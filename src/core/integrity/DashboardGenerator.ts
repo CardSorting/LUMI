@@ -86,10 +86,11 @@ ${opts.length > 0
 ## 🛡️ Immune System Status
 - **Pathogen Memory**: ${immuneMemory.length} antigens recorded.
 - **Defense Activity**: Blocked 0 regressions this session.
+- **Memory Efficiency**: SHA-256 Compressed (LRU Active).
 
 ### 🧪 Detected Pathogens (Architectural Antigens)
 ${immuneMemory.length > 0
-	? immuneMemory.slice(-5).map(p => `- **[${p.type}]** \`${path.basename(p.signature.split(":")[0])}\` (Severity: ${p.severity})`).join("\n")
+	? immuneMemory.slice(-5).map(p => `- **[${p.type}]** \`${path.basename(p.originalSummary)}\` (Hits: ${p.hitCount})`).join("\n")
 	: "✅ Immune memory is healthy. No pathogens detected."}
 
 ---
