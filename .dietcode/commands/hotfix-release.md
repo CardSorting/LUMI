@@ -1,1 +1,1 @@
-../../.codemarierules/workflows/hotfix-release.md
+../../.dietcoderules/workflows/hotfix-release.md

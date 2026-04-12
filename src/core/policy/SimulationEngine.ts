@@ -61,7 +61,6 @@ export class SimulationEngine {
 		})
 
 		// 3. Re-compute coupling and entropy
-		// @ts-expect-error - access private compute for simulation
 		simEngine.computeCouplingMetrics()
 		// @ts-expect-error
 		simEngine.computeReachability()
@@ -109,7 +108,6 @@ export class SimulationEngine {
 			})
 		}
 
-		// @ts-expect-error
 		simEngine.computeCouplingMetrics()
 		// @ts-expect-error
 		simEngine.computeReachability()

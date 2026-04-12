@@ -1,0 +1,39 @@
+
+> dietcode@3.88.4 build:webview
+> cd webview-ui && npm run build
+
+
+> webview-ui@0.3.0 build
+> tsc -b && vite build
+
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(532,35): error TS2551: Property 'planModeDietcodeModelId' does not exist on type 'ApiHandlerOptions'. Did you mean 'planModeDietCodeModelId'?
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(533,71): error TS2551: Property 'planModeDietcodeModelInfo' does not exist on type 'ApiHandlerOptions'. Did you mean 'planModeDietCodeModelInfo'?
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(576,34): error TS2551: Property 'actModeDietcodeModelId' does not exist on type 'ApiHandlerOptions'. Did you mean 'actModeDietCodeModelId'?
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(577,70): error TS2551: Property 'actModeDietcodeModelInfo' does not exist on type 'ApiHandlerOptions'. Did you mean 'actModeDietCodeModelInfo'?
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(719,3): error TS2561: Object literal may only specify known properties, but 'planModeDietcodeModelId' does not exist in type 'ApiHandlerOptions'. Did you mean to write 'planModeDietCodeModelId'?
+src/components/dietcode-rules/DietCodeRulesToggleModal.tsx(84,19): error TS2551: Property 'globalDietCodeRulesToggles' does not exist on type 'RefreshedRules'. Did you mean 'globalDietcodeRulesToggles'?
+src/components/dietcode-rules/DietCodeRulesToggleModal.tsx(85,46): error TS2551: Property 'globalDietCodeRulesToggles' does not exist on type 'RefreshedRules'. Did you mean 'globalDietcodeRulesToggles'?
+src/components/dietcode-rules/DietCodeRulesToggleModal.tsx(87,19): error TS2551: Property 'localDietCodeRulesToggles' does not exist on type 'RefreshedRules'. Did you mean 'localDietcodeRulesToggles'?
+src/components/dietcode-rules/DietCodeRulesToggleModal.tsx(88,45): error TS2551: Property 'localDietCodeRulesToggles' does not exist on type 'RefreshedRules'. Did you mean 'localDietcodeRulesToggles'?
+src/components/dietcode-rules/DietCodeRulesToggleModal.tsx(245,18): error TS2551: Property 'globalDietCodeRulesToggles' does not exist on type 'ToggleDietCodeRules'. Did you mean 'globalDietcodeRulesToggles'?
+src/components/dietcode-rules/DietCodeRulesToggleModal.tsx(246,45): error TS2551: Property 'globalDietCodeRulesToggles' does not exist on type 'ToggleDietCodeRules'. Did you mean 'globalDietcodeRulesToggles'?
+src/components/dietcode-rules/DietCodeRulesToggleModal.tsx(248,18): error TS2551: Property 'localDietCodeRulesToggles' does not exist on type 'ToggleDietCodeRules'. Did you mean 'localDietcodeRulesToggles'?
+src/components/dietcode-rules/DietCodeRulesToggleModal.tsx(249,44): error TS2551: Property 'localDietCodeRulesToggles' does not exist on type 'ToggleDietCodeRules'. Did you mean 'localDietcodeRulesToggles'?
+src/components/mcp/chat-display/ImagePreview.tsx(86,9): error TS2339: Property 'aspectRatio' does not exist on type 'ImagePreview'.
+src/components/mcp/chat-display/ImagePreview.tsx(99,10): error TS2339: Property 'aspectRatio' does not exist on type 'ImagePreview'.
+src/components/settings/DietCodeModelPicker.tsx(208,24): error TS2820: Type '"planModeDietcodeModelId"' is not assignable to type 'keyof ApiHandlerOptions'. Did you mean '"planModeDietCodeModelId"'?
+src/components/settings/DietCodeModelPicker.tsx(208,57): error TS2820: Type '"actModeDietcodeModelId"' is not assignable to type 'keyof ApiHandlerOptions'. Did you mean '"actModeDietCodeModelId"'?
+src/components/settings/DietCodeModelPicker.tsx(209,26): error TS2820: Type '"planModeDietcodeModelInfo"' is not assignable to type 'keyof ApiHandlerOptions'. Did you mean '"planModeDietCodeModelInfo"'?
+src/components/settings/DietCodeModelPicker.tsx(209,61): error TS2820: Type '"actModeDietcodeModelInfo"' is not assignable to type 'keyof ApiHandlerOptions'. Did you mean '"actModeDietCodeModelInfo"'?
+src/components/settings/utils/providerUtils.ts(272,49): error TS2551: Property 'planModeDietcodeModelId' does not exist on type 'ApiHandlerOptions'. Did you mean 'planModeDietCodeModelId'?
+src/components/settings/utils/providerUtils.ts(272,93): error TS2551: Property 'actModeDietcodeModelId' does not exist on type 'ApiHandlerOptions'. Did you mean 'actModeDietCodeModelId'?
+src/components/settings/utils/providerUtils.ts(277,26): error TS2551: Property 'planModeDietcodeModelInfo' does not exist on type 'ApiHandlerOptions'. Did you mean 'planModeDietCodeModelInfo'?
+src/components/settings/utils/providerUtils.ts(278,26): error TS2551: Property 'actModeDietcodeModelInfo' does not exist on type 'ApiHandlerOptions'. Did you mean 'actModeDietCodeModelInfo'?
+src/components/settings/utils/providerUtils.ts(564,39): error TS2551: Property 'planModeDietcodeModelId' does not exist on type 'ApiHandlerOptions'. Did you mean 'planModeDietCodeModelId'?
+src/components/settings/utils/providerUtils.ts(564,82): error TS2551: Property 'actModeDietcodeModelId' does not exist on type 'ApiHandlerOptions'. Did you mean 'actModeDietCodeModelId'?
+src/components/settings/utils/providerUtils.ts(567,39): error TS2551: Property 'planModeDietcodeModelInfo' does not exist on type 'ApiHandlerOptions'. Did you mean 'planModeDietCodeModelInfo'?
+src/components/settings/utils/providerUtils.ts(567,84): error TS2551: Property 'actModeDietcodeModelInfo' does not exist on type 'ApiHandlerOptions'. Did you mean 'actModeDietCodeModelInfo'?
+src/components/settings/utils/providerUtils.ts(686,12): error TS2551: Property 'planModeDietcodeModelId' does not exist on type 'Partial<ApiHandlerOptions>'. Did you mean 'planModeDietCodeModelId'?
+src/components/settings/utils/providerUtils.ts(687,12): error TS2551: Property 'actModeDietcodeModelId' does not exist on type 'Partial<ApiHandlerOptions>'. Did you mean 'actModeDietCodeModelId'?
+src/components/settings/utils/providerUtils.ts(688,12): error TS2551: Property 'planModeDietcodeModelInfo' does not exist on type 'Partial<ApiHandlerOptions>'. Did you mean 'planModeDietCodeModelInfo'?
+src/components/settings/utils/providerUtils.ts(689,12): error TS2551: Property 'actModeDietcodeModelInfo' does not exist on type 'Partial<ApiHandlerOptions>'. Did you mean 'actModeDietCodeModelInfo'?

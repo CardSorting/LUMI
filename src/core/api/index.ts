@@ -261,10 +261,10 @@ function createHandlerForProvider(
 			})
 		case "dietcode": {
 			const dietcodeModelId =
-				(mode === "plan" ? options.planModeDietcodeModelId : options.actModeDietcodeModelId) ||
+				(mode === "plan" ? options.planModeDietCodeModelId : options.actModeDietCodeModelId) ||
 				(mode === "plan" ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId)
 			const dietcodeModelInfo =
-				(mode === "plan" ? options.planModeDietcodeModelInfo : options.actModeDietcodeModelInfo) ||
+				(mode === "plan" ? options.planModeDietCodeModelInfo : options.actModeDietCodeModelInfo) ||
 				(mode === "plan" ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo)
 			return new DietCodeHandler({
 				onRetryAttempt: options.onRetryAttempt,

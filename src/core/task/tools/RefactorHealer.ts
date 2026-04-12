@@ -76,7 +76,6 @@ export class RefactorHealer {
 			const layer = getLayer(filePath)
 			if (layer === "infrastructure" || layer === "ui") {
 				return {
-					// @ts-expect-error
 					id: (globalThis.crypto || require("crypto")).randomUUID(),
 					type: "BOTTLENECK",
 					file: filePath,

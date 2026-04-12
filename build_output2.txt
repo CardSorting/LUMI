@@ -1,0 +1,13 @@
+
+> dietcode@3.88.4 build:webview
+> cd webview-ui && npm run build
+
+
+> webview-ui@0.3.0 build
+> tsc -b && vite build
+
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(532,3): error TS2561: Object literal may only specify known properties, but 'planModeDietCodeModelId' does not exist in type 'ModelsApiConfiguration'. Did you mean to write 'planModeDietcodeModelId'?
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(719,40): error TS2551: Property 'planModeDietCodeModelId' does not exist on type 'ModelsApiConfiguration'. Did you mean 'planModeDietcodeModelId'?
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(720,66): error TS2551: Property 'planModeDietCodeModelInfo' does not exist on type 'ModelsApiConfiguration'. Did you mean 'planModeDietcodeModelInfo'?
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(764,39): error TS2551: Property 'actModeDietCodeModelId' does not exist on type 'ModelsApiConfiguration'. Did you mean 'actModeDietcodeModelId'?
+../src/shared/proto-conversions/models/api-configuration-conversion.ts(765,65): error TS2551: Property 'actModeDietCodeModelInfo' does not exist on type 'ModelsApiConfiguration'. Did you mean 'actModeDietcodeModelInfo'?

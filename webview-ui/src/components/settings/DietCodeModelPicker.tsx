@@ -205,8 +205,8 @@ const DietCodeModelPicker: React.FC<DietCodeModelPickerProps> = ({ isPopup, curr
 
 		handleModeFieldsChange(
 			{
-				dietcodeModelId: { plan: "planModeDietcodeModelId", act: "actModeDietcodeModelId" },
-				dietcodeModelInfo: { plan: "planModeDietcodeModelInfo", act: "actModeDietcodeModelInfo" },
+				dietcodeModelId: { plan: "planModeDietCodeModelId", act: "actModeDietCodeModelId" },
+				dietcodeModelInfo: { plan: "planModeDietCodeModelInfo", act: "actModeDietCodeModelInfo" },
 			},
 			{
 				dietcodeModelId: newModelId,

@@ -81,11 +81,11 @@ const DietCodeRulesToggleModal: React.FC = () => {
 			FileServiceClient.refreshRules({} as EmptyRequest)
 				.then((response: RefreshedRules) => {
 					// Update state with the response data using all available setters
-					if (response.globalDietCodeRulesToggles?.toggles) {
-						setGlobalDietCodeRulesToggles(response.globalDietCodeRulesToggles.toggles)
+					if (response.globalDietcodeRulesToggles?.toggles) {
+						setGlobalDietCodeRulesToggles(response.globalDietcodeRulesToggles.toggles)
 					}
-					if (response.localDietCodeRulesToggles?.toggles) {
-						setLocalDietCodeRulesToggles(response.localDietCodeRulesToggles.toggles)
+					if (response.localDietcodeRulesToggles?.toggles) {
+						setLocalDietCodeRulesToggles(response.localDietcodeRulesToggles.toggles)
 					}
 					if (response.localCursorRulesToggles?.toggles) {
 						setLocalCursorRulesToggles(response.localCursorRulesToggles.toggles)
@@ -242,11 +242,11 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		)
 			.then((response) => {
 				// Update the local state with the response
-				if (response.globalDietCodeRulesToggles?.toggles) {
-					setGlobalDietCodeRulesToggles(response.globalDietCodeRulesToggles.toggles)
+				if (response.globalDietcodeRulesToggles?.toggles) {
+					setGlobalDietCodeRulesToggles(response.globalDietcodeRulesToggles.toggles)
 				}
-				if (response.localDietCodeRulesToggles?.toggles) {
-					setLocalDietCodeRulesToggles(response.localDietCodeRulesToggles.toggles)
+				if (response.localDietcodeRulesToggles?.toggles) {
+					setLocalDietCodeRulesToggles(response.localDietcodeRulesToggles.toggles)
 				}
 				if (response.remoteRulesToggles?.toggles) {
 					setRemoteRulesToggles(response.remoteRulesToggles.toggles)

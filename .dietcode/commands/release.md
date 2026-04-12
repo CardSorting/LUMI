@@ -1,1 +1,1 @@
-../../.codemarierules/workflows/release.md
+../../.dietcoderules/workflows/release.md

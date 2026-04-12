@@ -269,13 +269,13 @@ export function normalizeApiConfiguration(
 					? apiConfiguration?.planModeOpenRouterModelInfo
 					: apiConfiguration?.actModeOpenRouterModelInfo
 			const dietcodeModelId =
-				(currentMode === "plan" ? apiConfiguration?.planModeDietcodeModelId : apiConfiguration?.actModeDietcodeModelId) ||
+				(currentMode === "plan" ? apiConfiguration?.planModeDietCodeModelId : apiConfiguration?.actModeDietCodeModelId) ||
 				fallbackOpenRouterModelId ||
 				openRouterDefaultModelId
 			const dietcodeModelInfo =
 				(currentMode === "plan"
-					? apiConfiguration?.planModeDietcodeModelInfo
-					: apiConfiguration?.actModeDietcodeModelInfo) ||
+					? apiConfiguration?.planModeDietCodeModelInfo
+					: apiConfiguration?.actModeDietCodeModelInfo) ||
 				fallbackOpenRouterModelInfo ||
 				openRouterDefaultModelInfo
 			return {
@@ -561,10 +561,10 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 
 	// Backward compatibility: DietCode previously stored model selection in OpenRouter keys.
 	const dietcodeModelId =
-		(mode === "plan" ? apiConfiguration.planModeDietcodeModelId : apiConfiguration.actModeDietcodeModelId) ||
+		(mode === "plan" ? apiConfiguration.planModeDietCodeModelId : apiConfiguration.actModeDietCodeModelId) ||
 		openRouterModelId
 	const dietcodeModelInfo =
-		(mode === "plan" ? apiConfiguration.planModeDietcodeModelInfo : apiConfiguration.actModeDietcodeModelInfo) ||
+		(mode === "plan" ? apiConfiguration.planModeDietCodeModelInfo : apiConfiguration.actModeDietCodeModelInfo) ||
 		openRouterModelInfo
 
 	return {
@@ -683,10 +683,10 @@ export async function syncModeConfigurations(
 			break
 
 		case "dietcode":
-			updates.planModeDietcodeModelId = sourceFields.dietcodeModelId
-			updates.actModeDietcodeModelId = sourceFields.dietcodeModelId
-			updates.planModeDietcodeModelInfo = sourceFields.dietcodeModelInfo
-			updates.actModeDietcodeModelInfo = sourceFields.dietcodeModelInfo
+			updates.planModeDietCodeModelId = sourceFields.dietcodeModelId
+			updates.actModeDietCodeModelId = sourceFields.dietcodeModelId
+			updates.planModeDietCodeModelInfo = sourceFields.dietcodeModelInfo
+			updates.actModeDietCodeModelInfo = sourceFields.dietcodeModelInfo
 			break
 
 		case "requesty":

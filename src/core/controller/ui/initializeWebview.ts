@@ -80,8 +80,8 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 
 				if (planActSeparateModelsSetting) {
 					// Separate models: update only current mode
-					const modelIdField = currentMode === "plan" ? "planModeDietcodeModelId" : "actModeDietcodeModelId"
-					const modelInfoField = currentMode === "plan" ? "planModeDietcodeModelInfo" : "actModeDietcodeModelInfo"
+					const modelIdField = currentMode === "plan" ? "planModeDietCodeModelId" : "actModeDietCodeModelId"
+					const modelInfoField = currentMode === "plan" ? "planModeDietCodeModelInfo" : "actModeDietCodeModelInfo"
 					const modelId = apiConfiguration[modelIdField]
 
 					if (modelId && models[modelId]) {
@@ -90,18 +90,18 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 					}
 				} else {
 					// Shared models: update both plan and act modes
-					const planModelId = apiConfiguration.planModeDietcodeModelId
-					const actModelId = apiConfiguration.actModeDietcodeModelId
+					const planModelId = apiConfiguration.planModeDietCodeModelId
+					const actModelId = apiConfiguration.actModeDietCodeModelId
 					const updates: Partial<GlobalStateAndSettings> = {}
 
 					// Update plan mode model info if we have a model ID
 					if (planModelId && models[planModelId]) {
-						updates.planModeDietcodeModelInfo = models[planModelId]
+						updates.planModeDietCodeModelInfo = models[planModelId]
 					}
 
 					// Update act mode model info if we have a model ID
 					if (actModelId && models[actModelId]) {
-						updates.actModeDietcodeModelInfo = models[actModelId]
+						updates.actModeDietCodeModelInfo = models[actModelId]
 					}
 
 					// Post state update if we updated any model info
