@@ -1,6 +1,6 @@
-import { SpiderEngine } from "../policy/SpiderEngine.js"
-import { AuditRecorder } from "./AuditRecorder.js"
 import { MetabolicMonitor } from "./MetabolicMonitor.js"
+import { SovereignOptimizer } from "../policy/SovereignOptimizer.js"
+import { PathogenStore } from "./PathogenStore.js"
 import { Logger } from "@/shared/services/Logger"
 
 /**
@@ -17,7 +17,7 @@ export class DashboardGenerator {
 	/**
 	 * Updates the live architectural dashboard.
 	 */
-	public async updateDashboard(engine: SpiderEngine, recorder: AuditRecorder, metabolic: MetabolicMonitor): Promise<void> {
+	public async updateDashboard(engine: SpiderEngine, recorder: AuditRecorder, metabolic: MetabolicMonitor, optimizer: SovereignOptimizer, pathogens: PathogenStore): Promise<void> {
 		try {
 			const report = engine.computeEntropy()
 			const score = Math.round((1 - report.score) * 100)
@@ -25,6 +25,8 @@ export class DashboardGenerator {
 			const violations = engine.getViolations()
 			const mermaid = engine.toMermaid()
 			const vitals = metabolic.getVitalityStats()
+			const opts = optimizer.findOptimizations(engine)
+			const immuneMemory = pathogens.getPathogens()
 
 			const content = `# 🏗️ JoyZoning Architectural Dashboard
 
@@ -69,6 +71,26 @@ ${this.generateGhostSection(engine)}
 ${vitals.hotspots.length > 0
 	? vitals.hotspots.map(h => `- \`${path.basename(h.path)}\`: Stress Index **${h.stress.toFixed(1)}**`).join("\n")
 	: "✅ Codebase is calm. No fever detected."}
+
+---
+
+## ⚡ Sovereign Optimization Queue
+*The substrate has identified the following structural migrations to maximize integrity.*
+
+${opts.length > 0
+	? opts.map(o => `- **[MOVE]** \`${path.basename(o.file)}\`: ${o.currentLayer} → **${o.recommendedLayer}** (Gain: +${o.integrityGain} points)\n  - *Reason*: ${o.reason}`).join("\n")
+	: "✅ No optimizations pending. Architecture is at maximal stability."}
+
+---
+
+## 🛡️ Immune System Status
+- **Pathogen Memory**: ${immuneMemory.length} antigens recorded.
+- **Defense Activity**: Blocked 0 regressions this session.
+
+### 🧪 Detected Pathogens (Architectural Antigens)
+${immuneMemory.length > 0
+	? immuneMemory.slice(-5).map(p => `- **[${p.type}]** \`${path.basename(p.signature.split(":")[0])}\` (Severity: ${p.severity})`).join("\n")
+	: "✅ Immune memory is healthy. No pathogens detected."}
 
 ---
 

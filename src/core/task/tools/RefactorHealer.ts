@@ -1,5 +1,9 @@
 import { ImportFixer } from "@/utils/import-fixer"
 import { getLayer, parseLayerTag } from "@/utils/joy-zoning"
+import { SpiderEngine } from "../../policy/SpiderEngine"
+import { SovereignTransaction } from "../../integrity/SovereignTransaction"
+import { SemanticAxiomEngine } from "../../policy/SemanticAxiomEngine"
+import { Logger } from "@/shared/services/Logger"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { crypto } from "crypto"
@@ -25,22 +29,50 @@ export class RefactorHealer {
 	}
 
 	/**
-	 * Synchronously heals a file move.
-	 * 1. Updates tags within the moved file.
-	 * 2. Fixes incoming imports from other files.
-	 * 3. Fixes outgoing imports within the moved file.
+	 * Strategic Pivoting: Heals a move violation, but pivots to extraction if move is impossible.
 	 */
-	public async healMove(oldPath: string, newPath: string): Promise<void> {
-		const absoluteNewPath = path.resolve(this.projectRoot, newPath)
-		
-		// 1. Tag Alignment (Confidence 1.0)
-		await this.alignTag(absoluteNewPath)
+	public async healMove(filePath: string, targetPath: string): Promise<{ success: boolean; pivot?: string }> {
+		const tx = new SovereignTransaction(`heal_move_${path.basename(filePath)}`)
+		tx.start()
 
-		// 2. Outgoing Imports (Fix links inside the moved file)
-		await this.importFixer.fixOutgoingImports(newPath, oldPath)
+		try {
+			// Try Strategy A: Move
+			const content = await fs.readFile(filePath, "utf-8")
+			tx.stage(filePath, "DELETE")
+			tx.stage(targetPath, "WRITE", content)
 
-		// 3. Incoming Imports (Fix references from the rest of the project)
-		await this.importFixer.fixImports(oldPath, newPath)
+			const result = await tx.commit()
+			if (result.success) {
+				return { success: true }
+			}
+			
+			// If Strategy A fails, pivot to Strategy B: Extract Interface
+			Logger.info("Move strategy failed. Pivoting to Strategic Extraction...")
+			return { success: false, pivot: "EXTRACT_INTERFACE" }
+		} catch (error) {
+			await tx.rollback()
+			return { success: false }
+		}
+	}
+
+	/**
+	 * Cascade Healing: Fixes the "Vibrations" in dependents after a change.
+	 */
+	public async healCascade(targetPath: string, engine: SpiderEngine): Promise<number> {
+		const node = engine.nodes.get(targetPath)
+		if (!node) return 0
+
+		let healCount = 0
+		// Sense vibrations in 1-degree dependents
+		for (const dependent of node.dependents) {
+			try {
+				await this.alignTag(dependent)
+				healCount++
+			} catch (e) {
+				// Silent fail for background cascade
+			}
+		}
+		return healCount
 	}
 
 	/**

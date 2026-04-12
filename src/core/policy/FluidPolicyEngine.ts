@@ -9,7 +9,9 @@ import { ContextStalenessTracker } from "../context/ContextStalenessTracker"
 import { AuditRecorder } from "./AuditRecorder.js"
 import { DashboardGenerator } from "../integrity/DashboardGenerator"
 import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
+import { PathogenStore } from "../integrity/PathogenStore"
 import { SemanticAxiomEngine } from "./SemanticAxiomEngine"
+import { SovereignOptimizer } from "./SovereignOptimizer"
 import { SimulationEngine } from "./SimulationEngine.js"
 import { SpiderEngine } from "./SpiderEngine.js"
 import { SpiderRefactorer } from "./SpiderRefactorer.js"
@@ -50,6 +52,8 @@ export class FluidPolicyEngine {
 	private dashboardGenerator: DashboardGenerator
 	private axiomEngine: SemanticAxiomEngine
 	private metabolicMonitor: MetabolicMonitor
+	private optimizer: SovereignOptimizer
+	private pathogens: PathogenStore
 	private architecturalAlarmActive = false
 	private alarmViolations: string[] = []
 
@@ -66,6 +70,8 @@ export class FluidPolicyEngine {
 		this.dashboardGenerator = new DashboardGenerator(this.cwd)
 		this.axiomEngine = new SemanticAxiomEngine(this.cwd)
 		this.metabolicMonitor = new MetabolicMonitor(this.cwd)
+		this.optimizer = new SovereignOptimizer(this.cwd)
+		this.pathogens = new PathogenStore(this.cwd)
 	}
 
 	/**
@@ -192,7 +198,7 @@ export class FluidPolicyEngine {
 		await this.auditRecorder.record(score, violations.length, fileCount)
 		
 		// Passive Dashboard Update
-		await this.dashboardGenerator.updateDashboard(this.spiderEngine, this.auditRecorder, this.metabolicMonitor)
+		await this.dashboardGenerator.updateDashboard(this.spiderEngine, this.auditRecorder, this.metabolicMonitor, this.optimizer, this.pathogens)
 	}
 
 	private triggerAlarm(violations: string[]) {
@@ -388,6 +394,21 @@ export class FluidPolicyEngine {
 
 		const normalizedPath = this.normalize(block.params.path)
 		this.metabolicMonitor.recordWrite(normalizedPath, 0, 0) // Basic write record
+
+		// --- ZERO-FRICTION COMPLIANCE HOOK ---
+		// Automatically align tags and fix outgoing imports in the backup
+		try {
+			const absolutePath = path.resolve(this.cwd, normalizedPath)
+			await this.refactorHealer.alignTag(absolutePath)
+			
+			// --- VIBRATION SENSING (Blast Radius) ---
+			// Heal the rattled dependents in the background
+			await this.refactorHealer.healCascade(absolutePath, this.spiderEngine)
+			
+			// Silent healing of the file we just touched
+		} catch (error) {
+			// Fail-safe: background mini-heals should never block execution
+		}
 
 		return { success: true }
 	}

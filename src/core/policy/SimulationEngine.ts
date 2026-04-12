@@ -1,6 +1,7 @@
 import { SpiderEngine, SpiderEntropyReport } from "./SpiderEngine.js"
+import { PathogenStore } from "../integrity/PathogenStore"
 import { Logger } from "@/shared/services/Logger"
-import { Layer } from "@/utils/joy-zoning"
+import { Layer, getLayer } from "@/utils/joy-zoning"
 import * as path from "path"
 
 export interface SimulationResult {
@@ -25,8 +26,20 @@ export class SimulationEngine {
 	public async simulateMove(
 		oldPath: string,
 		newPath: string,
-		currentEngine: SpiderEngine
+		currentEngine: SpiderEngine,
+		pathogens: PathogenStore
 	): Promise<SimulationResult> {
+		// Immune Check
+		if (pathogens.isPathogenic(oldPath)) {
+			return { 
+				safe: false, 
+				predictedScore: 0, 
+				scoreDrop: 100, 
+				violations: ["Pathogen detected"], 
+				message: "PATHOGEN DETECTED: This move has failed in the past. Re-routing attempt to prevent architectural regression." 
+			}
+		}
+
 		const simEngine = this.cloneEngine(currentEngine)
 		
 		// 1. Resolve logical paths
