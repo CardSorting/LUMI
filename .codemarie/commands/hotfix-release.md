@@ -1,0 +1,1 @@
+../../.codemarierules/workflows/hotfix-release.md

@@ -1,0 +1,19 @@
+/Users/bozoegg/Downloads/cline-main/src/infrastructure/ai/src/infrastructure/ai/Orchestrator.ts internalError/io  INTERNAL  ━━━━━━━━━━
+
+  × No such file or directory (os error 2)
+  
+  ! This diagnostic was derived from an internal Biome error. Potential bug, please report it if necessary.
+  
+
+Checked 0 files in 2ms. No fixes applied.
+check ━━━━━━━━━━━━━━━━━━━━━━
+
+  × No files were processed in the specified paths.
+  
+  i Check your biome.json or biome.jsonc to ensure the paths are not ignored by the configuration.
+  
+  i These paths were provided but ignored:
+  
+  - src/infrastructure/ai/Orchestrator.ts
+  
+

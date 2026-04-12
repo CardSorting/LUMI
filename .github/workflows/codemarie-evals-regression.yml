@@ -1,0 +1,100 @@
+name: Smoke Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/core/**'
+      - 'src/shared/**'
+      - 'proto/**'
+      - 'evals/**'
+      - '.github/workflows/codemarie-evals-regression.yml'
+  pull_request:
+    paths:
+      - 'src/core/**'
+      - 'src/shared/**'
+      - 'proto/**'
+      - 'evals/**'
+      - '.github/workflows/codemarie-evals-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and install CLI
+        run: |
+          npm run protos
+          cd cli && npm install && npm run build:production && npm link
+          echo "$(npm config get prefix)/bin" >> $GITHUB_PATH
+
+      - name: Verify CLI
+        run: codemarie --version
+
+      - name: Run smoke tests
+        env:
+          CODEMARIE_API_KEY: ${{ secrets.CLINE_API_KEY }}
+        run: |
+          if [ -z "$CODEMARIE_API_KEY" ]; then
+            echo "::error::CODEMARIE_API_KEY (secrets.CLINE_API_KEY) is missing or empty. Smoke tests require an API key to run."
+            exit 1
+          fi
+          
+          # Non-interactive auth
+          codemarie auth -p codemarie -k "$CODEMARIE_API_KEY" -m "anthropic/claude-sonnet-4.5"
+          
+          max_attempts=3
+          for attempt in $(seq 1 $max_attempts); do
+            echo "::group::Attempt $attempt of $max_attempts"
+            # Use --parallel for faster execution in CI
+            if npx tsx evals/smoke-tests/run-smoke-tests.ts --trials 1 --parallel; then
+              echo "::endgroup::"
+              echo "Smoke tests passed on attempt $attempt"
+              exit 0
+            fi
+            echo "::endgroup::"
+            if [ $attempt -lt $max_attempts ]; then
+              echo "::warning::Smoke tests failed on attempt $attempt, retrying..."
+              sleep 10
+            fi
+          done
+          echo "::error::Smoke tests failed after $max_attempts attempts"
+          exit 1
+
+      - name: Generate summary
+        if: always()
+        run: |
+          if [ -f evals/smoke-tests/results/latest/summary.md ]; then
+            cat evals/smoke-tests/results/latest/summary.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Smoke Test Summary Not Found" >> $GITHUB_STEP_SUMMARY
+            echo "The smoke tests may have failed before generating a summary." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-results-${{ github.run_id }}
+          path: evals/smoke-tests/results/latest/
+          if-no-files-found: ignore
+          retention-days: 30

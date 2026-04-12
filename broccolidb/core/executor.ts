@@ -1,0 +1,140 @@
+/**
+ * ExecuteOptions defines the reliability parameters for an agent action.
+ */
+export interface ExecuteOptions {
+  timeoutMs?: number;
+  maxRetries?: number;
+  backoffMs?: number;
+  concurrencyGroup?: string;
+}
+
+/**
+ * ActionExecutor manages the lifecycle of agent-initiated repository actions.
+ * It provides concurrency limiting, retries, and timeout protection.
+ *
+ * Inspired by production-grade hardening in openclaw-marie.
+ */
+export class ActionExecutor {
+  private static activeOperations = new Map<string, number>();
+
+  // Parameterized constants for production hardening
+  private static CONFIG = {
+    MAX_CONCURRENCY: 10,
+    DEFAULT_TIMEOUT: 120000,
+  };
+
+  /**
+   * Execute an async task with retries and timeout protection.
+   */
+  async execute<T>(
+    taskId: string,
+    operation: () => Promise<T>,
+    options: ExecuteOptions = {}
+  ): Promise<T> {
+    const {
+      timeoutMs = ActionExecutor.CONFIG.DEFAULT_TIMEOUT,
+      maxRetries = 5,
+      backoffMs = 500,
+      concurrencyGroup = 'default',
+    } = options;
+
+    let attempts = 0;
+
+    while (attempts < maxRetries) {
+      try {
+        const result = await this.withConcurrency(concurrencyGroup, () =>
+          this.withTimeout(taskId, operation(), timeoutMs)
+        );
+        return result;
+      } catch (err: any) {
+        attempts++;
+        const isRetryable = this.isRetryableError(err);
+
+        if (attempts >= maxRetries || !isRetryable) {
+          console.error(
+            `[ActionExecutor] Task ${taskId} failed permanently after ${attempts} attempts:`,
+            err
+          );
+          throw err;
+        }
+
+        const delay = backoffMs * 2 ** (attempts - 1);
+        console.warn(
+          `[ActionExecutor] Task ${taskId} retrying (${attempts}/${maxRetries}) because of retryable error: ${err.message || err}. Backoff: ${delay}ms`
+        );
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    throw new Error(`[ActionExecutor] Task ${taskId} failed after max retries`);
+  }
+
+  private static queues = new Map<string, (() => void)[]>();
+
+  private async withConcurrency<T>(group: string, op: () => Promise<T>): Promise<T> {
+    const active = ActionExecutor.activeOperations.get(group) || 0;
+
+    if (active >= ActionExecutor.CONFIG.MAX_CONCURRENCY) {
+      // Wait for a slot in the queue
+      await new Promise<void>((resolve) => {
+        const queue = ActionExecutor.queues.get(group) || [];
+        queue.push(resolve);
+        ActionExecutor.queues.set(group, queue);
+      });
+    }
+
+    ActionExecutor.activeOperations.set(
+      group,
+      (ActionExecutor.activeOperations.get(group) || 0) + 1
+    );
+
+    try {
+      return await op();
+    } finally {
+      const remaining = (ActionExecutor.activeOperations.get(group) || 1) - 1;
+      ActionExecutor.activeOperations.set(group, remaining);
+
+      // Notify the next in queue if any
+      const queue = ActionExecutor.queues.get(group);
+      if (queue && queue.length > 0) {
+        const next = queue.shift()!;
+        if (queue.length === 0) {
+          ActionExecutor.queues.delete(group);
+        }
+        next();
+      }
+    }
+  }
+
+  private async withTimeout<T>(id: string, promise: Promise<T>, ms: number): Promise<T> {
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(
+        () => reject(new Error(`[ActionExecutor] Task ${id} timed out after ${ms}ms`)),
+        ms
+      );
+    });
+    return Promise.race([promise, timeout]);
+  }
+
+  private isRetryableError(err: any): boolean {
+    const message = (err.message || String(err)).toUpperCase();
+    const code = err.code;
+    return (
+      message.includes('ABORTED') ||
+      message.includes('CONTENTION') ||
+      message.includes('DEADLINE EXCEEDED') ||
+      message.includes('SQLITE_BUSY') ||
+      message.includes('SQLITE_LOCKED') ||
+      message.includes('SQLITE_PROTOCOL') ||
+      code === 10 || // ABORTED
+      code === 4 || // DEADLINE_EXCEEDED
+      code === 8 || // RESOURCE_EXHAUSTED
+      code === 14 || // UNAVAILABLE
+      code === 'TIMEOUT' ||
+      code === 'LOCK_TIMEOUT' ||
+      code === 'SQLITE_BUSY' ||
+      code === 'SQLITE_LOCKED'
+    );
+  }
+}
+
+export const executor = new ActionExecutor();

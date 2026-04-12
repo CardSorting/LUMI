@@ -1,0 +1,20 @@
+import { UserOrganizationUpdateRequest } from "@shared/proto/codemarie/account"
+import { Empty } from "@shared/proto/codemarie/common"
+import { fetchRemoteConfig } from "@/core/storage/remote-config/fetch"
+import type { Controller } from "../index"
+
+/**
+ * Handles setting the user's active organization
+ * @param controller The controller instance
+ * @param request UserOrganization to set as active
+ * @returns Empty response
+ */
+export async function setUserOrganization(controller: Controller, request: UserOrganizationUpdateRequest): Promise<Empty> {
+	if (!controller.accountService) {
+		throw new Error("Account service not available")
+	}
+	// Switch to the specified organization using the account service
+	await controller.accountService.switchAccount(request.organizationId)
+	await fetchRemoteConfig(controller)
+	return {}
+}

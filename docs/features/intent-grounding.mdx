@@ -1,0 +1,98 @@
+Intent Grounding is a mission-critical pre-processing phase that transforms ambiguous human requests into high-fidelity, validated, and contextually aware technical specifications. It moves the agent from **Stochastic Generation** (guessing what to do) to **Deterministic Execution** (working from a verified plan).
+
+## Grounding vs. Planning: A Critical Distinction
+
+It is common to confuse "Grounding" with "Planning." However, they serve two distinct architectural purposes:
+
+- **Planning**: Defines the **sequence of actions** (e.g., "1. Read file, 2. Run command, 3. Edit code"). It is about *how* to solve the problem.
+- **Grounding**: Defines the **reality of the problem** (e.g., "The user says 'Fix the auth' which means 'Modify `src/auth/service.ts` while adhering to the `JWT_EXPIRY` rule'"). It is about *what* the problem actually is in the context of the filesystem and project rules.
+
+**Grounding is the "Input Filter" for Planning.** Without Grounding, Planning is based on hallucinations.
+
+## The 5-Pass Hardening Journey
+
+This strategy was implemented through an iterative "doubling down" process across five passes to reach production-grade reliability:
+
+1.  **Pass 1 (Foundational)**: Introduced Zod schema validation for structural integrity.
+2.  **Pass 2 (Contextual)**: Added workspace-awareness (file trees, environment variables).
+3.  **Pass 3 (Extreme)**: Implemented the **Clarification Loop** and Confidence Scoring.
+4.  **Pass 4 (Ultimate)**: Integrated **Semantic Search** and Orchestrator-backed memory.
+5.  **Pass 5 (Full-Cycle)**: Added autonomous **Self-Critique** and hard **Entity Verification**.
+
+## Strategic Objectives
+
+Traditional AI agents often suffer from "Planning Blindness"—the tendency to start writing code before fully understanding the environment or the nuances of the user's intent. Intent Grounding solves this by enforcing a formal "Reality Check" before any files are modified.
+
+### The Problem it Solves:
+1.  **Hallucinated Entities**: Prevent the AI from referencing files or directories that don't exist in the current workspace.
+2.  **Scope Creep**: Enforce specific constraints (e.g., "only edit files in `/src/auth`") that the model must follow.
+3.  **Ambiguity Paralysis**: Identify when a request is too vague to execute safely and pause for user clarification.
+4.  **Context Misalignment**: Ensure project-specific rules (from `.codemarierules`) are central to every decision.
+
+## Core Philosophy
+The strategy follows a tiered hardening approach (Passes 1–5), designed to reach "Production Hardening" levels of reliability:
+- **Safety First**: No tool can be used until the grounded specification is finalized.
+- **Verification-Led**: Every file mentioned in the plan must be physically verified on disk.
+- **Human-in-the-Loop**: Low-confidence plans trigger an interactive clarification loop rather than proceeding with assumptions.
+
+## Strategic Impact: Prevention of Failure Modes
+
+| Failure Mode | Traditional Solution | Grounded Implementation Solution |
+| :--- | :--- | :--- |
+| **Phantom Files** | AI guesses paths based on project structure. | **Entity Verification**: Rejects any file not verified on disk. |
+| **Out-of-Scope Execution** | AI edits related files "just in case". | **Hard Constraints**: Limits execution to user-approved boundaries. |
+| **Contextual Drifting** | AI forgets project rules mid-conversation. | **Orchestrated Memory**: Rules are baked into the Spec, not just the chat history. |
+| **Blind Assumptions** | AI proceeds with vague instructions. | **Clarification Loop**: Pauses and asks for missing information. |
+
+## Key Pillars of the Strategy
+
+### 1. Structural Determinism (Schema Validation)
+Every grounding operation is governed by a strict **Zod schema** (`GroundedSpecSchema`). This ensures that the AI's output is not just a blob of text, but a machine-readable specification that defines exactly what variables are at play and what constraints must be honored.
+
+### 2. Autonomous Environment Discovery
+Grounding is not performed in a vacuum. The system bridges the gap between the LLM and your local system using:
+- **Environment Context**: Real-time extraction of workspace roots and active file trees.
+- **Dynamic Semantic Search**: Proactive discovery of relevant code patterns before implementation begins.
+- **Rule Ingestion**: Automatic alignment with `.codemarierules/*.md`, ensuring the AI follows your project's specific "Law of the Land."
+
+### 3. Adaptive Evolution (Clarification Loop)
+Trust is built on transparency. When confidence is low (< 70%), the system enters a clarification state. It articulates its ambiguity reasoning, allowing the user to provide missing information that *evolves* the existing spec rather than discarding it.
+
+### 4. Long-Term Architectural Memory
+Grounding is fully integrated with the `AgentOrchestrator` to ensure long-term consistency. Specifications are persisted in `agent_memory`, providing a "Source of Truth" that subagents and downstream tasks can reference across multiple turns.
+
+### 5. Reflexive Self-Validation
+The final stage of grounding is a **Full-Cycle Verification** pass:
+- **Self-Critique Loop**: The system acts as its own reviewer, critiquing the proposed spec for potential hallucinations or logical gaps.
+- **Entity Resolution**: A hard check against the filesystem ensures that every file mentioned in the plan is physically reachable.
+
+## Conceptual Workflow: From Intent to Specification
+
+The following sequence illustrates how the system ensures deterministic alignment:
+
+1.  **Discovery**: The `IntentGrounder` scans the intent for keywords and proactively searches the workspace for relevant file snippets (Pass 4).
+2.  **Inference**: The LLM analyzes the intent against the discovered context and the `.codemarierules` (Pass 2/3).
+3.  **Self-Correction**: An internal reflection pass identifies logic gaps or phantom entities (Pass 5).
+4.  **Verification**: Every entity in the spec is resolved against the physical filesystem (Pass 5).
+5.  **Grounding**: The final, validated `GroundedSpec` is injected into the task stream and stored in `agent_memory`.
+
+## Technical Implementation
+
+- **Core Logic**: `src/core/grounding/IntentGrounder.ts`
+- **Spec Schema**: `src/core/grounding/types.ts`
+- **Task Integration**: `src/core/task/index.ts` (Grounding Trigger)
+- **LifeCycle Memory**: Linked via `OrchestrationController`.
+
+## Telemetry & Auditability
+Grounding performance is tracked with detailed telemetry, enabling continuous refinement of the system prompts and discovery logic:
+- `durationMs`: Monitors the latency impact of the hardening loops.
+- `tokens`: Usage metrics for economic auditing.
+- `verifiedEntities`: Tracks the "hit rate" of the discovery logic.
+
+---
+
+## The Strategic Outcome
+By implementing Intent Grounding, we transform the AI from a **creative generator** into a **precision engineer**. The system no longer "hopes" it is right; it **verifies** that it is right before a single byte of code is changed.
+
+> [!TIP]
+> **Adaptive Grounding**: You can significantly improve grounding quality by adding detailed `.md` files to your `.codemarierules` directory. The Intent Grounder will automatically ingest these as "source of truth" constraints.

@@ -1,0 +1,69 @@
+{
+  "name": "@noorm/broccolidb",
+  "version": "1.0.0",
+  "description": "**The High-Performance, Asynchronous, and Hardened SQLite Infrastructure for Node.js.**",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "broccolidb": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist && find . -name '*.d.ts' -not -path './node_modules/*' -delete && find . -name '*.d.ts.map' -not -path './node_modules/*' -delete",
+    "prepublishOnly": "npm run clean && npm run build",
+    "format": "biome format --write .",
+    "lint": "biome lint . && eslint .",
+    "check": "biome check --write . && eslint .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CardSorting/AIBroccoliDB.git"
+  },
+  "keywords": [
+    "sqlite",
+    "mcp",
+    "database",
+    "ai",
+    "agent",
+    "persistence",
+    "async"
+  ],
+  "author": "MarieCoder",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/CardSorting/AIBroccoliDB/issues"
+  },
+  "homepage": "https://github.com/CardSorting/AIBroccoliDB#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.8.0",
+    "chalk": "^5.6.2",
+    "chokidar": "^5.0.0",
+    "ignore": "^7.0.5",
+    "kysely": "^0.28.14",
+    "ora": "^9.3.0",
+    "simple-git": "^3.33.0",
+    "ts-morph": "^27.0.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
+    "@eslint/js": "^9.39.4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/eslint__js": "^8.42.3",
+    "@types/node": "^25.5.0",
+    "eslint": "^9.39.4",
+    "globals": "^17.4.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0"
+  }
+}

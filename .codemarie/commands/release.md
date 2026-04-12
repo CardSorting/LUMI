@@ -1,0 +1,1 @@
+../../.codemarierules/workflows/release.md
