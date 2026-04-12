@@ -1,8 +1,8 @@
-# CodeMarie: The Architectural Guardian
+# DietCode: The Architectural Guardian
 
-![CodeMarie Banner](assets/branding/banner.png)
+![DietCode Banner](assets/branding/banner.png)
 
-**CodeMarie** is an industrial-grade, model-agnostic agentic coding assistant designed to maintain architectural integrity in complex software ecosystems. Beyond simple code generation, CodeMarie acts as an **Architectural Guardian**, enforcing strict layering, managing structural entropy, and ensuring transactional stability across your workspace.
+**DietCode** is an industrial-grade, model-agnostic agentic coding assistant designed to maintain architectural integrity in complex software ecosystems. Beyond simple code generation, DietCode acts as an **Architectural Guardian**, enforcing strict layering, managing structural entropy, and ensuring transactional stability across your workspace.
 
 > [!IMPORTANT]
 > **Oracle Grade Release (v3.87.0)**: This release marks the transition to the **Observe-Act-Adjust** execution model, prioritizing forward progress and reliability by removing high-latency grounding loops while maintaining strict architectural enforcement via the **Spider Engine**.
@@ -12,7 +12,7 @@
 ## 🏗️ Core Pillars of Intelligence
 
 ### 🧬 Joy-Zoning Framework
-CodeMarie enforces a rigorous architectural pattern known as **Joy-Zoning**. It automatically categorizes every file into distinct layers and enforces "Outside-In" dependency rules. 
+DietCode enforces a rigorous architectural pattern known as **Joy-Zoning**. It automatically categorizes every file into distinct layers and enforces "Outside-In" dependency rules. 
 *   **Layer 1 (Shared/Core)**: Foundational types and utilities.
 *   **Layer 2 (Services)**: Business logic and data providers.
 *   **Layer 3 (UI/Handlers)**: Components and interaction logic.
@@ -38,7 +38,7 @@ The **Oracle Suggestion Engine** transforms prompt suggestions into an architect
 ## 📐 System Architecture
 
 ### 1. Functional Layout
-CodeMarie is built on a decoupled, high-throughput architecture designed for stability and observability.
+DietCode is built on a decoupled, high-throughput architecture designed for stability and observability.
 
 ```mermaid
 graph TD
@@ -70,7 +70,7 @@ graph TD
 ```
 
 ### 2. Execution Flow: Observe-Act-Adjust
-CodeMarie utilizes a high-reliability autonomous loop that prioritizes forward progress over recursive validation.
+DietCode utilizes a high-reliability autonomous loop that prioritizes forward progress over recursive validation.
 
 ```mermaid
 graph LR
@@ -101,14 +101,14 @@ High-fidelity telemetry for audit trails and performance tuning:
 
 ## ⚡ Quick Start
 
-1.  **Install**: Search for "CodeMarie" in the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=codemarie.codemarie).
+1.  **Install**: Search for "DietCode" in the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=codemarie.codemarie).
 2.  **Configure**: Add your API keys for [OpenRouter](https://openrouter.ai/), [Anthropic](https://www.anthropic.com/), or [Google](https://ai.google.dev/).
-3.  **Activate**: Click the CodeMarie icon in the sidebar and start your first "Architectural Intent" resolution task.
+3.  **Activate**: Click the DietCode icon in the sidebar and start your first "Architectural Intent" resolution task.
 
 ---
 
 ## 🕰️ History & Origins
-**CodeMarie** is a completely transformed, industrial-grade evolution of the original [Cline](https://github.com/cline/cline) repository. While it shares foundational DNA, the architecture, orchestration, and policy safeguarding have been reconstructed from the ground up to support enterprise-scale agentic coding.
+**DietCode** is a completely transformed, industrial-grade evolution of the original [Cline](https://github.com/cline/cline) repository. While it shares foundational DNA, the architecture, orchestration, and policy safeguarding have been reconstructed from the ground up to support enterprise-scale agentic coding.
 
 ---
-*Built with ❤️ by the CodeMarie Team. Architectural Integrity is the core.*
+*Built with ❤️ by the DietCode Team. Architectural Integrity is the core.*

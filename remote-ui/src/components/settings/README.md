@@ -1,6 +1,6 @@
 # API Options Component Architecture
 
-This directory contains the refactored API Options components for the CodeMarie extension. The refactoring aims to improve maintainability, code organization, and reduce complexity by separating provider-specific code into modular components.
+This directory contains the refactored API Options components for the DietCode extension. The refactoring aims to improve maintainability, code organization, and reduce complexity by separating provider-specific code into modular components.
 
 ## Directory Structure
 
@@ -14,7 +14,7 @@ settings/
 │   ├── ModelInfoView.tsx       # Model information display
 │   └── ModelSelector.tsx       # Model selection dropdown
 ├── providers/                   # Provider-specific components
-│   ├── CodeMarieProvider.tsx       # CodeMarie configuration
+│   ├── DietCodeProvider.tsx       # DietCode configuration
 │   ├── AnthropicProvider.tsx   # Anthropic-specific configuration
 │   ├── BedrockProvider.tsx     # AWS Bedrock configuration
 │   ├── GeminiProvider.tsx      # Google Gemini configuration

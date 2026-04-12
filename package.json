@@ -1,7 +1,7 @@
 {
-	"name": "marie-coder",
-	"displayName": "CodeMarie",
-	"description": "CodeMarie is your autonomous coding partner, capable of creating/editing files, running commands, and more with your permission.",
+	"name": "dietcode",
+	"displayName": "DietCode",
+	"description": "DietCode is your autonomous architectural substrate, maintaining codebase integrity with zero bloat.",
 	"version": "3.88.4",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
@@ -117,7 +117,7 @@
 			"activitybar": [
 				{
 					"id": "codemarie-ActivityBar",
-					"title": "CodeMarie",
+					"title": "DietCode",
 					"icon": "assets/icons/icon.svg"
 				}
 			]
@@ -127,7 +127,7 @@
 				{
 					"type": "webview",
 					"id": "codemarie.SidebarProvider",
-					"name": "",
+					"name": "DietCode",
 					"icon": "assets/icons/icon.svg"
 				}
 			]
