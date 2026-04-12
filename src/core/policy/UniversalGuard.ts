@@ -8,7 +8,7 @@ import { FluidPolicyEngine, PolicyResult } from "./FluidPolicyEngine"
  * FluidPolicyEngine calls.
  */
 export class UniversalGuard {
-	private readonly engine: FluidPolicyEngine
+	public readonly engine: FluidPolicyEngine
 	private currentMode: "plan" | "act" = "act"
 
 	constructor(cwd: string, taskId: string, stateManager: StateManager) {

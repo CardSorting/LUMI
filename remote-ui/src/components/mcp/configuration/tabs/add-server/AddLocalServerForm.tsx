@@ -1,4 +1,4 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import styled from "styled-components"
 import { LINKS } from "@/constants"
@@ -12,7 +12,7 @@ const AddLocalServerForm = ({}: AddLocalServerFormProps) => {
 	return (
 		<FormContainer>
 			<div className="text-(--vscode-foreground)">
-				Add a local MCP server by configuring it in <code>codemarie_mcp_settings.json</code>. You'll need to specify the
+				Add a local MCP server by configuring it in <code>dietcode_mcp_settings.json</code>. You'll need to specify the
 				server name, command, arguments, and any required environment variables in the JSON configuration. Learn more
 				<VSCodeLink href={LINKS.DOCUMENTATION.LOCAL_MCP_SERVER_DOCS} style={{ display: "inline" }}>
 					here.
@@ -28,7 +28,7 @@ const AddLocalServerForm = ({}: AddLocalServerFormProps) => {
 					})
 				}}
 				style={{ width: "100%", marginBottom: "5px", marginTop: 8 }}>
-				Open codemarie_mcp_settings.json
+				Open dietcode_mcp_settings.json
 			</VSCodeButton>
 		</FormContainer>
 	)

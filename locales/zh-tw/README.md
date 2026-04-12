@@ -1,5 +1,5 @@
 <div align="center"><sub>
-<a href="https://github.com/codemarie/codemarie/blob/main/README.md" target="_blank">English</a> | <a href="https://github.com/codemarie/codemarie/blob/main/locales/es/README.md" target="_blank">Español</a> | <a href="https://github.com/codemarie/codemarie/blob/main/locales/de/README.md" target="_blank">Deutsch</a> | <a href="https://github.com/codemarie/codemarie/blob/main/locales/ja/README.md" target="_blank">日本語</a> | <a href="https://github.com/codemarie/codemarie/blob/main/locales/zh-cn/README.md" target="_blank">简体中文</a> | 繁體中文 | <a href="https://github.com/codemarie/codemarie/blob/main/locales/ko/README.md" target="_blank">한국어</a>
+<a href="https://github.com/dietcode/dietcode/blob/main/README.md" target="_blank">English</a> | <a href="https://github.com/dietcode/dietcode/blob/main/locales/es/README.md" target="_blank">Español</a> | <a href="https://github.com/dietcode/dietcode/blob/main/locales/de/README.md" target="_blank">Deutsch</a> | <a href="https://github.com/dietcode/dietcode/blob/main/locales/ja/README.md" target="_blank">日本語</a> | <a href="https://github.com/dietcode/dietcode/blob/main/locales/zh-cn/README.md" target="_blank">简体中文</a> | 繁體中文 | <a href="https://github.com/dietcode/dietcode/blob/main/locales/ko/README.md" target="_blank">한국어</a>
 </sub></div>
 
 # Cline
@@ -21,7 +21,7 @@
 <a href="https://www.reddit.com/r/cline/" target="_blank"><strong>r/cline</strong></a>
 </td>
 <td align="center">
-<a href="https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>功能建議</strong></a>
+<a href="https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>功能建議</strong></a>
 </td>
 <td align="center">
 <a href="https://docs.cline.bot/getting-started/getting-started-new-coders" target="_blank"><strong>新手上路</strong></a>
@@ -140,7 +140,7 @@ Cline 可以直接在您的編輯器中建立和編輯檔案，並顯示變更�
 1. 複製程式碼庫（需要 [git-lfs](https://git-lfs.com/)）：
 
     ```bash
-    git clone https://github.com/codemarie/codemarie.git
+    git clone https://github.com/dietcode/dietcode.git
     ```
 
 2. 在 VSCode 中開啟專案：

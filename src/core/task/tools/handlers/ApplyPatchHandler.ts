@@ -2,13 +2,13 @@ import { readFile } from "node:fs/promises"
 import type { ToolUse } from "@core/assistant-message"
 import { resolveWorkspacePath } from "@core/workspace"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
-import type { CodemarieSayTool } from "@shared/ExtensionMessage"
+import type { DietCodeSayTool } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
 import { BASH_WRAPPERS, DiffError, PATCH_MARKERS, type Patch, PatchActionType, type PatchChunk } from "@/shared/Patch"
 import { preserveEscaping } from "@/shared/string"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -33,14 +33,14 @@ interface Commit {
 	changes: Record<string, FileChange>
 }
 
-export const PatchCodemarieSayMap = {
+export const PatchDietCodeSayMap = {
 	[PatchActionType.ADD]: "newFileCreated",
 	[PatchActionType.DELETE]: "fileDeleted",
 	[PatchActionType.UPDATE]: "editedExistingFile",
 }
 
 export class ApplyPatchHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.APPLY_PATCH
+	readonly name = DietCodeDefaultTool.APPLY_PATCH
 	private config?: TaskConfig
 	private pathResolver?: PathResolver
 	private providerOps?: FileProviderOperations
@@ -153,7 +153,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 			.ask(
 				"tool",
 				JSON.stringify({
-					tool: PatchCodemarieSayMap[actionType],
+					tool: PatchDietCodeSayMap[actionType],
 					path: getReadablePath(config.cwd, finalPath),
 					content: rawInput,
 					operationIsLocatedInWorkspace: await isLocatedInWorkspace(finalPath),
@@ -331,8 +331,8 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 				const change = commit.changes[changedFilePath]
 				// For move operations, track the new path instead
 				const pathToTrack = change.type === PatchActionType.UPDATE && change.movePath ? change.movePath : changedFilePath
-				config.services.fileContextTracker.markFileAsEditedByCodemarie(pathToTrack)
-				await config.services.fileContextTracker.trackFileContext(pathToTrack, "codemarie_edited")
+				config.services.fileContextTracker.markFileAsEditedByDietCode(pathToTrack)
+				await config.services.fileContextTracker.trackFileContext(pathToTrack, "dietcode_edited")
 			}
 
 			this.config = undefined
@@ -491,9 +491,9 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 			const absolutePath = typeof pathResult === "string" ? pathResult : pathResult.absolutePath
 			const resolvedPath = typeof pathResult === "string" ? filePath : pathResult.resolvedPath
 
-			const accessValidation = await this.validator.checkCodemarieIgnorePath(resolvedPath)
+			const accessValidation = await this.validator.checkDietCodeIgnorePath(resolvedPath)
 			if (!accessValidation.ok) {
-				await config.callbacks.say("codemarieignore_error", resolvedPath)
+				await config.callbacks.say("dietcodeignore_error", resolvedPath)
 				throw new DiffError(`Access denied: ${resolvedPath}`)
 			}
 
@@ -653,7 +653,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 		}
 	}
 
-	private async generateChangeSummary(changes: Record<string, FileChange>): Promise<CodemarieSayTool[]> {
+	private async generateChangeSummary(changes: Record<string, FileChange>): Promise<DietCodeSayTool[]> {
 		const summaries = await Promise.all(
 			Object.entries(changes).map(async ([file, change]) => {
 				const operationIsLocatedInWorkspace = await isLocatedInWorkspace(file)
@@ -664,7 +664,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 							path: file,
 							content: change.newContent,
 							operationIsLocatedInWorkspace,
-						} as CodemarieSayTool
+						} as DietCodeSayTool
 					case PatchActionType.UPDATE:
 						return {
 							tool: change.movePath ? "newFileCreated" : "editedExistingFile",
@@ -672,14 +672,14 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 							content: change.movePath ? change.oldContent : change.newContent,
 							operationIsLocatedInWorkspace,
 							startLineNumbers: change.startLineNumbers,
-						} as CodemarieSayTool
+						} as DietCodeSayTool
 					case PatchActionType.DELETE:
 						return {
 							tool: "fileDeleted",
 							path: file,
 							content: change.newContent,
 							operationIsLocatedInWorkspace,
-						} as CodemarieSayTool
+						} as DietCodeSayTool
 				}
 			}),
 		)
@@ -690,7 +690,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 	private async handleApproval(
 		config: TaskConfig,
 		block: ToolUse,
-		message: CodemarieSayTool,
+		message: DietCodeSayTool,
 		rawInput: string,
 	): Promise<boolean> {
 		const patch = { ...message, content: rawInput }
@@ -719,7 +719,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 			return true
 		}
 
-		showNotificationForApproval(`Codemarie wants to edit '${message.path}'`, config.autoApprovalSettings.enableNotifications)
+		showNotificationForApproval(`DietCode wants to edit '${message.path}'`, config.autoApprovalSettings.enableNotifications)
 
 		await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
 		const { response, text, images, files } = await config.callbacks.ask("tool", completeMessage, false)

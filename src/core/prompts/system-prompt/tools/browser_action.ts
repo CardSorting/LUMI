@@ -1,10 +1,10 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
-const id = CodemarieDefaultTool.BROWSER
+const id = DietCodeDefaultTool.BROWSER
 
-const GENERIC: CodemarieToolSpec = {
+const GENERIC: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "browser_action",
@@ -57,7 +57,7 @@ const GENERIC: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 	id,
 	name: "browser_action",

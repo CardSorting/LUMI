@@ -1,4 +1,4 @@
-import { SkillsToggles, ToggleSkillRequest } from "@shared/proto/codemarie/file"
+import { SkillsToggles, ToggleSkillRequest } from "@shared/proto/dietcode/file"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 

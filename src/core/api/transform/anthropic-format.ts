@@ -1,25 +1,25 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import { CodemarieStorageMessage, convertCodemarieStorageToAnthropicMessage } from "@/shared/messages/content"
+import { convertDietCodeStorageToAnthropicMessage, DietCodeStorageMessage } from "@/shared/messages/content"
 
 /**
- * Converts Codemarie storage messages to Anthropic API format with optional cache control.
+ * Converts DietCode storage messages to Anthropic API format with optional cache control.
  * Adds ephemeral cache control to the last two user messages to prevent them from being
  * stored in Anthropic's cache.
  *
- * @param codemarieMessages - Array of Codemarie storage messages to convert
+ * @param dietcodeMessages - Array of DietCode storage messages to convert
  * @param lastUserMsgIndex - Optional index of the last user message
  * @param secondLastMsgUserIndex - Optional index of the second-to-last user message
  * @returns Array of Anthropic-compatible messages with cache control applied
  */
 export function sanitizeAnthropicMessages(
-	codemarieMessages: Array<CodemarieStorageMessage | Anthropic.MessageParam>,
+	dietcodeMessages: Array<DietCodeStorageMessage | Anthropic.MessageParam>,
 	supportCache: boolean,
 ): Array<Anthropic.MessageParam> {
 	// The latest message will be the new user message, one before will be the assistant message from a previous request,
 	// and the user message before that will be a previously cached user message. So we need to mark the latest user message
 	// as ephemeral to cache it for the next request, and mark the second to last user message as ephemeral to let the server
 	// know the last message to retrieve from the cache for the current request.
-	const userMsgIndices = codemarieMessages.reduce((acc, msg, index) => {
+	const userMsgIndices = dietcodeMessages.reduce((acc, msg, index) => {
 		if (msg.role === "user") {
 			acc.push(index)
 		}
@@ -30,8 +30,8 @@ export function sanitizeAnthropicMessages(
 	const lastUserMsgIndex = userMsgIndices[indicesLength - 1]
 	const secondLastMsgUserIndex = userMsgIndices[indicesLength - 2]
 
-	return codemarieMessages.map((msg, index) => {
-		const anthropicMsg = convertCodemarieStorageToAnthropicMessage(msg)
+	return dietcodeMessages.map((msg, index) => {
+		const anthropicMsg = convertDietCodeStorageToAnthropicMessage(msg)
 
 		// Add cache control to the last two user messages
 		if (supportCache && (index === lastUserMsgIndex || index === secondLastMsgUserIndex)) {

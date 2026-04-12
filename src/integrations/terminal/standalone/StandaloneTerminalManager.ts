@@ -12,7 +12,7 @@
  * - Provides summary for environment details
  */
 
-import { CodemarieTempManager } from "@services/temp"
+import { DietCodeTempManager } from "@services/temp"
 import * as fs from "fs"
 import { BACKGROUND_COMMAND_TIMEOUT_MS, DEFAULT_TERMINAL_OUTPUT_LINE_LIMIT } from "../constants"
 import type { BackgroundCommand, ITerminalManager, TerminalInfo, TerminalProcessResultPromise } from "../types"
@@ -76,6 +76,9 @@ export class StandaloneTerminalManager implements ITerminalManager {
 
 	/** Default terminal profile */
 	private defaultTerminalProfile = "default"
+
+	/** Timeout for shell integration (milliseconds) */
+	private shellIntegrationTimeout = 0
 
 	// =========================================================================
 	// Background Command Tracking
@@ -163,7 +166,7 @@ export class StandaloneTerminalManager implements ITerminalManager {
 		// Create new terminal
 		const newTerminalInfo = this.registry.createTerminal({
 			cwd: cwd,
-			name: `Codemarie Terminal ${this.registry.size + 1}`,
+			name: `DietCode Terminal ${this.registry.size + 1}`,
 		})
 		this.terminalIds.add(newTerminalInfo.id)
 		return newTerminalInfo
@@ -406,8 +409,8 @@ export class StandaloneTerminalManager implements ITerminalManager {
 		existingOutput: string[] = [],
 	): BackgroundCommand {
 		const id = `background-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-		// Use CodemarieTempManager for proper temp file management and cleanup
-		const logFilePath = CodemarieTempManager.createTempFilePath("background")
+		// Use DietCodeTempManager for proper temp file management and cleanup
+		const logFilePath = DietCodeTempManager.createTempFilePath("background")
 
 		const backgroundCommand: BackgroundCommand = {
 			id,

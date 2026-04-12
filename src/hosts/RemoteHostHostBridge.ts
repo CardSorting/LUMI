@@ -57,10 +57,10 @@ export function createRemoteHostHostBridgeProvider(): HostBridgeClientProvider {
 	}
 
 	class RemoteEnvServiceClient extends CliEnvServiceClient {
-		override async openExternal(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+		override async openExternal(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 			await super.openExternal(request)
 			await proxyToWebview("openExternal", request.value)
-			return proto.codemarie.Empty.create()
+			return proto.dietcode.Empty.create()
 		}
 	}
 

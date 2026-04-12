@@ -1,5 +1,5 @@
 <div align="center"><sub>
-العربية | <a href="https://github.com/codemarie/codemarie/blob/main/locales/es/README.md" target="_blank">الإسبانية</a> | <a href="https://github.com/codemarie/codemarie/blob/main/locales/de/README.md" target="_blank">الألمانية</a> | <a href="https://github.com/codemarie/codemarie/blob/main/locales/ja/README.md" target="_blank">اليابانية</a> | <a href="https://github.com/codemarie/codemarie/blob/main/locales/zh-cn/README.md" target="_blank">الصينية المبسطة</a> | <a href="https://github.com/codemarie/codemarie/blob/main/locales/zh-tw/README.md" target="_blank">الصينية التقليدية</a> | <a href="https://github.com/codemarie/codemarie/blob/main/locales/pt-BR/README.md" target="_blank">البرتغالية</a>
+العربية | <a href="https://github.com/dietcode/dietcode/blob/main/locales/es/README.md" target="_blank">الإسبانية</a> | <a href="https://github.com/dietcode/dietcode/blob/main/locales/de/README.md" target="_blank">الألمانية</a> | <a href="https://github.com/dietcode/dietcode/blob/main/locales/ja/README.md" target="_blank">اليابانية</a> | <a href="https://github.com/dietcode/dietcode/blob/main/locales/zh-cn/README.md" target="_blank">الصينية المبسطة</a> | <a href="https://github.com/dietcode/dietcode/blob/main/locales/zh-tw/README.md" target="_blank">الصينية التقليدية</a> | <a href="https://github.com/dietcode/dietcode/blob/main/locales/pt-BR/README.md" target="_blank">البرتغالية</a>
 </sub></div>
 
 # Cline
@@ -21,7 +21,7 @@
 <a href="https://www.reddit.com/r/cline/" target="_blank"><strong>r/cline</strong></a>
 </td>
 <td align="center">
-<a href="https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>طلبات الميزات</strong></a>
+<a href="https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>طلبات الميزات</strong></a>
 </td>
 <td align="center">
 <a href="https://docs.cline.bot/getting-started/getting-started-new-coders" target="_blank"><strong>البدء</strong></a>
@@ -146,7 +146,7 @@
 
 1. استنساخ المستودع _(يتطلب [git-lfs](https://git-lfs.com/))_:
     ```bash
-    git clone https://github.com/codemarie/codemarie.git
+    git clone https://github.com/dietcode/dietcode.git
     ```
 2. افتح المشروع في VSCode:
     ```bash

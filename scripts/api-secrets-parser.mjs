@@ -113,9 +113,9 @@ export function extractProviderFromFieldName(fieldName) {
 		return "anthropic"
 	}
 
-	// Special case: codemarieAccountId maps to "codemarie"
-	if (lowerFieldName === "codemarieaccountid") {
-		return "codemarie"
+	// Special case: dietcodeAccountId maps to "dietcode"
+	if (lowerFieldName === "dietcodeaccountid") {
+		return "dietcode"
 	}
 
 	// Special case: authNonce is not provider-specific
@@ -315,7 +315,7 @@ export function generateApiKeyDisplayName(fieldName) {
 		requestyApiKey: "Requesty API Key",
 		togetherApiKey: "Together AI API Key",
 		difyApiKey: "Dify API Key",
-		codemarieAccountId: "CodeMarie Account ID",
+		dietcodeAccountId: "DietCode Account ID",
 		sapAiCoreClientId: "SAP AI Core Client ID",
 		sapAiCoreClientSecret: "SAP AI Core Client Secret",
 		huaweiCloudMaasApiKey: "Huawei Cloud MaaS API Key",

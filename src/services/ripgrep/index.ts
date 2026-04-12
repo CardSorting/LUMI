@@ -1,4 +1,4 @@
-import { CodemarieIgnoreController } from "@core/ignore/CodemarieIgnoreController"
+import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import * as childProcess from "child_process"
 import * as path from "path"
 import * as readline from "readline"
@@ -110,7 +110,7 @@ export async function regexSearchFiles(
 	directoryPath: string,
 	regex: string,
 	filePattern?: string,
-	codemarieIgnoreController?: CodemarieIgnoreController,
+	dietcodeIgnoreController?: DietCodeIgnoreController,
 ): Promise<string> {
 	const args = ["--json", "-e", regex, "--glob", filePattern || "*", "--context", "1", directoryPath]
 
@@ -156,9 +156,9 @@ export async function regexSearchFiles(
 		results.push(currentResult as SearchResult)
 	}
 
-	// Filter results using CodemarieIgnoreController if provided
-	const filteredResults = codemarieIgnoreController
-		? results.filter((result) => codemarieIgnoreController.validateAccess(result.filePath))
+	// Filter results using DietCodeIgnoreController if provided
+	const filteredResults = dietcodeIgnoreController
+		? results.filter((result) => dietcodeIgnoreController.validateAccess(result.filePath))
 		: results
 
 	return formatResults(filteredResults, cwd)

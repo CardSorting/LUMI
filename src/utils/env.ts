@@ -1,4 +1,4 @@
-import { EmptyRequest, StringRequest } from "@shared/proto/codemarie/common"
+import { EmptyRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { ShowMessageType } from "@shared/proto/host/window"
 import { HostProvider } from "@/hosts/host-provider"
 import { Logger } from "@/shared/services/Logger"

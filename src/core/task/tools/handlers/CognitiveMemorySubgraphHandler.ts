@@ -1,11 +1,11 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemorySubgraphHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_SUBGRAPH
+	readonly name = DietCodeDefaultTool.MEM_SUBGRAPH
 
 	getDescription(_block: ToolUse): string {
 		return "[extract knowledge subgraph]"

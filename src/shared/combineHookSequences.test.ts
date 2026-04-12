@@ -1,11 +1,11 @@
 import { describe, it } from "mocha"
-import type { CodemarieMessage } from "./ExtensionMessage"
+import type { DietCodeMessage } from "./ExtensionMessage"
 import "should"
 import { combineHookSequences } from "./combineHookSequences"
 
 describe("combineHookSequences", () => {
 	it("keeps partial tool messages when no newer tool message with same timestamp exists", () => {
-		const messages: CodemarieMessage[] = [
+		const messages: DietCodeMessage[] = [
 			{
 				ts: 1,
 				type: "say",
@@ -34,7 +34,7 @@ describe("combineHookSequences", () => {
 	})
 
 	it("keeps only the newest tool message variant for a shared timestamp", () => {
-		const messages: CodemarieMessage[] = [
+		const messages: DietCodeMessage[] = [
 			{
 				ts: 10,
 				type: "ask",

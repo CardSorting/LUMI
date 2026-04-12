@@ -1,5 +1,5 @@
-import type { ToggleToolAutoApproveRequest } from "@shared/proto/codemarie/mcp"
-import { McpServers } from "@shared/proto/codemarie/mcp"
+import type { ToggleToolAutoApproveRequest } from "@shared/proto/dietcode/mcp"
+import { McpServers } from "@shared/proto/dietcode/mcp"
 import { convertMcpServersToProtoMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"

@@ -1,0 +1,377 @@
+src/core/context/ContextStalenessTracker.ts:3:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import * as fs from "fs"
+    2 │ import * as path from "path"
+  > 3 │ import { Logger } from "@/shared/services/Logger"
+      │        ^^^^^^^^^^
+    4 │ 
+    5 │ export interface ContextEntry {
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import * as fs from "fs"
+     2  2 │   import * as path from "path"
+     3    │ - import·{·Logger·}·from·"@/shared/services/Logger"
+     4  3 │   
+     5  4 │   export interface ContextEntry {
+  
+
+src/core/integrity/MetabolicMonitor.ts:1:13 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+  > 1 │ import * as fs from "fs"
+      │             ^^
+    2 │ import * as path from "path"
+    3 │ import { Logger } from "@/shared/services/Logger"
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+    1 │ import·*·as·fs·from·"fs"
+      │ ------------------------
+
+src/core/integrity/MetabolicMonitor.ts:2:13 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import * as fs from "fs"
+  > 2 │ import * as path from "path"
+      │             ^^^^
+    3 │ import { Logger } from "@/shared/services/Logger"
+    4 │ 
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+      1   1 │   import * as fs from "fs"
+      2     │ - import·*·as·path·from·"path"
+      3   2 │   import { Logger } from "@/shared/services/Logger"
+      4   3 │   
+  
+
+src/core/integrity/MetabolicMonitor.ts:3:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import * as fs from "fs"
+    2 │ import * as path from "path"
+  > 3 │ import { Logger } from "@/shared/services/Logger"
+      │        ^^^^^^^^^^
+    4 │ 
+    5 │ export interface MetabolicMetrics {
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+      1   1 │   import * as fs from "fs"
+      2   2 │   import * as path from "path"
+      3     │ - import·{·Logger·}·from·"@/shared/services/Logger"
+      4   3 │   
+      5   4 │   export interface MetabolicMetrics {
+  
+
+src/core/integrity/SovereignCheckpoint.ts:2:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import { SpiderSnapshot } from "../policy/SpiderEngine.js"
+  > 2 │ import { Logger } from "@/shared/services/Logger"
+      │        ^^^^^^^^^^
+    3 │ 
+    4 │ /**
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import { SpiderSnapshot } from "../policy/SpiderEngine.js"
+     2    │ - import·{·Logger·}·from·"@/shared/services/Logger"
+     3  2 │   
+     4  3 │   /**
+  
+
+src/core/integrity/SovereignDoctor.ts:3:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import * as fs from "fs"
+    2 │ import * as path from "path"
+  > 3 │ import { Logger } from "@/shared/services/Logger"
+      │        ^^^^^^^^^^
+    4 │ 
+    5 │ export interface DiagnosticIssue {
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+      1   1 │   import * as fs from "fs"
+      2   2 │   import * as path from "path"
+      3     │ - import·{·Logger·}·from·"@/shared/services/Logger"
+      4   3 │   
+      5   4 │   export interface DiagnosticIssue {
+  
+
+src/core/orchestration/DriftOrchestrator.ts:1:10 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × Several of these imports are unused.
+  
+  > 1 │ import { SpiderEngine, SpiderNode } from "../policy/SpiderEngine.js"
+      │          ^^^^^^^^^^^^
+    2 │ import { Logger } from "@/shared/services/Logger"
+    3 │ 
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+    1 │ import·{·SpiderEngine,·SpiderNode·}·from·"../policy/SpiderEngine.js"
+      │          --------------                                             
+
+src/core/orchestration/DriftOrchestrator.ts:2:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import { SpiderEngine, SpiderNode } from "../policy/SpiderEngine.js"
+  > 2 │ import { Logger } from "@/shared/services/Logger"
+      │        ^^^^^^^^^^
+    3 │ 
+    4 │ export interface DriftReport {
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import { SpiderEngine, SpiderNode } from "../policy/SpiderEngine.js"
+     2    │ - import·{·Logger·}·from·"@/shared/services/Logger"
+     3  2 │   
+     4  3 │   export interface DriftReport {
+  
+
+src/core/policy/SemanticAxiomEngine.ts:2:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import { SpiderEngine } from "./SpiderEngine.js"
+  > 2 │ import { Logger } from "@/shared/services/Logger"
+      │        ^^^^^^^^^^
+    3 │ import * as path from "path"
+    4 │ 
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import { SpiderEngine } from "./SpiderEngine.js"
+     2    │ - import·{·Logger·}·from·"@/shared/services/Logger"
+     3  2 │   import * as path from "path"
+     4  3 │   
+  
+
+src/core/policy/SimulationEngine.ts:1:24 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × Several of these imports are unused.
+  
+  > 1 │ import { SpiderEngine, SpiderEntropyReport } from "./SpiderEngine.js"
+      │                        ^^^^^^^^^^^^^^^^^^^
+    2 │ import { PathogenStore } from "../integrity/PathogenStore"
+    3 │ import { Logger } from "@/shared/services/Logger"
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+    1 │ import·{·SpiderEngine,·SpiderEntropyReport·}·from·"./SpiderEngine.js"
+      │                        --------------------                          
+
+src/core/policy/SimulationEngine.ts:3:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import { SpiderEngine, SpiderEntropyReport } from "./SpiderEngine.js"
+    2 │ import { PathogenStore } from "../integrity/PathogenStore"
+  > 3 │ import { Logger } from "@/shared/services/Logger"
+      │        ^^^^^^^^^^
+    4 │ import { Layer, getLayer } from "@/utils/joy-zoning"
+    5 │ import * as path from "path"
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+      1   1 │   import { SpiderEngine, SpiderEntropyReport } from "./SpiderEngine.js"
+      2   2 │   import { PathogenStore } from "../integrity/PathogenStore"
+      3     │ - import·{·Logger·}·from·"@/shared/services/Logger"
+      4   3 │   import { Layer, getLayer } from "@/utils/joy-zoning"
+      5   4 │   import * as path from "path"
+  
+
+src/core/policy/SimulationEngine.ts:4:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    2 │ import { PathogenStore } from "../integrity/PathogenStore"
+    3 │ import { Logger } from "@/shared/services/Logger"
+  > 4 │ import { Layer, getLayer } from "@/utils/joy-zoning"
+      │        ^^^^^^^^^^^^^^^^^^^
+    5 │ import * as path from "path"
+    6 │ 
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+      2   2 │   import { PathogenStore } from "../integrity/PathogenStore"
+      3   3 │   import { Logger } from "@/shared/services/Logger"
+      4     │ - import·{·Layer,·getLayer·}·from·"@/utils/joy-zoning"
+      5   4 │   import * as path from "path"
+      6   5 │   
+  
+
+src/core/policy/SovereignOptimizer.ts:2:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import { SpiderEngine, SpiderNode } from "./SpiderEngine.js"
+  > 2 │ import { getLayer } from "@/utils/joy-zoning"
+      │        ^^^^^^^^^^^^
+    3 │ import * as path from "path"
+    4 │ 
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import { SpiderEngine, SpiderNode } from "./SpiderEngine.js"
+     2    │ - import·{·getLayer·}·from·"@/utils/joy-zoning"
+     3  2 │   import * as path from "path"
+     4  3 │   
+  
+
+src/core/policy/SovereignOptimizer.ts:3:13 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import { SpiderEngine, SpiderNode } from "./SpiderEngine.js"
+    2 │ import { getLayer } from "@/utils/joy-zoning"
+  > 3 │ import * as path from "path"
+      │             ^^^^
+    4 │ 
+    5 │ export interface OptimizationOpportunity {
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import { SpiderEngine, SpiderNode } from "./SpiderEngine.js"
+     2  2 │   import { getLayer } from "@/utils/joy-zoning"
+     3    │ - import·*·as·path·from·"path"
+     4  3 │   
+     5  4 │   export interface OptimizationOpportunity {
+  
+
+src/core/task/tools/RefactorHealer.ts:124:4 plugin ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Use Logger service instead of direct console calls.
+  
+    122 │ 			}
+    123 │ 		} catch (err) {
+  > 124 │ 			console.error(`[RefactorHealer] Failed to align tag for ${filePath}:`, err)
+        │ 			^^^^^^^^^^^^^
+    125 │ 		}
+    126 │ 	}
+  
+
+src/core/task/tools/RefactorHealer.ts:146:4 plugin ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Use Logger service instead of direct console calls.
+  
+    144 │ 			await fs.writeFile(absolutePath, template, "utf-8")
+    145 │ 		} catch (err) {
+  > 146 │ 			console.error(`[RefactorHealer] Failed to materialize ghost ${filePath}:`, err)
+        │ 			^^^^^^^^^^^^^
+    147 │ 		}
+    148 │ 	}
+  
+
+src/core/task/tools/RefactorHealer.ts:5:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    3 │ import { SpiderEngine } from "../../policy/SpiderEngine"
+    4 │ import { SovereignTransaction } from "../../integrity/SovereignTransaction"
+  > 5 │ import { SemanticAxiomEngine } from "../../policy/SemanticAxiomEngine"
+      │        ^^^^^^^^^^^^^^^^^^^^^^^
+    6 │ import { Logger } from "@/shared/services/Logger"
+    7 │ import * as fs from "fs/promises"
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+      3   3 │   import { SpiderEngine } from "../../policy/SpiderEngine"
+      4   4 │   import { SovereignTransaction } from "../../integrity/SovereignTransaction"
+      5     │ - import·{·SemanticAxiomEngine·}·from·"../../policy/SemanticAxiomEngine"
+      6   5 │   import { Logger } from "@/shared/services/Logger"
+      7   6 │   import * as fs from "fs/promises"
+  
+
+src/core/task/tools/RefactorHealer.ts:9:13 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+     7 │ import * as fs from "fs/promises"
+     8 │ import * as path from "path"
+   > 9 │ import * as crypto from "crypto"
+       │             ^^^^^^
+    10 │ 
+    11 │ export interface HealingProposal {
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+      7   7 │   import * as fs from "fs/promises"
+      8   8 │   import * as path from "path"
+      9     │ - import·*·as·crypto·from·"crypto"
+     10   9 │   
+     11  10 │   export interface HealingProposal {
+  
+
+src/utils/import-fixer.ts:3:13 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━
+
+  × This import is unused.
+  
+    1 │ import { Project } from "ts-morph"
+    2 │ import * as path from "path"
+  > 3 │ import * as fs from "fs"
+      │             ^^
+    4 │ 
+    5 │ /**
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import { Project } from "ts-morph"
+     2  2 │   import * as path from "path"
+     3    │ - import·*·as·fs·from·"fs"
+     4  3 │   
+     5  4 │   /**
+  
+
+Checked 1837 files in 5s. No fixes applied.
+Found 19 errors.
+lint ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Some errors were emitted while running checks.
+  
+

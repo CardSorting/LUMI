@@ -1,5 +1,5 @@
-import { StringRequest } from "@shared/proto/codemarie/common"
-import { ApiFormat, OcaCompatibleModelInfo, OcaModelInfo } from "@shared/proto/codemarie/models"
+import { StringRequest } from "@shared/proto/dietcode/common"
+import { ApiFormat, OcaCompatibleModelInfo, OcaModelInfo } from "@shared/proto/dietcode/models"
 import axios from "axios"
 import { HostProvider } from "@/hosts/host-provider"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"

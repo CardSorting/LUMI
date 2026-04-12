@@ -1,4 +1,4 @@
-import { StringArrayRequest } from "@shared/proto/codemarie/common"
+import { StringArrayRequest } from "@shared/proto/dietcode/common"
 import { TrashIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"

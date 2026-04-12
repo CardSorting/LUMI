@@ -5,7 +5,7 @@ import { HostProvider } from "@/hosts/host-provider"
 import { getCwd, getDesktopDir } from "@/utils/path"
 
 /**
- * All valid hook types that can be created and executed by Codemarie.
+ * All valid hook types that can be created and executed by DietCode.
  * These hooks correspond to specific lifecycle events in the task execution process.
  */
 export const VALID_HOOK_TYPES = [
@@ -50,7 +50,7 @@ export async function resolveHooksDirectory(
 	globalHooksDirOverride?: string,
 ): Promise<string> {
 	if (isGlobal) {
-		return globalHooksDirOverride || path.join(os.homedir(), "Documents", "Codemarie", "Hooks")
+		return globalHooksDirOverride || path.join(os.homedir(), "Documents", "DietCode", "Hooks")
 	}
 
 	// For workspace hooks, find the correct workspace
@@ -61,12 +61,12 @@ export async function resolveHooksDirectory(
 		if (!targetWorkspace) {
 			throw new Error(`Workspace "${workspaceName}" not found`)
 		}
-		return path.join(targetWorkspace, ".codemarierules", "hooks")
+		return path.join(targetWorkspace, ".dietcoderules", "hooks")
 	}
 
 	// Single workspace: use getCwd
 	const cwd = await getCwd(getDesktopDir())
-	return path.join(cwd, ".codemarierules", "hooks")
+	return path.join(cwd, ".dietcoderules", "hooks")
 }
 
 /**

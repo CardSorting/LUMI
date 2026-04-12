@@ -9,7 +9,7 @@ describe("HookProcess", () => {
 
 		await withPlatform("win32", async () => {
 			const config = await getHookLaunchConfig(
-				"C:\\workspace\\.codemarierules\\hooks\\PreToolUse.ps1",
+				"C:\\workspace\\.dietcoderules\\hooks\\PreToolUse.ps1",
 				async () => resolvedExecutable,
 			)
 
@@ -20,7 +20,7 @@ describe("HookProcess", () => {
 				"-ExecutionPolicy",
 				"Bypass",
 				"-File",
-				"C:\\workspace\\.codemarierules\\hooks\\PreToolUse.ps1",
+				"C:\\workspace\\.dietcoderules\\hooks\\PreToolUse.ps1",
 			])
 			config.shell.should.equal(false)
 			config.detached.should.equal(false)
@@ -29,7 +29,7 @@ describe("HookProcess", () => {
 
 	it("keeps Unix launch behavior unchanged", async () => {
 		await withPlatform("linux", async () => {
-			const config = await getHookLaunchConfig("/tmp/.codemarierules/hooks/PreToolUse")
+			const config = await getHookLaunchConfig("/tmp/.dietcoderules/hooks/PreToolUse")
 			config.args.should.deepEqual([])
 			config.shell.should.equal(true)
 			config.detached.should.equal(true)
@@ -39,7 +39,7 @@ describe("HookProcess", () => {
 	it("surfaces resolver failures", async () => {
 		await withPlatform("win32", async () => {
 			try {
-				await getHookLaunchConfig("C:\\workspace\\.codemarierules\\hooks\\PreToolUse.ps1", async () => {
+				await getHookLaunchConfig("C:\\workspace\\.dietcoderules\\hooks\\PreToolUse.ps1", async () => {
 					throw new Error("resolver failed")
 				})
 				throw new Error("Expected getHookLaunchConfig to throw")

@@ -1,17 +1,17 @@
 # Knowledge Base Guide
 
-Welcome to the CodeMarie Knowledge Base. This guide serves as a central map for navigating our sprawling documentation, organized by your specific needs.
+Welcome to the DietCode Knowledge Base. This guide serves as a central map for navigating our sprawling documentation, organized by your specific needs.
 
 ## 🗺️ Documentation Domains
 
 ### 1. 🚀 Getting Started (User Domain)
-If you are new to CodeMarie, start here to understand the core workflow.
-- [What is CodeMarie?](getting-started/what-is-cline)
+If you are new to DietCode, start here to understand the core workflow.
+- [What is DietCode?](getting-started/what-is-cline)
 - [Quick Start Guide](getting-started/quick-start)
 - [Your First Project](getting-started/your-first-project)
 
 ### 2. 🧬 Cognitive Architecture (Architect Domain)
-Deep dives into the internal mechanics of CodeMarie's intelligence.
+Deep dives into the internal mechanics of DietCode's intelligence.
 - [**Memory Bank (BroccoliDB)**](features/memory-bank): The persistent knowledge graph that powers long-term reasoning.
 - [**Grounding & MAS Deprecation**](hyper-cognition/GROUNDING_MAS_DEPRECATION): Post-mortem analysis and removal rationale for legacy orchestration layers.
 - [**Production Optimization Summary**](PRODUCTION_OPTIMIZATION_SUMMARY): Benchmark results and engineering details for the v3.84.0 hardening initiative.

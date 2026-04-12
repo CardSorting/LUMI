@@ -1,14 +1,14 @@
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import ErrorRow from "./ErrorRow"
 
 // Mock the auth context
-vi.mock("@/context/CodemarieAuthContext", () => ({
-	useCodemarieAuth: () => ({
-		codemarieUser: null,
+vi.mock("@/context/DietCodeAuthContext", () => ({
+	useDietCodeAuth: () => ({
+		dietcodeUser: null,
 	}),
-	useCodemarieSignIn: () => ({
+	useDietCodeSignIn: () => ({
 		isLoginLoading: false,
 	}),
 	handleSignOut: vi.fn(),
@@ -19,12 +19,12 @@ vi.mock("@/components/chat/CreditLimitError", () => ({
 	default: ({ message }: { message: string }) => <div data-testid="credit-limit-error">{message}</div>,
 }))
 
-// Mock CodemarieError
-vi.mock("../../../../src/services/error/CodemarieError", () => ({
-	CodemarieError: {
+// Mock DietCodeError
+vi.mock("../../../../src/services/error/DietCodeError", () => ({
+	DietCodeError: {
 		parse: vi.fn(),
 	},
-	CodemarieErrorType: {
+	DietCodeErrorType: {
 		Balance: "balance",
 		RateLimit: "rateLimit",
 		Auth: "auth",
@@ -32,7 +32,7 @@ vi.mock("../../../../src/services/error/CodemarieError", () => ({
 }))
 
 describe("ErrorRow", () => {
-	const mockMessage: CodemarieMessage = {
+	const mockMessage: DietCodeMessage = {
 		ts: 123456789,
 		type: "say",
 		say: "error",
@@ -64,17 +64,17 @@ describe("ErrorRow", () => {
 		).toBeInTheDocument()
 	})
 
-	it("renders codemarieignore error", () => {
-		const codemarieignoreMessage = { ...mockMessage, text: "/path/to/file.txt" }
-		render(<ErrorRow errorType="codemarieignore_error" message={codemarieignoreMessage} />)
+	it("renders dietcodeignore error", () => {
+		const dietcodeignoreMessage = { ...mockMessage, text: "/path/to/file.txt" }
+		render(<ErrorRow errorType="dietcodeignore_error" message={dietcodeignoreMessage} />)
 
-		expect(screen.getByText(/Codemarie tried to access/)).toBeInTheDocument()
+		expect(screen.getByText(/DietCode tried to access/)).toBeInTheDocument()
 		expect(screen.getByText("/path/to/file.txt")).toBeInTheDocument()
 	})
 
 	describe("API error handling", () => {
 		it("renders credit limit error when balance error is detected", async () => {
-			const mockCodemarieError = {
+			const mockDietCodeError = {
 				message: "Insufficient credits",
 				isErrorType: vi.fn((type) => type === "balance"),
 				_error: {
@@ -83,13 +83,13 @@ describe("ErrorRow", () => {
 						total_spent: 10.5,
 						total_promotions: 5.0,
 						message: "You have run out of credits.",
-						buy_credits_url: "https://app.codemarie.bot/dashboard",
+						buy_credits_url: "https://app.dietcode.bot/dashboard",
 					},
 				},
 			}
 
-			const { CodemarieError } = await import("../../../../src/services/error/CodemarieError")
-			vi.mocked(CodemarieError.parse).mockReturnValue(mockCodemarieError as any)
+			const { DietCodeError } = await import("../../../../src/services/error/DietCodeError")
+			vi.mocked(DietCodeError.parse).mockReturnValue(mockDietCodeError as any)
 
 			render(<ErrorRow apiRequestFailedMessage="Insufficient credits error" errorType="error" message={mockMessage} />)
 
@@ -98,7 +98,7 @@ describe("ErrorRow", () => {
 		})
 
 		it("renders rate limit error with request ID", async () => {
-			const mockCodemarieError = {
+			const mockDietCodeError = {
 				message: "Rate limit exceeded",
 				isErrorType: vi.fn((type) => type === "rateLimit"),
 				_error: {
@@ -106,8 +106,8 @@ describe("ErrorRow", () => {
 				},
 			}
 
-			const { CodemarieError } = await import("../../../../src/services/error/CodemarieError")
-			vi.mocked(CodemarieError.parse).mockReturnValue(mockCodemarieError as any)
+			const { DietCodeError } = await import("../../../../src/services/error/DietCodeError")
+			vi.mocked(DietCodeError.parse).mockReturnValue(mockDietCodeError as any)
 
 			render(<ErrorRow apiRequestFailedMessage="Rate limit exceeded" errorType="error" message={mockMessage} />)
 
@@ -116,31 +116,31 @@ describe("ErrorRow", () => {
 		})
 
 		it("renders auth error with sign in button when user is not signed in", async () => {
-			const mockCodemarieError = {
+			const mockDietCodeError = {
 				message: "Authentication failed",
 				isErrorType: vi.fn((type) => type === "auth"),
-				providerId: "codemarie",
+				providerId: "dietcode",
 				_error: {},
 			}
 
-			const { CodemarieError } = await import("../../../../src/services/error/CodemarieError")
-			vi.mocked(CodemarieError.parse).mockReturnValue(mockCodemarieError as any)
+			const { DietCodeError } = await import("../../../../src/services/error/DietCodeError")
+			vi.mocked(DietCodeError.parse).mockReturnValue(mockDietCodeError as any)
 
 			render(<ErrorRow apiRequestFailedMessage="Authentication failed" errorType="error" message={mockMessage} />)
 
 			expect(screen.getByText("Authentication failed")).toBeInTheDocument()
-			expect(screen.getByText("Sign in to Codemarie")).toBeInTheDocument()
+			expect(screen.getByText("Sign in to DietCode")).toBeInTheDocument()
 		})
 
 		it("renders PowerShell troubleshooting link when error mentions PowerShell", async () => {
-			const mockCodemarieError = {
+			const mockDietCodeError = {
 				message: "PowerShell is not recognized as an internal or external command",
 				isErrorType: vi.fn(() => false),
 				_error: {},
 			}
 
-			const { CodemarieError } = await import("../../../../src/services/error/CodemarieError")
-			vi.mocked(CodemarieError.parse).mockReturnValue(mockCodemarieError as any)
+			const { DietCodeError } = await import("../../../../src/services/error/DietCodeError")
+			vi.mocked(DietCodeError.parse).mockReturnValue(mockDietCodeError as any)
 
 			render(
 				<ErrorRow
@@ -154,33 +154,33 @@ describe("ErrorRow", () => {
 			expect(screen.getByText("troubleshooting guide")).toBeInTheDocument()
 			expect(screen.getByRole("link", { name: "troubleshooting guide" })).toHaveAttribute(
 				"href",
-				"https://github.com/codemarie/codemarie/wiki/TroubleShooting-%E2%80%90-%22PowerShell-is-not-recognized-as-an-internal-or-external-command%22",
+				"https://github.com/dietcode/dietcode/wiki/TroubleShooting-%E2%80%90-%22PowerShell-is-not-recognized-as-an-internal-or-external-command%22",
 			)
 		})
 
 		it("handles apiReqStreamingFailedMessage instead of apiRequestFailedMessage", async () => {
-			const mockCodemarieError = {
+			const mockDietCodeError = {
 				message: "Streaming failed",
 				isErrorType: vi.fn(() => false),
 				_error: {},
 			}
 
-			const { CodemarieError } = await import("../../../../src/services/error/CodemarieError")
-			vi.mocked(CodemarieError.parse).mockReturnValue(mockCodemarieError as any)
+			const { DietCodeError } = await import("../../../../src/services/error/DietCodeError")
+			vi.mocked(DietCodeError.parse).mockReturnValue(mockDietCodeError as any)
 
 			render(<ErrorRow apiReqStreamingFailedMessage="Streaming failed" errorType="error" message={mockMessage} />)
 
 			expect(screen.getByText("Streaming failed")).toBeInTheDocument()
 		})
 
-		it("falls back to regular error message when CodemarieError.parse returns null", async () => {
-			const { CodemarieError } = await import("../../../../src/services/error/CodemarieError")
-			vi.mocked(CodemarieError.parse).mockReturnValue(undefined)
+		it("falls back to regular error message when DietCodeError.parse returns null", async () => {
+			const { DietCodeError } = await import("../../../../src/services/error/DietCodeError")
+			vi.mocked(DietCodeError.parse).mockReturnValue(undefined)
 
 			render(<ErrorRow apiRequestFailedMessage="Some API error" errorType="error" message={mockMessage} />)
 
-			// When CodemarieError.parse returns null, we display the raw error message for non-Codemarie providers
-			// Since codemarieError is undefined, isCodemarieProvider is false, so we show the raw apiRequestFailedMessage
+			// When DietCodeError.parse returns null, we display the raw error message for non-DietCode providers
+			// Since dietcodeError is undefined, isDietCodeProvider is false, so we show the raw apiRequestFailedMessage
 			expect(screen.getByText("Some API error")).toBeInTheDocument()
 		})
 

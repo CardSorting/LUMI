@@ -17,11 +17,11 @@ export function getConfiguredProviders(
 	const configured: ApiProvider[] = []
 
 	if (!apiConfiguration) {
-		return ["codemarie"] // Codemarie is always available
+		return ["dietcode"] // DietCode is always available
 	}
 
-	// Codemarie - always available (uses account-based auth)
-	configured.push("codemarie")
+	// DietCode - always available (uses account-based auth)
+	configured.push("dietcode")
 
 	// Anthropic - requires API key
 	if (apiConfiguration.apiKey) {

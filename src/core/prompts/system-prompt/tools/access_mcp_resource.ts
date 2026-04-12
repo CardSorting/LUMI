@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
 /**
@@ -20,9 +20,9 @@ Checklist here (optional)
 </access_mcp_resource>
  */
 
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
-	id: CodemarieDefaultTool.MCP_ACCESS,
+	id: DietCodeDefaultTool.MCP_ACCESS,
 	name: "access_mcp_resource",
 	description:
 		"Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information.",
@@ -44,9 +44,9 @@ const generic: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_GPT_5,
-	id: CodemarieDefaultTool.MCP_ACCESS,
+	id: DietCodeDefaultTool.MCP_ACCESS,
 	name: "access_mcp_resource",
 	description:
 		"Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information. You must only use this tool if you have been informed of the MCP server and the resource you are trying to access.",
@@ -71,7 +71,7 @@ const NATIVE_GPT_5: CodemarieToolSpec = {
 const nextGen = { ...generic, variant: ModelFamily.NEXT_GEN }
 const gpt = { ...generic, variant: ModelFamily.GPT }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	...NATIVE_GPT_5,
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 }

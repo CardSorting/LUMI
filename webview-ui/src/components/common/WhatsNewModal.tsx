@@ -1,4 +1,4 @@
-import { BannerAction, BannerCardData } from "@shared/codemarie/banner"
+import { BannerAction, BannerCardData } from "@shared/dietcode/banner"
 import React, { useCallback } from "react"
 import { useMount } from "react-use"
 import DiscordIcon from "@/assets/DiscordIcon"
@@ -28,11 +28,11 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, ver
 
 	const navigateToModelPicker = useCallback(
 		(initialModelTab: "recommended" | "free", modelId?: string) => {
-			// Switch to Codemarie provider first so the model picker tab works
+			// Switch to DietCode provider first so the model picker tab works
 			// Optionally also set the model if provided
 			const updates: Record<string, any> = {
-				planModeApiProvider: "codemarie",
-				actModeApiProvider: "codemarie",
+				planModeApiProvider: "dietcode",
+				actModeApiProvider: "dietcode",
 			}
 			if (modelId) {
 				updates.planModeOpenRouterModelId = modelId
@@ -85,7 +85,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, ver
 							<a
 								aria-label="Follow us on X"
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
-								href="https://x.com/codemarie"
+								href="https://x.com/dietcode"
 								rel="noopener noreferrer"
 								target="_blank">
 								<XIcon />
@@ -95,7 +95,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, ver
 							<a
 								aria-label="Join our Discord"
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
-								href="https://discord.gg/codemarie"
+								href="https://discord.gg/dietcode"
 								rel="noopener noreferrer"
 								target="_blank">
 								<DiscordIcon />
@@ -105,7 +105,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, ver
 							<a
 								aria-label="Star us on GitHub"
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
-								href="https://github.com/codemarie/codemarie"
+								href="https://github.com/dietcode/dietcode"
 								rel="noopener noreferrer"
 								target="_blank">
 								<GitHubIcon />
@@ -115,7 +115,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, ver
 							<a
 								aria-label="Join our subreddit"
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
-								href="https://www.reddit.com/r/codemarie/"
+								href="https://www.reddit.com/r/dietcode/"
 								rel="noopener noreferrer"
 								target="_blank">
 								<RedditIcon />
@@ -125,7 +125,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, ver
 							<a
 								aria-label="Follow us on LinkedIn"
 								className="text-[var(--vscode-foreground)] hover:text-[var(--vscode-textLink-activeForeground)] transition-colors"
-								href="https://www.linkedin.com/company/codemariebot/"
+								href="https://www.linkedin.com/company/dietcodebot/"
 								rel="noopener noreferrer"
 								target="_blank">
 								<LinkedInIcon />
@@ -134,9 +134,9 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, ver
 
 						{/* GitHub Star CTA */}
 						<p className="text-sm text-center" style={{ color: "var(--vscode-descriptionForeground)" }}>
-							Please support Codemarie by{" "}
+							Please support DietCode by{" "}
 							<a
-								href="https://github.com/codemarie/codemarie"
+								href="https://github.com/dietcode/dietcode"
 								rel="noopener noreferrer"
 								style={{ color: "var(--vscode-textLink-foreground)" }}
 								target="_blank">

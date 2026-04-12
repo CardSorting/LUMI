@@ -28,9 +28,9 @@ describe("distinctId", () => {
 				workspaceClient: {},
 				envClient: {
 					getHostVersion: sandbox.stub().resolves({
-						codemarieVersion: "1.0.0",
+						dietcodeVersion: "1.0.0",
 						platform: "darwin",
-						codemarieType: "vscode",
+						dietcodeType: "vscode",
 					}),
 				},
 				windowClient: {},

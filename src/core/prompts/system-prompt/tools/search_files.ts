@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
 /**
@@ -18,9 +18,9 @@ Usage:
 </search_files>
  */
 
-const id = CodemarieDefaultTool.SEARCH
+const id = DietCodeDefaultTool.SEARCH
 
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "search_files",
@@ -50,7 +50,7 @@ const generic: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 	id,
 	name: "search_files",
@@ -80,7 +80,7 @@ const NATIVE_NEXT_GEN: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	...NATIVE_NEXT_GEN,
 	variant: ModelFamily.NATIVE_GPT_5,
 }

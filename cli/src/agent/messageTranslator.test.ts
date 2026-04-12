@@ -1,14 +1,14 @@
 /**
  * Unit tests for messageTranslator.ts
  *
- * Tests the translation of Codemarie messages to ACP session updates,
+ * Tests the translation of DietCode messages to ACP session updates,
  * validating conformance to the ACP protocol schema.
  *
  * @see https://agentclientprotocol.com/schema
  */
 
 import type * as acp from "@agentclientprotocol/sdk"
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { beforeEach, describe, expect, it } from "vitest"
 import { createSessionState, translateMessage, translateMessages } from "./messageTranslator"
 import type { AcpSessionState } from "./types"
@@ -19,14 +19,14 @@ import { AcpSessionStatus } from "./types"
 // =============================================================================
 
 /**
- * Create a minimal CodemarieMessage for testing.
+ * Create a minimal DietCodeMessage for testing.
  */
-function createCodemarieMessage(overrides: Partial<CodemarieMessage>): CodemarieMessage {
+function createDietCodeMessage(overrides: Partial<DietCodeMessage>): DietCodeMessage {
 	return {
 		ts: Date.now(),
 		type: "say",
 		...overrides,
-	} as CodemarieMessage
+	} as DietCodeMessage
 }
 
 /**
@@ -209,7 +209,7 @@ describe("translateMessage - say messages", () => {
 
 	describe("text messages", () => {
 		it("should translate say:text to agent_message_chunk", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "text",
 				text: "Hello, this is a response.",
@@ -228,7 +228,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should not generate update for empty text", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "text",
 				text: "",
@@ -240,7 +240,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should not generate update for undefined text", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "text",
 			})
@@ -253,7 +253,7 @@ describe("translateMessage - say messages", () => {
 
 	describe("reasoning messages", () => {
 		it("should translate say:reasoning to agent_thought_chunk", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "reasoning",
 				reasoning: "I need to analyze the code structure first.",
@@ -272,7 +272,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should fall back to text field if reasoning is undefined", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "reasoning",
 				text: "Thinking about the problem...",
@@ -290,7 +290,7 @@ describe("translateMessage - say messages", () => {
 
 	describe("error messages", () => {
 		it("should translate say:error to agent_message_chunk with error prefix", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "error",
 				text: "Failed to read file",
@@ -309,7 +309,7 @@ describe("translateMessage - say messages", () => {
 		it("should update current tool call to failed status on error", () => {
 			sessionState.currentToolCallId = "active-tool-123"
 
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "error",
 				text: "Operation failed",
@@ -330,7 +330,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should handle error_retry message type", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "error_retry",
 				text: "Retrying after failure",
@@ -343,7 +343,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should handle diff_error message type", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "diff_error",
 				text: "Diff application failed",
@@ -358,7 +358,7 @@ describe("translateMessage - say messages", () => {
 
 	describe("command messages", () => {
 		it("should translate say:command to tool_call with execute kind", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "command",
 				text: "npm install",
@@ -382,7 +382,7 @@ describe("translateMessage - say messages", () => {
 
 		it("should truncate long command titles", () => {
 			const longCommand = "npm install --save-dev very-long-package-name-that-exceeds-fifty-characters-limit"
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "command",
 				text: longCommand,
@@ -403,7 +403,7 @@ describe("translateMessage - say messages", () => {
 		it("should translate say:command_output to tool_call_update when tool is active", () => {
 			sessionState.currentToolCallId = "command-tool-123"
 
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "command_output",
 				text: "added 5 packages",
@@ -425,7 +425,7 @@ describe("translateMessage - say messages", () => {
 		it("should mark tool as completed when commandCompleted is true", () => {
 			sessionState.currentToolCallId = "command-tool-456"
 
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "command_output",
 				text: "Done!",
@@ -444,7 +444,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should fall back to agent_message_chunk when no active tool", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "command_output",
 				text: "Output without active tool",
@@ -464,7 +464,7 @@ describe("translateMessage - say messages", () => {
 				path: "/src/index.ts",
 				content: "export const hello = 'world';",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: JSON.stringify(toolInfo),
@@ -493,7 +493,7 @@ describe("translateMessage - say messages", () => {
 +const y = 2;
  console.log(x);`,
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: JSON.stringify(toolInfo),
@@ -519,7 +519,7 @@ describe("translateMessage - say messages", () => {
 				path: "/src/new-file.ts",
 				content: "// New file content",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: JSON.stringify(toolInfo),
@@ -539,7 +539,7 @@ describe("translateMessage - say messages", () => {
 				tool: "fileDeleted",
 				path: "/src/old-file.ts",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: JSON.stringify(toolInfo),
@@ -560,7 +560,7 @@ describe("translateMessage - say messages", () => {
 				regex: "TODO|FIXME",
 				content: "Found 3 matches...",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: JSON.stringify(toolInfo),
@@ -580,7 +580,7 @@ describe("translateMessage - say messages", () => {
 				tool: "readFile",
 				path: "/src/large-file.ts",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: JSON.stringify(toolInfo),
@@ -604,7 +604,7 @@ describe("translateMessage - say messages", () => {
 				path: "/src/file.ts",
 				content: "More content...",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: JSON.stringify(toolInfo),
@@ -618,7 +618,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should handle invalid JSON in tool message gracefully", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: "not valid json",
@@ -638,7 +638,7 @@ describe("translateMessage - say messages", () => {
 				action: "launch",
 				url: "https://example.com",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "browser_action_launch",
 				text: JSON.stringify(actionInfo),
@@ -660,7 +660,7 @@ describe("translateMessage - say messages", () => {
 				action: "click",
 				coordinate: [100, 200],
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "browser_action",
 				text: JSON.stringify(actionInfo),
@@ -682,7 +682,7 @@ describe("translateMessage - say messages", () => {
 				screenshot: "base64data...",
 				success: true,
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "browser_action_result",
 				text: JSON.stringify(resultInfo),
@@ -705,7 +705,7 @@ describe("translateMessage - say messages", () => {
 				toolName: "get_weather",
 				type: "tool_call",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "mcp_server_request_started",
 				text: JSON.stringify(mcpInfo),
@@ -728,7 +728,7 @@ describe("translateMessage - say messages", () => {
 			const responseInfo = {
 				result: { temperature: 72, unit: "F" },
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "mcp_server_response",
 				text: JSON.stringify(responseInfo),
@@ -746,7 +746,7 @@ describe("translateMessage - say messages", () => {
 
 	describe("completion messages", () => {
 		it("should translate say:completion_result to agent_message_chunk", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "completion_result",
 				text: "Task completed successfully!",
@@ -764,7 +764,7 @@ describe("translateMessage - say messages", () => {
 
 	describe("task progress messages", () => {
 		it("should translate say:task_progress to plan update", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "task_progress",
 				text: `- [x] Step 1 completed
@@ -795,7 +795,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should handle empty task progress", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "task_progress",
 				text: "",
@@ -811,7 +811,7 @@ describe("translateMessage - say messages", () => {
 
 	describe("informational messages", () => {
 		it("should translate say:info to agent_message_chunk", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "info",
 				text: "Some informational message",
@@ -824,7 +824,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should not echo user feedback back", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "user_feedback",
 				text: "User's input text",
@@ -837,7 +837,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should not echo task message back", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "task",
 				text: "User's original prompt",
@@ -857,7 +857,7 @@ describe("translateMessage - say messages", () => {
 				status: "running",
 				toolName: "write_to_file",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "hook_status",
 				text: JSON.stringify(hookInfo),
@@ -875,7 +875,7 @@ describe("translateMessage - say messages", () => {
 		})
 
 		it("should suppress hook_output_stream messages", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "hook_output_stream",
 				text: "verbose hook output...",
@@ -905,7 +905,7 @@ describe("translateMessage - ask messages", () => {
 				question: "What would you like me to do next?",
 				options: ["Continue", "Stop"],
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "followup",
 				text: JSON.stringify(followupData),
@@ -924,7 +924,7 @@ describe("translateMessage - ask messages", () => {
 		})
 
 		it("should handle plain text followup", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "followup",
 				text: "Do you want to continue?",
@@ -944,7 +944,7 @@ describe("translateMessage - ask messages", () => {
 				response: "Here is my plan for the task...",
 				options: ["Approve", "Revise"],
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "plan_mode_respond",
 				text: JSON.stringify(planResponse),
@@ -962,7 +962,7 @@ describe("translateMessage - ask messages", () => {
 
 	describe("command permissions", () => {
 		it("should translate ask:command to tool_call with permission request", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "command",
 				text: "rm -rf node_modules",
@@ -1003,7 +1003,7 @@ describe("translateMessage - ask messages", () => {
 				path: "/src/config.ts",
 				diff: "...",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "tool",
 				text: JSON.stringify(toolInfo),
@@ -1033,7 +1033,7 @@ describe("translateMessage - ask messages", () => {
 				tool: "readFile",
 				path: "/src/file.ts",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "tool",
 				text: JSON.stringify(toolInfo),
@@ -1051,7 +1051,7 @@ describe("translateMessage - ask messages", () => {
 				tool: "editedExistingFile",
 				path: "/src/file.ts",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "tool",
 				text: JSON.stringify(toolInfo),
@@ -1072,7 +1072,7 @@ describe("translateMessage - ask messages", () => {
 
 	describe("browser action permissions", () => {
 		it("should translate ask:browser_action_launch to tool_call with permission", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "browser_action_launch",
 				text: "https://suspicious-site.com",
@@ -1098,7 +1098,7 @@ describe("translateMessage - ask messages", () => {
 				serverName: "database-server",
 				toolName: "drop_table",
 			}
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "use_mcp_server",
 				text: JSON.stringify(mcpInfo),
@@ -1119,7 +1119,7 @@ describe("translateMessage - ask messages", () => {
 
 	describe("completion and resume asks", () => {
 		it("should translate ask:completion_result to agent_message_chunk", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "completion_result",
 				text: "Task completed. Would you like to review?",
@@ -1135,7 +1135,7 @@ describe("translateMessage - ask messages", () => {
 		})
 
 		it("should translate ask:resume_task to agent_message_chunk", () => {
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "ask",
 				ask: "resume_task",
 				text: "Would you like to resume the previous task?",
@@ -1161,10 +1161,10 @@ describe("translateMessages", () => {
 	})
 
 	it("should translate multiple messages in sequence", () => {
-		const messages: CodemarieMessage[] = [
-			createCodemarieMessage({ type: "say", say: "text", text: "First message" }),
-			createCodemarieMessage({ type: "say", say: "reasoning", reasoning: "Thinking..." }),
-			createCodemarieMessage({ type: "say", say: "text", text: "Second message" }),
+		const messages: DietCodeMessage[] = [
+			createDietCodeMessage({ type: "say", say: "text", text: "First message" }),
+			createDietCodeMessage({ type: "say", say: "reasoning", reasoning: "Thinking..." }),
+			createDietCodeMessage({ type: "say", say: "text", text: "Second message" }),
 		]
 
 		const updates = translateMessages(messages, sessionState)
@@ -1176,9 +1176,9 @@ describe("translateMessages", () => {
 	})
 
 	it("should maintain session state across messages", () => {
-		const messages: CodemarieMessage[] = [
-			createCodemarieMessage({ type: "say", say: "command", text: "npm test" }),
-			createCodemarieMessage({ type: "say", say: "command_output", text: "All tests passed", commandCompleted: true }),
+		const messages: DietCodeMessage[] = [
+			createDietCodeMessage({ type: "say", say: "command", text: "npm test" }),
+			createDietCodeMessage({ type: "say", say: "command_output", text: "All tests passed", commandCompleted: true }),
 		]
 
 		const updates = translateMessages(messages, sessionState)
@@ -1227,7 +1227,7 @@ describe("diff parsing", () => {
 			path: "/file.ts",
 			diff: diff,
 		}
-		const message = createCodemarieMessage({
+		const message = createDietCodeMessage({
 			type: "say",
 			say: "tool",
 			text: JSON.stringify(toolInfo),
@@ -1258,7 +1258,7 @@ describe("diff parsing", () => {
 			path: "/file.ts",
 			diff: diff,
 		}
-		const message = createCodemarieMessage({
+		const message = createDietCodeMessage({
 			type: "say",
 			say: "tool",
 			text: JSON.stringify(toolInfo),
@@ -1288,7 +1288,7 @@ describe("diff parsing", () => {
 			path: "/file.ts",
 			diff: diff,
 		}
-		const message = createCodemarieMessage({
+		const message = createDietCodeMessage({
 			type: "say",
 			say: "tool",
 			text: JSON.stringify(toolInfo),
@@ -1323,7 +1323,7 @@ describe("diff parsing", () => {
 			path: "/file.ts",
 			diff: diff,
 		}
-		const message = createCodemarieMessage({
+		const message = createDietCodeMessage({
 			type: "say",
 			say: "tool",
 			text: JSON.stringify(toolInfo),
@@ -1371,7 +1371,7 @@ describe("tool kind mapping", () => {
 	toolKindCases.forEach(({ tool, expectedKind }) => {
 		it(`should map ${tool} to kind "${expectedKind}"`, () => {
 			const toolInfo = { tool, path: "/test/path" }
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: JSON.stringify(toolInfo),
@@ -1389,7 +1389,7 @@ describe("tool kind mapping", () => {
 
 	it("should default to 'other' for unknown tool types", () => {
 		const toolInfo = { tool: "unknownTool", path: "/test" }
-		const message = createCodemarieMessage({
+		const message = createDietCodeMessage({
 			type: "say",
 			say: "tool",
 			text: JSON.stringify(toolInfo),
@@ -1430,7 +1430,7 @@ describe("tool title building", () => {
 	titleCases.forEach(({ tool, path, regex, expectedContains }) => {
 		it(`should build title for ${tool} containing "${expectedContains}"`, () => {
 			const toolInfo = { tool, path, regex }
-			const message = createCodemarieMessage({
+			const message = createDietCodeMessage({
 				type: "say",
 				say: "tool",
 				text: JSON.stringify(toolInfo),
@@ -1458,7 +1458,7 @@ describe("session state management", () => {
 	})
 
 	it("should set currentToolCallId when creating a new tool call", () => {
-		const message = createCodemarieMessage({
+		const message = createDietCodeMessage({
 			type: "say",
 			say: "command",
 			text: "npm test",
@@ -1474,7 +1474,7 @@ describe("session state management", () => {
 	it("should clear currentToolCallId when tool completes", () => {
 		sessionState.currentToolCallId = "test-tool-123"
 
-		const message = createCodemarieMessage({
+		const message = createDietCodeMessage({
 			type: "say",
 			say: "command_output",
 			text: "Done",
@@ -1489,7 +1489,7 @@ describe("session state management", () => {
 	it("should clear currentToolCallId on error", () => {
 		sessionState.currentToolCallId = "test-tool-456"
 
-		const message = createCodemarieMessage({
+		const message = createDietCodeMessage({
 			type: "say",
 			say: "error",
 			text: "Something went wrong",
@@ -1501,7 +1501,7 @@ describe("session state management", () => {
 	})
 
 	it("should track pending tool calls for permission requests", () => {
-		const message = createCodemarieMessage({
+		const message = createDietCodeMessage({
 			type: "ask",
 			ask: "command",
 			text: "rm -rf /",

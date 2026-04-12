@@ -10,7 +10,7 @@ import { executeHook } from "../core/hooks/hook-executor"
 import { StateManager } from "../core/storage/StateManager"
 import { MessageStateHandler } from "../core/task/message-state"
 import { TaskState } from "../core/task/TaskState"
-import { CodemarieMessage } from "../shared/ExtensionMessage"
+import { DietCodeMessage } from "../shared/ExtensionMessage"
 
 /**
  * Unit tests for the hook-executor module
@@ -22,7 +22,7 @@ describe("Hook Executor", () => {
 	let tempDir: string
 	let baseTempDir: string // Store base directory for cleanup
 	let testHandler: MessageStateHandler
-	let _mockMessages: CodemarieMessage[]
+	let _mockMessages: DietCodeMessage[]
 	let stateManagerStub: sinon.SinonStub
 
 	/**
@@ -71,14 +71,14 @@ setTimeout(() => {
 
 		// Create temporary directory for test hooks
 		baseTempDir = await fs.mkdtemp(path.join(os.tmpdir(), "hook-test-"))
-		// Create .codemarierules/hooks subdirectory structure
-		tempDir = path.join(baseTempDir, ".codemarierules", "hooks")
+		// Create .dietcoderules/hooks subdirectory structure
+		tempDir = path.join(baseTempDir, ".dietcoderules", "hooks")
 		await fs.mkdir(tempDir, { recursive: true })
 		testHandler = createTestHandler()
 		_mockMessages = []
 
 		// Mock StateManager to return baseTempDir as workspace root
-		// This allows HookFactory to find hooks in baseTempDir/.codemarierules/hooks/
+		// This allows HookFactory to find hooks in baseTempDir/.dietcoderules/hooks/
 		stateManagerStub = sinon.stub(StateManager, "get").returns({
 			getGlobalStateKey: (key: string) => {
 				if (key === "workspaceRoots") {
@@ -355,14 +355,14 @@ setTimeout(() => {
 
 			await createHookScript("TaskStart", {}, 1) // Exit with error
 
-			const messages: CodemarieMessage[] = []
+			const messages: DietCodeMessage[] = []
 			const mockHandler = {
 				...testHandler,
-				getCodemarieMessages: () => messages,
-				addToCodemarieMessages: async (msg: CodemarieMessage) => {
+				getDietCodeMessages: () => messages,
+				addToDietCodeMessages: async (msg: DietCodeMessage) => {
 					messages.push(msg)
 				},
-				updateCodemarieMessage: async (index: number, updates: Partial<CodemarieMessage>) => {
+				updateDietCodeMessage: async (index: number, updates: Partial<DietCodeMessage>) => {
 					if (messages[index]) {
 						Object.assign(messages[index], updates)
 					}
@@ -382,7 +382,7 @@ setTimeout(() => {
 				},
 				isCancellable: true,
 				say: async (type: any, text?: string) => {
-					const msg: CodemarieMessage = {
+					const msg: DietCodeMessage = {
 						ts: Date.now(),
 						type: "say",
 						say: type,
@@ -409,7 +409,7 @@ setTimeout(() => {
 				cancel: false,
 			})
 
-			const messages: CodemarieMessage[] = []
+			const messages: DietCodeMessage[] = []
 
 			await executeHook({
 				hookName: "TaskStart",
@@ -424,7 +424,7 @@ setTimeout(() => {
 				},
 				isCancellable: true,
 				say: async (type: any, text?: string) => {
-					const msg: CodemarieMessage = {
+					const msg: DietCodeMessage = {
 						ts: Date.now(),
 						type: "say",
 						say: type,
@@ -451,11 +451,11 @@ setTimeout(() => {
 				cancel: false,
 			})
 
-			const messages: CodemarieMessage[] = []
+			const messages: DietCodeMessage[] = []
 			const mockHandler = {
 				...testHandler,
-				getCodemarieMessages: () => messages,
-				updateCodemarieMessage: async (index: number, updates: Partial<CodemarieMessage>) => {
+				getDietCodeMessages: () => messages,
+				updateDietCodeMessage: async (index: number, updates: Partial<DietCodeMessage>) => {
 					if (messages[index]) {
 						Object.assign(messages[index], updates)
 					}
@@ -475,7 +475,7 @@ setTimeout(() => {
 				},
 				isCancellable: true,
 				say: async (type: any, text?: string) => {
-					const msg: CodemarieMessage = {
+					const msg: DietCodeMessage = {
 						ts: Date.now(),
 						type: "say",
 						say: type,

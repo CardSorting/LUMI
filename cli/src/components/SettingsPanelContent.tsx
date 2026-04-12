@@ -17,15 +17,15 @@ import type { Controller } from "@/core/controller"
 import { refreshOcaModels } from "@/core/controller/models/refreshOcaModels"
 import { StateManager } from "@/core/storage/StateManager"
 import { openAiCodexOAuthManager } from "@/integrations/openai-codex/oauth"
-import { CodemarieAccountService } from "@/services/account/CodemarieAccountService"
-import { AuthService, CodemarieAccountOrganization } from "@/services/auth/AuthService"
-import { StringRequest } from "@/shared/proto/codemarie/common"
+import { DietCodeAccountService } from "@/services/account/DietCodeAccountService"
+import { AuthService, DietCodeAccountOrganization } from "@/services/auth/AuthService"
+import { StringRequest } from "@/shared/proto/dietcode/common"
 import { openExternal } from "@/utils/env"
 import { supportsReasoningEffortForModel } from "@/utils/model-utils"
 import { version as CLI_VERSION } from "../../package.json"
 import { COLORS } from "../constants/colors"
 import { useStdinContext } from "../context/StdinContext"
-import { useCodemarieFeaturedModels } from "../hooks/useCodemarieFeaturedModels"
+import { useDietCodeFeaturedModels } from "../hooks/useDietCodeFeaturedModels"
 import { useOcaAuth } from "../hooks/useOcaAuth"
 import { isMouseEscapeSequence } from "../utils/input"
 import { applyBedrockConfig, applyProviderConfig } from "../utils/provider-config"
@@ -104,7 +104,7 @@ const FEATURE_SETTINGS = {
 		stateKey: "subagentsEnabled",
 		default: false,
 		label: "Subagents",
-		description: "Let Codemarie run focused subagents in parallel to explore the codebase for you",
+		description: "Let DietCode run focused subagents in parallel to explore the codebase for you",
 	},
 	autoCondense: {
 		stateKey: "useAutoCondense",
@@ -113,7 +113,7 @@ const FEATURE_SETTINGS = {
 		description: "Automatically summarize long conversations",
 	},
 	webTools: {
-		stateKey: "codemarieWebToolsEnabled",
+		stateKey: "dietcodeWebToolsEnabled",
 		default: true,
 		label: "Web tools",
 		description: "Enable web search and fetch tools",
@@ -183,7 +183,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 	)
 	const [isPickingFeaturedModel, setIsPickingFeaturedModel] = useState(initialMode === "featured-models")
 	const [featuredModelIndex, setFeaturedModelIndex] = useState(0)
-	const featuredModels = useCodemarieFeaturedModels()
+	const featuredModels = useDietCodeFeaturedModels()
 	const [isPickingProvider, setIsPickingProvider] = useState(false)
 	const [isPickingLanguage, setIsPickingLanguage] = useState(false)
 	const [isEnteringApiKey, setIsEnteringApiKey] = useState(false)
@@ -245,11 +245,11 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 	// Account tab state
 	const [accountEmail, setAccountEmail] = useState<string | null>(null)
 	const [accountBalance, setAccountBalance] = useState<number | null>(null)
-	const [accountOrganization, setAccountOrganization] = useState<CodemarieAccountOrganization | null>(null)
-	const [accountOrganizations, setAccountOrganizations] = useState<CodemarieAccountOrganization[] | null>(null)
+	const [accountOrganization, setAccountOrganization] = useState<DietCodeAccountOrganization | null>(null)
+	const [accountOrganizations, setAccountOrganizations] = useState<DietCodeAccountOrganization[] | null>(null)
 	const [isAccountLoading, setIsAccountLoading] = useState(false)
 	const [isPickingOrganization, setIsPickingOrganization] = useState(false)
-	const [isWaitingForCodemarieAuth, setIsWaitingForCodemarieAuth] = useState(false)
+	const [isWaitingForDietCodeAuth, setIsWaitingForDietCodeAuth] = useState(false)
 	const [accountChecked, setAccountChecked] = useState(false) // Tracks if we've already checked auth
 
 	// Get current provider and model info
@@ -340,7 +340,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 				return
 			}
 
-			const accountService = CodemarieAccountService.getInstance()
+			const accountService = DietCodeAccountService.getInstance()
 
 			// Fetch fresh organization info from server (like webview's getUserOrganizations RPC)
 			// Don't use authService.getUserOrganizations() as it returns cached data
@@ -377,23 +377,23 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 		}
 	}, [controller])
 
-	// Handle Codemarie login - starts OAuth flow
-	const handleCodemarieLogin = useCallback(() => {
+	// Handle DietCode login - starts OAuth flow
+	const handleDietCodeLogin = useCallback(() => {
 		if (!controller) {
 			return
 		}
 		// Set waiting state first (synchronously) to show the waiting UI immediately
-		setIsWaitingForCodemarieAuth(true)
+		setIsWaitingForDietCodeAuth(true)
 		// Then start the auth request (async, but we don't need to await)
 		AuthService.getInstance(controller)
 			.createAuthRequest()
 			.catch(() => {
-				setIsWaitingForCodemarieAuth(false)
+				setIsWaitingForDietCodeAuth(false)
 			})
 	}, [controller])
 
-	// Handle Codemarie logout
-	const handleCodemarieLogout = useCallback(async () => {
+	// Handle DietCode logout
+	const handleDietCodeLogout = useCallback(async () => {
 		if (!controller) {
 			return
 		}
@@ -413,7 +413,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 			}
 			setIsPickingOrganization(false)
 			try {
-				await CodemarieAccountService.getInstance().switchAccount(orgId || undefined)
+				await DietCodeAccountService.getInstance().switchAccount(orgId || undefined)
 				// Refetch fresh org data from server
 				await fetchAccountInfo()
 			} catch {
@@ -430,9 +430,9 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 		}
 	}, [currentTab, accountEmail, isAccountLoading, accountChecked, controller, fetchAccountInfo])
 
-	// Subscribe to auth status updates when waiting for Codemarie auth
+	// Subscribe to auth status updates when waiting for DietCode auth
 	useEffect(() => {
-		if (!isWaitingForCodemarieAuth || !controller) {
+		if (!isWaitingForDietCodeAuth || !controller) {
 			return
 		}
 
@@ -444,10 +444,10 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 				return
 			}
 			if (authState.user?.email) {
-				setIsWaitingForCodemarieAuth(false)
+				setIsWaitingForDietCodeAuth(false)
 				setAccountChecked(false) // Reset so fetchAccountInfo can run
-				await applyProviderConfig({ providerId: "codemarie", controller })
-				setProvider("codemarie")
+				await applyProviderConfig({ providerId: "dietcode", controller })
+				setProvider("dietcode")
 				refreshModelIds()
 				fetchAccountInfo()
 			}
@@ -458,7 +458,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 		return () => {
 			cancelled = true
 		}
-	}, [isWaitingForCodemarieAuth, controller, fetchAccountInfo, refreshModelIds])
+	}, [isWaitingForDietCodeAuth, controller, fetchAccountInfo, refreshModelIds])
 
 	// Build items list based on current tab
 	const items: ListItem[] = useMemo(() => {
@@ -478,7 +478,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 						type: "editable",
 						value: provider ? getProviderLabel(provider) : "not configured",
 					},
-					...(provider === "codemarie"
+					...(provider === "dietcode"
 						? [{ key: "viewAccount", label: "View account", type: "action" as const, value: "" }]
 						: []),
 					...(separateModels
@@ -655,7 +655,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 						label: "Enable notifications",
 						type: "checkbox",
 						value: autoApproveSettings.enableNotifications,
-						description: "System alerts when Codemarie needs your attention",
+						description: "System alerts when DietCode needs your attention",
 					},
 				)
 				return result
@@ -678,10 +678,10 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 						label: "Error/usage reporting",
 						type: "checkbox",
 						value: telemetry !== "disabled",
-						description: "Help improve Codemarie by sending anonymous usage data",
+						description: "Help improve DietCode by sending anonymous usage data",
 					},
 					{ key: "separator", label: "", type: "separator", value: "" },
-					{ key: "version", label: "", type: "readonly", value: `Codemarie v${CLI_VERSION}` },
+					{ key: "version", label: "", type: "readonly", value: `DietCode v${CLI_VERSION}` },
 				]
 
 			case "account":
@@ -691,7 +691,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 				}
 				// If not logged in, show login option
 				if (!accountEmail) {
-					return [{ key: "login", label: "Sign in with Codemarie", type: "action", value: "" }]
+					return [{ key: "login", label: "Sign in with DietCode", type: "action", value: "" }]
 				}
 				// Logged in - show account info
 				const accountItems: ListItem[] = [
@@ -902,11 +902,11 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 			try {
 				// Action items trigger their handler directly
 				if (item.key === "login") {
-					handleCodemarieLogin()
+					handleDietCodeLogin()
 					return
 				}
 				if (item.key === "logout") {
-					handleCodemarieLogout()
+					handleDietCodeLogout()
 					return
 				}
 				if (item.key === "viewAccount") {
@@ -937,8 +937,8 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 			// For model ID fields, check if we should use the model picker
 			if ((item.key === "actModelId" || item.key === "planModelId") && hasModelPicker(provider)) {
 				setPickingModelKey(item.key as "actModelId" | "planModelId")
-				// For Codemarie provider, show featured models first
-				if (provider === "codemarie") {
+				// For DietCode provider, show featured models first
+				if (provider === "dietcode") {
 					setFeaturedModelIndex(0)
 					setIsPickingFeaturedModel(true)
 				} else {
@@ -1069,8 +1069,8 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 		stateManager,
 		autoApproveSettings,
 		toggleFeature,
-		handleCodemarieLogin,
-		handleCodemarieLogout,
+		handleDietCodeLogin,
+		handleDietCodeLogout,
 		accountOrganizations,
 		separateModels,
 		actReasoningEffort,
@@ -1169,13 +1169,13 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 					: planProvider
 				: actProvider || planProvider
 			if (!providerForSelection) return
-			// Use provider-specific model ID keys (e.g., codemarie uses actModeOpenRouterModelId)
+			// Use provider-specific model ID keys (e.g., dietcode uses actModeOpenRouterModelId)
 			const actKey = actProvider ? getProviderModelIdKey(actProvider, "act") : null
 			const planKey = planProvider ? getProviderModelIdKey(planProvider, "plan") : null
 
-			// For codemarie/openrouter providers, also set model info (like webview does)
+			// For dietcode/openrouter providers, also set model info (like webview does)
 			let modelInfo: ModelInfo | undefined
-			if (providerForSelection === "codemarie" || providerForSelection === "openrouter") {
+			if (providerForSelection === "dietcode" || providerForSelection === "openrouter") {
 				const openRouterModels = await controller?.readOpenRouterModels()
 				modelInfo = openRouterModels?.[modelId]
 			}
@@ -1262,19 +1262,19 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 
 	const handleProviderSelect = useCallback(
 		async (providerId: string) => {
-			// Special handling for Codemarie - uses OAuth (but skip if already logged in)
-			if (providerId === "codemarie") {
+			// Special handling for DietCode - uses OAuth (but skip if already logged in)
+			if (providerId === "dietcode") {
 				setIsPickingProvider(false)
 				// Check if already logged in
 				const authInfo = AuthService.getInstance(controller).getInfo()
 				if (authInfo?.user?.email) {
 					// Already logged in - just set the provider
-					await applyProviderConfig({ providerId: "codemarie", controller })
-					setProvider("codemarie")
+					await applyProviderConfig({ providerId: "dietcode", controller })
+					setProvider("dietcode")
 					refreshModelIds()
 				} else {
 					// Not logged in - trigger OAuth
-					handleCodemarieLogin()
+					handleDietCodeLogin()
 				}
 				return
 			}
@@ -1330,7 +1330,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 				setIsPickingProvider(false)
 			}
 		},
-		[stateManager, startCodexAuth, handleCodemarieLogin, isOcaAuthenticated, controller, refreshModelIds],
+		[stateManager, startCodexAuth, handleDietCodeLogin, isOcaAuthenticated, controller, refreshModelIds],
 	)
 
 	// Handle API key submission after provider selection
@@ -1373,7 +1373,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 		switch (item.key) {
 			case "actModelId":
 			case "planModelId": {
-				// Use provider-specific model ID keys (e.g., codemarie uses actModeOpenRouterModelId)
+				// Use provider-specific model ID keys (e.g., dietcode uses actModeOpenRouterModelId)
 				const apiConfig = stateManager.getApiConfiguration()
 				const actProvider = apiConfig.actModeApiProvider
 				const planProvider = apiConfig.planModeApiProvider || actProvider
@@ -1451,7 +1451,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 				return
 			}
 
-			// Featured model picker mode (Codemarie provider)
+			// Featured model picker mode (DietCode provider)
 			if (isPickingFeaturedModel) {
 				const maxIndex = getFeaturedModelMaxIndex(featuredModels)
 
@@ -1527,10 +1527,10 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 				return
 			}
 
-			// Codemarie OAuth waiting mode - escape to cancel
-			if (isWaitingForCodemarieAuth) {
+			// DietCode OAuth waiting mode - escape to cancel
+			if (isWaitingForDietCodeAuth) {
 				if (key.escape) {
-					setIsWaitingForCodemarieAuth(false)
+					setIsWaitingForDietCodeAuth(false)
 				}
 				return
 			}
@@ -1762,14 +1762,14 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 			)
 		}
 
-		if (isWaitingForCodemarieAuth) {
+		if (isWaitingForDietCodeAuth) {
 			return (
 				<Box flexDirection="column">
 					<Box>
 						<Text color={COLORS.primaryBlue}>
 							<Spinner type="dots" />
 						</Text>
-						<Text color="white"> Waiting for Codemarie sign-in...</Text>
+						<Text color="white"> Waiting for DietCode sign-in...</Text>
 					</Box>
 					<Box marginTop={1}>
 						<Text color="gray">Complete sign-in in your browser.</Text>
@@ -1843,7 +1843,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 		if (currentTab === "account" && !accountEmail && !isAccountLoading) {
 			return (
 				<Box flexDirection="column">
-					<Text color="white">Sign in to access Codemarie features:</Text>
+					<Text color="white">Sign in to access DietCode features:</Text>
 					<Box flexDirection="column" marginTop={1}>
 						<Text color="gray"> - Free access to frontier AI models</Text>
 						<Text color="gray"> - Built-in web search capabilities</Text>
@@ -1988,7 +1988,7 @@ export const SettingsPanelContent: React.FC<SettingsPanelContentProps> = ({
 		isWaitingForCodexAuth ||
 		!!codexAuthError ||
 		isPickingOrganization ||
-		isWaitingForCodemarieAuth ||
+		isWaitingForDietCodeAuth ||
 		isShowingOcaEmployeeCheck ||
 		isWaitingForOcaAuth ||
 		isBedrockCustomFlow ||

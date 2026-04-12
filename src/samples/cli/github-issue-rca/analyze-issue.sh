@@ -1,5 +1,5 @@
 #!/bin/bash
-# Analyze a GitHub issue using Codemarie CLI
+# Analyze a GitHub issue using DietCode CLI
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <github-issue-url> [prompt] [address]"
@@ -16,8 +16,8 @@ if [ -n "$3" ]; then
     ADDRESS="--address $3"
 fi
 
-# Ask Codemarie for its analysis, showing only the summary
-codemarie -y "$PROMPT: $ISSUE_URL" --mode act $ADDRESS -F json | \
+# Ask DietCode for its analysis, showing only the summary
+dietcode -y "$PROMPT: $ISSUE_URL" --mode act $ADDRESS -F json | \
     sed -n '/^{/,$p' | \
     jq -r 'select(.say == "completion_result") | .text' | \
     sed 's/\\n/\n/g'

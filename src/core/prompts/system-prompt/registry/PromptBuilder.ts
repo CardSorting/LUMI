@@ -1,7 +1,7 @@
 import { Logger } from "@/shared/services/Logger"
-import type { CodemarieDefaultTool } from "@/shared/tools"
-import { CodemarieToolSet } from "../registry/CodemarieToolSet"
-import { type CodemarieToolSpec, resolveInstruction } from "../spec"
+import type { DietCodeDefaultTool } from "@/shared/tools"
+import { DietCodeToolSet } from "../registry/DietCodeToolSet"
+import { type DietCodeToolSpec, resolveInstruction } from "../spec"
 import { STANDARD_PLACEHOLDERS } from "../templates/placeholders"
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { ComponentRegistry, PromptVariant, SystemPromptContext } from "../types"
@@ -132,8 +132,8 @@ export class PromptBuilder {
 		}
 	}
 
-	private static getEnabledTools(variant: PromptVariant, context: SystemPromptContext): CodemarieToolSpec[] {
-		return CodemarieToolSet.getEnabledToolSpecs(variant, context)
+	private static getEnabledTools(variant: PromptVariant, context: SystemPromptContext): DietCodeToolSpec[] {
+		return DietCodeToolSet.getEnabledToolSpecs(variant, context)
 	}
 
 	public static async getToolsPrompts(variant: PromptVariant, context: SystemPromptContext) {
@@ -143,7 +143,7 @@ export class PromptBuilder {
 		return Promise.all(enabledTools.map((tool) => PromptBuilder.tool(tool, ids, context)))
 	}
 
-	public static tool(config: CodemarieToolSpec, registry: CodemarieDefaultTool[], context: SystemPromptContext): string {
+	public static tool(config: DietCodeToolSpec, registry: DietCodeDefaultTool[], context: SystemPromptContext): string {
 		// Skip tools without parameters or description - those are placeholder tools
 		if (!config.parameters?.length && !config.description?.length) {
 			return ""

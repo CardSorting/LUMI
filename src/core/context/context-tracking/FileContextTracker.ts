@@ -1,5 +1,5 @@
 import { getTaskMetadata, readTaskHistoryFromState, saveTaskMetadata } from "@core/storage/disk"
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import chokidar, { FSWatcher } from "chokidar"
 import * as path from "path"
 import { Controller } from "@/core/controller"
@@ -9,17 +9,17 @@ import { getCwd } from "@/utils/path"
 import type { FileMetadataEntry } from "./ContextTrackerTypes"
 
 // This class is responsible for tracking file operations that may result in stale context.
-// If a user modifies a file outside of Codemarie, the context may become stale and need to be updated.
-// We do not want Codemarie to reload the context every time a file is modified, so we use this class merely
-// to inform Codemarie that the change has occurred, and tell Codemarie to reload the file before making
-// any changes to it. This fixes an issue with diff editing, where Codemarie was unable to complete a diff edit.
-// a diff edit because the file was modified since Codemarie last read it.
+// If a user modifies a file outside of DietCode, the context may become stale and need to be updated.
+// We do not want DietCode to reload the context every time a file is modified, so we use this class merely
+// to inform DietCode that the change has occurred, and tell DietCode to reload the file before making
+// any changes to it. This fixes an issue with diff editing, where DietCode was unable to complete a diff edit.
+// a diff edit because the file was modified since DietCode last read it.
 
 // FileContextTracker
 /**
 This class is responsible for tracking file operations.
-If the full contents of a file are passed to Codemarie via a tool, mention, or edit, the file is marked as active.
-If a file is modified outside of Codemarie, we detect and track this change to prevent stale context.
+If the full contents of a file are passed to DietCode via a tool, mention, or edit, the file is marked as active.
+If a file is modified outside of DietCode, we detect and track this change to prevent stale context.
 This is used when restoring a task (non-git "checkpoint" restore), and mid-task.
 */
 export class FileContextTracker {
@@ -29,7 +29,7 @@ export class FileContextTracker {
 	// File tracking and watching
 	private fileWatchers = new Map<string, FSWatcher>()
 	private recentlyModifiedFiles = new Set<string>()
-	private recentlyEditedByCodemarie = new Set<string>()
+	private recentlyEditedByDietCode = new Set<string>()
 
 	constructor(controller: Controller, taskId: string) {
 		this.controller = controller
@@ -66,10 +66,10 @@ export class FileContextTracker {
 
 		// Track file changes
 		watcher.on("change", () => {
-			if (this.recentlyEditedByCodemarie.has(filePath)) {
-				this.recentlyEditedByCodemarie.delete(filePath) // This was an edit by Codemarie, no need to inform Codemarie
+			if (this.recentlyEditedByDietCode.has(filePath)) {
+				this.recentlyEditedByDietCode.delete(filePath) // This was an edit by DietCode, no need to inform DietCode
 			} else {
-				this.recentlyModifiedFiles.add(filePath) // This was a user edit, we will inform Codemarie
+				this.recentlyModifiedFiles.add(filePath) // This was a user edit, we will inform DietCode
 				this.trackFileContext(filePath, "user_edited") // Update the task metadata with file tracking
 			}
 		})
@@ -80,9 +80,9 @@ export class FileContextTracker {
 
 	/**
 	 * Tracks a file operation in metadata and sets up a watcher for the file
-	 * This is the main entry point for FileContextTracker and is called when a file is passed to Codemarie via a tool, mention, or edit.
+	 * This is the main entry point for FileContextTracker and is called when a file is passed to DietCode via a tool, mention, or edit.
 	 */
-	async trackFileContext(filePath: string, operation: "read_tool" | "user_edited" | "codemarie_edited" | "file_mentioned") {
+	async trackFileContext(filePath: string, operation: "read_tool" | "user_edited" | "dietcode_edited" | "file_mentioned") {
 		try {
 			const cwd = await getCwd()
 			if (!cwd) {
@@ -130,8 +130,8 @@ export class FileContextTracker {
 				path: filePath,
 				record_state: "active",
 				record_source: source,
-				codemarie_read_date: getLatestDateForField(filePath, "codemarie_read_date"),
-				codemarie_edit_date: getLatestDateForField(filePath, "codemarie_edit_date"),
+				dietcode_read_date: getLatestDateForField(filePath, "dietcode_read_date"),
+				dietcode_edit_date: getLatestDateForField(filePath, "dietcode_edit_date"),
 				user_edit_date: getLatestDateForField(filePath, "user_edit_date"),
 			}
 
@@ -142,16 +142,16 @@ export class FileContextTracker {
 					this.recentlyModifiedFiles.add(filePath)
 					break
 
-				// codemarie_edited: Codemarie has edited the file
-				case "codemarie_edited":
-					newEntry.codemarie_read_date = now
-					newEntry.codemarie_edit_date = now
+				// dietcode_edited: DietCode has edited the file
+				case "dietcode_edited":
+					newEntry.dietcode_read_date = now
+					newEntry.dietcode_edit_date = now
 					break
 
-				// read_tool/file_mentioned: Codemarie has read the file via a tool or file mention
+				// read_tool/file_mentioned: DietCode has read the file via a tool or file mention
 				case "read_tool":
 				case "file_mentioned":
-					newEntry.codemarie_read_date = now
+					newEntry.dietcode_read_date = now
 					break
 			}
 
@@ -172,10 +172,10 @@ export class FileContextTracker {
 	}
 
 	/**
-	 * Marks a file as edited by Codemarie to prevent false positives in file watchers
+	 * Marks a file as edited by DietCode to prevent false positives in file watchers
 	 */
-	markFileAsEditedByCodemarie(filePath: string): void {
-		this.recentlyEditedByCodemarie.add(filePath)
+	markFileAsEditedByDietCode(filePath: string): void {
+		this.recentlyEditedByDietCode.add(filePath)
 	}
 
 	/**
@@ -188,22 +188,22 @@ export class FileContextTracker {
 	}
 
 	/**
-	 * Detects files that were edited by Codemarie or users after a specific message timestamp
+	 * Detects files that were edited by DietCode or users after a specific message timestamp
 	 * This is used when restoring checkpoints to warn about potential file content mismatches
 	 */
-	async detectFilesEditedAfterMessage(messageTs: number, deletedMessages: CodemarieMessage[]): Promise<string[]> {
+	async detectFilesEditedAfterMessage(messageTs: number, deletedMessages: DietCodeMessage[]): Promise<string[]> {
 		const editedFiles: string[] = []
 
 		try {
-			// Check task metadata for files that were edited by Codemarie or users after the message timestamp
+			// Check task metadata for files that were edited by DietCode or users after the message timestamp
 			const taskMetadata = await getTaskMetadata(this.taskId)
 
 			if (taskMetadata?.files_in_context) {
 				for (const fileEntry of taskMetadata.files_in_context) {
-					const codemarieEditedAfter = fileEntry.codemarie_edit_date && fileEntry.codemarie_edit_date > messageTs
+					const dietcodeEditedAfter = fileEntry.dietcode_edit_date && fileEntry.dietcode_edit_date > messageTs
 					const userEditedAfter = fileEntry.user_edit_date && fileEntry.user_edit_date > messageTs
 
-					if (codemarieEditedAfter || userEditedAfter) {
+					if (dietcodeEditedAfter || userEditedAfter) {
 						editedFiles.push(fileEntry.path)
 					}
 				}

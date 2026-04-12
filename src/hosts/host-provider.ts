@@ -6,7 +6,7 @@ import { HostBridgeClientProvider } from "./host-provider-types"
 /**
  * Singleton class that manages host-specific providers for dependency injection.
  *
- * This system runs on two different platforms (VSCode extension and codemarie-core),
+ * This system runs on two different platforms (VSCode extension and dietcode-core),
  * so all the host-specific classes and properties are contained in here. The
  * rest of the codebase can use the host provider interface to access platform-specific
  * implementations in a platform-agnostic way.
@@ -28,7 +28,7 @@ export class HostProvider {
 	// Logs to a user-visible output channel.
 	logToChannel: LogToChannel
 
-	// Returns a callback URL that will redirect to Codemarie.
+	// Returns a callback URL that will redirect to DietCode.
 	// The path parameter specifies the route for the callback (e.g., "/auth", "/openrouter").
 	getCallbackUrl: (path: string) => Promise<string>
 

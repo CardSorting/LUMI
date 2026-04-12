@@ -1,5 +1,5 @@
-import { Empty } from "@shared/proto/codemarie/common"
-import { AutoApprovalSettingsRequest } from "@shared/proto/codemarie/state"
+import { Empty } from "@shared/proto/dietcode/common"
+import { AutoApprovalSettingsRequest } from "@shared/proto/dietcode/state"
 import { Controller } from ".."
 
 /**

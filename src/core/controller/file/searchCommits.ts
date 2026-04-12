@@ -1,5 +1,5 @@
-import { StringRequest } from "@shared/proto/codemarie/common"
-import { GitCommits } from "@shared/proto/codemarie/file"
+import { StringRequest } from "@shared/proto/dietcode/common"
+import { GitCommits } from "@shared/proto/dietcode/file"
 import { searchCommits as searchCommitsUtil } from "@utils/git"
 import { getWorkspacePath } from "@utils/path"
 import { Logger } from "@/shared/services/Logger"

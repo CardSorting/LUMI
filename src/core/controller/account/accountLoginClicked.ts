@@ -1,4 +1,4 @@
-import { EmptyRequest, String } from "@shared/proto/codemarie/common"
+import { EmptyRequest, String } from "@shared/proto/dietcode/common"
 import { AuthService } from "@/services/auth/AuthService"
 import { Controller } from "../index"
 

@@ -1,5 +1,5 @@
-import type { Empty } from "@shared/proto/codemarie/common"
-import { McpServers } from "@shared/proto/codemarie/mcp"
+import type { Empty } from "@shared/proto/dietcode/common"
+import { McpServers } from "@shared/proto/dietcode/mcp"
 import { convertMcpServersToProtoMcpServers } from "@/shared/proto-conversions/mcp/mcp-server-conversion"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"

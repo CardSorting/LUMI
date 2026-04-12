@@ -70,7 +70,7 @@ export interface ToolUse {
 	partial: boolean
 }
 
-// parseAssistantmessageV1 removed in https://github.com/codemarie/codemarie/pull/5425
+// parseAssistantmessageV1 removed in https://github.com/dietcode/dietcode/pull/5425
 
 /**
  * @description **Version 2**

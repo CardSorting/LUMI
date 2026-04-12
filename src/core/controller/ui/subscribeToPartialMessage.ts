@@ -1,14 +1,14 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { CodemarieMessage } from "@shared/proto/codemarie/ui"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { DietCodeMessage } from "@shared/proto/dietcode/ui"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
 import { Controller } from "../index"
 
 // Keep track of active partial message subscriptions (gRPC streams)
-const activePartialMessageSubscriptions = new Set<StreamingResponseHandler<CodemarieMessage>>()
+const activePartialMessageSubscriptions = new Set<StreamingResponseHandler<DietCodeMessage>>()
 
 // Keep track of callback-based subscriptions (for CLI and other non-gRPC consumers)
-export type PartialMessageCallback = (message: CodemarieMessage) => void
+export type PartialMessageCallback = (message: DietCodeMessage) => void
 const callbackSubscriptions = new Set<PartialMessageCallback>()
 
 /**
@@ -21,7 +21,7 @@ const callbackSubscriptions = new Set<PartialMessageCallback>()
 export async function subscribeToPartialMessage(
 	_controller: Controller,
 	_request: EmptyRequest,
-	responseStream: StreamingResponseHandler<CodemarieMessage>,
+	responseStream: StreamingResponseHandler<DietCodeMessage>,
 	requestId?: string,
 ): Promise<void> {
 	// Add this subscription to the active subscriptions
@@ -52,9 +52,9 @@ export function registerPartialMessageCallback(callback: PartialMessageCallback)
 
 /**
  * Send a partial message event to all active subscribers
- * @param partialMessage The CodemarieMessage to send
+ * @param partialMessage The DietCodeMessage to send
  */
-export async function sendPartialMessageEvent(partialMessage: CodemarieMessage): Promise<void> {
+export async function sendPartialMessageEvent(partialMessage: DietCodeMessage): Promise<void> {
 	// Send to gRPC stream subscribers
 	const streamPromises = Array.from(activePartialMessageSubscriptions).map(async (responseStream) => {
 		try {

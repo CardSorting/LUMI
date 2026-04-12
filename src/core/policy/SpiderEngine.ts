@@ -9,6 +9,7 @@ export interface SpiderNode {
 	path: string
 	layer: Layer
 	imports: string[]
+	dependents: string[]
 	depth: number
 	orphaned: boolean
 	afferentCoupling: number
@@ -101,8 +102,10 @@ export class SpiderEngine {
 			path: normalizedPath,
 			layer,
 			imports: importsList,
+			dependents: oldNode?.dependents || [],
 			depth: normalizedPath.split("/").length - 1,
 			orphaned: false,
+			afferentCoupling: oldNode?.afferentCoupling || 0,
 		})
 
 		// MEMORY HARDENING: Discard AST after extraction to prevent memory leaks in large projects
@@ -181,8 +184,10 @@ export class SpiderEngine {
 				path: normalizedPath,
 				layer,
 				imports: Array.from(imports),
+				dependents: [],
 				depth: normalizedPath.split("/").length - 1,
 				orphaned: false,
+				afferentCoupling: 0,
 			})
 
 			// MEMORY HARDENING: Discard AST after extraction
@@ -208,10 +213,15 @@ export class SpiderEngine {
 
 		// Count incoming edges
 		for (const node of this.nodes.values()) {
+			node.dependents = [] // Reset
 			for (const imp of node.imports) {
 				const resolved = this.resolveImportToNodeId(node.path, imp)
 				if (resolved && couplingMap.has(resolved)) {
 					couplingMap.set(resolved, (couplingMap.get(resolved) || 0) + 1)
+					const targetNode = this.nodes.get(resolved)
+					if (targetNode && !targetNode.dependents.includes(node.id)) {
+						targetNode.dependents.push(node.id)
+					}
 				}
 			}
 		}

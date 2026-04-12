@@ -1,11 +1,11 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryRefreshHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_REFRESH
+	readonly name = DietCodeDefaultTool.MEM_REFRESH
 
 	getDescription(_block: ToolUse): string {
 		return "[refresh cognitive memory]"

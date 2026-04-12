@@ -1,11 +1,11 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryBundleHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_BUNDLE
+	readonly name = DietCodeDefaultTool.MEM_BUNDLE
 
 	getDescription(_block: ToolUse): string {
 		return "[fetch cognitive intelligence bundle]"

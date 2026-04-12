@@ -1,10 +1,10 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
-const id = CodemarieDefaultTool.GENERATE_EXPLANATION
+const id = DietCodeDefaultTool.GENERATE_EXPLANATION
 
-const GENERIC: CodemarieToolSpec = {
+const GENERIC: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "generate_explanation",

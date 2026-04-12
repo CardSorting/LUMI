@@ -1,10 +1,10 @@
 # Tool Registration System
 
-This directory contains the tool registration system for CodeMarie tools. The system automatically collects and registers all tool variants with the `CodeMarieToolSet` provider.
+This directory contains the tool registration system for DietCode tools. The system automatically collects and registers all tool variants with the `DietCodeToolSet` provider.
 
 ## Overview
 
-Each tool file in this directory exports a `{toolName}_variants` array containing tool specifications for different prompt variants (e.g., Claude, GPT). The registration system automatically imports all these variants and registers them with the `CodeMarieToolSet` provider.
+Each tool file in this directory exports a `{toolName}_variants` array containing tool specifications for different prompt variants (e.g., Claude, GPT). The registration system automatically imports all these variants and registers them with the `DietCodeToolSet` provider.
 
 ## Files
 
@@ -37,14 +37,14 @@ console.log(summary);
 ### Using Registered Tools
 
 ```typescript
-import { CodeMarieToolSet } from "../registry/CodeMarieToolSet";
+import { DietCodeToolSet } from "../registry/DietCodeToolSet";
 import { PromptVariant } from "@/shared/tools";
 
 // Get all tools for a specific variant
-const claudeTools = CodeMarieToolSet.getTools(PromptVariant.CLAUDE);
+const claudeTools = DietCodeToolSet.getTools(PromptVariant.CLAUDE);
 
 // Get a specific tool by name
-const writeToFileTool = CodeMarieToolSet.getToolByName("write_to_file", PromptVariant.CLAUDE);
+const writeToFileTool = DietCodeToolSet.getToolByName("write_to_file", PromptVariant.CLAUDE);
 ```
 
 ## Tool Structure
@@ -52,9 +52,9 @@ const writeToFileTool = CodeMarieToolSet.getToolByName("write_to_file", PromptVa
 Each tool file follows this pattern:
 
 ```typescript
-import { CodeMarieDefaultTool, PromptVariant, type CodeMarieToolSpec } from "@/shared/tools";
+import { DietCodeDefaultTool, PromptVariant, type DietCodeToolSpec } from "@/shared/tools";
 
-const claude: CodeMarieToolSpec = {
+const claude: DietCodeToolSpec = {
     variant: PromptVariant.CLAUDE,
     id: "tool_name",
     description: "Tool description",
@@ -63,7 +63,7 @@ const claude: CodeMarieToolSpec = {
     ],
 };
 
-const gpt: CodeMarieToolSpec = {
+const gpt: DietCodeToolSpec = {
     variant: PromptVariant.GPT,
     id: "tool_name_gpt",
     description: "Tool description for GPT",

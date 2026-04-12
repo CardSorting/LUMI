@@ -15,7 +15,7 @@ describe("FailureClassifier", () => {
 			expect(failures.length).toBeGreaterThan(0)
 			expect(failures[0].name).toBe("gemini_signature")
 			expect(failures[0].category).toBe("provider_bug")
-			expect(failures[0].issue_url).toBe("https://github.com/codemarie/codemarie/issues/7974")
+			expect(failures[0].issue_url).toBe("https://github.com/dietcode/dietcode/issues/7974")
 		})
 
 		it("detects Claude tool format issue", () => {
@@ -25,7 +25,7 @@ describe("FailureClassifier", () => {
 			expect(failures.length).toBeGreaterThan(0)
 			expect(failures[0].name).toBe("claude_tool_format")
 			expect(failures[0].category).toBe("provider_bug")
-			expect(failures[0].issue_url).toBe("https://github.com/codemarie/codemarie/issues/7998")
+			expect(failures[0].issue_url).toBe("https://github.com/dietcode/dietcode/issues/7998")
 		})
 	})
 

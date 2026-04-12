@@ -5,8 +5,8 @@ import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
 import { extractFileContent } from "@integrations/misc/extract-file-content"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
-import { CodemarieSayTool } from "@/shared/ExtensionMessage"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeSayTool } from "@/shared/ExtensionMessage"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -16,7 +16,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class ReadFileToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.FILE_READ
+	readonly name = DietCodeDefaultTool.FILE_READ
 
 	constructor(private validator: ToolValidator) {}
 
@@ -60,11 +60,11 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
 		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
-		// Validate required parameters and check codemarieignore access
+		// Validate required parameters and check dietcodeignore access
 		const validation = await this.validator.validate(block, "path")
 		if (!validation.ok) {
 			if (!config.isSubagentExecution && validation.error.includes("RESTRICTED")) {
-				await config.callbacks.say("codemarieignore_error", relPath)
+				await config.callbacks.say("dietcodeignore_error", relPath)
 			}
 
 			if (validation.error.includes("Missing required parameter")) {
@@ -97,7 +97,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			path: getReadablePath(config.cwd, displayPath),
 			content: absolutePath,
 			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath!),
-		} satisfies CodemarieSayTool
+		} satisfies DietCodeSayTool
 
 		const completeMessage = JSON.stringify(sharedMessageProps)
 
@@ -123,7 +123,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			)
 		} else {
 			// Manual approval flow
-			const notificationMessage = `Codemarie wants to read ${getWorkspaceBasename(absolutePath, "ReadFileToolHandler.notification")}`
+			const notificationMessage = `DietCode wants to read ${getWorkspaceBasename(absolutePath, "ReadFileToolHandler.notification")}`
 
 			// Show notification
 			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)

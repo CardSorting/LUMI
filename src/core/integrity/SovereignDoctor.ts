@@ -1,6 +1,5 @@
 import * as fs from "fs"
 import * as path from "path"
-import { Logger } from "@/shared/services/Logger"
 
 export interface DiagnosticIssue {
 	id: string
@@ -35,9 +34,9 @@ export class SovereignDoctor {
 		await this.checkMcpStability(issues)
 
 		return {
-			healthy: issues.filter(i => i.severity === "CRITICAL" || i.severity === "HIGH").length === 0,
+			healthy: issues.filter((i) => i.severity === "CRITICAL" || i.severity === "HIGH").length === 0,
 			issues,
-			timestamp: Date.now()
+			timestamp: Date.now(),
 		}
 	}
 
@@ -49,7 +48,7 @@ export class SovereignDoctor {
 				if (file.endsWith(".lock")) {
 					const stats = await fs.promises.stat(path.join(this.cwd, file))
 					const ageMinutes = (Date.now() - stats.mtimeMs) / (1000 * 60)
-					
+
 					if (ageMinutes > 15) {
 						issues.push({
 							id: "DOC-001",
@@ -57,7 +56,7 @@ export class SovereignDoctor {
 							severity: "MEDIUM",
 							message: `Stale lock file detected: ${file} (Age: ${Math.round(ageMinutes)}m)`,
 							remediable: true,
-							remediationHint: "Delete the stale lock file to unlock resources."
+							remediationHint: "Delete the stale lock file to unlock resources.",
 						})
 					}
 				}
@@ -77,7 +76,7 @@ export class SovereignDoctor {
 					severity: "HIGH",
 					message: `Critical project configuration file missing: ${file}`,
 					remediable: false,
-					remediationHint: "The project structure is damaged. Restore the configuration file."
+					remediationHint: "The project structure is damaged. Restore the configuration file.",
 				})
 			}
 		}
@@ -85,19 +84,19 @@ export class SovereignDoctor {
 
 	private async checkMcpStability(issues: DiagnosticIssue[]) {
 		// Example: check for MCP settings file
-		const settingsPath = path.join(this.cwd, ".vscode", "codemarie_mcp_settings.json")
+		const settingsPath = path.join(this.cwd, ".vscode", "dietcode_mcp_settings.json")
 		if (fs.existsSync(settingsPath)) {
 			try {
 				const content = await fs.promises.readFile(settingsPath, "utf-8")
 				JSON.parse(content)
-			} catch (e) {
+			} catch (_e) {
 				issues.push({
 					id: "DOC-003",
 					category: "STATE",
 					severity: "MEDIUM",
 					message: "MCP settings file is corrupted (invalid JSON).",
 					remediable: true,
-					remediationHint: "Reset or repair the MCP settings JSON manually."
+					remediationHint: "Reset or repair the MCP settings JSON manually.",
 				})
 			}
 		}

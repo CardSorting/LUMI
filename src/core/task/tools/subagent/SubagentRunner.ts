@@ -9,20 +9,20 @@ import type { SystemPromptContext } from "@core/prompts/system-prompt/types"
 import { StreamResponseHandler } from "@core/task/StreamResponseHandler"
 import { ModelInfo } from "@shared/api"
 import {
-	CodemarieAssistantToolUseBlock,
-	CodemarieStorageMessage,
-	CodemarieTextContentBlock,
-	CodemarieUserContent,
+	DietCodeAssistantToolUseBlock,
+	DietCodeStorageMessage,
+	DietCodeTextContentBlock,
+	DietCodeUserContent,
 } from "@shared/messages"
 import { Logger } from "@shared/services/Logger"
-import { CodemarieDefaultTool, CodemarieTool } from "@shared/tools"
+import { DietCodeDefaultTool, DietCodeTool } from "@shared/tools"
 import { ContextManager } from "@/core/context/context-management/ContextManager"
 import { checkContextWindowExceededError } from "@/core/context/context-management/context-error-handling"
 import { getContextWindowInfo } from "@/core/context/context-management/context-window-utils"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { HostRegistryInfo } from "@/registry"
-import { CodemarieError, CodemarieErrorType } from "@/services/error"
-import { ApiFormat } from "@/shared/proto/codemarie/models"
+import { DietCodeError, DietCodeErrorType } from "@/services/error"
+import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@/utils/cost"
 import { isNextGenModelFamily } from "@/utils/model-utils"
 import { UniversalGuard } from "../../../policy/UniversalGuard"
@@ -211,7 +211,7 @@ function resolveToolUseId(call: { id?: string; call_id?: string; name?: string }
 	return fallbackId
 }
 
-function toAssistantToolUseBlock(call: SubagentToolCall): CodemarieAssistantToolUseBlock {
+function toAssistantToolUseBlock(call: SubagentToolCall): DietCodeAssistantToolUseBlock {
 	return {
 		type: "tool_use",
 		id: call.toolUseId,
@@ -237,7 +237,7 @@ function parseNonNativeToolCalls(assistantText: string): SubagentToolCall[] {
 }
 
 function pushSubagentToolResultBlock(
-	toolResultBlocks: CodemarieUserContent[],
+	toolResultBlocks: DietCodeUserContent[],
 	call: SubagentToolCall,
 	label: string,
 	content: string,
@@ -260,7 +260,7 @@ function pushSubagentToolResultBlock(
 
 export class SubagentRunner {
 	private readonly apiHandler: ApiHandler
-	private readonly allowedTools: CodemarieDefaultTool[]
+	private readonly allowedTools: DietCodeDefaultTool[]
 	private activeApiAbort: (() => void) | undefined
 	private abortRequested = false
 	private recursionDepth = 0
@@ -450,14 +450,14 @@ export class SubagentRunner {
 				return { status: "failed", error, stats }
 			}
 
-			const conversation: CodemarieStorageMessage[] = [
+			const conversation: DietCodeStorageMessage[] = [
 				{
 					role: "user",
 					content: [
 						{
 							type: "text",
 							text: prompt,
-						} as CodemarieTextContentBlock,
+						} as DietCodeTextContentBlock,
 						// Server-side task loop checks require workspace metadata to be present in the
 						// initial user message of subagent runs.
 						...(workspaceMetadataEnvironmentBlock
@@ -465,7 +465,7 @@ export class SubagentRunner {
 									{
 										type: "text",
 										text: workspaceMetadataEnvironmentBlock,
-									} as CodemarieTextContentBlock,
+									} as DietCodeTextContentBlock,
 								]
 							: []),
 					],
@@ -614,7 +614,7 @@ export class SubagentRunner {
 					)
 					finalizedToolCalls = fallbackNonNativeToolCalls
 				}
-				const assistantContent: (CodemarieTextContentBlock | CodemarieAssistantToolUseBlock)[] = []
+				const assistantContent: (DietCodeTextContentBlock | DietCodeAssistantToolUseBlock)[] = []
 				if (assistantText.trim().length > 0) {
 					assistantContent.push({
 						type: "text",
@@ -670,12 +670,12 @@ export class SubagentRunner {
 				}
 				emptyAssistantResponseRetries = 0
 
-				const toolResultBlocks = [] as CodemarieUserContent[]
+				const toolResultBlocks = [] as DietCodeUserContent[]
 				for (const call of finalizedToolCalls) {
-					const toolName = call.name as CodemarieDefaultTool
+					const toolName = call.name as DietCodeDefaultTool
 					const toolCallParams = toToolUseParams(call.input)
 
-					if (toolName === CodemarieDefaultTool.ATTEMPT) {
+					if (toolName === DietCodeDefaultTool.ATTEMPT) {
 						if (toolCallParams?.result) {
 							await this.signalCriticalFindingsToSwarm(toolCallParams.result)
 						}
@@ -801,7 +801,7 @@ export class SubagentRunner {
 		const { ToolExecutorCoordinator } = require("../ToolExecutorCoordinator")
 		const coordinator = new ToolExecutorCoordinator()
 		const validator = new ToolValidator(
-			this.baseConfig.services.codemarieIgnoreController,
+			this.baseConfig.services.dietcodeIgnoreController,
 			// biome-ignore lint/style/noNonNullAssertion: Guard is guaranteed to exist by SubagentToolHandler validation.
 			(this.baseConfig as ConfigWithExtensions).guard!,
 		) // Add guard from config
@@ -844,9 +844,9 @@ export class SubagentRunner {
 
 	private shouldRetryInitialStreamError(error: unknown, providerId: string, modelId: string): boolean {
 		// Mirror main loop behavior: do not auto-retry auth/balance failures.
-		const parsedError = CodemarieError.transform(error, modelId, providerId)
-		const isAuthError = parsedError.isErrorType(CodemarieErrorType.Auth)
-		const isBalanceError = parsedError.isErrorType(CodemarieErrorType.Balance)
+		const parsedError = DietCodeError.transform(error, modelId, providerId)
+		const isAuthError = parsedError.isErrorType(DietCodeErrorType.Auth)
+		const isBalanceError = parsedError.isErrorType(DietCodeErrorType.Balance)
 
 		if (isAuthError || isBalanceError) {
 			return false
@@ -855,7 +855,7 @@ export class SubagentRunner {
 		return true
 	}
 
-	private compactConversationForContextWindow(conversation: CodemarieStorageMessage[]): boolean {
+	private compactConversationForContextWindow(conversation: DietCodeStorageMessage[]): boolean {
 		const contextManager = new ContextManager()
 		const optimizationResult = this.optimizeConversationForContextWindow(contextManager, conversation)
 		if (optimizationResult.didOptimize && !optimizationResult.needToTruncate) {
@@ -869,7 +869,7 @@ export class SubagentRunner {
 
 		const truncated = contextManager
 			.getTruncatedMessages(conversation, deletedRange)
-			.map((message) => message as CodemarieStorageMessage)
+			.map((message) => message as DietCodeStorageMessage)
 		if (truncated.length >= conversation.length) {
 			return optimizationResult.didOptimize
 		}
@@ -880,7 +880,7 @@ export class SubagentRunner {
 
 	private optimizeConversationForContextWindow(
 		contextManager: ContextManager,
-		conversation: CodemarieStorageMessage[],
+		conversation: DietCodeStorageMessage[],
 	): {
 		didOptimize: boolean
 		needToTruncate: boolean
@@ -892,7 +892,7 @@ export class SubagentRunner {
 		}
 
 		const optimizedConversation = optimizationResult.optimizedConversationHistory.map(
-			(message) => message as CodemarieStorageMessage,
+			(message) => message as DietCodeStorageMessage,
 		)
 		conversation.splice(0, conversation.length, ...optimizedConversation)
 		return { didOptimize: true, needToTruncate: optimizationResult.needToTruncate }
@@ -918,8 +918,8 @@ export class SubagentRunner {
 	private async *createMessageWithInitialChunkRetry(
 		api: ReturnType<typeof buildApiHandler>,
 		systemPrompt: string,
-		conversation: CodemarieStorageMessage[],
-		nativeTools: CodemarieTool[] | undefined,
+		conversation: DietCodeStorageMessage[],
+		nativeTools: DietCodeTool[] | undefined,
 		providerId: string,
 		modelId: string,
 	) {

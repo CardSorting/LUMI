@@ -1,4 +1,4 @@
-import { CreateWorktreeRequest, WorktreeResult } from "@shared/proto/codemarie/worktree"
+import { CreateWorktreeRequest, WorktreeResult } from "@shared/proto/dietcode/worktree"
 import { createWorktree as createWorktreeUtil, listWorktrees } from "@utils/git-worktree"
 import { getWorkspacePath } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"

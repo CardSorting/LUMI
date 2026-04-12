@@ -1,6 +1,6 @@
 /* Editor theme mapping */
 @theme {
-	--color-codemarie: #9663f1;
+	--color-dietcode: #9663f1;
 	--color-background: var(--vscode-sideBar-background);
 	--color-border: var(--vscode-focusBorder);
 	--color-border-panel: var(--vscode-panel-border);

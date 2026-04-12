@@ -2,13 +2,13 @@
  * Entry point for ACP (Agent Client Protocol) mode.
  *
  * When the CLI is invoked with `--acp`, this module sets up the ACP connection
- * and runs Codemarie as an ACP-compliant agent communicating over stdio.
+ * and runs DietCode as an ACP-compliant agent communicating over stdio.
  *
  * This module exports:
- * - `CodemarieAgent` - Decoupled agent for programmatic use (no stdio dependency)
- * - `AcpAgent` - Thin wrapper that bridges stdio connection to CodemarieAgent
- * - `CodemarieSessionEmitter` - Typed EventEmitter for per-session events
- * - `runAcpMode` - Function to run Codemarie in stdio-based ACP mode
+ * - `DietCodeAgent` - Decoupled agent for programmatic use (no stdio dependency)
+ * - `AcpAgent` - Thin wrapper that bridges stdio connection to DietCodeAgent
+ * - `DietCodeSessionEmitter` - Typed EventEmitter for per-session events
+ * - `runAcpMode` - Function to run DietCode in stdio-based ACP mode
  *
  * @module acp
  */
@@ -19,13 +19,13 @@ import { AcpAgent } from "./AcpAgent.js"
 import { nodeToWebReadable, nodeToWebWritable } from "./streamUtils.js"
 
 // Re-export classes for programmatic use
-export { CodemarieAgent } from "../agent/CodemarieAgent.js"
-export { CodemarieSessionEmitter } from "../agent/CodemarieSessionEmitter.js"
+export { DietCodeAgent } from "../agent/DietCodeAgent.js"
+export { DietCodeSessionEmitter } from "../agent/DietCodeSessionEmitter.js"
 export type {
 	AcpAgentOptions,
 	AcpSessionState,
-	CodemarieAgentOptions,
-	CodemarieSessionEvents,
+	DietCodeAgentOptions,
+	DietCodeSessionEvents,
 	PermissionHandler,
 } from "../agent/types.js"
 export { AcpAgent } from "./AcpAgent.js"
@@ -65,7 +65,7 @@ export function restoreConsole(): void {
 }
 
 export interface AcpModeOptions {
-	/** Path to Codemarie configuration directory */
+	/** Path to DietCode configuration directory */
 	config?: string
 	/** Working directory (default: process.cwd()) */
 	cwd?: string
@@ -74,7 +74,7 @@ export interface AcpModeOptions {
 }
 
 /**
- * Run Codemarie in ACP mode.
+ * Run DietCode in ACP mode.
  *
  * This function:
  * 1. Redirects console output to stderr (stdout reserved for JSON-RPC)

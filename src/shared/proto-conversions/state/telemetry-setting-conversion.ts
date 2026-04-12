@@ -1,4 +1,4 @@
-import { TelemetrySettingEnum } from "@shared/proto/codemarie/state"
+import { TelemetrySettingEnum } from "@shared/proto/dietcode/state"
 import { TelemetrySetting } from "../../TelemetrySetting"
 
 /**

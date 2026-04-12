@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
 /**
  * ## new_task
@@ -19,9 +19,9 @@ Usage:
 </new_task>
  */
 
-const id = CodemarieDefaultTool.NEW_TASK
+const id = DietCodeDefaultTool.NEW_TASK
 
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "new_task",

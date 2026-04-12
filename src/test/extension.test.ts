@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 
 const packagePath = path.join(__dirname, "..", "..", "..", "package.json")
 
-describe("Codemarie Extension", () => {
+describe("DietCode Extension", () => {
 	after(() => {
 		vscode.window.showInformationMessage("All tests done!")
 	})
@@ -14,14 +14,14 @@ describe("Codemarie Extension", () => {
 	it("should verify extension ID matches package.json", async () => {
 		const packageJSON = JSON.parse(await readFile(packagePath, "utf8"))
 		const id = `${packageJSON.publisher}.${packageJSON.name}`
-		const codemarieExtensionApi = vscode.extensions.getExtension(id)
+		const dietcodeExtensionApi = vscode.extensions.getExtension(id)
 
-		codemarieExtensionApi?.id.should.equal(id)
+		dietcodeExtensionApi?.id.should.equal(id)
 	})
 
 	it("should successfully execute the plus button command", async () => {
 		await new Promise((resolve) => setTimeout(resolve, 400))
-		await vscode.commands.executeCommand("codemarie.plusButtonClicked")
+		await vscode.commands.executeCommand("dietcode.plusButtonClicked")
 	})
 
 	// New test to verify xvfb and webview functionality

@@ -1,4 +1,4 @@
-import { HookInfo, HooksToggles, WorkspaceHooks } from "@shared/proto/codemarie/file"
+import { HookInfo, HooksToggles, WorkspaceHooks } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -11,7 +11,7 @@ export async function refreshHooks(
 	_request?: any,
 	globalHooksDirOverride?: string,
 ): Promise<HooksToggles> {
-	const globalHooksDir = globalHooksDirOverride || path.join(os.homedir(), "Documents", "Codemarie", "Hooks")
+	const globalHooksDir = globalHooksDirOverride || path.join(os.homedir(), "Documents", "DietCode", "Hooks")
 	const isWindows = process.platform === "win32"
 
 	// Collect global hooks
@@ -34,7 +34,7 @@ export async function refreshHooks(
 	const workspaceHooksList: WorkspaceHooks[] = []
 
 	for (const workspacePath of workspacePaths.paths) {
-		const workspaceHooksDir = path.join(workspacePath, ".codemarierules", "hooks")
+		const workspaceHooksDir = path.join(workspacePath, ".dietcoderules", "hooks")
 		const hooks: HookInfo[] = []
 
 		for (const hookName of VALID_HOOK_TYPES) {

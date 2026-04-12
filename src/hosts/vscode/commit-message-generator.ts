@@ -168,7 +168,7 @@ async function generateCommitMsgForRepository(controller: Controller, repository
 
 async function performCommitMsgGeneration(controller: Controller, gitDiff: string, inputBox: any) {
 	try {
-		vscode.commands.executeCommand("setContext", "codemarie.isGeneratingCommit", true)
+		vscode.commands.executeCommand("setContext", "dietcode.isGeneratingCommit", true)
 
 		const prompts = [PROMPT.instruction]
 
@@ -226,13 +226,13 @@ async function performCommitMsgGeneration(controller: Controller, gitDiff: strin
 			message: `Failed to generate commit message: ${errorMessage}`,
 		})
 	} finally {
-		vscode.commands.executeCommand("setContext", "codemarie.isGeneratingCommit", false)
+		vscode.commands.executeCommand("setContext", "dietcode.isGeneratingCommit", false)
 	}
 }
 
 export function abortCommitGeneration() {
 	commitGenerationAbortController?.abort()
-	vscode.commands.executeCommand("setContext", "codemarie.isGeneratingCommit", false)
+	vscode.commands.executeCommand("setContext", "dietcode.isGeneratingCommit", false)
 }
 
 /**

@@ -17,7 +17,7 @@ npm run test:unit
 ```
 src/core/prompts/system-prompt/
 ├── registry/
-│   ├── CodeMarieToolSet.ts            # Tool set management & registry
+│   ├── DietCodeToolSet.ts            # Tool set management & registry
 │   ├── PromptRegistry.ts          # Singleton registry for loading/managing prompts
 │   ├── PromptBuilder.ts           # Builds final prompts with template resolution
 │   └── utils.ts                   # Model family detection utilities
@@ -143,15 +143,15 @@ interface PromptVariant {
   placeholders: { [key: string]: string };      // Default placeholder values
 
   // Tool configuration
-  tools?: CodeMarieDefaultTool[];                    // Ordered list of tools to include
-  toolOverrides?: { [K in CodeMarieDefaultTool]?: ConfigOverride }; // Tool-specific customizations
+  tools?: DietCodeDefaultTool[];                    // Ordered list of tools to include
+  toolOverrides?: { [K in DietCodeDefaultTool]?: ConfigOverride }; // Tool-specific customizations
 }
 
 interface PromptConfig {
   modelName?: string;
   temperature?: number;
   maxTokens?: number;
-  tools?: CodeMarieToolSpec[];
+  tools?: DietCodeToolSpec[];
   [key: string]: any;                            // Additional arbitrary config
 }
 
@@ -298,7 +298,7 @@ class TemplateEngine {
 
 **Base Template Example:**
 ```markdown
-You are CodeMarie, a highly skilled software engineer...
+You are DietCode, a highly skilled software engineer...
 
 ====
 
@@ -357,26 +357,26 @@ Current Working Directory: {{workingDir}}
 
 ### 6. Tool System
 
-Tools are managed through the `CodeMarieToolSet` and can be configured per variant:
+Tools are managed through the `DietCodeToolSet` and can be configured per variant:
 
 ```typescript
-class CodeMarieToolSet {
-  private static variants: Map<ModelFamily, Set<CodeMarieToolSet>> = new Map();
+class DietCodeToolSet {
+  private static variants: Map<ModelFamily, Set<DietCodeToolSet>> = new Map();
 
-  static register(config: CodeMarieToolSpec): CodeMarieToolSet {
-    return new CodeMarieToolSet(config.id, config);
+  static register(config: DietCodeToolSpec): DietCodeToolSet {
+    return new DietCodeToolSet(config.id, config);
   }
 
-  static getTools(variant: ModelFamily): CodeMarieToolSet[] {
-    const toolsSet = CodeMarieToolSet.variants.get(variant) || new Set();
-    const defaultSet = CodeMarieToolSet.variants.get(ModelFamily.GENERIC) || new Set();
+  static getTools(variant: ModelFamily): DietCodeToolSet[] {
+    const toolsSet = DietCodeToolSet.variants.get(variant) || new Set();
+    const defaultSet = DietCodeToolSet.variants.get(ModelFamily.GENERIC) || new Set();
     return toolsSet ? Array.from(toolsSet) : Array.from(defaultSet);
   }
 }
 
 // Tool generation in PromptBuilder
 public static async getToolsPrompts(variant: PromptVariant, context: SystemPromptContext) {
-  const tools = CodeMarieToolSet.getTools(variant.family);
+  const tools = DietCodeToolSet.getTools(variant.family);
   
   // Filter and sort tools based on variant configuration
   const enabledTools = tools.filter((tool) => 
@@ -411,7 +411,7 @@ public static async getToolsPrompts(variant: PromptVariant, context: SystemPromp
 ```typescript
 // variants/generic/config.ts
 import { ModelFamily } from "@/shared/prompts";
-import { CodeMarieDefaultTool } from "@/shared/tools";
+import { DietCodeDefaultTool } from "@/shared/tools";
 import { SystemPromptSection } from "../../templates/placeholders";
 import { validateVariant } from "../../validation/VariantValidator";
 import { createVariant } from "../builder";
@@ -441,22 +441,22 @@ export const config = createVariant(ModelFamily.GENERIC)
     SystemPromptSection.USER_INSTRUCTIONS,
   )
   .tools(
-    CodeMarieDefaultTool.BASH,
-    CodeMarieDefaultTool.FILE_READ,
-    CodeMarieDefaultTool.FILE_NEW,
-    CodeMarieDefaultTool.FILE_EDIT,
-    CodeMarieDefaultTool.SEARCH,
-    CodeMarieDefaultTool.LIST_FILES,
-    CodeMarieDefaultTool.LIST_CODE_DEF,
-    CodeMarieDefaultTool.BROWSER,
-    CodeMarieDefaultTool.MCP_USE,
-    CodeMarieDefaultTool.MCP_ACCESS,
-    CodeMarieDefaultTool.ASK,
-    CodeMarieDefaultTool.ATTEMPT,
-    CodeMarieDefaultTool.NEW_TASK,
-    CodeMarieDefaultTool.PLAN_MODE,
-    CodeMarieDefaultTool.MCP_DOCS,
-    CodeMarieDefaultTool.TODO,
+    DietCodeDefaultTool.BASH,
+    DietCodeDefaultTool.FILE_READ,
+    DietCodeDefaultTool.FILE_NEW,
+    DietCodeDefaultTool.FILE_EDIT,
+    DietCodeDefaultTool.SEARCH,
+    DietCodeDefaultTool.LIST_FILES,
+    DietCodeDefaultTool.LIST_CODE_DEF,
+    DietCodeDefaultTool.BROWSER,
+    DietCodeDefaultTool.MCP_USE,
+    DietCodeDefaultTool.MCP_ACCESS,
+    DietCodeDefaultTool.ASK,
+    DietCodeDefaultTool.ATTEMPT,
+    DietCodeDefaultTool.NEW_TASK,
+    DietCodeDefaultTool.PLAN_MODE,
+    DietCodeDefaultTool.MCP_DOCS,
+    DietCodeDefaultTool.TODO,
   )
   .placeholders({
     MODEL_FAMILY: "generic",
@@ -480,7 +480,7 @@ export type GenericVariantConfig = typeof config;
 ```typescript
 // variants/next-gen/config.ts
 import { ModelFamily } from "@/shared/prompts";
-import { CodeMarieDefaultTool } from "@/shared/tools";
+import { DietCodeDefaultTool } from "@/shared/tools";
 import { SystemPromptSection } from "../../templates/placeholders";
 import { validateVariant } from "../../validation/VariantValidator";
 import { createVariant } from "../builder";
@@ -512,23 +512,23 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
     SystemPromptSection.USER_INSTRUCTIONS,
   )
   .tools(
-    CodeMarieDefaultTool.BASH,
-    CodeMarieDefaultTool.FILE_READ,
-    CodeMarieDefaultTool.FILE_NEW,
-    CodeMarieDefaultTool.FILE_EDIT,
-    CodeMarieDefaultTool.SEARCH,
-    CodeMarieDefaultTool.LIST_FILES,
-    CodeMarieDefaultTool.LIST_CODE_DEF,
-    CodeMarieDefaultTool.BROWSER,
-    CodeMarieDefaultTool.WEB_FETCH,  // Additional tool for next-gen
-    CodeMarieDefaultTool.MCP_USE,
-    CodeMarieDefaultTool.MCP_ACCESS,
-    CodeMarieDefaultTool.ASK,
-    CodeMarieDefaultTool.ATTEMPT,
-    CodeMarieDefaultTool.NEW_TASK,
-    CodeMarieDefaultTool.PLAN_MODE,
-    CodeMarieDefaultTool.MCP_DOCS,
-    CodeMarieDefaultTool.TODO,
+    DietCodeDefaultTool.BASH,
+    DietCodeDefaultTool.FILE_READ,
+    DietCodeDefaultTool.FILE_NEW,
+    DietCodeDefaultTool.FILE_EDIT,
+    DietCodeDefaultTool.SEARCH,
+    DietCodeDefaultTool.LIST_FILES,
+    DietCodeDefaultTool.LIST_CODE_DEF,
+    DietCodeDefaultTool.BROWSER,
+    DietCodeDefaultTool.WEB_FETCH,  // Additional tool for next-gen
+    DietCodeDefaultTool.MCP_USE,
+    DietCodeDefaultTool.MCP_ACCESS,
+    DietCodeDefaultTool.ASK,
+    DietCodeDefaultTool.ATTEMPT,
+    DietCodeDefaultTool.NEW_TASK,
+    DietCodeDefaultTool.PLAN_MODE,
+    DietCodeDefaultTool.MCP_DOCS,
+    DietCodeDefaultTool.TODO,
   )
   .placeholders({
     MODEL_FAMILY: ModelFamily.NEXT_GEN,
@@ -556,7 +556,7 @@ export type NextGenVariantConfig = typeof config;
 ```typescript
 // variants/xs/config.ts
 import { ModelFamily } from "@/shared/prompts";
-import { CodeMarieDefaultTool } from "@/shared/tools";
+import { DietCodeDefaultTool } from "@/shared/tools";
 import { SystemPromptSection } from "../../templates/placeholders";
 import { validateVariant } from "../../validation/VariantValidator";
 import { createVariant } from "../builder";
@@ -585,19 +585,19 @@ export const config = createVariant(ModelFamily.XS)
     SystemPromptSection.USER_INSTRUCTIONS,
   )
   .tools(
-    CodeMarieDefaultTool.BASH,
-    CodeMarieDefaultTool.FILE_READ,
-    CodeMarieDefaultTool.FILE_NEW,
-    CodeMarieDefaultTool.FILE_EDIT,
-    CodeMarieDefaultTool.SEARCH,
-    CodeMarieDefaultTool.LIST_FILES,
-    CodeMarieDefaultTool.ASK,
-    CodeMarieDefaultTool.ATTEMPT,
-    CodeMarieDefaultTool.NEW_TASK,
-    CodeMarieDefaultTool.PLAN_MODE,
-    CodeMarieDefaultTool.MCP_USE,
-    CodeMarieDefaultTool.MCP_ACCESS,
-    CodeMarieDefaultTool.MCP_DOCS,
+    DietCodeDefaultTool.BASH,
+    DietCodeDefaultTool.FILE_READ,
+    DietCodeDefaultTool.FILE_NEW,
+    DietCodeDefaultTool.FILE_EDIT,
+    DietCodeDefaultTool.SEARCH,
+    DietCodeDefaultTool.LIST_FILES,
+    DietCodeDefaultTool.ASK,
+    DietCodeDefaultTool.ATTEMPT,
+    DietCodeDefaultTool.NEW_TASK,
+    DietCodeDefaultTool.PLAN_MODE,
+    DietCodeDefaultTool.MCP_USE,
+    DietCodeDefaultTool.MCP_ACCESS,
+    DietCodeDefaultTool.MCP_DOCS,
   )
   .placeholders({
     MODEL_FAMILY: ModelFamily.XS,
@@ -639,8 +639,8 @@ const config = createVariant(ModelFamily.GENERIC)
     // ... more components
   )
   .tools(                                          // Optional, type-safe tool selection
-    CodeMarieDefaultTool.BASH,
-    CodeMarieDefaultTool.FILE_READ,
+    DietCodeDefaultTool.BASH,
+    DietCodeDefaultTool.FILE_READ,
     // ... more tools
   )
   .placeholders({                                  // Optional
@@ -654,7 +654,7 @@ const config = createVariant(ModelFamily.GENERIC)
   .overrideComponent(SystemPromptSection.RULES, {  // Optional, component overrides
     template: customRulesTemplate,
   })
-  .overrideTool(CodeMarieDefaultTool.BASH, {          // Optional, tool overrides
+  .overrideTool(DietCodeDefaultTool.BASH, {          // Optional, tool overrides
     enabled: false,
   })
   .build();                                       // Returns Omit<PromptVariant, "id">
@@ -750,7 +750,7 @@ The system includes the following built-in components:
 
 ## Available Tools
 
-The system supports the following tools (mapped to `CodeMarieDefaultTool` enum):
+The system supports the following tools (mapped to `DietCodeDefaultTool` enum):
 
 - `BASH`: Execute shell commands
 - `FILE_READ`: Read file contents
@@ -774,17 +774,17 @@ The system supports the following tools (mapped to `CodeMarieDefaultTool` enum):
 
 ### Tool Structure and Anatomy
 
-Each tool in CodeMarie follows a specific structure with variants for different model families. Here's the anatomy of a tool:
+Each tool in DietCode follows a specific structure with variants for different model families. Here's the anatomy of a tool:
 
 ```typescript
 // src/core/prompts/system-prompt/tools/my_new_tool.ts
 import { ModelFamily } from "@/shared/prompts"
-import { CodeMarieDefaultTool } from "@/shared/tools"
-import type { CodeMarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
-const id = CodeMarieDefaultTool.MY_NEW_TOOL // Add to enum first
+const id = DietCodeDefaultTool.MY_NEW_TOOL // Add to enum first
 
-const generic: CodeMarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "my_new_tool",
@@ -801,7 +801,7 @@ const generic: CodeMarieToolSpec = {
 			required: false,
 			instruction: "Description of optional parameter",
 			usage: "Optional example (optional)",
-			dependencies: [CodeMarieDefaultTool.SOME_OTHER_TOOL], // Only show if dependency exists
+			dependencies: [DietCodeDefaultTool.SOME_OTHER_TOOL], // Only show if dependency exists
 		},
 	],
 }
@@ -818,11 +818,11 @@ export const my_new_tool_variants = [generic, nextGen, gpt, gemini]
 
 #### 1. Add Tool ID to Enum
 
-First, add your tool ID to the `CodeMarieDefaultTool` enum:
+First, add your tool ID to the `DietCodeDefaultTool` enum:
 
 ```typescript
 // src/shared/tools.ts
-export enum CodeMarieDefaultTool {
+export enum DietCodeDefaultTool {
 	// ... existing tools
 	MY_NEW_TOOL = "my_new_tool",
 }
@@ -835,12 +835,12 @@ Create a new file in `src/core/prompts/system-prompt/tools/` following the namin
 ```typescript
 // src/core/prompts/system-prompt/tools/my_new_tool.ts
 import { ModelFamily } from "@/shared/prompts"
-import { CodeMarieDefaultTool } from "@/shared/tools"
-import type { CodeMarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
-const id = CodeMarieDefaultTool.MY_NEW_TOOL
+const id = DietCodeDefaultTool.MY_NEW_TOOL
 
-const generic: CodeMarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "my_new_tool",
@@ -882,14 +882,14 @@ Add your tool to the registration function:
 // src/core/prompts/system-prompt/tools/init.ts
 import { my_new_tool_variants } from "./my_new_tool"
 
-export function registerCodeMarieToolSets(): void {
+export function registerDietCodeToolSets(): void {
 	const allToolVariants = [
 		// ... existing tool variants
 		...my_new_tool_variants,
 	]
 
 	allToolVariants.forEach((v) => {
-		CodeMarieToolSet.register(v)
+		DietCodeToolSet.register(v)
 	})
 }
 ```
@@ -899,7 +899,7 @@ export function registerCodeMarieToolSets(): void {
 Create the actual tool implementation in the appropriate handler:
 
 ```typescript
-// In your tool handler class (e.g., CodeMarieProvider)
+// In your tool handler class (e.g., DietCodeProvider)
 async handleMyNewTool(args: { input_parameter: string; options?: string }) {
 	// Implement your tool logic here
 	const result = await performToolOperation(args.input_parameter, args.options)
@@ -918,9 +918,9 @@ async handleMyNewTool(args: { input_parameter: string; options?: string }) {
 Tools can be conditionally enabled based on context:
 
 ```typescript
-const contextAwareTool: CodeMarieToolSpec = {
+const contextAwareTool: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
-	id: CodeMarieDefaultTool.CONTEXT_TOOL,
+	id: DietCodeDefaultTool.CONTEXT_TOOL,
 	name: "context_tool",
 	description: "Tool that only appears in certain contexts",
 	contextRequirements: (context: SystemPromptContext) => {
@@ -938,9 +938,9 @@ const contextAwareTool: CodeMarieToolSpec = {
 Create different tool behaviors for different model families:
 
 ```typescript
-const claude: CodeMarieToolSpec = {
+const claude: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
-	id: CodeMarieDefaultTool.MODEL_SPECIFIC_TOOL,
+	id: DietCodeDefaultTool.MODEL_SPECIFIC_TOOL,
 	name: "model_specific_tool",
 	description: "Tool optimized for Claude models with detailed instructions",
 	parameters: [
@@ -953,7 +953,7 @@ const claude: CodeMarieToolSpec = {
 	],
 }
 
-const gpt: CodeMarieToolSpec = {
+const gpt: DietCodeToolSpec = {
 	...claude,
 	variant: ModelFamily.GPT,
 	description: "Tool optimized for GPT models with concise instructions",
@@ -975,9 +975,9 @@ export const model_specific_tool_variants = [claude, gpt]
 Tools can have parameters that only appear when other tools are available:
 
 ```typescript
-const dependentTool: CodeMarieToolSpec = {
+const dependentTool: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
-	id: CodeMarieDefaultTool.DEPENDENT_TOOL,
+	id: DietCodeDefaultTool.DEPENDENT_TOOL,
 	name: "dependent_tool",
 	description: "Tool with conditional parameters",
 	parameters: [
@@ -992,7 +992,7 @@ const dependentTool: CodeMarieToolSpec = {
 			required: false,
 			instruction: "This parameter only appears if TODO tool is available",
 			usage: "Conditional input (optional)",
-			dependencies: [CodeMarieDefaultTool.TODO],
+			dependencies: [DietCodeDefaultTool.TODO],
 		},
 	],
 }
@@ -1069,19 +1069,19 @@ Here's a complete example of adding a new "analyze_file" tool:
 
 ```typescript
 // 1. Add to src/shared/tools.ts
-export enum CodeMarieDefaultTool {
+export enum DietCodeDefaultTool {
 	// ... existing tools
 	ANALYZE_FILE = "analyze_file",
 }
 
 // 2. Create src/core/prompts/system-prompt/tools/analyze_file.ts
 import { ModelFamily } from "@/shared/prompts"
-import { CodeMarieDefaultTool } from "@/shared/tools"
-import type { CodeMarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
-const id = CodeMarieDefaultTool.ANALYZE_FILE
+const id = DietCodeDefaultTool.ANALYZE_FILE
 
-const generic: CodeMarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "analyze_file",
@@ -1108,7 +1108,7 @@ const generic: CodeMarieToolSpec = {
 	],
 }
 
-const nextGen: CodeMarieToolSpec = {
+const nextGen: DietCodeToolSpec = {
 	...generic,
 	variant: ModelFamily.NEXT_GEN,
 	description: "Perform comprehensive file analysis including structure, dependencies, code quality, and improvement suggestions. Ideal for code review and refactoring planning.",
@@ -1122,7 +1122,7 @@ export * from "./analyze_file"
 // 4. Add to src/core/prompts/system-prompt/tools/init.ts
 import { analyze_file_variants } from "./analyze_file"
 
-export function registerCodeMarieToolSets(): void {
+export function registerDietCodeToolSets(): void {
 	const allToolVariants = [
 		// ... existing variants
 		...analyze_file_variants,
@@ -1131,7 +1131,7 @@ export function registerCodeMarieToolSets(): void {
 }
 ```
 
-This comprehensive guide should help developers understand both the architecture and practical steps needed to extend CodeMarie with new tools.
+This comprehensive guide should help developers understand both the architecture and practical steps needed to extend DietCode with new tools.
 
 ## Key Features
 

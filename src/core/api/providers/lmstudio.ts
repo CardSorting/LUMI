@@ -1,7 +1,7 @@
 import { type ModelInfo, openAiModelInfoSaneDefaults } from "@shared/api"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import type { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
@@ -39,7 +39,7 @@ export class LmStudioHandler implements ApiHandler {
 	}
 
 	@withRetry({ retryAllErrors: true })
-	async *createMessage(systemPrompt: string, messages: CodemarieStorageMessage[], tools?: OpenAITool[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: OpenAITool[]): ApiStream {
 		const client = this.ensureClient()
 		const openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
 			{ role: "system", content: systemPrompt },
@@ -90,7 +90,7 @@ export class LmStudioHandler implements ApiHandler {
 		} catch {
 			// LM Studio doesn't return an error code/body for now
 			throw new Error(
-				"Please check the LM Studio developer logs to debug what went wrong. You may need to load the model with a larger context length to work with Codemarie's prompts. Alternatively, try enabling Compact Prompt in your settings when working with a limited context window.",
+				"Please check the LM Studio developer logs to debug what went wrong. You may need to load the model with a larger context length to work with DietCode's prompts. Alternatively, try enabling Compact Prompt in your settings when working with a limited context window.",
 			)
 		}
 	}

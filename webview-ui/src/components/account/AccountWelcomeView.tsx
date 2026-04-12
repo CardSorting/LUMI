@@ -1,19 +1,19 @@
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { VscIcon } from "@/components/ui/vsc-icon"
-import { useCodemarieSignIn } from "@/context/CodemarieAuthContext"
+import { useDietCodeSignIn } from "@/context/DietCodeAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import CodemarieLogoVariable from "../../assets/CodemarieLogoVariable"
+import DietCodeLogoVariable from "../../assets/DietCodeLogoVariable"
 
 // export const AccountWelcomeView = () => (
 // 	<div className="flex flex-col items-center pr-3 gap-2.5">
-// 		<CodemarieLogoWhite className="size-16 mb-4" />
+// 		<DietCodeLogoWhite className="size-16 mb-4" />
 export const AccountWelcomeView = () => {
 	const { environment } = useExtensionState()
-	const { isLoginLoading, handleSignIn } = useCodemarieSignIn()
+	const { isLoginLoading, handleSignIn } = useDietCodeSignIn()
 
 	return (
 		<div className="flex flex-col items-center gap-2.5">
-			<CodemarieLogoVariable className="size-16 mb-4" environment={environment} />
+			<DietCodeLogoVariable className="size-16 mb-4" environment={environment} />
 
 			<p>
 				Sign up for an account to get access to the latest models, billing dashboard to view usage and credits, and more
@@ -21,7 +21,7 @@ export const AccountWelcomeView = () => {
 			</p>
 
 			<VSCodeButton className="w-full mb-4" disabled={isLoginLoading} onClick={handleSignIn}>
-				Sign up with Codemarie
+				Sign up with DietCode
 				{isLoginLoading && (
 					<span className="ml-1 animate-spin">
 						<VscIcon className="" name="refresh" />
@@ -30,8 +30,8 @@ export const AccountWelcomeView = () => {
 			</VSCodeButton>
 
 			<p className="text-(--vscode-descriptionForeground) text-xs text-center m-0">
-				By continuing, you agree to the <VSCodeLink href="https://codemarie.bot/tos">Terms of Service</VSCodeLink> and{" "}
-				<VSCodeLink href="https://codemarie.bot/privacy">Privacy Policy.</VSCodeLink>
+				By continuing, you agree to the <VSCodeLink href="https://dietcode.bot/tos">Terms of Service</VSCodeLink> and{" "}
+				<VSCodeLink href="https://dietcode.bot/privacy">Privacy Policy.</VSCodeLink>
 			</p>
 		</div>
 	)

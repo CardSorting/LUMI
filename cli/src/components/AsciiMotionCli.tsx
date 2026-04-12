@@ -78,7 +78,7 @@ export const StaticRobotFrame: React.FC<{ hasDarkBackground?: boolean }> = ({ ha
 
 	return (
 		<Box alignItems="center" flexDirection="column" width="100%">
-			<Text color={theme.petal}> 🌸 CodeMarie 🌸 </Text>
+			<Text color={theme.petal}> 🌸 DietCode 🌸 </Text>
 		</Box>
 	)
 }

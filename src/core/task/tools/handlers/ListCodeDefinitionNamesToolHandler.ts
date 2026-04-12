@@ -4,7 +4,7 @@ import { parseSourceCodeForDefinitionsTopLevel } from "@services/tree-sitter"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { formatResponse } from "@/core/prompts/responses"
 import { telemetryService } from "@/services/telemetry"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -14,7 +14,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.LIST_CODE_DEF
+	readonly name = DietCodeDefaultTool.LIST_CODE_DEF
 
 	constructor(private validator: ToolValidator) {}
 
@@ -58,7 +58,7 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
 		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
-		// Validate required parameters and check codemarieignore access
+		// Validate required parameters and check dietcodeignore access
 		const validation = await this.validator.validate(block, "path")
 		if (!validation.ok) {
 			if (validation.error.includes("Missing required parameter")) {
@@ -77,7 +77,7 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relDirPath! } : pathResult
 
 		// Execute the actual parse source code operation
-		const result = await parseSourceCodeForDefinitionsTopLevel(absolutePath, config.services.codemarieIgnoreController)
+		const result = await parseSourceCodeForDefinitionsTopLevel(absolutePath, config.services.dietcodeIgnoreController)
 
 		// Handle approval flow
 		const sharedMessageProps = {
@@ -111,7 +111,7 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 			)
 		} else {
 			// Manual approval flow
-			const notificationMessage = `Codemarie wants to analyze code definitions in ${getWorkspaceBasename(absolutePath, "ListCodeDefinitionNamesToolHandler.notification")}`
+			const notificationMessage = `DietCode wants to analyze code definitions in ${getWorkspaceBasename(absolutePath, "ListCodeDefinitionNamesToolHandler.notification")}`
 
 			// Show notification
 			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)

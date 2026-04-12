@@ -4,7 +4,7 @@ import * as path from "node:path"
 import { type ElectronApplication, expect, type Frame, type Page, test } from "@playwright/test"
 import { downloadAndUnzipVSCode, SilentReporter } from "@vscode/test-electron"
 import { _electron } from "playwright"
-import { CodemarieApiServerMock } from "../fixtures/server"
+import { DietCodeApiServerMock } from "../fixtures/server"
 
 interface E2ETestDirectories {
 	workspaceDir: string
@@ -84,7 +84,7 @@ export class E2ETestHelper {
 
 				try {
 					const title = await frame.title()
-					if (title.toLowerCase().startsWith("codemarie")) {
+					if (title.toLowerCase().startsWith("dietcode")) {
 						this.cachedFrame = frame
 						return frame
 					}
@@ -119,17 +119,17 @@ export class E2ETestHelper {
 	}
 
 	public async signin(webview: Frame): Promise<void> {
-		await webview.getByRole("button", { name: /Login to CodeMarie/i }).click({ delay: 100 })
+		await webview.getByRole("button", { name: /Login to DietCode/i }).click({ delay: 100 })
 
 		// Verify start up page is no longer visible
-		await expect(webview.getByRole("button", { name: /Login to CodeMarie/i })).not.toBeVisible()
+		await expect(webview.getByRole("button", { name: /Login to DietCode/i })).not.toBeVisible()
 
 		await webview.getByRole("button", { name: "Close" }).click({ delay: 50 })
 	}
 
-	public static async openCodemarieSidebar(page: Page): Promise<void> {
+	public static async openDietCodeSidebar(page: Page): Promise<void> {
 		await page
-			.getByRole("tab", { name: /CodeMarie/i })
+			.getByRole("tab", { name: /DietCode/i })
 			.locator("a")
 			.click()
 	}
@@ -152,11 +152,11 @@ export class E2ETestHelper {
 }
 
 /**
- * NOTE: Use the `e2e` test fixture for all E2E tests to test the Codemarie extension.
+ * NOTE: Use the `e2e` test fixture for all E2E tests to test the DietCode extension.
  *
- * Extended Playwright test configuration for Codemarie E2E testing.
+ * Extended Playwright test configuration for DietCode E2E testing.
  *
- * This test configuration provides a comprehensive setup for end-to-end testing of the Codemarie VS Code extension,
+ * This test configuration provides a comprehensive setup for end-to-end testing of the DietCode VS Code extension,
  * including server mocking, temporary directories, VS Code instance management, and helper utilities.
  *
  * NOTE: Default to run in single-root workspace; use `e2eMultiRoot` for multi-root workspace tests.
@@ -164,26 +164,26 @@ export class E2ETestHelper {
  * @extends test - Base Playwright test with multiple fixture extensions
  *
  * Fixtures provided:
- * - `server`: Shared CodemarieApiServerMock instance for API mocking (reused across all tests)
+ * - `server`: Shared DietCodeApiServerMock instance for API mocking (reused across all tests)
  * - `workspaceDir`: Path to the test workspace directory
  * - `userDataDir`: Temporary directory for VS Code user data
  * - `extensionsDir`: Temporary directory for VS Code extensions
  * - `openVSCode`: Function that returns a Promise resolving to an ElectronApplication instance
  * - `app`: ElectronApplication instance with automatic cleanup
  * - `helper`: E2ETestHelper instance for test utilities
- * - `page`: Playwright Page object representing the main VS Code window with Codemarie sidebar opened
- * - `sidebar`: Playwright Frame object representing the Codemarie extension's sidebar iframe
+ * - `page`: Playwright Page object representing the main VS Code window with DietCode sidebar opened
+ * - `sidebar`: Playwright Frame object representing the DietCode extension's sidebar iframe
  *
  * @returns Extended test object with all fixtures available for E2E test scenarios:
- * - **server**: Automatically starts and manages a CodemarieApiServerMock instance
+ * - **server**: Automatically starts and manages a DietCodeApiServerMock instance
  * - **workspaceDir**: Sets up a test workspace directory from fixtures
  * - **userDataDir**: Creates a temporary directory for VS Code user data
  * - **extensionsDir**: Creates a temporary directory for VS Code extensions
  * - **openVSCode**: Factory function that launches VS Code with proper configuration for testing
  * - **app**: Manages the VS Code ElectronApplication lifecycle with automatic cleanup
  * - **helper**: Provides E2ETestHelper utilities for test operations
- * - **page**: Configures the main VS Code window with notifications disabled and Codemarie sidebar open
- * - **sidebar**: Provides access to the Codemarie extension's sidebar frame
+ * - **page**: Configures the main VS Code window with notifications disabled and DietCode sidebar open
+ * - **sidebar**: Provides access to the DietCode extension's sidebar frame
  *
  * @example
  * ```typescript
@@ -194,27 +194,27 @@ export class E2ETestHelper {
  *
  * @remarks
  * - Automatically handles VS Code download and setup
- * - Installs the Codemarie extension in development mode
+ * - Installs the DietCode extension in development mode
  * - Records test videos for debugging
  * - Performs cleanup of temporary directories after each test
  * - Configures VS Code with disabled updates, workspace trust, and welcome screens
  */
 export const e2e = test
 	// biome-ignore lint/complexity/noBannedTypes: Playwright extend requires {} for empty fixtures
-	.extend<{}, { server: CodemarieApiServerMock | null }>({
+	.extend<{}, { server: DietCodeApiServerMock | null }>({
 		server: [
 			async ({}, use) => {
 				// Start server if it doesn't exist
-				if (!CodemarieApiServerMock.globalSharedServer) {
-					await CodemarieApiServerMock.startGlobalServer()
+				if (!DietCodeApiServerMock.globalSharedServer) {
+					await DietCodeApiServerMock.startGlobalServer()
 				}
-				await use(CodemarieApiServerMock.globalSharedServer)
+				await use(DietCodeApiServerMock.globalSharedServer)
 
 				// Teardown: stop server after all tests in the worker are done
 				// Playwright workers can be reused, but we want to ensure clean state
 				// For truly global server, we might want to keep it running until the end,
 				// but stopGlobalServer handles multiple calls and existing sockets.
-				await CodemarieApiServerMock.stopGlobalServer()
+				await DietCodeApiServerMock.stopGlobalServer()
 			},
 			{ scope: "worker" },
 		],
@@ -240,8 +240,8 @@ export const e2e = test
 			const executablePath = await downloadAndUnzipVSCode(channel, undefined, new SilentReporter())
 
 			await use(async (workspacePath: string) => {
-				// Create isolated Codemarie data directory for this test
-				const codemarieTestDir = mkdtempSync(path.join(os.tmpdir(), "codemarie-e2e-"))
+				// Create isolated DietCode data directory for this test
+				const dietcodeTestDir = mkdtempSync(path.join(os.tmpdir(), "dietcode-e2e-"))
 
 				const app = await _electron.launch({
 					executablePath,
@@ -249,9 +249,9 @@ export const e2e = test
 						...process.env,
 						TEMP_PROFILE: "true",
 						E2E_TEST: "true",
-						CODEMARIE_ENVIRONMENT: process.env.CODEMARIE_ENVIRONMENT || process.env.CLINE_ENVIRONMENT || "local",
-						CODEMARIE_DIR: codemarieTestDir, // Isolate test data from user's ~/.codemarie
-						CLINE_DIR: codemarieTestDir, // Backwards compatibility for now
+						DIETCODE_ENVIRONMENT: process.env.DIETCODE_ENVIRONMENT || process.env.CLINE_ENVIRONMENT || "local",
+						DIETCODE_DIR: dietcodeTestDir, // Isolate test data from user's ~/.dietcode
+						CLINE_DIR: dietcodeTestDir, // Backwards compatibility for now
 						GRPC_RECORDER_FILE_NAME: E2ETestHelper.generateTestFileName(testInfo.title, testInfo.project.name),
 						// GRPC_RECORDER_ENABLED: "true",
 						// GRPC_RECORDER_TESTS_FILTERS_ENABLED: "true"
@@ -281,7 +281,7 @@ export const e2e = test
 	})
 	.extend<{
 		app: ElectronApplication
-		codemarieTestDir: string
+		dietcodeTestDir: string
 	}>({
 		app: async ({ openVSCode, userDataDir, extensionsDir, workspaceType, workspaceDir, multiRootWorkspaceDir }, use) => {
 			const workspacePath = workspaceType === "single" ? workspaceDir : multiRootWorkspaceDir
@@ -292,19 +292,19 @@ export const e2e = test
 				await use(app)
 			} finally {
 				await app.close()
-				// Cleanup in parallel - include codemarieTestDir if it was created
+				// Cleanup in parallel - include dietcodeTestDir if it was created
 				const cleanupTasks = [
 					E2ETestHelper.rmForRetries(userDataDir, { recursive: true }),
 					E2ETestHelper.rmForRetries(extensionsDir, { recursive: true }),
 				]
 
-				// Clean up the isolated Codemarie data directory
+				// Clean up the isolated DietCode data directory
 				// Find all temp directories matching our pattern
 				const tmpDir = os.tmpdir()
 				try {
 					const entries = require("node:fs").readdirSync(tmpDir)
 					for (const entry of entries) {
-						if (entry.startsWith("codemarie-e2e-")) {
+						if (entry.startsWith("dietcode-e2e-")) {
 							cleanupTasks.push(E2ETestHelper.rmForRetries(path.join(tmpDir, entry), { recursive: true }))
 						}
 					}
@@ -315,7 +315,7 @@ export const e2e = test
 				await Promise.allSettled(cleanupTasks)
 			}
 		},
-		codemarieTestDir: async ({}, use) =>
+		dietcodeTestDir: async ({}, use) =>
 			// This will be set by the openVSCode fixture
 			await use(""),
 	})
@@ -345,7 +345,7 @@ export const e2e = test
 		sidebar: Frame
 	}>({
 		sidebar: async ({ page, helper }, use) => {
-			await E2ETestHelper.openCodemarieSidebar(page)
+			await E2ETestHelper.openDietCodeSidebar(page)
 			const sidebar = await helper.getSidebar(page)
 			await use(sidebar)
 		},

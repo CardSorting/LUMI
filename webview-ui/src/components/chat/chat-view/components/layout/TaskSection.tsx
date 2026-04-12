@@ -1,10 +1,10 @@
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import React from "react"
 import TaskHeader from "@/components/chat/task-header/TaskHeader"
 import { MessageHandlers } from "../../types/chatTypes"
 
 interface TaskSectionProps {
-	task: CodemarieMessage
+	task: DietCodeMessage
 	apiMetrics: {
 		totalTokensIn: number
 		totalTokensOut: number

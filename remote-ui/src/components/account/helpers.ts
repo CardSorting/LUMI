@@ -1,5 +1,5 @@
-import type { UsageTransaction as CodemarieAccountUsageTransaction } from "@shared/CodemarieAccount"
-import type { UsageTransaction as ProtoUsageTransaction, UserOrganization } from "@shared/proto/codemarie/account"
+import type { UsageTransaction as DietCodeAccountUsageTransaction } from "@shared/DietCodeAccount"
+import type { UsageTransaction as ProtoUsageTransaction, UserOrganization } from "@shared/proto/dietcode/account"
 
 export const getMainRole = (roles?: string[]) => {
 	if (!roles) {
@@ -16,7 +16,7 @@ export const getMainRole = (roles?: string[]) => {
 	return "Member"
 }
 
-export const getCodemarieUris = (base: string, type: "dashboard" | "credits", route?: "account" | "organization") => {
+export const getDietCodeUris = (base: string, type: "dashboard" | "credits", route?: "account" | "organization") => {
 	const dashboard = new URL("dashboard", base)
 
 	if (type === "dashboard") {
@@ -30,10 +30,10 @@ export const getCodemarieUris = (base: string, type: "dashboard" | "credits", ro
 }
 
 /**
- * Converts a protobuf UsageTransaction to a CodemarieAccount UsageTransaction
+ * Converts a protobuf UsageTransaction to a DietCodeAccount UsageTransaction
  * by adding the missing id and metadata fields
  */
-export function convertProtoUsageTransaction(protoTransaction: ProtoUsageTransaction): CodemarieAccountUsageTransaction {
+export function convertProtoUsageTransaction(protoTransaction: ProtoUsageTransaction): DietCodeAccountUsageTransaction {
 	return {
 		...protoTransaction,
 		id: protoTransaction.generationId, // Use generationId as the id
@@ -46,9 +46,9 @@ export function convertProtoUsageTransaction(protoTransaction: ProtoUsageTransac
 }
 
 /**
- * Converts an array of protobuf UsageTransactions to CodemarieAccount UsageTransactions
+ * Converts an array of protobuf UsageTransactions to DietCodeAccount UsageTransactions
  */
-export function convertProtoUsageTransactions(protoTransactions: ProtoUsageTransaction[]): CodemarieAccountUsageTransaction[] {
+export function convertProtoUsageTransactions(protoTransactions: ProtoUsageTransaction[]): DietCodeAccountUsageTransaction[] {
 	return protoTransactions.map(convertProtoUsageTransaction)
 }
 

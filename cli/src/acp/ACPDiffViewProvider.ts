@@ -18,7 +18,7 @@ import * as iconv from "iconv-lite"
 import { HostProvider } from "@/hosts/host-provider"
 import { FileEditProvider } from "@/integrations/editor/FileEditProvider"
 import { detectEncoding } from "@/integrations/misc/extract-text"
-import type { FileDiagnostics } from "@/shared/proto/index.codemarie"
+import type { FileDiagnostics } from "@/shared/proto/index.dietcode"
 import { Logger } from "@/shared/services/Logger"
 
 /**

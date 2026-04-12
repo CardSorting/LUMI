@@ -1,6 +1,6 @@
 import { CloudflareModelId, cloudflareDefaultModelId, cloudflareModels, ModelInfo } from "@shared/api"
 import OpenAI from "openai"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
@@ -51,7 +51,7 @@ export class CloudflareHandler implements ApiHandler {
 	}
 
 	@withRetry()
-	async *createMessage(systemPrompt: string, messages: CodemarieStorageMessage[], tools?: any[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: any[]): ApiStream {
 		const client = this.ensureClient()
 		const model = this.getModel()
 		const openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [

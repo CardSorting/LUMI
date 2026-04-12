@@ -1,5 +1,5 @@
-import { BrowserAction, BrowserActionResult, browserActions, CodemarieSayBrowserAction } from "@shared/ExtensionMessage"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { BrowserAction, BrowserActionResult, browserActions, DietCodeSayBrowserAction } from "@shared/ExtensionMessage"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { ToolResponse } from "../.."
@@ -10,7 +10,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class BrowserToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.BROWSER
+	readonly name = DietCodeDefaultTool.BROWSER
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.action}']`
@@ -51,7 +51,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 					action: action as BrowserAction,
 					coordinate: uiHelpers.removeClosingTag(block, "coordinate", coordinate),
 					text: uiHelpers.removeClosingTag(block, "text", text),
-				} satisfies CodemarieSayBrowserAction),
+				} satisfies DietCodeSayBrowserAction),
 				undefined,
 				undefined,
 				block.partial,
@@ -95,7 +95,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 				} else {
 					// Show notification for approval if enabled
 					showNotificationForApproval(
-						`Codemarie wants to use a browser and launch ${url}`,
+						`DietCode wants to use a browser and launch ${url}`,
 						config.autoApprovalSettings.enableNotifications,
 					)
 					await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "browser_action_launch")
@@ -152,7 +152,7 @@ export class BrowserToolHandler implements IFullyManagedTool {
 						action: action as BrowserAction,
 						coordinate,
 						text,
-					} satisfies CodemarieSayBrowserAction),
+					} satisfies DietCodeSayBrowserAction),
 					undefined,
 					undefined,
 					false,

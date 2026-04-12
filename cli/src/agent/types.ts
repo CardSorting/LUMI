@@ -1,5 +1,5 @@
 /**
- * Internal types for ACP integration with Codemarie CLI.
+ * Internal types for ACP integration with DietCode CLI.
  *
  * This file re-exports all public types from ./public-types.ts and adds
  * internal-only Types that reference core modules (Controller, etc.).
@@ -54,11 +54,11 @@ export type {
 export type {
 	AcpAgentOptions,
 	AcpSessionState,
-	CodemarieAgentCapabilities,
-	CodemarieAgentInfo,
-	CodemarieAgentOptions,
-	CodemariePermissionOption,
-	CodemarieSessionEvents,
+	DietCodeAgentCapabilities,
+	DietCodeAgentInfo,
+	DietCodeAgentOptions,
+	DietCodePermissionOption,
+	DietCodeSessionEvents,
 	PermissionHandler,
 	SessionUpdatePayload,
 	SessionUpdateType,

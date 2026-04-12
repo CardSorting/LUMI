@@ -79,7 +79,7 @@ export function supportsReasoningEffortForModelId(modelId?: string, _allowShortO
 
 /**
  * Returns the static model list for a provider.
- * For providers with dynamic models (openrouter, codemarie, ollama, etc.), returns undefined.
+ * For providers with dynamic models (openrouter, dietcode, ollama, etc.), returns undefined.
  * Some providers depend on configuration (qwen, zai) for region-specific models.
  */
 export function getModelsForProvider(
@@ -261,29 +261,27 @@ export function normalizeApiConfiguration(
 				selectedModelId: requestyModelId || requestyDefaultModelId,
 				selectedModelInfo: requestyModelInfo || requestyDefaultModelInfo,
 			}
-		case "codemarie":
+		case "dietcode":
 			const fallbackOpenRouterModelId =
 				currentMode === "plan" ? apiConfiguration?.planModeOpenRouterModelId : apiConfiguration?.actModeOpenRouterModelId
 			const fallbackOpenRouterModelInfo =
 				currentMode === "plan"
 					? apiConfiguration?.planModeOpenRouterModelInfo
 					: apiConfiguration?.actModeOpenRouterModelInfo
-			const codemarieModelId =
-				(currentMode === "plan"
-					? apiConfiguration?.planModeCodemarieModelId
-					: apiConfiguration?.actModeCodemarieModelId) ||
+			const dietcodeModelId =
+				(currentMode === "plan" ? apiConfiguration?.planModeDietcodeModelId : apiConfiguration?.actModeDietcodeModelId) ||
 				fallbackOpenRouterModelId ||
 				openRouterDefaultModelId
-			const codemarieModelInfo =
+			const dietcodeModelInfo =
 				(currentMode === "plan"
-					? apiConfiguration?.planModeCodemarieModelInfo
-					: apiConfiguration?.actModeCodemarieModelInfo) ||
+					? apiConfiguration?.planModeDietcodeModelInfo
+					: apiConfiguration?.actModeDietcodeModelInfo) ||
 				fallbackOpenRouterModelInfo ||
 				openRouterDefaultModelInfo
 			return {
 				selectedProvider: provider,
-				selectedModelId: codemarieModelId,
-				selectedModelInfo: codemarieModelInfo,
+				selectedModelId: dietcodeModelId,
+				selectedModelInfo: dietcodeModelInfo,
 			}
 		case "openai":
 			const openAiModelId =
@@ -521,7 +519,7 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 			requestyModelId: undefined,
 			openAiModelId: undefined,
 			openRouterModelId: undefined,
-			codemarieModelId: undefined,
+			dietcodeModelId: undefined,
 			groqModelId: undefined,
 			basetenModelId: undefined,
 			huggingFaceModelId: undefined,
@@ -535,7 +533,7 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 			openAiModelInfo: undefined,
 			liteLlmModelInfo: undefined,
 			openRouterModelInfo: undefined,
-			codemarieModelInfo: undefined,
+			dietcodeModelInfo: undefined,
 			requestyModelInfo: undefined,
 			groqModelInfo: undefined,
 			basetenModelInfo: undefined,
@@ -561,12 +559,12 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 	const openRouterModelInfo =
 		mode === "plan" ? apiConfiguration.planModeOpenRouterModelInfo : apiConfiguration.actModeOpenRouterModelInfo
 
-	// Backward compatibility: Codemarie previously stored model selection in OpenRouter keys.
-	const codemarieModelId =
-		(mode === "plan" ? apiConfiguration.planModeCodemarieModelId : apiConfiguration.actModeCodemarieModelId) ||
+	// Backward compatibility: DietCode previously stored model selection in OpenRouter keys.
+	const dietcodeModelId =
+		(mode === "plan" ? apiConfiguration.planModeDietcodeModelId : apiConfiguration.actModeDietcodeModelId) ||
 		openRouterModelId
-	const codemarieModelInfo =
-		(mode === "plan" ? apiConfiguration.planModeCodemarieModelInfo : apiConfiguration.actModeCodemarieModelInfo) ||
+	const dietcodeModelInfo =
+		(mode === "plan" ? apiConfiguration.planModeDietcodeModelInfo : apiConfiguration.actModeDietcodeModelInfo) ||
 		openRouterModelInfo
 
 	return {
@@ -583,7 +581,7 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 		requestyModelId: mode === "plan" ? apiConfiguration.planModeRequestyModelId : apiConfiguration.actModeRequestyModelId,
 		openAiModelId: mode === "plan" ? apiConfiguration.planModeOpenAiModelId : apiConfiguration.actModeOpenAiModelId,
 		openRouterModelId,
-		codemarieModelId,
+		dietcodeModelId,
 		groqModelId: mode === "plan" ? apiConfiguration.planModeGroqModelId : apiConfiguration.actModeGroqModelId,
 		basetenModelId: mode === "plan" ? apiConfiguration.planModeBasetenModelId : apiConfiguration.actModeBasetenModelId,
 		huggingFaceModelId:
@@ -602,7 +600,7 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 		openAiModelInfo: mode === "plan" ? apiConfiguration.planModeOpenAiModelInfo : apiConfiguration.actModeOpenAiModelInfo,
 		liteLlmModelInfo: mode === "plan" ? apiConfiguration.planModeLiteLlmModelInfo : apiConfiguration.actModeLiteLlmModelInfo,
 		openRouterModelInfo,
-		codemarieModelInfo,
+		dietcodeModelInfo,
 		requestyModelInfo:
 			mode === "plan" ? apiConfiguration.planModeRequestyModelInfo : apiConfiguration.actModeRequestyModelInfo,
 		groqModelInfo: mode === "plan" ? apiConfiguration.planModeGroqModelInfo : apiConfiguration.actModeGroqModelInfo,
@@ -684,11 +682,11 @@ export async function syncModeConfigurations(
 			updates.actModeOpenRouterModelInfo = sourceFields.openRouterModelInfo
 			break
 
-		case "codemarie":
-			updates.planModeCodemarieModelId = sourceFields.codemarieModelId
-			updates.actModeCodemarieModelId = sourceFields.codemarieModelId
-			updates.planModeCodemarieModelInfo = sourceFields.codemarieModelInfo
-			updates.actModeCodemarieModelInfo = sourceFields.codemarieModelInfo
+		case "dietcode":
+			updates.planModeDietcodeModelId = sourceFields.dietcodeModelId
+			updates.actModeDietcodeModelId = sourceFields.dietcodeModelId
+			updates.planModeDietcodeModelInfo = sourceFields.dietcodeModelInfo
+			updates.actModeDietcodeModelInfo = sourceFields.dietcodeModelInfo
 			break
 
 		case "requesty":

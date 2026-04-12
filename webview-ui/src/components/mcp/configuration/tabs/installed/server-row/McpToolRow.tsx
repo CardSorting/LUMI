@@ -1,5 +1,5 @@
 import { McpTool } from "@shared/mcp"
-import { ToggleToolAutoApproveRequest } from "@shared/proto/codemarie/mcp"
+import { ToggleToolAutoApproveRequest } from "@shared/proto/dietcode/mcp"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { VscIcon } from "@/components/ui/vsc-icon"

@@ -1,7 +1,7 @@
 import type { ApiHandler } from "@core/api"
 import type { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import type { KnowledgeGraphService } from "@core/context/KnowledgeGraphService"
-import type { CodemarieIgnoreController } from "@core/ignore/CodemarieIgnoreController"
+import type { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import type { CommandPermissionController } from "@core/permissions"
 import type { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
 import type { CommandExecutionOptions } from "@integrations/terminal"
@@ -10,12 +10,12 @@ import type { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import type { McpHub } from "@services/mcp/McpHub"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { BrowserSettings } from "@shared/BrowserSettings"
-import type { CodemarieAsk, CodemarieSay } from "@shared/ExtensionMessage"
+import type { DietCodeAsk, DietCodeSay } from "@shared/ExtensionMessage"
 import type { FocusChainSettings } from "@shared/FocusChainSettings"
-import type { CodemarieContent, CodemarieToolResponseContent } from "@shared/messages/content"
+import type { DietCodeContent, DietCodeToolResponseContent } from "@shared/messages/content"
 import type { Mode } from "@shared/storage/types"
-import type { CodemarieDefaultTool } from "@shared/tools"
-import type { CodemarieAskResponse } from "@shared/WebviewMessage"
+import type { DietCodeDefaultTool } from "@shared/tools"
+import type { DietCodeAskResponse } from "@shared/WebviewMessage"
 import { WorkspaceRootManager } from "@/core/workspace"
 import type { ContextManager } from "../../../context/context-management/ContextManager"
 import type { StateManager } from "../../../storage/StateManager"
@@ -77,7 +77,7 @@ export interface TaskServices {
 	urlContentFetcher: UrlContentFetcher
 	diffViewProvider: DiffViewProvider
 	fileContextTracker: FileContextTracker
-	codemarieIgnoreController: CodemarieIgnoreController
+	dietcodeIgnoreController: DietCodeIgnoreController
 	commandPermissionController: CommandPermissionController
 	contextManager: ContextManager
 	stateManager: StateManager
@@ -88,20 +88,14 @@ export interface TaskServices {
  * All callback functions available to tool handlers
  */
 export interface TaskCallbacks {
-	say: (
-		type: CodemarieSay,
-		text?: string,
-		images?: string[],
-		files?: string[],
-		partial?: boolean,
-	) => Promise<number | undefined>
+	say: (type: DietCodeSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
 
 	ask: (
-		type: CodemarieAsk,
+		type: DietCodeAsk,
 		text?: string,
 		partial?: boolean,
 	) => Promise<{
-		response: CodemarieAskResponse
+		response: DietCodeAskResponse
 		text?: string
 		images?: string[]
 		files?: string[]
@@ -110,26 +104,26 @@ export interface TaskCallbacks {
 	saveCheckpoint: (isAttemptCompletionMessage?: boolean, completionMessageTs?: number) => Promise<void>
 
 	sayAndCreateMissingParamError: (
-		toolName: CodemarieDefaultTool,
+		toolName: DietCodeDefaultTool,
 		paramName: string,
 		relPath?: string,
-	) => Promise<CodemarieToolResponseContent>
+	) => Promise<DietCodeToolResponseContent>
 
-	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: CodemarieAsk | CodemarieSay) => Promise<void>
+	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: DietCodeAsk | DietCodeSay) => Promise<void>
 
 	executeCommandTool: (
 		command: string,
 		timeoutSeconds: number | undefined,
 		options?: CommandExecutionOptions,
-	) => Promise<[boolean, CodemarieToolResponseContent]>
+	) => Promise<[boolean, DietCodeToolResponseContent]>
 	cancelRunningCommandTool?: () => Promise<boolean>
 
 	doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>
 
 	updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>
 
-	shouldAutoApproveTool: (toolName: CodemarieDefaultTool) => boolean | [boolean, boolean]
-	shouldAutoApproveToolWithPath: (toolName: CodemarieDefaultTool, path?: string) => Promise<boolean>
+	shouldAutoApproveTool: (toolName: DietCodeDefaultTool) => boolean | [boolean, boolean]
+	shouldAutoApproveToolWithPath: (toolName: DietCodeDefaultTool, path?: string) => Promise<boolean>
 
 	// Additional callbacks for task management
 	postStateToWebview: () => Promise<void>
@@ -148,7 +142,7 @@ export interface TaskCallbacks {
 
 	// User prompt hook callback
 	runUserPromptSubmitHook: (
-		userContent: CodemarieContent[],
+		userContent: DietCodeContent[],
 		context: "initial_task" | "resume" | "feedback",
 	) => Promise<{ cancel?: boolean; wasCancelled?: boolean; contextModification?: string; errorMessage?: string }>
 }

@@ -21,8 +21,8 @@ jobs:
 
   publish-npm-nightly:
     needs: test
-    name: Publish Codemarie CLI (Nightly) to NPM
-    if: github.repository == 'codemarie/codemarie' && github.ref == 'refs/heads/main'
+    name: Publish DietCode CLI (Nightly) to NPM
+    if: github.repository == 'dietcode/dietcode' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
@@ -97,7 +97,7 @@ jobs:
         env:
           TELEMETRY_SERVICE_API_KEY: ${{ secrets.TELEMETRY_SERVICE_API_KEY }}
           ERROR_SERVICE_API_KEY: ${{ secrets.ERROR_SERVICE_API_KEY }}
-          CODEMARIE_ENVIRONMENT: production
+          DIETCODE_ENVIRONMENT: production
           OTEL_TELEMETRY_ENABLED: "1"
           OTEL_METRICS_EXPORTER: otlp
           OTEL_LOGS_EXPORTER: otlp
@@ -113,7 +113,7 @@ jobs:
           ls -la dist-standalone/
 
           echo "Verifying CLI binaries..."
-          ls -lh cli/bin/codemarie-* || echo "Warning: CLI binaries not found"
+          ls -lh cli/bin/dietcode-* || echo "Warning: CLI binaries not found"
 
           echo "Checking package.json in dist-standalone..."
           cat dist-standalone/package.json | grep version
@@ -128,7 +128,7 @@ jobs:
       - name: Summary
         if: steps.check_commits.outputs.skip != 'true'
         run: |
-          echo "✅ Successfully published codemarie@${{ steps.version.outputs.version }} to NPM with tag 'nightly'"
+          echo "✅ Successfully published dietcode@${{ steps.version.outputs.version }} to NPM with tag 'nightly'"
           echo ""
-          echo "📦 Install with: npm install -g codemarie@nightly"
-          echo "🔗 NPM: https://www.npmjs.com/package/codemarie/v/${{ steps.version.outputs.version }}"
+          echo "📦 Install with: npm install -g dietcode@nightly"
+          echo "🔗 NPM: https://www.npmjs.com/package/dietcode/v/${{ steps.version.outputs.version }}"

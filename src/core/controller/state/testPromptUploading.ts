@@ -1,7 +1,7 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { TestConnectionResult } from "@shared/proto/codemarie/state"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { TestConnectionResult } from "@shared/proto/dietcode/state"
 import { Logger } from "@/shared/services/Logger"
-import { blobStorage } from "@/shared/storage/CodemarieBlobStorage"
+import { blobStorage } from "@/shared/storage/DietCodeBlobStorage"
 import { Controller } from ".."
 
 /**
@@ -19,7 +19,7 @@ export async function testPromptUploading(_controller: Controller, _: EmptyReque
 			})
 		}
 
-		const testKey = `codemarie-test-${Date.now()}.json`
+		const testKey = `dietcode-test-${Date.now()}.json`
 		const testContent = JSON.stringify({
 			test: true,
 			timestamp: new Date().toISOString(),

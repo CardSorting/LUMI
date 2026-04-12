@@ -2,7 +2,7 @@ import { expect } from "chai"
 import { describe, it } from "mocha"
 import {
 	AwsBedrockSettingsSchema,
-	CodemarieSettingsSchema,
+	DietCodeSettingsSchema,
 	EnterpriseTelemetrySchema,
 	OpenAiCompatibleSchema,
 	PromptUploadingSchema,
@@ -311,17 +311,17 @@ describe("Remote Config Schema", () => {
 		})
 	})
 
-	describe("CodemarieSettingsSchema", () => {
-		it("should accept valid Codemarie provider settings", () => {
+	describe("DietCodeSettingsSchema", () => {
+		it("should accept valid DietCode provider settings", () => {
 			const validSettings = {
 				models: [{ id: "claude-3-5-sonnet-20241022" }, { id: "claude-3-5-haiku-20241022" }],
 			}
-			const result = CodemarieSettingsSchema.parse(validSettings)
+			const result = DietCodeSettingsSchema.parse(validSettings)
 			expect(result).to.deep.equal(validSettings)
 		})
 
 		it("should accept empty settings object", () => {
-			const result = CodemarieSettingsSchema.parse({})
+			const result = DietCodeSettingsSchema.parse({})
 			expect(result.models).to.be.undefined
 		})
 
@@ -329,12 +329,12 @@ describe("Remote Config Schema", () => {
 			const settings = {
 				models: [{ id: "claude-3-5-sonnet-20241022" }],
 			}
-			expect(() => CodemarieSettingsSchema.parse(settings)).to.not.throw()
+			expect(() => DietCodeSettingsSchema.parse(settings)).to.not.throw()
 		})
 
 		it("should reject models with missing id field", () => {
 			expect(() =>
-				CodemarieSettingsSchema.parse({
+				DietCodeSettingsSchema.parse({
 					models: [{}],
 				}),
 			).to.throw()
@@ -731,7 +731,7 @@ describe("Remote Config Schema", () => {
 						awsBedrockUsePromptCache: true,
 						awsBedrockEndpoint: "https://custom-bedrock.endpoint",
 					},
-					Codemarie: {
+					DietCode: {
 						models: [{ id: "claude-3-5-sonnet-20241022" }, { id: "claude-3-5-haiku-20241022" }],
 					},
 					Vertex: {
@@ -745,7 +745,7 @@ describe("Remote Config Schema", () => {
 							{ id: "claude-3-5-sonnet-20241022" },
 							{ id: "claude-3-5-sonnet-20241024", thinkingBudgetTokens: 1600 },
 						],
-						baseUrl: "https://example.codemarie.bot",
+						baseUrl: "https://example.dietcode.bot",
 					},
 				},
 				enterpriseTelemetry: {
@@ -785,10 +785,10 @@ describe("Remote Config Schema", () => {
 			expect(result.providerSettings?.AwsBedrock?.awsBedrockUsePromptCache).to.equal(true)
 			expect(result.providerSettings?.AwsBedrock?.awsBedrockEndpoint).to.equal("https://custom-bedrock.endpoint")
 
-			// Verify Codemarie settings
-			expect(result.providerSettings?.Codemarie?.models).to.have.lengthOf(2)
-			expect(result.providerSettings?.Codemarie?.models?.[0].id).to.equal("claude-3-5-sonnet-20241022")
-			expect(result.providerSettings?.Codemarie?.models?.[1].id).to.equal("claude-3-5-haiku-20241022")
+			// Verify DietCode settings
+			expect(result.providerSettings?.DietCode?.models).to.have.lengthOf(2)
+			expect(result.providerSettings?.DietCode?.models?.[0].id).to.equal("claude-3-5-sonnet-20241022")
+			expect(result.providerSettings?.DietCode?.models?.[1].id).to.equal("claude-3-5-haiku-20241022")
 
 			// Verify Vertex settings
 			expect(result.providerSettings?.Vertex?.models).to.have.lengthOf(2)
@@ -802,7 +802,7 @@ describe("Remote Config Schema", () => {
 			expect(result.providerSettings?.Anthropic?.models?.[0].thinkingBudgetTokens).to.be.undefined
 			expect(result.providerSettings?.Anthropic?.models?.[1].id).to.equal("claude-3-5-sonnet-20241024")
 			expect(result.providerSettings?.Anthropic?.models?.[1].thinkingBudgetTokens).to.equal(1600)
-			expect(result.providerSettings?.Anthropic?.baseUrl).to.equal("https://example.codemarie.bot")
+			expect(result.providerSettings?.Anthropic?.baseUrl).to.equal("https://example.dietcode.bot")
 
 			// Verify OpenTelemetry settings
 			expect(result.openTelemetryEnabled).to.equal(true)

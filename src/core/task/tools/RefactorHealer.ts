@@ -1,12 +1,9 @@
-import { ImportFixer } from "@/utils/import-fixer"
-import { getLayer, parseLayerTag } from "@/utils/joy-zoning"
-import { SpiderEngine } from "../../policy/SpiderEngine"
-import { SovereignTransaction } from "../../integrity/SovereignTransaction"
-import { SemanticAxiomEngine } from "../../policy/SemanticAxiomEngine"
-import { Logger } from "@/shared/services/Logger"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { crypto } from "crypto"
+import { Logger } from "@/shared/services/Logger"
+import { getLayer, parseLayerTag } from "@/utils/joy-zoning"
+import { SovereignTransaction } from "../../integrity/SovereignTransaction"
+import { SpiderEngine } from "../../policy/SpiderEngine"
 
 export interface HealingProposal {
 	id: string
@@ -22,11 +19,7 @@ export interface HealingProposal {
  * Automatically aligns file tags and fixes broken imports after architectural drift.
  */
 export class RefactorHealer {
-	private importFixer: ImportFixer
-
-	constructor(private projectRoot: string) {
-		this.importFixer = new ImportFixer(this.projectRoot)
-	}
+	constructor(private projectRoot: string) {}
 
 	/**
 	 * Strategic Pivoting: Heals a move violation, but pivots to extraction if move is impossible.
@@ -45,11 +38,11 @@ export class RefactorHealer {
 			if (result.success) {
 				return { success: true }
 			}
-			
+
 			// If Strategy A fails, pivot to Strategy B: Extract Interface
 			Logger.info("Move strategy failed. Pivoting to Strategic Extraction...")
 			return { success: false, pivot: "EXTRACT_INTERFACE" }
-		} catch (error) {
+		} catch (_error) {
 			await tx.rollback()
 			return { success: false }
 		}
@@ -68,7 +61,7 @@ export class RefactorHealer {
 			try {
 				await this.alignTag(dependent)
 				healCount++
-			} catch (e) {
+			} catch (_e) {
 				// Silent fail for background cascade
 			}
 		}
@@ -83,13 +76,15 @@ export class RefactorHealer {
 			const layer = getLayer(filePath)
 			if (layer === "infrastructure" || layer === "ui") {
 				return {
-					// @ts-ignore
+					// @ts-expect-error
 					id: (globalThis.crypto || require("crypto")).randomUUID(),
 					type: "BOTTLENECK",
 					file: filePath,
 					confidence: 0.3, // Low confidence: requires human extraction of interface
 					message: `Structural Bottleneck detected: ${afferentCoupling} incoming links. Consider extracting a Domain interface.`,
-					action: async () => { /* No-op: Requires human refactor */ }
+					action: async () => {
+						/* No-op: Requires human refactor */
+					},
 				}
 			}
 		}
@@ -108,7 +103,7 @@ export class RefactorHealer {
 			if (currentTag !== expectedLayer) {
 				const tagLabel = expectedLayer.toUpperCase() === "PLUMBING" ? "UTILS" : expectedLayer.toUpperCase()
 				const newTag = `[LAYER: ${tagLabel}]`
-				
+
 				let newContent: string
 				if (currentTag) {
 					// Replace existing tag
@@ -117,11 +112,11 @@ export class RefactorHealer {
 					// Add new tag at the top
 					newContent = `/**\n * ${newTag}\n */\n\n${content}`
 				}
-				
+
 				await fs.writeFile(filePath, newContent, "utf-8")
 			}
 		} catch (err) {
-			console.error(`[RefactorHealer] Failed to align tag for ${filePath}:`, err)
+			Logger.error(`[RefactorHealer] Failed to align tag for ${filePath}:`, err)
 		}
 	}
 
@@ -143,12 +138,15 @@ export class RefactorHealer {
 			}
 			await fs.writeFile(absolutePath, template, "utf-8")
 		} catch (err) {
-			console.error(`[RefactorHealer] Failed to materialize ghost ${filePath}:`, err)
+			Logger.error(`[RefactorHealer] Failed to materialize ghost ${filePath}:`, err)
 		}
 	}
 
 	private toPascalCase(str: string): string {
-		return str.split("-").map(p => p.charAt(0).toUpperCase() + p.slice(1)).join("")
+		return str
+			.split("-")
+			.map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+			.join("")
 	}
 
 	private async dirExists(dir: string): Promise<boolean> {

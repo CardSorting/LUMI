@@ -4,19 +4,19 @@
 
 ## الإبلاغ عن الأخطاء أو المشكلات
 
-تساعد تقارير الأخطاء على جعل Cline أفضل للجميع! قبل إنشاء مشكلة جديدة، يرجى [البحث عن المشكلات الموجودة](https://github.com/codemarie/codemarie/issues) لتجنب الازدواجية. عندما تكون جاهزًا للإبلاغ عن خطأ، انتقل إلى [صفحة المشكلات](https://github.com/codemarie/codemarie/issues/new/choose) حيث ستجد قالبًا لمساعدتك في ملء المعلومات ذات الصلة.
+تساعد تقارير الأخطاء على جعل Cline أفضل للجميع! قبل إنشاء مشكلة جديدة، يرجى [البحث عن المشكلات الموجودة](https://github.com/dietcode/dietcode/issues) لتجنب الازدواجية. عندما تكون جاهزًا للإبلاغ عن خطأ، انتقل إلى [صفحة المشكلات](https://github.com/dietcode/dietcode/issues/new/choose) حيث ستجد قالبًا لمساعدتك في ملء المعلومات ذات الصلة.
 
 <blockquote class='warning-note'>
-     🔐 <b>مهم:</b> إذا اكتشفت ثغرة أمنية، فيرجى استخدام <a href="https://github.com/codemarie/codemarie/security/advisories/new">أداة الأمان على Github للإبلاغ عنها بشكل خاص</a>.
+     🔐 <b>مهم:</b> إذا اكتشفت ثغرة أمنية، فيرجى استخدام <a href="https://github.com/dietcode/dietcode/security/advisories/new">أداة الأمان على Github للإبلاغ عنها بشكل خاص</a>.
 </blockquote>
 
 ## تحديد ما يجب العمل عليه
 
-تبحث عن مساهمة أولى جيدة؟ تحقق من المشكلات المميزة بـ ["good first issue"](https://github.com/codemarie/codemarie/labels/good%20first%20issue) أو ["help wanted"](https://github.com/codemarie/codemarie/labels/help%20wanted). تم تحديد هذه المشكلات خصيصًا للمساهمين الجدد والمجالات التي نرحب فيها بالمساعدة!
+تبحث عن مساهمة أولى جيدة؟ تحقق من المشكلات المميزة بـ ["good first issue"](https://github.com/dietcode/dietcode/labels/good%20first%20issue) أو ["help wanted"](https://github.com/dietcode/dietcode/labels/help%20wanted). تم تحديد هذه المشكلات خصيصًا للمساهمين الجدد والمجالات التي نرحب فيها بالمساعدة!
 
-نرحب أيضًا بالمساهمات في [الوثائق](https://github.com/codemarie/codemarie/tree/main/docs) لدينا! سواء كان تصحيح أخطاء إملائية، أو تحسين الأدلة الحالية، أو إنشاء محتوى تعليمي جديد - نود بناء مستودع موارد مدفوع من المجتمع يساعد الجميع على الاستفادة القصوى من Cline. يمكنك البدء بالغوص في `/docs` والبحث عن مجالات تحتاج إلى تحسين.
+نرحب أيضًا بالمساهمات في [الوثائق](https://github.com/dietcode/dietcode/tree/main/docs) لدينا! سواء كان تصحيح أخطاء إملائية، أو تحسين الأدلة الحالية، أو إنشاء محتوى تعليمي جديد - نود بناء مستودع موارد مدفوع من المجتمع يساعد الجميع على الاستفادة القصوى من Cline. يمكنك البدء بالغوص في `/docs` والبحث عن مجالات تحتاج إلى تحسين.
 
-إذا كنت تخطط للعمل على ميزة أكبر، فيرجى إنشاء [طلب ميزة](https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop) أولاً حتى نتمكن من مناقشة ما إذا كان ذلك يتماشى مع رؤية Cline.
+إذا كنت تخطط للعمل على ميزة أكبر، فيرجى إنشاء [طلب ميزة](https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop) أولاً حتى نتمكن من مناقشة ما إذا كان ذلك يتماشى مع رؤية Cline.
 
 ## إعداد التطوير
 

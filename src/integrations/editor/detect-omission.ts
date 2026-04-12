@@ -53,7 +53,7 @@ export function showOmissionWarning(originalFileContent: string, newFileContent:
 			.then((response) => {
 				if (response.selectedOption === "Follow this guide to fix the issue") {
 					openExternal(
-						"https://github.com/codemarie/codemarie/wiki/Troubleshooting-%E2%80%90-Codemarie-Deleting-Code-with-%22Rest-of-Code-Here%22-Comments",
+						"https://github.com/dietcode/dietcode/wiki/Troubleshooting-%E2%80%90-DietCode-Deleting-Code-with-%22Rest-of-Code-Here%22-Comments",
 					)
 				}
 			})

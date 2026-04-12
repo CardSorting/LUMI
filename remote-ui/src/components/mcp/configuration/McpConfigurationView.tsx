@@ -1,6 +1,6 @@
 import { McpViewTab } from "@shared/mcp"
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { McpServers } from "@shared/proto/codemarie/mcp"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { McpServers } from "@shared/proto/dietcode/mcp"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { useEffect, useState } from "react"
 import styled from "styled-components"

@@ -16,8 +16,8 @@ export type GrpcCancel = {
 	request_id: string // ID of the request to cancel
 }
 
-export type CodemarieAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse"
+export type DietCodeAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse"
 
-export type CodemarieCheckpointRestore = "task" | "workspace" | "taskAndWorkspace"
+export type DietCodeCheckpointRestore = "task" | "workspace" | "taskAndWorkspace"
 
 export type TaskFeedbackType = "thumbs_up" | "thumbs_down"

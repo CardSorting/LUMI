@@ -1,4 +1,4 @@
-import { EmptyRequest, String } from "@shared/proto/codemarie/common"
+import { EmptyRequest, String } from "@shared/proto/dietcode/common"
 import * as vscode from "vscode"
 
 export async function getIdeRedirectUri(_: EmptyRequest): Promise<String> {

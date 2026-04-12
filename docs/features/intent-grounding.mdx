@@ -27,7 +27,7 @@ Traditional AI agents often suffer from "Planning Blindness"—the tendency to s
 1.  **Hallucinated Entities**: Prevent the AI from referencing files or directories that don't exist in the current workspace.
 2.  **Scope Creep**: Enforce specific constraints (e.g., "only edit files in `/src/auth`") that the model must follow.
 3.  **Ambiguity Paralysis**: Identify when a request is too vague to execute safely and pause for user clarification.
-4.  **Context Misalignment**: Ensure project-specific rules (from `.codemarierules`) are central to every decision.
+4.  **Context Misalignment**: Ensure project-specific rules (from `.dietcoderules`) are central to every decision.
 
 ## Core Philosophy
 The strategy follows a tiered hardening approach (Passes 1–5), designed to reach "Production Hardening" levels of reliability:
@@ -53,7 +53,7 @@ Every grounding operation is governed by a strict **Zod schema** (`GroundedSpecS
 Grounding is not performed in a vacuum. The system bridges the gap between the LLM and your local system using:
 - **Environment Context**: Real-time extraction of workspace roots and active file trees.
 - **Dynamic Semantic Search**: Proactive discovery of relevant code patterns before implementation begins.
-- **Rule Ingestion**: Automatic alignment with `.codemarierules/*.md`, ensuring the AI follows your project's specific "Law of the Land."
+- **Rule Ingestion**: Automatic alignment with `.dietcoderules/*.md`, ensuring the AI follows your project's specific "Law of the Land."
 
 ### 3. Adaptive Evolution (Clarification Loop)
 Trust is built on transparency. When confidence is low (< 70%), the system enters a clarification state. It articulates its ambiguity reasoning, allowing the user to provide missing information that *evolves* the existing spec rather than discarding it.
@@ -71,7 +71,7 @@ The final stage of grounding is a **Full-Cycle Verification** pass:
 The following sequence illustrates how the system ensures deterministic alignment:
 
 1.  **Discovery**: The `IntentGrounder` scans the intent for keywords and proactively searches the workspace for relevant file snippets (Pass 4).
-2.  **Inference**: The LLM analyzes the intent against the discovered context and the `.codemarierules` (Pass 2/3).
+2.  **Inference**: The LLM analyzes the intent against the discovered context and the `.dietcoderules` (Pass 2/3).
 3.  **Self-Correction**: An internal reflection pass identifies logic gaps or phantom entities (Pass 5).
 4.  **Verification**: Every entity in the spec is resolved against the physical filesystem (Pass 5).
 5.  **Grounding**: The final, validated `GroundedSpec` is injected into the task stream and stored in `agent_memory`.
@@ -95,4 +95,4 @@ Grounding performance is tracked with detailed telemetry, enabling continuous re
 By implementing Intent Grounding, we transform the AI from a **creative generator** into a **precision engineer**. The system no longer "hopes" it is right; it **verifies** that it is right before a single byte of code is changed.
 
 > [!TIP]
-> **Adaptive Grounding**: You can significantly improve grounding quality by adding detailed `.md` files to your `.codemarierules` directory. The Intent Grounder will automatically ingest these as "source of truth" constraints.
+> **Adaptive Grounding**: You can significantly improve grounding quality by adding detailed `.md` files to your `.dietcoderules` directory. The Intent Grounder will automatically ingest these as "source of truth" constraints.

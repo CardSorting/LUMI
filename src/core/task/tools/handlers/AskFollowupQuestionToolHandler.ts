@@ -1,8 +1,8 @@
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { findLast, parsePartialArrayString } from "@shared/array"
-import { CodemarieAsk, CodemarieAskQuestion } from "@shared/ExtensionMessage"
-import { CodemarieDefaultTool } from "@shared/tools"
+import { DietCodeAsk, DietCodeAskQuestion } from "@shared/ExtensionMessage"
+import { DietCodeDefaultTool } from "@shared/tools"
 import { telemetryService } from "@/services/telemetry"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
@@ -12,7 +12,7 @@ import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlockHandler {
-	readonly name = CodemarieDefaultTool.ASK
+	readonly name = DietCodeDefaultTool.ASK
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.question}']`
@@ -24,9 +24,9 @@ export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlo
 		const sharedMessage = {
 			question: uiHelpers.removeClosingTag(block, "question", question),
 			options: parsePartialArrayString(uiHelpers.removeClosingTag(block, "options", optionsRaw)),
-		} satisfies CodemarieAskQuestion
+		} satisfies DietCodeAskQuestion
 
-		await uiHelpers.ask("followup" as CodemarieAsk, JSON.stringify(sharedMessage), block.partial).catch(() => {})
+		await uiHelpers.ask("followup" as DietCodeAsk, JSON.stringify(sharedMessage), block.partial).catch(() => {})
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -56,7 +56,7 @@ export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlo
 		// Show notification if enabled
 		if (config.autoApprovalSettings.enableNotifications) {
 			showSystemNotification({
-				subtitle: "Codemarie has a question...",
+				subtitle: "DietCode has a question...",
 				message: question.replace(/\n/g, " "),
 			})
 		}
@@ -64,7 +64,7 @@ export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlo
 		const sharedMessage = {
 			question: question,
 			options: parsePartialArrayString(optionsRaw || "[]"),
-		} satisfies CodemarieAskQuestion
+		} satisfies DietCodeAskQuestion
 
 		const options = parsePartialArrayString(optionsRaw || "[]")
 
@@ -80,14 +80,14 @@ export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlo
 			telemetryService.captureOptionSelected(config.ulid, options.length, "act")
 
 			// Valid option selected, update last followup message with selected option
-			const codemarieMessages = config.messageState.getCodemarieMessages()
-			const lastFollowupMessage = findLast(codemarieMessages, (m: any) => m.ask === "followup")
+			const dietcodeMessages = config.messageState.getDietCodeMessages()
+			const lastFollowupMessage = findLast(dietcodeMessages, (m: any) => m.ask === "followup")
 			if (lastFollowupMessage) {
 				lastFollowupMessage.text = JSON.stringify({
 					...sharedMessage,
 					selected: text,
-				} satisfies CodemarieAskQuestion)
-				await config.messageState.saveCodemarieMessagesAndUpdateHistory()
+				} satisfies DietCodeAskQuestion)
+				await config.messageState.saveDietCodeMessagesAndUpdateHistory()
 			}
 		} else {
 			// Option not selected, send user feedback

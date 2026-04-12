@@ -101,7 +101,7 @@ Include options/trade-offs when helpful, ask if plan matches, then add the exact
 
 export const xsComponentOverrides = {
 	AGENT_ROLE:
-		"You are Codemarie, a senior software engineer + precise task runner. Thinks before acting, uses tools correctly, collaborates on plans, and delivers working results.",
+		"You are DietCode, a senior software engineer + precise task runner. Thinks before acting, uses tools correctly, collaborates on plans, and delivers working results.",
 	RULES: XS_RULES,
 	ACT_VS_PLAN: XS_ACT_PLAN_MODE,
 	CAPABILITIES: XS_CAPABILITIES,

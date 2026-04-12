@@ -1,13 +1,13 @@
 import { Message } from "ollama"
 import {
-	CodemarieAssistantToolUseBlock,
-	CodemarieImageContentBlock,
-	CodemarieStorageMessage,
-	CodemarieTextContentBlock,
-	CodemarieUserToolResultContentBlock,
+	DietCodeAssistantToolUseBlock,
+	DietCodeImageContentBlock,
+	DietCodeStorageMessage,
+	DietCodeTextContentBlock,
+	DietCodeUserToolResultContentBlock,
 } from "@/shared/messages/content"
 
-export function convertToOllamaMessages(anthropicMessages: Omit<CodemarieStorageMessage, "modelInfo">[]): Message[] {
+export function convertToOllamaMessages(anthropicMessages: Omit<DietCodeStorageMessage, "modelInfo">[]): Message[] {
 	const ollamaMessages: Message[] = []
 
 	for (const anthropicMessage of anthropicMessages) {
@@ -19,8 +19,8 @@ export function convertToOllamaMessages(anthropicMessages: Omit<CodemarieStorage
 		} else {
 			if (anthropicMessage.role === "user") {
 				const { nonToolMessages, toolMessages } = anthropicMessage.content.reduce<{
-					nonToolMessages: (CodemarieTextContentBlock | CodemarieImageContentBlock)[]
-					toolMessages: CodemarieUserToolResultContentBlock[]
+					nonToolMessages: (DietCodeTextContentBlock | DietCodeImageContentBlock)[]
+					toolMessages: DietCodeUserToolResultContentBlock[]
 				}>(
 					(acc, part) => {
 						if (part.type === "tool_result") {
@@ -76,8 +76,8 @@ export function convertToOllamaMessages(anthropicMessages: Omit<CodemarieStorage
 				}
 			} else if (anthropicMessage.role === "assistant") {
 				const { nonToolMessages, toolMessages } = anthropicMessage.content.reduce<{
-					nonToolMessages: (CodemarieTextContentBlock | CodemarieImageContentBlock)[]
-					toolMessages: CodemarieAssistantToolUseBlock[]
+					nonToolMessages: (DietCodeTextContentBlock | DietCodeImageContentBlock)[]
+					toolMessages: DietCodeAssistantToolUseBlock[]
 				}>(
 					(acc, part) => {
 						if (part.type === "tool_use") {

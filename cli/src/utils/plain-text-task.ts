@@ -5,14 +5,14 @@
  * Design goals:
  * - stdout: Only the final completion result text (no prefix) - perfect for piping
  * - stderr: Errors and verbose output (won't break pipes)
- * - Enables workflows like: git diff | codemarie 'explain' | codemarie 'summarize'
+ * - Enables workflows like: git diff | dietcode 'explain' | dietcode 'summarize'
  */
 
 /* eslint-disable no-console */
 // Console output is intentional here for plain text mode
 
-import type { CodemarieMessage, ExtensionState } from "@shared/ExtensionMessage"
-import { StringRequest } from "@shared/proto/codemarie/common"
+import type { DietCodeMessage, ExtensionState } from "@shared/ExtensionMessage"
+import { StringRequest } from "@shared/proto/dietcode/common"
 import type { Controller } from "@/core/controller"
 import { getRequestRegistry } from "@/core/controller/grpc-handler"
 import { subscribeToState } from "@/core/controller/state/subscribeToState"
@@ -79,7 +79,7 @@ export async function runPlainTextTask(options: PlainTextTaskOptions): Promise<b
 	}
 
 	// Helper to process a message and track completion state
-	const processMessage = (message: CodemarieMessage) => {
+	const processMessage = (message: DietCodeMessage) => {
 		const ts = message.ts || 0
 		if (message.partial || processedMessages.has(ts)) {
 			return
@@ -106,14 +106,14 @@ export async function runPlainTextTask(options: PlainTextTaskOptions): Promise<b
 		}
 	}
 
-	const requestId = "codemarie-cli-plain-text-task"
+	const requestId = "dietcode-cli-plain-text-task"
 	subscribeToState(
 		controller,
 		{},
 		async ({ stateJson }) => {
 			try {
 				const state = JSON.parse(stateJson) as ExtensionState
-				for (const message of state.codemarieMessages ?? []) {
+				for (const message of state.dietcodeMessages ?? []) {
 					processMessage(message)
 				}
 			} catch (error) {
@@ -199,7 +199,7 @@ export async function runPlainTextTask(options: PlainTextTaskOptions): Promise<b
  * - Verbose output goes to stderr
  * - Nothing else goes to stdout (stdout is reserved for final result only)
  */
-function handleMessageForPipeMode(message: CodemarieMessage, verbose: boolean): void {
+function handleMessageForPipeMode(message: DietCodeMessage, verbose: boolean): void {
 	const fullText = message.text ?? ""
 
 	if (message.type === "say") {

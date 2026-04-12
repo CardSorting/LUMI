@@ -1,7 +1,7 @@
-import { BooleanRequest, EmptyRequest } from "@shared/proto/codemarie/common"
+import { BooleanRequest, EmptyRequest } from "@shared/proto/dietcode/common"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { memo, useEffect, useState } from "react"
-import CodemarieLogoWhite from "@/assets/CodemarieLogoWhite"
+import DietCodeLogoWhite from "@/assets/DietCodeLogoWhite"
 import ApiOptions from "@/components/settings/ApiOptions"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { AccountServiceClient, StateServiceClient } from "@/services/grpc-client"
@@ -41,9 +41,9 @@ const WelcomeView = memo(() => {
 	return (
 		<div className="fixed inset-0 p-0 flex flex-col">
 			<div className="h-full px-5 overflow-auto flex flex-col gap-2.5">
-				<h2 className="text-lg font-semibold">Hi, I'm Codemarie</h2>
+				<h2 className="text-lg font-semibold">Hi, I'm DietCode</h2>
 				<div className="flex justify-center my-5">
-					<CodemarieLogoWhite className="size-16" />
+					<DietCodeLogoWhite className="size-16" />
 				</div>
 				<p>
 					I can do all kinds of tasks thanks to breakthroughs in{" "}

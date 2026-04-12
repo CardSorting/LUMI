@@ -2,7 +2,7 @@ import type { SqliteLockManager } from "@/core/locks/SqliteLockManager"
 
 /**
  * Module-level reference to the SqliteLockManager instance.
- * This is set by codemarie-core and accessed by folder lock utilities.
+ * This is set by dietcode-core and accessed by folder lock utilities.
  */
 let lockManagerInstance: SqliteLockManager | undefined
 
@@ -16,7 +16,7 @@ export function getLockManager(): SqliteLockManager | undefined {
 
 /**
  * Set the SqliteLockManager instance after it has been created.
- * This is called by codemarie-core when the lock manager is initialized.
+ * This is called by dietcode-core when the lock manager is initialized.
  * @param lockManager - The SqliteLockManager instance to set
  */
 export function setLockManager(lockManager: SqliteLockManager): void {

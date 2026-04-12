@@ -1,5 +1,4 @@
-import { SpiderEngine, SpiderNode } from "../policy/SpiderEngine.js"
-import { Logger } from "@/shared/services/Logger"
+import { SpiderNode } from "../policy/SpiderEngine.js"
 
 export interface DriftReport {
 	path: string
@@ -10,13 +9,11 @@ export interface DriftReport {
 
 /**
  * DriftOrchestrator: Monitors the "Semantic Intent" of files.
- * Tracks how a file's responsibility evolves and warns if it starts to 
+ * Tracks how a file's responsibility evolves and warns if it starts to
  * violate the Single Responsibility Principle (SRP).
  */
 export class DriftOrchestrator {
 	private purposeRegistry: Map<string, string> = new Map()
-
-	constructor() {}
 
 	/**
 	 * Records the initial purpose of a file (based on its exports and tags).
@@ -32,14 +29,14 @@ export class DriftOrchestrator {
 	public analyzeDrift(node: SpiderNode, content: string): DriftReport {
 		const original = this.purposeRegistry.get(node.id) || "Unknown Purpose"
 		const current = this.extractPurpose(content)
-		
+
 		const driftDetected = original !== "Unknown Purpose" && !this.purposesAlign(original, current)
 
 		return {
 			path: node.path,
 			originalPurpose: original,
 			currentPurpose: current,
-			driftDetected
+			driftDetected,
 		}
 	}
 

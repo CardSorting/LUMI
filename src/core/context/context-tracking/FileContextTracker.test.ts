@@ -78,12 +78,12 @@ describe("FileContextTracker", () => {
 		expect(fileEntry.path).to.equal(filePath)
 		expect(fileEntry.record_state).to.equal("active")
 		expect(fileEntry.record_source).to.equal("read_tool")
-		expect(fileEntry.codemarie_read_date).to.be.a("number")
-		expect(fileEntry.codemarie_edit_date).to.be.null
+		expect(fileEntry.dietcode_read_date).to.be.a("number")
+		expect(fileEntry.dietcode_edit_date).to.be.null
 	})
 
-	it("should add a record when a file is edited by Codemarie", async () => {
-		await tracker.trackFileContext(filePath, "codemarie_edited")
+	it("should add a record when a file is edited by DietCode", async () => {
+		await tracker.trackFileContext(filePath, "dietcode_edited")
 
 		// Verify saveTaskMetadata was called with the correct data
 		expect(saveTaskMetadataStub.calledOnce).to.be.true
@@ -103,9 +103,9 @@ describe("FileContextTracker", () => {
 		// Now check the properties of the active entry
 		expect(activeEntry.path).to.equal(filePath)
 		expect(activeEntry.record_state).to.equal("active")
-		expect(activeEntry.record_source).to.equal("codemarie_edited")
-		expect(activeEntry.codemarie_read_date).to.be.a("number")
-		expect(activeEntry.codemarie_edit_date).to.be.a("number")
+		expect(activeEntry.record_source).to.equal("dietcode_edited")
+		expect(activeEntry.dietcode_read_date).to.be.a("number")
+		expect(activeEntry.dietcode_edit_date).to.be.a("number")
 	})
 
 	it("should add a record when a file is mentioned", async () => {
@@ -118,8 +118,8 @@ describe("FileContextTracker", () => {
 		expect(fileEntry.path).to.equal(filePath)
 		expect(fileEntry.record_state).to.equal("active")
 		expect(fileEntry.record_source).to.equal("file_mentioned")
-		expect(fileEntry.codemarie_read_date).to.be.a("number")
-		expect(fileEntry.codemarie_edit_date).to.be.null
+		expect(fileEntry.dietcode_read_date).to.be.a("number")
+		expect(fileEntry.dietcode_edit_date).to.be.null
 	})
 
 	it("should add a record when a file is edited by the user", async () => {
@@ -146,14 +146,14 @@ describe("FileContextTracker", () => {
 				path: filePath,
 				record_state: "active",
 				record_source: "read_tool",
-				codemarie_read_date: Date.now() - 1000, // 1 second ago
-				codemarie_edit_date: null,
+				dietcode_read_date: Date.now() - 1000, // 1 second ago
+				dietcode_edit_date: null,
 				user_edit_date: null,
 			},
 		]
 
 		// Track a new operation on the same file
-		await tracker.trackFileContext(filePath, "codemarie_edited")
+		await tracker.trackFileContext(filePath, "dietcode_edited")
 
 		// Verify the metadata now has two entries - one stale and one active
 		const savedMetadata = saveTaskMetadataStub.firstCall.args[1]
@@ -165,7 +165,7 @@ describe("FileContextTracker", () => {
 		// New entry should be active
 		const newEntry = savedMetadata.files_in_context[1]
 		expect(newEntry.record_state).to.equal("active")
-		expect(newEntry.record_source).to.equal("codemarie_edited")
+		expect(newEntry.record_source).to.equal("dietcode_edited")
 	})
 
 	it("should setup a file watcher for tracked files", async () => {
@@ -203,12 +203,12 @@ describe("FileContextTracker", () => {
 		expect(modifiedFiles).to.include(filePath)
 	})
 
-	it("should not track Codemarie edits as user edits", async () => {
+	it("should not track DietCode edits as user edits", async () => {
 		// First track the file to set up the watcher
 		await tracker.trackFileContext(filePath, "read_tool")
 
-		// Mark the file as edited by Codemarie
-		tracker.markFileAsEditedByCodemarie(filePath)
+		// Mark the file as edited by DietCode
+		tracker.markFileAsEditedByDietCode(filePath)
 
 		// Reset the stubs to check the next calls
 		getTaskMetadataStub.resetHistory()

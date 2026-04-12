@@ -3,11 +3,11 @@
  * Tests API fetching, caching, auth updates, and rate limit backoff
  */
 
-import type { BannerRules } from "@shared/CodemarieBanner"
+import type { BannerRules } from "@shared/DietCodeBanner"
 import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import * as sinon from "sinon"
-import { CodemarieEnv, Environment } from "@/config"
+import { DietCodeEnv, Environment } from "@/config"
 import { Controller } from "@/core/controller"
 import { StateManager } from "@/core/storage/StateManager"
 import { HostRegistryInfo } from "@/registry"
@@ -81,12 +81,12 @@ describe("BannerService", () => {
 			distinctId: "test-distinct-id",
 		})
 
-		// Mock CodemarieEnv.config() to return a valid config
-		sandbox.stub(CodemarieEnv, "config").returns({
+		// Mock DietCodeEnv.config() to return a valid config
+		sandbox.stub(DietCodeEnv, "config").returns({
 			environment: Environment.production,
-			appBaseUrl: "https://app.codemarie-mock.bot",
-			apiBaseUrl: "https://api.codemarie-mock.bot",
-			mcpBaseUrl: "https://api.codemarie-mock.bot/v1/mcp",
+			appBaseUrl: "https://app.dietcode-mock.bot",
+			apiBaseUrl: "https://api.dietcode-mock.bot",
+			mcpBaseUrl: "https://api.dietcode-mock.bot/v1/mcp",
 		})
 
 		const authService = AuthService.getInstance()
@@ -909,8 +909,8 @@ describe("BannerService", () => {
 			})
 		})
 
-		it('should return "jetbrains" when ide is "Codemarie for JetBrains" (case-insensitive)', async () => {
-			stubHostInfo({ ide: "Codemarie for JetBrains" })
+		it('should return "jetbrains" when ide is "DietCode for JetBrains" (case-insensitive)', async () => {
+			stubHostInfo({ ide: "DietCode for JetBrains" })
 			mockFetch.resolves(createSuccessResponse(emptyResponse))
 
 			await mockFetchForTesting(mockFetch, async () => {
@@ -988,7 +988,7 @@ describe("BannerService", () => {
 		})
 
 		it("should prefer ide field over platform field for detection", async () => {
-			stubHostInfo({ ide: "Codemarie for JetBrains", platform: "Visual Studio Code 1.103.0" })
+			stubHostInfo({ ide: "DietCode for JetBrains", platform: "Visual Studio Code 1.103.0" })
 			mockFetch.resolves(createSuccessResponse(emptyResponse))
 
 			await mockFetchForTesting(mockFetch, async () => {

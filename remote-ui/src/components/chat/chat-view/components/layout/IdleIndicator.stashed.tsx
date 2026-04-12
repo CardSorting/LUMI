@@ -10,7 +10,7 @@
  * 3. Add the indicator to the Virtuoso Footer component
  */
 
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { useEffect, useRef, useState } from "react"
 
 // Idle timeout in milliseconds before showing indicator
@@ -22,7 +22,7 @@ const IDLE_TIMEOUT_MS = 3000
  */
 export function useIdleIndicator(
 	scrollContainerRef: React.RefObject<HTMLDivElement>,
-	codemarieMessages: CodemarieMessage[],
+	dietcodeMessages: DietCodeMessage[],
 ): boolean {
 	const [showIdleIndicator, setShowIdleIndicator] = useState(false)
 	const idleTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -35,7 +35,7 @@ export function useIdleIndicator(
 		}
 
 		// Check if task is complete
-		const isTaskComplete = codemarieMessages.some(
+		const isTaskComplete = dietcodeMessages.some(
 			(msg) => msg.ask === "completion_result" || msg.say === "completion_result" || msg.ask === "plan_mode_respond",
 		)
 
@@ -115,7 +115,7 @@ export function useIdleIndicator(
 			}
 			timerStartTimeRef.current = null
 		}
-	}, [scrollContainerRef, codemarieMessages])
+	}, [scrollContainerRef, dietcodeMessages])
 
 	return showIdleIndicator
 }

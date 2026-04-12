@@ -1,5 +1,5 @@
 import { openFile as openFileIntegration } from "@integrations/misc/open-file"
-import { Empty, StringRequest } from "@shared/proto/codemarie/common"
+import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import path from "path"
 import { HostProvider } from "@/hosts/host-provider"
 import { Controller } from ".."

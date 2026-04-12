@@ -4,19 +4,19 @@
 
 ## 回報程式錯誤或問題
 
-程式錯誤回報能幫助 Cline 變得更好！在建立新的議題之前，請先[搜尋現有議題](https://github.com/codemarie/codemarie/issues)，避免重複。當您準備好回報程式錯誤時，請前往我們的[議題頁面](https://github.com/codemarie/codemarie/issues/new/choose)，您會找到協助填寫相關資訊的範本。
+程式錯誤回報能幫助 Cline 變得更好！在建立新的議題之前，請先[搜尋現有議題](https://github.com/dietcode/dietcode/issues)，避免重複。當您準備好回報程式錯誤時，請前往我們的[議題頁面](https://github.com/dietcode/dietcode/issues/new/choose)，您會找到協助填寫相關資訊的範本。
 
 <blockquote class='warning-note'>
-    🔐 <b>重要：</b> 若您發現安全性漏洞，請使用 <a href="https://github.com/codemarie/codemarie/security/advisories/new">GitHub 安全性工具進行私密回報</a>。
+    🔐 <b>重要：</b> 若您發現安全性漏洞，請使用 <a href="https://github.com/dietcode/dietcode/security/advisories/new">GitHub 安全性工具進行私密回報</a>。
 </blockquote>
 
 ## 決定要處理的工作
 
-想找適合第一次貢獻的工作嗎？請檢視標示為[「good first issue」](https://github.com/codemarie/codemarie/labels/good%20first%20issue)或[「help wanted」](https://github.com/codemarie/codemarie/labels/help%20wanted)的議題。這些議題特別適合新手貢獻者，我們也非常歡迎您的協助！
+想找適合第一次貢獻的工作嗎？請檢視標示為[「good first issue」](https://github.com/dietcode/dietcode/labels/good%20first%20issue)或[「help wanted」](https://github.com/dietcode/dietcode/labels/help%20wanted)的議題。這些議題特別適合新手貢獻者，我們也非常歡迎您的協助！
 
-我們也歡迎對[文件](https://github.com/codemarie/codemarie/tree/main/docs)的貢獻！無論是修正錯字、改善現有指南或建立新的教學內容，我們都期待能建立一個由社群共同維護的知識庫，協助每個人充分運用 Cline。您可以從 `/docs` 開始，尋找需要改善的地方。
+我們也歡迎對[文件](https://github.com/dietcode/dietcode/tree/main/docs)的貢獻！無論是修正錯字、改善現有指南或建立新的教學內容，我們都期待能建立一個由社群共同維護的知識庫，協助每個人充分運用 Cline。您可以從 `/docs` 開始，尋找需要改善的地方。
 
-若您計畫處理較大的功能，請先建立一個[功能請求](https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop)，以便我們討論該功能是否符合 Cline 的願景。
+若您計畫處理較大的功能，請先建立一個[功能請求](https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop)，以便我們討論該功能是否符合 Cline 的願景。
 
 ## 開發環境設定
 

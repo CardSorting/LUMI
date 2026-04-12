@@ -1,4 +1,4 @@
-import { CreateHookRequest, CreateHookResponse } from "@shared/proto/codemarie/file"
+import { CreateHookRequest, CreateHookResponse } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import path from "path"
 import { HookDiscoveryCache } from "../../hooks/HookDiscoveryCache"

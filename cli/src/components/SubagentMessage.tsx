@@ -1,4 +1,4 @@
-import type { CodemarieAskUseSubagents, CodemarieMessage, CodemarieSaySubagentStatus } from "@shared/ExtensionMessage"
+import type { DietCodeAskUseSubagents, DietCodeMessage, DietCodeSaySubagentStatus } from "@shared/ExtensionMessage"
 import { Box, Text } from "ink"
 import Spinner from "ink-spinner"
 import React from "react"
@@ -7,7 +7,7 @@ import { useTerminalSize } from "../hooks/useTerminalSize"
 import { jsonParseSafe } from "../utils/parser"
 
 interface SubagentMessageProps {
-	message: CodemarieMessage
+	message: DietCodeMessage
 	isStreaming?: boolean
 	mode?: "act" | "plan"
 }
@@ -175,7 +175,7 @@ export const SubagentMessage: React.FC<SubagentMessageProps> = ({ message, mode,
 
 	if ((type === "ask" && ask === "use_subagents") || say === "use_subagents") {
 		const parsed = text
-			? jsonParseSafe<CodemarieAskUseSubagents>(text, {
+			? jsonParseSafe<DietCodeAskUseSubagents>(text, {
 					prompts: [],
 				})
 			: { prompts: [] }
@@ -185,7 +185,7 @@ export const SubagentMessage: React.FC<SubagentMessageProps> = ({ message, mode,
 			return (
 				<Box flexDirection="column" marginBottom={1} width="100%">
 					<DotRow color={toolColor}>
-						<Text color={toolColor}>Codemarie wants to run subagents:</Text>
+						<Text color={toolColor}>DietCode wants to run subagents:</Text>
 					</DotRow>
 				</Box>
 			)
@@ -196,7 +196,7 @@ export const SubagentMessage: React.FC<SubagentMessageProps> = ({ message, mode,
 			<Box flexDirection="column" marginBottom={1} width="100%">
 				<DotRow color={toolColor} flashing={partial === true && isStreaming}>
 					<Text color={toolColor}>
-						{singular ? "Codemarie wants to run a subagent:" : "Codemarie wants to run subagents:"}
+						{singular ? "DietCode wants to run a subagent:" : "DietCode wants to run subagents:"}
 					</Text>
 				</DotRow>
 				<Box flexDirection="column" marginLeft={2} width="100%">
@@ -229,7 +229,7 @@ export const SubagentMessage: React.FC<SubagentMessageProps> = ({ message, mode,
 	}
 
 	if (say === "subagent" && text) {
-		const parsed = jsonParseSafe<CodemarieSaySubagentStatus>(text, {
+		const parsed = jsonParseSafe<DietCodeSaySubagentStatus>(text, {
 			status: "running",
 			total: 0,
 			completed: 0,
@@ -253,7 +253,7 @@ export const SubagentMessage: React.FC<SubagentMessageProps> = ({ message, mode,
 			<Box flexDirection="column" marginBottom={1} width="100%">
 				<DotRow color={toolColor} flashing={partial === true && isStreaming}>
 					<Text color={toolColor}>
-						{items.length === 1 ? "Codemarie is running a subagent:" : "Codemarie is running subagents:"}
+						{items.length === 1 ? "DietCode is running a subagent:" : "DietCode is running subagents:"}
 					</Text>
 				</DotRow>
 				<Box flexDirection="column" marginLeft={2} width="100%">

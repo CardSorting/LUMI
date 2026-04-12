@@ -1,4 +1,4 @@
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { createStorybookDecorator } from "@/config/StorybookDecorator"
 import { Environment } from "../../../../../src/config"
@@ -31,7 +31,7 @@ export default meta
 type Story = StoryObj<typeof TaskHeader>
 
 // Helper to create mock task messages
-const createTask = (text: string, images?: string[], files?: string[]): CodemarieMessage => ({
+const createTask = (text: string, images?: string[], files?: string[]): DietCodeMessage => ({
 	ts: Date.now(),
 	type: "say",
 	say: "task",
@@ -41,7 +41,7 @@ const createTask = (text: string, images?: string[], files?: string[]): Codemari
 })
 
 // Helper to create mock messages for timeline
-const createMessages = (): CodemarieMessage[] => [
+const createMessages = (): DietCodeMessage[] => [
 	{
 		ts: Date.now() - 300000,
 		type: "say",
@@ -87,7 +87,7 @@ export const Collapsed: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -118,7 +118,7 @@ export const Expanded: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -153,7 +153,7 @@ export const WithImages: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -188,7 +188,7 @@ export const WithFiles: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -221,7 +221,7 @@ export const LongTaskText: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -258,7 +258,7 @@ export const HighTokenUsage: Story = {
 					supportsPromptCache: true,
 				},
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -287,7 +287,7 @@ export const NoCost: Story = {
 				actModeApiProvider: "ollama",
 				actModeApiModelId: "llama3.2",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -317,7 +317,7 @@ export const WithCheckpointError: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -350,7 +350,7 @@ export const WithProgressMessage: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -380,7 +380,7 @@ export const LocalEnvironment: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -410,7 +410,7 @@ export const StagingEnvironment: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -440,7 +440,7 @@ export const ProductionEnvironment: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: createMessages(),
+			dietcodeMessages: createMessages(),
 		}),
 	],
 	parameters: {
@@ -469,7 +469,7 @@ export const MinimalTask: Story = {
 				actModeApiProvider: "anthropic",
 				actModeApiModelId: "claude-3-5-sonnet-20241022",
 			},
-			codemarieMessages: [
+			dietcodeMessages: [
 				{
 					ts: Date.now() - 60000,
 					type: "say",

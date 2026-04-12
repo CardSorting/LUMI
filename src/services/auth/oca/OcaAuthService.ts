@@ -1,5 +1,5 @@
-import { type EmptyRequest, String as ProtoString } from "@shared/proto/codemarie/common"
-import { OcaAuthState, OcaUserInfo } from "@shared/proto/codemarie/oca_account"
+import { type EmptyRequest, String as ProtoString } from "@shared/proto/dietcode/common"
+import { OcaAuthState, OcaUserInfo } from "@shared/proto/dietcode/oca_account"
 import type { Controller } from "@/core/controller"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { AuthHandler } from "@/hosts/external/AuthHandler"

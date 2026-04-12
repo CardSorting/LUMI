@@ -1,14 +1,14 @@
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { COLOR_BEIGE, COLOR_BLUE, COLOR_DARK_GRAY, COLOR_GRAY, COLOR_GREEN, COLOR_PURPLE, COLOR_WHITE } from "../colors"
 
 /**
  *
  * Get the color for a block or the indicator based on the message type
  *
- * @param message CodemarieMessage - The message to determine the color for
+ * @param message DietCodeMessage - The message to determine the color for
  * @returns string - The color code for the block or indicator
  */
-export const getColor = (message: CodemarieMessage): string => {
+export const getColor = (message: DietCodeMessage): string => {
 	if (message.type === "say") {
 		switch (message.say) {
 			case "task":

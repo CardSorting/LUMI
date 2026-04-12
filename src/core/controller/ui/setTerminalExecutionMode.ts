@@ -1,4 +1,4 @@
-import { BooleanRequest, KeyValuePair } from "@shared/proto/codemarie/common"
+import { BooleanRequest, KeyValuePair } from "@shared/proto/dietcode/common"
 import { Controller } from ".."
 
 /**

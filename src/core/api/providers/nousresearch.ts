@@ -1,6 +1,6 @@
 import { ModelInfo, NousResearchModelId, nousResearchDefaultModelId, nousResearchModels } from "@shared/api"
 import OpenAI from "openai"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
@@ -38,7 +38,7 @@ export class NousResearchHandler implements ApiHandler {
 	}
 
 	@withRetry()
-	async *createMessage(systemPrompt: string, messages: CodemarieStorageMessage[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[]): ApiStream {
 		const client = this.ensureClient()
 		const model = this.getModel()
 

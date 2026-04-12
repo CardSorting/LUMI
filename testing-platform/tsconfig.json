@@ -18,7 +18,7 @@
 				"../src/generated/*"
 			],
 			"@cline-grpc/*": [
-				"../src/generated/grpc-js/codemarie/*"
+				"../src/generated/grpc-js/dietcode/*"
 			],
 			"@harness/*": [
 				"harness/*"

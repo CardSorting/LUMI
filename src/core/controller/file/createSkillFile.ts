@@ -1,5 +1,5 @@
 import { ensureAgentSkillsDirectoryExists } from "@core/storage/disk"
-import { CreateSkillRequest, SkillsToggles } from "@shared/proto/codemarie/file"
+import { CreateSkillRequest, SkillsToggles } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import path from "path"
 import { HostProvider } from "@/hosts/host-provider"

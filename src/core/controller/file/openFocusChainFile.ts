@@ -1,6 +1,6 @@
 import { openFile as openFileIntegration } from "@integrations/misc/open-file"
 import { telemetryService } from "../../../services/telemetry"
-import { Empty, StringRequest } from "../../../shared/proto/codemarie/common"
+import { Empty, StringRequest } from "../../../shared/proto/dietcode/common"
 import { ensureFocusChainFile, extractFocusChainListFromText } from "../../task/focus-chain/file-utils"
 import { Controller } from ".."
 
@@ -20,9 +20,9 @@ export async function openFocusChainFile(controller: Controller, request: String
 	const currentTask = controller.task
 	if (currentTask) {
 		// Get the task's message history and find the most recent task_progress message
-		// TODO - can we decouple this from CodemarieMessages?
-		const codemarieMessages = currentTask.messageStateHandler.getCodemarieMessages()
-		const lastProgressMessage = codemarieMessages
+		// TODO - can we decouple this from DietCodeMessages?
+		const dietcodeMessages = currentTask.messageStateHandler.getDietCodeMessages()
+		const lastProgressMessage = dietcodeMessages
 			.slice()
 			.reverse()
 			.find((m) => m.say === "task_progress")

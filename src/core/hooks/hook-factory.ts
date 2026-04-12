@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { Logger } from "@/shared/services/Logger"
-import { version as codemarieVersion } from "../../../package.json"
+import { version as dietcodeVersion } from "../../../package.json"
 import { getDistinctId } from "../../services/logging/distinctId"
 import { telemetryService } from "../../services/telemetry"
 import {
@@ -15,7 +15,7 @@ import {
 	TaskResumeData,
 	TaskStartData,
 	UserPromptSubmitData,
-} from "../../shared/proto/codemarie/hooks"
+} from "../../shared/proto/dietcode/hooks"
 import { getAllHooksDirs } from "../storage/disk"
 import { StateManager } from "../storage/StateManager"
 import { HookExecutionError } from "./HookError"
@@ -129,7 +129,7 @@ type HookName = keyof Hooks
 
 /**
  * The hook input parameters for a named hook. These are the parameters the caller must
- * provide--the other common parameters like codemarieVersion and userId are handled by the
+ * provide--the other common parameters like dietcodeVersion and userId are handled by the
  * hook system.
  */
 export type NamedHookInput<Name extends HookName> = {
@@ -172,11 +172,11 @@ export abstract class HookRunner<Name extends HookName> {
 	 *
 	 * This method enriches the hook-specific input (like preToolUse or postToolUse data)
 	 * with standard information that all hooks receive:
-	 * - codemarieVersion: Current Codemarie extension version
+	 * - dietcodeVersion: Current DietCode extension version
 	 * - hookName: The type of hook being executed (e.g., "PreToolUse")
 	 * - timestamp: Execution time in milliseconds since epoch
 	 * - workspaceRoots: Array of workspace folder paths
-	 * - userId: Codemarie user ID, machine ID, or generated UUID
+	 * - userId: DietCode user ID, machine ID, or generated UUID
 	 *
 	 * This separation allows hook scripts to receive consistent metadata without
 	 * requiring callers to manually provide it each time.
@@ -190,11 +190,11 @@ export abstract class HookRunner<Name extends HookName> {
 				.getGlobalStateKey("workspaceRoots")
 				?.map((root) => root.path) || []
 		return {
-			codemarieVersion,
+			dietcodeVersion,
 			hookName: this.hookName,
 			timestamp: Date.now().toString(),
 			workspaceRoots,
-			userId: getDistinctId(), // Always available: Codemarie User ID, machine ID, or generated UUID
+			userId: getDistinctId(), // Always available: DietCode User ID, machine ID, or generated UUID
 			...params,
 		}
 	}
@@ -615,8 +615,8 @@ class StdioHookRunner<Name extends HookName> extends HookRunner<Name> {
 /**
  * Combines multiple hook runners and executes them in parallel.
  *
- * Used in multi-root workspaces where both global hooks (from ~/Documents/Codemarie/Hooks/)
- * and workspace-specific hooks (from each workspace's .codemarierules/hooks/) exist for the
+ * Used in multi-root workspaces where both global hooks (from ~/Documents/DietCode/Hooks/)
+ * and workspace-specific hooks (from each workspace's .dietcoderules/hooks/) exist for the
  * same hook type.
  *
  * Behavior:
@@ -685,7 +685,7 @@ function isExpectedHookError(error: unknown): boolean {
 	}
 
 	// Expected: Permission denied (file not executable or not readable)
-	// Note: This is expected because users may have hooks in .codemarierules that they don't want to execute
+	// Note: This is expected because users may have hooks in .dietcoderules that they don't want to execute
 	if (nodeError.code === "EACCES") {
 		return true
 	}
@@ -798,7 +798,7 @@ export class HookFactory {
 
 	/**
 	 * Checks if a hooks directory is a global hooks directory.
-	 * Global hooks are located in paths containing "Codemarie/Hooks" or "codemarie/hooks".
+	 * Global hooks are located in paths containing "DietCode/Hooks" or "dietcode/hooks".
 	 */
 	private static isGlobalHooksDir(dir: string): boolean {
 		return /[/\\][Cc]line[/\\][Hh]ooks/i.test(dir)
@@ -818,8 +818,8 @@ export class HookFactory {
 	/**
 	 * Determines the working directory for a hook script based on its location.
 	 *
-	 * - Global hooks (from ~/Documents/Codemarie/Hooks/): run from the primary workspace root
-	 * - Workspace hooks (from workspaceRoot/.codemarierules/hooks/): run from that specific workspace root
+	 * - Global hooks (from ~/Documents/DietCode/Hooks/): run from the primary workspace root
+	 * - Workspace hooks (from workspaceRoot/.dietcoderules/hooks/): run from that specific workspace root
 	 *
 	 * This ensures workspace-specific hooks can use relative paths that are meaningful
 	 * within their own workspace context.
@@ -844,7 +844,7 @@ export class HookFactory {
 		}
 
 		// If workspace hook, find which workspace root it belongs to
-		// Workspace hooks are at: workspaceRoot/.codemarierules/hooks/
+		// Workspace hooks are at: workspaceRoot/.dietcoderules/hooks/
 		// So find the workspace root whose path is a prefix of the containing hooks dir
 		if (containingDir && workspaceRoots) {
 			const workspaceRoot = workspaceRoots.find((root) => containingDir.startsWith(root.path))
@@ -859,8 +859,8 @@ export class HookFactory {
 
 	/**
 	 * Categorizes hook scripts by their location (global vs workspace).
-	 * Global hooks are located in ~/Documents/Codemarie/Hooks/
-	 * Workspace hooks are located in workspace .codemarierules/hooks/ directories
+	 * Global hooks are located in ~/Documents/DietCode/Hooks/
+	 * Workspace hooks are located in workspace .dietcoderules/hooks/ directories
 	 *
 	 * @param scripts Array of hook script paths
 	 * @param hooksDirs Array of hooks directories (passed to avoid redundant fetches)
@@ -888,8 +888,8 @@ export class HookFactory {
 
 	/**
 	 * @returns A list of paths to scripts for the given hook name.
-	 * Includes both global hooks (from ~/Documents/Codemarie/Hooks/) and workspace hooks
-	 * (from .codemarierules/hooks/ in each workspace root).
+	 * Includes both global hooks (from ~/Documents/DietCode/Hooks/) and workspace hooks
+	 * (from .dietcoderules/hooks/ in each workspace root).
 	 */
 	private static async findHookScripts(hookName: HookName): Promise<string[]> {
 		const hookScripts = []
@@ -901,10 +901,10 @@ export class HookFactory {
 	}
 
 	/**
-	 * Finds the path to a hook in a .codemarierules hooks directory.
+	 * Finds the path to a hook in a .dietcoderules hooks directory.
 	 *
 	 * @param hookName the name of the hook to search for, for example 'PreToolUse'
-	 * @param hooksDir the .codemarierules directory path to search
+	 * @param hooksDir the .dietcoderules directory path to search
 	 * @returns the path to the hook to execute, or undefined if none found
 	 * @throws Error if an unexpected file system error occurs
 	 */
@@ -957,7 +957,7 @@ export class HookFactory {
 	 * with canonical extensionless hook names.
 	 *
 	 * @param hookName the name of the hook to search for
-	 * @param hooksDir the .codemarierules directory path to search
+	 * @param hooksDir the .dietcoderules directory path to search
 	 * @returns the path to the hook to execute, or undefined if none found
 	 * @throws Error if an unexpected file system error occurs
 	 */

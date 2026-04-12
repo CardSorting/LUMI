@@ -11,7 +11,7 @@ import axios from "axios"
 import JSON5 from "json5"
 import OpenAI from "openai"
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
@@ -120,7 +120,7 @@ namespace Bedrock {
 	 * Formats messages for models using the Converse API specification
 	 * Used by both Anthropic and Nova models to avoid code duplication
 	 */
-	export function formatMessagesForConverseAPI(messages: CodemarieStorageMessage[]): BedrockMessage[] {
+	export function formatMessagesForConverseAPI(messages: DietCodeStorageMessage[]): BedrockMessage[] {
 		return messages.map((message) => {
 			// Determine role (user or assistant)
 			const role = message.role === "user" ? BedrockConversationRole.USER : BedrockConversationRole.ASSISTANT
@@ -320,7 +320,7 @@ namespace Gemini {
 	 */
 	export function prepareRequestPayload(
 		systemPrompt: string,
-		messages: CodemarieStorageMessage[],
+		messages: DietCodeStorageMessage[],
 		model: { id: SapAiCoreModelId; info: ModelInfo },
 	): any {
 		const contents = messages.map(convertAnthropicMessageToGemini)
@@ -455,7 +455,7 @@ export class SapAiCoreHandler implements ApiHandler {
 			Authorization: `Bearer ${token}`,
 			"AI-Resource-Group": this.options.sapAiResourceGroup || "default",
 			"Content-Type": "application/json",
-			"AI-Client-Type": "Codemarie",
+			"AI-Client-Type": "DietCode",
 		}
 
 		const url = `${this.options.sapAiCoreBaseUrl}/v2/lm/deployments?$top=10000&$skip=0`
@@ -507,7 +507,7 @@ export class SapAiCoreHandler implements ApiHandler {
 	}
 
 	@withRetry()
-	async *createMessage(systemPrompt: string, messages: CodemarieStorageMessage[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[]): ApiStream {
 		if (this.options.sapAiCoreUseOrchestrationMode) {
 			yield* this.createMessageWithOrchestration(systemPrompt, messages)
 		} else {
@@ -530,7 +530,7 @@ export class SapAiCoreHandler implements ApiHandler {
 		}
 	}
 
-	private async *createMessageWithOrchestration(systemPrompt: string, messages: CodemarieStorageMessage[]): ApiStream {
+	private async *createMessageWithOrchestration(systemPrompt: string, messages: DietCodeStorageMessage[]): ApiStream {
 		try {
 			await this.ensureAiCoreEnvSetup()
 			const model = this.getModel()
@@ -564,7 +564,7 @@ export class SapAiCoreHandler implements ApiHandler {
 			// messagesHistory: Contains the conversation context (user/assistant messages).
 			// Unlike the `messages` field that validates input, this does not validate
 			// template placeholders such as {{?userResponse}}, allowing content to be
-			// sent directly to the LLM with the Codemarie system prompt without validation errors.
+			// sent directly to the LLM with the DietCode system prompt without validation errors.
 			const response = await orchestrationClient.stream({
 				messagesHistory: sapMessages,
 			})
@@ -587,7 +587,7 @@ export class SapAiCoreHandler implements ApiHandler {
 		}
 	}
 
-	private async *createMessageWithDeployments(systemPrompt: string, messages: CodemarieStorageMessage[]): ApiStream {
+	private async *createMessageWithDeployments(systemPrompt: string, messages: DietCodeStorageMessage[]): ApiStream {
 		const token = await this.getToken()
 		const externalHeaders = buildExternalBasicHeaders()
 		const headers = {
@@ -595,7 +595,7 @@ export class SapAiCoreHandler implements ApiHandler {
 			Authorization: `Bearer ${token}`,
 			"AI-Resource-Group": this.options.sapAiResourceGroup || "default",
 			"Content-Type": "application/json",
-			"AI-Client-Type": "Codemarie",
+			"AI-Client-Type": "DietCode",
 		}
 
 		const model = this.getModel()
@@ -1154,7 +1154,7 @@ export class SapAiCoreHandler implements ApiHandler {
 		}
 		return { id: sapAiCoreDefaultModelId, info: sapAiCoreModels[sapAiCoreDefaultModelId] }
 	}
-	private convertMessageParamToSAPMessages(messages: CodemarieStorageMessage[]): ChatMessage[] {
+	private convertMessageParamToSAPMessages(messages: DietCodeStorageMessage[]): ChatMessage[] {
 		// Use the existing OpenAI converter since the logic is identical
 		return convertToOpenAiMessages(messages) as ChatMessage[]
 	}

@@ -54,7 +54,7 @@ vi.mock("../context/TaskContext", () => ({
 		clearState: vi.fn(),
 	}),
 	useTaskState: () => ({
-		codemarieMessages: [],
+		dietcodeMessages: [],
 	}),
 }))
 

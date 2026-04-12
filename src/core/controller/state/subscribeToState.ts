@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { State } from "@shared/proto/codemarie/state"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { State } from "@shared/proto/dietcode/state"
 import { ExtensionState } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"

@@ -5,7 +5,7 @@ import { shouldSkipReasoningForModel } from "@utils/model-utils"
 import axios from "axios"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient, getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
@@ -43,8 +43,8 @@ export class OpenRouterHandler implements ApiHandler {
 					baseURL: "https://openrouter.ai/api/v1",
 					apiKey: this.options.openRouterApiKey,
 					defaultHeaders: {
-						"HTTP-Referer": "https://codemarie.bot", // Optional, for including your app on openrouter.ai rankings.
-						"X-Title": "Codemarie", // Optional. Shows in rankings on openrouter.ai.
+						"HTTP-Referer": "https://dietcode.bot", // Optional, for including your app on openrouter.ai rankings.
+						"X-Title": "DietCode", // Optional. Shows in rankings on openrouter.ai.
 					},
 				})
 			} catch (error: any) {
@@ -55,7 +55,7 @@ export class OpenRouterHandler implements ApiHandler {
 	}
 
 	@withRetry()
-	async *createMessage(systemPrompt: string, messages: CodemarieStorageMessage[], tools?: OpenAITool[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: OpenAITool[]): ApiStream {
 		const client = this.ensureClient()
 		this.lastGenerationId = undefined
 

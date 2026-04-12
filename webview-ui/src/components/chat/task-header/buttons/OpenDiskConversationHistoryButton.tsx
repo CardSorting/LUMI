@@ -1,4 +1,4 @@
-import { StringRequest } from "@shared/proto/codemarie/common"
+import { StringRequest } from "@shared/proto/dietcode/common"
 import { ArrowDownToLineIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"

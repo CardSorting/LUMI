@@ -1,4 +1,4 @@
-import { DeleteAllTaskHistoryCount } from "@shared/proto/codemarie/task"
+import { DeleteAllTaskHistoryCount } from "@shared/proto/dietcode/task"
 import fs from "fs/promises"
 import path from "path"
 import { HostProvider } from "@/hosts/host-provider"

@@ -1,5 +1,5 @@
-import type { ToggleWindsurfRuleRequest } from "@shared/proto/codemarie/file"
-import { CodemarieRulesToggles } from "@shared/proto/codemarie/file"
+import type { ToggleWindsurfRuleRequest } from "@shared/proto/dietcode/file"
+import { DietCodeRulesToggles } from "@shared/proto/dietcode/file"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"
 
@@ -12,7 +12,7 @@ import type { Controller } from "../index"
 export async function toggleWindsurfRule(
 	controller: Controller,
 	request: ToggleWindsurfRuleRequest,
-): Promise<CodemarieRulesToggles> {
+): Promise<DietCodeRulesToggles> {
 	const { rulePath, enabled } = request
 
 	if (!rulePath || typeof enabled !== "boolean") {
@@ -29,5 +29,5 @@ export async function toggleWindsurfRule(
 	controller.stateManager.setWorkspaceState("localWindsurfRulesToggles", toggles)
 
 	// Return the toggles directly
-	return CodemarieRulesToggles.create({ toggles: toggles })
+	return DietCodeRulesToggles.create({ toggles: toggles })
 }

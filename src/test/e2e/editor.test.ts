@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test"
-import { addSelectedCodeToCodemarieWebview, openTab, toggleNotifications } from "./utils/common"
+import { addSelectedCodeToDietCodeWebview, openTab, toggleNotifications } from "./utils/common"
 import { E2E_WORKSPACE_TYPES, e2e } from "./utils/helpers"
 
 e2e.describe("Code Actions and Editor Panel", () => {
@@ -19,8 +19,8 @@ e2e.describe("Code Actions and Editor Panel", () => {
 			await page.getByRole("treeitem", { name: "index.html" }).locator("a").click()
 			await expect(sidebarInput).not.toBeFocused()
 
-			// Sidebar should be opened and visible after adding code to Codemarie
-			await addSelectedCodeToCodemarieWebview(page)
+			// Sidebar should be opened and visible after adding code to DietCode
+			await addSelectedCodeToDietCodeWebview(page)
 			await expect(sidebarInput).not.toBeEmpty()
 			await expect(sidebarInput).toBeFocused()
 		})

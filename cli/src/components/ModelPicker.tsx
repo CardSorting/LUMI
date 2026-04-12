@@ -65,7 +65,7 @@ import {
 	xaiDefaultModelId,
 	xaiModels,
 } from "@/shared/api"
-import { StringRequest } from "@/shared/proto/codemarie/common"
+import { StringRequest } from "@/shared/proto/dietcode/common"
 import { filterOpenRouterModelIds } from "@/shared/utils/model-filters"
 import { COLORS } from "../constants/colors"
 import { getOpenRouterDefaultModelId, usesOpenRouterModels } from "../utils/openrouter-models"

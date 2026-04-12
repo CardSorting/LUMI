@@ -1,4 +1,4 @@
-import { UpdateTerminalConnectionTimeoutRequest, UpdateTerminalConnectionTimeoutResponse } from "@shared/proto/codemarie/state"
+import { UpdateTerminalConnectionTimeoutRequest, UpdateTerminalConnectionTimeoutResponse } from "@shared/proto/dietcode/state"
 import { Controller } from "../index"
 
 export async function updateTerminalConnectionTimeout(

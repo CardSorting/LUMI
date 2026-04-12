@@ -1,5 +1,5 @@
 import { Controller } from "@core/controller"
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -14,7 +14,7 @@ import { Logger } from "@/shared/services/Logger"
  */
 export function registerTaskCommands(controller: Controller): vscode.Disposable[] {
 	return [
-		vscode.commands.registerCommand("codemarie.dev.expireMcpOAuthTokens", async () => {
+		vscode.commands.registerCommand("dietcode.dev.expireMcpOAuthTokens", async () => {
 			try {
 				const stateManager = controller.stateManager
 				const secretsJson = stateManager.getSecretKey("mcpOAuthSecrets")
@@ -52,7 +52,7 @@ export function registerTaskCommands(controller: Controller): vscode.Disposable[
 				Logger.error("[Dev] Error expiring MCP OAuth tokens:", error)
 			}
 		}),
-		vscode.commands.registerCommand("codemarie.dev.createTestTasks", async () => {
+		vscode.commands.registerCommand("dietcode.dev.createTestTasks", async () => {
 			const count = (
 				await HostProvider.window.showInputBox({
 					title: "Test Tasks",
@@ -153,7 +153,7 @@ export function registerTaskCommands(controller: Controller): vscode.Disposable[
 /**
  * Creates a realistic sequence of messages that would occur in a typical task
  */
-function createRealisticMessageSequence(baseTimestamp: number, taskPrompt: string, taskIndex: number): CodemarieMessage[] {
+function createRealisticMessageSequence(baseTimestamp: number, taskPrompt: string, taskIndex: number): DietCodeMessage[] {
 	// Use an incrementing timestamp to ensure messages appear in sequence
 	let timestamp = baseTimestamp
 	const getNextTimestamp = () => {
@@ -166,8 +166,8 @@ function createRealisticMessageSequence(baseTimestamp: number, taskPrompt: strin
 	const commitHash = `commit${taskIndex}${Math.floor(Math.random() * 1000000).toString(16)}`
 
 	// Create a realistic message sequence
-	const messages: CodemarieMessage[] = [
-		// Initial task message - uses "say" with "text" which is the format used in Codemarie.ts
+	const messages: DietCodeMessage[] = [
+		// Initial task message - uses "say" with "text" which is the format used in DietCode.ts
 		{
 			ts: baseTimestamp,
 			type: "say",

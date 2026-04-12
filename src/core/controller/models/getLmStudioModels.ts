@@ -1,4 +1,4 @@
-import { StringArray, type StringRequest } from "@shared/proto/codemarie/common"
+import { StringArray, type StringRequest } from "@shared/proto/dietcode/common"
 import { fetch } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from ".."

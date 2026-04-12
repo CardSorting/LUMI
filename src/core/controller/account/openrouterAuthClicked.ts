@@ -1,4 +1,4 @@
-import { Empty, EmptyRequest } from "@shared/proto/codemarie/common"
+import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
 import { HostProvider } from "@/hosts/host-provider"
 import { openExternal } from "@/utils/env"
 import { Controller } from ".."

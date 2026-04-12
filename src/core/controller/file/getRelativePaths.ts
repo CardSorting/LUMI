@@ -1,4 +1,4 @@
-import { RelativePaths, RelativePathsRequest } from "@shared/proto/codemarie/file"
+import { RelativePaths, RelativePathsRequest } from "@shared/proto/dietcode/file"
 import * as path from "path"
 import { URI } from "vscode-uri"
 import { Logger } from "@/shared/services/Logger"

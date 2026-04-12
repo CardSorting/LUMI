@@ -51,7 +51,7 @@ function getTaskStartTemplate(): string {
 # 
 # Executes when a new task begins.
 # 
-# Input: { taskId, taskStart: { task: string }, codemarieVersion, timestamp, ... }
+# Input: { taskId, taskStart: { task: string }, dietcodeVersion, timestamp, ... }
 # Output: { cancel: boolean, contextModification?: string, errorMessage?: string }
 # 
 # Use cases:
@@ -95,7 +95,7 @@ function getTaskResumeTemplate(): string {
 # 
 # Executes when a task is resumed after being interrupted.
 # 
-# Input: { taskId, taskResume: { task: string }, codemarieVersion, timestamp, ... }
+# Input: { taskId, taskResume: { task: string }, dietcodeVersion, timestamp, ... }
 # Output: { cancel: boolean, contextModification?: string, errorMessage?: string }
 # 
 # Use cases:
@@ -127,7 +127,7 @@ function getTaskCancelTemplate(): string {
 # 
 # Executes when a task is cancelled by the user.
 # 
-# Input: { taskId, taskCancel: { task: string }, codemarieVersion, timestamp, ... }
+# Input: { taskId, taskCancel: { task: string }, dietcodeVersion, timestamp, ... }
 # Output: { cancel: boolean, contextModification?: string, errorMessage?: string }
 # 
 # Use cases:
@@ -159,7 +159,7 @@ function getTaskCompleteTemplate(): string {
 # 
 # Executes when a task completes successfully.
 # 
-# Input: { taskId, taskComplete: { task: string }, codemarieVersion, timestamp, ... }
+# Input: { taskId, taskComplete: { task: string }, dietcodeVersion, timestamp, ... }
 # Output: { cancel: boolean, contextModification?: string, errorMessage?: string }
 # 
 # Use cases:
@@ -282,9 +282,9 @@ function getUserPromptSubmitTemplate(): string {
 #
 # UserPromptSubmit Hook
 # 
-# Executes when the user submits a prompt to Codemarie.
+# Executes when the user submits a prompt to DietCode.
 # 
-# Input: { taskId, userPromptSubmit: { prompt: string }, codemarieVersion, timestamp, ... }
+# Input: { taskId, userPromptSubmit: { prompt: string }, dietcodeVersion, timestamp, ... }
 # Output: { cancel: boolean, contextModification?: string, errorMessage?: string }
 # 
 # Use cases:

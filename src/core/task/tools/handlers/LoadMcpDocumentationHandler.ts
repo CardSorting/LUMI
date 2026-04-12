@@ -1,13 +1,13 @@
 import type { ToolUse } from "@core/assistant-message"
 import { loadMcpDocumentation } from "@core/prompts/loadMcpDocumentation"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class LoadMcpDocumentationHandler implements IToolHandler, IPartialBlockHandler {
-	readonly name = CodemarieDefaultTool.MCP_DOCS
+	readonly name = DietCodeDefaultTool.MCP_DOCS
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`

@@ -3,7 +3,7 @@ import * as chokidar from "chokidar"
 import * as fs from "fs/promises"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieSay } from "../../../shared/ExtensionMessage"
+import { DietCodeSay } from "../../../shared/ExtensionMessage"
 import { Mode } from "../../../shared/storage/types"
 import { writeFile } from "../../../utils/fs"
 import { ensureTaskDirectoryExists } from "../../storage/disk"
@@ -24,13 +24,7 @@ export interface FocusChainDependencies {
 	mode: Mode
 	stateManager: StateManager
 	postStateToWebview: () => Promise<void>
-	say: (
-		type: CodemarieSay,
-		text?: string,
-		images?: string[],
-		files?: string[],
-		partial?: boolean,
-	) => Promise<number | undefined>
+	say: (type: DietCodeSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
 	focusChainSettings: FocusChainSettings
 }
 
@@ -40,7 +34,7 @@ export class FocusChainManager {
 	private stateManager: StateManager
 	private postStateToWebview: () => Promise<void>
 	private say: (
-		type: CodemarieSay,
+		type: DietCodeSay,
 		text?: string,
 		images?: string[],
 		files?: string[],
@@ -346,7 +340,7 @@ export class FocusChainManager {
 		const userUpdatedList = this.taskState.todoListWasUpdatedByUser
 		// Include when reaching the reminder interval, configured by settings
 		const reachedReminderInterval =
-			this.taskState.apiRequestsSinceLastTodoUpdate >= this.focusChainSettings.remindCodemarieInterval
+			this.taskState.apiRequestsSinceLastTodoUpdate >= this.focusChainSettings.remindDietcodeInterval
 		// Include on first API request or if list does not exist
 		const isFirstApiRequest = this.taskState.apiRequestCount === 1 && !this.taskState.currentFocusChainChecklist
 		// Include if no list has been created and multiple requests have completed

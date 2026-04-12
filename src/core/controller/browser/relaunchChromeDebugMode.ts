@@ -1,4 +1,4 @@
-import { EmptyRequest, String as StringMessage } from "@shared/proto/codemarie/common"
+import { EmptyRequest, String as StringMessage } from "@shared/proto/dietcode/common"
 import { BrowserSession } from "../../../services/browser/BrowserSession"
 import { Controller } from "../index"
 

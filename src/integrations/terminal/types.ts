@@ -4,7 +4,7 @@
  * the StandaloneTerminalManager used in CLI/JetBrains environments.
  */
 
-import type { CodemarieToolResponseContent } from "@shared/messages"
+import type { DietCodeToolResponseContent } from "@shared/messages"
 import type { EventEmitter } from "events"
 
 // =============================================================================
@@ -331,12 +331,12 @@ export interface CommandExecutorCallbacks {
 	/** Update the background command running state in the controller */
 	updateBackgroundCommandState: (running: boolean) => void
 	/**
-	 * Update a codemarie message by index
+	 * Update a dietcode message by index
 	 * Supports updating commandCompleted status and/or text content
 	 */
-	updateCodemarieMessage: (index: number, updates: { commandCompleted?: boolean; text?: string }) => Promise<void>
-	/** Get codemarie messages array */
-	getCodemarieMessages: () => Array<{ ask?: string; say?: string; text?: string }>
+	updateDietCodeMessage: (index: number, updates: { commandCompleted?: boolean; text?: string }) => Promise<void>
+	/** Get dietcode messages array */
+	getDietCodeMessages: () => Array<{ ask?: string; say?: string; text?: string }>
 	/** Add content to user message for next API request */
 	addToUserMessageContent: (content: { type: string; text: string }) => void
 }
@@ -418,7 +418,7 @@ export interface OrchestrationResult {
 	/** Whether the user rejected/cancelled the command */
 	userRejected: boolean
 	/** The result content to return */
-	result: CodemarieToolResponseContent
+	result: DietCodeToolResponseContent
 	/** Whether the command completed */
 	completed: boolean
 	/** All output lines captured */

@@ -1,4 +1,4 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useEffect } from "react"

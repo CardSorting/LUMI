@@ -1,4 +1,4 @@
-import { UpdateSettingsRequest } from "@shared/proto/codemarie/state"
+import { UpdateSettingsRequest } from "@shared/proto/dietcode/state"
 import { Mode } from "@shared/storage/types"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"

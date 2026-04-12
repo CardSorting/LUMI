@@ -1,7 +1,3 @@
-import * as fs from "fs"
-import * as path from "path"
-import { Logger } from "@/shared/services/Logger"
-
 export interface MetabolicMetrics {
 	reads: number
 	writes: number
@@ -17,7 +13,7 @@ export interface MetabolicMetrics {
 export class MetabolicMonitor {
 	private registry: Map<string, MetabolicMetrics> = new Map()
 
-	constructor(private cwd: string) {}
+	constructor(_cwd: string) {}
 
 	/**
 	 * Records a read operation.
@@ -55,13 +51,13 @@ export class MetabolicMonitor {
 		if (!metrics) return { inflamed: false }
 
 		const timeSinceLastEdit = Date.now() - metrics.lastEditTimestamp
-		const highChurn = (metrics.linesAdded + metrics.linesDeleted) > 500
+		const highChurn = metrics.linesAdded + metrics.linesDeleted > 500
 		const recentActivity = timeSinceLastEdit < 3600000 // 1 hour
 
 		if (highChurn && recentActivity && metrics.writes > 5) {
-			return { 
-				inflamed: true, 
-				reason: `High metabolic churn detected (${metrics.writes} edits, ${metrics.linesAdded + metrics.linesDeleted} lines modified in under an hour).` 
+			return {
+				inflamed: true,
+				reason: `High metabolic churn detected (${metrics.writes} edits, ${metrics.linesAdded + metrics.linesDeleted} lines modified in under an hour).`,
 			}
 		}
 
@@ -74,12 +70,12 @@ export class MetabolicMonitor {
 	public getVitalityStats() {
 		let totalReads = 0
 		let totalWrites = 0
-		const hotspots: { path: string, stress: number }[] = []
+		const hotspots: { path: string; stress: number }[] = []
 
 		for (const [p, m] of this.registry.entries()) {
 			totalReads += m.reads
 			totalWrites += m.writes
-			const stress = (m.reads * 0.2) + (m.writes * 0.8) + ((m.linesAdded + m.linesDeleted) / 100)
+			const stress = m.reads * 0.2 + m.writes * 0.8 + (m.linesAdded + m.linesDeleted) / 100
 			if (stress > 1) {
 				hotspots.push({ path: p, stress })
 			}
@@ -89,7 +85,7 @@ export class MetabolicMonitor {
 			totalReads,
 			totalWrites,
 			avgDoubtSignal: totalReads / (totalWrites || 1),
-			hotspots: hotspots.sort((a, b) => b.stress - a.stress).slice(0, 5)
+			hotspots: hotspots.sort((a, b) => b.stress - a.stress).slice(0, 5),
 		}
 	}
 

@@ -1,20 +1,20 @@
 /**
- * Message translator for converting Codemarie messages to ACP session updates.
+ * Message translator for converting DietCode messages to ACP session updates.
  *
- * This module handles the translation between Codemarie's internal message format
- * (CodemarieMessage) and the ACP protocol's session update format. A single Codemarie
+ * This module handles the translation between DietCode's internal message format
+ * (DietCodeMessage) and the ACP protocol's session update format. A single DietCode
  * message may produce multiple ACP updates.
  *
  * @module acp/messageTranslator
  */
 
 import type * as acp from "@agentclientprotocol/sdk"
-import type { CodemarieMessage, CodemarieSayBrowserAction, CodemarieSayTool } from "@shared/ExtensionMessage"
+import type { DietCodeMessage, DietCodeSayBrowserAction, DietCodeSayTool } from "@shared/ExtensionMessage"
 import type { AcpSessionState, TranslatedMessage } from "./types.js"
 import { AcpSessionStatus } from "./types.js"
 
 /**
- * Maps Codemarie tool types to ACP ToolKind values.
+ * Maps DietCode tool types to ACP ToolKind values.
  */
 const TOOL_KIND_MAP: Record<string, acp.ToolKind> = {
 	// File operations
@@ -137,15 +137,15 @@ export interface TranslateMessageOptions {
 }
 
 /**
- * Translate a single Codemarie message to ACP session updates.
+ * Translate a single DietCode message to ACP session updates.
  *
- * @param message - The Codemarie message to translate
+ * @param message - The DietCode message to translate
  * @param sessionState - The current session state for tracking tool calls
  * @param options - Optional translation options (e.g., existing toolCallId for updates)
  * @returns The translated message with ACP updates and permission requirements
  */
 export function translateMessage(
-	message: CodemarieMessage,
+	message: DietCodeMessage,
 	sessionState: AcpSessionState,
 	options?: TranslateMessageOptions,
 ): TranslatedMessage {
@@ -175,10 +175,10 @@ export function translateMessage(
 }
 
 /**
- * Translate a "say" type Codemarie message to ACP updates.
+ * Translate a "say" type DietCode message to ACP updates.
  */
 function translateSayMessage(
-	message: CodemarieMessage,
+	message: DietCodeMessage,
 	sessionState: AcpSessionState,
 	_options?: TranslateMessageOptions,
 ): TranslatedMessage {
@@ -242,7 +242,7 @@ function translateSayMessage(
 		case "error":
 		case "error_retry":
 		case "diff_error":
-		case "codemarieignore_error":
+		case "dietcodeignore_error":
 			// Error messages → agent_message_chunk (errors are displayed as text)
 			if (message.text) {
 				updates.push({
@@ -388,11 +388,11 @@ function translateSayMessage(
 }
 
 /**
- * Translate a "ask" type Codemarie message to ACP updates.
+ * Translate a "ask" type DietCode message to ACP updates.
  * Ask messages typically require permission from the client.
  */
 function translateAskMessage(
-	message: CodemarieMessage,
+	message: DietCodeMessage,
 	sessionState: AcpSessionState,
 	options?: TranslateMessageOptions,
 ): TranslatedMessage {
@@ -652,13 +652,13 @@ function translateAskMessage(
 /**
  * Translate a tool message to ACP tool_call updates.
  */
-function translateToolMessage(message: CodemarieMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
+function translateToolMessage(message: DietCodeMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
 	const updates: acp.SessionUpdate[] = []
 
 	if (!message.text) return updates
 
 	try {
-		const toolInfo = JSON.parse(message.text) as CodemarieSayTool
+		const toolInfo = JSON.parse(message.text) as DietCodeSayTool
 		const toolCallId = sessionState.currentToolCallId || generateToolCallId()
 
 		// Determine tool kind
@@ -737,7 +737,7 @@ function translateToolMessage(message: CodemarieMessage, sessionState: AcpSessio
 /**
  * Translate a command message to ACP tool_call.
  */
-function translateCommandMessage(message: CodemarieMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
+function translateCommandMessage(message: DietCodeMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
 	const updates: acp.SessionUpdate[] = []
 
 	const command = extractCommandFromText(message.text)
@@ -766,7 +766,7 @@ function translateCommandMessage(message: CodemarieMessage, sessionState: AcpSes
 /**
  * Translate command output to ACP tool_call_update.
  */
-function translateCommandOutputMessage(message: CodemarieMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
+function translateCommandOutputMessage(message: DietCodeMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
 	const updates: acp.SessionUpdate[] = []
 
 	if (sessionState.currentToolCallId) {
@@ -807,11 +807,11 @@ function translateCommandOutputMessage(message: CodemarieMessage, sessionState: 
 /**
  * Translate browser action to ACP tool_call.
  */
-function translateBrowserActionMessage(message: CodemarieMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
+function translateBrowserActionMessage(message: DietCodeMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
 	const updates: acp.SessionUpdate[] = []
 
 	try {
-		const action = message.text ? (JSON.parse(message.text) as CodemarieSayBrowserAction) : null
+		const action = message.text ? (JSON.parse(message.text) as DietCodeSayBrowserAction) : null
 		const toolCallId = sessionState.currentToolCallId || generateToolCallId()
 
 		if (!sessionState.currentToolCallId) {
@@ -842,7 +842,7 @@ function translateBrowserActionMessage(message: CodemarieMessage, sessionState: 
 /**
  * Translate MCP server message to ACP tool_call.
  */
-function translateMcpMessage(message: CodemarieMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
+function translateMcpMessage(message: DietCodeMessage, sessionState: AcpSessionState): acp.SessionUpdate[] {
 	const updates: acp.SessionUpdate[] = []
 
 	try {
@@ -874,7 +874,7 @@ function translateMcpMessage(message: CodemarieMessage, sessionState: AcpSession
 /**
  * Translate task progress (focus chain/todos) to ACP plan update.
  */
-function translateTaskProgressMessage(message: CodemarieMessage): acp.SessionUpdate[] {
+function translateTaskProgressMessage(message: DietCodeMessage): acp.SessionUpdate[] {
 	const updates: acp.SessionUpdate[] = []
 
 	if (!message.text) return updates
@@ -939,7 +939,7 @@ function parseTaskProgressToEntries(text: string): acp.PlanEntry[] {
 /**
  * Build a human-readable title for a tool operation.
  */
-function buildToolTitle(toolInfo: CodemarieSayTool): string {
+function buildToolTitle(toolInfo: DietCodeSayTool): string {
 	switch (toolInfo.tool) {
 		case "editedExistingFile":
 			return `Edit file: ${toolInfo.path || "unknown"}`
@@ -984,7 +984,7 @@ function extractCommandFromText(text?: string): string {
  */
 function parseToolInfo(text: string): { title: string; kind: acp.ToolKind; path?: string; input?: unknown } | null {
 	try {
-		const info = JSON.parse(text) as CodemarieSayTool
+		const info = JSON.parse(text) as DietCodeSayTool
 		return {
 			title: buildToolTitle(info),
 			kind: TOOL_KIND_MAP[info.tool] || "other",
@@ -997,13 +997,13 @@ function parseToolInfo(text: string): { title: string; kind: acp.ToolKind; path?
 }
 
 /**
- * Translate multiple Codemarie messages to ACP session updates.
+ * Translate multiple DietCode messages to ACP session updates.
  *
- * @param messages - Array of Codemarie messages to translate
+ * @param messages - Array of DietCode messages to translate
  * @param sessionState - The current session state
  * @returns Combined array of ACP session updates
  */
-export function translateMessages(messages: CodemarieMessage[], sessionState: AcpSessionState): acp.SessionUpdate[] {
+export function translateMessages(messages: DietCodeMessage[], sessionState: AcpSessionState): acp.SessionUpdate[] {
 	const allUpdates: acp.SessionUpdate[] = []
 
 	for (const message of messages) {

@@ -1,7 +1,7 @@
-import { Empty } from "@shared/proto/codemarie/common"
-import { AskResponseRequest } from "@shared/proto/codemarie/task"
+import { Empty } from "@shared/proto/dietcode/common"
+import { AskResponseRequest } from "@shared/proto/dietcode/task"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieAskResponse } from "../../../shared/WebviewMessage"
+import { DietCodeAskResponse } from "../../../shared/WebviewMessage"
 import { Controller } from ".."
 
 /**
@@ -18,8 +18,8 @@ export async function askResponse(controller: Controller, request: AskResponseRe
 			return Empty.create()
 		}
 
-		// Map the string responseType to the CodemarieAskResponse enum
-		let responseType: CodemarieAskResponse
+		// Map the string responseType to the DietCodeAskResponse enum
+		let responseType: DietCodeAskResponse
 		switch (request.responseType) {
 			case "yesButtonClicked":
 				responseType = "yesButtonClicked"

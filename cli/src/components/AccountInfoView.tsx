@@ -1,14 +1,14 @@
 /**
  * Account info view component
- * Shows current provider, and for Codemarie provider: credit balance and organization name
+ * Shows current provider, and for DietCode provider: credit balance and organization name
  */
 
 import { Box, Text } from "ink"
 import React, { useCallback, useEffect, useState } from "react"
 import { Controller } from "@/core/controller"
 import { StateManager } from "@/core/storage/StateManager"
-import { CodemarieAccountService } from "@/services/account/CodemarieAccountService"
-import { AuthService, CodemarieAccountOrganization } from "@/services/auth/AuthService"
+import { DietCodeAccountService } from "@/services/account/DietCodeAccountService"
+import { AuthService, DietCodeAccountOrganization } from "@/services/auth/AuthService"
 import { LoadingSpinner } from "./Spinner"
 
 interface AccountInfoViewProps {
@@ -38,7 +38,7 @@ function formatBalance(balance: number | null): string {
 export const AccountInfoView: React.FC<AccountInfoViewProps> = React.memo(({ controller }) => {
 	const [provider, setProvider] = useState<string | null>(null)
 	const [balance, setBalance] = useState<number | null>(null)
-	const [organization, setOrganization] = useState<CodemarieAccountOrganization | null>(null)
+	const [organization, setOrganization] = useState<DietCodeAccountOrganization | null>(null)
 	const [email, setEmail] = useState<string | null>(null)
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
@@ -53,10 +53,10 @@ export const AccountInfoView: React.FC<AccountInfoViewProps> = React.memo(({ con
 			const mode = stateManager.getGlobalSettingsKey("mode") as string
 			const providerKey = mode === "act" ? "actModeApiProvider" : "planModeApiProvider"
 			const currentProvider = stateManager.getGlobalSettingsKey(providerKey) as string
-			setProvider(currentProvider || "codemarie")
+			setProvider(currentProvider || "dietcode")
 
-			// If using Codemarie provider, fetch additional info
-			if (currentProvider === "codemarie") {
+			// If using DietCode provider, fetch additional info
+			if (currentProvider === "dietcode") {
 				const authService = AuthService.getInstance(controller)
 
 				// Wait for auth to be restored - poll until we have auth info or timeout
@@ -73,7 +73,7 @@ export const AccountInfoView: React.FC<AccountInfoViewProps> = React.memo(({ con
 				if (authInfo?.user?.email) {
 					setEmail(authInfo.user.email)
 				} else {
-					// User not logged in to Codemarie
+					// User not logged in to DietCode
 					setEmail(null)
 					setIsLoading(false)
 					return
@@ -90,7 +90,7 @@ export const AccountInfoView: React.FC<AccountInfoViewProps> = React.memo(({ con
 
 				// Fetch credit balance
 				try {
-					const accountService = CodemarieAccountService.getInstance()
+					const accountService = DietCodeAccountService.getInstance()
 					const activeOrgId = authService.getActiveOrganizationId()
 
 					if (activeOrgId) {
@@ -139,8 +139,8 @@ export const AccountInfoView: React.FC<AccountInfoViewProps> = React.memo(({ con
 		)
 	}
 
-	// If not using Codemarie provider, just show the provider name
-	if (provider !== "codemarie") {
+	// If not using DietCode provider, just show the provider name
+	if (provider !== "dietcode") {
 		return (
 			<Box>
 				<Text color="gray">Provider: </Text>
@@ -149,24 +149,24 @@ export const AccountInfoView: React.FC<AccountInfoViewProps> = React.memo(({ con
 		)
 	}
 
-	// Codemarie provider but not logged in
+	// DietCode provider but not logged in
 	if (!email) {
 		return (
 			<Box>
 				<Text color="gray">Provider: </Text>
-				<Text color="cyan">Codemarie</Text>
+				<Text color="cyan">DietCode</Text>
 				<Text color="gray"> • </Text>
-				<Text color="yellow">Not logged in (run 'codemarie auth' to sign in)</Text>
+				<Text color="yellow">Not logged in (run 'dietcode auth' to sign in)</Text>
 			</Box>
 		)
 	}
 
-	// Codemarie provider - show full account info
+	// DietCode provider - show full account info
 	return (
 		<Box flexDirection="column">
 			<Box>
 				<Text color="gray">Provider: </Text>
-				<Text color="cyan">Codemarie</Text>
+				<Text color="cyan">DietCode</Text>
 				{email && (
 					<Box>
 						<Text color="gray"> • </Text>

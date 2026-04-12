@@ -9,7 +9,7 @@ if [ "$#" -ne 3 ]; then
     echo "Usage: $0 <source.vsix> <output.vsix> <endpoints.json>"
     echo ""
     echo "Example:"
-    echo "  $0 codemarie-3.55.0.vsix codemarie-3.55.0-enterprise.vsix endpoints.json"
+    echo "  $0 dietcode-3.55.0.vsix dietcode-3.55.0-enterprise.vsix endpoints.json"
     exit 1
 fi
 
@@ -81,4 +81,4 @@ cd - > /dev/null
 echo "✓ Successfully created $OUTPUT_VSIX with bundled endpoints.json"
 echo ""
 echo "The package is ready for enterprise distribution."
-echo "When installed, CodeMarie will automatically use the bundled configuration."
+echo "When installed, DietCode will automatically use the bundled configuration."

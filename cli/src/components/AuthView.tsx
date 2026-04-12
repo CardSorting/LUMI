@@ -11,11 +11,11 @@ import { StateManager } from "@/core/storage/StateManager"
 import { openAiCodexOAuthManager } from "@/integrations/openai-codex/oauth"
 import { AuthService } from "@/services/auth/AuthService"
 import { openAiCodexDefaultModelId, openRouterDefaultModelId } from "@/shared/api"
-import { StringRequest } from "@/shared/proto/codemarie/common"
+import { StringRequest } from "@/shared/proto/dietcode/common"
 import { openExternal } from "@/utils/env"
 import { COLORS } from "../constants/colors"
 import { useStdinContext } from "../context/StdinContext"
-import { useCodemarieFeaturedModels } from "../hooks/useCodemarieFeaturedModels"
+import { useDietCodeFeaturedModels } from "../hooks/useDietCodeFeaturedModels"
 import { useOcaAuth } from "../hooks/useOcaAuth"
 import { useScrollableList } from "../hooks/useScrollableList"
 import { type DetectedSources, detectImportSources, type ImportSource } from "../utils/import-configs"
@@ -46,10 +46,10 @@ type AuthStep =
 	| "saving"
 	| "success"
 	| "error"
-	| "codemarie_auth"
+	| "dietcode_auth"
 	| "oca_employee_check"
 	| "oca_auth"
-	| "codemarie_model"
+	| "dietcode_model"
 	| "openai_codex_auth"
 	| "bedrock"
 	| "import"
@@ -172,8 +172,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 	const [errorMessage, setErrorMessage] = useState("")
 	const [providerSearch, setProviderSearch] = useState("")
 	const [providerIndex, setProviderIndex] = useState(0)
-	const [codemarieModelIndex, setCodemarieModelIndex] = useState(0)
-	const featuredModels = useCodemarieFeaturedModels()
+	const [dietcodeModelIndex, setDietCodeModelIndex] = useState(0)
+	const featuredModels = useDietCodeFeaturedModels()
 	const [importSources, setImportSources] = useState<DetectedSources>({ codex: false, opencode: false })
 	const [importSource, setImportSource] = useState<ImportSource | null>(null)
 	const [bedrockConfig, setBedrockConfig] = useState<BedrockConfig | null>(null)
@@ -206,7 +206,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 
 	// Main menu items - conditionally include import options
 	const mainMenuItems: SelectItem[] = useMemo(() => {
-		const items: SelectItem[] = [{ label: "Sign in with Codemarie", value: "codemarie_auth" }]
+		const items: SelectItem[] = [{ label: "Sign in with DietCode", value: "dietcode_auth" }]
 
 		// Add OpenAI Codex option for ChatGPT subscribers
 		items.push({ label: "Sign in with ChatGPT Subscription", value: "openai_codex_auth" })
@@ -268,9 +268,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 		}
 	}, [step, selectedProvider])
 
-	// Subscribe to auth status updates when in codemarie_auth step
+	// Subscribe to auth status updates when in dietcode_auth step
 	useEffect(() => {
-		if (step !== "codemarie_auth") {
+		if (step !== "dietcode_auth") {
 			return
 		}
 
@@ -284,10 +284,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 
 			if (authState.user?.email) {
 				// Auth succeeded - save configuration and transition to model selection
-				await applyProviderConfig({ providerId: "codemarie", controller })
-				setSelectedProvider("codemarie")
+				await applyProviderConfig({ providerId: "dietcode", controller })
+				setSelectedProvider("dietcode")
 				setModelId(openRouterDefaultModelId)
-				setStep("codemarie_model")
+				setStep("dietcode_model")
 			}
 		}
 
@@ -327,10 +327,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 		}
 	}, [controller])
 
-	// Start Codemarie auth flow
-	const startCodemarieAuth = useCallback(async () => {
+	// Start DietCode auth flow
+	const startDietCodeAuth = useCallback(async () => {
 		try {
-			setStep("codemarie_auth")
+			setStep("dietcode_auth")
 			await AuthService.getInstance(controller).createAuthRequest()
 		} catch (error) {
 			setErrorMessage(error instanceof Error ? error.message : String(error))
@@ -348,8 +348,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 			if (value === "exit") {
 				exit()
 				onComplete?.()
-			} else if (value === "codemarie_auth") {
-				startCodemarieAuth()
+			} else if (value === "dietcode_auth") {
+				startDietCodeAuth()
 			} else if (value === "openai_codex_auth") {
 				setStep("openai_codex_auth")
 				startOpenAiCodexAuth()
@@ -363,7 +363,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 				setStep("import")
 			}
 		},
-		[exit, onComplete, startCodemarieAuth, startOpenAiCodexAuth],
+		[exit, onComplete, startDietCodeAuth, startOpenAiCodexAuth],
 	)
 
 	const handleProviderSelect = useCallback(
@@ -488,7 +488,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 		[modelId, saveConfiguration],
 	)
 
-	const handleCodemarieModelSelect = useCallback(
+	const handleDietCodeModelSelect = useCallback(
 		(modelId: string) => {
 			setModelId(modelId)
 			setStep("saving")
@@ -569,9 +569,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 				break
 			case "modelid":
 				setModelId("")
-				// Go back to codemarie_model if we came from there (Codemarie provider)
-				if (selectedProvider === "codemarie") {
-					setStep("codemarie_model")
+				// Go back to dietcode_model if we came from there (DietCode provider)
+				if (selectedProvider === "dietcode") {
+					setStep("dietcode_model")
 				} else if (selectedProvider === "bedrock") {
 					// Bedrock skips the API key step — go back to Bedrock setup
 					setStep("bedrock")
@@ -589,15 +589,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 			case "oca_auth":
 				setStep("oca_employee_check")
 				break
-			case "codemarie_auth":
+			case "dietcode_auth":
 				setStep("menu")
 				break
 			case "openai_codex_auth":
 				openAiCodexOAuthManager.cancelAuthorizationFlow()
 				setStep("menu")
 				break
-			case "codemarie_model":
-				setCodemarieModelIndex(0)
+			case "dietcode_model":
+				setDietCodeModelIndex(0)
 				setStep("menu")
 				break
 			case "bedrock":
@@ -731,7 +731,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 				return <OcaEmployeeCheck isActive={step === "oca_employee_check"} onCancel={goBack} onSignIn={startOcaAuth} />
 
 			case "oca_auth":
-			case "codemarie_auth":
+			case "dietcode_auth":
 				return (
 					<Box flexDirection="column">
 						<Box>
@@ -764,12 +764,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 					</Box>
 				)
 
-			case "codemarie_model": {
+			case "dietcode_model": {
 				return (
 					<Box flexDirection="column">
 						<Text color="white">Choose a model</Text>
 						<Text> </Text>
-						<FeaturedModelPicker featuredModels={featuredModels} selectedIndex={codemarieModelIndex} />
+						<FeaturedModelPicker featuredModels={featuredModels} selectedIndex={dietcodeModelIndex} />
 					</Box>
 				)
 			}
@@ -832,9 +832,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 		"provider",
 		"modelid",
 		"baseurl",
-		"codemarie_auth",
+		"dietcode_auth",
 		"oca_auth",
-		"codemarie_model",
+		"dietcode_model",
 		"openai_codex_auth",
 		"bedrock",
 		"error",
@@ -870,38 +870,38 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 				} else if (input && !key.ctrl && !key.meta) {
 					setProviderSearch((prev) => prev + input)
 				}
-			} else if (step === "codemarie_model") {
+			} else if (step === "dietcode_model") {
 				const maxIndex = getFeaturedModelMaxIndex(featuredModels)
 
 				if (key.upArrow) {
-					setCodemarieModelIndex((prev) => (prev > 0 ? prev - 1 : maxIndex))
+					setDietCodeModelIndex((prev) => (prev > 0 ? prev - 1 : maxIndex))
 				} else if (key.downArrow) {
-					setCodemarieModelIndex((prev) => (prev < maxIndex ? prev + 1 : 0))
+					setDietCodeModelIndex((prev) => (prev < maxIndex ? prev + 1 : 0))
 				} else if (key.return) {
-					if (isBrowseAllSelected(codemarieModelIndex, featuredModels)) {
+					if (isBrowseAllSelected(dietcodeModelIndex, featuredModels)) {
 						setStep("modelid")
 					} else {
-						const selectedModel = getFeaturedModelAtIndex(codemarieModelIndex, featuredModels)
+						const selectedModel = getFeaturedModelAtIndex(dietcodeModelIndex, featuredModels)
 						if (selectedModel) {
-							handleCodemarieModelSelect(selectedModel.id)
+							handleDietCodeModelSelect(selectedModel.id)
 						}
 					}
 				}
 			}
 			// Note: modelid step input is handled by ModelPicker component
 		},
-		{ isActive: isRawModeSupported && (step === "menu" || step === "provider" || step === "codemarie_model" || canGoBack) },
+		{ isActive: isRawModeSupported && (step === "menu" || step === "provider" || step === "dietcode_model" || canGoBack) },
 	)
 
 	return (
 		<Box flexDirection="column" paddingLeft={1} paddingRight={1} width="100%">
-			{/* Codemarie robot - centered */}
+			{/* DietCode robot - centered */}
 			<StaticRobotFrame />
 
 			{/* Welcome text - centered */}
 			<Box justifyContent="center" marginTop={1}>
 				<Text bold color="white">
-					Welcome to Codemarie
+					Welcome to DietCode
 				</Text>
 			</Box>
 
@@ -926,7 +926,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ controller, onComplete, onEr
 										{index === menuIndex ? "❯ " : "  "}
 										{item.label}
 									</Text>
-									{item.value === "codemarie_auth" && <Text color="yellow"> (try Opus 4.6!)</Text>}
+									{item.value === "dietcode_auth" && <Text color="yellow"> (try Opus 4.6!)</Text>}
 								</Text>
 							</Box>
 						))}

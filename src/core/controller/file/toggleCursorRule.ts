@@ -1,5 +1,5 @@
-import type { ToggleCursorRuleRequest } from "@shared/proto/codemarie/file"
-import { CodemarieRulesToggles } from "@shared/proto/codemarie/file"
+import type { ToggleCursorRuleRequest } from "@shared/proto/dietcode/file"
+import { DietCodeRulesToggles } from "@shared/proto/dietcode/file"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"
 
@@ -9,7 +9,7 @@ import type { Controller } from "../index"
  * @param request The toggle request
  * @returns The updated Cursor rule toggles
  */
-export async function toggleCursorRule(controller: Controller, request: ToggleCursorRuleRequest): Promise<CodemarieRulesToggles> {
+export async function toggleCursorRule(controller: Controller, request: ToggleCursorRuleRequest): Promise<DietCodeRulesToggles> {
 	const { rulePath, enabled } = request
 
 	if (!rulePath || typeof enabled !== "boolean") {
@@ -28,7 +28,7 @@ export async function toggleCursorRule(controller: Controller, request: ToggleCu
 	// Get the current state to return in the response
 	const cursorToggles = controller.stateManager.getWorkspaceStateKey("localCursorRulesToggles")
 
-	return CodemarieRulesToggles.create({
+	return DietCodeRulesToggles.create({
 		toggles: cursorToggles,
 	})
 }

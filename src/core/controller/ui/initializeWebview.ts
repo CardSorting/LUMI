@@ -1,5 +1,5 @@
-import { Empty, EmptyRequest } from "@shared/proto/codemarie/common"
-import { OpenRouterCompatibleModelInfo } from "@shared/proto/codemarie/models"
+import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
+import { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
 import { readMcpMarketplaceCatalogFromCache } from "@/core/storage/disk"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
@@ -7,7 +7,7 @@ import { GlobalStateAndSettings } from "@/shared/storage/state-keys"
 import type { Controller } from "../index"
 import { sendMcpMarketplaceCatalogEvent } from "../mcp/subscribeToMcpMarketplaceCatalog"
 import { refreshBasetenModels } from "../models/refreshBasetenModels"
-import { refreshCodemarieModels } from "../models/refreshCodemarieModels"
+import { refreshDietCodeModels } from "../models/refreshDietCodeModels"
 import { refreshGroqModels } from "../models/refreshGroqModels"
 import { refreshHicapModels } from "../models/refreshHicapModels"
 import { refreshLiteLlmModels } from "../models/refreshLiteLlmModels"
@@ -71,17 +71,17 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 			}
 		})
 
-		refreshCodemarieModels(controller).then(async (models) => {
+		refreshDietCodeModels(controller).then(async (models) => {
 			if (models && Object.keys(models).length > 0) {
-				// Update model info in state for Codemarie (this needs to be done here since we don't want to update state while settings is open, and we may refresh models there)
+				// Update model info in state for DietCode (this needs to be done here since we don't want to update state while settings is open, and we may refresh models there)
 				const apiConfiguration = controller.stateManager.getApiConfiguration()
 				const planActSeparateModelsSetting = controller.stateManager.getGlobalSettingsKey("planActSeparateModelsSetting")
 				const currentMode = controller.stateManager.getGlobalSettingsKey("mode")
 
 				if (planActSeparateModelsSetting) {
 					// Separate models: update only current mode
-					const modelIdField = currentMode === "plan" ? "planModeCodemarieModelId" : "actModeCodemarieModelId"
-					const modelInfoField = currentMode === "plan" ? "planModeCodemarieModelInfo" : "actModeCodemarieModelInfo"
+					const modelIdField = currentMode === "plan" ? "planModeDietcodeModelId" : "actModeDietcodeModelId"
+					const modelInfoField = currentMode === "plan" ? "planModeDietcodeModelInfo" : "actModeDietcodeModelInfo"
 					const modelId = apiConfiguration[modelIdField]
 
 					if (modelId && models[modelId]) {
@@ -90,18 +90,18 @@ export async function initializeWebview(controller: Controller, _request: EmptyR
 					}
 				} else {
 					// Shared models: update both plan and act modes
-					const planModelId = apiConfiguration.planModeCodemarieModelId
-					const actModelId = apiConfiguration.actModeCodemarieModelId
+					const planModelId = apiConfiguration.planModeDietcodeModelId
+					const actModelId = apiConfiguration.actModeDietcodeModelId
 					const updates: Partial<GlobalStateAndSettings> = {}
 
 					// Update plan mode model info if we have a model ID
 					if (planModelId && models[planModelId]) {
-						updates.planModeCodemarieModelInfo = models[planModelId]
+						updates.planModeDietcodeModelInfo = models[planModelId]
 					}
 
 					// Update act mode model info if we have a model ID
 					if (actModelId && models[actModelId]) {
-						updates.actModeCodemarieModelInfo = models[actModelId]
+						updates.actModeDietcodeModelInfo = models[actModelId]
 					}
 
 					// Post state update if we updated any model info

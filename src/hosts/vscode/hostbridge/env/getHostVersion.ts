@@ -1,14 +1,14 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
 import * as vscode from "vscode"
 import { ExtensionRegistryInfo } from "@/registry"
-import { CodemarieClient } from "@/shared/codemarie"
+import { DietCodeClient } from "@/shared/dietcode"
 import { GetHostVersionResponse } from "@/shared/proto/index.host"
 
 export async function getHostVersion(_: EmptyRequest): Promise<GetHostVersionResponse> {
 	return {
 		platform: vscode.env.appName,
 		version: vscode.version,
-		codemarieType: CodemarieClient.VSCode,
-		codemarieVersion: ExtensionRegistryInfo.version,
+		dietcodeType: DietCodeClient.VSCode,
+		dietcodeVersion: ExtensionRegistryInfo.version,
 	}
 }

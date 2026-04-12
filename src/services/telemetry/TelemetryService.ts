@@ -1,10 +1,10 @@
 import { HostProvider } from "@hosts/host-provider"
 import type { BrowserSettings } from "@shared/BrowserSettings"
-import { ApiFormat, apiFormatToJSON } from "@shared/proto/codemarie/models"
+import { ApiFormat, apiFormatToJSON } from "@shared/proto/dietcode/models"
 import { ShowMessageType } from "@shared/proto/host/window"
 import type { TaskFeedbackType } from "@shared/WebviewMessage"
 import * as os from "os"
-import { CodemarieAccountUserInfo } from "@/services/auth/AuthService"
+import { DietCodeAccountUserInfo } from "@/services/auth/AuthService"
 import { Setting } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
 import { Mode } from "@/shared/storage/types"
@@ -69,17 +69,17 @@ export enum TerminalHangStage {
 
 export type TelemetryMetadata = {
 	/**
-	 * The extension or codemarie-core version. JetBrains and CLI have different
-	 * versioning than the VSCode Extension, but on those platforms this will be the _codemarie-core version_
+	 * The extension or dietcode-core version. JetBrains and CLI have different
+	 * versioning than the VSCode Extension, but on those platforms this will be the _dietcode-core version_
 	 * which uses the same as the versioning as the VSCode extension.
 	 */
 	extension_version: string
 	/**
-	 * The type of codemarie distribution, e.g VSCode Extension, JetBrains Plugin or CLI. This
+	 * The type of dietcode distribution, e.g VSCode Extension, JetBrains Plugin or CLI. This
 	 * is different than the `platform` because there are many variants of VSCode and JetBrains but they
 	 * all use the same extension or plugin.
 	 */
-	codemarie_type: string
+	dietcode_type: string
 	/** The name of the host IDE or environment e.g. VSCode, Cursor, IntelliJ Professional Edition, etc. */
 	platform: string
 	/** The version of the host environment */
@@ -99,7 +99,7 @@ export type TelemetryMetadata = {
 const MAX_ERROR_MESSAGE_LENGTH = 500
 
 /**
- * TelemetryService handles telemetry event tracking for the Codemarie extension
+ * TelemetryService handles telemetry event tracking for the DietCode extension
  * Uses an abstracted telemetry provider to support multiple analytics backends
  * Respects user privacy settings and VSCode's global telemetry configuration
  */
@@ -125,42 +125,42 @@ export class TelemetryService {
 	private taskErrorCounts = new Map<string, number>()
 	public static readonly METRICS = {
 		TASK: {
-			TURNS_TOTAL: "codemarie.turns.total",
-			TURNS_PER_TASK: "codemarie.turns.per_task",
-			TOKENS_INPUT_TOTAL: "codemarie.tokens.input.total",
-			TOKENS_INPUT_PER_RESPONSE: "codemarie.tokens.input.per_response",
-			TOKENS_OUTPUT_TOTAL: "codemarie.tokens.output.total",
-			TOKENS_OUTPUT_PER_RESPONSE: "codemarie.tokens.output.per_response",
-			COST_TOTAL: "codemarie.cost.total",
-			COST_PER_EVENT: "codemarie.cost.per_event",
+			TURNS_TOTAL: "dietcode.turns.total",
+			TURNS_PER_TASK: "dietcode.turns.per_task",
+			TOKENS_INPUT_TOTAL: "dietcode.tokens.input.total",
+			TOKENS_INPUT_PER_RESPONSE: "dietcode.tokens.input.per_response",
+			TOKENS_OUTPUT_TOTAL: "dietcode.tokens.output.total",
+			TOKENS_OUTPUT_PER_RESPONSE: "dietcode.tokens.output.per_response",
+			COST_TOTAL: "dietcode.cost.total",
+			COST_PER_EVENT: "dietcode.cost.per_event",
 		},
 		CACHE: {
-			WRITE_TOTAL: "codemarie.cache.write.tokens.total",
-			WRITE_PER_EVENT: "codemarie.cache.write.tokens.per_event",
-			READ_TOTAL: "codemarie.cache.read.tokens.total",
-			READ_PER_EVENT: "codemarie.cache.read.tokens.per_event",
-			HITS_TOTAL: "codemarie.cache.hits.total",
+			WRITE_TOTAL: "dietcode.cache.write.tokens.total",
+			WRITE_PER_EVENT: "dietcode.cache.write.tokens.per_event",
+			READ_TOTAL: "dietcode.cache.read.tokens.total",
+			READ_PER_EVENT: "dietcode.cache.read.tokens.per_event",
+			HITS_TOTAL: "dietcode.cache.hits.total",
 		},
 		TOOLS: {
-			CALLS_TOTAL: "codemarie.tool.calls.total",
-			CALLS_PER_TASK: "codemarie.tool.calls.per_task",
+			CALLS_TOTAL: "dietcode.tool.calls.total",
+			CALLS_PER_TASK: "dietcode.tool.calls.per_task",
 		},
 		ERRORS: {
-			TOTAL: "codemarie.errors.total",
-			PER_TASK: "codemarie.errors.per_task",
+			TOTAL: "dietcode.errors.total",
+			PER_TASK: "dietcode.errors.per_task",
 		},
 		API: {
-			TTFT_SECONDS: "codemarie.api.ttft.seconds",
-			DURATION_SECONDS: "codemarie.api.duration.seconds",
-			THROUGHPUT_TOKENS_PER_SECOND: "codemarie.api.throughput.tokens_per_second",
+			TTFT_SECONDS: "dietcode.api.ttft.seconds",
+			DURATION_SECONDS: "dietcode.api.duration.seconds",
+			THROUGHPUT_TOKENS_PER_SECOND: "dietcode.api.throughput.tokens_per_second",
 		},
 		HOOKS: {
-			EXECUTIONS_TOTAL: "codemarie.hooks.executions.total",
-			DURATION_SECONDS: "codemarie.hooks.duration.seconds",
-			FAILURES_TOTAL: "codemarie.hooks.failures.total",
-			CANCELLATIONS_TOTAL: "codemarie.hooks.cancellations.total",
-			CONTEXT_MODIFICATIONS_TOTAL: "codemarie.hooks.context_modifications.total",
-			CACHE_ACCESSES_TOTAL: "codemarie.hooks.cache.accesses.total",
+			EXECUTIONS_TOTAL: "dietcode.hooks.executions.total",
+			DURATION_SECONDS: "dietcode.hooks.duration.seconds",
+			FAILURES_TOTAL: "dietcode.hooks.failures.total",
+			CANCELLATIONS_TOTAL: "dietcode.hooks.cancellations.total",
+			CONTEXT_MODIFICATIONS_TOTAL: "dietcode.hooks.context_modifications.total",
+			CACHE_ACCESSES_TOTAL: "dietcode.hooks.cache.accesses.total",
 		},
 	}
 	// Event constants for tracking user interactions and system events
@@ -253,14 +253,14 @@ export class TelemetryService {
 			SLASH_COMMAND_USED: "task.slash_command_used",
 			// Tracks when a feature is toggled on/off
 			FEATURE_TOGGLED: "task.feature_toggled",
-			// Tracks when individual Codemarie rules are toggled on/off
+			// Tracks when individual DietCode rules are toggled on/off
 			RULE_TOGGLED: "task.rule_toggled",
 			// Tracks when auto condense setting is toggled on/off
 			AUTO_CONDENSE_TOGGLED: "task.auto_condense_toggled",
 			// Tracks when yolo mode setting is toggled on/off
 			YOLO_MODE_TOGGLED: "task.yolo_mode_toggled",
-			// Tracks when Codemarie web tools setting is toggled on/off
-			CODEMARIE_WEB_TOOLS_TOGGLED: "task.codemarie_web_tools_toggled",
+			// Tracks when DietCode web tools setting is toggled on/off
+			DIETCODE_WEB_TOOLS_TOGGLED: "task.dietcode_web_tools_toggled",
 			// Tracks task initialization timing
 			INITIALIZATION: "task.initialization",
 			// Terminal execution telemetry events
@@ -332,7 +332,7 @@ export class TelemetryService {
 			extension_version: extensionVersion,
 			platform: hostVersion.platform || "unknown",
 			platform_version: hostVersion.version || "unknown",
-			codemarie_type: hostVersion.codemarieType || "unknown",
+			dietcode_type: hostVersion.dietcodeType || "unknown",
 			os_type: os.platform(),
 			os_version: os.version(),
 			is_dev: process.env.IS_DEV,
@@ -371,13 +371,13 @@ export class TelemetryService {
 		// We only enable telemetry if global host telemetry is enabled
 		const hostSetting = await HostProvider.env.getTelemetrySettings({})
 		if (hostSetting.isEnabled === Setting.DISABLED) {
-			// Only show warning if user has opted in to Codemarie telemetry but host telemetry is disabled
+			// Only show warning if user has opted in to DietCode telemetry but host telemetry is disabled
 			if (didUserOptIn) {
 				void HostProvider.window
 					.showMessage({
 						type: ShowMessageType.WARNING,
 						message:
-							"Anonymous Codemarie error and usage reporting is enabled, but IDE telemetry is disabled. To enable error and usage reporting for this extension, enable telemetry in IDE settings.",
+							"Anonymous DietCode error and usage reporting is enabled, but IDE telemetry is disabled. To enable error and usage reporting for this extension, enable telemetry in IDE settings.",
 						options: {
 							items: ["Open Settings"],
 						},
@@ -609,7 +609,7 @@ export class TelemetryService {
 	 * Identifies the accounts user
 	 * @param userInfo The user's information
 	 */
-	public identifyAccount(userInfo: CodemarieAccountUserInfo) {
+	public identifyAccount(userInfo: DietCodeAccountUserInfo) {
 		const propertiesWithMetadata: TelemetryProperties = {
 			...this.telemetryMetadata,
 		}
@@ -669,7 +669,7 @@ export class TelemetryService {
 	}
 
 	/**
-	 * Records when codemarie calls the task completion_result tool signifying that codemarie is done with the task
+	 * Records when dietcode calls the task completion_result tool signifying that dietcode is done with the task
 	 * @param ulid Unique identifier for the task
 	 */
 	public captureTaskCompleted(
@@ -1513,13 +1513,13 @@ export class TelemetryService {
 	}
 
 	/**
-	 * Records when individual Codemarie rules are toggled on/off
+	 * Records when individual DietCode rules are toggled on/off
 	 * @param ulid Unique identifier for the task (to track rule changes within task context)
 	 * @param ruleFileName The filename of the rule (sanitized to exclude full path)
 	 * @param enabled Whether the rule is being enabled (true) or disabled (false)
 	 * @param isGlobal Whether this is a global rule or workspace-specific rule
 	 */
-	public captureCodemarieRuleToggled(ulid: string, ruleFileName: string, enabled: boolean, isGlobal: boolean) {
+	public captureDietCodeRuleToggled(ulid: string, ruleFileName: string, enabled: boolean, isGlobal: boolean) {
 		// Sanitize filename to remove any path information for privacy
 		const sanitizedFileName = ruleFileName.split("/").pop() || ruleFileName.split("\\").pop() || ruleFileName
 
@@ -1567,13 +1567,13 @@ export class TelemetryService {
 	}
 
 	/**
-	 * Records when Codemarie web tools are enabled/disabled by the user
+	 * Records when DietCode web tools are enabled/disabled by the user
 	 * @param ulid Unique identifier for the task
-	 * @param enabled Whether Codemarie web tools are enabled (true) or disabled (false)
+	 * @param enabled Whether DietCode web tools are enabled (true) or disabled (false)
 	 */
-	public captureCodemarieWebToolsToggle(ulid: string, enabled: boolean) {
+	public captureDietCodeWebToolsToggle(ulid: string, enabled: boolean) {
 		this.capture({
-			event: TelemetryService.EVENTS.TASK.CODEMARIE_WEB_TOOLS_TOGGLED,
+			event: TelemetryService.EVENTS.TASK.DIETCODE_WEB_TOOLS_TOGGLED,
 			properties: {
 				ulid,
 				enabled,
@@ -1727,11 +1727,11 @@ export class TelemetryService {
 		})
 
 		const isMultiRoot = rootCount > 1
-		this.recordGauge("codemarie.workspace.active_roots", rootCount, {
+		this.recordGauge("dietcode.workspace.active_roots", rootCount, {
 			is_multi_root: isMultiRoot,
 		})
 		// Retire the previous series to avoid leaking gauge entries when the flag flips.
-		this.recordGauge("codemarie.workspace.active_roots", null, {
+		this.recordGauge("dietcode.workspace.active_roots", null, {
 			is_multi_root: !isMultiRoot,
 		})
 	}

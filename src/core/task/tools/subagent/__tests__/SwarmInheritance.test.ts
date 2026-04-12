@@ -6,8 +6,8 @@ import type { TaskConfig } from "@core/task/tools/types/TaskConfig"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { HostProvider } from "@/hosts/host-provider"
-import { ApiFormat } from "@/shared/proto/codemarie/models"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { ApiFormat } from "@/shared/proto/dietcode/models"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { TaskState } from "../../../TaskState"
 import { SubagentBuilder } from "../SubagentBuilder"
 import { SubagentRunner } from "../SubagentRunner"
@@ -103,8 +103,8 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 			runUserPromptSubmitHook: sinon.stub().resolves({}),
 		},
 		coordinator: {
-			getHandler: sinon.stub().callsFake((toolName: CodemarieDefaultTool) => {
-				if (toolName === CodemarieDefaultTool.ATTEMPT) {
+			getHandler: sinon.stub().callsFake((toolName: DietCodeDefaultTool) => {
+				if (toolName === DietCodeDefaultTool.ATTEMPT) {
 					return {
 						execute: sinon.stub().resolves("ok"),
 						getDescription: sinon.stub().returns("attempt"),
@@ -145,7 +145,7 @@ describe("Subagent Swarm Inheritance", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_1",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},
@@ -180,7 +180,7 @@ describe("Subagent Swarm Inheritance", () => {
 				tool_call: {
 					function: {
 						id: "toolu_finding_1",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "CRITICAL: Found a JoyZoning Violation in security.ts" }),
 					},
 				},
@@ -229,7 +229,7 @@ describe("Subagent Swarm Inheritance", () => {
 		const handler = new UseSubagentsToolHandler()
 
 		const result = await handler.execute(baseConfig, {
-			name: CodemarieDefaultTool.USE_SUBAGENTS,
+			name: DietCodeDefaultTool.USE_SUBAGENTS,
 			params: { prompt_1: "test" },
 			// biome-ignore lint/suspicious/noExplicitAny: Mocking tool call parameters for tests
 		} as any)

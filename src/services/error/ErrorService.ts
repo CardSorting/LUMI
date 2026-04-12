@@ -1,10 +1,10 @@
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieError } from "./CodemarieError"
+import { DietCodeError } from "./DietCodeError"
 import { ErrorProviderFactory } from "./ErrorProviderFactory"
 import { IErrorProvider } from "./providers/IErrorProvider"
 
 /**
- * ErrorService handles error logging and tracking for the Codemarie extension
+ * ErrorService handles error logging and tracking for the DietCode extension
  * Uses an abstracted error provider to support multiple error tracking backends
  * Respects user privacy settings and VSCode's global telemetry configuration
  */
@@ -40,7 +40,7 @@ export class ErrorService {
 		this.provider = provider
 	}
 
-	public logException(error: Error | CodemarieError, properties?: Record<string, unknown>): void {
+	public logException(error: Error | DietCodeError, properties?: Record<string, unknown>): void {
 		this.provider.logException(error, properties)
 		Logger.error("[ErrorService] Logging exception", JSON.stringify(error))
 	}
@@ -53,8 +53,8 @@ export class ErrorService {
 		this.provider.logMessage(message, level, properties)
 	}
 
-	public toCodemarieError(rawError: unknown, modelId?: string, providerId?: string): CodemarieError {
-		const transformed = CodemarieError.transform(rawError, modelId, providerId)
+	public toDietCodeError(rawError: unknown, modelId?: string, providerId?: string): DietCodeError {
+		const transformed = DietCodeError.transform(rawError, modelId, providerId)
 		this.logException(transformed, { modelId, providerId })
 		return transformed
 	}

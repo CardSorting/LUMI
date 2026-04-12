@@ -17,7 +17,7 @@
 <a href="https://www.reddit.com/r/cline/" target="_blank"><strong>r/cline</strong></a>
 </td>
 <td align="center">
-<a href="https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>Solicitação de Funcionalidades</strong></a>
+<a href="https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>Solicitação de Funcionalidades</strong></a>
 </td>
 <td align="center">
 <a href="https://cline.bot/join-us" target="_blank"><strong>Estamos Contratando!</strong></a>
@@ -142,7 +142,7 @@ Para contribuir com o projeto, comece com nosso [Guia de Contribuição](CONTRIB
 
 1. Clone o repositório _(Necessário [git-lfs](https://git-lfs.com/))_:
                 ```bash
-                git clone https://github.com/codemarie/codemarie.git
+                git clone https://github.com/dietcode/dietcode.git
                 ```
 2. Abra o projeto no VSCode:
                 ```bash

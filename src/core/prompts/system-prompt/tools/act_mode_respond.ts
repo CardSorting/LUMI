@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
 /**
  * ## act_mode_respond
@@ -20,9 +20,9 @@ Usage:
 </act_mode_respond>
  */
 
-const id = CodemarieDefaultTool.ACT_MODE
+const id = DietCodeDefaultTool.ACT_MODE
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_GPT_5,
 	id,
 	name: "act_mode_respond",
@@ -56,12 +56,12 @@ CRITICAL CONSTRAINT: You MUST NOT call this tool more than once in a row. After 
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	...NATIVE_GPT_5,
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 }
 
-const GEMINI_3: CodemarieToolSpec = {
+const GEMINI_3: DietCodeToolSpec = {
 	...NATIVE_GPT_5,
 	variant: ModelFamily.GEMINI_3,
 }

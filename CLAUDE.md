@@ -1,3 +1,3 @@
-@.codemarierules/general.md
-@.codemarierules/network.md
-@.codemarierules/cli.md
+@.dietcoderules/general.md
+@.dietcoderules/network.md
+@.dietcoderules/cli.md

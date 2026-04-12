@@ -1,20 +1,20 @@
-import { String } from "@shared/proto/codemarie/common"
-import { CodemarieEnv } from "@/config"
+import { String } from "@shared/proto/dietcode/common"
+import { DietCodeEnv } from "@/config"
 import { Controller } from "@/core/controller"
 import { setWelcomeViewCompleted } from "@/core/controller/state/setWelcomeViewCompleted"
 import { WebviewProvider } from "@/core/webview"
-import { CODEMARIE_API_ENDPOINT } from "@/shared/codemarie/api"
+import { DIETCODE_API_ENDPOINT } from "@/shared/dietcode/api"
 import { fetch } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import { BannerService } from "../banner/BannerService"
-import { buildBasicCodemarieHeaders } from "../EnvUtils"
+import { buildBasicDietCodeHeaders } from "../EnvUtils"
 import { AuthService } from "./AuthService"
 
 export class AuthServiceMock extends AuthService {
 	protected constructor(controller: Controller) {
 		super(controller)
 
-		if (process?.env?.CODEMARIE_ENVIRONMENT !== "local" && process?.env?.CLINE_ENVIRONMENT !== "local") {
+		if (process?.env?.DIETCODE_ENVIRONMENT !== "local" && process?.env?.CLINE_ENVIRONMENT !== "local") {
 			throw new Error("AuthServiceMock should only be used in local environment for testing purposes.")
 		}
 
@@ -41,25 +41,25 @@ export class AuthServiceMock extends AuthService {
 	}
 
 	override async getAuthToken(): Promise<string | null> {
-		if (!this._codemarieAuthInfo) {
+		if (!this._dietcodeAuthInfo) {
 			return null
 		}
-		return this._codemarieAuthInfo.idToken
+		return this._dietcodeAuthInfo.idToken
 	}
 
 	override async createAuthRequest(): Promise<String> {
 		// Use URL object for more graceful query construction
-		const authUrl = new URL(CodemarieEnv.config().apiBaseUrl)
+		const authUrl = new URL(DietCodeEnv.config().apiBaseUrl)
 		const authUrlString = authUrl.toString()
 		// Call the parent implementation
-		if (this._authenticated && this._codemarieAuthInfo) {
+		if (this._authenticated && this._dietcodeAuthInfo) {
 			Logger.log("Already authenticated with mock server")
 			return String.create({ value: authUrlString })
 		}
 
 		try {
-			// Use token exchange endpoint like CodemarieAuthProvider
-			const tokenExchangeUri = new URL(CODEMARIE_API_ENDPOINT.TOKEN_EXCHANGE, CodemarieEnv.config().apiBaseUrl)
+			// Use token exchange endpoint like DietCodeAuthProvider
+			const tokenExchangeUri = new URL(DIETCODE_API_ENDPOINT.TOKEN_EXCHANGE, DietCodeEnv.config().apiBaseUrl)
 			const tokenType = "personal"
 			const testCode = `test-${tokenType}-token`
 
@@ -67,7 +67,7 @@ export class AuthServiceMock extends AuthService {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					...(await buildBasicCodemarieHeaders()),
+					...(await buildBasicDietCodeHeaders()),
 				},
 				body: JSON.stringify({
 					code: testCode,
@@ -87,18 +87,18 @@ export class AuthServiceMock extends AuthService {
 
 			const authData = responseData.data
 
-			// Convert to CodemarieAuthInfo format matching CodemarieAuthProvider
-			this._codemarieAuthInfo = {
+			// Convert to DietCodeAuthInfo format matching DietCodeAuthProvider
+			this._dietcodeAuthInfo = {
 				idToken: authData.accessToken,
 				refreshToken: authData.refreshToken,
 				expiresAt: new Date(authData.expiresAt).getTime() / 1000,
 				userInfo: {
-					id: authData.userInfo.codemarieUserId || authData.userInfo.subject,
+					id: authData.userInfo.dietcodeUserId || authData.userInfo.subject,
 					email: authData.userInfo.email,
 					displayName: authData.userInfo.name,
 					createdAt: new Date().toISOString(),
 					organizations: authData.organizations,
-					appBaseUrl: CodemarieEnv.config().appBaseUrl,
+					appBaseUrl: DietCodeEnv.config().appBaseUrl,
 					subject: authData.userInfo.subject,
 				},
 				provider: this._provider?.name || "mock",
@@ -115,7 +115,7 @@ export class AuthServiceMock extends AuthService {
 		} catch (error) {
 			Logger.error("Error signing in with mock server:", error)
 			this._authenticated = false
-			this._codemarieAuthInfo = null
+			this._dietcodeAuthInfo = null
 			throw error
 		}
 
@@ -135,18 +135,18 @@ export class AuthServiceMock extends AuthService {
 
 	override async restoreRefreshTokenAndRetrieveAuthInfo(): Promise<void> {
 		try {
-			if (this._codemarieAuthInfo) {
+			if (this._dietcodeAuthInfo) {
 				this._authenticated = true
 				await this.sendAuthStatusUpdate()
 			} else {
 				Logger.warn("No user found after restoring auth token")
 				this._authenticated = false
-				this._codemarieAuthInfo = null
+				this._dietcodeAuthInfo = null
 			}
 		} catch (error) {
 			Logger.error("Error restoring auth token:", error)
 			this._authenticated = false
-			this._codemarieAuthInfo = null
+			this._dietcodeAuthInfo = null
 			return
 		}
 	}

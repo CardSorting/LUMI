@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * NPM Package Builder for CodeMarie CLI
+ * NPM Package Builder for DietCode CLI
  *
- * This script builds the CodeMarie CLI NPM package (dist-standalone/).
+ * This script builds the DietCode CLI NPM package (dist-standalone/).
  * It packages the CLI from cli/.
  *
  * Usage: node scripts/package-npm.mjs
@@ -22,7 +22,7 @@ const CLI_DIR = "cli"
 const IS_VERBOSE = process.argv.includes("-v") || process.argv.includes("--verbose")
 
 async function main() {
-	console.log("🚀 Building CodeMarie CLI NPM Package (TypeScript)\n")
+	console.log("🚀 Building DietCode CLI NPM Package (TypeScript)\n")
 
 	await cleanBuildDir()
 	await buildTypeScriptCli()

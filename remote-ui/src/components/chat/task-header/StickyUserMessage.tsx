@@ -1,10 +1,10 @@
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import React, { memo, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { highlightText } from "./Highlights"
 
 interface StickyUserMessageProps {
-	readonly lastUserMessage: CodemarieMessage | null
+	readonly lastUserMessage: DietCodeMessage | null
 	readonly onScrollToMessage?: () => void
 	readonly isVisible: boolean
 }

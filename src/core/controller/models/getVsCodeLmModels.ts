@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { VsCodeLmModelsArray } from "@shared/proto/codemarie/models"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { VsCodeLmModelsArray } from "@shared/proto/dietcode/models"
 import * as vscode from "vscode"
 import { Logger } from "@/shared/services/Logger"
 import { convertVsCodeNativeModelsToProtoModels } from "../../../shared/proto-conversions/models/vscode-lm-models-conversion"

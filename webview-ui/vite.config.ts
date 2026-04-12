@@ -119,11 +119,11 @@ export default defineConfig({
 			platform: JSON.stringify(process?.platform),
 			env: {
 				NODE_ENV: JSON.stringify(process?.env?.IS_DEV ? "development" : "production"),
-				CODEMARIE_ENVIRONMENT: JSON.stringify(
-					process?.env?.CODEMARIE_ENVIRONMENT ?? process?.env?.CLINE_ENVIRONMENT ?? "production",
+				DIETCODE_ENVIRONMENT: JSON.stringify(
+					process?.env?.DIETCODE_ENVIRONMENT ?? process?.env?.CLINE_ENVIRONMENT ?? "production",
 				),
 				CLINE_ENVIRONMENT: JSON.stringify(
-					process?.env?.CODEMARIE_ENVIRONMENT ?? process?.env?.CLINE_ENVIRONMENT ?? "production",
+					process?.env?.DIETCODE_ENVIRONMENT ?? process?.env?.CLINE_ENVIRONMENT ?? "production",
 				),
 				IS_DEV: JSON.stringify(process?.env?.IS_DEV),
 				IS_TEST: JSON.stringify(process?.env?.IS_TEST),

@@ -1,9 +1,9 @@
 import { ModelFamily } from "@/shared/prompts"
 import { Logger } from "@/shared/services/Logger"
-import type { CodemarieTool } from "@/shared/tools"
-import { CodemarieToolSet } from ".."
+import type { DietCodeTool } from "@/shared/tools"
+import { DietCodeToolSet } from ".."
 import { getSystemPromptComponents } from "../components"
-import { registerCodemarieToolSets } from "../tools"
+import { registerDietCodeToolSets } from "../tools"
 import type { ComponentFunction, ComponentRegistry, PromptVariant, SystemPromptContext } from "../types"
 import { loadAllVariantConfigs } from "../variants"
 import { config as genericConfig } from "../variants/generic/config"
@@ -13,10 +13,10 @@ export class PromptRegistry {
 	private static instance: PromptRegistry
 	private variants: Map<string, PromptVariant> = new Map()
 	private components: ComponentRegistry = {}
-	public nativeTools: CodemarieTool[] | undefined = undefined
+	public nativeTools: DietCodeTool[] | undefined = undefined
 
 	private constructor() {
-		registerCodemarieToolSets()
+		registerDietCodeToolSets()
 		this.load()
 	}
 
@@ -87,7 +87,7 @@ export class PromptRegistry {
 		const variant = this.getVariant(context)
 
 		// Hacky way to get native tools for the current variant - it's bad and ugly
-		this.nativeTools = CodemarieToolSet.getNativeTools(variant, context)
+		this.nativeTools = DietCodeToolSet.getNativeTools(variant, context)
 
 		const builder = new PromptBuilder(variant, context, this.components)
 		return await builder.build()

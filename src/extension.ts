@@ -12,7 +12,7 @@ import { sendMcpButtonClickedEvent } from "./core/controller/ui/subscribeToMcpBu
 import { sendSettingsButtonClickedEvent } from "./core/controller/ui/subscribeToSettingsButtonClicked"
 import { sendWorktreesButtonClickedEvent } from "./core/controller/ui/subscribeToWorktreesButtonClicked"
 import { WebviewProvider } from "./core/webview"
-import { createCodemarieAPI } from "./exports"
+import { createDietCodeAPI } from "./exports"
 import { initializeTestMode } from "./services/test/TestMode"
 import "./utils/path" // necessary to have access to String.prototype.toPosix
 import path from "node:path"
@@ -22,10 +22,10 @@ import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-gr
 import { createStorageContext } from "@/shared/storage/storage-context"
 import { readTextFromClipboard, writeTextToClipboard } from "@/utils/env"
 import { initialize, tearDown } from "./common"
-import { addToCodemarie } from "./core/controller/commands/addToCodemarie"
-import { explainWithCodemarie } from "./core/controller/commands/explainWithCodemarie"
-import { fixWithCodemarie } from "./core/controller/commands/fixWithCodemarie"
-import { improveWithCodemarie } from "./core/controller/commands/improveWithCodemarie"
+import { addToDietCode } from "./core/controller/commands/addToDietCode"
+import { explainWithDietCode } from "./core/controller/commands/explainWithDietCode"
+import { fixWithDietCode } from "./core/controller/commands/fixWithDietCode"
+import { improveWithDietCode } from "./core/controller/commands/improveWithDietCode"
 import { sendAddToInputEvent } from "./core/controller/ui/subscribeToAddToInput"
 import { sendShowWebviewEvent } from "./core/controller/ui/subscribeToShowWebview"
 import { HookDiscoveryCache } from "./core/hooks/HookDiscoveryCache"
@@ -40,7 +40,7 @@ import {
 import { workspaceResolver } from "./core/workspace"
 import { findMatchingNotebookCell, getContextForCommand, showWebview } from "./hosts/vscode/commandUtils"
 import { abortCommitGeneration, generateCommitMsg } from "./hosts/vscode/commit-message-generator"
-import { registerCodemarieOutputChannel } from "./hosts/vscode/hostbridge/env/debugLog"
+import { registerDietCodeOutputChannel } from "./hosts/vscode/hostbridge/env/debugLog"
 import {
 	disposeVscodeCommentReviewController,
 	getVscodeCommentReviewController,
@@ -73,7 +73,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	await cleanupLegacyVSCodeStorage(context)
 
 	// 3. One-time export of VSCode's native storage to shared file-backed stores.
-	// After this, all platforms (VSCode, CLI, JetBrains) read from ~/.codemarie/data/.
+	// After this, all platforms (VSCode, CLI, JetBrains) read from ~/.dietcode/data/.
 	const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
 	const storageContext = createStorageContext({ workspacePath })
 	await exportVSCodeStorageToSharedFiles(context, storageContext)
@@ -163,14 +163,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		const isTaskUri = getUriPath(url) === TASK_URI_PATH
 
 		if (isTaskUri) {
-			await openCodemarieSidebarForTaskUri()
+			await openDietCodeSidebarForTaskUri()
 		}
 
 		let success = await SharedUriHandler.handleUri(url)
 
 		// Task deeplinks can race with first-time sidebar initialization.
 		if (!success && isTaskUri) {
-			await openCodemarieSidebarForTaskUri()
+			await openDietCodeSidebarForTaskUri()
 			success = await SharedUriHandler.handleUri(url)
 		}
 
@@ -182,16 +182,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Register size testing commands in development mode
 	if (IS_DEV) {
-		vscode.commands.executeCommand("setContext", "codemarie.isDevMode", IS_DEV)
+		vscode.commands.executeCommand("setContext", "dietcode.isDevMode", IS_DEV)
 		// Use dynamic import to avoid loading the module in production
 		import("./dev/commands/tasks")
 			.then((module) => {
 				const devTaskCommands = module.registerTaskCommands(webview.controller)
 				context.subscriptions.push(...devTaskCommands)
-				Logger.log("[Codemarie Dev] Dev mode activated & dev commands registered")
+				Logger.log("[DietCode Dev] Dev mode activated & dev commands registered")
 			})
 			.catch((error) => {
-				Logger.log(`[Codemarie Dev] Failed to register dev commands: ${error}`)
+				Logger.log(`[DietCode Dev] Failed to register dev commands: ${error}`)
 			})
 	}
 
@@ -284,40 +284,40 @@ export async function activate(context: vscode.ExtensionContext) {
 						)
 					}
 
-					// Add to Codemarie (Always available)
-					const addAction = new vscode.CodeAction("Add to Codemarie", vscode.CodeActionKind.QuickFix)
+					// Add to DietCode (Always available)
+					const addAction = new vscode.CodeAction("Add to DietCode", vscode.CodeActionKind.QuickFix)
 					addAction.command = {
 						command: commands.AddToChat,
-						title: "Add to Codemarie",
+						title: "Add to DietCode",
 						arguments: [expandedRange, context.diagnostics],
 					}
 					actions.push(addAction)
 
-					// Explain with Codemarie (Always available)
-					const explainAction = new vscode.CodeAction("Explain with Codemarie", vscode.CodeActionKind.RefactorExtract) // Using a refactor kind
+					// Explain with DietCode (Always available)
+					const explainAction = new vscode.CodeAction("Explain with DietCode", vscode.CodeActionKind.RefactorExtract) // Using a refactor kind
 					explainAction.command = {
 						command: commands.ExplainCode,
-						title: "Explain with Codemarie",
+						title: "Explain with DietCode",
 						arguments: [expandedRange],
 					}
 					actions.push(explainAction)
 
-					// Improve with Codemarie (Always available)
-					const improveAction = new vscode.CodeAction("Improve with Codemarie", vscode.CodeActionKind.RefactorRewrite) // Using a refactor kind
+					// Improve with DietCode (Always available)
+					const improveAction = new vscode.CodeAction("Improve with DietCode", vscode.CodeActionKind.RefactorRewrite) // Using a refactor kind
 					improveAction.command = {
 						command: commands.ImproveCode,
-						title: "Improve with Codemarie",
+						title: "Improve with DietCode",
 						arguments: [expandedRange],
 					}
 					actions.push(improveAction)
 
-					// Fix with Codemarie (Only if diagnostics exist)
+					// Fix with DietCode (Only if diagnostics exist)
 					if (context.diagnostics.length > 0) {
-						const fixAction = new vscode.CodeAction("Fix with Codemarie", vscode.CodeActionKind.QuickFix)
+						const fixAction = new vscode.CodeAction("Fix with DietCode", vscode.CodeActionKind.QuickFix)
 						fixAction.isPreferred = true
 						fixAction.command = {
-							command: commands.FixWithCodemarie,
-							title: "Fix with Codemarie",
+							command: commands.FixWithDietCode,
+							title: "Fix with DietCode",
 							arguments: [expandedRange, context.diagnostics],
 						}
 						actions.push(fixAction)
@@ -342,18 +342,18 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (!context) {
 				return
 			}
-			await addToCodemarie(context.controller, context.commandContext)
+			await addToDietCode(context.controller, context.commandContext)
 		}),
 	)
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
-			commands.FixWithCodemarie,
+			commands.FixWithDietCode,
 			async (range: vscode.Range, diagnostics: vscode.Diagnostic[]) => {
 				const context = await getContextForCommand(range, diagnostics)
 				if (!context) {
 					return
 				}
-				await fixWithCodemarie(context.controller, context.commandContext)
+				await fixWithDietCode(context.controller, context.commandContext)
 			},
 		),
 	)
@@ -363,7 +363,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (!context) {
 				return
 			}
-			await explainWithCodemarie(context.controller, context.commandContext)
+			await explainWithDietCode(context.controller, context.commandContext)
 		}),
 	)
 	context.subscriptions.push(
@@ -372,7 +372,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (!context) {
 				return
 			}
-			await improveWithCodemarie(context.controller, context.commandContext)
+			await improveWithDietCode(context.controller, context.commandContext)
 		}),
 	)
 
@@ -452,7 +452,7 @@ Current Notebook Cell Context (JSON, sanitized of image data):
 ${ctx.cellJson || "{}"}
 \`\`\``
 
-				await addToCodemarie(ctx.controller, ctx.commandContext, notebookContext)
+				await addToDietCode(ctx.controller, ctx.commandContext, notebookContext)
 			},
 		),
 	)
@@ -468,7 +468,7 @@ ${ctx.cellJson || "{}"}
 					? `\n\nCurrent Notebook Cell Context (JSON, sanitized of image data):\n\`\`\`json\n${ctx.cellJson}\n\`\`\``
 					: undefined
 
-				await explainWithCodemarie(ctx.controller, ctx.commandContext, notebookContext)
+				await explainWithDietCode(ctx.controller, ctx.commandContext, notebookContext)
 			},
 		),
 	)
@@ -494,7 +494,7 @@ Current Notebook Cell Context (JSON, sanitized of image data):
 ${ctx.cellJson || "{}"}
 \`\`\``
 
-				await improveWithCodemarie(ctx.controller, ctx.commandContext, notebookContext)
+				await improveWithDietCode(ctx.controller, ctx.commandContext, notebookContext)
 			},
 		),
 	)
@@ -504,7 +504,7 @@ ${ctx.cellJson || "{}"}
 		vscode.commands.registerCommand(commands.Walkthrough, async () => {
 			await vscode.commands.executeCommand(
 				"workbench.action.openWalkthrough",
-				`${context.extension.id}#CodemarieWalkthrough`,
+				`${context.extension.id}#DietCodeWalkthrough`,
 			)
 			telemetryService.captureButtonClick("command_openWalkthrough")
 		}),
@@ -531,7 +531,7 @@ ${ctx.cellJson || "{}"}
 
 	// Listen for secrets changes (e.g., cross-window login/logout sync)
 	const unsubSecrets = storageContext.secrets.onDidChange((event) => {
-		if (event.key === "codemarie:codemarieAccountId") {
+		if (event.key === "dietcode:dietcodeAccountId") {
 			const secretValue = storageContext.secrets.get<string>(event.key)
 			const activeWebview = WebviewProvider.getVisibleInstance()
 			const controller = activeWebview?.controller
@@ -548,9 +548,9 @@ ${ctx.cellJson || "{}"}
 	})
 	context.subscriptions.push({ dispose: unsubSecrets })
 
-	Logger.log(`[Codemarie] extension activated in ${performance.now() - activationStartTime} ms`)
+	Logger.log(`[DietCode] extension activated in ${performance.now() - activationStartTime} ms`)
 
-	return createCodemarieAPI(webview.controller)
+	return createDietCodeAPI(webview.controller)
 }
 
 async function showJupyterPromptInput(title: string, placeholder: string): Promise<string | undefined> {
@@ -600,8 +600,8 @@ async function showJupyterPromptInput(title: string, placeholder: string): Promi
 }
 
 function setupHostProvider(context: ExtensionContext) {
-	const outputChannel = registerCodemarieOutputChannel(context)
-	outputChannel.appendLine("[Codemarie] Setting up VS Code host...")
+	const outputChannel = registerDietCodeOutputChannel(context)
+	outputChannel.appendLine("[DietCode] Setting up VS Code host...")
 
 	const createWebview = () => new VscodeWebviewProvider(context)
 	const createDiffView = () => new VscodeDiffViewProvider()
@@ -645,7 +645,7 @@ function getUriPath(url: string): string | undefined {
 	}
 }
 
-async function openCodemarieSidebarForTaskUri(): Promise<void> {
+async function openDietCodeSidebarForTaskUri(): Promise<void> {
 	const sidebarWaitTimeoutMs = 3000
 	const sidebarWaitIntervalMs = 50
 
@@ -659,7 +659,7 @@ async function openCodemarieSidebarForTaskUri(): Promise<void> {
 		await new Promise((resolve) => setTimeout(resolve, sidebarWaitIntervalMs))
 	}
 
-	Logger.warn("Task URI handling timed out waiting for Codemarie sidebar visibility")
+	Logger.warn("Task URI handling timed out waiting for DietCode sidebar visibility")
 }
 
 async function getBinaryLocation(name: string): Promise<string> {
@@ -731,7 +731,7 @@ async function cleanupLegacyVSCodeStorage(context: ExtensionContext): Promise<vo
 
 		Logger.info("[VS Code Storage Migrations] Starting")
 
-		// Migrate custom instructions to global Codemarie rules (one-time cleanup)
+		// Migrate custom instructions to global DietCode rules (one-time cleanup)
 		await migrateCustomInstructionsToGlobalRules(context)
 
 		// Migrate welcomeViewCompleted setting based on existing API keys (one-time cleanup)

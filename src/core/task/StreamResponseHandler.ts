@@ -4,13 +4,13 @@ import { nanoid } from "nanoid"
 import { McpHub } from "@/services/mcp/McpHub"
 import { CLINE_MCP_TOOL_IDENTIFIER } from "@/shared/mcp"
 import {
-	CodemarieAssistantRedactedThinkingBlock,
-	CodemarieAssistantThinkingBlock,
-	CodemarieAssistantToolUseBlock,
-	CodemarieReasoningDetailParam,
+	DietCodeAssistantRedactedThinkingBlock,
+	DietCodeAssistantThinkingBlock,
+	DietCodeAssistantToolUseBlock,
+	DietCodeReasoningDetailParam,
 } from "@/shared/messages/content"
 import { Session } from "@/shared/services/Session"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 
 export interface PendingToolUse {
 	id: string
@@ -42,8 +42,8 @@ export interface PendingReasoning {
 	id?: string
 	content: string
 	call_id: string
-	redactedThinking: CodemarieAssistantRedactedThinkingBlock[]
-	summary: unknown[] | CodemarieReasoningDetailParam[]
+	redactedThinking: DietCodeAssistantRedactedThinkingBlock[]
+	summary: unknown[] | DietCodeReasoningDetailParam[]
 }
 
 const ESCAPE_MAP: Record<string, string> = {
@@ -87,7 +87,7 @@ export class StreamResponseHandler {
 }
 
 /**
- * Handles streaming native tool use blocks and converts them to CodemarieAssistantToolUseBlock format
+ * Handles streaming native tool use blocks and converts them to DietCodeAssistantToolUseBlock format
  */
 class ToolUseHandler {
 	private pendingToolUses = new Map<string, PendingToolUse>()
@@ -120,7 +120,7 @@ class ToolUseHandler {
 		}
 	}
 
-	getFinalizedToolUse(id: string): CodemarieAssistantToolUseBlock | undefined {
+	getFinalizedToolUse(id: string): DietCodeAssistantToolUseBlock | undefined {
 		const pending = this.pendingToolUses.get(id)
 		if (!pending?.name) {
 			return undefined
@@ -146,8 +146,8 @@ class ToolUseHandler {
 		}
 	}
 
-	getAllFinalizedToolUses(summary?: CodemarieAssistantToolUseBlock["reasoning_details"]): CodemarieAssistantToolUseBlock[] {
-		const results: CodemarieAssistantToolUseBlock[] = []
+	getAllFinalizedToolUses(summary?: DietCodeAssistantToolUseBlock["reasoning_details"]): DietCodeAssistantToolUseBlock[] {
+		const results: DietCodeAssistantToolUseBlock[] = []
 		for (const id of this.pendingToolUses.keys()) {
 			const toolUse = this.getFinalizedToolUse(id)
 			if (toolUse) {
@@ -189,7 +189,7 @@ class ToolUseHandler {
 				const [key, toolName] = pending.name.split(CLINE_MCP_TOOL_IDENTIFIER)
 				results.push({
 					type: "tool_use",
-					name: CodemarieDefaultTool.MCP_USE,
+					name: DietCodeDefaultTool.MCP_USE,
 					params: {
 						server_name: McpHub.getMcpServerByKey(key),
 						tool_name: toolName,
@@ -208,7 +208,7 @@ class ToolUseHandler {
 				}
 				results.push({
 					type: "tool_use",
-					name: pending.name as CodemarieDefaultTool,
+					name: pending.name as DietCodeDefaultTool,
 					params: params as any,
 					partial: true,
 					isNativeToolCall: true,
@@ -308,7 +308,7 @@ class ReasoningHandler {
 		}
 	}
 
-	getCurrentReasoning(): CodemarieAssistantThinkingBlock | null {
+	getCurrentReasoning(): DietCodeAssistantThinkingBlock | null {
 		if (!this.pendingReasoning) {
 			return null
 		}
@@ -334,10 +334,10 @@ class ReasoningHandler {
 			summary: this.pendingReasoning.summary,
 			call_id: this.pendingReasoning.id || this.pendingReasoning.call_id,
 			signature: this.pendingReasoning.call_id, // For backward compatibility if signature is required but missing
-		} as CodemarieAssistantThinkingBlock
+		} as DietCodeAssistantThinkingBlock
 	}
 
-	getRedactedThinking(): CodemarieAssistantRedactedThinkingBlock[] {
+	getRedactedThinking(): DietCodeAssistantRedactedThinkingBlock[] {
 		return this.pendingReasoning?.redactedThinking || []
 	}
 

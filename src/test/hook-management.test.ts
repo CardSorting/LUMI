@@ -13,7 +13,7 @@ import { hookFileName, withPlatform } from "../core/hooks/__tests__/test-utils"
 import { HookDiscoveryCache } from "../core/hooks/HookDiscoveryCache"
 import { StateManager } from "../core/storage/StateManager"
 import { HostProvider } from "../hosts/host-provider"
-import { CreateHookRequest, DeleteHookRequest, ToggleHookRequest } from "../shared/proto/codemarie/file"
+import { CreateHookRequest, DeleteHookRequest, ToggleHookRequest } from "../shared/proto/dietcode/file"
 
 /**
  * Unit tests for hook management operations
@@ -36,8 +36,8 @@ describe("Hook Management", () => {
 
 		// Create temporary directories
 		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "hook-mgmt-test-"))
-		globalHooksDir = path.join(tempDir, "global", "Documents", "Codemarie", "Hooks")
-		workspaceHooksDir = path.join(tempDir, "workspace", ".codemarierules", "hooks")
+		globalHooksDir = path.join(tempDir, "global", "Documents", "DietCode", "Hooks")
+		workspaceHooksDir = path.join(tempDir, "workspace", ".dietcoderules", "hooks")
 
 		await fs.mkdir(globalHooksDir, { recursive: true })
 		await fs.mkdir(workspaceHooksDir, { recursive: true })
@@ -504,7 +504,7 @@ describe("Hook Management", () => {
 	})
 
 	describe("Edge Cases", () => {
-		it("should handle missing .codemarierules directory gracefully", async function () {
+		it("should handle missing .dietcoderules directory gracefully", async function () {
 			this.timeout(5000)
 
 			// Remove workspace hooks directory

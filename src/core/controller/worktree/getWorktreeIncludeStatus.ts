@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { WorktreeIncludeStatus } from "@shared/proto/codemarie/worktree"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { WorktreeIncludeStatus } from "@shared/proto/dietcode/worktree"
 import { getWorkspacePath } from "@utils/path"
 import * as fs from "fs/promises"
 import * as path from "path"

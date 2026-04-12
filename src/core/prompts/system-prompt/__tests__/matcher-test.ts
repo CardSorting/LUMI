@@ -90,7 +90,7 @@ export function testVariantMatching() {
 				} as unknown as McpHub,
 				focusChainSettings: {
 					enabled: true,
-					remindCodemarieInterval: 6,
+					remindDietcodeInterval: 6,
 				},
 				browserSettings: {
 					viewport: {
@@ -98,8 +98,8 @@ export function testVariantMatching() {
 						height: 720,
 					},
 				},
-				globalCodemarieRulesFileInstructions: "Follow global rules",
-				localCodemarieRulesFileInstructions: "Follow local rules",
+				globalDietCodeRulesFileInstructions: "Follow global rules",
+				localDietCodeRulesFileInstructions: "Follow local rules",
 				preferredLanguageInstructions: "Prefer TypeScript",
 				isTesting: true,
 				enableNativeToolCalls: false,

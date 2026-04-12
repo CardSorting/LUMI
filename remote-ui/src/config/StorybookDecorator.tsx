@@ -6,11 +6,11 @@ import { cn } from "@heroui/react"
 import type { Decorator } from "@storybook/react-vite"
 import React from "react"
 import {
-	CodemarieAuthContext,
-	CodemarieAuthContextType,
-	CodemarieAuthProvider,
-	useCodemarieAuth,
-} from "@/context/CodemarieAuthContext"
+	DietCodeAuthContext,
+	DietCodeAuthContextType,
+	DietCodeAuthProvider,
+	useDietCodeAuth,
+} from "@/context/DietCodeAuthContext"
 import {
 	ExtensionStateContext,
 	ExtensionStateContextProvider,
@@ -50,9 +50,9 @@ function StorybookDecoratorProvider(className = "relative"): Decorator {
 		return (
 			<div className={className}>
 				<ExtensionStateContextProvider>
-					<CodemarieAuthProvider>
+					<DietCodeAuthProvider>
 						<ThemeHandler theme={parameters?.globals?.theme}>{React.createElement(story)}</ThemeHandler>
-					</CodemarieAuthProvider>
+					</DietCodeAuthProvider>
 				</ExtensionStateContextProvider>
 			</div>
 		)
@@ -68,27 +68,27 @@ const ExtensionStateProviderWithOverrides: React.FC<{
 	return <ExtensionStateContext.Provider value={{ ...extensionState, ...overrides }}>{children}</ExtensionStateContext.Provider>
 }
 
-const CodemarieAuthProviderWithOverrides: React.FC<{
-	overrides?: Partial<CodemarieAuthContextType>
+const DietCodeAuthProviderWithOverrides: React.FC<{
+	overrides?: Partial<DietCodeAuthContextType>
 	children: React.ReactNode
 }> = ({ overrides, children }) => {
-	const authContext = useCodemarieAuth()
-	return <CodemarieAuthContext.Provider value={{ ...authContext, ...overrides }}>{children}</CodemarieAuthContext.Provider>
+	const authContext = useDietCodeAuth()
+	return <DietCodeAuthContext.Provider value={{ ...authContext, ...overrides }}>{children}</DietCodeAuthContext.Provider>
 }
 
 export const createStorybookDecorator =
 	(
 		overrideStates?: Partial<ExtensionStateContextType>,
 		classNames?: string,
-		authOverrides?: Partial<CodemarieAuthContextType>,
+		authOverrides?: Partial<DietCodeAuthContextType>,
 	) =>
 	(Story: any) => (
 		<ExtensionStateProviderWithOverrides overrides={overrideStates}>
-			<CodemarieAuthProviderWithOverrides overrides={authOverrides}>
+			<DietCodeAuthProviderWithOverrides overrides={authOverrides}>
 				<div className={cn("max-w-lg mx-auto", classNames)}>
 					<Story />
 				</div>
-			</CodemarieAuthProviderWithOverrides>
+			</DietCodeAuthProviderWithOverrides>
 		</ExtensionStateProviderWithOverrides>
 	)
 

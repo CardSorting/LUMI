@@ -1,4 +1,4 @@
-import { UpdateTerminalConnectionTimeoutResponse } from "@shared/proto/index.codemarie"
+import { UpdateTerminalConnectionTimeoutResponse } from "@shared/proto/index.dietcode"
 import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import React, { useState } from "react"
 import { PlatformType } from "@/config/platform.config"
@@ -108,7 +108,7 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							))}
 						</VSCodeDropdown>
 						<p className="text-xs text-(--vscode-descriptionForeground) mt-1">
-							Select the default terminal Codemarie will use. 'Default' uses your VSCode global setting.
+							Select the default terminal DietCode will use. 'Default' uses your VSCode global setting.
 						</p>
 					</div>
 
@@ -127,8 +127,8 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							{inputError && <div className="text-(--vscode-errorForeground) text-xs mt-1">{inputError}</div>}
 						</div>
 						<p className="text-xs text-(--vscode-descriptionForeground)">
-							Set how long Codemarie waits for shell integration to activate before executing commands. Increase
-							this value if you experience terminal connection timeouts.
+							Set how long DietCode waits for shell integration to activate before executing commands. Increase this
+							value if you experience terminal connection timeouts.
 						</p>
 					</div>
 
@@ -141,7 +141,7 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							</VSCodeCheckbox>
 						</div>
 						<p className="text-xs text-(--vscode-descriptionForeground)">
-							When enabled, Codemarie will reuse existing terminal windows that aren't in the current working
+							When enabled, DietCode will reuse existing terminal windows that aren't in the current working
 							directory. Disable this if you experience issues with task lockout after a terminal command.
 						</p>
 					</div>
@@ -159,7 +159,7 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 								<VSCodeOption value="backgroundExec">Background Exec</VSCodeOption>
 							</VSCodeDropdown>
 							<p className="text-xs text-[var(--vscode-descriptionForeground)] mt-1">
-								Choose whether Codemarie runs commands in the VS Code terminal or a background process.
+								Choose whether DietCode runs commands in the VS Code terminal or a background process.
 							</p>
 						</div>
 					)}
@@ -169,7 +169,7 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							<strong>Having terminal issues?</strong> Check our{" "}
 							<a
 								className="text-(--vscode-textLink-foreground) underline hover:no-underline"
-								href="https://docs.codemarie.bot/troubleshooting/terminal-quick-fixes"
+								href="https://docs.dietcode.bot/troubleshooting/terminal-quick-fixes"
 								rel="noopener noreferrer"
 								target="_blank">
 								Terminal Quick Fixes
@@ -177,7 +177,7 @@ export const TerminalSettingsSection: React.FC<TerminalSettingsSectionProps> = (
 							or the{" "}
 							<a
 								className="text-(--vscode-textLink-foreground) underline hover:no-underline"
-								href="https://docs.codemarie.bot/troubleshooting/terminal-integration-guide"
+								href="https://docs.dietcode.bot/troubleshooting/terminal-integration-guide"
 								rel="noopener noreferrer"
 								target="_blank">
 								Complete Troubleshooting Guide

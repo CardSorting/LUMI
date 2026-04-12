@@ -3,7 +3,7 @@
  * Displays available checkpoints and allows user to select one to restore
  */
 
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { Box, Text, useInput } from "ink"
 import React, { useState } from "react"
 import { useStdinContext } from "../context/StdinContext"
@@ -18,7 +18,7 @@ interface CheckpointOption {
 }
 
 interface CheckpointMenuProps {
-	messages: CodemarieMessage[]
+	messages: DietCodeMessage[]
 	onSelect: (messageTs: number, restoreType: RestoreType) => void
 	onCancel: () => void
 }
@@ -26,7 +26,7 @@ interface CheckpointMenuProps {
 /**
  * Extract checkpoint options from messages
  */
-function getCheckpointOptions(messages: CodemarieMessage[]): CheckpointOption[] {
+function getCheckpointOptions(messages: DietCodeMessage[]): CheckpointOption[] {
 	const options: CheckpointOption[] = []
 
 	for (const msg of messages) {
@@ -47,7 +47,7 @@ function getCheckpointOptions(messages: CodemarieMessage[]): CheckpointOption[] 
 /**
  * Get a human-readable label for a checkpoint
  */
-function getCheckpointLabel(msg: CodemarieMessage): string {
+function getCheckpointLabel(msg: DietCodeMessage): string {
 	if (msg.say === "completion_result") {
 		return "Task completion"
 	}

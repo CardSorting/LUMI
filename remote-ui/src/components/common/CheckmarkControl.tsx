@@ -1,7 +1,7 @@
 import { flip, offset, shift, useFloating } from "@floating-ui/react"
-import { CheckpointRestoreRequest } from "@shared/proto/codemarie/checkpoints"
-import { Int64Request } from "@shared/proto/codemarie/common"
-import { CodemarieCheckpointRestore } from "@shared/WebviewMessage"
+import { CheckpointRestoreRequest } from "@shared/proto/dietcode/checkpoints"
+import { Int64Request } from "@shared/proto/dietcode/common"
+import { DietCodeCheckpointRestore } from "@shared/WebviewMessage"
 import { BookmarkIcon } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
@@ -102,7 +102,7 @@ export const CheckmarkControl = ({ messageTs, isCheckpointCheckedOut }: Checkmar
 	const handleRestoreTask = async () => {
 		setRestoreTaskDisabled(true)
 		try {
-			const restoreType: CodemarieCheckpointRestore = "task"
+			const restoreType: DietCodeCheckpointRestore = "task"
 			await CheckpointsServiceClient.checkpointRestore(
 				CheckpointRestoreRequest.create({
 					number: messageTs,
@@ -120,7 +120,7 @@ export const CheckmarkControl = ({ messageTs, isCheckpointCheckedOut }: Checkmar
 	const handleRestoreWorkspace = async () => {
 		setRestoreWorkspaceDisabled(true)
 		try {
-			const restoreType: CodemarieCheckpointRestore = "workspace"
+			const restoreType: DietCodeCheckpointRestore = "workspace"
 			await CheckpointsServiceClient.checkpointRestore(
 				CheckpointRestoreRequest.create({
 					number: messageTs,
@@ -138,7 +138,7 @@ export const CheckmarkControl = ({ messageTs, isCheckpointCheckedOut }: Checkmar
 	const handleRestoreBoth = async () => {
 		setRestoreBothDisabled(true)
 		try {
-			const restoreType: CodemarieCheckpointRestore = "taskAndWorkspace"
+			const restoreType: DietCodeCheckpointRestore = "taskAndWorkspace"
 			await CheckpointsServiceClient.checkpointRestore(
 				CheckpointRestoreRequest.create({
 					number: messageTs,

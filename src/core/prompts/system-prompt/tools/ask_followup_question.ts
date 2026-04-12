@@ -1,11 +1,11 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
-	id: CodemarieDefaultTool.ASK,
+	id: DietCodeDefaultTool.ASK,
 	name: "ask_followup_question",
 	description:
 		"Ask the user a question to gather additional information needed to complete the task. This tool should be used when you encounter ambiguities, need clarification, or require more details to proceed effectively. It allows for interactive problem-solving by enabling direct communication with the user. Use this tool judiciously to maintain a balance between gathering necessary information and avoiding excessive back-and-forth.",
@@ -29,9 +29,9 @@ const generic: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
-	id: CodemarieDefaultTool.ASK,
+	id: DietCodeDefaultTool.ASK,
 	name: "ask_followup_question",
 	description:
 		"Ask user a question for clarifying or gathering information needed to complete the task. For example, ask the user clarifying questions about a key implementation decision. You should only ask one question.",
@@ -52,7 +52,7 @@ const NATIVE_NEXT_GEN: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	...NATIVE_NEXT_GEN,
 	variant: ModelFamily.NATIVE_GPT_5,
 }

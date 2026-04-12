@@ -1,8 +1,8 @@
 import { ResponseInput, ResponseInputMessageContentList, ResponseReasoningItem } from "openai/resources/responses/responses"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 
 /**
- * Converts an array of CodemarieStorageMessage objects (extension of Anthropic format) to a ResponseInput array to use with OpenAI's Responses API.
+ * Converts an array of DietCodeStorageMessage objects (extension of Anthropic format) to a ResponseInput array to use with OpenAI's Responses API.
  *
  * ## Key Differences from Chat Completions API
  *
@@ -68,11 +68,11 @@ import { CodemarieStorageMessage } from "@/shared/messages/content"
  *
  * @link https://community.openai.com/t/openai-api-error-function-call-was-provided-without-its-required-reasoning-item-the-real-issue/1355347
  *
- * @param messages - Array of CodemarieStorageMessage objects to be converted
+ * @param messages - Array of DietCodeStorageMessage objects to be converted
  * @returns ResponseInput array containing the transformed messages with proper reasoning pairing
  */
 export function convertToOpenAIResponsesInput(
-	_messages: CodemarieStorageMessage[],
+	_messages: DietCodeStorageMessage[],
 	options?: { usePreviousResponseId?: boolean },
 ): {
 	input: ResponseInput

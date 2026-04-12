@@ -1,10 +1,10 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
-const id = CodemarieDefaultTool.USE_SKILL
+const id = DietCodeDefaultTool.USE_SKILL
 
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	id,
 	variant: ModelFamily.GENERIC,
 	name: "use_skill",

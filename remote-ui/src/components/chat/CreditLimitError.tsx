@@ -1,8 +1,8 @@
-import { AskResponseRequest } from "@shared/proto/codemarie/task"
+import { AskResponseRequest } from "@shared/proto/dietcode/task"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import React, { useEffect, useMemo, useState } from "react"
 import VSCodeButtonLink from "@/components/common/VSCodeButtonLink"
-import { useCodemarieAuth } from "@/context/CodemarieAuthContext"
+import { useDietCodeAuth } from "@/context/DietCodeAuthContext"
 import { AccountServiceClient, TaskServiceClient } from "@/services/grpc-client"
 
 interface CreditLimitErrorProps {
@@ -14,8 +14,8 @@ interface CreditLimitErrorProps {
 }
 
 const DEFAULT_BUY_CREDITS_URL = {
-	USER: "https://app.codemarie.bot/dashboard/account?tab=credits&redirect=true",
-	ORG: "https://app.codemarie.bot/dashboard/organization?tab=credits&redirect=true",
+	USER: "https://app.dietcode.bot/dashboard/account?tab=credits&redirect=true",
+	ORG: "https://app.dietcode.bot/dashboard/organization?tab=credits&redirect=true",
 }
 
 const CreditLimitError: React.FC<CreditLimitErrorProps> = ({
@@ -25,7 +25,7 @@ const CreditLimitError: React.FC<CreditLimitErrorProps> = ({
 	totalPromotions,
 	totalSpent,
 }) => {
-	const { activeOrganization } = useCodemarieAuth()
+	const { activeOrganization } = useDietCodeAuth()
 	const [fullBuyCreditsUrl, setFullBuyCreditsUrl] = useState<string>("")
 
 	const dashboardUrl = useMemo(() => {

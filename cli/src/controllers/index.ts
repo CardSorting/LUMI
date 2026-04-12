@@ -12,7 +12,7 @@ import type {
 import type { HostBridgeClientProvider, StreamingCallbacks } from "@hosts/host-provider-types"
 import * as proto from "@shared/proto/index"
 import { StateManager } from "@/core/storage/StateManager"
-import { CodemarieClient } from "@/shared/codemarie"
+import { DietCodeClient } from "@/shared/dietcode"
 import { version as CLI_VERSION } from "../../package.json"
 import { printError, printInfo, printWarning } from "../utils/display"
 
@@ -87,37 +87,37 @@ export class CliEnvServiceClient implements EnvServiceClientInterface {
 		return setting === "disabled" ? proto.host.Setting.DISABLED : proto.host.Setting.ENABLED
 	}
 
-	async clipboardWriteText(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	async clipboardWriteText(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		this.clipboardContent = request.value || ""
 		printInfo(`📋 Copied to clipboard`)
-		return proto.codemarie.Empty.create()
+		return proto.dietcode.Empty.create()
 	}
 
-	async clipboardReadText(_request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.String> {
-		return proto.codemarie.String.create({ value: this.clipboardContent })
+	async clipboardReadText(_request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.String> {
+		return proto.dietcode.String.create({ value: this.clipboardContent })
 	}
 
-	async getHostVersion(_request: proto.codemarie.EmptyRequest): Promise<proto.host.GetHostVersionResponse> {
+	async getHostVersion(_request: proto.dietcode.EmptyRequest): Promise<proto.host.GetHostVersionResponse> {
 		return proto.host.GetHostVersionResponse.create({
 			version: CLI_VERSION,
-			platform: "Codemarie CLI - Node.js",
-			codemarieType: CodemarieClient.Cli,
+			platform: "DietCode CLI - Node.js",
+			dietcodeType: DietCodeClient.Cli,
 		})
 	}
 
-	async getIdeRedirectUri(_request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.String> {
+	async getIdeRedirectUri(_request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.String> {
 		// CLI doesn't have IDE redirect
-		return proto.codemarie.String.create({ value: "" })
+		return proto.dietcode.String.create({ value: "" })
 	}
 
-	async getTelemetrySettings(_request: proto.codemarie.EmptyRequest): Promise<proto.host.GetTelemetrySettingsResponse> {
+	async getTelemetrySettings(_request: proto.dietcode.EmptyRequest): Promise<proto.host.GetTelemetrySettingsResponse> {
 		return proto.host.GetTelemetrySettingsResponse.create({
 			isEnabled: this.getTelemetrySetting(),
 		})
 	}
 
 	subscribeToTelemetrySettings(
-		_request: proto.codemarie.EmptyRequest,
+		_request: proto.dietcode.EmptyRequest,
 		callbacks: StreamingCallbacks<proto.host.TelemetrySettingsEvent>,
 	): () => void {
 		// Send initial settings
@@ -130,20 +130,20 @@ export class CliEnvServiceClient implements EnvServiceClientInterface {
 		return () => {}
 	}
 
-	debugLog(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	debugLog(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		const message = request.value || ""
 		if (process.env.IS_DEV) {
 			printInfo(`[DebugLog] ${message}`)
 		}
-		return Promise.resolve(proto.codemarie.Empty.create())
+		return Promise.resolve(proto.dietcode.Empty.create())
 	}
 
-	async shutdown(_request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	async shutdown(_request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		printInfo("Shutting down...")
-		return proto.codemarie.Empty.create()
+		return proto.dietcode.Empty.create()
 	}
 
-	async openExternal(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	async openExternal(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		const url = request.value || ""
 		if (url) {
 			printInfo(`🌐 Opening: ${url}`)
@@ -151,7 +151,7 @@ export class CliEnvServiceClient implements EnvServiceClientInterface {
 			const { default: open } = await import("open")
 			await open(url)
 		}
-		return proto.codemarie.Empty.create()
+		return proto.dietcode.Empty.create()
 	}
 }
 
@@ -207,7 +207,7 @@ export class CliWindowServiceClient implements WindowServiceClientInterface {
 	}
 
 	async openSettings(_request: proto.host.OpenSettingsRequest): Promise<proto.host.OpenSettingsResponse> {
-		printInfo("Settings can be configured in ~/.codemarie/data/globalState.json")
+		printInfo("Settings can be configured in ~/.dietcode/data/globalState.json")
 		return proto.host.OpenSettingsResponse.create({})
 	}
 
@@ -268,11 +268,11 @@ export class CliWorkspaceServiceClient implements WorkspaceServiceClientInterfac
 		return proto.host.OpenInFileExplorerPanelResponse.create({})
 	}
 
-	async openCodemarieSidebarPanel(
-		_request: proto.host.OpenCodemarieSidebarPanelRequest,
-	): Promise<proto.host.OpenCodemarieSidebarPanelResponse> {
+	async openDietCodeSidebarPanel(
+		_request: proto.host.OpenDietCodeSidebarPanelRequest,
+	): Promise<proto.host.OpenDietCodeSidebarPanelResponse> {
 		// No sidebar in CLI
-		return proto.host.OpenCodemarieSidebarPanelResponse.create({})
+		return proto.host.OpenDietCodeSidebarPanelResponse.create({})
 	}
 
 	async openTerminalPanel(_request: proto.host.OpenTerminalRequest): Promise<proto.host.OpenTerminalResponse> {

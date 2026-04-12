@@ -1,4 +1,4 @@
-import { Empty, EmptyRequest } from "@shared/proto/codemarie/common"
+import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
 import { openAiCodexOAuthManager } from "@/integrations/openai-codex/oauth"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."

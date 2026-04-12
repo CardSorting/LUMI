@@ -1,22 +1,22 @@
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
 import { groupLowStakesTools, isToolGroup } from "./messageUtils"
 
-const createTextMessage = (ts: number, text: string): CodemarieMessage => ({
+const createTextMessage = (ts: number, text: string): DietCodeMessage => ({
 	type: "say",
 	say: "text",
 	text,
 	ts,
 })
 
-const createToolMessage = (ts: number, tool: string): CodemarieMessage => ({
+const createToolMessage = (ts: number, tool: string): DietCodeMessage => ({
 	type: "say",
 	say: "tool",
 	text: JSON.stringify({ tool, path: "src/file.ts" }),
 	ts,
 })
 
-const createReasoningMessage = (ts: number, text: string): CodemarieMessage => ({
+const createReasoningMessage = (ts: number, text: string): DietCodeMessage => ({
 	type: "say",
 	say: "reasoning",
 	text,

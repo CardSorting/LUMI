@@ -1,7 +1,7 @@
 import {
-	CodemarieAskUseSubagents,
-	CodemarieMessage,
-	CodemarieSaySubagentStatus,
+	DietCodeAskUseSubagents,
+	DietCodeMessage,
+	DietCodeSaySubagentStatus,
 	SubagentExecutionStatus,
 	SubagentStatusItem,
 } from "@shared/ExtensionMessage"
@@ -19,9 +19,9 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import MarkdownBlock from "../common/MarkdownBlock"
 
 interface SubagentStatusRowProps {
-	message: CodemarieMessage
+	message: DietCodeMessage
 	isLast: boolean
-	lastModifiedMessage?: CodemarieMessage
+	lastModifiedMessage?: DietCodeMessage
 }
 
 type DisplayStatus = SubagentExecutionStatus | "cancelled"
@@ -72,14 +72,14 @@ const formatCost = (value: number | undefined): string => {
 	}).format(normalized)
 }
 
-function parseSubagentRowData(message: CodemarieMessage): SubagentRowData | null {
+function parseSubagentRowData(message: DietCodeMessage): SubagentRowData | null {
 	if (!message.text) {
 		return null
 	}
 
 	try {
 		if (message.ask === "use_subagents" || message.say === "use_subagents") {
-			const parsed = JSON.parse(message.text) as CodemarieAskUseSubagents
+			const parsed = JSON.parse(message.text) as DietCodeAskUseSubagents
 			if (!Array.isArray(parsed.prompts)) {
 				return null
 			}
@@ -105,7 +105,7 @@ function parseSubagentRowData(message: CodemarieMessage): SubagentRowData | null
 			}
 		}
 
-		const parsed = JSON.parse(message.text) as CodemarieSaySubagentStatus
+		const parsed = JSON.parse(message.text) as DietCodeSaySubagentStatus
 		if (!Array.isArray(parsed.items)) {
 			return null
 		}
@@ -197,7 +197,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 			resumedBeforeNextVisibleMessage)
 
 	const singular = data.items.length === 1
-	const title = singular ? "Codemarie wants to use a subagent:" : "Codemarie wants to use subagents:"
+	const title = singular ? "DietCode wants to use a subagent:" : "DietCode wants to use subagents:"
 	const isPromptConstructionRow = message.ask === "use_subagents" || message.say === "use_subagents"
 	const toggleItem = (index: number) => {
 		setExpandedItems((prev) => ({

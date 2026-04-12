@@ -1,7 +1,7 @@
 import { isLocalModel } from "@utils/model-utils"
 import { ModelFamily } from "@/shared/prompts"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
 import { validateVariant } from "../variant-validator"
@@ -42,15 +42,15 @@ export const config = createVariant(ModelFamily.XS)
 		SystemPromptSection.SKILLS,
 	)
 	.tools(
-		CodemarieDefaultTool.BASH,
-		CodemarieDefaultTool.FILE_READ,
-		CodemarieDefaultTool.FILE_NEW,
-		CodemarieDefaultTool.FILE_EDIT,
-		CodemarieDefaultTool.SEARCH,
-		CodemarieDefaultTool.ASK,
-		CodemarieDefaultTool.ATTEMPT,
-		CodemarieDefaultTool.PLAN_MODE,
-		CodemarieDefaultTool.USE_SUBAGENTS,
+		DietCodeDefaultTool.BASH,
+		DietCodeDefaultTool.FILE_READ,
+		DietCodeDefaultTool.FILE_NEW,
+		DietCodeDefaultTool.FILE_EDIT,
+		DietCodeDefaultTool.SEARCH,
+		DietCodeDefaultTool.ASK,
+		DietCodeDefaultTool.ATTEMPT,
+		DietCodeDefaultTool.PLAN_MODE,
+		DietCodeDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({
 		MODEL_FAMILY: ModelFamily.XS,

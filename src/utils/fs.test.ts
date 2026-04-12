@@ -6,7 +6,7 @@ import "should"
 import { createDirectoriesForFile, fileExistsAtPath, isDirectory, readDirectory } from "./fs"
 
 describe("Filesystem Utilities", () => {
-	const tmpDir = path.join(os.tmpdir(), `codemarie-test-${Math.random().toString(36).slice(2)}`)
+	const tmpDir = path.join(os.tmpdir(), `dietcode-test-${Math.random().toString(36).slice(2)}`)
 
 	// Clean up after tests
 	after(async () => {
@@ -198,30 +198,30 @@ describe("Filesystem Utilities", () => {
 		files.sort().should.deepEqual(expectedFiles.sort())
 	})
 
-	it("should exclude .codemarierules/workflows directory specifically", async () => {
+	it("should exclude .dietcoderules/workflows directory specifically", async () => {
 		// Create a test directory structure
-		const codemarierulesDirTest = path.join(tmpDir, "codemarierules-test")
-		const codemarierulesDirPath = path.join(codemarierulesDirTest, ".codemarierules")
+		const dietcoderulesDirTest = path.join(tmpDir, "dietcoderules-test")
+		const dietcoderulesDirPath = path.join(dietcoderulesDirTest, ".dietcoderules")
 
-		// Create .codemarierules directory and root files
-		await fs.mkdir(codemarierulesDirPath, { recursive: true })
-		await fs.writeFile(path.join(codemarierulesDirPath, "config.json"), "{}")
-		await fs.writeFile(path.join(codemarierulesDirPath, "settings.js"), "// settings")
+		// Create .dietcoderules directory and root files
+		await fs.mkdir(dietcoderulesDirPath, { recursive: true })
+		await fs.writeFile(path.join(dietcoderulesDirPath, "config.json"), "{}")
+		await fs.writeFile(path.join(dietcoderulesDirPath, "settings.js"), "// settings")
 
-		// Create .codemarierules/other directory and files
-		const otherDirPath = path.join(codemarierulesDirPath, "other")
+		// Create .dietcoderules/other directory and files
+		const otherDirPath = path.join(dietcoderulesDirPath, "other")
 		await fs.mkdir(otherDirPath, { recursive: true })
 		await fs.writeFile(path.join(otherDirPath, "helper.js"), "// helper code")
 		await fs.writeFile(path.join(otherDirPath, "util.js"), "// util functions")
 
-		// Create .codemarierules/workflows directory and files
-		const workflowsDirPath = path.join(codemarierulesDirPath, "workflows")
+		// Create .dietcoderules/workflows directory and files
+		const workflowsDirPath = path.join(dietcoderulesDirPath, "workflows")
 		await fs.mkdir(workflowsDirPath, { recursive: true })
 		await fs.writeFile(path.join(workflowsDirPath, "workflow1.js"), "// workflow1")
 		await fs.writeFile(path.join(workflowsDirPath, "workflow2.js"), "// workflow2")
 
 		// Get all files WITHOUT exclusion
-		const allFiles = await readDirectory(codemarierulesDirPath)
+		const allFiles = await readDirectory(dietcoderulesDirPath)
 
 		// Verify all files are included
 		allFiles.length.should.equal(6) // 2 in root + 2 in other + 2 in workflows
@@ -229,14 +229,14 @@ describe("Filesystem Utilities", () => {
 		allFiles.some((file) => file.includes("workflow2.js")).should.be.true()
 
 		// Get files WITH workflows directory excluded
-		const filteredFiles = await readDirectory(codemarierulesDirPath, [[".codemarierules", "workflows"]])
+		const filteredFiles = await readDirectory(dietcoderulesDirPath, [[".dietcoderules", "workflows"]])
 
 		// Verify workflows files are excluded but others remain
 		filteredFiles.length.should.equal(4) // 2 in root + 2 in other
 
 		const expectedFiles = [
-			path.resolve(codemarierulesDirPath, "config.json"),
-			path.resolve(codemarierulesDirPath, "settings.js"),
+			path.resolve(dietcoderulesDirPath, "config.json"),
+			path.resolve(dietcoderulesDirPath, "settings.js"),
 			path.resolve(otherDirPath, "helper.js"),
 			path.resolve(otherDirPath, "util.js"),
 		]
@@ -244,45 +244,45 @@ describe("Filesystem Utilities", () => {
 		filteredFiles.sort().should.deepEqual(expectedFiles.sort())
 
 		// Test with multiple exclusions
-		const multiExcludeFiles = await readDirectory(codemarierulesDirPath, [
-			[".codemarierules", "workflows"],
-			[".codemarierules", "other"],
+		const multiExcludeFiles = await readDirectory(dietcoderulesDirPath, [
+			[".dietcoderules", "workflows"],
+			[".dietcoderules", "other"],
 		])
 
 		// Verify both workflows and other directories are excluded
 		multiExcludeFiles.length.should.equal(2) // only the 2 files in root
 
 		const rootOnlyFiles = [
-			path.resolve(codemarierulesDirPath, "config.json"),
-			path.resolve(codemarierulesDirPath, "settings.js"),
+			path.resolve(dietcoderulesDirPath, "config.json"),
+			path.resolve(dietcoderulesDirPath, "settings.js"),
 		]
 
 		multiExcludeFiles.sort().should.deepEqual(rootOnlyFiles.sort())
 	})
 
-	it("should exclude .codemarierules/hooks directory specifically", async () => {
+	it("should exclude .dietcoderules/hooks directory specifically", async () => {
 		// Create a test directory structure
-		const codemarierulesDirTest = path.join(tmpDir, "codemarierules-hooks-test")
-		const codemarierulesDirPath = path.join(codemarierulesDirTest, ".codemarierules")
+		const dietcoderulesDirTest = path.join(tmpDir, "dietcoderules-hooks-test")
+		const dietcoderulesDirPath = path.join(dietcoderulesDirTest, ".dietcoderules")
 
-		// Create .codemarierules directory and root files
-		await fs.mkdir(codemarierulesDirPath, { recursive: true })
-		await fs.writeFile(path.join(codemarierulesDirPath, "config.json"), "{}")
-		await fs.writeFile(path.join(codemarierulesDirPath, "settings.js"), "// settings")
+		// Create .dietcoderules directory and root files
+		await fs.mkdir(dietcoderulesDirPath, { recursive: true })
+		await fs.writeFile(path.join(dietcoderulesDirPath, "config.json"), "{}")
+		await fs.writeFile(path.join(dietcoderulesDirPath, "settings.js"), "// settings")
 
-		// Create .codemarierules/workflows directory and files
-		const workflowsDirPath = path.join(codemarierulesDirPath, "workflows")
+		// Create .dietcoderules/workflows directory and files
+		const workflowsDirPath = path.join(dietcoderulesDirPath, "workflows")
 		await fs.mkdir(workflowsDirPath, { recursive: true })
 		await fs.writeFile(path.join(workflowsDirPath, "workflow1.js"), "// workflow1")
 
-		// Create .codemarierules/hooks directory and files
-		const hooksDirPath = path.join(codemarierulesDirPath, "hooks")
+		// Create .dietcoderules/hooks directory and files
+		const hooksDirPath = path.join(dietcoderulesDirPath, "hooks")
 		await fs.mkdir(hooksDirPath, { recursive: true })
 		await fs.writeFile(path.join(hooksDirPath, "PreToolUse"), "#!/usr/bin/env bash")
 		await fs.writeFile(path.join(hooksDirPath, "PostToolUse"), "#!/usr/bin/env bash")
 
 		// Get all files WITHOUT exclusion
-		const allFiles = await readDirectory(codemarierulesDirPath)
+		const allFiles = await readDirectory(dietcoderulesDirPath)
 
 		// Verify all files are included
 		allFiles.length.should.equal(5) // 2 in root + 1 in workflows + 2 in hooks
@@ -290,31 +290,31 @@ describe("Filesystem Utilities", () => {
 		allFiles.some((file) => file.includes("PostToolUse")).should.be.true()
 
 		// Get files WITH hooks directory excluded
-		const filteredFiles = await readDirectory(codemarierulesDirPath, [[".codemarierules", "hooks"]])
+		const filteredFiles = await readDirectory(dietcoderulesDirPath, [[".dietcoderules", "hooks"]])
 
 		// Verify hooks files are excluded but others remain
 		filteredFiles.length.should.equal(3) // 2 in root + 1 in workflows
 
 		const expectedFiles = [
-			path.resolve(codemarierulesDirPath, "config.json"),
-			path.resolve(codemarierulesDirPath, "settings.js"),
+			path.resolve(dietcoderulesDirPath, "config.json"),
+			path.resolve(dietcoderulesDirPath, "settings.js"),
 			path.resolve(workflowsDirPath, "workflow1.js"),
 		]
 
 		filteredFiles.sort().should.deepEqual(expectedFiles.sort())
 
 		// Test with multiple exclusions (both workflows and hooks)
-		const multiExcludeFiles = await readDirectory(codemarierulesDirPath, [
-			[".codemarierules", "workflows"],
-			[".codemarierules", "hooks"],
+		const multiExcludeFiles = await readDirectory(dietcoderulesDirPath, [
+			[".dietcoderules", "workflows"],
+			[".dietcoderules", "hooks"],
 		])
 
 		// Verify both workflows and hooks directories are excluded
 		multiExcludeFiles.length.should.equal(2) // only the 2 files in root
 
 		const rootOnlyFiles = [
-			path.resolve(codemarierulesDirPath, "config.json"),
-			path.resolve(codemarierulesDirPath, "settings.js"),
+			path.resolve(dietcoderulesDirPath, "config.json"),
+			path.resolve(dietcoderulesDirPath, "settings.js"),
 		]
 
 		multiExcludeFiles.sort().should.deepEqual(rootOnlyFiles.sort())

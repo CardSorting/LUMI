@@ -24,7 +24,7 @@ describe("Skills Utility Functions", () => {
 
 	// Use path.join for OS-independent paths
 	const TEST_CWD = path.join("/test", "project")
-	const GLOBAL_SKILLS_DIR = path.join("/home", "user", ".codemarie", "skills")
+	const GLOBAL_SKILLS_DIR = path.join("/home", "user", ".dietcode", "skills")
 
 	beforeEach(() => {
 		sandbox = sinon.createSandbox()
@@ -39,8 +39,8 @@ describe("Skills Utility Functions", () => {
 		statStub = sandbox.stub(fs.promises, "stat")
 		readFileStub = sandbox.stub(fs.promises, "readFile")
 		sandbox.stub(disk, "getSkillsDirectoriesForScan").returns([
-			{ path: path.join(TEST_CWD, ".codemarierules", "skills"), source: "project" },
-			{ path: path.join(TEST_CWD, ".codemarie", "skills"), source: "project" },
+			{ path: path.join(TEST_CWD, ".dietcoderules", "skills"), source: "project" },
+			{ path: path.join(TEST_CWD, ".dietcode", "skills"), source: "project" },
 			{ path: path.join(TEST_CWD, ".claude", "skills"), source: "project" },
 			{ path: path.join(TEST_CWD, ".agents", "skills"), source: "project" },
 			{ path: GLOBAL_SKILLS_DIR, source: "global" },
@@ -80,8 +80,8 @@ Instructions here`)
 			expect(skills[0].source).to.equal("global")
 		})
 
-		it("should discover skills from project .codemarierules/skills directory", async () => {
-			const projectSkillsDir = path.join(TEST_CWD, ".codemarierules", "skills")
+		it("should discover skills from project .dietcoderules/skills directory", async () => {
+			const projectSkillsDir = path.join(TEST_CWD, ".dietcoderules", "skills")
 			const skillDir = path.join(projectSkillsDir, "explaining-code")
 			const skillMdPath = path.join(skillDir, "SKILL.md")
 
@@ -103,15 +103,15 @@ Use analogies and ASCII diagrams when explaining code.`)
 			expect(skills[0].source).to.equal("project")
 		})
 
-		it("should discover skills from project .codemarie/skills directory", async () => {
-			const codemarieSkillsDir = path.join(TEST_CWD, ".codemarie", "skills")
-			const skillDir = path.join(codemarieSkillsDir, "debugging")
+		it("should discover skills from project .dietcode/skills directory", async () => {
+			const dietcodeSkillsDir = path.join(TEST_CWD, ".dietcode", "skills")
+			const skillDir = path.join(dietcodeSkillsDir, "debugging")
 			const skillMdPath = path.join(skillDir, "SKILL.md")
 
-			fileExistsStub.withArgs(codemarieSkillsDir).resolves(true)
+			fileExistsStub.withArgs(dietcodeSkillsDir).resolves(true)
 			fileExistsStub.withArgs(skillMdPath).resolves(true)
-			isDirectoryStub.withArgs(codemarieSkillsDir).resolves(true)
-			readdirStub.withArgs(codemarieSkillsDir).resolves(["debugging"])
+			isDirectoryStub.withArgs(dietcodeSkillsDir).resolves(true)
+			readdirStub.withArgs(dietcodeSkillsDir).resolves(["debugging"])
 			statStub.withArgs(skillDir).resolves({ isDirectory: () => true })
 			readFileStub.withArgs(skillMdPath, "utf-8").resolves(`---
 name: debugging
@@ -239,7 +239,7 @@ description: Global coding skill
 Global instructions`)
 
 			// Setup project skill with same name (lower priority)
-			const projectSkillsDir = path.join(TEST_CWD, ".codemarierules", "skills")
+			const projectSkillsDir = path.join(TEST_CWD, ".dietcoderules", "skills")
 			const projectSkillDir = path.join(projectSkillsDir, "coding")
 			const projectSkillMdPath = path.join(projectSkillDir, "SKILL.md")
 
@@ -279,7 +279,7 @@ description: A global skill
 Content`)
 
 			// Setup project skill with different name
-			const projectSkillsDir = path.join(TEST_CWD, ".codemarierules", "skills")
+			const projectSkillsDir = path.join(TEST_CWD, ".dietcoderules", "skills")
 			const projectSkillDir = path.join(projectSkillsDir, "project-skill")
 			const projectSkillMdPath = path.join(projectSkillDir, "SKILL.md")
 

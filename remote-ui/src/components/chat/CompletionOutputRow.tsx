@@ -1,4 +1,4 @@
-import { Int64Request } from "@shared/proto/codemarie/common"
+import { Int64Request } from "@shared/proto/dietcode/common"
 import { CheckIcon } from "lucide-react"
 import { memo } from "react"
 import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"

@@ -1,4 +1,4 @@
-import { McpDisplayMode, UpdateSettingsRequest } from "@shared/proto/codemarie/state"
+import { McpDisplayMode, UpdateSettingsRequest } from "@shared/proto/dietcode/state"
 import { StateServiceClient } from "@/services/grpc-client"
 
 /**

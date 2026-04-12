@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
 /**
  * ## load_mcp_documentation
@@ -11,9 +11,9 @@ Usage:
 </load_mcp_documentation>
  */
 
-const id = CodemarieDefaultTool.MCP_DOCS
+const id = DietCodeDefaultTool.MCP_DOCS
 
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	id,
 	variant: ModelFamily.GENERIC,
 	name: "load_mcp_documentation",

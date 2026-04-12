@@ -1,5 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { expect } from "chai"
 import { ContextManager } from "../ContextManager"
 
@@ -15,7 +15,7 @@ function createApiReqMessage(tokens: {
 	tokensOut?: number
 	cacheWrites?: number
 	cacheReads?: number
-}): CodemarieMessage {
+}): DietCodeMessage {
 	return {
 		ts: Date.now(),
 		type: "say",
@@ -242,7 +242,7 @@ describe("ContextManager", () => {
 							content: [
 								{
 									type: "text",
-									text: "[plan_mode_respond] Result:\n<user_message>\n'test2.txt' (see below for file content)\n</user_message>\n\n<file_content path=\"/Users/toshi/Desktop/codemarie_testing_repo/test2.txt\">\ntest\n\n</file_content>",
+									text: "[plan_mode_respond] Result:\n<user_message>\n'test2.txt' (see below for file content)\n</user_message>\n\n<file_content path=\"/Users/toshi/Desktop/dietcode_testing_repo/test2.txt\">\ntest\n\n</file_content>",
 								},
 							],
 						},
@@ -258,7 +258,7 @@ describe("ContextManager", () => {
 							content: [
 								{
 									type: "text",
-									text: "[write_to_file for '/Users/toshi/Desktop/codemarie_testing_repo/test2.txt'] Result:\nThe content was successfully saved.\n\n<final_file_content path=\"/Users/toshi/Desktop/codemarie_testing_repo/test2.txt\">\ntest\n\n</final_file_content>",
+									text: "[write_to_file for '/Users/toshi/Desktop/dietcode_testing_repo/test2.txt'] Result:\nThe content was successfully saved.\n\n<final_file_content path=\"/Users/toshi/Desktop/dietcode_testing_repo/test2.txt\">\ntest\n\n</final_file_content>",
 								},
 							],
 						},
@@ -286,7 +286,7 @@ describe("ContextManager", () => {
 							content: [
 								{
 									type: "text",
-									text: "[replace_in_file for '/Users/toshi/Desktop/codemarie_testing_repo/test2.txt'] Result:\nThe content was successfully saved.\n\n<final_file_content path=\"/Users/toshi/Desktop/codemarie_testing_repo/test2.txt\">\ntest2\n\n</final_file_content>",
+									text: "[replace_in_file for '/Users/toshi/Desktop/dietcode_testing_repo/test2.txt'] Result:\nThe content was successfully saved.\n\n<final_file_content path=\"/Users/toshi/Desktop/dietcode_testing_repo/test2.txt\">\ntest2\n\n</final_file_content>",
 								},
 							],
 						},
@@ -413,17 +413,17 @@ describe("ContextManager", () => {
 
 		it("does not compact at 33K tokens with default 0.75 threshold on 200K context", () => {
 			const api = createMockApi(200_000)
-			const codemarieMessages: CodemarieMessage[] = [createApiReqMessage({ tokensIn: 30_000, tokensOut: 3_000 })]
+			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 30_000, tokensOut: 3_000 })]
 
-			const result = contextManager.shouldCompactContextWindow(codemarieMessages, api, 0, 0.75)
+			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, 0.75)
 			expect(result).to.equal(false)
 		})
 
 		it("compacts when tokens exceed 0.75 threshold on 200K context", () => {
 			const api = createMockApi(200_000)
-			const codemarieMessages: CodemarieMessage[] = [createApiReqMessage({ tokensIn: 140_000, tokensOut: 15_000 })]
+			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 140_000, tokensOut: 15_000 })]
 
-			const result = contextManager.shouldCompactContextWindow(codemarieMessages, api, 0, 0.75)
+			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, 0.75)
 			expect(result).to.equal(true)
 		})
 
@@ -439,56 +439,56 @@ describe("ContextManager", () => {
 			const api = createMockApi(contextWindow)
 			const tokensIn = totalTokens - 1_500
 			const tokensOut = 1_500
-			const codemarieMessages: CodemarieMessage[] = [createApiReqMessage({ tokensIn, tokensOut })]
+			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn, tokensOut })]
 
-			const result = contextManager.shouldCompactContextWindow(codemarieMessages, api, 0, accidentalThreshold)
+			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, accidentalThreshold)
 			expect(result).to.equal(true)
 		})
 
 		it("falls back to maxAllowedSize when threshold is undefined", () => {
 			const api = createMockApi(200_000)
 			// 155K tokens — above 0.75 threshold (150K) but below maxAllowedSize (160K)
-			const codemarieMessages: CodemarieMessage[] = [createApiReqMessage({ tokensIn: 150_000, tokensOut: 5_000 })]
+			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 150_000, tokensOut: 5_000 })]
 
-			const result = contextManager.shouldCompactContextWindow(codemarieMessages, api, 0, undefined)
+			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, undefined)
 			// undefined → uses maxAllowedSize (160K), so 155K < 160K → false
 			expect(result).to.equal(false)
 		})
 
 		it("falls back to maxAllowedSize when threshold is 0", () => {
 			const api = createMockApi(200_000)
-			const codemarieMessages: CodemarieMessage[] = [createApiReqMessage({ tokensIn: 150_000, tokensOut: 5_000 })]
+			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 150_000, tokensOut: 5_000 })]
 
 			// 0 is falsy, so ternary falls back to maxAllowedSize (160K)
-			const result = contextManager.shouldCompactContextWindow(codemarieMessages, api, 0, 0)
+			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, 0)
 			expect(result).to.equal(false)
 		})
 
 		it("includes cacheWrites and cacheReads in total token count", () => {
 			const api = createMockApi(200_000)
 			// Low direct tokens but high cache reads push total over threshold
-			const codemarieMessages: CodemarieMessage[] = [
+			const dietcodeMessages: DietCodeMessage[] = [
 				createApiReqMessage({ tokensIn: 5_000, tokensOut: 500, cacheWrites: 0, cacheReads: 150_000 }),
 			]
 
-			const result = contextManager.shouldCompactContextWindow(codemarieMessages, api, 0, 0.75)
+			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, 0.75)
 			expect(result).to.equal(true)
 		})
 
 		it("returns false when previousApiReqIndex is negative", () => {
 			const api = createMockApi(200_000)
-			const codemarieMessages: CodemarieMessage[] = [createApiReqMessage({ tokensIn: 200_000 })]
+			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 200_000 })]
 
-			const result = contextManager.shouldCompactContextWindow(codemarieMessages, api, -1, 0.75)
+			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, -1, 0.75)
 			expect(result).to.equal(false)
 		})
 
 		it("threshold is capped at maxAllowedSize even when percentage is very high", () => {
 			const api = createMockApi(200_000)
 			// threshold of 1.0 → floor(200000 * 1.0) = 200000, but min(200000, 160000) = 160000
-			const codemarieMessages: CodemarieMessage[] = [createApiReqMessage({ tokensIn: 165_000 })]
+			const dietcodeMessages: DietCodeMessage[] = [createApiReqMessage({ tokensIn: 165_000 })]
 
-			const result = contextManager.shouldCompactContextWindow(codemarieMessages, api, 0, 1.0)
+			const result = contextManager.shouldCompactContextWindow(dietcodeMessages, api, 0, 1.0)
 			expect(result).to.equal(true)
 		})
 	})

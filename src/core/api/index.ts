@@ -1,8 +1,8 @@
 import { ApiConfiguration, ModelInfo, QwenApiRegions } from "@shared/api"
 import { Mode } from "@shared/storage/types"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieTool } from "@/shared/tools"
+import { DietCodeTool } from "@/shared/tools"
 import { AIhubmixHandler } from "./providers/aihubmix"
 import { AnthropicHandler } from "./providers/anthropic"
 import { AskSageHandler } from "./providers/asksage"
@@ -11,8 +11,8 @@ import { AwsBedrockHandler } from "./providers/bedrock"
 import { CerebrasHandler } from "./providers/cerebras"
 import { ClaudeCodeHandler } from "./providers/claude-code"
 import { CloudflareHandler } from "./providers/cloudflare"
-import { CodemarieHandler } from "./providers/codemarie"
 import { DeepSeekHandler } from "./providers/deepseek"
+import { DietCodeHandler } from "./providers/dietcode"
 import { DifyHandler } from "./providers/dify"
 import { DoubaoHandler } from "./providers/doubao"
 import { FireworksHandler } from "./providers/fireworks"
@@ -53,8 +53,8 @@ export type CommonApiHandlerOptions = {
 export interface ApiHandler {
 	createMessage(
 		systemPrompt: string,
-		messages: CodemarieStorageMessage[],
-		tools?: CodemarieTool[],
+		messages: DietCodeStorageMessage[],
+		tools?: DietCodeTool[],
 		useResponseApi?: boolean,
 	): ApiStream
 	getModel(): ApiHandlerModel
@@ -259,24 +259,24 @@ function createHandlerForProvider(
 				vsCodeLmModelSelector:
 					mode === "plan" ? options.planModeVsCodeLmModelSelector : options.actModeVsCodeLmModelSelector,
 			})
-		case "codemarie": {
-			const codemarieModelId =
-				(mode === "plan" ? options.planModeCodemarieModelId : options.actModeCodemarieModelId) ||
+		case "dietcode": {
+			const dietcodeModelId =
+				(mode === "plan" ? options.planModeDietcodeModelId : options.actModeDietcodeModelId) ||
 				(mode === "plan" ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId)
-			const codemarieModelInfo =
-				(mode === "plan" ? options.planModeCodemarieModelInfo : options.actModeCodemarieModelInfo) ||
+			const dietcodeModelInfo =
+				(mode === "plan" ? options.planModeDietcodeModelInfo : options.actModeDietcodeModelInfo) ||
 				(mode === "plan" ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo)
-			return new CodemarieHandler({
+			return new DietCodeHandler({
 				onRetryAttempt: options.onRetryAttempt,
-				codemarieAccountId: options.codemarieAccountId,
-				codemarieApiKey: options.codemarieApiKey,
+				dietcodeAccountId: options.dietcodeAccountId,
+				dietcodeApiKey: options.dietcodeApiKey,
 				ulid: options.ulid,
 				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 				thinkingBudgetTokens:
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
 				openRouterProviderSorting: options.openRouterProviderSorting,
-				openRouterModelId: codemarieModelId,
-				openRouterModelInfo: codemarieModelInfo,
+				openRouterModelId: dietcodeModelId,
+				openRouterModelInfo: dietcodeModelInfo,
 			})
 		}
 		case "litellm":

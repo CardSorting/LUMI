@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import sinon from "sinon"
 import "should"
 import { ClaudeCodeHandler } from "@core/api/providers/claude-code"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 
 describe("ClaudeCodeHandler", () => {
 	let handler: ClaudeCodeHandler
@@ -71,7 +71,7 @@ describe("ClaudeCodeHandler", () => {
 			runClaudeCodeStub.returns(mockGenerator() as any)
 
 			const systemPrompt = "You are a helpful assistant."
-			const messages: CodemarieStorageMessage[] = [{ role: "user", content: "Hello" }]
+			const messages: DietCodeStorageMessage[] = [{ role: "user", content: "Hello" }]
 
 			const usageData: any[] = []
 
@@ -140,7 +140,7 @@ describe("ClaudeCodeHandler", () => {
 			runClaudeCodeStub.returns(mockGenerator() as any)
 
 			const systemPrompt = "You are a helpful assistant."
-			const messages: CodemarieStorageMessage[] = [{ role: "user", content: "Hello" }]
+			const messages: DietCodeStorageMessage[] = [{ role: "user", content: "Hello" }]
 
 			const usageData: any[] = []
 
@@ -199,7 +199,7 @@ describe("ClaudeCodeHandler", () => {
 			runClaudeCodeStub.returns(mockGenerator() as any)
 
 			const systemPrompt = "You are a helpful assistant."
-			const messages: CodemarieStorageMessage[] = [{ role: "user", content: "Hello" }]
+			const messages: DietCodeStorageMessage[] = [{ role: "user", content: "Hello" }]
 
 			const usageData: any[] = []
 

@@ -5,7 +5,7 @@ import type { McpMarketplaceItem } from "@shared/mcp"
 import type { RemoteConfig } from "@shared/remote-config/schema"
 import axios from "axios"
 import * as sinon from "sinon"
-import { CodemarieEndpoint, CodemarieEnv } from "@/config"
+import { DietCodeEndpoint, DietCodeEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 
 /**
@@ -20,10 +20,10 @@ describe("Controller Marketplace Filtering", () => {
 	let axiosGetStub: sinon.SinonStub
 	let hostProviderInitialized = false
 
-	// Initialize CodemarieEndpoint before tests run (required for CodemarieEnv.config() to work)
+	// Initialize DietCodeEndpoint before tests run (required for DietCodeEnv.config() to work)
 	before(async () => {
-		if (!CodemarieEndpoint.isInitialized()) {
-			await CodemarieEndpoint.initialize("/test/extension")
+		if (!DietCodeEndpoint.isInitialized()) {
+			await DietCodeEndpoint.initialize("/test/extension")
 		}
 	})
 
@@ -91,9 +91,9 @@ describe("Controller Marketplace Filtering", () => {
 				workspaceClient: {},
 				envClient: {
 					getHostVersion: sinon.stub().resolves({
-						codemarieVersion: "1.0.0",
+						dietcodeVersion: "1.0.0",
 						platform: "darwin",
-						codemarieType: "vscode",
+						dietcodeType: "vscode",
 					}),
 				},
 				windowClient: {},
@@ -274,7 +274,7 @@ describe("Controller Marketplace Filtering", () => {
 
 			sinon.assert.calledOnce(axiosGetStub)
 			const callArgs = axiosGetStub.firstCall.args
-			callArgs[0].should.equal(`${CodemarieEnv.config().mcpBaseUrl}/marketplace`)
+			callArgs[0].should.equal(`${DietCodeEnv.config().mcpBaseUrl}/marketplace`)
 		})
 
 		it("should handle API errors gracefully", async () => {

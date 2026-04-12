@@ -1,33 +1,33 @@
 /**
- * AcpAgent - Thin wrapper that bridges stdio connection to CodemarieAgent.
+ * AcpAgent - Thin wrapper that bridges stdio connection to DietCodeAgent.
  *
- * This class wraps the CodemarieAgent and connects it to an ACP AgentSideConnection
+ * This class wraps the DietCodeAgent and connects it to an ACP AgentSideConnection
  * for stdio-based communication. It:
  * - Wires up the permission handler to call connection.requestPermission()
- * - Subscribes to CodemarieAgent session events and forwards them to connection.sessionUpdate()
- * - Delegates all acp.Agent methods to the internal CodemarieAgent
+ * - Subscribes to DietCodeAgent session events and forwards them to connection.sessionUpdate()
+ * - Delegates all acp.Agent methods to the internal DietCodeAgent
  *
- * For programmatic usage without stdio, use CodemarieAgent directly.
+ * For programmatic usage without stdio, use DietCodeAgent directly.
  *
  * @module acp
  */
 
 import type * as acp from "@agentclientprotocol/sdk"
 import { Logger } from "@/shared/services/Logger.js"
-import { CodemarieAgent } from "../agent/CodemarieAgent.js"
+import { DietCodeAgent } from "../agent/DietCodeAgent.js"
 import { type AcpAgentOptions, type SessionUpdateType } from "../agent/types.js"
 
 /**
- * ACP Agent wrapper that bridges stdio connection to CodemarieAgent.
+ * ACP Agent wrapper that bridges stdio connection to DietCodeAgent.
  *
  * This is the class used by runAcpMode() for stdio-based ACP communication.
- * It creates an internal CodemarieAgent and wires up the connection for:
+ * It creates an internal DietCodeAgent and wires up the connection for:
  * - Permission requests (via connection.requestPermission)
  * - Session updates (via connection.sessionUpdate)
  */
 export class AcpAgent implements acp.Agent {
 	private readonly connection: acp.AgentSideConnection
-	private readonly codemarieAgent: CodemarieAgent
+	private readonly dietcodeAgent: DietCodeAgent
 
 	/** Track which sessions we've subscribed to for event forwarding */
 	private readonly subscribedSessions: Set<string> = new Set()
@@ -35,11 +35,11 @@ export class AcpAgent implements acp.Agent {
 	constructor(connection: acp.AgentSideConnection, options: AcpAgentOptions) {
 		this.connection = connection
 
-		// Create the internal CodemarieAgent
-		this.codemarieAgent = new CodemarieAgent(options)
+		// Create the internal DietCodeAgent
+		this.dietcodeAgent = new DietCodeAgent(options)
 
 		// Wire up the permission handler to use the connection
-		this.codemarieAgent.setPermissionHandler(async (request) => {
+		this.dietcodeAgent.setPermissionHandler(async (request) => {
 			try {
 				Logger.debug("[AcpAgent] Forwarding permission request to connection")
 				return await this.connection.requestPermission({
@@ -62,7 +62,7 @@ export class AcpAgent implements acp.Agent {
 			return
 		}
 
-		const emitter = this.codemarieAgent.emitterForSession(sessionId)
+		const emitter = this.dietcodeAgent.emitterForSession(sessionId)
 
 		// Forward session update by adding the sessionUpdate discriminator
 		const forwardSessionUpdate = <K extends SessionUpdateType>(eventName: K) => {
@@ -98,15 +98,15 @@ export class AcpAgent implements acp.Agent {
 	}
 
 	// ============================================================
-	// acp.Agent Interface Implementation - Delegate to CodemarieAgent
+	// acp.Agent Interface Implementation - Delegate to DietCodeAgent
 	// ============================================================
 
 	async initialize(params: acp.InitializeRequest): Promise<acp.InitializeResponse> {
-		return await this.codemarieAgent.initialize(params, this.connection)
+		return await this.dietcodeAgent.initialize(params, this.connection)
 	}
 
 	async newSession(params: acp.NewSessionRequest): Promise<acp.NewSessionResponse> {
-		const response = await this.codemarieAgent.newSession(params)
+		const response = await this.dietcodeAgent.newSession(params)
 		// Subscribe to events for this new session
 		this.subscribeToSessionEvents(response.sessionId)
 		return response
@@ -115,27 +115,27 @@ export class AcpAgent implements acp.Agent {
 	async prompt(params: acp.PromptRequest): Promise<acp.PromptResponse> {
 		// Ensure we're subscribed to this session's events
 		this.subscribeToSessionEvents(params.sessionId)
-		return this.codemarieAgent.prompt(params)
+		return this.dietcodeAgent.prompt(params)
 	}
 
 	async cancel(params: acp.CancelNotification): Promise<void> {
-		return this.codemarieAgent.cancel(params)
+		return this.dietcodeAgent.cancel(params)
 	}
 
 	async setSessionMode(params: acp.SetSessionModeRequest): Promise<acp.SetSessionModeResponse> {
-		return this.codemarieAgent.setSessionMode(params)
+		return this.dietcodeAgent.setSessionMode(params)
 	}
 
 	async unstable_setSessionModel(params: acp.SetSessionModelRequest): Promise<acp.SetSessionModelResponse> {
-		return this.codemarieAgent.unstable_setSessionModel(params)
+		return this.dietcodeAgent.unstable_setSessionModel(params)
 	}
 
 	async authenticate(params: acp.AuthenticateRequest): Promise<acp.AuthenticateResponse> {
-		return this.codemarieAgent.authenticate(params)
+		return this.dietcodeAgent.authenticate(params)
 	}
 
 	async shutdown(): Promise<void> {
 		this.subscribedSessions.clear()
-		return this.codemarieAgent.shutdown()
+		return this.dietcodeAgent.shutdown()
 	}
 }

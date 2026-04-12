@@ -1,6 +1,6 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import type { Worktree } from "@shared/proto/codemarie/worktree"
-import { TrackWorktreeViewOpenedRequest } from "@shared/proto/codemarie/worktree"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import type { Worktree } from "@shared/proto/dietcode/worktree"
+import { TrackWorktreeViewOpenedRequest } from "@shared/proto/dietcode/worktree"
 import { GitBranch } from "lucide-react"
 import React, { useCallback, useEffect, useState } from "react"
 import HistoryPreview from "@/components/history/HistoryPreview"
@@ -73,7 +73,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({ showHistoryView,
 										</button>
 									</TooltipTrigger>
 									<TooltipContent side="bottom">
-										View and manage git worktrees. Great for running parallel Codemarie tasks.
+										View and manage git worktrees. Great for running parallel DietCode tasks.
 									</TooltipContent>
 								</Tooltip>
 							)}

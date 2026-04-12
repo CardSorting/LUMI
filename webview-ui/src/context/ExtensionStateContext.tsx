@@ -4,11 +4,11 @@ import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
 import { DEFAULT_MCP_DISPLAY_MODE } from "@shared/McpDisplayMode"
-import type { UserInfo } from "@shared/proto/codemarie/account"
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import type { OpenRouterCompatibleModelInfo } from "@shared/proto/codemarie/models"
-import { type TerminalProfile } from "@shared/proto/codemarie/state"
-import { convertProtoToCodemarieMessage } from "@shared/proto-conversions/codemarie-message"
+import type { UserInfo } from "@shared/proto/dietcode/account"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import type { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
+import { type TerminalProfile } from "@shared/proto/dietcode/state"
+import { convertProtoToDietCodeMessage } from "@shared/proto-conversions/dietcode-message"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { fromProtobufModels } from "@shared/proto-conversions/models/typeConversion"
 import type React from "react"
@@ -31,7 +31,7 @@ import { McpServiceClient, ModelsServiceClient, StateServiceClient, UiServiceCli
 export interface ExtensionStateContextType extends ExtensionState {
 	didHydrateState: boolean
 	showWelcome: boolean
-	codemarieModels: Record<string, ModelInfo> | null
+	dietcodeModels: Record<string, ModelInfo> | null
 	openRouterModels: Record<string, ModelInfo>
 	vercelAiGatewayModels: Record<string, ModelInfo>
 	hicapModels: Record<string, ModelInfo>
@@ -69,8 +69,8 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setGroqModels: (value: Record<string, ModelInfo>) => void
 	setBasetenModels: (value: Record<string, ModelInfo>) => void
 	setHuggingFaceModels: (value: Record<string, ModelInfo>) => void
-	setGlobalCodemarieRulesToggles: (toggles: Record<string, boolean>) => void
-	setLocalCodemarieRulesToggles: (toggles: Record<string, boolean>) => void
+	setGlobalDietCodeRulesToggles: (toggles: Record<string, boolean>) => void
+	setLocalDietCodeRulesToggles: (toggles: Record<string, boolean>) => void
 	setLocalCursorRulesToggles: (toggles: Record<string, boolean>) => void
 	setLocalWindsurfRulesToggles: (toggles: Record<string, boolean>) => void
 	setLocalAgentsRulesToggles: (toggles: Record<string, boolean>) => void
@@ -86,7 +86,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setShowWelcome: (value: boolean) => void
 
 	// Refresh functions
-	refreshCodemarieModels: () => void
+	refreshDietCodeModels: () => void
 	refreshOpenRouterModels: () => void
 	refreshVercelAiGatewayModels: () => void
 	refreshHicapModels: () => void
@@ -223,7 +223,7 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	const [state, setState] = useState<ExtensionState>({
 		version: "",
-		codemarieMessages: [],
+		dietcodeMessages: [],
 		taskHistory: [],
 		shouldShowAnnouncement: false,
 		autoApprovalSettings: DEFAULT_AUTO_APPROVAL_SETTINGS,
@@ -238,8 +238,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		planActSeparateModelsSetting: true,
 		enableCheckpointsSetting: true,
 		mcpDisplayMode: DEFAULT_MCP_DISPLAY_MODE,
-		globalCodemarieRulesToggles: {},
-		localCodemarieRulesToggles: {},
+		globalDietCodeRulesToggles: {},
+		localDietCodeRulesToggles: {},
 		localCursorRulesToggles: {},
 		localWindsurfRulesToggles: {},
 		localAgentsRulesToggles: {},
@@ -259,7 +259,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		customPrompt: undefined,
 		useAutoCondense: false,
 		subagentsEnabled: false,
-		codemarieWebToolsEnabled: { user: true, featureFlag: false },
+		dietcodeWebToolsEnabled: { user: true, featureFlag: false },
 		worktreesEnabled: { user: true, featureFlag: false },
 		favoritedModelIds: [],
 		lastDismissedInfoBannerVersion: 0,
@@ -288,7 +288,7 @@ export const ExtensionStateContextProvider: React.FC<{
 
 	const [showWelcome, setShowWelcome] = useState(false)
 
-	const [codemarieModels, setCodemarieModels] = useState<Record<string, ModelInfo> | null>(null)
+	const [dietcodeModels, setDietCodeModels] = useState<Record<string, ModelInfo> | null>(null)
 	const [openRouterModels, setOpenRouterModels] = useState<Record<string, ModelInfo>>({
 		[openRouterDefaultModelId]: openRouterDefaultModelInfo,
 	})
@@ -354,11 +354,11 @@ export const ExtensionStateContextProvider: React.FC<{
 							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
 							const currentVersion = prevState.autoApprovalSettings?.version ?? 1
 							const shouldUpdateAutoApproval = incomingVersion > currentVersion
-							// HACK: Preserve codemarieMessages if currentTaskItem is the same
+							// HACK: Preserve dietcodeMessages if currentTaskItem is the same
 							if (stateData.currentTaskItem?.id === prevState.currentTaskItem?.id) {
-								stateData.codemarieMessages = stateData.codemarieMessages?.length
-									? stateData.codemarieMessages
-									: prevState.codemarieMessages
+								stateData.dietcodeMessages = stateData.dietcodeMessages?.length
+									? stateData.dietcodeMessages
+									: prevState.dietcodeMessages
 							}
 
 							const newState = {
@@ -506,14 +506,14 @@ export const ExtensionStateContextProvider: React.FC<{
 						return
 					}
 
-					const partialMessage = convertProtoToCodemarieMessage(protoMessage)
+					const partialMessage = convertProtoToDietCodeMessage(protoMessage)
 					setState((prevState) => {
 						// worth noting it will never be possible for a more up-to-date message to be sent here or in normal messages post since the presentAssistantContent function uses lock
-						const lastIndex = findLastIndex(prevState.codemarieMessages, (msg) => msg.ts === partialMessage.ts)
+						const lastIndex = findLastIndex(prevState.dietcodeMessages, (msg) => msg.ts === partialMessage.ts)
 						if (lastIndex !== -1) {
-							const newCodemarieMessages = [...prevState.codemarieMessages]
-							newCodemarieMessages[lastIndex] = partialMessage
-							return { ...prevState, codemarieMessages: newCodemarieMessages }
+							const newDietCodeMessages = [...prevState.dietcodeMessages]
+							newDietCodeMessages[lastIndex] = partialMessage
+							return { ...prevState, dietcodeMessages: newDietCodeMessages }
 						}
 						return prevState
 					})
@@ -767,36 +767,36 @@ export const ExtensionStateContextProvider: React.FC<{
 		vercelAiGatewayModels,
 	])
 
-	// Refresh Codemarie models function
-	const refreshCodemarieModels = useCallback(() => {
-		ModelsServiceClient.refreshCodemarieModelsRpc(EmptyRequest.create({}))
+	// Refresh DietCode models function
+	const refreshDietCodeModels = useCallback(() => {
+		ModelsServiceClient.refreshDietCodeModelsRpc(EmptyRequest.create({}))
 			.then((response: OpenRouterCompatibleModelInfo) => {
 				const models = fromProtobufModels(response.models)
-				setCodemarieModels((prev) => (Object.keys(models).length > 0 ? models : (prev ?? null)))
+				setDietCodeModels((prev) => (Object.keys(models).length > 0 ? models : (prev ?? null)))
 			})
-			.catch((error: Error) => console.error("Failed to refresh Codemarie models:", error))
+			.catch((error: Error) => console.error("Failed to refresh DietCode models:", error))
 	}, [])
 
-	// Auto-refresh Codemarie models when provider is codemarie
+	// Auto-refresh DietCode models when provider is dietcode
 	useEffect(() => {
-		const hasCodemarieProvider =
-			state.apiConfiguration?.actModeApiProvider === "codemarie" ||
-			state.apiConfiguration?.planModeApiProvider === "codemarie"
-		if (hasCodemarieProvider && codemarieModels === null) {
-			refreshCodemarieModels()
+		const hasDietCodeProvider =
+			state.apiConfiguration?.actModeApiProvider === "dietcode" ||
+			state.apiConfiguration?.planModeApiProvider === "dietcode"
+		if (hasDietCodeProvider && dietcodeModels === null) {
+			refreshDietCodeModels()
 		}
 	}, [
 		state.apiConfiguration?.actModeApiProvider,
 		state.apiConfiguration?.planModeApiProvider,
-		codemarieModels,
-		refreshCodemarieModels,
+		dietcodeModels,
+		refreshDietCodeModels,
 	])
 
 	const contextValue: ExtensionStateContextType = {
 		...state,
 		didHydrateState,
 		showWelcome,
-		codemarieModels,
+		dietcodeModels,
 		openRouterModels,
 		vercelAiGatewayModels,
 		hicapModels,
@@ -819,8 +819,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		showAccount,
 		showWorktrees,
 		showAnnouncement,
-		globalCodemarieRulesToggles: state.globalCodemarieRulesToggles || {},
-		localCodemarieRulesToggles: state.localCodemarieRulesToggles || {},
+		globalDietCodeRulesToggles: state.globalDietCodeRulesToggles || {},
+		localDietCodeRulesToggles: state.localDietCodeRulesToggles || {},
 		localCursorRulesToggles: state.localCursorRulesToggles || {},
 		localWindsurfRulesToggles: state.localWindsurfRulesToggles || {},
 		localAgentsRulesToggles: state.localAgentsRulesToggles || {},
@@ -861,15 +861,15 @@ export const ExtensionStateContextProvider: React.FC<{
 		setMcpMarketplaceCatalog: (catalog: McpMarketplaceCatalog) => setMcpMarketplaceCatalog(catalog),
 		setShowMcp,
 		closeMcpView,
-		setGlobalCodemarieRulesToggles: (toggles) =>
+		setGlobalDietCodeRulesToggles: (toggles) =>
 			setState((prevState) => ({
 				...prevState,
-				globalCodemarieRulesToggles: toggles,
+				globalDietCodeRulesToggles: toggles,
 			})),
-		setLocalCodemarieRulesToggles: (toggles) =>
+		setLocalDietCodeRulesToggles: (toggles) =>
 			setState((prevState) => ({
 				...prevState,
-				localCodemarieRulesToggles: toggles,
+				localDietCodeRulesToggles: toggles,
 			})),
 		setLocalCursorRulesToggles: (toggles) =>
 			setState((prevState) => ({
@@ -918,7 +918,7 @@ export const ExtensionStateContextProvider: React.FC<{
 			})),
 		setMcpTab,
 		setTotalTasksSize,
-		refreshCodemarieModels,
+		refreshDietCodeModels,
 		refreshOpenRouterModels,
 		refreshVercelAiGatewayModels,
 		refreshHicapModels,

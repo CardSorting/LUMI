@@ -1,5 +1,5 @@
 import type { ApiProviderInfo } from "@core/api"
-import { CodemarieRulesToggles } from "@shared/codemarie-rules"
+import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { McpPromptResponse } from "@shared/mcp"
 import fs from "fs/promises"
 import { telemetryService } from "@/services/telemetry"
@@ -41,14 +41,14 @@ type Workflow = FileBasedWorkflow | RemoteWorkflow
  */
 export async function parseSlashCommands(
 	text: string,
-	localWorkflowToggles: CodemarieRulesToggles,
-	globalWorkflowToggles: CodemarieRulesToggles,
+	localWorkflowToggles: DietCodeRulesToggles,
+	globalWorkflowToggles: DietCodeRulesToggles,
 	ulid: string,
 	focusChainSettings?: { enabled: boolean },
 	enableNativeToolCalls?: boolean,
 	providerInfo?: ApiProviderInfo,
 	mcpPromptFetcher?: McpPromptFetcher,
-): Promise<{ processedText: string; needsCodemarierulesFileCheck: boolean }> {
+): Promise<{ processedText: string; needsDietCoderulesFileCheck: boolean }> {
 	const SUPPORTED_DEFAULT_COMMANDS = ["newtask", "smol", "compact", "newrule", "reportbug", "deep-planning", "explain-changes"]
 
 	// Determine if the current provider/model/setting actually uses native tool calling
@@ -138,7 +138,7 @@ export async function parseSlashCommands(
 				// Track telemetry for builtin slash command usage
 				telemetryService.captureSlashCommandUsed(ulid, commandName, "builtin")
 
-				return { processedText: processedText, needsCodemarierulesFileCheck: commandName === "newrule" }
+				return { processedText: processedText, needsDietCoderulesFileCheck: commandName === "newrule" }
 			}
 
 			// Check for MCP prompt commands (format: mcp:<server>:<prompt>)
@@ -163,7 +163,7 @@ export async function parseSlashCommands(
 							// Track telemetry for MCP prompt usage
 							telemetryService.captureSlashCommandUsed(ulid, commandName, "mcp_prompt")
 
-							return { processedText, needsCodemarierulesFileCheck: false }
+							return { processedText, needsDietCoderulesFileCheck: false }
 						}
 						// Prompt not found - log for debugging and fall through to workflow checking
 						Logger.debug(`MCP prompt not found: ${commandName} (server: ${serverName}, prompt: ${promptName})`)
@@ -232,7 +232,7 @@ export async function parseSlashCommands(
 					// Track telemetry for workflow command usage
 					telemetryService.captureSlashCommandUsed(ulid, commandName, "workflow")
 
-					return { processedText, needsCodemarierulesFileCheck: false }
+					return { processedText, needsDietCoderulesFileCheck: false }
 				} catch (error) {
 					Logger.error(`Error reading workflow file ${matchingWorkflow.fullPath}: ${error}`)
 				}
@@ -241,7 +241,7 @@ export async function parseSlashCommands(
 	}
 
 	// if no supported commands are found, return the original text
-	return { processedText: text, needsCodemarierulesFileCheck: false }
+	return { processedText: text, needsDietCoderulesFileCheck: false }
 }
 
 /**

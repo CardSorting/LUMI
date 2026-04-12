@@ -8,9 +8,9 @@ import { v7 as uuidv7 } from "uuid"
 import { openAiCodexOAuthManager } from "@/integrations/openai-codex/oauth"
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { featureFlagsService } from "@/services/feature-flags"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch } from "@/shared/net"
-import { ApiFormat } from "@/shared/proto/codemarie/models"
+import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { FeatureFlag } from "@/shared/services/feature-flags/feature-flags"
 import { Logger } from "@/shared/services/Logger"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
@@ -97,7 +97,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 		return out
 	}
 
-	async *createMessage(systemPrompt: string, messages: CodemarieStorageMessage[], tools?: ChatCompletionTool[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: ChatCompletionTool[]): ApiStream {
 		const model = this.getModel()
 
 		// Reset state for this request
@@ -211,9 +211,9 @@ export class OpenAiCodexHandler implements ApiHandler {
 
 			// Build Codex-specific headers
 			const codexHeaders: Record<string, string> = {
-				originator: "codemarie",
+				originator: "dietcode",
 				session_id: this.sessionId,
-				"User-Agent": `codemarie/${process.env.npm_package_version || "1.0.0"} (${os.platform()} ${os.release()}; ${os.arch()}) node/${process.version.slice(1)}`,
+				"User-Agent": `dietcode/${process.env.npm_package_version || "1.0.0"} (${os.platform()} ${os.release()}; ${os.arch()}) node/${process.version.slice(1)}`,
 				...(accountId ? { "ChatGPT-Account-Id": accountId } : {}),
 				...buildExternalBasicHeaders(),
 			}
@@ -493,9 +493,9 @@ export class OpenAiCodexHandler implements ApiHandler {
 		const headers: Record<string, string> = {
 			"Content-Type": "application/json",
 			Authorization: `Bearer ${accessToken}`,
-			originator: "codemarie",
+			originator: "dietcode",
 			session_id: this.sessionId,
-			"User-Agent": `codemarie/${process.env.npm_package_version || "1.0.0"} (${os.platform()} ${os.release()}; ${os.arch()}) node/${process.version.slice(1)}`,
+			"User-Agent": `dietcode/${process.env.npm_package_version || "1.0.0"} (${os.platform()} ${os.release()}; ${os.arch()}) node/${process.version.slice(1)}`,
 		}
 
 		// Add ChatGPT-Account-Id if available

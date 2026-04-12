@@ -3,7 +3,7 @@
  * Allows switching between different error tracking providers (PostHog, Sentry, etc.)
  */
 
-import type { CodemarieError } from "../CodemarieError"
+import type { DietCodeError } from "../DietCodeError"
 
 /**
  * Error settings that control when and how errors are logged
@@ -24,10 +24,10 @@ export interface ErrorSettings {
 export interface IErrorProvider {
 	/**
 	 * Log an exception with error details
-	 * @param error The error to log (Error or CodemarieError)
+	 * @param error The error to log (Error or DietCodeError)
 	 * @param properties Optional additional properties to attach
 	 */
-	logException(error: Error | CodemarieError, properties?: Record<string, unknown>): void
+	logException(error: Error | DietCodeError, properties?: Record<string, unknown>): void
 
 	/**
 	 * Log a message with specified level

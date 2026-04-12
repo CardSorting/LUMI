@@ -1,6 +1,6 @@
 import { deleteRuleFile as deleteRuleFileImpl } from "@core/context/instructions/user-instructions/rule-helpers"
 import { getWorkspaceBasename } from "@core/workspace"
-import { RuleFile, RuleFileRequest } from "@shared/proto/codemarie/file"
+import { RuleFile, RuleFileRequest } from "@shared/proto/dietcode/file"
 import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
@@ -36,7 +36,7 @@ export async function deleteRuleFile(controller: Controller, request: RuleFileRe
 	}
 
 	// we refresh inside of the deleteRuleFileImpl(..) call
-	//await refreshCodemarieRulesToggles(controller.context, cwd)
+	//await refreshDietCodeRulesToggles(controller.context, cwd)
 	//await refreshExternalRulesToggles(controller.context, cwd)
 	//await refreshWorkflowToggles(controller.context, cwd)
 	await controller.postStateToWebview()

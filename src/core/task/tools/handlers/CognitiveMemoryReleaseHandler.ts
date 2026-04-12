@@ -1,11 +1,11 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { SwarmMutexService } from "../../../swarm/SwarmMutexService"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryReleaseHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_RELEASE
+	readonly name = DietCodeDefaultTool.MEM_RELEASE
 
 	getDescription(_block: ToolUse): string {
 		return "Release a previously claimed resource."

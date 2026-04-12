@@ -1,6 +1,6 @@
 import type { ExtensionMessage } from "@shared/ExtensionMessage"
-import { ResetStateRequest } from "@shared/proto/codemarie/state"
-import { UserOrganization } from "@shared/proto/index.codemarie"
+import { ResetStateRequest } from "@shared/proto/dietcode/state"
+import { UserOrganization } from "@shared/proto/index.dietcode"
 import {
 	CheckCheck,
 	FlaskConical,
@@ -15,7 +15,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useEvent } from "react-use"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useCodemarieAuth } from "@/context/CodemarieAuthContext"
+import { useDietCodeAuth } from "@/context/DietCodeAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { StateServiceClient } from "@/services/grpc-client"
@@ -110,7 +110,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
 	{
 		id: "about",
 		name: "About",
-		tooltipText: "About Codemarie",
+		tooltipText: "About DietCode",
 		headerText: "About",
 		icon: Info,
 	},
@@ -165,7 +165,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 	) // Empty deps - these imports never change
 
 	const { version, environment, settingsInitialModelTab } = useExtensionState()
-	const { activeOrganization } = useCodemarieAuth()
+	const { activeOrganization } = useDietCodeAuth()
 
 	const [activeTab, setActiveTab] = useState<string>(targetSection || SETTINGS_TABS[0].id)
 

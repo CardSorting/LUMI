@@ -133,7 +133,7 @@ npm run eval:e2e
 
 ### E2E Task
 
-Contribute to [cline/cline-bench](https://github.com/codemarie/codemarie-bench)
+Contribute to [cline/cline-bench](https://github.com/dietcode/dietcode-bench)
 
 ## Resources
 

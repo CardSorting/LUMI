@@ -1,6 +1,6 @@
 import { ToolParamName, ToolUse } from "@core/assistant-message"
-import { CodemarieIgnoreController } from "@core/ignore/CodemarieIgnoreController"
-import { CodemarieDefaultTool } from "@shared/tools"
+import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
+import { DietCodeDefaultTool } from "@shared/tools"
 import { UniversalGuard } from "../../policy/UniversalGuard"
 
 export type ValidationResult = { ok: true } | { ok: false; error: string; hint?: string }
@@ -11,7 +11,7 @@ export type ValidationResult = { ok: true } | { ok: false; error: string; hint?:
  */
 export class ToolValidator {
 	constructor(
-		private readonly ignoreController: CodemarieIgnoreController,
+		private readonly ignoreController: DietCodeIgnoreController,
 		private readonly guard: UniversalGuard,
 	) {}
 
@@ -31,15 +31,15 @@ export class ToolValidator {
 
 		// 2. Security Audit
 		if (params.path) {
-			const ignoreResult = await this.checkCodemarieIgnorePath(params.path)
+			const ignoreResult = await this.checkDietCodeIgnorePath(params.path)
 			if (!ignoreResult.ok) return ignoreResult
 		}
 
 		// 3. Architectural Audit (for writes and patches)
 		if (
-			(block.name === CodemarieDefaultTool.FILE_NEW ||
-				block.name === CodemarieDefaultTool.FILE_EDIT ||
-				block.name === CodemarieDefaultTool.APPLY_PATCH) &&
+			(block.name === DietCodeDefaultTool.FILE_NEW ||
+				block.name === DietCodeDefaultTool.FILE_EDIT ||
+				block.name === DietCodeDefaultTool.APPLY_PATCH) &&
 			params.path &&
 			(params.content || params.diff || params.patch)
 		) {
@@ -51,21 +51,21 @@ export class ToolValidator {
 	}
 
 	/**
-	 * Real-world asynchronous .codemarieignore check.
+	 * Real-world asynchronous .dietcodeignore check.
 	 */
-	public async checkCodemarieIgnorePath(filePath: string): Promise<ValidationResult> {
+	public async checkDietCodeIgnorePath(filePath: string): Promise<ValidationResult> {
 		const isAccessible = this.ignoreController.validateAccess(filePath)
 		if (!isAccessible) {
 			return {
 				ok: false,
-				error: `Access to '${filePath}' is RESTRICTED by .codemarieignore policies.`,
+				error: `Access to '${filePath}' is RESTRICTED by .dietcodeignore policies.`,
 			}
 		}
 		return { ok: true }
 	}
 
 	/**
-	 * Real-world command validation using .codemarieignore patterns.
+	 * Real-world command validation using .dietcodeignore patterns.
 	 */
 	public validateCommand(command: string): ValidationResult {
 		const ignoredFile = this.ignoreController.validateCommand(command)
@@ -90,7 +90,7 @@ export class ToolValidator {
 		// Build a synthetic tool block for the guard's pre-execution check
 		const syntheticBlock = {
 			type: "tool_use" as const,
-			name: CodemarieDefaultTool.FILE_NEW,
+			name: DietCodeDefaultTool.FILE_NEW,
 			params: { path: filePath, content },
 			partial: false,
 		}

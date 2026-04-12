@@ -1,5 +1,5 @@
 import { openImage as openImageIntegration } from "@integrations/misc/open-file"
-import { Empty, StringRequest } from "@shared/proto/codemarie/common"
+import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import { Controller } from ".."
 
 /**

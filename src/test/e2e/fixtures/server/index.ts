@@ -2,23 +2,23 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Socket } from "node:net"
 import { parse } from "node:url"
 import { v4 as uuidv4 } from "uuid"
-import type { BalanceResponse, OrganizationBalanceResponse, UserResponse } from "../../../../shared/CodemarieAccount"
+import type { BalanceResponse, OrganizationBalanceResponse, UserResponse } from "../../../../shared/DietCodeAccount"
 import { E2E_MOCK_API_RESPONSES, E2E_REGISTERED_MOCK_ENDPOINTS } from "./api"
-import { CodemarieDataMock } from "./data"
+import { DietCodeDataMock } from "./data"
 
 const E2E_API_SERVER_PORT = 7777
 
-export const MOCK_CODEMARIE_API_SERVER_URL = `http://localhost:${E2E_API_SERVER_PORT}`
+export const MOCK_DIETCODE_API_SERVER_URL = `http://localhost:${E2E_API_SERVER_PORT}`
 
-const useVerboseLogging = process.env.CODEMARIE_E2E_TESTS_VERBOSE === "true" || process.env.CLINE_E2E_TESTS_VERBOSE === "true"
+const useVerboseLogging = process.env.DIETCODE_E2E_TESTS_VERBOSE === "true" || process.env.CLINE_E2E_TESTS_VERBOSE === "true"
 function log(...args: unknown[]) {
 	if (useVerboseLogging) {
-		console.log("[CodemarieApiServerMock]", ...args)
+		console.log("[DietCodeApiServerMock]", ...args)
 	}
 }
 
-export class CodemarieApiServerMock {
-	static globalSharedServer: CodemarieApiServerMock | null = null
+export class DietCodeApiServerMock {
+	static globalSharedServer: DietCodeApiServerMock | null = null
 	static globalSockets: Set<Socket> = new Set()
 
 	private currentUser: UserResponse | null = null
@@ -27,7 +27,7 @@ export class CodemarieApiServerMock {
 	private userHasOrganization = false
 	public generationCounter = 0
 
-	public readonly API_USER = new CodemarieDataMock("personal")
+	public readonly API_USER = new DietCodeDataMock("personal")
 
 	constructor(public readonly server: Server) {}
 
@@ -112,11 +112,11 @@ export class CodemarieApiServerMock {
 	}
 
 	// Starts the global shared server
-	public static async startGlobalServer(): Promise<CodemarieApiServerMock> {
+	public static async startGlobalServer(): Promise<DietCodeApiServerMock> {
 		log("=== SERVER FIXTURE CALLED ===")
-		if (CodemarieApiServerMock.globalSharedServer) {
+		if (DietCodeApiServerMock.globalSharedServer) {
 			log("Using existing global server")
-			return CodemarieApiServerMock.globalSharedServer
+			return DietCodeApiServerMock.globalSharedServer
 		}
 
 		log("Starting global server...")
@@ -167,11 +167,11 @@ export class CodemarieApiServerMock {
 			// Authenticate the token and set current user
 			if (isAuthRequired && authToken) {
 				log(`Authenticating token: ${authToken}`)
-				const user = CodemarieApiServerMock.globalSharedServer?.API_USER.getUserByToken(authToken)
+				const user = DietCodeApiServerMock.globalSharedServer?.API_USER.getUserByToken(authToken)
 				if (!user) {
 					return sendApiError("Invalid token", 401)
 				}
-				CodemarieApiServerMock.globalSharedServer?.setCurrentUser(user)
+				DietCodeApiServerMock.globalSharedServer?.setCurrentUser(user)
 			}
 
 			log("=== MOCK SERVER REQUEST ===")
@@ -184,14 +184,14 @@ export class CodemarieApiServerMock {
 			// Route handling
 			const handleRequest = async () => {
 				// Try to match the route using registered endpoints
-				const routeMatch = CodemarieApiServerMock.matchRoute(path, method)
+				const routeMatch = DietCodeApiServerMock.matchRoute(path, method)
 
 				if (!routeMatch.matched) {
 					return sendJson({ error: "Not found" }, 404)
 				}
 
 				const { baseRoute, endpoint, params = {} } = routeMatch
-				const controller = CodemarieApiServerMock.globalSharedServer!
+				const controller = DietCodeApiServerMock.globalSharedServer!
 
 				// Health check endpoints
 				if (baseRoute === "/health") {
@@ -310,7 +310,7 @@ export class CodemarieApiServerMock {
 							return sendApiError("Invalid or expired authorization code", 400)
 						}
 
-						// Return format matching CodemarieAuthProvider expectations
+						// Return format matching DietCodeAuthProvider expectations
 						return sendApiResponse({
 							accessToken: `${code}_access`,
 							refreshToken: `${code}_refresh`,
@@ -320,7 +320,7 @@ export class CodemarieApiServerMock {
 								subject: user.id,
 								email: user.email,
 								name: user.displayName,
-								codemarieUserId: user.id,
+								dietcodeUserId: user.id,
 								accounts: null,
 								organizations: user.organizations,
 							},
@@ -344,7 +344,7 @@ export class CodemarieApiServerMock {
 							return sendApiError("Invalid or expired refresh token", 400)
 						}
 
-						// Return format matching CodemarieAuthProvider expectations
+						// Return format matching DietCodeAuthProvider expectations
 						return sendApiResponse({
 							accessToken: `${originalToken}_access_refreshed`,
 							refreshToken: refreshToken, // Keep same refresh token
@@ -354,7 +354,7 @@ export class CodemarieApiServerMock {
 								subject: user.id,
 								email: user.email,
 								name: user.displayName,
-								codemarieUserId: user.id,
+								dietcodeUserId: user.id,
 								accounts: null,
 							},
 						})
@@ -383,7 +383,7 @@ export class CodemarieApiServerMock {
 						if (body.includes("edit_request")) {
 							responseText = E2E_MOCK_API_RESPONSES.EDIT_REQUEST
 						}
-						if (body.includes("[diff.test.ts] Hello, Codemarie!")) {
+						if (body.includes("[diff.test.ts] Hello, DietCode!")) {
 							// The playwright test in diff.test.ts needs the "API Request..." text
 							// to be on the screen long enough to detect it.  This worked at 100ms
 							// too, but setting to 500ms to cover slower CI boxes.
@@ -465,7 +465,7 @@ export class CodemarieApiServerMock {
 									index: 0,
 									message: {
 										role: "assistant",
-										content: "Hello! I'm a mock Codemarie API response.",
+										content: "Hello! I'm a mock DietCode API response.",
 									},
 									finish_reason: "stop",
 								},
@@ -543,14 +543,14 @@ export class CodemarieApiServerMock {
 		})
 
 		// Initialize the controller after the server is created
-		const controller = new CodemarieApiServerMock(server)
-		CodemarieApiServerMock.globalSharedServer = controller
+		const controller = new DietCodeApiServerMock(server)
+		DietCodeApiServerMock.globalSharedServer = controller
 
 		// Track connections for proper cleanup
 		server.on("connection", (socket) => {
-			CodemarieApiServerMock.globalSockets.add(socket)
+			DietCodeApiServerMock.globalSockets.add(socket)
 			socket.on("close", () => {
-				CodemarieApiServerMock.globalSockets.delete(socket)
+				DietCodeApiServerMock.globalSockets.delete(socket)
 			})
 		})
 
@@ -560,7 +560,7 @@ export class CodemarieApiServerMock {
 					console.error(`Failed to start server on port ${E2E_API_SERVER_PORT}:`, error)
 					reject(error)
 				} else {
-					log(`CodemarieApiServerMock listening on port ${E2E_API_SERVER_PORT}`)
+					log(`DietCodeApiServerMock listening on port ${E2E_API_SERVER_PORT}`)
 					resolve()
 				}
 			})
@@ -571,15 +571,15 @@ export class CodemarieApiServerMock {
 
 	// Stops the global shared server
 	public static async stopGlobalServer(): Promise<void> {
-		if (!CodemarieApiServerMock.globalSharedServer) {
+		if (!DietCodeApiServerMock.globalSharedServer) {
 			return
 		}
 
-		const server = CodemarieApiServerMock.globalSharedServer.server
+		const server = DietCodeApiServerMock.globalSharedServer.server
 
 		// Clean shutdown - destroy all socket connections first
-		CodemarieApiServerMock.globalSockets.forEach((socket) => socket.destroy())
-		CodemarieApiServerMock.globalSockets.clear()
+		DietCodeApiServerMock.globalSockets.forEach((socket) => socket.destroy())
+		DietCodeApiServerMock.globalSockets.clear()
 
 		await new Promise<void>((resolve, reject) => {
 			server.close((err) => {
@@ -592,6 +592,6 @@ export class CodemarieApiServerMock {
 			})
 		})
 
-		CodemarieApiServerMock.globalSharedServer = null
+		DietCodeApiServerMock.globalSharedServer = null
 	}
 }

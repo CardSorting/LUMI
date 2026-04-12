@@ -1,6 +1,4 @@
 import { SpiderEngine, SpiderNode } from "./SpiderEngine.js"
-import { getLayer } from "@/utils/joy-zoning"
-import * as path from "path"
 
 export interface OptimizationOpportunity {
 	file: string
@@ -16,7 +14,7 @@ export interface OptimizationOpportunity {
  * that would significantly increase the integrity score.
  */
 export class SovereignOptimizer {
-	constructor(private cwd: string) {}
+	constructor(_cwd: string) {}
 
 	/**
 	 * Scans the project for structural migration opportunities.
@@ -28,13 +26,13 @@ export class SovereignOptimizer {
 			const current = node.layer
 			const recommended = this.calculateOptimalLayer(node, engine)
 
-			if (current !== recommended && recommended !== "unknown") {
+			if (recommended && current !== recommended) {
 				opportunities.push({
 					file: node.path,
 					currentLayer: current,
 					recommendedLayer: recommended,
 					reason: `File has ${node.imports.length} imports from ${recommended} and zero dependencies on ${current}'s peer layers.`,
-					integrityGain: 5 // Static gain for now
+					integrityGain: 5, // Static gain for now
 				})
 			}
 		}
@@ -42,24 +40,26 @@ export class SovereignOptimizer {
 		return opportunities.sort((a, b) => b.integrityGain - a.integrityGain).slice(0, 5)
 	}
 
-	private calculateOptimalLayer(node: SpiderNode, engine: SpiderEngine): string {
+	private calculateOptimalLayer(node: SpiderNode, engine: SpiderEngine): string | null {
 		if (node.imports.length === 0) return node.layer // Stay put if stable
 
-		const targetLayers = node.imports.map(imp => {
-			const res = engine.resolveImportToNodeId(node.path, imp)
-			return res ? engine.nodes.get(res)?.layer : null
-		}).filter(l => l && l !== "unknown")
+		const targetLayers = node.imports
+			.map((imp) => {
+				const res = engine.resolveImportToNodeId(node.path, imp)
+				return res ? engine.nodes.get(res)?.layer : null
+			})
+			.filter((l) => l)
 
 		if (targetLayers.length === 0) return node.layer
 
 		// Logic: If a file only depends on layers BELOW it, it might need to move DOWN.
 		// If a file depends on layers ABOVE it, it's a violation (handled by Policy).
 		// This optimizer focuses on "Deep Stability".
-		
+
 		const counts = new Map<string, number>()
-		targetLayers.forEach(l => counts.set(l!, (counts.get(l!) || 0) + 1))
-		
-		let dominant = "unknown"
+		targetLayers.forEach((l) => counts.set(l!, (counts.get(l!) || 0) + 1))
+
+		let dominant: string | null = null
 		let max = 0
 		for (const [l, c] of counts.entries()) {
 			if (c > max) {

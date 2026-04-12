@@ -1,7 +1,7 @@
 import React from "react"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { cn } from "@/lib/utils"
-import { CodemarieError, CodemarieErrorType } from "../../../../src/services/error/CodemarieError"
+import { DietCodeError, DietCodeErrorType } from "../../../../src/services/error/DietCodeError"
 import { ProgressIndicator } from "./ChatRow"
 
 interface ErrorBlockTitleProps {
@@ -59,8 +59,8 @@ export const ErrorBlockTitle = ({
 			details.classNames.push("text-(--vscode-foreground)")
 		} else if (apiRequestFailedMessage) {
 			// Handle failed request
-			const codemarieError = CodemarieError.parse(apiRequestFailedMessage)
-			const titleText = codemarieError?.isErrorType(CodemarieErrorType.Balance)
+			const dietcodeError = DietCodeError.parse(apiRequestFailedMessage)
+			const titleText = dietcodeError?.isErrorType(DietCodeErrorType.Balance)
 				? "Credit Limit Reached"
 				: "API Request Failed"
 			details.title = titleText

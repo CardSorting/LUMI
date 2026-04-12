@@ -18,7 +18,7 @@ type CheckpointOperation = "CHECKPOINT_INIT" | "CHECKPOINT_COMMIT" | "CHECKPOINT
 /**
  * CheckpointTracker Module
  *
- * Core implementation of Codemarie's Checkpoints system that provides version control
+ * Core implementation of DietCode's Checkpoints system that provides version control
  * capabilities without interfering with the user's main Git repository. Key features:
  *
  * Shadow Git Repository:
@@ -122,7 +122,7 @@ class CheckpointTracker {
 	 * - Creates/initializes shadow git repository
 	 *
 	 * Configuration:
-	 * - Respects 'codemarie.enableCheckpoints' VS Code setting
+	 * - Respects 'dietcode.enableCheckpoints' VS Code setting
 	 */
 	public static async create(
 		taskId: string,
@@ -222,7 +222,7 @@ class CheckpointTracker {
 			// Locking failed due to conflicting lock
 			if (!lockResult.acquired && !lockResult.skipped) {
 				throw new Error(
-					"Failed to acquire checkpoint folder lock - another Codemarie instance may be performing checkpoint operations",
+					"Failed to acquire checkpoint folder lock - another DietCode instance may be performing checkpoint operations",
 				)
 			}
 
@@ -345,7 +345,7 @@ class CheckpointTracker {
 			// Locking failed due to conflicting lock
 			if (!lockResult.acquired && !lockResult.skipped) {
 				throw new Error(
-					"Failed to acquire checkpoint folder lock - another Codemarie instance may be performing checkpoint operations",
+					"Failed to acquire checkpoint folder lock - another DietCode instance may be performing checkpoint operations",
 				)
 			}
 

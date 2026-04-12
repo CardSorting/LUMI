@@ -1,6 +1,6 @@
 # Hook Test Fixtures
 
-This directory contains pre-written hook scripts for testing the CodeMarie hooks system.
+This directory contains pre-written hook scripts for testing the DietCode hooks system.
 
 ## Directory Structure
 

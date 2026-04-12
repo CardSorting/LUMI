@@ -8,14 +8,14 @@ import { ExtensionRegistryInfo } from "@/registry"
 import { log } from "./utils"
 import { EnvironmentVariableCollection, MementoStore, readJson, SecretStore } from "./vscode-context-utils"
 
-log("Running standalone codemarie", ExtensionRegistryInfo.version)
-log(`CODEMARIE_ENVIRONMENT: ${process.env.CODEMARIE_ENVIRONMENT || process.env.CLINE_ENVIRONMENT}`)
+log("Running standalone dietcode", ExtensionRegistryInfo.version)
+log(`DIETCODE_ENVIRONMENT: ${process.env.DIETCODE_ENVIRONMENT || process.env.CLINE_ENVIRONMENT}`)
 
 // WE WILL HAVE TO MIGRATE THIS FROM DATA TO v1 LATER
 const SETTINGS_SUBFOLDER = "data"
 
-export function initializeContext(codemarieDir?: string) {
-	const CLINE_DIR = codemarieDir || process.env.CODEMARIE_DIR || process.env.CLINE_DIR || `${os.homedir()}/.codemarie`
+export function initializeContext(dietcodeDir?: string) {
+	const CLINE_DIR = dietcodeDir || process.env.DIETCODE_DIR || process.env.CLINE_DIR || `${os.homedir()}/.dietcode`
 	const DATA_DIR = path.join(CLINE_DIR, SETTINGS_SUBFOLDER)
 	const INSTALL_DIR = process.env.INSTALL_DIR || __dirname
 	const WORKSPACE_STORAGE_DIR = process.env.WORKSPACE_STORAGE_DIR || path.join(DATA_DIR, "workspace")
@@ -48,16 +48,16 @@ export function initializeContext(codemarieDir?: string) {
 
 		// Set up URIs.
 		storageUri: URI.file(WORKSPACE_STORAGE_DIR),
-		storagePath: WORKSPACE_STORAGE_DIR, // Deprecated, not used in codemarie.
+		storagePath: WORKSPACE_STORAGE_DIR, // Deprecated, not used in dietcode.
 		globalStorageUri: URI.file(DATA_DIR),
-		globalStoragePath: DATA_DIR, // Deprecated, not used in codemarie.
+		globalStoragePath: DATA_DIR, // Deprecated, not used in dietcode.
 
 		// Logs are global per extension, not per workspace.
 		logUri: URI.file(DATA_DIR),
-		logPath: DATA_DIR, // Deprecated, not used in codemarie.
+		logPath: DATA_DIR, // Deprecated, not used in dietcode.
 
 		extensionUri: URI.file(EXTENSION_DIR),
-		extensionPath: EXTENSION_DIR, // Deprecated, not used in codemarie.
+		extensionPath: EXTENSION_DIR, // Deprecated, not used in dietcode.
 		asAbsolutePath: (relPath: string) => path.join(EXTENSION_DIR, relPath),
 
 		subscriptions: [], // These need to be destroyed when the extension is deactivated.

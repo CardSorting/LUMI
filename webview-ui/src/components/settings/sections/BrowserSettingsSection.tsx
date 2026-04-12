@@ -1,4 +1,4 @@
-import { EmptyRequest, StringRequest } from "@shared/proto/codemarie/common"
+import { EmptyRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import React, { useCallback, useEffect, useState } from "react"
 import styled from "styled-components"
@@ -176,7 +176,7 @@ export const BrowserSettingsSection: React.FC<BrowserSettingsSectionProps> = ({ 
 								color: "var(--vscode-descriptionForeground)",
 								margin: "4px 0 0 0px",
 							}}>
-							Prevent Codemarie from using browser actions (e.g. launch, click, type).
+							Prevent DietCode from using browser actions (e.g. launch, click, type).
 						</p>
 					</div>
 
@@ -247,7 +247,7 @@ export const BrowserSettingsSection: React.FC<BrowserSettingsSectionProps> = ({ 
 									color: "var(--vscode-descriptionForeground)",
 									margin: "0 0 6px 0px",
 								}}>
-								Enable Codemarie to use your Chrome
+								Enable DietCode to use your Chrome
 								{isBundled
 									? "(not detected on your machine)"
 									: detectedChromePath

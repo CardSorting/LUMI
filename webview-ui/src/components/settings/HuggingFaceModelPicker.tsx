@@ -1,5 +1,5 @@
 import { huggingFaceDefaultModelId, huggingFaceModels } from "@shared/api"
-import { EmptyRequest } from "@shared/proto/codemarie/common"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Mode } from "@shared/storage/types"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"

@@ -1,5 +1,5 @@
-import type { OpenRouterModelInfo } from "@shared/proto/codemarie/models"
-import type { OnboardingModel, OnboardingModelGroup } from "@shared/proto/codemarie/state"
+import type { OpenRouterModelInfo } from "@shared/proto/dietcode/models"
+import type { OnboardingModel, OnboardingModelGroup } from "@shared/proto/dietcode/state"
 
 export interface OnboardingModelsByGroup {
 	free: ModelGroup[]
@@ -11,7 +11,7 @@ interface ModelGroup {
 	models: OnboardingModel[]
 }
 
-export function getCodemarieUIOnboardingGroups(groupedModels: OnboardingModelGroup): OnboardingModelsByGroup {
+export function getDietCodeUIOnboardingGroups(groupedModels: OnboardingModelGroup): OnboardingModelsByGroup {
 	const { models } = groupedModels
 
 	const freeModels = models.filter((m) => m.group === "free")

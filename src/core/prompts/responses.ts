@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import * as diff from "diff"
 import * as path from "path"
 import { Mode } from "@/shared/storage/types"
-import { CodemarieIgnoreController, LOCK_TEXT_SYMBOL } from "../ignore/CodemarieIgnoreController"
+import { DietCodeIgnoreController, LOCK_TEXT_SYMBOL } from "../ignore/DietCodeIgnoreController"
 
 const CONTEXT_WINDOW_WARNING_THRESHOLD_PERCENT = 50
 
@@ -41,8 +41,7 @@ export const formatResponse = {
 
 	postExecutionSummary: (layer: string, score: number, violations?: string[]) => {
 		const label = layer.toUpperCase()
-		const statusLine =
-			score === 100 ? `✅ Clean write to **${label}** layer` : `⚠️ Joy-Zoning Audit: **${label}** layer`
+		const statusLine = score === 100 ? `✅ Clean write to **${label}** layer` : `⚠️ Joy-Zoning Audit: **${label}** layer`
 		const scoreLine = `🏆 Architectural Integrity: **${score}/100**`
 
 		let message = `${statusLine}\n${scoreLine}`
@@ -52,8 +51,8 @@ export const formatResponse = {
 		return message
 	},
 
-	codemarieIgnoreError: (path: string) =>
-		`Access to ${path} is blocked by the .codemarieignore file settings. You must try to continue in the task without using this file, or ask the user to update the .codemarieignore file.`,
+	dietcodeIgnoreError: (path: string) =>
+		`Access to ${path} is blocked by the .dietcodeignore file settings. You must try to continue in the task without using this file, or ask the user to update the .dietcodeignore file.`,
 
 	permissionDeniedError: (reason: string) =>
 		`Command execution blocked by CLINE_COMMAND_PERMISSIONS: ${reason}. You must try a different approach or ask the user to update the permission settings.`,
@@ -162,7 +161,7 @@ Otherwise, if you have not completed the task and do not need additional informa
 		absolutePath: string,
 		files: string[],
 		didHitLimit: boolean,
-		codemarieIgnoreController?: CodemarieIgnoreController,
+		dietcodeIgnoreController?: DietCodeIgnoreController,
 	): string => {
 		const { getLayer } = require("@/utils/joy-zoning")
 
@@ -174,7 +173,7 @@ Otherwise, if you have not completed the task and do not need additional informa
 				const layerTag = layer ? `[${layer.toUpperCase()}] ` : ""
 				return file.endsWith("/") ? `${layerTag + relativePath}/` : layerTag + relativePath
 			})
-			// Sort so files are listed under their respective directories to make it clear what files are children of what directories. Since we build file list top down, even if file list is truncated it will show directories that codemarie can then explore further.
+			// Sort so files are listed under their respective directories to make it clear what files are children of what directories. Since we build file list top down, even if file list is truncated it will show directories that dietcode can then explore further.
 			.sort((a, b) => {
 				const aParts = a.replace(/^\[[A-Z]+\] /, "").split("/") // remove layer tag for sorting
 				const bParts = b.replace(/^\[[A-Z]+\] /, "").split("/")
@@ -199,12 +198,12 @@ Otherwise, if you have not completed the task and do not need additional informa
 				return aParts.length - bParts.length
 			})
 
-		const codemarieIgnoreParsed = codemarieIgnoreController
+		const dietcodeIgnoreParsed = dietcodeIgnoreController
 			? sorted.map((displayPath) => {
 					// Extract the actual path by removing the layer tag
 					const cleanPath = displayPath.replace(/^\[[A-Z]+\] /, "")
 					const absoluteFilePath = path.resolve(absolutePath, cleanPath)
-					const isIgnored = !codemarieIgnoreController.validateAccess(absoluteFilePath)
+					const isIgnored = !dietcodeIgnoreController.validateAccess(absoluteFilePath)
 					if (isIgnored) {
 						return `${LOCK_TEXT_SYMBOL} ${displayPath}`
 					}
@@ -214,14 +213,14 @@ Otherwise, if you have not completed the task and do not need additional informa
 			: sorted
 
 		if (didHitLimit) {
-			return `${codemarieIgnoreParsed.join(
+			return `${dietcodeIgnoreParsed.join(
 				"\n",
 			)}\n\n(File list truncated. Use list_files on specific subdirectories if you need to explore further.)`
 		}
-		if (codemarieIgnoreParsed.length === 0 || (codemarieIgnoreParsed.length === 1 && codemarieIgnoreParsed[0] === "")) {
+		if (dietcodeIgnoreParsed.length === 0 || (dietcodeIgnoreParsed.length === 1 && dietcodeIgnoreParsed[0] === "")) {
 			return "No files found."
 		}
-		return codemarieIgnoreParsed.join("\n")
+		return dietcodeIgnoreParsed.join("\n")
 	},
 
 	createPrettyPatch: (filename = "file", oldStr?: string, newStr?: string) => {
@@ -318,17 +317,17 @@ Once you have a detailed architectural plan, use the plan_mode_respond tool to e
 	toolAlreadyUsed: (toolName: string) =>
 		`Tool [${toolName}] was not executed because a tool has already been used in this message. Only one tool may be used per message. You must assess the first tool's result before proceeding to use the next tool.`,
 
-	codemarieIgnoreInstructions: (content: string) =>
-		`# .codemarieignore\n\n(The following is provided by a root-level .codemarieignore file where the user has specified files and directories that should not be accessed. When using list_files, you'll notice a ${LOCK_TEXT_SYMBOL} next to files that are blocked. Attempting to access the file's contents e.g. through read_file will result in an error.)\n\n${content}\n.codemarieignore`,
+	dietcodeIgnoreInstructions: (content: string) =>
+		`# .dietcodeignore\n\n(The following is provided by a root-level .dietcodeignore file where the user has specified files and directories that should not be accessed. When using list_files, you'll notice a ${LOCK_TEXT_SYMBOL} next to files that are blocked. Attempting to access the file's contents e.g. through read_file will result in an error.)\n\n${content}\n.dietcodeignore`,
 
-	codemarieRulesGlobalDirectoryInstructions: (globalCodemarieRulesFilePath: string, content: string) =>
-		`# .codemarierules/\n\nThe following is provided by a global .codemarierules/ directory, located at ${globalCodemarieRulesFilePath.toPosix()}, where the user has specified instructions for all working directories:\n\n${content}`,
+	dietcodeRulesGlobalDirectoryInstructions: (globalDietCodeRulesFilePath: string, content: string) =>
+		`# .dietcoderules/\n\nThe following is provided by a global .dietcoderules/ directory, located at ${globalDietCodeRulesFilePath.toPosix()}, where the user has specified instructions for all working directories:\n\n${content}`,
 
-	codemarieRulesLocalDirectoryInstructions: (cwd: string, content: string) =>
-		`# .codemarierules/\n\nThe following is provided by a root-level .codemarierules/ directory where the user has specified instructions for this working directory (${cwd.toPosix()})\n\n${content}`,
+	dietcodeRulesLocalDirectoryInstructions: (cwd: string, content: string) =>
+		`# .dietcoderules/\n\nThe following is provided by a root-level .dietcoderules/ directory where the user has specified instructions for this working directory (${cwd.toPosix()})\n\n${content}`,
 
-	codemarieRulesLocalFileInstructions: (cwd: string, content: string) =>
-		`# .codemarierules\n\nThe following is provided by a root-level .codemarierules file where the user has specified instructions for this working directory (${cwd.toPosix()})\n\n${content}`,
+	dietcodeRulesLocalFileInstructions: (cwd: string, content: string) =>
+		`# .dietcoderules\n\nThe following is provided by a root-level .dietcoderules file where the user has specified instructions for this working directory (${cwd.toPosix()})\n\n${content}`,
 
 	windsurfRulesLocalFileInstructions: (cwd: string, content: string) =>
 		`# .windsurfrules\n\nThe following is provided by a root-level .windsurfrules file where the user has specified instructions for this working directory (${cwd.toPosix()})\n\n${content}`,

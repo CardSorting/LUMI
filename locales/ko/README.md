@@ -17,7 +17,7 @@
 <a href="https://www.reddit.com/r/cline/" target="_blank"><strong>r/cline</strong></a>
 </td>
 <td align="center">
-<a href="https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>기능 요청</strong></a>
+<a href="https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>기능 요청</strong></a>
 </td>
 <td align="center">
 <a href="https://cline.bot/join-us" target="_blank"><strong>채용 정보</strong></a>
@@ -129,7 +129,7 @@ Cline이 작업을 진행하는 동안 확장 프로그램은 각 단계에서 �
 
 1. 리포지토리를 클론합니다 _(Requires [git-lfs](https://git-lfs.com/))_：
         ```bash
-        git clone https://github.com/codemarie/codemarie.git
+        git clone https://github.com/dietcode/dietcode.git
         ```
 2. 프로젝트를 VSCode에서 엽니다：
         ```bash

@@ -1,1 +1,1 @@
-export { CodemarieTempManager } from "./CodemarieTempManager"
+export { DietCodeTempManager } from "./DietCodeTempManager"

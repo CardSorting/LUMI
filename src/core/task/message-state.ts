@@ -5,35 +5,35 @@ import Mutex from "p-mutex"
 import { findLastIndex } from "@/shared/array"
 import { combineApiRequests } from "@/shared/combineApiRequests"
 import { combineCommandSequences } from "@/shared/combineCommandSequences"
-import { CodemarieMessage } from "@/shared/ExtensionMessage"
+import { DietCodeMessage } from "@/shared/ExtensionMessage"
 import { getApiMetrics } from "@/shared/getApiMetrics"
 import { HistoryItem } from "@/shared/HistoryItem"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
 import { getCwd, getDesktopDir } from "@/utils/path"
-import { ensureTaskDirectoryExists, saveApiConversationHistory, saveCodemarieMessages } from "../storage/disk"
+import { ensureTaskDirectoryExists, saveApiConversationHistory, saveDietCodeMessages } from "../storage/disk"
 import { TaskState } from "./TaskState"
 
-// Event types for codemarieMessages changes
-export type CodemarieMessageChangeType = "add" | "update" | "delete" | "set"
+// Event types for dietcodeMessages changes
+export type DietCodeMessageChangeType = "add" | "update" | "delete" | "set"
 
-export interface CodemarieMessageChange {
-	type: CodemarieMessageChangeType
+export interface DietCodeMessageChange {
+	type: DietCodeMessageChangeType
 	/** The full array after the change */
-	messages: CodemarieMessage[]
+	messages: DietCodeMessage[]
 	/** The affected index (for add/update/delete) */
 	index?: number
 	/** The new/updated message (for add/update) */
-	message?: CodemarieMessage
+	message?: DietCodeMessage
 	/** The old message before change (for update/delete) */
-	previousMessage?: CodemarieMessage
+	previousMessage?: DietCodeMessage
 	/** The entire previous array (for set) */
-	previousMessages?: CodemarieMessage[]
+	previousMessages?: DietCodeMessage[]
 }
 
 // Strongly-typed event emitter interface
 export interface MessageStateHandlerEvents {
-	codemarieMessagesChanged: [change: CodemarieMessageChange]
+	dietcodeMessagesChanged: [change: DietCodeMessageChange]
 }
 
 interface MessageStateHandlerParams {
@@ -46,8 +46,8 @@ interface MessageStateHandlerParams {
 }
 
 export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents> {
-	private apiConversationHistory: CodemarieStorageMessage[] = []
-	private codemarieMessages: CodemarieMessage[] = []
+	private apiConversationHistory: DietCodeStorageMessage[] = []
+	private dietcodeMessages: DietCodeMessage[] = []
 	private taskIsFavorited: boolean
 	private checkpointTracker: CheckpointTracker | undefined
 	private updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
@@ -71,10 +71,10 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 	}
 
 	/**
-	 * Emit a codemarieMessagesChanged event with the change details
+	 * Emit a dietcodeMessagesChanged event with the change details
 	 */
-	private emitCodemarieMessagesChanged(change: CodemarieMessageChange): void {
-		this.emit("codemarieMessagesChanged", change)
+	private emitDietCodeMessagesChanged(change: DietCodeMessageChange): void {
+		this.emit("dietcodeMessagesChanged", change)
 	}
 
 	setCheckpointTracker(tracker: CheckpointTracker | undefined) {
@@ -90,24 +90,24 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 		return await this.stateMutex.withLock(fn)
 	}
 
-	getApiConversationHistory(): CodemarieStorageMessage[] {
+	getApiConversationHistory(): DietCodeStorageMessage[] {
 		return this.apiConversationHistory
 	}
 
-	setApiConversationHistory(newHistory: CodemarieStorageMessage[]): void {
+	setApiConversationHistory(newHistory: DietCodeStorageMessage[]): void {
 		this.apiConversationHistory = newHistory
 	}
 
-	getCodemarieMessages(): CodemarieMessage[] {
-		return this.codemarieMessages
+	getDietCodeMessages(): DietCodeMessage[] {
+		return this.dietcodeMessages
 	}
 
-	setCodemarieMessages(newMessages: CodemarieMessage[]) {
-		const previousMessages = this.codemarieMessages
-		this.codemarieMessages = newMessages
-		this.emitCodemarieMessagesChanged({
+	setDietCodeMessages(newMessages: DietCodeMessage[]) {
+		const previousMessages = this.dietcodeMessages
+		this.dietcodeMessages = newMessages
+		this.emitDietCodeMessagesChanged({
 			type: "set",
-			messages: this.codemarieMessages,
+			messages: this.dietcodeMessages,
 			previousMessages,
 		})
 	}
@@ -115,19 +115,19 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 	/**
 	 * Internal method to save messages and update history (without mutex protection)
 	 * This is used by methods that already hold the stateMutex lock
-	 * Should NOT be called directly - use saveCodemarieMessagesAndUpdateHistory() instead
+	 * Should NOT be called directly - use saveDietCodeMessagesAndUpdateHistory() instead
 	 */
-	private async saveCodemarieMessagesAndUpdateHistoryInternal(): Promise<void> {
+	private async saveDietCodeMessagesAndUpdateHistoryInternal(): Promise<void> {
 		try {
-			await saveCodemarieMessages(this.taskId, this.codemarieMessages)
+			await saveDietCodeMessages(this.taskId, this.dietcodeMessages)
 
 			// combined as they are in ChatView
-			const apiMetrics = getApiMetrics(combineApiRequests(combineCommandSequences(this.codemarieMessages.slice(1))))
-			const taskMessage = this.codemarieMessages[0] // first message is always the task say
+			const apiMetrics = getApiMetrics(combineApiRequests(combineCommandSequences(this.dietcodeMessages.slice(1))))
+			const taskMessage = this.dietcodeMessages[0] // first message is always the task say
 			const lastRelevantMessage =
-				this.codemarieMessages[
+				this.dietcodeMessages[
 					findLastIndex(
-						this.codemarieMessages,
+						this.dietcodeMessages,
 						(message) => !(message.ask === "resume_task" || message.ask === "resume_completed_task"),
 					)
 				]
@@ -161,21 +161,21 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 				modelId: lastModelInfo?.modelInfo?.modelId,
 			})
 		} catch (error) {
-			Logger.error("Failed to save codemarie messages:", error)
+			Logger.error("Failed to save dietcode messages:", error)
 		}
 	}
 
 	/**
-	 * Save codemarie messages and update task history (public API with mutex protection)
+	 * Save dietcode messages and update task history (public API with mutex protection)
 	 * This is the main entry point for saving message state from external callers
 	 */
-	async saveCodemarieMessagesAndUpdateHistory(): Promise<void> {
+	async saveDietCodeMessagesAndUpdateHistory(): Promise<void> {
 		return await this.withStateLock(async () => {
-			await this.saveCodemarieMessagesAndUpdateHistoryInternal()
+			await this.saveDietCodeMessagesAndUpdateHistoryInternal()
 		})
 	}
 
-	async addToApiConversationHistory(message: CodemarieStorageMessage) {
+	async addToApiConversationHistory(message: DietCodeStorageMessage) {
 		// Protect with mutex to prevent concurrent modifications from corrupting data (RC-4)
 		return await this.withStateLock(async () => {
 			this.apiConversationHistory.push(message)
@@ -183,7 +183,7 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 		})
 	}
 
-	async overwriteApiConversationHistory(newHistory: CodemarieStorageMessage[]): Promise<void> {
+	async overwriteApiConversationHistory(newHistory: DietCodeStorageMessage[]): Promise<void> {
 		// Protect with mutex to prevent concurrent modifications from corrupting data (RC-4)
 		return await this.withStateLock(async () => {
 			this.apiConversationHistory = newHistory
@@ -192,100 +192,100 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 	}
 
 	/**
-	 * Add a new message to codemarieMessages array with proper index tracking
+	 * Add a new message to dietcodeMessages array with proper index tracking
 	 * CRITICAL: This entire operation must be atomic to prevent race conditions (RC-4)
 	 * The conversationHistoryIndex must be set correctly based on the current state,
 	 * and the message must be added and saved without any interleaving operations
 	 */
-	async addToCodemarieMessages(message: CodemarieMessage) {
+	async addToDietCodeMessages(message: DietCodeMessage) {
 		return await this.withStateLock(async () => {
-			// these values allow us to reconstruct the conversation history at the time this codemarie message was created
-			// it's important that apiConversationHistory is initialized before we add codemarie messages
-			message.conversationHistoryIndex = this.apiConversationHistory.length - 1 // NOTE: this is the index of the last added message which is the user message, and once the codemariemessages have been presented we update the apiconversationhistory with the completed assistant message. This means when resetting to a message, we need to +1 this index to get the correct assistant message that this tool use corresponds to
+			// these values allow us to reconstruct the conversation history at the time this dietcode message was created
+			// it's important that apiConversationHistory is initialized before we add dietcode messages
+			message.conversationHistoryIndex = this.apiConversationHistory.length - 1 // NOTE: this is the index of the last added message which is the user message, and once the dietcodemessages have been presented we update the apiconversationhistory with the completed assistant message. This means when resetting to a message, we need to +1 this index to get the correct assistant message that this tool use corresponds to
 			message.conversationHistoryDeletedRange = this.taskState.conversationHistoryDeletedRange
-			const index = this.codemarieMessages.length
-			this.codemarieMessages.push(message)
-			this.emitCodemarieMessagesChanged({
+			const index = this.dietcodeMessages.length
+			this.dietcodeMessages.push(message)
+			this.emitDietCodeMessagesChanged({
 				type: "add",
-				messages: this.codemarieMessages,
+				messages: this.dietcodeMessages,
 				index,
 				message,
 			})
-			await this.saveCodemarieMessagesAndUpdateHistoryInternal()
+			await this.saveDietCodeMessagesAndUpdateHistoryInternal()
 		})
 	}
 
 	/**
-	 * Replace the entire codemarieMessages array with new messages
+	 * Replace the entire dietcodeMessages array with new messages
 	 * Protected by mutex to prevent concurrent modifications (RC-4)
 	 */
-	async overwriteCodemarieMessages(newMessages: CodemarieMessage[]) {
+	async overwriteDietCodeMessages(newMessages: DietCodeMessage[]) {
 		return await this.withStateLock(async () => {
-			const previousMessages = this.codemarieMessages
-			this.codemarieMessages = newMessages
-			this.emitCodemarieMessagesChanged({
+			const previousMessages = this.dietcodeMessages
+			this.dietcodeMessages = newMessages
+			this.emitDietCodeMessagesChanged({
 				type: "set",
-				messages: this.codemarieMessages,
+				messages: this.dietcodeMessages,
 				previousMessages,
 			})
-			await this.saveCodemarieMessagesAndUpdateHistoryInternal()
+			await this.saveDietCodeMessagesAndUpdateHistoryInternal()
 		})
 	}
 
 	/**
-	 * Update a specific message in the codemarieMessages array
+	 * Update a specific message in the dietcodeMessages array
 	 * The entire operation (validate, update, save) is atomic to prevent races (RC-4)
 	 */
-	async updateCodemarieMessage(index: number, updates: Partial<CodemarieMessage>): Promise<void> {
+	async updateDietCodeMessage(index: number, updates: Partial<DietCodeMessage>): Promise<void> {
 		return await this.withStateLock(async () => {
-			if (index < 0 || index >= this.codemarieMessages.length) {
+			if (index < 0 || index >= this.dietcodeMessages.length) {
 				throw new Error(`Invalid message index: ${index}`)
 			}
 
 			// Capture previous state before mutation
-			const previousMessage = { ...this.codemarieMessages[index] }
+			const previousMessage = { ...this.dietcodeMessages[index] }
 
 			// Apply updates to the message
-			Object.assign(this.codemarieMessages[index], updates)
+			Object.assign(this.dietcodeMessages[index], updates)
 
-			this.emitCodemarieMessagesChanged({
+			this.emitDietCodeMessagesChanged({
 				type: "update",
-				messages: this.codemarieMessages,
+				messages: this.dietcodeMessages,
 				index,
 				previousMessage,
-				message: this.codemarieMessages[index],
+				message: this.dietcodeMessages[index],
 			})
 
 			// Save changes and update history
-			await this.saveCodemarieMessagesAndUpdateHistoryInternal()
+			await this.saveDietCodeMessagesAndUpdateHistoryInternal()
 		})
 	}
 
 	/**
-	 * Delete a specific message from the codemarieMessages array
+	 * Delete a specific message from the dietcodeMessages array
 	 * The entire operation (validate, delete, save) is atomic to prevent races (RC-4)
 	 */
-	async deleteCodemarieMessage(index: number): Promise<void> {
+	async deleteDietCodeMessage(index: number): Promise<void> {
 		return await this.withStateLock(async () => {
-			if (index < 0 || index >= this.codemarieMessages.length) {
+			if (index < 0 || index >= this.dietcodeMessages.length) {
 				throw new Error(`Invalid message index: ${index}`)
 			}
 
 			// Capture the message before deletion
-			const previousMessage = this.codemarieMessages[index]
+			const previousMessage = this.dietcodeMessages[index]
 
 			// Remove the message at the specified index
-			this.codemarieMessages.splice(index, 1)
+			this.dietcodeMessages.splice(index, 1)
 
-			this.emitCodemarieMessagesChanged({
+			this.emitDietCodeMessagesChanged({
 				type: "delete",
-				messages: this.codemarieMessages,
+				messages: this.dietcodeMessages,
 				index,
 				previousMessage,
 			})
 
 			// Save changes and update history
-			await this.saveCodemarieMessagesAndUpdateHistoryInternal()
+			await this.saveDietCodeMessagesAndUpdateHistoryInternal()
 		})
 	}
 }

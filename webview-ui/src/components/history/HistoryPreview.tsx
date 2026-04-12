@@ -1,4 +1,4 @@
-import { StringRequest } from "@shared/proto/codemarie/common"
+import { StringRequest } from "@shared/proto/dietcode/common"
 import { memo } from "react"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { useExtensionState } from "@/context/ExtensionStateContext"

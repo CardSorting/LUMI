@@ -1,6 +1,6 @@
 import { BROWSER_VIEWPORT_PRESETS } from "@shared/BrowserSettings"
-import { BrowserAction, BrowserActionResult, CodemarieMessage, CodemarieSayBrowserAction } from "@shared/ExtensionMessage"
-import { StringRequest } from "@shared/proto/codemarie/common"
+import { BrowserAction, BrowserActionResult, DietCodeMessage, DietCodeSayBrowserAction } from "@shared/ExtensionMessage"
+import { StringRequest } from "@shared/proto/dietcode/common"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
@@ -16,10 +16,10 @@ import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
 
 interface BrowserSessionRowProps {
-	messages: CodemarieMessage[]
+	messages: DietCodeMessage[]
 	expandedRows: Record<number, boolean>
 	onToggleExpand: (messageTs: number) => void
-	lastModifiedMessage?: CodemarieMessage
+	lastModifiedMessage?: DietCodeMessage
 	isLast: boolean
 	onHeightChange: (isTaller: boolean) => void
 	onSetQuote: (text: string) => void
@@ -146,15 +146,15 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 				screenshot?: string
 				mousePosition?: string
 				consoleLogs?: string
-				messages: CodemarieMessage[] // messages up to and including the result
+				messages: DietCodeMessage[] // messages up to and including the result
 			}
 			nextAction?: {
-				messages: CodemarieMessage[] // messages leading to next result
+				messages: DietCodeMessage[] // messages leading to next result
 			}
 		}[] = []
 
-		let currentStateMessages: CodemarieMessage[] = []
-		let nextActionMessages: CodemarieMessage[] = []
+		let currentStateMessages: DietCodeMessage[] = []
+		let nextActionMessages: DietCodeMessage[] = []
 
 		messages.forEach((message) => {
 			if (message.ask === "browser_action_launch" || message.say === "browser_action_launch") {
@@ -325,7 +325,7 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 		for (let i = actions.length - 1; i >= 0; i--) {
 			const message = actions[i]
 			if (message.say === "browser_action") {
-				const browserAction = JSON.parse(message.text || "{}") as CodemarieSayBrowserAction
+				const browserAction = JSON.parse(message.text || "{}") as DietCodeSayBrowserAction
 				if (browserAction.action === "click" && browserAction.coordinate) {
 					return browserAction.coordinate
 				}
@@ -361,7 +361,7 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 					<VscIcon className="" name="inspect" style={browserIconStyle} />
 				)}
 				<span style={approveTextStyle}>
-					{isAutoApproved ? "Codemarie is using the browser:" : "Codemarie wants to use the browser:"}
+					{isAutoApproved ? "DietCode is using the browser:" : "DietCode wants to use the browser:"}
 				</span>
 			</div>
 			<div
@@ -492,7 +492,7 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 }, deepEqual)
 
 interface BrowserSessionRowContentProps extends Omit<BrowserSessionRowProps, "messages" | "onHeightChange"> {
-	message: CodemarieMessage
+	message: DietCodeMessage
 	setMaxActionHeight: (height: number) => void
 	onSetQuote: (text: string) => void
 }
@@ -548,7 +548,7 @@ const BrowserSessionRowContent = memo(
 						)
 
 					case "browser_action":
-						const browserAction = JSON.parse(message.text || "{}") as CodemarieSayBrowserAction
+						const browserAction = JSON.parse(message.text || "{}") as DietCodeSayBrowserAction
 						return (
 							<BrowserActionBox
 								action={browserAction.action}

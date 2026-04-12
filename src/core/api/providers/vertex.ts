@@ -3,8 +3,8 @@ import { AnthropicVertex } from "@anthropic-ai/vertex-sdk"
 import { FunctionDeclaration as GoogleTool } from "@google/genai"
 import { CLAUDE_SONNET_1M_SUFFIX, ModelInfo, VertexModelId, vertexDefaultModelId, vertexModels } from "@shared/api"
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
-import { CodemarieTool } from "@/shared/tools"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
+import { DietCodeTool } from "@/shared/tools"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { sanitizeAnthropicMessages } from "../transform/anthropic-format"
@@ -69,7 +69,7 @@ export class VertexHandler implements ApiHandler {
 	}
 
 	@withRetry()
-	async *createMessage(systemPrompt: string, messages: CodemarieStorageMessage[], tools?: CodemarieTool[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: DietCodeTool[]): ApiStream {
 		const model = this.getModel()
 		const rawModelId = model.id
 		const modelId = rawModelId.endsWith(CLAUDE_SONNET_1M_SUFFIX)

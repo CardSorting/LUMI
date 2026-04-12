@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Content, GenerateContentResponse, Part } from "@google/genai"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 
 // Source: https://ai.google.dev/gemini-api/docs/thought-signatures#faqs
 // While injecting custom function call blocks into the request is strongly discouraged,
@@ -11,7 +11,7 @@ import { CodemarieStorageMessage } from "@/shared/messages/content"
 const GEMINI_DUMMY_THOUGHT_SIGNATURE = "skip_thought_signature_validator"
 
 export function convertAnthropicContentToGemini(
-	content: string | CodemarieStorageMessage["content"],
+	content: string | DietCodeStorageMessage["content"],
 	modelContext?: { originalModelId?: string; currentModelId?: string },
 ): Part[] {
 	if (typeof content === "string") {
@@ -77,7 +77,7 @@ export function convertAnthropicContentToGemini(
 		.filter((part): part is Part => part !== undefined) // Filter out unsupported blocks
 }
 
-export function convertAnthropicMessageToGemini(message: CodemarieStorageMessage, currentModelId?: string): Content {
+export function convertAnthropicMessageToGemini(message: DietCodeStorageMessage, currentModelId?: string): Content {
 	const originalModelId = message.modelInfo?.modelId
 	return {
 		role: message.role === "assistant" ? "model" : "user",

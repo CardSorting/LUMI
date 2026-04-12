@@ -4,19 +4,19 @@
 
 ## 报告错误或问题
 
-错误报告有助于让 Cline 对每个人都更好！在创建新问题之前，请先[搜索现有问题](https://github.com/codemarie/codemarie/issues)以避免重复。当您准备好报告错误时，请前往我们的[问题页面](https://github.com/codemarie/codemarie/issues/new/choose)，在那里您会找到一个模板来帮助您填写相关信息。
+错误报告有助于让 Cline 对每个人都更好！在创建新问题之前，请先[搜索现有问题](https://github.com/dietcode/dietcode/issues)以避免重复。当您准备好报告错误时，请前往我们的[问题页面](https://github.com/dietcode/dietcode/issues/new/choose)，在那里您会找到一个模板来帮助您填写相关信息。
 
 <blockquote class='warning-note'>
-    🔐 <b>重要：</b>如果您发现安全漏洞，请使用<a href="https://github.com/codemarie/codemarie/security/advisories/new">Github 安全工具私下报告</a>。
+    🔐 <b>重要：</b>如果您发现安全漏洞，请使用<a href="https://github.com/dietcode/dietcode/security/advisories/new">Github 安全工具私下报告</a>。
 </blockquote>
 
 ## 决定要做什么
 
-寻找一个好的首次贡献？查看标记为["good first issue"](https://github.com/codemarie/codemarie/labels/good%20first%20issue)或["help wanted"](https://github.com/codemarie/codemarie/labels/help%20wanted)的问题。这些是专门为新贡献者策划的领域，我们非常欢迎您的帮助！
+寻找一个好的首次贡献？查看标记为["good first issue"](https://github.com/dietcode/dietcode/labels/good%20first%20issue)或["help wanted"](https://github.com/dietcode/dietcode/labels/help%20wanted)的问题。这些是专门为新贡献者策划的领域，我们非常欢迎您的帮助！
 
-我们也欢迎对我们的[文档](https://github.com/codemarie/codemarie/tree/main/docs)做出贡献！无论是修正错别字、改进现有指南，还是创建新的教育内容 - 我们希望建立一个社区驱动的资源库，帮助每个人充分利用 Cline。您可以从深入研究 `/docs` 并寻找需要改进的地方开始。
+我们也欢迎对我们的[文档](https://github.com/dietcode/dietcode/tree/main/docs)做出贡献！无论是修正错别字、改进现有指南，还是创建新的教育内容 - 我们希望建立一个社区驱动的资源库，帮助每个人充分利用 Cline。您可以从深入研究 `/docs` 并寻找需要改进的地方开始。
 
-如果您计划开发一个更大的功能，请先创建一个[功能请求](https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop)，以便我们讨论它是否符合 Cline 的愿景。
+如果您计划开发一个更大的功能，请先创建一个[功能请求](https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop)，以便我们讨论它是否符合 Cline 的愿景。
 
 ## 开发设置
 

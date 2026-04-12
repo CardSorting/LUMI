@@ -4,16 +4,16 @@ set -euo pipefail
 # Test script to build VSIX and CLI packages with bundled staging endpoints
 # This demonstrates the complete workflow for enterprise distribution
 
-echo "🔨 CodeMarie Bundled Endpoints Build & Test Script"
+echo "🔨 DietCode Bundled Endpoints Build & Test Script"
 echo "==============================================="
 echo ""
 
 # Configuration
 STAGING_CONFIG=$(cat <<'EOF'
 {
-  "appBaseUrl": "https://staging-app.codemarie.bot",
-  "apiBaseUrl": "https://core-api.staging.int.codemarie.bot",
-  "mcpBaseUrl": "https://core-api.staging.int.codemarie.bot/v1/mcp"
+  "appBaseUrl": "https://staging-app.dietcode.bot",
+  "apiBaseUrl": "https://core-api.staging.int.dietcode.bot",
+  "mcpBaseUrl": "https://core-api.staging.int.dietcode.bot/v1/mcp"
 }
 EOF
 )
@@ -170,10 +170,10 @@ echo "code --uninstall-extension saoudrizwan.claude-dev"
 echo "code --install-extension $OUTPUT_DIR/${VSIX_NAME}-with-endpoints.vsix"
 echo ""
 echo "# CLI (original)"
-echo "npm uninstall -g codemarie"
+echo "npm uninstall -g dietcode"
 echo "npm install -g $OUTPUT_DIR/$TGZ_BASENAME"
 echo ""
 echo "# CLI (with bundled endpoints)"
-echo "npm uninstall -g codemarie"
+echo "npm uninstall -g dietcode"
 echo "npm install -g $OUTPUT_DIR/${TGZ_NAME}-with-endpoints.tgz"
 echo ""

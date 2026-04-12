@@ -1,4 +1,4 @@
-import type { Boolean, EmptyRequest } from "@shared/proto/codemarie/common"
+import type { Boolean, EmptyRequest } from "@shared/proto/dietcode/common"
 import { useEffect, useMemo } from "react"
 import AccountView from "./components/account/AccountView"
 import ChatView from "./components/chat/ChatView"
@@ -9,7 +9,7 @@ import OnboardingView from "./components/onboarding/OnboardingView"
 import SettingsView from "./components/settings/SettingsView"
 import WelcomeView from "./components/welcome/WelcomeView"
 import WorktreesView from "./components/worktrees/WorktreesView"
-import { useCodemarieAuth } from "./context/CodemarieAuthContext"
+import { useDietCodeAuth } from "./context/DietCodeAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
 import { Providers } from "./Providers"
 import { UiServiceClient } from "./services/grpc-client"
@@ -43,7 +43,7 @@ const AppContent = () => {
 		hideAnnouncement,
 	} = useExtensionState()
 
-	const { codemarieUser, organizations, activeOrganization } = useCodemarieAuth()
+	const { dietcodeUser, organizations, activeOrganization } = useDietCodeAuth()
 
 	useEffect(() => {
 		if (shouldShowAnnouncement) {
@@ -105,7 +105,7 @@ const AppContent = () => {
 			{showAccount && (
 				<AccountView
 					activeOrganization={activeOrganization}
-					codemarieUser={codemarieUser}
+					dietcodeUser={dietcodeUser}
 					onDone={hideAccount}
 					organizations={organizations}
 				/>

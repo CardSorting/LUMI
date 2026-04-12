@@ -1,5 +1,5 @@
 import { ApiProvider } from "@shared/api"
-import type { CodemarieFileStorage } from "@shared/storage/CodemarieFileStorage"
+import type { DietCodeFileStorage } from "@shared/storage/DietCodeFileStorage"
 import {
 	applyTransform,
 	GlobalStateAndSettingKeys,
@@ -13,16 +13,16 @@ import {
 	Secrets,
 } from "@shared/storage/state-keys"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieMemento } from "@/shared/storage"
+import { DietCodeMemento } from "@/shared/storage"
 import { readTaskHistoryFromState } from "../disk"
 import { StateManager } from "../StateManager"
 
 // ─── File-backed storage readers (used by StateManager) ────────────────────
 
 /**
- * Read secrets from a CodemarieFileStorage instance.
+ * Read secrets from a DietCodeFileStorage instance.
  */
-export function readSecretsFromStorage(store: CodemarieFileStorage<string>): Secrets {
+export function readSecretsFromStorage(store: DietCodeFileStorage<string>): Secrets {
 	return SecretKeys.reduce((acc, key) => {
 		acc[key] = store.get(key)
 		return acc
@@ -30,9 +30,9 @@ export function readSecretsFromStorage(store: CodemarieFileStorage<string>): Sec
 }
 
 /**
- * Read workspace state from a CodemarieFileStorage instance.
+ * Read workspace state from a DietCodeFileStorage instance.
  */
-export function readWorkspaceStateFromStorage(store: CodemarieFileStorage): LocalState {
+export function readWorkspaceStateFromStorage(store: DietCodeFileStorage): LocalState {
 	return LocalStateKeys.reduce((acc, key) => {
 		acc[key] = store.get(key) || {}
 		return acc
@@ -40,9 +40,9 @@ export function readWorkspaceStateFromStorage(store: CodemarieFileStorage): Loca
 }
 
 /**
- * Read global state from a CodemarieFileStorage instance.
+ * Read global state from a DietCodeFileStorage instance.
  */
-export async function readGlobalStateFromStorage(store: CodemarieMemento): Promise<GlobalStateAndSettings> {
+export async function readGlobalStateFromStorage(store: DietCodeMemento): Promise<GlobalStateAndSettings> {
 	try {
 		// Batch read all state values in a single optimized pass
 		const stateValues = new Map<string, any>()

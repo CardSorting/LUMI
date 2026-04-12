@@ -7,7 +7,7 @@ import * as fs from "fs/promises"
 import * as iconv from "iconv-lite"
 import { HostProvider } from "@/hosts/host-provider"
 import { diagnosticsToProblemsString, getNewDiagnostics } from "@/integrations/diagnostics"
-import { DiagnosticSeverity, FileDiagnostics } from "@/shared/proto/index.codemarie"
+import { DiagnosticSeverity, FileDiagnostics } from "@/shared/proto/index.dietcode"
 import { Logger } from "@/shared/services/Logger"
 import { detectEncoding } from "../misc/extract-text"
 import { sanitizeNotebookForLLM } from "../misc/notebook-utils"
@@ -53,7 +53,7 @@ export abstract class DiffViewProvider {
 		if (!fileExists) {
 			await fs.writeFile(this.absolutePath, "")
 		}
-		// get diagnostics before editing the file, we'll compare to diagnostics after editing to see if codemarie needs to fix anything
+		// get diagnostics before editing the file, we'll compare to diagnostics after editing to see if dietcode needs to fix anything
 		this.preDiagnostics = (await HostProvider.workspace.getDiagnostics({})).fileDiagnostics
 		await this.openDiffEditor()
 		await this.scrollEditorToLine(0)
@@ -127,17 +127,17 @@ export abstract class DiffViewProvider {
 	 * Getting diagnostics before and after the file edit is a better approach than
 	 * automatically tracking problems in real-time. This method ensures we only
 	 * report new problems that are a direct result of this specific edit.
-	 * Since these are new problems resulting from Codemarie's edit, we know they're
-	 * directly related to the work he's doing. This eliminates the risk of Codemarie
+	 * Since these are new problems resulting from DietCode's edit, we know they're
+	 * directly related to the work he's doing. This eliminates the risk of DietCode
 	 * going off-task or getting distracted by unrelated issues, which was a problem
 	 * with the previous auto-debug approach. Some users' machines may be slow to
 	 * update diagnostics, so this approach provides a good balance between automation
-	 * and avoiding potential issues where Codemarie might get stuck in loops due to
+	 * and avoiding potential issues where DietCode might get stuck in loops due to
 	 * outdated problem information. If no new problems show up by the time the user
 	 * accepts the changes, they can always debug later using the '@problems' mention.
-	 * This way, Codemarie only becomes aware of new problems resulting from his edits
+	 * This way, DietCode only becomes aware of new problems resulting from his edits
 	 * and can address them accordingly. If problems don't change immediately after
-	 * applying a fix, Codemarie won't be notified, which is generally fine since the
+	 * applying a fix, DietCode won't be notified, which is generally fine since the
 	 * initial fix is usually correct and it may just take time for linters to catch up.
 	 */
 	private async getNewDiagnosticProblems(): Promise<string> {
@@ -374,7 +374,7 @@ export abstract class DiffViewProvider {
 			userEdits = formatResponse.createPrettyPatch(this.relPath.toPosix(), normalizedNewContent, normalizedPreSaveContent)
 			// return { newProblemsMessage, userEdits, finalContent: normalizedPostSaveContent }
 		} else {
-			// no changes to codemarie's edits
+			// no changes to dietcode's edits
 			// return { newProblemsMessage, userEdits: undefined, finalContent: normalizedPostSaveContent }
 		}
 

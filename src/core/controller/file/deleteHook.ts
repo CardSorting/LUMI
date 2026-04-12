@@ -1,4 +1,4 @@
-import { DeleteHookRequest, DeleteHookResponse } from "@shared/proto/codemarie/file"
+import { DeleteHookRequest, DeleteHookResponse } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import { HookDiscoveryCache } from "../../hooks/HookDiscoveryCache"
 import { resolveExistingHookPath, resolveHooksDirectory } from "../../hooks/utils"

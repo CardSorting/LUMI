@@ -169,62 +169,62 @@ function getOtelConfig(): OpenTelemetryClientConfig {
  */
 function getRuntimeOtelConfig(): OpenTelemetryClientConfig {
 	return {
-		enabled: (process.env.CODEMARIE_OTEL_TELEMETRY_ENABLED || process.env.CLINE_OTEL_TELEMETRY_ENABLED) === "true",
-		metricsExporter: process.env.CODEMARIE_OTEL_METRICS_EXPORTER || process.env.CLINE_OTEL_METRICS_EXPORTER,
-		logsExporter: process.env.CODEMARIE_OTEL_LOGS_EXPORTER || process.env.CLINE_OTEL_LOGS_EXPORTER,
-		otlpProtocol: process.env.CODEMARIE_OTEL_EXPORTER_OTLP_PROTOCOL || process.env.CLINE_OTEL_EXPORTER_OTLP_PROTOCOL,
-		otlpEndpoint: process.env.CODEMARIE_OTEL_EXPORTER_OTLP_ENDPOINT || process.env.CLINE_OTEL_EXPORTER_OTLP_ENDPOINT,
+		enabled: (process.env.DIETCODE_OTEL_TELEMETRY_ENABLED || process.env.CLINE_OTEL_TELEMETRY_ENABLED) === "true",
+		metricsExporter: process.env.DIETCODE_OTEL_METRICS_EXPORTER || process.env.CLINE_OTEL_METRICS_EXPORTER,
+		logsExporter: process.env.DIETCODE_OTEL_LOGS_EXPORTER || process.env.CLINE_OTEL_LOGS_EXPORTER,
+		otlpProtocol: process.env.DIETCODE_OTEL_EXPORTER_OTLP_PROTOCOL || process.env.CLINE_OTEL_EXPORTER_OTLP_PROTOCOL,
+		otlpEndpoint: process.env.DIETCODE_OTEL_EXPORTER_OTLP_ENDPOINT || process.env.CLINE_OTEL_EXPORTER_OTLP_ENDPOINT,
 		otlpMetricsProtocol:
-			process.env.CODEMARIE_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL || process.env.CLINE_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL,
+			process.env.DIETCODE_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL || process.env.CLINE_OTEL_EXPORTER_OTLP_METRICS_PROTOCOL,
 		otlpMetricsEndpoint:
-			process.env.CODEMARIE_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT || process.env.CLINE_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
+			process.env.DIETCODE_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT || process.env.CLINE_OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
 		otlpLogsProtocol:
-			process.env.CODEMARIE_OTEL_EXPORTER_OTLP_LOGS_PROTOCOL || process.env.CLINE_OTEL_EXPORTER_OTLP_LOGS_PROTOCOL,
+			process.env.DIETCODE_OTEL_EXPORTER_OTLP_LOGS_PROTOCOL || process.env.CLINE_OTEL_EXPORTER_OTLP_LOGS_PROTOCOL,
 		otlpLogsEndpoint:
-			process.env.CODEMARIE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT || process.env.CLINE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
+			process.env.DIETCODE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT || process.env.CLINE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
 		metricExportInterval:
-			process.env.CODEMARIE_OTEL_METRIC_EXPORT_INTERVAL || process.env.CLINE_OTEL_METRIC_EXPORT_INTERVAL
+			process.env.DIETCODE_OTEL_METRIC_EXPORT_INTERVAL || process.env.CLINE_OTEL_METRIC_EXPORT_INTERVAL
 				? Number.parseInt(
-						process.env.CODEMARIE_OTEL_METRIC_EXPORT_INTERVAL || process.env.CLINE_OTEL_METRIC_EXPORT_INTERVAL || "",
+						process.env.DIETCODE_OTEL_METRIC_EXPORT_INTERVAL || process.env.CLINE_OTEL_METRIC_EXPORT_INTERVAL || "",
 						10,
 					)
 				: undefined,
 		otlpInsecure:
-			(process.env.CODEMARIE_OTEL_EXPORTER_OTLP_INSECURE || process.env.CLINE_OTEL_EXPORTER_OTLP_INSECURE) === "true",
+			(process.env.DIETCODE_OTEL_EXPORTER_OTLP_INSECURE || process.env.CLINE_OTEL_EXPORTER_OTLP_INSECURE) === "true",
 		logBatchSize:
-			process.env.CODEMARIE_OTEL_LOG_BATCH_SIZE || process.env.CLINE_OTEL_LOG_BATCH_SIZE
+			process.env.DIETCODE_OTEL_LOG_BATCH_SIZE || process.env.CLINE_OTEL_LOG_BATCH_SIZE
 				? Math.max(
 						1,
 						Number.parseInt(
-							process.env.CODEMARIE_OTEL_LOG_BATCH_SIZE || process.env.CLINE_OTEL_LOG_BATCH_SIZE || "",
+							process.env.DIETCODE_OTEL_LOG_BATCH_SIZE || process.env.CLINE_OTEL_LOG_BATCH_SIZE || "",
 							10,
 						),
 					)
 				: undefined,
 		logBatchTimeout:
-			process.env.CODEMARIE_OTEL_LOG_BATCH_TIMEOUT || process.env.CLINE_OTEL_LOG_BATCH_TIMEOUT
+			process.env.DIETCODE_OTEL_LOG_BATCH_TIMEOUT || process.env.CLINE_OTEL_LOG_BATCH_TIMEOUT
 				? Math.max(
 						1,
 						Number.parseInt(
-							process.env.CODEMARIE_OTEL_LOG_BATCH_TIMEOUT || process.env.CLINE_OTEL_LOG_BATCH_TIMEOUT || "",
+							process.env.DIETCODE_OTEL_LOG_BATCH_TIMEOUT || process.env.CLINE_OTEL_LOG_BATCH_TIMEOUT || "",
 							10,
 						),
 					)
 				: undefined,
 		logMaxQueueSize:
-			process.env.CODEMARIE_OTEL_LOG_MAX_QUEUE_SIZE || process.env.CLINE_OTEL_LOG_MAX_QUEUE_SIZE
+			process.env.DIETCODE_OTEL_LOG_MAX_QUEUE_SIZE || process.env.CLINE_OTEL_LOG_MAX_QUEUE_SIZE
 				? Math.max(
 						1,
 						Number.parseInt(
-							process.env.CODEMARIE_OTEL_LOG_MAX_QUEUE_SIZE || process.env.CLINE_OTEL_LOG_MAX_QUEUE_SIZE || "",
+							process.env.DIETCODE_OTEL_LOG_MAX_QUEUE_SIZE || process.env.CLINE_OTEL_LOG_MAX_QUEUE_SIZE || "",
 							10,
 						),
 					)
 				: undefined,
 		otlpHeaders:
-			process.env.CODEMARIE_OTEL_EXPORTER_OTLP_HEADERS || process.env.CLINE_OTEL_EXPORTER_OTLP_HEADERS
+			process.env.DIETCODE_OTEL_EXPORTER_OTLP_HEADERS || process.env.CLINE_OTEL_EXPORTER_OTLP_HEADERS
 				? parseKeyPairsIntoRecord(
-						process.env.CODEMARIE_OTEL_EXPORTER_OTLP_HEADERS || process.env.CLINE_OTEL_EXPORTER_OTLP_HEADERS || "",
+						process.env.DIETCODE_OTEL_EXPORTER_OTLP_HEADERS || process.env.CLINE_OTEL_EXPORTER_OTLP_HEADERS || "",
 					)
 				: undefined,
 	}

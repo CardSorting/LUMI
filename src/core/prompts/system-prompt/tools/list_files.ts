@@ -1,11 +1,11 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
-const id = CodemarieDefaultTool.LIST_FILES
+const id = DietCodeDefaultTool.LIST_FILES
 
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "list_files",
@@ -30,7 +30,7 @@ const generic: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_GPT_5,
 	id,
 	name: "list_files",
@@ -52,7 +52,7 @@ const NATIVE_GPT_5: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	...NATIVE_GPT_5,
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 }

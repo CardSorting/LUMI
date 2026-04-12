@@ -3,7 +3,7 @@
  * Bridges communication between the Controller and a WebSocket client.
  */
 import type { WebSocket } from "ws"
-import type { CodemarieExtensionContext } from "@/shared/codemarie"
+import type { DietCodeExtensionContext } from "@/shared/dietcode"
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import type { WebviewMessage } from "@/shared/WebviewMessage"
@@ -13,7 +13,7 @@ export class RemoteWebviewProvider extends WebviewProvider {
 	private socket: WebSocket | null = null
 	private messageQueue: ExtensionMessage[] = []
 
-	constructor(context: CodemarieExtensionContext) {
+	constructor(context: DietCodeExtensionContext) {
 		super(context)
 		Logger.info("[RemoteWebviewProvider] Initialized")
 	}

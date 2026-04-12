@@ -1,7 +1,7 @@
 import { mentionRegex, mentionRegexGlobal } from "@shared/context-mentions"
-import { StringRequest } from "@shared/proto/codemarie/common"
-import { FileSearchRequest, FileSearchType, RelativePathsRequest } from "@shared/proto/codemarie/file"
-import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/codemarie/state"
+import { StringRequest } from "@shared/proto/dietcode/common"
+import { FileSearchRequest, FileSearchType, RelativePathsRequest } from "@shared/proto/dietcode/file"
+import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/dietcode/state"
 import { type SlashCommand } from "@shared/slashCommands"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
@@ -41,7 +41,7 @@ import {
 	slashCommandRegexGlobal,
 	validateSlashCommand,
 } from "@/utils/slash-commands"
-import CodemarieRulesToggleModal from "../codemarie-rules/CodemarieRulesToggleModal"
+import DietCodeRulesToggleModal from "../dietcode-rules/DietCodeRulesToggleModal"
 import ServersToggleModal from "./ServersToggleModal"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
@@ -865,7 +865,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				return unknownModel
 			}
 			switch (selectedProvider) {
-				case "codemarie":
+				case "dietcode":
 					return `${selectedProvider}:${selectedModelId}`
 				case "openai":
 					return `openai-compat:${selectedModelId}`
@@ -1582,7 +1582,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 							<ServersToggleModal />
 
-							<CodemarieRulesToggleModal />
+							<DietCodeRulesToggleModal />
 
 							<ModelContainer>
 								<ModelButtonWrapper>
@@ -1604,7 +1604,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							className="text-xs px-2 flex flex-col gap-1"
 							hidden={shownTooltipMode === null}
 							side="top">
-							{`In ${shownTooltipMode === "act" ? "Act" : "Plan"}  mode, Codemarie will ${shownTooltipMode === "act" ? "complete the task immediately" : "gather information to architect a plan"}`}
+							{`In ${shownTooltipMode === "act" ? "Act" : "Plan"}  mode, DietCode will ${shownTooltipMode === "act" ? "complete the task immediately" : "gather information to architect a plan"}`}
 							<p className="text-description/80 text-xs mb-0">
 								Toggle w/ <kbd className="text-muted-foreground mx-1">{togglePlanActKeys}</kbd>
 							</p>

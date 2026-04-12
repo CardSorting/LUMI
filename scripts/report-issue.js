@@ -9,11 +9,11 @@ const rl = readline.createInterface({
 
 const ask = (question) => new Promise((resolve) => rl.question(`\n${question}`, resolve))
 
-const getCodeMarieVersion = () => {
+const getDietCodeVersion = () => {
 	try {
 		const extensions = execSync("code --list-extensions --show-versions").toString()
-		const codemarieMatch = extensions.match(/claude-dev@(\d+\.\d+\.\d+)/)
-		return codemarieMatch ? codemarieMatch[1] : "Not installed"
+		const dietcodeMatch = extensions.match(/claude-dev@(\d+\.\d+\.\d+)/)
+		return dietcodeMatch ? dietcodeMatch[1] : "Not installed"
 	} catch (_err) {
 		return "Error getting version"
 	}
@@ -44,7 +44,7 @@ const collectSystemInfo = () => {
 		os: `${os.arch()}; ${os.version()}`,
 		nodeVersion: execSync("node -v").toString().trim(),
 		npmVersion: execSync("npm -v").toString().trim(),
-		codemarieVersion: getCodeMarieVersion(),
+		dietcodeVersion: getDietCodeVersion(),
 	}
 }
 
@@ -63,10 +63,10 @@ const checkGitHubAuth = async () => {
 
 const createIssueUrl = (systemInfo, issueTitle) => {
 	return (
-		`https://github.com/codemarie/codemarie/issues/new?template=bug_report.yml` +
+		`https://github.com/dietcode/dietcode/issues/new?template=bug_report.yml` +
 		`&title=${issueTitle}` +
 		`&operating-system=${systemInfo.os}` +
-		`&codemarie-version=${systemInfo.codemarieVersion}` +
+		`&dietcode-version=${systemInfo.dietcodeVersion}` +
 		`&system-info=${
 			`Node: ${systemInfo.nodeVersion}\n` +
 			`npm: ${systemInfo.npmVersion}\n` +

@@ -1,4 +1,4 @@
-import { Empty, StringRequest } from "@shared/proto/codemarie/common"
+import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import { HostProvider } from "@/hosts/host-provider"
 import { toRequestyServiceUrl } from "@/shared/clients/requesty"
 import { openExternal } from "@/utils/env"

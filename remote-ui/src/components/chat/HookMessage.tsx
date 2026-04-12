@@ -1,5 +1,5 @@
-import { CodemarieMessage } from "@shared/ExtensionMessage"
-import { EmptyRequest } from "@shared/proto/codemarie/common"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { memo, useMemo, useState } from "react"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { CHAT_ROW_EXPANDED_BG_COLOR } from "../common/CodeBlock"
@@ -23,7 +23,7 @@ const completedColor = "var(--vscode-descriptionForeground)"
  * @param metadata The hook metadata containing status
  * @returns true if the hook output should be expanded by default
  */
-function shouldExpandHookByDefault(message: CodemarieMessage, metadata: HookMetadata): boolean {
+function shouldExpandHookByDefault(message: DietCodeMessage, metadata: HookMetadata): boolean {
 	// Always collapse historical messages (>5 seconds old) for better UX
 	const isHistorical = message.ts && Date.now() - message.ts > 5000
 	if (isHistorical) {
@@ -35,7 +35,7 @@ function shouldExpandHookByDefault(message: CodemarieMessage, metadata: HookMeta
 }
 
 interface HookMessageProps {
-	message: CodemarieMessage
+	message: DietCodeMessage
 	// CommandOutput component - we'll import and use it here
 	CommandOutput: React.ComponentType<{
 		output: string

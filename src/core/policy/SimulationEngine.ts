@@ -1,8 +1,6 @@
-import { SpiderEngine, SpiderEntropyReport } from "./SpiderEngine.js"
-import { PathogenStore } from "../integrity/PathogenStore"
-import { Logger } from "@/shared/services/Logger"
-import { Layer, getLayer } from "@/utils/joy-zoning"
 import * as path from "path"
+import { PathogenStore } from "../integrity/PathogenStore"
+import { SpiderEngine } from "./SpiderEngine.js"
 
 export interface SimulationResult {
 	safe: boolean
@@ -27,25 +25,26 @@ export class SimulationEngine {
 		oldPath: string,
 		newPath: string,
 		currentEngine: SpiderEngine,
-		pathogens: PathogenStore
+		pathogens: PathogenStore,
 	): Promise<SimulationResult> {
 		// Immune Check
 		if (pathogens.isPathogenic(oldPath)) {
-			return { 
-				safe: false, 
-				predictedScore: 0, 
-				scoreDrop: 100, 
-				violations: ["Pathogen detected"], 
-				message: "PATHOGEN DETECTED: This move has failed in the past. Re-routing attempt to prevent architectural regression." 
+			return {
+				safe: false,
+				predictedScore: 0,
+				scoreDrop: 100,
+				violations: ["Pathogen detected"],
+				message:
+					"PATHOGEN DETECTED: This move has failed in the past. Re-routing attempt to prevent architectural regression.",
 			}
 		}
 
 		const simEngine = this.cloneEngine(currentEngine)
-		
+
 		// 1. Resolve logical paths
 		const normalizedOld = this.normalize(oldPath)
 		const normalizedNew = this.normalize(newPath)
-		
+
 		// 2. Perform virtual move
 		const node = simEngine.nodes.get(normalizedOld)
 		if (!node) {
@@ -58,20 +57,20 @@ export class SimulationEngine {
 			...node,
 			id: normalizedNew,
 			path: normalizedNew,
-			depth: normalizedNew.split("/").length - 1
+			depth: normalizedNew.split("/").length - 1,
 		})
 
 		// 3. Re-compute coupling and entropy
-		// @ts-ignore - access private compute for simulation
+		// @ts-expect-error - access private compute for simulation
 		simEngine.computeCouplingMetrics()
-		// @ts-ignore
+		// @ts-expect-error
 		simEngine.computeReachability()
-		
+
 		const currentReport = currentEngine.computeEntropy()
 		const simReport = simEngine.computeEntropy()
-		
+
 		const scoreDrop = (currentReport.score - simReport.score) * 100
-		const violations = simEngine.getViolations().map(v => v.message)
+		const violations = simEngine.getViolations().map((v) => v.message)
 
 		const isSafe = scoreDrop < 10 && violations.length === 0
 
@@ -80,23 +79,19 @@ export class SimulationEngine {
 			predictedScore: (1 - simReport.score) * 100,
 			scoreDrop,
 			violations,
-			message: isSafe 
-				? "Simulation predicts stable transition." 
-				: `Simulation Warning: Move predicts a ${(scoreDrop).toFixed(1)}% drop in structural integrity.`
+			message: isSafe
+				? "Simulation predicts stable transition."
+				: `Simulation Warning: Move predicts a ${(scoreDrop).toFixed(1)}% drop in structural integrity.`,
 		}
 	}
 
 	/**
 	 * Simulates a file edit/creation.
 	 */
-	public async simulateEdit(
-		filePath: string,
-		newImports: string[],
-		currentEngine: SpiderEngine
-	): Promise<SimulationResult> {
+	public async simulateEdit(filePath: string, newImports: string[], currentEngine: SpiderEngine): Promise<SimulationResult> {
 		const simEngine = this.cloneEngine(currentEngine)
 		const normalizedPath = this.normalize(filePath)
-		
+
 		const node = simEngine.nodes.get(normalizedPath)
 		if (node) {
 			node.imports = newImports
@@ -109,27 +104,28 @@ export class SimulationEngine {
 				imports: newImports,
 				depth: normalizedPath.split("/").length - 1,
 				orphaned: false,
-				afferentCoupling: 0
+				afferentCoupling: 0,
+				dependents: [],
 			})
 		}
 
-		// @ts-ignore
+		// @ts-expect-error
 		simEngine.computeCouplingMetrics()
-		// @ts-ignore
+		// @ts-expect-error
 		simEngine.computeReachability()
 
 		const currentReport = currentEngine.computeEntropy()
 		const simReport = simEngine.computeEntropy()
-		
+
 		const scoreDrop = (currentReport.score - simReport.score) * 100
-		const violations = simEngine.getViolations().map(v => v.message)
+		const violations = simEngine.getViolations().map((v) => v.message)
 
 		return {
 			safe: scoreDrop < 5,
 			predictedScore: (1 - simReport.score) * 100,
 			scoreDrop,
 			violations,
-			message: scoreDrop > 5 ? "Predictive warning: Edit increases structural entropy." : "Safe edit predicted."
+			message: scoreDrop > 5 ? "Predictive warning: Edit increases structural entropy." : "Safe edit predicted.",
 		}
 	}
 

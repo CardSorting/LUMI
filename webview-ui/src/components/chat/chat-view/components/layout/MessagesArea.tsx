@@ -1,4 +1,4 @@
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import type React from "react"
 import { useCallback, useMemo } from "react"
 import { Virtuoso } from "react-virtuoso"
@@ -10,9 +10,9 @@ import { isToolGroup } from "../../utils/messageUtils"
 import { createMessageRenderer } from "../messages/MessageRenderer"
 
 interface MessagesAreaProps {
-	task: CodemarieMessage
-	groupedMessages: (CodemarieMessage | CodemarieMessage[])[]
-	modifiedMessages: CodemarieMessage[]
+	task: DietCodeMessage
+	groupedMessages: (DietCodeMessage | DietCodeMessage[])[]
+	modifiedMessages: DietCodeMessage[]
 	scrollBehavior: ScrollBehavior
 	chatState: ChatState
 	messageHandlers: MessageHandlers
@@ -30,8 +30,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	chatState,
 	messageHandlers,
 }) => {
-	const { codemarieMessages } = useExtensionState()
-	const lastRawMessage = useMemo(() => codemarieMessages.at(-1), [codemarieMessages])
+	const { dietcodeMessages } = useExtensionState()
+	const lastRawMessage = useMemo(() => dietcodeMessages.at(-1), [dietcodeMessages])
 
 	const {
 		virtuosoRef,
@@ -51,8 +51,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		if (!scrolledPastUserMessage) {
 			return -1
 		}
-		return codemarieMessages.findIndex((msg) => msg.ts === scrolledPastUserMessage.ts)
-	}, [codemarieMessages, scrolledPastUserMessage])
+		return dietcodeMessages.findIndex((msg) => msg.ts === scrolledPastUserMessage.ts)
+	}, [dietcodeMessages, scrolledPastUserMessage])
 
 	// Handler to scroll to the scrolled past user message
 	const handleScrollToUserMessage = useCallback(() => {
@@ -153,11 +153,11 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		return isWaitingForResponse || handoffToReasoningPending
 	}, [isWaitingForResponse, lastRawMessage, lastVisibleMessage?.say])
 
-	const displayedGroupedMessages = useMemo<(CodemarieMessage | CodemarieMessage[])[]>(() => {
+	const displayedGroupedMessages = useMemo<(DietCodeMessage | DietCodeMessage[])[]>(() => {
 		if (!showThinkingLoaderRow) {
 			return groupedMessages
 		}
-		const waitingRow: CodemarieMessage = {
+		const waitingRow: DietCodeMessage = {
 			ts: Number.MIN_SAFE_INTEGER,
 			type: "say",
 			say: "reasoning",

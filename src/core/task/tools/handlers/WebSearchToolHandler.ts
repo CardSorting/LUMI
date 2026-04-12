@@ -1,13 +1,13 @@
-import { CodemarieAsk, CodemarieSayTool } from "@shared/ExtensionMessage"
-import { CodemarieDefaultTool } from "@shared/tools"
+import { DietCodeAsk, DietCodeSayTool } from "@shared/ExtensionMessage"
+import { DietCodeDefaultTool } from "@shared/tools"
 import axios from "axios"
-import { CodemarieEnv } from "@/config"
+import { DietCodeEnv } from "@/config"
 import { AuthService } from "@/services/auth/AuthService"
-import { buildCodemarieExtraHeaders } from "@/services/EnvUtils"
+import { buildDietCodeExtraHeaders } from "@/services/EnvUtils"
 import { featureFlagsService } from "@/services/feature-flags"
 import { telemetryService } from "@/services/telemetry"
 import { parsePartialArrayString } from "@/shared/array"
-import { CODEMARIE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@/shared/CodemarieAccount"
+import { DIETCODE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@/shared/DietCodeAccount"
 import { getAxiosSettings } from "@/shared/net"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
@@ -19,7 +19,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class WebSearchToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.WEB_SEARCH
+	readonly name = DietCodeDefaultTool.WEB_SEARCH
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.query}']`
@@ -27,19 +27,19 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 
 	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
 		const query = block.params.query || ""
-		const sharedMessageProps: CodemarieSayTool = {
+		const sharedMessageProps: DietCodeSayTool = {
 			tool: "webSearch",
 			path: uiHelpers.removeClosingTag(block, "query", query),
 			content: `Searching for: ${uiHelpers.removeClosingTag(block, "query", query)}`,
 			operationIsLocatedInWorkspace: false, // web_search is always external
-		} satisfies CodemarieSayTool
+		} satisfies DietCodeSayTool
 
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
 		// For partial blocks, we'll let the ToolExecutor handle auto-approval logic
 		// Just stream the UI update for now
 		await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "tool")
-		await uiHelpers.ask("tool" as CodemarieAsk, partialMessage, block.partial).catch(() => {})
+		await uiHelpers.ask("tool" as DietCodeAsk, partialMessage, block.partial).catch(() => {})
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
@@ -53,11 +53,11 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 			const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
 			const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
-			// Check if Codemarie web tools are enabled (both user setting and feature flag)
-			const codemarieWebToolsEnabled = config.services.stateManager.getGlobalSettingsKey("codemarieWebToolsEnabled")
+			// Check if DietCode web tools are enabled (both user setting and feature flag)
+			const dietcodeWebToolsEnabled = config.services.stateManager.getGlobalSettingsKey("dietcodeWebToolsEnabled")
 			const featureFlagEnabled = featureFlagsService.getWebtoolsEnabled()
-			if (provider !== "codemarie" || !codemarieWebToolsEnabled || !featureFlagEnabled) {
-				return formatResponse.toolError("Codemarie web tools are currently disabled.")
+			if (provider !== "dietcode" || !dietcodeWebToolsEnabled || !featureFlagEnabled) {
+				return formatResponse.toolError("DietCode web tools are currently disabled.")
 			}
 
 			// Validate required parameters
@@ -78,7 +78,7 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 			}
 
 			// Create message for approval
-			const sharedMessageProps: CodemarieSayTool = {
+			const sharedMessageProps: DietCodeSayTool = {
 				tool: "webSearch",
 				path: query,
 				content: `Searching for: ${query}`,
@@ -103,7 +103,7 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 			} else {
 				// Manual approval flow
 				showNotificationForApproval(
-					`Codemarie wants to search for: ${query}`,
+					`DietCode wants to search for: ${query}`,
 					config.autoApprovalSettings.enableNotifications,
 				)
 				await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
@@ -147,11 +147,11 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 			}
 
 			// Execute the actual search
-			const baseUrl = CodemarieEnv.config().apiBaseUrl
+			const baseUrl = DietCodeEnv.config().apiBaseUrl
 			const authToken = await AuthService.getInstance().getAuthToken()
 
 			if (!authToken) {
-				throw new Error(CODEMARIE_ACCOUNT_AUTH_ERROR_MESSAGE)
+				throw new Error(DIETCODE_ACCOUNT_AUTH_ERROR_MESSAGE)
 			}
 
 			const requestBody: {
@@ -175,7 +175,7 @@ export class WebSearchToolHandler implements IFullyManagedTool {
 					Authorization: `Bearer ${authToken}`,
 					"Content-Type": "application/json",
 					"X-Task-ID": config.ulid || "",
-					...(await buildCodemarieExtraHeaders()),
+					...(await buildDietCodeExtraHeaders()),
 				},
 				timeout: 15000,
 				...getAxiosSettings(),

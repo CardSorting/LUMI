@@ -1,12 +1,12 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryChokeHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_CHOKE
+	readonly name = DietCodeDefaultTool.MEM_CHOKE
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`

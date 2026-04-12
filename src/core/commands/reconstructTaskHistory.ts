@@ -1,6 +1,6 @@
-import { getSavedCodemarieMessages, getTaskMetadata, readTaskHistoryFromState, writeTaskHistoryToState } from "@core/storage/disk"
+import { getSavedDietCodeMessages, getTaskMetadata, readTaskHistoryFromState, writeTaskHistoryToState } from "@core/storage/disk"
 import { HostProvider } from "@hosts/host-provider"
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { ShowMessageType } from "@shared/proto/host/window"
 import { fileExistsAtPath } from "@utils/fs"
@@ -165,8 +165,8 @@ async function scanTaskDirectories(tasksDir: string): Promise<string[]> {
 async function reconstructTaskHistoryItem(taskId: string): Promise<HistoryItem | null> {
 	try {
 		// Load UI messages to extract task info
-		const codemarieMessages = await getSavedCodemarieMessages(taskId)
-		if (codemarieMessages.length === 0) {
+		const dietcodeMessages = await getSavedDietCodeMessages(taskId)
+		if (dietcodeMessages.length === 0) {
 			return null // Skip empty tasks
 		}
 
@@ -174,7 +174,7 @@ async function reconstructTaskHistoryItem(taskId: string): Promise<HistoryItem |
 		const metadata = await getTaskMetadata(taskId)
 
 		// Extract task information
-		const taskInfo = extractTaskInformation(codemarieMessages, metadata)
+		const taskInfo = extractTaskInformation(dietcodeMessages, metadata)
 
 		// Create HistoryItem
 		const historyItem: HistoryItem = {
@@ -212,12 +212,12 @@ interface TaskInfo {
 	conversationHistoryDeletedRange?: [number, number]
 }
 
-function extractTaskInformation(codemarieMessages: CodemarieMessage[], metadata: any): TaskInfo {
+function extractTaskInformation(dietcodeMessages: DietCodeMessage[], metadata: any): TaskInfo {
 	// Find the first user message (task description)
-	const firstUserMessage = codemarieMessages.find((msg) => msg.type === "say" && msg.say === "text" && msg.text)
+	const firstUserMessage = dietcodeMessages.find((msg) => msg.type === "say" && msg.say === "text" && msg.text)
 
 	// Extract timestamp from first message or use task ID as fallback
-	const timestamp = codemarieMessages.length > 0 ? codemarieMessages[0].ts : Date.now()
+	const timestamp = dietcodeMessages.length > 0 ? dietcodeMessages[0].ts : Date.now()
 
 	// Extract task description
 	let taskDescription = "Untitled Task"
@@ -242,7 +242,7 @@ function extractTaskInformation(codemarieMessages: CodemarieMessage[], metadata:
 	let totalCost = 0
 
 	// Look for usage-carrying messages with token info
-	const apiReqMessages = codemarieMessages.filter(
+	const apiReqMessages = dietcodeMessages.filter(
 		(msg) => msg.type === "say" && (msg.say === "api_req_started" || msg.say === "subagent_usage") && msg.text,
 	)
 
@@ -288,7 +288,7 @@ function extractTaskInformation(codemarieMessages: CodemarieMessage[], metadata:
 	}
 
 	// Calculate approximate size (rough estimate)
-	const messageSize = JSON.stringify(codemarieMessages).length
+	const messageSize = JSON.stringify(dietcodeMessages).length
 	const size = Math.floor(messageSize / 1024) // KB
 
 	return {

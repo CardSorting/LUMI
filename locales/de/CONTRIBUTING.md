@@ -4,19 +4,19 @@ Wir freuen uns, dass du daran interessiert bist, zu Cline beizutragen. Ob du ein
 
 ## Fehler oder Probleme melden
 
-Fehlermeldungen helfen, Cline für alle zu verbessern! Bevor du ein neues Problem erstellst, überprüfe bitte die [bestehenden Probleme](https://github.com/codemarie/codemarie/issues), um Duplikate zu vermeiden. Wenn du bereit bist, einen Fehler zu melden, gehe zu unserer [Issues-Seite](https://github.com/codemarie/codemarie/issues/new/choose), wo du eine Vorlage findest, die dir hilft, die relevanten Informationen auszufüllen.
+Fehlermeldungen helfen, Cline für alle zu verbessern! Bevor du ein neues Problem erstellst, überprüfe bitte die [bestehenden Probleme](https://github.com/dietcode/dietcode/issues), um Duplikate zu vermeiden. Wenn du bereit bist, einen Fehler zu melden, gehe zu unserer [Issues-Seite](https://github.com/dietcode/dietcode/issues/new/choose), wo du eine Vorlage findest, die dir hilft, die relevanten Informationen auszufüllen.
 
 <blockquote class='warning-note'>
-    🔐 <b>Wichtig:</b> Wenn du eine Sicherheitslücke entdeckst, verwende das <a href="https://github.com/codemarie/codemarie/security/advisories/new">GitHub-Sicherheitstool, um sie privat zu melden</a>.
+    🔐 <b>Wichtig:</b> Wenn du eine Sicherheitslücke entdeckst, verwende das <a href="https://github.com/dietcode/dietcode/security/advisories/new">GitHub-Sicherheitstool, um sie privat zu melden</a>.
 </blockquote>
 
 ## Entscheiden, woran man arbeiten möchte
 
-Suchst du nach einem guten ersten Beitrag? Schau dir die mit ["good first issue"](https://github.com/codemarie/codemarie/labels/good%20first%20issue) oder ["help wanted"](https://github.com/codemarie/codemarie/labels/help%20wanted) gekennzeichneten Issues an. Diese sind speziell für neue Mitwirkende ausgewählt und Bereiche, in denen wir gerne Hilfe erhalten würden!
+Suchst du nach einem guten ersten Beitrag? Schau dir die mit ["good first issue"](https://github.com/dietcode/dietcode/labels/good%20first%20issue) oder ["help wanted"](https://github.com/dietcode/dietcode/labels/help%20wanted) gekennzeichneten Issues an. Diese sind speziell für neue Mitwirkende ausgewählt und Bereiche, in denen wir gerne Hilfe erhalten würden!
 
-Wir begrüßen auch Beiträge zu unserer [Dokumentation](https://github.com/codemarie/codemarie/tree/main/docs). Ob du Tippfehler korrigierst, bestehende Anleitungen verbesserst oder neue Bildungsinhalte erstellst – wir möchten ein von der Community verwaltetes Ressourcen-Repository aufbauen, das allen hilft, das Beste aus Cline herauszuholen. Du kannst beginnen, indem du `/docs` erkundest und nach Bereichen suchst, die verbessert werden müssen.
+Wir begrüßen auch Beiträge zu unserer [Dokumentation](https://github.com/dietcode/dietcode/tree/main/docs). Ob du Tippfehler korrigierst, bestehende Anleitungen verbesserst oder neue Bildungsinhalte erstellst – wir möchten ein von der Community verwaltetes Ressourcen-Repository aufbauen, das allen hilft, das Beste aus Cline herauszuholen. Du kannst beginnen, indem du `/docs` erkundest und nach Bereichen suchst, die verbessert werden müssen.
 
-Wenn du planst, an einer größeren Funktion zu arbeiten, erstelle bitte zuerst eine [Funktionsanfrage](https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop), damit wir besprechen können, ob sie mit der Vision von Cline übereinstimmt.
+Wenn du planst, an einer größeren Funktion zu arbeiten, erstelle bitte zuerst eine [Funktionsanfrage](https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop), damit wir besprechen können, ob sie mit der Vision von Cline übereinstimmt.
 
 ## Entwicklungsumgebung einrichten
 

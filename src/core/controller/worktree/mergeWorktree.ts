@@ -1,4 +1,4 @@
-import { MergeWorktreeRequest, MergeWorktreeResult } from "@shared/proto/codemarie/worktree"
+import { MergeWorktreeRequest, MergeWorktreeResult } from "@shared/proto/dietcode/worktree"
 import { listWorktrees } from "@utils/git-worktree"
 import { getWorkspacePath } from "@utils/path"
 import simpleGit from "simple-git"

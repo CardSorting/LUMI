@@ -6,7 +6,7 @@ We actively patch only the most recent minor release of Cline. Older versions re
 
 ## Reporting a Vulnerability
 
-If you discover a potential security vulnerability in CodeMarie, please contact us by sending an email to security@codemarie.bot.
+If you discover a potential security vulnerability in DietCode, please contact us by sending an email to security@dietcode.bot.
 
 Please provide a detailed description of the vulnerability and the steps required to reproduce it. We will acknowledge receipt of your report and work to address the vulnerability as quickly as possible.
 
@@ -14,6 +14,6 @@ We ask that you do not disclose the vulnerability publicly until we have had a c
 
 ## Escalation
 
-If you do not receive an acknowledgement of your report within 5 business days, you may send an email to security@codemarie.bot.
+If you do not receive an acknowledgement of your report within 5 business days, you may send an email to security@dietcode.bot.
 
-Thank you for helping us keep CodeMarie users safe.
+Thank you for helping us keep DietCode users safe.

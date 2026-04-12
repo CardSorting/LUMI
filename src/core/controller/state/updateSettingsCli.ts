@@ -1,11 +1,11 @@
 import { buildApiHandler } from "@core/api"
 
-import { Empty } from "@shared/proto/codemarie/common"
-import { PlanActMode, UpdateSettingsRequestCli } from "@shared/proto/codemarie/state"
+import { Empty } from "@shared/proto/dietcode/common"
+import { PlanActMode, UpdateSettingsRequestCli } from "@shared/proto/dietcode/state"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { Settings } from "@shared/storage/state-keys"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
-import { CodemarieEnv } from "@/config"
+import { DietCodeEnv } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
@@ -26,7 +26,7 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 		return mode === PlanActMode.PLAN ? "plan" : "act"
 	}
 	if (request.environment !== undefined) {
-		CodemarieEnv.setEnvironment(request.environment)
+		DietCodeEnv.setEnvironment(request.environment)
 		await accountLogoutClicked(controller, Empty.create())
 	}
 
@@ -46,7 +46,7 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 			telemetrySetting,
 			yoloModeToggled,
 			useAutoCondense,
-			codemarieWebToolsEnabled,
+			dietcodeWebToolsEnabled,
 			worktreesEnabled,
 			subagentsEnabled,
 			focusChainSettings,
@@ -148,12 +148,12 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 			controller.stateManager.setGlobalState("useAutoCondense", useAutoCondense)
 		}
 
-		// Update Codemarie web tools setting (requires telemetry)
-		if (codemarieWebToolsEnabled !== undefined) {
+		// Update DietCode web tools setting (requires telemetry)
+		if (dietcodeWebToolsEnabled !== undefined) {
 			if (controller.task) {
-				telemetryService.captureCodemarieWebToolsToggle(controller.task.ulid, codemarieWebToolsEnabled)
+				telemetryService.captureDietCodeWebToolsToggle(controller.task.ulid, dietcodeWebToolsEnabled)
 			}
-			controller.stateManager.setGlobalState("codemarieWebToolsEnabled", codemarieWebToolsEnabled)
+			controller.stateManager.setGlobalState("dietcodeWebToolsEnabled", dietcodeWebToolsEnabled)
 		}
 
 		// Update worktrees setting
@@ -180,7 +180,7 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 
 			const newFocusChainSettings = {
 				enabled: isEnabled,
-				remindCodemarieInterval: focusChainSettings.remindCodemarieInterval,
+				remindDietcodeInterval: focusChainSettings.remindDietcodeInterval,
 			}
 			controller.stateManager.setGlobalState("focusChainSettings", newFocusChainSettings)
 

@@ -26,13 +26,13 @@ export const BASE_SLASH_COMMANDS: SlashCommand[] = [
 	},
 	{
 		name: "newrule",
-		description: "Create a new Codemarie rule based on your conversation",
+		description: "Create a new DietCode rule based on your conversation",
 		section: "default",
 		cliCompatible: true,
 	},
 	{
 		name: "reportbug",
-		description: "Create a Github issue with Codemarie",
+		description: "Create a Github issue with DietCode",
 		section: "default",
 		cliCompatible: true,
 	},
@@ -51,7 +51,7 @@ export const VSCODE_ONLY_COMMANDS: SlashCommand[] = [
 export const CLI_ONLY_COMMANDS: SlashCommand[] = [
 	{
 		name: "help",
-		description: "Learn how to use Codemarie CLI",
+		description: "Learn how to use DietCode CLI",
 		section: "default",
 		cliCompatible: true,
 	},

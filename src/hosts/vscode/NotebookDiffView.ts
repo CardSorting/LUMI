@@ -41,7 +41,7 @@ export class NotebookDiffView {
 	private async createDiffView(uri: vscode.Uri, fileName: string, editor: vscode.TextEditor): Promise<void> {
 		const tempDir = os.tmpdir()
 		const timestamp = Date.now()
-		const tempModifiedPath = path.join(tempDir, `codemarie-modified-${timestamp}-${fileName}`)
+		const tempModifiedPath = path.join(tempDir, `dietcode-modified-${timestamp}-${fileName}`)
 
 		const currentContent = editor.document.getText()
 
@@ -62,7 +62,7 @@ export class NotebookDiffView {
 			"vscode.diff",
 			uri,
 			this.tempModifiedUri,
-			`${fileName}: Original ↔ Codemarie's Changes (Notebook)`,
+			`${fileName}: Original ↔ DietCode's Changes (Notebook)`,
 		)
 
 		// Brief delay to allow VS Code to render the notebook diff view

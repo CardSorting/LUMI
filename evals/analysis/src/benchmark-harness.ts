@@ -27,8 +27,8 @@ async function benchmarkSmokeTestHarness() {
 	
 	const startTime = Date.now()
 	// Skip if no API key
-	if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY && !process.env.CODEMARIE_API_KEY) {
-		console.warn("⚠️ Skipping Smoke Test Harness benchmark: No API key found (GEMINI_API_KEY, GOOGLE_API_KEY, or CODEMARIE_API_KEY)")
+	if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY && !process.env.DIETCODE_API_KEY) {
+		console.warn("⚠️ Skipping Smoke Test Harness benchmark: No API key found (GEMINI_API_KEY, GOOGLE_API_KEY, or DIETCODE_API_KEY)")
 		return null
 	}
 	
@@ -38,7 +38,7 @@ async function benchmarkSmokeTestHarness() {
 			encoding: "utf-8",
 			env: { 
 				...process.env, 
-				CODEMARIE_API_KEY: process.env.CODEMARIE_API_KEY || "dummy",
+				DIETCODE_API_KEY: process.env.DIETCODE_API_KEY || "dummy",
 				GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
 			}
 		})

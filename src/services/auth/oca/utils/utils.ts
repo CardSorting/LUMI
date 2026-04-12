@@ -124,13 +124,13 @@ export async function generateOpcRequestId(taskId: string, token: string): Promi
 export async function createOcaHeaders(accessToken: string, taskId: string): Promise<Record<string, string>> {
 	const opcRequestId = await generateOpcRequestId(taskId, accessToken)
 	const host = await HostProvider.env.getHostVersion({})
-	const codemarieVersion = ExtensionRegistryInfo.version
+	const dietcodeVersion = ExtensionRegistryInfo.version
 
 	return {
 		Authorization: `Bearer ${accessToken}`,
 		"Content-Type": "application/json",
-		client: "Codemarie",
-		"client-version": `${codemarieVersion}`,
+		client: "DietCode",
+		"client-version": `${dietcodeVersion}`,
 		"client-ide": host.platform || "unknown",
 		"client-ide-version": host.version || "unknown",
 		"opc-request-id": opcRequestId,

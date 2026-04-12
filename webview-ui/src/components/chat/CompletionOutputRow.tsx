@@ -1,4 +1,4 @@
-import { Int64Request } from "@shared/proto/codemarie/common"
+import { Int64Request } from "@shared/proto/dietcode/common"
 import { CheckIcon } from "lucide-react"
 import { memo } from "react"
 import { VscIcon } from "@/components/ui/vsc-icon"

@@ -8,8 +8,8 @@ import type { BrowserSettings } from "@/shared/BrowserSettings"
 import type { FocusChainSettings } from "@/shared/FocusChainSettings"
 import { ModelFamily } from "@/shared/prompts"
 import type { SkillMetadata } from "@/shared/skills"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "./spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "./spec"
 import { SystemPromptSection } from "./templates/placeholders"
 
 /**
@@ -41,8 +41,8 @@ export interface PromptVariant {
 	readonly placeholders: Readonly<Record<string, string>> // Default placeholder values
 
 	// Tool configuration
-	readonly tools?: readonly CodemarieDefaultTool[] // Ordered list of tools to include
-	readonly toolOverrides?: Readonly<Partial<Record<CodemarieDefaultTool, ConfigOverride>>> // Tool customizations
+	readonly tools?: readonly DietCodeDefaultTool[] // Ordered list of tools to include
+	readonly toolOverrides?: Readonly<Partial<Record<DietCodeDefaultTool, ConfigOverride>>> // Tool customizations
 }
 
 /**
@@ -61,8 +61,8 @@ export interface MutablePromptVariant {
 	componentOrder: SystemPromptSection[]
 	componentOverrides: Partial<Record<SystemPromptSection, ConfigOverride>>
 	placeholders: Record<string, string>
-	tools?: CodemarieDefaultTool[]
-	toolOverrides?: Partial<Record<CodemarieDefaultTool, ConfigOverride>>
+	tools?: DietCodeDefaultTool[]
+	toolOverrides?: Partial<Record<DietCodeDefaultTool, ConfigOverride>>
 }
 
 /**
@@ -72,7 +72,7 @@ export interface PromptConfig {
 	readonly modelName?: string
 	readonly temperature?: number
 	readonly maxTokens?: number
-	readonly tools?: readonly CodemarieToolSpec[]
+	readonly tools?: readonly DietCodeToolSpec[]
 	readonly [key: string]: unknown // Additional arbitrary config
 }
 
@@ -103,20 +103,20 @@ export interface SystemPromptContext {
 	readonly mcpHub?: McpHub
 	readonly skills?: SkillMetadata[]
 	readonly focusChainSettings?: FocusChainSettings
-	readonly globalCodemarieRulesFileInstructions?: string
-	readonly localCodemarieRulesFileInstructions?: string
+	readonly globalDietCodeRulesFileInstructions?: string
+	readonly localDietCodeRulesFileInstructions?: string
 	readonly localCursorRulesFileInstructions?: string
 	readonly localCursorRulesDirInstructions?: string
 	readonly localWindsurfRulesFileInstructions?: string
 	readonly localAgentsRulesFileInstructions?: string
-	readonly codemarieIgnoreInstructions?: string
+	readonly dietcodeIgnoreInstructions?: string
 	readonly preferredLanguageInstructions?: string
 	readonly browserSettings?: BrowserSettings
 	readonly isTesting?: boolean
 	readonly runtimePlaceholders?: Readonly<Record<string, unknown>>
 	readonly yoloModeToggled?: boolean
 	readonly subagentsEnabled?: boolean
-	readonly codemarieWebToolsEnabled?: boolean
+	readonly dietcodeWebToolsEnabled?: boolean
 	readonly isMultiRootEnabled?: boolean
 	readonly workspaceRoots?: Array<{ path: string; name: string; vcs?: string }>
 	readonly isSubagentsEnabledAndCliInstalled?: boolean
@@ -156,8 +156,8 @@ export type ComponentKey = keyof typeof SystemPromptSection
 export type ComponentValue = (typeof SystemPromptSection)[ComponentKey]
 
 // Extract tool keys as literal types
-export type ToolKey = keyof typeof CodemarieDefaultTool
-export type ToolValue = (typeof CodemarieDefaultTool)[ToolKey]
+export type ToolKey = keyof typeof DietCodeDefaultTool
+export type ToolValue = (typeof DietCodeDefaultTool)[ToolKey]
 
 // Type for variant builder methods
 export type VariantBuilderMethod<T> = (this: T, ...args: unknown[]) => T
@@ -171,8 +171,8 @@ export function isValidSystemPromptSection(section: string): section is SystemPr
 	return Object.values(SystemPromptSection).includes(section as SystemPromptSection)
 }
 
-export function isValidCodemarieDefaultTool(tool: string): tool is CodemarieDefaultTool {
-	return Object.values(CodemarieDefaultTool).includes(tool as CodemarieDefaultTool)
+export function isValidDietCodeDefaultTool(tool: string): tool is DietCodeDefaultTool {
+	return Object.values(DietCodeDefaultTool).includes(tool as DietCodeDefaultTool)
 }
 
 /**
@@ -204,8 +204,8 @@ export interface VariantBuilder {
 	template(baseTemplate: string): this
 	components(...sections: SystemPromptSection[]): this
 	overrideComponent(section: SystemPromptSection, override: ConfigOverride): this
-	tools(...tools: CodemarieDefaultTool[]): this
-	overrideTool(tool: CodemarieDefaultTool, override: ConfigOverride): this
+	tools(...tools: DietCodeDefaultTool[]): this
+	overrideTool(tool: DietCodeDefaultTool, override: ConfigOverride): this
 	placeholders(placeholders: Record<string, string>): this
 	config(config: Record<string, unknown>): this
 	build(): VariantConfig
@@ -273,5 +273,5 @@ export const TASK_PROGRESS_PARAMETER = {
 	required: false,
 	instruction: `A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)`,
 	usage: "Checklist here (optional)",
-	dependencies: [CodemarieDefaultTool.TODO],
+	dependencies: [DietCodeDefaultTool.TODO],
 }

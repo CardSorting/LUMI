@@ -1,8 +1,8 @@
 /**
- * Terminal display utilities for rendering Codemarie messages in the CLI
+ * Terminal display utilities for rendering DietCode messages in the CLI
  */
 
-import type { CodemarieAsk, CodemarieMessage, CodemarieSay, ExtensionState } from "@shared/ExtensionMessage"
+import type { DietCodeAsk, DietCodeMessage, DietCodeSay, ExtensionState } from "@shared/ExtensionMessage"
 import { originalConsoleError, originalConsoleLog } from "./console"
 
 // ANSI color codes for terminal output
@@ -88,7 +88,7 @@ export function formatTimestamp(ts: number): string {
 /**
  * Get a prefix icon for different message types
  */
-function getMessageIcon(message: CodemarieMessage): string {
+function getMessageIcon(message: DietCodeMessage): string {
 	if (message.type === "ask") {
 		switch (message.ask) {
 			case "followup":
@@ -151,9 +151,9 @@ function getMessageIcon(message: CodemarieMessage): string {
 }
 
 /**
- * Format a CodemarieMessage for terminal display
+ * Format a DietCodeMessage for terminal display
  */
-export function formatMessage(message: CodemarieMessage, verbose = false): string {
+export function formatMessage(message: DietCodeMessage, verbose = false): string {
 	const icon = getMessageIcon(message)
 	const timestamp = formatTimestamp(message.ts)
 	const lines: string[] = []
@@ -169,8 +169,8 @@ export function formatMessage(message: CodemarieMessage, verbose = false): strin
 	return lines.filter(Boolean).join("\n")
 }
 
-function formatAskMessage(message: CodemarieMessage, prefix: string, verbose: boolean): string {
-	const ask = message.ask as CodemarieAsk
+function formatAskMessage(message: DietCodeMessage, prefix: string, verbose: boolean): string {
+	const ask = message.ask as DietCodeAsk
 
 	switch (ask) {
 		case "followup": {
@@ -216,8 +216,8 @@ function formatAskMessage(message: CodemarieMessage, prefix: string, verbose: bo
 	}
 }
 
-function formatSayMessage(message: CodemarieMessage, prefix: string, verbose: boolean): string {
-	const say = message.say as CodemarieSay
+function formatSayMessage(message: DietCodeMessage, prefix: string, verbose: boolean): string {
+	const say = message.say as DietCodeSay
 
 	switch (say) {
 		case "task":
@@ -316,10 +316,10 @@ export function formatState(state: ExtensionState, verbose = false): string {
 	}
 
 	// Show messages
-	if (state.codemarieMessages && state.codemarieMessages.length > 0) {
+	if (state.dietcodeMessages && state.dietcodeMessages.length > 0) {
 		const messagesToShow = verbose
-			? state.codemarieMessages
-			: state.codemarieMessages.filter((_m) => {
+			? state.dietcodeMessages
+			: state.dietcodeMessages.filter((_m) => {
 					// Filter out noisy messages in non-verbose mode
 					// if (m.say === "api_req_started" || m.say === "api_req_finished") return false
 					return true

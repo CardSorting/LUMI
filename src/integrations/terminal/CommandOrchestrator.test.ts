@@ -65,8 +65,8 @@ function createCallbacks(): CommandExecutorCallbacks {
 		say: async () => undefined,
 		ask: async () => ({ response: "messageResponse" }),
 		updateBackgroundCommandState: () => {},
-		updateCodemarieMessage: async () => {},
-		getCodemarieMessages: () => [],
+		updateDietCodeMessage: async () => {},
+		getDietCodeMessages: () => [],
 		addToUserMessageContent: () => {},
 	}
 }

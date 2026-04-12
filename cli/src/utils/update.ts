@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { realpathSync } from "node:fs"
 import { exit } from "node:process"
-import { CodemarieEndpoint } from "@/config"
+import { DietCodeEndpoint } from "@/config"
 import { fetch } from "@/shared/net"
 import { printInfo, printWarning } from "./display"
 
@@ -52,7 +52,7 @@ function getInstallationInfo(currentVersion: string): InstallationInfo {
 		if (scriptPath.includes("/.pnpm/global") || scriptPath.includes("/pnpm/global")) {
 			return {
 				packageManager: PackageManager.PNPM,
-				updateCommand: `pnpm add -g codemarie@${tag}`,
+				updateCommand: `pnpm add -g dietcode@${tag}`,
 			}
 		}
 
@@ -60,7 +60,7 @@ function getInstallationInfo(currentVersion: string): InstallationInfo {
 		if (scriptPath.includes("/.yarn/") || scriptPath.includes("/yarn/global")) {
 			return {
 				packageManager: PackageManager.YARN,
-				updateCommand: `yarn global add codemarie@${tag}`,
+				updateCommand: `yarn global add dietcode@${tag}`,
 			}
 		}
 
@@ -68,15 +68,15 @@ function getInstallationInfo(currentVersion: string): InstallationInfo {
 		if (scriptPath.includes("/.bun/bin")) {
 			return {
 				packageManager: PackageManager.BUN,
-				updateCommand: `bun add -g codemarie@${tag}`,
+				updateCommand: `bun add -g dietcode@${tag}`,
 			}
 		}
 
-		// npm global (node_modules/codemarie)
-		if (scriptPath.includes("/node_modules/codemarie/")) {
+		// npm global (node_modules/dietcode)
+		if (scriptPath.includes("/node_modules/dietcode/")) {
 			return {
 				packageManager: PackageManager.NPM,
-				updateCommand: `npm install -g codemarie@${tag}`,
+				updateCommand: `npm install -g dietcode@${tag}`,
 			}
 		}
 	} catch {
@@ -93,7 +93,7 @@ function getInstallationInfo(currentVersion: string): InstallationInfo {
 async function getLatestVersion(currentVersion: string): Promise<string | null> {
 	try {
 		const tag = getNpmTag(currentVersion)
-		const response = await fetch(`https://registry.npmjs.org/codemarie/${tag}`)
+		const response = await fetch(`https://registry.npmjs.org/dietcode/${tag}`)
 		if (!response.ok) return null
 		const data = (await response.json()) as { version: string }
 		return data.version || null
@@ -123,7 +123,7 @@ export function autoUpdateOnStartup(currentVersion: string): void {
 	}
 
 	// Skip if using bundled enterprise config (single source of truth)
-	if (CodemarieEndpoint.isBundledConfig()) {
+	if (DietCodeEndpoint.isBundledConfig()) {
 		return
 	}
 

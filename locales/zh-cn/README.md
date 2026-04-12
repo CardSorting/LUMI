@@ -17,7 +17,7 @@
 <a href="https://www.reddit.com/r/cline/" target="_blank"><strong>r/cline</strong></a>
 </td>
 <td align="center">
-<a href="https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>功能请求</strong></a>
+<a href="https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>功能请求</strong></a>
 </td>
 <td align="center">
 <a href="https://docs.cline.bot/getting-started/for-new-coders" target="_blank"><strong>新手上路</strong></a>
@@ -142,7 +142,7 @@ Cline 所做的所有更改都会记录在你的文件时间轴中，提供了�
 
 1. 克隆仓库 _(需要 [git-lfs](https://git-lfs.com/))_：
         ```bash
-        git clone https://github.com/codemarie/codemarie.git
+        git clone https://github.com/dietcode/dietcode.git
         ```
 2. 在 VSCode 中打开项目：
         ```bash

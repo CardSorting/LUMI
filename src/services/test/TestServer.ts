@@ -1,4 +1,4 @@
-import { getSavedApiConversationHistory, getSavedCodemarieMessages } from "@core/storage/disk"
+import { getSavedApiConversationHistory, getSavedDietCodeMessages } from "@core/storage/disk"
 import { WebviewProvider } from "@core/webview"
 import { AutoApprovalSettings, DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { ApiProvider } from "@shared/api"
@@ -84,8 +84,8 @@ async function updateAutoApprovalSettings(controller?: Controller) {
  * @returns The created HTTP server instance
  */
 export async function createTestServer(controller: Controller): Promise<http.Server> {
-	// Try to show the Codemarie sidebar
-	Logger.log("[createTestServer] Opening Codemarie in sidebar...")
+	// Try to show the DietCode sidebar
+	Logger.log("[createTestServer] Opening DietCode in sidebar...")
 	vscode.commands.executeCommand(`workbench.view.${ExtensionRegistryInfo.name}-ActivityBar`)
 
 	// Then ensure the webview is focused/loaded
@@ -150,7 +150,7 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 				const visibleWebview = WebviewProvider.getVisibleInstance()
 				if (!visibleWebview || !visibleWebview.controller) {
 					res.writeHead(500)
-					res.end(JSON.stringify({ error: "No active Codemarie instance found" }))
+					res.end(JSON.stringify({ error: "No active DietCode instance found" }))
 					return
 				}
 
@@ -211,21 +211,21 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 						// Update API configuration with API key
 						const updatedConfig = {
 							...apiConfiguration,
-							apiProvider: "codemarie" as ApiProvider,
-							codemarieAccountId: apiKey,
+							apiProvider: "dietcode" as ApiProvider,
+							dietcodeAccountId: apiKey,
 						}
 
 						// Store the API key securely
-						visibleWebview.controller.stateManager.setSecret("codemarieAccountId", apiKey)
+						visibleWebview.controller.stateManager.setSecret("dietcodeAccountId", apiKey)
 
 						visibleWebview.controller.stateManager.setApiConfiguration(updatedConfig)
 
-						// Update cache service to use codemarie provider
+						// Update cache service to use dietcode provider
 						const currentConfig = visibleWebview.controller.stateManager.getApiConfiguration()
 						visibleWebview.controller.stateManager.setApiConfiguration({
 							...currentConfig,
-							planModeApiProvider: "codemarie",
-							actModeApiProvider: "codemarie",
+							planModeApiProvider: "dietcode",
+							actModeApiProvider: "dietcode",
 						})
 
 						// Post state to webview to reflect changes
@@ -302,10 +302,10 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 						let apiConversationHistory: any[] = []
 						try {
 							if (typeof taskId === "string") {
-								messages = await getSavedCodemarieMessages(taskId)
+								messages = await getSavedDietCodeMessages(taskId)
 							}
 						} catch (error) {
-							Logger.log(`Error getting saved Codemarie messages: ${error}`)
+							Logger.log(`Error getting saved DietCode messages: ${error}`)
 						}
 
 						try {

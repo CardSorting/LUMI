@@ -1,4 +1,4 @@
-import type { BannerAction, BannerCardData } from "@shared/codemarie/banner"
+import type { BannerAction, BannerCardData } from "@shared/dietcode/banner"
 import React from "react"
 import Markdown from "react-markdown"
 
@@ -79,16 +79,16 @@ export const WhatsNewItems: React.FC<WhatsNewItemsProps> = ({
 				<>
 					{/* Hardcoded fallback items shown when remote welcome banners feature flag is off */}
 					<li className="mb-2">
-						<strong>Try Codex 5.3:</strong> OpenAI's latest coding model, now available in Codemarie!{" "}
+						<strong>Try Codex 5.3:</strong> OpenAI's latest coding model, now available in DietCode!{" "}
 						<InlineModelLink label="Try now" modelId="openai/gpt-5.3-codex" pickerTab="recommended" />
 					</li>
 					<li className="mb-2">
-						<strong>Try latest SOTA coding model:</strong> Claude Sonnet 4.6 and Gemini 3.1 pro within Codemarie!{" "}
+						<strong>Try latest SOTA coding model:</strong> Claude Sonnet 4.6 and Gemini 3.1 pro within DietCode!{" "}
 						<InlineModelLink label="Try now" modelId="anthropic/claude-sonnet-4.6" pickerTab="recommended" />
 					</li>
 					<li className="mb-2">
-						<strong>Try Codemarie CLI 2.0:</strong> with /mcp functionality added in CLI{" "}
-						<code style={inlineCodeStyle}>npm install -g codemarie</code>
+						<strong>Try DietCode CLI 2.0:</strong> with /mcp functionality added in CLI{" "}
+						<code style={inlineCodeStyle}>npm install -g dietcode</code>
 					</li>
 					<li className="mb-2">
 						<strong>Minimax M2.5 and Z.ai GLM 5:</strong> no longer free starting Feb 23, 2026

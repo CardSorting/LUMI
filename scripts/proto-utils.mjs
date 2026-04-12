@@ -15,7 +15,7 @@ function addTypeNameToFqn(name, fqn) {
 	}
 	typeNameToFQN.set(name, fqn)
 }
-// Get the fully qualified name for a proto type, e.g. getFqn('StringRequest') returns 'codemarie.StringRequest'
+// Get the fully qualified name for a proto type, e.g. getFqn('StringRequest') returns 'dietcode.StringRequest'
 export function getFqn(name) {
 	if (!typeNameToFQN.has(name)) {
 		throw Error(`No FQN for ${name}`)
@@ -48,11 +48,11 @@ export async function loadServicesFromProtoDescriptor() {
 		}
 	}
 	const protobusServices = {}
-	for (const [name, def] of Object.entries(proto.codemarie)) {
+	for (const [name, def] of Object.entries(proto.dietcode)) {
 		if (def && "service" in def) {
 			protobusServices[name] = def
 		} else {
-			addTypeNameToFqn(name, `proto.codemarie.${name}`)
+			addTypeNameToFqn(name, `proto.dietcode.${name}`)
 		}
 	}
 	return { protobusServices, hostServices }

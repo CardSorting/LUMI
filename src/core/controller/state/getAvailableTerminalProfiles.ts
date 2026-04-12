@@ -4,11 +4,11 @@ import { Controller } from "../index"
 
 export async function getAvailableTerminalProfiles(
 	_controller: Controller,
-	_request: proto.codemarie.EmptyRequest,
-): Promise<proto.codemarie.TerminalProfiles> {
+	_request: proto.dietcode.EmptyRequest,
+): Promise<proto.dietcode.TerminalProfiles> {
 	const profiles = getTerminalProfilesFromShell()
 
-	return proto.codemarie.TerminalProfiles.create({
+	return proto.dietcode.TerminalProfiles.create({
 		profiles: profiles.map((profile) => ({
 			id: profile.id,
 			name: profile.name,

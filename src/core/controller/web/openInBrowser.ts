@@ -1,4 +1,4 @@
-import { Empty, StringRequest } from "@shared/proto/codemarie/common"
+import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import { openExternal } from "@utils/env"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."

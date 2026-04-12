@@ -17,7 +17,7 @@ import { setTimeout as setTimeoutPromise } from "node:timers/promises"
 import { formatResponse } from "@core/prompts/responses"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { TerminalHangStage, TerminalUserInterventionAction, telemetryService } from "@services/telemetry"
-import { CodemarieTempManager } from "@services/temp"
+import { DietCodeTempManager } from "@services/temp"
 import { COMMAND_CANCEL_TOKEN } from "@shared/ExtensionMessage"
 import * as fs from "fs"
 import { Logger } from "@/shared/services/Logger"
@@ -97,10 +97,10 @@ export async function orchestrateCommandExecution(
 		callbacks.updateBackgroundCommandState(false)
 
 		// Mark the command message as completed
-		const codemarieMessages = callbacks.getCodemarieMessages()
-		const lastCommandIndex = findLastIndex(codemarieMessages, (m) => m.ask === "command" || m.say === "command")
+		const dietcodeMessages = callbacks.getDietCodeMessages()
+		const lastCommandIndex = findLastIndex(dietcodeMessages, (m) => m.ask === "command" || m.say === "command")
 		if (lastCommandIndex !== -1) {
-			await callbacks.updateCodemarieMessage(lastCommandIndex, {
+			await callbacks.updateDietCodeMessage(lastCommandIndex, {
 				commandCompleted: true,
 			})
 		}
@@ -286,8 +286,8 @@ export async function orchestrateCommandExecution(
 			chunkTimer = null
 		}
 
-		// Set up file logging using CodemarieTempManager for proper cleanup
-		largeOutputLogPath = CodemarieTempManager.createTempFilePath("large-output")
+		// Set up file logging using DietCodeTempManager for proper cleanup
+		largeOutputLogPath = DietCodeTempManager.createTempFilePath("large-output")
 		largeOutputLogStream = fs.createWriteStream(largeOutputLogPath, { flags: "a" })
 
 		// Write all existing lines to file in a single batch to reduce I/O overhead

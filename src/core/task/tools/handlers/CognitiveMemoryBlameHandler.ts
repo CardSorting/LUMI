@@ -1,11 +1,11 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryBlameHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_BLAME
+	readonly name = DietCodeDefaultTool.MEM_BLAME
 
 	getDescription(block: ToolUse): string {
 		return `[blame cognitive memory for '${block.params.path}']`

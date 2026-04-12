@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { WorktreeDefaults } from "@shared/proto/codemarie/worktree"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { WorktreeDefaults } from "@shared/proto/dietcode/worktree"
 import { getWorkspacePath } from "@utils/path"
 import path from "path"
 import { getDocumentsPath } from "@/core/storage/disk"
@@ -28,9 +28,9 @@ export async function getWorktreeDefaults(_controller: Controller, _request: Emp
 	const suffix = generateRandomSuffix()
 
 	// Generate suggested branch name
-	const suggestedBranch = `worktree/codemarie-${suffix}`
+	const suggestedBranch = `worktree/dietcode-${suffix}`
 
-	// Generate suggested path in Documents/Codemarie/Worktrees/<project-name>-<suffix>
+	// Generate suggested path in Documents/DietCode/Worktrees/<project-name>-<suffix>
 	const documentsPath = await getDocumentsPath()
 	const cwd = await getWorkspacePath()
 
@@ -40,7 +40,7 @@ export async function getWorktreeDefaults(_controller: Controller, _request: Emp
 		projectName = path.basename(cwd)
 	}
 
-	const suggestedPath = path.join(documentsPath, "Codemarie", "Worktrees", `${projectName}-${suffix}`)
+	const suggestedPath = path.join(documentsPath, "DietCode", "Worktrees", `${projectName}-${suffix}`)
 
 	return WorktreeDefaults.create({
 		suggestedBranch,

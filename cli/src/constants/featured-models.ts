@@ -1,8 +1,8 @@
 /**
- * Featured models shown in the Codemarie model picker during onboarding
- * These are curated models that work well with Codemarie
+ * Featured models shown in the DietCode model picker during onboarding
+ * These are curated models that work well with DietCode
  */
-import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/codemarie/recommended-models"
+import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/dietcode/recommended-models"
 
 export interface FeaturedModel {
 	id: string

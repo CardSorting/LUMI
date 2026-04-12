@@ -1,11 +1,11 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import { DietCodeToolSpec } from "../spec"
 
-export const cognitive_memory_variants: CodemarieToolSpec[] = [
+export const cognitive_memory_variants: DietCodeToolSpec[] = [
 	{
-		id: CodemarieDefaultTool.MEM_QUERY,
-		name: CodemarieDefaultTool.MEM_QUERY,
+		id: DietCodeDefaultTool.MEM_QUERY,
+		name: DietCodeDefaultTool.MEM_QUERY,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Query the cognitive memory for relevant snapshots based on semantic similarity. Use this to retrieve past context, decisions, or learned patterns that are not in the current context window.",
@@ -19,8 +19,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_SNAPSHOT,
-		name: CodemarieDefaultTool.MEM_SNAPSHOT,
+		id: DietCodeDefaultTool.MEM_SNAPSHOT,
+		name: DietCodeDefaultTool.MEM_SNAPSHOT,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Create a manual cognitive snapshot of the current state, important decisions, or a summary of work. This will be stored for future retrieval via semantic search.",
@@ -40,8 +40,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_LINK,
-		name: CodemarieDefaultTool.MEM_LINK,
+		id: DietCodeDefaultTool.MEM_LINK,
+		name: DietCodeDefaultTool.MEM_LINK,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Create an explicit bidirectional relationship (edge) between two existing cognitive knowledge nodes. Use this to represent semantic connections, causal links, or grouped architectural decisions.",
@@ -73,8 +73,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_MERGE,
-		name: CodemarieDefaultTool.MEM_MERGE,
+		id: DietCodeDefaultTool.MEM_MERGE,
+		name: DietCodeDefaultTool.MEM_MERGE,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Proactively merge two existing cognitive knowledge nodes. This consolidates their content and tags, and re-points all existing graph edges to the target node. Original source node is deleted after successful merge.",
@@ -94,8 +94,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_REFRESH,
-		name: CodemarieDefaultTool.MEM_REFRESH,
+		id: DietCodeDefaultTool.MEM_REFRESH,
+		name: DietCodeDefaultTool.MEM_REFRESH,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Resets the confidence and usage markers of a specific knowledge node. Use this to prevent important but older memories from decaying or being garbage-collected.",
@@ -109,8 +109,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_CONTEXT,
-		name: CodemarieDefaultTool.MEM_CONTEXT,
+		id: DietCodeDefaultTool.MEM_CONTEXT,
+		name: DietCodeDefaultTool.MEM_CONTEXT,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Identify files that are semantically related to a target file based on co-modification patterns in the task history (Semantic Context Routing). Helps determine which files should be modified together.",
@@ -130,8 +130,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_BLAST,
-		name: CodemarieDefaultTool.MEM_BLAST,
+		id: DietCodeDefaultTool.MEM_BLAST,
+		name: DietCodeDefaultTool.MEM_BLAST,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Perform recursive semantic impact analysis to identify the 'blast radius' of changes to a file. Walks the history to find secondary and tertiary dependencies.",
@@ -151,8 +151,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_CHOKE,
-		name: CodemarieDefaultTool.MEM_CHOKE,
+		id: DietCodeDefaultTool.MEM_CHOKE,
+		name: DietCodeDefaultTool.MEM_CHOKE,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Detect architectural chokepoints or 'Spaghetti Files'. Identifies files with high churn and potential bottlenecks based on historical modification patterns.",
@@ -166,8 +166,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_HEAL,
-		name: CodemarieDefaultTool.MEM_HEAL,
+		id: DietCodeDefaultTool.MEM_HEAL,
+		name: DietCodeDefaultTool.MEM_HEAL,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Agentic Self-Healing: Search for the last previously known stable state of a file in the cognitive history. Returns historical content that can be restored using 'write_to_file'.",
@@ -181,8 +181,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_FORECAST,
-		name: CodemarieDefaultTool.MEM_FORECAST,
+		id: DietCodeDefaultTool.MEM_FORECAST,
+		name: DietCodeDefaultTool.MEM_FORECAST,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Predict potential merge conflicts and architectural divergence before performing heavy workspace operations. Uses speculative O(log N) graph diffing between task snapshot histories.",
@@ -202,8 +202,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_CENTRALITY,
-		name: CodemarieDefaultTool.MEM_CENTRALITY,
+		id: DietCodeDefaultTool.MEM_CENTRALITY,
+		name: DietCodeDefaultTool.MEM_CENTRALITY,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Get degree centrality metrics for a knowledge node (inbound + outbound edge count). Higher = more connected hub.",
@@ -217,8 +217,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_SUBGRAPH,
-		name: CodemarieDefaultTool.MEM_SUBGRAPH,
+		id: DietCodeDefaultTool.MEM_SUBGRAPH,
+		name: DietCodeDefaultTool.MEM_SUBGRAPH,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Extract a self-contained serializable subgraph from a root node — perfect for injecting into an LLM context window.",
@@ -238,8 +238,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_APPEND_SHARED,
-		name: CodemarieDefaultTool.MEM_APPEND_SHARED,
+		id: DietCodeDefaultTool.MEM_APPEND_SHARED,
+		name: DietCodeDefaultTool.MEM_APPEND_SHARED,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Contribute a global rule, fact or guideline to the swarm-wide shared memory layer (The 'Shared Rulebook'). These memories are inherited by all sub-tasks.",
@@ -253,8 +253,8 @@ export const cognitive_memory_variants: CodemarieToolSpec[] = [
 		],
 	},
 	{
-		id: CodemarieDefaultTool.MEM_GET_SHARED,
-		name: CodemarieDefaultTool.MEM_GET_SHARED,
+		id: DietCodeDefaultTool.MEM_GET_SHARED,
+		name: DietCodeDefaultTool.MEM_GET_SHARED,
 		variant: ModelFamily.GENERIC,
 		description:
 			"Fetch the holistic 'Shared Rulebook' containing all global instructions and guidelines for the current swarm/workspace.",

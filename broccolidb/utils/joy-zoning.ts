@@ -43,7 +43,7 @@ export function getLayer(filePath: string): Layer {
   if (normalized.includes('src/plumbing/')) return 'plumbing';
   if (normalized.includes('src/ui/')) return 'ui';
 
-  // Fallback for Codemarie's specific structure if it doesn't match the standard Joy-Zoning
+  // Fallback for DietCode's specific structure if it doesn't match the standard Joy-Zoning
   // NOTE: src/core/ is NOT strict domain — it's a "soft" domain with relaxed enforcement
   if (normalized.includes('src/core/')) return 'core';
   if (normalized.includes('src/services/') || normalized.includes('src/integrations/'))

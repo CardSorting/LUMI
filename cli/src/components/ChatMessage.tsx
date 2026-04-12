@@ -6,9 +6,9 @@
  * - ⎿ for tool results (indented)
  */
 
-import { CODEMARIE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@shared/CodemarieAccount"
 import { COMMAND_OUTPUT_STRING } from "@shared/combineCommandSequences"
-import type { CodemarieAskUseMcpServer, CodemarieMessage } from "@shared/ExtensionMessage"
+import { DIETCODE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@shared/DietCodeAccount"
+import type { DietCodeAskUseMcpServer, DietCodeMessage } from "@shared/ExtensionMessage"
 import { Box, Text } from "ink"
 import Spinner from "ink-spinner"
 import { lexer, type Token, type Tokens } from "marked"
@@ -188,7 +188,7 @@ const MarkdownText: React.FC<{ children: string; color?: string }> = ({ children
 }
 
 interface ChatMessageProps {
-	message: CodemarieMessage
+	message: DietCodeMessage
 	isStreaming?: boolean
 	mode?: "act" | "plan"
 }
@@ -260,7 +260,7 @@ function getToolMainArg(_toolName: string, args: Record<string, unknown>): strin
 }
 
 /**
- * Render a tool call in webview style: "Codemarie wants to read this file:" / "Codemarie read this file:"
+ * Render a tool call in webview style: "DietCode wants to read this file:" / "DietCode read this file:"
  */
 const ToolCallText: React.FC<{
 	toolName: string
@@ -275,7 +275,7 @@ const ToolCallText: React.FC<{
 
 	return (
 		<Text>
-			<Text color={toolColor}>Codemarie {actionText}</Text>
+			<Text color={toolColor}>DietCode {actionText}</Text>
 			{mainArg && (
 				<Text>
 					<Text color={toolColor}>: </Text>
@@ -420,7 +420,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 		const output = outputIndex === -1 ? "" : text.slice(outputIndex + COMMAND_OUTPUT_STRING.length).trim()
 
 		const isAsk = type === "ask"
-		const label = isAsk ? "Codemarie wants to execute this command: " : "Codemarie executed this command: "
+		const label = isAsk ? "DietCode wants to execute this command: " : "DietCode executed this command: "
 
 		return (
 			<Box flexDirection="column" marginBottom={1} width="100%">
@@ -463,7 +463,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 	if ((type === "ask" && ask === "use_mcp_server") || say === "use_mcp_server") {
 		const isAsk = type === "ask"
 		const parsed = text
-			? jsonParseSafe<Partial<CodemarieAskUseMcpServer> & { serverName: string }>(text, {
+			? jsonParseSafe<Partial<DietCodeAskUseMcpServer> & { serverName: string }>(text, {
 					type: undefined,
 					serverName: "unknown server",
 					toolName: undefined,
@@ -473,7 +473,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 			: undefined
 
 		const serverName = parsed?.serverName || "unknown server"
-		const actionLabel = isAsk ? "Codemarie wants to use MCP" : "Codemarie used MCP"
+		const actionLabel = isAsk ? "DietCode wants to use MCP" : "DietCode used MCP"
 		const targetLine =
 			parsed?.type === "access_mcp_resource"
 				? `resource: ${parsed?.uri || "unknown"}`
@@ -543,12 +543,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 	}
 
 	// Error messages
-	if (say === "codemarieignore_error") {
+	if (say === "dietcodeignore_error") {
 		return (
 			<Box flexDirection="column" marginBottom={1} width="100%">
 				<DotRow color="red">
 					<Text color="red" wrap="wrap">
-						Codemarie tried to access <Text bold>{text}</Text> which is blocked by the .codemarieignore file.
+						DietCode tried to access <Text bold>{text}</Text> which is blocked by the .dietcodeignore file.
 					</Text>
 				</DotRow>
 			</Box>
@@ -565,8 +565,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 			}
 		}
 
-		// Check for Codemarie auth error to show sign-in instructions
-		const isCodemarieAuthError = errorMessage.includes(CODEMARIE_ACCOUNT_AUTH_ERROR_MESSAGE)
+		// Check for DietCode auth error to show sign-in instructions
+		const isDietCodeAuthError = errorMessage.includes(DIETCODE_ACCOUNT_AUTH_ERROR_MESSAGE)
 
 		return (
 			<Box flexDirection="column" marginBottom={1} width="100%">
@@ -575,7 +575,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 						<Text bold>Error</Text>: {errorMessage}
 					</Text>
 				</DotRow>
-				{isCodemarieAuthError && (
+				{isDietCodeAuthError && (
 					<Box marginLeft={2} marginTop={1}>
 						<Text color="gray">
 							Run <Text color="cyan">/settings</Text> and go to Account to sign in.
@@ -671,7 +671,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 			<Box flexDirection="column" marginBottom={1} width="100%">
 				<DotRow color={toolColor} flashing={partial === true && isStreaming}>
 					<Text>
-						<Text color={toolColor}>Codemarie used the browser</Text>
+						<Text color={toolColor}>DietCode used the browser</Text>
 						{text && (
 							<Text>
 								<Text color={toolColor}>: </Text>
@@ -690,7 +690,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 			<Box flexDirection="column" marginBottom={1} width="100%">
 				<DotRow color={toolColor} flashing={partial === true && isStreaming}>
 					<Text>
-						<Text color={toolColor}>Codemarie is using an MCP tool</Text>
+						<Text color={toolColor}>DietCode is using an MCP tool</Text>
 						{text && (
 							<Text>
 								<Text color={toolColor}>: </Text>
@@ -802,7 +802,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 			<Box flexDirection="column" marginBottom={1} width="100%">
 				<DotRow color={COLORS.primaryBlue}>
 					<Text bold color={COLORS.primaryBlue}>
-						Codemarie wants to start a new task:
+						DietCode wants to start a new task:
 					</Text>
 				</DotRow>
 				<Box flexDirection="column" paddingLeft={2}>
@@ -818,7 +818,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 			<Box flexDirection="column" marginBottom={1} width="100%">
 				<DotRow color={COLORS.primaryBlue} flashing={partial === true && isStreaming}>
 					<Text bold color={COLORS.primaryBlue}>
-						Codemarie wants to condense your conversation:
+						DietCode wants to condense your conversation:
 					</Text>
 				</DotRow>
 				<Box flexDirection="column" paddingLeft={2}>
@@ -834,7 +834,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 			<Box flexDirection="column" marginBottom={1} width="100%">
 				<DotRow color={COLORS.primaryBlue} flashing={partial === true && isStreaming}>
 					<Text bold color={COLORS.primaryBlue}>
-						Codemarie wants to summarize the task:
+						DietCode wants to summarize the task:
 					</Text>
 				</DotRow>
 				<Box flexDirection="column" paddingLeft={2}>
@@ -850,7 +850,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
 			<Box flexDirection="column" marginBottom={1} width="100%">
 				<DotRow color={COLORS.primaryBlue} flashing={partial === true && isStreaming}>
 					<Text bold color={COLORS.primaryBlue}>
-						Codemarie wants to create a Github issue:
+						DietCode wants to create a Github issue:
 					</Text>
 				</DotRow>
 				<Box flexDirection="column" paddingLeft={2}>
@@ -868,7 +868,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, mode, isStrea
  * Render a list of messages in Claude Code style
  */
 interface ChatMessageListProps {
-	messages: CodemarieMessage[]
+	messages: DietCodeMessage[]
 	maxMessages?: number
 }
 

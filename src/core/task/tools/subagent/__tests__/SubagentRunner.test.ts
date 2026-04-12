@@ -6,9 +6,9 @@ import type { TaskConfig } from "@core/task/tools/types/TaskConfig"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { HostProvider } from "@/hosts/host-provider"
-import { ApiFormat } from "@/shared/proto/codemarie/models"
+import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { TaskState } from "../../../TaskState"
 import { SubagentBuilder } from "../SubagentBuilder"
 import { SubagentRunner } from "../SubagentRunner"
@@ -111,8 +111,8 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 			runUserPromptSubmitHook: sinon.stub().resolves({}),
 		},
 		coordinator: {
-			getHandler: sinon.stub().callsFake((toolName: CodemarieDefaultTool) => {
-				if (toolName === CodemarieDefaultTool.LIST_FILES) {
+			getHandler: sinon.stub().callsFake((toolName: DietCodeDefaultTool) => {
+				if (toolName === DietCodeDefaultTool.LIST_FILES) {
 					return {
 						execute: sinon.stub().resolves("ok"),
 						getDescription: sinon.stub().returns("list_files"),
@@ -154,7 +154,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_1",
-						name: CodemarieDefaultTool.LIST_FILES,
+						name: DietCodeDefaultTool.LIST_FILES,
 						arguments: JSON.stringify({ path: ".", recursive: false }),
 					},
 				},
@@ -170,7 +170,7 @@ describe("SubagentRunner", () => {
 			const toolUse = assistantMessage.content.find((block) => block.type === "tool_use")
 			assert.ok(toolUse)
 			assert.equal(toolUse.id, "toolu_subagent_1")
-			assert.equal(toolUse.name, CodemarieDefaultTool.LIST_FILES)
+			assert.equal(toolUse.name, DietCodeDefaultTool.LIST_FILES)
 
 			const userMessage = conversation[2] as { role: string; content: Array<{ type?: string; [key: string]: unknown }> }
 			assert.equal(userMessage.role, "user")
@@ -183,7 +183,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_complete_1",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},
@@ -226,7 +226,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_previous_tokens_1",
-						name: CodemarieDefaultTool.LIST_FILES,
+						name: DietCodeDefaultTool.LIST_FILES,
 						arguments: JSON.stringify({ path: ".", recursive: false }),
 					},
 				},
@@ -238,7 +238,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_previous_tokens_complete_1",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},
@@ -281,7 +281,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_2",
-						name: CodemarieDefaultTool.LIST_FILES,
+						name: DietCodeDefaultTool.LIST_FILES,
 						arguments: JSON.stringify({ path: ".", recursive: false }),
 					},
 				},
@@ -305,7 +305,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_complete_2",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},
@@ -357,7 +357,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_complete_3",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},
@@ -459,7 +459,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_complete_4",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},
@@ -493,7 +493,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_skills_filtered_1",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},
@@ -535,7 +535,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_skills_unconfigured_1",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},
@@ -577,7 +577,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_skills_missing_1",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},
@@ -632,7 +632,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_workspace_1",
-						name: CodemarieDefaultTool.LIST_FILES,
+						name: DietCodeDefaultTool.LIST_FILES,
 						arguments: JSON.stringify({ path: ".", recursive: false }),
 					},
 				},
@@ -655,7 +655,7 @@ describe("SubagentRunner", () => {
 				tool_call: {
 					function: {
 						id: "toolu_subagent_workspace_complete_1",
-						name: CodemarieDefaultTool.ATTEMPT,
+						name: DietCodeDefaultTool.ATTEMPT,
 						arguments: JSON.stringify({ result: "done" }),
 					},
 				},

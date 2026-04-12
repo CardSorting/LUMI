@@ -1,4 +1,4 @@
-import { CodemarieEndpoint } from "@/config"
+import { DietCodeEndpoint } from "@/config"
 import { isPostHogConfigValid, posthogConfig } from "@/shared/services/config/posthog-config"
 import { Logger } from "@/shared/services/Logger"
 import { PostHogClientProvider } from "../telemetry/providers/posthog/PostHogClientProvider"
@@ -49,7 +49,7 @@ export class FeatureFlagsProviderFactory {
 	 */
 	public static getDefaultConfig(): FeatureFlagsProviderConfig {
 		// Use no-op provider in self-hosted mode to avoid external network calls
-		if (CodemarieEndpoint.isSelfHosted()) {
+		if (DietCodeEndpoint.isSelfHosted()) {
 			return { type: "no-op" }
 		}
 		const hasValidConfig = isPostHogConfigValid(posthogConfig)

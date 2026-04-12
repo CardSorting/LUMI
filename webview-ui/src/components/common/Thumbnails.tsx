@@ -1,5 +1,5 @@
 import { cn } from "@heroui/react"
-import { StringRequest } from "@shared/proto/codemarie/common"
+import { StringRequest } from "@shared/proto/dietcode/common"
 import React, { memo, useLayoutEffect, useRef, useState } from "react"
 import { useWindowSize } from "react-use"
 import { VscIcon } from "@/components/ui/vsc-icon"

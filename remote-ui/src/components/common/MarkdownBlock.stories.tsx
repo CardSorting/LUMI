@@ -125,11 +125,11 @@ export const WithLinks: Story = {
 	args: {
 		markdown: `Check out these resources:
 
-- Official documentation: https://github.com/codemarie/codemarie
-- API reference: https://api.codemarie.bot/docs
-- Support forum: https://community.codemarie.bot
+- Official documentation: https://github.com/dietcode/dietcode
+- API reference: https://api.dietcode.bot/docs
+- Support forum: https://community.dietcode.bot
 
-You can also visit our website at https://codemarie.bot for more information.`,
+You can also visit our website at https://dietcode.bot for more information.`,
 		compact: false,
 		showCursor: false,
 	},

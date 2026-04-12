@@ -17,7 +17,7 @@
 <a href="https://www.reddit.com/r/cline/" target="_blank"><strong>r/cline</strong></a>
 </td>
 <td align="center">
-<a href="https://github.com/codemarie/codemarie/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>機能リクエスト</strong></a>
+<a href="https://github.com/dietcode/dietcode/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>機能リクエスト</strong></a>
 </td>
 <td align="center">
 <a href="https://cline.bot/join-us" target="_blank"><strong>採用情報</strong></a>
@@ -142,7 +142,7 @@ Clineがタスクを進める中で、拡張機能は各ステップでワーク
 
 1. リポジトリをクローンします _(Requires [git-lfs](https://git-lfs.com/))_：
         ```bash
-        git clone https://github.com/codemarie/codemarie.git
+        git clone https://github.com/dietcode/dietcode.git
         ```
 2. プロジェクトをVSCodeで開きます：
         ```bash

@@ -3,8 +3,8 @@ import { Controller } from "../index"
 
 export async function updateTerminalReuseEnabled(
 	controller: Controller,
-	request: proto.codemarie.BooleanRequest,
-): Promise<proto.codemarie.Empty> {
+	request: proto.dietcode.BooleanRequest,
+): Promise<proto.dietcode.Empty> {
 	const enabled = request.value
 
 	// Update the terminal reuse setting in the state
@@ -13,5 +13,5 @@ export async function updateTerminalReuseEnabled(
 	// Broadcast state update to all webviews
 	await controller.postStateToWebview()
 
-	return proto.codemarie.Empty.create({})
+	return proto.dietcode.Empty.create({})
 }

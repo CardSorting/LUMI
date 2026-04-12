@@ -34,7 +34,7 @@ export async function applyProviderConfig(options: ApplyProviderConfigOptions): 
 	}
 
 	// Add model ID (use provided or fall back to default)
-	// Use provider-specific model ID keys (e.g., actModeOpenRouterModelId for codemarie/openrouter)
+	// Use provider-specific model ID keys (e.g., actModeOpenRouterModelId for dietcode/openrouter)
 	const finalModelId = modelId || getDefaultModelId(providerId)
 	if (finalModelId) {
 		const actModelKey = getProviderModelIdKey(providerId as ApiProvider, "act")
@@ -44,7 +44,7 @@ export async function applyProviderConfig(options: ApplyProviderConfigOptions): 
 
 		// Fetch model info from the provider API (not just disk cache) so headless
 		// CLI auth gets correct maxTokens, thinkingConfig, etc.
-		if ((providerId === "codemarie" || providerId === "openrouter") && controller) {
+		if ((providerId === "dietcode" || providerId === "openrouter") && controller) {
 			const openRouterModels = await refreshOpenRouterModels(controller)
 			const modelInfo = openRouterModels?.[finalModelId]
 			if (modelInfo) {

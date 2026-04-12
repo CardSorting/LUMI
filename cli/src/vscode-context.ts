@@ -7,8 +7,8 @@ import { fileURLToPath } from "node:url"
 import os from "os"
 import path from "path"
 import { ExtensionRegistryInfo } from "@/registry"
-import { CodemarieExtensionContext } from "@/shared/codemarie"
-import type { CodemarieMemento } from "@/shared/storage/CodemarieStorage"
+import { DietCodeExtensionContext } from "@/shared/dietcode"
+import type { DietCodeMemento } from "@/shared/storage/DietCodeStorage"
 import { createStorageContext, type StorageContext } from "@/shared/storage/storage-context"
 import { EnvironmentVariableCollection, ExtensionKind, ExtensionMode, readJson, URI } from "./vscode-shim"
 
@@ -33,12 +33,12 @@ const CLI_STATE_OVERRIDES: Record<string, any> = {
 }
 
 /**
- * Memento adapter that wraps a CodemarieFileStorage with optional key overrides.
+ * Memento adapter that wraps a DietCodeFileStorage with optional key overrides.
  * Used for globalState where CLI needs to inject hardcoded overrides.
  */
-class MementoAdapter implements CodemarieMemento {
+class MementoAdapter implements DietCodeMemento {
 	constructor(
-		private readonly store: CodemarieMemento,
+		private readonly store: DietCodeMemento,
 		private readonly overrides: Record<string, any> = {},
 	) {}
 
@@ -78,13 +78,13 @@ class MementoAdapter implements CodemarieMemento {
 }
 
 export interface CliContextConfig {
-	codemarieDir?: string
+	dietcodeDir?: string
 	/** The workspace directory being worked in (used to compute workspace storage hash) */
 	workspaceDir?: string
 }
 
 export interface CliContextResult {
-	extensionContext: CodemarieExtensionContext
+	extensionContext: DietCodeExtensionContext
 	storageContext: StorageContext
 	DATA_DIR: string
 	EXTENSION_DIR: string
@@ -95,17 +95,17 @@ export interface CliContextResult {
  * Initialize the VSCode-like context for CLI mode.
  *
  * Creates a shared StorageContext (the single source of truth for all storage)
- * and wraps it in a CodemarieExtensionContext shell for legacy APIs that still
+ * and wraps it in a DietCodeExtensionContext shell for legacy APIs that still
  * expect the VSCode ExtensionContext shape.
  */
 export function initializeCliContext(config: CliContextConfig = {}): CliContextResult {
 	const CLINE_DIR =
-		config.codemarieDir || process.env.CODEMARIE_DIR || process.env.CLINE_DIR || path.join(os.homedir(), ".codemarie")
+		config.dietcodeDir || process.env.DIETCODE_DIR || process.env.CLINE_DIR || path.join(os.homedir(), ".dietcode")
 
-	// Create the shared StorageContext — this owns all CodemarieFileStorage instances.
+	// Create the shared StorageContext — this owns all DietCodeFileStorage instances.
 	// CLI, JetBrains, and VSCode all share this same file-backed implementation.
 	let storageContext = createStorageContext({
-		codemarieDir: CLINE_DIR,
+		dietcodeDir: CLINE_DIR,
 		workspacePath: config.workspaceDir || process.cwd(),
 		workspaceStorageDir: process.env.WORKSPACE_STORAGE_DIR || undefined,
 	})
@@ -122,7 +122,7 @@ export function initializeCliContext(config: CliContextConfig = {}): CliContextR
 	const EXTENSION_DIR = path.resolve(__dirname, "..")
 	const EXTENSION_MODE = process.env.IS_DEV === "true" ? ExtensionMode.Development : ExtensionMode.Production
 
-	const extension: CodemarieExtensionContext["extension"] = {
+	const extension: DietCodeExtensionContext["extension"] = {
 		id: ExtensionRegistryInfo.id,
 		isActive: true,
 		extensionPath: EXTENSION_DIR,
@@ -133,9 +133,9 @@ export function initializeCliContext(config: CliContextConfig = {}): CliContextR
 		extensionKind: ExtensionKind.UI,
 	}
 
-	// Build the CodemarieExtensionContext shell. All storage delegates to storageContext —
-	// there are NO separate CodemarieFileStorage instances here.
-	const extensionContext: CodemarieExtensionContext = {
+	// Build the DietCodeExtensionContext shell. All storage delegates to storageContext —
+	// there are NO separate DietCodeFileStorage instances here.
+	const extensionContext: DietCodeExtensionContext = {
 		extension: extension,
 		extensionMode: EXTENSION_MODE,
 

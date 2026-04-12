@@ -1,6 +1,6 @@
-import type { CodemarieAsk, CodemarieSay } from "@shared/ExtensionMessage"
-import type { CodemarieDefaultTool } from "@shared/tools"
-import type { CodemarieAskResponse } from "@shared/WebviewMessage"
+import type { DietCodeAsk, DietCodeSay } from "@shared/ExtensionMessage"
+import type { DietCodeDefaultTool } from "@shared/tools"
+import type { DietCodeAskResponse } from "@shared/WebviewMessage"
 import { telemetryService } from "@/services/telemetry"
 import type { ToolParamName, ToolUse } from "../../../assistant-message"
 import { showNotificationForApproval } from "../../utils"
@@ -12,20 +12,14 @@ import type { TaskConfig } from "./TaskConfig"
  */
 export interface StronglyTypedUIHelpers {
 	// Core UI methods
-	say: (
-		type: CodemarieSay,
-		text?: string,
-		images?: string[],
-		files?: string[],
-		partial?: boolean,
-	) => Promise<number | undefined>
+	say: (type: DietCodeSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
 
 	ask: (
-		type: CodemarieAsk,
+		type: DietCodeAsk,
 		text?: string,
 		partial?: boolean,
 	) => Promise<{
-		response: CodemarieAskResponse
+		response: DietCodeAskResponse
 		text?: string
 		images?: string[]
 		files?: string[]
@@ -33,16 +27,16 @@ export interface StronglyTypedUIHelpers {
 
 	// Utility methods
 	removeClosingTag: (block: ToolUse, tag: ToolParamName, text?: string) => string
-	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: CodemarieAsk | CodemarieSay) => Promise<void>
+	removeLastPartialMessageIfExistsWithType: (type: "ask" | "say", askOrSay: DietCodeAsk | DietCodeSay) => Promise<void>
 
 	// Approval methods
-	shouldAutoApproveTool: (toolName: CodemarieDefaultTool) => boolean | [boolean, boolean]
-	shouldAutoApproveToolWithPath: (toolName: CodemarieDefaultTool, path?: string) => Promise<boolean>
-	askApproval: (messageType: CodemarieAsk, message: string) => Promise<boolean>
+	shouldAutoApproveTool: (toolName: DietCodeDefaultTool) => boolean | [boolean, boolean]
+	shouldAutoApproveToolWithPath: (toolName: DietCodeDefaultTool, path?: string) => Promise<boolean>
+	askApproval: (messageType: DietCodeAsk, message: string) => Promise<boolean>
 
 	// Telemetry and notifications
 	captureTelemetry: (
-		toolName: CodemarieDefaultTool,
+		toolName: DietCodeDefaultTool,
 		autoApproved: boolean,
 		approved: boolean,
 		isNativeToolCall?: boolean,
@@ -62,14 +56,14 @@ export function createUIHelpers(config: TaskConfig): StronglyTypedUIHelpers {
 		ask: config.callbacks.ask,
 		removeClosingTag: (block: ToolUse, tag: ToolParamName, text?: string) => removeClosingTag(block, tag, text),
 		removeLastPartialMessageIfExistsWithType: config.callbacks.removeLastPartialMessageIfExistsWithType,
-		shouldAutoApproveTool: (toolName: CodemarieDefaultTool) => config.autoApprover.shouldAutoApproveTool(toolName),
+		shouldAutoApproveTool: (toolName: DietCodeDefaultTool) => config.autoApprover.shouldAutoApproveTool(toolName),
 		shouldAutoApproveToolWithPath: config.callbacks.shouldAutoApproveToolWithPath,
-		askApproval: async (messageType: CodemarieAsk, message: string): Promise<boolean> => {
+		askApproval: async (messageType: DietCodeAsk, message: string): Promise<boolean> => {
 			const { response } = await config.callbacks.ask(messageType, message, false)
 			return response === "yesButtonClicked"
 		},
 		captureTelemetry: (
-			toolName: CodemarieDefaultTool,
+			toolName: DietCodeDefaultTool,
 			autoApproved: boolean,
 			approved: boolean,
 			isNativeToolCall?: boolean,

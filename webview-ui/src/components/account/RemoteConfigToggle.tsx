@@ -1,4 +1,4 @@
-import { UpdateSettingsRequest, UserOrganization } from "@shared/proto/index.codemarie"
+import { UpdateSettingsRequest, UserOrganization } from "@shared/proto/index.dietcode"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { useRef } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"

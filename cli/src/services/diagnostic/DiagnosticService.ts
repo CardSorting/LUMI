@@ -56,7 +56,7 @@ export class DiagnosticService {
 				results.push({
 					name: "API Tokens Repair",
 					status: "warning",
-					message: "Unable to auto-repair tokens. Please run `codemarie auth` or `codemarie config`.",
+					message: "Unable to auto-repair tokens. Please run `dietcode auth` or `dietcode config`.",
 				})
 			} else {
 				results.push({
@@ -144,14 +144,14 @@ export class DiagnosticService {
 				name: "Configuration Integrity",
 				status: "error",
 				message: "Configuration file corrupted or inaccessible",
-				remediation: "Run `codemarie auth` to reconfigure.",
+				remediation: "Run `dietcode auth` to reconfigure.",
 			}
 		}
 		return {
 			name: "Configuration Integrity",
 			status: "warning",
 			message: "No configuration found",
-			remediation: "Run `codemarie auth` to get started.",
+			remediation: "Run `dietcode auth` to get started.",
 		}
 	}
 

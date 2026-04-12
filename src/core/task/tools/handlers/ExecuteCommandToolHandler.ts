@@ -3,10 +3,10 @@ import { formatResponse } from "@core/prompts/responses"
 import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
 import { showSystemNotification } from "@integrations/notifications"
 import { COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
-import { CodemarieAsk } from "@shared/ExtensionMessage"
+import { DietCodeAsk } from "@shared/ExtensionMessage"
 import { arePathsEqual } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { executor } from "../../ActionExecutor"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
@@ -58,7 +58,7 @@ export function resolveCommandTimeoutSeconds(
 }
 
 export class ExecuteCommandToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.BASH
+	readonly name = DietCodeDefaultTool.BASH
 
 	constructor(private readonly validator: ToolValidator) {}
 
@@ -82,7 +82,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			return
 		}
 		await uiHelpers
-			.ask("command" as CodemarieAsk, uiHelpers.removeClosingTag(block, "command", command), block.partial)
+			.ask("command" as DietCodeAsk, uiHelpers.removeClosingTag(block, "command", command), block.partial)
 			.catch(() => {})
 	}
 
@@ -178,11 +178,11 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			return formatResponse.toolError(formatResponse.permissionDeniedError(errorMessage))
 		}
 
-		// Check codemarieignore validation for command
+		// Check dietcodeignore validation for command
 		const commandValidation = this.validator.validateCommand(actualCommand)
 		if (!commandValidation.ok) {
 			if (!config.isSubagentExecution) {
-				await config.callbacks.say("codemarieignore_error", commandValidation.error)
+				await config.callbacks.say("dietcodeignore_error", commandValidation.error)
 			}
 			return formatResponse.toolError(commandValidation.error)
 		}
@@ -243,7 +243,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		} else {
 			// Manual approval flow
 			showNotificationForApproval(
-				`Codemarie wants to execute a command: ${actualCommand}`,
+				`DietCode wants to execute a command: ${actualCommand}`,
 				config.autoApprovalSettings.enableNotifications,
 			)
 

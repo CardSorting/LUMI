@@ -1,5 +1,5 @@
-import { Empty } from "@shared/proto/codemarie/common"
-import { UpdateApiConfigurationRequest } from "@shared/proto/codemarie/models"
+import { Empty } from "@shared/proto/dietcode/common"
+import { UpdateApiConfigurationRequest } from "@shared/proto/dietcode/models"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
 import {
 	fromProtobufLiteLLMModelInfo,
@@ -51,8 +51,8 @@ export async function updateApiConfigurationProto(
 			planModeOpenRouterModelInfo: protoApiConfiguration.planModeOpenRouterModelInfo
 				? fromProtobufModelInfo(protoApiConfiguration.planModeOpenRouterModelInfo)
 				: undefined,
-			planModeCodemarieModelInfo: protoApiConfiguration.planModeCodemarieModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.planModeCodemarieModelInfo)
+			planModeDietcodeModelInfo: protoApiConfiguration.planModeDietcodeModelInfo
+				? fromProtobufModelInfo(protoApiConfiguration.planModeDietcodeModelInfo)
 				: undefined,
 			planModeOpenAiModelInfo: protoApiConfiguration.planModeOpenAiModelInfo
 				? fromProtobufOpenAiCompatibleModelInfo(protoApiConfiguration.planModeOpenAiModelInfo)
@@ -89,8 +89,8 @@ export async function updateApiConfigurationProto(
 			actModeOpenRouterModelInfo: protoApiConfiguration.actModeOpenRouterModelInfo
 				? fromProtobufModelInfo(protoApiConfiguration.actModeOpenRouterModelInfo)
 				: undefined,
-			actModeCodemarieModelInfo: protoApiConfiguration.actModeCodemarieModelInfo
-				? fromProtobufModelInfo(protoApiConfiguration.actModeCodemarieModelInfo)
+			actModeDietcodeModelInfo: protoApiConfiguration.actModeDietcodeModelInfo
+				? fromProtobufModelInfo(protoApiConfiguration.actModeDietcodeModelInfo)
 				: undefined,
 			actModeOpenAiModelInfo: protoApiConfiguration.actModeOpenAiModelInfo
 				? fromProtobufOpenAiCompatibleModelInfo(protoApiConfiguration.actModeOpenAiModelInfo)

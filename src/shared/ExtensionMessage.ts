@@ -6,13 +6,13 @@ import type { Environment } from "../config"
 import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import { ApiConfiguration } from "./api"
 import { BrowserSettings } from "./BrowserSettings"
-import { CodemarieFeatureSetting } from "./CodemarieFeatureSetting"
-import { BannerCardData } from "./codemarie/banner"
-import { CodemarieRulesToggles } from "./codemarie-rules"
+import { DietCodeFeatureSetting } from "./DietCodeFeatureSetting"
+import { BannerCardData } from "./dietcode/banner"
+import { DietCodeRulesToggles } from "./dietcode-rules"
 import { FocusChainSettings } from "./FocusChainSettings"
 import { HistoryItem } from "./HistoryItem"
 import { McpDisplayMode } from "./McpDisplayMode"
-import { CodemarieMessageModelInfo } from "./messages"
+import { DietCodeMessageModelInfo } from "./messages"
 import { Mode } from "./storage/types"
 import { TelemetrySetting } from "./TelemetrySetting"
 import { UserInfo } from "./UserInfo"
@@ -35,7 +35,7 @@ export type Platform = "aix" | "darwin" | "freebsd" | "linux" | "openbsd" | "sun
 
 export const DEFAULT_PLATFORM = "unknown"
 
-export const COMMAND_CANCEL_TOKEN = "__codemarie_command_cancel__"
+export const COMMAND_CANCEL_TOKEN = "__dietcode_command_cancel__"
 export interface ExtensionState {
 	isNewUser: boolean
 	welcomeViewCompleted: boolean
@@ -46,7 +46,7 @@ export interface ExtensionState {
 	preferredLanguage?: string
 	mode: Mode
 	checkpointManagerErrorMessage?: string
-	codemarieMessages: CodemarieMessage[]
+	dietcodeMessages: DietCodeMessage[]
 	currentTaskItem?: HistoryItem
 	currentFocusChainChecklist?: string | null
 	mcpMarketplaceEnabled?: boolean
@@ -70,22 +70,22 @@ export interface ExtensionState {
 	userInfo?: UserInfo
 	version: string
 	distinctId: string
-	globalCodemarieRulesToggles: CodemarieRulesToggles
-	localCodemarieRulesToggles: CodemarieRulesToggles
-	localWorkflowToggles: CodemarieRulesToggles
-	globalWorkflowToggles: CodemarieRulesToggles
-	localCursorRulesToggles: CodemarieRulesToggles
-	localWindsurfRulesToggles: CodemarieRulesToggles
-	remoteRulesToggles?: CodemarieRulesToggles
-	remoteWorkflowToggles?: CodemarieRulesToggles
-	localAgentsRulesToggles: CodemarieRulesToggles
+	globalDietCodeRulesToggles: DietCodeRulesToggles
+	localDietCodeRulesToggles: DietCodeRulesToggles
+	localWorkflowToggles: DietCodeRulesToggles
+	globalWorkflowToggles: DietCodeRulesToggles
+	localCursorRulesToggles: DietCodeRulesToggles
+	localWindsurfRulesToggles: DietCodeRulesToggles
+	remoteRulesToggles?: DietCodeRulesToggles
+	remoteWorkflowToggles?: DietCodeRulesToggles
+	localAgentsRulesToggles: DietCodeRulesToggles
 	mcpResponsesCollapsed?: boolean
 	strictPlanModeEnabled?: boolean
 	yoloModeToggled?: boolean
 	useAutoCondense?: boolean
 	subagentsEnabled?: boolean
-	codemarieWebToolsEnabled?: CodemarieFeatureSetting
-	worktreesEnabled?: CodemarieFeatureSetting
+	dietcodeWebToolsEnabled?: DietCodeFeatureSetting
+	worktreesEnabled?: DietCodeFeatureSetting
 	focusChainSettings: FocusChainSettings
 	customPrompt?: string
 	favoritedModelIds: string[]
@@ -93,7 +93,7 @@ export interface ExtensionState {
 	workspaceRoots: WorkspaceRoot[]
 	primaryRootIndex: number
 	isMultiRootWorkspace: boolean
-	multiRootSetting: CodemarieFeatureSetting
+	multiRootSetting: DietCodeFeatureSetting
 	lastDismissedInfoBannerVersion: number
 	lastDismissedModelBannerVersion: number
 	lastDismissedCliBannerVersion: number
@@ -112,11 +112,11 @@ export interface ExtensionState {
 	openAiCodexIsAuthenticated?: boolean
 }
 
-export interface CodemarieMessage {
+export interface DietCodeMessage {
 	ts: number
 	type: "ask" | "say"
-	ask?: CodemarieAsk
-	say?: CodemarieSay
+	ask?: DietCodeAsk
+	say?: DietCodeSay
 	text?: string
 	reasoning?: string
 	images?: string[]
@@ -128,10 +128,10 @@ export interface CodemarieMessage {
 	isOperationOutsideWorkspace?: boolean
 	conversationHistoryIndex?: number
 	conversationHistoryDeletedRange?: [number, number] // for when conversation history is truncated for API requests
-	modelInfo?: CodemarieMessageModelInfo
+	modelInfo?: DietCodeMessageModelInfo
 }
 
-export type CodemarieAsk =
+export type DietCodeAsk =
 	| "followup"
 	| "plan_mode_respond"
 	| "act_mode_respond"
@@ -151,7 +151,7 @@ export type CodemarieAsk =
 	| "report_bug"
 	| "use_subagents"
 
-export type CodemarieSay =
+export type DietCodeSay =
 	| "task"
 	| "error"
 	| "error_retry"
@@ -177,7 +177,7 @@ export type CodemarieSay =
 	| "use_mcp_server"
 	| "diff_error"
 	| "deleted_api_reqs"
-	| "codemarieignore_error"
+	| "dietcodeignore_error"
 	| "command_permission_denied"
 	| "checkpoint_created"
 	| "load_mcp_documentation"
@@ -191,7 +191,7 @@ export type CodemarieSay =
 	| "subagent_usage"
 	| "conditional_rules_applied"
 
-export interface CodemarieSayTool {
+export interface DietCodeSayTool {
 	tool:
 		| "editedExistingFile"
 		| "newFileCreated"
@@ -215,7 +215,7 @@ export interface CodemarieSayTool {
 	startLineNumbers?: number[]
 }
 
-export interface CodemarieSayHook {
+export interface DietCodeSayHook {
 	hookName: string // Name of the hook (e.g., "PreToolUse", "PostToolUse")
 	toolName?: string // Tool name if applicable (for PreToolUse/PostToolUse)
 	status: "running" | "completed" | "failed" | "cancelled" // Execution status
@@ -254,13 +254,13 @@ export type HookOutputStreamMeta = {
 export const browserActions = ["launch", "click", "type", "scroll_down", "scroll_up", "close"] as const
 export type BrowserAction = (typeof browserActions)[number]
 
-export interface CodemarieSayBrowserAction {
+export interface DietCodeSayBrowserAction {
 	action: BrowserAction
 	coordinate?: string
 	text?: string
 }
 
-export interface CodemarieSayGenerateExplanation {
+export interface DietCodeSayGenerateExplanation {
 	title: string
 	fromRef: string
 	toRef: string
@@ -286,7 +286,7 @@ export interface SubagentStatusItem {
 	error?: string
 }
 
-export interface CodemarieSaySubagentStatus {
+export interface DietCodeSaySubagentStatus {
 	status: "running" | "completed" | "failed"
 	total: number
 	completed: number
@@ -308,7 +308,7 @@ export type BrowserActionResult = {
 	currentMousePosition?: string
 }
 
-export interface CodemarieAskUseMcpServer {
+export interface DietCodeAskUseMcpServer {
 	serverName: string
 	type: "use_mcp_tool" | "access_mcp_resource"
 	toolName?: string
@@ -316,11 +316,11 @@ export interface CodemarieAskUseMcpServer {
 	uri?: string
 }
 
-export interface CodemarieAskUseSubagents {
+export interface DietCodeAskUseSubagents {
 	prompts: string[]
 }
 
-export interface CodemariePlanModeResponse {
+export interface DietCodePlanModeResponse {
 	response: string
 	options?: string[]
 	selected?: string
@@ -380,7 +380,7 @@ export interface CodemariePlanModeResponse {
 	}
 }
 
-export interface CodemarieAskQuestion {
+export interface DietCodeAskQuestion {
 	question: string
 	options?: string[]
 	selected?: string
@@ -440,18 +440,18 @@ export interface CodemarieAskQuestion {
 	}
 }
 
-export interface CodemarieAskNewTask {
+export interface DietCodeAskNewTask {
 	context: string
 }
 
-export interface CodemarieApiReqInfo {
+export interface DietCodeApiReqInfo {
 	request?: string
 	tokensIn?: number
 	tokensOut?: number
 	cacheWrites?: number
 	cacheReads?: number
 	cost?: number
-	cancelReason?: CodemarieApiReqCancelReason
+	cancelReason?: DietCodeApiReqCancelReason
 	streamingFailedMessage?: string
 	retryStatus?: {
 		attempt: number
@@ -461,7 +461,7 @@ export interface CodemarieApiReqInfo {
 	}
 }
 
-export interface CodemarieSubagentUsageInfo {
+export interface DietCodeSubagentUsageInfo {
 	source: "subagents"
 	tokensIn: number
 	tokensOut: number
@@ -470,6 +470,6 @@ export interface CodemarieSubagentUsageInfo {
 	cost: number
 }
 
-export type CodemarieApiReqCancelReason = "streaming_failed" | "user_cancelled" | "retries_exhausted"
+export type DietCodeApiReqCancelReason = "streaming_failed" | "user_cancelled" | "retries_exhausted"
 
 export const COMPLETION_RESULT_CHANGES_FLAG = "HAS_CHANGES"

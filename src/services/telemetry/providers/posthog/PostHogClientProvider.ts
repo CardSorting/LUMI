@@ -1,5 +1,5 @@
 import { type EventMessage, PostHog } from "posthog-node"
-import { CodemarieEndpoint } from "@/config"
+import { DietCodeEndpoint } from "@/config"
 import { fetch } from "@/shared/net"
 import { posthogConfig } from "@/shared/services/config/posthog-config"
 import { Logger } from "@/shared/services/Logger"
@@ -22,7 +22,7 @@ export class PostHogClientProvider {
 
 	private constructor() {
 		// Skip PostHog client initialization in self-hosted mode
-		if (CodemarieEndpoint.isSelfHosted()) {
+		if (DietCodeEndpoint.isSelfHosted()) {
 			this.client = null
 			return
 		}
@@ -44,8 +44,8 @@ export class PostHogClientProvider {
 
 	/**
 	 * Filters PostHog events before they are sent.
-	 * For exceptions, we only capture those from the Codemarie extension.
-	 * this is specifically to avoid capturing errors from anything other than Codemarie
+	 * For exceptions, we only capture those from the DietCode extension.
+	 * this is specifically to avoid capturing errors from anything other than DietCode
 	 */
 	static eventFilter(event: EventMessage | null) {
 		if (!event || event?.event !== "$exception") {
@@ -55,14 +55,14 @@ export class PostHogClientProvider {
 		if (!exceptionList?.length) {
 			return null
 		}
-		// Check if any exception is from Codemarie
+		// Check if any exception is from DietCode
 		for (let i = 0; i < exceptionList.length; i++) {
 			const stacktrace = exceptionList[i].stacktrace
-			// Fast check: error message contains "codemarie"
-			if (stacktrace?.value?.toLowerCase().includes("codemarie")) {
+			// Fast check: error message contains "dietcode"
+			if (stacktrace?.value?.toLowerCase().includes("dietcode")) {
 				return event
 			}
-			// Check stack frames for Codemarie extension path
+			// Check stack frames for DietCode extension path
 			const frames = stacktrace?.frames
 			if (frames?.length) {
 				for (let j = 0; j < frames.length; j++) {

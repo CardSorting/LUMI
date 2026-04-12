@@ -1,5 +1,5 @@
 import { SYSTEM_CONTENT_MARKERS, USER_CONTENT_TAGS } from "@shared/messages/constants"
-import type { CodemarieContent } from "@shared/messages/content"
+import type { DietCodeContent } from "@shared/messages/content"
 
 /**
  * Extracts the actual user input from content blocks, stripping system-added wrappers
@@ -9,7 +9,7 @@ import type { CodemarieContent } from "@shared/messages/content"
  * @param userContent Array of content blocks that may contain user input
  * @returns Extracted user prompt text, or empty string if no user input found
  */
-export function extractUserPromptFromContent(userContent: CodemarieContent[]): string {
+export function extractUserPromptFromContent(userContent: DietCodeContent[]): string {
 	const extractedTexts: string[] = []
 
 	for (const block of userContent) {

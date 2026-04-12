@@ -1,6 +1,6 @@
 import { buildApiHandler } from "@core/api"
-import { Empty } from "@shared/proto/codemarie/common"
-import { UpdateApiConfigurationPartialRequest } from "@shared/proto/codemarie/models"
+import { Empty } from "@shared/proto/dietcode/common"
+import { UpdateApiConfigurationPartialRequest } from "@shared/proto/dietcode/models"
 import { convertProtoToApiConfiguration } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"

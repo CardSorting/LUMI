@@ -17,7 +17,7 @@ import type {
 } from "@generated/hosts/host-bridge-client-types"
 import type { HostBridgeClientProvider, StreamingCallbacks } from "@hosts/host-provider-types"
 import * as proto from "@shared/proto/index"
-import { CodemarieClient } from "@/shared/codemarie"
+import { DietCodeClient } from "@/shared/dietcode"
 import { Logger } from "@/shared/services/Logger"
 
 /**
@@ -112,36 +112,36 @@ class ACPEnvServiceClient implements EnvServiceClientInterface {
 		this.version = version
 	}
 
-	async debugLog(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	async debugLog(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		Logger.debug(request.value)
-		return proto.codemarie.Empty.create()
+		return proto.dietcode.Empty.create()
 	}
 
-	async clipboardWriteText(_request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	async clipboardWriteText(_request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		Logger.debug("[ACPEnvServiceClient] clipboardWriteText called (stub)")
-		return proto.codemarie.Empty.create()
+		return proto.dietcode.Empty.create()
 	}
 
-	async clipboardReadText(_request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.String> {
+	async clipboardReadText(_request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.String> {
 		Logger.debug("[ACPEnvServiceClient] clipboardReadText called (stub)")
-		return proto.codemarie.String.create({ value: "" })
+		return proto.dietcode.String.create({ value: "" })
 	}
 
-	async getHostVersion(_request: proto.codemarie.EmptyRequest): Promise<proto.host.GetHostVersionResponse> {
+	async getHostVersion(_request: proto.dietcode.EmptyRequest): Promise<proto.host.GetHostVersionResponse> {
 		// Return version info for the ACP agent.
 		return proto.host.GetHostVersionResponse.create({
 			version: this.version,
-			platform: "Codemarie ACP Agent",
-			codemarieType: CodemarieClient.Cli,
+			platform: "DietCode ACP Agent",
+			dietcodeType: DietCodeClient.Cli,
 		})
 	}
 
-	async getIdeRedirectUri(_request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.String> {
+	async getIdeRedirectUri(_request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.String> {
 		Logger.debug("[ACPEnvServiceClient] getIdeRedirectUri called (stub)")
-		return proto.codemarie.String.create({ value: "" })
+		return proto.dietcode.String.create({ value: "" })
 	}
 
-	async getTelemetrySettings(_request: proto.codemarie.EmptyRequest): Promise<proto.host.GetTelemetrySettingsResponse> {
+	async getTelemetrySettings(_request: proto.dietcode.EmptyRequest): Promise<proto.host.GetTelemetrySettingsResponse> {
 		// Return telemetry as disabled by default in ACP mode.
 		return proto.host.GetTelemetrySettingsResponse.create({
 			isEnabled: proto.host.Setting.DISABLED,
@@ -149,7 +149,7 @@ class ACPEnvServiceClient implements EnvServiceClientInterface {
 	}
 
 	subscribeToTelemetrySettings(
-		_request: proto.codemarie.EmptyRequest,
+		_request: proto.dietcode.EmptyRequest,
 		callbacks: StreamingCallbacks<proto.host.TelemetrySettingsEvent>,
 	): () => void {
 		// Send initial telemetry settings (disabled) and return unsubscribe function.
@@ -162,21 +162,21 @@ class ACPEnvServiceClient implements EnvServiceClientInterface {
 		return () => {}
 	}
 
-	async shutdown(_request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	async shutdown(_request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		// Next phase: Graceful ACP connection shutdown.
 		// This would cleanly close the ACP connection and release resources.
 		Logger.debug("[ACPEnvServiceClient] shutdown called (stub)")
-		return proto.codemarie.Empty.create()
+		return proto.dietcode.Empty.create()
 	}
 
-	async openExternal(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	async openExternal(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		const url = request.value || ""
 		if (url) {
 			Logger.debug(`[ACPEnvServiceClient] openExternal: ${url}`)
 			const { openUrlInBrowser } = await import("../utils/browser")
 			await openUrlInBrowser(url)
 		}
-		return proto.codemarie.Empty.create()
+		return proto.dietcode.Empty.create()
 	}
 }
 
@@ -187,6 +187,9 @@ class ACPEnvServiceClient implements EnvServiceClientInterface {
  * Most operations are stubs that will be implemented using ACP extension methods.
  */
 class ACPWindowServiceClient implements WindowServiceClientInterface {
+	private readonly _clientCapabilities: acp.ClientCapabilities | undefined
+	private readonly _sessionIdResolver: SessionIdResolver
+
 	constructor(clientCapabilities: acp.ClientCapabilities | undefined, sessionIdResolver: SessionIdResolver) {
 		this._clientCapabilities = clientCapabilities
 		this._sessionIdResolver = sessionIdResolver
@@ -336,13 +339,13 @@ class ACPWorkspaceServiceClient implements WorkspaceServiceClientInterface {
 		return proto.host.OpenInFileExplorerPanelResponse.create({})
 	}
 
-	async openCodemarieSidebarPanel(
-		_request: proto.host.OpenCodemarieSidebarPanelRequest,
-	): Promise<proto.host.OpenCodemarieSidebarPanelResponse> {
-		// Next phase: Send ACP extension notification to open Codemarie sidebar.
-		// This would show the Codemarie panel/sidebar in the editor.
-		Logger.debug("[ACPWorkspaceServiceClient] openCodemarieSidebarPanel called (stub)")
-		return proto.host.OpenCodemarieSidebarPanelResponse.create({})
+	async openDietCodeSidebarPanel(
+		_request: proto.host.OpenDietCodeSidebarPanelRequest,
+	): Promise<proto.host.OpenDietCodeSidebarPanelResponse> {
+		// Next phase: Send ACP extension notification to open DietCode sidebar.
+		// This would show the DietCode panel/sidebar in the editor.
+		Logger.debug("[ACPWorkspaceServiceClient] openDietCodeSidebarPanel called (stub)")
+		return proto.host.OpenDietCodeSidebarPanelResponse.create({})
 	}
 
 	async openTerminalPanel(_request: proto.host.OpenTerminalRequest): Promise<proto.host.OpenTerminalResponse> {

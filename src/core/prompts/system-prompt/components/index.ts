@@ -15,7 +15,7 @@ import { getToolUseSection } from "./tool_use"
 import { getUserInstructions } from "./user_instructions"
 
 /**
- * Registers all tool variants with the CodemarieToolSet provider.
+ * Registers all tool variants with the DietCodeToolSet provider.
  * This function should be called once during application initialization
  * to make all tools available for use.
  */

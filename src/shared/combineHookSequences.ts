@@ -1,8 +1,8 @@
-import { CodemarieMessage } from "./ExtensionMessage"
+import { DietCodeMessage } from "./ExtensionMessage"
 
 /**
  * Hook metadata extracted from hook message text.
- * Mirrors the CodemarieSayHook interface but represents parsed data.
+ * Mirrors the DietCodeSayHook interface but represents parsed data.
  */
 interface HookMetadata {
 	hookName: string
@@ -15,7 +15,7 @@ interface HookMetadata {
 type HookStatusSay = "hook" | "hook_status"
 type HookOutputStreamSay = "hook_output" | "hook_output_stream"
 
-function getSay(msg: CodemarieMessage): string | undefined {
+function getSay(msg: DietCodeMessage): string | undefined {
 	// Back-compat: older recordings may be deserialized without strict typing.
 	return msg.say as string | undefined
 }
@@ -35,7 +35,7 @@ function isHookOutputStreamSay(say: string | undefined): say is HookOutputStream
 /**
  * Type guard to check if a message is a tool or command.
  */
-function isToolOrCommandMessage(msg: CodemarieMessage): boolean {
+function isToolOrCommandMessage(msg: DietCodeMessage): boolean {
 	return msg.ask === "tool" || msg.say === "tool" || msg.ask === "command" || msg.say === "command"
 }
 
@@ -43,7 +43,7 @@ function isToolOrCommandMessage(msg: CodemarieMessage): boolean {
  * Safely parses hook metadata from a hook message.
  * Returns null if parsing fails or message is not a hook.
  */
-function parseHookMetadata(hookMessage: CodemarieMessage): HookMetadata | null {
+function parseHookMetadata(hookMessage: DietCodeMessage): HookMetadata | null {
 	if (!isHookStatusSay(getSay(hookMessage)) || !hookMessage.text) {
 		return null
 	}
@@ -69,7 +69,7 @@ function parseHookMetadata(hookMessage: CodemarieMessage): HookMetadata | null {
  * This preserves streaming partial tool rows in the UI while still preventing
  * duplicate tool/command entries when both partial and final variants exist.
  */
-function dedupeToolOrCommandMessagesByTimestamp(messages: CodemarieMessage[]): CodemarieMessage[] {
+function dedupeToolOrCommandMessagesByTimestamp(messages: DietCodeMessage[]): DietCodeMessage[] {
 	const lastToolOrCommandIndexByTs = new Map<number, number>()
 
 	for (let i = 0; i < messages.length; i++) {
@@ -95,10 +95,10 @@ function dedupeToolOrCommandMessagesByTimestamp(messages: CodemarieMessage[]): C
  * @returns Object containing the combined message and the next index to process
  */
 function combineHookWithOutputs(
-	hookMessage: CodemarieMessage,
+	hookMessage: DietCodeMessage,
 	startIndex: number,
-	messages: CodemarieMessage[],
-): { combined: CodemarieMessage; nextIndex: number } {
+	messages: DietCodeMessage[],
+): { combined: DietCodeMessage; nextIndex: number } {
 	let combinedText = hookMessage.text || ""
 	let hasOutput = false
 	let i = startIndex + 1
@@ -135,9 +135,9 @@ function combineHookWithOutputs(
  * 1. Scan through and combine each hook with its outputs
  * 2. Build final array without hook_output messages, using combined hooks
  */
-function combineAllHooks(messages: CodemarieMessage[]): CodemarieMessage[] {
+function combineAllHooks(messages: DietCodeMessage[]): DietCodeMessage[] {
 	// Pass 1: Build map of combined hooks by timestamp
-	const combinedHooksByTs = new Map<number, CodemarieMessage>()
+	const combinedHooksByTs = new Map<number, DietCodeMessage>()
 
 	for (let i = 0; i < messages.length; i++) {
 		if (isHookStatusSay(getSay(messages[i]))) {
@@ -148,7 +148,7 @@ function combineAllHooks(messages: CodemarieMessage[]): CodemarieMessage[] {
 	}
 
 	// Pass 2: Build result array
-	const result: CodemarieMessage[] = []
+	const result: DietCodeMessage[] = []
 
 	for (const msg of messages) {
 		const say = getSay(msg)
@@ -180,7 +180,7 @@ function combineAllHooks(messages: CodemarieMessage[]): CodemarieMessage[] {
  * @param messages The original messages array (may include partial tools)
  * @returns The timestamp of the immediate next tool, or null if none found
  */
-function findImmediateNextToolTimestamp(hookIndex: number, messages: CodemarieMessage[]): number | null {
+function findImmediateNextToolTimestamp(hookIndex: number, messages: DietCodeMessage[]): number | null {
 	for (let i = hookIndex + 1; i < messages.length; i++) {
 		const msg = messages[i]
 
@@ -217,10 +217,10 @@ function findImmediateNextToolTimestamp(hookIndex: number, messages: CodemarieMe
  * @returns Map of tool timestamp -> array of PreToolUse hooks for that tool
  */
 function buildPreToolUseMap(
-	processedMessages: CodemarieMessage[],
-	originalMessages: CodemarieMessage[],
-): Map<number, CodemarieMessage[]> {
-	const map = new Map<number, CodemarieMessage[]>()
+	processedMessages: DietCodeMessage[],
+	originalMessages: DietCodeMessage[],
+): Map<number, DietCodeMessage[]> {
+	const map = new Map<number, DietCodeMessage[]>()
 
 	// Build timestamp-to-index map once to avoid O(n) findIndex calls
 	const timestampToIndex = new Map<number, number>()
@@ -281,10 +281,10 @@ function buildPreToolUseMap(
  * @returns Reordered messages array
  */
 function reorderWithPreToolUseHooks(
-	messages: CodemarieMessage[],
-	preToolUseMap: Map<number, CodemarieMessage[]>,
-): CodemarieMessage[] {
-	const result: CodemarieMessage[] = []
+	messages: DietCodeMessage[],
+	preToolUseMap: Map<number, DietCodeMessage[]>,
+): DietCodeMessage[] {
+	const result: DietCodeMessage[] = []
 	const addedHooks = new Set<number>()
 	const addedTools = new Set<number>()
 
@@ -358,10 +358,10 @@ function reorderWithPreToolUseHooks(
  * 3. Build mapping of tools to their PreToolUse hooks
  * 4. Reorder so PreToolUse hooks appear before their tools
  *
- * @param messages Array of CodemarieMessage objects to process
+ * @param messages Array of DietCodeMessage objects to process
  * @returns New array with hooks combined and PreToolUse hooks reordered
  */
-export function combineHookSequences(messages: CodemarieMessage[]): CodemarieMessage[] {
+export function combineHookSequences(messages: DietCodeMessage[]): DietCodeMessage[] {
 	// Phase 1: Deduplicate tool/command messages while preserving streaming partials
 	const filtered = dedupeToolOrCommandMessagesByTimestamp(messages)
 

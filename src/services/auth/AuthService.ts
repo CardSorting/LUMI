@@ -1,6 +1,6 @@
-import { AuthState, UserInfo } from "@shared/proto/codemarie/account"
-import { type EmptyRequest, String } from "@shared/proto/codemarie/common"
-import { CodemarieEnv } from "@/config"
+import { AuthState, UserInfo } from "@shared/proto/dietcode/account"
+import { type EmptyRequest, String } from "@shared/proto/dietcode/common"
+import { DietCodeEnv } from "@/config"
 import { Controller } from "@/core/controller"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { setWelcomeViewCompleted } from "@/core/controller/state/setWelcomeViewCompleted"
@@ -9,9 +9,9 @@ import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { openExternal } from "@/utils/env"
 import { BannerService } from "../banner/BannerService"
-import { AuthInvalidTokenError, AuthNetworkError } from "../error/CodemarieError"
+import { AuthInvalidTokenError, AuthNetworkError } from "../error/DietCodeError"
 import { featureFlagsService } from "../feature-flags"
-import { CodemarieAuthProvider } from "./providers/CodemarieAuthProvider"
+import { DietCodeAuthProvider } from "./providers/DietCodeAuthProvider"
 import { LogoutReason } from "./types"
 
 export type ServiceConfig = {
@@ -19,7 +19,7 @@ export type ServiceConfig = {
 	[key: string]: any
 }
 
-export interface CodemarieAuthInfo {
+export interface DietCodeAuthInfo {
 	/**
 	 * accessToken
 	 */
@@ -33,19 +33,19 @@ export interface CodemarieAuthInfo {
 	 * When expired, the access token needs to be refreshed using the refresh token.
 	 */
 	expiresAt?: number
-	userInfo: CodemarieAccountUserInfo
+	userInfo: DietCodeAccountUserInfo
 	provider: string
 	startedAt?: number
 }
 
-export interface CodemarieAccountUserInfo {
+export interface DietCodeAccountUserInfo {
 	createdAt: string
 	displayName: string
 	email: string
 	id: string
-	organizations: CodemarieAccountOrganization[]
+	organizations: DietCodeAccountOrganization[]
 	/**
-	 * Codemarie app base URL, used for webview UI and other client-side operations
+	 * DietCode app base URL, used for webview UI and other client-side operations
 	 */
 	appBaseUrl?: string
 	/**
@@ -54,7 +54,7 @@ export interface CodemarieAccountUserInfo {
 	subject?: string
 }
 
-export interface CodemarieAccountOrganization {
+export interface DietCodeAccountOrganization {
 	active: boolean
 	memberId: string
 	name: string
@@ -65,8 +65,8 @@ export interface CodemarieAccountOrganization {
 export class AuthService {
 	protected static instance: AuthService | null = null
 	protected _authenticated = false
-	protected _codemarieAuthInfo: CodemarieAuthInfo | null = null
-	protected _provider: CodemarieAuthProvider
+	protected _dietcodeAuthInfo: DietCodeAuthInfo | null = null
+	protected _provider: DietCodeAuthProvider
 	protected _activeAuthStatusUpdateHandlers = new Set<StreamingResponseHandler<AuthState>>()
 	protected _handlerToController = new Map<StreamingResponseHandler<AuthState>, Controller>()
 	protected _controller: Controller
@@ -77,7 +77,7 @@ export class AuthService {
 	 * @param controller - Optional reference to the Controller instance.
 	 */
 	protected constructor(controller: Controller) {
-		this._provider = new CodemarieAuthProvider()
+		this._provider = new DietCodeAuthProvider()
 		this._controller = controller
 	}
 
@@ -137,10 +137,10 @@ export class AuthService {
 	 * @returns The active organization ID, or null if no active organization exists
 	 */
 	getActiveOrganizationId(): string | null {
-		if (!this._codemarieAuthInfo?.userInfo?.organizations) {
+		if (!this._dietcodeAuthInfo?.userInfo?.organizations) {
 			return null
 		}
-		const activeOrg = this._codemarieAuthInfo.userInfo.organizations.find((org) => org.active)
+		const activeOrg = this._dietcodeAuthInfo.userInfo.organizations.find((org) => org.active)
 		return activeOrg?.organizationId ?? null
 	}
 
@@ -148,20 +148,20 @@ export class AuthService {
 	 * Gets all organizations from the authenticated user's info
 	 * @returns Array of organizations, or undefined if not available
 	 */
-	getUserOrganizations(): CodemarieAccountOrganization[] | undefined {
-		return this._codemarieAuthInfo?.userInfo?.organizations
+	getUserOrganizations(): DietCodeAccountOrganization[] | undefined {
+		return this._dietcodeAuthInfo?.userInfo?.organizations
 	}
 
-	private async internalGetAuthToken(provider: CodemarieAuthProvider): Promise<string | null> {
+	private async internalGetAuthToken(provider: DietCodeAuthProvider): Promise<string | null> {
 		try {
-			let codemarieAccountAuthToken = this._codemarieAuthInfo?.idToken
-			if (!this._codemarieAuthInfo || !codemarieAccountAuthToken || this._codemarieAuthInfo.provider !== provider.name) {
+			let dietcodeAccountAuthToken = this._dietcodeAuthInfo?.idToken
+			if (!this._dietcodeAuthInfo || !dietcodeAccountAuthToken || this._dietcodeAuthInfo.provider !== provider.name) {
 				// Not authenticated
 				return null
 			}
 
 			// Check if token has expired
-			if (await provider.shouldRefreshIdToken(codemarieAccountAuthToken, this._codemarieAuthInfo.expiresAt)) {
+			if (await provider.shouldRefreshIdToken(dietcodeAccountAuthToken, this._dietcodeAuthInfo.expiresAt)) {
 				// If a refresh is already in progress, wait for it to complete
 				if (this._refreshPromise) {
 					Logger.info("Token refresh already in progress, waiting for completion")
@@ -174,18 +174,18 @@ export class AuthService {
 					let authStatusChanged = false
 
 					try {
-						const updatedAuthInfo = await provider.retrieveCodemarieAuthInfo(this._controller)
+						const updatedAuthInfo = await provider.retrieveDietCodeAuthInfo(this._controller)
 						if (updatedAuthInfo) {
-							this._codemarieAuthInfo = updatedAuthInfo
+							this._dietcodeAuthInfo = updatedAuthInfo
 							this._authenticated = true
-							codemarieAccountAuthToken = updatedAuthInfo.idToken
+							dietcodeAccountAuthToken = updatedAuthInfo.idToken
 							authStatusChanged = true
 						}
 					} catch (error) {
 						// Only log out for permanent auth failures, not network issues
 						if (error instanceof AuthInvalidTokenError) {
 							Logger.error("Token is invalid or expired:", error)
-							this._codemarieAuthInfo = null
+							this._dietcodeAuthInfo = null
 							this._authenticated = false
 							telemetryService.captureAuthLoggedOut(this._provider.name, LogoutReason.ERROR_RECOVERY)
 							authStatusChanged = true
@@ -208,13 +208,13 @@ export class AuthService {
 						})
 					}
 
-					return codemarieAccountAuthToken
+					return dietcodeAccountAuthToken
 				})()
 
-				codemarieAccountAuthToken = await this._refreshPromise
+				dietcodeAccountAuthToken = await this._refreshPromise
 			}
 
-			return codemarieAccountAuthToken || null
+			return dietcodeAccountAuthToken || null
 		} catch (error) {
 			Logger.error("Error getting auth token:", error)
 			return null
@@ -223,18 +223,18 @@ export class AuthService {
 
 	/**
 	 * Gets the provider name for the current authentication
-	 * @returns The provider name (e.g., "codemarie", "firebase"), or null if not authenticated
+	 * @returns The provider name (e.g., "dietcode", "firebase"), or null if not authenticated
 	 */
 	getProviderName(): string | null {
-		return this._codemarieAuthInfo?.provider ?? null
+		return this._dietcodeAuthInfo?.provider ?? null
 	}
 
 	getInfo(): AuthState {
 		// TODO: this logic should be cleaner, but this will determine the authentication state for the webview -- if a user object is returned then the webview assumes authenticated, otherwise it assumes logged out (we previously returned a UserInfo object with empty fields, and this represented a broken logged in state)
 		let user: any = null
-		if (this._codemarieAuthInfo && this._authenticated) {
-			const userInfo = this._codemarieAuthInfo.userInfo
-			this._codemarieAuthInfo.userInfo.appBaseUrl = CodemarieEnv.config()?.appBaseUrl
+		if (this._dietcodeAuthInfo && this._authenticated) {
+			const userInfo = this._dietcodeAuthInfo.userInfo
+			this._dietcodeAuthInfo.userInfo.appBaseUrl = DietCodeEnv.config()?.appBaseUrl
 
 			user = UserInfo.create({
 				// TODO: create proto for new user info type
@@ -271,7 +271,7 @@ export class AuthService {
 	async handleDeauth(reason: LogoutReason = LogoutReason.UNKNOWN): Promise<void> {
 		try {
 			telemetryService.captureAuthLoggedOut(this._provider.name, reason)
-			this._codemarieAuthInfo = null
+			this._dietcodeAuthInfo = null
 			this._authenticated = false
 			this.destroyTokens()
 			this.sendAuthStatusUpdate()
@@ -283,8 +283,8 @@ export class AuthService {
 
 	async handleAuthCallback(authorizationCode: string, provider: string): Promise<void> {
 		try {
-			this._codemarieAuthInfo = await this._provider.signIn(this._controller, authorizationCode, provider)
-			this._authenticated = this._codemarieAuthInfo?.idToken !== undefined
+			this._dietcodeAuthInfo = await this._provider.signIn(this._controller, authorizationCode, provider)
+			this._authenticated = this._dietcodeAuthInfo?.idToken !== undefined
 
 			telemetryService.captureAuthSucceeded(this._provider.name)
 			await setWelcomeViewCompleted(this._controller, { value: true })
@@ -312,33 +312,33 @@ export class AuthService {
 	 */
 	async restoreRefreshTokenAndRetrieveAuthInfo(): Promise<void> {
 		try {
-			this._codemarieAuthInfo = await this.retrieveAuthInfo()
-			if (this._codemarieAuthInfo) {
+			this._dietcodeAuthInfo = await this.retrieveAuthInfo()
+			if (this._dietcodeAuthInfo) {
 				this._authenticated = true
 				await this.sendAuthStatusUpdate()
 			} else {
 				Logger.warn("No user found after restoring auth token")
 				this._authenticated = false
-				this._codemarieAuthInfo = null
+				this._dietcodeAuthInfo = null
 				telemetryService.captureAuthLoggedOut(this._provider.name, LogoutReason.ERROR_RECOVERY)
 			}
 		} catch (error) {
 			Logger.error("Error restoring auth token:", error)
 			this._authenticated = false
-			this._codemarieAuthInfo = null
+			this._dietcodeAuthInfo = null
 			telemetryService.captureAuthLoggedOut(this._provider.name, LogoutReason.ERROR_RECOVERY)
 			return
 		}
 	}
 
-	private async retrieveAuthInfo(): Promise<CodemarieAuthInfo | null> {
+	private async retrieveAuthInfo(): Promise<DietCodeAuthInfo | null> {
 		// If a refresh is already in progress, wait for it to complete
 		if (this._refreshPromise) {
 			Logger.info("Token refresh already in progress, waiting for completion")
 			await this._refreshPromise
 		}
 
-		return this._provider.retrieveCodemarieAuthInfo(this._controller)
+		return this._provider.retrieveDietCodeAuthInfo(this._controller)
 	}
 
 	/**
@@ -408,17 +408,17 @@ export class AuthService {
 		await Promise.all(streamSends)
 
 		// Identify the user in telemetry if available
-		if (this._codemarieAuthInfo?.userInfo?.id) {
-			telemetryService.identifyAccount(this._codemarieAuthInfo.userInfo)
+		if (this._dietcodeAuthInfo?.userInfo?.id) {
+			telemetryService.identifyAccount(this._dietcodeAuthInfo.userInfo)
 			// Poll feature flags immediately for authenticated users to ensure cache is populated
-			await featureFlagsService.poll(this._codemarieAuthInfo.userInfo?.id)
+			await featureFlagsService.poll(this._dietcodeAuthInfo.userInfo?.id)
 		} else {
 			// Poll feature flags for unauthenticated state
 			await featureFlagsService.poll(null)
 		}
 
 		// Update banners based on new auth token
-		BannerService.onAuthUpdate(this._codemarieAuthInfo?.userInfo?.id || null).catch((error) => {
+		BannerService.onAuthUpdate(this._dietcodeAuthInfo?.userInfo?.id || null).catch((error) => {
 			Logger.error("[AuthService] Banner update failed", error)
 		})
 
@@ -427,7 +427,7 @@ export class AuthService {
 	}
 
 	private destroyTokens() {
-		this._controller.stateManager.setSecret("codemarieAccountId", undefined)
-		this._controller.stateManager.setSecret("codemarie:codemarieAccountId", undefined)
+		this._controller.stateManager.setSecret("dietcodeAccountId", undefined)
+		this._controller.stateManager.setSecret("dietcode:dietcodeAccountId", undefined)
 	}
 }

@@ -1,11 +1,11 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryCentralityHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_CENTRALITY
+	readonly name = DietCodeDefaultTool.MEM_CENTRALITY
 
 	getDescription(_block: ToolUse): string {
 		return "[get node centrality]"

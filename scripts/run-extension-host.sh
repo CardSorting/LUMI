@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 
-SESSION="codemarie-dev"
-WORKSPACE="${CODEMARIE_WORKSPACE:-${CLINE_WORKSPACE:-$(cd "$(dirname "$0")/.." && pwd)}}"
-ENVIRONMENT="${CODEMARIE_ENVIRONMENT:-${CLINE_ENVIRONMENT:-production}}"
+SESSION="dietcode-dev"
+WORKSPACE="${DIETCODE_WORKSPACE:-${CLINE_WORKSPACE:-$(cd "$(dirname "$0")/.." && pwd)}}"
+ENVIRONMENT="${DIETCODE_ENVIRONMENT:-${CLINE_ENVIRONMENT:-production}}"
 
 cd "$WORKSPACE"
 
 # Export env vars -- tmux inherits them automatically
 export IS_DEV=true
 export DEV_WORKSPACE_FOLDER="$WORKSPACE"
-export CODEMARIE_ENVIRONMENT="$ENVIRONMENT"
+export DIETCODE_ENVIRONMENT="$ENVIRONMENT"
 export CLINE_ENVIRONMENT="$ENVIRONMENT"
 if [ -f .env ]; then
   set -a
@@ -48,7 +48,7 @@ tmux bind-key -T root C-c kill-session
 tmux send-keys -t "$SESSION:0.0" "npm run watch:esbuild" Enter
 tmux send-keys -t "$SESSION:0.1" "npm run watch:tsc" Enter
 tmux send-keys -t "$SESSION:0.2" "npm run dev:webview" Enter
-tmux send-keys -t "$SESSION:0.3" "while [ ! -f '$WORKSPACE/dist/extension.js' ]; do sleep 0.5; done && echo 'Launching Extension Host...' && code --extensionDevelopmentPath='$WORKSPACE' --disable-workspace-trust --disable-extension saoudrizwan.claude-dev --disable-extension saoudrizwan.codemarie-nightly '$WORKSPACE' && echo 'Extension Host launched.'" Enter
+tmux send-keys -t "$SESSION:0.3" "while [ ! -f '$WORKSPACE/dist/extension.js' ]; do sleep 0.5; done && echo 'Launching Extension Host...' && code --extensionDevelopmentPath='$WORKSPACE' --disable-workspace-trust --disable-extension saoudrizwan.claude-dev --disable-extension saoudrizwan.dietcode-nightly '$WORKSPACE' && echo 'Extension Host launched.'" Enter
 
 # Attach to the session
 tmux attach-session -t "$SESSION"

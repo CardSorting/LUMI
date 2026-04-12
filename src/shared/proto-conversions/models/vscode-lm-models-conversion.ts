@@ -1,4 +1,4 @@
-import { LanguageModelChatSelector } from "@shared/proto/codemarie/models"
+import { LanguageModelChatSelector } from "@shared/proto/dietcode/models"
 
 /**
  * Represents a VS Code language model in the native VS Code format

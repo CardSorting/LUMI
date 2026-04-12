@@ -2,7 +2,7 @@
  * Shared types and interfaces for the chat view components
  */
 
-import { CodemarieAsk, CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeAsk, DietCodeMessage } from "@shared/ExtensionMessage"
 import { ListRange, VirtuosoHandle } from "react-virtuoso"
 import { ButtonActionType } from "../shared/buttonConfig"
 
@@ -46,10 +46,10 @@ export interface ChatState {
 	textAreaRef: React.RefObject<HTMLTextAreaElement>
 
 	// Derived values
-	lastMessage: CodemarieMessage | undefined
-	secondLastMessage: CodemarieMessage | undefined
-	codemarieAsk: CodemarieAsk | undefined
-	task: CodemarieMessage | undefined
+	lastMessage: DietCodeMessage | undefined
+	secondLastMessage: DietCodeMessage | undefined
+	dietcodeAsk: DietCodeAsk | undefined
+	task: DietCodeMessage | undefined
 
 	// Handlers
 	handleFocusChange: (isFocused: boolean) => void
@@ -90,7 +90,7 @@ export interface ScrollBehavior {
 	setIsAtBottom: React.Dispatch<React.SetStateAction<boolean>>
 	pendingScrollToMessage: number | null
 	setPendingScrollToMessage: React.Dispatch<React.SetStateAction<number | null>>
-	scrolledPastUserMessage: CodemarieMessage | null
+	scrolledPastUserMessage: DietCodeMessage | null
 	handleRangeChanged: (range: ListRange) => void
 }
 
@@ -118,8 +118,8 @@ export interface InputState {
  * Task section props
  */
 export interface TaskSectionProps {
-	task: CodemarieMessage
-	messages: CodemarieMessage[]
+	task: DietCodeMessage
+	messages: DietCodeMessage[]
 	scrollBehavior: ScrollBehavior
 	buttonState: ButtonState
 	messageHandlers: MessageHandlers
@@ -137,8 +137,8 @@ export interface TaskSectionProps {
 		supportsImages: boolean
 	}
 	isStreaming: boolean
-	codemarieAsk?: CodemarieAsk
-	modifiedMessages: CodemarieMessage[]
+	dietcodeAsk?: DietCodeAsk
+	modifiedMessages: DietCodeMessage[]
 }
 
 /**

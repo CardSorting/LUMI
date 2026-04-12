@@ -6,7 +6,7 @@ import { NotebookDiffView } from "@/hosts/vscode/NotebookDiffView"
 import { Logger } from "@/shared/services/Logger"
 import { arePathsEqual } from "@/utils/path"
 
-export const DIFF_VIEW_URI_SCHEME = "codemarie-diff"
+export const DIFF_VIEW_URI_SCHEME = "dietcode-diff"
 
 export class VscodeDiffViewProvider extends DiffViewProvider {
 	private activeDiffEditor?: vscode.TextEditor
@@ -72,7 +72,7 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 						query: Buffer.from(this.originalContent ?? "").toString("base64"),
 					}),
 					uri,
-					`${fileName}: ${fileExists ? "Original ↔ Codemarie's Changes" : "New File"} (Editable)`,
+					`${fileName}: ${fileExists ? "Original ↔ DietCode's Changes" : "New File"} (Editable)`,
 					{
 						preserveFocus: true,
 					},
@@ -202,7 +202,7 @@ export class VscodeDiffViewProvider extends DiffViewProvider {
 	}
 
 	protected async closeAllDiffViews(): Promise<void> {
-		// Close all the codemarie diff views.
+		// Close all the dietcode diff views.
 		const tabs = vscode.window.tabGroups.all
 			.flatMap((tg) => tg.tabs)
 			.filter((tab) => tab.input instanceof vscode.TabInputTextDiff && tab.input?.original?.scheme === DIFF_VIEW_URI_SCHEME)

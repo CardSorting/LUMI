@@ -1,5 +1,5 @@
-import type { ToggleMcpServerRequest } from "@shared/proto/codemarie/mcp"
-import { McpServers } from "@shared/proto/codemarie/mcp"
+import type { ToggleMcpServerRequest } from "@shared/proto/dietcode/mcp"
+import { McpServers } from "@shared/proto/dietcode/mcp"
 import { Logger } from "@/shared/services/Logger"
 import { convertMcpServersToProtoMcpServers } from "../../../shared/proto-conversions/mcp/mcp-server-conversion"
 import type { Controller } from "../index"

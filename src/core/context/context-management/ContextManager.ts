@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { ApiHandler } from "@core/api"
 import { formatResponse } from "@core/prompts/responses"
 import { GlobalFileNames } from "@core/storage/disk"
-import { CodemarieApiReqInfo, CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeApiReqInfo, DietCodeMessage } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
 import cloneDeep from "clone-deep"
 import fs from "fs/promises"
@@ -148,16 +148,16 @@ export class ContextManager {
 	 * Determine whether we should compact context window, based on token counts
 	 */
 	shouldCompactContextWindow(
-		codemarieMessages: CodemarieMessage[],
+		dietcodeMessages: DietCodeMessage[],
 		api: ApiHandler,
 		previousApiReqIndex: number,
 		thresholdPercentage?: number,
 	): boolean {
 		if (previousApiReqIndex >= 0) {
-			const previousRequestText = codemarieMessages[previousApiReqIndex]?.text
+			const previousRequestText = dietcodeMessages[previousApiReqIndex]?.text
 			if (previousRequestText) {
 				try {
-					const { tokensIn, tokensOut, cacheWrites, cacheReads }: CodemarieApiReqInfo = JSON.parse(previousRequestText)
+					const { tokensIn, tokensOut, cacheWrites, cacheReads }: DietCodeApiReqInfo = JSON.parse(previousRequestText)
 					const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 
 					const { contextWindow, maxAllowedSize } = getContextWindowInfo(api)
@@ -179,7 +179,7 @@ export class ContextManager {
 	 * Returns the token counts and context window info that drove summarization
 	 */
 	getContextTelemetryData(
-		codemarieMessages: CodemarieMessage[],
+		dietcodeMessages: DietCodeMessage[],
 		api: ApiHandler,
 		triggerIndex?: number,
 	): {
@@ -192,7 +192,7 @@ export class ContextManager {
 			targetIndex = triggerIndex
 		} else {
 			// Find all API request indices
-			const apiReqIndices = codemarieMessages
+			const apiReqIndices = dietcodeMessages
 				.map((msg, index) => (msg.say === "api_req_started" ? index : -1))
 				.filter((index) => index !== -1)
 
@@ -201,10 +201,10 @@ export class ContextManager {
 		}
 
 		if (targetIndex >= 0) {
-			const targetRequestText = codemarieMessages[targetIndex]?.text
+			const targetRequestText = dietcodeMessages[targetIndex]?.text
 			if (targetRequestText) {
 				try {
-					const { tokensIn, tokensOut, cacheWrites, cacheReads }: CodemarieApiReqInfo = JSON.parse(targetRequestText)
+					const { tokensIn, tokensOut, cacheWrites, cacheReads }: DietCodeApiReqInfo = JSON.parse(targetRequestText)
 					const tokensUsed = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 
 					const { contextWindow } = getContextWindowInfo(api)
@@ -226,7 +226,7 @@ export class ContextManager {
 	 */
 	async getNewContextMessagesAndMetadata(
 		apiConversationHistory: Anthropic.Messages.MessageParam[],
-		codemarieMessages: CodemarieMessage[],
+		dietcodeMessages: DietCodeMessage[],
 		api: ApiHandler,
 		conversationHistoryDeletedRange: [number, number] | undefined,
 		previousApiReqIndex: number,
@@ -238,10 +238,10 @@ export class ContextManager {
 		if (!useAutoCondense) {
 			// If the previous API request's total token usage is close to the context window, truncate the conversation history to free up space for the new request
 			if (previousApiReqIndex >= 0) {
-				const previousRequestText = codemarieMessages[previousApiReqIndex]?.text
+				const previousRequestText = dietcodeMessages[previousApiReqIndex]?.text
 				if (previousRequestText) {
-					const timestamp = codemarieMessages[previousApiReqIndex].ts
-					const { tokensIn, tokensOut, cacheWrites, cacheReads }: CodemarieApiReqInfo = JSON.parse(previousRequestText)
+					const timestamp = dietcodeMessages[previousApiReqIndex].ts
+					const { tokensIn, tokensOut, cacheWrites, cacheReads }: DietCodeApiReqInfo = JSON.parse(previousRequestText)
 					const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 					const { maxAllowedSize } = getContextWindowInfo(api)
 
@@ -329,7 +329,7 @@ export class ContextManager {
 		let rangeEndIndex = startOfRest + messagesToRemove - 1 // inclusive ending index
 
 		// Make sure that the last message being removed is a assistant message, so the next message after the initial user-assistant pair is an assistant message. This preserves the user-assistant-user-assistant structure.
-		// NOTE: anthropic format messages are always user-assistant-user-assistant, while openai format messages can have multiple user messages in a row (we use anthropic format throughout codemarie)
+		// NOTE: anthropic format messages are always user-assistant-user-assistant, while openai format messages can have multiple user messages in a row (we use anthropic format throughout dietcode)
 		if (apiMessages[rangeEndIndex] && apiMessages[rangeEndIndex].role !== "assistant") {
 			rangeEndIndex -= 1
 		}
@@ -661,7 +661,7 @@ export class ContextManager {
 	async attemptFileReadOptimization(
 		apiConversationHistory: Anthropic.Messages.MessageParam[],
 		conversationHistoryDeletedRange: [number, number] | undefined,
-		codemarieMessages: CodemarieMessage[],
+		dietcodeMessages: DietCodeMessage[],
 		previousApiReqIndex: number,
 		taskDirectory: string,
 	): Promise<boolean> {
@@ -670,7 +670,7 @@ export class ContextManager {
 			return true
 		}
 
-		const previousRequest = codemarieMessages[previousApiReqIndex]
+		const previousRequest = dietcodeMessages[previousApiReqIndex]
 		if (!previousRequest || !previousRequest.text) {
 			return true
 		}

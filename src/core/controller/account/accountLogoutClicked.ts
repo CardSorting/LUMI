@@ -1,5 +1,5 @@
-import type { EmptyRequest } from "@shared/proto/codemarie/common"
-import { Empty } from "@shared/proto/codemarie/common"
+import type { EmptyRequest } from "@shared/proto/dietcode/common"
+import { Empty } from "@shared/proto/dietcode/common"
 import { AuthService } from "@/services/auth/AuthService"
 import { LogoutReason } from "@/services/auth/types"
 import type { Controller } from "../index"

@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { WorktreeList } from "@shared/proto/codemarie/worktree"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { WorktreeList } from "@shared/proto/dietcode/worktree"
 import { getGitRootPath, listWorktrees as listWorktreesUtil } from "@utils/git-worktree"
 import { arePathsEqual, getWorkspacePath } from "@utils/path"
 import { HostProvider } from "@/hosts/host-provider"

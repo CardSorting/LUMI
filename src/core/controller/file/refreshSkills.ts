@@ -1,4 +1,4 @@
-import { RefreshedSkills, SkillInfo } from "@shared/proto/codemarie/file"
+import { RefreshedSkills, SkillInfo } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import path from "path"
 import { getSkillsDirectoriesForScan } from "@/core/storage/disk"

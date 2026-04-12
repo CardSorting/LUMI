@@ -7,9 +7,9 @@ import { parseWorkspaceInlinePath } from "@/core/workspace/utils/parseWorkspaceI
 import { WorkspacePathAdapter } from "@/core/workspace/WorkspacePathAdapter"
 import { resolveWorkspacePath } from "@/core/workspace/WorkspaceResolver"
 import { telemetryService } from "@/services/telemetry"
-import { CodemarieSayTool } from "@/shared/ExtensionMessage"
+import { DietCodeSayTool } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -19,7 +19,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class SearchFilesToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.SEARCH
+	readonly name = DietCodeDefaultTool.SEARCH
 
 	constructor(private validator: ToolValidator) {}
 
@@ -88,7 +88,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 				absolutePath,
 				regex,
 				filePattern,
-				config.services.codemarieIgnoreController,
+				config.services.dietcodeIgnoreController,
 			)
 
 			// Parse the result count from the first line
@@ -188,7 +188,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			regex: uiHelpers.removeClosingTag(block, "regex", regex),
 			filePattern: uiHelpers.removeClosingTag(block, "file_pattern", filePattern),
 			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath),
-		} satisfies CodemarieSayTool
+		} satisfies DietCodeSayTool
 
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
@@ -212,11 +212,11 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
 		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
-		// Validate required parameters and check codemarieignore access
+		// Validate required parameters and check dietcodeignore access
 		const validation = await this.validator.validate(block, "path", "regex")
 		if (!validation.ok) {
 			if (!config.isSubagentExecution && validation.error.includes("RESTRICTED")) {
-				await config.callbacks.say("codemarieignore_error", relDirPath!)
+				await config.callbacks.say("dietcodeignore_error", relDirPath!)
 			}
 
 			if (validation.error.includes("Missing required parameter")) {
@@ -313,7 +313,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			regex: regex,
 			filePattern: filePattern,
 			operationIsLocatedInWorkspace: await isLocatedInWorkspace(parsedPath),
-		} satisfies CodemarieSayTool
+		} satisfies DietCodeSayTool
 
 		const completeMessage = JSON.stringify(sharedMessageProps)
 
@@ -339,7 +339,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			)
 		} else {
 			// Manual approval flow
-			const notificationMessage = `Codemarie wants to search files for ${regex}`
+			const notificationMessage = `DietCode wants to search files for ${regex}`
 
 			// Show notification
 			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)

@@ -1,4 +1,4 @@
-import { CodemarieDefaultTool } from "@shared/tools"
+import { DietCodeDefaultTool } from "@shared/tools"
 
 export type AssistantMessageContent = TextStreamContent | ToolUse | ReasoningStreamContent
 
@@ -69,7 +69,7 @@ export type ToolParamName = (typeof toolParamNames)[number]
 
 export interface ToolUse {
 	type: "tool_use"
-	name: CodemarieDefaultTool // id of the tool being used
+	name: DietCodeDefaultTool // id of the tool being used
 	// params is a partial record, allowing only some or none of the possible parameters to be used
 	params: Partial<Record<ToolParamName, string>>
 	partial: boolean

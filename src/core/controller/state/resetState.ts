@@ -1,5 +1,5 @@
-import { Empty } from "@shared/proto/codemarie/common"
-import { ResetStateRequest } from "@shared/proto/codemarie/state"
+import { Empty } from "@shared/proto/dietcode/common"
+import { ResetStateRequest } from "@shared/proto/dietcode/state"
 import { resetGlobalState, resetWorkspaceState } from "@/core/storage/utils/state-helpers"
 import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"

@@ -1,5 +1,5 @@
-import { ChromePath } from "@shared/proto/codemarie/browser"
-import { EmptyRequest } from "@shared/proto/codemarie/common"
+import { ChromePath } from "@shared/proto/dietcode/browser"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
 import { BrowserSession } from "../../../services/browser/BrowserSession"
 import { Controller } from "../index"

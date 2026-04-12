@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { AddRemoteMcpServerRequest, McpServers } from "@shared/proto/codemarie/mcp"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { AddRemoteMcpServerRequest, McpServers } from "@shared/proto/dietcode/mcp"
 import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { VSCodeButton, VSCodeLink, VSCodeRadio, VSCodeRadioGroup, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"

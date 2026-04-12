@@ -1,6 +1,6 @@
 import { resolveWorkspacePath } from "@core/workspace"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
-import { CodemarieDefaultTool } from "@shared/tools"
+import { DietCodeDefaultTool } from "@shared/tools"
 import { StateManager } from "@/core/storage/StateManager"
 import { HostProvider } from "@/hosts/host-provider"
 import { getCwd, getDesktopDir, isLocatedInPath, isLocatedInWorkspace } from "@/utils/path"
@@ -54,7 +54,7 @@ export class AutoApprove {
 
 	// Check if the tool should be auto-approved based on the settings
 	// Returns bool for most tools, and tuple for tools with nested settings
-	shouldAutoApproveTool(toolName: CodemarieDefaultTool): boolean | [boolean, boolean] {
+	shouldAutoApproveTool(toolName: DietCodeDefaultTool): boolean | [boolean, boolean] {
 		// Check persistent trust list
 		const trustedTools = this.stateManager.getTrustedTools()
 		if (trustedTools.includes(toolName)) {
@@ -63,45 +63,45 @@ export class AutoApprove {
 
 		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
 			switch (toolName) {
-				case CodemarieDefaultTool.FILE_READ:
-				case CodemarieDefaultTool.LIST_FILES:
-				case CodemarieDefaultTool.LIST_CODE_DEF:
-				case CodemarieDefaultTool.SEARCH:
-				case CodemarieDefaultTool.NEW_RULE:
-				case CodemarieDefaultTool.FILE_NEW:
-				case CodemarieDefaultTool.FILE_EDIT:
-				case CodemarieDefaultTool.APPLY_PATCH:
-				case CodemarieDefaultTool.BASH:
-				case CodemarieDefaultTool.USE_SUBAGENTS:
+				case DietCodeDefaultTool.FILE_READ:
+				case DietCodeDefaultTool.LIST_FILES:
+				case DietCodeDefaultTool.LIST_CODE_DEF:
+				case DietCodeDefaultTool.SEARCH:
+				case DietCodeDefaultTool.NEW_RULE:
+				case DietCodeDefaultTool.FILE_NEW:
+				case DietCodeDefaultTool.FILE_EDIT:
+				case DietCodeDefaultTool.APPLY_PATCH:
+				case DietCodeDefaultTool.BASH:
+				case DietCodeDefaultTool.USE_SUBAGENTS:
 					return [true, true]
 
-				case CodemarieDefaultTool.BROWSER:
-				case CodemarieDefaultTool.WEB_FETCH:
-				case CodemarieDefaultTool.WEB_SEARCH:
-				case CodemarieDefaultTool.MCP_ACCESS:
-				case CodemarieDefaultTool.MCP_USE:
+				case DietCodeDefaultTool.BROWSER:
+				case DietCodeDefaultTool.WEB_FETCH:
+				case DietCodeDefaultTool.WEB_SEARCH:
+				case DietCodeDefaultTool.MCP_ACCESS:
+				case DietCodeDefaultTool.MCP_USE:
 					return true
 			}
 		}
 
 		if (this.stateManager.getGlobalSettingsKey("autoApproveAllToggled")) {
 			switch (toolName) {
-				case CodemarieDefaultTool.FILE_READ:
-				case CodemarieDefaultTool.LIST_FILES:
-				case CodemarieDefaultTool.LIST_CODE_DEF:
-				case CodemarieDefaultTool.SEARCH:
-				case CodemarieDefaultTool.NEW_RULE:
-				case CodemarieDefaultTool.FILE_NEW:
-				case CodemarieDefaultTool.FILE_EDIT:
-				case CodemarieDefaultTool.APPLY_PATCH:
-				case CodemarieDefaultTool.BASH:
-				case CodemarieDefaultTool.USE_SUBAGENTS:
+				case DietCodeDefaultTool.FILE_READ:
+				case DietCodeDefaultTool.LIST_FILES:
+				case DietCodeDefaultTool.LIST_CODE_DEF:
+				case DietCodeDefaultTool.SEARCH:
+				case DietCodeDefaultTool.NEW_RULE:
+				case DietCodeDefaultTool.FILE_NEW:
+				case DietCodeDefaultTool.FILE_EDIT:
+				case DietCodeDefaultTool.APPLY_PATCH:
+				case DietCodeDefaultTool.BASH:
+				case DietCodeDefaultTool.USE_SUBAGENTS:
 					return [true, true]
-				case CodemarieDefaultTool.BROWSER:
-				case CodemarieDefaultTool.WEB_FETCH:
-				case CodemarieDefaultTool.WEB_SEARCH:
-				case CodemarieDefaultTool.MCP_ACCESS:
-				case CodemarieDefaultTool.MCP_USE:
+				case DietCodeDefaultTool.BROWSER:
+				case DietCodeDefaultTool.WEB_FETCH:
+				case DietCodeDefaultTool.WEB_SEARCH:
+				case DietCodeDefaultTool.MCP_ACCESS:
+				case DietCodeDefaultTool.MCP_USE:
 					return true
 			}
 		}
@@ -109,29 +109,29 @@ export class AutoApprove {
 		const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 
 		switch (toolName) {
-			case CodemarieDefaultTool.FILE_READ:
-			case CodemarieDefaultTool.LIST_FILES:
-			case CodemarieDefaultTool.LIST_CODE_DEF:
-			case CodemarieDefaultTool.SEARCH:
-			case CodemarieDefaultTool.USE_SUBAGENTS:
+			case DietCodeDefaultTool.FILE_READ:
+			case DietCodeDefaultTool.LIST_FILES:
+			case DietCodeDefaultTool.LIST_CODE_DEF:
+			case DietCodeDefaultTool.SEARCH:
+			case DietCodeDefaultTool.USE_SUBAGENTS:
 				return [autoApprovalSettings.actions.readFiles, autoApprovalSettings.actions.readFilesExternally ?? false]
-			case CodemarieDefaultTool.NEW_RULE:
-			case CodemarieDefaultTool.FILE_NEW:
-			case CodemarieDefaultTool.FILE_EDIT:
-			case CodemarieDefaultTool.APPLY_PATCH:
+			case DietCodeDefaultTool.NEW_RULE:
+			case DietCodeDefaultTool.FILE_NEW:
+			case DietCodeDefaultTool.FILE_EDIT:
+			case DietCodeDefaultTool.APPLY_PATCH:
 				return [autoApprovalSettings.actions.editFiles, autoApprovalSettings.actions.editFilesExternally ?? false]
-			case CodemarieDefaultTool.BASH:
+			case DietCodeDefaultTool.BASH:
 				return [
 					autoApprovalSettings.actions.executeSafeCommands ?? false,
 					autoApprovalSettings.actions.executeAllCommands ?? false,
 				]
-			case CodemarieDefaultTool.BROWSER:
+			case DietCodeDefaultTool.BROWSER:
 				return autoApprovalSettings.actions.useBrowser
-			case CodemarieDefaultTool.WEB_FETCH:
-			case CodemarieDefaultTool.WEB_SEARCH:
+			case DietCodeDefaultTool.WEB_FETCH:
+			case DietCodeDefaultTool.WEB_SEARCH:
 				return autoApprovalSettings.actions.useBrowser
-			case CodemarieDefaultTool.MCP_ACCESS:
-			case CodemarieDefaultTool.MCP_USE:
+			case DietCodeDefaultTool.MCP_ACCESS:
+			case DietCodeDefaultTool.MCP_USE:
 				return autoApprovalSettings.actions.useMcp
 		}
 		return false
@@ -141,20 +141,20 @@ export class AutoApprove {
 	// and the path of the action. Returns true if the tool should be auto-approved
 	// based on the user's settings and the path of the action.
 	async shouldAutoApproveToolWithPath(
-		blockname: CodemarieDefaultTool,
+		blockname: DietCodeDefaultTool,
 		autoApproveActionpath: string | undefined,
 		command?: string,
 		mcpServerName?: string,
 	): Promise<boolean> {
 		// Check persistent command trust first if applicable
-		if (blockname === CodemarieDefaultTool.BASH && command) {
+		if (blockname === DietCodeDefaultTool.BASH && command) {
 			if (this.shouldAutoApproveCommand(command)) {
 				return true
 			}
 		}
 
 		// Check persistent MCP server trust
-		if ((blockname === CodemarieDefaultTool.MCP_USE || blockname === CodemarieDefaultTool.MCP_ACCESS) && mcpServerName) {
+		if ((blockname === DietCodeDefaultTool.MCP_USE || blockname === DietCodeDefaultTool.MCP_ACCESS) && mcpServerName) {
 			const trustedMcpServers = this.stateManager.getTrustedMcpServers()
 			if (trustedMcpServers.includes(mcpServerName)) {
 				return true
@@ -174,11 +174,11 @@ export class AutoApprove {
 			// BASH and MCP are handled above if they are trusted
 			// Here we check if the tool itself is considered "safe-listable"
 			const isReadOnly = [
-				CodemarieDefaultTool.FILE_READ,
-				CodemarieDefaultTool.LIST_FILES,
-				CodemarieDefaultTool.LIST_CODE_DEF,
-				CodemarieDefaultTool.SEARCH,
-				CodemarieDefaultTool.NEW_RULE,
+				DietCodeDefaultTool.FILE_READ,
+				DietCodeDefaultTool.LIST_FILES,
+				DietCodeDefaultTool.LIST_CODE_DEF,
+				DietCodeDefaultTool.SEARCH,
+				DietCodeDefaultTool.NEW_RULE,
 			].includes(blockname)
 
 			if (isReadOnly) {

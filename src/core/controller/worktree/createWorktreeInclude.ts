@@ -1,4 +1,4 @@
-import { CreateWorktreeIncludeRequest, WorktreeResult } from "@shared/proto/codemarie/worktree"
+import { CreateWorktreeIncludeRequest, WorktreeResult } from "@shared/proto/dietcode/worktree"
 import { getWorkspacePath } from "@utils/path"
 import * as fs from "fs/promises"
 import * as path from "path"

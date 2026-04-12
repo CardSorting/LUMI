@@ -1,4 +1,4 @@
-import { CodemarieIgnoreController } from "@core/ignore/CodemarieIgnoreController"
+import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import { listFiles } from "@services/glob/list-files"
 import { fileExistsAtPath } from "@utils/fs"
 import * as fs from "fs/promises"
@@ -9,7 +9,7 @@ import { LanguageParser, loadRequiredLanguageParsers } from "./languageParser"
 // TODO: implement caching behavior to avoid having to keep analyzing project for new tasks.
 export async function parseSourceCodeForDefinitionsTopLevel(
 	dirPath: string,
-	codemarieIgnoreController?: CodemarieIgnoreController,
+	dietcodeIgnoreController?: DietCodeIgnoreController,
 ): Promise<string> {
 	// check if the path exists
 	const dirExists = await fileExistsAtPath(path.resolve(dirPath))
@@ -31,10 +31,10 @@ export async function parseSourceCodeForDefinitionsTopLevel(
 	// const filesWithoutDefinitions: string[] = []
 
 	// Filter filepaths for access if controller is provided
-	const allowedFilesToParse = codemarieIgnoreController ? codemarieIgnoreController.filterPaths(filesToParse) : filesToParse
+	const allowedFilesToParse = dietcodeIgnoreController ? dietcodeIgnoreController.filterPaths(filesToParse) : filesToParse
 
 	for (const filePath of allowedFilesToParse) {
-		const definitions = await parseFile(filePath, languageParsers, codemarieIgnoreController)
+		const definitions = await parseFile(filePath, languageParsers, dietcodeIgnoreController)
 		if (definitions) {
 			result += `${path.relative(dirPath, filePath).toPosix()}\n${definitions}\n`
 		}
@@ -112,9 +112,9 @@ This approach allows us to focus on the most relevant parts of the code (defined
 async function parseFile(
 	filePath: string,
 	languageParsers: LanguageParser,
-	codemarieIgnoreController?: CodemarieIgnoreController,
+	dietcodeIgnoreController?: DietCodeIgnoreController,
 ): Promise<string | null> {
-	if (codemarieIgnoreController && !codemarieIgnoreController.validateAccess(filePath)) {
+	if (dietcodeIgnoreController && !dietcodeIgnoreController.validateAccess(filePath)) {
 		return null
 	}
 	const fileContent = await fs.readFile(filePath, "utf8")

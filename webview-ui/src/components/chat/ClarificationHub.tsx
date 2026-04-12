@@ -136,7 +136,7 @@ export const ClarificationHub = ({ interactiveClarifications, swarmConsensus }: 
 					<LabelText>Interactive Clarification & Consensus</LabelText>
 				</Title>
 				{swarmConsensus && (
-					<Badge className="text-[10px] font-bold" variant="codemarie">
+					<Badge className="text-[10px] font-bold" variant="dietcode">
 						{Math.round(swarmConsensus.agreementScore * 100)}% CONSENSUS
 					</Badge>
 				)}

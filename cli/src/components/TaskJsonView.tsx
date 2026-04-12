@@ -51,7 +51,7 @@ export const TaskJsonView: React.FC<TaskJsonViewProps> = ({ taskId: _taskId, ver
 
 	// Output messages as JSON when they arrive
 	useEffect(() => {
-		const messages = state.codemarieMessages || []
+		const messages = state.dietcodeMessages || []
 
 		for (let i = 0; i < messages.length; i++) {
 			const message = messages[i]
@@ -92,7 +92,7 @@ export const TaskJsonView: React.FC<TaskJsonViewProps> = ({ taskId: _taskId, ver
 
 			outputtedMessages.current.add(message.ts)
 		}
-	}, [state.codemarieMessages, verbose, getRole])
+	}, [state.dietcodeMessages, verbose, getRole])
 
 	// Handle task completion
 	useEffect(() => {

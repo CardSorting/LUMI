@@ -14,8 +14,8 @@ DIM='\033[2m'
 NC='\033[0m' # No Color
 
 # Configuration
-INSTALL_DIR="${CLINE_INSTALL_DIR:-$HOME/.codemarie/cli}"
-GITHUB_REPO="codemarie/codemarie"
+INSTALL_DIR="${CLINE_INSTALL_DIR:-$HOME/.dietcode/cli}"
+GITHUB_REPO="dietcode/dietcode"
 requested_version="${CLINE_VERSION:-}"
 FORCE_INSTALL="${FORCE_INSTALL:-false}"
 
@@ -307,16 +307,16 @@ check_existing_installation() {
         return
     fi
     
-    if [ -d "$INSTALL_DIR/bin" ] && [ -f "$INSTALL_DIR/bin/codemarie" ]; then
-        # Extract version from codemarie binary
-        local installed_version=$("$INSTALL_DIR/bin/codemarie" version 2>/dev/null | head -1 | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "")
+    if [ -d "$INSTALL_DIR/bin" ] && [ -f "$INSTALL_DIR/bin/dietcode" ]; then
+        # Extract version from dietcode binary
+        local installed_version=$("$INSTALL_DIR/bin/dietcode" version 2>/dev/null | head -1 | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "")
         
         # Compare versions (remove -cli suffix for comparison)
         local cli_tag_version=$(echo "$cli_tag" | sed 's/-cli$//')
         
         if [ -n "$installed_version" ] && [ "$installed_version" = "$cli_tag_version" ]; then
             echo ""
-            print_ok "CodeMarie ${MAGENTA}${BOLD}$installed_version${NC} already installed"
+            print_ok "DietCode ${MAGENTA}${BOLD}$installed_version${NC} already installed"
             echo ""
             print_message "$DIM" "Installation directory: $INSTALL_DIR"
             print_message "$DIM" "To reinstall, run: ${MAGENTA}rm -rf $INSTALL_DIR && <install command>${NC}"
@@ -331,8 +331,8 @@ check_existing_installation() {
 }
 
 # Download and install
-install_codemarie() {
-    print_step "Installing CodeMarie"
+install_dietcode() {
+    print_step "Installing DietCode"
     
     # Create temporary directory
     local tmp_dir=$(mktemp -d)
@@ -340,7 +340,7 @@ install_codemarie() {
     
     # Download with progress bar
     echo -e "${MAGENTA}${BOLD}"
-    local package_file="$tmp_dir/codemarie.tar.gz"
+    local package_file="$tmp_dir/dietcode.tar.gz"
 
     if ! curl -#fSL -o "$package_file" "$download_url"; then
         echo -e "${NC}"
@@ -391,7 +391,7 @@ install_codemarie() {
         fi
     fi
     
-    print_ok "CodeMarie installed to ${MAGENTA}${BOLD}$INSTALL_DIR${NC}"
+    print_ok "DietCode installed to ${MAGENTA}${BOLD}$INSTALL_DIR${NC}"
 }
 
 # Configure PATH
@@ -453,10 +453,10 @@ configure_path() {
     if ! grep -q "$bin_dir" "$config_file" 2>/dev/null; then
         case $current_shell in
             fish)
-                echo -e "\n# CodeMarie CLI\nfish_add_path $bin_dir" >> "$config_file"
+                echo -e "\n# DietCode CLI\nfish_add_path $bin_dir" >> "$config_file"
                 ;;
             *)
-                echo -e "\n# CodeMarie CLI\nexport PATH=\"$bin_dir:\$PATH\"" >> "$config_file"
+                echo -e "\n# DietCode CLI\nexport PATH=\"$bin_dir:\$PATH\"" >> "$config_file"
                 ;;
         esac
         
@@ -475,15 +475,15 @@ configure_path() {
 verify_installation() {
     print_step "Verifying installation"
     
-    local codemarie_bin="$INSTALL_DIR/bin/codemarie"
+    local dietcode_bin="$INSTALL_DIR/bin/dietcode"
     
-    if [ ! -f "$codemarie_bin" ]; then
-        print_error "Binary not found at $codemarie_bin"
+    if [ ! -f "$dietcode_bin" ]; then
+        print_error "Binary not found at $dietcode_bin"
         exit 1
     fi
     
-    if [ ! -x "$codemarie_bin" ]; then
-        chmod +x "$codemarie_bin"
+    if [ ! -x "$dietcode_bin" ]; then
+        chmod +x "$dietcode_bin"
     fi
     
     print_ok "Installation verified"
@@ -645,7 +645,7 @@ print_success() {
     echo ""
     print_box "Installation complete" "$GREEN$BOLD" 48
     echo ""
-    print_message "$NC" "Run this to start using ${MAGENTA}${BOLD}codemarie${NC} immediately:"
+    print_message "$NC" "Run this to start using ${MAGENTA}${BOLD}dietcode${NC} immediately:"
     echo ""
     print_message "$YELLOW" "${BOLD}    exec \$SHELL"
     echo ""
@@ -662,7 +662,7 @@ main() {
     check_prerequisites
     get_release_info
     check_existing_installation
-    install_codemarie
+    install_dietcode
     configure_path
     verify_installation
     print_success

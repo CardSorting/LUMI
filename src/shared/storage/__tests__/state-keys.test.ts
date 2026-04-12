@@ -412,7 +412,7 @@ describe("State Keys Type Safety", () => {
 			const globalKey: GlobalStateKey = "isNewUser"
 			const settingsKey: SettingsKey = "preferredLanguage"
 			const secretKey: SecretKey = "apiKey"
-			const localKey: LocalStateKey = "localCodemarieRulesToggles"
+			const localKey: LocalStateKey = "localDietCodeRulesToggles"
 
 			expect(globalKey).to.be.a("string")
 			expect(settingsKey).to.be.a("string")
@@ -431,12 +431,12 @@ describe("State Keys Type Safety", () => {
 			expect(combined.preferredLanguage).to.equal("English")
 		})
 
-		it("should have LocalState keys map to CodemarieRulesToggles", () => {
+		it("should have LocalState keys map to DietCodeRulesToggles", () => {
 			const localState: Partial<LocalState> = {
-				localCodemarieRulesToggles: {},
+				localDietCodeRulesToggles: {},
 				localCursorRulesToggles: { "some-rule": true },
 			}
-			expect(localState.localCodemarieRulesToggles).to.deep.equal({})
+			expect(localState.localDietCodeRulesToggles).to.deep.equal({})
 		})
 	})
 
@@ -453,9 +453,9 @@ describe("State Keys Type Safety", () => {
 		})
 
 		it("should handle keys with special characters", () => {
-			// The codemarie:codemarieAccountId key has a colon
-			expect(SecretKeys).to.include("codemarie:codemarieAccountId")
-			expect(isSecretKey("codemarie:codemarieAccountId")).to.be.true
+			// The dietcode:dietcodeAccountId key has a colon
+			expect(SecretKeys).to.include("dietcode:dietcodeAccountId")
+			expect(isSecretKey("dietcode:dietcodeAccountId")).to.be.true
 		})
 
 		it("should not have keys that could cause prototype pollution", () => {

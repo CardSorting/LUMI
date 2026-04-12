@@ -1,18 +1,19 @@
-import { ToolUse } from "@core/assistant-message"
-import { CodemarieDefaultTool } from "@shared/tools"
+import { DietCodeDefaultTool } from "@shared/tools"
 import { createHash } from "crypto"
 import fs from "fs/promises"
 import * as path from "path"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
-import { StateManager } from "../storage/StateManager"
+import { Logger } from "@/shared/services/Logger"
+import { ToolUse } from "../assistant-message"
 import { ContextStalenessTracker } from "../context/ContextStalenessTracker"
-import { AuditRecorder } from "./AuditRecorder.js"
+import { AuditRecorder } from "../integrity/AuditRecorder.js"
 import { DashboardGenerator } from "../integrity/DashboardGenerator"
 import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
 import { PathogenStore } from "../integrity/PathogenStore"
+import { StateManager } from "../storage/StateManager"
 import { SemanticAxiomEngine } from "./SemanticAxiomEngine"
-import { SovereignOptimizer } from "./SovereignOptimizer"
 import { SimulationEngine } from "./SimulationEngine.js"
+import { SovereignOptimizer } from "./SovereignOptimizer"
 import { SpiderEngine } from "./SpiderEngine.js"
 import { SpiderRefactorer } from "./SpiderRefactorer.js"
 import { TspPolicyPlugin } from "./TspPolicyPlugin.js"
@@ -56,6 +57,7 @@ export class FluidPolicyEngine {
 	private pathogens: PathogenStore
 	private architecturalAlarmActive = false
 	private alarmViolations: string[] = []
+	private refactorHealer: any = null // TODO: Initialize properly if needed
 
 	constructor(
 		private cwd: string,
@@ -154,7 +156,9 @@ export class FluidPolicyEngine {
 		const fixes: string[] = []
 		for (const err of errors) {
 			if (err.includes("tag") || err.includes("Missing mandatory"))
-				fixes.push("Add a mandatory [LAYER: TYPE] tag to the file header (one of DOMAIN, CORE, INFRASTRUCTURE, PLUMBING, UI).")
+				fixes.push(
+					"Add a mandatory [LAYER: TYPE] tag to the file header (one of DOMAIN, CORE, INFRASTRUCTURE, PLUMBING, UI).",
+				)
 			else if (err.includes("Geographic Misalignment"))
 				fixes.push("Move the file to the physical directory that matches its declared [LAYER] tag.")
 			else if (err.includes("relative navigation"))
@@ -196,9 +200,15 @@ export class FluidPolicyEngine {
 		const score = this.computeIntegrityScore(violations)
 		const fileCount = this.spiderEngine.nodes.size
 		await this.auditRecorder.record(score, violations.length, fileCount)
-		
+
 		// Passive Dashboard Update
-		await this.dashboardGenerator.updateDashboard(this.spiderEngine, this.auditRecorder, this.metabolicMonitor, this.optimizer, this.pathogens)
+		await this.dashboardGenerator.updateDashboard(
+			this.spiderEngine,
+			this.auditRecorder,
+			this.metabolicMonitor,
+			this.optimizer,
+			this.pathogens,
+		)
 	}
 
 	private triggerAlarm(violations: string[]) {
@@ -219,50 +229,55 @@ export class FluidPolicyEngine {
 	 */
 	public async validatePreExecution(block: ToolUse): Promise<PolicyResult> {
 		// 0. Rule: Logic Axiom Guard (Substrate Maturity)
-		if (block.name === "write_files" || block.name === "patch_files") {
+		if (block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.APPLY_PATCH) {
 			const { path: filePath, content } = block.params as any
 			if (content) {
 				const axiomViolations = this.axiomEngine.validateAxioms(filePath, content, this.spiderEngine)
-				const errors = axiomViolations.filter(v => v.severity === "ERROR")
+				const errors = axiomViolations.filter((v) => v.severity === "ERROR")
 				if (errors.length > 0 && !this.commitSeal) {
 					return {
 						success: false,
-						error: `🚨 AXIOMATIC LOGIC BLOCK: Logic Sovereignty has been compromised.\n` +
-							   `${errors.map(v => `  - [AXIOM: ${v.axiom}] ${v.message}`).join("\n")}\n\n` +
-							   `💡 You must split this logic or maintain purity before the substrate will accept these changes.`,
+						error:
+							`🚨 AXIOMATIC LOGIC BLOCK: Logic Sovereignty has been compromised.\n` +
+							`${errors.map((v) => `  - [AXIOM: ${v.axiom}] ${v.message}`).join("\n")}\n\n` +
+							`💡 You must split this logic or maintain purity before the substrate will accept these changes.`,
 					}
 				}
 			}
 		}
 
 		// 0. Rule: Simulation Guard (Pre-flight Prophet)
-		if (block.name === "rename_files" || block.name === "move_files") {
+		if (block.name === DietCodeDefaultTool.RENAME || block.name === DietCodeDefaultTool.MOVE) {
 			const { oldPath, newPath } = block.params as any
-			const sim = await this.simulationEngine.simulateMove(oldPath, newPath, this.spiderEngine)
+			const sim = await this.simulationEngine.simulateMove(oldPath, newPath, this.spiderEngine, this.pathogens)
 			if (!sim.safe && !this.commitSeal) {
 				return {
 					success: false,
-					error: `🚨 SIMULATION BLOCK: ${sim.message}\n` +
-						   `Your proposed move predicts a significant architectural regression.\n` +
-						   `Violations predicted: \n${sim.violations.map(v => `  - ${v}`).join("\n")}\n\n` +
-						   `💡 Fix these structural issues in the source before moving, or use a Commit Seal to bypass.`,
+					error:
+						`🚨 SIMULATION BLOCK: ${sim.message}\n` +
+						`Your proposed move predicts a significant architectural regression.\n` +
+						`Violations predicted: \n${sim.violations.map((v) => `  - ${v}`).join("\n")}\n\n` +
+						`💡 Fix these structural issues in the source before moving, or use a Commit Seal to bypass.`,
 				}
 			}
 		}
 
 		// 0. Rule: Architectural Alarm (Soft-Lock)
-		if (this.architecturalAlarmActive && 
-			(block.name === CodemarieDefaultTool.FILE_NEW || 
-			 block.name === CodemarieDefaultTool.FILE_EDIT || 
-			 block.name === CodemarieDefaultTool.APPLY_PATCH ||
-			 block.name === "delete_file")) {
+		if (
+			this.architecturalAlarmActive &&
+			(block.name === DietCodeDefaultTool.FILE_NEW ||
+				block.name === DietCodeDefaultTool.FILE_EDIT ||
+				block.name === DietCodeDefaultTool.APPLY_PATCH ||
+				block.name === DietCodeDefaultTool.DELETE)
+		) {
 			return {
 				success: false,
-				error: `🚨 ARCHITECTURAL ALARM ACTIVE (Score: ${this.computeIntegrityScore(this.alarmViolations)}/100)\n` +
-					   `Your previous actions have degraded the system integrity beyond the safety threshold. ` +
-					   `All destructive or structural tool calls are LOCKED until the following violations are healed:\n` +
-					   `${this.alarmViolations.map(v => `  - ${v}`).join("\n")}\n\n` +
-					   `💡 You MUST fix these issues using simple writes or refactor tools before continuing with new features.`,
+				error:
+					`🚨 ARCHITECTURAL ALARM ACTIVE (Score: ${this.computeIntegrityScore(this.alarmViolations)}/100)\n` +
+					`Your previous actions have degraded the system integrity beyond the safety threshold. ` +
+					`All destructive or structural tool calls are LOCKED until the following violations are healed:\n` +
+					`${this.alarmViolations.map((v) => `  - ${v}`).join("\n")}\n\n` +
+					`💡 You MUST fix these issues using simple writes or refactor tools before continuing with new features.`,
 			}
 		}
 
@@ -290,7 +305,7 @@ export class FluidPolicyEngine {
 
 		// Architectural Policy: AST + Database Concurrent Pass
 		if (
-			(block.name === CodemarieDefaultTool.FILE_NEW || block.name === CodemarieDefaultTool.FILE_EDIT) &&
+			(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
 			block.params?.path &&
 			block.params?.content
 		) {
@@ -359,7 +374,7 @@ export class FluidPolicyEngine {
 			}
 
 			// For new files: proactively suggest the best layer if content doesn't match location
-			if (block.name === CodemarieDefaultTool.FILE_NEW && block.params.content) {
+			if (block.name === DietCodeDefaultTool.FILE_NEW && block.params.content) {
 				const { getLayer, suggestLayerForContent } = require("@/utils/joy-zoning")
 				const currentLayer = getLayer(filePath)
 				const suggestion = suggestLayerForContent(block.params.content)
@@ -376,9 +391,9 @@ export class FluidPolicyEngine {
 		if (!this.streamId) return { success: true }
 
 		if (
-			block.name === CodemarieDefaultTool.FILE_NEW ||
-			block.name === CodemarieDefaultTool.FILE_EDIT ||
-			block.name === CodemarieDefaultTool.APPLY_PATCH
+			block.name === DietCodeDefaultTool.FILE_NEW ||
+			block.name === DietCodeDefaultTool.FILE_EDIT ||
+			block.name === DietCodeDefaultTool.APPLY_PATCH
 		) {
 			const files = block.params?.path ? [path.resolve(this.cwd, block.params.path)] : []
 			if (files.length > 0) {
@@ -392,22 +407,22 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		const normalizedPath = this.normalize(block.params.path)
-		this.metabolicMonitor.recordWrite(normalizedPath, 0, 0) // Basic write record
+		if (block.params?.path) {
+			const normalizedPath = this.normalize(block.params.path)
+			this.metabolicMonitor.recordWrite(normalizedPath, 0, 0) // Basic write record
 
-		// --- ZERO-FRICTION COMPLIANCE HOOK ---
-		// Automatically align tags and fix outgoing imports in the backup
-		try {
-			const absolutePath = path.resolve(this.cwd, normalizedPath)
-			await this.refactorHealer.alignTag(absolutePath)
-			
-			// --- VIBRATION SENSING (Blast Radius) ---
-			// Heal the rattled dependents in the background
-			await this.refactorHealer.healCascade(absolutePath, this.spiderEngine)
-			
-			// Silent healing of the file we just touched
-		} catch (error) {
-			// Fail-safe: background mini-heals should never block execution
+			// --- ZERO-FRICTION COMPLIANCE HOOK ---
+			// Automatically align tags and fix outgoing imports in the backup
+			try {
+				const absolutePath = path.resolve(this.cwd, normalizedPath)
+				await this.refactorHealer.alignTag(absolutePath)
+
+				// --- VIBRATION SENSING (Blast Radius) ---
+				// Heal the rattled dependents in the background
+				await this.refactorHealer.healCascade(absolutePath, this.spiderEngine)
+			} catch (e) {
+				Logger.warn("Refactor healer failed in background", { error: e })
+			}
 		}
 
 		return { success: true }
@@ -495,7 +510,7 @@ export class FluidPolicyEngine {
 		}
 
 		// Protocol Hardening: Inject Guard Directives based on project health
-		const integrityScore = this.computeIntegrityScore(this.spiderEngine.getViolations().map(v => v.message))
+		const integrityScore = this.computeIntegrityScore(this.spiderEngine.getViolations().map((v) => v.message))
 		if (integrityScore < 70) {
 			header += `\n🛡️ HIGH-SHIELD PROTOCOL ACTIVE: The project's Structural Integrity is CRITICAL (${integrityScore}/100).\n`
 			header += `You are instructed by the Substrate Sovereignty directives to PRIORITIZE HEALING the architecture over new feature development. Fix existing violations before proceeding.\n`
@@ -506,7 +521,7 @@ export class FluidPolicyEngine {
 		// Axiomatic Logic Report
 		const axioms = this.axiomEngine.validateAxioms(absolutePath, content, this.spiderEngine)
 		if (axioms.length > 0) {
-			header += `\n🧠 LOGIC AXIOM ANALYSIS:\n${axioms.map(v => `  - [${v.axiom}] ${v.message}`).join("\n")}\n`
+			header += `\n🧠 LOGIC AXIOM ANALYSIS:\n${axioms.map((v) => `  - [${v.axiom}] ${v.message}`).join("\n")}\n`
 		}
 
 		// Metabolic Vitality Injection
@@ -533,7 +548,7 @@ export class FluidPolicyEngine {
 				}
 			}
 			if (ghosts.length > 0) {
-				header += `👻 GHOST IMPORTS DETECTED (Missing Files):\n${ghosts.map(g => `  - ${g}`).join("\n")}\n`
+				header += `👻 GHOST IMPORTS DETECTED (Missing Files):\n${ghosts.map((g) => `  - ${g}`).join("\n")}\n`
 			}
 		}
 
@@ -606,7 +621,7 @@ export class FluidPolicyEngine {
 		const result: PolicyResult = { success: true }
 
 		// Architectural Policy: Audit file changes via AST (warning-only, never blocks post-execution)
-		if (block.name === CodemarieDefaultTool.FILE_NEW || block.name === CodemarieDefaultTool.FILE_EDIT) {
+		if (block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) {
 			const filePath = block.params?.path ? path.resolve(this.cwd, block.params.path) : null
 			if (filePath) {
 				try {
@@ -729,5 +744,10 @@ export class FluidPolicyEngine {
 		}
 
 		return { success: true, errors: allErrors }
+	}
+
+	private normalize(p: string): string {
+		if (!p) return ""
+		return path.relative(this.cwd, path.resolve(this.cwd, p))
 	}
 }

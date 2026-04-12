@@ -1,6 +1,6 @@
-# CodeMarie Production Hardening: Engineering Summary (v3.84.0)
+# DietCode Production Hardening: Engineering Summary (v3.84.0)
 
-This document provides a high-level summary of the five-round production hardening initiative designed to scale CodeMarie for enterprise-grade repositories and high-throughput cognitive workloads.
+This document provides a high-level summary of the five-round production hardening initiative designed to scale DietCode for enterprise-grade repositories and high-throughput cognitive workloads.
 
 ## 🚀 The North Star: Zero-Latency Architectural Intelligence
 
@@ -35,4 +35,4 @@ The objective was to move BroccoliDB (Long-Term Memory) and Spider (Structural I
 | History Analysis | $O(N)$ | $O(1)$ | **Infinite Scale** |
 
 ## 🛡️ Conclusion
-CodeMarie 3.84.0 represents a significant leap in architectural sovereignty and operational efficiency. The system is now built for scale, speed, and long-term cognitive continuity in professional software engineering environments.
+DietCode 3.84.0 represents a significant leap in architectural sovereignty and operational efficiency. The system is now built for scale, speed, and long-term cognitive continuity in professional software engineering environments.

@@ -1,13 +1,13 @@
-# CodeMarie Smoke Tests
+# DietCode Smoke Tests
 
 > [!NOTE]
-> Smoke tests are a critical part of our CI/CD pipeline, ensuring that CodeMarie's agentic capabilities remain reliable across different LLM providers and model updates.
+> Smoke tests are a critical part of our CI/CD pipeline, ensuring that DietCode's agentic capabilities remain reliable across different LLM providers and model updates.
 
 ## Overview
 
-CodeMarie is an advanced AI coding assistant that can use the **CLI** and **Editor** to handle complex software development tasks. Unlike traditional AI scripts that run in sandboxed environments, CodeMarie provides a human-in-the-loop GUI to approve file changes and terminal commands.
+DietCode is an advanced AI coding assistant that can use the **CLI** and **Editor** to handle complex software development tasks. Unlike traditional AI scripts that run in sandboxed environments, DietCode provides a human-in-the-loop GUI to approve file changes and terminal commands.
 
-The **Smoke Tests** are a suite of automated evaluations designed to verify the core functionality of the CodeMarie CLI. They focus on:
+The **Smoke Tests** are a suite of automated evaluations designed to verify the core functionality of the DietCode CLI. They focus on:
 - **Tool Execution**: Verifying `write_to_file`, `replace_in_file`, `read_file`, etc.
 - **Provider Reliability**: Ensuring consistent behavior across Anthropic, OpenAI, Gemini, and others.
 - **Reasoning & Planning**: Validating that the model can chain multiple tools to solve multi-step tasks.
@@ -26,7 +26,7 @@ npm run eval:smoke:build
 ### 2. Configure Authentication
 If you haven't already, authenticate with your preferred provider:
 ```bash
-codemarie auth
+dietcode auth
 ```
 *Note: For CI or non-interactive use, see the [Authentication](#authentication) section.*
 
@@ -99,7 +99,7 @@ To add a new smoke test:
 {
   "name": "Feature Description",
   "description": "What is being tested",
-  "prompt": "The specific task for CodeMarie",
+  "prompt": "The specific task for DietCode",
   "expectedFiles": ["output.js"],
   "expectedContent": [
     { "file": "output.js", "contains": "export function" }
@@ -117,11 +117,11 @@ npm run eval:smoke:run -- --scenario your-scenario-name
 Smoke tests run automatically on every Pull Request and Push to `main`. Results are posted as a summary in the GitHub Action run.
 
 ### Required Secrets
-- `CODEMARIE_API_KEY`: Required for the default provider in CI.
+- `DIETCODE_API_KEY`: Required for the default provider in CI.
 - `CLINE_API_KEY`: Fallback key used in legacy environments.
 
 ## Troubleshooting
 
 - **CLI Not Found**: Ensure you ran `npm run eval:smoke:build` to link the binary.
-- **Authentication Failures**: Check that your API keys are set in `.env` or passed via `codemarie auth`.
+- **Authentication Failures**: Check that your API keys are set in `.env` or passed via `dietcode auth`.
 - **Timeouts**: Some complex scenarios might require more time. Increase the `timeout` in `config.json`.

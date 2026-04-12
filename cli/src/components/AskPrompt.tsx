@@ -3,7 +3,7 @@
  * Handles different types of user interactions (text input, confirmations, choices)
  */
 
-import type { CodemarieAsk, CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeAsk, DietCodeMessage } from "@shared/ExtensionMessage"
 import { Box, Text, useApp, useInput } from "ink"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useStdinContext } from "../context/StdinContext"
@@ -18,7 +18,7 @@ interface AskPromptProps {
 
 type PromptType = "confirmation" | "text" | "options" | "plan_mode_text" | "completion" | "exit_confirmation" | "none"
 
-function getPromptType(ask: CodemarieAsk, text: string): PromptType {
+function getPromptType(ask: DietCodeAsk, text: string): PromptType {
 	switch (ask) {
 		case "followup": {
 			const parts = jsonParseSafe(text, {
@@ -118,7 +118,7 @@ export const AskPrompt: React.FC<AskPromptProps> = ({ onRespond }) => {
 				return
 			}
 
-			const ask = lastAskMessage.ask as CodemarieAsk
+			const ask = lastAskMessage.ask as DietCodeAsk
 			const text = lastAskMessage.text || ""
 			const promptType = getPromptType(ask, text)
 
@@ -208,7 +208,7 @@ export const AskPrompt: React.FC<AskPromptProps> = ({ onRespond }) => {
 		return null
 	}
 
-	const ask = lastAskMessage.ask as CodemarieAsk
+	const ask = lastAskMessage.ask as DietCodeAsk
 	const text = lastAskMessage.text || ""
 	const promptType = getPromptType(ask, text)
 	const icon = getCliMessagePrefixIcon(lastAskMessage)
@@ -375,7 +375,7 @@ export const AskPrompt: React.FC<AskPromptProps> = ({ onRespond }) => {
 /**
  * Get emoji icon for message type
  */
-function getCliMessagePrefixIcon(message: CodemarieMessage): string {
+function getCliMessagePrefixIcon(message: DietCodeMessage): string {
 	if (message.type === "ask") {
 		switch (message.ask) {
 			case "followup":

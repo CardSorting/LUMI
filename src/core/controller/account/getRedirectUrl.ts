@@ -1,4 +1,4 @@
-import { EmptyRequest, String } from "@shared/proto/codemarie/common"
+import { EmptyRequest, String } from "@shared/proto/dietcode/common"
 import { HostProvider } from "@/hosts/host-provider"
 import { Controller } from "../index"
 

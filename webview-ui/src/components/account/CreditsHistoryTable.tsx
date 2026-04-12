@@ -1,4 +1,4 @@
-import type { PaymentTransaction, UsageTransaction } from "@shared/CodemarieAccount"
+import type { PaymentTransaction, UsageTransaction } from "@shared/DietCodeAccount"
 import { VSCodeDataGrid, VSCodeDataGridCell, VSCodeDataGridRow } from "@vscode/webview-ui-toolkit/react"
 import { memo, useState } from "react"
 import { formatDollars, formatTimestamp } from "@/utils/format"

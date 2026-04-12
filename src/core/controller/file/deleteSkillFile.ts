@@ -1,4 +1,4 @@
-import { DeleteSkillRequest, SkillsToggles } from "@shared/proto/codemarie/file"
+import { DeleteSkillRequest, SkillsToggles } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import path from "path"
 import { Logger } from "@/shared/services/Logger"

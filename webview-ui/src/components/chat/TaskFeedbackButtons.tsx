@@ -1,4 +1,4 @@
-import { StringRequest } from "@shared/proto/codemarie/common"
+import { StringRequest } from "@shared/proto/dietcode/common"
 import { TaskFeedbackType } from "@shared/WebviewMessage"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import React, { useEffect, useState } from "react"
@@ -100,7 +100,7 @@ const TaskFeedbackButtons: React.FC<TaskFeedbackButtonsProps> = ({ messageTs, is
 					</VSCodeButton>
 				</ButtonWrapper>
 				{/* <VSCodeButtonLink
-					href="https://github.com/codemarie/codemarie/issues/new?template=bug_report.yml"
+					href="https://github.com/dietcode/dietcode/issues/new?template=bug_report.yml"
 					appearance="icon"
 					title="Report a bug"
 					aria-label="Report a bug">

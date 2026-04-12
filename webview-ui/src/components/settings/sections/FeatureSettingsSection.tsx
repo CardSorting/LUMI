@@ -1,4 +1,4 @@
-import { UpdateSettingsRequest } from "@shared/proto/codemarie/state"
+import { UpdateSettingsRequest } from "@shared/proto/dietcode/state"
 import { memo, type ReactNode, useCallback } from "react"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -37,7 +37,7 @@ const agentFeatures: FeatureToggle[] = [
 	{
 		id: "subagents",
 		label: "Subagents",
-		description: "Let Codemarie run focused subagents in parallel to explore the codebase for you.",
+		description: "Let DietCode run focused subagents in parallel to explore the codebase for you.",
 		stateKey: "subagentsEnabled",
 		settingKey: "subagentsEnabled",
 	},
@@ -95,16 +95,16 @@ const editorFeatures: FeatureToggle[] = [
 		settingKey: "enableCheckpointsSetting",
 	},
 	{
-		id: "codemarie-web-tools",
-		label: "Codemarie Web Tools",
+		id: "dietcode-web-tools",
+		label: "DietCode Web Tools",
 		description: "Access web browsing and search capabilities",
-		stateKey: "codemarieWebToolsEnabled",
-		settingKey: "codemarieWebToolsEnabled",
+		stateKey: "dietcodeWebToolsEnabled",
+		settingKey: "dietcodeWebToolsEnabled",
 	},
 	{
 		id: "worktrees",
 		label: "Worktrees",
-		description: "Enables git worktree management for running parallel Codemarie tasks.",
+		description: "Enables git worktree management for running parallel DietCode tasks.",
 		stateKey: "worktreesEnabled",
 		settingKey: "worktreesEnabled",
 	},
@@ -193,7 +193,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		yoloModeToggled,
 		useAutoCondense,
 		subagentsEnabled,
-		codemarieWebToolsEnabled,
+		dietcodeWebToolsEnabled,
 		worktreesEnabled,
 		focusChainSettings,
 		remoteConfigSettings,
@@ -205,7 +205,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 
 	const handleFocusChainIntervalChange = useCallback(
 		(value: number) => {
-			updateSetting("focusChainSettings", { ...focusChainSettings, remindCodemarieInterval: value })
+			updateSetting("focusChainSettings", { ...focusChainSettings, remindDietcodeInterval: value })
 		},
 		[focusChainSettings],
 	)
@@ -220,7 +220,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		focusChainEnabled: focusChainSettings?.enabled,
 		useAutoCondense,
 		subagentsEnabled,
-		codemarieWebToolsEnabled: codemarieWebToolsEnabled?.user,
+		dietcodeWebToolsEnabled: dietcodeWebToolsEnabled?.user,
 		worktreesEnabled: worktreesEnabled?.user,
 		enableParallelToolCalling,
 		backgroundEditEnabled,
@@ -230,7 +230,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 
 	// Visibility lookup for features with feature flags
 	const featureVisibility: Record<string, boolean | undefined> = {
-		codemarieWebToolsEnabled: codemarieWebToolsEnabled?.featureFlag,
+		dietcodeWebToolsEnabled: dietcodeWebToolsEnabled?.featureFlag,
 		worktreesEnabled: worktreesEnabled?.featureFlag,
 	}
 
@@ -283,7 +283,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 											min={1}
 											onChange={handleFocusChainIntervalChange}
 											step={1}
-											value={focusChainSettings?.remindCodemarieInterval || 6}
+											value={focusChainSettings?.remindDietcodeInterval || 6}
 											valueWidth="w-6"
 										/>
 									)}

@@ -36,16 +36,16 @@ export async function checkAnyProviderConfigured(): Promise<boolean> {
 	const stateManager = StateManager.get()
 	const config = stateManager.getApiConfiguration() as Record<string, unknown>
 
-	// Check Codemarie account (stored as "codemarie:codemarieAccountId" in secrets, loaded into config)
-	if (config.codemarieApiKey || config["codemarie:codemarieAccountId"]) return true
+	// Check DietCode account (stored as "dietcode:dietcodeAccountId" in secrets, loaded into config)
+	if (config.dietcodeApiKey || config["dietcode:dietcodeAccountId"]) return true
 
 	// Check OpenAI Codex OAuth (stored in SECRETS_KEYS, loaded into config)
 	if (config["openai-codex-oauth-credentials"]) return true
 
 	// Check all BYO provider API keys (loaded into config from secrets)
 	for (const [provider, keyField] of Object.entries(ProviderToApiKeyMap)) {
-		// Skip codemarie - already checked above with the correct key
-		if (provider === "codemarie") continue
+		// Skip dietcode - already checked above with the correct key
+		if (provider === "dietcode") continue
 
 		const fields = Array.isArray(keyField) ? keyField : [keyField]
 		for (const field of fields) {

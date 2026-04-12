@@ -10,7 +10,7 @@ Storybook is a frontend workshop for building UI components and pages in isolati
 - **Catch UI bugs** through visual testing
 - **Share components** with team members and stakeholders
 
-In CodeMarie's webview, Storybook helps us develop and test React components that make up the chat interface, settings panels, and other UI elements in isolation from the VSCode extension environment.
+In DietCode's webview, Storybook helps us develop and test React components that make up the chat interface, settings panels, and other UI elements in isolation from the VSCode extension environment.
 
 ## Getting Started
 
@@ -103,7 +103,7 @@ import { ExtensionStateContext } from "@/context/ExtensionStateContext"
 
 const createMockState = (overrides = {}) => ({
   // Mock state properties
-  codemarieMessages: [],
+  dietcodeMessages: [],
   taskHistory: [],
   ...overrides
 })
@@ -112,7 +112,7 @@ export const WithMockState: Story = {
   decorators: [
     (Story) => {
       const mockState = createMockState({ 
-        codemarieMessages: mockMessages 
+        dietcodeMessages: mockMessages 
       })
       return (
         <ExtensionStateContext.Provider value={mockState}>

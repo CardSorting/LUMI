@@ -1,11 +1,11 @@
 import { strict as assert } from "node:assert"
 import * as api from "@core/api"
 import { PromptRegistry } from "@core/prompts/system-prompt"
-import { CodemarieToolSet } from "@core/prompts/system-prompt/registry/CodemarieToolSet"
+import { DietCodeToolSet } from "@core/prompts/system-prompt/registry/DietCodeToolSet"
 import type { TaskConfig } from "@core/task/tools/types/TaskConfig"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { AgentConfigLoader } from "../AgentConfigLoader"
 import { SUBAGENT_DEFAULT_ALLOWED_TOOLS, SUBAGENT_SYSTEM_SUFFIX, SubagentBuilder } from "../SubagentBuilder"
 
@@ -40,7 +40,7 @@ describe("SubagentBuilder", () => {
 					? {
 							name: "cached-agent",
 							description: "cached description",
-							tools: [CodemarieDefaultTool.LIST_FILES],
+							tools: [DietCodeDefaultTool.LIST_FILES],
 							modelId: "gpt-5",
 							systemPrompt: "cached system prompt",
 						}
@@ -59,7 +59,7 @@ describe("SubagentBuilder", () => {
 		assert.equal((effectiveApiConfig as Record<string, unknown>).actModeOpenAiModelId, "gpt-5")
 		assert.equal((effectiveApiConfig as Record<string, unknown>).actModeApiModelId, "act-default")
 
-		assert.deepEqual(builder.getAllowedTools(), [CodemarieDefaultTool.LIST_FILES, CodemarieDefaultTool.ATTEMPT])
+		assert.deepEqual(builder.getAllowedTools(), [DietCodeDefaultTool.LIST_FILES, DietCodeDefaultTool.ATTEMPT])
 		const prompt = builder.buildSystemPrompt("generated system prompt")
 		assert.match(prompt, /# AGENT PROFILE/)
 		assert.match(prompt, /Identity: cached-agent/)
@@ -88,7 +88,7 @@ describe("SubagentBuilder", () => {
 					? {
 							name: "openrouter-agent",
 							description: "openrouter plan agent",
-							tools: [CodemarieDefaultTool.FILE_READ],
+							tools: [DietCodeDefaultTool.FILE_READ],
 							modelId: "openrouter/custom-model",
 							systemPrompt: "plan system",
 						}
@@ -116,7 +116,7 @@ describe("SubagentBuilder", () => {
 					? {
 							name: "tools-agent",
 							description: "tool-limited",
-							tools: [CodemarieDefaultTool.LIST_FILES],
+							tools: [DietCodeDefaultTool.LIST_FILES],
 							modelId: "sonnet",
 							systemPrompt: "tool prompt",
 						}
@@ -125,28 +125,28 @@ describe("SubagentBuilder", () => {
 		sinon.stub(api, "buildApiHandler").returns({ getModel: sinon.stub(), createMessage: sinon.stub() } as never)
 
 		const getModelFamilyStub = sinon.stub(PromptRegistry.getInstance(), "getModelFamily").returns("test-family" as never)
-		const getToolsStub = sinon.stub(CodemarieToolSet, "getToolsForVariantWithFallback").returns([
+		const getToolsStub = sinon.stub(DietCodeToolSet, "getToolsForVariantWithFallback").returns([
 			{
 				config: {
-					id: CodemarieDefaultTool.LIST_FILES,
+					id: DietCodeDefaultTool.LIST_FILES,
 					contextRequirements: () => true,
 				},
 			},
 			{
 				config: {
-					id: CodemarieDefaultTool.SEARCH,
+					id: DietCodeDefaultTool.SEARCH,
 					contextRequirements: () => true,
 				},
 			},
 			{
 				config: {
-					id: CodemarieDefaultTool.ATTEMPT,
+					id: DietCodeDefaultTool.ATTEMPT,
 					contextRequirements: () => false,
 				},
 			},
 		] as never)
 		const converter = sinon.stub().callsFake((tool: { id: string }) => ({ converted: tool.id }))
-		const getConverterStub = sinon.stub(CodemarieToolSet, "getNativeConverter").returns(converter as never)
+		const getConverterStub = sinon.stub(DietCodeToolSet, "getNativeConverter").returns(converter as never)
 
 		const builder = new SubagentBuilder(createTaskConfig("act", "anthropic"), "tools-agent")
 
@@ -161,6 +161,6 @@ describe("SubagentBuilder", () => {
 		assert.equal(getModelFamilyStub.callCount, 1)
 		assert.equal(getToolsStub.callCount, 1)
 		assert.equal(getConverterStub.callCount, 1)
-		assert.deepEqual(result, [{ converted: CodemarieDefaultTool.LIST_FILES }])
+		assert.deepEqual(result, [{ converted: DietCodeDefaultTool.LIST_FILES }])
 	})
 })

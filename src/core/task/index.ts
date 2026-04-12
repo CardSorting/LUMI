@@ -12,10 +12,10 @@ import { FileContextTracker } from "@core/context/context-tracking/FileContextTr
 import { ModelContextTracker } from "@core/context/context-tracking/ModelContextTracker"
 import { EnvironmentTracker } from "@core/context/EnvironmentTracker"
 import {
-	getGlobalCodemarieRules,
-	getLocalCodemarieRules,
-	refreshCodemarieRulesToggles,
-} from "@core/context/instructions/user-instructions/codemarie-rules"
+	getGlobalDietCodeRules,
+	getLocalDietCodeRules,
+	refreshDietCodeRulesToggles,
+} from "@core/context/instructions/user-instructions/dietcode-rules"
 import {
 	getLocalAgentsRules,
 	getLocalCursorRules,
@@ -25,7 +25,7 @@ import {
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { executePreCompactHookWithCleanup, HookCancellationError, HookExecution } from "@core/hooks/precompact-executor"
-import { CodemarieIgnoreController } from "@core/ignore/CodemarieIgnoreController"
+import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import { parseMentions } from "@core/mentions"
 import { CommandPermissionController } from "@core/permissions"
 import { summarizeTask } from "@core/prompts/contextManagement"
@@ -36,7 +36,7 @@ import {
 	ensureTaskDirectoryExists,
 	GlobalFileNames,
 	getSavedApiConversationHistory,
-	getSavedCodemarieMessages,
+	getSavedDietCodeMessages,
 } from "@core/storage/disk"
 import { releaseTaskLock } from "@core/task/TaskLockUtils"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
@@ -59,18 +59,18 @@ import { findLast, findLastIndex } from "@shared/array"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import {
-	CodemarieApiReqCancelReason,
-	CodemarieApiReqInfo,
-	CodemarieAsk,
-	CodemarieMessage,
-	CodemarieSay,
+	DietCodeApiReqCancelReason,
+	DietCodeApiReqInfo,
+	DietCodeAsk,
+	DietCodeMessage,
+	DietCodeSay,
 } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay } from "@shared/Languages"
 import { USER_CONTENT_TAGS } from "@shared/messages/constants"
-import { convertCodemarieMessageToProto } from "@shared/proto-conversions/codemarie-message"
-import { CodemarieDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
-import { CodemarieAskResponse } from "@shared/WebviewMessage"
+import { convertDietCodeMessageToProto } from "@shared/proto-conversions/dietcode-message"
+import { DietCodeDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
+import { DietCodeAskResponse } from "@shared/WebviewMessage"
 import {
 	isClaude4PlusModelFamily,
 	isGPT5ModelFamily,
@@ -97,26 +97,26 @@ import {
 	FullCommandExecutorConfig,
 	StandaloneTerminalManager,
 } from "@/integrations/terminal"
-import { CodemarieError, CodemarieErrorType, ErrorService } from "@/services/error"
+import { DietCodeError, DietCodeErrorType, ErrorService } from "@/services/error"
 import { telemetryService } from "@/services/telemetry"
-import { CodemarieClient } from "@/shared/codemarie"
+import { DietCodeClient } from "@/shared/dietcode"
 import {
-	CodemarieAssistantContent,
-	CodemarieContent,
-	CodemarieImageContentBlock,
-	CodemarieMessageModelInfo,
-	CodemarieReasoningDetailParam,
-	CodemarieStorageMessage,
-	CodemarieTextContentBlock,
-	CodemarieToolResponseContent,
-	CodemarieUserContent,
+	DietCodeAssistantContent,
+	DietCodeContent,
+	DietCodeImageContentBlock,
+	DietCodeMessageModelInfo,
+	DietCodeReasoningDetailParam,
+	DietCodeStorageMessage,
+	DietCodeTextContentBlock,
+	DietCodeToolResponseContent,
+	DietCodeUserContent,
 } from "@/shared/messages"
-import { ApiFormat } from "@/shared/proto/codemarie/models"
+import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { ShowMessageType } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
 import { Session } from "@/shared/services/Session"
 import { RuleContextBuilder } from "../context/instructions/user-instructions/RuleContextBuilder"
-import { ensureLocalCodemarieDirExists } from "../context/instructions/user-instructions/rule-helpers"
+import { ensureLocalDietCodeDirExists } from "../context/instructions/user-instructions/rule-helpers"
 import { discoverSkills, getAvailableSkills } from "../context/instructions/user-instructions/skills"
 import { refreshWorkflowToggles } from "../context/instructions/user-instructions/workflows"
 import { EmbeddingHandler, KnowledgeGraphService } from "../context/KnowledgeGraphService"
@@ -131,7 +131,7 @@ import { ToolExecutor } from "./ToolExecutor"
 import { detectAvailableCliTools, extractProviderDomainFromUrl, updateApiReqMsg } from "./utils"
 import { buildUserFeedbackContent } from "./utils/buildUserFeedbackContent"
 
-export type ToolResponse = CodemarieToolResponseContent
+export type ToolResponse = DietCodeToolResponseContent
 
 type TaskParams = {
 	controller: Controller
@@ -224,7 +224,7 @@ export class Task {
 	private diffViewProvider: DiffViewProvider
 	public checkpointManager?: ICheckpointManager
 	private initialCheckpointCommitPromise?: Promise<string | undefined>
-	private codemarieIgnoreController: CodemarieIgnoreController
+	private dietcodeIgnoreController: DietCodeIgnoreController
 	private commandPermissionController: CommandPermissionController
 	private toolExecutor: ToolExecutor
 	/**
@@ -305,7 +305,7 @@ export class Task {
 		this.postStateToWebview = postStateToWebview
 		this.reinitExistingTaskFromId = reinitExistingTaskFromId
 		this.cancelTask = cancelTask
-		this.codemarieIgnoreController = new CodemarieIgnoreController(cwd)
+		this.dietcodeIgnoreController = new DietCodeIgnoreController(cwd)
 		this.commandPermissionController = new CommandPermissionController()
 		this.taskLockAcquired = taskLockAcquired
 		// Determine terminal execution mode and create appropriate terminal manager
@@ -450,12 +450,12 @@ export class Task {
 			...apiConfiguration,
 			ulid: this.ulid,
 			onRetryAttempt: async (attempt: number, maxRetries: number, delay: number, error: Error | unknown) => {
-				const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-				const lastApiReqStartedIndex = findLastIndex(codemarieMessages, (m) => m.say === "api_req_started")
+				const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+				const lastApiReqStartedIndex = findLastIndex(dietcodeMessages, (m) => m.say === "api_req_started")
 				if (lastApiReqStartedIndex !== -1) {
 					try {
-						const currentApiReqInfo: CodemarieApiReqInfo = JSON.parse(
-							codemarieMessages[lastApiReqStartedIndex].text || "{}",
+						const currentApiReqInfo: DietCodeApiReqInfo = JSON.parse(
+							dietcodeMessages[lastApiReqStartedIndex].text || "{}",
 						)
 						currentApiReqInfo.retryStatus = {
 							attempt: attempt, // attempt is already 1-indexed from retry.ts
@@ -466,7 +466,7 @@ export class Task {
 						// Clear previous cancelReason and streamingFailedMessage if we are retrying
 						delete currentApiReqInfo.cancelReason
 						delete currentApiReqInfo.streamingFailedMessage
-						await this.messageStateHandler.updateCodemarieMessage(lastApiReqStartedIndex, {
+						await this.messageStateHandler.updateDietCodeMessage(lastApiReqStartedIndex, {
 							text: JSON.stringify(currentApiReqInfo),
 						})
 
@@ -528,7 +528,7 @@ export class Task {
 		const commandExecutorCallbacks: CommandExecutorCallbacks = {
 			say: this.say.bind(this) as CommandExecutorCallbacks["say"],
 			ask: async (type: string, text?: string, partial?: boolean) => {
-				const result = await this.ask(type as CodemarieAsk, text, partial)
+				const result = await this.ask(type as DietCodeAsk, text, partial)
 				return {
 					response: result.response,
 					text: result.text,
@@ -538,14 +538,14 @@ export class Task {
 			},
 			updateBackgroundCommandState: (isRunning: boolean) =>
 				this.controller.updateBackgroundCommandState(isRunning, this.taskId),
-			updateCodemarieMessage: async (index: number, updates: { commandCompleted?: boolean; text?: string }) => {
-				await this.messageStateHandler.updateCodemarieMessage(index, updates)
+			updateDietCodeMessage: async (index: number, updates: { commandCompleted?: boolean; text?: string }) => {
+				await this.messageStateHandler.updateDietCodeMessage(index, updates)
 			},
-			getCodemarieMessages: () =>
-				this.messageStateHandler.getCodemarieMessages() as Array<{ ask?: string; say?: string; text?: string }>,
+			getDietCodeMessages: () =>
+				this.messageStateHandler.getDietCodeMessages() as Array<{ ask?: string; say?: string; text?: string }>,
 			addToUserMessageContent: (content: { type: string; text: string }) => {
-				// Cast to CodemarieTextContentBlock which is compatible with CodemarieContent
-				this.taskState.userMessageContent.push({ type: "text", text: content.text } as CodemarieTextContentBlock)
+				// Cast to DietCodeTextContentBlock which is compatible with DietCodeContent
+				this.taskState.userMessageContent.push({ type: "text", text: content.text } as DietCodeTextContentBlock)
 			},
 		}
 
@@ -560,7 +560,7 @@ export class Task {
 			this.diffViewProvider,
 			this.mcpHub,
 			this.fileContextTracker,
-			this.codemarieIgnoreController,
+			this.dietcodeIgnoreController,
 			this.commandPermissionController,
 			this.contextManager,
 			this.stateManager,
@@ -594,11 +594,11 @@ export class Task {
 
 	// partial has three valid states true (partial message), false (completion of partial message), undefined (individual complete message)
 	async ask(
-		type: CodemarieAsk,
+		type: DietCodeAsk,
 		text?: string,
 		partial?: boolean,
 	): Promise<{
-		response: CodemarieAskResponse
+		response: DietCodeAskResponse
 		text?: string
 		images?: string[]
 		files?: string[]
@@ -606,27 +606,27 @@ export class Task {
 	}> {
 		// Allow resume asks even when aborted to enable resume button after cancellation
 		if (this.taskState.abort && type !== "resume_task" && type !== "resume_completed_task") {
-			throw new Error("Codemarie instance aborted")
+			throw new Error("DietCode instance aborted")
 		}
 
 		let askTs: number
 		if (partial !== undefined) {
-			const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-			const lastMessage = codemarieMessages.at(-1)
-			const lastMessageIndex = codemarieMessages.length - 1
+			const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+			const lastMessage = dietcodeMessages.at(-1)
+			const lastMessageIndex = dietcodeMessages.length - 1
 
 			const isUpdatingPreviousPartial = lastMessage?.partial && lastMessage.type === "ask" && lastMessage.ask === type
 			if (partial) {
 				if (isUpdatingPreviousPartial) {
 					// existing partial message, so update it
-					await this.messageStateHandler.updateCodemarieMessage(lastMessageIndex, {
+					await this.messageStateHandler.updateDietCodeMessage(lastMessageIndex, {
 						text,
 						partial,
 					})
 					// Optimization: Send partial updates to webview to maintain UI responsiveness.
-					// await this.saveCodemarieMessagesAndUpdateHistory()
+					// await this.saveDietCodeMessagesAndUpdateHistory()
 					// await this.postStateToWebview()
-					const protoMessage = convertCodemarieMessageToProto(lastMessage)
+					const protoMessage = convertDietCodeMessageToProto(lastMessage)
 					await sendPartialMessageEvent(protoMessage)
 					throw new Error("Current ask promise was ignored 1")
 				}
@@ -636,7 +636,7 @@ export class Task {
 				// this.askResponseImages = undefined
 				askTs = Date.now()
 				this.taskState.lastMessageTs = askTs
-				await this.messageStateHandler.addToCodemarieMessages({
+				await this.messageStateHandler.addToDietCodeMessages({
 					ts: askTs,
 					type: "ask",
 					ask: type,
@@ -663,12 +663,12 @@ export class Task {
 				askTs = lastMessage.ts
 				this.taskState.lastMessageTs = askTs
 				// lastMessage.ts = askTs
-				await this.messageStateHandler.updateCodemarieMessage(lastMessageIndex, {
+				await this.messageStateHandler.updateDietCodeMessage(lastMessageIndex, {
 					text,
 					partial: false,
 				})
 				// await this.postStateToWebview()
-				const protoMessage = convertCodemarieMessageToProto(lastMessage)
+				const protoMessage = convertDietCodeMessageToProto(lastMessage)
 				await sendPartialMessageEvent(protoMessage)
 			} else {
 				// this is a new partial=false message, so add it like normal
@@ -678,7 +678,7 @@ export class Task {
 				this.taskState.askResponseFiles = undefined
 				askTs = Date.now()
 				this.taskState.lastMessageTs = askTs
-				await this.messageStateHandler.addToCodemarieMessages({
+				await this.messageStateHandler.addToDietCodeMessages({
 					ts: askTs,
 					type: "ask",
 					ask: type,
@@ -688,14 +688,14 @@ export class Task {
 			}
 		} else {
 			// this is a new non-partial message, so add it like normal
-			// const lastMessage = this.codemarieMessages.at(-1)
+			// const lastMessage = this.dietcodeMessages.at(-1)
 			this.taskState.askResponse = undefined
 			this.taskState.askResponseText = undefined
 			this.taskState.askResponseImages = undefined
 			this.taskState.askResponseFiles = undefined
 			askTs = Date.now()
 			this.taskState.lastMessageTs = askTs
-			await this.messageStateHandler.addToCodemarieMessages({
+			await this.messageStateHandler.addToDietCodeMessages({
 				ts: askTs,
 				type: "ask",
 				ask: type,
@@ -727,7 +727,7 @@ export class Task {
 		return result
 	}
 
-	async handleWebviewAskResponse(askResponse: CodemarieAskResponse, text?: string, images?: string[], files?: string[]) {
+	async handleWebviewAskResponse(askResponse: DietCodeAskResponse, text?: string, images?: string[], files?: string[]) {
 		this.taskState.askResponse = askResponse
 		this.taskState.askResponseText = text
 		this.taskState.askResponseImages = images
@@ -735,7 +735,7 @@ export class Task {
 	}
 
 	async say(
-		type: CodemarieSay,
+		type: DietCodeSay,
 		text?: string,
 		images?: string[],
 		files?: string[],
@@ -743,38 +743,38 @@ export class Task {
 	): Promise<number | undefined> {
 		// Allow hook messages even when aborted to enable proper cleanup
 		if (this.taskState.abort && type !== "hook_status" && type !== "hook_output_stream") {
-			throw new Error("Codemarie instance aborted")
+			throw new Error("DietCode instance aborted")
 		}
 
 		const providerInfo = this.getCurrentProviderInfo()
-		const modelInfo: CodemarieMessageModelInfo = {
+		const modelInfo: DietCodeMessageModelInfo = {
 			providerId: providerInfo.providerId,
 			modelId: providerInfo.model.id,
 			mode: providerInfo.mode,
 		}
 
 		if (partial !== undefined) {
-			const lastMessage = this.messageStateHandler.getCodemarieMessages().at(-1)
+			const lastMessage = this.messageStateHandler.getDietCodeMessages().at(-1)
 			const isUpdatingPreviousPartial = lastMessage?.partial && lastMessage.type === "say" && lastMessage.say === type
 			if (partial) {
 				if (isUpdatingPreviousPartial) {
 					// existing partial message, so update it
-					const lastIndex = this.messageStateHandler.getCodemarieMessages().length - 1
-					await this.messageStateHandler.updateCodemarieMessage(lastIndex, {
+					const lastIndex = this.messageStateHandler.getDietCodeMessages().length - 1
+					await this.messageStateHandler.updateDietCodeMessage(lastIndex, {
 						text,
 						images,
 						files,
 						partial,
 					})
 
-					const protoMessage = convertCodemarieMessageToProto(lastMessage)
+					const protoMessage = convertDietCodeMessageToProto(lastMessage)
 					await sendPartialMessageEvent(protoMessage)
 					return undefined
 				}
 				// this is a new partial message, so add it with partial state
 				const sayTs = Date.now()
 				this.taskState.lastMessageTs = sayTs
-				await this.messageStateHandler.addToCodemarieMessages({
+				await this.messageStateHandler.addToDietCodeMessages({
 					ts: sayTs,
 					type: "say",
 					say: type,
@@ -791,9 +791,9 @@ export class Task {
 			if (isUpdatingPreviousPartial) {
 				// this is the complete version of a previously partial message, so replace the partial with the complete version
 				this.taskState.lastMessageTs = lastMessage.ts
-				const lastIndex = this.messageStateHandler.getCodemarieMessages().length - 1
-				// updateCodemarieMessage emits the change event and saves to disk
-				await this.messageStateHandler.updateCodemarieMessage(lastIndex, {
+				const lastIndex = this.messageStateHandler.getDietCodeMessages().length - 1
+				// updateDietCodeMessage emits the change event and saves to disk
+				await this.messageStateHandler.updateDietCodeMessage(lastIndex, {
 					text,
 					images,
 					files,
@@ -801,14 +801,14 @@ export class Task {
 				})
 
 				// await this.postStateToWebview()
-				const protoMessage = convertCodemarieMessageToProto(lastMessage)
+				const protoMessage = convertDietCodeMessageToProto(lastMessage)
 				await sendPartialMessageEvent(protoMessage) // more performant than an entire postStateToWebview
 				return undefined
 			}
 			// this is a new partial=false message, so add it like normal
 			const sayTs = Date.now()
 			this.taskState.lastMessageTs = sayTs
-			await this.messageStateHandler.addToCodemarieMessages({
+			await this.messageStateHandler.addToDietCodeMessages({
 				ts: sayTs,
 				type: "say",
 				say: type,
@@ -823,7 +823,7 @@ export class Task {
 		// this is a new non-partial message, so add it like normal
 		const sayTs = Date.now()
 		this.taskState.lastMessageTs = sayTs
-		await this.messageStateHandler.addToCodemarieMessages({
+		await this.messageStateHandler.addToDietCodeMessages({
 			ts: sayTs,
 			type: "say",
 			say: type,
@@ -836,22 +836,22 @@ export class Task {
 		return sayTs
 	}
 
-	async sayAndCreateMissingParamError(toolName: CodemarieDefaultTool, paramName: string, relPath?: string) {
+	async sayAndCreateMissingParamError(toolName: DietCodeDefaultTool, paramName: string, relPath?: string) {
 		await this.say(
 			"error",
-			`Codemarie tried to use ${toolName}${
+			`DietCode tried to use ${toolName}${
 				relPath ? ` for '${relPath.toPosix()}'` : ""
 			} without value for required parameter '${paramName}'. Retrying...`,
 		)
 		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName))
 	}
 
-	async removeLastPartialMessageIfExistsWithType(type: "ask" | "say", askOrSay: CodemarieAsk | CodemarieSay) {
-		const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-		const lastMessage = codemarieMessages.at(-1)
+	async removeLastPartialMessageIfExistsWithType(type: "ask" | "say", askOrSay: DietCodeAsk | DietCodeSay) {
+		const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+		const lastMessage = dietcodeMessages.at(-1)
 		if (lastMessage?.partial && lastMessage.type === type && (lastMessage.ask === askOrSay || lastMessage.say === askOrSay)) {
-			this.messageStateHandler.setCodemarieMessages(codemarieMessages.slice(0, -1))
-			await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+			this.messageStateHandler.setDietCodeMessages(dietcodeMessages.slice(0, -1))
+			await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 		}
 	}
 
@@ -888,7 +888,7 @@ export class Task {
 		this.taskState.didFinishAbortingStream = true
 
 		// Save conversation state to disk
-		await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+		await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 		await this.messageStateHandler.overwriteApiConversationHistory(this.messageStateHandler.getApiConversationHistory())
 
 		// Update UI
@@ -903,7 +903,7 @@ export class Task {
 	 * @param apiConversationHistory The full API conversation history
 	 * @returns Tuple with start and end indices for the deleted range
 	 */
-	private calculatePreCompactDeletedRange(apiConversationHistory: CodemarieStorageMessage[]): [number, number] {
+	private calculatePreCompactDeletedRange(apiConversationHistory: DietCodeStorageMessage[]): [number, number] {
 		const newDeletedRange = this.contextManager.getNextTruncationRange(
 			apiConversationHistory,
 			this.taskState.conversationHistoryDeletedRange,
@@ -914,7 +914,7 @@ export class Task {
 	}
 
 	private async runUserPromptSubmitHook(
-		userContent: CodemarieContent[],
+		userContent: DietCodeContent[],
 		_context: "initial_task" | "resume" | "feedback",
 	): Promise<{ cancel?: boolean; wasCancelled?: boolean; contextModification?: string; errorMessage?: string }> {
 		const hooksEnabled = getHooksEnabledSafe()
@@ -950,7 +950,7 @@ export class Task {
 			// Set flag to allow Controller.cancelTask() to proceed
 			this.taskState.didFinishAbortingStream = true
 			// Save BOTH files so Controller.cancelTask() can find the task
-			await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+			await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 			await this.messageStateHandler.overwriteApiConversationHistory(this.messageStateHandler.getApiConversationHistory())
 			await this.postStateToWebview()
 		}
@@ -966,14 +966,14 @@ export class Task {
 
 	public async startTask(task?: string, images?: string[], files?: string[]): Promise<void> {
 		try {
-			await this.codemarieIgnoreController.initialize()
+			await this.dietcodeIgnoreController.initialize()
 		} catch (error) {
-			Logger.error("Failed to initialize CodemarieIgnoreController:", error)
+			Logger.error("Failed to initialize DietCodeIgnoreController:", error)
 			// Optionally, inform the user or handle the error appropriately
 		}
-		// conversationHistory (for API) and codemarieMessages (for webview) need to be in sync
-		// if the extension process were killed, then on restart the codemarieMessages might not be empty, so we need to set it to [] when we create a new Codemarie client (otherwise webview would show stale messages from previous session)
-		this.messageStateHandler.setCodemarieMessages([])
+		// conversationHistory (for API) and dietcodeMessages (for webview) need to be in sync
+		// if the extension process were killed, then on restart the dietcodeMessages might not be empty, so we need to set it to [] when we create a new DietCode client (otherwise webview would show stale messages from previous session)
+		this.messageStateHandler.setDietCodeMessages([])
 		this.messageStateHandler.setApiConversationHistory([])
 
 		await this.postStateToWebview()
@@ -985,9 +985,9 @@ export class Task {
 
 		this.taskState.isInitialized = true
 
-		const imageBlocks: CodemarieImageContentBlock[] = formatResponse.imageBlocks(images)
+		const imageBlocks: DietCodeImageContentBlock[] = formatResponse.imageBlocks(images)
 
-		const userContent: CodemarieUserContent[] = [
+		const userContent: DietCodeUserContent[] = [
 			{
 				type: "text",
 				text: `<task>\n${task}\n</task>`,
@@ -1091,41 +1091,41 @@ export class Task {
 
 	public async resumeTaskFromHistory() {
 		try {
-			await this.codemarieIgnoreController.initialize()
+			await this.dietcodeIgnoreController.initialize()
 		} catch (error) {
-			Logger.error("Failed to initialize CodemarieIgnoreController:", error)
+			Logger.error("Failed to initialize DietCodeIgnoreController:", error)
 			// Optionally, inform the user or handle the error appropriately
 		}
 
-		const savedCodemarieMessages = await getSavedCodemarieMessages(this.taskId)
+		const savedDietCodeMessages = await getSavedDietCodeMessages(this.taskId)
 
 		// Remove any resume messages that may have been added before
 
 		const lastRelevantMessageIndex = findLastIndex(
-			savedCodemarieMessages,
+			savedDietCodeMessages,
 			(m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"),
 		)
 		if (lastRelevantMessageIndex !== -1) {
-			savedCodemarieMessages.splice(lastRelevantMessageIndex + 1)
+			savedDietCodeMessages.splice(lastRelevantMessageIndex + 1)
 		}
 
 		// since we don't use api_req_finished anymore, we need to check if the last api_req_started has a cost value, if it doesn't and no cancellation reason to present, then we remove it since it indicates an api request without any partial content streamed
 		const lastApiReqStartedIndex = findLastIndex(
-			savedCodemarieMessages,
+			savedDietCodeMessages,
 			(m) => m.type === "say" && m.say === "api_req_started",
 		)
 		if (lastApiReqStartedIndex !== -1) {
-			const lastApiReqStarted = savedCodemarieMessages[lastApiReqStartedIndex]
-			const { cost, cancelReason }: CodemarieApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
+			const lastApiReqStarted = savedDietCodeMessages[lastApiReqStartedIndex]
+			const { cost, cancelReason }: DietCodeApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
 			if (cost === undefined && cancelReason === undefined) {
-				savedCodemarieMessages.splice(lastApiReqStartedIndex, 1)
+				savedDietCodeMessages.splice(lastApiReqStartedIndex, 1)
 			}
 		}
 
-		await this.messageStateHandler.overwriteCodemarieMessages(savedCodemarieMessages)
-		this.messageStateHandler.setCodemarieMessages(await getSavedCodemarieMessages(this.taskId))
+		await this.messageStateHandler.overwriteDietCodeMessages(savedDietCodeMessages)
+		this.messageStateHandler.setDietCodeMessages(await getSavedDietCodeMessages(this.taskId))
 
-		// Now present the codemarie messages to the user and ask if they want to resume (NOTE: we ran into a bug before where the apiconversationhistory wouldn't be initialized when opening a old task, and it was because we were waiting for resume)
+		// Now present the dietcode messages to the user and ask if they want to resume (NOTE: we ran into a bug before where the apiconversationhistory wouldn't be initialized when opening a old task, and it was because we were waiting for resume)
 		// This is important in case the user deletes messages without resuming the task first
 		const savedApiConversationHistory = await getSavedApiConversationHistory(this.taskId)
 
@@ -1135,14 +1135,14 @@ export class Task {
 		await ensureTaskDirectoryExists(this.taskId)
 		await this.contextManager.initializeContextHistory(await ensureTaskDirectoryExists(this.taskId))
 
-		const lastCodemarieMessage = this.messageStateHandler
-			.getCodemarieMessages()
+		const lastDietCodeMessage = this.messageStateHandler
+			.getDietCodeMessages()
 			.slice()
 			.reverse()
 			.find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")) // could be multiple resume tasks
 
-		let askType: CodemarieAsk
-		if (lastCodemarieMessage?.ask === "completion_result") {
+		let askType: DietCodeAsk
+		if (lastDietCodeMessage?.ask === "completion_result") {
 			askType = "resume_completed_task"
 		} else {
 			askType = "resume_task"
@@ -1156,12 +1156,12 @@ export class Task {
 		const { response, text, images, files } = await this.ask(askType) // calls poststatetowebview
 
 		// Initialize newUserContent array for hook context
-		const newUserContent: CodemarieContent[] = []
+		const newUserContent: DietCodeContent[] = []
 
 		// Run TaskResume hook AFTER user clicks resume button
 		const hooksEnabled = getHooksEnabledSafe()
 		if (hooksEnabled) {
-			const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
+			const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
 			const taskResumeResult = await executeHook({
 				hookName: "TaskResume",
 				hookInput: {
@@ -1171,8 +1171,8 @@ export class Task {
 							ulid: this.ulid,
 						},
 						previousState: {
-							lastMessageTs: lastCodemarieMessage?.ts?.toString() || "",
-							messageCount: codemarieMessages.length.toString(),
+							lastMessageTs: lastDietCodeMessage?.ts?.toString() || "",
+							messageCount: dietcodeMessages.length.toString(),
 							conversationHistoryDeleted: (this.taskState.conversationHistoryDeletedRange !== undefined).toString(),
 						},
 					},
@@ -1222,22 +1222,22 @@ export class Task {
 			responseFiles = files
 		}
 
-		// need to make sure that the api conversation history can be resumed by the api, even if it goes out of sync with codemarie messages
+		// need to make sure that the api conversation history can be resumed by the api, even if it goes out of sync with dietcode messages
 
 		// Use the already-loaded API conversation history from memory instead of reloading from disk
 		// This prevents issues where the file might be empty or stale after hook execution
 		const existingApiConversationHistory = this.messageStateHandler.getApiConversationHistory()
 
 		// Remove the last user message so we can update it with the resume message
-		let modifiedOldUserContent: CodemarieContent[] // either the last message if its user message, or the user message before the last (assistant) message
-		let modifiedApiConversationHistory: CodemarieStorageMessage[] // need to remove the last user message to replace with new modified user message
+		let modifiedOldUserContent: DietCodeContent[] // either the last message if its user message, or the user message before the last (assistant) message
+		let modifiedApiConversationHistory: DietCodeStorageMessage[] // need to remove the last user message to replace with new modified user message
 		if (existingApiConversationHistory.length > 0) {
 			const lastMessage = existingApiConversationHistory[existingApiConversationHistory.length - 1]
 			if (lastMessage.role === "assistant") {
 				modifiedApiConversationHistory = [...existingApiConversationHistory]
 				modifiedOldUserContent = []
 			} else if (lastMessage.role === "user") {
-				const existingUserContent: CodemarieContent[] = Array.isArray(lastMessage.content)
+				const existingUserContent: DietCodeContent[] = Array.isArray(lastMessage.content)
 					? lastMessage.content
 					: [{ type: "text", text: lastMessage.content }]
 				modifiedApiConversationHistory = existingApiConversationHistory.slice(0, -1)
@@ -1256,7 +1256,7 @@ export class Task {
 		newUserContent.push(...modifiedOldUserContent)
 
 		const agoText = (() => {
-			const timestamp = lastCodemarieMessage?.ts ?? Date.now()
+			const timestamp = lastDietCodeMessage?.ts ?? Date.now()
 			const now = Date.now()
 			const diff = now - timestamp
 			const minutes = Math.floor(diff / 60000)
@@ -1275,7 +1275,7 @@ export class Task {
 			return "just now"
 		})()
 
-		const wasRecent = lastCodemarieMessage?.ts && Date.now() - lastCodemarieMessage.ts < 30_000
+		const wasRecent = lastDietCodeMessage?.ts && Date.now() - lastDietCodeMessage.ts < 30_000
 
 		// Check if there are pending file context warnings before calling taskResumption
 		const pendingContextWarning = await this.fileContextTracker.retrieveAndClearPendingFileContextWarning()
@@ -1365,7 +1365,7 @@ export class Task {
 		await this.initiateTaskLoop(newUserContent)
 	}
 
-	private async initiateTaskLoop(userContent: CodemarieContent[]): Promise<void> {
+	private async initiateTaskLoop(userContent: DietCodeContent[]): Promise<void> {
 		let nextUserContent = userContent
 		let includeFileDetails = true
 
@@ -1374,10 +1374,10 @@ export class Task {
 			this.taskState.currentTurnTotalReadCount = 0 // Reset total read counter for the new turn
 			this.taskState.currentTurnUniqueReadCount = 0 // Reset unique read counter for the new turn
 			this.taskState.currentTurnExplorationCount = 0 // Reset exploration counter for the new turn
-			const didEndLoop = await this.recursivelyMakeCodemarieRequests(nextUserContent, includeFileDetails)
+			const didEndLoop = await this.recursivelyMakeDietCodeRequests(nextUserContent, includeFileDetails)
 			includeFileDetails = false // we only need file details the first time
 
-			//  The way this agentic loop works is that codemarie will be given a task that he then calls tools to complete. unless there's an attempt_completion call, we keep responding back to him with his tool's responses until he either attempt_completion or does not use anymore tools. If he does not use anymore tools, we ask him to consider if he's completed the task and then call attempt_completion, otherwise proceed with completing the task.
+			//  The way this agentic loop works is that dietcode will be given a task that he then calls tools to complete. unless there's an attempt_completion call, we keep responding back to him with his tool's responses until he either attempt_completion or does not use anymore tools. If he does not use anymore tools, we ask him to consider if he's completed the task and then call attempt_completion, otherwise proceed with completing the task.
 
 			//const totalCost = this.calculateApiCost(totalInputTokens, totalOutputTokens)
 			if (didEndLoop) {
@@ -1387,7 +1387,7 @@ export class Task {
 			}
 			// this.say(
 			// 	"tool",
-			// 	"Codemarie responded with only text blocks but has not called attempt_completion yet. Forcing him to continue with task..."
+			// 	"DietCode responded with only text blocks but has not called attempt_completion yet. Forcing him to continue with task..."
 			// )
 			nextUserContent = [
 				{
@@ -1428,8 +1428,8 @@ export class Task {
 		}
 
 		// Check if we're at a button-only state (no active work, just waiting for user action)
-		const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-		const lastMessage = codemarieMessages.at(-1)
+		const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+		const lastMessage = dietcodeMessages.at(-1)
 		const isAtButtonOnlyState =
 			lastMessage?.type === "ask" &&
 			(lastMessage.ask === "resume_task" ||
@@ -1512,14 +1512,14 @@ export class Task {
 
 					// TaskCancel completed successfully
 					// Present resume button after successful TaskCancel hook
-					const lastCodemarieMessage = this.messageStateHandler
-						.getCodemarieMessages()
+					const lastDietCodeMessage = this.messageStateHandler
+						.getDietCodeMessages()
 						.slice()
 						.reverse()
 						.find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"))
 
-					let askType: CodemarieAsk
-					if (lastCodemarieMessage?.ask === "completion_result") {
+					let askType: DietCodeAsk
+					if (lastDietCodeMessage?.ask === "completion_result") {
 						askType = "resume_completed_task"
 					} else {
 						askType = "resume_task"
@@ -1540,7 +1540,7 @@ export class Task {
 
 			// PHASE 5: Immediately update UI to reflect abort state
 			try {
-				await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+				await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 				await this.postStateToWebview()
 			} catch (error) {
 				Logger.error("Failed to post state after setting abort flag", error)
@@ -1563,7 +1563,7 @@ export class Task {
 			await this.terminalManager.disposeAll()
 			this.urlContentFetcher.closeBrowser()
 			await this.browserSession.dispose()
-			this.codemarieIgnoreController.dispose()
+			this.dietcodeIgnoreController.dispose()
 			this.fileContextTracker.dispose()
 			// need to await for when we want to make sure directories/files are reverted before
 			// re-starting the task from a checkpoint
@@ -1599,7 +1599,7 @@ export class Task {
 		command: string,
 		timeoutSeconds: number | undefined,
 		options?: CommandExecutionOptions,
-	): Promise<[boolean, CodemarieToolResponseContent]> {
+	): Promise<[boolean, DietCodeToolResponseContent]> {
 		return this.commandExecutor.execute(command, timeoutSeconds, options)
 	}
 
@@ -1628,8 +1628,8 @@ export class Task {
 			abortController.abort()
 
 			// Update hook message status to "cancelled"
-			const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-			const hookMessageIndex = codemarieMessages.findIndex((m) => m.ts === messageTs)
+			const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+			const hookMessageIndex = dietcodeMessages.findIndex((m) => m.ts === messageTs)
 			if (hookMessageIndex !== -1) {
 				const cancelledMetadata = {
 					hookName,
@@ -1637,7 +1637,7 @@ export class Task {
 					status: "cancelled",
 					exitCode: 130, // Standard SIGTERM exit code
 				}
-				await this.messageStateHandler.updateCodemarieMessage(hookMessageIndex, {
+				await this.messageStateHandler.updateDietCodeMessage(hookMessageIndex, {
 					text: JSON.stringify(cancelledMetadata),
 				})
 			}
@@ -1676,7 +1676,7 @@ export class Task {
 				? path.isAbsolute(configuredDir)
 					? configuredDir
 					: path.resolve(this.cwd, configuredDir)
-				: path.resolve(this.cwd, ".codemarie-prompt-artifacts")
+				: path.resolve(this.cwd, ".dietcode-prompt-artifacts")
 
 			await fs.mkdir(artifactDir, { recursive: true })
 
@@ -1733,7 +1733,7 @@ export class Task {
 					apiConversationHistory,
 					conversationHistoryDeletedRange: this.taskState.conversationHistoryDeletedRange,
 					contextManager: this.contextManager,
-					codemarieMessages: this.messageStateHandler.getCodemarieMessages(),
+					dietcodeMessages: this.messageStateHandler.getDietCodeMessages(),
 					messageStateHandler: this.messageStateHandler,
 					compactionStrategy: "standard-truncation-lastquarter",
 					deletedRange,
@@ -1769,7 +1769,7 @@ export class Task {
 
 		this.taskState.conversationHistoryDeletedRange = newDeletedRange
 
-		await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+		await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 		await this.contextManager.triggerApplyStandardContextTruncationNoticeChange(
 			Date.now(),
 			await ensureTaskDirectoryExists(this.taskId),
@@ -1790,10 +1790,10 @@ export class Task {
 		const providerInfo = this.getCurrentProviderInfo()
 		const host = await HostProvider.env.getHostVersion({})
 		const ide = host?.platform || "Unknown"
-		const isCliEnvironment = host.codemarieType === CodemarieClient.Cli
+		const isCliEnvironment = host.dietcodeType === DietCodeClient.Cli
 		const browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
 		const disableBrowserTool = browserSettings.disableToolUse ?? false
-		// codemarie browser tool uses image recognition for navigation (requires model image support).
+		// dietcode browser tool uses image recognition for navigation (requires model image support).
 		const modelSupportsBrowserUse = providerInfo.model.info.supportsImages ?? false
 
 		const supportsBrowserUse = modelSupportsBrowserUse && !disableBrowserTool // only enable browser use if the model supports it and the user hasn't disabled it
@@ -1804,7 +1804,7 @@ export class Task {
 				? `# Preferred Language\n\nSpeak in ${preferredLanguage}.`
 				: ""
 
-		const { globalToggles, localToggles } = await refreshCodemarieRulesToggles(this.controller, this.cwd)
+		const { globalToggles, localToggles } = await refreshDietCodeRulesToggles(this.controller, this.cwd)
 		const { windsurfLocalToggles, cursorLocalToggles, agentsLocalToggles } = await refreshExternalRulesToggles(
 			this.controller,
 			this.cwd,
@@ -1816,12 +1816,12 @@ export class Task {
 			workspaceManager: this.workspaceManager,
 		})
 
-		const globalCodemarieRulesFilePath = await ensureRulesDirectoryExists()
-		const globalRules = await getGlobalCodemarieRules(globalCodemarieRulesFilePath, globalToggles, { evaluationContext })
-		const globalCodemarieRulesFileInstructions = globalRules.instructions
+		const globalDietCodeRulesFilePath = await ensureRulesDirectoryExists()
+		const globalRules = await getGlobalDietCodeRules(globalDietCodeRulesFilePath, globalToggles, { evaluationContext })
+		const globalDietCodeRulesFileInstructions = globalRules.instructions
 
-		const localRules = await getLocalCodemarieRules(this.cwd, localToggles, { evaluationContext })
-		const localCodemarieRulesFileInstructions = localRules.instructions
+		const localRules = await getLocalDietCodeRules(this.cwd, localToggles, { evaluationContext })
+		const localDietCodeRulesFileInstructions = localRules.instructions
 		const [localCursorRulesFileInstructions, localCursorRulesDirInstructions] = await getLocalCursorRules(
 			this.cwd,
 			cursorLocalToggles,
@@ -1830,10 +1830,10 @@ export class Task {
 
 		const localAgentsRulesFileInstructions = await getLocalAgentsRules(this.cwd, agentsLocalToggles)
 
-		const codemarieIgnoreContent = this.codemarieIgnoreController.codemarieIgnoreContent
-		let codemarieIgnoreInstructions: string | undefined
-		if (codemarieIgnoreContent) {
-			codemarieIgnoreInstructions = formatResponse.codemarieIgnoreInstructions(codemarieIgnoreContent)
+		const dietcodeIgnoreContent = this.dietcodeIgnoreController.dietcodeIgnoreContent
+		let dietcodeIgnoreInstructions: string | undefined
+		if (dietcodeIgnoreContent) {
+			dietcodeIgnoreInstructions = formatResponse.dietcodeIgnoreInstructions(dietcodeIgnoreContent)
 		}
 
 		// Prepare multi-root workspace information if enabled
@@ -1879,19 +1879,19 @@ export class Task {
 			mcpHub: this.mcpHub,
 			skills: availableSkills,
 			focusChainSettings: this.stateManager.getGlobalSettingsKey("focusChainSettings"),
-			globalCodemarieRulesFileInstructions,
-			localCodemarieRulesFileInstructions,
+			globalDietCodeRulesFileInstructions,
+			localDietCodeRulesFileInstructions,
 			localCursorRulesFileInstructions,
 			localCursorRulesDirInstructions,
 			localWindsurfRulesFileInstructions,
 			localAgentsRulesFileInstructions,
-			codemarieIgnoreInstructions,
+			dietcodeIgnoreInstructions,
 			preferredLanguageInstructions,
 			browserSettings: this.stateManager.getGlobalSettingsKey("browserSettings"),
 			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
 			subagentsEnabled: this.stateManager.getGlobalSettingsKey("subagentsEnabled"),
-			codemarieWebToolsEnabled:
-				this.stateManager.getGlobalSettingsKey("codemarieWebToolsEnabled") && featureFlagsService.getWebtoolsEnabled(),
+			dietcodeWebToolsEnabled:
+				this.stateManager.getGlobalSettingsKey("dietcodeWebToolsEnabled") && featureFlagsService.getWebtoolsEnabled(),
 			isMultiRootEnabled: multiRootEnabled,
 			workspaceRoots,
 			isSubagentRun: false,
@@ -1916,7 +1916,7 @@ export class Task {
 
 		const contextManagementMetadata = await this.contextManager.getNewContextMessagesAndMetadata(
 			this.messageStateHandler.getApiConversationHistory(),
-			this.messageStateHandler.getCodemarieMessages(),
+			this.messageStateHandler.getDietCodeMessages(),
 			this.api,
 			this.taskState.conversationHistoryDeletedRange,
 			previousApiReqIndex,
@@ -1926,7 +1926,7 @@ export class Task {
 
 		if (contextManagementMetadata.updatedConversationHistoryDeletedRange) {
 			this.taskState.conversationHistoryDeletedRange = contextManagementMetadata.conversationHistoryDeletedRange
-			await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+			await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 			// saves task history item which we use to keep track of conversation history deleted range
 
 			// Automatically create a cognitive snapshot of the truncated conversation in the Knowledge Graph
@@ -1974,10 +1974,10 @@ export class Task {
 		} catch (error) {
 			const isContextWindowExceededError = checkContextWindowExceededError(error)
 			const { model, providerId } = this.getCurrentProviderInfo()
-			const codemarieError = ErrorService.get().toCodemarieError(error, model.id, providerId)
+			const dietcodeError = ErrorService.get().toDietCodeError(error, model.id, providerId)
 
-			// Capture provider failure telemetry using codemarieError
-			ErrorService.get().logMessage(codemarieError.message)
+			// Capture provider failure telemetry using dietcodeError
+			ErrorService.get().logMessage(dietcodeError.message)
 
 			if (isContextWindowExceededError && !this.taskState.didAutomaticallyRetryFailedApiRequest) {
 				await this.handleContextWindowExceededError()
@@ -1994,54 +1994,53 @@ export class Task {
 					// If the conversation has more than 3 messages, we can truncate again. If not, then the conversation is bricked.
 					// ToDo: Allow the user to change their input if this is the case.
 					if (truncatedConversationHistory.length > 3) {
-						codemarieError.message =
-							"Context window exceeded. Click retry to truncate the conversation and try again."
+						dietcodeError.message = "Context window exceeded. Click retry to truncate the conversation and try again."
 						this.taskState.didAutomaticallyRetryFailedApiRequest = false
 					}
 				}
 
-				const streamingFailedMessage = codemarieError.serialize()
+				const streamingFailedMessage = dietcodeError.serialize()
 
 				// Update the 'api_req_started' message to reflect final failure before asking user to manually retry
 				const lastApiReqStartedIndex = findLastIndex(
-					this.messageStateHandler.getCodemarieMessages(),
+					this.messageStateHandler.getDietCodeMessages(),
 					(m) => m.say === "api_req_started",
 				)
 				if (lastApiReqStartedIndex !== -1) {
-					const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-					const currentApiReqInfo: CodemarieApiReqInfo = JSON.parse(
-						codemarieMessages[lastApiReqStartedIndex].text || "{}",
+					const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+					const currentApiReqInfo: DietCodeApiReqInfo = JSON.parse(
+						dietcodeMessages[lastApiReqStartedIndex].text || "{}",
 					)
 					delete currentApiReqInfo.retryStatus
 
-					await this.messageStateHandler.updateCodemarieMessage(lastApiReqStartedIndex, {
+					await this.messageStateHandler.updateDietCodeMessage(lastApiReqStartedIndex, {
 						text: JSON.stringify({
 							...currentApiReqInfo, // Spread the modified info (with retryStatus removed)
 							// cancelReason: "retries_exhausted", // Indicate that automatic retries failed
 							streamingFailedMessage,
-						} satisfies CodemarieApiReqInfo),
+						} satisfies DietCodeApiReqInfo),
 					})
 					// this.ask will trigger postStateToWebview, so this change should be picked up.
 				}
 
-				const isAuthError = codemarieError.isErrorType(CodemarieErrorType.Auth)
+				const isAuthError = dietcodeError.isErrorType(DietCodeErrorType.Auth)
 
-				// Check if this is a Codemarie provider insufficient credits error - don't auto-retry these
-				const isCodemarieProviderInsufficientCredits = (() => {
-					if (providerId !== "codemarie") {
+				// Check if this is a DietCode provider insufficient credits error - don't auto-retry these
+				const isDietCodeProviderInsufficientCredits = (() => {
+					if (providerId !== "dietcode") {
 						return false
 					}
 					try {
-						const parsedError = CodemarieError.transform(error, model.id, providerId)
-						return parsedError.isErrorType(CodemarieErrorType.Balance)
+						const parsedError = DietCodeError.transform(error, model.id, providerId)
+						return parsedError.isErrorType(DietCodeErrorType.Balance)
 					} catch {
 						return false
 					}
 				})()
 
-				let response: CodemarieAskResponse
-				// Skip auto-retry for Codemarie provider insufficient credits or auth errors
-				if (!isCodemarieProviderInsufficientCredits && !isAuthError && this.taskState.autoRetryAttempts < 3) {
+				let response: DietCodeAskResponse
+				// Skip auto-retry for DietCode provider insufficient credits or auth errors
+				if (!isDietCodeProviderInsufficientCredits && !isAuthError && this.taskState.autoRetryAttempts < 3) {
 					// Auto-retry enabled with max 3 attempts: automatically approve the retry
 					this.taskState.autoRetryAttempts++
 
@@ -2060,7 +2059,7 @@ export class Task {
 						cancelReason: "streaming_failed",
 						streamingFailedMessage,
 					})
-					await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+					await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 					await this.postStateToWebview()
 
 					response = "yesButtonClicked"
@@ -2077,16 +2076,16 @@ export class Task {
 					// Clear streamingFailedMessage now that error_retry contains it
 					// This prevents showing the error in both ErrorRow and error_retry
 					const autoRetryApiReqIndex = findLastIndex(
-						this.messageStateHandler.getCodemarieMessages(),
+						this.messageStateHandler.getDietCodeMessages(),
 						(m) => m.say === "api_req_started",
 					)
 					if (autoRetryApiReqIndex !== -1) {
-						const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-						const currentApiReqInfo: CodemarieApiReqInfo = JSON.parse(
-							codemarieMessages[autoRetryApiReqIndex].text || "{}",
+						const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+						const currentApiReqInfo: DietCodeApiReqInfo = JSON.parse(
+							dietcodeMessages[autoRetryApiReqIndex].text || "{}",
 						)
 						delete currentApiReqInfo.streamingFailedMessage
-						await this.messageStateHandler.updateCodemarieMessage(autoRetryApiReqIndex, {
+						await this.messageStateHandler.updateDietCodeMessage(autoRetryApiReqIndex, {
 							text: JSON.stringify(currentApiReqInfo),
 						})
 					}
@@ -2094,7 +2093,7 @@ export class Task {
 					await setTimeoutPromise(delay)
 				} else {
 					// Show error_retry with failed flag to indicate all retries exhausted (but not for insufficient credits)
-					if (!isCodemarieProviderInsufficientCredits && !isAuthError) {
+					if (!isDietCodeProviderInsufficientCredits && !isAuthError) {
 						await this.say(
 							"error_retry",
 							JSON.stringify({
@@ -2120,16 +2119,16 @@ export class Task {
 
 				// Clear streamingFailedMessage when user manually retries
 				const manualRetryApiReqIndex = findLastIndex(
-					this.messageStateHandler.getCodemarieMessages(),
+					this.messageStateHandler.getDietCodeMessages(),
 					(m) => m.say === "api_req_started",
 				)
 				if (manualRetryApiReqIndex !== -1) {
-					const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-					const currentApiReqInfo: CodemarieApiReqInfo = JSON.parse(
-						codemarieMessages[manualRetryApiReqIndex].text || "{}",
+					const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+					const currentApiReqInfo: DietCodeApiReqInfo = JSON.parse(
+						dietcodeMessages[manualRetryApiReqIndex].text || "{}",
 					)
 					delete currentApiReqInfo.streamingFailedMessage
-					await this.messageStateHandler.updateCodemarieMessage(manualRetryApiReqIndex, {
+					await this.messageStateHandler.updateDietCodeMessage(manualRetryApiReqIndex, {
 						text: JSON.stringify(currentApiReqInfo),
 					})
 				}
@@ -2152,7 +2151,7 @@ export class Task {
 
 	async presentAssistantMessage() {
 		if (this.taskState.abort) {
-			throw new Error("Codemarie instance aborted")
+			throw new Error("DietCode instance aborted")
 		}
 
 		// If we're locked, mark pending and return
@@ -2292,7 +2291,7 @@ export class Task {
 		}
 	}
 
-	async recursivelyMakeCodemarieRequests(userContent: CodemarieContent[], includeFileDetails = false): Promise<boolean> {
+	async recursivelyMakeDietCodeRequests(userContent: DietCodeContent[], includeFileDetails = false): Promise<boolean> {
 		// Check abort flag at the very start to prevent any execution after cancellation
 		if (this.taskState.abort) {
 			throw new Error("Task instance aborted")
@@ -2310,7 +2309,7 @@ export class Task {
 			} catch {}
 		}
 
-		const modelInfo: CodemarieMessageModelInfo = {
+		const modelInfo: DietCodeMessageModelInfo = {
 			modelId: model.id,
 			providerId: providerId,
 			mode: mode,
@@ -2331,21 +2330,21 @@ export class Task {
 			if (autoApprovalSettings.enableNotifications) {
 				showSystemNotification({
 					subtitle: "Error",
-					message: "Codemarie is having trouble. Would you like to continue the task?",
+					message: "DietCode is having trouble. Would you like to continue the task?",
 				})
 			}
 			const { response, text, images, files } = await this.ask(
 				"mistake_limit_reached",
 				this.api.getModel().id.includes("claude")
-					? `This may indicate a failure in Codemarie's thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. "Try breaking down the task into smaller steps").`
-					: "Codemarie uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 4.5 Sonnet for its advanced agentic coding capabilities.",
+					? `This may indicate a failure in DietCode's thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. "Try breaking down the task into smaller steps").`
+					: "DietCode uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 4.5 Sonnet for its advanced agentic coding capabilities.",
 			)
 			if (response === "messageResponse") {
 				// Display the user's message in the chat UI
 				await this.say("user_feedback", text, images, files)
 
 				// This userContent is for the *next* API call.
-				const feedbackUserContent: CodemarieUserContent[] = []
+				const feedbackUserContent: DietCodeUserContent[] = []
 				feedbackUserContent.push({
 					type: "text",
 					text: formatResponse.tooManyMistakes(text),
@@ -2374,13 +2373,13 @@ export class Task {
 
 		// get previous api req's index to check token usage and determine if we need to truncate conversation history
 		const previousApiReqIndex = findLastIndex(
-			this.messageStateHandler.getCodemarieMessages(),
+			this.messageStateHandler.getDietCodeMessages(),
 			(m) => m.say === "api_req_started",
 		)
 
 		// Save checkpoint if this is the first API request
 		const isFirstRequest =
-			this.messageStateHandler.getCodemarieMessages().filter((m) => m.say === "api_req_started").length === 0
+			this.messageStateHandler.getDietCodeMessages().filter((m) => m.say === "api_req_started").length === 0
 
 		// Initialize checkpointManager first if enabled and it's the first request
 		if (
@@ -2394,7 +2393,7 @@ export class Task {
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : "Unknown error"
 				Logger.error("Failed to initialize checkpoint manager:", errorMessage)
-				this.taskState.checkpointManagerErrorMessage = errorMessage // will be displayed right away since we saveCodemarieMessages next which posts state to webview
+				this.taskState.checkpointManagerErrorMessage = errorMessage // will be displayed right away since we saveDietCodeMessages next which posts state to webview
 				HostProvider.window.showMessage({
 					type: ShowMessageType.ERROR,
 					message: `Checkpoint initialization timed out: ${errorMessage}`,
@@ -2412,7 +2411,7 @@ export class Task {
 		) {
 			await this.say("checkpoint_created") // Now this is conditional
 			const lastCheckpointMessageIndex = findLastIndex(
-				this.messageStateHandler.getCodemarieMessages(),
+				this.messageStateHandler.getDietCodeMessages(),
 				(m) => m.say === "checkpoint_created",
 			)
 			if (lastCheckpointMessageIndex !== -1) {
@@ -2421,10 +2420,10 @@ export class Task {
 				commitPromise
 					?.then(async (commitHash) => {
 						if (commitHash) {
-							await this.messageStateHandler.updateCodemarieMessage(lastCheckpointMessageIndex, {
+							await this.messageStateHandler.updateDietCodeMessage(lastCheckpointMessageIndex, {
 								lastCheckpointHash: commitHash,
 							})
-							// saveCodemarieMessagesAndUpdateHistory will be called later after API response,
+							// saveDietCodeMessagesAndUpdateHistory will be called later after API response,
 							// so no need to call it here unless this is the only modification to this message.
 							// For now, assuming it's handled later.
 						}
@@ -2465,12 +2464,12 @@ export class Task {
 					const safeEnd = Math.min(end + 2, apiHistory.length - 1)
 					if (end + 2 <= safeEnd) {
 						this.taskState.conversationHistoryDeletedRange = [start, end + 2]
-						await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+						await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 					}
 				}
 			} else {
 				shouldCompact = this.contextManager.shouldCompactContextWindow(
-					this.messageStateHandler.getCodemarieMessages(),
+					this.messageStateHandler.getDietCodeMessages(),
 					this.api,
 					previousApiReqIndex,
 				)
@@ -2494,7 +2493,7 @@ export class Task {
 					shouldCompact = await this.contextManager.attemptFileReadOptimization(
 						this.messageStateHandler.getApiConversationHistory(),
 						this.taskState.conversationHistoryDeletedRange,
-						this.messageStateHandler.getCodemarieMessages(),
+						this.messageStateHandler.getDietCodeMessages(),
 						previousApiReqIndex,
 						await ensureTaskDirectoryExists(this.taskId),
 					)
@@ -2504,30 +2503,30 @@ export class Task {
 
 		// NOW load context based on compaction decision
 		// This optimization avoids expensive context loading when using summarize_task
-		let parsedUserContent: CodemarieContent[]
+		let parsedUserContent: DietCodeContent[]
 		let environmentDetails: string
-		let codemarierulesError: boolean
+		let dietcoderulesError: boolean
 
 		if (shouldCompact) {
 			// When compacting, skip full context loading (use summarize_task instead)
 			parsedUserContent = userContent
 			environmentDetails = ""
-			codemarierulesError = false
+			dietcoderulesError = false
 			this.taskState.lastAutoCompactTriggerIndex = previousApiReqIndex
 		} else {
 			// When NOT compacting, load full context with mentions parsing and slash commands
-			;[parsedUserContent, environmentDetails, codemarierulesError] = await this.loadContext(
+			;[parsedUserContent, environmentDetails, dietcoderulesError] = await this.loadContext(
 				userContent,
 				includeFileDetails,
 				useCompactPrompt,
 			)
 		}
 
-		// error handling if the user uses the /newrule command & their .codemarierules is a file, for file read operations didnt work properly
-		if (codemarierulesError === true) {
+		// error handling if the user uses the /newrule command & their .dietcoderules is a file, for file read operations didnt work properly
+		if (dietcoderulesError === true) {
 			await this.say(
 				"error",
-				"Issue with processing the /newrule command. Double check that, if '.codemarierules' already exists, it's a directory and not a file. Otherwise there was an issue referencing this file/directory.",
+				"Issue with processing the /newrule command. Double check that, if '.dietcoderules' already exists, it's a directory and not a file. Otherwise there was an issue referencing this file/directory.",
 			)
 		}
 
@@ -2580,11 +2579,11 @@ export class Task {
 		}
 
 		// since we sent off a placeholder api_req_started message to update the webview while waiting to actually start the API request (to load potential details for example), we need to update the text of that message
-		const lastApiReqIndex = findLastIndex(this.messageStateHandler.getCodemarieMessages(), (m) => m.say === "api_req_started")
-		await this.messageStateHandler.updateCodemarieMessage(lastApiReqIndex, {
+		const lastApiReqIndex = findLastIndex(this.messageStateHandler.getDietCodeMessages(), (m) => m.say === "api_req_started")
+		await this.messageStateHandler.updateDietCodeMessage(lastApiReqIndex, {
 			text: JSON.stringify({
 				request: userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n"),
-			} satisfies CodemarieApiReqInfo),
+			} satisfies DietCodeApiReqInfo),
 		})
 		await this.postStateToWebview()
 
@@ -2597,7 +2596,7 @@ export class Task {
 				totalCost: number | undefined
 			} = { cacheWriteTokens: 0, cacheReadTokens: 0, inputTokens: 0, outputTokens: 0, totalCost: undefined }
 
-			const abortStream = async (cancelReason: CodemarieApiReqCancelReason, streamingFailedMessage?: string) => {
+			const abortStream = async (cancelReason: DietCodeApiReqCancelReason, streamingFailedMessage?: string) => {
 				Session.get().finalizeRequest()
 
 				if (this.diffViewProvider.isEditing) {
@@ -2605,13 +2604,13 @@ export class Task {
 				}
 
 				// if last message is a partial we need to update and save it
-				const lastMessage = this.messageStateHandler.getCodemarieMessages().at(-1)
+				const lastMessage = this.messageStateHandler.getDietCodeMessages().at(-1)
 				if (lastMessage?.partial) {
 					// lastMessage.ts = Date.now() DO NOT update ts since it is used as a key for virtuoso list
 					lastMessage.partial = false
 					// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
 					Logger.log("updating partial message", lastMessage)
-					// await this.saveCodemarieMessagesAndUpdateHistory()
+					// await this.saveDietCodeMessagesAndUpdateHistory()
 				}
 				// update api_req_started to have cancelled and cost, so that we can display the cost of the partial stream
 				await updateApiReqMsg({
@@ -2626,7 +2625,7 @@ export class Task {
 					cancelReason,
 					streamingFailedMessage,
 				})
-				await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+				await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 
 				// Let assistant know their response was interrupted for when task is resumed
 				await this.messageStateHandler.addToApiConversationHistory({
@@ -2704,7 +2703,7 @@ export class Task {
 
 			const finalizePendingReasoningMessage = async (thinking: string): Promise<boolean> => {
 				const pendingReasoningIndex = findLastIndex(
-					this.messageStateHandler.getCodemarieMessages(),
+					this.messageStateHandler.getDietCodeMessages(),
 					(message) => message.type === "say" && message.say === "reasoning" && message.partial === true,
 				)
 
@@ -2712,13 +2711,13 @@ export class Task {
 					return false
 				}
 
-				await this.messageStateHandler.updateCodemarieMessage(pendingReasoningIndex, {
+				await this.messageStateHandler.updateDietCodeMessage(pendingReasoningIndex, {
 					text: thinking,
 					partial: false,
 				})
-				const completedReasoning = this.messageStateHandler.getCodemarieMessages()[pendingReasoningIndex]
+				const completedReasoning = this.messageStateHandler.getDietCodeMessages()[pendingReasoningIndex]
 				if (completedReasoning) {
-					await sendPartialMessageEvent(convertCodemarieMessageToProto(completedReasoning))
+					await sendPartialMessageEvent(convertDietCodeMessageToProto(completedReasoning))
 				}
 				return true
 			}
@@ -2826,7 +2825,7 @@ export class Task {
 					if (this.taskState.abort) {
 						this.api.abort?.()
 						if (!this.taskState.abandoned) {
-							// only need to gracefully abort if this instance isn't abandoned (sometimes openrouter stream hangs, in which case this would affect future instances of codemarie)
+							// only need to gracefully abort if this instance isn't abandoned (sometimes openrouter stream hangs, in which case this would affect future instances of dietcode)
 							await abortStream("user_cancelled")
 						}
 						break // aborts the stream
@@ -2860,10 +2859,10 @@ export class Task {
 					}
 				}
 			} catch (error) {
-				// abandoned happens when extension is no longer waiting for the codemarie instance to finish aborting (error is thrown here when any function in the for loop throws due to this.abort)
+				// abandoned happens when extension is no longer waiting for the dietcode instance to finish aborting (error is thrown here when any function in the for loop throws due to this.abort)
 				if (!this.taskState.abandoned) {
-					const codemarieError = ErrorService.get().toCodemarieError(error, this.api.getModel().id)
-					const errorMessage = codemarieError.serialize()
+					const dietcodeError = ErrorService.get().toDietCodeError(error, this.api.getModel().id)
+					const errorMessage = dietcodeError.serialize()
 					// Auto-retry for streaming failures (always enabled)
 					if (this.taskState.autoRetryAttempts < 3) {
 						this.taskState.autoRetryAttempts++
@@ -2906,7 +2905,7 @@ export class Task {
 
 			// Finalize any remaining tool calls at the end of the stream
 
-			// OpenRouter/Codemarie may not return token usage as part of the stream (since it may abort early), so we fetch after the stream is finished
+			// OpenRouter/DietCode may not return token usage as part of the stream (since it may abort early), so we fetch after the stream is finished
 			// (updateApiReq below will update the api_req_started message with the usage details. we do this async so it updates the api_req_started message in the background)
 			if (!didReceiveUsageChunk) {
 				this.api.getApiStreamUsage?.().then(async (apiStreamUsage) => {
@@ -2931,7 +2930,7 @@ export class Task {
 				api: this.api,
 				totalCost: taskMetrics.totalCost,
 			})
-			await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+			await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 
 			// V6: Record usage telemetry
 			await EnvironmentTracker.recordUsage(
@@ -2949,7 +2948,7 @@ export class Task {
 
 			// need to call here in case the stream was aborted
 			if (this.taskState.abort) {
-				throw new Error("Codemarie instance aborted")
+				throw new Error("DietCode instance aborted")
 			}
 
 			// Stored the assistant API response immediately after the stream finishes in the same turn
@@ -2977,7 +2976,7 @@ export class Task {
 				const requestId = this.streamHandler.requestId
 
 				// Build content array with thinking blocks, text (if any), and tool use blocks
-				const assistantContent: Array<CodemarieAssistantContent> = [
+				const assistantContent: Array<DietCodeAssistantContent> = [
 					// This is critical for maintaining the model's reasoning flow and conversation integrity.
 					// "When providing thinking blocks, the entire sequence of consecutive thinking blocks must match the outputs generated by the model during the original request; you cannot rearrange or modify the sequence of these blocks." The signature_delta is used to verify that the thinking was generated by Claude, and the thinking blocks will be ignored if it's incorrect or missing.
 					// https://docs.claude.com/en/docs/build-with-claude/extended-thinking#preserving-thinking-blocks
@@ -2995,8 +2994,8 @@ export class Task {
 					assistantContent.push({
 						type: "text",
 						text: assistantTextOnly,
-						// reasoning_details only exists for codemarie/openrouter providers
-						reasoning_details: thinkingBlock?.summary as CodemarieReasoningDetailParam[],
+						// reasoning_details only exists for dietcode/openrouter providers
+						reasoning_details: thinkingBlock?.summary as DietCodeReasoningDetailParam[],
 						signature: assistantTextSignature,
 						call_id: assistantMessageId,
 					})
@@ -3081,7 +3080,7 @@ export class Task {
 				// Reset auto-retry counter for each new API request
 				this.taskState.autoRetryAttempts = 0
 
-				const recDidEndLoop = await this.recursivelyMakeCodemarieRequests(this.taskState.userMessageContent)
+				const recDidEndLoop = await this.recursivelyMakeDietCodeRequests(this.taskState.userMessageContent)
 				didEndLoop = recDidEndLoop
 			} else {
 				// if there's no assistant_responses, that means we got no text or tool_use content blocks from API which we should assume is an error
@@ -3099,7 +3098,7 @@ export class Task {
 				})
 
 				const baseErrorMessage =
-					"Invalid API Response: The provider returned an empty or unparsable response. This is a provider-side issue where the model failed to generate valid output or returned tool calls that Codemarie cannot process. Retrying the request may help resolve this issue."
+					"Invalid API Response: The provider returned an empty or unparsable response. This is a provider-side issue where the model failed to generate valid output or returned tool calls that DietCode cannot process. Retrying the request may help resolve this issue."
 				const errorText = reqId ? `${baseErrorMessage} (Request ID: ${reqId})` : baseErrorMessage
 
 				await this.say("error", errorText)
@@ -3124,7 +3123,7 @@ export class Task {
 					ts: Date.now(),
 				})
 
-				let response: CodemarieAskResponse
+				let response: DietCodeAskResponse
 
 				const noResponseErrorMessage = "No assistant message was received. Would you like to retry the request?"
 
@@ -3182,11 +3181,11 @@ export class Task {
 	}
 
 	async loadContext(
-		userContent: CodemarieContent[],
+		userContent: DietCodeContent[],
 		includeFileDetails = false,
 		useCompactPrompt = false,
-	): Promise<[CodemarieContent[], string, boolean]> {
-		let needsCodemarierulesFileCheck = false
+	): Promise<[DietCodeContent[], string, boolean]> {
+		let needsDietCoderulesFileCheck = false
 
 		// Pre-fetch necessary data to avoid redundant calls within loops
 		const ulid = this.ulid
@@ -3218,7 +3217,7 @@ export class Task {
 				}
 			}
 
-			const { processedText, needsCodemarierulesFileCheck: needsCheck } = await parseSlashCommands(
+			const { processedText, needsDietCoderulesFileCheck: needsCheck } = await parseSlashCommands(
 				parsedText,
 				localWorkflowToggles,
 				globalWorkflowToggles,
@@ -3230,13 +3229,13 @@ export class Task {
 			)
 
 			if (needsCheck) {
-				needsCodemarierulesFileCheck = true
+				needsDietCoderulesFileCheck = true
 			}
 
 			return processedText
 		}
 
-		const processTextContent = async (block: CodemarieTextContentBlock): Promise<CodemarieTextContentBlock> => {
+		const processTextContent = async (block: DietCodeTextContentBlock): Promise<DietCodeTextContentBlock> => {
 			if (block.type !== "text" || !hasUserContentTag(block.text)) {
 				return block
 			}
@@ -3245,7 +3244,7 @@ export class Task {
 			return { ...block, text: processedText }
 		}
 
-		const processContentBlock = async (block: CodemarieContent): Promise<CodemarieContent> => {
+		const processContentBlock = async (block: DietCodeContent): Promise<DietCodeContent> => {
 			if (block.type === "text") {
 				return processTextContent(block)
 			}
@@ -3285,9 +3284,9 @@ export class Task {
 			this.getEnvironmentDetails(includeFileDetails),
 		])
 
-		// Check codemarierulesData if needed
-		const codemarierulesError = needsCodemarierulesFileCheck
-			? await ensureLocalCodemarieDirExists(this.cwd, GlobalFileNames.codemarieRules)
+		// Check dietcoderulesData if needed
+		const dietcoderulesError = needsDietCoderulesFileCheck
+			? await ensureLocalDietCodeDirExists(this.cwd, GlobalFileNames.dietcodeRules)
 			: false
 
 		// Add focus chain instructions if needed
@@ -3304,7 +3303,7 @@ export class Task {
 			}
 		}
 
-		return [processedUserContent, environmentDetails, codemarierulesError]
+		return [processedUserContent, environmentDetails, dietcoderulesError]
 	}
 
 	async processNativeToolCalls(assistantTextOnly: string, toolBlocks: ToolUse[]) {
@@ -3318,26 +3317,26 @@ export class Task {
 		const textContent = assistantTextOnly.trim()
 		const textBlocks: AssistantMessageContent[] = textContent ? [{ type: "text", content: textContent, partial: false }] : []
 
-		// IMPORTANT: Finalize any partial text CodemarieMessage before we skip over it.
+		// IMPORTANT: Finalize any partial text DietCodeMessage before we skip over it.
 		//
 		// When native tool calls are processed, we set currentStreamingContentIndex to skip
 		// the text block (line below sets it to textBlocks.length). This means presentAssistantMessage
 		// will never call say("text", content, false) for this text block.
 		//
-		// Without this fix, the partial text CodemarieMessage remains with partial=true. In the UI
+		// Without this fix, the partial text DietCodeMessage remains with partial=true. In the UI
 		// (ChatView), partial messages that are not the last message don't get displayed anywhere:
 		// - Not in completedMessages (because partial=true)
 		// - Not in currentMessage (because it's not the last message - tool message came after)
 		//
 		// The text appears to "disappear" when tool calls start, even though it's still in the array.
-		const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-		const lastMessage = codemarieMessages.at(-1)
+		const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+		const lastMessage = dietcodeMessages.at(-1)
 		const shouldFinalizePartialText = textBlocks.length > 0
 		if (shouldFinalizePartialText && lastMessage?.partial && lastMessage.type === "say" && lastMessage.say === "text") {
 			lastMessage.text = textContent
 			lastMessage.partial = false
-			await this.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
-			const protoMessage = convertCodemarieMessageToProto(lastMessage)
+			await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
+			const protoMessage = convertDietCodeMessageToProto(lastMessage)
 			await sendPartialMessageEvent(protoMessage)
 		}
 
@@ -3418,14 +3417,14 @@ export class Task {
 		// Workspace roots (multi-root)
 		details += this.formatWorkspaceRootsSection()
 
-		// It could be useful for codemarie to know if the user went from one or no file to another between messages, so we always include this context
+		// It could be useful for dietcode to know if the user went from one or no file to another between messages, so we always include this context
 		details += `\n\n# ${host.platform} Visible Files`
 		const rawVisiblePaths = (await HostProvider.window.getVisibleTabs({})).paths
 		const filteredVisiblePaths = await filterExistingFiles(rawVisiblePaths)
 		const visibleFilePaths = filteredVisiblePaths.map((absolutePath) => path.relative(this.cwd, absolutePath))
 
-		// Filter paths through codemarieIgnoreController
-		const allowedVisibleFiles = this.codemarieIgnoreController
+		// Filter paths through dietcodeIgnoreController
+		const allowedVisibleFiles = this.dietcodeIgnoreController
 			.filterPaths(visibleFilePaths)
 			.map((p) => p.toPosix())
 			.join("\n")
@@ -3441,8 +3440,8 @@ export class Task {
 		const filteredOpenTabPaths = await filterExistingFiles(rawOpenTabPaths)
 		const openTabPaths = filteredOpenTabPaths.map((absolutePath) => path.relative(this.cwd, absolutePath))
 
-		// Filter paths through codemarieIgnoreController
-		const allowedOpenTabs = this.codemarieIgnoreController
+		// Filter paths through dietcodeIgnoreController
+		const allowedOpenTabs = this.dietcodeIgnoreController
 			.filterPaths(openTabPaths)
 			.map((p) => p.toPosix())
 			.join("\n")
@@ -3547,7 +3546,7 @@ export class Task {
 				details += "(Desktop files not shown automatically. Use list_files to explore if needed.)"
 			} else {
 				const [files, didHitLimit] = await listFiles(this.cwd, true, 200)
-				const result = formatResponse.formatFilesList(this.cwd, files, didHitLimit, this.codemarieIgnoreController)
+				const result = formatResponse.formatFilesList(this.cwd, files, didHitLimit, this.dietcodeIgnoreController)
 				details += result
 			}
 
@@ -3570,7 +3569,7 @@ export class Task {
 		const { contextWindow } = getContextWindowInfo(this.api)
 
 		// Get the token count from the most recent API request to accurately reflect context management
-		const getTotalTokensFromApiReqMessage = (msg: CodemarieMessage) => {
+		const getTotalTokensFromApiReqMessage = (msg: DietCodeMessage) => {
 			if (!msg.text) {
 				return 0
 			}
@@ -3582,8 +3581,8 @@ export class Task {
 			}
 		}
 
-		const codemarieMessages = this.messageStateHandler.getCodemarieMessages()
-		const modifiedMessages = combineApiRequests(combineCommandSequences(codemarieMessages.slice(1)))
+		const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
+		const modifiedMessages = combineApiRequests(combineCommandSequences(dietcodeMessages.slice(1)))
 		const lastApiReqMessage = findLast(modifiedMessages, (msg) => {
 			if (msg.say !== "api_req_started") {
 				return false

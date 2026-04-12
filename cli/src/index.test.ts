@@ -13,7 +13,7 @@ describe("CLI Commands", () => {
 	beforeEach(() => {
 		// Create a fresh program instance for each test
 		program = new Command()
-		program.name("codemarie").description("Codemarie CLI - AI coding assistant").version("0.0.0")
+		program.name("dietcode").description("DietCode CLI - AI coding assistant").version("0.0.0")
 		program.enablePositionalOptions()
 
 		// Define commands matching index.ts
@@ -351,7 +351,7 @@ describe("getProviderModelIdKey", () => {
 	// Test the provider model ID key mapping logic
 	const providerKeyMap: Record<string, string> = {
 		openrouter: "OpenRouterModelId",
-		codemarie: "OpenRouterModelId",
+		dietcode: "OpenRouterModelId",
 		openai: "OpenAiModelId",
 		ollama: "OllamaModelId",
 		lmstudio: "LmStudioModelId",
@@ -382,8 +382,8 @@ describe("getProviderModelIdKey", () => {
 		expect(getProviderModelIdKey("openrouter", "plan")).toBe("planModeOpenRouterModelId")
 	})
 
-	it("should return same key for codemarie as openrouter", () => {
-		expect(getProviderModelIdKey("codemarie", "act")).toBe("actModeOpenRouterModelId")
+	it("should return same key for dietcode as openrouter", () => {
+		expect(getProviderModelIdKey("dietcode", "act")).toBe("actModeOpenRouterModelId")
 	})
 
 	it("should return correct key for openai", () => {

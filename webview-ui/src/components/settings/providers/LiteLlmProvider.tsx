@@ -1,5 +1,5 @@
 import { ModelInfo } from "@shared/api"
-import { UpdateApiConfigurationRequestNew } from "@shared/proto/index.codemarie"
+import { UpdateApiConfigurationRequestNew } from "@shared/proto/index.dietcode"
 import { Mode } from "@shared/storage/types"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { RefreshCwIcon } from "lucide-react"

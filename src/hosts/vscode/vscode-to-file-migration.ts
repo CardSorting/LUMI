@@ -3,7 +3,7 @@
  *
  * VSCode historically stored global state, workspace state, and secrets via the
  * ExtensionContext API (backed by SQLite under ~/.vscode/). This module migrates
- * that data to the shared file-backed stores in ~/.codemarie/data/ so all platforms
+ * that data to the shared file-backed stores in ~/.dietcode/data/ so all platforms
  * (VSCode, CLI, JetBrains) share the same persistence layer.
  *
  * ## Migration semantics
@@ -24,11 +24,11 @@
  *
  * - taskHistory is NOT migrated here. It uses its own file-based storage
  *   at {globalStorageFsPath}/state/taskHistory.json. Note that for VSCode,
- *   globalStorageFsPath is still the VSCode-managed path (not ~/.codemarie/data/),
+ *   globalStorageFsPath is still the VSCode-managed path (not ~/.dietcode/data/),
  *   so task history is NOT yet shared across clients.
  *
  *   TODO: Migrate taskHistory.json and task data files ({globalStorageFsPath}/tasks/)
- *   to ~/.codemarie/data/ so that tasks created in VSCode are visible in CLI/JetBrains
+ *   to ~/.dietcode/data/ so that tasks created in VSCode are visible in CLI/JetBrains
  *   and vice versa. See also: checkpoints at {globalStorageFsPath}/checkpoints/.
  */
 

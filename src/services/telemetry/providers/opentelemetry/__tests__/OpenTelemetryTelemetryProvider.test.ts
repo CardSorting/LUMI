@@ -1,13 +1,13 @@
 import { InMemoryLogRecordExporter, LoggerProvider, SimpleLogRecordProcessor } from "@opentelemetry/sdk-logs"
 import { expect } from "chai"
 import * as sinon from "sinon"
-import type { CodemarieAccountUserInfo } from "@/services/auth/AuthService"
+import type { DietCodeAccountUserInfo } from "@/services/auth/AuthService"
 import * as distinctIdModule from "@/services/logging/distinctId"
 import { OpenTelemetryTelemetryProvider } from "../OpenTelemetryTelemetryProvider"
 
 function makeUserInfo(
-	overrides: Partial<CodemarieAccountUserInfo> & { orgOverrides?: Record<string, unknown> } = {},
-): CodemarieAccountUserInfo {
+	overrides: Partial<DietCodeAccountUserInfo> & { orgOverrides?: Record<string, unknown> } = {},
+): DietCodeAccountUserInfo {
 	const { orgOverrides, ...rest } = overrides
 	return {
 		id: "user-1",
@@ -150,7 +150,7 @@ describe("OpenTelemetryTelemetryProvider.identifyUser", () => {
 	it("should handle user with no active organization", () => {
 		getDistinctIdStub.returns("user-1")
 
-		const userInfo: CodemarieAccountUserInfo = {
+		const userInfo: DietCodeAccountUserInfo = {
 			id: "user-1",
 			displayName: "Solo User",
 			email: "solo@example.com",
@@ -184,7 +184,7 @@ describe("OpenTelemetryTelemetryProvider.identifyUser", () => {
 		logExporter.reset()
 
 		// Second: identify same user but no active org
-		const userNoOrg: CodemarieAccountUserInfo = {
+		const userNoOrg: DietCodeAccountUserInfo = {
 			id: "user-1",
 			displayName: "Test User",
 			email: "test@example.com",

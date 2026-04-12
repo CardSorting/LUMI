@@ -75,14 +75,14 @@ async function ensureInitPy(dir) {
 /**
  * Parse proto files to extract service names with their source file and package.
  * Returns array of:
- * { serviceName: string, serviceKey: string, protoPackage: "codemarie"|"host", moduleBase: string }
+ * { serviceName: string, serviceKey: string, protoPackage: "dietcode"|"host", moduleBase: string }
  */
 async function parseServicesWithFiles(protoDir, protoFiles) {
 	const services = []
 	for (const relPath of protoFiles) {
 		const full = path.join(protoDir, relPath)
 		const content = await fs.readFile(full, "utf8")
-		const pkg = relPath.startsWith("host/") ? "host" : "codemarie"
+		const pkg = relPath.startsWith("host/") ? "host" : "dietcode"
 		const moduleBase = path.basename(relPath, ".proto")
 		const serviceRe = /service\s+(\w+Service)\s*\{([\s\S]*?)\}/g
 		for (const m of content.matchAll(serviceRe)) {
@@ -148,7 +148,7 @@ class ConnectionManager:
 	await ensureInitPy(outDir)
 }
 
-async function generateCodeMarieClientPy(outDir, services) {
+async function generateDietCodeClientPy(outDir, services) {
 	// Import per-service wrapper clients
 	const importLines = []
 	const seen = new Set()
@@ -184,12 +184,12 @@ import grpc
 from .connection import ConnectionManager
 ${importLines.join("\n")}
 
-class CodeMarieClient:
+class DietCodeClient:
     """
-    Unified Python client analogous to src/generated/grpc-go/client/CodeMarieClient.
+    Unified Python client analogous to src/generated/grpc-go/client/DietCodeClient.
 
     Usage:
-        client = CodeMarieClient("localhost:17611")
+        client = DietCodeClient("localhost:17611")
         client.connect()
         # Call wrappers, e.g.: client.Task.SomeRpc(...)
         client.disconnect()
@@ -224,7 +224,7 @@ ${nilLines.join("\n")}
 `
 	const clientDir = outDir
 	await fs.mkdir(clientDir, { recursive: true })
-	await fs.writeFile(path.join(clientDir, "codemarie_client.py"), content)
+	await fs.writeFile(path.join(clientDir, "dietcode_client.py"), content)
 }
 
 async function generatePythonClient(protoDir, pyOutDir, clientDir, protoFiles) {
@@ -244,8 +244,8 @@ async function generatePythonClient(protoDir, pyOutDir, clientDir, protoFiles) {
 	await ensureInitPy(servicesDir)
 	await generateServiceClientsPy(servicesDir, services)
 
-	// codemarie_client.py (unified that composes service wrappers)
-	await generateCodeMarieClientPy(clientDir, services)
+	// dietcode_client.py (unified that composes service wrappers)
+	await generateDietCodeClientPy(clientDir, services)
 }
 
 async function generateServiceClientsPy(outDir, services) {
@@ -307,9 +307,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "codemarie-grpc-python"
+name = "dietcode-grpc-python"
 version = "0.1.0"
-description = "Generated Python gRPC stubs and client wrappers for CodeMarie protos"
+description = "Generated Python gRPC stubs and client wrappers for DietCode protos"
 license = { text: "Apache-2.0" }
 requires-python = ">=3.9"
 dependencies = [
@@ -389,12 +389,12 @@ async function main() {
 	// Ensure package structure (__init__.py) for imports
 	await ensureInitPy(PY_OUT_DIR)
 	try {
-		const codemarieDir = path.join(PY_OUT_DIR, "codemarie")
+		const dietcodeDir = path.join(PY_OUT_DIR, "dietcode")
 		const hostDir = path.join(PY_OUT_DIR, "host")
 		// These may or may not exist depending on which protos are present
 		await fs
-			.stat(codemarieDir)
-			.then(() => ensureInitPy(codemarieDir))
+			.stat(dietcodeDir)
+			.then(() => ensureInitPy(dietcodeDir))
 			.catch(() => {})
 		await fs
 			.stat(hostDir)

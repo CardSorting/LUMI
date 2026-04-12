@@ -1,10 +1,10 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
-const id = CodemarieDefaultTool.ATTEMPT
+const id = DietCodeDefaultTool.ATTEMPT
 
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "attempt_completion",
@@ -31,14 +31,14 @@ IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user th
 			instruction:
 				"A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)",
 			usage: "Checklist here (required if you used task_progress in previous tool uses)",
-			dependencies: [CodemarieDefaultTool.TODO],
+			dependencies: [DietCodeDefaultTool.TODO],
 			description:
 				"If you were using task_progress to update the task progress, you must include the completed list in the result as well.",
 		},
 	],
 }
 
-const GPT_5: CodemarieToolSpec = {
+const GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.GPT_5,
 	id,
 	name: "attempt_completion",
@@ -65,14 +65,14 @@ IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user th
 			instruction:
 				"A checklist showing task progress after this tool use is completed. (See 'Updating Task Progress' section for more details)",
 			usage: "Checklist here (required if you used task_progress in previous tool uses)",
-			dependencies: [CodemarieDefaultTool.TODO],
+			dependencies: [DietCodeDefaultTool.TODO],
 			description:
 				"If you were using task_progress to update the task progress, you must include the completed list in the result as well.",
 		},
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 	id,
 	name: "attempt_completion",
@@ -93,14 +93,14 @@ const NATIVE_NEXT_GEN: CodemarieToolSpec = {
 		{
 			name: "task_progress",
 			required: false,
-			dependencies: [CodemarieDefaultTool.TODO],
+			dependencies: [DietCodeDefaultTool.TODO],
 			instruction:
 				"A checklist showing task progress with the latest status of each subtasks included previously, if any. If you are calling attempt completion, and all items in this list have been completed, they must be marked as completed in this response.",
 		},
 	],
 }
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	...NATIVE_NEXT_GEN,
 	variant: ModelFamily.NATIVE_GPT_5,
 }

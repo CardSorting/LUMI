@@ -41,7 +41,7 @@ export class RemoteServer {
 		})
 
 		// Simple token-based auth middleware
-		const authToken = process.env.CODEMARIE_REMOTE_AUTH_TOKEN
+		const authToken = process.env.DIETCODE_REMOTE_AUTH_TOKEN
 		if (authToken) {
 			this.app.use((req, res, next) => {
 				// Don't require token for health check
@@ -76,7 +76,7 @@ export class RemoteServer {
 	private setupWebSockets() {
 		this.wss.on("connection", (ws: WebSocket, req) => {
 			// Validate token for WebSocket connection
-			const authToken = process.env.CODEMARIE_REMOTE_AUTH_TOKEN
+			const authToken = process.env.DIETCODE_REMOTE_AUTH_TOKEN
 			if (authToken) {
 				const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`)
 				const token = url.searchParams.get("token")

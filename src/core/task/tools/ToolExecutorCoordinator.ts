@@ -1,6 +1,6 @@
 import type { ToolUse } from "@core/assistant-message"
 import { CLINE_MCP_TOOL_IDENTIFIER } from "@/shared/mcp"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../index"
 import { AccessMcpResourceHandler } from "./handlers/AccessMcpResourceHandler"
 import { ActModeRespondHandler } from "./handlers/ActModeRespondHandler"
@@ -52,7 +52,7 @@ import type { TaskConfig } from "./types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "./types/UIHelpers"
 
 export interface IToolHandler {
-	readonly name: CodemarieDefaultTool
+	readonly name: DietCodeDefaultTool
 	execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse>
 	getDescription(block: ToolUse): string
 }
@@ -71,7 +71,7 @@ export interface IFullyManagedTool extends IToolHandler, IPartialBlockHandler {
  */
 export class SharedToolHandler implements IFullyManagedTool {
 	constructor(
-		public readonly name: CodemarieDefaultTool,
+		public readonly name: DietCodeDefaultTool,
 		private baseHandler: IFullyManagedTool,
 	) {}
 
@@ -96,56 +96,59 @@ export class ToolExecutorCoordinator {
 	private handlers = new Map<string, IToolHandler>()
 	private dynamicSubagentHandlers = new Map<string, IToolHandler>()
 
-	private readonly toolHandlersMap: Record<CodemarieDefaultTool, (v: ToolValidator) => IToolHandler | undefined> = {
-		[CodemarieDefaultTool.ASK]: (_v: ToolValidator) => new AskFollowupQuestionToolHandler(),
-		[CodemarieDefaultTool.ATTEMPT]: (_v: ToolValidator) => new AttemptCompletionHandler(),
-		[CodemarieDefaultTool.BASH]: (v: ToolValidator) => new ExecuteCommandToolHandler(v),
-		[CodemarieDefaultTool.FILE_EDIT]: (v: ToolValidator) =>
-			new SharedToolHandler(CodemarieDefaultTool.FILE_EDIT, new WriteToFileToolHandler(v)),
-		[CodemarieDefaultTool.FILE_READ]: (v: ToolValidator) => new ReadFileToolHandler(v),
-		[CodemarieDefaultTool.FILE_NEW]: (v: ToolValidator) => new WriteToFileToolHandler(v),
-		[CodemarieDefaultTool.SEARCH]: (v: ToolValidator) => new SearchFilesToolHandler(v),
-		[CodemarieDefaultTool.LIST_FILES]: (v: ToolValidator) => new ListFilesToolHandler(v),
-		[CodemarieDefaultTool.LIST_CODE_DEF]: (v: ToolValidator) => new ListCodeDefinitionNamesToolHandler(v),
-		[CodemarieDefaultTool.BROWSER]: (_v: ToolValidator) => new BrowserToolHandler(),
-		[CodemarieDefaultTool.MCP_USE]: (_v: ToolValidator) => new UseMcpToolHandler(),
-		[CodemarieDefaultTool.MCP_ACCESS]: (_v: ToolValidator) => new AccessMcpResourceHandler(),
-		[CodemarieDefaultTool.MCP_DOCS]: (_v: ToolValidator) => new LoadMcpDocumentationHandler(),
-		[CodemarieDefaultTool.NEW_TASK]: (_v: ToolValidator) => new NewTaskHandler(),
-		[CodemarieDefaultTool.PLAN_MODE]: (_v: ToolValidator) => new PlanModeRespondHandler(),
-		[CodemarieDefaultTool.ACT_MODE]: (_v: ToolValidator) => new ActModeRespondHandler(),
-		[CodemarieDefaultTool.TODO]: (_v: ToolValidator) => undefined,
-		[CodemarieDefaultTool.WEB_FETCH]: (_v: ToolValidator) => new WebFetchToolHandler(),
-		[CodemarieDefaultTool.WEB_SEARCH]: (_v: ToolValidator) => new WebSearchToolHandler(),
-		[CodemarieDefaultTool.CONDENSE]: (_v: ToolValidator) => new CondenseHandler(),
-		[CodemarieDefaultTool.SUMMARIZE_TASK]: (_v: ToolValidator) => new SummarizeTaskHandler(_v),
-		[CodemarieDefaultTool.REPORT_BUG]: (_v: ToolValidator) => new ReportBugHandler(),
-		[CodemarieDefaultTool.NEW_RULE]: (v: ToolValidator) =>
-			new SharedToolHandler(CodemarieDefaultTool.NEW_RULE, new WriteToFileToolHandler(v)),
-		[CodemarieDefaultTool.APPLY_PATCH]: (_v: ToolValidator) => new ApplyPatchHandler(_v),
-		[CodemarieDefaultTool.GENERATE_EXPLANATION]: (_v: ToolValidator) => new GenerateExplanationToolHandler(),
-		[CodemarieDefaultTool.USE_SKILL]: (_v: ToolValidator) => new UseSkillToolHandler(),
-		[CodemarieDefaultTool.USE_SUBAGENTS]: (_v: ToolValidator) => new UseSubagentsToolHandler(),
-		[CodemarieDefaultTool.MEM_QUERY]: (_v: ToolValidator) => new CognitiveMemoryQueryHandler(),
-		[CodemarieDefaultTool.MEM_SNAPSHOT]: (_v: ToolValidator) => new CognitiveMemorySnapshotHandler(),
-		[CodemarieDefaultTool.MEM_LINK]: (_v: ToolValidator) => new CognitiveMemoryLinkHandler(),
-		[CodemarieDefaultTool.MEM_MERGE]: (_v: ToolValidator) => new CognitiveMemoryMergeHandler(),
-		[CodemarieDefaultTool.MEM_REFRESH]: (_v: ToolValidator) => new CognitiveMemoryRefreshHandler(),
-		[CodemarieDefaultTool.MEM_CONTEXT]: (_v: ToolValidator) => new CognitiveMemoryContextHandler(),
-		[CodemarieDefaultTool.MEM_BLAST]: (_v: ToolValidator) => new CognitiveMemoryBlastHandler(),
-		[CodemarieDefaultTool.MEM_CHOKE]: (_v: ToolValidator) => new CognitiveMemoryChokeHandler(),
-		[CodemarieDefaultTool.MEM_HEAL]: (_v: ToolValidator) => new CognitiveMemoryHealHandler(),
-		[CodemarieDefaultTool.MEM_FORECAST]: (_v: ToolValidator) => new CognitiveMemoryForecastHandler(),
-		[CodemarieDefaultTool.MEM_CENTRALITY]: (_v: ToolValidator) => new CognitiveMemoryCentralityHandler(),
-		[CodemarieDefaultTool.MEM_SUBGRAPH]: (_v: ToolValidator) => new CognitiveMemorySubgraphHandler(),
-		[CodemarieDefaultTool.MEM_APPEND_SHARED]: (_v: ToolValidator) => new CognitiveMemoryAppendSharedHandler(),
-		[CodemarieDefaultTool.MEM_GET_SHARED]: (_v: ToolValidator) => new CognitiveMemoryGetSharedHandler(),
-		[CodemarieDefaultTool.MEM_BUNDLE]: (_v: ToolValidator) => new CognitiveMemoryBundleHandler(),
-		[CodemarieDefaultTool.MEM_BLAME]: (_v: ToolValidator) => new CognitiveMemoryBlameHandler(),
-		[CodemarieDefaultTool.MEM_CHANGELOG]: (_v: ToolValidator) => new CognitiveMemoryChangelogHandler(),
-		[CodemarieDefaultTool.MEM_CLAIM]: (_v: ToolValidator) => new CognitiveMemoryClaimHandler(),
-		[CodemarieDefaultTool.MEM_RELEASE]: (_v: ToolValidator) => new CognitiveMemoryReleaseHandler(),
-		[CodemarieDefaultTool.MEM_HUBS]: (_v: ToolValidator) => new CognitiveMemoryHubsHandler(),
+	private readonly toolHandlersMap: Record<DietCodeDefaultTool, (v: ToolValidator) => IToolHandler | undefined> = {
+		[DietCodeDefaultTool.ASK]: (_v: ToolValidator) => new AskFollowupQuestionToolHandler(),
+		[DietCodeDefaultTool.ATTEMPT]: (_v: ToolValidator) => new AttemptCompletionHandler(),
+		[DietCodeDefaultTool.BASH]: (v: ToolValidator) => new ExecuteCommandToolHandler(v),
+		[DietCodeDefaultTool.FILE_EDIT]: (v: ToolValidator) =>
+			new SharedToolHandler(DietCodeDefaultTool.FILE_EDIT, new WriteToFileToolHandler(v)),
+		[DietCodeDefaultTool.FILE_READ]: (v: ToolValidator) => new ReadFileToolHandler(v),
+		[DietCodeDefaultTool.FILE_NEW]: (v: ToolValidator) => new WriteToFileToolHandler(v),
+		[DietCodeDefaultTool.SEARCH]: (v: ToolValidator) => new SearchFilesToolHandler(v),
+		[DietCodeDefaultTool.LIST_FILES]: (v: ToolValidator) => new ListFilesToolHandler(v),
+		[DietCodeDefaultTool.LIST_CODE_DEF]: (v: ToolValidator) => new ListCodeDefinitionNamesToolHandler(v),
+		[DietCodeDefaultTool.BROWSER]: (_v: ToolValidator) => new BrowserToolHandler(),
+		[DietCodeDefaultTool.MCP_USE]: (_v: ToolValidator) => new UseMcpToolHandler(),
+		[DietCodeDefaultTool.MCP_ACCESS]: (_v: ToolValidator) => new AccessMcpResourceHandler(),
+		[DietCodeDefaultTool.MCP_DOCS]: (_v: ToolValidator) => new LoadMcpDocumentationHandler(),
+		[DietCodeDefaultTool.NEW_TASK]: (_v: ToolValidator) => new NewTaskHandler(),
+		[DietCodeDefaultTool.PLAN_MODE]: (_v: ToolValidator) => new PlanModeRespondHandler(),
+		[DietCodeDefaultTool.ACT_MODE]: (_v: ToolValidator) => new ActModeRespondHandler(),
+		[DietCodeDefaultTool.TODO]: (_v: ToolValidator) => undefined,
+		[DietCodeDefaultTool.WEB_FETCH]: (_v: ToolValidator) => new WebFetchToolHandler(),
+		[DietCodeDefaultTool.WEB_SEARCH]: (_v: ToolValidator) => new WebSearchToolHandler(),
+		[DietCodeDefaultTool.CONDENSE]: (_v: ToolValidator) => new CondenseHandler(),
+		[DietCodeDefaultTool.SUMMARIZE_TASK]: (_v: ToolValidator) => new SummarizeTaskHandler(_v),
+		[DietCodeDefaultTool.REPORT_BUG]: (_v: ToolValidator) => new ReportBugHandler(),
+		[DietCodeDefaultTool.NEW_RULE]: (v: ToolValidator) =>
+			new SharedToolHandler(DietCodeDefaultTool.NEW_RULE, new WriteToFileToolHandler(v)),
+		[DietCodeDefaultTool.APPLY_PATCH]: (_v: ToolValidator) => new ApplyPatchHandler(_v),
+		[DietCodeDefaultTool.GENERATE_EXPLANATION]: (_v: ToolValidator) => new GenerateExplanationToolHandler(),
+		[DietCodeDefaultTool.USE_SKILL]: (_v: ToolValidator) => new UseSkillToolHandler(),
+		[DietCodeDefaultTool.USE_SUBAGENTS]: (_v: ToolValidator) => new UseSubagentsToolHandler(),
+		[DietCodeDefaultTool.MEM_QUERY]: (_v: ToolValidator) => new CognitiveMemoryQueryHandler(),
+		[DietCodeDefaultTool.MEM_SNAPSHOT]: (_v: ToolValidator) => new CognitiveMemorySnapshotHandler(),
+		[DietCodeDefaultTool.MEM_LINK]: (_v: ToolValidator) => new CognitiveMemoryLinkHandler(),
+		[DietCodeDefaultTool.MEM_MERGE]: (_v: ToolValidator) => new CognitiveMemoryMergeHandler(),
+		[DietCodeDefaultTool.MEM_REFRESH]: (_v: ToolValidator) => new CognitiveMemoryRefreshHandler(),
+		[DietCodeDefaultTool.MEM_CONTEXT]: (_v: ToolValidator) => new CognitiveMemoryContextHandler(),
+		[DietCodeDefaultTool.MEM_BLAST]: (_v: ToolValidator) => new CognitiveMemoryBlastHandler(),
+		[DietCodeDefaultTool.MEM_CHOKE]: (_v: ToolValidator) => new CognitiveMemoryChokeHandler(),
+		[DietCodeDefaultTool.MEM_HEAL]: (_v: ToolValidator) => new CognitiveMemoryHealHandler(),
+		[DietCodeDefaultTool.MEM_FORECAST]: (_v: ToolValidator) => new CognitiveMemoryForecastHandler(),
+		[DietCodeDefaultTool.MEM_CENTRALITY]: (_v: ToolValidator) => new CognitiveMemoryCentralityHandler(),
+		[DietCodeDefaultTool.MEM_SUBGRAPH]: (_v: ToolValidator) => new CognitiveMemorySubgraphHandler(),
+		[DietCodeDefaultTool.MEM_APPEND_SHARED]: (_v: ToolValidator) => new CognitiveMemoryAppendSharedHandler(),
+		[DietCodeDefaultTool.MEM_GET_SHARED]: (_v: ToolValidator) => new CognitiveMemoryGetSharedHandler(),
+		[DietCodeDefaultTool.MEM_BUNDLE]: (_v: ToolValidator) => new CognitiveMemoryBundleHandler(),
+		[DietCodeDefaultTool.MEM_BLAME]: (_v: ToolValidator) => new CognitiveMemoryBlameHandler(),
+		[DietCodeDefaultTool.MEM_CHANGELOG]: (_v: ToolValidator) => new CognitiveMemoryChangelogHandler(),
+		[DietCodeDefaultTool.MEM_CLAIM]: (_v: ToolValidator) => new CognitiveMemoryClaimHandler(),
+		[DietCodeDefaultTool.MEM_RELEASE]: (_v: ToolValidator) => new CognitiveMemoryReleaseHandler(),
+		[DietCodeDefaultTool.MEM_HUBS]: (_v: ToolValidator) => new CognitiveMemoryHubsHandler(),
+		[DietCodeDefaultTool.RENAME]: (_v: ToolValidator) => undefined,
+		[DietCodeDefaultTool.MOVE]: (_v: ToolValidator) => undefined,
+		[DietCodeDefaultTool.DELETE]: (_v: ToolValidator) => undefined,
 	}
 
 	/**
@@ -155,7 +158,7 @@ export class ToolExecutorCoordinator {
 		this.handlers.set(handler.name, handler)
 	}
 
-	registerByName(toolName: CodemarieDefaultTool, validator: ToolValidator): void {
+	registerByName(toolName: DietCodeDefaultTool, validator: ToolValidator): void {
 		const handler = this.toolHandlersMap[toolName]?.(validator)
 		if (handler) {
 			this.register(handler)
@@ -175,7 +178,7 @@ export class ToolExecutorCoordinator {
 	getHandler(toolName: string): IToolHandler | undefined {
 		// HACK: Normalize MCP tool names to the standard handler
 		if (toolName.includes(CLINE_MCP_TOOL_IDENTIFIER)) {
-			toolName = CodemarieDefaultTool.MCP_USE
+			toolName = DietCodeDefaultTool.MCP_USE
 		}
 
 		const staticHandler = this.handlers.get(toolName)
@@ -188,7 +191,7 @@ export class ToolExecutorCoordinator {
 			if (existingHandler) {
 				return existingHandler
 			}
-			const handler = new SharedToolHandler(toolName as CodemarieDefaultTool, new UseSubagentsToolHandler())
+			const handler = new SharedToolHandler(toolName as DietCodeDefaultTool, new UseSubagentsToolHandler())
 			this.dynamicSubagentHandlers.set(toolName, handler)
 			return handler
 		}

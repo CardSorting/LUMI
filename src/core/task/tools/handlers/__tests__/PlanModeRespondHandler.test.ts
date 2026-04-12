@@ -1,5 +1,5 @@
 import { expect } from "chai"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { PlanModeRespondHandler } from "../PlanModeRespondHandler"
 
 describe("PlanModeRespondHandler - Exploration Limits", () => {
@@ -23,14 +23,14 @@ describe("PlanModeRespondHandler - Exploration Limits", () => {
 			},
 			messageState: {
 				getApiConversationHistory: () => [],
-				getCodemarieMessages: () => [],
+				getDietCodeMessages: () => [],
 			},
 		}
 	})
 
 	it("should allow needs_more_exploration until threshold (3)", async () => {
 		const block = {
-			name: CodemarieDefaultTool.PLAN_MODE,
+			name: DietCodeDefaultTool.PLAN_MODE,
 			params: {
 				response: "I need to see more.",
 				needs_more_exploration: "true",

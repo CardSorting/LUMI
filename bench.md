@@ -86,6 +86,6 @@ The repository now includes performance evaluation for the harness itself:
 
 2. **Terminal-Bench 2.0**:
    ```bash
-   npx tsx evals/e2e/run-codemarie-bench.ts --dataset terminal-bench --tasks sample
+   npx tsx evals/e2e/run-dietcode-bench.ts --dataset terminal-bench --tasks sample
    ```
    *Runs CLI-focused tasks from the official Terminal-Bench 2.0 dataset via Harbor.*

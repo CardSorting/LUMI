@@ -5,12 +5,12 @@ import { constructNewFileContent, getLineNumberFromCharIndex } from "@core/assis
 import { formatResponse } from "@core/prompts/responses"
 import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
-import { CodemarieSayTool } from "@shared/ExtensionMessage"
+import { DietCodeSayTool } from "@shared/ExtensionMessage"
 import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { fileExistsAtPath } from "@utils/fs"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { executor } from "../../ActionExecutor"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
@@ -23,7 +23,7 @@ import { ToolDisplayUtils } from "../utils/ToolDisplayUtils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class WriteToFileToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.FILE_NEW // This handler supports write_to_file, replace_in_file, and new_rule
+	readonly name = DietCodeDefaultTool.FILE_NEW // This handler supports write_to_file, replace_in_file, and new_rule
 
 	constructor(private validator: ToolValidator) {}
 
@@ -54,7 +54,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			const { relPath, absolutePath, fileExists, diff, content, newContent, matchIndices } = result
 
 			// Create and show partial UI message
-			const sharedMessageProps: CodemarieSayTool = {
+			const sharedMessageProps: DietCodeSayTool = {
 				tool: fileExists ? "editedExistingFile" : "newFileCreated",
 				path: getReadablePath(config.cwd, uiHelpers.removeClosingTag(block, "path", relPath)),
 				content: diff || content,
@@ -119,7 +119,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			// Use progressive error with token budget awareness
 			const relPath = rawRelPath || "unknown"
 			const contextWindow = config.api.getModel().info.contextWindow ?? 128_000
-			const lastApiReqTotalTokens = getLastApiReqTotalTokens(config.messageState.getCodemarieMessages())
+			const lastApiReqTotalTokens = getLastApiReqTotalTokens(config.messageState.getDietCodeMessages())
 			const contextUsagePercent = contextWindow > 0 ? Math.round((lastApiReqTotalTokens / contextWindow) * 100) : undefined
 			const errorMessage = formatResponse.writeToFileMissingContentError(
 				relPath,
@@ -129,9 +129,9 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 
 			await config.callbacks.say(
 				"error",
-				`Codemarie tried to use write_to_file for '${relPath}' without value for required parameter 'content'. ${
+				`DietCode tried to use write_to_file for '${relPath}' without value for required parameter 'content'. ${
 					config.taskState.consecutiveMistakeCount >= 2
-						? "This has happened multiple times — Codemarie will try a different approach."
+						? "This has happened multiple times — DietCode will try a different approach."
 						: "Retrying..."
 				}`,
 			)
@@ -156,7 +156,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			const { relPath, absolutePath, fileExists, diff, content, newContent, workspaceContext, matchIndices } = result
 
 			// Handle approval flow
-			const sharedMessageProps: CodemarieSayTool = {
+			const sharedMessageProps: DietCodeSayTool = {
 				tool: fileExists ? "editedExistingFile" : "newFileCreated",
 				path: getReadablePath(config.cwd, relPath),
 				content: diff || content,
@@ -189,7 +189,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				// 		newContent,
 				// 	)
 				// : undefined,
-			} satisfies CodemarieSayTool)
+			} satisfies DietCodeSayTool)
 
 			if (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relPath)) {
 				// Auto-approval flow
@@ -212,7 +212,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				await setTimeoutPromise(3_500)
 			} else {
 				// Manual approval flow with detailed feedback handling
-				const notificationMessage = `Codemarie wants to ${fileExists ? "edit" : "create"} ${getWorkspaceBasename(relPath, "WriteToFile.notification")}`
+				const notificationMessage = `DietCode wants to ${fileExists ? "edit" : "create"} ${getWorkspaceBasename(relPath, "WriteToFile.notification")}`
 
 				// Show notification
 				showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
@@ -308,8 +308,8 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				throw error
 			}
 
-			// Mark the file as edited by Codemarie
-			config.services.fileContextTracker.markFileAsEditedByCodemarie(relPath)
+			// Mark the file as edited by DietCode
+			config.services.fileContextTracker.markFileAsEditedByDietCode(relPath)
 
 			// Save the changes and get the result with reliability wrapper
 			const { newProblemsMessage, userEdits, autoFormattingEdits, finalContent } = await executor.execute(
@@ -324,7 +324,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			config.taskState.didEditFile = true // used to determine if we should wait for busy terminal to update before sending api request
 
 			// Track file edit operation
-			await config.services.fileContextTracker.trackFileContext(relPath, "codemarie_edited")
+			await config.services.fileContextTracker.trackFileContext(relPath, "dietcode_edited")
 
 			// Reset the diff view
 			await config.services.diffViewProvider.reset()
@@ -389,14 +389,14 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			resolutionMethod: (typeof pathResult !== "string" ? "hint" : "primary_fallback") as "hint" | "primary_fallback",
 		}
 
-		// Check codemarieignore access first
-		const accessValidation = await this.validator.checkCodemarieIgnorePath(resolvedPath)
+		// Check dietcodeignore access first
+		const accessValidation = await this.validator.checkDietCodeIgnorePath(resolvedPath)
 		if (!accessValidation.ok) {
 			// Show error and return early (full original behavior)
-			await config.callbacks.say("codemarieignore_error", resolvedPath)
+			await config.callbacks.say("dietcodeignore_error", resolvedPath)
 
 			// Push tool result and save checkpoint using existing utilities
-			const errorResponse = formatResponse.toolError(formatResponse.codemarieIgnoreError(resolvedPath))
+			const errorResponse = formatResponse.toolError(formatResponse.dietcodeIgnoreError(resolvedPath))
 			ToolResultUtils.pushToolResult(
 				errorResponse,
 				block,
@@ -431,7 +431,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			// Apply model-specific fixes (deepseek models tend to use unescaped html entities in diffs)
 			diff = applyModelContentFixes(diff, config.api.getModel().id, resolvedPath)
 
-			// open the editor if not done already.  This is to fix diff error when model provides correct search-replace text but Codemarie throws error
+			// open the editor if not done already.  This is to fix diff error when model provides correct search-replace text but DietCode throws error
 			// because file is not open.
 			if (!config.services.diffViewProvider.isEditing) {
 				await config.services.diffViewProvider.open(absolutePath, { displayPath: relPath })

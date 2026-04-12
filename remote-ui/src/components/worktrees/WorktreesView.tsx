@@ -1,12 +1,12 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { NewTaskRequest } from "@shared/proto/codemarie/task"
-import type { MergeWorktreeResult, Worktree as WorktreeProto } from "@shared/proto/codemarie/worktree"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { NewTaskRequest } from "@shared/proto/dietcode/task"
+import type { MergeWorktreeResult, Worktree as WorktreeProto } from "@shared/proto/dietcode/worktree"
 import {
 	CreateWorktreeIncludeRequest,
 	DeleteWorktreeRequest,
 	MergeWorktreeRequest,
 	SwitchWorktreeRequest,
-} from "@shared/proto/codemarie/worktree"
+} from "@shared/proto/dietcode/worktree"
 import { VSCodeButton, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { AlertCircle, Check, ExternalLink, FolderOpen, GitBranch, GitMerge, Loader2, Plus, Trash2, X } from "lucide-react"
 import { memo, useCallback, useEffect, useState } from "react"
@@ -218,8 +218,8 @@ const WorktreesView = ({ onDone }: WorktreesViewProps) => {
 		}
 	}, [mergeWorktree, getMainBranch, deleteAfterMerge, loadWorktrees])
 
-	// Ask Codemarie to resolve conflicts
-	const handleAskCodemarieToResolve = useCallback(async () => {
+	// Ask DietCode to resolve conflicts
+	const handleAskDietCodeToResolve = useCallback(async () => {
 		if (!mergeResult || !mergeResult.hasConflicts) return
 
 		const conflictList = mergeResult.conflictingFiles.join(", ")
@@ -234,7 +234,7 @@ Please help me resolve these merge conflicts, then complete the merge, and delet
 			// Close worktrees view to show the chat with the new task
 			onDone()
 		} catch (err) {
-			setMergeError(err instanceof Error ? err.message : "Failed to create task for Codemarie")
+			setMergeError(err instanceof Error ? err.message : "Failed to create task for DietCode")
 		}
 	}, [mergeResult, mergeWorktree, closeMergeModal, onDone])
 
@@ -253,10 +253,10 @@ Please help me resolve these merge conflicts, then complete the merge, and delet
 				{/* Description */}
 				<p className="text-sm text-[var(--vscode-descriptionForeground)] m-0 mb-4">
 					Git worktrees let you work on multiple branches at the same time, each in its own folder. Open worktrees in
-					their own windows so Codemarie can work on multiple tasks in parallel.{" "}
+					their own windows so DietCode can work on multiple tasks in parallel.{" "}
 					<a
 						className="text-[var(--vscode-textLink-foreground)] hover:text-[var(--vscode-textLink-activeForeground)]"
-						href="https://docs.codemarie.bot/features/worktrees"
+						href="https://docs.dietcode.bot/features/worktrees"
 						rel="noopener noreferrer"
 						style={{ fontSize: "inherit" }}
 						target="_blank">
@@ -278,7 +278,7 @@ Please help me resolve these merge conflicts, then complete the merge, and delet
 								.worktreeinclude detected.{" "}
 								<a
 									className="text-[var(--vscode-textLink-foreground)] hover:text-[var(--vscode-textLink-activeForeground)]"
-									href="https://docs.codemarie.bot/features/worktrees#worktreeinclude"
+									href="https://docs.dietcode.bot/features/worktrees#worktreeinclude"
 									rel="noopener noreferrer"
 									style={{ fontSize: "inherit" }}
 									target="_blank">
@@ -299,7 +299,7 @@ Please help me resolve these merge conflicts, then complete the merge, and delet
 									to new worktrees, so you don't have to reinstall dependencies.{" "}
 									<a
 										className="text-[var(--vscode-textLink-foreground)] hover:text-[var(--vscode-textLink-activeForeground)]"
-										href="https://docs.codemarie.bot/features/worktrees#worktreeinclude"
+										href="https://docs.dietcode.bot/features/worktrees#worktreeinclude"
 										rel="noopener noreferrer"
 										style={{ fontSize: "inherit" }}
 										target="_blank">
@@ -579,8 +579,8 @@ Please help me resolve these merge conflicts, then complete the merge, and delet
 								</div>
 
 								<div className="flex flex-col gap-2">
-									<VSCodeButton onClick={handleAskCodemarieToResolve} style={{ width: "100%" }}>
-										Ask Codemarie to Resolve
+									<VSCodeButton onClick={handleAskDietCodeToResolve} style={{ width: "100%" }}>
+										Ask DietCode to Resolve
 									</VSCodeButton>
 									<VSCodeButton appearance="secondary" onClick={closeMergeModal} style={{ width: "100%" }}>
 										I'll Resolve Manually

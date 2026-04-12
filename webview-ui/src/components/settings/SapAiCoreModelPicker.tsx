@@ -1,5 +1,5 @@
 import { sapAiCoreModels } from "@shared/api"
-import { SapAiCoreModelDeployment } from "@shared/proto/index.codemarie"
+import { SapAiCoreModelDeployment } from "@shared/proto/index.dietcode"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import React, { memo, useEffect, useMemo } from "react"
 import { DropdownContainer } from "./common/ModelSelector"
@@ -70,13 +70,13 @@ const SapAiCoreModelPicker: React.FC<SapAiCoreModelPickerProps> = ({
 	const categorizedModels = useMemo(() => {
 		const allSupportedModels = Object.keys(sapAiCoreModels)
 
-		// Models that are both deployed AND supported in Codemarie
+		// Models that are both deployed AND supported in DietCode
 		const deployedModelNames = sapAiCoreModelDeployments.map((d) => d.modelName)
 		const deployedAndSupported = deployedModelNames.filter((deployedModel: string) =>
 			allSupportedModels.includes(deployedModel),
 		)
 
-		// Models that are supported in Codemarie but NOT deployed
+		// Models that are supported in DietCode but NOT deployed
 		const supportedButNotDeployed = allSupportedModels.filter(
 			(supportedModel: string) => !deployedModelNames.includes(supportedModel),
 		)

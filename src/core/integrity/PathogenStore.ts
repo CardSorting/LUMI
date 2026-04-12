@@ -1,6 +1,6 @@
+import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
-import { crypto } from "crypto"
 
 export interface Pathogen {
 	id: string
@@ -43,7 +43,7 @@ export class PathogenStore {
 				originalSummary: originalSignature.substring(0, 50) + "...",
 				timestamp: Date.now(),
 				severity,
-				hitCount: 1
+				hitCount: 1,
 			})
 		}
 
@@ -69,7 +69,7 @@ export class PathogenStore {
 	 */
 	private prune() {
 		const now = Date.now()
-		
+
 		// 1. Age-based pruning
 		for (const [hash, p] of this.pathogens.entries()) {
 			if (now - p.timestamp > this.EXPIRATION_MS) {
@@ -79,11 +79,10 @@ export class PathogenStore {
 
 		// 2. Capacity-based pruning (LRU)
 		if (this.pathogens.size > this.MAX_PATHOGENS) {
-			const sorted = Array.from(this.pathogens.values())
-				.sort((a, b) => a.timestamp - b.timestamp) // Oldest first
-			
+			const sorted = Array.from(this.pathogens.values()).sort((a, b) => a.timestamp - b.timestamp) // Oldest first
+
 			const toRemove = sorted.slice(0, this.pathogens.size - this.MAX_PATHOGENS)
-			toRemove.forEach(p => this.pathogens.delete(p.signature))
+			toRemove.forEach((p) => this.pathogens.delete(p.signature))
 		}
 	}
 

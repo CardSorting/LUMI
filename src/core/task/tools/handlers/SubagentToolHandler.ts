@@ -1,15 +1,15 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import {
-	CodemarieAskUseSubagents,
-	CodemarieSaySubagentStatus,
-	CodemarieSubagentUsageInfo,
+	DietCodeAskUseSubagents,
+	DietCodeSaySubagentStatus,
+	DietCodeSubagentUsageInfo,
 	SubagentStatusItem,
 } from "@shared/ExtensionMessage"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
@@ -54,7 +54,7 @@ function excerpt(text: string | undefined, maxChars = 1200): string {
 }
 
 export class UseSubagentsToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.USE_SUBAGENTS
+	readonly name = DietCodeDefaultTool.USE_SUBAGENTS
 
 	getDescription(_block: ToolUse): string {
 		const configuredSubagentName = resolveConfiguredSubagentName(_block.name)
@@ -77,7 +77,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			return
 		}
 
-		const partialMessage = JSON.stringify({ prompts } satisfies CodemarieAskUseSubagents)
+		const partialMessage = JSON.stringify({ prompts } satisfies DietCodeAskUseSubagents)
 		const autoApproveResult = uiHelpers.shouldAutoApproveTool(this.name)
 		const [shouldAutoApprove] = Array.isArray(autoApproveResult) ? autoApproveResult : [autoApproveResult, false]
 
@@ -114,7 +114,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		const apiConfig = config.services.stateManager.getApiConfiguration()
 		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
 		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
-		const approvalPayload: CodemarieAskUseSubagents = { prompts }
+		const approvalPayload: DietCodeAskUseSubagents = { prompts }
 		const approvalBody = JSON.stringify(approvalPayload)
 
 		const autoApproveResult = config.autoApprover?.shouldAutoApproveTool(this.name)
@@ -135,8 +135,8 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		} else {
 			showNotificationForApproval(
 				prompts.length === 1
-					? `Codemarie wants to use ${configuredSubagentName ? `the '${configuredSubagentName}' subagent` : "a subagent"}`
-					: `Codemarie wants to use ${prompts.length} subagents`,
+					? `DietCode wants to use ${configuredSubagentName ? `the '${configuredSubagentName}' subagent` : "a subagent"}`
+					: `DietCode wants to use ${prompts.length} subagents`,
 				config.autoApprovalSettings.enableNotifications,
 			)
 			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("use_subagents", approvalBody, config)
@@ -192,7 +192,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			latestToolCall: undefined,
 		}))
 
-		const emitStatus = async (status: CodemarieSaySubagentStatus["status"], partial: boolean) => {
+		const emitStatus = async (status: DietCodeSaySubagentStatus["status"], partial: boolean) => {
 			const completed = entries.filter((entry) => entry.status === "completed" || entry.status === "failed").length
 			const successes = entries.filter((entry) => entry.status === "completed").length
 			const failures = entries.filter((entry) => entry.status === "failed").length
@@ -203,7 +203,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			const maxContextTokens = entries.reduce((acc, entry) => Math.max(acc, entry.contextTokens || 0), 0)
 			const maxContextUsagePercentage = entries.reduce((acc, entry) => Math.max(acc, entry.contextUsagePercentage || 0), 0)
 
-			const payload: CodemarieSaySubagentStatus = {
+			const payload: DietCodeSaySubagentStatus = {
 				status,
 				total: entries.length,
 				completed,
@@ -222,7 +222,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		}
 
 		let statusUpdateQueue: Promise<void> = Promise.resolve()
-		const queueStatusUpdate = (status: CodemarieSaySubagentStatus["status"], partial: boolean): Promise<void> => {
+		const queueStatusUpdate = (status: DietCodeSaySubagentStatus["status"], partial: boolean): Promise<void> => {
 			statusUpdateQueue = statusUpdateQueue.catch(() => undefined).then(() => emitStatus(status, partial))
 			return statusUpdateQueue
 		}
@@ -244,7 +244,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		// Phase 3: Swarm Tool Delegation & Authorization Guard
 		const requestedTools = builder.getAllowedTools() || []
 		const unauthorizedTools = requestedTools.filter(
-			(t: CodemarieDefaultTool) => !SUBAGENT_DEFAULT_ALLOWED_TOOLS.includes(t) && t !== CodemarieDefaultTool.ATTEMPT,
+			(t: DietCodeDefaultTool) => !SUBAGENT_DEFAULT_ALLOWED_TOOLS.includes(t) && t !== DietCodeDefaultTool.ATTEMPT,
 		)
 
 		if (unauthorizedTools.length > 0) {
@@ -357,7 +357,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		const failures = entries.filter((entry) => entry.status === "failed").length
 		await queueStatusUpdate(failures > 0 ? "failed" : "completed", false)
 
-		const subagentUsagePayload: CodemarieSubagentUsageInfo = {
+		const subagentUsagePayload: DietCodeSubagentUsageInfo = {
 			source: "subagents",
 			tokensIn: usageTokensIn,
 			tokensOut: usageTokensOut,

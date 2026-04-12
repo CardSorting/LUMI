@@ -78,7 +78,7 @@ jobs:
               env:
                   VSCE_PAT: ${{ secrets.VSCE_PAT }}
                   OVSX_PAT: ${{ secrets.OVSX_PAT }}
-                  CODEMARIE_ENVIRONMENT: production
+                  DIETCODE_ENVIRONMENT: production
                   TELEMETRY_SERVICE_API_KEY: ${{ secrets.TELEMETRY_SERVICE_API_KEY }}
                   ERROR_SERVICE_API_KEY: ${{ secrets.ERROR_SERVICE_API_KEY }}
                   # OpenTelemetry production defaults (can be overridden at runtime)
@@ -90,7 +90,7 @@ jobs:
                   OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
               run: |
                   # Required to generate the .vsix
-                  vsce package  --allow-package-secrets sendgrid --out "codemarie-${{ steps.get_version.outputs.version }}.vsix"
+                  vsce package  --allow-package-secrets sendgrid --out "dietcode-${{ steps.get_version.outputs.version }}.vsix"
 
                   if [ "${{ github.event.inputs.release-type }}" = "pre-release" ]; then
                     npm run publish:marketplace:prerelease

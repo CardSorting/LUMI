@@ -25,7 +25,7 @@ describe("TemplateEngine", () => {
 			} as unknown as McpHub,
 			focusChainSettings: {
 				enabled: true,
-				remindCodemarieInterval: 6,
+				remindDietcodeInterval: 6,
 			},
 			browserSettings: {
 				viewport: {

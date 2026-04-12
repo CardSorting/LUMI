@@ -1,6 +1,6 @@
 import { ErrorSettings } from "./providers/IErrorProvider"
 
-export { CodemarieError, CodemarieErrorType } from "./CodemarieError"
+export { DietCodeError, DietCodeErrorType } from "./DietCodeError"
 export { type ErrorProviderConfig, ErrorProviderFactory, type ErrorProviderType } from "./ErrorProviderFactory"
 export { ErrorService } from "./ErrorService"
 export type { ErrorSettings, IErrorProvider } from "./providers/IErrorProvider"

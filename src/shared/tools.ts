@@ -2,16 +2,19 @@ import { Tool as AnthropicTool } from "@anthropic-ai/sdk/resources/index"
 import { FunctionDeclaration as GoogleTool } from "@google/genai"
 import { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
 
-export type CodemarieTool = OpenAITool | AnthropicTool | GoogleTool
+export type DietCodeTool = OpenAITool | AnthropicTool | GoogleTool
 
 // Define available tool ids
-export enum CodemarieDefaultTool {
+export enum DietCodeDefaultTool {
 	ASK = "ask_followup_question",
 	ATTEMPT = "attempt_completion",
 	BASH = "execute_command",
 	FILE_EDIT = "replace_in_file",
 	FILE_READ = "read_file",
 	FILE_NEW = "write_to_file",
+	RENAME = "rename_files",
+	MOVE = "move_files",
+	DELETE = "delete_file",
 	SEARCH = "search_files",
 	LIST_FILES = "list_files",
 	LIST_CODE_DEF = "list_code_definition_names",
@@ -58,7 +61,7 @@ export enum CodemarieDefaultTool {
 
 // Array of all tool names for compatibility
 // Automatically generated from the enum values
-export const toolUseNames = Object.values(CodemarieDefaultTool) as CodemarieDefaultTool[]
+export const toolUseNames = Object.values(DietCodeDefaultTool) as DietCodeDefaultTool[]
 
 const dynamicToolUseNamesByNamespace = new Map<string, Set<string>>()
 
@@ -75,14 +78,14 @@ export function getToolUseNames(): string[] {
 // Tools that are safe to run in parallel with the initial checkpoint commit
 // These are tools that do not modify the workspace state
 export const READ_ONLY_TOOLS = [
-	CodemarieDefaultTool.LIST_FILES,
-	CodemarieDefaultTool.FILE_READ,
-	CodemarieDefaultTool.SEARCH,
-	CodemarieDefaultTool.LIST_CODE_DEF,
-	CodemarieDefaultTool.BROWSER,
-	CodemarieDefaultTool.ASK,
-	CodemarieDefaultTool.WEB_SEARCH,
-	CodemarieDefaultTool.WEB_FETCH,
-	CodemarieDefaultTool.USE_SKILL,
-	CodemarieDefaultTool.USE_SUBAGENTS,
+	DietCodeDefaultTool.LIST_FILES,
+	DietCodeDefaultTool.FILE_READ,
+	DietCodeDefaultTool.SEARCH,
+	DietCodeDefaultTool.LIST_CODE_DEF,
+	DietCodeDefaultTool.BROWSER,
+	DietCodeDefaultTool.ASK,
+	DietCodeDefaultTool.WEB_SEARCH,
+	DietCodeDefaultTool.WEB_FETCH,
+	DietCodeDefaultTool.USE_SKILL,
+	DietCodeDefaultTool.USE_SUBAGENTS,
 ] as const

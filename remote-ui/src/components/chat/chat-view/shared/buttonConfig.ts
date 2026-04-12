@@ -1,4 +1,4 @@
-import type { CodemarieMessage, CodemarieSayTool } from "@shared/ExtensionMessage"
+import type { DietCodeMessage, DietCodeSayTool } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 
 /**
@@ -213,7 +213,7 @@ const errorTypes = ["api_req_failed", "mistake_limit_reached"]
  * Determines button configuration based on message type and state
  * This is the single source of truth used by both ActionButtons and useMessageHandlers
  */
-export function getButtonConfig(message: CodemarieMessage | undefined, _mode: Mode = "act"): ButtonConfig {
+export function getButtonConfig(message: DietCodeMessage | undefined, _mode: Mode = "act"): ButtonConfig {
 	if (!message) {
 		return BUTTON_CONFIGS.default
 	}
@@ -246,7 +246,7 @@ export function getButtonConfig(message: CodemarieMessage | undefined, _mode: Mo
 			case "tool": {
 				// Only parse JSON if we need to determine save vs approve
 				try {
-					const tool = JSON.parse(message.text || "{}") as CodemarieSayTool
+					const tool = JSON.parse(message.text || "{}") as DietCodeSayTool
 					if (tool.tool === "editedExistingFile" || tool.tool === "newFileCreated" || tool.tool === "fileDeleted") {
 						return BUTTON_CONFIGS.tool_save
 					}

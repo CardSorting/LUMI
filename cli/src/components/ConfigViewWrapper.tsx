@@ -6,7 +6,7 @@ import { exec } from "node:child_process"
 import os from "node:os"
 import path from "node:path"
 
-import { RuleScope } from "@shared/proto/codemarie/file"
+import { RuleScope } from "@shared/proto/dietcode/file"
 import type { GlobalStateAndSettings, GlobalStateAndSettingsKey, LocalState, LocalStateKey } from "@shared/storage/state-keys"
 import React, { useCallback, useEffect, useState } from "react"
 
@@ -57,8 +57,8 @@ export const ConfigViewWrapper: React.FC<ConfigViewWrapperProps> = ({
 	const [workspaceStateLocal, setWorkspaceStateLocal] = useState<Record<string, unknown>>(initialWorkspaceState)
 
 	// Rules state
-	const [globalCodemarieRulesToggles, setGlobalCodemarieRulesToggles] = useState<Record<string, boolean>>({})
-	const [localCodemarieRulesToggles, setLocalCodemarieRulesToggles] = useState<Record<string, boolean>>({})
+	const [globalDietCodeRulesToggles, setGlobalDietCodeRulesToggles] = useState<Record<string, boolean>>({})
+	const [localDietCodeRulesToggles, setLocalDietCodeRulesToggles] = useState<Record<string, boolean>>({})
 	const [localCursorRulesToggles, setLocalCursorRulesToggles] = useState<Record<string, boolean>>({})
 	const [localWindsurfRulesToggles, setLocalWindsurfRulesToggles] = useState<Record<string, boolean>>({})
 	const [localAgentsRulesToggles, setLocalAgentsRulesToggles] = useState<Record<string, boolean>>({})
@@ -83,8 +83,8 @@ export const ConfigViewWrapper: React.FC<ConfigViewWrapperProps> = ({
 			const { refreshSkills } = await import("@/core/controller/file/refreshSkills")
 
 			const rulesData = await refreshRules(controller, {})
-			setGlobalCodemarieRulesToggles(rulesData.globalCodemarieRulesToggles?.toggles || {})
-			setLocalCodemarieRulesToggles(rulesData.localCodemarieRulesToggles?.toggles || {})
+			setGlobalDietCodeRulesToggles(rulesData.globalDietcodeRulesToggles?.toggles || {})
+			setLocalDietCodeRulesToggles(rulesData.localDietcodeRulesToggles?.toggles || {})
 			setLocalCursorRulesToggles(rulesData.localCursorRulesToggles?.toggles || {})
 			setLocalWindsurfRulesToggles(rulesData.localWindsurfRulesToggles?.toggles || {})
 			setLocalAgentsRulesToggles(rulesData.localAgentsRulesToggles?.toggles || {})
@@ -109,12 +109,12 @@ export const ConfigViewWrapper: React.FC<ConfigViewWrapperProps> = ({
 	// Toggle handlers
 	const handleToggleRule = useCallback(
 		async (isGlobal: boolean, rulePath: string, enabled: boolean, ruleType: string) => {
-			const { toggleCodemarieRule } = await import("@/core/controller/file/toggleCodemarieRule")
+			const { toggleDietCodeRule } = await import("@/core/controller/file/toggleDietCodeRule")
 
 			// Determine scope based on isGlobal and rule type
 			const scope = isGlobal ? RuleScope.GLOBAL : RuleScope.LOCAL
 
-			// For non-codemarie rules, we need different toggle functions
+			// For non-dietcode rules, we need different toggle functions
 			if (ruleType === "cursor") {
 				// Update local state optimistically
 				setLocalCursorRulesToggles((prev) => ({ ...prev, [rulePath]: enabled }))
@@ -133,13 +133,13 @@ export const ConfigViewWrapper: React.FC<ConfigViewWrapperProps> = ({
 				toggles[rulePath] = enabled
 				controller.stateManager.setWorkspaceState("localAgentsRulesToggles", toggles)
 			} else {
-				// Codemarie rules
-				const result = await toggleCodemarieRule(controller, { metadata: undefined, rulePath, enabled, scope })
-				if (result.globalCodemarieRulesToggles?.toggles) {
-					setGlobalCodemarieRulesToggles(result.globalCodemarieRulesToggles.toggles)
+				// DietCode rules
+				const result = await toggleDietCodeRule(controller, { metadata: undefined, rulePath, enabled, scope })
+				if (result.globalDietcodeRulesToggles?.toggles) {
+					setGlobalDietCodeRulesToggles(result.globalDietcodeRulesToggles.toggles)
 				}
-				if (result.localCodemarieRulesToggles?.toggles) {
-					setLocalCodemarieRulesToggles(result.localCodemarieRulesToggles.toggles)
+				if (result.localDietcodeRulesToggles?.toggles) {
+					setLocalDietCodeRulesToggles(result.localDietcodeRulesToggles.toggles)
 				}
 			}
 		},
@@ -210,7 +210,7 @@ export const ConfigViewWrapper: React.FC<ConfigViewWrapperProps> = ({
 			let folderPath: string
 
 			if (isGlobal) {
-				// Global folders are in dataDir (e.g., ~/.codemarie/)
+				// Global folders are in dataDir (e.g., ~/.dietcode/)
 				const subFolder = folderType === "rules" ? "rules" : folderType
 				folderPath = path.join(dataDir, subFolder)
 			} else {
@@ -220,9 +220,9 @@ export const ConfigViewWrapper: React.FC<ConfigViewWrapperProps> = ({
 				if (!primaryWorkspace) {
 					return
 				}
-				// Local rules/workflows/hooks/skills are in .codemarierules or .codemarie
+				// Local rules/workflows/hooks/skills are in .dietcoderules or .dietcode
 				const subFolder = folderType === "rules" ? "rules" : folderType
-				folderPath = path.join(primaryWorkspace, ".codemarierules", subFolder)
+				folderPath = path.join(primaryWorkspace, ".dietcoderules", subFolder)
 			}
 
 			// Open folder using platform-specific command
@@ -273,15 +273,15 @@ export const ConfigViewWrapper: React.FC<ConfigViewWrapperProps> = ({
 		<StdinProvider isRawModeSupported={isRawModeSupported}>
 			<ConfigView
 				dataDir={dataDir}
-				globalCodemarieRulesToggles={globalCodemarieRulesToggles}
+				globalDietCodeRulesToggles={globalDietCodeRulesToggles}
 				globalHooks={globalHooks}
 				globalSkills={globalSkills}
 				globalState={globalStateLocal}
 				globalWorkflowToggles={globalWorkflowToggles}
 				hooksEnabled={hooksEnabled}
 				localAgentsRulesToggles={localAgentsRulesToggles}
-				localCodemarieRulesToggles={localCodemarieRulesToggles}
 				localCursorRulesToggles={localCursorRulesToggles}
+				localDietCodeRulesToggles={localDietCodeRulesToggles}
 				localSkills={localSkills}
 				localWindsurfRulesToggles={localWindsurfRulesToggles}
 				localWorkflowToggles={localWorkflowToggles}

@@ -3,7 +3,7 @@
 	"entries": [
 		{
 			"requestId": "6e4460e9-e701-4bd2-bac6-1b0f20938c11",
-			"service": "codemarie.AccountService",
+			"service": "dietcode.AccountService",
 			"method": "accountLoginClicked",
 			"isStreaming": false,
 			"request": {
@@ -22,7 +22,7 @@
 		},
 		{
 			"requestId": "2f774918-949e-4919-9b26-8b8be5b95bb9",
-			"service": "codemarie.AccountService",
+			"service": "dietcode.AccountService",
 			"method": "getUserOrganizations",
 			"isStreaming": false,
 			"request": {
@@ -51,7 +51,7 @@
 		},
 		{
 			"requestId": "118991fc-73b1-4dce-ae20-15cd3529f465",
-			"service": "codemarie.TaskService",
+			"service": "dietcode.TaskService",
 			"method": "newTask",
 			"isStreaming": false,
 			"request": {
@@ -75,7 +75,7 @@
 		},
 		{
 			"requestId": "6633a706-366d-49d5-a3f4-4589131bdc5c",
-			"service": "codemarie.StateService",
+			"service": "dietcode.StateService",
 			"method": "getLatestState",
 			"isStreaming": false,
 			"request": {

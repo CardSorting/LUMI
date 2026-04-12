@@ -1,4 +1,4 @@
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import type React from "react"
 import { useMemo } from "react"
 import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
@@ -11,9 +11,9 @@ import { ToolGroupRenderer } from "./ToolGroupRenderer"
 
 interface MessageRendererProps {
 	index: number
-	messageOrGroup: CodemarieMessage | CodemarieMessage[]
-	groupedMessages: (CodemarieMessage | CodemarieMessage[])[]
-	modifiedMessages: CodemarieMessage[]
+	messageOrGroup: DietCodeMessage | DietCodeMessage[]
+	groupedMessages: (DietCodeMessage | DietCodeMessage[])[]
+	modifiedMessages: DietCodeMessage[]
 	expandedRows: Record<number, boolean>
 	onToggleExpand: (ts: number) => void
 	onHeightChange: (isTaller: boolean) => void
@@ -130,8 +130,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
  * This allows us to encapsulate the rendering logic while maintaining performance
  */
 export const createMessageRenderer = (
-	groupedMessages: (CodemarieMessage | CodemarieMessage[])[],
-	modifiedMessages: CodemarieMessage[],
+	groupedMessages: (DietCodeMessage | DietCodeMessage[])[],
+	modifiedMessages: DietCodeMessage[],
 	expandedRows: Record<number, boolean>,
 	onToggleExpand: (ts: number) => void,
 	onHeightChange: (isTaller: boolean) => void,
@@ -140,7 +140,7 @@ export const createMessageRenderer = (
 	messageHandlers: MessageHandlers,
 	footerActive: boolean,
 ) => {
-	return (index: number, messageOrGroup: CodemarieMessage | CodemarieMessage[]) => (
+	return (index: number, messageOrGroup: DietCodeMessage | DietCodeMessage[]) => (
 		<MessageRenderer
 			expandedRows={expandedRows}
 			footerActive={footerActive}

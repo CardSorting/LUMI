@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert"
-import { CodemarieDefaultTool } from "@shared/tools"
+import { DietCodeDefaultTool } from "@shared/tools"
 import { describe, it } from "mocha"
 import type { ToolUse } from "../../assistant-message"
 import { canonicalizeAttemptCompletionParams } from "../ToolExecutor"
@@ -8,7 +8,7 @@ describe("ToolExecutor canonicalization", () => {
 	it("canonicalizes attempt_completion response into result", () => {
 		const block: ToolUse = {
 			type: "tool_use",
-			name: CodemarieDefaultTool.ATTEMPT,
+			name: DietCodeDefaultTool.ATTEMPT,
 			params: {
 				response: "final answer from response field",
 				task_progress: "- [x] done",
@@ -26,7 +26,7 @@ describe("ToolExecutor canonicalization", () => {
 	it("does not canonicalize when attempt_completion already has result", () => {
 		const block: ToolUse = {
 			type: "tool_use",
-			name: CodemarieDefaultTool.ATTEMPT,
+			name: DietCodeDefaultTool.ATTEMPT,
 			params: {
 				result: "already canonical",
 				response: "extra text",
@@ -43,7 +43,7 @@ describe("ToolExecutor canonicalization", () => {
 	it("does not canonicalize non-attempt tools", () => {
 		const block: ToolUse = {
 			type: "tool_use",
-			name: CodemarieDefaultTool.ACT_MODE,
+			name: DietCodeDefaultTool.ACT_MODE,
 			params: {
 				response: "act mode response",
 			},

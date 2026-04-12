@@ -104,10 +104,10 @@
 import type { ApiProvider, ModelInfo } from "@shared/api"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineHookSequences } from "@shared/combineHookSequences"
-import type { CodemarieAsk, CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeAsk, DietCodeMessage } from "@shared/ExtensionMessage"
 import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
-import { EmptyRequest, StringRequest } from "@shared/proto/codemarie/common"
-import type { SlashCommandInfo } from "@shared/proto/codemarie/slash"
+import { EmptyRequest, StringRequest } from "@shared/proto/dietcode/common"
+import type { SlashCommandInfo } from "@shared/proto/dietcode/slash"
 import { CLI_ONLY_COMMANDS } from "@shared/slashCommands"
 import { getProviderDefaultModelId, getProviderModelIdKey } from "@shared/storage"
 import type { Mode } from "@shared/storage/types"
@@ -285,7 +285,7 @@ function centerText(text: string, terminalWidth?: number): string {
  * Any new ask types added in the future will be suppressed by default in yolo mode.
  * If a new ask type needs user interaction, add it here explicitly.
  */
-const YOLO_INTERACTIVE_ASKS = new Set<CodemarieAsk>([
+const YOLO_INTERACTIVE_ASKS = new Set<DietCodeAsk>([
 	"completion_result",
 	// In yolo mode, ExecuteCommandToolHandler auto-approves commands via say() (not ask()) at line 176,
 	// so command asks never reach the UI for regular tool use. The only command ask that reaches the UI
@@ -299,14 +299,14 @@ const YOLO_INTERACTIVE_ASKS = new Set<CodemarieAsk>([
 	"new_task",
 ])
 
-function isYoloSuppressed(yolo: boolean, ask: CodemarieAsk | undefined): boolean {
+function isYoloSuppressed(yolo: boolean, ask: DietCodeAsk | undefined): boolean {
 	return yolo && (!ask || !YOLO_INTERACTIVE_ASKS.has(ask))
 }
 
 /**
  * Get the type of prompt needed for an ask message
  */
-function getAskPromptType(ask: CodemarieAsk, text: string): "confirmation" | "text" | "options" | "none" {
+function getAskPromptType(ask: DietCodeAsk, text: string): "confirmation" | "text" | "options" | "none" {
 	switch (ask) {
 		case "followup":
 		case "plan_mode_respond": {
@@ -523,7 +523,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 	}, [mode])
 
 	// Get model ID based on current mode and provider
-	// Different providers use different state keys (e.g., codemarie uses actModeOpenRouterModelId)
+	// Different providers use different state keys (e.g., dietcode uses actModeOpenRouterModelId)
 	// Re-read when activePanel changes (settings panel closes) to pick up changes
 	// Falls back to provider's default model if no model has been explicitly set
 	const modelId = useMemo(() => {
@@ -662,7 +662,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 		return [...new Set(filtered)]
 	}, [])
 
-	const messages = taskState.codemarieMessages || []
+	const messages = taskState.dietcodeMessages || []
 
 	// Refresh git diff stats when messages change (after file edits)
 	const _lastMsg = messages[messages.length - 1]
@@ -824,7 +824,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 	const lastMessage = messages[messages.length - 1]
 	const pendingAsk =
 		lastMessage?.type === "ask" && !lastMessage.partial && respondedToAsk !== lastMessage.ts ? lastMessage : null
-	const askType = pendingAsk ? getAskPromptType(pendingAsk.ask as CodemarieAsk, pendingAsk.text || "") : "none"
+	const askType = pendingAsk ? getAskPromptType(pendingAsk.ask as DietCodeAsk, pendingAsk.text || "") : "none"
 	const askOptions = pendingAsk && askType === "options" ? parseAskOptions(pendingAsk.text || "") : []
 
 	// Send response to ask message
@@ -875,7 +875,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
 	// Get button config based on the last message state
 	const buttonConfig = useMemo(() => {
-		const lastMsg = messages[messages.length - 1] as CodemarieMessage | undefined
+		const lastMsg = messages[messages.length - 1] as DietCodeMessage | undefined
 		return getButtonConfig(lastMsg, isSpinnerActive)
 	}, [messages, isSpinnerActive])
 
@@ -1178,7 +1178,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 							mode === "act"
 								? apiConfig.actModeApiProvider || apiConfig.planModeApiProvider
 								: apiConfig.planModeApiProvider || apiConfig.actModeApiProvider
-						const initialMode = !provider ? undefined : provider === "codemarie" ? "featured-models" : "model-picker"
+						const initialMode = !provider ? undefined : provider === "dietcode" ? "featured-models" : "model-picker"
 						// Set model for current mode (plan or act)
 						const initialModelKey = mode === "act" ? "actModelId" : "planModelId"
 						setActivePanel({ type: "settings", initialMode, initialModelKey })
@@ -1321,7 +1321,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 			buttonConfig.enableButtons &&
 			!isSpinnerActive &&
 			textInput === "" &&
-			!isYoloSuppressed(yolo, pendingAsk?.ask as CodemarieAsk | undefined)
+			!isYoloSuppressed(yolo, pendingAsk?.ask as DietCodeAsk | undefined)
 		) {
 			const { hasPrimary, hasSecondary } = getVisibleButtons(buttonConfig)
 
@@ -1344,7 +1344,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 		}
 
 		// 9. Handle ask responses for options and text input
-		if (pendingAsk && !isYoloSuppressed(yolo, pendingAsk.ask as CodemarieAsk | undefined)) {
+		if (pendingAsk && !isYoloSuppressed(yolo, pendingAsk.ask as DietCodeAsk | undefined)) {
 			// Allow sending text message for any ask type where sending is enabled
 			if (key.return && textInput.trim() && !buttonConfig.sendingDisabled) {
 				sendAskResponse("messageResponse", textInput.trim())
@@ -1570,7 +1570,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 				{/* Action buttons for tool approvals and other asks (not during streaming) */}
 				{buttonConfig.enableButtons &&
 					!isSpinnerActive &&
-					!isYoloSuppressed(yolo, pendingAsk?.ask as CodemarieAsk | undefined) && (
+					!isYoloSuppressed(yolo, pendingAsk?.ask as DietCodeAsk | undefined) && (
 						<ActionButtons config={buttonConfig} mode={mode} />
 					)}
 

@@ -1,5 +1,5 @@
 import { AuthService } from "@services/auth/AuthService"
-import { AuthState, EmptyRequest } from "@/shared/proto/index.codemarie"
+import { AuthState, EmptyRequest } from "@/shared/proto/index.dietcode"
 import { Controller } from ".."
 import { StreamingResponseHandler } from "../grpc-handler"
 

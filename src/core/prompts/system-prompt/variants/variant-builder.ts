@@ -1,5 +1,5 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../templates/placeholders"
 import type { ConfigOverride, PromptVariant, SystemPromptContext } from "../types"
 
@@ -120,7 +120,7 @@ export class VariantBuilder {
 	 * Configure tools with type safety
 	 * If a tool is listed here but no variant was registered, it will fall back to the generic variant.
 	 */
-	tools(...tools: CodemarieDefaultTool[]): this {
+	tools(...tools: DietCodeDefaultTool[]): this {
 		this.variant = {
 			...this.variant,
 			tools: tools,
@@ -131,7 +131,7 @@ export class VariantBuilder {
 	/**
 	 * Override specific tools with type safety
 	 */
-	overrideTool(tool: CodemarieDefaultTool, override: ConfigOverride): this {
+	overrideTool(tool: DietCodeDefaultTool, override: ConfigOverride): this {
 		const current = this.variant.toolOverrides || {}
 		this.variant = {
 			...this.variant,

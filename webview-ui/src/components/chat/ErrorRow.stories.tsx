@@ -1,4 +1,4 @@
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useMemo } from "react"
 import { expect, userEvent, within } from "storybook/test"
@@ -6,7 +6,7 @@ import { createStorybookDecorator } from "@/config/StorybookDecorator"
 import ErrorRow from "./ErrorRow"
 
 // Mock data factories
-const createMockMessage = (overrides: Partial<CodemarieMessage> = {}): CodemarieMessage => ({
+const createMockMessage = (overrides: Partial<DietCodeMessage> = {}): DietCodeMessage => ({
 	ts: Date.now(),
 	type: "say",
 	say: "error",
@@ -15,7 +15,7 @@ const createMockMessage = (overrides: Partial<CodemarieMessage> = {}): Codemarie
 })
 
 const createMockAuthState = (overrides: any = {}) => ({
-	codemarieUser: null,
+	dietcodeUser: null,
 	activeOrganization: null,
 	isAuthenticated: false,
 	...overrides,
@@ -23,7 +23,7 @@ const createMockAuthState = (overrides: any = {}) => ({
 
 const createMockExtensionState = (overrides: any = {}) => ({
 	version: "1.0.0",
-	codemarieMessages: [],
+	dietcodeMessages: [],
 	taskHistory: [],
 	shouldShowAnnouncement: false,
 	...overrides,
@@ -51,7 +51,7 @@ const meta: Meta<typeof ErrorRow> = {
 		docs: {
 			description: {
 				component:
-					"Displays different types of error messages in the chat interface, including API errors, credit limit errors, diff errors, and codemarieignore errors. Handles special error parsing for Codemarie provider errors and provides appropriate user actions.",
+					"Displays different types of error messages in the chat interface, including API errors, credit limit errors, diff errors, and dietcodeignore errors. Handles special error parsing for DietCode provider errors and provides appropriate user actions.",
 			},
 		},
 	},
@@ -71,7 +71,7 @@ export const Default: Story = {
 	argTypes: {
 		errorType: {
 			control: { type: "select" },
-			options: ["error", "mistake_limit_reached", "diff_error", "codemarieignore_error"],
+			options: ["error", "mistake_limit_reached", "diff_error", "dietcodeignore_error"],
 			description: "Type of error to display",
 		},
 		message: {
@@ -120,8 +120,8 @@ export const ApiStreamingFailed: Story = {
 	},
 }
 
-// Codemarie-specific errors
-export const CodemarieBalanceError: Story = {
+// DietCode-specific errors
+export const DietCodeBalanceError: Story = {
 	args: {
 		message: createMockMessage(),
 		errorType: "error",
@@ -129,7 +129,7 @@ export const CodemarieBalanceError: Story = {
 			message: "Insufficient credits to complete this request.",
 			code: "insufficient_credits",
 			request_id: "req_123456789",
-			providerId: "codemarie",
+			providerId: "dietcode",
 			details: {
 				current_balance: 0.5,
 				total_spent: 25.75,
@@ -141,14 +141,14 @@ export const CodemarieBalanceError: Story = {
 	},
 }
 
-export const CodemarieRateLimitError: Story = {
+export const DietCodeRateLimitError: Story = {
 	args: {
 		message: createMockMessage(),
 		errorType: "error",
 		apiRequestFailedMessage: JSON.stringify({
 			message: "Rate limit exceeded. Please wait before making another request.",
 			request_id: "req_987654321",
-			providerId: "codemarie",
+			providerId: "dietcode",
 		}),
 	},
 }
@@ -162,7 +162,7 @@ export const AuthenticationErrors: Story = {
 			message: "Authentication failed. Please sign in to continue.",
 			code: "ERR_BAD_REQUEST",
 			request_id: "req_auth_123",
-			providerId: "codemarie",
+			providerId: "dietcode",
 		}),
 	},
 	argTypes: {
@@ -185,7 +185,7 @@ export const AuthErrorSignedIn: Story = {
 	...AuthenticationErrors,
 	decorators: [
 		createStoryDecorator({
-			codemarieUser: { id: "user123", email: "user@example.com" },
+			dietcodeUser: { id: "user123", email: "user@example.com" },
 			isAuthenticated: true,
 		}),
 	],
@@ -206,17 +206,17 @@ export const InteractiveSignIn: Story = {
 		message: createMockMessage(),
 		errorType: "error",
 		apiRequestFailedMessage: JSON.stringify({
-			message: "Please sign in to access Codemarie services.",
+			message: "Please sign in to access DietCode services.",
 			code: "ERR_BAD_REQUEST",
 			request_id: "req_signin_test",
-			providerId: "codemarie",
+			providerId: "dietcode",
 		}),
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement)
 
 		// Find the sign in button
-		const signInButton = canvas.getByRole("button", { name: /sign in to codemarie/i })
+		const signInButton = canvas.getByRole("button", { name: /sign in to dietcode/i })
 		await expect(signInButton).toBeInTheDocument()
 
 		// Test button is clickable
@@ -255,7 +255,7 @@ export const ErrorWithRequestId: Story = {
 		apiRequestFailedMessage: JSON.stringify({
 			message: "An unexpected error occurred while processing your request.",
 			request_id: "req_detailed_123456",
-			providerId: "codemarie",
+			providerId: "dietcode",
 		}),
 	},
 	play: async ({ canvasElement }) => {

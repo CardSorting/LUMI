@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Smoke Test Runner for Codemarie
+ * Smoke Test Runner for DietCode
  *
  * Runs curated smoke tests against configured providers to verify:
  * - Basic tool execution works
@@ -31,19 +31,19 @@ const DEFAULT_MODEL = "gemini-3.1-pro-preview"
 // Models to test - can be overridden with --model flag
 const MODELS: string[] = [DEFAULT_MODEL]
 
-// Check if codemarie CLI is available
-function checkCodemarieCli(): boolean {
+// Check if dietcode CLI is available
+function checkDietCodeCli(): boolean {
 	try {
-		execSync("which codemarie", { encoding: "utf-8", timeout: 5000 })
+		execSync("which dietcode", { encoding: "utf-8", timeout: 5000 })
 		return true
 	} catch {
 		return false
 	}
 }
 
-// Use user's existing Codemarie config (already has auth configured)
+// Use user's existing DietCode config (already has auth configured)
 // For CI, this would be set up by the auth step before tests run
-const CODEMARIE_CONFIG_DIR = path.join(process.env.HOME || "", ".codemarie")
+const DIETCODE_CONFIG_DIR = path.join(process.env.HOME || "", ".dietcode")
 const configuredAuthCache = new Set<string>()
 
 function configureAuth(options: { provider: string; apiKey: string; modelId: string; baseUrl?: string }): {
@@ -51,11 +51,11 @@ function configureAuth(options: { provider: string; apiKey: string; modelId: str
 	error?: string
 } {
 	// Ensure config directory exists
-	fs.mkdirSync(CODEMARIE_CONFIG_DIR, { recursive: true })
+	fs.mkdirSync(DIETCODE_CONFIG_DIR, { recursive: true })
 
 	try {
 		// Run quick auth setup (non-interactive when all flags provided)
-		const args = [`codemarie auth --config "${CODEMARIE_CONFIG_DIR}"`, `-p "${options.provider}"`, `-k "${options.apiKey}"`, `-m "${options.modelId}"`]
+		const args = [`dietcode auth --config "${DIETCODE_CONFIG_DIR}"`, `-p "${options.provider}"`, `-k "${options.apiKey}"`, `-m "${options.modelId}"`]
 		if (options.baseUrl) {
 			args.push(`-b "${options.baseUrl}"`)
 		}
@@ -141,7 +141,7 @@ function getScenarioProvider(scenario: SmokeScenario): string {
 function ensureScenarioAuth(scenario: SmokeScenario, modelId: string): { ok: boolean; error?: string } {
 	const provider = getScenarioProvider(scenario)
 	const authModelId = scenario.auth?.modelId || modelId
-	const apiKeyEnv = scenario.auth?.apiKeyEnv || (provider === DEFAULT_PROVIDER ? "CODEMARIE_API_KEY" : undefined)
+	const apiKeyEnv = scenario.auth?.apiKeyEnv || (provider === DEFAULT_PROVIDER ? "DIETCODE_API_KEY" : undefined)
 	const apiKey = apiKeyEnv ? process.env[apiKeyEnv] : undefined
 	const baseUrl = scenario.auth?.baseUrlEnv ? process.env[scenario.auth.baseUrlEnv] : undefined
 	const authCacheKey = `${provider}|${authModelId}|${baseUrl || ""}|${apiKeyEnv || ""}`
@@ -157,7 +157,7 @@ function ensureScenarioAuth(scenario: SmokeScenario, modelId: string): { ok: boo
 		return result
 	}
 
-	// For default provider, local developers can rely on existing ~/.codemarie auth.
+	// For default provider, local developers can rely on existing ~/.dietcode auth.
 	if (provider === DEFAULT_PROVIDER) {
 		return { ok: true }
 	}
@@ -200,10 +200,10 @@ async function runTrial(scenario: SmokeScenario, modelId: string, trialWorkdir: 
 	}
 
 	// Build CLI command with explicit model setting for determinism
-	// Provider is configured via `codemarie auth` before running tests
+	// Provider is configured via `dietcode auth` before running tests
 	const args = [
 		"--config",
-		CODEMARIE_CONFIG_DIR, // Use shared config directory for auth
+		DIETCODE_CONFIG_DIR, // Use shared config directory for auth
 		"-y", // YOLO mode - auto-approve all actions, exits after completion
 		"-t",
 		String(scenario.timeout), // CLI timeout (matches our timeout)
@@ -213,8 +213,8 @@ async function runTrial(scenario: SmokeScenario, modelId: string, trialWorkdir: 
 	]
 
 	try {
-		// Run codemarie CLI
-		const result = await runCodemarieWithTimeout(args, trialWorkdir, scenario.timeout * 1000)
+		// Run dietcode CLI
+		const result = await runDietCodeWithTimeout(args, trialWorkdir, scenario.timeout * 1000)
 
 		if (!result.success) {
 			return {
@@ -285,20 +285,20 @@ async function runTrial(scenario: SmokeScenario, modelId: string, trialWorkdir: 
 	}
 }
 
-// Run codemarie CLI with timeout
-interface CodemarieResult {
+// Run dietcode CLI with timeout
+interface DietCodeResult {
 	success: boolean
 	error?: string
 	stdout: string
 	stderr: string
 }
 
-function runCodemarieWithTimeout(args: string[], cwd: string, timeoutMs: number): Promise<CodemarieResult> {
+function runDietCodeWithTimeout(args: string[], cwd: string, timeoutMs: number): Promise<DietCodeResult> {
 	return new Promise((resolve) => {
 		let stdout = ""
 		let stderr = ""
 
-		const proc = spawn("codemarie", args, {
+		const proc = spawn("dietcode", args, {
 			cwd,
 			env: { ...process.env },
 			stdio: ["ignore", "pipe", "pipe"], // stdin: ignore, stdout/stderr: pipe
@@ -414,9 +414,9 @@ async function main() {
 		}
 	}
 
-	// Check codemarie CLI is available
-	if (!checkCodemarieCli()) {
-		console.error("ERROR: codemarie CLI not found in PATH")
+	// Check dietcode CLI is available
+	if (!checkDietCodeCli()) {
+		console.error("ERROR: dietcode CLI not found in PATH")
 		console.error("")
 		console.error("For local development:")
 		console.error("  cd cli && npm install && npm run build && npm link")

@@ -63,8 +63,8 @@ interface AppProps {
 	globalState?: Record<string, unknown>
 	workspaceState?: Record<string, unknown>
 	// Rules toggles
-	globalCodemarieRulesToggles?: Record<string, boolean>
-	localCodemarieRulesToggles?: Record<string, boolean>
+	globalDietCodeRulesToggles?: Record<string, boolean>
+	localDietCodeRulesToggles?: Record<string, boolean>
 	localCursorRulesToggles?: Record<string, boolean>
 	localWindsurfRulesToggles?: Record<string, boolean>
 	localAgentsRulesToggles?: Record<string, boolean>
@@ -108,8 +108,8 @@ export const App: React.FC<AppProps> = ({
 	globalState = {},
 	workspaceState = {},
 	// Rules
-	globalCodemarieRulesToggles,
-	localCodemarieRulesToggles,
+	globalDietCodeRulesToggles,
+	localDietCodeRulesToggles,
 	localCursorRulesToggles,
 	localWindsurfRulesToggles,
 	localAgentsRulesToggles,
@@ -201,15 +201,15 @@ export const App: React.FC<AppProps> = ({
 			content = (
 				<ConfigView
 					dataDir={dataDir}
-					globalCodemarieRulesToggles={globalCodemarieRulesToggles}
+					globalDietCodeRulesToggles={globalDietCodeRulesToggles}
 					globalHooks={globalHooks}
 					globalSkills={globalSkills}
 					globalState={globalState}
 					globalWorkflowToggles={globalWorkflowToggles}
 					hooksEnabled={hooksEnabled}
 					localAgentsRulesToggles={localAgentsRulesToggles}
-					localCodemarieRulesToggles={localCodemarieRulesToggles}
 					localCursorRulesToggles={localCursorRulesToggles}
+					localDietCodeRulesToggles={localDietCodeRulesToggles}
 					localSkills={localSkills}
 					localWindsurfRulesToggles={localWindsurfRulesToggles}
 					localWorkflowToggles={localWorkflowToggles}
@@ -270,7 +270,7 @@ export const App: React.FC<AppProps> = ({
 				<CheckpointView
 					checkpoints={
 						controller?.task?.messageStateHandler
-							.getCodemarieMessages()
+							.getDietCodeMessages()
 							.filter((m) => m.say === "checkpoint_created" || m.lastCheckpointHash)
 							.map((m) => ({
 								id: m.lastCheckpointHash || String(m.ts),

@@ -3,12 +3,12 @@ import "should"
 import should from "should"
 import { MessageStateHandler } from "../core/task/message-state"
 import { TaskState } from "../core/task/TaskState"
-import { CodemarieMessage } from "../shared/ExtensionMessage"
+import { DietCodeMessage } from "../shared/ExtensionMessage"
 
 /**
  * Unit tests for MessageStateHandler's mutex protection (RC-4)
  * These tests verify that concurrent operations on message state are properly serialized
- * to prevent race conditions, particularly the TOCTOU bug in addToCodemarieMessages
+ * to prevent race conditions, particularly the TOCTOU bug in addToDietCodeMessages
  */
 describe("MessageStateHandler Mutex Protection", () => {
 	/**
@@ -25,9 +25,9 @@ describe("MessageStateHandler Mutex Protection", () => {
 	}
 
 	/**
-	 * Helper to create a test CodemarieMessage
+	 * Helper to create a test DietCodeMessage
 	 */
-	function createTestMessage(text: string): CodemarieMessage {
+	function createTestMessage(text: string): DietCodeMessage {
 		return {
 			ts: Date.now(),
 			type: "say",
@@ -38,7 +38,7 @@ describe("MessageStateHandler Mutex Protection", () => {
 
 	it("should initialize with empty message arrays", () => {
 		const handler = createTestHandler()
-		handler.getCodemarieMessages().length.should.equal(0)
+		handler.getDietCodeMessages().length.should.equal(0)
 		handler.getApiConversationHistory().length.should.equal(0)
 	})
 
@@ -50,20 +50,20 @@ describe("MessageStateHandler Mutex Protection", () => {
 		handler.getApiConversationHistory().should.deepEqual(testHistory)
 	})
 
-	it("should set and get codemarie messages", () => {
+	it("should set and get dietcode messages", () => {
 		const handler = createTestHandler()
 		const testMessages = [createTestMessage("test1"), createTestMessage("test2")]
 
-		handler.setCodemarieMessages(testMessages)
-		handler.getCodemarieMessages().should.deepEqual(testMessages)
+		handler.setDietCodeMessages(testMessages)
+		handler.getDietCodeMessages().should.deepEqual(testMessages)
 	})
 
 	/**
-	 * CRITICAL TEST: Verify that addToCodemarieMessages is atomic
+	 * CRITICAL TEST: Verify that addToDietCodeMessages is atomic
 	 * This test simulates the race condition that can occur when multiple
-	 * addToCodemarieMessages calls happen concurrently without proper mutex protection
+	 * addToDietCodeMessages calls happen concurrently without proper mutex protection
 	 */
-	it("should handle concurrent addToCodemarieMessages atomically", async function () {
+	it("should handle concurrent addToDietCodeMessages atomically", async function () {
 		// Increase timeout for this test as it involves async operations
 		this.timeout(5000)
 
@@ -79,10 +79,10 @@ describe("MessageStateHandler Mutex Protection", () => {
 
 		// Add initial message to establish baseline
 		const initialMsg = createTestMessage("initial")
-		await handler.addToCodemarieMessages(initialMsg)
+		await handler.addToDietCodeMessages(initialMsg)
 
 		// Verify initial state
-		const messages = handler.getCodemarieMessages()
+		const messages = handler.getDietCodeMessages()
 		messages.length.should.equal(1)
 		messages[0].conversationHistoryIndex?.should.equal(2) // length - 1 = 3 - 1 = 2
 
@@ -101,16 +101,16 @@ describe("MessageStateHandler Mutex Protection", () => {
 
 		// Execute concurrent operations
 		const results = await Promise.all([
-			handler.addToCodemarieMessages(msg1),
-			handler.addToCodemarieMessages(msg2),
-			handler.addToCodemarieMessages(msg3),
+			handler.addToDietCodeMessages(msg1),
+			handler.addToDietCodeMessages(msg2),
+			handler.addToDietCodeMessages(msg3),
 		])
 
 		// Verify all operations completed
 		results.length.should.equal(3)
 
 		// Get final state
-		const finalMessages = handler.getCodemarieMessages()
+		const finalMessages = handler.getDietCodeMessages()
 		finalMessages.length.should.equal(4) // initial + 3 concurrent
 
 		// CRITICAL ASSERTION: Each message should have a valid conversationHistoryIndex
@@ -124,44 +124,44 @@ describe("MessageStateHandler Mutex Protection", () => {
 	})
 
 	/**
-	 * Test that updateCodemarieMessage operations are atomic
+	 * Test that updateDietCodeMessage operations are atomic
 	 */
-	it("should handle concurrent updateCodemarieMessage atomically", async function () {
+	it("should handle concurrent updateDietCodeMessage atomically", async function () {
 		this.timeout(5000)
 
 		const handler = createTestHandler()
 
 		// Set up initial messages
 		const msgs = [createTestMessage("msg1"), createTestMessage("msg2"), createTestMessage("msg3")]
-		handler.setCodemarieMessages(msgs)
+		handler.setDietCodeMessages(msgs)
 
 		// Perform concurrent updates to different messages
 		await Promise.all([
-			handler.updateCodemarieMessage(0, { text: "updated1" }),
-			handler.updateCodemarieMessage(1, { text: "updated2" }),
-			handler.updateCodemarieMessage(2, { text: "updated3" }),
+			handler.updateDietCodeMessage(0, { text: "updated1" }),
+			handler.updateDietCodeMessage(1, { text: "updated2" }),
+			handler.updateDietCodeMessage(2, { text: "updated3" }),
 		])
 
-		const finalMessages = handler.getCodemarieMessages()
+		const finalMessages = handler.getDietCodeMessages()
 		finalMessages[0]?.text?.should.equal("updated1")
 		finalMessages[1]?.text?.should.equal("updated2")
 		finalMessages[2]?.text?.should.equal("updated3")
 	})
 
 	/**
-	 * Test that deleteCodemarieMessage operations are atomic
+	 * Test that deleteDietCodeMessage operations are atomic
 	 */
-	it("should handle deleteCodemarieMessage with proper validation", async () => {
+	it("should handle deleteDietCodeMessage with proper validation", async () => {
 		const handler = createTestHandler()
 
 		// Set up initial messages
 		const msgs = [createTestMessage("msg1"), createTestMessage("msg2"), createTestMessage("msg3")]
-		handler.setCodemarieMessages(msgs)
+		handler.setDietCodeMessages(msgs)
 
 		// Delete middle message
-		await handler.deleteCodemarieMessage(1)
+		await handler.deleteDietCodeMessage(1)
 
-		const finalMessages = handler.getCodemarieMessages()
+		const finalMessages = handler.getDietCodeMessages()
 		finalMessages.length.should.equal(2)
 		finalMessages[0]?.text?.should.equal("msg1")
 		finalMessages[1]?.text?.should.equal("msg3")
@@ -170,12 +170,12 @@ describe("MessageStateHandler Mutex Protection", () => {
 	/**
 	 * Test that invalid indices are rejected
 	 */
-	it("should throw error for invalid message index in updateCodemarieMessage", async () => {
+	it("should throw error for invalid message index in updateDietCodeMessage", async () => {
 		const handler = createTestHandler()
-		handler.setCodemarieMessages([createTestMessage("msg1")])
+		handler.setDietCodeMessages([createTestMessage("msg1")])
 
 		try {
-			await handler.updateCodemarieMessage(5, { text: "invalid" })
+			await handler.updateDietCodeMessage(5, { text: "invalid" })
 			throw new Error("Should have thrown")
 		} catch (error) {
 			if (error instanceof Error) {
@@ -185,14 +185,14 @@ describe("MessageStateHandler Mutex Protection", () => {
 	})
 
 	/**
-	 * Test that invalid indices are rejected in deleteCodemarieMessage
+	 * Test that invalid indices are rejected in deleteDietCodeMessage
 	 */
-	it("should throw error for invalid message index in deleteCodemarieMessage", async () => {
+	it("should throw error for invalid message index in deleteDietCodeMessage", async () => {
 		const handler = createTestHandler()
-		handler.setCodemarieMessages([createTestMessage("msg1")])
+		handler.setDietCodeMessages([createTestMessage("msg1")])
 
 		try {
-			await handler.deleteCodemarieMessage(-1)
+			await handler.deleteDietCodeMessage(-1)
 			throw new Error("Should have thrown")
 		} catch (error) {
 			if (error instanceof Error) {
@@ -226,17 +226,17 @@ describe("MessageStateHandler Mutex Protection", () => {
 	/**
 	 * Test overwrite operations
 	 */
-	it("should handle overwriteCodemarieMessages atomically", async () => {
+	it("should handle overwriteDietCodeMessages atomically", async () => {
 		const handler = createTestHandler()
 
 		// Set initial messages
-		handler.setCodemarieMessages([createTestMessage("old1"), createTestMessage("old2")])
+		handler.setDietCodeMessages([createTestMessage("old1"), createTestMessage("old2")])
 
 		// Overwrite with new messages
 		const newMessages = [createTestMessage("new1"), createTestMessage("new2"), createTestMessage("new3")]
-		await handler.overwriteCodemarieMessages(newMessages)
+		await handler.overwriteDietCodeMessages(newMessages)
 
-		const finalMessages = handler.getCodemarieMessages()
+		const finalMessages = handler.getDietCodeMessages()
 		finalMessages.length.should.equal(3)
 		finalMessages[0]?.text?.should.equal("new1")
 		finalMessages[1]?.text?.should.equal("new2")

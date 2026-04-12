@@ -1,4 +1,4 @@
-import { CodemarieContent, CodemarieTextContentBlock } from "@/shared/messages/content"
+import { DietCodeContent, DietCodeTextContentBlock } from "@/shared/messages/content"
 
 /**
  * ContextPruner: Manages cognitive economy by pruning or "folding" large text attachments.
@@ -26,7 +26,7 @@ export class ContextPruner {
 	/**
 	 * Intelligently prunes a list of content blocks.
 	 */
-	public prune(content: CodemarieContent[]): CodemarieContent[] {
+	public prune(content: DietCodeContent[]): DietCodeContent[] {
 		if (!this.config.enabled) return content
 
 		return content.map((block) => {
@@ -40,9 +40,9 @@ export class ContextPruner {
 	/**
 	 * Folds a text block if it exceeds the line limit.
 	 */
-	private pruneTextBlock(block: CodemarieTextContentBlock): CodemarieTextContentBlock {
+	private pruneTextBlock(block: DietCodeTextContentBlock): DietCodeTextContentBlock {
 		const lines = block.text.split("\n")
-		
+
 		if (lines.length <= this.config.maxLines) {
 			return block
 		}
@@ -60,11 +60,11 @@ export class ContextPruner {
 			...block,
 			text: prunedText,
 			// Metadata for tracking the fold
-			// @ts-ignore
+			// @ts-expect-error
 			_folded: {
 				originalLineCount: lines.length,
-				foldedCount: foldedCount
-			}
+				foldedCount: foldedCount,
+			},
 		}
 	}
 }

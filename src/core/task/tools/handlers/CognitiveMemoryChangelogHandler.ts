@@ -1,11 +1,11 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryChangelogHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_CHANGELOG
+	readonly name = DietCodeDefaultTool.MEM_CHANGELOG
 
 	getDescription(block: ToolUse): string {
 		const { baseId, headId } = block.params as { baseId: string; headId: string }

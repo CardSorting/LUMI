@@ -1,6 +1,5 @@
-import { SpiderEngine } from "./SpiderEngine.js"
-import { Logger } from "@/shared/services/Logger"
 import * as path from "path"
+import { SpiderEngine } from "./SpiderEngine.js"
 
 export interface AxiomViolation {
 	axiom: string
@@ -14,7 +13,6 @@ export interface AxiomViolation {
  */
 export class SemanticAxiomEngine {
 	private readonly SIMPLICITY_THRESHOLD = 300 // Max lines per file
-	private readonly COMPLEXITY_THRESHOLD = 15  // Max rough cyclomatic "score"
 
 	constructor(private cwd: string) {}
 
@@ -23,7 +21,7 @@ export class SemanticAxiomEngine {
 	 */
 	public validateAxioms(filePath: string, content: string, engine: SpiderEngine): AxiomViolation[] {
 		const violations: AxiomViolation[] = []
-		const absolutePath = path.resolve(this.cwd, filePath)
+		const _absolutePath = path.resolve(this.cwd, filePath)
 		const lines = content.split("\n")
 
 		// 1. Axiom: SIMPLICITY (Cognitive Weight)
@@ -31,14 +29,14 @@ export class SemanticAxiomEngine {
 			violations.push({
 				axiom: "SIMPLICITY",
 				severity: "ERROR",
-				message: `Cognitive Bloat: File exceeds ${this.SIMPLICITY_THRESHOLD} lines (${lines.length}). Logic must be split.`
+				message: `Cognitive Bloat: File exceeds ${this.SIMPLICITY_THRESHOLD} lines (${lines.length}). Logic must be split.`,
 			})
 		}
 
 		// 2. Axiom: PURITY (Logic Leaks)
 		const node = engine.nodes.get(this.normalize(filePath))
 		if (node && node.layer === "core") {
-			const infrastructureLeaks = node.imports.filter(imp => {
+			const infrastructureLeaks = node.imports.filter((imp) => {
 				const res = engine.resolveImportToNodeId(node.path, imp)
 				return res && engine.nodes.get(res)?.layer === "infrastructure"
 			})
@@ -47,14 +45,14 @@ export class SemanticAxiomEngine {
 				violations.push({
 					axiom: "PURITY",
 					severity: "ERROR",
-					message: `Purity Violation: Core logic leaking into Infrastructure via: ${infrastructureLeaks.join(", ")}`
+					message: `Purity Violation: Core logic leaking into Infrastructure via: ${infrastructureLeaks.join(", ")}`,
 				})
 			}
 		}
 
 		// 3. Axiom: STABILITY (Dependency Flow)
 		if (node && (node.layer === "domain" || node.layer === "core")) {
-			const volatileImports = node.imports.filter(imp => {
+			const volatileImports = node.imports.filter((imp) => {
 				const res = engine.resolveImportToNodeId(node.path, imp)
 				const targetNode = res ? engine.nodes.get(res) : null
 				return targetNode && (targetNode.layer === "ui" || targetNode.layer === "plumbing")
@@ -64,7 +62,7 @@ export class SemanticAxiomEngine {
 				violations.push({
 					axiom: "STABILITY",
 					severity: "WARN",
-					message: `Stability Warning: Stable logic (${node.layer}) depends on Volatile logic: ${volatileImports.join(", ")}`
+					message: `Stability Warning: Stable logic (${node.layer}) depends on Volatile logic: ${volatileImports.join(", ")}`,
 				})
 			}
 		}

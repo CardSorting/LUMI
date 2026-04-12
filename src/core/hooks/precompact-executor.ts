@@ -1,6 +1,6 @@
 import { findLastIndex } from "@shared/array"
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
-import type { CodemarieStorageMessage } from "@shared/messages/content"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
+import type { DietCodeStorageMessage } from "@shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
 import type { ContextManager } from "../context/context-management/ContextManager"
 import type { MessageStateHandler } from "../task/message-state"
@@ -45,7 +45,7 @@ export interface TokenUsage {
  * @param message The API request message to parse
  * @returns Token usage information, or zeros if parsing fails
  */
-export function extractTokenUsageFromMessage(message: CodemarieMessage | undefined): TokenUsage {
+export function extractTokenUsageFromMessage(message: DietCodeMessage | undefined): TokenUsage {
 	const defaultUsage: TokenUsage = {
 		tokensIn: 0,
 		tokensOut: 0,
@@ -88,7 +88,7 @@ export interface PreCompactContextFiles {
  */
 export async function writePreCompactContextFiles(
 	taskId: string,
-	currentContext: CodemarieStorageMessage[],
+	currentContext: DietCodeStorageMessage[],
 ): Promise<PreCompactContextFiles> {
 	const { writeConversationHistoryJson, writeConversationHistoryText } = await import("../storage/disk")
 
@@ -122,11 +122,11 @@ export interface PreCompactHookParams {
 
 	// Conversation state
 	/** API conversation history */
-	apiConversationHistory: CodemarieStorageMessage[]
+	apiConversationHistory: DietCodeStorageMessage[]
 	/** Current deleted range (if any) */
 	conversationHistoryDeletedRange?: [number, number]
-	/** Codemarie messages for extracting token usage */
-	codemarieMessages: CodemarieMessage[]
+	/** DietCode messages for extracting token usage */
+	dietcodeMessages: DietCodeMessage[]
 
 	// Services
 	/** Context manager for getting truncated messages */
@@ -201,8 +201,8 @@ export async function executePreCompactHookWithCleanup(params: PreCompactHookPar
 		contextRawPath = contextFiles.contextRawPath
 
 		// Extract token usage from the most recent API request
-		const previousApiReqIndex = findLastIndex(params.codemarieMessages, (m) => m.say === "api_req_started")
-		const previousRequest = previousApiReqIndex !== -1 ? params.codemarieMessages[previousApiReqIndex] : undefined
+		const previousApiReqIndex = findLastIndex(params.dietcodeMessages, (m) => m.say === "api_req_started")
+		const previousRequest = previousApiReqIndex !== -1 ? params.dietcodeMessages[previousApiReqIndex] : undefined
 		const { tokensIn, tokensOut, tokensInCache, tokensOutCache } = extractTokenUsageFromMessage(previousRequest)
 
 		// Extract truncation range - use provided range or extract from conversationHistoryDeletedRange
@@ -252,7 +252,7 @@ export async function executePreCompactHookWithCleanup(params: PreCompactHookPar
 			// Internalized cancellation state management (replaces handleCancellation callback)
 			// Always save state before cancelling, regardless of cancellation source
 			params.taskState.didFinishAbortingStream = true
-			await params.messageStateHandler.saveCodemarieMessagesAndUpdateHistory()
+			await params.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 			await params.messageStateHandler.overwriteApiConversationHistory(
 				params.messageStateHandler.getApiConversationHistory(),
 			)

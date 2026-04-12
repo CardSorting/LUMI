@@ -1,4 +1,4 @@
-import { AuthState, AuthStateChangedRequest } from "@shared/proto/codemarie/account"
+import { AuthState, AuthStateChangedRequest } from "@shared/proto/dietcode/account"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"
 

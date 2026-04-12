@@ -1,5 +1,5 @@
 /**
- * Codemarie CLI - TypeScript implementation with React Ink
+ * DietCode CLI - TypeScript implementation with React Ink
  */
 
 import { existsSync } from "node:fs"
@@ -9,7 +9,7 @@ import type { ApiProvider } from "@shared/api"
 import { Command } from "commander"
 import { render } from "ink"
 import React from "react"
-import { CodemarieEndpoint } from "@/config"
+import { DietCodeEndpoint } from "@/config"
 import type { Controller } from "@/core/controller"
 import { StateManager } from "@/core/storage/StateManager"
 import { RemoteWebviewProvider } from "@/core/webview/RemoteWebviewProvider"
@@ -278,7 +278,7 @@ async function runTaskInPlainTextMode(
 	// In plain text mode we can't show the interactive auth flow
 	const hasAuth = await isAuthConfigured()
 	if (!hasAuth) {
-		printWarning("Not authenticated. Please run 'codemarie auth' first to configure your API credentials.")
+		printWarning("Not authenticated. Please run 'dietcode auth' first to configure your API credentials.")
 		await disposeCliContext(ctx)
 		exit(1)
 	}
@@ -392,7 +392,7 @@ function setupSignalHandlers() {
 	process.on("SIGTERM", () => shutdown("SIGTERM"))
 
 	// Suppress known abort errors from unhandled rejections
-	// These occur when task is cancelled and async operations throw "Codemarie instance aborted"
+	// These occur when task is cancelled and async operations throw "DietCode instance aborted"
 	process.on("unhandledRejection", async (reason: unknown) => {
 		const message = reason instanceof Error ? reason.message : String(reason)
 		// Silently ignore abort-related errors - they're expected during task cancellation
@@ -444,18 +444,18 @@ interface InitOptions {
 async function initializeCli(options: InitOptions): Promise<CliContext> {
 	const workspacePath = options.cwd || process.cwd()
 	const { extensionContext, storageContext, DATA_DIR, EXTENSION_DIR } = initializeCliContext({
-		codemarieDir: options.config,
+		dietcodeDir: options.config,
 		workspaceDir: workspacePath,
 	})
 
-	// Set up output channel and Logger early so CodemarieEndpoint.initialize logs are captured
-	const outputChannel = window.createOutputChannel("Codemarie CLI")
+	// Set up output channel and Logger early so DietCodeEndpoint.initialize logs are captured
+	const outputChannel = window.createOutputChannel("DietCode CLI")
 	const logToChannel = (message: string) => outputChannel.appendLine(message)
 
 	// Configure the shared Logging class early to capture all initialization logs
 	Logger.subscribe(logToChannel)
 
-	await CodemarieEndpoint.initialize(EXTENSION_DIR)
+	await DietCodeEndpoint.initialize(EXTENSION_DIR)
 
 	// Auto-update check (after endpoints initialized, so we can detect bundled configs)
 	autoUpdateOnStartup(CLI_VERSION)
@@ -468,7 +468,7 @@ async function initializeCli(options: InitOptions): Promise<CliContext> {
 	}
 
 	outputChannel.appendLine(
-		`Codemarie CLI initialized. Data dir: ${DATA_DIR}, Extension dir: ${EXTENSION_DIR}, Log dir: ${CLINE_CLI_DIR.log}`,
+		`DietCode CLI initialized. Data dir: ${DATA_DIR}, Extension dir: ${EXTENSION_DIR}, Log dir: ${CLINE_CLI_DIR.log}`,
 	)
 
 	// Start system guardrails
@@ -503,7 +503,7 @@ async function initializeCli(options: InitOptions): Promise<CliContext> {
 	const controller = webview.controller
 
 	await telemetryService.captureExtensionActivated()
-	await telemetryService.captureHostEvent("codemarie_cli", "initialized")
+	await telemetryService.captureHostEvent("dietcode_cli", "initialized")
 
 	const ctx: CliContext = {
 		extensionContext: extensionContext as unknown as ExtensionContext,
@@ -575,8 +575,8 @@ async function runTask(prompt: string, options: TaskOptions & { images?: string[
 	}
 
 	// Interactive mode: Render the welcome view with optional initial prompt/images
-	// If prompt provided (codemarie task "prompt"), ChatView will auto-submit
-	// If no prompt (codemarie interactive), user will type it in
+	// If prompt provided (dietcode task "prompt"), ChatView will auto-submit
+	// If no prompt (dietcode interactive), user will type it in
 	let taskError = false
 
 	await runInkApp(
@@ -811,7 +811,7 @@ async function runServer(options: {
 	}
 
 	// Ensure we have a token if requested, or generate one/reuse existing
-	let authToken = process.env.CODEMARIE_REMOTE_AUTH_TOKEN
+	let authToken = process.env.DIETCODE_REMOTE_AUTH_TOKEN
 	if (!authToken) {
 		authToken = StateManager.get().getGlobalStateKey("remoteAuthToken")
 		if (!authToken) {
@@ -819,7 +819,7 @@ async function runServer(options: {
 			StateManager.get().setGlobalState("remoteAuthToken", authToken)
 			await StateManager.get().flushPendingState()
 		}
-		process.env.CODEMARIE_REMOTE_AUTH_TOKEN = authToken
+		process.env.DIETCODE_REMOTE_AUTH_TOKEN = authToken
 	}
 
 	printInfo(`Remote control authentication token: ${authToken}`)
@@ -845,7 +845,7 @@ async function runServer(options: {
 // Setup CLI commands
 const program = new Command()
 
-program.name("codemarie").description("Codemarie CLI - AI coding assistant in your terminal").version(CLI_VERSION)
+program.name("dietcode").description("DietCode CLI - AI coding assistant in your terminal").version(CLI_VERSION)
 
 // Enable positional options to avoid conflicts between root and subcommand options with the same name
 program.enablePositionalOptions()
@@ -863,7 +863,7 @@ program
 	.option("-m, --model <model>", "Model to use for the task")
 	.option("-v, --verbose", "Show verbose output")
 	.option("-c, --cwd <path>", "Working directory for the task")
-	.option("--config <path>", "Path to Codemarie configuration directory")
+	.option("--config <path>", "Path to DietCode configuration directory")
 	.option("--thinking [tokens]", "Enable extended thinking (default: 1024 tokens)")
 	.option("--reasoning-effort <effort>", "Reasoning effort: none|low|medium|high|xhigh")
 	.option("--max-consecutive-mistakes <count>", "Maximum consecutive mistakes before halting in yolo mode")
@@ -884,20 +884,20 @@ program
 	.description("List task history")
 	.option("-n, --limit <number>", "Number of tasks to show", "10")
 	.option("-p, --page <number>", "Page number (1-based)", "1")
-	.option("--config <path>", "Path to Codemarie configuration directory")
+	.option("--config <path>", "Path to DietCode configuration directory")
 	.action(listHistory)
 
 const config = program.command("config").description("Show or manage configuration")
 
 config
 	.description("Show current configuration")
-	.option("--config <path>", "Path to Codemarie configuration directory")
+	.option("--config <path>", "Path to DietCode configuration directory")
 	.action(showConfig)
 
 config
 	.command("clear-trust")
 	.description("Clear persistent trust for tools and commands")
-	.option("--config <path>", "Path to Codemarie configuration directory")
+	.option("--config <path>", "Path to DietCode configuration directory")
 	.action(async (options) => {
 		const ctx = await initializeCli(options)
 		StateManager.get().clearPersistentTrust()
@@ -916,13 +916,13 @@ program
 	.option("-b, --baseurl <url>", "Base URL (optional, only for openai provider)")
 	.option("-v, --verbose", "Show verbose output")
 	.option("-c, --cwd <path>", "Working directory for the task")
-	.option("--config <path>", "Path to Codemarie configuration directory")
+	.option("--config <path>", "Path to DietCode configuration directory")
 	.action(runAuth)
 
 program
 	.command("version")
-	.description("Show Codemarie CLI version number")
-	.action(() => printInfo(`Codemarie CLI version: ${CLI_VERSION}`))
+	.description("Show DietCode CLI version number")
+	.action(() => printInfo(`DietCode CLI version: ${CLI_VERSION}`))
 
 program
 	.command("update")
@@ -962,7 +962,7 @@ program
 			}
 		} else if (hasError) {
 			console.log(
-				"\n\x1b[31mSome diagnostics failed. Please follow the remediation steps above, or run `codemarie doctor --repair`.\x1b[0m",
+				"\n\x1b[31mSome diagnostics failed. Please follow the remediation steps above, or run `dietcode doctor --repair`.\x1b[0m",
 			)
 			process.exit(1)
 		} else {
@@ -1001,7 +1001,7 @@ async function resumeTask(taskId: string, options: TaskOptions & { initialPrompt
 	const historyItem = findTaskInHistory(taskId)
 	if (!historyItem) {
 		printWarning(`Task not found: ${taskId}`)
-		printInfo("Use 'codemarie history' to see available tasks.")
+		printInfo("Use 'dietcode history' to see available tasks.")
 		await disposeCliContext(ctx)
 		exit(1)
 	}
@@ -1117,9 +1117,9 @@ program
 
 		// Error if stdin was piped but empty AND no prompt was provided
 		// This handles:
-		// - `echo "" | codemarie` -> error (empty stdin, no prompt)
-		// - `codemarie "prompt"` in GitHub Actions -> OK (empty stdin ignored, has prompt)
-		// - `cat file | codemarie "explain"` -> OK (has stdin AND prompt)
+		// - `echo "" | dietcode` -> error (empty stdin, no prompt)
+		// - `dietcode "prompt"` in GitHub Actions -> OK (empty stdin ignored, has prompt)
+		// - `cat file | dietcode "explain"` -> OK (has stdin AND prompt)
 		if (stdinInput === "" && !prompt) {
 			printWarning("Empty input received from stdin. Please provide content to process.")
 			exit(1)
@@ -1168,7 +1168,7 @@ program
 	.option("-p, --port <number>", "Port to listen on", "26042")
 	.option("-H, --host <address>", "Host to listen on", "127.0.0.1")
 	.option("-v, --verbose", "Show verbose output")
-	.option("--config <path>", "Path to Codemarie configuration directory")
+	.option("--config <path>", "Path to DietCode configuration directory")
 	.option("-c, --cwd <path>", "Working directory for the task")
 	.option("--build", "Automatically build the webview-ui for remote platform")
 	.action(runServer)

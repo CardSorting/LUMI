@@ -32,11 +32,11 @@ import { mkdtempSync } from "fs"
 import os from "os"
 import path from "path"
 import { _electron } from "playwright"
-import { CodemarieApiServerMock } from "../src/test/e2e/fixtures/server"
+import { DietCodeApiServerMock } from "../src/test/e2e/fixtures/server"
 import { E2ETestHelper } from "../src/test/e2e/utils/helpers"
 
 async function main() {
-	await CodemarieApiServerMock.startGlobalServer()
+	await DietCodeApiServerMock.startGlobalServer()
 
 	const userDataDir = mkdtempSync(path.join(os.tmpdir(), "vsce-interactive"))
 	const executablePath = await downloadAndUnzipVSCode("stable", undefined, new SilentReporter())
@@ -48,7 +48,7 @@ async function main() {
 			...process.env,
 			TEMP_PROFILE: "true",
 			E2E_TEST: "true",
-			CODEMARIE_ENVIRONMENT: "local",
+			DIETCODE_ENVIRONMENT: "local",
 			CLINE_ENVIRONMENT: "local",
 			GRPC_RECORDER_ENABLED: "true",
 			GRPC_RECORDER_TESTS_FILTERS_ENABLED: "true",
@@ -69,9 +69,9 @@ async function main() {
 
 	const page = await app.firstWindow()
 
-	await E2ETestHelper.openCodemarieSidebar(page)
+	await E2ETestHelper.openDietCodeSidebar(page)
 
-	console.log("VSCode with Codemarie extension is now running!")
+	console.log("VSCode with DietCode extension is now running!")
 	console.log(`Temporary data directory on: ${userDataDir}`)
 	console.log("You can manually interact with the extension.")
 	console.log("Press Ctrl+C to close when done.")
@@ -80,7 +80,7 @@ async function main() {
 		console.log("Cleaning up resources...")
 		try {
 			await app?.close()
-			await CodemarieApiServerMock.stopGlobalServer?.()
+			await DietCodeApiServerMock.stopGlobalServer?.()
 			await E2ETestHelper.rmForRetries(userDataDir, { recursive: true })
 		} catch (e) {
 			console.log(`We could teardown interactive playwright properly, error:${e}`)

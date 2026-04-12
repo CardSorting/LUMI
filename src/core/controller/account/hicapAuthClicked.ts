@@ -1,4 +1,4 @@
-import { Empty, EmptyRequest } from "@shared/proto/codemarie/common"
+import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
 import { HostProvider } from "@/hosts/host-provider"
 import { openExternal } from "@/utils/env"
 import { Controller } from ".."
@@ -9,7 +9,7 @@ import { Controller } from ".."
 export async function hicapAuthClicked(_: Controller, __: EmptyRequest): Promise<Empty> {
 	const callbackUrl = await HostProvider.get().getCallbackUrl("/hicap")
 	const authUrl = new URL("https://dashboard.hicap.ai/setup")
-	authUrl.searchParams.set("application", "codemarie")
+	authUrl.searchParams.set("application", "dietcode")
 	authUrl.searchParams.set("callback_url", callbackUrl)
 
 	await openExternal(authUrl.toString())

@@ -112,7 +112,7 @@ export class JsonKeyValueStore<T> {
 	}
 }
 
-/** This is not used in codemarie, none of the methods are implemented. */
+/** This is not used in dietcode, none of the methods are implemented. */
 export class EnvironmentVariableCollection implements EnvironmentVariableCollection {
 	persistent = false
 	description: string | undefined = undefined

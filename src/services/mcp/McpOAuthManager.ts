@@ -48,10 +48,10 @@ function saveMcpOAuthSecrets(secrets: McpOAuthSecrets): void {
 }
 
 /**
- * Implementation of OAuthClientProvider for Codemarie
+ * Implementation of OAuthClientProvider for DietCode
  * Manages OAuth state and token storage for a single MCP server
  */
-class CodemarieOAuthClientProvider implements OAuthClientProvider {
+class DietCodeOAuthClientProvider implements OAuthClientProvider {
 	private serverName: string
 	private serverUrl: string
 	private _redirectUrl: string
@@ -82,9 +82,9 @@ class CodemarieOAuthClientProvider implements OAuthClientProvider {
 			token_endpoint_auth_method: "none",
 			grant_types: ["authorization_code", "refresh_token"],
 			response_types: ["code"],
-			client_name: "Codemarie",
-			client_uri: "https://codemarie.bot",
-			software_id: "codemarie",
+			client_name: "DietCode",
+			client_uri: "https://dietcode.bot",
+			software_id: "dietcode",
 		}
 	}
 
@@ -274,7 +274,7 @@ export class McpOAuthManager {
 		}
 
 		// Create provider
-		const provider = new CodemarieOAuthClientProvider(serverName, serverUrl)
+		const provider = new DietCodeOAuthClientProvider(serverName, serverUrl)
 		await provider.initialize() // Sets the redirect URL
 		this.providers.set(key, provider)
 		return provider

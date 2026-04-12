@@ -28,7 +28,7 @@ export const NebiusProvider = ({ showModelOptions, isPopup, currentMode }: Nebiu
 	return (
 		<div>
 			<ApiKeyField
-				helpText="This key is stored locally and only used to make API requests from this extension. (Note: Codemarie uses complex prompts and works best with Claude models. Less capable models may not work as expected.)"
+				helpText="This key is stored locally and only used to make API requests from this extension. (Note: DietCode uses complex prompts and works best with Claude models. Less capable models may not work as expected.)"
 				initialValue={apiConfiguration?.nebiusApiKey || ""}
 				onChange={(value) => handleFieldChange("nebiusApiKey", value)}
 				providerName="Nebius"

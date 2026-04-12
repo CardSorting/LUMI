@@ -1,22 +1,22 @@
 /**
- * Codemarie Library Exports
+ * DietCode Library Exports
  *
- * This file exports the public API for programmatic use of Codemarie.
- * Use these classes and types to embed Codemarie into your applications.
+ * This file exports the public API for programmatic use of DietCode.
+ * Use these classes and types to embed DietCode into your applications.
  *
  * @example
  * ```typescript
- * import { CodemarieAgent } from "codemarie"
+ * import { DietCodeAgent } from "dietcode"
  *
- * const agent = new CodemarieAgent()
+ * const agent = new DietCodeAgent()
  * await agent.initialize({ clientCapabilities: {} })
  * const session = await agent.newSession({ cwd: process.cwd() })
  * ```
- * @module codemarie
+ * @module dietcode
  */
 
-export { CodemarieAgent } from "./agent/CodemarieAgent.js"
-export { CodemarieSessionEmitter } from "./agent/CodemarieSessionEmitter.js"
+export { DietCodeAgent } from "./agent/DietCodeAgent.js"
+export { DietCodeSessionEmitter } from "./agent/DietCodeSessionEmitter.js"
 export type {
 	AcpAgentOptions,
 	AcpSessionState,
@@ -26,13 +26,13 @@ export type {
 	AudioContent,
 	CancelNotification,
 	ClientCapabilities,
-	CodemarieAcpSession,
-	CodemarieAgentCapabilities,
-	CodemarieAgentInfo,
-	CodemarieAgentOptions,
-	CodemariePermissionOption,
-	CodemarieSessionEvents,
 	ContentBlock,
+	DietCodeAcpSession,
+	DietCodeAgentCapabilities,
+	DietCodeAgentInfo,
+	DietCodeAgentOptions,
+	DietCodePermissionOption,
+	DietCodeSessionEvents,
 	ImageContent,
 	InitializeRequest,
 	InitializeResponse,

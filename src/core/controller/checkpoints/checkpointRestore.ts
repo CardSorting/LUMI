@@ -1,10 +1,10 @@
-import { CheckpointRestoreRequest } from "@shared/proto/codemarie/checkpoints"
-import { Empty } from "@shared/proto/codemarie/common"
+import { CheckpointRestoreRequest } from "@shared/proto/dietcode/checkpoints"
+import { Empty } from "@shared/proto/dietcode/common"
 import pWaitFor from "p-wait-for"
 import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieCheckpointRestore } from "../../../shared/WebviewMessage"
+import { DietCodeCheckpointRestore } from "../../../shared/WebviewMessage"
 import { Controller } from ".."
 
 export async function checkpointRestore(controller: Controller, request: CheckpointRestoreRequest): Promise<Empty> {
@@ -15,7 +15,7 @@ export async function checkpointRestore(controller: Controller, request: Checkpo
 		await pWaitFor(() => controller.task?.taskState.isInitialized === true, {
 			timeout: 3_000,
 		}).catch((error) => {
-			Logger.log("Failed to init new Codemarie instance to restore checkpoint", error)
+			Logger.log("Failed to init new DietCode instance to restore checkpoint", error)
 			HostProvider.window.showMessage({
 				type: ShowMessageType.ERROR,
 				message: "Failed to restore checkpoint",
@@ -26,7 +26,7 @@ export async function checkpointRestore(controller: Controller, request: Checkpo
 		// NOTE: cancelTask awaits abortTask, which awaits diffViewProvider.revertChanges, which reverts any edited files, allowing us to reset to a checkpoint rather than running into a state where the revertChanges function is called alongside or after the checkpoint reset
 		await controller.task?.checkpointManager?.restoreCheckpoint(
 			request.number,
-			request.restoreType as CodemarieCheckpointRestore,
+			request.restoreType as DietCodeCheckpointRestore,
 			request.offset,
 		)
 	}

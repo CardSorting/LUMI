@@ -1,7 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { EnvironmentMetadataEntry, TaskMetadata } from "@core/context/context-tracking/ContextTrackerTypes"
 import { execa } from "@packages/execa"
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { RemoteConfig } from "@shared/remote-config/schema"
 import { GlobalState, Settings } from "@shared/storage/state-keys"
@@ -45,19 +45,19 @@ export const GlobalFileNames = {
 	apiConversationHistory: "api_conversation_history.json",
 	contextHistory: "context_history.json",
 	uiMessages: "ui_messages.json",
-	codemarieRecommendedModels: "codemarie_recommended_models.json",
-	codemarieModels: "codemarie_models.json",
+	dietcodeRecommendedModels: "dietcode_recommended_models.json",
+	dietcodeModels: "dietcode_models.json",
 	openRouterModels: "openrouter_models.json",
 	vercelAiGatewayModels: "vercel_ai_gateway_models.json",
 	groqModels: "groq_models.json",
 	basetenModels: "baseten_models.json",
 	hicapModels: "hicap_models.json",
-	mcpSettings: "codemarie_mcp_settings.json",
-	codemarieRules: ".codemarierules",
-	workflows: ".codemarierules/workflows",
-	hooksDir: ".codemarierules/hooks",
-	codemarieruleSkillsDir: ".codemarierules/skills",
-	codemarieSkillsDir: ".codemarie/skills",
+	mcpSettings: "dietcode_mcp_settings.json",
+	dietcodeRules: ".dietcoderules",
+	workflows: ".dietcoderules/workflows",
+	hooksDir: ".dietcoderules/hooks",
+	dietcoderuleSkillsDir: ".dietcoderules/skills",
+	dietcodeSkillsDir: ".dietcode/skills",
 	claudeSkillsDir: ".claude/skills",
 	agentsSkillsDir: ".agents/skills",
 	cursorRulesDir: ".cursor/rules",
@@ -106,16 +106,16 @@ export async function getDocumentsPath(): Promise<string> {
 }
 
 /**
- * Returns the cross-platform path to the Codemarie home directory (~/.codemarie).
+ * Returns the cross-platform path to the DietCode home directory (~/.dietcode).
  * This works on macOS, Linux, and Windows:
- * - macOS: /Users/username/.codemarie
- * - Linux: /home/username/.codemarie
- * - Windows: C:\Users\username\.codemarie
+ * - macOS: /Users/username/.dietcode
+ * - Linux: /home/username/.dietcode
+ * - Windows: C:\Users\username\.dietcode
  *
- * This is intended to eventually replace ~/Documents/Codemarie as the global config location.
+ * This is intended to eventually replace ~/Documents/DietCode as the global config location.
  */
-export function getCodemarieHomePath(): string {
-	return path.join(os.homedir(), ".codemarie")
+export function getDietCodeHomePath(): string {
+	return path.join(os.homedir(), ".dietcode")
 }
 
 export async function ensureTaskDirectoryExists(taskId: string): Promise<string> {
@@ -124,53 +124,53 @@ export async function ensureTaskDirectoryExists(taskId: string): Promise<string>
 
 export async function ensureRulesDirectoryExists(): Promise<string> {
 	const userDocumentsPath = await getDocumentsPath()
-	const codemarieRulesDir = path.join(userDocumentsPath, "Codemarie", "Rules")
+	const dietcodeRulesDir = path.join(userDocumentsPath, "DietCode", "Rules")
 	try {
-		await fs.mkdir(codemarieRulesDir, { recursive: true })
+		await fs.mkdir(dietcodeRulesDir, { recursive: true })
 	} catch (_error) {
-		return path.join(os.homedir(), "Documents", "Codemarie", "Rules") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
+		return path.join(os.homedir(), "Documents", "DietCode", "Rules") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
 	}
-	return codemarieRulesDir
+	return dietcodeRulesDir
 }
 
 export async function ensureWorkflowsDirectoryExists(): Promise<string> {
 	const userDocumentsPath = await getDocumentsPath()
-	const codemarieWorkflowsDir = path.join(userDocumentsPath, "Codemarie", "Workflows")
+	const dietcodeWorkflowsDir = path.join(userDocumentsPath, "DietCode", "Workflows")
 	try {
-		await fs.mkdir(codemarieWorkflowsDir, { recursive: true })
+		await fs.mkdir(dietcodeWorkflowsDir, { recursive: true })
 	} catch (_error) {
-		return path.join(os.homedir(), "Documents", "Codemarie", "Workflows") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
+		return path.join(os.homedir(), "Documents", "DietCode", "Workflows") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
 	}
-	return codemarieWorkflowsDir
+	return dietcodeWorkflowsDir
 }
 
 export async function ensureMcpServersDirectoryExists(): Promise<string> {
 	const userDocumentsPath = await getDocumentsPath()
-	const mcpServersDir = path.join(userDocumentsPath, "Codemarie", "MCP")
+	const mcpServersDir = path.join(userDocumentsPath, "DietCode", "MCP")
 	try {
 		await fs.mkdir(mcpServersDir, { recursive: true })
 	} catch (_error) {
-		return path.join(os.homedir(), "Documents", "Codemarie", "MCP") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine since this path is only ever used in the system prompt
+		return path.join(os.homedir(), "Documents", "DietCode", "MCP") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine since this path is only ever used in the system prompt
 	}
 	return mcpServersDir
 }
 
 export async function ensureHooksDirectoryExists(): Promise<string> {
 	const userDocumentsPath = await getDocumentsPath()
-	const codemarieHooksDir = path.join(userDocumentsPath, "Codemarie", "Hooks")
+	const dietcodeHooksDir = path.join(userDocumentsPath, "DietCode", "Hooks")
 	try {
-		await fs.mkdir(codemarieHooksDir, { recursive: true })
+		await fs.mkdir(dietcodeHooksDir, { recursive: true })
 	} catch (_error) {
-		return path.join(os.homedir(), "Documents", "Codemarie", "Hooks") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
+		return path.join(os.homedir(), "Documents", "DietCode", "Hooks") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
 	}
-	return codemarieHooksDir
+	return dietcodeHooksDir
 }
 
 /**
- * Returns the global skills directory path (~/.codemarie/skills) without creating it.
+ * Returns the global skills directory path (~/.dietcode/skills) without creating it.
  */
-function getCodemarieSkillsDirectoryPath(): string {
-	return path.join(getCodemarieHomePath(), "skills")
+function getDietCodeSkillsDirectoryPath(): string {
+	return path.join(getDietCodeHomePath(), "skills")
 }
 
 function getAgentSkillsDirectoryPath(): string {
@@ -206,11 +206,11 @@ export type SkillsScanDirectory = {
  */
 export function getSkillsDirectoriesForScan(cwd: string): SkillsScanDirectory[] {
 	return [
-		{ path: path.join(cwd, GlobalFileNames.codemarieruleSkillsDir), source: "project" },
-		{ path: path.join(cwd, GlobalFileNames.codemarieSkillsDir), source: "project" },
+		{ path: path.join(cwd, GlobalFileNames.dietcoderuleSkillsDir), source: "project" },
+		{ path: path.join(cwd, GlobalFileNames.dietcodeSkillsDir), source: "project" },
 		{ path: path.join(cwd, GlobalFileNames.claudeSkillsDir), source: "project" },
 		{ path: path.join(cwd, GlobalFileNames.agentsSkillsDir), source: "project" },
-		{ path: getCodemarieSkillsDirectoryPath(), source: "global" },
+		{ path: getDietCodeSkillsDirectoryPath(), source: "global" },
 		{ path: getAgentSkillsDirectoryPath(), source: "global" },
 	]
 }
@@ -259,7 +259,7 @@ export async function saveApiConversationHistory(taskId: string, apiConversation
 	}
 }
 
-export async function getSavedCodemarieMessages(taskId: string): Promise<CodemarieMessage[]> {
+export async function getSavedDietCodeMessages(taskId: string): Promise<DietCodeMessage[]> {
 	const filePath = path.join(await ensureTaskDirectoryExists(taskId), GlobalFileNames.uiMessages)
 	if (await fileExistsAtPath(filePath)) {
 		return JSON.parse(await fs.readFile(filePath, "utf8"))
@@ -274,7 +274,7 @@ export async function getSavedCodemarieMessages(taskId: string): Promise<Codemar
 	return []
 }
 
-export async function saveCodemarieMessages(taskId: string, uiMessages: CodemarieMessage[]) {
+export async function saveDietCodeMessages(taskId: string, uiMessages: DietCodeMessage[]) {
 	try {
 		const taskDir = await ensureTaskDirectoryExists(taskId)
 		const filePath = path.join(taskDir, GlobalFileNames.uiMessages)
@@ -299,7 +299,7 @@ export async function collectEnvironmentMetadata(): Promise<Omit<EnvironmentMeta
 			os_arch: os.arch(),
 			host_name: hostVersion.platform || "Unknown",
 			host_version: hostVersion.version || "Unknown",
-			codemarie_version: ExtensionRegistryInfo.version,
+			dietcode_version: ExtensionRegistryInfo.version,
 		}
 	} catch (error) {
 		Logger.error("Failed to collect environment metadata:", error)
@@ -310,7 +310,7 @@ export async function collectEnvironmentMetadata(): Promise<Omit<EnvironmentMeta
 			os_arch: os.arch(),
 			host_name: "Unknown",
 			host_version: "Unknown",
-			codemarie_version: "Unknown",
+			dietcode_version: "Unknown",
 		}
 	}
 }
@@ -511,7 +511,7 @@ export async function getGlobalHooksDir(): Promise<string | undefined> {
 /**
  * Gets the paths to all hooks directories to search for hooks, including:
  * 1. The global hooks directory (if it exists)
- * 2. Each workspace root's .codemarierules/hooks directory (if they exist)
+ * 2. Each workspace root's .dietcoderules/hooks directory (if they exist)
  *
  * Note: Hooks from different directories may be executed concurrently.
  * No execution order is guaranteed between hooks from different directories.
@@ -535,7 +535,7 @@ export async function getAllHooksDirs(): Promise<string[]> {
 }
 
 /**
- * Gets the paths to the workspace's .codemarierules/hooks directories to search for
+ * Gets the paths to the workspace's .dietcoderules/hooks directories to search for
  * hooks. A workspace may not use hooks, and the resulting array will be empty. A
  * multi-root workspace may have multiple hooks directories.
  */
@@ -548,7 +548,7 @@ export async function getWorkspaceHooksDirs(): Promise<string[]> {
 	return (
 		await Promise.all(
 			workspaceRootPaths.map(async (workspaceRootPath) => {
-				// Look for a .codemarierules/hooks folder in this workspace root.
+				// Look for a .dietcoderules/hooks folder in this workspace root.
 				const candidate = path.join(workspaceRootPath, GlobalFileNames.hooksDir)
 				return (await isDirectory(candidate)) ? candidate : undefined
 			}),

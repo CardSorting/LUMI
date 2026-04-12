@@ -1,8 +1,8 @@
 import { buildApiHandler } from "@core/api"
 import { PromptRegistry } from "@core/prompts/system-prompt"
-import { CodemarieToolSet } from "@core/prompts/system-prompt/registry/CodemarieToolSet"
+import { DietCodeToolSet } from "@core/prompts/system-prompt/registry/DietCodeToolSet"
 import type { SystemPromptContext } from "@core/prompts/system-prompt/types"
-import { CodemarieDefaultTool } from "@shared/tools"
+import { DietCodeDefaultTool } from "@shared/tools"
 import { ApiConfiguration, ApiProvider } from "@/shared/api"
 import { getProviderModelIdKey } from "@/shared/storage/provider-keys"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -11,17 +11,17 @@ import { AgentConfigLoader } from "./AgentConfigLoader"
 
 export type AgentConfig = Partial<AgentBaseConfig>
 
-export const SUBAGENT_DEFAULT_ALLOWED_TOOLS: CodemarieDefaultTool[] = [
-	CodemarieDefaultTool.FILE_READ,
-	CodemarieDefaultTool.LIST_FILES,
-	CodemarieDefaultTool.SEARCH,
-	CodemarieDefaultTool.LIST_CODE_DEF,
-	CodemarieDefaultTool.BASH,
-	CodemarieDefaultTool.USE_SKILL,
-	CodemarieDefaultTool.ATTEMPT,
-	CodemarieDefaultTool.MCP_USE,
-	CodemarieDefaultTool.MCP_ACCESS,
-	CodemarieDefaultTool.MEM_REFRESH,
+export const SUBAGENT_DEFAULT_ALLOWED_TOOLS: DietCodeDefaultTool[] = [
+	DietCodeDefaultTool.FILE_READ,
+	DietCodeDefaultTool.LIST_FILES,
+	DietCodeDefaultTool.SEARCH,
+	DietCodeDefaultTool.LIST_CODE_DEF,
+	DietCodeDefaultTool.BASH,
+	DietCodeDefaultTool.USE_SKILL,
+	DietCodeDefaultTool.ATTEMPT,
+	DietCodeDefaultTool.MCP_USE,
+	DietCodeDefaultTool.MCP_ACCESS,
+	DietCodeDefaultTool.MEM_REFRESH,
 ]
 
 // Peer-Review & Consensus loops
@@ -61,7 +61,7 @@ CRITICAL: You are operating within a JOY-ZONED architectural environment.
 
 export class SubagentBuilder {
 	private readonly agentConfig: AgentConfig = {}
-	private readonly allowedTools: CodemarieDefaultTool[]
+	private readonly allowedTools: DietCodeDefaultTool[]
 	private readonly apiHandler: ReturnType<typeof buildApiHandler>
 	private parentStreamContext: string | null = null
 
@@ -92,7 +92,7 @@ export class SubagentBuilder {
 		this.parentStreamContext = context
 	}
 
-	getAllowedTools(): CodemarieDefaultTool[] {
+	getAllowedTools(): DietCodeDefaultTool[] {
 		return this.allowedTools
 	}
 
@@ -112,7 +112,7 @@ export class SubagentBuilder {
 
 	buildNativeTools(context: SystemPromptContext) {
 		const family = PromptRegistry.getInstance().getModelFamily(context)
-		const toolSets = CodemarieToolSet.getToolsForVariantWithFallback(family, this.allowedTools)
+		const toolSets = DietCodeToolSet.getToolsForVariantWithFallback(family, this.allowedTools)
 		const filteredToolSpecs = toolSets
 			.map((toolSet) => toolSet.config)
 			.filter(
@@ -121,13 +121,13 @@ export class SubagentBuilder {
 					(!toolSpec.contextRequirements || toolSpec.contextRequirements(context)),
 			)
 
-		const converter = CodemarieToolSet.getNativeConverter(context.providerInfo.providerId, context.providerInfo.model.id)
+		const converter = DietCodeToolSet.getNativeConverter(context.providerInfo.providerId, context.providerInfo.model.id)
 		return filteredToolSpecs.map((tool) => converter(tool, context))
 	}
 
-	private resolveAllowedTools(configuredTools?: CodemarieDefaultTool[]): CodemarieDefaultTool[] {
+	private resolveAllowedTools(configuredTools?: DietCodeDefaultTool[]): DietCodeDefaultTool[] {
 		const sourceTools = configuredTools && configuredTools.length > 0 ? configuredTools : SUBAGENT_DEFAULT_ALLOWED_TOOLS
-		return Array.from(new Set([...sourceTools, CodemarieDefaultTool.ATTEMPT]))
+		return Array.from(new Set([...sourceTools, DietCodeDefaultTool.ATTEMPT]))
 	}
 
 	private buildAgentIdentitySystemPrefix(): string {

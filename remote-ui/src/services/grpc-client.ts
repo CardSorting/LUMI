@@ -4,1525 +4,1504 @@ import * as proto from "@shared/proto/index"
 import { Callbacks, ProtoBusClient } from "./grpc-client-base"
 
 export class AccountServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.AccountService"
-	static async accountLoginClicked(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.String> {
+	static override serviceName = "dietcode.AccountService"
+	static async accountLoginClicked(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.String> {
 		return AccountServiceClient.makeUnaryRequest(
 			"accountLoginClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.String.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.String.fromJSON,
 		)
 	}
-	static async accountLogoutClicked(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async accountLogoutClicked(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return AccountServiceClient.makeUnaryRequest(
 			"accountLogoutClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 	static subscribeToAuthStatusUpdate(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.AuthState>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.AuthState>,
 	): () => void {
 		return AccountServiceClient.makeStreamingRequest(
 			"subscribeToAuthStatusUpdate",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.AuthState.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.AuthState.fromJSON,
 			callbacks,
 		)
 	}
-	static async authStateChanged(request: proto.codemarie.AuthStateChangedRequest): Promise<proto.codemarie.AuthState> {
+	static async authStateChanged(request: proto.dietcode.AuthStateChangedRequest): Promise<proto.dietcode.AuthState> {
 		return AccountServiceClient.makeUnaryRequest(
 			"authStateChanged",
 			request,
-			proto.codemarie.AuthStateChangedRequest.toJSON,
-			proto.codemarie.AuthState.fromJSON,
+			proto.dietcode.AuthStateChangedRequest.toJSON,
+			proto.dietcode.AuthState.fromJSON,
 		)
 	}
-	static async getUserCredits(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.UserCreditsData> {
+	static async getUserCredits(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.UserCreditsData> {
 		return AccountServiceClient.makeUnaryRequest(
 			"getUserCredits",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.UserCreditsData.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.UserCreditsData.fromJSON,
 		)
 	}
 	static async getOrganizationCredits(
-		request: proto.codemarie.GetOrganizationCreditsRequest,
-	): Promise<proto.codemarie.OrganizationCreditsData> {
+		request: proto.dietcode.GetOrganizationCreditsRequest,
+	): Promise<proto.dietcode.OrganizationCreditsData> {
 		return AccountServiceClient.makeUnaryRequest(
 			"getOrganizationCredits",
 			request,
-			proto.codemarie.GetOrganizationCreditsRequest.toJSON,
-			proto.codemarie.OrganizationCreditsData.fromJSON,
+			proto.dietcode.GetOrganizationCreditsRequest.toJSON,
+			proto.dietcode.OrganizationCreditsData.fromJSON,
 		)
 	}
-	static async getUserOrganizations(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.UserOrganizationsResponse> {
+	static async getUserOrganizations(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.UserOrganizationsResponse> {
 		return AccountServiceClient.makeUnaryRequest(
 			"getUserOrganizations",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.UserOrganizationsResponse.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.UserOrganizationsResponse.fromJSON,
 		)
 	}
-	static async setUserOrganization(request: proto.codemarie.UserOrganizationUpdateRequest): Promise<proto.codemarie.Empty> {
+	static async setUserOrganization(request: proto.dietcode.UserOrganizationUpdateRequest): Promise<proto.dietcode.Empty> {
 		return AccountServiceClient.makeUnaryRequest(
 			"setUserOrganization",
 			request,
-			proto.codemarie.UserOrganizationUpdateRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.UserOrganizationUpdateRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async openrouterAuthClicked(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async openrouterAuthClicked(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return AccountServiceClient.makeUnaryRequest(
 			"openrouterAuthClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async requestyAuthClicked(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async requestyAuthClicked(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return AccountServiceClient.makeUnaryRequest(
 			"requestyAuthClicked",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async hicapAuthClicked(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async hicapAuthClicked(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return AccountServiceClient.makeUnaryRequest(
 			"hicapAuthClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async getRedirectUrl(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.String> {
+	static async getRedirectUrl(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.String> {
 		return AccountServiceClient.makeUnaryRequest(
 			"getRedirectUrl",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.String.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.String.fromJSON,
 		)
 	}
-	static async openAiCodexSignIn(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async openAiCodexSignIn(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return AccountServiceClient.makeUnaryRequest(
 			"openAiCodexSignIn",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async openAiCodexSignOut(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async openAiCodexSignOut(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return AccountServiceClient.makeUnaryRequest(
 			"openAiCodexSignOut",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 }
 export class BrowserServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.BrowserService"
-	static async getBrowserConnectionInfo(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.BrowserConnectionInfo> {
+	static override serviceName = "dietcode.BrowserService"
+	static async getBrowserConnectionInfo(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.BrowserConnectionInfo> {
 		return BrowserServiceClient.makeUnaryRequest(
 			"getBrowserConnectionInfo",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.BrowserConnectionInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.BrowserConnectionInfo.fromJSON,
 		)
 	}
-	static async testBrowserConnection(request: proto.codemarie.StringRequest): Promise<proto.codemarie.BrowserConnection> {
+	static async testBrowserConnection(request: proto.dietcode.StringRequest): Promise<proto.dietcode.BrowserConnection> {
 		return BrowserServiceClient.makeUnaryRequest(
 			"testBrowserConnection",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.BrowserConnection.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.BrowserConnection.fromJSON,
 		)
 	}
-	static async discoverBrowser(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.BrowserConnection> {
+	static async discoverBrowser(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.BrowserConnection> {
 		return BrowserServiceClient.makeUnaryRequest(
 			"discoverBrowser",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.BrowserConnection.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.BrowserConnection.fromJSON,
 		)
 	}
-	static async getDetectedChromePath(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.ChromePath> {
+	static async getDetectedChromePath(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.ChromePath> {
 		return BrowserServiceClient.makeUnaryRequest(
 			"getDetectedChromePath",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.ChromePath.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.ChromePath.fromJSON,
 		)
 	}
-	static async relaunchChromeDebugMode(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.String> {
+	static async relaunchChromeDebugMode(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.String> {
 		return BrowserServiceClient.makeUnaryRequest(
 			"relaunchChromeDebugMode",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.String.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.String.fromJSON,
 		)
 	}
 }
 export class CheckpointsServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.CheckpointsService"
-	static async checkpointDiff(request: proto.codemarie.Int64Request): Promise<proto.codemarie.Empty> {
+	static override serviceName = "dietcode.CheckpointsService"
+	static async checkpointDiff(request: proto.dietcode.Int64Request): Promise<proto.dietcode.Empty> {
 		return CheckpointsServiceClient.makeUnaryRequest(
 			"checkpointDiff",
 			request,
-			proto.codemarie.Int64Request.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.Int64Request.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async checkpointRestore(request: proto.codemarie.CheckpointRestoreRequest): Promise<proto.codemarie.Empty> {
+	static async checkpointRestore(request: proto.dietcode.CheckpointRestoreRequest): Promise<proto.dietcode.Empty> {
 		return CheckpointsServiceClient.makeUnaryRequest(
 			"checkpointRestore",
 			request,
-			proto.codemarie.CheckpointRestoreRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.CheckpointRestoreRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 	static subscribeToCheckpoints(
-		request: proto.codemarie.CheckpointSubscriptionRequest,
-		callbacks: Callbacks<proto.codemarie.CheckpointEvent>,
+		request: proto.dietcode.CheckpointSubscriptionRequest,
+		callbacks: Callbacks<proto.dietcode.CheckpointEvent>,
 	): () => void {
 		return CheckpointsServiceClient.makeStreamingRequest(
 			"subscribeToCheckpoints",
 			request,
-			proto.codemarie.CheckpointSubscriptionRequest.toJSON,
-			proto.codemarie.CheckpointEvent.fromJSON,
+			proto.dietcode.CheckpointSubscriptionRequest.toJSON,
+			proto.dietcode.CheckpointEvent.fromJSON,
 			callbacks,
 		)
 	}
-	static async getCwdHash(request: proto.codemarie.StringArrayRequest): Promise<proto.codemarie.PathHashMap> {
+	static async getCwdHash(request: proto.dietcode.StringArrayRequest): Promise<proto.dietcode.PathHashMap> {
 		return CheckpointsServiceClient.makeUnaryRequest(
 			"getCwdHash",
 			request,
-			proto.codemarie.StringArrayRequest.toJSON,
-			proto.codemarie.PathHashMap.fromJSON,
+			proto.dietcode.StringArrayRequest.toJSON,
+			proto.dietcode.PathHashMap.fromJSON,
 		)
 	}
 }
 export class CommandsServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.CommandsService"
-	static async addToCodemarie(request: proto.codemarie.CommandContext): Promise<proto.codemarie.Empty> {
+	static override serviceName = "dietcode.CommandsService"
+	static async addToDietCode(request: proto.dietcode.CommandContext): Promise<proto.dietcode.Empty> {
 		return CommandsServiceClient.makeUnaryRequest(
-			"addToCodemarie",
+			"addToDietCode",
 			request,
-			proto.codemarie.CommandContext.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.CommandContext.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async fixWithCodemarie(request: proto.codemarie.CommandContext): Promise<proto.codemarie.Empty> {
+	static async fixWithDietCode(request: proto.dietcode.CommandContext): Promise<proto.dietcode.Empty> {
 		return CommandsServiceClient.makeUnaryRequest(
-			"fixWithCodemarie",
+			"fixWithDietCode",
 			request,
-			proto.codemarie.CommandContext.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.CommandContext.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async explainWithCodemarie(request: proto.codemarie.CommandContext): Promise<proto.codemarie.Empty> {
+	static async explainWithDietCode(request: proto.dietcode.CommandContext): Promise<proto.dietcode.Empty> {
 		return CommandsServiceClient.makeUnaryRequest(
-			"explainWithCodemarie",
+			"explainWithDietCode",
 			request,
-			proto.codemarie.CommandContext.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.CommandContext.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async improveWithCodemarie(request: proto.codemarie.CommandContext): Promise<proto.codemarie.Empty> {
+	static async improveWithDietCode(request: proto.dietcode.CommandContext): Promise<proto.dietcode.Empty> {
 		return CommandsServiceClient.makeUnaryRequest(
-			"improveWithCodemarie",
+			"improveWithDietCode",
 			request,
-			proto.codemarie.CommandContext.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.CommandContext.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 }
 export class FileServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.FileService"
-	static async copyToClipboard(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static override serviceName = "dietcode.FileService"
+	static async copyToClipboard(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return FileServiceClient.makeUnaryRequest(
 			"copyToClipboard",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async openFile(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async openFile(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return FileServiceClient.makeUnaryRequest(
 			"openFile",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async openImage(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async openImage(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return FileServiceClient.makeUnaryRequest(
 			"openImage",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async openMention(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async openMention(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return FileServiceClient.makeUnaryRequest(
 			"openMention",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async deleteRuleFile(request: proto.codemarie.RuleFileRequest): Promise<proto.codemarie.RuleFile> {
+	static async deleteRuleFile(request: proto.dietcode.RuleFileRequest): Promise<proto.dietcode.RuleFile> {
 		return FileServiceClient.makeUnaryRequest(
 			"deleteRuleFile",
 			request,
-			proto.codemarie.RuleFileRequest.toJSON,
-			proto.codemarie.RuleFile.fromJSON,
+			proto.dietcode.RuleFileRequest.toJSON,
+			proto.dietcode.RuleFile.fromJSON,
 		)
 	}
-	static async createRuleFile(request: proto.codemarie.RuleFileRequest): Promise<proto.codemarie.RuleFile> {
+	static async createRuleFile(request: proto.dietcode.RuleFileRequest): Promise<proto.dietcode.RuleFile> {
 		return FileServiceClient.makeUnaryRequest(
 			"createRuleFile",
 			request,
-			proto.codemarie.RuleFileRequest.toJSON,
-			proto.codemarie.RuleFile.fromJSON,
+			proto.dietcode.RuleFileRequest.toJSON,
+			proto.dietcode.RuleFile.fromJSON,
 		)
 	}
-	static async searchCommits(request: proto.codemarie.StringRequest): Promise<proto.codemarie.GitCommits> {
+	static async searchCommits(request: proto.dietcode.StringRequest): Promise<proto.dietcode.GitCommits> {
 		return FileServiceClient.makeUnaryRequest(
 			"searchCommits",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.GitCommits.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.GitCommits.fromJSON,
 		)
 	}
-	static async selectFiles(request: proto.codemarie.BooleanRequest): Promise<proto.codemarie.StringArrays> {
+	static async selectFiles(request: proto.dietcode.BooleanRequest): Promise<proto.dietcode.StringArrays> {
 		return FileServiceClient.makeUnaryRequest(
 			"selectFiles",
 			request,
-			proto.codemarie.BooleanRequest.toJSON,
-			proto.codemarie.StringArrays.fromJSON,
+			proto.dietcode.BooleanRequest.toJSON,
+			proto.dietcode.StringArrays.fromJSON,
 		)
 	}
-	static async getRelativePaths(request: proto.codemarie.RelativePathsRequest): Promise<proto.codemarie.RelativePaths> {
+	static async getRelativePaths(request: proto.dietcode.RelativePathsRequest): Promise<proto.dietcode.RelativePaths> {
 		return FileServiceClient.makeUnaryRequest(
 			"getRelativePaths",
 			request,
-			proto.codemarie.RelativePathsRequest.toJSON,
-			proto.codemarie.RelativePaths.fromJSON,
+			proto.dietcode.RelativePathsRequest.toJSON,
+			proto.dietcode.RelativePaths.fromJSON,
 		)
 	}
-	static async searchFiles(request: proto.codemarie.FileSearchRequest): Promise<proto.codemarie.FileSearchResults> {
+	static async searchFiles(request: proto.dietcode.FileSearchRequest): Promise<proto.dietcode.FileSearchResults> {
 		return FileServiceClient.makeUnaryRequest(
 			"searchFiles",
 			request,
-			proto.codemarie.FileSearchRequest.toJSON,
-			proto.codemarie.FileSearchResults.fromJSON,
+			proto.dietcode.FileSearchRequest.toJSON,
+			proto.dietcode.FileSearchResults.fromJSON,
 		)
 	}
-	static async toggleCodemarieRule(
-		request: proto.codemarie.ToggleCodemarieRuleRequest,
-	): Promise<proto.codemarie.ToggleCodemarieRules> {
+	static async toggleDietCodeRule(
+		request: proto.dietcode.ToggleDietCodeRuleRequest,
+	): Promise<proto.dietcode.ToggleDietCodeRules> {
 		return FileServiceClient.makeUnaryRequest(
-			"toggleCodemarieRule",
+			"toggleDietCodeRule",
 			request,
-			proto.codemarie.ToggleCodemarieRuleRequest.toJSON,
-			proto.codemarie.ToggleCodemarieRules.fromJSON,
+			proto.dietcode.ToggleDietCodeRuleRequest.toJSON,
+			proto.dietcode.ToggleDietCodeRules.fromJSON,
 		)
 	}
-	static async toggleCursorRule(
-		request: proto.codemarie.ToggleCursorRuleRequest,
-	): Promise<proto.codemarie.CodemarieRulesToggles> {
+	static async toggleCursorRule(request: proto.dietcode.ToggleCursorRuleRequest): Promise<proto.dietcode.DietCodeRulesToggles> {
 		return FileServiceClient.makeUnaryRequest(
 			"toggleCursorRule",
 			request,
-			proto.codemarie.ToggleCursorRuleRequest.toJSON,
-			proto.codemarie.CodemarieRulesToggles.fromJSON,
+			proto.dietcode.ToggleCursorRuleRequest.toJSON,
+			proto.dietcode.DietCodeRulesToggles.fromJSON,
 		)
 	}
 	static async toggleWindsurfRule(
-		request: proto.codemarie.ToggleWindsurfRuleRequest,
-	): Promise<proto.codemarie.CodemarieRulesToggles> {
+		request: proto.dietcode.ToggleWindsurfRuleRequest,
+	): Promise<proto.dietcode.DietCodeRulesToggles> {
 		return FileServiceClient.makeUnaryRequest(
 			"toggleWindsurfRule",
 			request,
-			proto.codemarie.ToggleWindsurfRuleRequest.toJSON,
-			proto.codemarie.CodemarieRulesToggles.fromJSON,
+			proto.dietcode.ToggleWindsurfRuleRequest.toJSON,
+			proto.dietcode.DietCodeRulesToggles.fromJSON,
 		)
 	}
-	static async toggleAgentsRule(
-		request: proto.codemarie.ToggleAgentsRuleRequest,
-	): Promise<proto.codemarie.CodemarieRulesToggles> {
+	static async toggleAgentsRule(request: proto.dietcode.ToggleAgentsRuleRequest): Promise<proto.dietcode.DietCodeRulesToggles> {
 		return FileServiceClient.makeUnaryRequest(
 			"toggleAgentsRule",
 			request,
-			proto.codemarie.ToggleAgentsRuleRequest.toJSON,
-			proto.codemarie.CodemarieRulesToggles.fromJSON,
+			proto.dietcode.ToggleAgentsRuleRequest.toJSON,
+			proto.dietcode.DietCodeRulesToggles.fromJSON,
 		)
 	}
-	static async refreshRules(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.RefreshedRules> {
+	static async refreshRules(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.RefreshedRules> {
 		return FileServiceClient.makeUnaryRequest(
 			"refreshRules",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.RefreshedRules.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.RefreshedRules.fromJSON,
 		)
 	}
-	static async openDiskConversationHistory(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async openDiskConversationHistory(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return FileServiceClient.makeUnaryRequest(
 			"openDiskConversationHistory",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async toggleWorkflow(request: proto.codemarie.ToggleWorkflowRequest): Promise<proto.codemarie.CodemarieRulesToggles> {
+	static async toggleWorkflow(request: proto.dietcode.ToggleWorkflowRequest): Promise<proto.dietcode.DietCodeRulesToggles> {
 		return FileServiceClient.makeUnaryRequest(
 			"toggleWorkflow",
 			request,
-			proto.codemarie.ToggleWorkflowRequest.toJSON,
-			proto.codemarie.CodemarieRulesToggles.fromJSON,
+			proto.dietcode.ToggleWorkflowRequest.toJSON,
+			proto.dietcode.DietCodeRulesToggles.fromJSON,
 		)
 	}
-	static async ifFileExistsRelativePath(request: proto.codemarie.StringRequest): Promise<proto.codemarie.BooleanResponse> {
+	static async ifFileExistsRelativePath(request: proto.dietcode.StringRequest): Promise<proto.dietcode.BooleanResponse> {
 		return FileServiceClient.makeUnaryRequest(
 			"ifFileExistsRelativePath",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.BooleanResponse.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.BooleanResponse.fromJSON,
 		)
 	}
-	static async openFileRelativePath(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async openFileRelativePath(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return FileServiceClient.makeUnaryRequest(
 			"openFileRelativePath",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async openFocusChainFile(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async openFocusChainFile(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return FileServiceClient.makeUnaryRequest(
 			"openFocusChainFile",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async refreshHooks(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.HooksToggles> {
+	static async refreshHooks(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.HooksToggles> {
 		return FileServiceClient.makeUnaryRequest(
 			"refreshHooks",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.HooksToggles.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.HooksToggles.fromJSON,
 		)
 	}
-	static async toggleHook(request: proto.codemarie.ToggleHookRequest): Promise<proto.codemarie.ToggleHookResponse> {
+	static async toggleHook(request: proto.dietcode.ToggleHookRequest): Promise<proto.dietcode.ToggleHookResponse> {
 		return FileServiceClient.makeUnaryRequest(
 			"toggleHook",
 			request,
-			proto.codemarie.ToggleHookRequest.toJSON,
-			proto.codemarie.ToggleHookResponse.fromJSON,
+			proto.dietcode.ToggleHookRequest.toJSON,
+			proto.dietcode.ToggleHookResponse.fromJSON,
 		)
 	}
-	static async createHook(request: proto.codemarie.CreateHookRequest): Promise<proto.codemarie.CreateHookResponse> {
+	static async createHook(request: proto.dietcode.CreateHookRequest): Promise<proto.dietcode.CreateHookResponse> {
 		return FileServiceClient.makeUnaryRequest(
 			"createHook",
 			request,
-			proto.codemarie.CreateHookRequest.toJSON,
-			proto.codemarie.CreateHookResponse.fromJSON,
+			proto.dietcode.CreateHookRequest.toJSON,
+			proto.dietcode.CreateHookResponse.fromJSON,
 		)
 	}
-	static async deleteHook(request: proto.codemarie.DeleteHookRequest): Promise<proto.codemarie.DeleteHookResponse> {
+	static async deleteHook(request: proto.dietcode.DeleteHookRequest): Promise<proto.dietcode.DeleteHookResponse> {
 		return FileServiceClient.makeUnaryRequest(
 			"deleteHook",
 			request,
-			proto.codemarie.DeleteHookRequest.toJSON,
-			proto.codemarie.DeleteHookResponse.fromJSON,
+			proto.dietcode.DeleteHookRequest.toJSON,
+			proto.dietcode.DeleteHookResponse.fromJSON,
 		)
 	}
-	static async refreshSkills(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.RefreshedSkills> {
+	static async refreshSkills(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.RefreshedSkills> {
 		return FileServiceClient.makeUnaryRequest(
 			"refreshSkills",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.RefreshedSkills.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.RefreshedSkills.fromJSON,
 		)
 	}
-	static async toggleSkill(request: proto.codemarie.ToggleSkillRequest): Promise<proto.codemarie.SkillsToggles> {
+	static async toggleSkill(request: proto.dietcode.ToggleSkillRequest): Promise<proto.dietcode.SkillsToggles> {
 		return FileServiceClient.makeUnaryRequest(
 			"toggleSkill",
 			request,
-			proto.codemarie.ToggleSkillRequest.toJSON,
-			proto.codemarie.SkillsToggles.fromJSON,
+			proto.dietcode.ToggleSkillRequest.toJSON,
+			proto.dietcode.SkillsToggles.fromJSON,
 		)
 	}
-	static async createSkillFile(request: proto.codemarie.CreateSkillRequest): Promise<proto.codemarie.SkillsToggles> {
+	static async createSkillFile(request: proto.dietcode.CreateSkillRequest): Promise<proto.dietcode.SkillsToggles> {
 		return FileServiceClient.makeUnaryRequest(
 			"createSkillFile",
 			request,
-			proto.codemarie.CreateSkillRequest.toJSON,
-			proto.codemarie.SkillsToggles.fromJSON,
+			proto.dietcode.CreateSkillRequest.toJSON,
+			proto.dietcode.SkillsToggles.fromJSON,
 		)
 	}
-	static async deleteSkillFile(request: proto.codemarie.DeleteSkillRequest): Promise<proto.codemarie.SkillsToggles> {
+	static async deleteSkillFile(request: proto.dietcode.DeleteSkillRequest): Promise<proto.dietcode.SkillsToggles> {
 		return FileServiceClient.makeUnaryRequest(
 			"deleteSkillFile",
 			request,
-			proto.codemarie.DeleteSkillRequest.toJSON,
-			proto.codemarie.SkillsToggles.fromJSON,
+			proto.dietcode.DeleteSkillRequest.toJSON,
+			proto.dietcode.SkillsToggles.fromJSON,
 		)
 	}
 }
 export class McpServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.McpService"
-	static async toggleMcpServer(request: proto.codemarie.ToggleMcpServerRequest): Promise<proto.codemarie.McpServers> {
+	static override serviceName = "dietcode.McpService"
+	static async toggleMcpServer(request: proto.dietcode.ToggleMcpServerRequest): Promise<proto.dietcode.McpServers> {
 		return McpServiceClient.makeUnaryRequest(
 			"toggleMcpServer",
 			request,
-			proto.codemarie.ToggleMcpServerRequest.toJSON,
-			proto.codemarie.McpServers.fromJSON,
+			proto.dietcode.ToggleMcpServerRequest.toJSON,
+			proto.dietcode.McpServers.fromJSON,
 		)
 	}
-	static async updateMcpTimeout(request: proto.codemarie.UpdateMcpTimeoutRequest): Promise<proto.codemarie.McpServers> {
+	static async updateMcpTimeout(request: proto.dietcode.UpdateMcpTimeoutRequest): Promise<proto.dietcode.McpServers> {
 		return McpServiceClient.makeUnaryRequest(
 			"updateMcpTimeout",
 			request,
-			proto.codemarie.UpdateMcpTimeoutRequest.toJSON,
-			proto.codemarie.McpServers.fromJSON,
+			proto.dietcode.UpdateMcpTimeoutRequest.toJSON,
+			proto.dietcode.McpServers.fromJSON,
 		)
 	}
-	static async addRemoteMcpServer(request: proto.codemarie.AddRemoteMcpServerRequest): Promise<proto.codemarie.McpServers> {
+	static async addRemoteMcpServer(request: proto.dietcode.AddRemoteMcpServerRequest): Promise<proto.dietcode.McpServers> {
 		return McpServiceClient.makeUnaryRequest(
 			"addRemoteMcpServer",
 			request,
-			proto.codemarie.AddRemoteMcpServerRequest.toJSON,
-			proto.codemarie.McpServers.fromJSON,
+			proto.dietcode.AddRemoteMcpServerRequest.toJSON,
+			proto.dietcode.McpServers.fromJSON,
 		)
 	}
-	static async downloadMcp(request: proto.codemarie.StringRequest): Promise<proto.codemarie.McpDownloadResponse> {
+	static async downloadMcp(request: proto.dietcode.StringRequest): Promise<proto.dietcode.McpDownloadResponse> {
 		return McpServiceClient.makeUnaryRequest(
 			"downloadMcp",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.McpDownloadResponse.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.McpDownloadResponse.fromJSON,
 		)
 	}
-	static async restartMcpServer(request: proto.codemarie.StringRequest): Promise<proto.codemarie.McpServers> {
+	static async restartMcpServer(request: proto.dietcode.StringRequest): Promise<proto.dietcode.McpServers> {
 		return McpServiceClient.makeUnaryRequest(
 			"restartMcpServer",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.McpServers.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.McpServers.fromJSON,
 		)
 	}
-	static async deleteMcpServer(request: proto.codemarie.StringRequest): Promise<proto.codemarie.McpServers> {
+	static async deleteMcpServer(request: proto.dietcode.StringRequest): Promise<proto.dietcode.McpServers> {
 		return McpServiceClient.makeUnaryRequest(
 			"deleteMcpServer",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.McpServers.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.McpServers.fromJSON,
 		)
 	}
-	static async toggleToolAutoApprove(
-		request: proto.codemarie.ToggleToolAutoApproveRequest,
-	): Promise<proto.codemarie.McpServers> {
+	static async toggleToolAutoApprove(request: proto.dietcode.ToggleToolAutoApproveRequest): Promise<proto.dietcode.McpServers> {
 		return McpServiceClient.makeUnaryRequest(
 			"toggleToolAutoApprove",
 			request,
-			proto.codemarie.ToggleToolAutoApproveRequest.toJSON,
-			proto.codemarie.McpServers.fromJSON,
+			proto.dietcode.ToggleToolAutoApproveRequest.toJSON,
+			proto.dietcode.McpServers.fromJSON,
 		)
 	}
-	static async refreshMcpMarketplace(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.McpMarketplaceCatalog> {
+	static async refreshMcpMarketplace(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.McpMarketplaceCatalog> {
 		return McpServiceClient.makeUnaryRequest(
 			"refreshMcpMarketplace",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.McpMarketplaceCatalog.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.McpMarketplaceCatalog.fromJSON,
 		)
 	}
-	static async openMcpSettings(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async openMcpSettings(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return McpServiceClient.makeUnaryRequest(
 			"openMcpSettings",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async authenticateMcpServer(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async authenticateMcpServer(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return McpServiceClient.makeUnaryRequest(
 			"authenticateMcpServer",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 	static subscribeToMcpMarketplaceCatalog(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.McpMarketplaceCatalog>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.McpMarketplaceCatalog>,
 	): () => void {
 		return McpServiceClient.makeStreamingRequest(
 			"subscribeToMcpMarketplaceCatalog",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.McpMarketplaceCatalog.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.McpMarketplaceCatalog.fromJSON,
 			callbacks,
 		)
 	}
-	static async getLatestMcpServers(request: proto.codemarie.Empty): Promise<proto.codemarie.McpServers> {
+	static async getLatestMcpServers(request: proto.dietcode.Empty): Promise<proto.dietcode.McpServers> {
 		return McpServiceClient.makeUnaryRequest(
 			"getLatestMcpServers",
 			request,
-			proto.codemarie.Empty.toJSON,
-			proto.codemarie.McpServers.fromJSON,
+			proto.dietcode.Empty.toJSON,
+			proto.dietcode.McpServers.fromJSON,
 		)
 	}
 	static subscribeToMcpServers(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.McpServers>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.McpServers>,
 	): () => void {
 		return McpServiceClient.makeStreamingRequest(
 			"subscribeToMcpServers",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.McpServers.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.McpServers.fromJSON,
 			callbacks,
 		)
 	}
 }
 export class ModelsServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.ModelsService"
-	static async getOllamaModels(request: proto.codemarie.StringRequest): Promise<proto.codemarie.StringArray> {
+	static override serviceName = "dietcode.ModelsService"
+	static async getOllamaModels(request: proto.dietcode.StringRequest): Promise<proto.dietcode.StringArray> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"getOllamaModels",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.StringArray.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.StringArray.fromJSON,
 		)
 	}
-	static async getLmStudioModels(request: proto.codemarie.StringRequest): Promise<proto.codemarie.StringArray> {
+	static async getLmStudioModels(request: proto.dietcode.StringRequest): Promise<proto.dietcode.StringArray> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"getLmStudioModels",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.StringArray.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.StringArray.fromJSON,
 		)
 	}
-	static async getVsCodeLmModels(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.VsCodeLmModelsArray> {
+	static async getVsCodeLmModels(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.VsCodeLmModelsArray> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"getVsCodeLmModels",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.VsCodeLmModelsArray.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.VsCodeLmModelsArray.fromJSON,
 		)
 	}
 	static async refreshOpenRouterModelsRpc(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+		request: proto.dietcode.EmptyRequest,
+	): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshOpenRouterModelsRpc",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
-	static async refreshCodemarieRecommendedModelsRpc(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.CodemarieRecommendedModelsResponse> {
+	static async refreshDietCodeRecommendedModelsRpc(
+		request: proto.dietcode.EmptyRequest,
+	): Promise<proto.dietcode.DietCodeRecommendedModelsResponse> {
 		return ModelsServiceClient.makeUnaryRequest(
-			"refreshCodemarieRecommendedModelsRpc",
+			"refreshDietCodeRecommendedModelsRpc",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.CodemarieRecommendedModelsResponse.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.DietCodeRecommendedModelsResponse.fromJSON,
 		)
 	}
-	static async refreshCodemarieModelsRpc(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+	static async refreshDietCodeModelsRpc(
+		request: proto.dietcode.EmptyRequest,
+	): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
-			"refreshCodemarieModelsRpc",
+			"refreshDietCodeModelsRpc",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
 	static async refreshHuggingFaceModels(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+		request: proto.dietcode.EmptyRequest,
+	): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshHuggingFaceModels",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
-	static async refreshOpenAiModels(request: proto.codemarie.OpenAiModelsRequest): Promise<proto.codemarie.StringArray> {
+	static async refreshOpenAiModels(request: proto.dietcode.OpenAiModelsRequest): Promise<proto.dietcode.StringArray> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshOpenAiModels",
 			request,
-			proto.codemarie.OpenAiModelsRequest.toJSON,
-			proto.codemarie.StringArray.fromJSON,
+			proto.dietcode.OpenAiModelsRequest.toJSON,
+			proto.dietcode.StringArray.fromJSON,
 		)
 	}
 	static async refreshRequestyModels(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+		request: proto.dietcode.EmptyRequest,
+	): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshRequestyModels",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
-	static async refreshHicapModels(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+	static async refreshHicapModels(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshHicapModels",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
 	static async refreshLiteLlmModelsRpc(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+		request: proto.dietcode.EmptyRequest,
+	): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshLiteLlmModelsRpc",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
 	static subscribeToOpenRouterModels(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.OpenRouterCompatibleModelInfo>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.OpenRouterCompatibleModelInfo>,
 	): () => void {
 		return ModelsServiceClient.makeStreamingRequest(
 			"subscribeToOpenRouterModels",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 			callbacks,
 		)
 	}
 	static subscribeToLiteLlmModels(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.OpenRouterCompatibleModelInfo>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.OpenRouterCompatibleModelInfo>,
 	): () => void {
 		return ModelsServiceClient.makeStreamingRequest(
 			"subscribeToLiteLlmModels",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 			callbacks,
 		)
 	}
 	static async updateApiConfigurationProto(
-		request: proto.codemarie.UpdateApiConfigurationRequest,
-	): Promise<proto.codemarie.Empty> {
+		request: proto.dietcode.UpdateApiConfigurationRequest,
+	): Promise<proto.dietcode.Empty> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"updateApiConfigurationProto",
 			request,
-			proto.codemarie.UpdateApiConfigurationRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.UpdateApiConfigurationRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async updateApiConfiguration(
-		request: proto.codemarie.UpdateApiConfigurationRequestNew,
-	): Promise<proto.codemarie.Empty> {
+	static async updateApiConfiguration(request: proto.dietcode.UpdateApiConfigurationRequestNew): Promise<proto.dietcode.Empty> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"updateApiConfiguration",
 			request,
-			proto.codemarie.UpdateApiConfigurationRequestNew.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.UpdateApiConfigurationRequestNew.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 	static async updateApiConfigurationPartial(
-		request: proto.codemarie.UpdateApiConfigurationPartialRequest,
-	): Promise<proto.codemarie.Empty> {
+		request: proto.dietcode.UpdateApiConfigurationPartialRequest,
+	): Promise<proto.dietcode.Empty> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"updateApiConfigurationPartial",
 			request,
-			proto.codemarie.UpdateApiConfigurationPartialRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.UpdateApiConfigurationPartialRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 	static async refreshGroqModelsRpc(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+		request: proto.dietcode.EmptyRequest,
+	): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshGroqModelsRpc",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
 	static async refreshBasetenModelsRpc(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+		request: proto.dietcode.EmptyRequest,
+	): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshBasetenModelsRpc",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
 	static async getSapAiCoreModels(
-		request: proto.codemarie.SapAiCoreModelsRequest,
-	): Promise<proto.codemarie.SapAiCoreModelsResponse> {
+		request: proto.dietcode.SapAiCoreModelsRequest,
+	): Promise<proto.dietcode.SapAiCoreModelsResponse> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"getSapAiCoreModels",
 			request,
-			proto.codemarie.SapAiCoreModelsRequest.toJSON,
-			proto.codemarie.SapAiCoreModelsResponse.fromJSON,
+			proto.dietcode.SapAiCoreModelsRequest.toJSON,
+			proto.dietcode.SapAiCoreModelsResponse.fromJSON,
 		)
 	}
-	static async refreshOcaModels(request: proto.codemarie.StringRequest): Promise<proto.codemarie.OcaCompatibleModelInfo> {
+	static async refreshOcaModels(request: proto.dietcode.StringRequest): Promise<proto.dietcode.OcaCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshOcaModels",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.OcaCompatibleModelInfo.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.OcaCompatibleModelInfo.fromJSON,
 		)
 	}
-	static async getAihubmixModels(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+	static async getAihubmixModels(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"getAihubmixModels",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
 	static async refreshVercelAiGatewayModelsRpc(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.OpenRouterCompatibleModelInfo> {
+		request: proto.dietcode.EmptyRequest,
+	): Promise<proto.dietcode.OpenRouterCompatibleModelInfo> {
 		return ModelsServiceClient.makeUnaryRequest(
 			"refreshVercelAiGatewayModelsRpc",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OpenRouterCompatibleModelInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OpenRouterCompatibleModelInfo.fromJSON,
 		)
 	}
 }
 export class OcaAccountServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.OcaAccountService"
-	static async ocaAccountLoginClicked(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.String> {
+	static override serviceName = "dietcode.OcaAccountService"
+	static async ocaAccountLoginClicked(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.String> {
 		return OcaAccountServiceClient.makeUnaryRequest(
 			"ocaAccountLoginClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.String.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.String.fromJSON,
 		)
 	}
-	static async ocaAccountLogoutClicked(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async ocaAccountLogoutClicked(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return OcaAccountServiceClient.makeUnaryRequest(
 			"ocaAccountLogoutClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 	static ocaSubscribeToAuthStatusUpdate(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.OcaAuthState>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.OcaAuthState>,
 	): () => void {
 		return OcaAccountServiceClient.makeStreamingRequest(
 			"ocaSubscribeToAuthStatusUpdate",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.OcaAuthState.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.OcaAuthState.fromJSON,
 			callbacks,
 		)
 	}
 }
 export class SlashServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.SlashService"
-	static async reportBug(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static override serviceName = "dietcode.SlashService"
+	static async reportBug(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return SlashServiceClient.makeUnaryRequest(
 			"reportBug",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async condense(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async condense(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return SlashServiceClient.makeUnaryRequest(
 			"condense",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async getAvailableSlashCommands(
-		request: proto.codemarie.EmptyRequest,
-	): Promise<proto.codemarie.SlashCommandsResponse> {
+	static async getAvailableSlashCommands(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.SlashCommandsResponse> {
 		return SlashServiceClient.makeUnaryRequest(
 			"getAvailableSlashCommands",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.SlashCommandsResponse.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.SlashCommandsResponse.fromJSON,
 		)
 	}
 }
 export class StateServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.StateService"
-	static async getLatestState(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.State> {
+	static override serviceName = "dietcode.StateService"
+	static async getLatestState(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.State> {
 		return StateServiceClient.makeUnaryRequest(
 			"getLatestState",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.State.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.State.fromJSON,
 		)
 	}
 	static async updateTerminalConnectionTimeout(
-		request: proto.codemarie.UpdateTerminalConnectionTimeoutRequest,
-	): Promise<proto.codemarie.UpdateTerminalConnectionTimeoutResponse> {
+		request: proto.dietcode.UpdateTerminalConnectionTimeoutRequest,
+	): Promise<proto.dietcode.UpdateTerminalConnectionTimeoutResponse> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateTerminalConnectionTimeout",
 			request,
-			proto.codemarie.UpdateTerminalConnectionTimeoutRequest.toJSON,
-			proto.codemarie.UpdateTerminalConnectionTimeoutResponse.fromJSON,
+			proto.dietcode.UpdateTerminalConnectionTimeoutRequest.toJSON,
+			proto.dietcode.UpdateTerminalConnectionTimeoutResponse.fromJSON,
 		)
 	}
-	static async updateTerminalReuseEnabled(request: proto.codemarie.BooleanRequest): Promise<proto.codemarie.Empty> {
+	static async updateTerminalReuseEnabled(request: proto.dietcode.BooleanRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateTerminalReuseEnabled",
 			request,
-			proto.codemarie.BooleanRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.BooleanRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async getAvailableTerminalProfiles(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.TerminalProfiles> {
+	static async getAvailableTerminalProfiles(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.TerminalProfiles> {
 		return StateServiceClient.makeUnaryRequest(
 			"getAvailableTerminalProfiles",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.TerminalProfiles.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.TerminalProfiles.fromJSON,
 		)
 	}
-	static subscribeToState(request: proto.codemarie.EmptyRequest, callbacks: Callbacks<proto.codemarie.State>): () => void {
+	static subscribeToState(request: proto.dietcode.EmptyRequest, callbacks: Callbacks<proto.dietcode.State>): () => void {
 		return StateServiceClient.makeStreamingRequest(
 			"subscribeToState",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.State.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.State.fromJSON,
 			callbacks,
 		)
 	}
-	static async toggleFavoriteModel(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async toggleFavoriteModel(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"toggleFavoriteModel",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async resetState(request: proto.codemarie.ResetStateRequest): Promise<proto.codemarie.Empty> {
+	static async resetState(request: proto.dietcode.ResetStateRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"resetState",
 			request,
-			proto.codemarie.ResetStateRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.ResetStateRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async togglePlanActModeProto(request: proto.codemarie.TogglePlanActModeRequest): Promise<proto.codemarie.Boolean> {
+	static async togglePlanActModeProto(request: proto.dietcode.TogglePlanActModeRequest): Promise<proto.dietcode.Boolean> {
 		return StateServiceClient.makeUnaryRequest(
 			"togglePlanActModeProto",
 			request,
-			proto.codemarie.TogglePlanActModeRequest.toJSON,
-			proto.codemarie.Boolean.fromJSON,
+			proto.dietcode.TogglePlanActModeRequest.toJSON,
+			proto.dietcode.Boolean.fromJSON,
 		)
 	}
-	static async updateAutoApprovalSettings(
-		request: proto.codemarie.AutoApprovalSettingsRequest,
-	): Promise<proto.codemarie.Empty> {
+	static async updateAutoApprovalSettings(request: proto.dietcode.AutoApprovalSettingsRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateAutoApprovalSettings",
 			request,
-			proto.codemarie.AutoApprovalSettingsRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.AutoApprovalSettingsRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async updateSettings(request: proto.codemarie.UpdateSettingsRequest): Promise<proto.codemarie.Empty> {
+	static async updateSettings(request: proto.dietcode.UpdateSettingsRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateSettings",
 			request,
-			proto.codemarie.UpdateSettingsRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.UpdateSettingsRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async updateSettingsCli(request: proto.codemarie.UpdateSettingsRequestCli): Promise<proto.codemarie.Empty> {
+	static async updateSettingsCli(request: proto.dietcode.UpdateSettingsRequestCli): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateSettingsCli",
 			request,
-			proto.codemarie.UpdateSettingsRequestCli.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.UpdateSettingsRequestCli.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async updateTaskSettings(request: proto.codemarie.UpdateTaskSettingsRequest): Promise<proto.codemarie.Empty> {
+	static async updateTaskSettings(request: proto.dietcode.UpdateTaskSettingsRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateTaskSettings",
 			request,
-			proto.codemarie.UpdateTaskSettingsRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.UpdateTaskSettingsRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async updateTelemetrySetting(request: proto.codemarie.TelemetrySettingRequest): Promise<proto.codemarie.Empty> {
+	static async updateTelemetrySetting(request: proto.dietcode.TelemetrySettingRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateTelemetrySetting",
 			request,
-			proto.codemarie.TelemetrySettingRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.TelemetrySettingRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async captureOnboardingProgress(request: proto.codemarie.OnboardingProgressRequest): Promise<proto.codemarie.Empty> {
+	static async captureOnboardingProgress(request: proto.dietcode.OnboardingProgressRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"captureOnboardingProgress",
 			request,
-			proto.codemarie.OnboardingProgressRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.OnboardingProgressRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async setWelcomeViewCompleted(request: proto.codemarie.BooleanRequest): Promise<proto.codemarie.Empty> {
+	static async setWelcomeViewCompleted(request: proto.dietcode.BooleanRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"setWelcomeViewCompleted",
 			request,
-			proto.codemarie.BooleanRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.BooleanRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async updateInfoBannerVersion(request: proto.codemarie.Int64Request): Promise<proto.codemarie.Empty> {
+	static async updateInfoBannerVersion(request: proto.dietcode.Int64Request): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateInfoBannerVersion",
 			request,
-			proto.codemarie.Int64Request.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.Int64Request.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async updateModelBannerVersion(request: proto.codemarie.Int64Request): Promise<proto.codemarie.Empty> {
+	static async updateModelBannerVersion(request: proto.dietcode.Int64Request): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateModelBannerVersion",
 			request,
-			proto.codemarie.Int64Request.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.Int64Request.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async updateCliBannerVersion(request: proto.codemarie.Int64Request): Promise<proto.codemarie.Empty> {
+	static async updateCliBannerVersion(request: proto.dietcode.Int64Request): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"updateCliBannerVersion",
 			request,
-			proto.codemarie.Int64Request.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.Int64Request.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async dismissBanner(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async dismissBanner(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"dismissBanner",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async trackBannerEvent(request: proto.codemarie.TrackBannerEventRequest): Promise<proto.codemarie.Empty> {
+	static async trackBannerEvent(request: proto.dietcode.TrackBannerEventRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"trackBannerEvent",
 			request,
-			proto.codemarie.TrackBannerEventRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.TrackBannerEventRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async installCodemarieCli(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async installDietCodeCli(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
-			"installCodemarieCli",
+			"installDietCodeCli",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async checkCliInstallation(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Boolean> {
+	static async checkCliInstallation(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Boolean> {
 		return StateServiceClient.makeUnaryRequest(
 			"checkCliInstallation",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Boolean.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Boolean.fromJSON,
 		)
 	}
-	static async getProcessInfo(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.ProcessInfo> {
+	static async getProcessInfo(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.ProcessInfo> {
 		return StateServiceClient.makeUnaryRequest(
 			"getProcessInfo",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.ProcessInfo.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.ProcessInfo.fromJSON,
 		)
 	}
-	static async flushPendingState(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async flushPendingState(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"flushPendingState",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async refreshRemoteConfig(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async refreshRemoteConfig(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return StateServiceClient.makeUnaryRequest(
 			"refreshRemoteConfig",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async testOtelConnection(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.TestConnectionResult> {
+	static async testOtelConnection(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.TestConnectionResult> {
 		return StateServiceClient.makeUnaryRequest(
 			"testOtelConnection",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.TestConnectionResult.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.TestConnectionResult.fromJSON,
 		)
 	}
-	static async testPromptUploading(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.TestConnectionResult> {
+	static async testPromptUploading(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.TestConnectionResult> {
 		return StateServiceClient.makeUnaryRequest(
 			"testPromptUploading",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.TestConnectionResult.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.TestConnectionResult.fromJSON,
 		)
 	}
 }
 export class TaskServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.TaskService"
-	static async cancelTask(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static override serviceName = "dietcode.TaskService"
+	static async cancelTask(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"cancelTask",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async cancelBackgroundCommand(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async cancelBackgroundCommand(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"cancelBackgroundCommand",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async clearTask(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async clearTask(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"clearTask",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async getTotalTasksSize(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Int64> {
+	static async getTotalTasksSize(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Int64> {
 		return TaskServiceClient.makeUnaryRequest(
 			"getTotalTasksSize",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Int64.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Int64.fromJSON,
 		)
 	}
-	static async deleteTasksWithIds(request: proto.codemarie.StringArrayRequest): Promise<proto.codemarie.Empty> {
+	static async deleteTasksWithIds(request: proto.dietcode.StringArrayRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"deleteTasksWithIds",
 			request,
-			proto.codemarie.StringArrayRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringArrayRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async newTask(request: proto.codemarie.NewTaskRequest): Promise<proto.codemarie.String> {
+	static async newTask(request: proto.dietcode.NewTaskRequest): Promise<proto.dietcode.String> {
 		return TaskServiceClient.makeUnaryRequest(
 			"newTask",
 			request,
-			proto.codemarie.NewTaskRequest.toJSON,
-			proto.codemarie.String.fromJSON,
+			proto.dietcode.NewTaskRequest.toJSON,
+			proto.dietcode.String.fromJSON,
 		)
 	}
-	static async showTaskWithId(request: proto.codemarie.StringRequest): Promise<proto.codemarie.TaskResponse> {
+	static async showTaskWithId(request: proto.dietcode.StringRequest): Promise<proto.dietcode.TaskResponse> {
 		return TaskServiceClient.makeUnaryRequest(
 			"showTaskWithId",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.TaskResponse.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.TaskResponse.fromJSON,
 		)
 	}
-	static async exportTaskWithId(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async exportTaskWithId(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"exportTaskWithId",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async toggleTaskFavorite(request: proto.codemarie.TaskFavoriteRequest): Promise<proto.codemarie.Empty> {
+	static async toggleTaskFavorite(request: proto.dietcode.TaskFavoriteRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"toggleTaskFavorite",
 			request,
-			proto.codemarie.TaskFavoriteRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.TaskFavoriteRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async getTaskHistory(request: proto.codemarie.GetTaskHistoryRequest): Promise<proto.codemarie.TaskHistoryArray> {
+	static async getTaskHistory(request: proto.dietcode.GetTaskHistoryRequest): Promise<proto.dietcode.TaskHistoryArray> {
 		return TaskServiceClient.makeUnaryRequest(
 			"getTaskHistory",
 			request,
-			proto.codemarie.GetTaskHistoryRequest.toJSON,
-			proto.codemarie.TaskHistoryArray.fromJSON,
+			proto.dietcode.GetTaskHistoryRequest.toJSON,
+			proto.dietcode.TaskHistoryArray.fromJSON,
 		)
 	}
-	static async askResponse(request: proto.codemarie.AskResponseRequest): Promise<proto.codemarie.Empty> {
+	static async askResponse(request: proto.dietcode.AskResponseRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"askResponse",
 			request,
-			proto.codemarie.AskResponseRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.AskResponseRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async taskFeedback(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async taskFeedback(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"taskFeedback",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async taskCompletionViewChanges(request: proto.codemarie.Int64Request): Promise<proto.codemarie.Empty> {
+	static async taskCompletionViewChanges(request: proto.dietcode.Int64Request): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"taskCompletionViewChanges",
 			request,
-			proto.codemarie.Int64Request.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.Int64Request.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async executeQuickWin(request: proto.codemarie.ExecuteQuickWinRequest): Promise<proto.codemarie.Empty> {
+	static async executeQuickWin(request: proto.dietcode.ExecuteQuickWinRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"executeQuickWin",
 			request,
-			proto.codemarie.ExecuteQuickWinRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.ExecuteQuickWinRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async deleteAllTaskHistory(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.DeleteAllTaskHistoryCount> {
+	static async deleteAllTaskHistory(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.DeleteAllTaskHistoryCount> {
 		return TaskServiceClient.makeUnaryRequest(
 			"deleteAllTaskHistory",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.DeleteAllTaskHistoryCount.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.DeleteAllTaskHistoryCount.fromJSON,
 		)
 	}
-	static async explainChanges(request: proto.codemarie.ExplainChangesRequest): Promise<proto.codemarie.Empty> {
+	static async explainChanges(request: proto.dietcode.ExplainChangesRequest): Promise<proto.dietcode.Empty> {
 		return TaskServiceClient.makeUnaryRequest(
 			"explainChanges",
 			request,
-			proto.codemarie.ExplainChangesRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.ExplainChangesRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 }
 export class UiServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.UiService"
-	static async scrollToSettings(request: proto.codemarie.StringRequest): Promise<proto.codemarie.KeyValuePair> {
+	static override serviceName = "dietcode.UiService"
+	static async scrollToSettings(request: proto.dietcode.StringRequest): Promise<proto.dietcode.KeyValuePair> {
 		return UiServiceClient.makeUnaryRequest(
 			"scrollToSettings",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.KeyValuePair.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.KeyValuePair.fromJSON,
 		)
 	}
-	static async setTerminalExecutionMode(request: proto.codemarie.BooleanRequest): Promise<proto.codemarie.KeyValuePair> {
+	static async setTerminalExecutionMode(request: proto.dietcode.BooleanRequest): Promise<proto.dietcode.KeyValuePair> {
 		return UiServiceClient.makeUnaryRequest(
 			"setTerminalExecutionMode",
 			request,
-			proto.codemarie.BooleanRequest.toJSON,
-			proto.codemarie.KeyValuePair.fromJSON,
+			proto.dietcode.BooleanRequest.toJSON,
+			proto.dietcode.KeyValuePair.fromJSON,
 		)
 	}
-	static async onDidShowAnnouncement(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Boolean> {
+	static async onDidShowAnnouncement(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Boolean> {
 		return UiServiceClient.makeUnaryRequest(
 			"onDidShowAnnouncement",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Boolean.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Boolean.fromJSON,
 		)
 	}
-	static subscribeToAddToInput(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.String>,
-	): () => void {
+	static subscribeToAddToInput(request: proto.dietcode.EmptyRequest, callbacks: Callbacks<proto.dietcode.String>): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToAddToInput",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.String.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.String.fromJSON,
 			callbacks,
 		)
 	}
 	static subscribeToMcpButtonClicked(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.Empty>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.Empty>,
 	): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToMcpButtonClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 			callbacks,
 		)
 	}
 	static subscribeToHistoryButtonClicked(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.Empty>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.Empty>,
 	): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToHistoryButtonClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 			callbacks,
 		)
 	}
 	static subscribeToChatButtonClicked(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.Empty>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.Empty>,
 	): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToChatButtonClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 			callbacks,
 		)
 	}
 	static subscribeToAccountButtonClicked(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.Empty>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.Empty>,
 	): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToAccountButtonClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 			callbacks,
 		)
 	}
 	static subscribeToSettingsButtonClicked(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.Empty>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.Empty>,
 	): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToSettingsButtonClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 			callbacks,
 		)
 	}
 	static subscribeToWorktreesButtonClicked(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.Empty>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.Empty>,
 	): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToWorktreesButtonClicked",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 			callbacks,
 		)
 	}
 	static subscribeToPartialMessage(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.CodemarieMessage>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.DietCodeMessage>,
 	): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToPartialMessage",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.CodemarieMessage.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.DietCodeMessage.fromJSON,
 			callbacks,
 		)
 	}
-	static async initializeWebview(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async initializeWebview(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return UiServiceClient.makeUnaryRequest(
 			"initializeWebview",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 	static subscribeToRelinquishControl(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.Empty>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.Empty>,
 	): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToRelinquishControl",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 			callbacks,
 		)
 	}
 	static subscribeToShowWebview(
-		request: proto.codemarie.EmptyRequest,
-		callbacks: Callbacks<proto.codemarie.ShowWebviewEvent>,
+		request: proto.dietcode.EmptyRequest,
+		callbacks: Callbacks<proto.dietcode.ShowWebviewEvent>,
 	): () => void {
 		return UiServiceClient.makeStreamingRequest(
 			"subscribeToShowWebview",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.ShowWebviewEvent.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.ShowWebviewEvent.fromJSON,
 			callbacks,
 		)
 	}
-	static async getWebviewHtml(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.String> {
+	static async getWebviewHtml(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.String> {
 		return UiServiceClient.makeUnaryRequest(
 			"getWebviewHtml",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.String.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.String.fromJSON,
 		)
 	}
-	static async openUrl(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async openUrl(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return UiServiceClient.makeUnaryRequest(
 			"openUrl",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
-	static async openWalkthrough(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.Empty> {
+	static async openWalkthrough(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.Empty> {
 		return UiServiceClient.makeUnaryRequest(
 			"openWalkthrough",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 }
 export class WebServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.WebService"
-	static async checkIsImageUrl(request: proto.codemarie.StringRequest): Promise<proto.codemarie.IsImageUrl> {
+	static override serviceName = "dietcode.WebService"
+	static async checkIsImageUrl(request: proto.dietcode.StringRequest): Promise<proto.dietcode.IsImageUrl> {
 		return WebServiceClient.makeUnaryRequest(
 			"checkIsImageUrl",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.IsImageUrl.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.IsImageUrl.fromJSON,
 		)
 	}
-	static async fetchOpenGraphData(request: proto.codemarie.StringRequest): Promise<proto.codemarie.OpenGraphData> {
+	static async fetchOpenGraphData(request: proto.dietcode.StringRequest): Promise<proto.dietcode.OpenGraphData> {
 		return WebServiceClient.makeUnaryRequest(
 			"fetchOpenGraphData",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.OpenGraphData.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.OpenGraphData.fromJSON,
 		)
 	}
-	static async openInBrowser(request: proto.codemarie.StringRequest): Promise<proto.codemarie.Empty> {
+	static async openInBrowser(request: proto.dietcode.StringRequest): Promise<proto.dietcode.Empty> {
 		return WebServiceClient.makeUnaryRequest(
 			"openInBrowser",
 			request,
-			proto.codemarie.StringRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.StringRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 }
 export class WorktreeServiceClient extends ProtoBusClient {
-	static override serviceName = "codemarie.WorktreeService"
-	static async listWorktrees(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.WorktreeList> {
+	static override serviceName = "dietcode.WorktreeService"
+	static async listWorktrees(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.WorktreeList> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"listWorktrees",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.WorktreeList.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.WorktreeList.fromJSON,
 		)
 	}
-	static async createWorktree(request: proto.codemarie.CreateWorktreeRequest): Promise<proto.codemarie.WorktreeResult> {
+	static async createWorktree(request: proto.dietcode.CreateWorktreeRequest): Promise<proto.dietcode.WorktreeResult> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"createWorktree",
 			request,
-			proto.codemarie.CreateWorktreeRequest.toJSON,
-			proto.codemarie.WorktreeResult.fromJSON,
+			proto.dietcode.CreateWorktreeRequest.toJSON,
+			proto.dietcode.WorktreeResult.fromJSON,
 		)
 	}
-	static async deleteWorktree(request: proto.codemarie.DeleteWorktreeRequest): Promise<proto.codemarie.WorktreeResult> {
+	static async deleteWorktree(request: proto.dietcode.DeleteWorktreeRequest): Promise<proto.dietcode.WorktreeResult> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"deleteWorktree",
 			request,
-			proto.codemarie.DeleteWorktreeRequest.toJSON,
-			proto.codemarie.WorktreeResult.fromJSON,
+			proto.dietcode.DeleteWorktreeRequest.toJSON,
+			proto.dietcode.WorktreeResult.fromJSON,
 		)
 	}
-	static async switchWorktree(request: proto.codemarie.SwitchWorktreeRequest): Promise<proto.codemarie.WorktreeResult> {
+	static async switchWorktree(request: proto.dietcode.SwitchWorktreeRequest): Promise<proto.dietcode.WorktreeResult> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"switchWorktree",
 			request,
-			proto.codemarie.SwitchWorktreeRequest.toJSON,
-			proto.codemarie.WorktreeResult.fromJSON,
+			proto.dietcode.SwitchWorktreeRequest.toJSON,
+			proto.dietcode.WorktreeResult.fromJSON,
 		)
 	}
-	static async getAvailableBranches(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.BranchList> {
+	static async getAvailableBranches(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.BranchList> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"getAvailableBranches",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.BranchList.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.BranchList.fromJSON,
 		)
 	}
-	static async getWorktreeDefaults(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.WorktreeDefaults> {
+	static async getWorktreeDefaults(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.WorktreeDefaults> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"getWorktreeDefaults",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.WorktreeDefaults.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.WorktreeDefaults.fromJSON,
 		)
 	}
-	static async getWorktreeIncludeStatus(request: proto.codemarie.EmptyRequest): Promise<proto.codemarie.WorktreeIncludeStatus> {
+	static async getWorktreeIncludeStatus(request: proto.dietcode.EmptyRequest): Promise<proto.dietcode.WorktreeIncludeStatus> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"getWorktreeIncludeStatus",
 			request,
-			proto.codemarie.EmptyRequest.toJSON,
-			proto.codemarie.WorktreeIncludeStatus.fromJSON,
+			proto.dietcode.EmptyRequest.toJSON,
+			proto.dietcode.WorktreeIncludeStatus.fromJSON,
 		)
 	}
 	static async createWorktreeInclude(
-		request: proto.codemarie.CreateWorktreeIncludeRequest,
-	): Promise<proto.codemarie.WorktreeResult> {
+		request: proto.dietcode.CreateWorktreeIncludeRequest,
+	): Promise<proto.dietcode.WorktreeResult> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"createWorktreeInclude",
 			request,
-			proto.codemarie.CreateWorktreeIncludeRequest.toJSON,
-			proto.codemarie.WorktreeResult.fromJSON,
+			proto.dietcode.CreateWorktreeIncludeRequest.toJSON,
+			proto.dietcode.WorktreeResult.fromJSON,
 		)
 	}
-	static async checkoutBranch(request: proto.codemarie.CheckoutBranchRequest): Promise<proto.codemarie.WorktreeResult> {
+	static async checkoutBranch(request: proto.dietcode.CheckoutBranchRequest): Promise<proto.dietcode.WorktreeResult> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"checkoutBranch",
 			request,
-			proto.codemarie.CheckoutBranchRequest.toJSON,
-			proto.codemarie.WorktreeResult.fromJSON,
+			proto.dietcode.CheckoutBranchRequest.toJSON,
+			proto.dietcode.WorktreeResult.fromJSON,
 		)
 	}
-	static async mergeWorktree(request: proto.codemarie.MergeWorktreeRequest): Promise<proto.codemarie.MergeWorktreeResult> {
+	static async mergeWorktree(request: proto.dietcode.MergeWorktreeRequest): Promise<proto.dietcode.MergeWorktreeResult> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"mergeWorktree",
 			request,
-			proto.codemarie.MergeWorktreeRequest.toJSON,
-			proto.codemarie.MergeWorktreeResult.fromJSON,
+			proto.dietcode.MergeWorktreeRequest.toJSON,
+			proto.dietcode.MergeWorktreeResult.fromJSON,
 		)
 	}
-	static async trackWorktreeViewOpened(
-		request: proto.codemarie.TrackWorktreeViewOpenedRequest,
-	): Promise<proto.codemarie.Empty> {
+	static async trackWorktreeViewOpened(request: proto.dietcode.TrackWorktreeViewOpenedRequest): Promise<proto.dietcode.Empty> {
 		return WorktreeServiceClient.makeUnaryRequest(
 			"trackWorktreeViewOpened",
 			request,
-			proto.codemarie.TrackWorktreeViewOpenedRequest.toJSON,
-			proto.codemarie.Empty.fromJSON,
+			proto.dietcode.TrackWorktreeViewOpenedRequest.toJSON,
+			proto.dietcode.Empty.fromJSON,
 		)
 	}
 }

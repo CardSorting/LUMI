@@ -1,4 +1,4 @@
-import { NewTaskRequest } from "@shared/proto/codemarie/task"
+import { NewTaskRequest } from "@shared/proto/dietcode/task"
 import React from "react"
 import { TaskServiceClient } from "@/services/grpc-client"
 import QuickWinCard from "./QuickWinCard"
@@ -14,7 +14,7 @@ export const SuggestedTasks: React.FC<{ shouldShowQuickWins: boolean }> = ({ sho
 			<div className="px-4 pt-1 pb-3 select-none">
 				{" "}
 				<h2 className="text-sm font-medium mb-2.5 text-center text-gray">
-					Quick <span className="text-white">[Wins]</span> with Codemarie
+					Quick <span className="text-white">[Wins]</span> with DietCode
 				</h2>
 				<div className="flex flex-col space-y-1">
 					{" "}

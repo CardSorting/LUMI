@@ -2,14 +2,14 @@ import type { ToolUse } from "@core/assistant-message"
 import { discoverSkills, getAvailableSkills, getSkillContent } from "@core/context/instructions/user-instructions/skills"
 import type { SkillMetadata } from "@shared/skills"
 import { telemetryService } from "@/services/telemetry"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class UseSkillToolHandler implements IToolHandler, IPartialBlockHandler {
-	readonly name = CodemarieDefaultTool.USE_SKILL
+	readonly name = DietCodeDefaultTool.USE_SKILL
 
 	getDescription(block: ToolUse): string {
 		const skillName = block.params.skill_name

@@ -49,8 +49,8 @@ interface ConfigViewProps {
 	onUpdateGlobal?: (key: GlobalStateAndSettingsKey, value: GlobalStateAndSettings[GlobalStateAndSettingsKey]) => void
 	onUpdateWorkspace?: (key: LocalStateKey, value: LocalState[LocalStateKey]) => void
 	// Rules toggles
-	globalCodemarieRulesToggles?: Record<string, boolean>
-	localCodemarieRulesToggles?: Record<string, boolean>
+	globalDietCodeRulesToggles?: Record<string, boolean>
+	localDietCodeRulesToggles?: Record<string, boolean>
 	localCursorRulesToggles?: Record<string, boolean>
 	localWindsurfRulesToggles?: Record<string, boolean>
 	localAgentsRulesToggles?: Record<string, boolean>
@@ -83,8 +83,8 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 	workspaceState,
 	onUpdateGlobal,
 	onUpdateWorkspace,
-	globalCodemarieRulesToggles,
-	localCodemarieRulesToggles,
+	globalDietCodeRulesToggles,
+	localDietCodeRulesToggles,
 	localCursorRulesToggles,
 	localWindsurfRulesToggles,
 	localAgentsRulesToggles,
@@ -127,15 +127,15 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 	// Build entries for rules tab
 	const ruleEntries = useMemo(() => {
 		const entries: ToggleEntry[] = []
-		entries.push(...buildToggleEntries(globalCodemarieRulesToggles, "global", "codemarie"))
-		entries.push(...buildToggleEntries(localCodemarieRulesToggles, "workspace", "codemarie"))
+		entries.push(...buildToggleEntries(globalDietCodeRulesToggles, "global", "dietcode"))
+		entries.push(...buildToggleEntries(localDietCodeRulesToggles, "workspace", "dietcode"))
 		entries.push(...buildToggleEntries(localCursorRulesToggles, "workspace", "cursor"))
 		entries.push(...buildToggleEntries(localWindsurfRulesToggles, "workspace", "windsurf"))
 		entries.push(...buildToggleEntries(localAgentsRulesToggles, "workspace", "agents"))
 		return entries
 	}, [
-		globalCodemarieRulesToggles,
-		localCodemarieRulesToggles,
+		globalDietCodeRulesToggles,
+		localDietCodeRulesToggles,
 		localCursorRulesToggles,
 		localWindsurfRulesToggles,
 		localAgentsRulesToggles,
@@ -281,7 +281,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 	const handleToggle = () => {
 		if (currentTab === "rules" && ruleEntries[selectedIndex] && onToggleRule) {
 			const entry = ruleEntries[selectedIndex]
-			onToggleRule(entry.source === "global", entry.path, !entry.enabled, entry.ruleType || "codemarie")
+			onToggleRule(entry.source === "global", entry.path, !entry.enabled, entry.ruleType || "dietcode")
 		} else if (currentTab === "workflows" && workflowEntries[selectedIndex] && onToggleWorkflow) {
 			const entry = workflowEntries[selectedIndex]
 			onToggleWorkflow(entry.source === "global", entry.path, !entry.enabled)
@@ -485,7 +485,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 					return (
 						<Box>
 							<Text color="gray">
-								No rules configured. Add .codemarierules files to your workspace or global config.
+								No rules configured. Add .dietcoderules files to your workspace or global config.
 							</Text>
 						</Box>
 					)
@@ -624,7 +624,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 	return (
 		<Box flexDirection="column">
 			<Text bold color="white">
-				⚙️ Codemarie Configuration
+				⚙️ DietCode Configuration
 			</Text>
 			<Text color="gray">{SEPARATOR}</Text>
 

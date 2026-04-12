@@ -47,7 +47,7 @@ vi.mock("../vscode-shim", () => ({
 // Mock TaskContext
 vi.mock("../context/TaskContext", () => ({
 	useTaskState: vi.fn(() => ({
-		codemarieMessages: [],
+		dietcodeMessages: [],
 		mode: "act",
 	})),
 	useTaskContext: vi.fn(() => ({

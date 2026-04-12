@@ -1,12 +1,12 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios"
 import { Controller } from "@/core/controller"
-import { buildBasicCodemarieHeaders } from "@/services/EnvUtils"
+import { buildBasicDietCodeHeaders } from "@/services/EnvUtils"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import { ConfiguredAPIKeys } from "@/shared/storage/state-keys"
-import { CodemarieEnv } from "../../../config"
+import { DietCodeEnv } from "../../../config"
 import { AuthService } from "../../../services/auth/AuthService"
-import { CODEMARIE_API_ENDPOINT } from "../../../shared/codemarie/api"
+import { DIETCODE_API_ENDPOINT } from "../../../shared/dietcode/api"
 import { APIKeySchema, type APIKeySettings, RemoteConfig, RemoteConfigSchema } from "../../../shared/remote-config/schema"
 import { deleteRemoteConfigFromCache, readRemoteConfigFromCache, writeRemoteConfigToCache } from "../disk"
 import { applyRemoteConfig, clearRemoteConfig, isRemoteConfigEnabled } from "./utils"
@@ -29,7 +29,7 @@ function parseApiKeys(value: string): APIKeySettings {
 }
 
 /**
- * Helper function to make authenticated requests to the Codemarie API
+ * Helper function to make authenticated requests to the DietCode API
  * @param endpoint The API endpoint path (with {id} placeholder if needed)
  * @param organizationId The organization ID to replace in the endpoint
  * @returns The response data on success
@@ -41,19 +41,19 @@ async function makeAuthenticatedRequest<T>(endpoint: string, organizationId: str
 	// Get authentication token
 	const authToken = await authService.getAuthToken()
 	if (!authToken) {
-		throw new Error("No Codemarie account auth token found")
+		throw new Error("No DietCode account auth token found")
 	}
 
 	// Construct URL by replacing {id} placeholder with organizationId
 	const apiEndpoint = endpoint.replace("{id}", organizationId)
-	const url = new URL(apiEndpoint, CodemarieEnv.config().apiBaseUrl).toString()
+	const url = new URL(apiEndpoint, DietCodeEnv.config().apiBaseUrl).toString()
 
 	// Make authenticated request
 	const requestConfig: AxiosRequestConfig = {
 		headers: {
 			Authorization: `Bearer ${authToken}`,
 			"Content-Type": "application/json",
-			...(await buildBasicCodemarieHeaders()),
+			...(await buildBasicDietCodeHeaders()),
 		},
 		...getAxiosSettings(),
 	}
@@ -99,7 +99,7 @@ async function fetchRemoteConfigForOrganization(organizationId: string): Promise
 	try {
 		// Fetch config data using helper
 		const configData = await makeAuthenticatedRequest<{ value: string; enabled: boolean }>(
-			CODEMARIE_API_ENDPOINT.REMOTE_CONFIG,
+			DIETCODE_API_ENDPOINT.REMOTE_CONFIG,
 			organizationId,
 		)
 
@@ -147,7 +147,7 @@ async function fetchApiKeysForOrganization(organizationId: string): Promise<APIK
 	try {
 		// Fetch API keys string using helper
 		const response = await makeAuthenticatedRequest<{ providerApiKeys: string }>(
-			CODEMARIE_API_ENDPOINT.API_KEYS,
+			DIETCODE_API_ENDPOINT.API_KEYS,
 			organizationId,
 		)
 

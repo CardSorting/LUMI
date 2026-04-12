@@ -5,7 +5,7 @@ import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
 import { listFiles } from "@services/glob/list-files"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -15,7 +15,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class ListFilesToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.LIST_FILES
+	readonly name = DietCodeDefaultTool.LIST_FILES
 
 	constructor(private validator: ToolValidator) {}
 
@@ -64,11 +64,11 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
 		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 
-		// Validate required parameters and check codemarieignore access
+		// Validate required parameters and check dietcodeignore access
 		const validation = await this.validator.validate(block, "path")
 		if (!validation.ok) {
 			if (!config.isSubagentExecution && validation.error.includes("RESTRICTED")) {
-				await config.callbacks.say("codemarieignore_error", relDirPath!)
+				await config.callbacks.say("dietcodeignore_error", relDirPath!)
 			}
 
 			if (validation.error.includes("Missing required parameter")) {
@@ -98,7 +98,7 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 		// Execute the actual list files operation
 		const [files, didHitLimit] = await listFiles(absolutePath, recursive, 200)
 
-		const result = formatResponse.formatFilesList(absolutePath, files, didHitLimit, config.services.codemarieIgnoreController)
+		const result = formatResponse.formatFilesList(absolutePath, files, didHitLimit, config.services.dietcodeIgnoreController)
 
 		// Handle approval flow
 		const sharedMessageProps = {
@@ -132,7 +132,7 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 			)
 		} else {
 			// Manual approval flow
-			const notificationMessage = `Codemarie wants to view directory ${getWorkspaceBasename(absolutePath, "ListFilesToolHandler.notification")}/`
+			const notificationMessage = `DietCode wants to view directory ${getWorkspaceBasename(absolutePath, "ListFilesToolHandler.notification")}/`
 
 			// Show notification
 			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)

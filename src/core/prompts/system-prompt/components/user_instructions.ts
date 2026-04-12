@@ -10,13 +10,13 @@ The following additional instructions are provided by the user, and should be fo
 
 export async function getUserInstructions(variant: PromptVariant, context: SystemPromptContext): Promise<string | undefined> {
 	const customInstructions = buildUserInstructions(
-		context.globalCodemarieRulesFileInstructions,
-		context.localCodemarieRulesFileInstructions,
+		context.globalDietCodeRulesFileInstructions,
+		context.localDietCodeRulesFileInstructions,
 		context.localCursorRulesFileInstructions,
 		context.localCursorRulesDirInstructions,
 		context.localWindsurfRulesFileInstructions,
 		context.localAgentsRulesFileInstructions,
-		context.codemarieIgnoreInstructions,
+		context.dietcodeIgnoreInstructions,
 		context.preferredLanguageInstructions,
 	)
 
@@ -33,24 +33,24 @@ export async function getUserInstructions(variant: PromptVariant, context: Syste
 }
 
 function buildUserInstructions(
-	globalCodemarieRulesFileInstructions?: string,
-	localCodemarieRulesFileInstructions?: string,
+	globalDietCodeRulesFileInstructions?: string,
+	localDietCodeRulesFileInstructions?: string,
 	localCursorRulesFileInstructions?: string,
 	localCursorRulesDirInstructions?: string,
 	localWindsurfRulesFileInstructions?: string,
 	localAgentsRulesFileInstructions?: string,
-	codemarieIgnoreInstructions?: string,
+	dietcodeIgnoreInstructions?: string,
 	preferredLanguageInstructions?: string,
 ): string | undefined {
 	const customInstructions = []
 	if (preferredLanguageInstructions) {
 		customInstructions.push(preferredLanguageInstructions)
 	}
-	if (globalCodemarieRulesFileInstructions) {
-		customInstructions.push(globalCodemarieRulesFileInstructions)
+	if (globalDietCodeRulesFileInstructions) {
+		customInstructions.push(globalDietCodeRulesFileInstructions)
 	}
-	if (localCodemarieRulesFileInstructions) {
-		customInstructions.push(localCodemarieRulesFileInstructions)
+	if (localDietCodeRulesFileInstructions) {
+		customInstructions.push(localDietCodeRulesFileInstructions)
 	}
 	if (localCursorRulesFileInstructions) {
 		customInstructions.push(localCursorRulesFileInstructions)
@@ -64,8 +64,8 @@ function buildUserInstructions(
 	if (localAgentsRulesFileInstructions) {
 		customInstructions.push(localAgentsRulesFileInstructions)
 	}
-	if (codemarieIgnoreInstructions) {
-		customInstructions.push(codemarieIgnoreInstructions)
+	if (dietcodeIgnoreInstructions) {
+		customInstructions.push(dietcodeIgnoreInstructions)
 	}
 	if (customInstructions.length === 0) {
 		return undefined

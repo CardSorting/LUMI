@@ -1,14 +1,14 @@
-import { CodemarieMessage } from "./ExtensionMessage"
+import { DietCodeMessage } from "./ExtensionMessage"
 
 /**
- * Combines API request start and finish messages in an array of CodemarieMessages.
+ * Combines API request start and finish messages in an array of DietCodeMessages.
  *
  * This function looks for pairs of 'api_req_started' and 'api_req_finished' messages.
  * When it finds a pair, it combines them into a single 'api_req_combined' message.
  * The JSON data in the text fields of both messages are merged.
  *
- * @param messages - An array of CodemarieMessage objects to process.
- * @returns A new array of CodemarieMessage objects with API requests combined.
+ * @param messages - An array of DietCodeMessage objects to process.
+ * @returns A new array of DietCodeMessage objects with API requests combined.
  *
  * @example
  * const messages = [
@@ -18,8 +18,8 @@ import { CodemarieMessage } from "./ExtensionMessage"
  * const result = combineApiRequests(messages);
  * // Result: [{ type: "say", say: "api_req_started", text: '{"request":"GET /api/data","cost":0.005}', ts: 1000 }]
  */
-export function combineApiRequests(messages: CodemarieMessage[]): CodemarieMessage[] {
-	const combinedApiRequests: CodemarieMessage[] = []
+export function combineApiRequests(messages: DietCodeMessage[]): DietCodeMessage[] {
+	const combinedApiRequests: DietCodeMessage[] = []
 
 	for (let i = 0; i < messages.length; i++) {
 		if (messages[i].type === "say" && messages[i].say === "api_req_started") {

@@ -6,18 +6,18 @@ function normalizeModelId(modelId: string): string {
 
 const CLINE_FREE_MODEL_EXCEPTIONS = ["minimax-m2", "devstral-2512", "arcee-ai/trinity-large"]
 
-export function isCodemarieFreeModelException(modelId: string): boolean {
+export function isDietCodeFreeModelException(modelId: string): boolean {
 	const normalizedModelId = normalizeModelId(modelId)
 	return CLINE_FREE_MODEL_EXCEPTIONS.some((token) => normalizedModelId.includes(token))
 }
 
 /**
  * Filters OpenRouter model IDs based on provider-specific rules.
- * For Codemarie provider: excludes :free models (except known exception models)
- * For OpenRouter/Vercel: excludes codemarie/ prefixed models
+ * For DietCode provider: excludes :free models (except known exception models)
+ * For OpenRouter/Vercel: excludes dietcode/ prefixed models
  * @param modelIds Array of model IDs to filter
  * @param provider The current API provider
- * @param allowedFreeModelIds Optional list of Codemarie free model IDs to keep visible
+ * @param allowedFreeModelIds Optional list of DietCode free model IDs to keep visible
  * @returns Filtered array of model IDs
  */
 export function filterOpenRouterModelIds(
@@ -25,15 +25,15 @@ export function filterOpenRouterModelIds(
 	provider: ApiProvider,
 	allowedFreeModelIds: string[] = [],
 ): string[] {
-	if (provider === "codemarie") {
+	if (provider === "dietcode") {
 		const allowedFreeIdSet = new Set(allowedFreeModelIds.map((id) => normalizeModelId(id)))
-		// For Codemarie provider: exclude :free models, but keep known exception models
+		// For DietCode provider: exclude :free models, but keep known exception models
 		return modelIds.filter((id) => {
 			const normalizedModelId = normalizeModelId(id)
 			if (allowedFreeIdSet.has(normalizedModelId)) {
 				return true
 			}
-			if (isCodemarieFreeModelException(normalizedModelId)) {
+			if (isDietCodeFreeModelException(normalizedModelId)) {
 				return true
 			}
 			// Filter out other :free models
@@ -41,6 +41,6 @@ export function filterOpenRouterModelIds(
 		})
 	}
 
-	// For OpenRouter and Vercel AI Gateway providers: exclude Codemarie-specific models
-	return modelIds.filter((id) => !id.startsWith("codemarie/"))
+	// For OpenRouter and Vercel AI Gateway providers: exclude DietCode-specific models
+	return modelIds.filter((id) => !id.startsWith("dietcode/"))
 }

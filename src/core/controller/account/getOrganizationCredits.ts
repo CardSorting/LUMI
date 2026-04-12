@@ -2,7 +2,7 @@ import {
 	GetOrganizationCreditsRequest,
 	OrganizationCreditsData,
 	OrganizationUsageTransaction,
-} from "@shared/proto/codemarie/account"
+} from "@shared/proto/dietcode/account"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"
 

@@ -1,7 +1,7 @@
 import { discoverChromeInstances } from "@services/browser/BrowserDiscovery"
 import { BrowserSession } from "@services/browser/BrowserSession"
-import { BrowserConnection } from "@shared/proto/codemarie/browser"
-import { StringRequest } from "@shared/proto/codemarie/common"
+import { BrowserConnection } from "@shared/proto/dietcode/browser"
+import { StringRequest } from "@shared/proto/dietcode/common"
 import { Controller } from "../index"
 
 /**

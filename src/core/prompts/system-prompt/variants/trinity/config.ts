@@ -1,7 +1,7 @@
 import { isTrinityModelFamily } from "@utils/model-utils"
 import { ModelFamily } from "@/shared/prompts"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
 import { validateVariant } from "../variant-validator"
@@ -38,24 +38,24 @@ export const config = createVariant(ModelFamily.TRINITY)
 		SystemPromptSection.SKILLS,
 	)
 	.tools(
-		CodemarieDefaultTool.BASH,
-		CodemarieDefaultTool.FILE_READ,
-		CodemarieDefaultTool.FILE_NEW,
-		CodemarieDefaultTool.FILE_EDIT,
-		CodemarieDefaultTool.SEARCH,
-		CodemarieDefaultTool.LIST_FILES,
-		CodemarieDefaultTool.LIST_CODE_DEF,
-		CodemarieDefaultTool.BROWSER,
-		CodemarieDefaultTool.MCP_USE,
-		CodemarieDefaultTool.MCP_ACCESS,
-		CodemarieDefaultTool.ASK,
-		CodemarieDefaultTool.ATTEMPT,
-		CodemarieDefaultTool.PLAN_MODE,
-		CodemarieDefaultTool.MCP_DOCS,
-		CodemarieDefaultTool.TODO,
-		CodemarieDefaultTool.GENERATE_EXPLANATION,
-		CodemarieDefaultTool.USE_SKILL,
-		CodemarieDefaultTool.USE_SUBAGENTS,
+		DietCodeDefaultTool.BASH,
+		DietCodeDefaultTool.FILE_READ,
+		DietCodeDefaultTool.FILE_NEW,
+		DietCodeDefaultTool.FILE_EDIT,
+		DietCodeDefaultTool.SEARCH,
+		DietCodeDefaultTool.LIST_FILES,
+		DietCodeDefaultTool.LIST_CODE_DEF,
+		DietCodeDefaultTool.BROWSER,
+		DietCodeDefaultTool.MCP_USE,
+		DietCodeDefaultTool.MCP_ACCESS,
+		DietCodeDefaultTool.ASK,
+		DietCodeDefaultTool.ATTEMPT,
+		DietCodeDefaultTool.PLAN_MODE,
+		DietCodeDefaultTool.MCP_DOCS,
+		DietCodeDefaultTool.TODO,
+		DietCodeDefaultTool.GENERATE_EXPLANATION,
+		DietCodeDefaultTool.USE_SKILL,
+		DietCodeDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({
 		MODEL_FAMILY: ModelFamily.TRINITY,

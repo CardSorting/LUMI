@@ -1,4 +1,4 @@
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
@@ -9,8 +9,8 @@ import { ButtonActionType, getButtonConfig } from "../../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../../types/chatTypes"
 
 interface ActionButtonsProps {
-	task?: CodemarieMessage
-	messages: CodemarieMessage[]
+	task?: DietCodeMessage
+	messages: DietCodeMessage[]
 	chatState: ChatState
 	messageHandlers: MessageHandlers
 	mode: Mode

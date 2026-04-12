@@ -1,9 +1,9 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { CodemarieAsk, CodemarieAskUseMcpServer } from "@shared/ExtensionMessage"
+import { DietCodeAsk, DietCodeAskUseMcpServer } from "@shared/ExtensionMessage"
 import { telemetryService } from "@/services/telemetry"
 import { truncateContent } from "@/shared/content-limits"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { executor } from "../../ActionExecutor"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
@@ -13,7 +13,7 @@ import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class UseMcpToolHandler implements IFullyManagedTool {
-	readonly name = CodemarieDefaultTool.MCP_USE
+	readonly name = DietCodeDefaultTool.MCP_USE
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.server_name}']`
@@ -29,7 +29,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			serverName: uiHelpers.removeClosingTag(block, "server_name", server_name),
 			toolName: uiHelpers.removeClosingTag(block, "tool_name", tool_name),
 			arguments: uiHelpers.removeClosingTag(block, "arguments", mcp_arguments),
-		} satisfies CodemarieAskUseMcpServer)
+		} satisfies DietCodeAskUseMcpServer)
 
 		// Check if tool should be auto-approved using MCP-specific logic
 		const config = uiHelpers.getConfig()
@@ -40,7 +40,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			await uiHelpers.say("use_mcp_server" as any, partialMessage, undefined, undefined, block.partial)
 		} else {
 			await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "use_mcp_server")
-			await uiHelpers.ask("use_mcp_server" as CodemarieAsk, partialMessage, block.partial).catch(() => {})
+			await uiHelpers.ask("use_mcp_server" as DietCodeAsk, partialMessage, block.partial).catch(() => {})
 		}
 	}
 
@@ -74,7 +74,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 				config.taskState.consecutiveMistakeCount++
 				await config.callbacks.say(
 					"error",
-					`Codemarie tried to use ${tool_name} with an invalid JSON argument. Retrying...`,
+					`DietCode tried to use ${tool_name} with an invalid JSON argument. Retrying...`,
 				)
 				return formatResponse.toolError(formatResponse.invalidMcpToolArgumentError(server_name, tool_name))
 			}
@@ -88,7 +88,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			serverName: server_name,
 			toolName: tool_name,
 			arguments: mcp_arguments,
-		} satisfies CodemarieAskUseMcpServer)
+		} satisfies DietCodeAskUseMcpServer)
 
 		const isToolAutoApproved = config.services.mcpHub.connections
 			?.find((conn: any) => conn.server.name === server_name)
@@ -112,7 +112,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			)
 		} else {
 			// Manual approval flow
-			const notificationMessage = `Codemarie wants to use ${tool_name || "unknown tool"} on ${server_name || "unknown server"}`
+			const notificationMessage = `DietCode wants to use ${tool_name || "unknown tool"} on ${server_name || "unknown server"}`
 
 			// Show notification
 			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)

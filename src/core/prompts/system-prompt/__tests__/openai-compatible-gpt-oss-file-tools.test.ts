@@ -2,7 +2,7 @@ import { expect } from "chai"
 import { beforeEach, describe, it } from "mocha"
 import type { ApiProviderInfo } from "@/core/api"
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { getSystemPrompt } from "../index"
 import { PromptRegistry } from "../registry/PromptRegistry"
 import type { SystemPromptContext } from "../types"
@@ -11,8 +11,8 @@ const makeContext = (modelId: string): SystemPromptContext => ({
 	cwd: "/test/project",
 	ide: "TestIde",
 	supportsBrowserUse: true,
-	codemarieWebToolsEnabled: true,
-	focusChainSettings: { enabled: true, remindCodemarieInterval: 6 },
+	dietcodeWebToolsEnabled: true,
+	focusChainSettings: { enabled: true, remindDietcodeInterval: 6 },
 	browserSettings: { viewport: { width: 1280, height: 720 } },
 	isTesting: true,
 	enableNativeToolCalls: true,
@@ -45,17 +45,17 @@ describe("OpenAI-compatible gpt-oss native tools smoke test", () => {
 		const { tools } = await getSystemPrompt(makeContext("gpt-oss-120b"))
 		const toolNames = toolNamesFrom(tools)
 
-		expect(toolNames).to.include(CodemarieDefaultTool.BASH)
-		expect(toolNames).to.include(CodemarieDefaultTool.FILE_READ)
-		expect(toolNames).to.include(CodemarieDefaultTool.APPLY_PATCH)
-		expect(toolNames).to.not.include(CodemarieDefaultTool.FILE_NEW)
-		expect(toolNames).to.not.include(CodemarieDefaultTool.FILE_EDIT)
+		expect(toolNames).to.include(DietCodeDefaultTool.BASH)
+		expect(toolNames).to.include(DietCodeDefaultTool.FILE_READ)
+		expect(toolNames).to.include(DietCodeDefaultTool.APPLY_PATCH)
+		expect(toolNames).to.not.include(DietCodeDefaultTool.FILE_NEW)
+		expect(toolNames).to.not.include(DietCodeDefaultTool.FILE_EDIT)
 	})
 
 	it("control: gpt-5-codex still receives apply_patch", async () => {
 		const { tools } = await getSystemPrompt(makeContext("gpt-5-codex"))
 		const toolNames = toolNamesFrom(tools)
 
-		expect(toolNames).to.include(CodemarieDefaultTool.APPLY_PATCH)
+		expect(toolNames).to.include(DietCodeDefaultTool.APPLY_PATCH)
 	})
 })

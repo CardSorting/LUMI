@@ -1,6 +1,6 @@
 /**
  * Welcome view component
- * Shows an interactive prompt when user starts codemarie without a command
+ * Shows an interactive prompt when user starts dietcode without a command
  * Supports file mentions with @
  */
 
@@ -29,8 +29,8 @@ interface WelcomeViewProps {
 	controller?: any
 }
 
-// ASCII art Codemarie logo (Sakura Petal)
-const CODEMARIE_LOGO = [
+// ASCII art DietCode logo (Sakura Petal)
+const DIETCODE_LOGO = [
 	"            @@@@@            ",
 	"          @@@@@@@@@          ",
 	"        @@@@@@@@@@@@@        ",
@@ -64,11 +64,11 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onSubmit, onExit, cont
 		const mode = stateManager.getGlobalSettingsKey("mode") as string
 		const providerKey = mode === "act" ? "actModeApiProvider" : "planModeApiProvider"
 		const currentProvider = stateManager.getGlobalSettingsKey(providerKey) as string
-		return currentProvider || "codemarie"
+		return currentProvider || "dietcode"
 	}, [])
 
 	// Get model ID based on current mode and provider
-	// Different providers use different state keys (e.g., codemarie uses actModeOpenRouterModelId)
+	// Different providers use different state keys (e.g., dietcode uses actModeOpenRouterModelId)
 	const modelId = useMemo(() => {
 		const stateManager = StateManager.get()
 		const modelKey = getProviderModelIdKey(provider as ApiProvider, mode)
@@ -238,9 +238,9 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({ onSubmit, onExit, cont
 				</Box>
 			)}
 
-			{/* Codemarie logo - centered */}
+			{/* DietCode logo - centered */}
 			<Box alignItems="center" flexDirection="column">
-				{CODEMARIE_LOGO.map((line, idx) => (
+				{DIETCODE_LOGO.map((line, idx) => (
 					// biome-ignore lint/suspicious/noArrayIndexKey: static array that never changes
 					<Text color="magenta" key={idx}>
 						{line}

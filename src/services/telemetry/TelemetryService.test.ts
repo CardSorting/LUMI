@@ -9,7 +9,7 @@
 
 import * as assert from "assert"
 import * as sinon from "sinon"
-import { CodemarieEndpoint } from "@/config"
+import { DietCodeEndpoint } from "@/config"
 import { HostProvider } from "@/hosts/host-provider"
 import * as otelConfigModule from "@/shared/services/config/otel-config"
 import * as posthogConfigModule from "@/shared/services/config/posthog-config"
@@ -44,7 +44,7 @@ describe("Telemetry system is abstracted and can easily switch between providers
 	}
 	const MOCK_METADATA: TelemetryMetadata = {
 		extension_version: "1.2.3",
-		codemarie_type: "codemarie-unit-test",
+		dietcode_type: "dietcode-unit-test",
 		platform: "Test-IDE",
 		platform_version: "9.8.7-abc",
 		os_type: "win32",
@@ -277,7 +277,7 @@ describe("Telemetry system is abstracted and can easily switch between providers
 		it("should return default configurations", () => {
 			// Mock PostHog config validation to return true for this test
 			const isPostHogConfigValidStub = sinon.stub(posthogConfigModule, "isPostHogConfigValid").returns(true)
-			const isSelfHostedStub = sinon.stub(CodemarieEndpoint, "isSelfHosted").returns(false)
+			const isSelfHostedStub = sinon.stub(DietCodeEndpoint, "isSelfHosted").returns(false)
 
 			const defaultConfigs = TelemetryProviderFactory.getDefaultConfigs()
 
@@ -294,8 +294,8 @@ describe("Telemetry system is abstracted and can easily switch between providers
 		})
 
 		it("should NOT include PostHog config when in selfHosted mode", () => {
-			// Stub CodemarieEndpoint.isSelfHosted() to return true (selfHosted mode)
-			const isSelfHostedStub = sinon.stub(CodemarieEndpoint, "isSelfHosted").returns(true)
+			// Stub DietCodeEndpoint.isSelfHosted() to return true (selfHosted mode)
+			const isSelfHostedStub = sinon.stub(DietCodeEndpoint, "isSelfHosted").returns(true)
 			// Even if PostHog config is valid, it should be skipped
 			const isPostHogConfigValidStub = sinon.stub(posthogConfigModule, "isPostHogConfigValid").returns(true)
 
@@ -311,8 +311,8 @@ describe("Telemetry system is abstracted and can easily switch between providers
 		})
 
 		it("should include PostHog config when NOT in selfHosted mode and config is valid", () => {
-			// Stub CodemarieEndpoint.isSelfHosted() to return false (normal mode)
-			const isSelfHostedStub = sinon.stub(CodemarieEndpoint, "isSelfHosted").returns(false)
+			// Stub DietCodeEndpoint.isSelfHosted() to return false (normal mode)
+			const isSelfHostedStub = sinon.stub(DietCodeEndpoint, "isSelfHosted").returns(false)
 			const isPostHogConfigValidStub = sinon.stub(posthogConfigModule, "isPostHogConfigValid").returns(true)
 
 			const configs = TelemetryProviderFactory.getDefaultConfigs()
@@ -327,8 +327,8 @@ describe("Telemetry system is abstracted and can easily switch between providers
 		})
 
 		it("should NOT include build-time OTEL config when in selfHosted mode", () => {
-			// Stub CodemarieEndpoint.isSelfHosted() to return true (selfHosted mode)
-			const isSelfHostedStub = sinon.stub(CodemarieEndpoint, "isSelfHosted").returns(true)
+			// Stub DietCodeEndpoint.isSelfHosted() to return true (selfHosted mode)
+			const isSelfHostedStub = sinon.stub(DietCodeEndpoint, "isSelfHosted").returns(true)
 			// Even if build-time OTEL config is valid, it should be skipped
 			const getValidOtelConfigStub = sinon.stub(otelConfigModule, "getValidOpenTelemetryConfig").returns({
 				enabled: true,
@@ -353,8 +353,8 @@ describe("Telemetry system is abstracted and can easily switch between providers
 		})
 
 		it("should include build-time OTEL config when NOT in selfHosted mode", () => {
-			// Stub CodemarieEndpoint.isSelfHosted() to return false (normal mode)
-			const isSelfHostedStub = sinon.stub(CodemarieEndpoint, "isSelfHosted").returns(false)
+			// Stub DietCodeEndpoint.isSelfHosted() to return false (normal mode)
+			const isSelfHostedStub = sinon.stub(DietCodeEndpoint, "isSelfHosted").returns(false)
 			const getValidOtelConfigStub = sinon.stub(otelConfigModule, "getValidOpenTelemetryConfig").returns({
 				enabled: true,
 				metricsExporter: "otlp",
@@ -378,8 +378,8 @@ describe("Telemetry system is abstracted and can easily switch between providers
 		})
 
 		it("should STILL include runtime env OTEL config even in selfHosted mode", () => {
-			// Stub CodemarieEndpoint.isSelfHosted() to return true (selfHosted mode)
-			const isSelfHostedStub = sinon.stub(CodemarieEndpoint, "isSelfHosted").returns(true)
+			// Stub DietCodeEndpoint.isSelfHosted() to return true (selfHosted mode)
+			const isSelfHostedStub = sinon.stub(DietCodeEndpoint, "isSelfHosted").returns(true)
 			// Disable build-time OTEL
 			const getValidOtelConfigStub = sinon.stub(otelConfigModule, "getValidOpenTelemetryConfig").returns(null)
 			// Enable runtime OTEL (user explicitly configured it)
@@ -562,7 +562,7 @@ describe("Telemetry system is abstracted and can easily switch between providers
 				skillSource: "global",
 				skillsAvailableGlobal: 2,
 				skillsAvailableProject: 3,
-				provider: "codemarie",
+				provider: "dietcode",
 				modelId: "anthropic/claude-sonnet-4.5",
 			})
 
@@ -575,7 +575,7 @@ describe("Telemetry system is abstracted and can easily switch between providers
 			assert.strictEqual(properties.skillSource, "global", "Properties should include skillSource")
 			assert.strictEqual(properties.skillsAvailableGlobal, 2, "Properties should include global skill count")
 			assert.strictEqual(properties.skillsAvailableProject, 3, "Properties should include project skill count")
-			assert.strictEqual(properties.provider, "codemarie", "Properties should include provider")
+			assert.strictEqual(properties.provider, "dietcode", "Properties should include provider")
 			assert.strictEqual(properties.modelId, "anthropic/claude-sonnet-4.5", "Properties should include modelId")
 
 			logSpy.restore()

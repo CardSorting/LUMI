@@ -1,5 +1,5 @@
-import { Empty } from "@shared/proto/codemarie/common"
-import { TrackWorktreeViewOpenedRequest } from "@shared/proto/codemarie/worktree"
+import { Empty } from "@shared/proto/dietcode/common"
+import { TrackWorktreeViewOpenedRequest } from "@shared/proto/dietcode/worktree"
 import { telemetryService } from "@/services/telemetry"
 import { Controller } from ".."
 

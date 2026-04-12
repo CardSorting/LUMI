@@ -1,5 +1,5 @@
-import type { EmptyRequest } from "@shared/proto/codemarie/common"
-import { McpMarketplaceCatalog } from "@shared/proto/codemarie/mcp"
+import type { EmptyRequest } from "@shared/proto/dietcode/common"
+import { McpMarketplaceCatalog } from "@shared/proto/dietcode/mcp"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"
 

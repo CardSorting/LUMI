@@ -1,9 +1,9 @@
 import { formatResponse } from "@core/prompts/responses"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
-import type { CodemarieContent } from "@shared/messages/content"
+import type { DietCodeContent } from "@shared/messages/content"
 
 /**
- * Builds an array of CodemarieContent blocks from user feedback inputs.
+ * Builds an array of DietCodeContent blocks from user feedback inputs.
  * This ensures consistent formatting across all user feedback scenarios:
  * - Task resumption with feedback
  * - Post-completion feedback
@@ -11,10 +11,10 @@ import type { CodemarieContent } from "@shared/messages/content"
  * @param text Optional feedback text from user
  * @param images Optional array of base64 image data
  * @param files Optional array of file paths to include
- * @returns Array of CodemarieContent blocks ready for hook processing (may be empty if no content provided)
+ * @returns Array of DietCodeContent blocks ready for hook processing (may be empty if no content provided)
  */
-export async function buildUserFeedbackContent(text?: string, images?: string[], files?: string[]): Promise<CodemarieContent[]> {
-	const content: CodemarieContent[] = []
+export async function buildUserFeedbackContent(text?: string, images?: string[], files?: string[]): Promise<DietCodeContent[]> {
+	const content: DietCodeContent[] = []
 
 	if (text) {
 		content.push({

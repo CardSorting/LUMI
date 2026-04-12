@@ -1,9 +1,9 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 import { SystemPromptContext, TASK_PROGRESS_PARAMETER } from "../types"
 
-const id = CodemarieDefaultTool.FILE_EDIT
+const id = DietCodeDefaultTool.FILE_EDIT
 
 const getOpenOrVisibleTabPaths = (context: SystemPromptContext) => {
 	return [...(context.editorTabs?.open ?? []), ...(context.editorTabs?.visible ?? [])]
@@ -60,7 +60,7 @@ const diffInstruction = (context: SystemPromptContext) => {
 	return shouldIncludeNotebookInstructions(context) ? BASE_DIFF_INSTRUCTIONS + NOTEBOOK_INSTRUCTIONS : BASE_DIFF_INSTRUCTIONS
 }
 
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "replace_in_file",
@@ -83,7 +83,7 @@ const generic: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 	id,
 	name: "replace_in_file",
@@ -104,7 +104,7 @@ const NATIVE_NEXT_GEN: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	...NATIVE_NEXT_GEN,
 	variant: ModelFamily.NATIVE_GPT_5,
 }

@@ -1,5 +1,5 @@
-import { PathHashMap } from "@shared/proto/codemarie/checkpoints"
-import { StringArrayRequest } from "@shared/proto/codemarie/common"
+import { PathHashMap } from "@shared/proto/dietcode/checkpoints"
+import { StringArrayRequest } from "@shared/proto/dietcode/common"
 import { hashWorkingDir } from "@/integrations/checkpoints/CheckpointUtils"
 import { Controller } from ".."
 

@@ -17,7 +17,7 @@
 #   gh workflow run pack-cli.yml -f ref=abc123 -f pr_number=1234
 #
 # Install the built CLI (no auth required):
-#   npm install -g https://github.com/codemarie/codemarie/releases/download/cli-build-<sha>/codemarie-<ver>.tgz
+#   npm install -g https://github.com/dietcode/dietcode/releases/download/cli-build-<sha>/dietcode-<ver>.tgz
 #
 # Find releases:
 #   gh release list --limit 10
@@ -190,8 +190,8 @@ jobs:
             ### Alternative: Download and Install
 
             \`\`\`bash
-            curl -L ${downloadUrl} -o codemarie.tgz
-            npm install -g ./codemarie.tgz
+            curl -L ${downloadUrl} -o dietcode.tgz
+            npm install -g ./dietcode.tgz
             \`\`\`
 
             📦 [View Release](${releaseUrl})

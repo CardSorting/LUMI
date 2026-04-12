@@ -1,4 +1,4 @@
-import { SwitchWorktreeRequest, WorktreeResult } from "@shared/proto/codemarie/worktree"
+import { SwitchWorktreeRequest, WorktreeResult } from "@shared/proto/dietcode/worktree"
 import { HostProvider } from "@/hosts/host-provider"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
@@ -11,7 +11,7 @@ import { Controller } from ".."
  */
 export async function switchWorktree(controller: Controller, request: SwitchWorktreeRequest): Promise<WorktreeResult> {
 	try {
-		// Set state so Codemarie auto-opens when the worktree folder loads
+		// Set state so DietCode auto-opens when the worktree folder loads
 		controller.stateManager.setGlobalState("worktreeAutoOpenPath", request.path)
 
 		// When opening in current window, the window reloads immediately and StateManager's

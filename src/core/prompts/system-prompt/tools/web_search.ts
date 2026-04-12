@@ -1,11 +1,11 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
-const GENERIC: CodemarieToolSpec = {
+const GENERIC: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
-	id: CodemarieDefaultTool.WEB_SEARCH,
+	id: DietCodeDefaultTool.WEB_SEARCH,
 	name: "web_search",
 	description: `Performs a web search and returns relevant results
 - Takes a search query as input and returns search results with titles and URLs
@@ -16,8 +16,7 @@ const GENERIC: CodemarieToolSpec = {
 - You may provide either allowed_domains OR blocked_domains, but NOT both
 - Domains should be provided as a JSON array of strings
 - This tool is read-only and does not modify any files`,
-	contextRequirements: (context) =>
-		context.providerInfo.providerId === "codemarie" && context.codemarieWebToolsEnabled === true,
+	contextRequirements: (context) => context.providerInfo.providerId === "dietcode" && context.dietcodeWebToolsEnabled === true,
 	parameters: [
 		{
 			name: "query",
@@ -41,14 +40,13 @@ const GENERIC: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
-	id: CodemarieDefaultTool.WEB_SEARCH,
+	id: DietCodeDefaultTool.WEB_SEARCH,
 	name: "web_search",
 	description:
 		"Performs a web search and returns relevant results with titles and URLs. IMPORTANT: If an MCP-provided web search tool is available, prefer using that tool instead of this one, as it may have fewer restrictions.",
-	contextRequirements: (context) =>
-		context.providerInfo.providerId === "codemarie" && context.codemarieWebToolsEnabled === true,
+	contextRequirements: (context) => context.providerInfo.providerId === "dietcode" && context.dietcodeWebToolsEnabled === true,
 	parameters: [
 		{
 			name: "query",
@@ -69,7 +67,7 @@ const NATIVE_NEXT_GEN: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	...NATIVE_NEXT_GEN,
 	variant: ModelFamily.NATIVE_GPT_5,
 }

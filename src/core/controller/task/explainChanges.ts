@@ -1,7 +1,7 @@
 import CheckpointTracker from "@integrations/checkpoints/CheckpointTracker"
 import { findLast } from "@shared/array"
-import { Empty } from "@shared/proto/codemarie/common"
-import { ExplainChangesRequest } from "@shared/proto/codemarie/task"
+import { Empty } from "@shared/proto/dietcode/common"
+import { ExplainChangesRequest } from "@shared/proto/dietcode/task"
 import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
@@ -72,9 +72,9 @@ export async function explainChanges(controller: Controller, request: ExplainCha
 		}
 
 		// Find the message
-		const codemarieMessages = messageStateHandler.getCodemarieMessages()
-		const messageIndex = codemarieMessages.findIndex((m: any) => m.ts === request.messageTs)
-		const message = codemarieMessages[messageIndex]
+		const dietcodeMessages = messageStateHandler.getDietCodeMessages()
+		const messageIndex = dietcodeMessages.findIndex((m: any) => m.ts === request.messageTs)
+		const message = dietcodeMessages[messageIndex]
 
 		if (!message) {
 			Logger.error(`[explainChanges] Message not found for timestamp ${request.messageTs}`)
@@ -129,11 +129,11 @@ export async function explainChanges(controller: Controller, request: ExplainCha
 
 		// Get changed files (using seeNewChangesSinceLastTaskCompletion logic)
 		const lastTaskCompletedMessageCheckpointHash = findLast(
-			codemarieMessages.slice(0, messageIndex),
+			dietcodeMessages.slice(0, messageIndex),
 			(m: any) => m.say === "completion_result",
 		)?.lastCheckpointHash
 
-		const firstCheckpointMessageCheckpointHash = codemarieMessages.find(
+		const firstCheckpointMessageCheckpointHash = dietcodeMessages.find(
 			(m: any) => m.say === "checkpoint_created",
 		)?.lastCheckpointHash
 

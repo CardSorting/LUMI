@@ -167,11 +167,11 @@ export function transformRemoteConfigToStateShape(remoteConfig: RemoteConfig): P
 		}
 	}
 
-	const codemarieSettings = remoteConfig.providerSettings?.Codemarie
-	if (codemarieSettings) {
-		transformed.planModeApiProvider = "codemarie"
-		transformed.actModeApiProvider = "codemarie"
-		providers.push("codemarie")
+	const dietcodeSettings = remoteConfig.providerSettings?.DietCode
+	if (dietcodeSettings) {
+		transformed.planModeApiProvider = "dietcode"
+		transformed.actModeApiProvider = "dietcode"
+		providers.push("dietcode")
 	}
 
 	// Map LiteLLM provider settings
@@ -270,7 +270,7 @@ export function clearRemoteConfig() {
 
 		stateManager.clearRemoteConfig()
 		telemetryService.removeProvider(REMOTE_CONFIG_OTEL_PROVIDER_ID)
-		// the remote config codemarie rules toggle state is stored in global state
+		// the remote config dietcode rules toggle state is stored in global state
 		stateManager.setGlobalState("remoteRulesToggles", {})
 		stateManager.setGlobalState("remoteWorkflowToggles", {})
 

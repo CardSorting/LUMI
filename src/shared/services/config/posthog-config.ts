@@ -28,7 +28,7 @@ export interface PostHogClientValidConfig extends PostHogClientConfig {
  * so it is not a reliable indicator of the environment.
  */
 const useDevEnv =
-	process.env.IS_DEV === "true" || process.env.CODEMARIE_ENVIRONMENT === "local" || process.env.CLINE_ENVIRONMENT === "local"
+	process.env.IS_DEV === "true" || process.env.DIETCODE_ENVIRONMENT === "local" || process.env.CLINE_ENVIRONMENT === "local"
 
 /**
  * PostHog configuration for Production Environment.
@@ -40,7 +40,7 @@ const useDevEnv =
 export const posthogConfig: PostHogClientConfig = {
 	apiKey: BUILD_CONSTANTS.TELEMETRY_SERVICE_API_KEY,
 	errorTrackingApiKey: BUILD_CONSTANTS.ERROR_SERVICE_API_KEY,
-	host: "https://data.codemarie.bot",
+	host: "https://data.dietcode.bot",
 	uiHost: useDevEnv ? "https://us.i.posthog.com" : "https://us.posthog.com",
 }
 

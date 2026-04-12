@@ -1,8 +1,8 @@
-import { EmptyRequest } from "@shared/proto/index.codemarie"
+import { EmptyRequest } from "@shared/proto/index.dietcode"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { useEffect, useRef, useState } from "react"
 import { RemoteConfigToggle } from "@/components/account/RemoteConfigToggle"
-import { useCodemarieAuth } from "@/context/CodemarieAuthContext"
+import { useDietCodeAuth } from "@/context/DietCodeAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
 import Section from "../Section"
@@ -270,7 +270,7 @@ function PromptUploadingSection() {
 
 export function RemoteConfigSection({ renderSectionHeader }: RemoteConfigSectionProps) {
 	const { remoteConfigSettings, optOutOfRemoteConfig } = useExtensionState()
-	const { activeOrganization } = useCodemarieAuth()
+	const { activeOrganization } = useDietCodeAuth()
 
 	if (optOutOfRemoteConfig) {
 		return (
@@ -290,7 +290,7 @@ export function RemoteConfigSection({ renderSectionHeader }: RemoteConfigSection
 				<div className="flex flex-col justify-center gap-4">
 					<h3>
 						You haven't configured remote config yet. Do so through our{" "}
-						<VSCodeLink href="https://app.codemarie.bot/dashboard/organization?tab=settings">dashboard</VSCodeLink>.
+						<VSCodeLink href="https://app.dietcode.bot/dashboard/organization?tab=settings">dashboard</VSCodeLink>.
 					</h3>
 
 					<RefreshButton />

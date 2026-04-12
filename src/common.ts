@@ -15,7 +15,7 @@ import { featureFlagsService } from "./services/feature-flags"
 import { getDistinctId } from "./services/logging/distinctId"
 import { telemetryService } from "./services/telemetry"
 import { PostHogClientProvider } from "./services/telemetry/providers/posthog/PostHogClientProvider"
-import { CodemarieTempManager } from "./services/temp"
+import { DietCodeTempManager } from "./services/temp"
 import { cleanupTestMode } from "./services/test/TestMode"
 import { ShowMessageType } from "./shared/proto/host/window"
 import { syncWorker } from "./shared/services/worker/sync"
@@ -24,27 +24,27 @@ import { getLatestAnnouncementId } from "./utils/announcements"
 import { arePathsEqual } from "./utils/path"
 
 /**
- * Performs intialization for Codemarie that is common to all platforms.
+ * Performs intialization for DietCode that is common to all platforms.
  *
  * @param context
  * @returns The webview provider
- * @throws CodemarieConfigurationError if endpoints.json exists but is invalid
+ * @throws DietCodeConfigurationError if endpoints.json exists but is invalid
  */
 export async function initialize(storageContext: StorageContext): Promise<WebviewProvider> {
 	// Configure the shared Logging class to use HostProvider's output channels and debug logger
 	Logger.subscribe((msg: string) => HostProvider.get().logToChannel(msg)) // File system logging
 	Logger.subscribe((msg: string) => HostProvider.env.debugLog({ value: msg })) // Host debug logging
 
-	// Initialize CodemarieEndpoint configuration (reads bundled and ~/.codemarie/endpoints.json if present)
-	// This must be done before any other code that calls CodemarieEnv.config()
-	// Throws CodemarieConfigurationError if config file exists but is invalid
-	const { CodemarieEndpoint } = await import("./config")
-	await CodemarieEndpoint.initialize(HostProvider.get().extensionFsPath)
+	// Initialize DietCodeEndpoint configuration (reads bundled and ~/.dietcode/endpoints.json if present)
+	// This must be done before any other code that calls DietCodeEnv.config()
+	// Throws DietCodeConfigurationError if config file exists but is invalid
+	const { DietCodeEndpoint } = await import("./config")
+	await DietCodeEndpoint.initialize(HostProvider.get().extensionFsPath)
 
 	try {
 		await StateManager.initialize(storageContext)
 	} catch (error) {
-		Logger.error("[Codemarie] CRITICAL: Failed to initialize StateManager:", error)
+		Logger.error("[DietCode] CRITICAL: Failed to initialize StateManager:", error)
 		HostProvider.window.showMessage({
 			type: ShowMessageType.ERROR,
 			message: "Failed to initialize storage. Please check logs for details or try restarting the client.",
@@ -54,7 +54,7 @@ export async function initialize(storageContext: StorageContext): Promise<Webvie
 	// =============== External services ===============
 	await ErrorService.initialize()
 	// Initialize PostHog client provider (skip in self-hosted mode)
-	if (!CodemarieEndpoint.isSelfHosted()) {
+	if (!DietCodeEndpoint.isSelfHosted()) {
 		PostHogClientProvider.getInstance()
 	}
 
@@ -72,7 +72,7 @@ export async function initialize(storageContext: StorageContext): Promise<Webvie
 	const blobStoreSettings = stateManager.getRemoteConfigSettings()?.blobStoreConfig ?? getBlobStoreSettingsFromEnv()
 	syncWorker().init({ ...blobStoreSettings, userDistinctId: getDistinctId() })
 	// Clean up old temp files in background (non-blocking) and start periodic cleanup every 24 hours
-	CodemarieTempManager.startPeriodicCleanup()
+	DietCodeTempManager.startPeriodicCleanup()
 	// Clean up orphaned file context warnings (startup cleanup)
 	FileContextTracker.cleanupOrphanedWarnings(stateManager)
 
@@ -84,11 +84,11 @@ export async function initialize(storageContext: StorageContext): Promise<Webvie
 async function showVersionUpdateAnnouncement(stateManager: StateManager) {
 	// Version checking for autoupdate notification
 	const currentVersion = ExtensionRegistryInfo.version
-	const previousVersion = stateManager.getGlobalStateKey("codemarieVersion")
+	const previousVersion = stateManager.getGlobalStateKey("dietcodeVersion")
 	// Perform post-update actions if necessary
 	try {
 		if (!previousVersion || currentVersion !== previousVersion) {
-			Logger.log(`Codemarie version changed: ${previousVersion} -> ${currentVersion}. First run or update detected.`)
+			Logger.log(`DietCode version changed: ${previousVersion} -> ${currentVersion}. First run or update detected.`)
 
 			// Check if there's a new announcement to show
 			const lastShownAnnouncementId = stateManager.getGlobalStateKey("lastShownAnnouncementId")
@@ -97,15 +97,15 @@ async function showVersionUpdateAnnouncement(stateManager: StateManager) {
 			if (lastShownAnnouncementId !== latestAnnouncementId) {
 				// Show notification when there's a new announcement (major/minor updates or fresh installs)
 				const message = previousVersion
-					? `Codemarie has been updated to v${currentVersion}`
-					: `Welcome to Codemarie v${currentVersion}`
+					? `DietCode has been updated to v${currentVersion}`
+					: `Welcome to DietCode v${currentVersion}`
 				HostProvider.window.showMessage({
 					type: ShowMessageType.INFORMATION,
 					message,
 				})
 			}
 			// Always update the main version tracker for the next launch.
-			await stateManager.setGlobalState("codemarieVersion", currentVersion)
+			await stateManager.setGlobalState("dietcodeVersion", currentVersion)
 		}
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
@@ -115,7 +115,7 @@ async function showVersionUpdateAnnouncement(stateManager: StateManager) {
 
 /**
  * Checks if this workspace was opened from the worktree quick launch button.
- * If so, opens the Codemarie sidebar and clears the state.
+ * If so, opens the DietCode sidebar and clears the state.
  */
 async function checkWorktreeAutoOpen(stateManager: StateManager): Promise<void> {
 	try {
@@ -138,8 +138,8 @@ async function checkWorktreeAutoOpen(stateManager: StateManager): Promise<void> 
 		if (arePathsEqual(currentPath, worktreeAutoOpenPath)) {
 			// Clear the state first to prevent re-triggering
 			stateManager.setGlobalState("worktreeAutoOpenPath", undefined)
-			// Open the Codemarie sidebar
-			await HostProvider.workspace.openCodemarieSidebarPanel({})
+			// Open the DietCode sidebar
+			await HostProvider.workspace.openDietCodeSidebarPanel({})
 		}
 	} catch (error) {
 		Logger.error("Error checking worktree auto-open", error)
@@ -147,7 +147,7 @@ async function checkWorktreeAutoOpen(stateManager: StateManager): Promise<void> 
 }
 
 /**
- * Performs cleanup when Codemarie is deactivated that is common to all platforms.
+ * Performs cleanup when DietCode is deactivated that is common to all platforms.
  */
 export async function tearDown(): Promise<void> {
 	AgentConfigLoader.getInstance()?.dispose()
@@ -164,7 +164,7 @@ export async function tearDown(): Promise<void> {
 	// Clean up hook discovery cache
 	HookDiscoveryCache.getInstance().dispose()
 	// Stop periodic temp file cleanup
-	CodemarieTempManager.stopPeriodicCleanup()
+	DietCodeTempManager.stopPeriodicCleanup()
 
 	// Clean up test mode
 	cleanupTestMode()

@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { ShowWebviewEvent } from "@shared/proto/codemarie/ui"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { ShowWebviewEvent } from "@shared/proto/dietcode/ui"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
 import type { Controller } from "../index"

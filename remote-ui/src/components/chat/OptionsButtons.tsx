@@ -1,4 +1,4 @@
-import { AskResponseRequest } from "@shared/proto/codemarie/task"
+import { AskResponseRequest } from "@shared/proto/dietcode/task"
 import styled from "styled-components"
 import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
 import { TaskServiceClient } from "@/services/grpc-client"

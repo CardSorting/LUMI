@@ -1,5 +1,5 @@
-import { BooleanRequest, EmptyRequest, StringArrayRequest } from "@shared/proto/codemarie/common"
-import { GetTaskHistoryRequest, TaskFavoriteRequest } from "@shared/proto/codemarie/task"
+import { BooleanRequest, EmptyRequest, StringArrayRequest } from "@shared/proto/dietcode/common"
+import { GetTaskHistoryRequest, TaskFavoriteRequest } from "@shared/proto/dietcode/task"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse, { FuseResult } from "fuse.js"
 import { memo, useCallback, useEffect, useMemo, useState } from "react"

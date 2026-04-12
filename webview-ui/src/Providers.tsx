@@ -1,7 +1,7 @@
 import { HeroUIProvider } from "@heroui/react"
 import { type ReactNode } from "react"
 import { CustomPostHogProvider } from "./CustomPostHogProvider"
-import { CodemarieAuthProvider } from "./context/CodemarieAuthContext"
+import { DietCodeAuthProvider } from "./context/DietCodeAuthContext"
 import { ExtensionStateContextProvider } from "./context/ExtensionStateContext"
 import { PlatformProvider } from "./context/PlatformContext"
 
@@ -10,9 +10,9 @@ export function Providers({ children }: { children: ReactNode }) {
 		<PlatformProvider>
 			<ExtensionStateContextProvider>
 				<CustomPostHogProvider>
-					<CodemarieAuthProvider>
+					<DietCodeAuthProvider>
 						<HeroUIProvider>{children}</HeroUIProvider>
-					</CodemarieAuthProvider>
+					</DietCodeAuthProvider>
 				</CustomPostHogProvider>
 			</ExtensionStateContextProvider>
 		</PlatformProvider>

@@ -1,5 +1,5 @@
 /**
- * Public types for the Codemarie library API.
+ * Public types for the DietCode library API.
  *
  * This file contains types that are safe to export to library consumers.
  * It must NOT import any internal types (Controller, StateManager, etc.)
@@ -52,7 +52,7 @@ export type PermissionHandler = (request: acp.RequestPermissionRequest) => Promi
  * Maps ACP SessionUpdate types to their event listener signatures.
  * Uses the sessionUpdate discriminator to derive event names and payload types.
  */
-export type CodemarieSessionEvents = {
+export type DietCodeSessionEvents = {
 	[K in SessionUpdateType]: (payload: SessionUpdatePayload<K>) => void
 } & {
 	/** Error event for session-level errors (not part of ACP SessionUpdate) */
@@ -60,17 +60,17 @@ export type CodemarieSessionEvents = {
 }
 
 // ============================================================
-// CodemarieAgent Options
+// DietCodeAgent Options
 // ============================================================
 
 /**
- * Options for creating a CodemarieAgent instance.
+ * Options for creating a DietCodeAgent instance.
  */
-export interface CodemarieAgentOptions {
+export interface DietCodeAgentOptions {
 	/** Whether debug logging is enabled */
 	debug?: boolean
-	/** Codemarie Config Directory (defaults to ~/.codemarie) */
-	codemarieDir?: string
+	/** DietCode Config Directory (defaults to ~/.dietcode) */
+	dietcodeDir?: string
 }
 
 /**
@@ -87,9 +87,9 @@ export interface AcpAgentOptions {
 export type SessionID = string
 
 /**
- * Extended session data stored by Codemarie for ACP sessions.
+ * Extended session data stored by DietCode for ACP sessions.
  */
-export interface CodemarieAcpSession {
+export interface DietCodeAcpSession {
 	/** Unique session ID */
 	sessionId: SessionID
 	/** Working directory for the session */
@@ -127,7 +127,7 @@ export enum AcpSessionStatus {
 }
 
 /**
- * State tracking for an active ACP session within Codemarie.
+ * State tracking for an active ACP session within DietCode.
  */
 export interface AcpSessionState {
 	/** Session ID */
@@ -145,9 +145,9 @@ export interface AcpSessionState {
 // ============================================================
 
 /**
- * Codemarie-specific agent capabilities extending the ACP base capabilities.
+ * DietCode-specific agent capabilities extending the ACP base capabilities.
  */
-export interface CodemarieAgentCapabilities {
+export interface DietCodeAgentCapabilities {
 	/** Support for loading sessions from disk */
 	loadSession: boolean
 	/** Prompt capabilities for the agent */
@@ -169,11 +169,11 @@ export interface CodemarieAgentCapabilities {
 }
 
 /**
- * Codemarie agent info for ACP initialization response.
+ * DietCode agent info for ACP initialization response.
  */
-export interface CodemarieAgentInfo {
-	name: "codemarie"
-	title: "Codemarie"
+export interface DietCodeAgentInfo {
+	name: "dietcode"
+	title: "DietCode"
 	version: string
 }
 
@@ -184,7 +184,7 @@ export interface CodemarieAgentInfo {
 /**
  * Permission option as presented to the ACP client.
  */
-export interface CodemariePermissionOption {
+export interface DietCodePermissionOption {
 	kind: acp.PermissionOptionKind
 	name: string
 	optionId: string
@@ -195,8 +195,8 @@ export interface CodemariePermissionOption {
 // ============================================================
 
 /**
- * Result of translating a Codemarie message to ACP session update(s).
- * A single Codemarie message may produce multiple ACP updates.
+ * Result of translating a DietCode message to ACP session update(s).
+ * A single DietCode message may produce multiple ACP updates.
  */
 export interface TranslatedMessage {
 	/** The session updates to send */

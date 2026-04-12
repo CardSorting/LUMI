@@ -1,8 +1,8 @@
 import type { ModelInfo } from "@shared/api"
-import type { OnboardingModel, OnboardingModelGroup, OpenRouterModelInfo } from "@shared/proto/index.codemarie"
+import type { OnboardingModel, OnboardingModelGroup, OpenRouterModelInfo } from "@shared/proto/index.dietcode"
 import { AlertCircleIcon, CircleCheckIcon, CircleIcon, ListIcon, LoaderCircleIcon, StarIcon, ZapIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import CodemarieLogoWhite from "@/assets/CodemarieLogoWhite"
+import DietCodeLogoWhite from "@/assets/DietCodeLogoWhite"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,7 +14,7 @@ import ApiConfigurationSection from "../settings/sections/ApiConfigurationSectio
 import { useApiConfigurationHandlers } from "../settings/utils/useApiConfigurationHandlers"
 import {
 	getCapabilities,
-	getCodemarieUIOnboardingGroups,
+	getDietCodeUIOnboardingGroups,
 	getOverviewLabel,
 	getPriceRange,
 	getSpeedLabel,
@@ -281,7 +281,7 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 	const [selectedModelId, setSelectedModelId] = useState("")
 	const [searchTerm, setSearchTerm] = useState("")
 
-	const models = useMemo(() => getCodemarieUIOnboardingGroups(onboardingModels), [onboardingModels])
+	const models = useMemo(() => getDietCodeUIOnboardingGroups(onboardingModels), [onboardingModels])
 
 	useEffect(() => {
 		setSearchTerm("")
@@ -318,8 +318,8 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 					actModeOpenRouterModelId: selectedModelId,
 					planModeOpenRouterModelInfo: openRouterModels[selectedModelId],
 					actModeOpenRouterModelInfo: openRouterModels[selectedModelId],
-					planModeApiProvider: "codemarie",
-					actModeApiProvider: "codemarie",
+					planModeApiProvider: "dietcode",
+					actModeApiProvider: "dietcode",
 				})
 			}
 			hideAccount()
@@ -377,7 +377,7 @@ const OnboardingView = ({ onboardingModels }: { onboardingModels: OnboardingMode
 	return (
 		<div className="fixed inset-0 p-0 flex flex-col w-full">
 			<div className="h-full px-5 xs:mx-10 overflow-auto flex flex-col gap-4 items-center justify-center">
-				<CodemarieLogoWhite className="size-16 flex-shrink-0" />
+				<DietCodeLogoWhite className="size-16 flex-shrink-0" />
 				<h2 className="text-lg font-semibold p-0 flex-shrink-0">{stepDisplayInfo.title}</h2>
 				{stepNumber === 2 && (
 					<div className="flex w-full max-w-lg flex-col gap-6 my-4 items-center ">

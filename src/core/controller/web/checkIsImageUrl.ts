@@ -1,6 +1,6 @@
 import { detectImageUrl } from "@integrations/misc/link-preview"
-import { StringRequest } from "@shared/proto/codemarie/common"
-import { IsImageUrl } from "@shared/proto/codemarie/web"
+import { StringRequest } from "@shared/proto/dietcode/common"
+import { IsImageUrl } from "@shared/proto/dietcode/web"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from "../index"
 

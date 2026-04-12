@@ -14,7 +14,7 @@
  */
 
 import { findLastIndex } from "@shared/array"
-import { CodemarieToolResponseContent } from "@shared/messages"
+import { DietCodeToolResponseContent } from "@shared/messages"
 import { Logger } from "@/shared/services/Logger"
 import { orchestrateCommandExecution } from "./CommandOrchestrator"
 import { StandaloneTerminalManager } from "./standalone/StandaloneTerminalManager"
@@ -99,7 +99,7 @@ export class CommandExecutor {
 		command: string,
 		timeoutSeconds: number | undefined,
 		options?: CommandExecutionOptions,
-	): Promise<[boolean, CodemarieToolResponseContent]> {
+	): Promise<[boolean, DietCodeToolResponseContent]> {
 		// Strip leading `cd` to workspace from command
 		const workspaceCdPrefix = `cd ${this.cwd} && `
 		if (command.startsWith(workspaceCdPrefix)) {
@@ -200,12 +200,12 @@ export class CommandExecutor {
 			await new Promise((resolve) => setTimeout(resolve, 300))
 
 			// Find the last command_output message and update it
-			const messages = this.callbacks.getCodemarieMessages()
+			const messages = this.callbacks.getDietCodeMessages()
 			const lastCommandOutputIndex = findLastIndex(messages, (m) => m.ask === "command_output")
 			if (lastCommandOutputIndex !== -1) {
 				const existingText = messages[lastCommandOutputIndex].text || ""
 				const cancellationNotice = "\n\nCommand(s) cancelled by user."
-				await this.callbacks.updateCodemarieMessage(lastCommandOutputIndex, {
+				await this.callbacks.updateDietCodeMessage(lastCommandOutputIndex, {
 					text: existingText + cancellationNotice,
 				})
 			}

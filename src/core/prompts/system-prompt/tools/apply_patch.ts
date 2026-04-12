@@ -1,7 +1,7 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { isGPT5ModelFamily, isGptOssModelFamily } from "@/utils/model-utils"
-import type { CodemarieToolSpec } from "../spec"
+import type { DietCodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
 // {
@@ -76,9 +76,9 @@ apply_patch <<"EOF"
 *** End Patch
 EOF`
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_GPT_5,
-	id: CodemarieDefaultTool.APPLY_PATCH,
+	id: DietCodeDefaultTool.APPLY_PATCH,
 	name: "apply_patch",
 	description: APPLY_PATCH_TOOL_DESC,
 	contextRequirements: (context) =>
@@ -93,7 +93,7 @@ const NATIVE_GPT_5: CodemarieToolSpec = {
 	],
 }
 
-const GPT_5: CodemarieToolSpec = {
+const GPT_5: DietCodeToolSpec = {
 	...NATIVE_GPT_5,
 	variant: ModelFamily.GPT_5,
 }

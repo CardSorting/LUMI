@@ -13,7 +13,7 @@
 
 import { ModelFamily } from "@/shared/prompts"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { PromptVariant } from ".."
 import { SystemPromptSection } from "../templates/placeholders"
 import { baseTemplate } from "./generic/template"
@@ -47,22 +47,22 @@ export const config: Omit<PromptVariant, "id"> = createVariant(ModelFamily.GENER
 	.tools(
 		// Define tool order - this is type-safe and will show available options.
 		// If a tool is listed here but no variant was registered, it will fall back to the generic variant.
-		CodemarieDefaultTool.BASH,
-		CodemarieDefaultTool.FILE_READ,
-		CodemarieDefaultTool.FILE_NEW,
-		CodemarieDefaultTool.FILE_EDIT,
-		CodemarieDefaultTool.SEARCH,
-		CodemarieDefaultTool.LIST_FILES,
-		CodemarieDefaultTool.LIST_CODE_DEF,
-		CodemarieDefaultTool.BROWSER,
-		CodemarieDefaultTool.MCP_USE,
-		CodemarieDefaultTool.MCP_ACCESS,
-		CodemarieDefaultTool.ASK,
-		CodemarieDefaultTool.ATTEMPT,
-		CodemarieDefaultTool.NEW_TASK,
-		CodemarieDefaultTool.PLAN_MODE,
-		CodemarieDefaultTool.MCP_DOCS,
-		CodemarieDefaultTool.TODO,
+		DietCodeDefaultTool.BASH,
+		DietCodeDefaultTool.FILE_READ,
+		DietCodeDefaultTool.FILE_NEW,
+		DietCodeDefaultTool.FILE_EDIT,
+		DietCodeDefaultTool.SEARCH,
+		DietCodeDefaultTool.LIST_FILES,
+		DietCodeDefaultTool.LIST_CODE_DEF,
+		DietCodeDefaultTool.BROWSER,
+		DietCodeDefaultTool.MCP_USE,
+		DietCodeDefaultTool.MCP_ACCESS,
+		DietCodeDefaultTool.ASK,
+		DietCodeDefaultTool.ATTEMPT,
+		DietCodeDefaultTool.NEW_TASK,
+		DietCodeDefaultTool.PLAN_MODE,
+		DietCodeDefaultTool.MCP_DOCS,
+		DietCodeDefaultTool.TODO,
 	)
 	.placeholders({
 		MODEL_FAMILY: "your-model-family", // Replace with appropriate model family
@@ -78,7 +78,7 @@ export const config: Omit<PromptVariant, "id"> = createVariant(ModelFamily.GENER
 	//     template: customRulesTemplate,
 	// })
 	// Optional: Override specific tools
-	// .overrideTool(CodemarieDefaultTool.BASH, {
+	// .overrideTool(DietCodeDefaultTool.BASH, {
 	//     enabled: false,
 	// })
 	.build()
@@ -111,7 +111,7 @@ export const createMinimalVariant = (family: ModelFamily) =>
 			SystemPromptSection.RULES,
 			SystemPromptSection.SYSTEM_INFO,
 		)
-		.tools(CodemarieDefaultTool.FILE_READ, CodemarieDefaultTool.FILE_NEW, CodemarieDefaultTool.ATTEMPT)
+		.tools(DietCodeDefaultTool.FILE_READ, DietCodeDefaultTool.FILE_NEW, DietCodeDefaultTool.ATTEMPT)
 
 // Full-featured variant for advanced models
 export const createAdvancedVariant = (family: ModelFamily) =>
@@ -132,22 +132,22 @@ export const createAdvancedVariant = (family: ModelFamily) =>
 			SystemPromptSection.USER_INSTRUCTIONS,
 		)
 		.tools(
-			CodemarieDefaultTool.BASH,
-			CodemarieDefaultTool.FILE_READ,
-			CodemarieDefaultTool.FILE_NEW,
-			CodemarieDefaultTool.FILE_EDIT,
-			CodemarieDefaultTool.SEARCH,
-			CodemarieDefaultTool.LIST_FILES,
-			CodemarieDefaultTool.LIST_CODE_DEF,
-			CodemarieDefaultTool.BROWSER,
-			CodemarieDefaultTool.WEB_FETCH,
-			CodemarieDefaultTool.MCP_USE,
-			CodemarieDefaultTool.MCP_ACCESS,
-			CodemarieDefaultTool.ASK,
-			CodemarieDefaultTool.ATTEMPT,
-			CodemarieDefaultTool.NEW_TASK,
-			CodemarieDefaultTool.PLAN_MODE,
-			CodemarieDefaultTool.MCP_DOCS,
-			CodemarieDefaultTool.TODO,
-			CodemarieDefaultTool.USE_SUBAGENTS,
+			DietCodeDefaultTool.BASH,
+			DietCodeDefaultTool.FILE_READ,
+			DietCodeDefaultTool.FILE_NEW,
+			DietCodeDefaultTool.FILE_EDIT,
+			DietCodeDefaultTool.SEARCH,
+			DietCodeDefaultTool.LIST_FILES,
+			DietCodeDefaultTool.LIST_CODE_DEF,
+			DietCodeDefaultTool.BROWSER,
+			DietCodeDefaultTool.WEB_FETCH,
+			DietCodeDefaultTool.MCP_USE,
+			DietCodeDefaultTool.MCP_ACCESS,
+			DietCodeDefaultTool.ASK,
+			DietCodeDefaultTool.ATTEMPT,
+			DietCodeDefaultTool.NEW_TASK,
+			DietCodeDefaultTool.PLAN_MODE,
+			DietCodeDefaultTool.MCP_DOCS,
+			DietCodeDefaultTool.TODO,
+			DietCodeDefaultTool.USE_SUBAGENTS,
 		)

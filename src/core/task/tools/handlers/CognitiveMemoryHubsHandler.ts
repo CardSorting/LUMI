@@ -1,10 +1,10 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryHubsHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_HUBS
+	readonly name = DietCodeDefaultTool.MEM_HUBS
 
 	getDescription(_block: ToolUse): string {
 		return "Identify highly-connected 'Hub' nodes in the Knowledge Graph for rapid context indexing."

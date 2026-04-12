@@ -1,12 +1,12 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryContextHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_CONTEXT
+	readonly name = DietCodeDefaultTool.MEM_CONTEXT
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for '${block.params.path}']`

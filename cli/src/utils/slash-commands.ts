@@ -3,7 +3,7 @@
  * Handles detection, filtering, and insertion of slash commands
  */
 
-import type { SlashCommandInfo } from "@shared/proto/codemarie/slash"
+import type { SlashCommandInfo } from "@shared/proto/dietcode/slash"
 import { fuzzyFilter } from "./fuzzy-search"
 
 export interface SlashQueryInfo {

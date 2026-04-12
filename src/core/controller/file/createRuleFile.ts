@@ -1,7 +1,7 @@
-import { refreshCodemarieRulesToggles } from "@core/context/instructions/user-instructions/codemarie-rules"
+import { refreshDietCodeRulesToggles } from "@core/context/instructions/user-instructions/dietcode-rules"
 import { createRuleFile as createRuleFileImpl } from "@core/context/instructions/user-instructions/rule-helpers"
 import { getWorkspaceBasename } from "@core/workspace"
-import { RuleFile, RuleFileRequest } from "@shared/proto/codemarie/file"
+import { RuleFile, RuleFileRequest } from "@shared/proto/dietcode/file"
 import { refreshWorkflowToggles } from "@/core/context/instructions/user-instructions/workflows"
 import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"
@@ -54,7 +54,7 @@ export async function createRuleFile(controller: Controller, request: RuleFileRe
 		if (request.type === "workflow") {
 			await refreshWorkflowToggles(controller, cwd)
 		} else {
-			await refreshCodemarieRulesToggles(controller, cwd)
+			await refreshDietCodeRulesToggles(controller, cwd)
 		}
 		await controller.postStateToWebview()
 

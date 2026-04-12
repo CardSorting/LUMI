@@ -1,7 +1,7 @@
 /**
  * Context for tracking stdin raw mode support
  * Used to conditionally disable input handling when stdin doesn't support raw mode
- * (e.g., when input is piped: echo "..." | codemariedev)
+ * (e.g., when input is piped: echo "..." | dietcodedev)
  */
 
 import React, { createContext, type ReactNode, useContext } from "react"

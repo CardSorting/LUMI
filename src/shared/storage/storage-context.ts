@@ -1,8 +1,8 @@
 import fsSync from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { CodemarieFileStorage } from "./CodemarieFileStorage"
-import { CodemarieMemento } from "./CodemarieStorage"
+import { DietCodeFileStorage } from "./DietCodeFileStorage"
+import { DietCodeMemento } from "./DietCodeStorage"
 
 /**
  * The storage backend context object used by StateManager and other components.
@@ -14,24 +14,24 @@ import { CodemarieMemento } from "./CodemarieStorage"
  */
 export interface StorageContext {
 	/** Global state — settings, task history references, UI state, etc. */
-	readonly globalState: CodemarieMemento
+	readonly globalState: DietCodeMemento
 
 	// TODO: Privatize this field after StorageContext becomes class with a reset method.
 	/**
 	 * The backing store for global state. Prefer `globalState` when possible.
 	 *
-	 * This split exists because CLI needs to intercept the CodemarieMemento interface to global state,
+	 * This split exists because CLI needs to intercept the DietCodeMemento interface to global state,
 	 * but state resets need to write through to the backing store.
 	 */
-	readonly globalStateBackingStore: CodemarieFileStorage
+	readonly globalStateBackingStore: DietCodeFileStorage
 
 	/** Secrets — API keys and other sensitive values. File uses restricted permissions (0o600). */
-	readonly secrets: CodemarieFileStorage<string>
+	readonly secrets: DietCodeFileStorage<string>
 
 	/** Workspace-scoped state — per-project toggles, rules, etc. */
-	readonly workspaceState: CodemarieFileStorage
+	readonly workspaceState: DietCodeFileStorage
 
-	/** The resolved path to the data directory (~/.codemarie/data) */
+	/** The resolved path to the data directory (~/.dietcode/data) */
 	readonly dataDir: string
 
 	/** The resolved path to the workspace storage directory (contains workspaceState.json) */
@@ -40,9 +40,9 @@ export interface StorageContext {
 
 export interface StorageContextOptions {
 	/**
-	 * Override the Codemarie home directory. Defaults to CODEMARIE_DIR env var or ~/.codemarie.
+	 * Override the DietCode home directory. Defaults to DIETCODE_DIR env var or ~/.dietcode.
 	 */
-	codemarieDir?: string
+	dietcodeDir?: string
 
 	/**
 	 * The workspace/project directory path. Used to compute a hash-based
@@ -84,17 +84,17 @@ function hashString(str: string): string {
  * construct paths to these storage files themselves.
  *
  * File layout:
- *   ~/.codemarie/data/globalState.json    — global state
- *   ~/.codemarie/data/secrets.json        — secrets (mode 0o600)
- *   ~/.codemarie/data/workspaces/<hash>/workspaceState.json — per-workspace state
+ *   ~/.dietcode/data/globalState.json    — global state
+ *   ~/.dietcode/data/secrets.json        — secrets (mode 0o600)
+ *   ~/.dietcode/data/workspaces/<hash>/workspaceState.json — per-workspace state
  *
  * @param opts Configuration options for path resolution
  * @returns A StorageContext ready for use by StateManager
  */
 export function createStorageContext(opts: StorageContextOptions = {}): StorageContext {
-	const codemarieDir =
-		opts.codemarieDir || process.env.CODEMARIE_DIR || process.env.CLINE_DIR || path.join(os.homedir(), ".codemarie")
-	const dataDir = path.join(codemarieDir, SETTINGS_SUBFOLDER)
+	const dietcodeDir =
+		opts.dietcodeDir || process.env.DIETCODE_DIR || process.env.CLINE_DIR || path.join(os.homedir(), ".dietcode")
+	const dataDir = path.join(dietcodeDir, SETTINGS_SUBFOLDER)
 
 	// Resolve workspace storage directory
 	let workspaceDir: string
@@ -112,15 +112,15 @@ export function createStorageContext(opts: StorageContextOptions = {}): StorageC
 	fsSync.mkdirSync(dataDir, { recursive: true })
 	fsSync.mkdirSync(workspaceDir, { recursive: true })
 
-	const globalState = new CodemarieFileStorage(path.join(dataDir, "globalState.json"), "GlobalState")
+	const globalState = new DietCodeFileStorage(path.join(dataDir, "globalState.json"), "GlobalState")
 
 	return {
 		globalState,
 		globalStateBackingStore: globalState,
-		secrets: new CodemarieFileStorage<string>(path.join(dataDir, "secrets.json"), "Secrets", {
+		secrets: new DietCodeFileStorage<string>(path.join(dataDir, "secrets.json"), "Secrets", {
 			fileMode: 0o600, // Owner read/write only — protects API keys
 		}),
-		workspaceState: new CodemarieFileStorage(path.join(workspaceDir, "workspaceState.json"), "WorkspaceState"),
+		workspaceState: new DietCodeFileStorage(path.join(workspaceDir, "workspaceState.json"), "WorkspaceState"),
 		dataDir,
 		workspaceStoragePath: workspaceDir,
 	}

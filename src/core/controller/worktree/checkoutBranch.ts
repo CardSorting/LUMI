@@ -1,4 +1,4 @@
-import { CheckoutBranchRequest, WorktreeResult } from "@shared/proto/codemarie/worktree"
+import { CheckoutBranchRequest, WorktreeResult } from "@shared/proto/dietcode/worktree"
 import { getWorkspacePath } from "@utils/path"
 import simpleGit from "simple-git"
 import { Controller } from ".."

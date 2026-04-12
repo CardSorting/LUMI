@@ -1,5 +1,5 @@
-import { StringRequest } from "@shared/proto/codemarie/common"
-import { TaskResponse } from "@shared/proto/codemarie/task"
+import { StringRequest } from "@shared/proto/dietcode/common"
+import { TaskResponse } from "@shared/proto/dietcode/task"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from ".."
 import { sendChatButtonClickedEvent } from "../ui/subscribeToChatButtonClicked"

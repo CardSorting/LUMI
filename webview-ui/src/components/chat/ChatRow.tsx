@@ -1,15 +1,15 @@
 import { COMMAND_OUTPUT_STRING } from "@shared/combineCommandSequences"
 import {
 	COMPLETION_RESULT_CHANGES_FLAG,
-	CodemarieApiReqInfo,
-	CodemarieAskQuestion,
-	CodemarieAskUseMcpServer,
-	CodemarieMessage,
-	CodemariePlanModeResponse,
-	CodemarieSayGenerateExplanation,
-	CodemarieSayTool,
+	DietCodeApiReqInfo,
+	DietCodeAskQuestion,
+	DietCodeAskUseMcpServer,
+	DietCodeMessage,
+	DietCodePlanModeResponse,
+	DietCodeSayGenerateExplanation,
+	DietCodeSayTool,
 } from "@shared/ExtensionMessage"
-import { BooleanRequest, StringRequest } from "@shared/proto/codemarie/common"
+import { BooleanRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { Mode } from "@shared/storage/types"
 import deepEqual from "fast-deep-equal"
 import { MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -52,10 +52,10 @@ import UserMessage from "./UserMessage"
 const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
 
 interface ChatRowProps {
-	message: CodemarieMessage
+	message: DietCodeMessage
 	isExpanded: boolean
 	onToggleExpand: (ts: number) => void
-	lastModifiedMessage?: CodemarieMessage
+	lastModifiedMessage?: DietCodeMessage
 	isLast: boolean
 	onHeightChange: (isTaller: boolean) => void
 	inputValue?: string
@@ -137,7 +137,7 @@ export const ChatRowContent = memo(
 			mcpMarketplaceCatalog,
 			onRelinquishControl,
 			vscodeTerminalExecutionMode,
-			codemarieMessages,
+			dietcodeMessages,
 		} = useExtensionState()
 		const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 		const [explainChangesDisabled, setExplainChangesDisabled] = useState(false)
@@ -152,7 +152,7 @@ export const ChatRowContent = memo(
 		const initialActions = useMemo(() => {
 			if (message.ask === "followup") {
 				try {
-					const parsed = JSON.parse(message.text || "{}") as CodemarieAskQuestion
+					const parsed = JSON.parse(message.text || "{}") as DietCodeAskQuestion
 					return parsed.actions?.filter((a) => a.isChecked).map((a) => a.id) || []
 				} catch {
 					return []
@@ -198,7 +198,7 @@ export const ChatRowContent = memo(
 
 		const [cost, _apiReqCancelReason, apiReqStreamingFailedMessage] = useMemo(() => {
 			if (message.text != null && message.say === "api_req_started") {
-				const info: CodemarieApiReqInfo = JSON.parse(message.text)
+				const info: DietCodeApiReqInfo = JSON.parse(message.text)
 				return [info.cost, info.cancelReason, info.streamingFailedMessage, info.retryStatus]
 			}
 			return [undefined, undefined, undefined, undefined, undefined]
@@ -319,18 +319,18 @@ export const ChatRowContent = memo(
 					return [
 						<Icon className="text-error size-2" key="mistake-icon" name="CircleXIcon" />,
 						<span className="text-error font-bold text-sm" key="mistake-title">
-							Codemarie is having trouble...
+							DietCode is having trouble...
 						</span>,
 					]
 				case "command":
 					return [
 						<Icon className="text-foreground size-2" key="command-icon" name="TerminalIcon" />,
 						<span className="font-bold text-foreground text-sm" key="command-title">
-							Codemarie wants to execute this command:
+							DietCode wants to execute this command:
 						</span>,
 					]
 				case "use_mcp_server":
-					const mcpServerUse = JSON.parse(message.text || "{}") as CodemarieAskUseMcpServer
+					const mcpServerUse = JSON.parse(message.text || "{}") as DietCodeAskUseMcpServer
 					return [
 						isMcpServerResponding ? (
 							<ProgressIndicator key="mcp-progress" />
@@ -338,7 +338,7 @@ export const ChatRowContent = memo(
 							<Icon className="text-foreground mb-[-1.5px]" key="mcp-icon" name="server" />
 						),
 						<span className="ph-no-capture font-bold text-foreground break-words text-sm" key="mcp-title">
-							Codemarie wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
+							DietCode wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
 							<code className="break-all text-xs">
 								{getMcpServerDisplayName(mcpServerUse.serverName, mcpMarketplaceCatalog)}
 							</code>{" "}
@@ -360,7 +360,7 @@ export const ChatRowContent = memo(
 					return [
 						<Icon className="text-foreground mb-[-1.5px]" key="followup-icon" name="question" />,
 						<span className="font-bold text-foreground text-sm" key="followup-title">
-							Codemarie has a question:
+							DietCode has a question:
 						</span>,
 					]
 				default:
@@ -370,7 +370,7 @@ export const ChatRowContent = memo(
 
 		const tool = useMemo(() => {
 			if (message.ask === "tool" || message.say === "tool") {
-				return JSON.parse(message.text || "{}") as CodemarieSayTool
+				return JSON.parse(message.text || "{}") as DietCodeSayTool
 			}
 			return null
 		}, [message.ask, message.say, message.text])
@@ -431,8 +431,8 @@ export const ChatRowContent = memo(
 					const content = tool?.content || ""
 					const isApplyingPatch = content?.startsWith("%%bash") && !content.endsWith("*** End Patch\nEOF")
 					const editToolTitle = isApplyingPatch
-						? "Codemarie is creating patches to edit this file:"
-						: "Codemarie wants to edit this file:"
+						? "DietCode is creating patches to edit this file:"
+						: "DietCode wants to edit this file:"
 					return (
 						<div>
 							<div className={HEADER_CLASSNAMES}>
@@ -466,7 +466,7 @@ export const ChatRowContent = memo(
 								<Icon className="size-2" name="SquareMinusIcon" />
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span style={{ fontWeight: "bold" }}>Codemarie wants to delete this file:</span>
+								<span style={{ fontWeight: "bold" }}>DietCode wants to delete this file:</span>
 							</div>
 							<CodeAccordian
 								// isLoading={message.partial}
@@ -484,7 +484,7 @@ export const ChatRowContent = memo(
 								<Icon className="size-2" name="FilePlus2Icon" />
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">Codemarie wants to create a new file:</span>
+								<span className="font-bold">DietCode wants to create a new file:</span>
 							</div>
 							{backgroundEditEnabled && tool.path && tool.content ? (
 								<DiffEditRow patch={tool.content} path={tool.path} startLineNumbers={tool.startLineNumbers} />
@@ -511,7 +511,7 @@ export const ChatRowContent = memo(
 								)}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">Codemarie wants to read this file:</span>
+								<span className="font-bold">DietCode wants to read this file:</span>
 							</div>
 							<div className="bg-code rounded-sm overflow-hidden border border-editor-group-border">
 								<div
@@ -545,8 +545,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? "Codemarie wants to view the top level files in this directory:"
-										: "Codemarie viewed the top level files in this directory:"}
+										? "DietCode wants to view the top level files in this directory:"
+										: "DietCode viewed the top level files in this directory:"}
 								</span>
 							</div>
 							<CodeAccordian
@@ -567,8 +567,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? "Codemarie wants to recursively view all files in this directory:"
-										: "Codemarie recursively viewed all files in this directory:"}
+										? "DietCode wants to recursively view all files in this directory:"
+										: "DietCode recursively viewed all files in this directory:"}
 								</span>
 							</div>
 							<CodeAccordian
@@ -589,8 +589,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
 								<span style={{ fontWeight: "bold" }}>
 									{message.type === "ask"
-										? "Codemarie wants to view source code definition names used in this directory:"
-										: "Codemarie viewed source code definition names used in this directory:"}
+										? "DietCode wants to view source code definition names used in this directory:"
+										: "DietCode viewed source code definition names used in this directory:"}
 								</span>
 							</div>
 							<CodeAccordian
@@ -609,7 +609,7 @@ export const ChatRowContent = memo(
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
 								<span className="font-bold">
-									Codemarie wants to search this directory for <code className="break-all">{tool.regex}</code>:
+									DietCode wants to search this directory for <code className="break-all">{tool.regex}</code>:
 								</span>
 							</div>
 							<SearchResultsDisplay
@@ -626,7 +626,7 @@ export const ChatRowContent = memo(
 						<div>
 							<div className={HEADER_CLASSNAMES}>
 								<Icon className="size-2" name="FoldVerticalIcon" />
-								<span className="font-bold">Codemarie is condensing the conversation:</span>
+								<span className="font-bold">DietCode is condensing the conversation:</span>
 							</div>
 							<div className="bg-code overflow-hidden border border-editor-group-border rounded-[3px]">
 								<div
@@ -670,8 +670,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This URL is external")}
 								<span className="font-bold">
 									{message.type === "ask"
-										? "Codemarie wants to fetch content from this URL:"
-										: "Codemarie fetched content from this URL:"}
+										? "DietCode wants to fetch content from this URL:"
+										: "DietCode fetched content from this URL:"}
 								</span>
 							</div>
 							<div
@@ -699,8 +699,8 @@ export const ChatRowContent = memo(
 									toolIcon("sign-out", "yellow", -90, "This search is external")}
 								<span className="font-bold">
 									{message.type === "ask"
-										? "Codemarie wants to search the web for:"
-										: "Codemarie searched the web for:"}
+										? "DietCode wants to search the web for:"
+										: "DietCode searched the web for:"}
 								</span>
 							</div>
 							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs select-text py-[9px] px-2.5">
@@ -715,7 +715,7 @@ export const ChatRowContent = memo(
 						<div>
 							<div className={HEADER_CLASSNAMES}>
 								<Icon className="size-2" name="LightbulbIcon" />
-								<span className="font-bold">Codemarie loaded the skill:</span>
+								<span className="font-bold">DietCode loaded the skill:</span>
 							</div>
 							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs py-[9px] px-2.5">
 								<span className="ph-no-capture font-medium">{tool.path}</span>
@@ -773,7 +773,7 @@ export const ChatRowContent = memo(
 		}
 
 		if (message.ask === "use_mcp_server" || message.say === "use_mcp_server") {
-			const useMcpServer = JSON.parse(message.text || "{}") as CodemarieAskUseMcpServer
+			const useMcpServer = JSON.parse(message.text || "{}") as DietCodeAskUseMcpServer
 			const server = mcpServers.find((server) => server.name === useMcpServer.serverName)
 			return (
 				<div>
@@ -842,8 +842,8 @@ export const ChatRowContent = memo(
 							<RequestStartRow
 								apiReqStreamingFailedMessage={apiReqStreamingFailedMessage}
 								apiRequestFailedMessage={apiRequestFailedMessage}
-								codemarieMessages={codemarieMessages}
 								cost={cost}
+								dietcodeMessages={dietcodeMessages}
 								handleToggle={handleToggle}
 								isExpanded={isExpanded}
 								message={message}
@@ -915,7 +915,7 @@ export const ChatRowContent = memo(
 							/>
 						)
 					case "user_feedback_diff":
-						const tool = JSON.parse(message.text || "{}") as CodemarieSayTool
+						const tool = JSON.parse(message.text || "{}") as DietCodeSayTool
 						return (
 							<div className="w-full -mt-2.5">
 								<CodeAccordian
@@ -930,8 +930,8 @@ export const ChatRowContent = memo(
 						return <ErrorRow errorType="error" message={message} />
 					case "diff_error":
 						return <ErrorRow errorType="diff_error" message={message} />
-					case "codemarieignore_error":
-						return <ErrorRow errorType="codemarieignore_error" message={message} />
+					case "dietcodeignore_error":
+						return <ErrorRow errorType="dietcodeignore_error" message={message} />
 					case "checkpoint_created":
 						return <CheckmarkControl isCheckpointCheckedOut={message.isCheckpointCheckedOut} messageTs={message.ts} />
 					case "load_mcp_documentation":
@@ -942,7 +942,7 @@ export const ChatRowContent = memo(
 							</div>
 						)
 					case "generate_explanation": {
-						let explanationInfo: CodemarieSayGenerateExplanation = {
+						let explanationInfo: DietCodeSayGenerateExplanation = {
 							title: "code changes",
 							fromRef: "",
 							toRef: "",
@@ -1035,13 +1035,13 @@ export const ChatRowContent = memo(
 									<span className="font-medium text-foreground">Shell Integration Unavailable</span>
 								</div>
 								<div className="text-foreground opacity-80">
-									Codemarie may have trouble viewing the command's output. Please update VSCode (
+									DietCode may have trouble viewing the command's output. Please update VSCode (
 									<code>CMD/CTRL + Shift + P</code> → "Update") and make sure you're using a supported shell:
 									zsh, bash, fish, or PowerShell (<code>CMD/CTRL + Shift + P</code> → "Terminal: Select Default
 									Profile").
 									<a
 										className="px-1"
-										href="https://github.com/codemarie/codemarie/wiki/Troubleshooting-%E2%80%90-Shell-Integration-Unavailable">
+										href="https://github.com/dietcode/dietcode/wiki/Troubleshooting-%E2%80%90-Shell-Integration-Unavailable">
 										Still having trouble?
 									</a>
 								</div>
@@ -1182,22 +1182,22 @@ export const ChatRowContent = memo(
 						let question: string | undefined
 						let options: string[] | undefined
 						let selected: string | undefined
-						let actions: CodemarieAskQuestion["actions"] | undefined
+						let actions: DietCodeAskQuestion["actions"] | undefined
 						let confidenceScore: number | undefined
 						let ambiguityReasoning: string | undefined
 						let verifiedEntities: string[] | undefined
-						let risks: CodemarieAskQuestion["risks"] | undefined
-						let intentDecomposition: CodemarieAskQuestion["intentDecomposition"] | undefined
+						let risks: DietCodeAskQuestion["risks"] | undefined
+						let intentDecomposition: DietCodeAskQuestion["intentDecomposition"] | undefined
 						let constraints: string[] | undefined
 						let constraintExplanations: Record<string, string> | undefined
-						let architecturalLayers: CodemarieAskQuestion["architecturalLayers"] | undefined
-						let policyCompliance: CodemarieAskQuestion["policyCompliance"] | undefined
-						let outcomeMapping: CodemarieAskQuestion["outcomeMapping"] | undefined
-						let adversarialCritique: CodemarieAskQuestion["adversarialCritique"] | undefined
-						let interactiveClarifications: CodemarieAskQuestion["interactiveClarifications"] | undefined
-						let swarmConsensus: CodemarieAskQuestion["swarmConsensus"] | undefined
+						let architecturalLayers: DietCodeAskQuestion["architecturalLayers"] | undefined
+						let policyCompliance: DietCodeAskQuestion["policyCompliance"] | undefined
+						let outcomeMapping: DietCodeAskQuestion["outcomeMapping"] | undefined
+						let adversarialCritique: DietCodeAskQuestion["adversarialCritique"] | undefined
+						let interactiveClarifications: DietCodeAskQuestion["interactiveClarifications"] | undefined
+						let swarmConsensus: DietCodeAskQuestion["swarmConsensus"] | undefined
 						try {
-							const parsedMessage = JSON.parse(message.text || "{}") as CodemarieAskQuestion
+							const parsedMessage = JSON.parse(message.text || "{}") as DietCodeAskQuestion
 							question = parsedMessage.question
 							options = parsedMessage.options
 							selected = parsedMessage.selected
@@ -1301,7 +1301,7 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<Icon className="size-2" name="FilePlus2Icon" />
-									<span className="text-foreground font-bold">Codemarie wants to start a new task:</span>
+									<span className="text-foreground font-bold">DietCode wants to start a new task:</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
 							</div>
@@ -1312,7 +1312,7 @@ export const ChatRowContent = memo(
 								<div className={HEADER_CLASSNAMES}>
 									<Icon className="size-2" name="FilePlus2Icon" />
 									<span className="text-foreground font-bold">
-										Codemarie wants to condense your conversation:
+										DietCode wants to condense your conversation:
 									</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
@@ -1323,7 +1323,7 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<Icon className="size-2" name="FilePlus2Icon" />
-									<span className="text-foreground font-bold">Codemarie wants to create a Github issue:</span>
+									<span className="text-foreground font-bold">DietCode wants to create a Github issue:</span>
 								</div>
 								<ReportBugPreview data={message.text || ""} />
 							</div>
@@ -1333,7 +1333,7 @@ export const ChatRowContent = memo(
 						let options: string[] | undefined
 						let selected: string | undefined
 						try {
-							const parsedMessage = JSON.parse(message.text || "{}") as CodemariePlanModeResponse
+							const parsedMessage = JSON.parse(message.text || "{}") as DietCodePlanModeResponse
 							response = parsedMessage.response
 							options = parsedMessage.options
 							selected = parsedMessage.selected

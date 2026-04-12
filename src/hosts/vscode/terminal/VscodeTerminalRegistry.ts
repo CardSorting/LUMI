@@ -31,10 +31,10 @@ export const TerminalRegistry = {
 		const iconPath = vscode.Uri.file(path.join(HostProvider.get().extensionFsPath, "assets", "icons", "icon.svg"))
 		const terminalOptions: vscode.TerminalOptions = {
 			cwd,
-			name: "Codemarie",
+			name: "DietCode",
 			iconPath,
 			env: {
-				CODEMARIE_ACTIVE: "true",
+				DIETCODE_ACTIVE: "true",
 				CLINE_ACTIVE: "true",
 			},
 		}

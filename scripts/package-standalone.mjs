@@ -59,7 +59,7 @@ async function installNodeDependencies() {
  * to download the binary.
  *
  * The modules are downloaded to dist-standalone/binaries/{os}-{platform}/.
- * When codemarie-core is installed, the installer should use the correct module for the current platform.
+ * When dietcode-core is installed, the installer should use the correct module for the current platform.
  */
 async function packageAllBinaryDeps() {
 	// Check for native .node modules.
@@ -79,7 +79,7 @@ async function packageAllBinaryDeps() {
 		console.log(`Installing binaries for ${module}...`)
 		const src = path.join(BUILD_DIR, "node_modules", module)
 		if (!fs.existsSync(src)) {
-			console.warn(`Warning: Trying to install binaries for the module '${module}', but it is not being used by codemarie.`)
+			console.warn(`Warning: Trying to install binaries for the module '${module}', but it is not being used by dietcode.`)
 			continue
 		}
 
@@ -135,7 +135,7 @@ async function zipDistribution() {
 	// Also ignore the dist directory, the build directory for the extension.
 	const isIgnored = createIsIgnored(["dist/**"])
 
-	// Add the whole codemarie directory under "extension", except the for the ignored files.
+	// Add the whole dietcode directory under "extension", except the for the ignored files.
 	archive.directory(process.cwd(), "extension", (entry) => {
 		if (isIgnored(entry.name)) {
 			//log_verbose("Ignoring", entry.name)

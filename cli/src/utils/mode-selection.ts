@@ -4,7 +4,7 @@
  * This is extracted as a pure function for testability. The decision tree:
  * - Plain text mode when output is redirected (stdout not TTY)
  * - Plain text mode when input is redirected (stdin not TTY) - Ink requires raw mode
- * - Plain text mode when stdin was piped (e.g., echo "x" | codemarie)
+ * - Plain text mode when stdin was piped (e.g., echo "x" | dietcode)
  * - Plain text mode when --json flag is used
  * - Plain text mode when --yolo flag is used
  * - Otherwise: Interactive Ink mode

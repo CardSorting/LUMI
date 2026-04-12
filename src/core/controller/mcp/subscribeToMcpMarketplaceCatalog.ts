@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { McpMarketplaceCatalog } from "@shared/proto/codemarie/mcp"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { McpMarketplaceCatalog } from "@shared/proto/dietcode/mcp"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
 import { Controller } from "../index"

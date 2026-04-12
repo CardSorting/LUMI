@@ -1,6 +1,6 @@
 import { synchronizeRuleToggles } from "@core/context/instructions/user-instructions/rule-helpers"
 import { ensureWorkflowsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
-import { CodemarieRulesToggles } from "@shared/codemarie-rules"
+import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import path from "path"
 import { Controller } from "@/core/controller"
 
@@ -11,13 +11,13 @@ export async function refreshWorkflowToggles(
 	controller: Controller,
 	workingDirectory: string,
 ): Promise<{
-	globalWorkflowToggles: CodemarieRulesToggles
-	localWorkflowToggles: CodemarieRulesToggles
+	globalWorkflowToggles: DietCodeRulesToggles
+	localWorkflowToggles: DietCodeRulesToggles
 }> {
 	// Global workflows
 	const globalWorkflowToggles = controller.stateManager.getGlobalSettingsKey("globalWorkflowToggles")
-	const globalCodemarieWorkflowsFilePath = await ensureWorkflowsDirectoryExists()
-	const updatedGlobalWorkflowToggles = await synchronizeRuleToggles(globalCodemarieWorkflowsFilePath, globalWorkflowToggles)
+	const globalDietCodeWorkflowsFilePath = await ensureWorkflowsDirectoryExists()
+	const updatedGlobalWorkflowToggles = await synchronizeRuleToggles(globalDietCodeWorkflowsFilePath, globalWorkflowToggles)
 	controller.stateManager.setGlobalState("globalWorkflowToggles", updatedGlobalWorkflowToggles)
 
 	const workflowRulesToggles = controller.stateManager.getWorkspaceStateKey("workflowToggles")

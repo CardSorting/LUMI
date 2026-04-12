@@ -48,7 +48,7 @@ export class GrpcRecorderBuilder {
 			GrpcRecorderBuilder.recorder = GrpcRecorder.builder()
 				.enableIf(
 					process.env.GRPC_RECORDER_ENABLED === "true" &&
-						(process.env.CODEMARIE_ENVIRONMENT === "local" || process.env.CLINE_ENVIRONMENT === "local"),
+						(process.env.DIETCODE_ENVIRONMENT === "local" || process.env.CLINE_ENVIRONMENT === "local"),
 				)
 				.withLogFileHandler(new LogFileHandler())
 				.build(controller)
@@ -93,7 +93,7 @@ function testFilters(): GrpcRequestFilter[] {
 	 */
 	return [
 		(req) => req.is_streaming,
-		(req) => ["codemarie.UiService", "codemarie.McpService", "codemarie.WebService"].includes(req.service),
+		(req) => ["dietcode.UiService", "dietcode.McpService", "dietcode.WebService"].includes(req.service),
 		(req) =>
 			[
 				"refreshOpenRouterModels",

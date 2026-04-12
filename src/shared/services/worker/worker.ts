@@ -1,5 +1,5 @@
 import { Logger } from "@/shared/services/Logger"
-import { BlobStoreSettings, blobStorage } from "../../storage/CodemarieBlobStorage"
+import { BlobStoreSettings, blobStorage } from "../../storage/DietCodeBlobStorage"
 
 import { SyncQueue, SyncQueueItem } from "./queue"
 
@@ -30,30 +30,30 @@ function parseIntEnv(value: string | undefined, fallback: number): number {
  */
 export function getBlobStoreSettingsFromEnv(): BlobStoreSettings {
 	return {
-		adapterType: process?.env?.CODEMARIE_STORAGE_ADAPTER || process?.env?.CLINE_STORAGE_ADAPTER || "unknown",
-		bucket: process?.env?.CODEMARIE_STORAGE_BUCKET || process?.env?.CLINE_STORAGE_BUCKET || "codemarie",
-		accessKeyId: process?.env?.CODEMARIE_STORAGE_ACCESS_KEY_ID || process?.env?.CLINE_STORAGE_ACCESS_KEY_ID || "",
-		secretAccessKey: process?.env?.CODEMARIE_STORAGE_SECRET_ACCESS_KEY || process?.env?.CLINE_STORAGE_SECRET_ACCESS_KEY || "",
-		region: process?.env?.CODEMARIE_STORAGE_REGION || process?.env?.CLINE_STORAGE_REGION,
-		endpoint: process?.env?.CODEMARIE_STORAGE_ENDPOINT || process?.env?.CLINE_STORAGE_ENDPOINT,
-		accountId: process?.env?.CODEMARIE_STORAGE_ACCOUNT_ID || process?.env?.CLINE_STORAGE_ACCOUNT_ID,
+		adapterType: process?.env?.DIETCODE_STORAGE_ADAPTER || process?.env?.CLINE_STORAGE_ADAPTER || "unknown",
+		bucket: process?.env?.DIETCODE_STORAGE_BUCKET || process?.env?.CLINE_STORAGE_BUCKET || "dietcode",
+		accessKeyId: process?.env?.DIETCODE_STORAGE_ACCESS_KEY_ID || process?.env?.CLINE_STORAGE_ACCESS_KEY_ID || "",
+		secretAccessKey: process?.env?.DIETCODE_STORAGE_SECRET_ACCESS_KEY || process?.env?.CLINE_STORAGE_SECRET_ACCESS_KEY || "",
+		region: process?.env?.DIETCODE_STORAGE_REGION || process?.env?.CLINE_STORAGE_REGION,
+		endpoint: process?.env?.DIETCODE_STORAGE_ENDPOINT || process?.env?.CLINE_STORAGE_ENDPOINT,
+		accountId: process?.env?.DIETCODE_STORAGE_ACCOUNT_ID || process?.env?.CLINE_STORAGE_ACCOUNT_ID,
 
 		intervalMs: parseIntEnv(
-			process.env.CODEMARIE_STORAGE_SYNC_INTERVAL_MS || process.env.CLINE_STORAGE_SYNC_INTERVAL_MS,
+			process.env.DIETCODE_STORAGE_SYNC_INTERVAL_MS || process.env.CLINE_STORAGE_SYNC_INTERVAL_MS,
 			30000,
 		),
-		maxRetries: parseIntEnv(process.env.CODEMARIE_STORAGE_SYNC_MAX_RETRIES || process.env.CLINE_STORAGE_SYNC_MAX_RETRIES, 5),
-		batchSize: parseIntEnv(process.env.CODEMARIE_STORAGE_SYNC_BATCH_SIZE || process.env.CLINE_STORAGE_SYNC_BATCH_SIZE, 10),
+		maxRetries: parseIntEnv(process.env.DIETCODE_STORAGE_SYNC_MAX_RETRIES || process.env.CLINE_STORAGE_SYNC_MAX_RETRIES, 5),
+		batchSize: parseIntEnv(process.env.DIETCODE_STORAGE_SYNC_BATCH_SIZE || process.env.CLINE_STORAGE_SYNC_BATCH_SIZE, 10),
 		maxQueueSize: parseIntEnv(
-			process.env.CODEMARIE_STORAGE_SYNC_MAX_QUEUE_SIZE || process.env.CLINE_STORAGE_SYNC_MAX_QUEUE_SIZE,
+			process.env.DIETCODE_STORAGE_SYNC_MAX_QUEUE_SIZE || process.env.CLINE_STORAGE_SYNC_MAX_QUEUE_SIZE,
 			1000,
 		),
 		maxFailedAgeMs: parseIntEnv(
-			process.env.CODEMARIE_STORAGE_SYNC_MAX_FAILED_AGE_MS || process.env.CLINE_STORAGE_SYNC_MAX_FAILED_AGE_MS,
+			process.env.DIETCODE_STORAGE_SYNC_MAX_FAILED_AGE_MS || process.env.CLINE_STORAGE_SYNC_MAX_FAILED_AGE_MS,
 			SEVEN_DAYS_MS,
 		),
 		backfillEnabled:
-			(process.env.CODEMARIE_STORAGE_SYNC_BACKFILL_ENABLED || process.env.CLINE_STORAGE_SYNC_BACKFILL_ENABLED) === "true",
+			(process.env.DIETCODE_STORAGE_SYNC_BACKFILL_ENABLED || process.env.CLINE_STORAGE_SYNC_BACKFILL_ENABLED) === "true",
 	}
 }
 

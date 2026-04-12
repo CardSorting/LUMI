@@ -33,7 +33,7 @@ export const MAX_SYSTEM_PROMPT_LENGTH = 65536
 export async function* runClaudeCode(options: ClaudeCodeOptions): AsyncGenerator<ClaudeCodeMessage | string> {
 	const isSystemPromptTooLong = options.systemPrompt.length > MAX_SYSTEM_PROMPT_LENGTH
 	const uniqueId = crypto.randomUUID()
-	const tempFilePath = path.join(os.tmpdir(), `codemarie-system-prompt-${uniqueId}.txt`)
+	const tempFilePath = path.join(os.tmpdir(), `dietcode-system-prompt-${uniqueId}.txt`)
 	if (os.platform() === "win32" || isSystemPromptTooLong) {
 		// Use a temporary file to prevent ENAMETOOLONG and E2BIG errors
 		// https://github.com/anthropics/claude-code/issues/3411#issuecomment-3082068547
@@ -127,8 +127,8 @@ Anthropic is aware of this issue and is considering a fix: https://github.com/an
 
 			if (err.message.includes("ENAMETOOLONG")) {
 				throw new Error(
-					`Executing Claude Code failed due to a long system prompt. Windows has a limit of 8191 characters, which makes the integration with Codemarie not work properly.
-Please check our docs on how to integrate Claude Code with Codemarie on Windows: https://docs.codemarie.bot/provider-config/claude-code#windows-setup.
+					`Executing Claude Code failed due to a long system prompt. Windows has a limit of 8191 characters, which makes the integration with DietCode not work properly.
+Please check our docs on how to integrate Claude Code with DietCode on Windows: https://docs.dietcode.bot/provider-config/claude-code#windows-setup.
 Anthropic is aware of this issue and is considering a fix: https://github.com/anthropics/claude-code/issues/3411.
 `,
 					{ cause: err },
@@ -200,7 +200,7 @@ function runProcess(
 		"stream-json",
 		"--disallowedTools",
 		claudeCodeTools,
-		// Codemarie will handle recursive calls
+		// DietCode will handle recursive calls
 		"--max-turns",
 		"1",
 		"--model",

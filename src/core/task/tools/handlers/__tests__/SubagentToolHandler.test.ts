@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert"
 import { setTimeout as delay } from "node:timers/promises"
-import { CodemarieSubagentUsageInfo } from "@shared/ExtensionMessage"
-import { CodemarieDefaultTool } from "@shared/tools"
+import { DietCodeSubagentUsageInfo } from "@shared/ExtensionMessage"
+import { DietCodeDefaultTool } from "@shared/tools"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { TaskState } from "../../../TaskState"
@@ -114,7 +114,7 @@ describe("SubagentToolHandler", () => {
 
 		const result = await handler.execute(config, {
 			type: "tool_use",
-			name: CodemarieDefaultTool.USE_SUBAGENTS,
+			name: DietCodeDefaultTool.USE_SUBAGENTS,
 			params: {},
 			partial: false,
 		})
@@ -130,7 +130,7 @@ describe("SubagentToolHandler", () => {
 
 		const result = await handler.execute(config, {
 			type: "tool_use",
-			name: CodemarieDefaultTool.USE_SUBAGENTS,
+			name: DietCodeDefaultTool.USE_SUBAGENTS,
 			params: {
 				prompt_1: "first prompt",
 			},
@@ -151,7 +151,7 @@ describe("SubagentToolHandler", () => {
 		await handler.handlePartialBlock(
 			{
 				type: "tool_use",
-				name: CodemarieDefaultTool.USE_SUBAGENTS,
+				name: DietCodeDefaultTool.USE_SUBAGENTS,
 				params: {
 					prompt_1: "first prompt",
 					prompt_2: "second prompt",
@@ -179,7 +179,7 @@ describe("SubagentToolHandler", () => {
 		await handler.handlePartialBlock(
 			{
 				type: "tool_use",
-				name: CodemarieDefaultTool.USE_SUBAGENTS,
+				name: DietCodeDefaultTool.USE_SUBAGENTS,
 				params: {
 					prompt_1: "first prompt",
 					prompt_2: "second prompt",
@@ -206,7 +206,7 @@ describe("SubagentToolHandler", () => {
 
 		const result = await handler.execute(config, {
 			type: "tool_use",
-			name: CodemarieDefaultTool.USE_SUBAGENTS,
+			name: DietCodeDefaultTool.USE_SUBAGENTS,
 			params: {
 				prompt_1: "one",
 				prompt_2: "two",
@@ -242,7 +242,7 @@ describe("SubagentToolHandler", () => {
 		const handler = new UseSubagentsToolHandler()
 		await handler.execute(config, {
 			type: "tool_use",
-			name: CodemarieDefaultTool.USE_SUBAGENTS,
+			name: DietCodeDefaultTool.USE_SUBAGENTS,
 			params: {
 				prompt_1: "one",
 			},
@@ -298,7 +298,7 @@ describe("SubagentToolHandler", () => {
 		const handler = new UseSubagentsToolHandler()
 		const result = await handler.execute(config, {
 			type: "tool_use",
-			name: CodemarieDefaultTool.USE_SUBAGENTS,
+			name: DietCodeDefaultTool.USE_SUBAGENTS,
 			params: {
 				prompt_1: "one",
 				prompt_2: "two",
@@ -318,7 +318,7 @@ describe("SubagentToolHandler", () => {
 
 		const usageCalls = callbacks.say.getCalls().filter((call) => call.args[0] === "subagent_usage")
 		assert.equal(usageCalls.length, 1)
-		const usagePayload = JSON.parse(usageCalls[0].args[1]) as CodemarieSubagentUsageInfo
+		const usagePayload = JSON.parse(usageCalls[0].args[1]) as DietCodeSubagentUsageInfo
 		assert.equal(usagePayload.source, "subagents")
 		assert.equal(usagePayload.tokensIn, 6)
 		assert.equal(usagePayload.tokensOut, 9)
@@ -368,7 +368,7 @@ describe("SubagentToolHandler", () => {
 		const handler = new UseSubagentsToolHandler()
 		const result = await handler.execute(config, {
 			type: "tool_use",
-			name: CodemarieDefaultTool.USE_SUBAGENTS,
+			name: DietCodeDefaultTool.USE_SUBAGENTS,
 			params: {
 				prompt_1: "succeed",
 				prompt_2: "fail",
@@ -409,7 +409,7 @@ describe("SubagentToolHandler", () => {
 
 		const result = await handler.execute(config, {
 			type: "tool_use",
-			name: dynamicToolName as CodemarieDefaultTool,
+			name: dynamicToolName as DietCodeDefaultTool,
 			params: { prompt: "review this PR" },
 			partial: false,
 		})
@@ -430,13 +430,13 @@ describe("SubagentToolHandler", () => {
 
 		const result = await handler.execute(config, {
 			type: "tool_use",
-			name: dynamicToolName as CodemarieDefaultTool,
+			name: dynamicToolName as DietCodeDefaultTool,
 			params: {},
 			partial: false,
 		})
 
 		assert.equal(result, "missing")
 		assert.equal(taskState.consecutiveMistakeCount, 1)
-		sinon.assert.calledWithExactly(callbacks.sayAndCreateMissingParamError, CodemarieDefaultTool.USE_SUBAGENTS, "prompt")
+		sinon.assert.calledWithExactly(callbacks.sayAndCreateMissingParamError, DietCodeDefaultTool.USE_SUBAGENTS, "prompt")
 	})
 })

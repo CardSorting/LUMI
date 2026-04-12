@@ -91,7 +91,7 @@ async function loadSkillMetadata(
 }
 
 /**
- * Discover all skills from global (~/.codemarie/skills) and project directories.
+ * Discover all skills from global (~/.dietcode/skills) and project directories.
  * Returns skills in order: project skills first, then global skills.
  * Global skills take precedence over project skills with the same name.
  */

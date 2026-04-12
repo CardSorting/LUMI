@@ -1,12 +1,12 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryForecastHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_FORECAST
+	readonly name = DietCodeDefaultTool.MEM_FORECAST
 
 	getDescription(block: ToolUse): string {
 		return `[Forecast merge risk for '${block.params.sourceStreamId}']`

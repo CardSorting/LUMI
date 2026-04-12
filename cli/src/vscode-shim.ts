@@ -8,14 +8,14 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import pino, { type Logger } from "pino"
 import { URI } from "vscode-uri"
-import { CodemarieFileStorage } from "@/shared/storage"
+import { DietCodeFileStorage } from "@/shared/storage"
 import { printError, printInfo, printWarning } from "./utils/display"
 import { CLINE_CLI_DIR } from "./utils/path"
 
 export { URI } from "vscode-uri"
-export { CodemarieFileStorage } from "@/shared/storage"
+export { DietCodeFileStorage } from "@/shared/storage"
 
-export const CLI_LOG_FILE = path.join(CLINE_CLI_DIR.log, "codemarie-cli.1.log")
+export const CLI_LOG_FILE = path.join(CLINE_CLI_DIR.log, "dietcode-cli.1.log")
 
 /**
  * Safely read and parse a JSON file, returning a default value on failure
@@ -551,12 +551,12 @@ export const commands = {
 }
 
 export const env = {
-	appName: "Codemarie CLI",
+	appName: "DietCode CLI",
 	appRoot: path.resolve(__dirname, ".."),
 	language: "en",
 	shell: process.env.SHELL || "/bin/sh",
 	uiKind: UIKind.Desktop,
-	uriScheme: "codemarie",
+	uriScheme: "dietcode",
 	clipboard: {
 		readText: async () => {
 			try {
@@ -630,7 +630,7 @@ export interface SecretStorage {
 }
 
 export class MementoShim implements Memento {
-	constructor(private storage: CodemarieFileStorage) {}
+	constructor(private storage: DietCodeFileStorage) {}
 	get<T>(key: string): T | undefined
 	get<T>(key: string, defaultValue: T): T
 	get<T>(key: string, defaultValue?: T): T | undefined {
@@ -648,12 +648,12 @@ export class MementoShim implements Memento {
 }
 
 export class SecretStorageShim implements SecretStorage {
-	private storage: CodemarieFileStorage
+	private storage: DietCodeFileStorage
 	private _onDidChange = new EventEmitter<SecretStorageChangeEvent>()
 	readonly onDidChange = this._onDidChange.event
 
 	constructor(filePath: string) {
-		this.storage = new CodemarieFileStorage(filePath, "SecretStorage", { fileMode: 0o600 })
+		this.storage = new DietCodeFileStorage(filePath, "SecretStorage", { fileMode: 0o600 })
 	}
 
 	get(key: string): Thenable<string | undefined> {
@@ -715,8 +715,8 @@ export class ExtensionContextShim implements ExtensionContext {
 		const workspaceStatePath = path.join(storageDir, "workspaceState.json")
 		const secretsPath = path.join(storageDir, "secrets.json")
 
-		this.globalState = new MementoShim(new CodemarieFileStorage(globalStatePath, "GlobalState"))
-		this.workspaceState = new MementoShim(new CodemarieFileStorage(workspaceStatePath, "WorkspaceState"))
+		this.globalState = new MementoShim(new DietCodeFileStorage(globalStatePath, "GlobalState"))
+		this.workspaceState = new MementoShim(new DietCodeFileStorage(workspaceStatePath, "WorkspaceState"))
 		this.secrets = new SecretStorageShim(secretsPath)
 
 		// extensionPath should point to the root of the project/package

@@ -1,4 +1,4 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
 import {
 	VSCodeButton,
 	VSCodeDropdown,

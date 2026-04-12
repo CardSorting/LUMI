@@ -32,7 +32,7 @@ permissions:
 jobs:
   publish-main:
     if: |
-      github.repository == 'codemarie/codemarie' && (
+      github.repository == 'dietcode/dietcode' && (
         github.event_name == 'workflow_dispatch' &&
         github.event.inputs.publish_target == 'main' &&
         github.event.inputs.confirm_publish == 'publish' &&
@@ -45,7 +45,7 @@ jobs:
 
   publish-nightly:
     if: |
-      github.repository == 'codemarie/codemarie' && (
+      github.repository == 'dietcode/dietcode' && (
         github.event_name == 'schedule' ||
         (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_target == 'nightly')
       )

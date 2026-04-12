@@ -1,13 +1,13 @@
-import type { UsageTransaction as CodemarieAccountUsageTransaction, PaymentTransaction } from "@shared/CodemarieAccount"
-import { isCodemarieInternalTester } from "@shared/internal/account"
-import type { UserOrganization } from "@shared/proto/codemarie/account"
-import { EmptyRequest } from "@shared/proto/codemarie/common"
+import type { UsageTransaction as DietCodeAccountUsageTransaction, PaymentTransaction } from "@shared/DietCodeAccount"
+import { isDietCodeInternalTester } from "@shared/internal/account"
+import type { UserOrganization } from "@shared/proto/dietcode/account"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { VSCodeButton, VSCodeDivider, VSCodeDropdown, VSCodeOption, VSCodeTag } from "@vscode/webview-ui-toolkit/react"
 import deepEqual from "fast-deep-equal"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useInterval } from "react-use"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { type CodemarieUser, handleSignOut } from "@/context/CodemarieAuthContext"
+import { type DietCodeUser, handleSignOut } from "@/context/DietCodeAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { AccountServiceClient } from "@/services/grpc-client"
 import ViewHeader from "../common/ViewHeader"
@@ -16,45 +16,45 @@ import { updateSetting } from "../settings/utils/settingsHandlers"
 import { AccountWelcomeView } from "./AccountWelcomeView"
 import { CreditBalance } from "./CreditBalance"
 import CreditsHistoryTable from "./CreditsHistoryTable"
-import { convertProtoUsageTransactions, getCodemarieUris, getMainRole } from "./helpers"
+import { convertProtoUsageTransactions, getDietCodeUris, getMainRole } from "./helpers"
 import { RemoteConfigToggle } from "./RemoteConfigToggle"
 
 type AccountViewProps = {
-	codemarieUser: CodemarieUser | null
+	dietcodeUser: DietCodeUser | null
 	organizations: UserOrganization[] | null
 	activeOrganization: UserOrganization | null
 	onDone: () => void
 }
 
-type CodemarieAccountViewProps = {
-	codemarieUser: CodemarieUser
+type DietCodeAccountViewProps = {
+	dietcodeUser: DietCodeUser
 	userOrganizations: UserOrganization[] | null
 	activeOrganization: UserOrganization | null
-	codemarieEnv: "Production" | "Staging" | "Local"
+	dietcodeEnv: "Production" | "Staging" | "Local"
 }
 
 type CachedData = {
 	balance: number | null
-	usageData: CodemarieAccountUsageTransaction[]
+	usageData: DietCodeAccountUsageTransaction[]
 	paymentsData: PaymentTransaction[]
 	lastFetchTime: number
 }
 
-const CodemarieEnvOptions = ["Production", "Staging", "Local"] as const
+const DietCodeEnvOptions = ["Production", "Staging", "Local"] as const
 
-const AccountView = ({ onDone, codemarieUser, organizations, activeOrganization }: AccountViewProps) => {
+const AccountView = ({ onDone, dietcodeUser, organizations, activeOrganization }: AccountViewProps) => {
 	const { environment } = useExtensionState()
 
 	return (
 		<div className="fixed inset-0 flex flex-col overflow-hidden">
 			<ViewHeader environment={environment} onDone={onDone} showEnvironmentSuffix title="Account" />
 			<div className="grow flex flex-col px-5 overflow-y-auto">
-				{codemarieUser?.uid ? (
-					<CodemarieAccountView
+				{dietcodeUser?.uid ? (
+					<DietCodeAccountView
 						activeOrganization={activeOrganization}
-						codemarieEnv={environment === "local" ? "Local" : environment === "staging" ? "Staging" : "Production"}
-						codemarieUser={codemarieUser}
-						key={codemarieUser.uid}
+						dietcodeEnv={environment === "local" ? "Local" : environment === "staging" ? "Staging" : "Production"}
+						dietcodeUser={dietcodeUser}
+						key={dietcodeUser.uid}
 						userOrganizations={organizations}
 					/>
 				) : (
@@ -65,13 +65,13 @@ const AccountView = ({ onDone, codemarieUser, organizations, activeOrganization 
 	)
 }
 
-export const CodemarieAccountView = ({
-	codemarieUser,
+export const DietCodeAccountView = ({
+	dietcodeUser,
 	userOrganizations,
 	activeOrganization,
-	codemarieEnv,
-}: CodemarieAccountViewProps) => {
-	const { email, displayName, appBaseUrl, uid } = codemarieUser
+	dietcodeEnv,
+}: DietCodeAccountViewProps) => {
+	const { email, displayName, appBaseUrl, uid } = dietcodeUser
 	const { remoteConfigSettings, environment } = useExtensionState()
 
 	// Determine if dropdown should be locked by remote config
@@ -87,7 +87,7 @@ export const CodemarieAccountView = ({
 
 	// Current displayed data
 	const [balance, setBalance] = useState<number | null>(null)
-	const [usageData, setUsageData] = useState<CodemarieAccountUsageTransaction[]>([])
+	const [usageData, setUsageData] = useState<DietCodeAccountUsageTransaction[]>([])
 	const [paymentsData, setPaymentsData] = useState<PaymentTransaction[]>([])
 	const [lastFetchTime, setLastFetchTime] = useState<number>(Date.now())
 
@@ -125,7 +125,7 @@ export const CodemarieAccountView = ({
 	// Track if initial mount fetch has completed to avoid duplicate fetches
 	const initialFetchCompleteRef = useRef<boolean>(false)
 
-	const isCodemarieTester = useMemo(() => (email ? isCodemarieInternalTester(email) : false), [email])
+	const isDietCodeTester = useMemo(() => (email ? isDietCodeInternalTester(email) : false), [email])
 
 	const fetchUserCredit = useCallback(async () => {
 		try {
@@ -242,7 +242,7 @@ export const CodemarieAccountView = ({
 		fetchCreditBalance(dropdownValue)
 	}, 60000)
 
-	const codemarieUrl = appBaseUrl || "https://app.codemarie.bot"
+	const dietcodeUrl = appBaseUrl || "https://app.dietcode.bot"
 
 	// Fetch balance on mount
 	useEffect(() => {
@@ -372,7 +372,7 @@ export const CodemarieAccountView = ({
 						<VSCodeButtonLink
 							appearance="primary"
 							className="w-full"
-							href={getCodemarieUris(codemarieUrl, "dashboard").href}>
+							href={getDietCodeUris(dietcodeUrl, "dashboard").href}>
 							Dashboard
 						</VSCodeButtonLink>
 					</div>
@@ -385,7 +385,7 @@ export const CodemarieAccountView = ({
 
 				<CreditBalance
 					balance={balance}
-					creditUrl={getCodemarieUris(codemarieUrl, "credits", dropdownValue === uid ? "account" : "organization")}
+					creditUrl={getDietCodeUris(dietcodeUrl, "credits", dropdownValue === uid ? "account" : "organization")}
 					fetchCreditBalance={() => fetchCreditBalance(dropdownValue)}
 					isLoading={isLoading}
 					lastFetchTime={lastFetchTime}
@@ -403,21 +403,21 @@ export const CodemarieAccountView = ({
 				</div>
 
 				{/* Hide environment switching UI when in self-hosted mode */}
-				{isCodemarieTester && environment !== "selfHosted" && (
+				{isDietCodeTester && environment !== "selfHosted" && (
 					<div className="w-full gap-1 items-end">
 						<VSCodeDivider className="w-full my-3" />
-						<div className="text-sm font-semibold">Codemarie Environment</div>
+						<div className="text-sm font-semibold">DietCode Environment</div>
 						<VSCodeDropdown
 							className="w-full mt-1"
-							currentValue={codemarieEnv}
+							currentValue={dietcodeEnv}
 							onChange={async (e) => {
 								const target = e.target as HTMLSelectElement
 								if (target?.value) {
 									const value = target.value as "Local" | "Staging" | "Production"
-									updateSetting("codemarieEnv", value.toLowerCase())
+									updateSetting("dietcodeEnv", value.toLowerCase())
 								}
 							}}>
-							{CodemarieEnvOptions.map((env) => (
+							{DietCodeEnvOptions.map((env) => (
 								<VSCodeOption key={env} value={env}>
 									{env}
 								</VSCodeOption>

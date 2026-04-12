@@ -194,7 +194,7 @@ const buildTimeEnvs = [
 	"OTEL_EXPORTER_OTLP_ENDPOINT",
 	"OTEL_EXPORTER_OTLP_HEADERS",
 	"OTEL_METRIC_EXPORT_INTERVAL",
-	"CODEMARIE_ENVIRONMENT",
+	"DIETCODE_ENVIRONMENT",
 	"CLINE_ENVIRONMENT",
 ]
 
@@ -263,7 +263,7 @@ const libConfig: esbuild.BuildOptions = {
 	entryPoints: [path.join(__dirname, "src", "exports.ts")],
 	outfile: path.join(__dirname, "dist", "lib.mjs"),
 	banner: {
-		js: `// Codemarie Library - Programmatic API
+		js: `// DietCode Library - Programmatic API
 import { createRequire as _createRequire } from 'module';
 import { fileURLToPath as _fileURLToPath } from 'url';
 import { dirname as _dirname } from 'path';

@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import CodemarieLogoVariable from "@/assets/CodemarieLogoVariable"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import DietCodeLogoVariable from "@/assets/DietCodeLogoVariable"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { UiServiceClient } from "@/services/grpc-client"
@@ -19,7 +19,7 @@ const HomeHeader = ({ shouldShowQuickWins = false }: HomeHeaderProps) => {
 		}
 	}
 
-	const LogoComponent = CodemarieLogoVariable
+	const LogoComponent = DietCodeLogoVariable
 
 	return (
 		<div className="flex flex-col items-center mb-5">

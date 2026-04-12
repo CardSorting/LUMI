@@ -77,7 +77,7 @@ Defines the request/response structure for a model provider's API. Different for
 
 **Values:** `ANTHROPIC_CHAT`, `GEMINI_CHAT`, `OPENAI_CHAT`, `R1_CHAT`, `OPENAI_RESPONSES`
 
-**Location:** [`proto/codemarie/models.proto`](../../../proto/codemarie/models.proto)
+**Location:** [`proto/dietcode/models.proto`](../../../proto/dietcode/models.proto)
 
 **Usage:** `model.info.apiFormat` determines how requests/responses are structured
 
@@ -105,7 +105,7 @@ The system uses **automatic fallbacks** to ensure robustness:
 
 2. **Tool Variant Fallback:**
    - If a tool doesn't define a variant for the current model family, automatically falls back to `GENERIC` tool variant
-   - Handled by `CodeMarieToolSet.getToolByNameWithFallback()`
+   - Handled by `DietCodeToolSet.getToolByNameWithFallback()`
    - **You only need to export model-specific tool variants when behavior differs from `GENERIC`**
 
 3. **Component Fallback:**
@@ -197,7 +197,7 @@ Create [`variants/my-new-model/config.ts`](./variants/):
 ```typescript
 import { isMyNewModelFamily, isNextGenModelProvider } from "@utils/model-utils"
 import { ModelFamily } from "@/shared/prompts"
-import { CodeMarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import { SystemPromptSection } from "../../templates/placeholders"
 import { createVariant } from "../variant-builder"
 import { validateVariant } from "../variant-validator"
@@ -237,9 +237,9 @@ export const config = createVariant(ModelFamily.MY_NEW_MODEL)
         SystemPromptSection.OBJECTIVE,
     )
     .tools(
-        CodeMarieDefaultTool.BASH,
-        CodeMarieDefaultTool.FILE_READ,
-        CodeMarieDefaultTool.ASK,
+        DietCodeDefaultTool.BASH,
+        DietCodeDefaultTool.FILE_READ,
+        DietCodeDefaultTool.ASK,
     )
     .placeholders({
         MODEL_FAMILY: ModelFamily.MY_NEW_MODEL,
@@ -444,7 +444,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
     })
     .tools(
         // Include MCP_USE for XML-based tool calling
-        CodeMarieDefaultTool.MCP_USE,  // Instead of MCP_ACCESS
+        DietCodeDefaultTool.MCP_USE,  // Instead of MCP_ACCESS
         // ... other tools
     )
 ```
@@ -473,7 +473,7 @@ Is enableNativeToolCalls enabled?
 
 ### Setting API Format
 
-API formats are defined in [`proto/codemarie/models.proto`](../../../proto/codemarie/models.proto):
+API formats are defined in [`proto/dietcode/models.proto`](../../../proto/dietcode/models.proto):
 
 ```protobuf
 enum ApiFormat {
@@ -490,7 +490,7 @@ enum ApiFormat {
 **Example from [`src/core/api/providers/openai-native.ts`](../../api/providers/openai-native.ts):**
 
 ```typescript
-async *createMessage(systemPrompt: string, messages: CodeMarieStorageMessage[], tools?: ChatCompletionTool[]): ApiStream {
+async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: ChatCompletionTool[]): ApiStream {
     // Route based on API format
     if (tools?.length && this.getModel()?.info?.apiFormat === ApiFormat.OPENAI_RESPONSES) {
         yield* this.createResponseStream(systemPrompt, messages, tools)
@@ -512,9 +512,9 @@ async *createMessage(systemPrompt: string, messages: CodeMarieStorageMessage[], 
 
 ### Adding a New API Format
 
-1. **Add to proto:** [`proto/codemarie/models.proto`](../../../proto/codemarie/models.proto)
+1. **Add to proto:** [`proto/dietcode/models.proto`](../../../proto/dietcode/models.proto)
 2. **Regenerate:** `npm run protos`
-3. **Import:** `import { ApiFormat } from "@/shared/proto/codemarie/models"`
+3. **Import:** `import { ApiFormat } from "@/shared/proto/dietcode/models"`
 4. **Handle in provider:** Add format-specific logic in your provider handler
 
 See existing providers in [`src/core/api/providers/`](../../api/providers/) for examples.
@@ -525,7 +525,7 @@ See existing providers in [`src/core/api/providers/`](../../api/providers/) for 
 
 ### When to Create Model-Specific Tool Variants
 
-**Default behavior:** Tools automatically fall back to `GENERIC` variant via `CodeMarieToolSet.getToolByNameWithFallback()`.
+**Default behavior:** Tools automatically fall back to `GENERIC` variant via `DietCodeToolSet.getToolByNameWithFallback()`.
 
 **Only create a model-specific tool variant when:**
 - Tool needs different parameters or descriptions for the model
@@ -545,12 +545,12 @@ See existing providers in [`src/core/api/providers/`](../../api/providers/) for 
 
 ```typescript
 import { ModelFamily } from "@/shared/prompts"
-import { CodeMarieDefaultTool } from "@/shared/tools"
-import type { CodeMarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
-const id = CodeMarieDefaultTool.FILE_NEW
+const id = DietCodeDefaultTool.FILE_NEW
 
-const GENERIC: CodeMarieToolSpec = {
+const GENERIC: DietCodeToolSpec = {
     variant: ModelFamily.GENERIC,
     id,
     name: "write_to_file",
@@ -571,7 +571,7 @@ const GENERIC: CodeMarieToolSpec = {
     ],
 }
 
-const NATIVE_NEXT_GEN: CodeMarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
     variant: ModelFamily.NATIVE_NEXT_GEN,
     id,
     name: "write_to_file",
@@ -616,13 +616,13 @@ export * from "./write_to_file"
 ```typescript
 import { write_to_file_variants } from "./write_to_file"
 
-export function registerCodeMarieToolSets(): void {
+export function registerDietCodeToolSets(): void {
     const allToolVariants = [
         ...write_to_file_variants,
         // ... other tool variants
     ]
 
-    allToolVariants.forEach((v) => CodeMarieToolSet.register(v))
+    allToolVariants.forEach((v) => DietCodeToolSet.register(v))
 }
 ```
 
@@ -632,8 +632,8 @@ export function registerCodeMarieToolSets(): void {
 
 ```typescript
 .tools(
-    CodeMarieDefaultTool.BASH,
-    CodeMarieDefaultTool.FILE_NEW,  // Add your tool here
+    DietCodeDefaultTool.BASH,
+    DietCodeDefaultTool.FILE_NEW,  // Add your tool here
     // ... other tools
 )
 ```
@@ -642,7 +642,7 @@ export function registerCodeMarieToolSets(): void {
 1. The tool exports a spec for that `ModelFamily`, OR
 2. The tool exports a `GENERIC` spec (automatic fallback)
 
-**Note:** When a variant includes a tool in `.tools()` but the tool doesn't have a specific variant for that model family, the system automatically uses the `GENERIC` variant. This is handled by `CodeMarieToolSet.getToolByNameWithFallback()`, so you don't need to manually define variants for every model family—only when behavior needs to differ.
+**Note:** When a variant includes a tool in `.tools()` but the tool doesn't have a specific variant for that model family, the system automatically uses the `GENERIC` variant. This is handled by `DietCodeToolSet.getToolByNameWithFallback()`, so you don't need to manually define variants for every model family—only when behavior needs to differ.
 
 ---
 
@@ -674,14 +674,14 @@ UPDATE_SNAPSHOTS=true npm run test:unit
 
 ### Testing in Debug Mode
 
-**For live testing with real models**, run CodeMarie in debug mode to verify your variant works correctly:
+**For live testing with real models**, run DietCode in debug mode to verify your variant works correctly:
 
 1. **Enable Debug Mode:**
-   - See the main [CONTRIBUTING.md](../../../../CONTRIBUTING.md) for instructions on running CodeMarie in debug mode
+   - See the main [CONTRIBUTING.md](../../../../CONTRIBUTING.md) for instructions on running DietCode in debug mode
    - Debug mode enables additional features for testing and verification
 
 2. **Run a Task with Your Model:**
-   - Configure your model in CodeMarie settings
+   - Configure your model in DietCode settings
    - Start a conversation or task with the model
    - The system will automatically select your variant based on the matcher function
 
@@ -703,7 +703,7 @@ UPDATE_SNAPSHOTS=true npm run test:unit
 **Example verification:**
 ```json
 {
-  "systemPrompt": "You are CodeMarie...\n\n====\n\n# Agent Role\n...",
+  "systemPrompt": "You are DietCode...\n\n====\n\n# Agent Role\n...",
   "modelFamily": "my-new-model",
   "tools": ["bash", "file_read", "ask"],
   // ... rest of task data
@@ -743,7 +743,7 @@ This exported JSON is invaluable for debugging and verifying that your variant c
 - **Tool Development:** [tools/README.md](./tools/README.md)
 - **Testing Guide:** [__tests__/README.md](./__tests__/README.md)
 - **Model Utilities:** [`src/utils/model-utils.ts`](../../../utils/model-utils.ts)
-- **Proto Definitions:** [`proto/codemarie/models.proto`](../../../proto/codemarie/models.proto)
+- **Proto Definitions:** [`proto/dietcode/models.proto`](../../../proto/dietcode/models.proto)
 - **CLAUDE.md:** [`CLAUDE.md`](../../../../CLAUDE.md) (tribal knowledge)
 
 ---
@@ -756,7 +756,7 @@ This exported JSON is invaluable for debugging and verifying that your variant c
 src/
 ├── shared/
 │   ├── prompts.ts              # ModelFamily enum
-│   └── tools.ts                # CodeMarieDefaultTool enum
+│   └── tools.ts                # DietCodeDefaultTool enum
 ├── utils/
 │   └── model-utils.ts          # Model detection functions
 ├── core/
@@ -774,9 +774,9 @@ src/
 │       └── registry/           # Core logic
 │           ├── PromptRegistry.ts
 │           ├── PromptBuilder.ts
-│           └── CodeMarieToolSet.ts
+│           └── DietCodeToolSet.ts
 proto/
-└── codemarie/
+└── dietcode/
     └── models.proto            # ApiFormat enum
 ```
 

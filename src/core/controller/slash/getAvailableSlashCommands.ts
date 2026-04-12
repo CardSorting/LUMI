@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { SlashCommandInfo, SlashCommandsResponse } from "@shared/proto/codemarie/slash"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { SlashCommandInfo, SlashCommandsResponse } from "@shared/proto/dietcode/slash"
 import { BASE_SLASH_COMMANDS } from "@/shared/slashCommands"
 import { Controller } from ".."
 

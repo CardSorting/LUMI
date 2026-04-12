@@ -1,15 +1,15 @@
 import { name, publisher, version } from "../package.json"
 import { HostProvider } from "./hosts/host-provider"
 
-const prefix = name === "claude-dev" || name === "marie-coder" ? "codemarie" : name
+const prefix = name === "claude-dev" || name === "marie-coder" ? "dietcode" : name
 
 /**
  * List of commands with the name of the extension they are registered under.
  * These should match the command IDs defined in package.json.
  * For Nightly build, the publish script has updated all the commands to use the extension name as prefix.
- * In production, all commands are registered under "codemarie" for consistency.
+ * In production, all commands are registered under "dietcode" for consistency.
  */
-const CodemarieCommands = {
+const DietCodeCommands = {
 	PlusButton: `${prefix}.plusButtonClicked`,
 	McpButton: `${prefix}.mcpButtonClicked`,
 	SettingsButton: `${prefix}.settingsButtonClicked`,
@@ -18,7 +18,7 @@ const CodemarieCommands = {
 	WorktreesButton: `${prefix}.worktreesButtonClicked`,
 	TerminalOutput: `${prefix}.addTerminalOutputToChat`,
 	AddToChat: `${prefix}.addToChat`,
-	FixWithCodemarie: `${prefix}.fixWithCodemarie`,
+	FixWithDietCode: `${prefix}.fixWithDietCode`,
 	ExplainCode: `${prefix}.explainCode`,
 	ImproveCode: `${prefix}.improveCode`,
 	FocusChatInput: `${prefix}.focusChatInput`,
@@ -36,7 +36,7 @@ const CodemarieCommands = {
  * IDs for the views registered by the extension.
  * These should match the name + view IDs defined in package.json.
  */
-const CodemarieViewIds = {
+const DietCodeViewIds = {
 	Sidebar: `${prefix}.SidebarProvider`,
 }
 
@@ -49,8 +49,8 @@ export const ExtensionRegistryInfo = {
 	name,
 	version,
 	publisher,
-	commands: CodemarieCommands,
-	views: CodemarieViewIds,
+	commands: DietCodeCommands,
+	views: DietCodeViewIds,
 }
 
 export interface HostInfo {
@@ -63,7 +63,7 @@ export interface HostInfo {
 	 */
 	os: string
 	/**
-	 * The type of the codemarie host environment, e.g. 'VSCode Extension', 'Codemarie for JetBrains', 'CLI'
+	 * The type of the dietcode host environment, e.g. 'VSCode Extension', 'DietCode for JetBrains', 'CLI'
 	 * This is different from the platform because there are many JetBrains IDEs, but they all use the same
 	 * plugin.
 	 */
@@ -77,7 +77,7 @@ export interface HostInfo {
 	 */
 	hostVersion?: string
 	/**
-	 * The version of Codemarie that the host client is running
+	 * The version of DietCode that the host client is running
 	 */
 	extensionVersion: string
 }
@@ -88,10 +88,10 @@ export const HostRegistryInfo = {
 	init: async (distinctId: string) => {
 		const host = await HostProvider.env.getHostVersion({})
 		const hostVersion = host.version
-		const extensionVersion = host.codemarieVersion || ExtensionRegistryInfo.version
+		const extensionVersion = host.dietcodeVersion || ExtensionRegistryInfo.version
 		const platform = host.platform || "unknown"
 		const os = process.platform || "unknown"
-		const ide = host.codemarieType || "unknown"
+		const ide = host.dietcodeType || "unknown"
 		hostInfo = { hostVersion, extensionVersion, platform, os, ide, distinctId }
 	},
 	get: () => hostInfo,

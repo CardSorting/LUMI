@@ -1,6 +1,5 @@
 import * as fs from "fs"
 import * as path from "path"
-import { Logger } from "@/shared/services/Logger"
 
 export interface ContextEntry {
 	path: string
@@ -26,13 +25,13 @@ export class ContextStalenessTracker {
 	public async recordRead(filePath: string, content: string) {
 		const absolutePath = path.resolve(this.cwd, filePath)
 		const signature = this.calculateSignature(content)
-		
+
 		this.contextMap.set(absolutePath, {
 			path: absolutePath,
 			lastReadTimestamp: Date.now(),
 			lastEditTimestamp: this.getMtime(absolutePath),
 			signature,
-			stale: false
+			stale: false,
 		})
 	}
 
@@ -54,7 +53,7 @@ export class ContextStalenessTracker {
 	public checkStaleness(filePath: string): { isStale: boolean; reason?: string } {
 		const absolutePath = path.resolve(this.cwd, filePath)
 		const entry = this.contextMap.get(absolutePath)
-		
+
 		if (!entry) return { isStale: false }
 
 		// 1. Check if marked stale by previous tool action

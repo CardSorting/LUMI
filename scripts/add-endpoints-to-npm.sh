@@ -9,7 +9,7 @@ if [ "$#" -ne 3 ]; then
     echo "Usage: $0 <source.tgz> <output.tgz> <endpoints.json>"
     echo ""
     echo "Example:"
-    echo "  $0 codemarie-3.55.0.tgz codemarie-3.55.0-enterprise.tgz endpoints.json"
+    echo "  $0 dietcode-3.55.0.tgz dietcode-3.55.0-enterprise.tgz endpoints.json"
     exit 1
 fi
 
@@ -82,4 +82,4 @@ cd - > /dev/null
 echo "✓ Successfully created $OUTPUT_TGZ with bundled endpoints.json"
 echo ""
 echo "The package is ready for enterprise distribution."
-echo "When installed via npm, CodeMarie will automatically use the bundled configuration."
+echo "When installed via npm, DietCode will automatically use the bundled configuration."

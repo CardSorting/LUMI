@@ -1,6 +1,6 @@
 import type { HookOutputStreamMeta } from "@shared/ExtensionMessage"
-import { CodemarieMessage } from "@shared/ExtensionMessage"
-import type { HookOutput } from "@shared/proto/codemarie/hooks"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
+import type { HookOutput } from "@shared/proto/dietcode/hooks"
 import { Logger } from "@/shared/services/Logger"
 import { MessageStateHandler } from "../task/message-state"
 import { HookExecutionError } from "./HookError"
@@ -261,10 +261,10 @@ async function updateHookMessage(
 	hookMessageTs: number,
 	metadata: Record<string, any>,
 ): Promise<void> {
-	const codemarieMessages = messageStateHandler.getCodemarieMessages()
-	const hookMessageIndex = codemarieMessages.findIndex((m: CodemarieMessage) => m.ts === hookMessageTs)
+	const dietcodeMessages = messageStateHandler.getDietCodeMessages()
+	const hookMessageIndex = dietcodeMessages.findIndex((m: DietCodeMessage) => m.ts === hookMessageTs)
 	if (hookMessageIndex !== -1) {
-		await messageStateHandler.updateCodemarieMessage(hookMessageIndex, {
+		await messageStateHandler.updateDietCodeMessage(hookMessageIndex, {
 			text: JSON.stringify(metadata),
 		})
 	}
@@ -281,15 +281,15 @@ async function updateHookMessage(
  * 4. Re-add the tool message at the end (after hook messages)
  */
 async function reorderHookAndToolMessages(messageStateHandler: MessageStateHandler): Promise<void> {
-	const codemarieMessages = messageStateHandler.getCodemarieMessages()
+	const dietcodeMessages = messageStateHandler.getDietCodeMessages()
 
 	// Define all message types that represent tool executions with PreToolUse hooks
 	const toolMessageTypes = ["tool", "command", "use_mcp_server", "browser_action_launch"]
 
 	// Find the most recent tool message
 	let lastToolMessageIndex = -1
-	for (let i = codemarieMessages.length - 1; i >= 0; i--) {
-		const msgType = codemarieMessages[i].ask || codemarieMessages[i].say
+	for (let i = dietcodeMessages.length - 1; i >= 0; i--) {
+		const msgType = dietcodeMessages[i].ask || dietcodeMessages[i].say
 		if (msgType && toolMessageTypes.includes(msgType)) {
 			lastToolMessageIndex = i
 			break
@@ -302,8 +302,8 @@ async function reorderHookAndToolMessages(messageStateHandler: MessageStateHandl
 
 	// Check if there are any hook messages after the tool message
 	let hasHookMessagesAfterTool = false
-	for (let i = lastToolMessageIndex + 1; i < codemarieMessages.length; i++) {
-		if (codemarieMessages[i].say === "hook_status" || codemarieMessages[i].say === "hook_output_stream") {
+	for (let i = lastToolMessageIndex + 1; i < dietcodeMessages.length; i++) {
+		if (dietcodeMessages[i].say === "hook_status" || dietcodeMessages[i].say === "hook_output_stream") {
 			hasHookMessagesAfterTool = true
 			break
 		}
@@ -314,11 +314,11 @@ async function reorderHookAndToolMessages(messageStateHandler: MessageStateHandl
 	}
 
 	// Store the tool message (deep copy to preserve all properties)
-	const toolMessage = { ...codemarieMessages[lastToolMessageIndex] }
+	const toolMessage = { ...dietcodeMessages[lastToolMessageIndex] }
 
 	// Delete the tool message at its current position
-	await messageStateHandler.deleteCodemarieMessage(lastToolMessageIndex)
+	await messageStateHandler.deleteDietCodeMessage(lastToolMessageIndex)
 
 	// Re-add the tool message at the end (after hook messages)
-	await messageStateHandler.addToCodemarieMessages(toolMessage)
+	await messageStateHandler.addToDietCodeMessages(toolMessage)
 }

@@ -1,5 +1,5 @@
-import { UserOrganizationUpdateRequest } from "@shared/proto/codemarie/account"
-import { Empty } from "@shared/proto/codemarie/common"
+import { UserOrganizationUpdateRequest } from "@shared/proto/dietcode/account"
+import { Empty } from "@shared/proto/dietcode/common"
 import { fetchRemoteConfig } from "@/core/storage/remote-config/fetch"
 import type { Controller } from "../index"
 

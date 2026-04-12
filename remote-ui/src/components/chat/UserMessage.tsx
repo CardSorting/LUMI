@@ -1,5 +1,5 @@
-import { CheckpointRestoreRequest } from "@shared/proto/codemarie/checkpoints"
-import { CodemarieCheckpointRestore } from "@shared/WebviewMessage"
+import { CheckpointRestoreRequest } from "@shared/proto/dietcode/checkpoints"
+import { DietCodeCheckpointRestore } from "@shared/WebviewMessage"
 import React, { forwardRef, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
 import Thumbnails from "@/components/common/Thumbnails"
@@ -40,7 +40,7 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 		}
 	}, [isEditing])
 
-	const handleRestoreWorkspace = async (type: CodemarieCheckpointRestore) => {
+	const handleRestoreWorkspace = async (type: DietCodeCheckpointRestore) => {
 		const delay = type === "task" ? 500 : 1000 // Delay for task and workspace restore
 		setIsEditing(false)
 
@@ -159,10 +159,10 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 
 // Reusable button component for restore actions
 interface RestoreButtonProps {
-	type: CodemarieCheckpointRestore
+	type: DietCodeCheckpointRestore
 	label: string
 	isPrimary: boolean
-	onClick: (type: CodemarieCheckpointRestore) => void
+	onClick: (type: DietCodeCheckpointRestore) => void
 	title?: string
 }
 

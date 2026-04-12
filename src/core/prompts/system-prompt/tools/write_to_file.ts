@@ -1,6 +1,6 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
 /**
@@ -22,9 +22,9 @@ Checklist here (optional)
 </write_to_file>
  */
 
-const id = CodemarieDefaultTool.FILE_NEW
+const id = DietCodeDefaultTool.FILE_NEW
 
-const GENERIC: CodemarieToolSpec = {
+const GENERIC: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id,
 	name: "write_to_file",
@@ -48,7 +48,7 @@ const GENERIC: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
 	id,
 	name: "write_to_file",
@@ -71,7 +71,7 @@ const NATIVE_NEXT_GEN: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	...NATIVE_NEXT_GEN,
 	variant: ModelFamily.NATIVE_GPT_5,
 }

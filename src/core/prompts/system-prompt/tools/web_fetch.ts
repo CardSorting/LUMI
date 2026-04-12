@@ -1,11 +1,11 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
-const GENERIC: CodemarieToolSpec = {
+const GENERIC: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
-	id: CodemarieDefaultTool.WEB_FETCH,
+	id: DietCodeDefaultTool.WEB_FETCH,
 	name: "web_fetch",
 	description: `Fetches content from a specified URL and analyzes it using your prompt
 - Takes a URL and analysis prompt as input
@@ -16,8 +16,7 @@ const GENERIC: CodemarieToolSpec = {
 - The prompt must be at least 2 characters
 - HTTP URLs will be automatically upgraded to HTTPS
 - This tool is read-only and does not modify any files`,
-	contextRequirements: (context) =>
-		context.providerInfo.providerId === "codemarie" && context.codemarieWebToolsEnabled === true,
+	contextRequirements: (context) => context.providerInfo.providerId === "dietcode" && context.dietcodeWebToolsEnabled === true,
 	parameters: [
 		{
 			name: "url",
@@ -35,14 +34,13 @@ const GENERIC: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_NEXT_GEN: CodemarieToolSpec = {
+const NATIVE_NEXT_GEN: DietCodeToolSpec = {
 	variant: ModelFamily.NATIVE_NEXT_GEN,
-	id: CodemarieDefaultTool.WEB_FETCH,
+	id: DietCodeDefaultTool.WEB_FETCH,
 	name: "web_fetch",
 	description:
 		"Fetches and analyzes content from a specified URL. IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool instead of this one, as it may have fewer restrictions.",
-	contextRequirements: (context) =>
-		context.providerInfo.providerId === "codemarie" && context.codemarieWebToolsEnabled === true,
+	contextRequirements: (context) => context.providerInfo.providerId === "dietcode" && context.dietcodeWebToolsEnabled === true,
 	parameters: [
 		{
 			name: "url",
@@ -58,7 +56,7 @@ const NATIVE_NEXT_GEN: CodemarieToolSpec = {
 	],
 }
 
-const NATIVE_GPT_5: CodemarieToolSpec = {
+const NATIVE_GPT_5: DietCodeToolSpec = {
 	...NATIVE_NEXT_GEN,
 	variant: ModelFamily.NATIVE_GPT_5,
 }

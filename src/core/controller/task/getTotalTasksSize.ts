@@ -1,4 +1,4 @@
-import { EmptyRequest, Int64 } from "@shared/proto/codemarie/common"
+import { EmptyRequest, Int64 } from "@shared/proto/dietcode/common"
 import { getTotalTasksSize as calculateTotalTasksSize } from "../../../utils/storage"
 import { Controller } from ".."
 

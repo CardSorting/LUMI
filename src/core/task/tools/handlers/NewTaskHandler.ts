@@ -2,14 +2,14 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class NewTaskHandler implements IToolHandler, IPartialBlockHandler {
-	readonly name = CodemarieDefaultTool.NEW_TASK
+	readonly name = DietCodeDefaultTool.NEW_TASK
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name} for creating a new task]`
@@ -37,8 +37,8 @@ export class NewTaskHandler implements IToolHandler, IPartialBlockHandler {
 		// Show notification if enabled
 		if (config.autoApprovalSettings.enableNotifications) {
 			showSystemNotification({
-				subtitle: "Codemarie wants to start a new task...",
-				message: `Codemarie is suggesting to start a new task with: ${context}`,
+				subtitle: "DietCode wants to start a new task...",
+				message: `DietCode is suggesting to start a new task with: ${context}`,
 			})
 		}
 

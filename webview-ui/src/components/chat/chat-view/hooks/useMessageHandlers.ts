@@ -1,6 +1,6 @@
-import type { CodemarieMessage } from "@shared/ExtensionMessage"
-import { EmptyRequest, StringRequest } from "@shared/proto/codemarie/common"
-import { AskResponseRequest, NewTaskRequest } from "@shared/proto/codemarie/task"
+import type { DietCodeMessage } from "@shared/ExtensionMessage"
+import { EmptyRequest, StringRequest } from "@shared/proto/dietcode/common"
+import { AskResponseRequest, NewTaskRequest } from "@shared/proto/dietcode/task"
 import { useCallback, useRef } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { SlashServiceClient, TaskServiceClient } from "@/services/grpc-client"
@@ -11,7 +11,7 @@ import type { ChatState, MessageHandlers } from "../types/chatTypes"
  * Custom hook for managing message handlers
  * Handles sending messages, button clicks, and task management
  */
-export function useMessageHandlers(messages: CodemarieMessage[], chatState: ChatState): MessageHandlers {
+export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatState): MessageHandlers {
 	const { backgroundCommandRunning } = useExtensionState()
 	const {
 		setInputValue,
@@ -21,7 +21,7 @@ export function useMessageHandlers(messages: CodemarieMessage[], chatState: Chat
 		setSelectedFiles,
 		setSendingDisabled,
 		setEnableButtons,
-		codemarieAsk,
+		dietcodeAsk,
 		lastMessage,
 	} = chatState
 	const cancelInFlightRef = useRef(false)
@@ -53,10 +53,10 @@ export function useMessageHandlers(messages: CodemarieMessage[], chatState: Chat
 						}),
 					)
 					messageSent = true
-				} else if (codemarieAsk) {
+				} else if (dietcodeAsk) {
 					// For resume_task and resume_completed_task, use yesButtonClicked to match Resume button behavior
 					// This ensures Enter key and Resume button work identically
-					if (codemarieAsk === "resume_task" || codemarieAsk === "resume_completed_task") {
+					if (dietcodeAsk === "resume_task" || dietcodeAsk === "resume_completed_task") {
 						await TaskServiceClient.askResponse(
 							AskResponseRequest.create({
 								responseType: "yesButtonClicked",
@@ -68,7 +68,7 @@ export function useMessageHandlers(messages: CodemarieMessage[], chatState: Chat
 						messageSent = true
 					} else {
 						// All other ask types use messageResponse
-						switch (codemarieAsk) {
+						switch (dietcodeAsk) {
 							case "followup":
 							case "plan_mode_respond":
 							case "tool":
@@ -96,7 +96,7 @@ export function useMessageHandlers(messages: CodemarieMessage[], chatState: Chat
 						}
 					}
 				} else if (messages.length > 0) {
-					// No codemarieAsk set - check if task is actively running
+					// No dietcodeAsk set - check if task is actively running
 					// If so, allow interrupting it with feedback
 					const lastMessage = messages[messages.length - 1]
 					const isTaskRunning =
@@ -134,7 +134,7 @@ export function useMessageHandlers(messages: CodemarieMessage[], chatState: Chat
 		},
 		[
 			messages.length,
-			codemarieAsk,
+			dietcodeAsk,
 			activeQuote,
 			setInputValue,
 			setActiveQuote,
@@ -238,7 +238,7 @@ export function useMessageHandlers(messages: CodemarieMessage[], chatState: Chat
 					break
 
 				case "new_task":
-					if (codemarieAsk === "new_task") {
+					if (dietcodeAsk === "new_task") {
 						await TaskServiceClient.newTask(
 							NewTaskRequest.create({
 								text: lastMessage?.text,
@@ -275,7 +275,7 @@ export function useMessageHandlers(messages: CodemarieMessage[], chatState: Chat
 				}
 
 				case "utility":
-					switch (codemarieAsk) {
+					switch (dietcodeAsk) {
 						case "condense":
 							await SlashServiceClient.condense(StringRequest.create({ value: lastMessage?.text })).catch((err) =>
 								console.error(err),
@@ -295,7 +295,7 @@ export function useMessageHandlers(messages: CodemarieMessage[], chatState: Chat
 			}
 		},
 		[
-			codemarieAsk,
+			dietcodeAsk,
 			lastMessage,
 			clearInputState,
 			startNewTask,

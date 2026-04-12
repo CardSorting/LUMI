@@ -6,7 +6,7 @@ import "should"
 import { copyWorktreeIncludeFiles, hasWorktreeInclude } from "./worktree-include"
 
 describe("Worktree Include Utilities", () => {
-	const tmpDir = path.join(os.tmpdir(), `codemarie-worktree-test-${Math.random().toString(36).slice(2)}`)
+	const tmpDir = path.join(os.tmpdir(), `dietcode-worktree-test-${Math.random().toString(36).slice(2)}`)
 	const _sourceDir = path.join(tmpDir, "source")
 	const _targetDir = path.join(tmpDir, "target")
 

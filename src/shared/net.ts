@@ -1,5 +1,5 @@
 /**
- * # Network Support for Codemarie
+ * # Network Support for DietCode
  *
  * ## Development Guidelines
  *
@@ -35,7 +35,7 @@
  *
  * ## Proxy Support
  *
- * Codemarie uses platform-specific fetch implementations to handle proxy
+ * DietCode uses platform-specific fetch implementations to handle proxy
  * configuration:
  * - **VSCode**: Uses global fetch (VSCode provides proxy configuration)
  * - **JetBrains, CLI**: Uses undici fetch with explicit ProxyAgent
@@ -76,7 +76,7 @@
  *
  * 1. Verify proxy env vars: `echo $http_proxy $https_proxy`
  * 2. Check certificates: `echo $NODE_EXTRA_CA_CERTS` (should point to PEM file)
- * 3. View logs: Check ~/.codemarie/codemarie-core-service.log for network-related
+ * 3. View logs: Check ~/.dietcode/dietcode-core-service.log for network-related
  *    failures.
  * 4. Test connection: Use `curl -x host:port` etc. to isolate proxy
  *    configuration versus client issues.

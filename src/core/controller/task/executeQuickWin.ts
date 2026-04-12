@@ -1,5 +1,5 @@
-import { Empty } from "@shared/proto/codemarie/common"
-import { ExecuteQuickWinRequest } from "@shared/proto/codemarie/task"
+import { Empty } from "@shared/proto/dietcode/common"
+import { ExecuteQuickWinRequest } from "@shared/proto/dietcode/task"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"
 
@@ -12,7 +12,7 @@ import type { Controller } from "../index"
  * @example
  * // Usage from webview:
  * import { TaskServiceClient } from "@/services/grpc-client"
- * import { ExecuteQuickWinRequest } from "@shared/proto/codemarie/task"
+ * import { ExecuteQuickWinRequest } from "@shared/proto/dietcode/task"
  *
  * const request: ExecuteQuickWinRequest = {
  *   command: "npm install",

@@ -1,11 +1,11 @@
 import { ModelFamily } from "@/shared/prompts"
-import { CodemarieDefaultTool } from "@/shared/tools"
-import type { CodemarieToolSpec } from "../spec"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
 
 // HACK: Placeholder to act as tool dependency
-const generic: CodemarieToolSpec = {
+const generic: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
-	id: CodemarieDefaultTool.TODO,
+	id: DietCodeDefaultTool.TODO,
 	name: "focus_chain",
 	description: "",
 	contextRequirements: (context) => context.focusChainSettings?.enabled === true,

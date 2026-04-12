@@ -1,4 +1,4 @@
-import { DiagnosticSeverity, FileDiagnostics } from "@shared/proto/index.codemarie"
+import { DiagnosticSeverity, FileDiagnostics } from "@shared/proto/index.dietcode"
 import { expect } from "chai"
 import { beforeEach, describe, it } from "mocha"
 import * as sinon from "sinon"

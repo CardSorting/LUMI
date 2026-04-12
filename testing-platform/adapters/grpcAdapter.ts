@@ -14,18 +14,18 @@ import { credentials } from "@grpc/grpc-js"
 import { promisify } from "util"
 
 const serviceRegistry = {
-	"codemarie.AccountService": AccountServiceClient,
-	"codemarie.BrowserService": BrowserServiceClient,
-	"codemarie.CheckpointsService": CheckpointsServiceClient,
-	"codemarie.CommandsService": CommandsServiceClient,
-	"codemarie.FileService": FileServiceClient,
-	"codemarie.McpService": McpServiceClient,
-	"codemarie.ModelsService": ModelsServiceClient,
-	"codemarie.SlashService": SlashServiceClient,
-	"codemarie.StateService": StateServiceClient,
-	"codemarie.TaskService": TaskServiceClient,
-	"codemarie.UiService": UiServiceClient,
-	"codemarie.WebService": WebServiceClient,
+	"dietcode.AccountService": AccountServiceClient,
+	"dietcode.BrowserService": BrowserServiceClient,
+	"dietcode.CheckpointsService": CheckpointsServiceClient,
+	"dietcode.CommandsService": CommandsServiceClient,
+	"dietcode.FileService": FileServiceClient,
+	"dietcode.McpService": McpServiceClient,
+	"dietcode.ModelsService": ModelsServiceClient,
+	"dietcode.SlashService": SlashServiceClient,
+	"dietcode.StateService": StateServiceClient,
+	"dietcode.TaskService": TaskServiceClient,
+	"dietcode.UiService": UiServiceClient,
+	"dietcode.WebService": WebServiceClient,
 } as const
 
 export type ServiceClients = {

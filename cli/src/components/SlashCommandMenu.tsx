@@ -3,7 +3,7 @@
  * Displays a list of matching slash commands when user types /
  */
 
-import type { SlashCommandInfo } from "@shared/proto/codemarie/slash"
+import type { SlashCommandInfo } from "@shared/proto/dietcode/slash"
 import { Box, Text } from "ink"
 import React from "react"
 import { COLORS } from "../constants/colors"

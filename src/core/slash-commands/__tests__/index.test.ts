@@ -109,7 +109,7 @@ describe("slash-commands", () => {
 
 			expect(result.processedText).to.include('<mcp_prompt server="test-server" prompt="greet">')
 			expect(result.processedText).to.include("Hello from MCP!")
-			expect(result.needsCodemarierulesFileCheck).to.equal(false)
+			expect(result.needsDietCoderulesFileCheck).to.equal(false)
 		})
 
 		it("should process MCP prompt with additional text", async () => {

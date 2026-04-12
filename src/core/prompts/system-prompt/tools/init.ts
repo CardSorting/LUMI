@@ -1,5 +1,5 @@
 // Import all tool variants
-import { CodemarieToolSet } from "../registry/CodemarieToolSet"
+import { DietCodeToolSet } from "../registry/DietCodeToolSet"
 import { access_mcp_resource_variants } from "./access_mcp_resource"
 import { act_mode_respond_variants } from "./act_mode_respond"
 import { apply_patch_variants } from "./apply_patch"
@@ -26,11 +26,11 @@ import { web_search_variants } from "./web_search"
 import { write_to_file_variants } from "./write_to_file"
 
 /**
- * Registers all tool variants with the CodemarieToolSet provider.
+ * Registers all tool variants with the DietCodeToolSet provider.
  * This function must be called at prompt registry
  * to allow all tool sets be available at build time.
  */
-export function registerCodemarieToolSets(): void {
+export function registerDietCodeToolSets(): void {
 	// Collect all variants from all tools
 	const allToolVariants = [
 		...access_mcp_resource_variants,
@@ -61,6 +61,6 @@ export function registerCodemarieToolSets(): void {
 
 	// Register each variant
 	allToolVariants.forEach((v) => {
-		CodemarieToolSet.register(v)
+		DietCodeToolSet.register(v)
 	})
 }

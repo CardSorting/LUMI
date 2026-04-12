@@ -17,8 +17,8 @@ jobs:
 
     publish:
         needs: test
-        name: Publish Codemarie (Nightly) Extension
-        if: github.repository == 'codemarie/codemarie'
+        name: Publish DietCode (Nightly) Extension
+        if: github.repository == 'dietcode/dietcode'
         runs-on: ubuntu-latest
         environment: PublishNightly
 
@@ -55,7 +55,7 @@ jobs:
                   OVSX_PAT: ${{ secrets.OVSX_PAT }}
                   TELEMETRY_SERVICE_API_KEY: ${{ secrets.TELEMETRY_SERVICE_API_KEY }}
                   ERROR_SERVICE_API_KEY: ${{ secrets.ERROR_SERVICE_API_KEY }}
-                  CODEMARIE_ENVIRONMENT: production
+                  DIETCODE_ENVIRONMENT: production
                   # OpenTelemetry production defaults (can be overridden at runtime)
                   OTEL_TELEMETRY_ENABLED: ${{ secrets.OTEL_TELEMETRY_ENABLED }}
                   OTEL_LOGS_EXPORTER: otlp

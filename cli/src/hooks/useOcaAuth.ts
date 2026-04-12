@@ -3,7 +3,7 @@
  * Handles starting auth, subscribing to status updates, and notifying on success.
  */
 
-import type { OcaAuthState } from "@shared/proto/codemarie/oca_account"
+import type { OcaAuthState } from "@shared/proto/dietcode/oca_account"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { Controller } from "@/core/controller"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"

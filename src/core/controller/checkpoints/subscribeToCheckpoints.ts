@@ -1,8 +1,4 @@
-import {
-	CheckpointEvent,
-	CheckpointEvent_OperationType,
-	CheckpointSubscriptionRequest,
-} from "@shared/proto/codemarie/checkpoints"
+import { CheckpointEvent, CheckpointEvent_OperationType, CheckpointSubscriptionRequest } from "@shared/proto/dietcode/checkpoints"
 import { Timestamp } from "@shared/proto/google/protobuf/timestamp"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"

@@ -1,11 +1,11 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { SwarmMutexService } from "../../../swarm/SwarmMutexService"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryClaimHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_CLAIM
+	readonly name = DietCodeDefaultTool.MEM_CLAIM
 
 	getDescription(_block: ToolUse): string {
 		return "Claim exclusive access to a resource (file or concept) to prevent swarm conflicts."

@@ -13,9 +13,9 @@ import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { type BedrockModelId, bedrockDefaultModelId, bedrockModels, CLAUDE_SONNET_1M_SUFFIX, type ModelInfo } from "@shared/api"
 import { calculateApiCostOpenAI, calculateApiCostQwen } from "@utils/cost"
 import { ExtensionRegistryInfo } from "@/registry"
-import type { CodemarieStorageMessage } from "@/shared/messages/content"
+import type { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
-import type { CodemarieTool } from "@/shared/tools"
+import type { DietCodeTool } from "@/shared/tools"
 import type { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToR1Format } from "../transform/r1-format"
@@ -148,7 +148,7 @@ export class AwsBedrockHandler implements ApiHandler {
 	}
 
 	@withRetry({ maxRetries: 4 })
-	async *createMessage(systemPrompt: string, messages: CodemarieStorageMessage[], tools?: CodemarieTool[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: DietCodeTool[]): ApiStream {
 		// cross region inference requires prefixing the model id with the region
 		const rawModelId = await this.getModelId()
 
@@ -241,7 +241,7 @@ export class AwsBedrockHandler implements ApiHandler {
 		const providerOptions: ProviderChainOptions = {
 			clientConfig: {
 				// set the inner sts client userAgentAppId
-				userAgentAppId: `codemarie#${ExtensionRegistryInfo.version}`,
+				userAgentAppId: `dietcode#${ExtensionRegistryInfo.version}`,
 			},
 		}
 		const useProfile =
@@ -307,7 +307,7 @@ export class AwsBedrockHandler implements ApiHandler {
 		// AWS SDK uses a different architecture than fetch-based SDKs.
 		// To add proxy support, we need to provide a custom requestHandler.
 		return new BedrockRuntimeClient({
-			userAgentAppId: `codemarie#${ExtensionRegistryInfo.version}`,
+			userAgentAppId: `dietcode#${ExtensionRegistryInfo.version}`,
 			region: this.getRegion(),
 			...auth,
 			...(this.options.awsBedrockEndpoint && { endpoint: this.options.awsBedrockEndpoint }),
@@ -376,10 +376,10 @@ export class AwsBedrockHandler implements ApiHandler {
 	 */
 	private async *createDeepseekMessage(
 		systemPrompt: string,
-		messages: CodemarieStorageMessage[],
+		messages: DietCodeStorageMessage[],
 		modelId: string,
 		model: { id: string; info: ModelInfo },
-		_tools?: CodemarieTool[],
+		_tools?: DietCodeTool[],
 	): ApiStream {
 		// Get Bedrock client with proper credentials
 		const client = await this.getBedrockClient()
@@ -515,7 +515,7 @@ export class AwsBedrockHandler implements ApiHandler {
 	 * First uses convertToR1Format to merge consecutive messages with the same role,
 	 * then converts to the string format that DeepSeek R1 expects
 	 */
-	private formatDeepseekR1Prompt(systemPrompt: string, messages: CodemarieStorageMessage[]): string {
+	private formatDeepseekR1Prompt(systemPrompt: string, messages: DietCodeStorageMessage[]): string {
 		// First use convertToR1Format to merge consecutive messages with the same role
 		const r1Messages = convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
 
@@ -548,7 +548,7 @@ export class AwsBedrockHandler implements ApiHandler {
 	 * Estimates token count based on text length (approximate)
 	 * Note: This is a rough estimation, as the actual token count depends on the tokenizer
 	 */
-	private estimateInputTokens(systemPrompt: string, messages: CodemarieStorageMessage[]): number {
+	private estimateInputTokens(systemPrompt: string, messages: DietCodeStorageMessage[]): number {
 		// For Deepseek R1, we estimate the token count of the formatted prompt
 		// The formatted prompt includes special tokens and consistent formatting
 		const formattedPrompt = this.formatDeepseekR1Prompt(systemPrompt, messages)
@@ -564,16 +564,16 @@ export class AwsBedrockHandler implements ApiHandler {
 	}
 
 	/**
-	 * Converts Codemarie's tool definitions (Anthropic format with `input_schema`) to the
+	 * Converts DietCode's tool definitions (Anthropic format with `input_schema`) to the
 	 * Bedrock Converse API `ToolConfiguration` shape. Returns `undefined` when no tools
 	 * are provided so callers can conditionally spread into the command params.
 	 */
-	public mapCodemarieToolsToBedrockToolConfig(tools?: CodemarieTool[]): ToolConfiguration | undefined {
+	public mapDietCodeToolsToBedrockToolConfig(tools?: DietCodeTool[]): ToolConfiguration | undefined {
 		if (!tools || tools.length === 0) {
 			return undefined
 		}
 
-		const isAnthropicTool = (tool: CodemarieTool): tool is AnthropicTool => "input_schema" in tool
+		const isAnthropicTool = (tool: DietCodeTool): tool is AnthropicTool => "input_schema" in tool
 
 		const bedrockTools = tools.filter(isAnthropicTool).map((tool) => {
 			return {
@@ -864,11 +864,11 @@ export class AwsBedrockHandler implements ApiHandler {
 	 */
 	public async *createAnthropicMessage(
 		systemPrompt: string,
-		messages: CodemarieStorageMessage[],
+		messages: DietCodeStorageMessage[],
 		modelId: string,
 		model: { id: string; info: ModelInfo },
 		enable1mContextWindow: boolean,
-		tools?: CodemarieTool[],
+		tools?: DietCodeTool[],
 	): ApiStream {
 		// Format messages for Anthropic model using unified formatter
 		const formattedMessages = this.formatMessagesForConverseAPI(messages)
@@ -891,7 +891,7 @@ export class AwsBedrockHandler implements ApiHandler {
 		const reasoningOn = model.info.supportsReasoning && budget_tokens > 0
 
 		// Prepare request for Anthropic model using Converse API
-		const toolConfig = this.mapCodemarieToolsToBedrockToolConfig(tools)
+		const toolConfig = this.mapDietCodeToolsToBedrockToolConfig(tools)
 		const command = new ConverseStreamCommand({
 			modelId: modelId,
 			messages: messagesWithCache,
@@ -920,7 +920,7 @@ export class AwsBedrockHandler implements ApiHandler {
 	 * Formats messages for models using the Converse API specification
 	 * Used by both Anthropic and Nova models to avoid code duplication
 	 */
-	public formatMessagesForConverseAPI(messages: CodemarieStorageMessage[]): Message[] {
+	public formatMessagesForConverseAPI(messages: DietCodeStorageMessage[]): Message[] {
 		return messages.map((message) => {
 			// Determine role (user or assistant)
 			const role = message.role === "user" ? ConversationRole.USER : ConversationRole.ASSISTANT
@@ -1094,10 +1094,10 @@ export class AwsBedrockHandler implements ApiHandler {
 	 */
 	private async *createNovaMessage(
 		systemPrompt: string,
-		messages: CodemarieStorageMessage[],
+		messages: DietCodeStorageMessage[],
 		modelId: string,
 		model: { id: string; info: ModelInfo },
-		tools?: CodemarieTool[],
+		tools?: DietCodeTool[],
 	): ApiStream {
 		// Format messages for Nova model using unified formatter
 		const formattedMessages = this.formatMessagesForConverseAPI(messages)
@@ -1118,7 +1118,7 @@ export class AwsBedrockHandler implements ApiHandler {
 		const systemMessages = this.prepareSystemMessages(systemPrompt, enableCaching || false)
 
 		// Prepare request for Nova model
-		const toolConfig = this.mapCodemarieToolsToBedrockToolConfig(tools)
+		const toolConfig = this.mapDietCodeToolsToBedrockToolConfig(tools)
 		const command = new ConverseStreamCommand({
 			modelId: modelId,
 			messages: messagesWithCache,
@@ -1137,10 +1137,10 @@ export class AwsBedrockHandler implements ApiHandler {
 	 */
 	private async *createOpenAIMessage(
 		systemPrompt: string,
-		messages: CodemarieStorageMessage[],
+		messages: DietCodeStorageMessage[],
 		modelId: string,
 		model: { id: string; info: ModelInfo },
-		tools?: CodemarieTool[],
+		tools?: DietCodeTool[],
 	): ApiStream {
 		// Get Bedrock client with proper credentials
 		const client = await this.getBedrockClient()
@@ -1152,7 +1152,7 @@ export class AwsBedrockHandler implements ApiHandler {
 		const systemMessages = systemPrompt ? [{ text: systemPrompt }] : undefined
 
 		// Prepare the non-streaming Converse command
-		const toolConfig = this.mapCodemarieToolsToBedrockToolConfig(tools)
+		const toolConfig = this.mapDietCodeToolsToBedrockToolConfig(tools)
 		const command = new ConverseCommand({
 			modelId: modelId,
 			messages: formattedMessages,
@@ -1275,10 +1275,10 @@ export class AwsBedrockHandler implements ApiHandler {
 	 */
 	private async *createQwenMessage(
 		systemPrompt: string,
-		messages: CodemarieStorageMessage[],
+		messages: DietCodeStorageMessage[],
 		modelId: string,
 		model: { id: string; info: ModelInfo },
-		tools?: CodemarieTool[],
+		tools?: DietCodeTool[],
 	): ApiStream {
 		// Get Bedrock client with proper credentials
 		const client = await this.getBedrockClient()
@@ -1290,7 +1290,7 @@ export class AwsBedrockHandler implements ApiHandler {
 		const systemMessages = systemPrompt ? [{ text: systemPrompt }] : undefined
 
 		// Prepare the non-streaming Converse command
-		const toolConfig = this.mapCodemarieToolsToBedrockToolConfig(tools)
+		const toolConfig = this.mapDietCodeToolsToBedrockToolConfig(tools)
 		const command = new ConverseCommand({
 			modelId: modelId,
 			messages: formattedMessages,

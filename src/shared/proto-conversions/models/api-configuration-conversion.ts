@@ -6,7 +6,7 @@ import {
 	ApiProvider as ProtoApiProvider,
 	OcaModelInfo as ProtoOcaModelInfo,
 	ThinkingConfig,
-} from "@shared/proto/codemarie/models"
+} from "@shared/proto/dietcode/models"
 import {
 	ApiConfiguration,
 	ApiProvider,
@@ -278,8 +278,8 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.MISTRAL
 		case "vscode-lm":
 			return ProtoApiProvider.VSCODE_LM
-		case "codemarie":
-			return ProtoApiProvider.CODEMARIE
+		case "dietcode":
+			return ProtoApiProvider.DIETCODE
 		case "litellm":
 			return ProtoApiProvider.LITELLM
 		case "moonshot":
@@ -370,8 +370,8 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 			return "mistral"
 		case ProtoApiProvider.VSCODE_LM:
 			return "vscode-lm"
-		case ProtoApiProvider.CODEMARIE:
-			return "codemarie"
+		case ProtoApiProvider.DIETCODE:
+			return "dietcode"
 		case ProtoApiProvider.LITELLM:
 			return "litellm"
 		case ProtoApiProvider.MOONSHOT:
@@ -430,7 +430,7 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 	return {
 		// Global configuration fields
 		apiKey: config.apiKey,
-		codemarieAccountId: config.codemarieAccountId,
+		dietcodeAccountId: config.dietcodeAccountId,
 		ulid: config.ulid,
 		liteLlmBaseUrl: config.liteLlmBaseUrl,
 		liteLlmApiKey: config.liteLlmApiKey,
@@ -504,7 +504,7 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		minimaxApiKey: config.minimaxApiKey,
 		minimaxApiLine: config.minimaxApiLine,
 		nousResearchApiKey: config.nousResearchApiKey,
-		codemarieApiKey: config.codemarieApiKey,
+		dietcodeApiKey: config.dietcodeApiKey,
 		ocaMode: config.ocaMode,
 		aihubmixApiKey: config.aihubmixApiKey,
 		aihubmixBaseUrl: config.aihubmixBaseUrl,
@@ -529,8 +529,8 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		planModeAwsBedrockCustomModelBaseId: config.planModeAwsBedrockCustomModelBaseId as string | undefined,
 		planModeOpenRouterModelId: config.planModeOpenRouterModelId,
 		planModeOpenRouterModelInfo: convertModelInfoToProtoOpenRouter(config.planModeOpenRouterModelInfo),
-		planModeCodemarieModelId: config.planModeCodemarieModelId,
-		planModeCodemarieModelInfo: convertModelInfoToProtoOpenRouter(config.planModeCodemarieModelInfo),
+		planModeDietcodeModelId: config.planModeDietcodeModelId,
+		planModeDietcodeModelInfo: convertModelInfoToProtoOpenRouter(config.planModeDietcodeModelInfo),
 		planModeOpenAiModelId: config.planModeOpenAiModelId,
 		planModeOpenAiModelInfo: convertOpenAiCompatibleModelInfoToProto(config.planModeOpenAiModelInfo),
 		planModeOllamaModelId: config.planModeOllamaModelId,
@@ -573,8 +573,8 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		actModeAwsBedrockCustomModelBaseId: config.actModeAwsBedrockCustomModelBaseId as string | undefined,
 		actModeOpenRouterModelId: config.actModeOpenRouterModelId,
 		actModeOpenRouterModelInfo: convertModelInfoToProtoOpenRouter(config.actModeOpenRouterModelInfo),
-		actModeCodemarieModelId: config.actModeCodemarieModelId,
-		actModeCodemarieModelInfo: convertModelInfoToProtoOpenRouter(config.actModeCodemarieModelInfo),
+		actModeDietcodeModelId: config.actModeDietcodeModelId,
+		actModeDietcodeModelInfo: convertModelInfoToProtoOpenRouter(config.actModeDietcodeModelInfo),
 		actModeOpenAiModelId: config.actModeOpenAiModelId,
 		actModeOpenAiModelInfo: convertOpenAiCompatibleModelInfoToProto(config.actModeOpenAiModelInfo),
 		actModeOllamaModelId: config.actModeOllamaModelId,
@@ -613,7 +613,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 	return {
 		// Global configuration fields
 		apiKey: protoConfig.apiKey,
-		codemarieAccountId: protoConfig.codemarieAccountId,
+		dietcodeAccountId: protoConfig.dietcodeAccountId,
 		ulid: protoConfig.ulid,
 		liteLlmBaseUrl: protoConfig.liteLlmBaseUrl,
 		liteLlmApiKey: protoConfig.liteLlmApiKey,
@@ -693,7 +693,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		hicapApiKey: protoConfig.hicapApiKey,
 		hicapModelId: protoConfig.hicapModelId,
 		nousResearchApiKey: protoConfig.nousResearchApiKey,
-		codemarieApiKey: protoConfig.codemarieApiKey,
+		dietcodeApiKey: protoConfig.dietcodeApiKey,
 		embeddingProvider:
 			protoConfig.embeddingProvider !== undefined ? convertProtoToApiProvider(protoConfig.embeddingProvider) : undefined,
 		embeddingModelId: protoConfig.embeddingModelId,
@@ -716,8 +716,8 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		planModeAwsBedrockCustomModelBaseId: protoConfig.planModeAwsBedrockCustomModelBaseId as BedrockModelId | undefined,
 		planModeOpenRouterModelId: protoConfig.planModeOpenRouterModelId,
 		planModeOpenRouterModelInfo: convertProtoToModelInfo(protoConfig.planModeOpenRouterModelInfo),
-		planModeCodemarieModelId: protoConfig.planModeCodemarieModelId,
-		planModeCodemarieModelInfo: convertProtoToModelInfo(protoConfig.planModeCodemarieModelInfo),
+		planModeDietcodeModelId: protoConfig.planModeDietcodeModelId,
+		planModeDietcodeModelInfo: convertProtoToModelInfo(protoConfig.planModeDietcodeModelInfo),
 		planModeOpenAiModelId: protoConfig.planModeOpenAiModelId,
 		planModeOpenAiModelInfo: convertProtoToOpenAiCompatibleModelInfo(protoConfig.planModeOpenAiModelInfo),
 		planModeOllamaModelId: protoConfig.planModeOllamaModelId,
@@ -761,8 +761,8 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		actModeAwsBedrockCustomModelBaseId: protoConfig.actModeAwsBedrockCustomModelBaseId as BedrockModelId | undefined,
 		actModeOpenRouterModelId: protoConfig.actModeOpenRouterModelId,
 		actModeOpenRouterModelInfo: convertProtoToModelInfo(protoConfig.actModeOpenRouterModelInfo),
-		actModeCodemarieModelId: protoConfig.actModeCodemarieModelId,
-		actModeCodemarieModelInfo: convertProtoToModelInfo(protoConfig.actModeCodemarieModelInfo),
+		actModeDietcodeModelId: protoConfig.actModeDietcodeModelId,
+		actModeDietcodeModelInfo: convertProtoToModelInfo(protoConfig.actModeDietcodeModelInfo),
 		actModeOpenAiModelId: protoConfig.actModeOpenAiModelId,
 		actModeOpenAiModelInfo: convertProtoToOpenAiCompatibleModelInfo(protoConfig.actModeOpenAiModelInfo),
 		actModeOllamaModelId: protoConfig.actModeOllamaModelId,

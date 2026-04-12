@@ -1,5 +1,5 @@
-import type { StringRequest } from "@shared/proto/codemarie/common"
-import { Empty } from "@shared/proto/codemarie/common"
+import type { StringRequest } from "@shared/proto/dietcode/common"
+import { Empty } from "@shared/proto/dietcode/common"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from "../index"

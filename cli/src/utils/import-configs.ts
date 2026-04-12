@@ -13,8 +13,8 @@ export type ImportSource = "codex" | "opencode"
 
 // Imported key structure
 export interface ImportedKey {
-	provider: string // Codemarie provider ID
-	keyField: string // Codemarie API key field name
+	provider: string // DietCode provider ID
+	keyField: string // DietCode API key field name
 	key: string // The API key value
 	modelId?: string // Optional default model ID
 }
@@ -117,7 +117,7 @@ function findOpenCodeAuthPath(): string | null {
 }
 
 /**
- * Map Codex key names to Codemarie providers
+ * Map Codex key names to DietCode providers
  */
 const CODEX_KEY_MAP: Record<string, { provider: string; keyField: string; modelId?: string }> = {
 	OPENAI_API_KEY: { provider: "openai-native", keyField: "openAiNativeApiKey", modelId: openAiNativeDefaultModelId },
@@ -125,7 +125,7 @@ const CODEX_KEY_MAP: Record<string, { provider: string; keyField: string; modelI
 }
 
 /**
- * Map OpenCode provider IDs to Codemarie providers
+ * Map OpenCode provider IDs to DietCode providers
  */
 const OPENCODE_PROVIDER_MAP: Record<string, { provider: string; keyField: string; modelId?: string }> = {
 	openai: { provider: "openai-native", keyField: "openAiNativeApiKey", modelId: openAiNativeDefaultModelId },

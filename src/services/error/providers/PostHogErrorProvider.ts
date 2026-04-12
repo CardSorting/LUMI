@@ -9,7 +9,7 @@ import { Logger } from "@/shared/services/Logger"
 import * as pkg from "../../../../package.json"
 import type { PostHogClientValidConfig } from "../../../shared/services/config/posthog-config"
 import { getErrorLevelFromString } from ".."
-import { CodemarieError } from "../CodemarieError"
+import { DietCodeError } from "../DietCodeError"
 import type { ErrorSettings, IErrorProvider } from "./IErrorProvider"
 
 const isDev = process.env.IS_DEV === "true"
@@ -61,7 +61,7 @@ export class PostHogErrorProvider implements IErrorProvider {
 		return this
 	}
 
-	public logException(error: Error | CodemarieError, properties: Record<string, unknown> = {}): void {
+	public logException(error: Error | DietCodeError, properties: Record<string, unknown> = {}): void {
 		if (!this.isEnabled() || this.errorSettings.level === "off") {
 			return
 		}
@@ -75,7 +75,7 @@ export class PostHogErrorProvider implements IErrorProvider {
 			...properties,
 		}
 
-		if (error instanceof CodemarieError) {
+		if (error instanceof DietCodeError) {
 			Object.assign(errorDetails, {
 				modelId: error.modelId,
 				providerId: error.providerId,

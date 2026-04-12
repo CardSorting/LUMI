@@ -23,7 +23,7 @@ export class PathResolver {
 	}
 
 	async validate(resolvedPath: string): Promise<{ ok: boolean; error?: string }> {
-		const result = await this.validator.checkCodemarieIgnorePath(resolvedPath)
+		const result = await this.validator.checkDietCodeIgnorePath(resolvedPath)
 		return {
 			ok: result.ok,
 			error: "error" in result ? result.error : undefined,

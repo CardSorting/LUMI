@@ -8,8 +8,8 @@
  * 1. Backs up the original package.json
  * 2. Updates package.json with:
  *    - New version (major.minor.timestamp format)
- *    - Changes name to "codemarie-nightly"
- *    - Changes displayName to "CodeMarie (Nightly)"
+ *    - Changes name to "dietcode-nightly"
+ *    - Changes displayName to "DietCode (Nightly)"
  * 3. Packages the extension as a .vsix file
  * 4. Publishes to VS Code Marketplace (if VSCE_PAT is set)
  * 5. Publishes to OpenVSX Registry (if OVSX_PAT is set)
@@ -55,9 +55,9 @@ const log = {
 // Configuration
 const config = {
 	// The name and display name for the nightly version
-	nightlyName: "codemarie-nightly",
+	nightlyName: "dietcode-nightly",
 	originalName: "claude-dev",
-	nightlyDisplayName: "CodeMarie (Nightly)",
+	nightlyDisplayName: "DietCode (Nightly)",
 	projectRoot: path.join(__dirname, ".."),
 	get packageJsonPath() {
 		return path.join(this.projectRoot, "package.json")
@@ -69,7 +69,7 @@ const config = {
 		return path.join(this.projectRoot, "dist")
 	},
 	get vsixPath() {
-		return path.join(this.distDir, "codemarie-nightly.vsix")
+		return path.join(this.distDir, "dietcode-nightly.vsix")
 	},
 	get nodeModulesPath() {
 		return path.join(this.projectRoot, "node_modules")
@@ -185,9 +185,9 @@ class NightlyPublisher {
 	 *
 	 * The repo root is a workspace package ("."). When npm installs dependencies,
 	 * it creates a self-link at node_modules/<package-name>. Nightly packaging
-	 * changes package.json name from "claude-dev" to "codemarie-nightly". If we don't
+	 * changes package.json name from "claude-dev" to "dietcode-nightly". If we don't
 	 * align this link, vsce's dependency detection (`npm list --production`) fails
-	 * with ELSPROBLEMS (missing codemarie-nightly + extraneous claude-dev).
+	 * with ELSPROBLEMS (missing dietcode-nightly + extraneous claude-dev).
 	 */
 	reconcileWorkspaceSelfLinkForNightly() {
 		const originalPath = config.originalWorkspaceLinkPath
@@ -294,11 +294,11 @@ class NightlyPublisher {
 	 * Update package.json with nightly configuration
 	 */
 	updatePackageJson() {
-		// Replace any occurrences codemarie. or claude-dev with nightly name
+		// Replace any occurrences dietcode. or claude-dev with nightly name
 		const rawContent = fs.readFileSync(config.packageJsonPath, "utf-8")
 		const content = rawContent
 			.replaceAll("claude-dev", config.nightlyName)
-			.replaceAll('"codemarie.', `"${config.nightlyName}.`)
+			.replaceAll('"dietcode.', `"${config.nightlyName}.`)
 
 		const pkg = JSON.parse(content)
 		const currentVersion = pkg.version

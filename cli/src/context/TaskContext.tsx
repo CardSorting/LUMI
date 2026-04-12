@@ -4,8 +4,8 @@
  */
 
 import { registerPartialMessageCallback } from "@core/controller/ui/subscribeToPartialMessage"
-import type { CodemarieMessage, ExtensionState } from "@shared/ExtensionMessage"
-import { convertProtoToCodemarieMessage } from "@shared/proto-conversions/codemarie-message"
+import type { DietCodeMessage, ExtensionState } from "@shared/ExtensionMessage"
+import { convertProtoToDietCodeMessage } from "@shared/proto-conversions/dietcode-message"
 import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react"
 
 interface TaskContextType {
@@ -29,7 +29,7 @@ export const TaskContextProvider: React.FC<TaskContextProviderProps> = ({ contro
 	const [state, setState] = useState<Partial<ExtensionState>>(
 		() =>
 			({
-				codemarieMessages: [],
+				dietcodeMessages: [],
 				currentTaskItem: null,
 			}) as unknown as Partial<ExtensionState>,
 	)
@@ -49,8 +49,8 @@ export const TaskContextProvider: React.FC<TaskContextProviderProps> = ({ contro
 				const newState = await controller.getStateToPostToWebview()
 				// Ignore transient empty messages state during cancel/reinit
 				// When clearTask() runs, messages briefly become [] before new task loads them
-				const hadMessages = (stateRef.current.codemarieMessages?.length ?? 0) > 0
-				const hasMessages = (newState.codemarieMessages?.length ?? 0) > 0
+				const hadMessages = (stateRef.current.dietcodeMessages?.length ?? 0) > 0
+				const hasMessages = (newState.dietcodeMessages?.length ?? 0) > 0
 				if (hadMessages && !hasMessages) {
 					return
 				}
@@ -68,15 +68,15 @@ export const TaskContextProvider: React.FC<TaskContextProviderProps> = ({ contro
 
 		// Subscribe to partial message events (for streaming updates)
 		const unsubscribePartial = registerPartialMessageCallback((protoMessage) => {
-			const updatedMessage = convertProtoToCodemarieMessage(protoMessage) as CodemarieMessage
+			const updatedMessage = convertProtoToDietCodeMessage(protoMessage) as DietCodeMessage
 			setState((prevState) => {
-				const messages = prevState.codemarieMessages || []
+				const messages = prevState.dietcodeMessages || []
 				// Find and update the message by timestamp
 				const index = messages.findIndex((m) => m.ts === updatedMessage.ts)
 				if (index >= 0) {
 					const newMessages = [...messages]
 					newMessages[index] = updatedMessage
-					return { ...prevState, codemarieMessages: newMessages }
+					return { ...prevState, dietcodeMessages: newMessages }
 				}
 				return prevState
 			})
@@ -95,7 +95,7 @@ export const TaskContextProvider: React.FC<TaskContextProviderProps> = ({ contro
 	// Force clear state (bypasses the empty messages check for intentional clears like /clear)
 	const clearState = () => {
 		setState({
-			codemarieMessages: [],
+			dietcodeMessages: [],
 			currentTaskItem: null,
 		} as unknown as Partial<ExtensionState>)
 	}

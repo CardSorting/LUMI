@@ -1,11 +1,11 @@
 import { describe, it } from "mocha"
 import "should"
-import { CodemarieStorageMessage } from "../../../../shared/messages/content"
+import { DietCodeStorageMessage } from "../../../../shared/messages/content"
 import { convertAnthropicMessageToGemini } from "../gemini-format"
 
 describe("Gemini Format Conversion", () => {
 	it("should preserve signature when model IDs match", () => {
-		const message: CodemarieStorageMessage = {
+		const message: DietCodeStorageMessage = {
 			role: "assistant",
 			content: [
 				{
@@ -27,7 +27,7 @@ describe("Gemini Format Conversion", () => {
 	})
 
 	it("should replace signature with dummy when model IDs differ", () => {
-		const message: CodemarieStorageMessage = {
+		const message: DietCodeStorageMessage = {
 			role: "assistant",
 			content: [
 				{
@@ -50,7 +50,7 @@ describe("Gemini Format Conversion", () => {
 	})
 
 	it("should use dummy signature for tool_use if no signature is present", () => {
-		const message: CodemarieStorageMessage = {
+		const message: DietCodeStorageMessage = {
 			role: "assistant",
 			content: [
 				{
@@ -68,7 +68,7 @@ describe("Gemini Format Conversion", () => {
 	})
 
 	it("should handle text blocks with signatures during model switches", () => {
-		const message: CodemarieStorageMessage = {
+		const message: DietCodeStorageMessage = {
 			role: "assistant",
 			content: [
 				{

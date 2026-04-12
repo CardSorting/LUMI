@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { TestConnectionResult } from "@shared/proto/codemarie/state"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { TestConnectionResult } from "@shared/proto/dietcode/state"
 import { REMOTE_CONFIG_OTEL_PROVIDER_ID } from "@/core/storage/remote-config/utils"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
@@ -23,13 +23,13 @@ export async function testOtelConnection(_controller: Controller, _: EmptyReques
 			})
 		}
 
-		otelProvider.log("codemarie.test.connection", {
+		otelProvider.log("dietcode.test.connection", {
 			test: true,
 			timestamp: new Date().toISOString(),
 			source: "remote_config_settings",
 		})
 
-		otelProvider.recordCounter("codemarie.test.connection", 1)
+		otelProvider.recordCounter("dietcode.test.connection", 1)
 
 		await otelProvider.forceFlush()
 

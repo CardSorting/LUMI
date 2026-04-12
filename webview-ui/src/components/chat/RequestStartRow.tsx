@@ -1,4 +1,4 @@
-import type { CodemarieMessage, CodemarieSayTool } from "@shared/ExtensionMessage"
+import type { DietCodeMessage, DietCodeSayTool } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 import type { LucideIcon } from "lucide-react"
 import type React from "react"
@@ -11,13 +11,13 @@ import { ThinkingRow } from "./ThinkingRow"
 import { TypewriterText } from "./TypewriterText"
 
 interface RequestStartRowProps {
-	message: CodemarieMessage
+	message: DietCodeMessage
 	apiRequestFailedMessage?: string
 	apiReqStreamingFailedMessage?: string
 	cost?: number
 	reasoningContent?: string
 	responseStarted?: boolean
-	codemarieMessages: CodemarieMessage[]
+	dietcodeMessages: DietCodeMessage[]
 	mode?: Mode
 	classNames?: string
 	isExpanded: boolean
@@ -38,7 +38,7 @@ const formatSearchRegex = (regex: string, path: string, filePattern?: string): s
 	return filePattern && filePattern !== "*" ? `"${terms}" in ${cleanedPath}/ (${filePattern})` : `"${terms}" in ${cleanedPath}/`
 }
 // Format activity text based on tool type
-const getActivityText = (tool: CodemarieSayTool): string | null => {
+const getActivityText = (tool: DietCodeSayTool): string | null => {
 	const cleanedPath = cleanPathPrefix(tool.path || "")
 	switch (tool.tool) {
 		case "readFile":
@@ -57,10 +57,10 @@ const getActivityText = (tool: CodemarieSayTool): string | null => {
 
 // Collect tools in a given range, with optional stop condition
 const collectToolsInRange = (
-	messages: CodemarieMessage[],
+	messages: DietCodeMessage[],
 	startIdx: number,
 	endIdx: number,
-	stopCondition?: (msg: CodemarieMessage) => boolean,
+	stopCondition?: (msg: DietCodeMessage) => boolean,
 ): { icon: LucideIcon; text: string }[] => {
 	const activities: { icon: LucideIcon; text: string }[] = []
 
@@ -78,7 +78,7 @@ const collectToolsInRange = (
 		}
 
 		try {
-			const tool = JSON.parse(msg.text || "{}") as CodemarieSayTool
+			const tool = JSON.parse(msg.text || "{}") as DietCodeSayTool
 			const activityText = getActivityText(tool)
 			if (activityText) {
 				const toolIcon = getIconByToolName(tool.tool)
@@ -92,7 +92,7 @@ const collectToolsInRange = (
 }
 
 // Find current api_req and determine if it has cost
-const findCurrentApiReq = (messages: CodemarieMessage[]): { index: number; hasCost: boolean } | null => {
+const findCurrentApiReq = (messages: DietCodeMessage[]): { index: number; hasCost: boolean } | null => {
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const msg = messages[i]
 		if (msg.say === "api_req_started" && msg.text) {
@@ -108,7 +108,7 @@ const findCurrentApiReq = (messages: CodemarieMessage[]): { index: number; hasCo
 }
 
 // Find the most recent completed api_req before the given index
-const _findPrevCompletedApiReq = (messages: CodemarieMessage[], beforeIdx: number): number => {
+const _findPrevCompletedApiReq = (messages: DietCodeMessage[], beforeIdx: number): number => {
 	for (let i = beforeIdx - 1; i >= 0; i--) {
 		const msg = messages[i]
 		if (msg.say === "api_req_started" && msg.text) {
@@ -134,7 +134,7 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 	cost,
 	reasoningContent,
 	responseStarted,
-	codemarieMessages,
+	dietcodeMessages,
 	mode,
 	handleToggle,
 	isExpanded,
@@ -144,7 +144,7 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 	const hasError = !!(apiRequestFailedMessage || apiReqStreamingFailedMessage)
 	const hasCost = cost != null
 	const hasReasoning = !!reasoningContent
-	const _hasCompletionResult = codemarieMessages.some(
+	const _hasCompletionResult = dietcodeMessages.some(
 		(msg) => msg.ask === "completion_result" || msg.say === "completion_result" || msg.ask === "plan_mode_respond",
 	)
 
@@ -160,13 +160,13 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 
 	// Check if this api_req will be absorbed into a tool group (reasoning will disappear)
 	const _willBeAbsorbed = useMemo(() => {
-		return isApiReqAbsorbable(message.ts, codemarieMessages)
-	}, [message.ts, codemarieMessages])
+		return isApiReqAbsorbable(message.ts, dietcodeMessages)
+	}, [message.ts, dietcodeMessages])
 
 	// Find all exploratory tool activities that are currently in flight.
 	// Tools come AFTER the api_req_started message, so we look from currentApiReq forward.
 	const currentActivities = useMemo(() => {
-		const currentApiReq = findCurrentApiReq(codemarieMessages)
+		const currentApiReq = findCurrentApiReq(dietcodeMessages)
 		if (!currentApiReq) {
 			return []
 		}
@@ -174,21 +174,21 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 		if (!currentApiReq.hasCost) {
 			// CASE A: Current api_req is INCOMPLETE
 			// Look for ask === "tool" messages AFTER the current api_req_started
-			return collectToolsInRange(codemarieMessages, currentApiReq.index + 1, codemarieMessages.length)
+			return collectToolsInRange(dietcodeMessages, currentApiReq.index + 1, dietcodeMessages.length)
 		}
 		// CASE B: Current api_req is COMPLETE - no activities to show
 		return []
-	}, [codemarieMessages])
+	}, [dietcodeMessages])
 
 	// Check if there are any completed tools in the tool group
 	const hasCompletedTools = useMemo(() => {
 		// Look for any completed low-stakes tool messages that would be in a tool group
-		return codemarieMessages.some((msg, idx) => {
+		return dietcodeMessages.some((msg, idx) => {
 			if (msg.say === "tool" && isLowStakesTool(msg)) {
 				// Check if this tool is from a completed API request
 				// (looking backwards for an api_req with cost)
 				for (let i = idx - 1; i >= 0; i--) {
-					const prevMsg = codemarieMessages[i]
+					const prevMsg = dietcodeMessages[i]
 					if (prevMsg.say === "api_req_started" && prevMsg.text) {
 						try {
 							const info = JSON.parse(prevMsg.text)
@@ -201,7 +201,7 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 			}
 			return false
 		})
-	}, [codemarieMessages])
+	}, [dietcodeMessages])
 
 	// Only show currentActivities if there are NO completed tools
 	// (otherwise they'll be shown in the unified ToolGroupRenderer list)

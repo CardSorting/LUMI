@@ -3,15 +3,15 @@ import { formatResponse } from "@core/prompts/responses"
 import { ensureTaskDirectoryExists } from "@core/storage/disk"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
-import { CodemarieAsk } from "@shared/ExtensionMessage"
-import { CodemarieDefaultTool } from "@/shared/tools"
+import { DietCodeAsk } from "@shared/ExtensionMessage"
+import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class CondenseHandler implements IToolHandler, IPartialBlockHandler {
-	readonly name = CodemarieDefaultTool.CONDENSE
+	readonly name = DietCodeDefaultTool.CONDENSE
 
 	getDescription(block: ToolUse): string {
 		return `[${block.name}]`
@@ -31,8 +31,8 @@ export class CondenseHandler implements IToolHandler, IPartialBlockHandler {
 		// Show notification if enabled
 		if (config.autoApprovalSettings.enableNotifications) {
 			showSystemNotification({
-				subtitle: "Codemarie wants to condense the conversation...",
-				message: `Codemarie is suggesting to condense your conversation with: ${context}`,
+				subtitle: "DietCode wants to condense the conversation...",
+				message: `DietCode is suggesting to condense your conversation with: ${context}`,
 			})
 		}
 
@@ -65,7 +65,7 @@ export class CondenseHandler implements IToolHandler, IPartialBlockHandler {
 			config.taskState.conversationHistoryDeletedRange,
 			keepStrategy,
 		)
-		await config.messageState.saveCodemarieMessagesAndUpdateHistory()
+		await config.messageState.saveDietCodeMessagesAndUpdateHistory()
 		await config.services.contextManager.triggerApplyStandardContextTruncationNoticeChange(
 			Date.now(),
 			await ensureTaskDirectoryExists(config.taskId),
@@ -80,6 +80,6 @@ export class CondenseHandler implements IToolHandler, IPartialBlockHandler {
 		const cleanedContext = uiHelpers.removeClosingTag(block, "context", context)
 
 		await uiHelpers.removeLastPartialMessageIfExistsWithType("say", "condense")
-		await uiHelpers.ask("condense" as CodemarieAsk, cleanedContext, block.partial).catch(() => {})
+		await uiHelpers.ask("condense" as DietCodeAsk, cleanedContext, block.partial).catch(() => {})
 	}
 }

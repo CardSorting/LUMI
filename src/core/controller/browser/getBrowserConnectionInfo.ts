@@ -1,5 +1,5 @@
-import { BrowserConnectionInfo } from "@shared/proto/codemarie/browser"
-import { EmptyRequest } from "@shared/proto/codemarie/common"
+import { BrowserConnectionInfo } from "@shared/proto/dietcode/browser"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
 import { Controller } from "../index"
 

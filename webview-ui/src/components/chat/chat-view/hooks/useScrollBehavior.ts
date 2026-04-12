@@ -1,4 +1,4 @@
-import { CodemarieMessage } from "@shared/ExtensionMessage"
+import { DietCodeMessage } from "@shared/ExtensionMessage"
 import debounce from "debounce"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
@@ -13,9 +13,9 @@ const STICKY_HEADER_HEIGHT = 32
  * Handles auto-scrolling, manual scrolling, and scroll-to-message functionality
  */
 export function useScrollBehavior(
-	messages: CodemarieMessage[],
-	visibleMessages: CodemarieMessage[],
-	groupedMessages: (CodemarieMessage | CodemarieMessage[])[],
+	messages: DietCodeMessage[],
+	visibleMessages: DietCodeMessage[],
+	groupedMessages: (DietCodeMessage | DietCodeMessage[])[],
 	expandedRows: Record<number, boolean>,
 	setExpandedRows: React.Dispatch<React.SetStateAction<Record<number, boolean>>>,
 ): ScrollBehavior & {
@@ -25,7 +25,7 @@ export function useScrollBehavior(
 	setIsAtBottom: React.Dispatch<React.SetStateAction<boolean>>
 	pendingScrollToMessage: number | null
 	setPendingScrollToMessage: React.Dispatch<React.SetStateAction<number | null>>
-	scrolledPastUserMessage: CodemarieMessage | null
+	scrolledPastUserMessage: DietCodeMessage | null
 	handleRangeChanged: (range: ListRange) => void
 } {
 	// Refs
@@ -37,7 +37,7 @@ export function useScrollBehavior(
 	const [showScrollToBottom, setShowScrollToBottom] = useState(false)
 	const [isAtBottom, setIsAtBottom] = useState(false)
 	const [pendingScrollToMessage, setPendingScrollToMessage] = useState<number | null>(null)
-	const [scrolledPastUserMessage, setScrolledPastUserMessage] = useState<CodemarieMessage | null>(null)
+	const [scrolledPastUserMessage, setScrolledPastUserMessage] = useState<DietCodeMessage | null>(null)
 
 	// Find all user feedback messages
 	const userFeedbackMessages = useMemo(() => {
@@ -57,7 +57,7 @@ export function useScrollBehavior(
 
 		// Find the most recent (last in order) user message that's been scrolled past
 		// We iterate from the end to find the latest one that's above the viewport
-		let mostRecentScrolledPast: CodemarieMessage | null = null
+		let mostRecentScrolledPast: DietCodeMessage | null = null
 
 		// Track if we've found any visible message element in the DOM
 		// This helps us determine if missing elements are above or below viewport

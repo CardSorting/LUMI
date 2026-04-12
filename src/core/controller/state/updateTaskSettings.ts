@@ -1,5 +1,5 @@
-import { Empty } from "@shared/proto/codemarie/common"
-import { PlanActMode, UpdateTaskSettingsRequest } from "@shared/proto/codemarie/state"
+import { Empty } from "@shared/proto/dietcode/common"
+import { PlanActMode, UpdateTaskSettingsRequest } from "@shared/proto/dietcode/state"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { Mode } from "@/shared/storage/types"
 import { Controller } from ".."

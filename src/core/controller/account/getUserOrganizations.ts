@@ -1,5 +1,5 @@
-import { UserOrganization, UserOrganizationsResponse } from "@shared/proto/codemarie/account"
-import type { EmptyRequest } from "@shared/proto/codemarie/common"
+import { UserOrganization, UserOrganizationsResponse } from "@shared/proto/dietcode/account"
+import type { EmptyRequest } from "@shared/proto/dietcode/common"
 import type { Controller } from "../index"
 
 /**

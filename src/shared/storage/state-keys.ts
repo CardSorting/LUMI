@@ -8,7 +8,7 @@ import {
 	OpenAiCompatibleModelInfo,
 } from "@shared/api"
 import { BrowserSettings, DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
-import { CodemarieRulesToggles } from "@shared/codemarie-rules"
+import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS, FocusChainSettings } from "@shared/FocusChainSettings"
 import { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_MCP_DISPLAY_MODE, McpDisplayMode } from "@shared/McpDisplayMode"
@@ -18,14 +18,14 @@ import { Mode } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
 import { UserInfo } from "@shared/UserInfo"
 import { LanguageModelChatSelector } from "vscode"
-import { BlobStoreSettings } from "./CodemarieBlobStorage"
+import { BlobStoreSettings } from "./DietCodeBlobStorage"
 
 // ============================================================================
 // SINGLE SOURCE OF TRUTH FOR STORAGE KEYS
 //
 // Property definitions with types, default values, and metadata
 // NOTE: When adding a new field, the scripts/generate-state-proto.mjs will be
-// executed automatically to regenerate the proto/codemarie/state.proto file with the
+// executed automatically to regenerate the proto/dietcode/state.proto file with the
 // new fields once the file is staged and committed.
 // ============================================================================
 
@@ -66,8 +66,8 @@ const REMOTE_CONFIG_EXTRA_FIELDS = {
 } satisfies FieldDefinitions
 
 const GLOBAL_STATE_FIELDS = {
-	codemarieVersion: { default: undefined as string | undefined },
-	"codemarie.generatedMachineId": { default: undefined as string | undefined }, // Note, distinctId reads/writes this directly from/to StorageContext before StateManager is initialized.
+	dietcodeVersion: { default: undefined as string | undefined },
+	"dietcode.generatedMachineId": { default: undefined as string | undefined }, // Note, distinctId reads/writes this directly from/to StorageContext before StateManager is initialized.
 	lastShownAnnouncementId: { default: undefined as string | undefined },
 	taskHistory: { default: [] as HistoryItem[], isAsync: true },
 	userInfo: { default: undefined as UserInfo | undefined },
@@ -88,10 +88,10 @@ const GLOBAL_STATE_FIELDS = {
 	lastDismissedModelBannerVersion: { default: 0 as number },
 	lastDismissedCliBannerVersion: { default: 0 as number },
 	nativeToolCallEnabled: { default: true as boolean },
-	remoteRulesToggles: { default: {} as CodemarieRulesToggles },
-	remoteWorkflowToggles: { default: {} as CodemarieRulesToggles },
+	remoteRulesToggles: { default: {} as DietCodeRulesToggles },
+	remoteWorkflowToggles: { default: {} as DietCodeRulesToggles },
 	dismissedBanners: { default: [] as Array<{ bannerId: string; dismissedAt: number }> },
-	// Path to worktree that should auto-open Codemarie sidebar when launched
+	// Path to worktree that should auto-open DietCode sidebar when launched
 	worktreeAutoOpenPath: { default: undefined as string | undefined },
 	// Tracks architectural violations (Strikes) per file to enable progressive enforcement
 	architecturalStrikes: { default: {} as Record<string, number> },
@@ -167,8 +167,8 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	planModeAwsBedrockCustomModelBaseId: { default: undefined as string | undefined },
 	planModeOpenRouterModelId: { default: undefined as string | undefined },
 	planModeOpenRouterModelInfo: { default: undefined as ModelInfo | undefined },
-	planModeCodemarieModelId: { default: undefined as string | undefined },
-	planModeCodemarieModelInfo: { default: undefined as ModelInfo | undefined },
+	planModeDietcodeModelId: { default: undefined as string | undefined },
+	planModeDietcodeModelInfo: { default: undefined as ModelInfo | undefined },
 	planModeOpenAiModelId: { default: undefined as string | undefined },
 	planModeOpenAiModelInfo: { default: undefined as OpenAiCompatibleModelInfo | undefined },
 	planModeOllamaModelId: { default: undefined as string | undefined },
@@ -211,8 +211,8 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	actModeAwsBedrockCustomModelBaseId: { default: undefined as string | undefined },
 	actModeOpenRouterModelId: { default: undefined as string | undefined },
 	actModeOpenRouterModelInfo: { default: undefined as ModelInfo | undefined },
-	actModeCodemarieModelId: { default: undefined as string | undefined },
-	actModeCodemarieModelInfo: { default: undefined as ModelInfo | undefined },
+	actModeDietcodeModelId: { default: undefined as string | undefined },
+	actModeDietcodeModelInfo: { default: undefined as ModelInfo | undefined },
 	actModeOpenAiModelId: { default: undefined as string | undefined },
 	actModeOpenAiModelInfo: { default: undefined as OpenAiCompatibleModelInfo | undefined },
 	actModeOllamaModelId: { default: undefined as string | undefined },
@@ -258,8 +258,8 @@ const USER_SETTINGS_FIELDS = {
 	autoApprovalSettings: {
 		default: DEFAULT_AUTO_APPROVAL_SETTINGS as AutoApprovalSettings,
 	},
-	globalCodemarieRulesToggles: { default: {} as CodemarieRulesToggles },
-	globalWorkflowToggles: { default: {} as CodemarieRulesToggles },
+	globalDietCodeRulesToggles: { default: {} as DietCodeRulesToggles },
+	globalWorkflowToggles: { default: {} as DietCodeRulesToggles },
 	globalSkillsToggles: { default: {} as Record<string, boolean> },
 	browserSettings: {
 		default: DEFAULT_BROWSER_SETTINGS as BrowserSettings,
@@ -279,7 +279,7 @@ const USER_SETTINGS_FIELDS = {
 	useAutoCondense: { default: false as boolean },
 	subagentsEnabled: { default: false as boolean },
 	maxSwarmDepth: { default: 3 as number },
-	codemarieWebToolsEnabled: { default: true as boolean },
+	dietcodeWebToolsEnabled: { default: true as boolean },
 	worktreesEnabled: { default: false as boolean },
 	preferredLanguage: { default: "English" as string },
 	mode: { default: "act" as Mode },
@@ -318,9 +318,9 @@ const GLOBAL_STATE_AND_SETTINGS_FIELDS = { ...GLOBAL_STATE_FIELDS, ...SETTINGS_F
 // Secret keys used in Api Configuration
 const SECRETS_KEYS = [
 	"apiKey",
-	"codemarieApiKey",
-	"codemarieAccountId", // Codemarie Account ID for Firebase
-	"codemarie:codemarieAccountId",
+	"dietcodeApiKey",
+	"dietcodeAccountId", // DietCode Account ID for Firebase
+	"dietcode:dietcodeAccountId",
 	"openRouterApiKey",
 	"awsAccessKey",
 	"awsSecretKey",
@@ -371,7 +371,7 @@ const SECRETS_KEYS = [
 // WARNING, these are not ALL of the local state keys in practice. For example, FileContextTracker
 // uses dynamic keys like pendingFileContextWarning_${taskId}.
 export const LocalStateKeys = [
-	"localCodemarieRulesToggles",
+	"localDietCodeRulesToggles",
 	"localCursorRulesToggles",
 	"localWindsurfRulesToggles",
 	"localAgentsRulesToggles",
@@ -400,7 +400,7 @@ export type RemoteConfigFields = GlobalStateAndSettings & RemoteConfigExtra
 // ============================================================================
 
 export type Secrets = { [K in (typeof SecretKeys)[number]]: string | undefined }
-export type LocalState = { [K in (typeof LocalStateKeys)[number]]: CodemarieRulesToggles }
+export type LocalState = { [K in (typeof LocalStateKeys)[number]]: DietCodeRulesToggles }
 export type SecretKey = (typeof SecretKeys)[number]
 export type GlobalStateKey = keyof GlobalState
 export type LocalStateKey = keyof LocalState

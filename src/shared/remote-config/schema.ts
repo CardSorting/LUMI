@@ -63,15 +63,15 @@ export const AwsBedrockSettingsSchema = z.object({
 	awsBedrockEndpoint: z.string().optional(),
 })
 
-// Codemarie Provider model schema with per-model settings
-export const CodemarieModelSchema = z.object({
+// DietCode Provider model schema with per-model settings
+export const DietCodeModelSchema = z.object({
 	id: z.string(), // The model ID is required
 })
 
-// Codemarie Provider specific settings
-export const CodemarieSettingsSchema = z.object({
+// DietCode Provider specific settings
+export const DietCodeSettingsSchema = z.object({
 	// A list of the allowed models with their settings
-	models: z.array(CodemarieModelSchema).optional(),
+	models: z.array(DietCodeModelSchema).optional(),
 })
 
 // Vertex Provider model schema with per-model settings
@@ -112,7 +112,7 @@ export const AnthropicSchema = z.object({
 const ProviderSettingsSchema = z.object({
 	OpenAiCompatible: OpenAiCompatibleSchema.optional(),
 	AwsBedrock: AwsBedrockSettingsSchema.optional(),
-	Codemarie: CodemarieSettingsSchema.optional(),
+	DietCode: DietCodeSettingsSchema.optional(),
 	Vertex: VertexSettingsSchema.optional(),
 	LiteLLM: LiteLLMSchema.optional(),
 	Anthropic: AnthropicSchema.optional(),
@@ -134,7 +134,7 @@ export const RemoteMCPServerSchema = z.object({
 	headers: z.record(z.string(), z.string()).optional(),
 })
 
-// Settings for a global codemarie rules or workflow file.
+// Settings for a global dietcode rules or workflow file.
 export const GlobalInstructionsFileSchema = z.object({
 	// When this is enabled, the user cannot turn off this rule or workflow.
 	alwaysEnabled: z.boolean(),

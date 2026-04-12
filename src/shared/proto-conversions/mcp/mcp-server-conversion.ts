@@ -6,7 +6,7 @@ import {
 	McpResourceTemplate as ProtoMcpResourceTemplate,
 	McpServer as ProtoMcpServer,
 	McpTool as ProtoMcpTool,
-} from "@shared/proto/codemarie/mcp"
+} from "@shared/proto/dietcode/mcp"
 import { McpOAuthAuthStatus, McpPrompt, McpPromptArgument, McpResource, McpResourceTemplate, McpServer, McpTool } from "../../mcp"
 
 // Helper to convert TS status to Proto enum

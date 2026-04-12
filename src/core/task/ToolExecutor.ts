@@ -1,17 +1,17 @@
 import { ApiHandler } from "@core/api"
 import { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
-import { CodemarieIgnoreController } from "@core/ignore/CodemarieIgnoreController"
+import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import { CommandPermissionController } from "@core/permissions"
 import { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
 import type { CommandExecutionOptions } from "@integrations/terminal"
 import { BrowserSession } from "@services/browser/BrowserSession"
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import { McpHub } from "@services/mcp/McpHub"
-import { CodemarieAsk, CodemarieSay } from "@shared/ExtensionMessage"
-import { CodemarieContent } from "@shared/messages/content"
-import { CodemarieDefaultTool, toolUseNames } from "@shared/tools"
-import { CodemarieAskResponse } from "@shared/WebviewMessage"
+import { DietCodeAsk, DietCodeSay } from "@shared/ExtensionMessage"
+import { DietCodeContent } from "@shared/messages/content"
+import { DietCodeDefaultTool, toolUseNames } from "@shared/tools"
+import { DietCodeAskResponse } from "@shared/WebviewMessage"
 import * as path from "path"
 import { isParallelToolCallingEnabled, modelDoesntSupportWebp } from "@/utils/model-utils"
 import { ToolUse } from "../assistant-message"
@@ -20,11 +20,11 @@ import { KnowledgeGraphService } from "../context/KnowledgeGraphService"
 import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
-import { RefactorHealer } from "./tools/RefactorHealer"
 import { ToolResponse } from "."
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
 import { AutoApprove } from "./tools/autoApprove"
+import { RefactorHealer } from "./tools/RefactorHealer"
 import { IPartialBlockHandler, ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator"
 import { ToolValidator } from "./tools/ToolValidator"
 import { TaskConfig, validateTaskConfig } from "./tools/types/TaskConfig"
@@ -33,7 +33,7 @@ import { ToolDisplayUtils } from "./tools/utils/ToolDisplayUtils"
 import { ToolResultUtils } from "./tools/utils/ToolResultUtils"
 
 export function canonicalizeAttemptCompletionParams(block: ToolUse): boolean {
-	if (block.name === CodemarieDefaultTool.ATTEMPT && !block.params?.result && typeof block.params?.response === "string") {
+	if (block.name === DietCodeDefaultTool.ATTEMPT && !block.params?.result && typeof block.params?.response === "string") {
 		block.params.result = block.params.response
 		return true
 	}
@@ -52,12 +52,12 @@ export class ToolExecutor {
 	private healer: RefactorHealer
 
 	// Auto-approval methods using the AutoApprove class
-	private shouldAutoApproveTool(toolName: CodemarieDefaultTool): boolean | [boolean, boolean] {
+	private shouldAutoApproveTool(toolName: DietCodeDefaultTool): boolean | [boolean, boolean] {
 		return this.autoApprover.shouldAutoApproveTool(toolName)
 	}
 
 	private async shouldAutoApproveToolWithPath(
-		blockname: CodemarieDefaultTool,
+		blockname: DietCodeDefaultTool,
 		autoApproveActionpath: string | undefined,
 	): Promise<boolean> {
 		return this.autoApprover.shouldAutoApproveToolWithPath(blockname, autoApproveActionpath)
@@ -73,7 +73,7 @@ export class ToolExecutor {
 		private diffViewProvider: DiffViewProvider,
 		private mcpHub: McpHub,
 		private fileContextTracker: FileContextTracker,
-		private codemarieIgnoreController: CodemarieIgnoreController,
+		private dietcodeIgnoreController: DietCodeIgnoreController,
 		private commandPermissionController: CommandPermissionController,
 		private contextManager: ContextManager,
 		private stateManager: StateManager,
@@ -84,26 +84,26 @@ export class ToolExecutor {
 		private workspaceManager: WorkspaceRootManager | undefined,
 		private isMultiRootEnabled: boolean,
 		private say: (
-			type: CodemarieSay,
+			type: DietCodeSay,
 			text?: string,
 			images?: string[],
 			files?: string[],
 			partial?: boolean,
 		) => Promise<number | undefined>,
 		private ask: (
-			type: CodemarieAsk,
+			type: DietCodeAsk,
 			text?: string,
 			partial?: boolean,
-		) => Promise<{ response: CodemarieAskResponse; text?: string; images?: string[] }>,
+		) => Promise<{ response: DietCodeAskResponse; text?: string; images?: string[] }>,
 		private saveCheckpoint: (isAttemptCompletionMessage?: boolean, completionMessageTs?: number) => Promise<void>,
 		private sayAndCreateMissingParamError: (
-			toolName: CodemarieDefaultTool,
+			toolName: DietCodeDefaultTool,
 			paramName: string,
 			relPath?: string,
 		) => Promise<any>,
 		private removeLastPartialMessageIfExistsWithType: (
 			type: "ask" | "say",
-			askOrSay: CodemarieAsk | CodemarieSay,
+			askOrSay: DietCodeAsk | DietCodeSay,
 		) => Promise<void>,
 		private executeCommandTool: (
 			command: string,
@@ -119,7 +119,7 @@ export class ToolExecutor {
 		private clearActiveHookExecution: () => Promise<void>,
 		private getActiveHookExecution: () => Promise<typeof taskState.activeHookExecution>,
 		private runUserPromptSubmitHook: (
-			userContent: CodemarieContent[],
+			userContent: DietCodeContent[],
 			context: "initial_task" | "resume" | "feedback",
 		) => Promise<{ cancel?: boolean; wasCancelled?: boolean; contextModification?: string; errorMessage?: string }>,
 		private getKnowledgeGraphService: () => Promise<KnowledgeGraphService | undefined>,
@@ -166,7 +166,7 @@ export class ToolExecutor {
 				urlContentFetcher: this.urlContentFetcher,
 				diffViewProvider: this.diffViewProvider,
 				fileContextTracker: this.fileContextTracker,
-				codemarieIgnoreController: this.codemarieIgnoreController,
+				dietcodeIgnoreController: this.dietcodeIgnoreController,
 				commandPermissionController: this.commandPermissionController,
 				contextManager: this.contextManager,
 				stateManager: this.stateManager,
@@ -207,7 +207,7 @@ export class ToolExecutor {
 	 * Register all tool handlers with the coordinator
 	 */
 	private registerToolHandlers(): void {
-		const validator = new ToolValidator(this.codemarieIgnoreController, this.guard as any)
+		const validator = new ToolValidator(this.dietcodeIgnoreController, this.guard as any)
 		// Register all tools via toolUseNames
 		for (const tool of toolUseNames) {
 			this.coordinator.registerByName(tool, validator)
@@ -299,11 +299,11 @@ export class ToolExecutor {
 	/**
 	 * Tools that are restricted in plan mode and can only be used in act mode
 	 */
-	private static readonly PLAN_MODE_RESTRICTED_TOOLS: CodemarieDefaultTool[] = [
-		CodemarieDefaultTool.FILE_NEW,
-		CodemarieDefaultTool.FILE_EDIT,
-		CodemarieDefaultTool.NEW_RULE,
-		CodemarieDefaultTool.APPLY_PATCH,
+	private static readonly PLAN_MODE_RESTRICTED_TOOLS: DietCodeDefaultTool[] = [
+		DietCodeDefaultTool.FILE_NEW,
+		DietCodeDefaultTool.FILE_EDIT,
+		DietCodeDefaultTool.NEW_RULE,
+		DietCodeDefaultTool.APPLY_PATCH,
 	]
 
 	/**
@@ -370,7 +370,7 @@ export class ToolExecutor {
 
 					if (
 						(layer === "domain" || layer === "core") &&
-						(block.name === CodemarieDefaultTool.BASH || block.name === CodemarieDefaultTool.MCP_USE)
+						(block.name === DietCodeDefaultTool.BASH || block.name === DietCodeDefaultTool.MCP_USE)
 					) {
 						isLayerRestricted = true
 						const role = layer.toUpperCase()
@@ -427,7 +427,7 @@ export class ToolExecutor {
 	 * @param toolName The name of the tool to check
 	 * @returns true if the tool is restricted in plan mode, false otherwise
 	 */
-	private isPlanModeToolRestricted(toolName: CodemarieDefaultTool): boolean {
+	private isPlanModeToolRestricted(toolName: DietCodeDefaultTool): boolean {
 		return ToolExecutor.PLAN_MODE_RESTRICTED_TOOLS.includes(toolName)
 	}
 
@@ -644,7 +644,7 @@ export class ToolExecutor {
 
 			// Autonomous Self-Healing: Align tags and resolve imports
 			if (
-				(block.name === CodemarieDefaultTool.FILE_NEW || block.name === CodemarieDefaultTool.FILE_EDIT) &&
+				(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
 				block.params.path
 			) {
 				const fullPath = path.resolve(this.cwd, block.params.path)
@@ -653,7 +653,7 @@ export class ToolExecutor {
 
 			// Policy Enforcement: Read-Time
 			if (
-				(block.name === CodemarieDefaultTool.FILE_READ || block.name === CodemarieDefaultTool.SEARCH) &&
+				(block.name === DietCodeDefaultTool.FILE_READ || block.name === DietCodeDefaultTool.SEARCH) &&
 				block.params.path &&
 				typeof toolResult === "string"
 			) {
@@ -688,7 +688,7 @@ export class ToolExecutor {
 
 			// Layer confirmation + architectural feedback for write operations
 			if (
-				(block.name === CodemarieDefaultTool.FILE_NEW || block.name === CodemarieDefaultTool.FILE_EDIT) &&
+				(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
 				block.params.path
 			) {
 				const layer = this.guard.getLayerForPath(path.resolve(this.cwd, block.params.path))

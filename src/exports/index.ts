@@ -1,10 +1,10 @@
 import { Controller } from "@core/controller"
 import { sendChatButtonClickedEvent } from "@core/controller/ui/subscribeToChatButtonClicked"
 import { Logger } from "@/shared/services/Logger"
-import { CodemarieAPI } from "./codemarie"
+import { DietCodeAPI } from "./dietcode"
 
-export function createCodemarieAPI(sidebarController: Controller): CodemarieAPI {
-	const api: CodemarieAPI = {
+export function createDietCodeAPI(sidebarController: Controller): DietCodeAPI {
+	const api: DietCodeAPI = {
 		startNewTask: async (task?: string, images?: string[]) => {
 			await sidebarController.clearTask()
 			await sidebarController.postStateToWebview()

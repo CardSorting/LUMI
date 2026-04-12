@@ -1,5 +1,5 @@
-import { CodemarieMessage, CodemarieSayTool } from "@shared/ExtensionMessage"
-import { StringRequest } from "@shared/proto/codemarie/common"
+import { DietCodeMessage, DietCodeSayTool } from "@shared/ExtensionMessage"
+import { StringRequest } from "@shared/proto/dietcode/common"
 import { memo, useCallback, useMemo, useState } from "react"
 import { TypewriterText } from "@/components/chat/TypewriterText"
 import { cleanPathPrefix } from "@/components/common/CodeAccordian"
@@ -9,14 +9,14 @@ import { FileServiceClient } from "@/services/grpc-client"
 import { getIconByToolName, getToolsNotInCurrentActivities, isLowStakesTool } from "../../utils/messageUtils"
 
 interface ToolGroupRendererProps {
-	messages: CodemarieMessage[]
-	allMessages: CodemarieMessage[]
+	messages: DietCodeMessage[]
+	allMessages: DietCodeMessage[]
 	isLastGroup: boolean
 }
 
 interface ToolWithReasoning {
-	tool: CodemarieMessage
-	parsedTool: CodemarieSayTool
+	tool: DietCodeMessage
+	parsedTool: DietCodeSayTool
 	reasoning?: string
 	isActive?: boolean
 	activityText?: string
@@ -25,7 +25,7 @@ interface ToolWithReasoning {
 const EXPANDABLE_TOOLS = new Set(["listFilesTopLevel", "listFilesRecursive", "listCodeDefinitionNames", "searchFiles"])
 
 // Helper to format activity text for active items (from RequestStartRow logic)
-const getActivityText = (tool: CodemarieSayTool): string | null => {
+const getActivityText = (tool: DietCodeSayTool): string | null => {
 	const cleanedPath = cleanPathPrefix(tool.path || "")
 	const formatSearchRegex = (regex: string, path: string, filePattern?: string): string => {
 		const cleanedPath = cleanPathPrefix(path)
@@ -55,7 +55,7 @@ const getActivityText = (tool: CodemarieSayTool): string | null => {
 }
 
 // Calculate current activities (from RequestStartRow logic)
-const getCurrentActivities = (allMessages: CodemarieMessage[]): CodemarieMessage[] => {
+const getCurrentActivities = (allMessages: DietCodeMessage[]): DietCodeMessage[] => {
 	// Find current api_req
 	let currentApiReqIndex = -1
 	for (let i = allMessages.length - 1; i >= 0; i--) {
@@ -79,7 +79,7 @@ const getCurrentActivities = (allMessages: CodemarieMessage[]): CodemarieMessage
 	}
 
 	// Collect tools AFTER the current api_req_started
-	const activities: CodemarieMessage[] = []
+	const activities: DietCodeMessage[] = []
 	for (let i = currentApiReqIndex + 1; i < allMessages.length; i++) {
 		const msg = allMessages[i]
 		// Only collect tools that are currently executing (ask === "tool")
@@ -234,7 +234,7 @@ export const ToolGroupRenderer = memo(({ messages, allMessages, isLastGroup }: T
  * Build tool items WITHOUT reasoning.
  * Reasoning should not be displayed in file lists - only file/folder content.
  */
-function buildToolsWithReasoning(messages: CodemarieMessage[]): ToolWithReasoning[] {
+function buildToolsWithReasoning(messages: DietCodeMessage[]): ToolWithReasoning[] {
 	const result: ToolWithReasoning[] = []
 
 	for (const msg of messages) {
@@ -259,18 +259,18 @@ function buildToolsWithReasoning(messages: CodemarieMessage[]): ToolWithReasonin
 /**
  * Safely parse tool JSON, returning empty tool on failure.
  */
-function parseToolSafe(text: string | undefined): CodemarieSayTool {
+function parseToolSafe(text: string | undefined): DietCodeSayTool {
 	try {
-		return JSON.parse(text || "{}") as CodemarieSayTool
+		return JSON.parse(text || "{}") as DietCodeSayTool
 	} catch {
-		return {} as CodemarieSayTool
+		return {} as DietCodeSayTool
 	}
 }
 
 /**
  * Get display info for a tool.
  */
-function getToolDisplayInfo(tool: CodemarieSayTool) {
+function getToolDisplayInfo(tool: DietCodeSayTool) {
 	const icon = getIconByToolName(tool.tool)
 	const filePath = tool.path || ""
 	const folderPath = `${filePath}/`
@@ -319,7 +319,7 @@ function formatSearchDisplay(regex: string, path: string, filePattern?: string):
 /**
  * Get summary label for a tool group - shows what's been added to context.
  */
-function getToolGroupSummary(messages: CodemarieMessage[]): string {
+function getToolGroupSummary(messages: DietCodeMessage[]): string {
 	const counts = { read: 0, list: 0, search: 0, def: 0 }
 
 	for (const msg of messages) {
@@ -361,5 +361,5 @@ function getToolGroupSummary(messages: CodemarieMessage[]): string {
 		parts.push(`performed ${counts.search} search${counts.search > 1 ? "es" : ""}`)
 	}
 
-	return parts.length === 0 ? "Context" : `Codemarie${action}${parts.join(", ")}`
+	return parts.length === 0 ? "Context" : `DietCode${action}${parts.join(", ")}`
 }

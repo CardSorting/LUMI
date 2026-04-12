@@ -14,7 +14,7 @@ interface CheckpointAddResult {
 /**
  * GitOperations Class
  *
- * Handles git-specific operations for Codemarie's Checkpoints system.
+ * Handles git-specific operations for DietCode's Checkpoints system.
  *
  * Key responsibilities:
  * - Git repository initialization and configuration
@@ -84,8 +84,8 @@ export class GitOperations {
 		// Configure repo with git settings
 		await git.addConfig("core.worktree", cwd)
 		await git.addConfig("commit.gpgSign", "false")
-		await git.addConfig("user.name", "Codemarie Checkpoint")
-		await git.addConfig("user.email", "checkpoint@codemarie.bot")
+		await git.addConfig("user.name", "DietCode Checkpoint")
+		await git.addConfig("user.email", "checkpoint@dietcode.bot")
 
 		// Set up LFS patterns
 		const lfsPatterns = await getLfsPatterns(cwd)

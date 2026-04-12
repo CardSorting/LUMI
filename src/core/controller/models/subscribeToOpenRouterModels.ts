@@ -1,5 +1,5 @@
-import { EmptyRequest } from "@shared/proto/codemarie/common"
-import { OpenRouterCompatibleModelInfo } from "@shared/proto/codemarie/models"
+import { EmptyRequest } from "@shared/proto/dietcode/common"
+import { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
 import { Controller } from "../index"

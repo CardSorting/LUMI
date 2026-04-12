@@ -1,6 +1,6 @@
 /**
  * Help panel content for inline display in ChatView
- * Explains Codemarie CLI features and links to documentation
+ * Explains DietCode CLI features and links to documentation
  */
 
 import { Box, Text, useInput } from "ink"
@@ -32,13 +32,13 @@ export const HelpPanelContent: React.FC<HelpPanelContentProps> = ({ onClose }) =
 	return (
 		<Panel label="Help">
 			<Box flexDirection="column" gap={1}>
-				<Text>Codemarie can edit files, run terminal commands, use the browser, and more with your permission.</Text>
+				<Text>DietCode can edit files, run terminal commands, use the browser, and more with your permission.</Text>
 
 				<Box flexDirection="column">
 					<Text bold>Plan vs Act Mode</Text>
 					<Text>
 						Use <Text color="yellow">Plan</Text> mode to discuss and strategize before making changes. Use{" "}
-						<Text color={COLORS.primaryBlue}>Act</Text> mode when you're ready for Codemarie to edit files and run
+						<Text color={COLORS.primaryBlue}>Act</Text> mode when you're ready for DietCode to edit files and run
 						commands. Toggle between them with <Text color="white">Tab</Text>.
 					</Text>
 				</Box>
@@ -90,12 +90,12 @@ export const HelpPanelContent: React.FC<HelpPanelContentProps> = ({ onClose }) =
 					</Text>
 					<Text>
 						{"  "}
-						<Text color="white">/q</Text> - Quit Codemarie
+						<Text color="white">/q</Text> - Quit DietCode
 					</Text>
 				</Box>
 
 				<Text>
-					For more help: <Text color={COLORS.primaryBlue}>https://docs.codemarie.bot/codemarie-cli</Text>
+					For more help: <Text color={COLORS.primaryBlue}>https://docs.dietcode.bot/dietcode-cli</Text>
 				</Text>
 			</Box>
 		</Panel>

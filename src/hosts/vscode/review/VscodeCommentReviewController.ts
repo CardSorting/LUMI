@@ -5,9 +5,9 @@ import { Logger } from "@/shared/services/Logger"
 import { DIFF_VIEW_URI_SCHEME } from "../VscodeDiffViewProvider"
 
 /**
- * Codemarie's GitHub avatar URL
+ * DietCode's GitHub avatar URL
  */
-const CODEMARIE_AVATAR_URL = "https://avatars.githubusercontent.com/u/184127137"
+const DIETCODE_AVATAR_URL = "https://avatars.githubusercontent.com/u/184127137"
 
 /**
  * VS Code implementation of CommentReviewController.
@@ -30,12 +30,12 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 	constructor() {
 		super()
 		// Create the comment controller
-		this.commentController = vscode.comments.createCommentController("codemarie-ai-review", "Codemarie AI Review")
+		this.commentController = vscode.comments.createCommentController("dietcode-ai-review", "DietCode AI Review")
 
 		// Configure options for the reply input
 		this.commentController.options = {
 			placeHolder: "Ask a question about this code...",
-			prompt: "Reply to Codemarie",
+			prompt: "Reply to DietCode",
 		}
 
 		// Configure the commenting range provider (optional - allows commenting on any line)
@@ -49,14 +49,14 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 
 		// Register reply command - this is called when user clicks the Reply button
 		this.disposables.push(
-			vscode.commands.registerCommand("codemarie.reviewComment.reply", async (reply: vscode.CommentReply) => {
+			vscode.commands.registerCommand("dietcode.reviewComment.reply", async (reply: vscode.CommentReply) => {
 				await this.handleReply(reply)
 			}),
 		)
 
-		// Register add to chat command - sends the conversation to Codemarie's main chat
+		// Register add to chat command - sends the conversation to DietCode's main chat
 		this.disposables.push(
-			vscode.commands.registerCommand("codemarie.reviewComment.addToChat", async (thread: vscode.CommentThread) => {
+			vscode.commands.registerCommand("dietcode.reviewComment.addToChat", async (thread: vscode.CommentThread) => {
 				await this.handleAddToChat(thread)
 			}),
 		)
@@ -105,8 +105,8 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 			body: new vscode.MarkdownString(comment.comment),
 			mode: vscode.CommentMode.Preview,
 			author: {
-				name: "Codemarie",
-				iconPath: vscode.Uri.parse(CODEMARIE_AVATAR_URL),
+				name: "DietCode",
+				iconPath: vscode.Uri.parse(DIETCODE_AVATAR_URL),
 			},
 		}
 
@@ -152,8 +152,8 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 			body: new vscode.MarkdownString("_Thinking..._"),
 			mode: vscode.CommentMode.Preview,
 			author: {
-				name: "Codemarie",
-				iconPath: vscode.Uri.parse(CODEMARIE_AVATAR_URL),
+				name: "DietCode",
+				iconPath: vscode.Uri.parse(DIETCODE_AVATAR_URL),
 			},
 		}
 
@@ -218,8 +218,8 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 			body: new vscode.MarkdownString(this.streamingContent || "_Thinking..._"),
 			mode: vscode.CommentMode.Preview,
 			author: {
-				name: "Codemarie",
-				iconPath: vscode.Uri.parse(CODEMARIE_AVATAR_URL),
+				name: "DietCode",
+				iconPath: vscode.Uri.parse(DIETCODE_AVATAR_URL),
 			},
 		}
 		// Create a new array to ensure VS Code detects the change
@@ -240,8 +240,8 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 			body: new vscode.MarkdownString(finalContent),
 			mode: vscode.CommentMode.Preview,
 			author: {
-				name: "Codemarie",
-				iconPath: vscode.Uri.parse(CODEMARIE_AVATAR_URL),
+				name: "DietCode",
+				iconPath: vscode.Uri.parse(DIETCODE_AVATAR_URL),
 			},
 		}
 		this.streamingThread.comments = [commentObj]
@@ -331,8 +331,8 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 					body: new vscode.MarkdownString(content || "_Thinking..._"),
 					mode: vscode.CommentMode.Preview,
 					author: {
-						name: "Codemarie",
-						iconPath: vscode.Uri.parse(CODEMARIE_AVATAR_URL),
+						name: "DietCode",
+						iconPath: vscode.Uri.parse(DIETCODE_AVATAR_URL),
 					},
 				}
 				thread.comments = [...thread.comments.slice(0, -1), streamingComment]
@@ -343,8 +343,8 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 				body: new vscode.MarkdownString("_Thinking..._"),
 				mode: vscode.CommentMode.Preview,
 				author: {
-					name: "Codemarie",
-					iconPath: vscode.Uri.parse(CODEMARIE_AVATAR_URL),
+					name: "DietCode",
+					iconPath: vscode.Uri.parse(DIETCODE_AVATAR_URL),
 				},
 			}
 			thread.comments = [...thread.comments, thinkingComment]
@@ -369,8 +369,8 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 						),
 						mode: vscode.CommentMode.Preview,
 						author: {
-							name: "Codemarie",
-							iconPath: vscode.Uri.parse(CODEMARIE_AVATAR_URL),
+							name: "DietCode",
+							iconPath: vscode.Uri.parse(DIETCODE_AVATAR_URL),
 						},
 					}
 					thread.comments = [...thread.comments.slice(0, -1), errorComment]
@@ -379,7 +379,7 @@ export class VscodeCommentReviewController extends CommentReviewController imple
 	}
 
 	/**
-	 * Handle adding the thread conversation to Codemarie's main chat
+	 * Handle adding the thread conversation to DietCode's main chat
 	 */
 	private async handleAddToChat(thread: vscode.CommentThread): Promise<void> {
 		const filePath = this.threadFilePaths.get(thread) || thread.uri.fsPath
@@ -414,7 +414,7 @@ Please continue helping the user with their question about this code.`
 	}
 
 	/**
-	 * Close all tabs that use the codemarie-diff URI scheme (both diff views and regular text documents)
+	 * Close all tabs that use the dietcode-diff URI scheme (both diff views and regular text documents)
 	 */
 	async closeDiffViews(): Promise<void> {
 		const tabs = vscode.window.tabGroups.all
@@ -424,7 +424,7 @@ Please continue helping the user with their question about this code.`
 				if (tab.input instanceof vscode.TabInputTextDiff && tab.input?.original?.scheme === DIFF_VIEW_URI_SCHEME) {
 					return true
 				}
-				// Check for regular text document tabs with codemarie-diff scheme (opened during comment reveal)
+				// Check for regular text document tabs with dietcode-diff scheme (opened during comment reveal)
 				if (tab.input instanceof vscode.TabInputText && tab.input?.uri?.scheme === DIFF_VIEW_URI_SCHEME) {
 					return true
 				}

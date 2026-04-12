@@ -3,7 +3,7 @@ import "should"
 import { ApiHandlerOptions } from "@shared/api"
 import axios from "axios"
 import sinon from "sinon"
-import { CodemarieStorageMessage } from "@/shared/messages/content"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { OllamaHandler } from "../ollama"
 
 describe("OllamaHandler", () => {
@@ -59,7 +59,7 @@ describe("OllamaHandler", () => {
 			} as any)
 
 			const systemPrompt = "You are a helpful assistant."
-			const messages: CodemarieStorageMessage[] = [{ role: "user", content: "Hello" }]
+			const messages: DietCodeStorageMessage[] = [{ role: "user", content: "Hello" }]
 
 			const result = []
 			const usageInfo = []
@@ -114,7 +114,7 @@ describe("OllamaHandler", () => {
 			}
 
 			const systemPrompt = "You are a helpful assistant."
-			const messages: CodemarieStorageMessage[] = [{ role: "user", content: "Hello" }]
+			const messages: DietCodeStorageMessage[] = [{ role: "user", content: "Hello" }]
 
 			// Start the request and catch the error
 			let errorMessage = ""
@@ -158,7 +158,7 @@ describe("OllamaHandler", () => {
 			} as any)
 
 			const systemPrompt = "You are a helpful assistant."
-			const messages: CodemarieStorageMessage[] = [{ role: "user", content: "Hello" }]
+			const messages: DietCodeStorageMessage[] = [{ role: "user", content: "Hello" }]
 
 			const result = []
 
@@ -204,7 +204,7 @@ describe("OllamaHandler", () => {
 			}
 
 			const systemPrompt = "You are a helpful assistant."
-			const messages: CodemarieStorageMessage[] = [{ role: "user", content: "Hello" }]
+			const messages: DietCodeStorageMessage[] = [{ role: "user", content: "Hello" }]
 
 			const result = []
 

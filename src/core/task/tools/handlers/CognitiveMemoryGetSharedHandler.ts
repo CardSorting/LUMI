@@ -1,11 +1,11 @@
-import { CodemarieDefaultTool } from "../../../../shared/tools"
+import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
 export class CognitiveMemoryGetSharedHandler implements IToolHandler {
-	readonly name = CodemarieDefaultTool.MEM_GET_SHARED
+	readonly name = DietCodeDefaultTool.MEM_GET_SHARED
 
 	getDescription(_block: ToolUse): string {
 		return "[get shared memory layer]"

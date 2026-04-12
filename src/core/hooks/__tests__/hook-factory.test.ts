@@ -54,7 +54,7 @@ describe("Hook System", () => {
 			}
 
 			// Create a test hook script that outputs the current working directory
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 const input = require('fs').readFileSync(0, 'utf-8');
 // Output the current working directory
@@ -88,7 +88,7 @@ console.log(JSON.stringify({
 
 		it("should execute hook script and parse output", async () => {
 			// Create a test hook script
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 const input = require('fs').readFileSync(0, 'utf-8');
 console.log(JSON.stringify({
@@ -115,7 +115,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should handle script that blocks execution", async () => {
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({
   cancel: true,
@@ -140,7 +140,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should truncate large context modifications", async () => {
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			// Create context larger than 50KB
 			const largeContext = "x".repeat(60000)
 			const hookScript = `#!/usr/bin/env node
@@ -167,7 +167,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should handle script errors", async () => {
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 process.exit(1)`
 
@@ -191,7 +191,7 @@ process.exit(1)`
 		})
 
 		it("should handle malformed JSON output", async () => {
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 console.log("not valid json")`
 
@@ -215,7 +215,7 @@ console.log("not valid json")`
 		})
 
 		it("should pass hook input via stdin", async () => {
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 const input = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
 console.log(JSON.stringify({
@@ -242,7 +242,7 @@ console.log(JSON.stringify({
 
 	describe("PostToolUse Hook", () => {
 		it("should receive execution results", async () => {
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PostToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PostToolUse")
 			const hookScript = `#!/usr/bin/env node
 const input = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
 console.log(JSON.stringify({
@@ -272,7 +272,7 @@ console.log(JSON.stringify({
 
 	describe("Hook Discovery", () => {
 		it("should generate Windows PowerShell bridge files with real newlines", async () => {
-			const hooksDir = path.join(tempDir, ".codemarierules", "hooks")
+			const hooksDir = path.join(tempDir, ".dietcoderules", "hooks")
 			const hookBasePath = path.join(hooksDir, "PreToolUse")
 
 			await withPlatform("win32", async () => {
@@ -285,7 +285,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should resolve .ps1 hook on windows", async () => {
-			const hooksDir = path.join(tempDir, ".codemarierules", "hooks")
+			const hooksDir = path.join(tempDir, ".dietcoderules", "hooks")
 			const ps1Path = path.join(hooksDir, "PreToolUse.ps1")
 			await fs.writeFile(ps1Path, "Write-Output '{\"cancel\":false}'")
 
@@ -301,7 +301,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should ignore extensionless hook on windows and use .ps1 only", async () => {
-			const hooksDir = path.join(tempDir, ".codemarierules", "hooks")
+			const hooksDir = path.join(tempDir, ".dietcoderules", "hooks")
 			const extensionless = path.join(hooksDir, "PreToolUse")
 			const ps1Path = path.join(hooksDir, "PreToolUse.ps1")
 			await fs.writeFile(extensionless, "Write-Output '{\"cancel\":false}'")
@@ -319,7 +319,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should ignore .ps1 hook on unix-like platforms", async () => {
-			const hooksDir = path.join(tempDir, ".codemarierules", "hooks")
+			const hooksDir = path.join(tempDir, ".dietcoderules", "hooks")
 			const ps1Path = path.join(hooksDir, "PreToolUse.ps1")
 			await fs.writeFile(ps1Path, "Write-Output '{\"cancel\":false}'")
 
@@ -331,7 +331,7 @@ console.log(JSON.stringify({
 		})
 
 		it("should find executable hook", async () => {
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({ cancel: false }))`
 
@@ -354,7 +354,7 @@ console.log(JSON.stringify({ cancel: false }))`
 		})
 
 		it("should not find non-executable file", async () => {
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({ cancel: false }))`
 
@@ -416,10 +416,10 @@ console.log(JSON.stringify({ cancel: false }))`
 		})
 
 		it("should handle hook input with all parameters", async () => {
-			const hookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const hookScript = `#!/usr/bin/env node
 const input = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
-const hasAllFields = input.codemarieVersion && input.hookName && input.timestamp && 
+const hasAllFields = input.dietcodeVersion && input.hookName && input.timestamp && 
                      input.taskId && input.workspaceRoots !== undefined;
 console.log(JSON.stringify({
   cancel: false,
@@ -451,7 +451,7 @@ console.log(JSON.stringify({
 			// Create global hooks directory
 			globalHooksDir = path.join(tempDir, "global-hooks")
 			await fs.mkdir(globalHooksDir, { recursive: true })
-			workspaceHooksDir = path.join(tempDir, ".codemarierules", "hooks")
+			workspaceHooksDir = path.join(tempDir, ".dietcoderules", "hooks")
 
 			// Mock getAllHooksDirs with deterministic test directories only.
 			// Avoid calling the real implementation, which may hit OS-specific
@@ -471,7 +471,7 @@ console.log(JSON.stringify({
 			await writeHookScript(globalHookPath, globalHookScript)
 
 			// Create workspace hook
-			const workspaceHookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const workspaceHookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const workspaceHookScript = `#!/usr/bin/env node
 const input = require('fs').readFileSync(0, 'utf-8');
 console.log(JSON.stringify({
@@ -505,7 +505,7 @@ console.log(JSON.stringify({
 			await writeHookScript(globalHookPath, globalHookScript)
 
 			// Create allowing workspace hook
-			const workspaceHookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const workspaceHookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const workspaceHookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({
   cancel: false
@@ -555,7 +555,7 @@ console.log(JSON.stringify({
 			await writeHookScript(globalHookPath, globalHookScript)
 
 			// Create blocking workspace hook
-			const workspaceHookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const workspaceHookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const workspaceHookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({
   cancel: true,
@@ -587,7 +587,7 @@ console.log(JSON.stringify({
 			await writeHookScript(globalHookPath, globalHookScript)
 
 			// Create blocking workspace hook
-			const workspaceHookPath = path.join(tempDir, ".codemarierules", "hooks", "PreToolUse")
+			const workspaceHookPath = path.join(tempDir, ".dietcoderules", "hooks", "PreToolUse")
 			const workspaceHookScript = `#!/usr/bin/env node
 console.log(JSON.stringify({
   cancel: true,

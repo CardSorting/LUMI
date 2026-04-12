@@ -5,7 +5,7 @@ import { e2e } from "./utils/helpers"
 e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ sidebar }) => {
 	// Use the page object to interact with editor outside the sidebar
 	// Verify initial state
-	await expect(sidebar.getByRole("button", { name: "Login to Codemarie" })).toBeVisible()
+	await expect(sidebar.getByRole("button", { name: "Login to DietCode" })).toBeVisible()
 	await expect(sidebar.getByText("Bring my own API key")).toBeVisible()
 
 	// Navigate to API key setup
@@ -17,12 +17,12 @@ e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ s
 	// Verify provider selector is visible
 	await expect(providerSelectorInput).toBeVisible()
 
-	// Test Codemarie provider option
+	// Test DietCode provider option
 	await providerSelectorInput.click({ delay: 100 })
-	// Wait for dropdown to appear and find Codemarie option
-	await expect(sidebar.getByTestId("provider-option-codemarie")).toBeVisible()
-	await sidebar.getByTestId("provider-option-codemarie").click({ delay: 100 })
-	await expect(sidebar.getByRole("button", { name: "Sign Up with Codemarie" })).toBeVisible()
+	// Wait for dropdown to appear and find DietCode option
+	await expect(sidebar.getByTestId("provider-option-dietcode")).toBeVisible()
+	await sidebar.getByTestId("provider-option-dietcode").click({ delay: 100 })
+	await expect(sidebar.getByRole("button", { name: "Sign Up with DietCode" })).toBeVisible()
 
 	// Switch to OpenRouter and complete setup
 	await providerSelectorInput.click({ delay: 100 })
@@ -36,7 +36,7 @@ e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ s
 	await apiKeyInput.click({ delay: 100 })
 	await sidebar.getByRole("button", { name: "Continue" }).click()
 
-	await expect(sidebar.getByRole("button", { name: "Login to Codemarie" })).not.toBeVisible()
+	await expect(sidebar.getByRole("button", { name: "Login to DietCode" })).not.toBeVisible()
 
 	// Verify start up page is no longer visible
 	await expect(apiKeyInput).not.toBeVisible()
@@ -51,9 +51,9 @@ e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ s
 	await expect(dialog).not.toBeVisible()
 
 	// Verify you are now in the chat page after setup was completed and the dialog was closed.
-	// codemarie logo container
-	const codemarieLogo = sidebar.locator(".size-20")
-	await expect(codemarieLogo).toBeVisible()
+	// dietcode logo container
+	const dietcodeLogo = sidebar.locator(".size-20")
+	await expect(dietcodeLogo).toBeVisible()
 	const chatInputBox = sidebar.getByTestId("chat-input")
 	await expect(chatInputBox).toBeVisible()
 

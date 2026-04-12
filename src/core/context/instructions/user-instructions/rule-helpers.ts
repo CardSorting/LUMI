@@ -1,5 +1,5 @@
 import { ensureRulesDirectoryExists, ensureWorkflowsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
-import { CodemarieRulesToggles } from "@shared/codemarie-rules"
+import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { GlobalInstructionsFile } from "@shared/remote-config/schema"
 import { fileExistsAtPath, isDirectory, readDirectory } from "@utils/fs"
 import fs from "fs/promises"
@@ -41,10 +41,10 @@ export async function readDirectoryRecursive(
  */
 export async function synchronizeRuleToggles(
 	rulesDirectoryPath: string,
-	currentToggles: CodemarieRulesToggles,
+	currentToggles: DietCodeRulesToggles,
 	allowedFileExtension = "",
 	excludedPaths: string[][] = [],
-): Promise<CodemarieRulesToggles> {
+): Promise<DietCodeRulesToggles> {
 	// Create a copy of toggles to modify
 	const updatedToggles = { ...currentToggles }
 
@@ -111,9 +111,9 @@ export async function synchronizeRuleToggles(
  */
 export function synchronizeRemoteRuleToggles(
 	remoteRules: GlobalInstructionsFile[],
-	currentToggles: CodemarieRulesToggles,
-): CodemarieRulesToggles {
-	const updatedToggles: CodemarieRulesToggles = {}
+	currentToggles: DietCodeRulesToggles,
+): DietCodeRulesToggles {
+	const updatedToggles: DietCodeRulesToggles = {}
 
 	// Create set of current remote rule names
 	const existingRuleNames = new Set(remoteRules.map((rule) => rule.name))
@@ -138,14 +138,14 @@ export function synchronizeRemoteRuleToggles(
 /**
  * Certain project rules have more than a single location where rules are allowed to be stored
  */
-export function combineRuleToggles(toggles1: CodemarieRulesToggles, toggles2: CodemarieRulesToggles): CodemarieRulesToggles {
+export function combineRuleToggles(toggles1: DietCodeRulesToggles, toggles2: DietCodeRulesToggles): DietCodeRulesToggles {
 	return { ...toggles1, ...toggles2 }
 }
 
 /**
  * Read the content of rules files
  */
-export const getRuleFilesTotalContent = async (rulesFilePaths: string[], basePath: string, toggles: CodemarieRulesToggles) => {
+export const getRuleFilesTotalContent = async (rulesFilePaths: string[], basePath: string, toggles: DietCodeRulesToggles) => {
 	return (await getRuleFilesTotalContentWithMetadata(rulesFilePaths, basePath, toggles)).content
 }
 
@@ -169,7 +169,7 @@ export type RuleLoadResult = {
 
 /**
  * Result type for rule loading functions that return formatted instructions.
- * Used by getGlobalCodemarieRules and getLocalCodemarieRules.
+ * Used by getGlobalDietCodeRules and getLocalDietCodeRules.
  */
 export type RuleLoadResultWithInstructions = {
 	instructions?: string
@@ -179,7 +179,7 @@ export type RuleLoadResultWithInstructions = {
 export const getRuleFilesTotalContentWithMetadata = async (
 	rulesFilePaths: string[],
 	basePath: string,
-	toggles: CodemarieRulesToggles,
+	toggles: DietCodeRulesToggles,
 	opts?: { evaluationContext?: RuleEvaluationContext; ruleNamePrefix?: keyof typeof RULE_SOURCE_PREFIX },
 ): Promise<RuleLoadResult> => {
 	const evaluationContext = opts?.evaluationContext ?? {}
@@ -238,7 +238,7 @@ export const getRuleFilesTotalContentWithMetadata = async (
 
 export function getRemoteRulesTotalContentWithMetadata(
 	remoteRules: GlobalInstructionsFile[],
-	remoteToggles: CodemarieRulesToggles,
+	remoteToggles: DietCodeRulesToggles,
 	opts?: { evaluationContext?: RuleEvaluationContext },
 ): RuleLoadResult {
 	const activatedConditionalRules: ActivatedConditionalRule[] = []
@@ -275,31 +275,31 @@ export function getRemoteRulesTotalContentWithMetadata(
 }
 
 /**
- * Handles converting any directory into a file (specifically used for .codemarierules and .codemarierules/workflows)
- * The old .codemarierules file or .codemarierules/workflows file will be renamed to a default filename
+ * Handles converting any directory into a file (specifically used for .dietcoderules and .dietcoderules/workflows)
+ * The old .dietcoderules file or .dietcoderules/workflows file will be renamed to a default filename
  * Doesn't do anything if the dir already exists or doesn't exist
  * Returns whether there are any uncaught errors
  */
-export async function ensureLocalCodemarieDirExists(codemarierulePath: string, defaultRuleFilename: string): Promise<boolean> {
+export async function ensureLocalDietCodeDirExists(dietcoderulePath: string, defaultRuleFilename: string): Promise<boolean> {
 	try {
-		const exists = await fileExistsAtPath(codemarierulePath)
+		const exists = await fileExistsAtPath(dietcoderulePath)
 
-		if (exists && !(await isDirectory(codemarierulePath))) {
-			// logic to convert .codemarierules file into directory, and rename the rules file to {defaultRuleFilename}
-			const content = await fs.readFile(codemarierulePath, "utf8")
-			const tempPath = `${codemarierulePath}.bak`
-			await fs.rename(codemarierulePath, tempPath) // create backup
+		if (exists && !(await isDirectory(dietcoderulePath))) {
+			// logic to convert .dietcoderules file into directory, and rename the rules file to {defaultRuleFilename}
+			const content = await fs.readFile(dietcoderulePath, "utf8")
+			const tempPath = `${dietcoderulePath}.bak`
+			await fs.rename(dietcoderulePath, tempPath) // create backup
 			try {
-				await fs.mkdir(codemarierulePath, { recursive: true })
-				await fs.writeFile(path.join(codemarierulePath, defaultRuleFilename), content, "utf8")
+				await fs.mkdir(dietcoderulePath, { recursive: true })
+				await fs.writeFile(path.join(dietcoderulePath, defaultRuleFilename), content, "utf8")
 				await fs.unlink(tempPath).catch(() => {}) // delete backup
 
 				return false // conversion successful with no errors
 			} catch (_conversionError) {
 				// attempt to restore backup on conversion failure
 				try {
-					await fs.rm(codemarierulePath, { recursive: true, force: true }).catch(() => {})
-					await fs.rename(tempPath, codemarierulePath) // restore backup
+					await fs.rm(dietcoderulePath, { recursive: true, force: true }).catch(() => {})
+					await fs.rename(tempPath, dietcoderulePath) // restore backup
 				} catch (_restoreError) {}
 				return true // in either case here we consider this an error
 			}
@@ -319,26 +319,26 @@ export const createRuleFile = async (isGlobal: boolean, filename: string, cwd: s
 		let filePath: string
 		if (isGlobal) {
 			if (type === "workflow") {
-				const globalCodemarieWorkflowFilePath = await ensureWorkflowsDirectoryExists()
-				filePath = path.join(globalCodemarieWorkflowFilePath, filename)
+				const globalDietCodeWorkflowFilePath = await ensureWorkflowsDirectoryExists()
+				filePath = path.join(globalDietCodeWorkflowFilePath, filename)
 			} else {
-				const globalCodemarieRulesFilePath = await ensureRulesDirectoryExists()
-				filePath = path.join(globalCodemarieRulesFilePath, filename)
+				const globalDietCodeRulesFilePath = await ensureRulesDirectoryExists()
+				filePath = path.join(globalDietCodeRulesFilePath, filename)
 			}
 		} else {
-			const localCodemarieRulesFilePath = path.resolve(cwd, GlobalFileNames.codemarieRules)
+			const localDietCodeRulesFilePath = path.resolve(cwd, GlobalFileNames.dietcodeRules)
 
-			const hasError = await ensureLocalCodemarieDirExists(localCodemarieRulesFilePath, "default-rules.md")
+			const hasError = await ensureLocalDietCodeDirExists(localDietCodeRulesFilePath, "default-rules.md")
 			if (hasError === true) {
 				return { filePath: null, fileExists: false }
 			}
 
-			await fs.mkdir(localCodemarieRulesFilePath, { recursive: true })
+			await fs.mkdir(localDietCodeRulesFilePath, { recursive: true })
 
 			if (type === "workflow") {
 				const localWorkflowsFilePath = path.resolve(cwd, GlobalFileNames.workflows)
 
-				const hasError = await ensureLocalCodemarieDirExists(localWorkflowsFilePath, "default-workflows.md")
+				const hasError = await ensureLocalDietCodeDirExists(localWorkflowsFilePath, "default-workflows.md")
 				if (hasError === true) {
 					return { filePath: null, fileExists: false }
 				}
@@ -347,8 +347,8 @@ export const createRuleFile = async (isGlobal: boolean, filename: string, cwd: s
 
 				filePath = path.join(localWorkflowsFilePath, filename)
 			} else {
-				// codemarierules file creation
-				filePath = path.join(localCodemarieRulesFilePath, filename)
+				// dietcoderules file creation
+				filePath = path.join(localDietCodeRulesFilePath, filename)
 			}
 		}
 
@@ -398,9 +398,9 @@ export async function deleteRuleFile(
 				delete toggles[rulePath]
 				controller.stateManager.setGlobalState("globalWorkflowToggles", toggles)
 			} else {
-				const toggles = controller.stateManager.getGlobalSettingsKey("globalCodemarieRulesToggles")
+				const toggles = controller.stateManager.getGlobalSettingsKey("globalDietCodeRulesToggles")
 				delete toggles[rulePath]
-				controller.stateManager.setGlobalState("globalCodemarieRulesToggles", toggles)
+				controller.stateManager.setGlobalState("globalDietCodeRulesToggles", toggles)
 			}
 		} else {
 			if (type === "workflow") {
@@ -420,9 +420,9 @@ export async function deleteRuleFile(
 				delete toggles[rulePath]
 				controller.stateManager.setWorkspaceState("localAgentsRulesToggles", toggles)
 			} else {
-				const toggles = controller.stateManager.getWorkspaceStateKey("localCodemarieRulesToggles")
+				const toggles = controller.stateManager.getWorkspaceStateKey("localDietCodeRulesToggles")
 				delete toggles[rulePath]
-				controller.stateManager.setWorkspaceState("localCodemarieRulesToggles", toggles)
+				controller.stateManager.setWorkspaceState("localDietCodeRulesToggles", toggles)
 			}
 		}
 

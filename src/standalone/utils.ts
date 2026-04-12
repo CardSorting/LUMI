@@ -17,7 +17,7 @@ const log = (...args: unknown[]) => {
 
 		const timestamp = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`
 
-		console.log(`[${timestamp}]`, "#bot.codemarie.server.ts", ...args)
+		console.log(`[${timestamp}]`, "#bot.dietcode.server.ts", ...args)
 	}
 }
 

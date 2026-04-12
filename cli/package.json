@@ -1,11 +1,11 @@
 {
-	"name": "codemarie-cli",
+	"name": "dietcode-cli",
 	"version": "2.13.1",
 	"description": "Autonomous coding agent CLI - capable of creating/editing files, running commands, using the browser, and more",
 	"main": "dist/lib.mjs",
 	"types": "dist/lib.d.ts",
 	"bin": {
-		"codemarie": "./dist/cli.mjs"
+		"dietcode": "./dist/cli.mjs"
 	},
 	"exports": {
 		".": {
@@ -22,7 +22,7 @@
 		"x64",
 		"arm64"
 	],
-	"man": "./man/codemarie.1",
+	"man": "./man/dietcode.1",
 	"type": "module",
 	"engines": {
 		"node": ">=20.0.0"
@@ -32,18 +32,18 @@
 		"package": "npm pack --pack-destination ./dist",
 		"build": "npm run typecheck && npx tsx esbuild.mts && npm run build:types",
 		"build:production": "npm run typecheck && npx tsx esbuild.mts --production && npm run build:types",
-		"build:types": "(npx tsc -p tsconfig.lib.json || true) && cp dist/types/cli/src/exports.d.ts dist/lib.d.ts && mkdir -p dist/agent && cp dist/types/cli/src/agent/CodemarieAgent.d.ts dist/types/cli/src/agent/CodemarieSessionEmitter.d.ts dist/types/cli/src/agent/public-types.d.ts dist/agent/ && rm -rf dist/types",
+		"build:types": "(npx tsc -p tsconfig.lib.json || true) && cp dist/types/cli/src/exports.d.ts dist/lib.d.ts && mkdir -p dist/agent && cp dist/types/cli/src/agent/DietCodeAgent.d.ts dist/types/cli/src/agent/DietCodeSessionEmitter.d.ts dist/types/cli/src/agent/public-types.d.ts dist/agent/ && rm -rf dist/types",
 		"watch": "npx tsx esbuild.mts --watch",
 		"dev": "IS_DEV=true && npm run link && npm run watch ; npm run unlink",
 		"clean": "rimraf dist",
 		"typecheck": "npx tsc --noEmit",
 		"link": "npm run build && npm link",
-		"unlink": "npm unlink -g codemarie",
+		"unlink": "npm unlink -g dietcode",
 		"test": "vitest",
 		"test:run": "vitest run"
 	},
 	"keywords": [
-		"codemarie",
+		"dietcode",
 		"claude",
 		"dev",
 		"mcp",
@@ -58,16 +58,16 @@
 		"cli"
 	],
 	"author": {
-		"name": "Codemarie Bot Inc."
+		"name": "DietCode Bot Inc."
 	},
 	"license": "Apache-2.0",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/cardsorting/codemarie"
+		"url": "https://github.com/cardsorting/dietcode"
 	},
-	"homepage": "https://mariecoder.com",
+	"homepage": "https://dietcode.io",
 	"bugs": {
-		"url": "https://github.com/cardsorting/codemarie/issues"
+		"url": "https://github.com/cardsorting/dietcode/issues"
 	},
 	"devDependencies": {
 		"@types/marked": "^5.0.2",
