@@ -1,6 +1,6 @@
 /* Editor theme mapping */
 @theme {
-	--color-dietcode: #9663f1;
+	--color-dietcode: #e74c3c;
 	--color-background: var(--vscode-sideBar-background);
 	--color-border: var(--vscode-focusBorder);
 	--color-border-panel: var(--vscode-panel-border);
@@ -48,7 +48,7 @@
 	--color-menu-foreground: var(--vscode-menu-foreground);
 	--color-menu-border: var(--vscode-menu-border);
 	--color-menu-shadow: var(--vscode-menu-shadow);
-	--color-preformat: var(--vscode-textPreformat-foreground, #f78383);
+	--color-preformat: var(--vscode-textPreformat-foreground, #e74c3c);
 	--color-link: var(--vscode-textLink-foreground);
 	--color-link-hover: var(--vscode-textLink-activeForeground);
 	--color-list-hover: var(--vscode-list-hoverBackground);
