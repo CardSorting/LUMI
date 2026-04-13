@@ -1,10 +1,6 @@
 <svg width="256" height="256" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-  <!-- Soda Can Silhouette for DietCode (Classic Cola Theme) -->
-  <rect x="32" y="25" width="36" height="60" rx="4" fill="none" stroke="#e74c3c" stroke-width="6"/>
-  <!-- Top Lid Curve in Silver -->
-  <path d="M32 25 Q 50 18 68 25" fill="none" stroke="#95a5a6" stroke-width="4" stroke-linecap="round"/>
-  <!-- Bottom Curve in Silver -->
-  <path d="M32 85 Q 50 90 68 85" fill="none" stroke="#95a5a6" stroke-width="2" stroke-linecap="round"/>
-  <!-- Stylized 'D' label in Cola Red/Charcoal -->
-  <path d="M42 40 H 52 C 58 40 58 65 52 65 H 42 V 40 Z" fill="#e74c3c" stroke="#2c3e50" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Chunky "Diet Can" Silhouette with 'D' Cutout (Compound Path for Transparency) -->
+  <path d="M25 15 H 75 V 82 Q 75 92 65 92 H 35 Q 25 92 25 82 Z M 42 40 V 65 H 52 C 60 65 60 40 52 40 H 42 M 46 44 H 50 C 55 44 55 61 50 61 H 46 V 44" fill="#e74c3c" fill-rule="evenodd" />
+  <!-- Top Lid Curve (Inner) -->
+  <path d="M25 25 Q 50 15 75 25" fill="none" stroke="white" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
 </svg>

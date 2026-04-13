@@ -1,8 +1,12 @@
 export const DietCodeCompactIcon = () => (
 	<svg height="16" viewBox="0 0 100 100" width="16">
-		<g fill="none" stroke="currentColor" strokeWidth="8">
-			<path d="M35 25 H 65 V 82 Q 65 88 59 88 H 41 Q 35 88 35 82 Z" fill="currentColor" />
-			<path d="M35 25 Q 50 18 65 25" strokeLinecap="round" strokeWidth="6" />
-		</g>
+		{/* Chunky "Diet Can" Silhouette with 'D' Cutout (Compound Path for Transparency) */}
+		<path
+			d="M25 15 H 75 V 82 Q 75 92 65 92 H 35 Q 25 92 25 82 Z M 42 40 V 65 H 52 C 60 65 60 40 52 40 H 42 M 46 44 H 50 C 55 44 55 61 50 61 H 46 V 44"
+			fill="currentColor"
+			fillRule="evenodd"
+		/>
+		{/* Top Lid Curve (Inner) - using a subtle contrast stroke */}
+		<path d="M25 25 Q 50 15 75 25" fill="none" opacity="0.4" stroke="background" strokeWidth="6" />
 	</svg>
 )
