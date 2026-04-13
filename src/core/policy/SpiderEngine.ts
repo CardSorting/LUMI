@@ -4,7 +4,9 @@ import * as path from "path"
 import * as ts from "typescript"
 import * as v8 from "v8"
 import { Logger } from "@/shared/services/Logger"
+import { writeAtomic } from "@/utils/fs"
 import { getLayer, Layer } from "@/utils/joy-zoning"
+import "@/utils/path"
 import { SovereignPolicy } from "./SovereignPolicy"
 
 export interface SpiderNode {
@@ -136,6 +138,14 @@ export class SpiderEngine {
 						ioImports++
 					}
 				}
+			} else if (ts.isExportDeclaration(node)) {
+				// DEEP HARDEING: Track re-exports (export * from '...') which act as imports
+				const moduleSpecifier = node.moduleSpecifier
+				if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier)) {
+					const text = moduleSpecifier.text
+					imports.add(text)
+					totalImports++
+				}
 			} else if (ts.isCallExpression(node)) {
 				const expression = node.expression
 				if (expression.kind === ts.SyntaxKind.ImportKeyword && node.arguments.length > 0) {
@@ -190,7 +200,7 @@ export class SpiderEngine {
 			}
 			this.scheduleReachability()
 		}
-		this.saveRegistry().catch((e) => Logger.error("[SpiderEngine] Auto-save failed:", e))
+		this.saveRegistry().catch((e) => Logger.error("[SpiderEngine] Auto-save (atomic) failed:", e))
 	}
 
 	/**
@@ -501,12 +511,59 @@ export class SpiderEngine {
 		}
 		const couplingScore = totalEdges > 0 ? crossLayerEdges / totalEdges : 0
 
-		const score = depthScore * 0.3 + namingScore * 0.2 + orphanScore * 0.2 + couplingScore * 0.3
-		const report = { score, components: { depthScore, namingScore, orphanScore, couplingScore } }
+		// CYCLE DETECTION: Circular dependencies are architectural rot
+		const cycles = this.detectCycles()
+		const cyclePenalty = cycles.length > 0 ? Math.min(0.2, cycles.length * 0.05) : 0
+
+		const score = Math.max(0, depthScore * 0.3 + namingScore * 0.2 + orphanScore * 0.2 + couplingScore * 0.3 - cyclePenalty)
+		const report = { score, components: { depthScore, namingScore, orphanScore, couplingScore, cycles: cycles.length } }
 
 		this.cachedEntropy = report
 		this.lastEntropyVersion = this.version
 		return report
+	}
+
+	/**
+	 * Detects circular dependencies in the import graph using DFS.
+	 */
+	public detectCycles(): string[][] {
+		const cycles: string[][] = []
+		const visited = new Set<string>()
+		const visiting = new Set<string>()
+		const stack: string[] = []
+
+		const dfs = (nodeId: string) => {
+			visited.add(nodeId)
+			visiting.add(nodeId)
+			stack.push(nodeId)
+
+			const node = this.nodes.get(nodeId)
+			if (node) {
+				for (const imp of node.imports) {
+					const targetId = this.resolveImportToNodeId(nodeId, imp)
+					if (!targetId || !this.nodes.has(targetId)) continue
+
+					if (visiting.has(targetId)) {
+						// Found a cycle
+						const cycleStart = stack.indexOf(targetId)
+						cycles.push(stack.slice(cycleStart))
+					} else if (!visited.has(targetId)) {
+						dfs(targetId)
+					}
+				}
+			}
+
+			visiting.delete(nodeId)
+			stack.pop()
+		}
+
+		for (const nodeId of this.nodes.keys()) {
+			if (!visited.has(nodeId)) {
+				dfs(nodeId)
+			}
+		}
+
+		return cycles
 	}
 
 	/**
@@ -546,6 +603,31 @@ export class SpiderEngine {
 				})
 			}
 		}
+
+		// SPI-004: Circular Dependency Detection
+		const cycles = this.detectCycles()
+		for (const cycle of cycles) {
+			violations.push({
+				id: "SPI-004",
+				severity: "ERROR",
+				message: `Circular Dependency Detected: ${cycle.join(" -> ")} -> ${cycle[0]}`,
+				path: cycle[0],
+				remediation: "Break the cycle by extracting shared logic to a lower layer or using interfaces.",
+			})
+		}
+
+		// Proactive Ghost Intelligence
+		this.findGhosts()
+		for (const ghost of this.ghosts) {
+			violations.push({
+				id: "SPI-005",
+				severity: "WARN",
+				message: `Ghost Import: ${ghost}`,
+				path: ghost.split(" -> ")[0],
+				remediation: "Dangling import discovered. Check if the file was deleted or the path is incorrect.",
+			})
+		}
+
 		return violations
 	}
 
@@ -572,7 +654,8 @@ export class SpiderEngine {
 		}
 		if (!fs.existsSync(this.snapshotDir)) await fs.promises.mkdir(this.snapshotDir, { recursive: true })
 		const filePath = path.join(this.snapshotDir, `${Date.now()}.json`)
-		await fs.promises.writeFile(filePath, JSON.stringify(snapshot, null, 2))
+		// PRODUCTION HARDENING: Atomic write to prevent corruption
+		await writeAtomic(filePath, JSON.stringify(snapshot, null, 2))
 		return filePath
 	}
 
@@ -617,10 +700,10 @@ export class SpiderEngine {
 			else if (this.nodes.has(`${rel}.tsx`)) result = `${rel}.tsx`
 			else {
 				// Handle directory index files for aliases
-				const indexTs = path.join(rel, "index.ts").replace(/\\/g, "/")
+				const indexTs = path.join(rel, "index.ts").toPosix()
 				if (this.nodes.has(indexTs)) result = indexTs
 				else {
-					const indexTsx = path.join(rel, "index.tsx").replace(/\\/g, "/")
+					const indexTsx = path.join(rel, "index.tsx").toPosix()
 					if (this.nodes.has(indexTsx)) result = indexTsx
 				}
 			}
@@ -664,7 +747,8 @@ export class SpiderEngine {
 			const binFile = this.registryFile.replace(".json", ".spiderbin")
 			if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
-			await fs.promises.writeFile(binFile, data)
+			// PRODUCTION HARDENING: Atomic binary write
+			await writeAtomic(binFile, data)
 			this.saveTimeout = null
 		}, 500)
 	}

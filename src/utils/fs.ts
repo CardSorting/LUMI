@@ -98,6 +98,35 @@ export async function writeFile(
 	}
 }
 
+/**
+ * Robustly writes content to a file atomically by writing to a temporary file
+ * and then renaming it. This prevents data corruption if the process is killed
+ * or power is lost during a write operation.
+ */
+export async function writeAtomic(filePath: string, content: string | Uint8Array): Promise<void> {
+	const tempPath = `${filePath}.${Date.now()}.tmp`
+	try {
+		if (content instanceof Uint8Array) {
+			await fs.writeFile(tempPath, content)
+		} else {
+			await fs.writeFile(tempPath, content, "utf8")
+		}
+
+		// Sync to disk to ensure data is actually written
+		const handle = await fs.open(tempPath, "r+")
+		await handle.sync()
+		await handle.close()
+
+		await fs.rename(tempPath, filePath)
+	} catch (err) {
+		// Clean up temp file on failure
+		try {
+			await fs.unlink(tempPath)
+		} catch (e) {}
+		throw err
+	}
+}
+
 // Common OS-generated files that would appear in an otherwise clean directory
 const OS_GENERATED_FILES = [
 	".DS_Store", // macOS Finder

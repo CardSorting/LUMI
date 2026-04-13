@@ -1,6 +1,7 @@
 import * as path from "path"
 import { PathogenStore } from "../integrity/PathogenStore"
 import { SpiderEngine } from "./SpiderEngine.js"
+import "@/utils/path"
 
 export interface SimulationResult {
 	safe: boolean
@@ -105,11 +106,15 @@ export class SimulationEngine {
 				orphaned: false,
 				afferentCoupling: 0,
 				dependents: [],
-				logicDensity: 0,
-				ioEntropy: 0,
-				astComplexity: 0,
-				hash: "",
-				isInterface: false,
+				logicDensity: 0.2, // Conservative logic estimate for simulation
+				ioEntropy:
+					newImports.filter((imp) => !imp.startsWith(".") && !imp.startsWith("@/")).length / (newImports.length || 1),
+				astComplexity: 100,
+				hash: "sim-pending",
+				isInterface:
+					normalizedPath.includes("/interfaces/") ||
+					normalizedPath.includes("/types/") ||
+					normalizedPath.endsWith(".d.ts"),
 			})
 		}
 
@@ -138,7 +143,6 @@ export class SimulationEngine {
 
 	private normalize(p: string): string {
 		const abs = path.resolve(this.cwd, p)
-		const rel = path.relative(this.cwd, abs).replace(/\\/g, "/")
-		return rel
+		return path.relative(this.cwd, abs).toPosix()
 	}
 }
