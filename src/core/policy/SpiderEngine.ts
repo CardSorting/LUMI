@@ -1,7 +1,8 @@
 import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
-import { CallExpression, ImportDeclaration, Project, SourceFile, SyntaxKind } from "ts-morph"
+import * as ts from "typescript"
+import * as v8 from "v8"
 import { Logger } from "@/shared/services/Logger"
 import { getLayer, Layer } from "@/utils/joy-zoning"
 import { SovereignPolicy } from "./SovereignPolicy"
@@ -58,7 +59,6 @@ export interface SpiderViolation {
 export class SpiderEngine {
 	public nodes: Map<string, SpiderNode> = new Map()
 	public version = 0
-	private project: Project
 	private snapshotDir: string
 	private registryFile: string
 	private resolutionCache: Map<string, string | null> = new Map()
@@ -69,13 +69,6 @@ export class SpiderEngine {
 	constructor(public cwd: string) {
 		this.snapshotDir = path.join(cwd, ".spider", "snapshots")
 		this.registryFile = path.join(cwd, ".spider", "registry.json")
-		this.project = new Project({
-			useInMemoryFileSystem: true,
-			compilerOptions: {
-				allowJs: true,
-				checkJs: false,
-			},
-		})
 	}
 
 	/**
@@ -94,30 +87,35 @@ export class SpiderEngine {
 			return
 		}
 
-		const sourceFile = this.project.createSourceFile(absolutePath, content, { overwrite: true })
+		const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
 		const imports: Set<string> = new Set()
 
-		sourceFile.forEachDescendant((node) => {
-			if (node.isKind(SyntaxKind.ImportDeclaration)) {
-				const importDeclaration = node as ImportDeclaration
-				const moduleSpecifier = importDeclaration.getModuleSpecifier().getLiteralValue()
-				imports.add(moduleSpecifier)
-			} else if (node.isKind(SyntaxKind.CallExpression)) {
-				const callExpression = node as CallExpression
-				if (callExpression.getExpression().getText() === "import" && callExpression.getArguments().length > 0) {
-					const arg = callExpression.getArguments()[0]
-					if (arg?.isKind(SyntaxKind.StringLiteral)) {
-						imports.add(arg.getLiteralValue())
+		const visit = (node: ts.Node) => {
+			if (ts.isImportDeclaration(node)) {
+				const moduleSpecifier = node.moduleSpecifier
+				if (ts.isStringLiteral(moduleSpecifier)) {
+					imports.add(moduleSpecifier.text)
+				}
+			} else if (ts.isCallExpression(node)) {
+				const expression = node.expression
+				if (expression.kind === ts.SyntaxKind.ImportKeyword && node.arguments.length > 0) {
+					const arg = node.arguments[0]
+					if (ts.isStringLiteral(arg)) {
+						imports.add(arg.text)
 					}
 				}
 			}
-		})
+			ts.forEachChild(node, visit)
+		}
+		visit(sourceFile)
+
+		const oldImports = oldNode?.imports || []
 		const importsList = Array.from(imports)
-		const importsChanged = !oldNode || JSON.stringify(oldNode.imports) !== JSON.stringify(importsList)
+		const importsChanged = !oldNode || JSON.stringify(oldImports) !== JSON.stringify(importsList)
 
 		const metrics = this.calculateMetrics(sourceFile)
 
-		this.nodes.set(normalizedPath, {
+		const newNode: SpiderNode = {
 			id: normalizedPath,
 			path: normalizedPath,
 			layer,
@@ -128,16 +126,47 @@ export class SpiderEngine {
 			afferentCoupling: oldNode?.afferentCoupling || 0,
 			...metrics,
 			hash,
-		})
+		}
 
-		// MEMORY HARDENING: Discard AST after extraction to prevent memory leaks in large projects
-		this.project.removeSourceFile(sourceFile)
+		this.nodes.set(normalizedPath, newNode)
 
 		if (importsChanged) {
+			this.updateIncrementalCoupling(normalizedPath, oldImports, importsList)
 			this.resolutionCache.clear()
 			this.computeReachability()
 		}
 		this.saveRegistry().catch((e) => Logger.error("[SpiderEngine] Auto-save failed:", e))
+	}
+
+	/**
+	 * Atomic, incremental update of the coupling graph.
+	 * Only updates affected nodes to maintain O(1) propagation.
+	 */
+	private updateIncrementalCoupling(nodeId: string, oldImports: string[], newImports: string[]) {
+		const removed = oldImports.filter((i) => !newImports.includes(i))
+		const added = newImports.filter((i) => !oldImports.includes(i))
+
+		// 1. Process removals
+		for (const imp of removed) {
+			const targetId = this.resolveImportToNodeId(nodeId, imp)
+			if (targetId && this.nodes.has(targetId)) {
+				const target = this.nodes.get(targetId)!
+				target.dependents = target.dependents.filter((d) => d !== nodeId)
+				target.afferentCoupling = target.dependents.length
+			}
+		}
+
+		// 2. Process additions
+		for (const imp of added) {
+			const targetId = this.resolveImportToNodeId(nodeId, imp)
+			if (targetId && this.nodes.has(targetId)) {
+				const target = this.nodes.get(targetId)!
+				if (!target.dependents.includes(nodeId)) {
+					target.dependents.push(nodeId)
+					target.afferentCoupling = target.dependents.length
+				}
+			}
+		}
 	}
 
 	/**
@@ -149,8 +178,6 @@ export class SpiderEngine {
 		const normalizedPath = relativePath.replace(/\\/g, "/")
 
 		this.nodes.delete(normalizedPath)
-		const sf = this.project.getSourceFile(absolutePath)
-		if (sf) this.project.removeSourceFile(sf)
 		this.resolutionCache.clear()
 		this.computeReachability()
 		this.cachedEntropy = null // Invalidate cache
@@ -162,9 +189,6 @@ export class SpiderEngine {
 	 */
 	public clearNodes() {
 		this.nodes.clear()
-		for (const sourceFile of this.project.getSourceFiles()) {
-			this.project.removeSourceFile(sourceFile)
-		}
 		this.resolutionCache.clear()
 		this.version++
 	}
@@ -174,9 +198,6 @@ export class SpiderEngine {
 	 */
 	public buildGraph(files: { filePath: string; content: string }[]): void {
 		this.nodes.clear()
-		for (const sourceFile of this.project.getSourceFiles()) {
-			this.project.removeSourceFile(sourceFile)
-		}
 
 		for (const file of files) {
 			const absolutePath = path.resolve(this.cwd, file.filePath)
@@ -185,24 +206,27 @@ export class SpiderEngine {
 			const layer = getLayer(absolutePath)
 			const hash = crypto.createHash("md5").update(file.content).digest("hex")
 
-			const sourceFile = this.project.createSourceFile(absolutePath, file.content, { overwrite: true })
+			const sourceFile = ts.createSourceFile(absolutePath, file.content, ts.ScriptTarget.Latest, true)
 			const imports: Set<string> = new Set()
 
-			sourceFile.forEachDescendant((node) => {
-				if (node.isKind(SyntaxKind.ImportDeclaration)) {
-					const importDeclaration = node as ImportDeclaration
-					const moduleSpecifier = importDeclaration.getModuleSpecifier().getLiteralValue()
-					imports.add(moduleSpecifier)
-				} else if (node.isKind(SyntaxKind.CallExpression)) {
-					const callExpression = node as CallExpression
-					if (callExpression.getExpression().getText() === "import" && callExpression.getArguments().length > 0) {
-						const arg = callExpression.getArguments()[0]
-						if (arg?.isKind(SyntaxKind.StringLiteral)) {
-							imports.add(arg.getLiteralValue())
+			const visit = (node: ts.Node) => {
+				if (ts.isImportDeclaration(node)) {
+					const moduleSpecifier = node.moduleSpecifier
+					if (ts.isStringLiteral(moduleSpecifier)) {
+						imports.add(moduleSpecifier.text)
+					}
+				} else if (ts.isCallExpression(node)) {
+					const expression = node.expression
+					if (expression.kind === ts.SyntaxKind.ImportKeyword && node.arguments.length > 0) {
+						const arg = node.arguments[0]
+						if (ts.isStringLiteral(arg)) {
+							imports.add(arg.text)
 						}
 					}
 				}
-			})
+				ts.forEachChild(node, visit)
+			}
+			visit(sourceFile)
 
 			const metrics = this.calculateMetrics(sourceFile)
 
@@ -218,9 +242,6 @@ export class SpiderEngine {
 				...metrics,
 				hash,
 			})
-
-			// MEMORY HARDENING: Discard AST after extraction
-			this.project.removeSourceFile(sourceFile)
 		}
 
 		this.resolutionCache.clear()
@@ -484,17 +505,17 @@ export class SpiderEngine {
 		return result
 	}
 
-	public serialize(): string {
-		return JSON.stringify(Array.from(this.nodes.entries()))
+	public serialize(): Buffer {
+		return v8.serialize(Array.from(this.nodes.entries()))
 	}
 
-	public deserialize(data: string) {
+	public deserialize(data: Buffer) {
 		try {
-			const entries = JSON.parse(data)
+			const entries = v8.deserialize(data)
 			this.nodes = new Map(entries)
 			this.version++
 		} catch (e) {
-			Logger.error("[SpiderEngine] Deserialization failed:", e)
+			Logger.error("[SpiderEngine] Binary deserialization failed:", e)
 		}
 	}
 
@@ -516,18 +537,28 @@ export class SpiderEngine {
 		this.saveTimeout = setTimeout(async () => {
 			const data = this.serialize()
 			const dir = path.dirname(this.registryFile)
+			const binFile = this.registryFile.replace(".json", ".spiderbin")
 			if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
-			await fs.promises.writeFile(this.registryFile, data, "utf-8")
+			await fs.promises.writeFile(binFile, data)
 			this.saveTimeout = null
 		}, 500)
 	}
 
 	public async loadRegistry(): Promise<boolean> {
-		if (!fs.existsSync(this.registryFile)) return false
+		const binFile = this.registryFile.replace(".json", ".spiderbin")
+		const fileToLoad = fs.existsSync(binFile) ? binFile : fs.existsSync(this.registryFile) ? this.registryFile : null
+
+		if (!fileToLoad) return false
+
 		try {
-			const data = await fs.promises.readFile(this.registryFile, "utf-8")
-			this.deserialize(data)
+			const data = await fs.promises.readFile(fileToLoad)
+			if (fileToLoad.endsWith(".json")) {
+				const entries = JSON.parse(data.toString("utf-8"))
+				this.nodes = new Map(entries)
+			} else {
+				this.deserialize(data)
+			}
 			this.computeCouplingMetrics()
 			this.computeReachability()
 			return true
@@ -542,35 +573,46 @@ export class SpiderEngine {
 		return id ? this.nodes.get(id)?.layer || null : null
 	}
 
-	private calculateMetrics(sourceFile: SourceFile): { logicDensity: number; ioEntropy: number; astComplexity: number } {
+	private calculateMetrics(sourceFile: ts.SourceFile): { logicDensity: number; ioEntropy: number; astComplexity: number } {
 		let totalNodes = 0
 		let logicNodes = 0
+		let ioImports = 0
+		let totalImports = 0
 
-		sourceFile.forEachDescendant((node) => {
-			const kind = node.getKind()
+		const visit = (node: ts.Node) => {
 			totalNodes++
+			const kind = node.kind
 			if (
-				kind === SyntaxKind.IfStatement ||
-				kind === SyntaxKind.ForStatement ||
-				kind === SyntaxKind.ForInStatement ||
-				kind === SyntaxKind.ForOfStatement ||
-				kind === SyntaxKind.WhileStatement ||
-				kind === SyntaxKind.DoStatement ||
-				kind === SyntaxKind.SwitchStatement
+				kind === ts.SyntaxKind.IfStatement ||
+				kind === ts.SyntaxKind.ForStatement ||
+				kind === ts.SyntaxKind.ForInStatement ||
+				kind === ts.SyntaxKind.ForOfStatement ||
+				kind === ts.SyntaxKind.WhileStatement ||
+				kind === ts.SyntaxKind.DoStatement ||
+				kind === ts.SyntaxKind.SwitchStatement
 			) {
 				logicNodes++
 			}
-		})
 
-		const imports = sourceFile.getImportDeclarations()
-		const ioImports = imports.filter((imp) => {
-			const spec = imp.getModuleSpecifierValue()
-			return !spec.startsWith(".") && !spec.startsWith("@/")
-		}).length
+			if (ts.isImportDeclaration(node)) {
+				totalImports++
+				const spec = node.moduleSpecifier
+				if (ts.isStringLiteral(spec)) {
+					const text = spec.text
+					if (!text.startsWith(".") && !text.startsWith("@/")) {
+						ioImports++
+					}
+				}
+			}
+
+			ts.forEachChild(node, visit)
+		}
+
+		visit(sourceFile)
 
 		return {
 			logicDensity: totalNodes > 0 ? logicNodes / totalNodes : 0,
-			ioEntropy: imports.length > 0 ? ioImports / imports.length : 0,
+			ioEntropy: totalImports > 0 ? ioImports / totalImports : 0,
 			astComplexity: totalNodes,
 		}
 	}

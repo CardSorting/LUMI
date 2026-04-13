@@ -1,7 +1,7 @@
 import * as fs from "fs"
-import minimatch from "minimatch"
+import { minimatch } from "minimatch"
 import * as path from "path"
-import { CallExpression, ImportDeclaration, Project, SyntaxKind } from "ts-morph"
+import * as ts from "typescript"
 import { SovereignPolicy } from "../core/policy/SovereignPolicy"
 
 export type Layer = "domain" | "core" | "infrastructure" | "plumbing" | "ui"
@@ -64,53 +64,72 @@ const STRICT_BLOCKLIST = [
 	".eot",
 ]
 
+let SPEC_CACHE: any = null
+let EXCLUDE_PATTERN_CACHE: any[] | null = null
+const PATH_LAYER_CACHE: Map<string, Layer> = new Map()
+const PATH_TAG_SUPPORT_CACHE: Map<string, boolean> = new Map()
+
 /**
  * Determines the layer of a given file path based on Joy-Zoning conventions or spider.spec.json.
+ * High-Performance: Uses an in-memory session cache to avoid redundant path math.
  */
 export function getLayer(filePath: string): Layer {
 	const normalized = filePath.replace(/\\/g, "/")
+	if (PATH_LAYER_CACHE.has(normalized)) return PATH_LAYER_CACHE.get(normalized)!
 
-	// Try to load spider.spec.json for custom domain/layer mappings
-	try {
-		const specPath = path.resolve(process.cwd(), "spider.spec.json")
-		if (fs.existsSync(specPath)) {
-			const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"))
-			if (spec.resources) {
-				// Check if any resource path matches
-				for (const [_key, resource] of Object.entries(spec.resources)) {
-					const res = resource as { path?: string; domain?: string }
-					if (res.path && normalized.includes(res.path)) {
-						if (res.domain) {
-							const domainToLayer: Record<string, Layer> = {
-								ui: "ui",
-								api: "infrastructure",
-								admin: "infrastructure",
-								domain: "domain",
-								core: "core",
-							}
-							return domainToLayer[res.domain] || "infrastructure"
-						}
+	// Try to load spider.spec.json for custom domain/layer mappings (Cached)
+	if (SPEC_CACHE === null) {
+		try {
+			const specPath = path.resolve(process.cwd(), "spider.spec.json")
+			if (fs.existsSync(specPath)) {
+				SPEC_CACHE = JSON.parse(fs.readFileSync(specPath, "utf-8"))
+			} else {
+				SPEC_CACHE = {}
+			}
+		} catch (_e) {
+			SPEC_CACHE = {}
+		}
+	}
+
+	if (SPEC_CACHE?.resources) {
+		// Check if any resource path matches
+		for (const [_key, resource] of Object.entries(SPEC_CACHE.resources)) {
+			const res = resource as { path?: string; domain?: string }
+			if (res.path && normalized.includes(res.path)) {
+				if (res.domain) {
+					const domainToLayer: Record<string, Layer> = {
+						ui: "ui",
+						api: "infrastructure",
+						admin: "infrastructure",
+						domain: "domain",
+						core: "core",
 					}
+					return domainToLayer[res.domain] || "infrastructure"
 				}
 			}
 		}
-	} catch (_e) {
-		// Fallback to default logic
 	}
 
-	if (normalized.includes("src/domain/")) return "domain"
-	if (normalized.includes("src/infrastructure/")) return "infrastructure"
-	if (normalized.includes("src/plumbing/")) return "plumbing"
-	if (normalized.includes("src/ui/")) return "ui"
+	const layer = normalized.includes("src/domain/")
+		? "domain"
+		: normalized.includes("src/infrastructure/")
+			? "infrastructure"
+			: normalized.includes("src/plumbing/")
+				? "plumbing"
+				: normalized.includes("src/ui/")
+					? "ui"
+					: normalized.includes("src/core/")
+						? "core"
+						: normalized.includes("src/services/") || normalized.includes("src/integrations/")
+							? "infrastructure"
+							: normalized.includes("src/utils/")
+								? "plumbing"
+								: normalized.includes("webview-ui/")
+									? "ui"
+									: "infrastructure"
 
-	// Fallback for DietCode's specific structure if it doesn't match the standard Joy-Zoning
-	// NOTE: src/core/ is NOT strict domain — it's a "soft" domain with relaxed enforcement
-	if (normalized.includes("src/core/")) return "core"
-	if (normalized.includes("src/services/") || normalized.includes("src/integrations/")) return "infrastructure"
-	if (normalized.includes("src/utils/")) return "plumbing"
-	if (normalized.includes("webview-ui/")) return "ui"
-
-	return "infrastructure" // Default
+	PATH_LAYER_CACHE.set(normalized, layer)
+	return layer
 }
 
 /**
@@ -118,6 +137,8 @@ export function getLayer(filePath: string): Layer {
  * Only source files that support JSDoc-style comments are included.
  */
 export function isLayerTagSupported(filePath: string, content?: string): boolean {
+	const normalized = filePath.replace(/\\/g, "/")
+	if (!content && PATH_TAG_SUPPORT_CACHE.has(normalized)) return PATH_TAG_SUPPORT_CACHE.get(normalized)!
 	const ext = path.extname(filePath).toLowerCase()
 	if (filePath.toLowerCase().endsWith(".d.ts") || STRICT_BLOCKLIST.includes(ext)) return false
 
@@ -126,12 +147,13 @@ export function isLayerTagSupported(filePath: string, content?: string): boolean
 	const supportedExtensions = config.supportedLayerTags
 	const excludePaths = config.excludePaths || []
 
-	// 1. Path-based Glob Exclusion
-	for (const pattern of excludePaths) {
-		if (
-			minimatch(filePath, pattern, { dot: true }) ||
-			minimatch(path.relative(process.cwd(), filePath), pattern, { dot: true })
-		) {
+	// 1. Path-based Glob Exclusion (Optimized with Cached Matchers)
+	if (EXCLUDE_PATTERN_CACHE === null) {
+		EXCLUDE_PATTERN_CACHE = excludePaths.map((p) => (f: string) => minimatch(f, p, { dot: true }))
+	}
+
+	for (const matcher of EXCLUDE_PATTERN_CACHE) {
+		if (matcher(filePath) || matcher(path.relative(process.cwd(), filePath))) {
 			return false
 		}
 	}
@@ -158,6 +180,7 @@ export function isLayerTagSupported(filePath: string, content?: string): boolean
 		}
 	}
 
+	if (!content) PATH_TAG_SUPPORT_CACHE.set(normalized, true)
 	return true
 }
 
@@ -270,84 +293,62 @@ export function validateLayering(filePath: string, content: string): string[] {
 	const errors: string[] = []
 	const layer = getLayer(filePath)
 
-	const project = new Project()
-	const sourceFile = project.createSourceFile(filePath, content, { overwrite: true })
+	const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true)
 
-	// Validate imports
-	sourceFile.getImportDeclarations().forEach((imp: ImportDeclaration) => {
-		const moduleSpecifier = imp.getModuleSpecifierValue()
-		if (moduleSpecifier.startsWith(".")) {
-			const absoluteImportPath = path.resolve(path.dirname(filePath), moduleSpecifier)
-			const importedLayer = getLayer(absoluteImportPath)
+	// Single-pass import validation using raw TS AST
+	const visit = (node: ts.Node) => {
+		if (ts.isImportDeclaration(node)) {
+			const moduleSpecifier = node.moduleSpecifier
+			if (ts.isStringLiteral(moduleSpecifier)) {
+				const spec = moduleSpecifier.text
+				if (spec.startsWith(".")) {
+					const absoluteImportPath = path.resolve(path.dirname(filePath), spec)
+					const importedLayer = getLayer(absoluteImportPath)
 
-			if (layer === "domain") {
-				if (importedLayer === "infrastructure" || importedLayer === "ui") {
-					errors.push(`Domain layer in ${path.basename(filePath)} cannot import from ${importedLayer}.`)
-				}
-			}
-			if (layer === "core") {
-				if (importedLayer === "ui") {
-					errors.push(`Core layer in ${path.basename(filePath)} cannot import from UI — use events or callbacks.`)
-				}
-			}
-			if (layer === "infrastructure") {
-				if (importedLayer === "ui") {
-					errors.push(`Infrastructure layer in ${path.basename(filePath)} cannot import from UI.`)
-				}
-			}
-			if (layer === "ui") {
-				if (importedLayer === "infrastructure") {
-					errors.push(`UI layer in ${path.basename(filePath)} cannot directly import Infrastructure.`)
-				}
-			}
-			if (layer === "plumbing") {
-				if (["domain", "core", "infrastructure", "ui"].includes(importedLayer)) {
-					errors.push(`Plumbing layer in ${path.basename(filePath)} cannot depend on ${importedLayer} layer.`)
+					if (layer === "domain") {
+						if (importedLayer === "infrastructure" || importedLayer === "ui") {
+							errors.push(`Domain layer in ${path.basename(filePath)} cannot import from ${importedLayer}.`)
+						}
+					}
+					if (layer === "core") {
+						if (importedLayer === "ui") {
+							errors.push(
+								`Core layer in ${path.basename(filePath)} cannot import from UI — use events or callbacks.`,
+							)
+						}
+					}
+					if (layer === "infrastructure") {
+						if (importedLayer === "ui") {
+							errors.push(`Infrastructure layer in ${path.basename(filePath)} cannot import from UI.`)
+						}
+					}
+					if (layer === "ui") {
+						if (importedLayer === "infrastructure") {
+							errors.push(`UI layer in ${path.basename(filePath)} cannot directly import Infrastructure.`)
+						}
+					}
+					if (layer === "plumbing") {
+						if (["domain", "core", "infrastructure", "ui"].includes(importedLayer)) {
+							errors.push(`Plumbing layer in ${path.basename(filePath)} cannot depend on ${importedLayer} layer.`)
+						}
+					}
 				}
 			}
 		}
-	})
 
-	// Validate forbidden calls in Domain
-	if (layer === "domain") {
-		const forbiddenTerms = ["fetch", "fs.", "child_process", "axios", "http."]
-		sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).forEach((call: CallExpression) => {
-			const text = call.getExpression().getText()
+		// Validate forbidden calls in Domain
+		if (layer === "domain" && ts.isCallExpression(node)) {
+			const text = node.expression.getText(sourceFile)
+			const forbiddenTerms = ["fetch", "fs.", "child_process", "axios", "http."]
 			if (forbiddenTerms.some((term) => text.includes(term))) {
 				errors.push(`Architectural Violation: Forbidden call '${text}' in Domain layer file ${path.basename(filePath)}.`)
 			}
-		})
+		}
+
+		ts.forEachChild(node, visit)
 	}
 
-	// Circular Dependency Detection (Surface Level: A ↔ B direct cycles)
-	sourceFile.getImportDeclarations().forEach((imp: ImportDeclaration) => {
-		const moduleSpecifier = imp.getModuleSpecifierValue()
-		if (moduleSpecifier.startsWith(".")) {
-			const resolvedPath = path.resolve(
-				path.dirname(filePath),
-				moduleSpecifier + (moduleSpecifier.endsWith(".ts") ? "" : ".ts"),
-			)
-			try {
-				const importedFile = project.addSourceFileAtPathIfExists(resolvedPath)
-				if (importedFile) {
-					const isCircular = importedFile.getImportDeclarations().some((i) => {
-						const spec = i.getModuleSpecifierValue()
-						if (!spec.startsWith(".")) return false
-						const backResolved = path.resolve(path.dirname(resolvedPath), spec + (spec.endsWith(".ts") ? "" : ".ts"))
-						return backResolved === filePath
-					})
-					if (isCircular) {
-						errors.push(
-							`Architectural Violation: Circular dependency detected between ${path.basename(filePath)} and ${path.basename(resolvedPath)}.`,
-						)
-					}
-				}
-			} catch {
-				/* Imported file not on disk or inaccessible; skip circular check for this import */
-			}
-		}
-	})
-
+	visit(sourceFile)
 	return errors
 }
 

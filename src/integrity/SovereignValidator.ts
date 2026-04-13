@@ -1,4 +1,4 @@
-import { Project, SyntaxKind } from "ts-morph"
+import * as ts from "typescript"
 import { SovereignPolicy } from "../core/policy/SovereignPolicy"
 import { getLayer } from "../utils/joy-zoning"
 
@@ -7,8 +7,6 @@ import { getLayer } from "../utils/joy-zoning"
  * Allows modules to verify their own structural integrity during CI/CD.
  */
 export class SovereignValidator {
-	private project = new Project({ useInMemoryFileSystem: true })
-
 	constructor(private cwd: string) {}
 
 	/**
@@ -35,31 +33,44 @@ export class SovereignValidator {
 			}
 		}
 
-		const sourceFile = this.project.createSourceFile("temp.ts", content, { overwrite: true })
+		const sourceFile = ts.createSourceFile("temp.ts", content, ts.ScriptTarget.Latest, true)
 		const layer = getLayer(filePath)
 		const policy = SovereignPolicy.getInstance(this.cwd).getLayerConfig(layer)
 
 		let totalNodes = 0
 		let logicNodes = 0
-		sourceFile.forEachDescendant((node) => {
+		let ioImports = 0
+		let totalImports = 0
+
+		const visit = (node: ts.Node) => {
 			totalNodes++
+			const kind = node.kind
 			if (
-				node.isKind(SyntaxKind.IfStatement) ||
-				node.isKind(SyntaxKind.ForStatement) ||
-				node.isKind(SyntaxKind.SwitchStatement)
+				kind === ts.SyntaxKind.IfStatement ||
+				kind === ts.SyntaxKind.ForStatement ||
+				kind === ts.SyntaxKind.SwitchStatement
 			) {
 				logicNodes++
 			}
-		})
 
-		const imports = sourceFile.getImportDeclarations()
-		const ioImports = imports.filter((imp) => {
-			const spec = imp.getModuleSpecifierValue()
-			return !spec.startsWith(".") && !spec.startsWith("@/")
-		}).length
+			if (ts.isImportDeclaration(node)) {
+				totalImports++
+				const moduleSpecifier = node.moduleSpecifier
+				if (ts.isStringLiteral(moduleSpecifier)) {
+					const spec = moduleSpecifier.text
+					if (!spec.startsWith(".") && !spec.startsWith("@/")) {
+						ioImports++
+					}
+				}
+			}
+
+			ts.forEachChild(node, visit)
+		}
+
+		visit(sourceFile)
 
 		const density = totalNodes > 0 ? logicNodes / totalNodes : 0
-		const entropy = imports.length > 0 ? ioImports / imports.length : 0
+		const entropy = totalImports > 0 ? ioImports / totalImports : 0
 
 		const violations: string[] = []
 
@@ -79,8 +90,6 @@ export class SovereignValidator {
 				`CORE layer must have ${policy.maxIOEntropy * 100}% direct entropy. Found: ${(entropy * 100).toFixed(1)}%`,
 			)
 		}
-
-		this.project.removeSourceFile(sourceFile)
 
 		return {
 			ok: violations.length === 0,

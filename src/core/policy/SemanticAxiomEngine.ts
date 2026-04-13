@@ -1,5 +1,5 @@
 import * as path from "path"
-import { Project } from "ts-morph"
+import * as ts from "typescript"
 import { SpiderEngine } from "./SpiderEngine.js"
 
 export interface AxiomViolation {
@@ -40,11 +40,19 @@ export class SemanticAxiomEngine {
 
 		// 2. Axiom of Statelessness ([LAYER: PLUMBING])
 		if (node.layer === "plumbing") {
-			const project = new Project({ useInMemoryFileSystem: true })
-			const sf = project.createSourceFile("temp.ts", content)
-			const mutableGlobals = sf.getVariableStatements().filter((vs) => vs.getDeclarationKind() !== "const")
+			const sourceFile = ts.createSourceFile("temp.ts", content, ts.ScriptTarget.Latest, true)
+			let mutableGlobalsFound = false
 
-			if (mutableGlobals.length > 0) {
+			ts.forEachChild(sourceFile, (node) => {
+				if (ts.isVariableStatement(node)) {
+					const isConst = (ts.getCombinedModifierFlags(node.declarationList) & ts.ModifierFlags.Const) !== 0
+					if (!isConst) {
+						mutableGlobalsFound = true
+					}
+				}
+			})
+
+			if (mutableGlobalsFound) {
 				violations.push({
 					axiom: "STATELESSNESS",
 					severity: "ERROR",

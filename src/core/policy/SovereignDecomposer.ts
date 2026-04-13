@@ -1,4 +1,4 @@
-import { Project, SyntaxKind } from "ts-morph"
+import * as ts from "typescript"
 import { getLayer } from "../../utils/joy-zoning"
 
 export interface DecompositionStep {
@@ -21,79 +21,99 @@ export interface DecompositionPlan {
  * Analyzes "Fat" or "High-Entropy" modules and provides a specific recipe for splitting them.
  */
 export class SovereignDecomposer {
-	private project = new Project({ useInMemoryFileSystem: true })
-
 	public analyze(filePath: string, content: string): DecompositionPlan {
-		const sourceFile = this.project.createSourceFile("analyze.ts", content, { overwrite: true })
+		const sourceFile = ts.createSourceFile("analyze.ts", content, ts.ScriptTarget.Latest, true)
 		const layer = getLayer(filePath)
 
 		const steps: DecompositionStep[] = []
 
 		// 1. Analyze Method-Level Logic Density vs I/O
-		sourceFile.getClasses().forEach((cls) => {
-			cls.getMethods().forEach((method) => {
-				const { density, hasIO } = this.analyzeMethod(method)
+		const visit = (node: ts.Node) => {
+			if (ts.isClassDeclaration(node)) {
+				for (const element of node.members) {
+					if (ts.isMethodDeclaration(element) && element.body) {
+						const { density, hasIO } = this.analyzeMethod(element, sourceFile)
+						const methodName = element.name.getText(sourceFile)
 
-				// VIOLATION: Pure Logic in INFRASTRUCTURE
-				if (layer === "infrastructure" && density > 0.3 && !hasIO) {
-					steps.push({
-						action: "MOVE",
-						target: `Method '${method.getName()}'`,
-						destination: "DOMAIN",
-						reason: "This method is pure business logic (high density, no I/O) and should live in the Domain layer for testability.",
-						intentSuggestion: `[SOVEREIGN_INTENT: Pure domain logic for ${method.getName()}]`,
-					})
-				}
+						// VIOLATION: Pure Logic in INFRASTRUCTURE
+						if (layer === "infrastructure" && density > 0.3 && !hasIO) {
+							steps.push({
+								action: "MOVE",
+								target: `Method '${methodName}'`,
+								destination: "DOMAIN",
+								reason: "This method is pure business logic (high density, no I/O) and should live in the Domain layer for testability.",
+								intentSuggestion: `[SOVEREIGN_INTENT: Pure domain logic for ${methodName}]`,
+							})
+						}
 
-				// VIOLATION: Direct I/O in CORE/DOMAIN
-				if ((layer === "core" || layer === "domain") && hasIO) {
-					steps.push({
-						action: "MOVE",
-						target: `Method '${method.getName()}'`,
-						destination: "INFRASTRUCTURE",
-						reason: "This method performs direct I/O. Extract the I/O to an Interface and inject it to maintain sovereignty.",
-						intentSuggestion: `[SOVEREIGN_INTENT: I/O Adapter for ${method.getName()}]`,
-					})
+						// VIOLATION: Direct I/O in CORE/DOMAIN
+						if ((layer === "core" || layer === "domain") && hasIO) {
+							steps.push({
+								action: "MOVE",
+								target: `Method '${methodName}'`,
+								destination: "INFRASTRUCTURE",
+								reason: "This method performs direct I/O. Extract the I/O to an Interface and inject it to maintain sovereignty.",
+								intentSuggestion: `[SOVEREIGN_INTENT: I/O Adapter for ${methodName}]`,
+							})
+						}
+					}
 				}
-			})
-		})
+			}
+
+			if (ts.isImportDeclaration(node)) {
+				// No action here yet, handled after visit
+			}
+
+			ts.forEachChild(node, visit)
+		}
+
+		visit(sourceFile)
 
 		// 2. Analyze Import Bloat
-		const imports = sourceFile.getImportDeclarations()
-		if (imports.length > 10) {
+		let importCount = 0
+		ts.forEachChild(sourceFile, (node) => {
+			if (ts.isImportDeclaration(node)) {
+				importCount++
+			}
+		})
+
+		if (importCount > 10) {
 			steps.push({
 				action: "DECOUPLE",
 				target: "Module Imports",
 				destination: "MULTIPLE",
-				reason: "High import coupling (> 10). Split this module into mission-focused services.",
+				reason: `High import coupling (${importCount} > 10). Split this module into mission-focused services.`,
 			})
 		}
-
-		this.project.removeSourceFile(sourceFile)
 
 		return {
 			filePath,
 			currentLayer: layer.toUpperCase(),
-			integrityScore: 100 - steps.length * 15,
+			integrityScore: Math.max(0, 100 - steps.length * 15),
 			steps,
 		}
 	}
 
-	private analyzeMethod(method: MethodDeclaration): { density: number; hasIO: boolean } {
+	private analyzeMethod(method: ts.MethodDeclaration, sourceFile: ts.SourceFile): { density: number; hasIO: boolean } {
 		let nodes = 0
 		let logic = 0
 		let hasIO = false
 
-		method.forEachDescendant((node) => {
+		const visit = (node: ts.Node) => {
 			nodes++
-			if (node.isKind(SyntaxKind.IfStatement) || node.isKind(SyntaxKind.SwitchStatement)) logic++
+			if (ts.isIfStatement(node) || ts.isSwitchStatement(node)) logic++
 
+			const text = node.getText(sourceFile)
 			// Detect I/O signals (fs, http, db calls)
-			// In a real implementation, we'd check for specific library symbols
-			if (node.getText().includes("fs.") || node.getText().includes("fetch(") || node.getText().includes(".save()")) {
+			if (text.includes("fs.") || text.includes("fetch(") || text.includes(".save()")) {
 				hasIO = true
 			}
-		})
+			ts.forEachChild(node, visit)
+		}
+
+		if (method.body) {
+			visit(method.body)
+		}
 
 		return {
 			density: nodes > 0 ? logic / nodes : 0,

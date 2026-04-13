@@ -1,6 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
-import { Project, VariableDeclarationKind } from "ts-morph"
+import * as ts from "typescript"
 import { Logger } from "@/shared/services/Logger"
 import { generateLayerComment, getLayer, isLayerTagSupported, parseLayerTag } from "@/utils/joy-zoning"
 import { SovereignTransaction } from "../../integrity/SovereignTransaction"
@@ -141,20 +141,38 @@ export class RefactorHealer {
 	 */
 	public async healStatelessness(filePath: string): Promise<boolean> {
 		try {
-			const project = new Project()
 			const absolutePath = path.resolve(this.projectRoot, filePath)
-			const sourceFile = project.addSourceFileAtPath(absolutePath)
+			const content = await fs.readFile(absolutePath, "utf-8")
+			const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
 
+			// Simple byte-level replacement for 'let' to 'const' at global variable level
+			// This is safer than full AST factory for simple healing.
 			let changed = false
-			sourceFile.getVariableStatements().forEach((vs) => {
-				if (vs.getDeclarationKind() !== VariableDeclarationKind.Const) {
-					vs.setDeclarationKind(VariableDeclarationKind.Const)
-					changed = true
+			let newContent = content
+
+			ts.forEachChild(sourceFile, (node) => {
+				if (ts.isVariableStatement(node)) {
+					const flags = ts.getCombinedModifierFlags(node.declarationList)
+					if (!(flags & ts.ModifierFlags.Const)) {
+						// Only heal if it's a 'let' or 'var' at the top level
+						const listText = node.declarationList.getFullText(sourceFile)
+						if (listText.trim().startsWith("let ") || listText.trim().startsWith("var ")) {
+							const start = node.declarationList.getStart(sourceFile)
+							const updatedList = listText.replace(/^(let|var)\s+/, "const ")
+
+							// Just update the first occurrence for this heuristic check
+							if (updatedList !== listText) {
+								newContent =
+									newContent.substring(0, start) + updatedList + newContent.substring(start + listText.length)
+								changed = true
+							}
+						}
+					}
 				}
 			})
 
 			if (changed) {
-				await sourceFile.save()
+				await fs.writeFile(absolutePath, newContent, "utf-8")
 				return true
 			}
 		} catch (err) {

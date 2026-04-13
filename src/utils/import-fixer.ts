@@ -1,13 +1,12 @@
+import * as fs from "fs/promises"
 import * as path from "path"
-import { Project } from "ts-morph"
+import * as ts from "typescript"
 
 /**
  * ImportFixer: Automates the rewriting of relative imports when files move between layers.
  * Ported and adapted from DietCode's high-sovereignty architecture.
  */
 export class ImportFixer {
-	private project = new Project()
-
 	constructor(private projectRoot: string) {}
 
 	/**
@@ -17,36 +16,47 @@ export class ImportFixer {
 		const absoluteOldPath = path.resolve(this.projectRoot, oldPath)
 		const absoluteNewPath = path.resolve(this.projectRoot, newPath)
 
-		// 1. Add all TS files in src to the project
-		this.project.addSourceFilesAtPaths("src/**/*.ts")
+		// Get all TS files in src
+		const files = await this.glob("src/**/*.ts")
 
-		for (const sourceFile of this.project.getSourceFiles()) {
+		for (const file of files) {
+			const absoluteSourcePath = path.resolve(this.projectRoot, file)
+			const content = await fs.readFile(absoluteSourcePath, "utf-8")
+			const sourceFile = ts.createSourceFile(absoluteSourcePath, content, ts.ScriptTarget.Latest, true)
+
 			let changed = false
-			const imports = sourceFile.getImportDeclarations()
+			let newContent = content
 
-			for (const imp of imports) {
-				const specifier = imp.getModuleSpecifierValue()
-				if (!specifier.startsWith(".")) continue
+			ts.forEachChild(sourceFile, (node) => {
+				if (ts.isImportDeclaration(node)) {
+					const moduleSpecifier = node.moduleSpecifier
+					if (ts.isStringLiteral(moduleSpecifier)) {
+						const specifier = moduleSpecifier.text
+						if (specifier.startsWith(".")) {
+							const resolvedImport = path.resolve(path.dirname(absoluteSourcePath), specifier)
 
-				const resolvedImport = path.resolve(path.dirname(sourceFile.getFilePath()), specifier)
+							// Normalize paths for comparison (without extension)
+							const normOld = absoluteOldPath.replace(/\.ts$/, "")
+							const normImport = resolvedImport.replace(/\.ts$/, "")
 
-				// Normalize paths for comparison (without extension)
-				const normOld = absoluteOldPath.replace(/\.ts$/, "")
-				const normImport = resolvedImport.replace(/\.ts$/, "")
+							if (normImport === normOld) {
+								// Calculate new relative path
+								let relativePath = path.relative(path.dirname(absoluteSourcePath), absoluteNewPath)
+								if (!relativePath.startsWith(".")) relativePath = `./${relativePath}`
+								relativePath = relativePath.replace(/\.ts$/, "")
 
-				if (normImport === normOld) {
-					// Calculate new relative path
-					let relativePath = path.relative(path.dirname(sourceFile.getFilePath()), absoluteNewPath)
-					if (!relativePath.startsWith(".")) relativePath = `./${relativePath}`
-					relativePath = relativePath.replace(/\.ts$/, "")
-
-					imp.setModuleSpecifier(relativePath)
-					changed = true
+								const start = moduleSpecifier.getStart(sourceFile) + 1 // +1 for quote
+								const end = moduleSpecifier.getEnd() - 1 // -1 for quote
+								newContent = newContent.substring(0, start) + relativePath + newContent.substring(end)
+								changed = true
+							}
+						}
+					}
 				}
-			}
+			})
 
 			if (changed) {
-				await sourceFile.save()
+				await fs.writeFile(absoluteSourcePath, newContent, "utf-8")
 			}
 		}
 	}
@@ -58,27 +68,57 @@ export class ImportFixer {
 		const absoluteOldPath = path.resolve(this.projectRoot, oldPath)
 		const absoluteNewPath = path.resolve(this.projectRoot, newPath)
 
-		const sourceFile = this.project.addSourceFileAtPath(absoluteNewPath)
+		const content = await fs.readFile(absoluteNewPath, "utf-8")
+		const sourceFile = ts.createSourceFile(absoluteNewPath, content, ts.ScriptTarget.Latest, true)
+
 		let changed = false
+		let newContent = content
 
-		for (const imp of sourceFile.getImportDeclarations()) {
-			const specifier = imp.getModuleSpecifierValue()
-			if (!specifier.startsWith(".")) continue
+		ts.forEachChild(sourceFile, (node) => {
+			if (ts.isImportDeclaration(node)) {
+				const moduleSpecifier = node.moduleSpecifier
+				if (ts.isStringLiteral(moduleSpecifier)) {
+					const specifier = moduleSpecifier.text
+					if (specifier.startsWith(".")) {
+						// The import was relative to the OLD path.
+						const resolvedTarget = path.resolve(path.dirname(absoluteOldPath), specifier)
 
-			// The import was relative to the OLD path. We need to resolve it relative to the old path,
-			// then calculate its new relative path from the NEW path.
-			const resolvedTarget = path.resolve(path.dirname(absoluteOldPath), specifier)
+						let newRelative = path.relative(path.dirname(absoluteNewPath), resolvedTarget)
+						if (!newRelative.startsWith(".")) newRelative = `./${newRelative}`
+						newRelative = newRelative.replace(/\.ts$/, "")
 
-			let newRelative = path.relative(path.dirname(absoluteNewPath), resolvedTarget)
-			if (!newRelative.startsWith(".")) newRelative = `./${newRelative}`
-			newRelative = newRelative.replace(/\.ts$/, "")
-
-			imp.setModuleSpecifier(newRelative)
-			changed = true
-		}
+						const start = moduleSpecifier.getStart(sourceFile) + 1
+						const end = moduleSpecifier.getEnd() - 1
+						newContent = newContent.substring(0, start) + newRelative + newContent.substring(end)
+						changed = true
+					}
+				}
+			}
+		})
 
 		if (changed) {
-			await sourceFile.save()
+			await fs.writeFile(absoluteNewPath, newContent, "utf-8")
 		}
+	}
+
+	private async glob(pattern: string): Promise<string[]> {
+		// Minimal glob implementation for src/**/*.ts
+		const results: string[] = []
+		const scan = async (dir: string) => {
+			const entries = await fs.readdir(dir, { withFileTypes: true })
+			for (const entry of entries) {
+				const fullPath = path.join(dir, entry.name)
+				if (entry.isDirectory()) {
+					if (entry.name !== "node_modules" && !entry.name.startsWith(".")) {
+						await scan(fullPath)
+					}
+				} else if (entry.name.endsWith(".ts")) {
+					results.push(path.relative(this.projectRoot, fullPath))
+				}
+			}
+		}
+		const srcDir = path.resolve(this.projectRoot, "src")
+		await scan(srcDir)
+		return results
 	}
 }
