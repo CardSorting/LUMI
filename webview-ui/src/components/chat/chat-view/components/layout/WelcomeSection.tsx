@@ -16,7 +16,7 @@ import { WelcomeSectionProps } from "../../types/chatTypes"
  * Welcome section shown when there's no active task
  * Includes home header, history preview, and suggested tasks
  */
-export const WelcomeSection: React.FC<WelcomeSectionProps> = ({ showHistoryView, taskHistory, shouldShowQuickWins }) => {
+export const WelcomeSection: React.FC<WelcomeSectionProps> = ({ showHistoryView, taskHistory }) => {
 	// Quick launch worktree modal
 	const [showCreateWorktreeModal, setShowCreateWorktreeModal] = useState(false)
 	const [isGitRepo, setIsGitRepo] = useState<boolean | null>(null)
@@ -49,9 +49,9 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({ showHistoryView,
 	return (
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">
 			<div className="overflow-y-auto flex flex-col pb-2.5 justify-center flex-1">
-				<HomeHeader shouldShowQuickWins={shouldShowQuickWins} />
+				<HomeHeader />
 				<div className="flex flex-col">
-					{!shouldShowQuickWins && taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
+					{taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}
 					{/* Quick launch worktree button */}
 					{isGitRepo && worktreesEnabled?.featureFlag && worktreesEnabled?.user && (
 						<div className="flex flex-col items-center gap-3 mt-2 mb-4 px-5">
@@ -81,7 +81,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({ showHistoryView,
 					)}
 				</div>
 			</div>
-			<SuggestedTasks shouldShowQuickWins={shouldShowQuickWins} />
+			<SuggestedTasks />
 
 			{/* Quick launch worktree modal */}
 			<CreateWorktreeModal

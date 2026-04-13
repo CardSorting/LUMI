@@ -1,23 +1,8 @@
-import { EmptyRequest } from "@shared/proto/dietcode/common"
 import DietCodeLogoVariable from "@/assets/DietCodeLogoVariable"
-import { VscIcon } from "@/components/ui/vsc-icon"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { UiServiceClient } from "@/services/grpc-client"
 
-interface HomeHeaderProps {
-	shouldShowQuickWins?: boolean
-}
-
-const HomeHeader = ({ shouldShowQuickWins = false }: HomeHeaderProps) => {
+const HomeHeader = () => {
 	const { environment } = useExtensionState()
-
-	const handleTakeATour = async () => {
-		try {
-			await UiServiceClient.openWalkthrough(EmptyRequest.create())
-		} catch (error) {
-			console.error("Error opening walkthrough:", error)
-		}
-	}
 
 	const LogoComponent = DietCodeLogoVariable
 
@@ -35,17 +20,6 @@ const HomeHeader = ({ shouldShowQuickWins = false }: HomeHeaderProps) => {
 					I'm your agentic coding partner, ready to help you build, refactor, and explore your codebase.
 				</p>
 			</div>
-			{shouldShowQuickWins && (
-				<div className="mt-4">
-					<button
-						className="flex items-center gap-2 px-4 py-2 rounded-full border border-border-panel bg-white/2 hover:bg-list-background-hover transition-colors duration-150 ease-in-out text-code-foreground text-sm font-medium cursor-pointer"
-						onClick={handleTakeATour}
-						type="button">
-						Take a Tour
-						<VscIcon className="scale-90" name="play" />
-					</button>
-				</div>
-			)}
 		</div>
 	)
 }
