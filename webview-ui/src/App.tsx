@@ -5,7 +5,6 @@ import ChatView from "./components/chat/ChatView"
 import HistoryView from "./components/history/HistoryView"
 import McpView from "./components/mcp/configuration/McpConfigurationView"
 import SettingsView from "./components/settings/SettingsView"
-import WelcomeView from "./components/welcome/WelcomeView"
 import WorktreesView from "./components/worktrees/WorktreesView"
 import { useDietCodeAuth } from "./context/DietCodeAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
@@ -15,7 +14,6 @@ import { UiServiceClient } from "./services/grpc-client"
 const AppContent = () => {
 	const {
 		didHydrateState,
-		showWelcome,
 		shouldShowAnnouncement,
 		showMcp,
 		mcpTab,
@@ -55,10 +53,6 @@ const AppContent = () => {
 
 	if (!didHydrateState) {
 		return null
-	}
-
-	if (showWelcome) {
-		return <WelcomeView />
 	}
 
 	return (

@@ -4,6 +4,7 @@ import React, { forwardRef, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
 import Thumbnails from "@/components/common/Thumbnails"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { cn } from "@/lib/utils"
 import { CheckpointsServiceClient } from "@/services/grpc-client"
 import { highlightText } from "./task-header/Highlights"
 
@@ -87,6 +88,13 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 		}
 	}
 
+	const handleKeyDownContainer = (e: React.KeyboardEvent) => {
+		if (e.key === "Enter" || e.key === " ") {
+			e.preventDefault()
+			handleClick()
+		}
+	}
+
 	return (
 		<div
 			className={cn(
@@ -94,9 +102,12 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 				isEditing ? "bg-transparent shadow-none" : "btn-premium-cola",
 			)}
 			onClick={handleClick}
+			onKeyDown={handleKeyDownContainer}
+			role="button"
 			style={{
 				whiteSpace: "pre-line",
-			}}>
+			}}
+			tabIndex={isEditing ? -1 : 0}>
 			{isEditing ? (
 				<>
 					<DynamicTextArea
@@ -189,7 +200,8 @@ const RestoreButton = forwardRef<HTMLButtonElement, RestoreButtonProps>(({ type,
 				fontSize: "9px",
 				cursor: "pointer",
 			}}
-			title={title}>
+			title={title}
+			type="button">
 			{label}
 		</button>
 	)

@@ -372,12 +372,13 @@ export const ExtensionStateContextProvider: React.FC<{
 							// if they are embedded or sent separately.
 							// But actually we added a separate message handler in the webview.
 
-							// Update welcome screen state based on API configuration if welcome view not in progress
-							if (!newState.welcomeViewCompleted && !showWelcome) {
-								setShowWelcome(true)
-							} else if (newState.welcomeViewCompleted) {
-								setShowWelcome(false)
-							}
+							// Skip welcome screen entirely
+							// if (!newState.welcomeViewCompleted && !showWelcome && !newState.isNewUser) {
+							// 	setShowWelcome(true)
+							// } else if (newState.welcomeViewCompleted) {
+							// 	setShowWelcome(false)
+							// }
+							setShowWelcome(false) // Force false always
 
 							setDidHydrateState(true)
 
@@ -687,7 +688,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		navigateToMcp, // When settings button is clicked, navigate to settings
 		navigateToSettings, // When worktrees button is clicked, navigate to worktrees
 		navigateToWorktrees,
-		showWelcome,
 	])
 
 	const refreshOpenRouterModels = useCallback(() => {
