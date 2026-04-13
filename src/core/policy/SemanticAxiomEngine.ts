@@ -45,7 +45,7 @@ export class SemanticAxiomEngine {
 
 			ts.forEachChild(sourceFile, (node) => {
 				if (ts.isVariableStatement(node)) {
-					const isConst = (ts.getCombinedModifierFlags(node.declarationList) & ts.ModifierFlags.Const) !== 0
+					const isConst = (node.declarationList.flags & ts.NodeFlags.Const) !== 0
 					if (!isConst) {
 						mutableGlobalsFound = true
 					}

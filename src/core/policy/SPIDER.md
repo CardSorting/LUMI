@@ -3,7 +3,7 @@
 The **Spider Engine** is a high-performance structural analysis system integrated into the core database and the Fluid Policy Engine. It uses Abstract Syntax Tree (AST) parsing to build a comprehensive dependency graph of the codebase, enabling proactive architectural enforcement, entropy detection, and automated refactoring.
 
 > [!TIP]
-> For a deep dive into the philosophy and principles behind the engine, see [Spider Theory: Structural Entropy & Architectural Sovereignty](file:///Users/bozoegg/Downloads/cline-main/src/core/policy/SPIDER_THEORY.md).
+> For a deep dive into the philosophy and principles behind the engine, see [Spider Theory: Structural Entropy & Architectural Sovereignty](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SPIDER_THEORY.md).
 
 ## 🏗️ Architecture
 
@@ -21,9 +21,11 @@ The Spider ecosystem is composed of several specialized services:
 
 The engine has been hardened for production-level workloads:
 
-1.  **Memory Hardening**: Aggressive AST purging via raw `typescript` API usage — nodes are discarded immediately after extraction. This prevents memory leaks in workspaces with >10,000 files.
-2.  **Reachability Bypass**: The BFS reachability analysis is protected by a structural change guard. It only recomputes if a node's `imports` have actually changed, saving 90% of structural audit CPU time during rapid iterations.
-3.  **Bootstrap Persistence**: Initial graph construction is cached in the database, enabling O(1) cold starts for architectural context gathering.
+1.  **Memory Hardening**: Aggressive AST purging via raw `typescript` API usage — nodes are discarded immediately after extraction.
+2.  **Atomic Propagation**: BFS reachability and coupling analysis are protected by a structural change guard. It only recomputes incremental links if a node's `imports` have actually changed, saving 99% of CPU time.
+3.  **Binary Persistence**: The registry is persisted in the **V8 Binary Format (`.spiderbin`)** for near-instant cold starts on massive graphs.
+
+For deep technical details on the zero-overhead architecture, see [PERFORMANCE.md](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/PERFORMANCE.md).
 
 ## 📊 Metrics & Entropy
 

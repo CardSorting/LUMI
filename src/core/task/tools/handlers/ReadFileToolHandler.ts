@@ -78,9 +78,9 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Resolve the absolute path based on multi-workspace configuration
-		const pathResult = resolveWorkspacePath(config, relPath, "ReadFileToolHandler.execute")
+		const pathResult = resolveWorkspacePath(config, relPath as string, "ReadFileToolHandler.execute")
 		const { absolutePath, displayPath } =
-			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relPath } : pathResult
+			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relPath as string } : pathResult
 
 		// Determine workspace context for telemetry
 		const fallbackAbsolutePath = path.resolve(config.cwd, relPath ?? "")
@@ -173,7 +173,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		const fileContent = await extractFileContent(absolutePath, supportsImages)
 
 		// Track file read operation
-		await config.services.fileContextTracker.trackFileContext(relPath, "read_tool")
+		await config.services.fileContextTracker.trackFileContext(relPath as string, "read_tool")
 
 		// Handle image blocks separately - they need to be pushed to userMessageContent
 		if (fileContent.imageBlock) {
@@ -185,7 +185,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			const { SpiderEngine } = await import("../../../policy/SpiderEngine")
 			const engine = new SpiderEngine(config.cwd)
 			await engine.loadRegistry()
-			const node = engine.nodes.get(relPath)
+			const node = engine.nodes.get(relPath as string)
 			if (node) {
 				const intentRegex = /\[SOVEREIGN_INTENT:\s*(.*?)\]/
 				const intentMatch = fileContent.text.match(intentRegex)

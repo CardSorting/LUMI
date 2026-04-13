@@ -1,8 +1,8 @@
 import * as fs from "fs"
 import * as path from "path"
+import { Logger } from "@/shared/services/Logger"
 import { SpiderEngine } from "../policy/SpiderEngine.js"
 import { AuditRecorder } from "./AuditRecorder.js"
-import { Logger } from "@/shared/services/Logger"
 
 export interface SovereignHandoverData {
 	projectId: string
@@ -30,14 +30,14 @@ export class SovereigntyHandover {
 	public async exportSovereignty(engine: SpiderEngine, recorder: AuditRecorder) {
 		const report = engine.computeEntropy()
 		const score = Math.round((1 - report.score) * 100)
-		const violations = engine.getViolations().map(v => v.message)
+		const violations = engine.getViolations().map((v) => v.message)
 
 		const data: SovereignHandoverData = {
 			projectId: path.basename(this.cwd),
 			timestamp: new Date().toISOString(),
 			lastIntegrityScore: score,
 			violations,
-			graphState: engine.serialize()
+			graphState: engine.serialize().toString("base64"),
 		}
 
 		try {
@@ -57,8 +57,10 @@ export class SovereigntyHandover {
 		try {
 			const content = await fs.promises.readFile(this.handoverPath, "utf-8")
 			const data: SovereignHandoverData = JSON.parse(content)
-			engine.deserialize(data.graphState)
-			Logger.info(`[SovereigntyHandover] Architectural sovereignty restored from ${data.timestamp} (Score: ${data.lastIntegrityScore})`)
+			engine.deserialize(Buffer.from(data.graphState, "base64"))
+			Logger.info(
+				`[SovereigntyHandover] Architectural sovereignty restored from ${data.timestamp} (Score: ${data.lastIntegrityScore})`,
+			)
 			return true
 		} catch (error) {
 			Logger.error("[SovereigntyHandover] Import failed:", error)

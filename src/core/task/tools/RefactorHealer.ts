@@ -152,8 +152,8 @@ export class RefactorHealer {
 
 			ts.forEachChild(sourceFile, (node) => {
 				if (ts.isVariableStatement(node)) {
-					const flags = ts.getCombinedModifierFlags(node.declarationList)
-					if (!(flags & ts.ModifierFlags.Const)) {
+					const isConst = (node.declarationList.flags & ts.NodeFlags.Const) !== 0
+					if (!isConst) {
 						// Only heal if it's a 'let' or 'var' at the top level
 						const listText = node.declarationList.getFullText(sourceFile)
 						if (listText.trim().startsWith("let ") || listText.trim().startsWith("var ")) {

@@ -21,7 +21,7 @@ export class ReactivePolicyObserver {
 
 				// If the agent is writing to a file, provide proactive layer awareness
 				if ((block.name === "write_to_file" || block.name === "replace_in_file") && params.path) {
-					const layer = this.guard.getLayerForPath(params.path)
+					const layer = this.guard.getLayerForPath(params.path as string)
 					const content = params.content || params.diff || ""
 
 					// Check for cross-layer import patterns in domain files

@@ -8,7 +8,9 @@ import type { TaskConfig } from "../types/TaskConfig"
 interface QueryParams {
 	layer?: string
 	minLogicDensity?: number
-	maxIoEntropy?: number
+	maxIOEntropy?: number
+	minComplexity?: number
+	orphanedOnly?: boolean
 	limit?: number
 }
 

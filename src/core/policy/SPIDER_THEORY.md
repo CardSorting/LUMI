@@ -16,7 +16,7 @@ As entropy increases:
 The engine is named **Spider** because it treats the codebase as a living **Dependency Web**. 
 
 -   **The Web**: Every file is a node; every import is a silken thread.
--   **Sensing Vibrations**: Using **Incremental Updates ($O(1)$)**, the Spider senses structural drift through a **Structural Change Guard**. It only recomputes the global reachability web if a file's import threads have actually moved. This ensures the engine remains virtually invisible in terms of CPU overhead until a significant architectural event occurs.
+-   **Sensing Vibrations**: Using **Atomic Propagation ($O(1)$)**, the Spider senses structural drift through a reactive update guard. It only adjusts local coupling links and propagates reachability when a node's import threads are actually modified. This ensures the engine remains virtually invisible (sub-millisecond latency) even in massive industrial-scale deployments.
 -   **Weaving Order**: By providing real-time feedback, it helps the "weaver" (developer) maintain the geometric integrity of the architecture.
 
 ## 🏛️ The Four Pillar Model of Structural Health
@@ -50,4 +50,4 @@ The ultimate goal of Spider is **Architectural Sovereignty**: the ability of a s
 By integrating these metrics into the **Fluid Policy Engine**, structural health moves from a static "best practice" to a dynamic, enforced **Constraint**.
 
 ---
-*For technical integration details, see [SPIDER.md](file:///Users/bozoegg/Downloads/cline-main/src/core/policy/SPIDER.md).*
+*For technical integration details, see [SPIDER.md](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SPIDER.md). For deep-dive performance details, see [PERFORMANCE.md](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/PERFORMANCE.md).*

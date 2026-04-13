@@ -12,11 +12,12 @@ import { DashboardGenerator } from "../integrity/DashboardGenerator"
 import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
 import { PathogenStore } from "../integrity/PathogenStore"
 import { StateManager } from "../storage/StateManager"
+import { RefactorHealer } from "../task/tools/RefactorHealer"
 import { SemanticAxiomEngine } from "./SemanticAxiomEngine"
 import { SimulationEngine } from "./SimulationEngine.js"
 import { SovereignOptimizer } from "./SovereignOptimizer"
 import { SpiderEngine } from "./SpiderEngine.js"
-import { SpiderRefactorer } from "./SpiderRefactorer.js"
+import { RefactoringSuggestion, SpiderRefactorer } from "./SpiderRefactorer.js"
 import { TspPolicyPlugin } from "./TspPolicyPlugin.js"
 
 export interface PolicyResult {
@@ -58,7 +59,7 @@ export class FluidPolicyEngine {
 	private pathogens: PathogenStore
 	private architecturalAlarmActive = false
 	private alarmViolations: string[] = []
-	private refactorHealer: unknown = null // TODO: Initialize properly if needed
+	private refactorHealer: RefactorHealer
 
 	constructor(
 		private cwd: string,
@@ -75,6 +76,7 @@ export class FluidPolicyEngine {
 		this.metabolicMonitor = new MetabolicMonitor(this.cwd)
 		this.optimizer = new SovereignOptimizer(this.cwd)
 		this.pathogens = new PathogenStore(this.cwd)
+		this.refactorHealer = new RefactorHealer(this.cwd)
 	}
 
 	/**
@@ -492,7 +494,7 @@ export class FluidPolicyEngine {
 		let header = `${layerContext}\n`
 
 		if (refactorSuggestions.length > 0) {
-			header += `🕷️ ARCHITECTURAL REFACTORING OPPORTUNITIES:\n${refactorSuggestions.map((s) => `  - [${s.type}] ${s.target}: ${s.reason} (${s.benefit})`).join("\n")}\n`
+			header += `🕷️ ARCHITECTURAL REFACTORING OPPORTUNITIES:\n${refactorSuggestions.map((s: RefactoringSuggestion) => `  - [${s.type}] ${s.target}: ${s.reason} (${s.benefit})`).join("\n")}\n`
 		}
 
 		if (!validation.success) {
