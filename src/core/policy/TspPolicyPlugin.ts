@@ -53,9 +53,10 @@ export class TspPolicyPlugin {
 		// 5. Rule: Structural Bottleneck Detection (High Incoming Coupling)
 		// We'll pass this via a specialized metadata object in the future,
 		// but for now, we'll implement the hook for the PolicyEngine to inject.
-		if ((this as any)._afferentCoupling > 10) {
+		const instance = this as unknown as { _afferentCoupling?: number }
+		if (instance._afferentCoupling && instance._afferentCoupling > 10) {
 			warnings.push(
-				`Structural Bottleneck: This file has ${(this as any)._afferentCoupling} incoming dependencies. Consider extracting an interface and using dependency injection to reduce fragility.`,
+				`Structural Bottleneck: This file has ${instance._afferentCoupling} incoming dependencies. Consider extracting an interface and using dependency injection to reduce fragility.`,
 			)
 		}
 

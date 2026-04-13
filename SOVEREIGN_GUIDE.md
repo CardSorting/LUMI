@@ -36,3 +36,26 @@ If the codebase enters a "Fever" state (Integrity < 70%), run the alignment scri
 ```bash
 npx ts-node src/scripts/align-sovereignty.ts
 ```
+
+## 🛰️ Agent Intelligence Features
+
+### 1. Active Surveillance (SovereignContext)
+Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block. 
+- **Density Awareness**: If logic density > 15% in an Infrastructure file, move the logic to DOMAIN.
+- **Entropy Awareness**: If I/O entropy > 5% in a Domain file, isolate the I/O to INFRASTRUCTURE.
+- **Complexity Awareness**: High complexity in PLUMBING indicates a need for modularization.
+
+## 🤝 Swarm Consensus Protocol
+When performing a mission-critical refactor (e.g., `decompose_sovereign_module`):
+1. Spawn a subagent with the `Architecture_Verifier` profile.
+2. Provide the decomposition blueprint.
+3. If the Verifier identifies an axiom violation (e.g., logic leaks into infrastructure), adjust the plan.
+4. Finalize only when consensus is reached.
+
+## 🗺️ Visual Sovereignty
+Use `generate_sovereign_map` to visualize the structural health and coupling of the substrate. High integrity is marked by low coupling between layers and high internal cohesion within Domain modules.
+
+### 2. Axiomatic Scaffolding (Born Sovereign)
+Use the `scaffold_sovereign_module` tool to create new components.
+- **Command**: `scaffold_sovereign_module { name: "UserAuth", layer: "domain" }`
+- **Blueprint Outcome**: The tool ensures the correct directory, file name (`kebab-case`), `[LAYER]` tag, and base template are applied instantly. Never create files manually if you can scaffold.

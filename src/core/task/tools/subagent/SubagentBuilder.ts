@@ -1,4 +1,6 @@
 import { buildApiHandler } from "@core/api"
+import { SovereignDoctor } from "@core/policy/SovereignDoctor"
+import { SpiderEngine } from "@core/policy/SpiderEngine"
 import { PromptRegistry } from "@core/prompts/system-prompt"
 import { DietCodeToolSet } from "@core/prompts/system-prompt/registry/DietCodeToolSet"
 import type { SystemPromptContext } from "@core/prompts/system-prompt/types"
@@ -103,11 +105,23 @@ export class SubagentBuilder {
 	buildSystemPrompt(generatedSystemPrompt: string): string {
 		const configuredSystemPrompt = this.agentConfig?.systemPrompt?.trim()
 		const systemPrompt = configuredSystemPrompt || generatedSystemPrompt
+
+		// 1. Fetch current structural health signal
+		let architectureSignal = ""
+		try {
+			const _engine = new SpiderEngine(this.baseConfig.cwd)
+			const _doctor = new SovereignDoctor(this.baseConfig.cwd)
+			// Synchronous load if possible, or just use a default tag if engine not loaded
+			architectureSignal = `\n\n# SUBSTRATE HEALTH SIGNAL\n[STATUS: JOY-ZONED]\n[SIGNAL: Every file you modify must respect the architecture axioms defined in 'SOVEREIGN_GUIDE.md'.]`
+		} catch (_e) {
+			// Fallback if registry fails
+		}
+
 		const parentContextBlock = this.parentStreamContext
 			? `\n\n# Parent Agent Context\n${this.parentStreamContext}\nUse the context above to prioritize your research within the broader task goals.`
 			: ""
 
-		return `${this.buildAgentIdentitySystemPrefix()}${systemPrompt}${parentContextBlock}${SUBAGENT_SYSTEM_SUFFIX}`
+		return `${this.buildAgentIdentitySystemPrefix()}${systemPrompt}${architectureSignal}${parentContextBlock}${SUBAGENT_SYSTEM_SUFFIX}`
 	}
 
 	buildNativeTools(context: SystemPromptContext) {

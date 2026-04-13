@@ -78,9 +78,9 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Resolve the absolute path based on multi-workspace configuration
-		const pathResult = resolveWorkspacePath(config, relPath!, "ReadFileToolHandler.execute")
+		const pathResult = resolveWorkspacePath(config, relPath, "ReadFileToolHandler.execute")
 		const { absolutePath, displayPath } =
-			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relPath! } : pathResult
+			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relPath } : pathResult
 
 		// Determine workspace context for telemetry
 		const fallbackAbsolutePath = path.resolve(config.cwd, relPath ?? "")
@@ -96,7 +96,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			tool: "readFile",
 			path: getReadablePath(config.cwd, displayPath),
 			content: absolutePath,
-			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath!),
+			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath),
 		} satisfies DietCodeSayTool
 
 		const completeMessage = JSON.stringify(sharedMessageProps)
@@ -173,11 +173,34 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		const fileContent = await extractFileContent(absolutePath, supportsImages)
 
 		// Track file read operation
-		await config.services.fileContextTracker.trackFileContext(relPath!, "read_tool")
+		await config.services.fileContextTracker.trackFileContext(relPath, "read_tool")
 
 		// Handle image blocks separately - they need to be pushed to userMessageContent
 		if (fileContent.imageBlock) {
 			config.taskState.userMessageContent.push(fileContent.imageBlock)
+		}
+
+		// --- JoyZoning Sovereign Context Injection ---
+		try {
+			const { SpiderEngine } = await import("../../../policy/SpiderEngine")
+			const engine = new SpiderEngine(config.cwd)
+			await engine.loadRegistry()
+			const node = engine.nodes.get(relPath)
+			if (node) {
+				const intentRegex = /\[SOVEREIGN_INTENT:\s*(.*?)\]/
+				const intentMatch = fileContent.text.match(intentRegex)
+				const intent = intentMatch ? intentMatch[1] : "Not explicitly documented."
+
+				const contextBlock =
+					`\n\n[SOVEREIGN_CONTEXT]\n` +
+					`Layer: ${node.layer?.toUpperCase() || "UNKNOWN"}\n` +
+					`Architectural Intent: ${intent}\n` +
+					`Metrics: Logic Density: ${node.logicDensity.toFixed(2)}, I/O Entropy: ${node.ioEntropy.toFixed(2)}\n` +
+					`Status: ${node.orphaned ? "ORPHANED" : "INTEGRATED"}\n`
+				fileContent.text += contextBlock
+			}
+		} catch (_e) {
+			// Fail silent for context injection
 		}
 
 		return fileContent.text

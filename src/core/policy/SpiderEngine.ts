@@ -1,8 +1,9 @@
 import * as fs from "fs"
 import * as path from "path"
-import { CallExpression, ImportDeclaration, Project, SyntaxKind } from "ts-morph"
+import { CallExpression, ImportDeclaration, Project, SourceFile, SyntaxKind } from "ts-morph"
 import { Logger } from "@/shared/services/Logger"
 import { getLayer, Layer } from "@/utils/joy-zoning"
+import { SovereignPolicy } from "./SovereignPolicy"
 
 export interface SpiderNode {
 	id: string
@@ -57,10 +58,12 @@ export class SpiderEngine {
 	public version = 0
 	private project: Project
 	private snapshotDir: string
+	private registryFile: string
 	private resolutionCache: Map<string, string | null> = new Map()
 
 	constructor(public cwd: string) {
 		this.snapshotDir = path.join(cwd, ".spider", "snapshots")
+		this.registryFile = path.join(cwd, ".spider", "registry.json")
 		this.project = new Project({
 			useInMemoryFileSystem: true,
 			compilerOptions: {
@@ -122,6 +125,7 @@ export class SpiderEngine {
 			this.resolutionCache.clear()
 			this.computeReachability()
 		}
+		this.saveRegistry().catch((e) => Logger.error("[SpiderEngine] Auto-save failed:", e))
 	}
 
 	/**
@@ -342,18 +346,20 @@ export class SpiderEngine {
 	 */
 	public getViolations(): SpiderViolation[] {
 		const violations: SpiderViolation[] = []
+		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
+
 		for (const node of this.nodes.values()) {
-			if (node.depth > 4) {
+			if (node.depth > policy.maxPathDepth) {
 				violations.push({
 					id: "SPI-001",
 					severity: "ERROR",
-					message: `Path depth (${node.depth}) exceeds limit (4).`,
+					message: `Path depth (${node.depth}) exceeds limit (${policy.maxPathDepth}).`,
 					path: node.id,
 					remediation: "Flatten the directory structure or move this module closer to the source root.",
 				})
 			}
 			const base = path.basename(node.path).split(".")[0] || ""
-			if (!/^[a-z0-9-]+$/.test(base)) {
+			if (policy.enforceKebabCase && !/^[a-z0-9-]+$/.test(base)) {
 				violations.push({
 					id: "SPI-002",
 					severity: "WARN",
@@ -469,16 +475,39 @@ export class SpiderEngine {
 		}
 	}
 
+	public async saveRegistry(): Promise<void> {
+		const data = this.serialize()
+		const dir = path.dirname(this.registryFile)
+		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+
+		// Atomic-ish write (to temp file then rename would be better, but recursive write is fine for now)
+		await fs.promises.writeFile(this.registryFile, data, "utf-8")
+	}
+
+	public async loadRegistry(): Promise<boolean> {
+		if (!fs.existsSync(this.registryFile)) return false
+		try {
+			const data = await fs.promises.readFile(this.registryFile, "utf-8")
+			this.deserialize(data)
+			this.computeCouplingMetrics()
+			this.computeReachability()
+			return true
+		} catch (e) {
+			Logger.error("[SpiderEngine] Registry load failed:", e)
+			return false
+		}
+	}
+
 	public resolveLayer(sourcePath: string, specifier: string): Layer | null {
 		const id = this.resolveImportToNodeId(sourcePath, specifier)
 		return id ? this.nodes.get(id)?.layer || null : null
 	}
 
-	private calculateMetrics(sourceFile: any): { logicDensity: number; ioEntropy: number; astComplexity: number } {
+	private calculateMetrics(sourceFile: SourceFile): { logicDensity: number; ioEntropy: number; astComplexity: number } {
 		let totalNodes = 0
 		let logicNodes = 0
 
-		sourceFile.forEachDescendant((node: any) => {
+		sourceFile.forEachDescendant((node) => {
 			totalNodes++
 			if (
 				node.isKind(SyntaxKind.IfStatement) ||
@@ -494,7 +523,7 @@ export class SpiderEngine {
 		})
 
 		const imports = sourceFile.getImportDeclarations()
-		const ioImports = imports.filter((imp: any) => {
+		const ioImports = imports.filter((imp) => {
 			const spec = imp.getModuleSpecifierValue()
 			return !spec.startsWith(".") && !spec.startsWith("@/")
 		}).length

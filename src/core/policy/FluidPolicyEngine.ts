@@ -57,7 +57,7 @@ export class FluidPolicyEngine {
 	private pathogens: PathogenStore
 	private architecturalAlarmActive = false
 	private alarmViolations: string[] = []
-	private refactorHealer: any = null // TODO: Initialize properly if needed
+	private refactorHealer: unknown = null // TODO: Initialize properly if needed
 
 	constructor(
 		private cwd: string,
@@ -230,7 +230,7 @@ export class FluidPolicyEngine {
 	public async validatePreExecution(block: ToolUse): Promise<PolicyResult> {
 		// 0. Rule: Logic Axiom Guard (Substrate Maturity)
 		if (block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.APPLY_PATCH) {
-			const { path: filePath, content } = block.params as any
+			const { path: filePath, content } = block.params as unknown as { path: string; content?: string }
 			if (content) {
 				const axiomViolations = this.axiomEngine.validateAxioms(filePath, content, this.spiderEngine)
 				const errors = axiomViolations.filter((v) => v.severity === "ERROR")
@@ -248,7 +248,7 @@ export class FluidPolicyEngine {
 
 		// 0. Rule: Simulation Guard (Pre-flight Prophet)
 		if (block.name === DietCodeDefaultTool.RENAME || block.name === DietCodeDefaultTool.MOVE) {
-			const { oldPath, newPath } = block.params as any
+			const { oldPath, newPath } = block.params as unknown as { oldPath: string; newPath: string }
 			const sim = await this.simulationEngine.simulateMove(oldPath, newPath, this.spiderEngine, this.pathogens)
 			if (!sim.safe && !this.commitSeal) {
 				return {
@@ -395,7 +395,8 @@ export class FluidPolicyEngine {
 			block.name === DietCodeDefaultTool.FILE_EDIT ||
 			block.name === DietCodeDefaultTool.APPLY_PATCH
 		) {
-			const files = block.params?.path ? [path.resolve(this.cwd, block.params.path)] : []
+			const params = (block as unknown as { params: Record<string, unknown> }).params || {}
+			const files = params.path ? [path.resolve(this.cwd, params.path as string)] : []
 			if (files.length > 0) {
 				const collision = await orchestrator.checkCollision(this.streamId, files)
 				if (collision) {
@@ -449,6 +450,10 @@ export class FluidPolicyEngine {
 	 * Always injects the file's layer context so the agent knows the rules before editing.
 	 * Additionally warns about existing violations if any are found.
 	 */
+	public async observeToolOutcome(_toolName: string, _output: unknown): Promise<{ hint?: string }> {
+		return {}
+	}
+
 	public async onRead(
 		filePath: string,
 		content: string,

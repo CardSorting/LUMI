@@ -57,6 +57,11 @@ export enum DietCodeDefaultTool {
 	MEM_CLAIM = "mem_claim",
 	MEM_RELEASE = "mem_release",
 	MEM_HUBS = "mem_hubs",
+	SOVEREIGN_DIAGNOSE = "diagnose_sovereignty",
+	SOVEREIGN_SCAFFOLD = "scaffold_sovereign_module",
+	SOVEREIGN_QUERY = "query_sovereignty",
+	SOVEREIGN_DECOMPOSE = "decompose_sovereign_module",
+	SOVEREIGN_MAP = "generate_sovereign_map",
 }
 
 // Array of all tool names for compatibility
@@ -88,4 +93,5 @@ export const READ_ONLY_TOOLS = [
 	DietCodeDefaultTool.WEB_FETCH,
 	DietCodeDefaultTool.USE_SKILL,
 	DietCodeDefaultTool.USE_SUBAGENTS,
+	DietCodeDefaultTool.SOVEREIGN_DIAGNOSE,
 ] as const

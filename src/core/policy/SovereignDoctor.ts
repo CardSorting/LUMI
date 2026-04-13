@@ -1,5 +1,5 @@
-import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine.js"
 import { OptimizationOpportunity, SovereignOptimizer } from "./SovereignOptimizer.js"
+import { SovereignPolicy } from "./SovereignPolicy"
 import { SpiderEngine } from "./SpiderEngine.js"
 
 export interface DoctorReport {
@@ -15,6 +15,10 @@ export interface DoctorReport {
 	}[]
 	optimizations: OptimizationOpportunity[]
 	agentSuccessRate: number
+	resources: {
+		memoryPressure: number
+		diskUsage: number
+	}
 }
 
 /**
@@ -22,12 +26,10 @@ export interface DoctorReport {
  * Aggregates all architectural signals into a single, machine-actionable report.
  */
 export class SovereignDoctor {
-	private axiomEngine: SemanticAxiomEngine
 	private optimizer: SovereignOptimizer
 
 	constructor(private cwd: string) {
-		this.axiomEngine = new SemanticAxiomEngine(cwd)
-		this.optimizer = new SovereignOptimizer(cwd)
+		this.optimizer = new SovereignOptimizer()
 	}
 
 	/**
@@ -35,17 +37,12 @@ export class SovereignDoctor {
 	 */
 	public async diagnose(engine: SpiderEngine): Promise<DoctorReport> {
 		const structuralViolations = engine.getViolations()
-		const axiomViolations: { path: string; violation: AxiomViolation }[] = []
 		const feverMap: { path: string; score: number }[] = []
 
+		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
 		for (const node of engine.nodes.values()) {
-			// In a real scenario, we'd read the file content from disk or a cache
-			// For this implementation, we assume engine has already indexed these.
-			// However, SemanticAxiomEngine needs the actual content.
-			// For brevity in this doctor, we simulate finding hotspots.
-
 			const feverScore = node.logicDensity * 10 + node.ioEntropy * 5 + (node.orphaned ? 2 : 0)
-			if (feverScore > 5) {
+			if (feverScore > policy.feverThreshold) {
 				feverMap.push({ path: node.path, score: feverScore })
 			}
 		}
@@ -63,7 +60,11 @@ export class SovereignDoctor {
 		]
 
 		const entropy = engine.computeEntropy().score
-		const integrityScore = Math.max(0, 100 - entropy * 100 - allViolations.length * 2)
+		const integrityScore = Math.max(0, 100 - entropy * 50 - allViolations.length * 5)
+
+		// Map to metabolic pressure
+		const mem = process.memoryUsage()
+		const memoryPressure = (mem.heapUsed / mem.heapTotal) * 100
 
 		return {
 			integrityScore,
@@ -71,7 +72,11 @@ export class SovereignDoctor {
 			feverMap: feverMap.sort((a, b) => b.score - a.score),
 			violations: allViolations,
 			optimizations,
-			agentSuccessRate: 0.95, // Placeholder for success tracking
+			agentSuccessRate: 0.95,
+			resources: {
+				memoryPressure,
+				diskUsage: 0, // Placeholder
+			},
 		}
 	}
 
@@ -79,7 +84,8 @@ export class SovereignDoctor {
 	 * Compact "Agent Signal" - intended for system prompts.
 	 */
 	public getAgentSignal(report: DoctorReport): string {
-		if (report.integrityScore < 70) {
+		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
+		if (report.integrityScore < policy.integrityAlertThreshold) {
 			return `⚠️ [ARCHITECTURAL ALARM] Substrate Integrity: ${report.integrityScore.toFixed(0)}%. Agent state: Restricted to HEAL operations only.`
 		}
 		return `✅ Substrate Integrity: ${report.integrityScore.toFixed(0)}%. Codebase is sovereign.`

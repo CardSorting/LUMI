@@ -1,3 +1,4 @@
+import { SovereignPolicy } from "./SovereignPolicy"
 import { SpiderEngine, SpiderNode } from "./SpiderEngine.js"
 
 export interface OptimizationOpportunity {
@@ -14,7 +15,7 @@ export interface OptimizationOpportunity {
  * that would significantly increase the integrity score.
  */
 export class SovereignOptimizer {
-	constructor(_cwd: string) {}
+	constructor(_cwd?: string) {}
 
 	/**
 	 * Scans the project for structural migration opportunities.
@@ -41,9 +42,14 @@ export class SovereignOptimizer {
 	}
 
 	public calculateOptimalLayer(node: SpiderNode, _engine: SpiderEngine): string | null {
+		const _policy = SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig(node.layer)
+		const plumbing = SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("plumbing")
+		const domain = SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("domain")
+		const core = SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("core")
+
 		// Fingerprint-based recommendation
 		// 1. PLUMBING: Must be Simple & Stateless
-		if (node.astComplexity < 500 && node.logicDensity < 0.05) {
+		if (node.astComplexity < plumbing.maxComplexity && node.logicDensity < 0.05) {
 			return "plumbing"
 		}
 
@@ -53,12 +59,16 @@ export class SovereignOptimizer {
 		}
 
 		// 3. DOMAIN: Pure logic, no I/O
-		if (node.ioEntropy === 0 && node.logicDensity > 0.15) {
+		if (node.ioEntropy === domain.maxIOEntropy && node.logicDensity > domain.optimalLogicDensity) {
 			return "domain"
 		}
 
 		// 4. CORE: Orchestrator, Zero I/O, Medium Logic
-		if (node.ioEntropy === 0 && node.logicDensity >= 0.05 && node.logicDensity <= 0.15) {
+		if (
+			node.ioEntropy === core.maxIOEntropy &&
+			node.logicDensity >= core.optimalLogicDensity &&
+			node.logicDensity <= domain.optimalLogicDensity
+		) {
 			return "core"
 		}
 

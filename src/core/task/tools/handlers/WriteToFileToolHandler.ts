@@ -10,9 +10,15 @@ import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { fileExistsAtPath } from "@utils/fs"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
+import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
+import { PathogenStore } from "../../../integrity/PathogenStore"
+import { SovereignDoctor } from "../../../policy/SovereignDoctor"
+import { SovereignGuard } from "../../../policy/SovereignGuard"
+import { SpiderEngine } from "../../../policy/SpiderEngine"
 import { executor } from "../../ActionExecutor"
 import type { ToolResponse } from "../../index"
+import { RefactorHealer } from "../../tools/RefactorHealer"
 import { showNotificationForApproval } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { ToolValidator } from "../ToolValidator"
@@ -311,6 +317,39 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			// Mark the file as edited by DietCode
 			config.services.fileContextTracker.markFileAsEditedByDietCode(relPath)
 
+			// --- JoyZoning Sovereign Integration ---
+			try {
+				const engine = new SpiderEngine(config.cwd)
+				await engine.loadRegistry()
+				const guard = new SovereignGuard(config.cwd)
+
+				// Audit the proposed content
+				const pathogens = new PathogenStore(config.cwd)
+				const signal = await guard.scrutinize(relPath, newContent, engine, pathogens)
+
+				if (!signal.approved) {
+					await config.callbacks.say("error", `Sovereign Interdiction: ${signal.reason}`)
+				}
+
+				// Check for drift/optimizations
+				const doctor = new SovereignDoctor(config.cwd)
+				const report = await doctor.diagnose(engine)
+				const optimization = report.optimizations.find((o) => o.file === relPath)
+
+				if (optimization) {
+					// Add to a "Directive" queue to be appended to the return message
+					const state = config.taskState as unknown as { sovereignDirective?: string }
+					state.sovereignDirective = `\n\n[ARCHITECTURAL OPTIMIZATION]: ${optimization.reason}. Recommended Layer: ${optimization.recommendedLayer}.`
+				}
+
+				// Auto-Align Tag
+				const healer = new RefactorHealer(config.cwd)
+				await healer.alignTag(absolutePath)
+			} catch (e) {
+				Logger.error("[JoyZoning] Integration error:", e)
+			}
+			// ----------------------------------------
+
 			// Save the changes and get the result with reliability wrapper
 			const { newProblemsMessage, userEdits, autoFormattingEdits, finalContent } = await executor.execute(
 				config.ulid,
@@ -348,7 +387,16 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 					newProblemsMessage,
 				)
 			}
-			return formatResponse.fileEditWithoutUserChanges(relPath, autoFormattingEdits, finalContent, newProblemsMessage)
+			const baseResult = formatResponse.fileEditWithoutUserChanges(
+				relPath,
+				autoFormattingEdits,
+				finalContent,
+				newProblemsMessage,
+			)
+			const state = config.taskState as unknown as { sovereignDirective?: string }
+			const directive = state.sovereignDirective || ""
+			if (directive) delete state.sovereignDirective
+			return baseResult + directive
 		} catch (error) {
 			// Reset diff view on error
 			await config.services.diffViewProvider.revertChanges()

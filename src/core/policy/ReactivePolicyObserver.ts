@@ -17,7 +17,7 @@ export class ReactivePolicyObserver {
 		const mode = this.guard.getMode()
 		for (const block of content) {
 			if (block.type === "tool_use" && "name" in block) {
-				const params = (block as any).params || {}
+				const params = (block as unknown as { params?: Record<string, unknown> }).params || {}
 
 				// If the agent is writing to a file, provide proactive layer awareness
 				if ((block.name === "write_to_file" || block.name === "replace_in_file") && params.path) {
@@ -64,7 +64,7 @@ export class ReactivePolicyObserver {
 	/**
 	 * Provides proactive layer awareness on tool outcomes.
 	 */
-	public async observeToolOutcome(_toolName: string, _output: any): Promise<{ hint?: string }> {
+	public async observeToolOutcome(_toolName: string, _output: unknown): Promise<{ hint?: string }> {
 		// Read-time layer context is already handled by FluidPolicyEngine.onRead()
 		// This hook is available for future enrichments (e.g., dependency graph suggestions)
 		return {}

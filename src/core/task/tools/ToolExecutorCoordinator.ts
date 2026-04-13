@@ -39,6 +39,11 @@ import { PlanModeRespondHandler } from "./handlers/PlanModeRespondHandler"
 import { ReadFileToolHandler } from "./handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./handlers/ReportBugHandler"
 import { SearchFilesToolHandler } from "./handlers/SearchFilesToolHandler"
+import { SovereignDecomposeHandler } from "./handlers/SovereignDecomposeHandler"
+import { SovereignDoctorHandler } from "./handlers/SovereignDoctorHandler"
+import { SovereignMapHandler } from "./handlers/SovereignMapHandler"
+import { SovereignQueryHandler } from "./handlers/SovereignQueryHandler"
+import { SovereignScaffoldHandler } from "./handlers/SovereignScaffoldHandler"
 import { UseSubagentsToolHandler } from "./handlers/SubagentToolHandler"
 import { SummarizeTaskHandler } from "./handlers/SummarizeTaskHandler"
 import { UseMcpToolHandler } from "./handlers/UseMcpToolHandler"
@@ -146,6 +151,11 @@ export class ToolExecutorCoordinator {
 		[DietCodeDefaultTool.MEM_CLAIM]: (_v: ToolValidator) => new CognitiveMemoryClaimHandler(),
 		[DietCodeDefaultTool.MEM_RELEASE]: (_v: ToolValidator) => new CognitiveMemoryReleaseHandler(),
 		[DietCodeDefaultTool.MEM_HUBS]: (_v: ToolValidator) => new CognitiveMemoryHubsHandler(),
+		[DietCodeDefaultTool.SOVEREIGN_DIAGNOSE]: (_v: ToolValidator) => new SovereignDoctorHandler(),
+		[DietCodeDefaultTool.SOVEREIGN_SCAFFOLD]: (_v: ToolValidator) => new SovereignScaffoldHandler(),
+		[DietCodeDefaultTool.SOVEREIGN_QUERY]: (_v: ToolValidator) => new SovereignQueryHandler(),
+		[DietCodeDefaultTool.SOVEREIGN_DECOMPOSE]: (_v: ToolValidator) => new SovereignDecomposeHandler(),
+		[DietCodeDefaultTool.SOVEREIGN_MAP]: (_v: ToolValidator) => new SovereignMapHandler(),
 		[DietCodeDefaultTool.RENAME]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.MOVE]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.DELETE]: (_v: ToolValidator) => undefined,
