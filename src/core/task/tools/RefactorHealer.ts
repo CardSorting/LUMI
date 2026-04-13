@@ -1,9 +1,11 @@
 import * as fs from "fs/promises"
 import * as path from "path"
+import { Project, VariableDeclarationKind } from "ts-morph"
 import { Logger } from "@/shared/services/Logger"
 import { getLayer, parseLayerTag } from "@/utils/joy-zoning"
 import { SovereignTransaction } from "../../integrity/SovereignTransaction"
-import { SpiderEngine } from "../../policy/SpiderEngine"
+import { SovereignOptimizer } from "../../policy/SovereignOptimizer"
+import { SpiderEngine, SpiderNode } from "../../policy/SpiderEngine"
 
 export interface HealingProposal {
 	id: string
@@ -139,6 +141,60 @@ export class RefactorHealer {
 		} catch (err) {
 			Logger.error(`[RefactorHealer] Failed to materialize ghost ${filePath}:`, err)
 		}
+	}
+
+	/**
+	 * Automatically heals a statelessness violation by converting 'let' to 'const'.
+	 */
+	public async healStatelessness(filePath: string): Promise<boolean> {
+		try {
+			const project = new Project()
+			const absolutePath = path.resolve(this.projectRoot, filePath)
+			const sourceFile = project.addSourceFileAtPath(absolutePath)
+
+			let changed = false
+			sourceFile.getVariableStatements().forEach((vs) => {
+				if (vs.getDeclarationKind() !== VariableDeclarationKind.Const) {
+					vs.setDeclarationKind(VariableDeclarationKind.Const)
+					changed = true
+				}
+			})
+
+			if (changed) {
+				await sourceFile.save()
+				return true
+			}
+		} catch (err) {
+			Logger.error(`[RefactorHealer] Failed to heal statelessness in ${filePath}:`, err)
+		}
+		return false
+	}
+
+	/**
+	 * Re-aligns a file's tag based on its ARCHETYPAL fingerprint, not just its location.
+	 */
+	public async alignTagByFingerprint(node: SpiderNode, optimizer: SovereignOptimizer): Promise<void> {
+		const recommended = optimizer.calculateOptimalLayer(node, null as any) // optimizer logic is pure for layers
+		if (recommended && recommended !== node.layer) {
+			Logger.info(`Re-aligning ${node.path} from ${node.layer} to ${recommended} (Fingerprint Match)`)
+			await this.alignTagWithLayer(node.path, recommended as any)
+		}
+	}
+
+	private async alignTagWithLayer(filePath: string, layer: string): Promise<void> {
+		const absolutePath = path.resolve(this.projectRoot, filePath)
+		const content = await fs.readFile(absolutePath, "utf-8")
+		const tagLabel = layer.toUpperCase() === "PLUMBING" ? "UTILS" : layer.toUpperCase()
+		const newTag = `[LAYER: ${tagLabel}]`
+
+		const currentTag = parseLayerTag(content)
+		let newContent: string
+		if (currentTag) {
+			newContent = content.replace(/\[LAYER:\s*(DOMAIN|CORE|INFRASTRUCTURE|PLUMBING|UI|UTILS)\]/i, newTag)
+		} else {
+			newContent = `/**\n * ${newTag}\n */\n\n${content}`
+		}
+		await fs.writeFile(absolutePath, newContent, "utf-8")
 	}
 
 	private toPascalCase(str: string): string {

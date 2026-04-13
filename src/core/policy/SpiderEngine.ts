@@ -13,6 +13,9 @@ export interface SpiderNode {
 	depth: number
 	orphaned: boolean
 	afferentCoupling: number
+	logicDensity: number
+	ioEntropy: number
+	astComplexity: number
 }
 
 export interface SpiderSnapshot {
@@ -42,6 +45,7 @@ export interface SpiderViolation {
 	severity: "ERROR" | "WARN" | "INFO"
 	message: string
 	path: string
+	remediation?: string
 }
 
 /**
@@ -97,6 +101,8 @@ export class SpiderEngine {
 		const importsList = Array.from(imports)
 		const importsChanged = !oldNode || JSON.stringify(oldNode.imports) !== JSON.stringify(importsList)
 
+		const metrics = this.calculateMetrics(sourceFile)
+
 		this.nodes.set(normalizedPath, {
 			id: normalizedPath,
 			path: normalizedPath,
@@ -106,6 +112,7 @@ export class SpiderEngine {
 			depth: normalizedPath.split("/").length - 1,
 			orphaned: false,
 			afferentCoupling: oldNode?.afferentCoupling || 0,
+			...metrics,
 		})
 
 		// MEMORY HARDENING: Discard AST after extraction to prevent memory leaks in large projects
@@ -179,6 +186,8 @@ export class SpiderEngine {
 				}
 			})
 
+			const metrics = this.calculateMetrics(sourceFile)
+
 			this.nodes.set(normalizedPath, {
 				id: normalizedPath,
 				path: normalizedPath,
@@ -188,6 +197,7 @@ export class SpiderEngine {
 				depth: normalizedPath.split("/").length - 1,
 				orphaned: false,
 				afferentCoupling: 0,
+				...metrics,
 			})
 
 			// MEMORY HARDENING: Discard AST after extraction
@@ -339,6 +349,7 @@ export class SpiderEngine {
 					severity: "ERROR",
 					message: `Path depth (${node.depth}) exceeds limit (4).`,
 					path: node.id,
+					remediation: "Flatten the directory structure or move this module closer to the source root.",
 				})
 			}
 			const base = path.basename(node.path).split(".")[0] || ""
@@ -348,6 +359,7 @@ export class SpiderEngine {
 					severity: "WARN",
 					message: `File name '${path.basename(node.path)}' violates kebab-case.`,
 					path: node.id,
+					remediation: `Rename '${path.basename(node.path)}' to '${base.toLowerCase().replace(/_/g, "-")}.ts'.`,
 				})
 			}
 			if (node.orphaned) {
@@ -356,6 +368,7 @@ export class SpiderEngine {
 					severity: "WARN",
 					message: "Node is orphaned (unreachable from roots).",
 					path: node.id,
+					remediation: "Import this file from a CORE or UI module, or delete it if it is dead code.",
 				})
 			}
 		}
@@ -459,5 +472,37 @@ export class SpiderEngine {
 	public resolveLayer(sourcePath: string, specifier: string): Layer | null {
 		const id = this.resolveImportToNodeId(sourcePath, specifier)
 		return id ? this.nodes.get(id)?.layer || null : null
+	}
+
+	private calculateMetrics(sourceFile: any): { logicDensity: number; ioEntropy: number; astComplexity: number } {
+		let totalNodes = 0
+		let logicNodes = 0
+
+		sourceFile.forEachDescendant((node: any) => {
+			totalNodes++
+			if (
+				node.isKind(SyntaxKind.IfStatement) ||
+				node.isKind(SyntaxKind.ForStatement) ||
+				node.isKind(SyntaxKind.ForInStatement) ||
+				node.isKind(SyntaxKind.ForOfStatement) ||
+				node.isKind(SyntaxKind.WhileStatement) ||
+				node.isKind(SyntaxKind.DoStatement) ||
+				node.isKind(SyntaxKind.SwitchStatement)
+			) {
+				logicNodes++
+			}
+		})
+
+		const imports = sourceFile.getImportDeclarations()
+		const ioImports = imports.filter((imp: any) => {
+			const spec = imp.getModuleSpecifierValue()
+			return !spec.startsWith(".") && !spec.startsWith("@/")
+		}).length
+
+		return {
+			logicDensity: totalNodes > 0 ? logicNodes / totalNodes : 0,
+			ioEntropy: imports.length > 0 ? ioImports / imports.length : 0,
+			astComplexity: totalNodes,
+		}
 	}
 }

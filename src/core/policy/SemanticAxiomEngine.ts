@@ -1,10 +1,12 @@
 import * as path from "path"
+import { Project } from "ts-morph"
 import { SpiderEngine } from "./SpiderEngine.js"
 
 export interface AxiomViolation {
 	axiom: string
 	severity: "ERROR" | "WARN"
 	message: string
+	remediation?: string
 }
 
 /**
@@ -21,7 +23,7 @@ export class SemanticAxiomEngine {
 	 */
 	public validateAxioms(filePath: string, content: string, engine: SpiderEngine): AxiomViolation[] {
 		const violations: AxiomViolation[] = []
-		const _absolutePath = path.resolve(this.cwd, filePath)
+		const node = engine.nodes.get(this.normalize(filePath))
 		const lines = content.split("\n")
 
 		// 1. Axiom: SIMPLICITY (Cognitive Weight)
@@ -29,40 +31,63 @@ export class SemanticAxiomEngine {
 			violations.push({
 				axiom: "SIMPLICITY",
 				severity: "ERROR",
-				message: `Cognitive Bloat: File exceeds ${this.SIMPLICITY_THRESHOLD} lines (${lines.length}). Logic must be split.`,
+				message: `Cognitive Bloat: File exceeds ${this.SIMPLICITY_THRESHOLD} lines (${lines.length}).`,
+				remediation: "Split the file into focused sub-modules or extract utility functions to @/utils.",
 			})
 		}
 
-		// 2. Axiom: PURITY (Logic Leaks)
-		const node = engine.nodes.get(this.normalize(filePath))
-		if (node && node.layer === "core") {
-			const infrastructureLeaks = node.imports.filter((imp) => {
-				const res = engine.resolveImportToNodeId(node.path, imp)
-				return res && engine.nodes.get(res)?.layer === "infrastructure"
-			})
+		if (!node) return violations
 
-			if (infrastructureLeaks.length > 0) {
+		// 2. Axiom of Statelessness ([LAYER: PLUMBING])
+		if (node.layer === "plumbing") {
+			const project = new Project({ useInMemoryFileSystem: true })
+			const sf = project.createSourceFile("temp.ts", content)
+			const mutableGlobals = sf.getVariableStatements().filter((vs) => vs.getDeclarationKind() !== "const")
+
+			if (mutableGlobals.length > 0) {
 				violations.push({
-					axiom: "PURITY",
+					axiom: "STATELESSNESS",
 					severity: "ERROR",
-					message: `Purity Violation: Core logic leaking into Infrastructure via: ${infrastructureLeaks.join(", ")}`,
+					message: "Plumbing logic must be stateless. Mutable top-level variables (let/var) are blocked.",
+					remediation: "Convert 'let' or 'var' to 'const' or move state into a class instance if strictly necessary.",
 				})
 			}
 		}
 
-		// 3. Axiom: STABILITY (Dependency Flow)
-		if (node && (node.layer === "domain" || node.layer === "core")) {
-			const volatileImports = node.imports.filter((imp) => {
-				const res = engine.resolveImportToNodeId(node.path, imp)
-				const targetNode = res ? engine.nodes.get(res) : null
-				return targetNode && (targetNode.layer === "ui" || targetNode.layer === "plumbing")
+		// 3. Axiom of Interface Segregation (Fat Coordinators)
+		if (node.layer === "core") {
+			const infraDeps = node.imports.filter((imp) => engine.resolveLayer(node.path, imp) === "infrastructure")
+			if (infraDeps.length > 5) {
+				violations.push({
+					axiom: "INTERFACE_SEGREGATION",
+					severity: "WARN",
+					message: `Fat Coordinator: Module depends on ${infraDeps.length} infrastructure adapters.`,
+					remediation: "Refactor this core logic into smaller, mission-focused services.",
+				})
+			}
+		}
+
+		// 4. Axiom of Dependency Inversion (Sovereign Logic)
+		if (node.layer === "domain" || node.layer === "core") {
+			const concreteImports = node.imports.filter((imp) => {
+				const resolved = engine.resolveImportToNodeId(node.path, imp)
+				if (!resolved) return false
+				const filename = path.basename(resolved)
+				// Violation if it doesn't look like an interface (e.g. LocalStorage.ts vs IStorage.ts)
+				return !filename.startsWith("I") && !resolved.includes("/interfaces/") && !resolved.includes("/types/")
 			})
 
-			if (volatileImports.length > 0) {
+			const leaks = concreteImports.filter((imp) => {
+				const layer = engine.resolveLayer(node.path, imp)
+				return layer === "infrastructure"
+			})
+
+			if (leaks.length > 0) {
 				violations.push({
-					axiom: "STABILITY",
-					severity: "WARN",
-					message: `Stability Warning: Stable logic (${node.layer}) depends on Volatile logic: ${volatileImports.join(", ")}`,
+					axiom: "DEPENDENCY_INVERSION",
+					severity: "ERROR",
+					message: `Sovereign Leak: Logic depends on concrete implementation: ${leaks.join(", ")}`,
+					remediation: `Extract interface from ${leaks[0]} and depend on that instead. Run: arch_heal extract_interface ${leaks[0]}`,
 				})
 			}
 		}

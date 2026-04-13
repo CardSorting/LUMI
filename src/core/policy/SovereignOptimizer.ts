@@ -40,34 +40,28 @@ export class SovereignOptimizer {
 		return opportunities.sort((a, b) => b.integrityGain - a.integrityGain).slice(0, 5)
 	}
 
-	private calculateOptimalLayer(node: SpiderNode, engine: SpiderEngine): string | null {
-		if (node.imports.length === 0) return node.layer // Stay put if stable
-
-		const targetLayers = node.imports
-			.map((imp) => {
-				const res = engine.resolveImportToNodeId(node.path, imp)
-				return res ? engine.nodes.get(res)?.layer : null
-			})
-			.filter((l) => l)
-
-		if (targetLayers.length === 0) return node.layer
-
-		// Logic: If a file only depends on layers BELOW it, it might need to move DOWN.
-		// If a file depends on layers ABOVE it, it's a violation (handled by Policy).
-		// This optimizer focuses on "Deep Stability".
-
-		const counts = new Map<string, number>()
-		targetLayers.forEach((l) => counts.set(l!, (counts.get(l!) || 0) + 1))
-
-		let dominant: string | null = null
-		let max = 0
-		for (const [l, c] of counts.entries()) {
-			if (c > max) {
-				max = c
-				dominant = l
-			}
+	public calculateOptimalLayer(node: SpiderNode, _engine: SpiderEngine): string | null {
+		// Fingerprint-based recommendation
+		// 1. PLUMBING: Must be Simple & Stateless
+		if (node.astComplexity < 500 && node.logicDensity < 0.05) {
+			return "plumbing"
 		}
 
-		return dominant
+		// 2. INFRASTRUCTURE: High I/O Entropy
+		if (node.ioEntropy > 0.2) {
+			return "infrastructure"
+		}
+
+		// 3. DOMAIN: Pure logic, no I/O
+		if (node.ioEntropy === 0 && node.logicDensity > 0.15) {
+			return "domain"
+		}
+
+		// 4. CORE: Orchestrator, Zero I/O, Medium Logic
+		if (node.ioEntropy === 0 && node.logicDensity >= 0.05 && node.logicDensity <= 0.15) {
+			return "core"
+		}
+
+		return node.layer // Default to current if no strong fingerprint match
 	}
 }

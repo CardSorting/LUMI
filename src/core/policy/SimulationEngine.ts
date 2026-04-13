@@ -105,6 +105,9 @@ export class SimulationEngine {
 				orphaned: false,
 				afferentCoupling: 0,
 				dependents: [],
+				logicDensity: 0,
+				ioEntropy: 0,
+				astComplexity: 0,
 			})
 		}
 
