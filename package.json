@@ -446,7 +446,7 @@
 		"eval:smoke:run": "npx tsx evals/smoke-tests/run-smoke-tests.ts",
 		"eval:smoke": "npm run eval:smoke:build && npm run eval:smoke:run",
 		"eval:smoke:ci": "npm run eval:smoke:build && npm run eval:smoke:run -- --trials 1 --parallel",
-		"rebuild:electron": "electron-rebuild -v 34.0.0"
+		"rebuild:electron": "electron-rebuild -v 39.2.3"
 	},
 	"lint-staged": {
 		"src/shared/storage/state-keys.ts": [
