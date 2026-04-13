@@ -131,9 +131,7 @@ export class SimulationEngine {
 	}
 
 	private cloneEngine(source: SpiderEngine): SpiderEngine {
-		const clone = new SpiderEngine(this.cwd)
-		clone.deserialize(source.serialize())
-		return clone
+		return source.clone()
 	}
 
 	private normalize(p: string): string {

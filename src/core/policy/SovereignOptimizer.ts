@@ -22,10 +22,16 @@ export class SovereignOptimizer {
 	 */
 	public findOptimizations(engine: SpiderEngine): OptimizationOpportunity[] {
 		const opportunities: OptimizationOpportunity[] = []
+		const policy = SovereignPolicy.getInstance(engine.cwd)
+		const configs = {
+			plumbing: policy.getLayerConfig("plumbing"),
+			domain: policy.getLayerConfig("domain"),
+			core: policy.getLayerConfig("core"),
+		}
 
 		for (const node of engine.nodes.values()) {
 			const current = node.layer
-			const recommended = this.calculateOptimalLayer(node, engine)
+			const recommended = this.calculateOptimalLayer(node, engine, configs)
 
 			if (recommended && current !== recommended) {
 				opportunities.push({
@@ -41,11 +47,14 @@ export class SovereignOptimizer {
 		return opportunities.sort((a, b) => b.integrityGain - a.integrityGain).slice(0, 5)
 	}
 
-	public calculateOptimalLayer(node: SpiderNode, _engine: SpiderEngine): string | null {
-		const _policy = SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig(node.layer)
-		const plumbing = SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("plumbing")
-		const domain = SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("domain")
-		const core = SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("core")
+	public calculateOptimalLayer(
+		node: SpiderNode,
+		_engine: SpiderEngine,
+		configs?: { plumbing: any; domain: any; core: any },
+	): string | null {
+		const plumbing = configs?.plumbing || SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("plumbing")
+		const domain = configs?.domain || SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("domain")
+		const core = configs?.core || SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("core")
 
 		// Fingerprint-based recommendation
 		// 1. PLUMBING: Must be Simple & Stateless

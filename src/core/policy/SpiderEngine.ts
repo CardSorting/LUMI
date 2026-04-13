@@ -1,3 +1,4 @@
+import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
 import { CallExpression, ImportDeclaration, Project, SourceFile, SyntaxKind } from "ts-morph"
@@ -17,6 +18,7 @@ export interface SpiderNode {
 	logicDensity: number
 	ioEntropy: number
 	astComplexity: number
+	hash: string
 }
 
 export interface SpiderSnapshot {
@@ -60,6 +62,9 @@ export class SpiderEngine {
 	private snapshotDir: string
 	private registryFile: string
 	private resolutionCache: Map<string, string | null> = new Map()
+	private saveTimeout: NodeJS.Timeout | null = null
+	private cachedEntropy: SpiderEntropyReport | null = null
+	private lastEntropyVersion = -1
 
 	constructor(public cwd: string) {
 		this.snapshotDir = path.join(cwd, ".spider", "snapshots")
@@ -81,6 +86,13 @@ export class SpiderEngine {
 		const relativePath = path.relative(this.cwd, absolutePath)
 		const normalizedPath = relativePath.replace(/\\/g, "/")
 		const layer = getLayer(absolutePath)
+		const hash = crypto.createHash("md5").update(content).digest("hex")
+
+		const oldNode = this.nodes.get(normalizedPath)
+		if (oldNode && oldNode.hash === hash) {
+			// HIGH-PERFORMANCE SKIP: Content is identical, skip AST processing
+			return
+		}
 
 		const sourceFile = this.project.createSourceFile(absolutePath, content, { overwrite: true })
 		const imports: Set<string> = new Set()
@@ -100,7 +112,6 @@ export class SpiderEngine {
 				}
 			}
 		})
-		const oldNode = this.nodes.get(normalizedPath)
 		const importsList = Array.from(imports)
 		const importsChanged = !oldNode || JSON.stringify(oldNode.imports) !== JSON.stringify(importsList)
 
@@ -116,6 +127,7 @@ export class SpiderEngine {
 			orphaned: false,
 			afferentCoupling: oldNode?.afferentCoupling || 0,
 			...metrics,
+			hash,
 		})
 
 		// MEMORY HARDENING: Discard AST after extraction to prevent memory leaks in large projects
@@ -141,6 +153,7 @@ export class SpiderEngine {
 		if (sf) this.project.removeSourceFile(sf)
 		this.resolutionCache.clear()
 		this.computeReachability()
+		this.cachedEntropy = null // Invalidate cache
 		this.version++
 	}
 
@@ -170,6 +183,7 @@ export class SpiderEngine {
 			const relativePath = path.relative(this.cwd, absolutePath)
 			const normalizedPath = relativePath.replace(/\\/g, "/")
 			const layer = getLayer(absolutePath)
+			const hash = crypto.createHash("md5").update(file.content).digest("hex")
 
 			const sourceFile = this.project.createSourceFile(absolutePath, file.content, { overwrite: true })
 			const imports: Set<string> = new Set()
@@ -202,6 +216,7 @@ export class SpiderEngine {
 				orphaned: false,
 				afferentCoupling: 0,
 				...metrics,
+				hash,
 			})
 
 			// MEMORY HARDENING: Discard AST after extraction
@@ -211,6 +226,7 @@ export class SpiderEngine {
 		this.resolutionCache.clear()
 		this.computeCouplingMetrics()
 		this.computeReachability()
+		this.cachedEntropy = null // Invalidate cache
 	}
 
 	/**
@@ -306,6 +322,10 @@ export class SpiderEngine {
 	 * Computes entropy score.
 	 */
 	public computeEntropy(): SpiderEntropyReport {
+		if (this.cachedEntropy && this.version === this.lastEntropyVersion) {
+			return this.cachedEntropy
+		}
+
 		const totalNodes = this.nodes.size
 		if (totalNodes === 0) {
 			return { score: 0, components: { depthScore: 0, namingScore: 0, orphanScore: 0, couplingScore: 0 } }
@@ -337,8 +357,11 @@ export class SpiderEngine {
 		const couplingScore = totalEdges > 0 ? crossLayerEdges / totalEdges : 0
 
 		const score = depthScore * 0.3 + namingScore * 0.2 + orphanScore * 0.2 + couplingScore * 0.3
+		const report = { score, components: { depthScore, namingScore, orphanScore, couplingScore } }
 
-		return { score, components: { depthScore, namingScore, orphanScore, couplingScore } }
+		this.cachedEntropy = report
+		this.lastEntropyVersion = this.version
+		return report
 	}
 
 	/**
@@ -475,13 +498,29 @@ export class SpiderEngine {
 		}
 	}
 
-	public async saveRegistry(): Promise<void> {
-		const data = this.serialize()
-		const dir = path.dirname(this.registryFile)
-		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+	/**
+	 * Fast, in-memory clone of the structural graph.
+	 * Avoids JSON serialization overhead for simulation work.
+	 */
+	public clone(): SpiderEngine {
+		const clone = new SpiderEngine(this.cwd)
+		// Shallow clone of the map and a shallow clone of each node object
+		clone.nodes = new Map(Array.from(this.nodes.entries()).map(([k, v]) => [k, { ...v }]))
+		clone.version = this.version
+		return clone
+	}
 
-		// Atomic-ish write (to temp file then rename would be better, but recursive write is fine for now)
-		await fs.promises.writeFile(this.registryFile, data, "utf-8")
+	public async saveRegistry(): Promise<void> {
+		if (this.saveTimeout) return
+
+		this.saveTimeout = setTimeout(async () => {
+			const data = this.serialize()
+			const dir = path.dirname(this.registryFile)
+			if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+
+			await fs.promises.writeFile(this.registryFile, data, "utf-8")
+			this.saveTimeout = null
+		}, 500)
 	}
 
 	public async loadRegistry(): Promise<boolean> {
@@ -508,15 +547,16 @@ export class SpiderEngine {
 		let logicNodes = 0
 
 		sourceFile.forEachDescendant((node) => {
+			const kind = node.getKind()
 			totalNodes++
 			if (
-				node.isKind(SyntaxKind.IfStatement) ||
-				node.isKind(SyntaxKind.ForStatement) ||
-				node.isKind(SyntaxKind.ForInStatement) ||
-				node.isKind(SyntaxKind.ForOfStatement) ||
-				node.isKind(SyntaxKind.WhileStatement) ||
-				node.isKind(SyntaxKind.DoStatement) ||
-				node.isKind(SyntaxKind.SwitchStatement)
+				kind === SyntaxKind.IfStatement ||
+				kind === SyntaxKind.ForStatement ||
+				kind === SyntaxKind.ForInStatement ||
+				kind === SyntaxKind.ForOfStatement ||
+				kind === SyntaxKind.WhileStatement ||
+				kind === SyntaxKind.DoStatement ||
+				kind === SyntaxKind.SwitchStatement
 			) {
 				logicNodes++
 			}

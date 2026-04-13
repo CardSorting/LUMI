@@ -171,22 +171,26 @@ export class TspPolicyPlugin {
 	 */
 	private isFileInWhitelist(filePath: string): boolean {
 		const basename = path.basename(filePath)
-		const ext = basename.split(".").pop()?.toLowerCase()
-		return this.SPECIAL_CASE_FILES.has(ext || "") || this.exceptions.some((e) => e.extension === ext)
+		const ext = basename.split(".").pop()?.toLowerCase() || ""
+		if (this.SPECIAL_CASE_FILES.has(ext)) return true
+		for (const e of this.exceptions) {
+			if (e.extension === ext) return true
+		}
+		return false
 	}
 
 	/**
 	 * Analyze a file's structure for quality scoring
 	 */
 	private analyzeFileStructure(content: string): FileQualityScore {
-		const lines = content.split("\n")
+		const lineCount = (content.match(/\n/g) || []).length + 1
 		const recommendations: string[] = []
 		let score = 100
 
-		if (lines.length > this.THRESHOLDS.MAX_CUSTOM_LINES) {
+		if (lineCount > this.THRESHOLDS.MAX_CUSTOM_LINES) {
 			score -= 30
 			recommendations.push("File exceeds maximum allowed lines")
-		} else if (lines.length > this.THRESHOLDS.MAX_WARNING_LINES) {
+		} else if (lineCount > this.THRESHOLDS.MAX_WARNING_LINES) {
 			score -= 10
 			recommendations.push("Consider splitting file into smaller modules")
 		}
@@ -216,7 +220,7 @@ export class TspPolicyPlugin {
 		}
 
 		const currentLayer = getLayer(filePath)
-		const lineCount = content.split("\n").length
+		const lineCount = (content.match(/\n/g) || []).length + 1
 
 		// Safety/Relaxed Theme logic
 		if (this.theme !== "strict") {
@@ -269,7 +273,7 @@ export class TspPolicyPlugin {
 		}
 
 		// 5. Rule: Layered Import Constraints
-		this.validateImports(sourceFile, filePath, currentLayer, errors, warnings, resolveContent)
+		this.validateImports(sourceFile, filePath, currentLayer, errors, warnings)
 
 		return {
 			success: errors.length === 0,
@@ -299,13 +303,10 @@ export class TspPolicyPlugin {
 		}
 	}
 
-	/**
-	 * Public API to detect cross-layer violations using AST.
-	 */
 	public findCrossLayerViolations(sourceFile: ts.SourceFile, filePath: string): string[] {
 		const violations: string[] = []
 		const currentLayer = getLayer(filePath)
-		this.validateLayering(sourceFile, filePath, currentLayer, violations)
+		this.validateImports(sourceFile, filePath, currentLayer, [], violations)
 		return violations
 	}
 
@@ -341,8 +342,7 @@ export class TspPolicyPlugin {
 		filePath: string,
 		currentLayer: Layer,
 		errors: string[],
-		_warnings: string[],
-		_resolveContent?: (path: string) => string | undefined,
+		warnings: string[],
 	) {
 		ts.forEachChild(sourceFile, (node) => {
 			if (ts.isImportDeclaration(node)) {
@@ -361,7 +361,9 @@ export class TspPolicyPlugin {
 
 					if (currentLayer === "domain") {
 						if (targetLayer === "infrastructure" || targetLayer === "ui") {
-							errors.push(`Domain cannot import '${moduleName}' (${targetLayer} layer).`)
+							const msg = `Domain layer cannot import '${moduleName}' (${targetLayer} layer).`
+							errors.push(msg)
+							warnings.push(msg)
 						}
 					}
 
@@ -377,47 +379,20 @@ export class TspPolicyPlugin {
 		})
 	}
 
-	/**
-	 * Helper for deep layering validation.
-	 */
-	private validateLayering(sourceFile: ts.SourceFile, filePath: string, currentLayer: Layer, violations: string[]) {
-		ts.forEachChild(sourceFile, (node) => {
-			if (ts.isImportDeclaration(node)) {
-				const moduleSpecifier = node.moduleSpecifier
-				if (ts.isStringLiteral(moduleSpecifier)) {
-					const moduleName = moduleSpecifier.text
-					let targetPath = moduleName
-					if (moduleName.startsWith(".")) {
-						targetPath = path.resolve(path.dirname(filePath), moduleName)
-					} else {
-						targetPath = this.resolveAlias(moduleName)
-					}
-					const targetLayer = getLayer(targetPath)
-
-					if (currentLayer === "domain") {
-						if (targetLayer === "infrastructure" || targetLayer === "ui") {
-							violations.push(`Domain layer cannot import from ${targetLayer}: '${moduleName}'.`)
-						}
-					}
-				}
-			}
-		})
+	private static readonly ALIASES: Record<string, string> = {
+		"@/": "src/",
+		"@api/": "src/core/api/",
+		"@core/": "src/core/",
+		"@services/": "src/services/",
+		"@shared/": "src/shared/",
+		"@utils/": "src/utils/",
 	}
 
 	/**
 	 * Resolves project-specific path aliases.
 	 */
 	private resolveAlias(moduleName: string): string {
-		const aliases: Record<string, string> = {
-			"@/": "src/",
-			"@api/": "src/core/api/",
-			"@core/": "src/core/",
-			"@services/": "src/services/",
-			"@shared/": "src/shared/",
-			"@utils/": "src/utils/",
-		}
-
-		for (const [alias, replacement] of Object.entries(aliases)) {
+		for (const [alias, replacement] of Object.entries(TspPolicyPlugin.ALIASES)) {
 			if (moduleName.startsWith(alias)) {
 				return path.join(replacement, moduleName.substring(alias.length))
 			}
