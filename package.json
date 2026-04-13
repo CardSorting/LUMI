@@ -2,7 +2,7 @@
 	"name": "dietcode",
 	"displayName": "DietCode",
 	"description": "DietCode is your autonomous architectural substrate, maintaining codebase integrity with zero bloat.",
-	"version": "3.88.6",
+	"version": "3.88.7",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",
@@ -378,7 +378,7 @@
 		}
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run package",
+		"vscode:prepublish": "npm run build:webview && node esbuild.mjs --production",
 		"compile": "npm run check-types && npm run lint && node esbuild.mjs",
 		"compile-standalone": "npm run check-types && npm run lint && node esbuild.mjs --standalone",
 		"compile-standalone-npm": "npm run protos && npm run check-types && npm run lint && node esbuild.mjs --standalone",
@@ -396,7 +396,7 @@
 		"watch": "npx npm-run-all -p watch:*",
 		"watch:esbuild": "node esbuild.mjs --watch",
 		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-		"package": "npm run check-types && npm run build:webview && npm run lint && node esbuild.mjs --production",
+		"package": "npm run build:webview && npm run lint && node esbuild.mjs --production",
 		"protos": "node scripts/build-proto.mjs",
 		"protos-python": "node scripts/build-python-proto.mjs",
 		"download-ripgrep": "node scripts/download-ripgrep.mjs",
