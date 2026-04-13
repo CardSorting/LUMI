@@ -21,7 +21,7 @@ export class SemanticAxiomEngine {
 	/**
 	 * Validates a file's logic against defined architectural axioms.
 	 */
-	public validateAxioms(filePath: string, content: string, engine: SpiderEngine): AxiomViolation[] {
+	public validateAxioms(filePath: string, content: string, engine: SpiderEngine, sourceFile?: ts.SourceFile): AxiomViolation[] {
 		const violations: AxiomViolation[] = []
 		const node = engine.nodes.get(this.normalize(filePath))
 		const lines = content.split("\n")
@@ -38,14 +38,15 @@ export class SemanticAxiomEngine {
 
 		if (!node) return violations
 
+		const ast = sourceFile || ts.createSourceFile("temp.ts", content, ts.ScriptTarget.Latest, true)
+
 		// 2. Axiom of Statelessness ([LAYER: PLUMBING])
 		if (node.layer === "plumbing") {
-			const sourceFile = ts.createSourceFile("temp.ts", content, ts.ScriptTarget.Latest, true)
 			let mutableGlobalsFound = false
 
-			ts.forEachChild(sourceFile, (node) => {
-				if (ts.isVariableStatement(node)) {
-					const isConst = (node.declarationList.flags & ts.NodeFlags.Const) !== 0
+			ts.forEachChild(ast, (n) => {
+				if (ts.isVariableStatement(n)) {
+					const isConst = (n.declarationList.flags & ts.NodeFlags.Const) !== 0
 					if (!isConst) {
 						mutableGlobalsFound = true
 					}
@@ -80,8 +81,11 @@ export class SemanticAxiomEngine {
 			const concreteImports = node.imports.filter((imp) => {
 				const resolved = engine.resolveImportToNodeId(node.path, imp)
 				if (!resolved) return false
+				const targetNode = engine.nodes.get(resolved)
+				if (targetNode) {
+					return !targetNode.isInterface
+				}
 				const filename = path.basename(resolved)
-				// Violation if it doesn't look like an interface (e.g. LocalStorage.ts vs IStorage.ts)
 				return !filename.startsWith("I") && !resolved.includes("/interfaces/") && !resolved.includes("/types/")
 			})
 
@@ -95,7 +99,7 @@ export class SemanticAxiomEngine {
 					axiom: "DEPENDENCY_INVERSION",
 					severity: "ERROR",
 					message: `Sovereign Leak: Logic depends on concrete implementation: ${leaks.join(", ")}`,
-					remediation: `Extract interface from ${leaks[0]} and depend on that instead. Run: arch_heal extract_interface ${leaks[0]}`,
+					remediation: `Extract interface from ${leaks[0]} and depend on that instead.`,
 				})
 			}
 		}

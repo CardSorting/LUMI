@@ -20,6 +20,7 @@ export interface SpiderNode {
 	ioEntropy: number
 	astComplexity: number
 	hash: string
+	isInterface: boolean
 }
 
 export interface SpiderSnapshot {
@@ -58,7 +59,9 @@ export interface SpiderViolation {
  */
 export class SpiderEngine {
 	public nodes: Map<string, SpiderNode> = new Map()
+	public ghosts: Set<string> = new Set()
 	public version = 0
+	private reachabilityTimeout: NodeJS.Timeout | null = null
 	private snapshotDir: string
 	private registryFile: string
 	private resolutionCache: Map<string, string | null> = new Map()
@@ -75,6 +78,7 @@ export class SpiderEngine {
 	 * Incrementally updates or adds a single file to the structural graph.
 	 */
 	public updateNode(filePath: string, content: string) {
+		this.checkMetabolicPressure()
 		const absolutePath = path.resolve(this.cwd, filePath)
 		const relativePath = path.relative(this.cwd, absolutePath)
 		const normalizedPath = relativePath.replace(/\\/g, "/")
@@ -90,11 +94,47 @@ export class SpiderEngine {
 		const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
 		const imports: Set<string> = new Set()
 
+		// Single-pass AST metrics & imports
+		let totalNodes = 0
+		let logicNodes = 0
+		let ioImports = 0
+		let totalImports = 0
+		let hasConcreteDefinition = false
+
 		const visit = (node: ts.Node) => {
+			totalNodes++
+			const kind = node.kind
+
+			if (ts.isClassDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) {
+				// Rough heuristic: if it has a body and isn't just a type/interface, it's concrete
+				if ((node as any).body || ts.isVariableDeclaration(node)) {
+					hasConcreteDefinition = true
+				}
+			}
+
+			// Logic Density Analysis
+			if (
+				kind === ts.SyntaxKind.IfStatement ||
+				kind === ts.SyntaxKind.ForStatement ||
+				kind === ts.SyntaxKind.ForInStatement ||
+				kind === ts.SyntaxKind.ForOfStatement ||
+				kind === ts.SyntaxKind.WhileStatement ||
+				kind === ts.SyntaxKind.DoStatement ||
+				kind === ts.SyntaxKind.SwitchStatement
+			) {
+				logicNodes++
+			}
+
 			if (ts.isImportDeclaration(node)) {
+				totalImports++
 				const moduleSpecifier = node.moduleSpecifier
 				if (ts.isStringLiteral(moduleSpecifier)) {
-					imports.add(moduleSpecifier.text)
+					const text = moduleSpecifier.text
+					imports.add(text)
+					// IO Entropy Analysis
+					if (!text.startsWith(".") && !text.startsWith("@/")) {
+						ioImports++
+					}
 				}
 			} else if (ts.isCallExpression(node)) {
 				const expression = node.expression
@@ -113,7 +153,11 @@ export class SpiderEngine {
 		const importsList = Array.from(imports)
 		const importsChanged = !oldNode || JSON.stringify(oldImports) !== JSON.stringify(importsList)
 
-		const metrics = this.calculateMetrics(sourceFile)
+		const metrics = {
+			logicDensity: totalNodes > 0 ? logicNodes / totalNodes : 0,
+			ioEntropy: totalImports > 0 ? ioImports / totalImports : 0,
+			astComplexity: totalNodes,
+		}
 
 		const newNode: SpiderNode = {
 			id: normalizedPath,
@@ -126,16 +170,55 @@ export class SpiderEngine {
 			afferentCoupling: oldNode?.afferentCoupling || 0,
 			...metrics,
 			hash,
+			isInterface:
+				!hasConcreteDefinition ||
+				normalizedPath.includes("/interfaces/") ||
+				normalizedPath.includes("/types/") ||
+				normalizedPath.endsWith(".d.ts"),
 		}
 
 		this.nodes.set(normalizedPath, newNode)
+		this.version++
 
 		if (importsChanged) {
 			this.updateIncrementalCoupling(normalizedPath, oldImports, importsList)
-			this.resolutionCache.clear()
-			this.computeReachability()
+			// Granular Cache Invalidation: Only clear entries for this file
+			for (const key of this.resolutionCache.keys()) {
+				if (key.startsWith(`${normalizedPath}:`)) {
+					this.resolutionCache.delete(key)
+				}
+			}
+			this.scheduleReachability()
 		}
 		this.saveRegistry().catch((e) => Logger.error("[SpiderEngine] Auto-save failed:", e))
+	}
+
+	/**
+	 * Debounced reachability updates to prevent scaling issues during batch updates.
+	 */
+	private scheduleReachability() {
+		if (this.reachabilityTimeout) return
+		this.reachabilityTimeout = setTimeout(() => {
+			this.computeReachability()
+			this.reachabilityTimeout = null
+		}, 100)
+	}
+
+	/**
+	 * Metabolic Pressure Valve: Monitors V8 heap usage.
+	 * If memory pressure is too high (>80%), flushes resolution caches and triggers recycling.
+	 */
+	private checkMetabolicPressure() {
+		const stats = v8.getHeapStatistics()
+		const usedPercent = (stats.used_heap_size / stats.heap_size_limit) * 100
+
+		if (usedPercent > 80) {
+			Logger.warn(`[SpiderEngine] Metabolic Pressure Critical (${usedPercent.toFixed(1)}%). Flushing caches.`)
+			this.resolutionCache.clear()
+			this.cachedEntropy = null
+			// Garbage collection hint if available
+			if (global.gc) global.gc()
+		}
 	}
 
 	/**
@@ -209,11 +292,43 @@ export class SpiderEngine {
 			const sourceFile = ts.createSourceFile(absolutePath, file.content, ts.ScriptTarget.Latest, true)
 			const imports: Set<string> = new Set()
 
+			let totalNodes = 0
+			let logicNodes = 0
+			let ioImports = 0
+			let totalImports = 0
+			let hasConcreteDefinition = false
+
 			const visit = (node: ts.Node) => {
+				totalNodes++
+				const kind = node.kind
+
+				if (ts.isClassDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) {
+					if ((node as any).body || ts.isVariableDeclaration(node)) {
+						hasConcreteDefinition = true
+					}
+				}
+
+				if (
+					kind === ts.SyntaxKind.IfStatement ||
+					kind === ts.SyntaxKind.ForStatement ||
+					kind === ts.SyntaxKind.ForInStatement ||
+					kind === ts.SyntaxKind.ForOfStatement ||
+					kind === ts.SyntaxKind.WhileStatement ||
+					kind === ts.SyntaxKind.DoStatement ||
+					kind === ts.SyntaxKind.SwitchStatement
+				) {
+					logicNodes++
+				}
+
 				if (ts.isImportDeclaration(node)) {
+					totalImports++
 					const moduleSpecifier = node.moduleSpecifier
 					if (ts.isStringLiteral(moduleSpecifier)) {
-						imports.add(moduleSpecifier.text)
+						const text = moduleSpecifier.text
+						imports.add(text)
+						if (!text.startsWith(".") && !text.startsWith("@/")) {
+							ioImports++
+						}
 					}
 				} else if (ts.isCallExpression(node)) {
 					const expression = node.expression
@@ -228,8 +343,6 @@ export class SpiderEngine {
 			}
 			visit(sourceFile)
 
-			const metrics = this.calculateMetrics(sourceFile)
-
 			this.nodes.set(normalizedPath, {
 				id: normalizedPath,
 				path: normalizedPath,
@@ -239,15 +352,22 @@ export class SpiderEngine {
 				depth: normalizedPath.split("/").length - 1,
 				orphaned: false,
 				afferentCoupling: 0,
-				...metrics,
+				logicDensity: totalNodes > 0 ? logicNodes / totalNodes : 0,
+				ioEntropy: totalImports > 0 ? ioImports / totalImports : 0,
+				astComplexity: totalNodes,
 				hash,
+				isInterface:
+					!hasConcreteDefinition ||
+					normalizedPath.includes("/interfaces/") ||
+					normalizedPath.includes("/types/") ||
+					normalizedPath.endsWith(".d.ts"),
 			})
 		}
 
 		this.resolutionCache.clear()
 		this.computeCouplingMetrics()
 		this.computeReachability()
-		this.cachedEntropy = null // Invalidate cache
+		this.cachedEntropy = null
 	}
 
 	/**
@@ -325,11 +445,12 @@ export class SpiderEngine {
 	 * Detects "Ghost Files" — files that are imported but do not exist in the graph.
 	 */
 	public findGhosts() {
+		this.ghosts.clear()
 		for (const node of this.nodes.values()) {
 			for (const imp of node.imports) {
 				const resolved = this.resolveImportToNodeId(node.path, imp)
 				if (!resolved || (!this.nodes.has(resolved) && !this.isNodeLibrary(imp))) {
-					// Proactive Ghost Intelligence: We could log these here
+					this.ghosts.add(`${node.path} -> ${imp}`)
 				}
 			}
 		}
@@ -355,10 +476,13 @@ export class SpiderEngine {
 		const avgDepth = Array.from(this.nodes.values()).reduce((acc, n) => acc + n.depth, 0) / totalNodes
 		const depthScore = Math.min(avgDepth / 4, 1.0)
 
-		const namingViolations = Array.from(this.nodes.values()).filter((n) => {
-			const base = path.basename(n.path).split(".")[0] || ""
-			return !/^[a-z0-9-]+$/.test(base)
-		}).length
+		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
+		const namingViolations = policy.enforceKebabCase
+			? Array.from(this.nodes.values()).filter((n) => {
+					const base = path.basename(n.path).split(".")[0] || ""
+					return !/^[a-z0-9-]+$/.test(base)
+				}).length
+			: 0
 		const namingScore = namingViolations / totalNodes
 
 		const orphans = Array.from(this.nodes.values()).filter((n) => n.orphaned).length
@@ -446,7 +570,7 @@ export class SpiderEngine {
 			nodes: Array.from(this.nodes.values()),
 			components: report.components,
 		}
-		if (!fs.existsSync(this.snapshotDir)) fs.mkdirSync(this.snapshotDir, { recursive: true })
+		if (!fs.existsSync(this.snapshotDir)) await fs.promises.mkdir(this.snapshotDir, { recursive: true })
 		const filePath = path.join(this.snapshotDir, `${Date.now()}.json`)
 		await fs.promises.writeFile(filePath, JSON.stringify(snapshot, null, 2))
 		return filePath
@@ -571,49 +695,5 @@ export class SpiderEngine {
 	public resolveLayer(sourcePath: string, specifier: string): Layer | null {
 		const id = this.resolveImportToNodeId(sourcePath, specifier)
 		return id ? this.nodes.get(id)?.layer || null : null
-	}
-
-	private calculateMetrics(sourceFile: ts.SourceFile): { logicDensity: number; ioEntropy: number; astComplexity: number } {
-		let totalNodes = 0
-		let logicNodes = 0
-		let ioImports = 0
-		let totalImports = 0
-
-		const visit = (node: ts.Node) => {
-			totalNodes++
-			const kind = node.kind
-			if (
-				kind === ts.SyntaxKind.IfStatement ||
-				kind === ts.SyntaxKind.ForStatement ||
-				kind === ts.SyntaxKind.ForInStatement ||
-				kind === ts.SyntaxKind.ForOfStatement ||
-				kind === ts.SyntaxKind.WhileStatement ||
-				kind === ts.SyntaxKind.DoStatement ||
-				kind === ts.SyntaxKind.SwitchStatement
-			) {
-				logicNodes++
-			}
-
-			if (ts.isImportDeclaration(node)) {
-				totalImports++
-				const spec = node.moduleSpecifier
-				if (ts.isStringLiteral(spec)) {
-					const text = spec.text
-					if (!text.startsWith(".") && !text.startsWith("@/")) {
-						ioImports++
-					}
-				}
-			}
-
-			ts.forEachChild(node, visit)
-		}
-
-		visit(sourceFile)
-
-		return {
-			logicDensity: totalNodes > 0 ? logicNodes / totalNodes : 0,
-			ioEntropy: totalImports > 0 ? ioImports / totalImports : 0,
-			astComplexity: totalNodes,
-		}
 	}
 }

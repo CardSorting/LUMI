@@ -109,6 +109,7 @@ export class SimulationEngine {
 				ioEntropy: 0,
 				astComplexity: 0,
 				hash: "",
+				isInterface: false,
 			})
 		}
 
