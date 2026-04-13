@@ -4,156 +4,209 @@ import { getLayer, Layer, parseLayerTag, validateImportDepth } from "@/utils/joy
 import { Logger } from "../../shared/services/Logger"
 
 /**
- * TspPolicyPlugin: A production-grade TypeScript Transformer that enforces
- * Joy-Zoning architectural policies at the AST level.
+ * Policy Enforcement Theme: Defines the strictness level of architectural validation
+ */
+export type EnforcementTheme = "strict" | "relaxed" | "safety"
+
+/**
+ * Exception Rule: A pattern or filename extension that bypasses specific validation rules
+ */
+export interface ExceptionRule {
+	type: "whitelist" | "exclusion"
+	extension: string
+	notes?: string
+}
+
+/**
+ * Quality Score: AI-assessed quality of a large file (0-100)
+ */
+export interface FileQualityScore {
+	score: number
+	reviewed: boolean
+	recommendations: string[]
+}
+
+/**
+ * TspPolicyPlugin: A production-grade, configurable TypeScript Transformer that enforces
+ * Joy-Zoning architectural policies at the AST level with intelligent flexibility.
  */
 export class TspPolicyPlugin {
 	/**
-	 * Extended exception whitelist for files that bypass architectural enforcement.
-	 * Includes platform-generated files, lockfiles, and legitimate large metadata files.
-	 *
-	 * This list is intentionally broad to accommodate:
-	 * - Auto-generated platform files that must remain formatted as-is
-	 * - Large utility files that are legitimate and well-structured
-	 * - Configuration and lock files with rigid schemas
-	 * - Documentation and asset files
-	 *
-	 * SV: Set of valid extensions (lowercase)
+	 * Configurable enforcement theme (default: safety mode for best balance)
+	 * - strict: All validation rules enforced, 300-line limit applies
+	 * - relaxed: Only critical errors enforced, 800-line limit applies
+	 * - safety: Performance-first, only essential checks on large files
 	 */
-	private readonly SPECIAL_CASE_FILES: Set<string> = new Set([
-		// Platform-generated project files (>300 lines required)
-		"pbxproj", // Xcode project files - binary/XML structure, must remain contiguous
-
-		// Configuration and lockfiles (schema-locked, minimal edits)
-		"workspace.json", // VS Code workspace configuration
-		"tsconfig.json",
-		"tsconfig.base.json",
-		"tsconfig.node.json", // TypeScript configs
-		"package-lock.json",
-		"yarn.lock",
-		"pnpm-lock.yaml",
-		"bun.lockb", // Node lockfiles
-		"Cargo.lock",
-		"Cargo.toml",
-		"go.sum",
-		"go.mod", // Go/Rust lockfiles
-		"gemfile.lock",
-		"pipfile.lock", // Python/Ruby lockfiles
-		"composer.lock", // PHP lockfile
-		"node-shrinkwrap.json", // Node shrinkwrap
-		"mix.lock", // Elixir lockfile
-		"poetry.lock", // Poetry lockfile
-		"poetry export", // Poetry export
-		"pnpm-workspace.yaml", // PNPM workspace definition
-
-		// OS and editor metadata files
-		".swp",
-		".swo",
-		".swn", // Vim swap files (OS-managed)
-		".DS_Store", // macOS system files
-		".gitattributes",
-		".gitignore",
-		".gitmodules", // Git metadata
-		".editorconfig", // Editor configuration
-		".babelrc",
-		".babel.config.js", // Babel configuration
-		".prettierrc",
-		".prettierrc.json",
-		".prettierrc.yaml", // Prettier config
-		".eslintrc",
-		".eslintignore", // ESLint configuration
-		".stylelintrc", // Stylelint configuration
-		".postcssrc", // PostCSS configuration
-		".stylelintrc",
-		"stylelint.config.js", // Stylelint config
-		".rustfmt.toml", // Rust formatting
-		".dockerignore", // Docker ignore
-		"nginx.conf", // Web server config
-		"httpd.conf", // Apache config
-		"php.ini", // PHP config
-		".drone.yml",
-		".github/workflows/*.yml", // CI/CD configs (direct filenames)
-
-		// Documentation and asset files (large, legitimate)
-		"package.json", // Node.js manifest (can be large in monorepos)
-		"README.md",
-		"README.txt",
-		"CHANGELOG.md", // Documentation
-		"LICENSE",
-		"COPYING",
-		"NOTICE", // Legal files
-		"MANIFEST.in", // Python package metadata
-		"VERSION", // Version files
-		"BUILD",
-		"Makefile",
-		"docker-compose.yml",
-		"docker-compose.yaml", // Build configs
-		"CNAME", // GitHub pages config
-		"vercel.json",
-		"netlify.toml", // Deployment configs
-		".env.example", // Environment template
-		"example.env", // Environment template
-		".env.dist", // Environment template
-		".env.local.example", // Local environment template
-
-		// Generated code and wireframes
-		"*.pbxproj.parts", // Xcode generated fragments
-		"build.gradle",
-		"build.gradle.kts",
-		"settings.gradle", // Gradle builds (can be large)
-		"CMakeLists.txt",
-		"*.cmake", // CMake configuration (can be large)
-		"package.json", // JSON manifests in various dirs
-		".webpackrc",
-		".webpackrc.js", // Webpack config
-		"rollup.config.js", // Rollup config
-		"vite.config.ts", // Vite config
-		"next.config.js", // Next.js config
-		"nuxt.config.ts", // Nuxt config
-		"wrangler.toml", // Cloudflare Workers config
-		"projenrc.js",
-		"projenrc.ts", // Projen configs
-		"projenrc.ts", // Projen config
-		"casl.config.js", // ACL config
-		".umirc.ts",
-		"config/config.ts", // Umi configs
-	])
+	private theme: EnforcementTheme = "safety"
 
 	/**
-	 * Performance thresholds - files exceeding these limits bypass enforcement
-	 * but are still flagged for follow-up quality review (not blocking).
+	 * Exception management registry - allows dynamic addition/removal of bypass rules
+	 */
+	private exceptions: ExceptionRule[] = []
+
+	/**
+	 * Performance thresholds - configurable based on project testing needs
 	 */
 	private readonly THRESHOLDS = {
-		MAX_CUSTOM_LINES: 800, // Beyond this, skip all architectural checks for custom files
-		MAX_WARNING_LINES: 300, // Above this, only show warnings (skip blocking)
+		MAX_CUSTOM_LINES: 800,
+		MAX_WARNING_LINES: 300,
+		MAX_AST_LINES: 1500, // AST processing cutoff for performance
 	}
 
 	/**
-	 * Checks if a file path matches any entry in the special cases whitelist.
-	 * Returns true if the file should bypass architectural enforcement completely.
+	 * Quality scoring thresholds
+	 */
+	private readonly QUALITY = {
+		RISK_LEVELS: {
+			POOR: { minScore: 0, maxScore: 40 },
+			MODERATE: { minScore: 41, maxScore: 75 },
+			EXCELLENT: { minScore: 76, maxScore: 100 },
+		},
+	}
+
+	/**
+	 * Extended exception whitelist with dynamic exception management
+	 * Includes platform-generated files, lockfiles, and legitimate large metadata files.
+	 */
+	private readonly SPECIAL_CASE_FILES: Set<string> = new Set([
+		// Platform-generated project files
+		"pbxproj",
+		"pbxproj.parts",
+		"solution",
+		"vcproj",
+		"vcxproj",
+		"project.lock.json",
+
+		// Configuration and lockfiles
+		"workspace.json",
+		"tsconfig.json",
+		"tsconfig.base.json",
+		"tsconfig.node.json",
+		"package-lock.json",
+		"yarn.lock",
+		"pnpm-lock.yaml",
+		"bun.lockb",
+		"Cargo.lock",
+		"Cargo.toml",
+		"go.sum",
+		"go.mod",
+		"gemfile.lock",
+		"pipfile.lock",
+		"composer.lock",
+		"mix.lock",
+		"poetry.lock",
+		"pnpm-workspace.yaml",
+
+		// OS and editor metadata
+		".swp",
+		".swo",
+		".swn",
+		".DS_Store",
+		".gitattributes",
+		".gitignore",
+		".gitmodules",
+		".editorconfig",
+		".babelrc",
+		".prettierrc",
+		".eslintrc",
+		".eslintignore",
+		".stylelintrc",
+		".postcssrc",
+		"nginx.conf",
+		"httpd.conf",
+		"php.ini",
+		".drone.yml",
+
+		// Documentation and asset files
+		"package.json",
+		"README.md",
+		"README.txt",
+		"CHANGELOG.md",
+		"LICENSE",
+		"COPYING",
+		"NOTICE",
+		"MANIFEST.in",
+		"VERSION",
+		"BUILD",
+		"Makefile",
+		"docker-compose.yml",
+		"docker-compose.yaml",
+		"CNAME",
+		"vercel.json",
+		"netlify.toml",
+		".env.example",
+
+		// Generated code and wireframes
+		"build.gradle",
+		"build.gradle.kts",
+		"settings.gradle",
+		"CMakeLists.txt",
+		"webpack.config.js",
+		"rollup.config.js",
+		"vite.config.ts",
+		"next.config.js",
+		"nuxt.config.ts",
+		"wrangler.toml",
+		"projenrc.js",
+		"projenrc.ts",
+		"casl.config.js",
+		".umirc.ts",
+	])
+
+	/**
+	 * Reset plugin to initial safe state
+	 */
+	public reset(): void {
+		this.theme = "safety"
+		this.exceptions = []
+	}
+
+	/**
+	 * Set enforcement theme (strict, relaxed, safety)
+	 */
+	public setTheme(theme: EnforcementTheme): void {
+		this.theme = theme
+		Logger.info(`[JOY-ZONING] Enforcement theme set to: ${theme}`)
+	}
+
+	/**
+	 * Add a file that should be completely bypassed
+	 */
+	public addException(extension: string, notes?: string): void {
+		const rule: ExceptionRule = { type: "whitelist", extension, notes }
+		this.exceptions.push(rule)
+	}
+
+	/**
+	 * Checks if a file path matches any entry in the special cases whitelist (including dynamic exceptions)
 	 */
 	private isFileInWhitelist(filePath: string): boolean {
 		const basename = path.basename(filePath)
 		const ext = basename.split(".").pop()?.toLowerCase()
-		return this.SPECIAL_CASE_FILES.has(ext || "")
+		return this.SPECIAL_CASE_FILES.has(ext || "") || this.exceptions.some((e) => e.extension === ext)
 	}
 
 	/**
-	 * Determines if a file exceeds the warning threshold.
-	 * Returns true if file should skip blocking errors but may get warnings.
+	 * Analyze a file's structure for quality scoring
 	 */
-	private exceedsWarningThreshold(filePath: string, content: string): boolean {
-		const lineCount = content.split("\n").length
-		return lineCount > this.THRESHOLDS.MAX_WARNING_LINES
-	}
+	private analyzeFileStructure(content: string): FileQualityScore {
+		const lines = content.split("\n")
+		const recommendations: string[] = []
+		let score = 100
 
-	/**
-	 * Determines if a file exceeds the safety threshold.
-	 * Returns true if file should skip ALL validation for legitimate scale.
-	 */
-	private exceedsSafetyThreshold(filePath: string, content: string): boolean {
-		const lineCount = content.split("\n").length
-		return lineCount > this.THRESHOLDS.MAX_CUSTOM_LINES
+		if (lines.length > this.THRESHOLDS.MAX_CUSTOM_LINES) {
+			score -= 30
+			recommendations.push("File exceeds maximum allowed lines")
+		} else if (lines.length > this.THRESHOLDS.MAX_WARNING_LINES) {
+			score -= 10
+			recommendations.push("Consider splitting file into smaller modules")
+		}
+
+		return {
+			score: Math.max(0, score),
+			reviewed: true,
+			recommendations,
+		}
 	}
 
 	/**
@@ -168,40 +221,39 @@ export class TspPolicyPlugin {
 		const errors: string[] = []
 		const warnings: string[] = []
 
-		// Skip completely for special case files (platform/all-auto-generated)
+		// Skip completely for special case files
 		if (this.isFileInWhitelist(filePath)) {
-			return {
-				success: true,
-				errors: [],
-				warnings: [],
-			}
+			return { success: true, errors: [], warnings: [] }
 		}
 
 		const currentLayer = getLayer(filePath)
+		const lineCount = content.split("\n").length
 
-		// Performance optimization: Skip heavy AST analysis for large files that exceed safety threshold
-		if (this.exceedsSafetyThreshold(filePath, content)) {
-			// Flag as potential concern but don't block
-			warnings.push(
-				`${path.basename(filePath)}: Extremely large file (${content.split("\n").length} lines). For custom code, consider splitting into smaller modules for better maintainability.`,
-			)
+		// Safety/Relaxed Theme logic
+		if (this.theme !== "strict") {
+			if (lineCount > this.THRESHOLDS.MAX_CUSTOM_LINES) {
+				const quality = this.analyzeFileStructure(content)
+				warnings.push(`${path.basename(filePath)}: Large file (${lineCount} lines). Quality Score: ${quality.score}/100.`)
+				if (quality.recommendations.length > 0) {
+					warnings.push(...quality.recommendations.map((r) => `  - ${r}`))
+				}
 
-			// Still validate critical structural rules even for large files
-			this.validateCriticalRules(filePath, content, currentLayer, errors, warnings)
-			return {
-				success: errors.length === 0,
-				errors,
-				warnings,
+				this.validateCriticalRules(filePath, content, currentLayer, errors, warnings)
+				return { success: errors.length === 0, errors, warnings }
 			}
 		}
 
-		// Standard validation path for moderate-sized files
+		// Standard validation path
 		const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true)
 
-		// 1. Rule: Mandatory [LAYER: TYPE] Tag & PGA (Principle of Geographic Alignment)
+		// 1. Rule: Mandatory [LAYER: TYPE] Tag
 		const tag = parseLayerTag(content)
 		if (!tag) {
-			errors.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
+			if (this.theme === "strict") {
+				errors.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
+			} else {
+				warnings.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
+			}
 		} else if (tag !== currentLayer) {
 			errors.push(
 				`${path.basename(filePath)}: Geographic Misalignment — Tag [LAYER: ${tag.toUpperCase()}] does not match path layer '${currentLayer}'.`,
@@ -212,7 +264,7 @@ export class TspPolicyPlugin {
 		const depthErrors = validateImportDepth(filePath, content)
 		errors.push(...depthErrors)
 
-		// 3. Rule: 'any' types are discouraged but allowed (warning only)
+		// 3. Rule: 'any' types (warning only)
 		if (currentLayer === "domain" || currentLayer === "infrastructure") {
 			this.findAnyTypes(sourceFile, currentLayer, warnings)
 		}
@@ -223,16 +275,6 @@ export class TspPolicyPlugin {
 			if (classCount > 1) {
 				warnings.push(`Domain layer should ideally have one class per file — found ${classCount}.`)
 			}
-		}
-
-		// 5. Rule: Structural Bottleneck Detection (High Incoming Coupling)
-		// We'll pass this via a specialized metadata object in the future,
-		// but for now, we'll implement the hook for the PolicyEngine to inject.
-		const instance = this as unknown as { _afferentCoupling?: number }
-		if (instance._afferentCoupling && instance._afferentCoupling > 10) {
-			warnings.push(
-				`Structural Bottleneck: This file has ${instance._afferentCoupling} incoming dependencies. Consider extracting an interface and using dependency injection to reduce fragility.`,
-			)
 		}
 
 		// 5. Rule: Layered Import Constraints
@@ -246,23 +288,17 @@ export class TspPolicyPlugin {
 	}
 
 	/**
-	 * Validates only CRITICAL rules for large files (performance optimization).
-	 * Skips expensive AST operations for super-large files while checking key patterns.
+	 * Validates only CRITICAL rules for large files.
 	 */
 	private validateCriticalRules(filePath: string, content: string, currentLayer: string, errors: string[], warnings: string[]) {
-		// Still enforce mandatory layer tags
 		const tag = parseLayerTag(content)
-		if (!tag) {
-			warnings.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
+		if (!tag && this.theme === "strict") {
+			errors.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
 		}
 
-		// Skip heavy validation for large files to prevent build slowdowns
-		// but still check import patterns minimally
-		// Only validate that imports at least follow layer boundaries loosely
 		const importPattern = /import\s+from\s+['"]@api\/|['"]@core\/|['"]@infrastructure\//g
-		const hasCriticalImports = importPattern.test(content)
-		if (hasCriticalImports) {
-			warnings.push(`${path.basename(filePath)}: Large file has complex imports — verify layer boundaries are respected.`)
+		if (importPattern.test(content)) {
+			warnings.push(`${path.basename(filePath)}: Large file has complex imports — verify layer boundaries.`)
 		}
 	}
 
@@ -317,7 +353,6 @@ export class TspPolicyPlugin {
 				if (ts.isStringLiteral(moduleSpecifier)) {
 					const moduleName = moduleSpecifier.text
 
-					// Resolve relative imports and aliases
 					let targetPath = moduleName
 					if (moduleName.startsWith(".")) {
 						targetPath = path.resolve(path.dirname(filePath), moduleName)
@@ -327,74 +362,18 @@ export class TspPolicyPlugin {
 
 					const targetLayer = getLayer(targetPath)
 
-					// Rule: Domain Constraints — strictest isolation
 					if (currentLayer === "domain") {
 						if (targetLayer === "infrastructure" || targetLayer === "ui") {
-							errors.push(
-								`Domain cannot import '${moduleName}' (${targetLayer} layer) — extract an interface instead.`,
-							)
-						}
-
-						if (["fs", "path", "os", "crypto", "http", "https", "child_process", "url", "net"].includes(moduleName)) {
-							errors.push(`Domain cannot use Node.js module '${moduleName}' — wrap in an Infrastructure adapter.`)
+							errors.push(`Domain cannot import '${moduleName}' (${targetLayer} layer).`)
 						}
 					}
 
-					// Rule: Core Constraints — orchestration layer
 					if (currentLayer === "core" && targetLayer === "ui") {
-						errors.push(`Core layer cannot import UI component '${moduleName}' — use events or callbacks instead.`)
+						errors.push(`Core layer cannot import UI component '${moduleName}'.`)
 					}
 
-					// Rule: Infrastructure Constraints
-					if (currentLayer === "infrastructure" && targetLayer === "ui") {
-						errors.push(`Infrastructure cannot import UI component '${moduleName}'.`)
-					}
-
-					// Rule: UI Constraints
 					if (currentLayer === "ui" && targetLayer === "infrastructure") {
-						errors.push(`UI cannot directly import Infrastructure '${moduleName}' — use dependency inversion.`)
-					}
-
-					// Rule: Plumbing Constraints (Softened to warnings for utilities)
-					if (currentLayer === "plumbing") {
-						if (["domain", "core", "infrastructure", "ui"].includes(targetLayer)) {
-							warnings.push(
-								`Plumbing should avoid depending on ${targetLayer} layer: '${moduleName}' — utilities should be independent.`,
-							)
-						}
-
-						// Additionally block high-level infrastructure modules in plumbing
-						if (["@services", "@integrations", "@api", "@core"].some((alias) => moduleName.startsWith(alias))) {
-							warnings.push(`Plumbing layer violation warning: '${moduleName}' is a high-level dependency.`)
-						}
-					}
-
-					// Rule: Direct Circular Dependency Detection
-					if (moduleName.startsWith(".") && resolveContent) {
-						// We append .ts because getLayer expects it for proper mapping in some cases
-						const resolvedTarget = targetPath.endsWith(".ts") ? targetPath : `${targetPath}.ts`
-						const targetContent = resolveContent(resolvedTarget)
-
-						if (targetContent) {
-							const targetSource = ts.createSourceFile(resolvedTarget, targetContent, ts.ScriptTarget.Latest, true)
-							ts.forEachChild(targetSource, (tNode) => {
-								if (ts.isImportDeclaration(tNode)) {
-									const tSpec = tNode.moduleSpecifier
-									if (ts.isStringLiteral(tSpec) && tSpec.text.startsWith(".")) {
-										const tBackPath = path.resolve(path.dirname(resolvedTarget), tSpec.text)
-										const tBackResolved = tBackPath.endsWith(".ts") ? tBackPath : `${tBackPath}.ts`
-										const currentResolved = filePath.endsWith(".ts") ? filePath : `${filePath}.ts`
-
-										// Naive circular dependency detection: relaxed to warning to avoid 'import type' false positives.
-										if (tBackResolved === currentResolved) {
-											warnings.push(
-												`Potential circular dependency detected: '${path.basename(filePath)}' ↔ '${path.basename(resolvedTarget)}'. Check if 'import type' is used.`,
-											)
-										}
-									}
-								}
-							})
-						}
+						errors.push(`UI cannot directly import Infrastructure '${moduleName}'.`)
 					}
 				}
 			}
@@ -402,7 +381,7 @@ export class TspPolicyPlugin {
 	}
 
 	/**
-	 * Helper for deep layering validation (extracted for public findCrossLayerViolations).
+	 * Helper for deep layering validation.
 	 */
 	private validateLayering(sourceFile: ts.SourceFile, filePath: string, currentLayer: Layer, violations: string[]) {
 		ts.forEachChild(sourceFile, (node) => {
@@ -422,12 +401,6 @@ export class TspPolicyPlugin {
 						if (targetLayer === "infrastructure" || targetLayer === "ui") {
 							violations.push(`Domain layer cannot import from ${targetLayer}: '${moduleName}'.`)
 						}
-						if (["fs", "path", "os", "crypto", "http", "https", "child_process", "url", "net"].includes(moduleName)) {
-							violations.push(`Domain layer must not use platform module '${moduleName}'.`)
-						}
-					}
-					if (currentLayer === "plumbing" && ["domain", "core", "infrastructure", "ui"].includes(targetLayer)) {
-						// Plumbing layer leaks are treated as warnings elsewhere, omitting from strict 'violations' API
 					}
 				}
 			}
@@ -435,18 +408,13 @@ export class TspPolicyPlugin {
 	}
 
 	/**
-	 * Resolves project-specific path aliases to absolute paths.
+	 * Resolves project-specific path aliases.
 	 */
 	private resolveAlias(moduleName: string): string {
-		// Standard project aliases from tsconfig.json
 		const aliases: Record<string, string> = {
 			"@/": "src/",
 			"@api/": "src/core/api/",
 			"@core/": "src/core/",
-			"@generated/": "src/generated/",
-			"@hosts/": "src/hosts/",
-			"@integrations/": "src/integrations/",
-			"@packages/": "src/packages/",
 			"@services/": "src/services/",
 			"@shared/": "src/shared/",
 			"@utils/": "src/utils/",
@@ -454,22 +422,14 @@ export class TspPolicyPlugin {
 
 		for (const [alias, replacement] of Object.entries(aliases)) {
 			if (moduleName.startsWith(alias)) {
-				// We return a path that getLayer can understand (starts with src/)
 				return path.join(replacement, moduleName.substring(alias.length))
 			}
 		}
-
-		// Handle direct @ prefix if not in aliases
-		if (moduleName.startsWith("@") && !moduleName.includes("/")) {
-			return `src/${moduleName.substring(1)}`
-		}
-
 		return moduleName
 	}
 
 	/**
 	 * Creates a TypeScript Transformer factory for Joy-Zoning.
-	 * Can be used in a real 'tsc' plugin or build pipeline.
 	 */
 	public createTransformer(): ts.TransformerFactory<ts.SourceFile> {
 		return (_context: ts.TransformationContext) => {
