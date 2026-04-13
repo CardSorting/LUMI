@@ -48,7 +48,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({ showHistoryView,
 
 	return (
 		<div className="flex flex-col flex-1 w-full h-full p-0 m-0">
-			<div className="overflow-y-auto flex flex-col pb-2.5">
+			<div className="overflow-y-auto flex flex-col pb-2.5 justify-center flex-1">
 				<HomeHeader shouldShowQuickWins={shouldShowQuickWins} />
 				<div className="flex flex-col">
 					{!shouldShowQuickWins && taskHistory.length > 0 && <HistoryPreview showHistoryView={showHistoryView} />}

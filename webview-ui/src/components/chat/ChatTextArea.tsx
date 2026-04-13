@@ -91,7 +91,7 @@ interface GitCommit {
 	description: string
 }
 
-const PLAN_MODE_COLOR = "#e74c3c"
+const PLAN_MODE_COLOR = "var(--color-dietcode)"
 const ACT_MODE_COLOR = "#95a5a6"
 
 const SwitchContainer = styled.div<{ disabled: boolean }>`
@@ -1353,7 +1353,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					onDragEnter={handleDragEnter}
 					onDragLeave={handleDragLeave}
 					onDragOver={onDragOver}
-					onDrop={onDrop}>
+					onDrop={onDrop}
+					role="presentation">
 					{showDimensionError && (
 						<div className="absolute inset-2.5 bg-[rgba(var(--vscode-errorForeground-rgb),0.1)] border-2 border-error rounded-xs flex items-center justify-center z-10 pointer-events-none">
 							<span className="text-error font-bold text-xs text-center">Image dimensions exceed 7500px</span>
@@ -1492,7 +1493,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 									: isTextAreaFocused
 										? `none` // Handled by ring class above
 										: "none",
-							boxShadow: isTextAreaFocused ? "var(--glow-red)" : "none",
+							boxShadow: isTextAreaFocused ? "var(--glow-dietcode)" : "none",
 							outlineOffset: isDraggingOver && !showUnsupportedFileError ? "1px" : "0px", // Add offset for drag-over outline
 						}}
 						value={inputValue}
@@ -1622,9 +1623,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 											"pt-0.5 pb-px px-2 z-10 text-xs w-1/2 text-center bg-transparent",
 											mode === m.toLowerCase() ? "text-white" : "text-input-foreground",
 										)}
+										onFocus={() => setShownTooltipMode(m.toLowerCase() === "plan" ? "plan" : "act")}
 										onMouseLeave={() => setShownTooltipMode(null)}
 										onMouseOver={() => setShownTooltipMode(m.toLowerCase() === "plan" ? "plan" : "act")}
-										role="switch">
+										role="switch"
+										tabIndex={0}>
 										{m}
 									</div>
 								))}

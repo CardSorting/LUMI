@@ -10,6 +10,24 @@ export interface QuickWinTask {
 
 export const quickWinTasks: QuickWinTask[] = [
 	{
+		id: "codebase_audit",
+		title: "Audit Codebase",
+		description: "Analyze project structure, dependencies, and code quality",
+		icon: "AuditIcon",
+		actionCommand: "dietcode/auditCodebase",
+		prompt: "Perform a comprehensive audit of this codebase. Analyze the project structure, identify key components, check for security vulnerabilities, and suggest improvements for better performance and maintainability.",
+		buttonText: ">",
+	},
+	{
+		id: "unit_tests",
+		title: "Generate Unit Tests",
+		description: "Create robust test suites for your existing components",
+		icon: "TestIcon",
+		actionCommand: "dietcode/generateTests",
+		prompt: "Look at my existing components and logic, and generate a comprehensive set of unit tests using a popular testing framework like Vitest or Jest. Ensure edge cases are covered.",
+		buttonText: ">",
+	},
+	{
 		id: "nextjs_notetaking_app",
 		title: "Build a Next.js App",
 		description: "Create a beautiful notetaking app with Next.js and Tailwind",

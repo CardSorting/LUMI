@@ -22,12 +22,18 @@ const HomeHeader = ({ shouldShowQuickWins = false }: HomeHeaderProps) => {
 	const LogoComponent = DietCodeLogoVariable
 
 	return (
-		<div className="flex flex-col items-center mb-5">
-			<div className="my-7">
-				<LogoComponent className="size-20" environment={environment} />
+		<div className="flex flex-col items-center mb-10 mt-12 animate-fade-slide-in">
+			<div className="mb-8 relative">
+				<div className="absolute inset-0 blur-3xl opacity-20 bg-premium-cola-gradient rounded-full" />
+				<LogoComponent className="size-24 relative drop-shadow-2xl" environment={environment} />
 			</div>
-			<div className="text-center flex items-center justify-center px-4">
-				<h1 className="m-0 font-bold">What can I do for you?</h1>
+			<div className="text-center flex flex-col items-center justify-center px-8 gap-3">
+				<h1 className="m-0 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-dietcode to-green-400 bg-clip-text text-transparent">
+					Hi, I'm DietCode!
+				</h1>
+				<p className="text-description text-base max-w-[320px] leading-relaxed font-medium">
+					I'm your agentic coding partner, ready to help you build, refactor, and explore your codebase.
+				</p>
 			</div>
 			{shouldShowQuickWins && (
 				<div className="mt-4">

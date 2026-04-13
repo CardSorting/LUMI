@@ -1,6 +1,6 @@
 /* Editor theme mapping */
 @theme {
-	--color-dietcode: #e74c3c;
+	--color-dietcode: #2ecc71;
 	--color-background: var(--vscode-sideBar-background);
 	--color-border: var(--vscode-focusBorder);
 	--color-border-panel: var(--vscode-panel-border);
@@ -151,11 +151,11 @@
 	}
 
 	/* Premium Branding Tokens */
-	--gradient-cola: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+	--gradient-cola: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
 	--gradient-silver: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%);
 	--shadow-premium: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1), 0 10px 15px -3px rgb(0 0 0 / 0.1);
-	--glow-red: 0 0 15px rgba(231, 76, 60, 0.4);
-	--glow-red-intense: 0 0 25px rgba(231, 76, 60, 0.6);
+	--glow-dietcode: 0 0 15px rgba(46, 204, 113, 0.4);
+	--glow-dietcode-intense: 0 0 25px rgba(46, 204, 113, 0.6);
 }
 
 @theme inline {
