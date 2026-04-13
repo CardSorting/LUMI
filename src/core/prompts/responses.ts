@@ -30,7 +30,7 @@ export const formatResponse = {
 		`\n\n<error>\n${error}\n</error>\n\n` +
 		`Your previous tool execution was REJECTED because it deviated from the path of order. To maintain a state of "Joy", you MUST now align this code with our architectural mandate.\n\n` +
 		`High-Level Directive:\n` +
-		`1. **Respect Tag Locality**: Every file must declare its intention with [LAYER: TYPE].\n` +
+		`1. **Respect Tag Locality**: Every supported source file must declare its intention with [LAYER: TYPE].\n` +
 		`2. **Observe Geographic Alignment**: Files must reside in the directory that matches their tag.\n` +
 		`3. **Optimize Depth**: Keep relative navigation shallow (max 3 levels).\n\n` +
 		`💡 **Repair Strategy**:\n` +

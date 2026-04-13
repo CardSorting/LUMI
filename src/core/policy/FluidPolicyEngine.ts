@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import * as path from "path"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { Logger } from "@/shared/services/Logger"
+import { isLayerTagSupported } from "@/utils/joy-zoning"
 import { ToolUse } from "../assistant-message"
 import { ContextStalenessTracker } from "../context/ContextStalenessTracker"
 import { AuditRecorder } from "../integrity/AuditRecorder.js"
@@ -152,10 +153,12 @@ export class FluidPolicyEngine {
 	/**
 	 * Generates a concise, actionable correction hint for architectural violations.
 	 */
-	public getCorrectionHint(errors: string[]): string {
+	public getCorrectionHint(errors: string[], filePath?: string): string {
 		const fixes: string[] = []
+		const supportsTags = filePath ? isLayerTagSupported(filePath) : true
+
 		for (const err of errors) {
-			if (err.includes("tag") || err.includes("Missing mandatory"))
+			if ((err.includes("tag") || err.includes("Missing mandatory")) && supportsTags)
 				fixes.push(
 					"Add a mandatory [LAYER: TYPE] tag to the file header (one of DOMAIN, CORE, INFRASTRUCTURE, PLUMBING, UI).",
 				)
@@ -330,7 +333,7 @@ export class FluidPolicyEngine {
 					const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
 					return {
 						success: false,
-						error: `🏗️ ARCHITECTURAL CORRECTION REQUIRED (Strike ${strikes})\nDomain layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummaryRejection}\n\n${this.getCorrectionHint(astValidation.errors)}\n\n💡 Your write was NOT executed. Please address these violations and try again.`,
+						error: `🏗️ ARCHITECTURAL CORRECTION REQUIRED (Strike ${strikes})\nDomain layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummaryRejection}\n\n${this.getCorrectionHint(astValidation.errors, filePath)}\n\n💡 Your write was NOT executed. Please address these violations and try again.`,
 						violations: astValidation.errors,
 					}
 				}
@@ -358,7 +361,7 @@ export class FluidPolicyEngine {
 									: ""),
 					violations: astValidation.errors,
 					entropyScore: entropy.score,
-					correctionHint: this.getCorrectionHint(astValidation.errors),
+					correctionHint: this.getCorrectionHint(astValidation.errors, filePath),
 				}
 			}
 
@@ -641,7 +644,7 @@ export class FluidPolicyEngine {
 						result.violations = validation.errors
 						result.warning = `⚠️ ${path.basename(filePath)}:\n${allIssues.map((v) => `  - ${v}`).join("\n")}`
 						result.entropyScore = entropy.score
-						result.correctionHint = this.getCorrectionHint(validation.errors)
+						result.correctionHint = this.getCorrectionHint(validation.errors, filePath)
 					}
 				} catch {
 					// File might not exist yet

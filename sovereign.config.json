@@ -30,6 +30,20 @@
 		"maxPathDepth": 4,
 		"enforceKebabCase": true,
 		"feverThreshold": 5.0,
-		"integrityAlertThreshold": 70
+		"integrityAlertThreshold": 70,
+		"supportedLayerTags": [
+			".ts",
+			".tsx",
+			".js",
+			".jsx",
+			".md",
+			".sh",
+			".py",
+			".go",
+			".sql"
+		],
+		"excludePaths": [
+			"**/generated/**"
+		]
 	}
 }

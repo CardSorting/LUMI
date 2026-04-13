@@ -15,6 +15,8 @@ export interface SovereignConfig {
 		enforceKebabCase: boolean
 		feverThreshold: number
 		integrityAlertThreshold: number
+		supportedLayerTags?: string[]
+		excludePaths?: string[]
 	}
 }
 
@@ -68,6 +70,8 @@ export class SovereignPolicy {
 				enforceKebabCase: true,
 				feverThreshold: 5.0,
 				integrityAlertThreshold: 70,
+				supportedLayerTags: [".ts", ".tsx", ".js", ".jsx"],
+				excludePaths: [],
 			},
 		}
 	}

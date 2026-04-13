@@ -2,7 +2,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { Project, VariableDeclarationKind } from "ts-morph"
 import { Logger } from "@/shared/services/Logger"
-import { getLayer, parseLayerTag } from "@/utils/joy-zoning"
+import { generateLayerComment, getLayer, isLayerTagSupported, parseLayerTag } from "@/utils/joy-zoning"
 import { SovereignTransaction } from "../../integrity/SovereignTransaction"
 import { SovereignOptimizer } from "../../policy/SovereignOptimizer"
 import { SpiderEngine, SpiderNode } from "../../policy/SpiderEngine"
@@ -96,6 +96,8 @@ export class RefactorHealer {
 	 * Ensures the file's [LAYER] tag matches its directory.
 	 */
 	public async alignTag(filePath: string): Promise<void> {
+		if (!isLayerTagSupported(filePath)) return
+
 		try {
 			const content = await fs.readFile(filePath, "utf-8")
 			const currentTag = parseLayerTag(content)
@@ -103,16 +105,7 @@ export class RefactorHealer {
 
 			if (currentTag !== expectedLayer) {
 				const tagLabel = expectedLayer.toUpperCase() === "PLUMBING" ? "UTILS" : expectedLayer.toUpperCase()
-				const newTag = `[LAYER: ${tagLabel}]`
-
-				let newContent: string
-				if (currentTag) {
-					// Replace existing tag
-					newContent = content.replace(/\[LAYER:\s*(DOMAIN|CORE|INFRASTRUCTURE|PLUMBING|UI|UTILS)\]/i, newTag)
-				} else {
-					// Add new tag at the top
-					newContent = `/**\n * ${newTag}\n */\n\n${content}`
-				}
+				const newContent = generateLayerComment(filePath, tagLabel, content) || content
 
 				await fs.writeFile(filePath, newContent, "utf-8")
 			}
@@ -129,8 +122,8 @@ export class RefactorHealer {
 		const fileName = path.basename(filePath, path.extname(filePath))
 		const interfaceName = this.toPascalCase(fileName)
 		const layer = getLayer(filePath)
-
-		const template = `/**\n * [LAYER: ${layer.toUpperCase()}]\n * Auto-materialized by JoyZoning Healer\n */\n\nexport interface ${interfaceName} {\n\t// TODO: Define members for ${interfaceName}\n}\n`
+		const tagHeader = generateLayerComment(filePath, layer) || ""
+		const template = `${tagHeader}export interface ${interfaceName} {\n\t// TODO: Define members for ${interfaceName}\n}\n`
 
 		try {
 			const dir = path.dirname(absolutePath)
@@ -174,27 +167,22 @@ export class RefactorHealer {
 	 * Re-aligns a file's tag based on its ARCHETYPAL fingerprint, not just its location.
 	 */
 	public async alignTagByFingerprint(node: SpiderNode, optimizer: SovereignOptimizer): Promise<void> {
-		const recommended = optimizer.calculateOptimalLayer(node, null as any) // optimizer logic is pure for layers
+		const recommended = optimizer.calculateOptimalLayer(node, {} as SpiderEngine)
 		if (recommended && recommended !== node.layer) {
 			Logger.info(`Re-aligning ${node.path} from ${node.layer} to ${recommended} (Fingerprint Match)`)
-			await this.alignTagWithLayer(node.path, recommended as any)
+			await this.alignTagWithLayer(node.path, recommended)
 		}
 	}
 
 	private async alignTagWithLayer(filePath: string, layer: string): Promise<void> {
+		if (!isLayerTagSupported(filePath)) return
+
 		const absolutePath = path.resolve(this.projectRoot, filePath)
 		const content = await fs.readFile(absolutePath, "utf-8")
-		const tagLabel = layer.toUpperCase() === "PLUMBING" ? "UTILS" : layer.toUpperCase()
-		const newTag = `[LAYER: ${tagLabel}]`
-
-		const currentTag = parseLayerTag(content)
-		let newContent: string
-		if (currentTag) {
-			newContent = content.replace(/\[LAYER:\s*(DOMAIN|CORE|INFRASTRUCTURE|PLUMBING|UI|UTILS)\]/i, newTag)
-		} else {
-			newContent = `/**\n * ${newTag}\n */\n\n${content}`
+		const newContent = generateLayerComment(filePath, layer, content)
+		if (newContent) {
+			await fs.writeFile(absolutePath, newContent, "utf-8")
 		}
-		await fs.writeFile(absolutePath, newContent, "utf-8")
 	}
 
 	private toPascalCase(str: string): string {

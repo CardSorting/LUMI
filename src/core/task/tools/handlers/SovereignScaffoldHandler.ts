@@ -65,7 +65,7 @@ export class SovereignScaffoldHandler implements IToolHandler {
 		const interfaceName = this.toPascalCase(name)
 		const tag = layer === "plumbing" ? "UTILS" : layer.toUpperCase()
 
-		let content = `/**\n * [LAYER: ${tag}]\n * Scaffolded by Sovereign Blueprint v1.0\n */\n\n`
+		let content = generateLayerComment(relPath, tag) || ""
 
 		if (layer === "domain") {
 			content += `export interface ${interfaceName} {\n\t// Core Domain state and business rules\n\tid: string;\n}\n`

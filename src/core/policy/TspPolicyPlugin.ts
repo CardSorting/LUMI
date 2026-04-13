@@ -1,6 +1,6 @@
 import * as path from "path"
 import * as ts from "typescript"
-import { getLayer, Layer, parseLayerTag, validateImportDepth } from "@/utils/joy-zoning"
+import { getLayer, isLayerTagSupported, Layer, parseLayerTag, validateImportDepth } from "@/utils/joy-zoning"
 import { Logger } from "../../shared/services/Logger"
 
 /**
@@ -51,17 +51,6 @@ export class TspPolicyPlugin {
 		MAX_CUSTOM_LINES: 800,
 		MAX_WARNING_LINES: 300,
 		MAX_AST_LINES: 1500, // AST processing cutoff for performance
-	}
-
-	/**
-	 * Quality scoring thresholds
-	 */
-	private readonly QUALITY = {
-		RISK_LEVELS: {
-			POOR: { minScore: 0, maxScore: 40 },
-			MODERATE: { minScore: 41, maxScore: 75 },
-			EXCELLENT: { minScore: 76, maxScore: 100 },
-		},
 	}
 
 	/**
@@ -249,10 +238,12 @@ export class TspPolicyPlugin {
 		// 1. Rule: Mandatory [LAYER: TYPE] Tag
 		const tag = parseLayerTag(content)
 		if (!tag) {
-			if (this.theme === "strict") {
-				errors.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
-			} else {
-				warnings.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
+			if (isLayerTagSupported(filePath, content)) {
+				if (this.theme === "strict") {
+					errors.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
+				} else {
+					warnings.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
+				}
 			}
 		} else if (tag !== currentLayer) {
 			errors.push(
@@ -290,9 +281,15 @@ export class TspPolicyPlugin {
 	/**
 	 * Validates only CRITICAL rules for large files.
 	 */
-	private validateCriticalRules(filePath: string, content: string, currentLayer: string, errors: string[], warnings: string[]) {
+	private validateCriticalRules(
+		filePath: string,
+		content: string,
+		_currentLayer: string,
+		errors: string[],
+		warnings: string[],
+	) {
 		const tag = parseLayerTag(content)
-		if (!tag && this.theme === "strict") {
+		if (!tag && isLayerTagSupported(filePath, content) && this.theme === "strict") {
 			errors.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
 		}
 
@@ -344,8 +341,8 @@ export class TspPolicyPlugin {
 		filePath: string,
 		currentLayer: Layer,
 		errors: string[],
-		warnings: string[],
-		resolveContent?: (path: string) => string | undefined,
+		_warnings: string[],
+		_resolveContent?: (path: string) => string | undefined,
 	) {
 		ts.forEachChild(sourceFile, (node) => {
 			if (ts.isImportDeclaration(node)) {
