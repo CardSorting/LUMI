@@ -873,8 +873,8 @@ export const ChatRowContent = memo(
 								position="bottom-right"
 								ref={contentRef}
 								textToCopy={message.text}>
-								<div className="flex items-center">
-									<div className={cn("flex-1 min-w-0 pl-1")}>
+								<div className="flex items-center my-2">
+									<div className={cn("flex-1 min-w-0 p-3 rounded-lg glass-panel shadow-premium")}>
 										<MarkdownRow markdown={message.text} showCursor={false} />
 									</div>
 								</div>

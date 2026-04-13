@@ -106,3 +106,40 @@ body {
 	/* Prevent pull-to-refresh on mobile */
 	overscroll-behavior-y: contain;
 }
+
+/* Premium Styling Utilities */
+@layer components {
+	.glass-panel {
+		@apply backdrop-blur-md border border-white/10 dark:border-white/5;
+		background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+	}
+
+	.dark .glass-panel {
+		background: linear-gradient(135deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.1) 100%);
+	}
+
+	.btn-premium-cola {
+		@apply rounded-md font-semibold transition-all duration-300;
+		background: var(--gradient-cola);
+		box-shadow: var(--shadow-premium);
+		color: white;
+	}
+
+	.btn-premium-cola:hover:not(:disabled) {
+		@apply -translate-y-0.5;
+		box-shadow: var(--glow-red);
+		filter: brightness(1.1);
+	}
+
+	.btn-premium-cola:active:not(:disabled) {
+		@apply translate-y-0 scale-98;
+		box-shadow: none;
+	}
+
+	.aluminum-border {
+		border: 1px solid transparent;
+		background-image: linear-gradient(var(--color-background), var(--color-background)), var(--gradient-silver);
+		background-origin: border-box;
+		background-clip: padding-box, border-box;
+	}
+}

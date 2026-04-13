@@ -91,8 +91,8 @@ interface GitCommit {
 	description: string
 }
 
-const PLAN_MODE_COLOR = "var(--vscode-activityWarningBadge-background)"
-const ACT_MODE_COLOR = "var(--vscode-focusBorder)"
+const PLAN_MODE_COLOR = "#e74c3c"
+const ACT_MODE_COLOR = "#95a5a6"
 
 const SwitchContainer = styled.div<{ disabled: boolean }>`
 	display: flex;
@@ -1398,8 +1398,10 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					)}
 					<div
 						className={cn(
-							"absolute bottom-2.5 top-2.5 whitespace-pre-wrap break-words rounded-xs overflow-hidden bg-input-background",
-							isTextAreaFocused ? "left-3.5 right-3.5" : "left-3.5 right-3.5 border border-input-border",
+							"absolute bottom-2.5 top-2.5 whitespace-pre-wrap break-words rounded-md overflow-hidden bg-input-background glass-panel",
+							isTextAreaFocused
+								? "left-3.5 right-3.5 ring-2 ring-(--color-dietcode)"
+								: "left-3.5 right-3.5 border border-input-border shadow-premium",
 						)}
 						ref={highlightLayerRef}
 						style={{
@@ -1488,8 +1490,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								isDraggingOver && !showUnsupportedFileError // Only show drag outline if not showing error
 									? "2px dashed var(--vscode-focusBorder)"
 									: isTextAreaFocused
-										? `1px solid ${mode === "plan" ? PLAN_MODE_COLOR : "var(--vscode-focusBorder)"}`
+										? `none` // Handled by ring class above
 										: "none",
+							boxShadow: isTextAreaFocused ? "var(--glow-red)" : "none",
 							outlineOffset: isDraggingOver && !showUnsupportedFileError ? "1px" : "0px", // Add offset for drag-over outline
 						}}
 						value={inputValue}

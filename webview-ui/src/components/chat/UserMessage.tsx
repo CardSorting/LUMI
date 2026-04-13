@@ -89,12 +89,13 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 
 	return (
 		<div
-			className="p-2.5 pr-1 my-1 text-badge-foreground rounded-xs"
+			className={cn(
+				"p-3 my-2 text-white rounded-lg shadow-premium break-words",
+				isEditing ? "bg-transparent shadow-none" : "btn-premium-cola",
+			)}
 			onClick={handleClick}
 			style={{
-				backgroundColor: isEditing ? "unset" : "var(--vscode-badge-background)",
 				whiteSpace: "pre-line",
-				wordWrap: "break-word",
 			}}>
 			{isEditing ? (
 				<>

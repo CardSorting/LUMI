@@ -38,11 +38,12 @@ const WelcomeView = memo(() => {
 	}, [apiConfiguration, mode])
 
 	return (
-		<div className="fixed inset-0 p-0 flex flex-col">
-			<div className="h-full px-5 overflow-auto flex flex-col gap-2.5">
-				<h2 className="text-lg font-semibold">Hi, I'm DietCode</h2>
-				<div className="flex justify-center my-5">
-					<DietCodeLogoWhite className="size-16" />
+		<div className="fixed inset-0 p-0 flex flex-col items-center justify-center bg-background">
+			<div className="max-w-[400px] w-[90%] glass-panel p-8 rounded-2xl flex flex-col gap-6 shadow-2xl animate-fade-slide-in">
+				<div className="flex flex-col items-center gap-2">
+					<h2 className="text-2xl font-bold tracking-tight">Hi, I'm DietCode</h2>
+					<p className="text-description text-center mb-2">Refreshing your codebase.</p>
+					<DietCodeLogoWhite className="size-20 drop-shadow-lg" />
 				</div>
 				<p>
 					I can do all kinds of tasks thanks to breakthroughs in{" "}
@@ -59,11 +60,11 @@ const WelcomeView = memo(() => {
 					Sonnet.
 				</p>
 
-				<VSCodeButton appearance="primary" className="w-full mt-1" disabled={isLoading} onClick={handleLogin}>
-					Get Started for Free
+				<VSCodeButton className="btn-premium-cola h-12 w-full mt-2" disabled={isLoading} onClick={handleLogin}>
+					<span className="text-base">Get Started for Free</span>
 					{isLoading && (
-						<span className="ml-1 animate-spin">
-							<VscIcon className="" name="refresh" />
+						<span className="ml-2 animate-spin">
+							<VscIcon name="refresh" />
 						</span>
 					)}
 				</VSCodeButton>
