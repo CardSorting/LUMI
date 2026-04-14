@@ -25,6 +25,7 @@ import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { applyModelContentFixes } from "../utils/ModelContentProcessor"
+import { SovereignScribe } from "../utils/SovereignScribe"
 import { ToolDisplayUtils } from "../utils/ToolDisplayUtils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
@@ -393,10 +394,21 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				finalContent,
 				newProblemsMessage,
 			)
+
+			// PROACTIVE SOVEREIGN AUDIT (V6)
+			let auditReport = ""
+			if (relPath.endsWith("scratchpad.md") && config.mode === "plan" && config.strictPlanModeEnabled && finalContent) {
+				const audit = await SovereignScribe.validate(finalContent, config.cwd)
+				auditReport = `\n\n${audit.report}`
+				if (audit.synthesis) {
+					config.taskState.sovereignAuditSynthesis = audit.synthesis
+				}
+			}
+
 			const state = config.taskState as unknown as { sovereignDirective?: string }
 			const directive = state.sovereignDirective || ""
 			if (directive) delete state.sovereignDirective
-			return baseResult + directive
+			return baseResult + directive + auditReport
 		} catch (error) {
 			// Reset diff view on error
 			await config.services.diffViewProvider.revertChanges()

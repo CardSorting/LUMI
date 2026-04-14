@@ -10,6 +10,7 @@ import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordina
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { getTaskCompletionTelemetry } from "../utils"
+import { SovereignScribe } from "../utils/SovereignScribe"
 
 export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.PLAN_MODE
@@ -46,11 +47,15 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// SOVEREIGN DRAFTING ENFORCEMENT (V6)
+		// SOVEREIGN DRAFTER ENFORCEMENT (V6)
 		if (config.strictPlanModeEnabled && config.mode === "plan") {
-			const draftingError = await this.validateScratchpad(config)
-			if (draftingError) {
-				return formatResponse.toolResult(draftingError)
+			const { content } = SovereignScribe.getLatestScratchpadContent(config.messageState.getApiConversationHistory())
+			const audit = await SovereignScribe.validate(content, config.cwd)
+			if (!audit.ok) {
+				return formatResponse.toolResult(audit.report)
+			}
+			if (audit.synthesis) {
+				config.taskState.sovereignAuditSynthesis = audit.synthesis
 			}
 		}
 
@@ -192,28 +197,7 @@ By proceeding to ACT mode, you commit to maintaining the integrity of the layers
 	 * Extracts the hardening synthesis from the scratchpad for the final handover.
 	 */
 	private getSovereignHandover(config: TaskConfig): string {
-		const history = config.messageState.getApiConversationHistory()
-		let synthesis = ""
-
-		for (let i = history.length - 1; i >= 0; i--) {
-			const msg = history[i]
-			if (msg.role === "assistant" && Array.isArray(msg.content)) {
-				for (const block of msg.content) {
-					if (block.type === "tool_use" && block.name === DietCodeDefaultTool.FILE_NEW) {
-						const input = block.input as Record<string, string>
-						const targetPath = input.path || input.TargetFile || ""
-						if (targetPath.endsWith("scratchpad.md")) {
-							const content = input.content || input.CodeContent || ""
-							const match = content.match(/- \*\*Synthesis\*\*: ([\s\S]+?)(?=\n- \*\*MANTRA\*\*|$)/i)
-							if (match) synthesis = match[1].trim()
-							break
-						}
-					}
-				}
-			}
-			if (synthesis) break
-		}
-
+		const synthesis = config.taskState.sovereignAuditSynthesis
 		if (!synthesis) return ""
 
 		return `\n\n[SOVEREIGN HANDOVER]
@@ -221,138 +205,6 @@ Your architectural audit resulted in the following hardening synthesis:
 > ${synthesis}
 
 Maintain this commitment throughout the ACT phase.`
-	}
-
-	/**
-	 * Scans conversation history to ensure scratchpad.md was used with the mandatory V6 template.
-	 */
-	private async validateScratchpad(config: TaskConfig): Promise<string | null> {
-		const history = config.messageState.getApiConversationHistory()
-		let latestScratchpadContent = ""
-
-		// Scan backwards for the latest scratchpad write
-		for (let i = history.length - 1; i >= 0; i--) {
-			const msg = history[i]
-			if (msg.role === "assistant" && Array.isArray(msg.content)) {
-				for (const block of msg.content) {
-					if (block.type === "tool_use" && block.name === DietCodeDefaultTool.FILE_NEW) {
-						const input = block.input as Record<string, string>
-						const targetPath = input.path || input.TargetFile || ""
-						if (targetPath.endsWith("scratchpad.md")) {
-							latestScratchpadContent = input.content || input.CodeContent || ""
-							const match = latestScratchpadContent.match(
-								/- \*\*Synthesis\*\*: ([\s\S]+?)(?=\n- \*\*MANTRA\*\*|$)/i,
-							)
-							if (match) config.taskState.sovereignAuditSynthesis = match[1].trim()
-							break
-						}
-					}
-				}
-			}
-			if (latestScratchpadContent) break
-		}
-
-		if (!latestScratchpadContent) {
-			return (
-				"⚠️ SOVEREIGN DRAFTER VIOLATION: You attempted to call `plan_mode_respond` without completing the mandatory `scratchpad.md` drafting phase.\n" +
-				"In PLAN MODE, you MUST first externalize your architectural investigation using the **Sovereign Triad V6 Template** in `scratchpad.md`.\n" +
-				"Your next action must be a `write_to_file` call to `scratchpad.md` following the required format."
-			)
-		}
-
-		// Hardened Validation (V6)
-		const missingMarkers: string[] = []
-
-		// 1. Check title (ensure it doesn't contain the placeholder [Task Name])
-		if (!latestScratchpadContent.includes("# SOVEREIGN AUDIT") || latestScratchpadContent.includes("[Task Name]")) {
-			missingMarkers.push("# SOVEREIGN AUDIT (Descriptive Title)")
-		}
-
-		// 2. Check Probes & Substantive Content (with Path/Evidence Check)
-		const pathRegex = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+|[a-zA-Z0-9_\-.]+\.ts|[a-zA-Z0-9_\-.]+\.js/g
-		const probePatterns = [
-			{ name: "### 1. THE ARCHITECT", pattern: /### 1\. THE ARCHITECT \(Boundary Probe\)\n([\s\S]+?)(?=### 2|$)/i },
-			{ name: "### 2. THE CRITIC", pattern: /### 2\. THE CRITIC \(Assumption Probe\)\n([\s\S]+?)(?=### 3|$)/i },
-			{ name: "### 3. THE SRE", pattern: /### 3\. THE SRE \(Atomic Probe\)\n([\s\S]+?)(?=## \[FINAL RESOLUTION\]|$)/i },
-		]
-
-		const diagnosticHints: string[] = []
-
-		for (const probe of probePatterns) {
-			const match = latestScratchpadContent.match(probe.pattern)
-			if (!match) {
-				missingMarkers.push(probe.name)
-				diagnosticHints.push(`Mandatory header missing: ${probe.name}`)
-				continue
-			}
-
-			const content = match[1].trim()
-
-			// Path/Evidence Check
-			const pathMatch = content.match(pathRegex)
-			const paths = pathMatch ? Array.from(new Set(pathMatch)) : []
-			const nonExistentPaths: string[] = []
-
-			if (paths.length > 0) {
-				const fs = require("fs")
-				const path = require("path")
-				for (const p of paths) {
-					const sanitizedPath = p.replace(/[`*]/g, "") // Clean up markdown
-					const absolutePath = path.isAbsolute(sanitizedPath) ? sanitizedPath : path.join(config.cwd, sanitizedPath)
-					if (!fs.existsSync(absolutePath)) {
-						nonExistentPaths.push(sanitizedPath)
-					}
-				}
-			}
-
-			const isPlaceholder =
-				content.includes("[Where is the boundary weakest?]") ||
-				content.includes("[Which assumption is most dangerous?]") ||
-				content.includes("[What happens during partial failure?]")
-
-			if (content.length < 40 || paths.length === 0 || isPlaceholder || nonExistentPaths.length > 0) {
-				missingMarkers.push(`${probe.name} (Quality Check)`)
-				if (content.length < 40) diagnosticHints.push(`${probe.name}: Analysis is too brief. Be more descriptive.`)
-				if (paths.length === 0)
-					diagnosticHints.push(`${probe.name}: Cite specific file paths or code segments as evidence.`)
-				if (nonExistentPaths.length > 0)
-					diagnosticHints.push(
-						`${probe.name}: Hallucination detected! The following paths do not exist: ${nonExistentPaths.join(", ")}`,
-					)
-				if (isPlaceholder)
-					diagnosticHints.push(`${probe.name}: Remove template placeholders and replace with real investigation.`)
-			}
-		}
-
-		// 3. Check Final Resolution sections
-		const hasMantra = latestScratchpadContent.toLowerCase().includes("double down on this concept")
-		const synthesisMatch = latestScratchpadContent.match(/- \*\*Synthesis\*\*: ([\s\S]+?)(?=\n- \*\*MANTRA\*\*|$)/i)
-		const synthesisValid =
-			synthesisMatch &&
-			synthesisMatch[1].trim().length > 20 &&
-			!synthesisMatch[1].includes("[Summary of hardening applied]")
-
-		if (!hasMantra || !synthesisValid) {
-			if (!hasMantra) {
-				missingMarkers.push("Double Down MANTRA")
-				diagnosticHints.push("The mandatory Double Down MANTRA is missing or incorrect.")
-			}
-			if (!synthesisValid) {
-				missingMarkers.push("Synthesis (Hardened Summary)")
-				diagnosticHints.push("Your Synthesis block must be a unique, substantive summary of your hardening actions.")
-			}
-		}
-
-		if (missingMarkers.length > 0) {
-			let error = "⚠️ SOVEREIGN DRAFTER VIOLATION: Your `scratchpad.md` draft failed the Quality Audit.\n\n"
-			error += `**Missing/Inferior Components:**\n${missingMarkers.map((m) => `- ${m}`).join("\n")}\n\n`
-			error += `**Diagnostic Hints:**\n${diagnosticHints.map((h) => `💡 ${h}`).join("\n")}\n\n`
-			error +=
-				"You MUST deeply investigate all three probes and cite evidence in `scratchpad.md` before the `plan_mode_respond` tool will unlock."
-			return error
-		}
-
-		return null
 	}
 
 	/**

@@ -6,7 +6,8 @@ const getSovereignDraftingTemplateText = () => `## SOVEREIGN DRAFTING & GROUNDED
 In PLAN MODE, you must adhere to the **Double Down Planning** methodology. This ensures production-grade hardening and architectural integrity through **Actionable Grounding Probes**.
 
 ### 1. Mandatory Scratchpad Usage
-- **Requirement**: Use \`scratchpad.md\` for ALL architectural decisions. 
+- **Requirement**: Use the \`write_to_file\` tool to create and maintain \`scratchpad.md\` for ALL architectural decisions.
+- **Forbidden**: Do NOT use internal \`<scratchpad>\` tags, thinking blocks, or any tool called \`scratchpad\`. Your work must be saved as a physical file in the workspace to satisfy the hardened audit validator.
 - **Method**: Externalize your investigation using the **Sovereign Triad V6 Template**.
 
 ### 2. The Grounded Triad Audit
@@ -62,6 +63,17 @@ Structure your \`scratchpad.md\` as follows:
 ## [FINAL RESOLUTION]
 - **Synthesis**: [Summary of hardening applied to the final plan]
 - **MANTRA**: [Double down on this concept, audit and revise in its entirety]
+\`\`\`
+
+**EXAMPLE TOOL CALL**:
+\`\`\`xml
+<write_to_file>
+<path>scratchpad.md</path>
+<content>
+# SOVEREIGN AUDIT: [Task Name]
+... [Probes & Resolution] ...
+</content>
+</write_to_file>
 \`\`\`
 
 **CRITICAL**: You MUST use the \`plan_mode_respond\` tool immediately after completing the Final Resolution to conclude the planning phase.`
