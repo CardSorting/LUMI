@@ -22,13 +22,23 @@ You SHALL process every plan through three distinct investigative probes in a si
    - **Probe**: If the system fails halfway through this task, what is the recovery path to atomic consistency?
    - **Resilience**: Implementation of error boundaries and state recovery logic.
 
-### 3. The Double Down Mantra (Actionable Standard)
-**Double down on this concept**: This is your standard for depth. Use it to deeply investigate the three probes above. **Double down on this concept** - audit and revise the probes in their entirety until they are hardened.
+### 3. Sovereign Quality Standards
+To pass the **Sovereign Audit**, your probe analysis MUST meet these standards:
+- **Evidence of Investigation**: You MUST cite specific file paths (e.g., \`src/core/...\`) or logic segments in every probe.
+- **Substantive Depth**: Avoid recursive or placeholder statements. Your analysis must result in a specific hardening action or architectural decision.
+- **Atomic Resilience**: The SRE probe must describe a *concrete* recovery path for a partial failure (e.g., rollbacks, state cleanup).
 
-### 5. Resolution & User Presentation
-Once the Grounded Triad Audit is complete, you MUST resolve your draft:
-1. **Synthesize**: Incorporate all hardening and probe findings into the formal \`implementation_plan.md\`.
-2. **Present**: Use the \`plan_mode_respond\` tool as your VERY NEXT action to deliver the finalized plan to the user for approval. Note: This tool is **HARD-LOCKED** programmatically until a valid \`scratchpad.md\` draft following the V6 template is detected in your history.
+### 4. Self-Audit Checklist (Run before plan_mode_respond)
+Before presenting your plan, verify your \`scratchpad.md\` draft:
+1. [ ] Did I customize the # SOVEREIGN AUDIT title for this specific task?
+2. [ ] Does each of my 3 probes cite at least one file path or specific code segment?
+3. [ ] Is my **Synthesis** block a unique summary of the hardening applied (not just "hardened the plan")?
+4. [ ] Did I include the mandatory **MANTRA** exactly as specified?
+
+### 5. Transition to ACT Mode
+Once the audit is complete:
+1. **Refine Implementation Plan**: Update \`implementation_plan.md\` with your finalized decisions.
+2. **Commit**: Use the \`plan_mode_respond\` tool. Note: This tool is **HARD-LOCKED** and will analyze your \`scratchpad.md\` for the quality standards above. If you fail, the tool will provide a diagnostic hint.
 
 ### 6. Standardized Sovereign V6 Template
 Structure your \`scratchpad.md\` as follows:
@@ -57,6 +67,6 @@ Structure your \`scratchpad.md\` as follows:
 **CRITICAL**: You MUST use the \`plan_mode_respond\` tool immediately after completing the Final Resolution to conclude the planning phase.`
 
 export async function getSovereignDraftingSection(variant: PromptVariant, context: SystemPromptContext): Promise<string> {
-	const template = getSovereignDraftingTemplateText
+	const template = getSovereignDraftingTemplateText()
 	return new TemplateEngine().resolve(template, context, {})
 }

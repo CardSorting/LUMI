@@ -89,7 +89,10 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 
 			if (switchSuccessful) {
 				// Complete the plan mode response tool call (this is a unique case where we auto-respond to the user with an ask response)
-				const lastPlanMessage = findLast(config.messageState.getDietCodeMessages(), (m: any) => m.ask === this.name)
+				const lastPlanMessage = findLast(
+					config.messageState.getDietCodeMessages(),
+					(m: { ask?: string; text?: string; partial?: boolean }) => m.ask === this.name,
+				)
 				if (lastPlanMessage) {
 					lastPlanMessage.text = JSON.stringify({
 						...sharedMessage,
@@ -126,7 +129,10 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 			telemetryService.captureOptionSelected(config.ulid, options.length, "plan")
 			// Valid option selected, don't show user message in UI
 			// Update last plan message with selected option
-			const lastPlanMessage = findLast(config.messageState.getDietCodeMessages(), (m: any) => m.ask === this.name)
+			const lastPlanMessage = findLast(
+				config.messageState.getDietCodeMessages(),
+				(m: { ask?: string; text?: string; partial?: boolean }) => m.ask === this.name,
+			)
 			if (lastPlanMessage) {
 				lastPlanMessage.text = JSON.stringify({
 					...sharedMessage,
@@ -166,6 +172,7 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 		}
 		// if we didn't switch to ACT MODE, then we can just send the user_feedback message
 		const layerSummary = await this.getLayerPlanningSummary(config)
+		const sovereignHandover = config.strictPlanModeEnabled ? this.getSovereignHandover(config) : ""
 		const architecturalCommitment = layerSummary
 			? `\n\n[ARCHITECTURAL COMMITMENT SEAL]
 By proceeding to ACT mode, you commit to maintaining the integrity of the layers explored:
@@ -175,10 +182,45 @@ By proceeding to ACT mode, you commit to maintaining the integrity of the layers
 			: ""
 
 		return formatResponse.toolResult(
-			`<user_message>\n${text}\n</user_message>${layerSummary}${architecturalCommitment}`,
+			`<user_message>\n${text}\n</user_message>${layerSummary}${sovereignHandover}${architecturalCommitment}`,
 			images,
 			fileContentString,
 		)
+	}
+
+	/**
+	 * Extracts the hardening synthesis from the scratchpad for the final handover.
+	 */
+	private getSovereignHandover(config: TaskConfig): string {
+		const history = config.messageState.getApiConversationHistory()
+		let synthesis = ""
+
+		for (let i = history.length - 1; i >= 0; i--) {
+			const msg = history[i]
+			if (msg.role === "assistant" && Array.isArray(msg.content)) {
+				for (const block of msg.content) {
+					if (block.type === "tool_use" && block.name === DietCodeDefaultTool.FILE_NEW) {
+						const input = block.input as Record<string, string>
+						const targetPath = input.path || input.TargetFile || ""
+						if (targetPath.endsWith("scratchpad.md")) {
+							const content = input.content || input.CodeContent || ""
+							const match = content.match(/- \*\*Synthesis\*\*: ([\s\S]+?)(?=\n- \*\*MANTRA\*\*|$)/i)
+							if (match) synthesis = match[1].trim()
+							break
+						}
+					}
+				}
+			}
+			if (synthesis) break
+		}
+
+		if (!synthesis) return ""
+
+		return `\n\n[SOVEREIGN HANDOVER]
+Your architectural audit resulted in the following hardening synthesis:
+> ${synthesis}
+
+Maintain this commitment throughout the ACT phase.`
 	}
 
 	/**
@@ -194,7 +236,7 @@ By proceeding to ACT mode, you commit to maintaining the integrity of the layers
 			if (msg.role === "assistant" && Array.isArray(msg.content)) {
 				for (const block of msg.content) {
 					if (block.type === "tool_use" && block.name === DietCodeDefaultTool.FILE_NEW) {
-						const input = block.input as any
+						const input = block.input as Record<string, string>
 						const targetPath = input.path || input.TargetFile || ""
 						if (targetPath.endsWith("scratchpad.md")) {
 							latestScratchpadContent = input.content || input.CodeContent || ""
@@ -222,23 +264,37 @@ By proceeding to ACT mode, you commit to maintaining the integrity of the layers
 			missingMarkers.push("# SOVEREIGN AUDIT (Descriptive Title)")
 		}
 
-		// 2. Check Probes & Substantive Content
+		// 2. Check Probes & Substantive Content (with Path/Evidence Check)
+		const pathRegex = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+|[a-zA-Z0-9_\-.]+\.ts|[a-zA-Z0-9_\-.]+\.js/g
 		const probePatterns = [
 			{ name: "### 1. THE ARCHITECT", pattern: /### 1\. THE ARCHITECT \(Boundary Probe\)\n([\s\S]+?)(?=### 2|$)/i },
 			{ name: "### 2. THE CRITIC", pattern: /### 2\. THE CRITIC \(Assumption Probe\)\n([\s\S]+?)(?=### 3|$)/i },
 			{ name: "### 3. THE SRE", pattern: /### 3\. THE SRE \(Atomic Probe\)\n([\s\S]+?)(?=## \[FINAL RESOLUTION\]|$)/i },
 		]
 
+		const diagnosticHints: string[] = []
+
 		for (const probe of probePatterns) {
 			const match = latestScratchpadContent.match(probe.pattern)
-			if (
-				!match ||
-				match[1].trim().length < 30 ||
-				match[1].includes("[Where is the boundary weakest?]") ||
-				match[1].includes("[Which assumption is most dangerous?]") ||
-				match[1].includes("[What happens during partial failure?]")
-			) {
-				missingMarkers.push(`${probe.name} (Substantive Analysis)`)
+			if (!match) {
+				missingMarkers.push(probe.name)
+				diagnosticHints.push(`Mandatory header missing: ${probe.name}`)
+				continue
+			}
+
+			const content = match[1].trim()
+			const hasPath = pathRegex.test(content)
+			const isPlaceholder =
+				content.includes("[Where is the boundary weakest?]") ||
+				content.includes("[Which assumption is most dangerous?]") ||
+				content.includes("[What happens during partial failure?]")
+
+			if (content.length < 40 || !hasPath || isPlaceholder) {
+				missingMarkers.push(`${probe.name} (Quality Check)`)
+				if (content.length < 40) diagnosticHints.push(`${probe.name}: Analysis is too brief. Be more descriptive.`)
+				if (!hasPath) diagnosticHints.push(`${probe.name}: Cite specific file paths or code segments as evidence.`)
+				if (isPlaceholder)
+					diagnosticHints.push(`${probe.name}: Remove template placeholders and replace with real investigation.`)
 			}
 		}
 
@@ -247,20 +303,26 @@ By proceeding to ACT mode, you commit to maintaining the integrity of the layers
 		const synthesisMatch = latestScratchpadContent.match(/- \*\*Synthesis\*\*: ([\s\S]+?)(?=\n- \*\*MANTRA\*\*|$)/i)
 		const synthesisValid =
 			synthesisMatch &&
-			synthesisMatch[1].trim().length > 15 &&
+			synthesisMatch[1].trim().length > 20 &&
 			!synthesisMatch[1].includes("[Summary of hardening applied]")
 
 		if (!hasMantra || !synthesisValid) {
-			if (!hasMantra) missingMarkers.push("Double Down MANTRA")
-			if (!synthesisValid) missingMarkers.push("Synthesis (Hardened Summary)")
+			if (!hasMantra) {
+				missingMarkers.push("Double Down MANTRA")
+				diagnosticHints.push("The mandatory Double Down MANTRA is missing or incorrect.")
+			}
+			if (!synthesisValid) {
+				missingMarkers.push("Synthesis (Hardened Summary)")
+				diagnosticHints.push("Your Synthesis block must be a unique, substantive summary of your hardening actions.")
+			}
 		}
 
 		if (missingMarkers.length > 0) {
-			let error =
-				"⚠️ SOVEREIGN DRAFTER VIOLATION: Your `scratchpad.md` draft is incomplete, placeholder-heavy, or non-conformant.\n"
-			error += `Insufficient or missing components: ${missingMarkers.join(", ")}.\n\n`
+			let error = "⚠️ SOVEREIGN DRAFTER VIOLATION: Your `scratchpad.md` draft failed the Quality Audit.\n\n"
+			error += `**Missing/Inferior Components:**\n${missingMarkers.map((m) => `- ${m}`).join("\n")}\n\n`
+			error += `**Diagnostic Hints:**\n${diagnosticHints.map((h) => `💡 ${h}`).join("\n")}\n\n`
 			error +=
-				"You MUST deeply investigate all three probes and synthesize a hardened plan in `scratchpad.md` before the `plan_mode_respond` tool will unlock."
+				"You MUST deeply investigate all three probes and cite evidence in `scratchpad.md` before the `plan_mode_respond` tool will unlock."
 			return error
 		}
 
@@ -280,7 +342,7 @@ By proceeding to ACT mode, you commit to maintaining the integrity of the layers
 			if (msg.role === "assistant" && Array.isArray(msg.content)) {
 				for (const block of msg.content) {
 					if (block.type === "tool_use") {
-						const input = block.input as any
+						const input = block.input as Record<string, string>
 						const pathParam = getTargetPath(input)
 						if (pathParam) {
 							const layer = getLayer(pathParam)
