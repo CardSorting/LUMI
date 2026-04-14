@@ -7,7 +7,7 @@ In PLAN MODE, you must adhere to the **Double Down Planning** methodology. This 
 
 ### 1. Mandatory Scratchpad Usage
 - **Requirement**: Use \`scratchpad.md\` for ALL architectural decisions. 
-- **Method**: Externalize your investigation using the **Sovereign Triad V5 Template**.
+- **Method**: Externalize your investigation using the **Sovereign Triad V6 Template**.
 
 ### 2. The Grounded Triad Audit
 You SHALL process every plan through three distinct investigative probes in a single, high-quality pass:
@@ -28,7 +28,7 @@ You SHALL process every plan through three distinct investigative probes in a si
 ### 5. Resolution & User Presentation
 Once the Grounded Triad Audit is complete, you MUST resolve your draft:
 1. **Synthesize**: Incorporate all hardening and probe findings into the formal \`implementation_plan.md\`.
-2. **Present**: Use the \`plan_mode_respond\` tool as your VERY NEXT action to deliver the finalized plan to the user for approval.
+2. **Present**: Use the \`plan_mode_respond\` tool as your VERY NEXT action to deliver the finalized plan to the user for approval. Note: This tool is **HARD-LOCKED** programmatically until a valid \`scratchpad.md\` draft following the V6 template is detected in your history.
 
 ### 6. Standardized Sovereign V6 Template
 Structure your \`scratchpad.md\` as follows:

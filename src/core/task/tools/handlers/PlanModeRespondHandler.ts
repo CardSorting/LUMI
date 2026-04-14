@@ -46,6 +46,14 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 
 		config.taskState.consecutiveMistakeCount = 0
 
+		// SOVEREIGN DRAFTING ENFORCEMENT (V6)
+		if (config.strictPlanModeEnabled && config.mode === "plan") {
+			const draftingError = this.validateScratchpad(config)
+			if (draftingError) {
+				return formatResponse.toolResult(draftingError)
+			}
+		}
+
 		// The plan_mode_respond tool tends to run into this issue where the model realizes mid-tool call that it should have called another tool before calling plan_mode_respond. And it ends the plan_mode_respond tool call with 'Proceeding to reading files...' which doesn't do anything because we restrict to 1 tool call per message. As an escape hatch for the model, we provide it the optionality to tack on a parameter at the end of its response `needs_more_exploration`, which will allow the loop to continue.
 		if (needsMoreExploration) {
 			config.taskState.currentTurnExplorationCount++
@@ -171,6 +179,92 @@ By proceeding to ACT mode, you commit to maintaining the integrity of the layers
 			images,
 			fileContentString,
 		)
+	}
+
+	/**
+	 * Scans conversation history to ensure scratchpad.md was used with the mandatory V6 template.
+	 */
+	private validateScratchpad(config: TaskConfig): string | null {
+		const history = config.messageState.getApiConversationHistory()
+		let latestScratchpadContent = ""
+
+		// Scan backwards for the latest scratchpad write
+		for (let i = history.length - 1; i >= 0; i--) {
+			const msg = history[i]
+			if (msg.role === "assistant" && Array.isArray(msg.content)) {
+				for (const block of msg.content) {
+					if (block.type === "tool_use" && block.name === DietCodeDefaultTool.FILE_NEW) {
+						const input = block.input as any
+						const targetPath = input.path || input.TargetFile || ""
+						if (targetPath.endsWith("scratchpad.md")) {
+							latestScratchpadContent = input.content || input.CodeContent || ""
+							break
+						}
+					}
+				}
+			}
+			if (latestScratchpadContent) break
+		}
+
+		if (!latestScratchpadContent) {
+			return (
+				"⚠️ SOVEREIGN DRAFTER VIOLATION: You attempted to call `plan_mode_respond` without completing the mandatory `scratchpad.md` drafting phase.\n" +
+				"In PLAN MODE, you MUST first externalize your architectural investigation using the **Sovereign Triad V6 Template** in `scratchpad.md`.\n" +
+				"Your next action must be a `write_to_file` call to `scratchpad.md` following the required format."
+			)
+		}
+
+		// Hardened Validation (V6)
+		const missingMarkers: string[] = []
+
+		// 1. Check title (ensure it doesn't contain the placeholder [Task Name])
+		if (!latestScratchpadContent.includes("# SOVEREIGN AUDIT") || latestScratchpadContent.includes("[Task Name]")) {
+			missingMarkers.push("# SOVEREIGN AUDIT (Descriptive Title)")
+		}
+
+		// 2. Check Probes & Substantive Content
+		const probePatterns = [
+			{ name: "### 1. THE ARCHITECT", pattern: /### 1\. THE ARCHITECT \(Boundary Probe\)\n([\s\S]+?)(?=### 2|$)/i },
+			{ name: "### 2. THE CRITIC", pattern: /### 2\. THE CRITIC \(Assumption Probe\)\n([\s\S]+?)(?=### 3|$)/i },
+			{ name: "### 3. THE SRE", pattern: /### 3\. THE SRE \(Atomic Probe\)\n([\s\S]+?)(?=## \[FINAL RESOLUTION\]|$)/i },
+		]
+
+		for (const probe of probePatterns) {
+			const match = latestScratchpadContent.match(probe.pattern)
+			if (
+				!match ||
+				match[1].trim().length < 30 ||
+				match[1].includes("[Where is the boundary weakest?]") ||
+				match[1].includes("[Which assumption is most dangerous?]") ||
+				match[1].includes("[What happens during partial failure?]")
+			) {
+				missingMarkers.push(`${probe.name} (Substantive Analysis)`)
+			}
+		}
+
+		// 3. Check Final Resolution sections
+		const hasMantra = latestScratchpadContent.toLowerCase().includes("double down on this concept")
+		const synthesisMatch = latestScratchpadContent.match(/- \*\*Synthesis\*\*: ([\s\S]+?)(?=\n- \*\*MANTRA\*\*|$)/i)
+		const synthesisValid =
+			synthesisMatch &&
+			synthesisMatch[1].trim().length > 15 &&
+			!synthesisMatch[1].includes("[Summary of hardening applied]")
+
+		if (!hasMantra || !synthesisValid) {
+			if (!hasMantra) missingMarkers.push("Double Down MANTRA")
+			if (!synthesisValid) missingMarkers.push("Synthesis (Hardened Summary)")
+		}
+
+		if (missingMarkers.length > 0) {
+			let error =
+				"⚠️ SOVEREIGN DRAFTER VIOLATION: Your `scratchpad.md` draft is incomplete, placeholder-heavy, or non-conformant.\n"
+			error += `Insufficient or missing components: ${missingMarkers.join(", ")}.\n\n`
+			error +=
+				"You MUST deeply investigate all three probes and synthesize a hardened plan in `scratchpad.md` before the `plan_mode_respond` tool will unlock."
+			return error
+		}
+
+		return null
 	}
 
 	/**
