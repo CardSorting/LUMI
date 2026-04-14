@@ -1,0 +1,79 @@
+# Double Down Planning (V6)
+
+**Double Down Planning** is a high-rigor investigative methodology designed to ensure production-grade architectural hardening and system resilience during the planning phase of an autonomous agent task.
+
+The methodology focuses on **Actionable Grounding Probes**—targeted investigative questions that force the agent to identify and resolve vulnerabilities before a single line of implementation code is written.
+
+## ⚖️ The Core Balance: Depth vs. Throughput
+
+Double Down Planning (V6) avoids "metacognitive spirals" (abstract self-questioning) by focusing on a **Streamlined Directed Flow**. It mandates deep investigation in a single, high-quality pass, rather than infinite recursive cycles.
+
+---
+
+## 🧬 Step 1: The Sovereign Triad Audit
+
+Every plan must be processed through three distinct investigative probes documented in `scratchpad.md`.
+
+### 1. THE ARCHITECT (Boundary Probe)
+- **Goal**: Ensure absolute adherence to **JoyZoning 3.0** architectural axioms.
+- **Probe**: "Where is the layer boundary or axiom most vulnerable to leakage or violation in this approach?"
+- **Output**: Cited evidence of file-path isolation and domain purity.
+
+### 2. THE CRITIC (Assumption Probe)
+- **Goal**: Hostile stress-testing of the implementation approach.
+- **Probe**: "What single assumption in this plan, if proven wrong, would cause the entire implementation to fail?"
+- **Output**: Identification of the weakest point and a specific architectural fix or guardrail implemented to resolve it.
+
+### 3. THE SRE (Atomic Probe)
+- **Goal**: Production-grade hardening for system resilience.
+- **Probe**: "If the system fails halfway through this task, what is the recovery path to atomic consistency?"
+- **Output**: Practical implementation of error boundaries, state recovery logic, and observability points.
+
+---
+
+## 🛠️ Step 2: The Double Down Mantra
+
+The mantra is not a repetitive chant, but an **Absolute Standard for Investigative Depth**. When an agent is instructed to "Double Down," it must use the mantra to drive deeper into the probes:
+
+> **Double down on this concept**: audit and revise in its entirety. Do another pass of deep audit and production hardening. Deeply investigate this - ensure no detail is left unhardened.
+
+---
+
+## 🏁 Step 3: Resolution & User Presentation
+
+The planning phase is only complete when the agent transitions from drafting to action via two mandatory steps:
+
+1. **Synthesis**: All findings from the Triad Audit must be incorporated into the formal `implementation_plan.md`.
+2. **Mandatory Presentation**: The agent MUST use the `plan_mode_respond` tool as its immediate next action once the audit is resolved. Stalling in the drafting phase without presenting to the user is a **Failure of Duty**.
+
+---
+
+## 📋 Standard Scratchpad Template (V6)
+
+Agents use this structure in `scratchpad.md` to externalize their investigation:
+
+```markdown
+# SOVEREIGN AUDIT: [Task Name]
+
+## [TRIAD PROBES]
+### 1. THE ARCHITECT (Boundary Probe)
+- **Vulnerability**: [Where is the boundary weakest?]
+- **Proof**: [Evidence of JoyZoning compliance]
+
+### 2. THE CRITIC (Assumption Probe)
+- **Weak Point**: [Which assumption is most dangerous?]
+- **Hardening**: [Specific fix/guardrail applied]
+
+### 3. THE SRE (Atomic Probe)
+- **Failure Path**: [What happens during partial failure?]
+- **Resilience**: [Atomic recovery logic/Error boundaries]
+
+## [FINAL RESOLUTION]
+- **Synthesis**: [Summary of hardening applied to the final plan]
+- **MANTRA**: [The mantra applied as a depth benchmark]
+```
+
+---
+
+> [!IMPORTANT]
+> **Plan-Mode Sovereignty**: Every agent interaction in PLAN MODE is governed by this standard. Skipping this investigative loop is an architectural violation.

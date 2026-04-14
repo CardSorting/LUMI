@@ -15,6 +15,7 @@ Deep dives into the internal mechanics of DietCode's intelligence.
 - [**Memory Bank (BroccoliDB)**](features/memory-bank): The persistent knowledge graph that powers long-term reasoning.
 - [**Grounding & MAS Deprecation**](hyper-cognition/GROUNDING_MAS_DEPRECATION): Post-mortem analysis and removal rationale for legacy orchestration layers.
 - [**Production Optimization Summary**](PRODUCTION_OPTIMIZATION_SUMMARY): Benchmark results and engineering details for the v3.84.0 hardening initiative.
+- [**Double Down Planning (V6)**](core-workflows/double-down-planning): Actionable grounding probes and architectural boundary hardening for autonomous reasoning.
 - [**Hyper-Cognition Vision**](hyper-cognition/VISION): The long-term roadmap for architectural intelligence.
 
 ### 3. 🛠️ Development & Engineering (Developer Domain)
