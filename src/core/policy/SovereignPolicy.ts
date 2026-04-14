@@ -67,7 +67,7 @@ export class SovereignPolicy {
 			},
 			global: {
 				maxPathDepth: 4,
-				enforceKebabCase: true,
+				enforceKebabCase: false,
 				feverThreshold: 5.0,
 				integrityAlertThreshold: 70,
 				supportedLayerTags: [".ts", ".tsx", ".js", ".jsx"],

@@ -32,7 +32,7 @@ For deep technical details on the zero-overhead architecture, see [PERFORMANCE.m
 Spider quantifies the "architectural health" of the codebase using a weighted entropy score (0.0 to 1.0):
 
 1.  **Depth Score (30%)**: Penalizes deeply nested directory structures (limit > 4).
-2.  **Naming Score (20%)**: Enforces project-wide `kebab-case` naming conventions.
+2.  **Naming Score (20%)**: Monitors adherence to project naming conventions (Optional).
 3.  **Orphan Score (20%)**: Identifies files unreachable from root layers (UI, Core, entry points).
 4.  **Coupling Score (30%)**: Detects illegal cross-layer dependencies (e.g., Domain importing Infrastructure).
 

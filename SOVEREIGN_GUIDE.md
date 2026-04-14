@@ -58,4 +58,4 @@ Use `generate_sovereign_map` to visualize the structural health and coupling of 
 ### 2. Axiomatic Scaffolding (Born Sovereign)
 Use the `scaffold_sovereign_module` tool to create new components.
 - **Command**: `scaffold_sovereign_module { name: "UserAuth", layer: "domain" }`
-- **Blueprint Outcome**: The tool ensures the correct directory, file name (`kebab-case`), `[LAYER]` tag, and base template are applied instantly. Never create files manually if you can scaffold.
+- **Blueprint Outcome**: The tool ensures the correct directory, file name, `[LAYER]` tag, and base template are applied instantly. Never create files manually if you can scaffold.

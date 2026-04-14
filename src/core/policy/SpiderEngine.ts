@@ -487,13 +487,7 @@ export class SpiderEngine {
 		const depthScore = Math.min(avgDepth / 4, 1.0)
 
 		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
-		const namingViolations = policy.enforceKebabCase
-			? Array.from(this.nodes.values()).filter((n) => {
-					const base = path.basename(n.path).split(".")[0] || ""
-					return !/^[a-z0-9-]+$/.test(base)
-				}).length
-			: 0
-		const namingScore = namingViolations / totalNodes
+		const namingScore = 0 // kebab-case enforcement removed per user request
 
 		const orphans = Array.from(this.nodes.values()).filter((n) => n.orphaned).length
 		const orphanScore = orphans / totalNodes
@@ -581,16 +575,6 @@ export class SpiderEngine {
 					message: `Path depth (${node.depth}) exceeds limit (${policy.maxPathDepth}).`,
 					path: node.id,
 					remediation: "Flatten the directory structure or move this module closer to the source root.",
-				})
-			}
-			const base = path.basename(node.path).split(".")[0] || ""
-			if (policy.enforceKebabCase && !/^[a-z0-9-]+$/.test(base)) {
-				violations.push({
-					id: "SPI-002",
-					severity: "WARN",
-					message: `File name '${path.basename(node.path)}' violates kebab-case.`,
-					path: node.id,
-					remediation: `Rename '${path.basename(node.path)}' to '${base.toLowerCase().replace(/_/g, "-")}.ts'.`,
 				})
 			}
 			if (node.orphaned) {

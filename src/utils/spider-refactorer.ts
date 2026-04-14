@@ -23,17 +23,6 @@ export class SpiderRefactorer {
 		this.engine.computeEntropy()
 		const violations = this.engine.getViolations()
 
-		// 1. Suggest moves for naming violations
-		for (const v of violations) {
-			if (v.id === "SPI-002") {
-				suggestions.push({
-					type: "RENAME",
-					path: v.path,
-					reason: "File name does not follow kebab-case convention, contributing to naming entropy.",
-				})
-			}
-		}
-
 		// 2. Suggest moves for cross-layer coupling hotspots
 		const nodes = Array.from(this.engine.nodes.values())
 		for (const node of nodes) {

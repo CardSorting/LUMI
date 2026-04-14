@@ -1,5 +1,13 @@
 # Changelog (V2)
 
+## [4.3.0] - 2026-04-14
+
+### Added
+- **Sovereign Double Down Planning (V6)**: Implemented high-throughput grounded auditing with **Actionable investigative Probes**.
+- **Draft Resolution & Presentation**: Enforced mandatory synthesis of research and immediate tool-based presentation of finalized implementation plans.
+- **Metacognitive Hardening**: Optimized the "Double Down" logic to eliminate abstract spirals while preserving deep investigative rigor.
+- **Workspace Knowledge Integration**: Formalized the "Double Down" standard in the internal knowledge base (`docs/core-workflows/double-down-planning.mdx`).
+
 ## [4.2.1] - 2026-04-13
 
 ### Fixed
