@@ -48,7 +48,7 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 
 		// SOVEREIGN DRAFTING ENFORCEMENT (V6)
 		if (config.strictPlanModeEnabled && config.mode === "plan") {
-			const draftingError = this.validateScratchpad(config)
+			const draftingError = await this.validateScratchpad(config)
 			if (draftingError) {
 				return formatResponse.toolResult(draftingError)
 			}
@@ -226,7 +226,7 @@ Maintain this commitment throughout the ACT phase.`
 	/**
 	 * Scans conversation history to ensure scratchpad.md was used with the mandatory V6 template.
 	 */
-	private validateScratchpad(config: TaskConfig): string | null {
+	private async validateScratchpad(config: TaskConfig): Promise<string | null> {
 		const history = config.messageState.getApiConversationHistory()
 		let latestScratchpadContent = ""
 
@@ -240,6 +240,10 @@ Maintain this commitment throughout the ACT phase.`
 						const targetPath = input.path || input.TargetFile || ""
 						if (targetPath.endsWith("scratchpad.md")) {
 							latestScratchpadContent = input.content || input.CodeContent || ""
+							const match = latestScratchpadContent.match(
+								/- \*\*Synthesis\*\*: ([\s\S]+?)(?=\n- \*\*MANTRA\*\*|$)/i,
+							)
+							if (match) config.taskState.sovereignAuditSynthesis = match[1].trim()
 							break
 						}
 					}
@@ -283,16 +287,38 @@ Maintain this commitment throughout the ACT phase.`
 			}
 
 			const content = match[1].trim()
-			const hasPath = pathRegex.test(content)
+
+			// Path/Evidence Check
+			const pathMatch = content.match(pathRegex)
+			const paths = pathMatch ? Array.from(new Set(pathMatch)) : []
+			const nonExistentPaths: string[] = []
+
+			if (paths.length > 0) {
+				const fs = require("fs")
+				const path = require("path")
+				for (const p of paths) {
+					const sanitizedPath = p.replace(/[`*]/g, "") // Clean up markdown
+					const absolutePath = path.isAbsolute(sanitizedPath) ? sanitizedPath : path.join(config.cwd, sanitizedPath)
+					if (!fs.existsSync(absolutePath)) {
+						nonExistentPaths.push(sanitizedPath)
+					}
+				}
+			}
+
 			const isPlaceholder =
 				content.includes("[Where is the boundary weakest?]") ||
 				content.includes("[Which assumption is most dangerous?]") ||
 				content.includes("[What happens during partial failure?]")
 
-			if (content.length < 40 || !hasPath || isPlaceholder) {
+			if (content.length < 40 || paths.length === 0 || isPlaceholder || nonExistentPaths.length > 0) {
 				missingMarkers.push(`${probe.name} (Quality Check)`)
 				if (content.length < 40) diagnosticHints.push(`${probe.name}: Analysis is too brief. Be more descriptive.`)
-				if (!hasPath) diagnosticHints.push(`${probe.name}: Cite specific file paths or code segments as evidence.`)
+				if (paths.length === 0)
+					diagnosticHints.push(`${probe.name}: Cite specific file paths or code segments as evidence.`)
+				if (nonExistentPaths.length > 0)
+					diagnosticHints.push(
+						`${probe.name}: Hallucination detected! The following paths do not exist: ${nonExistentPaths.join(", ")}`,
+					)
 				if (isPlaceholder)
 					diagnosticHints.push(`${probe.name}: Remove template placeholders and replace with real investigation.`)
 			}

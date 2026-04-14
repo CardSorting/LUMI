@@ -92,6 +92,7 @@ export class TaskState {
 	currentTurnUniqueReadCount = 0
 	currentTurnExplorationCount = 0
 	taskReadHistory = new Map<string, number>()
+	public sovereignAuditSynthesis?: string
 }
 
 export enum PolicyHealth {

@@ -1902,6 +1902,7 @@ export class Task {
 			enableParallelToolCalling: this.isParallelToolCallingEnabled(),
 			terminalExecutionMode: this.terminalExecutionMode,
 			mode: (providerInfo.mode as "plan" | "act") || "act",
+			taskState: this.taskState,
 		}
 
 		// Notify user if any conditional rules were applied for this request

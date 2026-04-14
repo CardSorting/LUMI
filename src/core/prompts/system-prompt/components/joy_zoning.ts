@@ -5,6 +5,12 @@ import type { PromptVariant, SystemPromptContext } from "../types"
 
 export async function getJoyZoningSection(_variant?: PromptVariant, context?: SystemPromptContext) {
 	const mode = context?.mode || "act"
+	const sovereignCommitment = context?.taskState?.sovereignAuditSynthesis
+		? `\n\n[SOVEREIGN COMMITMENT SEAL]
+Your architectural audit resulted in the following hardening synthesis:
+> ${context.taskState.sovereignAuditSynthesis}
+Maintain this commitment strictly during execution.`
+		: ""
 
 	// Attempt to inject live audit context from the orchestration layer
 	// Timeout-guarded: prompt building must never be blocked by slow DB
@@ -128,6 +134,7 @@ Before each change, quick-scan:
 1. Which layer does this file live in?
 2. Am I importing from a layer I shouldn't?
 3. Can I make this change smaller and more focused?
+${sovereignCommitment}
 
 After each write, you'll see layer confirmation (✅ clean or 📍 with guidance).
 When creating a new file, the system will suggest the best layer for your content.`
