@@ -1,5 +1,14 @@
 # Changelog (V2)
 
+## [4.2.1] - 2026-04-13
+
+### Fixed
+- **JoyZoning Deep Audit & Hardening**: Comprehensive production hardening of the architectural substrate (SpiderEngine and JoyZoning) to ensure structural integrity and cross-platform consistency.
+- **Throughput Optimization**: Implemented performance enhancements targeting higher throughput and more reliable structural analysis in the core architectural substrate.
+
+### Added
+- **Atomic & Parallel Substrate Hardening**: Transitioned to incremental propagation and binary persistence for performance, reaching theoretical throughput limits.
+
 ## [3.88.4] - 2026-03-31
 
 ### Changed

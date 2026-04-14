@@ -141,6 +141,11 @@ export function isDevstralModelFamily(id: string): boolean {
 	return modelId.includes("devstral")
 }
 
+export function isMiMoModelFamily(id: string): boolean {
+	const modelId = normalize(id)
+	return modelId.includes("xiaomi/mimo") || modelId.includes("mimo-v2")
+}
+
 export function isTrinityModelFamily(id: string): boolean {
 	const modelId = normalize(id)
 	// OpenRouter: arcee-ai/trinity-large-preview:free and other trinity variants
@@ -171,10 +176,12 @@ export function isNextGenModelFamily(id: string): boolean {
 		isGPT5ModelFamily(modelId) ||
 		isGptOssModelFamily(modelId) ||
 		isMinimaxModelFamily(modelId) ||
+		isTrinityModelFamily(modelId) ||
 		isGemini3ModelFamily(modelId) ||
 		isNextGenOpenSourceModelFamily(modelId) ||
 		isDeepSeek32ModelFamily(modelId) ||
-		isDeepSeekNativeModelFamily(modelId)
+		isDeepSeekNativeModelFamily(modelId) ||
+		isMiMoModelFamily(modelId)
 	)
 }
 

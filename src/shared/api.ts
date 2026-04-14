@@ -4557,4 +4557,24 @@ export const nousResearchModels = {
 		description:
 			"This incarnation of Hermes 4 balances scale and size. It handles complex reasoning tasks, while staying fast and cost effective. A versatile choice for many use cases.",
 	},
+	"xiaomi/mimo-v2-pro": {
+		maxTokens: 64_000,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 1.0,
+		outputPrice: 3.0,
+		description:
+			"Xiaomi's flagship foundation model designed primarily for agentic workloads, complex reasoning, and production engineering tasks.",
+	},
+	"xiaomi/mimo-v2-omni": {
+		maxTokens: 66_000,
+		contextWindow: 262_144,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0.4,
+		outputPrice: 2.0,
+		description:
+			"Multimodal foundation model designed for agentic tasks requiring simultaneous processing of text, images, video, and audio.",
+	},
 } as const satisfies Record<string, ModelInfo>
