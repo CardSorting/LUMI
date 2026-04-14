@@ -125,6 +125,14 @@ Your questions should be direct and specific. Avoid long explanations or multipl
 
 ## STEP 4: Create Implementation Plan Document
 
+### Grounded Triad Audit (V6)
+Before finalizing your plan, you must follow the **Double Down Planning** workflow:
+1. **Draft**: Use \`scratchpad.md\` for your investigation. You MUST follow the **Sovereign Triad V6 Template** (Grounding Probes -> Resolution).
+2. **Grounded Audit**: Answer the three investigative probes (Boundary, Assumption, Atomic) in the scratchpad.
+3. **Draft Resolution**: Synthesize all hardening results into the formal \`implementation_plan.md\`.
+4. **User Presentation**: Use the \`plan_mode_respond\` tool as your VERY NEXT action to deliver the finalized plan to the user for approval.
+5. **Mantra Standard**: **Double down on this concept**: use the mantra to drive investigative depth. **Double down on this concept** - audit and revise in its entirety.
+
 Once you have obtained sufficient context to understand all code modifications that will be required, create a structured markdown document containing your complete implementation plan. The document must follow this exact format with clearly marked sections:
 
 ### Document Structure Requirements

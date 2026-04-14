@@ -9,6 +9,7 @@ import { getMcp } from "./mcp"
 import { getObjectiveSection } from "./objective"
 import { getRulesSection } from "./rules"
 import { getSkillsSection } from "./skills"
+import { getSovereignDraftingSection } from "./sovereign_drafting"
 import { getSystemInfo } from "./system_info"
 import { getUpdatingTaskProgress } from "./task_progress"
 import { getToolUseSection } from "./tool_use"
@@ -50,5 +51,6 @@ export function getSystemPromptComponents() {
 		},
 		{ id: SystemPromptSection.TASK_PROGRESS, fn: getUpdatingTaskProgress },
 		{ id: SystemPromptSection.JOY_ZONING, fn: getJoyZoningSection },
+		{ id: SystemPromptSection.SOVEREIGN_DRAFTING, fn: getSovereignDraftingSection },
 	]
 }
