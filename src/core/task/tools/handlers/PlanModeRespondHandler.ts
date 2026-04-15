@@ -6,13 +6,11 @@ import { formatResponse } from "@core/prompts/responses"
 import { findLast, parsePartialArrayString } from "@/shared/array"
 import { DietCodePlanModeResponse } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
-import { telemetryService } from "@/shared/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { getTaskCompletionTelemetry } from "../utils"
 import { SovereignScribe } from "../utils/SovereignScribe"
 
 export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandler {
@@ -54,7 +52,7 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 		if (config.mode === "plan") {
 			const universalGuard = config.universalGuard
 			if (universalGuard) {
-				const enforcementResult = await universalGuard.enforceSovereignDraftingInPlanMode()
+				const enforcementResult = await universalGuard.enforceSovereignDrafting()
 				if (!enforcementResult.allowed) {
 					return formatResponse.toolResult(enforcementResult.reason || "Sovereign drafting required but incomplete.")
 				}
@@ -145,7 +143,6 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 
 		// Check if options contains the text response
 		if (optionsRaw && text && parsePartialArrayString(optionsRaw).includes(text)) {
-			telemetryService.captureOptionSelected(config.ulid, options.length, "plan")
 			// Valid option selected, don't show user message in UI
 			// Update last plan message with selected option
 			const lastPlanMessage = findLast(
@@ -162,7 +159,6 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 		} else {
 			// Option not selected, send user feedback
 			if (text || (images && images.length > 0) || (planResponseFiles && planResponseFiles.length > 0)) {
-				telemetryService.captureOptionsIgnored(config.ulid, options.length, "plan")
 				await config.callbacks.say("user_feedback", text ?? "", images, planResponseFiles)
 			}
 		}
@@ -172,8 +168,6 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 			const { processFilesIntoText } = await import("@integrations/misc/extract-text")
 			fileContentString = await processFilesIntoText(planResponseFiles)
 		}
-
-		telemetryService.captureTaskCompleted(config.ulid, getTaskCompletionTelemetry(config))
 
 		// Handle mode switching response
 		if (config.taskState.didRespondToPlanAskBySwitchingMode) {

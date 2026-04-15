@@ -1,4 +1,7 @@
 /**
+ * [LAYER: INFRASTRUCTURE]
+ */
+/**
  * Simple Logger utility for the extension's backend code.
  */
 export class Logger {

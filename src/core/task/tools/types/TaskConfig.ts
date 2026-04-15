@@ -1,8 +1,12 @@
+/**
+ * [LAYER: CORE]
+ */
 import type { ApiHandler } from "@core/api"
 import type { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import type { KnowledgeGraphService } from "@core/context/KnowledgeGraphService"
 import type { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import type { CommandPermissionController } from "@core/permissions"
+import type { PlanModeEnforcer } from "@core/policy/PlanModeEnforcer"
 import type { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
 import type { CommandExecutionOptions } from "@integrations/terminal"
 import type { BrowserSession } from "@services/browser/BrowserSession"
@@ -63,6 +67,9 @@ export interface TaskConfig {
 
 	// Callbacks (strongly typed)
 	callbacks: TaskCallbacks
+
+	// Universal guard for plan mode enforcement
+	universalGuard?: PlanModeEnforcer
 
 	// Tool coordination
 	coordinator: ToolExecutorCoordinator

@@ -2,7 +2,7 @@
  * [LAYER: CORE]
  */
 
-import { PlanModeEnforcer } from "@/infrastructure/policy/PlanModeEnforcer"
+import { PlanModeEnforcer } from "@/core/policy/PlanModeEnforcer"
 import { ToolUse } from "../assistant-message"
 import { StateManager } from "../storage/StateManager"
 import { FluidPolicyEngine, PolicyResult } from "./FluidPolicyEngine"

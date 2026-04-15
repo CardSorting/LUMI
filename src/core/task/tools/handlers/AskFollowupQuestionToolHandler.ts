@@ -1,3 +1,6 @@
+/**
+ * [LAYER: CORE]
+ */
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { findLast, parsePartialArrayString } from "@shared/array"

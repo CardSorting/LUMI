@@ -31,6 +31,9 @@ export interface PlanModeRequirements {
  * - The SRE: System reliability, observability, deployment
  */
 export class PlanModeEnforcer {
+	private scratchpadPath: string
+	private currentResponseCount = 0
+
 	constructor(cwd: string) {
 		this.scratchpadPath = path.join(cwd, "scratchpad.md")
 	}
@@ -266,7 +269,7 @@ export class PlanModeEnforcer {
 		}
 
 		// Check for error handling
-		if (!planSummary.includes("error") && !planSummary.includes("handle") && !plan.includes("fallback")) {
+		if (!planSummary.includes("error") && !planSummary.includes("handle") && !planSummary.includes("fallback")) {
 			issues.push("SRE CRITICAL: No error handling or fallback strategies. What happens when things fail?")
 		}
 
