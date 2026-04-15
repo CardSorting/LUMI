@@ -1,3 +1,6 @@
+/**
+ * [LAYER: CORE]
+ */
 import { SpiderNode } from "../policy/spider/types.js"
 
 export interface DriftReport {

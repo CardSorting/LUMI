@@ -1,9 +1,12 @@
+/**
+ * [LAYER: CORE]
+ */
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { findLast, parsePartialArrayString } from "@shared/array"
-import { telemetryService } from "@/services/telemetry"
+import { findLast, parsePartialArrayString } from "@/shared/array"
 import { DietCodePlanModeResponse } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
+import { telemetryService } from "@/shared/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
@@ -47,7 +50,18 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// SOVEREIGN DRAFTER ENFORCEMENT (V6)
+		// UNIFIED SOVEREIGN DRAFTING ENFORCEMENT
+		if (config.mode === "plan") {
+			const universalGuard = config.universalGuard
+			if (universalGuard) {
+				const enforcementResult = await universalGuard.enforceSovereignDraftingInPlanMode()
+				if (!enforcementResult.allowed) {
+					return formatResponse.toolResult(enforcementResult.reason || "Sovereign drafting required but incomplete.")
+				}
+			}
+		}
+
+		// SOVEREIGN DRAFTER ENFORCEMENT (V6) - Legacy validation
 		if (config.strictPlanModeEnabled && config.mode === "plan") {
 			const { content } = SovereignScribe.getLatestScratchpadContent(config.messageState.getApiConversationHistory())
 			const audit = await SovereignScribe.validate(content, config.cwd)

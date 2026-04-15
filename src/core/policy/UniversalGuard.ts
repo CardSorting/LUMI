@@ -1,3 +1,8 @@
+/**
+ * [LAYER: CORE]
+ */
+
+import { PlanModeEnforcer } from "@/infrastructure/policy/PlanModeEnforcer"
 import { ToolUse } from "../assistant-message"
 import { StateManager } from "../storage/StateManager"
 import { FluidPolicyEngine, PolicyResult } from "./FluidPolicyEngine"
@@ -9,10 +14,12 @@ import { FluidPolicyEngine, PolicyResult } from "./FluidPolicyEngine"
  */
 export class UniversalGuard {
 	public readonly engine: FluidPolicyEngine
+	private readonly planModeEnforcer: PlanModeEnforcer
 	private currentMode: "plan" | "act" = "act"
 
 	constructor(cwd: string, taskId: string, stateManager: StateManager) {
 		this.engine = new FluidPolicyEngine(cwd, taskId, stateManager)
+		this.planModeEnforcer = new PlanModeEnforcer(cwd)
 	}
 
 	/**
@@ -49,6 +56,14 @@ export class UniversalGuard {
 	 */
 	public async guardPostExecution(block: ToolUse, toolOutput: unknown, prevHash?: string): Promise<PolicyResult> {
 		return this.engine.validatePostExecution(block, toolOutput, prevHash)
+	}
+
+	/**
+	 * Performs SOVEREIGN DRAFTING workflow check before Plan Mode responses.
+	 * Blocks plan_mode_respond calls if scratchpad.md is missing or incomplete.
+	 */
+	public async enforceSovereignDraftingInPlanMode(): Promise<{ allowed: boolean; reason?: string }> {
+		return this.planModeEnforcer.enforceSovereignDrafting()
 	}
 
 	/**
