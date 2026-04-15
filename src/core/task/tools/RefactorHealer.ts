@@ -7,7 +7,7 @@ import { SovereignTransaction } from "../../integrity/SovereignTransaction"
 import { AxiomViolation } from "../../policy/SemanticAxiomEngine"
 import { SovereignOptimizer } from "../../policy/SovereignOptimizer"
 import { SpiderEngine } from "../../policy/spider/SpiderEngine"
-import { SpiderNode } from "../../policy/spider/types"
+import { SpiderNode, SpiderViolation } from "../../policy/spider/types"
 
 export interface HealingProposal {
 	id: string
@@ -377,6 +377,31 @@ export class RefactorHealer {
 	}
 
 	/**
+	 * V17: Generates an executable healing recipe for structural violations.
+	 */
+	public generateHealingRecipe(violation: SpiderViolation): string {
+		switch (violation.id) {
+			case "SPI-001": // Contractless Breach
+				const className = violation.message.match(/Module (.*) exports/)?.[1]
+				return className
+					? `EXECUTE: Create src/domain/interfaces/I${className}.ts with the following bridge:\n${this.generateInterfaceBridge(className)}`
+					: "EXECUTE: Implement a domain interface."
+			case "SPI-004": // Cycle
+				return violation.remediation || "Analyze complexity to find weakest link for extraction."
+			case "SPI-005": // Ghost
+				return violation.remediation
+					? `EXECUTE: Add the following line to ${path.basename(violation.path)}: \n    ${violation.remediation.replace("Suggested Import: ", "")}`
+					: "Locate providing module and add missing import."
+			case "SPI-103": // Unused Export
+				return `EXECUTE: Remove unused export from ${path.basename(violation.path)} to reduce structural waste.`
+			case "SPI-003": // Orphan
+				return `EXECUTE: Delete file if redundant, or integrate it into a consumer in the same directory.`
+			default:
+				return violation.message
+		}
+	}
+
+	/**
 	 * PRODUCTION HARDENING: Proactively scans the codebase for untagged files
 	 * and returns healing proposals for the dashboard.
 	 */
@@ -408,5 +433,20 @@ export class RefactorHealer {
 		}
 
 		return proposals
+	}
+
+	/**
+	 * V18: Generates a suggested interface contract for a concrete class.
+	 */
+	public generateInterfaceBridge(className: string): string {
+		const interfaceName = `I${className.charAt(0).toUpperCase()}${className.slice(1)}`
+		return [
+			`/** [LAYER: DOMAIN] */`,
+			`export interface ${interfaceName} {`,
+			`  // Add formal contract methods here`,
+			`  initialize(): Promise<void>;`,
+			`  dispose(): void;`,
+			`}`,
+		].join("\n")
 	}
 }

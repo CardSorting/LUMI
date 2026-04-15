@@ -82,6 +82,7 @@ export class SpiderEngine {
 				this.updateNode(entry, content)
 			}
 		}
+		await this.synchronizeRegistry()
 	}
 
 	public buildGraph(files: { filePath: string; content: string }[]): void {
@@ -133,6 +134,7 @@ export class SpiderEngine {
 			isInterface: this.detectInterface(normalizedPath, sourceFile),
 			exports,
 			consumptions,
+			mtime: fs.statSync(absolutePath).mtimeMs,
 		}
 
 		this.nodes.set(normalizedPath, newNode)
@@ -143,7 +145,9 @@ export class SpiderEngine {
 			this.resolver.clearFileFromCache(normalizedPath)
 			this.scheduleReachability()
 		}
-		this.persistence.saveRegistry(this.nodes).catch((e) => Logger.error("[SpiderEngine] Save failed:", e))
+
+		// V20: Non-blocking background save to prevent I/O latency blocks
+		this.persistence.saveRegistry(this.nodes).catch((e) => Logger.error("[SpiderEngine] Registry persistence failed:", e))
 	}
 
 	private extractExports(sourceFile: ts.SourceFile): string[] {
@@ -175,7 +179,7 @@ export class SpiderEngine {
 			ts.forEachChild(node, visit)
 		}
 		visit(sourceFile)
-		return [...new Set(exports)]
+		return Array.from(new Set(exports))
 	}
 
 	/**
@@ -326,6 +330,7 @@ export class SpiderEngine {
 	}
 
 	public getViolations(): SpiderViolation[] {
+		this.pruneDeadNodes()
 		const violations: SpiderViolation[] = []
 		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
 
@@ -351,13 +356,36 @@ export class SpiderEngine {
 				severity: "ERROR",
 				message: `Circular dependency detected: ${formattedPath}`,
 				path: cycle[0],
-				remediation: `Break the cycle by extracting a common interface or utility from one of the participants: [${cycle.map((p) => path.basename(p)).join(", ")}]`,
 			})
 		}
 
+		// V21: Barrel Sovereignty - Detect sub-system bypasses
+		const barrelBreaches = this.findBarrelBreaches()
+		violations.push(...barrelBreaches)
+
 		this.ghosts = this.forensics.findGhosts(this.nodes)
 		for (const ghost of this.ghosts) {
-			violations.push({ id: "SPI-005", severity: "WARN", message: `Ghost import: ${ghost}`, path: ghost.split(" -> ")[0] })
+			const [sourcePath, symbol] = ghost.split(" -> ")
+			const providers = this.findSymbolProviders(symbol)
+			let remediation: string | undefined
+
+			if (providers.length > 0) {
+				const bestProvider = providers[0]
+				const relPath = path
+					.relative(path.dirname(sourcePath), bestProvider)
+					.replace(/\.tsx?$/, "")
+					.replace(/\\/g, "/")
+				const specifier = relPath.startsWith(".") ? relPath : `./${relPath}`
+				remediation = `Suggested Import: import { ${symbol} } from '${specifier}'`
+			}
+
+			violations.push({
+				id: "SPI-005",
+				severity: "WARN",
+				message: `Ghost import: ${ghost}`,
+				path: sourcePath,
+				remediation,
+			})
 		}
 
 		const unused = this.forensics.findUnusedExports(this.nodes)
@@ -401,10 +429,59 @@ export class SpiderEngine {
 			}
 			this.metrics.computeCouplingMetrics(this.nodes)
 			this.metrics.computeReachability(this.nodes)
+			await this.synchronizeRegistry()
 			return true
 		} catch (e) {
 			Logger.error("[SpiderEngine] Registry load failed:", e)
 			return false
+		}
+	}
+
+	/**
+	 * V20: Synchronizes the in-memory registry with the physical disk (Merkle Healing).
+	 * Prunes missing files and automatically re-indexes stale files based on mtime.
+	 */
+	public async synchronizeRegistry(): Promise<void> {
+		let pruned = 0
+		let reindexed = 0
+
+		for (const [id, node] of this.nodes.entries()) {
+			const absPath = path.resolve(this.cwd, node.path)
+			if (!fs.existsSync(absPath)) {
+				this.nodes.delete(id)
+				pruned++
+			} else {
+				const stats = fs.statSync(absPath)
+				if (stats.mtimeMs > (node.mtime || 0)) {
+					const content = await fs.promises.readFile(absPath, "utf-8")
+					this.updateNode(node.path, content)
+					reindexed++
+				}
+			}
+		}
+
+		if (pruned > 0 || reindexed > 0) {
+			this.version++
+			Logger.info(`[SpiderEngine] Registry Synchronized: Pruned ${pruned}, Re-indexed ${reindexed}.`)
+			this.metrics.computeCouplingMetrics(this.nodes)
+			this.metrics.computeReachability(this.nodes)
+		}
+	}
+
+	public pruneDeadNodes(): void {
+		// Legacy alias for synchronizeRegistry (Sync)
+		let pruned = 0
+		for (const [id, node] of this.nodes.entries()) {
+			const absPath = path.resolve(this.cwd, node.path)
+			if (!fs.existsSync(absPath)) {
+				this.nodes.delete(id)
+				pruned++
+			}
+		}
+		if (pruned > 0) {
+			this.version++
+			this.metrics.computeCouplingMetrics(this.nodes)
+			this.metrics.computeReachability(this.nodes)
 		}
 	}
 
@@ -472,6 +549,19 @@ export class SpiderEngine {
 		return this.resolver.resolveImportToNodeId(sourceId, specifier, new Set(this.nodes.keys()))
 	}
 
+	/**
+	 * V17: Searches the global export registry for nodes that provide a specific symbol.
+	 */
+	public findSymbolProviders(symbol: string): string[] {
+		const providers: string[] = []
+		for (const node of this.nodes.values()) {
+			if (node.exports.includes(symbol)) {
+				providers.push(node.path)
+			}
+		}
+		return providers
+	}
+
 	public computeCCI(filePath: string, pathogens: PathogenStore, monitor: MetabolicMonitor): number {
 		const node = this.nodes.get(this.resolver.normalizePath(filePath))
 		if (!node) return 0
@@ -499,5 +589,38 @@ export class SpiderEngine {
 			}
 		}
 		return graph
+	}
+
+	/**
+	 * V21: Identifies imports that bypass a local index.ts/js (Barrel Breach).
+	 */
+	private findBarrelBreaches(): import("./types.js").SpiderViolation[] {
+		const breaches: import("./types.js").SpiderViolation[] = []
+		const barrels = Array.from(this.nodes.keys()).filter((p) => p.endsWith("/index.ts") || p.endsWith("/index.js"))
+
+		for (const node of this.nodes.values()) {
+			for (const imp of node.imports) {
+				const targetId = this.resolver.resolveImportToNodeId(node.id, imp, new Set(this.nodes.keys()))
+				if (!targetId || targetId === node.id) continue
+
+				const targetDir = path.dirname(targetId)
+				const localBarrel = barrels.find((b) => path.dirname(b) === targetDir && b !== targetId)
+
+				if (localBarrel && targetId !== localBarrel) {
+					// We are importing a file directly, but a barrel exists in its directory.
+					// Heuristic: If we are not in the same directory, we should use the barrel.
+					if (path.dirname(node.id) !== targetDir) {
+						breaches.push({
+							id: "SPI-104",
+							severity: "WARN",
+							message: `BARREL BREACH: Importing ${path.basename(targetId)} directly. Use sub-system entry point: ${path.basename(targetDir)}/index.ts.`,
+							path: node.id,
+							remediation: `Suggested: Import from ${path.dirname(targetId)} instead of ${targetId}.`,
+						})
+					}
+				}
+			}
+		}
+		return breaches
 	}
 }

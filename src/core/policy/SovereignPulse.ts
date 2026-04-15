@@ -3,6 +3,7 @@
  */
 
 import * as fs from "fs/promises"
+import { RefactorHealer } from "../task/tools/RefactorHealer.js"
 import { DecompositionPlan, SovereignDecomposer } from "./SovereignDecomposer.js"
 import { OptimizationOpportunity, SovereignOptimizer } from "./SovereignOptimizer.js"
 import { RefactoringSuggestion, SpiderRefactorer } from "./SpiderRefactorer.js"
@@ -16,6 +17,7 @@ export interface PulseReport {
 		refactors: RefactoringSuggestion[]
 		optimizations: OptimizationOpportunity[]
 		decompositionRequired?: DecompositionPlan[]
+		healingShelf?: string[]
 	}
 }
 
@@ -53,6 +55,9 @@ export class SovereignPulse {
 			}
 		}
 
+		const healer = new RefactorHealer(this.cwd)
+		const healingShelf = violations.slice(0, 5).map((v) => healer.generateHealingRecipe(v))
+
 		return {
 			timestamp: new Date().toISOString(),
 			integrityScore: (1 - entropy.score) * 100,
@@ -61,6 +66,7 @@ export class SovereignPulse {
 				refactors,
 				optimizations,
 				decompositionRequired: decompositions,
+				healingShelf,
 			},
 		}
 	}

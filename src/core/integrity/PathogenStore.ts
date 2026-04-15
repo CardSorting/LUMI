@@ -106,6 +106,31 @@ export class PathogenStore {
 	}
 
 	/**
+	 * V18: Forcefully clears all pathogens related to a directory or file.
+	 */
+	public forceClear(target: string) {
+		let cleared = 0
+		const dirStressPrefix = this.hashSignature(`dir_stress:${target}`)
+		const fileHash = this.hashSignature(target)
+
+		if (this.pathogens.delete(dirStressPrefix)) cleared++
+		if (this.pathogens.delete(fileHash)) cleared++
+
+		// Pattern sweep
+		for (const [hash, p] of this.pathogens.entries()) {
+			if (p.originalSummary.includes(target)) {
+				this.pathogens.delete(hash)
+				cleared++
+			}
+		}
+
+		if (cleared > 0) {
+			Logger.info(`[PathogenStore] Force-cleared ${cleared} pathogens for ${target}`)
+			this.save()
+		}
+	}
+
+	/**
 	 * PRODUCTION HARDENING: Predicts if an edit is likely to fail based on historical antigens.
 	 */
 	public predictFailure(filePath: string): { likely: boolean; reason?: string } {

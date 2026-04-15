@@ -242,6 +242,15 @@ export class TspPolicyPlugin {
 		const errors: string[] = []
 		const warnings: string[] = []
 
+		// V19: Fat Module Sensing (Architectural Proactivity)
+		const lines = content.split("\n").length
+		if (lines > 800) {
+			warnings.push(
+				`🐋 FAT MODULE DETECTED: ${path.basename(filePath)} has ${lines} lines. Logic density exceeds structural safety limits. ` +
+					"STRATEGY: Split into smaller cohesive domain services or use an orchestrator.",
+			)
+		}
+
 		// Skip completely for special case files
 		if (this.isFileInWhitelist(filePath)) {
 			return { success: true, errors: [], warnings: [] }
@@ -378,7 +387,9 @@ export class TspPolicyPlugin {
 					parent.getText().includes("any as") ||
 					parent.getText().includes("as any"))
 
-			if (!isTypeGuard && !isExplicitNarrowing) {
+			const isIgnored = sourceFile.text.includes("@sovereign-ignore any-type")
+
+			if (!isTypeGuard && !isExplicitNarrowing && !isIgnored) {
 				const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart())
 				warnings.push(`'any' type in ${layer.toUpperCase()} layer (line ${line + 1}).`)
 			}
@@ -472,26 +483,12 @@ export class TspPolicyPlugin {
 		const expectedInterfacePath = `src/domain/interfaces/${interfaceName}.ts`
 
 		// Heuristic: If it exports a class, it MUST have a contract
-		if (content.includes("export class ") && !content.includes(`implements ${interfaceName}`)) {
+		const isIgnored = content.includes("@sovereign-ignore contractual-integrity")
+		if (content.includes("export class ") && !content.includes(`implements ${interfaceName}`) && !isIgnored) {
 			warnings.push(
 				`📜 CONTRACTLESS BREACH: Module ${baseName} exports concrete logic without a formal contract in ${expectedInterfacePath}.`,
 			)
 		}
-	}
-
-	private static readonly ALIASES: Record<string, string> = {
-		"@/": "src/",
-		"@api/": "src/core/api/",
-		"@core/": "src/core/",
-		"@generated/": "src/generated/",
-		"@hosts/": "src/hosts/",
-		"@integrations/": "src/integrations/",
-		"@packages/": "src/packages/",
-		"@services/": "src/services/",
-		"@shared/": "src/shared/",
-		"@utils/": "src/utils/",
-		"@frontend/": "webview-ui/src/",
-		"@shared-utils/": "src/shared/utils/",
 	}
 
 	/**

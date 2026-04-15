@@ -16,6 +16,7 @@ export interface SpiderNode {
 	isInterface: boolean
 	exports: string[]
 	consumptions: Record<string, string[]> // V16: Resolved Node ID -> symbols imported
+	mtime: number // V20: Modification timestamp for Merkle Healing
 }
 
 export interface SpiderSnapshot {

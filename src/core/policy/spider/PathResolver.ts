@@ -56,7 +56,7 @@ export class PathResolver {
 				}
 			}
 		} else {
-			for (const [alias, target] of this.dynamicAliases.entries()) {
+			for (const [alias, target] of this.dynamicAliases) {
 				if (specifier.startsWith(alias)) {
 					const rel = specifier.replace(alias, target).replace(/\\/g, "/")
 					if (nodes.has(rel)) result = rel
@@ -84,7 +84,7 @@ export class PathResolver {
 			absPath = path.resolve(this.cwd, path.dirname(sourcePath), specifier)
 		} else {
 			let resolved = false
-			for (const [alias, target] of this.dynamicAliases.entries()) {
+			for (const [alias, target] of this.dynamicAliases) {
 				if (specifier.startsWith(alias)) {
 					absPath = path.resolve(this.cwd, specifier.replace(alias, target))
 					resolved = true
@@ -94,9 +94,10 @@ export class PathResolver {
 			if (!resolved) return null
 		}
 
-		const extensions = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx"]
+		// V18: Standardized extension retry logic across all engines
+		const extensions = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js"]
 		for (const ext of extensions) {
-			const full = absPath + ext
+			const full = (absPath.endsWith("/") && ext.startsWith("/") ? absPath.slice(0, -1) : absPath) + ext
 			if (fs.existsSync(full) && fs.statSync(full).isFile()) return full
 		}
 		return null
@@ -128,12 +129,23 @@ export class PathResolver {
 	}
 
 	public normalizePath(filePath: string): string {
+		return this.canonicalize(filePath)
+	}
+
+	/**
+	 * V19: The Single Point of Truth for path fingerprints across the entire substrate.
+	 * Resolves relative paths, absolute paths, and platform-specific separators into a
+	 * canonical, Posix-compliant relative path. Handles case-insensitivity on macOS.
+	 */
+	public canonicalize(p: string): string {
+		if (!p) return ""
 		try {
-			const absolutePath = path.resolve(this.cwd, filePath)
+			const absolutePath = path.resolve(this.cwd, p)
 			const relativePath = path.relative(this.cwd, absolutePath)
-			return relativePath.replace(/\\/g, "/")
+			// Lowercase canonicalization for case-insensitive filesystems (Sovereign Safety)
+			return relativePath.replace(/\\/g, "/").toLowerCase()
 		} catch {
-			return filePath.replace(/\\/g, "/")
+			return p.replace(/\\/g, "/").toLowerCase()
 		}
 	}
 

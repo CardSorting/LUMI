@@ -66,6 +66,8 @@ export class FluidPolicyEngine {
 	private architecturalAlarmActive = false
 	private alarmViolations: string[] = []
 	private lastIntegrityScore = 100
+	private lastViolationCount = 0
+	private modifiedLayers: Set<string> = new Set()
 	private refactorHealer: RefactorHealer
 
 	constructor(
@@ -96,7 +98,9 @@ export class FluidPolicyEngine {
 	public resetSystemPressure(): void {
 		this.metabolicMonitor.resetMetabolicPressure()
 		this.alarmViolations = []
-		Logger.info("🔋 [FluidPolicyEngine] System pressure and alarm violations reset for Breather.")
+		this.modifiedLayers.clear()
+		this.lastIntegrityScore = 100
+		Logger.info("[FluidPolicyEngine] Unified System Pressure Reset (Metabolic & Structural).")
 	}
 
 	/**
@@ -363,6 +367,46 @@ export class FluidPolicyEngine {
 	 * Uses progressive enforcement: first domain violation blocks, subsequent ones degrade to warnings.
 	 */
 	public async validatePreExecution(block: ToolUse): Promise<PolicyResult> {
+		// V18/V19: Harmonic Healing Intent Sensing
+		let intent = null
+		const content = (block.params as { content?: string })?.content || ""
+
+		if (
+			(block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) &&
+			(this.metabolicMonitor.getCooldownStatus().active || this.architecturalAlarmActive)
+		) {
+			intent = this.detectHealingIntent(block)
+			if (intent) {
+				Logger.info(`[FluidPolicyEngine] Healing Intent detected. Resetting metabolic pressure for ${intent}.`)
+				this.resetSystemPressure()
+			}
+		}
+
+		// Centralized Healing Mode Detection
+		const isHealingMode = this.architecturalAlarmActive || !!intent || !!content.match(/#HEAL|#HEALING|#CURE/)
+
+		// 0. Rule: Cognitive Drift Sensing (Thrashing Prevention)
+		if (
+			block.name === DietCodeDefaultTool.FILE_EDIT ||
+			block.name === DietCodeDefaultTool.APPLY_PATCH ||
+			block.name === DietCodeDefaultTool.FILE_NEW
+		) {
+			const targetPath = (block.params as { path?: string })?.path
+			if (targetPath) {
+				const layer = getLayer(targetPath)
+				this.modifiedLayers.add(layer)
+
+				if (this.modifiedLayers.size > 3 && !this.commitSeal) {
+					return {
+						success: true,
+						warning:
+							`⚠️ [SPI-201] COGNITIVE DRIFT DETECTED: You have modified ${this.modifiedLayers.size} distinct architectural layers in this task (${Array.from(this.modifiedLayers).join(", ")}).\n` +
+							`High layer entropy often leads to structural regressions. Consider completing one layer or performing a # SOVEREIGN_BREATH to reset cognitive focus.`,
+					}
+				}
+			}
+		}
+
 		// 0. Rule: Cognitive Cooldown Enforcement (Substrate Immune System)
 		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
 			const cooldown = this.metabolicMonitor.getCooldownStatus()
@@ -405,8 +449,14 @@ export class FluidPolicyEngine {
 				const hasOverride = (block.params as { content?: string }).content?.includes(
 					"[SOVEREIGN_EXCEPTION: Metabolic Cooldown Override]",
 				)
+				const hasBreath = (block.params as { content?: string }).content?.includes("# SOVEREIGN_BREATH")
 
-				if (status.inflamed && !hasOverride && !this.commitSeal) {
+				if (hasBreath) {
+					this.resetSystemPressure()
+					Logger.info(`[FluidPolicyEngine] Metabolic Auto-Reset triggered via # SOVEREIGN_BREATH for ${targetPath}`)
+				}
+
+				if (status.inflamed && !hasOverride && !hasBreath && !this.commitSeal) {
 					return {
 						success: true,
 						warning:
@@ -469,15 +519,11 @@ export class FluidPolicyEngine {
 		if (block.name === DietCodeDefaultTool.RENAME || block.name === DietCodeDefaultTool.MOVE) {
 			const { oldPath, newPath } = block.params as { oldPath: string; newPath: string }
 
-			// V8: Detect healing intent in current turn
-			let isHealingMode = this.architecturalAlarmActive
+			// V8: Detect agile mode in turn
 			let isAgile = false
 			try {
 				const scratchpadPath = path.join(this.cwd, "scratchpad.md")
 				const scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
-				if (scratchpadContent.includes("[SOVEREIGN_HEALING]") || scratchpadContent.includes("# HEALING TURN")) {
-					isHealingMode = true
-				}
 				if (scratchpadContent.includes("# SOVEREIGN_AGILE")) {
 					isAgile = true
 				}
@@ -491,14 +537,14 @@ export class FluidPolicyEngine {
 				isHealingMode,
 				isAgile,
 			)
-			if (!sim.safe && !this.commitSeal) {
+			if (!sim.safe && !this.commitSeal && !isHealingMode) {
 				const healingHint = !isHealingMode
 					? "\n\n💡 PRO-TIP: To bypass simulation blocks during structural repairs, add `# HEALING TURN` to your `scratchpad.md`."
 					: ""
 				return {
 					success: true,
-					warning:
-						`⚠️ SIMULATION WARNING: ${sim.message}\n` +
+					[isHealingMode ? "info" : "warning"]:
+						`⚠️ SIMULATION RESONANCE: ${sim.message}\n` +
 						`Your proposed move predicts a significant architectural regression.\n` +
 						`Violations predicted: \n${sim.violations.map((v: string) => `  - ${v}`).join("\n")}\n\n` +
 						`💡 Fix these structural issues in the source before moving, or use a Commit Seal to bypass.${healingHint}`,
@@ -523,13 +569,7 @@ export class FluidPolicyEngine {
 				block.name === DietCodeDefaultTool.RENAME ||
 				block.name === DietCodeDefaultTool.DELETE)
 		) {
-			const targetPath = (block.params as { path?: string })?.path
-			const normalizedTarget = targetPath ? this.normalize(targetPath) : null
-
-			// PRODUCTION HARDENING: Healing Leniency (v12.3)
-			// V16: Soft-Lock Transition. The alarm no longer physically blocks non-violating edits,
-			// but instead provides a strong warning. This prevents agent spirals while maintaining visibility.
-			const isOrphanOnlyAlarm = this.alarmViolations.every((v) => v.includes("Node is orphaned"))
+			const _targetPath = (block.params as { path?: string })?.path
 
 			let isExplicitlyIgnored = false
 			try {
@@ -540,40 +580,30 @@ export class FluidPolicyEngine {
 				}
 			} catch (_e) {}
 
-			const isHealingAttempt =
-				(block.name === DietCodeDefaultTool.FILE_EDIT ||
-					block.name === DietCodeDefaultTool.APPLY_PATCH ||
-					block.name === DietCodeDefaultTool.MOVE ||
-					block.name === DietCodeDefaultTool.RENAME ||
-					block.name === DietCodeDefaultTool.DELETE) &&
-				normalizedTarget &&
-				(this.alarmViolations.some((v) => v.includes(normalizedTarget)) ||
-					this.pathogens.isPathogenic(normalizedTarget) ||
-					isOrphanOnlyAlarm)
+			const isSealed = !!this.commitSeal
+			if (!isHealingMode && !isExplicitlyIgnored && !isSealed) {
+				const recipes = this.spiderEngine
+					.getViolations()
+					.slice(0, 3)
+					.map((v) => `  - ${this.refactorHealer.generateHealingRecipe(v)}`)
 
-			if (!isHealingAttempt && !isExplicitlyIgnored) {
-				const healableFiles = [
-					...new Set(
-						this.alarmViolations
-							.map((v) => {
-								// Match full src/ path or the trailing path in orphan message
-								const match = v.match(/(src\/[^\s:]+)/)
-								return match ? match[1] : null
-							})
-							.filter(Boolean),
-					),
-				] as string[]
+				// V21: Diagnostic Synthesis (Cognitive Load Reduction)
+				const displayedViolations =
+					this.alarmViolations.length > 5
+						? [
+								...this.alarmViolations.slice(0, 3),
+								`... and ${this.alarmViolations.length - 3} more structural antigens.`,
+							]
+						: this.alarmViolations
 
 				return {
 					success: true,
 					warning:
 						`⚠️ ARCHITECTURAL ALARM ACTIVE (Score: ${this.computeIntegrityScore(this.alarmViolations)}/100)\n` +
-						`System integrity has degraded beyond the safety threshold. ` +
-						`Structural changes are discouraged until the following violations are healed:\n` +
-						`${this.alarmViolations.map((v) => `  - ${v}`).join("\n")}\n\n` +
-						`🩹 HEALING RECOMMENDATION: Consider prioritizing these violating files:\n` +
-						`${healableFiles.map((f) => `  → ${f}`).join("\n")}\n\n` +
-						`💡 You should fix these issues using FILE_EDIT or refactor tools to restore substrate stability.`,
+						`Structural changes are discouraged until the following violations are healed:\n\n` +
+						`${displayedViolations.map((v) => `  - ${v}`).join("\n")}\n\n` +
+						`🛠️ HEALING RECIPES:\n${recipes.join("\n")}\n\n` +
+						`💡 To bypass this block during structural repairs, add \`# HEALING TURN\` to your \`scratchpad.md\`.`,
 				}
 			}
 		}
@@ -1086,11 +1116,19 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// V16: Metabolic Forgiveness
-		// If health improved (recovery detected), clear inflammation
+		// V16/V17: Metabolic Forgiveness 2.0
+		// If health improved (recovery detected) or violation count decreased, clear inflammation
 		const latestSnapshot = await this.spiderEngine.getLatestSnapshot()
 		const currentEntropy = this.spiderEngine.computeEntropy().score
-		if (latestSnapshot && currentEntropy < latestSnapshot.entropyScore) {
+		const currentViolations = this.spiderEngine.getViolations()
+
+		const recoveryDetected =
+			(latestSnapshot && currentEntropy < latestSnapshot.entropyScore) || currentViolations.length < this.lastViolationCount
+
+		if (recoveryDetected) {
+			this.lastViolationCount = currentViolations.length
+			this.modifiedLayers.clear() // Reset drift on recovery
+
 			const filePath = block.params?.path
 			if (filePath) {
 				const norm = this.normalize(filePath)
@@ -1098,6 +1136,9 @@ export class FluidPolicyEngine {
 				Logger.info(
 					`[FluidPolicyEngine] Metabolic Forgiveness applied to ${path.basename(norm)} (Architectural Recovery Detected).`,
 				)
+			} else {
+				this.metabolicMonitor.resetMetabolicPressure()
+				Logger.info("[FluidPolicyEngine] Global Metabolic Forgiveness applied (Structural Improvement Detected).")
 			}
 		}
 
@@ -1119,62 +1160,34 @@ export class FluidPolicyEngine {
 			try {
 				const content = await fs.readFile(filePath, "utf-8")
 				const validation = this.tspPlugin.validateSource(filePath, content, this.virtualResolver)
-				if (!validation.success || (validation.warnings && validation.warnings.length > 0)) {
-					const allIssues = [...(validation.warnings || []), ...validation.errors]
-					const layer = this.getCachedLayer(filePath)
-					const layerPrefix = `[${layer.toUpperCase()}] ${path.basename(filePath)}`
-					allErrors.push(...allIssues.map((e) => `${layerPrefix}: ${e}`))
+				if (!validation.success) {
+					allErrors.push(...validation.errors)
 				}
 
-				// Dependency Detection for commit validation (AST-based)
-				const sourceFile = require("typescript").createSourceFile(
-					filePath,
-					content,
-					require("typescript").ScriptTarget.Latest,
-					true,
-				)
-				const crossLayerViolations = this.tspPlugin.findCrossLayerViolations(sourceFile, filePath)
-				if (crossLayerViolations.length > 0) {
-					const layer = this.getCachedLayer(filePath)
-					const layerPrefix = `[${layer.toUpperCase()}] ${path.basename(filePath)}`
-					allErrors.push(
-						...crossLayerViolations.map((e) => `${layerPrefix}: ARCHITECTURAL SMELL (Cross-Layer Dependency): ${e}`),
-					)
+				// AST-based dependency detection
+				const ts = require("typescript")
+				const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true)
+				const crossViolations = this.tspPlugin.findCrossLayerViolations(sourceFile, filePath)
+				if (crossViolations.length > 0) {
+					const layer = getLayer(filePath)
+					allErrors.push(...crossViolations.map((v) => `[${layer.toUpperCase()}] ${path.basename(filePath)}: ${v}`))
 				}
-			} catch {
-				// File might have been deleted or moved
+			} catch (e) {
+				Logger.error(`[FluidPolicyEngine] Commit validation failed for ${filePath}:`, e)
 			}
 		}
 
-		if (isDomainChange && allErrors.length > 0) {
-			// Restore blocking for domain violations on commit, unless it's just warnings
-			let hasHardErrors = false
-			for (const filePath of affectedFiles) {
-				try {
-					const content = require("fs").readFileSync(filePath, "utf-8")
-					const validation = this.tspPlugin.validateSource(filePath, content)
-					if (validation.errors.length > 0) {
-						hasHardErrors = true
-						break
-					}
-				} catch {
-					// File might not exist
-				}
-			}
+		const isSealed = !!this.commitSeal
+		const success = isSealed || !isDomainChange || allErrors.length === 0
 
-			if (hasHardErrors && !this.commitSeal) {
-				return { success: true, errors: allErrors.map((e) => `[DOMAIN WARNING - FORCED COMMIT] ${e}`) }
-			}
-
-			return { success: true, errors: allErrors.map((e) => `[DOMAIN WARNING] ${e}`) }
+		return {
+			success,
+			errors: isSealed ? allErrors.map((e) => `[SEALED OVERRIDE] ${e}`) : allErrors,
 		}
-
-		return { success: true, errors: allErrors }
 	}
 
 	private normalize(p: string): string {
-		if (!p) return ""
-		return path.relative(this.cwd, path.resolve(this.cwd, p))
+		return this.spiderEngine.normalizePath(p)
 	}
 
 	/**
@@ -1195,5 +1208,36 @@ export class FluidPolicyEngine {
 		]
 
 		return shield.join("\n")
+	}
+
+	/**
+	 * V18: Detects if the proposed tool execution is an attempt to heal known architectural violations.
+	 */
+	private detectHealingIntent(block: ToolUse): string | null {
+		const content = (block.params as { content?: string })?.content || ""
+		if (!content) return null
+
+		const violations = this.spiderEngine.getViolations()
+		for (const v of violations) {
+			if (!v.remediation) continue
+
+			// Match suggested import lines
+			const importMatch = v.remediation.match(/Suggested Import: (.*)/)
+			if (importMatch && content.includes(importMatch[1])) {
+				return `Resolved Ghost: ${v.message}`
+			}
+
+			// Match explicit intention markers or remediation keywords
+			if (content.includes("#HEAL") || content.includes("[HEALING]")) {
+				return "Explicit Healing Intention"
+			}
+
+			// Match interface extraction markers
+			if (v.id === "SPI-004" && content.includes("interface I") && content.includes("implements I")) {
+				return `Breaking Cycle: ${v.message}`
+			}
+		}
+
+		return null
 	}
 }

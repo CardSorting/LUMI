@@ -85,6 +85,17 @@ export class SovereignGuard {
 
 		const criticalViolations = violations.filter((v) => v.severity === "ERROR")
 
+		// V21: Therapeutic Leniency (Sovereign Drift)
+		// If we are in a recovery state and the edit improves project health (simResult.safe),
+		// we demote axiomatic errors to warnings to allow structural drift toward resonance.
+		if (isRecovering && simResult.safe && criticalViolations.length > 0) {
+			return {
+				approved: true,
+				violations: violations,
+				reason: `Therapeutic Leniency granted for positive structural drift in \`${path.basename(filePath)}\`.`,
+			}
+		}
+
 		if (criticalViolations.length > 0) {
 			const v = criticalViolations[0]
 			const fixSnippet = v.remediationSnippet

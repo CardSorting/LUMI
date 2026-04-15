@@ -39,10 +39,10 @@ export class ForensicEngine {
 				const diskPath = this.resolver.getDiskPath(node.path, specifier)
 				const targetId = this.resolver.resolveImportToNodeId(node.path, specifier, new Set(nodes.keys()))
 
-				if (!diskPath || !fs.existsSync(diskPath)) {
-					if (this.isNodeLibrary(specifier)) continue
+				if (!diskPath) {
 					// PRODUCTION HARDENING: Ignore ghost files for common build/config files in root
 					if (!specifier.startsWith(".") && !this.isProjectAlias(specifier)) continue
+					if (specifier.endsWith(".config.js") || specifier.endsWith(".config.ts")) continue
 					if (specifier.endsWith(".config.js") || specifier.endsWith(".config.ts")) continue
 
 					const msg = `[SPI-101] GHOST FILE: ${node.path} -> ${specifier}`
