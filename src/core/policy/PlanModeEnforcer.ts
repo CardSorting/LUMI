@@ -51,30 +51,17 @@ export class PlanModeEnforcer {
 		const content = await this.readScratchpad()
 
 		if (!content || content.trim().length === 0) {
+			const { SovereignProtocol } = await import("./SovereignProtocol")
+			const template = SovereignProtocol.generateAuditTemplate("Architectural Drafting")
 			return {
 				allowed: false,
 				reason:
 					`🛑 SOVEREIGN DRAFTING NOT COMPLETE\n\n` +
 					`Before presenting an architectural plan, you must complete the SOVEREIGN DRAFTING workflow:\n\n` +
-					`1️⃣ Create/Update ${this.scratchpadPath} with the SOVEREIGN DRAFTING template\n\n` +
-					`SOVEREIGN DRAFTING TEMPLATE:\`\`\`\n` +
-					`# SOVEREIGN DRAFTING\n\n` +
-					`## Requirement Analysis\n` +
-					`- What are the core requirements? (Deep Dive #1)\n` +
-					`- What are the edge cases? (Deep Dive #2)\n\n` +
-					`## The Architect (Your Brain)\n` +
-					`- Analyze architecture soundness and JoyZoning layer discipline\n` +
-					`- Ensure Domain/Core/Infrastructure/UI/Plumbing boundaries are respected\n\n` +
-					`## The Critic (The Skeptic)\n` +
-					`- Identify failure modes, scaling bottlenecks, maintenance risks\n` +
-					`- What could go wrong and how to fail fast?\n\n` +
-					`## The SRE (Reliability Engineer)\n` +
-					`- Address observability, error handling, fallback strategies\n` +
-					`- How will we know if this works in production?\n\n` +
-					`## Required Reviewers\n` +
-					`- [ ] The Architect [ ] The Critic [ ] The SRE\n\n` +
-					`\`\`\`\n\n` +
-					`💡 TIP: After completing the template with answers for ALL sections, ` +
+					`1️⃣ Create/Update ${this.scratchpadPath} with the SOVEREIGN DRAFTING (V12) template\n\n` +
+					`SOVEREIGN DRAFTING TEMPLATE:\`\`\`markdown\n` +
+					`${template}\`\`\`\n\n` +
+					`💡 TIP: After completing the template with answers for ALL probes, ` +
 					`you can call plan_mode_respond with your plan.`,
 			}
 		}

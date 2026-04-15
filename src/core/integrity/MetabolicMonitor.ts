@@ -8,6 +8,7 @@ export interface MetabolicMetrics {
 	linesDeleted: number
 	lastEditTimestamp: number
 	lastReadTimestamp: number
+	symbolObservations: Set<string> // V26: Neural Forensic Tracking
 }
 
 /**
@@ -16,7 +17,7 @@ export interface MetabolicMetrics {
  */
 export class MetabolicMonitor {
 	private registry: Map<string, MetabolicMetrics> = new Map()
-	private cooldownThreshold = 15 // Max collective edits per 3 turns
+	private cooldownThreshold = 25 // Max collective edits per 30 minutes
 
 	/**
 	 * Records a read operation.
@@ -200,6 +201,22 @@ export class MetabolicMonitor {
 		}
 	}
 
+	/**
+	 * V26: Records a focused observation of a specific symbol (class/function).
+	 */
+	public recordSymbolObservation(filePath: string, symbol: string) {
+		const metrics = this.getOrCreateMetrics(filePath)
+		metrics.symbolObservations.add(symbol)
+		Logger.info(`[MetabolicMonitor] Symbol observed: ${symbol} in ${path.basename(filePath)}`)
+	}
+
+	/**
+	 * V26: Returns a read-only snapshot of the investigation registry.
+	 */
+	public getForensicRegistry(): ReadonlyMap<string, MetabolicMetrics> {
+		return this.registry
+	}
+
 	private getOrCreateMetrics(filePath: string): MetabolicMetrics {
 		let metrics = this.registry.get(filePath)
 		if (!metrics) {
@@ -210,6 +227,7 @@ export class MetabolicMonitor {
 				linesDeleted: 0,
 				lastEditTimestamp: 0,
 				lastReadTimestamp: Date.now(),
+				symbolObservations: new Set<string>(),
 			}
 			this.registry.set(filePath, metrics)
 		}

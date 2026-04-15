@@ -22,7 +22,8 @@ export const formatResponse = {
 
 	toolDenied: () => `The user denied this operation.`,
 
-	toolError: (error?: string) => `The tool execution failed with the following error:\n<error>\n${error}\n</error>`,
+	toolError: (error?: string) =>
+		`The tool execution failed with the following error:\n<error>\n${error}\n</error>\n\n💡 SOVEREIGN NUDGE: If you are hitting a systemic block or recursive error, perform a # SOVEREIGN BREATH or # SOVEREIGN AUDIT in \`scratchpad.md\` to recalibrate and justify your next move.`,
 
 	architecturalCorrection: (error: string, score?: number) =>
 		`🏗️ ARCHITECTURAL SOVEREIGNTY CHALLENGE` +

@@ -49,5 +49,15 @@ The ultimate goal of Spider is **Architectural Sovereignty**: the ability of a s
 
 By integrating these metrics into the **Fluid Policy Engine**, structural health moves from a static "best practice" to a dynamic, enforced **Constraint**.
 
+## 🩹 Structural Resonance & Healing Modes
+
+Architectural enforcement must be firm, but not rigid. The Spider substrate implements two advanced mechanisms for **Resilient Recovery**:
+
+### Harmonic Leniency (Resonance Bypass)
+During active structural remediation (marked by `#HEAL`, `#HEALING`, or `#CURE`), the system enters **Resonance Mode**. In this state, "Entropy Regression" warnings (predicted score drops) are demoted to advisory information, allowing vous to break monolithic structures without being blocked by temporary integrity drops.
+
+### Aromatic Transition Sensing (Therapeutic Leniency)
+The **Sovereign Guard** implements "Positive Drift" sensing. If a proposed edit resolves a critical architectural violation (e.g., breaking a cycle) but introduces a minor, non-blocking warning, the guard will approve the turn as a net-positive **Therapeutic Transition**. This prevents the "Healing Deadlock" where complex repairs are blocked by intermediate integrity requirements.
+
 ---
 *For technical integration details, see [SPIDER.md](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SPIDER.md). For deep-dive performance details, see [PERFORMANCE.md](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/PERFORMANCE.md).*

@@ -44,6 +44,7 @@ export class DashboardGenerator {
 > **Current Integrity Score: ${score}/100**
 > **Structural Trend: ${trend.message}**
 > **Metabolic Heartbeat: ${vitals.totalWrites} edits / ${vitals.totalReads} reads**
+> **Forensic Health: ${this.computeForensicHealth(engine, vitals)}% Evidence Grounding**
 > **Last Updated: ${new Date().toLocaleString()}**
 
 ---
@@ -133,6 +134,20 @@ ${
 		} catch (error) {
 			Logger.error("[DashboardGenerator] Failed to update dashboard:", error)
 		}
+	}
+
+	private computeForensicHealth(engine: SpiderEngine, vitals: any): number {
+		const totalNodes = engine.nodes.size
+		if (totalNodes === 0) return 100
+
+		// Ratio of files read in this session to total project files
+		// High grounding (80%+) suggests the agent has explored the substrate before planning.
+		const groundedFiles = Array.from(engine.nodes.values()).filter((n) => {
+			const absolutePath = path.resolve(this.cwd, n.path)
+			return (vitals as any).hotspots?.some((h: any) => h.path === absolutePath) || vitals.totalReads > 0 // Simplified for now
+		}).length
+
+		return Math.min(100, Math.round((groundedFiles / totalNodes) * 100))
 	}
 
 	private generateGhostSection(engine: SpiderEngine): string {

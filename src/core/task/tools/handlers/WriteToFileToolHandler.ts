@@ -395,13 +395,17 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				newProblemsMessage,
 			)
 
-			// PROACTIVE SOVEREIGN AUDIT (V6)
+			// PROACTIVE SOVEREIGN AUDIT (V12 Double Down)
 			let auditReport = ""
-			if (relPath.endsWith("scratchpad.md") && config.mode === "plan" && config.strictPlanModeEnabled && finalContent) {
-				const audit = await SovereignScribe.validate(finalContent, config.cwd)
-				auditReport = `\n\n${audit.report}`
-				if (audit.synthesis) {
-					config.taskState.sovereignAuditSynthesis = audit.synthesis
+			if (relPath.endsWith("scratchpad.md") && finalContent) {
+				const scribe = new SovereignScribe(config.cwd)
+				const isAgile = finalContent.includes("# SOVEREIGN_AGILE")
+				const audit = await scribe.validate(finalContent, isAgile)
+
+				if (!audit.success) {
+					auditReport = `\n\n⚠️ SOVEREIGN AUDIT FAILED:\n${audit.errors.map((e) => `- ${e}`).join("\n")}`
+				} else {
+					auditReport = `\n\n✅ SOVEREIGN AUDIT PASSED: Substrate integrity verified.`
 				}
 			}
 

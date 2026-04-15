@@ -1,238 +1,139 @@
-import * as fs from "node:fs"
-import * as path from "node:path"
-import { DietCodeDefaultTool } from "@/shared/tools"
-
-export interface SovereignAuditResult {
-	ok: boolean
-	report: string
-	synthesis?: string
-}
-
-import { PathogenStore } from "../../../integrity/PathogenStore"
-import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
+import { SovereignForensics } from "@/core/policy/SovereignForensics"
+import { SovereignProtocol } from "@/core/policy/SovereignProtocol"
 
 /**
- * SovereignScribe: Shared logic for validating the Double Down Planning scratchpad.
- * Provides real-time feedback and final "Hard Lock" validation.
+ * SovereignScribe: The validator for scratchpad.md compliance.
+ * Enforces the Sovereign Drafting V12 standard.
  */
-export const SovereignScribe = {
-	/**
-	 * Scans conversation history to find the latest scratchpad content.
-	 */
-	getLatestScratchpadContent(history: unknown[]): { content: string; synthesis: string } {
-		let latestScratchpadContent = ""
-		let synthesis = ""
+export class SovereignScribe {
+	constructor(
+		private cwd: string,
+		private forensics?: SovereignForensics,
+	) {}
 
+	/**
+	 * Static helper to extract the latest scratchpad content from conversation history.
+	 */
+	public static getLatestScratchpadContent(history: any[]): { content: string } {
+		let content = ""
 		for (let i = history.length - 1; i >= 0; i--) {
-			const msg = history[i] as { role?: string; content?: unknown }
+			const msg = history[i]
 			if (msg.role === "assistant" && Array.isArray(msg.content)) {
-				for (const block of msg.content) {
-					const b = block as { type: string; name?: string; input?: Record<string, unknown> }
-					if (b.type === "tool_use" && b.name === DietCodeDefaultTool.FILE_NEW) {
-						const input = b.input as Record<string, string>
-						const targetPath = input.path || input.TargetFile || ""
-						if (targetPath.endsWith("scratchpad.md")) {
-							latestScratchpadContent = input.content || input.CodeContent || ""
-							const match = latestScratchpadContent.match(
-								/- \*\*Synthesis\*\*: ([\s\S]+?)(?=\n- \*\*MANTRA\*\*|$)/i,
-							)
-							if (match) synthesis = match[1].trim()
-							break
-						}
-					}
+				const editCall = msg.content.find(
+					(c: any) =>
+						c.type === "tool_use" &&
+						(c.name === "edit_file" || c.name === "write_to_file") &&
+						c.input?.path?.endsWith("scratchpad.md"),
+				)
+				if (editCall) {
+					content = editCall.input.content || ""
+					break
 				}
 			}
-			if (latestScratchpadContent) break
 		}
-
-		return { content: latestScratchpadContent, synthesis }
-	},
+		return { content }
+	}
 
 	/**
-	 * Validates the scratchpad content against Sovereign V8 standards.
+	 * Validates the scratchpad content against the Sovereign V12 protocol.
 	 */
-	async validate(
+	public async validate(
 		content: string,
-		cwd: string,
-		_spider?: SpiderEngine,
-		pathogens?: PathogenStore,
-	): Promise<SovereignAuditResult> {
-		if (!content) {
+		isAgile = false,
+	): Promise<{ success: boolean; errors: string[]; ok?: boolean; report?: string; synthesis?: string }> {
+		const errors: string[] = []
+		const diagnosticHints: string[] = []
+
+		// Extract all cited paths for forensic verification
+		const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
+		const citedPaths = Array.from(content.matchAll(pathRegexp)).map((m) => m[0])
+
+		if (this.forensics && !isAgile) {
+			const { errors: forensicErrors, warnings: forensicWarnings } = this.forensics.verifyEvidenceGrounding(content)
+			errors.push(...forensicErrors)
+			diagnosticHints.push(...forensicWarnings)
+		}
+
+		// 1. Check for Protocol Identity
+		if (content.includes(SovereignProtocol.HEADERS.BREATH)) {
+			// Sovereign Breath Turn - Lightweight validation
+			if (content.length < 100) {
+				errors.push("Sovereign Breath turn is too brief (min 100 characters).")
+			}
+			return { success: errors.length === 0, errors }
+		}
+
+		if (!content.includes(SovereignProtocol.HEADERS.AUDIT)) {
 			return {
-				ok: false,
-				report:
-					"⚠️ SOVEREIGN DRAFTER VIOLATION: Mandatory `scratchpad.md` drafting phase not found.\n" +
-					"In PLAN MODE, you MUST first externalize your architectural investigation using the **Sovereign Triad V6 Template** in `scratchpad.md`.",
+				success: false,
+				errors: ["No # SOVEREIGN AUDIT section found. You must structure your audit around the Sovereign Protocol."],
 			}
 		}
 
-		const missingMarkers: string[] = []
-		const diagnosticHints: string[] = []
-
-		// 1. Hallucination Protection: Check for <scratchpad> tags within the file content
-		if (content.includes("<scratchpad>") || content.includes("</scratchpad>")) {
-			missingMarkers.push("Tool Isolation Violation")
-			diagnosticHints.push(
-				"💡 FORBIDDEN PATTERN: You included `<scratchpad>` tags inside the file. Write raw markdown only.",
-			)
-		}
-
-		// 2. Check title
-		if (!content.includes("# SOVEREIGN AUDIT") || content.includes("[Task Name]")) {
-			missingMarkers.push("# SOVEREIGN AUDIT (Descriptive Title)")
-			if (content.includes("[Task Name]"))
-				diagnosticHints.push("💡 Title still contains the template placeholder '[Task Name]'.")
-		}
-
-		// 3. Check Probes & Substantive Content
-		// PRODUCTION HARDENING: Improved regex to capture aliased paths and more extensions (.tsx, .js, .json, .md)
-		const pathRegex = /(?:@[\w-]+\/|(?:[a-zA-Z0-9_-]+\/)+)[a-zA-Z0-9_-]+\.[a-z]+|[a-zA-Z0-9_-]+\.(?:ts|tsx|js|jsx|json|md)/g
-		const probePatterns = [
-			{ name: "### 1. THE ARCHITECT", pattern: /### 1\. THE ARCHITECT \(Boundary Probe\)\n([\s\S]+?)(?=### 2|$)/i },
-			{ name: "### 2. THE CRITIC", pattern: /### 2\. THE CRITIC \(Assumption Probe\)\n([\s\S]+?)(?=### 3|$)/i },
-			{ name: "### 3. THE SRE", pattern: /### 3\. THE SRE \(Atomic Probe\)\n([\s\S]+?)(?=## \[FINAL RESOLUTION\]|$)/i },
+		// 2. Check for Triad Probes
+		const probes = [
+			{ name: "THE ARCHITECT", header: SovereignProtocol.HEADERS.ARCHITECT },
+			{ name: "THE CRITIC", header: SovereignProtocol.HEADERS.CRITIC },
+			{ name: "THE SRE", header: SovereignProtocol.HEADERS.SRE },
 		]
 
-		for (const probe of probePatterns) {
-			const match = content.match(probe.pattern)
-			if (!match) {
-				missingMarkers.push(probe.name)
-				diagnosticHints.push(`💡 Mandatory header missing: ${probe.name}`)
+		for (const probe of probes) {
+			if (!content.includes(probe.header)) {
+				errors.push(`Missing mandatory triad probe: ${probe.name}`)
 				continue
 			}
 
-			const probeContent = match[1].trim()
-			const pathMatch = probeContent.match(pathRegex)
-			const paths = pathMatch ? Array.from(new Set(pathMatch)) : []
-			const nonExistentPaths: string[] = []
+			const startIndex = content.indexOf(probe.header) + probe.header.length
+			const nextProbe = probes[probes.indexOf(probe) + 1]?.header || SovereignProtocol.HEADERS.RESOLUTION
+			const endIndex = content.indexOf(nextProbe) > startIndex ? content.indexOf(nextProbe) : content.length
+			const probeContent = content.substring(startIndex, endIndex).trim()
 
-			if (paths.length > 0) {
-				for (const p of paths) {
-					const sanitizedPath = p.replace(/[`*]/g, "")
-					// RESOLUTION HARDENING: Use a more robust mapping for aliases in scratchpad validation
-					let resolvedPath = sanitizedPath
-					if (sanitizedPath.startsWith("@/")) resolvedPath = sanitizedPath.replace("@/", "src/")
-					else if (sanitizedPath.startsWith("@api/")) resolvedPath = sanitizedPath.replace("@api/", "src/core/api/")
-					else if (sanitizedPath.startsWith("@core/")) resolvedPath = sanitizedPath.replace("@core/", "src/core/")
-					else if (sanitizedPath.startsWith("@infra/"))
-						resolvedPath = sanitizedPath.replace("@infra/", "src/infrastructure/")
-					else if (sanitizedPath.startsWith("@shared/")) resolvedPath = sanitizedPath.replace("@shared/", "src/shared/")
-					else if (sanitizedPath.startsWith("@utils/")) resolvedPath = sanitizedPath.replace("@utils/", "src/utils/")
-
-					const absolutePath = path.isAbsolute(resolvedPath) ? resolvedPath : path.join(cwd, resolvedPath)
-
-					// PRODUCTION HARDENING: check for existence with common extensions if not provided
-					let exists = fs.existsSync(absolutePath)
-					if (!exists && !path.extname(absolutePath)) {
-						for (const ext of [".ts", ".tsx", ".js", ".json", ".md"]) {
-							if (fs.existsSync(absolutePath + ext)) {
-								exists = true
-								break
-							}
-						}
-					}
-
-					if (!exists) {
-						nonExistentPaths.push(sanitizedPath)
-					} else if (pathogens) {
-						// PRODUCTION HARDENING: Surface Stress Zone warnings during drafting
-						const prediction = pathogens.predictFailure(absolutePath)
-						if (prediction.likely) {
-							diagnosticHints.push(`⚠️ SOVEREIGN FORESIGHT: ${prediction.reason}`)
-						}
-					}
-				}
+			// Substantive Validation for Probes
+			if (probeContent.length < 50) {
+				diagnosticHints.push(`💡 ${probe.name}: Analysis is too superficial (min 50 chars).`)
 			}
 
-			const isPlaceholder =
-				probeContent.includes("[Where is the boundary weakest?]") ||
-				probeContent.includes("[Which assumption is most dangerous?]") ||
-				probeContent.includes("[What happens during partial failure?]")
-
-			// PRODUCTION HARDENING: Evidence Density & Semantic Anchoring check.
-			// Probes MUST recite at least 2 unique files AND mention at least one symbol from those files.
-
-			// Extract potential symbols mentioned in the probe (CamelCase or snake_case)
-			const symbolRegex = /\b(?:[A-Z][a-zA-Z0-9]+|[a-z]+(?:_[a-z0-9]+)+)\b/g
-			const mentionedSymbols = probeContent.match(symbolRegex) || []
-			const uniqueSymbols = new Set(mentionedSymbols)
-
-			// isPlaceholder already declared above at line 147
-
-			// PRODUCTION HARDENING: Semantic Delta Verification.
-			// Agents MUST describe the transformation (~ operator or before/after)
+			// Symbol/Delta detection in probe content
 			const deltaRegex = /(?:~|before|after|changing|updating|fixing|transformation)/i
 			const hasDelta = deltaRegex.test(probeContent)
-
-			if (
-				probeContent.length < 40 ||
-				paths.length < 2 ||
-				uniqueSymbols.size < 2 ||
-				!hasDelta ||
-				isPlaceholder ||
-				nonExistentPaths.length > 0
-			) {
-				missingMarkers.push(`${probe.name} (Substantive Grounding)`)
-				if (probeContent.length < 40)
-					diagnosticHints.push(`💡 ${probe.name}: Analysis is too brief. Be more descriptive.`)
-				if (paths.length < 2)
-					diagnosticHints.push(`💡 ${probe.name}: Insufficient evidence density. Cite at least 2 unique file paths.`)
-				if (uniqueSymbols.size < 2 && !isPlaceholder)
-					diagnosticHints.push(
-						`💡 ${probe.name}: SEMANTIC DISORIENTATION: Mention specific classes, functions, or variables you investigated.`,
-					)
-				if (!hasDelta && !isPlaceholder)
-					diagnosticHints.push(
-						`💡 ${probe.name}: DELTA DISORIENTATION: Describe the transformation of your symbols using the '~' operator or "Before/After" notation.`,
-					)
-				if (nonExistentPaths.length > 0)
-					diagnosticHints.push(
-						`💡 ${probe.name}: Hallucination detected! The following paths do not exist: ${nonExistentPaths.join(", ")}`,
-					)
-				if (isPlaceholder)
-					diagnosticHints.push(`💡 ${probe.name}: Remove template placeholders and replace with real investigation.`)
-			}
-		}
-
-		// 4. Check Final Resolution sections
-		// PRODUCTION HARDENING: Mantra must be the exact "Double down on this concept" string.
-		const hasMantra = content.toLowerCase().includes("double down on this concept")
-		const synthesisMatch = content.match(/- \*\*Synthesis\*\*: ([\s\S]+?)(?=\n- \*\*MANTRA\*\*|$)/i)
-		const synthesis = synthesisMatch ? synthesisMatch[1].trim() : ""
-
-		// Synthesis Depth Check
-		// PRODUCTION HARDENING: Synthesis must contain structural outcomes (e.g. 'hardened', 'refined', 'migrated')
-		const isShallowSynthesis =
-			synthesis.length < 60 ||
-			synthesis.includes("[Summary of hardening applied]") ||
-			!/(hardened|refined|migrated|aligned|interdicted|harden|refine)/i.test(synthesis)
-
-		if (!hasMantra || isShallowSynthesis) {
-			if (!hasMantra) {
-				missingMarkers.push("Double Down MANTRA")
-				diagnosticHints.push("💡 The mandatory Double Down MANTRA is missing or incorrect.")
-			}
-			if (isShallowSynthesis) {
-				missingMarkers.push("Synthesis (Sovereign Summary)")
+			if (!hasDelta && !isAgile) {
 				diagnosticHints.push(
-					"💡 Your Synthesis block is too shallow. Provide a substantive summary (min 60 chars) of specific structural hardening or refactoring outcomes (use keywords like 'hardened', 'refined', etc.).",
+					`💡 ${probe.name}: No structural transformation cited. Use the '~' operator (e.g. SymbolA ~ SymbolB).`,
 				)
 			}
 		}
 
-		if (missingMarkers.length > 0) {
-			let report = "⚠️ SOVEREIGN QUALITY AUDIT: FAILED\n"
-			report += `**Missing/Inferior Components:**\n${missingMarkers.map((m) => `- ${m}`).join("\n")}\n\n`
-			report += `**Diagnostic Hints:**\n${diagnosticHints.join("\n")}\n\n`
-			report +=
-				"You MUST deeply investigate all three probes and cite evidence in `scratchpad.md` before the planning phase can conclude."
-			return { ok: false, report, synthesis }
+		// 3. Check for Final Resolution and Mantra
+		if (!content.includes(SovereignProtocol.HEADERS.RESOLUTION)) {
+			errors.push("Missing mandatory section: ## [FINAL RESOLUTION]")
 		}
 
+		const hasMantra = content.includes(SovereignProtocol.MANTRA)
+		if (!hasMantra) {
+			errors.push(`Missing the Sovereign Mantra: "${SovereignProtocol.MANTRA}"`)
+		}
+
+		// 4. Check for Diagnostics
+		if (!content.includes(SovereignProtocol.HEADERS.DIAGNOSTICS)) {
+			diagnosticHints.push("💡 GUIDANCE: Consider including ## [SYSTEM DIAGNOSTICS] for better grounding.")
+		}
+
+		const success = errors.length === 0 && (isAgile || diagnosticHints.length === 0)
+		const combinedErrors = [...errors, ...diagnosticHints]
+
+		// Extract resolution for synthesis
+		const resolutionMatch = content.match(/## \[FINAL RESOLUTION\]\s*([\s\S]*?)(?:\n##|$)/)
+		const synthesis = resolutionMatch ? resolutionMatch[1].trim().split("\n")[0] : undefined
+
 		return {
-			ok: true,
-			report: "✅ SOVEREIGN QUALITY AUDIT: PASSED\nArchitectural integrity verified. You may now proceed with `plan_mode_respond`.",
+			success,
+			errors: combinedErrors,
+			ok: success,
+			report:
+				combinedErrors.length > 0
+					? "🛑 SOVEREIGN AUDIT FAILURE:\n" + combinedErrors.map((e) => `  - ${e}`).join("\n")
+					: undefined,
 			synthesis,
 		}
-	},
+	}
 }

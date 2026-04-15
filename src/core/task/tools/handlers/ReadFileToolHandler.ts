@@ -170,16 +170,64 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 
 		// Execute the actual file read operation
 		const supportsImages = config.api.getModel().info.supportsImages ?? false
-		let fileContent
+		let fileContent: any // FileContentResult
 		try {
 			fileContent = await extractFileContent(absolutePath, supportsImages)
+
+			// V26: Neural Forensic Hardening - Record observations
+			try {
+				const { MetabolicMonitor } = await import("../../../integrity/MetabolicMonitor")
+				const monitor = new MetabolicMonitor() // managed singleton in real env
+				monitor.recordRead(absolutePath)
+
+				if (fileContent.text) {
+					// Extract symbols from the content (simple regex for classes/functions/interfaces)
+					const symbolRegex = /\b(?:export\s+)?(?:class|function|interface|const)\s+([a-zA-Z0-9_]+)\b/g
+					let match
+					while ((match = symbolRegex.exec(fileContent.text)) !== null) {
+						monitor.recordSymbolObservation(absolutePath, match[1])
+					}
+				}
+			} catch (e) {
+				// Ignore telemetry errors
+			}
 		} catch (error) {
 			if (error instanceof Error && error.message.includes("File not found") && absolutePath.endsWith("scratchpad.md")) {
+				// V19: Proactive diagnostic injection on auto-creation
+				let diagnostics: any
+				try {
+					const { FluidPolicyEngine } = await import("../../../policy/FluidPolicyEngine")
+					const engine = new FluidPolicyEngine(config.cwd)
+					const violations = (engine as any).spiderEngine.getViolations()
+					const stats = (engine as any).metabolicMonitor.getVitalityStats()
+					diagnostics = {
+						integrityScore: (engine as any).computeIntegrityScore(violations.map((v: any) => v.message)),
+						metabolicPressure: `${stats.totalWrites} writes across ${(engine as any).spiderEngine.nodes.size} nodes`,
+						violations: violations.slice(0, 10).map((v: any) => `[${v.id}] ${v.path}: ${v.message}`),
+						hotspots: stats.hotspots.map((h: any) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
+					}
+				} catch (_e) {
+					// Fallback to empty if diagnostics fail
+				}
+
+				const { SovereignProtocol } = await import("../../../policy/SovereignProtocol")
+				const { SovereignForensics } = await import("../../../policy/SovereignForensics")
+				const { MetabolicMonitor } = await import("../../../integrity/MetabolicMonitor")
+
+				const monitor = new MetabolicMonitor() // In real app, this would be the managed singleton
+				const forensics = new SovereignForensics(config.cwd, monitor)
+				const forensicTrace = forensics.generateForensicTrace()
+
+				const template = SovereignProtocol.generateAuditTemplate(
+					"Initial Architectural Audit",
+					diagnostics,
+					forensicTrace,
+				)
+
 				const fs = await import("fs/promises")
-				const template = `# SOVEREIGN AUDIT: [Task Name]\n\n## [TRIAD PROBES]\n### 1. THE ARCHITECT (Boundary Probe)\n- **Vulnerability**: [Where is the boundary weakest?]\n- **Proof**: [Evidence of JoyZoning compliance]\n\n### 2. THE CRITIC (Assumption Probe)\n- **Weak Point**: [Which assumption is most dangerous?]\n- **Hardening**: [Specific fix/guardrail applied]\n\n### 3. THE SRE (Atomic Probe)\n- **Failure Path**: [What happens during partial failure?]\n- **Resilience**: [Atomic recovery logic/Error boundaries]\n\n## [FINAL RESOLUTION]\n- **Synthesis**: [Summary of hardening applied to the final plan]\n- **MANTRA**: Double down on this concept, audit and revise in its entirety\n`
 				await fs.writeFile(absolutePath, template, "utf8")
 				return (
-					"The file `scratchpad.md` did not exist, but I have automatically generated it with the default template. Please use `edit_file` to perform your audit.\n\n" +
+					"The file `scratchpad.md` did not exist, but I have automatically generated it with the unified V24 Forensic template and current diagnostics. Please use `edit_file` to perform your audit.\n\n" +
 					template
 				)
 			}

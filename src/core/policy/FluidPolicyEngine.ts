@@ -17,13 +17,13 @@ import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
 import { PathogenStore } from "../integrity/PathogenStore"
 import { StateManager } from "../storage/StateManager"
 import { RefactorHealer } from "../task/tools/RefactorHealer"
-import { SemanticAxiomEngine } from "./SemanticAxiomEngine"
+import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine"
 import { SimulationEngine } from "./SimulationEngine.js"
 import { SovereignOptimizer } from "./SovereignOptimizer"
 import { SovereignPolicy } from "./SovereignPolicy.js"
+import { SovereignProtocol } from "./SovereignProtocol"
 import { RefactoringSuggestion, SpiderRefactorer } from "./SpiderRefactorer.js"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
-import { SpiderViolation } from "./spider/types.js"
 import { TspPolicyPlugin } from "./TspPolicyPlugin.js"
 
 export interface PolicyResult {
@@ -108,34 +108,16 @@ export class FluidPolicyEngine {
 	 * Injected into the Breather Nudge BEFORE pressure is reset, so the agent learns *why* it was failing.
 	 */
 	public getSystemDiagnostics(): string {
-		const diag: string[] = []
-		if (this.architecturalAlarmActive) {
-			diag.push("🚨 ARCHITECTURAL ALARM ACTIVE")
-		}
-		if (this.alarmViolations.length > 0) {
-			diag.push(`Recent Policy Violations:\n${this.alarmViolations.map((v) => `  - ${v}`).join("\n")}`)
-		}
-
 		const violations = this.spiderEngine.getViolations()
-		if (violations.length > 0) {
-			diag.push(
-				`Active AST/Structural Violations (${violations.length}):\n` +
-					violations
-						.slice(0, 5)
-						.map((v: SpiderViolation) => `  - ${v.path}: ${v.message}`)
-						.join("\n"),
-			)
-		}
-
 		const stats = this.metabolicMonitor.getVitalityStats()
-		if (stats.hotspots && stats.hotspots.length > 0) {
-			diag.push(
-				"Substrate Hotspots (Files causing thrashing):\n" +
-					stats.hotspots.map((h) => `  - ${path.basename(h.path)} (Stress index: ${h.stress.toFixed(2)})`).join("\n"),
-			)
-		}
+		const integrityScore = this.computeIntegrityScore(violations.map((v) => v.message))
 
-		return diag.join("\n\n")
+		return SovereignProtocol.generateAuditTemplate("System Recovery", {
+			integrityScore,
+			metabolicPressure: `${stats.totalWrites} writes across ${this.spiderEngine.nodes.size} nodes`,
+			violations: violations.slice(0, 10).map((v) => `[${v.id}] ${v.path}: ${v.message}`),
+			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
+		})
 	}
 
 	/**
@@ -371,6 +353,17 @@ export class FluidPolicyEngine {
 		let intent = null
 		const content = (block.params as { content?: string })?.content || ""
 
+		// Step 0: Read scratchpad context for Sovereign Protocols
+		let scratchpadContent = ""
+		let hasAudit = false
+		let hasBreath = false
+		try {
+			const scratchpadPath = path.join(this.cwd, "scratchpad.md")
+			scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
+			hasAudit = scratchpadContent.includes(SovereignProtocol.HEADERS.AUDIT)
+			hasBreath = scratchpadContent.includes(SovereignProtocol.HEADERS.BREATH)
+		} catch (_e) {}
+
 		if (
 			(block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) &&
 			(this.metabolicMonitor.getCooldownStatus().active || this.architecturalAlarmActive)
@@ -411,30 +404,49 @@ export class FluidPolicyEngine {
 		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
 			const cooldown = this.metabolicMonitor.getCooldownStatus()
 			if (cooldown.active && !this.commitSeal) {
-				// V7/V8 HARDENING: Check for SOVEREIGN context in scratchpad
-				let hasBreath = false
-				let scratchpadContent = ""
-				try {
-					const scratchpadPath = path.join(this.cwd, "scratchpad.md")
-					scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
-					if (scratchpadContent.includes("# SOVEREIGN BREATH")) {
-						hasBreath = true
-						Logger.info("[FluidPolicyEngine] Metabolic Cooldown bypassed via # SOVEREIGN BREATH")
-					}
-				} catch (_e) {
-					// Scratchpad missing
+				if (hasBreath) {
+					Logger.info("[FluidPolicyEngine] Metabolic Cooldown bypassed via # SOVEREIGN BREATH")
+				} else if (hasAudit) {
+					Logger.info("[FluidPolicyEngine] Metabolic Cooldown bypassed via # SOVEREIGN AUDIT")
 				}
 
-				if (!hasBreath) {
+				if (!hasBreath && !hasAudit) {
+					const auditTemplate = SovereignProtocol.generateAuditTemplate("Cognitive Recovery")
+					const breathTemplate = SovereignProtocol.generateBreathTemplate("Metabolic Reset", cooldown.reason)
+
+					return {
+						success: false,
+						error:
+							`🛑 COGNITIVE COOLDOWN [ACTIVE]: ${cooldown.reason}\n` +
+							`The substrate has reached structural saturation. High-velocity logic churn is discouraged to prevent architectural regression.\n\n` +
+							`💡 GUIDANCE: You are currently BLOCKED from performing further edits. You MUST perform an audit turn to justify further churn.\n\n` +
+							`📝 OPTION A: [Audit Turn] - Add this to your \`scratchpad.md\` for a full state synthesis:\n` +
+							`\`\`\`markdown\n${auditTemplate}\`\`\`\n\n` +
+							`📝 OPTION B: [Breath Turn] - Add this to your \`scratchpad.md\` for a quick targeted fix:\n` +
+							`\`\`\`markdown\n${breathTemplate}\`\`\`\n`,
+					}
+				}
+			}
+		}
+
+		// V24: Implicit Guideline Injection (Contextual Awareness)
+		if (block.name === DietCodeDefaultTool.FILE_READ) {
+			const targetPath = (block.params as { path?: string })?.path
+			if (targetPath) {
+				const absolutePath = path.resolve(this.cwd, targetPath)
+				const violations = this.spiderEngine.getViolations().filter((v) => v.path === absolutePath)
+				const status = this.metabolicMonitor.isInflamed(absolutePath)
+
+				if (violations.length > 0 || status.inflamed) {
+					const alerts: string[] = []
+					if (status.inflamed) alerts.push(`⚠️ METABOLIC INFLAMMATION: ${status.reason}`)
+					violations.forEach((v) => {
+						alerts.push(`🚨 STRUCTURAL ANTIGEN: ${v.message}`)
+					})
+
 					return {
 						success: true,
-						warning:
-							`⚠️ COGNITIVE COOLDOWN [ACTIVE]: ${cooldown.reason}\n` +
-							`The substrate has reached structural saturation. High-velocity logic churn is discouraged to prevent architectural regression.\n\n` +
-							`💡 GUIDANCE: Consider performing an audit turn:\n` +
-							`  - Update \`scratchpad.md\` with a # SOVEREIGN BREATH (lightweight targeted fix justification)\n` +
-							`  - Update \`scratchpad.md\` with a # SOVEREIGN AUDIT (full state synthesis)\n` +
-							`  - Read \`docs/\` or architectural guides`,
+						warning: `🏗️ ARCHITECTURAL ADVISORY: \`${path.basename(targetPath)}\` has active structural alerts:\n${alerts.join("\n")}`,
 					}
 				}
 			}
@@ -445,7 +457,52 @@ export class FluidPolicyEngine {
 			const targetPath = (block.params as { path?: string })?.path
 			if (targetPath) {
 				const absolutePath = path.resolve(this.cwd, targetPath)
+				const isScratchpad = targetPath.endsWith("scratchpad.md")
+
+				// V22: Implicit Recovery - Scratchpad edits are NEVER blocked.
+				if (isScratchpad) {
+					return { success: true }
+				}
+
+				// V24: Symbol Lockdown (Audit-to-Action Binding)
+				if (hasAudit && !isScratchpad) {
+					const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
+					const citedPaths = Array.from(scratchpadContent.matchAll(pathRegexp)).map((m) => m[0])
+					const isCited = citedPaths.some((p) => absolutePath.includes(p))
+
+					if (!isCited && !scratchpadContent.includes("# SOVEREIGN_AGILE")) {
+						return {
+							success: false,
+							error: `🛑 SYMBOL LOCKDOWN: The file \`${path.basename(targetPath)}\` is not cited in your active # SOVEREIGN AUDIT. You are restricted to editing only files identified during your forensic investigation.`,
+						}
+					}
+				}
+
 				const status = this.metabolicMonitor.isInflamed(absolutePath)
+
+				// V26: Axiom Lockdown (Structural Debt Prevention)
+				if (!isScratchpad && block.name === DietCodeDefaultTool.FILE_EDIT) {
+					const content = (block.params as { content: string }).content
+					if (content) {
+						const newViolations = this.axiomEngine.validateAxioms(targetPath, content, this.spiderEngine)
+						const oldViolations = this.spiderEngine.getViolations().filter((v) => v.path === absolutePath)
+						const oldAxiomMapped: AxiomViolation[] = oldViolations.map((v) => ({
+							axiom: v.id,
+							severity: v.severity === "INFO" ? "WARN" : v.severity,
+							message: v.message,
+							remediation: v.remediation,
+						}))
+						const result = this.axiomEngine.compareAxiomSessions(oldAxiomMapped, newViolations)
+
+						if (result.status === "NEGATIVE" && !scratchpadContent.includes("# SOVEREIGN_AGILE")) {
+							return {
+								success: false,
+								error: `🛑 AXIOM LOCKDOWN: ${result.message}\nThis edit introduces architectural regression. You must audit and justify this trade-off in \`scratchpad.md\`.`,
+							}
+						}
+					}
+				}
+
 				const hasOverride = (block.params as { content?: string }).content?.includes(
 					"[SOVEREIGN_EXCEPTION: Metabolic Cooldown Override]",
 				)
@@ -462,7 +519,7 @@ export class FluidPolicyEngine {
 						warning:
 							`⚠️ METABOLIC COOLDOWN INTERDICTION: \`${path.basename(targetPath)}\` is currently INFLAMED.\n` +
 							`${status.reason}\n\n` +
-							`💡 RECOVERY: Architectural exhaustion detected. You MUST stop editing this file and performing a # SOVEREIGN AUDIT in \`scratchpad.md\` to justify further churn or plan an atomic split. ` +
+							`💡 RECOVERY: Architectural exhaustion detected. You MUST stop editing this file and performing a # SOVEREIGN AUDIT in \`scratchpad.md\` to justify further churn.\n\n` +
 							`To override, add \`[SOVEREIGN_EXCEPTION: Metabolic Cooldown Override]\` with a substantive reason to your edit.`,
 					}
 				}
@@ -596,6 +653,8 @@ export class FluidPolicyEngine {
 							]
 						: this.alarmViolations
 
+				const auditTemplate = SovereignProtocol.generateAuditTemplate("Alarm Healing")
+
 				return {
 					success: true,
 					warning:
@@ -603,7 +662,8 @@ export class FluidPolicyEngine {
 						`Structural changes are discouraged until the following violations are healed:\n\n` +
 						`${displayedViolations.map((v) => `  - ${v}`).join("\n")}\n\n` +
 						`🛠️ HEALING RECIPES:\n${recipes.join("\n")}\n\n` +
-						`💡 To bypass this block during structural repairs, add \`# HEALING TURN\` to your \`scratchpad.md\`.`,
+						`💡 To bypass this block during structural repairs, add \`# HEALING TURN\` to your \`scratchpad.md\`, or perform a full audit turn:\n\n` +
+						`\`\`\`markdown\n${auditTemplate}\`\`\`\n`,
 				}
 			}
 		}

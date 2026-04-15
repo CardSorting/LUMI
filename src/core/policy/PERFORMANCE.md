@@ -23,12 +23,16 @@ Large architectural graphs (10,000+ nodes) can lead to significant JSON parsing/
 The substrate avoids redundant AST processing for identical content.
 -   **Mechanism**: Every `SpiderNode` tracks a content `hash`. The `updateNode` method checks the MD5 fingerprint before triggering any AST visitation.
 -   **Impact**: 0ms overhead for saves that do not change structural logic (e.g., comment-only changes or formatting).
+-   **Merkle Sync ($O(1)$ State Checks)**: The engine utilizes Modification Timestamps (`mtime`). During startup or registry hydration, it performs a single syscall per file to check for external drift.
+-   **Impact**: Avoids redundant full-directory scans or file reads. The graph is perfectly synchronized with the disk in milliseconds.
 
 ### 5. Multi-Level Session Caching
 To minimize the cumulative tax of path operations and specification lookups:
 -   **Path Resolution Cache**: All `path.resolve` and `path.relative` results are cached per session.
 -   **Layer Lookup Cache**: Results of `getLayer()` and `isLayerTagSupported()` are memoized in `PATH_LAYER_CACHE`.
 -   **Spec Singleton**: The `spider.spec.json` is lazy-loaded into a memory singleton, eliminating synchronous disk IO during tight validation loops.
+-   **Canonical Branding**: All path fingerprints are canonicalized (Posix-normalized, case-normalized) once during extraction and cached.
+-   **Impact**: Eliminates the 1-2ms "Geographic Misalignment" noise that occurs when comparing absolute paths across varied operating system environments.
 
 ---
 

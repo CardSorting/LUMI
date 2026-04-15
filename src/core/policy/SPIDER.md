@@ -24,6 +24,7 @@ The engine has been hardened for production-level workloads:
 1.  **Memory Hardening**: Aggressive AST purging via raw `typescript` API usage — nodes are discarded immediately after extraction.
 2.  **Atomic Propagation**: BFS reachability and coupling analysis are protected by a structural change guard. It only recomputes incremental links if a node's `imports` have actually changed, saving 99% of CPU time.
 3.  **Binary Persistence**: The registry is persisted in the **V8 Binary Format (`.spiderbin`)** for near-instant cold starts on massive graphs.
+4.  **Merkle Healing (Self-Sync)**: The registry tracks file modification timestamps (`mtime`). Upon startup, the engine automatically re-indexes nodes that have been modified externally, ensuring 100% fidelity between the graph and the disk.
 
 For deep technical details on the zero-overhead architecture, see [PERFORMANCE.md](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/PERFORMANCE.md).
 
@@ -34,7 +35,8 @@ Spider quantifies the "architectural health" of the codebase using a weighted en
 1.  **Depth Score (30%)**: Penalizes deeply nested directory structures (limit > 4).
 2.  **Naming Score (20%)**: Monitors adherence to project naming conventions (Optional).
 3.  **Orphan Score (20%)**: Identifies files unreachable from root layers (UI, Core, entry points).
-4.  **Coupling Score (30%)**: Detects illegal cross-layer dependencies (e.g., Domain importing Infrastructure).
+4.  **Coupling Score (20%)**: Detects illegal cross-layer dependencies (e.g., Domain importing Infrastructure).
+5.  **Barrel Sovereignty (10%)**: Monitors adherence to sub-system encapsulation. Penalizes direct imports that bypass established `index.ts` entry points.
 
 ## 🛡️ Integration
 

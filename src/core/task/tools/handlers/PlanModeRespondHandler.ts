@@ -62,9 +62,10 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 		// SOVEREIGN DRAFTER ENFORCEMENT (V6) - Legacy validation
 		if (config.strictPlanModeEnabled && config.mode === "plan") {
 			const { content } = SovereignScribe.getLatestScratchpadContent(config.messageState.getApiConversationHistory())
-			const audit = await SovereignScribe.validate(content, config.cwd)
+			const scribe = new SovereignScribe(config.cwd)
+			const audit = await scribe.validate(content)
 			if (!audit.ok) {
-				return formatResponse.toolResult(audit.report)
+				return formatResponse.toolResult(audit.report || "Sovereign Audit Failed.")
 			}
 			if (audit.synthesis) {
 				config.taskState.sovereignAuditSynthesis = audit.synthesis
