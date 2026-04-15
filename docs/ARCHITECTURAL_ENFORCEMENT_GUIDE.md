@@ -80,3 +80,17 @@ private readonly THRESHOLDS = {
     MAX_AST_LINES: 3000
 }
 ```
+
+---
+
+## 🕊️ Zero-Friction Success (V33/V34)
+To support high-velocity refactoring, the system implements **Spectral Leniency**:
+
+- **Conversational Grounding**: Paths discussed in recent chat (last 3 turns) are automatically grounded via neural context.
+- **Aesthetic Agility**: Styles, comments, or whitespace modifications require no audit citation.
+- **Terminal Agility**: Isolated leaf nodes (0 dependents) are always agile-safe.
+- **Metabolic Elasticity**: Use `#REFACTOR` or `#INFRASTRUCTURE` in your audit to double your edit budget (25 -> 50).
+- **Proactive Discovery**: During investigative stalls, the system automatically injects substrate deep-scans (symbols/pathogens) into the tool response.
+
+---
+*Last Updated: 2026-04-15 (V34 Spectral)*

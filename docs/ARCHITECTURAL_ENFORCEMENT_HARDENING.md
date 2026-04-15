@@ -191,5 +191,33 @@ Human intent is now formalized as the ultimate architectural arbiter:
 - **@dietcode-passthrough**: Supporting a formal directive for intentional architectural deviations.
 - **Zero-Block Exception**: Tagging a file with a passthrough directive downgrades hard locks to non-blocking warnings, allowing for documented design exceptions without deadlocking the agentic loop.
 
+## 11. V33 Hardening: Ethereal Sovereignty (Zero-Friction Pass)
+
+The V33 pass (April 2026) transforms the substrate into an "Ethereal" layer. It prioritizes agentic intent and structural stability over rigid, blocking rules.
+
+### 11.1 Metabolic Elasticity
+- **Refactor-Aware Budgets**: Turns tagged with `#REFACTOR` or `#INFRASTRUCTURE` receive a 2x edit budget (25 -> 50) and 50% more task-drift leniency.
+- **Therapeutic Leniency**: Fix-it turns (#FIX, #REPAIR) automatically demote metabolic interdiction to non-blocking warnings.
+
+### 11.2 Forensic Identity Persistence
+- **Substrate-Aware Grounding**: The forensic engine now recognizes **Stable Nodes** in the SpiderEngine history. Citations of known, synchronized nodes are accepted even without recent reads.
+- **Merkle Grace Window**: Introduced a 120s grace window for high-velocity turns to suppress transient Desync Alarms.
+
+### 11.3 Terminal Node Agility
+- **Implicit Domain Agility**: Files with zero architectural dependents (Leaf Nodes) are now treated as implicitly "Agile-safe," allowing for isolated maintenance without explicit audit citations.
+
+## 12. V34 Hardening: Spectral Sovereignty (Proactive Healing)
+
+The V34 pass (April 2026) reaches the final graduation: **Spectral Sovereignty**. The substrate shifts from "Block-and-Nudge" to a **"Heal-and-Enable"** model.
+
+### 12.1 Conversational Grounding
+- **Neural Context Scraper**: The forensic engine now monitors assistant dialogue. File paths discussed in the last 3 turns are recognized as grounded evidence, eliminating the need for redundant documentation.
+
+### 12.2 Aesthetic Agility
+- **Style-Only Passthroughs**: Edits that only modify whitespace or comments (detected via structural hashing) are now **Always Agile**. No audit citation is required for purely stylistic maintenance.
+
+### 12.3 Proactive Discovery Scans
+- **Sovereign Deep Scans**: During investigative stalls (Doubt Loops) or hallucinations, the system automatically performs a "Deep Scan" of the target node, injecting its symbols, pathogens, and head content into the tool response.
+
 ---
-*Last Updated: 2026-04-15*
+*Last Updated: 2026-04-15 (V34 Final)*
