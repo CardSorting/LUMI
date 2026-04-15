@@ -2,7 +2,7 @@
 
 JoyZoning 3.0 represents a pivot from passive architectural enforcement to an **Active Sovereignty** model. The codebase is no longer just a collection of files; it is a self-aware substrate that enforces its own structural integrity through fingerprinting, design axioms, and autonomous healing.
 
-## 1. The Fingerprinting Engine (Spider 3.0)
+## 1. The Fingerprinting Engine (Spider 4.0)
 
 The core diagnostic layer now uses **Archetypal Fingerprinting** to detect structural misfits. Every module in the `src` directory is profiled across three key dimensions:
 
@@ -12,9 +12,20 @@ The core diagnostic layer now uses **Archetypal Fingerprinting** to detect struc
 | **I/O Entropy** | Percentage of platform/node imports vs pure imports. | > 20% (Domain/Core) |
 | **AST Complexity** | Total count of unique AST nodes in the file. | > 500 (Plumbing) |
 
+### Modular Sovereignty (Package: `src/core/policy/spider/`)
+
+In V15, the Spider Engine graduated from a monolithic class to a specialized package structure, orchestrating several domain-specific engines:
+
+- **PathResolver**: High-performance layer detection and alias resolution.
+- **ForensicEngine**: Proactive "ghost symbol" detection and move-aware graph verification.
+- **MetricsEngine**: Mathematical calculation of Logic Density, I/O Entropy, and Reachability.
+- **PersistenceManager**: Atomic binary serialization (`.spiderbin`) for high-integrity registries.
+
+This decomposition ensures that the substrate diagnostic layer is as maintainable and testable as the Domain logic it protects.
+
 ### Sovereign Archetypes by Layer
 
-The [SovereignOptimizer](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SovereignOptimizer.ts) uses these fingerprints to recommend migrations:
+The [SovereignOptimizer](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SovereignOptimizer.ts) uses these modular signals to recommend migrations:
 - **DOMAIN**: Must be **Pure**. `ioEntropy` should be 0%. High `logicDensity` expected.
 - **INFRASTRUCTURE**: Must be **Simple Adapters**. Low `logicDensity`, high `ioEntropy`.
 - **PLUMBING**: Must be **Stateless**. Low `complexity`, focused purely on utility functions.

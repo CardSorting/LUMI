@@ -39,11 +39,15 @@ npx ts-node src/scripts/align-sovereignty.ts
 
 ## 🛰️ Agent Intelligence Features
 
-### 1. Active Surveillance (SovereignContext)
-Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block. 
-- **Density Awareness**: If logic density > 15% in an Infrastructure file, move the logic to DOMAIN.
-- **Entropy Awareness**: If I/O entropy > 5% in a Domain file, isolate the I/O to INFRASTRUCTURE.
-- **Complexity Awareness**: High complexity in PLUMBING indicates a need for modularization.
+### 1. Active Surveillance (Spider 4.0)
+Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by a modular diagnostic suite:
+- **Forensic Engine**: Detects "ghost imports" (symbols that are physically missing but still present in code).
+- **Metrics Engine**: Real-time evaluation of Logic Density, I/O Entropy, and AST Complexity.
+- **Persistence Manager**: Ensures architectural state is atomically persisted in `.spiderbin`.
+
+### 2. Forensic Sovereignty
+When moving or deleting files, the Forensic Engine verifies symbol integrity project-wide. 
+- **Rule**: You must never delete a file without first running a forensic scan (`npm run scan`) to verify that no orphaned symbols remain.
 
 ## 🤝 Swarm Consensus Protocol
 When performing a mission-critical refactor (e.g., `decompose_sovereign_module`):
