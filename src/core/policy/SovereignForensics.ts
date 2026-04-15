@@ -1,3 +1,5 @@
+import * as crypto from "crypto"
+import * as fs from "fs"
 import * as path from "path"
 import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
 
@@ -13,8 +15,10 @@ export class SovereignForensics {
 
 	/**
 	 * Verifies that all file paths and symbols cited in the scratchpad have a high-fidelity observation history.
+	 * V30: Now includes Merkle-Drift Detection for structural synchronization.
+	 * V31: Uses Structural Hashing to ignore aesthetic changes (comments, whitespace).
 	 */
-	public verifyEvidenceGrounding(content: string): { errors: string[]; warnings: string[] } {
+	public async verifyEvidenceGrounding(content: string): Promise<{ errors: string[]; warnings: string[] }> {
 		const errors: string[] = []
 		const warnings: string[] = []
 		const registry = this.metabolicMonitor.getForensicRegistry()
@@ -32,6 +36,22 @@ export class SovereignForensics {
 					`FORENSIC HALLUCINATION: You cited \`${cited}\` but have no read history for it. You must investigate the substrate before making claims about it.`,
 				)
 				continue
+			}
+
+			// V30/V31: Merkle Drift Detection (Structural Synchronization)
+			if (metrics.lastObservedHash) {
+				try {
+					const currentContent = await fs.promises.readFile(absoluteCited, "utf-8")
+					const currentHash = this.computeStructuralHash(currentContent)
+					if (currentHash !== metrics.lastObservedHash) {
+						errors.push(
+							`🛑 STRUCTURAL DRIFT DETECTED: \`${cited}\` has changed structurally since your last investigation. ` +
+								`Significant logic or symbol shifts detected (Ignoring aesthetic changes). Please re-read the file to sync your mental model.`,
+						)
+					}
+				} catch (_e) {
+					errors.push(`FORENSIC FAIL: Missing file or unreadable substrate at \`${cited}\`.`)
+				}
 			}
 
 			// Staleness Check (V26: 20 minute window)
@@ -81,6 +101,22 @@ export class SovereignForensics {
 		}
 
 		return { errors, warnings }
+	}
+
+	/**
+	 * V31: Computes an aesthetically-normalized hashing of the content.
+	 * Strips comments and collapses whitespace to ensure that purely visual changes
+	 * do not trigger a Desync Alarm.
+	 */
+	private computeStructuralHash(content: string): string {
+		// Strip single line comments
+		let normalized = content.replace(/\/\/.*$/gm, "")
+		// Strip multi-line comments
+		normalized = normalized.replace(/\/\*[\s\S]*?\*\//g, "")
+		// Collapse all whitespace (including newlines) into identity strings
+		normalized = normalized.replace(/\s+/g, "")
+
+		return crypto.createHash("md5").update(normalized).digest("hex")
 	}
 
 	/**

@@ -1,3 +1,4 @@
+import * as crypto from "crypto"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 
@@ -8,6 +9,7 @@ export interface MetabolicMetrics {
 	linesDeleted: number
 	lastEditTimestamp: number
 	lastReadTimestamp: number
+	lastObservedHash?: string // V30 Merkle Drift Detection
 	symbolObservations: Set<string> // V26: Neural Forensic Tracking
 }
 
@@ -22,21 +24,37 @@ export class MetabolicMonitor {
 	/**
 	 * Records a read operation.
 	 */
-	public recordRead(filePath: string) {
+	public recordRead(filePath: string, content?: string) {
 		const metrics = this.getOrCreateMetrics(filePath)
 		metrics.reads++
 		metrics.lastReadTimestamp = Date.now()
+
+		if (content) {
+			metrics.lastObservedHash = this.computeHash(content)
+		}
 	}
 
 	/**
 	 * Records a write/edit operation.
+	 * V31: Structural Sync Awareness. Updates the last observed hash immediately.
 	 */
-	public recordWrite(filePath: string, added = 0, deleted = 0) {
+	public recordWrite(filePath: string, content?: string, added = 0, deleted = 0) {
 		const metrics = this.getOrCreateMetrics(filePath)
 		metrics.writes++
 		metrics.linesAdded += added
 		metrics.linesDeleted += deleted
 		metrics.lastEditTimestamp = Date.now()
+
+		if (content) {
+			metrics.lastObservedHash = this.computeHash(content)
+		}
+	}
+
+	/**
+	 * Computes a structural hash for the given content.
+	 */
+	private computeHash(content: string): string {
+		return crypto.createHash("md5").update(content).digest("hex")
 	}
 
 	public getDoubtSignal(filePath: string, layer = "infrastructure", lineCount = 0): number {

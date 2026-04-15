@@ -83,5 +83,33 @@ export class SovereignProtocol {
 		FORENSICS: "## [FORENSIC TRACE]",
 		RESOLUTION: "## [FINAL RESOLUTION]",
 		MANTRA: "**MANTRA**",
+		AGILE: "# SOVEREIGN_AGILE",
+	}
+
+	/**
+	 * V29: Semantic patterns for fuzzy audit detection.
+	 * Allows recognition of audits drafted in natural language without exact headers.
+	 */
+	public static readonly SEMANTIC_PATTERNS = {
+		AUDIT: /(?:# SOVEREIGN AUDIT|My architectural audit|Planning my changes|Architectural plan)/i,
+		ARCHITECT: /(?:### 1. THE ARCHITECT|Step 1: Architect|Architectural Boundary|Layer Probe)/i,
+		RESOLUTION: /(?:## \[FINAL RESOLUTION\]|Final Resolution|Synthesis|Conclusion)/i,
+	}
+
+	/**
+	 * V29: Determines if a file path is implicitly safe for Agile Mode.
+	 * Candidates: Tests, Documentation, Dist files, or leaf nodes (handled in engine).
+	 */
+	public static isImplicitAgileSafe(filePath: string): boolean {
+		const lower = filePath.toLowerCase()
+		return (
+			lower.includes("/test/") ||
+			lower.includes("/tests/") ||
+			lower.includes(".test.") ||
+			lower.includes(".spec.") ||
+			lower.includes("/docs/") ||
+			lower.includes("readme.md") ||
+			lower.includes(".example.")
+		)
 	}
 }

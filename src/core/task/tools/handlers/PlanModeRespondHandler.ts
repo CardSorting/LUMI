@@ -61,9 +61,22 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 
 		// SOVEREIGN DRAFTER ENFORCEMENT (V6) - Legacy validation
 		if (config.strictPlanModeEnabled && config.mode === "plan") {
-			const { content } = SovereignScribe.getLatestScratchpadContent(config.messageState.getApiConversationHistory())
+			const { content, source } = SovereignScribe.getLatestScratchpadContent(
+				config.messageState.getApiConversationHistory(),
+			)
 			const scribe = new SovereignScribe(config.cwd)
 			const audit = await scribe.validate(content)
+
+			if (!audit.ok && source === "disk" && content === "") {
+				// V27: Proactive Injection
+				const diagnostics = config.universalGuard ? (config.universalGuard as any).getSystemDiagnostics() : ""
+				return formatResponse.toolResult(
+					`🛑 SOVEREIGN PLANNING BLOCK: You are attempting to respond without a valid architectural audit in \`scratchpad.md\`.\n\n` +
+						`💡 I have automatically synthesized your substrate diagnostics. Please use \`write_to_file\` to initialize your \`scratchpad.md\` with the following template before proceeding:\n\n` +
+						`\`\`\`markdown\n${diagnostics}\n\`\`\``,
+				)
+			}
+
 			if (!audit.ok) {
 				return formatResponse.toolResult(audit.report || "Sovereign Audit Failed.")
 			}

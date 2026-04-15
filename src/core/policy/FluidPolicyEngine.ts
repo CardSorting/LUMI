@@ -17,6 +17,7 @@ import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
 import { PathogenStore } from "../integrity/PathogenStore"
 import { StateManager } from "../storage/StateManager"
 import { RefactorHealer } from "../task/tools/RefactorHealer"
+import { SovereignScribe } from "../task/tools/utils/SovereignScribe"
 import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine"
 import { SimulationEngine } from "./SimulationEngine.js"
 import { SovereignOptimizer } from "./SovereignOptimizer"
@@ -357,12 +358,38 @@ export class FluidPolicyEngine {
 		let scratchpadContent = ""
 		let hasAudit = false
 		let hasBreath = false
+		let scratchpadHealed = false
+
 		try {
 			const scratchpadPath = path.join(this.cwd, "scratchpad.md")
 			scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
 			hasAudit = scratchpadContent.includes(SovereignProtocol.HEADERS.AUDIT)
 			hasBreath = scratchpadContent.includes(SovereignProtocol.HEADERS.BREATH)
-		} catch (_e) {}
+		} catch (_e) {
+			// V27 Agent Success: Auto-heal if we're trending towards a block
+			const cooldown = this.metabolicMonitor.getCooldownStatus()
+			if (cooldown.active || this.architecturalAlarmActive) {
+				const healing = await this.ensureScratchpadIntegrity("Metabolic Recovery")
+				scratchpadContent = healing.content
+				hasAudit = scratchpadContent.includes(SovereignProtocol.HEADERS.AUDIT)
+				scratchpadHealed = healing.created
+			}
+
+			// V28: Virtual Substrate Fallback (Search history if disk is empty)
+			if (!hasAudit && !hasBreath && this.streamId) {
+				const history = await (orchestrator as any).getConversationHistory(this.streamId)
+				if (history) {
+					const virtual = SovereignScribe.findVirtualAuditInHistory(history)
+					if (virtual.valid) {
+						scratchpadContent = virtual.content
+						hasAudit = true
+						Logger.info(
+							"[FluidPolicyEngine] Sovereign interdiction bypassed via Virtual Scratchpad (History Synthesis).",
+						)
+					}
+				}
+			}
+		}
 
 		if (
 			(block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) &&
@@ -415,15 +442,20 @@ export class FluidPolicyEngine {
 					const breathTemplate = SovereignProtocol.generateBreathTemplate("Metabolic Reset", cooldown.reason)
 
 					return {
-						success: false,
-						error:
-							`🛑 COGNITIVE COOLDOWN [ACTIVE]: ${cooldown.reason}\n` +
-							`The substrate has reached structural saturation. High-velocity logic churn is discouraged to prevent architectural regression.\n\n` +
-							`💡 GUIDANCE: You are currently BLOCKED from performing further edits. You MUST perform an audit turn to justify further churn.\n\n` +
-							`📝 OPTION A: [Audit Turn] - Add this to your \`scratchpad.md\` for a full state synthesis:\n` +
-							`\`\`\`markdown\n${auditTemplate}\`\`\`\n\n` +
-							`📝 OPTION B: [Breath Turn] - Add this to your \`scratchpad.md\` for a quick targeted fix:\n` +
-							`\`\`\`markdown\n${breathTemplate}\`\`\`\n`,
+						success: scratchpadHealed, // V27: Allow success if we just healed the substrate
+						error: scratchpadHealed
+							? undefined
+							: `🛑 COGNITIVE COOLDOWN [ACTIVE]: ${cooldown.reason}\n` +
+								`The substrate has reached structural saturation. High-velocity logic churn is discouraged to prevent architectural regression.\n\n` +
+								`💡 GUIDANCE: You are currently BLOCKED from performing further edits. You MUST perform an audit turn to justify further churn.\n\n` +
+								`📝 OPTION A: [Audit Turn] - Add this to your \`scratchpad.md\` for a full state synthesis:\n` +
+								`\`\`\`markdown\n${auditTemplate}\`\`\`\n\n` +
+								`📝 OPTION B: [Breath Turn] - Add this to your \`scratchpad.md\` for a quick targeted fix:\n` +
+								`\`\`\`markdown\n${breathTemplate}\`\`\`\n`,
+						warning: scratchpadHealed
+							? `⚠️ SUBSTRATE RECOVERED: \`scratchpad.md\` was missing during Cognitive Cooldown. I have automatically generated it with the required recovery templates.\n\n` +
+								`💡 ACTION REQUIRED: You MUST now sync your plan into the newly created \`scratchpad.md\` before your next move.`
+							: undefined,
 					}
 				}
 			}
@@ -466,14 +498,19 @@ export class FluidPolicyEngine {
 
 				// V24: Symbol Lockdown (Audit-to-Action Binding)
 				if (hasAudit && !isScratchpad) {
-					const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
-					const citedPaths = Array.from(scratchpadContent.matchAll(pathRegexp)).map((m) => m[0])
-					const isCited = citedPaths.some((p) => absolutePath.includes(p))
+					const isCovered = this.isImplicitlyAudited(targetPath, scratchpadContent)
 
-					if (!isCited && !scratchpadContent.includes("# SOVEREIGN_AGILE")) {
-						return {
-							success: false,
-							error: `🛑 SYMBOL LOCKDOWN: The file \`${path.basename(targetPath)}\` is not cited in your active # SOVEREIGN AUDIT. You are restricted to editing only files identified during your forensic investigation.`,
+					if (!isCovered) {
+						// Fallback to symbol-level check if not implicitly covered
+						const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
+						const citedPaths = Array.from(scratchpadContent.matchAll(pathRegexp)).map((m) => m[0])
+						const isCited = citedPaths.some((p) => absolutePath.includes(p))
+
+						if (!isCited) {
+							return {
+								success: false,
+								error: `🛑 SYMBOL LOCKDOWN: The file \`${path.basename(targetPath)}\` is not cited in your active # SOVEREIGN AUDIT. You are restricted to editing only files identified during your forensic investigation.`,
+							}
 						}
 					}
 				}
@@ -891,7 +928,7 @@ export class FluidPolicyEngine {
 
 		if (block.params?.path) {
 			const normalizedPath = this.normalize(block.params.path)
-			this.metabolicMonitor.recordWrite(normalizedPath, 0, 0) // Basic write record
+			this.metabolicMonitor.recordWrite(normalizedPath) // V31: Intent record (without content)
 
 			// --- ZERO-FRICTION COMPLIANCE HOOK ---
 			// Automatically align tags and fix outgoing imports in the backup
@@ -973,7 +1010,14 @@ export class FluidPolicyEngine {
 		}
 
 		if (!validation.success) {
-			header += `⚠️ Existing issues in this file:\n${validation.errors.map((v) => `  - ${v}`).join("\n")}\nKeep these in mind — avoid propagating these patterns.\n`
+			header += `⚠️ Existing issues in this file:\n${validation.errors.map((v) => `  - ${v}`).join("\n")}\n`
+
+			// V29: Pathogen Nudging (Remediation Injection)
+			const pathogens = this.spiderEngine.getViolations().filter((v) => v.path === absolutePath && v.remediation)
+			if (pathogens.length > 0) {
+				header += `💡 ARCHITECTURAL REMEDIATION:\n${pathogens.map((p) => `  - [${p.id}] ${p.remediation}`).join("\n")}\n`
+			}
+			header += `Keep these in mind — avoid propagating these patterns.\n`
 		}
 
 		// Proactive Dependency Detection (AST-based)
@@ -1014,10 +1058,26 @@ export class FluidPolicyEngine {
 		// Metabolic Vitality Injection
 		const lineCount = content.split("\n").length
 		const doubt = this.metabolicMonitor.getDoubtSignal(absolutePath, layer, lineCount)
-		if (doubt > 5 && !this.commitSeal) {
+		const cooldown = this.metabolicMonitor.getCooldownStatus()
+
+		if ((doubt > 5 || cooldown.active) && !this.commitSeal) {
 			const isHardStall = doubt >= 999.0
-			header += `\n⚠️ METABOLIC DOUBT DETECTED (Signal: ${doubt.toFixed(1)}):\n`
-			if (isHardStall) {
+			header += `\n⚠️ METABOLIC PRESSURE DETECTED (Doubt: ${doubt.toFixed(1)}, Cooldown: ${cooldown.active})\n`
+
+			// V28: Proactive Recovery Template Injection
+			let scratchpadExists = false
+			try {
+				await fs.access(path.join(this.cwd, "scratchpad.md"))
+				scratchpadExists = true
+			} catch (_) {}
+
+			if (!scratchpadExists) {
+				const template = this.getSystemDiagnostics()
+				header +=
+					`🛑 ARCHITECTURAL STALL: Your investigation is thrashed. Sovereignty protocol requires an audit.\n` +
+					`💡 I have synthesized a recovery template for you. Initialize \`scratchpad.md\` NOW to proceed:\n\n` +
+					`\`\`\`markdown\n${template}\n\`\`\`\n`
+			} else if (isHardStall) {
 				header +=
 					`🛑 ARCHITECTURAL STALL: Your investigation has reached a cognitive dead-end. Automated recovery suggested:\n` +
 					`  STEP 1: Re-read core domain contracts in \`src/domain/interfaces/\`.\n` +
@@ -1128,6 +1188,9 @@ export class FluidPolicyEngine {
 			if (filePath) {
 				try {
 					const content = await fs.readFile(filePath, "utf-8")
+					// V31: Structural Sync Awareness
+					this.metabolicMonitor.recordWrite(this.normalize(filePath), content)
+
 					const validation = this.tspPlugin.validateSource(filePath, content, this.virtualResolver)
 					if (!validation.success || (validation.warnings && validation.warnings.length > 0)) {
 						const allIssues = [...(validation.warnings || []), ...validation.errors]
@@ -1299,5 +1362,62 @@ export class FluidPolicyEngine {
 		}
 
 		return null
+	}
+
+	/**
+	 * V27: Ensures that the scratchpad.md exists and is meaningful.
+	 * If missing or uninitialized, it automatically generates a recovery template.
+	 */
+	private async ensureScratchpadIntegrity(taskName = "Architectural Recovery"): Promise<{ content: string; created: boolean }> {
+		const scratchpadPath = path.join(this.cwd, "scratchpad.md")
+		try {
+			const content = await fs.readFile(scratchpadPath, "utf-8")
+			if (content.trim().length > 0) {
+				return { content, created: false }
+			}
+		} catch (_e) {
+			// File doesn't exist or is unreadable
+		}
+
+		// Auto-creation logic
+		const violations = this.spiderEngine.getViolations()
+		const stats = this.metabolicMonitor.getVitalityStats()
+		const diagnostics: import("./SovereignProtocol").SovereignDiagnostics = {
+			integrityScore: this.computeIntegrityScore(violations.map((v) => v.message)),
+			metabolicPressure: `${stats.totalWrites} writes, ${stats.totalReads} reads`,
+			violations: violations.slice(0, 5).map((v) => `[${v.id}] ${v.path}: ${v.message}`),
+			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
+		}
+
+		const template = SovereignProtocol.generateAuditTemplate(taskName, diagnostics)
+		await fs.writeFile(scratchpadPath, template, "utf-8")
+		Logger.info(`[FluidPolicyEngine] Auto-initialized missing scratchpad.md for '${taskName}'`)
+		return { content: template, created: true }
+	}
+
+	/**
+	 * V30: Harmonic Audit Inheritance.
+	 * Checks if a file is implicitly covered by a parent directory citation or if it's an Agile Domain.
+	 */
+	private isImplicitlyAudited(filePath: string, scratchpadContent: string): boolean {
+		const absolutePath = path.resolve(this.cwd, filePath)
+
+		if (scratchpadContent.includes("# SOVEREIGN_AGILE")) return true
+
+		// 1. Directory-level coverage
+		const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+(?:\/|$)/g
+		const citedPaths = Array.from(scratchpadContent.matchAll(pathRegexp)).map((m) => m[0])
+		const isCoveredByDir = citedPaths.some((p) => absolutePath.includes(p))
+		if (isCoveredByDir) return true
+
+		// 2. Terminal Node Agility (Leaf nodes)
+		const node = this.spiderEngine.nodes.get(this.spiderEngine.normalizePath(filePath))
+		if (node && node.dependents.length === 0) {
+			Logger.info(`[FluidPolicyEngine] Terminal Node Agility triggered for ${path.basename(filePath)}`)
+			return true
+		}
+
+		// 3. Global Agile Domain detection
+		return SovereignProtocol.isImplicitAgileSafe(absolutePath)
 	}
 }
