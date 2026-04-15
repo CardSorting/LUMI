@@ -598,16 +598,25 @@ export class SpiderEngine {
 		// Handle node: prefix and common external library scopes to prevent false positive ghost detection
 		const normalizedSpecifier = specifier.startsWith("node:") ? specifier.slice(5) : specifier
 		const isBuiltin = builtins.includes(normalizedSpecifier)
-		const isExternal =
-			!specifier.startsWith(".") &&
-			!specifier.startsWith("@/") &&
-			!specifier.startsWith("@api/") &&
-			!specifier.startsWith("@core/") &&
-			!specifier.startsWith("@infrastructure/") &&
-			!specifier.startsWith("@shared/") &&
-			!specifier.startsWith("@utils/") &&
-			!specifier.startsWith("@frontend/") &&
-			!specifier.startsWith("@shared-utils/")
+
+		// Hardened Ghost Detection: Project-specific aliases should NEVER be considered external libraries.
+		// If an import starts with an alias but isn't resolved, it's a legitimate ghost.
+		const isAlias =
+			specifier.startsWith("@/") ||
+			specifier.startsWith("@api/") ||
+			specifier.startsWith("@core/") ||
+			specifier.startsWith("@infrastructure/") ||
+			specifier.startsWith("@shared/") ||
+			specifier.startsWith("@utils/") ||
+			specifier.startsWith("@frontend/") ||
+			specifier.startsWith("@shared-utils/") ||
+			specifier.startsWith("@generated/") ||
+			specifier.startsWith("@hosts/") ||
+			specifier.startsWith("@integrations/") ||
+			specifier.startsWith("@packages/") ||
+			specifier.startsWith("@services/")
+
+		const isExternal = !specifier.startsWith(".") && !isAlias
 
 		return isBuiltin || isExternal
 	}

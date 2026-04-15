@@ -68,6 +68,8 @@ export class SemanticAxiomEngine {
 			normalizedPath.includes(".yaml") ||
 			normalizedPath.includes(".yml") ||
 			normalizedPath.includes("manifest") ||
+			normalizedPath.includes("data") ||
+			normalizedPath.includes("assets") ||
 			content.includes("@generated") ||
 			content.includes("Automatically generated")
 
@@ -134,6 +136,11 @@ export class SemanticAxiomEngine {
 			})
 
 			const leaks = concreteImports.filter((imp) => {
+				// PRODUCTION HARDENING: Exempt standard ubiquitous library types (express Request/Response)
+				// if they are used but don't represent a concrete infrastructure implementation leak.
+				if (imp === "express" || imp.includes("express-serve-static-core") || imp.startsWith("@types/express"))
+					return false
+
 				const layer = engine.resolveLayer(node.path, imp)
 				return layer === "infrastructure"
 			})
@@ -148,15 +155,82 @@ export class SemanticAxiomEngine {
 			}
 		}
 
-		// 5. Axiom: COGNITIVE_COMPLEXITY
+		// 5. Axiom of Purity: Data vs. Utility Distinction
+		// PRODUCTION HARDENING: Flag "Utility Classes" in Domain/Core layers.
+		if (node.layer === "domain" || node.layer === "core") {
+			const classDeclarations = ast.statements.filter(ts.isClassDeclaration)
+			for (const cls of classDeclarations) {
+				const className = cls.name?.text || ""
+				const isUtilityClass =
+					className.endsWith("Util") ||
+					className.endsWith("Utils") ||
+					className.endsWith("Helper") ||
+					className.endsWith("Formatter") ||
+					className.endsWith("Manager")
+				const isDataStructure =
+					className.endsWith("Data") ||
+					className.endsWith("DTO") ||
+					className.endsWith("Request") ||
+					className.endsWith("Response") ||
+					className.endsWith("Event") ||
+					className.endsWith("Message")
+
+				if (isUtilityClass && !isDataStructure) {
+					violations.push({
+						axiom: "PURITY",
+						severity: "WARN",
+						message: `Utility/Manager Class '${className}' detected in ${node.layer.toUpperCase()} layer.`,
+						remediation: "Move stateless utility classes to the PLUMBING layer or convert to pure functions.",
+					})
+				}
+			}
+		}
+
+		// 6. Axiom: COGNITIVE_COMPLEXITY
+		// PRODUCTION HARDENING: Tiered approach where > 25 is a warning and > 50 is an error.
 		const complexity = this.calculateCognitiveComplexity(ast)
 		if (complexity > 25) {
 			violations.push({
 				axiom: "COGNITIVE_COMPLEXITY",
 				severity: complexity > 50 ? "ERROR" : "WARN",
-				message: `High logic complexity (${complexity}). This module is becoming difficult to reason about.`,
+				message:
+					complexity > 50
+						? `CRITICAL logic complexity (${complexity}). This module is too complex to maintain safely.`
+						: `High logic complexity (${complexity}). This module is becoming difficult to reason about.`,
 				remediation: "Extract complex branching logic into smaller, testable helper functions.",
 			})
+		}
+
+		// 7. Axiom: COHESION (Fragmented Models)
+		// PRODUCTION HARDENING: Warn when a Domain file is too small, suggesting it should be merged with related concepts.
+		if (node.layer === "domain" && !isExempt && lines.length < 20) {
+			const nonCommentLines = lines.filter(
+				(l) => l.trim() && !l.trim().startsWith("//") && !l.trim().startsWith("*"),
+			).length
+			if (nonCommentLines < 10) {
+				violations.push({
+					axiom: "COHESION",
+					severity: "WARN",
+					message: `Fragmented Domain Model: File is very small (${nonCommentLines} logical lines).`,
+					remediation:
+						"Consider merging this small model/value-object into a related aggregate file to maintain cohesion.",
+				})
+			}
+		}
+
+		// 8. Axiom: AUTONOMY (Automation Vectors)
+		// PRODUCTION HARDENING: Flag logic that is boilerplate-heavy and could be extracted.
+		if (node.layer === "infrastructure") {
+			const hasBoilerplate =
+				content.includes("try {") && content.includes("} catch (e) {") && content.includes("Logger.error")
+			if (hasBoilerplate && lines.length > 100) {
+				violations.push({
+					axiom: "AUTONOMY",
+					severity: "WARN",
+					message: "Boilerplate saturation: Infrastructure module contains significant repetitive error handling.",
+					remediation: "Extract a shared base class or utility decorator to centralize standard I/O error handling.",
+				})
+			}
 		}
 
 		return violations

@@ -72,7 +72,11 @@ export class SimulationEngine {
 		const scoreDrop = (currentReport.score - simReport.score) * 100
 		const violations = simEngine.getViolations().map((v) => v.message)
 
-		const isSafe = scoreDrop < 10 && violations.length === 0
+		// PRODUCTION HARDENING: Threshold relaxed from 10% to 15% to allow for ambitious refactors.
+		// NEW pass: Stricter for "High-Traffic" nodes (afferent coupling > 10) to prevent breaking core modules.
+		const isHighTraffic = (node.afferentCoupling || 0) > 10
+		const dynamicThreshold = isHighTraffic ? 10 : 15
+		const isSafe = scoreDrop < dynamicThreshold && violations.length === 0
 
 		return {
 			safe: isSafe,
@@ -81,7 +85,7 @@ export class SimulationEngine {
 			violations,
 			message: isSafe
 				? "Simulation predicts stable transition."
-				: `Simulation Warning: Move predicts a ${(scoreDrop).toFixed(1)}% drop in structural integrity.`,
+				: `Simulation Warning: Move predicts a ${(scoreDrop).toFixed(1)}% drop in structural integrity. Review layer boundaries if this is unexpected.`,
 		}
 	}
 
@@ -129,11 +133,11 @@ export class SimulationEngine {
 		const violations = simEngine.getViolations().map((v) => v.message)
 
 		return {
-			safe: scoreDrop < 5,
+			safe: scoreDrop < 8,
 			predictedScore: (1 - simReport.score) * 100,
 			scoreDrop,
 			violations,
-			message: scoreDrop > 5 ? "Predictive warning: Edit increases structural entropy." : "Safe edit predicted.",
+			message: scoreDrop > 8 ? "Predictive warning: Edit increases structural entropy." : "Safe edit predicted.",
 		}
 	}
 

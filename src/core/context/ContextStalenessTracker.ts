@@ -6,6 +6,7 @@ export interface ContextEntry {
 	lastReadTimestamp: number
 	lastEditTimestamp: number
 	signature: string
+	content: string // v9 HARDENING: Store content for delta snapshots
 	stale: boolean
 }
 
@@ -31,6 +32,7 @@ export class ContextStalenessTracker {
 			lastReadTimestamp: Date.now(),
 			lastEditTimestamp: this.getMtime(absolutePath),
 			signature,
+			content, // Cache content for v9 Delta Analysis
 			stale: false,
 		})
 	}
@@ -73,11 +75,27 @@ export class ContextStalenessTracker {
 
 	/**
 	 * Returns a warning message if the context is stale.
+	 * PRODUCTION HARDENING: Authoritative signaling for high-velocity synchronization.
 	 */
 	public getStaleWarning(filePath: string): string | null {
 		const status = this.checkStaleness(filePath)
 		if (status.isStale) {
-			return `⚠️ COGNITIVE STALENESS: The version of \`${path.basename(filePath)}\` in your current context window is OUTDATED. ${status.reason} You MUST re-read this file to align your mental model with truth.`
+			const absolutePath = path.resolve(this.cwd, filePath)
+			const entry = this.contextMap.get(absolutePath)
+			const urgency = status.reason?.includes("externally") ? "CRITICAL" : "HIGH"
+
+			let deltaMsg = ""
+			if (entry && entry.content) {
+				try {
+					const currentContent = fs.readFileSync(absolutePath, "utf-8")
+					const lineDiff = currentContent.split("\n").length - entry.content.split("\n").length
+					deltaMsg = `\n  - Delta: ${lineDiff > 0 ? "+" : ""}${lineDiff} lines since last read.`
+				} catch {
+					deltaMsg = "\n  - Delta: File might have been deleted or moved."
+				}
+			}
+
+			return `⚠️ COGNITIVE STALENESS [Urgency: ${urgency}]: The version of \`${path.basename(filePath)}\` in your current context window is OUTDATED. ${status.reason}${deltaMsg}\n  👉 You MUST re-read this file to prevent architectural drift and tool execution failure.`
 		}
 		return null
 	}

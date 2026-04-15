@@ -115,9 +115,11 @@ export function getLayer(filePath: string): Layer {
 			? "domain"
 			: normalized.includes("src/infrastructure/") || normalized.endsWith("/src/infrastructure")
 				? "infrastructure"
-				: normalized.includes("src/plumbing/") || normalized.endsWith("/src/plumbing")
+				: normalized.includes("src/plumbing/") ||
+						normalized.endsWith("/src/plumbing") ||
+						normalized.includes("src/shared/utils/")
 					? "plumbing"
-					: normalized.includes("src/ui/") || normalized.endsWith("/src/ui")
+					: normalized.includes("src/ui/") || normalized.endsWith("/src/ui") || normalized.includes("webview-ui/")
 						? "ui"
 						: normalized.includes("src/core/") || normalized.endsWith("/src/core")
 							? "core"
@@ -125,7 +127,8 @@ export function getLayer(filePath: string): Layer {
 									normalized.includes("src/integrations/") ||
 									normalized.includes("src/generated/") ||
 									normalized.includes("src/hosts/") ||
-									normalized.includes("src/packages/")
+									normalized.includes("src/packages/") ||
+									normalized.includes("src/shared/")
 								? "infrastructure"
 								: normalized.includes("src/utils/")
 									? "plumbing"
@@ -207,7 +210,7 @@ export function generateLayerComment(filePath: string, layer: string, content?: 
 
 	switch (style) {
 		case CommentStyle.JSDOC:
-			comment = `/**\n * ${label}\n */\n\n`
+			comment = `/**\n * ${label}\n */\n`
 			break
 		case CommentStyle.SLASH:
 			comment = `// ${label}\n\n`
@@ -230,7 +233,21 @@ export function generateLayerComment(filePath: string, layer: string, content?: 
 
 		if (existingMatch) {
 			// Find the line containing the tag and replace Just the tag part
-			// This preserves the existing comment style if possible
+			// PRODUCTION HARDENING: Ensure it's wrapped in a proper JSDoc block if it's a .ts/.js file
+			if (style === CommentStyle.JSDOC && !content.includes(`* ${label}`)) {
+				// Check if we are inside a JSDoc block already
+				const index = content.search(tagRegex)
+				const prefix = content.slice(0, index)
+				const lastOpen = prefix.lastIndexOf("/**")
+				const lastClose = prefix.lastIndexOf("*/")
+
+				if (lastOpen > lastClose) {
+					// We are inside a JSDoc block, just ensure the asterisk prefix
+					return content.replace(tagRegex, `* ${label}`)
+				}
+				// Not in a JSDoc block, wrap it
+				return content.replace(tagRegex, `/**\n * ${label}\n */`)
+			}
 			return content.replace(tagRegex, label)
 		}
 
@@ -435,25 +452,54 @@ export function validateJoyZoning(filePath: string, content: string): { success:
 /**
  * Analyzes code content and suggests which architectural layer best fits.
  * Returns the suggested layer and the reasoning behind the suggestion.
+ * PRODUCTION HARDENING: Context-aware detection for reactive and orchestration patterns.
  */
 export function suggestLayerForContent(content: string): { layer: Layer; reason: string } | null {
-	// Check for UI patterns
+	// 1. UI Patterns
 	if (/import\s+.*from\s+["']react/i.test(content) || /jsx|tsx|component|render/i.test(content)) {
 		return { layer: "ui", reason: "Contains React/JSX patterns — belongs in the UI layer." }
 	}
 
-	// Check for I/O / adapter patterns
-	if (/import\s+.*from\s+["'](?:fs|http|https|net|child_process|pg|mysql|redis|axios)/i.test(content)) {
-		return { layer: "infrastructure", reason: "Contains I/O or external service imports — belongs in Infrastructure." }
+	// 2. Infrastructure Patterns (I/O, Adapters, Storage)
+	if (
+		/import\s+.*from\s+["'](?:fs|http|https|net|child_process|pg|mysql|redis|axios|sqlite|mongodb)/i.test(content) ||
+		/class\s+.*Adapter|class\s+.*Repository|class\s+.*Client/i.test(content)
+	) {
+		return { layer: "infrastructure", reason: "Contains I/O, storage, or external service adapter patterns." }
 	}
 
-	// Check for pure utility patterns (no class, stateless exports)
+	// 3. Core Patterns (Orchestration, Events, State Management)
+	// PRODUCTION HARDENING: Explicitly recognize Reactive and Message-passing primitives as Core signals.
+	if (
+		/EventEmitter|Observable|Subject|BehaviorSubject|ReplaySubject|Subscription|Redux|Store|Dispatch|Effect/i.test(content) ||
+		/class\s+.*Service|class\s+.*Manager|class\s+.*Orchestrator|class\s+.*Broker/i.test(content) ||
+		/import\s+.*from\s+["'](?:rxjs|@ngrx|@reduxjs|events)/i.test(content)
+	) {
+		return { layer: "core", reason: "Contains orchestration, event-driven, or state management patterns." }
+	}
+
+	// 4. Domain Patterns (DDD - Value Objects, Entities)
+	// PRODUCTION HARDENING: Recognize ValueObject, Entity, and AggregateRoot as strong Domain signals.
+	if (
+		/ValueObject|Entity|AggregateRoot|Specification|DomainEvent/i.test(content) ||
+		/class\s+.*(?:Entity|Service|Factory|Repository|VO)/.test(content)
+	) {
+		// Only suggest Domain if it doesn't look like Infrastructure (Repository Impls usually in Infra)
+		if (!/import\s+.*from\s+["'](?:fs|http|pg|mysql|redis|axios|sqlite|mongodb)/i.test(content)) {
+			return {
+				layer: "domain",
+				reason: "Contains Domain-Driven Design (DDD) patterns (ValueObject, Entity, AggregateRoot) — belongs in the Domain layer.",
+			}
+		}
+	}
+
+	// 5. Plumbing Patterns (Pure utilities, stateless)
 	if (
 		!/class\s+/.test(content) &&
 		/export\s+(?:function|const)\s+/.test(content) &&
-		!/import\s+.*from\s+["']@(?:core|infrastructure|services)/.test(content)
+		!/import\s+.*from\s+["']@(?:core|infrastructure|services|api)/.test(content)
 	) {
-		return { layer: "plumbing", reason: "Stateless utility functions with no layer dependencies — fits Plumbing." }
+		return { layer: "plumbing", reason: "Stateless utility functions with no high-level layer dependencies." }
 	}
 
 	return null // can't confidently suggest

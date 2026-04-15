@@ -39,6 +39,8 @@ export class ContextPruner {
 
 	/**
 	 * Folds a text block if it exceeds the line limit.
+	 * PRODUCTION HARDENING: "Architectural Anchors" — guarantees that [LAYER] tags,
+	 * exports, and interface definitions are never folded out.
 	 */
 	private pruneTextBlock(block: DietCodeTextContentBlock): DietCodeTextContentBlock {
 		const lines = block.text.split("\n")
@@ -47,14 +49,59 @@ export class ContextPruner {
 			return block
 		}
 
+		// 1. Identify Architectural Anchors (High-Fidelity Context)
+		// v9 HARDENING: Skeleton Pruning — ensuring API surface is always visible.
+		const anchors: { line: string; index: number }[] = []
+		const anchorPatterns = [
+			/\[LAYER:\s*[^\]]+\]/i,
+			/export\s+(?:interface|class|type|function|const|enum)/,
+			/import\s+.*from/,
+			/public\s+.*\(.*\)/, // Method signatures
+			/private\s+.*\(.*\)/, // Internal contracts
+			/protected\s+.*\(.*\)/,
+			/constructor\s*\(.*\)/,
+			/interface\s+\w+\s*{/, // Interface start
+			/type\s+\w+\s*=/,
+		]
+
+		for (let i = 0; i < lines.length; i++) {
+			if (anchorPatterns.some((p) => p.test(lines[i]))) {
+				anchors.push({ line: lines[i], index: i })
+			}
+		}
+
 		const headSize = Math.floor(this.config.maxLines * this.config.headRatio)
 		const tailSize = Math.floor(this.config.maxLines * this.config.tailRatio)
 
-		const head = lines.slice(0, headSize).join("\n")
-		const tail = lines.slice(-tailSize).join("\n")
-		const foldedCount = lines.length - headSize - tailSize
+		// 2. Build Intelligent Head/Tail while protecting anchors
+		const preservedHeadIndices = new Set<number>()
+		const preservedTailIndices = new Set<number>()
 
-		const prunedText = `${head}\n\n... [JOY-ZONING: ${foldedCount} lines folded for cognitive focus] ...\n\n${tail}`
+		// Fill standard head/tail
+		for (let i = 0; i < headSize; i++) preservedHeadIndices.add(i)
+		for (let i = lines.length - tailSize; i < lines.length; i++) preservedTailIndices.add(i)
+
+		// v9 HARDENING: ALL anchors are now protected from pruning to maintain "Skeleton" visibility
+		anchors.forEach((a) => {
+			if (a.index < lines.length / 2) {
+				preservedHeadIndices.add(a.index)
+			} else {
+				preservedTailIndices.add(a.index)
+			}
+		})
+
+		const head = Array.from(preservedHeadIndices)
+			.sort((a, b) => a - b)
+			.map((i) => lines[i])
+			.join("\n")
+		const tail = Array.from(preservedTailIndices)
+			.sort((a, b) => a - b)
+			.map((i) => lines[i])
+			.join("\n")
+
+		const foldedCount = lines.length - preservedHeadIndices.size - preservedTailIndices.size
+
+		const prunedText = `${head}\n\n... [JOY-ZONING: ${foldedCount} lines folded for cognitive focus — Architectural Anchors Preserved] ...\n\n${tail}`
 
 		return {
 			...block,

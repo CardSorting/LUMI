@@ -34,10 +34,16 @@ export class SovereignGuard {
 	): Promise<GuardSignal> {
 		// 0. Architectural Exception Handshake
 		if (newContent.includes("[SOVEREIGN_EXCEPTION]")) {
+			// PRODUCTION HARDENING: Extract reason if provided [SOVEREIGN_EXCEPTION: reasoning...]
+			const reasonMatch = newContent.match(/\[SOVEREIGN_EXCEPTION:\s*([^\]]+)\]/)
+			const reason = reasonMatch
+				? `Architectural Exception granted: ${reasonMatch[1].trim()}`
+				: "Architectural Exception granted via [SOVEREIGN_EXCEPTION] tag."
+
 			return {
 				approved: true,
 				violations: [],
-				reason: "Architectural Exception granted via [SOVEREIGN_EXCEPTION] tag.",
+				reason: reason,
 			}
 		}
 
@@ -58,7 +64,8 @@ export class SovereignGuard {
 				approved: false,
 				reason: `Integrity Drop Warning: This edit predicts a ${simResult.scoreDrop.toFixed(1)}% drop in structural integrity.`,
 				violations: [],
-				remediation: "Verify imports and ensure module is placed in the correct layer.",
+				remediation:
+					"Verify imports and ensure module is placed in the correct layer. If this change is architecturally necessary but temporarily drops integrity, you may request an override by adding [SOVEREIGN_EXCEPTION] to your file header.",
 			}
 		}
 

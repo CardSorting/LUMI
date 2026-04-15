@@ -94,20 +94,25 @@ export class RefactorHealer {
 
 	/**
 	 * Ensures the file's [LAYER] tag matches its directory.
+	 * PRODUCTION HARDENING: Idempotent alignment that respects existing JSDoc structures.
 	 */
 	public async alignTag(filePath: string): Promise<void> {
 		if (!isLayerTagSupported(filePath)) return
 
 		try {
-			const content = await fs.readFile(filePath, "utf-8")
+			const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(this.projectRoot, filePath)
+			const content = await fs.readFile(absolutePath, "utf-8")
 			const currentTag = parseLayerTag(content)
-			const expectedLayer = getLayer(filePath)
+			const expectedLayer = getLayer(absolutePath)
 
 			if (currentTag !== expectedLayer) {
 				const tagLabel = expectedLayer.toUpperCase() === "PLUMBING" ? "UTILS" : expectedLayer.toUpperCase()
-				const newContent = generateLayerComment(filePath, tagLabel, content) || content
+				const newContent = generateLayerComment(absolutePath, tagLabel, content)
 
-				await fs.writeFile(filePath, newContent, "utf-8")
+				if (newContent && newContent !== content) {
+					await fs.writeFile(absolutePath, newContent, "utf-8")
+					Logger.info(`[RefactorHealer] Automatically aligned [LAYER: ${tagLabel}] tag for ${path.basename(filePath)}`)
+				}
 			}
 		} catch (err) {
 			Logger.error(`[RefactorHealer] Failed to align tag for ${filePath}:`, err)

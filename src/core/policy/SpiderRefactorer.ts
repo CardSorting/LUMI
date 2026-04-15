@@ -28,7 +28,6 @@ export const SpiderRefactorer = {
 		}
 
 		// 2. Identify Layer Violations (Heuristic)
-		// This can be expanded based on SpiderViolation results
 		const violations = engine.getViolations()
 		for (const v of violations) {
 			if (v.severity === "ERROR") {
@@ -37,6 +36,18 @@ export const SpiderRefactorer = {
 					target: path.basename(v.path),
 					reason: v.message,
 					benefit: "Restores architectural integrity and prevents cross-layer pollution.",
+				})
+			}
+		}
+
+		// 3. Identify Fat Coordinators
+		for (const node of engine.nodes.values()) {
+			if (node.layer === "core" && node.afferentCoupling > 10) {
+				suggestions.push({
+					type: "EXTRACT",
+					target: path.basename(node.path),
+					reason: `Module is becoming a 'Fat Coordinator' with ${node.afferentCoupling} incoming dependencies.`,
+					benefit: "Improves maintainability by splitting orchestration logic.",
 				})
 			}
 		}

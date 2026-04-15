@@ -178,13 +178,33 @@ export class FluidPolicyEngine {
 			} else if (err.includes("import")) {
 				fixes.push("Move the import to the appropriate layer, or extract an interface in Domain.")
 				if (err.includes("Domain layer")) {
-					snippets.push("// Move this to src/domain/interfaces/ and depend on the interface instead")
+					snippets.push("// Domain Leak: Move this to src/domain/interfaces/ and depend on the interface instead")
+					snippets.push("export interface IMyContract { ... }")
 				}
 			} else if (err.includes("class")) {
 				fixes.push("Split into separate files — one class per file in Domain.")
-			} else if (err.includes("circular")) {
-				fixes.push("Break the circular dependency by extracting shared logic to a lower layer (e.g., Plumbing).")
-				snippets.push("// Circular detected: Move shared logic to src/plumbing/utils.ts")
+			} else if (err.includes("circular") || err.includes("Circular Dependency")) {
+				fixes.push(
+					"Break the circular dependency by extracting shared logic to a lower layer (Plumbing) or using Dependency Inversion via interfaces (Domain).",
+				)
+				// PRODUCTION HARDENING: Provide high-fidelity extraction targets based on common patterns
+				snippets.push(
+					"// Pattern A: Extract shared state/logic to src/plumbing/shared-utils.ts\n// Pattern B: Define a listener interface in src/domain/interfaces/ and use events/callbacks.\nexport interface IEventListener { onAction(): void; }",
+				)
+				snippets.push(
+					"// Pattern C: Use an EventEmitter for cross-module signaling without direct coupling\nimport { EventEmitter } from 'events';\nexport const bridge = new EventEmitter();",
+				)
+			} else if (err.includes("Sovereign Leak") || err.includes("DEPENDENCY_INVERSION")) {
+				fixes.push("Domain/Core logic cannot depend on concrete Infrastructure. Extract an interface.")
+				// PRODUCTION HARDENING: Explicitly suggest the standard extraction pattern with dynamic names
+				const interfaceMatch = err.match(/concrete implementation: ([^,]+)/)
+				const baseName = interfaceMatch ? interfaceMatch[1].split("/").pop()?.split(".")[0] : "Service"
+				const interfaceName = `I${baseName?.charAt(0).toUpperCase()}${baseName?.slice(1)}`
+
+				snippets.push(`/**\n * [LAYER: DOMAIN]\n */\nexport interface ${interfaceName} {\n\t// TODO: Define members\n}`)
+				snippets.push(
+					`// 1. Move implementation to src/infrastructure/adapters/\n// 2. Define contract in src/domain/interfaces/${interfaceName}.ts\n// 3. Inject implementation into Core at runtime\nexport interface ${interfaceName} { ... }`,
+				)
 			} else {
 				fixes.push("Review the violation and restructure accordingly.")
 			}
@@ -228,13 +248,16 @@ export class FluidPolicyEngine {
 		const score = Math.max(5, base - penalty)
 
 		// Trigger Architectural Alarm if score drops below 70 due to hard errors
-		// PRODUCTION HARDENING: Alarm is trend-aware. Only trigger if score is declining.
+		// PRODUCTION HARDENING: Alarm is trend-aware. Only trigger if score is actively declining.
+		// This prevents friction during positive refactoring sessions where the score is recovering.
 		const isDeclining = score < this.lastIntegrityScore
+		const isRecovering = score > this.lastIntegrityScore
 		this.lastIntegrityScore = score
 
 		if (score < 70 && !this.architecturalAlarmActive && isDeclining) {
 			this.triggerAlarm(violations)
-		} else if (score >= 90 && this.architecturalAlarmActive) {
+		} else if (this.architecturalAlarmActive && (score >= 90 || isRecovering)) {
+			// Clear alarm if score is high enough OR if we are making active progress (recovering)
 			this.clearAlarm()
 		}
 
@@ -376,6 +399,38 @@ export class FluidPolicyEngine {
 			}
 		}
 
+		// v9 HARDENING: Pre-emptive Match Sensing for replace_in_file (simulated via FILE_EDIT validation)
+		if (block.name === DietCodeDefaultTool.FILE_EDIT && block.params?.path && (block.params as any).diff) {
+			const filePath = path.resolve(this.cwd, block.params.path)
+			const diff = (block.params as any).diff as string
+			const searchBlocks = diff.match(/------- SEARCH\n([\s\S]*?)\n=======/)
+			if (searchBlocks) {
+				const searchContent = searchBlocks[1]
+				try {
+					const currentDiskContent = await fs.readFile(filePath, "utf-8")
+					if (!currentDiskContent.includes(searchContent)) {
+						// v9 AUTO-CORRECTION: Provide the agent with the actual lines to fix the search block
+						const searchLines = searchContent.split("\n")
+						const firstLine = searchLines[0].trim()
+						const diskLines = currentDiskContent.split("\n")
+						const matchIndex = diskLines.findIndex((l) => l.includes(firstLine))
+						let hint = ""
+						if (matchIndex !== -1) {
+							const contextWindow = diskLines.slice(Math.max(0, matchIndex - 2), matchIndex + 5).join("\n")
+							hint = `\n\n🔍 AUTO-CORRECTION HINT: Your SEARCH block failed, but I found a similar section starting at line ${matchIndex + 1}:\n\`\`\`typescript\n${contextWindow}\n\`\`\``
+						}
+
+						return {
+							success: false,
+							error: `🛑 PRE-EMPTIVE MATCH FAILURE: The SEARCH block in your edit does not match the current state of \`${path.basename(filePath)}\`.${hint}\n\n💡 RECOVERY: Update your SEARCH block to match the actual file content exactly.`,
+						}
+					}
+				} catch (e) {
+					// File might not exist
+				}
+			}
+		}
+
 		// Architectural Policy: AST + Database Concurrent Pass
 		if (
 			(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
@@ -384,6 +439,16 @@ export class FluidPolicyEngine {
 		) {
 			const filePath = path.resolve(this.cwd, block.params.path)
 			const content = block.params.content as string
+
+			// 0. Rule: Contextual Sovereignty Guard (Staleness Protection)
+			// PRODUCTION HARDENING: Proactively block edits based on verifiably stale context.
+			const staleness = this.stalenessTracker.checkStaleness(filePath)
+			if (staleness.isStale && !this.commitSeal) {
+				return {
+					success: false,
+					error: `🛑 CONTEXTUAL SOVEREIGNTY BREACH: You are attempting to edit \`${path.basename(filePath)}\` based on a stale mental model.\nReason: ${staleness.reason}\n\n💡 RECOVERY: Use \`read_file\` to synchronize your context with the current state of the file before applying changes.`,
+				}
+			}
 
 			// Update Spider session cache
 			this.sessionFiles.set(filePath, content)
@@ -399,7 +464,12 @@ export class FluidPolicyEngine {
 				const allWarnings = [...(astValidation.warnings || []), ...astValidation.errors]
 				const violationSummary = allWarnings.map((e: string) => `  - ${e}`).join("\n")
 
-				if (layer === "domain" && strikes === 1 && astValidation.errors.length > 0) {
+				// GRACEFUL RECOVERY: If project integrity is high (> 85), degrade block to warning even for Strike 1 Domain
+				const projectIntegrity = this.computeIntegrityScore(this.spiderEngine.getViolations().map((v) => v.message))
+				const shouldBlock =
+					layer === "domain" && strikes === 1 && astValidation.errors.length > 0 && projectIntegrity < 85
+
+				if (shouldBlock) {
 					const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
 					return {
 						success: false,
@@ -587,12 +657,14 @@ export class FluidPolicyEngine {
 		}
 
 		// Protocol Hardening: Inject Guard Directives based on project health
+		// PRODUCTION HARDENING: Clearer, more authoritative guidance for integrity recovery.
 		const integrityScore = this.computeIntegrityScore(this.spiderEngine.getViolations().map((v) => v.message))
 		if (integrityScore < 70) {
-			header += `\n🛡️ HIGH-SHIELD PROTOCOL ACTIVE: The project's Structural Integrity is CRITICAL (${integrityScore}/100).\n`
-			header += `You are instructed by the Substrate Sovereignty directives to PRIORITIZE HEALING the architecture over new feature development. Fix existing violations before proceeding.\n`
+			header += `\n🛡️ HIGH-SHIELD PROTOCOL ACTIVE: Structural Integrity is CRITICAL (${integrityScore}/100).\n`
+			header += `Architecture is currently under SOFT-LOCK. New features are RESTRICTED. Prioritize HEALING the following vectors:\n`
+			header += `  - Address Circular Dependencies (SPI-004)\n  - Resolve Layer Violations\n  - Clean up Ghost Imports (SPI-005)\n`
 		} else if (integrityScore < 85) {
-			header += `\n🔍 ARCHITECTURAL WATCH: Structural Integrity has slightly decayed (${integrityScore}/100). Maintain discipline to prevent soft-locks.\n`
+			header += `\n🔍 ARCHITECTURAL WATCH: Structural Integrity is ${integrityScore}/100. Maintain layer discipline to avoid soft-lock thresholds.\n`
 		}
 
 		// Axiomatic Logic Report
@@ -602,7 +674,8 @@ export class FluidPolicyEngine {
 		}
 
 		// Metabolic Vitality Injection
-		const doubt = this.metabolicMonitor.getDoubtSignal(absolutePath)
+		const lineCount = content.split("\n").length
+		const doubt = this.metabolicMonitor.getDoubtSignal(absolutePath, lineCount)
 		if (doubt > 5 && !this.commitSeal) {
 			header += `\n⚠️ METABOLIC DOUBT DETECTED (Signal: ${doubt.toFixed(1)}):\n`
 			header += `You have read this file ${doubt.toFixed(0)} times without making a move. You are drifting into a RECURSIVE LOOP. Stop reading and formulate a clear execution plan NOW.\n`
@@ -613,7 +686,8 @@ export class FluidPolicyEngine {
 			header += `\n🔥 METABOLIC FEVER DETECTED:\n${infection.reason}\nThis file is reaching a state of architectural exhaustion. Consider an atomic split.\n`
 		}
 
-		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan")
+		const isRefactoring = this.spiderEngine.getViolations().length > 0 || this.architecturalAlarmActive
+		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan", isRefactoring)
 		if (drift.warning) {
 			header += `\n${drift.warning}\n`
 		}

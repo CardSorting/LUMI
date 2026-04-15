@@ -36,11 +36,15 @@ export class MetabolicMonitor {
 
 	/**
 	 * Calculates the "Doubt Signal" (Read:Write ratio) for a file.
+	 * Calibrated for large files to allow more reads during deep research.
 	 */
-	public getDoubtSignal(filePath: string): number {
+	public getDoubtSignal(filePath: string, lineCount = 0): number {
 		const metrics = this.registry.get(filePath)
 		if (!metrics) return 0
-		return metrics.reads / (metrics.writes || 1)
+		const baseDoubt = metrics.reads / (metrics.writes || 1)
+		// Lenience factor for large files (> 500 lines)
+		const lenience = lineCount > 500 ? Math.min(2.0, lineCount / 500) : 1.0
+		return baseDoubt / lenience
 	}
 
 	/**
@@ -66,17 +70,34 @@ export class MetabolicMonitor {
 
 	/**
 	 * Detects "Task Drift" — changing too many unrelated files in a short burst.
+	 * Calibrated for high-velocity agents: Planning mode is 2x more lenient to allow for broad exploration.
 	 */
-	public getTaskDrift(isPlanning = false): { drift: number; warning?: string } {
+	public getTaskDrift(isPlanning = false, isRefactoring = false): { drift: number; warning?: string } {
 		const recentThreshold = Date.now() - 600000 // 10 minutes
-		const recentFiles = Array.from(this.registry.entries()).filter(([_p, m]) => m.lastEditTimestamp > recentThreshold)
+		const recentEntries = Array.from(this.registry.entries()).filter(([_p, m]) => m.lastEditTimestamp > recentThreshold)
 
-		const drift = recentFiles.length
-		const threshold = isPlanning ? 20 : 10
+		const drift = recentEntries.length
+		// PRODUCTION HARDENING: "Refactor Mode" allows for 50% more drift to support complex cross-module changes.
+		const baseThreshold = isPlanning ? 20 : 10
+		const threshold = isRefactoring ? Math.floor(baseThreshold * 1.5) : baseThreshold
+
 		if (drift > threshold) {
 			return {
 				drift,
-				warning: `⚠️ TASK DRIFT DETECTED: You have modified ${drift} different files in the last 10 minutes. This high-entropy behavior increases the risk of regression. Focus on one module at a time.`,
+				warning: `⚠️ TASK DRIFT DETECTED: You have modified ${drift} different files in the last 10 minutes. This high-entropy behavior increases the risk of regression. Focus on one module at a time.${isRefactoring ? " (Refactor leniency applied)" : ""}`,
+			}
+		}
+
+		// v9 HARDENING: Mission Drift Detection
+		// Track if we are spending too much metabolic energy in non-core layers
+		if (drift >= 5 && !isPlanning) {
+			const nonDomainEdits = recentEntries.filter(([p]) => !p.includes("/domain/") && !p.includes("/core/")).length
+			const missionRatio = nonDomainEdits / drift
+			if (missionRatio > 0.8) {
+				return {
+					drift,
+					warning: `⚠️ MISSION DRIFT [Urgency: MEDIUM]: 80% of your recent edits are in peripheral layers (Plumbing/Infrastructure). Ensure you are not "Yak Shaving"—return focus to the core Domain requirements.`,
+				}
 			}
 		}
 
