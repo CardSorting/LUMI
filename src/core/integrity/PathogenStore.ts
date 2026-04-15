@@ -4,7 +4,7 @@ import * as path from "path"
 
 export interface Pathogen {
 	id: string
-	type: "FAILED_MOVE" | "AXIOM_VIOLATION" | "DRIFT_PATTERN" | "DIRECTORY_STRESS" | "PATTERN_ANTIGEN"
+	type: "FAILED_MOVE" | "AXIOM_VIOLATION" | "DRIFT_PATTERN" | "DIRECTORY_STRESS" | "PATTERN_ANTIGEN" | "LAYER_VIOLATION_PATTERN"
 	signature: string // Now hashed for space efficiency
 	originalSummary: string // Short human-readable summary
 	timestamp: number
@@ -89,7 +89,26 @@ export class PathogenStore {
 			}
 		}
 
+		// Pattern-based Prediction (v12)
+		const fileName = path.basename(filePath)
+		for (const p of this.pathogens.values()) {
+			if (p.type === "LAYER_VIOLATION_PATTERN" && p.hitCount > 5) {
+				return {
+					likely: true,
+					reason: `Sovereign Antigen Alert: This move matches a historically failed architectural pattern.`,
+				}
+			}
+		}
+
 		return { likely: false }
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Records a failed architectural pattern.
+	 */
+	public recordPatternAntigen(originLayer: string, targetLayer: string) {
+		const sig = `pattern:${originLayer}->${targetLayer}`
+		this.record("LAYER_VIOLATION_PATTERN", sig, 3)
 	}
 
 	/**

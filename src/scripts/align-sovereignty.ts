@@ -2,7 +2,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { SemanticAxiomEngine } from "../core/policy/SemanticAxiomEngine"
 import { SovereignOptimizer } from "../core/policy/SovereignOptimizer"
-import { SpiderEngine } from "../core/policy/SpiderEngine"
+import { SpiderEngine } from "../core/policy/spider/SpiderEngine"
 import { RefactorHealer } from "../core/task/tools/RefactorHealer"
 
 /**

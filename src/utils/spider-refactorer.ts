@@ -1,5 +1,5 @@
-import { SpiderEngine } from "@/core/policy/SpiderEngine"
 import { Layer } from "@/utils/joy-zoning"
+import { SpiderEngine } from "../core/policy/spider/SpiderEngine"
 
 export interface RefactoringSuggestion {
 	type: "MOVE" | "SPLIT" | "RENAME"
@@ -21,7 +21,6 @@ export class SpiderRefactorer {
 	suggest(): RefactoringSuggestion[] {
 		const suggestions: RefactoringSuggestion[] = []
 		this.engine.computeEntropy()
-		const violations = this.engine.getViolations()
 
 		// 2. Suggest moves for cross-layer coupling hotspots
 		const nodes = Array.from(this.engine.nodes.values())

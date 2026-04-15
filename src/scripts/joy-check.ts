@@ -1,5 +1,5 @@
 import * as path from "path"
-import { SpiderEngine } from "../core/policy/SpiderEngine"
+import { SpiderEngine } from "../core/policy/spider/SpiderEngine"
 
 /**
  * JoyCheck: The Sovereign Radar CLI.

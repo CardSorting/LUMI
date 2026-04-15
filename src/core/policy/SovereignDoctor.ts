@@ -1,6 +1,6 @@
 import { OptimizationOpportunity, SovereignOptimizer } from "./SovereignOptimizer.js"
 import { SovereignPolicy } from "./SovereignPolicy"
-import { SpiderEngine } from "./SpiderEngine.js"
+import { SpiderEngine } from "./spider/SpiderEngine.js"
 
 export interface DoctorReport {
 	integrityScore: number

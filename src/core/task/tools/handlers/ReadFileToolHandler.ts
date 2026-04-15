@@ -182,7 +182,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 
 		// --- JoyZoning Sovereign Context Injection ---
 		try {
-			const { SpiderEngine } = await import("../../../policy/SpiderEngine")
+			const { SpiderEngine } = await import("../../../policy/spider/SpiderEngine")
 			const engine = new SpiderEngine(config.cwd)
 			await engine.loadRegistry()
 			const node = engine.nodes.get(relPath as string)

@@ -1,4 +1,4 @@
-import { SpiderNode } from "../policy/SpiderEngine.js"
+import { SpiderNode } from "../policy/spider/types.js"
 
 export interface DriftReport {
 	path: string

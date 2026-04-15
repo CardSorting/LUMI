@@ -1,5 +1,43 @@
 # Changelog (V2)
 
+## [4.5.4] - 2026-04-15
+
+### Added
+- **V13 Hardening: Substrate Transcendence (Global Optimization)**:
+  - **High-Fidelity Architectural Forecaster**: Upgraded `SimulationEngine` to perform a 1:1 AST index of proposed changes for absolute structural prediction accuracy.
+  - **Sovereign Registry Pruning**: Implemented automatic "ghost node" removal in `SpiderEngine` during substrate load to prevent structural rot from deleted files.
+  - **Metabolic Emergency Valve**: Added manual cooldown reset in `MetabolicMonitor` for emergency infrastructure control.
+  - **Root Sovereignty Expansion**: Recognized `src/common`, `src/standalone`, and test suites as valid architectural roots.
+
+## [4.5.3] - 2026-04-15
+
+### Added
+- **V12 Hardening: Sovereign Resilience (The Auto-Immune Pass)**:
+  - **Granular Merkle Healing**: Implemented sub-tree verification in `SpiderEngine` for targeted layer recovery during substrate drift.
+  - **Pattern-Based Pathogen Learning**: Upgraded `PathogenStore` to track and interdict historically failed structural patterns (origin -> target).
+  - **Contractual Sovereignty**: Added interface enforcement in `TspPolicyPlugin` for all `CORE` and `DOMAIN` modules.
+  - **Metabolic Decay Tracking**: Implemented stagnation detection in `MetabolicMonitor` to identify unvisited or legacy substrate logic.
+  - **Unified Resilience Shield**: Consolidated all health metrics into a high-fidelity project dashboard in `FluidPolicyEngine`.
+
+## [4.5.2] - 2026-04-15
+
+### Added
+- **V12 Hardening: Sovereign Resilience (The Auto-Immune Pass)**:
+  - **Granular Merkle Healing**: Implemented sub-tree verification in `SpiderEngine` for targeted layer recovery during substrate drift.
+  - **Pattern-Based Pathogen Learning**: Upgraded `PathogenStore` to track and interdict historically failed structural patterns (origin -> target).
+  - **Contractual Sovereignty**: Added interface enforcement in `TspPolicyPlugin` for all `CORE` and `DOMAIN` modules.
+  - **Metabolic Decay Tracking**: Implemented stagnation detection in `MetabolicMonitor` to identify unvisited or legacy substrate logic.
+  - **Unified Resilience Shield**: Consolidated all health metrics into a high-fidelity project dashboard in `FluidPolicyEngine`.
+
+## [4.5.1] - 2026-04-15
+
+### Added
+- **V11 Hardening: Sovereign Synthesis (Immune System Pass)**:
+  - **Merkle-Tree Registry Integrity**: Implemented cryptographic graph fingerprinting in `SpiderEngine` to prevent registry tampering and bypasses.
+  - **Aromatic Interface Synthesis**: Upgraded `SpiderRefactorer` to automatically generate TypeScript interface definitions for high-coupling modules.
+  - **Projected Entropy Forecasting**: Integrated pre-flight structural rot predictions in `SimulationEngine` for `FILE_EDIT` and `FILE_NEW` operations.
+  - **Cognitive Cooldown Enforcement**: Introduced project-wide "Heat Limits" in `MetabolicMonitor` and `FluidPolicyEngine` to manage cognitive load and enforce architectural focus.
+
 ## [4.5.0] - 2026-04-15
 
 ### Added

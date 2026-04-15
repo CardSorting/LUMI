@@ -1,9 +1,12 @@
+import { Logger } from "@/shared/services/Logger"
+
 export interface MetabolicMetrics {
 	reads: number
 	writes: number
 	linesAdded: number
 	linesDeleted: number
 	lastEditTimestamp: number
+	lastReadTimestamp: number
 }
 
 /**
@@ -12,6 +15,7 @@ export interface MetabolicMetrics {
  */
 export class MetabolicMonitor {
 	private registry: Map<string, MetabolicMetrics> = new Map()
+	private cooldownThreshold = 15 // Max collective edits per 3 turns
 
 	/**
 	 * Records a read operation.
@@ -19,6 +23,7 @@ export class MetabolicMonitor {
 	public recordRead(filePath: string) {
 		const metrics = this.getOrCreateMetrics(filePath)
 		metrics.reads++
+		metrics.lastReadTimestamp = Date.now()
 	}
 
 	/**
@@ -159,9 +164,66 @@ export class MetabolicMonitor {
 	private getOrCreateMetrics(filePath: string): MetabolicMetrics {
 		let metrics = this.registry.get(filePath)
 		if (!metrics) {
-			metrics = { reads: 0, writes: 0, linesAdded: 0, linesDeleted: 0, lastEditTimestamp: 0 }
+			metrics = {
+				reads: 0,
+				writes: 0,
+				linesAdded: 0,
+				linesDeleted: 0,
+				lastEditTimestamp: 0,
+				lastReadTimestamp: Date.now(),
+			}
 			this.registry.set(filePath, metrics)
 		}
 		return metrics
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Identifies "Stagnant Substrate" — files with high age-to-utility ratios.
+	 */
+	public getStagnantSubstrate(): { path: string; ageInDays: number; utility: number }[] {
+		const now = Date.now()
+		const stagnant: { path: string; ageInDays: number; utility: number }[] = []
+
+		for (const [p, m] of this.registry.entries()) {
+			const ageInMs = now - Math.max(m.lastEditTimestamp, m.lastReadTimestamp)
+			const ageInDays = ageInMs / (1000 * 60 * 60 * 24)
+			const utility = m.reads + m.writes * 5
+
+			// If unvisited for > 15 days despite project churn
+			if (ageInDays > 15 && utility < 10) {
+				stagnant.push({ path: p, ageInDays, utility })
+			}
+		}
+
+		return stagnant.sort((a, b) => b.ageInDays - a.ageInDays)
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Evaluates the project-wide cognitive load and triggers a COOLDOWN
+	 * if the metabolic churn exceeds the safety capacity of the substrate.
+	 */
+	public getCooldownStatus(): { active: boolean; reason?: string } {
+		const recentThreshold = Date.now() - 1800000 // 30 minutes
+		const totalRecentWrites = Array.from(this.registry.values()).reduce((acc, m) => {
+			return m.lastEditTimestamp > recentThreshold ? acc + m.writes : acc
+		}, 0)
+
+		if (totalRecentWrites > this.cooldownThreshold) {
+			return {
+				active: true,
+				reason: `System-wide metabolic churn peaking (${totalRecentWrites} edits in 30m). Substrate heat threshold exceeded.`,
+			}
+		}
+
+		return { active: false }
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Emergency override to reset metabolic pressure.
+	 * Allows for manual recovery from audit locks during project-wide infrastructure turns.
+	 */
+	public resetMetabolicPressure() {
+		this.registry.clear()
+		Logger.info("🔋 [MetabolicMonitor] Metabolic pressure reset. Inflammation cleared.")
 	}
 }

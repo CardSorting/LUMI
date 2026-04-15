@@ -14,7 +14,7 @@ interface QueryParams {
 	limit?: number
 }
 
-import { SpiderEngine } from "../../../policy/SpiderEngine"
+import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
 
 /**
  * SovereignQueryHandler: The Architectural Search Engine.

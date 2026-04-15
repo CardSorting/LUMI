@@ -235,7 +235,7 @@ export class TspPolicyPlugin {
 	public validateSource(
 		filePath: string,
 		content: string,
-		resolveContent?: (path: string) => string | undefined,
+		_resolveContent?: (path: string) => string | undefined,
 	): { success: boolean; errors: string[]; warnings: string[] } {
 		const errors: string[] = []
 		const warnings: string[] = []
@@ -300,6 +300,11 @@ export class TspPolicyPlugin {
 
 		// 5. Rule: Layered Import Constraints
 		this.validateImports(sourceFile, filePath, currentLayer, errors, warnings)
+
+		// 6. Rule: Contractual Sovereignty (v12)
+		if (currentLayer === "domain" || currentLayer === "core") {
+			this.validateContractualIntegrity(filePath, content, errors, warnings)
+		}
 
 		return {
 			success: errors.length === 0,
@@ -435,6 +440,26 @@ export class TspPolicyPlugin {
 				}
 			}
 		})
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Validates that critical modules have corresponding interfaces.
+	 * Enforces Dependency Inversion at the architectural boundary.
+	 */
+	private validateContractualIntegrity(filePath: string, content: string, _errors: string[], warnings: string[]) {
+		const baseName = path.basename(filePath).split(".")[0]
+		// Skip index files and types
+		if (baseName === "index" || filePath.includes("/interfaces/") || filePath.includes("/types/")) return
+
+		const interfaceName = `I${baseName.charAt(0).toUpperCase()}${baseName.slice(1)}`
+		const expectedInterfacePath = `src/domain/interfaces/${interfaceName}.ts`
+
+		// Heuristic: If it exports a class, it MUST have a contract
+		if (content.includes("export class ") && !content.includes(`implements ${interfaceName}`)) {
+			warnings.push(
+				`📜 CONTRACTLESS BREACH: Module ${baseName} exports concrete logic without a formal contract in ${expectedInterfacePath}.`,
+			)
+		}
 	}
 
 	private static readonly ALIASES: Record<string, string> = {

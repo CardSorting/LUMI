@@ -1,4 +1,4 @@
-import { SpiderSnapshot } from "../policy/SpiderEngine.js"
+import { SpiderSnapshot } from "../policy/spider/SpiderEngine.js"
 
 /**
  * SovereignCheckpoint: The architectural safety net.

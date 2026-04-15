@@ -1,5 +1,6 @@
 import { SovereignPolicy } from "./SovereignPolicy"
-import { SpiderEngine, SpiderNode } from "./SpiderEngine.js"
+import { SpiderEngine } from "./spider/SpiderEngine.js"
+import { SpiderNode } from "./spider/types.js"
 
 export interface OptimizationOpportunity {
 	file: string

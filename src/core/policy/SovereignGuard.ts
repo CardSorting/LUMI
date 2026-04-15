@@ -2,7 +2,7 @@ import * as path from "path"
 import { PathogenStore } from "../integrity/PathogenStore.js"
 import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine.js"
 import { SimulationEngine } from "./SimulationEngine.js"
-import { SpiderEngine } from "./SpiderEngine.js"
+import { SpiderEngine } from "./spider/SpiderEngine.js"
 
 export interface GuardSignal {
 	approved: boolean
@@ -56,17 +56,8 @@ export class SovereignGuard {
 			}
 		}
 
-		// 1. Simulate the impact on the structural graph
-		// Extract imports for the simulation
-		const importRegex = /import\s+.*from\s+["']([^"']+)["']/g
-		const newImports: string[] = []
-		let match: RegExpExecArray | null = importRegex.exec(newContent)
-		while (match !== null) {
-			newImports.push(match[1])
-			match = importRegex.exec(newContent)
-		}
-
-		const simResult = await this.simulationEngine.simulateEdit(filePath, newImports, currentEngine)
+		// 1. Simulate the impact on the structural graph (v13 High-Fidelity)
+		const simResult = await this.simulationEngine.simulateEdit(filePath, newContent, currentEngine)
 
 		if (!simResult.safe && simResult.scoreDrop > 15) {
 			return {

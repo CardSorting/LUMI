@@ -5,7 +5,8 @@ import { Logger } from "@/shared/services/Logger"
 import { generateLayerComment, getLayer, isLayerTagSupported, parseLayerTag } from "@/utils/joy-zoning"
 import { SovereignTransaction } from "../../integrity/SovereignTransaction"
 import { SovereignOptimizer } from "../../policy/SovereignOptimizer"
-import { SpiderEngine, SpiderNode } from "../../policy/SpiderEngine"
+import { SpiderEngine } from "../../policy/spider/SpiderEngine"
+import { SpiderNode } from "../../policy/spider/types"
 
 export interface HealingProposal {
 	id: string

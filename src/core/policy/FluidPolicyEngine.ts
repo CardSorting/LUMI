@@ -20,8 +20,8 @@ import { RefactorHealer } from "../task/tools/RefactorHealer"
 import { SemanticAxiomEngine } from "./SemanticAxiomEngine"
 import { SimulationEngine } from "./SimulationEngine.js"
 import { SovereignOptimizer } from "./SovereignOptimizer"
-import { SpiderEngine } from "./SpiderEngine.js"
 import { RefactoringSuggestion, SpiderRefactorer } from "./SpiderRefactorer.js"
+import { SpiderEngine } from "./spider/SpiderEngine.js"
 import { TspPolicyPlugin } from "./TspPolicyPlugin.js"
 
 export interface PolicyResult {
@@ -232,14 +232,19 @@ export class FluidPolicyEngine {
 
 		let totalPenalty = 0
 		for (const violation of violations) {
-			if (violation.includes("Ghost Import")) {
+			// PERFECTION WEIGHTED INTEGRAL (v14)
+			if (violation.includes("[GHOST SYMBOL]")) {
 				totalPenalty += 1
+			} else if (violation.includes("[GHOST FILE]")) {
+				totalPenalty += 3
 			} else if (violation.includes("Circular Dependency")) {
 				totalPenalty += 15
-			} else if (violation.includes("layer") || violation.includes("Geographic Misalignment")) {
+			} else if (violation.includes("Sovereign Leak") || violation.includes("Geographic Misalignment")) {
 				totalPenalty += 10
+			} else if (violation.includes("Node is orphaned")) {
+				totalPenalty += 2 // Orchestrated healing handles these specifically
 			} else {
-				totalPenalty += 5 // Default penalty
+				totalPenalty += 5 // Default structural penalty
 			}
 		}
 
@@ -300,6 +305,23 @@ export class FluidPolicyEngine {
 	 * Uses progressive enforcement: first domain violation blocks, subsequent ones degrade to warnings.
 	 */
 	public async validatePreExecution(block: ToolUse): Promise<PolicyResult> {
+		// 0. Rule: Cognitive Cooldown Enforcement (Substrate Immune System)
+		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
+			const cooldown = this.metabolicMonitor.getCooldownStatus()
+			if (cooldown.active && !this.commitSeal) {
+				return {
+					success: false,
+					error:
+						`🛑 COGNITIVE COOLDOWN [ACTIVE]: ${cooldown.reason}\n` +
+						`The substrate has reached structural saturation. High-velocity logic churn is temporarily interdicted to prevent architectural regression.\n\n` +
+						`💡 RECOVERY: You MUST perform an audit turn before continuing. Execute one of the following:\n` +
+						`  - Update \`scratchpad.md\` with a # SOVEREIGN AUDIT\n` +
+						`  - Read \`docs/\` or architectural guides\n` +
+						`  - Refine existing interfaces in DOMAIN`,
+				}
+			}
+		}
+
 		// 0. Rule: Metabolic Cooldown (Inflammation Control)
 		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
 			const targetPath = (block.params as any)?.path
@@ -350,7 +372,12 @@ export class FluidPolicyEngine {
 					const compare = this.axiomEngine.compareAxiomSessions(currentViolations, nextViolations)
 					let directive = ""
 					if (compare.status === "ZERO_SUM") {
-						directive = `\n\n🧩 AROMATIC EXTRACTION DIRECTIVE: You are trading architectural debt. STRATEGY: Extract an interface to src/domain/interfaces/ and inject it to break the coupling.`
+						const suggestions = SpiderRefactorer.getRefactoringSuggestions(this.spiderEngine)
+						const extract = suggestions.find((s) => s.type === "EXTRACT" && filePath.includes(s.target))
+						const synthesis = extract?.synthesis
+							? `\n\n📝 SYNTHESIZED CONTRACT:\n\`\`\`typescript\n${extract.synthesis}\n\`\`\``
+							: ""
+						directive = `\n\n🧩 AROMATIC EXTRACTION DIRECTIVE: You are trading architectural debt. STRATEGY: Extract an interface to src/domain/interfaces/ and inject it to break the coupling.${synthesis}`
 					}
 
 					return {
@@ -393,8 +420,11 @@ export class FluidPolicyEngine {
 			const targetPath = (block.params as { path?: string })?.path
 			const normalizedTarget = targetPath ? this.normalize(targetPath) : null
 
-			// HEALING MODE: Allow edits and structural changes if the target file is currently in violation
-			// PRODUCTION HARDENING: Expand to allow MOVE/DELETE if they are rectifying a violation (e.g. SPI-001 or SPI-003)
+			// PRODUCTION HARDENING: Healing Leniency (v12.3)
+			// If the alarm is EXCLUSIVELY caused by orphaned nodes (SPI-003), relax the lock to allow
+			// editing any file (e.g. roots) to fix the imports.
+			const isOrphanOnlyAlarm = this.alarmViolations.every((v) => v.includes("Node is orphaned"))
+
 			const isHealingAttempt =
 				(block.name === DietCodeDefaultTool.FILE_EDIT ||
 					block.name === DietCodeDefaultTool.APPLY_PATCH ||
@@ -402,19 +432,22 @@ export class FluidPolicyEngine {
 					block.name === DietCodeDefaultTool.RENAME ||
 					block.name === DietCodeDefaultTool.DELETE) &&
 				normalizedTarget &&
-				(this.alarmViolations.some((v) => v.includes(normalizedTarget)) || this.pathogens.isPathogenic(normalizedTarget))
+				(this.alarmViolations.some((v) => v.includes(normalizedTarget)) ||
+					this.pathogens.isPathogenic(normalizedTarget) ||
+					isOrphanOnlyAlarm)
 
 			if (!isHealingAttempt) {
 				const healableFiles = [
 					...new Set(
 						this.alarmViolations
 							.map((v) => {
-								const match = v.match(/src\/[^\s:]+/)
-								return match ? match[0] : null
+								// Match full src/ path or the trailing path in orphan message
+								const match = v.match(/(src\/[^\s:]+)/)
+								return match ? match[1] : null
 							})
 							.filter(Boolean),
 					),
-				]
+				] as string[]
 
 				return {
 					success: false,
@@ -528,9 +561,10 @@ export class FluidPolicyEngine {
 				if (shouldBlock) {
 					const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
 					const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN SOVEREIGNTY BREACH" : "🏗️ CORE INTEGRITY PROTECT"
+					const shield = this.getResilienceShield()
 					return {
 						success: false,
-						error: `${rejectionTitle} (Strike ${strikes})\nLayer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummaryRejection}\n\n${this.getCorrectionHint(astValidation.errors, filePath)}\n\n💡 Your write was NOT executed. Please address these violations and try again.`,
+						error: `${shield}${rejectionTitle} (Strike ${strikes})\nLayer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummaryRejection}\n\n${this.getCorrectionHint(astValidation.errors, filePath)}\n\n💡 Your write was NOT executed. Please address these violations and try again.`,
 						violations: astValidation.errors,
 					}
 				}
@@ -971,5 +1005,25 @@ export class FluidPolicyEngine {
 	private normalize(p: string): string {
 		if (!p) return ""
 		return path.relative(this.cwd, path.resolve(this.cwd, p))
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Consolidates all substrate metrics into a high-fidelity Resilience Shield.
+	 */
+	public getResilienceShield(): string {
+		const metabolic = this.metabolicMonitor.getVitalityStats()
+		const stagnant = this.metabolicMonitor.getStagnantSubstrate()
+		const hotspots = this.spiderEngine.getViolationHotspots()
+
+		const shield = [
+			"\n🛡️ UNIFIED RESILIENCE SHIELD [V12]",
+			"====================================",
+			`METABOLIC: ${metabolic.totalWrites} edits, ${metabolic.totalReads} reads (Doubt: ${metabolic.avgDoubtSignal.toFixed(1)})`,
+			`STRUCTURAL: ${this.spiderEngine.nodes.size} nodes, ${hotspots.length} hotspots detected`,
+			stagnant.length > 0 ? `DECAY: ${stagnant.length} stagnant files detected (Action: Prune)` : "DECAY: 0 stagnant files",
+			"====================================\n",
+		]
+
+		return shield.join("\n")
 	}
 }

@@ -1,11 +1,13 @@
 import * as path from "path"
-import type { SpiderEngine } from "./SpiderEngine.js"
+import type { SpiderEngine } from "./spider/SpiderEngine.js"
+import type { SpiderNode } from "./spider/types.js"
 
 export interface RefactoringSuggestion {
 	type: "RENAME" | "MOVE" | "EXTRACT" | "DELETE"
 	target: string
 	reason: string
 	benefit: string
+	synthesis?: string
 }
 
 /**
@@ -48,10 +50,30 @@ export const SpiderRefactorer = {
 					target: path.basename(node.path),
 					reason: `Module is becoming a 'Fat Coordinator' with ${node.afferentCoupling} incoming dependencies.`,
 					benefit: "Improves maintainability by splitting orchestration logic.",
+					synthesis: this.synthesizeInterface(node),
 				})
 			}
 		}
 
 		return suggestions
+	},
+
+	/**
+	 * PRODUCTION HARDENING: Synthesizes a virtual interface for a problematic module.
+	 */
+	synthesizeInterface(node: SpiderNode): string {
+		const baseName = path.basename(node.path).split(".")[0]
+		const interfaceName = `I${baseName.charAt(0).toUpperCase()}${baseName.slice(1)}`
+
+		return [
+			"/**",
+			" * [LAYER: DOMAIN]",
+			" * Aromatic Synthesis: This interface breaks the coupling of a Fat Coordinator.",
+			" */",
+			`export interface ${interfaceName} {`,
+			"\t// TODO: Map implementation members to this contract",
+			"\t// Note: Dependents should now consume this interface via Dependency Inversion.",
+			"}",
+		].join("\n")
 	},
 }

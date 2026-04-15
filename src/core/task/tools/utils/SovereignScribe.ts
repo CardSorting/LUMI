@@ -9,7 +9,7 @@ export interface SovereignAuditResult {
 }
 
 import { PathogenStore } from "../../../integrity/PathogenStore"
-import { SpiderEngine } from "../../../policy/SpiderEngine"
+import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
 
 /**
  * SovereignScribe: Shared logic for validating the Double Down Planning scratchpad.

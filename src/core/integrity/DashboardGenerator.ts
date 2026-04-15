@@ -3,7 +3,7 @@ import path from "node:path"
 
 import { Logger } from "@/shared/services/Logger"
 import { SovereignOptimizer } from "../policy/SovereignOptimizer.js"
-import type { SpiderEngine } from "../policy/SpiderEngine.js"
+import type { SpiderEngine } from "../policy/spider/SpiderEngine.js"
 import type { AuditRecorder } from "./AuditRecorder.js"
 import { MetabolicMonitor } from "./MetabolicMonitor.js"
 import { PathogenStore } from "./PathogenStore.js"

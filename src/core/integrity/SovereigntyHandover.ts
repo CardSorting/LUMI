@@ -1,7 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
-import { SpiderEngine } from "../policy/SpiderEngine.js"
+import { SpiderEngine } from "../policy/spider/SpiderEngine.js"
 import { AuditRecorder } from "./AuditRecorder.js"
 
 export interface SovereignHandoverData {

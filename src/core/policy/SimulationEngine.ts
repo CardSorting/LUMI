@@ -1,6 +1,6 @@
 import * as path from "path"
 import { PathogenStore } from "../integrity/PathogenStore"
-import { SpiderEngine } from "./SpiderEngine.js"
+import { SpiderEngine } from "./spider/SpiderEngine.js"
 import "@/utils/path"
 
 export interface SimulationResult {
@@ -52,18 +52,25 @@ export class SimulationEngine {
 			return { safe: true, predictedScore: 100, scoreDrop: 0, violations: [], message: "Source node not found in graph." }
 		}
 
-		// Virtual re-target
+		// Virtual re-target and migration (v15)
 		simEngine.nodes.delete(normalizedOld)
-		simEngine.nodes.set(normalizedNew, {
+		const migratedNode = {
 			...node,
 			id: normalizedNew,
 			path: normalizedNew,
 			depth: normalizedNew.split("/").length - 1,
-		})
+		}
+		simEngine.nodes.set(normalizedNew, migratedNode)
+
+		// VIRTUAL RE-LINKING: Update all nodes that imported the old path
+		for (const otherNode of simEngine.nodes.values()) {
+			if (otherNode.imports.includes(normalizedOld)) {
+				otherNode.imports = otherNode.imports.map((imp) => (imp === normalizedOld ? normalizedNew : imp))
+			}
+		}
 
 		// 3. Re-compute coupling and entropy
 		simEngine.computeCouplingMetrics()
-		// @ts-expect-error
 		simEngine.computeReachability()
 
 		const currentReport = currentEngine.computeEntropy()
@@ -89,52 +96,24 @@ export class SimulationEngine {
 		}
 	}
 
-	/**
-	 * Simulates a file edit/creation.
-	 */
-	public async simulateEdit(filePath: string, newImports: string[], currentEngine: SpiderEngine): Promise<SimulationResult> {
-		const simEngine = this.cloneEngine(currentEngine)
+	public async simulateEdit(filePath: string, content: string, currentEngine: SpiderEngine): Promise<SimulationResult> {
+		const simEngine = currentEngine.clone()
 		const normalizedPath = this.normalize(filePath)
 
-		const node = simEngine.nodes.get(normalizedPath)
-		if (node) {
-			node.imports = newImports
-		} else {
-			// New file simulation
-			simEngine.nodes.set(normalizedPath, {
-				id: normalizedPath,
-				path: normalizedPath,
-				layer: "infrastructure", // Default for simulation estimation
-				imports: newImports,
-				depth: normalizedPath.split("/").length - 1,
-				orphaned: false,
-				afferentCoupling: 0,
-				dependents: [],
-				logicDensity: 0.2, // Conservative logic estimate for simulation
-				ioEntropy:
-					newImports.filter((imp) => !imp.startsWith(".") && !imp.startsWith("@/")).length / (newImports.length || 1),
-				astComplexity: 100,
-				hash: "sim-pending",
-				isInterface:
-					normalizedPath.includes("/interfaces/") ||
-					normalizedPath.includes("/types/") ||
-					normalizedPath.endsWith(".d.ts"),
-			})
-		}
-
+		// High-Fidelity AST Simulation (v13)
+		// Instead of manual property estimation, we perform a 1:1 structural index on the clone.
+		simEngine.updateNode(normalizedPath, content)
 		simEngine.computeCouplingMetrics()
-		// @ts-expect-error
 		simEngine.computeReachability()
 
 		const currentReport = currentEngine.computeEntropy()
-		const simReport = simEngine.computeEntropy()
-
-		const scoreDrop = (currentReport.score - simReport.score) * 100
+		const forecast = currentEngine.forecastEntropy([{ path: normalizedPath, content }])
+		const scoreDrop = (currentReport.score - forecast.predictedScore) * 100
 		const violations = simEngine.getViolations().map((v) => v.message)
 
 		return {
 			safe: scoreDrop < 8,
-			predictedScore: (1 - simReport.score) * 100,
+			predictedScore: forecast.predictedScore * 100,
 			scoreDrop,
 			violations,
 			message: scoreDrop > 8 ? "Predictive warning: Edit increases structural entropy." : "Safe edit predicted.",

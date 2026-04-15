@@ -1,6 +1,6 @@
 import * as path from "path"
 import * as ts from "typescript"
-import { SpiderEngine } from "./SpiderEngine.js"
+import { SpiderEngine } from "./spider/SpiderEngine.js"
 
 export interface AxiomViolation {
 	axiom: string
@@ -60,6 +60,7 @@ export class SemanticAxiomEngine {
 		const normalizedPath = this.normalize(filePath)
 		const node = engine.nodes.get(normalizedPath)
 		const lines = content.split("\n")
+		const isPassthrough = content.includes("@dietcode-passthrough") || content.includes("@sovereign-exception")
 
 		// 1. Axiom: SIMPLICITY (Cognitive Weight)
 		// PRODUCTION HARDENING: Exempt configuration and generated files from hard line-count blocks
@@ -246,7 +247,7 @@ export class SemanticAxiomEngine {
 			}
 		}
 
-		return violations
+		return isPassthrough ? violations.map((v) => ({ ...v, severity: "WARN" as const })) : violations
 	}
 
 	/**
