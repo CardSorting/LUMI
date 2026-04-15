@@ -1,0 +1,67 @@
+/**
+ * [LAYER: CORE]
+ */
+
+import * as fs from "fs/promises"
+import { DecompositionPlan, SovereignDecomposer } from "./SovereignDecomposer.js"
+import { OptimizationOpportunity, SovereignOptimizer } from "./SovereignOptimizer.js"
+import { RefactoringSuggestion, SpiderRefactorer } from "./SpiderRefactorer.js"
+import { SpiderEngine } from "./spider/SpiderEngine.js"
+
+export interface PulseReport {
+	timestamp: string
+	integrityScore: number
+	violations: number
+	recommendations: {
+		refactors: RefactoringSuggestion[]
+		optimizations: OptimizationOpportunity[]
+		decompositionRequired?: DecompositionPlan[]
+	}
+}
+
+/**
+ * SovereignPulse: The architectural heartbeat of the project.
+ * Provides a high-fidelity "State of the Union" report by aggregating
+ * all structural analysis engines into a single actionable dashboard.
+ */
+export class SovereignPulse {
+	constructor(private cwd: string) {}
+
+	public async generatePulse(engine: SpiderEngine): Promise<PulseReport> {
+		const refactorer = SpiderRefactorer
+		const optimizer = new SovereignOptimizer(this.cwd)
+		const decomposer = new SovereignDecomposer()
+
+		const entropy = engine.computeEntropy()
+		const violations = engine.getViolations()
+
+		const refactors = refactorer.getRefactoringSuggestions(engine)
+		const optimizations = optimizer.findOptimizations(engine)
+
+		// Strategic Decomposition: Focus on top 3 "Fat" or "Complex" nodes
+		const fatNodes = Array.from(engine.nodes.values())
+			.sort((a, b) => b.astComplexity - a.astComplexity)
+			.slice(0, 3)
+
+		const decompositions: DecompositionPlan[] = []
+		for (const node of fatNodes) {
+			try {
+				const content = await fs.readFile(node.path, "utf-8")
+				decompositions.push(decomposer.analyze(node.path, content))
+			} catch (_e) {
+				// Skip if file unreadable
+			}
+		}
+
+		return {
+			timestamp: new Date().toISOString(),
+			integrityScore: (1 - entropy.score) * 100,
+			violations: violations.length,
+			recommendations: {
+				refactors,
+				optimizations,
+				decompositionRequired: decompositions,
+			},
+		}
+	}
+}

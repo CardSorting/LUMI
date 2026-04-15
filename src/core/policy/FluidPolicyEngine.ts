@@ -20,8 +20,10 @@ import { RefactorHealer } from "../task/tools/RefactorHealer"
 import { SemanticAxiomEngine } from "./SemanticAxiomEngine"
 import { SimulationEngine } from "./SimulationEngine.js"
 import { SovereignOptimizer } from "./SovereignOptimizer"
+import { SovereignPolicy } from "./SovereignPolicy.js"
 import { RefactoringSuggestion, SpiderRefactorer } from "./SpiderRefactorer.js"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
+import { SpiderViolation } from "./spider/types.js"
 import { TspPolicyPlugin } from "./TspPolicyPlugin.js"
 
 export interface PolicyResult {
@@ -82,6 +84,9 @@ export class FluidPolicyEngine {
 		this.optimizer = new SovereignOptimizer(this.cwd)
 		this.pathogens = new PathogenStore(this.cwd)
 		this.refactorHealer = new RefactorHealer(this.cwd)
+
+		// V16: Warm graph startup
+		this.spiderEngine.loadRegistry().catch((e: unknown) => Logger.error("[FluidPolicyEngine] Failed to load registry:", e))
 	}
 
 	/**
@@ -104,7 +109,7 @@ export class FluidPolicyEngine {
 			diag.push("🚨 ARCHITECTURAL ALARM ACTIVE")
 		}
 		if (this.alarmViolations.length > 0) {
-			diag.push("Recent Policy Violations:\n" + this.alarmViolations.map((v) => `  - ${v}`).join("\n"))
+			diag.push(`Recent Policy Violations:\n${this.alarmViolations.map((v) => `  - ${v}`).join("\n")}`)
 		}
 
 		const violations = this.spiderEngine.getViolations()
@@ -113,7 +118,7 @@ export class FluidPolicyEngine {
 				`Active AST/Structural Violations (${violations.length}):\n` +
 					violations
 						.slice(0, 5)
-						.map((v) => `  - ${v.path}: ${v.message}`)
+						.map((v: SpiderViolation) => `  - ${v.path}: ${v.message}`)
 						.join("\n"),
 			)
 		}
@@ -288,6 +293,12 @@ export class FluidPolicyEngine {
 				totalPenalty += 10
 			} else if (violation.includes("Node is orphaned")) {
 				totalPenalty += 2 // Orchestrated healing handles these specifically
+			} else if (
+				violation.includes("PURITY") ||
+				violation.includes("COHESION") ||
+				violation.includes("Fragmented Domain Model")
+			) {
+				totalPenalty += 0 // Info-only warnings for Pass 2
 			} else {
 				totalPenalty += 5 // Default structural penalty
 			}
@@ -298,13 +309,15 @@ export class FluidPolicyEngine {
 		const score = Math.max(5, base - penalty)
 
 		// PRODUCTION HARDENING: Alarm is trend-aware. Only trigger if score is actively declining.
-		// This prevents friction during positive refactoring sessions where the score is recovering.
 		const isDeclining = score < this.lastIntegrityScore
 		const isRecovering = score > this.lastIntegrityScore
 		this.lastIntegrityScore = score
 		this.spiderEngine.isRecovering = isRecovering // Synchronize trend with substrate engine
 
-		if (score < 70 && !this.architecturalAlarmActive && isDeclining) {
+		const config = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
+		const threshold = config.integrityAlertThreshold || 70
+
+		if (score < threshold && !this.architecturalAlarmActive && isDeclining) {
 			this.triggerAlarm(violations)
 		} else if (this.architecturalAlarmActive && (score >= 90 || isRecovering)) {
 			// Clear alarm if score is high enough OR if we are making active progress (recovering)
@@ -385,7 +398,7 @@ export class FluidPolicyEngine {
 
 		// 0. Rule: Metabolic Cooldown (Inflammation Control)
 		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
-			const targetPath = (block.params as any)?.path
+			const targetPath = (block.params as { path?: string })?.path
 			if (targetPath) {
 				const absolutePath = path.resolve(this.cwd, targetPath)
 				const status = this.metabolicMonitor.isInflamed(absolutePath)
@@ -458,11 +471,15 @@ export class FluidPolicyEngine {
 
 			// V8: Detect healing intent in current turn
 			let isHealingMode = this.architecturalAlarmActive
+			let isAgile = false
 			try {
 				const scratchpadPath = path.join(this.cwd, "scratchpad.md")
 				const scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
 				if (scratchpadContent.includes("[SOVEREIGN_HEALING]") || scratchpadContent.includes("# HEALING TURN")) {
 					isHealingMode = true
+				}
+				if (scratchpadContent.includes("# SOVEREIGN_AGILE")) {
+					isAgile = true
 				}
 			} catch (_e) {}
 
@@ -472,6 +489,7 @@ export class FluidPolicyEngine {
 				this.spiderEngine,
 				this.pathogens,
 				isHealingMode,
+				isAgile,
 			)
 			if (!sim.safe && !this.commitSeal) {
 				const healingHint = !isHealingMode
@@ -509,9 +527,18 @@ export class FluidPolicyEngine {
 			const normalizedTarget = targetPath ? this.normalize(targetPath) : null
 
 			// PRODUCTION HARDENING: Healing Leniency (v12.3)
-			// If the alarm is EXCLUSIVELY caused by orphaned nodes (SPI-003), relax the lock to allow
-			// editing any file (e.g. roots) to fix the imports.
+			// V16: Soft-Lock Transition. The alarm no longer physically blocks non-violating edits,
+			// but instead provides a strong warning. This prevents agent spirals while maintaining visibility.
 			const isOrphanOnlyAlarm = this.alarmViolations.every((v) => v.includes("Node is orphaned"))
+
+			let isExplicitlyIgnored = false
+			try {
+				const scratchpadPath = path.join(this.cwd, "scratchpad.md")
+				const scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
+				if (scratchpadContent.includes("# SOVEREIGN_IGNORE_ALARM")) {
+					isExplicitlyIgnored = true
+				}
+			} catch (_e) {}
 
 			const isHealingAttempt =
 				(block.name === DietCodeDefaultTool.FILE_EDIT ||
@@ -524,7 +551,7 @@ export class FluidPolicyEngine {
 					this.pathogens.isPathogenic(normalizedTarget) ||
 					isOrphanOnlyAlarm)
 
-			if (!isHealingAttempt) {
+			if (!isHealingAttempt && !isExplicitlyIgnored) {
 				const healableFiles = [
 					...new Set(
 						this.alarmViolations
@@ -541,12 +568,12 @@ export class FluidPolicyEngine {
 					success: true,
 					warning:
 						`⚠️ ARCHITECTURAL ALARM ACTIVE (Score: ${this.computeIntegrityScore(this.alarmViolations)}/100)\n` +
-						`Your previous actions have degraded the system integrity beyond the safety threshold. ` +
-						`Structural changes are LOCKED until the following violations are healed:\n` +
+						`System integrity has degraded beyond the safety threshold. ` +
+						`Structural changes are discouraged until the following violations are healed:\n` +
 						`${this.alarmViolations.map((v) => `  - ${v}`).join("\n")}\n\n` +
-						`🩹 HEALING MODE ACTIVE: You may only edit the following violating files:\n` +
+						`🩹 HEALING RECOMMENDATION: Consider prioritizing these violating files:\n` +
 						`${healableFiles.map((f) => `  → ${f}`).join("\n")}\n\n` +
-						`💡 You MUST fix these issues using FILE_EDIT or refactor tools before continuing with new features.`,
+						`💡 You should fix these issues using FILE_EDIT or refactor tools to restore substrate stability.`,
 				}
 			}
 		}
@@ -626,9 +653,9 @@ export class FluidPolicyEngine {
 				}
 			}
 
-			// Update Spider session cache
+			// Update Spider session cache with Incremental Node Sync (v16)
 			this.sessionFiles.set(filePath, content)
-			this.spiderEngine.buildGraph(Array.from(this.sessionFiles.entries()).map(([p, c]) => ({ filePath: p, content: c })))
+			this.spiderEngine.updateNode(filePath, content)
 
 			// 1. AST Validation (TSP)
 			// V9: Pass trend signals for Absolute Metabolic Integrity
@@ -1056,6 +1083,21 @@ export class FluidPolicyEngine {
 			// Take a snapshot if successful and divergence is low
 			if (result.success && result.entropyScore !== undefined && result.entropyScore < 0.2) {
 				await this.spiderEngine.takeSnapshot()
+			}
+		}
+
+		// V16: Metabolic Forgiveness
+		// If health improved (recovery detected), clear inflammation
+		const latestSnapshot = await this.spiderEngine.getLatestSnapshot()
+		const currentEntropy = this.spiderEngine.computeEntropy().score
+		if (latestSnapshot && currentEntropy < latestSnapshot.entropyScore) {
+			const filePath = block.params?.path
+			if (filePath) {
+				const norm = this.normalize(filePath)
+				this.metabolicMonitor.resetFileInflammation(norm)
+				Logger.info(
+					`[FluidPolicyEngine] Metabolic Forgiveness applied to ${path.basename(norm)} (Architectural Recovery Detected).`,
+				)
 			}
 		}
 

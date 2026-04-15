@@ -85,8 +85,17 @@ export class RefactorHealer {
 						v.match(/Module.*has no exported member ['"]([^'"]+)['"]/i)
 					if (ghostMatch) {
 						const symbol = ghostMatch[1]
-						const ok = await this.materializeGhostSymbol(filePath, symbol)
+						const ok = await this.materializeGhostSymbol(filePath, symbol, _engine)
 						if (ok) healedSomething = true
+					}
+
+					if (v.includes("Circular dependency detected")) {
+						const cycle = v.split(": ")[1].split(" -> ")
+						const remediation = await this.mediateCycle(cycle, _engine)
+						if (remediation) {
+							Logger.info(`[RefactorHealer] Cycle Mediation Proposal: ${remediation}`)
+							healedSomething = true
+						}
 					}
 				}
 			}
@@ -214,22 +223,53 @@ export class RefactorHealer {
 	}
 
 	/**
-	 * V8: Materializes a missing symbol in a file.
+	 * V16: Materializes a missing symbol in a file or suggests an existing match from the graph.
 	 */
-	public async materializeGhostSymbol(filePath: string, symbol: string): Promise<boolean> {
+	public async materializeGhostSymbol(filePath: string, symbol: string, engine?: SpiderEngine): Promise<boolean> {
 		try {
 			const absolutePath = path.resolve(this.projectRoot, filePath)
 			const content = await fs.readFile(absolutePath, "utf-8")
 
+			// Check if already materialized or exists
 			if (
 				content.includes(`export class ${symbol}`) ||
 				content.includes(`export interface ${symbol}`) ||
-				content.includes(`export const ${symbol}`)
+				content.includes(`export const ${symbol}`) ||
+				content.includes(`import { ${symbol}`) ||
+				content.includes(`import ${symbol}`)
 			) {
 				return false
 			}
 
-			// Add a basic boilerplate at the end of the file
+			// V16: Semantic Sensing - Search for existing symbols in the graph
+			if (engine) {
+				const matches: { symbol: string; path: string }[] = []
+				for (const node of engine.nodes.values()) {
+					if (node.path === filePath) continue
+					for (const exported of node.exports) {
+						if (
+							exported.toLowerCase() === symbol.toLowerCase() ||
+							exported.includes(symbol) ||
+							symbol.includes(exported)
+						) {
+							matches.push({ symbol: exported, path: node.path })
+						}
+					}
+				}
+
+				if (matches.length > 0) {
+					const bestMatch = matches[0]
+
+					Logger.info(
+						`[RefactorHealer] Semantic Match Found: Suggesting import of '${bestMatch.symbol}' from ${bestMatch.path} instead of materialization.`,
+					)
+					// We don't automatically inject imports yet to avoid breaking multi-symbol imports,
+					// but we provide the hint in the log/violations.
+					return false
+				}
+			}
+
+			// Fallback: Add a basic boilerplate at the end of the file
 			const layer = getLayer(filePath)
 			const boilerplate = `\n\n/**\n * [LAYER: ${layer.toUpperCase()}]\n * Placeholder for ${symbol} (Materialized via Sovereign Healer)\n */\nexport class ${symbol} {\n\t// TODO: Implement members\n}\n`
 
@@ -307,6 +347,33 @@ export class RefactorHealer {
 		if (newContent) {
 			await fs.writeFile(absolutePath, newContent, "utf-8")
 		}
+	}
+
+	/**
+	 * V16: Identifies the best candidate in a cycle to break it via interface extraction.
+	 */
+	public async mediateCycle(cycle: string[], engine: SpiderEngine): Promise<string | null> {
+		if (cycle.length < 2) return null
+
+		// Find the node with the lowest internal complexity or lowest coupling to others
+		let weakestLink: string | null = null
+		let minCoupling = Number.POSITIVE_INFINITY
+
+		for (const nodeLabel of cycle) {
+			const node = Array.from(engine.nodes.values()).find((n: SpiderNode) => path.basename(n.path) === nodeLabel)
+			if (node && node.afferentCoupling < minCoupling) {
+				minCoupling = node.afferentCoupling
+				weakestLink = node.path
+			}
+		}
+
+		if (weakestLink) {
+			const base = path.basename(weakestLink).split(".")[0]
+			const interfaceName = `I${base.charAt(0).toUpperCase()}${base.slice(1)}`
+			return `Break cycle by extracting '${interfaceName}' from ${path.basename(weakestLink)} and moving it to the DOMAIN layer.`
+		}
+
+		return null
 	}
 
 	/**

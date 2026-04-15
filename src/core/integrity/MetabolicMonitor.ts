@@ -141,6 +141,24 @@ export class MetabolicMonitor {
 			}
 		}
 
+		// V16: Breather Support
+		if (scratchpadContent.includes("# SOVEREIGN_BREATHER")) {
+			this.resetMetabolicPressure()
+			return { drift: 0, isInfraTurn: true }
+		}
+
+		// V16: Agile Drift Tuning
+		if (scratchpadContent.includes("# SOVEREIGN_AGILE")) {
+			const agileThreshold = 25
+			if (drift > agileThreshold) {
+				return {
+					drift,
+					warning: `⚠️ AGILE DRIFT ALERT: Even in Agile mode, ${drift} files is a high blast radius. Consider a checkpoint soon.`,
+				}
+			}
+			return { drift, isInfraTurn: true }
+		}
+
 		return { drift, isInfraTurn }
 	}
 

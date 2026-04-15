@@ -24,45 +24,106 @@ export class ForensicEngine {
 
 			const cached = this.ghostVerificationCache.get(node.path)
 			if (cached && cached.hash === currentHash) {
-				cached.ghosts.forEach((g) => allGhosts.add(g))
+				cached.ghosts.forEach((g) => {
+					allGhosts.add(g)
+				})
 				continue
 			}
 
 			const nodeGhosts: string[] = []
 			const sourceFile = ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true)
 			const imports = this.getImportedSymbols(sourceFile)
+			const hasGhostException = content.includes("[SOVEREIGN_EXCEPTION: Ghost Symbols]")
 
 			for (const { specifier, symbols } of imports) {
 				const diskPath = this.resolver.getDiskPath(node.path, specifier)
+				const targetId = this.resolver.resolveImportToNodeId(node.path, specifier, new Set(nodes.keys()))
 
 				if (!diskPath || !fs.existsSync(diskPath)) {
 					if (this.isNodeLibrary(specifier)) continue
+					// PRODUCTION HARDENING: Ignore ghost files for common build/config files in root
+					if (!specifier.startsWith(".") && !this.isProjectAlias(specifier)) continue
+					if (specifier.endsWith(".config.js") || specifier.endsWith(".config.ts")) continue
+
 					const msg = `[SPI-101] GHOST FILE: ${node.path} -> ${specifier}`
 					allGhosts.add(msg)
 					nodeGhosts.push(msg)
-				} else if (symbols.length > 0) {
-					try {
-						const targetContent = fs.readFileSync(diskPath, "utf-8")
+				} else if (symbols.length > 0 && !hasGhostException) {
+					// V16: Use Node exports for high-precision verification
+					const targetNode = targetId ? nodes.get(targetId) : null
+
+					if (targetNode) {
 						for (const symbol of symbols) {
-							if (symbol === "*") continue
-							const exportPattern = new RegExp(
-								`export\\s+(const|class|interface|type|function|enum|let|var)\\s+${symbol}\\b`,
-							)
-							if (!exportPattern.test(targetContent) && !targetContent.includes(`export { ${symbol}`)) {
-								// PRODUCTION HARDENING: Downgrade GHOST SYMBOL to WARN to prevent hard-blocks on false positives
-								const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
-								allGhosts.add(msg)
-								nodeGhosts.push(msg)
-							}
+							if (symbol === "*" || targetNode.exports.includes(symbol)) continue
+
+							const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
+							allGhosts.add(msg)
+							nodeGhosts.push(msg)
 						}
-					} catch (_e) {
-						// Skip if file unreadable
+					} else {
+						// Fallback to disk-based verification (legacy with hardened regex)
+						try {
+							const targetContent = fs.readFileSync(diskPath, "utf-8")
+							for (const symbol of symbols) {
+								if (symbol === "*") continue
+								// V16: Hardened regex to avoid false positives for complex export patterns
+								const exportPattern = new RegExp(
+									`export\\s+(?:const|class|interface|type|function|enum|let|var)\\s+${symbol}\\b|export\\s+\\{\\s*(?:[^}]*,\\s*)?${symbol}(?:\\s*,[^}]*)?\\s*\\}`,
+								)
+								if (!exportPattern.test(targetContent)) {
+									const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
+									allGhosts.add(msg)
+									nodeGhosts.push(msg)
+								}
+							}
+						} catch (_e) {
+							// Skip if file unreadable
+						}
 					}
 				}
 			}
 			this.ghostVerificationCache.set(node.path, { hash: currentHash, ghosts: nodeGhosts })
 		}
 		return allGhosts
+	}
+
+	/**
+	 * V16: Identifies exported symbols that are never consumed project-wide.
+	 */
+	public findUnusedExports(nodes: Map<string, SpiderNode>): string[] {
+		const unusedViolations: string[] = []
+
+		const allConsumptions = new Set<string>()
+		for (const node of nodes.values()) {
+			for (const symbols of Object.values(node.consumptions)) {
+				for (const s of symbols) {
+					allConsumptions.add(`${node.id}::${s}`) // This is not quite right, symbols are relative to target
+				}
+			}
+		}
+
+		// Correct logic: Track global symbol consumption (symbolName -> Set of target Node IDs)
+		const globalConsumption = new Map<string, Set<string>>()
+		for (const node of nodes.values()) {
+			for (const [targetId, symbols] of Object.entries(node.consumptions)) {
+				if (!globalConsumption.has(targetId)) globalConsumption.set(targetId, new Set())
+				for (const s of symbols) globalConsumption.get(targetId)?.add(s)
+			}
+		}
+
+		for (const node of nodes.values()) {
+			const consumed = globalConsumption.get(node.id) || new Set()
+			if (consumed.has("*")) continue // Namespace import consumes everything
+
+			for (const exp of node.exports) {
+				if (exp === "default") continue // Skip default exports for now to avoid noise
+				if (!consumed.has(exp)) {
+					unusedViolations.push(`[SPI-103] UNUSED EXPORT: ${node.path} -> ${exp}`)
+				}
+			}
+		}
+
+		return unusedViolations
 	}
 
 	public getImportedSymbols(sourceFile: ts.SourceFile): { specifier: string; symbols: string[] }[] {

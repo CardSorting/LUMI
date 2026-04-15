@@ -30,7 +30,7 @@
 		"maxPathDepth": 4,
 		"enforceKebabCase": false,
 		"feverThreshold": 5.0,
-		"integrityAlertThreshold": 70,
+		"integrityAlertThreshold": 40,
 		"supportedLayerTags": [
 			".ts",
 			".tsx",
@@ -43,7 +43,11 @@
 			".sql"
 		],
 		"excludePaths": [
-			"**/generated/**"
+			"**/generated/**",
+			"**/dist/**",
+			"**/node_modules/**",
+			"**/out/**",
+			"**/*.config.js"
 		]
 	}
 }

@@ -5,7 +5,7 @@ import { SpiderEntropyReport, SpiderNode } from "./types.js"
 
 export class MetricsEngine {
 	constructor(
-		private cwd: string,
+		_cwd: string,
 		private resolver: PathResolver,
 	) {}
 
@@ -52,7 +52,15 @@ export class MetricsEngine {
 				p.startsWith("src/scripts/") ||
 				p.startsWith("src/common/") ||
 				p.includes("/__tests__/") ||
-				/\.(test|spec)\.tsx?$/.test(p)
+				/\.(test|spec)\.tsx?$/.test(p) ||
+				// PRODUCTION HARDENING: Explicitly recognize build/config files as roots to prevent orphan false-positives
+				p.endsWith(".config.js") ||
+				p.endsWith(".config.ts") ||
+				p.endsWith(".config.mjs") ||
+				p === "package.json" ||
+				p === "tsconfig.json" ||
+				p === "biome.json" ||
+				p === "biome.jsonc"
 			)
 		})
 

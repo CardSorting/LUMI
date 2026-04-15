@@ -14,6 +14,8 @@ export interface SpiderNode {
 	astComplexity: number
 	hash: string
 	isInterface: boolean
+	exports: string[]
+	consumptions: Record<string, string[]> // V16: Resolved Node ID -> symbols imported
 }
 
 export interface SpiderSnapshot {

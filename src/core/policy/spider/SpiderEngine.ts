@@ -106,8 +106,18 @@ export class SpiderEngine {
 		if (oldNode && oldNode.hash === hash) return
 
 		const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
-		const imports = this.extractImports(sourceFile)
+		const importData = this.extractDetailedImports(sourceFile)
+		const imports = importData.map((i) => i.specifier)
+		const exports = this.extractExports(sourceFile)
 		const metrics = this.extractMetrics(sourceFile)
+
+		const consumptions: Record<string, string[]> = {}
+		for (const { specifier, symbols } of importData) {
+			const targetId = this.resolver.resolveImportToNodeId(normalizedPath, specifier, new Set(this.nodes.keys()))
+			if (targetId) {
+				consumptions[targetId] = (consumptions[targetId] || []).concat(symbols)
+			}
+		}
 
 		const newNode: SpiderNode = {
 			id: normalizedPath,
@@ -121,6 +131,8 @@ export class SpiderEngine {
 			...metrics,
 			hash,
 			isInterface: this.detectInterface(normalizedPath, sourceFile),
+			exports,
+			consumptions,
 		}
 
 		this.nodes.set(normalizedPath, newNode)
@@ -134,24 +146,75 @@ export class SpiderEngine {
 		this.persistence.saveRegistry(this.nodes).catch((e) => Logger.error("[SpiderEngine] Save failed:", e))
 	}
 
-	private extractImports(sourceFile: ts.SourceFile): Set<string> {
-		const imports = new Set<string>()
+	private extractExports(sourceFile: ts.SourceFile): string[] {
+		const exports: string[] = []
 		const visit = (node: ts.Node) => {
-			if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-				imports.add(node.moduleSpecifier.text)
-			} else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-				imports.add(node.moduleSpecifier.text)
-			} else if (
-				ts.isCallExpression(node) &&
-				node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-				node.arguments.length > 0
+			if (
+				(ts.isClassDeclaration(node) ||
+					ts.isFunctionDeclaration(node) ||
+					ts.isInterfaceDeclaration(node) ||
+					ts.isTypeAliasDeclaration(node) ||
+					ts.isEnumDeclaration(node) ||
+					ts.isVariableStatement(node)) &&
+				node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
 			) {
-				const arg = node.arguments[0]
-				if (ts.isStringLiteral(arg)) imports.add(arg.text)
+				if (ts.isVariableStatement(node)) {
+					for (const decl of node.declarationList.declarations) {
+						if (ts.isIdentifier(decl.name)) exports.push(decl.name.text)
+					}
+				} else if (node.name && ts.isIdentifier(node.name)) {
+					exports.push(node.name.text)
+				}
+			} else if (ts.isExportDeclaration(node)) {
+				if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+					for (const element of node.exportClause.elements) {
+						exports.push(element.name.text)
+					}
+				}
 			}
 			ts.forEachChild(node, visit)
 		}
 		visit(sourceFile)
+		return [...new Set(exports)]
+	}
+
+	/**
+	 * V16: Detailed import extraction including symbols.
+	 */
+	private extractDetailedImports(sourceFile: ts.SourceFile): { specifier: string; symbols: string[] }[] {
+		const imports: { specifier: string; symbols: string[] }[] = []
+		sourceFile.forEachChild((node) => {
+			if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+				const specifier = node.moduleSpecifier.text
+				const symbols: string[] = []
+				if (node.importClause) {
+					if (node.importClause.name) {
+						symbols.push("default")
+					}
+					if (node.importClause.namedBindings) {
+						if (ts.isNamedImports(node.importClause.namedBindings)) {
+							for (const n of node.importClause.namedBindings.elements) {
+								symbols.push(n.name.text)
+							}
+						} else if (ts.isNamespaceImport(node.importClause.namedBindings)) {
+							symbols.push("*")
+						}
+					}
+				}
+				imports.push({ specifier, symbols })
+			} else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+				const specifier = node.moduleSpecifier.text
+				const symbols: string[] = []
+				if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+					for (const n of node.exportClause.elements) {
+						symbols.push(n.name.text)
+					}
+				} else {
+					symbols.push("*")
+				}
+				imports.push({ specifier, symbols })
+			}
+		})
 		return imports
 	}
 
@@ -282,17 +345,24 @@ export class SpiderEngine {
 
 		const cycles = this.metrics.detectCycles(this.nodes)
 		for (const cycle of cycles) {
+			const formattedPath = [...cycle, cycle[0]].map((p) => path.basename(p)).join(" -> ")
 			violations.push({
 				id: "SPI-004",
 				severity: "ERROR",
-				message: `Circular dependency: ${cycle.join(" -> ")}`,
+				message: `Circular dependency detected: ${formattedPath}`,
 				path: cycle[0],
+				remediation: `Break the cycle by extracting a common interface or utility from one of the participants: [${cycle.map((p) => path.basename(p)).join(", ")}]`,
 			})
 		}
 
 		this.ghosts = this.forensics.findGhosts(this.nodes)
 		for (const ghost of this.ghosts) {
 			violations.push({ id: "SPI-005", severity: "WARN", message: `Ghost import: ${ghost}`, path: ghost.split(" -> ")[0] })
+		}
+
+		const unused = this.forensics.findUnusedExports(this.nodes)
+		for (const v of unused) {
+			violations.push({ id: "SPI-103", severity: "INFO", message: v, path: v.split(" -> ")[0].split(": ")[1] })
 		}
 
 		return violations
@@ -372,7 +442,10 @@ export class SpiderEngine {
 		return this.resolver.resolveLayer(pathOrSource)
 	}
 
-	public forecastEntropy(files: { path: string; content: string }[]): { predictedScore: number; components: any } {
+	public forecastEntropy(files: { path: string; content: string }[]): {
+		predictedScore: number
+		components: SpiderEntropyReport["components"]
+	} {
 		const clone = this.clone()
 		for (const file of files) {
 			clone.updateNode(file.path, file.content)

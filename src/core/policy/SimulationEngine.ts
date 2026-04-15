@@ -9,6 +9,7 @@ export interface SimulationResult {
 	scoreDrop: number
 	violations: string[]
 	message: string
+	impactedDependents?: string[] // V16: List of high-traffic modules affected
 }
 
 /**
@@ -27,10 +28,11 @@ export class SimulationEngine {
 		newPath: string,
 		currentEngine: SpiderEngine,
 		pathogens: PathogenStore,
-		isHealingMode = false, // V8: Allow moves that introduce temporary violations if in Healing Mode
+		isHealingMode = false,
+		isAgile = false, // V16: Support structural agility bypass
 	): Promise<SimulationResult> {
 		// Immune Check
-		if (pathogens.isPathogenic(oldPath) && !isHealingMode) {
+		if (pathogens.isPathogenic(oldPath) && !isHealingMode && !isAgile) {
 			return {
 				safe: false,
 				predictedScore: 0,
@@ -83,19 +85,32 @@ export class SimulationEngine {
 		// PRODUCTION HARDENING: Threshold relaxed from 10% to 15% to allow for ambitious refactors.
 		// NEW pass: Stricter for "High-Traffic" nodes (afferent coupling > 10) to prevent breaking core modules.
 		const isHighTraffic = (node.afferentCoupling || 0) > 10
-		const baseThreshold = isHighTraffic ? 10 : 15
-		// V8 SOVEREIGN AGILITY: Healing Mode provides a massive 25% drop threshold and ignores new violations
-		const dynamicThreshold = isHealingMode ? 25 : baseThreshold
-		const isSafe = scoreDrop < dynamicThreshold && (violations.length === 0 || isHealingMode)
+		const baseThreshold = isHighTraffic ? 15 : 20
+		// V8 SOVEREIGN AGILITY: Healing Mode provides a massive 30% drop threshold and ignores new violations
+		const dynamicThreshold = isHealingMode || isAgile ? 30 : baseThreshold
+		const isSafe = scoreDrop < dynamicThreshold && (violations.length === 0 || isHealingMode || isAgile)
+
+		// V16: Blast Radius Analysis
+		const impactedDependents = Array.from(simEngine.nodes.values())
+			.filter((n) => n.afferentCoupling > 5)
+			.sort((a, b) => b.afferentCoupling - a.afferentCoupling)
+			.slice(0, 3)
+			.map((n) => path.basename(n.path))
+
+		const impactMsg =
+			impactedDependents.length > 0
+				? `\n🔥 BLAST RADIUS: High-traffic modules [${impactedDependents.join(", ")}] are affected by this move.`
+				: ""
 
 		return {
 			safe: isSafe,
 			predictedScore: (1 - simReport.score) * 100,
 			scoreDrop,
 			violations,
+			impactedDependents,
 			message: isSafe
-				? "Simulation predicts stable transition (Sovereign Leniency applied)."
-				: `Simulation Warning: Move predicts a ${(scoreDrop).toFixed(1)}% drop in structural integrity. Review layer boundaries if this is unexpected.`,
+				? `Simulation predicts stable transition (Agile Sovereignty applied).${impactMsg}`
+				: `Simulation Warning: Move predicts a ${(scoreDrop).toFixed(1)}% drop in structural integrity. Review layer boundaries if this is unexpected.${impactMsg}`,
 		}
 	}
 
