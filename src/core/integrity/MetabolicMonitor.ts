@@ -1,3 +1,4 @@
+import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 
 export interface MetabolicMetrics {
@@ -95,7 +96,11 @@ export class MetabolicMonitor {
 	 * Detects "Task Drift" — changing too many unrelated files in a short burst.
 	 * Calibrated for high-velocity agents: Planning mode is 2x more lenient to allow for broad exploration.
 	 */
-	public getTaskDrift(isPlanning = false, isRefactoring = false): { drift: number; warning?: string } {
+	public getTaskDrift(
+		isPlanning = false,
+		isRefactoring = false,
+		scratchpadContent = "",
+	): { drift: number; warning?: string; isInfraTurn?: boolean } {
 		const recentThreshold = Date.now() - 600000 // 10 minutes
 		const recentEntries = Array.from(this.registry.entries()).filter(([_p, m]) => m.lastEditTimestamp > recentThreshold)
 
@@ -104,7 +109,10 @@ export class MetabolicMonitor {
 		const baseThreshold = isPlanning ? 20 : 10
 		const threshold = isRefactoring ? Math.floor(baseThreshold * 1.5) : baseThreshold
 
-		if (drift > threshold) {
+		// V8: Infrastructure Turn Suppression
+		const isInfraTurn = scratchpadContent.includes("# INFRASTRUCTURE TURN") || scratchpadContent.includes("# TECH DEBT TURN")
+
+		if (drift > threshold && !isInfraTurn) {
 			return {
 				drift,
 				warning: `⚠️ TASK DRIFT DETECTED: You have modified ${drift} different files in the last 10 minutes. This high-entropy behavior increases the risk of regression. Focus on one module at a time.${isRefactoring ? " (Refactor leniency applied)" : ""}`,
@@ -113,7 +121,7 @@ export class MetabolicMonitor {
 
 		// v9 HARDENING: Mission Drift Detection (Yak Shaving Protection)
 		// Track if we are spending too much metabolic energy in non-core layers
-		if (drift >= 5 && !isPlanning) {
+		if (drift >= 5 && !isPlanning && !isInfraTurn) {
 			const nonDomainEdits = recentEntries.filter(([p]) => !p.includes("/domain/") && !p.includes("/core/")).length
 			const missionRatio = nonDomainEdits / drift
 
@@ -133,7 +141,20 @@ export class MetabolicMonitor {
 			}
 		}
 
-		return { drift }
+		return { drift, isInfraTurn }
+	}
+
+	/**
+	 * V8: Resets inflammation for a specific file (Breath-based recovery)
+	 */
+	public resetFileInflammation(filePath: string) {
+		const metrics = this.registry.get(filePath)
+		if (metrics) {
+			metrics.linesAdded = 0
+			metrics.linesDeleted = 0
+			metrics.writes = 0
+			Logger.info(`[MetabolicMonitor] Inflammation manually cleared for ${path.basename(filePath)}`)
+		}
 	}
 
 	/**

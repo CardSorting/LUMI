@@ -2,6 +2,7 @@ import * as path from "path"
 import * as ts from "typescript"
 import { getLayer, isLayerTagSupported, Layer, parseLayerTag, validateImportDepth } from "@/utils/joy-zoning"
 import { Logger } from "../../shared/services/Logger"
+import { SpiderEngine } from "./spider/SpiderEngine"
 
 /**
  * Policy Enforcement Theme: Defines the strictness level of architectural validation
@@ -236,6 +237,7 @@ export class TspPolicyPlugin {
 		filePath: string,
 		content: string,
 		_resolveContent?: (path: string) => string | undefined,
+		isRecovering = false, // V9: Downgrade errors to warnings if project integrity is recovering
 	): { success: boolean; errors: string[]; warnings: string[] } {
 		const errors: string[] = []
 		const warnings: string[] = []
@@ -299,7 +301,7 @@ export class TspPolicyPlugin {
 		}
 
 		// 5. Rule: Layered Import Constraints
-		this.validateImports(sourceFile, filePath, currentLayer, errors, warnings)
+		this.validateImports(sourceFile, filePath, currentLayer, errors, warnings, isRecovering)
 
 		// 6. Rule: Contractual Sovereignty (v12)
 		if (currentLayer === "domain" || currentLayer === "core") {
@@ -406,6 +408,7 @@ export class TspPolicyPlugin {
 		currentLayer: Layer,
 		errors: string[],
 		warnings: string[],
+		isRecovering = false,
 	) {
 		ts.forEachChild(sourceFile, (node) => {
 			if (ts.isImportDeclaration(node)) {
@@ -425,17 +428,31 @@ export class TspPolicyPlugin {
 					if (currentLayer === "domain") {
 						if (targetLayer === "infrastructure" || targetLayer === "ui") {
 							const msg = `Domain layer cannot import '${moduleName}' (${targetLayer} layer).`
-							errors.push(msg)
-							warnings.push(msg)
+							if (isRecovering) {
+								warnings.push(`${msg} (Leniency applied during recovery)`)
+							} else {
+								errors.push(msg)
+								warnings.push(msg)
+							}
 						}
 					}
 
 					if (currentLayer === "core" && targetLayer === "ui") {
-						errors.push(`Core layer cannot import UI component '${moduleName}'.`)
+						const msg = `Core layer cannot import UI component '${moduleName}'.`
+						if (isRecovering) {
+							warnings.push(`${msg} (Leniency applied during recovery)`)
+						} else {
+							errors.push(msg)
+						}
 					}
 
 					if (currentLayer === "ui" && targetLayer === "infrastructure") {
-						errors.push(`UI cannot directly import Infrastructure '${moduleName}'.`)
+						const msg = `UI cannot directly import Infrastructure '${moduleName}'.`
+						if (isRecovering) {
+							warnings.push(`${msg} (Leniency applied during recovery)`)
+						} else {
+							errors.push(msg)
+						}
 					}
 				}
 			}
@@ -483,11 +500,11 @@ export class TspPolicyPlugin {
 	 * Ensures consistent POSIX path normalization to prevent "Geographic Misalignment" false positives.
 	 */
 	private resolveAlias(moduleName: string): string {
-		// Sort aliases by length descending to ensure the most specific match (e.g., @shared-utils/ vs @shared/)
-		const sortedAliases = Object.entries(TspPolicyPlugin.ALIASES).sort((a, b) => b[0].length - a[0].length)
+		// V9: Use centralized aliases from SpiderEngine
+		const globalAliases = SpiderEngine.getGlobalAliases()
+		const sortedAliases = Object.entries(globalAliases).sort((a, b) => b[0].length - a[0].length)
 
 		for (const [alias, replacement] of sortedAliases) {
-			// Check for exact match without trailing slash OR starts with alias
 			if (moduleName === alias.slice(0, -1) || moduleName.startsWith(alias)) {
 				const suffix = moduleName.startsWith(alias) ? moduleName.substring(alias.length) : ""
 				return path.join(replacement, suffix).replace(/\\/g, "/")

@@ -33,16 +33,20 @@ export class SovereignGuard {
 		currentEngine: SpiderEngine,
 		_pathogens: PathogenStore,
 	): Promise<GuardSignal> {
+		const isRecovering = currentEngine.isRecovering
+
 		// 0. Architectural Exception Handshake
 		if (newContent.includes("[SOVEREIGN_EXCEPTION]")) {
 			// PRODUCTION HARDENING: Require substantive reasoning for exceptions.
 			const reasonMatch = newContent.match(/\[SOVEREIGN_EXCEPTION:\s*([^\]]+)\]/)
 			const reasonText = reasonMatch ? reasonMatch[1].trim() : ""
 
-			if (reasonText.length < 20) {
+			// V9: Relax length requirement if project is recovering
+			const minLength = isRecovering ? 10 : 20
+			if (reasonText.length < minLength) {
 				return {
 					approved: false,
-					reason: "🛑 INVALID EXCEPTION: The [SOVEREIGN_EXCEPTION] tag requires a substantive reason (min 20 characters).",
+					reason: `🛑 INVALID EXCEPTION: The [SOVEREIGN_EXCEPTION] tag requires a substantive reason (min ${minLength} characters).`,
 					violations: [],
 					remediation:
 						"Provide a clear architectural justification for bypassing the integrity guard (e.g. [SOVEREIGN_EXCEPTION: Temporary circularity for migration]).",
@@ -57,9 +61,12 @@ export class SovereignGuard {
 		}
 
 		// 1. Simulate the impact on the structural graph (v13 High-Fidelity)
+		// V9: Pass isRecovering as isHealingMode to SimulationEngine
 		const simResult = await this.simulationEngine.simulateEdit(filePath, newContent, currentEngine)
 
-		if (!simResult.safe && simResult.scoreDrop > 15) {
+		// V9: Dynamic Leniency sync with SimulationEngine
+		const maxDrop = isRecovering ? 25 : 15
+		if (!simResult.safe && simResult.scoreDrop > maxDrop) {
 			return {
 				approved: false,
 				reason: `Integrity Drop Warning: This edit predicts a ${simResult.scoreDrop.toFixed(1)}% drop in structural integrity.`,

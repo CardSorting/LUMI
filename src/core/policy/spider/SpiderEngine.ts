@@ -28,6 +28,32 @@ export class SpiderEngine {
 	public nodes: Map<string, SpiderNode> = new Map()
 	public ghosts: Set<string> = new Set()
 	public version = 0
+	public isRecovering = false // Track if the last operation improved project health
+
+	/**
+	 * V9: Centralized source of truth for architectural aliases.
+	 * Synchronizes ForensicEngine, TspPolicyPlugin, and FluidPolicyEngine.
+	 */
+	public static getGlobalAliases(): Record<string, string> {
+		return {
+			"@/": "src/",
+			"@domain/": "src/domain/",
+			"@core/": "src/core/",
+			"@infrastructure/": "src/infrastructure/",
+			"@plumbing/": "src/plumbing/",
+			"@ui/": "src/ui/",
+			"@api/": "src/core/api/",
+			"@generated/": "src/generated/",
+			"@services/": "src/services/",
+			"@integrations/": "src/integrations/",
+			"@packages/": "src/packages/",
+			"@hosts/": "src/hosts/",
+			"@shared/": "src/shared/",
+			"@utils/": "src/utils/",
+			"@frontend/": "webview-ui/src/",
+			"@shared-utils/": "src/shared/utils/",
+		}
+	}
 
 	private resolver: PathResolver
 	private forensics: ForensicEngine
@@ -275,6 +301,10 @@ export class SpiderEngine {
 	public getViolationHotspots(): string[] {
 		const violations = this.getViolations()
 		return Array.from(new Set(violations.map((v) => v.path)))
+	}
+
+	public getFilesByPath(dir: string): string[] {
+		return Array.from(this.nodes.keys()).filter((p) => p.startsWith(dir))
 	}
 
 	public async takeSnapshot(): Promise<string> {

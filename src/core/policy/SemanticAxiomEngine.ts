@@ -1,5 +1,6 @@
 import * as path from "path"
 import * as ts from "typescript"
+import { Logger } from "@/shared/services/Logger"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
 
 export interface AxiomViolation {
@@ -61,9 +62,18 @@ export class SemanticAxiomEngine {
 		const node = engine.nodes.get(normalizedPath)
 		const lines = content.split("\n")
 		const isPassthrough = content.includes("@dietcode-passthrough") || content.includes("@sovereign-exception")
+		const exceptionMatch = content.match(/@sovereign-exception:\s*([^\n*/]+)/)
+		const exceptionReason = exceptionMatch ? exceptionMatch[1].trim() : "None provided"
+
+		if (isPassthrough && node) {
+			Logger.info(`[SemanticAxiomEngine] Sovereign Exception active for ${node.path}. Reason: ${exceptionReason}`)
+		}
+
+		if (!node) return violations
 
 		// 1. Axiom: SIMPLICITY (Cognitive Weight)
-		// PRODUCTION HARDENING: Exempt configuration and generated files from hard line-count blocks
+		// PRODUCTION HARDENING: Layer-aware thresholds. Domain is strict (800), others use default (1500).
+		const threshold = node.layer === "domain" ? 800 : this.SIMPLICITY_THRESHOLD
 		const isExempt =
 			normalizedPath.includes("config") ||
 			normalizedPath.includes(".json") ||
@@ -78,19 +88,18 @@ export class SemanticAxiomEngine {
 			normalizedPath.includes("/dist/") ||
 			normalizedPath.includes("/node_modules/") ||
 			normalizedPath.includes("/.spider/") ||
-			normalizedPath.includes("/.vscode/")
+			normalizedPath.includes("/.vscode/") ||
+			content.includes("@sovereign-exception: SIMPLICITY")
 
-		if (lines.length > this.SIMPLICITY_THRESHOLD && !isExempt) {
+		if (lines.length > threshold && !isExempt) {
 			violations.push({
 				axiom: "SIMPLICITY",
 				severity: "ERROR",
-				message: `Cognitive Bloat: File exceeds ${this.SIMPLICITY_THRESHOLD} lines (${lines.length}).`,
+				message: `Cognitive Bloat: ${node.layer.toUpperCase()} file exceeds limit (${lines.length}/${threshold} lines).`,
 				remediation: "Split the file into focused sub-modules or extract utility functions to @/utils.",
 				remediationSnippet: "/* Recommended: Extract core logic to focused sub-modules */",
 			})
 		}
-
-		if (!node) return violations
 
 		const ast = sourceFile || ts.createSourceFile("temp.ts", content, ts.ScriptTarget.Latest, true)
 
@@ -222,12 +231,17 @@ export class SemanticAxiomEngine {
 				(l) => l.trim() && !l.trim().startsWith("//") && !l.trim().startsWith("*"),
 			).length
 			if (nonCommentLines < 10) {
+				// V8: Cohesion Auto-Healing Suggestions
+				const dir = path.dirname(node.path)
+				const siblings = engine.getFilesByPath(dir).filter((p) => p !== node.path && p.endsWith(".ts"))
+				const mergeTarget = siblings.length > 0 ? path.basename(siblings[0]) : "another Domain file"
+
 				violations.push({
 					axiom: "COHESION",
 					severity: "WARN",
 					message: `Fragmented Domain Model: File is very small (${nonCommentLines} logical lines).`,
-					remediation:
-						"Consider merging this small model/value-object into a related aggregate file to maintain cohesion.",
+					remediation: `Consider merging ${path.basename(node.path)} into ${mergeTarget} to maintain structural density.`,
+					remediationSnippet: `// Merge into ${mergeTarget}`,
 				})
 			}
 		}

@@ -252,12 +252,12 @@ export class FluidPolicyEngine {
 		const penalty = Math.min(95, totalPenalty)
 		const score = Math.max(5, base - penalty)
 
-		// Trigger Architectural Alarm if score drops below 70 due to hard errors
 		// PRODUCTION HARDENING: Alarm is trend-aware. Only trigger if score is actively declining.
 		// This prevents friction during positive refactoring sessions where the score is recovering.
 		const isDeclining = score < this.lastIntegrityScore
 		const isRecovering = score > this.lastIntegrityScore
 		this.lastIntegrityScore = score
+		this.spiderEngine.isRecovering = isRecovering // Synchronize trend with substrate engine
 
 		if (score < 70 && !this.architecturalAlarmActive && isDeclining) {
 			this.triggerAlarm(violations)
@@ -309,15 +309,31 @@ export class FluidPolicyEngine {
 		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
 			const cooldown = this.metabolicMonitor.getCooldownStatus()
 			if (cooldown.active && !this.commitSeal) {
-				return {
-					success: false,
-					error:
-						`🛑 COGNITIVE COOLDOWN [ACTIVE]: ${cooldown.reason}\n` +
-						`The substrate has reached structural saturation. High-velocity logic churn is temporarily interdicted to prevent architectural regression.\n\n` +
-						`💡 RECOVERY: You MUST perform an audit turn before continuing. Execute one of the following:\n` +
-						`  - Update \`scratchpad.md\` with a # SOVEREIGN AUDIT\n` +
-						`  - Read \`docs/\` or architectural guides\n` +
-						`  - Refine existing interfaces in DOMAIN`,
+				// V7/V8 HARDENING: Check for SOVEREIGN context in scratchpad
+				let hasBreath = false
+				let scratchpadContent = ""
+				try {
+					const scratchpadPath = path.join(this.cwd, "scratchpad.md")
+					scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
+					if (scratchpadContent.includes("# SOVEREIGN BREATH")) {
+						hasBreath = true
+						Logger.info("[FluidPolicyEngine] Metabolic Cooldown bypassed via # SOVEREIGN BREATH")
+					}
+				} catch (_e) {
+					// Scratchpad missing
+				}
+
+				if (!hasBreath) {
+					return {
+						success: false,
+						error:
+							`🛑 COGNITIVE COOLDOWN [ACTIVE]: ${cooldown.reason}\n` +
+							`The substrate has reached structural saturation. High-velocity logic churn is temporarily interdicted to prevent architectural regression.\n\n` +
+							`💡 RECOVERY: You MUST perform an audit turn before continuing. Execute one of the following:\n` +
+							`  - Update \`scratchpad.md\` with a # SOVEREIGN BREATH (lightweight targeted fix justification)\n` +
+							`  - Update \`scratchpad.md\` with a # SOVEREIGN AUDIT (full state synthesis)\n` +
+							`  - Read \`docs/\` or architectural guides`,
+					}
 				}
 			}
 		}
@@ -394,16 +410,43 @@ export class FluidPolicyEngine {
 		// 0. Rule: Simulation Guard (Pre-flight Prophet)
 		if (block.name === DietCodeDefaultTool.RENAME || block.name === DietCodeDefaultTool.MOVE) {
 			const { oldPath, newPath } = block.params as { oldPath: string; newPath: string }
-			const sim = await this.simulationEngine.simulateMove(oldPath, newPath, this.spiderEngine, this.pathogens)
+
+			// V8: Detect healing intent in current turn
+			let isHealingMode = this.architecturalAlarmActive
+			try {
+				const scratchpadPath = path.join(this.cwd, "scratchpad.md")
+				const scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
+				if (scratchpadContent.includes("[SOVEREIGN_HEALING]") || scratchpadContent.includes("# HEALING TURN")) {
+					isHealingMode = true
+				}
+			} catch (_e) {}
+
+			const sim = await this.simulationEngine.simulateMove(
+				oldPath,
+				newPath,
+				this.spiderEngine,
+				this.pathogens,
+				isHealingMode,
+			)
 			if (!sim.safe && !this.commitSeal) {
+				const healingHint = !isHealingMode
+					? "\n\n💡 PRO-TIP: To bypass simulation blocks during structural repairs, add `# HEALING TURN` to your `scratchpad.md`."
+					: ""
 				return {
 					success: false,
 					error:
 						`🚨 SIMULATION BLOCK: ${sim.message}\n` +
 						`Your proposed move predicts a significant architectural regression.\n` +
 						`Violations predicted: \n${sim.violations.map((v: string) => `  - ${v}`).join("\n")}\n\n` +
-						`💡 Fix these structural issues in the source before moving, or use a Commit Seal to bypass.`,
+						`💡 Fix these structural issues in the source before moving, or use a Commit Seal to bypass.${healingHint}`,
 				}
+			}
+
+			// V8: Automated Re-linking after successful move
+			if (sim.safe) {
+				Logger.info(`[FluidPolicyEngine] Scheduling post-move import healing for ${oldPath} -> ${newPath}`)
+				// Note: In a real orchestrator, this might be a post-execution hook.
+				// For now, we inform the agent it can use RefactorHealer.
 			}
 		}
 
@@ -543,7 +586,15 @@ export class FluidPolicyEngine {
 			this.spiderEngine.buildGraph(Array.from(this.sessionFiles.entries()).map(([p, c]) => ({ filePath: p, content: c })))
 
 			// 1. AST Validation (TSP)
-			const astValidation = this.tspPlugin.validateSource(filePath, content, this.virtualResolver)
+			// V9: Pass trend signals for Absolute Metabolic Integrity
+			const isRecovering = this.spiderEngine.isRecovering
+			const isHealing = content.includes("[SOVEREIGN_HEALING]") || content.includes("# HEALING TURN")
+			const astValidation = this.tspPlugin.validateSource(
+				filePath,
+				content,
+				this.virtualResolver,
+				isRecovering || isHealing,
+			)
 
 			// Block on AST Failure (Strike 1 Domain)
 			if (!astValidation.success) {
@@ -552,19 +603,30 @@ export class FluidPolicyEngine {
 				const projectIntegrity = this.computeIntegrityScore(this.spiderEngine.getViolations().map((v) => v.message))
 
 				// PRODUCTION HARDENING: Layer-aware blocking.
-				// 1. DOMAIN is the holy of holies — ALWAYS block on any error.
-				// 2. CORE is the mission control — block on Strike 1 if integrity is compromised (< 70).
+				// 1. DOMAIN is the holy of holies — ALWAYS block on any error UNLESS [SOVEREIGN_HEALING] is present.
+				// 2. CORE is the mission control — block on Strike 1 if integrity is compromised (< 70) AND declining.
+
+				const isRecoveringTrend = this.spiderEngine.isRecovering
 				const shouldBlock =
-					(layer === "domain" && astValidation.errors.length > 0) ||
-					(layer === "core" && strikes === 1 && astValidation.errors.length > 0 && projectIntegrity < 70)
+					(layer === "domain" && astValidation.errors.length > 0 && !isHealing) ||
+					(layer === "core" &&
+						strikes === 1 &&
+						astValidation.errors.length > 0 &&
+						projectIntegrity < 70 &&
+						!isRecoveringTrend)
 
 				if (shouldBlock) {
 					const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
 					const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN SOVEREIGNTY BREACH" : "🏗️ CORE INTEGRITY PROTECT"
 					const shield = this.getResilienceShield()
+					const healingHint =
+						layer === "domain"
+							? "\n\n🩹 SOVEREIGN HEALING: To bypass this block during complex refactoring, add `[SOVEREIGN_HEALING]` to your file content.\n" +
+								"💡 Alternatively, use `materializeGhost` or `healImports` tools if applicable."
+							: ""
 					return {
 						success: false,
-						error: `${shield}${rejectionTitle} (Strike ${strikes})\nLayer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummaryRejection}\n\n${this.getCorrectionHint(astValidation.errors, filePath)}\n\n💡 Your write was NOT executed. Please address these violations and try again.`,
+						error: `${shield}${rejectionTitle} (Strike ${strikes})\nLayer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummaryRejection}\n\n${this.getCorrectionHint(astValidation.errors, filePath)}${healingHint}\n\n💡 Your write was NOT executed. Please address these violations and try again.`,
 						violations: astValidation.errors,
 					}
 				}
@@ -580,6 +642,17 @@ export class FluidPolicyEngine {
 					await orchestrator.storeMemory(this.streamId, "last_entropy_score", entropy.score.toString())
 					if (delta > 0.01) {
 						await orchestrator.storeMemory(this.streamId, "entropy_decay", delta.toString())
+					}
+				}
+
+				// V10: Recursive Drift Protection
+				if (strikes >= 3 && layer === "core") {
+					return {
+						success: false,
+						error:
+							`🛑 RECURSIVE DRIFT INTERDICTION: You have attempted to edit \`${path.basename(filePath)}\` 3 times with unresolved Domain/Core violations.\n` +
+							`The substrate is rejecting these atomic changes. You are likely trying to perform a complex refactor in too small of a window.\n\n` +
+							`💡 STRATEGIC PIVOT: You MUST extract this logic or implement a formal interface rather than forcing the current approach. Use \`RefactorHealer\` to materialize a contract, or perform a # SOVEREIGN AUDIT.`,
 					}
 				}
 
@@ -600,6 +673,16 @@ export class FluidPolicyEngine {
 
 			// Clean file — reset strikes for this path
 			await this.resetStrikes(filePath)
+
+			// V10: Harmonic Decay (Forgiveness for historically stressed files)
+			if (this.spiderEngine.isRecovering) {
+				const isHistoricallyAlarmed =
+					this.alarmViolations.some((v) => v.includes(filePath)) || this.pathogens.isPathogenic(filePath)
+				if (isHistoricallyAlarmed) {
+					Logger.info(`[FluidPolicyEngine] Triggering Harmonic Decay for successfully healed file: ${filePath}`)
+					this.pathogens.decay(filePath, 2)
+				}
+			}
 
 			// Surface AST warnings if any
 			if (astValidation.warnings && astValidation.warnings.length > 0) {

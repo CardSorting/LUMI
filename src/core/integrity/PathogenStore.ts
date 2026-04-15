@@ -1,6 +1,7 @@
 import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
+import { Logger } from "@/shared/services/Logger"
 
 export interface Pathogen {
 	id: string
@@ -40,7 +41,7 @@ export class PathogenStore {
 				id: Math.random().toString(36).substring(7),
 				type,
 				signature: hash,
-				originalSummary: originalSignature.substring(0, 50) + "...",
+				originalSummary: `${originalSignature.substring(0, 50)}...`,
 				timestamp: Date.now(),
 				severity,
 				hitCount: 1,
@@ -64,14 +65,44 @@ export class PathogenStore {
 		// If the file resides in a directory with "STRESS", it inherits pathogenicity.
 		const dir = path.dirname(signature)
 		const dirHash = this.hashSignature(`dir_stress:${dir}`)
-		if (this.pathogens.has(dirHash)) {
-			const dp = this.pathogens.get(dirHash)!
+		const dp = this.pathogens.get(dirHash)
+		if (dp) {
 			dp.hitCount++
 			dp.timestamp = Date.now()
 			return true
 		}
 
 		return false
+	}
+
+	/**
+	 * V10: Harmonic Decay. Reduces the weight of a pathogen when integrity improves.
+	 */
+	public decay(signature: string, amount = 1) {
+		const hash = this.hashSignature(signature)
+		const p = this.pathogens.get(hash)
+		if (p) {
+			p.hitCount = Math.max(0, p.hitCount - amount)
+			p.severity = Math.max(0, p.severity - 0.5)
+			if (p.hitCount <= 0) {
+				this.pathogens.delete(hash)
+				Logger.info(`[PathogenStore] Forgiveness granted: Pathogen cleared for ${p.originalSummary}`)
+			} else {
+				p.timestamp = Date.now()
+			}
+			this.save()
+		}
+	}
+
+	/**
+	 * V10: Explicitly clears a pathogen.
+	 */
+	public clearPathogen(signature: string) {
+		const hash = this.hashSignature(signature)
+		if (this.pathogens.delete(hash)) {
+			Logger.info(`[PathogenStore] Explicitly cleared pathogen for signature: ${signature.substring(0, 30)}...`)
+			this.save()
+		}
 	}
 
 	/**
@@ -90,7 +121,6 @@ export class PathogenStore {
 		}
 
 		// Pattern-based Prediction (v12)
-		const fileName = path.basename(filePath)
 		for (const p of this.pathogens.values()) {
 			if (p.type === "LAYER_VIOLATION_PATTERN" && p.hitCount > 5) {
 				return {
@@ -154,7 +184,9 @@ export class PathogenStore {
 			const sorted = Array.from(this.pathogens.values()).sort((a, b) => a.timestamp - b.timestamp) // Oldest first
 
 			const toRemove = sorted.slice(0, this.pathogens.size - this.MAX_PATHOGENS)
-			toRemove.forEach((p) => this.pathogens.delete(p.signature))
+			for (const p of toRemove) {
+				this.pathogens.delete(p.signature)
+			}
 		}
 	}
 
@@ -171,7 +203,9 @@ export class PathogenStore {
 			try {
 				const data = JSON.parse(fs.readFileSync(this.storePath, "utf-8"))
 				if (Array.isArray(data)) {
-					data.forEach((p: Pathogen) => this.pathogens.set(p.signature, p))
+					for (const p of data as Pathogen[]) {
+						this.pathogens.set(p.signature, p)
+					}
 				}
 			} catch (_e) {
 				this.pathogens = new Map()

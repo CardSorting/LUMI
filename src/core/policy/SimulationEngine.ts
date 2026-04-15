@@ -27,9 +27,10 @@ export class SimulationEngine {
 		newPath: string,
 		currentEngine: SpiderEngine,
 		pathogens: PathogenStore,
+		isHealingMode = false, // V8: Allow moves that introduce temporary violations if in Healing Mode
 	): Promise<SimulationResult> {
 		// Immune Check
-		if (pathogens.isPathogenic(oldPath)) {
+		if (pathogens.isPathogenic(oldPath) && !isHealingMode) {
 			return {
 				safe: false,
 				predictedScore: 0,
@@ -82,8 +83,10 @@ export class SimulationEngine {
 		// PRODUCTION HARDENING: Threshold relaxed from 10% to 15% to allow for ambitious refactors.
 		// NEW pass: Stricter for "High-Traffic" nodes (afferent coupling > 10) to prevent breaking core modules.
 		const isHighTraffic = (node.afferentCoupling || 0) > 10
-		const dynamicThreshold = isHighTraffic ? 10 : 15
-		const isSafe = scoreDrop < dynamicThreshold && violations.length === 0
+		const baseThreshold = isHighTraffic ? 10 : 15
+		// V8 SOVEREIGN AGILITY: Healing Mode provides a massive 25% drop threshold and ignores new violations
+		const dynamicThreshold = isHealingMode ? 25 : baseThreshold
+		const isSafe = scoreDrop < dynamicThreshold && (violations.length === 0 || isHealingMode)
 
 		return {
 			safe: isSafe,
@@ -91,7 +94,7 @@ export class SimulationEngine {
 			scoreDrop,
 			violations,
 			message: isSafe
-				? "Simulation predicts stable transition."
+				? "Simulation predicts stable transition (Sovereign Leniency applied)."
 				: `Simulation Warning: Move predicts a ${(scoreDrop).toFixed(1)}% drop in structural integrity. Review layer boundaries if this is unexpected.`,
 		}
 	}

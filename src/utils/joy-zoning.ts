@@ -72,9 +72,29 @@ const PATH_TAG_SUPPORT_CACHE: Map<string, boolean> = new Map()
 /**
  * Determines the layer of a given file path based on Joy-Zoning conventions or spider.spec.json.
  * High-Performance: Uses an in-memory session cache to avoid redundant path math.
+ * V10: Archetypal Primacy — The [LAYER: TYPE] tag in content overrides the file path.
  */
-export function getLayer(filePath: string): Layer {
+export function getLayer(filePath: string, content?: string): Layer {
 	const normalized = filePath.replace(/\\/g, "/")
+
+	// 1. Archetypal Primacy: Use the explicit tag in the content if available (v10)
+	if (content) {
+		const tag = parseLayerTag(content)
+		if (tag) {
+			// Cache this result for this specific file version
+			PATH_LAYER_CACHE.set(normalized, tag)
+			return tag
+		}
+
+		// 2. Archetypal Fallback: Suggest layer based on code patterns (v10)
+		const suggestion = suggestLayerForContent(content)
+		if (suggestion) {
+			// Only trust suggestion if it is a strong signal (not null)
+			PATH_LAYER_CACHE.set(normalized, suggestion.layer)
+			return suggestion.layer
+		}
+	}
+
 	if (PATH_LAYER_CACHE.has(normalized)) return PATH_LAYER_CACHE.get(normalized)!
 
 	// Try to load spider.spec.json for custom domain/layer mappings (Cached)

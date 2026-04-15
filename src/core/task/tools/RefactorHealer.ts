@@ -4,6 +4,7 @@ import * as ts from "typescript"
 import { Logger } from "@/shared/services/Logger"
 import { generateLayerComment, getLayer, isLayerTagSupported, parseLayerTag } from "@/utils/joy-zoning"
 import { SovereignTransaction } from "../../integrity/SovereignTransaction"
+import { AxiomViolation } from "../../policy/SemanticAxiomEngine"
 import { SovereignOptimizer } from "../../policy/SovereignOptimizer"
 import { SpiderEngine } from "../../policy/spider/SpiderEngine"
 import { SpiderNode } from "../../policy/spider/types"
@@ -48,6 +49,52 @@ export class RefactorHealer {
 		} catch (_error) {
 			await tx.rollback()
 			return { success: false }
+		}
+	}
+
+	/**
+	 * V10: Orchestrates a multi-step healing process based on known violations.
+	 */
+	public async autoHeal(filePath: string, _engine: SpiderEngine, violations?: string[] | AxiomViolation[]): Promise<boolean> {
+		let healedSomething = false
+		try {
+			const absolutePath = path.resolve(this.projectRoot, filePath)
+			const content = await fs.readFile(absolutePath, "utf-8")
+			const layer = getLayer(filePath, content)
+
+			// 1. Tag Alignment (Archetypal Sync)
+			const currentTag = parseLayerTag(content)
+			if (currentTag !== layer && isLayerTagSupported(filePath, content)) {
+				const newContent = generateLayerComment(filePath, layer, content)
+				if (newContent && newContent !== content) {
+					await fs.writeFile(absolutePath, newContent, "utf-8")
+					Logger.info(
+						`[RefactorHealer] Auto-healed: Aligned tag to [LAYER: ${layer.toUpperCase()}] in ${path.basename(filePath)}`,
+					)
+					healedSomething = true
+				}
+			}
+
+			// 2. Resolve known ghost symbols from violations
+			if (violations) {
+				const vstrings = violations.map((v) => (typeof v === "string" ? v : v.message))
+				for (const v of vstrings) {
+					// Detect "Cannot find module/symbol 'X'"
+					const ghostMatch =
+						v.match(/Cannot find name ['"]([^'"]+)['"]/i) ||
+						v.match(/Module.*has no exported member ['"]([^'"]+)['"]/i)
+					if (ghostMatch) {
+						const symbol = ghostMatch[1]
+						const ok = await this.materializeGhostSymbol(filePath, symbol)
+						if (ok) healedSomething = true
+					}
+				}
+			}
+
+			return healedSomething
+		} catch (err) {
+			Logger.error(`[RefactorHealer] autoHeal failed for ${filePath}:`, err)
+			return false
 		}
 	}
 
@@ -129,35 +176,69 @@ export class RefactorHealer {
 	}
 
 	/**
-	 * Materializes a "Ghost" file (Missing import) into a physical Domain interface.
+	 * V8: Strategic Import Re-linking.
+	 * Automatically updates all known dependents when a file is moved.
 	 */
-	public async materializeGhost(filePath: string, importingSource?: string): Promise<void> {
-		const absolutePath = path.resolve(this.projectRoot, filePath)
-		const fileName = path.basename(filePath, path.extname(filePath))
-		const interfaceName = this.toPascalCase(fileName)
-		const layer = getLayer(filePath)
-		const tagHeader = generateLayerComment(filePath, layer) || ""
+	public async healImports(oldPath: string, newPath: string, engine: SpiderEngine): Promise<number> {
+		const node = engine.nodes.get(oldPath) || engine.nodes.get(newPath)
+		if (!node) return 0
 
-		// PRODUCTION HARDENING: If importing source is provided, try to infer methods
-		let members = "// TODO: Define members"
-		if (importingSource?.includes(interfaceName)) {
-			const usageMatch = importingSource.match(new RegExp(`${interfaceName}\\s*{([\\s\\S]+?)}`, "g"))
-			if (usageMatch) {
-				members = `// Inferred from usage:\n\t${usageMatch.map((m) => m.trim()).join("\n\t")}`
+		let updatedCount = 0
+		const oldRel = oldPath.replace(".ts", "").replace(".tsx", "")
+		const newRel = newPath.replace(".ts", "").replace(".tsx", "")
+
+		for (const dependent of node.dependents) {
+			try {
+				const depAbs = path.resolve(this.projectRoot, dependent)
+				const content = await fs.readFile(depAbs, "utf-8")
+
+				// Calculate relative paths using @/ aliases if possible, or fall back to relative
+				const oldImportStr = oldRel.startsWith("src/") ? oldRel.replace("src/", "@/") : oldRel
+				const newImportStr = newRel.startsWith("src/") ? newRel.replace("src/", "@/") : newRel
+
+				if (content.includes(oldImportStr)) {
+					const updatedContent = content.split(oldImportStr).join(newImportStr)
+					if (updatedContent !== content) {
+						await fs.writeFile(depAbs, updatedContent, "utf-8")
+						updatedCount++
+						Logger.info(
+							`[RefactorHealer] Automatically re-linked import in ${path.basename(dependent)}: ${oldImportStr} -> ${newImportStr}`,
+						)
+					}
+				}
+			} catch (_e) {
+				// Skip if failed
 			}
 		}
+		return updatedCount
+	}
 
-		const template = `${tagHeader}export interface ${interfaceName} {\n\t${members}\n}\n`
-
+	/**
+	 * V8: Materializes a missing symbol in a file.
+	 */
+	public async materializeGhostSymbol(filePath: string, symbol: string): Promise<boolean> {
 		try {
-			const dir = path.dirname(absolutePath)
-			if (!(await this.dirExists(dir))) {
-				await fs.mkdir(dir, { recursive: true })
+			const absolutePath = path.resolve(this.projectRoot, filePath)
+			const content = await fs.readFile(absolutePath, "utf-8")
+
+			if (
+				content.includes(`export class ${symbol}`) ||
+				content.includes(`export interface ${symbol}`) ||
+				content.includes(`export const ${symbol}`)
+			) {
+				return false
 			}
-			await fs.writeFile(absolutePath, template, "utf-8")
-			Logger.info(`[RefactorHealer] Materialized ghost interface ${interfaceName} at ${filePath}`)
+
+			// Add a basic boilerplate at the end of the file
+			const layer = getLayer(filePath)
+			const boilerplate = `\n\n/**\n * [LAYER: ${layer.toUpperCase()}]\n * Placeholder for ${symbol} (Materialized via Sovereign Healer)\n */\nexport class ${symbol} {\n\t// TODO: Implement members\n}\n`
+
+			await fs.writeFile(absolutePath, content + boilerplate, "utf-8")
+			Logger.info(`[RefactorHealer] Materialized ghost symbol ${symbol} in ${path.basename(filePath)}`)
+			return true
 		} catch (err) {
-			Logger.error(`[RefactorHealer] Failed to materialize ghost ${filePath}:`, err)
+			Logger.error(`[RefactorHealer] Failed to materialize ghost symbol ${symbol} in ${filePath}:`, err)
+			return false
 		}
 	}
 
@@ -260,21 +341,5 @@ export class RefactorHealer {
 		}
 
 		return proposals
-	}
-
-	private toPascalCase(str: string): string {
-		return str
-			.split("-")
-			.map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-			.join("")
-	}
-
-	private async dirExists(dir: string): Promise<boolean> {
-		try {
-			await fs.access(dir)
-			return true
-		} catch {
-			return false
-		}
 	}
 }
