@@ -233,7 +233,9 @@ export class SemanticAxiomEngine {
 			if (nonCommentLines < 10) {
 				// V8: Cohesion Auto-Healing Suggestions
 				const dir = path.dirname(node.path)
-				const siblings = engine.getFilesByPath(dir).filter((p) => p !== node.path && p.endsWith(".ts"))
+				const siblings = Array.from(engine.nodes.values())
+					.map((n) => n.path)
+					.filter((p: string) => path.dirname(p) === dir && p !== node.path && p.endsWith(".ts"))
 				const mergeTarget = siblings.length > 0 ? path.basename(siblings[0]) : "another Domain file"
 
 				violations.push({
