@@ -8,7 +8,7 @@ import fs from "fs/promises"
 import * as path from "path"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { Logger } from "@/shared/services/Logger"
-import { isLayerTagSupported } from "@/utils/joy-zoning"
+import { getLayer, isLayerTagSupported, suggestLayerForContent } from "@/utils/joy-zoning"
 import { ToolUse } from "../assistant-message"
 import { ContextStalenessTracker } from "../context/ContextStalenessTracker"
 import { AuditRecorder } from "../integrity/AuditRecorder.js"
@@ -78,7 +78,7 @@ export class FluidPolicyEngine {
 		this.stalenessTracker = new ContextStalenessTracker(this.cwd)
 		this.dashboardGenerator = new DashboardGenerator(this.cwd)
 		this.axiomEngine = new SemanticAxiomEngine(this.cwd)
-		this.metabolicMonitor = new MetabolicMonitor(this.cwd)
+		this.metabolicMonitor = new MetabolicMonitor()
 		this.optimizer = new SovereignOptimizer(this.cwd)
 		this.pathogens = new PathogenStore(this.cwd)
 		this.refactorHealer = new RefactorHealer(this.cwd)
@@ -300,19 +300,65 @@ export class FluidPolicyEngine {
 	 * Uses progressive enforcement: first domain violation blocks, subsequent ones degrade to warnings.
 	 */
 	public async validatePreExecution(block: ToolUse): Promise<PolicyResult> {
+		// 0. Rule: Metabolic Cooldown (Inflammation Control)
+		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
+			const targetPath = (block.params as any)?.path
+			if (targetPath) {
+				const absolutePath = path.resolve(this.cwd, targetPath)
+				const status = this.metabolicMonitor.isInflamed(absolutePath)
+				const hasOverride = (block.params as { content?: string }).content?.includes(
+					"[SOVEREIGN_EXCEPTION: Metabolic Cooldown Override]",
+				)
+
+				if (status.inflamed && !hasOverride && !this.commitSeal) {
+					return {
+						success: false,
+						error:
+							`🛑 METABOLIC COOLDOWN INTERDICTION: \`${path.basename(targetPath)}\` is currently INFLAMED.\n` +
+							`${status.reason}\n\n` +
+							`💡 RECOVERY: Architectural exhaustion detected. You MUST stop editing this file and performing a # SOVEREIGN AUDIT in \`scratchpad.md\` to justify further churn or plan an atomic split. ` +
+							`To override, add \`[SOVEREIGN_EXCEPTION: Metabolic Cooldown Override]\` with a substantive reason to your edit.`,
+					}
+				}
+			}
+		}
 		// 0. Rule: Logic Axiom Guard (Substrate Maturity)
 		if (block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.APPLY_PATCH) {
 			const { path: filePath, content } = block.params as unknown as { path: string; content?: string }
 			if (content) {
 				const axiomViolations = this.axiomEngine.validateAxioms(filePath, content, this.spiderEngine)
 				const errors = axiomViolations.filter((v) => v.severity === "ERROR")
+
+				// PRODUCTION HARDENING: Auto-healing for specific axioms (e.g. STATELESSNESS)
+				// This significantly improves agent success rate by fixing minor issues automatically.
+				const statelessnessViolation = axiomViolations.find((v) => v.axiom === "STATELESSNESS")
+				if (statelessnessViolation && block.name === DietCodeDefaultTool.APPLY_PATCH) {
+					Logger.info(`[FluidPolicyEngine] Auto-healing STATELESSNESS for ${filePath}`)
+					await this.refactorHealer.healStatelessness(filePath)
+					// Remove from errors list to allow continuation if it was the only error
+					const index = errors.indexOf(statelessnessViolation)
+					if (index !== -1) errors.splice(index, 1)
+				}
+
 				if (errors.length > 0 && !this.commitSeal) {
+					// v10 HARDENING: Aromatic Extraction Sensing.
+					// If we detect a zero-sum move, suggest an extraction immediately.
+					const currentViolations = this.spiderEngine
+						.getViolations()
+						.map((v) => ({ axiom: "STRUCTURAL", severity: "WARN" as const, message: v.message }))
+					const nextViolations = axiomViolations
+					const compare = this.axiomEngine.compareAxiomSessions(currentViolations, nextViolations)
+					let directive = ""
+					if (compare.status === "ZERO_SUM") {
+						directive = `\n\n🧩 AROMATIC EXTRACTION DIRECTIVE: You are trading architectural debt. STRATEGY: Extract an interface to src/domain/interfaces/ and inject it to break the coupling.`
+					}
+
 					return {
 						success: false,
 						error:
 							`🚨 AXIOMATIC LOGIC BLOCK: Logic Sovereignty has been compromised.\n` +
 							`${errors.map((v) => `  - [AXIOM: ${v.axiom}] ${v.message}`).join("\n")}\n\n` +
-							`💡 You must split this logic or maintain purity before the substrate will accept these changes.`,
+							`💡 You must split this logic or maintain purity before the substrate will accept these changes.${directive}`,
 					}
 				}
 			}
@@ -320,7 +366,7 @@ export class FluidPolicyEngine {
 
 		// 0. Rule: Simulation Guard (Pre-flight Prophet)
 		if (block.name === DietCodeDefaultTool.RENAME || block.name === DietCodeDefaultTool.MOVE) {
-			const { oldPath, newPath } = block.params as unknown as { oldPath: string; newPath: string }
+			const { oldPath, newPath } = block.params as { oldPath: string; newPath: string }
 			const sim = await this.simulationEngine.simulateMove(oldPath, newPath, this.spiderEngine, this.pathogens)
 			if (!sim.safe && !this.commitSeal) {
 				return {
@@ -328,7 +374,7 @@ export class FluidPolicyEngine {
 					error:
 						`🚨 SIMULATION BLOCK: ${sim.message}\n` +
 						`Your proposed move predicts a significant architectural regression.\n` +
-						`Violations predicted: \n${sim.violations.map((v) => `  - ${v}`).join("\n")}\n\n` +
+						`Violations predicted: \n${sim.violations.map((v: string) => `  - ${v}`).join("\n")}\n\n` +
 						`💡 Fix these structural issues in the source before moving, or use a Commit Seal to bypass.`,
 				}
 			}
@@ -340,16 +386,23 @@ export class FluidPolicyEngine {
 			(block.name === DietCodeDefaultTool.FILE_NEW ||
 				block.name === DietCodeDefaultTool.FILE_EDIT ||
 				block.name === DietCodeDefaultTool.APPLY_PATCH ||
+				block.name === DietCodeDefaultTool.MOVE ||
+				block.name === DietCodeDefaultTool.RENAME ||
 				block.name === DietCodeDefaultTool.DELETE)
 		) {
-			const targetPath = (block.params as any)?.path
+			const targetPath = (block.params as { path?: string })?.path
 			const normalizedTarget = targetPath ? this.normalize(targetPath) : null
 
-			// HEALING MODE: Allow FILE_EDIT/APPLY_PATCH if the target file is currently in violation
+			// HEALING MODE: Allow edits and structural changes if the target file is currently in violation
+			// PRODUCTION HARDENING: Expand to allow MOVE/DELETE if they are rectifying a violation (e.g. SPI-001 or SPI-003)
 			const isHealingAttempt =
-				(block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) &&
+				(block.name === DietCodeDefaultTool.FILE_EDIT ||
+					block.name === DietCodeDefaultTool.APPLY_PATCH ||
+					block.name === DietCodeDefaultTool.MOVE ||
+					block.name === DietCodeDefaultTool.RENAME ||
+					block.name === DietCodeDefaultTool.DELETE) &&
 				normalizedTarget &&
-				this.alarmViolations.some((v) => v.includes(normalizedTarget))
+				(this.alarmViolations.some((v) => v.includes(normalizedTarget)) || this.pathogens.isPathogenic(normalizedTarget))
 
 			if (!isHealingAttempt) {
 				const healableFiles = [
@@ -380,7 +433,7 @@ export class FluidPolicyEngine {
 		// In PLAN mode, skip enforcement — agent is only planning, not writing
 		// Return guidance instead of blocking
 		if (this.mode === "plan" && block.params?.path) {
-			const { getLayer } = require("@/utils/joy-zoning")
+			// consolidated to top-level import
 			const filePath = path.resolve(this.cwd, block.params.path)
 			const layer = getLayer(filePath)
 
@@ -400,9 +453,9 @@ export class FluidPolicyEngine {
 		}
 
 		// v9 HARDENING: Pre-emptive Match Sensing for replace_in_file (simulated via FILE_EDIT validation)
-		if (block.name === DietCodeDefaultTool.FILE_EDIT && block.params?.path && (block.params as any).diff) {
+		if (block.name === DietCodeDefaultTool.FILE_EDIT && block.params?.path && (block.params as { diff?: string }).diff) {
 			const filePath = path.resolve(this.cwd, block.params.path)
-			const diff = (block.params as any).diff as string
+			const diff = (block.params as { diff: string }).diff as string
 			const searchBlocks = diff.match(/------- SEARCH\n([\s\S]*?)\n=======/)
 			if (searchBlocks) {
 				const searchContent = searchBlocks[1]
@@ -425,7 +478,7 @@ export class FluidPolicyEngine {
 							error: `🛑 PRE-EMPTIVE MATCH FAILURE: The SEARCH block in your edit does not match the current state of \`${path.basename(filePath)}\`.${hint}\n\n💡 RECOVERY: Update your SEARCH block to match the actual file content exactly.`,
 						}
 					}
-				} catch (e) {
+				} catch (_e) {
 					// File might not exist
 				}
 			}
@@ -444,9 +497,11 @@ export class FluidPolicyEngine {
 			// PRODUCTION HARDENING: Proactively block edits based on verifiably stale context.
 			const staleness = this.stalenessTracker.checkStaleness(filePath)
 			if (staleness.isStale && !this.commitSeal) {
+				const fileName = path.basename(filePath)
+				// PRODUCTION HARDENING: Proactive recovery hint with a ready-to-use tool call snippet
 				return {
 					success: false,
-					error: `🛑 CONTEXTUAL SOVEREIGNTY BREACH: You are attempting to edit \`${path.basename(filePath)}\` based on a stale mental model.\nReason: ${staleness.reason}\n\n💡 RECOVERY: Use \`read_file\` to synchronize your context with the current state of the file before applying changes.`,
+					error: `🛑 CONTEXTUAL SOVEREIGNTY BREACH: You are attempting to edit \`${fileName}\` based on a stale mental model.\nReason: ${staleness.reason}\n\n💡 RECOVERY: Execute the following command to synchronize your context:\n\`\`\`json\n{\n  "name": "read_file",\n  "params": { "path": "${filePath}" }\n}\n\`\`\``,
 				}
 			}
 
@@ -461,24 +516,28 @@ export class FluidPolicyEngine {
 			if (!astValidation.success) {
 				const layer = this.getCachedLayer(filePath)
 				const strikes = await this.incrementStrikes(filePath)
-				const allWarnings = [...(astValidation.warnings || []), ...astValidation.errors]
-				const violationSummary = allWarnings.map((e: string) => `  - ${e}`).join("\n")
-
-				// GRACEFUL RECOVERY: If project integrity is high (> 85), degrade block to warning even for Strike 1 Domain
 				const projectIntegrity = this.computeIntegrityScore(this.spiderEngine.getViolations().map((v) => v.message))
+
+				// PRODUCTION HARDENING: Layer-aware blocking.
+				// 1. DOMAIN is the holy of holies — ALWAYS block on any error.
+				// 2. CORE is the mission control — block on Strike 1 if integrity is compromised (< 70).
 				const shouldBlock =
-					layer === "domain" && strikes === 1 && astValidation.errors.length > 0 && projectIntegrity < 85
+					(layer === "domain" && astValidation.errors.length > 0) ||
+					(layer === "core" && strikes === 1 && astValidation.errors.length > 0 && projectIntegrity < 70)
 
 				if (shouldBlock) {
 					const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
+					const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN SOVEREIGNTY BREACH" : "🏗️ CORE INTEGRITY PROTECT"
 					return {
 						success: false,
-						error: `🏗️ ARCHITECTURAL CORRECTION REQUIRED (Strike ${strikes})\nDomain layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummaryRejection}\n\n${this.getCorrectionHint(astValidation.errors, filePath)}\n\n💡 Your write was NOT executed. Please address these violations and try again.`,
+						error: `${rejectionTitle} (Strike ${strikes})\nLayer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummaryRejection}\n\n${this.getCorrectionHint(astValidation.errors, filePath)}\n\n💡 Your write was NOT executed. Please address these violations and try again.`,
 						violations: astValidation.errors,
 					}
 				}
 
 				// Strike 2+ or other layers: Warning only
+				const allWarnings = [...(astValidation.warnings || []), ...astValidation.errors]
+				const violationSummary = allWarnings.map((e: string) => `  - ${e}`).join("\n")
 				const entropy = this.spiderEngine.computeEntropy()
 				const latestSnapshot = await this.spiderEngine.getLatestSnapshot()
 				const delta = latestSnapshot ? this.spiderEngine.compareWith(latestSnapshot) : 0
@@ -518,7 +577,7 @@ export class FluidPolicyEngine {
 
 			// For new files: proactively suggest the best layer if content doesn't match location
 			if (block.name === DietCodeDefaultTool.FILE_NEW && block.params.content) {
-				const { getLayer, suggestLayerForContent } = require("@/utils/joy-zoning")
+				// consolidated to top-level import
 				const currentLayer = getLayer(filePath)
 				const suggestion = suggestLayerForContent(block.params.content)
 				if (suggestion && suggestion.layer !== currentLayer && currentLayer !== "core") {
@@ -579,7 +638,7 @@ export class FluidPolicyEngine {
 	private getCachedLayer(filePath: string): string {
 		let layer = this.layerCache.get(filePath)
 		if (!layer) {
-			const { getLayer } = require("@/utils/joy-zoning")
+			// consolidated to top-level import
 			layer = getLayer(filePath)
 			if (layer) {
 				this.layerCache.set(filePath, layer)
@@ -675,10 +734,18 @@ export class FluidPolicyEngine {
 
 		// Metabolic Vitality Injection
 		const lineCount = content.split("\n").length
-		const doubt = this.metabolicMonitor.getDoubtSignal(absolutePath, lineCount)
+		const doubt = this.metabolicMonitor.getDoubtSignal(absolutePath, layer, lineCount)
 		if (doubt > 5 && !this.commitSeal) {
+			const isHardStall = doubt >= 999.0
 			header += `\n⚠️ METABOLIC DOUBT DETECTED (Signal: ${doubt.toFixed(1)}):\n`
-			header += `You have read this file ${doubt.toFixed(0)} times without making a move. You are drifting into a RECURSIVE LOOP. Stop reading and formulate a clear execution plan NOW.\n`
+			if (isHardStall) {
+				header +=
+					`🛑 ARCHITECTURAL STALL: Your investigation has reached a cognitive dead-end. Automated recovery suggested:\n` +
+					`  STEP 1: Re-read core domain contracts in \`src/domain/interfaces/\`.\n` +
+					`  STEP 2: Trigger a # SOVEREIGN AUDIT in \`scratchpad.md\` to re-ground your mental model.\n`
+			} else {
+				header += `You have read this file ${doubt.toFixed(0)} times without making a move. You are drifting into a RECURSIVE LOOP. Stop reading and formulate a clear execution plan NOW.\n`
+			}
 		}
 
 		const infection = this.metabolicMonitor.isInflamed(absolutePath)

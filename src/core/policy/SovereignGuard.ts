@@ -1,3 +1,4 @@
+import * as path from "path"
 import { PathogenStore } from "../integrity/PathogenStore.js"
 import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine.js"
 import { SimulationEngine } from "./SimulationEngine.js"
@@ -34,16 +35,24 @@ export class SovereignGuard {
 	): Promise<GuardSignal> {
 		// 0. Architectural Exception Handshake
 		if (newContent.includes("[SOVEREIGN_EXCEPTION]")) {
-			// PRODUCTION HARDENING: Extract reason if provided [SOVEREIGN_EXCEPTION: reasoning...]
+			// PRODUCTION HARDENING: Require substantive reasoning for exceptions.
 			const reasonMatch = newContent.match(/\[SOVEREIGN_EXCEPTION:\s*([^\]]+)\]/)
-			const reason = reasonMatch
-				? `Architectural Exception granted: ${reasonMatch[1].trim()}`
-				: "Architectural Exception granted via [SOVEREIGN_EXCEPTION] tag."
+			const reasonText = reasonMatch ? reasonMatch[1].trim() : ""
+
+			if (reasonText.length < 20) {
+				return {
+					approved: false,
+					reason: "🛑 INVALID EXCEPTION: The [SOVEREIGN_EXCEPTION] tag requires a substantive reason (min 20 characters).",
+					violations: [],
+					remediation:
+						"Provide a clear architectural justification for bypassing the integrity guard (e.g. [SOVEREIGN_EXCEPTION: Temporary circularity for migration]).",
+				}
+			}
 
 			return {
 				approved: true,
 				violations: [],
-				reason: reason,
+				reason: `Architectural Exception granted: ${reasonText}`,
 			}
 		}
 
@@ -79,11 +88,16 @@ export class SovereignGuard {
 		const criticalViolations = violations.filter((v) => v.severity === "ERROR")
 
 		if (criticalViolations.length > 0) {
+			const v = criticalViolations[0]
+			const fixSnippet = v.remediationSnippet
+				? `\n\n💡 RECOMMENDED FIX:\n\`\`\`typescript\n${v.remediationSnippet}\n\`\`\``
+				: ""
+
 			return {
 				approved: false,
-				reason: "Axiomatic Breach: Proactive interdiction triggered.",
+				reason: `🛑 AXIOMATIC BREACH: Proactive interdiction triggered in \`${path.basename(filePath)}\`.`,
 				violations: criticalViolations,
-				remediation: criticalViolations[0].remediation,
+				remediation: `${v.remediation}${fixSnippet}`,
 			}
 		}
 

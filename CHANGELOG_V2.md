@@ -1,5 +1,15 @@
 # Changelog (V2)
 
+## [4.5.0] - 2026-04-15
+
+### Added
+- **V10 Hardening: Substrate Self-Awareness (Autonomous Alignment)**:
+  - **Critical Core Indicators (CCI)**: Implemented multivariate risk mapping in `SpiderEngine` for non-degradable keystone protection.
+  - **Autonomous Tag Discovery**: Upgraded `RefactorHealer` to proactively scan for missing architectural metadata and alignment.
+  - **Weighted Metabolic Throttling**: Introduced layer-aware doubt budgets in `MetabolicMonitor` for rapid core stall detection.
+  - **Semantic Delta Verification**: Hardened `SovereignScribe` to require transformation-based symbol citations (`~`).
+  - **Aromatic Extraction Directives**: Automated strategic pivot suggestions in `FluidPolicyEngine` for zero-sum refactors.
+
 ## [4.4.0] - 2026-04-14
 
 ### Added

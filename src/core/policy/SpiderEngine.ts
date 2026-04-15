@@ -11,6 +11,8 @@ import { Logger } from "@/shared/services/Logger"
 import { writeAtomic } from "@/utils/fs"
 import { getLayer, Layer } from "@/utils/joy-zoning"
 import "@/utils/path"
+import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
+import { PathogenStore } from "../integrity/PathogenStore"
 import { SovereignPolicy } from "./SovereignPolicy"
 
 export interface SpiderNode {
@@ -129,8 +131,12 @@ export class SpiderEngine {
 			const kind = node.kind
 
 			if (ts.isClassDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) {
-				// Rough heuristic: if it has a body and isn't just a type/interface, it's concrete
-				if ((node as any).body || ts.isVariableDeclaration(node)) {
+				// Rough heuristic: if it has a body/members and isn't just a type/interface, it's concrete
+				const hasBody =
+					(ts.isFunctionDeclaration(node) && node.body) ||
+					(ts.isClassDeclaration(node) && node.members.length > 0) ||
+					ts.isVariableDeclaration(node)
+				if (hasBody) {
 					hasConcreteDefinition = true
 				}
 			}
@@ -264,9 +270,11 @@ export class SpiderEngine {
 		for (const imp of removed) {
 			const targetId = this.resolveImportToNodeId(nodeId, imp)
 			if (targetId && this.nodes.has(targetId)) {
-				const target = this.nodes.get(targetId)!
-				target.dependents = target.dependents.filter((d) => d !== nodeId)
-				target.afferentCoupling = target.dependents.length
+				const target = this.nodes.get(targetId)
+				if (target) {
+					target.dependents = target.dependents.filter((d) => d !== nodeId)
+					target.afferentCoupling = target.dependents.length
+				}
 			}
 		}
 
@@ -274,8 +282,8 @@ export class SpiderEngine {
 		for (const imp of added) {
 			const targetId = this.resolveImportToNodeId(nodeId, imp)
 			if (targetId && this.nodes.has(targetId)) {
-				const target = this.nodes.get(targetId)!
-				if (!target.dependents.includes(nodeId)) {
+				const target = this.nodes.get(targetId)
+				if (target && !target.dependents.includes(nodeId)) {
 					target.dependents.push(nodeId)
 					target.afferentCoupling = target.dependents.length
 				}
@@ -334,7 +342,11 @@ export class SpiderEngine {
 				const kind = node.kind
 
 				if (ts.isClassDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) {
-					if ((node as any).body || ts.isVariableDeclaration(node)) {
+					const hasBody =
+						(ts.isFunctionDeclaration(node) && node.body) ||
+						(ts.isClassDeclaration(node) && node.members.length > 0) ||
+						ts.isVariableDeclaration(node)
+					if (hasBody) {
 						hasConcreteDefinition = true
 					}
 				}
@@ -428,11 +440,18 @@ export class SpiderEngine {
 			}
 		}
 
-		// Update nodes
+		// Update nodes and detect clusters
 		for (const [id, count] of couplingMap.entries()) {
 			const node = this.nodes.get(id)
 			if (node) {
 				node.afferentCoupling = count
+
+				// PRODUCTION HARDENING: Efferent Cluster Detection.
+				// If a node has high Ce (>5) AND high Ca (>5), it is a structural cluster risk.
+				const ce = node.imports.length
+				if (count > 5 && ce > 5) {
+					Logger.info(`[SpiderEngine] Efferent Cluster detected in legacy module: ${path.basename(id)}`)
+				}
 			}
 		}
 	}
@@ -616,9 +635,12 @@ export class SpiderEngine {
 			specifier.startsWith("@packages/") ||
 			specifier.startsWith("@services/")
 
+		// PRODUCTION HARDENING: Detect common scoped external packages (e.g. @types, @babel)
+		// and ensure they are treated as external unless they match a project alias.
+		const isScopedExternal = specifier.startsWith("@") && !isAlias
 		const isExternal = !specifier.startsWith(".") && !isAlias
 
-		return isBuiltin || isExternal
+		return isBuiltin || isExternal || isScopedExternal
 	}
 
 	/**
@@ -637,7 +659,7 @@ export class SpiderEngine {
 		const avgDepth = Array.from(this.nodes.values()).reduce((acc, n) => acc + n.depth, 0) / totalNodes
 		const depthScore = Math.min(avgDepth / 4, 1.0)
 
-		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
+		// const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig() // Removed unused variable
 		const namingScore = 0 // kebab-case enforcement removed per user request
 
 		const orphans = Array.from(this.nodes.values()).filter((n) => n.orphaned).length
@@ -897,7 +919,10 @@ export class SpiderEngine {
 		try {
 			const data = await fs.promises.readFile(fileToLoad)
 			if (fileToLoad.endsWith(".json")) {
-				const entries = JSON.parse(data.toString("utf-8"))
+				// PRODUCTION HARDENING: Robust JSON parsing with length check
+				const raw = data.toString("utf-8")
+				if (!raw || raw.trim().length === 0) return false
+				const entries = JSON.parse(raw)
 				this.nodes = new Map(entries)
 			} else {
 				this.deserialize(data)
@@ -906,9 +931,31 @@ export class SpiderEngine {
 			this.computeReachability()
 			return true
 		} catch (e) {
-			Logger.error("[SpiderEngine] Registry load failed:", e)
+			Logger.error("[SpiderEngine] Registry load failed (corrupted):", e)
+			// Emergency recovery: if corrupted, start fresh instead of hanging
+			this.nodes = new Map()
 			return false
 		}
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Performs a high-throughput batch update of multiple files.
+	 * Optimized to only compute reachability once at the end.
+	 */
+	public async batchIndex(files: { path: string; content: string }[]): Promise<void> {
+		Logger.info(`[SpiderEngine] Performing high-velocity batch index of ${files.length} files.`)
+		for (const file of files) {
+			// updateNode handles incremental coupling, but we skip reachability here
+			const oldSchedule = this.scheduleReachability
+			this.scheduleReachability = () => {} // Disable temp
+			try {
+				this.updateNode(file.path, file.content)
+			} finally {
+				this.scheduleReachability = oldSchedule
+			}
+		}
+		this.computeReachability()
+		await this.saveRegistry()
 	}
 
 	private normalizePath(filePath: string): string {
@@ -924,5 +971,49 @@ export class SpiderEngine {
 	public resolveLayer(sourcePath: string, specifier: string): Layer | null {
 		const id = this.resolveImportToNodeId(sourcePath, specifier)
 		return id ? this.nodes.get(id)?.layer || null : null
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Computes the Critical Core Indicator (CCI) for a file.
+	 * Combines structural weight, historical pathogenicity, and metabolic pressure.
+	 */
+	public computeCCI(filePath: string, pathogens: PathogenStore, monitor: MetabolicMonitor): number {
+		const node = this.nodes.get(this.normalizePath(filePath))
+		if (!node) return 0
+
+		// factor 1: Structural Weight (0-0.4)
+		const couplingLoad = Math.min(node.afferentCoupling / 20, 1.0)
+		const complexityLoad = Math.min(node.astComplexity / 2000, 1.0)
+		const structuralWeight = ((couplingLoad + complexityLoad) / 2) * 0.4
+
+		// factor 2: Historical Pathogenicity (0-0.4)
+		const prediction = pathogens.predictFailure(filePath)
+		const historicalRisk = prediction.likely ? 0.4 : 0
+
+		// factor 3: Metabolic Pressure (0-0.2)
+		const infection = monitor.isInflamed(filePath)
+		const metabolicPressure = infection.inflamed ? 0.2 : 0
+
+		return structuralWeight + historicalRisk + metabolicPressure
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Groups file-level violations into "Architectural Fever Zones" (Hotspots).
+	 */
+	public getViolationHotspots(): { directory: string; violationCount: number; severity: number }[] {
+		const violations = this.getViolations()
+		const dirMap = new Map<string, { count: number; severity: number }>()
+
+		for (const v of violations) {
+			const dir = path.dirname(v.path)
+			const stats = dirMap.get(dir) || { count: 0, severity: 0 }
+			stats.count++
+			stats.severity += v.severity === "ERROR" ? 5 : 2
+			dirMap.set(dir, stats)
+		}
+
+		return Array.from(dirMap.entries())
+			.map(([directory, stats]) => ({ directory, violationCount: stats.count, severity: stats.severity }))
+			.sort((a, b) => b.severity - a.severity)
 	}
 }

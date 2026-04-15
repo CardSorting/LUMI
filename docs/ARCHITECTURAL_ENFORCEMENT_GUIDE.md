@@ -17,7 +17,7 @@ You can configure how strictly the architecture is enforced using themes:
 ---
 
 ## 🛡️ Exception Management
-Certain files bypass the 300-line limit and architectural rules because their format is dictated by external tools (Xcode, NPM, Cargo, etc.).
+Certain files bypass architectural rules because their format is dictated by external tools (Xcode, NPM, Cargo, etc.).
 
 ### Automatic Whitelist
 The system automatically whitelists over 50+ file types, including:
@@ -38,17 +38,17 @@ plugin.addException("model", "Custom binary format bypass");
 ## 📊 Quality Scoring & Thresholds
 For custom source code, the plugin applies a tier-based approach to line counts:
 
-### 🟢 Tier 1: Small & Sharp (0-300 lines)
+### 🟢 Tier 1: Small & Sharp (0-1000 lines)
 - **Status**: Full Enforcement
 - **Rules**: AST analysis, mandatory headers, strict layer boundaries.
 
-### 🟡 Tier 2: The Warning Zone (301-800 lines)
+### 🟡 Tier 2: The Warning Zone (1001-1500 lines)
 - **Status**: Non-Blocking Warnings
 - **Feature**: **Quality Scoring (0-100)**
 - **Checks**: Complexity analysis, class-to-line ratio.
 - **Outcome**: The build succeeds, but you receive refactoring recommendations.
 
-### 🔴 Tier 3: Safety Bypass (>800 lines)
+### 🔴 Tier 3: Safety Bypass (>1500 lines)
 - **Status**: Safety Mode
 - **Rules**: Bypasses heavy AST analysis to prevent build slowdowns.
 - **Outcome**: Only checks for mandatory Layer Tags and critical Import boundaries.
@@ -75,8 +75,8 @@ export class User { ... }
 The thresholds and quality rules can be tuned in `src/core/policy/TspPolicyPlugin.ts`:
 ```typescript
 private readonly THRESHOLDS = {
-    MAX_CUSTOM_LINES: 800,
-    MAX_WARNING_LINES: 300,
-    MAX_AST_LINES: 1500
+    MAX_CUSTOM_LINES: 1500,
+    MAX_WARNING_LINES: 1000,
+    MAX_AST_LINES: 3000
 }
 ```

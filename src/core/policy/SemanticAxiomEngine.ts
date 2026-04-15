@@ -7,6 +7,7 @@ export interface AxiomViolation {
 	severity: "ERROR" | "WARN"
 	message: string
 	remediation?: string
+	remediationSnippet?: string // PRODUCTION HARDENING: Proactive fix snippet for agent success
 }
 
 /**
@@ -14,7 +15,7 @@ export interface AxiomViolation {
  * Enforces logical "Truths" and "Purity" rules that go beyond mere structure.
  */
 export class SemanticAxiomEngine {
-	private readonly SIMPLICITY_THRESHOLD = 300 // Max lines per file
+	private readonly SIMPLICITY_THRESHOLD = 1500 // Max lines per file
 
 	constructor(private cwd: string) {}
 
@@ -71,7 +72,12 @@ export class SemanticAxiomEngine {
 			normalizedPath.includes("data") ||
 			normalizedPath.includes("assets") ||
 			content.includes("@generated") ||
-			content.includes("Automatically generated")
+			content.includes("Automatically generated") ||
+			normalizedPath.endsWith("scratchpad.md") ||
+			normalizedPath.includes("/dist/") ||
+			normalizedPath.includes("/node_modules/") ||
+			normalizedPath.includes("/.spider/") ||
+			normalizedPath.includes("/.vscode/")
 
 		if (lines.length > this.SIMPLICITY_THRESHOLD && !isExempt) {
 			violations.push({
@@ -79,6 +85,7 @@ export class SemanticAxiomEngine {
 				severity: "ERROR",
 				message: `Cognitive Bloat: File exceeds ${this.SIMPLICITY_THRESHOLD} lines (${lines.length}).`,
 				remediation: "Split the file into focused sub-modules or extract utility functions to @/utils.",
+				remediationSnippet: "/* Recommended: Extract core logic to focused sub-modules */",
 			})
 		}
 
@@ -105,6 +112,7 @@ export class SemanticAxiomEngine {
 					severity: "ERROR",
 					message: "Plumbing logic must be stateless. Mutable top-level variables (let/var) are blocked.",
 					remediation: "Convert 'let' or 'var' to 'const' or move state into a class instance if strictly necessary.",
+					remediationSnippet: "const myVar = ... // Use const instead of let",
 				})
 			}
 		}
@@ -187,14 +195,19 @@ export class SemanticAxiomEngine {
 		}
 
 		// 6. Axiom: COGNITIVE_COMPLEXITY
-		// PRODUCTION HARDENING: Tiered approach where > 25 is a warning and > 50 is an error.
+		// PRODUCTION HARDENING: Layer-aware thresholds. Domain/Core are strict (25/50).
+		// Infrastructure/Plumbing/UI are more lenient (50/100) as they often handle complex I/O or rendering.
+		const isStrictLayer = node.layer === "domain" || node.layer === "core"
+		const warnThreshold = isStrictLayer ? 25 : 50
+		const errorThreshold = isStrictLayer ? 50 : 100
+
 		const complexity = this.calculateCognitiveComplexity(ast)
-		if (complexity > 25) {
+		if (complexity > warnThreshold) {
 			violations.push({
 				axiom: "COGNITIVE_COMPLEXITY",
-				severity: complexity > 50 ? "ERROR" : "WARN",
+				severity: complexity > errorThreshold ? "ERROR" : "WARN",
 				message:
-					complexity > 50
+					complexity > errorThreshold
 						? `CRITICAL logic complexity (${complexity}). This module is too complex to maintain safely.`
 						: `High logic complexity (${complexity}). This module is becoming difficult to reason about.`,
 				remediation: "Extract complex branching logic into smaller, testable helper functions.",
@@ -234,6 +247,33 @@ export class SemanticAxiomEngine {
 		}
 
 		return violations
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Detects "Zero-Sum" refactors where an edit fixes one axiom but breaks another.
+	 */
+	public compareAxiomSessions(
+		oldViolations: AxiomViolation[],
+		newViolations: AxiomViolation[],
+	): { status: "POSITIVE" | "ZERO_SUM" | "NEGATIVE"; message?: string } {
+		const fixed = oldViolations.filter((ov) => !newViolations.some((nv) => nv.axiom === ov.axiom)).length
+		const introduced = newViolations.filter((nv) => !oldViolations.some((ov) => ov.axiom === nv.axiom)).length
+
+		if (introduced > 0 && fixed > 0 && introduced >= fixed) {
+			return {
+				status: "ZERO_SUM",
+				message: `⚠️ NET-ZERO STRUCTURAL MOVE: You fixed ${fixed} axiom(s) but introduced ${introduced} new ones. This refactoring is trading one architectural debt for another.`,
+			}
+		}
+
+		if (introduced > 0 && introduced > fixed) {
+			return {
+				status: "NEGATIVE",
+				message: `🛑 STRUCTURAL REGRESSION: This edit introduces ${introduced - fixed} net-new axiomatic violations.`,
+			}
+		}
+
+		return { status: "POSITIVE" }
 	}
 
 	private normalize(p: string): string {

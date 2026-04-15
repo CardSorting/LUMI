@@ -61,5 +61,39 @@ The `FluidPolicyEngine` now intercepts `replace_in_file` failures before they re
 - **Pre-flight Search Validation**: Validates the `SEARCH` block against the current disk state.
 - **Automatic Context Injection**: If a match fails, the engine automatically identifies the similar section and injects a `🔍 AUTO-CORRECTION HINT` into the error message, providing the agent with the exact lines needed to fix its mental model.
 
+### 5.5 Projected Integrity Gain (EIS)
+The `SovereignOptimizer` now provides quantitative yield analysis for refactoring:
+- **Optimization Priority**: Estimates the `Projected Integrity Score` improvement before an edit is made.
+- **High-Yield Guidance**: Prioritizes refactoring tasks that offer the greatest structural stability gains with the least churn.
+
+## 6. V10 Hardening: Substrate Self-Awareness (Autonomous Alignment)
+
+The V10 pass (April 2026) reaches the architectural zenith: **Substrate Self-Awareness**. The system now perceives its own structural health and proactively guides the agent toward absolute alignment.
+
+### 6.1 Critical Core Indicators (CCI)
+`SpiderEngine` now implements multivariate risk mapping to identify **Substrate Keystones**:
+- **Keystone Identification**: Combines coupling Load, complexity, historical failure rates (Antigens), and metabolic pressure into a single 0-1.0 risk score.
+- **High-Shield Protocol**: Keystone files are protected by non-degradable enforcement. The system will not allow even "Strike 2" warning-based bypasses for critical core logic.
+
+### 6.2 Autonomous Tag Discovery
+The `RefactorHealer` is now proactive rather than reactive:
+- **Proactive Workspace Scanning**: Automatically scans the workspace for untagged modules or misaligned `[LAYER]` decorations.
+- **Background Alignment Proposals**: Generates healing proposals for the agent, ensuring the codebase remains self-documented and architecturally categorized at all times.
+
+### 6.3 Semantic Delta Verification
+Harden `SovereignScribe` to ensure the agent maintains a high-fidelity mental model of code transformations:
+- **Delta Notation (`~`)**: Scratchpad audits now require agents to describe the *transformation* of symbols (e.g., "Updating `Service` (~ adding X)") rather than simple citations.
+- **Cognitive Symmetry**: Enforces thinking in "Before/After" states, eliminating shallow citations that bypass deep investigation.
+
+### 6.4 Aromatic Extraction Directives
+`FluidPolicyEngine` now provides strategic alternatives for coupling conflicts:
+- **Zero-Sum Move Interdiction**: Detects when an edit fixes one architectural violation but introduces another.
+- **Extraction Directives**: Automatically suggests the exact interface extraction path (e.g., "Extract interface to `domain/interfaces/` and inject") to resolve the conflict without trading debt.
+
+### 6.5 Weighted Metabolic Throttling
+The `MetabolicMonitor` now implements layer-aware discipline:
+- **Discipline Weighting**: The Domain/Core layers have a significantly tighter "Doubt Budget" (5.0) than peripheral layers.
+- **Rapid Stall Interdiction**: Cognitive stalls in the core logic are detected and blocked 3x faster, forcing agents to re-ground using # SOVEREIGN AUDIT before wasting tokens.
+
 ---
-*Last Updated: 2026-04-14*
+*Last Updated: 2026-04-15*

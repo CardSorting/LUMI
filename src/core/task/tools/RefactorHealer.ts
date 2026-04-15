@@ -27,7 +27,7 @@ export class RefactorHealer {
 	 * Strategic Pivoting: Heals a move violation, but pivots to extraction if move is impossible.
 	 */
 	public async healMove(filePath: string, targetPath: string): Promise<{ success: boolean; pivot?: string }> {
-		const tx = new SovereignTransaction(`heal_move_${path.basename(filePath)}`)
+		const tx = new SovereignTransaction(`heal_move_${path.basename(filePath)}`, this.projectRoot)
 		tx.start()
 
 		try {
@@ -107,7 +107,15 @@ export class RefactorHealer {
 
 			if (currentTag !== expectedLayer) {
 				const tagLabel = expectedLayer.toUpperCase() === "PLUMBING" ? "UTILS" : expectedLayer.toUpperCase()
-				const newContent = generateLayerComment(absolutePath, tagLabel, content)
+
+				// PRODUCTION HARDENING: If a tag already exists but is wrong, replace it instead of prepending.
+				let newContent = content
+				const tagRegex = /\/\*\*[\s\S]*?\[LAYER:\s*\w+\][\s\S]*?\*\//i
+				if (tagRegex.test(content)) {
+					newContent = content.replace(tagRegex, `/**\n * [LAYER: ${tagLabel}]\n */`)
+				} else {
+					newContent = generateLayerComment(absolutePath, tagLabel, content) || content
+				}
 
 				if (newContent && newContent !== content) {
 					await fs.writeFile(absolutePath, newContent, "utf-8")
@@ -122,13 +130,23 @@ export class RefactorHealer {
 	/**
 	 * Materializes a "Ghost" file (Missing import) into a physical Domain interface.
 	 */
-	public async materializeGhost(filePath: string): Promise<void> {
+	public async materializeGhost(filePath: string, importingSource?: string): Promise<void> {
 		const absolutePath = path.resolve(this.projectRoot, filePath)
 		const fileName = path.basename(filePath, path.extname(filePath))
 		const interfaceName = this.toPascalCase(fileName)
 		const layer = getLayer(filePath)
 		const tagHeader = generateLayerComment(filePath, layer) || ""
-		const template = `${tagHeader}export interface ${interfaceName} {\n\t// TODO: Define members for ${interfaceName}\n}\n`
+
+		// PRODUCTION HARDENING: If importing source is provided, try to infer methods
+		let members = "// TODO: Define members"
+		if (importingSource?.includes(interfaceName)) {
+			const usageMatch = importingSource.match(new RegExp(`${interfaceName}\\s*{([\\s\\S]+?)}`, "g"))
+			if (usageMatch) {
+				members = `// Inferred from usage:\n\t${usageMatch.map((m) => m.trim()).join("\n\t")}`
+			}
+		}
+
+		const template = `${tagHeader}export interface ${interfaceName} {\n\t${members}\n}\n`
 
 		try {
 			const dir = path.dirname(absolutePath)
@@ -136,6 +154,7 @@ export class RefactorHealer {
 				await fs.mkdir(dir, { recursive: true })
 			}
 			await fs.writeFile(absolutePath, template, "utf-8")
+			Logger.info(`[RefactorHealer] Materialized ghost interface ${interfaceName} at ${filePath}`)
 		} catch (err) {
 			Logger.error(`[RefactorHealer] Failed to materialize ghost ${filePath}:`, err)
 		}
@@ -206,6 +225,40 @@ export class RefactorHealer {
 		if (newContent) {
 			await fs.writeFile(absolutePath, newContent, "utf-8")
 		}
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Proactively scans the codebase for untagged files
+	 * and returns healing proposals for the dashboard.
+	 */
+	public async proactiveScan(fileList: string[]): Promise<HealingProposal[]> {
+		const proposals: HealingProposal[] = []
+
+		for (const file of fileList) {
+			if (!isLayerTagSupported(file)) continue
+
+			try {
+				const absolutePath = path.isAbsolute(file) ? file : path.resolve(this.projectRoot, file)
+				const content = await fs.readFile(absolutePath, "utf-8")
+				const currentTag = parseLayerTag(content)
+
+				if (!currentTag) {
+					const expectedLayer = getLayer(absolutePath)
+					proposals.push({
+						id: (globalThis.crypto || require("crypto")).randomUUID(),
+						type: "TAG_ALIGN",
+						file: file,
+						confidence: 1.0,
+						message: `Proactive Alignment Required: File is missing mandatory [LAYER] tag. Expected: ${expectedLayer.toUpperCase()}.`,
+						action: () => this.alignTag(file),
+					})
+				}
+			} catch (_e) {
+				// Skip files we can't read
+			}
+		}
+
+		return proposals
 	}
 
 	private toPascalCase(str: string): string {

@@ -13,8 +13,6 @@ export interface MetabolicMetrics {
 export class MetabolicMonitor {
 	private registry: Map<string, MetabolicMetrics> = new Map()
 
-	constructor(_cwd: string) {}
-
 	/**
 	 * Records a read operation.
 	 */
@@ -34,17 +32,37 @@ export class MetabolicMonitor {
 		metrics.lastEditTimestamp = Date.now()
 	}
 
-	/**
-	 * Calculates the "Doubt Signal" (Read:Write ratio) for a file.
-	 * Calibrated for large files to allow more reads during deep research.
-	 */
-	public getDoubtSignal(filePath: string, lineCount = 0): number {
+	public getDoubtSignal(filePath: string, layer = "infrastructure", lineCount = 0): number {
 		const metrics = this.registry.get(filePath)
 		if (!metrics) return 0
 		const baseDoubt = metrics.reads / (metrics.writes || 1)
+
+		// PRODUCTION HARDENING: Layer-Aware Throttling.
+		// Domain/Core have a much lower "Doubt budget".
+		const threshold = layer === "domain" || layer === "core" ? 5.0 : 15.0
+
+		if (metrics.reads > threshold && metrics.writes === 0) return 999.0 // Hard stall signal
+
 		// Lenience factor for large files (> 500 lines)
 		const lenience = lineCount > 500 ? Math.min(2.0, lineCount / 500) : 1.0
 		return baseDoubt / lenience
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Detects if the agent is stuck in a high-entropy recursive scanning loop.
+	 */
+	public detectRecursiveLoop(): { loop: boolean; files?: string[] } {
+		const loopingFiles = Array.from(this.registry.entries())
+			.filter(([_p, m]) => m.lastEditTimestamp === 0 && m.reads > 5) // Read multiple times but never edited
+			.map(([p]) => p)
+
+		if (loopingFiles.length >= 3) {
+			return {
+				loop: true,
+				files: loopingFiles,
+			}
+		}
+		return { loop: false }
 	}
 
 	/**
@@ -88,15 +106,24 @@ export class MetabolicMonitor {
 			}
 		}
 
-		// v9 HARDENING: Mission Drift Detection
+		// v9 HARDENING: Mission Drift Detection (Yak Shaving Protection)
 		// Track if we are spending too much metabolic energy in non-core layers
 		if (drift >= 5 && !isPlanning) {
 			const nonDomainEdits = recentEntries.filter(([p]) => !p.includes("/domain/") && !p.includes("/core/")).length
 			const missionRatio = nonDomainEdits / drift
-			if (missionRatio > 0.8) {
+
+			// PRODUCTION HARDENING: Interdict at 90% drift
+			if (missionRatio >= 0.9) {
 				return {
 					drift,
-					warning: `⚠️ MISSION DRIFT [Urgency: MEDIUM]: 80% of your recent edits are in peripheral layers (Plumbing/Infrastructure). Ensure you are not "Yak Shaving"—return focus to the core Domain requirements.`,
+					warning: `🛑 MISSION DRIFT [CRITICAL]: 90% of your recent edits are in peripheral layers (Plumbing/Infrastructure). Architectural investigations suggest you are "Yak Shaving". You MUST return focus to Domain/Core logic immediately or trigger a # SOVEREIGN AUDIT to justify this detour.`,
+				}
+			}
+
+			if (missionRatio > 0.7) {
+				return {
+					drift,
+					warning: `⚠️ MISSION DRIFT [Urgency: MEDIUM]: ${Math.round(missionRatio * 100)}% of your recent edits are in peripheral layers. Ensure you are not drifting from the primary objective.`,
 				}
 			}
 		}

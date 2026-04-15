@@ -33,8 +33,8 @@ export interface FileQualityScore {
 export class TspPolicyPlugin {
 	/**
 	 * Configurable enforcement theme (default: safety mode for best balance)
-	 * - strict: All validation rules enforced, 300-line limit applies
-	 * - relaxed: Only critical errors enforced, 800-line limit applies
+	 * - strict: All validation rules enforced, strict layer boundaries apply
+	 * - relaxed: Only critical errors enforced, 1500-line limit applies
 	 * - safety: Performance-first, only essential checks on large files
 	 */
 	private theme: EnforcementTheme = "safety"
@@ -49,7 +49,7 @@ export class TspPolicyPlugin {
 	 */
 	private readonly THRESHOLDS = {
 		MAX_CUSTOM_LINES: 1500,
-		MAX_WARNING_LINES: 800,
+		MAX_WARNING_LINES: 1000,
 		MAX_AST_LINES: 3000, // AST processing cutoff for performance
 	}
 

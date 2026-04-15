@@ -4,7 +4,7 @@ import * as path from "path"
 
 export interface Pathogen {
 	id: string
-	type: "FAILED_MOVE" | "AXIOM_VIOLATION" | "DRIFT_PATTERN"
+	type: "FAILED_MOVE" | "AXIOM_VIOLATION" | "DRIFT_PATTERN" | "DIRECTORY_STRESS" | "PATTERN_ANTIGEN"
 	signature: string // Now hashed for space efficiency
 	originalSummary: string // Short human-readable summary
 	timestamp: number
@@ -59,7 +59,60 @@ export class PathogenStore {
 			p.timestamp = Date.now()
 			return true
 		}
+
+		// PRODUCTION HARDENING: Pattern-based sensing
+		// If the file resides in a directory with "STRESS", it inherits pathogenicity.
+		const dir = path.dirname(signature)
+		const dirHash = this.hashSignature(`dir_stress:${dir}`)
+		if (this.pathogens.has(dirHash)) {
+			const dp = this.pathogens.get(dirHash)!
+			dp.hitCount++
+			dp.timestamp = Date.now()
+			return true
+		}
+
 		return false
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Predicts if an edit is likely to fail based on historical antigens.
+	 */
+	public predictFailure(filePath: string): { likely: boolean; reason?: string } {
+		const dir = path.dirname(filePath)
+		const dirHash = this.hashSignature(`dir_stress:${dir}`)
+		const dp = this.pathogens.get(dirHash)
+
+		if (dp && dp.hitCount > 3) {
+			return {
+				likely: true,
+				reason: `Architectural Stress Zone detected in \`${dir}\`. Historic violations suggest high risk of regression.`,
+			}
+		}
+
+		return { likely: false }
+	}
+
+	/**
+	 * Records directory stress when multiple violations occur in the same folder.
+	 */
+	public recordDirectoryStress(directory: string) {
+		const hash = this.hashSignature(`dir_stress:${directory}`)
+		const existing = this.pathogens.get(hash)
+		if (existing) {
+			existing.hitCount++
+			existing.timestamp = Date.now()
+		} else {
+			this.pathogens.set(hash, {
+				id: Math.random().toString(36).substring(7),
+				type: "DIRECTORY_STRESS",
+				signature: hash,
+				originalSummary: `Stress in ${directory}`,
+				timestamp: Date.now(),
+				severity: 2,
+				hitCount: 1,
+			})
+		}
+		this.save()
 	}
 
 	/**
@@ -101,7 +154,7 @@ export class PathogenStore {
 				if (Array.isArray(data)) {
 					data.forEach((p: Pathogen) => this.pathogens.set(p.signature, p))
 				}
-			} catch (e) {
+			} catch (_e) {
 				this.pathogens = new Map()
 			}
 		}
