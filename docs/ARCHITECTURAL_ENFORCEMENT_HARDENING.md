@@ -37,5 +37,29 @@ To support multi-thousand file repositories, the infrastructure was scaled for h
 - **Batched Reasoning Chains**: Eliminated N+1 query patterns in `ReasoningService`. Complex cognitive tasks like contradiction detection and pedigree tracing now fetch their neighborhood context in single high-performance batches.
 - **Operational GraphQL Batching**: The `BufferedDbPool` now groups consecutive same-table updates into single bulk SQL queries, drastically reducing transaction overhead during high-volume tool execution.
 
+## 5. V9 Hardening: The "Autonomous Architect" (Sovereign Success)
+
+The v9 hardening pass (April 2026) doubles down on agent success rates by moving from reactive warnings to proactive architectural enforcement and self-healing context synchronization.
+
+### 5.1 Cognitive Fidelity: Skeleton Pruning
+Upgraded the `ContextPruner` to implement "Skeleton Pruning." This mechanism creates a cognitive force-field around the structural contract of a file:
+- **API Surface Immunity**: All `export`, `class`, `interface`, and `method signatures` (public/private/protected) are IMMUNE to pruning.
+- **Structural Integrity**: The agent always sees the "Skeleton" of a file, ensuring it never loses sight of available methods or architectural contracts due to context folding.
+
+### 5.2 Contextual Sovereignty: Delta-Aware Staleness
+The `ContextStalenessTracker` now provides quantitative drift analysis:
+- **Delta Snapshots**: When a file is modified externally or by a previous tool call, the tracker caches the specific line-count delta.
+- **Authoritative Signaling**: Staleness warnings now include specific metrics (e.g., `+15 lines since last read`), allowing the agent to gauge the severity of the drift before resynchronizing.
+
+### 5.3 Metabolic Guardrails: Mission Drift Interdiction
+The `MetabolicMonitor` now tracks "Focus Entropy":
+- **Mission Drift Detection**: Detects when an agent is spending >80% of its energy on peripheral layers (Plumbing/Infrastructure) while neglecting core Domain requirements.
+- **Refocusing Protocols**: Injects `⚠️ MISSION DRIFT` warnings to break "Yak Shaving" loops and return focus to high-value success criteria.
+
+### 5.4 Self-Healing: Pre-emptive Match Sensing
+The `FluidPolicyEngine` now intercepts `replace_in_file` failures before they reach the file system:
+- **Pre-flight Search Validation**: Validates the `SEARCH` block against the current disk state.
+- **Automatic Context Injection**: If a match fails, the engine automatically identifies the similar section and injects a `🔍 AUTO-CORRECTION HINT` into the error message, providing the agent with the exact lines needed to fix its mental model.
+
 ---
-*Last Updated: 2026-03-23*
+*Last Updated: 2026-04-14*

@@ -1,5 +1,14 @@
 # Changelog (V2)
 
+## [4.4.0] - 2026-04-14
+
+### Added
+- **V9 Hardening: The "Autonomous Architect" (Sovereign Success)**:
+  - **Skeleton Pruning**: Upgraded `ContextPruner` to guarantee API surface immunity for all exports, classes, and method signatures during folding.
+  - **Delta-Aware Staleness**: Implemented quantitative drift analysis in `ContextStalenessTracker` with authoritative signaling of line-count deltas.
+  - **Mission Drift Interdiction**: Added focus-enforcement logic in `MetabolicMonitor` to detect and break "Yak Shaving" loops in peripheral layers.
+  - **Self-Healing Context Synchronization**: Hardened `FluidPolicyEngine` with pre-emptive match sensing for `replace_in_file` and automatic context injection for rapid failure recovery.
+
 ## [4.3.0] - 2026-04-14
 
 ### Added
