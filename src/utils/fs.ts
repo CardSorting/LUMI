@@ -1,4 +1,5 @@
 import { workspaceResolver } from "@core/workspace"
+import * as crypto from "crypto"
 import fs from "fs/promises"
 import * as path from "path"
 import { HostProvider } from "@/hosts/host-provider"
@@ -104,7 +105,7 @@ export async function writeFile(
  * or power is lost during a write operation.
  */
 export async function writeAtomic(filePath: string, content: string | Uint8Array): Promise<void> {
-	const tempPath = `${filePath}.${Date.now()}.tmp`
+	const tempPath = `${filePath}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`
 	try {
 		if (content instanceof Uint8Array) {
 			await fs.writeFile(tempPath, content)

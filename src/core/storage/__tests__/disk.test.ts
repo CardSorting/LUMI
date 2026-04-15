@@ -251,7 +251,7 @@ describe("disk - atomic writes", () => {
 	const getTempFileCount = async (): Promise<number> => {
 		const stateDir = await ensureStateDirectoryExists()
 		const files = await fs.readdir(stateDir)
-		return files.filter((f) => f.startsWith("taskHistory.json.tmp.")).length
+		return files.filter((f) => f.startsWith("taskHistory.json.") && f.endsWith(".tmp")).length
 	}
 
 	beforeEach(async () => {
@@ -586,7 +586,7 @@ describe("disk - atomic writes", () => {
 
 			// Simulate an interrupted write by creating a partial temp file
 			const stateDir = await ensureStateDirectoryExists()
-			const partialTempPath = path.join(stateDir, "taskHistory.json.tmp.99999.partial")
+			const partialTempPath = path.join(stateDir, "taskHistory.json.1234567890.abcdef.tmp")
 
 			// Write only part of a valid JSON array
 			await fs.writeFile(partialTempPath, '[{"id":"partial","ts":123456789', "utf8")

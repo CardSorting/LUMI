@@ -1,3 +1,4 @@
+import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { Logger } from "../services/Logger"
@@ -119,7 +120,7 @@ export class DietCodeFileStorage<T = any> extends DietCodeSyncStorage<T> {
  * Prefer core/storage's async atomicWriteFile to this.
  */
 function atomicWriteFileSync(filePath: string, data: string, mode?: fs.Mode | undefined): void {
-	const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).substring(7)}.json`
+	const tmpPath = `${filePath}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`
 	try {
 		fs.writeFileSync(tmpPath, data, {
 			flag: "wx",

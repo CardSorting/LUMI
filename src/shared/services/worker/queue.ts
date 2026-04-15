@@ -1,3 +1,4 @@
+import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { Logger } from "@/shared/services/Logger"
@@ -130,7 +131,7 @@ export class SyncQueue {
 			return
 		}
 		try {
-			const tmpPath = `${this.queuePath}.tmp`
+			const tmpPath = `${this.queuePath}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`
 			fs.writeFileSync(tmpPath, JSON.stringify(this.data, null, 2), "utf-8")
 			fs.renameSync(tmpPath, this.queuePath)
 			this.isDirty = false

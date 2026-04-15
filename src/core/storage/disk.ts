@@ -6,6 +6,7 @@ import { HistoryItem } from "@shared/HistoryItem"
 import { RemoteConfig } from "@shared/remote-config/schema"
 import { GlobalState, Settings } from "@shared/storage/state-keys"
 import { fileExistsAtPath, isDirectory } from "@utils/fs"
+import * as crypto from "crypto"
 import fs from "fs/promises"
 import os from "os"
 import * as path from "path"
@@ -28,7 +29,7 @@ import { StateManager } from "./StateManager"
  * @param data - The data to write
  */
 async function atomicWriteFile(filePath: string, data: string): Promise<void> {
-	const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).substring(7)}.json`
+	const tmpPath = `${filePath}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`
 	try {
 		// Write to temporary file first
 		await fs.writeFile(tmpPath, data, "utf8")
