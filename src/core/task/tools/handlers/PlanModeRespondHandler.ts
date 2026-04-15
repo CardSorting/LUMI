@@ -64,8 +64,9 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 			const { content, source } = SovereignScribe.getLatestScratchpadContent(
 				config.messageState.getApiConversationHistory(),
 			)
-			const scribe = new SovereignScribe(config.cwd)
-			const audit = await scribe.validate(content)
+			const forensics = config.universalGuard ? (config.universalGuard as any).getForensics() : undefined
+			const scribe = new SovereignScribe(config.cwd, forensics)
+			const audit = await scribe.validate(content, false, undefined, config.messageState.getApiConversationHistory())
 
 			if (!audit.ok && source === "disk" && content === "") {
 				// V27: Proactive Injection

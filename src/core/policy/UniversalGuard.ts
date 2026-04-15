@@ -58,6 +58,10 @@ export class UniversalGuard {
 		return this.engine.validatePostExecution(block, toolOutput, prevHash)
 	}
 
+	public getForensics(): any {
+		return this.engine.getForensics()
+	}
+
 	/**
 	 * Performs SOVEREIGN DRAFTING workflow check before Plan Mode responses.
 	 * Blocks plan_mode_respond calls if scratchpad.md is missing or incomplete.

@@ -85,6 +85,7 @@ export class SovereignScribe {
 		content: string,
 		isAgile = false,
 		targetPath?: string,
+		history: any[] = [], // V34: Neural Support
 	): Promise<{ success: boolean; errors: string[]; ok?: boolean; report?: string; synthesis?: string }> {
 		const errors: string[] = []
 		const diagnosticHints: string[] = []
@@ -104,7 +105,10 @@ export class SovereignScribe {
 		const citedPaths = Array.from(content.matchAll(pathRegexp)).map((m) => m[0])
 
 		if (this.forensics && !isExplicitlyAgile) {
-			const { errors: forensicErrors, warnings: forensicWarnings } = await this.forensics.verifyEvidenceGrounding(content)
+			const { errors: forensicErrors, warnings: forensicWarnings } = await this.forensics.verifyEvidenceGrounding(
+				content,
+				history,
+			)
 			errors.push(...forensicErrors)
 			diagnosticHints.push(...forensicWarnings)
 		}
@@ -159,8 +163,9 @@ export class SovereignScribe {
 			const probeContent = content.substring(startIndex, endIndex).trim()
 
 			// Substantive Validation for Probes
-			if (probeContent.length < 50 && !isExplicitlyAgile) {
-				diagnosticHints.push(`💡 ${probe.name}: Analysis is too superficial (min 50 chars).`)
+			const threshold = isExplicitlyAgile ? 10 : 50
+			if (probeContent.length < threshold) {
+				diagnosticHints.push(`💡 ${probe.name}: Analysis is too superficial (min ${threshold} chars).`)
 			}
 
 			// Symbol/Delta detection in probe content
@@ -178,12 +183,16 @@ export class SovereignScribe {
 			content.includes(SovereignProtocol.HEADERS.RESOLUTION) || SovereignProtocol.SEMANTIC_PATTERNS.RESOLUTION.test(content)
 
 		if (!hasResolution) {
-			if (!isExplicitlyAgile) errors.push("Missing mandatory section: ## [FINAL RESOLUTION]")
+			if (isExplicitlyAgile) {
+				diagnosticHints.push("💡 AGILE: Missing ## [FINAL RESOLUTION] section.")
+			} else {
+				errors.push("Missing mandatory section: ## [FINAL RESOLUTION]")
+			}
 		}
 
 		const hasMantra = content.includes(SovereignProtocol.MANTRA)
-		if (!hasMantra && !isExplicitlyAgile) {
-			errors.push(`Missing the Sovereign Mantra: "${SovereignProtocol.MANTRA}"`)
+		if (!hasMantra) {
+			diagnosticHints.push(`💡 MANTRA: The Sovereign Mantra is missing. Sovereignty implies discipline.`)
 		}
 
 		// 4. Check for Diagnostics

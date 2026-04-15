@@ -219,6 +219,13 @@ export class PathogenStore {
 		return Array.from(this.pathogens.values())
 	}
 
+	/**
+	 * V34: Path-aware violation retrieval for Proactive Discovery.
+	 */
+	public getViolations(filePath: string): Pathogen[] {
+		return this.getPathogens().filter((p) => p.originalSummary.includes(filePath))
+	}
+
 	private hashSignature(sig: string): string {
 		return crypto.createHash("sha256").update(sig).digest("hex")
 	}

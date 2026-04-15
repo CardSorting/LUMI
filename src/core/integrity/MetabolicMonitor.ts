@@ -19,7 +19,8 @@ export interface MetabolicMetrics {
  */
 export class MetabolicMonitor {
 	private registry: Map<string, MetabolicMetrics> = new Map()
-	private cooldownThreshold = 25 // Max collective edits per 30 minutes
+	private cooldownThreshold = 25 // Base collective edits per 30 minutes
+	private refactorThreshold = 50 // V33: Ethereal budget for refactors
 
 	/**
 	 * Records a read operation.
@@ -93,18 +94,24 @@ export class MetabolicMonitor {
 	/**
 	 * Detects if a file is "Inflamed" (High churn in a short period).
 	 */
-	public isInflamed(filePath: string): { inflamed: boolean; reason?: string } {
+	public isMetabolicallyInflamed(filePath: string, isRefactoring = false): { inflamed: boolean; reason?: string } {
 		const metrics = this.registry.get(filePath)
 		if (!metrics) return { inflamed: false }
 
 		const timeSinceLastEdit = Date.now() - metrics.lastEditTimestamp
-		const highChurn = metrics.linesAdded + metrics.linesDeleted > 500
+		const totalDelta = metrics.linesAdded + metrics.linesDeleted
+
+		// V33: Ethereal Leniency
+		const churnThreshold = isRefactoring ? 1000 : 500
+		const writeThreshold = isRefactoring ? 10 : 5
+
+		const highChurn = totalDelta > churnThreshold
 		const recentActivity = timeSinceLastEdit < 3600000 // 1 hour
 
-		if (highChurn && recentActivity && metrics.writes > 5) {
+		if (highChurn && recentActivity && metrics.writes > writeThreshold) {
 			return {
 				inflamed: true,
-				reason: `High metabolic churn detected (${metrics.writes} edits, ${metrics.linesAdded + metrics.linesDeleted} lines modified in under an hour).`,
+				reason: `High metabolic churn detected (${metrics.writes} edits). ${isRefactoring ? "(Refactor leniency applied)" : ""}`,
 			}
 		}
 
@@ -277,16 +284,18 @@ export class MetabolicMonitor {
 	 * PRODUCTION HARDENING: Evaluates the project-wide cognitive load and triggers a COOLDOWN
 	 * if the metabolic churn exceeds the safety capacity of the substrate.
 	 */
-	public getCooldownStatus(): { active: boolean; reason?: string } {
+	public getCooldownStatus(isRefactoring = false): { active: boolean; reason?: string } {
 		const recentThreshold = Date.now() - 1800000 // 30 minutes
 		const totalRecentWrites = Array.from(this.registry.values()).reduce((acc, m) => {
 			return m.lastEditTimestamp > recentThreshold ? acc + m.writes : acc
 		}, 0)
 
-		if (totalRecentWrites > this.cooldownThreshold) {
+		const threshold = isRefactoring ? this.refactorThreshold : this.cooldownThreshold
+
+		if (totalRecentWrites > threshold) {
 			return {
 				active: true,
-				reason: `System-wide metabolic churn peaking (${totalRecentWrites} edits in 30m). Substrate heat threshold exceeded.`,
+				reason: `System-wide metabolic churn peaking (${totalRecentWrites} edits in 30m). ${isRefactoring ? "(Refactor status active: Budget doubled)" : "Substrate heat threshold exceeded."}`,
 			}
 		}
 

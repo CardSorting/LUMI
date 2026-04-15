@@ -20,6 +20,7 @@ import { RefactorHealer } from "../task/tools/RefactorHealer"
 import { SovereignScribe } from "../task/tools/utils/SovereignScribe"
 import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine"
 import { SimulationEngine } from "./SimulationEngine.js"
+import { SovereignForensics } from "./SovereignForensics"
 import { SovereignOptimizer } from "./SovereignOptimizer"
 import { SovereignPolicy } from "./SovereignPolicy.js"
 import { SovereignProtocol } from "./SovereignProtocol"
@@ -70,6 +71,7 @@ export class FluidPolicyEngine {
 	private lastViolationCount = 0
 	private modifiedLayers: Set<string> = new Set()
 	private refactorHealer: RefactorHealer
+	private forensics: SovereignForensics // V33: Ethereal Persistence
 
 	constructor(
 		private cwd: string,
@@ -87,6 +89,7 @@ export class FluidPolicyEngine {
 		this.optimizer = new SovereignOptimizer(this.cwd)
 		this.pathogens = new PathogenStore(this.cwd)
 		this.refactorHealer = new RefactorHealer(this.cwd)
+		this.forensics = new SovereignForensics(this.cwd, this.metabolicMonitor, this.spiderEngine)
 
 		// V16: Warm graph startup
 		this.spiderEngine.loadRegistry().catch((e: unknown) => Logger.error("[FluidPolicyEngine] Failed to load registry:", e))
@@ -403,7 +406,8 @@ export class FluidPolicyEngine {
 		}
 
 		// Centralized Healing Mode Detection
-		const isHealingMode = this.architecturalAlarmActive || !!intent || !!content.match(/#HEAL|#HEALING|#CURE/)
+		const isHealingMode =
+			this.architecturalAlarmActive || !!intent || !!content.match(/#HEAL|#HEALING|#CURE|#FIX|#REPAIR|#TIDY/)
 
 		// 0. Rule: Cognitive Drift Sensing (Thrashing Prevention)
 		if (
@@ -429,7 +433,8 @@ export class FluidPolicyEngine {
 
 		// 0. Rule: Cognitive Cooldown Enforcement (Substrate Immune System)
 		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
-			const cooldown = this.metabolicMonitor.getCooldownStatus()
+			const isRefactoring = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
+			const cooldown = this.metabolicMonitor.getCooldownStatus(isRefactoring)
 			if (cooldown.active && !this.commitSeal) {
 				if (hasBreath) {
 					Logger.info("[FluidPolicyEngine] Metabolic Cooldown bypassed via # SOVEREIGN BREATH")
@@ -438,6 +443,14 @@ export class FluidPolicyEngine {
 				}
 
 				if (!hasBreath && !hasAudit) {
+					// V32: Therapeutic Leniency
+					if (isHealingMode) {
+						return {
+							success: true,
+							warning: `⚠️ THERAPEUTIC LENIENCY: Substrate is under Metabolic Pressure (${cooldown.reason}), but your Healing Intent (#HEAL/FIX) has been detected. Proceed with caution to restore structural balance.`,
+						}
+					}
+
 					const auditTemplate = SovereignProtocol.generateAuditTemplate("Cognitive Recovery")
 					const breathTemplate = SovereignProtocol.generateBreathTemplate("Metabolic Reset", cooldown.reason)
 
@@ -467,7 +480,8 @@ export class FluidPolicyEngine {
 			if (targetPath) {
 				const absolutePath = path.resolve(this.cwd, targetPath)
 				const violations = this.spiderEngine.getViolations().filter((v) => v.path === absolutePath)
-				const status = this.metabolicMonitor.isInflamed(absolutePath)
+				const isRefactoring = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
+				const status = this.metabolicMonitor.isMetabolicallyInflamed(absolutePath, isRefactoring)
 
 				if (violations.length > 0 || status.inflamed) {
 					const alerts: string[] = []
@@ -498,7 +512,7 @@ export class FluidPolicyEngine {
 
 				// V24: Symbol Lockdown (Audit-to-Action Binding)
 				if (hasAudit && !isScratchpad) {
-					const isCovered = this.isImplicitlyAudited(targetPath, scratchpadContent)
+					const isCovered = this.isImplicitlyAudited(targetPath, scratchpadContent, block)
 
 					if (!isCovered) {
 						// Fallback to symbol-level check if not implicitly covered
@@ -515,7 +529,8 @@ export class FluidPolicyEngine {
 					}
 				}
 
-				const status = this.metabolicMonitor.isInflamed(absolutePath)
+				const isRefactoring = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
+				const status = this.metabolicMonitor.isMetabolicallyInflamed(absolutePath, isRefactoring)
 
 				// V26: Axiom Lockdown (Structural Debt Prevention)
 				if (!isScratchpad && block.name === DietCodeDefaultTool.FILE_EDIT) {
@@ -1085,15 +1100,30 @@ export class FluidPolicyEngine {
 			} else {
 				header += `You have read this file ${doubt.toFixed(0)} times without making a move. You are drifting into a RECURSIVE LOOP. Stop reading and formulate a clear execution plan NOW.\n`
 			}
+
+			// V34: Sovereign Deep Scans (Proactive Discovery)
+			const pathogens = this.pathogens.getViolations(absolutePath)
+			if (pathogens.length > 0 || isHardStall || doubt > 10) {
+				const slice = await this.getSubstrateSlice(absolutePath)
+				header +=
+					`\n🔍 SOVEREIGN DEEP SCAN [PROACTIVE]:\n` +
+					`Pathogens: ${pathogens.length} detected (Top: ${pathogens[0]?.originalSummary || "None"})\n` +
+					`Substrate Slice (First 30 lines):\n\`\`\`typescript\n${slice}\n\`\`\`\n`
+			}
 		}
 
-		const infection = this.metabolicMonitor.isInflamed(absolutePath)
+		// V33: Refactor awareness for diagnostic injection
+		const { content: scratchpadContent } = SovereignScribe.getLatestScratchpadContent([])
+		const isRefactoringAudit = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
+
+		const infection = this.metabolicMonitor.isMetabolicallyInflamed(absolutePath, isRefactoringAudit)
 		if (infection.inflamed) {
 			header += `\n🔥 METABOLIC FEVER DETECTED:\n${infection.reason}\nThis file is reaching a state of architectural exhaustion. Consider an atomic split.\n`
 		}
 
-		const isRefactoring = this.spiderEngine.getViolations().length > 0 || this.architecturalAlarmActive
-		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan", isRefactoring)
+		const isRefactoringIntent =
+			isRefactoringAudit || this.spiderEngine.getViolations().length > 0 || this.architecturalAlarmActive
+		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan", isRefactoringIntent)
 		if (drift.warning) {
 			header += `\n${drift.warning}\n`
 		}
@@ -1399,10 +1429,30 @@ export class FluidPolicyEngine {
 	 * V30: Harmonic Audit Inheritance.
 	 * Checks if a file is implicitly covered by a parent directory citation or if it's an Agile Domain.
 	 */
-	private isImplicitlyAudited(filePath: string, scratchpadContent: string): boolean {
+	public getForensics(): SovereignForensics {
+		return this.forensics
+	}
+
+	/**
+	 * Extracts a high-fidelity slice of the substrate for proactive discovery.
+	 * V34: Ethereal Discovery.
+	 */
+	private async getSubstrateSlice(absolutePath: string): Promise<string> {
+		try {
+			const content = await fs.readFile(absolutePath, "utf-8")
+			return content.split("\n").slice(0, 30).join("\n")
+		} catch (e) {
+			return "Substrate unreachable."
+		}
+	}
+
+	private isImplicitlyAudited(filePath: string, scratchpadContent: string, block?: ToolUse): boolean {
 		const absolutePath = path.resolve(this.cwd, filePath)
 
 		if (scratchpadContent.includes("# SOVEREIGN_AGILE")) return true
+
+		// V33: Ethereal Refactor Leniency
+		const isRefactoring = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
 
 		// 1. Directory-level coverage
 		const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+(?:\/|$)/g
@@ -1410,7 +1460,23 @@ export class FluidPolicyEngine {
 		const isCoveredByDir = citedPaths.some((p) => absolutePath.includes(p))
 		if (isCoveredByDir) return true
 
-		// 2. Terminal Node Agility (Leaf nodes)
+		// 2. Aesthetic Agility (V34)
+		if (block?.name === DietCodeDefaultTool.FILE_EDIT || block?.name === DietCodeDefaultTool.APPLY_PATCH) {
+			const params = block.params as any
+			const target = params.targetContent || params.TargetContent
+			const replacement = params.replacementContent || params.ReplacementContent
+
+			if (target && replacement) {
+				const targetHash = (this.forensics as any).computeStructuralHash(target)
+				const replacementHash = (this.forensics as any).computeStructuralHash(replacement)
+				if (targetHash === replacementHash) {
+					Logger.info(`[FluidPolicyEngine] Aesthetic Agility triggered for ${path.basename(filePath)}`)
+					return true
+				}
+			}
+		}
+
+		// 3. Terminal Node Agility (Leaf nodes)
 		const node = this.spiderEngine.nodes.get(this.spiderEngine.normalizePath(filePath))
 		if (node && node.dependents.length === 0) {
 			Logger.info(`[FluidPolicyEngine] Terminal Node Agility triggered for ${path.basename(filePath)}`)

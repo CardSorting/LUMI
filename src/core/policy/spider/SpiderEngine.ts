@@ -570,7 +570,7 @@ export class SpiderEngine {
 		const structuralWeight = ((couplingLoad + complexityLoad) / 2) * 0.4
 		const prediction = pathogens.predictFailure(filePath)
 		const historicalRisk = prediction.likely ? 0.4 : 0
-		const infection = monitor.isInflamed(filePath)
+		const infection = monitor.isMetabolicallyInflamed(filePath)
 		const metabolicPressure = infection.inflamed ? 0.2 : 0
 		return structuralWeight + historicalRisk + metabolicPressure
 	}
