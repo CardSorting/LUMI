@@ -60,6 +60,7 @@ export class SemanticAxiomEngine {
 		const violations: AxiomViolation[] = []
 		const normalizedPath = this.normalize(filePath)
 		const node = engine.nodes.get(normalizedPath)
+		if (!node) return violations
 		const lines = content.split("\n")
 		const isPassthrough = content.includes("@dietcode-passthrough") || content.includes("@sovereign-exception")
 		const exceptionMatch = content.match(/@sovereign-exception:\s*([^\n*/]+)/)
@@ -68,8 +69,6 @@ export class SemanticAxiomEngine {
 		if (isPassthrough && node) {
 			Logger.info(`[SemanticAxiomEngine] Sovereign Exception active for ${node.path}. Reason: ${exceptionReason}`)
 		}
-
-		if (!node) return violations
 
 		// 1. Axiom: SIMPLICITY (Cognitive Weight)
 		// PRODUCTION HARDENING: Layer-aware thresholds. Domain is strict (800), others use default (1500).

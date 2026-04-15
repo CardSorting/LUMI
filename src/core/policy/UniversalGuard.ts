@@ -29,6 +29,14 @@ export class UniversalGuard {
 		return this.currentMode
 	}
 
+	public resetSystemPressure(): void {
+		this.engine.resetSystemPressure()
+	}
+
+	public getSystemDiagnostics(): string {
+		return this.engine.getSystemDiagnostics()
+	}
+
 	/**
 	 * Single "Execute" call that performs all pre-flight audits.
 	 */

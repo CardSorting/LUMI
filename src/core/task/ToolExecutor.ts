@@ -51,6 +51,16 @@ export class ToolExecutor {
 	private guard: UniversalGuard
 	private healer: RefactorHealer
 
+	public resetSystemPressure(): void {
+		if (this.guard) {
+			this.guard.resetSystemPressure()
+		}
+	}
+
+	public getSystemDiagnostics(): string {
+		return this.guard ? this.guard.getSystemDiagnostics() : ""
+	}
+
 	// Auto-approval methods using the AutoApprove class
 	private shouldAutoApproveTool(toolName: DietCodeDefaultTool): boolean | [boolean, boolean] {
 		return this.autoApprover.shouldAutoApproveTool(toolName)

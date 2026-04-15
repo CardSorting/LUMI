@@ -2317,59 +2317,98 @@ export class Task {
 		}
 
 		if (this.taskState.consecutiveMistakeCount >= this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes")) {
-			// In yolo mode, don't wait for user input - fail the task
-			if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
-				const errorMessage =
-					`[YOLO MODE] Task failed: Too many consecutive mistakes (${this.taskState.consecutiveMistakeCount}). ` +
-					`The model may not be capable enough for this task. Consider using a more capable model.`
-				await this.say("error", errorMessage)
-				// End the task loop with failure
-				return true // didEndLoop = true, signals task completion/failure
+			// Cognitive Reflection Nudge ("Taking a Breather")
+			// Instead of a hard halt or stopping the workflow, we inject a psychological save point
+			let breatherText =
+				"You seem to be hitting some friction. Let's take a breather. Please take a moment to review your `scratchpad.md` or journal notes to re-orient yourself against the macro plan."
+
+			// 1. Memory Context Injection
+			let scratchpadExists = false
+			try {
+				const scratchpadPath = path.join(this.cwd, "scratchpad.md")
+				const stats = await fs.stat(scratchpadPath)
+				if (stats.size > 0) {
+					// Production Hardening: Prevent context bloat by truncating extremely large scratchpads
+					const scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
+					const MAX_SCRATCHPAD_LENGTH = 3000
+					const truncatedContent =
+						scratchpadContent.length > MAX_SCRATCHPAD_LENGTH
+							? scratchpadContent.slice(0, MAX_SCRATCHPAD_LENGTH) +
+								"\n\n... [TRUNCATED] Please use `read_file` for complete contents."
+							: scratchpadContent
+
+					if (truncatedContent.trim()) {
+						breatherText += `\n\nTo save you a read operation, here is the current state of your \`scratchpad.md\` for immediate review:\n<scratchpad>\n${truncatedContent}\n</scratchpad>`
+						scratchpadExists = true
+					}
+				}
+			} catch (error) {
+				// Ignore if scratchpad doesn't exist yet
 			}
+
+			if (!scratchpadExists) {
+				breatherText += `\n\n💡 ALARM: You do not currently have a \`scratchpad.md\` file! When the substrate rejects your edits, you MUST slow down and document a map. It is highly recommended to use \`write_to_file\` to create a scratchpad to define your architecture before taking another blind stab.`
+			}
+
+			// 2. Physical Environment Anchoring (Blast Radius)
+			try {
+				const { exec } = require("child_process")
+				const { promisify } = require("util")
+				const execAsync = promisify(exec)
+				// Production Hardening: timeout and maxBuffer to prevent zombie processes or memory limits crash
+				const { stdout } = await execAsync("git status -s", { cwd: this.cwd, timeout: 2000, maxBuffer: 1024 * 1024 })
+				let statusOutput = stdout.trim()
+
+				if (statusOutput) {
+					// Production Hardening: Prevent context bloat if repository has thousands of modified files
+					const MAX_GIT_LINES = 50
+					const lines = statusOutput.split("\n")
+					if (lines.length > MAX_GIT_LINES) {
+						statusOutput =
+							lines.slice(0, MAX_GIT_LINES).join("\n") + `\n... and ${lines.length - MAX_GIT_LINES} more files.`
+					}
+					breatherText += `\n\nTo prevent context drift, here is the exact current \`git status -s\` of your disk. These are the files you have currently modified:\n<git_status>\n${statusOutput}\n</git_status>`
+				}
+			} catch (e) {
+				// Ignore if git fails (e.g. no repo)
+			}
+			// 3. System Diagnostics Injection
+			if (this.toolExecutor) {
+				const diagnostics = this.toolExecutor.getSystemDiagnostics()
+				if (diagnostics.trim()) {
+					breatherText += `\n\nAdditionally, here are the exact architectural blockades and metabolic hotspots you are currently hitting. This is likely WHY your execution was failing:\n<system_diagnostics>\n${diagnostics.trim()}\n</system_diagnostics>`
+				}
+			}
+
+			userContent.push({
+				type: "text",
+				text: `<system_nudge>\n${breatherText}\n</system_nudge>`,
+			})
+
+			// Notify UI
+			await this.say(
+				"text",
+				"🗣️ [COGNITIVE REFLECTION] System triggered a breather nudge. The agent is organically reviewing its notes to re-orient.",
+			)
 
 			const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 			if (autoApprovalSettings.enableNotifications) {
 				showSystemNotification({
-					subtitle: "Error",
-					message: "DietCode is having trouble. Would you like to continue the task?",
+					subtitle: "Cognitive Reflection Activity",
+					message: "DietCode encountered friction and is taking a breather.",
 				})
 			}
-			const { response, text, images, files } = await this.ask(
-				"mistake_limit_reached",
-				this.api.getModel().id.includes("claude")
-					? `This may indicate a failure in DietCode's thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. "Try breaking down the task into smaller steps").`
-					: "DietCode uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 4.5 Sonnet for its advanced agentic coding capabilities.",
-			)
-			if (response === "messageResponse") {
-				// Display the user's message in the chat UI
-				await this.say("user_feedback", text, images, files)
 
-				// This userContent is for the *next* API call.
-				const feedbackUserContent: DietCodeUserContent[] = []
-				feedbackUserContent.push({
-					type: "text",
-					text: formatResponse.tooManyMistakes(text),
-				})
-				if (images && images.length > 0) {
-					feedbackUserContent.push(...formatResponse.imageBlocks(images))
-				}
-
-				let fileContentString = ""
-				if (files && files.length > 0) {
-					fileContentString = await processFilesIntoText(files)
-				}
-
-				if (fileContentString) {
-					feedbackUserContent.push({
-						type: "text",
-						text: fileContentString,
-					})
-				}
-
-				userContent = feedbackUserContent
-			}
+			// Clean state to give the agent a fresh attempt window without artificial throttling
 			this.taskState.consecutiveMistakeCount = 0
-			this.taskState.autoRetryAttempts = 0 // need to reset this if the user chooses to manually retry after the mistake limit is reached
+			this.taskState.autoRetryAttempts = 0
+
+			// 3. Systemic Recalibration
+			// We MUST physically clear the metabolic pressure in the Universal Guard,
+			// otherwise the agent will instantly trigger a "Substrate Heat Warning" upon resuming execution.
+			if (this.toolExecutor) {
+				this.toolExecutor.resetSystemPressure()
+			}
 		}
 
 		// get previous api req's index to check token usage and determine if we need to truncate conversation history

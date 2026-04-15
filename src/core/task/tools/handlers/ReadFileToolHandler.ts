@@ -170,7 +170,21 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 
 		// Execute the actual file read operation
 		const supportsImages = config.api.getModel().info.supportsImages ?? false
-		const fileContent = await extractFileContent(absolutePath, supportsImages)
+		let fileContent
+		try {
+			fileContent = await extractFileContent(absolutePath, supportsImages)
+		} catch (error) {
+			if (error instanceof Error && error.message.includes("File not found") && absolutePath.endsWith("scratchpad.md")) {
+				const fs = await import("fs/promises")
+				const template = `# SOVEREIGN AUDIT: [Task Name]\n\n## [TRIAD PROBES]\n### 1. THE ARCHITECT (Boundary Probe)\n- **Vulnerability**: [Where is the boundary weakest?]\n- **Proof**: [Evidence of JoyZoning compliance]\n\n### 2. THE CRITIC (Assumption Probe)\n- **Weak Point**: [Which assumption is most dangerous?]\n- **Hardening**: [Specific fix/guardrail applied]\n\n### 3. THE SRE (Atomic Probe)\n- **Failure Path**: [What happens during partial failure?]\n- **Resilience**: [Atomic recovery logic/Error boundaries]\n\n## [FINAL RESOLUTION]\n- **Synthesis**: [Summary of hardening applied to the final plan]\n- **MANTRA**: Double down on this concept, audit and revise in its entirety\n`
+				await fs.writeFile(absolutePath, template, "utf8")
+				return (
+					"The file `scratchpad.md` did not exist, but I have automatically generated it with the default template. Please use `edit_file` to perform your audit.\n\n" +
+					template
+				)
+			}
+			throw error
+		}
 
 		// Track file read operation
 		await config.services.fileContextTracker.trackFileContext(relPath as string, "read_tool")
