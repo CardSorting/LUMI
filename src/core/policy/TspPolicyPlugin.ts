@@ -48,9 +48,9 @@ export class TspPolicyPlugin {
 	 * Performance thresholds - configurable based on project testing needs
 	 */
 	private readonly THRESHOLDS = {
-		MAX_CUSTOM_LINES: 800,
-		MAX_WARNING_LINES: 300,
-		MAX_AST_LINES: 1500, // AST processing cutoff for performance
+		MAX_CUSTOM_LINES: 1500,
+		MAX_WARNING_LINES: 800,
+		MAX_AST_LINES: 3000, // AST processing cutoff for performance
 	}
 
 	/**
@@ -65,6 +65,13 @@ export class TspPolicyPlugin {
 		"vcproj",
 		"vcxproj",
 		"project.lock.json",
+
+		// Build artifacts
+		".turbo",
+		"dist",
+		"out",
+		".next",
+		"coverage",
 
 		// Configuration and lockfiles
 		"workspace.json",
@@ -168,11 +175,21 @@ export class TspPolicyPlugin {
 
 	/**
 	 * Checks if a file path matches any entry in the special cases whitelist (including dynamic exceptions)
+	 * PRODUCTION HARDENING: Deep path inspection for third-party and generated directories.
 	 */
 	private isFileInWhitelist(filePath: string): boolean {
 		const basename = path.basename(filePath)
 		const ext = basename.split(".").pop()?.toLowerCase() || ""
+
+		// Check extensions
 		if (this.SPECIAL_CASE_FILES.has(ext)) return true
+
+		// Check directory fragments (e.g., /node_modules/)
+		const normalizedPath = filePath.replace(/\\/g, "/")
+		for (const special of this.SPECIAL_CASE_FILES) {
+			if (normalizedPath.includes(`/${special}/`)) return true
+		}
+
 		for (const e of this.exceptions) {
 			if (e.extension === ext) return true
 		}
@@ -188,11 +205,11 @@ export class TspPolicyPlugin {
 		let score = 100
 
 		if (lineCount > this.THRESHOLDS.MAX_CUSTOM_LINES) {
-			score -= 30
-			recommendations.push("File exceeds maximum allowed lines")
+			score -= 20
+			recommendations.push(`Large file (${lineCount} lines) detected. Maintainability may decrease.`)
 		} else if (lineCount > this.THRESHOLDS.MAX_WARNING_LINES) {
 			score -= 10
-			recommendations.push("Consider splitting file into smaller modules")
+			recommendations.push("Consider splitting file into smaller modules if it becomes complex.")
 		}
 
 		return {
@@ -383,18 +400,30 @@ export class TspPolicyPlugin {
 		"@/": "src/",
 		"@api/": "src/core/api/",
 		"@core/": "src/core/",
+		"@generated/": "src/generated/",
+		"@hosts/": "src/hosts/",
+		"@integrations/": "src/integrations/",
+		"@packages/": "src/packages/",
 		"@services/": "src/services/",
 		"@shared/": "src/shared/",
 		"@utils/": "src/utils/",
+		"@frontend/": "webview-ui/src/",
+		"@shared-utils/": "src/shared/utils/",
 	}
 
 	/**
 	 * Resolves project-specific path aliases.
+	 * PRODUCTION HARDENING: Handles trailing slashes and precise matching to prevent path corruption.
 	 */
 	private resolveAlias(moduleName: string): string {
-		for (const [alias, replacement] of Object.entries(TspPolicyPlugin.ALIASES)) {
-			if (moduleName.startsWith(alias)) {
-				return path.join(replacement, moduleName.substring(alias.length))
+		// Sort aliases by length descending to ensure the most specific match (e.g., @shared-utils/ vs @shared/)
+		const sortedAliases = Object.entries(TspPolicyPlugin.ALIASES).sort((a, b) => b[0].length - a[0].length)
+
+		for (const [alias, replacement] of sortedAliases) {
+			// Check for exact match without trailing slash OR starts with alias
+			if (moduleName === alias.slice(0, -1) || moduleName.startsWith(alias)) {
+				const suffix = moduleName.startsWith(alias) ? moduleName.substring(alias.length) : ""
+				return path.join(replacement, suffix).replace(/\\/g, "/")
 			}
 		}
 		return moduleName

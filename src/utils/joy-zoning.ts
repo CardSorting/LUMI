@@ -110,23 +110,28 @@ export function getLayer(filePath: string): Layer {
 		}
 	}
 
-	const layer = normalized.includes("src/domain/")
-		? "domain"
-		: normalized.includes("src/infrastructure/")
-			? "infrastructure"
-			: normalized.includes("src/plumbing/")
-				? "plumbing"
-				: normalized.includes("src/ui/")
-					? "ui"
-					: normalized.includes("src/core/")
-						? "core"
-						: normalized.includes("src/services/") || normalized.includes("src/integrations/")
-							? "infrastructure"
-							: normalized.includes("src/utils/")
-								? "plumbing"
-								: normalized.includes("webview-ui/")
-									? "ui"
-									: "infrastructure"
+	const layer =
+		normalized.includes("src/domain/") || normalized.endsWith("/src/domain")
+			? "domain"
+			: normalized.includes("src/infrastructure/") || normalized.endsWith("/src/infrastructure")
+				? "infrastructure"
+				: normalized.includes("src/plumbing/") || normalized.endsWith("/src/plumbing")
+					? "plumbing"
+					: normalized.includes("src/ui/") || normalized.endsWith("/src/ui")
+						? "ui"
+						: normalized.includes("src/core/") || normalized.endsWith("/src/core")
+							? "core"
+							: normalized.includes("src/services/") ||
+									normalized.includes("src/integrations/") ||
+									normalized.includes("src/generated/") ||
+									normalized.includes("src/hosts/") ||
+									normalized.includes("src/packages/")
+								? "infrastructure"
+								: normalized.includes("src/utils/")
+									? "plumbing"
+									: normalized.includes("webview-ui/")
+										? "ui"
+										: "infrastructure"
 
 	PATH_LAYER_CACHE.set(normalized, layer)
 	return layer

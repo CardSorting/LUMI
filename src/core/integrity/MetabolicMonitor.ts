@@ -65,6 +65,25 @@ export class MetabolicMonitor {
 	}
 
 	/**
+	 * Detects "Task Drift" — changing too many unrelated files in a short burst.
+	 */
+	public getTaskDrift(isPlanning = false): { drift: number; warning?: string } {
+		const recentThreshold = Date.now() - 600000 // 10 minutes
+		const recentFiles = Array.from(this.registry.entries()).filter(([_p, m]) => m.lastEditTimestamp > recentThreshold)
+
+		const drift = recentFiles.length
+		const threshold = isPlanning ? 20 : 10
+		if (drift > threshold) {
+			return {
+				drift,
+				warning: `⚠️ TASK DRIFT DETECTED: You have modified ${drift} different files in the last 10 minutes. This high-entropy behavior increases the risk of regression. Focus on one module at a time.`,
+			}
+		}
+
+		return { drift }
+	}
+
+	/**
 	 * Gets the project-wide vitality stats.
 	 */
 	public getVitalityStats() {

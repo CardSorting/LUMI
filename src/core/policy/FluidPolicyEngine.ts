@@ -1,3 +1,7 @@
+/**
+ * [LAYER: CORE]
+ */
+
 import { DietCodeDefaultTool } from "@shared/tools"
 import { createHash } from "crypto"
 import fs from "fs/promises"
@@ -59,6 +63,7 @@ export class FluidPolicyEngine {
 	private pathogens: PathogenStore
 	private architecturalAlarmActive = false
 	private alarmViolations: string[] = []
+	private lastIntegrityScore = 100
 	private refactorHealer: RefactorHealer
 
 	constructor(
@@ -132,8 +137,7 @@ export class FluidPolicyEngine {
 	 * Returns proactive architectural guidance for a given file's layer.
 	 */
 	public getFileLayerContext(filePath: string): string {
-		const { getLayer } = require("@/utils/joy-zoning")
-		const layer = getLayer(filePath)
+		const layer = this.getCachedLayer(filePath)
 		const fileName = path.basename(filePath)
 
 		switch (layer) {
@@ -154,42 +158,81 @@ export class FluidPolicyEngine {
 
 	/**
 	 * Generates a concise, actionable correction hint for architectural violations.
+	 * Includes code snippets for immediate resolution.
 	 */
 	public getCorrectionHint(errors: string[], filePath?: string): string {
 		const fixes: string[] = []
+		const snippets: string[] = []
 		const supportsTags = filePath ? isLayerTagSupported(filePath) : true
 
 		for (const err of errors) {
-			if ((err.includes("tag") || err.includes("Missing mandatory")) && supportsTags)
-				fixes.push(
-					"Add a mandatory [LAYER: TYPE] tag to the file header (one of DOMAIN, CORE, INFRASTRUCTURE, PLUMBING, UI).",
-				)
-			else if (err.includes("Geographic Misalignment"))
+			if ((err.includes("tag") || err.includes("Missing mandatory")) && supportsTags) {
+				const layer = filePath ? this.getCachedLayer(filePath).toUpperCase() : "DOMAIN"
+				fixes.push(`Add a mandatory [LAYER: ${layer}] tag to the file header.`)
+				snippets.push(`/**\n * [LAYER: ${layer}]\n */`)
+			} else if (err.includes("Geographic Misalignment")) {
 				fixes.push("Move the file to the physical directory that matches its declared [LAYER] tag.")
-			else if (err.includes("relative navigation"))
+			} else if (err.includes("relative navigation")) {
 				fixes.push("Flatten the project structure or use '@/' aliases to avoid deep relative imports (max 3 levels).")
-			else if (err.includes("import"))
+				snippets.push("import { ... } from '@/core/logic'")
+			} else if (err.includes("import")) {
 				fixes.push("Move the import to the appropriate layer, or extract an interface in Domain.")
-			else if (err.includes("class")) fixes.push("Split into separate files — one class per file in Domain.")
-			else if (err.includes("circular")) fixes.push("Extract shared logic into a Plumbing utility.")
-			else fixes.push("Review the violation and restructure accordingly.")
+				if (err.includes("Domain layer")) {
+					snippets.push("// Move this to src/domain/interfaces/ and depend on the interface instead")
+				}
+			} else if (err.includes("class")) {
+				fixes.push("Split into separate files — one class per file in Domain.")
+			} else if (err.includes("circular")) {
+				fixes.push("Break the circular dependency by extracting shared logic to a lower layer (e.g., Plumbing).")
+				snippets.push("// Circular detected: Move shared logic to src/plumbing/utils.ts")
+			} else {
+				fixes.push("Review the violation and restructure accordingly.")
+			}
 		}
+
 		const uniqueFixes = [...new Set(fixes)]
-		return `💡 How to fix:\n${uniqueFixes.map((f) => `  → ${f}`).join("\n")}`
+		let response = `💡 How to fix:\n${uniqueFixes.map((f) => `  → ${f}`).join("\n")}`
+		if (snippets.length > 0) {
+			response += `\n\n📝 Suggested Code:\n${snippets.map((s) => `\`\`\`typescript\n${s}\n\`\`\``).join("\n")}`
+		}
+		return response
 	}
 
 	/**
 	 * Computes the architectural integrity score (0-100).
-	 * Every violation reduces the score exponentially.
+	 * Every violation reduces the score based on its weighted severity.
+	 *
+	 * Weights:
+	 * - Ghost imports: 1 point
+	 * - Layer violations: 10 points
+	 * - Circular dependencies: 15 points
 	 */
 	public computeIntegrityScore(violations: string[]): number {
 		if (violations.length === 0) return 100
+
+		let totalPenalty = 0
+		for (const violation of violations) {
+			if (violation.includes("Ghost Import")) {
+				totalPenalty += 1
+			} else if (violation.includes("Circular Dependency")) {
+				totalPenalty += 15
+			} else if (violation.includes("layer") || violation.includes("Geographic Misalignment")) {
+				totalPenalty += 10
+			} else {
+				totalPenalty += 5 // Default penalty
+			}
+		}
+
 		const base = 100
-		const penalty = Math.min(95, violations.length * 5)
+		const penalty = Math.min(95, totalPenalty)
 		const score = Math.max(5, base - penalty)
 
 		// Trigger Architectural Alarm if score drops below 70 due to hard errors
-		if (score < 70 && !this.architecturalAlarmActive) {
+		// PRODUCTION HARDENING: Alarm is trend-aware. Only trigger if score is declining.
+		const isDeclining = score < this.lastIntegrityScore
+		this.lastIntegrityScore = score
+
+		if (score < 70 && !this.architecturalAlarmActive && isDeclining) {
 			this.triggerAlarm(violations)
 		} else if (score >= 90 && this.architecturalAlarmActive) {
 			this.clearAlarm()
@@ -225,6 +268,7 @@ export class FluidPolicyEngine {
 	private clearAlarm() {
 		this.architecturalAlarmActive = false
 		this.alarmViolations = []
+		this.lastIntegrityScore = 100 // Reset baseline
 		Logger.info("💚 [ARCHITECTURAL ALARM] Alarm cleared. System integrity restored.")
 	}
 
@@ -267,7 +311,7 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// 0. Rule: Architectural Alarm (Soft-Lock)
+		// 0. Rule: Architectural Alarm (Soft-Lock / Healing Mode)
 		if (
 			this.architecturalAlarmActive &&
 			(block.name === DietCodeDefaultTool.FILE_NEW ||
@@ -275,14 +319,38 @@ export class FluidPolicyEngine {
 				block.name === DietCodeDefaultTool.APPLY_PATCH ||
 				block.name === DietCodeDefaultTool.DELETE)
 		) {
-			return {
-				success: false,
-				error:
-					`🚨 ARCHITECTURAL ALARM ACTIVE (Score: ${this.computeIntegrityScore(this.alarmViolations)}/100)\n` +
-					`Your previous actions have degraded the system integrity beyond the safety threshold. ` +
-					`All destructive or structural tool calls are LOCKED until the following violations are healed:\n` +
-					`${this.alarmViolations.map((v) => `  - ${v}`).join("\n")}\n\n` +
-					`💡 You MUST fix these issues using simple writes or refactor tools before continuing with new features.`,
+			const targetPath = (block.params as any)?.path
+			const normalizedTarget = targetPath ? this.normalize(targetPath) : null
+
+			// HEALING MODE: Allow FILE_EDIT/APPLY_PATCH if the target file is currently in violation
+			const isHealingAttempt =
+				(block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) &&
+				normalizedTarget &&
+				this.alarmViolations.some((v) => v.includes(normalizedTarget))
+
+			if (!isHealingAttempt) {
+				const healableFiles = [
+					...new Set(
+						this.alarmViolations
+							.map((v) => {
+								const match = v.match(/src\/[^\s:]+/)
+								return match ? match[0] : null
+							})
+							.filter(Boolean),
+					),
+				]
+
+				return {
+					success: false,
+					error:
+						`🚨 ARCHITECTURAL ALARM ACTIVE (Score: ${this.computeIntegrityScore(this.alarmViolations)}/100)\n` +
+						`Your previous actions have degraded the system integrity beyond the safety threshold. ` +
+						`Structural changes are LOCKED until the following violations are healed:\n` +
+						`${this.alarmViolations.map((v) => `  - ${v}`).join("\n")}\n\n` +
+						`🩹 HEALING MODE ACTIVE: You may only edit the following violating files:\n` +
+						`${healableFiles.map((f) => `  → ${f}`).join("\n")}\n\n` +
+						`💡 You MUST fix these issues using FILE_EDIT or refactor tools before continuing with new features.`,
+				}
 			}
 		}
 
@@ -487,8 +555,7 @@ export class FluidPolicyEngine {
 
 		const layerContext = this.getFileLayerContext(absolutePath)
 		const validation = this.tspPlugin.validateSource(absolutePath, content, this.virtualResolver)
-		const { getLayer } = require("@/utils/joy-zoning")
-		const layer = getLayer(absolutePath)
+		const layer = this.getCachedLayer(absolutePath)
 		const refactorSuggestions = SpiderRefactorer.getRefactoringSuggestions(this.spiderEngine)
 
 		let header = `${layerContext}\n`
@@ -544,6 +611,11 @@ export class FluidPolicyEngine {
 		const infection = this.metabolicMonitor.isInflamed(absolutePath)
 		if (infection.inflamed) {
 			header += `\n🔥 METABOLIC FEVER DETECTED:\n${infection.reason}\nThis file is reaching a state of architectural exhaustion. Consider an atomic split.\n`
+		}
+
+		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan")
+		if (drift.warning) {
+			header += `\n${drift.warning}\n`
 		}
 
 		// Proactive Ghost Intelligence
@@ -697,7 +769,6 @@ export class FluidPolicyEngine {
 	): Promise<{ success: boolean; errors: string[] }> {
 		const allErrors: string[] = []
 		const isDomainChange = ops.some((op) => op.layer === "domain")
-		const { getLayer } = require("@/utils/joy-zoning")
 
 		for (const filePath of affectedFiles) {
 			try {
@@ -705,7 +776,7 @@ export class FluidPolicyEngine {
 				const validation = this.tspPlugin.validateSource(filePath, content, this.virtualResolver)
 				if (!validation.success || (validation.warnings && validation.warnings.length > 0)) {
 					const allIssues = [...(validation.warnings || []), ...validation.errors]
-					const layer = getLayer(filePath)
+					const layer = this.getCachedLayer(filePath)
 					const layerPrefix = `[${layer.toUpperCase()}] ${path.basename(filePath)}`
 					allErrors.push(...allIssues.map((e) => `${layerPrefix}: ${e}`))
 				}
@@ -719,7 +790,7 @@ export class FluidPolicyEngine {
 				)
 				const crossLayerViolations = this.tspPlugin.findCrossLayerViolations(sourceFile, filePath)
 				if (crossLayerViolations.length > 0) {
-					const layer = getLayer(filePath)
+					const layer = this.getCachedLayer(filePath)
 					const layerPrefix = `[${layer.toUpperCase()}] ${path.basename(filePath)}`
 					allErrors.push(
 						...crossLayerViolations.map((e) => `${layerPrefix}: ARCHITECTURAL SMELL (Cross-Layer Dependency): ${e}`),

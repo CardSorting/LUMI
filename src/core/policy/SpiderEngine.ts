@@ -1,3 +1,7 @@
+/**
+ * [LAYER: CORE]
+ */
+
 import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
@@ -67,6 +71,7 @@ export class SpiderEngine {
 	private snapshotDir: string
 	private registryFile: string
 	private resolutionCache: Map<string, string | null> = new Map()
+	private negativeCache: Map<string, boolean> = new Map()
 	private saveTimeout: NodeJS.Timeout | null = null
 	private cachedEntropy: SpiderEntropyReport | null = null
 	private lastEntropyVersion = -1
@@ -77,13 +82,29 @@ export class SpiderEngine {
 	}
 
 	/**
+	 * Warm up the graph by scanning known entry points proactively.
+	 */
+	public async warmUp(entryPoints: string[] = ["src/main.ts", "src/index.ts"]) {
+		for (const entry of entryPoints) {
+			const absPath = path.resolve(this.cwd, entry)
+			if (fs.existsSync(absPath)) {
+				const content = await fs.promises.readFile(absPath, "utf-8")
+				this.updateNode(entry, content)
+			}
+		}
+	}
+
+	/**
 	 * Incrementally updates or adds a single file to the structural graph.
 	 */
 	public updateNode(filePath: string, content: string) {
+		const normalizedPath = this.normalizePath(filePath)
+		// SMART INVALIDATION: Only clear negative cache if the update could resolve a ghost
+		if (!this.nodes.has(normalizedPath)) {
+			this.negativeCache.clear()
+		}
 		this.checkMetabolicPressure()
 		const absolutePath = path.resolve(this.cwd, filePath)
-		const relativePath = path.relative(this.cwd, absolutePath)
-		const normalizedPath = relativePath.replace(/\\/g, "/")
 		const layer = getLayer(absolutePath)
 		const hash = crypto.createHash("md5").update(content).digest("hex")
 
@@ -454,20 +475,141 @@ export class SpiderEngine {
 	/**
 	 * Detects "Ghost Files" — files that are imported but do not exist in the graph.
 	 */
+	/**
+	 * Detects "Ghost Files" — files that are imported but do not exist in the graph.
+	 * REALITY CHECK: Also verifies existence on disk to prevent false positives for unindexed files.
+	 */
 	public findGhosts() {
 		this.ghosts.clear()
 		for (const node of this.nodes.values()) {
 			for (const imp of node.imports) {
 				const resolved = this.resolveImportToNodeId(node.path, imp)
-				if (!resolved || (!this.nodes.has(resolved) && !this.isNodeLibrary(imp))) {
-					this.ghosts.add(`${node.path} -> ${imp}`)
+				// If not in graph, check if it exists on disk before calling it a ghost
+				if (!resolved || !this.nodes.has(resolved)) {
+					if (this.isNodeLibrary(imp)) continue
+
+					// Deep disk check (expensive but prevents spirals)
+					const diskExists = this.verifyOnDisk(node.path, imp)
+					if (!diskExists) {
+						this.ghosts.add(`${node.path} -> ${imp}`)
+					}
 				}
 			}
 		}
 	}
 
+	/**
+	 * Performs a physical existence check on disk for a given import specifier.
+	 */
+	private verifyOnDisk(sourcePath: string, specifier: string): boolean {
+		const cacheKey = `${sourcePath}:${specifier}`
+		if (this.negativeCache.has(cacheKey)) return false
+
+		try {
+			let absPath = ""
+			if (specifier.startsWith(".")) {
+				absPath = path.resolve(this.cwd, path.dirname(sourcePath), specifier)
+			} else if (specifier.startsWith("@/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@/", "src/"))
+			} else if (specifier.startsWith("@api/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@api/", "src/core/api/"))
+			} else if (specifier.startsWith("@core/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@core/", "src/core/"))
+			} else if (specifier.startsWith("@generated/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@generated/", "src/generated/"))
+			} else if (specifier.startsWith("@hosts/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@hosts/", "src/hosts/"))
+			} else if (specifier.startsWith("@integrations/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@integrations/", "src/integrations/"))
+			} else if (specifier.startsWith("@packages/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@packages/", "src/packages/"))
+			} else if (specifier.startsWith("@services/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@services/", "src/services/"))
+			} else if (specifier.startsWith("@shared/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@shared/", "src/shared/"))
+			} else if (specifier.startsWith("@utils/")) {
+				absPath = path.resolve(this.cwd, specifier.replace("@utils/", "src/utils/"))
+			} else {
+				return true // Assume external libraries exist
+			}
+
+			// Check common extensions
+			const extensions = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx"]
+			for (const ext of extensions) {
+				if (fs.existsSync(absPath + ext)) return true
+			}
+
+			this.negativeCache.set(cacheKey, true)
+			return false
+		} catch {
+			this.negativeCache.set(cacheKey, true)
+			return false
+		}
+	}
+
 	private isNodeLibrary(specifier: string): boolean {
-		return !specifier.startsWith(".") && !specifier.startsWith("@/")
+		const builtins = [
+			"assert",
+			"async_hooks",
+			"buffer",
+			"child_process",
+			"cluster",
+			"console",
+			"constants",
+			"crypto",
+			"dgram",
+			"dns",
+			"domain",
+			"events",
+			"fs",
+			"fs/promises",
+			"http",
+			"http2",
+			"https",
+			"inspector",
+			"module",
+			"net",
+			"os",
+			"path",
+			"perf_hooks",
+			"process",
+			"punycode",
+			"querystring",
+			"readline",
+			"repl",
+			"stream",
+			"string_decoder",
+			"timers",
+			"tls",
+			"trace_events",
+			"tty",
+			"url",
+			"util",
+			"v8",
+			"vm",
+			"worker_threads",
+			"zlib",
+			"typescript",
+			"diagnostics_channel",
+			"wasi",
+			"test",
+			"inspector",
+		]
+		// Handle node: prefix and common external library scopes to prevent false positive ghost detection
+		const normalizedSpecifier = specifier.startsWith("node:") ? specifier.slice(5) : specifier
+		const isBuiltin = builtins.includes(normalizedSpecifier)
+		const isExternal =
+			!specifier.startsWith(".") &&
+			!specifier.startsWith("@/") &&
+			!specifier.startsWith("@api/") &&
+			!specifier.startsWith("@core/") &&
+			!specifier.startsWith("@infrastructure/") &&
+			!specifier.startsWith("@shared/") &&
+			!specifier.startsWith("@utils/") &&
+			!specifier.startsWith("@frontend/") &&
+			!specifier.startsWith("@shared-utils/")
+
+		return isBuiltin || isExternal
 	}
 
 	/**
@@ -757,6 +899,16 @@ export class SpiderEngine {
 		} catch (e) {
 			Logger.error("[SpiderEngine] Registry load failed:", e)
 			return false
+		}
+	}
+
+	private normalizePath(filePath: string): string {
+		try {
+			const absolutePath = path.resolve(this.cwd, filePath)
+			const relativePath = path.relative(this.cwd, absolutePath)
+			return relativePath.replace(/\\/g, "/")
+		} catch {
+			return filePath.replace(/\\/g, "/")
 		}
 	}
 

@@ -19,15 +19,59 @@ export class SemanticAxiomEngine {
 	constructor(private cwd: string) {}
 
 	/**
+	 * Calculates cognitive complexity based on nesting depth.
+	 */
+	private calculateCognitiveComplexity(node: ts.Node): number {
+		let complexity = 0
+		let nesting = 0
+
+		const visit = (n: ts.Node) => {
+			const isBranch =
+				ts.isIfStatement(n) ||
+				ts.isForStatement(n) ||
+				ts.isForInStatement(n) ||
+				ts.isForOfStatement(n) ||
+				ts.isWhileStatement(n) ||
+				ts.isDoStatement(n) ||
+				ts.isSwitchStatement(n) ||
+				ts.isConditionalExpression(n) ||
+				ts.isCatchClause(n)
+
+			if (isBranch) {
+				complexity += 1 + nesting
+				nesting++
+				ts.forEachChild(n, visit)
+				nesting--
+			} else {
+				ts.forEachChild(n, visit)
+			}
+		}
+
+		visit(node)
+		return complexity
+	}
+
+	/**
 	 * Validates a file's logic against defined architectural axioms.
 	 */
 	public validateAxioms(filePath: string, content: string, engine: SpiderEngine, sourceFile?: ts.SourceFile): AxiomViolation[] {
 		const violations: AxiomViolation[] = []
-		const node = engine.nodes.get(this.normalize(filePath))
+		const normalizedPath = this.normalize(filePath)
+		const node = engine.nodes.get(normalizedPath)
 		const lines = content.split("\n")
 
 		// 1. Axiom: SIMPLICITY (Cognitive Weight)
-		if (lines.length > this.SIMPLICITY_THRESHOLD) {
+		// PRODUCTION HARDENING: Exempt configuration and generated files from hard line-count blocks
+		const isExempt =
+			normalizedPath.includes("config") ||
+			normalizedPath.includes(".json") ||
+			normalizedPath.includes(".yaml") ||
+			normalizedPath.includes(".yml") ||
+			normalizedPath.includes("manifest") ||
+			content.includes("@generated") ||
+			content.includes("Automatically generated")
+
+		if (lines.length > this.SIMPLICITY_THRESHOLD && !isExempt) {
 			violations.push({
 				axiom: "SIMPLICITY",
 				severity: "ERROR",
@@ -102,6 +146,17 @@ export class SemanticAxiomEngine {
 					remediation: `Extract interface from ${leaks[0]} and depend on that instead.`,
 				})
 			}
+		}
+
+		// 5. Axiom: COGNITIVE_COMPLEXITY
+		const complexity = this.calculateCognitiveComplexity(ast)
+		if (complexity > 25) {
+			violations.push({
+				axiom: "COGNITIVE_COMPLEXITY",
+				severity: complexity > 50 ? "ERROR" : "WARN",
+				message: `High logic complexity (${complexity}). This module is becoming difficult to reason about.`,
+				remediation: "Extract complex branching logic into smaller, testable helper functions.",
+			})
 		}
 
 		return violations
