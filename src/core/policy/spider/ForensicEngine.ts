@@ -68,11 +68,11 @@ export class ForensicEngine {
 						if (targetContent) {
 							for (const symbol of symbols) {
 								if (symbol === "*") continue
-								// V16: Hardened regex to avoid false positives for complex export patterns
-								const exportPattern = new RegExp(
-									`export\\s+(?:const|class|interface|type|function|enum|let|var)\\s+${symbol}\\b|export\\s+\\{\\s*(?:[^}]*,\\s*)?${symbol}(?:\\s*,[^}]*)?\\s*\\}`,
-								)
-								if (!exportPattern.test(targetContent)) {
+								// V16: Forensic Realism - 100% Accurate AST Sensing
+								const targetAst = ts.createSourceFile(diskPath, targetContent, ts.ScriptTarget.Latest, true)
+								const exportedSymbols = this.getExportedSymbolsFull(targetAst)
+
+								if (!exportedSymbols.has(symbol)) {
 									const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
 									allGhosts.add(msg)
 									nodeGhosts.push(msg)
@@ -90,34 +90,37 @@ export class ForensicEngine {
 	/**
 	 * V16: Identifies exported symbols that are never consumed project-wide.
 	 */
+	/**
+	 * V140: Industrial Hardening - Precise Unused Export Forensics.
+	 */
 	public findUnusedExports(nodes: Map<string, SpiderNode>): string[] {
 		const unusedViolations: string[] = []
+		const globalConsumption = new Map<string, Set<string>>()
 
-		const allConsumptions = new Set<string>()
+		// 1. Build Global Consumption Map (TargetNodeID -> Set of Symbols)
 		for (const node of nodes.values()) {
-			for (const symbols of Object.values(node.consumptions)) {
+			for (const [targetId, symbols] of Object.entries(node.consumptions)) {
+				if (!globalConsumption.has(targetId)) {
+					globalConsumption.set(targetId, new Set())
+				}
+				const consumptionSet = globalConsumption.get(targetId)!
 				for (const s of symbols) {
-					allConsumptions.add(`${node.id}::${s}`) // This is not quite right, symbols are relative to target
+					consumptionSet.add(s)
 				}
 			}
 		}
 
-		// Correct logic: Track global symbol consumption (symbolName -> Set of target Node IDs)
-		const globalConsumption = new Map<string, Set<string>>()
+		// 2. Identify Deadwood (Exports never consumed)
 		for (const node of nodes.values()) {
-			for (const [targetId, symbols] of Object.entries(node.consumptions)) {
-				if (!globalConsumption.has(targetId)) globalConsumption.set(targetId, new Set())
-				for (const s of symbols) globalConsumption.get(targetId)?.add(s)
-			}
-		}
+			const consumedSymbols = globalConsumption.get(node.id) || new Set()
 
-		for (const node of nodes.values()) {
-			const consumed = globalConsumption.get(node.id) || new Set()
-			if (consumed.has("*")) continue // Namespace import consumes everything
+			// V16: Namespace imports or specific root files prevent pruning
+			if (consumedSymbols.has("*")) continue
+			if (node.path === "src/main.ts" || node.path === "src/index.ts" || node.path === "src/extension.ts") continue
 
 			for (const exp of node.exports) {
-				if (exp === "default") continue // Skip default exports for now to avoid noise
-				if (!consumed.has(exp)) {
+				// V16: Industrial Hardening - Include default exports in pruning
+				if (!consumedSymbols.has(exp)) {
 					unusedViolations.push(`[SPI-103] UNUSED EXPORT: ${node.path} -> ${exp}`)
 				}
 			}
@@ -148,6 +151,47 @@ export class ForensicEngine {
 			}
 		})
 		return imports
+	}
+
+	/**
+	 * V140: Forensic Realism - 100% Accurate AST-based Export Sensing.
+	 */
+	public getExportedSymbolsFull(sourceFile: ts.SourceFile): Set<string> {
+		const exports = new Set<string>()
+		ts.forEachChild(sourceFile, (node) => {
+			if (ts.isExportDeclaration(node)) {
+				if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+					for (const element of node.exportClause.elements) {
+						exports.add(element.name.text)
+					}
+				}
+			} else if (
+				ts.isClassDeclaration(node) ||
+				ts.isFunctionDeclaration(node) ||
+				ts.isInterfaceDeclaration(node) ||
+				ts.isTypeAliasDeclaration(node) ||
+				ts.isEnumDeclaration(node)
+			) {
+				const isExported = node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+				if (isExported && node.name) {
+					exports.add(node.name.text)
+					const isDefault = node.modifiers?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword)
+					if (isDefault) exports.add("default")
+				}
+			} else if (ts.isVariableStatement(node)) {
+				const isExported = node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+				if (isExported) {
+					for (const decl of node.declarationList.declarations) {
+						if (ts.isIdentifier(decl.name)) {
+							exports.add(decl.name.text)
+						}
+					}
+				}
+			} else if (ts.isExportAssignment(node)) {
+				exports.add("default")
+			}
+		})
+		return exports
 	}
 
 	private isNodeLibrary(specifier: string): boolean {

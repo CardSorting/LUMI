@@ -1,3 +1,4 @@
+import fsSync from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as ts from "typescript"
@@ -269,12 +270,26 @@ export class RefactorHealer {
 				}
 			}
 
-			// Fallback: Add a basic boilerplate at the end of the file
+			// Industrial Feature: Member Mapping logic
+			const isCap = /^[A-Z]/.test(symbol)
+			const memberSignatures = engine ? this.extractMemberSignatures(symbol, engine) : []
+			const memberBlock =
+				memberSignatures.length > 0
+					? memberSignatures.map((s) => `\t${s}`).join("\n")
+					: isCap
+						? "\tpublic async execute(): Promise<void> {\n\t\t// Mission logic placeholder\n\t}"
+						: "// Functional logic placeholder"
+
+			// Final Hardening: Industrial Boilerplate Generation
 			const layer = getLayer(filePath)
-			const boilerplate = `\n\n/**\n * [LAYER: ${layer.toUpperCase()}]\n * Placeholder for ${symbol} (Materialized via Sovereign Healer)\n */\nexport class ${symbol} {\n\t// TODO: Implement members\n}\n`
+			const header = `/**\n * [LAYER: ${layer.toUpperCase()}]\n * ${symbol}: Industrial component materialized via Sovereign Forensic Healer.\n */`
+
+			const boilerplate = isCap
+				? `\n\n${header}\nexport class ${symbol} {\n\tconstructor() {\n\t\t// TODO: Initialize industrial dependencies\n\t}\n\n${memberBlock}\n}\n`
+				: `\n\n${header}\nexport const ${symbol} = async () => {\n\t${memberBlock}\n}\n`
 
 			await fs.writeFile(absolutePath, content + boilerplate, "utf-8")
-			Logger.info(`[RefactorHealer] Materialized ghost symbol ${symbol} in ${path.basename(filePath)}`)
+			Logger.info(`[RefactorHealer] Industrial Materialization: ${symbol} in ${path.basename(filePath)}`)
 			return true
 		} catch (err) {
 			Logger.error(`[RefactorHealer] Failed to materialize ghost symbol ${symbol} in ${filePath}:`, err)
@@ -449,5 +464,98 @@ export class RefactorHealer {
 			`  dispose(): void;`,
 			`}`,
 		].join("\n")
+	}
+
+	/**
+	 * V140: Forensic Member Extraction.
+	 * Attempts to find the symbol in other modules to extract its physical signature.
+	 */
+	private extractMemberSignatures(symbol: string, engine: SpiderEngine): string[] {
+		const signatures: string[] = []
+		for (const node of engine.nodes.values()) {
+			if (node.exports.includes(symbol)) {
+				const absolutePath = path.resolve(this.projectRoot, node.path)
+				try {
+					if (!fsSync.existsSync(absolutePath)) continue
+					const content = fsSync.readFileSync(absolutePath, "utf-8")
+					const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
+
+					// Helper to extract signatures from a declaration
+					const processDeclaration = (decl: ts.Node) => {
+						if (ts.isClassDeclaration(decl) || ts.isInterfaceDeclaration(decl)) {
+							for (const member of (decl as ts.ClassDeclaration | ts.InterfaceDeclaration).members) {
+								if (
+									ts.isMethodDeclaration(member) ||
+									ts.isPropertyDeclaration(member) ||
+									ts.isMethodSignature(member) ||
+									ts.isPropertySignature(member)
+								) {
+									const isAsync =
+										member.modifiers && member.modifiers.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)
+											? "async "
+											: ""
+									const name = member.name?.getText(sourceFile) || "unknown"
+									const params =
+										ts.isMethodDeclaration(member) || ts.isMethodSignature(member)
+											? `(${member.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
+											: ""
+									const type = (member as any).type ? `: ${(member as any).type.getText(sourceFile)}` : ""
+									signatures.push(`public ${isAsync}${name}${params}${type};`)
+								}
+							}
+						} else if (ts.isFunctionDeclaration(decl)) {
+							const isAsync =
+								decl.modifiers && decl.modifiers.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)
+									? "async "
+									: ""
+							const name = decl.name?.getText(sourceFile) || "unknown"
+							const params = `(${decl.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
+							const type = decl.type ? `: ${decl.type.getText(sourceFile)}` : ""
+							signatures.push(`export ${isAsync}function ${name}${params}${type} { /* Forensic Stub */ }`)
+						}
+					}
+
+					// Find the symbol declaration
+					ts.forEachChild(sourceFile, (child) => {
+						if (
+							ts.isClassDeclaration(child) ||
+							ts.isInterfaceDeclaration(child) ||
+							ts.isFunctionDeclaration(child) ||
+							ts.isTypeAliasDeclaration(child)
+						) {
+							if ((child as any).name?.getText(sourceFile) === symbol) {
+								processDeclaration(child)
+							}
+						}
+						// Also check for 'export const X = ...'
+						if (ts.isVariableStatement(child)) {
+							for (const desc of child.declarationList.declarations) {
+								if (desc.name.getText(sourceFile) === symbol) {
+									if (
+										desc.initializer &&
+										(ts.isArrowFunction(desc.initializer) || ts.isFunctionExpression(desc.initializer))
+									) {
+										const func = desc.initializer as ts.ArrowFunction | ts.FunctionExpression
+										const isAsync =
+											func.modifiers && func.modifiers.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)
+												? "async "
+												: ""
+										const params = `(${func.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
+										const type = func.type ? `: ${func.type.getText(sourceFile)}` : ""
+										signatures.push(
+											`export const ${symbol} = ${isAsync}${params}${type} => { /* Forensic Stub */ };`,
+										)
+									}
+								}
+							}
+						}
+					})
+				} catch (err) {
+					Logger.error(`[RefactorHealer] Failed to extract signatures for ${symbol} from ${node.path}:`, err)
+				}
+			}
+		}
+		// Dedup signatures
+		return Array.from(new Set(signatures))
 	}
 }

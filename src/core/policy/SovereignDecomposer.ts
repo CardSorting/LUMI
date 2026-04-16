@@ -22,7 +22,11 @@ export interface DecompositionPlan {
  * Analyzes "Fat" or "High-Entropy" modules and provides a specific recipe for splitting them.
  */
 export class SovereignDecomposer {
-	public analyze(filePath: string, content: string): DecompositionPlan {
+	/**
+	 * V140: Industrial Decomposition Analysis.
+	 * Calculates real integrity and health scores based on Forensic Node metadata.
+	 */
+	public analyze(filePath: string, content: string, node?: import("./spider/types").SpiderNode): DecompositionPlan {
 		const sourceFile = ts.createSourceFile("analyze.ts", content, ts.ScriptTarget.Latest, true)
 		const layer = getLayer(filePath)
 
@@ -87,11 +91,25 @@ export class SovereignDecomposer {
 			})
 		}
 
+		// V140: Industrial Metric Actualization
+		const namingPenalty = node ? (1 - node.namingScore) * 50 : 0
+		const couplingPenalty = node ? Math.min(node.afferentCoupling * 2, 40) : 0
+		const integrityScore = Math.max(0, 100 - namingPenalty - couplingPenalty)
+
+		// V140: Build Health is a forensic aggregate of physical state and structural debt
+		let buildHealth = 100
+		if (node) {
+			if (node.orphaned) buildHealth -= 30
+			if (node.afferentCoupling > 15) buildHealth -= 20
+			if (node.namingScore < 0.8) buildHealth -= 10
+		}
+		buildHealth = Math.max(0, buildHealth)
+
 		return {
 			filePath,
 			currentLayer: layer,
-			buildHealth: 100, // TODO: Implement health calculation
-			integrityScore: 100,
+			buildHealth,
+			integrityScore,
 			steps,
 		}
 	}

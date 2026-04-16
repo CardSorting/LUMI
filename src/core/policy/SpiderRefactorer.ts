@@ -65,15 +65,29 @@ export const SpiderRefactorer = {
 		const baseName = path.basename(node.path).split(".")[0]
 		const interfaceName = `I${baseName.charAt(0).toUpperCase()}${baseName.slice(1)}`
 
-		return [
+		// V140: Industrial Member Mapping
+		const members = node.exports
+			.filter((e) => e !== "default")
+			.map((e) => `\t${e}: any; // Industrial member: Refined signature mapping recommended.`)
+
+		const header = [
 			"/**",
 			" * [LAYER: DOMAIN]",
-			" * Aromatic Synthesis: This interface breaks the coupling of a Fat Coordinator.",
+			" * Aromatic Synthesis: This interface was forensicly synthesized to break coupling",
+			` * with the Fat Coordinator '${baseName}'.`,
 			" */",
-			`export interface ${interfaceName} {`,
-			"\t// TODO: Map implementation members to this contract",
-			"\t// Note: Dependents should now consume this interface via Dependency Inversion.",
-			"}",
 		].join("\n")
+
+		return [header, `export interface ${interfaceName} {`, ...members, memberBlock(baseName), "}"].join("\n")
 	},
+}
+
+function memberBlock(name: string): string {
+	return [
+		"\t/**",
+		`\t * Industrial Placeholder: Dependents of ${name} should now consume this`,
+		"\t * interface via Dependency Inversion to restore architectural integrity.",
+		"\t */",
+		"\tsync?(): Promise<void>;",
+	].join("\n")
 }

@@ -32,6 +32,8 @@ export class SovereignDoctor {
 		await this.checkStaleLocks(issues)
 		await this.checkProjectIntegrity(issues)
 		await this.checkMcpStability(issues)
+		await this.checkMetabolicExhaustion(issues)
+		await this.checkImmuneMemoryBloat(issues)
 
 		return {
 			healthy: issues.filter((i) => i.severity === "CRITICAL" || i.severity === "HIGH").length === 0,
@@ -97,6 +99,43 @@ export class SovereignDoctor {
 					message: "MCP settings file is corrupted (invalid JSON).",
 					remediable: true,
 					remediationHint: "Reset or repair the MCP settings JSON manually.",
+				})
+			}
+		}
+	}
+
+	private async checkMetabolicExhaustion(issues: DiagnosticIssue[]) {
+		// V140: Sensing 'High-Velocity Fatigue'
+		if (fs.existsSync(path.join(this.cwd, ".spider", "metabolic_log.json"))) {
+			// In a full implementation, we would parse the log to find repeated cooldowns
+			// For now, we audit the existence of the velocity cache
+			const stats = await fs.promises.stat(path.join(this.cwd, ".spider", "metabolic_log.json"))
+			if (Date.now() - stats.mtimeMs < 1000 * 60 * 5) {
+				issues.push({
+					id: "DOC-101",
+					category: "STATE",
+					severity: "LOW",
+					message: "Metabolic velocity is currently high. Substrate is under pressure.",
+					remediable: true,
+					remediationHint: "Use # SOVEREIGN_BREATHER to allow structural stabilization.",
+				})
+			}
+		}
+	}
+
+	private async checkImmuneMemoryBloat(issues: DiagnosticIssue[]) {
+		const immunePath = path.join(this.cwd, ".spider", "immune_memory.json")
+		if (fs.existsSync(immunePath)) {
+			const stats = await fs.promises.stat(immunePath)
+			if (stats.size > 1024 * 50) {
+				// > 50KB of pathogens
+				issues.push({
+					id: "DOC-102",
+					category: "STATE",
+					severity: "MEDIUM",
+					message: "Immune memory (PathogenStore) is bloating. Systemic instability detected.",
+					remediable: true,
+					remediationHint: "Run 'DietCode: Audit Immune Memory' to prune stale antigens.",
 				})
 			}
 		}

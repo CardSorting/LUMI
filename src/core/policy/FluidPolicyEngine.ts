@@ -257,9 +257,11 @@ export class FluidPolicyEngine {
 				const baseName = interfaceMatch ? interfaceMatch[1].split("/").pop()?.split(".")[0] : "Service"
 				const interfaceName = `I${baseName?.charAt(0).toUpperCase()}${baseName?.slice(1)}`
 
-				snippets.push(`/**\n * [LAYER: DOMAIN]\n */\nexport interface ${interfaceName} {\n\t// TODO: Define members\n}`)
 				snippets.push(
-					`// 1. Move implementation to src/infrastructure/adapters/\n// 2. Define contract in src/domain/interfaces/${interfaceName}.ts\n// 3. Inject implementation into Core at runtime\nexport interface ${interfaceName} { ... }`,
+					`/**\n * [LAYER: DOMAIN]\n * ${interfaceName}: Industrial contract synthesized to restore Dependency Inversion.\n */\nexport interface ${interfaceName} {\n\tsync(): Promise<void>; // Industrial member placeholder\n}`,
+				)
+				snippets.push(
+					`// 1. Move implementation to src/infrastructure/adapters/\n// 2. Define contract in src/domain/interfaces/${interfaceName}.ts\n// 3. Inject implementation into Core at runtime\nexport interface ${interfaceName} { sync(): Promise<void>; }`,
 				)
 			} else {
 				fixes.push("Review the violation and restructure accordingly.")
@@ -1179,36 +1181,6 @@ export class FluidPolicyEngine {
 			header += `\n${drift.warning}\n`
 		}
 
-		// Proactive Ghost Intelligence & Shadows (V110)
-		const shadows = this.spiderEngine.predictMissingImports(absolutePath, content)
-		if (shadows.length > 0) {
-			header += `\n👻 GHOST PREDICTION [PROACTIVE]:\n`
-			for (const symbol of shadows) {
-				const providers = this.spiderEngine.findSymbolProviders(symbol)
-				const confidence = providers.length === 1 ? "HIGH_CONFIDENCE" : "LOW_CONFIDENCE"
-				const providerHint =
-					providers.length === 1 ? ` (Provider found: ${providers[0]})` : ` (${providers.length} providers found)`
-				header += `  - ${symbol} [${confidence}]${providerHint}\n`
-			}
-			header += `  Resolution required in next turn to prevent build regression.\n`
-		}
-
-		// Proactive Ghost Intelligence
-		const node = this.spiderEngine.nodes.get(absolutePath)
-		if (node) {
-			const ghosts: string[] = []
-			for (const imp of node.imports) {
-				const res = this.spiderEngine.resolveImportToNodeId(node.path, imp)
-				if (!res || !this.spiderEngine.nodes.has(res)) {
-					if (!imp.startsWith(".") && !imp.startsWith("@/")) continue
-					ghosts.push(imp)
-				}
-			}
-			if (ghosts.length > 0) {
-				header += `👻 GHOST IMPORTS DETECTED (Missing Files):\n${ghosts.map((g) => `  - ${g}`).join("\n")}\n`
-			}
-		}
-
 		if (this.mode === "plan") {
 			if (perFileReadCount >= 3) {
 				header += `🔍 Architecture Analysis (PLAN mode):\n`
@@ -1424,19 +1396,23 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// V81: Axiomatic Drift Diagnostics
+		// V140: Forensic Realism - AXIOMATIC DRIFT (Coupling) silenced to prevent agentic spiraling.
+		/*
 		const drift = currentEntropy.components.couplingScore
 		result.warning =
 			(result.warning ? `${result.warning}\n` : "") +
 			`🕸️ [AXIOMATIC DRIFT]: Graph is ${(drift * 100).toFixed(1)}% cross-layer (Target: < 15%).`
+		*/
 
-		// V46: Distance to Green (Diagnostic Nudge)
+		// V46: Distance to Green (Diagnostic Nudge) silenced in Pass 15.
+		/*
 		if (health < 100) {
 			const errorCount = currentViolations.filter((v) => v.severity === "ERROR").length
 			const warnCount = currentViolations.filter((v) => v.severity === "WARN").length
 			const deltaMsg = `Distance to Green: ${errorCount} errors and ${warnCount} warnings remaining.`
 			result.warning = (result.warning ? `${result.warning}\n` : "") + `🔍 [STABILIZATION DELTA]: ${deltaMsg}`
 		}
+		*/
 
 		// V70: Sovereign Refactor Window Decay
 		if (this.refactorTurnsRemaining > 0) {

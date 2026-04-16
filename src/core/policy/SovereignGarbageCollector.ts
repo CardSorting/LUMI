@@ -31,7 +31,8 @@ export class SovereignGarbageCollector {
 	 * Performs a recursive sweeping pass over the modified files and their dependents.
 	 * Capped at depth 2 to prevent infinite substrate loops.
 	 */
-	public async sweep(filePaths: string[]): Promise<{ fixedCount: number; remainingErrors: string[] }> {
+	public async sweep(filePaths: string[]): Promise<{ fixedCount: number; remainingErrors: string[]; repairLog: string[] }> {
+		const repairLog: string[] = []
 		let totalFixed = 0
 		const remainingErrors: string[] = []
 		const processed = new Set<string>()
@@ -49,6 +50,7 @@ export class SovereignGarbageCollector {
 			if (await this.alignLayerTags(filePath)) {
 				totalFixed++
 				fileModified = true
+				repairLog.push(`[ALIGNMENT] Resolved [LAYER] metadata drift in ${filePath}`)
 			}
 
 			// 1b. Immune-Driven Hardening (V91)
@@ -61,41 +63,61 @@ export class SovereignGarbageCollector {
 				if (deepFixed > 0) fileModified = true
 			}
 
-			// 2. Semantic Pruning (Active Pruning)
-			if (await this.pruneUnusedExports(filePath)) {
+			// 2. Pathogen Store (Immune Memory Decay)
+			if (this.pathogens && this.pathogens.isPathogenic(filePath)) {
+				this.pathogens.decay(filePath)
 				totalFixed++
 				fileModified = true
+				repairLog.push(`[PATHOGEN] Applied immune decay to pathogenic signature: ${filePath}`)
 			}
 
-			// 3. Lint & Format Sweep (Biome)
+			// 2. Build Check (Diagnostic Probe) - The Source of Forensic Truth
+			const buildProbe = await this.runMiniTsc(absolutePath)
+
+			// 3. Reactive Stabilizations (Only triggered by physical build blockers)
+			if (!buildProbe.success) {
+				// 3a. Ghost Import Resolution
+				const ghostFixed = await this.resolveMissingImports(filePath, buildProbe.errors)
+				if (ghostFixed) {
+					totalFixed++
+					fileModified = true
+					repairLog.push(`[GHOST_FIX] Materialized missing symbols in ${filePath}`)
+				}
+
+				// 3b. Structural Alignment
+				if (await this.healer.autoHeal(filePath, this.spiderEngine)) {
+					totalFixed++
+					fileModified = true
+					repairLog.push(`[STRUCTURAL_HEAL] Corrected architectural regression in ${filePath}`)
+				}
+
+				// 3c. Semantic Pruning (Demoting unused symbols causing bloat/shadowing)
+				if (await this.pruneUnusedExports(filePath)) {
+					totalFixed++
+					fileModified = true
+					repairLog.push(`[PRUNING] Removed unused exports in ${filePath}`)
+				}
+
+				// 3d. Circular Dependency Mitigation
+				if (await this.resolveCircularDependencies(filePath)) {
+					totalFixed++
+					fileModified = true
+					repairLog.push(`[CIRCULAR_FIX] Mitigated dependency cycle involving ${filePath}`)
+				}
+			}
+
+			// 4. Baseline Stabilization (Lint & Format)
 			const lintResult = await this.runBiomeCheck(absolutePath)
 			if (lintResult.fixedCount > 0) {
 				totalFixed += lintResult.fixedCount
 				fileModified = true
+				repairLog.push(`[LINT] Fixed ${lintResult.fixedCount} formatting/lint issues in ${filePath}`)
 			}
 
-			// 4. Structural Sweep (Ghost Imports & Alignment)
-			if (await this.healer.autoHeal(filePath, this.spiderEngine)) {
-				totalFixed++
-				fileModified = true
-			}
-
-			// 5. Ghost Import Resolution
-			if (await this.resolveMissingImports(filePath)) {
-				totalFixed++
-				fileModified = true
-			}
-
-			// 6. Circular Dependency Mitigation (Heuristics)
-			if (await this.resolveCircularDependencies(filePath)) {
-				totalFixed++
-				fileModified = true
-			}
-
-			// 7. Forensic Pruning (False Positive Suppression)
+			// 4. Forensic Pruning (False Positive Suppression)
 			await this.pruneFalsePositives(filePath)
 
-			// 8. Final Build Check (Verification)
+			// 9. Final Build Check (Verification)
 			const miniTsc = await this.runMiniTsc(absolutePath)
 			if (!miniTsc.success) {
 				remainingErrors.push(...miniTsc.errors.map((e) => `[TSC] ${e}`))
@@ -121,7 +143,7 @@ export class SovereignGarbageCollector {
 			}
 		}
 
-		return { fixedCount: totalFixed, remainingErrors }
+		return { fixedCount: totalFixed, remainingErrors, repairLog }
 	}
 
 	/**
@@ -285,21 +307,23 @@ export class SovereignGarbageCollector {
 
 	/**
 	 * Automatically resolves missing symbols by searching the graph and injecting imports.
+	 * V140: Forensic Realism - Only fixing verified build errors.
 	 */
-	private async resolveMissingImports(filePath: string): Promise<boolean> {
+	private async resolveMissingImports(filePath: string, errors: string[]): Promise<boolean> {
 		const absolutePath = path.resolve(this.cwd, filePath)
 		let content = await fs.readFile(absolutePath, "utf-8")
 
-		// V100: Predictive Ghosting (Synthesized Shadows)
-		const shadows = this.spiderEngine.predictMissingImports(filePath, content)
-		const violations = this.spiderEngine.getViolations().filter((v) => v.path === filePath && v.id === "SPI-005")
+		// Identify missing symbols from compiler diagnostics (e.g., "Cannot find name 'X'")
+		const missingSymbols = new Set<string>()
+		for (const error of errors) {
+			const match = error.match(/Cannot find name '([^']+)'/)
+			if (match) missingSymbols.add(match[1])
+		}
 
-		const allGhostSymbols = new Set(
-			[...shadows, ...violations.map((v) => v.message.match(/Ghost import: .* -> (.*)/)?.[1] || "")].filter(Boolean),
-		)
+		if (missingSymbols.size === 0) return false
 
 		let fixed = false
-		for (const symbol of allGhostSymbols) {
+		for (const symbol of missingSymbols) {
 			const attempts = (this.ghostAttempts.get(`${filePath}:${symbol}`) || 0) + 1
 			this.ghostAttempts.set(`${filePath}:${symbol}`, attempts)
 

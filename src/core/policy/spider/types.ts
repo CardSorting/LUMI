@@ -17,6 +17,7 @@ export interface SpiderNode {
 	exports: string[]
 	consumptions: Record<string, string[]> // V16: Resolved Node ID -> symbols imported
 	mtime: number // V20: Modification timestamp for Merkle Healing
+	namingScore: number // V140: Industrial Naming Integrity (0-1.0)
 }
 
 export interface SpiderSnapshot {

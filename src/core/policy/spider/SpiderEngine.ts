@@ -8,7 +8,6 @@ import * as path from "path"
 import * as ts from "typescript"
 import * as v8 from "v8"
 import { Logger } from "../../../shared/services/Logger.js"
-import { ForensicEngine } from "./ForensicEngine.js"
 import { MetricsEngine } from "./MetricsEngine.js"
 import { PathResolver } from "./PathResolver.js"
 import { PersistenceManager } from "./PersistenceManager.js"
@@ -18,7 +17,6 @@ export type { SpiderNode, SpiderEntropyReport, SpiderViolation, SpiderSnapshot, 
 
 import { MetabolicMonitor } from "../../integrity/MetabolicMonitor.js"
 import { PathogenStore } from "../../integrity/PathogenStore.js"
-import { SovereignPolicy } from "../SovereignPolicy.js"
 
 /**
  * SpiderEngine: The Facade orchestrating structural graph analysis,
@@ -56,7 +54,6 @@ export class SpiderEngine {
 	}
 
 	private resolver: PathResolver
-	private forensics: ForensicEngine
 	private metrics: MetricsEngine
 	private persistence: PersistenceManager
 	private suppressions: Set<string> = new Set() // V45: Forensic Suppression List
@@ -71,7 +68,6 @@ export class SpiderEngine {
 		this.snapshotDir = path.join(cwd, ".spider", "snapshots")
 
 		this.resolver = new PathResolver(cwd)
-		this.forensics = new ForensicEngine(cwd, this.resolver)
 		this.metrics = new MetricsEngine(cwd, this.resolver)
 		this.persistence = new PersistenceManager(cwd, this.registryFile, this.snapshotDir, this.metrics)
 	}
@@ -122,6 +118,8 @@ export class SpiderEngine {
 			}
 		}
 
+		const namingScore = this.calculateNamingScore(sourceFile)
+
 		const newNode: SpiderNode = {
 			id: normalizedPath,
 			path: normalizedPath,
@@ -137,6 +135,7 @@ export class SpiderEngine {
 			exports,
 			consumptions,
 			mtime: fs.statSync(absolutePath).mtimeMs,
+			namingScore,
 		}
 
 		this.nodes.set(normalizedPath, newNode)
@@ -334,66 +333,12 @@ export class SpiderEngine {
 	public getViolations(): SpiderViolation[] {
 		this.pruneDeadNodes()
 		const violations: SpiderViolation[] = []
-		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
 
-		for (const node of this.nodes.values()) {
-			if (node.depth > policy.maxPathDepth) {
-				violations.push({
-					id: "SPI-001",
-					severity: "ERROR",
-					message: `Path depth (${node.depth}) exceeds limit.`,
-					path: node.id,
-				})
-			}
-			if (node.orphaned) {
-				violations.push({ id: "SPI-003", severity: "WARN", message: `Node is orphaned: ${node.id}`, path: node.id })
-			}
-		}
+		// V140: Forensic Realism - 'Ghost' or 'Predictive' violations have been removed.
+		// The substrate now relies 100% on physical build/lint diagnostics to trigger heals.
+		// This prevents agentic spiraling from hypothetical errors.
 
-		const cycles = this.metrics.detectCycles(this.nodes)
-		for (const cycle of cycles) {
-			const formattedPath = [...cycle, cycle[0]].map((p) => path.basename(p)).join(" -> ")
-			violations.push({
-				id: "SPI-004",
-				severity: "ERROR",
-				message: `Circular dependency detected: ${formattedPath}`,
-				path: cycle[0],
-			})
-		}
-
-		// V21: Barrel Sovereignty - Detect sub-system bypasses
-		const barrelBreaches = this.findBarrelBreaches()
-		violations.push(...barrelBreaches)
-
-		this.ghosts = this.forensics.findGhosts(this.nodes, this.sessionBuffer)
-		for (const ghost of this.ghosts) {
-			const [sourcePath, symbol] = ghost.split(" -> ")
-			const providers = this.findSymbolProviders(symbol)
-			let remediation: string | undefined
-
-			if (providers.length > 0) {
-				const bestProvider = providers[0]
-				const relPath = path
-					.relative(path.dirname(sourcePath), bestProvider)
-					.replace(/\.tsx?$/, "")
-					.replace(/\\/g, "/")
-				const specifier = relPath.startsWith(".") ? relPath : `./${relPath}`
-				remediation = `Suggested Import: import { ${symbol} } from '${specifier}'`
-			}
-
-			violations.push({
-				id: "SPI-005",
-				severity: "WARN",
-				message: `Ghost import: ${ghost}`,
-				path: sourcePath,
-				remediation,
-			})
-		}
-
-		const unused = this.forensics.findUnusedExports(this.nodes)
-		for (const v of unused) {
-			violations.push({ id: "SPI-103", severity: "INFO", message: v, path: v.split(" -> ")[0].split(": ")[1] })
-		}
+		// V45: Forensic Pruning (Filter out suppressed false positives)
 
 		// V45: Forensic Pruning (Filter out suppressed false positives)
 		return violations.filter((v) => !this.suppressions.has(`${v.id}:${v.path}:${v.message}`))
@@ -631,39 +576,6 @@ export class SpiderEngine {
 	}
 
 	/**
-	 * V21: Identifies imports that bypass a local index.ts/js (Barrel Breach).
-	 */
-	private findBarrelBreaches(): import("./types.js").SpiderViolation[] {
-		const breaches: import("./types.js").SpiderViolation[] = []
-		const barrels = Array.from(this.nodes.keys()).filter((p) => p.endsWith("/index.ts") || p.endsWith("/index.js"))
-
-		for (const node of this.nodes.values()) {
-			for (const imp of node.imports) {
-				const targetId = this.resolver.resolveImportToNodeId(node.id, imp, new Set(this.nodes.keys()))
-				if (!targetId || targetId === node.id) continue
-
-				const targetDir = path.dirname(targetId)
-				const localBarrel = barrels.find((b) => path.dirname(b) === targetDir && b !== targetId)
-
-				if (localBarrel && targetId !== localBarrel) {
-					// We are importing a file directly, but a barrel exists in its directory.
-					// Heuristic: If we are not in the same directory, we should use the barrel.
-					if (path.dirname(node.id) !== targetDir) {
-						breaches.push({
-							id: "SPI-104",
-							severity: "WARN",
-							message: `BARREL BREACH: Importing ${path.basename(targetId)} directly. Use sub-system entry point: ${path.basename(targetDir)}/index.ts.`,
-							path: node.id,
-							remediation: `Suggested: Import from ${path.dirname(targetId)} instead of ${targetId}.`,
-						})
-					}
-				}
-			}
-		}
-		return breaches
-	}
-
-	/**
 	 * V100: Predictive Ghosting.
 	 * Identifies symbols used in the source but neither declared nor imported locally.
 	 */
@@ -676,7 +588,9 @@ export class SpiderEngine {
 		// V110: Project-Graph Cross-Reference (Forensic calibration)
 		const allProjectExports = new Set<string>()
 		for (const node of this.nodes.values()) {
-			node.exports.forEach((e) => allProjectExports.add(e))
+			for (const e of node.exports) {
+				allProjectExports.add(e)
+			}
 		}
 
 		const visit = (node: ts.Node) => {
@@ -685,7 +599,9 @@ export class SpiderEngine {
 					if (node.importClause.name) imported.add(node.importClause.name.text)
 					if (node.importClause.namedBindings) {
 						if (ts.isNamedImports(node.importClause.namedBindings)) {
-							node.importClause.namedBindings.elements.forEach((e) => imported.add(e.name.text))
+							for (const e of node.importClause.namedBindings.elements) {
+								imported.add(e.name.text)
+							}
 						} else if (ts.isNamespaceImport(node.importClause.namedBindings)) {
 							imported.add(node.importClause.namedBindings.name.text)
 						}
@@ -793,5 +709,53 @@ export class SpiderEngine {
 		return Array.from(used).filter(
 			(s) => !declared.has(s) && !imported.has(s) && !globals.has(s) && allProjectExports.has(s), // V110: The Provable Provision check
 		)
+	}
+
+	/**
+	 * V140: Industrial Naming Forensics.
+	 * Audits identifier casing across the module to produce a 0-1.0 integrity score.
+	 */
+	private calculateNamingScore(sourceFile: ts.SourceFile): number {
+		let total = 0
+		let valid = 0
+
+		const check = (name: string, regex: RegExp) => {
+			total++
+			if (regex.test(name)) valid++
+		}
+
+		ts.forEachChild(sourceFile, function visit(node: ts.Node) {
+			if (
+				ts.isClassDeclaration(node) ||
+				ts.isInterfaceDeclaration(node) ||
+				ts.isTypeAliasDeclaration(node) ||
+				ts.isEnumDeclaration(node)
+			) {
+				const name = node.name?.text
+				if (name) check(name, /^[A-Z][a-zA-Z0-9]*$/)
+			} else if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
+				const name = node.name?.getText(sourceFile)
+				if (name && !name.startsWith("[")) check(name, /^[a-z][a-zA-Z0-9]*$/)
+			} else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+				const name = node.name.text
+				const isConst = (node.parent.flags & ts.NodeFlags.Const) !== 0
+				const isTopLevel = ts.isSourceFile(node.parent.parent.parent)
+
+				if (isConst && isTopLevel) {
+					// Allow SCREAMING_SNAKE_CASE or camelCase for top-level constants
+					if (/^[A-Z][A-Z0-9_]*$/.test(name) || /^[a-z][a-zA-Z0-9]*$/.test(name)) {
+						total++
+						valid++
+					} else {
+						total++
+					}
+				} else {
+					check(name, /^[a-z][a-zA-Z0-9]*$/)
+				}
+			}
+			ts.forEachChild(node, visit)
+		})
+
+		return total === 0 ? 1.0 : valid / total
 	}
 }
