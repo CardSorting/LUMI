@@ -3,10 +3,17 @@
  */
 
 export interface SovereignDiagnostics {
-	integrityScore: number
+	buildHealth: number
 	metabolicPressure: string
-	violations: string[]
+	buildErrors: string[]
+	lintWarnings: string[]
 	hotspots: string[]
+	refactorTurns?: number
+	forensicVerified?: boolean
+	karmaStatus?: string
+	recursiveStabilization?: boolean
+	metabolicVelocity?: number
+	immuneResponse?: string
 }
 
 /**
@@ -24,15 +31,39 @@ export class SovereignProtocol {
 		let diagnosticsBlock = ""
 		if (diagnostics) {
 			diagnosticsBlock =
-				`## [SYSTEM DIAGNOSTICS]\n` +
-				`**Integrity Score**: ${diagnostics.integrityScore}/100\n` +
+				`## [BUILD STATUS]\n` +
+				`**Build Health**: ${diagnostics.buildHealth}/100\n` +
+				(diagnostics.forensicVerified ? `✅ **Physical Build Verified** (TSC Pruning Active)\n` : "") +
+				(diagnostics.refactorTurns
+					? `🏗️ **Refactor Window Active**: ${diagnostics.refactorTurns} turns remaining\n`
+					: "") +
+				(diagnostics.karmaStatus ? `✨ **Karma Status**: ${diagnostics.karmaStatus}\n` : "") +
+				(diagnostics.metabolicVelocity
+					? `🚀 **Metabolic Velocity**: ${diagnostics.metabolicVelocity.toFixed(2)}x\n`
+					: "") +
+				(diagnostics.recursiveStabilization ? `🌊 **Wave-Front Healing Active** (Dependency Stabilization)\n` : "") +
+				(diagnostics.immuneResponse ? `🛡️ **Immune Response Active**: ${diagnostics.immuneResponse}\n` : "") +
 				`**Metabolic Pressure**: ${diagnostics.metabolicPressure}\n\n` +
-				`### Structural Antigens:\n` +
-				diagnostics.violations.map((v) => `- ${v}`).join("\n") +
+				`### Critical Build Errors:\n` +
+				(diagnostics.buildErrors.length > 0
+					? diagnostics.buildErrors.map((v) => `- ${v}`).join("\n")
+					: "- [CLEAN BUILD]") +
 				"\n\n" +
-				`### Active Hotspots:\n` +
+				`### Linter Warnings:\n` +
+				(diagnostics.lintWarnings.length > 0
+					? diagnostics.lintWarnings.map((v) => `- ${v}`).join("\n")
+					: "- [ZERO SMELLS]") +
+				"\n\n" +
+				`### Hotspots:\n` +
 				diagnostics.hotspots.map((h) => `- ${h}`).join("\n") +
-				"\n\n"
+				"\n\n" +
+				`## [SOVEREIGN DIRECTIVES]\n` +
+				(diagnostics.buildHealth < 70
+					? `1. 🚨 **STABILIZE**: Resolve all Critical Build Errors immediately.\n2. 🧹 **SWEEP**: Run the Sovereign Garbage Collector to prune technical debt.\n3. 🛡️ **SEAL**: Do not introduce new features until health > 80%.\n\n` +
+						`🔍 **STABILIZATION DELTA**: ${diagnostics.buildErrors.length} errors and ${diagnostics.lintWarnings.length} warnings remaining to reach Green Zone.\n`
+					: `1. ✅ **MAINTAIN**: Continue following layer boundaries.\n2. 🔍 **MONITOR**: Keep an eye on metadata hotspots.\n`) +
+				"\n" +
+				`> *"${SovereignProtocol.MANTRA}"*\n`
 		}
 
 		const forensics = forensicTrace ? `${forensicTrace}\n\n` : ""

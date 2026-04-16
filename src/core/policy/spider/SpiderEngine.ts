@@ -59,6 +59,8 @@ export class SpiderEngine {
 	private forensics: ForensicEngine
 	private metrics: MetricsEngine
 	private persistence: PersistenceManager
+	private suppressions: Set<string> = new Set() // V45: Forensic Suppression List
+	private sessionBuffer: Map<string, string> = new Map() // V71: Virtual Session Sensing
 
 	private reachabilityTimeout: NodeJS.Timeout | null = null
 	private registryFile: string
@@ -363,7 +365,7 @@ export class SpiderEngine {
 		const barrelBreaches = this.findBarrelBreaches()
 		violations.push(...barrelBreaches)
 
-		this.ghosts = this.forensics.findGhosts(this.nodes)
+		this.ghosts = this.forensics.findGhosts(this.nodes, this.sessionBuffer)
 		for (const ghost of this.ghosts) {
 			const [sourcePath, symbol] = ghost.split(" -> ")
 			const providers = this.findSymbolProviders(symbol)
@@ -393,7 +395,24 @@ export class SpiderEngine {
 			violations.push({ id: "SPI-103", severity: "INFO", message: v, path: v.split(" -> ")[0].split(": ")[1] })
 		}
 
-		return violations
+		// V45: Forensic Pruning (Filter out suppressed false positives)
+		return violations.filter((v) => !this.suppressions.has(`${v.id}:${v.path}:${v.message}`))
+	}
+
+	public addSuppression(violationId: string, path: string, message: string) {
+		this.suppressions.add(`${violationId}:${path}:${message}`)
+	}
+
+	public clearSuppressions() {
+		this.suppressions.clear()
+	}
+
+	public setSessionBuffer(buffer: Map<string, string>) {
+		this.sessionBuffer = buffer
+	}
+
+	public getSessionBuffer(): Map<string, string> {
+		return this.sessionBuffer
 	}
 
 	public getViolationHotspots(): string[] {
@@ -425,16 +444,36 @@ export class SpiderEngine {
 			} else {
 				const payload = this.persistence.deserialize(data)
 				this.nodes = new Map(payload.nodes)
-				// Merkle healing logic could go here or remain in Facade
 			}
 			this.metrics.computeCouplingMetrics(this.nodes)
 			this.metrics.computeReachability(this.nodes)
-			await this.synchronizeRegistry()
+			Logger.info(`[SpiderEngine] Registry loaded successfully (${this.nodes.size} nodes).`)
 			return true
-		} catch (e) {
-			Logger.error("[SpiderEngine] Registry load failed:", e)
+		} catch (_e) {
+			Logger.error(`[SpiderEngine] Registry corruption detected. Triggering Substrate Self-Healing.`)
 			return false
 		}
+	}
+
+	/**
+	 * V93: Substrate Immortality. Autonomously rebuilds the graph from scratch.
+	 */
+	public async rebuildRegistry(): Promise<void> {
+		Logger.info("[SpiderEngine] Rebuilding project registry (Full Indexing)...")
+		this.nodes.clear()
+		const files = this.resolver.scanProject()
+		for (const f of files) {
+			try {
+				const content = fs.readFileSync(path.resolve(this.cwd, f), "utf-8")
+				this.updateNode(f, content)
+			} catch (_e) {
+				// Skip unreachable files
+			}
+		}
+		this.metrics.computeCouplingMetrics(this.nodes)
+		this.metrics.computeReachability(this.nodes)
+		await this.persistence.saveRegistry(this.nodes)
+		Logger.info(`[SpiderEngine] Substrate Immortalized: ${this.nodes.size} nodes indexed.`)
 	}
 
 	/**

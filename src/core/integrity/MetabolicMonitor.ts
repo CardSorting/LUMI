@@ -21,6 +21,7 @@ export class MetabolicMonitor {
 	private registry: Map<string, MetabolicMetrics> = new Map()
 	private cooldownThreshold = 25 // Base collective edits per 30 minutes
 	private refactorThreshold = 50 // V33: Ethereal budget for refactors
+	private thresholdMultiplier = 1.0 // V80: Adaptive Metabolism
 
 	/**
 	 * Records a read operation.
@@ -102,8 +103,8 @@ export class MetabolicMonitor {
 		const totalDelta = metrics.linesAdded + metrics.linesDeleted
 
 		// V33: Ethereal Leniency
-		const churnThreshold = isRefactoring ? 1000 : 500
-		const writeThreshold = isRefactoring ? 10 : 5
+		const churnThreshold = (isRefactoring ? 1000 : 500) * this.thresholdMultiplier
+		const writeThreshold = (isRefactoring ? 10 : 5) * this.thresholdMultiplier
 
 		const highChurn = totalDelta > churnThreshold
 		const recentActivity = timeSinceLastEdit < 3600000 // 1 hour
@@ -132,7 +133,7 @@ export class MetabolicMonitor {
 
 		const drift = recentEntries.length
 		// PRODUCTION HARDENING: "Refactor Mode" allows for 50% more drift to support complex cross-module changes.
-		const baseThreshold = isPlanning ? 20 : 10
+		const baseThreshold = (isPlanning ? 20 : 10) * this.thresholdMultiplier
 		const threshold = isRefactoring ? Math.floor(baseThreshold * 1.5) : baseThreshold
 
 		// V8: Infrastructure Turn Suppression
@@ -290,7 +291,7 @@ export class MetabolicMonitor {
 			return m.lastEditTimestamp > recentThreshold ? acc + m.writes : acc
 		}, 0)
 
-		const threshold = isRefactoring ? this.refactorThreshold : this.cooldownThreshold
+		const threshold = (isRefactoring ? this.refactorThreshold : this.cooldownThreshold) * this.thresholdMultiplier
 
 		if (totalRecentWrites > threshold) {
 			return {
@@ -308,6 +309,14 @@ export class MetabolicMonitor {
 	 */
 	public resetMetabolicPressure() {
 		this.registry.clear()
+		this.thresholdMultiplier = 1.0 // Reset velocity to base
 		Logger.info("🔋 [MetabolicMonitor] Metabolic pressure reset. Inflammation cleared.")
+	}
+
+	/**
+	 * V80: Adjusts the metabolic agility of the substrate.
+	 */
+	public setThresholdMultiplier(multiplier: number) {
+		this.thresholdMultiplier = multiplier
 	}
 }

@@ -161,4 +161,30 @@ export class PathResolver {
 			}
 		}
 	}
+
+	/**
+	 * V93: Recursive project scanning for substrate re-indexing.
+	 */
+	public scanProject(): string[] {
+		const results: string[] = []
+		const srcDir = path.join(this.cwd, "src")
+		if (!fs.existsSync(srcDir)) return []
+
+		const stack = [srcDir]
+		while (stack.length > 0) {
+			const dir = stack.pop()!
+			const items = fs.readdirSync(dir, { withFileTypes: true })
+			for (const item of items) {
+				const full = path.join(dir, item.name)
+				if (item.isDirectory()) {
+					if (item.name !== "node_modules" && !item.name.startsWith(".")) {
+						stack.push(full)
+					}
+				} else if (item.name.endsWith(".ts") || item.name.endsWith(".tsx")) {
+					results.push(path.relative(this.cwd, full).replace(/\\/g, "/"))
+				}
+			}
+		}
+		return results
+	}
 }

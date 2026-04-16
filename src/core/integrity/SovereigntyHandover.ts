@@ -7,7 +7,7 @@ import { AuditRecorder } from "./AuditRecorder.js"
 export interface SovereignHandoverData {
 	projectId: string
 	timestamp: string
-	lastIntegrityScore: number
+	lastBuildHealth: number
 	violations: string[]
 	graphState: string // Serialized SpiderEngine
 }
@@ -35,7 +35,7 @@ export class SovereigntyHandover {
 		const data: SovereignHandoverData = {
 			projectId: path.basename(this.cwd),
 			timestamp: new Date().toISOString(),
-			lastIntegrityScore: score,
+			lastBuildHealth: score,
 			violations,
 			graphState: engine.serialize().toString("base64"),
 		}
@@ -59,7 +59,7 @@ export class SovereigntyHandover {
 			const data: SovereignHandoverData = JSON.parse(content)
 			engine.deserialize(Buffer.from(data.graphState, "base64"))
 			Logger.info(
-				`[SovereigntyHandover] Architectural sovereignty restored from ${data.timestamp} (Score: ${data.lastIntegrityScore})`,
+				`[SovereigntyHandover] Architectural sovereignty restored from ${data.timestamp} (Build Health: ${data.lastBuildHealth})`,
 			)
 			return true
 		} catch (error) {

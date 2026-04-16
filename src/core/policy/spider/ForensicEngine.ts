@@ -13,7 +13,7 @@ export class ForensicEngine {
 		private resolver: PathResolver,
 	) {}
 
-	public findGhosts(nodes: Map<string, SpiderNode>): Set<string> {
+	public findGhosts(nodes: Map<string, SpiderNode>, sessionBuffer?: Map<string, string>): Set<string> {
 		const allGhosts = new Set<string>()
 		for (const node of nodes.values()) {
 			const absPath = path.resolve(this.cwd, node.path)
@@ -60,10 +60,12 @@ export class ForensicEngine {
 							allGhosts.add(msg)
 							nodeGhosts.push(msg)
 						}
-					} else {
-						// Fallback to disk-based verification (legacy with hardened regex)
-						try {
-							const targetContent = fs.readFileSync(diskPath, "utf-8")
+						// 1. Check Session Buffer (V71)
+						const sessionContent = sessionBuffer ? sessionBuffer.get(this.resolver.normalizePath(diskPath)) : null
+						const targetContent =
+							sessionContent || (fs.existsSync(diskPath) ? fs.readFileSync(diskPath, "utf-8") : null)
+
+						if (targetContent) {
 							for (const symbol of symbols) {
 								if (symbol === "*") continue
 								// V16: Hardened regex to avoid false positives for complex export patterns
@@ -76,8 +78,6 @@ export class ForensicEngine {
 									nodeGhosts.push(msg)
 								}
 							}
-						} catch (_e) {
-							// Skip if file unreadable
 						}
 					}
 				}

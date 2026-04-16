@@ -384,20 +384,21 @@ export class RefactorHealer {
 			case "SPI-001": // Contractless Breach
 				const className = violation.message.match(/Module (.*) exports/)?.[1]
 				return className
-					? `EXECUTE: Create src/domain/interfaces/I${className}.ts with the following bridge:\n${this.generateInterfaceBridge(className)}`
-					: "EXECUTE: Implement a domain interface."
+					? `🚨 [DIRECTIVE]: Extract I${className} to domain/interfaces and run SWEEP.`
+					: "🚨 [DIRECTIVE]: Implement a domain interface to break direct leakage."
 			case "SPI-004": // Cycle
-				return violation.remediation || "Analyze complexity to find weakest link for extraction."
+				return `🚨 [DIRECTIVE]: Use 'import type' for shared interfaces or extract shared logic to plumbing/.`
 			case "SPI-005": // Ghost
-				return violation.remediation
-					? `EXECUTE: Add the following line to ${path.basename(violation.path)}: \n    ${violation.remediation.replace("Suggested Import: ", "")}`
-					: "Locate providing module and add missing import."
+				return `🧹 [DIRECTIVE]: Execute Sovereign Garbage Collector Sweep to auto-align symbols.`
 			case "SPI-103": // Unused Export
-				return `EXECUTE: Remove unused export from ${path.basename(violation.path)} to reduce structural waste.`
+				return `🧹 [DIRECTIVE]: Prune unused export in ${path.basename(violation.path)} to reduce noise.`
 			case "SPI-003": // Orphan
-				return `EXECUTE: Delete file if redundant, or integrate it into a consumer in the same directory.`
+				return `🗑️ [DIRECTIVE]: Delete this file if redundant (Metabolic Trash detected).`
 			default:
-				return violation.message
+				if (violation.message.includes("Geographic Misalignment")) {
+					return `📍 [DIRECTIVE]: Align [LAYER] tag to match physical path and run SWEEP.`
+				}
+				return `🛠️ [FIX]: ${violation.message}`
 		}
 	}
 

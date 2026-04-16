@@ -11,7 +11,7 @@ import { SpiderEngine } from "./spider/SpiderEngine.js"
 
 export interface PulseReport {
 	timestamp: string
-	integrityScore: number
+	buildHealth: number
 	violations: number
 	recommendations: {
 		refactors: RefactoringSuggestion[]
@@ -60,7 +60,7 @@ export class SovereignPulse {
 
 		return {
 			timestamp: new Date().toISOString(),
-			integrityScore: (1 - entropy.score) * 100,
+			buildHealth: (1 - entropy.score) * 100,
 			violations: violations.length,
 			recommendations: {
 				refactors,

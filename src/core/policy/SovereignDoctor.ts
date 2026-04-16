@@ -3,7 +3,7 @@ import { SovereignPolicy } from "./SovereignPolicy"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
 
 export interface DoctorReport {
-	integrityScore: number
+	buildHealth: number
 	timestamp: string
 	feverMap: { path: string; score: number }[]
 	violations: {
@@ -59,15 +59,14 @@ export class SovereignDoctor {
 			// Axiom violations would normally be added here by iterating files
 		]
 
-		const entropy = engine.computeEntropy().score
-		const integrityScore = Math.max(0, 100 - entropy * 50 - allViolations.length * 5)
+		const buildHealth = Math.max(0, 100 - allViolations.length * 10)
 
 		// Map to metabolic pressure
 		const mem = process.memoryUsage()
 		const memoryPressure = (mem.heapUsed / mem.heapTotal) * 100
 
 		return {
-			integrityScore,
+			buildHealth,
 			timestamp: new Date().toISOString(),
 			feverMap: feverMap.sort((a, b) => b.score - a.score),
 			violations: allViolations,
@@ -85,9 +84,9 @@ export class SovereignDoctor {
 	 */
 	public getAgentSignal(report: DoctorReport): string {
 		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
-		if (report.integrityScore < policy.integrityAlertThreshold) {
-			return `⚠️ [ARCHITECTURAL ALARM] Substrate Integrity: ${report.integrityScore.toFixed(0)}%. Agent state: Restricted to HEAL operations only.`
+		if (report.buildHealth < (policy.integrityAlertThreshold || 70)) {
+			return `⚠️ [BUILD ALARM] Substrate Build Health: ${report.buildHealth.toFixed(0)}%. Agent state: Restricted to HEAL operations only.`
 		}
-		return `✅ Substrate Integrity: ${report.integrityScore.toFixed(0)}%. Codebase is sovereign.`
+		return `✅ Substrate Build Health: ${report.buildHealth.toFixed(0)}%. Codebase is sovereign.`
 	}
 }

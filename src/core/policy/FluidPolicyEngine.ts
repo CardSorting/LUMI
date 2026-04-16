@@ -21,6 +21,7 @@ import { SovereignScribe } from "../task/tools/utils/SovereignScribe"
 import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine"
 import { SimulationEngine } from "./SimulationEngine.js"
 import { SovereignForensics } from "./SovereignForensics"
+import { SovereignGarbageCollector } from "./SovereignGarbageCollector"
 import { SovereignOptimizer } from "./SovereignOptimizer"
 import { SovereignPolicy } from "./SovereignPolicy.js"
 import { SovereignProtocol } from "./SovereignProtocol"
@@ -34,6 +35,7 @@ export interface PolicyResult {
 	warning?: string
 	isAlarmed?: boolean
 	violations?: string[]
+	buildErrors?: string[]
 	entropyScore?: number
 	correctionHint?: string
 }
@@ -65,13 +67,16 @@ export class FluidPolicyEngine {
 	private metabolicMonitor: MetabolicMonitor
 	private optimizer: SovereignOptimizer
 	private pathogens: PathogenStore
-	private architecturalAlarmActive = false
+	private buildAlarmActive = false
 	private alarmViolations: string[] = []
-	private lastIntegrityScore = 100
+	private lastBuildHealth = 100
 	private lastViolationCount = 0
 	private modifiedLayers: Set<string> = new Set()
 	private refactorHealer: RefactorHealer
 	private forensics: SovereignForensics // V33: Ethereal Persistence
+	private garbageCollector: SovereignGarbageCollector
+	private refactorTurnsRemaining = 0 // V70: Sovereign Refactor Window
+	private lastEntropyScore = 1.0 // V80: Karma Tracking
 
 	constructor(
 		private cwd: string,
@@ -90,6 +95,7 @@ export class FluidPolicyEngine {
 		this.pathogens = new PathogenStore(this.cwd)
 		this.refactorHealer = new RefactorHealer(this.cwd)
 		this.forensics = new SovereignForensics(this.cwd, this.metabolicMonitor, this.spiderEngine)
+		this.garbageCollector = new SovereignGarbageCollector(this.cwd, this.spiderEngine, this.pathogens)
 
 		// V16: Warm graph startup
 		this.spiderEngine.loadRegistry().catch((e: unknown) => Logger.error("[FluidPolicyEngine] Failed to load registry:", e))
@@ -103,7 +109,7 @@ export class FluidPolicyEngine {
 		this.metabolicMonitor.resetMetabolicPressure()
 		this.alarmViolations = []
 		this.modifiedLayers.clear()
-		this.lastIntegrityScore = 100
+		this.lastBuildHealth = 100
 		Logger.info("[FluidPolicyEngine] Unified System Pressure Reset (Metabolic & Structural).")
 	}
 
@@ -114,12 +120,13 @@ export class FluidPolicyEngine {
 	public getSystemDiagnostics(): string {
 		const violations = this.spiderEngine.getViolations()
 		const stats = this.metabolicMonitor.getVitalityStats()
-		const integrityScore = this.computeIntegrityScore(violations.map((v) => v.message))
+		const buildHealth = this.computeBuildHealth(violations.map((v) => v.message))
 
 		return SovereignProtocol.generateAuditTemplate("System Recovery", {
-			integrityScore,
+			buildHealth,
 			metabolicPressure: `${stats.totalWrites} writes across ${this.spiderEngine.nodes.size} nodes`,
-			violations: violations.slice(0, 10).map((v) => `[${v.id}] ${v.path}: ${v.message}`),
+			buildErrors: violations.filter((v) => v.severity === "ERROR").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
+			lintWarnings: violations.filter((v) => v.severity === "WARN").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
 			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
 		})
 	}
@@ -259,38 +266,33 @@ export class FluidPolicyEngine {
 	}
 
 	/**
-	 * Computes the architectural integrity score (0-100).
+	 * Computes the build health score (0-100).
 	 * Every violation reduces the score based on its weighted severity.
 	 *
-	 * Weights:
-	 * - Ghost imports: 1 point
-	 * - Layer violations: 10 points
-	 * - Circular dependencies: 15 points
+	 * Weights (Revised for Build Integrity):
+	 * - Build Error: 20 points
+	 * - Linter Warning: 5 points
+	 * - Info/Smell: 1 point
 	 */
-	public computeIntegrityScore(violations: string[]): number {
+	public computeBuildHealth(violations: string[]): number {
 		if (violations.length === 0) return 100
 
 		let totalPenalty = 0
 		for (const violation of violations) {
-			// PERFECTION WEIGHTED INTEGRAL (v14)
-			if (violation.includes("[GHOST SYMBOL]")) {
-				totalPenalty += 1
-			} else if (violation.includes("[GHOST FILE]")) {
-				totalPenalty += 3
-			} else if (violation.includes("Circular Dependency")) {
-				totalPenalty += 15
-			} else if (violation.includes("Sovereign Leak") || violation.includes("Geographic Misalignment")) {
-				totalPenalty += 10
-			} else if (violation.includes("Node is orphaned")) {
-				totalPenalty += 2 // Orchestrated healing handles these specifically
+			if (violation.includes("Circular Dependency")) {
+				totalPenalty += 30 // CRITICAL: Structural death
+			} else if (violation.includes("[ERROR]") || violation.includes("Build Error")) {
+				totalPenalty += 20
+			} else if (violation.includes("Geographic Misalignment") || violation.includes("Layer violation")) {
+				totalPenalty += 15 // High-gravity regression
 			} else if (
-				violation.includes("PURITY") ||
-				violation.includes("COHESION") ||
-				violation.includes("Fragmented Domain Model")
+				violation.includes("[WARN]") ||
+				violation.includes("Linter Warning") ||
+				violation.includes("Ghost import")
 			) {
-				totalPenalty += 0 // Info-only warnings for Pass 2
+				totalPenalty += 5
 			} else {
-				totalPenalty += 5 // Default structural penalty
+				totalPenalty += 1
 			}
 		}
 
@@ -298,20 +300,18 @@ export class FluidPolicyEngine {
 		const penalty = Math.min(95, totalPenalty)
 		const score = Math.max(5, base - penalty)
 
-		// PRODUCTION HARDENING: Alarm is trend-aware. Only trigger if score is actively declining.
-		const isDeclining = score < this.lastIntegrityScore
-		const isRecovering = score > this.lastIntegrityScore
-		this.lastIntegrityScore = score
-		this.spiderEngine.isRecovering = isRecovering // Synchronize trend with substrate engine
+		const isDeclining = score < this.lastBuildHealth
+		const isRecovering = score > this.lastBuildHealth
+		this.lastBuildHealth = score
+		this.spiderEngine.isRecovering = isRecovering
 
 		const config = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
 		const threshold = config.integrityAlertThreshold || 70
 
-		if (score < threshold && !this.architecturalAlarmActive && isDeclining) {
-			this.triggerAlarm(violations)
-		} else if (this.architecturalAlarmActive && (score >= 90 || isRecovering)) {
-			// Clear alarm if score is high enough OR if we are making active progress (recovering)
-			this.clearAlarm()
+		if (score < threshold && !this.buildAlarmActive && isDeclining) {
+			this.triggerBuildAlarm(violations)
+		} else if (this.buildAlarmActive && (score >= 90 || isRecovering)) {
+			this.clearBuildAlarm()
 		}
 
 		return score
@@ -321,7 +321,7 @@ export class FluidPolicyEngine {
 	 * Records the current scan results to history.
 	 */
 	public async recordScanHistory(violations: string[]) {
-		const score = this.computeIntegrityScore(violations)
+		const score = this.computeBuildHealth(violations)
 		const fileCount = this.spiderEngine.nodes.size
 		await this.auditRecorder.record(score, violations.length, fileCount)
 
@@ -335,17 +335,17 @@ export class FluidPolicyEngine {
 		)
 	}
 
-	private triggerAlarm(violations: string[]) {
-		this.architecturalAlarmActive = true
+	private triggerBuildAlarm(violations: string[]) {
+		this.buildAlarmActive = true
 		this.alarmViolations = violations
-		Logger.warn("🚨 [ARCHITECTURAL ALARM] System entering soft-lock due to integrity violations.")
+		Logger.warn("🚨 [BUILD ALARM] System entering soft-lock due to linter/build errors. Forced Sweep started.")
 	}
 
-	private clearAlarm() {
-		this.architecturalAlarmActive = false
+	private clearBuildAlarm() {
+		this.buildAlarmActive = false
 		this.alarmViolations = []
-		this.lastIntegrityScore = 100 // Reset baseline
-		Logger.info("💚 [ARCHITECTURAL ALARM] Alarm cleared. System integrity restored.")
+		this.lastBuildHealth = 100 // Reset baseline
+		Logger.info("💚 [BUILD ALARM] Alarm cleared. System build health restored.")
 	}
 
 	/**
@@ -371,7 +371,7 @@ export class FluidPolicyEngine {
 		} catch (_e) {
 			// V27 Agent Success: Auto-heal if we're trending towards a block
 			const cooldown = this.metabolicMonitor.getCooldownStatus()
-			if (cooldown.active || this.architecturalAlarmActive) {
+			if (cooldown.active || this.buildAlarmActive) {
 				const healing = await this.ensureScratchpadIntegrity("Metabolic Recovery")
 				scratchpadContent = healing.content
 				hasAudit = scratchpadContent.includes(SovereignProtocol.HEADERS.AUDIT)
@@ -396,7 +396,7 @@ export class FluidPolicyEngine {
 
 		if (
 			(block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) &&
-			(this.metabolicMonitor.getCooldownStatus().active || this.architecturalAlarmActive)
+			(this.metabolicMonitor.getCooldownStatus().active || this.buildAlarmActive)
 		) {
 			intent = this.detectHealingIntent(block)
 			if (intent) {
@@ -405,9 +405,7 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// Centralized Healing Mode Detection
-		const isHealingMode =
-			this.architecturalAlarmActive || !!intent || !!content.match(/#HEAL|#HEALING|#CURE|#FIX|#REPAIR|#TIDY/)
+		const isHealingMode = this.buildAlarmActive || !!intent || !!content.match(/#HEAL|#HEALING|#CURE|#FIX|#REPAIR|#TIDY/)
 
 		// 0. Rule: Cognitive Drift Sensing (Thrashing Prevention)
 		if (
@@ -668,54 +666,68 @@ export class FluidPolicyEngine {
 			}
 		}
 
+		// V40: Pre-flight Sweep (Metabolic cleanup)
+		if (this.metabolicMonitor.getCooldownStatus().active && block.params?.path) {
+			Logger.warn(`[FluidPolicyEngine] High Metabolic Pressure detected. Running Pre-flight Sweep on ${block.params.path}`)
+			await this.garbageCollector.sweep([this.normalize(block.params.path)])
+		}
+
+		// V70: Sovereign Refactor Window Detection
+		if (scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#MIGRATION")) {
+			if (this.refactorTurnsRemaining <= 0) {
+				this.refactorTurnsRemaining = 3 // Standard 3-turn window
+				Logger.info("[FluidPolicyEngine] Sovereign Refactor Window opened (3 turns of architectural leniency).")
+			}
+		}
+
+		// 0. Update Session Awareness (V71)
+		this.spiderEngine.setSessionBuffer(this.sessionFiles)
+
+		// V80: Adaptive Metabolism (Metabolic Velocity Tuning)
+		const currentEntropy = this.spiderEngine.computeEntropy()
+		const entropyDiscovery = this.lastEntropyScore - currentEntropy.score
+		const drift = currentEntropy.components.couplingScore
+
+		let velocity = 1.0
+		if (entropyDiscovery > 0.05) velocity += 0.5 // Karma Expansion
+		if (drift > 0.15) velocity -= 0.5 // Drift Braking
+
+		this.metabolicMonitor.setThresholdMultiplier(Math.max(0.5, Math.min(2.0, velocity)))
+		Logger.info(`[FluidPolicyEngine] Metabolic Velocity calibrated to ${velocity.toFixed(2)}x.`)
+
 		// 0. Rule: Architectural Alarm (Soft-Lock / Healing Mode)
+		const isCriticalHealth = this.lastBuildHealth < 50
+		const isRefactoringWindow = this.refactorTurnsRemaining > 0
+
 		if (
-			this.architecturalAlarmActive &&
+			(this.buildAlarmActive || (isCriticalHealth && !isRefactoringWindow)) &&
 			(block.name === DietCodeDefaultTool.FILE_NEW ||
 				block.name === DietCodeDefaultTool.FILE_EDIT ||
 				block.name === DietCodeDefaultTool.APPLY_PATCH ||
-				block.name === DietCodeDefaultTool.MOVE ||
-				block.name === DietCodeDefaultTool.RENAME ||
-				block.name === DietCodeDefaultTool.DELETE)
+				block.name === DietCodeDefaultTool.BASH)
 		) {
-			const _targetPath = (block.params as { path?: string })?.path
+			const intent = this.detectHealingIntent(block)
 
-			let isExplicitlyIgnored = false
-			try {
-				const scratchpadPath = path.join(this.cwd, "scratchpad.md")
-				const scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
-				if (scratchpadContent.includes("# SOVEREIGN_IGNORE_ALARM")) {
-					isExplicitlyIgnored = true
-				}
-			} catch (_e) {}
-
-			const isSealed = !!this.commitSeal
-			if (!isHealingMode && !isExplicitlyIgnored && !isSealed) {
-				const recipes = this.spiderEngine
+			// Detect #HEAL or #FIX in the scratchpad (via isHealingMode logic)
+			if (!intent && !isHealingMode) {
+				const actualViolations = this.spiderEngine
 					.getViolations()
-					.slice(0, 3)
-					.map((v) => `  - ${this.refactorHealer.generateHealingRecipe(v)}`)
-
-				// V21: Diagnostic Synthesis (Cognitive Load Reduction)
-				const displayedViolations =
-					this.alarmViolations.length > 5
-						? [
-								...this.alarmViolations.slice(0, 3),
-								`... and ${this.alarmViolations.length - 3} more structural antigens.`,
-							]
-						: this.alarmViolations
-
-				const auditTemplate = SovereignProtocol.generateAuditTemplate("Alarm Healing")
+					.filter((v) => this.alarmViolations.includes(v.message))
+					.slice(0, 5)
+				const recipes = actualViolations.map((v) => this.refactorHealer.generateHealingRecipe(v))
 
 				return {
-					success: true,
+					success: false,
+					error: isCriticalHealth
+						? "🚫 [CRITICAL BUILD LOCK] System health is below 50%. New features are DISABLED. Fix existing errors first."
+						: "🚨 [BUILD ALARM] System health degraded.",
 					warning:
-						`⚠️ ARCHITECTURAL ALARM ACTIVE (Score: ${this.computeIntegrityScore(this.alarmViolations)}/100)\n` +
+						`⚠️ BUILD ALARM ACTIVE (Health: ${this.lastBuildHealth}/100)\n` +
 						`Structural changes are discouraged until the following violations are healed:\n\n` +
-						`${displayedViolations.map((v) => `  - ${v}`).join("\n")}\n\n` +
+						`${actualViolations.map((v) => `  - ${v.message}`).join("\n")}\n\n` +
 						`🛠️ HEALING RECIPES:\n${recipes.join("\n")}\n\n` +
-						`💡 To bypass this block during structural repairs, add \`# HEALING TURN\` to your \`scratchpad.md\`, or perform a full audit turn:\n\n` +
-						`\`\`\`markdown\n${auditTemplate}\`\`\`\n`,
+						`💡 Use #HEAL or #FIX in your scratchpad and focus ONLY on these repairs to bypass this alarm.`,
+					isAlarmed: true,
 				}
 			}
 		}
@@ -814,7 +826,7 @@ export class FluidPolicyEngine {
 			if (!astValidation.success) {
 				const layer = this.getCachedLayer(filePath)
 				const strikes = await this.incrementStrikes(filePath)
-				const projectIntegrity = this.computeIntegrityScore(this.spiderEngine.getViolations().map((v) => v.message))
+				const projectHealth = this.computeBuildHealth(this.spiderEngine.getViolations().map((v) => v.message))
 
 				// PRODUCTION HARDENING: Layer-aware blocking.
 				// 1. DOMAIN is the holy of holies — ALWAYS block on any error UNLESS [SOVEREIGN_HEALING] is present.
@@ -826,7 +838,7 @@ export class FluidPolicyEngine {
 					(layer === "core" &&
 						strikes === 1 &&
 						astValidation.errors.length > 0 &&
-						projectIntegrity < 70 &&
+						projectHealth < 70 &&
 						!isRecoveringTrend)
 
 				if (shouldBlock) {
@@ -1055,13 +1067,13 @@ export class FluidPolicyEngine {
 
 		// Protocol Hardening: Inject Guard Directives based on project health
 		// PRODUCTION HARDENING: Clearer, more authoritative guidance for integrity recovery.
-		const integrityScore = this.computeIntegrityScore(this.spiderEngine.getViolations().map((v) => v.message))
-		if (integrityScore < 70) {
-			header += `\n🛡️ HIGH-SHIELD PROTOCOL ACTIVE: Structural Integrity is CRITICAL (${integrityScore}/100).\n`
+		const buildHealth = this.computeBuildHealth(this.spiderEngine.getViolations().map((v) => v.message))
+		if (buildHealth < 70) {
+			header += `\n🛡️ HIGH-SHIELD PROTOCOL ACTIVE: Structural Integrity is CRITICAL (${buildHealth}/100).\n`
 			header += `Architecture is currently under SOFT-LOCK. New features are RESTRICTED. Prioritize HEALING the following vectors:\n`
 			header += `  - Address Circular Dependencies (SPI-004)\n  - Resolve Layer Violations\n  - Clean up Ghost Imports (SPI-005)\n`
-		} else if (integrityScore < 85) {
-			header += `\n🔍 ARCHITECTURAL WATCH: Structural Integrity is ${integrityScore}/100. Maintain layer discipline to avoid soft-lock thresholds.\n`
+		} else if (buildHealth < 85) {
+			header += `\n🔍 ARCHITECTURAL WATCH: Structural Integrity is ${buildHealth}/100. Maintain layer discipline to avoid soft-lock thresholds.\n`
 		}
 
 		// Axiomatic Logic Report
@@ -1121,8 +1133,7 @@ export class FluidPolicyEngine {
 			header += `\n🔥 METABOLIC FEVER DETECTED:\n${infection.reason}\nThis file is reaching a state of architectural exhaustion. Consider an atomic split.\n`
 		}
 
-		const isRefactoringIntent =
-			isRefactoringAudit || this.spiderEngine.getViolations().length > 0 || this.architecturalAlarmActive
+		const isRefactoringIntent = isRefactoringAudit || this.spiderEngine.getViolations().length > 0 || this.buildAlarmActive
 		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan", isRefactoringIntent)
 		if (drift.warning) {
 			header += `\n${drift.warning}\n`
@@ -1212,29 +1223,61 @@ export class FluidPolicyEngine {
 	public async validatePostExecution(block: ToolUse, toolOutput: unknown, prevResultHash?: string): Promise<PolicyResult> {
 		const result: PolicyResult = { success: true }
 
-		// Architectural Policy: Audit file changes via AST (warning-only, never blocks post-execution)
-		if (block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) {
-			const filePath = block.params?.path ? path.resolve(this.cwd, block.params.path) : null
+		// Build Integrity: Run Sweeping Garbage Collector (Real-time cleanup)
+		if (
+			block.name === DietCodeDefaultTool.FILE_NEW ||
+			block.name === DietCodeDefaultTool.FILE_EDIT ||
+			block.name === DietCodeDefaultTool.APPLY_PATCH
+		) {
+			const params = block.params as { path?: string; target_file?: string }
+			const filePath = params?.path || params?.target_file
 			if (filePath) {
+				const absPath = path.resolve(this.cwd, filePath)
 				try {
-					const content = await fs.readFile(filePath, "utf-8")
-					// V31: Structural Sync Awareness
-					this.metabolicMonitor.recordWrite(this.normalize(filePath), content)
+					const normPath = this.normalize(absPath)
 
-					const validation = this.tspPlugin.validateSource(filePath, content, this.virtualResolver)
-					if (!validation.success || (validation.warnings && validation.warnings.length > 0)) {
-						const allIssues = [...(validation.warnings || []), ...validation.errors]
-						const entropy = this.spiderEngine.computeEntropy()
-						if (this.streamId) {
-							await orchestrator.storeMemory(this.streamId, "last_entropy_score", entropy.score.toString())
-						}
-						result.violations = validation.errors
-						result.warning = `⚠️ ${path.basename(filePath)}:\n${allIssues.map((v) => `  - ${v}`).join("\n")}`
-						result.entropyScore = entropy.score
-						result.correctionHint = this.getCorrectionHint(validation.errors, filePath)
+					// 0. Update Session Awareness (V71)
+					this.spiderEngine.setSessionBuffer(this.sessionFiles)
+
+					// 1. Run the Sweep (Auto-fix lint/imports/pruning)
+					const sweepResult = await this.garbageCollector.sweep([normPath])
+
+					// 2. Synchronize Graph
+					const content = await fs.readFile(absPath, "utf-8")
+					this.spiderEngine.updateNode(normPath, content)
+					this.metabolicMonitor.recordWrite(normPath, content)
+
+					// 3. Report remaining errors
+					if (sweepResult.remainingErrors.length > 0) {
+						result.success = false // Build regression detected
+						result.buildErrors = sweepResult.remainingErrors
+						result.warning = `⚠️ Build/Lint issues persist after Sweep:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
+						result.correctionHint =
+							"The Garbage Collector could not auto-resolve these errors. Manual intervention required."
+					} else if (sweepResult.fixedCount > 0) {
+						Logger.info(
+							`[FluidPolicyEngine] Sweep fixed ${sweepResult.fixedCount} issues in ${path.basename(filePath)}.`,
+						)
 					}
-				} catch {
-					// File might not exist yet
+				} catch (e) {
+					Logger.error(`[FluidPolicyEngine] Garbage Collection failed for ${filePath}:`, e)
+				}
+			}
+		}
+
+		// V42: Active Move Synthesis (Project-wide re-linking)
+		if (block.name === DietCodeDefaultTool.MOVE || block.name === DietCodeDefaultTool.RENAME) {
+			const params = block.params as { path?: string; oldPath?: string; destination?: string; newPath?: string }
+			const oldPath = params.path || params.oldPath
+			const newPath = params.destination || params.newPath
+
+			if (oldPath && newPath) {
+				Logger.info(`[FluidPolicyEngine] MOVE detected. Synthesizing substrate imports for ${oldPath} -> ${newPath}`)
+				const updateCount = await this.refactorHealer.healImports(oldPath, newPath, this.spiderEngine)
+				if (updateCount > 0) {
+					result.warning =
+						(result.warning ? `${result.warning}\n` : "") +
+						`✨ [MOVE SYNTHESIS]: Automatically re-linked ${updateCount} imports project-wide to maintain integrity.`
 				}
 			}
 		}
@@ -1269,29 +1312,70 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// V16/V17: Metabolic Forgiveness 2.0
-		// If health improved (recovery detected) or violation count decreased, clear inflammation
-		const latestSnapshot = await this.spiderEngine.getLatestSnapshot()
-		const currentEntropy = this.spiderEngine.computeEntropy().score
+		const currentEntropy = this.spiderEngine.computeEntropy()
 		const currentViolations = this.spiderEngine.getViolations()
+		const health = this.computeBuildHealth(currentViolations.map((v) => v.message))
+
+		// V80: Karma-Based Strike Pardon (Structural Reward)
+		const entropyDiscovery = this.lastEntropyScore - currentEntropy.score
+		const karmaEarned = entropyDiscovery > 0.05 // 5% improvement in structural purity
 
 		const recoveryDetected =
-			(latestSnapshot && currentEntropy < latestSnapshot.entropyScore) || currentViolations.length < this.lastViolationCount
+			(this.lastBuildHealth < 70 && health > 90) || currentViolations.length < this.lastViolationCount || karmaEarned
 
 		if (recoveryDetected) {
+			const oldHealth = this.lastBuildHealth
 			this.lastViolationCount = currentViolations.length
+			this.lastBuildHealth = health
+			this.lastEntropyScore = currentEntropy.score
 			this.modifiedLayers.clear() // Reset drift on recovery
 
-			const filePath = block.params?.path
+			const params = block.params as { path?: string }
+			const filePath = params.path
 			if (filePath) {
-				const norm = this.normalize(filePath)
+				const norm = this.normalize(path.resolve(this.cwd, filePath))
 				this.metabolicMonitor.resetFileInflammation(norm)
-				Logger.info(
-					`[FluidPolicyEngine] Metabolic Forgiveness applied to ${path.basename(norm)} (Architectural Recovery Detected).`,
-				)
+			}
+
+			this.metabolicMonitor.resetMetabolicPressure()
+
+			// V45: Sovereign Success Reinforcement
+			if (karmaEarned) {
+				result.warning =
+					(result.warning ? `${result.warning}\n` : "") +
+					`✨ [KARMA EARNED]: Your high-quality refactor has reduced structural entropy by ${(entropyDiscovery * 100).toFixed(1)}%.\n` +
+					`Sovereign strikes have been pardoned. Substrate health is recovering.`
+				Logger.info(`[FluidPolicyEngine] Karma Pardon triggered: Entropy drop ${(entropyDiscovery * 100).toFixed(1)}%`)
+			} else if (oldHealth < 70 && health > 90) {
+				result.warning =
+					(result.warning ? `${result.warning}\n` : "") +
+					`🌟 [SOVEREIGN PRAISE]: You have successfully stabilized the substrate (Health: ${oldHealth}% -> ${health}%).\n` +
+					`Metabolic pressure has been reset. Sovereignty is maintained.`
+				Logger.info(`[FluidPolicyEngine] Success Reinforcement triggered: ${oldHealth} -> ${health}`)
 			} else {
-				this.metabolicMonitor.resetMetabolicPressure()
-				Logger.info("[FluidPolicyEngine] Global Metabolic Forgiveness applied (Structural Improvement Detected).")
+				Logger.info(`[FluidPolicyEngine] Metabolic Forgiveness applied (Structural Improvement Detected).`)
+			}
+		}
+
+		// V81: Axiomatic Drift Diagnostics
+		const drift = currentEntropy.components.couplingScore
+		result.warning =
+			(result.warning ? `${result.warning}\n` : "") +
+			`🕸️ [AXIOMATIC DRIFT]: Graph is ${(drift * 100).toFixed(1)}% cross-layer (Target: < 15%).`
+
+		// V46: Distance to Green (Diagnostic Nudge)
+		if (health < 100) {
+			const errorCount = currentViolations.filter((v) => v.severity === "ERROR").length
+			const warnCount = currentViolations.filter((v) => v.severity === "WARN").length
+			const deltaMsg = `Distance to Green: ${errorCount} errors and ${warnCount} warnings remaining.`
+			result.warning = (result.warning ? `${result.warning}\n` : "") + `🔍 [STABILIZATION DELTA]: ${deltaMsg}`
+		}
+
+		// V70: Sovereign Refactor Window Decay
+		if (this.refactorTurnsRemaining > 0) {
+			this.refactorTurnsRemaining--
+			if (this.refactorTurnsRemaining === 0) {
+				Logger.info("[FluidPolicyEngine] Sovereign Refactor Window closed. Strict enforcement restored.")
 			}
 		}
 
@@ -1412,11 +1496,26 @@ export class FluidPolicyEngine {
 		// Auto-creation logic
 		const violations = this.spiderEngine.getViolations()
 		const stats = this.metabolicMonitor.getVitalityStats()
+		const currentEntropy = this.spiderEngine.computeEntropy()
+		const currentViolations = this.spiderEngine.getViolations()
+
 		const diagnostics: import("./SovereignProtocol").SovereignDiagnostics = {
-			integrityScore: this.computeIntegrityScore(violations.map((v) => v.message)),
+			buildHealth: this.computeBuildHealth(currentViolations.map((v) => v.message)),
 			metabolicPressure: `${stats.totalWrites} writes, ${stats.totalReads} reads`,
-			violations: violations.slice(0, 5).map((v) => `[${v.id}] ${v.path}: ${v.message}`),
+			buildErrors: currentViolations.filter((v) => v.severity === "ERROR").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
+			lintWarnings: currentViolations.filter((v) => v.severity === "WARN").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
 			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
+			refactorTurns: this.refactorTurnsRemaining > 0 ? this.refactorTurnsRemaining : undefined,
+			forensicVerified: true,
+			karmaStatus: this.lastEntropyScore < 0.2 ? "Purified Sovereignty" : "Recovering Integrity",
+			recursiveStabilization: true,
+			metabolicVelocity:
+				1.0 +
+				(this.lastEntropyScore - currentEntropy.score > 0.05 ? 0.5 : 0) -
+				(currentEntropy.components.couplingScore > 0.15 ? 0.5 : 0),
+			immuneResponse: currentViolations.some((v) => this.pathogens?.isPathogenic(v.path))
+				? "Active Hardening"
+				: "Monitoring",
 		}
 
 		const template = SovereignProtocol.generateAuditTemplate(taskName, diagnostics)
@@ -1441,7 +1540,7 @@ export class FluidPolicyEngine {
 		try {
 			const content = await fs.readFile(absolutePath, "utf-8")
 			return content.split("\n").slice(0, 30).join("\n")
-		} catch (e) {
+		} catch (_e) {
 			return "Substrate unreachable."
 		}
 	}
@@ -1451,9 +1550,6 @@ export class FluidPolicyEngine {
 
 		if (scratchpadContent.includes("# SOVEREIGN_AGILE")) return true
 
-		// V33: Ethereal Refactor Leniency
-		const isRefactoring = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
-
 		// 1. Directory-level coverage
 		const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+(?:\/|$)/g
 		const citedPaths = Array.from(scratchpadContent.matchAll(pathRegexp)).map((m) => m[0])
@@ -1462,13 +1558,13 @@ export class FluidPolicyEngine {
 
 		// 2. Aesthetic Agility (V34)
 		if (block?.name === DietCodeDefaultTool.FILE_EDIT || block?.name === DietCodeDefaultTool.APPLY_PATCH) {
-			const params = block.params as any
+			const params = block.params as Record<string, any>
 			const target = params.targetContent || params.TargetContent
 			const replacement = params.replacementContent || params.ReplacementContent
 
 			if (target && replacement) {
-				const targetHash = (this.forensics as any).computeStructuralHash(target)
-				const replacementHash = (this.forensics as any).computeStructuralHash(replacement)
+				const targetHash = this.forensics.computeStructuralHash(target)
+				const replacementHash = this.forensics.computeStructuralHash(replacement)
 				if (targetHash === replacementHash) {
 					Logger.info(`[FluidPolicyEngine] Aesthetic Agility triggered for ${path.basename(filePath)}`)
 					return true

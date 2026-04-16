@@ -12,7 +12,7 @@ export interface DecompositionStep {
 export interface DecompositionPlan {
 	filePath: string
 	currentLayer: string
-	integrityScore: number
+	buildHealth: number
 	steps: DecompositionStep[]
 }
 
@@ -89,7 +89,7 @@ export class SovereignDecomposer {
 		return {
 			filePath,
 			currentLayer: layer.toUpperCase(),
-			integrityScore: Math.max(0, 100 - steps.length * 15),
+			buildHealth: Math.max(0, 100 - steps.length * 15),
 			steps,
 		}
 	}
