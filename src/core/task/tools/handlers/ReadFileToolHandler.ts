@@ -200,8 +200,9 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 					const engine = new FluidPolicyEngine(config.cwd)
 					const violations = (engine as any).spiderEngine.getViolations()
 					const stats = (engine as any).metabolicMonitor.getVitalityStats()
+					const entropy = (engine as any).spiderEngine.computeEntropy()
 					diagnostics = {
-						integrityScore: (engine as any).computeIntegrityScore(violations.map((v: any) => v.message)),
+						substrateHealth: `${((1 - entropy.score) * 100).toFixed(1)}%`,
 						metabolicPressure: `${stats.totalWrites} writes across ${(engine as any).spiderEngine.nodes.size} nodes`,
 						violations: violations.slice(0, 10).map((v: any) => `[${v.id}] ${v.path}: ${v.message}`),
 						hotspots: stats.hotspots.map((h: any) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),

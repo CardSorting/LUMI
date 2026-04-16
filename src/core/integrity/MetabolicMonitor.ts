@@ -149,11 +149,20 @@ export class MetabolicMonitor {
 		if (highChurn && recentActivity && metrics.writes > writeThreshold) {
 			return {
 				inflamed: true,
-				reason: `High metabolic churn detected (${metrics.writes.toFixed(1)} edits). ${isRefactoring ? "(Refactor resonance active)" : ""}`,
+				reason: `Metabolic churn exceeded threshold (${totalDelta} lines, ${metrics.writes} writes).`,
 			}
 		}
 
 		return { inflamed: false }
+	}
+
+	/**
+	 * V110: Returns a normalized pressure score [0.0 - 10.0+] for a file.
+	 */
+	public getPressure(filePath: string): number {
+		const metrics = this.registry.get(filePath)
+		if (!metrics) return 0
+		return (metrics.writes + (metrics.linesAdded + metrics.linesDeleted) / 100) * this.resonanceMultiplier
 	}
 
 	/**

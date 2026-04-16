@@ -1490,12 +1490,6 @@ export class FluidPolicyEngine {
 		}
 	}
 
-	public computeIntegrityScore(violations: string[]): number {
-		const entropy = this.spiderEngine.computeEntropy()
-		const health = this.computeBuildHealth(violations)
-		return Math.max(0, 100 - (1.0 - entropy.score) * 100)
-	}
-
 	private normalize(p: string): string {
 		return this.spiderEngine.normalizePath(p)
 	}
@@ -1656,5 +1650,27 @@ export class FluidPolicyEngine {
 
 		// 3. Global Agile Domain detection
 		return SovereignProtocol.isImplicitAgileSafe(absolutePath)
+	}
+	/**
+	 * V110: Substrate Telemetry Provider.
+	 * Returns the current metabolic and forensic status for a file.
+	 */
+	public getMetabolicTelemetry(filePath: string) {
+		const absPath = path.resolve(this.cwd, filePath)
+		const normPath = this.normalize(absPath)
+		const currentViolations = this.spiderEngine.getViolations()
+
+		return {
+			pressure: this.metabolicMonitor.getPressure(normPath),
+			resonance: this.metabolicMonitor.getResonance(),
+			tokens: this.restorationTokens.get(normPath) || 0,
+			health: this.computeBuildHealth(currentViolations.map((v) => v.message)),
+			layer: this.getLayerForPath(absPath),
+		}
+	}
+
+	public getLayerForPath(filePath: string): string {
+		const { getLayer } = require("@/utils/joy-zoning")
+		return getLayer(filePath)
 	}
 }

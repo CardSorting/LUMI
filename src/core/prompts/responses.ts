@@ -25,27 +25,35 @@ export const formatResponse = {
 	toolError: (error?: string) =>
 		`The tool execution failed with the following error:\n<error>\n${error}\n</error>\n\n💡 SOVEREIGN NUDGE: If you are hitting a systemic block or recursive error, perform a # SOVEREIGN BREATH or # SOVEREIGN AUDIT in \`scratchpad.md\` to recalibrate and justify your next move.`,
 
-	architecturalCorrection: (error: string, score?: number) =>
+	architecturalCorrection: (error: string) =>
 		`🏗️ ARCHITECTURAL SOVEREIGNTY CHALLENGE` +
-		(score !== undefined ? ` (Integrity Score: ${score}/100)` : "") +
 		`\n\n<error>\n${error}\n</error>\n\n` +
-		`Your previous tool execution was REJECTED because it deviated from the path of order. To maintain a state of "Joy", you MUST now align this code with our architectural mandate.\n\n` +
-		`High-Level Directive:\n` +
-		`1. **Respect Tag Locality**: Every supported source file must declare its intention with [LAYER: TYPE].\n` +
-		`2. **Observe Geographic Alignment**: Files must reside in the directory that matches their tag.\n` +
-		`3. **Optimize Depth**: Keep relative navigation shallow (max 3 levels).\n\n` +
-		`💡 **Repair Strategy**:\n` +
-		`- Read the error carefully.\n` +
-		`- Address the specific violations listed.\n` +
-		`- Use @ aliases or move files if necessary.\n\n` +
-		`Your write was NOT applied. Please heal the architecture and retry.`,
+		`Your previous tool execution was REJECTED by the Substrate. To clear metabolic interdiction, you MUST align this code with the current architectural mandate.\n\n` +
+		`Resilience Directives:\n` +
+		`1. **Respect Layer Purity**: Every source must declare a [LAYER] tag.\n` +
+		`2. **Observe Geographic Boundaries**: Files must reside in their assigned directory.\n` +
+		`3. **Reduce Entropy**: Follow remediation hints to restore structural order.\n\n` +
+		`💡 **Healing Strategy**:\n` +
+		`- Check Metabolic Pressure in the header.\n` +
+		`- Utilize Restoration Tokens for build-critical repairs.\n` +
+		`- Address the specific violations listed below.\n\n` +
+		`Your write was NOT applied. Please heal the substrate and retry.`,
 
-	postExecutionSummary: (layer: string, score: number, violations?: string[]) => {
-		const label = layer.toUpperCase()
-		const statusLine = score === 100 ? `✅ Clean write to **${label}** layer` : `⚠️ Joy-Zoning Audit: **${label}** layer`
-		const scoreLine = `🏆 Architectural Integrity: **${score}/100**`
+	postExecutionSummary: (
+		telemetry: { layer: string; pressure: number; resonance: number; tokens: number; health: number },
+		violations?: string[],
+	) => {
+		const label = telemetry.layer.toUpperCase()
+		const pressure = telemetry.pressure.toFixed(1)
+		const resonance = telemetry.resonance.toFixed(1)
 
-		let message = `${statusLine}\n${scoreLine}`
+		const statusLine =
+			telemetry.health === 100
+				? `✅ Substrate Synced: **${label}** layer`
+				: `⚠️ Sovereign Metabolic Audit: **${label}** layer`
+		const telemetryLine = `📊 Pressure: **${pressure}** | Resonance: **${resonance}x** | Tokens: **${telemetry.tokens}** | Health: **${telemetry.health.toFixed(1)}%**`
+
+		let message = `${statusLine}\n${telemetryLine}`
 		if (violations && violations.length > 0) {
 			message += `\n\nDetected Drift:\n${violations.map((v) => `  - ${v}`).join("\n")}`
 		}

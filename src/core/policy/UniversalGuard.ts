@@ -108,4 +108,11 @@ export class UniversalGuard {
 		const { getLayer } = require("@/utils/joy-zoning")
 		return getLayer(filePath)
 	}
+
+	/**
+	 * V110: Substrate Telemetry Proxy.
+	 */
+	public getMetabolicTelemetry(filePath: string) {
+		return this.engine.getMetabolicTelemetry(filePath)
+	}
 }

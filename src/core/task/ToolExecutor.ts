@@ -634,8 +634,7 @@ export class ToolExecutor {
 				await this.say("error_retry" as any, preExecResult.error!)
 				// Use specialized architectural correction response to encourage repair/retry
 				this.taskState.consecutiveMistakeCount++
-				const score = this.guard.engine.computeIntegrityScore(preExecResult.violations || [])
-				this.pushToolResult((formatResponse as any).architecturalCorrection(preExecResult.error!, score), block)
+				this.pushToolResult((formatResponse as any).architecturalCorrection(preExecResult.error!), block)
 				return
 			}
 			// Surface pre-execution architectural guidance (e.g. degraded enforcement warnings)
@@ -701,9 +700,8 @@ export class ToolExecutor {
 				(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
 				block.params.path
 			) {
-				const layer = this.guard.getLayerForPath(path.resolve(this.cwd, block.params.path))
-				const score = this.guard.engine.computeIntegrityScore(postExecResult.violations || [])
-				const summary = (formatResponse as any).postExecutionSummary(layer, score, postExecResult.violations)
+				const telemetry = (this.guard as any).getMetabolicTelemetry(block.params.path)
+				const summary = (formatResponse as any).postExecutionSummary(telemetry, postExecResult.violations)
 				this.say("text", summary).catch(() => {})
 			} else if (postExecResult.warning) {
 				this.say("text", postExecResult.warning).catch(() => {})
