@@ -52,8 +52,22 @@ The [ArchitectureHealTool](file:///Users/bozoegg/Downloads/codemarie-new/src/cor
     1. Runs **Canonicalization** (fixing relative imports to `@` aliases).
     2. Runs **Tag Alignment** (ensuring the `[LAYER: ...]` matches the file's physical location).
     3. Triggers optimization suggestions based on the current fingerprint.
+- **Wave-Front Healing (V90)**: The primary mechanism for **Cascading Stabilization**. When a file is modified, the garbage collector identifies its dependent modules and schedules a recursive sweep (up to depth 2), ensuring that improvements in core logic are propagated project-wide in a single turn.
 
-## 4. Integrity Projections (The Simulator)
+## 4. The Sovereign Metabolism (Pass 8)
+
+The substrate now manages its own "Caloric Budget" through **Adaptive Metabolism**:
+
+- **Metabolic Velocity**: Turn velocity is no longer static. High-quality work (Karma) grants **Velocity Expansion (1.5x)**, while architectural decay (Drift) induces **Metabolic Braking (0.5x)**.
+- **Structural Karma**: A reward system that recognizes refactors that reduce total entropy by > 5%. Earned Karma resets strike counts and pardons current metabolic pressure.
+- **Immune-Driven Hardening**: Integrated with the **PathogenStore**. Files with a history of failure (Chronic Violators) undergo **Deep Forensic Scans**, enforcing absolute structural purity during every sweep.
+
+## 5. Substrate Immortality & Axiomatic Drift
+
+The architectural truth is now self-healing and continuously monitored:
+
+- **Self-Healing Registry (V93)**: If the project registry is lost or corrupted, the system autonomously performs a full recursive re-indexing of the substrate.
+- **Axiomatic Drift Sensing**: Real-time ratio tracking of pure-layer imports vs. cross-layer leakage. Drift scores are reported in every audit to prevent gradual structural erosion.
 
 The [SimulationEngine](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SimulationEngine.ts) provides a "Pre-flight Prophet" that forecasts the architectural future.
 
@@ -72,3 +86,6 @@ When performing an architectural audit, the system generates a **DoctorReport** 
 
 > [!CAUTION]
 > **Substrate Integrity Score < 70**: Triggers the **Architectural Alarm**. In this state, the agent is restricted to `HEAL` operations only until sovereignty is restored.
+
+> [!NOTE]
+> **V14 Protocol Active**: Incorporates Adaptive Metabolism, Wave-Front Healing, and Immune Memory.

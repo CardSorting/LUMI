@@ -59,7 +59,12 @@ When performing a mission-critical refactor (e.g., `decompose_sovereign_module`)
 ## 🗺️ Visual Sovereignty
 Use `generate_sovereign_map` to visualize the structural health and coupling of the substrate. High integrity is marked by low coupling between layers and high internal cohesion within Domain modules.
 
-### 2. Axiomatic Scaffolding (Born Sovereign)
-Use the `scaffold_sovereign_module` tool to create new components.
-- **Command**: `scaffold_sovereign_module { name: "UserAuth", layer: "domain" }`
 - **Blueprint Outcome**: The tool ensures the correct directory, file name, `[LAYER]` tag, and base template are applied instantly. Never create files manually if you can scaffold.
+
+## 🌊 Wave-Front Healing (V90)
+Automated stabilization is now recursive. When you fix a symbol in a module, the Garbage Collector will automatically audit its **dependent modules** to ensure the fix propagated correctly. This achieves project-wide stability in a single turn.
+
+## ✨ The Sovereign Economy (Incentives)
+- **Structural Karma**: Earned by reducing project-wide entropy by > 5%. Karma pardons all strikes and resets metabolic pressure.
+- **Metabolic Velocity**: Your write/read budget is now adaptive. High-Karma agents gain **1.5x velocity**; introduction of Axiomatic Drift induces **0.5x velocity braking**.
+- **Immune Memory**: Failure patterns are tracked. Files with chronic issues (Pathogens) trigger **Deep Forensic Scans** that are more restrictive during cleanup.
