@@ -63,8 +63,25 @@ The architectural truth is now self-healing and continuously monitored:
 
 The [SimulationEngine](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SimulationEngine.ts) provides a "Pre-flight Prophet" that forecasts the architectural future.
 
-- **Drift Forecast**: Projects the **Integrity Score** impact of a proposed change. If a move or edit would drop global integrity by > 10%, the operation is warned or soft-locked.
 - **Archetype Prediction**: Before a file is moved to a new layer, the simulator checks if its current fingerprint is compatible with the target layer's archetype.
+
+## 6. Industrial Fission: The Sovereign Decomposer
+
+To manage high-mass modules and prevent agentic failure spirals, the [SovereignDecomposer](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SovereignDecomposer.ts) implements **Metabolic Fission**. This engine is the ultimate architectural scalpel for high-velocity refactoring.
+
+### Proactive metabolic Guardians (V150)
+The [SemanticAxiomEngine](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SemanticAxiomEngine.ts) enforces a hard **1500-line metabolic limit** per module. A **PREEMPTIVE_THRESHOLD (1200 lines)** triggers active fission recommendations before the blocker is reached.
+
+### Forensic Fission Strategy (V160-V170)
+- **Extraction Islands**: The decomposer maps internal symbol graphs to find "Islands of Logic" (disconnected subgraphs) that can be extracted with zero external impact.
+- **Risk-Adjusted Fission**: Every step is categorized (LOW/MEDIUM/HIGH) based on afferent and efferent coupling risk.
+- **Fission Blueprints**: The tool automatically performs **Import Forensics** to synthesize perfectly compatible, copy-pasteable module boilerplate, including all filtered external dependencies.
+
+### Industrial Sovereignty (V180 Hardening)
+The final pass of industrial hardening adds **Loop-Closing Fission**:
+- **Zombie Symbol Sensing**: Identifies internal helper symbols used exclusively by the extraction target and groups them into the fission blueprint.
+- **Post-Refactor Simulation**: Every plan includes a **Projected Health Metric** (e.g., `Health: 60/100 -> 95/100`), calculating the exact structural gain achieved by the fission.
+- **Source Healing Plans**: Provides the agent with a deterministic guide for removing extracted mass from the source file to restore module sovereignty.
 
 ---
 

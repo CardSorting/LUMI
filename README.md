@@ -25,6 +25,7 @@ DietCode enforces a rigorous architectural pattern known as **Joy-Zoning**. It a
 The **Spider Engine** represents a fundamental shift from static code analysis to **Forensic Structural Intelligence**:
 *   **Deterministic Forensics**: Uses real-time AST sensing to verify symbol consumption project-wide with 100% accuracy.
 *   **Incremental $O(1)$ Audits**: Uses a CAS-hash based model to provide near-instantaneous architectural validation without scanning the entire repo.
+*   **Sovereign Decomposer (Industrial Fission)**: Manages architectural mass by enforcing a hard **1500-line limit** per module. Uses **Metabolic Fission** and **Automated Blueprinting** to guide agents through zero-friction module extraction, ensuring structural sovereignty is never compromised.
 *   **Blast Radius Traceability**: Calculates the physical impact of structural changes, identifying potential "Structural Entropy" growth before they manifest as build failures.
 
 ### 🔮 Oracle Grade Suggestion Engine
