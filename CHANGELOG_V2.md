@@ -1,5 +1,12 @@
 # Changelog (V2)
 
+## [4.7.1] - 2026-04-15
+
+### Changed
+- Production VSIX build and version bump.
+- Hardening of architectural integrity and policy modules.
+- Optimization of scratchpad workflow and agentic self-correction.
+
 ## [4.5.4] - 2026-04-15
 
 ### Added
