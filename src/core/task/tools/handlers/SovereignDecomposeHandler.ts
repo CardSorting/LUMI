@@ -38,25 +38,52 @@ export class SovereignDecomposeHandler implements IToolHandler {
 
 			const decomposer = new SovereignDecomposer()
 			const plan = decomposer.analyze(relPath, content)
+			const totalLines = content.split("\n").length
 
 			if (plan.steps.length === 0) {
 				return formatResponse.toolResult(
-					`The module '${relPath}' is already structurally sovereign.\n` + `Integrity Score: ${plan.integrityScore}%`,
+					`The module '${relPath}' is already structurally sovereign.\n` +
+						`Integrity Score: ${plan.integrityScore}%\n` +
+						`Line Count: ${totalLines} / 1500`,
 				)
 			}
 
 			let response =
-				`Structural Decomposition Plan for '${relPath}'\n` +
-				`Integrity Score: ${plan.integrityScore}% (DEGRADED)\n` +
-				`Layer: ${plan.currentLayer}\n\n` +
+				`Structural Decomposition Plan for: ${plan.filePath}\n` +
+				`Current Layer: ${plan.currentLayer.toUpperCase()}\n` +
+				`Build Health: ${plan.buildHealth} / 100${plan.projectedHealth ? ` -> PROJECTED: ${plan.projectedHealth} / 100 [V180 Recovery]` : ""}\n` +
+				`Integrity Score: ${plan.integrityScore} / 100${plan.projectedIntegrity ? ` -> PROJECTED: ${plan.projectedIntegrity} / 100` : ""}\n` +
+				`Line Count: ${totalLines} / 1500${totalLines > 1200 ? " (WARNING: Approaching Industrial Limit)" : ""}\n\n` +
+				`V180 SOURCE HEALING: After creating modules from the Blueprints below, remove the extracted code from ${plan.filePath} to achieve the projected health recovery.\n\n` +
 				`RECOMMENDED STEPS:\n`
 
-			plan.steps.forEach((step, index) => {
-				response +=
-					`${index + 1}. [${step.action}] ${step.target} -> ${step.destination}\n` + `   Reason: ${step.reason}\n`
+			plan.steps.sort((a, b) => {
+				const riskMap = { LOW: 0, MEDIUM: 1, HIGH: 2 }
+				return (riskMap[a.risk || "MEDIUM"] || 1) - (riskMap[b.risk || "MEDIUM"] || 1)
 			})
 
-			response += `\nDirective: Follow these steps to restore sovereignty. Use 'scaffold_sovereign_module' to create the destination files if they don't exist.`
+			plan.steps.forEach((step, index) => {
+				const category = step.action === "EXTRACT" ? "FISSION" : "AXIOMATIC"
+				const riskEmoji = step.risk === "LOW" ? "✅" : step.risk === "MEDIUM" ? "⚠️" : "🛑"
+
+				response +=
+					`${index + 1}. [${step.risk || "MEDIUM"}] [${category}: ${step.action}] ${step.target} -> ${step.destination} ${riskEmoji}\n` +
+					`   Reason: ${step.reason}\n`
+
+				if (step.boilerplate) {
+					response += `   BLUEPRINT:\n\`\`\`typescript\n${step.boilerplate}\n\`\`\`\n`
+				}
+
+				if (step.intentSuggestion) {
+					response += `   Intent: ${step.intentSuggestion}\n`
+				}
+			})
+
+			if (totalLines > 1000) {
+				response += `\nProjected State: Executing [FISSION] steps will increase Build Health to ${plan.projectedHealth}/100 and ensure module sovereignty.`
+			}
+
+			response += `\n\nDirective: Follow these steps to restore sovereignty. Use 'scaffold_sovereign_module' to create the destination files if they don't exist.`
 
 			return formatResponse.toolResult(response)
 		} catch (error) {

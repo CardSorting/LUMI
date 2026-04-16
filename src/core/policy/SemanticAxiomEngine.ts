@@ -16,6 +16,7 @@ export interface AxiomViolation {
  */
 export class SemanticAxiomEngine {
 	private readonly SIMPLICITY_THRESHOLD = 1500 // V15: Industrial limit for Domain logic
+	private readonly PREEMPTIVE_THRESHOLD = 1200 // V150: Proactive warning threshold
 	private readonly decomposer = new SovereignDecomposer()
 
 	constructor() {}
@@ -35,17 +36,23 @@ export class SemanticAxiomEngine {
 		// 1. Simplicity Axiom (AST Grounded)
 		if (node.layer === "domain" || node.layer === "core") {
 			const lines = content.split("\n").length
-			if (lines > this.SIMPLICITY_THRESHOLD && !isExempt) {
+			if (lines > this.PREEMPTIVE_THRESHOLD && !isExempt) {
+				const isHardBlock = lines > this.SIMPLICITY_THRESHOLD
 				const plan = this.decomposer.analyze(filePath, content, node)
 				const steps = plan.steps
-					.map((s, i) => `${i + 1}. [${s.action}] ${s.target} -> ${s.destination}: ${s.reason}`)
+					.map((s) => {
+						const category = s.action === "EXTRACT" ? "FISSION" : "AXIOMATIC"
+						return `- [${category}: ${s.action}] ${s.target} -> ${s.destination}: ${s.reason}`
+					})
 					.join("\n")
 
 				violations.push({
 					axiom: "SIMPLICITY",
-					severity: "ERROR",
-					message: `Cognitive Bloat: ${node.layer.toUpperCase()} file exceeds industrial limit (${lines}/${this.SIMPLICITY_THRESHOLD} lines).`,
-					remediation: `Sunder the module into specialized sub-components (Metabolic Fission). Recommended Decomposition Plan:\n\n${steps || "No automatic split detected. Manual decomposition required."}`,
+					severity: isHardBlock ? "ERROR" : "WARN",
+					message: isHardBlock
+						? `🛑 COGNITIVE BLOAT (LIMIT EXCEEDED): ${node.layer.toUpperCase()} file exceeds industrial limit (${lines}/${this.SIMPLICITY_THRESHOLD} lines).`
+						: `⚠️ COGNITIVE BLOAT (PRE-EMPTIVE): ${node.layer.toUpperCase()} file is approaching industrial limit (${lines}/${this.SIMPLICITY_THRESHOLD} lines).`,
+					remediation: `Sunder the module into specialized sub-components (Metabolic Fission). Follow the recommended plan to restore simplicity:\n\n${steps || "Manual decomposition required."}`,
 				})
 			}
 		}
