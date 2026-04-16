@@ -67,16 +67,24 @@ To support high-velocity development, the substrate optimizes for "flow state" b
 - **Metabolic Synthesis**: Atomic writes to the same file in a single turn are discounted by **50%**, rewarding iterative refinement.
 - **Aesthetic Agility**: Changes to whitespace, line breaks, or comments (Aesthetic Hash) have a **90% discount** and never trigger blockades.
 
-## 🩹 Forensic Resilience & Recovery (V140 Industrial)
+## 🩹 Forensic Resilience & Recovery (V140-V189 Industrial)
 The substrate now operates on a platform of **Forensic Realism**.
 - **Deterministic Traceability**: Substrate repairs are grounded in physical structural proof. Imports and member signatures are extracted directly from the graph using AST forensics.
+- **Neural Forensics (V188-V189)**: Every turn extracts the **Cognitive Focus (🧠)** symbols currently under investigation. This prevents "investigative drift" and ensures the agent remains grounded in the primary domain.
 - **Reactive Stabilization**: Build errors trigger asynchronous sweeps by the Garbage Collector. These sweeps focus strictly on repairing verified violations, ensuring that development flow is never blocked by hypothetical substrate predictions.
-- **Forensic repairLog**: Use the repairLog in the Garbage Collector to trace any autonomous structural heals applied during your session.
+
+## 🛡️ The Substrate Immune System (V189)
+Designed to protect the most venerable parts of the codebase, the **Immune System** monitors for high-entropy violations.
+- **Fragility Interdiction**: Modules with a **Change Complexity Index (CCI) > 0.8** trigger defensive alarms. Broad mutations in these clusters are restricted to prevent regression spirals.
+- **Concurrent Drift**: The substrate detects external modifications by comparing current file hashes against the cognitive registry. If drift is detected, the agent is nudged to re-read and re-synchronize.
 
 ## 🌊 Wave-Front Healing (Reactive)
 Automated stabilization is now reactive and forensic. When a build error is detected, the Garbage Collector identifies the required repairs and schedules a recursive sweep of the dependent wave-front, achieving project-wide stability in a deterministic loop.
 
 ## ✨ The Sovereign Economy (Incentives)
 - **Structural Karma**: Earned by reducing project-wide entropy by > 5%. Karma pardons all strikes and resets metabolic pressure.
+- **Seismic Karma (V189)**: Awarded for "Double Down" logic implementation—deep refactoring that simplifies high-fragility clusters.
 - **Metabolic Velocity**: Your write/read budget is now adaptive. High-Karma agents gain **1.5x velocity**; introduction of Axiomatic Drift induces **0.5x velocity braking**.
+- **Substrate Vitality (💓 Pulse)**: A real-time heartbeat of the project. If Vitality drops below 40%, the substrate enters **Safe Mode**, requiring a `# SOVEREIGN BREATH` to continue.
 - **Immune Memory**: Failure patterns are tracked. Files with chronic issues (Pathogens) trigger **Deep Forensic Scans** that are more restrictive during cleanup.
+
