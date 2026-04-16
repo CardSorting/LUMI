@@ -14,7 +14,7 @@ async function main() {
 	const engine = new SpiderEngine(cwd)
 	const healer = new RefactorHealer(cwd)
 	const optimizer = new SovereignOptimizer(cwd)
-	const axiomEngine = new SemanticAxiomEngine(cwd)
+	const axiomEngine = new SemanticAxiomEngine()
 
 	console.log("🛸 Starting Sovereign Alignment audit...")
 

@@ -39,6 +39,7 @@ import { PlanModeRespondHandler } from "./handlers/PlanModeRespondHandler"
 import { ReadFileToolHandler } from "./handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./handlers/ReportBugHandler"
 import { SearchFilesToolHandler } from "./handlers/SearchFilesToolHandler"
+import { SovereignBreathHandler } from "./handlers/SovereignBreathHandler"
 import { SovereignDecomposeHandler } from "./handlers/SovereignDecomposeHandler"
 import { SovereignDoctorHandler } from "./handlers/SovereignDoctorHandler"
 import { SovereignMapHandler } from "./handlers/SovereignMapHandler"
@@ -156,6 +157,7 @@ export class ToolExecutorCoordinator {
 		[DietCodeDefaultTool.SOVEREIGN_QUERY]: (_v: ToolValidator) => new SovereignQueryHandler(),
 		[DietCodeDefaultTool.SOVEREIGN_DECOMPOSE]: (_v: ToolValidator) => new SovereignDecomposeHandler(),
 		[DietCodeDefaultTool.SOVEREIGN_MAP]: (_v: ToolValidator) => new SovereignMapHandler(),
+		[DietCodeDefaultTool.SOVEREIGN_BREATH]: (_v: ToolValidator) => new SovereignBreathHandler(),
 		[DietCodeDefaultTool.RENAME]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.MOVE]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.DELETE]: (_v: ToolValidator) => undefined,

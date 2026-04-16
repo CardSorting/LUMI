@@ -25,6 +25,7 @@ export class MetabolicMonitor {
 	private refactorThreshold = 50 // V33: Ethereal budget for refactors
 	private thresholdMultiplier = 1.0 // V80: Adaptive Metabolism
 	private resonanceMultiplier = 1.0 // V100: Cognitive Resonance
+	private sessionVersion = 1 // V150: State Evolution
 
 	/**
 	 * Records a read operation.
@@ -372,8 +373,62 @@ export class MetabolicMonitor {
 	public setResonance(multiplier: number) {
 		this.resonanceMultiplier = multiplier
 	}
+	/**
+	 * V150: Cognitive Immortality.
+	 * Serializes the current metabolic registry to a transport-safe object.
+	 */
+	public exportState(): MetabolicState {
+		const registryObj: Record<string, MetabolicMetrics> = {}
+		for (const [p, m] of this.registry.entries()) {
+			// Convert Set to Array for JSON safety
+			registryObj[p] = { ...m, symbolObservations: Array.from(m.symbolObservations) as any }
+		}
+
+		return {
+			version: this.sessionVersion,
+			registry: registryObj,
+			thresholdMultiplier: this.thresholdMultiplier,
+			resonanceMultiplier: this.resonanceMultiplier,
+			timestamp: Date.now(),
+		}
+	}
+
+	/**
+	 * V150: Substrate Restoration.
+	 * Restores metabolic state from a serialized object.
+	 */
+	public importState(state: MetabolicState) {
+		if (!state || state.version !== this.sessionVersion) {
+			Logger.warn("[MetabolicMonitor] Incompatible state version. Resetting memory.")
+			this.resetMetabolicPressure()
+			return
+		}
+
+		this.thresholdMultiplier = state.thresholdMultiplier
+		this.resonanceMultiplier = state.resonanceMultiplier
+
+		for (const [p, m] of Object.entries(state.registry)) {
+			this.registry.set(p, {
+				...m,
+				symbolObservations: new Set(m.symbolObservations),
+			})
+		}
+		Logger.info(`[MetabolicMonitor] Substrate Restored: ${this.registry.size} files re-enlisted in cognitive registry.`)
+	}
 
 	public getResonance(): number {
 		return this.resonanceMultiplier
 	}
+}
+
+/**
+ * V150: Industrial Maturity.
+ * Helper for deep state serialization.
+ */
+export interface MetabolicState {
+	version: number
+	registry: Record<string, MetabolicMetrics>
+	thresholdMultiplier: number
+	resonanceMultiplier: number
+	timestamp: number
 }

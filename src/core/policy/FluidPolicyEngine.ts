@@ -1,14 +1,10 @@
-/**
- * [LAYER: CORE]
- */
-
 import { DietCodeDefaultTool } from "@shared/tools"
 import { createHash } from "crypto"
 import fs from "fs/promises"
 import * as path from "path"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { Logger } from "@/shared/services/Logger"
-import { getLayer, isLayerTagSupported, suggestLayerForContent } from "@/utils/joy-zoning"
+import { getLayer, suggestLayerForContent } from "@/utils/joy-zoning"
 import { ToolUse } from "../assistant-message"
 import { ContextStalenessTracker } from "../context/ContextStalenessTracker"
 import { AuditRecorder } from "../integrity/AuditRecorder.js"
@@ -18,13 +14,15 @@ import { PathogenStore } from "../integrity/PathogenStore"
 import { StateManager } from "../storage/StateManager"
 import { RefactorHealer } from "../task/tools/RefactorHealer"
 import { SovereignScribe } from "../task/tools/utils/SovereignScribe"
-import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine"
+import { AxiomVerificationService } from "./AxiomVerificationService"
+import { SemanticAxiomEngine } from "./SemanticAxiomEngine"
 import { SimulationEngine } from "./SimulationEngine.js"
 import { SovereignForensics } from "./SovereignForensics"
 import { SovereignGarbageCollector } from "./SovereignGarbageCollector"
 import { SovereignOptimizer } from "./SovereignOptimizer"
 import { SovereignPolicy } from "./SovereignPolicy.js"
-import { SovereignProtocol } from "./SovereignProtocol"
+import { SovereignDiagnostics, SovereignProtocol } from "./SovereignProtocol"
+import { SovereignTelemetrics } from "./SovereignTelemetrics"
 import { RefactoringSuggestion, SpiderRefactorer } from "./SpiderRefactorer.js"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
 import { TspPolicyPlugin } from "./TspPolicyPlugin.js"
@@ -69,16 +67,19 @@ export class FluidPolicyEngine {
 	private pathogens: PathogenStore
 	private buildAlarmActive = false
 	private alarmViolations: string[] = []
+	private stateRestored = false // V150: Immortality tracking
 	private lastBuildHealth = 100
 	private lastViolationCount = 0
+	private telemetrics: SovereignTelemetrics
+	private verification: AxiomVerificationService
 	private modifiedLayers: Set<string> = new Set()
-	private refactorHealer: RefactorHealer
-	private forensics: SovereignForensics // V33: Ethereal Persistence
-	private garbageCollector: SovereignGarbageCollector
 	private refactorTurnsRemaining = 0 // V70: Sovereign Refactor Window
 	private lastEntropyScore = 1.0 // V80: Karma Tracking
 	private restorationTokens: Map<string, number> = new Map() // V100: Recovery Buffers
 	private gracePeriods: Map<string, number> = new Map() // V100: Soft-Lock attempts
+	private refactorHealer: RefactorHealer
+	private forensics: SovereignForensics
+	private garbageCollector: SovereignGarbageCollector
 
 	constructor(
 		private cwd: string,
@@ -91,13 +92,21 @@ export class FluidPolicyEngine {
 		this.simulationEngine = new SimulationEngine(this.cwd)
 		this.stalenessTracker = new ContextStalenessTracker(this.cwd)
 		this.dashboardGenerator = new DashboardGenerator(this.cwd)
-		this.axiomEngine = new SemanticAxiomEngine(this.cwd)
+		this.axiomEngine = new SemanticAxiomEngine()
 		this.metabolicMonitor = new MetabolicMonitor()
 		this.optimizer = new SovereignOptimizer(this.cwd)
 		this.pathogens = new PathogenStore(this.cwd)
 		this.refactorHealer = new RefactorHealer(this.cwd)
 		this.forensics = new SovereignForensics(this.cwd, this.metabolicMonitor, this.spiderEngine)
 		this.garbageCollector = new SovereignGarbageCollector(this.cwd, this.spiderEngine, this.pathogens)
+		this.telemetrics = new SovereignTelemetrics(this.cwd, this.metabolicMonitor, this.spiderEngine)
+		this.verification = new AxiomVerificationService(
+			this.cwd,
+			this.spiderEngine,
+			this.axiomEngine,
+			this.pathogens,
+			this.forensics,
+		)
 
 		// V16: Warm graph startup
 		this.spiderEngine.loadRegistry().catch((e: unknown) => Logger.error("[FluidPolicyEngine] Failed to load registry:", e))
@@ -108,36 +117,13 @@ export class FluidPolicyEngine {
 	 * Explicitly used by orchestrator during a Cognitive Reflection Nudge to grant a clean slate.
 	 */
 	public resetSystemPressure(): void {
-		this.metabolicMonitor.resetMetabolicPressure()
+		this.telemetrics.resetSystemPressure()
 		this.alarmViolations = []
-		this.modifiedLayers.clear()
-		this.lastBuildHealth = 100
-		Logger.info("[FluidPolicyEngine] Unified System Pressure Reset (Metabolic & Structural).")
 	}
 
-	/**
-	 * Returns a compiled diagnostic report of current architectural blockades and metabolic hotspots.
-	 * Injected into the Breather Nudge BEFORE pressure is reset, so the agent learns *why* it was failing.
-	 */
 	public getSystemDiagnostics(): string {
-		const violations = this.spiderEngine.getViolations()
-		const stats = this.metabolicMonitor.getVitalityStats()
-		const buildHealth = this.computeBuildHealth(violations.map((v) => v.message))
-
-		const currentEntropy = this.spiderEngine.computeEntropy()
-		return SovereignProtocol.generateAuditTemplate("System Recovery", {
-			buildHealth,
-			metabolicPressure: `${stats.totalWrites} writes across ${this.spiderEngine.nodes.size} nodes`,
-			buildErrors: violations.filter((v) => v.severity === "ERROR").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
-			lintWarnings: violations.filter((v) => v.severity === "WARN").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
-			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
-			resonanceDamping: this.metabolicMonitor.getResonance(),
-			restorationActive: Array.from(this.restorationTokens.values()).some((t) => t > 0),
-			metabolicVelocity:
-				1.0 +
-				(this.lastEntropyScore - currentEntropy.score > 0.05 ? 0.5 : 0) -
-				(currentEntropy.components.couplingScore > 0.15 ? 0.5 : 0),
-		})
+		// V18: Forwarding entropy context for velocity calculation
+		return this.telemetrics.getSystemDiagnostics(this.lastEntropyScore)
 	}
 
 	/**
@@ -189,135 +175,23 @@ export class FluidPolicyEngine {
 		this.sealReason = reason
 	}
 
-	/**
-	 * Returns proactive architectural guidance for a given file's layer.
-	 */
 	public getFileLayerContext(filePath: string): string {
 		const layer = this.getCachedLayer(filePath)
-		const fileName = path.basename(filePath)
-
-		switch (layer) {
-			case "domain":
-				return `📍 ${fileName} → DOMAIN layer\n  ✅ Pure business logic, models, rules, value objects\n  🚫 No I/O, no external imports, no side effects`
-			case "core":
-				return `📍 ${fileName} → CORE layer\n  ✅ Orchestration, task coordination, prompt assembly\n  🚫 Avoid raw I/O — delegate to Infrastructure adapters`
-			case "infrastructure":
-				return `📍 ${fileName} → INFRASTRUCTURE layer\n  ✅ Adapters, API clients, persistence, external services\n  🚫 No business rules (keep those in Domain)`
-			case "ui":
-				return `📍 ${fileName} → UI layer\n  ✅ Components, views, event handlers, visual state\n  🚫 No business logic, no direct I/O`
-			case "plumbing":
-				return `📍 ${fileName} → PLUMBING layer\n  ✅ Stateless utilities, formatters, pure helpers\n  🚫 No dependencies on Domain, Infrastructure, or UI`
-			default:
-				return `📍 ${fileName} → INFRASTRUCTURE layer (default)\n  ✅ Adapters and integrations\n  🚫 No business rules`
-		}
+		return this.verification.getFileLayerContext(filePath, layer)
 	}
 
-	/**
-	 * Generates a concise, actionable correction hint for architectural violations.
-	 * Includes code snippets for immediate resolution.
-	 */
 	public getCorrectionHint(errors: string[], filePath?: string): string {
-		const fixes: string[] = []
-		const snippets: string[] = []
-		const supportsTags = filePath ? isLayerTagSupported(filePath) : true
-
-		for (const err of errors) {
-			if ((err.includes("tag") || err.includes("Missing mandatory")) && supportsTags) {
-				const layer = filePath ? this.getCachedLayer(filePath).toUpperCase() : "DOMAIN"
-				fixes.push(`Add a mandatory [LAYER: ${layer}] tag to the file header.`)
-				snippets.push(`/**\n * [LAYER: ${layer}]\n */`)
-			} else if (err.includes("Geographic Misalignment")) {
-				fixes.push("Move the file to the physical directory that matches its declared [LAYER] tag.")
-			} else if (err.includes("relative navigation")) {
-				fixes.push("Flatten the project structure or use '@/' aliases to avoid deep relative imports (max 3 levels).")
-				snippets.push("import { ... } from '@/core/logic'")
-			} else if (err.includes("import")) {
-				fixes.push("Move the import to the appropriate layer, or extract an interface in Domain.")
-				if (err.includes("Domain layer")) {
-					snippets.push("// Domain Leak: Move this to src/domain/interfaces/ and depend on the interface instead")
-					snippets.push("export interface IMyContract { ... }")
-				}
-			} else if (err.includes("class")) {
-				fixes.push("Split into separate files — one class per file in Domain.")
-			} else if (err.includes("circular") || err.includes("Circular Dependency")) {
-				fixes.push(
-					"Break the circular dependency by extracting shared logic to a lower layer (Plumbing) or using Dependency Inversion via interfaces (Domain).",
-				)
-				// PRODUCTION HARDENING: Provide high-fidelity extraction targets based on common patterns
-				snippets.push(
-					"// Pattern A: Extract shared state/logic to src/plumbing/shared-utils.ts\n// Pattern B: Define a listener interface in src/domain/interfaces/ and use events/callbacks.\nexport interface IEventListener { onAction(): void; }",
-				)
-				snippets.push(
-					"// Pattern C: Use an EventEmitter for cross-module signaling without direct coupling\nimport { EventEmitter } from 'events';\nexport const bridge = new EventEmitter();",
-				)
-			} else if (err.includes("Sovereign Leak") || err.includes("DEPENDENCY_INVERSION")) {
-				fixes.push("Domain/Core logic cannot depend on concrete Infrastructure. Extract an interface.")
-				// PRODUCTION HARDENING: Explicitly suggest the standard extraction pattern with dynamic names
-				const interfaceMatch = err.match(/concrete implementation: ([^,]+)/)
-				const baseName = interfaceMatch ? interfaceMatch[1].split("/").pop()?.split(".")[0] : "Service"
-				const interfaceName = `I${baseName?.charAt(0).toUpperCase()}${baseName?.slice(1)}`
-
-				snippets.push(
-					`/**\n * [LAYER: DOMAIN]\n * ${interfaceName}: Industrial contract synthesized to restore Dependency Inversion.\n */\nexport interface ${interfaceName} {\n\tsync(): Promise<void>; // Industrial member placeholder\n}`,
-				)
-				snippets.push(
-					`// 1. Move implementation to src/infrastructure/adapters/\n// 2. Define contract in src/domain/interfaces/${interfaceName}.ts\n// 3. Inject implementation into Core at runtime\nexport interface ${interfaceName} { sync(): Promise<void>; }`,
-				)
-			} else {
-				fixes.push("Review the violation and restructure accordingly.")
-			}
-		}
-
-		const uniqueFixes = [...new Set(fixes)]
-		let response = `💡 How to fix:\n${uniqueFixes.map((f) => `  → ${f}`).join("\n")}`
-		if (snippets.length > 0) {
-			response += `\n\n📝 Suggested Code:\n${snippets.map((s) => `\`\`\`typescript\n${s}\n\`\`\``).join("\n")}`
-		}
-		return response
+		const layer = filePath ? this.getCachedLayer(filePath) : undefined
+		return this.verification.getCorrectionHint(errors, filePath, layer)
 	}
 
-	/**
-	 * Computes the build health score (0-100).
-	 * Every violation reduces the score based on its weighted severity.
-	 *
-	 * Weights (Revised for Build Integrity):
-	 * - Build Error: 20 points
-	 * - Linter Warning: 5 points
-	 * - Info/Smell: 1 point
-	 */
 	public computeBuildHealth(violations: string[]): number {
-		if (violations.length === 0) return 100
-
-		let totalPenalty = 0
-		for (const violation of violations) {
-			if (violation.includes("Circular Dependency")) {
-				totalPenalty += 30 // CRITICAL: Structural death
-			} else if (violation.includes("[ERROR]") || violation.includes("Build Error")) {
-				totalPenalty += 20
-			} else if (violation.includes("Geographic Misalignment") || violation.includes("Layer violation")) {
-				totalPenalty += 15 // High-gravity regression
-			} else if (
-				violation.includes("[WARN]") ||
-				violation.includes("Linter Warning") ||
-				violation.includes("Ghost import")
-			) {
-				totalPenalty += 5
-			} else {
-				totalPenalty += 1
-			}
-		}
-
-		const base = 100
-		const penalty = Math.min(95, totalPenalty)
-		const score = Math.max(5, base - penalty)
-
-		const isDeclining = score < this.lastBuildHealth
-		const isRecovering = score > this.lastBuildHealth
-		this.lastBuildHealth = score
-		this.spiderEngine.isRecovering = isRecovering
-
+		const lastScore = this.lastBuildHealth
+		const score = this.telemetrics.computeBuildHealth(violations)
 		const config = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
 		const threshold = config.integrityAlertThreshold || 70
+		const isDeclining = score < lastScore
+		const isRecovering = score > lastScore
 
 		if (score < threshold && !this.buildAlarmActive && isDeclining) {
 			this.triggerBuildAlarm(violations)
@@ -364,6 +238,15 @@ export class FluidPolicyEngine {
 	 * Uses progressive enforcement: first domain violation blocks, subsequent ones degrade to warnings.
 	 */
 	public async validatePreExecution(block: ToolUse): Promise<PolicyResult> {
+		if (this.streamId && !this.stateRestored) {
+			await this.restoreMetabolicState()
+		}
+
+		// V150: Sovereign Breath tool is ALWAYS allowed for cognitive recovery
+		if (block.name === DietCodeDefaultTool.SOVEREIGN_BREATH) {
+			return { success: true }
+		}
+
 		// V18/V19: Harmonic Healing Intent Sensing
 		let intent = null
 		const content = (block.params as { content?: string })?.content || ""
@@ -391,7 +274,7 @@ export class FluidPolicyEngine {
 
 			// V28: Virtual Substrate Fallback (Search history if disk is empty)
 			if (!hasAudit && !hasBreath && this.streamId) {
-				const history = await (orchestrator as any).getConversationHistory(this.streamId)
+				const history = await orchestrator.getConversationHistory(this.streamId)
 				if (history) {
 					const virtual = SovereignScribe.findVirtualAuditInHistory(history)
 					if (virtual.valid) {
@@ -409,7 +292,7 @@ export class FluidPolicyEngine {
 			(block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) &&
 			(this.metabolicMonitor.getCooldownStatus().active || this.buildAlarmActive)
 		) {
-			intent = this.detectHealingIntent(block)
+			intent = this.verification.detectHealingIntent(block)
 			if (intent) {
 				Logger.info(`[FluidPolicyEngine] Healing Intent detected. Resetting metabolic pressure for ${intent}.`)
 				this.resetSystemPressure()
@@ -525,7 +408,7 @@ export class FluidPolicyEngine {
 
 				// V24: Symbol Lockdown (Audit-to-Action Binding)
 				if (hasAudit && !isScratchpad) {
-					const isCovered = this.isImplicitlyAudited(targetPath, scratchpadContent, block)
+					const isCovered = this.verification.isImplicitlyAudited(targetPath, scratchpadContent, block)
 
 					if (!isCovered) {
 						// Fallback to symbol-level check if not implicitly covered
@@ -562,16 +445,7 @@ export class FluidPolicyEngine {
 				if (!isScratchpad && block.name === DietCodeDefaultTool.FILE_EDIT) {
 					const content = (block.params as { content: string }).content
 					if (content) {
-						const newViolations = this.axiomEngine.validateAxioms(targetPath, content, this.spiderEngine)
-						const oldViolations = this.spiderEngine.getViolations().filter((v) => v.path === absolutePath)
-						const oldAxiomMapped: AxiomViolation[] = oldViolations.map((v) => ({
-							axiom: v.id,
-							severity: v.severity === "INFO" ? "WARN" : v.severity,
-							message: v.message,
-							remediation: v.remediation,
-						}))
-						const result = this.axiomEngine.compareAxiomSessions(oldAxiomMapped, newViolations)
-
+						const result = this.verification.calculateAxiomaticDrift(targetPath, content)
 						if (result.status === "NEGATIVE" && !scratchpadContent.includes("# SOVEREIGN_AGILE")) {
 							return {
 								success: false,
@@ -643,7 +517,9 @@ export class FluidPolicyEngine {
 					let directive = ""
 					if (compare.status === "ZERO_SUM") {
 						const suggestions = SpiderRefactorer.getRefactoringSuggestions(this.spiderEngine)
-						const extract = suggestions.find((s) => s.type === "EXTRACT" && filePath.includes(s.target))
+						const extract = suggestions.find(
+							(s: RefactoringSuggestion) => s.type === "EXTRACT" && filePath.includes(s.target),
+						)
 						const synthesis = extract?.synthesis
 							? `\n\n📝 SYNTHESIZED CONTRACT:\n\`\`\`typescript\n${extract.synthesis}\n\`\`\``
 							: ""
@@ -745,7 +621,7 @@ export class FluidPolicyEngine {
 				block.name === DietCodeDefaultTool.APPLY_PATCH ||
 				block.name === DietCodeDefaultTool.BASH)
 		) {
-			const intent = this.detectHealingIntent(block)
+			const intent = this.verification.detectHealingIntent(block)
 
 			// Detect #HEAL or #FIX in the scratchpad (via isHealingMode logic)
 			if (!intent && !isHealingMode) {
@@ -883,7 +759,7 @@ export class FluidPolicyEngine {
 				if (shouldBlock) {
 					const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
 					const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN SOVEREIGNTY BREACH" : "🏗️ CORE INTEGRITY PROTECT"
-					const shield = this.getResilienceShield()
+					const shield = this.telemetrics.getResilienceShield()
 					const healingHint =
 						layer === "domain"
 							? "\n\n🩹 SOVEREIGN HEALING: To bypass this block during complex refactoring, add `[SOVEREIGN_HEALING]` to your file content.\n" +
@@ -1006,6 +882,11 @@ export class FluidPolicyEngine {
 			} catch (e) {
 				Logger.warn("Refactor healer failed in background", { error: e })
 			}
+		}
+
+		// V150: Cognitive Immortality (Eager Persistence)
+		if (this.streamId) {
+			await this.persistMetabolicState()
 		}
 
 		return { success: true }
@@ -1278,7 +1159,7 @@ export class FluidPolicyEngine {
 						const attempts = (this.gracePeriods.get(normPath) || 0) + 1
 						this.gracePeriods.set(normPath, attempts)
 
-						const isHealingIntent = this.detectHealingIntent(block) !== null
+						const isHealingIntent = this.verification.detectHealingIntent(block) !== null
 						const isRefactoringIntent = this.refactorTurnsRemaining > 0 || isHealingIntent
 
 						if (isRefactoringIntent && attempts === 1) {
@@ -1470,117 +1351,52 @@ export class FluidPolicyEngine {
 		return this.spiderEngine.normalizePath(p)
 	}
 
-	/**
-	 * PRODUCTION HARDENING: Consolidates all substrate metrics into a high-fidelity Resilience Shield.
-	 */
-	public getResilienceShield(): string {
-		const metabolic = this.metabolicMonitor.getVitalityStats()
-		const stagnant = this.metabolicMonitor.getStagnantSubstrate()
-		const hotspots = this.spiderEngine.getViolationHotspots()
-
-		const shield = [
-			"\n🛡️ UNIFIED RESILIENCE SHIELD [V12]",
-			"====================================",
-			`METABOLIC: ${metabolic.totalWrites} edits, ${metabolic.totalReads} reads (Doubt: ${metabolic.avgDoubtSignal.toFixed(1)})`,
-			`STRUCTURAL: ${this.spiderEngine.nodes.size} nodes, ${hotspots.length} hotspots detected`,
-			stagnant.length > 0 ? `DECAY: ${stagnant.length} stagnant files detected (Action: Prune)` : "DECAY: 0 stagnant files",
-			"====================================\n",
-		]
-
-		return shield.join("\n")
-	}
-
-	/**
-	 * V18: Detects if the proposed tool execution is an attempt to heal known architectural violations.
-	 */
-	private detectHealingIntent(block: ToolUse): string | null {
-		const content = (block.params as { content?: string })?.content || ""
-		if (!content) return null
-
-		const violations = this.spiderEngine.getViolations()
-		for (const v of violations) {
-			if (!v.remediation) continue
-
-			// Match suggested import lines
-			const importMatch = v.remediation.match(/Suggested Import: (.*)/)
-			if (importMatch && content.includes(importMatch[1])) {
-				return `Resolved Ghost: ${v.message}`
-			}
-
-			// Match explicit intention markers or remediation keywords
-			if (content.includes("#HEAL") || content.includes("[HEALING]")) {
-				return "Explicit Healing Intention"
-			}
-
-			// Match interface extraction markers
-			if (v.id === "SPI-004" && content.includes("interface I") && content.includes("implements I")) {
-				return `Breaking Cycle: ${v.message}`
-			}
-		}
-
-		return null
-	}
-
-	/**
-	 * V27: Ensures that the scratchpad.md exists and is meaningful.
-	 * If missing or uninitialized, it automatically generates a recovery template.
-	 */
-	private async ensureScratchpadIntegrity(taskName = "Architectural Recovery"): Promise<{ content: string; created: boolean }> {
-		const scratchpadPath = path.join(this.cwd, "scratchpad.md")
-		try {
-			const content = await fs.readFile(scratchpadPath, "utf-8")
-			if (content.trim().length > 0) {
-				return { content, created: false }
-			}
-		} catch (_e) {
-			// File doesn't exist or is unreadable
-		}
-
-		// Auto-creation logic
-		const violations = this.spiderEngine.getViolations()
-		const stats = this.metabolicMonitor.getVitalityStats()
-		const currentEntropy = this.spiderEngine.computeEntropy()
-		const currentViolations = this.spiderEngine.getViolations()
-
-		const diagnostics: import("./SovereignProtocol").SovereignDiagnostics = {
-			buildHealth: this.computeBuildHealth(currentViolations.map((v) => v.message)),
-			metabolicPressure: `${stats.totalWrites} writes, ${stats.totalReads} reads`,
-			buildErrors: currentViolations.filter((v) => v.severity === "ERROR").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
-			lintWarnings: currentViolations.filter((v) => v.severity === "WARN").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
-			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
-			refactorTurns: this.refactorTurnsRemaining > 0 ? this.refactorTurnsRemaining : undefined,
-			forensicVerified: true,
-			karmaStatus: this.lastEntropyScore < 0.2 ? "Purified Sovereignty" : "Recovering Integrity",
-			recursiveStabilization: true,
-			metabolicVelocity:
-				1.0 +
-				(this.lastEntropyScore - currentEntropy.score > 0.05 ? 0.5 : 0) -
-				(currentEntropy.components.couplingScore > 0.15 ? 0.5 : 0),
-			immuneResponse: currentViolations.some((v) => this.pathogens?.isPathogenic(v.path))
-				? "Active Hardening"
-				: "Monitoring",
-			resonanceDamping: this.metabolicMonitor.getResonance(),
-			restorationActive: Array.from(this.restorationTokens.values()).some((t) => t > 0),
-		}
-
-		const template = SovereignProtocol.generateAuditTemplate(taskName, diagnostics)
-		await fs.writeFile(scratchpadPath, template, "utf-8")
-		Logger.info(`[FluidPolicyEngine] Auto-initialized missing scratchpad.md for '${taskName}'`)
-		return { content: template, created: true }
-	}
-
-	/**
-	 * V30: Harmonic Audit Inheritance.
-	 * Checks if a file is implicitly covered by a parent directory citation or if it's an Agile Domain.
-	 */
 	public getForensics(): SovereignForensics {
 		return this.forensics
 	}
+	public getMetabolicTelemetry(filePath: string) {
+		const layer = this.getCachedLayer(filePath)
+		return this.telemetrics.getMetabolicTelemetry(filePath, layer)
+	}
 
 	/**
-	 * Extracts a high-fidelity slice of the substrate for proactive discovery.
-	 * V34: Ethereal Discovery.
+	 * V150: Cognitive Immortality (Substrate Recovery).
 	 */
+	private async restoreMetabolicState() {
+		if (!this.streamId) return
+		try {
+			const rawState = await orchestrator.recallMemory(this.streamId, "metabolic_state")
+			if (rawState) {
+				const state = JSON.parse(rawState)
+				this.metabolicMonitor.importState(state)
+				this.stateRestored = true
+				Logger.info(
+					`[FluidPolicyEngine] Substrate Immortalized: Metabolic pressure restored for stream ${this.streamId}.`,
+				)
+			}
+		} catch (e) {
+			Logger.error("[FluidPolicyEngine] Failed to restore metabolic state:", e)
+		}
+	}
+
+	/**
+	 * V150: Cognitive Immortality (Substrate Persistance).
+	 */
+	private async persistMetabolicState() {
+		if (!this.streamId) return
+		try {
+			const state = this.metabolicMonitor.exportState()
+			await orchestrator.storeMemory(this.streamId, "metabolic_state", JSON.stringify(state))
+		} catch (e) {
+			Logger.error("[FluidPolicyEngine] Failed to persist metabolic state:", e)
+		}
+	}
+
+	public getLayerForPath(filePath: string): string {
+		const { getLayer } = require("@/utils/joy-zoning")
+		return getLayer(filePath)
+	}
+
 	private async getSubstrateSlice(absolutePath: string): Promise<string> {
 		try {
 			const content = await fs.readFile(absolutePath, "utf-8")
@@ -1590,63 +1406,26 @@ export class FluidPolicyEngine {
 		}
 	}
 
-	private isImplicitlyAudited(filePath: string, scratchpadContent: string, block?: ToolUse): boolean {
-		const absolutePath = path.resolve(this.cwd, filePath)
-
-		if (scratchpadContent.includes("# SOVEREIGN_AGILE")) return true
-
-		// 1. Directory-level coverage
-		const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+(?:\/|$)/g
-		const citedPaths = Array.from(scratchpadContent.matchAll(pathRegexp)).map((m) => m[0])
-		const isCoveredByDir = citedPaths.some((p) => absolutePath.includes(p))
-		if (isCoveredByDir) return true
-
-		// 2. Aesthetic Agility (V34)
-		if (block?.name === DietCodeDefaultTool.FILE_EDIT || block?.name === DietCodeDefaultTool.APPLY_PATCH) {
-			const params = block.params as Record<string, any>
-			const target = params.targetContent || params.TargetContent
-			const replacement = params.replacementContent || params.ReplacementContent
-
-			if (target && replacement) {
-				const targetHash = this.forensics.computeStructuralHash(target)
-				const replacementHash = this.forensics.computeStructuralHash(replacement)
-				if (targetHash === replacementHash) {
-					Logger.info(`[FluidPolicyEngine] Aesthetic Agility triggered for ${path.basename(filePath)}`)
-					return true
-				}
+	private async ensureScratchpadIntegrity(taskName = "Architectural Recovery"): Promise<{ content: string; created: boolean }> {
+		const scratchpadPath = path.join(this.cwd, "scratchpad.md")
+		try {
+			const content = await fs.readFile(scratchpadPath, "utf-8")
+			if (content.trim().length > 0) {
+				return { content, created: false }
 			}
-		}
+		} catch (_e) {}
 
-		// 3. Terminal Node Agility (Leaf nodes)
-		const node = this.spiderEngine.nodes.get(this.spiderEngine.normalizePath(filePath))
-		if (node && node.dependents.length === 0) {
-			Logger.info(`[FluidPolicyEngine] Terminal Node Agility triggered for ${path.basename(filePath)}`)
-			return true
-		}
-
-		// 3. Global Agile Domain detection
-		return SovereignProtocol.isImplicitAgileSafe(absolutePath)
-	}
-	/**
-	 * V110: Substrate Telemetry Provider.
-	 * Returns the current metabolic and forensic status for a file.
-	 */
-	public getMetabolicTelemetry(filePath: string) {
-		const absPath = path.resolve(this.cwd, filePath)
-		const normPath = this.normalize(absPath)
 		const currentViolations = this.spiderEngine.getViolations()
-
-		return {
-			pressure: this.metabolicMonitor.getPressure(normPath),
-			resonance: this.metabolicMonitor.getResonance(),
-			tokens: this.restorationTokens.get(normPath) || 0,
-			health: this.computeBuildHealth(currentViolations.map((v) => v.message)),
-			layer: this.getLayerForPath(absPath),
+		const diagnostics: SovereignDiagnostics = {
+			buildHealth: this.computeBuildHealth(currentViolations.map((v) => v.message)),
+			metabolicPressure: "Restoring...",
+			buildErrors: currentViolations.filter((v) => v.severity === "ERROR").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
+			lintWarnings: [],
+			hotspots: [],
 		}
-	}
 
-	public getLayerForPath(filePath: string): string {
-		const { getLayer } = require("@/utils/joy-zoning")
-		return getLayer(filePath)
+		const template = SovereignProtocol.generateAuditTemplate(taskName, diagnostics)
+		await fs.writeFile(scratchpadPath, template, "utf-8")
+		return { content: template, created: true }
 	}
 }

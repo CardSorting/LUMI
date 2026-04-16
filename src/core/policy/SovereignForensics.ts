@@ -2,6 +2,7 @@ import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
 import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
+import type { SpiderEngine } from "./spider/SpiderEngine"
 
 /**
  * SovereignForensics: Verifies the integrity of architectural evidence.
@@ -11,7 +12,7 @@ export class SovereignForensics {
 	constructor(
 		private cwd: string,
 		private metabolicMonitor: MetabolicMonitor,
-		private spiderEngine?: any, // V33: Ethereal Persistence
+		private spiderEngine?: SpiderEngine, // V34: Hardened Typed Persistence
 	) {}
 
 	/**
@@ -32,8 +33,11 @@ export class SovereignForensics {
 		const historyPaths = this.extractPathsFromHistory(history)
 
 		// 1. File-Level Verification
-		const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
-		const citedPaths = Array.from(new Set(Array.from(content.matchAll(pathRegexp)).map((m) => m[0])))
+		// V34: Surgical Path Regex (Prevents version numbers/metrics from being flagged as phantom paths)
+		const pathRegexp = /(?:\/|^)(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
+		const citedPaths = Array.from(
+			new Set(Array.from(content.matchAll(pathRegexp)).map((m) => (m[0].startsWith("/") ? m[0].slice(1) : m[0]))),
+		)
 
 		for (const cited of citedPaths) {
 			const absoluteCited = path.resolve(this.cwd, cited)
@@ -175,20 +179,23 @@ export class SovereignForensics {
 
 	/**
 	 * Extracts file paths from the last N assistant turns in conversation history.
-	 * V34: Enables Conversational Grounding.
+	 * V34: Expanded Conversational Grounding (Lookback 5).
 	 */
 	public extractPathsFromHistory(history: any[]): Set<string> {
 		const paths = new Set<string>()
 		if (!history || !Array.isArray(history)) return paths
 
-		const assistantTurns = history.filter((m) => m.role === "assistant").slice(-3)
-		const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
+		const assistantTurns = history.filter((m) => m.role === "assistant").slice(-5)
+		const pathRegexp = /(?:\/|^)(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
 
 		for (const msg of assistantTurns) {
-			const text = Array.isArray(msg.content) ? msg.content.map((c: any) => c.text || "").join(" ") : String(msg.content)
+			const text = Array.isArray(msg.content)
+				? msg.content.map((c: any) => c.text || JSON.stringify(c.input || {})).join(" ")
+				: String(msg.content)
 			const matches = text.matchAll(pathRegexp)
 			for (const match of matches) {
-				paths.add(path.resolve(this.cwd, match[0]))
+				const rawPath = match[0].startsWith("/") ? match[0].slice(1) : match[0]
+				paths.add(path.resolve(this.cwd, rawPath))
 			}
 		}
 		return paths

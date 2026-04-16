@@ -77,7 +77,10 @@ export class BufferedDbPool {
 	private bufferB = new Map<keyof Schema, WriteOp[]>()
 	private activeBuffer: Map<keyof Schema, WriteOp[]> = this.bufferA
 	private inFlightOps: Map<keyof Schema, WriteOp[]> = new Map()
-	private agentShadows = new Map<string, { ops: WriteOp[]; affectedFiles: Set<string>; lastUpdated: number }>()
+	private agentShadows = new Map<
+		string,
+		{ ops: WriteOp[]; affectedFiles: Set<string>; lastUpdated: number; checksum: string } // V150: Grounded Trace
+	>()
 	private stateMutex = new Mutex("DbStateMutex")
 	private flushMutex = new Mutex("DbFlushMutex")
 	private flushInterval: NodeJS.Timeout | null = null
@@ -168,6 +171,7 @@ export class BufferedDbPool {
 					ops: [],
 					affectedFiles: new Set(),
 					lastUpdated: Date.now(),
+					checksum: "INIT",
 				})
 			}
 		} finally {
@@ -231,13 +235,15 @@ export class BufferedDbPool {
 			this.detectMetadata(op)
 
 			// Level 7: Index maintenance (O(1))
-			if ((op.table as string) === "agent_tasks" && op.values && (op.values as any).status) {
+			const tableName = op.table as string
+			if (tableName === "agent_tasks" && op.values && (op.values as Record<string, any>).status) {
+				const statusValue = (op.values as Record<string, any>).status
 				let tableIndex = this.activeIndex.get(op.table)
 				if (!tableIndex) {
 					tableIndex = new Map()
 					this.activeIndex.set(op.table, tableIndex)
 				}
-				const key = `status:${(op.values as any).status}`
+				const key = `status:${statusValue}`
 				let set = tableIndex.get(key)
 				if (!set) {
 					set = new Set()
@@ -259,6 +265,7 @@ export class BufferedDbPool {
 						ops: [],
 						affectedFiles: new Set<string>(),
 						lastUpdated: Date.now(),
+						checksum: "INIT",
 					}
 					this.agentShadows.set(agentId, shadow)
 				} finally {
@@ -272,6 +279,13 @@ export class BufferedDbPool {
 			}
 			if (affectedFile) shadow.affectedFiles.add(affectedFile)
 			shadow.lastUpdated = Date.now()
+
+			// V150: Update Shadow Checksum (Rolling Hash)
+			const opString = JSON.stringify(ops)
+			shadow.checksum = crypto
+				.createHash("sha256")
+				.update(shadow.checksum + opString)
+				.digest("hex")
 		} else {
 			if (ops.length > 0) {
 				let tableBuffer = this.activeBuffer.get(ops[0].table)
@@ -317,13 +331,14 @@ export class BufferedDbPool {
 					this.activeBufferSize++
 
 					// Level 7: Index maintenance (O(1))
-					if ((op.table as string) === "agent_tasks" && op.values && (op.values as any).status) {
+					const tableName = op.table as string
+					if (tableName === "agent_tasks" && op.values && (op.values as Record<string, any>).status) {
 						let tableIndex = this.activeIndex.get(op.table)
 						if (!tableIndex) {
 							tableIndex = new Map()
 							this.activeIndex.set(op.table, tableIndex)
 						}
-						const key = `status:${(op.values as any).status}`
+						const key = `status:${(op.values as Record<string, any>).status}`
 						let set = tableIndex.get(key)
 						if (!set) {
 							set = new Set()
@@ -397,8 +412,8 @@ export class BufferedDbPool {
 					opsToFlush = Array.from(dirtyBuffer.values())
 						.flat()
 						.sort((a, b) => {
-							const pA = (LAYER_PRIORITY as any)[a.layer ?? "plumbing"]
-							const pB = (LAYER_PRIORITY as any)[b.layer ?? "plumbing"]
+							const pA = LAYER_PRIORITY[a.layer ?? "plumbing"]
+							const pB = LAYER_PRIORITY[b.layer ?? "plumbing"]
 							if (pA !== pB) return pA - pB
 							if (a.table !== b.table) return (a.table as string).localeCompare(b.table as string)
 							return (a.type as string).localeCompare(b.type as string)
@@ -428,12 +443,12 @@ export class BufferedDbPool {
 					if (group.length >= 100 && first.type === "insert" && this.rawDb) {
 						totalFlushed += await this.executeChunkedRawInsert(table, group)
 					} else if (group.length > 1 && first.type === "insert") {
-						totalFlushed += await this.executeBulkInsert(trx as any, table, group)
+						totalFlushed += await this.executeBulkInsert(trx, table, group)
 					} else if (group.length > 1 && first.type === "update") {
-						totalFlushed += await this.executeBulkUpdate(trx as any, table, group)
+						totalFlushed += await this.executeBulkUpdate(trx, table, group)
 					} else {
 						for (const op of group) {
-							await this.executeSingleOp(trx as any, op)
+							await this.executeSingleOp(trx, op)
 							totalFlushed++
 						}
 					}
@@ -513,7 +528,7 @@ export class BufferedDbPool {
 
 		const canBatchIntoSingleStatement = group.every(
 			(op) =>
-				this.isSameValues(op.values as any, first.values as any) &&
+				this.isSameValues(op.values as Record<string, any>, first.values as Record<string, any>) &&
 				op.where &&
 				!Array.isArray(op.where) &&
 				op.where.column === "id" &&
@@ -580,23 +595,23 @@ export class BufferedDbPool {
 
 			let diskResults: Schema[T][] = []
 			if (!isWarmed) {
-				let query = db.selectFrom(table).selectAll()
+				let query: any = db.selectFrom(table).selectAll()
 				for (const cond of conditions) {
 					const opStr = cond.operator || "="
 					if (Array.isArray(cond.value)) {
-						query = (query as any).where(cond.column, "in", cond.value)
+						query = query.where(cond.column as never, "in", cond.value as never)
 					} else {
-						query = (query as any).where(cond.column, opStr, cond.value)
+						query = query.where(cond.column as never, opStr as any, cond.value as never)
 					}
 				}
 
 				if (options?.orderBy) {
-					query = (query as any).orderBy(options.orderBy.column, options.orderBy.direction)
+					query = (query as any).orderBy(options.orderBy.column as never, options.orderBy.direction)
 				}
 				if (options?.limit) {
 					query = (query as any).limit(options.limit)
 				}
-				diskResults = (await query.execute()) as Schema[T][]
+				diskResults = (await (query as any).execute()) as Schema[T][]
 			}
 
 			const applyOps = (ops: WriteOp[], sourceIndex: Map<string, Set<WriteOp>> | undefined, target: Schema[T][]) => {
@@ -897,18 +912,14 @@ export class BufferedDbPool {
 	private async executeSingleOp(trx: Transaction<Schema>, op: WriteOp) {
 		const conditions = normalizeWhere(op.where)
 		if (op.type === "insert" && op.values) {
-			await trx
-				.insertInto(op.table)
-				.values(op.values as any)
-				.execute()
+			await trx.insertInto(op.table).values(op.values).execute()
 		} else if (op.type === "upsert" && op.values) {
-			let query = trx.insertInto(op.table).values(op.values as any)
+			let query = trx.insertInto(op.table).values(op.values)
 			if (op.conflictTarget) {
-				query = (query as any).onConflict((oc: any) =>
-					oc.columns(Array.isArray(op.conflictTarget) ? op.conflictTarget : [op.conflictTarget]).doUpdateSet(op.values),
-				)
+				const targets = Array.isArray(op.conflictTarget) ? op.conflictTarget : [op.conflictTarget]
+				query = query.onConflict((oc) => oc.columns(targets as never).doUpdateSet(op.values as never)) as never
 			} else {
-				query = (query as any).onConflict((oc: any) => oc.column("id").doUpdateSet(op.values))
+				query = query.onConflict((oc) => oc.column("id" as never).doUpdateSet(op.values as never)) as never
 			}
 			await query.execute()
 		} else if (op.type === "update" && op.values) {
@@ -921,13 +932,13 @@ export class BufferedDbPool {
 				}
 			}
 
-			let query = trx.updateTable(op.table as any).set(sets)
+			let query = trx.updateTable(op.table).set(sets as never)
 			for (const cond of conditions) {
 				const opStr = cond.operator || "="
 				if (Array.isArray(cond.value)) {
-					query = (query as any).where(cond.column, "in", cond.value)
+					query = query.where(cond.column as never, "in", cond.value as never)
 				} else {
-					query = (query as any).where(cond.column, opStr, cond.value)
+					query = query.where(cond.column as never, opStr as any, cond.value as never)
 				}
 			}
 			await query.execute()

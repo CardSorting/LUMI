@@ -34,34 +34,30 @@ export class SovereignDecomposer {
 
 		// 1. Analyze Method-Level Logic Density vs I/O
 		const visit = (node: ts.Node) => {
-			if (ts.isClassDeclaration(node)) {
-				for (const element of node.members) {
-					if (ts.isMethodDeclaration(element) && element.body) {
-						const { density, hasIO } = this.analyzeMethod(element, sourceFile)
-						const methodName = element.name.getText(sourceFile)
+			if ((ts.isMethodDeclaration(node) || ts.isFunctionDeclaration(node)) && node.body) {
+				const { density, hasIO } = this.analyzeNodeLogic(node, sourceFile)
+				const name = node.name?.getText(sourceFile) || "anonymous"
 
-						// VIOLATION: Pure Logic in INFRASTRUCTURE
-						if (layer === "infrastructure" && density > 0.3 && !hasIO) {
-							steps.push({
-								action: "MOVE",
-								target: `Method '${methodName}'`,
-								destination: "DOMAIN",
-								reason: "This method is pure business logic (high density, no I/O) and should live in the Domain layer for testability.",
-								intentSuggestion: `[SOVEREIGN_INTENT: Pure domain logic for ${methodName}]`,
-							})
-						}
+				// VIOLATION: Pure Logic in INFRASTRUCTURE
+				if (layer === "infrastructure" && density > 0.3 && !hasIO) {
+					steps.push({
+						action: "MOVE",
+						target: `Logic '${name}'`,
+						destination: "DOMAIN",
+						reason: "This logic is purely computational (high density, no I/O) and should live in the Domain layer.",
+						intentSuggestion: `[SOVEREIGN_INTENT: Pure domain logic for ${name}]`,
+					})
+				}
 
-						// VIOLATION: Direct I/O in CORE/DOMAIN
-						if ((layer === "core" || layer === "domain") && hasIO) {
-							steps.push({
-								action: "MOVE",
-								target: `Method '${methodName}'`,
-								destination: "INFRASTRUCTURE",
-								reason: "This method performs direct I/O. Extract the I/O to an Interface and inject it to maintain sovereignty.",
-								intentSuggestion: `[SOVEREIGN_INTENT: I/O Adapter for ${methodName}]`,
-							})
-						}
-					}
+				// VIOLATION: Direct I/O in CORE/DOMAIN
+				if ((layer === "core" || layer === "domain") && hasIO) {
+					steps.push({
+						action: "MOVE",
+						target: `Logic '${name}'`,
+						destination: "INFRASTRUCTURE",
+						reason: "This logic performs direct I/O. Extract the I/O to a specialized adapter.",
+						intentSuggestion: `[SOVEREIGN_INTENT: I/O Adapter for ${name}]`,
+					})
 				}
 			}
 
@@ -114,7 +110,10 @@ export class SovereignDecomposer {
 		}
 	}
 
-	private analyzeMethod(method: ts.MethodDeclaration, sourceFile: ts.SourceFile): { density: number; hasIO: boolean } {
+	private analyzeNodeLogic(
+		node: ts.MethodDeclaration | ts.FunctionDeclaration,
+		sourceFile: ts.SourceFile,
+	): { density: number; hasIO: boolean } {
 		let nodes = 0
 		let logic = 0
 		let hasIO = false
@@ -131,8 +130,8 @@ export class SovereignDecomposer {
 			ts.forEachChild(node, visit)
 		}
 
-		if (method.body) {
-			visit(method.body)
+		if (node.body) {
+			visit(node.body)
 		}
 
 		return {

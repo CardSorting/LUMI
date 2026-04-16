@@ -1,0 +1,55 @@
+import type { ToolUse } from "@core/assistant-message"
+import { formatResponse } from "@core/prompts/responses"
+import { Logger } from "@/shared/services/Logger"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import { orchestrator } from "../../../../infrastructure/ai/Orchestrator"
+import { MetabolicMonitor } from "../../../integrity/MetabolicMonitor"
+import type { ToolResponse } from "../../index"
+import type { IToolHandler } from "../ToolExecutorCoordinator"
+import type { TaskConfig } from "../types/TaskConfig"
+
+/**
+ * SovereignBreathHandler: Handles the 'sovereign_breath' tool.
+ * Allows agents to reset their metabolic pressure by providing a high-fidelity justification.
+ */
+export class SovereignBreathHandler implements IToolHandler {
+	readonly name = DietCodeDefaultTool.SOVEREIGN_BREATH
+
+	getDescription(block: ToolUse): string {
+		return `[Sovereign Breath: Cognitive Recalibration]`
+	}
+
+	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		const justification = (block.params as { justification?: string })?.justification || "Routine recalibration."
+		const streamId = config.taskId
+
+		if (!streamId) {
+			return formatResponse.toolError("Sovereign Breath requires an active execution stream.")
+		}
+
+		try {
+			Logger.info(
+				`[SovereignBreath] Agent is taking a cognitive breather in stream ${streamId}. Justification: ${justification}`,
+			)
+
+			// V150: Grounded Reset.
+			// We create a fresh MetabolicMonitor, reset it, and export its state to cognitive memory.
+			const monitor = new MetabolicMonitor()
+			monitor.resetMetabolicPressure()
+
+			const state = monitor.exportState()
+			await orchestrator.storeMemory(streamId, "metabolic_state", JSON.stringify(state))
+
+			// Log specific breath event for audit forensics
+			await orchestrator.storeMemory(streamId, `breath_event_${Date.now()}`, justification)
+
+			return formatResponse.toolResult(
+				"🌬️ [SOVEREIGN BREATH] Cognitive recalibration successful. Metabolic pressure has been reset to zero.\n" +
+					"You may now proceed with high-velocity operations. Ensure you maintain architectural sovereignty in subsequent turns.",
+			)
+		} catch (error) {
+			Logger.error("[SovereignBreath] Failed to execute breath:", error)
+			return formatResponse.toolError(`Breath failure: ${(error as Error)?.message}`)
+		}
+	}
+}

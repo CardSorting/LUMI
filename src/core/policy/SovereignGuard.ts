@@ -21,7 +21,7 @@ export class SovereignGuard {
 
 	constructor(cwd: string) {
 		this.simulationEngine = new SimulationEngine(cwd)
-		this.axiomEngine = new SemanticAxiomEngine(cwd)
+		this.axiomEngine = new SemanticAxiomEngine()
 	}
 
 	/**

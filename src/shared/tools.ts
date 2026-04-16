@@ -62,6 +62,7 @@ export enum DietCodeDefaultTool {
 	SOVEREIGN_QUERY = "query_sovereignty",
 	SOVEREIGN_DECOMPOSE = "decompose_sovereign_module",
 	SOVEREIGN_MAP = "generate_sovereign_map",
+	SOVEREIGN_BREATH = "sovereign_breath",
 }
 
 // Array of all tool names for compatibility

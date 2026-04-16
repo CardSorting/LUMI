@@ -9,6 +9,7 @@ export interface AgentStream {
 	parentId: string | null
 	focus: string
 	status: "active" | "completed" | "failed"
+	sharedMemoryLayer: string | null // V34: Structured Swarm Persistence
 	createdAt: number
 }
 
@@ -48,6 +49,7 @@ export class AgentOrchestrator {
 				parentId,
 				focus,
 				status: "active",
+				sharedMemoryLayer: null, // V34 Recovery
 				createdAt: Date.now(),
 			}
 
@@ -113,10 +115,14 @@ export class AgentOrchestrator {
 		result: string | null = null,
 		metadata?: TaskAuditMetadata,
 	): Promise<void> {
+		const values: Record<string, any> = { status }
+		if (result !== null) values.result = result
+		if (metadata) values.metadata = JSON.stringify(metadata)
+
 		await dbPool.push({
 			type: "update",
 			table: "agent_tasks",
-			values: { status, result, metadata: metadata ? JSON.stringify(metadata) : undefined },
+			values,
 			where: { column: "id", value: taskId },
 			layer: "infrastructure",
 		})
@@ -162,8 +168,8 @@ export class AgentOrchestrator {
 	}
 
 	public async getStreamTasks(streamId: string, requestingAgentId?: string): Promise<AgentTask[]> {
-		const results = await dbPool.selectWhere("agent_tasks" as any, { column: "streamId", value: streamId }, requestingAgentId)
-		return results.map((t: any) => ({
+		const results = await dbPool.selectWhere("agent_tasks", { column: "streamId", value: streamId }, requestingAgentId)
+		return results.map((t) => ({
 			...t,
 			linkedKnowledgeIds: t.linkedKnowledgeIds ? JSON.parse(t.linkedKnowledgeIds) : [],
 			metadata: t.metadata ? JSON.parse(t.metadata) : undefined,
@@ -262,8 +268,8 @@ export class AgentOrchestrator {
 		}
 
 		// Count child streams
-		const allStreams = await dbPool.selectAllFrom("agent_streams" as any)
-		const childStreams = allStreams.filter((s: any) => s.parentId === streamId)
+		const allStreams = await dbPool.selectAllFrom("agent_streams")
+		const childStreams = allStreams.filter((s) => s.parentId === streamId)
 
 		const completedTasks = tasks.filter((t) => t.status === "completed").length
 		const failedTasks = tasks.filter((t) => t.status === "failed").length
@@ -391,7 +397,7 @@ export class AgentOrchestrator {
 		Logger.info(`[Orchestrator] Spawning Sovereign Teammate ${agentId} for task: ${prompt.slice(0, 50)}...`)
 
 		// Initialize Warm Teammate Stream
-		const streamId = crypto.randomUUID()
+		const streamId = uuidv4()
 		await dbPool.push({
 			type: "insert",
 			table: "agent_streams",
@@ -399,7 +405,9 @@ export class AgentOrchestrator {
 				id: streamId,
 				parentId: parentStreamId,
 				externalId: agentId,
+				focus: prompt, // Use prompt as focus if parent doesn't specify
 				status: "active",
+				sharedMemoryLayer: parentStream.sharedMemoryLayer,
 				createdAt: Date.now(),
 			},
 		})
@@ -449,6 +457,55 @@ export class AgentOrchestrator {
 		const total = counts.reduce((acc, c) => acc + c, 0)
 		const duration = (performance.now() - start).toFixed(1)
 		Logger.info(`[Orchestrator] Sovereign Warmup: ${total} records reconstituted in ${duration}ms (Level 9 Active)`)
+	}
+
+	/**
+	 * Reconstructs conversation history for a stream from its constituent tasks.
+	 * V34: Added for Virtual Substrate recovery and Forensic Grounding.
+	 */
+	public async getConversationHistory(streamId: string): Promise<any[]> {
+		const tasks = await this.getStreamTasks(streamId)
+		const history: any[] = []
+
+		for (const task of tasks) {
+			// user turn: description is the intent/prompt
+			history.push({
+				role: "user",
+				content: task.description,
+			})
+
+			// assistant turn: result is the output (including potential tool calls)
+			if (task.result) {
+				let content: any = task.result
+				try {
+					// Handle JSON results (common in subagent tool-calling outputs)
+					if (task.result.trim().startsWith("{") || task.result.trim().startsWith("[")) {
+						content = JSON.parse(task.result)
+					}
+				} catch (_e) {
+					// Fallback to raw string
+				}
+
+				// V34: Standardize block format for SovereignScribe compatibility
+				const contentBlocks = Array.isArray(content)
+					? content
+					: typeof content === "object"
+						? [content]
+						: [{ type: "text", text: String(content) }]
+
+				history.push({
+					role: "assistant",
+					content: contentBlocks,
+				})
+			}
+		}
+
+		return history
+	}
+
+	public getLayerForPath(filePath: string): string {
+		const { getLayer } = require("@/utils/joy-zoning")
+		return getLayer(filePath)
 	}
 }
 

@@ -390,14 +390,30 @@ export class SpiderEngine {
 				const payload = this.persistence.deserialize(data)
 				this.nodes = new Map(payload.nodes)
 			}
+
+			// V150: Merkle Shield validation (Forensic Drift Detection)
+			const currentMerkle = this.computeMerkleRoot()
+			Logger.info(`[SpiderEngine] Registry loaded. Merkle Root: ${currentMerkle.slice(0, 8)}...`)
+
 			this.metrics.computeCouplingMetrics(this.nodes)
 			this.metrics.computeReachability(this.nodes)
 			Logger.info(`[SpiderEngine] Registry loaded successfully (${this.nodes.size} nodes).`)
 			return true
 		} catch (_e) {
-			Logger.error(`[SpiderEngine] Registry corruption detected. Triggering Substrate Self-Healing.`)
-			return false
+			Logger.error(`[SpiderEngine] Registry corruption detected. Triggering Substrate Autonomous Recovery.`)
+			await this.rebuildRegistry()
+			return true
 		}
+	}
+
+	/**
+	 * V150: Computes an aggregate Merkle Root for the entire substrate.
+	 */
+	public computeMerkleRoot(): string {
+		const hashes = Array.from(this.nodes.values())
+			.map((n) => n.hash)
+			.sort()
+		return crypto.createHash("sha256").update(hashes.join("")).digest("hex")
 	}
 
 	/**
