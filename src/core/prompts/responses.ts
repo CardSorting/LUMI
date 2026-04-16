@@ -49,9 +49,15 @@ export const formatResponse = {
 
 		const statusLine =
 			telemetry.health === 100
-				? `✅ Substrate Synced: **${label}** layer`
-				: `⚠️ Sovereign Metabolic Audit: **${label}** layer`
-		const telemetryLine = `📊 Pressure: **${pressure}** | Resonance: **${resonance}x** | Tokens: **${telemetry.tokens}** | Health: **${telemetry.health.toFixed(1)}%**`
+				? `🛡️ SOVEREIGN SUBSTRATE [V189]: **${label}** layer`
+				: `🛡️ SOVEREIGN STRUCTURAL AUDIT: **${label}** layer`
+		const trend = (telemetry as any).healthTrend ?? 0
+		const trendIcon = trend > 0 ? "📈" : trend < 0 ? "📉" : "📊"
+		const trendText = trend !== 0 ? ` (${trend > 0 ? "+" : ""}${trend.toFixed(1)}%)` : ""
+
+		const vitality = (telemetry as any).vitalityPulse ?? 100
+		const focus = (telemetry as any).neuralFocus?.[0] ? ` | 🧠 Focus: **${(telemetry as any).neuralFocus[0]}**` : ""
+		const telemetryLine = `${trendIcon} Pressure: **${pressure}** | 💓 Vitality: **${vitality.toFixed(0)}%** | Health: **${telemetry.health.toFixed(1)}%**${trendText}${focus}`
 
 		let message = `${statusLine}\n${telemetryLine}`
 		if (violations && violations.length > 0) {

@@ -1,6 +1,7 @@
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
+import { PathogenStore } from "../integrity/PathogenStore"
 import { SovereignProtocol } from "./SovereignProtocol"
 import { SpiderEngine } from "./spider/SpiderEngine"
 
@@ -15,6 +16,7 @@ export class SovereignTelemetrics {
 		private cwd: string,
 		private metabolicMonitor: MetabolicMonitor,
 		private spiderEngine: SpiderEngine,
+		private pathogens: PathogenStore,
 	) {}
 
 	/**
@@ -37,7 +39,98 @@ export class SovereignTelemetrics {
 				1.0 +
 				(lastEntropyScore - currentEntropy.score > 0.05 ? 0.5 : 0) -
 				(currentEntropy.components.couplingScore > 0.15 ? 0.5 : 0),
+			agenticThrashing: this.getAgenticHealth(),
+			healthTrend: buildHealth - this.lastBuildHealth,
+			vitalityPulse: this.getSubstrateVitality(),
+			neuralFocus: this.getNeuralFocus(),
+			aestheticResilience: stats.aestheticResilience,
+			recoveryHint: this.getRecoveryHint(this.getSubstrateVitality()),
+			...this.getStructuralForensics(),
 		})
+	}
+
+	/**
+	 * V188: Surfaces the top cognitive focus symbols from the neural registry.
+	 */
+	public getNeuralFocus(): string[] {
+		const focusMap = new Map<string, number>()
+		const forensic = this.metabolicMonitor.getForensicRegistry()
+
+		for (const m of forensic.values()) {
+			for (const symbol of m.symbolObservations) {
+				focusMap.set(symbol, (focusMap.get(symbol) || 0) + 1)
+			}
+		}
+
+		return Array.from(focusMap.entries())
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 5)
+			.map(([name]) => name)
+	}
+
+	/**
+	 * V188: Generates a recovery strategy if Vitality is flatlining.
+	 */
+	public getRecoveryHint(vitality: number): string | undefined {
+		if (vitality > 40) return undefined
+		return `💓 FLATLINE WARNING: Vitality Pulse is at ${vitality.toFixed(0)}%. You MUST perform a # SOVEREIGN BREATH to clear metabolic inflammation before the substrate locks.`
+	}
+
+	/**
+	 * V187: Computes the 💓 Vitality Pulse based on pressure, doubt, and fragility.
+	 */
+	public getSubstrateVitality(): number {
+		const stats = this.metabolicMonitor.getVitalityStats()
+		const nodes = Array.from(this.spiderEngine.nodes.values())
+
+		const pressurePenalty = Math.min(stats.avgPressure * 2, 40)
+		const doubtPenalty = Math.min(stats.avgDoubtSignal / 2, 30)
+		const fragilityPenalty = (nodes.filter((n) => n.astComplexity > 2000).length / (nodes.length || 1)) * 30
+
+		return Math.max(0, 100 - pressurePenalty - doubtPenalty - fragilityPenalty)
+	}
+
+	/**
+	 * V186: Performs a deep structural audit of identifier casing, fragility, and substrate drift.
+	 */
+	public getStructuralForensics() {
+		const fragilityScores: Record<string, number> = {}
+		const nodes = Array.from(this.spiderEngine.nodes.values())
+
+		// Sampling top nodes for fragility
+		for (const node of nodes.slice(0, 20)) {
+			fragilityScores[path.basename(node.path)] = this.spiderEngine.computeCCI(
+				node.path,
+				this.pathogens,
+				this.metabolicMonitor,
+			)
+		}
+
+		const namingIntegrity = nodes.reduce((acc, n) => acc + (n.namingScore || 1.0), 0) / (nodes.length || 1)
+		const merkleDrift = this.spiderEngine.computeMerkleRoot()
+
+		return {
+			fragilityIndex: fragilityScores,
+			namingIntegrity,
+			merkleDrift,
+		}
+	}
+
+	/**
+	 * V185: Evaluates the "Success Flow" of the agent.
+	 * Detects recursive loops and investigative doubt.
+	 */
+	public getAgenticHealth(): { loop: boolean; doubtFiles: string[] } {
+		const loop = this.metabolicMonitor.detectRecursiveLoop()
+		const forensic = this.metabolicMonitor.getForensicRegistry()
+		const doubtFiles = Array.from(forensic.entries())
+			.filter(([p, m]) => this.metabolicMonitor.getDoubtSignal(p) > 10)
+			.map(([p]) => path.basename(p))
+
+		return {
+			loop: loop.loop,
+			doubtFiles,
+		}
 	}
 
 	/**
@@ -79,7 +172,7 @@ export class SovereignTelemetrics {
 	/**
 	 * Returns the current metabolic and forensic status for a file.
 	 */
-	public getMetabolicTelemetry(filePath: string, layer: string) {
+	public getMetabolicTelemetry(filePath: string, layer: string, tokens = 0) {
 		const absPath = path.resolve(this.cwd, filePath)
 		const normPath = this.spiderEngine.normalizePath(absPath)
 		const currentViolations = this.spiderEngine.getViolations()
@@ -88,6 +181,7 @@ export class SovereignTelemetrics {
 			pressure: this.metabolicMonitor.getPressure(normPath),
 			resonance: this.metabolicMonitor.getResonance(),
 			health: this.computeBuildHealth(currentViolations.map((v) => v.message)),
+			tokens,
 			layer,
 		}
 	}

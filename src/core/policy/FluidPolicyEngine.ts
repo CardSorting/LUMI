@@ -99,7 +99,7 @@ export class FluidPolicyEngine {
 		this.refactorHealer = new RefactorHealer(this.cwd)
 		this.forensics = new SovereignForensics(this.cwd, this.metabolicMonitor, this.spiderEngine)
 		this.garbageCollector = new SovereignGarbageCollector(this.cwd, this.spiderEngine, this.pathogens)
-		this.telemetrics = new SovereignTelemetrics(this.cwd, this.metabolicMonitor, this.spiderEngine)
+		this.telemetrics = new SovereignTelemetrics(this.cwd, this.metabolicMonitor, this.spiderEngine, this.pathogens)
 		this.verification = new AxiomVerificationService(
 			this.cwd,
 			this.spiderEngine,
@@ -238,6 +238,7 @@ export class FluidPolicyEngine {
 	 * Uses progressive enforcement: first domain violation blocks, subsequent ones degrade to warnings.
 	 */
 	public async validatePreExecution(block: ToolUse): Promise<PolicyResult> {
+		const result: PolicyResult = { success: true }
 		if (this.streamId && !this.stateRestored) {
 			await this.restoreMetabolicState()
 		}
@@ -250,6 +251,47 @@ export class FluidPolicyEngine {
 		// V18/V19: Harmonic Healing Intent Sensing
 		let intent = null
 		const content = (block.params as { content?: string })?.content || ""
+		const thrashing = this.telemetrics.getAgenticHealth()
+
+		// V185: Cognitive Interdiction - Block when agentic failure spiral is detected
+		if (
+			thrashing.loop &&
+			block.name !== DietCodeDefaultTool.FILE_EDIT // Allow editing scratchpad/audit
+		) {
+			const isTargetingAudit = (block.params as { path?: string })?.path?.endsWith("scratchpad.md")
+			if (!isTargetingAudit) {
+				const auditTemplate = SovereignProtocol.generateAuditTemplate("Agentic Failure Recovery")
+				return {
+					success: false,
+					error:
+						`🛑 COGNITIVE INTERDICTION [CRITICAL]: High-Entropy Thrashing detected.\n` +
+						`You are caught in a recursive investigative loop (Scanning files without acting).\n\n` +
+						`💡 RECOVERY: You are temporarily BLOCKED from further exploration. You MUST perform a # SOVEREIGN AUDIT in \`scratchpad.md\` to re-ground your mental model.\n\n` +
+						`\`\`\`markdown\n${auditTemplate}\n\`\`\``,
+				}
+			}
+		}
+
+		// V188: Concurrent Substrate Drift Detection
+		const driftAlert = await this.detectConcurrentDrift(block)
+		if (driftAlert) {
+			result.warning = (result.warning ? `${result.warning}\n` : "") + driftAlert
+		}
+
+		// V189: Substrate Immune Response Check (Fragility Alarm)
+		const targetPath =
+			(block.params as { path?: string; target_file?: string })?.path ||
+			(block.params as { path?: string; target_file?: string })?.target_file
+		if (targetPath && (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH)) {
+			const absPath = path.resolve(this.cwd, targetPath)
+			const cci = this.spiderEngine.computeCCI(absPath, this.pathogens, this.metabolicMonitor)
+			if (cci > 0.8) {
+				result.warning =
+					(result.warning ? `${result.warning}\n` : "") +
+					`🛑 [SUBSTRATE IMMUNE ALERT]: \`${path.basename(targetPath)}\` has high fragility (CCI: ${cci.toFixed(2)}). ` +
+					`Broad mutations in this cluster are restricted. Decompose or perform a # SOVEREIGN BREATH turn first.`
+			}
+		}
 
 		// Step 0: Read scratchpad context for Sovereign Protocols
 		let scratchpadContent = ""
@@ -341,10 +383,10 @@ export class FluidPolicyEngine {
 				if (!hasBreath && !hasAudit) {
 					// V32: Therapeutic Leniency
 					if (isHealingMode) {
-						return {
-							success: true,
-							warning: `⚠️ THERAPEUTIC LENIENCY: Substrate is under Metabolic Pressure (${cooldown.reason}), but your Healing Intent (#HEAL/FIX) has been detected. Proceed with caution to restore structural balance.`,
-						}
+						result.warning =
+							(result.warning ? `${result.warning}\n` : "") +
+							`⚠️ THERAPEUTIC LENIENCY: Substrate is under Metabolic Pressure (${cooldown.reason}), but your Healing Intent (#HEAL/FIX) has been detected. Proceed with caution to restore structural balance.`
+						return result
 					}
 
 					const auditTemplate = SovereignProtocol.generateAuditTemplate("Cognitive Recovery")
@@ -386,10 +428,10 @@ export class FluidPolicyEngine {
 						alerts.push(`🚨 STRUCTURAL ANTIGEN: ${v.message}`)
 					})
 
-					return {
-						success: true,
-						warning: `🏗️ ARCHITECTURAL ADVISORY: \`${path.basename(targetPath)}\` has active structural alerts:\n${alerts.join("\n")}`,
-					}
+					result.warning =
+						(result.warning ? `${result.warning}\n` : "") +
+						`🏗️ ARCHITECTURAL ADVISORY: \`${path.basename(targetPath)}\` has active structural alerts:\n${alerts.join("\n")}`
+					return result
 				}
 			}
 		}
@@ -403,7 +445,7 @@ export class FluidPolicyEngine {
 
 				// V22: Implicit Recovery - Scratchpad edits are NEVER blocked.
 				if (isScratchpad) {
-					return { success: true }
+					return result
 				}
 
 				// V24: Symbol Lockdown (Audit-to-Action Binding)
@@ -889,7 +931,7 @@ export class FluidPolicyEngine {
 			await this.persistMetabolicState()
 		}
 
-		return { success: true }
+		return result
 	}
 
 	/**
@@ -930,7 +972,14 @@ export class FluidPolicyEngine {
 		this.sessionFiles.set(absolutePath, content)
 		this.spiderEngine.updateNode(absolutePath, content)
 		await this.stalenessTracker.recordRead(absolutePath, content)
-		this.metabolicMonitor.recordRead(absolutePath)
+		this.metabolicMonitor.recordRead(absolutePath, content)
+
+		// V189: Neural Forensic Extraction
+		const symbolRegex = /(?:class|function|interface)\s+([a-zA-Z0-9_$]+)/g
+		let match
+		while ((match = symbolRegex.exec(content)) !== null) {
+			this.metabolicMonitor.recordSymbolObservation(absolutePath, match[1])
+		}
 
 		const entropy = this.spiderEngine.computeEntropy()
 		const latestSnapshot = await this.spiderEngine.getLatestSnapshot()
@@ -1151,8 +1200,36 @@ export class FluidPolicyEngine {
 
 					// 2. Synchronize Graph
 					const content = await fs.readFile(absPath, "utf-8")
+					const lastIntegrity = this.spiderEngine.nodes.get(normPath)?.namingScore || 1.0
+
+					// 2.1: Axiomatic Resonance Snapshot (V187)
+					const lastAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
+
 					this.spiderEngine.updateNode(normPath, content)
+					const currentIntegrity = this.spiderEngine.nodes.get(normPath)?.namingScore || 1.0
+					const currentAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
+					const axiomaticResult = this.axiomEngine.compareAxiomSessions(lastAxioms, currentAxioms)
+
+					// 2.2: Merkle Resonance Tracking (V186)
+					const merkle = this.spiderEngine.computeMerkleRoot()
+					if (this.streamId) {
+						await orchestrator.storeMemory(this.streamId, "merkle_resonance", merkle)
+					}
+
 					this.metabolicMonitor.recordWrite(normPath, content, 0, 0, this.streamId)
+
+					// 2.2: Structural & Axiomatic Gain Enforcement
+					if (axiomaticResult.status === "POSITIVE" && lastAxioms.length > currentAxioms.length) {
+						result.warning =
+							(result.warning ? `${result.warning}\n` : "") +
+							`✨ AXIOMATIC ALIGNMENT: Fundamental structural contradictions resolved in ${path.basename(filePath)}. Double down on this concept!`
+					} else if (currentIntegrity > lastIntegrity) {
+						result.warning =
+							(result.warning ? `${result.warning}\n` : "") +
+							`✨ STRUCTURAL GAIN: Identifier casing integrity improved in ${path.basename(filePath)}. Double down on this concept!`
+					} else if (axiomaticResult.message) {
+						result.warning = (result.warning ? `${result.warning}\n` : "") + axiomaticResult.message
+					}
 
 					// 3. Report remaining errors
 					if (sweepResult.remainingErrors.length > 0) {
@@ -1356,7 +1433,8 @@ export class FluidPolicyEngine {
 	}
 	public getMetabolicTelemetry(filePath: string) {
 		const layer = this.getCachedLayer(filePath)
-		return this.telemetrics.getMetabolicTelemetry(filePath, layer)
+		const tokens = this.restorationTokens.get(filePath) || 0
+		return this.telemetrics.getMetabolicTelemetry(filePath, layer, tokens)
 	}
 
 	/**
@@ -1427,5 +1505,31 @@ export class FluidPolicyEngine {
 		const template = SovereignProtocol.generateAuditTemplate(taskName, diagnostics)
 		await fs.writeFile(scratchpadPath, template, "utf-8")
 		return { content: template, created: true }
+	}
+	/**
+	 * V188: Detects if the physical substrate has been modified externally since the last edit.
+	 */
+	private async detectConcurrentDrift(block: ToolUse): Promise<string | undefined> {
+		if (block.name !== DietCodeDefaultTool.FILE_EDIT && block.name !== DietCodeDefaultTool.APPLY_PATCH) return undefined
+
+		const params = block.params as { path?: string; target_file?: string }
+		const filePath = params?.path || params?.target_file
+		if (!filePath) return undefined
+
+		const absPath = path.resolve(this.cwd, filePath)
+		try {
+			const metrics = this.metabolicMonitor.getForensicRegistry().get(absPath)
+			if (metrics?.lastObservedHash) {
+				const currentContent = await fs.readFile(absPath, "utf-8")
+				const currentHash = createHash("md5").update(currentContent).digest("hex")
+
+				if (currentHash !== metrics.lastObservedHash) {
+					return `⚠️ CONCURRENT DRIFT DETECTED: ${path.basename(filePath)} has been modified externally. Syncing substrate...`
+				}
+			}
+		} catch (_e) {
+			// File might not exist yet or be inaccessible
+		}
+		return undefined
 	}
 }

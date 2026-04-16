@@ -14,8 +14,17 @@ export interface SovereignDiagnostics {
 	recursiveStabilization?: boolean
 	metabolicVelocity?: number
 	immuneResponse?: string
+	agenticThrashing?: { loop: boolean; doubtFiles: string[] } // V185: Fail-signal detection
+	healthTrend?: number // V185: Success tracking
+	fragilityIndex?: Record<string, number> // V186: CCI surgical telemetry
+	namingIntegrity?: number // V186: identifier casing health
+	merkleDrift?: string // V186: Substrate sync detection
+	vitalityPulse?: number // V187: 💓 Heartbeat metric
 	resonanceDamping?: number // V100: 0.5x, 1.0x etc
 	restorationActive?: boolean // V100: Recovery Buffer
+	neuralFocus?: string[] // V188: Cognitive obsession tracking
+	aestheticResilience?: number // V188: Noise filtering efficiency
+	recoveryHint?: string // V188: Predictive restoration directive
 }
 
 /**
@@ -25,6 +34,38 @@ export interface SovereignDiagnostics {
 export class SovereignProtocol {
 	public static readonly V12_ID = "SOVEREIGN_V12"
 	public static readonly MANTRA = "Double down on this concept, audit and revise in its entirety"
+
+	public static readonly HEADERS = {
+		AUDIT: "# SOVEREIGN AUDIT",
+		BREATH: "# SOVEREIGN BREATH",
+		AGILE: "# SOVEREIGN_AGILE",
+		ARCHITECT: "### 1. THE ARCHITECT",
+		CRITIC: "### 2. THE CRITIC",
+		SRE: "### 3. THE SRE",
+		RESOLUTION: "## [FINAL RESOLUTION]",
+		DIAGNOSTICS: "## [SYSTEM DIAGNOSTICS]",
+	}
+
+	public static readonly SEMANTIC_PATTERNS = {
+		AUDIT: /# SOVEREIGN AUDIT/i,
+		ARCHITECT: /### 1\. THE ARCHITECT|## \[THE ARCHITECT\]|The Architect:/i,
+		RESILIENCE: /### 2\. THE CRITIC|## \[THE CRITIC\]|The Critic:/i,
+		RESOLUTION: /## \[FINAL RESOLUTION\]|Final Resolution:/i,
+	}
+
+	/**
+	 * V29: Implicit Agility Protection.
+	 * Files in infrastructure or core are often too complex for full triad audits during minor fixes.
+	 */
+	public static isImplicitAgileSafe(filePath: string): boolean {
+		return (
+			filePath.includes("/infrastructure/") ||
+			filePath.includes("/core/policy/") ||
+			filePath.includes(".agents/") ||
+			filePath.endsWith(".md") ||
+			filePath.endsWith(".json")
+		)
+	}
 
 	/**
 	 * Generates a full Sovereign Audit template with optional diagnostics.
@@ -40,8 +81,14 @@ export class SovereignProtocol {
 					? `🏗️ **Refactor Window Active**: ${diagnostics.refactorTurns} turns remaining\n`
 					: "") +
 				(diagnostics.karmaStatus ? `✨ **Karma Status**: ${diagnostics.karmaStatus}\n` : "") +
+				(diagnostics.vitalityPulse !== undefined
+					? `💓 **Vitality Pulse**: ${diagnostics.vitalityPulse.toFixed(0)}% (${diagnostics.vitalityPulse > 80 ? "Stable" : diagnostics.vitalityPulse > 50 ? "Strained" : "Flatlining"})\n`
+					: "") +
 				(diagnostics.metabolicVelocity
 					? `🚀 **Metabolic Velocity**: ${diagnostics.metabolicVelocity.toFixed(2)}x\n`
+					: "") +
+				(diagnostics.aestheticResilience !== undefined
+					? `🎨 **Aesthetic Resilience**: ${(diagnostics.aestheticResilience * 100).toFixed(1)}%\n`
 					: "") +
 				(diagnostics.resonanceDamping && diagnostics.resonanceDamping < 1.0
 					? `🧘 **Cognitive Resonance Active**: ${diagnostics.resonanceDamping}x pressure accumulation (Refactor Mode)\n`
@@ -62,93 +109,72 @@ export class SovereignProtocol {
 					? diagnostics.lintWarnings.map((v) => `- ${v}`).join("\n")
 					: "- [ZERO SMELLS]") +
 				"\n\n" +
+				`### Agentic Health (V185):\n` +
+				(diagnostics.agenticThrashing?.loop
+					? `⚠️ **Thrashing Signal**: Recursive reading loop detected across ${diagnostics.agenticThrashing.doubtFiles.length} files. Pivoting required.\n`
+					: "✅ **Cognitive Focus**: Investigative resonance is stable.\n") +
+				(diagnostics.healthTrend !== undefined && diagnostics.healthTrend > 0
+					? `📈 **Success Trend**: +${diagnostics.healthTrend.toFixed(1)}% (MANTRA: Double down on this concept!)\n`
+					: diagnostics.healthTrend !== undefined && diagnostics.healthTrend < 0
+						? `📉 **Structural Drift**: ${diagnostics.healthTrend.toFixed(1)}% (Audit and revise in its entirety)\n`
+						: "") +
+				"\n" +
 				`### Hotspots:\n` +
 				diagnostics.hotspots.map((h) => `- ${h}`).join("\n") +
 				"\n\n" +
-				`## [SOVEREIGN DIRECTIVES]\n` +
-				(diagnostics.buildHealth < 70
-					? `1. 🚨 **STABILIZE**: Resolve all Critical Build Errors immediately.\n2. 🧹 **SWEEP**: Run the Sovereign Garbage Collector to prune technical debt.\n3. 🛡️ **SEAL**: Do not introduce new features until health > 80%.\n\n` +
-						`🔍 **STABILIZATION DELTA**: ${diagnostics.buildErrors.length} errors and ${diagnostics.lintWarnings.length} warnings remaining to reach Green Zone.\n`
-					: `1. ✅ **MAINTAIN**: Continue following layer boundaries.\n2. 🔍 **MONITOR**: Keep an eye on metadata hotspots.\n`) +
-				"\n" +
-				`> *"${SovereignProtocol.MANTRA}"*\n`
+				`## [STRUCTURAL FORENSICS (V186-V188)]\n` +
+				(diagnostics.namingIntegrity !== undefined
+					? `⚖️ **Naming Integrity**: ${(diagnostics.namingIntegrity * 100).toFixed(1)}%\n`
+					: "") +
+				(diagnostics.merkleDrift
+					? `🌀 **Merkle Resonance**: Drift detected. Substrate hash: ${diagnostics.merkleDrift.substring(0, 8)}...\n`
+					: "✅ **Merkle Resonance**: Substrate is physically synchronized.\n") +
+				(diagnostics.neuralFocus && diagnostics.neuralFocus.length > 0
+					? `🧠 **Neural Focus**: ${diagnostics.neuralFocus.join(", ")}\n`
+					: "") +
+				(diagnostics.fragilityIndex
+					? `🔴 **Fragility Clusters**:\n` +
+						Object.entries(diagnostics.fragilityIndex)
+							.sort((a, b) => b[1] - a[1])
+							.slice(0, 3)
+							.map(([p, s]) => `  - ${p}: ${s.toFixed(2)} (CCI)`)
+							.join("\n")
+					: "") +
+				(diagnostics.recoveryHint ? `\n💡 **RECOVERY HINT**: ${diagnostics.recoveryHint}\n` : "") +
+				"\n"
 		}
 
-		const forensics = forensicTrace ? `${forensicTrace}\n\n` : ""
-
 		return (
-			`# SOVEREIGN AUDIT: ${taskName}\n\n` +
+			`${SovereignProtocol.HEADERS.AUDIT}: ${taskName}\n` +
+			`Timestamp: ${new Date().toISOString()}\n` +
+			`MANTRA: ${SovereignProtocol.MANTRA}\n\n` +
 			diagnosticsBlock +
-			forensics +
-			`## [TRIAD PROBES]\n` +
-			`### 1. THE ARCHITECT (Boundary Probe)\n` +
-			`- **Vulnerability**: [Where is the layer boundary or axiom most vulnerable to leakage?]\n` +
-			`- **Proof**: [Evidence of isolation and cited file paths using ~ notation]\n\n` +
-			`### 2. THE CRITIC (Assumption Probe)\n` +
-			`- **Weak Point**: [What single assumption if proven wrong would lead to regression?]\n` +
-			`- **Hardening**: [Specific architectural fix or guardrail applied]\n\n` +
-			`### 3. THE SRE (Atomic Probe)\n` +
-			`- **Failure Path**: [What is the recovery path to atomic consistency during failure?]\n` +
-			`- **Resilience**: [Implementation of error boundaries and state recovery logic]\n\n` +
-			`## [FINAL RESOLUTION]\n` +
-			`- **Synthesis**: [Summary of hardening applied (min 60 chars)]\n` +
-			`- **MANTRA**: ${SovereignProtocol.MANTRA}\n`
+			`${SovereignProtocol.HEADERS.ARCHITECT} (Mental Model)\n` +
+			`- **Objective**: [Clearly state the goal of this turn]\n` +
+			`- **Context**: [Summary of files read/investigated]\n` +
+			`- **Assumptions**: [List of logical assumptions made]\n\n` +
+			`### 2. THE PATHOGEN (Risks)\n` +
+			`- **Side Effects**: [Potential blast radius of the change]\n` +
+			`- **Regression Risk**: [How could this break the build?]\n\n` +
+			`### 3. THE CURE (Implementation Plan)\n` +
+			`- [ ] Step 1: ...\n` +
+			`- [ ] Step 2: ...\n\n` +
+			`### 4. FORENSIC TRACE\n` +
+			`${forensicTrace || "No trace provided."}\n`
 		)
 	}
 
 	/**
-	 * Generates a lightweight Sovereign Breath template.
+	 * V16: Generates a lightweight Sovereign Breath template for metabolic recovery.
 	 */
-	public static generateBreathTemplate(justification: string, hotspot?: string): string {
+	public static generateBreathTemplate(taskName: string, reason?: string): string {
 		return (
-			`# SOVEREIGN BREATH: ${justification}\n\n` +
-			`- **Objective**: [Briefly describe the target fix]\n` +
-			`- **Constraint**: [Why is this safe to perform despite systemic pressure?]\n` +
-			(hotspot ? `- **Hotspot**: ${hotspot}\n` : "") +
-			`- **Protocol**: ${SovereignProtocol.V12_ID}\n`
-		)
-	}
-
-	/**
-	 * Standardized section headers for validation.
-	 */
-	public static readonly HEADERS = {
-		AUDIT: "# SOVEREIGN AUDIT",
-		BREATH: "# SOVEREIGN BREATH",
-		ARCHITECT: "### 1. THE ARCHITECT",
-		CRITIC: "### 2. THE CRITIC",
-		SRE: "### 3. THE SRE",
-		DIAGNOSTICS: "## [SYSTEM DIAGNOSTICS]",
-		FORENSICS: "## [FORENSIC TRACE]",
-		RESOLUTION: "## [FINAL RESOLUTION]",
-		MANTRA: "**MANTRA**",
-		AGILE: "# SOVEREIGN_AGILE",
-	}
-
-	/**
-	 * V29: Semantic patterns for fuzzy audit detection.
-	 * Allows recognition of audits drafted in natural language without exact headers.
-	 */
-	public static readonly SEMANTIC_PATTERNS = {
-		AUDIT: /(?:# SOVEREIGN AUDIT|My architectural audit|Planning my changes|Architectural plan)/i,
-		ARCHITECT: /(?:### 1. THE ARCHITECT|Step 1: Architect|Architectural Boundary|Layer Probe)/i,
-		RESOLUTION: /(?:## \[FINAL RESOLUTION\]|Final Resolution|Synthesis|Conclusion)/i,
-	}
-
-	/**
-	 * V29: Determines if a file path is implicitly safe for Agile Mode.
-	 * Candidates: Tests, Documentation, Dist files, or leaf nodes (handled in engine).
-	 */
-	public static isImplicitAgileSafe(filePath: string): boolean {
-		const lower = filePath.toLowerCase()
-		return (
-			lower.includes("/test/") ||
-			lower.includes("/tests/") ||
-			lower.includes(".test.") ||
-			lower.includes(".spec.") ||
-			lower.includes("/docs/") ||
-			lower.includes("readme.md") ||
-			lower.includes(".example.")
+			`${SovereignProtocol.HEADERS.BREATH}: ${taskName}\n` +
+			`Timestamp: ${new Date().toISOString()}\n` +
+			`Reason: ${reason || "Metabolic Inflammation"}\n\n` +
+			`### [METABOLIC STRATEGY]\n` +
+			`- [ ] Resetting metabolic pressure for high-velocity focus.\n` +
+			`- [ ] Re-synchronizing physical substrate hashes.\n`
 		)
 	}
 }

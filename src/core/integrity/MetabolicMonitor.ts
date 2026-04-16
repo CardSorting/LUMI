@@ -13,6 +13,7 @@ export interface MetabolicMetrics {
 	lastAestheticHash?: string // V100: Structural integrity hash
 	lastTurnId?: string // V100: Synthesis tracking
 	symbolObservations: Set<string> // V26: Neural Forensic Tracking
+	aestheticWrites: number // V188: Noise filtering count
 }
 
 /**
@@ -53,6 +54,7 @@ export class MetabolicMonitor {
 			const aesHash = this.computeAestheticHash(content)
 			if (metrics.lastAestheticHash === aesHash) {
 				impactMultiplier *= 0.1 // V100: Aesthetic changes have minimal impact
+				metrics.aestheticWrites++
 				Logger.info(`[MetabolicMonitor] Aesthetic Agility: Negligible structural drift in ${path.basename(filePath)}`)
 			} else if (turnId && metrics.lastTurnId === turnId) {
 				impactMultiplier *= 0.5 // V100: Synthesis: iterative edits in same turn discounted
@@ -269,9 +271,25 @@ export class MetabolicMonitor {
 		return {
 			totalReads,
 			totalWrites,
+			avgPressure:
+				Array.from(this.registry.keys()).reduce((acc, p) => acc + this.getPressure(p), 0) / (this.registry.size || 1),
 			avgDoubtSignal: totalReads / (totalWrites || 1),
 			hotspots: hotspots.sort((a, b) => b.stress - a.stress).slice(0, 5),
+			aestheticResilience: this.getAestheticStatus(),
 		}
+	}
+
+	/**
+	 * V188: Computes the efficiency of the substrate in filtering aesthetic noise.
+	 */
+	public getAestheticStatus(): number {
+		let total = 0
+		let aesthetic = 0
+		for (const m of this.registry.values()) {
+			total += m.writes || 0
+			aesthetic += m.aestheticWrites || 0
+		}
+		return total === 0 ? 1.0 : aesthetic / total
 	}
 
 	/**
@@ -301,6 +319,7 @@ export class MetabolicMonitor {
 				lastEditTimestamp: 0,
 				lastReadTimestamp: Date.now(),
 				symbolObservations: new Set<string>(),
+				aestheticWrites: 0,
 			}
 			this.registry.set(filePath, metrics)
 		}
