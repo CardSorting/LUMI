@@ -77,6 +77,8 @@ export class FluidPolicyEngine {
 	private garbageCollector: SovereignGarbageCollector
 	private refactorTurnsRemaining = 0 // V70: Sovereign Refactor Window
 	private lastEntropyScore = 1.0 // V80: Karma Tracking
+	private restorationTokens: Map<string, number> = new Map() // V100: Recovery Buffers
+	private gracePeriods: Map<string, number> = new Map() // V100: Soft-Lock attempts
 
 	constructor(
 		private cwd: string,
@@ -122,12 +124,19 @@ export class FluidPolicyEngine {
 		const stats = this.metabolicMonitor.getVitalityStats()
 		const buildHealth = this.computeBuildHealth(violations.map((v) => v.message))
 
+		const currentEntropy = this.spiderEngine.computeEntropy()
 		return SovereignProtocol.generateAuditTemplate("System Recovery", {
 			buildHealth,
 			metabolicPressure: `${stats.totalWrites} writes across ${this.spiderEngine.nodes.size} nodes`,
 			buildErrors: violations.filter((v) => v.severity === "ERROR").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
 			lintWarnings: violations.filter((v) => v.severity === "WARN").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
 			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
+			resonanceDamping: this.metabolicMonitor.getResonance(),
+			restorationActive: Array.from(this.restorationTokens.values()).some((t) => t > 0),
+			metabolicVelocity:
+				1.0 +
+				(this.lastEntropyScore - currentEntropy.score > 0.05 ? 0.5 : 0) -
+				(currentEntropy.components.couplingScore > 0.15 ? 0.5 : 0),
 		})
 	}
 
@@ -407,6 +416,10 @@ export class FluidPolicyEngine {
 
 		const isHealingMode = this.buildAlarmActive || !!intent || !!content.match(/#HEAL|#HEALING|#CURE|#FIX|#REPAIR|#TIDY/)
 
+		// V100: Cognitive Resonance Scaling
+		const resonance = isHealingMode || this.refactorTurnsRemaining > 0 ? 0.5 : 1.0
+		this.metabolicMonitor.setResonance(resonance)
+
 		// 0. Rule: Cognitive Drift Sensing (Thrashing Prevention)
 		if (
 			block.name === DietCodeDefaultTool.FILE_EDIT ||
@@ -460,9 +473,9 @@ export class FluidPolicyEngine {
 								`The substrate has reached structural saturation. High-velocity logic churn is discouraged to prevent architectural regression.\n\n` +
 								`💡 GUIDANCE: You are currently BLOCKED from performing further edits. You MUST perform an audit turn to justify further churn.\n\n` +
 								`📝 OPTION A: [Audit Turn] - Add this to your \`scratchpad.md\` for a full state synthesis:\n` +
-								`\`\`\`markdown\n${auditTemplate}\`\`\`\n\n` +
+								`\`\`\`markdown\n${auditTemplate}\n\`\`\`\n\n` +
 								`📝 OPTION B: [Breath Turn] - Add this to your \`scratchpad.md\` for a quick targeted fix:\n` +
-								`\`\`\`markdown\n${breathTemplate}\`\`\`\n`,
+								`\`\`\`markdown\n${breathTemplate}\n\`\`\`\n`,
 						warning: scratchpadHealed
 							? `⚠️ SUBSTRATE RECOVERED: \`scratchpad.md\` was missing during Cognitive Cooldown. I have automatically generated it with the required recovery templates.\n\n` +
 								`💡 ACTION REQUIRED: You MUST now sync your plan into the newly created \`scratchpad.md\` before your next move.`
@@ -527,8 +540,21 @@ export class FluidPolicyEngine {
 					}
 				}
 
-				const isRefactoring = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
-				const status = this.metabolicMonitor.isMetabolicallyInflamed(absolutePath, isRefactoring)
+				const isRefactoring =
+					this.refactorTurnsRemaining > 0 ||
+					scratchpadContent.includes("#REFACTOR") ||
+					scratchpadContent.includes("#INFRASTRUCTURE")
+				const nodeSize = this.spiderEngine.nodes.get(absolutePath)?.astComplexity || 0
+				const status = this.metabolicMonitor.isMetabolicallyInflamed(absolutePath, isRefactoring, nodeSize)
+
+				// V100: Restoration Buffer Management
+				const tokens = this.restorationTokens.get(targetPath) || 0
+				if (status.inflamed && isHealingMode && tokens === 0) {
+					this.restorationTokens.set(targetPath, 3)
+					Logger.info(
+						`[FluidPolicyEngine] Recovery Buffer Activated: 3 restoration tokens granted for ${path.basename(targetPath)}`,
+					)
+				}
 
 				// V26: Axiom Lockdown (Structural Debt Prevention)
 				if (!isScratchpad && block.name === DietCodeDefaultTool.FILE_EDIT) {
@@ -563,14 +589,25 @@ export class FluidPolicyEngine {
 					Logger.info(`[FluidPolicyEngine] Metabolic Auto-Reset triggered via # SOVEREIGN_BREATH for ${targetPath}`)
 				}
 
-				if (status.inflamed && !hasOverride && !hasBreath && !this.commitSeal) {
+				const currentTokens = this.restorationTokens.get(targetPath) || 0
+				if (status.inflamed && currentTokens > 0) {
+					this.restorationTokens.set(targetPath, currentTokens - 1)
+					Logger.info(
+						`[FluidPolicyEngine] Restoration Token Consumed for ${path.basename(targetPath)} (${currentTokens - 1} remain)`,
+					)
 					return {
 						success: true,
+						warning: `🩹 RESTORATION ACTIVE: Inflammation bypass granted. ${currentTokens - 1} recovery writes remaining for this file.`,
+					}
+				}
+
+				if (status.inflamed && !hasOverride && !hasBreath && !this.commitSeal) {
+					return {
+						success: false,
+						error: `🛑 METABOLIC BLOCKADE: \`${path.basename(targetPath)}\` is currently INFLAMED (${status.reason}).`,
 						warning:
-							`⚠️ METABOLIC COOLDOWN INTERDICTION: \`${path.basename(targetPath)}\` is currently INFLAMED.\n` +
-							`${status.reason}\n\n` +
-							`💡 RECOVERY: Architectural exhaustion detected. You MUST stop editing this file and performing a # SOVEREIGN AUDIT in \`scratchpad.md\` to justify further churn.\n\n` +
-							`To override, add \`[SOVEREIGN_EXCEPTION: Metabolic Cooldown Override]\` with a substantive reason to your edit.`,
+							`💡 RECOVERY: Switch to #HEAL mode or provide a structural justification in \`scratchpad.md\` to earn a Restoration Token.\n` +
+							`Alternatively, use \`[SOVEREIGN_EXCEPTION: Metabolic Cooldown Override]\` in your edit.`,
 					}
 				}
 			}
@@ -891,8 +928,6 @@ export class FluidPolicyEngine {
 								(delta > 0.01
 									? `\n\n🕷️ ARCHITECTURAL DECAY: Entropy increased by ${(delta * 100).toFixed(1)}%.`
 									: ""),
-					violations: astValidation.errors,
-					entropyScore: entropy.score,
 					correctionHint: this.getCorrectionHint(astValidation.errors, filePath),
 				}
 			}
@@ -1125,18 +1160,37 @@ export class FluidPolicyEngine {
 		}
 
 		// V33: Refactor awareness for diagnostic injection
-		const { content: scratchpadContent } = SovereignScribe.getLatestScratchpadContent([])
-		const isRefactoringAudit = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
+		const isRefactoringIntent =
+			this.refactorTurnsRemaining > 0 || this.spiderEngine.getViolations().length > 0 || this.buildAlarmActive
+		const nodeSize = this.spiderEngine.nodes.get(absolutePath)?.astComplexity || 0
+		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan", isRefactoringIntent)
+		const infection = this.metabolicMonitor.isMetabolicallyInflamed(absolutePath, isRefactoringIntent, nodeSize)
 
-		const infection = this.metabolicMonitor.isMetabolicallyInflamed(absolutePath, isRefactoringAudit)
 		if (infection.inflamed) {
-			header += `\n🔥 METABOLIC FEVER DETECTED:\n${infection.reason}\nThis file is reaching a state of architectural exhaustion. Consider an atomic split.\n`
+			const tokens = this.restorationTokens.get(filePath) || 0
+			if (tokens > 0) {
+				header += `\n🩹 RESTORATION ACTIVE: Inflammation detected, but a Recovery Buffer is active (${tokens} writes remaining).\n`
+			} else {
+				header += `\n🔥 METABOLIC FEVER DETECTED:\n${infection.reason}\nThis file is reaching a state of architectural exhaustion. Consider an atomic split.\n`
+			}
 		}
 
-		const isRefactoringIntent = isRefactoringAudit || this.spiderEngine.getViolations().length > 0 || this.buildAlarmActive
-		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan", isRefactoringIntent)
 		if (drift.warning) {
 			header += `\n${drift.warning}\n`
+		}
+
+		// Proactive Ghost Intelligence & Shadows (V110)
+		const shadows = this.spiderEngine.predictMissingImports(absolutePath, content)
+		if (shadows.length > 0) {
+			header += `\n👻 GHOST PREDICTION [PROACTIVE]:\n`
+			for (const symbol of shadows) {
+				const providers = this.spiderEngine.findSymbolProviders(symbol)
+				const confidence = providers.length === 1 ? "HIGH_CONFIDENCE" : "LOW_CONFIDENCE"
+				const providerHint =
+					providers.length === 1 ? ` (Provider found: ${providers[0]})` : ` (${providers.length} providers found)`
+				header += `  - ${symbol} [${confidence}]${providerHint}\n`
+			}
+			header += `  Resolution required in next turn to prevent build regression.\n`
 		}
 
 		// Proactive Ghost Intelligence
@@ -1245,15 +1299,28 @@ export class FluidPolicyEngine {
 					// 2. Synchronize Graph
 					const content = await fs.readFile(absPath, "utf-8")
 					this.spiderEngine.updateNode(normPath, content)
-					this.metabolicMonitor.recordWrite(normPath, content)
+					this.metabolicMonitor.recordWrite(normPath, content, 0, 0, this.streamId)
 
 					// 3. Report remaining errors
 					if (sweepResult.remainingErrors.length > 0) {
-						result.success = false // Build regression detected
-						result.buildErrors = sweepResult.remainingErrors
-						result.warning = `⚠️ Build/Lint issues persist after Sweep:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
-						result.correctionHint =
-							"The Garbage Collector could not auto-resolve these errors. Manual intervention required."
+						const attempts = (this.gracePeriods.get(normPath) || 0) + 1
+						this.gracePeriods.set(normPath, attempts)
+
+						const isHealingIntent = this.detectHealingIntent(block) !== null
+						const isRefactoringIntent = this.refactorTurnsRemaining > 0 || isHealingIntent
+
+						if (isRefactoringIntent && attempts === 1) {
+							// V100: GC Soft-Lock Grace Period
+							result.success = true // Proceed with warning
+							result.warning = `🩹 GC SOFT-LOCK ACTIVE: Minor build regressions remain after Sweep. Proceeding with caution. FIX IN NEXT TURN:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
+							Logger.warn(`[FluidPolicyEngine] Soft-Lock Grace Period utilized for ${path.basename(filePath)}`)
+						} else {
+							result.success = false // Build regression detected
+							result.buildErrors = sweepResult.remainingErrors
+							result.warning = `⚠️ Build/Lint issues persist after Sweep:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
+							result.correctionHint =
+								"The Garbage Collector could not auto-resolve these errors. Manual intervention required."
+						}
 					} else if (sweepResult.fixedCount > 0) {
 						Logger.info(
 							`[FluidPolicyEngine] Sweep fixed ${sweepResult.fixedCount} issues in ${path.basename(filePath)}.`,
@@ -1423,6 +1490,12 @@ export class FluidPolicyEngine {
 		}
 	}
 
+	public computeIntegrityScore(violations: string[]): number {
+		const entropy = this.spiderEngine.computeEntropy()
+		const health = this.computeBuildHealth(violations)
+		return Math.max(0, 100 - (1.0 - entropy.score) * 100)
+	}
+
 	private normalize(p: string): string {
 		return this.spiderEngine.normalizePath(p)
 	}
@@ -1516,6 +1589,8 @@ export class FluidPolicyEngine {
 			immuneResponse: currentViolations.some((v) => this.pathogens?.isPathogenic(v.path))
 				? "Active Hardening"
 				: "Monitoring",
+			resonanceDamping: this.metabolicMonitor.getResonance(),
+			restorationActive: Array.from(this.restorationTokens.values()).some((t) => t > 0),
 		}
 
 		const template = SovereignProtocol.generateAuditTemplate(taskName, diagnostics)

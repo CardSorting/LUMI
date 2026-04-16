@@ -662,4 +662,136 @@ export class SpiderEngine {
 		}
 		return breaches
 	}
+
+	/**
+	 * V100: Predictive Ghosting.
+	 * Identifies symbols used in the source but neither declared nor imported locally.
+	 */
+	public predictMissingImports(filePath: string, content: string): string[] {
+		const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true)
+		const declared = new Set<string>()
+		const imported = new Set<string>()
+		const used = new Set<string>()
+
+		// V110: Project-Graph Cross-Reference (Forensic calibration)
+		const allProjectExports = new Set<string>()
+		for (const node of this.nodes.values()) {
+			node.exports.forEach((e) => allProjectExports.add(e))
+		}
+
+		const visit = (node: ts.Node) => {
+			if (ts.isImportDeclaration(node)) {
+				if (node.importClause) {
+					if (node.importClause.name) imported.add(node.importClause.name.text)
+					if (node.importClause.namedBindings) {
+						if (ts.isNamedImports(node.importClause.namedBindings)) {
+							node.importClause.namedBindings.elements.forEach((e) => imported.add(e.name.text))
+						} else if (ts.isNamespaceImport(node.importClause.namedBindings)) {
+							imported.add(node.importClause.namedBindings.name.text)
+						}
+					}
+				}
+				return
+			}
+
+			// V110: More surgical declaration tracking (Apothecary Scope Sensing)
+			if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) declared.add(node.name.text)
+			if (ts.isFunctionDeclaration(node) && node.name) declared.add(node.name.text)
+			if (ts.isClassDeclaration(node) && node.name) declared.add(node.name.text)
+			if (ts.isInterfaceDeclaration(node) && node.name) declared.add(node.name.text)
+			if (ts.isTypeAliasDeclaration(node) && node.name) declared.add(node.name.text)
+			if (ts.isEnumDeclaration(node) && node.name) declared.add(node.name.text)
+			if (ts.isParameter(node) && ts.isIdentifier(node.name)) declared.add(node.name.text)
+			if (ts.isBindingElement(node) && ts.isIdentifier(node.name)) declared.add(node.name.text)
+			if (ts.isTypeParameterDeclaration(node)) declared.add(node.name.text)
+
+			if (ts.isIdentifier(node)) {
+				const parent = node.parent
+				const name = node.text
+
+				// V110: Strict Identifier Filtering
+				const isDeclaration =
+					(ts.isVariableDeclaration(parent) && parent.name === node) ||
+					(ts.isFunctionDeclaration(parent) && parent.name === node) ||
+					(ts.isClassDeclaration(parent) && parent.name === node) ||
+					(ts.isInterfaceDeclaration(parent) && parent.name === node) ||
+					(ts.isEnumDeclaration(parent) && parent.name === node) ||
+					(ts.isParameter(parent) && parent.name === node) ||
+					(ts.isBindingElement(parent) && parent.name === node)
+
+				const isPropertyKey =
+					(ts.isPropertyAssignment(parent) && parent.name === node) ||
+					(ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+					(ts.isMethodDeclaration(parent) && parent.name === node)
+
+				const isMeaningfulUse = !isDeclaration && !isPropertyKey
+
+				if (isMeaningfulUse && name.length > 2 && !/^[A-Z_]+$/.test(name)) {
+					used.add(name)
+				}
+			}
+
+			ts.forEachChild(node, visit)
+		}
+
+		visit(sourceFile)
+
+		// V110: Exhaustive Globals (Node, Browser, TS Built-ins)
+		const globals = new Set([
+			"console",
+			"process",
+			"require",
+			"module",
+			"exports",
+			"__dirname",
+			"__filename",
+			"JSON",
+			"Math",
+			"Date",
+			"Error",
+			"Set",
+			"Map",
+			"Promise",
+			"Array",
+			"Object",
+			"String",
+			"Number",
+			"Boolean",
+			"Partial",
+			"Required",
+			"ReadOnly",
+			"Pick",
+			"Record",
+			"Omit",
+			"Exclude",
+			"Extract",
+			"NonNullable",
+			"Parameters",
+			"ConstructorParameters",
+			"ReturnType",
+			"InstanceType",
+			"Buffer",
+			"NodeJS",
+			"Timeout",
+			"Interval",
+			"Immediate",
+			"Uint8Array",
+			"Int32Array",
+			"Float64Array",
+			"Event",
+			"Window",
+			"Document",
+			"HTMLElement",
+			"HTMLDivElement",
+			"MutationObserver",
+			"Request",
+			"Response",
+			"Fetch",
+			"Header",
+		])
+
+		return Array.from(used).filter(
+			(s) => !declared.has(s) && !imported.has(s) && !globals.has(s) && allProjectExports.has(s), // V110: The Provable Provision check
+		)
+	}
 }

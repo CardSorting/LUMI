@@ -10,6 +10,8 @@ export interface MetabolicMetrics {
 	lastEditTimestamp: number
 	lastReadTimestamp: number
 	lastObservedHash?: string // V30 Merkle Drift Detection
+	lastAestheticHash?: string // V100: Structural integrity hash
+	lastTurnId?: string // V100: Synthesis tracking
 	symbolObservations: Set<string> // V26: Neural Forensic Tracking
 }
 
@@ -22,6 +24,7 @@ export class MetabolicMonitor {
 	private cooldownThreshold = 25 // Base collective edits per 30 minutes
 	private refactorThreshold = 50 // V33: Ethereal budget for refactors
 	private thresholdMultiplier = 1.0 // V80: Adaptive Metabolism
+	private resonanceMultiplier = 1.0 // V100: Cognitive Resonance
 
 	/**
 	 * Records a read operation.
@@ -38,14 +41,30 @@ export class MetabolicMonitor {
 
 	/**
 	 * Records a write/edit operation.
-	 * V31: Structural Sync Awareness. Updates the last observed hash immediately.
+	 * V100: Metabolic Synthesis & Aesthetic Agility.
 	 */
-	public recordWrite(filePath: string, content?: string, added = 0, deleted = 0) {
+	public recordWrite(filePath: string, content?: string, added = 0, deleted = 0, turnId?: string) {
 		const metrics = this.getOrCreateMetrics(filePath)
-		metrics.writes++
-		metrics.linesAdded += added
-		metrics.linesDeleted += deleted
+
+		let impactMultiplier = this.resonanceMultiplier
+
+		if (content) {
+			const aesHash = this.computeAestheticHash(content)
+			if (metrics.lastAestheticHash === aesHash) {
+				impactMultiplier *= 0.1 // V100: Aesthetic changes have minimal impact
+				Logger.info(`[MetabolicMonitor] Aesthetic Agility: Negligible structural drift in ${path.basename(filePath)}`)
+			} else if (turnId && metrics.lastTurnId === turnId) {
+				impactMultiplier *= 0.5 // V100: Synthesis: iterative edits in same turn discounted
+				Logger.info(`[MetabolicMonitor] Metabolic Synthesis: Iterative session discount for ${path.basename(filePath)}`)
+			}
+			metrics.lastAestheticHash = aesHash
+		}
+
+		metrics.writes += 1 * impactMultiplier
+		metrics.linesAdded += added * impactMultiplier
+		metrics.linesDeleted += deleted * impactMultiplier
 		metrics.lastEditTimestamp = Date.now()
+		metrics.lastTurnId = turnId
 
 		if (content) {
 			metrics.lastObservedHash = this.computeHash(content)
@@ -57,6 +76,18 @@ export class MetabolicMonitor {
 	 */
 	private computeHash(content: string): string {
 		return crypto.createHash("md5").update(content).digest("hex")
+	}
+
+	/**
+	 * V100: Computes a hash after stripping comments and whitespace.
+	 * Enables Aesthetic Agility (ignoring formatting churn).
+	 */
+	private computeAestheticHash(content: string): string {
+		const normalized = content
+			.replace(/\/\/.*$/gm, "") // Remove single-line comments
+			.replace(/\/\*[\s\S]*?\*\//g, "") // Remove multi-line comments
+			.replace(/\s+/g, "") // Remove all whitespace
+		return crypto.createHash("md5").update(normalized).digest("hex")
 	}
 
 	public getDoubtSignal(filePath: string, layer = "infrastructure", lineCount = 0): number {
@@ -95,7 +126,11 @@ export class MetabolicMonitor {
 	/**
 	 * Detects if a file is "Inflamed" (High churn in a short period).
 	 */
-	public isMetabolicallyInflamed(filePath: string, isRefactoring = false): { inflamed: boolean; reason?: string } {
+	public isMetabolicallyInflamed(
+		filePath: string,
+		isRefactoring = false,
+		lineCount = 0,
+	): { inflamed: boolean; reason?: string } {
 		const metrics = this.registry.get(filePath)
 		if (!metrics) return { inflamed: false }
 
@@ -103,8 +138,10 @@ export class MetabolicMonitor {
 		const totalDelta = metrics.linesAdded + metrics.linesDeleted
 
 		// V33: Ethereal Leniency
-		const churnThreshold = (isRefactoring ? 1000 : 500) * this.thresholdMultiplier
-		const writeThreshold = (isRefactoring ? 10 : 5) * this.thresholdMultiplier
+		// V100: Size-Aware Resonance (Normalization by line count)
+		const sizeFactor = lineCount > 0 ? Math.log10(Math.max(10, lineCount)) : 1.0
+		const churnThreshold = (isRefactoring ? 1000 : 500) * this.thresholdMultiplier * sizeFactor
+		const writeThreshold = (isRefactoring ? 10 : 5) * this.thresholdMultiplier * sizeFactor
 
 		const highChurn = totalDelta > churnThreshold
 		const recentActivity = timeSinceLastEdit < 3600000 // 1 hour
@@ -112,7 +149,7 @@ export class MetabolicMonitor {
 		if (highChurn && recentActivity && metrics.writes > writeThreshold) {
 			return {
 				inflamed: true,
-				reason: `High metabolic churn detected (${metrics.writes} edits). ${isRefactoring ? "(Refactor leniency applied)" : ""}`,
+				reason: `High metabolic churn detected (${metrics.writes.toFixed(1)} edits). ${isRefactoring ? "(Refactor resonance active)" : ""}`,
 			}
 		}
 
@@ -318,5 +355,16 @@ export class MetabolicMonitor {
 	 */
 	public setThresholdMultiplier(multiplier: number) {
 		this.thresholdMultiplier = multiplier
+	}
+
+	/**
+	 * V100: Sets the cognitive resonance factor (Damping).
+	 */
+	public setResonance(multiplier: number) {
+		this.resonanceMultiplier = multiplier
+	}
+
+	public getResonance(): number {
+		return this.resonanceMultiplier
 	}
 }

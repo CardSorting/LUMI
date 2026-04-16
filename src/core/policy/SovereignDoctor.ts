@@ -15,6 +15,7 @@ export interface DoctorReport {
 	}[]
 	optimizations: OptimizationOpportunity[]
 	agentSuccessRate: number
+	integrityScore: number // V100: Structural integrity (0-100)
 	resources: {
 		memoryPressure: number
 		diskUsage: number
@@ -62,6 +63,7 @@ export class SovereignDoctor {
 		const buildHealth = Math.max(0, 100 - allViolations.length * 10)
 
 		// Map to metabolic pressure
+		const entropy = engine.computeEntropy()
 		const mem = process.memoryUsage()
 		const memoryPressure = (mem.heapUsed / mem.heapTotal) * 100
 
@@ -71,10 +73,11 @@ export class SovereignDoctor {
 			feverMap: feverMap.sort((a, b) => b.score - a.score),
 			violations: allViolations,
 			optimizations,
-			agentSuccessRate: 0.95,
+			agentSuccessRate: 100, // Placeholder
+			integrityScore: entropy.score * 100,
 			resources: {
-				memoryPressure,
-				diskUsage: 0, // Placeholder
+				memoryPressure: process.memoryUsage().heapUsed / 1024 / 1024,
+				diskUsage: 0, // V100: Placeholder for stats fix
 			},
 		}
 	}

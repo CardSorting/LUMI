@@ -17,6 +17,7 @@ import { SpiderEngine } from "./spider/SpiderEngine"
  */
 export class SovereignGarbageCollector {
 	private healer: RefactorHealer
+	private ghostAttempts: Map<string, number> = new Map() // V100: Graceful Suppression
 
 	constructor(
 		private cwd: string,
@@ -287,41 +288,68 @@ export class SovereignGarbageCollector {
 	 */
 	private async resolveMissingImports(filePath: string): Promise<boolean> {
 		const absolutePath = path.resolve(this.cwd, filePath)
-		const content = await fs.readFile(absolutePath, "utf-8")
+		let content = await fs.readFile(absolutePath, "utf-8")
+
+		// V100: Predictive Ghosting (Synthesized Shadows)
+		const shadows = this.spiderEngine.predictMissingImports(filePath, content)
 		const violations = this.spiderEngine.getViolations().filter((v) => v.path === filePath && v.id === "SPI-005")
 
+		const allGhostSymbols = new Set(
+			[...shadows, ...violations.map((v) => v.message.match(/Ghost import: .* -> (.*)/)?.[1] || "")].filter(Boolean),
+		)
+
 		let fixed = false
-		for (const v of violations) {
-			const ghostMatch = v.message.match(/Ghost import: .* -> (.*)/)
-			if (ghostMatch) {
-				const symbol = ghostMatch[1]
-				const providers = this.spiderEngine.findSymbolProviders(symbol)
+		for (const symbol of allGhostSymbols) {
+			const attempts = (this.ghostAttempts.get(`${filePath}:${symbol}`) || 0) + 1
+			this.ghostAttempts.set(`${filePath}:${symbol}`, attempts)
 
-				if (providers.length === 1) {
-					// Unique provider found! Inject the import.
-					const provider = providers[0]
-					let relPath = path.relative(path.dirname(filePath), provider).replace(/\.tsx?$/, "")
-					if (!relPath.startsWith(".")) relPath = `./${relPath}`
+			const providers = this.spiderEngine.findSymbolProviders(symbol)
 
-					const importLine = `import { ${symbol} } from "${relPath}"\n`
+			// V110: Confidence-Based Auto-Healing (Uniqueness Rule)
+			if (providers.length === 1) {
+				// Unique provider found! Inject the import.
+				const provider = providers[0]
+				let relPath = path.relative(path.dirname(filePath), provider).replace(/\.tsx?$/, "")
+				if (!relPath.startsWith(".")) relPath = `./${relPath}`
 
-					// Inject after existing imports or at the top after [LAYER] tag
-					const lines = content.split("\n")
-					let insertIndex = 0
-					for (let i = 0; i < lines.length; i++) {
-						if (lines[i].includes("import ") || lines[i].includes('from "')) {
-							insertIndex = i + 1
-						}
-						if (lines[i].includes("[LAYER:")) {
-							insertIndex = Math.max(insertIndex, i + 2)
-						}
+				const importLine = `import { ${symbol} } from "${relPath}"\n`
+
+				// Inject after existing imports or at the top after [LAYER] tag
+				const lines = content.split("\n")
+				let insertIndex = 0
+				for (let i = 0; i < lines.length; i++) {
+					if (lines[i].includes("import ") || lines[i].includes('from "')) {
+						insertIndex = i + 1
 					}
-
-					lines.splice(insertIndex, 0, importLine)
-					await fs.writeFile(absolutePath, lines.join("\n"), "utf-8")
-					Logger.info(`[SovereignGarbageCollector] Resolved ghost symbol '${symbol}' by importing from ${relPath}`)
-					fixed = true
+					if (lines[i].includes("[LAYER:")) {
+						insertIndex = Math.max(insertIndex, i + 1)
+					}
 				}
+
+				lines.splice(insertIndex, 0, importLine)
+				content = lines.join("\n")
+				await fs.writeFile(absolutePath, content, "utf-8")
+				Logger.info(
+					`[SovereignGarbageCollector] Injected missing import for ${symbol} in ${path.basename(filePath)} (Shadow Prediction)`,
+				)
+				fixed = true
+			} else if (attempts >= 2) {
+				// V100: Graceful Degradation fallback (Auto-commenting)
+				Logger.warn(`[SovereignGarbageCollector] Unresolvable ghost ${symbol}. Falling back to graceful suppression.`)
+				const lines = content.split("\n")
+				const commentedLines = lines.map((line) => {
+					if (
+						line.includes(symbol) &&
+						(line.includes("import") || line.includes("from ") || line.includes(":") || line.includes("new "))
+					) {
+						return `// [SOVEREIGN_GHOST_SUPPRESSION]: ${line} // FIXME: Unresolvable provider`
+					}
+					return line
+				})
+				content = commentedLines.join("\n")
+				await fs.writeFile(absolutePath, content, "utf-8")
+				this.ghostAttempts.delete(`${filePath}:${symbol}`)
+				fixed = true
 			}
 		}
 		return fixed

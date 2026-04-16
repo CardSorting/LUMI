@@ -14,6 +14,8 @@ export interface SovereignDiagnostics {
 	recursiveStabilization?: boolean
 	metabolicVelocity?: number
 	immuneResponse?: string
+	resonanceDamping?: number // V100: 0.5x, 1.0x etc
+	restorationActive?: boolean // V100: Recovery Buffer
 }
 
 /**
@@ -40,6 +42,12 @@ export class SovereignProtocol {
 				(diagnostics.karmaStatus ? `✨ **Karma Status**: ${diagnostics.karmaStatus}\n` : "") +
 				(diagnostics.metabolicVelocity
 					? `🚀 **Metabolic Velocity**: ${diagnostics.metabolicVelocity.toFixed(2)}x\n`
+					: "") +
+				(diagnostics.resonanceDamping && diagnostics.resonanceDamping < 1.0
+					? `🧘 **Cognitive Resonance Active**: ${diagnostics.resonanceDamping}x pressure accumulation (Refactor Mode)\n`
+					: "") +
+				(diagnostics.restorationActive
+					? `🩹 **Restoration Buffer Active**: Immunity granted for build-critical repairs\n`
 					: "") +
 				(diagnostics.recursiveStabilization ? `🌊 **Wave-Front Healing Active** (Dependency Stabilization)\n` : "") +
 				(diagnostics.immuneResponse ? `🛡️ **Immune Response Active**: ${diagnostics.immuneResponse}\n` : "") +
