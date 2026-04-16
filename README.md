@@ -5,7 +5,7 @@
 **DietCode** is an industrial-grade, model-agnostic agentic coding assistant designed to maintain architectural integrity in complex software ecosystems. Beyond simple code generation, DietCode acts as an **Architectural Guardian**, enforcing strict layering, managing structural entropy, and ensuring transactional stability across your workspace.
 
 > [!IMPORTANT]
-> **Oracle Grade Release (v5.0.0)**: This release marks the transition to **Forensic Calibration** and **Metabolic Resilience**. It introduces predictive structural discovery (Shadow Symbols) and turn-aware metabolic synthesis to ensure high-velocity agentic stability with zero false positives.
+> **Industrial Release (v5.4.0)**: This release marks the transition to **Forensic Realism** and **Deterministic Traceability**. It introduces 100% data-driven structural forensics and reactive asynchronous healing, replacing predictive heuristics with verifiable structural proof.
 
 ---
 
@@ -22,15 +22,15 @@ DietCode enforces a rigorous architectural pattern known as **Joy-Zoning**. It a
 > The **Fluid Policy Engine** monitors every file operation via the **Universal Guard** to prevent layer leaks and circular dependencies in real-time.
 
 ### 🕷️ Spider Structural Intelligence Engine
-The **Spider Engine** represents a fundamental shift from static code analysis to **Structural Intelligence**:
-*   **Dependency Web analysis**: Treats the codebase as a living web, sensing "vibrations" (structural shifts) on every write.
+The **Spider Engine** represents a fundamental shift from static code analysis to **Forensic Structural Intelligence**:
+*   **Deterministic Forensics**: Uses real-time AST sensing to verify symbol consumption project-wide with 100% accuracy.
 *   **Incremental $O(1)$ Audits**: Uses a CAS-hash based model to provide near-instantaneous architectural validation without scanning the entire repo.
-*   **Blast Radius Intelligence**: Predicts the multi-hop impact of a change before execution, identifying potential "Structural Entropy" growth.
+*   **Blast Radius Traceability**: Calculates the physical impact of structural changes, identifying potential "Structural Entropy" growth before they manifest as build failures.
 
 ### 🔮 Oracle Grade Suggestion Engine
 The **Oracle Suggestion Engine** transforms prompt suggestions into an architectural and diagnostic compass:
-*   **Spider-Powered Symbol Resolution**: Automatically identifies and resolves the definitions of types causing workspace errors.
-*   **Project-Wide Consistency**: Extracts and enforces your project's dominant idioms, error handling conventions, and naming styles.
+*   **Forensic Symbol Resolution**: Automatically identifies and resolves missing symbols using verified AST metadata from the Spider graph.
+*   **Industrial Member Mapping**: Forensicly extracts method and property signatures from provider modules to synthesize perfectly compatible stubs.
 *   **Parallelized Source Discovery**: Simultaneously gathers intelligence from Diagnostics, Git, BroccoliDB, and Tree-Sitter with zero detectable latency.
 
 ---

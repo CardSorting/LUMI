@@ -41,26 +41,18 @@ The [SemanticAxiomEngine](file:///Users/bozoegg/Downloads/codemarie-new/src/core
 
 ## 3. Autonomous Sovereign Healing (`arch_heal`)
 
-The [ArchitectureHealTool](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/tools/ArchitectureHealTool.ts) is the primary engine for structural restoration. It supports multi-file cascading refactors:
+The [SovereignGarbageCollector](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SovereignGarbageCollector.ts) implements **Reactive Structural Stabilization**. It represents a pivot from predictive guessing to error-driven forensic repair:
 
-- **`extract_interface`**:
-    1. Detects public methods in a concrete class.
-    2. Generates a matching `I[ClassName].ts` interface.
-    3. Updates the original class to implement the interface.
-    4. Swaps all project-wide references to depend on the abstraction.
-- **`stabilize`**:
-    1. Runs **Canonicalization** (fixing relative imports to `@` aliases).
-    2. Runs **Tag Alignment** (ensuring the `[LAYER: ...]` matches the file's physical location).
-    3. Triggers optimization suggestions based on the current fingerprint.
-- **Wave-Front Healing (V90)**: The primary mechanism for **Cascading Stabilization**. When a file is modified, the garbage collector identifies its dependent modules and schedules a recursive sweep (up to depth 2), ensuring that improvements in core logic are propagated project-wide in a single turn.
+- **Reactive stabilization**: Structural heals, export pruning, and circular dependency mitigation are triggered strictly by verified build violations (TSC/Biome). This prevents agentic spiraling caused by hypothetical substrate predictions.
+- **Industrial Member Mapping**: The [RefactorHealer](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/tools/RefactorHealer.ts) physically extracts method/property signatures from provider modules using AST traversal to synthesize perfectly compatible stubs.
+- **Transparent Logging**: Every substrate repair is now recorded in a forensic `repairLog`, providing full traceability into autonomous substrate healing.
 
-## 4. The Sovereign Metabolism (Pass 8)
+## 4. The Sovereign Metabolism (V140)
 
-The substrate now manages its own "Caloric Budget" through **Adaptive Metabolism**:
+The metabolic layer is now **Data-Driven**, calculating energy consumption based on physical structural improvement:
 
-- **Metabolic Velocity**: Turn velocity is no longer static. High-quality work (Karma) grants **Velocity Expansion (1.5x)**, while architectural decay (Drift) induces **Metabolic Braking (0.5x)**.
-- **Structural Karma**: A reward system that recognizes refactors that reduce total entropy by > 5%. Earned Karma resets strike counts and pardons current metabolic pressure.
-- **Immune-Driven Hardening**: Integrated with the **PathogenStore**. Files with a history of failure (Chronic Violators) undergo **Deep Forensic Scans**, enforcing absolute structural purity during every sweep.
+- **Metabolic Velocity**: Turn velocity is adaptive. High-quality refactors (Naming Integrity > 0.9) grant **Velocity Expansion**, reward system structural hardening.
+- **Immune-Driven Hardening**: Integrated with the **PathogenStore**. Modules with high failure rates (Pathogens) undergo **Focused Forensic Audits**, enforcing 100% structural purity during reactive sweeps.
 
 ## 5. Substrate Immortality & Axiomatic Drift
 
@@ -76,16 +68,16 @@ The [SimulationEngine](file:///Users/bozoegg/Downloads/codemarie-new/src/core/po
 
 ---
 
-## 🔍 Auditing Logic 3.0
+## 🔍 Auditing Logic 3.0: Total Forensic Realism
 
-When performing an architectural audit, the system generates a **DoctorReport** which includes:
-1. **Fever Map**: Files with high doubt signals (loops/re-reads).
-2. **Archetype Mismatch List**: Modules physically located in one layer but behaving like another.
-3. **Axiom Violations**: Direct breaches of structural constraints.
-4. **Agent Success Rate**: Persistent tracking of how often the AI adheres to these rules vs. attempts to bypass them.
+When performing an architectural audit, the system generates a **DoctorReport** powered by **Forensic Realism**:
+1. **Fever Map**: Accurate detection of structural stagnation and high coupling density.
+2. **Metabolic Exhaustion**: Real-time sensing of agentic fatigue and loop detection.
+3. **Axiomatic Violation Audit**: Direct, verifiable breaches of structural constraints.
+4. **Member Mapping Success**: Evaluation of how often ghost symbols matches physical providers.
 
 > [!CAUTION]
-> **Substrate Integrity Score < 70**: Triggers the **Architectural Alarm**. In this state, the agent is restricted to `HEAL` operations only until sovereignty is restored.
+> **Substrate Integrity Score < 70**: Triggers the **Architectural Alarm**. In this state, the agent is restricted to **Reactive Healing** only until forensic sovereignty is restored.
 
 > [!NOTE]
-> **V14 Protocol Active**: Incorporates Adaptive Metabolism, Wave-Front Healing, and Immune Memory.
+> **V140 Industrial Protocol Active**: Incorporates Deterministic Forensics, Reactive GC, and Industrial Member Mapping.

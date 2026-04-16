@@ -1,9 +1,20 @@
 # Changelog (V2)
 
-## [5.0.0] - 2026-04-16
+## [5.4.0] - 2026-04-16
 
 ### Added
-- **V100/V110 Hardening: Forensic Calibration & Metabolic Resilience**:
+- **V140 Hardening: Industrial Realism [ULTRA_REALISM]**:
+  - **Forensic Realism**: Transitioned from predictive shadow sensing to 100% data-driven AST forensics in `ForensicEngine`.
+  - **Reactive Garbage Collection**: Implemented error-driven stabilization in `SovereignGarbageCollector`, focusing substrate repairs strictly on verified TSC/Biome violations.
+  - **Industrial Member Mapping**: Developed AST-based signature extraction in `RefactorHealer` to accurately replicate method/property contracts during ghost materialization.
+  - **Logic-Driven Integrity**: Replaced static placeholders in `SovereignDecomposer` with real-time structural metrics (Naming Integrity, Coupling Density, Orphanage).
+  - **Aromatic Interface Synthesis**: Enhanced `SpiderRefactorer` with dynamic export-to-interface contract mapping.
+  - **Forensic Doctor**: Implemented deep environment diagnostics in `SovereignDoctor`, sensing metabolic exhaustion and immune memory bloat.
+
+## [5.1.0] - 2026-04-16
+
+### Added
+- **V110 Hardening: Forensic Calibration & Metabolic Resilience**:
   - **Predictive Ghosting (Shadow Symbols)**: Implemented AST-based identifier scanning in `SpiderEngine` with **Provable Provision** calibration, cross-referencing shadow symbols against the project's export registry to eliminate false positives.
   - **Metabolic Synthesis**: Introduced turn-aware write budgeting in `MetabolicMonitor`, discounting iterative edits to the same file within a single session by 50%.
   - **Aesthetic Agility**: Implemented formatting-ignore logic via normalized hashing, providing a 90% metabolic discount for changes to comments and whitespace.

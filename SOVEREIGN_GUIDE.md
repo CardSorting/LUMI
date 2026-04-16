@@ -39,15 +39,15 @@ npx ts-node src/scripts/align-sovereignty.ts
 
 ## 🛰️ Agent Intelligence Features
 
-### 1. Active Surveillance (Spider 4.0)
+### 1. Active Surveillance (Spider Engine V140)
 Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by a modular diagnostic suite:
-- **Forensic Engine**: Detects "ghost imports" and **Shadow Symbols** (consumed but not imported) via predictive AST scanning.
+- **Forensic Realism**: Deterministically detects "ghost symbols" via physical AST sensing across the project graph.
 - **Metrics Engine**: Real-time evaluation of Logic Density, I/O Entropy, and **AST Complexity Scaling**.
 - **Persistence Manager**: Ensures architectural state is atomically persisted in `.spiderbin`.
 
-### 2. Forensic Sovereignty
+### 2. Forensic Realism
 When moving or deleting files, the Forensic Engine verifies symbol integrity project-wide. 
-- **Rule**: You must never delete a file without first running a forensic scan (`npm run scan`) to verify that no orphaned symbols remain.
+- **Rule**: All materialized symbols must use **Industrial Member Mapping** to ensure 100% structural fidelity with provider modules.
 
 ## 🤝 Swarm Consensus Protocol
 When performing a mission-critical refactor (e.g., `decompose_sovereign_module`):
@@ -67,14 +67,14 @@ To support high-velocity development, the substrate optimizes for "flow state" b
 - **Metabolic Synthesis**: Atomic writes to the same file in a single turn are discounted by **50%**, rewarding iterative refinement.
 - **Aesthetic Agility**: Changes to whitespace, line breaks, or comments (Aesthetic Hash) have a **90% discount** and never trigger blockades.
 
-## 🩹 Forensic Resilience & Recovery
-Failure is part of the architectural evolution. The system provides buffers for restoration.
-- **Restoration Tokens**: Grant **3-write "Recovery Buffers"** for build-critical repairs in inflamed files.
-- **Soft-Lock Grace Period**: During refactoring, first-occurrence build errors are reported as **warnings** rather than blocks, allowing for multi-file transition stabilization.
-- **Provable Provision**: Predictive Ghosting (Shadow Symbols) is cross-referenced against the project graph. Imports are auto-injected ONLY if a unique provider exists project-wide.
+## 🩹 Forensic Resilience & Recovery (V140 Industrial)
+The substrate now operates on a platform of **Forensic Realism**.
+- **Deterministic Traceability**: Substrate repairs are grounded in physical structural proof. Imports and member signatures are extracted directly from the graph using AST forensics.
+- **Reactive Stabilization**: Build errors trigger asynchronous sweeps by the Garbage Collector. These sweeps focus strictly on repairing verified violations, ensuring that development flow is never blocked by hypothetical substrate predictions.
+- **Forensic repairLog**: Use the repairLog in the Garbage Collector to trace any autonomous structural heals applied during your session.
 
-## 🌊 Wave-Front Healing (V90)
-Automated stabilization is now recursive. When you fix a symbol in a module, the Garbage Collector will automatically audit its **dependent modules** to ensure the fix propagated correctly. This achieves project-wide stability in a single turn.
+## 🌊 Wave-Front Healing (Reactive)
+Automated stabilization is now reactive and forensic. When a build error is detected, the Garbage Collector identifies the required repairs and schedules a recursive sweep of the dependent wave-front, achieving project-wide stability in a deterministic loop.
 
 ## ✨ The Sovereign Economy (Incentives)
 - **Structural Karma**: Earned by reducing project-wide entropy by > 5%. Karma pardons all strikes and resets metabolic pressure.
