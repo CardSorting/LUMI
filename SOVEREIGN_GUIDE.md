@@ -41,8 +41,8 @@ npx ts-node src/scripts/align-sovereignty.ts
 
 ### 1. Active Surveillance (Spider 4.0)
 Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by a modular diagnostic suite:
-- **Forensic Engine**: Detects "ghost imports" (symbols that are physically missing but still present in code).
-- **Metrics Engine**: Real-time evaluation of Logic Density, I/O Entropy, and AST Complexity.
+- **Forensic Engine**: Detects "ghost imports" and **Shadow Symbols** (consumed but not imported) via predictive AST scanning.
+- **Metrics Engine**: Real-time evaluation of Logic Density, I/O Entropy, and **AST Complexity Scaling**.
 - **Persistence Manager**: Ensures architectural state is atomically persisted in `.spiderbin`.
 
 ### 2. Forensic Sovereignty
@@ -60,6 +60,18 @@ When performing a mission-critical refactor (e.g., `decompose_sovereign_module`)
 Use `generate_sovereign_map` to visualize the structural health and coupling of the substrate. High integrity is marked by low coupling between layers and high internal cohesion within Domain modules.
 
 - **Blueprint Outcome**: The tool ensures the correct directory, file name, `[LAYER]` tag, and base template are applied instantly. Never create files manually if you can scaffold.
+
+## 🔋 Metabolic Resilience (V100/V110)
+To support high-velocity development, the substrate optimizes for "flow state" by damping pressure during intensive refactoring.
+- **Cognitive Resonance**: During `#REFACTOR` or `#HEAL` turns, metabolic pressure is damped at **0.5x velocity**.
+- **Metabolic Synthesis**: Atomic writes to the same file in a single turn are discounted by **50%**, rewarding iterative refinement.
+- **Aesthetic Agility**: Changes to whitespace, line breaks, or comments (Aesthetic Hash) have a **90% discount** and never trigger blockades.
+
+## 🩹 Forensic Resilience & Recovery
+Failure is part of the architectural evolution. The system provides buffers for restoration.
+- **Restoration Tokens**: Grant **3-write "Recovery Buffers"** for build-critical repairs in inflamed files.
+- **Soft-Lock Grace Period**: During refactoring, first-occurrence build errors are reported as **warnings** rather than blocks, allowing for multi-file transition stabilization.
+- **Provable Provision**: Predictive Ghosting (Shadow Symbols) is cross-referenced against the project graph. Imports are auto-injected ONLY if a unique provider exists project-wide.
 
 ## 🌊 Wave-Front Healing (V90)
 Automated stabilization is now recursive. When you fix a symbol in a module, the Garbage Collector will automatically audit its **dependent modules** to ensure the fix propagated correctly. This achieves project-wide stability in a single turn.

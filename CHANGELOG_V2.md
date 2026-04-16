@@ -1,5 +1,16 @@
 # Changelog (V2)
 
+## [5.0.0] - 2026-04-16
+
+### Added
+- **V100/V110 Hardening: Forensic Calibration & Metabolic Resilience**:
+  - **Predictive Ghosting (Shadow Symbols)**: Implemented AST-based identifier scanning in `SpiderEngine` with **Provable Provision** calibration, cross-referencing shadow symbols against the project's export registry to eliminate false positives.
+  - **Metabolic Synthesis**: Introduced turn-aware write budgeting in `MetabolicMonitor`, discounting iterative edits to the same file within a single session by 50%.
+  - **Aesthetic Agility**: Implemented formatting-ignore logic via normalized hashing, providing a 90% metabolic discount for changes to comments and whitespace.
+  - **Restoration Tokens (Recovery Buffers)**: Added 3-write immunity buffers in `FluidPolicyEngine` for build-critical repairs in inflamed files.
+  - **GC Soft-Lock Grace Periods**: Implemented a 1-turn "Grace Period" for first-occurrence build errors during active `#REFACTOR` turns.
+  - **High-Fidelity Diagnostic Labels**: Enhanced the resilience shield to display tiered ghost confidence (`[HIGH_CONFIDENCE]` vs `[LOW_CONFIDENCE]`).
+
 ## [4.7.1] - 2026-04-15
 
 ### Changed
