@@ -60,6 +60,8 @@ export class SpiderEngine {
 	private forensic: ForensicEngine
 	private suppressions: Set<string> = new Set() // V45: Forensic Suppression List
 	private sessionBuffer: Map<string, string> = new Map() // V71: Virtual Session Sensing
+	private stabilityLock: string | null = null // V190: Async Mutual Exclusion Lock
+	private stabilityHeartbeat: NodeJS.Timeout | null = null // V190: Lock expiration timer
 
 	private reachabilityTimeout: NodeJS.Timeout | null = null
 	constructor(public cwd: string) {
@@ -67,6 +69,41 @@ export class SpiderEngine {
 		this.metrics = new MetricsEngine(cwd, this.resolver)
 		this.persistence = new PersistenceManager(this.metrics)
 		this.forensic = new ForensicEngine(cwd, this.resolver)
+	}
+
+	/**
+	 * V190: Stability Sovereignty.
+	 * Acquires a mutual exclusion lock to prevent structural corruption during
+	 * concurrent or multi-step refactoring operations.
+	 */
+	public async acquireStabilityLock(owner: string): Promise<boolean> {
+		if (this.stabilityLock && this.stabilityLock !== owner) {
+			Logger.warn(`[SpiderEngine] Stability Lock collision: ${owner} denied by ${this.stabilityLock}`)
+			return false
+		}
+
+		this.stabilityLock = owner
+		this.clearStabilityHeartbeat()
+		this.stabilityHeartbeat = setTimeout(() => {
+			Logger.error(`[SpiderEngine] Stability Lease EXPIRED for ${owner}. Forcefully releasing lock.`)
+			this.releaseStabilityLock(owner)
+		}, 60000) // 1 minute lease
+
+		return true
+	}
+
+	public releaseStabilityLock(owner: string): void {
+		if (this.stabilityLock === owner) {
+			this.stabilityLock = null
+			this.clearStabilityHeartbeat()
+		}
+	}
+
+	private clearStabilityHeartbeat(): void {
+		if (this.stabilityHeartbeat) {
+			clearTimeout(this.stabilityHeartbeat)
+			this.stabilityHeartbeat = null
+		}
 	}
 
 	public getForensicEngine(): ForensicEngine {
@@ -137,6 +174,10 @@ export class SpiderEngine {
 			consumptions,
 			mtime: fs.statSync(absolutePath).mtimeMs,
 			namingScore,
+			symbolDensity: content.length > 0 ? exports.length / (content.length / 100) : 0,
+			logicCohesion: 0.5,
+			blastRadius: 0, // Computed project-wide
+			isFragile: false,
 		}
 
 		this.nodes.set(normalizedPath, newNode)
@@ -147,7 +188,6 @@ export class SpiderEngine {
 			this.resolver.clearFileFromCache(normalizedPath)
 			this.scheduleReachability()
 		}
-
 		// V150: Memory-Only Substrate - Removed background filesystem persistence to prevent workspace noise.
 
 		// V160: AST Hygiene - Explicitly nullify large objects to assist GC
@@ -470,6 +510,17 @@ export class SpiderEngine {
 
 		this.metrics.computeCouplingMetrics(this.nodes)
 		this.metrics.computeReachability(this.nodes)
+
+		// 10. Compute Fragility (V190: Industrial Risk Mapping)
+		const fragility = this.forensic.computeFragility(this.nodes)
+		for (const [id, stats] of fragility.entries()) {
+			const n = this.nodes.get(id)
+			if (n) {
+				n.blastRadius = stats.blastRadius
+				n.isFragile = stats.isFragile
+			}
+		}
+
 		Logger.info(`[SpiderEngine] Substrate Immortalized: ${this.nodes.size} nodes indexed.`)
 	}
 

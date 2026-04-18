@@ -55,6 +55,19 @@ export const SpiderRefactorer = {
 			}
 		}
 
+		// 4. Identify Structural Hotspots (High Blast Radius)
+		for (const node of engine.nodes.values()) {
+			if (node.isFragile && node.logicDensity > 0.7) {
+				suggestions.push({
+					type: "EXTRACT",
+					target: path.basename(node.path),
+					reason: `Module is a 'Structural Hotspot' with high blast radius (${(node.blastRadius * 100).toFixed(0)}%) and high complexity.`,
+					benefit: "Reduces systemic risk by de-coupling critical logic vectors.",
+					synthesis: this.synthesizeInterface(node),
+				})
+			}
+		}
+
 		return suggestions
 	},
 

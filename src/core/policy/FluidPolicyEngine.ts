@@ -1315,6 +1315,9 @@ export class FluidPolicyEngine {
 					// 0. Update Session Awareness (V71)
 					this.spiderEngine.setSessionBuffer(this.sessionFiles)
 
+					// 0.1: Acquire Stability Lock (V190: Industrial Sovereignty)
+					await this.spiderEngine.acquireStabilityLock("AGENT_MUTATION")
+
 					// 1. Run the Sweep (Auto-fix lint/imports/pruning)
 					const sweepResult = await this.garbageCollector.sweep([normPath])
 
@@ -1378,6 +1381,8 @@ export class FluidPolicyEngine {
 					}
 				} catch (e) {
 					Logger.error(`[FluidPolicyEngine] Garbage Collection failed for ${filePath}:`, e)
+				} finally {
+					this.spiderEngine.releaseStabilityLock("AGENT_MUTATION")
 				}
 			}
 		}
@@ -1652,6 +1657,17 @@ export class FluidPolicyEngine {
 						"[FluidPolicyEngine] Substrate Corruption Detected (Checksum Mismatch). Triggering Autonomous Rebuild.",
 					)
 					await this.spiderEngine.loadRegistry()
+					return
+				}
+
+				// V190: Merkle Throttling (Industrial Sovereignty)
+				// If the Merkle root in Ghost Memory matches our current root, we skip restoration/re-index.
+				const ghostMerkle = await orchestrator.recallMemory(this.streamId, "merkle_resonance")
+				const currentMerkle = this.spiderEngine.computeMerkleRoot()
+				if (ghostMerkle === currentMerkle && this.spiderEngine.nodes.size > 0) {
+					Logger.info(
+						`[FluidPolicyEngine] Substrate Merkle Match (${currentMerkle.slice(0, 8)}). Skipping ghost restoration.`,
+					)
 					return
 				}
 

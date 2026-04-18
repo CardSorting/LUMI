@@ -20,6 +20,8 @@ export interface SpiderNode {
 	namingScore: number // V140: Industrial Naming Integrity (0-1.0)
 	symbolDensity: number // V160: Ratio of exports to logical complexity
 	logicCohesion: number // V160: Internal symbol re-use score
+	blastRadius: number // V190: Systemic risk score (0-1.0)
+	isFragile: boolean // V190: Flag for high-blast radius components
 }
 
 export interface SpiderSnapshot {

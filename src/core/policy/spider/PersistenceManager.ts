@@ -4,7 +4,7 @@ import { MetricsEngine } from "./MetricsEngine.js"
 import { SpiderNode, SpiderRegistryPayload, SpiderSnapshot } from "./types.js"
 
 export class PersistenceManager {
-	private snapshots: SpiderSnapshot[] = []
+	private snapshots: Buffer[] = [] // V190: Binary Snapshot Buffer (Industrial Fidelity)
 
 	constructor(private metrics: MetricsEngine) {}
 
@@ -20,9 +20,25 @@ export class PersistenceManager {
 		return v8.deserialize(data)
 	}
 
-	public async saveRegistry(_nodes: Map<string, SpiderNode>): Promise<void> {
-		// V150: Memory-Only Substrate.
-		// Substrate persistence is now managed by the FluidPolicyEngine via the Ghost Memory layer.
+	/**
+	 * V190: High-Fidelity Snapshotting.
+	 * Preserves the entire structural state in a compressed V8 binary format.
+	 */
+	public async takeSnapshot(nodes: Map<string, SpiderNode>): Promise<SpiderSnapshot> {
+		const report = this.metrics.computeEntropy(nodes)
+		const snapshot: SpiderSnapshot = {
+			timestamp: new Date().toISOString(),
+			entropyScore: report.score,
+			nodes: Array.from(nodes.values()),
+			components: report.components,
+		}
+
+		// Preserve binary state for high-fidelity restoration if needed
+		const binary = v8.serialize(snapshot)
+		this.snapshots.push(binary)
+
+		if (this.snapshots.length > 5) this.snapshots.shift() // Maintain tight metabolic window
+		return snapshot
 	}
 
 	public computeAllLayerFingerprints(nodes: Map<string, SpiderNode>): Record<string, string> {
@@ -45,20 +61,8 @@ export class PersistenceManager {
 		return results
 	}
 
-	public async takeSnapshot(nodes: Map<string, SpiderNode>): Promise<SpiderSnapshot> {
-		const report = this.metrics.computeEntropy(nodes)
-		const snapshot: SpiderSnapshot = {
-			timestamp: new Date().toISOString(),
-			entropyScore: report.score,
-			nodes: Array.from(nodes.values()),
-			components: report.components,
-		}
-		this.snapshots.push(snapshot)
-		if (this.snapshots.length > 10) this.snapshots.shift() // Maintain rolling buffer
-		return snapshot
-	}
-
 	public async getLatestSnapshot(): Promise<SpiderSnapshot | null> {
-		return this.snapshots[this.snapshots.length - 1] || null
+		if (this.snapshots.length === 0) return null
+		return v8.deserialize(this.snapshots[this.snapshots.length - 1])
 	}
 }

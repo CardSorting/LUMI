@@ -140,8 +140,6 @@ export class ForensicEngine {
 
 	/**
 	 * V160: Contract Drift Forensics.
-	 * Compares the current exported surface against a previous snapshot to detect
-	 * potentially breaking changes in the public interface.
 	 */
 	public compareContracts(oldNodes: Map<string, SpiderNode>, newNodes: Map<string, SpiderNode>): string[] {
 		const drifts: string[] = []
@@ -157,6 +155,33 @@ export class ForensicEngine {
 			}
 		}
 		return drifts
+	}
+
+	/**
+	 * V190: Fragility Sensing (Structural Risk Analysis).
+	 * Calculates the 'Blast Radius' of each node based on afferent coupling and
+	 * depth in the architectural graph.
+	 */
+	public computeFragility(nodes: Map<string, SpiderNode>): Map<string, { blastRadius: number; isFragile: boolean }> {
+		const results = new Map<string, { blastRadius: number; isFragile: boolean }>()
+		const totalNodes = nodes.size
+		if (totalNodes === 0) return results
+
+		for (const node of nodes.values()) {
+			// Afferent Coupling (Incoming dependencies)
+			const directDependents = node.dependents.length
+
+			// V190: Industrial Calibration - Weighted Blast Radius
+			// We consider direct dependents and the layer importance.
+			const layerWeight = node.layer === "domain" ? 1.5 : node.layer === "core" ? 1.2 : 1.0
+			const blastRadius = Math.min((directDependents * layerWeight) / (totalNodes * 0.1), 1.0)
+
+			// Critical Threshold: If a node affects > 15% of the codebase, it's Fragile.
+			const isFragile = blastRadius > 0.4 || (node.layer === "domain" && directDependents > 5)
+
+			results.set(node.id, { blastRadius, isFragile })
+		}
+		return results
 	}
 
 	public getImportedSymbols(sourceFile: ts.SourceFile): { specifier: string; symbols: string[] }[] {
