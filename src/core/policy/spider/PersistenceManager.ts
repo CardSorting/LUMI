@@ -8,6 +8,13 @@ export class PersistenceManager {
 
 	constructor(private metrics: MetricsEngine) {}
 
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose() {
+		this.snapshots = [] // Clear binary residual
+	}
+
 	public serialize(nodes: Map<string, SpiderNode>): Buffer {
 		const payload: SpiderRegistryPayload = {
 			layerFingerprints: this.computeAllLayerFingerprints(nodes),
@@ -37,27 +44,41 @@ export class PersistenceManager {
 		const binary = v8.serialize(snapshot)
 		this.snapshots.push(binary)
 
-		if (this.snapshots.length > 5) this.snapshots.shift() // Maintain tight metabolic window
+		// V200: Snapshot Throttling - Retain 2 (Baseline & Current) for zero-residual state
+		if (this.snapshots.length > 2) this.snapshots.shift()
 		return snapshot
 	}
 
+	/**
+	 * V200: Single-Pass Industrial Fingerprinting.
+	 * Eliminates O(N) temporary array allocations during the hashing turn.
+	 */
 	public computeAllLayerFingerprints(nodes: Map<string, SpiderNode>): Record<string, string> {
 		const layers = ["domain", "core", "infrastructure", "ui", "plumbing"]
 		const results: Record<string, string> = {}
 
+		const hashers: Record<string, import("crypto").Hash> = {}
 		for (const layer of layers) {
-			const hasher = crypto.createHash("sha256")
-			const layerNodes = Array.from(nodes.values())
-				.filter((n) => n.layer === layer)
-				.sort((a, b) => a.id.localeCompare(b.id))
+			hashers[layer] = crypto.createHash("sha256")
+		}
 
-			for (const node of layerNodes) {
+		// Single-Pass iteration over the node map
+		for (const node of nodes.values()) {
+			const hasher = hashers[node.layer]
+			if (hasher) {
 				hasher.update(node.id)
 				hasher.update(node.hash)
-				hasher.update(JSON.stringify(node.imports.sort()))
+				// Imports are unique and pre-vetted during indexing
+				for (const imp of node.imports) {
+					hasher.update(imp)
+				}
 			}
-			results[layer] = hasher.digest("hex")
 		}
+
+		for (const layer of layers) {
+			results[layer] = hashers[layer].digest("hex")
+		}
+
 		return results
 	}
 

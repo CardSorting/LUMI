@@ -157,6 +157,7 @@ export class SpiderEngine {
 		}
 		this.forensic.dispose()
 		this.resolver.dispose()
+		this.persistence.dispose() // V200: Memory-Resident Pure Purge
 		this.nodes.clear()
 		this.ghosts.clear()
 		this.sessionBuffer.clear()
@@ -191,6 +192,7 @@ export class SpiderEngine {
 		for (const file of files) {
 			this.updateNode(file.filePath, file.content)
 		}
+		this.sessionBuffer.clear() // V200: Memory-Resident Residual Purge
 		this.metrics.computeCouplingMetrics(this.nodes)
 		this.metrics.computeReachability(this.nodes)
 		this.resolver.clearCaches()
@@ -215,7 +217,7 @@ export class SpiderEngine {
 
 		const consumptions: Record<string, string[]> = {}
 		for (const { specifier, symbols } of importData) {
-			const targetId = this.resolver.resolveImportToNodeId(normalizedPath, specifier, new Set(this.nodes.keys()))
+			const targetId = this.resolver.resolveImportToNodeId(normalizedPath, specifier, this.nodes)
 			if (targetId) {
 				consumptions[targetId] = (consumptions[targetId] || []).concat(symbols)
 			}
@@ -637,11 +639,13 @@ export class SpiderEngine {
 			this.metrics.computeCouplingMetrics(this.nodes)
 			this.metrics.computeReachability(this.nodes)
 
-			// V200: Forensic Ghost Pruning
 			for (const g of this.ghosts) {
 				if (!this.nodes.has(g)) this.ghosts.delete(g)
 			}
 		}
+
+		// V200: Industrial Session Flush
+		this.sessionBuffer.clear()
 	}
 
 	public pruneDeadNodes(): void {

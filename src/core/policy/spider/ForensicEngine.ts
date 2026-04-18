@@ -7,7 +7,8 @@ import { PathResolver } from "./PathResolver.js"
 import { SpiderNode } from "./types.js"
 
 export class ForensicEngine {
-	private ghostVerificationCache: Map<string, { hash: string; ghosts: string[] }> = new Map()
+	private ghostVerificationCache: Map<string, { hash: string; ghosts: string[]; turn: number }> = new Map()
+	private turnCounter = 0
 
 	constructor(
 		private cwd: string,
@@ -22,17 +23,35 @@ export class ForensicEngine {
 	}
 
 	/**
-	 * V200: Cache Saturation Floor.
+	 * V200: Cache Saturation & Generational GC.
 	 */
 	private checkCacheSaturation() {
 		const MAX_ENTRIES = 5000
+		const MAX_AGE = 5 // Turns
+
 		if (this.ghostVerificationCache.size > MAX_ENTRIES) {
 			this.ghostVerificationCache.clear()
 			Logger.info("[ForensicEngine] Ghost verification cache saturated. Metaphorical sweep performed.")
+			return
+		}
+
+		// Generational Purge: Clear nodes that haven't been seen in N turns
+		let purged = 0
+		for (const [path, entry] of this.ghostVerificationCache.entries()) {
+			if (this.turnCounter - entry.turn > MAX_AGE) {
+				this.ghostVerificationCache.delete(path)
+				purged++
+			}
+		}
+		if (purged > 0) {
+			Logger.info(`[ForensicEngine] Generational GC: Purged ${purged} stale ghost entries.`)
 		}
 	}
 
 	public findGhosts(nodes: Map<string, SpiderNode>, sessionBuffer?: Map<string, string>): Set<string> {
+		this.turnCounter++
+		this.checkCacheSaturation()
+
 		const allGhosts = new Set<string>()
 		for (const node of nodes.values()) {
 			const absPath = path.resolve(this.cwd, node.path)
@@ -49,6 +68,7 @@ export class ForensicEngine {
 
 			const cached = this.ghostVerificationCache.get(node.path)
 			if (cached && cached.hash === currentHash) {
+				cached.turn = this.turnCounter // Refresh TTL
 				cached.ghosts.forEach((g) => {
 					allGhosts.add(g)
 				})
@@ -62,7 +82,7 @@ export class ForensicEngine {
 
 			for (const { specifier, symbols } of imports) {
 				const diskPath = this.resolver.getDiskPath(node.path, specifier)
-				const targetId = this.resolver.resolveImportToNodeId(node.path, specifier, new Set(nodes.keys()))
+				const targetId = this.resolver.resolveImportToNodeId(node.path, specifier, nodes)
 
 				if (!diskPath) {
 					// PRODUCTION HARDENING: Ignore ghost files for common build/config files, Node builtins, or external packages
@@ -107,7 +127,7 @@ export class ForensicEngine {
 					}
 				}
 			}
-			this.ghostVerificationCache.set(node.path, { hash: currentHash, ghosts: nodeGhosts })
+			this.ghostVerificationCache.set(node.path, { hash: currentHash, ghosts: nodeGhosts, turn: this.turnCounter })
 
 			// V200: Forensic Closure Hygiene
 			;(sourceFile as unknown) = null

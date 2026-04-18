@@ -48,7 +48,7 @@ export class PathResolver {
 		}
 	}
 
-	public resolveImportToNodeId(sourcePath: string, specifier: string, nodes: Set<string>): string | null {
+	public resolveImportToNodeId(sourcePath: string, specifier: string, nodeIds: Map<string, any> | Set<string>): string | null {
 		this.checkCacheSaturation()
 
 		let sourceMap = this.resolutionCache.get(sourcePath)
@@ -58,30 +58,30 @@ export class PathResolver {
 		if (specifier.startsWith(".")) {
 			const abs = path.resolve(this.cwd, path.dirname(sourcePath), specifier)
 			const rel = this.canonicalize(abs)
-			if (nodes.has(rel)) result = rel
-			else if (nodes.has(`${rel}.ts`)) result = `${rel}.ts`
-			else if (nodes.has(`${rel}.tsx`)) result = `${rel}.tsx`
+			if (nodeIds.has(rel)) result = rel
+			else if (nodeIds.has(`${rel}.ts`)) result = `${rel}.ts`
+			else if (nodeIds.has(`${rel}.tsx`)) result = `${rel}.tsx`
 			else {
 				const indexTs = path.join(rel, "index.ts").replace(/\\/g, "/")
-				if (nodes.has(indexTs)) result = indexTs
+				if (nodeIds.has(indexTs)) result = indexTs
 				else {
 					const indexTsx = path.join(rel, "index.tsx").replace(/\\/g, "/")
-					if (nodes.has(indexTsx)) result = indexTsx
+					if (nodeIds.has(indexTsx)) result = indexTsx
 				}
 			}
 		} else {
 			for (const [alias, target] of this.dynamicAliases) {
 				if (specifier.startsWith(alias)) {
 					const rel = specifier.replace(alias, target).replace(/\\/g, "/")
-					if (nodes.has(rel)) result = rel
-					else if (nodes.has(`${rel}.ts`)) result = `${rel}.ts`
-					else if (nodes.has(`${rel}.tsx`)) result = `${rel}.tsx`
+					if (nodeIds.has(rel)) result = rel
+					else if (nodeIds.has(`${rel}.ts`)) result = `${rel}.ts`
+					else if (nodeIds.has(`${rel}.tsx`)) result = `${rel}.tsx`
 					else {
 						const indexTs = path.join(rel, "index.ts").replace(/\\/g, "/")
-						if (nodes.has(indexTs)) result = indexTs
+						if (nodeIds.has(indexTs)) result = indexTs
 						else {
 							const indexTsx = path.join(rel, "index.tsx").replace(/\\/g, "/")
-							if (nodes.has(indexTsx)) result = indexTsx
+							if (nodeIds.has(indexTsx)) result = indexTsx
 						}
 					}
 					break
@@ -201,15 +201,25 @@ export class PathResolver {
 	}
 
 	/**
-	 * V200: Metabolic Hygiene.
-	 * Explicitly releases all caches and maps to assist garbage collection.
+	 * V200: Industrial Hygiene (Disposal).
+	 * Forcefully nullifies all map references to assist V8 in aggressive
+	 * resource reclamation of the structural substrate.
 	 */
 	public dispose() {
 		this.resolutionCache.clear()
+		;(this.resolutionCache as any) = null
+
 		this.negativeCache.clear()
+		;(this.negativeCache as any) = null
+
 		this.canonicalCache.clear()
+		;(this.canonicalCache as any) = null
+
 		this.stringInterner.clear()
+		;(this.stringInterner as any) = null
+
 		this.dynamicAliases.clear()
+		;(this.dynamicAliases as any) = null
 	}
 
 	/**
