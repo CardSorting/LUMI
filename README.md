@@ -5,7 +5,7 @@
 **DietCode** is an industrial-grade, model-agnostic agentic coding assistant designed to maintain architectural integrity in complex software ecosystems. Beyond simple code generation, DietCode acts as an **Architectural Guardian**, enforcing strict layering, managing structural entropy, and ensuring transactional stability across your workspace.
 
 > [!IMPORTANT]
-> **Industrial Release (v5.5.0)**: This release marks the achievement of **Industrial Sovereignty (V200)**. It transitions the architectural substrate to a 100% memory-resident, zero-allocation model, ensuring absolute metabolic immortality and forensic stability for enterprise-scale workspaces.
+> **Industrial Release (v5.6.0)**: This release marks the achievement of **Metabolic Sovereignty**. It transitions the architectural substrate to a **Zero-Inflation** model, eliminating redundant heap pressure during high-velocity indexing and establishing absolute structural neutrality for the Spider Engine.
 
 ---
 

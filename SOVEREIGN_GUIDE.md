@@ -39,12 +39,13 @@ npx ts-node src/scripts/align-sovereignty.ts
 
 ## 🛰️ Agent Intelligence Features
 
-### 1. Active Surveillance (Spider Engine V200)
-Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by a memory-resident industrial suite:
+### 1. Active Surveillance (Spider Engine V210)
+Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by a **Metabolic Sovereign** industrial suite:
+- **Zero-Inflation Sensing**: Architectural audits are performed with zero redundant collection allocations, ensuring a stationary heap footprint.
 - **Forensic Realism**: Deterministically detects "ghost symbols" via physical AST sensing across the project graph.
 - **Metrics Engine**: Real-time evaluation of Logic Density, I/O Entropy, and **AST Complexity Scaling**.
+- **Generational GC**: Turn-based TTL autonomously purges stagnant forensic caches every 5 turns.
 - **Metabolic Pulse**: Inter-batch GC turns during massive scans to ensure zero-saturation indexing.
-- **Sovereign Memory**: Architectural state is atomically managed in a high-fidelity, zero-residual memory registry.
 
 ### 2. Forensic Realism
 When moving or deleting files, the Forensic Engine verifies symbol integrity project-wide. 
@@ -62,9 +63,12 @@ Use `generate_sovereign_map` to visualize the structural health and coupling of 
 
 - **Blueprint Outcome**: The tool ensures the correct directory, file name, `[LAYER]` tag, and base template are applied instantly. Never create files manually if you can scaffold.
 
-## 🔋 Metabolic Immortality & Resilience (V200)
-The substrate has achieved metabolic immortality through zero-allocation performance and absolute closure hygiene.
-- **Zero-Alloc Caching**: Nested Map architectures eliminate string concatenation in hot paths, reducing Young Gen GC pressure.
+## 🔋 Metabolic Sovereignty & Immortality (V210)
+The substrate has achieved absolute metabolic sovereignty through zero-inflation performance and clinical residual purging.
+- **Zero-Inflation Sensing**: Eliminates redundant Set/Map allocations in high-velocity structural loops, achieving absolute resource neutrality.
+- **Clinical Session Purge**: Forceful nullification of `sessionBuffer` residuals immediately after turn completion to prevent large-string hoarding.
+- **Generational GC**: Autonomous architectural TTL that purges stagnant ghost entries after 5 turn cycles.
+- **Snapshot Throttling**: Structural insurance is managed via a high-density "Baseline & Current" model (Retain 2).
 - **String Interning**: Every structural identifier is deduplicated at the heap level, achieving absolute resource neutrality.
 - **Clinical Closure Hygiene**: Explicit nullification of AST visitors and closures after every turn to ensure a zero-leak sensing environment.
 - **Cognitive Resonance**: During `#REFACTOR` or `#HEAL` turns, metabolic pressure is damped at **0.5x velocity**.

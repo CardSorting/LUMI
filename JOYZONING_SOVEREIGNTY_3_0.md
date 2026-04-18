@@ -12,14 +12,14 @@ The core diagnostic layer now uses **Archetypal Fingerprinting** to detect struc
 | **I/O Entropy** | Percentage of platform/node imports vs pure imports. | > 20% (Domain/Core) |
 | **AST Complexity** | Total count of unique AST nodes in the file. | > 500 (Plumbing) |
 
-### Modular Sovereignty (Spider Engine 5.0 - V200)
+### Modular Sovereignty (Spider Engine 5.1 - V210)
 
-In V200 (Spider 5.0), the engine has graduated to an **Industrial Memory-Resident Substrate**. Persistence artifacts (`.spiderbin`) have been decommissioned in favor of absolute metabolic immortality:
+In V210, the engine has graduated to **Absolute Metabolic Sovereignty**. The structural substrate operates with **Zero-Inflation** logic, ensuring that architectural sensing remains resource-neutral even in enterprise-scale environments:
 
-- **PathResolver**: High-performance layer detection using **Zero-Alloc Nested Map Caching**.
-- **ForensicEngine**: Proactive "ghost symbol" detection with **Clinical Closure Hygiene**.
-- **MetricsEngine**: Real-time evaluation of Logic Density, I/O Entropy, and **AST Complexity Scaling**.
-- **Metabolic Pulse**: Integrated inter-batch GC reclamation to support project-wide re-indexing with zero heap saturation.
+- **PathResolver**: High-performance layer detection using **Zero-Alloc Nested Map Caching** and **Zero-Inflation Identification**.
+- **ForensicEngine**: Proactive "ghost symbol" detection with **Generational GC (Turn-based TTL)** and clinical closure hygiene.
+- **MetricsEngine**: Mathematical calculation of Logic Density, I/O Entropy, and **AST Complexity Scaling**.
+- **Metabolic Pulse**: Integrated inter-batch GC reclamation and **Clinical Session Purging** to prevent large-string residuals.
 
 This decomposition ensures that the substrate diagnostic layer is as maintainable and testable as the Domain logic it protects.
 
