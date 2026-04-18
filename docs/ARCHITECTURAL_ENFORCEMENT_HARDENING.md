@@ -153,71 +153,38 @@ To eliminate false-positive structural alarms and prevent agent deadlock during 
 - **Expanded Root Discovery**: Valid entry points now include logic in `src/common/`, `src/standalone/`, `src/scripts/`, and all `.test.ts` / `.spec.ts` files. This ensures that utility modules and test suites are recognized as legitimate architectural roots.
 - **Healing Leniency Protocol**: If an architectural alarm is caused EXCLUSIVELY by orphaned nodes, the system relaxes the file-edit lock. This allows the agent to edit root files (e.g., `src/extension.ts`) to add the missing imports required to reconcile the orphans, breaking the "circular lock" deadlock.
 
-## 9. V13 Hardening: Substrate Transcendence (Global Optimization)
+## 13. V200 Hardening: Forensic Realism (The Industrial Pass)
 
-The V13 pass (April 2026) transitions the system from resilience to **Transcendence**. We have optimized the structural simulation fidelity and ensured the registry is zero-noise.
+The V200 pass (April 2026) transitions the substrate to **Industrial-Grade Forensic Realism**. We have eliminated all predictive heuristics in favor of deterministic, AST-verified structural sensing.
 
-### 9.1 High-Fidelity Architectural Forecaster
-`SimulationEngine` has been upgraded for absolute structural accuracy:
-- **1:1 Proposed Indexing**: The simulation now performs a full AST transformation of the *proposed* source content rather than using heuristic estimates.
-- **Exact Predictions**: This allows for sub-second, 1:1 predictions of Logic Density, IO Entropy, and AST Complexity before a single byte is written to disk.
+### 13.1 Stability Lock 2.0
+- **Session-Authenticated Mutex**: Transactions are now locked using specific Session IDs. This prevents "Late Return" race conditions where concurrent tool calls could corrupt the structural registry.
+- **Rollback Consistency**: If a transaction fails mid-flight, the Stability Lock ensures the registry reverts to exactly the pre-transaction state without fragmenting.
 
-### 9.2 Sovereign Registry Pruning
-`SpiderEngine` now cleanses itself of structural rot:
-- **Ghost Node Removal**: On every substrate load, the system verifies all registry nodes against the physical disk. Nodes corresponding to deleted files are automatically purged.
-- **Noise-Free Substrate**: This ensures that "Ghost Imports" and "Dangling Dependencies" from previous refactoring turns do not contaminate the current mental model.
+### 13.2 Substrate Checkpoints (Merkle-Mapped)
+- **Binary Snapshots**: The entire `SpiderEngine` node graph is now serialized into a binary Merkle-mapped snapshot (`.spider/substrate_checkpoint.bin`).
+- **Instant Restoration**: On startup, the substrate loads the checkpoint in `O(1)` time, only performing incremental re-indexing for files modified since the last snapshot.
 
-### 9.3 Metabolic Emergency Valve
-`MetabolicMonitor` now provides manual recovery tools:
-- **Pressure Reset**: Implemented a `resetMetabolicPressure` protocol that allows for manual clearance of administrative cooldowns.
-- **Infrastructure Overrides**: This ensures that during critical, project-wide infrastructure migrations, the system can be manually "cooled" to maintain high-velocity progress.
+### 13.3 Wave-Front Healing (Reactive Strategy)
+- **Dependency Expansion**: When a build error is detected by the `SovereignGarbageCollector`, it identifies the target files and expands a **Wave-Front** of 2-degree dependents.
+- **Recursive Stabilization**: The system recursively stabilizes the entire wave-front, ensuring that a single fix doesn't cause a cascade of breakages elsewhere.
 
-## 10. V14 Hardening: Substrate Perfection (The Double Down Mission)
+## 14. V210 Hardening: Metabolic Sovereignty (Zero-Inflation Pass)
 
-The V14 pass (April 2026) is the final "Double Down" on structural accuracy. We have achieved **0% False Positives** through dynamic discovery and symbol-level verification.
+The V210 pass (current state) achieves **Absolute Metabolic Sovereignty**. The substrate is now resource-neutral and capable of autonomous survival.
 
-### 10.1 Dynamic Alias Discovery
-SpiderEngine now understands your individual project structure:
-- **TSConfig Integration**: The engine dynamically reads `tsconfig.json` and `package.json` path mappings on startup.
-- **100% Resolution Accuracy**: This eliminates false-positive "Ghost Import" alarms caused by project-specific aliases, ensuring every specifier is verifiably resolved to its physical location.
+### 14.1 Zero-Inflation Sensing
+- **Redundant Map Elimination**: Uses nested map caching to ensure that architectural sensing (layer detection, import resolution) never triggers redundant object allocations in high-velocity loops.
+- **Heap Neutrality**: The sensing layer maintains a stationary heap footprint even during massive project-wide refactors.
 
-### 10.2 Symbol-Level Ghost Verification
-Structural sensors now perform deep "Sovereign Forensics":
-- **Export Verification**: Ghost detection now verifying the existence of specific exported members (classes, functions, interfaces).
-- **Symbol Accuracy**: If you import a name that was deleted from an existing file, the substrate will interdict the regression immediately, whereas previous versions only checked for file-level existence.
+### 14.2 Metabolic Pressure Metrics
+- **Heap Sensing**: `MetabolicMonitor` now monitors V8 heap statistics directly.
+- **Proactive Purge**:
+    - **80% Pressure**: Triggers a standard **Substrate Sweep** (TTL-based cleanup).
+    - **90% Pressure**: Triggers an **Absolute Sweep** (Forceful nullification of all non-essential forensic buffers).
 
-### 10.3 Axiom Neutralization & Passthroughs
-Human intent is now formalized as the ultimate architectural arbiter:
-- **@dietcode-passthrough**: Supporting a formal directive for intentional architectural deviations.
-- **Zero-Block Exception**: Tagging a file with a passthrough directive downgrades hard locks to non-blocking warnings, allowing for documented design exceptions without deadlocking the agentic loop.
-
-## 11. V33 Hardening: Ethereal Sovereignty (Zero-Friction Pass)
-
-The V33 pass (April 2026) transforms the substrate into an "Ethereal" layer. It prioritizes agentic intent and structural stability over rigid, blocking rules.
-
-### 11.1 Metabolic Elasticity
-- **Refactor-Aware Budgets**: Turns tagged with `#REFACTOR` or `#INFRASTRUCTURE` receive a 2x edit budget (25 -> 50) and 50% more task-drift leniency.
-- **Therapeutic Leniency**: Fix-it turns (#FIX, #REPAIR) automatically demote metabolic interdiction to non-blocking warnings.
-
-### 11.2 Forensic Identity Persistence
-- **Substrate-Aware Grounding**: The forensic engine now recognizes **Stable Nodes** in the SpiderEngine history. Citations of known, synchronized nodes are accepted even without recent reads.
-- **Merkle Grace Window**: Introduced a 120s grace window for high-velocity turns to suppress transient Desync Alarms.
-
-### 11.3 Terminal Node Agility
-- **Implicit Domain Agility**: Files with zero architectural dependents (Leaf Nodes) are now treated as implicitly "Agile-safe," allowing for isolated maintenance without explicit audit citations.
-
-## 12. V34 Hardening: Spectral Sovereignty (Proactive Healing)
-
-The V34 pass (April 2026) reaches the final graduation: **Spectral Sovereignty**. The substrate shifts from "Block-and-Nudge" to a **"Heal-and-Enable"** model.
-
-### 12.1 Conversational Grounding
-- **Neural Context Scraper**: The forensic engine now monitors assistant dialogue. File paths discussed in the last 3 turns are recognized as grounded evidence, eliminating the need for redundant documentation.
-
-### 12.2 Aesthetic Agility
-- **Style-Only Passthroughs**: Edits that only modify whitespace or comments (detected via structural hashing) are now **Always Agile**. No audit citation is required for purely stylistic maintenance.
-
-### 12.3 Proactive Discovery Scans
-- **Sovereign Deep Scans**: During investigative stalls (Doubt Loops) or hallucinations, the system automatically performs a "Deep Scan" of the target node, injecting its symbols, pathogens, and head content into the tool response.
+### 14.3 Forensic Member Mapping
+- **Physical Signature Extraction**: `RefactorHealer` no longer uses templates for stubs. It extracts method and property signatures directly from the provider module's AST to synthesize perfectly compatible code.
 
 ---
-*Last Updated: 2026-04-15 (V34 Final)*
+*Last Updated: 2026-04-18 (V210 Industrial Final)*

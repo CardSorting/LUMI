@@ -1,22 +1,22 @@
 ---
 title: "CLI Reference"
-description: "Complete command reference for Cline CLI including all commands, flags, and configuration options"
+description: "Complete command reference for DietCode CLI including all commands, flags, and configuration options"
 ---
 
-This page documents all available commands, flags, and configuration options for Cline CLI. For quick help in your terminal, use:
+This page documents all available commands, flags, and configuration options for DietCode CLI. For quick help in your terminal, use:
 
 ```bash
-cline --help          # Show all commands
-cline task --help     # Show task command options
-cline auth --help     # Show auth command options
-man cline             # View the full manual page (if installed)
+dietcode --help          # Show all commands
+dietcode task --help     # Show task command options
+dietcode auth --help     # Show auth command options
+man dietcode             # View the full manual page (if installed)
 ```
 
 ## Synopsis
 
 ```bash
-cline [prompt] [options]
-cline <command> [options] [arguments]
+dietcode [prompt] [options]
+dietcode <command> [options] [arguments]
 ```
 
 ## Global Options
@@ -25,52 +25,52 @@ These options work with any command:
 
 | Option | Description |
 |--------|-------------|
-| `--config <path>` | Use a custom configuration directory instead of `~/.cline/data/` |
+| `--config <path>` | Use a custom configuration directory instead of `~/.dietcode/data/` |
 | `-c, --cwd <path>` | Set the working directory for the task |
 | `-v, --verbose` | Show detailed output including model reasoning |
 | `--help` | Show help for the command |
 
 ## Modes of Operation
 
-Cline CLI automatically detects the best output mode based on how you invoke it:
+DietCode CLI automatically detects the best output mode based on how you invoke it:
 
 | Mode | When Activated | Description |
 |------|----------------|-------------|
-| **Interactive** | `cline` with no args, TTY connected | Rich terminal UI with real-time streaming, keyboard shortcuts, and visual feedback. |
-| **Task** | `cline "prompt"` with TTY connected | Interactive UI starts immediately with your task. |
+| **Interactive** | `dietcode` with no args, TTY connected | Rich terminal UI with real-time streaming, keyboard shortcuts, and visual feedback. |
+| **Task** | `dietcode "prompt"` with TTY connected | Interactive UI starts immediately with your task. |
 | **Plain Text** | stdin piped, stdout redirected, or `--yolo`/`--json` flags | Clean text output without UI, suitable for scripting and CI/CD. |
 
 ## Agent Behavior
 
-Cline operates in two primary modes that control how it approaches tasks:
+DietCode operates in two primary modes that control how it approaches tasks:
 
 | Mode | Description |
 |------|-------------|
-| **Act Mode** (default) | Cline actively uses tools to accomplish tasks. It can read files, write code, execute commands, use a headless browser, and more. |
-| **Plan Mode** | Cline gathers information and creates a detailed plan before implementation. It explores the codebase, asks clarifying questions, and presents a strategy for your approval before switching to Act Mode. |
+| **Act Mode** (default) | DietCode actively uses tools to accomplish tasks. It can read files, write code, execute commands, use a headless browser, and more. |
+| **Plan Mode** | DietCode gathers information and creates a detailed plan before implementation. It explores the codebase, asks clarifying questions, and presents a strategy for your approval before switching to Act Mode. |
 
 Use `-a, --act` or `-p, --plan` flags to explicitly set the mode.
 
 ## Commands
 
-### cline (default)
+### dietcode (default)
 
-Run Cline without a subcommand to start a task or enter interactive mode.
+Run DietCode without a subcommand to start a task or enter interactive mode.
 
 ```bash
 # Interactive mode (no arguments)
-cline
+dietcode
 
 # Start a task directly
-cline "your prompt here"
+dietcode "your prompt here"
 ```
 
 **Options:**
 
 | Option | Description |
 |--------|-------------|
-| `-a, --act` | Start in Act mode (default). Cline executes actions directly. |
-| `-p, --plan` | Start in Plan mode. Cline analyzes and creates a strategy before acting. |
+| `-a, --act` | Start in Act mode (default). DietCode executes actions directly. |
+| `-p, --plan` | Start in Plan mode. DietCode analyzes and creates a strategy before acting. |
 | `-y, --yolo` | YOLO mode: auto-approve all actions, use plain text output, exit when complete. Ideal for CI/CD. |
 | `-m, --model <id>` | Use a specific model (e.g., `claude-sonnet-4-5-20250929`, `gpt-4o`). |
 | `-i, --images <paths...>` | Include image files with the prompt. |
@@ -82,38 +82,38 @@ cline "your prompt here"
 
 | Invocation | Output Mode | Why |
 |------------|-------------|-----|
-| `cline` | Interactive UI | No arguments, TTY connected |
-| `cline "prompt"` | Interactive UI | TTY connected |
-| `cline -y "prompt"` | Plain text | YOLO flag forces plain text |
-| `cline --json "prompt"` | JSON | JSON flag forces plain text |
-| `cat file \| cline "prompt"` | Plain text | stdin is piped |
-| `cline "prompt" > out.txt` | Plain text | stdout is redirected |
+| `dietcode` | Interactive UI | No arguments, TTY connected |
+| `dietcode "prompt"` | Interactive UI | TTY connected |
+| `dietcode -y "prompt"` | Plain text | YOLO flag forces plain text |
+| `dietcode --json "prompt"` | JSON | JSON flag forces plain text |
+| `cat file \| dietcode "prompt"` | Plain text | stdin is piped |
+| `dietcode "prompt" > out.txt` | Plain text | stdout is redirected |
 
 ---
 
-### cline task (alias: t)
+### dietcode task (alias: t)
 
-Run a task with a prompt. This is equivalent to `cline "prompt"`.
+Run a task with a prompt. This is equivalent to `dietcode "prompt"`.
 
 ```bash
-cline task "Create a REST API endpoint"
-cline t "Fix the bug in utils.js"
+dietcode task "Create a REST API endpoint"
+dietcode t "Fix the bug in utils.js"
 ```
 
 **Options:** Same as the default command above.
 
 ---
 
-### cline auth
+### dietcode auth
 
 Configure authentication with an AI provider.
 
 ```bash
 # Interactive wizard
-cline auth
+dietcode auth
 
 # Quick setup with flags
-cline auth -p anthropic -k sk-ant-api-xxxxx -m claude-sonnet-4-5-20250929
+dietcode auth -p anthropic -k sk-ant-api-xxxxx -m claude-sonnet-4-5-20250929
 ```
 
 **Options:**
@@ -144,19 +144,19 @@ cline auth -p anthropic -k sk-ant-api-xxxxx -m claude-sonnet-4-5-20250929
 
 ---
 
-### cline history (alias: h)
+### dietcode history (alias: h)
 
 Browse task history with pagination.
 
 ```bash
 # Show recent tasks (default: 10)
-cline history
+dietcode history
 
 # Show more tasks
-cline history -n 20
+dietcode history -n 20
 
 # Paginate through history
-cline history -n 10 -p 2
+dietcode history -n 10 -p 2
 ```
 
 **Options:**
@@ -168,50 +168,50 @@ cline history -n 10 -p 2
 
 ---
 
-### cline config
+### dietcode config
 
 View and manage configuration settings.
 
 ```bash
-cline config
+dietcode config
 ```
 
 Opens an interactive configuration view with tabs for:
 - **Settings** - Global and workspace-specific settings
-- **Rules** - `.clinerules` files and imported rules
+- **Rules** - `.dietcoderules` files and imported rules
 - **Workflows** - Available workflows (appear as slash commands)
 - **Hooks** - Configured hook scripts
 - **Skills** - Enabled skills
 
 ---
 
-### cline update
+### dietcode update
 
 Check for updates and install the latest version.
 
 ```bash
-cline update
+dietcode update
 ```
 
 ---
 
-### cline version
+### dietcode version
 
 Show the installed CLI version.
 
 ```bash
-cline version
+dietcode version
 ```
 
 ---
 
-### cline dev
+### dietcode dev
 
 Developer tools for debugging.
 
 ```bash
 # Open the log file
-cline dev log
+dietcode dev log
 ```
 
 ## Environment Variables
@@ -222,19 +222,19 @@ Override the default configuration directory:
 
 ```bash
 export CLINE_DIR=/path/to/custom/config
-cline "your task"
+dietcode "your task"
 ```
 
-When set, all Cline data (settings, secrets, task history) is stored in this directory instead of `~/.cline/data/`.
+When set, all DietCode data (settings, secrets, task history) is stored in this directory instead of `~/.dietcode/data/`.
 
 **Use cases:**
-- Running isolated Cline instances with different settings
+- Running isolated DietCode instances with different settings
 - CI/CD environments with custom state directories
 - Testing configuration changes without affecting your main setup
 
 ### CLINE_COMMAND_PERMISSIONS
 
-Restrict which shell commands Cline can execute:
+Restrict which shell commands DietCode can execute:
 
 ```bash
 export CLINE_COMMAND_PERMISSIONS='{"allow": ["npm *", "git *"], "deny": ["rm -rf *"]}'
@@ -312,16 +312,16 @@ When using `--json`, each message is output as a JSON object (one per line):
 
 ## Configuration Files
 
-Cline stores all data in `~/.cline/` by default:
+DietCode stores all data in `~/.dietcode/` by default:
 
 ```text
-~/.cline/
+~/.dietcode/
 ├── data/                    # Configuration directory
 │   ├── globalState.json     # Global settings
 │   ├── secrets.json         # API keys (stored securely)
 │   ├── workspace/           # Workspace-specific state
 │   └── tasks/               # Task history and conversations
-└── log/                     # Debug logs (view with cline dev log)
+└── log/                     # Debug logs (view with dietcode dev log)
 ```
 
 ## Examples
@@ -330,95 +330,95 @@ Cline stores all data in `~/.cline/` by default:
 
 ```bash
 # Start interactive mode
-cline
+dietcode
 
 # Start with a task and use interactive UI
-cline "Help me refactor this codebase"
+dietcode "Help me refactor this codebase"
 ```
 
 ### Direct Task Execution
 
 ```bash
 # Run a task directly
-cline "Add error handling to utils.js"
+dietcode "Add error handling to utils.js"
 
 # Start in Plan mode to review strategy first
-cline -p "Design a caching layer for the API"
+dietcode -p "Design a caching layer for the API"
 
 # Use a specific model
-cline -m gpt-4o "Explain this code"
+dietcode -m gpt-4o "Explain this code"
 ```
 
 ### Piped Input
 
 ```bash
 # Pipe file contents
-cat README.md | cline "Summarize this document"
+cat README.md | dietcode "Summarize this document"
 
 # Review git changes
-git diff | cline "Review these changes"
+git diff | dietcode "Review these changes"
 
 # Analyze test output
-npm test 2>&1 | cline "Fix any failing tests"
+npm test 2>&1 | dietcode "Fix any failing tests"
 ```
 
 ### Automation and CI/CD
 
 ```bash
 # YOLO mode for automated workflows
-cline -y "Run tests and fix failures"
+dietcode -y "Run tests and fix failures"
 
 # JSON output for scripting
-cline --json "List all TODO comments" | jq '.text'
+dietcode --json "List all TODO comments" | jq '.text'
 
 # With timeout
-cline -y --timeout 600 "Run the full test suite"
+dietcode -y --timeout 600 "Run the full test suite"
 
 # Chain commands
-git diff | cline -y "explain" | cline -y "write a commit message"
+git diff | dietcode -y "explain" | dietcode -y "write a commit message"
 ```
 
 ### Authentication
 
 ```bash
 # Interactive wizard
-cline auth
+dietcode auth
 
 # Quick setup: Anthropic
-cline auth -p anthropic -k sk-ant-api-xxxxx -m claude-sonnet-4-5-20250929
+dietcode auth -p anthropic -k sk-ant-api-xxxxx -m claude-sonnet-4-5-20250929
 
 # Quick setup: OpenAI
-cline auth -p openai-native -k sk-xxxxx -m gpt-4o
+dietcode auth -p openai-native -k sk-xxxxx -m gpt-4o
 
 # Quick setup: OpenRouter
-cline auth -p openrouter -k sk-or-xxxxx
+dietcode auth -p openrouter -k sk-or-xxxxx
 
 # OpenAI-compatible with custom URL
-cline auth -p openai -k your-key -b https://api.example.com/v1
+dietcode auth -p openai -k your-key -b https://api.example.com/v1
 ```
 
 ## Support
 
 - **Report bugs:** https://github.com/dietcode/dietcode/issues
-- **Discord community:** https://discord.gg/cline
-- **Documentation:** https://docs.cline.bot
+- **Discord community:** https://discord.gg/dietcode
+- **Documentation:** https://docs.dietcode.bot
 
 ## See Also
 
 <Columns cols={2}>
-  <Card title="Installation & Setup" icon="download" href="/cline-cli/installation">
-    Install Cline CLI and configure authentication.
+  <Card title="Installation & Setup" icon="download" href="/dietcode-cli/installation">
+    Install DietCode CLI and configure authentication.
   </Card>
   
-  <Card title="Interactive Mode" icon="terminal" href="/cline-cli/interactive-mode">
+  <Card title="Interactive Mode" icon="terminal" href="/dietcode-cli/interactive-mode">
     Keyboard shortcuts, slash commands, and file mentions.
   </Card>
   
-  <Card title="Headless Mode" icon="robot" href="/cline-cli/three-core-flows">
-    Run Cline autonomously in scripts, CI/CD pipelines, and automated workflows.
+  <Card title="Headless Mode" icon="robot" href="/dietcode-cli/three-core-flows">
+    Run DietCode autonomously in scripts, CI/CD pipelines, and automated workflows.
   </Card>
   
-  <Card title="Configuration" icon="gear" href="/cline-cli/configuration">
+  <Card title="Configuration" icon="gear" href="/dietcode-cli/configuration">
     Environment variables and advanced settings.
   </Card>
 </Columns>

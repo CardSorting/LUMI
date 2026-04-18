@@ -1,11 +1,11 @@
-# Cline SDK
+# DietCode SDK
 
-The Cline SDK lets you embed Cline as a programmable coding agent in your Node.js applications. It exposes the same capabilities as the Cline CLI and VS Code extension — file editing, command execution, browser use, MCP servers — through a TypeScript API that conforms to the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/protocol/schema).
+The DietCode SDK lets you embed DietCode as a programmable coding agent in your Node.js applications. It exposes the same capabilities as the DietCode CLI and VS Code extension — file editing, command execution, browser use, MCP servers — through a TypeScript API that conforms to the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/protocol/schema).
 
 ## Installation
 
 ```bash
-npm install cline
+npm install dietcode
 ```
 
 If you want direct ACP type imports as well:
@@ -19,16 +19,16 @@ Requires Node.js 20+.
 ## Quick Start
 
 ```typescript
-import { ClineAgent } from "cline";
+import { DietCodeAgent } from "dietcode";
 
-const CLINE_DIR = "/Users/username/.cline";
-const agent = new ClineAgent({ clineDir: CLINE_DIR });
+const CLINE_DIR = "/Users/username/.dietcode";
+const agent = new DietCodeAgent({ dietcodeDir: CLINE_DIR });
 
 // 1. Initialize — negotiates capabilities
 const initializeResponse = await agent.initialize({
     protocolVersion: 1,
     // these are the capabilities that the client (you) supports
-    // The cline agent may or may not use them, but it needs to know about them to make informed decisions about what tools to use.
+    // The dietcode agent may or may not use them, but it needs to know about them to make informed decisions about what tools to use.
     clientCapabilities: {
         fs: { readTextFile: true, writeTextFile: true },
         terminal: true,
@@ -40,8 +40,8 @@ console.log("Agent info:", agentInfo); // contains things like agent name and ve
 console.log("Auth methods:", authMethods); // contains a list of supported authentication methods. More auth methods coming soon
 
 // 2. Authenticate if needed
-// If you skip this step, ClineAgent will look in CLINE_DIR for any existing credentials and authenticate with those
-await agent.authenticate({ methodId: "cline-oauth" });
+// If you skip this step, DietCodeAgent will look in CLINE_DIR for any existing credentials and authenticate with those
+await agent.authenticate({ methodId: "dietcode-oauth" });
 
 // 3. Create a session.
 // A session represents a conversation or task with the agent. You can have multiple sessions for different tasks or conversations.
@@ -100,7 +100,7 @@ initialize() → authenticate() → newSession() → prompt() ⇄ events → shu
 | Step | Method | Purpose |
 |------|--------|---------|
 | Init | `initialize()` | Exchange protocol version and capabilities |
-| Auth | `authenticate()` | OAuth flow for Cline or OpenAI Codex accounts. Optional step if cline config directory already has credentials |
+| Auth | `authenticate()` | OAuth flow for DietCode or OpenAI Codex accounts. Optional step if dietcode config directory already has credentials |
 | Session | `newSession()` | Create an isolated conversation context |
 | Prompt | `prompt()` | Send user messages; blocks until the turn ends |
 | Cancel | `cancel()` | Abort an in-progress prompt turn |
@@ -184,7 +184,7 @@ await agent.prompt({
 
 ### Streaming Events
 
-Subscribe to real-time output via `ClineSessionEmitter`. Each session has its own emitter.
+Subscribe to real-time output via `DietCodeSessionEmitter`. Each session has its own emitter.
 
 ```typescript
 const emitter = agent.emitterForSession(sessionId)
@@ -270,7 +270,7 @@ Each permission request includes an array of `PermissionOption` objects:
 
 ### Modes
 
-Cline supports two modes:
+DietCode supports two modes:
 
 - **`plan`** — The agent gathers information and creates a plan without executing actions
 - **`act`** — The agent executes actions (file edits, commands, etc.)
@@ -305,16 +305,16 @@ This sets the model for both plan and act modes. Available providers include `an
 The SDK supports two OAuth flows:
 
 ```typescript
-// Cline account (uses browser OAuth)
-await agent.authenticate({ methodId: "cline-oauth" })
+// DietCode account (uses browser OAuth)
+await agent.authenticate({ methodId: "dietcode-oauth" })
 
 // OpenAI Codex / ChatGPT subscription
 await agent.authenticate({ methodId: "openai-codex-oauth" })
 ```
 
-Both methods open a browser window for the OAuth flow and block until authentication completes (5-minute timeout for Cline OAuth).
+Both methods open a browser window for the OAuth flow and block until authentication completes (5-minute timeout for DietCode OAuth).
 
-For BYO (bring-your-own) API key providers, configure the key through the cline config directory before creating a session. The `authenticate()` call is not needed for BYO providers. We plan to support more auth providers in the near future.
+For BYO (bring-your-own) API key providers, configure the key through the dietcode config directory before creating a session. The `authenticate()` call is not needed for BYO providers. We plan to support more auth providers in the near future.
 
 ### Cancellation
 
@@ -329,23 +329,23 @@ await agent.cancel({ sessionId })
 ### Constructor
 
 ```typescript
-new ClineAgent(options: ClineAgentOptions)
+new DietCodeAgent(options: DietCodeAgentOptions)
 ```
 
 ```typescript
-interface ClineAgentOptions {
+interface DietCodeAgentOptions {
   /** Enable debug logging (default: false) */
   debug?: boolean
-  /** Custom Cline config directory (default: ~/.cline) */
-  clineDir?: string
+  /** Custom DietCode config directory (default: ~/.dietcode) */
+  dietcodeDir?: string
 }
 ```
 
-The `clineDir` option lets you isolate configuration and task history per-application:
+The `dietcodeDir` option lets you isolate configuration and task history per-application:
 
 ```typescript
-const agent = new ClineAgent({
-  clineDir: "/tmp/my-app-cline",
+const agent = new DietCodeAgent({
+  dietcodeDir: "/tmp/my-app-dietcode",
 })
 ```
 
@@ -369,9 +369,9 @@ const response = await agent.initialize({
     promptCapabilities: { image: true, audio: false, embeddedContext: true },
     mcpCapabilities: { http: true, sse: false }
   },
-  agentInfo: { name: "cline", version: "2.2.3" },
+  agentInfo: { name: "dietcode", version: "2.2.3" },
   authMethods: [
-    { id: "cline-oauth", name: "Sign in with Cline", description: "..." },
+    { id: "dietcode-oauth", name: "Sign in with DietCode", description: "..." },
     { id: "openai-codex-oauth", name: "Sign in with ChatGPT", description: "..." }
   ]
 }
@@ -416,7 +416,7 @@ const session = await agent.newSession({
 
 #### `prompt(params): Promise<PromptResponse>`
 
-Send a user prompt to the agent. This is the main method for interacting with Cline. Blocks until the agent finishes its turn.
+Send a user prompt to the agent. This is the main method for interacting with DietCode. Blocks until the agent finishes its turn.
 
 ```typescript
 const response = await agent.prompt({
@@ -461,14 +461,14 @@ await agent.unstable_setSessionModel({
 Authenticate with a provider. Opens a browser window for OAuth flow.
 
 ```typescript
-await agent.authenticate({ methodId: "cline-oauth" })
+await agent.authenticate({ methodId: "dietcode-oauth" })
 ```
 
 Current methodIds we support:
 
 | methodId             | Description                   |
 | -------------------- | ----------------------------- |
-| `cline-oauth`        | use cline inference provider  |
+| `dietcode-oauth`        | use dietcode inference provider  |
 | `openai-codex-oauth` | use your chatgpt subscription |
 | more coming soon!... |                               |
 
@@ -490,7 +490,7 @@ agent.setPermissionHandler((request, resolve) => {
 })
 ```
 
-#### `emitterForSession(sessionId): ClineSessionEmitter`
+#### `emitterForSession(sessionId): DietCodeSessionEmitter`
 
 Get the typed event emitter for a session.
 
@@ -511,10 +511,10 @@ for (const [sessionId, session] of agent.sessions) {
 ## Full Example: Auto-Approve Agent
 
 ```typescript
-import { ClineAgent } from "cline";
+import { DietCodeAgent } from "dietcode";
 
 async function runTask(taskPrompt: string, cwd: string) {
-    const agent = new ClineAgent({ clineDir: "/Users/maxpaulus/.cline" });
+    const agent = new DietCodeAgent({ dietcodeDir: "/Users/maxpaulus/.dietcode" });
 
     await agent.initialize({
         protocolVersion: 1,
@@ -563,7 +563,7 @@ runTask("Create a README.md for this project", process.cwd());
 ## Full Example: Interactive Permission Flow
 
 ```typescript
-import { ClineAgent, type PermissionHandler } from "cline";
+import { DietCodeAgent, type PermissionHandler } from "dietcode";
 import * as readline from "readline";
 
 const rl = readline.createInterface({
@@ -593,7 +593,7 @@ const interactivePermissions: PermissionHandler = async (request) => {
 };
 
 async function main() {
-    const agent = new ClineAgent({});
+    const agent = new DietCodeAgent({});
     await agent.initialize({ protocolVersion: 1, clientCapabilities: {} });
 
     const { sessionId } = await agent.newSession({
@@ -631,15 +631,15 @@ main();
 
 ## Exported Types
 
-All types are re-exported from the `cline` package. Key types:
+All types are re-exported from the `dietcode` package. Key types:
 
 | Type | Description |
 |------|-------------|
-| `ClineAgent` | Main agent class |
-| `ClineSessionEmitter` | Typed event emitter for session events |
-| `ClineAgentOptions` | Constructor options |
-| `ClineAcpSession` | Session metadata (read-only) |
-| `ClineSessionEvents` | Event name → handler signature map |
+| `DietCodeAgent` | Main agent class |
+| `DietCodeSessionEmitter` | Typed event emitter for session events |
+| `DietCodeAgentOptions` | Constructor options |
+| `DietCodeAcpSession` | Session metadata (read-only) |
+| `DietCodeSessionEvents` | Event name → handler signature map |
 | `PermissionHandler` | `(request, resolve) => void` callback |
 | `PermissionResolver` | `(response) => void` callback |
 | `SessionUpdate` | Union of all session update types |
@@ -659,12 +659,12 @@ See the [ACP Schema](https://agentclientprotocol.com/protocol/schema) for the fu
 
 ## Relationship to ACP
 
-The Cline SDK implements the [Agent Client Protocol](https://agentclientprotocol.com) `Agent` interface. The key difference from a standard ACP stdio agent is that the SDK uses an **event emitter pattern** instead of a transport connection:
+The DietCode SDK implements the [Agent Client Protocol](https://agentclientprotocol.com) `Agent` interface. The key difference from a standard ACP stdio agent is that the SDK uses an **event emitter pattern** instead of a transport connection:
 
-| ACP Stdio (via `AcpAgent`) | SDK (via `ClineAgent`) |
+| ACP Stdio (via `AcpAgent`) | SDK (via `DietCodeAgent`) |
 |-----------------------------|------------------------|
-| Session updates sent over JSON-RPC stdio | Session updates emitted via `ClineSessionEmitter` |
+| Session updates sent over JSON-RPC stdio | Session updates emitted via `DietCodeSessionEmitter` |
 | Permissions requested via `connection.requestPermission()` | Permissions requested via `setPermissionHandler()` callback |
 | Single process, single connection | Embeddable, multiple concurrent sessions |
 
-If you need stdio-based ACP communication (e.g., for IDE integration), use the `cline` CLI binary directly. The SDK is for embedding Cline in your own Nodke.js processes.
+If you need stdio-based ACP communication (e.g., for IDE integration), use the `dietcode` CLI binary directly. The SDK is for embedding DietCode in your own Nodke.js processes.

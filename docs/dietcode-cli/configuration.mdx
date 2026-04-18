@@ -1,16 +1,16 @@
 ---
 title: "Configuration"
-description: "Manage Cline CLI settings with cline config, environment variables, and configuration files"
+description: "Manage DietCode CLI settings with dietcode config, environment variables, and configuration files"
 ---
 
-Cline CLI provides multiple ways to configure settings, from the interactive `cline config` command to environment variables for automation.
+DietCode CLI provides multiple ways to configure settings, from the interactive `dietcode config` command to environment variables for automation.
 
 ## The Config Command
 
 Launch the configuration interface:
 
 ```bash
-cline config
+dietcode config
 ```
 
 This opens an interactive view with tabs for different configuration categories.
@@ -28,13 +28,13 @@ View and edit global and workspace-specific settings:
 
 ### Rules Tab
 
-Manage Cline rules that guide AI behavior:
+Manage DietCode rules that guide AI behavior:
 
-- **`.clinerules` files**: Project-specific rules in your workspace
+- **`.dietcoderules` files**: Project-specific rules in your workspace
 - **Cursor rules**: Import rules from Cursor editor format
 - **Windsurf rules**: Import rules from Windsurf editor format
 
-Rules help Cline understand your project's conventions, coding standards, and preferences.
+Rules help DietCode understand your project's conventions, coding standards, and preferences.
 
 ### Workflows Tab
 
@@ -50,15 +50,15 @@ Configure [hooks](/customization/hooks) for custom logic integration:
 
 - Enable/disable hooks globally
 - View configured hook scripts
-- Hooks run at key points in Cline's workflow
+- Hooks run at key points in DietCode's workflow
 
 <Note>
-Hooks must be enabled via settings. Use `cline config` to toggle `hooks-enabled`.
+Hooks must be enabled via settings. Use `dietcode config` to toggle `hooks-enabled`.
 </Note>
 
 ### Skills Tab
 
-Manage [skills](/customization/skills) that extend Cline's capabilities:
+Manage [skills](/customization/skills) that extend DietCode's capabilities:
 
 - View available skills
 - Enable/disable specific skills
@@ -66,15 +66,15 @@ Manage [skills](/customization/skills) that extend Cline's capabilities:
 
 ## Configuration Directory
 
-Cline stores configuration in `~/.cline/data/`:
+DietCode stores configuration in `~/.dietcode/data/`:
 
 ```text
-~/.cline/
+~/.dietcode/
 ├── data/                    # Configuration directory
 │   ├── globalState.json     # Global settings
 │   ├── secrets.json         # API keys (encrypted)
 │   ├── settings/            # Settings files
-│   │   └── cline_mcp_settings.json  # MCP server configuration
+│   │   └── dietcode_mcp_settings.json  # MCP server configuration
 │   ├── workspace/           # Workspace-specific state
 │   └── tasks/               # Task history and data
 └── log/                     # Log files
@@ -85,7 +85,7 @@ Cline stores configuration in `~/.cline/data/`:
 For debugging, view the log file:
 
 ```bash
-cline dev log
+dietcode dev log
 ```
 
 This opens the log file in your default editor.
@@ -97,20 +97,20 @@ This opens the log file in your default editor.
 Override the default configuration directory:
 
 ```bash
-export CLINE_DIR=/custom/path/to/cline
-cline "your task"
+export CLINE_DIR=/custom/path/to/dietcode
+dietcode "your task"
 ```
 
-When set, all Cline data is stored in this directory instead of `~/.cline/data/`.
+When set, all DietCode data is stored in this directory instead of `~/.dietcode/data/`.
 
 **Use cases:**
-- Running multiple isolated Cline configurations
+- Running multiple isolated DietCode configurations
 - Team-shared configurations
 - CI/CD with custom state directories
 
 ### CLINE_COMMAND_PERMISSIONS
 
-Restrict which shell commands Cline can execute:
+Restrict which shell commands DietCode can execute:
 
 ```bash
 export CLINE_COMMAND_PERMISSIONS='{"allow": ["npm *", "git *"], "deny": ["rm -rf *"]}'
@@ -153,14 +153,14 @@ When `allow` is set, all commands not matching the allow patterns are denied. Us
 
 ## Using --config Flag
 
-Run Cline with a custom configuration directory:
+Run DietCode with a custom configuration directory:
 
 ```bash
-cline --config /path/to/custom/config "your task"
+dietcode --config /path/to/custom/config "your task"
 ```
 
 This is useful for:
-- Running isolated Cline instances
+- Running isolated DietCode instances
 - Testing different configurations
 - Separating work and personal setups
 
@@ -168,22 +168,22 @@ This is useful for:
 
 ```bash
 # Work configuration
-cline --config ~/.cline-work "review this PR"
+dietcode --config ~/.dietcode-work "review this PR"
 
 # Personal projects
-cline --config ~/.cline-personal "help me with this side project"
+dietcode --config ~/.dietcode-personal "help me with this side project"
 ```
 
 ## MCP Server Configuration
 
-Cline CLI supports [MCP (Model Context Protocol)](/mcp/mcp-overview) servers, giving you access to external tools and data sources directly from the terminal. The CLI uses the same MCP configuration format as the VS Code extension.
+DietCode CLI supports [MCP (Model Context Protocol)](/mcp/mcp-overview) servers, giving you access to external tools and data sources directly from the terminal. The CLI uses the same MCP configuration format as the VS Code extension.
 
 ### Setting Up MCP Servers
 
 To configure MCP servers for the CLI, create or edit the settings file at:
 
 ```
-~/.cline/data/settings/cline_mcp_settings.json
+~/.dietcode/data/settings/dietcode_mcp_settings.json
 ```
 
 The file uses the same JSON format as the VS Code extension:
@@ -207,12 +207,12 @@ The file uses the same JSON format as the VS Code extension:
 For the full configuration reference including STDIO and SSE transport types, see [Adding and Configuring MCP Servers](/mcp/adding-and-configuring-servers).
 
 <Note>
-The CLI does not yet have a `/mcp` slash command for managing MCP servers interactively. For now, you'll need to edit the `cline_mcp_settings.json` file directly.
+The CLI does not yet have a `/mcp` slash command for managing MCP servers interactively. For now, you'll need to edit the `dietcode_mcp_settings.json` file directly.
 </Note>
 
 ### Custom Config Directory
 
-If you use the `CLINE_DIR` environment variable or `--config` flag, the MCP settings file will be located at `<your-config-dir>/data/settings/cline_mcp_settings.json` instead.
+If you use the `CLINE_DIR` environment variable or `--config` flag, the MCP settings file will be located at `<your-config-dir>/data/settings/dietcode_mcp_settings.json` instead.
 
 ## Configuration for Local Providers
 
@@ -222,7 +222,7 @@ Configure context window size for Ollama:
 
 ```bash
 # In settings or via config
-cline config
+dietcode config
 # Navigate to Settings tab, find ollama-api-options-ctx-num
 ```
 
@@ -230,7 +230,7 @@ Or set via environment:
 
 ```bash
 # Set context window to 32K tokens
-cline -m ollama/llama3 "your task"
+dietcode -m ollama/llama3 "your task"
 ```
 
 ### LM Studio
@@ -238,7 +238,7 @@ cline -m ollama/llama3 "your task"
 Configure max tokens for LM Studio:
 
 ```bash
-cline config
+dietcode config
 # Navigate to Settings tab, find lm-studio-max-tokens
 ```
 
@@ -246,11 +246,11 @@ cline config
 
 ### From VS Code Extension
 
-If you use the Cline VS Code extension, the CLI automatically detects and can share some settings. However, the CLI maintains its own configuration for terminal-specific features.
+If you use the DietCode VS Code extension, the CLI automatically detects and can share some settings. However, the CLI maintains its own configuration for terminal-specific features.
 
 ### From Other CLI Tools
 
-See [Installation & Setup](/cline-cli/installation#option-3-import-from-existing-tools) for importing configurations from:
+See [Installation & Setup](/dietcode-cli/installation#option-3-import-from-existing-tools) for importing configurations from:
 - Codex CLI
 - OpenCode
 
@@ -262,7 +262,7 @@ Use the default configuration with workspace-specific rules:
 
 ```bash
 # Add project-specific rules
-echo "Use TypeScript strict mode" > .clinerules/typescript.md
+echo "Use TypeScript strict mode" > .dietcoderules/typescript.md
 ```
 
 ### For CI/CD
@@ -271,7 +271,7 @@ Use environment variables and `--yolo` mode:
 
 ```bash
 export CLINE_COMMAND_PERMISSIONS='{"allow": ["npm test", "npm run build"]}'
-cline -y "run tests and fix any failures"
+dietcode -y "run tests and fix any failures"
 ```
 
 ### For Teams
@@ -279,16 +279,16 @@ cline -y "run tests and fix any failures"
 Share configuration via version control:
 
 ```bash
-# Commit .clinerules/ to your repo
-git add .clinerules/
-git commit -m "Add Cline rules for team"
+# Commit .dietcoderules/ to your repo
+git add .dietcoderules/
+git commit -m "Add DietCode rules for team"
 ```
 
 ## Troubleshooting
 
 ### Configuration Not Persisting
 
-1. Check write permissions on `~/.cline/data/`
+1. Check write permissions on `~/.dietcode/data/`
 2. Ensure `CLINE_DIR` isn't set to a read-only location
 3. Verify the config directory exists
 
@@ -303,18 +303,18 @@ git commit -m "Add Cline rules for team"
 To start fresh, remove the configuration directory:
 
 ```bash
-rm -rf ~/.cline/data/
-cline auth  # Re-authenticate
+rm -rf ~/.dietcode/data/
+dietcode auth  # Re-authenticate
 ```
 
 ## Next Steps
 
 <Columns cols={2}>
-  <Card title="Headless Mode" icon="robot" href="/cline-cli/three-core-flows">
-    Run Cline autonomously in scripts, CI/CD pipelines, and automated workflows.
+  <Card title="Headless Mode" icon="robot" href="/dietcode-cli/three-core-flows">
+    Run DietCode autonomously in scripts, CI/CD pipelines, and automated workflows.
   </Card>
   
-  <Card title="CLI Reference" icon="terminal" href="/cline-cli/cli-reference">
+  <Card title="CLI Reference" icon="terminal" href="/dietcode-cli/cli-reference">
     Complete command documentation with all flags and options.
   </Card>
 </Columns>

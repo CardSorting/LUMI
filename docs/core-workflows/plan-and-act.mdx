@@ -1,7 +1,7 @@
 ---
 title: "Plan & Act Mode"
 sidebarTitle: "Plan & Act Mode"
-description: "Think first, then build. Cline's dual-mode system for structured development."
+description: "Think first, then build. DietCode's dual-mode system for structured development."
 ---
 
 Plan & Act modes separate thinking from doing. Plan mode lets you explore and strategize without changing files. Act mode executes against your plan.
@@ -12,7 +12,7 @@ Plan & Act modes separate thinking from doing. Plan mode lets you explore and st
 
 ## Plan Mode
 
-Plan mode is where you and Cline figure out what you're building and how. In this mode, Cline can read your codebase, run searches, and discuss strategy, but cannot modify any files or execute commands.
+Plan mode is where you and DietCode figure out what you're building and how. In this mode, DietCode can read your codebase, run searches, and discuss strategy, but cannot modify any files or execute commands.
 
 This constraint is intentional. It keeps the conversation focused on understanding and planning, without the distraction of implementation details. You can explore freely, ask questions, and iterate on the approach before committing to changes.
 
@@ -26,21 +26,21 @@ Use Plan mode to:
 
 ## Act Mode
 
-Once you have a plan, switch to Act mode. Cline retains the full context from your planning session and can now modify files, run commands, and execute your strategy.
+Once you have a plan, switch to Act mode. DietCode retains the full context from your planning session and can now modify files, run commands, and execute your strategy.
 
-The conversation history carries over when you switch modes. Cline remembers everything you discussed in Plan mode, so you don't need to repeat yourself. This makes the transition seamless.
+The conversation history carries over when you switch modes. DietCode remembers everything you discussed in Plan mode, so you don't need to repeat yourself. This makes the transition seamless.
 
 <Note>
-	While you can start directly in Act mode, planning first is highly recommended. The planning phase intentionally builds context that Cline needs to implement changes effectively. Without it, Cline may lack the understanding required to make the right decisions.
+	While you can start directly in Act mode, planning first is highly recommended. The planning phase intentionally builds context that DietCode needs to implement changes effectively. Without it, DietCode may lack the understanding required to make the right decisions.
 </Note>
 
 ## Typical Workflow
 
 1. Start in Plan mode and describe what you want to build
-2. Let Cline explore relevant files and understand the codebase
+2. Let DietCode explore relevant files and understand the codebase
 3. Discuss the approach, considering edge cases and potential issues
 4. When confident in the plan, switch to Act mode
-5. Cline implements the solution based on your planning session
+5. DietCode implements the solution based on your planning session
 
 For complex projects, you may cycle between modes multiple times. Return to Plan mode when you hit unexpected complexity or need to rethink the approach, then switch back to Act mode to continue implementation.
 
@@ -66,7 +66,7 @@ You can configure separate models for Plan and Act modes. This is useful when yo
 
 To enable this:
 
-1. Open Cline Settings
+1. Open DietCode Settings
 2. Enable "Use different models for Plan and Act"
 3. Select your preferred model for each mode
 
@@ -82,7 +82,7 @@ When enabled, switching between Plan and Act mode automatically switches to the 
 
 ## Using `/deep-planning`
 
-For complex tasks that need thorough analysis, use the `/deep-planning` slash command. This triggers an extended planning session where Cline:
+For complex tasks that need thorough analysis, use the `/deep-planning` slash command. This triggers an extended planning session where DietCode:
 
 1. Explores the codebase systematically
 2. Identifies all affected files and dependencies
@@ -107,14 +107,14 @@ For most development work, start in Plan mode to understand the scope and approa
 
 ### Large tasks: Use `/deep-planning`
 
-For complex features that span multiple files, require architectural decisions, or will take multiple sessions to complete, use the `/deep-planning` slash command. This creates a detailed implementation plan that Cline can reference throughout the work.
+For complex features that span multiple files, require architectural decisions, or will take multiple sessions to complete, use the `/deep-planning` slash command. This creates a detailed implementation plan that DietCode can reference throughout the work.
 
 **Examples:** Add a new feature across frontend and backend, major refactoring across the codebase, implementing a new system or integration, multi-step migrations.
 
 ## Tips
 
-- Have Cline write a markdown file summarizing the plan for future reference
-- Use [file mentions](/core-workflows/working-with-files) to point Cline at relevant files during planning
+- Have DietCode write a markdown file summarizing the plan for future reference
+- Use [file mentions](/core-workflows/working-with-files) to point DietCode at relevant files during planning
 - Switch back to Plan mode when encountering unexpected complexity rather than pushing through
 - Enable [Checkpoints](/core-workflows/checkpoints) before Act mode so you can roll back if needed
-- For large tasks, ask Cline to create a todo list during planning that you can track in Act mode
+- For large tasks, ask DietCode to create a todo list during planning that you can track in Act mode

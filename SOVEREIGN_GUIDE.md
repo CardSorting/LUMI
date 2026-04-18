@@ -51,49 +51,43 @@ Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powe
 When moving or deleting files, the Forensic Engine verifies symbol integrity project-wide. 
 - **Rule**: All materialized symbols must use **Industrial Member Mapping** to ensure 100% structural fidelity with provider modules.
 
-## 🤝 Swarm Consensus Protocol
+## 🤝 Swarm Consensus Protocol (V210)
 When performing a mission-critical refactor (e.g., `decompose_sovereign_module`):
 1. Spawn a subagent with the `Architecture_Verifier` profile.
 2. Provide the decomposition blueprint.
 3. If the Verifier identifies an axiom violation (e.g., logic leaks into infrastructure), adjust the plan.
 4. Finalize only when consensus is reached.
 
-## 🗺️ Visual Sovereignty
-Use `generate_sovereign_map` to visualize the structural health and coupling of the substrate. High integrity is marked by low coupling between layers and high internal cohesion within Domain modules.
-
-- **Blueprint Outcome**: The tool ensures the correct directory, file name, `[LAYER]` tag, and base template are applied instantly. Never create files manually if you can scaffold.
+---
 
 ## 🔋 Metabolic Sovereignty & Immortality (V210)
 The substrate has achieved absolute metabolic sovereignty through zero-inflation performance and clinical residual purging.
-- **Zero-Inflation Sensing**: Eliminates redundant Set/Map allocations in high-velocity structural loops, achieving absolute resource neutrality.
-- **Clinical Session Purge**: Forceful nullification of `sessionBuffer` residuals immediately after turn completion to prevent large-string hoarding.
-- **Generational GC**: Autonomous architectural TTL that purges stagnant ghost entries after 5 turn cycles.
-- **Snapshot Throttling**: Structural insurance is managed via a high-density "Baseline & Current" model (Retain 2).
-- **String Interning**: Every structural identifier is deduplicated at the heap level, achieving absolute resource neutrality.
+- **Stability Lock 2.0**: Transaction concurrency is managed via session-authenticated IDs, preventing "Late Return" race conditions and structural corruption.
+- **Substrate Checkpoints**: Binary serialization of the node graph (Merkle-mapped) enables instant **Structural Rollback** if an edit compromises substrate integrity.
+- **Metabolic Pressure Sensing**: The substrate monitors V8 heap statistics. At **> 80% pressure**, it triggers a **Substrate Sweep**; at **> 90%**, it enforces an **Absolute Sweep** (Forceful purification).
+- **Zero-Inflation Identification**: Eliminates redundant Set/Map allocations in high-velocity structural loops using nested map caching.
+- **Clinical Session Purge**: Forceful nullification of `sessionBuffer` residuals immediately after turn completion.
+- **Industrial Throttling**: Project-wide re-indexing is batched (250 files) with event loop relinquishing to prevent host saturation.
 - **Clinical Closure Hygiene**: Explicit nullification of AST visitors and closures after every turn to ensure a zero-leak sensing environment.
-- **Cognitive Resonance**: During `#REFACTOR` or `#HEAL` turns, metabolic pressure is damped at **0.5x velocity**.
-- **Metabolic Synthesis**: Atomic writes to the same file in a single turn are discounted by **50%**, rewarding iterative refinement.
-- **Aesthetic Agility**: Changes to whitespace, line breaks, or comments (Aesthetic Hash) have a **90% discount** and never trigger blockades.
 
 ## 🩹 Forensic Resilience & Recovery (V200 Industrial)
 The substrate now operates on a platform of **Forensic Realism** and **Stability Locking**.
-- **Stability Lock 2.0**: Transaction concurrency is managed via session-authenticated IDs, preventing "Late Return" race conditions and structural corruption.
 - **Deterministic Traceability**: Substrate repairs are grounded in physical structural proof. Imports and member signatures are extracted directly from the graph using AST forensics.
-- **Neural Forensics (V188-V189)**: Every turn extracts the **Cognitive Focus (🧠)** symbols currently under investigation. This prevents "investigative drift" and ensures the agent remains grounded in the primary domain.
-- **Reactive Stabilization**: Build errors trigger asynchronous sweeps by the Garbage Collector. These sweeps focus strictly on repairing verified violations, ensuring that development flow is never blocked by hypothetical substrate predictions.
+- **Neural Forensics (V188-V189)**: Every turn extracts the **Cognitive Focus (🧠)** symbols currently under investigation. This prevents "investigative drift" and ensures the agent remains grounded.
+- **Reactive Stabilization**: Build errors trigger **Wave-Front Healing** sweeps focused strictly on repairing verified violations.
 
-## 🛡️ The Substrate Immune System (V189)
+## 🛡️ The Substrate Immune System (V189-V210)
 Designed to protect the most venerable parts of the codebase, the **Immune System** monitors for high-entropy violations.
 - **Fragility Interdiction**: Modules with a **Change Complexity Index (CCI) > 0.8** trigger defensive alarms. Broad mutations in these clusters are restricted to prevent regression spirals.
-- **Concurrent Drift**: The substrate detects external modifications by comparing current file hashes against the cognitive registry. If drift is detected, the agent is nudged to re-read and re-synchronize.
+- **Pathogen Memory**: Files with chronic failure history trigger **Deep Forensic Scans**, enforcing absolute structural purity and pruning all technical debt.
+- **Forensic Pruning**: Automatically suppresses heuristic violations if the native compiler (TSC) verifies the module is clean.
 
 ## 🌊 Wave-Front Healing (Reactive)
-Automated stabilization is now reactive and forensic. When a build error is detected, the Garbage Collector identifies the required repairs and schedules a recursive sweep of the dependent wave-front, achieving project-wide stability in a deterministic loop.
+Automated stabilization is now reactive and forensic. When a build error is detected, the Garbage Collector identifies the required repairs and schedules a recursive sweep of the dependent **Wave-Front** (2-degree depth), achieving project-wide stability in a deterministic loop.
 
 ## ✨ The Sovereign Economy (Incentives)
 - **Structural Karma**: Earned by reducing project-wide entropy by > 5%. Karma pardons all strikes and resets metabolic pressure.
-- **Seismic Karma (V189)**: Awarded for "Double Down" logic implementation—deep refactoring that simplifies high-fragility clusters.
-- **Metabolic Velocity**: Your write/read budget is now adaptive. High-Karma agents gain **1.5x velocity**; introduction of Axiomatic Drift induces **0.5x velocity braking**.
-- **Substrate Vitality (💓 Pulse)**: A real-time heartbeat of the project. If Vitality drops below 40%, the substrate enters **Safe Mode**, requiring a `# SOVEREIGN BREATH` to continue.
-- **Immune Memory**: Failure patterns are tracked. Files with chronic issues (Pathogens) trigger **Deep Forensic Scans** that are more restrictive during cleanup.
+- **Metabolic Velocity**: Your write/read budget is now adaptive. High-Karma agents gain **1.5x velocity**; Axiomatic Drift induces **0.5x velocity braking**.
+- **Substrate Vitality (💓 Pulse)**: A real-time heartbeat of the project. If Vitality drops below 40%, the substrate enters **Safe Mode**.
+
 

@@ -4,7 +4,7 @@ sidebarTitle: "Subagents"
 description: "Run parallel research agents to explore your codebase without filling the main agent's context window."
 ---
 
-Subagents let Cline spawn focused research agents that run in parallel. Each subagent gets its own prompt and context window, explores the codebase independently, and returns a detailed report to the main agent. This keeps the main agent's context clean while gathering broad information fast.
+Subagents let DietCode spawn focused research agents that run in parallel. Each subagent gets its own prompt and context window, explores the codebase independently, and returns a detailed report to the main agent. This keeps the main agent's context clean while gathering broad information fast.
 
 <Tip>
   Subagents is an experimental feature. Behavior may change in future releases.
@@ -12,7 +12,7 @@ Subagents let Cline spawn focused research agents that run in parallel. Each sub
 
 ## How It Works
 
-When Cline uses the `use_subagents` tool, it launches independent agents simultaneously. Each one:
+When DietCode uses the `use_subagents` tool, it launches independent agents simultaneously. Each one:
 
 - Gets its own prompt describing what to investigate
 - Runs with a separate context window and token budget
@@ -26,7 +26,7 @@ Subagent costs (tokens and API spend) are tracked separately per subagent and ro
 
 Subagents are disabled by default. To turn them on:
 
-1. Open Cline Settings (click the gear icon in the Cline panel)
+1. Open DietCode Settings (click the gear icon in the DietCode panel)
 2. Go to **Features**
 3. Under the **Agent** section, toggle **Subagents** on
 
@@ -34,7 +34,7 @@ This setting applies across all editors (VS Code, JetBrains, CLI).
 
 ## Using Subagents
 
-Cline does not automatically decide to use subagents. You need to ask for them in your prompt. When the feature is enabled and you mention subagents (or describe a task that benefits from parallel exploration), Cline will use the `use_subagents` tool.
+DietCode does not automatically decide to use subagents. You need to ask for them in your prompt. When the feature is enabled and you mention subagents (or describe a task that benefits from parallel exploration), DietCode will use the `use_subagents` tool.
 
 Example prompts:
 
@@ -42,7 +42,7 @@ Example prompts:
 - "Spin up subagents to investigate the API routes, the test setup, and the deployment config"
 - "I'm new to this codebase. Use subagents to map out the main entry points, the routing layer, and the data access patterns"
 
-Each subagent prompt should describe a focused research question. Cline will run them in parallel and synthesize the results.
+Each subagent prompt should describe a focused research question. DietCode will run them in parallel and synthesize the results.
 You can also run only one subagent when the task is small enough that parallel discovery would be unnecessary overhead.
 
 ## Auto-Approve Behavior
@@ -51,7 +51,7 @@ Subagents follow the **Read project files** auto-approve permission. If you have
 
 In [YOLO mode](/features/auto-approve#yolo-mode), subagents are always auto-approved.
 
-If auto-approve is off, Cline will ask for your approval before launching subagents, showing you the prompts it plans to send.
+If auto-approve is off, DietCode will ask for your approval before launching subagents, showing you the prompts it plans to send.
 
 ## What Subagents Can Do
 
@@ -82,4 +82,4 @@ Subagents work best when you need broad context from multiple areas of a codebas
 - **Pre-edit research**: Before making changes, use subagents to gather context from related files so the main agent can make informed edits without burning through its context window.
 - **Large codebases**: When reading many files sequentially would consume too much of the main agent's context, subagents let you explore broadly without that tradeoff.
 
-For small, focused tasks where you already know which files to look at, subagents add unnecessary overhead. Just ask Cline directly.
+For small, focused tasks where you already know which files to look at, subagents add unnecessary overhead. Just ask DietCode directly.

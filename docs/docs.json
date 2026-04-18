@@ -1,8 +1,8 @@
 {
 	"$schema": "https://mintlify.com/docs.json",
 	"theme": "mint",
-	"name": "Cline",
-	"description": "AI-powered coding agent for complex work",
+	"name": "DietCode",
+	"description": "The self-hardening, sovereign AI coding agent.",
 	"colors": {
 		"primary": "#9D4EDD",
 		"light": "#F0E6FF",
@@ -97,26 +97,36 @@
 						]
 					},
 					{
-						"group": "Cline CLI",
+						"group": "DietCode CLI",
 						"pages": [
-							"cline-cli/overview",
-							"cline-cli/installation",
-							"cline-cli/interactive-mode",
+							"dietcode-cli/overview",
+							"dietcode-cli/installation",
+							"dietcode-cli/interactive-mode",
 							{
 								"group": "Headless Mode",
 								"pages": [
-									"cline-cli/three-core-flows",
-									"cline-cli/samples/overview",
-									"cline-cli/samples/github-issue-rca",
-									"cline-cli/samples/github-integration",
-									"cline-cli/samples/github-pr-review",
-									"cline-cli/samples/model-orchestration",
-									"cline-cli/samples/worktree-workflows"
+									"dietcode-cli/three-core-flows",
+									"dietcode-cli/samples/overview",
+									"dietcode-cli/samples/github-issue-rca",
+									"dietcode-cli/samples/github-integration",
+									"dietcode-cli/samples/github-pr-review",
+									"dietcode-cli/samples/model-orchestration",
+									"dietcode-cli/samples/worktree-workflows"
 								]
 							},
-							"cline-cli/configuration",
-							"cline-cli/acp-editor-integrations",
-							"cline-cli/cli-reference"
+							"dietcode-cli/configuration",
+							"dietcode-cli/acp-editor-integrations",
+							"dietcode-cli/cli-reference"
+						]
+					},
+					{
+						"group": "Sovereign Substrate (V210)",
+						"pages": [
+							"SOVEREIGN_GUIDE",
+							"JOYZONING_SOVEREIGNTY_3_0",
+							"FORENSIC_SUBSTRATE_REPORT",
+							"PATHOGEN_REGISTRY",
+							"ARCHITECTURAL_ENFORCEMENT_HARDENING"
 						]
 					},
 					{
@@ -238,7 +248,7 @@
 					{
 						"group": "Tools Reference",
 						"pages": [
-							"tools-reference/all-cline-tools",
+							"tools-reference/all-dietcode-tools",
 							"tools-reference/browser-automation"
 						]
 					},
@@ -411,12 +421,12 @@
 			"destination": "/getting-started/your-first-project"
 		},
 		{
-			"source": "/cline-cli/samples",
-			"destination": "/cline-cli/samples/overview"
+			"source": "/dietcode-cli/samples",
+			"destination": "/dietcode-cli/samples/overview"
 		},
 		{
-			"source": "/cline-cli/overview",
-			"destination": "/cline-cli/getting-started"
+			"source": "/dietcode-cli/overview",
+			"destination": "/dietcode-cli/getting-started"
 		},
 		{
 			"source": "/features/hooks/real-world-examples",
@@ -536,11 +546,11 @@
 		},
 		{
 			"source": "/exploring-clines-tools/cline-tools-guide",
-			"destination": "/tools-reference/all-cline-tools"
+			"destination": "/tools-reference/all-dietcode-tools"
 		},
 		{
 			"source": "/exploring-clines-tools/new-task-tool",
-			"destination": "/tools-reference/all-cline-tools"
+			"destination": "/tools-reference/all-dietcode-tools"
 		},
 		{
 			"source": "/exploring-clines-tools/remote-browser-support",

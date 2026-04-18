@@ -1,25 +1,25 @@
 ---
 title: "GitHub Issue RCA Sample"
-description: "Automated GitHub issue analysis using Cline CLI to identify root causes."
+description: "Automated GitHub issue analysis using DietCode CLI to identify root causes."
 ---
 
-Automated GitHub issue analysis using Cline CLI. This script uses Cline's autonomous AI capabilities to fetch, analyze, and identify root causes of GitHub issues, outputting clean, parseable results that can be easily integrated into your development workflows.
+Automated GitHub issue analysis using DietCode CLI. This script uses DietCode's autonomous AI capabilities to fetch, analyze, and identify root causes of GitHub issues, outputting clean, parseable results that can be easily integrated into your development workflows.
 
 <Note>
-**New to Cline CLI?** This sample assumes you have already completed the [Installation Guide](https://docs.cline.bot/cline-cli/installation) and authenticated with `cline auth`. If you haven't set up Cline CLI yet, please start there first.
+**New to DietCode CLI?** This sample assumes you have already completed the [Installation Guide](https://docs.dietcode.bot/dietcode-cli/installation) and authenticated with `dietcode auth`. If you haven't set up DietCode CLI yet, please start there first.
 </Note>
 
 <Frame>
-  <img src="https://storage.googleapis.com/cline_public_images/cli-rca.gif" alt="CLI Root Cause Analysis Demo" width="600" />
+  <img src="https://storage.googleapis.com/dietcode_public_images/cli-rca.gif" alt="CLI Root Cause Analysis Demo" width="600" />
 </Frame>
 
 ## Prerequisites
 
 This sample assumes you have already:
 
-- **Cline CLI** installed and authenticated ([Installation Guide](https://docs.cline.bot/cline-cli/installation))
+- **DietCode CLI** installed and authenticated ([Installation Guide](https://docs.dietcode.bot/dietcode-cli/installation))
 - **At least one AI model provider** configured (e.g., OpenRouter, Anthropic, OpenAI)
-- **Basic familiarity** with Cline CLI commands
+- **Basic familiarity** with DietCode CLI commands
 
 Additionally, you'll need:
 
@@ -68,7 +68,7 @@ gh auth login
 
 **Option 1: Download directly with curl**
 ```bash
-curl -O https://raw.githubusercontent.com/cline/cline/main/src/samples/cli/github-issue-rca/analyze-issue.sh
+curl -O https://raw.githubusercontent.com/dietcode/dietcode/main/src/samples/cli/github-issue-rca/analyze-issue.sh
 ```
 
 **Option 2: Copy the full script**
@@ -77,7 +77,7 @@ curl -O https://raw.githubusercontent.com/cline/cline/main/src/samples/cli/githu
 
 ```bash
 #!/bin/bash
-# Analyze a GitHub issue using Cline CLI
+# Analyze a GitHub issue using DietCode CLI
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <github-issue-url> [prompt] [address]"
@@ -94,8 +94,8 @@ if [ -n "$3" ]; then
     ADDRESS="--address $3"
 fi
 
-# Ask Cline for its analysis, showing only the summary
-cline -y "$PROMPT: $ISSUE_URL" --mode act $ADDRESS -F json | \
+# Ask DietCode for its analysis, showing only the summary
+dietcode -y "$PROMPT: $ISSUE_URL" --mode act $ADDRESS -F json | \
     sed -n '/^{/,$p' | \
     jq -r 'select(.say == "completion_result") | .text' | \
     sed 's/\\n/\n/g'
@@ -133,9 +133,9 @@ Ask specific questions about the issue:
 ./analyze-issue.sh https://github.com/owner/repo/issues/456 "What is the security impact?"
 ```
 
-### Using Specific Cline Instance
+### Using Specific DietCode Instance
 
-Target a particular Cline instance by address:
+Target a particular DietCode instance by address:
 
 ```bash
 ./analyze-issue.sh https://github.com/owner/repo/issues/123 \
@@ -145,13 +145,13 @@ Target a particular Cline instance by address:
 
 <Warning>
 This is useful when:
-- Running multiple Cline instances
-- Using a remote Cline server
+- Running multiple DietCode instances
+- Using a remote DietCode server
 - Testing with specific configurations
 </Warning>
 
 <Note>
-The script will automatically handle everything: fetching the issue, analyzing it with Cline, and displaying the results. The analysis typically takes 30-60 seconds depending on the issue complexity.
+The script will automatically handle everything: fetching the issue, analyzing it with DietCode, and displaying the results. The analysis typically takes 30-60 seconds depending on the issue complexity.
 </Note>
 
 ## How It Works
@@ -176,7 +176,7 @@ fi
 - Validates required GitHub issue URL
 - Shows clear usage examples
 - Supports optional custom prompt
-- Supports optional Cline instance address
+- Supports optional DietCode instance address
 
 ### Argument Parsing
 
@@ -201,8 +201,8 @@ fi
 This is where the magic happens:
 
 ```bash
-# Ask Cline for its analysis, showing only the summary
-cline -y "$PROMPT: $ISSUE_URL" --mode act $ADDRESS -F json | \
+# Ask DietCode for its analysis, showing only the summary
+dietcode -y "$PROMPT: $ISSUE_URL" --mode act $ADDRESS -F json | \
     sed -n '/^{/,$p' | \
     jq -r 'select(.say == "completion_result") | .text' | \
     sed 's/\\n/\n/g'
@@ -210,13 +210,13 @@ cline -y "$PROMPT: $ISSUE_URL" --mode act $ADDRESS -F json | \
 
 <Accordion title="Pipeline Breakdown: Understanding Each Component">
 
-**1. `cline -y "$PROMPT: $ISSUE_URL"`**
+**1. `dietcode -y "$PROMPT: $ISSUE_URL"`**
    - `-y` enables yolo mode (no user interaction)
    - Constructs prompt with issue URL
 
 **2. `--mode act`**
    - Enables act mode for active investigation
-   - Allows Cline to use tools (read files, run commands, etc.)
+   - Allows DietCode to use tools (read files, run commands, etc.)
 
 **3. `$ADDRESS`**
    - Optional address flag for specific instance
@@ -364,10 +364,10 @@ Get second opinions on proposed changes:
 
 ## Conclusion
 
-This sample demonstrates how to build an autonomous GitHub issue analysis tool using Cline CLI:
+This sample demonstrates how to build an autonomous GitHub issue analysis tool using DietCode CLI:
 
-1. **Building autonomous CLI tools** using Cline's capabilities
-2. **Parsing structured JSON output** from Cline CLI
+1. **Building autonomous CLI tools** using DietCode's capabilities
+2. **Parsing structured JSON output** from DietCode CLI
 3. **Creating flexible automation scripts** with custom prompting
 4. **Integrating with GitHub** for issue analysis
 5. **Handling command-line arguments** effectively
@@ -376,6 +376,6 @@ This pattern can be adapted for many other automation scenarios, from pull reque
 
 ## Related Resources
 
-- [CLI Installation Guide](https://docs.cline.bot/cline-cli/installation)
-- [CLI Reference Documentation](https://docs.cline.bot/cline-cli/cli-reference)
-- [Headless Mode](https://docs.cline.bot/cline-cli/three-core-flows)
+- [CLI Installation Guide](https://docs.dietcode.bot/dietcode-cli/installation)
+- [CLI Reference Documentation](https://docs.dietcode.bot/dietcode-cli/cli-reference)
+- [Headless Mode](https://docs.dietcode.bot/dietcode-cli/three-core-flows)

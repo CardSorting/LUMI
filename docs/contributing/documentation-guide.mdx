@@ -1,21 +1,21 @@
 ---
 title: "Documentation Guide"
 sidebarTitle: "Documentation Guide"
-description: "How to write and contribute to Cline documentation"
+description: "How to write and contribute to DietCode documentation"
 ---
 
-Cline's documentation lives in the `docs/` directory and uses [Mintlify](https://mintlify.com) for rendering. This guide covers how to write docs that match Cline's established style.
+DietCode's documentation lives in the `docs/` directory and uses [Mintlify](https://mintlify.com) for rendering. This guide covers how to write docs that match DietCode's established style.
 
 ## Using the Documentation Workflow
 
-The fastest way to create documentation is using the `/write-docs` workflow. Type `/write-docs` in Cline and describe what you want to document. Cline guides you through a 4-step process:
+The fastest way to create documentation is using the `/write-docs` workflow. Type `/write-docs` in DietCode and describe what you want to document. DietCode guides you through a 4-step process:
 
 1. **Research**: Examine existing docs structure and patterns
 2. **Scope**: Clarify audience, doc type, and key use cases
 3. **Outline**: Select a template and create structure
 4. **Write**: Generate documentation following style guidelines
 
-The workflow file lives at `.clinerules/workflows/write-docs.md` and contains templates, style rules, and examples.
+The workflow file lives at `.dietcoderules/workflows/write-docs.md` and contains templates, style rules, and examples.
 
 ## Documentation Principles
 
@@ -25,11 +25,11 @@ Your audience is developers who value their time. Get to the point. Every senten
 
 ```markdown
 # Good
-Switch to bash in Cline Settings → Terminal → Default Terminal Profile.
+Switch to bash in DietCode Settings → Terminal → Default Terminal Profile.
 
 # Bad
 Users who are experiencing issues may find it helpful to navigate to the 
-Cline settings menu where they can locate the terminal configuration 
+DietCode settings menu where they can locate the terminal configuration 
 options and subsequently modify the default terminal profile setting.
 ```
 
@@ -40,7 +40,7 @@ Abstract descriptions don't help anyone. Show actual code, real file paths, and 
 ```markdown
 # Good
 I use `/deep-planning` whenever I'm building features that touch multiple 
-parts of the codebase. For example, when adding authentication, Cline 
+parts of the codebase. For example, when adding authentication, DietCode 
 mapped every endpoint and created a migration plan that avoided breaking changes.
 
 # Bad
@@ -50,26 +50,26 @@ that may require careful consideration and planning.
 
 ### Use Active Voice
 
-Cline does things. Files don't get created by Cline, Cline creates files.
+DietCode does things. Files don't get created by DietCode, DietCode creates files.
 
 ```markdown
 # Good
-Cline reads your project files and builds context automatically.
+DietCode reads your project files and builds context automatically.
 
 # Bad
 Project files are read and context is built automatically.
 ```
 
-### Use Neutral Pronouns for Cline
+### Use Neutral Pronouns for DietCode
 
-Refer to Cline as "it" not "he". Cline is software, not a person.
+Refer to DietCode as "it" not "he". DietCode is software, not a person.
 
 ```markdown
 # Good
-When Cline encounters an error, it suggests fixes.
+When DietCode encounters an error, it suggests fixes.
 
 # Bad
-When Cline encounters an error, he suggests fixes.
+When DietCode encounters an error, he suggests fixes.
 ```
 
 ## File Format
@@ -109,7 +109,7 @@ Wrap all images and videos:
 ```jsx
 <Frame>
   <img 
-    src="https://storage.googleapis.com/cline_public_images/docs/assets/filename.png" 
+    src="https://storage.googleapis.com/dietcode_public_images/docs/assets/filename.png" 
     alt="Descriptive alt text" 
   />
 </Frame>
@@ -132,7 +132,7 @@ For sequential procedures:
 ```jsx
 <Steps>
   <Step title="Install the Extension">
-    Search for "Cline" in the VS Code marketplace.
+    Search for "DietCode" in the VS Code marketplace.
   </Step>
   <Step title="Configure Your Model">
     Open settings and add your API key.
@@ -146,11 +146,11 @@ For navigation and feature overviews:
 
 ```jsx
 <CardGroup cols={2}>
-  <Card title="Getting Started" icon="rocket" href="/getting-started/installing-cline">
-    Install Cline and set up your first project.
+  <Card title="Getting Started" icon="rocket" href="/getting-started/installing-dietcode">
+    Install DietCode and set up your first project.
   </Card>
   <Card title="Features" icon="wand-magic-sparkles" href="/core-workflows/plan-and-act">
-    Explore what Cline can do.
+    Explore what DietCode can do.
   </Card>
 </CardGroup>
 ```
@@ -195,6 +195,6 @@ Open `http://localhost:3000` to see your changes in real time.
     Templates for different documentation types.
   </Card>
   <Card title="Workflows" icon="diagram-project" href="/customization/workflows">
-    Learn about Cline's workflow system.
+    Learn about DietCode's workflow system.
   </Card>
 </CardGroup>

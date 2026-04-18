@@ -3,33 +3,33 @@ title: "Interactive Mode"
 description: "Master the interactive CLI with keyboard shortcuts, slash commands, and file mentions"
 ---
 
-Interactive mode is the primary way to work with Cline CLI when you want a collaborative, conversational experience. Unlike headless mode (which runs a single task and exits), interactive mode keeps a session open where you can have back-and-forth conversations with Cline, refine your requests, and guide the AI as it works.
+Interactive mode is the primary way to work with DietCode CLI when you want a collaborative, conversational experience. Unlike headless mode (which runs a single task and exits), interactive mode keeps a session open where you can have back-and-forth conversations with DietCode, refine your requests, and guide the AI as it works.
 
 ## Why Use Interactive Mode?
 
 Interactive mode is ideal when you:
 
-- **Don't know exactly what you need yet** - Explore a codebase, ask questions, and let Cline help you understand the architecture before making changes
-- **Want to review before acting** - Toggle Plan mode to see Cline's strategy, then switch to Act mode when you're ready
-- **Need iterative refinement** - Build on previous responses, ask follow-up questions, and guide Cline to the right solution
-- **Prefer human oversight** - Review each action, approve file changes, and maintain control over what Cline does
+- **Don't know exactly what you need yet** - Explore a codebase, ask questions, and let DietCode help you understand the architecture before making changes
+- **Want to review before acting** - Toggle Plan mode to see DietCode's strategy, then switch to Act mode when you're ready
+- **Need iterative refinement** - Build on previous responses, ask follow-up questions, and guide DietCode to the right solution
+- **Prefer human oversight** - Review each action, approve file changes, and maintain control over what DietCode does
 - **Working on complex tasks** - Multi-step refactoring, debugging sessions, or feature development that requires judgment calls
 
-For automated workflows, scripts, or CI/CD pipelines, see [headless mode](/cline-cli/overview#headless-mode-non-interactive) instead.
+For automated workflows, scripts, or CI/CD pipelines, see [headless mode](/dietcode-cli/overview#headless-mode-non-interactive) instead.
 
 ## Prerequisites
 
-Before using interactive mode, you need to have Cline CLI installed and authenticated. If you haven't done this yet, follow the [Installation & Setup guide](/cline-cli/installation) first.
+Before using interactive mode, you need to have DietCode CLI installed and authenticated. If you haven't done this yet, follow the [Installation & Setup guide](/dietcode-cli/installation) first.
 
 ## Launching Interactive Mode
 
-Start interactive mode by running `cline` without any arguments:
+Start interactive mode by running `dietcode` without any arguments:
 
 ```bash
-cline
+dietcode
 ```
 
-You'll see an animated welcome screen with the Cline robot. Start typing your task in the input field at the bottom of the screen.
+You'll see an animated welcome screen with the DietCode robot. Start typing your task in the input field at the bottom of the screen.
 
 ## Keyboard Shortcuts
 
@@ -69,7 +69,7 @@ Reference files from your workspace by typing `@` followed by the filename:
 @src/utils.ts can you add error handling to this file?
 ```
 
-As you type after `@`, Cline shows a fuzzy search dropdown of matching files. Use arrow keys to navigate and `Enter` to select.
+As you type after `@`, DietCode shows a fuzzy search dropdown of matching files. Use arrow keys to navigate and `Enter` to select.
 
 <Tip>
 File search uses ripgrep for fast, fuzzy matching. You can type partial paths like `@utils` to find `src/utils/helpers.ts`.
@@ -113,25 +113,25 @@ Access the settings panel with `/settings`. Navigate between tabs using arrow ke
 | Tab | Description | Settings |
 |-----|-------------|----------|
 | **API** | Configure your AI provider and model | Provider selection, model choice, extended thinking toggle, thinking budget |
-| **Auto-approve** | Control which actions Cline can perform without prompting | Read files, write files, execute commands, browser actions, MCP tools |
-| **Features** | Toggle Cline capabilities | Hooks, skills, auto-compact, sound notifications |
-| **Account** | Manage your Cline account | View account status, sign in/out, manage subscription |
+| **Auto-approve** | Control which actions DietCode can perform without prompting | Read files, write files, execute commands, browser actions, MCP tools |
+| **Features** | Toggle DietCode capabilities | Hooks, skills, auto-compact, sound notifications |
+| **Account** | Manage your DietCode account | View account status, sign in/out, manage subscription |
 | **Other** | Additional preferences | Theme preferences, debug options |
 
 ## Plan and Act Modes
 
-Cline operates in two modes, toggled with `Tab`. These modes work the same way in the CLI as they do in the VS Code extension. For a deeper explanation of how Plan and Act modes work, see the [Plan and Act documentation](/core-workflows/plan-and-act).
+DietCode operates in two modes, toggled with `Tab`. These modes work the same way in the CLI as they do in the VS Code extension. For a deeper explanation of how Plan and Act modes work, see the [Plan and Act documentation](/core-workflows/plan-and-act).
 
 ### Plan Mode
 
-In Plan mode, Cline analyzes your request and creates a strategy before making changes. Use this when:
+In Plan mode, DietCode analyzes your request and creates a strategy before making changes. Use this when:
 - Exploring a new codebase
 - Working on complex refactoring
 - You want to review the approach first
 
 ### Act Mode
 
-In Act mode, Cline executes tasks directly. Use this when:
+In Act mode, DietCode executes tasks directly. Use this when:
 - You're confident in the task
 - Making straightforward changes
 - Running quick operations
@@ -142,14 +142,14 @@ Press `Tab` anytime to switch modes. Starting in Plan mode and switching to Act 
 
 ## Auto-approve Toggle
 
-Press `Shift+Tab` to toggle auto-approve for all actions. This removes the approval prompts that appear before each action, letting Cline work continuously without interruption.
+Press `Shift+Tab` to toggle auto-approve for all actions. This removes the approval prompts that appear before each action, letting DietCode work continuously without interruption.
 
 ### When to Enable Auto-approve
 
 Auto-approve is useful when:
 - **You trust the task** - Well-defined tasks where you're confident in the outcome
 - **Speed matters** - Long-running tasks where constant approvals slow you down
-- **You're watching anyway** - You can see Cline's work in real-time and can interrupt if needed
+- **You're watching anyway** - You can see DietCode's work in real-time and can interrupt if needed
 - **Iterating quickly** - Rapid prototyping where you want to see results fast
 
 ### What Gets Auto-approved
@@ -164,12 +164,12 @@ When enabled, these actions happen without prompting:
 You can also configure granular auto-approve settings (e.g., auto-approve reads but not writes) via `/settings` → Auto-approve tab, or see the [Auto-approve documentation](/features/auto-approve) for more details.
 
 <Warning>
-Auto-approve gives Cline full autonomy. Use on a clean git branch so you can easily revert changes if needed. You can always press `Ctrl+C` to stop Cline immediately.
+Auto-approve gives DietCode full autonomy. Use on a clean git branch so you can easily revert changes if needed. You can always press `Ctrl+C` to stop DietCode immediately.
 </Warning>
 
 ## Session Summary
 
-When you exit with `Ctrl+C`, Cline displays a session summary showing:
+When you exit with `Ctrl+C`, DietCode displays a session summary showing:
 - Tasks completed
 - Files modified
 - Commands executed
@@ -190,26 +190,26 @@ To run isolated instances, use the `--config` flag with different directories:
 
 ```bash
 # Work instance with team configuration
-cline --config ~/.cline-work
+dietcode --config ~/.dietcode-work
 
 # Personal instance with different model/provider
-cline --config ~/.cline-personal
+dietcode --config ~/.dietcode-personal
 
 # Experimental instance for testing new settings
-cline --config ~/.cline-test
+dietcode --config ~/.dietcode-test
 ```
 
 Each config directory maintains its own provider settings, API keys, task history, and preferences.
 
 <Tip>
-Use terminal multiplexers like tmux or split terminals to run multiple Cline instances in parallel, each working on different parts of your project with different models or settings.
+Use terminal multiplexers like tmux or split terminals to run multiple DietCode instances in parallel, each working on different parts of your project with different models or settings.
 </Tip>
 
 ## Tips for Effective Usage
 
 ### Start with Context
 
-Give Cline context about what you're working on:
+Give DietCode context about what you're working on:
 
 ```text
 I'm building a REST API with Express. The routes are in @src/routes/ and models in @src/models/. Help me add user authentication.
@@ -230,23 +230,23 @@ The interactive CLI maintains conversation context. Build on previous messages:
 
 ```text
 > Add a login endpoint
-[Cline creates the endpoint]
+[DietCode creates the endpoint]
 
 > Now add rate limiting to it
-[Cline modifies the same endpoint]
+[DietCode modifies the same endpoint]
 
 > Add tests for both features
-[Cline creates test files]
+[DietCode creates test files]
 ```
 
 ## Next Steps
 
 <Columns cols={2}>
-  <Card title="Headless Mode" icon="robot" href="/cline-cli/three-core-flows">
-    Run Cline autonomously in scripts, CI/CD pipelines, and automated workflows.
+  <Card title="Headless Mode" icon="robot" href="/dietcode-cli/three-core-flows">
+    Run DietCode autonomously in scripts, CI/CD pipelines, and automated workflows.
   </Card>
   
-  <Card title="Configuration" icon="gear" href="/cline-cli/configuration">
-    Explore `cline config` and advanced configuration options.
+  <Card title="Configuration" icon="gear" href="/dietcode-cli/configuration">
+    Explore `dietcode config` and advanced configuration options.
   </Card>
 </Columns>

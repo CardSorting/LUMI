@@ -1,13 +1,13 @@
 ---
 title: "Installation & Setup"
-description: "Install Cline CLI on macOS, Linux, or Windows and configure your AI provider"
+description: "Install DietCode CLI on macOS, Linux, or Windows and configure your AI provider"
 ---
 
-Cline CLI brings the full power of Cline to your terminal. In just a few minutes, you can install the CLI, authenticate with your preferred AI provider, and start running tasks from any directory on your machine.
+DietCode CLI brings the full power of DietCode to your terminal. In just a few minutes, you can install the CLI, authenticate with your preferred AI provider, and start running tasks from any directory on your machine.
 
 ## Prerequisites
 
-Cline CLI requires **Node.js version 20 or higher**. We recommend Node.js 22 for the best experience.
+DietCode CLI requires **Node.js version 20 or higher**. We recommend Node.js 22 for the best experience.
 
 Check your Node.js version:
 
@@ -17,22 +17,22 @@ node --version
 
 If you need to install or update Node.js, visit [nodejs.org](https://nodejs.org) or use a version manager like [nvm](https://github.com/nvm-sh/nvm).
 
-## Install Cline CLI
+## Install DietCode CLI
 
 Install globally via npm:
 
 ```bash
-npm install -g cline
+npm install -g dietcode
 ```
 
 Verify the installation:
 
 ```bash
-cline version
+dietcode version
 ```
 
 <Tip>
-To install a specific version, use `npm install -g cline@2.0.0`. Check [npm](https://www.npmjs.com/package/cline) for available versions.
+To install a specific version, use `npm install -g dietcode@2.0.0`. Check [npm](https://www.npmjs.com/package/dietcode) for available versions.
 </Tip>
 
 ## Authenticate
@@ -40,14 +40,14 @@ To install a specific version, use `npm install -g cline@2.0.0`. Check [npm](htt
 After installation, run the authentication wizard:
 
 ```bash
-cline auth
+dietcode auth
 ```
 
 This launches an interactive wizard with multiple options. Choose the method that works best for your workflow.
 
-### Option 1: Sign in with Cline (Recommended)
+### Option 1: Sign in with DietCode (Recommended)
 
-Select **"Sign in with Cline"** to authenticate with your Cline account via OAuth. Your browser opens automatically to complete sign-in.
+Select **"Sign in with DietCode"** to authenticate with your DietCode account via OAuth. Your browser opens automatically to complete sign-in.
 
 ### Option 2: Sign in with ChatGPT Subscription
 
@@ -55,7 +55,7 @@ If you have a ChatGPT Plus or Pro subscription, select **"Sign in with ChatGPT S
 
 ### Option 3: Import from Existing Tools
 
-Already using another AI coding CLI? Cline can import your existing configuration:
+Already using another AI coding CLI? DietCode can import your existing configuration:
 
 - **Import from Codex CLI** - Imports credentials from `~/.codex/auth.json`
 - **Import from OpenCode** - Imports configuration from `~/.local/share/opencode/auth.json`
@@ -66,19 +66,19 @@ Select **"Bring your own API key"** to manually configure any supported provider
 
 ```bash
 # Anthropic (Claude)
-cline auth -p anthropic -k sk-ant-api-xxxxx -m claude-sonnet-4-5-20250929
+dietcode auth -p anthropic -k sk-ant-api-xxxxx -m claude-sonnet-4-5-20250929
 
 # OpenAI
-cline auth -p openai-native -k sk-xxxxx -m gpt-4o
+dietcode auth -p openai-native -k sk-xxxxx -m gpt-4o
 
 # OpenRouter
-cline auth -p openrouter -k sk-or-xxxxx -m anthropic/claude-sonnet-4-5-20250929
+dietcode auth -p openrouter -k sk-or-xxxxx -m anthropic/claude-sonnet-4-5-20250929
 
 # Moonshot
-cline auth -p moonshot -k sk-xxxxx -m kimi-k2.5
+dietcode auth -p moonshot -k sk-xxxxx -m kimi-k2.5
 
 # OpenAI-compatible provider with custom base URL
-cline auth -p openai -k your-api-key -b https://api.example.com/v1
+dietcode auth -p openai -k your-api-key -b https://api.example.com/v1
 ```
 
 **Quick Setup Flags:**
@@ -117,64 +117,64 @@ Flags are especially useful for scripting, CI/CD environments, or setting up mul
 Confirm everything is working with a simple test:
 
 ```bash
-cline "What is 2 + 2?"
+dietcode "What is 2 + 2?"
 ```
 
-If Cline responds with an answer, your installation and authentication are complete.
+If DietCode responds with an answer, your installation and authentication are complete.
 
 Check your current configuration:
 
 ```bash
-cline config
+dietcode config
 ```
 
 ## Quick Start
 
-Now you're ready to use Cline. Choose how you want to work:
+Now you're ready to use DietCode. Choose how you want to work:
 
 ### Interactive Mode
 
 Launch the interactive CLI for development:
 
 ```bash
-cline
+dietcode
 ```
 
-You'll see the Cline welcome screen. Type your task and press Enter. Use:
+You'll see the DietCode welcome screen. Type your task and press Enter. Use:
 - `Tab` to toggle between Plan and Act modes
 - `Shift+Tab` to enable auto-approve
 - `/help` for available commands
 
-[Learn more about interactive mode →](/cline-cli/interactive-mode)
+[Learn more about interactive mode →](/dietcode-cli/interactive-mode)
 
 ### Direct Task Execution
 
 Run a task directly from your shell:
 
 ```bash
-cline "Add error handling to utils.js"
+dietcode "Add error handling to utils.js"
 ```
 
 For non-interactive execution (perfect for scripts and CI/CD):
 
 ```bash
-cline -y "Run tests and fix any failures"
+dietcode -y "Run tests and fix any failures"
 ```
 
-[Learn more about headless mode →](/cline-cli/three-core-flows)
+[Learn more about headless mode →](/dietcode-cli/three-core-flows)
 
 ## Switching Providers
 
 To change your configured provider at any time:
 
 ```bash
-cline auth
+dietcode auth
 ```
 
 You can also use the settings panel in interactive mode:
 
 ```bash
-cline
+dietcode
 # Then type: /settings
 # Navigate to the API tab
 ```
@@ -184,20 +184,20 @@ cline
 Check for updates and install the latest version:
 
 ```bash
-cline update
+dietcode update
 ```
 
 Or update manually via npm:
 
 ```bash
-npm update -g cline
+npm update -g dietcode
 ```
 
 ## Troubleshooting
 
 ### Command Not Found
 
-If `cline` is not found after installation:
+If `dietcode` is not found after installation:
 
 1. Ensure npm global bin is in your PATH:
    ```bash
@@ -245,34 +245,34 @@ If your API key is rejected:
 
 ## Uninstallation
 
-To remove Cline CLI:
+To remove DietCode CLI:
 
 ```bash
-npm uninstall -g cline
+npm uninstall -g dietcode
 ```
 
 To also remove configuration data:
 
 ```bash
-rm -rf ~/.cline
+rm -rf ~/.dietcode
 ```
 
 ## Next Steps
 
 <Columns cols={2}>
-  <Card title="Interactive Mode" icon="terminal" href="/cline-cli/interactive-mode">
+  <Card title="Interactive Mode" icon="terminal" href="/dietcode-cli/interactive-mode">
     Master the interactive CLI with shortcuts and slash commands.
   </Card>
   
-  <Card title="Headless Mode" icon="robot" href="/cline-cli/three-core-flows">
-    Run Cline autonomously in scripts, CI/CD pipelines, and automated workflows.
+  <Card title="Headless Mode" icon="robot" href="/dietcode-cli/three-core-flows">
+    Run DietCode autonomously in scripts, CI/CD pipelines, and automated workflows.
   </Card>
   
-  <Card title="Configuration" icon="gear" href="/cline-cli/configuration">
+  <Card title="Configuration" icon="gear" href="/dietcode-cli/configuration">
     Configure settings, rules, workflows, and environment variables.
   </Card>
   
-  <Card title="CLI Reference" icon="book" href="/cline-cli/cli-reference">
+  <Card title="CLI Reference" icon="book" href="/dietcode-cli/cli-reference">
     Complete command documentation with all flags and options.
   </Card>
 </Columns>

@@ -4,9 +4,9 @@ sidebarTitle: "Workflows"
 description: "Automate repetitive tasks with Markdown-based workflow files."
 ---
 
-Workflows are Markdown files that define a series of steps to guide Cline through repetitive or complex tasks. Type `/` followed by the workflow's filename to invoke it (e.g., `/deploy.md`).
+Workflows are Markdown files that define a series of steps to guide DietCode through repetitive or complex tasks. Type `/` followed by the workflow's filename to invoke it (e.g., `/deploy.md`).
 
-Deploying, setting up a new project, running through a release checklist: these tasks often require remembering a dozen steps, running commands in the right order, and updating files manually. Mess up one step and you're debugging for an hour. Workflows turn those multi-step processes into one command. Type `/release.md` and Cline handles the version bump, runs tests, updates the changelog, commits, tags, and pushes. You just review and approve.
+Deploying, setting up a new project, running through a release checklist: these tasks often require remembering a dozen steps, running commands in the right order, and updating files manually. Mess up one step and you're debugging for an hour. Workflows turn those multi-step processes into one command. Type `/release.md` and DietCode handles the version bump, runs tests, updates the changelog, commits, tags, and pushes. You just review and approve.
 
 ## Workflow Structure
 
@@ -32,14 +32,14 @@ Check that the build completed successfully and report any issues.
 
 Steps can be written at different levels of detail:
 
-- **High-level**: "Run the test suite and fix any failures" lets Cline decide how to accomplish the goal
+- **High-level**: "Run the test suite and fix any failures" lets DietCode decide how to accomplish the goal
 - **Specific**: Use XML tool syntax or exact commands when you need precise control
 
 ## Creating Workflows
 
 <Steps>
   <Step title="Open the Workflows menu">
-    Click the scale icon at the bottom of the Cline panel, to the left of the model selector. Switch to the Workflows tab.
+    Click the scale icon at the bottom of the DietCode panel, to the left of the model selector. Switch to the Workflows tab.
   </Step>
   <Step title="Create a new workflow file">
     Click "New workflow file..." and enter a filename (e.g., `deploy`). The file will be created with a `.md` extension.
@@ -50,14 +50,14 @@ Steps can be written at different levels of detail:
 </Steps>
 
 <Tip>
-**Create workflows from completed tasks.** After finishing something you'll need to repeat, tell Cline: "Create a workflow for the process I just completed." Cline analyzes the conversation, identifies the steps, and generates the workflow file. Your accumulated context becomes reusable automation.
+**Create workflows from completed tasks.** After finishing something you'll need to repeat, tell DietCode: "Create a workflow for the process I just completed." DietCode analyzes the conversation, identifies the steps, and generates the workflow file. Your accumulated context becomes reusable automation.
 </Tip>
 
 ### Invoking Workflows
 
-Type `/` in the chat input to see available workflows. Cline shows autocomplete suggestions as you type, so `/rel` would match `release-prep.md`. Select a workflow and press Enter to start it.
+Type `/` in the chat input to see available workflows. DietCode shows autocomplete suggestions as you type, so `/rel` would match `release-prep.md`. Select a workflow and press Enter to start it.
 
-Cline executes each step in sequence, pausing for your approval when needed. You can stop a workflow at any point by rejecting a step.
+DietCode executes each step in sequence, pausing for your approval when needed. You can stop a workflow at any point by rejecting a step.
 
 ### Toggling Workflows
 
@@ -67,17 +67,17 @@ Every workflow has a toggle to enable or disable it. This lets you control which
 
 Workflows can be stored in two locations: your project workspace or globally on your system.
 
-**Workspace workflows** go in `.clinerules/workflows/` at your project root. Use these for project-specific automation like deployment scripts, release processes, or setup procedures that your team shares.
+**Workspace workflows** go in `.dietcoderules/workflows/` at your project root. Use these for project-specific automation like deployment scripts, release processes, or setup procedures that your team shares.
 
-**Global workflows** go in your system's Cline Workflows directory. Use these for personal productivity workflows you use across all projects.
+**Global workflows** go in your system's DietCode Workflows directory. Use these for personal productivity workflows you use across all projects.
 
 ### Global Workflows Directory
 
 | Operating System | Default Location |
 |------------------|------------------|
-| Windows | `Documents\Cline\Workflows` |
-| macOS | `~/Documents/Cline/Workflows` |
-| Linux/WSL | `~/Documents/Cline/Workflows` |
+| Windows | `Documents\DietCode\Workflows` |
+| macOS | `~/Documents/DietCode/Workflows` |
+| Linux/WSL | `~/Documents/DietCode/Workflows` |
 
 Workspace workflows take precedence when names match global workflows. See [Storage Locations](/customization/overview#storage-locations) for more guidance.
 
@@ -87,7 +87,7 @@ Workflows can combine natural language instructions with specific tool calls. Th
 
 ### Natural Language
 
-Write steps as plain instructions. Cline interprets them and figures out which tools to use:
+Write steps as plain instructions. DietCode interprets them and figures out which tools to use:
 
 ```markdown
 ## Step 1: Check for uncommitted changes
@@ -97,11 +97,11 @@ Look at the git status. If there are uncommitted changes, ask whether to continu
 Execute all tests. If any fail, show the failures and stop.
 ```
 
-This approach works well when you want Cline to adapt to the situation rather than follow rigid steps.
+This approach works well when you want DietCode to adapt to the situation rather than follow rigid steps.
 
-### Cline Tools
+### DietCode Tools
 
-For precise control, use Cline's built-in tools with XML syntax. This guarantees specific actions:
+For precise control, use DietCode's built-in tools with XML syntax. This guarantees specific actions:
 
 ```xml
 <execute_command>
@@ -123,7 +123,7 @@ For precise control, use Cline's built-in tools with XML syntax. This guarantees
 </ask_followup_question>
 ```
 
-See the full list in the [Cline Tools Reference](/tools-reference/all-cline-tools).
+See the full list in the [DietCode Tools Reference](/tools-reference/all-dietcode-tools).
 
 ### CLI Tools
 
@@ -145,7 +145,7 @@ If you have [MCP servers](/mcp/mcp-overview) connected, use them in your workflo
 </use_mcp_tool>
 ```
 
-Or describe the intent in natural language and let Cline figure out the tool call:
+Or describe the intent in natural language and let DietCode figure out the tool call:
 
 ```markdown
 ## Step 3: Create GitHub release
@@ -159,11 +159,11 @@ Include the changelog as the release body.
 
 **Be specific about decisions.** If a step requires user input, make that explicit: "Ask whether to deploy to production or staging."
 
-**Include failure handling.** Tell Cline what to do when something goes wrong: "If tests fail, show the failures and stop the workflow."
+**Include failure handling.** Tell DietCode what to do when something goes wrong: "If tests fail, show the failures and stop the workflow."
 
 **Keep workflows focused.** A `deploy.md` should deploy. A `setup-db.md` should set up the database. Split complex processes into multiple workflows that can be run independently.
 
-**Version control your workflows.** Store workflows in `.clinerules/workflows/` and commit them. Your team can share, review, and improve them together.
+**Version control your workflows.** Store workflows in `.dietcoderules/workflows/` and commit them. Your team can share, review, and improve them together.
 
 <Warning>
 Workflows execute with your permissions. Review workflows before running them, especially those from external sources.
@@ -173,7 +173,7 @@ Workflows execute with your permissions. Review workflows before running them, e
 
 This workflow automates the tedious pre-release checklist. It verifies your working directory is clean, runs tests and builds, prompts you for the version bump, and generates a changelog from recent commits.
 
-The workflow demonstrates both approaches: XML tool syntax (`<execute_command>`, `<ask_followup_question>`) for steps that need precise control, and natural language for steps where Cline should adapt to the situation.
+The workflow demonstrates both approaches: XML tool syntax (`<execute_command>`, `<ask_followup_question>`) for steps that need precise control, and natural language for steps where DietCode should adapt to the situation.
 
 ````markdown title="release-prep.md"
 # Release Preparation
@@ -218,4 +218,4 @@ Update the version in `package.json` to the new version specified by the user.
 Use these commits to write a changelog entry for the new version.
 ````
 
-Invoke it with `/release-prep.md` and Cline walks through each step.
+Invoke it with `/release-prep.md` and DietCode walks through each step.

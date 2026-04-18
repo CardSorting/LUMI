@@ -1,29 +1,29 @@
 ---
 title: "Rules"
 sidebarTitle: "Rules"
-description: "Define specific instructions and coding standards for Cline."
+description: "Define specific instructions and coding standards for DietCode."
 ---
 
-Rules are markdown files that provide persistent instructions across all conversations. Instead of repeating the same preferences every time you start a new task, rules let you define them once and have Cline follow them automatically.
+Rules are markdown files that provide persistent instructions across all conversations. Instead of repeating the same preferences every time you start a new task, rules let you define them once and have DietCode follow them automatically.
 
-Use rules when you want Cline to:
+Use rules when you want DietCode to:
 - Follow your team's coding standards (naming conventions, file organization, error handling patterns)
 - Understand project-specific context (tech stack, architecture decisions, dependencies)
 - Apply consistent documentation or testing requirements
 - Remember constraints like "don't modify files in /legacy" or "always use TypeScript"
 
 <Tip>
-  **New to Rules?** Watch [Cline Rules Explained](https://youtu.be/xQwsy2vkK5M) to see them in action.
+  **New to Rules?** Watch [DietCode Rules Explained](https://youtu.be/xQwsy2vkK5M) to see them in action.
 </Tip>
 
 
 ## Supported Rule Types
 
-Cline recognizes rules from multiple sources, so you can use existing rule files from other tools:
+DietCode recognizes rules from multiple sources, so you can use existing rule files from other tools:
 
 | Rule Type | Location | Description |
 |-----------|----------|-------------|
-| Cline Rules | `.clinerules/` | Primary rule format |
+| DietCode Rules | `.dietcoderules/` | Primary rule format |
 | Cursor Rules | `.cursorrules` | Automatically detected |
 | Windsurf Rules | `.windsurfrules` | Automatically detected |
 | AGENTS.md | `AGENTS.md` | [Standard format](https://agents.md/) for cross-tool compatibility |
@@ -35,13 +35,13 @@ All detected rule types appear in the Rules panel, where you can toggle them ind
 
 Rules can be stored in two locations: your project workspace or globally on your system.
 
-**Workspace rules** go in `.clinerules/` at your project root. Use these for team standards, project-specific constraints, and anything you want to share with collaborators via version control.
+**Workspace rules** go in `.dietcoderules/` at your project root. Use these for team standards, project-specific constraints, and anything you want to share with collaborators via version control.
 
-**Global rules** go in your system's Cline Rules directory. Use these for personal preferences that apply across all projects.
+**Global rules** go in your system's DietCode Rules directory. Use these for personal preferences that apply across all projects.
 
 ```text
 your-project/
-├── .clinerules/              # Workspace rules
+├── .dietcoderules/              # Workspace rules
 │   ├── coding.md             # Coding standards
 │   ├── testing.md            # Test requirements
 │   └── architecture.md       # Structural decisions
@@ -49,20 +49,20 @@ your-project/
 └── ...
 ```
 
-Cline processes all `.md` and `.txt` files inside `.clinerules/`, combining them into a unified set of rules. Numeric prefixes (like `01-coding.md`) help organize files but are optional.
+DietCode processes all `.md` and `.txt` files inside `.dietcoderules/`, combining them into a unified set of rules. Numeric prefixes (like `01-coding.md`) help organize files but are optional.
 
-When both workspace and global rules exist, Cline combines them. Workspace rules take precedence when they conflict with global rules. See [Storage Locations](/customization/overview#storage-locations) for more guidance.
+When both workspace and global rules exist, DietCode combines them. Workspace rules take precedence when they conflict with global rules. See [Storage Locations](/customization/overview#storage-locations) for more guidance.
 
 ### Global Rules Directory
 
 | Operating System | Default Location |
 |------------------|------------------|
-| Windows | `Documents\Cline\Rules` |
-| macOS | `~/Documents/Cline/Rules` |
-| Linux/WSL | `~/Documents/Cline/Rules` |
+| Windows | `Documents\DietCode\Rules` |
+| macOS | `~/Documents/DietCode/Rules` |
+| Linux/WSL | `~/Documents/DietCode/Rules` |
 
 <Note>
-Linux/WSL users: If you don't find global rules in `~/Documents/Cline/Rules`, check `~/Cline/Rules`.
+Linux/WSL users: If you don't find global rules in `~/Documents/DietCode/Rules`, check `~/DietCode/Rules`.
 </Note>
 
 
@@ -70,7 +70,7 @@ Linux/WSL users: If you don't find global rules in `~/Documents/Cline/Rules`, ch
 
 <Steps>
   <Step title="Open the Rules menu">
-    Click the scale icon at the bottom of the Cline panel, to the left of the model selector.
+    Click the scale icon at the bottom of the DietCode panel, to the left of the model selector.
   </Step>
   <Step title="Create a new rule file">
     Click "New rule file..." and enter a filename (e.g., `coding-standards`). The file will be created with a `.md` extension.
@@ -80,7 +80,7 @@ Linux/WSL users: If you don't find global rules in `~/Documents/Cline/Rules`, ch
   </Step>
 </Steps>
 
-You can also use the [`/newrule` slash command](/core-workflows/using-commands#newrule) to have Cline create a rule interactively.
+You can also use the [`/newrule` slash command](/core-workflows/using-commands#newrule) to have DietCode create a rule interactively.
 
 ### Toggling Rules
 
@@ -109,17 +109,17 @@ Brief context about why this rule exists (optional but helpful).
 - Include the "why" when it's not obvious
 ```
 
-Cline reads rules as context, so formatting matters. Headers help Cline understand the scope of each instruction. Bullet points make individual requirements clear. Code examples show exactly what you want.
+DietCode reads rules as context, so formatting matters. Headers help DietCode understand the scope of each instruction. Bullet points make individual requirements clear. Code examples show exactly what you want.
 
 ### Best Practices
 
-**Be specific, not vague.** "Use descriptive variable names" is too broad. "Use camelCase for variables, PascalCase for classes, UPPER_SNAKE for constants" gives Cline something concrete to follow.
+**Be specific, not vague.** "Use descriptive variable names" is too broad. "Use camelCase for variables, PascalCase for classes, UPPER_SNAKE for constants" gives DietCode something concrete to follow.
 
-**Include the why.** When a rule might seem arbitrary, explain the reason. "Don't modify files in /legacy (this code is scheduled for removal in Q2)" helps Cline make better decisions in edge cases.
+**Include the why.** When a rule might seem arbitrary, explain the reason. "Don't modify files in /legacy (this code is scheduled for removal in Q2)" helps DietCode make better decisions in edge cases.
 
 **Point to examples.** If your codebase already demonstrates the pattern you want, reference it. "Follow the error handling pattern in /src/utils/errors.ts" is more effective than describing the pattern from scratch.
 
-**Keep rules current.** Outdated rules confuse Cline and waste context. If a constraint no longer applies, remove it. If your tech stack changes, update the rules.
+**Keep rules current.** Outdated rules confuse DietCode and waste context. If a constraint no longer applies, remove it. If your tech stack changes, update the rules.
 
 **One concern per file.** Split rules by topic: `coding.md` for style, `testing.md` for test requirements, `architecture.md` for structural decisions. This makes it easy to toggle specific rules on or off.
 
@@ -158,11 +158,11 @@ Conditional rules let you scope rules to specific parts of your codebase. Rules 
 
 For example, documentation style rules should only appear when you're editing docs, not when you're writing application code or tests.
 
-As your rule library grows, loading every rule for every request wastes context tokens and can dilute Cline's focus. Conditional rules solve this by giving Cline only the instructions that matter for the files you're actually touching. This means faster, more accurate responses. Your frontend rules won't compete for attention when you're deep in backend code, and your testing standards appear exactly when you're writing tests. It's the difference between handing someone an entire policy manual versus the one page they need right now.
+As your rule library grows, loading every rule for every request wastes context tokens and can dilute DietCode's focus. Conditional rules solve this by giving DietCode only the instructions that matter for the files you're actually touching. This means faster, more accurate responses. Your frontend rules won't compete for attention when you're deep in backend code, and your testing standards appear exactly when you're writing tests. It's the difference between handing someone an entire policy manual versus the one page they need right now.
 
 ### How It Works
 
-Conditional rules use YAML frontmatter at the top of your rule files. When Cline processes a request, it gathers context from your current work (open files, visible tabs, mentioned paths, edited files), evaluates each rule's conditions, and activates matching rules.
+Conditional rules use YAML frontmatter at the top of your rule files. When DietCode processes a request, it gathers context from your current work (open files, visible tabs, mentioned paths, edited files), evaluates each rule's conditions, and activates matching rules.
 
 <Note>
 When a conditional rule activates, you'll see a notification: **"Conditional rules applied: workspace:frontend-rules.md"**
@@ -170,7 +170,7 @@ When a conditional rule activates, you'll see a notification: **"Conditional rul
 
 ### Writing Conditional Rules
 
-Add YAML frontmatter to the top of any rule file in your `.clinerules/` directory:
+Add YAML frontmatter to the top of any rule file in your `.dietcoderules/` directory:
 
 ```yaml
 ---
@@ -235,19 +235,19 @@ paths:
 
 **Empty paths array**: `paths: []` means the rule never activates. Use this to temporarily disable a rule.
 
-**Invalid YAML**: If frontmatter can't be parsed, Cline fails open. The rule activates with raw content visible to help debugging.
+**Invalid YAML**: If frontmatter can't be parsed, DietCode fails open. The rule activates with raw content visible to help debugging.
 
 ### What Counts as "Current Context"
 
-Cline evaluates rules based on:
+DietCode evaluates rules based on:
 
 1. **Your message**: File paths mentioned in your prompt (e.g., "update `src/App.tsx`")
 2. **Open tabs**: Files currently open in your editor
 3. **Visible files**: Files visible in your active editor panes
-4. **Edited files**: Files Cline has created, modified, or deleted during the task
-5. **Pending operations**: Files Cline is about to edit
+4. **Edited files**: Files DietCode has created, modified, or deleted during the task
+5. **Pending operations**: Files DietCode is about to edit
 
-Conditional rules can activate on your first message, when relevant files are open, or mid-task when Cline starts working with matching files.
+Conditional rules can activate on your first message, when relevant files are open, or mid-task when DietCode starts working with matching files.
 
 <Tip>
 Be explicit about file paths in your prompts. "Update `src/services/user.ts`" reliably triggers path-based rules; "update the user service" may not.
@@ -262,7 +262,7 @@ Copy these patterns and adapt them to your project structure.
 Keep frontend and backend rules separate to avoid noise. Frontend rules only load when working with UI code, backend rules only load when working with API or service code.
 
 ```yaml
-# .clinerules/frontend.md
+# .dietcoderules/frontend.md
 ---
 paths:
   - "src/components/**"
@@ -278,7 +278,7 @@ paths:
 ```
 
 ```yaml
-# .clinerules/backend.md
+# .dietcoderules/backend.md
 ---
 paths:
   - "src/api/**"
@@ -298,7 +298,7 @@ paths:
 Enforce testing standards automatically. This rule activates only when you're writing or modifying tests, so testing guidance appears exactly when you need it.
 
 ```yaml
-# .clinerules/testing.md
+# .dietcoderules/testing.md
 ---
 paths:
   - "**/*.test.ts"
@@ -319,7 +319,7 @@ paths:
 Apply documentation standards only when editing docs. Prevents style rules from cluttering your context when you're writing code.
 
 ```yaml
-# .clinerules/docs.md
+# .dietcoderules/docs.md
 ---
 paths:
   - "docs/**"
@@ -358,7 +358,7 @@ paths:
 **Use Descriptive Filenames.** Name your rule files to indicate their scope:
 
 ```text
-.clinerules/
+.dietcoderules/
 ├── api-endpoints.md      # Rules for API code
 ├── database-models.md    # Rules for DB layer
 ├── react-components.md   # Rules for React

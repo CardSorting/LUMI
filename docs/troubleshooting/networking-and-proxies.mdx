@@ -1,23 +1,23 @@
 ---
 title: "Networking and Proxies"
 sidebarTitle: "Networking & Proxies"
-description: "Configure Cline to work behind firewalls and proxies"
+description: "Configure DietCode to work behind firewalls and proxies"
 ---
 
 If you're working behind a corporate proxy or firewall, you'll need to configure
-proxy settings for Cline to connect to AI providers. The configuration varies
-depending on which version of Cline you're using.
+proxy settings for DietCode to connect to AI providers. The configuration varies
+depending on which version of DietCode you're using.
 
 ## VSCode Extension
 
 The VSCode extension automatically uses VSCode's built-in proxy settings. See
 [Network Connections in Visual Studio Code, Proxy server support](https://code.visualstudio.com/docs/setup/network#_proxy-server-support)
 for instructions on how to set up proxies in VSCode. No additional configuration
-is needed for Cline itself.
+is needed for DietCode itself.
 
 ## CLI
 
-The Cline CLI uses standard HTTP proxy environment variables. Configure these before running `cline` commands.
+The DietCode CLI uses standard HTTP proxy environment variables. Configure these before running `dietcode` commands.
 
 ### Basic Configuration
 
@@ -25,21 +25,21 @@ The Cline CLI uses standard HTTP proxy environment variables. Configure these be
 ```cmd
 set https_proxy=http://proxy.company.com:8080
 set http_proxy=http://proxy.company.com:8080
-cline start
+dietcode start
 ```
 
 **Windows (PowerShell)**
 ```powershell
 $env:https_proxy="http://proxy.company.com:8080"
 $env:http_proxy="http://proxy.company.com:8080"
-cline start
+dietcode start
 ```
 
 **macOS/Linux**
 ```bash
 export https_proxy=http://proxy.company.com:8080
 export http_proxy=http://proxy.company.com:8080
-cline start
+dietcode start
 ```
 
 ### Proxy with Authentication
@@ -76,13 +76,13 @@ If your proxy uses a custom CA certificate:
 **Windows**
 ```cmd
 set NODE_EXTRA_CA_CERTS=C:\path\to\ca-certificate.crt
-cline start
+dietcode start
 ```
 
 **macOS/Linux**
 ```bash
 export NODE_EXTRA_CA_CERTS=/path/to/ca-certificate.pem
-cline start
+dietcode start
 ```
 
 ### Permanent Configuration
@@ -105,7 +105,7 @@ export NODE_EXTRA_CA_CERTS=/path/to/ca-certificate.pem
 
 ### Known Limitations
 
-Cline CLI only supports HTTP proxies. It does not support SOCKS proxies,
+DietCode CLI only supports HTTP proxies. It does not support SOCKS proxies,
 proxy autoconfiguration (PAC) scripts, or HTTP proxies which require
 authentication beyond a basic username and password.
 
@@ -142,9 +142,9 @@ The JetBrains plugin uses the IDE's HTTP proxy settings.
 
 ### Test Connection
 
-After configuring the proxy, test that Cline can connect to your AI provider:
+After configuring the proxy, test that DietCode can connect to your AI provider:
 
-1. Open the Cline panel
+1. Open the DietCode panel
 2. Try sending a simple message
 3. If connection fails, check the IDE's Event Log for error messages
 
@@ -159,12 +159,12 @@ If your proxy uses a custom CA:
 
 ### Known Limitations
 
-Cline in JetBrains only supports HTTP proxies. It does not support SOCKS
+DietCode in JetBrains only supports HTTP proxies. It does not support SOCKS
 proxies, proxy autoconfiguration (PAC) scripts, or HTTP proxies which require
 authentication beyond a basic username and password.
 
-Cline does not pick up changed proxy settings dynamically. After changing proxy
-settings, restart the IDE for Cline to use the new settings.
+DietCode does not pick up changed proxy settings dynamically. After changing proxy
+settings, restart the IDE for DietCode to use the new settings.
 
 ## Troubleshooting
 
@@ -182,12 +182,12 @@ If you see certificate-related errors:
 
 1. Check that `NODE_EXTRA_CA_CERTS` points to the correct certificate file
 2. Ensure the certificate file is in PEM format
-3. Use curl to verify the certificate works, for example, `curl -x proxy.corp.example:8080 --cacert /path/to/ca-cert.pem -o - -vv https://api.cline.bot/`
+3. Use curl to verify the certificate works, for example, `curl -x proxy.corp.example:8080 --cacert /path/to/ca-cert.pem -o - -vv https://api.dietcode.bot/`
 4. Consider disabling `http.proxyStrictSSL` in VSCode (not recommended for production)
 
 ### Testing Proxy Configuration
 
-If you encounter problems with Cline networking, first verify your proxy
+If you encounter problems with DietCode networking, first verify your proxy
 configuration works using curl:
 
 ```bash
@@ -202,7 +202,7 @@ curl.exe -vv https://api.anthropic.com
 
 Use `--cacert $NODE_EXTRA_CA_CERTS` to specify a certificate if necessary.
 
-Next, check ~/.cline/cline-core-service.log (CLI, JetBrains) for log messages
+Next, check ~/.dietcode/dietcode-core-service.log (CLI, JetBrains) for log messages
 confirming your proxy configuration and any network-related errors.
 
 ## Common Proxy Patterns

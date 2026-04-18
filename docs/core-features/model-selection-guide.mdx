@@ -3,38 +3,38 @@ title: "Model Selection Guide"
 description: "Choose the right AI model for your workflow based on reliability, speed, cost, and context window size."
 ---
 
-New models drop constantly, so this guide focuses on what's working well with Cline right now. We'll keep it updated as the landscape shifts.
+New models drop constantly, so this guide focuses on what's working well with DietCode right now. We'll keep it updated as the landscape shifts.
 
 <Callout type="tip">
-**New to model selection?** Start with [Module 2 of Cline's Learning Path](https://cline.bot/learn) for a comprehensive guide to choosing and configuring models.
+**New to model selection?** Start with [Module 2 of DietCode's Learning Path](https://dietcode.bot/learn) for a comprehensive guide to choosing and configuring models.
 </Callout>
 
 ## What is an AI Model?
 
-Think of an AI model as the "brain" that powers Cline. When you ask Cline to write code, fix bugs, or refactor your project, it's the model that actually understands your request and generates the response.
+Think of an AI model as the "brain" that powers DietCode. When you ask DietCode to write code, fix bugs, or refactor your project, it's the model that actually understands your request and generates the response.
 
 **Key points:**
 - **Models are trained AI systems** that understand natural language and code
 - **Different models have different strengths** some excel at complex reasoning, others prioritize speed or cost
-- **You choose which model Cline uses** like picking between different experts for different tasks
+- **You choose which model DietCode uses** like picking between different experts for different tasks
 - **Models are accessed via API providers** - companies like Anthropic, OpenAI, and OpenRouter host these models
 
-**Why it matters:** The model you choose directly impacts Cline's capabilities, response quality, speed, and cost. A premium model might handle complex refactoring beautifully but cost more, while a budget model works great for routine tasks at a fraction of the price.
+**Why it matters:** The model you choose directly impacts DietCode's capabilities, response quality, speed, and cost. A premium model might handle complex refactoring beautifully but cost more, while a budget model works great for routine tasks at a fraction of the price.
 
-## How to Select a Model in Cline
+## How to Select a Model in DietCode
 
-Follow these 5 simple steps to get Cline up and running with your preferred AI model:
+Follow these 5 simple steps to get DietCode up and running with your preferred AI model:
 
-### Step 1: Open Cline Settings
+### Step 1: Open DietCode Settings
 
-First, you need to access Cline's configuration panel.
+First, you need to access DietCode's configuration panel.
 
 **Two ways to open settings:**
-- **Quick method**: Click the **gear icon (⚙️)** in the top-right corner of Cline's chat interface
-- **Command palette**: Press **Cmd/Ctrl + Shift + P** → type "Cline: Open Settings"
+- **Quick method**: Click the **gear icon (⚙️)** in the top-right corner of DietCode's chat interface
+- **Command palette**: Press **Cmd/Ctrl + Shift + P** → type "DietCode: Open Settings"
 
 <Frame>
-  <img src="https://storage.googleapis.com/cline_public_images/step1-config.png" alt="Cline Settings Panel" />
+  <img src="https://storage.googleapis.com/dietcode_public_images/step1-config.png" alt="DietCode Settings Panel" />
 </Frame>
 
 The settings panel will open, showing configuration options with "API Provider" at the top.
@@ -49,14 +49,14 @@ Choose your preferred AI provider from the dropdown menu.
 
 
 <Frame>
-  <img src="https://storage.googleapis.com/cline_public_images/step2-provider.png" alt="Cline Settings Panel" />
+  <img src="https://storage.googleapis.com/dietcode_public_images/step2-provider.png" alt="DietCode Settings Panel" />
 </Frame>
 
 **Popular providers at a glance:**
 
 | Provider | Best For | Notes |
 |----------|----------|-------|
-| **Cline** | Easiest setup | No API keys needed, access to multiple models including stealth models |
+| **DietCode** | Easiest setup | No API keys needed, access to multiple models including stealth models |
 | **OpenRouter** | Value seekers | Multiple models, competitive pricing |
 | **Anthropic** | Reliability | Claude models, most dependable tool usage |
 | **OpenAI** | Latest tech | GPT-5, o3, o4-mini models |
@@ -69,30 +69,30 @@ Choose your preferred AI provider from the dropdown menu.
 | **AWS Bedrock** | Enterprise | Advanced features |
 | **Ollama** | Privacy | Run models locally |
 
-See the [full provider list](/getting-started/authorizing-with-cline) for all 30+ supported providers including xAI Grok, Mistral, Groq, Fireworks, Together, Baseten, SambaNova, Nebius, Hugging Face, and more.
+See the [full provider list](/getting-started/authorizing-with-dietcode) for all 30+ supported providers including xAI Grok, Mistral, Groq, Fireworks, Together, Baseten, SambaNova, Nebius, Hugging Face, and more.
 
 <Info>
-**Recommended for beginners:** Start with **Cline** as your provider - no API key management needed, instant access to multiple models, and occasional free inferencing through partner providers.
+**Recommended for beginners:** Start with **DietCode** as your provider - no API key management needed, instant access to multiple models, and occasional free inferencing through partner providers.
 </Info>
 
 ### Step 3: Add Your API Key (or Sign In)
 
 The next step depends on which provider you selected.
 
-#### If you selected **Cline** as your provider:
+#### If you selected **DietCode** as your provider:
 
-- **No API key needed!** Simply sign in with your Cline account
+- **No API key needed!** Simply sign in with your DietCode account
 - Click the **Sign In** button when prompted
-- You'll be redirected to [app.cline.bot](https://app.cline.bot) to authenticate
+- You'll be redirected to [app.dietcode.bot](https://app.dietcode.bot) to authenticate
 - After signing in, return to your IDE
 
 <Note>
-  For detailed information about the Cline authentication flow, OAuth tokens, and troubleshooting, see [Authorizing with Cline](/getting-started/authorizing-with-cline).
+  For detailed information about the DietCode authentication flow, OAuth tokens, and troubleshooting, see [Authorizing with DietCode](/getting-started/authorizing-with-dietcode).
 </Note>
 
 #### If you selected **OpenAI Codex** as your provider:
 
-- **No API key needed!** If you have a ChatGPT subscription (Plus, Pro, or Team), you can use it directly in Cline
+- **No API key needed!** If you have a ChatGPT subscription (Plus, Pro, or Team), you can use it directly in DietCode
 - Click **"Sign in with OpenAI"** to authenticate via your browser
 - Once authorized, all models available on your OpenAI plan will appear automatically
 - Usage is governed by your ChatGPT subscription — no separate API billing
@@ -108,18 +108,18 @@ You'll need to get an API key from your chosen provider:
    - **OpenRouter**: [openrouter.ai/keys](https://openrouter.ai/keys)
    - **OpenAI**: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
    - **Google**: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-   - **Others**: See [Provider Setup Guide](/getting-started/authorizing-with-cline)
+   - **Others**: See [Provider Setup Guide](/getting-started/authorizing-with-dietcode)
 
 2. **Generate a new API key** on the provider's website
 
 3. **Copy the API key** to your clipboard
 
-4. **Paste your key** in the **"API Key"** field in Cline settings
+4. **Paste your key** in the **"API Key"** field in DietCode settings
 
 5. **Save automatically** - Your key is stored securely in your editor's secrets storage
 
 <Frame>
-  <img src="https://storage.googleapis.com/cline_public_images/step3-API.png" alt="Cline API Selection" />
+  <img src="https://storage.googleapis.com/dietcode_public_images/step3-API.png" alt="DietCode API Selection" />
 </Frame>
 
 <Warning>
@@ -131,7 +131,7 @@ You'll need to get an API key from your chosen provider:
 Once your API key is added (or you've signed in), the **"Model"** dropdown becomes available.
 
 <Frame>
-  <img src="https://storage.googleapis.com/cline_public_images/step4-model.png" alt="Cline Model Selection" />
+  <img src="https://storage.googleapis.com/dietcode_public_images/step4-model.png" alt="DietCode Model Selection" />
 </Frame>
 
 **Quick model selection guide:**
@@ -152,11 +152,11 @@ You can switch models at any time without losing your conversation. Try differen
 
 See the [model comparison tables](#current-top-models) below for detailed specifications and pricing.
 
-### Step 5: Start Using Cline
+### Step 5: Start Using DietCode
 
-**Congratulations! You're all set up.** Here's how to start coding with Cline:
+**Congratulations! You're all set up.** Here's how to start coding with DietCode:
 
-1. **Type your request** in the Cline chat box
+1. **Type your request** in the DietCode chat box
    - Example: "Create a React component for a login form"
    - Example: "Debug this TypeScript error"
    - Example: "Refactor this function to be more efficient"
