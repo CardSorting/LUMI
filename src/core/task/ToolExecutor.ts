@@ -61,6 +61,10 @@ export class ToolExecutor {
 		return this.guard ? this.guard.getSystemDiagnostics() : ""
 	}
 
+	public getGuard(): UniversalGuard {
+		return this.guard
+	}
+
 	// Auto-approval methods using the AutoApprove class
 	private shouldAutoApproveTool(toolName: DietCodeDefaultTool): boolean | [boolean, boolean] {
 		return this.autoApprover.shouldAutoApproveTool(toolName)

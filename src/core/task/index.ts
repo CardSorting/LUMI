@@ -270,6 +270,8 @@ export class Task {
 	// Command executor for running shell commands (extracted from executeCommandTool)
 	private commandExecutor!: CommandExecutor
 
+	private environmentLeasePromise: Promise<import("../integrity/EnvironmentSovereignty").EnvironmentLease>
+
 	constructor(params: TaskParams) {
 		const {
 			controller,
@@ -588,6 +590,11 @@ export class Task {
 			this.runUserPromptSubmitHook.bind(this),
 			this.getKnowledgeGraphService.bind(this),
 		)
+
+		// V190: Non-Blocking Pre-flight Boot
+		// We trigger the environment validation here in the background.
+		// Acting tools will await this promise before execution.
+		this.environmentLeasePromise = this.toolExecutor.getGuard().validateEnvironment()
 	}
 
 	// Communicate with webview
@@ -1600,7 +1607,21 @@ export class Task {
 		timeoutSeconds: number | undefined,
 		options?: CommandExecutionOptions,
 	): Promise<[boolean, DietCodeToolResponseContent]> {
-		return this.commandExecutor.execute(command, timeoutSeconds, options)
+		const result = await this.commandExecutor.execute(command, timeoutSeconds, options)
+
+		// V191 Hardening: Auto-Revoke environmental lease for sensitive commands
+		// If command contains tools that likely alter the environment, revoke the lease for fresh probing.
+		const envAlteringTerms = ["npm ", "yarn ", "pnpm ", "nvm ", "brew ", "fvm ", "bun ", "git config"]
+		const isEnvAltering = envAlteringTerms.some((term) => command.includes(term))
+
+		if (isEnvAltering && result[0]) {
+			Logger.info(
+				`[Task ${this.taskId}] Env-altering command detected (\`${command}\`). Revoking environmental lease for re-probe.`,
+			)
+			this.toolExecutor.getGuard().engine.revokeLease()
+		}
+
+		return result
 	}
 
 	/**
@@ -1787,6 +1808,14 @@ export class Task {
 			Logger.error("MCP servers failed to connect in time")
 		})
 
+		// V192: Environment Blueprinting
+		const lease = await this.environmentLeasePromise
+		const environmentBlueprint = {
+			detectedProjectTypes: lease.details?.detectedProjectTypes || [],
+			toolchain: lease.details?.toolchain || {},
+			manifests: lease.details?.manifests || [],
+		}
+
 		const providerInfo = this.getCurrentProviderInfo()
 		const host = await HostProvider.env.getHostVersion({})
 		const ide = host?.platform || "Unknown"
@@ -1903,6 +1932,7 @@ export class Task {
 			terminalExecutionMode: this.terminalExecutionMode,
 			mode: (providerInfo.mode as "plan" | "act") || "act",
 			taskState: this.taskState,
+			environmentBlueprint,
 		}
 
 		// Notify user if any conditional rules were applied for this request
@@ -2250,8 +2280,11 @@ export class Task {
 						await this.initialCheckpointCommitPromise
 						this.initialCheckpointCommitPromise = undefined
 					}
+				} else {
+					// V190: Interlock - Wait for environment validation before executing any acting tool
+					await this.environmentLeasePromise
+					await this.toolExecutor.executeTool(block)
 				}
-				await this.toolExecutor.executeTool(block)
 				if (block.call_id) {
 					Session.get().updateToolCall(block.call_id, block.name)
 				}
@@ -2342,7 +2375,7 @@ export class Task {
 						scratchpadExists = true
 					}
 				}
-			} catch (error) {
+			} catch {
 				// Ignore if scratchpad doesn't exist yet
 			}
 
@@ -2364,12 +2397,11 @@ export class Task {
 					const MAX_GIT_LINES = 50
 					const lines = statusOutput.split("\n")
 					if (lines.length > MAX_GIT_LINES) {
-						statusOutput =
-							lines.slice(0, MAX_GIT_LINES).join("\n") + `\n... and ${lines.length - MAX_GIT_LINES} more files.`
+						statusOutput = `${lines.slice(0, MAX_GIT_LINES).join("\n")}\n... and ${lines.length - MAX_GIT_LINES} more files.`
 					}
 					breatherText += `\n\nTo prevent context drift, here is the exact current \`git status -s\` of your disk. These are the files you have currently modified:\n<git_status>\n${statusOutput}\n</git_status>`
 				}
-			} catch (e) {
+			} catch {
 				// Ignore if git fails (e.g. no repo)
 			}
 			// 3. System Diagnostics Injection

@@ -103,6 +103,8 @@ const GLOBAL_STATE_FIELDS = {
 	trustedMcpServers: { default: [] as string[] },
 	// Authentication token for remote control
 	remoteAuthToken: { default: undefined as string | undefined },
+	// Persistent environmental lease to prevent redundant pre-flight probes
+	environmentalLease: { default: undefined as any | undefined },
 } satisfies FieldDefinitions
 
 // Fields that map directly to ApiHandlerOptions in @shared/api.ts

@@ -3,6 +3,7 @@ import { getActVsPlanModeSection } from "./act_vs_plan_mode"
 import { getAgentRoleSection } from "./agent_role"
 import { getCapabilitiesSection } from "./capabilities"
 import { getEditingFilesSection } from "./editing_files"
+import { getEnvironmentStateSection } from "./environment_state"
 import { getFeedbackSection } from "./feedback"
 import { getJoyZoningSection } from "./joy_zoning"
 import { getMcp } from "./mcp"
@@ -52,5 +53,6 @@ export function getSystemPromptComponents() {
 		{ id: SystemPromptSection.TASK_PROGRESS, fn: getUpdatingTaskProgress },
 		{ id: SystemPromptSection.JOY_ZONING, fn: getJoyZoningSection },
 		{ id: SystemPromptSection.SOVEREIGN_DRAFTING, fn: getSovereignDraftingSection },
+		{ id: SystemPromptSection.ENVIRONMENT_STATE, fn: getEnvironmentStateSection },
 	]
 }

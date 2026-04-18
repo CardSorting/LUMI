@@ -9,7 +9,7 @@ import { ToolUse } from "../assistant-message"
 import { ContextStalenessTracker } from "../context/ContextStalenessTracker"
 import { AuditRecorder } from "../integrity/AuditRecorder.js"
 import { DashboardGenerator } from "../integrity/DashboardGenerator"
-import { EnvironmentSovereignty } from "../integrity/EnvironmentSovereignty"
+import { EnvironmentLease, EnvironmentSovereignty } from "../integrity/EnvironmentSovereignty"
 import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
 import { PathogenStore } from "../integrity/PathogenStore"
 import { StateManager } from "../storage/StateManager"
@@ -109,7 +109,7 @@ export class FluidPolicyEngine {
 			this.pathogens,
 			this.forensics,
 		)
-		this.envSovereignty = new EnvironmentSovereignty(this.cwd)
+		this.envSovereignty = new EnvironmentSovereignty(this.cwd, this.stateManager)
 
 		// V16: Warm graph startup
 		this.spiderEngine.loadRegistry().catch((e: unknown) => Logger.error("[FluidPolicyEngine] Failed to load registry:", e))
@@ -127,6 +127,20 @@ export class FluidPolicyEngine {
 	public getSystemDiagnostics(): string {
 		// V18: Forwarding entropy context for velocity calculation
 		return this.telemetrics.getSystemDiagnostics(this.lastEntropyScore)
+	}
+
+	/**
+	 * Explicitly triggers environmental validation.
+	 */
+	public async validateEnvironment(): Promise<EnvironmentLease> {
+		return await this.envSovereignty.validateEnvironment()
+	}
+
+	/**
+	 * Revokes the current environmental lease.
+	 */
+	public revokeLease(): void {
+		this.envSovereignty.revokeLease()
 	}
 
 	/**
@@ -246,19 +260,92 @@ export class FluidPolicyEngine {
 		// Step -1: Strategic Environment Check (SEC)
 		// Ensuring essential tools are available to prevent progress issues.
 		const lease = await this.envSovereignty.validateEnvironment()
-		if (!lease.success) {
+		if (!lease.success || (lease.details?.diskSpaceGB && Number.parseFloat(lease.details.diskSpaceGB) < 0.5)) {
+			const details = lease.details
+
+			// V192 Hardening: Categorized Forensics
+			const substrateContext = [
+				`• Machine: ${details?.hostname || "Unknown"}`,
+				`• Shell: ${details?.shell || "Unknown"}`,
+				...(details?.shadowingAlerts || []),
+			].join("\n")
+
+			const toolchainContext = [
+				details?.nodeVersion ? `• Node: ${details.nodeVersion} (${details.nodePath})` : "• Node: Missing/Inaccessible",
+				details?.hasNodeModules === false ? "• Dependencies: node_modules missing (Run npm install)" : "",
+			]
+				.filter(Boolean)
+				.join("\n")
+
+			const metabolicContext = [
+				details?.diskSpaceGB ? `• Disk: ${details.diskSpaceGB} available` : "• Disk: Sensing failed",
+				details?.memoryFreeGB ? `• Memory: ${details.memoryFreeGB}GB free` : "",
+			]
+				.filter(Boolean)
+				.join("\n")
+
+			const forensicReport = `📊 [SUBSTRATE]\n${substrateContext}\n\n🛠️ [TOOLCHAIN]\n${toolchainContext}\n\n🔋 [METABOLICS]\n${metabolicContext}`
+
+			// V191 Hardening: Metabolic Blockade
+			if (lease.details?.diskSpaceGB && Number.parseFloat(lease.details.diskSpaceGB) < 0.5) {
+				return {
+					success: false,
+					error:
+						`🛑 METABOLIC BLOCKADE [CRITICAL]: Disk space dangerously low.\n\n` +
+						`I've detected your environment has less than 500MB of free space (${lease.details.diskSpaceGB}).\n\n` +
+						`💡 WHY THIS MATTERS: Coding with near-zero disk space causes silent corruption of the database and source files during write operations.\n\n` +
+						`📊 STATE:\n${forensicReport}\n\n` +
+						`🛠️ RECOVERY: Please free up space in ${this.cwd} before proceeding.`,
+				}
+			}
+
+			// V191 Hardening: Shell Health Warning
+			let shellWarning = ""
+			if (details?.shell?.includes("cmd.exe")) {
+				shellWarning = `⚠️ WARNING: Restricted Shell detected (cmd.exe). Many advanced coding tools and terminal features work more reliably in PowerShell or Git Bash.\n\n`
+			}
+
+			// V192 Hardening: Adaptive Multi-Language Recipes
+			const recipes: string[] = []
+			const detected = details?.detectedProjectTypes || []
+			const toolchain = details?.toolchain || {}
+
+			if (detected.includes("node")) {
+				if (toolchain.node?.status !== "found")
+					recipes.push("• **Node.js**: Toolchain missing. Please install Node.js and npm.")
+				else if (details?.hasNodeModules === false)
+					recipes.push("• **Node.js**: `node_modules` missing. Run `npm install`.")
+			}
+			if (detected.includes("python") && toolchain.python?.status !== "found") {
+				recipes.push("• **Python**: Toolchain missing. Run `pip install -r requirements.txt` after installing python3.")
+			}
+			if (detected.includes("rust") && toolchain.rust?.status !== "found") {
+				recipes.push("• **Rust**: Toolchain missing. Run `cargo build` after installing rustup.")
+			}
+			if (detected.includes("go") && toolchain.go?.status !== "found") {
+				recipes.push("• **Go**: Toolchain missing. Run `go mod download` after installing Go.")
+			}
+			if (detected.includes("ruby") && toolchain.ruby?.status !== "found") {
+				recipes.push("• **Ruby**: Toolchain missing. Run `bundle install` after installing Ruby.")
+			}
+			if (detected.includes("dart") && toolchain.dart?.status !== "found") {
+				recipes.push("• **Dart/Flutter**: Toolchain missing. Run `flutter pub get`.")
+			}
+
+			let guidedSetup = recipes.length > 0 ? `🛠️ **ADAPTIVE REPAIR RECIPES**:\n${recipes.join("\n")}\n\n` : ""
+
+			guidedSetup +=
+				`1. Ensure essential tools are in your PATH.\n` +
+				`2. Check write permissions for ${this.cwd}.\n` +
+				`3. If using NVM/Version managers, ensure the correct version is activated.`
+
+			if (lease.error?.includes("Git Not Found")) {
+				guidedSetup = `⚠️ **CRITICAL**: Git is missing. Checkpoints and forensics are disabled. Please install git.\n\n${guidedSetup}`
+			}
+
 			return {
 				success: false,
-				error:
-					`🛑 SETUP REQUIREMENT DETECTED [GUIDED SETUP]\n\n` +
-					`We've noticed a few things in the workspace that need your attention before we can proceed safely.\n\n` +
-					`❌ ISSUE: ${lease.error}\n\n` +
-					`💡 WHY THIS MATTERS: I want to make sure your project stays stable. Essential tools (node/npm) or permissions are currently missing, which might cause errors later if we don't fix them now.\n\n` +
-					`🛠️ HOW TO FIX THIS:\n` +
-					`- Check if node and npm are installed in your terminal.\n` +
-					`- Verify you have permission to write files in ${this.cwd}.\n` +
-					`- If the project needs special setup, please run those steps manually in your terminal.\n\n` +
-					`🛑 I'll wait here until the environment is ready for us to continue!`,
+				error: `🛑 STRATEGIC ENVIRONMENT ALERT [GATEKEEPER]\n\nEssential environmental requirements for high-fidelity coding are not met.\n\n❌ ISSUE: ${lease.error || "Metabolic health critical"}\n\n${forensicReport}\n\n${shellWarning}💡 WHY THIS MATTERS: Attempting to modify code in a broken environment causes "hallucination loops" and failure spirals.\n\n🛠️ GUIDED SETUP:\n${guidedSetup}\n\n⚙️ I will remain in "Setup Mode" and will re-probe the environment on your next attempt.`,
 			}
 		}
 

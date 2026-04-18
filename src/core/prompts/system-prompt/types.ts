@@ -129,6 +129,11 @@ export interface SystemPromptContext {
 	readonly mode?: "plan" | "act"
 	readonly parentMode?: "plan" | "act"
 	readonly taskState?: any // To avoid circular dependency issues if TaskState isn't exported well, but we can try proper import first.
+	readonly environmentBlueprint?: {
+		readonly detectedProjectTypes: readonly string[]
+		readonly toolchain: Readonly<Record<string, { readonly version?: string; readonly status: string }>>
+		readonly manifests: readonly string[]
+	}
 }
 
 /**

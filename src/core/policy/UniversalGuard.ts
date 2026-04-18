@@ -45,6 +45,20 @@ export class UniversalGuard {
 	}
 
 	/**
+	 * Triggers environmental validation through the policy engine.
+	 */
+	public async validateEnvironment(): Promise<any> {
+		return await this.engine.validateEnvironment()
+	}
+
+	/**
+	 * Revokes the current environmental lease.
+	 */
+	public revokeLease(): void {
+		this.engine.revokeLease()
+	}
+
+	/**
 	 * Single "Execute" call that performs all pre-flight audits.
 	 */
 	public async guardPreExecution(block: ToolUse): Promise<PolicyResult> {
