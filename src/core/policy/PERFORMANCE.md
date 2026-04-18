@@ -14,10 +14,10 @@ Instead of global "Full-Project" re-audits, the engine uses **Reactive Increment
 -   **Mechanism**: When a file changes, `updateIncrementalCoupling` recalculates only the direct incoming and outgoing links for that specific node. 
 -   **Impact**: Coupling scores, afferent link counts, and structural dependencies are updated in constant time, independent of the total project size.
 
-### 3. Binary Persistence (V8-Serialize)
+### 3. Ghost Persistence (Binary Buffer + DB)
 Large architectural graphs (10,000+ nodes) can lead to significant JSON parsing/stringification bottlenecks during persistence.
--   **Mechanism**: The registry is persisted in the **V8 Binary Format (`.spiderbin`)**. 
--   **Impact**: Instant hydration of the structural graph on cold starts. Bypassing the text-based JSON parser yields a significant speedup for large heap-object reconstruction.
+-   **Mechanism**: The registry is serialized into a binary buffer (V8 format) and persisted to the **Conversational Ghost Memory (DB)**. 
+-   **Impact**: Instant hydration of the structural graph on cold starts without workspace pollution. Bypassing the text-based JSON parser yields a significant speedup for large heap-object reconstruction.
 
 ### 4. Structural Fingerprinting (MD5 FAST-SKIP)
 The substrate avoids redundant AST processing for identical content.
@@ -43,7 +43,7 @@ To maintain the **Near-Zero** status of the substrate, follow these guidelines w
 1.  **Single-Pass Visitation**: Never perform multiple `forEachChild` walks. Consolidate all metadata extraction into a single visitor function within `SpiderEngine.calculateMetrics`.
 2.  **Avoid String Overloads**: Use integer comparisons or cached atoms where possible. Avoid `getText()` on large nodes unless strictly necessary for semantic analysis.
 3.  **No Global Scans**: New metrics must be computable using only the current node's AST and its immediate neighbors in the graph. 
-4.  **Async Persistence**: Ensure `saveRegistry` remains debounced and non-blocking to the main agent loop.
+4.  **Async Ghost-Sync**: Substrate persistence is managed asynchronously via the Ghost Memory layer to ensure zero impact on the main agent loop.
 
 ---
 *For general architecture, see [SPIDER.md](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SPIDER.md).*

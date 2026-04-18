@@ -8,6 +8,7 @@ import * as path from "path"
 import * as ts from "typescript"
 import * as v8 from "v8"
 import { Logger } from "../../../shared/services/Logger.js"
+import { ForensicEngine } from "./ForensicEngine.js"
 import { MetricsEngine } from "./MetricsEngine.js"
 import { PathResolver } from "./PathResolver.js"
 import { PersistenceManager } from "./PersistenceManager.js"
@@ -56,20 +57,20 @@ export class SpiderEngine {
 	private resolver: PathResolver
 	private metrics: MetricsEngine
 	private persistence: PersistenceManager
+	private forensic: ForensicEngine
 	private suppressions: Set<string> = new Set() // V45: Forensic Suppression List
 	private sessionBuffer: Map<string, string> = new Map() // V71: Virtual Session Sensing
 
 	private reachabilityTimeout: NodeJS.Timeout | null = null
-	private registryFile: string
-	private snapshotDir: string
-
 	constructor(public cwd: string) {
-		this.registryFile = path.join(cwd, ".spider", "registry.json")
-		this.snapshotDir = path.join(cwd, ".spider", "snapshots")
-
-		this.resolver = new PathResolver(cwd)
+		this.resolver = new PathResolver(cwd, SpiderEngine.getGlobalAliases())
 		this.metrics = new MetricsEngine(cwd, this.resolver)
-		this.persistence = new PersistenceManager(cwd, this.registryFile, this.snapshotDir, this.metrics)
+		this.persistence = new PersistenceManager(this.metrics)
+		this.forensic = new ForensicEngine(cwd, this.resolver)
+	}
+
+	public getForensicEngine(): ForensicEngine {
+		return this.forensic
 	}
 
 	public async warmUp(entryPoints: string[] = ["src/main.ts", "src/index.ts"]) {
@@ -104,7 +105,7 @@ export class SpiderEngine {
 		const oldNode = this.nodes.get(normalizedPath)
 		if (oldNode && oldNode.hash === hash) return
 
-		const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
+		let sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
 		const importData = this.extractDetailedImports(sourceFile)
 		const imports = importData.map((i) => i.specifier)
 		const exports = this.extractExports(sourceFile)
@@ -147,8 +148,10 @@ export class SpiderEngine {
 			this.scheduleReachability()
 		}
 
-		// V20: Non-blocking background save to prevent I/O latency blocks
-		this.persistence.saveRegistry(this.nodes).catch((e) => Logger.error("[SpiderEngine] Registry persistence failed:", e))
+		// V150: Memory-Only Substrate - Removed background filesystem persistence to prevent workspace noise.
+
+		// V160: AST Hygiene - Explicitly nullify large objects to assist GC
+		;(sourceFile as unknown) = null
 	}
 
 	private extractExports(sourceFile: ts.SourceFile): string[] {
@@ -228,6 +231,8 @@ export class SpiderEngine {
 		let logicNodes = 0
 		let ioImports = 0
 		let totalImports = 0
+		let exportCount = 0
+		let internalReferenceCount = 0
 
 		const visit = (node: ts.Node) => {
 			totalNodes++
@@ -248,6 +253,24 @@ export class SpiderEngine {
 				const text = node.moduleSpecifier.text
 				if (!text.startsWith(".") && !text.startsWith("@/")) ioImports++
 			}
+
+			// V160: Forensic Depth - Identifying exports for density calculation
+			if (
+				(ts.isClassDeclaration(node) ||
+					ts.isFunctionDeclaration(node) ||
+					ts.isInterfaceDeclaration(node) ||
+					ts.isTypeAliasDeclaration(node) ||
+					ts.isVariableStatement(node)) &&
+				node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+			) {
+				exportCount++
+			}
+
+			// V160: Forensic Depth - Simple Cohesion (Internal identifier re-use)
+			if (ts.isIdentifier(node) && node.parent && !ts.isPropertyAccessExpression(node.parent)) {
+				internalReferenceCount++
+			}
+
 			ts.forEachChild(node, visit)
 		}
 		visit(sourceFile)
@@ -256,6 +279,8 @@ export class SpiderEngine {
 			logicDensity: totalNodes > 0 ? logicNodes / totalNodes : 0,
 			ioEntropy: totalImports > 0 ? ioImports / totalImports : 0,
 			astComplexity: totalNodes,
+			symbolDensity: totalNodes > 0 ? exportCount / totalNodes : 0,
+			logicCohesion: totalNodes > 0 ? internalReferenceCount / totalNodes : 0,
 		}
 	}
 
@@ -308,8 +333,12 @@ export class SpiderEngine {
 	private checkStabilityPressure() {
 		const stats = v8.getHeapStatistics()
 		const usedPercent = (stats.used_heap_size / stats.heap_size_limit) * 100
-		if (usedPercent > 80) {
+		if (usedPercent > 85) {
+			Logger.warn(
+				`[SpiderEngine] High Metabolic Pressure detected (${usedPercent.toFixed(1)}%). Triggering Substrate Sweep.`,
+			)
 			this.resolver.clearCaches()
+			this.sessionBuffer.clear()
 			if (global.gc) global.gc()
 		}
 	}
@@ -369,7 +398,7 @@ export class SpiderEngine {
 		return Array.from(this.nodes.keys()).filter((p) => p.startsWith(dir))
 	}
 
-	public async takeSnapshot(): Promise<string> {
+	public async takeSnapshot(): Promise<SpiderSnapshot> {
 		return this.persistence.takeSnapshot(this.nodes)
 	}
 
@@ -377,33 +406,30 @@ export class SpiderEngine {
 		return this.persistence.getLatestSnapshot()
 	}
 
-	public async loadRegistry(): Promise<boolean> {
-		const binFile = this.registryFile.replace(".json", ".spiderbin")
-		const fileToLoad = fs.existsSync(binFile) ? binFile : fs.existsSync(this.registryFile) ? this.registryFile : null
-		if (!fileToLoad) return false
-
-		try {
-			const data = await fs.promises.readFile(fileToLoad)
-			if (fileToLoad.endsWith(".json")) {
-				this.nodes = new Map(JSON.parse(data.toString("utf-8")))
-			} else {
-				const payload = this.persistence.deserialize(data)
-				this.nodes = new Map(payload.nodes)
+	/**
+	 * V150: Memory-Only Substrate.
+	 * Explicitly loads the registry from a provided buffer or string.
+	 * If no data is provided, it triggers a fast project scan.
+	 */
+	public async loadRegistry(data?: Buffer | string): Promise<boolean> {
+		if (data) {
+			try {
+				if (typeof data === "string") {
+					this.nodes = new Map(JSON.parse(data))
+				} else {
+					const payload = this.persistence.deserialize(data)
+					this.nodes = new Map(payload.nodes)
+				}
+				this.metrics.computeCouplingMetrics(this.nodes)
+				this.metrics.computeReachability(this.nodes)
+				return true
+			} catch (e) {
+				Logger.error("[SpiderEngine] Failed to deserialize substrate data:", e)
 			}
-
-			// V150: Merkle Shield validation (Forensic Drift Detection)
-			const currentMerkle = this.computeMerkleRoot()
-			Logger.info(`[SpiderEngine] Registry loaded. Merkle Root: ${currentMerkle.slice(0, 8)}...`)
-
-			this.metrics.computeCouplingMetrics(this.nodes)
-			this.metrics.computeReachability(this.nodes)
-			Logger.info(`[SpiderEngine] Registry loaded successfully (${this.nodes.size} nodes).`)
-			return true
-		} catch (_e) {
-			Logger.error(`[SpiderEngine] Registry corruption detected. Triggering Substrate Autonomous Recovery.`)
-			await this.rebuildRegistry()
-			return true
 		}
+
+		await this.rebuildRegistry()
+		return true
 	}
 
 	/**
@@ -417,23 +443,33 @@ export class SpiderEngine {
 	}
 
 	/**
-	 * V93: Substrate Immortality. Autonomously rebuilds the graph from scratch.
+	 * V160: Industrial Hardening - Batch Rebuild.
+	 * Autonomously rebuilds the graph with throttling to prevent event loop starvation.
 	 */
 	public async rebuildRegistry(): Promise<void> {
-		Logger.info("[SpiderEngine] Rebuilding project registry (Full Indexing)...")
+		Logger.info("[SpiderEngine] Rebuilding project registry (Throttled Indexing)...")
 		this.nodes.clear()
 		const files = this.resolver.scanProject()
-		for (const f of files) {
-			try {
-				const content = fs.readFileSync(path.resolve(this.cwd, f), "utf-8")
-				this.updateNode(f, content)
-			} catch (_e) {
-				// Skip unreachable files
+
+		const BATCH_SIZE = 250
+		for (let i = 0; i < files.length; i += BATCH_SIZE) {
+			const batch = files.slice(i, i + BATCH_SIZE)
+			for (const f of batch) {
+				try {
+					const content = fs.readFileSync(path.resolve(this.cwd, f), "utf-8")
+					this.updateNode(f, content)
+				} catch (_e) {
+					// Skip unreachable files
+				}
+			}
+			// V160: Relinquish control to the event loop between batches
+			if (i + BATCH_SIZE < files.length) {
+				await new Promise((resolve) => setTimeout(resolve, 0))
 			}
 		}
+
 		this.metrics.computeCouplingMetrics(this.nodes)
 		this.metrics.computeReachability(this.nodes)
-		await this.persistence.saveRegistry(this.nodes)
 		Logger.info(`[SpiderEngine] Substrate Immortalized: ${this.nodes.size} nodes indexed.`)
 	}
 

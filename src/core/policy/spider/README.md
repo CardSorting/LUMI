@@ -31,10 +31,11 @@ The mathematical heart of the system:
 - Detects circular dependencies within the structural graph.
 
 ### [Persistence] [PersistenceManager.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/spider/PersistenceManager.ts)
-Ensures structural truth survives between sessions:
-- Implements atomic write operations to prevent registry corruption.
-- Uses high-performance V8 serialization (`.spiderbin`) for indexing.
-- Manages a rolling buffer of architectural snapshots for rollback proposals.
+Ensures structural truth survives between sessions without workspace pollution:
+- Decommissions local `.spider` directory to ensure zero-noise architecture.
+- Uses high-performance V8 serialization to create memory buffers for the substrate.
+- Syncs with the **Ghost Memory (DB)** via the `FluidPolicyEngine` for cross-session immortality.
+- Manages a rolling in-memory buffer of architectural snapshots for rollback analysis.
 
 ## Data Structures
 

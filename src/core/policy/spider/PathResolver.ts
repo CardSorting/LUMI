@@ -7,8 +7,17 @@ export class PathResolver {
 	private dynamicAliases: Map<string, string> = new Map()
 	private resolutionCache: Map<string, string | null> = new Map()
 	private negativeCache: Map<string, boolean> = new Map()
+	private canonicalCache: Map<string, string> = new Map()
 
-	constructor(private cwd: string) {
+	constructor(
+		private cwd: string,
+		defaultAliases?: Record<string, string>,
+	) {
+		if (defaultAliases) {
+			for (const [alias, target] of Object.entries(defaultAliases)) {
+				this.dynamicAliases.set(alias, target)
+			}
+		}
 		this.loadProjectAliases()
 	}
 
@@ -17,7 +26,9 @@ export class PathResolver {
 		if (fs.existsSync(tsconfigPath)) {
 			try {
 				const raw = fs.readFileSync(tsconfigPath, "utf-8")
-				const config = JSON.parse(require("strip-json-comments")(raw))
+				// V160: Use surgical regex for JSON comments if strip-json-comments is missing or to avoid CJS require issues in ESM
+				const cleanJson = raw.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "")
+				const config = JSON.parse(cleanJson)
 				const paths = config.compilerOptions?.paths
 				if (paths) {
 					for (const [alias, targets] of Object.entries(paths)) {
@@ -43,7 +54,7 @@ export class PathResolver {
 		let result: string | null = null
 		if (specifier.startsWith(".")) {
 			const abs = path.resolve(this.cwd, path.dirname(sourcePath), specifier)
-			const rel = path.relative(this.cwd, abs).replace(/\\/g, "/")
+			const rel = this.canonicalize(abs)
 			if (nodes.has(rel)) result = rel
 			else if (nodes.has(`${rel}.ts`)) result = `${rel}.ts`
 			else if (nodes.has(`${rel}.tsx`)) result = `${rel}.tsx`
@@ -133,25 +144,31 @@ export class PathResolver {
 	}
 
 	/**
-	 * V19: The Single Point of Truth for path fingerprints across the entire substrate.
-	 * Resolves relative paths, absolute paths, and platform-specific separators into a
-	 * canonical, Posix-compliant relative path. Handles case-insensitivity on macOS.
+	 * V160: High-Velocity Canonicalization.
+	 * Memoized fingerprinting for extreme performance on massive structural graphs.
 	 */
 	public canonicalize(p: string): string {
 		if (!p) return ""
+		const cached = this.canonicalCache.get(p)
+		if (cached) return cached
+
+		let result: string
 		try {
 			const absolutePath = path.resolve(this.cwd, p)
 			const relativePath = path.relative(this.cwd, absolutePath)
-			// Lowercase canonicalization for case-insensitive filesystems (Sovereign Safety)
-			return relativePath.replace(/\\/g, "/").toLowerCase()
+			result = relativePath.replace(/\\/g, "/").toLowerCase()
 		} catch {
-			return p.replace(/\\/g, "/").toLowerCase()
+			result = p.replace(/\\/g, "/").toLowerCase()
 		}
+
+		this.canonicalCache.set(p, result)
+		return result
 	}
 
 	public clearCaches() {
 		this.resolutionCache.clear()
 		this.negativeCache.clear()
+		this.canonicalCache.clear()
 	}
 
 	public clearFileFromCache(filePath: string) {

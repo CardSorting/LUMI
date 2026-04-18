@@ -1,20 +1,12 @@
 import * as crypto from "crypto"
-import * as fs from "fs"
-import * as path from "path"
 import * as v8 from "v8"
-import { writeAtomic } from "../../../utils/fs.js"
 import { MetricsEngine } from "./MetricsEngine.js"
 import { SpiderNode, SpiderRegistryPayload, SpiderSnapshot } from "./types.js"
 
 export class PersistenceManager {
-	private saveTimeout: NodeJS.Timeout | null = null
+	private snapshots: SpiderSnapshot[] = []
 
-	constructor(
-		private cwd: string,
-		private registryFile: string,
-		private snapshotDir: string,
-		private metrics: MetricsEngine,
-	) {}
+	constructor(private metrics: MetricsEngine) {}
 
 	public serialize(nodes: Map<string, SpiderNode>): Buffer {
 		const payload: SpiderRegistryPayload = {
@@ -28,18 +20,9 @@ export class PersistenceManager {
 		return v8.deserialize(data)
 	}
 
-	public async saveRegistry(nodes: Map<string, SpiderNode>): Promise<void> {
-		if (this.saveTimeout) return
-
-		this.saveTimeout = setTimeout(async () => {
-			const data = this.serialize(nodes)
-			const binFile = this.registryFile.replace(".json", ".spiderbin")
-			const dir = path.dirname(this.registryFile)
-			if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-
-			await writeAtomic(binFile, data)
-			this.saveTimeout = null
-		}, 500)
+	public async saveRegistry(_nodes: Map<string, SpiderNode>): Promise<void> {
+		// V150: Memory-Only Substrate.
+		// Substrate persistence is now managed by the FluidPolicyEngine via the Ghost Memory layer.
 	}
 
 	public computeAllLayerFingerprints(nodes: Map<string, SpiderNode>): Record<string, string> {
@@ -62,7 +45,7 @@ export class PersistenceManager {
 		return results
 	}
 
-	public async takeSnapshot(nodes: Map<string, SpiderNode>): Promise<string> {
+	public async takeSnapshot(nodes: Map<string, SpiderNode>): Promise<SpiderSnapshot> {
 		const report = this.metrics.computeEntropy(nodes)
 		const snapshot: SpiderSnapshot = {
 			timestamp: new Date().toISOString(),
@@ -70,19 +53,12 @@ export class PersistenceManager {
 			nodes: Array.from(nodes.values()),
 			components: report.components,
 		}
-		if (!fs.existsSync(this.snapshotDir)) await fs.promises.mkdir(this.snapshotDir, { recursive: true })
-		const filePath = path.join(this.snapshotDir, `${Date.now()}.json`)
-		await writeAtomic(filePath, JSON.stringify(snapshot, null, 2))
-		return filePath
+		this.snapshots.push(snapshot)
+		if (this.snapshots.length > 10) this.snapshots.shift() // Maintain rolling buffer
+		return snapshot
 	}
 
 	public async getLatestSnapshot(): Promise<SpiderSnapshot | null> {
-		if (!fs.existsSync(this.snapshotDir)) return null
-		const files = await fs.promises.readdir(this.snapshotDir)
-		if (files.length === 0) return null
-		const latest = files.sort().reverse()[0]
-		if (!latest) return null
-		const content = await fs.promises.readFile(path.join(this.snapshotDir, latest), "utf-8")
-		return JSON.parse(content)
+		return this.snapshots[this.snapshots.length - 1] || null
 	}
 }

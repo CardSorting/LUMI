@@ -1,5 +1,18 @@
 # Changelog (V2)
 
+## [5.6.0] - 2026-04-18
+
+### Added
+- **V191-V192 Hardening: The Strategic Environment Gatekeeper [ENV_SOVEREIGNTY]**:
+  - **Tiered Environmental Leases (L0-L2)**: Implemented a deterministic pre-flight gatekeeper with persistent L0/L1 caches and deep L2 forensic protocols for industrial-grade environment validation.
+  - **Forensic Hyper-Determinism**: Fingerprints are now machine-anchored using `os.hostname` and binary path integrity checks to prevent environmental drift across synced machines and shadowed runtimes.
+  - **Multi-Language Manifest Sifting**: Advanced substrate sensing for Node.js, Python, Rust, Go, Dart, and Ruby, recognizing extended manifests like `.nvmrc`, `.python-version`, and `.tool-versions` (asdf).
+  - **Metabolic Blockade (Hard Floor)**: Automated write-execution interdiction when metabolic health (free disk space) drops below 500MB, featuring platform-native sensing for macOS, Linux, and Windows (PowerShell).
+  - **Adaptive Repair Recipes**: Context-aware restoration directives (e.g., `npm install`, `pip install -r requirements.txt`) injected directly into the agent's failure recovery loop.
+  - **Deep Toolchain Probing**: Integrated management tool discovery for `nvm`, `rustup`, `pyenv`, and `asdf` to ensure toolchain alignment.
+  - **Categorized Sovereign Diagnostics**: Refactored the setup UI into structured [SUBSTRATE], [TOOLCHAIN], and [METABOLICS] layers for clarity during environment restoration.
+  - **Non-Blocking Infrastructure**: Engineered an asynchronous pre-flight sequence that prevents agentic stalls while maintaining strict environmental sovereignty.
+
 ## [5.5.0] - 2026-04-16
 
 ### Added

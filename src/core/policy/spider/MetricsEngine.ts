@@ -135,19 +135,24 @@ export class MetricsEngine {
 		if (totalNodes === 0)
 			return { score: 0, components: { depthScore: 0, namingScore: 0, orphanScore: 0, couplingScore: 0, cycles: 0 } }
 
-		const avgDepth = Array.from(nodes.values()).reduce((acc, n) => acc + n.depth, 0) / totalNodes
+		const nodesArray = Array.from(nodes.values())
+		const avgDepth = nodesArray.reduce((acc, n) => acc + n.depth, 0) / totalNodes
 		const depthScore = Math.min(avgDepth / 4, 1.0)
-		const orphans = Array.from(nodes.values()).filter((n) => n.orphaned).length
+
+		const avgNaming = nodesArray.reduce((acc, n) => acc + (n.namingScore || 0), 0) / totalNodes
+		const namingScore = 1.0 - avgNaming // Invert so higher score = more naming violations
+
+		const orphans = nodesArray.filter((n) => n.orphaned).length
 		const orphanScore = orphans / totalNodes
 
 		let crossLayerEdges = 0
 		let totalEdges = 0
-		for (const node of nodes.values()) {
+		for (const node of nodesArray) {
 			for (const imp of node.imports) {
 				totalEdges++
-				const targetLayer = this.resolver.resolveLayer(
-					this.resolver.resolveImportToNodeId(node.id, imp, new Set(nodes.keys())) || "",
-				)
+				const targetId = this.resolver.resolveImportToNodeId(node.id, imp, new Set(nodes.keys()))
+				const targetLayer = targetId ? this.resolver.resolveLayer(targetId) : null
+
 				if (targetLayer && targetLayer !== node.layer && targetLayer !== "plumbing") {
 					crossLayerEdges++
 				}
@@ -155,9 +160,11 @@ export class MetricsEngine {
 		}
 		const couplingScore = totalEdges > 0 ? crossLayerEdges / totalEdges : 0
 		const cycles = this.detectCycles(nodes)
-		const cyclePenalty = cycles.length > 0 ? Math.min(0.2, cycles.length * 0.05) : 0
+		const cyclePenalty = cycles.length > 0 ? Math.min(0.3, cycles.length * 0.1) : 0
 
-		const score = Math.max(0, depthScore * 0.3 + 0 * 0.2 + orphanScore * 0.2 + couplingScore * 0.3 - cyclePenalty)
-		return { score, components: { depthScore, namingScore: 0, orphanScore, couplingScore, cycles: cycles.length } }
+		// V160: Calibrated Industrial Entropy Formula
+		const score = Math.max(0, depthScore * 0.2 + namingScore * 0.2 + orphanScore * 0.2 + couplingScore * 0.4 - cyclePenalty)
+
+		return { score, components: { depthScore, namingScore, orphanScore, couplingScore, cycles: cycles.length } }
 	}
 }

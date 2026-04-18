@@ -17,9 +17,15 @@ export class ForensicEngine {
 		const allGhosts = new Set<string>()
 		for (const node of nodes.values()) {
 			const absPath = path.resolve(this.cwd, node.path)
-			if (!fs.existsSync(absPath)) continue
 
-			const content = fs.readFileSync(absPath, "utf-8")
+			// V150: Memory-First Forensic Sensing
+			const sessionContent = sessionBuffer ? sessionBuffer.get(node.path) : null
+			let content = sessionContent
+			if (!content) {
+				if (!fs.existsSync(absPath)) continue
+				content = fs.readFileSync(absPath, "utf-8")
+			}
+
 			const currentHash = crypto.createHash("md5").update(content).digest("hex")
 
 			const cached = this.ghostVerificationCache.get(node.path)
@@ -40,9 +46,8 @@ export class ForensicEngine {
 				const targetId = this.resolver.resolveImportToNodeId(node.path, specifier, new Set(nodes.keys()))
 
 				if (!diskPath) {
-					// PRODUCTION HARDENING: Ignore ghost files for common build/config files in root
-					if (!specifier.startsWith(".") && !this.isProjectAlias(specifier)) continue
-					if (specifier.endsWith(".config.js") || specifier.endsWith(".config.ts")) continue
+					// PRODUCTION HARDENING: Ignore ghost files for common build/config files, Node builtins, or external packages
+					if (!specifier.startsWith(".") && !this.isProjectAlias(specifier) && this.isNodeLibrary(specifier)) continue
 					if (specifier.endsWith(".config.js") || specifier.endsWith(".config.ts")) continue
 
 					const msg = `[SPI-101] GHOST FILE: ${node.path} -> ${specifier}`
@@ -53,30 +58,31 @@ export class ForensicEngine {
 					const targetNode = targetId ? nodes.get(targetId) : null
 
 					if (targetNode) {
+						let foundMissingInExport = false
 						for (const symbol of symbols) {
 							if (symbol === "*" || targetNode.exports.includes(symbol)) continue
 
 							const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
 							allGhosts.add(msg)
 							nodeGhosts.push(msg)
+							foundMissingInExport = true
 						}
-						// 1. Check Session Buffer (V71)
-						const sessionContent = sessionBuffer ? sessionBuffer.get(this.resolver.normalizePath(diskPath)) : null
-						const targetContent =
-							sessionContent || (fs.existsSync(diskPath) ? fs.readFileSync(diskPath, "utf-8") : null)
 
-						if (targetContent) {
+						// V150 High-Velocity Calibration: If exports match, don't hit the disk for symbol verification
+						if (foundMissingInExport) continue
+
+						// Fallback to detailed AST check if target is in session but exports are stale
+						const targetSessionId = this.resolver.normalizePath(diskPath)
+						const targetSessionContent = sessionBuffer ? sessionBuffer.get(targetSessionId) : null
+						if (targetSessionContent) {
+							const targetAst = ts.createSourceFile(diskPath, targetSessionContent, ts.ScriptTarget.Latest, true)
+							const exportedSymbols = this.getExportedSymbolsFull(targetAst)
+
 							for (const symbol of symbols) {
-								if (symbol === "*") continue
-								// V16: Forensic Realism - 100% Accurate AST Sensing
-								const targetAst = ts.createSourceFile(diskPath, targetContent, ts.ScriptTarget.Latest, true)
-								const exportedSymbols = this.getExportedSymbolsFull(targetAst)
-
-								if (!exportedSymbols.has(symbol)) {
-									const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
-									allGhosts.add(msg)
-									nodeGhosts.push(msg)
-								}
+								if (symbol === "*" || exportedSymbols.has(symbol)) continue
+								const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
+								allGhosts.add(msg)
+								nodeGhosts.push(msg)
 							}
 						}
 					}
@@ -92,6 +98,7 @@ export class ForensicEngine {
 	 */
 	/**
 	 * V140: Industrial Hardening - Precise Unused Export Forensics.
+	 * V160: Zombie Detection - Flags symbols exported but only used within their own module.
 	 */
 	public findUnusedExports(nodes: Map<string, SpiderNode>): string[] {
 		const unusedViolations: string[] = []
@@ -119,7 +126,9 @@ export class ForensicEngine {
 			if (node.path === "src/main.ts" || node.path === "src/index.ts" || node.path === "src/extension.ts") continue
 
 			for (const exp of node.exports) {
-				// V16: Industrial Hardening - Include default exports in pruning
+				// V160: Forensic Pruning - default exports often used dynamically
+				if (exp === "default") continue
+
 				if (!consumedSymbols.has(exp)) {
 					unusedViolations.push(`[SPI-103] UNUSED EXPORT: ${node.path} -> ${exp}`)
 				}
@@ -127,6 +136,27 @@ export class ForensicEngine {
 		}
 
 		return unusedViolations
+	}
+
+	/**
+	 * V160: Contract Drift Forensics.
+	 * Compares the current exported surface against a previous snapshot to detect
+	 * potentially breaking changes in the public interface.
+	 */
+	public compareContracts(oldNodes: Map<string, SpiderNode>, newNodes: Map<string, SpiderNode>): string[] {
+		const drifts: string[] = []
+		for (const [id, newNode] of newNodes.entries()) {
+			const oldNode = oldNodes.get(id)
+			if (!oldNode) continue
+
+			const removedExports = oldNode.exports.filter((e) => !newNode.exports.includes(e))
+			if (removedExports.length > 0) {
+				drifts.push(
+					`[SPI-105] CONTRACT DRIFT (REMOVAL): ${newNode.path} -> removed exports: ${removedExports.join(", ")}`,
+				)
+			}
+		}
+		return drifts
 	}
 
 	public getImportedSymbols(sourceFile: ts.SourceFile): { specifier: string; symbols: string[] }[] {

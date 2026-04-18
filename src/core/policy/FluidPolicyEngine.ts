@@ -1,5 +1,5 @@
 import { DietCodeDefaultTool } from "@shared/tools"
-import { createHash } from "crypto"
+import crypto from "crypto"
 import fs from "fs/promises"
 import * as path from "path"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
@@ -112,7 +112,9 @@ export class FluidPolicyEngine {
 		this.envSovereignty = new EnvironmentSovereignty(this.cwd, this.stateManager)
 
 		// V16: Warm graph startup
-		this.spiderEngine.loadRegistry().catch((e: unknown) => Logger.error("[FluidPolicyEngine] Failed to load registry:", e))
+		this.restoreSpiderSubstrate().catch((e: unknown) =>
+			Logger.error("[FluidPolicyEngine] Failed to restore Spider Substrate:", e),
+		)
 	}
 
 	/**
@@ -235,6 +237,9 @@ export class FluidPolicyEngine {
 			this.optimizer,
 			this.pathogens,
 		)
+
+		// V150: Substrate Immortalization (Ghost Persistence)
+		await this.persistSpiderSubstrate()
 	}
 
 	private triggerBuildAlarm(violations: string[]) {
@@ -1397,7 +1402,7 @@ export class FluidPolicyEngine {
 		// Stability Policy: Entropy Detection
 		if (prevResultHash) {
 			const resultStr = typeof toolOutput === "string" ? toolOutput : JSON.stringify(toolOutput)
-			const currentHash = createHash("sha256").update(resultStr).digest("hex")
+			const currentHash = crypto.createHash("sha256").update(resultStr).digest("hex")
 
 			if (currentHash !== prevResultHash) {
 				const entropyReport = this.spiderEngine.computeEntropy()
@@ -1604,6 +1609,73 @@ export class FluidPolicyEngine {
 		}
 	}
 
+	/**
+	 * V150: Substrate Immortalization (Ghost Persistence).
+	 * V160: Added SHA256 Integrity Checksum to prevent substrate corruption.
+	 */
+	private async persistSpiderSubstrate() {
+		if (!this.streamId) return
+		try {
+			const data = this.spiderEngine.serialize()
+			const checksum = crypto.createHash("sha256").update(data).digest("hex")
+
+			const payload = JSON.stringify({
+				data: data.toString("base64"),
+				checksum,
+			})
+
+			await orchestrator.storeMemory(this.streamId, "spider_substrate_v160", payload)
+			Logger.info(`[FluidPolicyEngine] Spider Substrate persisted (Checksum: ${checksum.slice(0, 8)}).`)
+		} catch (e) {
+			Logger.error("[FluidPolicyEngine] Failed to persist Spider Substrate:", e)
+		}
+	}
+
+	/**
+	 * V150: Substrate Restoration (Ghost Recovery).
+	 * V160: Industrial Hardening - Validates SHA256 checksum and senses Contract Drift.
+	 */
+	private async restoreSpiderSubstrate() {
+		if (!this.streamId) {
+			await this.spiderEngine.loadRegistry()
+			return
+		}
+		try {
+			const raw = await orchestrator.recallMemory(this.streamId, "spider_substrate_v160")
+			if (raw) {
+				const { data: base64Data, checksum: expectedChecksum } = JSON.parse(raw)
+				const data = Buffer.from(base64Data, "base64")
+				const actualChecksum = crypto.createHash("sha256").update(data).digest("hex")
+
+				if (actualChecksum !== expectedChecksum) {
+					Logger.error(
+						"[FluidPolicyEngine] Substrate Corruption Detected (Checksum Mismatch). Triggering Autonomous Rebuild.",
+					)
+					await this.spiderEngine.loadRegistry()
+					return
+				}
+
+				// V160: Contract Drift Sensing
+				const oldNodes = new Map(this.spiderEngine.nodes)
+				await this.spiderEngine.loadRegistry(data)
+
+				const drifts = this.spiderEngine.getForensicEngine().compareContracts(oldNodes, this.spiderEngine.nodes)
+				if (drifts.length > 0) {
+					Logger.warn(`[FluidPolicyEngine] Industrial Drift Detected: ${drifts.length} interface changes sensed.`)
+					drifts.forEach((d) => Logger.warn(`  ${d}`))
+				}
+
+				Logger.info("[FluidPolicyEngine] Spider Substrate restored and verified from Ghost Memory.")
+			} else {
+				// Fallback to legacy or rebuild
+				await this.spiderEngine.loadRegistry()
+			}
+		} catch (e) {
+			Logger.error("[FluidPolicyEngine] Failed to restore/verify Spider Substrate:", e)
+			await this.spiderEngine.loadRegistry()
+		}
+	}
+
 	public getLayerForPath(filePath: string): string {
 		const { getLayer } = require("@/utils/joy-zoning")
 		return getLayer(filePath)
@@ -1655,7 +1727,7 @@ export class FluidPolicyEngine {
 			const metrics = this.metabolicMonitor.getForensicRegistry().get(absPath)
 			if (metrics?.lastObservedHash) {
 				const currentContent = await fs.readFile(absPath, "utf-8")
-				const currentHash = createHash("md5").update(currentContent).digest("hex")
+				const currentHash = crypto.createHash("md5").update(currentContent).digest("hex")
 
 				if (currentHash !== metrics.lastObservedHash) {
 					return `⚠️ CONCURRENT DRIFT DETECTED: ${path.basename(filePath)} has been modified externally. Syncing substrate...`
