@@ -18,6 +18,12 @@ Highly technical deep-dives into the internal mechanics of DietCode's high-veloc
 - [**Architectural Enforcement Hardening**](ARCHITECTURAL_ENFORCEMENT_HARDENING): Evolution of the substrate from V13 to V210 industrial hardening.
 - [**Spider Engine V210**](features/memory-bank): How the Merkle-mapped forensic graph monitors structural integrity.
 
+### 3. 🏗️ Industrial Infrastructure (1:1 Parity)
+Mapping the physical implementation of the substrate to its architectural roles.
+- [**System Architecture**](SYSTEM_ARCHITECTURE): Physical `src/` directory mapping.
+- [**HostBridge & Protobus**](HOSTBRIDGE_PROTOBUS): GRPC/IPC specification for headless execution.
+- [**Enterprise Deployment**](ENTERPRISE_DEPLOYMENT): Self-hosted and on-premise configuration.
+
 ### 3. 🛠️ Development & Engineering
 Technical references for extending the substrate.
 - [**DietCode CLI**](dietcode-cli/overview): Interacting with the substrate via the terminal.

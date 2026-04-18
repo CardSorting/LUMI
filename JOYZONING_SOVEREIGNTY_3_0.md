@@ -22,6 +22,28 @@ In V210, the engine has graduated to **Absolute Metabolic Sovereignty**. The str
 - **ForensicEngine**: Deterministic "ghost symbol" detection with **Generational GC** (Turn-based TTL) to prevent memory saturation.
 - **Metabolic Pulse**: Monitors V8 heap statistics to trigger proactive sweeps at **> 80% pressure**.
 
+### Sovereign Archetypes by Layer
+
+The physical substrate is organized into five distinct industrial layers, moving from the machine runtime to pure domain logic:
+
+| Layer | Physical Path | Role | Archetype |
+| :--- | :--- | :--- | :--- |
+| **Layer 0** | `src/standalone` | **Neural Interface** | HostBridge, Protobus, IPC |
+| **Layer 1** | `src/infrastructure` | **I/O Substrate** | Adapters, Drivers, FS |
+| **Layer 2** | `src/core` | **Policy & Reason** | Auditors, Monitors, Pulse |
+| **Layer 3** | `src/domain` | **Success Criteria** | Protocols, Models, Interfaces |
+| **Layer 4** | `src/ui` | **Aesthetic Mirror** | Webviews, Projections |
+
+### 0. Layer 0: The Neural Interface (HostBridge)
+
+The [HostBridge](HOSTBRIDGE_PROTOBUS) is the foundation of the DietCode substrate. It provides an environment-agnostic neural interface that decouples the "Brain" (Core) from the "Eyes and Ears" (IDE/Terminal).
+
+- **Protobus Protocol**: Standardized GRPC bus for all agentic signals.
+- **Standalone Mode**: Enables execution in headless, remote, or sovereign CLI environments.
+- **Host-Agnostic Isolation**: Prevents the core policy engine from being contaminated by IDE-specific API leaks.
+
+---
+
 ## 2. Axiomatic Sovereignty (Design Axioms)
 
 The [SemanticAxiomEngine](file:///Users/bozoegg/Downloads/codemarie-new/src/core/policy/SemanticAxiomEngine.ts) enforces mathematical-grade design truths across the **DietCode** ecosystem:

@@ -120,6 +120,14 @@
 						]
 					},
 					{
+						"group": "Industrial Infrastructure (1:1 Parity)",
+						"pages": [
+							"SYSTEM_ARCHITECTURE",
+							"HOSTBRIDGE_PROTOBUS",
+							"ENTERPRISE_DEPLOYMENT"
+						]
+					},
+					{
 						"group": "Sovereign Substrate (V210)",
 						"pages": [
 							"SOVEREIGN_GUIDE",
