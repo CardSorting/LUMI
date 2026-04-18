@@ -18,6 +18,7 @@ import { HostProvider } from "@/hosts/host-provider"
 import { FileEditProvider } from "@/integrations/editor/FileEditProvider"
 import { StandaloneTerminalManager } from "@/integrations/terminal/standalone/StandaloneTerminalManager"
 import { ErrorService } from "@/services/error/ErrorService"
+import { AuditLogService } from "@/services/logging/AuditLogService"
 import { telemetryService } from "@/services/telemetry"
 import { PostHogClientProvider } from "@/services/telemetry/providers/posthog/PostHogClientProvider"
 import { HistoryItem } from "@/shared/HistoryItem"
@@ -35,7 +36,7 @@ import { CliWebviewProvider } from "./controllers/CliWebviewProvider"
 import { RemoteServer } from "./server/RemoteServer"
 import { isAuthConfigured } from "./utils/auth"
 import { restoreConsole, suppressConsoleUnlessVerbose } from "./utils/console"
-import { printError, printInfo, printWarning } from "./utils/display"
+import { printError, printInfo, printSuccess, printWarning, style } from "./utils/display"
 import { selectOutputMode } from "./utils/mode-selection"
 import { parseImagesFromInput, processImagePaths } from "./utils/parser"
 import { CLINE_CLI_DIR, getCliBinaryPath } from "./utils/path"
@@ -887,6 +888,137 @@ program
 	.option("--config <path>", "Path to DietCode configuration directory")
 	.action(listHistory)
 
+const session = program.command("session").alias("s").description("Manage tasks/sessions")
+
+session
+	.command("list")
+	.alias("ls")
+	.description("List task history")
+	.option("-n, --limit <number>", "Number of tasks to show", "10")
+	.option("-p, --page <number>", "Page number (1-based)", "1")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(listHistory)
+
+session
+	.command("delete <id>")
+	.description("Delete a task by ID")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (id, options) => {
+		const ctx = await initializeCli(options)
+		const history = StateManager.get().getGlobalStateKey("taskHistory") || []
+		const newHistory = history.filter((item) => item.id !== id)
+		if (newHistory.length === history.length) {
+			printError(`Task with ID '${id}' not found.`)
+		} else {
+			StateManager.get().setGlobalState("taskHistory", newHistory)
+			await StateManager.get().flushPendingState()
+			printSuccess(`Task '${id}' deleted.`)
+		}
+		await disposeCliContext(ctx)
+		exit(0)
+	})
+
+session
+	.command("open <id>")
+	.description("Resume a task by ID")
+	.option("-v, --verbose", "Show verbose output")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action((id, options) => {
+		return resumeTask(id, options)
+	})
+
+session
+	.command("export <id> [file]")
+	.description("Export a session to a JSON file")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.option("-f, --force", "Overwrite existing file")
+	.action(async (id, file, options) => {
+		const ctx = await initializeCli({ config: options.config })
+		try {
+			const exportData = await ctx.controller.getExportData(id)
+			const outputPath = file || `dietcode-session-${id}.json`
+
+			const fs = await import("fs/promises")
+			const { fileExistsAtPath } = await import("@utils/fs")
+			if ((await fileExistsAtPath(outputPath)) && !options.force) {
+				printError(`File ${outputPath} already exists. Use --force to overwrite.`)
+				await disposeCliContext(ctx)
+				process.exit(1)
+			}
+
+			await fs.writeFile(outputPath, JSON.stringify(exportData, null, 2))
+			printSuccess(`Session '${id}' exported to ${outputPath}`)
+		} catch (error) {
+			printError(`Export failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
+session
+	.command("import <file>")
+	.description("Import a session from a JSON file")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (file, options) => {
+		const ctx = await initializeCli({ config: options.config })
+		try {
+			const fs = await import("fs/promises")
+			const { fileExistsAtPath } = await import("@utils/fs")
+			if (!(await fileExistsAtPath(file))) {
+				printError(`File ${file} not found.`)
+				await disposeCliContext(ctx)
+				process.exit(1)
+			}
+			const content = await fs.readFile(file, "utf8")
+			const importData = JSON.parse(content)
+
+			if (!importData.historyItem || !importData.historyItem.id) {
+				printError("Invalid import file format.")
+				await disposeCliContext(ctx)
+				process.exit(1)
+			}
+
+			await ctx.controller.importTask(importData)
+			printSuccess(`Session '${importData.historyItem.id}' imported successfully.`)
+		} catch (error) {
+			printError(`Import failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
+session
+	.command("delete <id>")
+	.description("Delete a session and all its associated data")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (id, options) => {
+		const ctx = await initializeCli(options)
+		try {
+			const history = StateManager.get().getGlobalStateKey("taskHistory") || []
+			const item = history.find((h) => h.id === id)
+
+			if (!item) {
+				printError(`Session ${id} not found in history.`)
+				return
+			}
+
+			const fs = await import("node:fs/promises")
+			const { HostProvider } = await import("@/hosts/host-provider")
+			const sessionDir = path.join(HostProvider.get().globalStorageFsPath, "tasks", id)
+
+			await fs.rm(sessionDir, { recursive: true, force: true })
+			const filtered = history.filter((h) => h.id !== id)
+			StateManager.get().setGlobalState("taskHistory", filtered)
+			await StateManager.get().flushPendingState()
+
+			printSuccess(`Session ${id} deleted successfully.`)
+		} catch (error) {
+			printError(`Deletion failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
 const config = program.command("config").description("Show or manage configuration")
 
 config
@@ -907,6 +1039,124 @@ config
 		exit(0)
 	})
 
+const doctor = program.command("doctor")
+doctor
+	.command("run")
+	.description("Run system diagnostics")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.option("--sanitize", "Scan configuration for unmasked secrets")
+	.action(async (options) => {
+		const ctx = await initializeCli(options)
+		try {
+			const { DiagnosticService } = await import("./services/diagnostic/DiagnosticService")
+			const ds = DiagnosticService.getInstance()
+			let results = await ds.runAllDiagnostics()
+
+			if (options.sanitize) {
+				const { HostProvider } = await import("@/hosts/host-provider")
+				const sanitizationResults = await ds.runSanitizationScan(options.config || HostProvider.get().globalStorageFsPath)
+				results = [...results, ...sanitizationResults]
+			}
+
+			printInfo("Running DietCode Diagnostics...")
+			const configDiag = results.find((r) => r.name === "Configuration Integrity")
+
+			if (configDiag && configDiag.status === "ok") {
+				printSuccess("Configuration integrity validated.")
+			} else if (configDiag) {
+				printError(`Configuration error: ${configDiag.message}`)
+				if (configDiag.remediation) printInfo(`Remediation: ${configDiag.remediation}`)
+			}
+
+			const history = StateManager.get().getGlobalStateKey("taskHistory") || []
+			const historyIds = new Set(history.map((h) => h.id))
+
+			const fs = await import("node:fs/promises")
+			const { HostProvider } = await import("@/hosts/host-provider")
+			const tasksDir = path.join(HostProvider.get().globalStorageFsPath, "tasks")
+
+			if (existsSync(tasksDir)) {
+				const dirs = await fs.readdir(tasksDir)
+				const orphaned = dirs.filter((d) => !historyIds.has(d) && !d.startsWith("."))
+				if (orphaned.length > 0) {
+					printWarning(`Found ${orphaned.length} orphaned task directories (not in history).`)
+					printInfo("Run `dietcode config prune` to clean them up.")
+				}
+			}
+		} catch (error) {
+			printError(`Validation failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
+config
+	.command("prune")
+	.description("Scavenge and remove stale session data")
+	.option("-d, --days <number>", "Remove sessions older than N days", "30")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.option("--dry-run", "Show what would be removed without deleting")
+	.action(async (options) => {
+		const ctx = await initializeCli(options)
+		try {
+			const days = Number.parseInt(options.days, 10)
+			const threshold = Date.now() - days * 24 * 60 * 60 * 1000
+
+			const history = StateManager.get().getGlobalStateKey("taskHistory") || []
+			const toRemove = history.filter((h) => h.ts < threshold)
+
+			if (toRemove.length === 0) {
+				printInfo("No stale sessions found.")
+			} else {
+				printInfo(`Found ${toRemove.length} sessions older than ${days} days.`)
+				const fs = await import("node:fs/promises")
+				const { HostProvider } = await import("@/hosts/host-provider")
+				const tasksDir = path.join(HostProvider.get().globalStorageFsPath, "tasks")
+
+				for (const item of toRemove) {
+					if (options.dryRun) {
+						printInfo(`[DRY RUN] Would delete session ${item.id} (${item.task})`)
+					} else {
+						const dir = path.join(tasksDir, item.id)
+						await fs.rm(dir, { recursive: true, force: true }).catch(() => {})
+						printInfo(`Deleted session persistence for ${item.id}`)
+					}
+				}
+
+				if (!options.dryRun) {
+					const filtered = history.filter((h) => h.ts >= threshold)
+					StateManager.get().setGlobalState("taskHistory", filtered)
+					await StateManager.get().flushPendingState()
+					printSuccess(`Successfully pruned ${toRemove.length} sessions.`)
+				}
+			}
+
+			const fs = await import("node:fs/promises")
+			const { HostProvider } = await import("@/hosts/host-provider")
+			const tasksDir = path.join(HostProvider.get().globalStorageFsPath, "tasks")
+			if (existsSync(tasksDir)) {
+				const historyIds = new Set(history.map((h) => h.id))
+				const dirs = await fs.readdir(tasksDir)
+				const orphaned = dirs.filter((d) => !historyIds.has(d) && !d.startsWith("."))
+				if (orphaned.length > 0) {
+					printInfo(`Found ${orphaned.length} orphaned directories.`)
+					for (const d of orphaned) {
+						if (options.dryRun) {
+							printInfo(`[DRY RUN] Would delete orphaned directory ${d}`)
+						} else {
+							await fs.rm(path.join(tasksDir, d), { recursive: true, force: true })
+							printInfo(`Deleted orphaned directory ${d}`)
+						}
+					}
+				}
+			}
+		} catch (error) {
+			printError(`Pruning failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
 program
 	.command("auth")
 	.description("Authenticate a provider and configure what model is used")
@@ -918,6 +1168,689 @@ program
 	.option("-c, --cwd <path>", "Working directory for the task")
 	.option("--config <path>", "Path to DietCode configuration directory")
 	.action(runAuth)
+
+program
+	.command("stats")
+	.description("Show token usage and cost statistics")
+	.option("-d, --days <number>", "Show stats for the last N days (default: all time)")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (options: { days?: string; config?: string }) => {
+		const ctx = await initializeCli({ config: options.config })
+		const history = StateManager.get().getGlobalStateKey("taskHistory") || []
+
+		const days = options.days ? Number.parseInt(options.days, 10) : undefined
+		const now = Date.now()
+		const filteredHistory = days ? history.filter((item) => now - item.ts <= days * 24 * 60 * 60 * 1000) : history
+
+		const stats = {
+			totalSessions: filteredHistory.length,
+			totalTokensIn: 0,
+			totalTokensOut: 0,
+			totalCacheReads: 0,
+			totalCacheWrites: 0,
+			totalCost: 0,
+		}
+
+		for (const item of filteredHistory) {
+			stats.totalTokensIn += item.tokensIn || 0
+			stats.totalTokensOut += item.tokensOut || 0
+			stats.totalCacheReads += item.cacheReads || 0
+			stats.totalCacheWrites += item.cacheWrites || 0
+			stats.totalCost += item.totalCost || 0
+		}
+
+		const width = 56
+		const renderRow = (label: string, value: string) => {
+			const padding = Math.max(0, width - label.length - value.length - 4)
+			return `│ ${label}${" ".repeat(padding)} ${value} │`
+		}
+
+		console.log("┌" + "─".repeat(width - 2) + "┐")
+		console.log("│" + " OVERVIEW ".padStart((width + 8) / 2).padEnd(width - 2) + "│")
+		console.log("├" + "─".repeat(width - 2) + "┤")
+		console.log(renderRow("Sessions", stats.totalSessions.toLocaleString()))
+		console.log(renderRow("Days", (days || "All time").toString()))
+		console.log("├" + "─".repeat(width - 2) + "┤")
+		console.log("│" + " COST & TOKENS ".padStart((width + 13) / 2).padEnd(width - 2) + "│")
+		console.log("├" + "─".repeat(width - 2) + "┤")
+		console.log(renderRow("Total Cost", `$${stats.totalCost.toFixed(2)}`))
+		console.log(renderRow("Input Tokens", stats.totalTokensIn.toLocaleString()))
+		console.log(renderRow("Output Tokens", stats.totalTokensOut.toLocaleString()))
+		console.log(renderRow("Cache Reads", (stats.totalCacheReads || 0).toLocaleString()))
+		console.log(renderRow("Cache Writes", (stats.totalCacheWrites || 0).toLocaleString()))
+		console.log("└" + "─".repeat(width - 2) + "┘")
+
+		await disposeCliContext(ctx)
+		process.exit(0)
+	})
+
+program
+	.command("models")
+	.description("Manage models")
+	.action(() => {
+		printInfo("Use 'dietcode models list [provider]' to see available models.")
+	})
+
+program
+	.command("models")
+	.command("list [provider]")
+	.description("List available models for a provider")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (providerId, options) => {
+		const ctx = await initializeCli(options)
+		const apiConfig = StateManager.get().getApiConfiguration()
+		const provider = providerId || apiConfig.planModeApiProvider || "anthropic"
+
+		let models: Record<string, any> = {}
+
+		const { anthropicModels, bedrockModels, vertexModels, openAiNativeModels, geminiModels, deepSeekModels, mistralModels } =
+			(await import("@shared/api")) as any
+
+		switch (provider) {
+			case "anthropic":
+				models = anthropicModels
+				break
+			case "openrouter":
+				const cached = await ctx.controller.readOpenRouterModels()
+				models = cached || {}
+				break
+			case "bedrock":
+				models = bedrockModels
+				break
+			case "vertex":
+				models = vertexModels
+				break
+			case "openai-native":
+				models = openAiNativeModels
+				break
+			case "gemini":
+				models = geminiModels
+				break
+			case "deepseek":
+				models = deepSeekModels
+				break
+			case "mistral":
+				models = mistralModels
+				break
+			default:
+				printWarning(`No built-in model list for '${provider}'. Showing current config only.`)
+				const mId = apiConfig.planModeApiModelId || apiConfig.actModeApiModelId
+				models = mId ? { [mId]: {} } : {}
+		}
+
+		if (Object.keys(models).length === 0) {
+			console.log("No models found.")
+		} else {
+			console.log(style.bold(`\n${provider.toUpperCase()} Models:`))
+			const sortedModels = Object.entries(models).sort(([a], [b]) => a.localeCompare(b))
+			for (const [id, info] of sortedModels) {
+				const details = []
+				if (info.contextWindow) details.push(`${(info.contextWindow / 1000).toFixed(0)}k context`)
+				if (info.supportsPromptCache) details.push("caches")
+				if (info.supportsReasoning) details.push("reasoning")
+
+				const detailsStr = details.length > 0 ? style.dim(` (${details.join(", ")})`) : ""
+				console.log(`- ${style.info(id)}${detailsStr}`)
+			}
+			console.log()
+		}
+
+		await disposeCliContext(ctx)
+		exit(0)
+	})
+
+program
+	.command("pr <number>")
+	.description("Checkout a GitHub PR and start a task")
+	.option("-p, --plan", "Run in plan mode")
+	.option("-y, --yolo", "Enable yolo mode")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (number, options) => {
+		const { execSync } = await import("node:child_process")
+		try {
+			printInfo(`Checking out PR #${number}...`)
+			execSync(`gh pr checkout ${number}`, { stdio: "inherit" })
+
+			const prDataRaw = execSync(`gh pr view ${number} --json title,body`, { encoding: "utf8" })
+			const prData = JSON.parse(prDataRaw)
+			const prompt = `I've checked out PR #${number}: ${prData.title}\n\nDescription:\n${prData.body}\n\nHow can I help with this PR?`
+
+			printInfo("Starting DietCode task...")
+			const ctx = await initializeCli(options)
+			return runTask(prompt, { ...options, act: true }, ctx)
+		} catch (error) {
+			printError("Failed to checkout PR. Ensure 'gh' CLI is installed and you are in a git repository.")
+			process.exit(1)
+		}
+	})
+
+program
+	.command("mcp")
+	.command("list")
+	.description("List all configured MCP servers")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (options: { config?: string }) => {
+		const ctx = await initializeCli({ config: options.config })
+		const connections = ctx.controller.mcpHub.connections
+
+		if (connections.length === 0) {
+			console.log("No MCP servers configured.")
+		} else {
+			console.log(style.bold("\nConfigured MCP Servers:"))
+			for (const conn of connections) {
+				const status = conn.server.disabled
+					? style.dim("Disabled")
+					: conn.server.status === "connected"
+						? style.success("Connected")
+						: style.error(conn.server.status)
+				const authStatus = conn.server.oauthRequired
+					? conn.server.oauthAuthStatus === "authenticated"
+						? style.success(" [Auth OK]")
+						: style.warning(" [Auth Required]")
+					: ""
+				const name = style.info(conn.server.name)
+				console.log(`- ${name} [${status}]${authStatus}`)
+				if (conn.server.error) {
+					console.log(style.dim(`  Error: ${conn.server.error.split("\n")[0]}`))
+				}
+			}
+			console.log()
+		}
+
+		await disposeCliContext(ctx)
+		process.exit(0)
+	})
+
+program
+	.command("mcp")
+	.command("auth <name>")
+	.description("Authenticate with an MCP server (OAuth)")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (name: string, options: { config?: string }) => {
+		const ctx = await initializeCli({ config: options.config })
+		try {
+			const mcpHub = ctx.controller.mcpHub
+			const connection = mcpHub.connections.find((c) => c.server.name === name)
+			if (!connection) {
+				printError(`MCP server '${name}' not found.`)
+				await disposeCliContext(ctx)
+				process.exit(1)
+			}
+
+			if (!connection.server.oauthRequired) {
+				printInfo(`Server '${name}' does not require OAuth.`)
+				return
+			}
+
+			printInfo(`Initiating OAuth flow for '${name}'...`)
+			await mcpHub.initiateOAuth(name)
+			printSuccess("Please complete the authentication in your browser.")
+			printInfo("Once completed, DietCode will automatically detect the tokens and reconnect.")
+		} catch (error) {
+			printError(`Failed to initiate auth: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
+program
+	.command("mcp")
+	.command("logout <name>")
+	.description("Logout and clear OAuth tokens for an MCP server")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (name: string, options: { config?: string }) => {
+		const ctx = await initializeCli({ config: options.config })
+		try {
+			const mcpHub = ctx.controller.mcpHub
+			const connection = mcpHub.connections.find((c) => c.server.name === name)
+			if (!connection) {
+				printError(`MCP server '${name}' not found.`)
+				return
+			}
+
+			printInfo(`Logging out from server '${name}'...`)
+			await mcpHub.logoutServer(name)
+			printSuccess(`Logged out from '${name}'. OAuth tokens cleared.`)
+		} catch (error) {
+			printError(`Failed to logout: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
+program
+	.command("hooks")
+	.command("run <name>")
+	.description("Run a specific hook from .dietcoderules/hooks")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (name: string, options: { config?: string }) => {
+		const ctx = await initializeCli({ config: options.config })
+		try {
+			const { HostProvider } = await import("@/hosts/host-provider")
+			const path = await import("node:path")
+			const fs = await import("node:fs/promises")
+
+			const hooksDirs = [
+				path.join(HostProvider.get().globalStorageFsPath, "hooks"),
+				path.join(process.cwd(), ".dietcoderules", "hooks"),
+			]
+
+			let hookPath: string | null = null
+			for (const dir of hooksDirs) {
+				const candidate = path.join(dir, name)
+				if (
+					await fs
+						.access(candidate)
+						.then(() => true)
+						.catch(() => false)
+				) {
+					hookPath = candidate
+					break
+				}
+			}
+
+			if (!hookPath) {
+				printError(`Hook '${name}' not found in any hooks directory.`)
+				return
+			}
+
+			printInfo(`Running hook '${name}'...`)
+			const { exec } = await import("node:child_process")
+			const { promisify } = await import("node:util")
+			const execAsync = promisify(exec)
+
+			const { stdout, stderr } = await execAsync(`chmod +x "${hookPath}" && "${hookPath}"`)
+			if (stdout) console.log(stdout)
+			if (stderr) console.error(stderr)
+			printSuccess(`Hook '${name}' completed successfully.`)
+		} catch (error) {
+			printError(`Hook execution failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
+program
+	.command("workspace")
+	.command("index")
+	.description("Build a semantic index of the current workspace")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (options: { config?: string }) => {
+		const ctx = await initializeCli({ config: options.config })
+		try {
+			printInfo("Building workspace index...")
+			const { regexSearchFiles } = await import("@/services/ripgrep")
+			const pattern = "(class|function|interface|export const|export enum) [a-zA-Z0-9_]+"
+			const results = await regexSearchFiles(process.cwd(), process.cwd(), pattern, "*.{ts,tsx,js,jsx,py,go,rs}")
+
+			const path = await import("node:path")
+			const fs = await import("node:fs/promises")
+			const indexPath = path.join(process.cwd(), ".dietcode-index.json")
+
+			await fs.writeFile(
+				indexPath,
+				JSON.stringify(
+					{
+						ts: Date.now(),
+						results: results.split("\n").filter((l) => l.includes("│")).length,
+						raw: results,
+					},
+					null,
+					2,
+				),
+			)
+
+			printSuccess(`Workspace indexed. Index saved to .dietcode-index.json`)
+		} catch (error) {
+			printError(`Indexing failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+		program
+			.command("mcp")
+			.command("toggle <name>")
+			.description("Enable or disable an MCP server")
+			.option("--config <path>", "Path to DietCode configuration directory")
+			.action(async (name: string, options: { config?: string }) => {
+				const ctx = await initializeCli({ config: options.config })
+				try {
+					const conn = ctx.controller.mcpHub.connections.find((c) => c.server.name === name)
+					if (!conn) {
+						printError(`MCP server '${name}' not found.`)
+						return
+					}
+
+					const newState = !conn.server.disabled
+					await ctx.controller.mcpHub.toggleServerDisabledRPC(name, newState)
+					printSuccess(`MCP server '${name}' ${newState ? "disabled" : "enabled"}.`)
+				} catch (error) {
+					printError(`Failed to toggle: ${error instanceof Error ? error.message : String(error)}`)
+				} finally {
+					await disposeCliContext(ctx)
+				}
+			})
+	})
+
+program
+	.command("chaos")
+	.description("Resilience test bed: Inject environmental chaos to verify CLI immunity")
+	.command("inject <type>")
+	.description("Inject a specific type of failure (corruption, latency, outage)")
+	.action(async (type) => {
+		const { style } = await import("./utils/display")
+		const path = await import("node:path")
+		const fs = await import("node:fs/promises")
+		const { HostProvider } = await import("@/hosts/host-provider")
+
+		switch (type) {
+			case "corruption":
+				const settingsPath = path.join(HostProvider.get().globalStorageFsPath, "settings", "dietcode_mcp_settings.json")
+				if (
+					await fs
+						.access(settingsPath)
+						.then(() => true)
+						.catch(() => false)
+				) {
+					await fs.writeFile(settingsPath, "INVALID_JSON_FOR_CHAOS_TESTING", "utf8")
+					console.log(style.error("Injecting configuration corruption... DONE."))
+				}
+				break
+			case "latency":
+				console.log(
+					style.warning("Injecting artificial substrate latency... (NOT IMPLEMENTED - requires dynamic interceptor)"),
+				)
+				break
+			default:
+				console.log(style.error(`Unknown chaos type: ${type}`))
+		}
+	})
+
+program
+	.command("config")
+	.command("repair")
+	.description("Repair configuration using forensic backups")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (options: { config?: string }) => {
+		const ctx = await initializeCli({ config: options.config })
+		try {
+			const { verifyIntegrity } = await import("@/core/storage/disk")
+			const { HostProvider } = await import("@/hosts/host-provider")
+			const path = await import("node:path")
+			const fs = await import("node:fs/promises")
+
+			const settingsDir = path.join(HostProvider.get().globalStorageFsPath, "settings")
+			const integrity = await verifyIntegrity(settingsDir)
+
+			if (integrity.ok) {
+				printSuccess("All configuration files are structurally sound. No repair needed.")
+				return
+			}
+
+			for (const filename of integrity.mismatched) {
+				const backupPath = path.join(settingsDir, "backups", `${filename}.bak`)
+				if (
+					await fs
+						.access(backupPath)
+						.then(() => true)
+						.catch(() => false)
+				) {
+					printInfo(`Repairing ${filename} from forensic backup...`)
+					await fs.copyFile(backupPath, path.join(settingsDir, filename))
+				} else {
+					printError(`No backup found for ${filename}. Repair impossible.`)
+				}
+			}
+			printSuccess("Substrate repair completed.")
+		} catch (error) {
+			printError(`Repair failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
+program
+	.command("history")
+	.command("audit")
+	.description("Perform a clinical scan of task history and directories")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (options: { config?: string }) => {
+		const ctx = await initializeCli({ config: options.config })
+		try {
+			const { StateManager } = await import("@/core/storage/StateManager")
+			const { HostProvider } = await import("@/hosts/host-provider")
+			const fs = await import("node:fs/promises")
+			const path = await import("node:path")
+
+			const history = StateManager.get().getGlobalStateKey("taskHistory") || []
+			const taskDirs = await fs.readdir(path.join(HostProvider.get().globalStorageFsPath, "tasks")).catch(() => [])
+
+			printInfo(`Auditing ${history.length} history items and ${taskDirs.length} task directories...`)
+
+			const linkedDirs = new Set(history.map((item) => item.id))
+			const orphanedDirs = taskDirs.filter((dir) => !linkedDirs.has(dir))
+
+			if (orphanedDirs.length > 0) {
+				printWarning(`Detected ${orphanedDirs.length} orphaned task directories (not in history).`)
+				console.log(orphanedDirs.join(", "))
+			} else {
+				printSuccess("No orphaned directories detected.")
+			}
+
+			// Detect sequence breaks
+			let sequenceBreaks = 0
+			for (let i = 1; i < history.length; i++) {
+				if (history[i].ts < history[i - 1].ts) {
+					sequenceBreaks++
+				}
+			}
+
+			if (sequenceBreaks > 0) {
+				printWarning(`Detected ${sequenceBreaks} sequence breaks (time-travel anomalies).`)
+			} else {
+				printSuccess("Timeline integrity verified.")
+			}
+		} catch (error) {
+			printError(`Audit failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
+program
+	.command("agent")
+	.description("Manage custom agents")
+	.action(() => {
+		printInfo("Use 'dietcode agent list' or 'dietcode agent create'")
+	})
+
+program
+	.command("agent")
+	.command("list")
+	.description("List all custom agents")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (options: { config?: string }) => {
+		const { AgentConfigLoader } = await import("@/core/task/tools/subagent/AgentConfigLoader")
+		const loader = AgentConfigLoader.getInstance()
+		await loader.ready()
+		const configs = loader.getAllCachedConfigs()
+
+		if (configs.size === 0) {
+			console.log("No custom agents found.")
+			console.log(style.dim(`Agents are loaded from: ${loader.getConfigPath()}`))
+		} else {
+			console.log(style.bold("\nCustom Agents:"))
+			for (const [name, config] of configs.entries()) {
+				console.log(`- ${style.info(config.name)}: ${config.description}`)
+			}
+			console.log()
+		}
+		process.exit(0)
+	})
+
+program
+	.command("agent")
+	.command("create")
+	.description("Interactively create a new custom agent")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (options: { config?: string }) => {
+		const prompts = (await import("prompts")).default
+		const { getAgentsConfigPath } = await import("@/core/task/tools/subagent/AgentConfigLoader")
+		const fs = await import("fs/promises")
+
+		const response = await prompts([
+			{
+				type: "text",
+				name: "name",
+				message: "Agent name:",
+				validate: (val: string) => (val.length > 0 ? true : "Name is required"),
+			},
+			{
+				type: "select",
+				name: "template",
+				message: "Choose a template profile:",
+				choices: [
+					{ title: "Custom (Manual selection)", value: "custom" },
+					{ title: "Reviewer (Explorer + Browser)", value: "reviewer" },
+					{ title: "Architect (Heavy Analysis)", value: "architect" },
+					{ title: "Debugger (Execution tools)", value: "debugger" },
+				],
+			},
+			{
+				type: "text",
+				name: "description",
+				message: "Agent description:",
+				validate: (val: string) => (val.length > 0 ? true : "Description is required"),
+			},
+			{
+				type: "text",
+				name: "systemPrompt",
+				message: "System prompt:",
+				validate: (val: string) => (val.length > 0 ? true : "System prompt is required"),
+			},
+		])
+
+		if (!response.name) return
+
+		let tools: string[] = ["read_file", "list_files", "attempt"]
+		if (response.template === "reviewer") {
+			tools = [...tools, "search_files", "browser_action"]
+		} else if (response.template === "architect") {
+			tools = [...tools, "grep_search", "list_code_definition", "search_files"]
+		} else if (response.template === "debugger") {
+			tools = [...tools, "run_command", "browser_action"]
+		} else {
+			// Custom - could add more prompts here but for now use default set
+			tools = [...tools, "search_files"]
+		}
+
+		const fileName = `${response.name.toLowerCase().replace(/\s+/g, "-")}.yaml`
+		const filePath = path.join(getAgentsConfigPath(), fileName)
+
+		const content = `---
+name: ${response.name}
+description: ${response.description}
+tools:
+${tools.map((t) => `  - ${t}`).join("\n")}
+---
+${response.systemPrompt}`
+
+		await fs.mkdir(path.dirname(filePath), { recursive: true })
+		await fs.writeFile(filePath, content, "utf8")
+		printSuccess(`Agent '${response.name}' created at ${filePath}`)
+		process.exit(0)
+	})
+
+const agent = program.command("agent").description("Manage agents")
+
+agent
+	.command("search <query>")
+	.description("Search for agents in the local and remote registry")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (query: string, options: { config?: string }) => {
+		const ctx = await initializeCli(options)
+		try {
+			const { AgentConfigLoader } = await import("@core/task/tools/subagent/AgentConfigLoader")
+			const configs = await AgentConfigLoader.getInstance().load()
+
+			const results = Array.from(configs.values()).filter(
+				(c) =>
+					c.name.toLowerCase().includes(query.toLowerCase()) ||
+					c.description.toLowerCase().includes(query.toLowerCase()),
+			)
+
+			if (results.length === 0) {
+				printInfo(`No agents found matching '${query}'`)
+			} else {
+				printInfo(`Found ${results.length} agents:`)
+				for (const res of results) {
+					console.log(`${style.bold(res.name)} - ${res.description}`)
+				}
+			}
+		} catch (error) {
+			printError(`Search failed: ${error instanceof Error ? error.message : String(error)}`)
+		} finally {
+			await disposeCliContext(ctx)
+		}
+	})
+
+program
+	.command("github")
+	.command("run")
+	.description("Run DietCode as a GitHub Agent (used in GitHub Actions)")
+	.option("--token <token>", "GitHub token")
+	.option("--config <path>", "Path to DietCode configuration directory")
+	.action(async (options) => {
+		const token = options.token || process.env.GITHUB_TOKEN
+		if (!token) {
+			printError("GitHub token is required. Set GITHUB_TOKEN environment variable or use --token.")
+			process.exit(1)
+		}
+
+		const ctx = await initializeCli(options)
+		const { GithubRunner } = await import("./github/github")
+		const runner = new GithubRunner(token)
+
+		await runner.run(ctx.controller, runTask)
+
+		await disposeCliContext(ctx)
+		process.exit(0)
+	})
+
+program
+	.command("github")
+	.command("install")
+	.description("Install DietCode GitHub Actions workflow")
+	.action(async () => {
+		const fs = await import("fs/promises")
+		const workflowDir = path.join(process.cwd(), ".github", "workflows")
+		const workflowPath = path.join(workflowDir, "dietcode.yml")
+
+		const workflowContent = `name: DietCode
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  dietcode:
+    if: contains(github.event.comment.body, '@dietcode')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: DietCode PR
+        uses: CardSorting/DietCodeMarie@dev
+        with:
+          github-token: \${{ secrets.GITHUB_TOKEN }}
+          anthropic-api-key: \${{ secrets.ANTHROPIC_API_KEY }}
+`
+		await fs.mkdir(workflowDir, { recursive: true })
+		await fs.writeFile(workflowPath, workflowContent, "utf8")
+		printSuccess(`GitHub Actions workflow installed at ${workflowPath}`)
+		process.exit(0)
+	})
 
 program
 	.command("version")
@@ -942,31 +1875,40 @@ program
 		let hasError = false
 		for (const result of results) {
 			const statusSymbol = result.status === "ok" ? "✔" : result.status === "warning" ? "⚠" : "✖"
-			const statusColor = result.status === "ok" ? "\x1b[32m" : result.status === "warning" ? "\x1b[33m" : "\x1b[31m"
-			console.log(`${statusColor}${statusSymbol}\x1b[0m \x1b[1m${result.name}\x1b[0m: ${result.message}`)
-			if (result.remediation) {
-				console.log(`   └─ ${result.remediation}`)
-			}
-			if (result.status === "error") {
+			const styledName = style.bold(result.name)
+			const styledMessage = result.message
+
+			if (result.status === "ok") {
+				console.log(`${style.success(statusSymbol)} ${styledName}: ${styledMessage}`)
+			} else if (result.status === "warning") {
+				console.log(`${style.warning(statusSymbol)} ${styledName}: ${styledMessage}`)
+			} else {
+				console.log(`${style.error(statusSymbol)} ${styledName}: ${styledMessage}`)
 				hasError = true
+			}
+
+			if (result.remediation) {
+				console.log(style.dim(`   └─ ${result.remediation}`))
 			}
 		}
 
 		if (options.repair && (hasError || results.some((r) => r.status === "warning"))) {
-			console.log("\n\x1b[34mAttempting to repair issues...\x1b[0m")
+			printInfo("\nAttempting to repair issues...")
 			const repairResults = await diagnostics.runRepair(results)
 			for (const result of repairResults) {
 				const statusSymbol = result.status === "ok" ? "✔" : result.status === "warning" ? "⚠" : "✖"
-				const statusColor = result.status === "ok" ? "\x1b[32m" : result.status === "warning" ? "\x1b[33m" : "\x1b[31m"
-				console.log(`${statusColor}${statusSymbol}\x1b[0m \x1b[1m${result.name}\x1b[0m: ${result.message}`)
+				const styledName = style.bold(result.name)
+				if (result.status === "ok") {
+					console.log(`${style.success(statusSymbol)} ${styledName}: ${result.message}`)
+				} else {
+					console.log(`${style.error(statusSymbol)} ${styledName}: ${result.message}`)
+				}
 			}
 		} else if (hasError) {
-			console.log(
-				"\n\x1b[31mSome diagnostics failed. Please follow the remediation steps above, or run `dietcode doctor --repair`.\x1b[0m",
-			)
+			printError("\nSome diagnostics failed. Please follow the remediation steps above, or run `dietcode doctor --repair`.")
 			process.exit(1)
 		} else {
-			console.log("\n\x1b[32mAll systems operational!\x1b[0m")
+			printSuccess("\nAll systems operational!")
 		}
 	})
 
@@ -1174,4 +2116,46 @@ program
 	.action(runServer)
 
 // Parse and run
+const startTime = Date.now()
+program.hook("preAction", async (thisCommand, actionCommand) => {
+	const configDir = thisCommand.opts().config
+	await AuditLogService.getInstance().initialize(configDir)
+	await AuditLogService.getInstance().log({
+		command: actionCommand.name(),
+		args: actionCommand.args,
+	})
+
+	// Run autonomous hooks if applicable
+	if (["act", "run", "plan"].includes(actionCommand.name())) {
+		const path = await import("node:path")
+		const fs = await import("node:fs/promises")
+		const preHook = path.join(process.cwd(), ".dietcoderules", "hooks", "pre-task")
+		if (
+			await fs
+				.access(preHook)
+				.then(() => true)
+				.catch(() => false)
+		) {
+			console.log(style.dim(`[Substrate] Running autonomous pre-task hook...`))
+			const { exec } = await import("node:child_process")
+			try {
+				const { promisify } = await import("node:util")
+				await promisify(exec)(`chmod +x "${preHook}" && "${preHook}"`)
+			} catch (err) {
+				Logger.error("Pre-task hook failed:", err)
+			}
+		}
+	}
+})
+
+program.hook("postAction", async (thisCommand, actionCommand) => {
+	const duration = Date.now() - startTime
+	await AuditLogService.getInstance().log({
+		command: actionCommand.name(),
+		args: actionCommand.args,
+		duration,
+		exitCode: (process.exitCode as number) || 0,
+	})
+})
+
 program.parse()

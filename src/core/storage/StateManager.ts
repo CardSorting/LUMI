@@ -137,6 +137,14 @@ export class StateManager {
 		try {
 			await initializeDistinctId(storage)
 
+			// Verify integrity of configuration files
+			const { verifyIntegrity } = await import("./disk")
+			const integrity = await verifyIntegrity(storage.dataDir)
+			if (!integrity.ok) {
+				Logger.warn(`[Forensics] Config integrity compromised. Mismatched files: ${integrity.mismatched.join(", ")}`)
+				// We don't block boot, but we flag it for the immunity system
+			}
+
 			// Load all extension state from file-backed stores
 			const globalState = await readGlobalStateFromStorage(storage.globalState)
 			const secrets = readSecretsFromStorage(storage.secrets)

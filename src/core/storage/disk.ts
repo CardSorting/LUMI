@@ -28,18 +28,66 @@ import { StateManager } from "./StateManager"
  * @param filePath - The target file path
  * @param data - The data to write
  */
-async function atomicWriteFile(filePath: string, data: string): Promise<void> {
+async function atomicWriteFile(filePath: string, data: string, updateChecksum = false): Promise<void> {
 	const tmpPath = `${filePath}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`
 	try {
+		// Create backup for recovery
+		if (await fileExistsAtPath(filePath)) {
+			const backupDir = path.join(path.dirname(filePath), "backups")
+			await fs.mkdir(backupDir, { recursive: true })
+			await fs.copyFile(filePath, path.join(backupDir, `${path.basename(filePath)}.bak`))
+		}
+
 		// Write to temporary file first
 		await fs.writeFile(tmpPath, data, "utf8")
 		// Rename temp file to target (atomic in most cases)
 		await fs.rename(tmpPath, filePath)
+
+		if (updateChecksum) {
+			await recordChecksum(filePath)
+		}
 	} catch (error) {
 		// Clean up temp file if it exists
 		fs.unlink(tmpPath).catch(() => {})
 		throw error
 	}
+}
+
+async function recordChecksum(filePath: string): Promise<void> {
+	const checksumPath = path.join(path.dirname(filePath), ".checksums.json")
+	let checksums: Record<string, string> = {}
+	if (await fileExistsAtPath(checksumPath)) {
+		try {
+			checksums = JSON.parse(await fs.readFile(checksumPath, "utf8"))
+		} catch {
+			/* ignore */
+		}
+	}
+	checksums[path.basename(filePath)] = await calculateFileChecksum(filePath)
+	await fs.writeFile(checksumPath, JSON.stringify(checksums, null, 2))
+}
+
+export async function calculateFileChecksum(filePath: string): Promise<string> {
+	const content = await fs.readFile(filePath)
+	return crypto.createHash("sha256").update(content).digest("hex")
+}
+
+export async function verifyIntegrity(settingsDir: string): Promise<{ ok: boolean; mismatched: string[] }> {
+	const checksumPath = path.join(settingsDir, ".checksums.json")
+	if (!(await fileExistsAtPath(checksumPath))) return { ok: true, mismatched: [] }
+
+	const checksums = JSON.parse(await fs.readFile(checksumPath, "utf8"))
+	const mismatched: string[] = []
+
+	for (const [filename, expected] of Object.entries(checksums)) {
+		const filePath = path.join(settingsDir, filename as string)
+		if (await fileExistsAtPath(filePath)) {
+			const actual = await calculateFileChecksum(filePath)
+			if (actual !== expected) mismatched.push(filename as string)
+		}
+	}
+
+	return { ok: mismatched.length === 0, mismatched }
 }
 
 export const GlobalFileNames = {
@@ -420,7 +468,7 @@ export async function readTaskHistoryFromState(): Promise<HistoryItem[]> {
 export async function writeTaskHistoryToState(items: HistoryItem[]): Promise<void> {
 	try {
 		const filePath = await getTaskHistoryStateFilePath()
-		await atomicWriteFile(filePath, JSON.stringify(items))
+		await atomicWriteFile(filePath, JSON.stringify(items), true)
 	} catch (error) {
 		Logger.error("[Disk] Failed to write task history:", error)
 		throw error

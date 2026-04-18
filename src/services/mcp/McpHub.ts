@@ -282,11 +282,24 @@ export class McpHub {
 		return this.connections.find((conn) => conn.server.name === name)
 	}
 
+	private validateServerPath(name: string, config: z.infer<typeof ServerConfigSchema>): void {
+		if (config.type !== "stdio") return
+
+		const trustedZones = ["/usr/bin", "/usr/local/bin", "/bin", "/usr/sbin", "/sbin", ".dietcode", ".dietcoderules"]
+		const isTrusted = trustedZones.some((zone) => config.command.includes(zone)) || !config.command.includes("/")
+
+		if (!isTrusted) {
+			Logger.warn(`[Forensics] MCP Server "${name}" uses an untrusted executable path: ${config.command}`)
+			// We log but don't block, similar to a sovereign audit
+		}
+	}
+
 	private async connectToServer(
 		name: string,
 		config: z.infer<typeof ServerConfigSchema>,
 		source: "rpc" | "internal",
 	): Promise<void> {
+		this.validateServerPath(name, config)
 		// Remove existing connection if it exists (should never happen, the connection should be deleted beforehand)
 		this.connections = this.connections.filter((conn) => conn.server.name !== name)
 
@@ -1651,6 +1664,31 @@ export class McpHub {
 
 		// Restart connection to complete setup with authenticated transport
 		await this.restartConnection(connection.server.name)
+	}
+
+	/**
+	 * Clears OAuth tokens and logs out from a server
+	 */
+	async logoutServer(serverName: string): Promise<void> {
+		const connection = this.connections.find((conn) => conn.server.name === serverName)
+		if (!connection) {
+			throw new Error(`No connection found for server: ${serverName}`)
+		}
+
+		const config = JSON.parse(connection.server.config)
+		const serverUrl = config.url
+		if (!serverUrl) {
+			throw new Error(`No URL found in config for server: ${serverName}`)
+		}
+
+		await this.mcpOAuthManager.clearServerAuth(serverName, serverUrl)
+
+		// Update connection status
+		connection.server.oauthAuthStatus = "unauthenticated"
+		connection.server.oauthRequired = true
+
+		// Reconnect to apply changes
+		await this.restartConnection(serverName)
 	}
 
 	async dispose(): Promise<void> {

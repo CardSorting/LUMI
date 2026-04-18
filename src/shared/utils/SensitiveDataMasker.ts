@@ -12,9 +12,12 @@ export class SensitiveDataMasker {
 		// Google AI (Gemini): AIza...
 		/AIza[a-zA-Z0-9\-_]{30,}/g,
 		// AWS Access Key ID
-		/(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}/g,
-		// Generic Bearer Token
-		/Bearer\s+[a-zA-Z0-9\-._~+/]+=*/g,
+		// GitHub: ghp_...
+		/ghp_[a-zA-Z0-9]{36}/g,
+		// Slack: xoxb-..., xoxp-...
+		/xox[abp]-[a-zA-Z0-9-]{40,}/g,
+		// AWS Secret Access Key: base64-like (approx 40 chars)
+		/(?<![A-Z0-9])[A-Za-z0-9/+=]{40}(?![A-Z0-9])/g,
 		// Azure API Key
 		/[a-f0-9]{32}/g,
 	]

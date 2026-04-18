@@ -825,6 +825,59 @@ export class Controller {
 		throw new Error("Task not found")
 	}
 
+	async getExportData(id: string) {
+		const task = await this.getTaskWithId(id)
+
+		const uiMessages = (await fileExistsAtPath(task.uiMessagesFilePath))
+			? JSON.parse(await fs.readFile(task.uiMessagesFilePath, "utf8"))
+			: []
+		const contextHistory = (await fileExistsAtPath(task.contextHistoryFilePath))
+			? JSON.parse(await fs.readFile(task.contextHistoryFilePath, "utf8"))
+			: []
+		const taskMetadata = (await fileExistsAtPath(task.taskMetadataFilePath))
+			? JSON.parse(await fs.readFile(task.taskMetadataFilePath, "utf8"))
+			: {}
+
+		return {
+			version: "1.0",
+			historyItem: task.historyItem,
+			apiConversationHistory: task.apiConversationHistory,
+			uiMessages,
+			contextHistory,
+			taskMetadata,
+		}
+	}
+
+	async importTask(importData: any) {
+		const { historyItem, apiConversationHistory, uiMessages, contextHistory, taskMetadata } = importData
+		const id = historyItem.id
+
+		// Check for duplicate
+		const history = this.stateManager.getGlobalStateKey("taskHistory")
+		if (history.some((item: any) => item.id === id)) {
+			throw new Error(`Task with ID ${id} already exists.`)
+		}
+
+		// Create directory
+		const taskDirPath = path.join(HostProvider.get().globalStorageFsPath, "tasks", id)
+		await fs.mkdir(taskDirPath, { recursive: true })
+
+		// Write files
+		await fs.writeFile(
+			path.join(taskDirPath, GlobalFileNames.apiConversationHistory),
+			JSON.stringify(apiConversationHistory, null, 2),
+		)
+		await fs.writeFile(path.join(taskDirPath, GlobalFileNames.uiMessages), JSON.stringify(uiMessages, null, 2))
+		await fs.writeFile(path.join(taskDirPath, GlobalFileNames.contextHistory), JSON.stringify(contextHistory, null, 2))
+		await fs.writeFile(path.join(taskDirPath, GlobalFileNames.taskMetadata), JSON.stringify(taskMetadata, null, 2))
+
+		// Add to history
+		const updatedHistory = [historyItem, ...history]
+		this.stateManager.setGlobalState("taskHistory", updatedHistory)
+
+		await this.postStateToWebview()
+	}
+
 	async exportTaskWithId(id: string) {
 		const { taskDirPath } = await this.getTaskWithId(id)
 		Logger.log(`[EXPORT] Opening task directory: ${taskDirPath}`)

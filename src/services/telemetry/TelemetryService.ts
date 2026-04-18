@@ -350,6 +350,19 @@ export class TelemetryService {
 	) {
 		this.capture({ event: TelemetryService.EVENTS.USER.TELEMETRY_ENABLED })
 		Logger.info(`[TelemetryService] Initialized with ${providers.length} telemetry provider(s)`)
+		this.startHeartbeat()
+	}
+
+	private startHeartbeat(): void {
+		setInterval(() => {
+			this.capture({
+				event: "substrate.heartbeat",
+				properties: {
+					uptime: process.uptime(),
+					memory_usage_rss: process.memoryUsage().rss,
+				},
+			})
+		}, 300000).unref() // Every 5 minutes
 	}
 
 	public addProvider(provider: ITelemetryProvider) {
