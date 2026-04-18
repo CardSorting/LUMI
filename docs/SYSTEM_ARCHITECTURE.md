@@ -13,6 +13,7 @@ The DietCode system is organized into distinct physical layers that separate hig
 | **`src/integrations/`** | **I/O Substrate** | Physical connectors for terminal, task management, and diagnostic propagation. |
 | **`src/infrastructure/`** | **External Adapters** | Concrete implementations of domain interfaces (e.g., AI providers, storage, file systems). |
 | **`src/generated/`** | **Service Contracts** | Automated code generated from Protobuf/GRPC schemas for inter-process communication. |
+| **`broccolidb/`** | **Context Engine** | The underlying high-performance graph library powering cognitive memory. |
 | **`src/services/`** | **Utility Layer** | Shared cross-cutting concerns (logging, telemetry, config, tree-sitter sensing). |
 
 ---

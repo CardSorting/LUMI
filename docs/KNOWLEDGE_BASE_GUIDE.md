@@ -23,8 +23,12 @@ Mapping the physical implementation of the substrate to its architectural roles.
 - [**System Architecture**](SYSTEM_ARCHITECTURE): Physical `src/` directory mapping.
 - [**HostBridge & Protobus**](HOSTBRIDGE_PROTOBUS): GRPC/IPC specification for headless execution.
 - [**Enterprise Deployment**](ENTERPRISE_DEPLOYMENT): Self-hosted and on-premise configuration.
+- [**UI Projection Layer**](UX_PROJECTION_LAYER): React/Tailwind webview architecture and state sync.
 
-### 3. 🛠️ Development & Engineering
+### 4. 🧠 Swarm Protocols & BroccoliDB (1:1 Parity)
+The industrial logic of the DietCode Multi-Agent System.
+- [**Subagent Swarm Protocols**](SUBAGENT_PROTOCOLS): Consensus, Nudge, and Signaling specifications.
+- [**Cognitive Memory Primitives**](COGNITIVE_PRIMITIVES): Forecast, Blast, and Choke operations.
 Technical references for extending the substrate.
 - [**DietCode CLI**](dietcode-cli/overview): Interacting with the substrate via the terminal.
 - [**MCP Protocol**](mcp/mcp-overview): Connecting industrial tool servers.

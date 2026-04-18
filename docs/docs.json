@@ -124,7 +124,15 @@
 						"pages": [
 							"SYSTEM_ARCHITECTURE",
 							"HOSTBRIDGE_PROTOBUS",
-							"ENTERPRISE_DEPLOYMENT"
+							"ENTERPRISE_DEPLOYMENT",
+							"UX_PROJECTION_LAYER"
+						]
+					},
+					{
+						"group": "Swarm Protocols & BroccoliDB (1:1 Parity)",
+						"pages": [
+							"SUBAGENT_PROTOCOLS",
+							"COGNITIVE_PRIMITIVES"
 						]
 					},
 					{
@@ -144,7 +152,7 @@
 						]
 					},
 					{
-						"group": "Cognitive Architecture",
+						"group": "Cognitive Architecture (V210)",
 						"pages": [
 							"features/intent-grounding",
 							"multi-agent-system",
@@ -243,7 +251,7 @@
 						]
 					},
 					{
-						"group": "MCP (Extending Cline)",
+						"group": "MCP (Extending DietCode)",
 						"pages": [
 							"mcp/mcp-overview",
 							"mcp/mcp-marketplace",
