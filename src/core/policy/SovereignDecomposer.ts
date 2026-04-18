@@ -22,8 +22,8 @@ export interface DecompositionPlan {
 }
 
 /**
- * SovereignDecomposer: The Architectural Scalpel.
- * Analyzes "Fat" or "High-Entropy" modules and provides a specific recipe for splitting them.
+ * SovereignDecomposer: The Architectural Analyzer.
+ * Analyzes high-activity modules and provides a specific guide for splitting them.
  */
 export class SovereignDecomposer {
 	/**
@@ -65,7 +65,7 @@ export class SovereignDecomposer {
 						destination: "INFRASTRUCTURE",
 						risk: "MEDIUM",
 						reason: "This logic performs direct I/O. Extract the I/O to a specialized adapter.",
-						intentSuggestion: `[SOVEREIGN_INTENT: I/O Adapter for ${name}]`,
+						intentSuggestion: `[PROTOCOL_INTENT: I/O Adapter for ${name}]`,
 					})
 				}
 			}
@@ -104,9 +104,9 @@ export class SovereignDecomposer {
 							target: `${ts.isClassDeclaration(n) ? "Class" : "Entity"} '${name}'`,
 							destination: "NEW_MODULE",
 							risk: isIsland && islandSymbols.length > 0 ? "LOW" : dependents === 0 ? "LOW" : "HIGH",
-							reason: `Metabolic Bloat: '${name}' consumes ${mass} lines (${Math.round((mass / totalLines) * 100)}% of file). ${isIsland ? "Identified as a self-contained island." : dependents === 0 ? "Identified as a leaf node." : `WARNING: This entity is used by ${dependents} other symbols locally.`}${zombies.length > 0 ? ` [V180: ${zombies.length} Zombie Symbols detected and included in fission blueprint].` : ""}`,
+							reason: `High Module Activity: '${name}' consumes ${mass} lines (${Math.round((mass / totalLines) * 100)}% of file). ${isIsland ? "Identified as a self-contained island." : dependents === 0 ? "Identified as a leaf node." : `NOTICE: This entity is used by ${dependents} other symbols locally.`}${zombies.length > 0 ? ` [V180: ${zombies.length} helpers detected and included in stability plan].` : ""}`,
 							boilerplate,
-							intentSuggestion: `[SOVEREIGN_INTENT: Extract ${name} to sovereign module]`,
+							intentSuggestion: `[PROTOCOL_INTENT: Extract ${name} to stable module]`,
 						})
 					}
 				}
@@ -127,8 +127,8 @@ export class SovereignDecomposer {
 						target: `God Method '${name}'`,
 						destination: "HELPER_FUNCTIONS",
 						risk: "MEDIUM",
-						reason: `Atomic Bloat: Method '${name}' is ${methodMass} lines. Factor out sub-procedures.`,
-						intentSuggestion: `[SOVEREIGN_INTENT: Decompose God Method ${name}]`,
+						reason: `High Method Activity: Method '${name}' is ${methodMass} lines. Factor out sub-procedures for better readability.`,
+						intentSuggestion: `[PROTOCOL_INTENT: Decompose Large Method ${name}]`,
 					})
 				}
 			}
@@ -356,7 +356,6 @@ export class SovereignDecomposer {
 		const projectedLines = Math.max(0, totalLines - linesRemoved)
 
 		// Recalculate based on projected lines
-		const complexityPenalty = projectedLines > 1500 ? 50 : projectedLines > 1200 ? 20 : 0
 		const projectedIntegrity = Math.max(0, plan.integrityScore + (plan.integrityScore < 100 ? 10 : 0)) // Hypothetical boost
 
 		let projectedHealth = plan.buildHealth

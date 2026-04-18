@@ -6,7 +6,7 @@ import type { FileContextTracker } from "@core/context/context-tracking/FileCont
 import type { KnowledgeGraphService } from "@core/context/KnowledgeGraphService"
 import type { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import type { CommandPermissionController } from "@core/permissions"
-import type { PlanModeEnforcer } from "@core/policy/PlanModeEnforcer"
+import type { UniversalGuard } from "@core/policy/UniversalGuard"
 import type { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
 import type { CommandExecutionOptions } from "@integrations/terminal"
 import type { BrowserSession } from "@services/browser/BrowserSession"
@@ -69,7 +69,7 @@ export interface TaskConfig {
 	callbacks: TaskCallbacks
 
 	// Universal guard for plan mode enforcement
-	universalGuard?: PlanModeEnforcer
+	universalGuard?: UniversalGuard
 
 	// Tool coordination
 	coordinator: ToolExecutorCoordinator

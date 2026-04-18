@@ -37,9 +37,9 @@ export class SimulationEngine {
 				safe: false,
 				predictedScore: 0,
 				scoreDrop: 100,
-				violations: ["Pathogen detected"],
+				violations: ["Potential regression risk detected"],
 				message:
-					"PATHOGEN DETECTED: This move has failed in the past. Re-routing attempt to prevent architectural regression.",
+					"REGRESSION RISK DETECTED: This move has failed in the past. Re-routing attempt to keep the architecture stable and clean.",
 			}
 		}
 
@@ -109,8 +109,8 @@ export class SimulationEngine {
 			violations,
 			impactedDependents,
 			message: isSafe
-				? `Simulation predicts stable transition (Agile Sovereignty applied).${impactMsg}`
-				: `Simulation Warning: Move predicts a ${(scoreDrop).toFixed(1)}% drop in structural integrity. Review layer boundaries if this is unexpected.${impactMsg}`,
+				? `Simulation predicts a stable transition. ${impactMsg}`
+				: `Simulation Notice: This move predicts a ${(scoreDrop).toFixed(1)}% change in structural complexity. Let's review the layer boundaries together to be sure.${impactMsg}`,
 		}
 	}
 
@@ -134,7 +134,7 @@ export class SimulationEngine {
 			predictedScore: forecast.predictedScore * 100,
 			scoreDrop,
 			violations,
-			message: scoreDrop > 8 ? "Predictive warning: Edit increases structural entropy." : "Safe edit predicted.",
+			message: scoreDrop > 8 ? "Predictive notice: This edit increases structural complexity." : "Safe edit predicted.",
 		}
 	}
 

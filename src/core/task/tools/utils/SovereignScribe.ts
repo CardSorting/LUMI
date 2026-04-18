@@ -1,9 +1,20 @@
 import { SovereignForensics } from "@/core/policy/SovereignForensics"
 import { SovereignProtocol } from "@/core/policy/SovereignProtocol"
 
+interface ScratchpadEditCall {
+	type: "tool_use"
+	name: string
+	input: {
+		path?: string
+		TargetFile?: string
+		content?: string
+		ReplacementChunks?: Array<{ ReplacementContent: string }>
+	}
+}
+
 /**
- * SovereignScribe: The validator for scratchpad.md compliance.
- * Enforces the Sovereign Drafting V12 standard.
+ * SovereignScribe: The validator for strategic review compliance.
+ * Enforces the Stability Focused Design standard.
  */
 export class SovereignScribe {
 	constructor(
@@ -15,14 +26,17 @@ export class SovereignScribe {
 	 * Static helper to extract the latest scratchpad content from conversation history.
 	 * V27 HARDENING: Performs multi-pass search and synthesized fallback detection.
 	 */
-	public static getLatestScratchpadContent(history: any[]): { content: string; source: "disk" | "history" | "synthesized" } {
+	public static getLatestScratchpadContent(history: Array<{ role: string; content: any }>): {
+		content: string
+		source: "disk" | "history" | "synthesized"
+	} {
 		let content = ""
 		// Pass 1: Direct find in tool call inputs (Physical write detection)
 		for (let i = history.length - 1; i >= 0; i--) {
 			const msg = history[i]
 			if (msg.role === "assistant" && Array.isArray(msg.content)) {
-				const editCall = msg.content.find(
-					(c: any) =>
+				const editCall = (msg.content as unknown as ScratchpadEditCall[]).find(
+					(c) =>
 						c.type === "tool_use" &&
 						(c.name === "edit_file" ||
 							c.name === "write_to_file" ||
@@ -59,9 +73,9 @@ export class SovereignScribe {
 	}
 
 	/**
-	 * V29: Scans conversation history for a "Virtual Audit" using semantic fuzzy matching.
+	 * V29: Scans conversation history for a "Virtual Review" using semantic fuzzy matching.
 	 */
-	public static findVirtualAuditInHistory(history: any[]): { content: string; valid: boolean } {
+	public static findVirtualReviewInHistory(history: any[]): { content: string; valid: boolean } {
 		const { content, source } = SovereignScribe.getLatestScratchpadContent(history)
 
 		if (source === "synthesized" || source === "history") {
@@ -100,12 +114,8 @@ export class SovereignScribe {
 			)
 		}
 
-		// Extract all cited paths for forensic verification
-		const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
-		const citedPaths = Array.from(content.matchAll(pathRegexp)).map((m) => m[0])
-
 		if (this.forensics && !isExplicitlyAgile) {
-			const { errors: forensicErrors, warnings: forensicWarnings } = await this.forensics.verifyEvidenceGrounding(
+			const { errors: forensicErrors, warnings: forensicWarnings } = await this.forensics.verifyEvidenceVerification(
 				content,
 				history,
 			)
@@ -115,9 +125,9 @@ export class SovereignScribe {
 
 		// 1. Check for Protocol Identity
 		if (content.includes(SovereignProtocol.HEADERS.BREATH)) {
-			// Sovereign Breath Turn - Lightweight validation
+			// Stability Break Turn - Lightweight validation
 			if (content.length < 100) {
-				errors.push("Sovereign Breath turn is too brief (min 100 characters).")
+				errors.push("Stability Break turn is too brief (min 100 characters).")
 			}
 			return { success: errors.length === 0, errors }
 		}
@@ -130,19 +140,19 @@ export class SovereignScribe {
 				success: isExplicitlyAgile,
 				errors: isExplicitlyAgile
 					? []
-					: ["No # SOVEREIGN AUDIT section found. You must structure your audit around the Sovereign Protocol."],
+					: ["No # STRATEGIC REVIEW section found. You must structure your review around the stability protocol."],
 			}
 		}
 
-		// 2. Check for Triad Probes
+		// 2. Check for Stability Gates
 		const probes = [
 			{
-				name: "THE ARCHITECT",
+				name: "THE FOUNDATION",
 				header: SovereignProtocol.HEADERS.ARCHITECT,
 				pattern: SovereignProtocol.SEMANTIC_PATTERNS.ARCHITECT,
 			},
-			{ name: "THE CRITIC", header: SovereignProtocol.HEADERS.CRITIC },
-			{ name: "THE SRE", header: SovereignProtocol.HEADERS.SRE },
+			{ name: "THE QUALITY CHECK", header: SovereignProtocol.HEADERS.CRITIC },
+			{ name: "THE STABILITY GUARD", header: SovereignProtocol.HEADERS.SRE },
 		]
 
 		for (const probe of probes) {
@@ -150,9 +160,9 @@ export class SovereignScribe {
 
 			if (!hasProbe) {
 				if (isExplicitlyAgile) {
-					diagnosticHints.push(`💡 AGILE MODE: Skipping triad probe: ${probe.name}`)
+					diagnosticHints.push(`💡 AGILE MODE: Skipping gate check: ${probe.name}`)
 				} else {
-					errors.push(`Missing mandatory triad probe: ${probe.name}`)
+					errors.push(`Missing mandatory gate check: ${probe.name}`)
 				}
 				continue
 			}
@@ -184,15 +194,15 @@ export class SovereignScribe {
 
 		if (!hasResolution) {
 			if (isExplicitlyAgile) {
-				diagnosticHints.push("💡 AGILE: Missing ## [FINAL RESOLUTION] section.")
+				diagnosticHints.push("💡 AGILE: Missing ## [FINAL STEPS] section.")
 			} else {
-				errors.push("Missing mandatory section: ## [FINAL RESOLUTION]")
+				errors.push("Missing mandatory section: ## [FINAL STEPS]")
 			}
 		}
 
 		const hasMantra = content.includes(SovereignProtocol.MANTRA)
 		if (!hasMantra) {
-			diagnosticHints.push(`💡 MANTRA: The Sovereign Mantra is missing. Sovereignty implies discipline.`)
+			diagnosticHints.push(`💡 STANDARD: The Stability Standard is missing. Discipline ensures project health.`)
 		}
 
 		// 4. Check for Diagnostics
@@ -213,7 +223,7 @@ export class SovereignScribe {
 			ok: success,
 			report:
 				combinedErrors.length > 0
-					? "🛑 SOVEREIGN AUDIT FAILURE:\n" + combinedErrors.map((e) => `  - ${e}`).join("\n")
+					? "🛑 STRATEGIC REVIEW FEEDBACK:\n" + combinedErrors.map((e) => `  - ${e}`).join("\n")
 					: undefined,
 			synthesis,
 		}

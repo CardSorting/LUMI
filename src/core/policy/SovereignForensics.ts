@@ -1,12 +1,17 @@
 import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
-import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
+import { MetabolicMetrics, MetabolicMonitor } from "../integrity/MetabolicMonitor"
 import type { SpiderEngine } from "./spider/SpiderEngine"
+
+export interface ForensicMessage {
+	role: string
+	content: string | Array<{ text?: string; input?: Record<string, unknown> }>
+}
 
 /**
  * SovereignForensics: Verifies the integrity of architectural evidence.
- * Ensures that an agent has actually "observed" the files and symbols they cite.
+ * Ensures that an assistant has actually "observed" the files and symbols they cite.
  */
 export class SovereignForensics {
 	constructor(
@@ -16,14 +21,14 @@ export class SovereignForensics {
 	) {}
 
 	/**
-	 * Verifies that all file paths and symbols cited in the scratchpad have a high-fidelity observation history.
-	 * V30: Now includes Merkle-Drift Detection for structural synchronization.
+	 * Verifies that all file paths and symbols cited in the strategic review have a clear observation history.
+	 * V30: Now includes Structural Sync Detection for synchronization.
 	 * V31: Uses Structural Hashing to ignore aesthetic changes (comments, whitespace).
-	 * V33: Uses Identity Persistence to ground citations via SpiderEngine history.
+	 * V33: Uses Identity Persistence to verify citations via project history.
 	 */
-	public async verifyEvidenceGrounding(
+	public async verifyEvidenceVerification(
 		content: string,
-		history: any[] = [],
+		history: ForensicMessage[] = [],
 	): Promise<{ errors: string[]; warnings: string[] }> {
 		const errors: string[] = []
 		const warnings: string[] = []
@@ -52,18 +57,18 @@ export class SovereignForensics {
 					continue
 				}
 
-				// V33: Identity Persistence (Substrate-Aware Grounding)
+				// V33: Identity Persistence (Substrate-Aware Verification)
 				const relPath = path.relative(this.cwd, absoluteCited)
 				const node = this.spiderEngine?.nodes.get(relPath)
 				if (node) {
 					warnings.push(
-						`💡 FORENSIC PERSISTENCE: \`${cited}\` cited without recent read, but structural identity is verifiably stable. Grounding assumed.`,
+						`💡 INVESTIGATION PERSISTENCE: \`${cited}\` cited without recent read, but structural identity is verifiably stable. Verification assumed.`,
 					)
 					continue
 				}
 
 				errors.push(
-					`FORENSIC HALLUCINATION: You cited \`${cited}\` but have no read history for it. You must investigate the substrate before making claims about it.`,
+					`UNVERIFIED FILE CITATION: You cited \`${cited}\` but I don't see a recent read history for it. Please take a look at the file so we can stay in sync!`,
 				)
 				continue
 			}
@@ -80,8 +85,8 @@ export class SovereignForensics {
 					const currentHash = this.computeStructuralHash(currentContent)
 					if (currentHash !== metrics.lastObservedHash) {
 						errors.push(
-							`🛑 STRUCTURAL DRIFT DETECTED: \`${cited}\` has changed structurally since your last investigation. ` +
-								`Significant logic or symbol shifts detected (Ignoring aesthetic changes). Please re-read the file to sync your mental model.`,
+							`🛑 RECENT FILE CHANGES DETECTED: \`${cited}\` has been updated since your last look. ` +
+								`There might be new logic or structure. Please re-read the file to ensure your plan is still accurate.`,
 						)
 					}
 				} catch (_e) {
@@ -93,7 +98,7 @@ export class SovereignForensics {
 			const stalenessMs = Date.now() - metrics.lastReadTimestamp
 			if (stalenessMs > 1200000) {
 				warnings.push(
-					`⚠️ STALE EVIDENCE: Your observation of \`${cited}\` is over 20 minutes old. Structural drift may have occurred. Re-verifying is recommended.`,
+					`⚠️ OLD OBSERVATION: Your latest look at \`${cited}\` is over 20 minutes old. It might be worth a quick re-check to ensure nothing has changed.`,
 				)
 			}
 		}
@@ -104,16 +109,16 @@ export class SovereignForensics {
 
 		// Exclude known common symbols/keywords
 		const commonKeywords = new Set([
-			"SOVEREIGN",
-			"AUDIT",
-			"BREATH",
-			"MANTRA",
+			"STRATEGIC",
+			"REVIEW",
+			"STABILITY",
+			"BREAK",
+			"GUIDANCE",
 			"THE",
-			"ARCHITECT",
-			"CRITIC",
-			"SRE",
-			"FINAL",
-			"RESOLUTION",
+			"FOUNDATION",
+			"QUALITY",
+			"CHECK",
+			"GUARD",
 		])
 		const citedSymbols = Array.from(uniqueSymbols).filter((s) => !commonKeywords.has(s.toUpperCase()))
 
@@ -130,7 +135,7 @@ export class SovereignForensics {
 				// We allow symbols if they were at least in the file content of a read file (simple heuristic)
 				// But V26 "Neural Hardening" encourages explicit symbol logging.
 				warnings.push(
-					`💡 UNVERIFIED SYMBOL: \`${symbol}\` cited but not explicitly logged as observed. Ensure your triad probes are grounded in verified symbols.`,
+					`💡 UNVERIFIED SYMBOL: \`${symbol}\` cited but not explicitly logged as observed. Ensure your strategic review probes are linked to verified symbols.`,
 				)
 			}
 		}
@@ -153,13 +158,13 @@ export class SovereignForensics {
 	}
 
 	/**
-	 * Generates a high-fidelity Forensic Trace for the scratchpad.
+	 * Generates a helpful Investigation Trace for the strategic review.
 	 */
-	public generateForensicTrace(): string {
+	public generateInvestigationTrace(): string {
 		const registry = this.metabolicMonitor.getForensicRegistry()
 		const trace: string[] = []
 
-		const recentEntries = Array.from(registry.entries() as IterableIterator<[string, any]>)
+		const recentEntries = Array.from(registry.entries() as IterableIterator<[string, MetabolicMetrics]>)
 			.filter(([_, m]) => m.reads > 0)
 			.sort(([__, ma], [___, mb]) => mb.lastReadTimestamp - ma.lastReadTimestamp)
 			.slice(0, 5)
@@ -167,13 +172,13 @@ export class SovereignForensics {
 		for (const [p, m] of recentEntries) {
 			const relPath = path.relative(this.cwd, p)
 			const symbols = Array.from(m.symbolObservations).slice(0, 3).join(", ")
-			trace.push(`- **OBSERVED**: \`${relPath}\` (${m.reads} reads)${symbols ? ` + Symbols: [${symbols}]` : ""}`)
+			trace.push(`- **VIEWED**: \`${relPath}\` (${m.reads} times)${symbols ? ` + Details: [${symbols}]` : ""}`)
 		}
 
 		return (
-			`## [FORENSIC TRACE]\n` +
-			`*Architectural Investigative History:*\n\n` +
-			(trace.length > 0 ? trace.join("\n") : "_No forensic evidence recorded in current session._")
+			`## [INVESTIGATION TRACE]\n` +
+			`*Recent Project Investigation History:*\n\n` +
+			(trace.length > 0 ? trace.join("\n") : "_No recent file investigations recorded._")
 		)
 	}
 
@@ -181,7 +186,7 @@ export class SovereignForensics {
 	 * Extracts file paths from the last N assistant turns in conversation history.
 	 * V34: Expanded Conversational Grounding (Lookback 5).
 	 */
-	public extractPathsFromHistory(history: any[]): Set<string> {
+	public extractPathsFromHistory(history: ForensicMessage[]): Set<string> {
 		const paths = new Set<string>()
 		if (!history || !Array.isArray(history)) return paths
 
@@ -190,7 +195,9 @@ export class SovereignForensics {
 
 		for (const msg of assistantTurns) {
 			const text = Array.isArray(msg.content)
-				? msg.content.map((c: any) => c.text || JSON.stringify(c.input || {})).join(" ")
+				? msg.content
+						.map((c: { text?: string; input?: Record<string, unknown> }) => c.text || JSON.stringify(c.input || {}))
+						.join(" ")
 				: String(msg.content)
 			const matches = text.matchAll(pathRegexp)
 			for (const match of matches) {

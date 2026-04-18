@@ -102,7 +102,7 @@ High-fidelity telemetry for audit trails and performance tuning:
 
 ## ⚡ Quick Start
 
-1.  **Install**: Search for "DietCode" in the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=dietcode.dietcode).
+1.  **Install**: Search for "DietCode" in the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=DreamBeesAI.dietcode).
 2.  **Configure**: Add your API keys for [OpenRouter](https://openrouter.ai/), [Anthropic](https://www.anthropic.com/), or [Google](https://ai.google.dev/).
 3.  **Activate**: Click the DietCode icon in the sidebar and start your first "Architectural Intent" resolution task.
 

@@ -48,13 +48,13 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 
 		config.taskState.consecutiveMistakeCount = 0
 
-		// UNIFIED SOVEREIGN DRAFTING ENFORCEMENT
+		// UNIFIED STRATEGIC REVIEW ENFORCEMENT
 		if (config.mode === "plan") {
 			const universalGuard = config.universalGuard
 			if (universalGuard) {
-				const enforcementResult = await universalGuard.enforceSovereignDrafting()
+				const enforcementResult = await universalGuard.enforceStrategicReviewInPlanMode()
 				if (!enforcementResult.allowed) {
-					return formatResponse.toolResult(enforcementResult.reason || "Sovereign drafting required but incomplete.")
+					return formatResponse.toolResult(enforcementResult.reason || "Strategic review required but incomplete.")
 				}
 			}
 		}
@@ -64,22 +64,22 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 			const { content, source } = SovereignScribe.getLatestScratchpadContent(
 				config.messageState.getApiConversationHistory(),
 			)
-			const forensics = config.universalGuard ? (config.universalGuard as any).getForensics() : undefined
+			const forensics = config.universalGuard ? config.universalGuard.getForensics() : undefined
 			const scribe = new SovereignScribe(config.cwd, forensics)
 			const audit = await scribe.validate(content, false, undefined, config.messageState.getApiConversationHistory())
 
 			if (!audit.ok && source === "disk" && content === "") {
 				// V27: Proactive Injection
-				const diagnostics = config.universalGuard ? (config.universalGuard as any).getSystemDiagnostics() : ""
+				const diagnostics = config.universalGuard ? config.universalGuard.getSystemDiagnostics() : ""
 				return formatResponse.toolResult(
-					`🛑 SOVEREIGN PLANNING BLOCK: You are attempting to respond without a valid architectural audit in \`scratchpad.md\`.\n\n` +
-						`💡 I have automatically synthesized your substrate diagnostics. Please use \`write_to_file\` to initialize your \`scratchpad.md\` with the following template before proceeding:\n\n` +
+					`🛑 STRATEGIC REVIEW BLOCK: You are attempting to respond without a valid architectural audit in \`scratchpad.md\`.\n\n` +
+						`💡 I have automatically synthesized your project diagnostics. Please use \`write_to_file\` to initialize your \`scratchpad.md\` with the following template before proceeding:\n\n` +
 						`\`\`\`markdown\n${diagnostics}\n\`\`\``,
 				)
 			}
 
 			if (!audit.ok) {
-				return formatResponse.toolResult(audit.report || "Sovereign Audit Failed.")
+				return formatResponse.toolResult(audit.report || "Strategic Review Failed.")
 			}
 			if (audit.synthesis) {
 				config.taskState.sovereignAuditSynthesis = audit.synthesis

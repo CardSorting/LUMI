@@ -5,9 +5,9 @@ import { SpiderEngine } from "./spider/SpiderEngine.js"
 export interface DoctorReport {
 	buildHealth: number
 	timestamp: string
-	feverMap: { path: string; score: number }[]
+	activityMap: { path: string; score: number }[]
 	violations: {
-		type: "AXIOM" | "STRUCTURAL"
+		type: "POLICY" | "STRUCTURAL"
 		axiom?: string
 		message: string
 		path: string
@@ -38,13 +38,13 @@ export class SovereignDoctor {
 	 */
 	public async diagnose(engine: SpiderEngine): Promise<DoctorReport> {
 		const structuralViolations = engine.getViolations()
-		const feverMap: { path: string; score: number }[] = []
+		const activityMap: { path: string; score: number }[] = []
 
 		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
 		for (const node of engine.nodes.values()) {
-			const feverScore = node.logicDensity * 10 + node.ioEntropy * 5 + (node.orphaned ? 2 : 0)
-			if (feverScore > policy.feverThreshold) {
-				feverMap.push({ path: node.path, score: feverScore })
+			const activityScore = node.logicDensity * 10 + node.ioEntropy * 5 + (node.orphaned ? 2 : 0)
+			if (activityScore > (policy.activityThreshold || 5.0)) {
+				activityMap.push({ path: node.path, score: activityScore })
 			}
 		}
 
@@ -64,13 +64,11 @@ export class SovereignDoctor {
 
 		// Map to metabolic pressure
 		const entropy = engine.computeEntropy()
-		const mem = process.memoryUsage()
-		const memoryPressure = (mem.heapUsed / mem.heapTotal) * 100
 
 		return {
 			buildHealth,
 			timestamp: new Date().toISOString(),
-			feverMap: feverMap.sort((a, b) => b.score - a.score),
+			activityMap: activityMap.sort((a, b) => b.score - a.score),
 			violations: allViolations,
 			optimizations,
 			agentSuccessRate: 100, // Placeholder
@@ -88,8 +86,8 @@ export class SovereignDoctor {
 	public getAgentSignal(report: DoctorReport): string {
 		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
 		if (report.buildHealth < (policy.integrityAlertThreshold || 70)) {
-			return `⚠️ [BUILD ALARM] Substrate Build Health: ${report.buildHealth.toFixed(0)}%. Agent state: Restricted to HEAL operations only.`
+			return `⚠️ [STABILITY NOTICE] Project Build Health: ${report.buildHealth.toFixed(0)}%. Focus: Improving current file stability.`
 		}
-		return `✅ Substrate Build Health: ${report.buildHealth.toFixed(0)}%. Codebase is sovereign.`
+		return `✅ Project Build Health: ${report.buildHealth.toFixed(0)}%. The codebase is stable and well-organized.`
 	}
 }

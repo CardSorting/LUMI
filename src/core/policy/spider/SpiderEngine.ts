@@ -95,7 +95,7 @@ export class SpiderEngine {
 
 	public updateNode(filePath: string, content: string) {
 		const normalizedPath = this.resolver.normalizePath(filePath)
-		this.checkMetabolicPressure()
+		this.checkStabilityPressure()
 
 		const absolutePath = path.resolve(this.cwd, filePath)
 		const layer = this.resolver.resolveLayer(filePath)
@@ -305,7 +305,7 @@ export class SpiderEngine {
 		}, 100)
 	}
 
-	private checkMetabolicPressure() {
+	private checkStabilityPressure() {
 		const stats = v8.getHeapStatistics()
 		const usedPercent = (stats.used_heap_size / stats.heap_size_limit) * 100
 		if (usedPercent > 80) {
@@ -570,9 +570,9 @@ export class SpiderEngine {
 		const structuralWeight = ((couplingLoad + complexityLoad) / 2) * 0.4
 		const prediction = pathogens.predictFailure(filePath)
 		const historicalRisk = prediction.likely ? 0.4 : 0
-		const infection = monitor.isMetabolicallyInflamed(filePath)
-		const metabolicPressure = infection.inflamed ? 0.2 : 0
-		return structuralWeight + historicalRisk + metabolicPressure
+		const activity = monitor.isHighlyActive(filePath)
+		const activityPressure = activity.active ? 0.2 : 0
+		return structuralWeight + historicalRisk + activityPressure
 	}
 
 	public toMermaid(): string {

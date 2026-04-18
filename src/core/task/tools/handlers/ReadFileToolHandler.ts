@@ -170,7 +170,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 
 		// Execute the actual file read operation
 		const supportsImages = config.api.getModel().info.supportsImages ?? false
-		let fileContent: any // FileContentResult
+		let fileContent: import("@integrations/misc/extract-file-content").FileContentResult
 		try {
 			fileContent = await extractFileContent(absolutePath, supportsImages)
 
@@ -183,29 +183,32 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 				if (fileContent.text) {
 					// Extract symbols from the content (simple regex for classes/functions/interfaces)
 					const symbolRegex = /\b(?:export\s+)?(?:class|function|interface|const)\s+([a-zA-Z0-9_]+)\b/g
-					let match
-					while ((match = symbolRegex.exec(fileContent.text)) !== null) {
+					const matches = fileContent.text.matchAll(symbolRegex)
+					for (const match of matches) {
 						monitor.recordSymbolObservation(absolutePath, match[1])
 					}
 				}
-			} catch (e) {
+			} catch (_e) {
 				// Ignore telemetry errors
 			}
 		} catch (error) {
 			if (error instanceof Error && error.message.includes("File not found") && absolutePath.endsWith("scratchpad.md")) {
 				// V19: Proactive diagnostic injection on auto-creation
-				let diagnostics: any
+				let diagnostics: import("../../../policy/SovereignProtocol").SovereignDiagnostics | undefined
 				try {
 					const { FluidPolicyEngine } = await import("../../../policy/FluidPolicyEngine")
 					const engine = new FluidPolicyEngine(config.cwd)
-					const violations = (engine as any).spiderEngine.getViolations()
-					const stats = (engine as any).metabolicMonitor.getVitalityStats()
-					const entropy = (engine as any).spiderEngine.computeEntropy()
+					const stats = engine.getStabilityStats()
+					const violations = engine.getViolations()
+					const entropy = engine.getEntropy()
 					diagnostics = {
-						substrateHealth: `${((1 - entropy.score) * 100).toFixed(1)}%`,
-						metabolicPressure: `${stats.totalWrites} writes across ${(engine as any).spiderEngine.nodes.size} nodes`,
-						violations: violations.slice(0, 10).map((v: any) => `[${v.id}] ${v.path}: ${v.message}`),
-						hotspots: stats.hotspots.map((h: any) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
+						buildHealth: Math.round((1 - entropy.score) * 100),
+						workloadLevel: `${stats.totalWrites} writes across ${engine.getNodes().size} nodes`,
+						buildErrors: violations
+							.filter((v) => v.severity === "ERROR")
+							.map((v) => `[${v.id}] ${v.path}: ${v.message}`),
+						lintWarnings: [],
+						hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
 					}
 				} catch (_e) {
 					// Fallback to empty if diagnostics fail
@@ -217,7 +220,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 
 				const monitor = new MetabolicMonitor() // In real app, this would be the managed singleton
 				const forensics = new SovereignForensics(config.cwd, monitor)
-				const forensicTrace = forensics.generateForensicTrace()
+				const forensicTrace = forensics.generateInvestigationTrace()
 
 				const template = SovereignProtocol.generateAuditTemplate(
 					"Initial Architectural Audit",
@@ -228,7 +231,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 				const fs = await import("fs/promises")
 				await fs.writeFile(absolutePath, template, "utf8")
 				return (
-					"The file `scratchpad.md` did not exist, but I have automatically generated it with the unified V24 Forensic template and current diagnostics. Please use `edit_file` to perform your audit.\n\n" +
+					"The file `scratchpad.md` did not exist, but I have automatically generated it with the supportive Strategic Review template and current diagnostics. Please use `edit_file` to perform your review.\n\n" +
 					template
 				)
 			}

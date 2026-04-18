@@ -6,8 +6,8 @@ import { SovereignProtocol } from "./SovereignProtocol"
 import { SpiderEngine } from "./spider/SpiderEngine"
 
 /**
- * SovereignTelemetrics: The Substrate Diagnostic Layer.
- * Extracts health, entropy, and metabolic telemetry from the architectural graph.
+ * SystemTelemetrics: The Substrate Diagnostic Layer.
+ * Extracts health, entropy, and vitality telemetry from the architectural graph.
  */
 export class SovereignTelemetrics {
 	private lastBuildHealth = 100
@@ -20,31 +20,31 @@ export class SovereignTelemetrics {
 	) {}
 
 	/**
-	 * Returns a compiled diagnostic report of current architectural blockades and metabolic hotspots.
+	 * Returns a compiled diagnostic report of current architectural blockades and vitality hotspots.
 	 */
 	public getSystemDiagnostics(lastEntropyScore: number): string {
 		const violations = this.spiderEngine.getViolations()
-		const stats = this.metabolicMonitor.getVitalityStats()
+		const stats = this.metabolicMonitor.getStabilityStats()
 		const buildHealth = this.computeBuildHealth(violations.map((v) => v.message))
 		const currentEntropy = this.spiderEngine.computeEntropy()
 
 		return SovereignProtocol.generateAuditTemplate("System Recovery", {
 			buildHealth,
-			metabolicPressure: `${stats.totalWrites} writes across ${this.spiderEngine.nodes.size} nodes`,
+			workloadLevel: `${stats.totalWrites} writes across ${this.spiderEngine.nodes.size} nodes`,
 			buildErrors: violations.filter((v) => v.severity === "ERROR").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
 			lintWarnings: violations.filter((v) => v.severity === "WARN").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
 			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
 			resonanceDamping: this.metabolicMonitor.getResonance(),
-			metabolicVelocity:
+			projectVelocity:
 				1.0 +
 				(lastEntropyScore - currentEntropy.score > 0.05 ? 0.5 : 0) -
 				(currentEntropy.components.couplingScore > 0.15 ? 0.5 : 0),
 			agenticThrashing: this.getAgenticHealth(),
 			healthTrend: buildHealth - this.lastBuildHealth,
-			vitalityPulse: this.getSubstrateVitality(),
+			heartbeatStatus: this.getStabilityPulse(),
 			neuralFocus: this.getNeuralFocus(),
 			aestheticResilience: stats.aestheticResilience,
-			recoveryHint: this.getRecoveryHint(this.getSubstrateVitality()),
+			recoveryHint: this.getRecoveryHint(this.getStabilityPulse()),
 			...this.getStructuralForensics(),
 		})
 	}
@@ -73,14 +73,16 @@ export class SovereignTelemetrics {
 	 */
 	public getRecoveryHint(vitality: number): string | undefined {
 		if (vitality > 40) return undefined
-		return `💓 FLATLINE WARNING: Vitality Pulse is at ${vitality.toFixed(0)}%. You MUST perform a # SOVEREIGN BREATH to clear metabolic inflammation before the substrate locks.`
+		return `💓 STABILITY WARNING: Heartbeat signal is at ${vitality.toFixed(0)}%. 
+  STEP 1: Implement a Strategic Stability Break. Simplify your current changes.
+  STEP 2: Trigger a # STRATEGIC REVIEW in \`scratchpad.md\` to re-ground your plan.`
 	}
 
 	/**
-	 * V187: Computes the 💓 Vitality Pulse based on pressure, doubt, and fragility.
+	 * V187: Computes the 💓 Stability Pulse based on workload, doubt, and complexity.
 	 */
-	public getSubstrateVitality(): number {
-		const stats = this.metabolicMonitor.getVitalityStats()
+	public getStabilityPulse(): number {
+		const stats = this.metabolicMonitor.getStabilityStats()
 		const nodes = Array.from(this.spiderEngine.nodes.values())
 
 		const pressurePenalty = Math.min(stats.avgPressure * 2, 40)
@@ -111,8 +113,8 @@ export class SovereignTelemetrics {
 
 		return {
 			fragilityIndex: fragilityScores,
-			namingIntegrity,
-			merkleDrift,
+			namingIntegrity: namingIntegrity,
+			merkleDrift: merkleDrift,
 		}
 	}
 
@@ -170,16 +172,16 @@ export class SovereignTelemetrics {
 	}
 
 	/**
-	 * Returns the current metabolic and forensic status for a file.
+	 * Returns the current stability and investigation status for a file.
 	 */
-	public getMetabolicTelemetry(filePath: string, layer: string, tokens = 0) {
+	public getStabilityTelemetry(filePath: string, layer: string, tokens = 0) {
 		const absPath = path.resolve(this.cwd, filePath)
 		const normPath = this.spiderEngine.normalizePath(absPath)
 		const currentViolations = this.spiderEngine.getViolations()
 
 		return {
-			pressure: this.metabolicMonitor.getPressure(normPath),
-			resonance: this.metabolicMonitor.getResonance(),
+			workload: this.metabolicMonitor.getPressure(normPath),
+			focus: this.metabolicMonitor.getResonance(),
 			health: this.computeBuildHealth(currentViolations.map((v) => v.message)),
 			tokens,
 			layer,
@@ -187,25 +189,25 @@ export class SovereignTelemetrics {
 	}
 
 	/**
-	 * Resets all metabolic and structural pressure.
+	 * Resets all project pressure.
 	 */
 	public resetSystemPressure(): void {
 		this.metabolicMonitor.resetMetabolicPressure()
 		this.lastBuildHealth = 100
-		Logger.info("[SovereignTelemetrics] Unified System Pressure Reset.")
+		Logger.info("[StabilityTelemetrics] Unified Project Pressure Reset.")
 	}
 	/**
 	 * Returns the resilience shield summary.
 	 */
 	public getResilienceShield(): string {
-		const metabolic = this.metabolicMonitor.getVitalityStats()
+		const metabolic = this.metabolicMonitor.getStabilityStats()
 		const hotspots = this.spiderEngine.getViolationHotspots()
 
 		const shield = [
-			"\n🛡️ UNIFIED RESILIENCE SHIELD [V12]",
+			"\n🛡️ PROJECT PROTECTION SUMMARY [V12]",
 			"====================================",
-			`METABOLIC: ${metabolic.totalWrites} edits, ${metabolic.totalReads} reads (Doubt: ${metabolic.avgDoubtSignal.toFixed(1)})`,
-			`STRUCTURAL: ${this.spiderEngine.nodes.size} nodes, ${hotspots.length} hotspots detected`,
+			`ACTIVITY: ${metabolic.totalWrites} edits, ${metabolic.totalReads} reads (Activity Ratio: ${metabolic.avgDoubtSignal.toFixed(1)})`,
+			`STRUCTURE: ${this.spiderEngine.nodes.size} nodes, ${hotspots.length} high-change areas detected`,
 			"====================================\n",
 		]
 

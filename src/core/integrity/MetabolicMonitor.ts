@@ -16,9 +16,18 @@ export interface MetabolicMetrics {
 	aestheticWrites: number // V188: Noise filtering count
 }
 
+export interface StabilityStats {
+	totalReads: number
+	totalWrites: number
+	avgPressure: number
+	avgDoubtSignal: number
+	hotspots: { path: string; stress: number }[]
+	aestheticResilience: number
+}
+
 /**
- * MetabolicMonitor: Tracks the "Vitality" and "Stress" of the project.
- * Implements organismal detection: Churn, Fever, and Doubt.
+ * MetabolicMonitor: Tracks the "Stability" and "Activity Level" of the project.
+ * Implements activity detection: Churn, High Activity, and Doubt.
  */
 export class MetabolicMonitor {
 	private registry: Map<string, MetabolicMetrics> = new Map()
@@ -55,10 +64,10 @@ export class MetabolicMonitor {
 			if (metrics.lastAestheticHash === aesHash) {
 				impactMultiplier *= 0.1 // V100: Aesthetic changes have minimal impact
 				metrics.aestheticWrites++
-				Logger.info(`[MetabolicMonitor] Aesthetic Agility: Negligible structural drift in ${path.basename(filePath)}`)
+				Logger.info(`[StabilityMonitor] Visual Alignment: Minimal structural change in ${path.basename(filePath)}`)
 			} else if (turnId && metrics.lastTurnId === turnId) {
-				impactMultiplier *= 0.5 // V100: Synthesis: iterative edits in same turn discounted
-				Logger.info(`[MetabolicMonitor] Metabolic Synthesis: Iterative session discount for ${path.basename(filePath)}`)
+				impactMultiplier *= 0.5 // V100: Activity Consolidation: iterative edits in same turn discounted
+				Logger.info(`[StabilityMonitor] Activity Consolidation: Repeated session update for ${path.basename(filePath)}`)
 			}
 			metrics.lastAestheticHash = aesHash
 		}
@@ -127,15 +136,11 @@ export class MetabolicMonitor {
 	}
 
 	/**
-	 * Detects if a file is "Inflamed" (High churn in a short period).
+	 * Detects if a file has high activity (High churn in a short period).
 	 */
-	public isMetabolicallyInflamed(
-		filePath: string,
-		isRefactoring = false,
-		lineCount = 0,
-	): { inflamed: boolean; reason?: string } {
+	public isHighlyActive(filePath: string, isRefactoring = false, lineCount = 0): { active: boolean; reason?: string } {
 		const metrics = this.registry.get(filePath)
-		if (!metrics) return { inflamed: false }
+		if (!metrics) return { active: false }
 
 		const timeSinceLastEdit = Date.now() - metrics.lastEditTimestamp
 		const totalDelta = metrics.linesAdded + metrics.linesDeleted
@@ -151,12 +156,12 @@ export class MetabolicMonitor {
 
 		if (highChurn && recentActivity && metrics.writes > writeThreshold) {
 			return {
-				inflamed: true,
-				reason: `Metabolic churn exceeded threshold (${totalDelta} lines, ${metrics.writes} writes).`,
+				active: true,
+				reason: `Activity level exceeded stability limit (${totalDelta} lines, ${metrics.writes} updates).`,
 			}
 		}
 
-		return { inflamed: false }
+		return { active: false }
 	}
 
 	/**
@@ -205,14 +210,14 @@ export class MetabolicMonitor {
 			if (missionRatio >= 0.9) {
 				return {
 					drift,
-					warning: `🛑 MISSION DRIFT [CRITICAL]: 90% of your recent edits are in peripheral layers (Plumbing/Infrastructure). Architectural investigations suggest you are "Yak Shaving". You MUST return focus to Domain/Core logic immediately or trigger a # SOVEREIGN AUDIT to justify this detour.`,
+					warning: `🛑 MISSION FOCUS [REQUIRED]: 90% of your recent updates are in peripheral files (Plumbing/Infrastructure). It looks like you might be drifting from the core task. Please return focus to Domain/Core logic or use a # STRATEGIC REVIEW to justify this detour.`,
 				}
 			}
 
 			if (missionRatio > 0.7) {
 				return {
 					drift,
-					warning: `⚠️ MISSION DRIFT [Urgency: MEDIUM]: ${Math.round(missionRatio * 100)}% of your recent edits are in peripheral layers. Ensure you are not drifting from the primary objective.`,
+					warning: `⚠️ MISSION FOCUS [Urgency: MEDIUM]: ${Math.round(missionRatio * 100)}% of your recent updates are in peripheral files. Ensure you are staying on track with the primary goal.`,
 				}
 			}
 		}
@@ -239,7 +244,7 @@ export class MetabolicMonitor {
 	}
 
 	/**
-	 * V8: Resets inflammation for a specific file (Breath-based recovery)
+	 * V8: Resets activity history for a specific file (Stability break recovery)
 	 */
 	public resetFileInflammation(filePath: string) {
 		const metrics = this.registry.get(filePath)
@@ -247,14 +252,14 @@ export class MetabolicMonitor {
 			metrics.linesAdded = 0
 			metrics.linesDeleted = 0
 			metrics.writes = 0
-			Logger.info(`[MetabolicMonitor] Inflammation manually cleared for ${path.basename(filePath)}`)
+			Logger.info(`[StabilityMonitor] Activity history cleared for ${path.basename(filePath)}`)
 		}
 	}
 
 	/**
-	 * Gets the project-wide vitality stats.
+	 * Gets the project-wide stability stats.
 	 */
-	public getVitalityStats() {
+	public getStabilityStats(): StabilityStats {
 		let totalReads = 0
 		let totalWrites = 0
 		const hotspots: { path: string; stress: number }[] = []
@@ -298,7 +303,7 @@ export class MetabolicMonitor {
 	public recordSymbolObservation(filePath: string, symbol: string) {
 		const metrics = this.getOrCreateMetrics(filePath)
 		metrics.symbolObservations.add(symbol)
-		Logger.info(`[MetabolicMonitor] Symbol observed: ${symbol} in ${path.basename(filePath)}`)
+		Logger.info(`[StabilityMonitor] Focus recorded: ${symbol} in ${path.basename(filePath)}`)
 	}
 
 	/**
@@ -362,7 +367,7 @@ export class MetabolicMonitor {
 		if (totalRecentWrites > threshold) {
 			return {
 				active: true,
-				reason: `System-wide metabolic churn peaking (${totalRecentWrites} edits in 30m). ${isRefactoring ? "(Refactor status active: Budget doubled)" : "Substrate heat threshold exceeded."}`,
+				reason: `System-wide activity peaking (${totalRecentWrites} edits in 30m). ${isRefactoring ? "(Refactor mode: Extra budget applied)" : "Stability safety threshold reached."}`,
 			}
 		}
 
@@ -370,13 +375,13 @@ export class MetabolicMonitor {
 	}
 
 	/**
-	 * PRODUCTION HARDENING: Emergency override to reset metabolic pressure.
-	 * Allows for manual recovery from audit locks during project-wide infrastructure turns.
+	 * PRODUCTION HARDENING: Emergency override to reset project activity.
+	 * Allows for manual recovery from planning holds during large-scale tasks.
 	 */
 	public resetMetabolicPressure() {
 		this.registry.clear()
 		this.thresholdMultiplier = 1.0 // Reset velocity to base
-		Logger.info("🔋 [MetabolicMonitor] Metabolic pressure reset. Inflammation cleared.")
+		Logger.info("🔋 [StabilityMonitor] Activity level reset. Project stability cleared for fresh start.")
 	}
 
 	/**
@@ -432,7 +437,7 @@ export class MetabolicMonitor {
 				symbolObservations: new Set(m.symbolObservations),
 			})
 		}
-		Logger.info(`[MetabolicMonitor] Substrate Restored: ${this.registry.size} files re-enlisted in cognitive registry.`)
+		Logger.info(`[StabilityMonitor] Project Restored: ${this.registry.size} files restored to context registry.`)
 	}
 
 	public getResonance(): number {

@@ -12,8 +12,8 @@ export interface GuardSignal {
 }
 
 /**
- * SovereignGuard: The Proactive Interdiction Middleware.
- * Prevents "Toxic Edits" from entering the codebase by simulating them first.
+ * SovereignGuard: The Proactive Stability Guidance.
+ * Ensures complex changes are stable by simulating them first.
  */
 export class SovereignGuard {
 	private simulationEngine: SimulationEngine
@@ -35,10 +35,10 @@ export class SovereignGuard {
 	): Promise<GuardSignal> {
 		const isRecovering = currentEngine.isRecovering
 
-		// 0. Architectural Exception Handshake
-		if (newContent.includes("[SOVEREIGN_EXCEPTION]")) {
-			// PRODUCTION HARDENING: Require substantive reasoning for exceptions.
-			const reasonMatch = newContent.match(/\[SOVEREIGN_EXCEPTION:\s*([^\]]+)\]/)
+		// 0. Safety Override Handshake
+		if (newContent.includes("[SAFETY_OVERRIDE]")) {
+			// PRODUCTION HARDENING: Require substantive reasoning for overrides.
+			const reasonMatch = newContent.match(/\[SAFETY_OVERRIDE:\s*([^\]]+)\]/)
 			const reasonText = reasonMatch ? reasonMatch[1].trim() : ""
 
 			// V9: Relax length requirement if project is recovering
@@ -46,17 +46,17 @@ export class SovereignGuard {
 			if (reasonText.length < minLength) {
 				return {
 					approved: false,
-					reason: `🛑 INVALID EXCEPTION: The [SOVEREIGN_EXCEPTION] tag requires a substantive reason (min ${minLength} characters).`,
+					reason: `🛑 INVALID OVERRIDE: The [SAFETY_OVERRIDE] tag requires a substantive reason (min ${minLength} characters).`,
 					violations: [],
 					remediation:
-						"Provide a clear architectural justification for bypassing the integrity guard (e.g. [SOVEREIGN_EXCEPTION: Temporary circularity for migration]).",
+						"Provide a clear architectural justification for bypassing the stability guard (e.g. [SAFETY_OVERRIDE: Temporary circularity for migration]).",
 				}
 			}
 
 			return {
 				approved: true,
 				violations: [],
-				reason: `Architectural Exception granted: ${reasonText}`,
+				reason: `Stability Override granted: ${reasonText}`,
 			}
 		}
 
@@ -69,10 +69,10 @@ export class SovereignGuard {
 		if (!simResult.safe && simResult.scoreDrop > maxDrop) {
 			return {
 				approved: false,
-				reason: `Integrity Drop Warning: This edit predicts a ${simResult.scoreDrop.toFixed(1)}% drop in structural integrity.`,
+				reason: `Integrity Notice: This edit predicts a ${simResult.scoreDrop.toFixed(1)}% change in structural complexity.`,
 				violations: [],
 				remediation:
-					"Verify imports and ensure module is placed in the correct layer. If this change is architecturally necessary but temporarily drops integrity, you may request an override by adding [SOVEREIGN_EXCEPTION] to your file header.",
+					"Verify imports and ensure module is placed in the correct layer. If this change is architecturally necessary but temporarily drops integrity, you may request an override by adding [SAFETY_OVERRIDE] to your file header.",
 			}
 		}
 
@@ -85,14 +85,14 @@ export class SovereignGuard {
 
 		const criticalViolations = violations.filter((v) => v.severity === "ERROR")
 
-		// V21: Therapeutic Leniency (Sovereign Drift)
+		// V21: Adaptive Flexibility (Stability Alignment)
 		// If we are in a recovery state and the edit improves project health (simResult.safe),
-		// we demote axiomatic errors to warnings to allow structural drift toward resonance.
+		// we demote errors to warnings to allow for positive structural evolution.
 		if (isRecovering && simResult.safe && criticalViolations.length > 0) {
 			return {
 				approved: true,
 				violations: violations,
-				reason: `Therapeutic Leniency granted for positive structural drift in \`${path.basename(filePath)}\`.`,
+				reason: `Adaptive Flexibility granted for positive file changes in \`${path.basename(filePath)}\`.`,
 			}
 		}
 
@@ -104,7 +104,7 @@ export class SovereignGuard {
 
 			return {
 				approved: false,
-				reason: `🛑 AXIOMATIC BREACH: Proactive interdiction triggered in \`${path.basename(filePath)}\`.`,
+				reason: `🛑 POLICY ALIGNMENT NOTICE: Stability guidance triggered in \`${path.basename(filePath)}\`.`,
 				violations: criticalViolations,
 				remediation: `${v.remediation}${fixSnippet}`,
 			}

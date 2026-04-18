@@ -13,7 +13,7 @@ export interface SovereignConfig {
 	global: {
 		maxPathDepth: number
 		enforceKebabCase: boolean
-		feverThreshold: number
+		activityThreshold: number
 		integrityAlertThreshold: number
 		supportedLayerTags?: string[]
 		excludePaths?: string[]
@@ -68,7 +68,7 @@ export class SovereignPolicy {
 			global: {
 				maxPathDepth: 4,
 				enforceKebabCase: false,
-				feverThreshold: 5.0,
+				activityThreshold: 5.0,
 				integrityAlertThreshold: 70,
 				supportedLayerTags: [".ts", ".tsx", ".js", ".jsx"],
 				excludePaths: [],

@@ -37,9 +37,9 @@ export class SovereignDoctorHandler implements IToolHandler {
 			return formatResponse.toolResult(
 				`JoyZoning Sovereignty Report [Status: ${doctor.getAgentSignal(report)}]\n\n` +
 					`Integrity Score: ${report.integrityScore.toFixed(1)}%\n` +
-					`Hotspots (Fever Map):\n${report.feverMap
+					`Activity Hotspots:\n${report.activityMap
 						.slice(0, 5)
-						.map((f) => `- ${f.path} (Score: ${f.score.toFixed(1)})`)
+						.map((f: { path: string; score: number }) => `- ${f.path} (Score: ${f.score.toFixed(1)})`)
 						.join("\n")}\n\n` +
 					`Active Violations:\n${report.violations.map((v) => `[${v.type}] ${v.path}: ${v.message}\n   -> Remediation: ${v.remediation}`).join("\n\n")}\n\n` +
 					`Optimization Opportunities:\n${report.optimizations.map((o) => `- Move ${o.file} to ${o.recommendedLayer}: ${o.reason}`).join("\n")}`,

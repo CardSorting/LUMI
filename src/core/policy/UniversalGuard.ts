@@ -58,16 +58,16 @@ export class UniversalGuard {
 		return this.engine.validatePostExecution(block, toolOutput, prevHash)
 	}
 
-	public getForensics(): any {
+	public getForensics(): import("./SovereignForensics").SovereignForensics {
 		return this.engine.getForensics()
 	}
 
 	/**
-	 * Performs SOVEREIGN DRAFTING workflow check before Plan Mode responses.
-	 * Blocks plan_mode_respond calls if scratchpad.md is missing or incomplete.
+	 * Performs STRATEGIC REVIEW workflow check before Plan Mode responses.
+	 * Blocks plan_mode_respond calls if strategic review is missing or incomplete.
 	 */
-	public async enforceSovereignDraftingInPlanMode(): Promise<{ allowed: boolean; reason?: string }> {
-		return this.planModeEnforcer.enforceSovereignDrafting()
+	public async enforceStrategicReviewInPlanMode(): Promise<{ allowed: boolean; reason?: string }> {
+		return this.planModeEnforcer.enforceStrategicReview()
 	}
 
 	/**
@@ -110,9 +110,9 @@ export class UniversalGuard {
 	}
 
 	/**
-	 * V110: Substrate Telemetry Proxy.
+	 * V110: Substrate Stability Telemetry Proxy.
 	 */
-	public getMetabolicTelemetry(filePath: string) {
-		return this.engine.getMetabolicTelemetry(filePath)
+	public getStabilityTelemetry(filePath: string) {
+		return this.engine.getStabilityTelemetry(filePath)
 	}
 }

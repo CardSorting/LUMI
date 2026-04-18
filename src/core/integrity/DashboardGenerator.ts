@@ -5,7 +5,7 @@ import { Logger } from "@/shared/services/Logger"
 import { SovereignOptimizer } from "../policy/SovereignOptimizer.js"
 import type { SpiderEngine } from "../policy/spider/SpiderEngine.js"
 import type { AuditRecorder } from "./AuditRecorder.js"
-import { MetabolicMonitor } from "./MetabolicMonitor.js"
+import { MetabolicMonitor, StabilityStats } from "./MetabolicMonitor.js"
 import { PathogenStore } from "./PathogenStore.js"
 
 /**
@@ -35,7 +35,7 @@ export class DashboardGenerator {
 			const trend = await recorder.getTrend()
 			const violations = engine.getViolations()
 			const mermaid = engine.toMermaid()
-			const vitals = metabolic.getVitalityStats()
+			const vitals = metabolic.getStabilityStats()
 			const opts = optimizer.findOptimizations(engine)
 			const immuneMemory = pathogens.getPathogens()
 
@@ -84,8 +84,8 @@ ${this.generateGhostSection(engine)}
 ### 🔥 Metabolic Hotspots (High Stress)
 ${
 	vitals.hotspots.length > 0
-		? vitals.hotspots.map((h) => `- \`${path.basename(h.path)}\`: Stress Index **${h.stress.toFixed(1)}**`).join("\n")
-		: "✅ Codebase is calm. No fever detected."
+		? vitals.hotspots.map((h) => `- \`${path.basename(h.path)}\`: Activity Index **${h.stress.toFixed(1)}**`).join("\n")
+		: "✅ Codebase is calm. No High Activity detected."
 }
 
 ---
@@ -136,7 +136,7 @@ ${
 		}
 	}
 
-	private computeForensicHealth(engine: SpiderEngine, vitals: any): number {
+	private computeForensicHealth(engine: SpiderEngine, vitals: StabilityStats): number {
 		const totalNodes = engine.nodes.size
 		if (totalNodes === 0) return 100
 
@@ -144,7 +144,7 @@ ${
 		// High grounding (80%+) suggests the agent has explored the substrate before planning.
 		const groundedFiles = Array.from(engine.nodes.values()).filter((n) => {
 			const absolutePath = path.resolve(this.cwd, n.path)
-			return (vitals as any).hotspots?.some((h: any) => h.path === absolutePath) || vitals.totalReads > 0 // Simplified for now
+			return vitals.hotspots?.some((h) => h.path === absolutePath) || vitals.totalReads > 0 // Simplified for now
 		}).length
 
 		return Math.min(100, Math.round((groundedFiles / totalNodes) * 100))

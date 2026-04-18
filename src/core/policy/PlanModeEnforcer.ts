@@ -42,11 +42,11 @@ export class PlanModeEnforcer {
 	 * Pre-plan-respond enforcement check.
 	 * If not satisfied, returns an error that should block the plan_mode_respond call.
 	 */
-	public async enforceSovereignDrafting(): Promise<{ allowed: boolean; reason?: string }> {
-		// Implementation: Check scratchpad.md existence and content
-		// Enforce SOVEREIGN DRAFTING workflow completion
-		// Track Double Down Passes completion
-		// Verify TRIAD AUDIT has been performed
+	public async enforceStrategicReview(): Promise<{ allowed: boolean; reason?: string }> {
+		// Implementation: Check strategic review existence and content
+		// Enforce STRATEGIC REVIEW workflow completion
+		// Track Analysis Passes completion
+		// Verify STABILITY GUARD has been performed
 
 		const content = await this.readScratchpad()
 
@@ -56,10 +56,10 @@ export class PlanModeEnforcer {
 			return {
 				allowed: false,
 				reason:
-					`🛑 SOVEREIGN DRAFTING NOT COMPLETE\n\n` +
-					`Before presenting an architectural plan, you must complete the SOVEREIGN DRAFTING workflow:\n\n` +
-					`1️⃣ Create/Update ${this.scratchpadPath} with the SOVEREIGN DRAFTING (V12) template\n\n` +
-					`SOVEREIGN DRAFTING TEMPLATE:\`\`\`markdown\n` +
+					`🛑 STRATEGIC REVIEW NOT COMPLETE\n\n` +
+					`Before presenting an architectural plan, you must complete the STRATEGIC REVIEW workflow:\n\n` +
+					`1️⃣ Create/Update ${this.scratchpadPath} with the STRATEGIC REVIEW (V12) template\n\n` +
+					`STRATEGIC REVIEW TEMPLATE:\`\`\`markdown\n` +
 					`${template}\`\`\`\n\n` +
 					`💡 TIP: After completing the template with answers for ALL probes, ` +
 					`you can call plan_mode_respond with your plan.`,
@@ -77,9 +77,9 @@ export class PlanModeEnforcer {
 			return {
 				allowed: false,
 				reason:
-					`⚠️ SOVEREIGN DRAFTING INCOMPLETE\n\n` +
+					`⚠️ STRATEGIC REVIEW INCOMPLETE\n\n` +
 					`Your scratchpad.md ${this.scratchpadPath} is missing required sections:\n` +
-					`- ✓ Requirement Analysis (Deep Dive #1)\n` +
+					`- ✓ Requirement Analysis\n` +
 					`- ✓ The Architect review\n` +
 					`- ✓ The Critic review\n` +
 					`- ✓ The SRE review\n\n` +
@@ -93,8 +93,8 @@ export class PlanModeEnforcer {
 			return {
 				allowed: false,
 				reason:
-					`⚠️ TRIAD AUDIT NOT COMPLETED\n\n` +
-					`You must complete the TRIAD AUDIT before presenting a plan.\n` +
+					`⚠️ STABILITY GUARD NOT COMPLETED\n\n` +
+					`You must complete the STABILITY GUARD review before presenting a plan.\n` +
 					`Find the Required Reviewers section in your scratchpad.md and mark:\n` +
 					`- [x] The Architect\n` +
 					`- [x] The Critic\n` +
@@ -109,9 +109,9 @@ export class PlanModeEnforcer {
 	}
 
 	/**
-	 * Provides feedback on the SOVEREIGN DRAFTING compliance status.
+	 * Provides feedback on the STRATEGIC REVIEW compliance status.
 	 */
-	public async getSovereignDraftingStatus(): Promise<{
+	public async getStrategicReviewStatus(): Promise<{
 		hasScratchpad: boolean
 		Requirements: boolean
 		Architect: boolean
@@ -151,7 +151,7 @@ export class PlanModeEnforcer {
 
 		const updatedContent = currentContent
 			? `${currentContent}\n\n---\n\n## Feasibility Review (${timestamp})\n\n${feedback}`
-			: `# SOVEREIGN DRAFTING\n\n## Feasibility Review (${timestamp})\n\n${feedback}`
+			: `# STRATEGIC REVIEW\n\n## Feasibility Review (${timestamp})\n\n${feedback}`
 
 		await fs.writeFile(this.scratchpadPath, updatedContent, "utf-8")
 		Logger.info(`[PlanModeEnforcer] Updated scratchpad.md with feasibility feedback`)
@@ -172,13 +172,13 @@ export class PlanModeEnforcer {
 	}
 
 	/**
-	 * Generates SOVEREIGN DRAFTING completion prompts.
+	 * Generates STRATEGIC REVIEW completion prompts.
 	 */
-	public async generateSovereignDraftingPrompts(): Promise<string> {
-		const status = await this.getSovereignDraftingStatus()
+	public async generateStrategicReviewPrompts(): Promise<string> {
+		const status = await this.getStrategicReviewStatus()
 
 		if (!status.hasScratchpad) {
-			return `🛑 SOVEREIGN DRAFTING NOT STARTED\n\nYou must create ${this.scratchpadPath} first.\nUse the SOVEREIGN DRAFTING template to structure your analysis.`
+			return `🛑 STRATEGIC REVIEW NOT STARTED\n\nYou must create ${this.scratchpadPath} first.\nUse the STRATEGIC REVIEW template to structure your analysis.`
 		}
 
 		const missing = []
@@ -186,13 +186,13 @@ export class PlanModeEnforcer {
 		if (!status.Architect) missing.push("The Architect review")
 		if (!status.Critic) missing.push("The Critic review")
 		if (!status.SRE) missing.push("The SRE review")
-		if (!status.TRIADAudit) missing.push("TRIAD AUDIT ([x] marks)")
+		if (!status.TRIADAudit) missing.push("STABILITY GUARD ([x] marks)")
 
 		if (missing.length === 0) {
-			return `✅ SOVEREIGN DRAFTING COMPLETE\n\nYour scratchpad.md ${this.scratchpadPath} is fully drafted:\n- ✓ Requires analysis\n- ✓ Architect review\n- ✓ Critic review\n- ✓ SRE review\n- ✓ TRIAD AUDIT completed\n\nYou may now call plan_mode_respond with your proposed plan.`
+			return `✅ STRATEGIC REVIEW COMPLETE\n\nYour scratchpad.md ${this.scratchpadPath} is fully drafted:\n- ✓ Requires analysis\n- ✓ Architect review\n- ✓ Critic review\n- ✓ SRE review\n- ✓ STABILITY GUARD completed\n\nYou may now call plan_mode_respond with your proposed plan.`
 		}
 
-		return `⚠️ SOVEREIGN DRAFTING INCOMPLETE\n\nMissing: ${missing.join(", ")}\n\nPlease update ${this.scratchpadPath} to address these items.`
+		return `⚠️ STRATEGIC REVIEW INCOMPLETE\n\nMissing: ${missing.join(", ")}\n\nPlease update ${this.scratchpadPath} to address these items.`
 	}
 
 	/**
