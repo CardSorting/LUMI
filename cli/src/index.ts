@@ -33,6 +33,7 @@ import { checkRawModeSupport } from "./context/StdinContext"
 import { createCliHostBridgeProvider } from "./controllers"
 import { CliCommentReviewController } from "./controllers/CliCommentReviewController"
 import { CliWebviewProvider } from "./controllers/CliWebviewProvider"
+import { buildRemoteUi } from "./server/build"
 import { RemoteServer } from "./server/RemoteServer"
 import { isAuthConfigured } from "./utils/auth"
 import { restoreConsole, suppressConsoleUnlessVerbose } from "./utils/console"
@@ -86,7 +87,7 @@ async function disposeTelemetryServices(): Promise<void> {
 	await Promise.allSettled([telemetryService.dispose(), PostHogClientProvider.getInstance().dispose()])
 }
 
-async function disposeCliContext(ctx: CliContext): Promise<void> {
+export async function disposeCliContext(ctx: CliContext): Promise<void> {
 	await ctx.controller.stateManager.flushPendingState()
 	await ctx.controller.dispose()
 	await ErrorService.get().dispose()
@@ -423,7 +424,7 @@ function setupSignalHandlers() {
 
 setupSignalHandlers()
 
-interface CliContext {
+export interface CliContext {
 	extensionContext: ExtensionContext
 	dataDir: string
 	extensionDir: string
@@ -442,7 +443,7 @@ interface InitOptions {
 /**
  * Initialize all CLI infrastructure and return context needed for commands
  */
-async function initializeCli(options: InitOptions): Promise<CliContext> {
+export async function initializeCli(options: InitOptions): Promise<CliContext> {
 	const workspacePath = options.cwd || process.cwd()
 	const { extensionContext, storageContext, DATA_DIR, EXTENSION_DIR } = initializeCliContext({
 		dietcodeDir: options.config,
@@ -520,7 +521,7 @@ async function initializeCli(options: InitOptions): Promise<CliContext> {
 /**
  * Run an Ink app with proper cleanup handling
  */
-async function runInkApp(element: React.ReactElement, cleanup: () => Promise<void>): Promise<void> {
+export async function runInkApp(element: React.ReactElement, cleanup: () => Promise<void>): Promise<void> {
 	// Clear terminal for clean UI - robot will render at row 1
 	process.stdout.write("\x1b[2J\x1b[3J\x1b[H")
 
@@ -799,16 +800,7 @@ async function runServer(options: {
 		options.build ||
 		(!existsSync(staticPath) && existsSync(path.join(ctx.extensionDir, "..", "remote-ui", "package.json")))
 	) {
-		printInfo("Building remote-ui...")
-		try {
-			const { execSync } = await import("node:child_process")
-			execSync("npm run build", {
-				cwd: path.join(ctx.extensionDir, "..", "remote-ui"),
-				stdio: "inherit",
-			})
-		} catch (error) {
-			printWarning(`Failed to build remote-ui: ${error instanceof Error ? error.message : String(error)}`)
-		}
+		await buildRemoteUi(ctx.extensionDir)
 	}
 
 	// Ensure we have a token if requested, or generate one/reuse existing
