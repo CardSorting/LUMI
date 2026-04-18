@@ -39,11 +39,12 @@ npx ts-node src/scripts/align-sovereignty.ts
 
 ## 🛰️ Agent Intelligence Features
 
-### 1. Active Surveillance (Spider Engine V140)
-Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by a modular diagnostic suite:
+### 1. Active Surveillance (Spider Engine V200)
+Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by a memory-resident industrial suite:
 - **Forensic Realism**: Deterministically detects "ghost symbols" via physical AST sensing across the project graph.
 - **Metrics Engine**: Real-time evaluation of Logic Density, I/O Entropy, and **AST Complexity Scaling**.
-- **Persistence Manager**: Ensures architectural state is atomically persisted in `.spiderbin`.
+- **Metabolic Pulse**: Inter-batch GC turns during massive scans to ensure zero-saturation indexing.
+- **Sovereign Memory**: Architectural state is atomically managed in a high-fidelity, zero-residual memory registry.
 
 ### 2. Forensic Realism
 When moving or deleting files, the Forensic Engine verifies symbol integrity project-wide. 
@@ -61,14 +62,18 @@ Use `generate_sovereign_map` to visualize the structural health and coupling of 
 
 - **Blueprint Outcome**: The tool ensures the correct directory, file name, `[LAYER]` tag, and base template are applied instantly. Never create files manually if you can scaffold.
 
-## 🔋 Metabolic Resilience (V100/V110)
-To support high-velocity development, the substrate optimizes for "flow state" by damping pressure during intensive refactoring.
+## 🔋 Metabolic Immortality & Resilience (V200)
+The substrate has achieved metabolic immortality through zero-allocation performance and absolute closure hygiene.
+- **Zero-Alloc Caching**: Nested Map architectures eliminate string concatenation in hot paths, reducing Young Gen GC pressure.
+- **String Interning**: Every structural identifier is deduplicated at the heap level, achieving absolute resource neutrality.
+- **Clinical Closure Hygiene**: Explicit nullification of AST visitors and closures after every turn to ensure a zero-leak sensing environment.
 - **Cognitive Resonance**: During `#REFACTOR` or `#HEAL` turns, metabolic pressure is damped at **0.5x velocity**.
 - **Metabolic Synthesis**: Atomic writes to the same file in a single turn are discounted by **50%**, rewarding iterative refinement.
 - **Aesthetic Agility**: Changes to whitespace, line breaks, or comments (Aesthetic Hash) have a **90% discount** and never trigger blockades.
 
-## 🩹 Forensic Resilience & Recovery (V140-V189 Industrial)
-The substrate now operates on a platform of **Forensic Realism**.
+## 🩹 Forensic Resilience & Recovery (V200 Industrial)
+The substrate now operates on a platform of **Forensic Realism** and **Stability Locking**.
+- **Stability Lock 2.0**: Transaction concurrency is managed via session-authenticated IDs, preventing "Late Return" race conditions and structural corruption.
 - **Deterministic Traceability**: Substrate repairs are grounded in physical structural proof. Imports and member signatures are extracted directly from the graph using AST forensics.
 - **Neural Forensics (V188-V189)**: Every turn extracts the **Cognitive Focus (🧠)** symbols currently under investigation. This prevents "investigative drift" and ensures the agent remains grounded in the primary domain.
 - **Reactive Stabilization**: Build errors trigger asynchronous sweeps by the Garbage Collector. These sweeps focus strictly on repairing verified violations, ensuring that development flow is never blocked by hypothetical substrate predictions.

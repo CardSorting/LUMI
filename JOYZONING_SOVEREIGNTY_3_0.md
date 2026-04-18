@@ -12,14 +12,14 @@ The core diagnostic layer now uses **Archetypal Fingerprinting** to detect struc
 | **I/O Entropy** | Percentage of platform/node imports vs pure imports. | > 20% (Domain/Core) |
 | **AST Complexity** | Total count of unique AST nodes in the file. | > 500 (Plumbing) |
 
-### Modular Sovereignty (Package: `src/core/policy/spider/`)
+### Modular Sovereignty (Spider Engine 5.0 - V200)
 
-In V15, the Spider Engine graduated from a monolithic class to a specialized package structure, orchestrating several domain-specific engines:
+In V200 (Spider 5.0), the engine has graduated to an **Industrial Memory-Resident Substrate**. Persistence artifacts (`.spiderbin`) have been decommissioned in favor of absolute metabolic immortality:
 
-- **PathResolver**: High-performance layer detection and alias resolution.
-- **ForensicEngine**: Proactive "ghost symbol" detection and move-aware graph verification.
-- **MetricsEngine**: Mathematical calculation of Logic Density, I/O Entropy, and Reachability.
-- **PersistenceManager**: Atomic binary serialization (`.spiderbin`) for high-integrity registries.
+- **PathResolver**: High-performance layer detection using **Zero-Alloc Nested Map Caching**.
+- **ForensicEngine**: Proactive "ghost symbol" detection with **Clinical Closure Hygiene**.
+- **MetricsEngine**: Real-time evaluation of Logic Density, I/O Entropy, and **AST Complexity Scaling**.
+- **Metabolic Pulse**: Integrated inter-batch GC reclamation to support project-wide re-indexing with zero heap saturation.
 
 This decomposition ensures that the substrate diagnostic layer is as maintainable and testable as the Domain logic it protects.
 
@@ -97,4 +97,4 @@ When performing an architectural audit, the system generates a **DoctorReport** 
 > **Substrate Integrity Score < 70**: Triggers the **Architectural Alarm**. In this state, the agent is restricted to **Reactive Healing** only until forensic sovereignty is restored.
 
 > [!NOTE]
-> **V140 Industrial Protocol Active**: Incorporates Deterministic Forensics, Reactive GC, and Industrial Member Mapping.
+> **V200 Industrial Sovereignty Active**: Incorporates Metabolic Immortality, Session-Based Concurrency, and Zero-Alloc Memory Sovereignty.
