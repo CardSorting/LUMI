@@ -2,6 +2,7 @@ import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
 import * as ts from "typescript"
+import { Logger } from "../../../shared/services/Logger.js"
 import { PathResolver } from "./PathResolver.js"
 import { SpiderNode } from "./types.js"
 
@@ -12,6 +13,24 @@ export class ForensicEngine {
 		private cwd: string,
 		private resolver: PathResolver,
 	) {}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose() {
+		this.ghostVerificationCache.clear()
+	}
+
+	/**
+	 * V200: Cache Saturation Floor.
+	 */
+	private checkCacheSaturation() {
+		const MAX_ENTRIES = 5000
+		if (this.ghostVerificationCache.size > MAX_ENTRIES) {
+			this.ghostVerificationCache.clear()
+			Logger.info("[ForensicEngine] Ghost verification cache saturated. Metaphorical sweep performed.")
+		}
+	}
 
 	public findGhosts(nodes: Map<string, SpiderNode>, sessionBuffer?: Map<string, string>): Set<string> {
 		const allGhosts = new Set<string>()
@@ -37,8 +56,8 @@ export class ForensicEngine {
 			}
 
 			const nodeGhosts: string[] = []
-			const sourceFile = ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true)
-			const imports = this.getImportedSymbols(sourceFile)
+			let sourceFile = ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true)
+			let imports = this.getImportedSymbols(sourceFile)
 			const hasGhostException = content.includes("[SOVEREIGN_EXCEPTION: Ghost Symbols]")
 
 			for (const { specifier, symbols } of imports) {
@@ -89,7 +108,12 @@ export class ForensicEngine {
 				}
 			}
 			this.ghostVerificationCache.set(node.path, { hash: currentHash, ghosts: nodeGhosts })
+
+			// V200: Forensic Closure Hygiene
+			;(sourceFile as unknown) = null
+			;(imports as unknown) = null
 		}
+		this.checkCacheSaturation()
 		return allGhosts
 	}
 
@@ -110,9 +134,11 @@ export class ForensicEngine {
 				if (!globalConsumption.has(targetId)) {
 					globalConsumption.set(targetId, new Set())
 				}
-				const consumptionSet = globalConsumption.get(targetId)!
-				for (const s of symbols) {
-					consumptionSet.add(s)
+				const consumptionSet = globalConsumption.get(targetId)
+				if (consumptionSet) {
+					for (const s of symbols) {
+						consumptionSet.add(s)
+					}
 				}
 			}
 		}

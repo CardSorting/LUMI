@@ -177,7 +177,7 @@ export class MetricsEngine {
 		let complexity = 0
 		let nesting = 0
 
-		const visit = (node: import("typescript").Node) => {
+		let visit = (node: import("typescript").Node) => {
 			// Cyclomatic complexity markers
 			if (
 				ts.isIfStatement(node) ||
@@ -209,6 +209,10 @@ export class MetricsEngine {
 		}
 
 		ts.forEachChild(sourceFile, visit)
-		return Math.min(complexity / 10, 1.0)
+		const result = Math.min(complexity / 10, 1.0)
+
+		// V200: Forensic Closure Hygiene
+		;(visit as unknown) = null
+		return result
 	}
 }

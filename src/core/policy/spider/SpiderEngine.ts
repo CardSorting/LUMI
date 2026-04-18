@@ -60,7 +60,8 @@ export class SpiderEngine {
 	private forensic: ForensicEngine
 	private suppressions: Set<string> = new Set() // V45: Forensic Suppression List
 	private sessionBuffer: Map<string, string> = new Map() // V71: Virtual Session Sensing
-	private stabilityLock: string | null = null // V190: Async Mutual Exclusion Lock
+	private stabilityLock: string | null = null // V190: Lock owner
+	private stabilityLockId: string | null = null // V200: Session-specific lock ID
 	private stabilityHeartbeat: NodeJS.Timeout | null = null // V190: Lock expiration timer
 	private substrateCheckpoint: Buffer | null = null // V200: Resilience Snapshot
 	private checkpointTimestamp: string | null = null // V200: Snapshot metadata
@@ -111,25 +112,28 @@ export class SpiderEngine {
 	 * Acquires a mutual exclusion lock to prevent structural corruption during
 	 * concurrent or multi-step refactoring operations.
 	 */
-	public async acquireStabilityLock(owner: string): Promise<boolean> {
+	public async acquireStabilityLock(owner: string, sessionId?: string): Promise<string | null> {
+		const lockId = sessionId || crypto.randomUUID()
 		if (this.stabilityLock && this.stabilityLock !== owner) {
 			Logger.warn(`[SpiderEngine] Stability Lock collision: ${owner} denied by ${this.stabilityLock}`)
-			return false
+			return null
 		}
 
 		this.stabilityLock = owner
+		this.stabilityLockId = lockId
 		this.clearStabilityHeartbeat()
 		this.stabilityHeartbeat = setTimeout(() => {
-			Logger.error(`[SpiderEngine] Stability Lease EXPIRED for ${owner}. Forcefully releasing lock.`)
-			this.releaseStabilityLock(owner)
+			Logger.error(`[SpiderEngine] Stability Lease EXPIRED for ${owner} (${lockId}). Forcefully releasing lock.`)
+			this.releaseStabilityLock(owner, lockId)
 		}, 60000) // 1 minute lease
 
-		return true
+		return lockId
 	}
 
-	public releaseStabilityLock(owner: string): void {
-		if (this.stabilityLock === owner) {
+	public releaseStabilityLock(owner: string, lockId: string): void {
+		if (this.stabilityLock === owner && this.stabilityLockId === lockId) {
 			this.stabilityLock = null
+			this.stabilityLockId = null
 			this.clearStabilityHeartbeat()
 		}
 	}
@@ -139,6 +143,32 @@ export class SpiderEngine {
 			clearTimeout(this.stabilityHeartbeat)
 			this.stabilityHeartbeat = null
 		}
+	}
+
+	/**
+	 * V200: Metabolic Hygiene (Disposal).
+	 * Forcefully releases all persistent memory and timers to prevent leaks.
+	 */
+	public dispose(): void {
+		this.clearStabilityHeartbeat()
+		if (this.reachabilityTimeout) {
+			clearTimeout(this.reachabilityTimeout)
+			this.reachabilityTimeout = null
+		}
+		this.forensic.dispose()
+		this.resolver.dispose()
+		this.nodes.clear()
+		this.ghosts.clear()
+		this.sessionBuffer.clear()
+		this.substrateCheckpoint = null
+		Logger.info("[SpiderEngine] Industrial Disposal Complete. Memory Substrate Released.")
+	}
+
+	/**
+	 * V200: TC39 Disposability Standard.
+	 */
+	public [Symbol.dispose](): void {
+		this.dispose()
 	}
 
 	public getForensicEngine(): ForensicEngine {
@@ -178,10 +208,10 @@ export class SpiderEngine {
 		if (oldNode && oldNode.hash === hash) return
 
 		let sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
-		const importData = this.extractDetailedImports(sourceFile)
+		let importData = this.extractDetailedImports(sourceFile)
 		const imports = importData.map((i) => i.specifier)
-		const exports = this.extractExports(sourceFile)
-		const metrics = this.extractMetrics(sourceFile)
+		let exports = this.extractExports(sourceFile)
+		let metrics = this.extractMetrics(sourceFile)
 
 		const consumptions: Record<string, string[]> = {}
 		for (const { specifier, symbols } of importData) {
@@ -225,10 +255,11 @@ export class SpiderEngine {
 			this.resolver.clearFileFromCache(normalizedPath)
 			this.scheduleReachability()
 		}
-		// V150: Memory-Only Substrate - Removed background filesystem persistence to prevent workspace noise.
-
-		// V160: AST Hygiene - Explicitly nullify large objects to assist GC
+		// V200: Forensic Closure Hygiene - Forcefully destroy visitor scopes
 		;(sourceFile as unknown) = null
+		;(importData as unknown) = null
+		;(exports as unknown) = null
+		;(metrics as unknown) = null
 	}
 
 	private extractExports(sourceFile: ts.SourceFile): string[] {
@@ -410,7 +441,18 @@ export class SpiderEngine {
 	private checkStabilityPressure() {
 		const stats = v8.getHeapStatistics()
 		const usedPercent = (stats.used_heap_size / stats.heap_size_limit) * 100
-		if (usedPercent > 85) {
+
+		if (usedPercent > 90) {
+			Logger.error(`[SpiderEngine] CRITICAL Metabolic Pressure (${usedPercent.toFixed(1)}%). Triggering ABSOLUTE SWEEP.`)
+			this.resolver.dispose()
+			this.sessionBuffer.clear()
+			this.substrateCheckpoint = null
+			this.ghosts.clear()
+			if (global.gc) global.gc()
+			return
+		}
+
+		if (usedPercent > 80) {
 			Logger.warn(
 				`[SpiderEngine] High Metabolic Pressure detected (${usedPercent.toFixed(1)}%). Triggering Substrate Sweep.`,
 			)
@@ -539,6 +581,10 @@ export class SpiderEngine {
 					// Skip unreachable files
 				}
 			}
+
+			// V200: Metabolic Pulse - Emergency reclamation between batches
+			this.checkStabilityPressure()
+
 			// V160: Relinquish control to the event loop between batches
 			if (i + BATCH_SIZE < files.length) {
 				await new Promise((resolve) => setTimeout(resolve, 0))
@@ -590,6 +636,11 @@ export class SpiderEngine {
 			Logger.info(`[SpiderEngine] Registry Synchronized: Pruned ${pruned}, Re-indexed ${reindexed}.`)
 			this.metrics.computeCouplingMetrics(this.nodes)
 			this.metrics.computeReachability(this.nodes)
+
+			// V200: Forensic Ghost Pruning
+			for (const g of this.ghosts) {
+				if (!this.nodes.has(g)) this.ghosts.delete(g)
+			}
 		}
 	}
 

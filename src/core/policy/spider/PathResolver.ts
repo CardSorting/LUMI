@@ -5,9 +5,10 @@ import { getLayer, Layer } from "../../../utils/joy-zoning.js"
 
 export class PathResolver {
 	private dynamicAliases: Map<string, string> = new Map()
-	private resolutionCache: Map<string, string | null> = new Map()
-	private negativeCache: Map<string, boolean> = new Map()
+	private resolutionCache: Map<string, Map<string, string | null>> = new Map()
+	private negativeCache: Map<string, Map<string, boolean>> = new Map()
 	private canonicalCache: Map<string, string> = new Map()
+	private stringInterner: Map<string, string> = new Map() // V200: Memory deduplication core
 
 	constructor(
 		private cwd: string,
@@ -48,8 +49,10 @@ export class PathResolver {
 	}
 
 	public resolveImportToNodeId(sourcePath: string, specifier: string, nodes: Set<string>): string | null {
-		const cacheKey = `${sourcePath}:${specifier}`
-		if (this.resolutionCache.has(cacheKey)) return this.resolutionCache.get(cacheKey) ?? null
+		this.checkCacheSaturation()
+
+		let sourceMap = this.resolutionCache.get(sourcePath)
+		if (sourceMap?.has(specifier)) return sourceMap.get(specifier) ?? null
 
 		let result: string | null = null
 		if (specifier.startsWith(".")) {
@@ -85,8 +88,12 @@ export class PathResolver {
 				}
 			}
 		}
-		this.resolutionCache.set(cacheKey, result)
-		return result
+		if (!sourceMap) {
+			sourceMap = new Map()
+			this.resolutionCache.set(sourcePath, sourceMap)
+		}
+		sourceMap.set(specifier, result)
+		return result ? this.intern(result) : null
 	}
 
 	public getDiskPath(sourcePath: string, specifier: string): string | null {
@@ -115,8 +122,8 @@ export class PathResolver {
 	}
 
 	public verifyOnDisk(sourcePath: string, specifier: string): boolean {
-		const cacheKey = `${sourcePath}:${specifier}`
-		if (this.negativeCache.has(cacheKey)) return false
+		let sourceMap = this.negativeCache.get(sourcePath)
+		if (sourceMap?.has(specifier)) return false
 
 		const diskPath = this.getDiskPath(sourcePath, specifier)
 		if (diskPath) return true
@@ -124,7 +131,11 @@ export class PathResolver {
 		// External check fallback
 		if (!specifier.startsWith(".") && !this.isProjectAlias(specifier)) return true
 
-		this.negativeCache.set(cacheKey, true)
+		if (!sourceMap) {
+			sourceMap = new Map()
+			this.negativeCache.set(sourcePath, sourceMap)
+		}
+		sourceMap.set(specifier, true)
 		return false
 	}
 
@@ -149,6 +160,7 @@ export class PathResolver {
 	 */
 	public canonicalize(p: string): string {
 		if (!p) return ""
+		this.checkCacheSaturation()
 		const cached = this.canonicalCache.get(p)
 		if (cached) return cached
 
@@ -162,20 +174,57 @@ export class PathResolver {
 		}
 
 		this.canonicalCache.set(p, result)
-		return result
+		return this.intern(result)
+	}
+
+	/**
+	 * V200: String Interning (Atomic Identity).
+	 * Ensures that every unique path string exists exactly once in memory.
+	 */
+	public intern(s: string): string {
+		const existing = this.stringInterner.get(s)
+		if (existing) return existing
+		this.stringInterner.set(s, s)
+		return s
 	}
 
 	public clearCaches() {
 		this.resolutionCache.clear()
 		this.negativeCache.clear()
 		this.canonicalCache.clear()
+		this.stringInterner.clear()
 	}
 
 	public clearFileFromCache(filePath: string) {
-		for (const key of this.resolutionCache.keys()) {
-			if (key.startsWith(`${filePath}:`)) {
-				this.resolutionCache.delete(key)
-			}
+		this.resolutionCache.delete(filePath)
+		this.negativeCache.delete(filePath)
+	}
+
+	/**
+	 * V200: Metabolic Hygiene.
+	 * Explicitly releases all caches and maps to assist garbage collection.
+	 */
+	public dispose() {
+		this.resolutionCache.clear()
+		this.negativeCache.clear()
+		this.canonicalCache.clear()
+		this.stringInterner.clear()
+		this.dynamicAliases.clear()
+	}
+
+	/**
+	 * V200: Cache Saturation Floor.
+	 * Prevents indefinite memory growth in massive projects.
+	 */
+	private checkCacheSaturation() {
+		const MAX_ENTRIES = 5000
+		if (this.resolutionCache.size > MAX_ENTRIES) {
+			this.resolutionCache.clear()
+			Logger.info("[PathResolver] Resolution cache saturated. Metaphorical sweep performed.")
+		}
+		if (this.canonicalCache.size > MAX_ENTRIES) {
+			this.canonicalCache.clear()
+			Logger.info("[PathResolver] Canonical cache saturated. Metaphorical sweep performed.")
 		}
 	}
 

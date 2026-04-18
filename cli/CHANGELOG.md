@@ -1,8 +1,19 @@
 # cline
 
-## [2.10.0]
+## [2.10.0] - 2026-04-18
 
 ### Added
+- **Spider Engine Industrial Sovereignty**: Hardened the substrate into a high-fidelity, memory-resident architectural guardian with zero filesystem footprint.
+- **Substrate Atomicity**: Implemented asynchronous stability locks (mutex) and heartbeats to prevent race conditions during concurrent tool executions.
+- **Forensic Risk Mapping**: Integrated project-wide "Blast Radius" sensing and fragility mapping to identify structural hotspots.
+- **Industrial Persistence**: Migrated to V8 binary serialization and Merkle-throttled restoration for 100% snapshot fidelity.
+- **Cognitive Entropy Mapping**: Added AST-based logic depth and cyclomatic complexity metrics to quantify semantic technical debt.
+- **Autonomous Deadwood Pruning**: Implemented self-healing metabolic pruning that automatically demotes unused exports to local symbols.
+- **Substrate Boundary Enforcement**: Hard-guarded internal agentic directories (.gemini, src/generated) from leaky structural forensics.
+
+### Fixed
+- **Zero-Noise Integrity**: Resolved all remaining Biome lint errors and type-safety warnings across the core policy engine.
+- **Type Safety**: Hardened AST traversal logic in MetricsEngine and RefactorHealer to correctly handle ModifierLike and BinaryExpression nodes.
 
 ## [2.9.0] - 2026-03-15
 

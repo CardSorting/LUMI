@@ -146,6 +146,19 @@ export class FluidPolicyEngine {
 	}
 
 	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 * Shuts down all engines and releases persistence buffers to prevent memory leaks.
+	 */
+	public dispose(): void {
+		this.spiderEngine.dispose()
+		this.layerCache.clear()
+		this.sessionFiles.clear()
+		this.restorationTokens.clear()
+		this.gracePeriods.clear()
+		Logger.info("[FluidPolicyEngine] Sovereign Teardown Complete. All substrates released.")
+	}
+
+	/**
 	 * Increments and persists the strike count for a file.
 	 */
 	private async incrementStrikes(filePath: string): Promise<number> {
@@ -1316,80 +1329,87 @@ export class FluidPolicyEngine {
 					this.spiderEngine.setSessionBuffer(this.sessionFiles)
 
 					// 0.1: Acquire Stability Lock (V190: Industrial Sovereignty)
-					await this.spiderEngine.acquireStabilityLock("AGENT_MUTATION")
-
-					// 0.2: Create Structural Checkpoint (V200: Resilience Insurance)
-					this.spiderEngine.createCheckpoint()
-
-					// 1. Run the Sweep (Auto-fix lint/imports/pruning)
-					const sweepResult = await this.garbageCollector.sweep([normPath])
-
-					// 2. Synchronize Graph
-					const content = await fs.readFile(absPath, "utf-8")
-					const lastIntegrity = this.spiderEngine.nodes.get(normPath)?.namingScore || 1.0
-
-					// 2.1: Axiomatic Resonance Snapshot (V187)
-					const lastAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
-
-					this.spiderEngine.updateNode(normPath, content)
-					const currentIntegrity = this.spiderEngine.nodes.get(normPath)?.namingScore || 1.0
-					const currentAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
-					const axiomaticResult = this.axiomEngine.compareAxiomSessions(lastAxioms, currentAxioms)
-
-					// 2.2: Merkle Resonance Tracking (V186)
-					const merkle = this.spiderEngine.computeMerkleRoot()
-					if (this.streamId) {
-						await orchestrator.storeMemory(this.streamId, "merkle_resonance", merkle)
+					const lockId = await this.spiderEngine.acquireStabilityLock("AGENT_MUTATION")
+					if (!lockId) {
+						result.success = false
+						result.error = "Stability Lock collision: Transaction denied by another agentic process."
+						return result
 					}
 
-					this.metabolicMonitor.recordWrite(normPath, content, 0, 0, this.streamId)
+					try {
+						// 0.2: Create Structural Checkpoint (V200: Resilience Insurance)
+						this.spiderEngine.createCheckpoint()
 
-					// 2.2: Structural & Axiomatic Gain Enforcement
-					if (axiomaticResult.status === "POSITIVE" && lastAxioms.length > currentAxioms.length) {
-						result.warning =
-							(result.warning ? `${result.warning}\n` : "") +
-							`✨ AXIOMATIC ALIGNMENT: Fundamental structural contradictions resolved in ${path.basename(filePath)}. Double down on this concept!`
-					} else if (axiomaticResult.status === "NEGATIVE") {
-						result.warning =
-							(result.warning ? `${result.warning}\n` : "") +
-							`⚠️ AXIOMATIC DECAY: This change introduced new structural violations. [INDUSTRIAL_ROLLBACK] suggested if build fails.`
-					} else if (currentIntegrity > lastIntegrity) {
-						result.warning =
-							(result.warning ? `${result.warning}\n` : "") +
-							`✨ STRUCTURAL GAIN: Identifier casing integrity improved in ${path.basename(filePath)}. Double down on this concept!`
-					} else if (axiomaticResult.message) {
-						result.warning = (result.warning ? `${result.warning}\n` : "") + axiomaticResult.message
-					}
+						// 1. Run the Sweep (Auto-fix lint/imports/pruning)
+						const sweepResult = await this.garbageCollector.sweep([normPath])
 
-					// 3. Report remaining errors
-					if (sweepResult.remainingErrors.length > 0) {
-						const attempts = (this.gracePeriods.get(normPath) || 0) + 1
-						this.gracePeriods.set(normPath, attempts)
+						// 2. Synchronize Graph
+						const content = await fs.readFile(absPath, "utf-8")
+						const lastIntegrity = this.spiderEngine.nodes.get(normPath)?.namingScore || 1.0
 
-						const isHealingIntent = this.verification.detectHealingIntent(block) !== null
-						const isRefactoringIntent = this.refactorTurnsRemaining > 0 || isHealingIntent
+						// 2.1: Axiomatic Resonance Snapshot (V187)
+						const lastAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
 
-						if (isRefactoringIntent && attempts === 1) {
-							// V100: GC Soft-Lock Grace Period
-							result.success = true // Proceed with warning
-							result.warning = `🩹 GC SOFT-LOCK ACTIVE: Minor build regressions remain after Sweep. Proceeding with caution. FIX IN NEXT TURN:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
-							Logger.warn(`[FluidPolicyEngine] Soft-Lock Grace Period utilized for ${path.basename(filePath)}`)
-						} else {
-							result.success = false // Build regression detected
-							result.buildErrors = sweepResult.remainingErrors
-							result.warning = `⚠️ Build/Lint issues persist after Sweep:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
-							result.correctionHint =
-								"The Garbage Collector could not auto-resolve these errors. Manual intervention required."
+						this.spiderEngine.updateNode(normPath, content)
+						const currentIntegrity = this.spiderEngine.nodes.get(normPath)?.namingScore || 1.0
+						const currentAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
+						const axiomaticResult = this.axiomEngine.compareAxiomSessions(lastAxioms, currentAxioms)
+
+						// 2.2: Merkle Resonance Tracking (V186)
+						const merkle = this.spiderEngine.computeMerkleRoot()
+						if (this.streamId) {
+							await orchestrator.storeMemory(this.streamId, "merkle_resonance", merkle)
 						}
-					} else if (sweepResult.fixedCount > 0) {
-						Logger.info(
-							`[FluidPolicyEngine] Sweep fixed ${sweepResult.fixedCount} issues in ${path.basename(filePath)}.`,
-						)
+
+						this.metabolicMonitor.recordWrite(normPath, content, 0, 0, this.streamId)
+
+						// 2.2: Structural & Axiomatic Gain Enforcement
+						if (axiomaticResult.status === "POSITIVE" && lastAxioms.length > currentAxioms.length) {
+							result.warning =
+								(result.warning ? `${result.warning}\n` : "") +
+								`✨ AXIOMATIC ALIGNMENT: Fundamental structural contradictions resolved in ${path.basename(filePath)}. Double down on this concept!`
+						} else if (axiomaticResult.status === "NEGATIVE") {
+							result.warning =
+								(result.warning ? `${result.warning}\n` : "") +
+								`⚠️ AXIOMATIC DECAY: This change introduced new structural violations. [INDUSTRIAL_ROLLBACK] suggested if build fails.`
+						} else if (currentIntegrity > lastIntegrity) {
+							result.warning =
+								(result.warning ? `${result.warning}\n` : "") +
+								`✨ STRUCTURAL GAIN: Identifier casing integrity improved in ${path.basename(filePath)}. Double down on this concept!`
+						} else if (axiomaticResult.message) {
+							result.warning = (result.warning ? `${result.warning}\n` : "") + axiomaticResult.message
+						}
+
+						// 3. Report remaining errors
+						if (sweepResult.remainingErrors.length > 0) {
+							const attempts = (this.gracePeriods.get(normPath) || 0) + 1
+							this.gracePeriods.set(normPath, attempts)
+
+							const isHealingIntent = this.verification.detectHealingIntent(block) !== null
+							const isRefactoringIntent = this.refactorTurnsRemaining > 0 || isHealingIntent
+
+							if (isRefactoringIntent && attempts === 1) {
+								// V100: GC Soft-Lock Grace Period
+								result.success = true // Proceed with warning
+								result.warning = `🩹 GC SOFT-LOCK ACTIVE: Minor build regressions remain after Sweep. Proceeding with caution. FIX IN NEXT TURN:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
+								Logger.warn(`[FluidPolicyEngine] Soft-Lock Grace Period utilized for ${path.basename(filePath)}`)
+							} else {
+								result.success = false // Build regression detected
+								result.buildErrors = sweepResult.remainingErrors
+								result.warning = `⚠️ Build/Lint issues persist after Sweep:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
+								result.correctionHint =
+									"The Garbage Collector could not auto-resolve these errors. Manual intervention required."
+							}
+						} else if (sweepResult.fixedCount > 0) {
+							Logger.info(
+								`[FluidPolicyEngine] Sweep fixed ${sweepResult.fixedCount} issues in ${path.basename(filePath)}.`,
+							)
+						}
+					} finally {
+						this.spiderEngine.releaseStabilityLock("AGENT_MUTATION", lockId)
 					}
 				} catch (e) {
 					Logger.error(`[FluidPolicyEngine] Garbage Collection failed for ${filePath}:`, e)
-				} finally {
-					this.spiderEngine.releaseStabilityLock("AGENT_MUTATION")
 				}
 			}
 		}
