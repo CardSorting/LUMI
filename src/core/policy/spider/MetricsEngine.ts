@@ -167,4 +167,48 @@ export class MetricsEngine {
 
 		return { score, components: { depthScore, namingScore, orphanScore, couplingScore, cycles: cycles.length } }
 	}
+
+	/**
+	 * V200: Cognitive Entropy (Semantic Analysis).
+	 * Calculates cyclomatic and nesting complexity using the TypeScript AST.
+	 */
+	public calculateCognitiveComplexity(sourceFile: import("typescript").SourceFile): number {
+		const ts = require("typescript")
+		let complexity = 0
+		let nesting = 0
+
+		const visit = (node: import("typescript").Node) => {
+			// Cyclomatic complexity markers
+			if (
+				ts.isIfStatement(node) ||
+				ts.isSwitchStatement(node) ||
+				ts.isForStatement(node) ||
+				ts.isForInStatement(node) ||
+				ts.isForOfStatement(node) ||
+				ts.isWhileStatement(node) ||
+				ts.isDoStatement(node) ||
+				ts.isCatchClause(node) ||
+				ts.isConditionalExpression(node) ||
+				(ts.isBinaryExpression(node) &&
+					((node as import("typescript").BinaryExpression).operatorToken.kind ===
+						ts.SyntaxKind.AmpersandAmpersandToken ||
+						(node as import("typescript").BinaryExpression).operatorToken.kind === ts.SyntaxKind.BarBarToken))
+			) {
+				complexity++
+				complexity += nesting * 0.5 // Weighted by depth
+			}
+
+			// Nesting depth
+			if (ts.isBlock(node) || ts.isFunctionLike(node)) {
+				nesting++
+				ts.forEachChild(node, visit)
+				nesting--
+			} else {
+				ts.forEachChild(node, visit)
+			}
+		}
+
+		ts.forEachChild(sourceFile, visit)
+		return Math.min(complexity / 10, 1.0)
+	}
 }

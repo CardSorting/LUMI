@@ -1318,6 +1318,9 @@ export class FluidPolicyEngine {
 					// 0.1: Acquire Stability Lock (V190: Industrial Sovereignty)
 					await this.spiderEngine.acquireStabilityLock("AGENT_MUTATION")
 
+					// 0.2: Create Structural Checkpoint (V200: Resilience Insurance)
+					this.spiderEngine.createCheckpoint()
+
 					// 1. Run the Sweep (Auto-fix lint/imports/pruning)
 					const sweepResult = await this.garbageCollector.sweep([normPath])
 
@@ -1346,6 +1349,10 @@ export class FluidPolicyEngine {
 						result.warning =
 							(result.warning ? `${result.warning}\n` : "") +
 							`✨ AXIOMATIC ALIGNMENT: Fundamental structural contradictions resolved in ${path.basename(filePath)}. Double down on this concept!`
+					} else if (axiomaticResult.status === "NEGATIVE") {
+						result.warning =
+							(result.warning ? `${result.warning}\n` : "") +
+							`⚠️ AXIOMATIC DECAY: This change introduced new structural violations. [INDUSTRIAL_ROLLBACK] suggested if build fails.`
 					} else if (currentIntegrity > lastIntegrity) {
 						result.warning =
 							(result.warning ? `${result.warning}\n` : "") +
@@ -1678,7 +1685,9 @@ export class FluidPolicyEngine {
 				const drifts = this.spiderEngine.getForensicEngine().compareContracts(oldNodes, this.spiderEngine.nodes)
 				if (drifts.length > 0) {
 					Logger.warn(`[FluidPolicyEngine] Industrial Drift Detected: ${drifts.length} interface changes sensed.`)
-					drifts.forEach((d) => Logger.warn(`  ${d}`))
+					for (const d of drifts) {
+						Logger.warn(`  ${d}`)
+					}
 				}
 
 				Logger.info("[FluidPolicyEngine] Spider Substrate restored and verified from Ghost Memory.")

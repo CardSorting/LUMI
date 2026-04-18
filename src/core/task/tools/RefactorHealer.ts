@@ -392,26 +392,28 @@ export class RefactorHealer {
 	}
 
 	/**
-	 * V17: Generates an executable healing recipe for structural violations.
+	 * V200: Strategic Healing Recipe.
+	 * Generates hyper-deterministic directives based on structural risk metrics.
 	 */
-	public generateHealingRecipe(violation: SpiderViolation): string {
+	public generateHealingRecipe(violation: SpiderViolation, engine?: SpiderEngine): string {
+		const node = engine?.nodes.get(violation.path)
+		const riskPrefix = node?.isHotspot ? "🔥 [HOTSPOT_REPAIR]: " : node?.isFragile ? "🛡️ [FRAGILE_SHIELD]: " : ""
+
 		switch (violation.id) {
 			case "SPI-001": // Contractless Breach
 				const className = violation.message.match(/Module (.*) exports/)?.[1]
-				return className
-					? `🚨 [DIRECTIVE]: Extract I${className} to domain/interfaces and run SWEEP.`
-					: "🚨 [DIRECTIVE]: Implement a domain interface to break direct leakage."
+				return `${riskPrefix}Extract I${className || "Component"} to domain/interfaces and run SWEEP.`
 			case "SPI-004": // Cycle
-				return `🚨 [DIRECTIVE]: Use 'import type' for shared interfaces or extract shared logic to plumbing/.`
+				return `${riskPrefix}Break Cycle via Dependency Inversion or move shared logic to src/plumbing/.`
 			case "SPI-005": // Ghost
-				return `🧹 [DIRECTIVE]: Execute Sovereign Garbage Collector Sweep to auto-align symbols.`
+				return `${riskPrefix}Materialize missing symbols via Sovereign Garbage Collector Sweep.`
 			case "SPI-103": // Unused Export
-				return `🧹 [DIRECTIVE]: Prune unused export in ${path.basename(violation.path)} to reduce noise.`
+				return `🧹 [METABOLIC_PRUNE]: Autonomously demote unused export in ${path.basename(violation.path)}.`
 			case "SPI-003": // Orphan
-				return `🗑️ [DIRECTIVE]: Delete this file if redundant (Metabolic Trash detected).`
+				return `🗑️ [METABOLIC_TRASH]: Delete this file if redundant (Disconnected from Root).`
 			default:
 				if (violation.message.includes("Geographic Misalignment")) {
-					return `📍 [DIRECTIVE]: Align [LAYER] tag to match physical path and run SWEEP.`
+					return `${riskPrefix}Align [LAYER] tag to match physical path and synchronize registry.`
 				}
 				return `🛠️ [FIX]: ${violation.message}`
 		}
@@ -490,24 +492,32 @@ export class RefactorHealer {
 									ts.isMethodSignature(member) ||
 									ts.isPropertySignature(member)
 								) {
-									const isAsync =
-										member.modifiers && member.modifiers.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)
-											? "async "
-											: ""
+									const isAsync = member.modifiers?.some(
+										(m: ts.ModifierLike) => m.kind === ts.SyntaxKind.AsyncKeyword,
+									)
+										? "async "
+										: ""
 									const name = member.name?.getText(sourceFile) || "unknown"
 									const params =
 										ts.isMethodDeclaration(member) || ts.isMethodSignature(member)
 											? `(${member.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
 											: ""
-									const type = (member as any).type ? `: ${(member as any).type.getText(sourceFile)}` : ""
+									const type = (
+										member as
+											| ts.PropertyDeclaration
+											| ts.PropertySignature
+											| ts.MethodDeclaration
+											| ts.MethodSignature
+									).type
+										? `: ${(member as any).type.getText(sourceFile)}`
+										: ""
 									signatures.push(`public ${isAsync}${name}${params}${type};`)
 								}
 							}
 						} else if (ts.isFunctionDeclaration(decl)) {
-							const isAsync =
-								decl.modifiers && decl.modifiers.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)
-									? "async "
-									: ""
+							const isAsync = decl.modifiers?.some((m: ts.ModifierLike) => m.kind === ts.SyntaxKind.AsyncKeyword)
+								? "async "
+								: ""
 							const name = decl.name?.getText(sourceFile) || "unknown"
 							const params = `(${decl.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
 							const type = decl.type ? `: ${decl.type.getText(sourceFile)}` : ""
@@ -523,7 +533,12 @@ export class RefactorHealer {
 							ts.isFunctionDeclaration(child) ||
 							ts.isTypeAliasDeclaration(child)
 						) {
-							if ((child as any).name?.getText(sourceFile) === symbol) {
+							const namedNode = child as
+								| ts.ClassDeclaration
+								| ts.InterfaceDeclaration
+								| ts.FunctionDeclaration
+								| ts.TypeAliasDeclaration
+							if (namedNode.name?.getText(sourceFile) === symbol) {
 								processDeclaration(child)
 							}
 						}
@@ -536,10 +551,11 @@ export class RefactorHealer {
 										(ts.isArrowFunction(desc.initializer) || ts.isFunctionExpression(desc.initializer))
 									) {
 										const func = desc.initializer as ts.ArrowFunction | ts.FunctionExpression
-										const isAsync =
-											func.modifiers && func.modifiers.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)
-												? "async "
-												: ""
+										const isAsync = func.modifiers?.some(
+											(m: ts.ModifierLike) => m.kind === ts.SyntaxKind.AsyncKeyword,
+										)
+											? "async "
+											: ""
 										const params = `(${func.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
 										const type = func.type ? `: ${func.type.getText(sourceFile)}` : ""
 										signatures.push(

@@ -62,6 +62,8 @@ export class SpiderEngine {
 	private sessionBuffer: Map<string, string> = new Map() // V71: Virtual Session Sensing
 	private stabilityLock: string | null = null // V190: Async Mutual Exclusion Lock
 	private stabilityHeartbeat: NodeJS.Timeout | null = null // V190: Lock expiration timer
+	private substrateCheckpoint: Buffer | null = null // V200: Resilience Snapshot
+	private checkpointTimestamp: string | null = null // V200: Snapshot metadata
 
 	private reachabilityTimeout: NodeJS.Timeout | null = null
 	constructor(public cwd: string) {
@@ -69,6 +71,39 @@ export class SpiderEngine {
 		this.metrics = new MetricsEngine(cwd, this.resolver)
 		this.persistence = new PersistenceManager(this.metrics)
 		this.forensic = new ForensicEngine(cwd, this.resolver)
+	}
+
+	/**
+	 * V200: Structural Resilience.
+	 * Captures a binary snapshot of the current structural truth.
+	 */
+	public createCheckpoint(): void {
+		this.substrateCheckpoint = this.persistence.serialize(this.nodes)
+		this.checkpointTimestamp = new Date().toISOString()
+		Logger.info(`[SpiderEngine] Substrate Checkpoint Created: ${this.checkpointTimestamp}`)
+	}
+
+	/**
+	 * V200: Structural Resilience.
+	 * Reverts the substrate to the last valid checkpoint.
+	 */
+	public async rollbackSubstrate(): Promise<boolean> {
+		if (!this.substrateCheckpoint) {
+			Logger.error("[SpiderEngine] Rollback failed: No substrate checkpoint found.")
+			return false
+		}
+
+		try {
+			const payload = this.persistence.deserialize(this.substrateCheckpoint)
+			this.nodes = new Map(payload.nodes)
+			this.version++
+			Logger.info(`[SpiderEngine] Substrate successfully rolled back to checkpoint: ${this.checkpointTimestamp}`)
+			this.substrateCheckpoint = null // Clear after successful rollback
+			return true
+		} catch (e) {
+			Logger.error("[SpiderEngine] Critical failure during substrate rollback:", e)
+			return false
+		}
 	}
 
 	/**
@@ -178,6 +213,8 @@ export class SpiderEngine {
 			logicCohesion: 0.5,
 			blastRadius: 0, // Computed project-wide
 			isFragile: false,
+			cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
+			isHotspot: false, // Computed project-wide
 		}
 
 		this.nodes.set(normalizedPath, newNode)
@@ -511,13 +548,14 @@ export class SpiderEngine {
 		this.metrics.computeCouplingMetrics(this.nodes)
 		this.metrics.computeReachability(this.nodes)
 
-		// 10. Compute Fragility (V190: Industrial Risk Mapping)
+		// 10. Compute Fragility & Hotspots (V200)
 		const fragility = this.forensic.computeFragility(this.nodes)
 		for (const [id, stats] of fragility.entries()) {
 			const n = this.nodes.get(id)
 			if (n) {
 				n.blastRadius = stats.blastRadius
 				n.isFragile = stats.isFragile
+				n.isHotspot = n.isFragile && n.cognitiveComplexity > 0.6
 			}
 		}
 

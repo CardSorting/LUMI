@@ -180,6 +180,23 @@ export class PathResolver {
 	}
 
 	/**
+	 * V200: Substrate Boundary Enforcement.
+	 * Identifies if a path is part of the internal agentic/system logic
+	 * that should be excluded from the structural graph.
+	 */
+	public isInternalPath(p: string): boolean {
+		const norm = this.canonicalize(p)
+		return (
+			norm.includes(".gemini") ||
+			norm.includes(".spider") ||
+			norm.includes("node_modules") ||
+			norm.includes(".git") ||
+			norm.includes("dist") ||
+			norm.includes("build")
+		)
+	}
+
+	/**
 	 * V93: Recursive project scanning for substrate re-indexing.
 	 */
 	public scanProject(): string[] {
@@ -189,16 +206,19 @@ export class PathResolver {
 
 		const stack = [srcDir]
 		while (stack.length > 0) {
-			const dir = stack.pop()!
+			const dir = stack.pop()
+			if (!dir) continue
 			const items = fs.readdirSync(dir, { withFileTypes: true })
 			for (const item of items) {
 				const full = path.join(dir, item.name)
+				const itemRel = path.relative(this.cwd, full).replace(/\\/g, "/")
+
+				if (this.isInternalPath(itemRel)) continue
+
 				if (item.isDirectory()) {
-					if (item.name !== "node_modules" && !item.name.startsWith(".")) {
-						stack.push(full)
-					}
+					stack.push(full)
 				} else if (item.name.endsWith(".ts") || item.name.endsWith(".tsx")) {
-					results.push(path.relative(this.cwd, full).replace(/\\/g, "/"))
+					results.push(itemRel)
 				}
 			}
 		}

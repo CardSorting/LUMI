@@ -39,7 +39,9 @@ export class SovereignGarbageCollector {
 		const queue = [...filePaths.map((f) => ({ path: f, depth: 0 }))]
 
 		while (queue.length > 0) {
-			const { path: filePath, depth } = queue.shift()!
+			const item = queue.shift()
+			if (!item) continue
+			const { path: filePath, depth } = item
 			if (processed.has(filePath)) continue
 			processed.add(filePath)
 
@@ -64,7 +66,7 @@ export class SovereignGarbageCollector {
 			}
 
 			// 2. Pathogen Store (Immune Memory Decay)
-			if (this.pathogens && this.pathogens.isPathogenic(filePath)) {
+			if (this.pathogens?.isPathogenic(filePath)) {
 				this.pathogens.decay(filePath)
 				totalFixed++
 				fileModified = true
@@ -114,7 +116,15 @@ export class SovereignGarbageCollector {
 				repairLog.push(`[LINT] Fixed ${lintResult.fixedCount} formatting/lint issues in ${filePath}`)
 			}
 
-			// 4. Forensic Pruning (False Positive Suppression)
+			// 5. Autonomous Deadwood Pruning (V200: Industrial Sovereignty)
+			// Automatically demotes unused exports (SPI-103) found by the Forensic Engine.
+			if (await this.pruneUnusedExports(filePath)) {
+				totalFixed++
+				fileModified = true
+				repairLog.push(`[PRUNING] Autonomously neutralized deadwood symbols in ${filePath}`)
+			}
+
+			// 6. Forensic Pruning (False Positive Suppression)
 			await this.pruneFalsePositives(filePath)
 
 			// 9. Final Build Check (Verification)
@@ -165,7 +175,7 @@ export class SovereignGarbageCollector {
 
 				// 1. Handle 'export { X }'
 				const namedExportRegex = new RegExp(`export\\s+\\{([^}]*\\b${symbol}\\b[^}]*)\\}`, "g")
-				const newContentNamed = content.replace(namedExportRegex, (m, symbols) => {
+				const newContentNamed = content.replace(namedExportRegex, (_m, symbols) => {
 					fixed = true
 					const remaining = symbols
 						.split(",")
@@ -186,7 +196,7 @@ export class SovereignGarbageCollector {
 					`export\\s+(class|const|interface|type|function|enum|let|var)\\s+${symbol}\\b`,
 					"g",
 				)
-				const newContentInline = content.replace(inlineExportRegex, (m, type) => {
+				const newContentInline = content.replace(inlineExportRegex, (_m, type) => {
 					fixed = true
 					return `${type} ${symbol}`
 				})
@@ -296,8 +306,9 @@ export class SovereignGarbageCollector {
 				{ cwd: this.cwd },
 			)
 			return { success: true, errors: [] }
-		} catch (e: any) {
-			const errors = (e.stderr || e.stdout || "")
+		} catch (e: unknown) {
+			const err = e as { stderr?: string; stdout?: string }
+			const errors = (err.stderr || err.stdout || "")
 				.split("\n")
 				.filter((l: string) => l.includes("error TS"))
 				.slice(0, 3)
@@ -415,10 +426,11 @@ export class SovereignGarbageCollector {
 			}
 
 			return { fixedCount, errors }
-		} catch (e: any) {
+		} catch (e: unknown) {
+			const err = e as { stderr?: string }
 			// Biome exits with non-zero if errors persist
 			const errors: string[] = []
-			const lines = (e.stderr || "").split("\n")
+			const lines = (err.stderr || "").split("\n")
 			for (const line of lines) {
 				if (line.includes("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")) continue
 				if (line.trim().length > 0 && !line.includes("Checking") && !line.includes("Found")) {

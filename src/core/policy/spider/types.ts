@@ -22,6 +22,8 @@ export interface SpiderNode {
 	logicCohesion: number // V160: Internal symbol re-use score
 	blastRadius: number // V190: Systemic risk score (0-1.0)
 	isFragile: boolean // V190: Flag for high-blast radius components
+	cognitiveComplexity: number // V200: Logic depth/branching complexity
+	isHotspot: boolean // V200: Flag for High Risk + High Complexity
 }
 
 export interface SpiderSnapshot {
