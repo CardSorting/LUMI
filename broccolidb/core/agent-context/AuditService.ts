@@ -1,4 +1,5 @@
 import * as crypto from 'node:crypto';
+import { Logger } from '../../shared/services/Logger.js';
 import type { GraphService } from './GraphService.js';
 import type { ReasoningService } from './ReasoningService.js';
 import type { ImpactReport, ServiceContext } from './types.js';
@@ -21,8 +22,9 @@ export class AuditService {
 
     // [Pillar 4] Structural Awareness: Check if this path is "load-bearing"
     const discovery = this.ctx.getStructuralImpact(path);
-    if (discovery.blastRadius > 10) {
-      console.warn(`[AuditService] High Blast Radius detected for ${path}: ${discovery.blastRadius}. Escalating audit.`);
+    const blastCount = discovery.blastRadius?.affectedNodes?.length ?? 0;
+    if (blastCount > 10) {
+      Logger.warn(`[AuditService] High Blast Radius detected for ${path}: ${blastCount} affected nodes. Escalating audit.`);
       // Scale rule strictly for high impact files
     }
 
@@ -41,8 +43,9 @@ export class AuditService {
     const filePath = input.path || input.targetFile || input.SearchPath;
     if (filePath) {
         const discovery = this.ctx.getStructuralImpact(filePath);
-        if (discovery && discovery.blastRadius > 15) {
-            return { approved: false, reason: `Blast radius ${discovery.blastRadius} is too high for autonomous execution. Requires manual Leader approval.` };
+        const blastCount = discovery?.blastRadius?.affectedNodes?.length ?? 0;
+        if (blastCount > 15) {
+            return { approved: false, reason: `Blast radius ${blastCount} affected nodes is too high for autonomous execution. Requires manual Leader approval.` };
         }
     }
 

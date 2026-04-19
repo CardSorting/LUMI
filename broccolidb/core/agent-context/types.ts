@@ -4,6 +4,7 @@ import type { Workspace } from '../workspace.js';
 import type { LspService } from './LspService.js';
 import type { CoordinatorService } from './CoordinatorService.js';
 import type { ScratchpadService } from './ScratchpadService.js';
+import type { BlastRadius } from './StructuralDiscoveryService.js';
 import type { CompactService } from './CompactService.js';
 import type { MailboxService } from './MailboxService.js';
 
@@ -157,7 +158,7 @@ export interface ServiceContext {
     options?: { augmentWithGraph?: boolean; skipVerification?: boolean }
   ) => Promise<KnowledgeBaseItem[]>;
   updateTaskStatus: (taskId: string, status: any, result?: any) => Promise<void>;
-  getStructuralImpact: (filePath: string) => { summary: string; blastRadius: any };
+  getStructuralImpact: (filePath: string) => { summary: string; blastRadius: BlastRadius };
   pasteStore: import('./PasteStore.js').PasteStore;
   compact: import('./CompactService.js').CompactService;
   storage: import('../../infrastructure/storage/StorageService.js').StorageService;
@@ -170,7 +171,7 @@ export interface ServiceContext {
 }
 
 export interface IAgentContext {
-  getStructuralImpact(filePath: string): { summary: string; blastRadius: any };
+  getStructuralImpact(filePath: string): { summary: string; blastRadius: BlastRadius };
   searchKnowledge(
     query: string,
     tags?: string[],

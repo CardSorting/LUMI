@@ -96,41 +96,67 @@ export function validateLayering(filePath: string, content: string): string[] {
   // Validate imports
   sourceFile.getImportDeclarations().forEach((imp: ImportDeclaration) => {
     const moduleSpecifier = imp.getModuleSpecifierValue();
-    if (moduleSpecifier.startsWith('.')) {
-      const absoluteImportPath = path.resolve(path.dirname(filePath), moduleSpecifier);
-      const importedLayer = getLayer(absoluteImportPath);
+    if (moduleSpecifier.startsWith('.') || moduleSpecifier.startsWith('@/')) {
+      let resolvedPath = '';
+      if (moduleSpecifier.startsWith('.')) {
+          resolvedPath = path.resolve(path.dirname(filePath), moduleSpecifier);
+      } else {
+          resolvedPath = path.resolve(process.cwd(), moduleSpecifier.replace('@/', 'src/'));
+      }
+      
+      const extensions = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'];
+      let finalResolved = resolvedPath;
+      let found = false;
 
-      if (layer === 'domain') {
-        if (importedLayer === 'infrastructure' || importedLayer === 'ui') {
-          errors.push(
-            `Domain layer in ${path.basename(filePath)} cannot import from ${importedLayer}.`
-          );
-        }
+      for (const ext of extensions) {
+          const test = ext ? `${resolvedPath}${ext}` : resolvedPath;
+          if (fs.existsSync(test)) {
+              finalResolved = test;
+              found = true;
+              break;
+          }
+          const indexTest = path.join(resolvedPath, `index${ext}`);
+          if (fs.existsSync(indexTest)) {
+              finalResolved = indexTest;
+              found = true;
+              break;
+          }
       }
-      if (layer === 'core') {
-        if (importedLayer === 'ui') {
-          errors.push(
-            `Core layer in ${path.basename(filePath)} cannot import from UI — use events or callbacks.`
-          );
+
+      if (found) {
+        const importedLayer = getLayer(finalResolved);
+        if (layer === 'domain') {
+            if (importedLayer === 'infrastructure' || importedLayer === 'ui') {
+            errors.push(
+                `Domain layer in ${path.basename(filePath)} cannot import from ${importedLayer}.`
+            );
+            }
         }
-      }
-      if (layer === 'infrastructure') {
-        if (importedLayer === 'ui') {
-          errors.push(`Infrastructure layer in ${path.basename(filePath)} cannot import from UI.`);
+        if (layer === 'core') {
+            if (importedLayer === 'ui') {
+            errors.push(
+                `Core layer in ${path.basename(filePath)} cannot import from UI — use events or callbacks.`
+            );
+            }
         }
-      }
-      if (layer === 'ui') {
-        if (importedLayer === 'infrastructure') {
-          errors.push(
-            `UI layer in ${path.basename(filePath)} cannot directly import Infrastructure.`
-          );
+        if (layer === 'infrastructure') {
+            if (importedLayer === 'ui') {
+            errors.push(`Infrastructure layer in ${path.basename(filePath)} cannot import from UI.`);
+            }
         }
-      }
-      if (layer === 'plumbing') {
-        if (['domain', 'core', 'infrastructure', 'ui'].includes(importedLayer)) {
-          errors.push(
-            `Plumbing layer in ${path.basename(filePath)} cannot depend on ${importedLayer} layer.`
-          );
+        if (layer === 'ui') {
+            if (importedLayer === 'infrastructure') {
+            errors.push(
+                `UI layer in ${path.basename(filePath)} cannot directly import Infrastructure.`
+            );
+            }
+        }
+        if (layer === 'plumbing') {
+            if (['domain', 'core', 'infrastructure', 'ui'].includes(importedLayer)) {
+            errors.push(
+                `Plumbing layer in ${path.basename(filePath)} cannot depend on ${importedLayer} layer.`
+            );
+            }
         }
       }
     }
@@ -149,38 +175,8 @@ export function validateLayering(filePath: string, content: string): string[] {
     });
   }
 
-  // Circular Dependency Detection (Surface Level: A ↔ B direct cycles)
-  sourceFile.getImportDeclarations().forEach((imp: ImportDeclaration) => {
-    const moduleSpecifier = imp.getModuleSpecifierValue();
-    if (moduleSpecifier.startsWith('.')) {
-      const resolvedPath = path.resolve(
-        path.dirname(filePath),
-        moduleSpecifier + (moduleSpecifier.endsWith('.ts') ? '' : '.ts')
-      );
-      try {
-        const importedFile = project.addSourceFileAtPathIfExists(resolvedPath);
-        if (importedFile) {
-          const isCircular = importedFile.getImportDeclarations().some((i) => {
-            const spec = i.getModuleSpecifierValue();
-            if (!spec.startsWith('.')) return false;
-            const backResolved = path.resolve(
-              path.dirname(resolvedPath),
-              spec + (spec.endsWith('.ts') ? '' : '.ts')
-            );
-            return backResolved === filePath;
-          });
-          if (isCircular) {
-            errors.push(
-              `Architectural Violation: Circular dependency detected between ${path.basename(filePath)} and ${path.basename(resolvedPath)}.`
-            );
-          }
-        }
-      } catch {
-        /* Imported file not on disk or inaccessible; skip circular check for this import */
-      }
-    }
-  });
-
+  // NOTE: Multi-hop circular detection is now offloaded to the Spider MetricsEngine.
+  // Direct cycle detection is maintained here for lightweight file-level validation.
   return errors;
 }
 

@@ -1,7 +1,8 @@
 import { Logger } from '../../shared/services/Logger.js';
-import { SpiderEngine, type SpiderViolation } from '../policy/SpiderEngine.js';
+import { SpiderEngine, type SpiderViolation, type SpiderEntropyReport } from '../policy/SpiderEngine.js';
 import { Repository } from '../repository.js';
 import { StructuralDiscoveryService } from './StructuralDiscoveryService.js';
+import { TaskMutex } from '../mutex.js';
 import type { ServiceContext } from './types.js';
 
 export class SpiderService {
@@ -18,15 +19,22 @@ export class SpiderService {
    * Performs an LSP-enhanced structural audit.
    * Resolves physical definitions of all exported symbols.
    */
-  async auditWithLsp(files: { filePath: string; content: string }[]): Promise<any> {
-    console.log(`[Spider] 🕵️ Performing LSP-enhanced audit on ${files.length} files...`);
+  async auditWithLsp(files: { filePath: string; content: string }[]): Promise<{
+    entropy: number;
+    violations: SpiderViolation[];
+    mermaid: string;
+  }> {
+    Logger.info(`[SpiderService] 🕵️ Performing LSP-enhanced audit on ${files.length} files...`);
     
     this.engine.buildGraph(files);
 
+    // Ensure server is started once for the entire batch
+    await this.ctx.lsp.ensureServer('typescript');
+
     for (const file of files) {
-        if (!file.filePath.endsWith('.ts') && !file.filePath.endsWith('.tsx')) continue;
-        
-        await this.ctx.lsp.startServer('typescript', 'typescript-language-server', ['--stdio']);
+        const isTs = file.filePath.endsWith('.ts') || file.filePath.endsWith('.tsx');
+        const isJs = file.filePath.endsWith('.js') || file.filePath.endsWith('.jsx') || file.filePath.endsWith('.mjs');
+        if (!isTs && !isJs) continue;
         
         // Real Scanner: Identify exported symbols using regex
         const lines = file.content.split('\n');
@@ -40,18 +48,23 @@ export class SpiderService {
                 try {
                     const definitions = await this.ctx.lsp.getDefinitions('typescript', file.filePath, i, charIndex);
                     if (definitions && definitions.length > 0) {
-                        console.log(`[Spider] 🧠 Resolved symbol '${symbolName}' via LSP: ${JSON.stringify(definitions[0].uri)}`);
-                        // High-Fidelity Edge: In a real app, we'd add this to the graph
-                        // this.engine.addEdge(file.filePath, definitions[0].uri, 'references');
+                        Logger.info(`[SpiderService] 🧠 Resolved symbol '${symbolName}' via LSP: ${JSON.stringify(definitions[0].uri)}`);
                     }
                 } catch (err) {
-                    console.warn(`[Spider] ⚠️ Failed to resolve symbol '${symbolName}':`, err);
+                    Logger.warn(`[SpiderService] ⚠️ Failed to resolve symbol '${symbolName}': ${err}`);
                 }
             }
         }
     }
 
-    return this.auditStructure(files);
+    for (const file of files) {
+        this.engine.updateNode(file.filePath, file.content);
+    }
+
+    // Proactive Memory Management: Recycle project after batch update
+    this.engine.recycleProject();
+
+    return this.auditStructure();
   }
 
   async auditStructure(files?: { filePath: string; content: string }[]): Promise<{
@@ -65,7 +78,9 @@ export class SpiderService {
       }
       this.discovery.clearCache();
       if (files) {
-        this.engine.buildGraph(files);
+        for (const file of files) {
+            this.engine.updateNode(file.filePath, file.content);
+        }
       }
       const entropyReport = this.engine.computeEntropy();
       const entropy = entropyReport.score;
@@ -80,18 +95,31 @@ export class SpiderService {
   }
 
   /**
-   * Incrementally updates the structural graph with a set of changes.
-   * If content is missing, the node is removed.
+   * Compares current structural state against the latest baseline snapshot.
+   * Returns the delta (positive means entropy increased/worsened).
    */
-  applyChanges(changes: { filePath: string; content?: string }[]): void {
-    this.discovery.clearCache();
-    for (const change of changes) {
-      if (change.content !== undefined) {
-        this.engine.updateNode(change.filePath, change.content);
-      } else {
-        this.engine.removeNode(change.filePath);
+  async getEntropyDelta(): Promise<number> {
+    const latest = await this.engine.getLatestSnapshot();
+    if (!latest) return 0;
+    return this.engine.compareWith(latest);
+  }
+
+  /**
+   * Incrementally updates the structural graph with a set of changes.
+   * Serialized via mutationLock to prevent concurrent corruption.
+   */
+  async applyChanges(changes: { filePath: string; content?: string }[]): Promise<void> {
+    const lockKey = `spider-mutation:${this.ctx.workspace.workspacePath}`;
+    await TaskMutex.runExclusive(lockKey, async () => {
+      this.discovery.clearCache();
+      for (const change of changes) {
+        if (change.content !== undefined) {
+          this.engine.updateNode(change.filePath, change.content);
+        } else {
+          this.engine.removeNode(change.filePath);
+        }
       }
-    }
+    });
   }
 
   /**
@@ -143,15 +171,56 @@ export class SpiderService {
         return;
       }
 
+      if (lastCommit && currentHead && lastCommit !== currentHead) {
+        Logger.info(`[SpiderService] 🔄 Incremental update detected: ${lastCommit.substring(0, 7)} -> ${currentHead.substring(0, 7)}`);
+        
+        try {
+            const oldNode = await repo.getNode(lastCommit);
+            const newNode = await repo.getNode(currentHead);
+            const oldTree = await repo.resolveTree(oldNode);
+            const newTree = await repo.resolveTree(newNode);
+
+            const changedFiles: string[] = [];
+            for (const [path, hash] of Object.entries(newTree)) {
+                if (oldTree[path] !== hash) {
+                    changedFiles.push(path);
+                }
+            }
+            for (const path of Object.keys(oldTree)) {
+                if (!newTree[path]) {
+                    this.engine.removeNode(path);
+                }
+            }
+
+            if (changedFiles.length > 0) {
+                Logger.info(`[SpiderService] ⚙️  Processing ${changedFiles.length} changed files...`);
+                for (const filePath of changedFiles) {
+                    const content = await repo.files().readFile(branchName, filePath, { skipIgnore: true });
+                    this.engine.updateNode(filePath, content.content);
+                }
+            }
+
+            this.bootstrapped = true;
+            await this.persistBootstrapCache(currentHead);
+            Logger.info(`[SpiderService] ✅ Incremental update complete in ${Date.now() - startTime}ms.`);
+            return;
+        } catch (e) {
+            Logger.warn(`[SpiderService] ⚠️ Incremental diff failed, falling back to full read: ${e}`);
+        }
+      }
+
       // 3. Fallback to (optimized) full read if cache is missing or invalid
       const filesData = await repo.files().listFiles(branchName);
-      const tsFiles = filesData.filter((f) => f.path.endsWith('.ts') || f.path.endsWith('.tsx'));
+      const auditFilesData = filesData.filter((f) => 
+        f.path.endsWith('.ts') || f.path.endsWith('.tsx') ||
+        f.path.endsWith('.js') || f.path.endsWith('.jsx') || f.path.endsWith('.mjs')
+      );
 
       // Parallel read with concurrency limit (e.g. 10 files at a time)
       const auditFiles: { filePath: string; content: string }[] = [];
       const batchSize = 10;
-      for (let i = 0; i < tsFiles.length; i += batchSize) {
-        const batch = tsFiles.slice(i, i + batchSize);
+      for (let i = 0; i < auditFilesData.length; i += batchSize) {
+        const batch = auditFilesData.slice(i, i + batchSize);
         const results = await Promise.all(
           batch.map(async (f) => {
             try {
@@ -167,6 +236,12 @@ export class SpiderService {
 
       this.discovery.clearCache();
       this.engine.buildGraph(auditFiles);
+
+      // Populate Vitality (Churn) data from Repository
+      for (const node of this.engine.nodes.values()) {
+          node.vitality = await repo.getFileChurn(node.path);
+      }
+
       this.bootstrapped = true;
 
       // 4. Persist the new cache
@@ -181,6 +256,7 @@ export class SpiderService {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       Logger.error(`[SpiderService] Bootstrap failed: ${msg}`);
+      this.bootstrapped = true; // Fail-closed to prevent hot loops
     }
   }
 

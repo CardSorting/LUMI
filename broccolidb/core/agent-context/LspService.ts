@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { Logger } from '../../shared/services/Logger.js';
 import type { ServiceContext } from './types.js';
 
 /**
@@ -33,7 +34,7 @@ export class LspService {
     
     const config = this.SERVER_REGISTRY[language];
     if (!config) {
-        console.warn(`[LSP] ⚠️  No server configured for language: ${language}`);
+        Logger.warn(`[LspService] ⚠️  No server configured for language: ${language}`);
         return false;
     }
 
@@ -56,11 +57,11 @@ export class LspService {
 
         server.stdout!.on('data', (chunk: Buffer) => this._onData(language, chunk));
         server.on('error', (err) => {
-            console.error(`[LSP] 💥 ${language} server error:`, err);
+            Logger.error(`[LspService] 💥 ${language} server error: ${err}`);
             this._handleServerError(language, err);
         });
         server.on('exit', (code) => {
-            console.warn(`[LSP] ⚰️  ${language} server exited with code ${code}`);
+            Logger.warn(`[LspService] ⚰️  ${language} server exited with code ${code}`);
             this._handleServerExit(language, code);
         });
 
@@ -95,12 +96,18 @@ export class LspService {
   }
 
   private _handleServerExit(language: string, code: number | null) {
+      this._rejectAll(language, new Error(`Server exited with code ${code}`));
       this.servers.delete(language);
-      const retries = this._retryCount.get(language) || 0;
       
+      if (code === 127) {
+          Logger.error(`[LspService] ❌ ${language} server command not found. Disabling retries.`);
+          return;
+      }
+
+      const retries = this._retryCount.get(language) || 0;
       if (retries < 3) {
           const delay = Math.pow(2, retries) * 1000;
-          console.log(`[LSP] 🔄 Attempting to restart ${language} server in ${delay}ms (retry ${retries + 1}/3)...`);
+          Logger.info(`[LspService] 🔄 Attempting to restart ${language} server in ${delay}ms (retry ${retries + 1}/3)...`);
           this._retryCount.set(language, retries + 1);
           setTimeout(() => this.ensureServer(language), delay);
       }

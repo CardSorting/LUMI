@@ -1,3 +1,4 @@
+import { Logger } from '../../shared/services/Logger.js';
 import type { GraphService } from './GraphService.js';
 import type { ContradictionReport, KnowledgeBaseItem, Pedigree, ServiceContext } from './types.js';
 
@@ -269,10 +270,11 @@ export class ReasoningService {
     }
 
     const discovery = this.ctx.getStructuralImpact(nodeId);
-    if (discovery && discovery.blastRadius > 15) {
+    const blastCount = discovery?.blastRadius?.affectedNodes?.length ?? 0;
+    if (blastCount > 15) {
         return {
             type: 'adaptive',
-            reason: `High structural blast radius (${discovery.blastRadius}) for node ${nodeId}. Architectural change requires slow-thinking (ultrathink) verification.`
+            reason: `High structural blast radius (${blastCount} affected nodes) for node ${nodeId}. Architectural change requires slow-thinking (ultrathink) verification.`
         };
     }
 
@@ -283,15 +285,15 @@ export class ReasoningService {
    * Vitality Daemon: Background process for autonomous graph self-healing.
    */
   public startVitalityDaemon(listAllFn: () => Promise<KnowledgeBaseItem[]>) {
-    console.log('[Reasoning] 🧬 Vitality Daemon started. Monitoring graph hygiene...');
+    Logger.info('[ReasoningService] 🧬 Vitality Daemon started. Monitoring graph hygiene...');
     setInterval(async () => {
       try {
         const result = await this.selfHealGraph(listAllFn);
         if (result.prunedNodes.length > 0) {
-          console.log(`[Reasoning] 🧹 Self-Heal: Pruned ${result.prunedNodes.length} stale/invalid nodes.`);
+          Logger.info(`[ReasoningService] 🧹 Self-Heal: Pruned ${result.prunedNodes.length} stale/invalid nodes.`);
         }
       } catch (err) {
-        console.error('[Reasoning] 💥 Vitality Daemon error:', err);
+        Logger.error('[ReasoningService] 💥 Vitality Daemon error:', err);
       }
     }, 600000); // Every 10 minutes
   }
