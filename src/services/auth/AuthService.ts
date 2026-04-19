@@ -344,15 +344,21 @@ export class AuthService {
 	async handleAuthCallback(authorizationCode: string, providerName: string, state: string | null = null): Promise<void> {
 		try {
 			const provider = this._providers.get(providerName) || this.provider
-			this._activeProviderName = provider.name
-			this._dietcodeAuthInfo = await provider.signIn(this._controller, authorizationCode, providerName, state ?? undefined)
-			this._authenticated = this._dietcodeAuthInfo?.idToken !== undefined
+			const authInfo = await provider.signIn(this._controller, authorizationCode, providerName, state ?? undefined)
 
-			telemetryService.captureAuthSucceeded(this.provider.name)
-			await setWelcomeViewCompleted(this._controller, { value: true })
+			// Isolate auxiliary integration domains from hijacking the internal primary authority substrate.
+			// Currently, only 'dietcode' serves as the cardinal UI application identity.
+			if (provider.name === "dietcode") {
+				this._activeProviderName = provider.name
+				this._dietcodeAuthInfo = authInfo
+				this._authenticated = this._dietcodeAuthInfo?.idToken !== undefined
+				await setWelcomeViewCompleted(this._controller, { value: true })
+			}
+
+			telemetryService.captureAuthSucceeded(provider.name)
 		} catch (error) {
-			Logger.error("Error signing in with custom token:", error)
-			telemetryService.captureAuthFailed(this.provider.name)
+			Logger.error(`Error signing in custom token for ${providerName}:`, error)
+			telemetryService.captureAuthFailed(providerName)
 			throw error
 		} finally {
 			await this.sendAuthStatusUpdate()

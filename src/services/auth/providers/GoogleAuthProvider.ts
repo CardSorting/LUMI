@@ -22,6 +22,7 @@ const OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || ""
 const OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || ""
 
 const OAUTH_SCOPE = [
+	"openid",
 	"https://www.googleapis.com/auth/cloud-platform",
 	"https://www.googleapis.com/auth/userinfo.email",
 	"https://www.googleapis.com/auth/userinfo.profile",
@@ -63,13 +64,15 @@ export class GoogleAuthProvider implements IAuthProvider {
 		state?: string,
 	): Promise<DietCodeAuthInfo | null> {
 		try {
-			// CRITICAL: Verify OAuth state to prevent CSRF
+			// CRITICAL: Verify OAuth state strictly to mathematically prevent CSRF
 			const storedState = controller.stateManager.getSecretKey("dietcode:googleOAuthState")
-			if (state && storedState && state !== storedState) {
-				throw new Error("OAuth state mismatch. Potential CSRF attack detected.")
-			}
-			// Cleanup state after verification
+
+			// Always unconditionally purge the state trapdoor to prevent replay attacks on this nonce
 			controller.stateManager.setSecret("dietcode:googleOAuthState", undefined)
+
+			if (!state || !storedState || state !== storedState) {
+				throw new Error("OAuth state mismatch or missing. CSRF protection envelope failed.")
+			}
 
 			AuthHandler.getInstance().setEnabled(true)
 			const callbackUrl = await AuthHandler.getInstance().getCallbackUrl("/auth")
@@ -83,9 +86,9 @@ export class GoogleAuthProvider implements IAuthProvider {
 			const userInfo = await this.fetchUserInfo(tokens)
 
 			const authInfo: DietCodeAuthInfo = {
-				idToken: tokens.id_token || tokens.access_token || "",
+				idToken: tokens.access_token || tokens.id_token || "",
 				refreshToken: tokens.refresh_token || undefined,
-				expiresAt: tokens.expiry_date ? tokens.expiry_date / 1000 : undefined,
+				expiresAt: tokens.expiry_date ? tokens.expiry_date / 1000 : Date.now() / 1000 + 3600,
 				userInfo,
 				provider: this.name,
 				startedAt: Date.now(),
@@ -117,9 +120,9 @@ export class GoogleAuthProvider implements IAuthProvider {
 
 			const authInfo: DietCodeAuthInfo = {
 				...storedData,
-				idToken: tokens.id_token || tokens.access_token || "",
+				idToken: tokens.access_token || tokens.id_token || "",
 				refreshToken: tokens.refresh_token || refreshToken,
-				expiresAt: tokens.expiry_date ? tokens.expiry_date / 1000 : undefined,
+				expiresAt: tokens.expiry_date ? tokens.expiry_date / 1000 : Date.now() / 1000 + 3600,
 			}
 
 			return authInfo
@@ -142,7 +145,20 @@ export class GoogleAuthProvider implements IAuthProvider {
 		try {
 			const authInfo: DietCodeAuthInfo = JSON.parse(stored)
 
-			if (authInfo.refreshToken && (await this.shouldRefreshIdToken(authInfo.refreshToken, authInfo.expiresAt))) {
+			// CRITICAL: Self-healing architecture for legacy tokens.
+			// Legacy auth incorrectly stored JWT ID Tokens (starting with eyJ) instead of OAuth Access Tokens.
+			// If detected, mathematically force a refresh to hydrate the correct access_token credential.
+			const isLegacyToken = authInfo.idToken && authInfo.idToken.startsWith("eyJ")
+
+			if (
+				isLegacyToken ||
+				(authInfo.refreshToken && (await this.shouldRefreshIdToken(authInfo.refreshToken, authInfo.expiresAt)))
+			) {
+				if (!authInfo.refreshToken) {
+					// Irrecoverable state without a refresh_token, cleanly purge to force a new OAuth cyce
+					controller.stateManager.setSecret("dietcode:googleAuthInfo", undefined)
+					return null
+				}
 				const updated = await this.refreshToken(authInfo.refreshToken, authInfo)
 				controller.stateManager.setSecret("dietcode:googleAuthInfo", JSON.stringify(updated))
 				return updated
