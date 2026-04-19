@@ -391,7 +391,12 @@ export class DietCodeAuthProvider implements IAuthProvider {
 		}
 	}
 
-	async signIn(controller: Controller, authorizationCode: string, provider: string): Promise<DietCodeAuthInfo | null> {
+	async signIn(
+		controller: Controller,
+		authorizationCode: string,
+		provider: string,
+		state?: string,
+	): Promise<DietCodeAuthInfo | null> {
 		try {
 			// Get the callback URL that was used during the initial auth request
 			const callbackUrl = await HostProvider.get().getCallbackUrl("/auth")
@@ -408,6 +413,7 @@ export class DietCodeAuthProvider implements IAuthProvider {
 					client_type: "extension",
 					redirect_uri: callbackUrl,
 					provider: provider,
+					state: state, // Included for the backend to process if needed
 				}),
 			})
 

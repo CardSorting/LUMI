@@ -58,7 +58,7 @@ export class AuthHandler {
 			this.updateTimeout()
 		}
 
-		return `http://127.0.0.1:${this.port}${path}`
+		return `http://localhost:${this.port}${path}`
 	}
 
 	private async createServer(): Promise<void> {
@@ -159,7 +159,7 @@ export class AuthHandler {
 		}
 
 		try {
-			const fullUrl = `http://127.0.0.1:${this.port}${req.url}`
+			const fullUrl = `http://localhost:${this.port}${req.url}`
 
 			// Use SharedUriHandler directly - it handles all validation and processing
 			const success = await SharedUriHandler.handleUri(fullUrl)

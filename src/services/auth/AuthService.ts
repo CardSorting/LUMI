@@ -341,11 +341,11 @@ export class AuthService {
 		}
 	}
 
-	async handleAuthCallback(authorizationCode: string, providerName: string): Promise<void> {
+	async handleAuthCallback(authorizationCode: string, providerName: string, state: string | null = null): Promise<void> {
 		try {
 			const provider = this._providers.get(providerName) || this.provider
 			this._activeProviderName = provider.name
-			this._dietcodeAuthInfo = await provider.signIn(this._controller, authorizationCode, providerName)
+			this._dietcodeAuthInfo = await provider.signIn(this._controller, authorizationCode, providerName, state ?? undefined)
 			this._authenticated = this._dietcodeAuthInfo?.idToken !== undefined
 
 			telemetryService.captureAuthSucceeded(this.provider.name)

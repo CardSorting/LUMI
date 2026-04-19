@@ -31,7 +31,7 @@ describe("Auth Callback URL", () => {
 
 			const url = await authHandler.getCallbackUrl("/auth")
 			url.should.containEql("/auth")
-			url.should.startWith("http://127.0.0.1:")
+			url.should.startWith("http://localhost:")
 		})
 
 		it("should include complex paths in the callback URL", async () => {
@@ -40,7 +40,7 @@ describe("Auth Callback URL", () => {
 
 			const url = await authHandler.getCallbackUrl("/mcp-auth/callback/abc123")
 			url.should.containEql("/mcp-auth/callback/abc123")
-			url.should.startWith("http://127.0.0.1:")
+			url.should.startWith("http://localhost:")
 		})
 
 		it("should work with empty path for backwards compatibility", async () => {
@@ -48,8 +48,8 @@ describe("Auth Callback URL", () => {
 			authHandler.setEnabled(true)
 
 			const url = await authHandler.getCallbackUrl()
-			url.should.startWith("http://127.0.0.1:")
-			url.should.match(/^http:\/\/127\.0\.0\.1:\d+$/)
+			url.should.startWith("http://localhost:")
+			url.should.match(/^http:\/\/localhost:\d+$/)
 		})
 	})
 

@@ -515,9 +515,9 @@ export class Controller {
 		}
 	}
 
-	async handleAuthCallback(customToken: string, provider: string | null = null) {
+	async handleAuthCallback(customToken: string, provider: string | null = null, state: string | null = null) {
 		try {
-			await this.authService.handleAuthCallback(customToken, provider ? provider : "google")
+			await this.authService.handleAuthCallback(customToken, provider ? provider : "google", state)
 
 			const dietcodeProvider: ApiProvider = "dietcode"
 

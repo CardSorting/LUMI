@@ -13,7 +13,7 @@ export interface IAuthProvider {
 	/**
 	 * Exchanges the authorization code for tokens.
 	 */
-	signIn(controller: Controller, authorizationCode: string, provider: string): Promise<DietCodeAuthInfo | null>
+	signIn(controller: Controller, authorizationCode: string, provider: string, state?: string): Promise<DietCodeAuthInfo | null>
 
 	/**
 	 * Checks if the ID token should be refreshed.

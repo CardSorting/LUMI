@@ -122,7 +122,7 @@ export class AuthServiceMock extends AuthService {
 		return String.create({ value: authUrlString })
 	}
 
-	override async handleAuthCallback(_token: string, _provider: string): Promise<void> {
+	override async handleAuthCallback(_token: string, _provider: string, _state: string | null = null): Promise<void> {
 		try {
 			this._authenticated = true
 			await setWelcomeViewCompleted(this._controller, { value: true })

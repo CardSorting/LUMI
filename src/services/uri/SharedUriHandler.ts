@@ -59,12 +59,13 @@ export class SharedUriHandler {
 				}
 				case "/auth": {
 					const provider = query.get("provider")
+					const state = query.get("state")
 
 					Logger.info(`SharedUriHandler - Auth callback received for ${provider} - ${path}`)
 
 					const token = query.get("refreshToken") || query.get("idToken") || query.get("code")
 					if (token) {
-						await visibleWebview.controller.handleAuthCallback(token, provider)
+						await visibleWebview.controller.handleAuthCallback(token, provider, state)
 						return true
 					}
 					Logger.warn("SharedUriHandler: Missing idToken parameter for auth callback")
