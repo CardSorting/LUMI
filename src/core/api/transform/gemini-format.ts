@@ -30,7 +30,9 @@ export function convertAnthropicContentToGemini(
 				case "text":
 					return {
 						text: block.text,
-						thoughtSignature: isModelSwitch ? GEMINI_DUMMY_THOUGHT_SIGNATURE : block.signature,
+						thoughtSignature: isModelSwitch
+							? GEMINI_DUMMY_THOUGHT_SIGNATURE
+							: block.signature || GEMINI_DUMMY_THOUGHT_SIGNATURE,
 					}
 				case "image":
 					if (block.source.type !== "base64") {

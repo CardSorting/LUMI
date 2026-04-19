@@ -12,6 +12,8 @@ const CODE_ASSIST_API_VERSION = "v1internal"
 
 export interface GooglePersonalHandlerOptions extends CommonApiHandlerOptions {
 	apiModelId?: string
+	thinkingBudgetTokens?: number
+	reasoningEffort?: string
 }
 
 export class GooglePersonalHandler implements ApiHandler {
@@ -32,12 +34,30 @@ export class GooglePersonalHandler implements ApiHandler {
 		const { id: modelId, info } = this.getModel()
 		const contents = messages.map((msg) => convertAnthropicMessageToGemini(msg, modelId))
 
-		const request = {
+		// Configure thinking budget/level if supported
+		const _thinkingBudget = this.options.thinkingBudgetTokens ?? 0
+		const maxBudget = info.thinkingConfig?.maxBudget ?? 65536
+		const thinkingBudget = Math.min(_thinkingBudget, maxBudget)
+
+		let finalThinkingBudget: number | undefined
+		let includeThoughts = false
+
+		if (info.thinkingConfig) {
+			const rawReasoningEffort = (this.options.reasoningEffort || "").toLowerCase()
+			const normalizedReasoningEffort =
+				!rawReasoningEffort || rawReasoningEffort === "none" || rawReasoningEffort === "off" ? "none" : rawReasoningEffort
+
+			if (normalizedReasoningEffort !== "none" || thinkingBudget > 0) {
+				finalThinkingBudget = thinkingBudget > 0 ? thinkingBudget : 1024
+				includeThoughts = true
+			}
+		}
+
+		const request: any = {
 			model: modelId,
 			request: {
 				contents,
 				systemInstruction: {
-					role: "user",
 					parts: [{ text: systemPrompt }],
 				},
 				generationConfig: {
@@ -45,6 +65,18 @@ export class GooglePersonalHandler implements ApiHandler {
 				},
 			},
 		}
+
+		if (includeThoughts) {
+			request.request.thinkingConfig = {
+				includeThoughts: true,
+				includeThoughtsSignature: true,
+				thinkingBudget: finalThinkingBudget,
+			}
+			// Temperature must be 1.0 or omitted for thinking models in some Gemini versions
+			request.request.generationConfig.temperature = 1
+		}
+
+		Logger.debug(`Google Personal Request: ${JSON.stringify({ ...request, token: "REDACTED" })}`)
 
 		const url = `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:streamGenerateContent?alt=sse`
 		const headers = {
@@ -61,13 +93,20 @@ export class GooglePersonalHandler implements ApiHandler {
 		})
 
 		if (!response.ok) {
-			let errorDetail = await response.text()
+			const rawError = await response.text()
+			let errorDetail = rawError
 			try {
-				const errorJson = JSON.parse(errorDetail)
-				errorDetail = errorJson.error?.message || errorJson.message || errorDetail
+				const errorJson = JSON.parse(rawError)
+				errorDetail = errorJson.error?.message || errorJson.message || rawError
 			} catch {
 				// Fallback to raw text
 			}
+			Logger.error(`Google Personal API error (${response.status})`, {
+				status: response.status,
+				detail: errorDetail,
+				raw: rawError,
+				url,
+			})
 			throw new Error(`Google Personal API error (${response.status}): ${errorDetail}`)
 		}
 
@@ -99,19 +138,28 @@ export class GooglePersonalHandler implements ApiHandler {
 
 					if (line.startsWith("data: ")) {
 						const data = line.slice(6).trim()
-						if (!data) continue
+						if (!data || data === "[DONE]") continue
 
 						try {
 							const json = JSON.parse(data)
-							const vertexResponse = json.response
-							if (vertexResponse) {
-								const parts = vertexResponse.candidates?.[0]?.content?.parts || []
+							// The Cloud Code API can sometimes return the response directly or wrapped in json.response
+							const vertexResponse = json.response || json
+							if (vertexResponse && vertexResponse.candidates) {
+								const parts = vertexResponse.candidates[0]?.content?.parts || []
 								for (const part of parts) {
-									if (part.text) {
+									if (part.thought && part.text) {
+										yield {
+											type: "reasoning",
+											reasoning: part.text,
+											id: json.traceId,
+											signature: part.thoughtSignature,
+										}
+									} else if (part.text) {
 										yield {
 											type: "text",
 											text: part.text,
 											id: json.traceId,
+											signature: part.thoughtSignature,
 										}
 									}
 								}
