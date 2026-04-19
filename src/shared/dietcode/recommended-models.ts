@@ -16,6 +16,12 @@ export interface DietCodeRecommendedModelsData {
 export const DIETCODE_RECOMMENDED_MODELS_FALLBACK: DietCodeRecommendedModelsData = {
 	recommended: [
 		{
+			id: "anthropic/claude-opus-4.7",
+			name: "Anthropic Claude Opus 4.7",
+			description: "Our most capable generally available model for complex reasoning and agentic coding",
+			tags: ["NEW", "BEST"],
+		},
+		{
 			id: "google/gemini-3.1-pro-preview",
 			name: "Google Gemini 3.1 Pro Preview",
 			description: "Latest Gemini release with 1m ctx window and strong coding performance",
@@ -24,7 +30,7 @@ export const DIETCODE_RECOMMENDED_MODELS_FALLBACK: DietCodeRecommendedModelsData
 		{
 			id: "anthropic/claude-sonnet-4.6",
 			name: "Anthropic Claude Sonnet 4.6",
-			description: "Latest Sonnet release with strong coding and agent performance",
+			description: "The best combination of speed and intelligence",
 			tags: ["NEW"],
 		},
 		{
