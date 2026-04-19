@@ -99,6 +99,7 @@ export function getModelsForProvider(
 		case "vertex":
 			return vertexModels
 		case "gemini":
+		case "google-personal":
 			return geminiModels
 		case "openai-native":
 			return openAiNativeModels
@@ -219,6 +220,7 @@ export function normalizeApiConfiguration(
 		case "vertex":
 			return getProviderData(vertexModels, vertexDefaultModelId)
 		case "gemini":
+		case "google-personal":
 			return getProviderData(geminiModels, geminiDefaultModelId)
 		case "openai-native":
 			return getProviderData(openAiNativeModels, openAiNativeDefaultModelId)
@@ -528,6 +530,7 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 			aihubmixModelId: undefined,
 			nousResearchModelId: undefined,
 			vercelAiGatewayModelId: undefined,
+			googlePersonalModelId: undefined,
 
 			// Model info objects
 			openAiModelInfo: undefined,
@@ -595,6 +598,7 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 			mode === "plan" ? apiConfiguration.planModeNousResearchModelId : apiConfiguration.actModeNousResearchModelId,
 		vercelAiGatewayModelId:
 			mode === "plan" ? apiConfiguration.planModeVercelAiGatewayModelId : apiConfiguration.actModeVercelAiGatewayModelId,
+		googlePersonalModelId: mode === "plan" ? apiConfiguration.planModeApiModelId : apiConfiguration.actModeApiModelId,
 
 		// Model info objects
 		openAiModelInfo: mode === "plan" ? apiConfiguration.planModeOpenAiModelInfo : apiConfiguration.actModeOpenAiModelInfo,
@@ -799,6 +803,10 @@ export async function syncModeConfigurations(
 		case "nousResearch":
 			updates.planModeNousResearchModelId = sourceFields.nousResearchModelId
 			updates.actModeNousResearchModelId = sourceFields.nousResearchModelId
+			break
+		case "google-personal":
+			updates.planModeApiModelId = sourceFields.apiModelId
+			updates.actModeApiModelId = sourceFields.apiModelId
 			break
 
 		case "aihubmix":

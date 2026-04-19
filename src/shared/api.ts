@@ -44,6 +44,7 @@ export type ApiProvider =
 	| "hicap"
 	| "nousResearch"
 	| "cloudflare"
+	| "google-personal"
 
 export const DEFAULT_API_PROVIDER = "openrouter" as ApiProvider
 

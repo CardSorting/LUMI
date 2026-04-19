@@ -44,6 +44,8 @@ service AccountService {
 
   rpc hicapAuthClicked(EmptyRequest) returns (Empty);
 
+  rpc googleAuthClicked(EmptyRequest) returns (Empty);
+
   // Returns a link the webview can use to redirect back to the user's IDE.
   rpc getRedirectUrl(EmptyRequest) returns (String);
 
@@ -53,6 +55,9 @@ service AccountService {
 
   // Signs out of OpenAI Codex and clears stored credentials
   rpc openAiCodexSignOut(EmptyRequest) returns (Empty);
+
+  // Signs out of Google Personal and clears stored credentials
+  rpc googleSignOutClicked(EmptyRequest) returns (Empty);
 }
 
 message AuthStateChangedRequest {

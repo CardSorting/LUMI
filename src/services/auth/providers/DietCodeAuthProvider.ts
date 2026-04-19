@@ -11,6 +11,7 @@ import { fetch, getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import { type DietCodeAccountUserInfo, type DietCodeAuthInfo } from "../AuthService"
 import { parseJwtPayload } from "../oca/utils/utils"
+import { IAuthProvider } from "./IAuthProvider"
 
 interface DietCodeAuthApiUser {
 	subject: string | null
@@ -61,8 +62,9 @@ export interface DietCodeAuthApiTokenRefreshResponse {
 	data: DietCodeAuthResponseData
 }
 
-export class DietCodeAuthProvider {
+export class DietCodeAuthProvider implements IAuthProvider {
 	readonly name = "dietcode"
+	readonly tokenPrefix = "workos"
 	private refreshRetryCount = 0
 	private lastRefreshAttempt = 0
 	private readonly MAX_REFRESH_RETRIES = 3
@@ -285,6 +287,11 @@ export class DietCodeAuthProvider {
 		}
 	}
 
+	async getAccessToken(controller: Controller): Promise<string | null> {
+		const authInfo = await this.retrieveDietCodeAuthInfo(controller)
+		return authInfo?.idToken || null
+	}
+
 	/**
 	 * Refreshes an access token using a refresh token.
 	 * @param refreshToken - The refresh token.
@@ -342,7 +349,7 @@ export class DietCodeAuthProvider {
 		}
 	}
 
-	async getAuthRequest(callbackUrl: string): Promise<string> {
+	async getAuthRequest(_controller: Controller, callbackUrl: string): Promise<string> {
 		const authUrl = new URL(DIETCODE_API_ENDPOINT.AUTH, this.config.apiBaseUrl)
 		authUrl.searchParams.set("client_type", "extension")
 		authUrl.searchParams.set("callback_url", callbackUrl)

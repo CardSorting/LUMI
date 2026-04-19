@@ -101,7 +101,7 @@ export class AuthServiceMock extends AuthService {
 					appBaseUrl: DietCodeEnv.config().appBaseUrl,
 					subject: authData.userInfo.subject,
 				},
-				provider: this._provider?.name || "mock",
+				provider: this.provider?.name || "mock",
 			}
 
 			Logger.log(`Successfully authenticated with mock server as ${authData.userInfo.name} (${authData.userInfo.email})`)
@@ -109,7 +109,7 @@ export class AuthServiceMock extends AuthService {
 			const visibleWebview = WebviewProvider.getVisibleInstance()
 
 			// Use appropriate provider name for callback
-			const providerName = this._provider?.name || "mock"
+			const providerName = this.provider?.name || "mock"
 			// Simulate handling the auth callback as if from a real provider
 			await visibleWebview?.controller.handleAuthCallback(authData.accessToken, providerName)
 		} catch (error) {

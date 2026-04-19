@@ -110,6 +110,8 @@ export interface ExtensionState {
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
+	googleAuthIsAuthenticated?: boolean
+	googleUserInfo?: UserInfo
 }
 
 export interface DietCodeMessage {

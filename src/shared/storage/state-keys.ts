@@ -323,6 +323,8 @@ const SECRETS_KEYS = [
 	"dietcodeApiKey",
 	"dietcodeAccountId", // DietCode Account ID for Firebase
 	"dietcode:dietcodeAccountId",
+	"dietcode:googleAuthInfo",
+	"dietcode:googleOAuthState",
 	"openRouterApiKey",
 	"awsAccessKey",
 	"awsSecretKey",

@@ -972,9 +972,9 @@ export class Controller {
 		const banners = BannerService.get().getActiveBanners() ?? []
 		const welcomeBanners = BannerService.get().getWelcomeBanners() ?? []
 
-		// Check OpenAI Codex authentication status
 		const { openAiCodexOAuthManager } = await import("@/integrations/openai-codex/oauth")
 		const openAiCodexIsAuthenticated = await openAiCodexOAuthManager.isAuthenticated()
+		const googleAuthIsAuthenticated = !!(await this.authService.getAuthToken("google"))
 
 		return {
 			version,
@@ -1057,6 +1057,8 @@ export class Controller {
 			banners,
 			welcomeBanners,
 			openAiCodexIsAuthenticated,
+			googleAuthIsAuthenticated,
+			googleUserInfo: (await this.authService.getProviderUserInfo("google")) || undefined,
 		}
 	}
 

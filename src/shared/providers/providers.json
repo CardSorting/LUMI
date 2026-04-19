@@ -13,6 +13,10 @@
 			"label": "Google Gemini"
 		},
 		{
+			"value": "google-personal",
+			"label": "Google (Personal / Free Tier)"
+		},
+		{
 			"value": "openai",
 			"label": "OpenAI Compatible"
 		},

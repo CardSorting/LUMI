@@ -12,6 +12,8 @@ import { BannerService } from "../banner/BannerService"
 import { AuthInvalidTokenError, AuthNetworkError } from "../error/DietCodeError"
 import { featureFlagsService } from "../feature-flags"
 import { DietCodeAuthProvider } from "./providers/DietCodeAuthProvider"
+import { GoogleAuthProvider } from "./providers/GoogleAuthProvider"
+import { IAuthProvider } from "./providers/IAuthProvider"
 import { LogoutReason } from "./types"
 
 export type ServiceConfig = {
@@ -66,7 +68,8 @@ export class AuthService {
 	protected static instance: AuthService | null = null
 	protected _authenticated = false
 	protected _dietcodeAuthInfo: DietCodeAuthInfo | null = null
-	protected _provider: DietCodeAuthProvider
+	protected _providers: Map<string, IAuthProvider>
+	protected _activeProviderName = "dietcode"
 	protected _activeAuthStatusUpdateHandlers = new Set<StreamingResponseHandler<AuthState>>()
 	protected _handlerToController = new Map<StreamingResponseHandler<AuthState>, Controller>()
 	protected _controller: Controller
@@ -77,8 +80,15 @@ export class AuthService {
 	 * @param controller - Optional reference to the Controller instance.
 	 */
 	protected constructor(controller: Controller) {
-		this._provider = new DietCodeAuthProvider()
+		this._providers = new Map<string, IAuthProvider>([
+			["dietcode", new DietCodeAuthProvider()],
+			["google", new GoogleAuthProvider()],
+		])
 		this._controller = controller
+	}
+
+	get provider(): IAuthProvider {
+		return this._providers.get(this._activeProviderName) || this._providers.get("dietcode")!
 	}
 
 	/**
@@ -116,20 +126,31 @@ export class AuthService {
 	/**
 	 * Returns the current authentication token with the appropriate prefix.
 	 * Refreshing it if necessary.
+	 * @param providerName Optional provider name to get a token for. If not provided, uses the active provider.
 	 */
-	async getAuthToken(): Promise<string | null> {
-		const token = await this.internalGetAuthToken(this._provider)
+	async getAuthToken(providerName?: string): Promise<string | null> {
+		if (providerName) {
+			const provider = this._providers.get(providerName)
+			if (!provider) {
+				return null
+			}
+			// If it's the current active provider, use the standard flow
+			if (providerName === this.provider.name) {
+				const token = await this.internalGetAuthToken(provider)
+				if (!token) return null
+				const prefix = provider.tokenPrefix
+				return prefix ? `${prefix}:${token}` : token
+			}
+			// Otherwise, use the provider's own access token retrieval (e.g. for Google Personal)
+			return provider.getAccessToken(this._controller)
+		}
+
+		const token = await this.internalGetAuthToken(this.provider)
 		if (!token) {
 			return null
 		}
-
-		if (this._provider.timeUntilExpiry(token) <= 0) {
-			// internalGetAuthToken may return stale data on network errors
-			// Verify the token is not expired after refresh - We have a pending larger refactor to prevent this
-			// This prevents 401 errors from using expired tokens
-			return null
-		}
-		return `workos:${token}`
+		const prefix = this.provider.tokenPrefix
+		return prefix ? `${prefix}:${token}` : token
 	}
 
 	/**
@@ -152,7 +173,7 @@ export class AuthService {
 		return this._dietcodeAuthInfo?.userInfo?.organizations
 	}
 
-	private async internalGetAuthToken(provider: DietCodeAuthProvider): Promise<string | null> {
+	private async internalGetAuthToken(provider: IAuthProvider): Promise<string | null> {
 		try {
 			let dietcodeAccountAuthToken = this._dietcodeAuthInfo?.idToken
 			if (!this._dietcodeAuthInfo || !dietcodeAccountAuthToken || this._dietcodeAuthInfo.provider !== provider.name) {
@@ -187,7 +208,7 @@ export class AuthService {
 							Logger.error("Token is invalid or expired:", error)
 							this._dietcodeAuthInfo = null
 							this._authenticated = false
-							telemetryService.captureAuthLoggedOut(this._provider.name, LogoutReason.ERROR_RECOVERY)
+							telemetryService.captureAuthLoggedOut(this.provider.name, LogoutReason.ERROR_RECOVERY)
 							authStatusChanged = true
 						} else if (error instanceof AuthNetworkError) {
 							Logger.error("Network error refreshing token", error)
@@ -229,6 +250,14 @@ export class AuthService {
 		return this._dietcodeAuthInfo?.provider ?? null
 	}
 
+	async getProviderUserInfo(providerName: string): Promise<DietCodeAccountUserInfo | null> {
+		const provider = this._providers.get(providerName)
+		if (!provider) return null
+
+		const authInfo = await provider.retrieveDietCodeAuthInfo(this._controller)
+		return authInfo?.userInfo || null
+	}
+
 	getInfo(): AuthState {
 		// TODO: this logic should be cleaner, but this will determine the authentication state for the webview -- if a user object is returned then the webview assumes authenticated, otherwise it assumes logged out (we previously returned a UserInfo object with empty fields, and this represented a broken logged in state)
 		let user: any = null
@@ -251,26 +280,30 @@ export class AuthService {
 		})
 	}
 
-	async createAuthRequest(strict = false): Promise<String> {
+	async createAuthRequest(strict = false, providerName?: string): Promise<String> {
 		// In strict mode, we do not open a new auth window if already authenticated
-		if (strict && this._authenticated) {
+		if (strict && this._authenticated && (!providerName || providerName === this.provider.name)) {
 			this.sendAuthStatusUpdate()
 			return String.create({ value: "Already authenticated" })
 		}
 
 		const callbackUrl = await HostProvider.get().getCallbackUrl("/auth")
+		const provider = providerName ? this._providers.get(providerName) : this.provider
+		if (!provider) {
+			throw new Error(`Provider ${providerName} not found`)
+		}
 
-		const authUrl = await this._provider.getAuthRequest(callbackUrl)
+		const authUrl = await provider.getAuthRequest(this._controller, callbackUrl)
 		const authUrlString = authUrl.toString()
 
 		await openExternal(authUrlString)
-		telemetryService.captureAuthStarted(this._provider.name)
+		telemetryService.captureAuthStarted(provider.name)
 		return String.create({ value: authUrlString })
 	}
 
 	async handleDeauth(reason: LogoutReason = LogoutReason.UNKNOWN): Promise<void> {
 		try {
-			telemetryService.captureAuthLoggedOut(this._provider.name, reason)
+			telemetryService.captureAuthLoggedOut(this.provider.name, reason)
 			this._dietcodeAuthInfo = null
 			this._authenticated = false
 			this.destroyTokens()
@@ -281,16 +314,45 @@ export class AuthService {
 		}
 	}
 
-	async handleAuthCallback(authorizationCode: string, provider: string): Promise<void> {
+	async signOutProvider(providerName: string): Promise<void> {
 		try {
-			this._dietcodeAuthInfo = await this._provider.signIn(this._controller, authorizationCode, provider)
+			Logger.info(`Signing out from provider: ${providerName}`)
+			const provider = this._providers.get(providerName)
+			if (provider) {
+				// Provider specific cleanup if implemented
+				if ("signOut" in provider && typeof provider.signOut === "function") {
+					await (provider as any).signOut(this._controller)
+				}
+			}
+
+			// Force clear the specific token from storage
+			const key = providerName === "google" ? "dietcode:googleAuthInfo" : "dietcode:dietcodeAccountId"
+			this._controller.stateManager.setSecret(key as any, undefined)
+
+			if (this._activeProviderName === providerName) {
+				this._dietcodeAuthInfo = null
+				this._authenticated = false
+				this._activeProviderName = "dietcode"
+			}
+
+			this.sendAuthStatusUpdate()
+		} catch (error) {
+			Logger.error(`Error signing out from ${providerName}:`, error)
+		}
+	}
+
+	async handleAuthCallback(authorizationCode: string, providerName: string): Promise<void> {
+		try {
+			const provider = this._providers.get(providerName) || this.provider
+			this._activeProviderName = provider.name
+			this._dietcodeAuthInfo = await provider.signIn(this._controller, authorizationCode, providerName)
 			this._authenticated = this._dietcodeAuthInfo?.idToken !== undefined
 
-			telemetryService.captureAuthSucceeded(this._provider.name)
+			telemetryService.captureAuthSucceeded(this.provider.name)
 			await setWelcomeViewCompleted(this._controller, { value: true })
 		} catch (error) {
 			Logger.error("Error signing in with custom token:", error)
-			telemetryService.captureAuthFailed(this._provider.name)
+			telemetryService.captureAuthFailed(this.provider.name)
 			throw error
 		} finally {
 			await this.sendAuthStatusUpdate()
@@ -312,21 +374,26 @@ export class AuthService {
 	 */
 	async restoreRefreshTokenAndRetrieveAuthInfo(): Promise<void> {
 		try {
-			this._dietcodeAuthInfo = await this.retrieveAuthInfo()
-			if (this._dietcodeAuthInfo) {
-				this._authenticated = true
-				await this.sendAuthStatusUpdate()
-			} else {
-				Logger.warn("No user found after restoring auth token")
-				this._authenticated = false
-				this._dietcodeAuthInfo = null
-				telemetryService.captureAuthLoggedOut(this._provider.name, LogoutReason.ERROR_RECOVERY)
+			// Try to restore session from any available provider
+			for (const [name, provider] of this._providers) {
+				this._dietcodeAuthInfo = await provider.retrieveDietCodeAuthInfo(this._controller)
+				if (this._dietcodeAuthInfo) {
+					this._activeProviderName = name
+					this._authenticated = true
+					await this.sendAuthStatusUpdate()
+					return
+				}
 			}
+
+			Logger.warn("No user found after restoring auth token")
+			this._authenticated = false
+			this._dietcodeAuthInfo = null
+			telemetryService.captureAuthLoggedOut(this.provider.name, LogoutReason.ERROR_RECOVERY)
 		} catch (error) {
 			Logger.error("Error restoring auth token:", error)
 			this._authenticated = false
 			this._dietcodeAuthInfo = null
-			telemetryService.captureAuthLoggedOut(this._provider.name, LogoutReason.ERROR_RECOVERY)
+			telemetryService.captureAuthLoggedOut(this.provider.name, LogoutReason.ERROR_RECOVERY)
 			return
 		}
 	}
@@ -338,7 +405,7 @@ export class AuthService {
 			await this._refreshPromise
 		}
 
-		return this._provider.retrieveDietCodeAuthInfo(this._controller)
+		return this.provider.retrieveDietCodeAuthInfo(this._controller)
 	}
 
 	/**
@@ -429,5 +496,6 @@ export class AuthService {
 	private destroyTokens() {
 		this._controller.stateManager.setSecret("dietcodeAccountId", undefined)
 		this._controller.stateManager.setSecret("dietcode:dietcodeAccountId", undefined)
+		this._controller.stateManager.setSecret("dietcode:googleAuthInfo", undefined)
 	}
 }
