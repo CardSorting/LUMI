@@ -467,6 +467,7 @@ enum ApiProvider {
   NOUSRESEARCH = 39;
   OPENAI_CODEX = 40;
   CLOUDFLARE = 41;
+  GOOGLE_PERSONAL = 42;
 }
 
 enum ApiFormat {

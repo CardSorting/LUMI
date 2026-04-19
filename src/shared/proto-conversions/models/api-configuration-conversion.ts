@@ -328,6 +328,8 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.OPENAI_CODEX
 		case "cloudflare":
 			return ProtoApiProvider.CLOUDFLARE
+		case "google-personal":
+			return ProtoApiProvider.GOOGLE_PERSONAL
 		default:
 			return ProtoApiProvider.ANTHROPIC
 	}
@@ -420,6 +422,8 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 			return "openai-codex"
 		case ProtoApiProvider.CLOUDFLARE:
 			return "cloudflare"
+		case ProtoApiProvider.GOOGLE_PERSONAL:
+			return "google-personal"
 		default:
 			return "anthropic"
 	}
