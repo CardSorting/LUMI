@@ -58,74 +58,67 @@ export class AuthHandler {
 			this.updateTimeout()
 		}
 
-		return `http://localhost:${this.port}${path}`
+		return `http://127.0.0.1:${this.port}${path}`
 	}
 
 	private async createServer(): Promise<void> {
-		return new Promise(async (resolve, reject) => {
-			try {
-				const server = http.createServer(this.handleRequest.bind(this))
+		try {
+			const server = http.createServer(this.handleRequest.bind(this))
 
-				// Try to bind on a port from the allowed range
-				for (const port of PORTS) {
-					try {
-						await this.tryListenOnPort(server, port)
+			// Try to bind on a port from the allowed range
+			for (const port of PORTS) {
+				try {
+					await this.tryListenOnPort(server, port)
 
-						const address = server.address()
-						if (!address) {
-							Logger.error("AuthHandler: Failed to get server address")
-							this.server = null
-							this.port = 0
-							this.serverCreationPromise = null
-							reject(new Error("Failed to get server address"))
-							return
-						}
-
-						// Get the assigned port and set up the server
-						this.port = (address as AddressInfo).port
-						this.server = server
-						Logger.log("AuthHandler: Server started on port", this.port)
-						this.updateTimeout()
-						this.serverCreationPromise = null
-
-						// Attach a general error logger for visibility after successful bind
-						server.on("error", (error) => {
-							Logger.error("AuthHandler: Server error", error)
-						})
-
-						resolve()
-						return
-					} catch (error) {
-						const err = error as NodeJS.ErrnoException
-						if (err?.code === "EADDRINUSE") {
-							Logger.warn(`AuthHandler: Port ${port} in use, trying next...`)
-							continue
-						}
-						Logger.error("AuthHandler: Server error", error)
+					const address = server.address()
+					if (!address) {
+						Logger.error("AuthHandler: Failed to get server address")
 						this.server = null
 						this.port = 0
 						this.serverCreationPromise = null
-						reject(error)
-						return
+						throw new Error("Failed to get server address")
 					}
-				}
 
-				// If we reach here, all ports in the range are occupied
-				Logger.error(`AuthHandler: No available port in range ${PORT_RANGE_START}-${PORT_RANGE_END}`)
-				this.server = null
-				this.port = 0
-				this.serverCreationPromise = null
-				reject(
-					new Error(`No available port found for local auth callback (tried ${PORT_RANGE_START}-${PORT_RANGE_END}).`),
-				)
-			} catch (error) {
-				Logger.error("AuthHandler: Failed to create server", error)
-				this.server = null
-				this.port = 0
-				this.serverCreationPromise = null
-				reject(error)
+					// Get the assigned port and set up the server
+					this.port = (address as AddressInfo).port
+					this.server = server
+					Logger.log("AuthHandler: Server started on port", this.port)
+					this.updateTimeout()
+					this.serverCreationPromise = null
+
+					// Attach a general error logger for visibility after successful bind
+					server.on("error", (error) => {
+						Logger.error("AuthHandler: Server error", error)
+					})
+
+					return
+				} catch (error) {
+					const err = error as NodeJS.ErrnoException
+					if (err?.code === "EADDRINUSE") {
+						Logger.warn(`AuthHandler: Port ${port} in use, trying next...`)
+						continue
+					}
+					Logger.error("AuthHandler: Server error", error)
+					this.server = null
+					this.port = 0
+					this.serverCreationPromise = null
+					throw error
+				}
 			}
-		})
+
+			// If we reach here, all ports in the range are occupied
+			Logger.error(`AuthHandler: No available port in range ${PORT_RANGE_START}-${PORT_RANGE_END}`)
+			this.server = null
+			this.port = 0
+			this.serverCreationPromise = null
+			throw new Error(`No available port found for local auth callback (tried ${PORT_RANGE_START}-${PORT_RANGE_END}).`)
+		} catch (error) {
+			Logger.error("AuthHandler: Failed to create server", error)
+			this.server = null
+			this.port = 0
+			this.serverCreationPromise = null
+			throw error
+		}
 	}
 
 	private tryListenOnPort(server: Server, port: number): Promise<void> {
@@ -153,13 +146,13 @@ export class AuthHandler {
 	private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		Logger.log("AuthHandler: Received request", req.url)
 
-		if (!req.url) {
+		if (!req.url || req.url === "/favicon.ico") {
 			this.sendResponse(res, 404, "text/plain", "Not found")
 			return
 		}
 
 		try {
-			const fullUrl = `http://localhost:${this.port}${req.url}`
+			const fullUrl = `http://127.0.0.1:${this.port}${req.url}`
 
 			// Use SharedUriHandler directly - it handles all validation and processing
 			const success = await SharedUriHandler.handleUri(fullUrl)
@@ -179,15 +172,13 @@ export class AuthHandler {
 
 			if (success) {
 				this.sendResponse(res, 200, "text/html", html)
+				this.stop()
 			} else {
 				this.sendResponse(res, 400, "text/plain", "Bad request")
 			}
 		} catch (error) {
 			Logger.error("AuthHandler: Error processing request", error)
-			this.sendResponse(res, 400, "text/plain", "Bad request")
-		} finally {
-			// Stop the server after handling any request (success or failure)
-			this.stop()
+			this.sendResponse(res, 500, "text/plain", "Internal Server Error")
 		}
 	}
 

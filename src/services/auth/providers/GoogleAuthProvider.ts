@@ -1,11 +1,20 @@
 import * as crypto from "crypto"
 import { type Credentials, OAuth2Client } from "google-auth-library"
+
 import { Controller } from "@/core/controller"
-import { HostProvider } from "@/hosts/host-provider"
+import { AuthHandler } from "@/hosts/external/AuthHandler"
 import { Logger } from "@/shared/services/Logger"
+
 import { type DietCodeAccountUserInfo, type DietCodeAuthInfo } from "../AuthService"
 import { parseJwtPayload } from "../oca/utils/utils"
 import { IAuthProvider } from "./IAuthProvider"
+
+interface GoogleJwtPayload {
+	sub?: string
+	email?: string
+	name?: string
+	exp?: number
+}
 
 //  OAuth Client ID used to initiate OAuth2Client class.
 //  Using the same ID as Gemini CLI for consistency, as per plan.
@@ -30,10 +39,13 @@ export class GoogleAuthProvider implements IAuthProvider {
 		})
 	}
 
-	async getAuthRequest(controller: Controller, callbackUrl: string): Promise<string> {
+	async getAuthRequest(controller: Controller, _ignoredCallbackUrl: string): Promise<string> {
 		const state = crypto.randomBytes(16).toString("hex")
 		// Save the state in secure storage for verification during callback
 		controller.stateManager.setSecret("dietcode:googleOAuthState", state)
+
+		AuthHandler.getInstance().setEnabled(true)
+		const callbackUrl = await AuthHandler.getInstance().getCallbackUrl("/auth")
 
 		return this._client.generateAuthUrl({
 			access_type: "offline",
@@ -59,7 +71,8 @@ export class GoogleAuthProvider implements IAuthProvider {
 			// Cleanup state after verification
 			controller.stateManager.setSecret("dietcode:googleOAuthState", undefined)
 
-			const callbackUrl = await HostProvider.get().getCallbackUrl("/auth")
+			AuthHandler.getInstance().setEnabled(true)
+			const callbackUrl = await AuthHandler.getInstance().getCallbackUrl("/auth")
 			const { tokens } = await this._client.getToken({
 				code: authorizationCode,
 				redirect_uri: callbackUrl,
@@ -117,7 +130,7 @@ export class GoogleAuthProvider implements IAuthProvider {
 	}
 
 	timeUntilExpiry(jwt: string): number {
-		const payload = parseJwtPayload<any>(jwt)
+		const payload = parseJwtPayload<GoogleJwtPayload>(jwt)
 		if (!payload || !payload.exp) return 0
 		return payload.exp - Date.now() / 1000
 	}
@@ -148,7 +161,7 @@ export class GoogleAuthProvider implements IAuthProvider {
 			throw new Error("No ID token received from Google")
 		}
 
-		const payload = parseJwtPayload<any>(idToken)
+		const payload = parseJwtPayload<GoogleJwtPayload>(idToken)
 		if (!payload) {
 			throw new Error("Failed to parse Google ID token")
 		}
