@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import { Project, SyntaxKind } from 'ts-morph';
 import { Logger } from '../../../shared/services/Logger.js';
 
@@ -30,6 +31,39 @@ export class ForensicEngine {
         return results;
     } catch {
         return results;
+    }
+  }
+
+  /**
+   * Generates a semantic footprint of a symbol to track its identity across files.
+   * Anchors on the logic/signature, ignoring formatting/comments.
+   */
+  public computeFootprint(targetPath: string, symbolName: string): string {
+    try {
+        const sourceFile = this.project.getSourceFile(targetPath);
+        if (!sourceFile) return '';
+
+        let targetNode: any = null;
+        // Search across common export types
+        targetNode = sourceFile.getClass(symbolName) || 
+                     sourceFile.getFunction(symbolName) || 
+                     sourceFile.getInterface(symbolName) || 
+                     sourceFile.getTypeAlias(symbolName);
+
+        if (!targetNode) {
+            // Check variables
+            const varDecl = sourceFile.getVariableDeclaration(symbolName);
+            if (varDecl) targetNode = varDecl;
+        }
+
+        if (!targetNode) return '';
+
+        // Semantic Cleaning: remove whitespace and comments for stable hashing
+        const cleanContent = targetNode.getText(false).replace(/\s+/g, '').replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+        
+        return crypto.createHash('sha256').update(cleanContent).digest('hex');
+    } catch {
+        return '';
     }
   }
 

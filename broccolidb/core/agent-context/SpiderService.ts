@@ -114,6 +114,7 @@ export class SpiderService {
           depId: string, 
           symbols: string[], 
           displacements: { symbol: string, newPath: string }[],
+          directives: import('./types.js').RepairDirective[],
           line: number, 
           character: number 
       }[],
@@ -126,6 +127,7 @@ export class SpiderService {
           depId: string, 
           symbols: string[], 
           displacements: { symbol: string, newPath: string }[],
+          directives: import('./types.js').RepairDirective[],
           line: number, 
           character: number 
       }[] = [];

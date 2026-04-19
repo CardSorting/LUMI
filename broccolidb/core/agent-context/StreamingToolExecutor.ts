@@ -73,7 +73,10 @@ export class StreamingToolExecutor {
                         finalContent += `\n- ${def.depId} (Line ${def.line}): Missing providers for: ${def.symbols.join(', ')}`;
                       }
                       for (const disp of def.displacements) {
-                        finalContent += `\n- 💡 SUGGESTION: Symbol '${disp.symbol}' found in '${disp.newPath}'. Update your import.`;
+                        finalContent += `\n- 💡 SUGGESTION: Symbol '${disp.symbol}' found in '${disp.newPath}'.`;
+                      }
+                      for (const dir of def.directives) {
+                        finalContent += `\n- 🛠️ REPAIR PLAN: [${dir.action}] ${dir.rationale}`;
                       }
                   }
               }

@@ -109,6 +109,7 @@ export class StructuralDiscoveryService {
       depId: string, 
       symbols: string[], 
       displacements: { symbol: string, newPath: string }[], 
+      directives: any[], // RepairDirective[]
       line: number, 
       character: number 
   }[] {
@@ -119,6 +120,7 @@ export class StructuralDiscoveryService {
         depId: string, 
         symbols: string[], 
         displacements: { symbol: string, newPath: string }[],
+        directives: any[], // RepairDirective[]
         line: number, 
         character: number 
     }[] = [];
@@ -139,13 +141,26 @@ export class StructuralDiscoveryService {
                 // For each missing symbol, check if it has "Displaced" elsewhere in the project reality
                 const realMissing: string[] = [];
                 const displacementSuggestions: { symbol: string, newPath: string }[] = [];
+                const directives: any[] = []; // RepairDirective[]
 
                 for (const s of missing) {
                     const providers = registry.findProviders(s);
                     if (providers.length > 0) {
-                        displacementSuggestions.push({ symbol: s, newPath: providers[0] });
+                        const newPath = providers[0];
+                        displacementSuggestions.push({ symbol: s, newPath });
+                        directives.push({
+                            action: 'UPDATE_IMPORT_PATH',
+                            symbol: s,
+                            suggestedValue: newPath,
+                            rationale: `Symbol '${s}' was moved to '${newPath}'. Update import specifier to restore link.`
+                        });
                     } else {
                         realMissing.push(s);
+                        directives.push({
+                            action: 'EXPORT_SYMBOL',
+                            symbol: s,
+                            rationale: `Symbol '${s}' is no longer exported by '${normalizedTarget}'. Ensure it is exported or update references.`
+                        });
                     }
                 }
 
@@ -155,6 +170,7 @@ export class StructuralDiscoveryService {
                         depId,
                         symbols: realMissing.length > 0 ? realMissing : [],
                         displacements: displacementSuggestions,
+                        directives,
                         line: imp.line,
                         character: imp.character
                     });

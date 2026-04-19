@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { type CallExpression, type ImportDeclaration, Project, SyntaxKind } from 'ts-morph';
 import { getLayer, type Layer } from '../../utils/joy-zoning.js';
 import { MetricsEngine } from './spider/MetricsEngine.js';
@@ -25,6 +26,7 @@ export interface SpiderNode {
   depth: number;
   orphaned: boolean;
   vitality: number;
+  diskHash?: string; // Physical reality anchor
 }
 
 export interface SpiderSnapshot {
@@ -157,10 +159,18 @@ export class SpiderEngine {
     const oldNode = this.nodes.get(normalizedPath);
     if (oldNode) this.symbols.unregisterFile(normalizedPath);
 
-    // Populate Symbol Registry
+    // Populate Symbol Registry with Footprints (Identity v2)
     const forensicData = this.forensic.analyzeExports(absolutePath);
-    for (const name of forensicData.concrete) this.symbols.register({ symbolName: name, filePath: normalizedPath, type: 'CLASS' });
-    for (const name of forensicData.abstract) this.symbols.register({ symbolName: name, filePath: normalizedPath, type: 'INTERFACE' });
+    for (const name of forensicData.concrete) {
+        const footprint = this.forensic.computeFootprint(absolutePath, name);
+        this.symbols.register({ symbolName: name, filePath: normalizedPath, type: 'CLASS', footprint });
+    }
+    for (const name of forensicData.abstract) {
+        const footprint = this.forensic.computeFootprint(absolutePath, name);
+        this.symbols.register({ symbolName: name, filePath: normalizedPath, type: 'INTERFACE', footprint });
+    }
+
+    const diskHash = crypto.createHash('sha256').update(content).digest('hex');
 
     this.nodes.set(normalizedPath, {
       id: normalizedPath,
@@ -171,6 +181,7 @@ export class SpiderEngine {
       depth: normalizedPath.split('/').length - 1,
       orphaned: false,
       vitality: (oldNode?.vitality || 0) + 1,
+      diskHash,
     });
 
     this.project.removeSourceFile(sourceFile);
@@ -331,6 +342,28 @@ export class SpiderEngine {
 
   public getRegistry(): SymbolRegistry {
       return this.symbols;
+  }
+
+  /**
+   * High-Fidelity Sovereign Check: Verifies that the memory-resident graph
+   * matches the actual bytes-on-disk. Detects 'Reality Drift'.
+   */
+  public async verifyDrift(): Promise<{ filePath: string, drifted: boolean }[]> {
+      const results: { filePath: string, drifted: boolean }[] = [];
+      for (const node of this.nodes.values()) {
+          try {
+              const absolutePath = path.resolve(this.cwd, node.path);
+              const data = await fs.promises.readFile(absolutePath, 'utf8');
+              const currentHash = crypto.createHash('sha256').update(data).digest('hex');
+              
+              if (currentHash !== node.diskHash) {
+                  results.push({ filePath: node.path, drifted: true });
+              }
+          } catch {
+              results.push({ filePath: node.path, drifted: true }); // Deleted or unreachable
+          }
+      }
+      return results;
   }
 
   public serialize(): string {

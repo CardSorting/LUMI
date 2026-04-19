@@ -4,6 +4,7 @@ export interface SymbolProvider {
     symbolName: string;
     filePath: string;
     type: 'CLASS' | 'FUNCTION' | 'INTERFACE' | 'TYPE' | 'CONST';
+    footprint: string;
 }
 
 /**
@@ -41,6 +42,14 @@ export class SymbolRegistry {
 
   public findProviders(symbolName: string): string[] {
       return Array.from(this.providers.get(symbolName) || []);
+  }
+
+  public findProviderByFootprint(footprint: string): SymbolProvider | null {
+      for (const providers of this.exportsByFile.values()) {
+          const match = providers.find(p => p.footprint === footprint);
+          if (match) return match;
+      }
+      return null;
   }
 
   /**

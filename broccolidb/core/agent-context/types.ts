@@ -142,6 +142,16 @@ export interface AiService {
   explainReasoningChain: (content: string, lineage: { content: string; type: string }[]) => Promise<string>;
 }
 
+export type RepairAction = 'UPDATE_IMPORT_PATH' | 'EXPORT_SYMBOL' | 'DECOUPLE_INTERFACE' | 'FIX_LAYER_VIOLATION';
+
+export interface RepairDirective {
+  action: RepairAction;
+  symbol?: string;
+  filePath?: string;
+  suggestedValue?: string;
+  rationale: string;
+}
+
 export interface ServiceContext {
   db: BufferedDbPool;
   aiService: AiService | null;
@@ -164,7 +174,8 @@ export interface ServiceContext {
     deficiencies: { 
         depId: string, 
         symbols: string[], 
-        displacements: { symbol: string, newPath: string }[], 
+        displacements: { symbol: string, newPath: string }[],
+        directives: RepairDirective[],
         line: number, 
         character: number 
     }[] 
@@ -188,7 +199,8 @@ export interface IAgentContext {
     deficiencies: { 
         depId: string, 
         symbols: string[], 
-        displacements: { symbol: string, newPath: string }[], 
+        displacements: { symbol: string, newPath: string }[],
+        directives: RepairDirective[],
         line: number, 
         character: number 
     }[] 
