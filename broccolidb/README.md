@@ -4,12 +4,12 @@ BroccoliDB is a high-fidelity agentic repository ecosystem built on **Forensic-G
 
 ## 🚀 Key Features
 
-### 🕷️ Spider Engine (Sovereign Level 17)
-A hyper-deterministic architectural guardian that enforces structural integrity and **Type-Soundness** via:
-- **Symbolic Mirroring**: tracks real-time exported/consumed symbols.
+### 🕷️ Spider Engine (Sovereign Level 18)
+A hyper-deterministic architectural guardian that enforces structural integrity, **Symbolic Continuity**, and **Type-Soundness** via:
+- **Displacement Recognition**: Tracks symbol moves across the workspace.
 - **T-Mirror**: Projects real compiler diagnostics onto every structural mutation.
 - **The Mirror of Reality**: Anchors all audits in the physical bytes-on-disk post-execution.
-- **Vitality Hubs**: identifies high-churn "Architectural Volcanoes" for stabilization.
+- **Sovereignty**: Enforces strict Joy-Zoning rules (SPI-005).
 - [Read the SPIDER Policy](core/policy/SPIDER.md)
 
 ### 🏥 Forensic Reasoning & Audit
