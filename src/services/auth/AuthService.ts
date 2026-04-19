@@ -1,6 +1,7 @@
 import { AuthState, UserInfo } from "@shared/proto/dietcode/account"
 import { type EmptyRequest, String } from "@shared/proto/dietcode/common"
 import { DietCodeEnv } from "@/config"
+import { clearGooglePersonalOnboardingCache } from "@/core/api/providers/google-personal"
 import { Controller } from "@/core/controller"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { setWelcomeViewCompleted } from "@/core/controller/state/setWelcomeViewCompleted"
@@ -323,6 +324,11 @@ export class AuthService {
 				if ("signOut" in provider && typeof provider.signOut === "function") {
 					await (provider as any).signOut(this._controller)
 				}
+			}
+
+			// Clear onboarding cache when signing out from Google
+			if (providerName === "google") {
+				clearGooglePersonalOnboardingCache()
 			}
 
 			// Force clear the specific token from storage

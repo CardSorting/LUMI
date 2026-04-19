@@ -2,7 +2,7 @@
 	"name": "dietcode",
 	"displayName": "DietCode",
 	"description": "DietCode is your autonomous architectural substrate, maintaining codebase integrity with zero bloat.",
-	"version": "5.7.5",
+	"version": "5.7.6",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",
@@ -246,6 +246,21 @@
 				"title": "Add to DietCode Chat",
 				"category": "DietCode",
 				"icon": "$(link-external)"
+			},
+			{
+				"command": "antigravity.importAntigravitySettings",
+				"title": "Import Antigravity Settings",
+				"category": "Antigravity"
+			},
+			{
+				"command": "antigravity.importAntigravityExtensions",
+				"title": "Import Antigravity Extensions",
+				"category": "Antigravity"
+			},
+			{
+				"command": "antigravity.prioritized.chat.open",
+				"title": "Open Prioritized Chat",
+				"category": "Antigravity"
 			}
 		],
 		"keybindings": [
