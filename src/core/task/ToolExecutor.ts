@@ -704,7 +704,7 @@ export class ToolExecutor {
 				(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
 				block.params.path
 			) {
-				const telemetry = (this.guard as any).getMetabolicTelemetry(block.params.path)
+				const telemetry = this.guard.getStabilityTelemetry(block.params.path)
 				const summary = (formatResponse as any).postExecutionSummary(telemetry, postExecResult.violations)
 				this.say("text", summary).catch(() => {})
 			} else if (postExecResult.warning) {

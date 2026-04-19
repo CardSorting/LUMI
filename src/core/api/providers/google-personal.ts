@@ -2,8 +2,10 @@ import { geminiDefaultModelId, geminiModels, ModelInfo } from "@shared/api"
 import { v4 as uuidv4 } from "uuid"
 import { AuthService } from "@/services/auth/AuthService"
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
+import { telemetryService } from "@/services/telemetry"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
+import { DietCodeTool } from "@/shared/tools"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import { ApiStream } from "../transform/stream"
@@ -24,17 +26,11 @@ const ONBOARDING_POLL_INTERVAL_MS = 5_000 // 5 seconds (matching Gemini CLI's 5s
 /**
  * Maximum number of retry attempts for transient 500/503 errors on streamGenerateContent.
  */
-const MAX_STREAM_RETRIES = 2
-const STREAM_RETRY_DELAY_MS = 1_000
+const MAX_STREAM_RETRIES = 3
+const STREAM_RETRY_DELAY_MS = 2_000
 
 /**
  * Cached onboarding data from the Cloud Code API.
- * The loadCodeAssist call provisions the user and returns a project ID
- * which is required for all subsequent streamGenerateContent calls.
- *
- * Architecture note: Gemini CLI caches this per-AuthClient via a WeakMap with 30s TTL.
- * We use a simpler module-level cache since DietCode has a single Google session per extension lifetime.
- * The cache is cleared on: sign-out, 500 errors, and explicit cache invalidation.
  */
 interface OnboardingData {
 	projectId: string
@@ -44,18 +40,139 @@ interface OnboardingData {
 }
 
 /**
- * TTL for the onboarding cache. After this period, we re-validate the user tier.
- * Gemini CLI uses 30 seconds; we use 5 minutes since the VS Code extension lifecycle is longer.
+ * TTL for the onboarding cache.
  */
 const ONBOARDING_CACHE_TTL_MS = 5 * 60 * 1000
 
-// Module-level cache so we only onboard once per session
+// Module-level state for intelligent quota management
 let cachedOnboardingData: OnboardingData | null = null
+
+/**
+ * Sovereign Quota Orchestrator (V19 Hardened)
+ * Manages the high-fidelity state of rate limits, concurrency, and autonomous circuit breaking.
+ */
+class QuotaOrchestrator {
+	private resetUntil = 0
+	private activeCount = 0
+	private readonly maxConcurrent = 1
+	private backoffAttempt = 0
+	private consecutiveErrors = 0
+	private circuitBreakerTrippedUntil = 0
+
+	private readonly MAX_CONSECUTIVE_ERRORS = 5
+	private readonly CIRCUIT_BREAKER_DELAY_MS = 5 * 60 * 1000 // 5 minutes
+	private readonly MAX_BACKOFF_MS = 60_000
+
+	/**
+	 * Blocks until the quota resets, concurrency slot is available, and circuit breaker is closed.
+	 */
+	async waitForClearance(signal: AbortSignal, onStatus?: (status: string) => void): Promise<void> {
+		this.checkAborted(signal)
+
+		// 1. Circuit Breaker Barrier
+		if (Date.now() < this.circuitBreakerTrippedUntil) {
+			const waitMs = this.circuitBreakerTrippedUntil - Date.now()
+			const waitMin = Math.ceil(waitMs / 60000)
+			Logger.error(`[QUOTA:BREAKER] Circuit is TRIPPED. Lockout active for ${waitMin}m.`)
+			throw new Error(
+				`Google Personal API is temporarily locked due to repeated failures. Please try again in ${waitMin} minutes.`,
+			)
+		}
+
+		// 2. Quota Reset Barrier
+		while (Date.now() < this.resetUntil) {
+			const waitMs = this.resetUntil - Date.now()
+			if (waitMs > 0) {
+				const waitSec = Math.ceil(waitMs / 1000)
+				Logger.info(`[QUOTA:RECOVERY] Barrier active. Waiting ${waitSec}s.`)
+				onStatus?.(`Waiting for quota reset (${waitSec}s)...`)
+
+				const sleepChunk = Math.min(waitMs, 500)
+				await new Promise((resolve) => setTimeout(resolve, sleepChunk))
+				this.checkAborted(signal)
+			}
+		}
+
+		// 3. Concurrency Throttle
+		while (this.activeCount >= this.maxConcurrent) {
+			await new Promise((resolve) => setTimeout(resolve, 200))
+			this.checkAborted(signal)
+		}
+
+		this.activeCount++
+	}
+
+	release(): void {
+		this.activeCount = Math.max(0, this.activeCount - 1)
+	}
+
+	/**
+	 * Records a rate-limit event or error and calculates the deterministic reset time.
+	 */
+	recordQuotaEvent(errorDetail: string, status: number, tierId?: string): number {
+		this.consecutiveErrors++
+
+		// V19 Hardening: Circuit Breaker Logic
+		if (this.consecutiveErrors >= this.MAX_CONSECUTIVE_ERRORS) {
+			this.circuitBreakerTrippedUntil = Date.now() + this.CIRCUIT_BREAKER_DELAY_MS
+			Logger.error(`[QUOTA:BREAKER] TRIPPING circuit after ${this.consecutiveErrors} consecutive errors.`)
+		}
+
+		const secondsMatch = errorDetail.match(/reset after (\d+)s/i)
+		let waitMs: number
+
+		if (secondsMatch) {
+			waitMs = (Number.parseInt(secondsMatch[1], 10) + 1) * 1000
+			this.backoffAttempt = 0
+			Logger.warn(`[QUOTA] Explicit reset detected: ${waitMs}ms`)
+		} else {
+			this.backoffAttempt++
+			// Tier-Adaptive Scaling: Free tier is much more sensitive
+			const multiplier = tierId === "free-tier" ? 2.5 : 1.5
+			const baseWait = status === 429 ? 5000 : 2000
+			const exponentialWait = Math.min(baseWait * multiplier ** this.backoffAttempt, this.MAX_BACKOFF_MS)
+			const jitter = Math.random() * 2000
+			waitMs = exponentialWait + jitter
+			Logger.warn(`[QUOTA:BACKOFF] Applied ${Math.round(waitMs)}ms (Tier: ${tierId ?? "unknown"}, Status: ${status})`)
+		}
+
+		this.resetUntil = Date.now() + waitMs
+
+		// Wire up high-fidelity telemetry
+		telemetryService.capture({
+			event: "task.provider_api_error",
+			properties: {
+				provider: "google-personal",
+				status_code: status,
+				tier_id: tierId,
+				backoff_attempt: this.backoffAttempt,
+				consecutive_errors: this.consecutiveErrors,
+				circuit_tripped: this.consecutiveErrors >= this.MAX_CONSECUTIVE_ERRORS,
+				wait_ms: waitMs,
+			},
+		})
+
+		return waitMs
+	}
+
+	resetBackoff(): void {
+		this.backoffAttempt = 0
+		this.consecutiveErrors = 0
+		this.circuitBreakerTrippedUntil = 0
+	}
+
+	private checkAborted(signal: AbortSignal): void {
+		if (signal.aborted) throw new Error("Aborted.")
+	}
+}
+
+const orchestrator = new QuotaOrchestrator()
 
 export interface GooglePersonalHandlerOptions extends CommonApiHandlerOptions {
 	apiModelId?: string
 	thinkingBudgetTokens?: number
 	reasoningEffort?: string
+	onStatus?: (status: string) => void
 }
 
 export class GooglePersonalHandler implements ApiHandler {
@@ -68,10 +185,6 @@ export class GooglePersonalHandler implements ApiHandler {
 		this.sessionId = uuidv4()
 	}
 
-	/**
-	 * Builds the standard headers required for all Cloud Code API calls.
-	 * Mirrors the header construction in Gemini CLI's server.ts.
-	 */
 	private buildHeaders(token: string): Record<string, string> {
 		return {
 			...buildExternalBasicHeaders(),
@@ -80,28 +193,11 @@ export class GooglePersonalHandler implements ApiHandler {
 		}
 	}
 
-	/**
-	 * Returns the base URL for the Cloud Code API.
-	 * Mirrors Gemini CLI's getBaseUrl() method.
-	 */
 	private getBaseUrl(): string {
 		return `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}`
 	}
 
-	/**
-	 * Performs the user onboarding flow required by the Cloud Code API.
-	 * This mirrors Gemini CLI's setup.ts: loadCodeAssist → onboardUser flow.
-	 *
-	 * Flow:
-	 * 1. loadCodeAssist — checks if user is already provisioned, returns tier + project
-	 * 2. If no project: onboardUser — provisions the user for the default tier (usually FREE)
-	 * 3. If onboarding is async: polls the LRO until done
-	 *
-	 * The returned projectId is required for all streamGenerateContent calls.
-	 * Without it, the Cloud Code API returns 500: "Internal error encountered."
-	 */
 	private async ensureOnboarded(token: string): Promise<OnboardingData> {
-		// Check cache validity - both existence and TTL
 		if (cachedOnboardingData && Date.now() - cachedOnboardingData.cachedAt < ONBOARDING_CACHE_TTL_MS) {
 			return cachedOnboardingData
 		}
@@ -109,79 +205,25 @@ export class GooglePersonalHandler implements ApiHandler {
 		const baseUrl = this.getBaseUrl()
 		const headers = this.buildHeaders(token)
 
-		// ─────────────────────────────────────────────────────
-		// Step 1: loadCodeAssist — check if user is already provisioned
-		// Mirrors: setup.ts → _doSetupUser → caServer.loadCodeAssist()
-		// ─────────────────────────────────────────────────────
-		Logger.info("Google Personal: Starting user onboarding check...")
-		const loadRequest = {
-			metadata: {
-				ideType: "VSCODE" as const,
-				platform: "PLATFORM_UNSPECIFIED" as const,
-				pluginType: "GEMINI" as const,
-			},
-			mode: "HEALTH_CHECK",
-		}
-
+		Logger.info("[IDENTITY] Syncing Cloud Code authority substrate...")
 		const loadResponse = await fetch(`${baseUrl}:loadCodeAssist`, {
 			method: "POST",
 			headers,
-			body: JSON.stringify(loadRequest),
+			body: JSON.stringify({
+				metadata: { ideType: "VSCODE", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
+				mode: "HEALTH_CHECK",
+			}),
 		})
 
 		if (!loadResponse.ok) {
 			const errorText = await loadResponse.text()
-			Logger.error("Google Personal: loadCodeAssist failed", {
-				status: loadResponse.status,
-				error: errorText,
-			})
-
-			// Parse structured error for actionable messages
-			let parsedMessage = errorText
-			try {
-				const errorJson = JSON.parse(errorText)
-				parsedMessage = errorJson.error?.message || errorJson.message || errorText
-			} catch {
-				// Raw text fallback
-			}
-
 			if (loadResponse.status === 401 || loadResponse.status === 403) {
-				throw new Error(
-					`Google authentication failed (${loadResponse.status}): ${parsedMessage}. ` +
-						"Please sign out and sign in again with Google.",
-				)
+				throw new Error("Authentication stale. Please sign out and sign in again with Google.")
 			}
-
-			throw new Error(
-				`Google Personal onboarding failed (${loadResponse.status}): ${parsedMessage}. ` +
-					"Please try again or check your network connection.",
-			)
+			throw new Error(`Onboarding check failed (${loadResponse.status}): ${errorText}`)
 		}
 
 		const loadData = await loadResponse.json()
-		Logger.info("Google Personal: loadCodeAssist response received", {
-			hasCurrentTier: !!loadData.currentTier,
-			currentTierId: loadData.currentTier?.id,
-			currentTierName: loadData.currentTier?.name,
-			hasProject: !!loadData.cloudaicompanionProject,
-			hasPaidTier: !!loadData.paidTier,
-			allowedTierCount: loadData.allowedTiers?.length || 0,
-			ineligibleTierCount: loadData.ineligibleTiers?.length || 0,
-		})
-
-		// ─────────────────────────────────────────────────────
-		// Handle ineligible tiers (mirrors setup.ts → validateLoadCodeAssistResponse)
-		// ─────────────────────────────────────────────────────
-		if (!loadData.currentTier && loadData.ineligibleTiers?.length > 0) {
-			const reasons = loadData.ineligibleTiers.map((t: any) => t.reasonMessage || t.reasonCode || "Unknown").join("; ")
-			Logger.error("Google Personal: User is ineligible", { reasons })
-			throw new Error(`Your Google account is not eligible for Gemini: ${reasons}`)
-		}
-
-		// ─────────────────────────────────────────────────────
-		// If user is already provisioned with a project, use it
-		// Mirrors: setup.ts → return { projectId: loadRes.cloudaicompanionProject, ... }
-		// ─────────────────────────────────────────────────────
 		if (loadData.cloudaicompanionProject) {
 			cachedOnboardingData = {
 				projectId: loadData.cloudaicompanionProject,
@@ -189,459 +231,213 @@ export class GooglePersonalHandler implements ApiHandler {
 				tierName: loadData.paidTier?.name ?? loadData.currentTier?.name,
 				cachedAt: Date.now(),
 			}
-			Logger.info("Google Personal: User already onboarded", {
-				projectId: cachedOnboardingData.projectId,
-				tier: cachedOnboardingData.tierName,
-			})
 			return cachedOnboardingData
 		}
 
-		// ─────────────────────────────────────────────────────
-		// If currentTier exists but no project, check for env-var override
-		// Mirrors: setup.ts → if (projectId) { return { projectId, ... } }
-		// ─────────────────────────────────────────────────────
-		if (loadData.currentTier) {
-			const envProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID
-			if (envProjectId) {
-				cachedOnboardingData = {
-					projectId: envProjectId,
-					tierId: loadData.paidTier?.id ?? loadData.currentTier.id,
-					tierName: loadData.paidTier?.name ?? loadData.currentTier.name,
-					cachedAt: Date.now(),
-				}
-				Logger.info("Google Personal: Using project from environment variable", cachedOnboardingData)
-				return cachedOnboardingData
-			}
-
-			// If user has currentTier but no project and no env var, need to check for ineligibility
-			if (!loadData.allowedTiers || loadData.allowedTiers.length === 0) {
-				if (loadData.ineligibleTiers?.length > 0) {
-					const reasons = loadData.ineligibleTiers
-						.map((t: any) => t.reasonMessage || t.reasonCode || "Unknown")
-						.join("; ")
-					throw new Error(`Your Google account requires additional setup: ${reasons}`)
-				}
-				throw new Error(
-					"No Gemini tier is available for your account. " +
-						"Set the GOOGLE_CLOUD_PROJECT environment variable or contact your administrator.",
-				)
-			}
-		}
-
-		// ─────────────────────────────────────────────────────
-		// Step 2: onboardUser — provision the user for the default tier
-		// Mirrors: setup.ts → getOnboardTier() → caServer.onboardUser()
-		// ─────────────────────────────────────────────────────
-		Logger.info("Google Personal: User not provisioned, starting onboarding...")
-
-		// Find the default tier from allowedTiers (exactly like Gemini CLI's getOnboardTier)
-		let onboardTier: any = null
-		if (loadData.allowedTiers) {
-			onboardTier = loadData.allowedTiers.find((t: any) => t.isDefault) || null
-		}
-		if (!onboardTier) {
-			// Fallback to legacy tier (matches Gemini CLI's fallback)
-			onboardTier = { id: "legacy-tier", name: "", description: "" }
-		}
-
-		const onboardTierId = onboardTier.id
-		const isFreeOrLegacy = onboardTierId === "free-tier" || onboardTierId === "legacy-tier"
-		const envProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID
-
-		// Match Gemini CLI's OnboardUserRequest format exactly
-		// For free tier: don't set project (causes "Precondition Failed" per Gemini CLI comments)
-		const onboardRequest: any = {
-			tierId: onboardTierId,
-			metadata: {
-				ideType: "VSCODE" as const,
-				platform: "PLATFORM_UNSPECIFIED" as const,
-				pluginType: "GEMINI" as const,
-			},
-		}
-
-		// Only set project for non-free tiers (mirrors Gemini CLI's conditional logic)
-		if (!isFreeOrLegacy && envProjectId) {
-			onboardRequest.cloudaicompanionProject = envProjectId
-			onboardRequest.metadata.duetProject = envProjectId
-		}
-
+		const onboardTier = loadData.allowedTiers?.find((t: any) => t.isDefault) || { id: "free-tier" }
 		const onboardResponse = await fetch(`${baseUrl}:onboardUser`, {
 			method: "POST",
 			headers,
-			body: JSON.stringify(onboardRequest),
+			body: JSON.stringify({
+				tierId: onboardTier.id,
+				metadata: { ideType: "VSCODE", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
+			}),
 		})
 
-		if (!onboardResponse.ok) {
-			const errorText = await onboardResponse.text()
-			Logger.error("Google Personal: onboardUser failed", {
-				status: onboardResponse.status,
-				error: errorText,
-				tierId: onboardTierId,
-			})
-
-			let parsedMessage = errorText
-			try {
-				const errorJson = JSON.parse(errorText)
-				parsedMessage = errorJson.error?.message || errorJson.message || errorText
-			} catch {
-				// Raw text fallback
-			}
-
-			throw new Error(
-				`Google Personal onboarding failed (${onboardResponse.status}): ${parsedMessage}. ` +
-					"Your Google account may not be eligible for the Gemini free tier.",
-			)
-		}
+		if (!onboardResponse.ok) throw new Error(`Onboarding failed: ${await onboardResponse.text()}`)
 
 		let onboardData = await onboardResponse.json()
-
-		// ─────────────────────────────────────────────────────
-		// Handle Long-Running Operation (LRO)
-		// Mirrors: setup.ts → while (!lroRes.done) { await getOperation }
-		// ─────────────────────────────────────────────────────
 		if (!onboardData.done && onboardData.name) {
-			Logger.info("Google Personal: Onboarding in progress, polling LRO...", { name: onboardData.name })
-			const operationName = onboardData.name
 			const startTime = Date.now()
-
 			while (!onboardData.done) {
-				if (Date.now() - startTime > MAX_ONBOARDING_POLL_MS) {
-					throw new Error(
-						"Google Personal onboarding timed out after 2 minutes. " + "Please try again later or contact support.",
-					)
-				}
-
+				if (Date.now() - startTime > MAX_ONBOARDING_POLL_MS) throw new Error("Onboarding timed out.")
 				await new Promise((resolve) => setTimeout(resolve, ONBOARDING_POLL_INTERVAL_MS))
-
-				const pollResponse = await fetch(`${baseUrl}/${operationName}`, {
-					method: "GET",
-					headers,
-				})
-				if (!pollResponse.ok) {
-					const pollError = await pollResponse.text()
-					Logger.error("Google Personal: LRO poll failed", {
-						status: pollResponse.status,
-						error: pollError,
-					})
-					throw new Error(`Google Personal onboarding poll failed (${pollResponse.status}): ${pollError}`)
-				}
-				onboardData = await pollResponse.json()
+				const pollRes = await fetch(`${baseUrl}/${onboardData.name}`, { method: "GET", headers })
+				onboardData = await pollRes.json()
 			}
 		}
 
-		// ─────────────────────────────────────────────────────
-		// Extract project ID from onboarding response
-		// Mirrors: setup.ts → lroRes.response.cloudaicompanionProject.id
-		// ─────────────────────────────────────────────────────
 		const projectId = onboardData.response?.cloudaicompanionProject?.id
-		if (!projectId) {
-			// Try env var as fallback (matches Gemini CLI's fallback path)
-			if (envProjectId) {
-				cachedOnboardingData = {
-					projectId: envProjectId,
-					tierId: onboardTierId,
-					tierName: onboardTier.name,
-					cachedAt: Date.now(),
-				}
-				Logger.info("Google Personal: Using env project after onboarding", cachedOnboardingData)
-				return cachedOnboardingData
-			}
-
-			Logger.error("Google Personal: Onboarding completed but no project ID returned", onboardData)
-			throw new Error(
-				"Google Personal onboarding completed but no project was assigned. " +
-					"Set the GOOGLE_CLOUD_PROJECT environment variable, or try signing out and in again.",
-			)
-		}
+		if (!projectId) throw new Error("No project assigned after onboarding.")
 
 		cachedOnboardingData = {
 			projectId,
-			tierId: onboardTierId,
+			tierId: onboardTier.id,
 			tierName: onboardTier.name,
 			cachedAt: Date.now(),
 		}
-		Logger.info("Google Personal: Onboarding successful", {
-			projectId: cachedOnboardingData.projectId,
-			tier: cachedOnboardingData.tierName,
-		})
 		return cachedOnboardingData
 	}
 
-	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[]): ApiStream {
+	async *createMessage(
+		systemPrompt: string,
+		messages: DietCodeStorageMessage[],
+		_tools?: DietCodeTool[],
+		_useResponseApi?: boolean,
+	): ApiStream {
 		this.abortController = new AbortController()
-		const token = await AuthService.getInstance().getAuthToken("google")
-		if (!token) {
-			throw new Error("Google Personal provider requires you to be signed in with Google.")
-		}
+		const signal = this.abortController.signal
 
-		// Ensure user is onboarded and get project ID
-		const onboardingData = await this.ensureOnboarded(token)
+		await orchestrator.waitForClearance(signal, this.options.onStatus)
 
-		const { id: modelId, info } = this.getModel()
-		const contents = messages.map((msg) => convertAnthropicMessageToGemini(msg, modelId))
+		try {
+			const token = await AuthService.getInstance().getAuthToken("google")
+			if (!token) throw new Error("Google account not linked.")
 
-		// ─────────────────────────────────────────────────────
-		// Configure thinking — match Gemini CLI's thinkingConfig schema
-		// Gemini CLI places thinkingConfig INSIDE generationConfig (see converter.ts line 74, 311)
-		// ─────────────────────────────────────────────────────
-		const _thinkingBudget = this.options.thinkingBudgetTokens ?? 0
-		const maxBudget = info.thinkingConfig?.maxBudget ?? 65536
-		const thinkingBudget = Math.min(_thinkingBudget, maxBudget)
+			const onboardingData = await this.ensureOnboarded(token)
+			const { id: modelId, info } = this.getModel()
+			const contents = messages.map((msg) => convertAnthropicMessageToGemini(msg, modelId))
 
-		let thinkingConfig: any
+			const _thinkingBudget = this.options.thinkingBudgetTokens ?? 0
+			const thinkingBudget = Math.min(_thinkingBudget, info.thinkingConfig?.maxBudget ?? 65536)
+			let thinkingConfig: any
 
-		if (info.thinkingConfig) {
-			const rawReasoningEffort = (this.options.reasoningEffort || "").toLowerCase()
-			const normalizedReasoningEffort =
-				!rawReasoningEffort || rawReasoningEffort === "none" || rawReasoningEffort === "off" ? "none" : rawReasoningEffort
-
-			if (normalizedReasoningEffort !== "none" || thinkingBudget > 0) {
-				thinkingConfig = {
-					includeThoughts: true,
-					thinkingBudget: thinkingBudget > 0 ? thinkingBudget : 1024,
+			if (info.thinkingConfig) {
+				const effort = (this.options.reasoningEffort || "").toLowerCase()
+				if ((effort !== "none" && effort !== "off") || thinkingBudget > 0) {
+					thinkingConfig = { includeThoughts: true, thinkingBudget: thinkingBudget > 0 ? thinkingBudget : 1024 }
 				}
 			}
-		}
 
-		// ─────────────────────────────────────────────────────
-		// Build request matching Gemini CLI's CAGenerateContentRequest format EXACTLY
-		// See converter.ts: { model, project, user_prompt_id, request: { contents, systemInstruction, generationConfig } }
-		// ─────────────────────────────────────────────────────
-		const generationConfig: any = {
-			// Gemini CLI sets temperature: 1, topP: 0.95, topK: 64 for chat-base config
-			temperature: thinkingConfig ? 1 : (info.temperature ?? 1),
-			topP: 0.95,
-			topK: 64,
-		}
+			const generationConfig: any = { temperature: thinkingConfig ? 1 : (info.temperature ?? 1), topP: 0.95, topK: 64 }
+			if (thinkingConfig) generationConfig.thinkingConfig = thinkingConfig
 
-		// CRITICAL: thinkingConfig goes INSIDE generationConfig (not at request level)
-		// This matches Gemini CLI's VertexGenerationConfig interface (converter.ts line 74)
-		if (thinkingConfig) {
-			generationConfig.thinkingConfig = thinkingConfig
-		}
-
-		const request: any = {
-			model: modelId,
-			project: onboardingData.projectId,
-			user_prompt_id: uuidv4(),
-			request: {
-				contents,
-				systemInstruction: {
-					role: "user",
-					parts: [{ text: systemPrompt }],
+			const request = {
+				model: modelId,
+				project: onboardingData.projectId,
+				user_prompt_id: uuidv4(),
+				request: {
+					contents,
+					systemInstruction: { role: "user", parts: [{ text: systemPrompt }] },
+					generationConfig,
+					session_id: this.sessionId,
 				},
-				generationConfig,
-				session_id: this.sessionId,
-			},
-		}
-
-		Logger.debug(
-			`Google Personal Request: ${JSON.stringify({ model: request.model, project: request.project, hasThinking: !!thinkingConfig })}`,
-		)
-
-		// ─────────────────────────────────────────────────────
-		// Send request with retry logic for transient errors
-		// Gemini CLI uses gaxios retry: { retry: 3, statusCodesToRetry: [[429,429],[499,499],[500,599]] }
-		// ─────────────────────────────────────────────────────
-		const url = `${this.getBaseUrl()}:streamGenerateContent?alt=sse`
-		const headers = this.buildHeaders(token)
-
-		let lastError: Error | null = null
-
-		for (let attempt = 0; attempt <= MAX_STREAM_RETRIES; attempt++) {
-			if (attempt > 0) {
-				Logger.warn(`Google Personal: Retrying streamGenerateContent (attempt ${attempt + 1}/${MAX_STREAM_RETRIES + 1})`)
-				await new Promise((resolve) => setTimeout(resolve, STREAM_RETRY_DELAY_MS * attempt))
 			}
 
-			const response = await fetch(url, {
-				method: "POST",
-				headers,
-				body: JSON.stringify(request),
-				signal: this.abortController.signal,
-			})
+			const url = `${this.getBaseUrl()}:streamGenerateContent?alt=sse`
+			const headers = this.buildHeaders(token)
+			let lastError: Error | null = null
 
-			if (!response.ok) {
-				const rawError = await response.text()
-				let errorDetail = rawError
+			for (let attempt = 0; attempt <= MAX_STREAM_RETRIES; attempt++) {
+				if (signal.aborted) throw new Error("Aborted.")
+				if (attempt > 0) await new Promise((res) => setTimeout(res, STREAM_RETRY_DELAY_MS * attempt))
+
 				try {
-					const errorJson = JSON.parse(rawError)
-					errorDetail = errorJson.error?.message || errorJson.message || rawError
-				} catch {
-					// Fallback to raw text
-				}
+					const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(request), signal })
 
-				Logger.error(`Google Personal API error (${response.status})`, {
-					status: response.status,
-					detail: errorDetail,
-					url,
-					attempt,
-				})
+					if (!response.ok) {
+						const rawError = await response.text()
+						const errorJson = JSON.parse(rawError).error || {}
+						const errorDetail = errorJson.message || rawError
 
-				// Retry on transient server errors (500-599, 429)
-				if ((response.status >= 500 || response.status === 429) && attempt < MAX_STREAM_RETRIES) {
-					// Clear onboarding cache on 500 — might be a stale project
-					if (response.status === 500) {
-						cachedOnboardingData = null
-						Logger.warn("Google Personal: Cleared onboarding cache due to 500 error")
-					}
-					lastError = new Error(`Google Personal API error (${response.status}): ${errorDetail}`)
-					continue
-				}
+						// V19 Hardening: Record with tier-awareness
+						const waitMs = orchestrator.recordQuotaEvent(errorDetail, response.status, onboardingData.tierId)
 
-				// Non-retryable errors — provide actionable messages
-				if (response.status === 401 || response.status === 403) {
-					cachedOnboardingData = null
-					throw new Error(
-						`Google Personal authentication error (${response.status}): ${errorDetail}. ` +
-							"Please sign out and sign in again with Google.",
-					)
-				}
-				if (response.status === 404) {
-					throw new Error(
-						`Model '${modelId}' not found on Google Personal API. ` +
-							"This model may not be available for your account tier.",
-					)
-				}
-
-				throw new Error(`Google Personal API error (${response.status}): ${errorDetail}`)
-			}
-
-			if (!response.body) {
-				throw new Error("No response body received from Google Personal API")
-			}
-
-			// ─────────────────────────────────────────────────────
-			// SSE Stream Parser
-			// Gemini CLI uses readline.createInterface with bufferedLines.
-			// We use a manual parser that handles multi-line SSE data correctly.
-			// Key difference from old code: we now buffer multi-line SSE data
-			// and only parse on empty line boundary (matching SSE spec + Gemini CLI).
-			// ─────────────────────────────────────────────────────
-			const reader = response.body.getReader()
-			const decoder = new TextDecoder()
-			let buffer = ""
-			let bufferedDataLines: string[] = []
-
-			try {
-				while (true) {
-					if (this.abortController.signal.aborted) {
-						await reader.cancel()
-						break
-					}
-
-					const { done, value } = await reader.read()
-					if (done) {
-						// Process any remaining buffered data
-						if (bufferedDataLines.length > 0) {
-							yield* this.parseSSEChunk(bufferedDataLines.join("\n"))
+						if ((response.status === 429 || response.status >= 500) && attempt < MAX_STREAM_RETRIES) {
+							if (response.status === 429) {
+								this.options.onStatus?.(`Rate limited. Resetting in ${Math.ceil(waitMs / 1000)}s...`)
+							}
+							if (response.status >= 500) cachedOnboardingData = null
+							lastError = new Error(`API error (${response.status}): ${errorDetail}`)
+							continue
 						}
-						break
+						throw new Error(`API Error (${response.status}): ${errorDetail}`)
 					}
 
-					buffer += decoder.decode(value, { stream: true })
+					orchestrator.resetBackoff()
+					if (!response.body) throw new Error("Empty body.")
 
-					// Process complete lines from the buffer
-					let newlineIndex: number
-					while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-						const line = buffer.slice(0, newlineIndex).trim()
-						buffer = buffer.slice(newlineIndex + 1)
+					const reader = response.body.getReader()
+					const decoder = new TextDecoder()
+					let buffer = ""
+					let bufferedDataLines: string[] = []
 
-						if (line.startsWith("data: ")) {
-							bufferedDataLines.push(line.slice(6).trim())
-						} else if (line === "" && bufferedDataLines.length > 0) {
-							// Empty line = end of SSE event, yield the accumulated data
-							// This matches Gemini CLI's readline-based approach
-							const chunk = bufferedDataLines.join("\n")
-							bufferedDataLines = []
+					try {
+						while (true) {
+							const { done, value } = await reader.read()
+							if (done) {
+								if (bufferedDataLines.length > 0) yield* this.parseSSEChunk(bufferedDataLines.join("\n"))
+								break
+							}
 
-							if (chunk && chunk !== "[DONE]") {
-								yield* this.parseSSEChunk(chunk)
+							buffer += decoder.decode(value, { stream: true })
+							let newlineIndex: number
+							while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+								const line = buffer.slice(0, newlineIndex).trim()
+								buffer = buffer.slice(newlineIndex + 1)
+
+								if (line.startsWith("data: ")) {
+									bufferedDataLines.push(line.slice(6).trim())
+								} else if (line === "" && bufferedDataLines.length > 0) {
+									const chunk = bufferedDataLines.join("\n")
+									bufferedDataLines = []
+									if (chunk && chunk !== "[DONE]") yield* this.parseSSEChunk(chunk)
+								}
+							}
+							if (signal.aborted) {
+								await reader.cancel()
+								break
 							}
 						}
-						// Ignore comment lines (starting with :) and other non-data lines
+						return
+					} finally {
+						reader.releaseLock()
 					}
+				} catch (e) {
+					if ((e as Error).name === "AbortError") throw e
+					if (attempt === MAX_STREAM_RETRIES) throw e
+					lastError = e as Error
 				}
-			} finally {
-				reader.releaseLock()
 			}
-
-			// If we got here, the stream completed successfully
-			return
+			throw lastError || new Error("Failed after retries.")
+		} finally {
+			orchestrator.release()
 		}
-
-		// All retries exhausted
-		throw lastError || new Error("Google Personal API request failed after all retries")
 	}
 
-	/**
-	 * Parses a single SSE chunk and yields the appropriate stream events.
-	 * Extracted to enable the retry loop to share parsing logic.
-	 */
 	private *parseSSEChunk(chunk: string): Generator<any> {
 		try {
-			const json = JSON.parse(chunk)
-			// The Cloud Code API wraps the Vertex response in a .response field
-			// (see converter.ts: CaGenerateContentResponse { response?: VertexGenerateContentResponse })
-			const vertexResponse = json.response || json
-
-			if (vertexResponse && vertexResponse.candidates) {
-				const parts = vertexResponse.candidates[0]?.content?.parts || []
-				for (const part of parts) {
-					if (part.thought && part.text) {
-						yield {
-							type: "reasoning" as const,
-							reasoning: part.text,
-							id: json.traceId,
-							signature: part.thoughtSignature,
-						}
-					} else if (part.text) {
-						yield {
-							type: "text" as const,
-							text: part.text,
-							id: json.traceId,
-							signature: part.thoughtSignature,
+			// V19 Hardening: Handle resonance where multiple JSON objects arrive in one chunk
+			const segments = chunk.split(/\n(?={)/)
+			for (const segment of segments) {
+				const json = JSON.parse(segment)
+				const vertexResponse = json.response || json
+				if (vertexResponse?.candidates) {
+					const parts = vertexResponse.candidates[0]?.content?.parts || []
+					for (const part of parts) {
+						if (part.thought && part.text) {
+							yield { type: "reasoning", reasoning: part.text, id: json.traceId, signature: part.thoughtSignature }
+						} else if (part.text) {
+							yield { type: "text", text: part.text, id: json.traceId, signature: part.thoughtSignature }
 						}
 					}
-				}
-
-				if (vertexResponse.usageMetadata) {
-					const usage = vertexResponse.usageMetadata
-					yield {
-						type: "usage" as const,
-						inputTokens: usage.promptTokenCount ?? 0,
-						outputTokens: usage.candidatesTokenCount ?? 0,
-						totalCost: 0, // Free tier — no cost
+					if (vertexResponse.usageMetadata) {
+						const usage = vertexResponse.usageMetadata
+						yield {
+							type: "usage",
+							inputTokens: usage.promptTokenCount ?? 0,
+							outputTokens: usage.candidatesTokenCount ?? 0,
+							totalCost: 0,
+						}
 					}
 				}
 			}
 		} catch (e) {
-			Logger.error("Failed to parse Google Personal API response chunk", { error: e, chunkLength: chunk.length })
+			Logger.error("[SSE:PARSE_FAIL]", { chunk: chunk.slice(0, 100) })
 		}
 	}
 
 	getModel(): { id: string; info: ModelInfo } {
 		const modelId = this.options.apiModelId
-		if (modelId && modelId in geminiModels) {
-			return { id: modelId, info: (geminiModels as Record<string, any>)[modelId] }
-		}
-		return {
-			id: geminiDefaultModelId,
-			info: (geminiModels as Record<string, any>)[geminiDefaultModelId],
-		}
+		const info = (geminiModels as any)[modelId || geminiDefaultModelId]
+		return { id: modelId || geminiDefaultModelId, info }
 	}
 
 	abort() {
-		if (this.abortController) {
-			this.abortController.abort()
-		}
+		this.abortController?.abort()
 	}
 }
 
-/**
- * Clear the onboarding cache. Called when the user signs out from Google
- * to force re-onboarding on next sign-in.
- */
 export function clearGooglePersonalOnboardingCache() {
 	cachedOnboardingData = null
 }
