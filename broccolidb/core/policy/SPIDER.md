@@ -1,29 +1,57 @@
-# SPIDER: Structural Path Integrity & Dependency Evolution Report
+# SPIDER: Structural Path Integrity & Dependency Evolution Engine (V15+)
 
-Spider is an advanced architectural analysis engine designed to monitor and enforce structural health within a repository. It treats the codebase as a directed graph where nodes are files and edges are imports.
+Spider is a high-fidelity architectural substrate designed for autonomous agentic environments. It transitions the codebase from a loose collection of files into a **Deterministic Symbolic Graph**, allowing for forensic-grade structural analysis and self-healing refactoring.
 
-## Core Metrics
+## 🏗️ Core Architecture (V15 Graduation)
 
-### 1. Entropy Score
-A composite metric (0.0 to 1.0) representing the architectural "chaos" of the system.
-- **Path Depth**: Penalizes deeply nested file structures.
-- **Naming Consistency**: Monitors adherence to project naming conventions (e.g., kebab-case).
-- **Orphan Ratio**: Tracks unreachable code that adds cognitive load without functional value.
-- **Coupling Density**: Measures cross-layer pollution (e.g., Domain layer importing Infrastructure).
+The engine has been modularized into specialized components to achieve maximum performance and memory safety:
 
-### 2. Reachability
-Spider identifies "root" files (UI entries, core index files) and performs a graph traversal to find orphaned nodes.
+- **MetricsEngine**: Calculates **Entropy** and evaluates **SCC (Strongly Connected Components)** using Tarjan's algorithm for deep multi-hop cycle detection.
+- **SymbolRegistry**: The source of truth for **Symbolic Anchoring**. Maps exported symbols (Classes, Interfaces, Types) to their providers, eliminating heuristic-based dependency detection.
+- **ForensicEngine**: Performs deep-symbol verification, distinguishing between concrete (Class/Method) and abstract (Interface/Type) dependencies.
+- **PersistenceManager**: Handles atomic **Binary-Lite Serialization** (`.spiderbin`) for near-instantaneous state recovery.
 
-### 3. Layer Enforcement
-Using "Joy-Zoning" rules, Spider ensures that dependencies only flow in allowed directions (e.g., Infrastructure can import Domain, but not vice-versa).
+## 🧠 Strategic Pillars
 
-## Usage in BroccoliDB
+### 1. Symbolic Anchoring (New)
+Instead of simple file-to-file imports, Spider anchors the graph to unique **Exported Symbols**. This enables:
+- **Symbolic Traceback**: Identifying the exact symbol causing a blast-radius dependency.
+- **Contract Verification**: Ensuring that moving or renaming a symbol satisfies all incoming dependents before commitment.
 
-Spider is integrated into BroccoliDB as a persistent structural observer. Snapshots are stored as Knowledge nodes, allowing agents to reason about high-level architectural state.
+### 2. High-Fidelity Incrementalism
+Spider leverages the Repository's Tree-CAS system to perform **Tree-Diff Bootstrapping**.
+- **Performance**: Instantaneous updates by comparing the Tree-Hash of the cached commit vs. the current HEAD. Only modified symbols are re-processed.
+
+### 3. Deep Circular Detection
+Using **Tarjan's SCC Algorithm**, Spider detects complex architectural loops (A → B → C → A) that standard linters miss. Multi-hop circularity is penalized heavily in the Entropy Score.
+
+### 4. Atomic Mutation Security
+Structural updates are serialized via a **TaskMutex Mutation Guard**. This prevents graph corruption in concurrent multi-agent environments where multiple tool-calls may attempt to modify the substrate simultaneously.
+
+## 📊 Architectural Health Metrics
+
+| Metric | Anchor | Target |
+| :--- | :--- | :--- |
+| **Entropy** | System Complexity | < 0.3 |
+| **Stability** | Concrete vs. Abstract | High Abstract Ratio |
+| **Reachability** | Path Connectivity | Zero Orphans |
+| **Centrality** | Component Importance | Avoid "Structural Volcanoes" |
+
+## 🛠️ Strategic Refactoring (SpiderRefactorer)
+
+Spider provides automated guidance for structural hardening:
+- **`SQUASH_CYCLE`**: Surgical removal of multi-hop circularity.
+- **`DECOUPLE`**: Suggests Inversion of Control (IoC) when concrete coupling crosses layer boundaries.
+- **`MOVE` / `DELETE`**: Continuous alignment with **Joy-Zoning** layering rules.
+
+## 🛰️ Integration in BroccoliDB
+
+Spider is the "Proprioception" of the agent. It is used in the `AuditService` to block high-impact mutations and in the `SuggestionService` to provide long-term architectural health strategies.
 
 ```typescript
-const structuralMetadata = await agentContext.getLatestStructuralMetadata();
-if (structuralMetadata.entropy > 0.4) {
-  // Suggest refactoring to reduce entropy
+// Deterministic Blast Radius Check
+const radius = spider.getBlastRadius('src/core/auth.ts');
+if (radius.centralityScore > 0.4) {
+  Logger.warn(`Structural Pillar detected. Traceback: ${JSON.stringify(radius.traceback)}`);
 }
 ```
