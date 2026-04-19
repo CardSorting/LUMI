@@ -106,19 +106,50 @@ export class SpiderService {
 
   /**
    * Incrementally updates the structural graph with a set of changes.
+   * Returns a list of symbolic deficiencies (breakages) caused by these changes.
    * Serialized via mutationLock to prevent concurrent corruption.
    */
-  async applyChanges(changes: { filePath: string; content?: string }[]): Promise<void> {
+  async applyChanges(changes: { filePath: string; content?: string }[]): Promise<{ 
+      deficiencies: { 
+          depId: string, 
+          symbols: string[], 
+          displacements: { symbol: string, newPath: string }[],
+          line: number, 
+          character: number 
+      }[],
+      diagnostics: { message: string, line?: number }[]
+  }> {
     const lockKey = `spider-mutation:${this.ctx.workspace.workspacePath}`;
-    await TaskMutex.runExclusive(lockKey, async () => {
+    return await TaskMutex.runExclusive(lockKey, async () => {
       this.discovery.clearCache();
+      const defReport: { 
+          depId: string, 
+          symbols: string[], 
+          displacements: { symbol: string, newPath: string }[],
+          line: number, 
+          character: number 
+      }[] = [];
+      const diagReport: { message: string, line?: number }[] = [];
+      
       for (const change of changes) {
         if (change.content !== undefined) {
           this.engine.updateNode(change.filePath, change.content);
+          diagReport.push(...this.engine.getDiagnostics(change.filePath));
         } else {
           this.engine.removeNode(change.filePath);
         }
       }
+
+      // 2. Resolve the graph connectivity
+      this.engine.computeReachability();
+
+      // 3. Collect breakages for all modified files
+      for (const change of changes) {
+          const fileReport = this.discovery.getDeficiencyReport(change.filePath);
+          defReport.push(...fileReport);
+      }
+
+      return { deficiencies: defReport, diagnostics: diagReport };
     });
   }
 

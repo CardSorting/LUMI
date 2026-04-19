@@ -10,6 +10,11 @@ import { ReasoningService } from './agent-context/ReasoningService.js';
 import { SideQueryService } from './agent-context/SideQueryService.js';
 import { SpiderService } from './agent-context/SpiderService.js';
 import { TaskService } from './agent-context/TaskService.js';
+import { CompactService } from './agent-context/CompactService.js';
+import { TokenService } from './agent-context/TokenService.js';
+import { CoordinatorService } from './agent-context/CoordinatorService.js';
+import { ScratchpadService } from './agent-context/ScratchpadService.js';
+import { StorageService } from '../infrastructure/storage/StorageService.js';
 import { BufferedDbPool, type WriteOp } from '../infrastructure/db/BufferedDbPool.js';
 
 export type {
@@ -56,6 +61,11 @@ export class AgentContext {
   private readonly _mutexService: MutexService;
   private readonly _cleanupService: CleanupService;
   private readonly _lspService: LspService;
+  private readonly _compactService: CompactService;
+  private readonly _tokenService: TokenService;
+  private readonly _coordinatorService: CoordinatorService;
+  private readonly _scratchpadService: ScratchpadService;
+  private readonly _storageService: StorageService;
   private readonly _teammates: Set<string> = new Set();
 
   public readonly userId: string;
@@ -81,8 +91,15 @@ export class AgentContext {
       searchKnowledge: this.searchKnowledge.bind(this),
       updateTaskStatus: this.updateTaskStatus.bind(this),
       getStructuralImpact: (p: string) => this.getStructuralImpact(p) as any,
-      pasteStore: undefined as any, // Bootstrapped below
-      lsp: undefined as any, // Bootstrapped below
+      pasteStore: undefined as any,
+      compact: undefined as any,
+      storage: undefined as any,
+      token: undefined as any,
+      lsp: undefined as any,
+      coordinator: undefined as any,
+      scratchpad: undefined as any,
+      mailbox: undefined as any,
+      spider: undefined as any,
     };
 
     this._graphService = new GraphService(this._serviceContext);
@@ -99,12 +116,25 @@ export class AgentContext {
     this._pasteStore = new PasteStore(this._serviceContext);
     this._sideQueryService = new SideQueryService(this._serviceContext);
     this._mutexService = new MutexService(this._serviceContext);
+    this._compactService = new CompactService(this._serviceContext);
+    this._tokenService = new TokenService();
+    this._coordinatorService = new CoordinatorService(this._serviceContext);
+    this._scratchpadService = new ScratchpadService(this._serviceContext);
+    this._storageService = new StorageService(this._serviceContext);
     this._cleanupService = new CleanupService(this._serviceContext, this._taskService, this._reasoningService);
     this._lspService = new LspService(this._serviceContext);
 
     // Final bootstrap
-    (this._serviceContext as any).pasteStore = this._pasteStore;
-    (this._serviceContext as any).lsp = this._lspService;
+    const ctx = this._serviceContext as any;
+    ctx.pasteStore = this._pasteStore;
+    ctx.compact = this._compactService;
+    ctx.storage = this._storageService;
+    ctx.token = this._tokenService;
+    ctx.lsp = this._lspService;
+    ctx.coordinator = this._coordinatorService;
+    ctx.scratchpad = this._scratchpadService;
+    ctx.mailbox = this._mailboxService;
+    ctx.spider = this._spiderService;
   }
 
   /**
@@ -315,6 +345,7 @@ export class AgentContext {
     return {
       summary: discovery.getImportanceSummary(filePath),
       blastRadius: discovery.getBlastRadius(filePath),
+      deficiencies: discovery.getDeficiencyReport(filePath),
     };
   }
 

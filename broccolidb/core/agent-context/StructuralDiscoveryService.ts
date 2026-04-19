@@ -38,7 +38,7 @@ export class StructuralDiscoveryService {
 
     const targetNode = engine.nodes.get(relativePath);
     if (!targetNode) {
-      return { affectedNodes: [], centralityScore: 0, criticalDependents: [] };
+      return { affectedNodes: [], centralityScore: 0, criticalDependents: [], traceback: {} };
     }
 
     const dependents: Set<string> = new Set();
@@ -47,7 +47,7 @@ export class StructuralDiscoveryService {
     if (engine.version !== this.lastVersion) {
       this.inverseGraph = new Map();
       for (const node of engine.nodes.values()) {
-        for (const resolved of node.resolvedImports) {
+        for (const resolved of node.resolvedImports.values()) {
             const existing = this.inverseGraph.get(resolved) || new Set();
             existing.add(node.id);
             this.inverseGraph.set(resolved, existing);
@@ -98,6 +98,71 @@ export class StructuralDiscoveryService {
           traceback[depId] = exports;
       }
       return traceback;
+  }
+
+  /**
+   * Identifies symbols that are imported by other files but no longer 
+   * provided by any node in the graph.
+   * Anchors on real imports and real symbol providers.
+   */
+  public getDeficiencyReport(filePath: string): { 
+      depId: string, 
+      symbols: string[], 
+      displacements: { symbol: string, newPath: string }[], 
+      line: number, 
+      character: number 
+  }[] {
+    const engine = this.getEngine();
+    const registry = engine.getRegistry();
+    const radius = this.getBlastRadius(filePath);
+    const report: { 
+        depId: string, 
+        symbols: string[], 
+        displacements: { symbol: string, newPath: string }[],
+        line: number, 
+        character: number 
+    }[] = [];
+
+    const normalizedTarget = engine.normalizePath(filePath);
+    const remainingSymbols = new Set(registry.getExports(normalizedTarget).map(s => s.symbolName));
+
+    for (const depId of radius.affectedNodes) {
+        const depNode = engine.nodes.get(depId);
+        if (!depNode) continue;
+
+        for (const imp of depNode.imports) {
+            const resolved = depNode.resolvedImports.get(imp.specifier);
+            if (resolved === normalizedTarget) {
+                // Determine WHICH symbols are missing
+                const missing = imp.symbols.filter(s => !remainingSymbols.has(s));
+                
+                // For each missing symbol, check if it has "Displaced" elsewhere in the project reality
+                const realMissing: string[] = [];
+                const displacementSuggestions: { symbol: string, newPath: string }[] = [];
+
+                for (const s of missing) {
+                    const providers = registry.findProviders(s);
+                    if (providers.length > 0) {
+                        displacementSuggestions.push({ symbol: s, newPath: providers[0] });
+                    } else {
+                        realMissing.push(s);
+                    }
+                }
+
+                // If the import was a wildcard or specific symbols are REAL missing
+                if (realMissing.length > 0 || displacementSuggestions.length > 0 || (imp.symbols.length === 0 && remainingSymbols.size === 0)) {
+                    report.push({
+                        depId,
+                        symbols: realMissing.length > 0 ? realMissing : [],
+                        displacements: displacementSuggestions,
+                        line: imp.line,
+                        character: imp.character
+                    });
+                }
+            }
+        }
+    }
+    return report;
   }
 
   /**

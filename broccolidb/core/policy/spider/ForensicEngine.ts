@@ -21,6 +21,9 @@ export class ForensicEngine {
 
         sourceFile.getClasses().filter(c => c.isExported()).forEach(c => results.concrete.push(c.getName()!));
         sourceFile.getFunctions().filter(f => f.isExported()).forEach(f => results.concrete.push(f.getName()!));
+        sourceFile.getVariableStatements().filter(v => v.isExported()).forEach(v => {
+            v.getDeclarations().forEach(d => results.concrete.push(d.getName()));
+        });
         sourceFile.getInterfaces().filter(i => i.isExported()).forEach(i => results.abstract.push(i.getName()!));
         sourceFile.getTypeAliases().filter(t => t.isExported()).forEach(t => results.abstract.push(t.getName()!));
 

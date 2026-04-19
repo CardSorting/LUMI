@@ -23,9 +23,16 @@ export class AuditService {
     // [Pillar 4] Structural Awareness: Check if this path is "load-bearing"
     const discovery = this.ctx.getStructuralImpact(path);
     const blastCount = discovery.blastRadius?.affectedNodes?.length ?? 0;
+    
+    if (discovery.deficiencies && discovery.deficiencies.length > 0) {
+        Logger.warn(`[AuditService] 🚨 SYMBOLIC CONTRACT VIOLATIONS in ${path}:`);
+        for (const def of discovery.deficiencies) {
+            Logger.warn(`  - Blocked by deficiency in ${def.depId} at line ${def.line}`);
+        }
+    }
+
     if (blastCount > 10) {
       Logger.warn(`[AuditService] High Blast Radius detected for ${path}: ${blastCount} affected nodes. Escalating audit.`);
-      // Scale rule strictly for high impact files
     }
 
     return this.ctx.aiService.auditCodeAgainstRule(path, code, ruleContent);

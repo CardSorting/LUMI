@@ -34,7 +34,7 @@ export class MetricsEngine {
     let crossLayerEdges = 0;
     let totalEdges = 0;
     for (const node of nodes.values()) {
-      for (const resolved of node.resolvedImports) {
+      for (const resolved of node.resolvedImports.values()) {
         totalEdges++;
         const targetNode = nodes.get(resolved);
         const targetLayer = targetNode?.layer || null;
@@ -70,7 +70,7 @@ export class MetricsEngine {
 
           const node = nodes.get(u);
           if (node) {
-              for (const v of node.resolvedImports) {
+              for (const v of node.resolvedImports.values()) {
                   if (!indexMap.has(v)) {
                       visit(v);
                       lowlinkMap.set(u, Math.min(lowlinkMap.get(u)!, lowlinkMap.get(v)!));
@@ -130,6 +130,22 @@ export class MetricsEngine {
           path: node.id,
         });
       }
+
+      // Layer Sovereignty Check (Joy-Zoning)
+      for (const resolved of node.resolvedImports.values()) {
+          const targetNode = nodes.get(resolved);
+          if (targetNode) {
+              const error = this.validateLayerLink(node.layer, targetNode.layer, node.path, targetNode.path);
+              if (error) {
+                  violations.push({
+                    id: 'SPI-005',
+                    severity: 'ERROR',
+                    message: error,
+                    path: node.id
+                  });
+              }
+          }
+      }
     }
 
     const cycles = this.findCycles(nodes);
@@ -144,5 +160,37 @@ export class MetricsEngine {
     }
 
     return violations;
+  }
+
+  private validateLayerLink(sourceLayer: string, targetLayer: string, sourcePath: string, targetPath: string): string | null {
+      const s = path.basename(sourcePath);
+      const t = path.basename(targetPath);
+
+      if (sourceLayer === 'domain') {
+          if (targetLayer === 'infrastructure' || targetLayer === 'ui') {
+              return `Layer Violation: Domain component '${s}' cannot import from ${targetLayer} '${t}'.`;
+          }
+      }
+      if (sourceLayer === 'core') {
+          if (targetLayer === 'ui') {
+              return `Layer Violation: Core component '${s}' cannot import from UI layer.`;
+          }
+      }
+      if (sourceLayer === 'infrastructure') {
+          if (targetLayer === 'ui') {
+              return `Layer Violation: Infrastructure component '${s}' cannot import from UI layer.`;
+          }
+      }
+      if (sourceLayer === 'plumbing') {
+          if (targetLayer !== 'plumbing') {
+              return `Layer Violation: Plumbing utility '${s}' cannot have dependencies outside plumbing layer.`;
+          }
+      }
+      if (sourceLayer === 'ui') {
+          if (targetLayer === 'infrastructure') {
+              return `Layer Violation: UI component '${s}' cannot directly import Infrastructure logic.`;
+          }
+      }
+      return null;
   }
 }

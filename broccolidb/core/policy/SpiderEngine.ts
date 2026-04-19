@@ -9,12 +9,19 @@ import { ForensicEngine } from './spider/ForensicEngine.js';
 import { SymbolRegistry } from './spider/SymbolRegistry.js';
 import { SpiderRefactorer, type RefactoringSuggestion } from './SpiderRefactorer.js';
 
+export interface SpiderImport {
+    specifier: string;
+    symbols: string[]; // Specific symbols consumed (e.g., ['Logger', 'SpiderNode'])
+    line: number;
+    character: number;
+}
+
 export interface SpiderNode {
   id: string;
   path: string;
   layer: Layer;
-  imports: Set<string>;
-  resolvedImports: Set<string>;
+  imports: Set<SpiderImport>;
+  resolvedImports: Map<string, string>; // specifier -> resolvedPath
   depth: number;
   orphaned: boolean;
   vitality: number;
@@ -109,18 +116,39 @@ export class SpiderEngine {
     const layer = getLayer(absolutePath);
 
     const sourceFile = this.project.createSourceFile(absolutePath, content, { overwrite: true });
-    const imports: Set<string> = new Set();
+    const imports: Set<SpiderImport> = new Set();
 
     sourceFile.forEachDescendant((node) => {
       if (node.isKind(SyntaxKind.ImportDeclaration)) {
         const importDeclaration = node as ImportDeclaration;
-        imports.add(importDeclaration.getModuleSpecifier().getLiteralValue());
+        const symbols: string[] = [];
+        
+        // Extract Named Imports
+        importDeclaration.getNamedImports().forEach(ni => symbols.push(ni.getName()));
+        // Extract Default Import
+        const defaultImport = importDeclaration.getDefaultImport();
+        if (defaultImport) symbols.push(defaultImport.getText());
+        // Extract Namespace Import
+        const namespaceImport = importDeclaration.getNamespaceImport();
+        if (namespaceImport) symbols.push(namespaceImport.getText());
+
+        imports.add({
+            specifier: importDeclaration.getModuleSpecifier().getLiteralValue(),
+            symbols,
+            line: importDeclaration.getStartLineNumber(),
+            character: importDeclaration.getStart() - importDeclaration.getStartLinePos()
+        });
       } else if (node.isKind(SyntaxKind.CallExpression)) {
         const callExpression = node as CallExpression;
         if (callExpression.getExpression().getText() === 'import' && callExpression.getArguments().length > 0) {
           const arg = callExpression.getArguments()[0];
           if (arg?.isKind(SyntaxKind.StringLiteral)) {
-            imports.add(arg.getLiteralValue());
+            imports.add({
+                specifier: arg.getLiteralValue(),
+                symbols: [], // Dynamic imports are harder to anchor statically without more depth
+                line: callExpression.getStartLineNumber(),
+                character: callExpression.getStart() - callExpression.getStartLinePos()
+            });
           }
         }
       }
@@ -134,33 +162,21 @@ export class SpiderEngine {
     for (const name of forensicData.concrete) this.symbols.register({ symbolName: name, filePath: normalizedPath, type: 'CLASS' });
     for (const name of forensicData.abstract) this.symbols.register({ symbolName: name, filePath: normalizedPath, type: 'INTERFACE' });
 
-    let importsChanged = !oldNode || oldNode.imports.size !== imports.size;
-    if (!importsChanged && oldNode) {
-        for (const imp of imports) {
-            if (!oldNode.imports.has(imp)) {
-                importsChanged = true;
-                break;
-            }
-        }
-    }
-
     this.nodes.set(normalizedPath, {
       id: normalizedPath,
       path: normalizedPath,
       layer,
       imports,
-      resolvedImports: new Set(),
+      resolvedImports: new Map(),
       depth: normalizedPath.split('/').length - 1,
       orphaned: false,
-      vitality: oldNode?.vitality || 0,
+      vitality: (oldNode?.vitality || 0) + 1,
     });
 
     this.project.removeSourceFile(sourceFile);
-
-    if (importsChanged) {
-      this.resolver.clearCache();
-      this.computeReachability();
-    }
+    this.resolver.clearCache();
+    this.computeReachability();
+    this.version++;
   }
 
   public removeNode(filePath: string) {
@@ -210,9 +226,9 @@ export class SpiderEngine {
       if (node) {
         node.resolvedImports.clear();
         for (const imp of node.imports) {
-          const resolved = this.resolver.resolve(node.path, imp);
+          const resolved = this.resolver.resolve(node.path, imp.specifier);
           if (resolved && this.nodes.has(resolved)) {
-            node.resolvedImports.add(resolved);
+            node.resolvedImports.set(imp.specifier, resolved);
             if (!reachable.has(resolved)) {
                 reachable.add(resolved);
                 queue.push(resolved);
@@ -232,6 +248,27 @@ export class SpiderEngine {
     return this.metrics.computeEntropy(this.nodes);
   }
 
+  /**
+   * Performs a targeted type-check on the modified file and its direct dependents.
+   * Anchors on the 'Ultimate Reality' of the TypeScript compiler.
+   */
+  public getDiagnostics(filePath?: string) {
+    if (!filePath) return [];
+    
+    const absolutePath = path.resolve(this.cwd, filePath);
+    const sourceFile = this.project.getSourceFile(absolutePath);
+    if (!sourceFile) return [];
+
+    // Focus on the diagnostics of this file and its immediate structural blast radius
+    const focalDiagnostics = sourceFile.getPreEmitDiagnostics();
+    
+    return focalDiagnostics.map(d => ({
+        message: typeof d.getMessageText() === 'string' ? d.getMessageText() : (d.getMessageText() as any).getMessageText(),
+        line: d.getLineNumber(),
+        category: d.getCategory() // 1 = Error
+    })).filter(d => d.category === 1);
+  }
+
   public getViolations(): SpiderViolation[] {
     return this.metrics.getViolations(this.nodes);
   }
@@ -239,7 +276,7 @@ export class SpiderEngine {
   public toMermaid(): string {
     let mermaid = 'graph TD\n';
     for (const node of this.nodes.values()) {
-      for (const resolved of node.resolvedImports) {
+      for (const resolved of node.resolvedImports.values()) {
           mermaid += `  ${path.basename(node.id).replace(/\./g, '_')} --> ${path.basename(resolved).replace(/\./g, '_')}\n`;
       }
     }
@@ -251,7 +288,7 @@ export class SpiderEngine {
     const snapshot: SpiderSnapshot = {
       timestamp: new Date().toISOString(),
       entropyScore: report.score,
-      nodes: Array.from(this.nodes.values()).map(n => ({...n, imports: Array.from(n.imports), resolvedImports: Array.from(n.resolvedImports)} as any)),
+      nodes: Array.from(this.nodes.values()),
       components: report.components,
     };
     if (!fs.existsSync(this.snapshotDir)) fs.mkdirSync(this.snapshotDir, { recursive: true });
@@ -272,10 +309,7 @@ export class SpiderEngine {
     if (!latest) return null;
     const content = await fs.promises.readFile(path.join(this.snapshotDir, latest), 'utf-8');
     const snapshot = JSON.parse(content);
-    return {
-        ...snapshot,
-        nodes: snapshot.nodes.map((n: any) => ({...n, imports: new Set(n.imports), resolvedImports: new Set(n.resolvedImports)}))
-    };
+    return snapshot;
   }
 
   public async save() {
@@ -291,9 +325,6 @@ export class SpiderEngine {
       }
   }
 
-  /**
-   * Returns the internal refactorer instance.
-   */
   public getRefactorer(): SpiderRefactorer {
     return new SpiderRefactorer(this);
   }
@@ -303,13 +334,13 @@ export class SpiderEngine {
   }
 
   public serialize(): string {
-    return JSON.stringify(Array.from(this.nodes.entries()).map(([k, v]) => [k, { ...v, imports: Array.from(v.imports), resolvedImports: Array.from(v.resolvedImports) }]));
+    return JSON.stringify(Array.from(this.nodes.entries()).map(([k, v]) => [k, { ...v, imports: Array.from(v.imports), resolvedImports: Array.from(v.resolvedImports.entries()) }]));
   }
 
   public deserialize(data: string) {
     try {
       const entries = JSON.parse(data);
-      this.nodes = new Map(entries.map(([k, v]: [string, any]) => [k, { ...v, imports: new Set(v.imports), resolvedImports: new Set(v.resolvedImports) }]));
+      this.nodes = new Map(entries.map(([k, v]: [string, any]) => [k, { ...v, imports: new Set(v.imports), resolvedImports: new Map(v.resolvedImports) }]));
       this.version++;
       this.resolver = new PathResolver(this.cwd, this.nodes);
     } catch (e) {

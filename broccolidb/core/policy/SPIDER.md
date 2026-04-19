@@ -1,57 +1,48 @@
-# SPIDER: Structural Path Integrity & Dependency Evolution Engine (V15+)
+# SPIDER: Sovereign Structural Forensic Engine (V17)
 
-Spider is a high-fidelity architectural substrate designed for autonomous agentic environments. It transitions the codebase from a loose collection of files into a **Deterministic Symbolic Graph**, allowing for forensic-grade structural analysis and self-healing refactoring.
+The Spider Engine is a hyper-deterministic, symbol-aware architectural guardian designed to enforce structural integrity and type-soundness in the BroccoliDB ecosystem. It anchors the agent's work in the physical reality of the codebase.
 
-## 🏗️ Core Architecture (V15 Graduation)
+## 🏗️ Architectural Pillars (Level 17)
 
-The engine has been modularized into specialized components to achieve maximum performance and memory safety:
+### 1. 🧬 Deep Symbolic Forensics
+Unlike traditional file-link graphs, the Spider tracks **Named Symbolic Consumption**. It understands not just that File A imports File B, but exactly which Classes, Interfaces, and Variables are being consumed as physical contracts. This enables surgical traceback of any broken reference.
 
-- **MetricsEngine**: Calculates **Entropy** and evaluates **SCC (Strongly Connected Components)** using Tarjan's algorithm for deep multi-hop cycle detection.
-- **SymbolRegistry**: The source of truth for **Symbolic Anchoring**. Maps exported symbols (Classes, Interfaces, Types) to their providers, eliminating heuristic-based dependency detection.
-- **ForensicEngine**: Performs deep-symbol verification, distinguishing between concrete (Class/Method) and abstract (Interface/Type) dependencies.
-- **PersistenceManager**: Handles atomic **Binary-Lite Serialization** (`.spiderbin`) for near-instantaneous state recovery.
+### 2. 🪚 T-Mirror (Type-Soundness Anchoring)
+The engine integrates the **TypeScript Type Checker** to verify the semantic reality of the codebase. After every mutation, the engine performs a targeted pre-emit diagnostic check to surface **Real Compiler Errors** directly to the agent.
 
-## 🧠 Strategic Pillars
+### 3. 🪞 The Mirror of Reality (Executor Sync)
+The Streaming Tool Executor is tethered to the Spider. After every write operation, it performs an automatic **anchored sync**:
+1. Reads the **actual bytes from disk** (verifying the physical write success).
+2. Performs an incremental structural and type-level audit.
+3. Injects a **Surgical Repair Map** (symbolic contract violations + compiler errors) into the tool result.
 
-### 1. Symbolic Anchoring (New)
-Instead of simple file-to-file imports, Spider anchors the graph to unique **Exported Symbols**. This enables:
-- **Symbolic Traceback**: Identifying the exact symbol causing a blast-radius dependency.
-- **Contract Verification**: Ensuring that moving or renaming a symbol satisfies all incoming dependents before commitment.
+### 4. 🌋 Vitality & Churn Mapping
+Anchors refactoring strategy on **Historical Reality**. It identifies "Architectural Volcanoes"—high-churn, high-centrality files that act as high-risk mutation hubs—and provides strategic decoupling guidance.
 
-### 2. High-Fidelity Incrementalism
-Spider leverages the Repository's Tree-CAS system to perform **Tree-Diff Bootstrapping**.
-- **Performance**: Instantaneous updates by comparing the Tree-Hash of the cached commit vs. the current HEAD. Only modified symbols are re-processed.
+## 📊 Structural Integrity Protocols
 
-### 3. Deep Circular Detection
-Using **Tarjan's SCC Algorithm**, Spider detects complex architectural loops (A → B → C → A) that standard linters miss. Multi-hop circularity is penalized heavily in the Entropy Score.
+| Metric | Anchor | Reality Check | Target |
+| :--- | :--- | :--- | :--- |
+| **Entropy** | Complexity | Path & Type Cross-references | < 0.3 |
+| **Deficiency** | Contract | Symbolic Repair Map (Line/Symbol) | 0 |
+| **Diagnostics** | Types | Real-time Compiler Errors | 0 |
+| **Vitality Hubs**| Churn | Historical modification frequency | Low |
 
-### 4. Atomic Mutation Security
-Structural updates are serialized via a **TaskMutex Mutation Guard**. This prevents graph corruption in concurrent multi-agent environments where multiple tool-calls may attempt to modify the substrate simultaneously.
+## 🚨 Diagnostic Identifiers
 
-## 📊 Architectural Health Metrics
+| ID | Severity | Violation Name | description |
+| :--- | :--- | :--- | :--- |
+| **SPI-001** | ERROR | Symbolic Contract Breakage | Missing named export consumed by dependents |
+| **SPI-002** | ERROR | Type-Soundness Failure | REALITY CHECK: Compiler diagnostic (Type Error) |
+| **SPI-003** | WARN | Architectural Volcano | High-churn hub targeting for extraction/decoupling |
+| **SPI-004** | ERROR | Structural Loop | Circular dependency detected via Tarjan's SCC |
 
-| Metric | Anchor | Target |
-| :--- | :--- | :--- |
-| **Entropy** | System Complexity | < 0.3 |
-| **Stability** | Concrete vs. Abstract | High Abstract Ratio |
-| **Reachability** | Path Connectivity | Zero Orphans |
-| **Centrality** | Component Importance | Avoid "Structural Volcanoes" |
+## 🛠️ Operational Workflow for Agents
+To maintain structural sovereignty, agents MUST:
+- **Anchor on Repair Maps**: Never guess about breakages. Use the line-specific repair instructions in tool outputs.
+- **Verify Compiled Truth**: All T-Mirror diagnostics must be addressed before a task is considered complete.
+- **Respect Vitality Hubs**: Prioritize refactoring tasks that target high-vitality hubs to reduce systemic risk.
+- **Atomic Concurrency**: Respect the `TaskMutex` mutation guards during parallel worker operations.
 
-## 🛠️ Strategic Refactoring (SpiderRefactorer)
-
-Spider provides automated guidance for structural hardening:
-- **`SQUASH_CYCLE`**: Surgical removal of multi-hop circularity.
-- **`DECOUPLE`**: Suggests Inversion of Control (IoC) when concrete coupling crosses layer boundaries.
-- **`MOVE` / `DELETE`**: Continuous alignment with **Joy-Zoning** layering rules.
-
-## 🛰️ Integration in BroccoliDB
-
-Spider is the "Proprioception" of the agent. It is used in the `AuditService` to block high-impact mutations and in the `SuggestionService` to provide long-term architectural health strategies.
-
-```typescript
-// Deterministic Blast Radius Check
-const radius = spider.getBlastRadius('src/core/auth.ts');
-if (radius.centralityScore > 0.4) {
-  Logger.warn(`Structural Pillar detected. Traceback: ${JSON.stringify(radius.traceback)}`);
-}
-```
+---
+*Sovereign Level 17 Industrial State*

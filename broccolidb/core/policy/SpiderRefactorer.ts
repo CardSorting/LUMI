@@ -57,7 +57,7 @@ export class SpiderRefactorer {
         const registry = this.engine.getRegistry();
         let concreteCount = 0;
         
-        for (const resolved of node.resolvedImports) {
+        for (const resolved of node.resolvedImports.values()) {
             const targetNode = this.engine.nodes.get(resolved);
             if (targetNode && targetNode.layer !== node.layer) {
                 const exports = registry.getExports(resolved);
@@ -71,6 +71,18 @@ export class SpiderRefactorer {
                 target: node.path,
                 reason: `Component is coupled to ${concreteCount} symbols across layer boundaries.`,
                 benefit: 'Reduces inter-layer friction and enables independent scaling.'
+            });
+        }
+    }
+
+    // 4. Heavy Hub Detection (Vitality aware)
+    for (const node of this.engine.nodes.values()) {
+        if (node.vitality > 80 && node.resolvedImports.size > 15) {
+            suggestions.push({
+                type: 'EXTRACT',
+                target: node.path,
+                reason: `High Churn Hub detected. Extensive vitality (${node.vitality} additions) and high outgoing coupling (${node.resolvedImports.size} imports).`,
+                benefit: 'Stabilizes core logic by extracting high-frequency mutation points into leaf components.'
             });
         }
     }

@@ -116,7 +116,12 @@ Oracle Modes:
 
 Output format: JSON array of EXACTLY 3 objects with "text" and "type" (one of fix, design, learn, feature).`;
 
-      const fullText = await this.ctx.aiService.generateText(systemPrompt);
+      const result = await this.ctx.aiService.completeOneOff(systemPrompt, {
+          model: 'claude-3-opus',
+          maxTokens: 1024,
+          system: 'You are an architectural advisor.'
+      });
+      const fullText = result.text;
 
       // Robust JSON extraction
       const jsonStartIndex = fullText.indexOf('[');

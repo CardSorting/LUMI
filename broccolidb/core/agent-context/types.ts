@@ -158,7 +158,17 @@ export interface ServiceContext {
     options?: { augmentWithGraph?: boolean; skipVerification?: boolean }
   ) => Promise<KnowledgeBaseItem[]>;
   updateTaskStatus: (taskId: string, status: any, result?: any) => Promise<void>;
-  getStructuralImpact: (filePath: string) => { summary: string; blastRadius: BlastRadius };
+  getStructuralImpact: (filePath: string) => { 
+    summary: string; 
+    blastRadius: BlastRadius; 
+    deficiencies: { 
+        depId: string, 
+        symbols: string[], 
+        displacements: { symbol: string, newPath: string }[], 
+        line: number, 
+        character: number 
+    }[] 
+  };
   pasteStore: import('./PasteStore.js').PasteStore;
   compact: import('./CompactService.js').CompactService;
   storage: import('../../infrastructure/storage/StorageService.js').StorageService;
@@ -167,11 +177,22 @@ export interface ServiceContext {
   coordinator: CoordinatorService;
   scratchpad: ScratchpadService;
   mailbox: MailboxService;
+  spider: import('./SpiderService.js').SpiderService;
   toolUseContext?: ToolUseContext;
 }
 
 export interface IAgentContext {
-  getStructuralImpact(filePath: string): { summary: string; blastRadius: BlastRadius };
+  getStructuralImpact(filePath: string): { 
+    summary: string; 
+    blastRadius: BlastRadius; 
+    deficiencies: { 
+        depId: string, 
+        symbols: string[], 
+        displacements: { symbol: string, newPath: string }[], 
+        line: number, 
+        character: number 
+    }[] 
+  };
   searchKnowledge(
     query: string,
     tags?: string[],

@@ -1,3 +1,5 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import type { ServiceContext, ToolDef, ToolUseContext } from './types.js';
 
 export interface ToolResult {
@@ -49,9 +51,47 @@ export class StreamingToolExecutor {
       
       // Trim if exceeds limit
       const limit = tool.maxResultSizeChars || 100000;
-      const finalContent = content.length > limit 
+      let finalContent = content.length > limit 
         ? `${content.slice(0, limit)}\n... [result truncated for size]`
         : content;
+
+      // 4. Real-Time Symbolic Mirroring (Anchored on Reality)
+      // If the tool modified a file, read its REAL bytes from disk and sync the graph.
+      if (!tool.isSearchOrReadCommand && (input.path || input.targetFile || input.TargetFile)) {
+          const filePath = input.path || input.targetFile || input.TargetFile;
+          const absolutePath = path.resolve(this.ctx.workspace.workspacePath, filePath);
+
+          try {
+              const realContent = await fs.readFile(absolutePath, 'utf8');
+              const result = await this.ctx.spider.applyChanges([{ filePath, content: realContent }]);
+              
+              if (result.deficiencies.length > 0) {
+                  finalContent += `\n\n🚨 STRUCTURAL WARNING: Your change broke ${result.deficiencies.length} symbolic contracts.`;
+                  finalContent += `\nRepair Map (Current Reality):`;
+                  for (const def of result.deficiencies) {
+                      if (def.symbols.length > 0) {
+                        finalContent += `\n- ${def.depId} (Line ${def.line}): Missing providers for: ${def.symbols.join(', ')}`;
+                      }
+                      for (const disp of def.displacements) {
+                        finalContent += `\n- 💡 SUGGESTION: Symbol '${disp.symbol}' found in '${disp.newPath}'. Update your import.`;
+                      }
+                  }
+              }
+
+              if (result.diagnostics.length > 0) {
+                  finalContent += `\n\n❌ COMPILER ERRORS DETECTED:`;
+                  for (const diag of result.diagnostics) {
+                      finalContent += `\n- Line ${diag.line}: ${diag.message}`;
+                  }
+                  finalContent += `\n\nAction: Anchor on these real breakages. You MUST fix them to restore structural integrity.`;
+              }
+          } catch (readErr) {
+              // file might have been deleted, which is handled by applyChanges(content: undefined)
+              if (!input.content && !input.ReplacementContent && !input.CodeContent) {
+                   await this.ctx.spider.applyChanges([{ filePath }]);
+              }
+          }
+      }
 
       return {
           toolUseId,

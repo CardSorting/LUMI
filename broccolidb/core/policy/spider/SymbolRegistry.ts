@@ -13,6 +13,7 @@ export interface SymbolProvider {
 export class SymbolRegistry {
   private providers: Map<string, Set<string>> = new Map(); // symbolName -> [filePaths]
   private exportsByFile: Map<string, SymbolProvider[]> = new Map(); // filePath -> [SymbolProviders]
+  private transitions: Map<string, { from: string, to: string, timestamp: number }> = new Map(); // symbolName -> moveData
 
   public register(provider: SymbolProvider) {
     const existing = this.providers.get(provider.symbolName) || new Set();
@@ -40,6 +41,19 @@ export class SymbolRegistry {
 
   public findProviders(symbolName: string): string[] {
       return Array.from(this.providers.get(symbolName) || []);
+  }
+
+  /**
+   * Records a transitional move to assist in distinguishing renames from removals.
+   */
+  public recordTransition(symbolName: string, from: string, to: string) {
+      this.transitions.set(symbolName, { from, to, timestamp: Date.now() });
+      // TTL: Expire transitions after 5 seconds to keep the context localized to the current task
+      setTimeout(() => this.transitions.delete(symbolName), 5000);
+  }
+
+  public getTransition(symbolName: string) {
+      return this.transitions.get(symbolName);
   }
 
   public getExports(filePath: string): SymbolProvider[] {
