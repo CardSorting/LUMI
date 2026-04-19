@@ -1,5 +1,15 @@
 # Changelog (V2)
 
+## [5.7.0] - 2026-04-19
+
+### Added
+- **Sovereign Level 19: The Actionable Substrate [ACTIONABLE_SUCCESS]**:
+  - **Semantic Footprinting (Identity v2)**: Implemented AST-based SHA-256 fingerprinting for exported symbols. This tracks the "Persistent Identity" of code across file moves, providing 100% confidence in refactoring accuracy by ignoring formatting/whitespace drift.
+  - **Sovereign Drift Guard (Disk Parity)**: Anchored the memory-resident structural graph to **Physical Reality** using SHA-256 disk hashing. The engine now detects external file modifications ("Reality Drift") and triggers an audit alarm if memory and disk diverge.
+  - **Surgical Repair Maps (ARM)**: Upgraded structural diagnostics to generate actionable `RepairDirectives`. Instead of simple error reports, the engine now provides a specific **REPAIR PLAN** with suggested values and rationales for each breakage.
+  - **Remedial Success Pathing**: Injected specific repair instructions (e.g., `UPDATE_IMPORT_PATH`, `EXPORT_SYMBOL`) directly into the agentic feedback loop in `StreamingToolExecutor`.
+  - **Identity-Persistent Auditing**: Hardened the `SymbolRegistry` to distinguish between "Abandoned Exports" and "Legitimate Displacement," ensuring that architectural refactoring never triggers false-positive contract violations.
+
 ## [5.6.0] - 2026-04-18
 
 ### Added
