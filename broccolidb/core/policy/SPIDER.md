@@ -1,29 +1,34 @@
-# SPIDER: Sovereign Structural Forensic Engine (V18)
+# SPIDER: Sovereign Structural Forensic Engine (V19)
 
-The Spider Engine is a hyper-deterministic, symbol-aware architectural guardian designed to enforce structural integrity, type-soundness, and symbolic continuity in the BroccoliDB ecosystem.
+The Spider Engine is a hyper-deterministic, remedial architectural guardian designed to enforce structural integrity, physical parity, and symbolic continuity in the BroccoliDB ecosystem.
 
-## 🏗️ Architectural Pillars (Level 18)
+## 🏗️ Architectural Pillars (Level 19)
 
-### 1. 🧬 Symbolic Displacement Recognition
-The substrate tracks the **Persistent Identity** of symbols. If a symbol (Class, Function, Type) is moved from File A to File B, the engine recognizes the transition rather than reporting a total loss of the symbol. This eliminates false-positive 'Contract Violation' alerts during refactoring.
+### 1. 🧬 Semantic Footprinting (Identity v2)
+The substrate tracks the **Persistent Identity** of symbols via SHA-256 AST hashing.
+- **The Anchor**: Footprints ignore whitespace/comments, focusing purely on the logic and signature.
+- **The Result**: 100% confidence in "Perfect Moves". The engine knows a function hasn't changed its identity just because it changed its address.
 
-### 2. 🪚 T-Mirror (Type-Soundness Anchoring)
-Integrates the **TypeScript Type Checker** to verify semantic reality. After every mutation, the engine performs targeted diagnostics to surface **Real Compiler Errors** directly to the agent.
+### 2. 🛡️ Sovereign Drift Guard (Disk Parity)
+Every node in the graph is anchored to its **Physical Reality** via disk hashing.
+- **The Anchor**: SHA-256 parity checks between the memory-resident graph and actual bytes-on-disk.
+- **The Result**: Automatic detection of "Reality Drift" (external file modifications), ensuring the agent always operates on the physical truth.
 
-### 3. 💡 High-Fidelity Move Suggestions
-Combined with Displacement Recognition, the Streaming Tool Executor provides actionable **Surgical Repair Maps**. If a symbol is moved, the agent is told exactly where it went: 
-`💡 SUGGESTION: Symbol 'X' found in 'src/new_file.ts'. Update your import.`
+### 3. 🛠️ Surgical Repair Maps (ARM)
+Audits now provide **Actionable Success Paths**. 
+- **The Anchor**: JSON-serializable `RepairDirectives` (e.g., `UPDATE_IMPORT_PATH`).
+- **The Result**: Tool outputs provide a specific **REPAIR PLAN** with suggested values and rationales, enabling self-healing recovery from structural breakages.
 
-### 4. 🌋 Vitality & Churn Mapping
-Anchors on **Historical Reality**. Identifies "Architectural Volcanoes"—high-churn, high-centrality files—guiding agents toward strategic decoupling and stabilization.
+### 4. 🪚 T-Mirror (Type-Soundness Anchoring)
+Integrates the TypeScript compiler to project REAL compiler diagnostics onto every mutation.
 
 ## 📊 Structural Integrity Protocols
 
 | Metric | Anchor | Reality Check | Target |
 | :--- | :--- | :--- | :--- |
 | **Entropy** | Complexity | Tarjan's SCC & Multi-Hop Cycles | < 0.3 |
-| **Deficiency** | Contract | Symbolic Repair & Displacement Map | 0 |
-| **Diagnostics** | Types | REALITY CHECK: Compiler Errors | 0 |
+| **Deficiency** | Contract | Symbolic Repair & Actionable Map | 0 |
+| **Drift** | Physical | SHA-256 Disk Parity Guard | 0 |
 | **Sovereignty** | Layers | Joy-Zoning Violation (SPI-005) | 0 |
 
 ## 🚨 Diagnostic Identifiers
@@ -37,9 +42,9 @@ Anchors on **Historical Reality**. Identifies "Architectural Volcanoes"—high-c
 | **SPI-005** | ERROR | Layer Violation | Forbidden Joy-Zoning dependency (e.g. Domain -> UI) |
 
 ## 🛠️ Operational Workflow for Agents
-- **Anchor on Repair Maps**: Never guess. Follow line-specific repair and displacement instructions in tool outputs.
+- **Anchor on Repair Maps**: Never guess. Follow the **Surgical Repair Plans** and displacement instructions in tool outputs.
+- **Respect Drift Alarms**: If the engine reports Reality Drift, resync the graph before continuing mutations.
 - **Verify Compiled Truth**: All T-Mirror diagnostics must be addressed before task completion.
-- **Atomic Concurrency**: Respect `TaskMutex` guards during parallel operations.
 
 ---
-*Sovereign Level 18 Industrial State*
+*Sovereign Level 19 Industrial State*
