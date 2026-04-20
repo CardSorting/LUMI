@@ -4,19 +4,31 @@ import { type Kysely, sql, type Transaction } from 'kysely';
 import { getDb, getRawDb, type Schema } from './Config.js';
 import { Logger } from '../../shared/services/Logger.js';
 
-// Production-grade Mutex implementation
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+// Production-grade Re-entrant Mutex implementation
+const mutexLocalStorage = new AsyncLocalStorage<string>();
+
 class Mutex {
-  private queue: { resolve: (release: () => void) => void; stack: string; timestamp: number }[] = [];
+  private queue: { resolve: (release: () => void) => void; holderId: string; stack: string; timestamp: number }[] = [];
   private locked = false;
+  private currentHolderId: string | null = null;
 
   constructor(public name: string, private timeoutMs: number = 30000) {}
 
   async acquire(): Promise<() => void> {
+    const callerId = mutexLocalStorage.getStore() || crypto.randomUUID();
     const stack = new Error().stack || '';
     const timestamp = Date.now();
 
+    // Re-entrancy: If the current async context already holds the lock, return a no-op release.
+    if (this.locked && this.currentHolderId === callerId) {
+      return () => {};
+    }
+
     if (!this.locked) {
       this.locked = true;
+      this.currentHolderId = callerId;
       return () => this.release();
     }
 
@@ -25,7 +37,7 @@ class Mutex {
         const idx = this.queue.findIndex(i => i.resolve === resolve);
         if (idx !== undefined && idx >= 0) {
             this.queue.splice(idx, 1);
-            console.error(`[Mutex:${this.name}] 🚨 Deadlock timeout after ${this.timeoutMs}ms! Mutex held by unknown. Waiter stack:\n${stack}`);
+            console.error(`[Mutex:${this.name}] 🚨 Deadlock timeout after ${this.timeoutMs}ms! Mutex held by ${this.currentHolderId}. Waiter stack:\n${stack}`);
             reject(new Error(`Mutex ${this.name} acquisition timeout`));
         }
       }, this.timeoutMs);
@@ -35,6 +47,7 @@ class Mutex {
               clearTimeout(timeout);
               resolve(releaseFn);
           }, 
+          holderId: callerId,
           stack, 
           timestamp 
       });
@@ -44,9 +57,24 @@ class Mutex {
   private release() {
     const next = this.queue.shift();
     if (next) {
+      this.currentHolderId = next.holderId;
       next.resolve(() => this.release());
     } else {
       this.locked = false;
+      this.currentHolderId = null;
+    }
+  }
+
+  /**
+   * Execute a callback within an async context that carries the lock owner identity.
+   * This enables re-entrant calls to nested locked methods.
+   */
+  async runLocked<T>(callback: () => Promise<T>): Promise<T> {
+    const release = await this.acquire();
+    try {
+      return await mutexLocalStorage.run(this.currentHolderId!, callback);
+    } finally {
+      release();
     }
   }
 }
@@ -122,6 +150,7 @@ export class BufferedDbPool {
   >();
   private stateMutex = new Mutex('DbStateMutex');
   private flushMutex = new Mutex('DbFlushMutex');
+  private initMutex = new Mutex('DbInitMutex');
   private flushInterval: NodeJS.Timeout | null = null;
   private db: Kysely<Schema> | null = null;
   private rawDb: Database.Database | null = null;
@@ -260,7 +289,11 @@ export class BufferedDbPool {
   }
 
   private async ensureDb(): Promise<Kysely<Schema>> {
-    if (!this.db) {
+    if (this.db) return this.db;
+    
+    return await this.initMutex.runLocked(async () => {
+      if (this.db) return this.db;
+      
       const db = await getDb();
       await sql`PRAGMA cache_size = -128000;`.execute(db);
       await sql`PRAGMA temp_store = MEMORY;`.execute(db);
@@ -272,8 +305,8 @@ export class BufferedDbPool {
       this.db = db;
       this.rawDb = await getRawDb();
       await this.verifySchemaVersion();
-    }
-    return this.db;
+      return this.db;
+    });
   }
 
   private getStatement(sqlStr: string): Database.Statement {

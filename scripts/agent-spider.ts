@@ -11,14 +11,22 @@ async function main() {
 	process.setMaxListeners(100)
 
 	// Graceful Shutdown: Sovereign Cleanup
+	let shutdownInProgress = false
 	const cleanup = async () => {
+		if (shutdownInProgress) return
+		shutdownInProgress = true
 		console.log("\n🛑 Graceful shutdown initiated...")
-		const dbPath = path.resolve(process.cwd(), "broccolidb.db")
-		const conn = new Connection({ dbPath })
-		const pool = conn.getPool()
-		await pool.stop()
-		console.log("✅ BroccoliDB safely persisted. Goodbye.")
-		process.exit(0)
+		try {
+			const dbPath = path.resolve(process.cwd(), "broccolidb.db")
+			const conn = new Connection({ dbPath })
+			const pool = conn.getPool()
+			await pool.stop()
+			console.log("✅ BroccoliDB safely persisted. Goodbye.")
+		} catch (e) {
+			console.error("❌ Shutdown failed:", e)
+		} finally {
+			process.exit(0)
+		}
 	}
 
 	process.on("SIGINT", cleanup)
