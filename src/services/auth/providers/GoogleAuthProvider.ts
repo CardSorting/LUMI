@@ -4,7 +4,7 @@ import { type Credentials, OAuth2Client } from "google-auth-library"
 import { Controller } from "@/core/controller"
 import { AuthHandler } from "@/hosts/external/AuthHandler"
 import { Logger } from "@/shared/services/Logger"
-
+import { AuthInvalidTokenError } from "../../error/DietCodeError"
 import { type DietCodeAccountUserInfo, type DietCodeAuthInfo } from "../AuthService"
 import { parseJwtPayload } from "../oca/utils/utils"
 import { IAuthProvider } from "./IAuthProvider"
@@ -135,8 +135,19 @@ export class GoogleAuthProvider implements IAuthProvider {
 			}
 
 			return authInfo
-		} catch (error) {
+		} catch (error: unknown) {
 			Logger.error("GoogleAuthProvider: Error refreshing token:", error)
+			// Distinguish between permanent auth failure and network issues.
+			// 'invalid_grant' is the standard OAuth2 error for a revoked or expired refresh token.
+			const err = error as any
+			const message = (err.message || "").toLowerCase()
+			const status = err.response?.status || err.status
+			const isPermanent =
+				message.includes("invalid_grant") || message.includes("invalid_client") || status === 400 || status === 401
+
+			if (isPermanent) {
+				throw new AuthInvalidTokenError(`Google refresh failed: ${err.message}`)
+			}
 			throw error
 		}
 	}
@@ -157,7 +168,7 @@ export class GoogleAuthProvider implements IAuthProvider {
 			// CRITICAL: Self-healing architecture for legacy tokens.
 			// Legacy auth incorrectly stored JWT ID Tokens (starting with eyJ) instead of OAuth Access Tokens.
 			// If detected, force a refresh to hydrate the correct access_token credential.
-			const isLegacyToken = authInfo.idToken && authInfo.idToken.startsWith("eyJ")
+			const isLegacyToken = authInfo.idToken?.startsWith("eyJ")
 
 			const needsRefresh =
 				isLegacyToken ||
@@ -187,8 +198,13 @@ export class GoogleAuthProvider implements IAuthProvider {
 			return authInfo
 		} catch (error) {
 			Logger.error("GoogleAuthProvider: Error restoring auth info:", error)
-			// On parse errors or refresh failures, purge the corrupted entry
-			controller.stateManager.setSecret("dietcode:googleAuthInfo", undefined)
+			// ONLY purge if it's a permanent authentication failure or corrupted storage.
+			// Transient network errors during refresh should NOT cause a logout.
+			if (error instanceof AuthInvalidTokenError || error instanceof SyntaxError) {
+				Logger.warn("GoogleAuthProvider: Purging invalid or corrupted Google auth credentials")
+				controller.stateManager.setSecret("dietcode:googleAuthInfo", undefined)
+			}
+			// If it's a network error, we return null but DON'T purge, so restoration can be retried.
 			return null
 		}
 	}

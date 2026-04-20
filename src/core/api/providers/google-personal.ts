@@ -249,6 +249,8 @@ export class GooglePersonalHandler implements ApiHandler {
 
 		if (!loadResponse.ok) {
 			if (loadResponse.status === 401 || loadResponse.status === 403) {
+				Logger.warn(`[IDENTITY] Google Personal authority rejected (${loadResponse.status}). Invalidating...`)
+				await AuthService.getInstance().signOutProvider("google")
 				throw new Error("Authentication stale. Please re-link Google account.")
 			}
 			throw new Error(`Project sync failed (${loadResponse.status})`)
@@ -370,6 +372,19 @@ export class GooglePersonalHandler implements ApiHandler {
 
 						// V20 Classification
 						if (response.status === 401 || response.status === 403) {
+							if (attempt === 0) {
+								Logger.warn(
+									`[IDENTITY] Primary stream auth rejected (${response.status}). Attempting fresh refresh...`,
+								)
+								// Force clear onboarding cache to ensure next attempt tries fresh
+								clearGooglePersonalOnboardingCache()
+								// continue to next attempt, which will call getAuthToken() again
+								// and potentially trigger a refresh in GoogleAuthProvider
+								lastError = new Error(`Authentication required (${response.status}). Retrying...`)
+								continue
+							}
+							Logger.error(`[IDENTITY] Authentication failed twice. Purging provider state.`)
+							await AuthService.getInstance().signOutProvider("google")
 							throw new Error(`Authentication required (${response.status}). Please re-link Google.`)
 						}
 
