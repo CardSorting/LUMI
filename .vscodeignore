@@ -40,6 +40,9 @@ cli/**
 
 # broccolidb
 broccolidb/**
+**/*.db
+**/*.db-shm
+**/*.db-wal
 
 # Custom
 **/demo.gif

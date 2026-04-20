@@ -5,6 +5,9 @@ node_modules
 tmp
 .vscode-test/
 *.vsix
+*.db
+*.db-shm
+*.db-wal
 
 .DS_Store
 .idea
