@@ -16,7 +16,7 @@ Whenever you need to locate a symbol, understand a dependency, or assess impact,
     - Confirm the exact method signature.
     - Verify literal string constants.
     - Ensure the graph hasn't drifted from recent edits.
-3.  **Align (Seed as Needed)**: If Spider and Grep results diverge (e.g., `find-symbol` says it's in File A, but `grep` doesn't see it), run `scripts/agent-spider.ts seed` to re-align the cache with reality.
+3.  **Align (Re-Seed as Needed)**: If Spider and Grep results diverge (e.g., `find-symbol` says it's in File A, but `grep` doesn't see it), run `scripts/agent-spider.ts re-seed` to perform a deterministic re-alignment of the cache with reality.
 
 ## Core Mandates
 
@@ -26,7 +26,8 @@ Whenever you need to locate a symbol, understand a dependency, or assess impact,
 
 ## Tooling: `scripts/agent-spider.ts`
 
-- `seed`: Hydrates BroccoliDB. Use `--force-full` for a deep alignment.
+- `seed`: Hydrates BroccoliDB.
+- `re-seed`: Deterministic, forced-full alignment (clears AST cache).
 - `status`: Displays graph health and entropy (drift score).
 - `find-symbol <name>`: Scopes providers of a symbol.
 - `find-usage <symbol>`: Scopes consumers via AST-analysis.

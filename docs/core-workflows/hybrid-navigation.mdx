@@ -1,0 +1,54 @@
+# Hybrid Structural Navigation Guide (V22)
+
+The **Hybrid Anchor** is the canonical navigation standard for the DietCode codebase. It mandates a "Structure First, Forensic Second" workflow to ensure 100% navigational certainty and eliminate hallsucinations caused by stale caches.
+
+## The Problem: Structural Blindness
+In large codebases, relying solely on `grep` leads to over-analysis and redundant reads. Conversely, relying solely on cached symbols leads to "Structural Drift" where the AI acts on code that has already changed.
+
+## The Solution: The Two-Lock Check
+The Hybrid Anchor protocol requires verifying every structural scoping (Spider) with a physical reality check (Grep).
+
+### Step 1: Scoping (Spider Engine)
+Use the Spider Engine to narrow the search area from thousands of files to the specific 1-5 structural providers.
+
+```bash
+# Locate the structural providers of a class or function
+npx tsx scripts/agent-spider.ts find-symbol BufferedDbPool
+```
+
+### Step 2: Verification (The Forensic Lock)
+Once the scope is narrowed, use `grep` to confirm the **physical reality** on disk. This prevents acting on stale AST data.
+
+```bash
+# Verify the literal existence and line number
+grep -n "export class BufferedDbPool" broccolidb/infrastructure/db/BufferedDbPool.ts
+```
+
+## Resilience & Maintenance
+
+### Structural Drift
+If the Spider Engine reports a symbol in a location where `grep` cannot find it, the graph has drifted.
+
+**Remediation**: Run the **re-seed** command to perform a deterministic, forced re-alignment of the cache.
+
+```bash
+# Clear AST cache and force-rebuild the structural graph
+npx tsx scripts/agent-spider.ts re-seed
+```
+
+### AI Onboarding
+If an agent is struggling to navigate or ignoring the Spider Engine, trigger the **tutor** mode.
+
+```bash
+# Interactive alignment for AI identities
+npx tsx scripts/agent-spider.ts tutor
+```
+
+## Summary of Commands
+
+| Command | Action | Goal |
+| :--- | :--- | :--- |
+| `find-symbol <name>` | AST-based lookup | High-velocity scoping |
+| `find-usage <symbol>` | Consumer analysis | Impact assessment |
+| `re-seed` | Forced Sync | Drift remediation |
+| `tutor` | Protocol Guide | Agent alignment |

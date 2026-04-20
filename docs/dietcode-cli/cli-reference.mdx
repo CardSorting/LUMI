@@ -205,6 +205,29 @@ dietcode version
 
 ---
 
+### agent-spider (Structural Navigation)
+
+The Spider Engine handles high-velocity structural analysis, symbol mapping, and dependency tracking. It powers the **Hybrid Anchor** protocol.
+
+```bash
+# Locate providers of a symbol
+npx tsx scripts/agent-spider.ts find-symbol <name>
+
+# Find consumers/usages of a symbol
+npx tsx scripts/agent-spider.ts find-usage <name>
+
+# Get dependency map for a file
+npx tsx scripts/agent-spider.ts deps <path>
+
+# Clear AST cache and re-align graph (Drift Remediation)
+npx tsx scripts/agent-spider.ts re-seed
+
+# AI Alignment & Onboarding Guide
+npx tsx scripts/agent-spider.ts tutor
+```
+
+---
+
 ### dietcode dev
 
 Developer tools for debugging.

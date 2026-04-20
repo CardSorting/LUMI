@@ -28,6 +28,7 @@ The **Spider Engine** has graduated to a sovereign, memory-resident **Industrial
 *   **Incremental $O(1)$ Audits**: Uses a memory-resident CAS-hash model to provide instantaneous architectural validation without disk overhead.
 *   **Stability Lock 2.0**: Session-authenticated concurrency prevents structural corruption and race conditions during high-velocity agentic turns.
 *   **Industrial Fission**: Manages architectural mass by enforcing a hard **1500-line limit** per module via the Sovereign Decomposer.
+*   **Hybrid Anchor Protocol**: Mandates the **"Two-Lock Check"**—every structural scoping performed by Spider must be verified by a physical Grep lock. This eliminates hallsucinations and ensures the AI acts on current disk reality, not stale AST caches.
 
 ### 🔮 Oracle Grade Suggestion Engine
 The **Oracle Suggestion Engine** transforms prompt suggestions into an architectural and diagnostic compass:
