@@ -1,21 +1,37 @@
-# Structural Navigation Policy
+# Structural Navigation Policy: The Hybrid Anchor
 
-To maximize efficiency and minimize redundant file scans, all codebase exploration must follow a **Structure First** interaction model via the Spider Engine and BroccoliDB.
+To maximize efficiency and eliminate both blind searching and stale-cache hallucinations, all codebase exploration must follow the **Hybrid Anchor** protocol.
+
+"Grep is Reality. Spider is Context."
+
+## The Hybrid Protocol (The Two-Lock Check)
+
+Whenever you need to locate a symbol, understand a dependency, or assess impact, you MUST follow these three steps:
+
+1.  **Scope (Spider First)**: Use `scripts/agent-spider.ts` to identify the structural scope.
+    - `find-symbol <symbol>`: Locate provider files.
+    - `find-usage <symbol>`: Identify consumers.
+    - `deps <file>`: Understand direct links.
+2.  **Verify (Grep Second)**: Once you have a scoped list of files/symbols, use `grep_search` to verify the **Physical Reality** on disk.
+    - Confirm the exact method signature.
+    - Verify literal string constants.
+    - Ensure the graph hasn't drifted from recent edits.
+3.  **Align (Seed as Needed)**: If Spider and Grep results diverge (e.g., `find-symbol` says it's in File A, but `grep` doesn't see it), run `scripts/agent-spider.ts seed` to re-align the cache with reality.
 
 ## Core Mandates
 
-1.  **Query Before Search**: Before using `grep_search`, `search_web`, or `list_dir`, you MUST query the structural graph using `scripts/agent-spider.ts`. High-fidelity navigation depends on BroccoliDB, not blind string matching.
-2.  **Symbol Registry**: Use `find-symbol <symbol>` to locate physical definitions. This is the ONLY reliable way to distinguish between active code and orphaned aliases.
-3.  **Dependency Analysis**: Use `deps <file>` to understand the imports and dependents of a module. Never modify a core file without checking its dependents first.
-4.  **Impact Assessment**: Use `blast-radius <file>` to evaluate architectural risk.
-5.  **Persistence Integrity**: Ensure BroccoliDB is seeded (`scripts/agent-spider.ts seed`) at the start of complex tasks. If the graph feels stale, re-seed.
+1.  **Stop Blind Grepping**: Never run `grep_search` on the entire workspace without first attempts to narrow the scope via `agent-spider`.
+2.  **Verify Every Symbol**: Never assume a symbol definition is correct based solely on the graph. Always perform the "Two-Lock Check" (Spider scoping + Grep verification).
+3.  **Study Before Editing**: Use `pre-heat <file>` to generate a "Study Pack" of relevant context before modifying a core module.
 
 ## Tooling: `scripts/agent-spider.ts`
 
-- `seed`: Hydrates BroccoliDB from `git ls-files` and bootstraps the structural graph. Use `--force-full` for a deep flush.
-- `status`: Displays graph density, node count, and entropy.
-- `find-symbol <name>`: Locates all providers of a specific symbol.
-- `find-usage <symbol>`: Finds all files importing a specific symbol cross-referenced via AST.
-- `deps <file>`: Lists direct dependencies and dependents.
-- `blast-radius <file>`: Calculates the downstream impact and centrality score.
-- `verify-graph`: Internal integrity check to prune "Ghost Nodes".
+- `seed`: Hydrates BroccoliDB. Use `--force-full` for a deep alignment.
+- `status`: Displays graph health and entropy (drift score).
+- `find-symbol <name>`: Scopes providers of a symbol.
+- `find-usage <symbol>`: Scopes consumers via AST-analysis.
+- `deps <file>`: Scopes direct architectural links.
+- `blast-radius <file>`: Scopes downstream impact of changes.
+- `pre-heat <file>`: Generates a prioritized reading list (Study Pack) for a file.
+- `conflicts`: Lists ambiguous symbols (naming collisions).
+- `tutor`: AI-specific guide for the Hybrid Anchor protocol.

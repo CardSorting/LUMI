@@ -44,7 +44,7 @@ async function main() {
 
 	const ctx = new AgentContext(ws, pool)
 
-	if (command === "seed") {
+	if (command === "seed" || command === "re-seed") {
 		const branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim()
 		console.log(`📡 Seeding BroccoliDB on branch '${branch}'...`)
 
@@ -63,7 +63,7 @@ async function main() {
 					f.trim().length > 0 && (f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".js") || f.endsWith(".mjs")),
 			)
 
-		const forceFull = args.includes("--force-full")
+		const forceFull = args.includes("--force-full") || command === "re-seed"
 		if (forceFull) {
 			console.log("🔥 Force-full re-index requested. Clearing persistent cache...")
 			await pool.push({
@@ -287,6 +287,26 @@ async function main() {
 			console.log(`   - '${symbol}' is provided by:`)
 			for (const p of providers) console.log(`     -> ${p}`)
 		}
+		process.exit(0)
+	}
+
+	if (command === "tutor") {
+		const entropy = engine.computeEntropy().score
+		console.log("🎓  Sovereign Navigation Tutor")
+		console.log("--------------------------------")
+		console.log("Interaction Pattern: The Hybrid Anchor")
+		console.log("1. SCOPE  (Spider): Use 'find-symbol' or 'find-usage' to narrow the search area.")
+		console.log("2. VERIFY (Grep)  : Use 'grep_search' on those specific files to confirm code reality.")
+		console.log("3. ALIGN  (Seed)  : If Spider and Grep diverge, run 're-seed' to update the cache.")
+		console.log("")
+		console.log(
+			`Current Entropy: ${entropy.toFixed(2)}% ${entropy > 20 ? "🚨 (High - Re-seed recommended)" : "✅ (Healthy)"}`,
+		)
+		console.log("")
+		console.log("Checklist for Agentic Success:")
+		console.log("[ ] Did I run 're-seed' at the start of the session?")
+		console.log("[ ] Did I use 'pre-heat' to study the module architecture?")
+		console.log("[ ] Did I verify the graph's scope with a physical Grep?")
 		process.exit(0)
 	}
 }

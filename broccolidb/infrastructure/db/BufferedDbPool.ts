@@ -136,13 +136,14 @@ export class BufferedDbPool {
   private warmedIndices = new Set<string>(); // Level 9: Authoritative Memory Indices
   private integrityMetrics = { brokenImports: 0, orphanedNodes: 0 };
   private SCHEMA_VERSION = 2; // Pass 4 hardening baseline
+  private schemaVerified = false;
 
   constructor() {
     this.startFlushLoop();
-    this.verifySchemaVersion().catch(e => console.error('[DbPool] Schema verify failed:', e));
   }
 
   private async verifySchemaVersion() {
+      if (this.schemaVerified) return;
       try {
           await this.db!.schema
             .createTable('system_metadata')
@@ -151,27 +152,26 @@ export class BufferedDbPool {
             .addColumn('value', 'text')
             .execute();
 
-          const versionDoc = await this.selectOne('system_metadata' as any, { column: 'key', value: 'schema_version' }) as { key: string, value: string } | undefined;
+          const versionDoc = await this.db!
+            .selectFrom('system_metadata' as any)
+            .selectAll()
+            .where('key', '=', 'schema_version')
+            .executeTakeFirst() as { key: string, value: string } | undefined;
+
           if (!versionDoc) {
-              await this.push({
-                  type: 'insert',
-                  table: 'system_metadata' as any,
-                  values: { key: 'schema_version', value: String(this.SCHEMA_VERSION) },
-                  layer: 'infrastructure'
-              });
-              await this.flush();
+              await this.db!
+                .insertInto('system_metadata' as any)
+                .values({ key: 'schema_version', value: String(this.SCHEMA_VERSION) })
+                .execute();
           } else if (Number(versionDoc.value) < this.SCHEMA_VERSION) {
-              console.warn(`[DbPool] 🚨 Schema Migration Required: v${versionDoc.value} -> v${this.SCHEMA_VERSION}. Please run migrations.`);
-              // For now, we auto-update the version as this is a new feature
-              await this.push({
-                  type: 'update',
-                  table: 'system_metadata' as any,
-                  values: { value: String(this.SCHEMA_VERSION) } as any,
-                  where: { column: 'key', value: 'schema_version' },
-                  layer: 'infrastructure'
-              });
-              await this.flush();
+              console.warn(`[DbPool] 🚨 Schema Migration Required: v${versionDoc.value} -> v${this.SCHEMA_VERSION}. Auto-patching metadata.`);
+              await this.db!
+                .updateTable('system_metadata' as any)
+                .set({ value: String(this.SCHEMA_VERSION) })
+                .where('key', '=', 'schema_version')
+                .execute();
           }
+          this.schemaVerified = true;
       } catch (e) {
           console.error('[DbPool] Schema verification failed:', e);
       }
@@ -271,6 +271,7 @@ export class BufferedDbPool {
       await sql`PRAGMA auto_vacuum = NONE;`.execute(db);
       this.db = db;
       this.rawDb = await getRawDb();
+      await this.verifySchemaVersion();
     }
     return this.db;
   }
