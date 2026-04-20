@@ -1,5 +1,6 @@
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
+import { SafeNumber } from "../../shared/utils/SafeNumber"
 import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
 import { PathogenStore } from "../integrity/PathogenStore"
 import { SovereignProtocol } from "./SovereignProtocol"
@@ -33,7 +34,7 @@ export class SovereignTelemetrics {
 			workloadLevel: `${stats.totalWrites} writes across ${this.spiderEngine.nodes.size} nodes`,
 			buildErrors: violations.filter((v) => v.severity === "ERROR").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
 			lintWarnings: violations.filter((v) => v.severity === "WARN").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
-			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
+			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${SafeNumber.format(h.stress, 2)})`),
 			resonanceDamping: this.metabolicMonitor.getResonance(),
 			projectVelocity:
 				1.0 +
@@ -73,7 +74,7 @@ export class SovereignTelemetrics {
 	 */
 	public getRecoveryHint(vitality: number): string | undefined {
 		if (vitality > 40) return undefined
-		return `💓 STABILITY WARNING: Heartbeat signal is at ${vitality.toFixed(0)}%. 
+		return `💓 STABILITY WARNING: Heartbeat signal is at ${SafeNumber.format(vitality, 0)}%. 
   STEP 1: Implement a Strategic Stability Break. Simplify your current changes.
   STEP 2: Trigger a # STRATEGIC REVIEW in \`scratchpad.md\` to re-ground your plan.`
 	}
@@ -180,9 +181,10 @@ export class SovereignTelemetrics {
 		const currentViolations = this.spiderEngine.getViolations()
 
 		return {
-			workload: this.metabolicMonitor.getPressure(normPath),
-			focus: this.metabolicMonitor.getResonance(),
+			pressure: this.metabolicMonitor.getPressure(normPath),
+			resonance: this.metabolicMonitor.getResonance(),
 			health: this.computeBuildHealth(currentViolations.map((v) => v.message)),
+			vitalityPulse: this.getStabilityPulse(),
 			tokens,
 			layer,
 		}
@@ -206,7 +208,7 @@ export class SovereignTelemetrics {
 		const shield = [
 			"\n🛡️ PROJECT PROTECTION SUMMARY [V12]",
 			"====================================",
-			`ACTIVITY: ${metabolic.totalWrites} edits, ${metabolic.totalReads} reads (Activity Ratio: ${metabolic.avgDoubtSignal.toFixed(1)})`,
+			`ACTIVITY: ${metabolic.totalWrites} edits, ${metabolic.totalReads} reads (Activity Ratio: ${SafeNumber.format(metabolic.avgDoubtSignal, 1)})`,
 			`STRUCTURE: ${this.spiderEngine.nodes.size} nodes, ${hotspots.length} high-change areas detected`,
 			"====================================\n",
 		]

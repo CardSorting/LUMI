@@ -1,6 +1,7 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { DietCodeDefaultTool } from "@/shared/tools"
+import { SafeNumber } from "../../../../shared/utils/SafeNumber"
 import { SovereignDoctor } from "../../../policy/SovereignDoctor"
 import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
 import type { ToolResponse } from "../../index"
@@ -36,10 +37,10 @@ export class SovereignDoctorHandler implements IToolHandler {
 
 			return formatResponse.toolResult(
 				`JoyZoning Sovereignty Report [Status: ${doctor.getAgentSignal(report)}]\n\n` +
-					`Integrity Score: ${report.integrityScore.toFixed(1)}%\n` +
+					`Integrity Score: ${SafeNumber.format(report.integrityScore, 1)}%\n` +
 					`Activity Hotspots:\n${report.activityMap
 						.slice(0, 5)
-						.map((f: { path: string; score: number }) => `- ${f.path} (Score: ${f.score.toFixed(1)})`)
+						.map((f: { path: string; score: number }) => `- ${f.path} (Score: ${SafeNumber.format(f.score, 1)})`)
 						.join("\n")}\n\n` +
 					`Active Violations:\n${report.violations.map((v) => `[${v.type}] ${v.path}: ${v.message}\n   -> Remediation: ${v.remediation}`).join("\n\n")}\n\n` +
 					`Optimization Opportunities:\n${report.optimizations.map((o) => `- Move ${o.file} to ${o.recommendedLayer}: ${o.reason}`).join("\n")}`,

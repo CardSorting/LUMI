@@ -40,24 +40,33 @@ export const formatResponse = {
 		`Your write was NOT applied. Please heal the substrate and retry.`,
 
 	postExecutionSummary: (
-		telemetry: { layer: string; pressure: number; resonance: number; tokens: number; health: number },
+		telemetry: {
+			layer: string
+			pressure?: number
+			resonance?: number
+			tokens?: number
+			health?: number
+			vitalityPulse?: number
+			healthTrend?: number
+			neuralFocus?: string[]
+		},
 		violations?: string[],
 	) => {
-		const label = telemetry.layer.toUpperCase()
-		const pressure = telemetry.pressure.toFixed(1)
-		const resonance = telemetry.resonance.toFixed(1)
+		const label = (telemetry.layer || "unknown").toUpperCase()
+		const pressure = (telemetry.pressure ?? 0).toFixed(1)
+		const resonance = (telemetry.resonance ?? 0).toFixed(1)
 
 		const statusLine =
 			telemetry.health === 100
 				? `🛡️ SOVEREIGN SUBSTRATE [V189]: **${label}** layer`
 				: `🛡️ SOVEREIGN STRUCTURAL AUDIT: **${label}** layer`
-		const trend = (telemetry as any).healthTrend ?? 0
+		const trend = telemetry.healthTrend ?? 0
 		const trendIcon = trend > 0 ? "📈" : trend < 0 ? "📉" : "📊"
 		const trendText = trend !== 0 ? ` (${trend > 0 ? "+" : ""}${trend.toFixed(1)}%)` : ""
 
-		const vitality = (telemetry as any).vitalityPulse ?? 100
-		const focus = (telemetry as any).neuralFocus?.[0] ? ` | 🧠 Focus: **${(telemetry as any).neuralFocus[0]}**` : ""
-		const telemetryLine = `${trendIcon} Pressure: **${pressure}** | 💓 Vitality: **${vitality.toFixed(0)}%** | Health: **${telemetry.health.toFixed(1)}%**${trendText}${focus}`
+		const vitality = telemetry.vitalityPulse ?? 100
+		const focus = telemetry.neuralFocus?.[0] ? ` | 🧠 Focus: **${telemetry.neuralFocus[0]}**` : ""
+		const telemetryLine = `${trendIcon} Pressure: **${pressure}** | 💓 Vitality: **${vitality.toFixed(0)}%** | Health: **${(telemetry.health ?? 100).toFixed(1)}%**${trendText}${focus}`
 
 		let message = `${statusLine}\n${telemetryLine}`
 		if (violations && violations.length > 0) {

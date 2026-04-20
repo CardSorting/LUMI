@@ -1,3 +1,4 @@
+import { SafeNumber } from "../../shared/utils/SafeNumber"
 import { SpiderSnapshot } from "../policy/spider/SpiderEngine.js"
 
 /**
@@ -34,7 +35,7 @@ export class SovereignCheckpoint {
 		if (decay > 20) {
 			return {
 				recommended: true,
-				message: `🚨 ARCHITECTURAL DECAY DETECTED: Integrity has dropped by ${decay.toFixed(1)}% in this session.\nIt is STRONGLY RECOMMENDED to evaluate a structural rollback to the state from ${initialSnapshot.timestamp}.`,
+				message: `🚨 ARCHITECTURAL DECAY DETECTED: Integrity has dropped by ${SafeNumber.format(decay, 1)}% in this session.\nIt is STRONGLY RECOMMENDED to evaluate a structural rollback to the state from ${initialSnapshot.timestamp}.`,
 				targetTimestamp: initialSnapshot.timestamp,
 			}
 		}

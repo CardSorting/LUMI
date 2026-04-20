@@ -1,4 +1,5 @@
 import * as path from "path"
+import { SafeNumber } from "../../shared/utils/SafeNumber"
 import { PathogenStore } from "../integrity/PathogenStore"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
 import "@/utils/path"
@@ -110,7 +111,7 @@ export class SimulationEngine {
 			impactedDependents,
 			message: isSafe
 				? `Simulation predicts a stable transition. ${impactMsg}`
-				: `Simulation Notice: This move predicts a ${(scoreDrop).toFixed(1)}% change in structural complexity. Let's review the layer boundaries together to be sure.${impactMsg}`,
+				: `Simulation Notice: This move predicts a ${SafeNumber.format(scoreDrop, 1)}% change in structural complexity. Let's review the layer boundaries together to be sure.${impactMsg}`,
 		}
 	}
 

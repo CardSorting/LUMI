@@ -5,6 +5,7 @@ import * as path from "path"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { Logger } from "@/shared/services/Logger"
 import { getLayer, suggestLayerForContent } from "@/utils/joy-zoning"
+import { SafeNumber } from "../../shared/utils/SafeNumber"
 import { ToolUse } from "../assistant-message"
 import { ContextStalenessTracker } from "../context/ContextStalenessTracker"
 import { AuditRecorder } from "../integrity/AuditRecorder.js"
@@ -82,6 +83,7 @@ export class FluidPolicyEngine {
 	private forensics: SovereignForensics
 	private garbageCollector: SovereignGarbageCollector
 	private readonly envSovereignty: EnvironmentSovereignty
+	private karma = 0
 
 	constructor(
 		private cwd: string,
@@ -416,8 +418,8 @@ export class FluidPolicyEngine {
 			if (cci > 0.8) {
 				result.warning =
 					(result.warning ? `${result.warning}\n` : "") +
-					`🛑 [STABILITY SAFETY ALERT]: \`${path.basename(targetPath)}\` has high complexity (Index: ${cci.toFixed(2)}). ` +
-					`Please simplify or verify your plan in the scratchpad before making broad changes here.`
+					`🛑 [STABILITY SAFETY ALERT]: \`${path.basename(targetPath)}\` has high complexity (Index: ${SafeNumber.format(cci, 2)}). ` +
+					`This module is a 'Structural Hotspot' (${SafeNumber.formatPercent(cci, 0)} risk). Deep audit required before further edits.`
 			}
 		}
 
@@ -773,12 +775,9 @@ export class FluidPolicyEngine {
 		const entropyDiscovery = this.lastEntropyScore - currentEntropy.score
 		const drift = currentEntropy.components.couplingScore
 
-		let velocity = 1.0
-		if (entropyDiscovery > 0.05) velocity += 0.5 // Karma Expansion
-		if (drift > 0.15) velocity -= 0.5 // Drift Braking
-
+		const velocity = 1.0 + (this.karma / 1000) * 0.5
 		this.metabolicMonitor.setThresholdMultiplier(Math.max(0.5, Math.min(2.0, velocity)))
-		Logger.info(`[FluidPolicyEngine] Metabolic Velocity calibrated to ${velocity.toFixed(2)}x.`)
+		Logger.info(`[FluidPolicyEngine] Metabolic Velocity calibrated to ${SafeNumber.format(velocity, 2)}x.`)
 
 		// 0. Rule: Architectural Alarm (Soft-Lock / Healing Mode)
 		const isCriticalHealth = this.lastBuildHealth < 50
@@ -974,7 +973,7 @@ export class FluidPolicyEngine {
 							? `⚠️ ARCHITECTURAL WARNING (Strike ${strikes} — enforcement degraded): Domain layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} unresolved violation(s):\n${violationSummary}\n\nThe write is ALLOWED to prevent deadlock.`
 							: `⚠️ ARCHITECTURAL WARNING: ${layer.toUpperCase()} layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummary}` +
 								(delta > 0.01
-									? `\n\n🕷️ ARCHITECTURAL DECAY: Entropy increased by ${(delta * 100).toFixed(1)}%.`
+									? `\n\n🕷️ ARCHITECTURAL DECAY: Entropy increased by ${SafeNumber.formatPercent(delta, 1)}%.`
 									: ""),
 					correctionHint: this.getCorrectionHint(astValidation.errors, filePath),
 				}
@@ -1179,45 +1178,26 @@ export class FluidPolicyEngine {
 		}
 
 		// Metabolic Vitality Injection
-		const lineCount = content.split("\n").length
-		const doubt = this.metabolicMonitor.getDoubtSignal(absolutePath, layer, lineCount)
+		const doubt = this.metabolicMonitor.getDoubtSignal(path.relative(this.cwd, absolutePath))
 		const cooldown = this.metabolicMonitor.getCooldownStatus()
 
-		if ((doubt > 5 || cooldown.active) && !this.commitSeal) {
-			const isHardStall = doubt >= 999.0
-			header += `\n⚠️ METABOLIC PRESSURE DETECTED (Doubt: ${doubt.toFixed(1)}, Cooldown: ${cooldown.active})\n`
+		if (doubt > 1.0) {
+			header += `\n⚠️ METABOLIC PRESSURE DETECTED (Doubt: ${SafeNumber.format(doubt, 1)}, Cooldown: ${cooldown.active})\n`
+		}
 
-			// V28: Proactive Recovery Template Injection
-			let scratchpadExists = false
-			try {
-				await fs.access(path.join(this.cwd, "scratchpad.md"))
-				scratchpadExists = true
-			} catch (_) {}
+		// V28: Proactive Recovery Template Injection
+		let scratchpadExists = false
+		try {
+			await fs.access(path.join(this.cwd, "scratchpad.md"))
+			scratchpadExists = true
+		} catch (_) {}
 
-			if (!scratchpadExists) {
-				const template = this.getSystemDiagnostics()
-				header +=
-					`🛑 ARCHITECTURAL STALL: Your investigation is thrashed. Sovereignty protocol requires an audit.\n` +
-					`💡 I have synthesized a recovery template for you. Initialize \`scratchpad.md\` NOW to proceed:\n\n` +
-					`\`\`\`markdown\n${template}\n\`\`\`\n`
-			} else if (isHardStall) {
-				header +=
-					`🛑 ARCHITECTURAL STALL: Your investigation has reached a cognitive dead-end. Automated recovery suggested:\n` +
-					`  STEP 1: Implement a Strategic Stability Break. Simplify your current changes.\n` +
-					`  STEP 2: Trigger a # STRATEGIC REVIEW in \`scratchpad.md\` to re-ground your plan.\n`
-			} else {
-				header += `You have read this file ${doubt.toFixed(0)} times without making a move. You are drifting into a RECURSIVE LOOP. Stop reading and formulate a clear execution plan NOW.\n`
-			}
-
-			// V34: Sovereign Deep Scans (Proactive Discovery)
-			const pathogens = this.pathogens.getViolations(absolutePath)
-			if (pathogens.length > 0 || isHardStall || doubt > 10) {
-				const slice = await this.getSubstrateSlice(absolutePath)
-				header +=
-					`\n🔍 SOVEREIGN DEEP SCAN [PROACTIVE]:\n` +
-					`Pathogens: ${pathogens.length} detected (Top: ${pathogens[0]?.originalSummary || "None"})\n` +
-					`Substrate Slice (First 30 lines):\n\`\`\`typescript\n${slice}\n\`\`\`\n`
-			}
+		if (!scratchpadExists && (doubt > 5 || cooldown.active)) {
+			const template = this.getSystemDiagnostics()
+			header +=
+				`🛑 ARCHITECTURAL STALL: Your investigation is thrashed. Sovereignty protocol requires an audit.\n` +
+				`💡 I have synthesized a recovery template for you. Initialize \`scratchpad.md\` NOW to proceed:\n\n` +
+				`\`\`\`markdown\n${template}\n\`\`\`\n`
 		}
 
 		// V33: Refactor awareness for diagnostic injection
@@ -1225,7 +1205,7 @@ export class FluidPolicyEngine {
 			this.refactorTurnsRemaining > 0 || this.spiderEngine.getViolations().length > 0 || this.buildAlarmActive
 		const nodeSize = this.spiderEngine.nodes.get(absolutePath)?.astComplexity || 0
 		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan", isRefactoringIntent)
-		const activity = this.metabolicMonitor.isHighlyActive(filePath, isRefactoringIntent, nodeSize)
+		const activity = this.metabolicMonitor.isHighlyActive(absolutePath, isRefactoringIntent, nodeSize)
 
 		if (activity.active) {
 			header += `\n🔥 HIGH ACTIVITY LEVEL DETECTED:\n${activity.reason}\nThis file is changing very rapidly. Consider a quick Strategic Review to stay aligned.\n`
@@ -1235,13 +1215,17 @@ export class FluidPolicyEngine {
 			header += `\n${drift.warning}\n`
 		}
 
+		if (drift.drift > 0.15) {
+			header += `\n🕸️ [AXIOMATIC DRIFT]: Graph is ${SafeNumber.formatPercent(drift.drift, 1)}% cross-layer (Target: < 15%).\n`
+		}
+
 		if (this.mode === "plan") {
 			if (perFileReadCount >= 3) {
 				header += `🔍 Architecture Analysis (PLAN mode):\n`
-				header += `  ⚠️ RECURSIVE STALLING DETECTED: You have read this specific file (${path.basename(filePath)}) ${perFileReadCount} times in this turn without making progress. To avoid an infinite loop, you MUST NOW stop reading this file and either synthesize your findings into a plan or use \`ask_followup_question\`.\n`
+				header += `  ⚠️ RECURSIVE STALLING DETECTED: You have read this specific file (${path.basename(absolutePath)}) ${perFileReadCount} times in this turn without making progress. To avoid an infinite loop, you MUST NOW stop reading this file and either synthesize your findings into a plan or use \`ask_followup_question\`.\n`
 			} else if (globalFileReadCount >= 5) {
 				header += `🔍 Architecture Analysis (PLAN mode):\n`
-				header += `  ⚠️ CROSS-TURN RECURSION DETECTED: You have read this specific file (${path.basename(filePath)}) ${globalFileReadCount} times across multiple turns without progress. To avoid an infinite loop, you MUST NOW stop reading this file and synthesize your findings or use \`ask_followup_question\`.\n`
+				header += `  ⚠️ CROSS-TURN RECURSION DETECTED: You have read this specific file (${path.basename(absolutePath)}) ${globalFileReadCount} times across multiple turns without progress. To avoid an infinite loop, you MUST NOW stop reading this file and synthesize your findings or use \`ask_followup_question\`.\n`
 			} else if (totalReadCount >= 10) {
 				header += `🔍 Architecture Analysis (PLAN mode):\n`
 				header += `  ⚠️ SYSTEMATIC SCANNING LIMIT: You have read ${totalReadCount} unique files in this interaction turn. To avoid context bloat, you MUST NOW synthesize your current findings into an architectural plan using \`plan_mode_respond\`.\n`
@@ -1450,8 +1434,8 @@ export class FluidPolicyEngine {
 
 				result.warning =
 					(result.warning ? `${result.warning}\n` : "") +
-					`⚠️ ENTROPY WARNING: Tool output has diverged. Structural health: ${(entropyReport.score * 100).toFixed(1)}% decay.` +
-					(delta > 0.01 ? `\n🕷️ DECAY SINCE LAST SNAPSHOT: +${(delta * 100).toFixed(1)}%` : "")
+					`⚠️ ENTROPY WARNING: Tool output has diverged. Structural health: ${SafeNumber.formatPercent(entropyReport.score, 1)}% decay.` +
+					(delta > 0.01 ? `\n🕷️ DECAY SINCE LAST SNAPSHOT: +${SafeNumber.formatPercent(delta, 1)}%` : "")
 				result.entropyScore = entropyReport.score
 			}
 
@@ -1492,9 +1476,11 @@ export class FluidPolicyEngine {
 			if (karmaEarned) {
 				result.warning =
 					(result.warning ? `${result.warning}\n` : "") +
-					`✨ [KARMA EARNED]: Your high-quality refactor has reduced structural entropy by ${(entropyDiscovery * 100).toFixed(1)}%.\n` +
+					`✨ [KARMA EARNED]: Your high-quality refactor has reduced structural entropy by ${SafeNumber.formatPercent(entropyDiscovery, 1)}%.\n` +
 					`Sovereign strikes have been pardoned. Substrate health is recovering.`
-				Logger.info(`[FluidPolicyEngine] Karma Pardon triggered: Entropy drop ${(entropyDiscovery * 100).toFixed(1)}%`)
+				Logger.info(
+					`[FluidPolicyEngine] Karma Pardon triggered: Entropy drop ${SafeNumber.formatPercent(entropyDiscovery, 1)}%`,
+				)
 			} else if (oldHealth < 70 && health > 90) {
 				result.warning =
 					(result.warning ? `${result.warning}\n` : "") +
@@ -1504,25 +1490,13 @@ export class FluidPolicyEngine {
 			} else {
 				Logger.info(`[FluidPolicyEngine] Metabolic Forgiveness applied (Structural Improvement Detected).`)
 			}
-		}
-
-		// V140: Forensic Realism - AXIOMATIC DRIFT (Coupling) silenced to prevent agentic spiraling.
-		/*
-		const drift = currentEntropy.components.couplingScore
-		result.warning =
-			(result.warning ? `${result.warning}\n` : "") +
-			`🕸️ [AXIOMATIC DRIFT]: Graph is ${(drift * 100).toFixed(1)}% cross-layer (Target: < 15%).`
-		*/
-
-		// V46: Distance to Green (Diagnostic Nudge) silenced in Pass 15.
-		/*
-		if (health < 100) {
 			const errorCount = currentViolations.filter((v) => v.severity === "ERROR").length
-			const warnCount = currentViolations.filter((v) => v.severity === "WARN").length
-			const deltaMsg = `Distance to Green: ${errorCount} errors and ${warnCount} warnings remaining.`
-			result.warning = (result.warning ? `${result.warning}\n` : "") + `🔍 [STABILIZATION DELTA]: ${deltaMsg}`
+			if (errorCount > 0) {
+				const warnCount = currentViolations.filter((v) => v.severity === "WARN").length
+				const deltaMsg = `Distance to Green: ${errorCount} errors and ${warnCount} warnings remaining.`
+				result.warning = (result.warning ? `${result.warning}\n` : "") + `🔍 [STABILIZATION DELTA]: ${deltaMsg}`
+			}
 		}
-		*/
 
 		// V70: Sovereign Refactor Window Decay
 		if (this.refactorTurnsRemaining > 0) {

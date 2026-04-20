@@ -1,3 +1,4 @@
+import { SafeNumber } from "../../shared/utils/SafeNumber"
 import { OptimizationOpportunity, SovereignOptimizer } from "./SovereignOptimizer.js"
 import { SovereignPolicy } from "./SovereignPolicy"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
@@ -84,10 +85,11 @@ export class SovereignDoctor {
 	 * Compact "Agent Signal" - intended for system prompts.
 	 */
 	public getAgentSignal(report: DoctorReport): string {
+		if (!report) return "⚠️ [STABILITY NOTICE] Diagnostic Report Unavailable."
 		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
 		if (report.buildHealth < (policy.integrityAlertThreshold || 70)) {
-			return `⚠️ [STABILITY NOTICE] Project Build Health: ${report.buildHealth.toFixed(0)}%. Focus: Improving current file stability.`
+			return `⚠️ [STABILITY NOTICE] Project Build Health: ${SafeNumber.format(report.buildHealth, 0)}%. Focus: Improving current file stability.`
 		}
-		return `✅ Project Build Health: ${report.buildHealth.toFixed(0)}%. The codebase is stable and well-organized.`
+		return `✅ Project Build Health: ${SafeNumber.format(report.buildHealth, 0)}%. The codebase is stable and well-organized.`
 	}
 }

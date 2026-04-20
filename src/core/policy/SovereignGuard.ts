@@ -1,4 +1,5 @@
 import * as path from "path"
+import { SafeNumber } from "../../shared/utils/SafeNumber"
 import { PathogenStore } from "../integrity/PathogenStore.js"
 import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine.js"
 import { SimulationEngine } from "./SimulationEngine.js"
@@ -66,10 +67,10 @@ export class SovereignGuard {
 
 		// V9: Dynamic Leniency sync with SimulationEngine
 		const maxDrop = isRecovering ? 25 : 15
-		if (!simResult.safe && simResult.scoreDrop > maxDrop) {
+		if (simResult && !simResult.safe && simResult.scoreDrop > maxDrop) {
 			return {
 				approved: false,
-				reason: `Integrity Notice: This edit predicts a ${simResult.scoreDrop.toFixed(1)}% change in structural complexity.`,
+				reason: `Integrity Notice: This edit predicts a ${SafeNumber.format(simResult.scoreDrop, 1)}% change in structural complexity.`,
 				violations: [],
 				remediation:
 					"Verify imports and ensure module is placed in the correct layer. If this change is architecturally necessary but temporarily drops integrity, you may request an override by adding [SAFETY_OVERRIDE] to your file header.",

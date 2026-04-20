@@ -1,6 +1,7 @@
 /**
  * [LAYER: CORE]
  */
+import { SafeNumber } from "../../shared/utils/SafeNumber"
 
 export interface SovereignDiagnostics {
 	buildHealth: number
@@ -83,11 +84,13 @@ export namespace SovereignProtocol {
 					: "") +
 				(diagnostics.karmaStatus ? `✨ **Karma Status**: ${diagnostics.karmaStatus}\n` : "") +
 				(diagnostics.heartbeatStatus !== undefined
-					? `💓 **Heartbeat Status**: ${diagnostics.heartbeatStatus.toFixed(0)}% (${diagnostics.heartbeatStatus > 80 ? "Stable" : diagnostics.heartbeatStatus > 50 ? "Strained" : "Flatlining"})\n`
+					? `💓 **Heartbeat Status**: ${SafeNumber.format(diagnostics.heartbeatStatus, 0)}% (${diagnostics.heartbeatStatus > 80 ? "Stable" : diagnostics.heartbeatStatus > 50 ? "Strained" : "Flatlining"})\n`
 					: "") +
-				(diagnostics.projectVelocity ? `🚀 **Project Velocity**: ${diagnostics.projectVelocity.toFixed(2)}x\n` : "") +
+				(diagnostics.projectVelocity
+					? `🚀 **Project Velocity**: ${SafeNumber.format(diagnostics.projectVelocity, 2)}x\n`
+					: "") +
 				(diagnostics.aestheticResilience !== undefined
-					? `🎨 **Aesthetic Resilience**: ${(diagnostics.aestheticResilience * 100).toFixed(1)}%\n`
+					? `🎨 **Aesthetic Resilience**: ${SafeNumber.format(diagnostics.aestheticResilience * 100, 1)}%\n`
 					: "") +
 				(diagnostics.resonanceDamping && diagnostics.resonanceDamping < 1.0
 					? `🧘 **Cognitive Resonance Active**: ${diagnostics.resonanceDamping}x pressure accumulation (Refactor Mode)\n`
@@ -113,9 +116,9 @@ export namespace SovereignProtocol {
 					? `⚠️ **Thrashing Signal**: Recursive reading loop detected across ${diagnostics.agenticThrashing.doubtFiles.length} files. Pivoting required.\n`
 					: "✅ **Cognitive Focus**: Investigative resonance is stable.\n") +
 				(diagnostics.healthTrend !== undefined && diagnostics.healthTrend > 0
-					? `📈 **Success Trend**: +${diagnostics.healthTrend.toFixed(1)}% (MANTRA: Double down on this concept!)\n`
+					? `📈 **Success Trend**: +${SafeNumber.format(diagnostics.healthTrend, 1)}% (MANTRA: Double down on this concept!)\n`
 					: diagnostics.healthTrend !== undefined && diagnostics.healthTrend < 0
-						? `📉 **Recent File Changes**: ${diagnostics.healthTrend.toFixed(1)}% (Strategic review and revision encouraged)\n`
+						? `📉 **Recent File Changes**: ${SafeNumber.format(diagnostics.healthTrend, 1)}% (Strategic review and revision encouraged)\n`
 						: "") +
 				"\n" +
 				`### Hotspots:\n` +
@@ -123,7 +126,7 @@ export namespace SovereignProtocol {
 				"\n\n" +
 				`## [STABILITY ANALYSIS]\n` +
 				(diagnostics.namingIntegrity !== undefined
-					? `⚖️ **Naming Consistency**: ${(diagnostics.namingIntegrity * 100).toFixed(1)}%\n`
+					? `⚖️ **Naming Consistency**: ${SafeNumber.format(diagnostics.namingIntegrity * 100, 1)}%\n`
 					: "") +
 				(diagnostics.merkleDrift
 					? `🌀 **Synchronization**: Slight drift detected. Local hash: ${diagnostics.merkleDrift.substring(0, 8)}...\n`
@@ -136,7 +139,7 @@ export namespace SovereignProtocol {
 						Object.entries(diagnostics.fragilityIndex)
 							.sort((a, b) => b[1] - a[1])
 							.slice(0, 3)
-							.map(([p, s]) => `  - ${p}: ${s.toFixed(2)} (Complexity)`)
+							.map(([p, s]) => `  - ${p}: ${SafeNumber.format(s, 2)} (Complexity)`)
 							.join("\n")
 					: "") +
 				(diagnostics.recoveryHint ? `\n💡 **HELPFUL TIP**: ${diagnostics.recoveryHint}\n` : "") +

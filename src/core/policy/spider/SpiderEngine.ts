@@ -8,6 +8,7 @@ import * as path from "path"
 import * as ts from "typescript"
 import * as v8 from "v8"
 import { Logger } from "../../../shared/services/Logger.js"
+import { SafeNumber } from "../../../shared/utils/SafeNumber"
 import { ForensicEngine } from "./ForensicEngine.js"
 import { MetricsEngine } from "./MetricsEngine.js"
 import { PathResolver } from "./PathResolver.js"
@@ -445,7 +446,9 @@ export class SpiderEngine {
 		const usedPercent = (stats.used_heap_size / stats.heap_size_limit) * 100
 
 		if (usedPercent > 90) {
-			Logger.error(`[SpiderEngine] CRITICAL Metabolic Pressure (${usedPercent.toFixed(1)}%). Triggering ABSOLUTE SWEEP.`)
+			Logger.error(
+				`[SpiderEngine] CRITICAL Metabolic Pressure (${SafeNumber.format(usedPercent, 1)}%). Triggering ABSOLUTE SWEEP.`,
+			)
 			this.resolver.dispose()
 			this.sessionBuffer.clear()
 			this.substrateCheckpoint = null
@@ -456,7 +459,7 @@ export class SpiderEngine {
 
 		if (usedPercent > 80) {
 			Logger.warn(
-				`[SpiderEngine] High Metabolic Pressure detected (${usedPercent.toFixed(1)}%). Triggering Substrate Sweep.`,
+				`[SpiderEngine] High Metabolic Pressure detected (${SafeNumber.format(usedPercent, 1)}%). Triggering Substrate Sweep.`,
 			)
 			this.resolver.clearCaches()
 			this.sessionBuffer.clear()

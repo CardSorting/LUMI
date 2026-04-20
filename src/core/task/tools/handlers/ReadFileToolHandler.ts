@@ -7,6 +7,7 @@ import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/pat
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeSayTool } from "@/shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@/shared/tools"
+import { SafeNumber } from "../../../../shared/utils/SafeNumber"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
@@ -207,8 +208,10 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 						buildErrors: violations
 							.filter((v) => v.severity === "ERROR")
 							.map((v) => `[${v.id}] ${v.path}: ${v.message}`),
-						lintWarnings: [],
-						hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${h.stress.toFixed(2)})`),
+						lintWarnings: violations
+							.filter((v) => v.severity === "WARN")
+							.map((v) => `[${v.id}] ${v.path}: ${v.message}`),
+						hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${SafeNumber.format(h.stress, 2)})`),
 					}
 				} catch (_e) {
 					// Fallback to empty if diagnostics fail
@@ -261,7 +264,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 					`\n\n[SOVEREIGN_CONTEXT]\n` +
 					`Layer: ${node.layer?.toUpperCase() || "UNKNOWN"}\n` +
 					`Architectural Intent: ${intent}\n` +
-					`Metrics: Logic Density: ${node.logicDensity.toFixed(2)}, I/O Entropy: ${node.ioEntropy.toFixed(2)}\n` +
+					`Metrics: Logic Density: ${SafeNumber.format(node.logicDensity, 2)}, I/O Entropy: ${SafeNumber.format(node.ioEntropy, 2)}\n` +
 					`Status: ${node.orphaned ? "ORPHANED" : "INTEGRATED"}\n`
 				fileContent.text += contextBlock
 			}
