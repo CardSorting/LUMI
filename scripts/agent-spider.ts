@@ -264,6 +264,31 @@ async function main() {
 		}
 		process.exit(0)
 	}
+
+	if (command === "pre-heat") {
+		const filePath = args[1]
+		if (!filePath) {
+			console.error("Usage: pre-heat <file>")
+			process.exit(1)
+		}
+		const pack = ctx.spider.getStudyPack(filePath)
+		console.log(`📖  Sovereign Study Pack for ${filePath}:`)
+		console.log(`   (Read these files to master the structural context)`)
+		for (const item of pack.studyItems) {
+			console.log(`   - ${item.path} [${item.reason}]`)
+		}
+		process.exit(0)
+	}
+
+	if (command === "conflicts") {
+		const conflicts = engine.getRegistry().getConflicts()
+		console.log(`⚔️  Structural Conflicts: ${conflicts.size}`)
+		for (const [symbol, providers] of conflicts.entries()) {
+			console.log(`   - '${symbol}' is provided by:`)
+			for (const p of providers) console.log(`     -> ${p}`)
+		}
+		process.exit(0)
+	}
 }
 
 main().catch((err) => {

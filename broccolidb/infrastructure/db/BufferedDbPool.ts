@@ -135,9 +135,46 @@ export class BufferedDbPool {
   private inFlightIndex = new Map<keyof Schema, Map<string, Set<WriteOp>>>();
   private warmedIndices = new Set<string>(); // Level 9: Authoritative Memory Indices
   private integrityMetrics = { brokenImports: 0, orphanedNodes: 0 };
+  private SCHEMA_VERSION = 2; // Pass 4 hardening baseline
 
   constructor() {
     this.startFlushLoop();
+    this.verifySchemaVersion().catch(e => console.error('[DbPool] Schema verify failed:', e));
+  }
+
+  private async verifySchemaVersion() {
+      try {
+          await this.db!.schema
+            .createTable('system_metadata')
+            .ifNotExists()
+            .addColumn('key', 'text', (col) => col.primaryKey())
+            .addColumn('value', 'text')
+            .execute();
+
+          const versionDoc = await this.selectOne('system_metadata' as any, { column: 'key', value: 'schema_version' }) as { key: string, value: string } | undefined;
+          if (!versionDoc) {
+              await this.push({
+                  type: 'insert',
+                  table: 'system_metadata' as any,
+                  values: { key: 'schema_version', value: String(this.SCHEMA_VERSION) },
+                  layer: 'infrastructure'
+              });
+              await this.flush();
+          } else if (Number(versionDoc.value) < this.SCHEMA_VERSION) {
+              console.warn(`[DbPool] 🚨 Schema Migration Required: v${versionDoc.value} -> v${this.SCHEMA_VERSION}. Please run migrations.`);
+              // For now, we auto-update the version as this is a new feature
+              await this.push({
+                  type: 'update',
+                  table: 'system_metadata' as any,
+                  values: { value: String(this.SCHEMA_VERSION) } as any,
+                  where: { column: 'key', value: 'schema_version' },
+                  layer: 'infrastructure'
+              });
+              await this.flush();
+          }
+      } catch (e) {
+          console.error('[DbPool] Schema verification failed:', e);
+      }
   }
 
   private flushTimeout: NodeJS.Timeout | null = null;
@@ -193,7 +230,7 @@ export class BufferedDbPool {
     try {
       const now = Date.now();
       const SHADOW_EXPIRATION = 5 * 60 * 1000;
-      for (const [agentId, shadow] of this.agentShadows.entries()) {
+      for (const [agentId, shadow] of Array.from(this.agentShadows.entries())) {
         if (now - shadow.lastUpdated > SHADOW_EXPIRATION) {
           this.agentShadows.delete(agentId);
         }
@@ -428,7 +465,7 @@ export class BufferedDbPool {
     }
   }
 
-  public async flush() {
+  public async flush(retryCount: number = 0): Promise<void> {
     const releaseFlush = await this.flushMutex.acquire();
     let opsToFlush: WriteOp[] = [];
     const startTime = Date.now();
@@ -438,7 +475,7 @@ export class BufferedDbPool {
       let hasData = false;
       try {
         const dirtyBuffer = this.activeBuffer;
-        for (const ops of dirtyBuffer.values()) {
+        for (const ops of Array.from(dirtyBuffer.values())) {
           if (ops.length > 0) {
             hasData = true;
             break;
@@ -533,6 +570,14 @@ export class BufferedDbPool {
         err.code === 'SQLITE_BUSY' ||
         err.code === 'SQLITE_LOCKED' ||
         err.message?.includes('deadlock');
+
+      if (isRetryable && retryCount < 3) {
+          const delay = Math.pow(2, retryCount) * 100;
+          console.warn(`[DbPool] ⚠️ Flush conflict (SQLITE_BUSY). Retrying in ${delay}ms... (Attempt ${retryCount + 1})`);
+          await new Promise(r => setTimeout(r, delay));
+          releaseFlush(); // Must release before recursive call to prevent own-deadlock
+          return this.flush(retryCount + 1);
+      }
 
       const releaseStateFail = await this.stateMutex.acquire();
       try {
@@ -676,7 +721,7 @@ export class BufferedDbPool {
           tableOps = ops;
         }
 
-        for (const op of tableOps) {
+        for (const op of Array.from(tableOps)) {
           // Additional safety check if we're using a full buffer instead of an index
           if (op.table !== table) continue;
 

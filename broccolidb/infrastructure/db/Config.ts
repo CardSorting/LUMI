@@ -267,6 +267,10 @@ export interface Schema {
     value: string;
     updatedAt: number;
   };
+  system_metadata: {
+    key: string;
+    value: string;
+  };
 }
 
 let _db: Kysely<Schema> | null = null;

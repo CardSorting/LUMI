@@ -22,8 +22,14 @@ export class SymbolRegistry {
     this.providers.set(provider.symbolName, existing);
 
     const fileExports = this.exportsByFile.get(provider.filePath) || [];
-    fileExports.push(provider);
-    this.exportsByFile.set(provider.filePath, fileExports);
+    if (!fileExports.some(p => p.symbolName === provider.symbolName)) {
+        fileExports.push(provider);
+        this.exportsByFile.set(provider.filePath, fileExports);
+    }
+
+    if (existing.size > 1) {
+        console.warn(`[SymbolRegistry] ⚠️  Ambiguous symbol detected: '${provider.symbolName}' is provided by ${existing.size} files.`);
+    }
   }
 
   public unregisterFile(filePath: string) {
@@ -63,6 +69,16 @@ export class SymbolRegistry {
 
   public getTransition(symbolName: string) {
       return this.transitions.get(symbolName);
+  }
+
+  public getConflicts(): Map<string, string[]> {
+      const conflicts = new Map<string, string[]>();
+      for (const [symbol, providers] of this.providers.entries()) {
+          if (providers.size > 1) {
+              conflicts.set(symbol, Array.from(providers));
+          }
+      }
+      return conflicts;
   }
 
   public getExports(filePath: string): SymbolProvider[] {

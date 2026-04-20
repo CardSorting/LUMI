@@ -277,7 +277,11 @@ export class SpiderService {
         auditFiles.push(...(results.filter(Boolean) as { filePath: string; content: string }[]));
         
         // Memory Management: Recycle project after batch reading to clear AST pressure
-        if (i > 0 && i % 100 === 0) {
+        const memory = process.memoryUsage().rss / 1024 / 1024;
+        if (memory > 1500) {
+            Logger.warn(`[SpiderService] 🚨 RSS Watchdog triggered (${memory.toFixed(0)}MB). Hard-resetting Project...`);
+            this.engine.recycleProject();
+        } else if (i > 0 && i % 100 === 0) {
             this.engine.recycleProject();
         }
       }
@@ -411,5 +415,57 @@ export class SpiderService {
       }
       
       return { pruned: prunedCount };
+  }
+
+  /**
+   * Generates a "Sovereign Study Pack" for a file.
+   * Identifies the core structural context an agent needs to master before editing.
+   */
+  public getStudyPack(filePath: string): { 
+      path: string, 
+      studyItems: { path: string, reason: string }[] 
+  } {
+      const engine = this.engine;
+      const normalizedPath = engine.normalizePath(filePath);
+      const node = engine.nodes.get(normalizedPath);
+      
+      const studyItems: { path: string, reason: string }[] = [];
+      const discovery = this.getDiscovery();
+      const registry = engine.getRegistry();
+
+      if (node) {
+          // 1. Direct dependencies
+          for (const resolved of Array.from(node.resolvedImports.values())) {
+              studyItems.push({ path: resolved, reason: 'Direct Dependency' });
+          }
+
+          // 2. Critical dependents (from Blast Radius)
+          const radius = discovery.getBlastRadius(filePath);
+          for (const cr of radius.criticalDependents.slice(0, 5)) {
+              studyItems.push({ path: cr, reason: 'Critical Dependent' });
+          }
+
+          // 3. Ambiguous Symbols used/provided
+          const exports = registry.getExports(normalizedPath);
+          const conflicts = registry.getConflicts();
+          for (const exp of exports) {
+              if (conflicts.has(exp.symbolName)) {
+                  const providers = conflicts.get(exp.symbolName)!.filter(p => p !== normalizedPath);
+                  for (const p of providers) {
+                      studyItems.push({ path: p, reason: `Ambiguity Provider for '${exp.symbolName}'` });
+                  }
+              }
+          }
+      }
+
+      // De-duplicate and prioritize
+      const seen = new Set<string>();
+      const pack = studyItems.filter(item => {
+          if (seen.has(item.path) || item.path === normalizedPath) return false;
+          seen.add(item.path);
+          return true;
+      });
+
+      return { path: normalizedPath, studyItems: pack };
   }
 }
