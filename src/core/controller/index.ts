@@ -1,5 +1,6 @@
 import type { Anthropic } from "@anthropic-ai/sdk"
 import { buildApiHandler } from "@core/api"
+import { startGooglePersonalHealthCheck, stopGooglePersonalHealthCheck } from "@core/api/providers/google-personal"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { tryAcquireTaskLockWithRetry } from "@core/task/TaskLockUtils"
 import { detectWorkspaceRoots } from "@core/workspace/detection"
@@ -142,6 +143,7 @@ export class Controller {
 
 		this.authService.restoreRefreshTokenAndRetrieveAuthInfo().then(() => {
 			this.startRemoteConfigTimer()
+			startGooglePersonalHealthCheck()
 		})
 
 		this.mcpHub = new McpHub(
@@ -186,6 +188,8 @@ export class Controller {
 			clearInterval(this.remoteConfigTimer)
 			this.remoteConfigTimer = undefined
 		}
+
+		stopGooglePersonalHealthCheck()
 
 		await this.clearTask()
 		this.mcpHub.dispose()

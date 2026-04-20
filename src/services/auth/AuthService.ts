@@ -39,6 +39,8 @@ export interface DietCodeAuthInfo {
 	userInfo: DietCodeAccountUserInfo
 	provider: string
 	startedAt?: number
+	lastRefreshedAt?: number
+	rotationCount?: number
 }
 
 export interface DietCodeAccountUserInfo {

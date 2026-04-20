@@ -184,3 +184,10 @@ export class AuthInvalidTokenError extends Error {
 		this.name = DietCodeErrorType.Auth
 	}
 }
+
+export class AuthInvalidGrantError extends AuthInvalidTokenError {
+	constructor(message: string) {
+		super(message)
+		this.name = "AuthInvalidGrant"
+	}
+}

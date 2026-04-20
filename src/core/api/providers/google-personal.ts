@@ -1,5 +1,6 @@
 import { geminiDefaultModelId, geminiModels, ModelInfo } from "@shared/api"
 import { v4 as uuidv4 } from "uuid"
+import { StateManager } from "@/core/storage/StateManager"
 import { AuthService } from "@/services/auth/AuthService"
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { telemetryService } from "@/services/telemetry"
@@ -21,6 +22,8 @@ const ONBOARDING_POLL_INTERVAL_MS = 5_000
 const MAX_STREAM_RETRIES = 3
 const STREAM_RETRY_DELAY_MS = 2_000
 const ONBOARDING_CACHE_TTL_MS = 5 * 60 * 1000
+const EARLY_FAILURE_WINDOW_MS = 1000 // 1s window for surgical retries
+const INSTANCE_NONCE = uuidv4()
 
 interface OnboardingData {
 	projectId: string
@@ -50,10 +53,13 @@ class QuotaOrchestrator {
 	private consecutiveErrors = 0
 	private circuitOpenUntil = 0
 	private lastLockoutDuration = 2 * 60 * 1000 // Initial 2m lockout
+	private isInitialized = false
 
-	private readonly maxConcurrent = 1
-	private readonly DEGRADED_THRESHOLD = 2
-	private readonly OPEN_THRESHOLD = 5
+	private readonly STORAGE_KEY = "dietcode:googleQuotaState"
+
+	private _maxConcurrent = 1
+	private _degradedThreshold = 2
+	private _openThreshold = 5
 	private readonly MAX_LOCKOUT_MS = 15 * 60 * 1000
 	private readonly MAX_BACKOFF_MS = 60_000
 
@@ -62,6 +68,7 @@ class QuotaOrchestrator {
 		probeAction: () => Promise<void>,
 		onStatus?: (status: string) => void,
 	): Promise<void> {
+		this.ensureLoaded()
 		this.checkAborted(signal)
 
 		// 1. State Transition Check
@@ -90,7 +97,7 @@ class QuotaOrchestrator {
 		}
 
 		// 4. Concurrency Limit
-		while (this.activeCount >= this.maxConcurrent) {
+		while (this.activeCount >= this._maxConcurrent) {
 			await new Promise((resolve) => setTimeout(resolve, 200))
 			this.checkAborted(signal)
 		}
@@ -118,19 +125,27 @@ class QuotaOrchestrator {
 	recordQuotaEvent(errorDetail: string, status: number, tierId?: string): number {
 		this.consecutiveErrors++
 
-		// Evolution: Graduated State Transitions
-		if (this.state === CircuitState.CLOSED && this.consecutiveErrors >= this.DEGRADED_THRESHOLD) {
+		// Evolution: Graduated State Transitions (Tier-Aware)
+		const isAdvanced = tierId && tierId !== "free-tier"
+		const degradedThreshold = isAdvanced ? this._degradedThreshold * 2 : this._degradedThreshold
+		const openThreshold = isAdvanced ? this._openThreshold * 1.5 : this._openThreshold
+
+		if (this.state === CircuitState.CLOSED && this.consecutiveErrors >= degradedThreshold) {
 			this.state = CircuitState.DEGRADED
 			Logger.warn(`[QUOTA:STATE] System is DEGRADED (${this.consecutiveErrors} errors). Intensity increasing.`)
 		}
 
-		if (this.consecutiveErrors >= this.OPEN_THRESHOLD) {
+		if (this.consecutiveErrors >= openThreshold) {
 			this.state = CircuitState.OPEN
 			this.circuitOpenUntil = Date.now() + this.lastLockoutDuration
 			Logger.error(`[QUOTA:STATE] System is OPEN. Lockout active for ${this.lastLockoutDuration / 1000}s.`)
 			// Graduate lockout for repeated failures
 			this.lastLockoutDuration = Math.min(this.lastLockoutDuration * 2, this.MAX_LOCKOUT_MS)
+			this.persistState()
 		}
+
+		// Phase 4: Adaptive Window Shrink
+		this._maxConcurrent = 1
 
 		const secondsMatch = errorDetail.match(/reset after (\d+)s/i)
 		let waitMs: number
@@ -178,19 +193,61 @@ class QuotaOrchestrator {
 			this.lastLockoutDuration = 2 * 60 * 1000 // Reset cooldown on full success
 		}
 		this.backoffAttempt = 0
+		this.persistState()
+	}
+
+	recordFullStablization(tierId?: string): void {
+		const isAdvanced = tierId && tierId !== "free-tier"
+		this._maxConcurrent = isAdvanced ? 2 : 1
+		Logger.info(`[QUOTA:WINDOW] Strategy expanded to Adaptive-${this._maxConcurrent} slots.`)
 	}
 
 	private recordProbeSuccess(): void {
 		Logger.info("[QUOTA:PROBE] Probe succeeded. System entering stabilization period.")
 		this.state = CircuitState.DEGRADED // Start in degraded to prove stability
-		this.consecutiveErrors = this.DEGRADED_THRESHOLD
+		this.consecutiveErrors = this._degradedThreshold
 	}
 
 	private recordProbeFailure(): void {
-		this.state = CircuitState.OPEN
 		this.circuitOpenUntil = Date.now() + this.lastLockoutDuration
 		Logger.error(`[QUOTA:PROBE] Probe failed. Extending lockout to ${this.lastLockoutDuration / 1000}s.`)
 		this.lastLockoutDuration = Math.min(this.lastLockoutDuration * 2, this.MAX_LOCKOUT_MS)
+		this.persistState()
+	}
+
+	private ensureLoaded(): void {
+		if (this.isInitialized) return
+		try {
+			const stored = StateManager.get().getGlobalStateKey(this.STORAGE_KEY as any) as
+				| {
+						state: CircuitState
+						circuitOpenUntil: number
+						lastLockoutDuration: number
+				  }
+				| undefined
+			if (stored) {
+				this.state = stored.state || CircuitState.CLOSED
+				this.circuitOpenUntil = stored.circuitOpenUntil || 0
+				this.lastLockoutDuration = stored.lastLockoutDuration || 2 * 60 * 1000
+				Logger.info(`[QUOTA:RESUME] Restored persistent lockout state: ${this.state}`)
+			}
+		} catch (e) {
+			Logger.error("[QUOTA:RESUME] Failed to restore state", e)
+		} finally {
+			this.isInitialized = true
+		}
+	}
+
+	private persistState(): void {
+		try {
+			StateManager.get().setGlobalState(this.STORAGE_KEY as any, {
+				state: this.state,
+				circuitOpenUntil: this.circuitOpenUntil,
+				lastLockoutDuration: this.lastLockoutDuration,
+			})
+		} catch (e) {
+			Logger.error("[QUOTA:PERSIST] Failed to save state", e)
+		}
 	}
 
 	private checkAborted(signal: AbortSignal): void {
@@ -211,6 +268,7 @@ export class GooglePersonalHandler implements ApiHandler {
 	private options: GooglePersonalHandlerOptions
 	private abortController?: AbortController
 	private sessionId: string
+	private static onboardingPromise: Promise<OnboardingData> | null = null
 
 	constructor(options: GooglePersonalHandlerOptions) {
 		this.options = options
@@ -222,6 +280,10 @@ export class GooglePersonalHandler implements ApiHandler {
 			...buildExternalBasicHeaders(),
 			"Content-Type": "application/json",
 			Authorization: `Bearer ${token}`,
+			"X-DietCode-Request-ID": uuidv4(),
+			"X-DietCode-Session-ID": this.sessionId,
+			"X-DietCode-Instance-Nonce": INSTANCE_NONCE,
+			"X-DietCode-Source": "VSCODE_EXTENSION",
 		}
 	}
 
@@ -234,65 +296,78 @@ export class GooglePersonalHandler implements ApiHandler {
 			return cachedOnboardingData
 		}
 
-		const baseUrl = this.getBaseUrl()
-		const headers = this.buildHeaders(token)
-
-		Logger.info("[IDENTITY] Syncing Google Personal authority...")
-		const loadResponse = await fetch(`${baseUrl}:loadCodeAssist`, {
-			method: "POST",
-			headers,
-			body: JSON.stringify({
-				metadata: { ideType: "VSCODE", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
-				mode: "HEALTH_CHECK",
-			}),
-		})
-
-		if (!loadResponse.ok) {
-			if (loadResponse.status === 401 || loadResponse.status === 403) {
-				Logger.warn(`[IDENTITY] Google Personal authority rejected (${loadResponse.status}). Invalidating...`)
-				await AuthService.getInstance().signOutProvider("google")
-				throw new Error("Authentication stale. Please re-link Google account.")
-			}
-			throw new Error(`Project sync failed (${loadResponse.status})`)
+		if (GooglePersonalHandler.onboardingPromise) {
+			Logger.info("[IDENTITY] Waiting for concurrent onboarding synchronization...")
+			return await GooglePersonalHandler.onboardingPromise
 		}
 
-		const loadData = await loadResponse.json()
-		if (loadData.cloudaicompanionProject) {
-			cachedOnboardingData = {
-				projectId: loadData.cloudaicompanionProject,
-				tierId: loadData.paidTier?.id ?? loadData.currentTier?.id,
-				tierName: loadData.paidTier?.name ?? loadData.currentTier?.name,
-				cachedAt: Date.now(),
+		GooglePersonalHandler.onboardingPromise = (async () => {
+			try {
+				const baseUrl = this.getBaseUrl()
+				const headers = this.buildHeaders(token)
+
+				Logger.info("[IDENTITY] Syncing Google Personal authority...")
+				const loadResponse = await fetch(`${baseUrl}:loadCodeAssist`, {
+					method: "POST",
+					headers,
+					body: JSON.stringify({
+						metadata: { ideType: "VSCODE", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
+						mode: "HEALTH_CHECK",
+					}),
+				})
+
+				if (!loadResponse.ok) {
+					if (loadResponse.status === 401 || loadResponse.status === 403) {
+						Logger.warn(`[IDENTITY] Google Personal authority rejected (${loadResponse.status}). Invalidating...`)
+						await AuthService.getInstance().signOutProvider("google")
+						throw new Error("Authentication stale. Please re-link Google account.")
+					}
+					throw new Error(`Project sync failed (${loadResponse.status})`)
+				}
+
+				const loadData = await loadResponse.json()
+				if (loadData.cloudaicompanionProject) {
+					cachedOnboardingData = {
+						projectId: loadData.cloudaicompanionProject,
+						tierId: loadData.paidTier?.id ?? loadData.currentTier?.id,
+						tierName: loadData.paidTier?.name ?? loadData.currentTier?.name,
+						cachedAt: Date.now(),
+					}
+					return cachedOnboardingData
+				}
+
+				// Onboarding flow (simplified)
+				const onboardResponse = await fetch(`${baseUrl}:onboardUser`, {
+					method: "POST",
+					headers,
+					body: JSON.stringify({
+						tierId: loadData.allowedTiers?.[0]?.id || "free-tier",
+						metadata: { ideType: "VSCODE", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
+					}),
+				})
+
+				if (!onboardResponse.ok) throw new Error("Onboarding provision failed.")
+				let onboardData = await onboardResponse.json()
+				if (!onboardData.done && onboardData.name) {
+					const startTime = Date.now()
+					while (!onboardData.done) {
+						if (Date.now() - startTime > MAX_ONBOARDING_POLL_MS) throw new Error("Timeout.")
+						await new Promise((r) => setTimeout(r, ONBOARDING_POLL_INTERVAL_MS))
+						onboardData = await (await fetch(`${baseUrl}/${onboardData.name}`, { method: "GET", headers })).json()
+					}
+				}
+
+				const projectId = onboardData.response?.cloudaicompanionProject?.id
+				if (!projectId) throw new Error("No project assigned.")
+
+				cachedOnboardingData = { projectId, cachedAt: Date.now() }
+				return cachedOnboardingData
+			} finally {
+				GooglePersonalHandler.onboardingPromise = null
 			}
-			return cachedOnboardingData
-		}
+		})()
 
-		// Onboarding flow (simplified)
-		const onboardResponse = await fetch(`${baseUrl}:onboardUser`, {
-			method: "POST",
-			headers,
-			body: JSON.stringify({
-				tierId: loadData.allowedTiers?.[0]?.id || "free-tier",
-				metadata: { ideType: "VSCODE", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
-			}),
-		})
-
-		if (!onboardResponse.ok) throw new Error("Onboarding provision failed.")
-		let onboardData = await onboardResponse.json()
-		if (!onboardData.done && onboardData.name) {
-			const startTime = Date.now()
-			while (!onboardData.done) {
-				if (Date.now() - startTime > MAX_ONBOARDING_POLL_MS) throw new Error("Timeout.")
-				await new Promise((r) => setTimeout(r, ONBOARDING_POLL_INTERVAL_MS))
-				onboardData = await (await fetch(`${baseUrl}/${onboardData.name}`, { method: "GET", headers })).json()
-			}
-		}
-
-		const projectId = onboardData.response?.cloudaicompanionProject?.id
-		if (!projectId) throw new Error("No project assigned.")
-
-		cachedOnboardingData = { projectId, cachedAt: Date.now() }
-		return cachedOnboardingData
+		return await GooglePersonalHandler.onboardingPromise
 	}
 
 	async *createMessage(
@@ -325,7 +400,7 @@ export class GooglePersonalHandler implements ApiHandler {
 
 			const _thinkingBudget = this.options.thinkingBudgetTokens ?? 0
 			const thinkingBudget = Math.min(_thinkingBudget, info.thinkingConfig?.maxBudget ?? 65536)
-			let thinkingConfig: any
+			let thinkingConfig: { includeThoughts: boolean; thinkingBudget: number } | undefined
 
 			if (info.thinkingConfig) {
 				const effort = (this.options.reasoningEffort || "").toLowerCase()
@@ -335,7 +410,7 @@ export class GooglePersonalHandler implements ApiHandler {
 			}
 
 			const generationConfig: any = { temperature: thinkingConfig ? 1 : (info.temperature ?? 1), topP: 0.95, topK: 64 }
-			if (thinkingConfig) generationConfig.thinkingConfig = thinkingConfig
+			if (thinkingConfig) (generationConfig as any).thinkingConfig = thinkingConfig
 
 			const request = {
 				model: modelId,
@@ -357,6 +432,7 @@ export class GooglePersonalHandler implements ApiHandler {
 				if (signal.aborted) throw new Error("Aborted.")
 				if (attempt > 0) await new Promise((res) => setTimeout(res, STREAM_RETRY_DELAY_MS * attempt))
 
+				const startTime = Date.now()
 				try {
 					const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(request), signal })
 
@@ -390,6 +466,15 @@ export class GooglePersonalHandler implements ApiHandler {
 
 						const waitMs = orchestrator.recordQuotaEvent(errorDetail, response.status, onboardingData.tierId)
 
+						// Phase 4: Surgical Early-Failure Retry
+						const flowDuration = Date.now() - startTime
+						if (flowDuration < EARLY_FAILURE_WINDOW_MS && attempt < MAX_STREAM_RETRIES) {
+							Logger.info(`[QUOTA:SURGERY] Early failure detected (${flowDuration}ms). Performing quiet-retry.`)
+							// Decrement consecutive errors to prevent circuit tripping for transient handshake issues
+							;(orchestrator as any).consecutiveErrors = Math.max(0, (orchestrator as any).consecutiveErrors - 1)
+							continue
+						}
+
 						if ((response.status === 429 || response.status >= 500) && attempt < MAX_STREAM_RETRIES) {
 							if (response.status === 429) {
 								this.options.onStatus?.(`Rate limited. Waiting ${Math.ceil(waitMs / 1000)}s...`)
@@ -403,6 +488,7 @@ export class GooglePersonalHandler implements ApiHandler {
 
 					// V20 Healing Step
 					orchestrator.recordSuccess()
+					orchestrator.recordFullStablization(onboardingData.tierId)
 					if (!response.body) throw new Error("Empty body.")
 
 					const reader = response.body.getReader()
@@ -454,32 +540,48 @@ export class GooglePersonalHandler implements ApiHandler {
 
 	private *parseSSEChunk(chunk: string): Generator<any> {
 		try {
+			// Phase 3 Hardening: Robust chunk reassembly and segment detection
 			const segments = chunk.split(/\n(?={)/)
 			for (const segment of segments) {
-				const json = JSON.parse(segment)
-				const vertexResponse = json.response || json
-				if (vertexResponse?.candidates) {
-					const parts = vertexResponse.candidates[0]?.content?.parts || []
-					for (const part of parts) {
-						if (part.thought && part.text) {
-							yield { type: "reasoning", reasoning: part.text, id: json.traceId, signature: part.thoughtSignature }
-						} else if (part.text) {
-							yield { type: "text", text: part.text, id: json.traceId, signature: part.thoughtSignature }
+				const trimmed = segment.trim()
+				if (!trimmed || trimmed === "[DONE]") continue
+
+				try {
+					const json = JSON.parse(trimmed)
+					const vertexResponse = json.response || json
+					if (vertexResponse?.candidates) {
+						const parts = vertexResponse.candidates[0]?.content?.parts || []
+						for (const part of parts) {
+							if (part.thought && part.text) {
+								yield {
+									type: "reasoning",
+									reasoning: part.text,
+									id: json.traceId,
+									signature: part.thoughtSignature,
+								}
+							} else if (part.text) {
+								yield { type: "text", text: part.text, id: json.traceId, signature: part.thoughtSignature }
+							}
+						}
+						if (vertexResponse.usageMetadata) {
+							const usage = vertexResponse.usageMetadata
+							yield {
+								type: "usage",
+								inputTokens: usage.promptTokenCount ?? 0,
+								outputTokens: usage.candidatesTokenCount ?? 0,
+								totalCost: 0,
+							}
 						}
 					}
-					if (vertexResponse.usageMetadata) {
-						const usage = vertexResponse.usageMetadata
-						yield {
-							type: "usage",
-							inputTokens: usage.promptTokenCount ?? 0,
-							outputTokens: usage.candidatesTokenCount ?? 0,
-							totalCost: 0,
-						}
-					}
+				} catch (parseError) {
+					Logger.error("[SSE:PARSE_FAIL] Malformed JSON segment detected", {
+						segment: trimmed.slice(0, 50),
+						error: parseError,
+					})
 				}
 			}
-		} catch (e) {
-			Logger.error("[SSE:PARSE_FAIL]", { chunk: chunk.slice(0, 100) })
+		} catch (error) {
+			Logger.error("[SSE:UNKNOWN_FAIL]", { chunk: chunk.slice(0, 100), error })
 		}
 	}
 
@@ -496,4 +598,44 @@ export class GooglePersonalHandler implements ApiHandler {
 
 export function clearGooglePersonalOnboardingCache() {
 	cachedOnboardingData = null
+}
+
+let healthCheckTimer: NodeJS.Timeout | null = null
+const HEALTH_CHECK_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
+
+/**
+ * Phase 2: Pre-flight Health Probe
+ * Periodically verifies the Google token's authority in the background.
+ */
+export function startGooglePersonalHealthCheck() {
+	if (healthCheckTimer) return
+
+	const performCheck = async () => {
+		try {
+			const token = await AuthService.getInstance().getAuthToken("google")
+			if (!token) return
+
+			Logger.info("[IDENTITY] Running background Google Personal health probe...")
+			const handler = new GooglePersonalHandler({ apiModelId: geminiDefaultModelId })
+			// This will trigger a refresh or invalidation if needed
+			await handler.getModel() // Dry run validation
+			// We call ensureOnboarded to check the actual API authority
+			await (handler as any).ensureOnboarded(token)
+			Logger.info("[IDENTITY] Google Personal health probe: SUCCESS")
+		} catch (error: any) {
+			Logger.warn(`[IDENTITY] Google Personal health probe: FAILED (${error.message})`)
+			// Error handling in ensureOnboarded will have already triggered signOutProvider if it was a 401/403
+		}
+	}
+
+	// Initial check after a short delay
+	setTimeout(performCheck, 10_000)
+	healthCheckTimer = setInterval(performCheck, HEALTH_CHECK_INTERVAL_MS)
+}
+
+export function stopGooglePersonalHealthCheck() {
+	if (healthCheckTimer) {
+		clearInterval(healthCheckTimer)
+		healthCheckTimer = null
+	}
 }

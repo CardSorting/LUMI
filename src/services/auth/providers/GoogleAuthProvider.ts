@@ -4,7 +4,7 @@ import { type Credentials, OAuth2Client } from "google-auth-library"
 import { Controller } from "@/core/controller"
 import { AuthHandler } from "@/hosts/external/AuthHandler"
 import { Logger } from "@/shared/services/Logger"
-import { AuthInvalidTokenError } from "../../error/DietCodeError"
+import { AuthInvalidGrantError, AuthInvalidTokenError } from "../../error/DietCodeError"
 import { type DietCodeAccountUserInfo, type DietCodeAuthInfo } from "../AuthService"
 import { parseJwtPayload } from "../oca/utils/utils"
 import { IAuthProvider } from "./IAuthProvider"
@@ -41,6 +41,8 @@ export class GoogleAuthProvider implements IAuthProvider {
 	readonly name = "google"
 	readonly tokenPrefix = "google"
 	private _client: OAuth2Client
+	private _refreshPromise: Promise<DietCodeAuthInfo | null> | null = null
+	private _rotationHistory: number[] = []
 
 	constructor() {
 		this._client = new OAuth2Client({
@@ -101,6 +103,8 @@ export class GoogleAuthProvider implements IAuthProvider {
 				userInfo,
 				provider: this.name,
 				startedAt: Date.now(),
+				lastRefreshedAt: Date.now(),
+				rotationCount: 0,
 			}
 
 			// Store the tokens
@@ -116,7 +120,8 @@ export class GoogleAuthProvider implements IAuthProvider {
 	async shouldRefreshIdToken(_refreshToken: string, expiresAt?: number): Promise<boolean> {
 		if (!expiresAt) return true
 		const now = Date.now() / 1000
-		return expiresAt < now + 300 // Refresh if expiring in less than 5 minutes
+		// Increase buffer to 15 minutes to aggressively handle clock skew and network jitter
+		return expiresAt < now + 900
 	}
 
 	async refreshToken(refreshToken: string, storedData: DietCodeAuthInfo): Promise<DietCodeAuthInfo> {
@@ -132,6 +137,8 @@ export class GoogleAuthProvider implements IAuthProvider {
 				idToken: tokens.access_token || tokens.id_token || "",
 				refreshToken: tokens.refresh_token || refreshToken,
 				expiresAt: tokens.expiry_date ? tokens.expiry_date / 1000 : Date.now() / 1000 + 3600,
+				lastRefreshedAt: Date.now(),
+				rotationCount: (storedData.rotationCount ?? 0) + 1,
 			}
 
 			return authInfo
@@ -146,6 +153,9 @@ export class GoogleAuthProvider implements IAuthProvider {
 				message.includes("invalid_grant") || message.includes("invalid_client") || status === 400 || status === 401
 
 			if (isPermanent) {
+				if (message.includes("invalid_grant")) {
+					throw new AuthInvalidGrantError(`Google account revoked: ${err.message}`)
+				}
 				throw new AuthInvalidTokenError(`Google refresh failed: ${err.message}`)
 			}
 			throw error
@@ -165,9 +175,15 @@ export class GoogleAuthProvider implements IAuthProvider {
 		try {
 			const authInfo: DietCodeAuthInfo = JSON.parse(stored)
 
-			// CRITICAL: Self-healing architecture for legacy tokens.
-			// Legacy auth incorrectly stored JWT ID Tokens (starting with eyJ) instead of OAuth Access Tokens.
-			// If detected, force a refresh to hydrate the correct access_token credential.
+			// CRITICAL: Concurrency Locking.
+			// Multiple components may request a token simultaneously.
+			// If a refresh is already in progress, wait for it to avoid token rotation conflicts.
+			if (this._refreshPromise) {
+				Logger.info("GoogleAuthProvider: Waiting for existing refresh operation...")
+				return await this._refreshPromise
+			}
+
+			// Legacy auth incorrectly stored JWT ID Tokens instead of OAuth Access Tokens.
 			const isLegacyToken = authInfo.idToken?.startsWith("eyJ")
 
 			const needsRefresh =
@@ -176,35 +192,53 @@ export class GoogleAuthProvider implements IAuthProvider {
 
 			if (needsRefresh) {
 				if (!authInfo.refreshToken) {
-					// Irrecoverable state without a refresh_token, cleanly purge to force a new OAuth cycle
 					Logger.warn("GoogleAuthProvider: No refresh_token available, purging stale auth")
 					controller.stateManager.setSecret("dietcode:googleAuthInfo", undefined)
 					return null
 				}
 
-				Logger.info("GoogleAuthProvider: Refreshing access token", {
-					isLegacy: isLegacyToken,
-					expiresAt: authInfo.expiresAt,
-				})
+				this._refreshPromise = (async () => {
+					try {
+						Logger.info("GoogleAuthProvider: Refreshing access token", {
+							isLegacy: isLegacyToken,
+							expiresAt: authInfo.expiresAt,
+						})
 
-				const updated = await this.refreshToken(authInfo.refreshToken, authInfo)
+						// Phase 4: Velocity Guard logic
+						const now = Date.now()
+						this._rotationHistory = this._rotationHistory.filter((t) => now - t < 60000)
+						this._rotationHistory.push(now)
 
-				// CRITICAL: Persist the refreshed token to storage so it survives extension restarts.
-				// Without this, a refreshed token is lost on window reload, causing re-auth loops.
-				controller.stateManager.setSecret("dietcode:googleAuthInfo", JSON.stringify(updated))
-				return updated
+						if (this._rotationHistory.length > 5) {
+							Logger.error("GoogleAuthProvider: Refresh Velocity Guard triggered. High frequency auth detected.")
+							throw new AuthInvalidTokenError(
+								"Excessive authentication frequency detected. Please try again in 1 minute.",
+							)
+						}
+
+						const updated = await this.refreshToken(authInfo.refreshToken!, authInfo)
+						controller.stateManager.setSecret("dietcode:googleAuthInfo", JSON.stringify(updated))
+						return updated
+					} catch (error) {
+						// Classification handled in refreshToken()
+						if (error instanceof AuthInvalidTokenError || error instanceof SyntaxError) {
+							Logger.warn("GoogleAuthProvider: Purging invalid Google auth credentials")
+							controller.stateManager.setSecret("dietcode:googleAuthInfo", undefined)
+						}
+						// Let the error propagate up to the caller
+						throw error
+					} finally {
+						this._refreshPromise = null
+					}
+				})()
+
+				return await this._refreshPromise
 			}
 
 			return authInfo
 		} catch (error) {
+			if (error instanceof AuthInvalidTokenError) return null
 			Logger.error("GoogleAuthProvider: Error restoring auth info:", error)
-			// ONLY purge if it's a permanent authentication failure or corrupted storage.
-			// Transient network errors during refresh should NOT cause a logout.
-			if (error instanceof AuthInvalidTokenError || error instanceof SyntaxError) {
-				Logger.warn("GoogleAuthProvider: Purging invalid or corrupted Google auth credentials")
-				controller.stateManager.setSecret("dietcode:googleAuthInfo", undefined)
-			}
-			// If it's a network error, we return null but DON'T purge, so restoration can be retried.
 			return null
 		}
 	}
