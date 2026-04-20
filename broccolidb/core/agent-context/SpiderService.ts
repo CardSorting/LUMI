@@ -4,6 +4,8 @@ import { Repository } from '../repository.js';
 import { StructuralDiscoveryService } from './StructuralDiscoveryService.js';
 import { TaskMutex } from '../mutex.js';
 import type { ServiceContext } from './types.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 export class SpiderService {
   private engine: SpiderEngine;
@@ -86,6 +88,8 @@ export class SpiderService {
       const entropy = entropyReport.score;
       const violations = this.engine.getViolations();
       const mermaid = this.engine.toMermaid();
+
+      this.engine.recycleProject();
 
       return { entropy, violations, mermaid };
     } catch (e) {
@@ -227,9 +231,15 @@ export class SpiderService {
 
             if (changedFiles.length > 0) {
                 Logger.info(`[SpiderService] ⚙️  Processing ${changedFiles.length} changed files...`);
-                for (const filePath of changedFiles) {
+                for (let i = 0; i < changedFiles.length; i++) {
+                    const filePath = changedFiles[i];
                     const content = await repo.files().readFile(branchName, filePath, { skipIgnore: true });
                     this.engine.updateNode(filePath, content.content);
+                    
+                    // Memory Management: Recycle every 50 files during incremental update
+                    if (i > 0 && i % 50 === 0) {
+                        this.engine.recycleProject();
+                    }
                 }
             }
 
@@ -265,6 +275,11 @@ export class SpiderService {
           })
         );
         auditFiles.push(...(results.filter(Boolean) as { filePath: string; content: string }[]));
+        
+        // Memory Management: Recycle project after batch reading to clear AST pressure
+        if (i > 0 && i % 100 === 0) {
+            this.engine.recycleProject();
+        }
       }
 
       this.discovery.clearCache();
@@ -286,6 +301,9 @@ export class SpiderService {
       Logger.info(
         `[SpiderService] Graph bootstrapped with ${auditFiles.length} files in ${duration}ms.`
       );
+      
+      // Level 9 Integrity Guard: Ghost Node Verification
+      await this.verifyGraphIntegrity(true);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       Logger.error(`[SpiderService] Bootstrap failed: ${msg}`);
@@ -364,5 +382,34 @@ export class SpiderService {
       layer: 'domain',
     });
     return kbId;
+  }
+
+  /**
+   * Level 9 integrity guard.
+   * Verifies that every node in the graph exists on disk.
+   * Orphaned entries are pruned to prevent "Structural Drift".
+   */
+  async verifyGraphIntegrity(silent: boolean = false): Promise<{ pruned: number }> {
+      const startTime = Date.now();
+      let prunedCount = 0;
+      const nodes = Array.from(this.engine.nodes.values());
+      
+      for (const node of nodes) {
+          const fullPath = path.resolve(this.ctx.workspace.workspacePath, node.path);
+          if (!fs.existsSync(fullPath)) {
+              this.engine.removeNode(node.path);
+              prunedCount++;
+          }
+      }
+
+      if (prunedCount > 0) {
+          const db = this.ctx.workspace.getDb() as any;
+          if (db.reportIntegrityIssue) {
+              db.reportIntegrityIssue('orphanedNode', prunedCount);
+          }
+          Logger.info(`[SpiderService] ✅ Integrity check complete. Pruned ${prunedCount} ghost nodes in ${Date.now() - startTime}ms.`);
+      }
+      
+      return { pruned: prunedCount };
   }
 }

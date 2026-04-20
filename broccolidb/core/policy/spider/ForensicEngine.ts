@@ -20,6 +20,7 @@ export class ForensicEngine {
                            this.project.addSourceFileAtPath(targetPath);
         if (!sourceFile) return results;
 
+        // 1. Direct Declarations
         sourceFile.getClasses().filter(c => c.isExported()).forEach(c => results.concrete.push(c.getName()!));
         sourceFile.getFunctions().filter(f => f.isExported()).forEach(f => results.concrete.push(f.getName()!));
         sourceFile.getVariableStatements().filter(v => v.isExported()).forEach(v => {
@@ -27,6 +28,26 @@ export class ForensicEngine {
         });
         sourceFile.getInterfaces().filter(i => i.isExported()).forEach(i => results.abstract.push(i.getName()!));
         sourceFile.getTypeAliases().filter(t => t.isExported()).forEach(t => results.abstract.push(t.getName()!));
+
+        // 2. Named Exports: export { a, b as c }
+        sourceFile.getExportDeclarations().forEach(ed => {
+            ed.getNamedExports().forEach(ne => {
+                const name = ne.getName();
+                results.concrete.push(name); // Treating named exports as concrete for registry purposes
+            });
+            
+            // 3. Namespace Exports: export * as ns from './bar'
+            const namespaceExport = ed.getNamespaceExport();
+            if (namespaceExport) {
+                results.concrete.push(namespaceExport.getName());
+            }
+        });
+
+        // 4. Default Export
+        const defaultExport = sourceFile.getDefaultExportSymbol();
+        if (defaultExport) {
+            results.concrete.push('default');
+        }
 
         return results;
     } catch {

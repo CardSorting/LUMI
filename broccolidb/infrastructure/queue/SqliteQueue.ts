@@ -60,6 +60,7 @@ export class SqliteQueue<T> {
       baseRetryDelayMs = 1000,
     } = options;
 
+    this.wakeUpEmitter.setMaxListeners(100);
     this.visibilityTimeoutMs = visibilityTimeoutMs;
     this.pruneDoneAgeMs = pruneDoneAgeMs;
     this.defaultMaxAttempts = defaultMaxAttempts;
@@ -553,11 +554,18 @@ export class SqliteQueue<T> {
             // Wait for in-flight jobs to complete
             await Promise.race(jobPromises);
           } else {
-            // Nothing in flight, wait for new jobs
-            await Promise.race([
-              new Promise((resolve) => setTimeout(resolve, pollIntervalMs)),
-              new Promise((resolve) => this.wakeUpEmitter.once('enqueue', resolve)),
-            ]);
+            // Nothing in flight, wait for new jobs with explicit listener cleanup
+            await new Promise((resolve) => {
+              const onEnqueue = () => {
+                clearTimeout(timeout);
+                resolve(null);
+              };
+              const timeout = setTimeout(() => {
+                this.wakeUpEmitter.removeListener('enqueue', onEnqueue);
+                resolve(null);
+              }, pollIntervalMs);
+              this.wakeUpEmitter.once('enqueue', onEnqueue);
+            });
           }
           continue;
         }
@@ -731,10 +739,17 @@ export class SqliteQueue<T> {
           if (batchPromises.size > 0) {
             await Promise.race(batchPromises);
           } else {
-            await Promise.race([
-              new Promise((resolve) => setTimeout(resolve, pollIntervalMs)),
-              new Promise((resolve) => this.wakeUpEmitter.once('enqueue', resolve)),
-            ]);
+            await new Promise((resolve) => {
+              const onEnqueue = () => {
+                clearTimeout(timeout);
+                resolve(null);
+              };
+              const timeout = setTimeout(() => {
+                this.wakeUpEmitter.removeListener('enqueue', onEnqueue);
+                resolve(null);
+              }, pollIntervalMs);
+              this.wakeUpEmitter.once('enqueue', onEnqueue);
+            });
           }
           continue;
         }

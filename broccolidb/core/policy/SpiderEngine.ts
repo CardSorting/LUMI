@@ -367,13 +367,41 @@ export class SpiderEngine {
   }
 
   public serialize(): string {
-    return JSON.stringify(Array.from(this.nodes.entries()).map(([k, v]) => [k, { ...v, imports: Array.from(v.imports), resolvedImports: Array.from(v.resolvedImports.entries()) }]));
+    return JSON.stringify({
+      nodes: Array.from(this.nodes.entries()).map(([k, v]) => [
+        k,
+        {
+          ...v,
+          imports: Array.from(v.imports),
+          resolvedImports: Array.from(v.resolvedImports.entries()),
+        },
+      ]),
+      symbols: this.symbols.serialize(),
+    });
   }
 
   public deserialize(data: string) {
     try {
-      const entries = JSON.parse(data);
-      this.nodes = new Map(entries.map(([k, v]: [string, any]) => [k, { ...v, imports: new Set(v.imports), resolvedImports: new Map(v.resolvedImports) }]));
+      const payload = JSON.parse(data);
+      // Backwards compatibility for pre-v15.1 snapshots
+      const entries = Array.isArray(payload) ? payload : payload.nodes;
+      const symbols = !Array.isArray(payload) ? payload.symbols : null;
+
+      this.nodes = new Map(
+        entries.map(([k, v]: [string, any]) => [
+          k,
+          {
+            ...v,
+            imports: new Set(v.imports),
+            resolvedImports: new Map(v.resolvedImports),
+          },
+        ])
+      );
+
+      if (symbols) {
+        this.symbols.deserialize(symbols);
+      }
+
       this.version++;
       this.resolver = new PathResolver(this.cwd, this.nodes);
     } catch (e) {

@@ -26,10 +26,14 @@ export class PersistenceManager {
         k, 
         { ...v, imports: Array.from(v.imports), resolvedImports: Array.from(v.resolvedImports) }
     ]);
-    
+
     // We use a binary-wrapped JSON payload for the V15 facade, 
     // ensuring we can add true binary protocol buffers later while maintaining the .spiderbin extension.
-    const payload = Buffer.from(JSON.stringify(entries), 'utf-8');
+    const payload = Buffer.from(JSON.stringify({
+        nodes: entries,
+        // We don't have direct access to symbols here without changing the signature,
+        // but this manager is mostly used for node persistence in the engine's local cache.
+    }), 'utf-8');
     const header = Buffer.alloc(8);
     header.writeUInt32BE(0x53504944, 0); // 'SPID' Magic Number
     header.writeUInt32BE(payload.length, 4);
@@ -55,7 +59,8 @@ export class PersistenceManager {
 
       const payloadLength = buffer.readUInt32BE(4);
       const payload = buffer.subarray(8, 8 + payloadLength).toString('utf-8');
-      const entries = JSON.parse(payload);
+      const data = JSON.parse(payload);
+      const entries = Array.isArray(data) ? data : data.nodes;
       
       return new Map(entries.map(([k, v]: [string, any]) => [
           k, 

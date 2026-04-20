@@ -73,4 +73,26 @@ export class SymbolRegistry {
       this.providers.clear();
       this.exportsByFile.clear();
   }
+
+  public serialize(): string {
+    const exports = Array.from(this.exportsByFile.entries());
+    return JSON.stringify(exports);
+  }
+
+  public deserialize(data: string) {
+    try {
+      const exports = JSON.parse(data);
+      this.clear();
+      for (const [filePath, providers] of exports) {
+          this.exportsByFile.set(filePath, providers);
+          for (const p of providers) {
+              const existing = this.providers.get(p.symbolName) || new Set();
+              existing.add(filePath);
+              this.providers.set(p.symbolName, existing);
+          }
+      }
+    } catch (e) {
+      console.error('[SymbolRegistry] Deserialization failed:', e);
+    }
+  }
 }
