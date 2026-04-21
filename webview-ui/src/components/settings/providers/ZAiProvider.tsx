@@ -35,20 +35,102 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 	)
 
 	return (
-		<div>
+		<div className="flex flex-col gap-2">
+			<div
+				style={{
+					background: "var(--vscode-editor-inactiveSelectionBackground)",
+					border: "1px solid var(--vscode-textLink-foreground)",
+					borderRadius: "6px",
+					padding: "16px",
+					marginBottom: "12px",
+					display: "flex",
+					flexDirection: "column",
+					gap: "10px",
+					position: "relative",
+					overflow: "hidden",
+				}}>
+				<div
+					style={{
+						position: "absolute",
+						top: "-15px",
+						right: "-15px",
+						fontSize: "60px",
+						opacity: 0.05,
+						transform: "rotate(20deg)",
+						pointerEvents: "none",
+					}}>
+					🚀
+				</div>
+				<div
+					style={{
+						display: "flex",
+						alignItems: "center",
+						gap: "8px",
+						fontWeight: "bold",
+						fontSize: "14px",
+						color: "var(--vscode-textLink-foreground)",
+					}}>
+					Power Up with GLM-5 & DietCode
+				</div>
+				<div style={{ fontSize: "13px", lineHeight: "1.5" }}>
+					Unlock the full potential of Z AI's latest models with the <b>GLM Coding Plan</b>—engineered for elite
+					performance and agentic workflows.
+				</div>
+				<ul
+					style={{
+						margin: "4px 0",
+						paddingLeft: "20px",
+						fontSize: "12px",
+						display: "flex",
+						flexDirection: "column",
+						gap: "4px",
+						opacity: 0.9,
+					}}>
+					<li>
+						<b>Unlimited Access</b> to GLM-5.1 & GLM-5-Turbo
+					</li>
+					<li>
+						<b>Premium Agentic Capabilities</b> optimized for DietCode
+					</li>
+					<li>
+						<b>Special Partnership Pricing</b> starting at just <b>$18/month</b>
+					</li>
+				</ul>
+				<a
+					href="https://z.ai/subscribe?ic=3LBVSDNHAW"
+					rel="noopener noreferrer"
+					style={{
+						display: "inline-flex",
+						alignItems: "center",
+						justifyContent: "center",
+						width: "fit-content",
+						padding: "6px 14px",
+						backgroundColor: "var(--vscode-button-background)",
+						color: "var(--vscode-button-foreground)",
+						textDecoration: "none",
+						borderRadius: "3px",
+						fontSize: "13px",
+						fontWeight: "600",
+						marginTop: "6px",
+					}}
+					target="_blank">
+					Claim Your Exclusive Offer
+				</a>
+			</div>
 			<DropdownContainer className="dropdown-container" style={{ position: "inherit" }}>
 				<label htmlFor="zai-entrypoint">
 					<span style={{ fontWeight: 500, marginTop: 5 }}>Z AI Entrypoint</span>
 				</label>
 				<VSCodeDropdown
 					id="zai-entrypoint"
-					onChange={(e) => handleFieldChange("zaiApiLine", (e.target as any).value)}
+					onChange={(e) => handleFieldChange("zaiApiLine", (e.target as HTMLSelectElement).value)}
 					style={{
 						minWidth: 130,
 						position: "relative",
 					}}
 					value={apiConfiguration?.zaiApiLine || "international"}>
 					<VSCodeOption value="international">api.z.ai</VSCodeOption>
+					<VSCodeOption value="coding">api.z.ai (Coding)</VSCodeOption>
 					<VSCodeOption value="china">open.bigmodel.cn</VSCodeOption>
 				</VSCodeDropdown>
 			</DropdownContainer>
@@ -77,10 +159,10 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 					<ModelSelector
 						label="Model"
 						models={zaiModels}
-						onChange={(e: any) =>
+						onChange={(e) =>
 							handleModeFieldChange(
 								{ plan: "planModeApiModelId", act: "actModeApiModelId" },
-								e.target.value,
+								(e.target as HTMLSelectElement).value,
 								currentMode,
 							)
 						}

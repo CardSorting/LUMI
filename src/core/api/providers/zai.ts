@@ -41,8 +41,14 @@ export class ZAiHandler implements ApiHandler {
 				throw new Error("Z AI API key is required")
 			}
 			try {
+				let baseURL = "https://api.z.ai/api/paas/v4"
+				if (this.options.zaiApiLine === "china") {
+					baseURL = "https://open.bigmodel.cn/api/paas/v4"
+				} else if (this.options.zaiApiLine === "coding") {
+					baseURL = "https://api.z.ai/api/coding/paas/v4"
+				}
 				this.client = createOpenAIClient({
-					baseURL: this.useChinaApi() ? "https://open.bigmodel.cn/api/paas/v4" : "https://api.z.ai/api/paas/v4",
+					baseURL,
 					apiKey: this.options.zaiApiKey,
 					defaultHeaders: {
 						"HTTP-Referer": "https://dietcode.bot",
