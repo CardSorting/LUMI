@@ -516,10 +516,116 @@ export class SpiderEngine {
 		// The substrate now relies 100% on physical build/lint diagnostics to trigger heals.
 		// This prevents agentic spiraling from hypothetical errors.
 
-		// V45: Forensic Pruning (Filter out suppressed false positives)
-
-		// V45: Forensic Pruning (Filter out suppressed false positives)
 		return violations.filter((v) => !this.suppressions.has(`${v.id}:${v.path}:${v.message}`))
+	}
+
+	/**
+	 * V204: Non-Blocking Integrity Advisories (TIA).
+	 * Provides structural guidance without triggering a policy block or metabolic spiral.
+	 */
+	public getIntegrityAdvisories(filePath?: string): SpiderViolation[] {
+		const advisories: SpiderViolation[] = []
+
+		// V204: Filter nodes if a specific path is requested
+		let nodesToScan = this.nodes
+		if (filePath) {
+			const normPath = this.resolver.normalizePath(filePath)
+			const node = this.nodes.get(normPath)
+			if (node) {
+				nodesToScan = new Map([[normPath, node]])
+			} else {
+				return []
+			}
+		}
+
+		const ghosts = this.forensic.findGhosts(nodesToScan, this.sessionBuffer)
+		for (const ghostMsg of ghosts) {
+			const id = ghostMsg.includes("GHOST FILE") ? "SPI-101" : "SPI-102"
+			const pathMatch = ghostMsg.match(/GHOST (?:FILE|SYMBOL): (.*?) ->/)
+			const path = pathMatch ? pathMatch[1] : "unknown"
+
+			// V204: Fuzzy Enrichment
+			let enrichedMessage = ghostMsg
+			if (id === "SPI-102") {
+				const symbol = ghostMsg.match(/SYMBOL: (.*?) ->/)?.[1]
+				if (symbol) {
+					const providers = this.findGlobalProviders(symbol)
+					if (providers.length > 0) {
+						const bestProvider = providers[0]
+						const alias = this.getBestAlias(bestProvider)
+						enrichedMessage += ` (Found in: \`${alias}\`. Suggestion: \`import { ${symbol} } from "${alias}"\`)`
+					} else {
+						const similarities = this.findSimilarSymbols(symbol)
+						if (similarities.length > 0) {
+							enrichedMessage += ` (Did you mean: ${similarities.join(", ")}?)`
+						}
+					}
+				}
+			}
+
+			advisories.push({
+				id,
+				severity: "WARN",
+				path,
+				message: enrichedMessage,
+			})
+		}
+
+		// V16: Identification of Deadwood (Unused Exports)
+		// PRODUCTION HARDENING: Move to advisory to prevent metabolic spirals.
+		const unused = this.forensic.findUnusedExports(nodesToScan)
+		for (const u of unused) {
+			const pathMatch = u.match(/UNUSED EXPORT: (.*?) ->/)
+			const path = pathMatch ? pathMatch[1] : "unknown"
+			advisories.push({
+				id: "SPI-103",
+				severity: "INFO",
+				path,
+				message: u,
+			})
+		}
+
+		// V204: Circular Dependency Detection.
+		// Identify cycles involving the target file to prevent substrate instability.
+		const cycles = this.metrics.detectCycles(this.nodes)
+		for (const cycle of cycles) {
+			if (filePath && !cycle.includes(this.resolver.normalizePath(filePath))) continue
+
+			const cycleStr = cycle.map((p) => path.basename(p)).join(" -> ")
+			advisories.push({
+				id: "SPI-104",
+				severity: "WARN",
+				path: cycle[0],
+				message: `Circular dependency detected: ${cycleStr}. Cycles lead to runtime 'undefined' symbols and fragile logic.`,
+			})
+		}
+
+		// V204: Substrate Vibration Detection.
+		// Warn about breaking changes in high-coupling nodes.
+		if (filePath) {
+			const normPath = this.resolver.normalizePath(filePath)
+			const node = this.nodes.get(normPath)
+			if (node && node.afferentCoupling > 5) {
+				// We check the session buffer for the NEW content if available
+				const newContent = this.sessionBuffer.get(normPath)
+				if (newContent) {
+					const sourceFile = ts.createSourceFile(normPath, newContent, ts.ScriptTarget.Latest, true)
+					const newExports = this.extractExports(sourceFile)
+					const removed = node.exports.filter((e) => !newExports.includes(e))
+
+					if (removed.length > 0) {
+						advisories.push({
+							id: "SPI-105",
+							severity: "WARN",
+							path: normPath,
+							message: `SUBSTRATE VIBRATION: You are removing/renaming ${removed.length} export(s) in a high-coupling file (${node.afferentCoupling} dependents). This WILL break dependents project-wide.`,
+						})
+					}
+				}
+			}
+		}
+
+		return advisories
 	}
 
 	public addSuppression(violationId: string, path: string, message: string) {
@@ -549,6 +655,57 @@ export class SpiderEngine {
 
 	public async takeSnapshot(): Promise<SpiderSnapshot> {
 		return this.persistence.takeSnapshot(this.nodes)
+	}
+
+	/**
+	 * V204: Fuzzy Forensic Sensing.
+	 * Finds symbols in the substrate that are lexicographically similar to the target.
+	 */
+	/**
+	 * V204: Global Forensic Mapping.
+	 * Locates all files that export a specific symbol.
+	 */
+	public findGlobalProviders(symbol: string): string[] {
+		const providers: string[] = []
+		for (const node of this.nodes.values()) {
+			if (node.exports.includes(symbol)) {
+				providers.push(node.path)
+			}
+		}
+		return providers
+	}
+
+	/**
+	 * V204: Fuzzy Forensic Sensing.
+	 * Finds symbols in the substrate that are lexicographically similar to the target.
+	 */
+	public findSimilarSymbols(symbol: string, limit = 3): string[] {
+		const allSymbols = new Set<string>()
+		for (const node of this.nodes.values()) {
+			for (const exp of node.exports) allSymbols.add(exp)
+		}
+
+		const lev = (a: string, b: string): number => {
+			if (a.length === 0) return b.length
+			if (b.length === 0) return a.length
+			const matrix = []
+			for (let i = 0; i <= b.length; i++) matrix[i] = [i]
+			for (let j = 0; j <= a.length; j++) matrix[0][j] = j
+			for (let i = 1; i <= b.length; i++) {
+				for (let j = 1; j <= a.length; j++) {
+					if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1]
+					else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1)
+				}
+			}
+			return matrix[b.length][a.length]
+		}
+
+		return Array.from(allSymbols)
+			.map((s) => ({ symbol: s, distance: lev(symbol, s) }))
+			.filter((item) => item.distance <= 3) // Only suggest close matches
+			.sort((a, b) => a.distance - b.distance)
+			.slice(0, limit)
+			.map((item) => item.symbol)
 	}
 
 	public async getLatestSnapshot(): Promise<SpiderSnapshot | null> {
@@ -717,6 +874,10 @@ export class SpiderEngine {
 
 	public normalizePath(filePath: string): string {
 		return this.resolver.normalizePath(filePath)
+	}
+
+	public getBestAlias(filePath: string): string {
+		return this.resolver.getBestAlias(filePath)
 	}
 
 	public resolveLayer(pathOrSource: string, specifier?: string): string | null {

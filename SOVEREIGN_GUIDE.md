@@ -39,13 +39,14 @@ npx ts-node src/scripts/align-sovereignty.ts
 
 ## 🛰️ Agent Intelligence Features
 
-### 1. Active Surveillance (Spider Engine V210)
-Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by a **Metabolic Sovereign** industrial suite:
+### 1. Active Surveillance & TIA (Spider Engine V204+)
+Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by the **Integrity Advisory Protocol (TIA)**:
+- **Non-Blocking Forensics**: Surfaces structural "smells" (ghost symbols, brittle paths, circularity) as passive `💡 [ADVISORY]` hints. This ensures peak metabolic velocity by providing guidance without tool rejections.
+- **Global Provider Mapping**: Deterministically identifies the canonical location of missing symbols across the entire substrate and provides ready-to-use alias-based import suggestions.
+- **Fuzzy Forensic Sensing**: Identifies lexicographical similarity to correct typos (e.g., "Did you mean: `MyService`?") project-wide.
+- **Substrate Vibration Alerting**: Monitors breaking changes in high-coupling modules (`dependents > 5`). Renaming or removing exports triggers a `🚨 [SUBSTRATE_VIBRATION]` warning to manage "Blast Radius."
+- **Proactive Materialization**: Synthesizes ready-to-use TypeScript boilerplates (Classes, Interfaces, Functions) for missing symbols directly in the tool response.
 - **Zero-Inflation Sensing**: Architectural audits are performed with zero redundant collection allocations, ensuring a stationary heap footprint.
-- **Forensic Realism**: Deterministically detects "ghost symbols" via physical AST sensing across the project graph.
-- **Metrics Engine**: Real-time evaluation of Logic Density, I/O Entropy, and **AST Complexity Scaling**.
-- **Generational GC**: Turn-based TTL autonomously purges stagnant forensic caches every 5 turns.
-- **Metabolic Pulse**: Inter-batch GC turns during massive scans to ensure zero-saturation indexing.
 
 ### 2. Forensic Realism
 When moving or deleting files, the Forensic Engine verifies symbol integrity project-wide. 

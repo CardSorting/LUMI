@@ -150,6 +150,28 @@ export class RefactorHealer {
 	}
 
 	/**
+	 * V204: Brittle Path Detection.
+	 * Scans content for relative imports that should be project aliases.
+	 */
+	public detectRelativeImports(filePath: string, content: string, engine: SpiderEngine): string[] {
+		const relativeImportRegex = /import\s+.*from\s+["'](\.\.?\/[^"']+)["']/g
+		const suggestions: string[] = []
+		let match: RegExpExecArray | null
+
+		while ((match = relativeImportRegex.exec(content)) !== null) {
+			const specifier = match[1]
+			const absPath = path.resolve(path.dirname(path.resolve(this.projectRoot, filePath)), specifier)
+			const alias = engine.getBestAlias(absPath)
+
+			if (alias.startsWith("@")) {
+				suggestions.push(`\`${specifier}\` -> \`${alias}\``)
+			}
+		}
+
+		return suggestions
+	}
+
+	/**
 	 * Proactively analyzes a file for structural issues (Bottlenecks).
 	 */
 	public async analyzeStructuralHealth(filePath: string, afferentCoupling: number): Promise<HealingProposal | null> {
@@ -169,6 +191,150 @@ export class RefactorHealer {
 			}
 		}
 		return null
+	}
+
+	/**
+	 * V204: Shadowing Detection.
+	 * Detects if an imported symbol is redefined in the local scope.
+	 */
+	public detectShadowing(filePath: string, content: string): string[] {
+		const suggestions: string[] = []
+		const importedSymbols = new Set<string>()
+
+		// Extract imports
+		const importRegex = /import\s+\{([^}]*)\}\s+from/g
+		let match: RegExpExecArray | null
+		while ((match = importRegex.exec(content)) !== null) {
+			match[1].split(",").forEach((s) => importedSymbols.add(s.trim()))
+		}
+
+		// Detect redefinitions (class, const, let, function)
+		const redefRegex = /^(?:class|const|let|function)\s+([a-zA-Z0-9_]+)/gm
+		while ((match = redefRegex.exec(content)) !== null) {
+			const symbol = match[1]
+			if (importedSymbols.has(symbol)) {
+				suggestions.push(
+					`\`${symbol}\` is imported but also redefined locally. This shadowing will cause a naming collision or 'Already defined' error.`,
+				)
+			}
+		}
+
+		return suggestions
+	}
+
+	/**
+	 * V204: Deadwood Detection (Local).
+	 * Detects imports that are never used in the file body.
+	 */
+	public detectUnusedImports(filePath: string, content: string): string[] {
+		const suggestions: string[] = []
+		const importRegex = /import\s+\{([^}]*)\}\s+from\s+["']([^"']+)["']/g
+		let match: RegExpExecArray | null
+
+		while ((match = importRegex.exec(content)) !== null) {
+			const symbols = match[1].split(",").map((s) => s.trim())
+			const specifier = match[2]
+
+			for (const symbol of symbols) {
+				// Simple check: is the symbol used anywhere else in the file?
+				const usageRegex = new RegExp(`\\b${symbol}\\b`, "g")
+				const usageCount = (content.match(usageRegex) || []).length
+				if (usageCount === 1) {
+					// Only found in the import declaration
+					suggestions.push(
+						`Imported symbol \`${symbol}\` from \`${specifier}\` is unused. Redundant imports increase cognitive load and substrate bloat.`,
+					)
+				}
+			}
+		}
+
+		return suggestions
+	}
+
+	/**
+	 * V204: Zero-Friction Path Normalization.
+	 * Automatically converts relative imports to project aliases in the provided content.
+	 */
+	public normalizeBrittlePaths(filePath: string, content: string, engine: SpiderEngine): string {
+		const relativeImportRegex = /import\s+(.*)\s+from\s+["'](\.\.?\/[^"']+)["']/g
+		return content.replace(relativeImportRegex, (match, symbols, specifier) => {
+			const absPath = path.resolve(path.dirname(path.resolve(this.projectRoot, filePath)), specifier)
+			const alias = engine.getBestAlias(absPath)
+			if (alias.startsWith("@")) {
+				return `import ${symbols} from "${alias}"`
+			}
+			return match
+		})
+	}
+
+	/**
+	 * V204: Barrel Sync Detection.
+	 * Detects if a file in a directory with an index.ts is missing from its exports.
+	 */
+	public async detectMissingFromBarrel(filePath: string): Promise<string[]> {
+		const dir = path.dirname(filePath)
+		const indexPath = path.join(dir, "index.ts")
+		const absoluteIndexPath = path.isAbsolute(indexPath) ? indexPath : path.resolve(this.projectRoot, indexPath)
+
+		try {
+			const indexContent = await fs.readFile(absoluteIndexPath, "utf-8")
+			const fileName = path.basename(filePath, path.extname(filePath))
+
+			// Simple check: is there an export for this file?
+			// handles: export * from "./file", export { x } from "./file", import x from "./file"
+			const exportRegex = new RegExp(`from\\s+["']\\.\\/${fileName}["']`, "i")
+			if (!exportRegex.test(indexContent)) {
+				return [
+					`File \`${path.basename(filePath)}\` is not exported in \`${path.basename(indexPath)}\`. Symbols in this file may be inaccessible via the directory barrel.`,
+				]
+			}
+		} catch (_e) {
+			// No index.ts, skip
+		}
+		return []
+	}
+
+	/**
+	 * V204: Proactive Materialization.
+	 * Generates a high-fidelity boilerplate for a missing symbol.
+	 */
+	public materializeSymbolBoilerplate(symbol: string, layer: string): string {
+		const isCap = /^[A-Z]/.test(symbol)
+		const isInterface = symbol.startsWith("I") && symbol.length > 2 && /^[A-Z]/.test(symbol.charAt(1))
+
+		if (isInterface) {
+			return `export interface ${symbol} {\n\t// TODO: Define the contract for ${symbol}\n}`
+		}
+
+		if (isCap) {
+			return `/**\n * [LAYER: ${layer.toUpperCase()}]\n */\nexport class ${symbol} {\n\tconstructor() {}\n}`
+		}
+
+		return `export const ${symbol} = () => {\n\t// TODO: Implement ${symbol}\n}`
+	}
+
+	/**
+	 * V204: Visibility Hardening.
+	 * Detects top-level declarations in major layers that are missing 'export'.
+	 */
+	public detectMissingExports(filePath: string, content: string): string[] {
+		const layer = getLayer(filePath)
+		if (layer === "plumbing" || layer === "ui") return [] // Skip utilities and UI (might have locals)
+
+		const suggestions: string[] = []
+		const lines = content.split("\n")
+
+		for (const line of lines) {
+			const match = line.match(/^(class|interface|type|enum|const|function)\s+([a-zA-Z0-9_]+)/)
+			if (match) {
+				const symbol = match[2]
+				suggestions.push(
+					`\`${symbol}\` is defined but not exported. In the **${layer.toUpperCase()}** layer, internal symbols should typically be exported for visibility.`,
+				)
+			}
+		}
+
+		return suggestions
 	}
 
 	/**
@@ -361,14 +527,25 @@ export class RefactorHealer {
 		const providers = engine.findSymbolProviders(symbol)
 		if (providers.length === 0) return false
 
-		// Unique provider rule (Confidence 1.0)
-		const provider = providers[0]
+		// V204: Ambiguity Resolution.
+		// If multiple providers exist, pick the one that is architecturally closest.
+		let provider = providers[0]
+		if (providers.length > 1) {
+			const sourceLayer = getLayer(sourceFile.getFilePath())
+			const sameLayer = providers.find((p) => getLayer(p) === sourceLayer)
+			if (sameLayer) provider = sameLayer
+		}
+
+		// V204: Deterministic Aliasing.
+		// Always prefer project aliases (@/) over brittle relative paths.
+		const bestPath = engine.getBestAlias(provider).replace(/\.tsx?$/, "")
 		const sourceFilePath = sourceFile.getFilePath()
-		let relPath = path.relative(path.dirname(sourceFilePath), path.resolve(this.projectRoot, provider)).replace(/\.tsx?$/, "")
-		if (!relPath.startsWith(".")) relPath = `./${relPath}`
 
 		// Verify existing imports to avoid duplicates
-		const existing = sourceFile.getImportDeclaration((d) => d.getModuleSpecifierValue() === relPath)
+		const existing = sourceFile.getImportDeclaration(
+			(d) => d.getModuleSpecifierValue() === bestPath || d.getModuleSpecifierValue().includes(path.basename(bestPath)),
+		)
+
 		if (existing) {
 			if (!existing.getNamedImports().some((n) => n.getName() === symbol)) {
 				existing.addNamedImport(symbol)
@@ -379,7 +556,7 @@ export class RefactorHealer {
 
 		sourceFile.addImportDeclaration({
 			namedImports: [symbol],
-			moduleSpecifier: relPath,
+			moduleSpecifier: bestPath,
 		})
 		return true
 	}

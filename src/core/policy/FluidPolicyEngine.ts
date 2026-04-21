@@ -1038,6 +1038,64 @@ export class FluidPolicyEngine {
 			// V189: Unified Substrate handles metabolic persistence
 		}
 
+		// V204: Non-Blocking Integrity Advisories (TIA)
+		// Pull healing suggestions from the structural graph without blocking execution.
+		const advisories = this.spiderEngine.getIntegrityAdvisories(block.params?.path as string)
+		const brittlePaths = this.refactorHealer.detectRelativeImports(
+			block.params?.path as string,
+			block.params?.content as string,
+			this.spiderEngine,
+		)
+		const missingExports = this.refactorHealer.detectMissingExports(
+			block.params?.path as string,
+			block.params?.content as string,
+		)
+		const shadowing = this.refactorHealer.detectShadowing(block.params?.path as string, block.params?.content as string)
+		const unusedImports = this.refactorHealer.detectUnusedImports(
+			block.params?.path as string,
+			block.params?.content as string,
+		)
+		const barrelGaps = await this.refactorHealer.detectMissingFromBarrel(block.params?.path as string)
+		const vibrations = this.spiderEngine
+			.getIntegrityAdvisories(block.params?.path as string)
+			.filter((a) => a.id === "SPI-105")
+
+		if (
+			advisories.length > 0 ||
+			brittlePaths.length > 0 ||
+			missingExports.length > 0 ||
+			shadowing.length > 0 ||
+			unusedImports.length > 0 ||
+			barrelGaps.length > 0 ||
+			vibrations.length > 0
+		) {
+			const advisoryHint = [
+				...advisories.map((a) => {
+					let msg = `  - 💡 [INTEGRITY_ADVISORY]: ${a.message}`
+					if (a.id === "SPI-102") {
+						const symbol = a.message.match(/SYMBOL: (.*?) ->/)?.[1]
+						if (symbol) {
+							const layer = this.getCachedLayer(a.path)
+							const boilerplate = this.refactorHealer.materializeSymbolBoilerplate(symbol, layer)
+							msg += `\n    \`\`\`typescript\n${boilerplate}\n    \`\`\``
+						}
+					}
+					return msg
+				}),
+				...brittlePaths.map((p) => `  - 💡 [PATH_ADVISORY]: Relative path should be an alias: ${p}`),
+				...missingExports.map((e) => `  - 💡 [VISIBILITY_ADVISORY]: ${e}`),
+				...shadowing.map((s) => `  - 💡 [NAMING_ADVISORY]: ${s}`),
+				...unusedImports.map((u) => `  - 💡 [DEADWOOD_ADVISORY]: ${u}`),
+				...barrelGaps.map((b) => `  - 💡 [BARREL_ADVISORY]: ${b}`),
+				...vibrations.map((v) => `  - 🚨 [SUBSTRATE_VIBRATION]: ${v.message}`),
+			].join("\n")
+
+			result.warning =
+				(result.warning ? result.warning + "\n\n" : "") +
+				`### 🔍 ARCHITECTURAL ADVISORIES\n${advisoryHint}\n\n` +
+				`*These are passive suggestions to improve structural health. You may address them in this turn or a subsequent stabilization phase.*`
+		}
+
 		return result
 	}
 

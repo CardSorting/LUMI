@@ -88,6 +88,18 @@ To manage high-mass modules, the [SovereignDecomposer](file:///Users/bozoegg/Dow
 
 ---
 
+## 7. Integrity Advisory Protocol (TIA - V204)
+
+The V204 pass introduces the **Integrity Advisory Protocol (TIA)**, a non-blocking forensic channel that provides real-time architectural guidance without triggering metabolic spirals or tool rejections.
+
+- **Non-Blocking Forensics**: Structural "smells" (ghost symbols, brittle paths, unused imports) are surfaced as passive `💡 [ADVISORY]` hints in tool responses. This allows the agent to maintain peak metabolic velocity while planning a deterministic "Success Path."
+- **Fuzzy Forensic Sensing**: Detects lexicographical similarity for missing symbols, suggesting potential typos (e.g., "Did you mean: `MyService`?") project-wide.
+- **Proactive Materialization**: Synthesizes ready-to-use TypeScript boilerplates for missing symbols (Classes, Interfaces, Functions) directly in the advisory.
+- **Substrate Vibration Warning**: Monitors afferent coupling project-wide. If an edit to a high-mass module (`coupling > 5`) removes or renames an export, a `🚨 [SUBSTRATE_VIBRATION]` alert is triggered to prevent project-wide cascade failure.
+- **Barrel Sync Enforcement**: Automatically detects if a file in a directory with an `index.ts` is missing from its exports, ensuring structural coherence at the directory level.
+
+---
+
 ## 🔍 Auditing Logic 3.1: Industrial Realism
 
 When performing an architectural audit, the system produces a **Sovereign Vitality Report**:
@@ -95,6 +107,7 @@ When performing an architectural audit, the system produces a **Sovereign Vitali
 2. **Substrate Heat**: Real-time metabolic pressure and heap stats.
 3. **Axiomatic Purity**: Verifiable adherence to the four core axioms.
 4. **Member Mapping Success**: Forensic fidelity of synthesized symbols.
+5. **Integrity Drift (TIA)**: Quantitative audit of ghost symbols, brittle paths, and vibrations.
 
 > [!IMPORTANT]
 > **V210 Industrial Sovereignty Active**: The DietCode substrate is now a self-hardening, resource-neutral entity capable of autonomous forensic repair and cognitive grounding.

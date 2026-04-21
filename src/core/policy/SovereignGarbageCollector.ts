@@ -188,7 +188,7 @@ export class SovereignGarbageCollector {
 	 * Automatically demotes unused exports to local symbols to reduce structural waste.
 	 */
 	private async pruneUnusedExports(filePath: string): Promise<boolean> {
-		const violations = this.spiderEngine.getViolations().filter((v) => v.path === filePath && v.id === "SPI-103")
+		const violations = this.spiderEngine.getIntegrityAdvisories(filePath).filter((v) => v.id === "SPI-103")
 		if (violations.length === 0) return false
 
 		const absolutePath = path.resolve(this.cwd, filePath)
@@ -506,10 +506,10 @@ export class SovereignGarbageCollector {
 	 * BEFORE expensive build tools are invoked.
 	 */
 	private async forensicStabilize(filePath: string): Promise<number> {
-		const violations = this.spiderEngine.getViolations().filter((v) => v.path === filePath)
+		const advisories = this.spiderEngine.getIntegrityAdvisories(filePath)
 		let fixedCount = 0
 
-		for (const v of violations) {
+		for (const v of advisories) {
 			if (v.id === "SPI-101" || v.id === "SPI-102") {
 				// Deterministic Ghost: We only resolve if the symbol/file provider is known and unique.
 				const symbol = v.message.match(/-> (.*) from/)?.[1] || v.message.match(/GHOST SYMBOL: .* -> (.*) from/)?.[1]

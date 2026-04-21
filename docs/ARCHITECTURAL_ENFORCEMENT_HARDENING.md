@@ -187,4 +187,29 @@ The V210 pass (current state) achieves **Absolute Metabolic Sovereignty**. The s
 - **Physical Signature Extraction**: `RefactorHealer` no longer uses templates for stubs. It extracts method and property signatures directly from the provider module's AST to synthesize perfectly compatible code.
 
 ---
-*Last Updated: 2026-04-18 (V210 Industrial Final)*
+## 15. V204 Hardening: Forensic Advisory (The Non-Blocking Pass)
+
+The V204 pass (April 2026) eliminates the "Agentic Spiral" caused by brittle, predictive ghost-symbol blocks by introducing the **Non-Blocking Integrity Advisory (TIA)** protocol.
+
+### 15.1 De-Ghosting the Metabolic Engine
+The metabolic engine has been decoupled from predictive heuristics:
+- **Passive Sensing**: Ghost symbol and ghost file detection have been moved from `getViolations` (hard block) to `getIntegrityAdvisories` (passive hint).
+- **Physical Build Truth**: Architectural blocking now relies 100% on physical build/lint reality (TSC/Biome), preventing agents from entering infinite repair loops for non-existent structural defects.
+
+### 15.2 Success-Rate Engineering (Deterministic Pathing)
+To improve success rates for imports/exports, the advisory channel now provides ready-to-use corrections:
+- **Global Provider Mapping**: If a symbol is missing locally, the system searches the entire substrate and provides the canonical alias-based import (e.g., `import { X } from "@core/services/X"`).
+- **Fuzzy correction**: Levenshtein-based sensing suggests corrections for typos project-wide.
+- **Proactive Materialization**: Synthesizes boilerplate Classes/Interfaces for missing symbols directly in the tool response.
+
+### 15.3 Substrate Vibration & Breaking Change Guard
+To manage the "Blast Radius" of refactors, the system now monitors afferent coupling:
+- **Vibration Sensing**: Edits to high-coupling files (`dependents > 5`) that remove or rename exports trigger a `🚨 [SUBSTRATE_VIBRATION]` alert.
+- **Cascade Prevention**: This deterministic warning forces the agent to acknowledge the systemic impact of its change before proceeding.
+
+### 15.4 Zero-Friction Compliance
+- **Automatic Path Normalization**: `RefactorHealer` can now automatically convert brittle relative imports to project-standard aliases in the background.
+- **Barrel Sync Detection**: Proactively identifies files missing from directory `index.ts` exports to maintain substrate accessibility.
+
+---
+*Last Updated: 2026-04-21 (V204 Forensic Advisory Final)*

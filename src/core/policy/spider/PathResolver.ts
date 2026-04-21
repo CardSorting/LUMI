@@ -283,4 +283,23 @@ export class PathResolver {
 		}
 		return results
 	}
+
+	/**
+	 * V204: Deterministic Alias Resolution.
+	 * Calculates the most concise alias-based import string for any file in the project.
+	 * Prefers deep aliases (@api/, @shared-utils/) over root aliases (@/).
+	 */
+	public getBestAlias(targetPath: string): string {
+		const normTarget = this.canonicalize(targetPath)
+		const sortedAliases = Array.from(this.dynamicAliases.entries()).sort((a, b) => b[1].length - a[1].length)
+
+		for (const [alias, replacement] of sortedAliases) {
+			const normReplacement = this.canonicalize(replacement)
+			if (normTarget === normReplacement || normTarget.startsWith(normReplacement + "/")) {
+				return normTarget.replace(normReplacement, alias).replace(/\\/g, "/")
+			}
+		}
+
+		return normTarget // Fallback to normalized relative path if no alias matches
+	}
 }
