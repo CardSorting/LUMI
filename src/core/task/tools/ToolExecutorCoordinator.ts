@@ -42,9 +42,11 @@ import { SearchFilesToolHandler } from "./handlers/SearchFilesToolHandler"
 import { SovereignBreathHandler } from "./handlers/SovereignBreathHandler"
 import { SovereignDecomposeHandler } from "./handlers/SovereignDecomposeHandler"
 import { SovereignDoctorHandler } from "./handlers/SovereignDoctorHandler"
+import { SovereignHealHandler } from "./handlers/SovereignHealHandler"
 import { SovereignMapHandler } from "./handlers/SovereignMapHandler"
 import { SovereignQueryHandler } from "./handlers/SovereignQueryHandler"
 import { SovereignScaffoldHandler } from "./handlers/SovereignScaffoldHandler"
+import { SovereignSweepHandler } from "./handlers/SovereignSweepHandler"
 import { UseSubagentsToolHandler } from "./handlers/SubagentToolHandler"
 import { SummarizeTaskHandler } from "./handlers/SummarizeTaskHandler"
 import { UseMcpToolHandler } from "./handlers/UseMcpToolHandler"
@@ -158,6 +160,8 @@ export class ToolExecutorCoordinator {
 		[DietCodeDefaultTool.SOVEREIGN_DECOMPOSE]: (_v: ToolValidator) => new SovereignDecomposeHandler(),
 		[DietCodeDefaultTool.SOVEREIGN_MAP]: (_v: ToolValidator) => new SovereignMapHandler(),
 		[DietCodeDefaultTool.SOVEREIGN_BREATH]: (_v: ToolValidator) => new SovereignBreathHandler(),
+		[DietCodeDefaultTool.SOVEREIGN_SWEEP]: (_v: ToolValidator) => new SovereignSweepHandler(),
+		[DietCodeDefaultTool.SOVEREIGN_HEAL]: (_v: ToolValidator) => new SovereignHealHandler(),
 		[DietCodeDefaultTool.RENAME]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.MOVE]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.DELETE]: (_v: ToolValidator) => undefined,

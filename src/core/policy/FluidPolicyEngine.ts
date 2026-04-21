@@ -14,7 +14,7 @@ import { EnvironmentLease, EnvironmentSovereignty } from "../integrity/Environme
 import { MetabolicMonitor } from "../integrity/MetabolicMonitor"
 import { PathogenStore } from "../integrity/PathogenStore"
 import { StateManager } from "../storage/StateManager"
-import { RefactorHealer } from "../task/tools/RefactorHealer"
+import { ForensicDiagnostic, RefactorHealer } from "../task/tools/RefactorHealer"
 import { SovereignScribe } from "../task/tools/utils/SovereignScribe"
 import { AxiomVerificationService } from "./AxiomVerificationService"
 import { SemanticAxiomEngine } from "./SemanticAxiomEngine"
@@ -1390,8 +1390,8 @@ export class FluidPolicyEngine {
 									`⚠️ [PFH ALERT] Build/Lint issues persist after Sweep:\n` +
 									`${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}\n\n` +
 									`🛑 **SOVEREIGN HEALING MANDATE**\n` +
-									`The Garbage Collector could not auto-resolve these errors. Your NEXT turn MUST involve manual intervention to heal this file (Deterministic PFH). ` +
-									`Failure to heal will trigger a Soft-Lock on new feature work.`
+									`The Garbage Collector could not auto-resolve these errors. Your NEXT turn MUST involve manual intervention to heal this file (Deterministic PFH).\n\n` +
+									`${this.generateSovereignCTA([normPath])}`
 
 								// Passive Circuit Breaker: If build health is critical, force an audit
 								if (this.lastBuildHealth < 60) {
@@ -1418,10 +1418,9 @@ export class FluidPolicyEngine {
 							const shield = this.telemetrics.getResilienceShield()
 							result.success = true // V201: Soft-Lock (Allow but Mandate)
 							result.warning =
-								`${shield}🛑 **MISSION DRIFT ADVISORY** [DETERMINISTIC SOFT-LOCK]\n` +
-								`Core build health is failing (${this.lastBuildHealth}%) and you are attempting to edit a peripheral layer file: \`${path.basename(filePath)}\`.\n` +
 								`The substrate has enabled a Deterministic Soft-Lock. You are STRONGLY ADVISED to return focus to healing the core logic violations before proceed with this new logic.\n\n` +
-								`MANDATE: Address the active Core/Domain violations immediately after this turn.`
+								`🛑 **SOVEREIGN HEALING MANDATE**\n` +
+								`${this.generateSovereignCTA([filePath])}`
 							return result
 						}
 
@@ -1748,5 +1747,33 @@ export class FluidPolicyEngine {
 			// File might not exist yet or be inaccessible
 		}
 		return undefined
+	}
+	/**
+	 * V202: Manual Trigger for Sovereign Sweep.
+	 */
+	public async runGarbageCollectorSweep(
+		files: string[],
+	): Promise<{ fixedCount: number; remainingErrors: string[]; repairLog: string[] }> {
+		return this.garbageCollector.sweep(files)
+	}
+
+	/**
+	 * V202: Manual Trigger for AST Repair.
+	 */
+	public async applyDiagnosticFix(diag: ForensicDiagnostic): Promise<boolean> {
+		return this.refactorHealer.applyDiagnosticFix(diag, this.spiderEngine)
+	}
+
+	/**
+	 * V202: Generates an actionable tool block for the agent to fix build errors.
+	 */
+	private generateSovereignCTA(files: string[]): string {
+		return (
+			`🛑 **ACTION REQUIRED**\n` +
+			`Please run the following tool to resolve the remaining regressions:\n\n` +
+			`<sovereign_integrity_sweep>\n` +
+			`<files>\n${JSON.stringify(files, null, 2)}\n</files>\n` +
+			`</sovereign_integrity_sweep>`
+		)
 	}
 }

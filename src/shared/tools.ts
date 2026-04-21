@@ -63,6 +63,8 @@ export enum DietCodeDefaultTool {
 	SOVEREIGN_DECOMPOSE = "decompose_sovereign_module",
 	SOVEREIGN_MAP = "generate_sovereign_map",
 	SOVEREIGN_BREATH = "sovereign_breath",
+	SOVEREIGN_SWEEP = "sovereign_integrity_sweep",
+	SOVEREIGN_HEAL = "sovereign_ast_repair",
 }
 
 // Array of all tool names for compatibility
