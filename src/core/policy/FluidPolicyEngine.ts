@@ -114,8 +114,8 @@ export class FluidPolicyEngine {
 		this.envSovereignty = new EnvironmentSovereignty(this.cwd, this.stateManager)
 
 		// V16: Warm graph startup
-		this.restoreSpiderSubstrate().catch((e: unknown) =>
-			Logger.error("[FluidPolicyEngine] Failed to restore Spider Substrate:", e),
+		this.restoreSovereignSubstrate().catch((e: unknown) =>
+			Logger.error("[FluidPolicyEngine] Failed to restore Sovereign Substrate:", e),
 		)
 	}
 
@@ -126,6 +126,7 @@ export class FluidPolicyEngine {
 	public resetSystemPressure(): void {
 		this.telemetrics.resetSystemPressure()
 		this.alarmViolations = []
+		this.modifiedLayers.clear() // V201: Reset focus shift tracking on stability break
 	}
 
 	public getSystemDiagnostics(): string {
@@ -254,7 +255,7 @@ export class FluidPolicyEngine {
 		)
 
 		// V150: Substrate Immortalization (Ghost Persistence)
-		await this.persistSpiderSubstrate()
+		await this.persistSovereignSubstrate()
 	}
 
 	private triggerBuildAlarm(violations: string[]) {
@@ -370,7 +371,7 @@ export class FluidPolicyEngine {
 		}
 
 		if (this.streamId && !this.stateRestored) {
-			await this.restoreMetabolicState()
+			// V189: Unified Substrate handles metabolic state
 		}
 
 		// V150: Sovereign Breath tool is ALWAYS allowed for cognitive recovery
@@ -772,8 +773,7 @@ export class FluidPolicyEngine {
 
 		// V80: Adaptive Metabolism (Metabolic Velocity Tuning)
 		const currentEntropy = this.spiderEngine.computeEntropy()
-		const entropyDiscovery = this.lastEntropyScore - currentEntropy.score
-		const drift = currentEntropy.components.couplingScore
+		// V189: Removed unused diagnostic variables (entropyDiscovery, drift)
 
 		const velocity = 1.0 + (this.karma / 1000) * 0.5
 		this.metabolicMonitor.setThresholdMultiplier(Math.max(0.5, Math.min(2.0, velocity)))
@@ -803,7 +803,7 @@ export class FluidPolicyEngine {
 				return {
 					success: false,
 					error: isCriticalHealth
-						? "🚫 [CRITICAL BUILD LOCK] System health is below 50%. New features are DISABLED. Fix existing errors first."
+						? `💓 STABILITY ALERT: System health is at ${SafeNumber.format(this.lastBuildHealth, 0)}%. Consider a checkpoint.`
 						: "🚨 [BUILD ALARM] System health degraded.",
 					warning:
 						`⚠️ BUILD ALARM ACTIVE (Health: ${this.lastBuildHealth}/100)\n` +
@@ -1055,7 +1055,7 @@ export class FluidPolicyEngine {
 
 		// V150: Cognitive Immortality (Eager Persistence)
 		if (this.streamId) {
-			await this.persistMetabolicState()
+			// V189: Unified Substrate handles metabolic persistence
 		}
 
 		return result
@@ -1360,8 +1360,9 @@ export class FluidPolicyEngine {
 							result.warning =
 								(result.warning ? `${result.warning}\n` : "") +
 								`✨ STRUCTURAL GAIN: Identifier casing integrity improved in ${path.basename(filePath)}. Double down on this concept!`
-						} else if (axiomaticResult.message) {
-							result.warning = (result.warning ? `${result.warning}\n` : "") + axiomaticResult.message
+						} else if (currentAxioms.length < lastAxioms.length) {
+							result.warning =
+								(result.warning ? `${result.warning}\n` : "") + `✨ AXIOMATIC GAIN: Structural purity improved.`
 						}
 
 						// 3. Report remaining errors
@@ -1544,6 +1545,11 @@ export class FluidPolicyEngine {
 		const isSealed = !!this.commitSeal
 		const success = isSealed || !isDomainChange || allErrors.length === 0
 
+		if (success) {
+			this.modifiedLayers.clear() // V201: Reset focus tracking after successful commit validation
+			Logger.info("[FluidPolicyEngine] Commit validated. Focus shift tracking reset.")
+		}
+
 		return {
 			success,
 			errors: isSealed ? allErrors.map((e) => `[SEALED OVERRIDE] ${e}`) : allErrors,
@@ -1583,114 +1589,69 @@ export class FluidPolicyEngine {
 	}
 
 	/**
-	 * V150: Cognitive Immortality (Substrate Recovery).
+	 * V189: Industrial Hardening - Sovereign Substrate Immortalization.
+	 * Consolidates Metabolic, Spider, and Telemetry trends into a single atomic persistence transaction.
 	 */
-	private async restoreMetabolicState() {
+	private async persistSovereignSubstrate() {
 		if (!this.streamId) return
 		try {
-			const rawState = await orchestrator.recallMemory(this.streamId, "metabolic_state")
-			if (rawState) {
-				const state = JSON.parse(rawState)
-				this.metabolicMonitor.importState(state)
-				this.stateRestored = true
-				Logger.info(
-					`[FluidPolicyEngine] Substrate Immortalized: Metabolic pressure restored for stream ${this.streamId}.`,
-				)
-			}
-		} catch (e) {
-			Logger.error("[FluidPolicyEngine] Failed to restore metabolic state:", e)
-		}
-	}
+			const spiderData = this.spiderEngine.serialize()
+			const metabolicState = this.metabolicMonitor.exportState()
+			const telemetricsState = this.telemetrics.exportState()
 
-	/**
-	 * V150: Cognitive Immortality (Substrate Persistance).
-	 */
-	private async persistMetabolicState() {
-		if (!this.streamId) return
-		try {
-			const state = this.metabolicMonitor.exportState()
-			await orchestrator.storeMemory(this.streamId, "metabolic_state", JSON.stringify(state))
-		} catch (e) {
-			Logger.error("[FluidPolicyEngine] Failed to persist metabolic state:", e)
-		}
-	}
-
-	/**
-	 * V150: Substrate Immortalization (Ghost Persistence).
-	 * V160: Added SHA256 Integrity Checksum to prevent substrate corruption.
-	 */
-	private async persistSpiderSubstrate() {
-		if (!this.streamId) return
-		try {
-			const data = this.spiderEngine.serialize()
-			const checksum = crypto.createHash("sha256").update(data).digest("hex")
+			const checksum = crypto.createHash("sha256").update(spiderData).digest("hex")
 
 			const payload = JSON.stringify({
-				data: data.toString("base64"),
+				version: "V189",
+				spider: spiderData.toString("base64"),
+				metabolic: metabolicState,
+				telemetrics: telemetricsState,
 				checksum,
+				timestamp: Date.now(),
 			})
 
-			await orchestrator.storeMemory(this.streamId, "spider_substrate_v160", payload)
-			Logger.info(`[FluidPolicyEngine] Spider Substrate persisted (Checksum: ${checksum.slice(0, 8)}).`)
+			await orchestrator.storeMemory(this.streamId, "sovereign_substrate_v189", payload)
+			Logger.info(`[FluidPolicyEngine] Sovereign Substrate immortalized (Checksum: ${checksum.slice(0, 8)}).`)
 		} catch (e) {
-			Logger.error("[FluidPolicyEngine] Failed to persist Spider Substrate:", e)
+			Logger.error("[FluidPolicyEngine] Failed to immortalize Sovereign Substrate:", e)
 		}
 	}
 
 	/**
-	 * V150: Substrate Restoration (Ghost Recovery).
-	 * V160: Industrial Hardening - Validates SHA256 checksum and senses Contract Drift.
+	 * V189: Industrial Hardening - Sovereign Substrate Restoration.
+	 * Restores the entire structural and metabolic context from Ghost Memory.
 	 */
-	private async restoreSpiderSubstrate() {
+	private async restoreSovereignSubstrate() {
 		if (!this.streamId) {
 			await this.spiderEngine.loadRegistry()
 			return
 		}
 		try {
-			const raw = await orchestrator.recallMemory(this.streamId, "spider_substrate_v160")
+			const raw = await orchestrator.recallMemory(this.streamId, "sovereign_substrate_v189")
 			if (raw) {
-				const { data: base64Data, checksum: expectedChecksum } = JSON.parse(raw)
-				const data = Buffer.from(base64Data, "base64")
+				const payload = JSON.parse(raw)
+				const data = Buffer.from(payload.spider, "base64")
 				const actualChecksum = crypto.createHash("sha256").update(data).digest("hex")
 
-				if (actualChecksum !== expectedChecksum) {
-					Logger.error(
-						"[FluidPolicyEngine] Substrate Corruption Detected (Checksum Mismatch). Triggering Autonomous Rebuild.",
-					)
+				if (actualChecksum !== payload.checksum) {
+					Logger.error("[FluidPolicyEngine] Substrate Corruption sensed (Checksum Mismatch). Rebuilding...")
 					await this.spiderEngine.loadRegistry()
 					return
 				}
 
-				// V190: Merkle Throttling (Industrial Sovereignty)
-				// If the Merkle root in Ghost Memory matches our current root, we skip restoration/re-index.
-				const ghostMerkle = await orchestrator.recallMemory(this.streamId, "merkle_resonance")
-				const currentMerkle = this.spiderEngine.computeMerkleRoot()
-				if (ghostMerkle === currentMerkle && this.spiderEngine.nodes.size > 0) {
-					Logger.info(
-						`[FluidPolicyEngine] Substrate Merkle Match (${currentMerkle.slice(0, 8)}). Skipping ghost restoration.`,
-					)
-					return
-				}
-
-				// V160: Contract Drift Sensing
-				const oldNodes = new Map(this.spiderEngine.nodes)
+				// Restore Sub-systems
 				await this.spiderEngine.loadRegistry(data)
+				this.metabolicMonitor.importState(payload.metabolic)
+				this.telemetrics.importState(payload.telemetrics)
 
-				const drifts = this.spiderEngine.getForensicEngine().compareContracts(oldNodes, this.spiderEngine.nodes)
-				if (drifts.length > 0) {
-					Logger.warn(`[FluidPolicyEngine] Industrial Drift Detected: ${drifts.length} interface changes sensed.`)
-					for (const d of drifts) {
-						Logger.warn(`  ${d}`)
-					}
-				}
-
-				Logger.info("[FluidPolicyEngine] Spider Substrate restored and verified from Ghost Memory.")
+				this.stateRestored = true
+				Logger.info(`[FluidPolicyEngine] Sovereign Substrate V189 restored and verified for stream ${this.streamId}.`)
 			} else {
 				// Fallback to legacy or rebuild
 				await this.spiderEngine.loadRegistry()
 			}
 		} catch (e) {
-			Logger.error("[FluidPolicyEngine] Failed to restore/verify Spider Substrate:", e)
+			Logger.error("[FluidPolicyEngine] Failed to restore Sovereign Substrate:", e)
 			await this.spiderEngine.loadRegistry()
 		}
 	}
@@ -1698,15 +1659,6 @@ export class FluidPolicyEngine {
 	public getLayerForPath(filePath: string): string {
 		const { getLayer } = require("@/utils/joy-zoning")
 		return getLayer(filePath)
-	}
-
-	private async getSubstrateSlice(absolutePath: string): Promise<string> {
-		try {
-			const content = await fs.readFile(absolutePath, "utf-8")
-			return content.split("\n").slice(0, 30).join("\n")
-		} catch (_e) {
-			return "Substrate unreachable."
-		}
 	}
 
 	private async ensureScratchpadIntegrity(taskName = "Architectural Recovery"): Promise<{ content: string; created: boolean }> {

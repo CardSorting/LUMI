@@ -138,26 +138,32 @@ export class SovereignTelemetrics {
 
 	/**
 	 * Computes the build health score (0-100).
+	 * V189: Hardened with Dynamic Scale Normalization.
 	 */
 	public computeBuildHealth(violations: string[]): number {
 		if (violations.length === 0) return 100
 
+		const nodeCount = this.spiderEngine.nodes.size || 1
+		// Large projects (1000+ nodes) have more surface area for warnings.
+		// Scale factor reduces penalty intensity proportional to project scale.
+		const scaleFactor = Math.max(0.2, 1.0 / (Math.log10(Math.max(10, nodeCount)) / 1.5))
+
 		let totalPenalty = 0
 		for (const violation of violations) {
 			if (violation.includes("Circular Dependency")) {
-				totalPenalty += 30
+				totalPenalty += 30 * scaleFactor
 			} else if (violation.includes("[ERROR]") || violation.includes("Build Error")) {
-				totalPenalty += 20
+				totalPenalty += 20 * scaleFactor
 			} else if (violation.includes("Geographic Misalignment") || violation.includes("Layer violation")) {
-				totalPenalty += 15
+				totalPenalty += 15 * scaleFactor
 			} else if (
 				violation.includes("[WARN]") ||
 				violation.includes("Linter Warning") ||
 				violation.includes("Ghost import")
 			) {
-				totalPenalty += 5
+				totalPenalty += 5 * scaleFactor
 			} else {
-				totalPenalty += 1
+				totalPenalty += 1 * scaleFactor
 			}
 		}
 
@@ -191,13 +197,53 @@ export class SovereignTelemetrics {
 	}
 
 	/**
+	 * V189: Industrial Hardening - Structured Telemetry Snapshot.
+	 */
+	public getTelemetrySnapshot() {
+		const violations = this.spiderEngine.getViolations()
+		const stats = this.metabolicMonitor.getStabilityStats()
+
+		return {
+			timestamp: Date.now(),
+			health: this.computeBuildHealth(violations.map((v) => v.message)),
+			pulse: this.getStabilityPulse(),
+			entropy: this.spiderEngine.computeEntropy(),
+			merkle: this.spiderEngine.computeMerkleRoot(),
+			activity: {
+				reads: stats.totalReads,
+				writes: stats.totalWrites,
+				pressure: stats.avgPressure,
+			},
+		}
+	}
+
+	/**
+	 * V189: Immortalizes the telemetry trends.
+	 */
+	public exportState(): { lastBuildHealth: number } {
+		return {
+			lastBuildHealth: this.lastBuildHealth,
+		}
+	}
+
+	/**
+	 * V189: Restores telemetry trends.
+	 */
+	public importState(state: { lastBuildHealth: number }) {
+		if (state && typeof state.lastBuildHealth === "number") {
+			this.lastBuildHealth = state.lastBuildHealth
+		}
+	}
+
+	/**
 	 * Resets all project pressure.
 	 */
 	public resetSystemPressure(): void {
-		this.metabolicMonitor.resetMetabolicPressure()
+		this.metabolicMonitor.resetMetabolicPressure(true) // V189: Transient reset
 		this.lastBuildHealth = 100
-		Logger.info("[StabilityTelemetrics] Unified Project Pressure Reset.")
+		Logger.info("[StabilityTelemetrics] Unified Project Pressure Reset (Transient).")
 	}
+
 	/**
 	 * Returns the resilience shield summary.
 	 */

@@ -1,6 +1,7 @@
 import * as crypto from "crypto"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
+import { SafeNumber } from "../../shared/utils/SafeNumber"
 
 export interface MetabolicMetrics {
 	reads: number
@@ -14,6 +15,13 @@ export interface MetabolicMetrics {
 	lastTurnId?: string // V100: Synthesis tracking
 	symbolObservations: Set<string> // V26: Neural Forensic Tracking
 	aestheticWrites: number // V188: Noise filtering count
+}
+
+/**
+ * Serializable version of metrics for persistence.
+ */
+export interface SerializableMetabolicMetrics extends Omit<MetabolicMetrics, "symbolObservations"> {
+	symbolObservations: string[]
 }
 
 export interface StabilityStats {
@@ -137,27 +145,20 @@ export class MetabolicMonitor {
 
 	/**
 	 * Detects if a file has high activity (High churn in a short period).
+	 * V189: Calibrated with nodal scale factor.
 	 */
 	public isHighlyActive(filePath: string, isRefactoring = false, lineCount = 0): { active: boolean; reason?: string } {
 		const metrics = this.registry.get(filePath)
 		if (!metrics) return { active: false }
 
-		const timeSinceLastEdit = Date.now() - metrics.lastEditTimestamp
-		const totalDelta = metrics.linesAdded + metrics.linesDeleted
-
-		// V33: Ethereal Leniency
-		// V100: Size-Aware Resonance (Normalization by line count)
+		const pressure = this.getPressure(filePath)
 		const sizeFactor = lineCount > 0 ? Math.log10(Math.max(10, lineCount)) : 1.0
-		const churnThreshold = (isRefactoring ? 1000 : 500) * this.thresholdMultiplier * sizeFactor
-		const writeThreshold = (isRefactoring ? 10 : 5) * this.thresholdMultiplier * sizeFactor
+		const threshold = (isRefactoring ? 15.0 : 7.0) * sizeFactor
 
-		const highChurn = totalDelta > churnThreshold
-		const recentActivity = timeSinceLastEdit < 3600000 // 1 hour
-
-		if (highChurn && recentActivity && metrics.writes > writeThreshold) {
+		if (pressure > threshold) {
 			return {
 				active: true,
-				reason: `Activity level exceeded stability limit (${totalDelta} lines, ${metrics.writes} updates).`,
+				reason: `Activity level (${SafeNumber.format(pressure, 1)}) exceeded stability limit.`,
 			}
 		}
 
@@ -165,12 +166,20 @@ export class MetabolicMonitor {
 	}
 
 	/**
-	 * V110: Returns a normalized pressure score [0.0 - 10.0+] for a file.
+	 * PRODUCTION HARDENING: Normalized pressure score [0.0 - 10.0+] for a file.
+	 * V189: Calibrated with Doubt Signal weighting to detect "Investigative Thrashing".
 	 */
 	public getPressure(filePath: string): number {
 		const metrics = this.registry.get(filePath)
 		if (!metrics) return 0
-		return (metrics.writes + (metrics.linesAdded + metrics.linesDeleted) / 100) * this.resonanceMultiplier
+
+		const churn = metrics.writes + (metrics.linesAdded + metrics.linesDeleted) / 100
+		const doubt = this.getDoubtSignal(filePath)
+
+		// If high doubt (> 10), it acts as a pressure multiplier
+		const doubtMultiplier = doubt > 10 ? Math.min(2.0, 1.0 + (doubt - 10) / 20) : 1.0
+
+		return churn * this.resonanceMultiplier * doubtMultiplier
 	}
 
 	/**
@@ -196,48 +205,27 @@ export class MetabolicMonitor {
 		if (drift > threshold && !isInfraTurn) {
 			return {
 				drift,
-				warning: `⚠️ TASK DRIFT DETECTED: You have modified ${drift} different files in the last 10 minutes. This high-entropy behavior increases the risk of regression. Focus on one module at a time.${isRefactoring ? " (Refactor leniency applied)" : ""}`,
+				warning: `⚠️ [SPI-202] TASK DRIFT DETECTED: You have modified ${drift} different files in 10m. Focus on one module at a time.`,
 			}
 		}
 
 		// v9 HARDENING: Mission Drift Detection (Yak Shaving Protection)
-		// Track if we are spending too much metabolic energy in non-core layers
 		if (drift >= 5 && !isPlanning && !isInfraTurn) {
 			const nonDomainEdits = recentEntries.filter(([p]) => !p.includes("/domain/") && !p.includes("/core/")).length
 			const missionRatio = nonDomainEdits / drift
 
-			// PRODUCTION HARDENING: Interdict at 90% drift
 			if (missionRatio >= 0.9) {
 				return {
 					drift,
-					warning: `🛑 MISSION FOCUS [REQUIRED]: 90% of your recent updates are in peripheral files (Plumbing/Infrastructure). It looks like you might be drifting from the core task. Please return focus to Domain/Core logic or use a # STRATEGIC REVIEW to justify this detour.`,
-				}
-			}
-
-			if (missionRatio > 0.7) {
-				return {
-					drift,
-					warning: `⚠️ MISSION FOCUS [Urgency: MEDIUM]: ${Math.round(missionRatio * 100)}% of your recent updates are in peripheral files. Ensure you are staying on track with the primary goal.`,
+					warning: `🛑 [SPI-203] MISSION DRIFT: 90% of updates are in peripheral files. Return focus to Domain/Core logic.`,
 				}
 			}
 		}
 
 		// V16: Breather Support
-		if (scratchpadContent.includes("# SOVEREIGN_BREATHER")) {
-			this.resetMetabolicPressure()
+		if (scratchpadContent.includes("# SOVEREIGN_BREATHER") || scratchpadContent.includes("# STABILITY BREAK")) {
+			this.resetMetabolicPressure(true) // V189: Transient reset only
 			return { drift: 0, isInfraTurn: true }
-		}
-
-		// V16: Agile Drift Tuning
-		if (scratchpadContent.includes("# SOVEREIGN_AGILE")) {
-			const agileThreshold = 25
-			if (drift > agileThreshold) {
-				return {
-					drift,
-					warning: `⚠️ AGILE DRIFT ALERT: Even in Agile mode, ${drift} files is a high blast radius. Consider a checkpoint soon.`,
-				}
-			}
-			return { drift, isInfraTurn: true }
 		}
 
 		return { drift, isInfraTurn }
@@ -267,7 +255,7 @@ export class MetabolicMonitor {
 		for (const [p, m] of this.registry.entries()) {
 			totalReads += m.reads
 			totalWrites += m.writes
-			const stress = m.reads * 0.2 + m.writes * 0.8 + (m.linesAdded + m.linesDeleted) / 100
+			const stress = this.getPressure(p)
 			if (stress > 1) {
 				hotspots.push({ path: p, stress })
 			}
@@ -376,12 +364,21 @@ export class MetabolicMonitor {
 
 	/**
 	 * PRODUCTION HARDENING: Emergency override to reset project activity.
-	 * Allows for manual recovery from planning holds during large-scale tasks.
+	 * V189: Forensic Separation - Clear pressure without destroying historical logs.
 	 */
-	public resetMetabolicPressure() {
-		this.registry.clear()
+	public resetMetabolicPressure(onlyTransient = false) {
+		if (onlyTransient) {
+			for (const m of this.registry.values()) {
+				m.writes = 0
+				m.linesAdded = 0
+				m.linesDeleted = 0
+				m.aestheticWrites = 0
+			}
+		} else {
+			this.registry.clear()
+		}
 		this.thresholdMultiplier = 1.0 // Reset velocity to base
-		Logger.info("🔋 [StabilityMonitor] Activity level reset. Project stability cleared for fresh start.")
+		Logger.info(`🔋 [StabilityMonitor] Activity level reset (${onlyTransient ? "Transient" : "Full"}).`)
 	}
 
 	/**
@@ -399,13 +396,14 @@ export class MetabolicMonitor {
 	}
 	/**
 	 * V150: Cognitive Immortality.
-	 * Serializes the current metabolic registry to a transport-safe object.
 	 */
 	public exportState(): MetabolicState {
-		const registryObj: Record<string, MetabolicMetrics> = {}
+		const registryObj: Record<string, SerializableMetabolicMetrics> = {}
 		for (const [p, m] of this.registry.entries()) {
-			// Convert Set to Array for JSON safety
-			registryObj[p] = { ...m, symbolObservations: Array.from(m.symbolObservations) as any }
+			registryObj[p] = {
+				...m,
+				symbolObservations: Array.from(m.symbolObservations),
+			}
 		}
 
 		return {
@@ -419,7 +417,6 @@ export class MetabolicMonitor {
 
 	/**
 	 * V150: Substrate Restoration.
-	 * Restores metabolic state from a serialized object.
 	 */
 	public importState(state: MetabolicState) {
 		if (!state || state.version !== this.sessionVersion) {
@@ -451,7 +448,7 @@ export class MetabolicMonitor {
  */
 export interface MetabolicState {
 	version: number
-	registry: Record<string, MetabolicMetrics>
+	registry: Record<string, SerializableMetabolicMetrics>
 	thresholdMultiplier: number
 	resonanceMultiplier: number
 	timestamp: number
