@@ -41,61 +41,37 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 					background: "var(--vscode-editor-inactiveSelectionBackground)",
 					border: "1px solid var(--vscode-textLink-foreground)",
 					borderRadius: "6px",
-					padding: "16px",
+					padding: "8px 12px",
 					marginBottom: "12px",
 					display: "flex",
-					flexDirection: "column",
-					gap: "10px",
+					alignItems: "center",
+					justifyContent: "space-between",
+					gap: "12px",
 					position: "relative",
 					overflow: "hidden",
 				}}>
 				<div
 					style={{
-						position: "absolute",
-						top: "-15px",
-						right: "-15px",
-						fontSize: "60px",
-						opacity: 0.05,
-						transform: "rotate(20deg)",
-						pointerEvents: "none",
-					}}>
-					🚀
-				</div>
-				<div
-					style={{
-						display: "flex",
-						alignItems: "center",
-						gap: "8px",
-						fontWeight: "bold",
-						fontSize: "14px",
-						color: "var(--vscode-textLink-foreground)",
-					}}>
-					Power Up with GLM-5 & DietCode
-				</div>
-				<div style={{ fontSize: "13px", lineHeight: "1.5" }}>
-					Unlock the full potential of Z AI's latest models with the <b>GLM Coding Plan</b>—engineered for elite
-					performance and agentic workflows.
-				</div>
-				<ul
-					style={{
-						margin: "4px 0",
-						paddingLeft: "20px",
-						fontSize: "12px",
 						display: "flex",
 						flexDirection: "column",
-						gap: "4px",
-						opacity: 0.9,
+						gap: "2px",
 					}}>
-					<li>
-						<b>Unlimited Access</b> to GLM-5.1 & GLM-5-Turbo
-					</li>
-					<li>
-						<b>Premium Agentic Capabilities</b> optimized for DietCode
-					</li>
-					<li>
-						<b>Special Partnership Pricing</b> starting at just <b>$18/month</b>
-					</li>
-				</ul>
+					<div
+						style={{
+							fontWeight: "bold",
+							fontSize: "12px",
+							color: "var(--vscode-textLink-foreground)",
+							display: "flex",
+							alignItems: "center",
+							gap: "4px",
+						}}>
+						<span>🚀</span>
+						<span>GLM Coding Plan Special</span>
+					</div>
+					<div style={{ fontSize: "11px", opacity: 0.9, lineHeight: "1.2" }}>
+						Elite GLM-5 models starting at <b>$18/month</b>.
+					</div>
+				</div>
 				<a
 					href="https://z.ai/subscribe?ic=3LBVSDNHAW"
 					rel="noopener noreferrer"
@@ -103,18 +79,17 @@ export const ZAiProvider = ({ showModelOptions, isPopup, currentMode }: ZAiProvi
 						display: "inline-flex",
 						alignItems: "center",
 						justifyContent: "center",
-						width: "fit-content",
-						padding: "6px 14px",
+						padding: "4px 10px",
 						backgroundColor: "var(--vscode-button-background)",
 						color: "var(--vscode-button-foreground)",
 						textDecoration: "none",
 						borderRadius: "3px",
-						fontSize: "13px",
+						fontSize: "11px",
 						fontWeight: "600",
-						marginTop: "6px",
+						whiteSpace: "nowrap",
 					}}
 					target="_blank">
-					Claim Your Exclusive Offer
+					Claim Offer
 				</a>
 			</div>
 			<DropdownContainer className="dropdown-container" style={{ position: "inherit" }}>
