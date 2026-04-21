@@ -4509,6 +4509,75 @@ export const cloudflareModels = {
 		description:
 			"Kimi K2.5 is a frontier-scale open-source model with a 256k context window, vision inputs, and structured outputs for agentic workloads.",
 	},
+	"anthropic/claude-opus-4.7": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheReadsPrice: 0.5,
+		cacheWritesPrice: 6.25,
+		description:
+			"Claude Opus 4.7 is Anthropic's most capable generally available model to date. It is highly autonomous and performs exceptionally well on long-horizon agentic work, knowledge work, vision tasks, and memory tasks.",
+	},
+	"alibaba/qwen3-max": {
+		maxTokens: 32_768,
+		contextWindow: 131_072,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 2.4,
+		outputPrice: 9.6,
+		description:
+			"Alibaba's Qwen 3 Max is a large language model with strong coding, reasoning, and multilingual capabilities.",
+	},
+	"google/gemini-3-flash": {
+		maxTokens: 65_536,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 0.5,
+		outputPrice: 3.0,
+		description:
+			"Gemini 3 Flash is Google's fast multimodal model with frontier intelligence, superior search, and grounding capabilities.",
+	},
+	"anthropic/claude-sonnet-4.6": {
+		maxTokens: 64_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 3.0,
+		outputPrice: 15.0,
+		cacheReadsPrice: 0.3,
+		cacheWritesPrice: 3.75,
+		description:
+			"Claude Sonnet 4.6 is Anthropic's latest balanced model offering strong coding, reasoning, and agentic capabilities with improved instruction following.",
+	},
+	"@cf/moonshotai/kimi-k2.6": {
+		maxTokens: 32_768,
+		contextWindow: 262_144,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 0.95,
+		outputPrice: 4.0,
+		cacheReadsPrice: 0.16,
+		description:
+			"Kimi K2.6 is a frontier-scale open-source 1T parameter model with a 262.1k context window, vision inputs, and structured outputs for agentic workloads.",
+	},
+	"openai/gpt-5.4": {
+		maxTokens: 16_384,
+		contextWindow: 272_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 1.75,
+		outputPrice: 14.0,
+		description: "GPT-5.4 is OpenAI's flagship model with strong coding, reasoning, and multimodal capabilities.",
+	},
 } as const satisfies Record<string, ModelInfo>
 
 // Fireworks AI

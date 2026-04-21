@@ -1,6 +1,6 @@
 import { DietCodeDefaultTool } from "@shared/tools"
-import crypto from "crypto"
-import fs from "fs/promises"
+import * as crypto from "crypto"
+import * as fs from "fs/promises"
 import * as path from "path"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { Logger } from "@/shared/services/Logger"
@@ -102,7 +102,7 @@ export class FluidPolicyEngine {
 		this.pathogens = new PathogenStore(this.cwd)
 		this.refactorHealer = new RefactorHealer(this.cwd)
 		this.forensics = new SovereignForensics(this.cwd, this.metabolicMonitor, this.spiderEngine)
-		this.garbageCollector = new SovereignGarbageCollector(this.cwd, this.spiderEngine, this.pathogens)
+		this.garbageCollector = new SovereignGarbageCollector(this.cwd, this.spiderEngine, this.pathogens, this.metabolicMonitor)
 		this.telemetrics = new SovereignTelemetrics(this.cwd, this.metabolicMonitor, this.spiderEngine, this.pathogens)
 		this.verification = new AxiomVerificationService(
 			this.cwd,
@@ -929,14 +929,17 @@ export class FluidPolicyEngine {
 					const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
 					const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN SOVEREIGNTY BREACH" : "🏗️ CORE INTEGRITY PROTECT"
 					const shield = this.telemetrics.getResilienceShield()
-					const healingHint =
-						layer === "domain"
-							? "\n\n🩹 SOVEREIGN HEALING: To bypass this block during complex refactoring, add `[SOVEREIGN_HEALING]` to your file content.\n" +
-								"💡 Alternatively, use `materializeGhost` or `healImports` tools if applicable."
-							: ""
+
+					// PFH: Proactive Forensic Healing - We allow the write but force a repair turn
 					return {
 						success: true,
-						warning: `${shield}${rejectionTitle} (Strike ${strikes})\nLayer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummaryRejection}\n\n${this.getCorrectionHint(astValidation.errors, filePath)}${healingHint}\n\n💡 This file block was automatically bypassed and you may proceed.`,
+						warning:
+							`${shield}🚨 ${rejectionTitle} [REPAIR_REQUIRED]\n` +
+							`Layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s) (Strike ${strikes}):\n${violationSummaryRejection}\n\n` +
+							`${this.getCorrectionHint(astValidation.errors, filePath)}\n\n` +
+							`‼️ **PROACTIVE FORENSIC HEALING REQUIRED**\n` +
+							`To maintain substrate stability, your NEXT turn MUST resolve these violations. ` +
+							`If these errors persist, the system will trigger a Hard Metabolic Cooldown.`,
 						violations: astValidation.errors,
 					}
 				}
@@ -1297,6 +1300,10 @@ export class FluidPolicyEngine {
 		}
 
 		// Build Integrity: Run Sweeping Garbage Collector (Real-time cleanup)
+		const isHealingIntent = this.verification.detectHealingIntent(block) !== null
+		const isRefactoringIntent = this.refactorTurnsRemaining > 0 || isHealingIntent
+
+		// Build Integrity: Run Sweeping Garbage Collector (Real-time cleanup)
 		if (
 			block.name === DietCodeDefaultTool.FILE_NEW ||
 			block.name === DietCodeDefaultTool.FILE_EDIT ||
@@ -1370,22 +1377,55 @@ export class FluidPolicyEngine {
 							const attempts = (this.gracePeriods.get(normPath) || 0) + 1
 							this.gracePeriods.set(normPath, attempts)
 
-							const isHealingIntent = this.verification.detectHealingIntent(block) !== null
-							const isRefactoringIntent = this.refactorTurnsRemaining > 0 || isHealingIntent
-
 							if (isRefactoringIntent && attempts === 1) {
 								// V100: GC Soft-Lock Grace Period
 								result.success = true // Proceed with warning
 								result.warning = `🩹 GC SOFT-LOCK ACTIVE: Minor build regressions remain after Sweep. Proceeding with caution. FIX IN NEXT TURN:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
 								Logger.warn(`[FluidPolicyEngine] Soft-Lock Grace Period utilized for ${path.basename(filePath)}`)
 							} else {
-								result.success = false // Build regression detected
+								// PFH: Instead of hard-failing, we allow it but inject a MANDATORY repair directive
+								result.success = true
 								result.buildErrors = sweepResult.remainingErrors
-								result.warning = `⚠️ Build/Lint issues persist after Sweep:\n${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}`
-								result.correctionHint =
-									"The Garbage Collector could not auto-resolve these errors. Manual intervention required."
+								result.warning =
+									`⚠️ [PFH ALERT] Build/Lint issues persist in ${path.basename(filePath)} after Sweep:\n` +
+									`${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}\n\n` +
+									`🛑 **MANDATORY REPAIR DIRECTIVE**\n` +
+									`The Garbage Collector could not auto-resolve these errors. Your NEXT turn MUST involve manual intervention to heal this file. ` +
+									`Failure to heal will result in a Metabolic Blockade.`
+
+								// Passive Circuit Breaker: If build health is critical, force an audit
+								if (this.lastBuildHealth < 60) {
+									const auditTemplate = SovereignProtocol.generateAuditTemplate("Substrate Recovery", {
+										buildHealth: this.lastBuildHealth,
+										workloadLevel: "Critical",
+										buildErrors: sweepResult.remainingErrors,
+										lintWarnings: [],
+										hotspots: [filePath],
+									})
+									result.warning +=
+										`\n\n🛑 **CRITICAL HEALTH BREACH**: System health is at ${this.lastBuildHealth}%. ` +
+										`I have prepared a Strategic Review template for you. Please update \`scratchpad.md\` before proceeding:\n\n` +
+										`\`\`\`markdown\n${auditTemplate}\n\`\`\``
+								}
 							}
-						} else if (sweepResult.fixedCount > 0) {
+						}
+
+						// V200: Mission Drift Suppression (Yak Shaving Interdiction)
+						// If build health is low and the current edit is in a peripheral file, block it.
+						const drift = this.metabolicMonitor.getTaskDrift(isRefactoringIntent)
+						const layer = this.getCachedLayer(filePath)
+						if (drift.warning && this.lastBuildHealth < 75 && !layer.match(/domain|core/i)) {
+							const shield = this.telemetrics.getResilienceShield()
+							result.success = false
+							result.warning =
+								`${shield}🛑 **MISSION DRIFT INTERDICTION**\n` +
+								`Core build health is failing (${this.lastBuildHealth}%) and you are attempting to edit a peripheral layer file: \`${path.basename(filePath)}\`.\n` +
+								`The substrate has triggered a Hard Metabolic Blockade. You MUST return focus to healing the core logic violations before you can modify this file.\n\n` +
+								`DIRECTIVE: Address the \`MANDATORY REPAIR DIRECTIVES\` currently active in the Core/Domain modules.`
+							return result
+						}
+
+						if (sweepResult.fixedCount > 0) {
 							Logger.info(
 								`[FluidPolicyEngine] Sweep fixed ${sweepResult.fixedCount} issues in ${path.basename(filePath)}.`,
 							)
@@ -1521,7 +1561,7 @@ export class FluidPolicyEngine {
 		const allErrors: string[] = []
 		const isDomainChange = ops.some((op) => op.layer === "domain")
 
-		for (const filePath of affectedFiles) {
+		for (const filePath of Array.from(affectedFiles)) {
 			try {
 				const content = await fs.readFile(filePath, "utf-8")
 				const validation = this.tspPlugin.validateSource(filePath, content, this.virtualResolver)

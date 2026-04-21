@@ -23,6 +23,7 @@ export class SovereignGarbageCollector {
 		private cwd: string,
 		private spiderEngine: SpiderEngine,
 		private pathogens?: import("../integrity/PathogenStore").PathogenStore,
+		private monitor?: import("../integrity/MetabolicMonitor").MetabolicMonitor,
 	) {
 		this.healer = new RefactorHealer(cwd)
 	}
@@ -32,124 +33,152 @@ export class SovereignGarbageCollector {
 	 * Capped at depth 2 to prevent infinite substrate loops.
 	 */
 	public async sweep(filePaths: string[]): Promise<{ fixedCount: number; remainingErrors: string[]; repairLog: string[] }> {
+		const lockId = await this.spiderEngine.acquireStabilityLock("SovereignGarbageCollector")
+		if (!lockId) {
+			Logger.warn(
+				"[SovereignGarbageCollector] Stability Lock acquisition failed. Proceeding with caution (Non-atomic Sweep).",
+			)
+		}
+
+		// V200: Deterministic Checkpoint for rollback capability
+		this.spiderEngine.createCheckpoint()
+
 		const repairLog: string[] = []
 		let totalFixed = 0
 		const remainingErrors: string[] = []
 		const processed = new Set<string>()
 		const queue = [...filePaths.map((f) => ({ path: f, depth: 0 }))]
 
-		while (queue.length > 0) {
-			const item = queue.shift()
-			if (!item) continue
-			const { path: filePath, depth } = item
-			if (processed.has(filePath)) continue
-			processed.add(filePath)
+		try {
+			while (queue.length > 0) {
+				const item = queue.shift()
+				if (!item) continue
+				const { path: filePath, depth } = item
+				if (processed.has(filePath)) continue
+				processed.add(filePath)
 
-			const absolutePath = path.resolve(this.cwd, filePath)
-			let fileModified = false
+				const absolutePath = path.resolve(this.cwd, filePath)
+				let fileModified = false
 
-			// 1. Layer Alignment (Structural Primacy)
-			if (await this.alignLayerTags(filePath)) {
-				totalFixed++
-				fileModified = true
-				repairLog.push(`[ALIGNMENT] Resolved [LAYER] metadata drift in ${filePath}`)
-			}
-
-			// 1b. Immune-Driven Hardening (V91)
-			if (this.pathogens?.isPathogenic(filePath)) {
-				Logger.info(
-					`[SovereignGarbageCollector] Chronic failure history detected for ${path.basename(filePath)}. Triggering Deep Forensic Scan.`,
-				)
-				const deepFixed = await this.deepScanPathogen(filePath)
-				totalFixed += deepFixed
-				if (deepFixed > 0) fileModified = true
-			}
-
-			// 2. Pathogen Store (Immune Memory Decay)
-			if (this.pathogens?.isPathogenic(filePath)) {
-				this.pathogens.decay(filePath)
-				totalFixed++
-				fileModified = true
-				repairLog.push(`[PATHOGEN] Applied immune decay to pathogenic signature: ${filePath}`)
-			}
-
-			// 2. Build Check (Diagnostic Probe) - The Source of Forensic Truth
-			const buildProbe = await this.runMiniTsc(absolutePath)
-
-			// 3. Reactive Stabilizations (Only triggered by physical build blockers)
-			if (!buildProbe.success) {
-				// 3a. Ghost Import Resolution
-				const ghostFixed = await this.resolveMissingImports(filePath, buildProbe.errors)
-				if (ghostFixed) {
-					totalFixed++
+				// V200: Deterministic Forensic Pre-Pass (Heroic Phase)
+				// Fixes clear ghost symbols BEFORE expensive build tools run.
+				const preFixed = await this.forensicStabilize(filePath)
+				if (preFixed > 0) {
+					totalFixed += preFixed
 					fileModified = true
-					repairLog.push(`[GHOST_FIX] Materialized missing symbols in ${filePath}`)
+					repairLog.push(`[FORENSIC] Deterministically resolved ${preFixed} ghost symbol(s) in ${filePath}`)
 				}
 
-				// 3b. Structural Alignment
-				if (await this.healer.autoHeal(filePath, this.spiderEngine)) {
+				// 1. Layer Alignment (Structural Primacy)
+				if (await this.alignLayerTags(filePath)) {
 					totalFixed++
 					fileModified = true
-					repairLog.push(`[STRUCTURAL_HEAL] Corrected architectural regression in ${filePath}`)
+					repairLog.push(`[ALIGNMENT] Resolved [LAYER] metadata drift in ${filePath}`)
 				}
 
-				// 3c. Semantic Pruning (Demoting unused symbols causing bloat/shadowing)
+				// 1b. Immune-Driven Hardening (V91)
+				if (this.pathogens?.isPathogenic(filePath)) {
+					Logger.info(
+						`[SovereignGarbageCollector] Chronic failure history detected for ${path.basename(filePath)}. Triggering Deep Forensic Scan.`,
+					)
+					const deepFixed = await this.deepScanPathogen(filePath)
+					totalFixed += deepFixed
+					if (deepFixed > 0) fileModified = true
+				}
+
+				// 2. Build Check (Diagnostic Probe) - The Source of Forensic Truth
+				const buildProbe = await this.runMiniTsc(absolutePath)
+
+				// 3. Reactive Stabilizations (Only triggered by physical build blockers)
+				if (!buildProbe.success) {
+					// 3a. Ghost Import Resolution
+					const ghostFixed = await this.resolveMissingImports(filePath, buildProbe.errors)
+					if (ghostFixed) {
+						totalFixed++
+						fileModified = true
+						repairLog.push(`[GHOST_FIX] Materialized missing symbols in ${filePath}`)
+					}
+
+					// 3b. Structural Alignment
+					if (await this.healer.autoHeal(filePath, this.spiderEngine)) {
+						totalFixed++
+						fileModified = true
+						repairLog.push(`[STRUCTURAL_HEAL] Corrected architectural regression in ${filePath}`)
+					}
+
+					// 3d. Circular Dependency Mitigation
+					if (await this.resolveCircularDependencies(filePath)) {
+						totalFixed++
+						fileModified = true
+						repairLog.push(`[CIRCULAR_FIX] Mitigated dependency cycle involving ${filePath}`)
+					}
+				}
+
+				// 4. Baseline Stabilization (Lint & Format)
+				const lintResult = await this.runBiomeCheck(absolutePath)
+				if (lintResult.fixedCount > 0) {
+					totalFixed += lintResult.fixedCount
+					fileModified = true
+					repairLog.push(`[LINT] Heroic Healing: Fixed ${lintResult.fixedCount} formatting/lint issues in ${filePath}`)
+
+					// V189: Double Down Reinforcement
+					repairLog.push(
+						`✨ [STRUCTURAL GAIN]: Code purity improved in ${path.basename(filePath)}. Double down on this concept!`,
+					)
+				}
+
+				// 5. Authoritative Deadwood Pruning (V200: Industrial Sovereignty)
+				// Automatically demotes unused exports (SPI-103) found by the Forensic Engine.
 				if (await this.pruneUnusedExports(filePath)) {
 					totalFixed++
 					fileModified = true
-					repairLog.push(`[PRUNING] Removed unused exports in ${filePath}`)
+					repairLog.push(`[PRUNING] Autonomously neutralized deadwood symbols in ${filePath}`)
 				}
 
-				// 3d. Circular Dependency Mitigation
-				if (await this.resolveCircularDependencies(filePath)) {
-					totalFixed++
-					fileModified = true
-					repairLog.push(`[CIRCULAR_FIX] Mitigated dependency cycle involving ${filePath}`)
+				// 6. Forensic Pruning (False Positive Suppression)
+				await this.pruneFalsePositives(filePath)
+
+				// 9. Final Build Check (Verification)
+				const miniTsc = await this.runMiniTsc(absolutePath)
+				if (!miniTsc.success) {
+					remainingErrors.push(...miniTsc.errors.map((e) => `[TSC] ${e}`))
 				}
-			}
 
-			// 4. Baseline Stabilization (Lint & Format)
-			const lintResult = await this.runBiomeCheck(absolutePath)
-			if (lintResult.fixedCount > 0) {
-				totalFixed += lintResult.fixedCount
-				fileModified = true
-				repairLog.push(`[LINT] Fixed ${lintResult.fixedCount} formatting/lint issues in ${filePath}`)
-			}
+				if (lintResult.errors.length > 0) {
+					remainingErrors.push(...lintResult.errors.map((e) => `[BIOME] ${path.basename(filePath)}: ${e}`))
+				}
 
-			// 5. Autonomous Deadwood Pruning (V200: Industrial Sovereignty)
-			// Automatically demotes unused exports (SPI-103) found by the Forensic Engine.
-			if (await this.pruneUnusedExports(filePath)) {
-				totalFixed++
-				fileModified = true
-				repairLog.push(`[PRUNING] Autonomously neutralized deadwood symbols in ${filePath}`)
-			}
+				// 🌊 Wave-Front Expansion: If file was modified, sweep its dependents
+				// V200: Metabolic Throttling — Adjust expansion depth based on pressure
+				const immune = this.monitor?.getImmuneResponse()
+				const maxDepth = immune?.strategy === "STABILIZE" ? 1 : 2
 
-			// 6. Forensic Pruning (False Positive Suppression)
-			await this.pruneFalsePositives(filePath)
-
-			// 9. Final Build Check (Verification)
-			const miniTsc = await this.runMiniTsc(absolutePath)
-			if (!miniTsc.success) {
-				remainingErrors.push(...miniTsc.errors.map((e) => `[TSC] ${e}`))
-			}
-
-			if (lintResult.errors.length > 0) {
-				remainingErrors.push(...lintResult.errors.map((e) => `[BIOME] ${path.basename(filePath)}: ${e}`))
-			}
-
-			// 🌊 Wave-Front Expansion: If file was modified, sweep its dependents
-			if (fileModified && depth < 2) {
-				const node = this.spiderEngine.nodes.get(this.spiderEngine.normalizePath(filePath))
-				if (node && node.dependents.length > 0) {
-					Logger.info(
-						`[SovereignGarbageCollector] Wave-Front expansion: Scheduling ${node.dependents.length} dependents of ${path.basename(filePath)} for stabilization.`,
-					)
-					for (const dep of node.dependents) {
-						if (!processed.has(dep)) {
-							queue.push({ path: dep, depth: depth + 1 })
+				if (fileModified && depth < maxDepth) {
+					const node = this.spiderEngine.nodes.get(this.spiderEngine.normalizePath(filePath))
+					if (node && node.dependents.length > 0) {
+						Logger.info(
+							`[SovereignGarbageCollector] Wave-Front expansion: Scheduling ${node.dependents.length} dependents of ${path.basename(filePath)} (Metabolic Depth: ${maxDepth}).`,
+						)
+						for (const dep of node.dependents) {
+							if (!processed.has(dep)) {
+								queue.push({ path: dep, depth: depth + 1 })
+							}
 						}
 					}
 				}
+			}
+
+			// V200: Orphanage Hardening (Evolutionary Purge)
+			if (this.monitor?.getImmuneResponse().strategy === "PURGE") {
+				const orphansFixed = await this.pruneOrphans()
+				if (orphansFixed > 0) {
+					totalFixed += orphansFixed
+					repairLog.push(`[ORPHAN_PURGE] Identified and neutralized ${orphansFixed} orphaned substrate node(s).`)
+				}
+			}
+		} finally {
+			if (lockId) {
+				this.spiderEngine.releaseStabilityLock("SovereignGarbageCollector", lockId)
 			}
 		}
 
@@ -308,10 +337,16 @@ export class SovereignGarbageCollector {
 			return { success: true, errors: [] }
 		} catch (e: unknown) {
 			const err = e as { stderr?: string; stdout?: string }
-			const errors = (err.stderr || err.stdout || "")
+			const fullOutput = err.stderr || err.stdout || ""
+			const errors = fullOutput
 				.split("\n")
 				.filter((l: string) => l.includes("error TS"))
-				.slice(0, 3)
+				.slice(0, 5) // Increased visibility
+
+			// V190: Forensic enrichment
+			if (fullOutput.includes("cannot find name")) {
+				errors.push(`[FORENSIC] Symbol missing. Ghost materialization recommended.`)
+			}
 			return { success: false, errors }
 		}
 	}
@@ -410,14 +445,11 @@ export class SovereignGarbageCollector {
 				{ cwd: this.cwd },
 			)
 
-			const fixedMatch = stdout.match(/Fixed (\d+) file/i)
-			const fixedCount = fixedMatch ? Number.parseInt(fixedMatch[1], 10) : 0
-
 			// Parse errors if any persist
 			const errors: string[] = []
-			if (stderr.includes("error")) {
-				// Simple parsing of biome error lines
-				const lines = stderr.split("\n")
+			const fullOutput = stdout + stderr
+			if (fullOutput.includes("error")) {
+				const lines = fullOutput.split("\n")
 				for (const line of lines) {
 					if (line.includes("error[")) {
 						errors.push(line.trim())
@@ -425,19 +457,27 @@ export class SovereignGarbageCollector {
 				}
 			}
 
+			const fixedMatch = stdout.match(/Fixed (\d+) file/i)
+			const fixedCount = fixedMatch ? Number.parseInt(fixedMatch[1], 10) : 0
+
+			// V190: Force multiple passes if fixes were successful to ensure cascading purity
+			if (fixedCount > 0 && errors.length > 0) {
+				Logger.info(`[SovereignGarbageCollector] Fixed ${fixedCount} issues. Running secondary verification pass.`)
+				return await this.runBiomeCheck(absolutePath)
+			}
+
 			return { fixedCount, errors }
 		} catch (e: unknown) {
-			const err = e as { stderr?: string }
-			// Biome exits with non-zero if errors persist
+			const err = e as { stderr?: string; stdout?: string }
 			const errors: string[] = []
-			const lines = (err.stderr || "").split("\n")
+			const lines = (err.stderr || err.stdout || "").split("\n")
 			for (const line of lines) {
 				if (line.includes("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")) continue
 				if (line.trim().length > 0 && !line.includes("Checking") && !line.includes("Found")) {
 					errors.push(line.trim())
 				}
 			}
-			return { fixedCount: 0, errors: errors.slice(0, 5) } // Cap at 5 errors per file
+			return { fixedCount: 0, errors: errors.slice(0, 8) } // Cap at 8 errors per file
 		}
 	}
 	/**
@@ -507,5 +547,58 @@ export class SovereignGarbageCollector {
 		}
 
 		return fixed
+	}
+
+	/**
+	 * V200: Deterministic Forensic Stabilization.
+	 * Resolves structural violations (Ghosts) identified by the Spider Engine
+	 * BEFORE expensive build tools are invoked.
+	 */
+	private async forensicStabilize(filePath: string): Promise<number> {
+		const violations = this.spiderEngine.getViolations().filter((v) => v.path === filePath)
+		let fixedCount = 0
+
+		for (const v of violations) {
+			if (v.id === "SPI-101" || v.id === "SPI-102") {
+				// Deterministic Ghost: We only resolve if the symbol/file provider is known and unique.
+				const symbol = v.message.match(/-> (.*) from/)?.[1] || v.message.match(/GHOST SYMBOL: .* -> (.*) from/)?.[1]
+				if (symbol && (await this.resolveMissingImports(filePath, [`Cannot find name '${symbol}'`]))) {
+					fixedCount++
+				}
+			}
+		}
+
+		return fixedCount
+	}
+
+	/**
+	 * V200: Orphanage Hardening.
+	 * Identifies files that are completely disconnected from the project graph
+	 * and recommends them for removal to prevent substrate bloat.
+	 */
+	private async pruneOrphans(): Promise<number> {
+		const nodes = this.spiderEngine.nodes
+		let orphanCount = 0
+
+		for (const [id, node] of nodes.entries()) {
+			if (node.orphaned && !node.path.includes("/__tests__/") && !node.path.endsWith(".d.ts")) {
+				// We don't delete them automatically, we neutralize them (stub them or flag them)
+				// For industrial hardening, we add a [DEADWOOD] marker.
+				const absolutePath = path.resolve(this.cwd, node.path)
+				try {
+					let content = await fs.readFile(absolutePath, "utf-8")
+					if (!content.includes("[SOVEREIGN_DEADWOOD]")) {
+						content =
+							`/** [SOVEREIGN_DEADWOOD] This file is an orphan. It is scheduled for evolutionary purging. */\n` +
+							content
+						await fs.writeFile(absolutePath, content, "utf-8")
+						orphanCount++
+					}
+				} catch (err) {
+					Logger.error(`[SovereignGarbageCollector] Failed to neutralize orphan ${node.path}:`, err)
+				}
+			}
+		}
+		return orphanCount
 	}
 }

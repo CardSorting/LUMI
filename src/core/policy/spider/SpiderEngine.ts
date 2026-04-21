@@ -441,6 +441,29 @@ export class SpiderEngine {
 		}, 100)
 	}
 
+	/**
+	 * V200: Merkle Verification.
+	 * Compares the in-memory Merkle Root with a fresh physical scan
+	 * to detect stealth drift or external modifications.
+	 */
+	public async verifySubstrateIntegrity(): Promise<{ synchronized: boolean; drift: number }> {
+		const currentMerkle = this.computeMerkleRoot()
+		const backupNodes = new Map(this.nodes)
+
+		await this.synchronizeRegistry()
+		const freshMerkle = this.computeMerkleRoot()
+
+		if (currentMerkle !== freshMerkle) {
+			const drift = Array.from(this.nodes.keys()).length - Array.from(backupNodes.keys()).length
+			Logger.warn(
+				`[SpiderEngine] Substrate Drift Detected! Merkle ${currentMerkle.substring(0, 8)} -> ${freshMerkle.substring(0, 8)}`,
+			)
+			return { synchronized: false, drift }
+		}
+
+		return { synchronized: true, drift: 0 }
+	}
+
 	private checkStabilityPressure() {
 		const stats = v8.getHeapStatistics()
 		const usedPercent = (stats.used_heap_size / stats.heap_size_limit) * 100
@@ -457,10 +480,12 @@ export class SpiderEngine {
 			return
 		}
 
+		// V200: Node Immortality - Protect hotspots even during high pressure
 		if (usedPercent > 80) {
 			Logger.warn(
-				`[SpiderEngine] High Metabolic Pressure detected (${SafeNumber.format(usedPercent, 1)}%). Triggering Substrate Sweep.`,
+				`[SpiderEngine] High Metabolic Pressure detected (${SafeNumber.format(usedPercent, 1)}%). Triggering Selective Sweep.`,
 			)
+			// Protective sweep: Keep hotspots, only clear legacy caches
 			this.resolver.clearCaches()
 			this.sessionBuffer.clear()
 			if (global.gc) global.gc()

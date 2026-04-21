@@ -281,9 +281,13 @@ export class TspPolicyPlugin {
 		if (!tag) {
 			if (isLayerTagSupported(filePath, content)) {
 				if (this.theme === "strict") {
-					errors.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
+					errors.push(
+						`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag. REMEDIATION: Add '/** [LAYER: ${currentLayer.toUpperCase()}] */' at the top of the file.`,
+					)
 				} else {
-					warnings.push(`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag.`)
+					warnings.push(
+						`${path.basename(filePath)}: Missing mandatory [LAYER: TYPE] header tag. REMEDIATION: Add '/** [LAYER: ${currentLayer.toUpperCase()}] */' at the top of the file.`,
+					)
 				}
 			}
 		} else if (tag !== currentLayer) {
@@ -485,8 +489,10 @@ export class TspPolicyPlugin {
 		// Heuristic: If it exports a class, it MUST have a contract
 		const isIgnored = content.includes("@sovereign-ignore contractual-integrity")
 		if (content.includes("export class ") && !content.includes(`implements ${interfaceName}`) && !isIgnored) {
+			const remediation = `export class ${baseName} implements ${interfaceName} { ... }`
 			warnings.push(
-				`📜 CONTRACTLESS BREACH: Module ${baseName} exports concrete logic without a formal contract in ${expectedInterfacePath}.`,
+				`📜 CONTRACTLESS BREACH: Module ${baseName} exports concrete logic without a formal contract in ${expectedInterfacePath}.\n` +
+					`REMEDIATION: Extract interface '${interfaceName}' and use 'implements'. Snippet: ${remediation}`,
 			)
 		}
 	}

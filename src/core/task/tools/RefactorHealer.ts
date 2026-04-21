@@ -1,4 +1,4 @@
-import fsSync from "fs"
+import * as fsSync from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as ts from "typescript"
@@ -197,7 +197,15 @@ export class RefactorHealer {
 		const oldRel = oldPath.replace(".ts", "").replace(".tsx", "")
 		const newRel = newPath.replace(".ts", "").replace(".tsx", "")
 
-		for (const dependent of node.dependents) {
+		// V190 Hardening: Forensic recursion (healing deep dependents)
+		const visited = new Set<string>()
+		const queue = [...node.dependents]
+
+		while (queue.length > 0) {
+			const dependent = queue.shift()
+			if (!dependent || visited.has(dependent)) continue
+			visited.add(dependent)
+
 			try {
 				const depAbs = path.resolve(this.projectRoot, dependent)
 				const content = await fs.readFile(depAbs, "utf-8")
@@ -214,6 +222,10 @@ export class RefactorHealer {
 						Logger.info(
 							`[RefactorHealer] Automatically re-linked import in ${path.basename(dependent)}: ${oldImportStr} -> ${newImportStr}`,
 						)
+
+						// Add dependents of this healed file to the queue for secondary stability
+						const depNode = engine.nodes.get(dependent)
+						if (depNode) queue.push(...depNode.dependents)
 					}
 				}
 			} catch (_e) {
@@ -245,7 +257,7 @@ export class RefactorHealer {
 			// V16: Semantic Sensing - Search for existing symbols in the graph
 			if (engine) {
 				const matches: { symbol: string; path: string }[] = []
-				for (const node of engine.nodes.values()) {
+				for (const node of Array.from(engine.nodes.values())) {
 					if (node.path === filePath) continue
 					for (const exported of node.exports) {
 						if (
@@ -456,16 +468,60 @@ export class RefactorHealer {
 	/**
 	 * V18: Generates a suggested interface contract for a concrete class.
 	 */
-	public generateInterfaceBridge(className: string): string {
+	public generateInterfaceBridge(className: string, absolutePath: string): string {
 		const interfaceName = `I${className.charAt(0).toUpperCase()}${className.slice(1)}`
-		return [
-			`/** [LAYER: DOMAIN] */`,
-			`export interface ${interfaceName} {`,
-			`  // Add formal contract methods here`,
-			`  initialize(): Promise<void>;`,
-			`  dispose(): void;`,
-			`}`,
-		].join("\n")
+		const signatures: string[] = []
+
+		try {
+			if (fsSync.existsSync(absolutePath)) {
+				const content = fsSync.readFileSync(absolutePath, "utf-8")
+				const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
+
+				ts.forEachChild(sourceFile, (node) => {
+					if (ts.isClassDeclaration(node) && node.name?.getText(sourceFile) === className) {
+						for (const member of node.members) {
+							// PRODUCTION HARDENING: Safe modifier check for ClassElement
+							const modifiers = ts.canHaveModifiers(member) ? ts.getModifiers(member) : undefined
+							const isPublic = !modifiers?.some(
+								(m: ts.Modifier) =>
+									m.kind === ts.SyntaxKind.PrivateKeyword || m.kind === ts.SyntaxKind.ProtectedKeyword,
+							)
+
+							if (isPublic && (ts.isMethodDeclaration(member) || ts.isPropertyDeclaration(member))) {
+								const name = member.name.getText(sourceFile)
+								const params = ts.isMethodDeclaration(member)
+									? `(${member.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
+									: ""
+								const type = member.type ? `: ${member.type.getText(sourceFile)}` : ""
+								const isAsync = member.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)
+									? "Promise<"
+									: ""
+								const isAsyncEnd = isAsync ? ">" : ""
+
+								// Convert to interface signature
+								if (ts.isMethodDeclaration(member)) {
+									signatures.push(
+										`  ${name}${params}: ${isAsync}${member.type?.getText(sourceFile) || "void"}${isAsyncEnd};`,
+									)
+								} else {
+									signatures.push(`  ${name}${type};`)
+								}
+							}
+						}
+					}
+				})
+			}
+		} catch (err) {
+			Logger.error(`[RefactorHealer] Failed to generate interface bridge for ${className}:`, err)
+		}
+
+		if (signatures.length === 0) {
+			signatures.push("  // TODO: Add formal contract methods")
+			signatures.push("  initialize(): Promise<void>;")
+			signatures.push("  dispose(): void;")
+		}
+
+		return [`/** [LAYER: DOMAIN] */`, `export interface ${interfaceName} {`, ...signatures, `}`].join("\n")
 	}
 
 	/**
@@ -474,7 +530,7 @@ export class RefactorHealer {
 	 */
 	private extractMemberSignatures(symbol: string, engine: SpiderEngine): string[] {
 		const signatures: string[] = []
-		for (const node of engine.nodes.values()) {
+		for (const node of Array.from(engine.nodes.values())) {
 			if (node.exports.includes(symbol)) {
 				const absolutePath = path.resolve(this.projectRoot, node.path)
 				try {
@@ -502,15 +558,14 @@ export class RefactorHealer {
 										ts.isMethodDeclaration(member) || ts.isMethodSignature(member)
 											? `(${member.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
 											: ""
-									const type = (
+									const typeNode = (
 										member as
 											| ts.PropertyDeclaration
 											| ts.PropertySignature
 											| ts.MethodDeclaration
 											| ts.MethodSignature
 									).type
-										? `: ${(member as any).type.getText(sourceFile)}`
-										: ""
+									const type = typeNode ? `: ${typeNode.getText(sourceFile)}` : ""
 									signatures.push(`public ${isAsync}${name}${params}${type};`)
 								}
 							}
@@ -573,5 +628,56 @@ export class RefactorHealer {
 		}
 		// Dedup signatures
 		return Array.from(new Set(signatures))
+	}
+
+	/**
+	 * V190: Industrial Contract Enforcement.
+	 * Automatically materializes an interface file and updates the concrete class to 'implements' it.
+	 */
+	public async enforceContract(filePath: string, className: string): Promise<boolean> {
+		const interfaceName = `I${className.charAt(0).toUpperCase()}${className.slice(1)}`
+		const interfacePath = path.join("src/domain/interfaces", `${interfaceName}.ts`)
+		const absoluteInterfacePath = path.resolve(this.projectRoot, interfacePath)
+
+		try {
+			// 1. Generate Interface Content
+			const absolutePath = path.resolve(this.projectRoot, filePath)
+			const interfaceContent = this.generateInterfaceBridge(className, absolutePath)
+			await fs.mkdir(path.dirname(absoluteInterfacePath), { recursive: true })
+			await fs.writeFile(absoluteInterfacePath, interfaceContent, "utf-8")
+
+			// 2. Update Concrete Class
+			let content = await fs.readFile(absolutePath, "utf-8")
+
+			// Inject 'implements'
+			content = content.replace(
+				new RegExp(`export class ${className}\\b`),
+				`export class ${className} implements ${interfaceName}`,
+			)
+
+			// Inject Import
+			let relPath = path.relative(path.dirname(filePath), interfacePath).replace(/\.tsx?$/, "")
+			if (!relPath.startsWith(".")) relPath = `./${relPath}`
+			const importLine = `import { ${interfaceName} } from "${relPath}"\n`
+
+			const lines = content.split("\n")
+			// Inject after [LAYER] tag
+			let insertIndex = 0
+			for (let i = 0; i < lines.length; i++) {
+				if (lines[i].includes("[LAYER:")) {
+					insertIndex = i + 1
+					break
+				}
+			}
+			lines.splice(insertIndex, 0, importLine)
+
+			await fs.writeFile(absolutePath, lines.join("\n"), "utf-8")
+
+			Logger.info(`[RefactorHealer] Industrial Contract Enforced: ${className} -> ${interfaceName}`)
+			return true
+		} catch (err) {
+			Logger.error(`[RefactorHealer] Contract Enforcement failed for ${className}:`, err)
+			return false
+		}
 	}
 }

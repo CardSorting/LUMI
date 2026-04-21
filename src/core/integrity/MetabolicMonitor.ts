@@ -344,6 +344,23 @@ export class MetabolicMonitor {
 	 * PRODUCTION HARDENING: Evaluates the project-wide cognitive load and triggers a COOLDOWN
 	 * if the metabolic churn exceeds the safety capacity of the substrate.
 	 */
+	/**
+	 * V200: Evolutionary Resilience.
+	 * Aggregates metabolic data to recommend a structural strategy.
+	 */
+	public getImmuneResponse(): { strategy: "STABILIZE" | "PURGE" | "RESONATE" | "NEUTRAL"; pressure: number; doubt: number } {
+		const stats = this.getStabilityStats()
+		const stagnant = this.getStagnantSubstrate()
+		const doubt = stats.avgDoubtSignal
+		const pressure = stats.avgPressure
+
+		if (pressure > 8.0 || doubt > 10.0) return { strategy: "STABILIZE", pressure, doubt }
+		if (stagnant.length > 5) return { strategy: "PURGE", pressure, doubt }
+		if (pressure < 2.0 && doubt < 2.0) return { strategy: "RESONATE", pressure, doubt }
+
+		return { strategy: "NEUTRAL", pressure, doubt }
+	}
+
 	public getCooldownStatus(isRefactoring = false): { active: boolean; reason?: string } {
 		const recentThreshold = Date.now() - 1800000 // 30 minutes
 		const totalRecentWrites = Array.from(this.registry.values()).reduce((acc, m) => {
