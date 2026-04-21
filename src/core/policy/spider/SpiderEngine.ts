@@ -59,7 +59,11 @@ export class SpiderEngine {
 	private metrics: MetricsEngine
 	private persistence: PersistenceManager
 	private forensic: ForensicEngine
-	private suppressions: Set<string> = new Set() // V45: Forensic Suppression List
+	private suppressions: Set<string> = new Set()
+	private graphRevision = 0
+	private lastCycleRevision = -1
+	private cachedCycles: string[][] = []
+	// V45: Forensic Suppression List
 	private sessionBuffer: Map<string, string> = new Map() // V71: Virtual Session Sensing
 	private stabilityLock: string | null = null // V190: Lock owner
 	private stabilityLockId: string | null = null // V200: Session-specific lock ID
@@ -209,6 +213,9 @@ export class SpiderEngine {
 
 		const oldNode = this.nodes.get(normalizedPath)
 		if (oldNode && oldNode.hash === hash) return
+
+		this.graphRevision++
+		this.resolver.clearCaches()
 
 		let sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
 		let importData = this.extractDetailedImports(sourceFile)
@@ -414,9 +421,10 @@ export class SpiderEngine {
 	private updateIncrementalCoupling(nodeId: string, oldImports: string[], newImports: string[]) {
 		const removed = oldImports.filter((o) => !newImports.includes(o))
 		const added = newImports.filter((n) => !oldImports.includes(n))
+		const nodeIds = new Set(this.nodes.keys())
 
 		for (const imp of removed) {
-			const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, new Set(this.nodes.keys()))
+			const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds)
 			const target = targetId ? this.nodes.get(targetId) : null
 			if (target) {
 				target.dependents = target.dependents.filter((d) => d !== nodeId)
@@ -424,7 +432,7 @@ export class SpiderEngine {
 			}
 		}
 		for (const imp of added) {
-			const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, new Set(this.nodes.keys()))
+			const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds)
 			const target = targetId ? this.nodes.get(targetId) : null
 			if (target && !target.dependents.includes(nodeId)) {
 				target.dependents.push(nodeId)
@@ -584,11 +592,14 @@ export class SpiderEngine {
 				message: u,
 			})
 		}
-
 		// V204: Circular Dependency Detection.
 		// Identify cycles involving the target file to prevent substrate instability.
-		const cycles = this.metrics.detectCycles(this.nodes)
-		for (const cycle of cycles) {
+		if (this.lastCycleRevision !== this.graphRevision) {
+			this.cachedCycles = this.metrics.detectCycles(this.nodes)
+			this.lastCycleRevision = this.graphRevision
+		}
+
+		for (const cycle of this.cachedCycles) {
 			if (filePath && !cycle.includes(this.resolver.normalizePath(filePath))) continue
 
 			const cycleStr = cycle.map((p) => path.basename(p)).join(" -> ")

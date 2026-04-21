@@ -271,13 +271,13 @@ export class RefactorHealer {
 	 * V204: Barrel Sync Detection.
 	 * Detects if a file in a directory with an index.ts is missing from its exports.
 	 */
-	public async detectMissingFromBarrel(filePath: string): Promise<string[]> {
+	public detectMissingFromBarrel(filePath: string): string[] {
 		const dir = path.dirname(filePath)
 		const indexPath = path.join(dir, "index.ts")
 		const absoluteIndexPath = path.isAbsolute(indexPath) ? indexPath : path.resolve(this.projectRoot, indexPath)
 
 		try {
-			const indexContent = await fs.readFile(absoluteIndexPath, "utf-8")
+			const indexContent = fsSync.readFileSync(absoluteIndexPath, "utf-8")
 			const fileName = path.basename(filePath, path.extname(filePath))
 
 			// Simple check: is there an export for this file?

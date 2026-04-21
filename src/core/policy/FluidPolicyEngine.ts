@@ -84,6 +84,8 @@ export class FluidPolicyEngine {
 	private readonly envSovereignty: EnvironmentSovereignty
 	private karma = 0
 
+	private isChecking = false
+
 	constructor(
 		private cwd: string,
 		private streamId?: string,
@@ -793,307 +795,328 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// In PLAN mode, skip enforcement — agent is only planning, not writing
-		// Return guidance instead of blocking
-		if (this.mode === "plan" && block.params?.path) {
-			// consolidated to top-level import
-			const filePath = path.resolve(this.cwd, block.params.path)
-			const layer = getLayer(filePath)
+		return result
+	}
 
-			// Predictive Collision Check: Warn early if another stream has a lock
-			const collision = await orchestrator.checkCollision(this.streamId || "viewer", [filePath])
-			if (collision) {
-				return {
-					success: true,
-					warning: `⚠️ PREDICTIVE COLLISION: You are planning to edit \`${path.basename(filePath)}\`, but it's currently LOCKED by a sibling stream. Coordination is required before acting.`,
-				}
+	public async execute(block: ToolUse): Promise<PolicyResult> {
+		if (this.isChecking) return { success: true }
+		this.isChecking = true
+
+		let result: PolicyResult = { success: true }
+		try {
+			const preResult = await this.validatePreExecution(block)
+			if (!preResult.success) {
+				result = preResult
+				return result
 			}
+			result = preResult
 
-			return {
-				success: true,
-				warning: `📍 Planning a change in the **${layer.toUpperCase()}** layer (${path.basename(filePath)}).`,
-			}
-		}
-
-		// v9 HARDENING: Pre-emptive Match Sensing for replace_in_file (simulated via FILE_EDIT validation)
-		if (block.name === DietCodeDefaultTool.FILE_EDIT && block.params?.path && (block.params as { diff?: string }).diff) {
-			const filePath = path.resolve(this.cwd, block.params.path)
-			const diff = (block.params as { diff: string }).diff as string
-			const searchBlocks = diff.match(/------- SEARCH\n([\s\S]*?)\n=======/)
-			if (searchBlocks) {
-				const searchContent = searchBlocks[1]
-				try {
-					const currentDiskContent = await fs.readFile(filePath, "utf-8")
-					if (!currentDiskContent.includes(searchContent)) {
-						// v9 AUTO-CORRECTION: Provide the agent with the actual lines to fix the search block
-						const searchLines = searchContent.split("\n")
-						const firstLine = searchLines[0].trim()
-						const diskLines = currentDiskContent.split("\n")
-						const matchIndex = diskLines.findIndex((l) => l.includes(firstLine))
-						let hint = ""
-						if (matchIndex !== -1) {
-							const contextWindow = diskLines.slice(Math.max(0, matchIndex - 2), matchIndex + 5).join("\n")
-							hint = `\n\n🔍 AUTO-CORRECTION HINT: Your SEARCH block failed, but I found a similar section starting at line ${matchIndex + 1}:\n\`\`\`typescript\n${contextWindow}\n\`\`\``
-						}
-
-						return {
-							success: false,
-							error: `🛑 PRE-EMPTIVE MATCH FAILURE: The SEARCH block in your edit does not match the current state of \`${path.basename(filePath)}\`.${hint}\n\n💡 RECOVERY: Update your SEARCH block to match the actual file content exactly.`,
-						}
-					}
-				} catch (_e) {
-					// File might not exist
-				}
-			}
-		}
-
-		// Architectural Policy: AST + Database Concurrent Pass
-		if (
-			(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
-			block.params?.path &&
-			block.params?.content
-		) {
-			const filePath = path.resolve(this.cwd, block.params.path)
-			const content = block.params.content as string
-
-			// 0. Rule: Contextual Sovereignty Guard (Staleness Protection)
-			// PRODUCTION HARDENING: Proactively block edits based on verifiably stale context.
-			const staleness = this.stalenessTracker.checkStaleness(filePath)
-			if (staleness.isStale && !this.commitSeal) {
-				const fileName = path.basename(filePath)
-				// PRODUCTION HARDENING: Proactive recovery hint with a ready-to-use tool call snippet
-				return {
-					success: true,
-					warning: `⚠️ CONTEXTUAL SOVEREIGNTY BREACH: You are attempting to edit \`${fileName}\` based on a stale mental model.\nReason: ${staleness.reason}\n\n💡 RECOVERY: Execute the following command to synchronize your context:\n\`\`\`json\n{\n  "name": "read_file",\n  "params": { "path": "${filePath}" }\n}\n\`\`\``,
-				}
-			}
-
-			// Update Spider session cache with Incremental Node Sync (v16)
-			this.sessionFiles.set(filePath, content)
-			this.spiderEngine.updateNode(filePath, content)
-
-			// 1. AST Validation (TSP)
-			// V9: Pass trend signals for Absolute Metabolic Integrity
-			const isRecovering = this.spiderEngine.isRecovering
-			const isHealing = content.includes("[SOVEREIGN_HEALING]") || content.includes("# HEALING TURN")
-			const astValidation = this.tspPlugin.validateSource(
-				filePath,
-				content,
-				this.virtualResolver,
-				isRecovering || isHealing,
-			)
-
-			// Block on AST Failure (Strike 1 Domain)
-			if (!astValidation.success) {
-				const layer = this.getCachedLayer(filePath)
-				const strikes = await this.incrementStrikes(filePath)
-				const projectHealth = this.computeBuildHealth(this.spiderEngine.getViolations().map((v) => v.message))
-
-				// PRODUCTION HARDENING: Layer-aware blocking.
-				// 1. DOMAIN is the holy of holies — ALWAYS block on any error UNLESS [SOVEREIGN_HEALING] is present.
-				// 2. CORE is the mission control — block on Strike 1 if integrity is compromised (< 70) AND declining.
-
-				const isRecoveringTrend = this.spiderEngine.isRecovering
-				const shouldBlock =
-					(layer === "domain" && astValidation.errors.length > 0 && !isHealing) ||
-					(layer === "core" &&
-						strikes === 1 &&
-						astValidation.errors.length > 0 &&
-						projectHealth < 70 &&
-						!isRecoveringTrend)
-
-				if (shouldBlock) {
-					const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
-					const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN SOVEREIGNTY BREACH" : "🏗️ CORE INTEGRITY PROTECT"
-					const shield = this.telemetrics.getResilienceShield()
-
-					// PFH: Proactive Forensic Healing - We allow the write but force a repair turn
-					return {
-						success: true,
-						warning:
-							`${shield}🚨 ${rejectionTitle} [REPAIR_REQUIRED]\n` +
-							`Layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s) (Strike ${strikes}):\n${violationSummaryRejection}\n\n` +
-							`${this.getCorrectionHint(astValidation.errors, filePath)}\n\n` +
-							`‼️ **PROACTIVE FORENSIC HEALING REQUIRED**\n` +
-							`To maintain substrate stability, your NEXT turn MUST resolve these violations. ` +
-							`If these errors persist, the system will trigger a Hard Metabolic Cooldown.`,
-						violations: astValidation.errors,
-					}
-				}
-
-				// Strike 2+ or other layers: Warning only
-				const allWarnings = [...(astValidation.warnings || []), ...astValidation.errors]
-				const violationSummary = allWarnings.map((e: string) => `  - ${e}`).join("\n")
-				const entropy = this.spiderEngine.computeEntropy()
-				const latestSnapshot = await this.spiderEngine.getLatestSnapshot()
-				const delta = latestSnapshot ? this.spiderEngine.compareWith(latestSnapshot) : 0
-
-				if (this.streamId) {
-					await orchestrator.storeMemory(this.streamId, "last_entropy_score", entropy.score.toString())
-					if (delta > 0.01) {
-						await orchestrator.storeMemory(this.streamId, "entropy_decay", delta.toString())
-					}
-				}
-
-				// V10: Recursive Drift Protection
-				if (strikes >= 3 && layer === "core") {
-					return {
-						success: true,
-						warning:
-							`⚠️ RECURSIVE DRIFT INTERDICTION: You have attempted to edit \`${path.basename(filePath)}\` 3 times with unresolved Domain/Core violations.\n` +
-							`The substrate is rejecting these atomic changes. You are likely trying to perform a complex refactor in too small of a window.\n\n` +
-							`💡 STRATEGIC PIVOT: You MUST extract this logic or implement a formal interface rather than forcing the current approach. Use \`RefactorHealer\` to materialize a contract, or perform a # SOVEREIGN AUDIT.`,
-					}
-				}
-
-				return {
-					success: true,
-					warning:
-						layer === "domain"
-							? `⚠️ ARCHITECTURAL WARNING (Strike ${strikes} — enforcement degraded): Domain layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} unresolved violation(s):\n${violationSummary}\n\nThe write is ALLOWED to prevent deadlock.`
-							: `⚠️ ARCHITECTURAL WARNING: ${layer.toUpperCase()} layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummary}` +
-								(delta > 0.01
-									? `\n\n🕷️ ARCHITECTURAL DECAY: Entropy increased by ${SafeNumber.formatPercent(delta, 1)}%.`
-									: ""),
-					correctionHint: this.getCorrectionHint(astValidation.errors, filePath),
-				}
-			}
-
-			// Clean file — reset strikes for this path
-			await this.resetStrikes(filePath)
-
-			// V10: Harmonic Decay (Forgiveness for historically stressed files)
-			if (this.spiderEngine.isRecovering) {
-				const isHistoricallyAlarmed =
-					this.alarmViolations.some((v) => v.includes(filePath)) || this.pathogens.isPathogenic(filePath)
-				if (isHistoricallyAlarmed) {
-					Logger.info(`[FluidPolicyEngine] Triggering Harmonic Decay for successfully healed file: ${filePath}`)
-					this.pathogens.decay(filePath, 2)
-				}
-			}
-
-			// Surface AST warnings if any
-			if (astValidation.warnings && astValidation.warnings.length > 0) {
-				return {
-					success: true,
-					warning: `⚠️ DISCERNMENT WARNING: Architectural smell(s) detected:\n${astValidation.warnings.map((w: string) => `  - ${w}`).join("\n")}`,
-				}
-			}
-
-			// For new files: proactively suggest the best layer if content doesn't match location
-			if (block.name === DietCodeDefaultTool.FILE_NEW && block.params.content) {
+			// In PLAN mode, skip enforcement — agent is only planning, not writing
+			// Return guidance instead of blocking
+			if (this.mode === "plan" && block.params?.path) {
 				// consolidated to top-level import
-				const currentLayer = getLayer(filePath)
-				const suggestion = suggestLayerForContent(block.params.content)
-				if (suggestion && suggestion.layer !== currentLayer && currentLayer !== "core") {
-					return {
-						success: true,
-						warning: `📍 This file is being created in the **${currentLayer.toUpperCase()}** layer, but its content looks like it belongs in **${suggestion.layer.toUpperCase()}**.\n${suggestion.reason}\nConsider placing it under \`src/${suggestion.layer}/\` instead. If the current location is intentional, proceed.`,
-					}
-				}
-			}
-		}
+				const filePath = path.resolve(this.cwd, block.params.path)
+				const layer = getLayer(filePath)
 
-		// Concurrency Policy: Check for file collisions with sibling streams
-		if (!this.streamId) return { success: true }
-
-		if (
-			block.name === DietCodeDefaultTool.FILE_NEW ||
-			block.name === DietCodeDefaultTool.FILE_EDIT ||
-			block.name === DietCodeDefaultTool.APPLY_PATCH
-		) {
-			const params = (block as unknown as { params: Record<string, unknown> }).params || {}
-			const files = params.path ? [path.resolve(this.cwd, params.path as string)] : []
-			if (files.length > 0) {
-				const collision = await orchestrator.checkCollision(this.streamId, files)
+				// Predictive Collision Check: Warn early if another stream has a lock
+				const collision = await orchestrator.checkCollision(this.streamId || "viewer", [filePath])
 				if (collision) {
 					return {
-						success: false,
-						error: `🛑 FLUID COORDINATION ERROR: ${collision}\nYOUR COMMIT HAS BEEN BLOCKED TO PREVENT DATA CORRUPTION. Coordinate with the sibling stream or wait for its completion before proceeding.`,
+						success: true,
+						warning: `⚠️ PREDICTIVE COLLISION: You are planning to edit \`${path.basename(filePath)}\`, but it's currently LOCKED by a sibling stream. Coordination is required before acting.`,
+					}
+				}
+
+				return {
+					success: true,
+					warning: `📍 Planning a change in the **${layer.toUpperCase()}** layer (${path.basename(filePath)}).`,
+				}
+			}
+
+			// v9 HARDENING: Pre-emptive Match Sensing for replace_in_file (simulated via FILE_EDIT validation)
+			if (block.name === DietCodeDefaultTool.FILE_EDIT && block.params?.path && (block.params as { diff?: string }).diff) {
+				const filePath = path.resolve(this.cwd, block.params.path)
+				const diff = (block.params as { diff: string }).diff as string
+				const searchBlocks = diff.match(/------- SEARCH\n([\s\S]*?)\n=======/)
+				if (searchBlocks) {
+					const searchContent = searchBlocks[1]
+					try {
+						const currentDiskContent = await fs.readFile(filePath, "utf-8")
+						if (!currentDiskContent.includes(searchContent)) {
+							// v9 AUTO-CORRECTION: Provide the agent with the actual lines to fix the search block
+							const searchLines = searchContent.split("\n")
+							const firstLine = searchLines[0].trim()
+							const diskLines = currentDiskContent.split("\n")
+							const matchIndex = diskLines.findIndex((l) => l.includes(firstLine))
+							let hint = ""
+							if (matchIndex !== -1) {
+								const contextWindow = diskLines.slice(Math.max(0, matchIndex - 2), matchIndex + 5).join("\n")
+								hint = `\n\n🔍 AUTO-CORRECTION HINT: Your SEARCH block failed, but I found a similar section starting at line ${matchIndex + 1}:\n\`\`\`typescript\n${contextWindow}\n\`\`\``
+							}
+
+							return {
+								success: false,
+								error: `🛑 PRE-EMPTIVE MATCH FAILURE: The SEARCH block in your edit does not match the current state of \`${path.basename(filePath)}\`.${hint}\n\n💡 RECOVERY: Update your SEARCH block to match the actual file content exactly.`,
+							}
+						}
+					} catch (_e) {
+						// File might not exist
 					}
 				}
 			}
-		}
 
-		if (block.params?.path) {
-			const normalizedPath = this.normalize(block.params.path)
-			this.metabolicMonitor.recordWrite(normalizedPath) // V31: Intent record (without content)
+			// Architectural Policy: AST + Database Concurrent Pass
+			if (
+				(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
+				block.params?.path &&
+				block.params?.content
+			) {
+				const filePath = path.resolve(this.cwd, block.params.path)
+				const content = block.params.content as string
 
-			// --- ZERO-FRICTION COMPLIANCE HOOK ---
-			// Automatically align tags and fix outgoing imports in the backup
-			try {
-				const absolutePath = path.resolve(this.cwd, normalizedPath)
-				await this.refactorHealer.alignTag(absolutePath)
+				// 0. Rule: Contextual Sovereignty Guard (Staleness Protection)
+				// PRODUCTION HARDENING: Proactively block edits based on verifiably stale context.
+				const staleness = this.stalenessTracker.checkStaleness(filePath)
+				if (staleness.isStale && !this.commitSeal) {
+					const fileName = path.basename(filePath)
+					// PRODUCTION HARDENING: Proactive recovery hint with a ready-to-use tool call snippet
+					return {
+						success: true,
+						warning: `⚠️ CONTEXTUAL SOVEREIGNTY BREACH: You are attempting to edit \`${fileName}\` based on a stale mental model.\nReason: ${staleness.reason}\n\n💡 RECOVERY: Execute the following command to synchronize your context:\n\`\`\`json\n{\n  "name": "read_file",\n  "params": { "path": "${filePath}" }\n}\n\`\`\``,
+					}
+				}
 
-				// --- VIBRATION SENSING (Blast Radius) ---
-				// Heal the rattled dependents in the background
-				await this.refactorHealer.healCascade(absolutePath, this.spiderEngine)
-			} catch (e) {
-				Logger.warn("Refactor healer failed in background", { error: e })
-			}
-		}
+				// Update Spider session cache with Incremental Node Sync (v16)
+				this.sessionFiles.set(filePath, content)
+				this.spiderEngine.updateNode(filePath, content)
 
-		// V150: Cognitive Immortality (Eager Persistence)
-		if (this.streamId) {
-			// V189: Unified Substrate handles metabolic persistence
-		}
+				// 1. AST Validation (TSP)
+				// V9: Pass trend signals for Absolute Metabolic Integrity
+				const isRecovering = this.spiderEngine.isRecovering
+				const isHealing = content.includes("[SOVEREIGN_HEALING]") || content.includes("# HEALING TURN")
+				const astValidation = this.tspPlugin.validateSource(
+					filePath,
+					content,
+					this.virtualResolver,
+					isRecovering || isHealing,
+				)
 
-		// V204: Non-Blocking Integrity Advisories (TIA)
-		// Pull healing suggestions from the structural graph without blocking execution.
-		const advisories = this.spiderEngine.getIntegrityAdvisories(block.params?.path as string)
-		const brittlePaths = this.refactorHealer.detectRelativeImports(
-			block.params?.path as string,
-			block.params?.content as string,
-			this.spiderEngine,
-		)
-		const missingExports = this.refactorHealer.detectMissingExports(
-			block.params?.path as string,
-			block.params?.content as string,
-		)
-		const shadowing = this.refactorHealer.detectShadowing(block.params?.path as string, block.params?.content as string)
-		const unusedImports = this.refactorHealer.detectUnusedImports(
-			block.params?.path as string,
-			block.params?.content as string,
-		)
-		const barrelGaps = await this.refactorHealer.detectMissingFromBarrel(block.params?.path as string)
-		const vibrations = this.spiderEngine
-			.getIntegrityAdvisories(block.params?.path as string)
-			.filter((a) => a.id === "SPI-105")
+				// Block on AST Failure (Strike 1 Domain)
+				if (!astValidation.success) {
+					const layer = this.getCachedLayer(filePath)
+					const strikes = await this.incrementStrikes(filePath)
+					const projectHealth = this.computeBuildHealth(this.spiderEngine.getViolations().map((v) => v.message))
 
-		if (
-			advisories.length > 0 ||
-			brittlePaths.length > 0 ||
-			missingExports.length > 0 ||
-			shadowing.length > 0 ||
-			unusedImports.length > 0 ||
-			barrelGaps.length > 0 ||
-			vibrations.length > 0
-		) {
-			const advisoryHint = [
-				...advisories.map((a) => {
-					let msg = `  - 💡 [INTEGRITY_ADVISORY]: ${a.message}`
-					if (a.id === "SPI-102") {
-						const symbol = a.message.match(/SYMBOL: (.*?) ->/)?.[1]
-						if (symbol) {
-							const layer = this.getCachedLayer(a.path)
-							const boilerplate = this.refactorHealer.materializeSymbolBoilerplate(symbol, layer)
-							msg += `\n    \`\`\`typescript\n${boilerplate}\n    \`\`\``
+					// PRODUCTION HARDENING: Layer-aware blocking.
+					// 1. DOMAIN is the holy of holies — ALWAYS block on any error UNLESS [SOVEREIGN_HEALING] is present.
+					// 2. CORE is the mission control — block on Strike 1 if integrity is compromised (< 70) AND declining.
+
+					const isRecoveringTrend = this.spiderEngine.isRecovering
+					const shouldBlock =
+						(layer === "domain" && astValidation.errors.length > 0 && !isHealing) ||
+						(layer === "core" &&
+							strikes === 1 &&
+							astValidation.errors.length > 0 &&
+							projectHealth < 70 &&
+							!isRecoveringTrend)
+
+					if (shouldBlock) {
+						const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
+						const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN SOVEREIGNTY BREACH" : "🏗️ CORE INTEGRITY PROTECT"
+						const shield = this.telemetrics.getResilienceShield()
+
+						// PFH: Proactive Forensic Healing - We allow the write but force a repair turn
+						return {
+							success: true,
+							warning:
+								`${shield}🚨 ${rejectionTitle} [REPAIR_REQUIRED]\n` +
+								`Layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s) (Strike ${strikes}):\n${violationSummaryRejection}\n\n` +
+								`${this.getCorrectionHint(astValidation.errors, filePath)}\n\n` +
+								`‼️ **PROACTIVE FORENSIC HEALING REQUIRED**\n` +
+								`To maintain substrate stability, your NEXT turn MUST resolve these violations. ` +
+								`If these errors persist, the system will trigger a Hard Metabolic Cooldown.`,
+							violations: astValidation.errors,
 						}
 					}
-					return msg
-				}),
-				...brittlePaths.map((p) => `  - 💡 [PATH_ADVISORY]: Relative path should be an alias: ${p}`),
-				...missingExports.map((e) => `  - 💡 [VISIBILITY_ADVISORY]: ${e}`),
-				...shadowing.map((s) => `  - 💡 [NAMING_ADVISORY]: ${s}`),
-				...unusedImports.map((u) => `  - 💡 [DEADWOOD_ADVISORY]: ${u}`),
-				...barrelGaps.map((b) => `  - 💡 [BARREL_ADVISORY]: ${b}`),
-				...vibrations.map((v) => `  - 🚨 [SUBSTRATE_VIBRATION]: ${v.message}`),
-			].join("\n")
 
-			result.warning =
-				(result.warning ? result.warning + "\n\n" : "") +
-				`### 🔍 ARCHITECTURAL ADVISORIES\n${advisoryHint}\n\n` +
-				`*These are passive suggestions to improve structural health. You may address them in this turn or a subsequent stabilization phase.*`
+					// Strike 2+ or other layers: Warning only
+					const allWarnings = [...(astValidation.warnings || []), ...astValidation.errors]
+					const violationSummary = allWarnings.map((e: string) => `  - ${e}`).join("\n")
+					const entropy = this.spiderEngine.computeEntropy()
+					const latestSnapshot = await this.spiderEngine.getLatestSnapshot()
+					const delta = latestSnapshot ? this.spiderEngine.compareWith(latestSnapshot) : 0
+
+					if (this.streamId) {
+						await orchestrator.storeMemory(this.streamId, "last_entropy_score", entropy.score.toString())
+						if (delta > 0.01) {
+							await orchestrator.storeMemory(this.streamId, "entropy_decay", delta.toString())
+						}
+					}
+
+					// V10: Recursive Drift Protection
+					if (strikes >= 3 && layer === "core") {
+						return {
+							success: true,
+							warning:
+								`⚠️ RECURSIVE DRIFT INTERDICTION: You have attempted to edit \`${path.basename(filePath)}\` 3 times with unresolved Domain/Core violations.\n` +
+								`The substrate is rejecting these atomic changes. You are likely trying to perform a complex refactor in too small of a window.\n\n` +
+								`💡 STRATEGIC PIVOT: You MUST extract this logic or implement a formal interface rather than forcing the current approach. Use \`RefactorHealer\` to materialize a contract, or perform a # SOVEREIGN AUDIT.`,
+						}
+					}
+
+					return {
+						success: true,
+						warning:
+							layer === "domain"
+								? `⚠️ ARCHITECTURAL WARNING (Strike ${strikes} — enforcement degraded): Domain layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} unresolved violation(s):\n${violationSummary}\n\nThe write is ALLOWED to prevent deadlock.`
+								: `⚠️ ARCHITECTURAL WARNING: ${layer.toUpperCase()} layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummary}` +
+									(delta > 0.01
+										? `\n\n🕷️ ARCHITECTURAL DECAY: Entropy increased by ${SafeNumber.formatPercent(delta, 1)}%.`
+										: ""),
+						correctionHint: this.getCorrectionHint(astValidation.errors, filePath),
+					}
+				}
+
+				// Clean file — reset strikes for this path
+				await this.resetStrikes(filePath)
+
+				// V10: Harmonic Decay (Forgiveness for historically stressed files)
+				if (this.spiderEngine.isRecovering) {
+					const isHistoricallyAlarmed =
+						this.alarmViolations.some((v) => v.includes(filePath)) || this.pathogens.isPathogenic(filePath)
+					if (isHistoricallyAlarmed) {
+						Logger.info(`[FluidPolicyEngine] Triggering Harmonic Decay for successfully healed file: ${filePath}`)
+						this.pathogens.decay(filePath, 2)
+					}
+				}
+
+				// Surface AST warnings if any
+				if (astValidation.warnings && astValidation.warnings.length > 0) {
+					return {
+						success: true,
+						warning: `⚠️ DISCERNMENT WARNING: Architectural smell(s) detected:\n${astValidation.warnings.map((w: string) => `  - ${w}`).join("\n")}`,
+					}
+				}
+
+				// For new files: proactively suggest the best layer if content doesn't match location
+				if (block.name === DietCodeDefaultTool.FILE_NEW && block.params.content) {
+					// consolidated to top-level import
+					const currentLayer = getLayer(filePath)
+					const suggestion = suggestLayerForContent(block.params.content)
+					if (suggestion && suggestion.layer !== currentLayer && currentLayer !== "core") {
+						return {
+							success: true,
+							warning: `📍 This file is being created in the **${currentLayer.toUpperCase()}** layer, but its content looks like it belongs in **${suggestion.layer.toUpperCase()}**.\n${suggestion.reason}\nConsider placing it under \`src/${suggestion.layer}/\` instead. If the current location is intentional, proceed.`,
+						}
+					}
+				}
+			}
+
+			// Concurrency Policy: Check for file collisions with sibling streams
+			if (!this.streamId) return { success: true }
+
+			if (
+				block.name === DietCodeDefaultTool.FILE_NEW ||
+				block.name === DietCodeDefaultTool.FILE_EDIT ||
+				block.name === DietCodeDefaultTool.APPLY_PATCH
+			) {
+				const params = (block as unknown as { params: Record<string, unknown> }).params || {}
+				const files = params.path ? [path.resolve(this.cwd, params.path as string)] : []
+				if (files.length > 0) {
+					const collision = await orchestrator.checkCollision(this.streamId, files)
+					if (collision) {
+						return {
+							success: false,
+							error: `🛑 FLUID COORDINATION ERROR: ${collision}\nYOUR COMMIT HAS BEEN BLOCKED TO PREVENT DATA CORRUPTION. Coordinate with the sibling stream or wait for its completion before proceeding.`,
+						}
+					}
+				}
+			}
+
+			const isModifyingTool =
+				block.name === DietCodeDefaultTool.FILE_NEW ||
+				block.name === DietCodeDefaultTool.FILE_EDIT ||
+				block.name === DietCodeDefaultTool.APPLY_PATCH
+
+			if (block.params?.path && isModifyingTool) {
+				const normalizedPath = this.normalize(block.params.path)
+				this.metabolicMonitor.recordWrite(normalizedPath) // V31: Intent record (without content)
+
+				// --- ZERO-FRICTION COMPLIANCE HOOK ---
+				// Automatically align tags and fix outgoing imports in the backup
+				try {
+					const absolutePath = path.resolve(this.cwd, normalizedPath)
+					await this.refactorHealer.alignTag(absolutePath)
+
+					// --- VIBRATION SENSING (Blast Radius) ---
+					// Heal the rattled dependents in the background to avoid blocking the agent turn
+					this.refactorHealer.healCascade(absolutePath, this.spiderEngine).catch((e) => {
+						Logger.warn("[FluidPolicyEngine] Background healCascade failed:", e)
+					})
+				} catch (e) {
+					Logger.warn("[FluidPolicyEngine] Zero-friction hook failed:", e)
+				}
+			}
+
+			// V150: Cognitive Immortality (Eager Persistence)
+			if (this.streamId) {
+				// V189: Unified Substrate handles metabolic persistence
+			}
+
+			// V204: Non-Blocking Integrity Advisories (TIA)
+			// Pull healing suggestions from the structural graph only for targeted files.
+			const targetedPath = block.params?.path as string
+			if (targetedPath && typeof targetedPath === "string") {
+				const advisories = this.spiderEngine.getIntegrityAdvisories(targetedPath)
+				const brittlePaths = this.refactorHealer.detectRelativeImports(
+					targetedPath,
+					block.params?.content as string,
+					this.spiderEngine,
+				)
+				const missingExports = this.refactorHealer.detectMissingExports(targetedPath, block.params?.content as string)
+				const shadowing = this.refactorHealer.detectShadowing(targetedPath, block.params?.content as string)
+				const unusedImports = this.refactorHealer.detectUnusedImports(targetedPath, block.params?.content as string)
+				const barrelGaps = this.refactorHealer.detectMissingFromBarrel(targetedPath)
+				const vibrations = advisories.filter((a) => a.id === "SPI-105")
+
+				if (
+					advisories.length > 0 ||
+					brittlePaths.length > 0 ||
+					missingExports.length > 0 ||
+					shadowing.length > 0 ||
+					unusedImports.length > 0 ||
+					(barrelGaps && barrelGaps.length > 0) ||
+					vibrations.length > 0
+				) {
+					const advisoryHint = [
+						...advisories.map((a) => {
+							let msg = `  - 💡 [INTEGRITY_ADVISORY]: ${a.message}`
+							if (a.id === "SPI-102") {
+								const symbol = a.message.match(/SYMBOL: (.*?) ->/)?.[1]
+								if (symbol) {
+									const layer = this.getCachedLayer(a.path)
+									const boilerplate = this.refactorHealer.materializeSymbolBoilerplate(symbol, layer)
+									msg += `\n    \`\`\`typescript\n${boilerplate}\n    \`\`\``
+								}
+							}
+							return msg
+						}),
+						...brittlePaths.map((p) => `  - 💡 [PATH_ADVISORY]: Relative path should be an alias: ${p}`),
+						...missingExports.map((e) => `  - 💡 [VISIBILITY_ADVISORY]: ${e}`),
+						...shadowing.map((s) => `  - 💡 [NAMING_ADVISORY]: ${s}`),
+						...unusedImports.map((u) => `  - 💡 [DEADWOOD_ADVISORY]: ${u}`),
+						...(barrelGaps || []).map((b) => `  - 💡 [BARREL_ADVISORY]: ${b}`),
+						...vibrations.map((v) => `  - 🚨 [SUBSTRATE_VIBRATION]: ${v.message}`),
+					].join("\n")
+
+					result.warning =
+						(result.warning ? result.warning + "\n\n" : "") +
+						`### 🔍 ARCHITECTURAL ADVISORIES\n${advisoryHint}\n\n` +
+						`*These are passive suggestions to improve structural health. You may address them in this turn or a subsequent stabilization phase.*`
+				}
+			}
+		} finally {
+			this.isChecking = false
 		}
 
 		return result

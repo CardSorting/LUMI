@@ -16,7 +16,7 @@ export class MetricsEngine {
 		for (const node of nodes.values()) {
 			node.dependents = []
 			for (const imp of node.imports) {
-				const resolved = this.resolver.resolveImportToNodeId(node.path, imp, new Set(nodes.keys()))
+				const resolved = this.resolver.resolveImportToNodeId(node.path, imp, nodes)
 				if (resolved && couplingMap.has(resolved)) {
 					couplingMap.set(resolved, (couplingMap.get(resolved) || 0) + 1)
 					const targetNode = nodes.get(resolved)
@@ -75,7 +75,7 @@ export class MetricsEngine {
 			const node = nodes.get(currentId)
 			if (node) {
 				for (const imp of node.imports) {
-					const resolved = this.resolver.resolveImportToNodeId(node.path, imp, new Set(nodes.keys()))
+					const resolved = this.resolver.resolveImportToNodeId(node.path, imp, nodes)
 					if (resolved && nodes.has(resolved) && !reachable.has(resolved)) {
 						reachable.add(resolved)
 						queue.push(resolved)
@@ -100,6 +100,7 @@ export class MetricsEngine {
 		const visited = new Set<string>()
 		const visiting = new Set<string>()
 		const stack: string[] = []
+		const nodeIds = new Set(nodes.keys())
 
 		const dfs = (nodeId: string) => {
 			visited.add(nodeId)
@@ -109,7 +110,7 @@ export class MetricsEngine {
 			const node = nodes.get(nodeId)
 			if (node) {
 				for (const imp of node.imports) {
-					const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, new Set(nodes.keys()))
+					const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds)
 					if (!targetId || !nodes.has(targetId)) continue
 
 					if (visiting.has(targetId)) {
