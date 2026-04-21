@@ -68,6 +68,10 @@ The substrate has achieved absolute metabolic sovereignty through zero-inflation
 - **Metabolic Pressure Sensing**: The substrate monitors V8 heap statistics. At **> 80% pressure**, it triggers a **Substrate Sweep**; at **> 90%**, it enforces an **Absolute Sweep** (Forceful purification).
 - **Zero-Inflation Identification**: Eliminates redundant Set/Map allocations in high-velocity structural loops using nested map caching.
 - **Clinical Session Purge**: Forceful nullification of `sessionBuffer` residuals immediately after turn completion.
+- **Loop & Deadlock Interdiction (V204-S)**:
+    - **Re-entrancy Guard**: The Policy Engine enforces atomic turn execution. Re-entrant tool calls (e.g., healing triggered by a write) are intercepted and return neutral success to prevent infinite agentic spirals.
+    - **Algorithmic Hardening**: High-frequency graph traversals (Reachability, Cycle Detection) are optimized to $O(V+E)$ and cached across turns, preventing CPU-bound "pseudo-deadlocks."
+    - **Targeted Enforcement**: Integrity advisories and Compliance Hooks are filtered by tool type (Modifying vs. Read-Only), ensuring zero maintenance overhead during investigation turns.
 - **Industrial Throttling**: Project-wide re-indexing is batched (250 files) with event loop relinquishing to prevent host saturation.
 - **Clinical Closure Hygiene**: Explicit nullification of AST visitors and closures after every turn to ensure a zero-leak sensing environment.
 
