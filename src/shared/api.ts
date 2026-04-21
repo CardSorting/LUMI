@@ -4509,7 +4509,7 @@ export const cloudflareModels = {
 		description:
 			"Kimi K2.5 is a frontier-scale open-source model with a 256k context window, vision inputs, and structured outputs for agentic workloads.",
 	},
-	"anthropic/claude-opus-4.7": {
+	"@cf/anthropic/claude-opus-4.7": {
 		maxTokens: 128_000,
 		contextWindow: 1_000_000,
 		supportsImages: true,
@@ -4522,7 +4522,7 @@ export const cloudflareModels = {
 		description:
 			"Claude Opus 4.7 is Anthropic's most capable generally available model to date. It is highly autonomous and performs exceptionally well on long-horizon agentic work, knowledge work, vision tasks, and memory tasks.",
 	},
-	"alibaba/qwen3-max": {
+	"@cf/alibaba/qwen3-max": {
 		maxTokens: 32_768,
 		contextWindow: 131_072,
 		supportsImages: false,
@@ -4532,7 +4532,7 @@ export const cloudflareModels = {
 		description:
 			"Alibaba's Qwen 3 Max is a large language model with strong coding, reasoning, and multilingual capabilities.",
 	},
-	"google/gemini-3-flash": {
+	"@cf/google/gemini-3-flash": {
 		maxTokens: 65_536,
 		contextWindow: 1_048_576,
 		supportsImages: true,
@@ -4543,7 +4543,7 @@ export const cloudflareModels = {
 		description:
 			"Gemini 3 Flash is Google's fast multimodal model with frontier intelligence, superior search, and grounding capabilities.",
 	},
-	"anthropic/claude-sonnet-4.6": {
+	"@cf/anthropic/claude-sonnet-4.6": {
 		maxTokens: 64_000,
 		contextWindow: 1_000_000,
 		supportsImages: true,
@@ -4568,7 +4568,7 @@ export const cloudflareModels = {
 		description:
 			"Kimi K2.6 is a frontier-scale open-source 1T parameter model with a 262.1k context window, vision inputs, and structured outputs for agentic workloads.",
 	},
-	"openai/gpt-5.4": {
+	"@cf/openai/gpt-5.4": {
 		maxTokens: 16_384,
 		contextWindow: 272_000,
 		supportsImages: true,

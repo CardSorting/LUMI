@@ -74,7 +74,6 @@ export class FluidPolicyEngine {
 	private lastViolationCount = 0
 	private telemetrics: SovereignTelemetrics
 	private verification: AxiomVerificationService
-	private modifiedLayers: Set<string> = new Set()
 	private refactorTurnsRemaining = 0 // V70: Sovereign Refactor Window
 	private lastEntropyScore = 1.0 // V80: Karma Tracking
 	private restorationTokens: Map<string, number> = new Map() // V100: Recovery Buffers
@@ -126,7 +125,6 @@ export class FluidPolicyEngine {
 	public resetSystemPressure(): void {
 		this.telemetrics.resetSystemPressure()
 		this.alarmViolations = []
-		this.modifiedLayers.clear() // V201: Reset focus shift tracking on stability break
 	}
 
 	public getSystemDiagnostics(): string {
@@ -479,27 +477,6 @@ export class FluidPolicyEngine {
 		this.metabolicMonitor.setResonance(resonance)
 
 		// 0. Rule: Cognitive Drift Sensing (Thrashing Prevention)
-		if (
-			block.name === DietCodeDefaultTool.FILE_EDIT ||
-			block.name === DietCodeDefaultTool.APPLY_PATCH ||
-			block.name === DietCodeDefaultTool.FILE_NEW
-		) {
-			const targetPath = (block.params as { path?: string })?.path
-			if (targetPath) {
-				const layer = getLayer(targetPath)
-				this.modifiedLayers.add(layer)
-
-				if (this.modifiedLayers.size > 3 && !this.commitSeal) {
-					return {
-						success: true,
-						warning:
-							`⚠️ [SPI-201] PROJECT FOCUS SHIFT: You have modified ${this.modifiedLayers.size} distinct project layers (${Array.from(this.modifiedLayers).join(", ")}).\n` +
-							`Changing many layers at once can be complex. Consider finishing one area or taking a # STABILITY BREAK to organize your next steps.`,
-					}
-				}
-			}
-		}
-
 		// 0. Rule: Activity Cooldown Enforcement (Substrate Immune System)
 		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
 			const isRefactoring = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
@@ -1502,7 +1479,6 @@ export class FluidPolicyEngine {
 			this.lastViolationCount = currentViolations.length
 			this.lastBuildHealth = health
 			this.lastEntropyScore = currentEntropy.score
-			this.modifiedLayers.clear() // Reset drift on recovery
 
 			const params = block.params as { path?: string }
 			const filePath = params.path
@@ -1586,7 +1562,6 @@ export class FluidPolicyEngine {
 		const success = isSealed || !isDomainChange || allErrors.length === 0
 
 		if (success) {
-			this.modifiedLayers.clear() // V201: Reset focus tracking after successful commit validation
 			Logger.info("[FluidPolicyEngine] Commit validated. Focus shift tracking reset.")
 		}
 

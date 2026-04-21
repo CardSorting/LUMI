@@ -16,7 +16,7 @@ export interface DietCodeRecommendedModelsData {
 export const DIETCODE_RECOMMENDED_MODELS_FALLBACK: DietCodeRecommendedModelsData = {
 	recommended: [
 		{
-			id: "anthropic/claude-opus-4.7",
+			id: "@cf/anthropic/claude-opus-4.7",
 			name: "Anthropic Claude Opus 4.7",
 			description: "Our most capable generally available model for complex reasoning and agentic coding",
 			tags: ["NEW", "BEST"],
@@ -28,7 +28,7 @@ export const DIETCODE_RECOMMENDED_MODELS_FALLBACK: DietCodeRecommendedModelsData
 			tags: ["NEW"],
 		},
 		{
-			id: "anthropic/claude-sonnet-4.6",
+			id: "@cf/anthropic/claude-sonnet-4.6",
 			name: "Anthropic Claude Sonnet 4.6",
 			description: "The best combination of speed and intelligence",
 			tags: ["NEW"],
