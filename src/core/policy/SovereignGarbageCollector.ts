@@ -7,7 +7,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 import { generateLayerComment, getLayer } from "../../utils/joy-zoning"
-import { RefactorHealer } from "../task/tools/RefactorHealer"
+import { ForensicDiagnostic, RefactorHealer } from "../task/tools/RefactorHealer"
 import { SpiderEngine } from "./spider/SpiderEngine"
 
 /**
@@ -17,7 +17,6 @@ import { SpiderEngine } from "./spider/SpiderEngine"
  */
 export class SovereignGarbageCollector {
 	private healer: RefactorHealer
-	private ghostAttempts: Map<string, number> = new Map() // V100: Graceful Suppression
 
 	constructor(
 		private cwd: string,
@@ -89,17 +88,17 @@ export class SovereignGarbageCollector {
 				// 2. Build Check (Diagnostic Probe) - The Source of Forensic Truth
 				const buildProbe = await this.runMiniTsc(absolutePath)
 
-				// 3. Reactive Stabilizations (Only triggered by physical build blockers)
+				// 3. Proactive Forensic Healing (PFH)
 				if (!buildProbe.success) {
-					// 3a. Ghost Import Resolution
-					const ghostFixed = await this.resolveMissingImports(filePath, buildProbe.errors)
-					if (ghostFixed) {
-						totalFixed++
-						fileModified = true
-						repairLog.push(`[GHOST_FIX] Materialized missing symbols in ${filePath}`)
+					for (const diag of buildProbe.diagnostics) {
+						if (await this.healer.applyDiagnosticFix(diag, this.spiderEngine)) {
+							totalFixed++
+							fileModified = true
+							repairLog.push(`[PFH] Deterministically resolved TS${diag.code} in ${filePath}`)
+						}
 					}
 
-					// 3b. Structural Alignment
+					// 3b. Structural Alignment (Spider-Level violations)
 					if (await this.healer.autoHeal(filePath, this.spiderEngine)) {
 						totalFixed++
 						fileModified = true
@@ -141,7 +140,7 @@ export class SovereignGarbageCollector {
 				// 9. Final Build Check (Verification)
 				const miniTsc = await this.runMiniTsc(absolutePath)
 				if (!miniTsc.success) {
-					remainingErrors.push(...miniTsc.errors.map((e) => `[TSC] ${e}`))
+					remainingErrors.push(...miniTsc.diagnostics.map((d) => `[TSC] ${d.message}`))
 				}
 
 				if (lintResult.errors.length > 0) {
@@ -314,8 +313,9 @@ export class SovereignGarbageCollector {
 
 	/**
 	 * Runs a fast, targeted TSC check on the file.
+	 * V201: Captures structured Forensic Diagnostics for the healer.
 	 */
-	private async runMiniTsc(absolutePath: string): Promise<{ success: boolean; errors: string[] }> {
+	private async runMiniTsc(absolutePath: string): Promise<{ success: boolean; diagnostics: ForensicDiagnostic[] }> {
 		try {
 			// We run tsc on the file, skipping lib checks for speed
 			await execa(
@@ -323,102 +323,53 @@ export class SovereignGarbageCollector {
 				[
 					"tsc",
 					"--noEmit",
+					"--pretty",
+					"false", // Ensure parseable output
 					"--skipLibCheck",
 					"--module",
 					"commonjs",
-					"--target",
-					"esnext",
-					"--moduleResolution",
-					"node",
 					absolutePath,
 				],
 				{ cwd: this.cwd },
 			)
-			return { success: true, errors: [] }
+			return { success: true, diagnostics: [] }
 		} catch (e: unknown) {
 			const err = e as { stderr?: string; stdout?: string }
 			const fullOutput = err.stderr || err.stdout || ""
-			const errors = fullOutput
-				.split("\n")
-				.filter((l: string) => l.includes("error TS"))
-				.slice(0, 5) // Increased visibility
+			const diagnostics: ForensicDiagnostic[] = []
 
-			// V190: Forensic enrichment
-			if (fullOutput.includes("cannot find name")) {
-				errors.push(`[FORENSIC] Symbol missing. Ghost materialization recommended.`)
+			// V201: Structured Forensic Parser
+			// Format: path/to/file.ts(line,col): error TSXXXX: message
+			const regex = /([^(]+)\((\d+),(\d+)\): error TS(\d+): (.*)/g
+			let match: RegExpExecArray | null
+			while ((match = regex.exec(fullOutput)) !== null) {
+				diagnostics.push({
+					file: this.spiderEngine.normalizePath(absolutePath),
+					line: Number.parseInt(match[2]),
+					column: Number.parseInt(match[3]),
+					code: Number.parseInt(match[4]),
+					message: match[5].trim(),
+				})
 			}
-			return { success: false, errors }
+
+			// Fallback for non-standard formats
+			if (diagnostics.length === 0 && fullOutput.includes("error TS")) {
+				Logger.warn(`[SovereignGarbageCollector] Non-standard TSC output detected: ${fullOutput}`)
+			}
+
+			return { success: false, diagnostics }
 		}
 	}
 
 	/**
 	 * Automatically resolves missing symbols by searching the graph and injecting imports.
 	 * V140: Forensic Realism - Only fixing verified build errors.
+	 * DEPRECATED: Use applyDiagnosticFix for deterministic AST repair.
 	 */
-	private async resolveMissingImports(filePath: string, errors: string[]): Promise<boolean> {
-		const absolutePath = path.resolve(this.cwd, filePath)
-		let content = await fs.readFile(absolutePath, "utf-8")
-
-		// Identify missing symbols from compiler diagnostics (e.g., "Cannot find name 'X'")
-		const missingSymbols = new Set<string>()
-		for (const error of errors) {
-			const match = error.match(/Cannot find name '([^']+)'/)
-			if (match) missingSymbols.add(match[1])
-		}
-
-		if (missingSymbols.size === 0) return false
-
+	private async resolveMissingImports(filePath: string, errors: ForensicDiagnostic[]): Promise<boolean> {
 		let fixed = false
-		for (const symbol of missingSymbols) {
-			const attempts = (this.ghostAttempts.get(`${filePath}:${symbol}`) || 0) + 1
-			this.ghostAttempts.set(`${filePath}:${symbol}`, attempts)
-
-			const providers = this.spiderEngine.findSymbolProviders(symbol)
-
-			// V110: Confidence-Based Auto-Healing (Uniqueness Rule)
-			if (providers.length === 1) {
-				// Unique provider found! Inject the import.
-				const provider = providers[0]
-				let relPath = path.relative(path.dirname(filePath), provider).replace(/\.tsx?$/, "")
-				if (!relPath.startsWith(".")) relPath = `./${relPath}`
-
-				const importLine = `import { ${symbol} } from "${relPath}"\n`
-
-				// Inject after existing imports or at the top after [LAYER] tag
-				const lines = content.split("\n")
-				let insertIndex = 0
-				for (let i = 0; i < lines.length; i++) {
-					if (lines[i].includes("import ") || lines[i].includes('from "')) {
-						insertIndex = i + 1
-					}
-					if (lines[i].includes("[LAYER:")) {
-						insertIndex = Math.max(insertIndex, i + 1)
-					}
-				}
-
-				lines.splice(insertIndex, 0, importLine)
-				content = lines.join("\n")
-				await fs.writeFile(absolutePath, content, "utf-8")
-				Logger.info(
-					`[SovereignGarbageCollector] Injected missing import for ${symbol} in ${path.basename(filePath)} (Shadow Prediction)`,
-				)
-				fixed = true
-			} else if (attempts >= 2) {
-				// V100: Graceful Degradation fallback (Auto-commenting)
-				Logger.warn(`[SovereignGarbageCollector] Unresolvable ghost ${symbol}. Falling back to graceful suppression.`)
-				const lines = content.split("\n")
-				const commentedLines = lines.map((line) => {
-					if (
-						line.includes(symbol) &&
-						(line.includes("import") || line.includes("from ") || line.includes(":") || line.includes("new "))
-					) {
-						return `// [SOVEREIGN_GHOST_SUPPRESSION]: ${line} // FIXME: Unresolvable provider`
-					}
-					return line
-				})
-				content = commentedLines.join("\n")
-				await fs.writeFile(absolutePath, content, "utf-8")
-				this.ghostAttempts.delete(`${filePath}:${symbol}`)
+		for (const diag of errors) {
+			if (await this.healer.applyDiagnosticFix(diag, this.spiderEngine)) {
 				fixed = true
 			}
 		}
@@ -504,9 +455,9 @@ export class SovereignGarbageCollector {
 				const symbolMatch = v.message.match(/ -> (.*)/)
 				const symbol = symbolMatch ? symbolMatch[1] : null
 
-				const hasMatchingTscError = miniTsc.errors.some((te) => {
+				const hasMatchingTscError = miniTsc.diagnostics.some((te) => {
 					// Check if symbol or file path is mentioned in the TSC error
-					return (symbol && te.includes(symbol)) || te.includes(path.basename(filePath))
+					return (symbol && te.message.includes(symbol)) || te.message.includes(path.basename(filePath))
 				})
 
 				if (!hasMatchingTscError) {
@@ -562,7 +513,19 @@ export class SovereignGarbageCollector {
 			if (v.id === "SPI-101" || v.id === "SPI-102") {
 				// Deterministic Ghost: We only resolve if the symbol/file provider is known and unique.
 				const symbol = v.message.match(/-> (.*) from/)?.[1] || v.message.match(/GHOST SYMBOL: .* -> (.*) from/)?.[1]
-				if (symbol && (await this.resolveMissingImports(filePath, [`Cannot find name '${symbol}'`]))) {
+				if (
+					symbol &&
+					(await this.healer.applyDiagnosticFix(
+						{
+							file: filePath,
+							line: 1,
+							column: 1,
+							code: 2304,
+							message: `Cannot find name '${symbol}'`,
+						},
+						this.spiderEngine,
+					))
+				) {
 					fixedCount++
 				}
 			}

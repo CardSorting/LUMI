@@ -1387,11 +1387,11 @@ export class FluidPolicyEngine {
 								result.success = true
 								result.buildErrors = sweepResult.remainingErrors
 								result.warning =
-									`⚠️ [PFH ALERT] Build/Lint issues persist in ${path.basename(filePath)} after Sweep:\n` +
+									`⚠️ [PFH ALERT] Build/Lint issues persist after Sweep:\n` +
 									`${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}\n\n` +
-									`🛑 **MANDATORY REPAIR DIRECTIVE**\n` +
-									`The Garbage Collector could not auto-resolve these errors. Your NEXT turn MUST involve manual intervention to heal this file. ` +
-									`Failure to heal will result in a Metabolic Blockade.`
+									`🛑 **SOVEREIGN HEALING MANDATE**\n` +
+									`The Garbage Collector could not auto-resolve these errors. Your NEXT turn MUST involve manual intervention to heal this file (Deterministic PFH). ` +
+									`Failure to heal will trigger a Soft-Lock on new feature work.`
 
 								// Passive Circuit Breaker: If build health is critical, force an audit
 								if (this.lastBuildHealth < 60) {
@@ -1411,17 +1411,17 @@ export class FluidPolicyEngine {
 						}
 
 						// V200: Mission Drift Suppression (Yak Shaving Interdiction)
-						// If build health is low and the current edit is in a peripheral file, block it.
+						// If build health is low and the current edit is in a peripheral file, encourage healing first.
 						const drift = this.metabolicMonitor.getTaskDrift(isRefactoringIntent)
 						const layer = this.getCachedLayer(filePath)
 						if (drift.warning && this.lastBuildHealth < 75 && !layer.match(/domain|core/i)) {
 							const shield = this.telemetrics.getResilienceShield()
-							result.success = false
+							result.success = true // V201: Soft-Lock (Allow but Mandate)
 							result.warning =
-								`${shield}🛑 **MISSION DRIFT INTERDICTION**\n` +
+								`${shield}🛑 **MISSION DRIFT ADVISORY** [DETERMINISTIC SOFT-LOCK]\n` +
 								`Core build health is failing (${this.lastBuildHealth}%) and you are attempting to edit a peripheral layer file: \`${path.basename(filePath)}\`.\n` +
-								`The substrate has triggered a Hard Metabolic Blockade. You MUST return focus to healing the core logic violations before you can modify this file.\n\n` +
-								`DIRECTIVE: Address the \`MANDATORY REPAIR DIRECTIVES\` currently active in the Core/Domain modules.`
+								`The substrate has enabled a Deterministic Soft-Lock. You are STRONGLY ADVISED to return focus to healing the core logic violations before proceed with this new logic.\n\n` +
+								`MANDATE: Address the active Core/Domain violations immediately after this turn.`
 							return result
 						}
 

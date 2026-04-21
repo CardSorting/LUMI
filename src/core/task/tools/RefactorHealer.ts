@@ -1,6 +1,7 @@
 import * as fsSync from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
+import { Project, SourceFile, VariableDeclarationKind } from "ts-morph"
 import * as ts from "typescript"
 import { Logger } from "@/shared/services/Logger"
 import { generateLayerComment, getLayer, isLayerTagSupported, parseLayerTag } from "@/utils/joy-zoning"
@@ -9,6 +10,14 @@ import { AxiomViolation } from "../../policy/SemanticAxiomEngine"
 import { SovereignOptimizer } from "../../policy/SovereignOptimizer"
 import { SpiderEngine } from "../../policy/spider/SpiderEngine"
 import { SpiderNode, SpiderViolation } from "../../policy/spider/types"
+
+export interface ForensicDiagnostic {
+	file: string
+	line: number
+	column: number
+	code: number
+	message: string
+}
 
 export interface HealingProposal {
 	id: string
@@ -24,7 +33,19 @@ export interface HealingProposal {
  * Automatically aligns file tags and fixes broken imports after architectural drift.
  */
 export class RefactorHealer {
+	private morphProject: Project | null = null
+
 	constructor(private projectRoot: string) {}
+
+	private getProject(): Project {
+		if (!this.morphProject) {
+			this.morphProject = new Project({
+				useInMemoryFileSystem: false,
+				skipAddingFilesFromTsConfig: true,
+			})
+		}
+		return this.morphProject
+	}
 
 	/**
 	 * Strategic Pivoting: Heals a move violation, but pivots to extraction if move is impossible.
@@ -86,7 +107,7 @@ export class RefactorHealer {
 						v.match(/Module.*has no exported member ['"]([^'"]+)['"]/i)
 					if (ghostMatch) {
 						const symbol = ghostMatch[1]
-						const ok = await this.materializeGhostSymbol(filePath, symbol, _engine)
+						const ok = await this.proposeSymbolAction(filePath, symbol, _engine)
 						if (ok) healedSomething = true
 					}
 
@@ -236,14 +257,15 @@ export class RefactorHealer {
 	}
 
 	/**
-	 * V16: Materializes a missing symbol in a file or suggests an existing match from the graph.
+	 * V201: Proposes a structured symbol action (Import or Proactive Creation)
+	 * instead of blindly appending boilerplates.
 	 */
-	public async materializeGhostSymbol(filePath: string, symbol: string, engine?: SpiderEngine): Promise<boolean> {
+	public async proposeSymbolAction(filePath: string, symbol: string, engine?: SpiderEngine): Promise<boolean> {
 		try {
 			const absolutePath = path.resolve(this.projectRoot, filePath)
 			const content = await fs.readFile(absolutePath, "utf-8")
 
-			// Check if already materialized or exists
+			// Check if already exist
 			if (
 				content.includes(`export class ${symbol}`) ||
 				content.includes(`export interface ${symbol}`) ||
@@ -254,59 +276,124 @@ export class RefactorHealer {
 				return false
 			}
 
-			// V16: Semantic Sensing - Search for existing symbols in the graph
 			if (engine) {
-				const matches: { symbol: string; path: string }[] = []
-				for (const node of Array.from(engine.nodes.values())) {
-					if (node.path === filePath) continue
-					for (const exported of node.exports) {
-						if (
-							exported.toLowerCase() === symbol.toLowerCase() ||
-							exported.includes(symbol) ||
-							symbol.includes(exported)
-						) {
-							matches.push({ symbol: exported, path: node.path })
-						}
-					}
-				}
+				const providers = engine.findSymbolProviders(symbol)
+				if (providers.length > 0) {
+					const bestProvider = providers[0]
+					Logger.info(`[RefactorHealer] Forensic Match: Found ${symbol} in ${bestProvider}. Proposing import.`)
 
-				if (matches.length > 0) {
-					const bestMatch = matches[0]
-
-					Logger.info(
-						`[RefactorHealer] Semantic Match Found: Suggesting import of '${bestMatch.symbol}' from ${bestMatch.path} instead of materialization.`,
-					)
-					// We don't automatically inject imports yet to avoid breaking multi-symbol imports,
-					// but we provide the hint in the log/violations.
-					return false
+					// Use AST to inject import safely
+					return await this.applyDiagnosticFix({
+						file: filePath,
+						line: 1,
+						column: 1,
+						code: 2304, // Cannot find name
+						message: `Cannot find name '${symbol}'`,
+					})
 				}
 			}
 
-			// Industrial Feature: Member Mapping logic
-			const isCap = /^[A-Z]/.test(symbol)
-			const memberSignatures = engine ? this.extractMemberSignatures(symbol, engine) : []
-			const memberBlock =
-				memberSignatures.length > 0
-					? memberSignatures.map((s) => `\t${s}`).join("\n")
-					: isCap
-						? "\tpublic async execute(): Promise<void> {\n\t\t// Mission logic placeholder\n\t}"
-						: "// Functional logic placeholder"
-
-			// Final Hardening: Industrial Boilerplate Generation
+			// If no provider found, we no longer blindly materialize.
+			// Instead, we propose a high-fidelity definition in a valid architectural layer.
 			const layer = getLayer(filePath)
-			const header = `/**\n * [LAYER: ${layer.toUpperCase()}]\n * ${symbol}: Industrial component materialized via Sovereign Forensic Healer.\n */`
+			const isCap = /^[A-Z]/.test(symbol)
+			const targetDir = isCap ? "src/domain/services" : "src/plumbing"
+			const targetFile = path.join(targetDir, `${symbol}.ts`)
 
-			const boilerplate = isCap
-				? `\n\n${header}\nexport class ${symbol} {\n\tconstructor() {\n\t\t// TODO: Initialize industrial dependencies\n\t}\n\n${memberBlock}\n}\n`
-				: `\n\n${header}\nexport const ${symbol} = async () => {\n\t${memberBlock}\n}\n`
+			Logger.warn(
+				`[RefactorHealer] UNRESOLVED SYMBOL: ${symbol}. ` +
+					`ACTION REQUIRED: Please define ${symbol} in ${targetFile} or provide a provider path.`,
+			)
 
-			await fs.writeFile(absolutePath, content + boilerplate, "utf-8")
-			Logger.info(`[RefactorHealer] Industrial Materialization: ${symbol} in ${path.basename(filePath)}`)
-			return true
+			// We return false because automatic materialization is deprecated for safety.
+			return false
 		} catch (err) {
-			Logger.error(`[RefactorHealer] Failed to materialize ghost symbol ${symbol} in ${filePath}:`, err)
+			Logger.error(`[RefactorHealer] proposeSymbolAction failed for ${symbol}:`, err)
 			return false
 		}
+	}
+
+	/**
+	 * V201: Deterministic AST-based Diagnostic Repair.
+	 * Handlers specific TypeScript error codes with high-fidelity repairs.
+	 */
+	public async applyDiagnosticFix(diag: ForensicDiagnostic, engine?: SpiderEngine): Promise<boolean> {
+		const project = this.getProject()
+		const absPath = path.resolve(this.projectRoot, diag.file)
+
+		try {
+			// Ensure file is in project
+			const sourceFile = project.addSourceFileAtPathIfExists(absPath) || project.addSourceFileAtPath(absPath)
+			if (!sourceFile) return false
+
+			let fixed = false
+
+			// TS2304: Cannot find name 'X'
+			if (diag.code === 2304 || diag.message.includes("Cannot find name")) {
+				const symbolMatch = diag.message.match(/Cannot find name '([^']+)'/)
+				const symbol = symbolMatch ? symbolMatch[1] : null
+
+				if (symbol && engine) {
+					fixed = await this.fixMissingImport(sourceFile, symbol, engine)
+				}
+			}
+
+			// TS1361: 'let' should be 'const'
+			if (diag.code === 1361 || diag.message.includes("should be a 'const'")) {
+				fixed = await this.fixStatelessnessAST(sourceFile, diag.line)
+			}
+
+			if (fixed) {
+				await sourceFile.save()
+				Logger.info(
+					`[RefactorHealer] PFH: Successfully applied AST repair for TS${diag.code} in ${path.basename(diag.file)}`,
+				)
+			}
+
+			return fixed
+		} catch (err) {
+			Logger.error(`[RefactorHealer] PFH: Failed to apply AST repair in ${diag.file}:`, err)
+			return false
+		}
+	}
+
+	private async fixMissingImport(sourceFile: SourceFile, symbol: string, engine: SpiderEngine): Promise<boolean> {
+		const providers = engine.findSymbolProviders(symbol)
+		if (providers.length === 0) return false
+
+		// Unique provider rule (Confidence 1.0)
+		const provider = providers[0]
+		const sourceFilePath = sourceFile.getFilePath()
+		let relPath = path.relative(path.dirname(sourceFilePath), path.resolve(this.projectRoot, provider)).replace(/\.tsx?$/, "")
+		if (!relPath.startsWith(".")) relPath = `./${relPath}`
+
+		// Verify existing imports to avoid duplicates
+		const existing = sourceFile.getImportDeclaration((d) => d.getModuleSpecifierValue() === relPath)
+		if (existing) {
+			if (!existing.getNamedImports().some((n) => n.getName() === symbol)) {
+				existing.addNamedImport(symbol)
+				return true
+			}
+			return false
+		}
+
+		sourceFile.addImportDeclaration({
+			namedImports: [symbol],
+			moduleSpecifier: relPath,
+		})
+		return true
+	}
+
+	private async fixStatelessnessAST(sourceFile: SourceFile, line: number): Promise<boolean> {
+		const variable = sourceFile.getVariableDeclaration((d) => d.getStartLineNumber() === line)
+		if (variable) {
+			const statement = variable.getVariableStatement()
+			if (statement && statement.getDeclarationKind() !== VariableDeclarationKind.Const) {
+				statement.setDeclarationKind(VariableDeclarationKind.Const)
+				return true
+			}
+		}
+		return false
 	}
 
 	/**
