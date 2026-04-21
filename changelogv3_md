@@ -1,0 +1,19 @@
+# Changelog V3
+
+## [5.10.11] - 2026-04-21
+
+### 🛰️ Sovereign Integrity Substrate (V204)
+Transitioned the architectural substrate from reactive, blocking heuristics to a deterministic **Non-Blocking Integrity Advisory (TIA)** protocol. This eliminates agentic spiraling while providing high-fidelity structural guidance.
+
+- **Non-Blocking Integrity Advisories (TIA)**: Surfaces structural "smells" (ghost symbols, brittle paths, circularity) as passive 💡 hints in tool responses.
+- **Global Forensic Provider Mapping**: Deterministically identifies the canonical location of missing symbols across the entire substrate and provides ready-to-use alias-based import suggestions.
+- **Fuzzy Forensic Sensing**: Implemented Levenshtein-based symbol matching to suggest corrections for missing symbols project-wide.
+- **Substrate Vibration Warning**: Monitors afferent coupling project-wide. Edits to high-mass modules (`coupling > 5`) that remove/rename exports trigger a 🚨 alert to manage refactor "Blast Radius."
+- **Zero-Friction Compliance**:
+    - **Automatic Path Normalization**: Automated conversion of brittle relative imports to project-standard aliases.
+    - **Barrel Sync Enforcement**: Proactively identifies files missing from directory `index.ts` exports.
+- **Hardened Forensics**:
+    - **Shadowing Detection**: Identifies local redefinitions of imported symbols.
+    - **Circular Dependency Interdiction**: Warns about architectural cycles that lead to runtime instability.
+    - **Deadwood Pruning**: Detects redundant imports and unused exports to maintain substrate purity.
+- **Proactive Materialization**: Synthesizes ready-to-use TypeScript boilerplates for missing symbols directly in the advisory channel.
