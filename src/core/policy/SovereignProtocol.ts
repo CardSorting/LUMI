@@ -24,8 +24,9 @@ export interface SovereignDiagnostics {
 	neuralFocus?: string[] // V188: Cognitive obsession tracking
 	aestheticResilience?: number // V188: Noise filtering efficiency
 	recoveryHint?: string // V188: Predictive restoration directive
-	projectVelocity?: number // V189: Hardening
-	merkleDrift?: string // V189: Hardening
+	projectVelocity?: number // Bumping hardening
+	merkleDrift?: string // Bumping hardening
+	suggestedRepairs?: string[] // V202-B: Passive healing advisories
 }
 
 /**
@@ -143,6 +144,11 @@ export namespace SovereignProtocol {
 							.join("\n")
 					: "") +
 				(diagnostics.recoveryHint ? `\n💡 **HELPFUL TIP**: ${diagnostics.recoveryHint}\n` : "") +
+				(diagnostics.suggestedRepairs && diagnostics.suggestedRepairs.length > 0
+					? `\n🛠️ **Suggested Repairs**:\n` +
+						diagnostics.suggestedRepairs.map((r) => `  - Run 'sovereign_integrity_sweep' for: ${r}`).join("\n") +
+						"\n"
+					: "") +
 				"\n"
 		}
 

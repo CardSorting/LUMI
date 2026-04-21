@@ -1389,9 +1389,9 @@ export class FluidPolicyEngine {
 								result.warning =
 									`⚠️ [PFH ALERT] Build/Lint issues persist after Sweep:\n` +
 									`${sweepResult.remainingErrors.map((e) => `  - ${e}`).join("\n")}\n\n` +
-									`🛑 **SOVEREIGN HEALING MANDATE**\n` +
-									`The Garbage Collector could not auto-resolve these errors. Your NEXT turn MUST involve manual intervention to heal this file (Deterministic PFH).\n\n` +
-									`${this.generateSovereignCTA([normPath])}`
+									`🩹 **Supportive Healing Advisory**\n` +
+									`The Garbage Collector could not auto-resolve these errors. Manual intervention is recommended to heal this file (Deterministic PFH).\n\n` +
+									`${this.generateIntegrityAdvisor([normPath])}`
 
 								// Passive Circuit Breaker: If build health is critical, force an audit
 								if (this.lastBuildHealth < 60) {
@@ -1401,6 +1401,7 @@ export class FluidPolicyEngine {
 										buildErrors: sweepResult.remainingErrors,
 										lintWarnings: [],
 										hotspots: [filePath],
+										suggestedRepairs: [normPath],
 									})
 									result.warning +=
 										`\n\n🛑 **CRITICAL HEALTH BREACH**: System health is at ${this.lastBuildHealth}%. ` +
@@ -1418,9 +1419,9 @@ export class FluidPolicyEngine {
 							const shield = this.telemetrics.getResilienceShield()
 							result.success = true // V201: Soft-Lock (Allow but Mandate)
 							result.warning =
-								`The substrate has enabled a Deterministic Soft-Lock. You are STRONGLY ADVISED to return focus to healing the core logic violations before proceed with this new logic.\n\n` +
-								`🛑 **SOVEREIGN HEALING MANDATE**\n` +
-								`${this.generateSovereignCTA([filePath])}`
+								`The substrate has enabled an Integrity Advisory. You are encouraged to return focus to healing the core logic violations before proceed with this new logic.\n\n` +
+								`🩹 **Supportive Healing Advisory**\n` +
+								`${this.generateIntegrityAdvisor([filePath])}`
 							return result
 						}
 
@@ -1765,15 +1766,10 @@ export class FluidPolicyEngine {
 	}
 
 	/**
-	 * V202: Generates an actionable tool block for the agent to fix build errors.
+	 * V202-B: Generates a passive integrity advisor hint.
+	 * Removed raw XML to prevent agentic spiraling.
 	 */
-	private generateSovereignCTA(files: string[]): string {
-		return (
-			`🛑 **ACTION REQUIRED**\n` +
-			`Please run the following tool to resolve the remaining regressions:\n\n` +
-			`<sovereign_integrity_sweep>\n` +
-			`<files>\n${JSON.stringify(files, null, 2)}\n</files>\n` +
-			`</sovereign_integrity_sweep>`
-		)
+	private generateIntegrityAdvisor(files: string[]): string {
+		return `💡 [INTEGRITY_ADVISORY]: Auto-healing available. Run 'sovereign_integrity_sweep' with files: ${JSON.stringify(files)} to resolve.`
 	}
 }
