@@ -4769,4 +4769,15 @@ export const nousResearchModels = {
 		description:
 			"Multimodal foundation model designed for agentic tasks requiring simultaneous processing of text, images, video, and audio.",
 	},
+	"moonshotai/kimi-k2.6": {
+		maxTokens: 32_768,
+		contextWindow: 262_144,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 0.95,
+		outputPrice: 4.0,
+		description:
+			"Kimi K2.6 is a frontier-scale open-source 1T parameter model with a 262.1k context window, vision inputs, and structured outputs for agentic workloads.",
+	},
 } as const satisfies Record<string, ModelInfo>
