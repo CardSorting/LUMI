@@ -27,7 +27,7 @@ export class NousResearchHandler implements ApiHandler {
 			}
 			try {
 				this.client = createOpenAIClient({
-					baseURL: "https://inference-api.nousResearch.com/v1",
+					baseURL: "https://inference-api.nousresearch.com/v1",
 					apiKey: this.options.nousResearchApiKey,
 				})
 			} catch (error: any) {
@@ -50,9 +50,8 @@ export class NousResearchHandler implements ApiHandler {
 		const stream = await client.chat.completions.create({
 			model: model.id,
 			messages: openAiMessages,
-			temperature: 0,
+			max_tokens: model.info.maxTokens && model.info.maxTokens > 0 ? model.info.maxTokens : undefined,
 			stream: true,
-			stream_options: { include_usage: true },
 		})
 
 		for await (const chunk of stream) {
@@ -61,21 +60,47 @@ export class NousResearchHandler implements ApiHandler {
 				yield {
 					type: "text",
 					text: delta.content,
+					id: chunk.id,
 				}
 			}
 
-			if (delta && "reasoning_content" in delta && delta.reasoning_content) {
+			if (
+				delta &&
+				("reasoning" in delta || "reasoning_content" in delta) &&
+				((delta as any).reasoning || (delta as any).reasoning_content)
+			) {
 				yield {
 					type: "reasoning",
-					reasoning: (delta.reasoning_content as string | undefined) || "",
+					reasoning: ((delta as any).reasoning || (delta as any).reasoning_content || "") as string,
+					id: chunk.id,
+				}
+			}
+
+			if (delta && "reasoning_details" in delta && (delta as any).reasoning_details) {
+				const details = (delta as any).reasoning_details
+				if (Array.isArray(details)) {
+					for (const detail of details) {
+						if (detail.text) {
+							yield {
+								type: "reasoning",
+								reasoning: detail.text,
+								id: chunk.id,
+							}
+						}
+					}
 				}
 			}
 
 			if (chunk.usage) {
+				const usage = chunk.usage as any
 				yield {
 					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0,
-					outputTokens: chunk.usage.completion_tokens || 0,
+					inputTokens: usage.prompt_tokens || 0,
+					outputTokens: usage.completion_tokens || 0,
+					thoughtsTokenCount: usage.completion_tokens_details?.reasoning_tokens || 0,
+					cacheReadTokens: usage.prompt_tokens_details?.cached_tokens || 0,
+					cacheWriteTokens: usage.cache_creation_input_tokens || 0,
+					id: chunk.id,
 				}
 			}
 		}
