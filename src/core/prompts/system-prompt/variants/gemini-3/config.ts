@@ -3,6 +3,7 @@ import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { isGemini3ModelFamily, isNextGenModelProvider } from "@/utils/model-utils"
 import { SystemPromptSection } from "../../templates/placeholders"
+import { ConfigOverride } from "../../types"
 import { createVariant } from "../variant-builder"
 import { validateVariant } from "../variant-validator"
 import { gemini3ComponentOverrides } from "./overrides"
@@ -40,6 +41,7 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 		SystemPromptSection.FEEDBACK,
 		SystemPromptSection.TODO,
 		SystemPromptSection.TASK_PROGRESS,
+		SystemPromptSection.SOVEREIGN_WIKI,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
 		SystemPromptSection.USER_INSTRUCTIONS,
@@ -73,14 +75,26 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 	})
 	.config({})
 	// Apply Gemini 3.0 specific component overrides
-	.overrideComponent(SystemPromptSection.AGENT_ROLE, gemini3ComponentOverrides[SystemPromptSection.AGENT_ROLE]!)
-	.overrideComponent(SystemPromptSection.TOOL_USE, gemini3ComponentOverrides[SystemPromptSection.TOOL_USE]!)
-	.overrideComponent(SystemPromptSection.EDITING_FILES, gemini3ComponentOverrides[SystemPromptSection.EDITING_FILES]!)
-	.overrideComponent(SystemPromptSection.OBJECTIVE, gemini3ComponentOverrides[SystemPromptSection.OBJECTIVE]!)
-	.overrideComponent(SystemPromptSection.RULES, gemini3ComponentOverrides[SystemPromptSection.RULES]!)
-	.overrideComponent(SystemPromptSection.FEEDBACK, gemini3ComponentOverrides[SystemPromptSection.FEEDBACK]!)
-	.overrideComponent(SystemPromptSection.ACT_VS_PLAN, gemini3ComponentOverrides[SystemPromptSection.ACT_VS_PLAN]!)
-	.overrideComponent(SystemPromptSection.TASK_PROGRESS, gemini3ComponentOverrides[SystemPromptSection.TASK_PROGRESS]!)
+	.overrideComponent(
+		SystemPromptSection.AGENT_ROLE,
+		gemini3ComponentOverrides[SystemPromptSection.AGENT_ROLE] as ConfigOverride,
+	)
+	.overrideComponent(SystemPromptSection.TOOL_USE, gemini3ComponentOverrides[SystemPromptSection.TOOL_USE] as ConfigOverride)
+	.overrideComponent(
+		SystemPromptSection.EDITING_FILES,
+		gemini3ComponentOverrides[SystemPromptSection.EDITING_FILES] as ConfigOverride,
+	)
+	.overrideComponent(SystemPromptSection.OBJECTIVE, gemini3ComponentOverrides[SystemPromptSection.OBJECTIVE] as ConfigOverride)
+	.overrideComponent(SystemPromptSection.RULES, gemini3ComponentOverrides[SystemPromptSection.RULES] as ConfigOverride)
+	.overrideComponent(SystemPromptSection.FEEDBACK, gemini3ComponentOverrides[SystemPromptSection.FEEDBACK] as ConfigOverride)
+	.overrideComponent(
+		SystemPromptSection.ACT_VS_PLAN,
+		gemini3ComponentOverrides[SystemPromptSection.ACT_VS_PLAN] as ConfigOverride,
+	)
+	.overrideComponent(
+		SystemPromptSection.TASK_PROGRESS,
+		gemini3ComponentOverrides[SystemPromptSection.TASK_PROGRESS] as ConfigOverride,
+	)
 	.build()
 
 // Compile-time validation

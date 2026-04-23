@@ -11,6 +11,7 @@ import { getObjectiveSection } from "./objective"
 import { getRulesSection } from "./rules"
 import { getSkillsSection } from "./skills"
 import { getSovereignDraftingSection } from "./sovereign_drafting"
+import { getSovereignWikiSection } from "./sovereign_wiki"
 import { getSystemInfo } from "./system_info"
 import { getUpdatingTaskProgress } from "./task_progress"
 import { getToolUseSection } from "./tool_use"
@@ -23,36 +24,22 @@ import { getUserInstructions } from "./user_instructions"
  */
 export function getSystemPromptComponents() {
 	return [
+		{ id: SystemPromptSection.ACT_VS_PLAN, fn: getActVsPlanModeSection },
 		{ id: SystemPromptSection.AGENT_ROLE, fn: getAgentRoleSection },
-		{ id: SystemPromptSection.SYSTEM_INFO, fn: getSystemInfo },
-		{ id: SystemPromptSection.MCP, fn: getMcp },
-		{
-			id: SystemPromptSection.USER_INSTRUCTIONS,
-			fn: getUserInstructions,
-		},
-		{ id: SystemPromptSection.TOOL_USE, fn: getToolUseSection },
-		{
-			id: SystemPromptSection.EDITING_FILES,
-			fn: getEditingFilesSection,
-		},
-		{
-			id: SystemPromptSection.CAPABILITIES,
-			fn: getCapabilitiesSection,
-		},
-		{ id: SystemPromptSection.SKILLS, fn: getSkillsSection },
-		{ id: SystemPromptSection.RULES, fn: getRulesSection },
-		{ id: SystemPromptSection.OBJECTIVE, fn: getObjectiveSection },
-		{
-			id: SystemPromptSection.ACT_VS_PLAN,
-			fn: getActVsPlanModeSection,
-		},
-		{
-			id: SystemPromptSection.FEEDBACK,
-			fn: getFeedbackSection,
-		},
-		{ id: SystemPromptSection.TASK_PROGRESS, fn: getUpdatingTaskProgress },
-		{ id: SystemPromptSection.JOY_ZONING, fn: getJoyZoningSection },
-		{ id: SystemPromptSection.SOVEREIGN_DRAFTING, fn: getSovereignDraftingSection },
+		{ id: SystemPromptSection.CAPABILITIES, fn: getCapabilitiesSection },
+		{ id: SystemPromptSection.EDITING_FILES, fn: getEditingFilesSection },
 		{ id: SystemPromptSection.ENVIRONMENT_STATE, fn: getEnvironmentStateSection },
+		{ id: SystemPromptSection.FEEDBACK, fn: getFeedbackSection },
+		{ id: SystemPromptSection.JOY_ZONING, fn: getJoyZoningSection },
+		{ id: SystemPromptSection.MCP, fn: getMcp },
+		{ id: SystemPromptSection.OBJECTIVE, fn: getObjectiveSection },
+		{ id: SystemPromptSection.RULES, fn: getRulesSection },
+		{ id: SystemPromptSection.SKILLS, fn: getSkillsSection },
+		{ id: SystemPromptSection.SOVEREIGN_DRAFTING, fn: getSovereignDraftingSection },
+		{ id: SystemPromptSection.SOVEREIGN_WIKI, fn: getSovereignWikiSection },
+		{ id: SystemPromptSection.SYSTEM_INFO, fn: getSystemInfo },
+		{ id: SystemPromptSection.TASK_PROGRESS, fn: getUpdatingTaskProgress },
+		{ id: SystemPromptSection.TOOL_USE, fn: getToolUseSection },
+		{ id: SystemPromptSection.USER_INSTRUCTIONS, fn: getUserInstructions },
 	]
 }

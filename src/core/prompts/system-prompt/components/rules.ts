@@ -45,10 +45,14 @@ export async function getRulesSection(variant: PromptVariant, context: SystemPro
 	const browserWaitRules = context.supportsBrowserUse ? BROWSER_WAIT_RULES : ""
 	const cliRules = context.isCliEnvironment ? CLI_RULES : ""
 
-	return new TemplateEngine().resolve(template, context, {
+	const resolved = new TemplateEngine().resolve(template, context, {
 		CWD: context.cwd || process.cwd(),
 		BROWSER_RULES: browserRules,
 		BROWSER_WAIT_RULES: browserWaitRules,
 		CLI_RULES: cliRules,
 	})
+
+	const WIKI_RULES = `\n- SOVEREIGN KNOWLEDGE LEDGER: You are STRICTLY MANDATED to maintain the project's Knowledge Ledger (SKL) in a dedicated directory (e.g., \`.wiki/\`). This is NOT a singular file, but a granular, high-parity breakdown of the system state. Before calling attempt_completion, you MUST audit the codebase and document every verified change with 1:1 factual precision. Refer to the SOVEREIGN KNOWLEDGE LEDGER (SKL) section for mandatory structural and evidence-based standards.`
+
+	return resolved + WIKI_RULES
 }

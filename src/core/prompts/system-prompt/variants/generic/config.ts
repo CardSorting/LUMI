@@ -46,6 +46,7 @@ export const config = createVariant(ModelFamily.GENERIC)
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TASK_PROGRESS,
+		SystemPromptSection.SOVEREIGN_WIKI,
 		SystemPromptSection.MCP,
 		SystemPromptSection.EDITING_FILES,
 		SystemPromptSection.ACT_VS_PLAN,
