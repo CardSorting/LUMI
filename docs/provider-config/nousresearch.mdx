@@ -20,7 +20,9 @@ DietCode supports the following NousResearch models:
 
 -   `Hermes-4-405B` (Default) - Largest Hermes 4 model focused on advanced reasoning and creative depth (128K context, $0.09/$0.37 per 1M tokens)
 -   `Hermes-4-70B` - Balanced model for complex reasoning while staying fast and cost-effective (128K context, $0.05/$0.20 per 1M tokens)
--   `moonshotai/kimi-k2.6` - Frontier-scale multimodal model with advanced vision and agentic capabilities (262K context, $0.95/$4.00 per 1M tokens)
+-   `moonshotai/kimi-k2.6` - Frontier-scale multimodal model with 262K context, advanced vision, and agentic capabilities ($0.95/$4.00 per 1M tokens)
+-   `xiaomi/mimo-v2-pro` - Flagship foundation model designed primarily for complex reasoning and production engineering.
+-   `xiaomi/mimo-v2-omni` - Multimodal foundation model for agentic tasks requiring simultaneous text/image/video/audio processing.
 
 ### Configuration in DietCode
 
@@ -31,6 +33,7 @@ DietCode supports the following NousResearch models:
 
 ### Tips and Notes
 
--   **Reasoning Focus:** Hermes 4 models are designed for advanced reasoning and creative depth.
--   **Competitive Pricing:** Very affordable pricing for large parameter models.
--   **128K Context:** Both models support 128K token context windows.
+-   **Deep Reasoning Support**: Kimi K2.6 provides real-time thinking traces. DietCode automatically extracts and displays these as "Thinking" blocks.
+-   **Vision Ready**: Models like `kimi-k2.6` and `mimo-v2-omni` support multimodal inputs for analyzing screenshots and UI designs.
+-   **Prompt Caching**: ephemeral prompt caching is supported on next-gen models, significantly reducing latency and cost for long-context conversations.
+-   **Agentic Capabilities**: The NousResearch provider is hardened for native tool calling, making it ideal for autonomous coding tasks.

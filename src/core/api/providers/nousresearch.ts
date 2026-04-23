@@ -2,14 +2,35 @@ import { ModelInfo, NousResearchModelId, nousResearchDefaultModelId, nousResearc
 import OpenAI from "openai"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
+import { DietCodeTool } from "@/shared/tools"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
 
 interface NousResearchHandlerOptions extends CommonApiHandlerOptions {
 	nousResearchApiKey?: string
 	apiModelId?: string
+}
+
+interface NousResearchDelta extends OpenAI.Chat.ChatCompletionChunk.Choice.Delta {
+	reasoning?: string
+	reasoning_content?: string
+	reasoning_details?: Array<{ text?: string }>
+}
+
+interface NousResearchUsage {
+	prompt_tokens?: number
+	completion_tokens?: number
+	total_tokens?: number
+	completion_tokens_details?: {
+		reasoning_tokens?: number
+	}
+	prompt_tokens_details?: {
+		cached_tokens?: number
+	}
+	cache_creation_input_tokens?: number
 }
 
 export class NousResearchHandler implements ApiHandler {
@@ -30,15 +51,15 @@ export class NousResearchHandler implements ApiHandler {
 					baseURL: "https://inference-api.nousresearch.com/v1",
 					apiKey: this.options.nousResearchApiKey,
 				})
-			} catch (error: any) {
-				throw new Error(`Error creating NousResearch client: ${error.message}`)
+			} catch (error) {
+				throw new Error(`Error creating NousResearch client: ${error instanceof Error ? error.message : String(error)}`)
 			}
 		}
 		return this.client
 	}
 
 	@withRetry()
-	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: DietCodeTool[]): ApiStream {
 		const client = this.ensureClient()
 		const model = this.getModel()
 
@@ -52,10 +73,13 @@ export class NousResearchHandler implements ApiHandler {
 			messages: openAiMessages,
 			max_tokens: model.info.maxTokens && model.info.maxTokens > 0 ? model.info.maxTokens : undefined,
 			stream: true,
+			...getOpenAIToolParams(tools as OpenAI.Chat.ChatCompletionTool[]),
 		})
 
+		const toolCallProcessor = new ToolCallProcessor()
+
 		for await (const chunk of stream) {
-			const delta = chunk.choices?.[0]?.delta
+			const delta = chunk.choices?.[0]?.delta as NousResearchDelta
 			if (delta?.content) {
 				yield {
 					type: "text",
@@ -64,21 +88,10 @@ export class NousResearchHandler implements ApiHandler {
 				}
 			}
 
-			if (
-				delta &&
-				("reasoning" in delta || "reasoning_content" in delta) &&
-				((delta as any).reasoning || (delta as any).reasoning_content)
-			) {
-				yield {
-					type: "reasoning",
-					reasoning: ((delta as any).reasoning || (delta as any).reasoning_content || "") as string,
-					id: chunk.id,
-				}
-			}
-
-			if (delta && "reasoning_details" in delta && (delta as any).reasoning_details) {
-				const details = (delta as any).reasoning_details
-				if (Array.isArray(details)) {
+			let yieldedReasoning = false
+			if (delta && "reasoning_details" in delta && delta.reasoning_details) {
+				const details = delta.reasoning_details
+				if (Array.isArray(details) && details.length > 0) {
 					for (const detail of details) {
 						if (detail.text) {
 							yield {
@@ -86,13 +99,29 @@ export class NousResearchHandler implements ApiHandler {
 								reasoning: detail.text,
 								id: chunk.id,
 							}
+							yieldedReasoning = true
 						}
 					}
 				}
 			}
 
+			if (!yieldedReasoning && delta && ("reasoning" in delta || "reasoning_content" in delta)) {
+				const r = delta.reasoning || delta.reasoning_content
+				if (r) {
+					yield {
+						type: "reasoning",
+						reasoning: r,
+						id: chunk.id,
+					}
+				}
+			}
+
+			if (delta?.tool_calls) {
+				yield* toolCallProcessor.processToolCallDeltas(delta.tool_calls)
+			}
+
 			if (chunk.usage) {
-				const usage = chunk.usage as any
+				const usage = chunk.usage as NousResearchUsage
 				yield {
 					type: "usage",
 					inputTokens: usage.prompt_tokens || 0,

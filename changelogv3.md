@@ -1,5 +1,18 @@
 # Changelog V3
 
+## [5.10.15] - 2026-04-22
+
+### 🚀 Integrated Moonshot Kimi K2.6 & NousResearch Hardening
+Full production-grade integration of the Moonshot Kimi K2.6 model and comprehensive hardening of the NousResearch provider ecosystem.
+
+- **Moonshot Kimi K2.6 Support**: Native integration of the frontier-scale 1T parameter model.
+- **Deep Reasoning Infrastructure**: Real-time extraction and streaming of "Thinking" traces from both `reasoning` and `reasoning_details` API fields.
+- **Hardened NousResearch Provider**:
+    - **Native Tool Calling**: Full support for agentic workloads via OpenAI-compatible tool specifications.
+    - **Advanced Token Forensics**: Detailed usage reporting including reasoning tokens, prompt cache metrics, and precise cost tracking.
+    - **Compatibility Normalization**: Standardized API requests (URL normalization, parameter relaxation) to eliminate 400-series status errors.
+    - **Vision & Caching**: Enabled support for multimodal inputs and ephemeral prompt caching.
+
 ## [5.10.11] - 2026-04-21
 
 ### 🛰️ Sovereign Integrity Substrate (V204)
