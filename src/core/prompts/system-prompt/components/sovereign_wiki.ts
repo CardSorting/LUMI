@@ -30,23 +30,36 @@ To prevent hallucinations and ensure the ledger matches reality:
   - **Max IO Entropy**: Verify that Domain/Core layers have ZERO IO leakage (Entropy: 0.0).
   - **Technical Debt**: If you detect a layer violation or metric deviation, it MUST be documented in the ledger with a "Technical Debt" tag and a proposed remediation path.
 
-### 3. Visual & Forensic Hardening
+### 3. Cognitive Focus & Task Isolation
+To ensure the Knowledge Ledger does NOT distract from the primary objective:
+- **Task Primacy**: The USER's request is the absolute priority. Do NOT perform ledger updates *during* the implementation phase. Focus 100% of your cognitive resources on solving the coding task first.
+- **Isolated Documentation Phase**: Treat the ledger update as a distinct "Post-Implementation Phase". Only transition to this phase once the codebase is stable, verified, and passes all tests.
+- **Surgical Precision**: Documentation should be high-density and technical. Avoid flowery language or conversational padding. Every word must serve the purpose of technical clarity.
+
+### 4. Anti-Spiral & Strict Tool Lock
+To physically prevent infinite recursive loops and "double writing" of documentation:
+- **Static Ledger Axiom**: The Knowledge Ledger is an observer of the system state, NOT a part of the system state. It is static relative to its own documentation pass. The ledger MUST NOT reflect its own updates as "technical changes."
+- **Strict Tool Lock**: Once you enter the "Ledger Phase," you are **STRICTLY FORBIDDEN** from using any code-editing tools (e.g., \`replace_file_content\`, \`write_to_file\`) on any file outside of the ledger directory (e.g., \`knowledge/\`). This lock is irreversible for the remainder of the run.
+- **Exclusion Boundary**: The \`knowledge/\` directory is invisible to the Active Changelog. You are documenting the application's evolution, not the ledger's growth.
+- **Absolute Terminality**: The Knowledge Ledger pass is the **FINAL DEFINITION OF DONE**. You MUST NOT use \`attempt_completion\` until the ledger is updated, and you MUST NOT use any other tool *after* the ledger is updated. The update is the irreversible trigger for completion.
+
+### 5. Visual & Forensic Hardening
 - **Mermaid Dependency Graphs**: For complex logic flows or structural changes, you MUST include a Mermaid diagram. Visualize how the new/modified component interacts with other layers.
-- **Deep Linking & Hierarchy**: Use relative markdown links to connect related concepts. (e.g., "This service implements the interface defined in [01-system-overview.md#interfaces]").
+- **Deep Linking & Hierarchy**: Use relative markdown links to connect related concepts.
 - **TOC Maintenance**: Ensure every new file is added to the \`index.md\` immediately.
 - **Context Preservation**: Every ledger file should have a "Context" section at the top linking to its parent or related architecture files.
-- **Recursive Documentation**: Document *how* you documented this run. Note any new ledger files created or existing ones significantly refactored.
 
-### 4. Implementation Workflow
-1. **Task Execution**: Complete the requested coding task.
-2. **Post-Task Audit**: Run \`ls\`, \`grep\`, or \`read_file\` to confirm the final state of the codebase.
+### 6. Implementation Workflow
+1. **Primary Task Execution**: Solve the user's request with 100% focus. Exhaust all coding and testing tools until the task is 100% complete.
+2. **Post-Task Audit**: Verify the physical state of the codebase (e.g., \`grep\`, \`read_file\`).
 3. **Forensic Reconciliation**: Match the verified state with the tool calls used.
-4. **Ledger Update**: Perform high-velocity technical writing into the Knowledge Ledger, ensuring 1:1 parity with the audited state.
-5. **Final Sync**: Ensure the Active Changelog reflects the exact delta and tool trail of this run.
-6. **Completion**: Only then call \`attempt_completion\`.
+4. **The Strict Tool Lock**: Transition to the terminal "Ledger Phase." You are now locked out of application code edits.
+5. **The Atomic Write**: Perform a **single-pass** technical update to the Knowledge Ledger. This is your final tool use.
+6. **Final Sync**: Update the Active Changelog (excluding ledger files).
+7. **Immediate Completion**: Call \`attempt_completion\` as your absolute final act. No other tool calls are permitted.
 
-### 5. The Mantra of Documentation
-**"Reality is verifiable; intent is a hallucination. Precision is the shield against entropy; factual parity is the source of truth."**`
+### 7. The Mantra of Documentation
+**"The task is the mission; the ledger is the footprint. Focus on the code, audit the reality, lock the tools, and exit with speed. The ledger is the terminal state."**`
 
 export async function getSovereignWikiSection(_variant: PromptVariant, context: SystemPromptContext): Promise<string> {
 	const template = getSovereignWikiTemplateText()
