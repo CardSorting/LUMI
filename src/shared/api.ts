@@ -2066,11 +2066,11 @@ export const openAiNativeModels = {
 // Uses OAuth authentication via ChatGPT, routes to chatgpt.com/backend-api/codex/responses
 // Subscription-based pricing (all costs are $0)
 export type OpenAiCodexModelId = keyof typeof openAiCodexModels
-export const openAiCodexDefaultModelId: OpenAiCodexModelId = "gpt-5.5-codex"
+export const openAiCodexDefaultModelId: OpenAiCodexModelId = "gpt-5.3-codex"
 export const openAiCodexModels = {
-	"gpt-5.5-codex": {
+	"gpt-5.5": {
 		maxTokens: 128_000,
-		contextWindow: 400_000,
+		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
 		supportsReasoning: true,
@@ -2080,38 +2080,17 @@ export const openAiCodexModels = {
 		outputPrice: 0,
 		description: "GPT-5.5 Codex: OpenAI's latest flagship coding model via ChatGPT subscription",
 	},
-	"gpt-5.5-pro-codex": {
+	"gpt-5.4": {
 		maxTokens: 128_000,
-		contextWindow: 400_000,
+		contextWindow: 1_000_000,
 		supportsImages: true,
 		supportsPromptCache: true,
 		supportsReasoning: true,
 		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		// Subscription-based: no per-token costs
 		inputPrice: 0,
 		outputPrice: 0,
-		description: "GPT-5.5 Pro Codex: Enhanced reasoning version via ChatGPT subscription",
-	},
-	"gpt-5.5-preview-codex": {
-		maxTokens: 128_000,
-		contextWindow: 400_000,
-		supportsImages: true,
-		supportsPromptCache: true,
-		supportsReasoning: true,
-		apiFormat: ApiFormat.OPENAI_RESPONSES,
-		inputPrice: 0,
-		outputPrice: 0,
-		description: "GPT-5.5 Preview Codex: Early access flagship via ChatGPT subscription",
-	},
-	"gpt-5.5": {
-		maxTokens: 128_000,
-		contextWindow: 400_000,
-		supportsImages: true,
-		supportsPromptCache: true,
-		supportsReasoning: true,
-		apiFormat: ApiFormat.OPENAI_RESPONSES,
-		inputPrice: 0,
-		outputPrice: 0,
-		description: "GPT-5.5: OpenAI's latest flagship general model via ChatGPT subscription",
+		description: "GPT-5.4 Codex: OpenAI's latest flagship coding model via ChatGPT subscription",
 	},
 	"gpt-5.3-codex": {
 		maxTokens: 128_000,
