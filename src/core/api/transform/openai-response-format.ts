@@ -1,5 +1,11 @@
-import { ResponseInput, ResponseInputMessageContentList, ResponseReasoningItem } from "openai/resources/responses/responses"
+import {
+	ResponseInput,
+	ResponseInputItem,
+	ResponseInputMessageContentList,
+	ResponseReasoningItem,
+} from "openai/resources/responses/responses"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
+import { Logger } from "@/shared/services/Logger"
 
 /**
  * Converts an array of DietCodeStorageMessage objects (extension of Anthropic format) to a ResponseInput array to use with OpenAI's Responses API.
@@ -96,12 +102,25 @@ export function convertToOpenAIResponsesInput(
 		}
 	}
 
-	const allItems: any[] = []
+	const allItems: ResponseInputItem[] = []
 	const toolUseIdToCallId = new Map<string, string>()
+
+	// PRE-PASS: Build tool use ID mapping from the ENTIRE history.
+	// This ensures that tool_results in the current turn can correctly reference call_ids from previous turns,
+	// which is critical when using previousResponseId chaining.
+	for (const m of _messages) {
+		if (typeof m.content !== "string") {
+			for (const part of m.content) {
+				if (part.type === "tool_use" && part.call_id) {
+					toolUseIdToCallId.set(part.id, part.call_id)
+				}
+			}
+		}
+	}
 
 	for (const m of messages) {
 		if (typeof m.content === "string") {
-			allItems.push({ role: m.role, content: [{ type: "input_text", text: m.content }] })
+			allItems.push({ role: m.role, content: [{ type: "input_text", text: m.content }] } as ResponseInputItem)
 			continue
 		}
 
@@ -109,7 +128,7 @@ export function convertToOpenAIResponsesInput(
 			// For assistant messages, we must ensure reasoning items are IMMEDIATELY followed
 			// by their corresponding message or function_call. Process the entire assistant
 			// turn and ensure proper pairing.
-			const assistantItems: any[] = []
+			const assistantItems: ResponseInputItem[] = []
 
 			for (const part of m.content) {
 				switch (part.type) {
@@ -146,16 +165,16 @@ export function convertToOpenAIResponsesInput(
 						// Include reasoning item with encrypted content if it has a call_id
 						// Even if data is missing, we need to maintain the reasoning-function_call pairing
 						if (part.call_id && part.call_id.length > 0) {
-							const reasoningItem: any = {
+							const reasoningItem: ResponseReasoningItem = {
 								id: part.call_id,
 								type: "reasoning",
 								summary: [],
 							}
 							// Only include encrypted_content if data exists
 							if (part.data) {
-								reasoningItem.encrypted_content = part.data
+								;(reasoningItem as any).encrypted_content = part.data
 							}
-							assistantItems.push(reasoningItem as ResponseReasoningItem)
+							assistantItems.push(reasoningItem)
 						}
 						break
 					case "text":
@@ -170,7 +189,7 @@ export function convertToOpenAIResponsesInput(
 						if (part.call_id) {
 							messageItem.id = part.call_id
 						}
-						assistantItems.push(messageItem)
+						assistantItems.push(messageItem as ResponseInputItem)
 						break
 					case "image":
 						// Message ID goes at the message level, not in the content
@@ -183,11 +202,12 @@ export function convertToOpenAIResponsesInput(
 						if (part.call_id) {
 							imageItem.id = part.call_id
 						}
-						assistantItems.push(imageItem)
+						assistantItems.push(imageItem as ResponseInputItem)
 						break
 					case "tool_use": {
 						// Function calls use call_id, not related to reasoning item ID
 						const call_id = part.call_id || part.id
+						// We already mapped this in the pre-pass, but keeping for consistency in nested turns
 						if (part.call_id) {
 							toolUseIdToCallId.set(part.id, part.call_id)
 						}
@@ -198,13 +218,32 @@ export function convertToOpenAIResponsesInput(
 							id: !part.id.startsWith("fc_") ? `fc_${part.id.slice(0, 50)}` : part.id,
 							name: part.name,
 							arguments: JSON.stringify(part.input ?? {}),
-						})
+						} as ResponseInputItem)
 						break
 					}
 				}
 			}
 
-			allItems.push(...assistantItems)
+			// PAIRING VALIDATION: The Responses API strictly requires every 'reasoning' item to be followed
+			// by an output item ('message' or 'function_call'). If a reasoning item is orphaned at the
+			// end of a turn, we must either insert a placeholder or drop it.
+			const validatedItems: ResponseInputItem[] = []
+			for (let i = 0; i < assistantItems.length; i++) {
+				const current = assistantItems[i]
+				if (current.type === "reasoning") {
+					const next = assistantItems[i + 1]
+					if (next && (next.type === "message" || next.type === "function_call")) {
+						validatedItems.push(current)
+					} else {
+						// Dropping orphaned reasoning item to prevent API error
+						Logger.warn(`Dropping orphaned reasoning item ${current.id} in assistant turn`)
+					}
+				} else {
+					validatedItems.push(current)
+				}
+			}
+
+			allItems.push(...validatedItems)
 		} else {
 			// User messages - collect all content
 			const messageContent: ResponseInputMessageContentList = []
@@ -224,7 +263,7 @@ export function convertToOpenAIResponsesInput(
 					case "tool_result": {
 						// Flush any pending message content before adding tool result
 						if (messageContent.length > 0) {
-							allItems.push({ role: m.role, content: [...messageContent] })
+							allItems.push({ role: m.role, content: [...messageContent] } as ResponseInputItem)
 							messageContent.length = 0
 						}
 						const call_id = part.call_id || toolUseIdToCallId.get(part.tool_use_id) || part.tool_use_id
@@ -232,7 +271,7 @@ export function convertToOpenAIResponsesInput(
 							type: "function_call_output",
 							call_id,
 							output: typeof part.content === "string" ? part.content : JSON.stringify(part.content),
-						})
+						} as ResponseInputItem)
 						break
 					}
 				}
@@ -240,7 +279,7 @@ export function convertToOpenAIResponsesInput(
 
 			// Flush any remaining user message content
 			if (messageContent.length > 0) {
-				allItems.push({ role: m.role, content: [...messageContent] })
+				allItems.push({ role: m.role, content: [...messageContent] } as ResponseInputItem)
 			}
 		}
 	}
