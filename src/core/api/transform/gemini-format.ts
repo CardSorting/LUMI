@@ -12,7 +12,7 @@ const GEMINI_DUMMY_THOUGHT_SIGNATURE = "skip_thought_signature_validator"
 
 export function convertAnthropicContentToGemini(
 	content: string | DietCodeStorageMessage["content"],
-	modelContext?: { originalModelId?: string; currentModelId?: string },
+	modelContext?: { originalModelId?: string; currentModelId?: string; role?: "user" | "model" },
 ): Part[] {
 	if (typeof content === "string") {
 		return [{ text: content }]
@@ -24,15 +24,19 @@ export function convertAnthropicContentToGemini(
 		modelContext.originalModelId !== modelContext.currentModelId
 	)
 
+	const isModelRole = modelContext?.role === "model"
+
 	return content
 		.flatMap((block): Part | undefined => {
 			switch (block.type) {
 				case "text":
 					return {
 						text: block.text,
-						thoughtSignature: isModelSwitch
-							? GEMINI_DUMMY_THOUGHT_SIGNATURE
-							: block.signature || GEMINI_DUMMY_THOUGHT_SIGNATURE,
+						...(isModelRole && {
+							thoughtSignature: isModelSwitch
+								? GEMINI_DUMMY_THOUGHT_SIGNATURE
+								: block.signature || GEMINI_DUMMY_THOUGHT_SIGNATURE,
+						}),
 					}
 				case "image":
 					if (block.source.type !== "base64") {
@@ -50,10 +54,12 @@ export function convertAnthropicContentToGemini(
 							name: block.name,
 							args: block.input as Record<string, unknown>,
 						},
-						// Thought signature is required, so provide a dummy one if not present
-						thoughtSignature: isModelSwitch
-							? GEMINI_DUMMY_THOUGHT_SIGNATURE
-							: block.signature || GEMINI_DUMMY_THOUGHT_SIGNATURE,
+						// Thought signature is required for model turns in function calling
+						...(isModelRole && {
+							thoughtSignature: isModelSwitch
+								? GEMINI_DUMMY_THOUGHT_SIGNATURE
+								: block.signature || GEMINI_DUMMY_THOUGHT_SIGNATURE,
+						}),
 					}
 				case "tool_result":
 					return {
@@ -68,9 +74,11 @@ export function convertAnthropicContentToGemini(
 					return {
 						text: block.thinking,
 						thought: true,
-						thoughtSignature: isModelSwitch
-							? GEMINI_DUMMY_THOUGHT_SIGNATURE
-							: block.signature || GEMINI_DUMMY_THOUGHT_SIGNATURE,
+						...(isModelRole && {
+							thoughtSignature: isModelSwitch
+								? GEMINI_DUMMY_THOUGHT_SIGNATURE
+								: block.signature || GEMINI_DUMMY_THOUGHT_SIGNATURE,
+						}),
 					}
 				default:
 					return undefined
@@ -81,9 +89,10 @@ export function convertAnthropicContentToGemini(
 
 export function convertAnthropicMessageToGemini(message: DietCodeStorageMessage, currentModelId?: string): Content {
 	const originalModelId = message.modelInfo?.modelId
+	const role = message.role === "assistant" ? "model" : "user"
 	return {
-		role: message.role === "assistant" ? "model" : "user",
-		parts: convertAnthropicContentToGemini(message.content, { originalModelId, currentModelId }),
+		role,
+		parts: convertAnthropicContentToGemini(message.content, { originalModelId, currentModelId, role }),
 	}
 }
 

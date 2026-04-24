@@ -50,7 +50,7 @@ export const DEFAULT_API_PROVIDER = "openrouter" as ApiProvider
 
 export interface ApiHandlerOptions extends Partial<ApiHandlerSettings> {
 	ulid?: string // Used to identify the task in API requests
-	onRetryAttempt?: (attempt: number, maxRetries: number, delay: number, error: any) => void // Callback function
+	onRetryAttempt?: (attempt: number, maxRetries: number, delay: number, error: unknown) => void // Callback function
 	vertexApiKey?: string
 }
 
@@ -955,34 +955,64 @@ export type VertexModelId = keyof typeof vertexModels
 export const vertexDefaultModelId: VertexModelId = "gemini-3-pro-preview"
 export const vertexModels = {
 	"gemini-3.1-pro-preview": {
-		maxTokens: 8192,
+		maxTokens: 65536,
 		contextWindow: 1_048_576,
 		supportsImages: true,
 		supportsPromptCache: true,
 		supportsGlobalEndpoint: true,
-		inputPrice: 2.0,
-		outputPrice: 12.0,
-		temperature: 1.0,
+		inputPrice: 4.0,
+		outputPrice: 18.0,
+		cacheReadsPrice: 0.4,
 		supportsReasoning: true,
 		thinkingConfig: {
 			geminiThinkingLevel: "high",
 			supportsThinkingLevel: true,
+			maxBudget: 65536,
 		},
+		tiers: [
+			{
+				contextWindow: 200000,
+				inputPrice: 2.0,
+				outputPrice: 12.0,
+				cacheReadsPrice: 0.2,
+			},
+			{
+				contextWindow: Number.MAX_SAFE_INTEGER,
+				inputPrice: 4.0,
+				outputPrice: 18.0,
+				cacheReadsPrice: 0.4,
+			},
+		],
 	},
 	"gemini-3-pro-preview": {
-		maxTokens: 8192,
+		maxTokens: 65536,
 		contextWindow: 1_048_576,
 		supportsImages: true,
 		supportsPromptCache: true,
 		supportsGlobalEndpoint: true,
-		inputPrice: 2.0,
-		outputPrice: 12.0,
-		temperature: 1.0,
+		inputPrice: 4.0,
+		outputPrice: 18.0,
+		cacheReadsPrice: 0.4,
 		supportsReasoning: true,
 		thinkingConfig: {
 			geminiThinkingLevel: "high",
 			supportsThinkingLevel: true,
+			maxBudget: 65536,
 		},
+		tiers: [
+			{
+				contextWindow: 200000,
+				inputPrice: 2.0,
+				outputPrice: 12.0,
+				cacheReadsPrice: 0.2,
+			},
+			{
+				contextWindow: Number.MAX_SAFE_INTEGER,
+				inputPrice: 4.0,
+				outputPrice: 18.0,
+				cacheReadsPrice: 0.4,
+			},
+		],
 	},
 	"gemini-3-flash-preview": {
 		maxTokens: 65536,
@@ -993,12 +1023,26 @@ export const vertexModels = {
 		inputPrice: 0.5,
 		outputPrice: 3.0,
 		cacheWritesPrice: 0.05,
-		temperature: 1.0,
 		supportsReasoning: true,
 		thinkingConfig: {
-			geminiThinkingLevel: "high",
+			geminiThinkingLevel: "low",
 			supportsThinkingLevel: true,
+			maxBudget: 65536,
 		},
+		tiers: [
+			{
+				contextWindow: 200000,
+				inputPrice: 0.3,
+				outputPrice: 2.5,
+				cacheReadsPrice: 0.03,
+			},
+			{
+				contextWindow: Number.MAX_SAFE_INTEGER,
+				inputPrice: 0.3,
+				outputPrice: 2.5,
+				cacheReadsPrice: 0.03,
+			},
+		],
 	},
 	"claude-sonnet-4-6": {
 		maxTokens: 64_000,
@@ -1314,7 +1358,7 @@ export const vertexModels = {
 				cacheReadsPrice: 0.31,
 			},
 			{
-				contextWindow: Number.POSITIVE_INFINITY,
+				contextWindow: Number.MAX_SAFE_INTEGER,
 				inputPrice: 2.5,
 				outputPrice: 15,
 				cacheReadsPrice: 0.625,
@@ -1389,7 +1433,7 @@ export const vertexModels = {
 				cacheReadsPrice: 0.01875,
 			},
 			{
-				contextWindow: Number.POSITIVE_INFINITY,
+				contextWindow: Number.MAX_SAFE_INTEGER,
 				inputPrice: 0.15,
 				outputPrice: 0.6,
 				cacheReadsPrice: 0.0375,
@@ -1412,6 +1456,15 @@ export const vertexModels = {
 		inputPrice: 0,
 		outputPrice: 0,
 	},
+	"gemini-3-pro-image-preview": {
+		maxTokens: 32000,
+		contextWindow: 32000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "Specialized model for image generation and understanding",
+	},
 	"gemini-1.5-pro-002": {
 		maxTokens: 8192,
 		contextWindow: 2_097_152,
@@ -1431,7 +1484,7 @@ export const vertexModels = {
 } as const satisfies Record<string, ModelInfo>
 
 export const vertexGlobalModels: Record<string, ModelInfo> = Object.fromEntries(
-	Object.entries(vertexModels).filter(([_k, v]) => Object.hasOwn(v, "supportsGlobalEndpoint")),
+	Object.entries(vertexModels).filter(([_k, v]) => v && "supportsGlobalEndpoint" in v && v.supportsGlobalEndpoint),
 ) as Record<string, ModelInfo>
 
 export const openAiModelInfoSaneDefaults: OpenAiCompatibleModelInfo = {
@@ -1474,7 +1527,7 @@ export const geminiModels = {
 				cacheReadsPrice: 0.2,
 			},
 			{
-				contextWindow: Number.POSITIVE_INFINITY,
+				contextWindow: Number.MAX_SAFE_INTEGER,
 				inputPrice: 4.0,
 				outputPrice: 18.0,
 				cacheReadsPrice: 0.4,
@@ -1503,7 +1556,7 @@ export const geminiModels = {
 				cacheReadsPrice: 0.2,
 			},
 			{
-				contextWindow: Number.POSITIVE_INFINITY,
+				contextWindow: Number.MAX_SAFE_INTEGER,
 				inputPrice: 4.0,
 				outputPrice: 18.0,
 				cacheReadsPrice: 0.4,
@@ -1533,7 +1586,7 @@ export const geminiModels = {
 				cacheReadsPrice: 0.03,
 			},
 			{
-				contextWindow: Number.POSITIVE_INFINITY,
+				contextWindow: Number.MAX_SAFE_INTEGER,
 				inputPrice: 0.3,
 				outputPrice: 2.5,
 				cacheReadsPrice: 0.03,
@@ -1561,7 +1614,7 @@ export const geminiModels = {
 				cacheReadsPrice: 0.31,
 			},
 			{
-				contextWindow: Number.POSITIVE_INFINITY,
+				contextWindow: Number.MAX_SAFE_INTEGER,
 				inputPrice: 2.5,
 				outputPrice: 15,
 				cacheReadsPrice: 0.625,
@@ -1678,7 +1731,7 @@ export const geminiModels = {
 				cacheReadsPrice: 0.01875,
 			},
 			{
-				contextWindow: Number.POSITIVE_INFINITY,
+				contextWindow: Number.MAX_SAFE_INTEGER,
 				inputPrice: 0.15,
 				outputPrice: 0.6,
 				cacheReadsPrice: 0.0375,
@@ -2013,8 +2066,53 @@ export const openAiNativeModels = {
 // Uses OAuth authentication via ChatGPT, routes to chatgpt.com/backend-api/codex/responses
 // Subscription-based pricing (all costs are $0)
 export type OpenAiCodexModelId = keyof typeof openAiCodexModels
-export const openAiCodexDefaultModelId: OpenAiCodexModelId = "gpt-5.3-codex"
+export const openAiCodexDefaultModelId: OpenAiCodexModelId = "gpt-5.5-codex"
 export const openAiCodexModels = {
+	"gpt-5.5-codex": {
+		maxTokens: 128_000,
+		contextWindow: 400_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		// Subscription-based: no per-token costs
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.5 Codex: OpenAI's latest flagship coding model via ChatGPT subscription",
+	},
+	"gpt-5.5-pro-codex": {
+		maxTokens: 128_000,
+		contextWindow: 400_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.5 Pro Codex: Enhanced reasoning version via ChatGPT subscription",
+	},
+	"gpt-5.5-preview-codex": {
+		maxTokens: 128_000,
+		contextWindow: 400_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.5 Preview Codex: Early access flagship via ChatGPT subscription",
+	},
+	"gpt-5.5": {
+		maxTokens: 128_000,
+		contextWindow: 400_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.5: OpenAI's latest flagship general model via ChatGPT subscription",
+	},
 	"gpt-5.3-codex": {
 		maxTokens: 128_000,
 		contextWindow: 400_000,

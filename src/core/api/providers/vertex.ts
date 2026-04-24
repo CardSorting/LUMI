@@ -1,12 +1,19 @@
 import { Tool as AnthropicTool } from "@anthropic-ai/sdk/resources/index"
 import { AnthropicVertex } from "@anthropic-ai/vertex-sdk"
 import { FunctionDeclaration as GoogleTool } from "@google/genai"
-import { CLAUDE_SONNET_1M_SUFFIX, ModelInfo, VertexModelId, vertexDefaultModelId, vertexModels } from "@shared/api"
+import {
+	CLAUDE_SONNET_1M_SUFFIX,
+	GeminiModelId,
+	geminiModels,
+	ModelInfo,
+	VertexModelId,
+	vertexDefaultModelId,
+	vertexModels,
+} from "@shared/api"
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { DietCodeTool } from "@/shared/tools"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
-import { withRetry } from "../retry"
 import { sanitizeAnthropicMessages } from "../transform/anthropic-format"
 import { ApiStream } from "../transform/stream"
 import { GeminiHandler } from "./gemini"
@@ -47,7 +54,8 @@ export class VertexHandler implements ApiHandler {
 
 	private ensureAnthropicClient(): AnthropicVertex {
 		if (!this.clientAnthropic) {
-			if (!this.options.vertexApiKey) {
+			const apiKey = this.options.vertexApiKey || this.options.geminiApiKey
+			if (!apiKey) {
 				throw new Error("Vertex AI API Key is required")
 			}
 			try {
@@ -58,7 +66,7 @@ export class VertexHandler implements ApiHandler {
 					projectId: "unused", // SDK requires projectId but API key might override
 					// https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude#regions
 					region: "us-central1",
-					apiKey: this.options.vertexApiKey,
+					apiKey,
 					defaultHeaders: externalHeaders,
 				} as any)
 			} catch (error: any) {
@@ -68,7 +76,6 @@ export class VertexHandler implements ApiHandler {
 		return this.clientAnthropic
 	}
 
-	@withRetry()
 	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: DietCodeTool[]): ApiStream {
 		const model = this.getModel()
 		const rawModelId = model.id
@@ -240,11 +247,15 @@ export class VertexHandler implements ApiHandler {
 		}
 	}
 
-	getModel(): { id: VertexModelId; info: ModelInfo } {
+	getModel(): { id: string; info: ModelInfo } {
 		const modelId = this.options.apiModelId
 		if (modelId && modelId in vertexModels) {
 			const id = modelId as VertexModelId
 			return { id, info: vertexModels[id] }
+		}
+		if (modelId && modelId in geminiModels) {
+			const id = modelId as GeminiModelId
+			return { id, info: geminiModels[id] }
 		}
 		return {
 			id: vertexDefaultModelId,

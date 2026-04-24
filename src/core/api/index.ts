@@ -509,8 +509,15 @@ export function buildApiHandler(configuration: ApiConfiguration, mode: Mode): Ap
 			}
 		}
 	} catch (error) {
-		Logger.error("buildApiHandler error:", error)
+		Logger.error("buildApiHandler pre-flight check error:", error)
+		// We continue anyway and return a fresh handler below
 	}
 
-	return createHandlerForProvider(apiProvider, options, mode)
+	try {
+		return createHandlerForProvider(apiProvider, options, mode)
+	} catch (error) {
+		Logger.error("buildApiHandler: CRITICAL failure in createHandlerForProvider", error)
+		// Fallback to a safe default if even creation fails
+		return createHandlerForProvider("anthropic", options, mode)
+	}
 }

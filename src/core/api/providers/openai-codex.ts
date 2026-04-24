@@ -51,6 +51,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 	// Track tool call identity for streaming
 	private pendingToolCallId: string | undefined
 	private pendingToolCallName: string | undefined
+	private lastResponseId: string | undefined
 
 	constructor(options: OpenAiCodexHandlerOptions) {
 		this.options = options
@@ -110,8 +111,8 @@ export class OpenAiCodexHandler implements ApiHandler {
 			throw new Error("Not authenticated with OpenAI Codex. Please sign in using the OpenAI Codex OAuth flow in settings.")
 		}
 		const useWebsocketMode = this.useWebsocketMode(model.info.apiFormat)
-		const { input, previousResponseId } = convertToOpenAIResponsesInput(messages, { usePreviousResponseId: useWebsocketMode })
-		const usePreviousResponseId = useWebsocketMode && !!previousResponseId
+		const { input, previousResponseId } = convertToOpenAIResponsesInput(messages, { usePreviousResponseId: true })
+		const usePreviousResponseId = !!previousResponseId
 
 		// Build request body
 		const requestBody = this.buildRequestBody(model, input, systemPrompt, tools, previousResponseId)
@@ -164,7 +165,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 			model: model.id,
 			input: formattedInput,
 			stream: true,
-			store: false,
+			store: true, // MUST be true for previous_response_id to work reliably
 			instructions: systemPrompt,
 			...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
 			...(includeReasoning ? { include: ["reasoning.encrypted_content"] } : {}),
@@ -253,7 +254,13 @@ export class OpenAiCodexHandler implements ApiHandler {
 						break
 					}
 
-					for await (const outChunk of this.processEvent(event, model)) {
+					if (event.id) {
+						this.lastResponseId = event.id
+					} else if (event.response_id) {
+						this.lastResponseId = event.response_id
+					}
+
+					for await (const outChunk of this.processEvent(event, model, this.lastResponseId)) {
 						yield outChunk
 					}
 				}
@@ -278,7 +285,13 @@ export class OpenAiCodexHandler implements ApiHandler {
 				if (this.abortController?.signal.aborted) {
 					return
 				}
-				yield* this.processEvent(event, model)
+				const eventAny = event as any
+				if (eventAny.id) {
+					this.lastResponseId = eventAny.id
+				} else if (eventAny.response_id) {
+					this.lastResponseId = eventAny.response_id
+				}
+				yield* this.processEvent(event, model, this.lastResponseId)
 			}
 		} catch (error) {
 			if (this.shouldRetryWebsocketWithFullContext(error, !!primaryParams.previous_response_id)) {
@@ -290,7 +303,13 @@ export class OpenAiCodexHandler implements ApiHandler {
 					if (this.abortController?.signal.aborted) {
 						return
 					}
-					yield* this.processEvent(event, model)
+					const eventAny = event as any
+					if (eventAny.id) {
+						this.lastResponseId = eventAny.id
+					} else if (eventAny.response_id) {
+						this.lastResponseId = eventAny.response_id
+					}
+					yield* this.processEvent(event, model, this.lastResponseId)
 				}
 				return
 			}
@@ -574,7 +593,13 @@ export class OpenAiCodexHandler implements ApiHandler {
 						try {
 							const parsed = JSON.parse(data)
 
-							for await (const outChunk of this.processEvent(parsed, model)) {
+							if (parsed.id) {
+								this.lastResponseId = parsed.id
+							} else if (parsed.response_id) {
+								this.lastResponseId = parsed.response_id
+							}
+
+							for await (const outChunk of this.processEvent(parsed, model, this.lastResponseId)) {
 								yield outChunk
 							}
 						} catch (e) {
@@ -590,11 +615,11 @@ export class OpenAiCodexHandler implements ApiHandler {
 		}
 	}
 
-	private async *processEvent(event: any, model: { id: string; info: ModelInfo }): ApiStream {
+	private async *processEvent(event: any, model: { id: string; info: ModelInfo }, responseId?: string): ApiStream {
 		// Handle text deltas
 		if (event?.type === "response.text.delta" || event?.type === "response.output_text.delta") {
 			if (event?.delta) {
-				yield { type: "text", text: event.delta }
+				yield { type: "text", text: event.delta, id: responseId }
 			}
 			return
 		}
@@ -607,7 +632,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 			event?.type === "response.reasoning_summary_text.delta"
 		) {
 			if (event?.delta) {
-				yield { type: "reasoning", reasoning: event.delta }
+				yield { type: "reasoning", reasoning: event.delta, id: responseId }
 			}
 			return
 		}
@@ -615,7 +640,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 		// Handle refusal deltas
 		if (event?.type === "response.refusal.delta") {
 			if (event?.delta) {
-				yield { type: "text", text: `[Refusal] ${event.delta}` }
+				yield { type: "text", text: `[Refusal] ${event.delta}`, id: responseId }
 			}
 			return
 		}
@@ -629,6 +654,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 			if (typeof callId === "string" && callId.length > 0 && typeof name === "string" && name.length > 0) {
 				yield {
 					type: "tool_calls",
+					id: responseId,
 					tool_call: {
 						call_id: callId,
 						function: {
@@ -657,13 +683,13 @@ export class OpenAiCodexHandler implements ApiHandler {
 				}
 
 				if (item.type === "text" && item.text) {
-					yield { type: "text", text: item.text }
+					yield { type: "text", text: item.text, id: responseId }
 				} else if (item.type === "reasoning" && item.text) {
-					yield { type: "reasoning", reasoning: item.text }
+					yield { type: "reasoning", reasoning: item.text, id: responseId }
 				} else if (item.type === "message" && Array.isArray(item.content)) {
 					for (const content of item.content) {
 						if ((content?.type === "text" || content?.type === "output_text") && content?.text) {
-							yield { type: "text", text: content.text }
+							yield { type: "text", text: content.text, id: responseId }
 						}
 					}
 				} else if (
@@ -675,7 +701,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 						const args = item.arguments || item.function?.arguments || item.function_arguments
 						yield {
 							type: "tool_calls",
-							id: callId,
+							id: responseId,
 							tool_call: {
 								call_id: callId,
 								function: {

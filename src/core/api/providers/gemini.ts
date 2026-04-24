@@ -10,8 +10,7 @@ import {
 	HarmCategory,
 	ThinkingLevel,
 } from "@google/genai"
-import { GeminiModelId, geminiDefaultModelId, geminiModels, ModelInfo } from "@shared/api"
-import { buildExternalBasicHeaders } from "@/services/EnvUtils"
+import { GeminiModelId, geminiDefaultModelId, geminiModels, ModelInfo, VertexModelId, vertexModels } from "@shared/api"
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
@@ -79,47 +78,32 @@ export class GeminiHandler implements ApiHandler {
 
 	private ensureClient(): GoogleGenAI {
 		if (!this.client) {
-			const options = this.options as GeminiHandlerOptions
-			const externalHeaders = buildExternalBasicHeaders()
+			const { geminiApiKey, vertexApiKey, isVertex } = this.options
+			const apiKey = isVertex ? vertexApiKey : geminiApiKey
 
-			if (options.isVertex) {
-				// Initialize with Vertex AI configuration
-				try {
-					const apiKey = options.vertexApiKey || options.geminiApiKey
+			if (!apiKey && !isVertex) {
+				throw new Error("Gemini requires an API Key")
+			}
 
-					if (!apiKey) {
-						throw new Error("Vertex AI requires an API Key")
-					}
+			try {
+				// Support for Vertex AI and Application Default Credentials (ADC)
+				// If vertexai is enabled, we provide a structured config object.
+				// Project ID is pulled from environment if not specified in options.
+				const vertexConfig = isVertex
+					? {
+							project: process.env.GOOGLE_CLOUD_PROJECT || "",
+							location: process.env.GOOGLE_CLOUD_LOCATION || "us-central1",
+						}
+					: undefined
 
-					const location = "us-central1"
-
-					this.client = new GoogleGenAI({
-						vertexai: true,
-						location,
-						apiKey,
-						httpOptions: {
-							headers: externalHeaders,
-						},
-					})
-				} catch (error: any) {
-					throw new Error(`Error creating Gemini Vertex AI client: ${error.message}`)
-				}
-			} else {
-				// Initialize with standard API key
-				if (!options.geminiApiKey) {
-					throw new Error("API key is required for Google Gemini when not using Vertex AI")
-				}
-
-				try {
-					this.client = new GoogleGenAI({
-						apiKey: options.geminiApiKey,
-						httpOptions: {
-							headers: externalHeaders,
-						},
-					})
-				} catch (error) {
-					throw new Error(`Error creating Gemini client: ${error.message}`)
-				}
+				this.client = new GoogleGenAI({
+					apiKey,
+					vertexai: !!isVertex,
+				})
+				Logger.log(`[GeminiHandler] Client initialized successfully (isVertex: ${!!isVertex})`)
+			} catch (error: any) {
+				Logger.error("Failed to create Gemini client:", error)
+				throw new Error(`Error creating Gemini client: ${error.message}`)
 			}
 		}
 		return this.client
@@ -196,13 +180,15 @@ export class GeminiHandler implements ApiHandler {
 
 		// Add thinking config only if the model supports it
 		if (info.thinkingConfig) {
-			const finalThinkingBudget = thinkingBudget > 0 ? thinkingBudget : thinkingLevel ? 1024 : undefined
-			requestConfig.thinkingConfig = {
-				thinkingBudget: finalThinkingBudget,
-				// Gemini allows only ONE of thinkingBudget or thinkingLevel.
-				// We prioritize budget to avoid "Budget 0 is invalid".
-				thinkingLevel: finalThinkingBudget ? undefined : thinkingLevel,
-				includeThoughts: !!finalThinkingBudget || !!thinkingLevel,
+			const includeThoughts = !!thinkingBudget || !!thinkingLevel
+			if (includeThoughts) {
+				requestConfig.thinkingConfig = {
+					includeThoughts: true,
+					// Gemini allows only ONE of thinkingBudget or thinkingLevel.
+					// We prioritize budget if specified (> 0), otherwise use level.
+					thinkingBudget: thinkingBudget > 0 ? thinkingBudget : undefined,
+					thinkingLevel: thinkingBudget > 0 ? undefined : thinkingLevel,
+				}
 			}
 		}
 
@@ -233,17 +219,24 @@ export class GeminiHandler implements ApiHandler {
 		try {
 			const result = await client.models.generateContentStream({
 				model: modelId,
-				contents: contents,
-				config: {
-					...requestConfig,
-				},
+				contents: contents as any,
+				config: requestConfig,
 			})
 
 			let isFirstSdkChunk = true
 			for await (const chunk of result) {
+				const usage = chunk.usageMetadata as GenerateContentResponseUsageMetadata | undefined
+				if (usage) {
+					promptTokens = usage.promptTokenCount ?? promptTokens
+					outputTokens = usage.candidatesTokenCount ?? outputTokens
+					cacheReadTokens = usage.cachedContentTokenCount ?? cacheReadTokens
+					thoughtsTokenCount = (usage as any).thinkingTokenCount ?? thoughtsTokenCount
+				}
+
 				if (isFirstSdkChunk) {
 					sdkFirstChunkTime = Date.now()
 					ttftSdkMs = sdkFirstChunkTime - sdkCallStartTime
+					responseId = chunk.responseId
 					isFirstSdkChunk = false
 				}
 
@@ -267,8 +260,9 @@ export class GeminiHandler implements ApiHandler {
 					}
 					if (part.functionCall) {
 						const functionCall = part.functionCall
-						const args = Object.entries(functionCall.args || {}).filter(([_key, val]) => !!val)
-						if (functionCall.args && args.length > 0) {
+						// Keep all arguments that are not undefined, allowing false, 0, and empty strings
+						const args = functionCall.args || {}
+						if (Object.keys(args).length > 0) {
 							yield {
 								type: "tool_calls",
 								id: chunk.responseId,
@@ -276,10 +270,9 @@ export class GeminiHandler implements ApiHandler {
 									function: {
 										id: chunk.responseId,
 										name: functionCall.name,
-										arguments: JSON.stringify(functionCall.args),
+										arguments: JSON.stringify(args),
 									},
 								},
-								signature: part.thoughtSignature,
 							}
 						}
 					}
@@ -484,11 +477,15 @@ export class GeminiHandler implements ApiHandler {
 	/**
 	 * Get the model ID and info for the current configuration
 	 */
-	getModel(): { id: GeminiModelId; info: ModelInfo } {
+	getModel(): { id: string; info: ModelInfo } {
 		const modelId = this.options.apiModelId
 		if (modelId && modelId in geminiModels) {
 			const id = modelId as GeminiModelId
 			return { id, info: geminiModels[id] }
+		}
+		if (modelId && modelId in vertexModels) {
+			const id = modelId as VertexModelId
+			return { id, info: vertexModels[id] }
 		}
 		return {
 			id: geminiDefaultModelId,
