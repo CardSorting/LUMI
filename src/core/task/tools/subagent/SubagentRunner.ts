@@ -261,12 +261,16 @@ function pushSubagentToolResultBlock(
 
 export class SubagentRunner {
 	private readonly apiHandler: ApiHandler
+	private readonly agent: SubagentBuilder
 	private readonly allowedTools: DietCodeDefaultTool[]
-	private activeApiAbort: (() => void) | undefined
+	private activeApiAbort?: () => void
 	private abortRequested = false
 	private recursionDepth = 0
 	private activeCommandExecutions = 0
-	private toolCallHistory: string[] = []
+	private abortingCommands = false
+	private streamId?: string
+
+	private readonly baseConfig: TaskConfig
 	private totalConsecutiveIdenticalCalls = 0
 	private readonly MAX_CONSECUTIVE_IDENTICAL_CALLS = 3
 	private signaledFindings = new Set<string>()
@@ -281,14 +285,13 @@ export class SubagentRunner {
 		contextWindow: 0,
 		contextUsagePercentage: 0,
 	}
-	private abortingCommands = false
 	private activeSignals: string[] = []
 	private onProgress?: (update: SubagentProgressUpdate) => void
+	private toolCallHistory: string[] = []
 
-	constructor(
-		private baseConfig: TaskConfig,
-		private agent: SubagentBuilder,
-	) {
+	constructor(baseConfig: TaskConfig, agent: SubagentBuilder) {
+		this.baseConfig = baseConfig
+		this.agent = agent
 		this.apiHandler = this.agent.getApiHandler()
 		this.allowedTools = this.agent.getAllowedTools()
 	}
@@ -345,7 +348,12 @@ export class SubagentRunner {
 		}
 	}
 
-	async run(prompt: string, onProgress: (update: SubagentProgressUpdate) => void): Promise<SubagentRunResult> {
+	async run(
+		prompt: string,
+		onProgress: (update: SubagentProgressUpdate) => void,
+		streamId?: string,
+	): Promise<SubagentRunResult> {
+		this.streamId = streamId
 		this.abortRequested = false
 		const state = new TaskState()
 		let emptyAssistantResponseRetries = 0
@@ -436,7 +444,6 @@ export class SubagentRunner {
 				}
 			}
 
-			const systemPrompt = this.agent.buildSystemPrompt(generatedSystemPrompt)
 			const useNativeToolCalls = !!promptRegistry.nativeTools?.length
 			const nativeTools = useNativeToolCalls ? this.agent.buildNativeTools(context) : undefined
 
@@ -477,6 +484,7 @@ export class SubagentRunner {
 			let iterationCount = 0
 			while (iterationCount < MAX_TASK_ITERATIONS) {
 				iterationCount++
+				const systemPrompt = this.agent.buildSystemPrompt(generatedSystemPrompt)
 				if (
 					usageState.lastRequest &&
 					this.shouldCompactBeforeNextRequest(usageState.lastRequest.totalTokens, api, providerInfo.model.id)
@@ -735,49 +743,68 @@ export class SubagentRunner {
 						toolResult = formatResponse.toolError(`No handler registered for tool '${toolName}'.`)
 					} else {
 						try {
-							// V227: Sovereign Audit Integration for Swarms
-							// Ensure subagent actions are recorded in the shared MetabolicMonitor
-							const guard = this.baseConfig.universalGuard
-							if (guard) {
-								const preExecResult = await guard.guardPreExecution(toolCallBlock)
-								if (!preExecResult.success) {
+							// V230: Swarm Collision Prevention
+							if (
+								this.streamId &&
+								toolCallParams.path &&
+								(toolName === DietCodeDefaultTool.FILE_NEW ||
+									toolName === DietCodeDefaultTool.FILE_EDIT ||
+									toolName === DietCodeDefaultTool.APPLY_PATCH)
+							) {
+								const collision = await orchestrator.checkCollision(this.streamId, [toolCallParams.path])
+								if (collision) {
 									toolResult = formatResponse.toolError(
-										preExecResult.error || "Subagent action denied by policy.",
+										`[COLLISION] ${collision} Wait for the other agent to finish or coordinate elsewhere.`,
 									)
+								}
+							}
+
+							if (!toolResult) {
+								// V227: Sovereign Audit Integration for Swarms
+								// Ensure subagent actions are recorded in the shared MetabolicMonitor
+								const guard = this.baseConfig.universalGuard
+								if (guard) {
+									const preExecResult = await guard.guardPreExecution(toolCallBlock)
+									if (!preExecResult.success) {
+										toolResult = formatResponse.toolError(
+											preExecResult.error || "Subagent action denied by policy.",
+										)
+									} else {
+										toolResult = await handler.execute(subagentConfig, toolCallBlock)
+										await guard.guardPostExecution(toolCallBlock, toolResult)
+
+										// V227: Substrate Read Auditing for Swarms
+										if (
+											(toolName === DietCodeDefaultTool.FILE_READ ||
+												toolName === DietCodeDefaultTool.SEARCH) &&
+											toolCallParams.path &&
+											typeof toolResult === "string"
+										) {
+											const pathKey = toolCallParams.path
+											const currentCount = state.currentTurnReadHistory.get(pathKey) || 0
+											if (currentCount === 0) {
+												state.currentTurnUniqueReadCount++
+											}
+											const newCount = currentCount + 1
+											state.currentTurnReadHistory.set(pathKey, newCount)
+											state.currentTurnTotalReadCount++
+
+											// Track global read history across turns
+											const globalCount = (state.taskReadHistory.get(pathKey) || 0) + 1
+											state.taskReadHistory.set(pathKey, globalCount)
+
+											toolResult = await guard.onRead(
+												toolCallParams.path,
+												toolResult,
+												state.currentTurnUniqueReadCount,
+												newCount,
+												globalCount,
+											)
+										}
+									}
 								} else {
 									toolResult = await handler.execute(subagentConfig, toolCallBlock)
-									await guard.guardPostExecution(toolCallBlock, toolResult)
-
-									// V227: Substrate Read Auditing for Swarms
-									if (
-										(toolName === DietCodeDefaultTool.FILE_READ || toolName === DietCodeDefaultTool.SEARCH) &&
-										toolCallParams.path &&
-										typeof toolResult === "string"
-									) {
-										const pathKey = toolCallParams.path
-										const currentCount = state.currentTurnReadHistory.get(pathKey) || 0
-										if (currentCount === 0) {
-											state.currentTurnUniqueReadCount++
-										}
-										const newCount = currentCount + 1
-										state.currentTurnReadHistory.set(pathKey, newCount)
-										state.currentTurnTotalReadCount++
-
-										// Track global read history across turns
-										const globalCount = (state.taskReadHistory.get(pathKey) || 0) + 1
-										state.taskReadHistory.set(pathKey, globalCount)
-
-										toolResult = await guard.onRead(
-											toolCallParams.path,
-											toolResult,
-											state.currentTurnUniqueReadCount,
-											newCount,
-											globalCount,
-										)
-									}
 								}
-							} else {
-								toolResult = await handler.execute(subagentConfig, toolCallBlock)
 							}
 						} catch (error) {
 							toolResult = formatResponse.toolError((error as Error).message)
@@ -927,7 +954,7 @@ export class SubagentRunner {
 
 		const truncated = contextManager
 			.getTruncatedMessages(conversation, deletedRange)
-			.map((message) => message as DietCodeStorageMessage)
+			.map((message: any) => message as DietCodeStorageMessage)
 		if (truncated.length >= conversation.length) {
 			return optimizationResult.didOptimize
 		}
@@ -950,7 +977,7 @@ export class SubagentRunner {
 		}
 
 		const optimizedConversation = optimizationResult.optimizedConversationHistory.map(
-			(message) => message as DietCodeStorageMessage,
+			(message: any) => message as DietCodeStorageMessage,
 		)
 		conversation.splice(0, conversation.length, ...optimizedConversation)
 		return { didOptimize: true, needToTruncate: optimizationResult.needToTruncate }

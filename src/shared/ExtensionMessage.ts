@@ -273,6 +273,8 @@ export interface DietCodeSayGenerateExplanation {
 export type SubagentExecutionStatus = "pending" | "running" | "completed" | "failed"
 
 export interface SubagentStatusItem {
+	id: string
+	name: string
 	index: number
 	prompt: string
 	status: SubagentExecutionStatus

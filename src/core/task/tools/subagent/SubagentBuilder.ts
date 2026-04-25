@@ -140,7 +140,14 @@ export class SubagentBuilder {
 			? `\n\n# Parent Agent Context\n${this.parentStreamContext}\nUse the context above to prioritize your research within the broader task goals.`
 			: ""
 
-		return `${this.buildAgentIdentitySystemPrefix()}${systemPrompt}${depthBlock}${architectureSignal}${parentContextBlock}${SUBAGENT_SYSTEM_SUFFIX}`
+		// Cross-Agent Intelligence (Blackboard)
+		const blackboard = this.baseConfig.taskState.swarmBlackboard || []
+		const blackboardBlock =
+			blackboard.length > 0
+				? `\n\n# SWARM BLACKBOARD (Shared Intelligence)\n${blackboard.map((f) => `- ${f}`).join("\n")}\nCONSIDER the findings above. If your research contradicts or supports these findings, signal it explicitly.`
+				: ""
+
+		return `${this.buildAgentIdentitySystemPrefix()}${systemPrompt}${depthBlock}${architectureSignal}${parentContextBlock}${blackboardBlock}${SUBAGENT_SYSTEM_SUFFIX}`
 	}
 
 	buildNativeTools(context: SystemPromptContext) {

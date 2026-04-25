@@ -92,6 +92,8 @@ export class TaskState {
 	currentTurnUniqueReadCount = 0
 	currentTurnExplorationCount = 0
 	taskReadHistory = new Map<string, number>()
+	// Cross-Agent Intelligence (Blackboard)
+	public swarmBlackboard: string[] = []
 	public sovereignAuditSynthesis?: string
 }
 

@@ -174,6 +174,8 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		config.taskState.consecutiveMistakeCount = 0
 
 		const entries: SubagentStatusItem[] = prompts.map((prompt, index) => ({
+			id: Math.random().toString(36).substring(2, 9),
+			name: configuredSubagentName || `Subagent ${index + 1}`,
 			index: index + 1,
 			prompt,
 			criticalSignals: [],
@@ -292,62 +294,71 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				await new Promise((resolve) => setTimeout(resolve, 500))
 			}
 
+			const current = entries[index]
 			try {
-				const result = await runners[index].run(prompts[index], async (update) => {
-					const current = entries[index]
+				const result = await runners[index].run(
+					prompts[index],
+					async (update) => {
+						// Real-time Swarm Cost Monitoring
+						if (update.stats?.totalCost !== undefined) {
+							const previousSubagentCost = current.totalCost || 0
+							const costDelta = update.stats.totalCost - previousSubagentCost
+							totalSwarmCost += costDelta
 
-					// Real-time Swarm Cost Monitoring
-					if (update.stats?.totalCost !== undefined) {
-						const previousSubagentCost = current.totalCost || 0
-						const costDelta = update.stats.totalCost - previousSubagentCost
-						totalSwarmCost += costDelta
-
-						if (MAX_PARENT_COST && totalSwarmCost > MAX_PARENT_COST) {
-							const costError = `Swarm Cumulative Cost Budget Exceeded ($${totalSwarmCost} > $${MAX_PARENT_COST}). Aborting entire swarm.`
-							Logger.error(`[SubagentToolHandler] ${costError}`)
-							// Abort all runners immediately
-							void Promise.allSettled(runners.map((r) => r.abort()))
+							if (MAX_PARENT_COST && totalSwarmCost > MAX_PARENT_COST) {
+								const costError = `Swarm Cumulative Cost Budget Exceeded ($${totalSwarmCost} > $${MAX_PARENT_COST}). Aborting entire swarm.`
+								Logger.error(`[SubagentToolHandler] ${costError}`)
+								// Abort all runners immediately
+								void Promise.allSettled(runners.map((r) => r.abort()))
+							}
 						}
-					}
 
-					if (update.status === "running") {
-						current.status = "running"
-					}
-					if (update.status === "completed") {
-						current.status = "completed"
-						const childId = childStreamIds[index]
-						if (childId) orchestrator.completeStream(childId, excerpt(update.result, 200)).catch(() => {})
-					}
-					if (update.status === "failed") {
-						current.status = "failed"
-						const childId = childStreamIds[index]
-						if (childId) orchestrator.failStream(childId, update.error || "Subagent failed").catch(() => {})
-					}
-					if (update.result !== undefined) {
-						current.result = update.result
-					}
-					if (update.error !== undefined) {
-						current.error = update.error
-					}
-					if (update.latestToolCall !== undefined) {
-						current.latestToolCall = update.latestToolCall
-					}
-					if (update.activeSignals !== undefined) {
-						current.criticalSignals = update.activeSignals
-					}
-					if (update.stats) {
-						current.toolCalls = update.stats.toolCalls || 0
-						current.inputTokens = update.stats.inputTokens || 0
-						current.outputTokens = update.stats.outputTokens || 0
-						current.totalCost = update.stats.totalCost || 0
-						current.contextTokens = update.stats.contextTokens || 0
-						current.contextWindow = update.stats.contextWindow || 0
-						current.contextUsagePercentage = update.stats.contextUsagePercentage || 0
-					}
-					await queueStatusUpdate("running", true)
-				})
+						if (update.status === "running") {
+							current.status = "running"
+						}
+						if (update.status === "completed") {
+							current.status = "completed"
+							const childId = childStreamIds[index]
+							if (childId) orchestrator.completeStream(childId, excerpt(update.result, 200)).catch(() => {})
+						}
+						if (update.status === "failed") {
+							current.status = "failed"
+							const childId = childStreamIds[index]
+							if (childId) orchestrator.failStream(childId, update.error || "Subagent failed").catch(() => {})
+						}
+						if (update.result !== undefined) {
+							current.result = update.result
+						}
+						if (update.error !== undefined) {
+							current.error = update.error
+						}
+						if (update.latestToolCall !== undefined) {
+							current.latestToolCall = update.latestToolCall
+						}
+						if (update.activeSignals !== undefined) {
+							current.criticalSignals = update.activeSignals
+						}
+						if (update.stats) {
+							current.toolCalls = update.stats.toolCalls || 0
+							current.inputTokens = update.stats.inputTokens || 0
+							current.outputTokens = update.stats.outputTokens || 0
+							current.totalCost = update.stats.totalCost || 0
+							current.contextTokens = update.stats.contextTokens || 0
+							current.contextWindow = update.stats.contextWindow || 0
+							current.contextUsagePercentage = update.stats.contextUsagePercentage || 0
+						}
+						await queueStatusUpdate("running", true)
+					},
+					childStreamIds[index] || undefined,
+				)
 				results[index] = { status: "fulfilled", value: result }
 			} catch (error) {
+				Logger.error(`[SubagentToolHandler] Subagent ${index} crashed:`, error)
+				current.status = "failed"
+				current.error = (error as Error).message || "Internal Runner Crash"
+				const childId = childStreamIds[index]
+				if (childId) orchestrator.failStream(childId, current.error).catch(() => {})
+				await queueStatusUpdate("running", true)
 				results[index] = { status: "rejected", reason: error }
 			}
 		}
@@ -362,29 +373,38 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		// Production Hardening: 20-minute hard timeout for the entire swarm execution
 		const SUBAGENT_EXECUTION_TIMEOUT_MS = 20 * 60 * 1000
 
-		await pTimeout(Promise.all(workers), {
-			milliseconds: SUBAGENT_EXECUTION_TIMEOUT_MS,
-			message: "Subagent swarm execution timed out after 20 minutes.",
-		}).catch(async (err: unknown) => {
+		try {
+			await pTimeout(Promise.all(workers), {
+				milliseconds: SUBAGENT_EXECUTION_TIMEOUT_MS,
+				message: "Subagent swarm execution timed out after 20 minutes.",
+			})
+		} catch (err: unknown) {
 			Logger.error("[SubagentToolHandler] Swarm execution error or timeout:", err)
-			// Abort all runners on timeout
-			await Promise.allSettled(runners.map((r) => r.abort()))
-			throw err
-		})
+			// Abort all runners on timeout to prevent zombie processes
+			void Promise.allSettled(runners.map((r) => r.abort()))
+		} finally {
+			clearInterval(abortPollInterval)
+		}
 
-		const settled = results
-		clearInterval(abortPollInterval)
 		let usageTokensIn = 0
 		let usageTokensOut = 0
 		let usageCacheWrites = 0
 		let usageCacheReads = 0
 		let usageCost = 0
-		settled.forEach((result, index) => {
+
+		results.forEach((result, index) => {
+			if (!result) {
+				entries[index].status = "failed"
+				entries[index].error = "Subagent task was aborted or timed out before execution."
+				return
+			}
+
 			if (result.status === "rejected") {
 				entries[index].status = "failed"
 				entries[index].error = (result.reason as Error)?.message || "Subagent execution failed"
 				return
 			}
+
 			entries[index].status = result.value.status
 			entries[index].result = result.value.result
 			entries[index].error = result.value.error
@@ -422,19 +442,22 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		const maxContextTokens = entries.reduce((acc, entry) => Math.max(acc, entry.contextTokens || 0), 0)
 		const contextWindow = entries.reduce((acc, entry) => Math.max(acc, entry.contextWindow || 0), 0)
 
+		const blackboard = config.taskState.swarmBlackboard || []
 		const summary = [
-			"Subagent results:",
-			`Total: ${entries.length}`,
-			`Succeeded: ${successCount}`,
-			`Failed: ${failures}`,
-			`Tool calls: ${totalToolCalls}`,
-			`Peak context usage: ${maxContextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} (${maxContextUsagePercentage.toFixed(1)}%)`,
+			"### SWARM EXECUTION SUMMARY",
+			`Total Agents: ${entries.length} (Success: ${successCount}, Fail: ${failures})`,
+			`Total Tool Calls: ${totalToolCalls}`,
+			`Peak Context Usage: ${maxContextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} (${maxContextUsagePercentage.toFixed(1)}%)`,
 			"",
+			"### AGENT DETAILS",
 			...entries.map((entry) => {
-				const header = `[${entry.index}] ${entry.status.toUpperCase()} - ${entry.prompt}`
-				const detail = entry.status === "completed" ? excerpt(entry.result) : excerpt(entry.error)
-				return detail ? `${header}\n${detail}` : header
+				const header = `[${entry.index}] ${entry.name} - ${entry.status.toUpperCase()}`
+				const subPrompt = `Prompt: ${excerpt(entry.prompt, 100)}`
+				const detail =
+					entry.status === "completed" ? `Result: ${excerpt(entry.result, 300)}` : `Error: ${excerpt(entry.error, 300)}`
+				return `${header}\n${subPrompt}\n${detail}\n`
 			}),
+			...(blackboard.length > 0 ? ["", "### SHARED SWARM FINDINGS (Blackboard)", ...blackboard.map((f) => `- ${f}`)] : []),
 		].join("\n")
 
 		return formatResponse.toolResult(summary)
