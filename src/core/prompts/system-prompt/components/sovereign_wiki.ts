@@ -48,6 +48,9 @@ Before calling \`attempt_completion\`, you MUST verify:
 **FAILURE TO PERFORM THESE STEPS IS A VIOLATION OF THE SOVEREIGN PROTOCOL AND WILL RESULT IN TASK REJECTION.**`
 
 export async function getSovereignWikiSection(_variant: PromptVariant, context: SystemPromptContext): Promise<string> {
+	if (!context.isSubagentRun) {
+		return ""
+	}
 	const template = getSovereignWikiTemplateText()
 	return new TemplateEngine().resolve(template, context, {})
 }

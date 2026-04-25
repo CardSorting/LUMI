@@ -476,6 +476,27 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			return
 		}
 
+		// V226: Knowledge Ledger (Wiki) Protection Gate
+		// Prevents main agents from manual wiki documentation to avoid context-poor updates.
+		if ((resolvedPath.startsWith(".wiki/") || resolvedPath.includes("/.wiki/")) && !config.isSubagentExecution) {
+			const wikiError =
+				"🛑 **ACCESS DENIED**: Direct modifications to the Knowledge Ledger (.wiki/) are reserved for specialized Forensic Sub-Agents. Please use 'attempt_completion' to trigger the autonomous documentation phase."
+			const errorResponse = formatResponse.toolError(wikiError)
+
+			ToolResultUtils.pushToolResult(
+				errorResponse,
+				block,
+				config.taskState.userMessageContent,
+				ToolDisplayUtils.getToolDescription,
+				config.coordinator,
+				config.taskState.toolUseIdMap,
+			)
+			if (!config.enableParallelToolCalling) {
+				config.taskState.didAlreadyUseTool = true
+			}
+			return
+		}
+
 		// Check if file exists to determine the correct UI message
 		let fileExists: boolean
 		if (config.services.diffViewProvider.editType !== undefined) {

@@ -92,12 +92,17 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 		// V225: Sovereign Forensic Gate
 		// If Knowledge Ledger (.wiki/) hasn't been updated, spawn a Forensic Sub-Agent
-		if (config.universalGuard) {
-			const compliance = await config.universalGuard.checkForensicCompliance()
+		if (config.universalGuard && !config.isSubagentExecution) {
+			let compliance = await config.universalGuard.checkForensicCompliance()
 			if (!compliance.compliant) {
+				await config.callbacks.say(
+					"subagent",
+					"🔍 **FORENSIC AUDIT REQUIRED**: Technical changes detected without Knowledge Ledger synchronization. Initiating autonomous documentation pass...",
+				)
+
 				// Pass 6: Dual-Pass Forensic Verification Loop
 				let forensicResult = await this.runForensicSubagent(config, result)
-				let compliance = await config.universalGuard.checkForensicCompliance()
+				compliance = await config.universalGuard.checkForensicCompliance()
 
 				if (!compliance.compliant && forensicResult) {
 					await config.callbacks.say(
@@ -112,16 +117,16 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 				if (!compliance.compliant) {
 					return formatResponse.toolError(
-						`🛡️ **SOVEREIGN FORENSIC GATE**: Documentation verification failed after two passes.\nReason: ${compliance.reason}\n\nYou MUST update the Knowledge Ledger (.wiki/) before completing the task.`,
+						`🛡️ **SOVEREIGN FORENSIC GATE**: Documentation verification failed.\nReason: ${compliance.reason}\n\nThe specialized Forensic Sub-Agent failed to synchronize the Ledger. Please review the substrate health before manually attempting further changes.`,
 					)
 				}
 
 				await config.callbacks.say("subagent", "✅ **FORENSIC GATE PASSED**: Knowledge Ledger is in sync.")
-				return forensicResult || formatResponse.toolError("Forensic subagent failed to return a result.")
+				// Fall through to actual completion
 			}
 		}
 
-		// Run PreToolUse hook before execution
+		// Show notification if enabled
 		try {
 			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
 			await ToolHookUtils.runPreToolUseIfEnabled(config, block)

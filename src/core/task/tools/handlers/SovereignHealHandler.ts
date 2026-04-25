@@ -18,6 +18,11 @@ export class SovereignHealHandler implements IToolHandler {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		if (!config.isSubagentExecution) {
+			return formatResponse.toolError(
+				"🛑 **ACCESS DENIED**: Specialized healing tools are reserved for Forensic Sub-Agents. Please use 'attempt_completion' to trigger an autonomous documentation phase.",
+			)
+		}
 		const params = block.params as any
 		const diagnostics = params.diagnostics
 		if (!Array.isArray(diagnostics)) {

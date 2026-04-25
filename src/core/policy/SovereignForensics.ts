@@ -46,7 +46,7 @@ export class SovereignForensics {
 
 		for (const cited of citedPaths) {
 			const absoluteCited = path.resolve(this.cwd, cited)
-			const metrics = registry.get(absoluteCited)
+			const metrics = this.metabolicMonitor.getMetrics(absoluteCited)
 
 			if (!metrics || metrics.reads === 0) {
 				// V34: Contextual Leniency (Conversational Grounding)
@@ -58,7 +58,7 @@ export class SovereignForensics {
 				}
 
 				// V33: Identity Persistence (Substrate-Aware Verification)
-				const relPath = path.relative(this.cwd, absoluteCited)
+				const relPath = this.metabolicMonitor.normalize(absoluteCited)
 				const node = this.spiderEngine?.nodes.get(relPath)
 				if (node) {
 					warnings.push(

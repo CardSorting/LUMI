@@ -45,11 +45,27 @@ export class MetabolicMonitor {
 	private resonanceMultiplier = 1.0 // V100: Cognitive Resonance
 	private sessionVersion = 1 // V150: State Evolution
 
+	constructor(private readonly cwd: string = process.cwd()) {}
+
+	/**
+	 * Normalizes a path to a consistent registry key (relative, lowercase).
+	 */
+	public normalize(p: string): string {
+		try {
+			const absolutePath = path.resolve(this.cwd, p)
+			const relativePath = path.relative(this.cwd, absolutePath)
+			return relativePath.replace(/\\/g, "/").toLowerCase()
+		} catch {
+			return p.replace(/\\/g, "/").toLowerCase()
+		}
+	}
+
 	/**
 	 * Records a read operation.
 	 */
 	public recordRead(filePath: string, content?: string) {
-		const metrics = this.getOrCreateMetrics(filePath)
+		const norm = this.normalize(filePath)
+		const metrics = this.getOrCreateMetrics(norm)
 		metrics.reads++
 		metrics.lastReadTimestamp = Date.now()
 
@@ -63,7 +79,8 @@ export class MetabolicMonitor {
 	 * V100: Metabolic Synthesis & Aesthetic Agility.
 	 */
 	public recordWrite(filePath: string, content?: string, added = 0, deleted = 0, turnId?: string) {
-		const metrics = this.getOrCreateMetrics(filePath)
+		const norm = this.normalize(filePath)
+		const metrics = this.getOrCreateMetrics(norm)
 
 		let impactMultiplier = this.resonanceMultiplier
 
@@ -111,7 +128,8 @@ export class MetabolicMonitor {
 	}
 
 	public getDoubtSignal(filePath: string, layer = "infrastructure", lineCount = 0): number {
-		const metrics = this.registry.get(filePath)
+		const norm = this.normalize(filePath)
+		const metrics = this.registry.get(norm)
 		if (!metrics) return 0
 		const baseDoubt = metrics.reads / (metrics.writes || 1)
 
@@ -148,7 +166,8 @@ export class MetabolicMonitor {
 	 * V189: Calibrated with nodal scale factor.
 	 */
 	public isHighlyActive(filePath: string, isRefactoring = false, lineCount = 0): { active: boolean; reason?: string } {
-		const metrics = this.registry.get(filePath)
+		const norm = this.normalize(filePath)
+		const metrics = this.registry.get(norm)
 		if (!metrics) return { active: false }
 
 		const pressure = this.getPressure(filePath)
@@ -170,7 +189,8 @@ export class MetabolicMonitor {
 	 * V189: Calibrated with Doubt Signal weighting to detect "Investigative Thrashing".
 	 */
 	public getPressure(filePath: string): number {
-		const metrics = this.registry.get(filePath)
+		const norm = this.normalize(filePath)
+		const metrics = this.registry.get(norm)
 		if (!metrics) return 0
 
 		const churn = metrics.writes + (metrics.linesAdded + metrics.linesDeleted) / 100
@@ -235,7 +255,8 @@ export class MetabolicMonitor {
 	 * V8: Resets activity history for a specific file (Stability break recovery)
 	 */
 	public resetFileInflammation(filePath: string) {
-		const metrics = this.registry.get(filePath)
+		const norm = this.normalize(filePath)
+		const metrics = this.registry.get(norm)
 		if (metrics) {
 			metrics.linesAdded = 0
 			metrics.linesDeleted = 0
@@ -289,7 +310,8 @@ export class MetabolicMonitor {
 	 * V26: Records a focused observation of a specific symbol (class/function).
 	 */
 	public recordSymbolObservation(filePath: string, symbol: string) {
-		const metrics = this.getOrCreateMetrics(filePath)
+		const norm = this.normalize(filePath)
+		const metrics = this.getOrCreateMetrics(norm)
 		metrics.symbolObservations.add(symbol)
 		Logger.info(`[StabilityMonitor] Focus recorded: ${symbol} in ${path.basename(filePath)}`)
 	}
@@ -299,6 +321,13 @@ export class MetabolicMonitor {
 	 */
 	public getForensicRegistry(): ReadonlyMap<string, MetabolicMetrics> {
 		return this.registry
+	}
+
+	/**
+	 * V228: Path-aware metrics lookup.
+	 */
+	public getMetrics(filePath: string): MetabolicMetrics | undefined {
+		return this.registry.get(this.normalize(filePath))
 	}
 
 	private getOrCreateMetrics(filePath: string): MetabolicMetrics {

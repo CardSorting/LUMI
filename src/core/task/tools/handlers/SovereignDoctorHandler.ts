@@ -20,6 +20,11 @@ export class SovereignDoctorHandler implements IToolHandler {
 	}
 
 	async execute(config: TaskConfig, _block: ToolUse): Promise<ToolResponse> {
+		if (!config.isSubagentExecution) {
+			return formatResponse.toolError(
+				"🛑 **ACCESS DENIED**: Specialized forensic tools are reserved for Forensic Sub-Agents. Please use 'attempt_completion' to trigger an autonomous documentation phase.",
+			)
+		}
 		try {
 			const engine = new SpiderEngine(config.cwd)
 			const loaded = await engine.loadRegistry()

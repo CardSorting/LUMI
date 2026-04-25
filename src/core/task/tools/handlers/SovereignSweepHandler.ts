@@ -18,6 +18,11 @@ export class SovereignSweepHandler implements IToolHandler {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		if (!config.isSubagentExecution) {
+			return formatResponse.toolError(
+				"🛑 **ACCESS DENIED**: Specialized integrity tools are reserved for Forensic Sub-Agents. Please use 'attempt_completion' to trigger an autonomous documentation phase.",
+			)
+		}
 		const params = block.params as any
 		const files = params.files
 		if (!Array.isArray(files)) {

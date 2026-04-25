@@ -24,6 +24,9 @@ Run these via \`npx tsx scripts/agent-spider.ts [command]\`:
 Every significant implementation MUST be preceded or followed by a Forensic Audit using these tools. Hallucinating metrics is a violation of the Sovereign Protocol.`
 
 export async function getForensicToolsSection(_variant: PromptVariant, context: SystemPromptContext): Promise<string> {
+	if (!context.isSubagentRun) {
+		return ""
+	}
 	const template = getForensicToolsTemplateText()
 	return new TemplateEngine().resolve(template, context, {})
 }

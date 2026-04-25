@@ -25,7 +25,6 @@ import { DietCodeError, DietCodeErrorType } from "@/services/error"
 import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@/utils/cost"
 import { isNextGenModelFamily } from "@/utils/model-utils"
-import { UniversalGuard } from "../../../policy/UniversalGuard"
 import { TaskState } from "../../TaskState"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -47,7 +46,6 @@ export interface SubagentRunResult {
 
 interface ConfigWithExtensions extends TaskConfig {
 	getSessionStreamId?: () => string
-	guard?: UniversalGuard
 }
 
 interface SubagentProgressUpdate {
@@ -724,7 +722,50 @@ export class SubagentRunner {
 						toolResult = formatResponse.toolError(`No handler registered for tool '${toolName}'.`)
 					} else {
 						try {
-							toolResult = await handler.execute(subagentConfig, toolCallBlock)
+							// V227: Sovereign Audit Integration for Swarms
+							// Ensure subagent actions are recorded in the shared MetabolicMonitor
+							const guard = this.baseConfig.universalGuard
+							if (guard) {
+								const preExecResult = await guard.guardPreExecution(toolCallBlock)
+								if (!preExecResult.success) {
+									toolResult = formatResponse.toolError(
+										preExecResult.error || "Subagent action denied by policy.",
+									)
+								} else {
+									toolResult = await handler.execute(subagentConfig, toolCallBlock)
+									await guard.guardPostExecution(toolCallBlock, toolResult)
+
+									// V227: Substrate Read Auditing for Swarms
+									if (
+										(toolName === DietCodeDefaultTool.FILE_READ || toolName === DietCodeDefaultTool.SEARCH) &&
+										toolCallParams.path &&
+										typeof toolResult === "string"
+									) {
+										const pathKey = toolCallParams.path
+										const currentCount = state.currentTurnReadHistory.get(pathKey) || 0
+										if (currentCount === 0) {
+											state.currentTurnUniqueReadCount++
+										}
+										const newCount = currentCount + 1
+										state.currentTurnReadHistory.set(pathKey, newCount)
+										state.currentTurnTotalReadCount++
+
+										// Track global read history across turns
+										const globalCount = (state.taskReadHistory.get(pathKey) || 0) + 1
+										state.taskReadHistory.set(pathKey, globalCount)
+
+										toolResult = await guard.onRead(
+											toolCallParams.path,
+											toolResult,
+											state.currentTurnUniqueReadCount,
+											newCount,
+											globalCount,
+										)
+									}
+								}
+							} else {
+								toolResult = await handler.execute(subagentConfig, toolCallBlock)
+							}
 						} catch (error) {
 							toolResult = formatResponse.toolError((error as Error).message)
 						}
@@ -803,7 +844,7 @@ export class SubagentRunner {
 		const validator = new ToolValidator(
 			this.baseConfig.services.dietcodeIgnoreController,
 			// biome-ignore lint/style/noNonNullAssertion: Guard is guaranteed to exist by SubagentToolHandler validation.
-			(this.baseConfig as ConfigWithExtensions).guard!,
+			this.baseConfig.universalGuard!,
 		) // Add guard from config
 
 		for (const tool of this.allowedTools) {

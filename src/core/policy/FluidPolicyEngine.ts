@@ -98,7 +98,7 @@ export class FluidPolicyEngine {
 		this.stalenessTracker = new ContextStalenessTracker(this.cwd)
 		this.dashboardGenerator = new DashboardGenerator(this.cwd)
 		this.axiomEngine = new SemanticAxiomEngine()
-		this.metabolicMonitor = new MetabolicMonitor()
+		this.metabolicMonitor = new MetabolicMonitor(this.cwd)
 		this.optimizer = new SovereignOptimizer(this.cwd)
 		this.pathogens = new PathogenStore(this.cwd)
 		this.refactorHealer = new RefactorHealer(this.cwd)
@@ -581,8 +581,9 @@ export class FluidPolicyEngine {
 					this.refactorTurnsRemaining > 0 ||
 					scratchpadContent.includes("#REFACTOR") ||
 					scratchpadContent.includes("#INFRASTRUCTURE")
-				const nodeSize = this.spiderEngine.nodes.get(absolutePath)?.astComplexity || 0
-				const status = this.metabolicMonitor.isHighlyActive(absolutePath, isRefactoring, nodeSize)
+				const normPath = this.normalize(absolutePath)
+				const nodeSize = this.spiderEngine.nodes.get(normPath)?.astComplexity || 0
+				const status = this.metabolicMonitor.isHighlyActive(normPath, isRefactoring, nodeSize)
 
 				// V100: Restoration Buffer Management
 				const tokens = this.restorationTokens.get(targetPath) || 0
@@ -1264,9 +1265,10 @@ export class FluidPolicyEngine {
 		// V33: Refactor awareness for diagnostic injection
 		const isRefactoringIntent =
 			this.refactorTurnsRemaining > 0 || this.spiderEngine.getViolations().length > 0 || this.buildAlarmActive
-		const nodeSize = this.spiderEngine.nodes.get(absolutePath)?.astComplexity || 0
+		const normPath = this.normalize(absolutePath)
+		const nodeSize = this.spiderEngine.nodes.get(normPath)?.astComplexity || 0
 		const drift = this.metabolicMonitor.getTaskDrift(this.mode === "plan", isRefactoringIntent)
-		const activity = this.metabolicMonitor.isHighlyActive(absolutePath, isRefactoringIntent, nodeSize)
+		const activity = this.metabolicMonitor.isHighlyActive(normPath, isRefactoringIntent, nodeSize)
 
 		if (activity.active) {
 			header += `\n🔥 HIGH ACTIVITY LEVEL DETECTED:\n${activity.reason}\nThis file is changing very rapidly. Consider a quick Strategic Review to stay aligned.\n`
@@ -1791,7 +1793,7 @@ export class FluidPolicyEngine {
 
 		const absPath = path.resolve(this.cwd, filePath)
 		try {
-			const metrics = this.metabolicMonitor.getForensicRegistry().get(absPath)
+			const metrics = this.metabolicMonitor.getMetrics(absPath)
 			if (metrics?.lastObservedHash) {
 				const currentContent = await fs.readFile(absPath, "utf-8")
 				const currentHash = crypto.createHash("md5").update(currentContent).digest("hex")
@@ -1862,8 +1864,8 @@ export class FluidPolicyEngine {
 		}
 
 		const registry = this.metabolicMonitor.getForensicRegistry()
-		const changelogPath = path.resolve(this.cwd, ".wiki/changelog.md")
-		const metrics = registry.get(changelogPath)
+		const rawChangelogPath = path.resolve(this.cwd, ".wiki/changelog.md")
+		const metrics = this.metabolicMonitor.getMetrics(rawChangelogPath)
 
 		if (!metrics || metrics.writes === 0) {
 			return {

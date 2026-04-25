@@ -34,7 +34,7 @@ export class SovereignBreathHandler implements IToolHandler {
 
 			// V150: Grounded Reset.
 			// We create a fresh MetabolicMonitor, reset it, and export its state to cognitive memory.
-			const monitor = new MetabolicMonitor()
+			const monitor = new MetabolicMonitor(config.cwd)
 			monitor.resetMetabolicPressure()
 
 			const state = monitor.exportState()
