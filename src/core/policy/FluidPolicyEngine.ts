@@ -1822,10 +1822,56 @@ export class FluidPolicyEngine {
 	}
 
 	/**
+	 * V226: Forensic Impact Analysis.
+	 * Returns a summary of all files modified in the current session.
+	 */
+	public getSessionImpactSummary(): string {
+		const registry = this.metabolicMonitor.getForensicRegistry()
+		const summary: string[] = []
+
+		for (const [p, m] of registry.entries()) {
+			if (m.writes > 0) {
+				const rel = path.relative(this.cwd, p)
+				if (rel.startsWith(".wiki/")) continue
+				summary.push(
+					`- \`${rel}\` (${m.writes} writes, +${Math.round(m.linesAdded)}/-${Math.round(m.linesDeleted)} lines)`,
+				)
+			}
+		}
+
+		return summary.length > 0 ? summary.join("\n") : "_No code changes detected in the primary substrate._"
+	}
+
+	/**
 	 * V202-B: Generates a passive integrity advisor hint.
 	 * Removed raw XML to prevent agentic spiraling.
 	 */
 	private generateIntegrityAdvisor(files: string[]): string {
 		return `💡 [INTEGRITY_ADVISORY]: Auto-healing available. Run 'sovereign_integrity_sweep' with files: ${JSON.stringify(files)} to resolve.`
+	}
+	/**
+	 * V225: Sovereign Forensic Gate.
+	 * Verifies if the Knowledge Ledger has been updated before task completion.
+	 */
+	public async checkForensicCompliance(): Promise<{ compliant: boolean; reason?: string }> {
+		const wikiPath = path.resolve(this.cwd, ".wiki")
+		try {
+			await fs.access(wikiPath)
+		} catch {
+			return { compliant: true } // No wiki, no enforcement
+		}
+
+		const registry = this.metabolicMonitor.getForensicRegistry()
+		const changelogPath = path.resolve(this.cwd, ".wiki/changelog.md")
+		const metrics = registry.get(changelogPath)
+
+		if (!metrics || metrics.writes === 0) {
+			return {
+				compliant: false,
+				reason: "🛑 **SOVEREIGN FORENSIC GATE**: The Knowledge Ledger (`.wiki/changelog.md`) has not been updated in this session. You MUST enter the **Forensic Phase** to document your technical changes before completing the task.",
+			}
+		}
+
+		return { compliant: true }
 	}
 }

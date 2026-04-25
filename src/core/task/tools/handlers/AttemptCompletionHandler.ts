@@ -12,6 +12,8 @@ import { DietCodeDefaultTool } from "@shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
+import { SubagentBuilder } from "../subagent/SubagentBuilder"
+import { SubagentRunner } from "../subagent/SubagentRunner"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -87,6 +89,37 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 		// Reset so the next attempt_completion pair triggers double-check again
 		config.taskState.doubleCheckCompletionPending = false
+
+		// V225: Sovereign Forensic Gate
+		// If Knowledge Ledger (.wiki/) hasn't been updated, spawn a Forensic Sub-Agent
+		if (config.universalGuard) {
+			const compliance = await config.universalGuard.checkForensicCompliance()
+			if (!compliance.compliant) {
+				// Pass 6: Dual-Pass Forensic Verification Loop
+				let forensicResult = await this.runForensicSubagent(config, result)
+				let compliance = await config.universalGuard.checkForensicCompliance()
+
+				if (!compliance.compliant && forensicResult) {
+					await config.callbacks.say(
+						"subagent",
+						`⚠️ **FORENSIC AUDIT FAILED**: ${compliance.reason}\nInitiating corrective second pass...`,
+					)
+					// Feedback-driven second pass
+					const feedback = `Your previous documentation update was REJECTED by the UniversalGuard.\nReason: ${compliance.reason}\n\nPlease perform a corrective pass to ensure all technical changes are mirrored in the Knowledge Ledger (.wiki/) and changelog.md.`
+					forensicResult = await this.runForensicSubagent(config, result, feedback)
+					compliance = await config.universalGuard.checkForensicCompliance()
+				}
+
+				if (!compliance.compliant) {
+					return formatResponse.toolError(
+						`🛡️ **SOVEREIGN FORENSIC GATE**: Documentation verification failed after two passes.\nReason: ${compliance.reason}\n\nYou MUST update the Knowledge Ledger (.wiki/) before completing the task.`,
+					)
+				}
+
+				await config.callbacks.say("subagent", "✅ **FORENSIC GATE PASSED**: Knowledge Ledger is in sync.")
+				return forensicResult || formatResponse.toolError("Forensic subagent failed to return a result.")
+			}
+		}
 
 		// Run PreToolUse hook before execution
 		try {
@@ -332,6 +365,74 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		} catch (error) {
 			// TaskComplete hook failed - non-fatal, just log
 			Logger.error("[TaskComplete Hook] Failed (non-fatal):", error)
+		}
+	}
+	/**
+	 * V225: Runs an autonomous Forensic Sub-Agent to handle Knowledge Ledger updates.
+	 */
+	private async runForensicSubagent(
+		config: TaskConfig,
+		originalResult: string,
+		feedback?: string,
+	): Promise<string | undefined> {
+		try {
+			await config.callbacks.say("subagent", "🛡️ **SOVEREIGN FORENSIC GATE**: Initiating Autonomous Forensic Phase...")
+
+			const builder = new SubagentBuilder(config, "forensic-architect")
+			builder.setAllowedTools([
+				DietCodeDefaultTool.FILE_READ,
+				DietCodeDefaultTool.FILE_EDIT,
+				DietCodeDefaultTool.FILE_NEW,
+				DietCodeDefaultTool.LIST_FILES,
+				DietCodeDefaultTool.SEARCH,
+				DietCodeDefaultTool.SOVEREIGN_DIAGNOSE,
+				DietCodeDefaultTool.SOVEREIGN_SWEEP,
+				DietCodeDefaultTool.BASH,
+			])
+			const runner = new SubagentRunner(config, builder)
+
+			const impact = config.universalGuard?.getSessionImpactSummary() || "No impact data available."
+
+			const prompt = `You are the Spider-Link Forensic Architect.
+Your mission is to master the structural graph of the codebase using the Spider Engine and synchronize the Knowledge Ledger (.wiki/) with the technical changes just completed.
+
+### Technical Summary of Implementation:
+${originalResult}
+
+### Files Impacted (Structural Delta):
+${impact}
+
+${feedback ? `### CORRECTIVE FEEDBACK FROM UNIVERSALGUARD\n${feedback}\n` : ""}
+
+### SPIDER ENGINE REFERENCE
+You have direct access to the Spider Engine, the structural authority of DietCode.
+- **Built-in Tool: 'diagnose_sovereignty'**: Use this to generate a comprehensive structural audit of impacted files.
+- **Built-in Tool: 'sovereign_integrity_sweep'**: Use this to verify that all citations in the wiki are grounded in the physical substrate.
+- **CLI Manual Access**: If you need deeper granularity, run 'npx tsx scripts/agent-spider.ts <command>':
+  - 'status': View graph health and entropy.
+  - 'blast-radius <file>': Identify critical dependents impacted by your changes.
+  - 'find-symbol <name>': Locate the physical definition of any symbol.
+  - 'find-usage <symbol>': See every file that consumes a specific symbol.
+  - 're-seed': Force-sync the graph if it diverges from reality.
+
+### SPIDER-LINK MANDATE
+1. **Structural Deep-Dive**: Before documenting, use 'diagnose_sovereignty' or 'blast-radius' on all impacted files. Master the import/export graph to ensure your documentation reflects architectural reality.
+2. **Changelog Mastery**: Update '.wiki/changelog.md' with granular, reverse-chronological records. Link changes to their structural blast radius as identified by the Spider.
+3. **Integrity Verification**: Perform a 'sovereign_integrity_sweep' to ensure that all logical citations in the wiki are verifiably grounded in the substrate.
+4. **Graph Persistence**: Ensure '.wiki/index.md' and related files maintain structural parity with the physical codebase.
+
+Do NOT provide conversational fluff. Use your specialized access to the Spider Engine to be the definitive voice of truth for this session's impact.`
+
+			const subagentResult = await runner.run(prompt, (update) => {
+				if (update.status === "failed") {
+					Logger.error("[ForensicSubagent] Failed:", update.error)
+				}
+			})
+
+			return subagentResult.status === "completed" ? subagentResult.result : undefined
+		} catch (error) {
+			Logger.error("[ForensicSubagent] Unexpected error:", error)
+			return undefined
 		}
 	}
 }

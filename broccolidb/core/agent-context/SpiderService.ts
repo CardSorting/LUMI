@@ -167,13 +167,29 @@ export class SpiderService {
     if (this.bootstrapped) return;
     const startTime = Date.now();
     try {
-      const repoPath = this.ctx.workspace.workspacePath;
       const db = this.ctx.workspace.getDb();
-      const repo = new Repository(db, repoPath);
+      let repo: Repository;
+      try {
+          repo = await this.ctx.workspace.getRepo(this.ctx.workspace.workspaceId);
+      } catch {
+          // Fallback for legacy or custom path structures
+          repo = new Repository(db, this.ctx.workspace.workspacePath);
+      }
+      
+      const repoPath = repo.getBasePath();
 
-      // Get default branch
+      // 0. Branch Discovery: Align with the active substrate layer
       const repoDoc = await db.selectOne('repositories', [{ column: 'repoPath', value: repoPath }]);
-      const branchName = repoDoc?.defaultBranch || 'main';
+      const branches = await db.selectWhere('branches', [{ column: 'repoPath', value: repoPath }]);
+      
+      // Prioritize the branch with the most recent activity if not specified
+      let branchName = repoDoc?.defaultBranch || 'main';
+      if (branches.length > 0) {
+          const sortedBranches = branches.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          branchName = sortedBranches[0].name;
+      }
+      
+      Logger.info(`[SpiderService] 🕸️  Bootstrapping graph from branch '${branchName}'...`);
 
       // 1. Try to load from persistent cache
       const cache = await db.selectOne('knowledge', [

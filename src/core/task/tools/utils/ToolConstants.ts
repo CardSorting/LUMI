@@ -30,6 +30,7 @@ export const TASK_CONFIG_KEYS = [
 	"focusChainSettings",
 	"callbacks",
 	"coordinator",
+	"universalGuard",
 ] as const
 
 /**

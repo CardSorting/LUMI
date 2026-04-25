@@ -129,4 +129,18 @@ export class UniversalGuard {
 	public getStabilityTelemetry(filePath: string) {
 		return this.engine.getStabilityTelemetry(filePath)
 	}
+
+	/**
+	 * V225: Sovereign Forensic Gate Proxy.
+	 */
+	public async checkForensicCompliance() {
+		return this.engine.checkForensicCompliance()
+	}
+
+	/**
+	 * V226: Forensic Impact Analysis Proxy.
+	 */
+	public getSessionImpactSummary(): string {
+		return this.engine.getSessionImpactSummary()
+	}
 }

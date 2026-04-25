@@ -210,6 +210,7 @@ export class ToolExecutor {
 				runUserPromptSubmitHook: this.runUserPromptSubmitHook,
 			},
 			coordinator: this.coordinator,
+			universalGuard: this.guard,
 		}
 
 		// Validate the config at runtime to catch any missing properties

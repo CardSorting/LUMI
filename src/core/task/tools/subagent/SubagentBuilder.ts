@@ -13,6 +13,8 @@ export type AgentConfig = Partial<AgentBaseConfig>
 
 export const SUBAGENT_DEFAULT_ALLOWED_TOOLS: DietCodeDefaultTool[] = [
 	DietCodeDefaultTool.FILE_READ,
+	DietCodeDefaultTool.FILE_EDIT,
+	DietCodeDefaultTool.FILE_NEW,
 	DietCodeDefaultTool.LIST_FILES,
 	DietCodeDefaultTool.SEARCH,
 	DietCodeDefaultTool.LIST_CODE_DEF,
@@ -22,6 +24,8 @@ export const SUBAGENT_DEFAULT_ALLOWED_TOOLS: DietCodeDefaultTool[] = [
 	DietCodeDefaultTool.MCP_USE,
 	DietCodeDefaultTool.MCP_ACCESS,
 	DietCodeDefaultTool.MEM_REFRESH,
+	DietCodeDefaultTool.SOVEREIGN_DIAGNOSE,
+	DietCodeDefaultTool.SOVEREIGN_SWEEP,
 ]
 
 // Peer-Review & Consensus loops
@@ -42,13 +46,21 @@ const STRUCTURED_SIGNALING_PROTO = `
 STRUCTURED SIGNALING: When signaling critical findings or final results, use structured markers [SIGNAL: ARCHITECTURE_VIOLATION] or [SIGNAL: SECURITY_RISK] followed by detailed JSON metadata if possible.
 `
 
+const FORENSIC_AXIOMS = `
+### FORENSIC HARDENING AXIOMS
+1. DOCUMENTATION IS CODE: Every technical change must be mirrored in the Knowledge Ledger (.wiki/).
+2. ZERO HALLUCINATION: Citations must be grounded in actual file reads and Spider Engine diagnostics.
+3. GRANULARITY: Changelogs must record technical implementation details (tools, files, logic shifts), not just high-level goals.
+4. STRUCTURAL SYNC: Verify that all internal wiki links are valid and that index.md is current.
+`
+
 export const SUBAGENT_SYSTEM_SUFFIX = `
 ${AUTONOMOUS_NUDGE_PROTO}
 ${STRUCTURED_SIGNALING_PROTO}
 ${CONSENSUS_PROTO}
+${FORENSIC_AXIOMS}
 
 Standardized Swarm Reporting:
-CRITICAL: You are operating within a JOY-ZONED architectural environment. 
 1. RESEARCH MANDATE: Every file you explore MUST be identified by its architectural layer (Domain, Core, Infrastructure, UI, or Plumbing). 
 2. DOMAIN-FIRST: Prioritize understanding the Domain layer before exploring implementation details in Infrastructure or UI.
 3. REPORTING MANDATE: In your final 'attempt_completion' result, you MUST provide a "JoyZoning Alignment" section, categorizing your findings by their respective layers and evaluating their "Architectural Suitability" (e.g., is the logic appearing in the right zone?).
@@ -61,7 +73,7 @@ CRITICAL: You are operating within a JOY-ZONED architectural environment.
 
 export class SubagentBuilder {
 	private readonly agentConfig: AgentConfig = {}
-	private readonly allowedTools: DietCodeDefaultTool[]
+	private allowedTools: DietCodeDefaultTool[]
 	private readonly apiHandler: ReturnType<typeof buildApiHandler>
 	private parentStreamContext: string | null = null
 
@@ -82,6 +94,10 @@ export class SubagentBuilder {
 
 		this.applyModelOverride(effectiveApiConfiguration as Record<string, unknown>, mode, this.agentConfig.modelId)
 		this.apiHandler = buildApiHandler(effectiveApiConfiguration as typeof apiConfiguration, mode)
+	}
+
+	setAllowedTools(tools: DietCodeDefaultTool[]): void {
+		this.allowedTools = Array.from(new Set([...tools, DietCodeDefaultTool.ATTEMPT]))
 	}
 
 	getApiHandler(): ReturnType<typeof buildApiHandler> {

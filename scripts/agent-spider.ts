@@ -39,15 +39,19 @@ async function main() {
 	const conn = new Connection({ dbPath })
 	const pool = conn.getPool()
 	const ws = new Workspace(pool, "local-user", "local-workspace")
-	await ws.init()
 
-	const repoId = path.basename(process.cwd())
+	// Pass 6: Idempotent Substrate Initialization
+	await ws.init()
+	await pool.flush() // Ensure users/workspaces are on disk before repo FK checks
+
+	const repoId = ws.workspaceId
 	let repo: Repository
 	try {
 		repo = await ws.getRepo(repoId)
 	} catch {
 		console.log(`[Spider] Initializing repository '${repoId}' in BroccoliDB...`)
 		repo = await ws.createRepo(repoId, "main")
+		await pool.flush()
 	}
 
 	const ctx = new AgentContext(ws, pool)
@@ -57,10 +61,12 @@ async function main() {
 		console.log(`📡 Seeding BroccoliDB on branch '${branch}'...`)
 
 		try {
+			// Idempotent branch resolution
 			await repo.resolveRef(branch)
 		} catch {
 			console.log(`🌱 Creating branch '${branch}'...`)
 			await repo.createBranch(branch)
+			await pool.flush()
 		}
 
 		const filesStr = execSync("git ls-files", { encoding: "utf8" })
