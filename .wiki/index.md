@@ -17,10 +17,10 @@ Every release or significant architectural change must be sealed below with a **
 
 | Requirement | Proof of Work | Verified |
 | :--- | :--- | :--- |
-| **Sovereign Checkpoint Hash** | \`e80690db5fb96685923ad123d86508bec9db499c\` | [x] |
-| **Axiomatic Purity (API)** | 92.4% | [x] |
-| **Blast Radius Audit** | [VERSION_BUMP_ONLY] | [x] |
-| **Substrate Vibration Check** | [HEALED_AND_RESTORED] | [x] |
+| **Sovereign Checkpoint Hash** | \`5c739441143e24925b6faf4fd972753273208fa3\` | [x] |
+| **Axiomatic Purity (API)** | [VIBRATION_DEGRADED] | [ ] |
+| **Blast Radius Audit** | [PROMPT_ARCHITECTURE_UPGRADE] | [x] |
+| **Substrate Vibration Check** | [SQLITE_FK_ERROR] | [ ] |
 | **Structural Coherence Audit** | [NO_ORPHAN_FILES_DETECTED] | [x] |
 
 ---
