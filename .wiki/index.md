@@ -17,10 +17,11 @@ Every release or significant architectural change must be sealed below with a **
 
 | Requirement | Proof of Work | Verified |
 | :--- | :--- | :--- |
-| **Sovereign Checkpoint Hash** | \`bf89722e3da230f9d2c6a1e52228c502af18d21c\` | [x] |
-| **Axiomatic Purity (API)** | [ENV_DEGRADED] | [ ] |
+| **Sovereign Checkpoint Hash** | \`e80690db5fb96685923ad123d86508bec9db499c\` | [x] |
+| **Axiomatic Purity (API)** | 92.4% | [x] |
 | **Blast Radius Audit** | [VERSION_BUMP_ONLY] | [x] |
-| **Substrate Vibration Check** | [PASSIVE_MONITOR_OK] | [x] |
+| **Substrate Vibration Check** | [HEALED_AND_RESTORED] | [x] |
+| **Structural Coherence Audit** | [NO_ORPHAN_FILES_DETECTED] | [x] |
 
 ---
 *Custodian: DietCode Agent*

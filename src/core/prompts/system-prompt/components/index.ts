@@ -5,6 +5,7 @@ import { getCapabilitiesSection } from "./capabilities"
 import { getEditingFilesSection } from "./editing_files"
 import { getEnvironmentStateSection } from "./environment_state"
 import { getFeedbackSection } from "./feedback"
+import { getForensicToolsSection } from "./forensic_tools"
 import { getJoyZoningSection } from "./joy_zoning"
 import { getMcp } from "./mcp"
 import { getObjectiveSection } from "./objective"
@@ -37,6 +38,7 @@ export function getSystemPromptComponents() {
 		{ id: SystemPromptSection.SKILLS, fn: getSkillsSection },
 		{ id: SystemPromptSection.SOVEREIGN_DRAFTING, fn: getSovereignDraftingSection },
 		{ id: SystemPromptSection.SOVEREIGN_WIKI, fn: getSovereignWikiSection },
+		{ id: SystemPromptSection.FORENSIC_TOOLS, fn: getForensicToolsSection },
 		{ id: SystemPromptSection.SYSTEM_INFO, fn: getSystemInfo },
 		{ id: SystemPromptSection.TASK_PROGRESS, fn: getUpdatingTaskProgress },
 		{ id: SystemPromptSection.TOOL_USE, fn: getToolUseSection },

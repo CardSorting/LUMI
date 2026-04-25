@@ -35,6 +35,8 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 	.components(
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.SOVEREIGN_WIKI,
+		SystemPromptSection.FORENSIC_TOOLS,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.MCP,

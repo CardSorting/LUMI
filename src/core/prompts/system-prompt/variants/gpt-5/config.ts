@@ -32,6 +32,8 @@ export const config = createVariant(ModelFamily.GPT_5)
 	.components(
 		SystemPromptSection.JOY_ZONING,
 		SystemPromptSection.AGENT_ROLE,
+		SystemPromptSection.SOVEREIGN_WIKI,
+		SystemPromptSection.FORENSIC_TOOLS,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.MCP,
