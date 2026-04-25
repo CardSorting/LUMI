@@ -91,6 +91,8 @@ function parseSubagentRowData(message: DietCodeMessage): SubagentRowData | null 
 			return {
 				status: "pending",
 				items: prompts.map((prompt, index) => ({
+					id: `pending-${index}`,
+					name: `Agent ${index + 1}`,
 					index: index + 1,
 					prompt,
 					status: "pending",
