@@ -12,8 +12,6 @@ import { DietCodeDefaultTool } from "@shared/tools"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
-import { SubagentBuilder } from "../subagent/SubagentBuilder"
-import { SubagentRunner } from "../subagent/SubagentRunner"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -90,39 +88,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// Reset so the next attempt_completion pair triggers double-check again
 		config.taskState.doubleCheckCompletionPending = false
 
-		// V225: Sovereign Forensic Gate
-		// If Knowledge Ledger (.wiki/) hasn't been updated, spawn a Forensic Sub-Agent
-		if (config.universalGuard && !config.isSubagentExecution) {
-			let compliance = await config.universalGuard.checkForensicCompliance()
-			if (!compliance.compliant) {
-				await config.callbacks.say(
-					"text",
-					"🔍 **FORENSIC AUDIT REQUIRED**: Technical changes detected without Knowledge Ledger synchronization. Initiating autonomous documentation pass...",
-				)
-
-				// Pass 6: Dual-Pass Forensic Verification Loop
-				let forensicResult = await this.runForensicSubagent(config, result)
-				compliance = await config.universalGuard.checkForensicCompliance()
-
-				if (!compliance.compliant && forensicResult) {
-					await config.callbacks.say(
-						"text",
-						`⚠️ **FORENSIC AUDIT FAILED**: ${compliance.reason}\nInitiating corrective second pass...`,
-					)
-					// Feedback-driven second pass
-					const feedback = `Your previous documentation update was REJECTED by the UniversalGuard.\nReason: ${compliance.reason}\n\nPlease perform a corrective pass to ensure all technical changes are mirrored in the Knowledge Ledger (.wiki/) and changelog.md.`
-					forensicResult = await this.runForensicSubagent(config, result, feedback)
-					compliance = await config.universalGuard.checkForensicCompliance()
-				}
-
-				if (!compliance.compliant) {
-					return formatResponse.toolError(
-						`🛡️ **SOVEREIGN FORENSIC GATE**: Documentation verification failed.\nReason: ${compliance.reason}\n\nThe specialized Forensic Sub-Agent failed to synchronize the Ledger. Please review the substrate health before manually attempting further changes.`,
-					)
-				}
-
-				await config.callbacks.say("text", "✅ **FORENSIC GATE PASSED**: Knowledge Ledger is in sync.")
-				// Fall through to actual completion
+		// V225: Sovereign Forensic Gate (Passive)
+		// We perform a non-blocking check for Knowledge Ledger compliance.
+		// If non-compliant, we provide a passive advisory to the agent.
+		if (config.universalGuard) {
+			const compliance = await config.universalGuard.checkForensicCompliance()
+			if (!compliance.compliant && compliance.advisory) {
+				await config.callbacks.say("info", compliance.advisory)
 			}
 		}
 
@@ -373,105 +345,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		} catch (error) {
 			// TaskComplete hook failed - non-fatal, just log
 			Logger.error("[TaskComplete Hook] Failed (non-fatal):", error)
-		}
-	}
-	/**
-	 * V225: Runs an autonomous Forensic Sub-Agent to handle Knowledge Ledger updates.
-	 */
-	private async runForensicSubagent(
-		config: TaskConfig,
-		originalResult: string,
-		feedback?: string,
-	): Promise<string | undefined> {
-		try {
-			await config.callbacks.say("text", "🛡️ **SOVEREIGN FORENSIC GATE**: Initiating Autonomous Forensic Phase...")
-
-			const builder = new SubagentBuilder(config, "forensic-architect")
-			builder.setAllowedTools([
-				DietCodeDefaultTool.FILE_READ,
-				DietCodeDefaultTool.FILE_EDIT,
-				DietCodeDefaultTool.FILE_NEW,
-				DietCodeDefaultTool.LIST_FILES,
-				DietCodeDefaultTool.SEARCH,
-				DietCodeDefaultTool.SOVEREIGN_DIAGNOSE,
-				DietCodeDefaultTool.SOVEREIGN_SWEEP,
-				DietCodeDefaultTool.BASH,
-			])
-			const runner = new SubagentRunner(config, builder)
-
-			const impact = config.universalGuard?.getSessionImpactSummary() || "No impact data available."
-
-			const prompt = `You are the Spider-Link Forensic Architect.
-Your mission is to master the structural graph of the codebase and synchronize the Knowledge Ledger (.wiki/) as the **Definitive Architectural Bridge** for human collaborators.
-
-### 🛑 OMNI-BRIDGE PROTOCOL (HIERARCHICAL TAXONOMY)
-You MUST organize the \`.wiki/\` directory into a strict hierarchical taxonomy to ensure it is approachable and parsable. Do NOT dump everything into the root.
-
-**1. Onboarding (\`.wiki/onboarding/\`)**
-- \`getting-started.md\`: Actionable setup, environment requirements, and first-run instructions.
-- \`walkthrough.md\`: A guided, human-readable tour of the codebase.
-- \`troubleshooting.md\`: Document known pitfalls and setup errors.
-
-**2. Architecture (\`.wiki/architecture/\`)**
-- \`overview.md\`: Dependency graphs, visual Mermaid diagrams, and structural mentorship (the "Why").
-- \`directories.md\`: Dictionary of every top-level directory's purpose and constraints.
-- \`schemas.md\`: Explicit mapping of core service interfaces and data models.
-- \`decisions.md\`: Architectural Decision Records (ADRs) to prevent regression.
-- \`risk-map.md\`: Explicit outline of fragile, high-risk areas ("If you touch X, test Y").
-
-**3. Agent (\`.wiki/agent/\`)**
-- \`agent-memory.md\`: A highly condensed, machine-readable brief of absolute strict constraints for future autonomous agents.
-- \`patterns.md\`: Step-by-step guides for common tasks to be executed by agents or devs.
-
-**4. Root (\`.wiki/\`)**
-- \`index.md\`: The primary dashboard and Table of Contents routing to the sub-directories.
-- \`changelog.md\`: The continuous ledger of granular structural changes.
-
-### 🛑 STRICT ACTION MANDATE
-- **ZERO CONVERSATION**: No fluff. No conversational acknowledgments.
-- **IMMEDIATE EXECUTION**: Your very first action MUST be a technical tool call (\`diagnose_sovereignty\`, \`list_dir\`, or \`git status\`).
-- **KNOWLEDGE BASE INITIALIZATION**: If the \`.wiki/\` directory is missing or flat, initialize the full hierarchical taxonomy immediately: \`index.md\`, \`onboarding/getting-started.md\`, \`architecture/overview.md\`, etc.
-
-### 🚫 ANTI-STALL MANDATE
-- **CRITICAL**: Do NOT attempt to read massive git logs or full repository diffs. This causes system stalls and information overload.
-- If you use git, limit it to \`git status\` or \`git log -n 5 --oneline\`.
-- Your primary source of truth is the **physical code** and the **Spider Engine**, not git history.
-
-### 🛡️ SESSION CONTEXT (GROUNDED DATA)
-The task results were as follows:
-<original_result>
-${originalResult}
-</original_result>
-
-${feedback ? `Feedback from parent: ${feedback}\n` : ""}
-
-The session impact summary is:
-<impact_summary>
-${impact}
-</impact_summary>
-
-### 🛡️ SPIDER-LINK MANDATE
-1. **Environmental Deep-Dive**: Use 'diagnose_sovereignty' or 'blast-radius' to master the import/export graph.
-2. **Physical Verification**: Read the core files involved in this session. Do NOT rely on summaries. See the code with your own eyes.
-3. **Changelog Mastery**: Update '.wiki/changelog.md' with **Granular Citations**. 
-   - **Format per File**: 
-     - \`- **Path**: \`relative/path.ts\`\`
-     - \`  - **Logic Shift**: [Granular detail of internal logic changes]\`
-     - \`  - **Structural Impact**: [Changes to exports, imports, or blast radius]\`
-   - **MANDATE**: The **Metabolic Citations Gauge** is active. Files with high churn REQUIRE longer, more technical descriptions. If you provide a superficial summary for a complex change, the Sovereign Forensic Gate will REJECT your completion.
-
-Do NOT provide conversational fluff. The Sovereign Forensic Gate now performs algorithmic granularity checks based on metabolic pressure. Be technically exhaustive.`
-
-			const subagentResult = await runner.run(prompt, (update) => {
-				if (update.status === "failed") {
-					Logger.error("[ForensicSubagent] Failed:", update.error)
-				}
-			})
-
-			return subagentResult.status === "completed" ? subagentResult.result : undefined
-		} catch (error) {
-			Logger.error("[ForensicSubagent] Unexpected error:", error)
-			return undefined
 		}
 	}
 }

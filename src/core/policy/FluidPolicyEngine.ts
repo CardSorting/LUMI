@@ -158,6 +158,8 @@ export class FluidPolicyEngine {
 		this.sessionFiles.clear()
 		this.restorationTokens.clear()
 		this.gracePeriods.clear()
+		this.isChecking = false
+		this.buildAlarmActive = false
 		Logger.info("[FluidPolicyEngine] Sovereign Teardown Complete. All substrates released.")
 	}
 
@@ -752,7 +754,6 @@ export class FluidPolicyEngine {
 		this.spiderEngine.setSessionBuffer(this.sessionFiles)
 
 		// V80: Adaptive Metabolism (Metabolic Velocity Tuning)
-		const currentEntropy = this.spiderEngine.computeEntropy()
 		// V189: Removed unused diagnostic variables (entropyDiscovery, drift)
 
 		const velocity = 1.0 + (this.karma / 1000) * 0.5
@@ -924,18 +925,16 @@ export class FluidPolicyEngine {
 					if (shouldBlock) {
 						const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
 						const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN SOVEREIGNTY BREACH" : "🏗️ CORE INTEGRITY PROTECT"
-						const shield = this.telemetrics.getResilienceShield()
 
 						// PFH: Proactive Forensic Healing - We allow the write but force a repair turn
 						return {
 							success: true,
 							warning:
-								`${shield}🚨 ${rejectionTitle} [REPAIR_REQUIRED]\n` +
+								`🚨 ${rejectionTitle} [REPAIR_REQUIRED]\n` +
 								`Layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s) (Strike ${strikes}):\n${violationSummaryRejection}\n\n` +
 								`${this.getCorrectionHint(astValidation.errors, filePath)}\n\n` +
 								`‼️ **PROACTIVE FORENSIC HEALING REQUIRED**\n` +
-								`To maintain substrate stability, your NEXT turn MUST resolve these violations. ` +
-								`If these errors persist, the system will trigger a Hard Metabolic Cooldown.`,
+								`Your NEXT turn MUST resolve these violations to maintain substrate stability.`,
 							violations: astValidation.errors,
 						}
 					}
@@ -1110,10 +1109,7 @@ export class FluidPolicyEngine {
 						...vibrations.map((v) => `  - 🚨 [SUBSTRATE_VIBRATION]: ${v.message}`),
 					].join("\n")
 
-					result.warning =
-						(result.warning ? result.warning + "\n\n" : "") +
-						`### 🔍 ARCHITECTURAL ADVISORIES\n${advisoryHint}\n\n` +
-						`*These are passive suggestions to improve structural health. You may address them in this turn or a subsequent stabilization phase.*`
+					result.warning = `${result.warning ? `${result.warning}\n\n` : ""}### 🔍 ARCHITECTURAL ADVISORIES\n${advisoryHint}\n\n*These are passive suggestions to improve structural health. You may address them in this turn or a subsequent stabilization phase.*`
 				}
 			}
 		} finally {
@@ -1428,8 +1424,7 @@ export class FluidPolicyEngine {
 								(result.warning ? `${result.warning}\n` : "") +
 								`✨ STRUCTURAL GAIN: Identifier casing integrity improved in ${path.basename(filePath)}. Double down on this concept!`
 						} else if (currentAxioms.length < lastAxioms.length) {
-							result.warning =
-								(result.warning ? `${result.warning}\n` : "") + `✨ AXIOMATIC GAIN: Structural purity improved.`
+							result.warning = `${result.warning ? `${result.warning}\n` : ""}✨ AXIOMATIC GAIN: Structural purity improved.`
 						}
 
 						// 3. Report remaining errors
@@ -1476,7 +1471,6 @@ export class FluidPolicyEngine {
 						const drift = this.metabolicMonitor.getTaskDrift(isRefactoringIntent)
 						const layer = this.getCachedLayer(filePath)
 						if (drift.warning && this.lastBuildHealth < 75 && !layer.match(/domain|core/i)) {
-							const shield = this.telemetrics.getResilienceShield()
 							result.success = true // V201: Soft-Lock (Allow but Mandate)
 							result.warning =
 								`The substrate has enabled an Integrity Advisory. You are encouraged to return focus to healing the core logic violations before proceed with this new logic.\n\n` +
@@ -1574,12 +1568,14 @@ export class FluidPolicyEngine {
 
 			// V45: Sovereign Success Reinforcement
 			if (karmaEarned) {
+				const earned = Math.floor(entropyDiscovery * 1000)
+				this.karma += earned
 				result.warning =
 					(result.warning ? `${result.warning}\n` : "") +
-					`✨ [KARMA EARNED]: Your high-quality refactor has reduced structural entropy by ${SafeNumber.formatPercent(entropyDiscovery, 1)}%.\n` +
+					`✨ [KARMA EARNED]: Your high-quality refactor has reduced structural entropy by ${SafeNumber.formatPercent(entropyDiscovery, 1)}% (+${earned} Karma).\n` +
 					`Sovereign strikes have been pardoned. Substrate health is recovering.`
 				Logger.info(
-					`[FluidPolicyEngine] Karma Pardon triggered: Entropy drop ${SafeNumber.formatPercent(entropyDiscovery, 1)}%`,
+					`[FluidPolicyEngine] Karma Pardon triggered: Entropy drop ${SafeNumber.formatPercent(entropyDiscovery, 1)}% (+${earned} Karma)`,
 				)
 			} else if (oldHealth < 70 && health > 90) {
 				result.warning =
@@ -1587,6 +1583,9 @@ export class FluidPolicyEngine {
 					`🌟 [SOVEREIGN PRAISE]: You have successfully stabilized the substrate (Health: ${oldHealth}% -> ${health}%).\n` +
 					`Metabolic pressure has been reset. Sovereignty is maintained.`
 				Logger.info(`[FluidPolicyEngine] Success Reinforcement triggered: ${oldHealth} -> ${health}`)
+
+				// V200: Resilience Insurance - Automatic Checkpoint on Recovery
+				this.spiderEngine.createCheckpoint()
 			} else {
 				Logger.info(`[FluidPolicyEngine] Metabolic Forgiveness applied (Structural Improvement Detected).`)
 			}
@@ -1594,7 +1593,7 @@ export class FluidPolicyEngine {
 			if (errorCount > 0) {
 				const warnCount = currentViolations.filter((v) => v.severity === "WARN").length
 				const deltaMsg = `Distance to Green: ${errorCount} errors and ${warnCount} warnings remaining.`
-				result.warning = (result.warning ? `${result.warning}\n` : "") + `🔍 [STABILIZATION DELTA]: ${deltaMsg}`
+				result.warning = `${result.warning ? `${result.warning}\n` : ""}🔍 [STABILIZATION DELTA]: ${deltaMsg}`
 			}
 		}
 
@@ -1704,6 +1703,7 @@ export class FluidPolicyEngine {
 				spider: spiderData.toString("base64"),
 				metabolic: metabolicState,
 				telemetrics: telemetricsState,
+				karma: this.karma,
 				checksum,
 				timestamp: Date.now(),
 			})
@@ -1741,6 +1741,7 @@ export class FluidPolicyEngine {
 				await this.spiderEngine.loadRegistry(data)
 				this.metabolicMonitor.importState(payload.metabolic)
 				this.telemetrics.importState(payload.telemetrics)
+				this.karma = payload.karma || 0
 
 				this.stateRestored = true
 				Logger.info(`[FluidPolicyEngine] Sovereign Substrate V189 restored and verified for stream ${this.streamId}.`)
@@ -1852,10 +1853,10 @@ export class FluidPolicyEngine {
 		return `💡 [INTEGRITY_ADVISORY]: Auto-healing available. Run 'sovereign_integrity_sweep' with files: ${JSON.stringify(files)} to resolve.`
 	}
 	/**
-	 * V225: Sovereign Forensic Gate.
-	 * Verifies if the Knowledge Ledger has been updated before task completion.
+	 * V225: Sovereign Forensic Gate (PASSIVE).
+	 * Verifies if the Knowledge Ledger has been updated. Returns an advisory instead of blocking.
 	 */
-	public async checkForensicCompliance(): Promise<{ compliant: boolean; reason?: string }> {
+	public async checkForensicCompliance(): Promise<{ compliant: boolean; reason?: string; advisory?: string }> {
 		const wikiPath = path.resolve(this.cwd, ".wiki")
 		try {
 			await fs.access(wikiPath)
@@ -1870,15 +1871,14 @@ export class FluidPolicyEngine {
 		if (!metrics || metrics.writes === 0) {
 			return {
 				compliant: false,
-				reason: "🛑 **SOVEREIGN FORENSIC GATE**: The Knowledge Ledger (`.wiki/changelog.md`) has not been updated in this session. You MUST enter the **Forensic Phase** to document your technical changes before completing the task.",
+				advisory:
+					"💡 [FORENSIC_ADVISORY]: The Knowledge Ledger (`.wiki/changelog.md`) has not been updated in this session. Consider documenting your changes before completion.",
 			}
 		}
 
 		// V228: Strict Structural Verification
-		// Ensure that every file modified in this session is mentioned in the changelog
 		const modifiedFiles: string[] = []
 		for (const [p, m] of registry.entries()) {
-			// Ignore .wiki files and metabolic registry files themselves
 			if (m.writes > 0 && !p.startsWith(".wiki") && !p.includes(".dietcode")) {
 				modifiedFiles.push(p)
 			}
@@ -1888,56 +1888,21 @@ export class FluidPolicyEngine {
 			try {
 				const changelogContent = await fs.readFile(changelogPath, "utf-8")
 				const missingCitations: string[] = []
-				const insufficientCitations: string[] = []
 
 				for (const f of modifiedFiles) {
-					const m = registry.get(f)!
-					const lowerChangelog = changelogContent.toLowerCase()
-					const lowerPath = f.toLowerCase()
-
-					if (!lowerChangelog.includes(lowerPath)) {
+					if (!changelogContent.toLowerCase().includes(f.toLowerCase())) {
 						missingCitations.push(f)
-					} else {
-						// V230: Metabolic Citations Gauge
-						// Calculate 'Technical Depth' requirement based on metabolic pressure
-						const metabolicPressure = m.writes + (m.linesAdded + m.linesDeleted) / 20
-						const minChars = Math.max(40, Math.min(250, Math.floor(metabolicPressure * 15)))
-
-						// Find the citation and extract the surrounding context
-						const index = lowerChangelog.indexOf(lowerPath)
-						// Look ahead up to 500 characters or until the next file path / header
-						const context = changelogContent.substring(index + f.length, index + f.length + 500).trim()
-
-						// Heuristic: If we hit another file path or a new header, the citation for this file ended
-						const citationEnd = context.search(/\n#|\n- \*\*|\n\d+\./)
-						const actualCitation = citationEnd === -1 ? context : context.substring(0, citationEnd)
-
-						if (actualCitation.length < minChars) {
-							insufficientCitations.push(
-								`- ${f} (Technical Depth: ${actualCitation.length}/${minChars} chars. Observed Pressure: ${SafeNumber.format(metabolicPressure, 1)})`,
-							)
-						}
 					}
 				}
 
-				if (missingCitations.length > 0 || insufficientCitations.length > 0) {
-					let reason = "🛑 **SOVEREIGN FORENSIC GATE**: Documentation integrity failure.\n\n"
-					if (missingCitations.length > 0) {
-						reason += `### ❌ MISSING CITATIONS\nThe following modified files are completely undocumented:\n${missingCitations.map((f) => `- ${f}`).join("\n")}\n\n`
+				if (missingCitations.length > 0) {
+					return {
+						compliant: false,
+						advisory: `💡 [FORENSIC_ADVISORY]: ${missingCitations.length} modified file(s) are missing citations in the Knowledge Ledger. Documentation alignment is recommended.`,
 					}
-					if (insufficientCitations.length > 0) {
-						reason += `### ⚠️ INSUFFICIENT GRANULARITY\nThe following citations lack the technical depth required for their observed metabolic impact:\n${insufficientCitations.join("\n")}\n\n`
-					}
-					reason +=
-						"**MANDATE**: You must provide a granular technical record for each file, detailing Logic Shifts, Structural Impacts, and Architectural Alignment. Do NOT take the path of least resistance."
-
-					return { compliant: false, reason }
 				}
-			} catch (error) {
-				return {
-					compliant: false,
-					reason: `🛑 **SOVEREIGN FORENSIC GATE**: Failed to verify Knowledge Ledger integrity: ${(error as Error).message}`,
-				}
+			} catch {
+				// Non-fatal advisory failure
 			}
 		}
 
