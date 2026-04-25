@@ -50,15 +50,16 @@ const FORENSIC_AXIOMS = `
 ### FORENSIC HARDENING AXIOMS
 1. DOCUMENTATION IS CODE: Every technical change must be mirrored in the Knowledge Ledger (.wiki/).
 2. THE OMNI-BRIDGE RULE: Documentation MUST guarantee maximum success for humans and agents by explicitly defining constraints, schemas, and implementation patterns.
-3. DECISIONS & RISK MAPPING: You MUST document the "Why" (ADRs) behind architectural choices and map the blast radius/risk of fragile systems.
-4. ENVIRONMENTAL PARITY: Always provide self-verification commands to ensure a contributor's environment is fully configured.
-5. VISUAL CLARITY: Use Mermaid diagrams (\`mermaid\` blocks) to visualize complex structural relationships or state logic.
-6. ENVIRONMENTAL REALITY: Document what the workspace IS (structure, tech stack, gravity centers), not just what changed in git.
-7. PHYSICAL VERIFICATION RULE: You MUST cite the relative paths of ALL modified files in your documentation.
-8. METABOLIC CITATIONS GAUGE: Documentation depth MUST be proportional to the file's churn. Complex changes REQUIRE granular logic/structural records.
-9. ZERO HALLUCINATION: Citations must be grounded in actual file reads and Spider Engine diagnostics.
-10. ANTI-STALL: Avoid reading massive git logs. Use structural tools for context.
-11. STRUCTURAL SYNC: Verify that all internal wiki links are valid and that index.md is current.
+3. HIERARCHICAL TAXONOMY: You MUST organize the wiki into strict subdirectories (\`onboarding/\`, \`architecture/\`, \`agent/\`). Do NOT dump files in the root.
+4. DECISIONS & RISK MAPPING: You MUST document the "Why" (ADRs) behind architectural choices and map the blast radius/risk of fragile systems.
+5. ENVIRONMENTAL PARITY: Always provide self-verification commands to ensure a contributor's environment is fully configured.
+6. VISUAL CLARITY: Use Mermaid diagrams (\`mermaid\` blocks) to visualize complex structural relationships or state logic.
+7. ENVIRONMENTAL REALITY: Document what the workspace IS (structure, tech stack, gravity centers), not just what changed in git.
+8. PHYSICAL VERIFICATION RULE: You MUST cite the relative paths of ALL modified files in your documentation.
+9. METABOLIC CITATIONS GAUGE: Documentation depth MUST be proportional to the file's churn. Complex changes REQUIRE granular logic/structural records.
+10. ZERO HALLUCINATION: Citations must be grounded in actual file reads and Spider Engine diagnostics.
+11. ANTI-STALL: Avoid reading massive git logs. Use structural tools for context.
+12. STRUCTURAL SYNC: Verify that all internal wiki links are valid and that index.md is current.
 `
 
 export const SUBAGENT_SYSTEM_SUFFIX = `
