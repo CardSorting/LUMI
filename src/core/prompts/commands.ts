@@ -318,3 +318,18 @@ export const deepPlanningToolResponse = (
 ) => {
 	return getDeepPlanningPrompt(focusChainSettings, providerInfo, enableNativeToolCalls)
 }
+
+export const documentToolResponse = () =>
+	`<explicit_instructions type="document">
+The user has explicitly asked you to trigger a Forensic Documentation pass. This is a critical architectural alignment phase where you must ensure that the Knowledge Ledger (.wiki/ directory) accurately reflects the current state of the codebase.
+
+You must follow the "Sovereign Knowledge Ledger" (SKL) protocol:
+1. **Audit**: Analyze all recent changes in the workspace.
+2. **Synchronize**: Update the relevant wiki files (e.g., .wiki/changelog.md, architecture docs).
+3. **Verify**: Ensure that every citation in your subsequent "Strategic Review" is grounded in observed files.
+
+Irrespective of whether additional instructions are given, you should prioritize calling the attempt_completion tool ONLY AFTER you have ensured the documentation is synchronized. If you detect out-of-sync documentation, you MUST use the Forensic Sub-Agent or perform the documentation updates yourself before completing.
+
+Below is the user's input when they indicated that they wanted to trigger the document phase.
+</explicit_instructions>\n
+`

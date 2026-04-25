@@ -77,7 +77,7 @@ interface ChatTextAreaProps {
 	selectedImages: string[]
 	setSelectedImages: React.Dispatch<React.SetStateAction<string[]>>
 	setSelectedFiles: React.Dispatch<React.SetStateAction<string[]>>
-	onSend: () => void
+	onSend: (value?: string) => void
 	onSelectFilesAndImages: () => void
 	shouldDisableFilesAndImages: boolean
 	onHeightChange?: (height: number) => void
@@ -1585,8 +1585,26 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							</Tooltip>
 
 							<ServersToggleModal />
-
 							<DietCodeRulesToggleModal />
+
+							<Tooltip>
+								<TooltipContent>Document Phase</TooltipContent>
+								<TooltipTrigger>
+									<VSCodeButton
+										appearance="icon"
+										aria-label="Document Phase"
+										className="p-0 m-0 flex items-center"
+										data-testid="document-button"
+										onClick={() => {
+											setInputValue("")
+											onSend("/document ")
+										}}>
+										<ButtonContainer>
+											<Icon name="book" size={13} style={{ color: "var(--color-dietcode)" }} />
+										</ButtonContainer>
+									</VSCodeButton>
+								</TooltipTrigger>
+							</Tooltip>
 
 							<ModelContainer>
 								<ModelButtonWrapper>
