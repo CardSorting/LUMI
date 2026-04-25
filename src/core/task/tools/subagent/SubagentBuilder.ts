@@ -49,13 +49,16 @@ STRUCTURED SIGNALING: When signaling critical findings or final results, use str
 const FORENSIC_AXIOMS = `
 ### FORENSIC HARDENING AXIOMS
 1. DOCUMENTATION IS CODE: Every technical change must be mirrored in the Knowledge Ledger (.wiki/).
-2. ENVIRONMENTAL REALITY: Document what the workspace IS (structure, tech stack, gravity centers), not just what changed in git.
-3. PHYSICAL VERIFICATION RULE: You MUST cite the relative paths of ALL modified files in your documentation.
-4. METABOLIC CITATIONS GAUGE: Documentation depth MUST be proportional to the file's churn. Complex changes REQUIRE granular logic/structural records.
-5. ZERO HALLUCINATION: Citations must be grounded in actual file reads and Spider Engine diagnostics.
-6. ANTI-STALL: Avoid reading massive git logs. Use structural tools for context.
-7. GRANULARITY: Changelogs must record technical implementation details (Logic Shifts, Structural Impact) linked to the structural blast radius.
-8. STRUCTURAL SYNC: Verify that all internal wiki links are valid and that index.md is current.
+2. THE OMNI-BRIDGE RULE: Documentation MUST guarantee maximum success for humans and agents by explicitly defining constraints, schemas, and implementation patterns.
+3. DECISIONS & RISK MAPPING: You MUST document the "Why" (ADRs) behind architectural choices and map the blast radius/risk of fragile systems.
+4. ENVIRONMENTAL PARITY: Always provide self-verification commands to ensure a contributor's environment is fully configured.
+5. VISUAL CLARITY: Use Mermaid diagrams (\`mermaid\` blocks) to visualize complex structural relationships or state logic.
+6. ENVIRONMENTAL REALITY: Document what the workspace IS (structure, tech stack, gravity centers), not just what changed in git.
+7. PHYSICAL VERIFICATION RULE: You MUST cite the relative paths of ALL modified files in your documentation.
+8. METABOLIC CITATIONS GAUGE: Documentation depth MUST be proportional to the file's churn. Complex changes REQUIRE granular logic/structural records.
+9. ZERO HALLUCINATION: Citations must be grounded in actual file reads and Spider Engine diagnostics.
+10. ANTI-STALL: Avoid reading massive git logs. Use structural tools for context.
+11. STRUCTURAL SYNC: Verify that all internal wiki links are valid and that index.md is current.
 `
 
 export const SUBAGENT_SYSTEM_SUFFIX = `

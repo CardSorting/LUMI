@@ -321,7 +321,25 @@ export const deepPlanningToolResponse = (
 
 export const documentToolResponse = () =>
 	`<explicit_instructions type="document">
-The user has explicitly asked you to trigger a Forensic Documentation pass. This is a critical architectural alignment phase where you must ensure that the Knowledge Ledger (.wiki/ directory) accurately reflects the **current structural state and environmental reality** of the workspace, not just a historical log of git changes.
+The user has explicitly asked you to trigger a Forensic Documentation pass. This is a critical architectural alignment phase where you must ensure that the Knowledge Ledger (.wiki/ directory) is the **Definitive Architectural Bridge** for human collaborators.
+
+### 🛑 OMNI-BRIDGE PROTOCOL (MAXIMUM SUCCESS MANDATE)
+- **WALKTHROUGH & GETTING STARTED**: Create \`walkthrough.md\` and \`getting-started.md\` for human onboarding, environment setup, and first-run instructions.
+- **DIRECTORY DICTIONARY**: Break down the exact purpose, rules, and constraints of every top-level directory (create \`directories.md\`).
+- **API & DATA SCHEMAS**: Explicitly document core service interfaces, API endpoints, and data models to prevent hallucination (\`api.md\` / \`schemas.md\`).
+- **IMPLEMENTATION PATTERNS**: Provide step-by-step guides for common tasks (e.g., "How to add a new route", "How to update DB state") in \`patterns.md\`.
+- **DECISION RECORDS (ADR)**: Document the "Why" behind core technology choices and structural patterns to prevent regression (create \`decisions.md\`).
+- **RISK & BLAST RADIUS MAP**: Explicitly outline fragile, high-risk, or complex areas ("If you touch X, test Y") to prevent catastrophic errors (create \`risk-map.md\`).
+- **ENVIRONMENTAL PARITY**: Provide a checklist and self-verification commands to ensure a contributor's local setup is fully functional.
+- **AGENT MEMORY CORE**: Include a highly condensed, machine-readable \`agent-memory.md\` summarizing absolute strict constraints, architectural axioms, and "Do Nots" as the very first read for future autonomous agents.
+- **DEPENDENCY & VISUAL CLARITY**: Map internal/external service connections using Mermaid diagrams in \`architecture.md\`.
+- **TROUBLESHOOTING & GOTCHAS**: Document known pitfalls and setup errors in \`troubleshooting.md\`.
+- **CONTRIBUTOR'S PATH**: Define the standard workflow for picking up a task, testing, and shipping.
+
+### 🛑 STRICT ACTION MANDATE
+- **ZERO CONVERSATION**: You are FORBIDDEN from providing any conversational acknowledgment or intro.
+- **IMMEDIATE EXECUTION**: Your first action MUST be a technical tool call (\`diagnose_sovereignty\`, \`list_dir\`, or \`git status\`).
+- **KNOWLEDGE BASE INITIALIZATION**: If the \`.wiki/\` directory is missing or incomplete, initialize the full set: \`index.md\`, \`architecture.md\`, \`directories.md\`, \`patterns.md\`, \`decisions.md\`, \`risk-map.md\`, \`agent-memory.md\`, \`walkthrough.md\`, \`getting-started.md\`, \`troubleshooting.md\`.
 
 ### 🚫 Git Stall Warning
 Do NOT attempt to read massive git logs or full diffs of the entire history. This causes system stalls and information overload. If you must use git to see recent activity, limit it to \`git status\` or \`git log -n 10 --oneline\`. Your priority is the **living state** of the files, not their history.
