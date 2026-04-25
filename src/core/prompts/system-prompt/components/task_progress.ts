@@ -13,7 +13,9 @@ You can track and communicate your progress on the overall task using the task_p
 - If you are creating this checklist for the first time, and the tool use completes the first step in the checklist, make sure to mark it as completed in your task_progress parameter.
 - Provide the whole checklist of steps you intend to complete in the task, and keep the checkboxes updated as you make progress. It's okay to rewrite this checklist as needed if it becomes invalid due to scope changes or new information.
 - If a checklist is being used, be sure to update it any time a step has been completed.
+- The final item in every todo list MUST be "- [ ] Update Sovereign Knowledge Ledger (.wiki/)"
 - The system will automatically include todo list context in your prompts when appropriate - these reminders are important.
+
 
 Example:
 <execute_command>
@@ -24,6 +26,7 @@ Example:
 - [x] Install dependencies
 - [ ] Create components
 - [ ] Test application
+- [ ] Update Sovereign Knowledge Ledger (.wiki/)
 </task_progress>
 </execute_command>`
 
@@ -38,7 +41,9 @@ You can track and communicate your progress on the overall task using the task_p
 - If you are creating this checklist for the first time, and the tool use completes the first step in the checklist, make sure to mark it as completed in your task_progress parameter.
 - Provide the whole checklist of steps you intend to complete in the task, and keep the checkboxes updated as you make progress. It's okay to rewrite this checklist as needed if it becomes invalid due to scope changes or new information.
 - If a checklist is being used, be sure to update it any time a step has been completed.
+- The final item in every todo list MUST be "- [ ] Update Sovereign Knowledge Ledger (.wiki/)"
 - The system will automatically include todo list context in your prompts when appropriate - these reminders are important.
+
 
 **How to use task_progress:**
 - include the task_progress parameter in your tool calls to provide an updated checklist
@@ -56,6 +61,7 @@ You can track and communicate your progress on the overall task using the task_p
 - If you are creating this checklist for the first time, and the tool use completes the first step in the checklist, make sure to mark it as completed in your task_progress parameter.
 - Provide the whole checklist of steps you intend to complete in the task, and keep the checkboxes updated as you make progress. It's okay to rewrite this checklist as needed if it becomes invalid due to scope changes or new information.
 - Be sure to update the list any time a step has been completed.
+- The final item in every todo list MUST be "- [ ] Update Sovereign Knowledge Ledger (.wiki/)"
 - The system may include todo list context in your prompts when appropriate - these reminders are important, and serve as a validation of your successful task execution.
 
 **How to use task_progress:**
