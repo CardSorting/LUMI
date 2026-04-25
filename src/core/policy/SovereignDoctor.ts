@@ -21,6 +21,12 @@ export interface DoctorReport {
 		memoryPressure: number
 		diskUsage: number
 	}
+	environmentContext: {
+		totalFiles: number
+		gravityCenter: string // File with highest blast radius
+		structuralEntropy: number
+		logicHotspots: string[] // Top 3 logic-dense files
+	}
 }
 
 /**
@@ -66,6 +72,13 @@ export class SovereignDoctor {
 		// Map to metabolic pressure
 		const entropy = engine.computeEntropy()
 
+		const nodes = Array.from(engine.nodes.values())
+		const gravityCenter = nodes.sort((a, b) => b.blastRadius - a.blastRadius)[0]?.path || "Unknown"
+		const logicHotspots = nodes
+			.sort((a, b) => b.logicDensity - a.logicDensity)
+			.slice(0, 3)
+			.map((n) => n.path)
+
 		return {
 			buildHealth,
 			timestamp: new Date().toISOString(),
@@ -77,6 +90,12 @@ export class SovereignDoctor {
 			resources: {
 				memoryPressure: process.memoryUsage().heapUsed / 1024 / 1024,
 				diskUsage: 0, // V100: Placeholder for stats fix
+			},
+			environmentContext: {
+				totalFiles: nodes.length,
+				gravityCenter,
+				structuralEntropy: entropy.score,
+				logicHotspots,
 			},
 		}
 	}

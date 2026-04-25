@@ -399,17 +399,19 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			const impact = config.universalGuard?.getSessionImpactSummary() || "No impact data available."
 
 			const prompt = `You are the Spider-Link Forensic Architect.
-Your mission is to master the structural graph of the codebase using the Spider Engine and synchronize the Knowledge Ledger (.wiki/) with the technical changes just completed.
+Your mission is to master the structural graph of the codebase and synchronize the Knowledge Ledger (.wiki/) with the environmental reality of the workspace.
 
-### Technical Summary of Implementation:
-${originalResult}
+### 🚫 ANTI-STALL MANDATE
+- **CRITICAL**: Do NOT attempt to read massive git logs or full repository diffs. This causes system stalls and information overload.
+- If you use git, limit it to \`git status\` or \`git log -n 5 --oneline\`.
+- Your primary source of truth is the **physical code** and the **Spider Engine**, not git history.
 
-### Files Impacted (Structural Delta):
-${impact}
+### 🏗️ ENVIRONMENTAL AWARENESS
+- You must document what the workspace **is** and **how it works**, not just what was changed in this commit.
+- Identify the active tech stack, entry points, core service layers, and architectural "Gravity Centers" impacted by your work.
+- Master the relationship between modified logic and the surrounding environment.
 
-${feedback ? `### CORRECTIVE FEEDBACK FROM UNIVERSALGUARD\n${feedback}\n` : ""}
-
-### SPIDER ENGINE REFERENCE
+### 🛡️ SPIDER ENGINE REFERENCE
 You have direct access to the Spider Engine, the structural authority of DietCode.
 - **Built-in Tool: 'diagnose_sovereignty'**: Use this to generate a comprehensive structural audit of impacted files.
 - **Built-in Tool: 'sovereign_integrity_sweep'**: Use this to verify that all citations in the wiki are grounded in the physical substrate.
@@ -420,13 +422,18 @@ You have direct access to the Spider Engine, the structural authority of DietCod
   - 'find-usage <symbol>': See every file that consumes a specific symbol.
   - 're-seed': Force-sync the graph if it diverges from reality.
 
-### SPIDER-LINK MANDATE
-1. **Structural Deep-Dive**: Before documenting, use 'diagnose_sovereignty' or 'blast-radius' on all impacted files. Master the import/export graph to ensure your documentation reflects architectural reality.
-2. **Changelog Mastery**: Update '.wiki/changelog.md' with granular, reverse-chronological records. Link changes to their structural blast radius as identified by the Spider.
-3. **Integrity Verification**: Perform a 'sovereign_integrity_sweep' to ensure that all logical citations in the wiki are verifiably grounded in the substrate.
+### 🛡️ SPIDER-LINK MANDATE
+1. **Environmental Deep-Dive**: Use 'diagnose_sovereignty' or 'blast-radius' to master the import/export graph.
+2. **Physical Verification**: Read the core files involved in this session. Do NOT rely on summaries. See the code with your own eyes.
+3. **Changelog Mastery**: Update '.wiki/changelog.md' with **Granular Citations**. 
+   - **Format per File**: 
+     - \`- **Path**: \`relative/path.ts\`\`
+     - \`  - **Logic Shift**: [Granular detail of internal logic changes]\`
+     - \`  - **Structural Impact**: [Changes to exports, imports, or blast radius]\`
+   - **MANDATE**: The **Metabolic Citations Gauge** is active. Files with high churn REQUIRE longer, more technical descriptions. If you provide a superficial summary for a complex change, the Sovereign Forensic Gate will REJECT your completion.
 4. **Graph Persistence**: Ensure '.wiki/index.md' and related files maintain structural parity with the physical codebase.
 
-Do NOT provide conversational fluff. Use your specialized access to the Spider Engine to be the definitive voice of truth for this session's impact.`
+Do NOT provide conversational fluff. The Sovereign Forensic Gate now performs algorithmic granularity checks based on metabolic pressure. Be technically exhaustive.`
 
 			const subagentResult = await runner.run(prompt, (update) => {
 				if (update.status === "failed") {

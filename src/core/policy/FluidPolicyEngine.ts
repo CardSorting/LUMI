@@ -1864,13 +1864,80 @@ export class FluidPolicyEngine {
 		}
 
 		const registry = this.metabolicMonitor.getForensicRegistry()
-		const rawChangelogPath = path.resolve(this.cwd, ".wiki/changelog.md")
-		const metrics = this.metabolicMonitor.getMetrics(rawChangelogPath)
+		const changelogPath = path.resolve(this.cwd, ".wiki/changelog.md")
+		const metrics = this.metabolicMonitor.getMetrics(changelogPath)
 
 		if (!metrics || metrics.writes === 0) {
 			return {
 				compliant: false,
 				reason: "🛑 **SOVEREIGN FORENSIC GATE**: The Knowledge Ledger (`.wiki/changelog.md`) has not been updated in this session. You MUST enter the **Forensic Phase** to document your technical changes before completing the task.",
+			}
+		}
+
+		// V228: Strict Structural Verification
+		// Ensure that every file modified in this session is mentioned in the changelog
+		const modifiedFiles: string[] = []
+		for (const [p, m] of registry.entries()) {
+			// Ignore .wiki files and metabolic registry files themselves
+			if (m.writes > 0 && !p.startsWith(".wiki") && !p.includes(".dietcode")) {
+				modifiedFiles.push(p)
+			}
+		}
+
+		if (modifiedFiles.length > 0) {
+			try {
+				const changelogContent = await fs.readFile(changelogPath, "utf-8")
+				const missingCitations: string[] = []
+				const insufficientCitations: string[] = []
+
+				for (const f of modifiedFiles) {
+					const m = registry.get(f)!
+					const lowerChangelog = changelogContent.toLowerCase()
+					const lowerPath = f.toLowerCase()
+
+					if (!lowerChangelog.includes(lowerPath)) {
+						missingCitations.push(f)
+					} else {
+						// V230: Metabolic Citations Gauge
+						// Calculate 'Technical Depth' requirement based on metabolic pressure
+						const metabolicPressure = m.writes + (m.linesAdded + m.linesDeleted) / 20
+						const minChars = Math.max(40, Math.min(250, Math.floor(metabolicPressure * 15)))
+
+						// Find the citation and extract the surrounding context
+						const index = lowerChangelog.indexOf(lowerPath)
+						// Look ahead up to 500 characters or until the next file path / header
+						const context = changelogContent.substring(index + f.length, index + f.length + 500).trim()
+
+						// Heuristic: If we hit another file path or a new header, the citation for this file ended
+						const citationEnd = context.search(/\n#|\n- \*\*|\n\d+\./)
+						const actualCitation = citationEnd === -1 ? context : context.substring(0, citationEnd)
+
+						if (actualCitation.length < minChars) {
+							insufficientCitations.push(
+								`- ${f} (Technical Depth: ${actualCitation.length}/${minChars} chars. Observed Pressure: ${SafeNumber.format(metabolicPressure, 1)})`,
+							)
+						}
+					}
+				}
+
+				if (missingCitations.length > 0 || insufficientCitations.length > 0) {
+					let reason = "🛑 **SOVEREIGN FORENSIC GATE**: Documentation integrity failure.\n\n"
+					if (missingCitations.length > 0) {
+						reason += `### ❌ MISSING CITATIONS\nThe following modified files are completely undocumented:\n${missingCitations.map((f) => `- ${f}`).join("\n")}\n\n`
+					}
+					if (insufficientCitations.length > 0) {
+						reason += `### ⚠️ INSUFFICIENT GRANULARITY\nThe following citations lack the technical depth required for their observed metabolic impact:\n${insufficientCitations.join("\n")}\n\n`
+					}
+					reason +=
+						"**MANDATE**: You must provide a granular technical record for each file, detailing Logic Shifts, Structural Impacts, and Architectural Alignment. Do NOT take the path of least resistance."
+
+					return { compliant: false, reason }
+				}
+			} catch (error) {
+				return {
+					compliant: false,
+					reason: `🛑 **SOVEREIGN FORENSIC GATE**: Failed to verify Knowledge Ledger integrity: ${(error as Error).message}`,
+				}
 			}
 		}
 

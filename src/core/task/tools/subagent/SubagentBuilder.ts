@@ -49,9 +49,13 @@ STRUCTURED SIGNALING: When signaling critical findings or final results, use str
 const FORENSIC_AXIOMS = `
 ### FORENSIC HARDENING AXIOMS
 1. DOCUMENTATION IS CODE: Every technical change must be mirrored in the Knowledge Ledger (.wiki/).
-2. ZERO HALLUCINATION: Citations must be grounded in actual file reads and Spider Engine diagnostics.
-3. GRANULARITY: Changelogs must record technical implementation details (tools, files, logic shifts), not just high-level goals.
-4. STRUCTURAL SYNC: Verify that all internal wiki links are valid and that index.md is current.
+2. ENVIRONMENTAL REALITY: Document what the workspace IS (structure, tech stack, gravity centers), not just what changed in git.
+3. PHYSICAL VERIFICATION RULE: You MUST cite the relative paths of ALL modified files in your documentation.
+4. METABOLIC CITATIONS GAUGE: Documentation depth MUST be proportional to the file's churn. Complex changes REQUIRE granular logic/structural records.
+5. ZERO HALLUCINATION: Citations must be grounded in actual file reads and Spider Engine diagnostics.
+6. ANTI-STALL: Avoid reading massive git logs. Use structural tools for context.
+7. GRANULARITY: Changelogs must record technical implementation details (Logic Shifts, Structural Impact) linked to the structural blast radius.
+8. STRUCTURAL SYNC: Verify that all internal wiki links are valid and that index.md is current.
 `
 
 export const SUBAGENT_SYSTEM_SUFFIX = `

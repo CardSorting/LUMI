@@ -321,14 +321,24 @@ export const deepPlanningToolResponse = (
 
 export const documentToolResponse = () =>
 	`<explicit_instructions type="document">
-The user has explicitly asked you to trigger a Forensic Documentation pass. This is a critical architectural alignment phase where you must ensure that the Knowledge Ledger (.wiki/ directory) accurately reflects the current state of the codebase.
+The user has explicitly asked you to trigger a Forensic Documentation pass. This is a critical architectural alignment phase where you must ensure that the Knowledge Ledger (.wiki/ directory) accurately reflects the **current structural state and environmental reality** of the workspace, not just a historical log of git changes.
 
-You must follow the "Sovereign Knowledge Ledger" (SKL) protocol:
-1. **Audit**: Analyze all recent changes in the workspace.
-2. **Synchronize**: Update the relevant wiki files (e.g., .wiki/changelog.md, architecture docs).
-3. **Verify**: Ensure that every citation in your subsequent "Strategic Review" is grounded in observed files.
+### 🚫 Git Stall Warning
+Do NOT attempt to read massive git logs or full diffs of the entire history. This causes system stalls and information overload. If you must use git to see recent activity, limit it to \`git status\` or \`git log -n 10 --oneline\`. Your priority is the **living state** of the files, not their history.
 
-Irrespective of whether additional instructions are given, you should prioritize calling the attempt_completion tool ONLY AFTER you have ensured the documentation is synchronized. If you detect out-of-sync documentation, you MUST use the Forensic Sub-Agent or perform the documentation updates yourself before completing.
+### 🏗️ Environmental Awareness Protocol
+You must perform a deep structural audit to document:
+1. **Workspace Architecture**: Use structural tools (Spider Engine, \`list_dir\`) to map the current hierarchy and identify core patterns.
+2. **Project Environment**: Identify the active tech stack, entry points, core service layers, and environmental configurations.
+3. **Logic Density**: Document where the primary logic resides and identify active development hotspots.
+4. **Knowledge Synchrony**: Ensure \`.wiki/\` files (Architecture, Changelog, Patterns) reflect the **present reality** of the codebase, correcting any stale documentation.
+
+### 🛡️ Sovereign Knowledge Ledger (SKL) Protocol
+1. **Structural Audit**: Map the workspace and identify key architectural components using environmental analysis.
+2. **Synchronize**: Update relevant wiki files to reflect the **current environment** and active state.
+3. **Verification Probes**: Ensure every claim in the documentation is grounded in physical file observations made during this pass.
+
+Irrespective of whether additional instructions are given, you should prioritize calling the attempt_completion tool ONLY AFTER you have ensured the documentation is synchronized with the **actual workspace state**. If the workspace is complex, you MUST spawn the Forensic Sub-Agent to perform a deep-dive audit.
 
 Below is the user's input when they indicated that they wanted to trigger the document phase.
 </explicit_instructions>\n
