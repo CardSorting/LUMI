@@ -34,6 +34,8 @@ import { SwarmConsensusHandler } from "./SwarmConsensusHandler"
 const MAX_EMPTY_ASSISTANT_RETRIES = 3
 const MAX_INITIAL_STREAM_ATTEMPTS = 3
 const INITIAL_STREAM_RETRY_BASE_DELAY_MS = 250
+const MAX_TOTAL_TOOL_CALLS = 50
+const MAX_TASK_ITERATIONS = 25
 
 export type SubagentRunStatus = "completed" | "failed"
 
@@ -54,6 +56,7 @@ interface SubagentProgressUpdate {
 	status?: "running" | "completed" | "failed"
 	result?: string
 	error?: string
+	activeSignals?: string[]
 }
 
 interface SubagentRunStats {
@@ -279,6 +282,8 @@ export class SubagentRunner {
 		contextUsagePercentage: 0,
 	}
 	private abortingCommands = false
+	private activeSignals: string[] = []
+	private onProgress?: (update: SubagentProgressUpdate) => void
 
 	constructor(
 		private baseConfig: TaskConfig,
@@ -362,6 +367,7 @@ export class SubagentRunner {
 		}
 		const stats = this.stats
 
+		this.onProgress = onProgress
 		onProgress({ status: "running", stats })
 
 		try {
@@ -433,7 +439,6 @@ export class SubagentRunner {
 			const systemPrompt = this.agent.buildSystemPrompt(generatedSystemPrompt)
 			const useNativeToolCalls = !!promptRegistry.nativeTools?.length
 			const nativeTools = useNativeToolCalls ? this.agent.buildNativeTools(context) : undefined
-			const workspaceMetadataEnvironmentBlock = await this.getWorkspaceMetadataEnvironmentBlock()
 
 			if (useNativeToolCalls && (!nativeTools || nativeTools.length === 0)) {
 				const error = "Subagent tool requires native tool calling support."
@@ -448,6 +453,7 @@ export class SubagentRunner {
 				return { status: "failed", error, stats }
 			}
 
+			const workspaceMetadataEnvironmentBlock = await this.getWorkspaceMetadataEnvironmentBlock()
 			const conversation: DietCodeStorageMessage[] = [
 				{
 					role: "user",
@@ -456,8 +462,6 @@ export class SubagentRunner {
 							type: "text",
 							text: prompt,
 						} as DietCodeTextContentBlock,
-						// Server-side task loop checks require workspace metadata to be present in the
-						// initial user message of subagent runs.
 						...(workspaceMetadataEnvironmentBlock
 							? [
 									{
@@ -470,7 +474,9 @@ export class SubagentRunner {
 				},
 			]
 
-			while (true) {
+			let iterationCount = 0
+			while (iterationCount < MAX_TASK_ITERATIONS) {
+				iterationCount++
 				if (
 					usageState.lastRequest &&
 					this.shouldCompactBeforeNextRequest(usageState.lastRequest.totalTokens, api, providerInfo.model.id)
@@ -533,6 +539,13 @@ export class SubagentRunner {
 							}
 							if (stats.maxCost && stats.totalCost > stats.maxCost) {
 								const error = `Swarm Cost Budget Exceeded ($${stats.maxCost}). Terminating subagent to prevent runaway costs.`
+								Logger.warn(`[SubagentRunner] ${error}`)
+								onProgress({ status: "failed", error, stats: { ...stats } })
+								return { status: "failed", error, stats }
+							}
+
+							if (stats.toolCalls >= MAX_TOTAL_TOOL_CALLS) {
+								const error = `Swarm Tool Call Limit Exceeded (${MAX_TOTAL_TOOL_CALLS}). Terminating subagent to prevent infinite tool loops.`
 								Logger.warn(`[SubagentRunner] ${error}`)
 								onProgress({ status: "failed", error, stats: { ...stats } })
 								return { status: "failed", error, stats }
@@ -821,6 +834,10 @@ export class SubagentRunner {
 
 				await delay(0)
 			}
+
+			const loopError = `Swarm Iteration Limit Exceeded (${MAX_TASK_ITERATIONS}). Subagent failed to complete the task within allowed turns.`
+			onProgress({ status: "failed", error: loopError, stats: { ...stats } })
+			return { status: "failed", error: loopError, stats }
 		} catch (error) {
 			if (this.shouldAbort()) {
 				const cancelledError = "Subagent run cancelled."
@@ -1037,6 +1054,10 @@ export class SubagentRunner {
 		}
 
 		if (criticalKeywords.some((keyword) => upperResult.includes(keyword))) {
+			const matchingKeywords = criticalKeywords.filter((keyword) => upperResult.includes(keyword))
+			this.activeSignals = Array.from(new Set([...this.activeSignals, ...matchingKeywords]))
+			this.onProgress?.({ activeSignals: this.activeSignals })
+
 			try {
 				const label =
 					upperResult.includes("GROUNDED SPECIFICATION REFRESH") || upperResult.includes("CONTEXT UNCERTAINTY")

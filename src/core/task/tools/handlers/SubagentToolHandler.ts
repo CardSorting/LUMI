@@ -6,6 +6,7 @@ import {
 	DietCodeSubagentUsageInfo,
 	SubagentStatusItem,
 } from "@shared/ExtensionMessage"
+import pTimeout from "p-timeout"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
@@ -14,7 +15,7 @@ import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
 import { SUBAGENT_DEFAULT_ALLOWED_TOOLS, SubagentBuilder } from "../subagent/SubagentBuilder"
-import { SubagentRunner } from "../subagent/SubagentRunner"
+import { SubagentRunner, type SubagentRunResult } from "../subagent/SubagentRunner"
 import type { IFullyManagedTool } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -24,7 +25,6 @@ interface ConfigWithExtensions extends TaskConfig {
 	getSessionStreamId?: () => string
 }
 
-const MAX_SUBAGENT_PROMPTS = 5
 const PROMPT_KEYS = ["prompt_1", "prompt_2", "prompt_3", "prompt_4", "prompt_5"] as const
 
 function resolveConfiguredSubagentName(toolName: string): string | undefined {
@@ -104,15 +104,21 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, configuredSubagentName ? "prompt" : "prompt_1")
 		}
 
-		if (!configuredSubagentName && prompts.length > MAX_SUBAGENT_PROMPTS) {
+		// Production Hardening: Limit number of prompts for nested subagents to prevent swarm explosions
+		const MAX_PROMPTS_PER_SWARM = config.isSubagentExecution ? 5 : 15
+		if (prompts.length > MAX_PROMPTS_PER_SWARM) {
 			config.taskState.consecutiveMistakeCount++
 			return formatResponse.toolError(
-				`Too many subagent prompts provided (${prompts.length}). Maximum is ${MAX_SUBAGENT_PROMPTS}.`,
+				`Maximum subagent swarm size exceeded. Requested ${prompts.length}, but limited to ${MAX_PROMPTS_PER_SWARM} for stability.`,
 			)
 		}
 
-		const apiConfig = config.services.stateManager.getApiConfiguration()
 		const currentMode = config.services.stateManager.getGlobalSettingsKey("mode")
+		Logger.info(
+			`[SubagentToolHandler] Spawning swarm of ${prompts.length} subagents (Mode: ${currentMode}, Concurrency: 3, Timeout: 20m)`,
+		)
+
+		const apiConfig = config.services.stateManager.getApiConfiguration()
 		const provider = (currentMode === "plan" ? apiConfig.planModeApiProvider : apiConfig.actModeApiProvider) as string
 		const approvalPayload: DietCodeAskUseSubagents = { prompts }
 		const approvalBody = JSON.stringify(approvalPayload)
@@ -170,17 +176,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		const entries: SubagentStatusItem[] = prompts.map((prompt, index) => ({
 			index: index + 1,
 			prompt,
-			criticalSignals: [
-				"CONTEXT UNCERTAINTY",
-				"GROUNDED SPECIFICATION REFRESH",
-				"JOY-ZONING VIOLATION",
-				"ARCHITECTURE VIOLATION",
-				"SECURITY RISK",
-				"TOXIC HOTSPOT",
-				"SIGNAL: ARCHITECTURE_VIOLATION",
-				"SIGNAL: SECURITY_RISK",
-				"SIGNAL: POLICY_VIOLATION",
-			],
+			criticalSignals: [],
 			status: "pending",
 			toolCalls: 0,
 			inputTokens: 0,
@@ -252,7 +248,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				`[SubagentToolHandler] Subagent '${configuredSubagentName}' requested restricted tools: ${unauthorizedTools.join(", ")}. Permission denied.`,
 			)
 			// Force filter the toolset to only include authorized tools
-			// builder.setAllowedTools(requestedTools.filter(t => !unauthorizedTools.includes(t)))
+			builder.setAllowedTools(requestedTools.filter((t) => !unauthorizedTools.includes(t)))
 		}
 
 		const runners = prompts.map(() => {
@@ -283,47 +279,100 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			}),
 		)
 
-		const execution = prompts.map((prompt, index) =>
-			runners[index].run(prompt, async (update) => {
-				const current = entries[index]
-				if (update.status === "running") {
-					current.status = "running"
-				}
-				if (update.status === "completed") {
-					current.status = "completed"
-					// Complete orchestrator child stream
-					const childId = childStreamIds[index]
-					if (childId) orchestrator.completeStream(childId, excerpt(update.result, 200)).catch(() => {})
-				}
-				if (update.status === "failed") {
-					current.status = "failed"
-					// Fail orchestrator child stream
-					const childId = childStreamIds[index]
-					if (childId) orchestrator.failStream(childId, update.error || "Subagent failed").catch(() => {})
-				}
-				if (update.result !== undefined) {
-					current.result = update.result
-				}
-				if (update.error !== undefined) {
-					current.error = update.error
-				}
-				if (update.latestToolCall !== undefined) {
-					current.latestToolCall = update.latestToolCall
-				}
-				if (update.stats) {
-					current.toolCalls = update.stats.toolCalls || 0
-					current.inputTokens = update.stats.inputTokens || 0
-					current.outputTokens = update.stats.outputTokens || 0
-					current.totalCost = update.stats.totalCost || 0
-					current.contextTokens = update.stats.contextTokens || 0
-					current.contextWindow = update.stats.contextWindow || 0
-					current.contextUsagePercentage = update.stats.contextUsagePercentage || 0
-				}
-				await queueStatusUpdate("running", true)
-			}),
-		)
+		// Production Hardening: Concurrency Limit (max 3 subagents in parallel)
+		const MAX_CONCURRENCY = 3
+		const results: PromiseSettledResult<SubagentRunResult>[] = new Array(prompts.length)
+		let nextIndex = 0
+		let totalSwarmCost = 0
+		const MAX_PARENT_COST = config.taskState.maxCost
 
-		const settled = await Promise.allSettled(execution)
+		const runSubagent = async (index: number) => {
+			// Production Hardening: Staggered spawn to prevent simultaneous rate-limit bursts
+			if (index > 0) {
+				await new Promise((resolve) => setTimeout(resolve, 500))
+			}
+
+			try {
+				const result = await runners[index].run(prompts[index], async (update) => {
+					const current = entries[index]
+
+					// Real-time Swarm Cost Monitoring
+					if (update.stats?.totalCost !== undefined) {
+						const previousSubagentCost = current.totalCost || 0
+						const costDelta = update.stats.totalCost - previousSubagentCost
+						totalSwarmCost += costDelta
+
+						if (MAX_PARENT_COST && totalSwarmCost > MAX_PARENT_COST) {
+							const costError = `Swarm Cumulative Cost Budget Exceeded ($${totalSwarmCost} > $${MAX_PARENT_COST}). Aborting entire swarm.`
+							Logger.error(`[SubagentToolHandler] ${costError}`)
+							// Abort all runners immediately
+							void Promise.allSettled(runners.map((r) => r.abort()))
+						}
+					}
+
+					if (update.status === "running") {
+						current.status = "running"
+					}
+					if (update.status === "completed") {
+						current.status = "completed"
+						const childId = childStreamIds[index]
+						if (childId) orchestrator.completeStream(childId, excerpt(update.result, 200)).catch(() => {})
+					}
+					if (update.status === "failed") {
+						current.status = "failed"
+						const childId = childStreamIds[index]
+						if (childId) orchestrator.failStream(childId, update.error || "Subagent failed").catch(() => {})
+					}
+					if (update.result !== undefined) {
+						current.result = update.result
+					}
+					if (update.error !== undefined) {
+						current.error = update.error
+					}
+					if (update.latestToolCall !== undefined) {
+						current.latestToolCall = update.latestToolCall
+					}
+					if (update.activeSignals !== undefined) {
+						current.criticalSignals = update.activeSignals
+					}
+					if (update.stats) {
+						current.toolCalls = update.stats.toolCalls || 0
+						current.inputTokens = update.stats.inputTokens || 0
+						current.outputTokens = update.stats.outputTokens || 0
+						current.totalCost = update.stats.totalCost || 0
+						current.contextTokens = update.stats.contextTokens || 0
+						current.contextWindow = update.stats.contextWindow || 0
+						current.contextUsagePercentage = update.stats.contextUsagePercentage || 0
+					}
+					await queueStatusUpdate("running", true)
+				})
+				results[index] = { status: "fulfilled", value: result }
+			} catch (error) {
+				results[index] = { status: "rejected", reason: error }
+			}
+		}
+
+		const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, prompts.length) }, async () => {
+			while (nextIndex < prompts.length) {
+				const i = nextIndex++
+				await runSubagent(i)
+			}
+		})
+
+		// Production Hardening: 20-minute hard timeout for the entire swarm execution
+		const SUBAGENT_EXECUTION_TIMEOUT_MS = 20 * 60 * 1000
+
+		await pTimeout(Promise.all(workers), {
+			milliseconds: SUBAGENT_EXECUTION_TIMEOUT_MS,
+			message: "Subagent swarm execution timed out after 20 minutes.",
+		}).catch(async (err: unknown) => {
+			Logger.error("[SubagentToolHandler] Swarm execution error or timeout:", err)
+			// Abort all runners on timeout
+			await Promise.allSettled(runners.map((r) => r.abort()))
+			throw err
+		})
+
+		const settled = results
 		clearInterval(abortPollInterval)
 		let usageTokensIn = 0
 		let usageTokensOut = 0

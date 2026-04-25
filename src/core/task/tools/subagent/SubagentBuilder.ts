@@ -128,6 +128,10 @@ export class SubagentBuilder {
 		const configuredSystemPrompt = this.agentConfig?.systemPrompt?.trim()
 		const systemPrompt = configuredSystemPrompt || generatedSystemPrompt
 
+		// Nesting depth awareness for the subagent
+		const currentDepth = this.baseConfig.taskState.recursionDepth || 0
+		const depthBlock = `\n\n# SWARM NESTING CONTEXT\nYou are operating at nesting depth ${currentDepth} (Max: 3). ${currentDepth >= 2 ? "You are at a deep structural layer; avoid spawning further subagents unless absolutely critical." : ""}`
+
 		// 1. Fetch current structural health signal
 		let architectureSignal = ""
 		architectureSignal = `\n\n# SUBSTRATE HEALTH SIGNAL\n[STATUS: JOY-ZONED]\n[SIGNAL: Every file you modify must respect the architecture axioms defined in 'SOVEREIGN_GUIDE.md'.]`
@@ -136,7 +140,7 @@ export class SubagentBuilder {
 			? `\n\n# Parent Agent Context\n${this.parentStreamContext}\nUse the context above to prioritize your research within the broader task goals.`
 			: ""
 
-		return `${this.buildAgentIdentitySystemPrefix()}${systemPrompt}${architectureSignal}${parentContextBlock}${SUBAGENT_SYSTEM_SUFFIX}`
+		return `${this.buildAgentIdentitySystemPrefix()}${systemPrompt}${depthBlock}${architectureSignal}${parentContextBlock}${SUBAGENT_SYSTEM_SUFFIX}`
 	}
 
 	buildNativeTools(context: SystemPromptContext) {

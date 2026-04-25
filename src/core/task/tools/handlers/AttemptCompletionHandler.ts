@@ -6,7 +6,7 @@ import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
-import { COMPLETION_RESULT_CHANGES_FLAG } from "@shared/ExtensionMessage"
+import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
 import type { ToolResponse } from "../../index"
@@ -96,7 +96,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			let compliance = await config.universalGuard.checkForensicCompliance()
 			if (!compliance.compliant) {
 				await config.callbacks.say(
-					"subagent",
+					"text",
 					"🔍 **FORENSIC AUDIT REQUIRED**: Technical changes detected without Knowledge Ledger synchronization. Initiating autonomous documentation pass...",
 				)
 
@@ -106,7 +106,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 				if (!compliance.compliant && forensicResult) {
 					await config.callbacks.say(
-						"subagent",
+						"text",
 						`⚠️ **FORENSIC AUDIT FAILED**: ${compliance.reason}\nInitiating corrective second pass...`,
 					)
 					// Feedback-driven second pass
@@ -121,7 +121,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 					)
 				}
 
-				await config.callbacks.say("subagent", "✅ **FORENSIC GATE PASSED**: Knowledge Ledger is in sync.")
+				await config.callbacks.say("text", "✅ **FORENSIC GATE PASSED**: Knowledge Ledger is in sync.")
 				// Fall through to actual completion
 			}
 		}
@@ -151,7 +151,10 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			const hasNewChanges = await config.callbacks.doesLatestTaskCompletionHaveNewChanges()
 			const dietcodeMessages = config.messageState.getDietCodeMessages()
 
-			const lastCompletionResultMessageIndex = findLastIndex(dietcodeMessages, (m: any) => m.say === "completion_result")
+			const lastCompletionResultMessageIndex = findLastIndex(
+				dietcodeMessages,
+				(m: DietCodeMessage) => m.say === "completion_result",
+			)
 			const lastCompletionResultMessage =
 				lastCompletionResultMessageIndex !== -1 ? dietcodeMessages[lastCompletionResultMessageIndex] : undefined
 			if (
@@ -182,7 +185,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			await config.messageState.saveDietCodeMessagesAndUpdateHistory()
 		}
 
-		let commandResult: any
+		let commandResult: ToolResponse | undefined
 		const lastMessage = config.messageState.getDietCodeMessages().at(-1)
 
 		if (command) {
@@ -225,7 +228,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			}
 
 			// Execute the command
-			const [userRejected, execCommandResult] = await config.callbacks.executeCommandTool(command!, undefined) // no timeout for attempt_completion command
+			const [userRejected, execCommandResult] = await config.callbacks.executeCommandTool(command, undefined) // no timeout for attempt_completion command
 
 			if (userRejected) {
 				config.taskState.didRejectTool = true
@@ -381,7 +384,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		feedback?: string,
 	): Promise<string | undefined> {
 		try {
-			await config.callbacks.say("subagent", "🛡️ **SOVEREIGN FORENSIC GATE**: Initiating Autonomous Forensic Phase...")
+			await config.callbacks.say("text", "🛡️ **SOVEREIGN FORENSIC GATE**: Initiating Autonomous Forensic Phase...")
 
 			const builder = new SubagentBuilder(config, "forensic-architect")
 			builder.setAllowedTools([
@@ -434,21 +437,18 @@ You MUST organize the \`.wiki/\` directory into a strict hierarchical taxonomy t
 - If you use git, limit it to \`git status\` or \`git log -n 5 --oneline\`.
 - Your primary source of truth is the **physical code** and the **Spider Engine**, not git history.
 
-### 🏗️ ENVIRONMENTAL AWARENESS
-- You must document what the workspace **is** and **how it works**, not just what was changed in this commit.
-- Identify the active tech stack, entry points, core service layers, and architectural "Gravity Centers" impacted by your work.
-- Master the relationship between modified logic and the surrounding environment.
+### 🛡️ SESSION CONTEXT (GROUNDED DATA)
+The task results were as follows:
+<original_result>
+${originalResult}
+</original_result>
 
-### 🛡️ SPIDER ENGINE REFERENCE
-You have direct access to the Spider Engine, the structural authority of DietCode.
-- **Built-in Tool: 'diagnose_sovereignty'**: Use this to generate a comprehensive structural audit of impacted files.
-- **Built-in Tool: 'sovereign_integrity_sweep'**: Use this to verify that all citations in the wiki are grounded in the physical substrate.
-- **CLI Manual Access**: If you need deeper granularity, run 'npx tsx scripts/agent-spider.ts <command>':
-  - 'status': View graph health and entropy.
-  - 'blast-radius <file>': Identify critical dependents impacted by your changes.
-  - 'find-symbol <name>': Locate the physical definition of any symbol.
-  - 'find-usage <symbol>': See every file that consumes a specific symbol.
-  - 're-seed': Force-sync the graph if it diverges from reality.
+${feedback ? `Feedback from parent: ${feedback}\n` : ""}
+
+The session impact summary is:
+<impact_summary>
+${impact}
+</impact_summary>
 
 ### 🛡️ SPIDER-LINK MANDATE
 1. **Environmental Deep-Dive**: Use 'diagnose_sovereignty' or 'blast-radius' to master the import/export graph.
@@ -459,7 +459,6 @@ You have direct access to the Spider Engine, the structural authority of DietCod
      - \`  - **Logic Shift**: [Granular detail of internal logic changes]\`
      - \`  - **Structural Impact**: [Changes to exports, imports, or blast radius]\`
    - **MANDATE**: The **Metabolic Citations Gauge** is active. Files with high churn REQUIRE longer, more technical descriptions. If you provide a superficial summary for a complex change, the Sovereign Forensic Gate will REJECT your completion.
-4. **Graph Persistence**: Ensure '.wiki/index.md' and related files maintain structural parity with the physical codebase.
 
 Do NOT provide conversational fluff. The Sovereign Forensic Gate now performs algorithmic granularity checks based on metabolic pressure. Be technically exhaustive.`
 

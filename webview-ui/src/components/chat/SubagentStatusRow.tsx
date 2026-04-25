@@ -247,8 +247,19 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 								</div>
 							</div>
 							{shouldShowStats && (
-								<div className="mt-1 text-[11px] opacity-70 min-w-0 whitespace-pre-wrap break-words">
-									<span>{statsText}</span>
+								<div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] min-w-0">
+									<span className="opacity-70 whitespace-pre-wrap break-words">{statsText}</span>
+									{entry.criticalSignals && entry.criticalSignals.length > 0 && (
+										<div className="flex flex-wrap gap-1">
+											{entry.criticalSignals.map((signal, sIdx) => (
+												<span
+													className="px-1 py-0 rounded-[2px] bg-foreground/10 text-foreground/80 font-mono text-[9px]"
+													key={sIdx}>
+													{signal}
+												</span>
+											))}
+										</div>
+									)}
 								</div>
 							)}
 							{shouldShowStats && hasDetails && (

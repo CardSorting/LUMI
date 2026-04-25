@@ -286,6 +286,7 @@ export interface SubagentStatusItem {
 	latestToolCall?: string
 	result?: string
 	error?: string
+	criticalSignals?: string[]
 }
 
 export interface DietCodeSaySubagentStatus {
