@@ -45,6 +45,7 @@ import { Logger } from "@/shared/services/Logger"
 import { Session } from "@/shared/services/Session"
 import { getLatestAnnouncementId } from "@/utils/announcements"
 import { getCwd, getDesktopDir } from "@/utils/path"
+import { SpiderEngine } from "../policy/spider/SpiderEngine"
 import { PromptRegistry } from "../prompts/system-prompt"
 import {
 	ensureCacheDirectoryExists,
@@ -70,7 +71,9 @@ https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default
 https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
 */
 
-export class Controller {
+import { IController } from "./types"
+
+export class Controller implements IController {
 	task?: Task
 
 	mcpHub: McpHub
@@ -108,6 +111,20 @@ export class Controller {
 	// Synchronous getter for workspace manager
 	getWorkspaceManager(): WorkspaceRootManager | undefined {
 		return this.workspaceManager
+	}
+
+	private spider?: SpiderEngine
+	getSpiderEngine(): SpiderEngine {
+		if (this.spider) return this.spider
+		const cwd = this.getWorkspaceManager()?.getPrimaryRoot()?.path || process.cwd()
+		this.spider = new SpiderEngine(cwd)
+		// Non-blocking load from persistence to accelerate cold-boot
+		this.spider.loadRegistry().catch((e) => Logger.error("[Controller] Failed to load spider registry:", e))
+		return this.spider
+	}
+
+	async createTask(prompt: string): Promise<string> {
+		return this.handleTaskCreation(prompt)
 	}
 
 	/**
@@ -640,9 +657,9 @@ export class Controller {
 		}
 	}
 
-	async handleTaskCreation(prompt: string) {
+	async handleTaskCreation(prompt: string): Promise<string> {
 		await sendChatButtonClickedEvent()
-		await this.initTask(prompt)
+		return await this.initTask(prompt)
 	}
 
 	// MCP Marketplace

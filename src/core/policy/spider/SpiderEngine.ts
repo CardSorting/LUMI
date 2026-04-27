@@ -143,6 +143,22 @@ export class SpiderEngine {
 		}
 	}
 
+	/**
+	 * V205: Metabolic Pressure Monitoring.
+	 * Calculates the current "Metabolic Pressure" (0.0-1.0) by analyzing
+	 * graph density vs. allocated memory substrate.
+	 */
+	public computeMetabolicPressure(): number {
+		const used = process.memoryUsage().heapUsed
+		const total = process.memoryUsage().heapTotal
+		const memPressure = used / total
+
+		const graphDensity = this.nodes.size / 10000 // Normalized to 10k nodes
+		const pressure = memPressure * 0.7 + Math.min(graphDensity, 1.0) * 0.3
+
+		return Number(pressure.toFixed(2))
+	}
+
 	private clearStabilityHeartbeat(): void {
 		if (this.stabilityHeartbeat) {
 			clearTimeout(this.stabilityHeartbeat)
@@ -203,7 +219,7 @@ export class SpiderEngine {
 		this.resolver.clearCaches()
 	}
 
-	public updateNode(filePath: string, content: string) {
+	public updateNode(filePath: string, content: string, skipResolution = false) {
 		const normalizedPath = this.resolver.normalizePath(filePath)
 		this.checkStabilityPressure()
 
@@ -224,10 +240,12 @@ export class SpiderEngine {
 		let metrics = this.extractMetrics(sourceFile)
 
 		const consumptions: Record<string, string[]> = {}
-		for (const { specifier, symbols } of importData) {
-			const targetId = this.resolver.resolveImportToNodeId(normalizedPath, specifier, this.nodes)
-			if (targetId) {
-				consumptions[targetId] = (consumptions[targetId] || []).concat(symbols)
+		if (!skipResolution) {
+			for (const { specifier, symbols } of importData) {
+				const targetId = this.resolver.resolveImportToNodeId(normalizedPath, specifier, this.nodes)
+				if (targetId) {
+					consumptions[targetId] = (consumptions[targetId] || []).concat(symbols)
+				}
 			}
 		}
 
@@ -763,47 +781,60 @@ export class SpiderEngine {
 	 * V160: Industrial Hardening - Batch Rebuild.
 	 * Autonomously rebuilds the graph with throttling to prevent event loop starvation.
 	 */
-	public async rebuildRegistry(): Promise<void> {
-		Logger.info("[SpiderEngine] Rebuilding project registry (Throttled Indexing)...")
-		this.nodes.clear()
-		const files = this.resolver.scanProject()
+	private isIndexing = false
+	public async rebuildRegistry(onProgress?: (processed: number, total: number, currentFile: string) => void): Promise<void> {
+		if (this.isIndexing) {
+			Logger.warn("[SpiderEngine] Rebuild already in progress. Skipping redundant request.")
+			return
+		}
+		this.isIndexing = true
+		try {
+			Logger.info("[SpiderEngine] Rebuilding project registry (Throttled Indexing)...")
+			this.nodes.clear()
+			const files = this.resolver.scanProject()
 
-		const BATCH_SIZE = 250
-		for (let i = 0; i < files.length; i += BATCH_SIZE) {
-			const batch = files.slice(i, i + BATCH_SIZE)
-			for (const f of batch) {
-				try {
-					const content = fs.readFileSync(path.resolve(this.cwd, f), "utf-8")
-					this.updateNode(f, content)
-				} catch (_e) {
-					// Skip unreachable files
+			const BATCH_SIZE = 250
+			for (let i = 0; i < files.length; i += BATCH_SIZE) {
+				const batch = files.slice(i, i + BATCH_SIZE)
+				for (const f of batch) {
+					try {
+						const content = fs.readFileSync(path.resolve(this.cwd, f), "utf-8")
+						this.updateNode(f, content, true)
+						if (onProgress) {
+							onProgress(i + batch.indexOf(f) + 1, files.length, f)
+						}
+					} catch (_e) {
+						// Skip unreachable files
+					}
+				}
+
+				// V200: Metabolic Pulse - Emergency reclamation between batches
+				this.checkStabilityPressure()
+
+				// V160: Relinquish control to the event loop between batches
+				if (i + BATCH_SIZE < files.length) {
+					await new Promise((resolve) => setTimeout(resolve, 0))
 				}
 			}
 
-			// V200: Metabolic Pulse - Emergency reclamation between batches
-			this.checkStabilityPressure()
+			this.metrics.computeCouplingMetrics(this.nodes)
+			this.metrics.computeReachability(this.nodes)
 
-			// V160: Relinquish control to the event loop between batches
-			if (i + BATCH_SIZE < files.length) {
-				await new Promise((resolve) => setTimeout(resolve, 0))
+			// 10. Compute Fragility & Hotspots (V200)
+			const fragility = this.forensic.computeFragility(this.nodes)
+			for (const [id, stats] of fragility.entries()) {
+				const n = this.nodes.get(id)
+				if (n) {
+					n.blastRadius = stats.blastRadius
+					n.isFragile = stats.isFragile
+					n.isHotspot = n.isFragile && n.cognitiveComplexity > 0.6
+				}
 			}
+
+			Logger.info(`[SpiderEngine] Substrate Immortalized: ${this.nodes.size} nodes indexed.`)
+		} finally {
+			this.isIndexing = false
 		}
-
-		this.metrics.computeCouplingMetrics(this.nodes)
-		this.metrics.computeReachability(this.nodes)
-
-		// 10. Compute Fragility & Hotspots (V200)
-		const fragility = this.forensic.computeFragility(this.nodes)
-		for (const [id, stats] of fragility.entries()) {
-			const n = this.nodes.get(id)
-			if (n) {
-				n.blastRadius = stats.blastRadius
-				n.isFragile = stats.isFragile
-				n.isHotspot = n.isFragile && n.cognitiveComplexity > 0.6
-			}
-		}
-
-		Logger.info(`[SpiderEngine] Substrate Immortalized: ${this.nodes.size} nodes indexed.`)
 	}
 
 	/**

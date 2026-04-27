@@ -105,6 +105,8 @@ const GLOBAL_STATE_FIELDS = {
 	remoteAuthToken: { default: undefined as string | undefined },
 	// Persistent environmental lease to prevent redundant pre-flight probes
 	environmentalLease: { default: undefined as any | undefined },
+	// Stores the last triggered JoyZoning report for UI restoration
+	lastJoyZoningReport: { default: undefined as any | undefined },
 } satisfies FieldDefinitions
 
 // Fields that map directly to ApiHandlerOptions in @shared/api.ts

@@ -59,6 +59,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	showAccount: boolean
 	showWorktrees: boolean
 	showAnnouncement: boolean
+	showJoyZoning: boolean
 	expandTaskHeader: boolean
 
 	// Setters
@@ -104,6 +105,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	navigateToHistory: () => void
 	navigateToAccount: () => void
 	navigateToWorktrees: () => void
+	navigateToJoyZoning: () => void
 	navigateToChat: () => void
 
 	// Hide functions
@@ -112,6 +114,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	hideAccount: () => void
 	hideWorktrees: () => void
 	hideAnnouncement: () => void
+	hideJoyZoning: () => void
 	closeMcpView: () => void
 
 	// Event callbacks
@@ -133,6 +136,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [showAccount, setShowAccount] = useState(false)
 	const [showWorktrees, setShowWorktrees] = useState(false)
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
+	const [showJoyZoning, setShowJoyZoning] = useState(false)
 
 	// Helper for MCP view
 	const closeMcpView = useCallback(() => {
@@ -150,6 +154,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const hideAccount = useCallback(() => setShowAccount(false), [])
 	const hideWorktrees = useCallback(() => setShowWorktrees(false), [])
 	const hideAnnouncement = useCallback(() => setShowAnnouncement(false), [])
+	const hideJoyZoning = useCallback(() => setShowJoyZoning(false), [])
 
 	// Navigation functions
 	const navigateToMcp = useCallback((tab?: McpViewTab) => {
@@ -163,12 +168,22 @@ export const ExtensionStateContextProvider: React.FC<{
 		setShowMcp(true)
 	}, [])
 
+	const navigateToJoyZoning = useCallback(() => {
+		setShowSettings(false)
+		setShowHistory(false)
+		setShowAccount(false)
+		setShowWorktrees(false)
+		closeMcpView()
+		setShowJoyZoning(true)
+	}, [closeMcpView])
+
 	const navigateToSettings = useCallback(
 		(targetSection?: string) => {
 			setShowHistory(false)
 			closeMcpView()
 			setShowAccount(false)
 			setShowWorktrees(false)
+			setShowJoyZoning(false)
 			setSettingsTargetSection(targetSection)
 			setSettingsInitialModelTab(undefined)
 			setShowSettings(true)
@@ -182,6 +197,7 @@ export const ExtensionStateContextProvider: React.FC<{
 			closeMcpView()
 			setShowAccount(false)
 			setShowWorktrees(false)
+			setShowJoyZoning(false)
 			setSettingsTargetSection(opts.targetSection)
 			setSettingsInitialModelTab(opts.initialModelTab)
 			setShowSettings(true)
@@ -194,6 +210,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		closeMcpView()
 		setShowAccount(false)
 		setShowWorktrees(false)
+		setShowJoyZoning(false)
 		setShowHistory(true)
 	}, [closeMcpView])
 
@@ -202,6 +219,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		closeMcpView()
 		setShowHistory(false)
 		setShowWorktrees(false)
+		setShowJoyZoning(false)
 		setShowAccount(true)
 	}, [closeMcpView])
 
@@ -210,6 +228,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		closeMcpView()
 		setShowHistory(false)
 		setShowAccount(false)
+		setShowJoyZoning(false)
 		setShowWorktrees(true)
 	}, [closeMcpView])
 
@@ -219,6 +238,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		setShowHistory(false)
 		setShowAccount(false)
 		setShowWorktrees(false)
+		setShowJoyZoning(false)
 	}, [closeMcpView])
 
 	const [state, setState] = useState<ExtensionState>({
@@ -688,6 +708,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		navigateToMcp, // When settings button is clicked, navigate to settings
 		navigateToSettings, // When worktrees button is clicked, navigate to worktrees
 		navigateToWorktrees,
+		navigateToJoyZoning,
 	])
 
 	const refreshOpenRouterModels = useCallback(() => {
@@ -819,6 +840,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		showAccount,
 		showWorktrees,
 		showAnnouncement,
+		showJoyZoning,
 		globalDietCodeRulesToggles: state.globalDietCodeRulesToggles || {},
 		localDietCodeRulesToggles: state.localDietCodeRulesToggles || {},
 		localCursorRulesToggles: state.localCursorRulesToggles || {},
@@ -838,6 +860,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		navigateToHistory,
 		navigateToAccount,
 		navigateToWorktrees,
+		navigateToJoyZoning,
 		navigateToChat,
 
 		// Hide functions
@@ -846,6 +869,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		hideAccount,
 		hideWorktrees,
 		hideAnnouncement,
+		hideJoyZoning,
 		setShowAnnouncement,
 		setShowWelcome,
 		setShouldShowAnnouncement: (value) =>

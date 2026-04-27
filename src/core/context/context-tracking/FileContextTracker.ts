@@ -2,7 +2,7 @@ import { getTaskMetadata, readTaskHistoryFromState, saveTaskMetadata } from "@co
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import chokidar, { FSWatcher } from "chokidar"
 import * as path from "path"
-import { Controller } from "@/core/controller"
+import { IController } from "@/core/controller/types"
 import { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import { getCwd } from "@/utils/path"
@@ -23,7 +23,7 @@ If a file is modified outside of DietCode, we detect and track this change to pr
 This is used when restoring a task (non-git "checkpoint" restore), and mid-task.
 */
 export class FileContextTracker {
-	private controller: Controller
+	private controller: IController
 	readonly taskId: string
 
 	// File tracking and watching
@@ -31,7 +31,7 @@ export class FileContextTracker {
 	private recentlyModifiedFiles = new Set<string>()
 	private recentlyEditedByDietCode = new Set<string>()
 
-	constructor(controller: Controller, taskId: string) {
+	constructor(controller: IController, taskId: string) {
 		this.controller = controller
 		this.taskId = taskId
 	}

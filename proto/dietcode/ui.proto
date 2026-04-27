@@ -264,6 +264,9 @@ service UiService {
   // Subscribe to worktrees button clicked events
   rpc subscribeToWorktreesButtonClicked(EmptyRequest) returns (stream Empty);
 
+  // Subscribe to joy zoning button clicked events
+  rpc subscribeToJoyZoningButtonClicked(EmptyRequest) returns (stream Empty);
+
   // Subscribe to partial message updates (streaming DietCode messages as they're built)
   rpc subscribeToPartialMessage(EmptyRequest) returns (stream DietCodeMessage);
 

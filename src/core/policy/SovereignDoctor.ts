@@ -26,6 +26,7 @@ export interface DoctorReport {
 		gravityCenter: string // File with highest blast radius
 		structuralEntropy: number
 		logicHotspots: string[] // Top 3 logic-dense files
+		metabolicSinks: string[] // Files with high coupling AND high complexity
 	}
 }
 
@@ -57,6 +58,7 @@ export class SovereignDoctor {
 
 		const optimizations = this.optimizer.findOptimizations(engine)
 
+		const advisories = engine.getIntegrityAdvisories()
 		const allViolations = [
 			...structuralViolations.map((v) => ({
 				type: "STRUCTURAL" as const,
@@ -64,7 +66,12 @@ export class SovereignDoctor {
 				path: v.path,
 				remediation: v.remediation || "Check documentation.",
 			})),
-			// Axiom violations would normally be added here by iterating files
+			...advisories.map((a) => ({
+				type: "STRUCTURAL" as const,
+				message: a.message,
+				path: a.path,
+				remediation: "Structural adjustment required.",
+			})),
 		]
 
 		const buildHealth = Math.max(0, 100 - allViolations.length * 10)
@@ -78,6 +85,8 @@ export class SovereignDoctor {
 			.sort((a, b) => b.logicDensity - a.logicDensity)
 			.slice(0, 3)
 			.map((n) => n.path)
+
+		const metabolicSinks = nodes.filter((n) => n.afferentCoupling > 10 && (n.astComplexity || 0) > 1000).map((n) => n.path)
 
 		return {
 			buildHealth,
@@ -96,6 +105,7 @@ export class SovereignDoctor {
 				gravityCenter,
 				structuralEntropy: entropy.score,
 				logicHotspots,
+				metabolicSinks,
 			},
 		}
 	}

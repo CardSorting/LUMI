@@ -3,6 +3,7 @@ import { useEffect } from "react"
 import AccountView from "./components/account/AccountView"
 import ChatView from "./components/chat/ChatView"
 import HistoryView from "./components/history/HistoryView"
+import JoyZoningView from "./components/joyzoning/JoyZoningView"
 import McpView from "./components/mcp/configuration/McpConfigurationView"
 import SettingsView from "./components/settings/SettingsView"
 import WorktreesView from "./components/worktrees/WorktreesView"
@@ -22,6 +23,7 @@ const AppContent = () => {
 		showHistory,
 		showAccount,
 		showWorktrees,
+		showJoyZoning,
 		showAnnouncement,
 		setShowAnnouncement,
 		setShouldShowAnnouncement,
@@ -31,6 +33,7 @@ const AppContent = () => {
 		hideHistory,
 		hideAccount,
 		hideWorktrees,
+		hideJoyZoning,
 		hideAnnouncement,
 	} = useExtensionState()
 
@@ -69,10 +72,11 @@ const AppContent = () => {
 				/>
 			)}
 			{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
+			{showJoyZoning && <JoyZoningView onDone={hideJoyZoning} />}
 			{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
 			<ChatView
 				hideAnnouncement={hideAnnouncement}
-				isHidden={showSettings || showHistory || showMcp || showAccount || showWorktrees}
+				isHidden={showSettings || showHistory || showMcp || showAccount || showWorktrees || showJoyZoning}
 				showAnnouncement={showAnnouncement}
 				showHistoryView={navigateToHistory}
 			/>

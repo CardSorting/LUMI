@@ -13,7 +13,7 @@ import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { fileExistsAtPath, isDirectory, readDirectory } from "@utils/fs"
 import fs from "fs/promises"
 import path from "path"
-import { Controller } from "@/core/controller"
+import { IController } from "@/core/controller/types"
 import { Logger } from "@/shared/services/Logger"
 import { parseYamlFrontmatter } from "./frontmatter"
 import { evaluateRuleConditionals, type RuleEvaluationContext } from "./rule-conditionals"
@@ -147,7 +147,7 @@ export const getLocalDietCodeRules = async (
 }
 
 export async function refreshDietCodeRulesToggles(
-	controller: Controller,
+	controller: IController,
 	workingDirectory: string,
 ): Promise<{
 	globalToggles: DietCodeRulesToggles

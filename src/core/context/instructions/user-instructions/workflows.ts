@@ -2,13 +2,13 @@ import { synchronizeRuleToggles } from "@core/context/instructions/user-instruct
 import { ensureWorkflowsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import path from "path"
-import { Controller } from "@/core/controller"
+import { IController } from "@/core/controller/types"
 
 /**
  * Refresh the workflow toggles
  */
 export async function refreshWorkflowToggles(
-	controller: Controller,
+	controller: IController,
 	workingDirectory: string,
 ): Promise<{
 	globalWorkflowToggles: DietCodeRulesToggles

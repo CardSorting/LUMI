@@ -159,6 +159,11 @@
 				"icon": "$(settings-gear)"
 			},
 			{
+				"command": "dietcode.joyZoningButtonClicked",
+				"title": "JoyZoning Audit",
+				"icon": "$(shield)"
+			},
+			{
 				"command": "dietcode.dev.createTestTasks",
 				"title": "Create Test Tasks",
 				"category": "DietCode",
@@ -311,6 +316,11 @@
 				{
 					"command": "dietcode.settingsButtonClicked",
 					"group": "navigation@6",
+					"when": "view == dietcode.SidebarProvider"
+				},
+				{
+					"command": "dietcode.joyZoningButtonClicked",
+					"group": "navigation@4",
 					"when": "view == dietcode.SidebarProvider"
 				}
 			],

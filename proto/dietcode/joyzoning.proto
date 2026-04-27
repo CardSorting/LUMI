@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package dietcode;
+
+import "dietcode/common.proto";
+
+option go_package = "github.com/cardsorting/grpc-go/dietcode";
+option java_multiple_files = true;
+option java_package = "bot.dietcode.proto";
+
+message JoyZoningAuditRequest {
+  string path = 1;
+  bool use_cache = 2;
+}
+
+message JoyZoningAuditProgress {
+  int32 processed_files = 1;
+  int32 total_files = 2;
+  string current_file = 3;
+  double percentage = 4;
+}
+
+message JoyZoningViolation {
+  string type = 1;
+  string message = 2;
+  string path = 3;
+  string remediation = 4;
+  string severity = 5; // INFO, WARN, ERROR
+}
+
+message JoyZoningOptimization {
+  string title = 1;
+  string description = 2;
+  string path = 3;
+  string action = 4;
+  double projected_health_gain = 5;
+  string boilerplate = 6; // Suggested code for extraction
+}
+
+message JoyZoningAuditResponse {
+  double build_health = 1;
+  int32 total_files = 2;
+  double structural_entropy = 3;
+  repeated JoyZoningViolation violations = 4;
+  repeated JoyZoningOptimization optimizations = 5;
+  string timestamp = 6;
+  double projected_health = 7; // After applying optimizations
+  double integrity_score = 8;
+  JoyZoningAuditProgress progress = 9; // For streaming progress updates
+  double metabolic_pressure = 10; // Current resource usage/indexing stress (0-1.0)
+  bool drift_detected = 11;
+  int32 drift_count = 12;
+  repeated string metabolic_sinks = 13;
+}
+
+message JoyZoningRefactorRequest {
+  string action = 1; // e.g. "ALIGN_TAGS", "HEAL_STATELESSNESS", "DECOMPOSE"
+  string path = 2;
+  bool dry_run = 3;
+}
+
+message JoyZoningRefactorResponse {
+  bool success = 1;
+  string message = 2;
+  string task_id = 3;
+  string plan_summary = 4; // Summary of what would be changed
+}
+
+service JoyZoningService {
+  // Streams progress updates during the audit, finishing with the full report
+  rpc triggerAudit(JoyZoningAuditRequest) returns (stream JoyZoningAuditResponse);
+  rpc executeRefactor(JoyZoningRefactorRequest) returns (JoyZoningRefactorResponse);
+}

@@ -120,7 +120,7 @@ import { ensureLocalDietCodeDirExists } from "../context/instructions/user-instr
 import { discoverSkills, getAvailableSkills } from "../context/instructions/user-instructions/skills"
 import { refreshWorkflowToggles } from "../context/instructions/user-instructions/workflows"
 import { EmbeddingHandler, KnowledgeGraphService } from "../context/KnowledgeGraphService"
-import { Controller } from "../controller"
+import { IController } from "../controller/types"
 import { executeHook } from "../hooks/hook-executor"
 import { StateManager } from "../storage/StateManager"
 import { FocusChainManager } from "./focus-chain"
@@ -134,7 +134,7 @@ import { buildUserFeedbackContent } from "./utils/buildUserFeedbackContent"
 export type ToolResponse = DietCodeToolResponseContent
 
 type TaskParams = {
-	controller: Controller
+	controller: IController
 	mcpHub: McpHub
 	updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
 	postStateToWebview: () => Promise<void>
@@ -212,7 +212,7 @@ export class Task {
 	}
 
 	// Core dependencies
-	private controller: Controller
+	private controller: IController
 	private mcpHub: McpHub
 
 	// Service handlers

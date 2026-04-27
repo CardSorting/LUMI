@@ -11,14 +11,14 @@ import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { fileExistsAtPath, isDirectory } from "@utils/fs"
 import fs from "fs/promises"
 import path from "path"
-import { Controller } from "@/core/controller"
+import { IController } from "@/core/controller/types"
 import { Logger } from "@/shared/services/Logger"
 
 /**
  * Refreshes the toggles for windsurf, cursor, and agents rules
  */
 export async function refreshExternalRulesToggles(
-	controller: Controller,
+	controller: IController,
 	workingDirectory: string,
 ): Promise<{
 	windsurfLocalToggles: DietCodeRulesToggles
