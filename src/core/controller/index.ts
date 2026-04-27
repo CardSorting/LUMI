@@ -114,9 +114,17 @@ export class Controller implements IController {
 	}
 
 	private spider?: SpiderEngine
-	getSpiderEngine(): SpiderEngine {
+	async getSpiderEngine(): Promise<SpiderEngine> {
 		if (this.spider) return this.spider
-		const cwd = this.getWorkspaceManager()?.getPrimaryRoot()?.path || process.cwd()
+
+		// V205: Intentional Synchronicity. Ensure workspace manager is ready before initializing spider.
+		const wm = await this.ensureWorkspaceManager()
+		const workspacePaths = await HostProvider.workspace.getWorkspacePaths({})
+		const primaryPath = workspacePaths.paths?.[0]
+
+		const cwd = wm?.getPrimaryRoot()?.path || primaryPath || process.cwd()
+		Logger.info(`[Controller] Initializing SpiderEngine with CWD: ${cwd}`)
+
 		this.spider = new SpiderEngine(cwd)
 		// Non-blocking load from persistence to accelerate cold-boot
 		this.spider.loadRegistry().catch((e) => Logger.error("[Controller] Failed to load spider registry:", e))

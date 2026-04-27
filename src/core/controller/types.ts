@@ -19,7 +19,7 @@ export interface IController {
 	accountService: DietCodeAccountService
 	authService: AuthService
 	ocaAuthService: OcaAuthService
-	getSpiderEngine(): SpiderEngine
+	getSpiderEngine(): Promise<SpiderEngine>
 	createTask(prompt: string): Promise<string>
 	updateBackgroundCommandState(isRunning: boolean, taskId?: string): void
 	toggleActModeForYoloMode(): Promise<boolean>

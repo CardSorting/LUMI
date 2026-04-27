@@ -9,7 +9,7 @@ import { GrpcCancel, GrpcRequest } from "@/shared/WebviewMessage"
 /**
  * Type definition for a streaming response handler
  */
-export type StreamingResponseHandler<TResponse> = (
+export type StreamingResponseHandler<TResponse = unknown> = (
 	response: TResponse,
 	isLast?: boolean,
 	sequenceNumber?: number,
@@ -118,7 +118,11 @@ async function handleStreamingRequest(
 	let isTerminated = false
 
 	// Create a response stream function with terminal guard
-	const responseStream: StreamingResponseHandler<any> = async (response: any, isLast = false, sequenceNumber?: number) => {
+	const responseStream: StreamingResponseHandler<unknown> = async (
+		response: unknown,
+		isLast = false,
+		sequenceNumber?: number,
+	) => {
 		if (isTerminated) {
 			return
 		}
@@ -211,13 +215,21 @@ const requestRegistry = new GrpcRequestRegistry()
 
 /**
  * Get the request registry instance
- * This allows other parts of the code to access the registry
  */
 export function getRequestRegistry(): GrpcRequestRegistry {
+	requestRegistry.startStalePurge(60000)
 	return requestRegistry
 }
 
-function getHandler(serviceName: string, methodName: string): any {
+function getHandler(
+	serviceName: string,
+	methodName: string,
+): (
+	controller: Controller,
+	message: unknown,
+	responseStream?: StreamingResponseHandler<unknown>,
+	requestId?: string,
+) => Promise<unknown> {
 	// Get the service handler from the config
 	const serviceConfig = serviceHandlers[serviceName]
 	if (!serviceConfig) {

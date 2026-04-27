@@ -245,14 +245,31 @@ export class PathResolver {
 	 */
 	public isInternalPath(p: string): boolean {
 		const norm = this.canonicalize(p)
-		return (
-			norm.includes(".gemini") ||
-			norm.includes(".spider") ||
-			norm.includes("node_modules") ||
-			norm.includes(".git") ||
-			norm.includes("dist") ||
-			norm.includes("build")
-		)
+		const segments = norm.split("/")
+
+		// Exclude known system/agentic directories at any level
+		const excludedFolders = [".gemini", ".spider", "node_modules", ".git", "dist", "build", "out", "target"]
+		if (segments.some((s) => excludedFolders.includes(s))) return true
+
+		// Exclude non-code assets
+		const excludedExts = [
+			".png",
+			".jpg",
+			".jpeg",
+			".gif",
+			".svg",
+			".ico",
+			".woff",
+			".woff2",
+			".ttf",
+			".eot",
+			".mp4",
+			".wav",
+			".mp3",
+		]
+		if (excludedExts.some((ext) => norm.endsWith(ext))) return true
+
+		return false
 	}
 
 	/**
@@ -260,25 +277,34 @@ export class PathResolver {
 	 */
 	public scanProject(): string[] {
 		const results: string[] = []
-		const srcDir = path.join(this.cwd, "src")
-		if (!fs.existsSync(srcDir)) return []
+		// V205: Adaptive Root Discovery. Scan 'src' if it exists, otherwise scan the root.
+		const startDir = fs.existsSync(path.join(this.cwd, "src")) ? path.join(this.cwd, "src") : this.cwd
 
-		const stack = [srcDir]
+		const stack = [startDir]
 		while (stack.length > 0) {
 			const dir = stack.pop()
 			if (!dir) continue
-			const items = fs.readdirSync(dir, { withFileTypes: true })
-			for (const item of items) {
-				const full = path.join(dir, item.name)
-				const itemRel = path.relative(this.cwd, full).replace(/\\/g, "/")
+			try {
+				const items = fs.readdirSync(dir, { withFileTypes: true })
+				for (const item of items) {
+					const full = path.join(dir, item.name)
+					const itemRel = path.relative(this.cwd, full).replace(/\\/g, "/")
 
-				if (this.isInternalPath(itemRel)) continue
+					if (this.isInternalPath(itemRel)) continue
 
-				if (item.isDirectory()) {
-					stack.push(full)
-				} else if (item.name.endsWith(".ts") || item.name.endsWith(".tsx")) {
-					results.push(itemRel)
+					if (item.isDirectory()) {
+						stack.push(full)
+					} else if (
+						item.name.endsWith(".ts") ||
+						item.name.endsWith(".tsx") ||
+						item.name.endsWith(".js") ||
+						item.name.endsWith(".jsx")
+					) {
+						results.push(itemRel)
+					}
 				}
+			} catch (e) {
+				Logger.warn(`[PathResolver] Failed to scan directory ${dir}:`, e)
 			}
 		}
 		return results

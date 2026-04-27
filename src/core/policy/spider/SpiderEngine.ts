@@ -787,14 +787,33 @@ export class SpiderEngine {
 			Logger.warn("[SpiderEngine] Rebuild already in progress. Skipping redundant request.")
 			return
 		}
+
+		// V205: Resilience - Create a checkpoint before clearing the current substrate
+		this.createCheckpoint()
+		const previousCount = this.nodes.size
+
 		this.isIndexing = true
 		try {
 			Logger.info("[SpiderEngine] Rebuilding project registry (Throttled Indexing)...")
 			this.nodes.clear()
 			const files = this.resolver.scanProject()
 
-			const BATCH_SIZE = 250
+			// Safety check for massive file drops (e.g. fs failure or bad filter)
+			if (previousCount > 50 && files.length === 0) {
+				Logger.error(
+					`[SpiderEngine] CRITICAL: Unexpected file count drop (${previousCount} -> 0). Aborting rebuild to protect substrate.`,
+				)
+				await this.rollbackSubstrate()
+				return
+			}
+
+			let BATCH_SIZE = 250
 			for (let i = 0; i < files.length; i += BATCH_SIZE) {
+				// V205: Adaptive Batching - reduce batch size under memory pressure
+				const pressure = this.computeMetabolicPressure()
+				if (pressure > 0.8) BATCH_SIZE = 50
+				else if (pressure > 0.5) BATCH_SIZE = 100
+
 				const batch = files.slice(i, i + BATCH_SIZE)
 				for (const f of batch) {
 					try {
@@ -813,7 +832,7 @@ export class SpiderEngine {
 
 				// V160: Relinquish control to the event loop between batches
 				if (i + BATCH_SIZE < files.length) {
-					await new Promise((resolve) => setTimeout(resolve, 0))
+					await new Promise((resolve) => setTimeout(resolve, pressure > 0.7 ? 10 : 0))
 				}
 			}
 
@@ -832,6 +851,10 @@ export class SpiderEngine {
 			}
 
 			Logger.info(`[SpiderEngine] Substrate Immortalized: ${this.nodes.size} nodes indexed.`)
+		} catch (error) {
+			Logger.error("[SpiderEngine] Critical failure during registry rebuild:", error)
+			await this.rollbackSubstrate()
+			throw error
 		} finally {
 			this.isIndexing = false
 		}

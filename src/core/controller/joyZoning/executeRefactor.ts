@@ -9,7 +9,7 @@ export async function executeRefactor(
 	controller: IController,
 	request: JoyZoningRefactorRequest,
 ): Promise<JoyZoningRefactorResponse> {
-	const spider = controller.getSpiderEngine()
+	const spider = await controller.getSpiderEngine()
 	const decomposer = new SovereignDecomposer()
 
 	try {
@@ -45,6 +45,10 @@ export async function executeRefactor(
 
 		// 3. Construct a high-fidelity agentic task
 		let taskPrompt = `Refactor task: ${request.action} on ${request.path}\n\n`
+		taskPrompt += `[FORENSIC_SIGNAL] Afferent Coupling: ${node?.afferentCoupling || 0}\n`
+		taskPrompt += `[FORENSIC_SIGNAL] Cognitive Complexity: ${node?.cognitiveComplexity.toFixed(2) || 0}\n`
+		taskPrompt += `[FORENSIC_SIGNAL] Structural Entropy: ${spider.computeEntropy().score.toFixed(2)}\n\n`
+
 		taskPrompt += `Context from SovereignDecomposer:\n`
 		if (step) {
 			taskPrompt += `- Reason: ${step.reason}\n`

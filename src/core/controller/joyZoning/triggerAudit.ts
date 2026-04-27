@@ -26,11 +26,17 @@ export async function triggerAudit(
 ): Promise<void> {
 	const registry = getRequestRegistry()
 	const isCancelled = () => requestId && !registry.hasRequest(requestId)
-	const spider = controller.getSpiderEngine()
+	const spider = await controller.getSpiderEngine()
 	const doctor = new SovereignDoctor(spider.cwd)
 	const decomposer = new SovereignDecomposer()
 
 	const { useCache } = request
+
+	// V205: Hardening - 10-minute industrial timeout to prevent zombie audits
+	const timeout = setTimeout(() => {
+		Logger.error(`[Audit] Audit TIMEOUT after 10 minutes. Forcefully terminating requestId: ${requestId}`)
+		if (requestId) registry.unregisterRequest(requestId)
+	}, 600000)
 
 	try {
 		// V200: Intent Persistence / Rapid Recovery
@@ -38,6 +44,7 @@ export async function triggerAudit(
 			const cached = controller.stateManager.getGlobalStateKey("lastJoyZoningReport")
 			if (cached) {
 				Logger.info("[JoyZoning] Restoring audit from persistent cache.")
+				clearTimeout(timeout)
 				await responseStream(
 					JoyZoningAuditResponse.create({
 						violations: cached.violations,
@@ -71,6 +78,7 @@ export async function triggerAudit(
 		}
 
 		// 3. Rebuild Registry with Streaming Progress
+		if (isCancelled()) return
 		let lastSentPercentage = 0
 		await spider.rebuildRegistry(async (processed: number, total: number, currentFile: string) => {
 			if (isCancelled()) return
@@ -105,8 +113,22 @@ export async function triggerAudit(
 			})
 		}
 
-		// Map Decomposer Optimizations for Hotspots/God Modules
+		// V205: Forensic Depth - Identifying the Gravity Center
 		const nodes = Array.from(spider.nodes.values())
+		if (nodes.length > 0) {
+			const gravityCenter = nodes.sort((a, b) => b.blastRadius - a.blastRadius)[0]
+			if (gravityCenter && gravityCenter.blastRadius > 5) {
+				violations.push({
+					type: "STRUCTURAL",
+					severity: "WARN",
+					path: gravityCenter.path,
+					message: `GRAVITY CENTER DETECTED: This file has the highest blast radius (${gravityCenter.blastRadius.toFixed(1)}). Changes here ripple project-wide.`,
+					remediation: "Consider decoupling or extracting stable interfaces to reduce ripple effects.",
+				})
+			}
+		}
+
+		// Map Decomposer Optimizations for Hotspots/God Modules
 		const hotspots = nodes.filter((n: SpiderNode) => (n.astComplexity || 0) > 1000 || n.afferentCoupling > 10)
 
 		for (const node of hotspots) {
@@ -135,6 +157,10 @@ export async function triggerAudit(
 			}
 		}
 
+		if (nodes.length === 0) {
+			Logger.warn("[JoyZoning] Audit completed with 0 files. Check if CWD/src exists and is not excluded.")
+		}
+
 		const finalResponse = JoyZoningAuditResponse.create({
 			buildHealth: doctorReport.buildHealth,
 			totalFiles: nodes.length,
@@ -152,6 +178,7 @@ export async function triggerAudit(
 		})
 
 		// 6. Send Final Report
+		if (isCancelled()) return
 		await responseStream(finalResponse, true)
 
 		// V200: Persistence for rapid UI recovery
@@ -170,5 +197,7 @@ export async function triggerAudit(
 	} catch (error) {
 		Logger.error("[Audit] Critical failure during JoyZoning audit:", error)
 		throw error
+	} finally {
+		clearTimeout(timeout)
 	}
 }

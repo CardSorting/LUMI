@@ -13,7 +13,7 @@ export interface RequestInfo {
 	/**
 	 * Optional metadata about the request
 	 */
-	metadata?: any
+	metadata?: unknown
 
 	/**
 	 * Timestamp when the request was registered
@@ -37,6 +37,11 @@ export class GrpcRequestRegistry {
 	private activeRequests = new Map<string, RequestInfo>()
 
 	/**
+	 * Timer for periodic stale request purging
+	 */
+	private purgeInterval: NodeJS.Timeout | null = null
+
+	/**
 	 * Register a new request with its cleanup function
 	 * @param requestId The unique ID of the request
 	 * @param cleanup Function to clean up resources when the request is cancelled
@@ -46,7 +51,7 @@ export class GrpcRequestRegistry {
 	public registerRequest(
 		requestId: string,
 		cleanup: () => void,
-		metadata?: any,
+		metadata?: unknown,
 		responseStream?: StreamingResponseHandler<any>,
 	): void {
 		this.activeRequests.set(requestId, {
@@ -74,6 +79,13 @@ export class GrpcRequestRegistry {
 		}
 		this.activeRequests.delete(requestId)
 		return true
+	}
+
+	/**
+	 * Alias for cancelRequest. Removes a request from the registry and cleans it up.
+	 */
+	public unregisterRequest(requestId: string): boolean {
+		return this.cancelRequest(requestId)
 	}
 
 	/**
@@ -119,5 +131,20 @@ export class GrpcRequestRegistry {
 		}
 
 		return cleanedCount
+	}
+
+	/**
+	 * Starts a periodic purge of stale requests
+	 * @param intervalMs Interval in milliseconds between purges
+	 * @param maxAgeMs Maximum age in milliseconds before a request is considered stale
+	 */
+	public startStalePurge(intervalMs: number = 15 * 60 * 1000, maxAgeMs: number = 2 * 60 * 60 * 1000): void {
+		if (this.purgeInterval) return
+		this.purgeInterval = setInterval(() => {
+			const cleaned = this.cleanupStaleRequests(maxAgeMs)
+			if (cleaned > 0) {
+				Logger.info(`[GrpcRequestRegistry] Purged ${cleaned} stale requests.`)
+			}
+		}, intervalMs)
 	}
 }
