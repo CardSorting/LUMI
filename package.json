@@ -164,6 +164,12 @@
 				"icon": "$(shield)"
 			},
 			{
+				"command": "dietcode.joyZoningAudit",
+				"title": "Run JoyZoning Audit",
+				"category": "DietCode",
+				"icon": "$(shield)"
+			},
+			{
 				"command": "dietcode.dev.createTestTasks",
 				"title": "Create Test Tasks",
 				"category": "DietCode",

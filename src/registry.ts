@@ -17,6 +17,7 @@ const DietCodeCommands = {
 	AccountButton: `${prefix}.accountButtonClicked`,
 	WorktreesButton: `${prefix}.worktreesButtonClicked`,
 	JoyZoningButton: `${prefix}.joyZoningButtonClicked`,
+	JoyZoningAudit: `${prefix}.joyZoningAudit`,
 	TerminalOutput: `${prefix}.addTerminalOutputToChat`,
 	AddToChat: `${prefix}.addToChat`,
 	FixWithDietCode: `${prefix}.fixWithDietCode`,

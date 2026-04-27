@@ -1,6 +1,7 @@
 import { JoyZoningAuditProgress, JoyZoningAuditResponse } from "@shared/proto/dietcode/joyzoning"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import styled, { css, keyframes } from "styled-components"
+import { PLATFORM_CONFIG } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { JoyZoningServiceClient } from "@/services/grpc-client"
 import ViewHeader from "../common/ViewHeader"
@@ -13,34 +14,28 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const [previewPlan, setPreviewPlan] = useState<string | null>(null)
 
 	const [launchingTaskId, setLaunchingTaskId] = useState<string | null>(null)
+	const [auditLaunchMessage, setAuditLaunchMessage] = useState<string | null>(null)
+	const [auditLaunchError, setAuditLaunchError] = useState<string | null>(null)
 
-	const triggerAudit = useCallback((useCache = false) => {
+	const triggerAudit = useCallback(() => {
 		setLoading(true)
-		if (!useCache) {
-			setReport(null)
-			setProgress(null)
-		}
+		setAuditLaunchError(null)
+		setAuditLaunchMessage(null)
 
-		JoyZoningServiceClient.triggerAudit(
-			{ path: "", useCache },
-			{
-				onResponse: (response: JoyZoningAuditResponse) => {
-					if (response.progress) {
-						setProgress(response.progress)
-					}
-					if (response.violations.length > 0 || response.optimizations.length > 0 || response.buildHealth > 0) {
-						setReport(response)
-					}
+		try {
+			PLATFORM_CONFIG.postMessage({
+				type: "execute_command",
+				execute_command: {
+					command: "dietcode.joyZoningAudit",
 				},
-				onError: (error: Error) => {
-					console.error("Audit failed:", error)
-					setLoading(false)
-				},
-				onComplete: () => {
-					setLoading(false)
-				},
-			},
-		)
+			})
+			setAuditLaunchMessage("JoyZoning audit launched in chat.")
+		} catch (error) {
+			console.error("Failed to launch JoyZoning audit command:", error)
+			setAuditLaunchError(error instanceof Error ? error.message : "Failed to launch JoyZoning audit.")
+		} finally {
+			setLoading(false)
+		}
 	}, [])
 
 	const executeRefactor = async (action: string, path: string, dryRun = false) => {
@@ -56,11 +51,6 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 			console.error("Refactor failed:", error)
 		}
 	}
-
-	useEffect(() => {
-		// Attempt to restore from cache on mount
-		triggerAudit(true)
-	}, [triggerAudit])
 
 	return (
 		<Container>
@@ -94,6 +84,9 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 							</ProgressStats>
 						</ProgressInfo>
 					)}
+
+					{auditLaunchMessage && <SuccessNotice>{auditLaunchMessage}</SuccessNotice>}
+					{auditLaunchError && <ErrorNotice>{auditLaunchError}</ErrorNotice>}
 
 					{!loading && report && (
 						<StatsGrid>
@@ -136,8 +129,8 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 				<Section>
 					<SectionHeader>
 						<SectionTitle>Optimization Opportunities</SectionTitle>
-						<AuditButton disabled={loading} onClick={() => triggerAudit()}>
-							{loading ? "Scanning..." : "Re-Scan"}
+						<AuditButton disabled={loading} onClick={triggerAudit}>
+							{loading ? "Launching..." : "Run Audit"}
 						</AuditButton>
 					</SectionHeader>
 
@@ -336,6 +329,30 @@ const ProgressText = styled.div`
 const ProgressStats = styled.div`
   font-size: 10px;
   opacity: 0.5;
+`
+
+const SuccessNotice = styled.div`
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(82, 196, 26, 0.35);
+  background: rgba(82, 196, 26, 0.08);
+  color: #52c41a;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+`
+
+const ErrorNotice = styled.div`
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 77, 79, 0.35);
+  background: rgba(255, 77, 79, 0.08);
+  color: #ff4d4f;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
 `
 
 const StatsGrid = styled.div`

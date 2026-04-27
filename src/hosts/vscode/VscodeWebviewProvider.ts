@@ -5,8 +5,10 @@ import { handleGrpcRequest, handleGrpcRequestCancel } from "@/core/controller/gr
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
+import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
-import { WebviewMessage } from "@/shared/WebviewMessage"
+import type { ExecuteCommandRequest } from "@/shared/WebviewMessage"
+import { isWebviewExecutableCommand, WebviewMessage } from "@/shared/WebviewMessage"
 
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
@@ -163,20 +165,43 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 
 		switch (message.type) {
 			case "grpc_request": {
-				if (message.grpc_request) {
-					await handleGrpcRequest(this.controller, postMessageToWebview, message.grpc_request)
-				}
+				await handleGrpcRequest(this.controller, postMessageToWebview, message.grpc_request)
 				break
 			}
 			case "grpc_request_cancel": {
-				if (message.grpc_request_cancel) {
-					await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
-				}
+				await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
+				break
+			}
+			case "execute_command": {
+				await this.handleExecuteCommandMessage(message.execute_command)
 				break
 			}
 			default: {
 				Logger.error("Received unhandled WebviewMessage type:", JSON.stringify(message))
 			}
+		}
+	}
+
+	private async handleExecuteCommandMessage(request: ExecuteCommandRequest): Promise<void> {
+		const command = request?.command
+		if (!command || !isWebviewExecutableCommand(command)) {
+			Logger.warn("Rejected unsupported webview command:", command)
+			await HostProvider.window.showMessage({
+				type: ShowMessageType.ERROR,
+				message: "Unsupported webview command request.",
+			})
+			return
+		}
+
+		try {
+			await vscode.commands.executeCommand(command, ...(request.args ?? []))
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			Logger.error(`[VscodeWebviewProvider] Failed to execute webview command ${command}:`, error)
+			await HostProvider.window.showMessage({
+				type: ShowMessageType.ERROR,
+				message: `Failed to execute command: ${message}`,
+			})
 		}
 	}
 

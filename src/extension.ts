@@ -139,6 +139,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand(commands.AccountButton, () => sendAccountButtonClickedEvent()))
 	context.subscriptions.push(vscode.commands.registerCommand(commands.WorktreesButton, () => sendWorktreesButtonClickedEvent()))
 	context.subscriptions.push(vscode.commands.registerCommand(commands.JoyZoningButton, () => sendJoyZoningButtonClickedEvent()))
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.JoyZoningAudit, async () => {
+			const prompt =
+				"Perform a JoyZoning architectural audit of this workspace. Analyze substrate drift, structural entropy, metabolic pressure, architectural violations, and decomposition opportunities. Summarize risks, prioritize fixes, and recommend concrete next steps without making changes unless I approve them."
+			await webview.controller.createTask(prompt)
+		}),
+	)
 
 	/*
 	We use the text document content provider API to show the left side for diff view by creating a

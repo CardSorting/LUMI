@@ -342,6 +342,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	const accountButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const settingsButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const worktreesButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
+	const joyZoningButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
 	const partialMessageUnsubscribeRef = useRef<(() => void) | null>(null)
 	const mcpMarketplaceUnsubscribeRef = useRef<(() => void) | null>(null)
 	const openRouterModelsUnsubscribeRef = useRef<(() => void) | null>(null)
@@ -517,6 +518,22 @@ export const ExtensionStateContextProvider: React.FC<{
 			},
 		)
 
+		// Set up JoyZoning button clicked subscription
+		joyZoningButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToJoyZoningButtonClicked(
+			EmptyRequest.create({}),
+			{
+				onResponse: () => {
+					navigateToJoyZoning()
+				},
+				onError: (error) => {
+					console.error("Error in JoyZoning button clicked subscription:", error)
+				},
+				onComplete: () => {
+					console.log("JoyZoning button clicked subscription completed")
+				},
+			},
+		)
+
 		// Subscribe to partial message events
 		partialMessageUnsubscribeRef.current = UiServiceClient.subscribeToPartialMessage(EmptyRequest.create({}), {
 			onResponse: (protoMessage) => {
@@ -671,6 +688,10 @@ export const ExtensionStateContextProvider: React.FC<{
 			if (worktreesButtonClickedSubscriptionRef.current) {
 				worktreesButtonClickedSubscriptionRef.current()
 				worktreesButtonClickedSubscriptionRef.current = null
+			}
+			if (joyZoningButtonClickedSubscriptionRef.current) {
+				joyZoningButtonClickedSubscriptionRef.current()
+				joyZoningButtonClickedSubscriptionRef.current = null
 			}
 			if (partialMessageUnsubscribeRef.current) {
 				partialMessageUnsubscribeRef.current()

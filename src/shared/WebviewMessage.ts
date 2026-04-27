@@ -1,7 +1,29 @@
-export interface WebviewMessage {
-	type: "grpc_request" | "grpc_request_cancel"
-	grpc_request?: GrpcRequest
-	grpc_request_cancel?: GrpcCancel
+export const WEBVIEW_EXECUTABLE_COMMANDS = ["dietcode.joyZoningAudit"] as const
+
+export type WebviewExecutableCommand = (typeof WEBVIEW_EXECUTABLE_COMMANDS)[number]
+
+export type WebviewMessage =
+	| {
+			type: "grpc_request"
+			grpc_request: GrpcRequest
+	  }
+	| {
+			type: "grpc_request_cancel"
+			grpc_request_cancel: GrpcCancel
+	  }
+	| {
+			type: "execute_command"
+			execute_command: ExecuteCommandRequest
+	  }
+
+export type ExecuteCommandRequest = {
+	command: WebviewExecutableCommand
+	args?: unknown[]
+	request_id?: string
+}
+
+export function isWebviewExecutableCommand(command: string): command is WebviewExecutableCommand {
+	return WEBVIEW_EXECUTABLE_COMMANDS.includes(command as WebviewExecutableCommand)
 }
 
 export type GrpcRequest = {
