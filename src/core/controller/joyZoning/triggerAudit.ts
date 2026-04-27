@@ -10,7 +10,7 @@ import {
 } from "@shared/proto/dietcode/joyzoning"
 import * as fs from "fs"
 import * as path from "path"
-import { StreamingResponseHandler } from "@/core/controller/grpc-handler"
+import { getRequestRegistry, StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { Logger } from "@/shared/services/Logger"
 
 /**
@@ -22,7 +22,10 @@ export async function triggerAudit(
 	controller: IController,
 	request: JoyZoningAuditRequest,
 	responseStream: StreamingResponseHandler<JoyZoningAuditResponse>,
+	requestId?: string,
 ): Promise<void> {
+	const registry = getRequestRegistry()
+	const isCancelled = () => requestId && !registry.hasRequest(requestId)
 	const spider = controller.getSpiderEngine()
 	const doctor = new SovereignDoctor(spider.cwd)
 	const decomposer = new SovereignDecomposer()
@@ -61,6 +64,7 @@ export async function triggerAudit(
 		)
 
 		// 2. Perform Physical Integrity Verification (Hardening: Detect Drift)
+		if (isCancelled()) return
 		const { synchronized, drift } = await spider.verifySubstrateIntegrity()
 		if (!synchronized) {
 			Logger.warn(`[Audit] Substrate drift detected (${drift} files). Re-indexing required.`)
@@ -69,6 +73,8 @@ export async function triggerAudit(
 		// 3. Rebuild Registry with Streaming Progress
 		let lastSentPercentage = 0
 		await spider.rebuildRegistry(async (processed: number, total: number, currentFile: string) => {
+			if (isCancelled()) return
+
 			const percentage = (processed / total) * 100
 			if (percentage - lastSentPercentage >= 5 || processed === total) {
 				lastSentPercentage = percentage
@@ -81,6 +87,7 @@ export async function triggerAudit(
 		})
 
 		// 4. Generate Doctor Report (Architectural Violations)
+		if (isCancelled()) return
 		const doctorReport = await doctor.diagnose(spider)
 
 		// 5. Generate Decomposition Plan (Optimizations)
@@ -103,6 +110,7 @@ export async function triggerAudit(
 		const hotspots = nodes.filter((n: SpiderNode) => (n.astComplexity || 0) > 1000 || n.afferentCoupling > 10)
 
 		for (const node of hotspots) {
+			if (isCancelled()) return
 			try {
 				const absPath = path.resolve(spider.cwd, node.path)
 				if (fs.existsSync(absPath)) {

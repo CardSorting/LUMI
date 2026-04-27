@@ -115,8 +115,18 @@ async function handleStreamingRequest(
 	postMessageToWebview: PostMessageToWebview,
 	request: GrpcRequest,
 ): Promise<void> {
-	// Create a response stream function
+	let isTerminated = false
+
+	// Create a response stream function with terminal guard
 	const responseStream: StreamingResponseHandler<any> = async (response: any, isLast = false, sequenceNumber?: number) => {
+		if (isTerminated) {
+			return
+		}
+
+		if (isLast) {
+			isTerminated = true
+		}
+
 		await postMessageToWebview({
 			type: "grpc_response",
 			grpc_response: {
@@ -126,18 +136,38 @@ async function handleStreamingRequest(
 				sequence_number: sequenceNumber,
 			},
 		})
+
+		if (isLast) {
+			requestRegistry.cancelRequest(request.request_id)
+		}
 	}
 
 	try {
+		// Register the request for cancellation support
+		requestRegistry.registerRequest(
+			request.request_id,
+			() => {
+				isTerminated = true
+			},
+			{ service: request.service, method: request.method },
+			responseStream,
+		)
+
 		// Get the service handler from the config
 		const handler = getHandler(request.service, request.method)
 
 		// Handle streaming request and pass the requestId to all streaming handlers
 		await handler(controller, request.message, responseStream, request.request_id)
 
-		// Don't send a final message here - the stream should stay open for future updates
-		// The stream will be closed when the client disconnects or when the service explicitly ends it
+		// If the handler completes without calling responseStream with isLast=true,
+		// we should still ensure the request is cleaned up eventually.
+		// However, many streams are persistent (like button subscriptions).
 	} catch (error) {
+		if (isTerminated) {
+			return
+		}
+		isTerminated = true
+
 		// Send error response
 		Logger.log("Protobus error:", error)
 		await postMessageToWebview({
@@ -148,6 +178,8 @@ async function handleStreamingRequest(
 				is_streaming: false,
 			},
 		})
+
+		requestRegistry.cancelRequest(request.request_id)
 	}
 }
 

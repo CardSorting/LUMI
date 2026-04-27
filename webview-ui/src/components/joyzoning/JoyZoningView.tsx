@@ -1,7 +1,6 @@
 import { JoyZoningAuditProgress, JoyZoningAuditResponse } from "@shared/proto/dietcode/joyzoning"
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import styled, { css, keyframes } from "styled-components"
-import { PLATFORM_CONFIG } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { JoyZoningServiceClient } from "@/services/grpc-client"
 import ViewHeader from "../common/ViewHeader"
@@ -13,42 +12,110 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const [progress, setProgress] = useState<JoyZoningAuditProgress | null>(null)
 	const [previewPlan, setPreviewPlan] = useState<string | null>(null)
 
+	const [status, setStatus] = useState<"idle" | "starting" | "streaming" | "completed" | "error" | "cancelled">("idle")
 	const [launchingTaskId, setLaunchingTaskId] = useState<string | null>(null)
 	const [auditLaunchMessage, setAuditLaunchMessage] = useState<string | null>(null)
 	const [auditLaunchError, setAuditLaunchError] = useState<string | null>(null)
 
-	const triggerAudit = useCallback(() => {
-		setLoading(true)
-		setAuditLaunchError(null)
-		setAuditLaunchMessage(null)
+	const cancelRef = useRef<(() => void) | null>(null)
+	const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
-		try {
-			PLATFORM_CONFIG.postMessage({
-				type: "execute_command",
-				execute_command: {
-					command: "dietcode.joyZoningAudit",
-				},
-			})
-			setAuditLaunchMessage("JoyZoning audit launched in chat.")
-		} catch (error) {
-			console.error("Failed to launch JoyZoning audit command:", error)
-			setAuditLaunchError(error instanceof Error ? error.message : "Failed to launch JoyZoning audit.")
-		} finally {
-			setLoading(false)
+	const cleanupTimers = useCallback(() => {
+		for (const timer of timersRef.current) {
+			clearTimeout(timer)
 		}
+		timersRef.current = []
 	}, [])
 
+	useEffect(() => {
+		return () => {
+			if (cancelRef.current) {
+				cancelRef.current()
+			}
+			cleanupTimers()
+		}
+	}, [cleanupTimers])
+
+	const triggerAudit = useCallback(() => {
+		if (status === "starting" || status === "streaming") {
+			return
+		}
+
+		// Cancel any existing stream
+		if (cancelRef.current) {
+			cancelRef.current()
+			cancelRef.current = null
+		}
+
+		setLoading(true)
+		setStatus("starting")
+		setAuditLaunchError(null)
+		setAuditLaunchMessage(null)
+		setReport(null)
+		setProgress(null)
+
+		try {
+			const cancel = JoyZoningServiceClient.triggerAudit(
+				{ path: "", useCache: false },
+				{
+					onResponse: (response) => {
+						setStatus("streaming")
+						if (response.progress) {
+							setProgress(response.progress)
+						}
+						// If response has violations or health info, it's a partial or final report
+						if (
+							(response.violations && response.violations.length > 0) ||
+							(response.optimizations && response.optimizations.length > 0) ||
+							response.integrityScore > 0 ||
+							response.buildHealth > 0
+						) {
+							setReport(response)
+						}
+					},
+					onError: (error) => {
+						setStatus("error")
+						setLoading(false)
+						setAuditLaunchError(error.message)
+						cancelRef.current = null
+					},
+					onComplete: () => {
+						setStatus("completed")
+						setLoading(false)
+						setAuditLaunchMessage("Audit complete.")
+						cancelRef.current = null
+					},
+				},
+			)
+			cancelRef.current = cancel
+		} catch (error) {
+			console.error("Failed to trigger JoyZoning audit:", error)
+			setStatus("error")
+			setLoading(false)
+			setAuditLaunchError(error instanceof Error ? error.message : "Failed to start audit.")
+		}
+	}, [status])
+
 	const executeRefactor = async (action: string, path: string, dryRun = false) => {
+		if (!action || !path) {
+			setAuditLaunchError("Missing action or path for refactor.")
+			return
+		}
+
 		try {
 			const response = await JoyZoningServiceClient.executeRefactor({ action, path, dryRun })
 			if (dryRun) {
 				setPreviewPlan(response.planSummary || "No plan summary available.")
 			} else if (response.success) {
-				setLaunchingTaskId(response.taskId)
-				setTimeout(() => setLaunchingTaskId(null), 5000)
+				setLaunchingTaskId(`${action}:${path}`)
+				const timer = setTimeout(() => setLaunchingTaskId(null), 5000)
+				timersRef.current.push(timer)
+			} else if (response.message) {
+				setAuditLaunchError(`Refactor failed: ${response.message}`)
 			}
 		} catch (error) {
 			console.error("Refactor failed:", error)
+			setAuditLaunchError(error instanceof Error ? error.message : "Refactor execution failed.")
 		}
 	}
 
@@ -129,8 +196,8 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 				<Section>
 					<SectionHeader>
 						<SectionTitle>Optimization Opportunities</SectionTitle>
-						<AuditButton disabled={loading} onClick={triggerAudit}>
-							{loading ? "Launching..." : "Run Audit"}
+						<AuditButton disabled={loading || status === "starting" || status === "streaming"} onClick={triggerAudit}>
+							{loading ? "Scanning..." : "Run Audit"}
 						</AuditButton>
 					</SectionHeader>
 
@@ -154,9 +221,9 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 										Preview
 									</SecondaryButton>
 									<ActionButton
-										disabled={launchingTaskId !== null}
+										disabled={launchingTaskId === `${opt.action}:${opt.path}`}
 										onClick={() => executeRefactor(opt.action, opt.path)}>
-										{launchingTaskId ? "Launching..." : "Execute"}
+										{launchingTaskId === `${opt.action}:${opt.path}` ? "Launching..." : "Execute"}
 									</ActionButton>
 								</ActionGroup>
 							</ListItem>
