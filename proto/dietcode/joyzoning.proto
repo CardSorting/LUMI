@@ -71,6 +71,11 @@ message JoyZoningAuditResponse {
   string quality_gate_status = 19; // PASSED, FAILED
   int32 compliance_score = 20; // 0-100
   string toxic_module = 21; // Directory with most issues
+  map<string, int32> layer_scores = 22; // Health per layer (Domain, Infrastructure, etc.)
+  repeated JoyZoningOptimization top_recommendations = 23; // "Quick Wins"
+  double health_delta = 24; // Change since last scan
+  int32 violation_delta = 25; // Change in violation count
+  map<string, int32> risk_profile = 26; // Count of files by risk level (LOW, MEDIUM, HIGH)
 }
 
 message JoyZoningRefactorRequest {

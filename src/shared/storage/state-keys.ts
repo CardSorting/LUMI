@@ -109,6 +109,8 @@ const GLOBAL_STATE_FIELDS = {
 	lastJoyZoningReport: { default: undefined as any | undefined },
 	// Stores historical scores for trend analysis
 	joyZoningHistory: { default: [] as Array<{ timestamp: string; health: number; stability: number; maintainability: number }> },
+	// Stores the violation count from the last scan for delta analysis
+	lastViolationCount: { default: 0 as number },
 } satisfies FieldDefinitions
 
 // Fields that map directly to ApiHandlerOptions in @shared/api.ts

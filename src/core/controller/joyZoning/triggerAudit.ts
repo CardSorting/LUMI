@@ -260,6 +260,39 @@ export async function triggerAudit(
 		}
 		const toxicModule = Object.entries(dirViolationCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "None detected"
 
+		// V220: Executive Strategy - Layer Scores and Quick Wins
+		const layerHealthMap: Record<string, { total: number; count: number }> = {}
+		for (const node of nodes) {
+			const layer = node.layer || "unassigned"
+			if (!layerHealthMap[layer]) layerHealthMap[layer] = { total: 0, count: 0 }
+			// Heuristic: start with 100 and subtract violations related to this node
+			const nodeViolations = violations.filter((v) => v.path === node.path).length
+			const nodeHealth = Math.max(0, 100 - nodeViolations * 20)
+			layerHealthMap[layer].total += nodeHealth
+			layerHealthMap[layer].count++
+		}
+		const layerScores: Record<string, number> = {}
+		for (const [layer, data] of Object.entries(layerHealthMap)) {
+			layerScores[layer] = Math.round(data.total / (data.count || 1))
+		}
+
+		const topRecommendations = [...optimizations].sort((a, b) => b.projectedHealthGain - a.projectedHealthGain).slice(0, 3)
+
+		// V230: Forensic Evolution - Delta Analysis and Risk Profiling
+		const lastPoint = history[history.length - 1]
+		const healthDelta = lastPoint ? doctorReport.buildHealth - lastPoint.health : 0
+		const lastViolationCount =
+			(controller.stateManager.getGlobalStateKey("lastViolationCount") as number) || violations.length
+		const violationDelta = violations.length - lastViolationCount
+		controller.stateManager.setGlobalState("lastViolationCount", violations.length)
+
+		const riskProfile: Record<string, number> = { LOW: 0, MEDIUM: 0, HIGH: 0 }
+		for (const node of nodes) {
+			if (node.blastRadius > 10) riskProfile.HIGH++
+			else if (node.blastRadius > 5) riskProfile.MEDIUM++
+			else riskProfile.LOW++
+		}
+
 		const finalResponse = JoyZoningAuditResponse.create({
 			buildHealth: doctorReport.buildHealth,
 			totalFiles: nodes.length,
@@ -281,6 +314,11 @@ export async function triggerAudit(
 			qualityGateStatus,
 			complianceScore: Math.round(complianceScore),
 			toxicModule,
+			layerScores,
+			topRecommendations,
+			healthDelta,
+			violationDelta,
+			riskProfile,
 			progress: { processedFiles: nodes.length, totalFiles: nodes.length, currentFile: "Complete", percentage: 100 },
 		})
 

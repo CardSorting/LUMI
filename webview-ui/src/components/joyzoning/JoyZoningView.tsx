@@ -134,7 +134,15 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 					<RadarContainer>
 						<RadarRing $loading={loading} $percentage={progress?.percentage || 0} />
 						<GradeValue $grade={report?.grade || "A"}>{report ? report.grade : loading ? "..." : "--"}</GradeValue>
-						<HealthLabel>{loading ? "Scanning..." : "Build Grade"}</HealthLabel>
+						<HealthLabel>
+							{loading ? "Scanning..." : "Build Grade"}
+							{report && report.healthDelta !== 0 && (
+								<DeltaBadge $positive={report.healthDelta > 0}>
+									{report.healthDelta > 0 ? "+" : ""}
+									{report.healthDelta.toFixed(1)}%
+								</DeltaBadge>
+							)}
+						</HealthLabel>
 					</RadarContainer>
 
 					<HeaderStats>
@@ -150,7 +158,20 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 						Overview
 					</Tab>
 					<Tab $active={activeTab === "fixes"} onClick={() => setActiveTab("fixes")}>
-						Fixes {report?.violations && report.violations.length > 0 ? `(${report.violations.length})` : ""}
+						Fixes{" "}
+						{report?.violations && report.violations.length > 0 ? (
+							<>
+								({report.violations.length})
+								{report.violationDelta !== 0 && (
+									<DeltaInline $positive={report.violationDelta < 0}>
+										{report.violationDelta > 0 ? "+" : ""}
+										{report.violationDelta}
+									</DeltaInline>
+								)}
+							</>
+						) : (
+							""
+						)}
 					</Tab>
 					<Tab $active={activeTab === "improvements"} onClick={() => setActiveTab("improvements")}>
 						Roadmap{" "}
@@ -175,6 +196,66 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 							</GovernanceCard>
 						</GovernanceGrid>
 
+						{report?.riskProfile && (
+							<RiskProfileSection>
+								<SectionHeader>
+									<SectionTitle>Substrate Risk Profile</SectionTitle>
+									<StatLabel>File Distribution</StatLabel>
+								</SectionHeader>
+								<RiskBar>
+									<RiskSegment
+										$total={report.totalFiles}
+										$type="LOW"
+										$width={report.riskProfile.LOW || 0}
+										title="Low Risk"
+									/>
+									<RiskSegment
+										$total={report.totalFiles}
+										$type="MEDIUM"
+										$width={report.riskProfile.MEDIUM || 0}
+										title="Medium Risk"
+									/>
+									<RiskSegment
+										$total={report.totalFiles}
+										$type="HIGH"
+										$width={report.riskProfile.HIGH || 0}
+										title="High Risk"
+									/>
+								</RiskBar>
+								<RiskLegend>
+									<LegendItem>
+										<Dot $type="LOW" /> Low
+									</LegendItem>
+									<LegendItem>
+										<Dot $type="MEDIUM" /> Medium
+									</LegendItem>
+									<LegendItem>
+										<Dot $type="HIGH" /> High Risk
+									</LegendItem>
+								</RiskLegend>
+							</RiskProfileSection>
+						)}
+
+						{report?.topRecommendations && report.topRecommendations.length > 0 && (
+							<QuickWinsSection>
+								<SectionHeader>
+									<SectionTitle>Top Recommendations</SectionTitle>
+									<Badge $type="HIGH">QUICK WINS</Badge>
+								</SectionHeader>
+								<QuickWinsGrid>
+									{report.topRecommendations.map((opt) => (
+										<QuickWinCard key={opt.title} onClick={() => setActiveTab("improvements")}>
+											<QuickWinIcon>⚡</QuickWinIcon>
+											<QuickWinContent>
+												<QuickWinTitle>{opt.title}</QuickWinTitle>
+												<QuickWinGain>+{opt.projectedHealthGain.toFixed(1)}% Health Boost</QuickWinGain>
+											</QuickWinContent>
+										</QuickWinCard>
+									))}
+								</QuickWinsGrid>
+							</QuickWinsSection>
+						)}
+
 						<MissionSection>
 							<SectionHeader>
 								<SectionTitle>Guided Missions</SectionTitle>
@@ -197,6 +278,27 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 							</MissionGrid>
 						</MissionSection>
 
+						{report?.layerScores && Object.keys(report.layerScores).length > 0 && (
+							<ArchitectureHealthSection>
+								<SectionHeader>
+									<SectionTitle>Architecture Health</SectionTitle>
+								</SectionHeader>
+								<LayerList>
+									{Object.entries(report.layerScores).map(([layer, score]) => (
+										<LayerItem key={layer}>
+											<LayerInfo>
+												<LayerName>{layer}</LayerName>
+												<LayerScore>{score}%</LayerScore>
+											</LayerInfo>
+											<LayerProgressBarContainer>
+												<LayerProgressBar $health={score} $width={score} />
+											</LayerProgressBarContainer>
+										</LayerItem>
+									))}
+								</LayerList>
+							</ArchitectureHealthSection>
+						)}
+
 						{!loading && report && (
 							<DashboardGrid>
 								<DashboardCard>
@@ -207,12 +309,12 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 								<DashboardCard>
 									<DashboardIcon>🛡️</DashboardIcon>
 									<DashboardValue>{report.stabilityScore}%</DashboardValue>
-									<DashboardLabel>Stability</DashboardLabel>
+									<DashboardLabel>Stability Index</DashboardLabel>
 								</DashboardCard>
 								<DashboardCard>
 									<DashboardIcon>🏗️</DashboardIcon>
 									<DashboardValue>{report.maintainabilityScore}%</DashboardValue>
-									<DashboardLabel>Health Index</DashboardLabel>
+									<DashboardLabel>Maintainability</DashboardLabel>
 								</DashboardCard>
 							</DashboardGrid>
 						)}
@@ -481,6 +583,115 @@ const MissionSection = styled.div`
   gap: 10px;
 `
 
+const QuickWinsSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const QuickWinsGrid = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const QuickWinCard = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(24, 144, 255, 0.05);
+    border-color: rgba(24, 144, 255, 0.2);
+    transform: translateX(4px);
+  }
+`
+
+const QuickWinIcon = styled.div`
+  font-size: 16px;
+  filter: drop-shadow(0 0 4px rgba(24, 144, 255, 0.5));
+`
+
+const QuickWinContent = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const QuickWinTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.9;
+`
+
+const QuickWinGain = styled.div`
+  font-size: 9px;
+  color: #52c41a;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+`
+
+const ArchitectureHealthSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+`
+
+const LayerList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const LayerItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const LayerInfo = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`
+
+const LayerName = styled.div`
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 800;
+  opacity: 0.5;
+  letter-spacing: 1px;
+`
+
+const LayerScore = styled.div`
+  font-size: 10px;
+  font-weight: 800;
+  opacity: 0.8;
+`
+
+const LayerProgressBarContainer = styled.div`
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+`
+
+const LayerProgressBar = styled.div<{ $width: number; $health: number }>`
+  height: 100%;
+  width: ${(props) => props.$width}%;
+  background: ${(props) => (props.$health > 80 ? "#52c41a" : props.$health > 50 ? "#faad14" : "#ff4d4f")};
+  box-shadow: 0 0 8px ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.3)" : "rgba(255, 77, 79, 0.3)")};
+  transition: width 1s ease-in-out;
+`
+
 const MissionGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -739,6 +950,76 @@ const HealthLabel = styled.div`
   opacity: 0.5;
   font-weight: 700;
   margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`
+
+const DeltaBadge = styled.div<{ $positive: boolean }>`
+  font-size: 8px;
+  background: ${(props) => (props.$positive ? "rgba(82, 196, 26, 0.15)" : "rgba(255, 77, 79, 0.15)")};
+  color: ${(props) => (props.$positive ? "#52c41a" : "#ff4d4f")};
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 800;
+`
+
+const DeltaInline = styled.span<{ $positive: boolean }>`
+  font-size: 9px;
+  margin-left: 4px;
+  color: ${(props) => (props.$positive ? "#52c41a" : "#ff4d4f")};
+  font-weight: 800;
+`
+
+const RiskProfileSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+`
+
+const RiskBar = styled.div`
+  height: 8px;
+  display: flex;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+`
+
+const RiskSegment = styled.div<{ $type: string; $width: number; $total: number }>`
+  height: 100%;
+  width: ${(props) => (props.$width / (props.$total || 1)) * 100}%;
+  background: ${(props) => (props.$type === "HIGH" ? "#ff4d4f" : props.$type === "MEDIUM" ? "#faad14" : "#52c41a")};
+  transition: width 1s ease-in-out;
+  border-right: 1px solid rgba(0, 0, 0, 0.2);
+  
+  &:last-child { border-right: none; }
+`
+
+const RiskLegend = styled.div`
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 4px;
+`
+
+const LegendItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  opacity: 0.6;
+`
+
+const Dot = styled.div<{ $type: string }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${(props) => (props.$type === "HIGH" ? "#ff4d4f" : props.$type === "MEDIUM" ? "#faad14" : "#52c41a")};
 `
 
 const BadgeGroup = styled.div`
