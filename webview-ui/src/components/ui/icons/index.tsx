@@ -33,6 +33,7 @@ export const Icon = React.forwardRef<SVGSVGElement, IconProps>(({ name, classNam
 
 	return (
 		<svg
+			aria-label={title || name}
 			className={cn("shrink-0", className)}
 			fill={isStroke ? "none" : "currentColor"}
 			height={size}
@@ -45,9 +46,9 @@ export const Icon = React.forwardRef<SVGSVGElement, IconProps>(({ name, classNam
 			width={size}
 			xmlns="http://www.w3.org/2000/svg"
 			{...props}>
-			{title && <title>{title}</title>}
+			<title>{title || name}</title>
 			{paths.map((d, i) => (
-				<path clipRule="evenodd" d={d} fillRule="evenodd" key={i} />
+				<path clipRule="evenodd" d={d || ""} fillRule="evenodd" key={`${name}-${i}`} />
 			))}
 		</svg>
 	)

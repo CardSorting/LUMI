@@ -146,7 +146,7 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 					)}
 
 					<List>
-						{report?.optimizations.map((opt, i) => (
+						{report?.optimizations?.map((opt, i) => (
 							<ListItem key={`${opt.path}-${i}`}>
 								<ListItemContent>
 									<ListItemTitle>{opt.title}</ListItemTitle>
@@ -177,7 +177,7 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 						<EmptyState>No architectural violations detected.</EmptyState>
 					)}
 					<List>
-						{report?.violations.map((v, i) => (
+						{report?.violations?.map((v, i) => (
 							<ListItem $type="VIOLATION" key={`${v.path}-${i}`}>
 								<ListItemContent>
 									<ListItemTitle>{v.type}</ListItemTitle>

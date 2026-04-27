@@ -68,11 +68,11 @@ export async function triggerAudit(
 
 		// 3. Rebuild Registry with Streaming Progress
 		let lastSentPercentage = 0
-		await spider.rebuildRegistry((processed: number, total: number, currentFile: string) => {
+		await spider.rebuildRegistry(async (processed: number, total: number, currentFile: string) => {
 			const percentage = (processed / total) * 100
 			if (percentage - lastSentPercentage >= 5 || processed === total) {
 				lastSentPercentage = percentage
-				responseStream(
+				await responseStream(
 					JoyZoningAuditResponse.create({
 						progress: { processedFiles: processed, totalFiles: total, currentFile, percentage },
 					}),
