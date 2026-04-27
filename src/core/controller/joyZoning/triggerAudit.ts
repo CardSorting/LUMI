@@ -1,6 +1,7 @@
 import { IController } from "@core/controller/types"
 import { SovereignDecomposer } from "@core/policy/SovereignDecomposer"
 import { SovereignDoctor } from "@core/policy/SovereignDoctor"
+import { SovereignPolicy } from "@core/policy/SovereignPolicy"
 import { SpiderNode } from "@core/policy/spider/SpiderEngine"
 import {
 	JoyZoningAuditRequest,
@@ -48,6 +49,7 @@ export async function triggerAudit(
 				await responseStream(
 					JoyZoningAuditResponse.create({
 						violations: cached.violations,
+						optimizations: cached.optimizations, // V206: Restore optimizations from cache
 						integrityScore: cached.integrityScore,
 						driftCount: cached.driftCount,
 						metabolicPressure: cached.metabolicPressure,
@@ -110,6 +112,8 @@ export async function triggerAudit(
 				path: v.path,
 				remediation: v.remediation,
 				severity: "ERROR",
+				riskLevel: v.type === "STRUCTURAL" ? "HIGH" : "MEDIUM",
+				impactArea: v.type === "STRUCTURAL" ? "STABILITY" : "MAINTAINABILITY",
 			})
 		}
 
@@ -124,8 +128,35 @@ export async function triggerAudit(
 					path: gravityCenter.path,
 					message: `GRAVITY CENTER DETECTED: This file has the highest blast radius (${gravityCenter.blastRadius.toFixed(1)}). Changes here ripple project-wide.`,
 					remediation: "Consider decoupling or extracting stable interfaces to reduce ripple effects.",
+					riskLevel: "HIGH",
+					impactArea: "STABILITY",
 				})
 			}
+		}
+
+		// V206: Automatic Structural Fixes - Launch task for violations that require substrate alignment
+		const structuralViolations = violations.filter((v) => v.type === "STRUCTURAL")
+		if (structuralViolations.length > 0) {
+			Logger.info(`[JoyZoning] Automatically triggering fixes for ${structuralViolations.length} structural violations.`)
+
+			// Update the messages in the violations list so the user knows they are being auto-fixed
+			for (const v of violations) {
+				if (v.type === "STRUCTURAL") {
+					v.message = `[AUTO-FIX TRIGGERED] ${v.message}`
+				}
+			}
+
+			let fixPrompt = `JOY_ZONING AUTO-FIX: The following structural violations were detected and must be corrected to maintain substrate integrity:\n\n`
+			for (const v of structuralViolations) {
+				fixPrompt += `- [FILE: ${v.path}] ${v.message}\n`
+				fixPrompt += `  REMEDIATION: ${v.remediation}\n\n`
+			}
+			fixPrompt += `Instructions:\n1. Apply all remediations listed above.\n2. Verify structural integrity using SpiderEngine after fixes.\n3. Do not modify business logic unless necessary for the structural fix.`
+
+			// Launch the task. We don't await completion to avoid blocking the audit report return.
+			controller.createTask(fixPrompt).catch((e) => {
+				Logger.error("[JoyZoning] Failed to trigger auto-fix task:", e)
+			})
 		}
 
 		// Map Decomposer Optimizations for Hotspots/God Modules
@@ -148,6 +179,9 @@ export async function triggerAudit(
 								action: step.action,
 								projectedHealthGain: (plan.projectedHealth || 0) - plan.buildHealth,
 								boilerplate: step.boilerplate || "",
+								impact: "", // Enriched below
+								effort: "", // Enriched below
+								category: "", // Enriched below
 							})
 						}
 					}
@@ -160,6 +194,71 @@ export async function triggerAudit(
 		if (nodes.length === 0) {
 			Logger.warn("[JoyZoning] Audit completed with 0 files. Check if CWD/src exists and is not excluded.")
 		}
+
+		// V206: Advanced Forensic Heuristics - Mapping technical signals to approachable industry standards
+		const computeGrade = (health: number) => {
+			if (health >= 90) return "A"
+			if (health >= 80) return "B"
+			if (health >= 70) return "C"
+			if (health >= 60) return "D"
+			return "F"
+		}
+
+		const totalViolations = violations.length
+		const techDebtMinutes = totalViolations * 15 + optimizations.length * 10
+		const techDebtStr =
+			techDebtMinutes > 60 ? `${Math.floor(techDebtMinutes / 60)}h ${techDebtMinutes % 60}m` : `${techDebtMinutes}m`
+
+		const stabilityScore = Math.round(doctorReport.integrityScore * (synchronized ? 1 : 0.8))
+		const maintainabilityScore = Math.round((1 - spider.computeEntropy().score) * 100)
+
+		// Enrich Optimizations with Impact/Effort/Category
+		for (const opt of optimizations) {
+			opt.impact = opt.projectedHealthGain > 10 ? "HIGH" : opt.projectedHealthGain > 5 ? "MEDIUM" : "LOW"
+			const node = spider.nodes.get(spider.normalizePath(opt.path))
+			const complexity = node?.astComplexity || 0
+			opt.effort = complexity > 1000 ? "HIGH" : complexity > 500 ? "MEDIUM" : "LOW"
+
+			if (opt.action === "EXTRACT" || opt.action === "DECOMPOSE") {
+				opt.category = "MAINTAINABILITY"
+			} else if (opt.action === "MOVE" || opt.action === "ALIGN_TAGS") {
+				opt.category = "STABILITY"
+			} else {
+				opt.category = "PERFORMANCE"
+			}
+		}
+
+		// V206: Evolution Tracking - Appending to historical substrate timeline
+		const history = (controller.stateManager.getGlobalStateKey("joyZoningHistory") || []) as Array<{
+			timestamp: string
+			health: number
+			stability: number
+			maintainability: number
+		}>
+
+		const newPoint = {
+			timestamp: new Date().toISOString(),
+			health: doctorReport.buildHealth,
+			stability: stabilityScore,
+			maintainability: maintainabilityScore,
+		}
+
+		const updatedHistory = [...history, newPoint].slice(-20) // Keep last 20 points
+		controller.stateManager.setGlobalState("joyZoningHistory", updatedHistory)
+
+		// V210: Governance Metrics - Quality Gates and Compliance
+		const policyConfig = SovereignPolicy.getInstance(spider.cwd).getGlobalConfig()
+		const qualityGateStatus = doctorReport.buildHealth >= (policyConfig.integrityAlertThreshold || 70) ? "PASSED" : "FAILED"
+		const complianceScore = Math.max(0, 100 - (violations.length / (nodes.length || 1)) * 100)
+
+		// Find Toxic Module
+		const dirViolationCounts: Record<string, number> = {}
+		for (const v of violations) {
+			const parts = v.path.split("/")
+			const module = parts.length > 1 ? parts.slice(0, 2).join("/") : "root"
+			dirViolationCounts[module] = (dirViolationCounts[module] || 0) + 1
+		}
+		const toxicModule = Object.entries(dirViolationCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "None detected"
 
 		const finalResponse = JoyZoningAuditResponse.create({
 			buildHealth: doctorReport.buildHealth,
@@ -174,6 +273,14 @@ export async function triggerAudit(
 			driftCount: drift,
 			metabolicPressure: spider.computeMetabolicPressure(),
 			metabolicSinks: doctorReport.environmentContext.metabolicSinks,
+			grade: computeGrade(doctorReport.buildHealth),
+			totalTechnicalDebt: techDebtStr,
+			stabilityScore,
+			maintainabilityScore,
+			history: updatedHistory, // V206: Return evolution data
+			qualityGateStatus,
+			complianceScore: Math.round(complianceScore),
+			toxicModule,
 			progress: { processedFiles: nodes.length, totalFiles: nodes.length, currentFile: "Complete", percentage: 100 },
 		})
 
@@ -184,6 +291,7 @@ export async function triggerAudit(
 		// V200: Persistence for rapid UI recovery
 		controller.stateManager.setGlobalState("lastJoyZoningReport", {
 			violations: finalResponse.violations,
+			optimizations: finalResponse.optimizations, // V206: Cache optimizations
 			integrityScore: finalResponse.integrityScore,
 			driftCount: drift,
 			metabolicPressure: finalResponse.metabolicPressure,
@@ -191,6 +299,11 @@ export async function triggerAudit(
 			buildHealth: finalResponse.buildHealth,
 			totalFiles: finalResponse.totalFiles,
 			timestamp: finalResponse.timestamp,
+			grade: finalResponse.grade,
+			totalTechnicalDebt: finalResponse.totalTechnicalDebt,
+			stabilityScore: finalResponse.stabilityScore,
+			maintainabilityScore: finalResponse.maintainabilityScore,
+			history: updatedHistory,
 		})
 
 		Logger.info("[JoyZoning] Audit Complete. Report persisted.")

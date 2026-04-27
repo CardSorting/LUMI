@@ -26,6 +26,8 @@ message JoyZoningViolation {
   string path = 3;
   string remediation = 4;
   string severity = 5; // INFO, WARN, ERROR
+  string risk_level = 6; // LOW, MEDIUM, HIGH
+  string impact_area = 7; // SECURITY, PERFORMANCE, STABILITY, MAINTAINABILITY
 }
 
 message JoyZoningOptimization {
@@ -35,6 +37,16 @@ message JoyZoningOptimization {
   string action = 4;
   double projected_health_gain = 5;
   string boilerplate = 6; // Suggested code for extraction
+  string impact = 7; // LOW, MEDIUM, HIGH
+  string effort = 8; // LOW, MEDIUM, HIGH
+  string category = 9; // STABILITY, MAINTAINABILITY, PERFORMANCE
+}
+
+message JoyZoningHistoryPoint {
+  string timestamp = 1;
+  double health = 2;
+  double stability = 3;
+  double maintainability = 4;
 }
 
 message JoyZoningAuditResponse {
@@ -51,6 +63,14 @@ message JoyZoningAuditResponse {
   bool drift_detected = 11;
   int32 drift_count = 12;
   repeated string metabolic_sinks = 13;
+  string grade = 14; // A, B, C, D, F
+  string total_technical_debt = 15; // e.g. "2h 15m"
+  int32 stability_score = 16; // 0-100
+  int32 maintainability_score = 17; // 0-100
+  repeated JoyZoningHistoryPoint history = 18;
+  string quality_gate_status = 19; // PASSED, FAILED
+  int32 compliance_score = 20; // 0-100
+  string toxic_module = 21; // Directory with most issues
 }
 
 message JoyZoningRefactorRequest {
