@@ -109,7 +109,7 @@ export class SovereignDoctor {
 			violations: allViolations,
 			optimizations,
 			agentSuccessRate: 100, // Placeholder
-			integrityScore: Math.round((1 - (Number.isNaN(entropy.score) ? 0 : entropy.score)) * 100),
+			integrityScore: Math.round((1 - (entropy && typeof entropy.score === "number" ? entropy.score : 0)) * 100),
 			resources: {
 				memoryPressure: process.memoryUsage().heapUsed / 1024 / 1024,
 				diskUsage: 0, // V100: Placeholder for stats fix

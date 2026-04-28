@@ -26,6 +26,7 @@ export interface SpiderNode {
 	cognitiveComplexity: number // V200: Logic depth/branching complexity
 	isHotspot: boolean // V200: Flag for High Risk + High Complexity
 	anyDensity: number // V210: Forensic marker for unsafe type usage (as any)
+	reExports: string[] // V215: Resolved Node IDs of wildcard re-exports (export * from ...)
 }
 
 export interface SpiderSnapshot {

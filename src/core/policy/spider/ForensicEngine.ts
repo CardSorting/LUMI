@@ -112,9 +112,22 @@ export class ForensicEngine {
 					const targetNode = targetId ? nodes.get(targetId) : null
 
 					if (targetNode) {
+						// V215: Recursive Export Resolution
+						const resolveSymbol = (target: SpiderNode, sym: string, visited = new Set<string>()): boolean => {
+							if (visited.has(target.id)) return false
+							visited.add(target.id)
+
+							if (target.exports.includes(sym)) return true
+							for (const reExpId of target.reExports || []) {
+								const reExpNode = nodes.get(reExpId)
+								if (reExpNode && resolveSymbol(reExpNode, sym, visited)) return true
+							}
+							return false
+						}
+
 						let foundMissingInExport = false
 						for (const symbol of symbols) {
-							if (symbol === "*" || targetNode.exports.includes(symbol)) continue
+							if (symbol === "*" || resolveSymbol(targetNode, symbol)) continue
 
 							const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
 							allGhosts.add(msg)

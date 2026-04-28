@@ -109,7 +109,8 @@ export class SovereignTelemetrics {
 			)
 		}
 
-		const namingIntegrity = nodes.reduce((acc, n) => acc + (n.namingScore || 1.0), 0) / (nodes.length || 1)
+		const namingIntegrity =
+			nodes.reduce((acc, n) => acc + (n.namingScore !== undefined ? n.namingScore : 1.0), 0) / (nodes.length || 1)
 		const merkleDrift = this.spiderEngine.computeMerkleRoot()
 
 		return {

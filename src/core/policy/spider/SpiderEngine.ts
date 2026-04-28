@@ -236,7 +236,10 @@ export class SpiderEngine {
 		let sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
 		let importData = this.extractDetailedImports(sourceFile)
 		const imports = importData.map((i) => i.specifier)
-		let exports = this.extractExports(sourceFile)
+		let { symbols: exports, reExports: rawReExports } = this.extractExports(sourceFile)
+		const reExports = rawReExports
+			.map((spec) => this.resolver.resolveImportToNodeId(normalizedPath, spec, this.nodes))
+			.filter(Boolean) as string[]
 		let metrics = this.extractMetrics(sourceFile)
 
 		const consumptions: Record<string, string[]> = {}
@@ -274,6 +277,7 @@ export class SpiderEngine {
 			cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
 			isHotspot: oldNode?.isHotspot || false,
 			anyDensity: metrics.anyDensity,
+			reExports,
 		}
 
 		this.nodes.set(normalizedPath, newNode)
@@ -305,8 +309,9 @@ export class SpiderEngine {
 		;(metrics as unknown) = null
 	}
 
-	private extractExports(sourceFile: ts.SourceFile): string[] {
-		const exports: string[] = []
+	private extractExports(sourceFile: ts.SourceFile): { symbols: string[]; reExports: string[] } {
+		const symbols: string[] = []
+		const reExports: string[] = []
 		const visit = (node: ts.Node) => {
 			if (
 				(ts.isClassDeclaration(node) ||
@@ -319,22 +324,28 @@ export class SpiderEngine {
 			) {
 				if (ts.isVariableStatement(node)) {
 					for (const decl of node.declarationList.declarations) {
-						if (ts.isIdentifier(decl.name)) exports.push(decl.name.text)
+						if (ts.isIdentifier(decl.name)) symbols.push(decl.name.text)
 					}
 				} else if (node.name && ts.isIdentifier(node.name)) {
-					exports.push(node.name.text)
+					symbols.push(node.name.text)
 				}
 			} else if (ts.isExportDeclaration(node)) {
 				if (node.exportClause && ts.isNamedExports(node.exportClause)) {
 					for (const element of node.exportClause.elements) {
-						exports.push(element.name.text)
+						symbols.push(element.name.text)
 					}
+				} else if (!node.exportClause && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+					// export * from '...'
+					reExports.push(node.moduleSpecifier.text)
 				}
 			}
 			ts.forEachChild(node, visit)
 		}
 		visit(sourceFile)
-		return Array.from(new Set(exports))
+		return {
+			symbols: Array.from(new Set(symbols)),
+			reExports: Array.from(new Set(reExports)),
+		}
 	}
 
 	/**
@@ -390,13 +401,24 @@ export class SpiderEngine {
 			totalNodes++
 			const kind = node.kind
 
-			// V210: Forensic marker for unsafe type usage
+			// V215: Deep 'any' Sourcing - Recursive type traversal
+			const checkDeepAny = (typeNode: ts.TypeNode | undefined) => {
+				if (!typeNode) return
+				if (typeNode.kind === ts.SyntaxKind.AnyKeyword) {
+					anyCasts++
+					return
+				}
+				ts.forEachChild(typeNode, (child) => {
+					if (ts.isTypeNode(child)) checkDeepAny(child)
+				})
+			}
+
 			if (ts.isAsExpression(node)) {
-				if (node.type.getText(sourceFile) === "any") anyCasts++
+				checkDeepAny(node.type)
 			} else if (ts.isTypeAssertionExpression(node)) {
-				if (node.type.getText(sourceFile) === "any") anyCasts++
+				checkDeepAny(node.type)
 			} else if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)) {
-				if (node.type && node.type.getText(sourceFile) === "any") anyCasts++
+				checkDeepAny(node.type)
 			}
 
 			if (
@@ -567,9 +589,52 @@ export class SpiderEngine {
 		this.pruneDeadNodes()
 		const violations: SpiderViolation[] = []
 
-		// V140: Forensic Realism - 'Ghost' or 'Predictive' violations have been removed.
-		// The substrate now relies 100% on physical build/lint diagnostics to trigger heals.
-		// This prevents agentic spiraling from hypothetical errors.
+		// 1. SPI-201: Circular Dependencies
+		const cycles = this.detectCycles()
+		for (const cycle of cycles) {
+			violations.push({
+				id: "SPI-201",
+				severity: "ERROR",
+				path: cycle[0],
+				message: `CIRCULAR DEPENDENCY: A structural loop detected: ${cycle.join(" -> ")}`,
+				remediation: "Break the cycle by extracting common logic or using interfaces.",
+			})
+		}
+
+		// 2. SPI-202: Systemic Risk (Blast Radius)
+		for (const node of this.nodes.values()) {
+			if ((node.blastRadius || 0) > 0.6) {
+				violations.push({
+					id: "SPI-202",
+					severity: "WARN",
+					path: node.path,
+					message: `SYSTEMIC RISK: This file has a high blast radius (${Math.round(node.blastRadius * 100)}%). A change here may destabilize the substrate.`,
+					remediation: "Decouple this module or extract stable sub-modules.",
+				})
+			}
+
+			// 3. SPI-203: Metabolic Pressure (God Modules)
+			if (node.afferentCoupling > 15 && (node.astComplexity || 0) > 1000) {
+				violations.push({
+					id: "SPI-203",
+					severity: "ERROR",
+					path: node.path,
+					message: `METABOLIC PRESSURE: God Module detected (Coupling: ${node.afferentCoupling}, Complexity: ${node.astComplexity}).`,
+					remediation: "Perform metabolic fission using the SovereignDecomposer.",
+				})
+			}
+
+			// 4. SPI-204: Orphaned Modules
+			if (node.orphaned && node.layer !== "plumbing") {
+				violations.push({
+					id: "SPI-204",
+					severity: "WARN",
+					path: node.path,
+					message: "ORPHANED MODULE: This file is not reachable from the project core or UI entry points.",
+					remediation: "Either integrate this module or prune it if it is legacy wood.",
+				})
+			}
+		}
 
 		return violations.filter((v) => !this.suppressions.has(`${v.id}:${v.path}:${v.message}`))
 	}
@@ -669,7 +734,7 @@ export class SpiderEngine {
 				if (newContent) {
 					const sourceFile = ts.createSourceFile(normPath, newContent, ts.ScriptTarget.Latest, true)
 					const newExports = this.extractExports(sourceFile)
-					const removed = node.exports.filter((e) => !newExports.includes(e))
+					const removed = node.exports.filter((e) => !newExports.symbols.includes(e))
 
 					if (removed.length > 0) {
 						advisories.push({
@@ -850,7 +915,10 @@ export class SpiderEngine {
 						// Manually create nodes for the temp registry
 						const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
 						const importData = this.extractDetailedImports(sourceFile)
-						const exports = this.extractExports(sourceFile)
+						const { symbols: exports, reExports: rawReExports } = this.extractExports(sourceFile)
+						const reExports = rawReExports
+							.map((spec) => this.resolver.resolveImportToNodeId(f, spec, tempRegistry))
+							.filter(Boolean) as string[]
 						const metrics = this.extractMetrics(sourceFile)
 						const namingScore = this.calculateNamingScore(sourceFile)
 
@@ -867,6 +935,7 @@ export class SpiderEngine {
 							hash,
 							isInterface: this.detectInterface(f, sourceFile),
 							exports,
+							reExports,
 							consumptions: {}, // Will be filled in coupling pass
 							mtime: fs.statSync(absolutePath).mtimeMs,
 							namingScore,
