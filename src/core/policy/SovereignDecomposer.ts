@@ -484,7 +484,10 @@ export class SovereignDecomposer {
 			projectedHealth += Math.min(15, steps.length * 2)
 		}
 
-		const projectedIntegrity = Math.max(0, plan.integrityScore + (plan.integrityScore < 100 ? 10 : 0))
+		// V215: Dynamic Integrity Projection
+		// Calculates gain based on the percentage of total issues being resolved.
+		const resolvedRatio = steps.length / Math.max(1, steps.length + 5) // Conservative growth
+		const projectedIntegrity = Math.max(0, plan.integrityScore + Math.round((100 - plan.integrityScore) * resolvedRatio))
 
 		return {
 			projectedHealth: Math.min(100, Math.round(projectedHealth)),

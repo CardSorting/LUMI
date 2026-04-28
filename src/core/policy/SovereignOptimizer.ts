@@ -82,11 +82,14 @@ export class SovereignOptimizer {
 
 		// Forensic Fallback: Complexity Checks
 		const maxComplexity = plumbing?.maxComplexity || 500
-		if (node.astComplexity < maxComplexity && (node.logicDensity || 0) < 0.05 && maxCount < 2) {
+		const isSmall = node.astComplexity < maxComplexity && (node.logicDensity || 0) < 0.05
+		const matchesCurrentLayerPath = node.path.includes(`/${node.layer}/`)
+
+		if (isSmall && maxCount < 2 && !matchesCurrentLayerPath) {
 			return "plumbing"
 		}
 
-		if (maxCount > node.imports.length * 0.6) return bestLayer
+		if (maxCount > node.imports.length * 0.75) return bestLayer // V215: Increased threshold to 75% for gravity moves
 
 		return node.layer || "plumbing"
 	}

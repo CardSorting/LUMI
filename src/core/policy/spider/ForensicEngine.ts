@@ -64,14 +64,28 @@ export class ForensicEngine {
 				content = fs.readFileSync(absPath, "utf-8")
 			}
 
-			const currentHash = crypto.createHash("md5").update(content).digest("hex")
+			// V215: Dependency-Aware Forensic Signature
+			// We include the hashes of all resolved dependencies to ensure the cache is invalidated
+			// if a dependency's exports change, even if this file's content remains identical.
+			const depHashes: string[] = []
+			for (const imp of node.imports) {
+				const targetId = this.resolver.resolveImportToNodeId(node.path, imp, nodes)
+				if (targetId) {
+					const targetNode = nodes.get(targetId)
+					if (targetNode) depHashes.push(targetNode.hash)
+				}
+			}
+			const forensicSignature = crypto
+				.createHash("md5")
+				.update(content + depHashes.join(""))
+				.digest("hex")
 
 			const cached = this.ghostVerificationCache.get(node.path)
-			if (cached && cached.hash === currentHash) {
+			if (cached && cached.hash === forensicSignature) {
 				cached.turn = this.turnCounter // Refresh TTL
-				cached.ghosts.forEach((g) => {
+				for (const g of cached.ghosts) {
 					allGhosts.add(g)
-				})
+				}
 				continue
 			}
 
@@ -128,7 +142,7 @@ export class ForensicEngine {
 					}
 				}
 			}
-			this.ghostVerificationCache.set(node.path, { hash: currentHash, ghosts: nodeGhosts, turn: this.turnCounter })
+			this.ghostVerificationCache.set(node.path, { hash: forensicSignature, ghosts: nodeGhosts, turn: this.turnCounter })
 
 			// V200: Forensic Closure Hygiene
 			;(sourceFile as unknown) = null
