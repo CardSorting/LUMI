@@ -49,7 +49,11 @@ export class PathResolver {
 		}
 	}
 
-	public resolveImportToNodeId(sourcePath: string, specifier: string, nodeIds: Map<string, any> | Set<string>): string | null {
+	public resolveImportToNodeId(
+		sourcePath: string,
+		specifier: string,
+		nodeIds: Map<string, unknown> | Set<string>,
+	): string | null {
 		this.checkCacheSaturation()
 
 		let sourceMap = this.resolutionCache.get(sourcePath)
@@ -189,6 +193,15 @@ export class PathResolver {
 		return s
 	}
 
+	/**
+	 * V215: Incremental Cache Purge.
+	 * Removes all cached resolutions originating from a specific file.
+	 */
+	public clearFileFromCache(filePath: string) {
+		this.resolutionCache.delete(filePath)
+		this.negativeCache.delete(filePath)
+	}
+
 	public clearCaches() {
 		this.resolutionCache.clear()
 		this.negativeCache.clear()
@@ -196,31 +209,16 @@ export class PathResolver {
 		this.stringInterner.clear()
 	}
 
-	public clearFileFromCache(filePath: string) {
-		this.resolutionCache.delete(filePath)
-		this.negativeCache.delete(filePath)
-	}
-
 	/**
 	 * V200: Industrial Hygiene (Disposal).
-	 * Forcefully nullifies all map references to assist V8 in aggressive
-	 * resource reclamation of the structural substrate.
+	 * Forcefully clears all map references to assist V8 in resource reclamation.
 	 */
 	public dispose() {
 		this.resolutionCache.clear()
-		;(this.resolutionCache as any) = null
-
 		this.negativeCache.clear()
-		;(this.negativeCache as any) = null
-
 		this.canonicalCache.clear()
-		;(this.canonicalCache as any) = null
-
 		this.stringInterner.clear()
-		;(this.stringInterner as any) = null
-
 		this.dynamicAliases.clear()
-		;(this.dynamicAliases as any) = null
 	}
 
 	/**

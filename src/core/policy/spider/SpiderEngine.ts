@@ -83,7 +83,10 @@ export class SpiderEngine {
 	 * V200: Structural Resilience.
 	 * Captures a binary snapshot of the current structural truth.
 	 */
-	public createCheckpoint(): void {
+	private createCheckpoint(): void {
+		// V200: Binary Checkpointing (Full Structural Persistence)
+		// We use serialize() to create a deterministic snapshot in a Buffer.
+		// This prevents any shared object references between the active state and the checkpoint.
 		this.substrateCheckpoint = this.persistence.serialize(this.nodes)
 		this.checkpointTimestamp = new Date().toISOString()
 		Logger.info(`[SpiderEngine] Substrate Checkpoint Created: ${this.checkpointTimestamp}`)
@@ -93,7 +96,7 @@ export class SpiderEngine {
 	 * V200: Structural Resilience.
 	 * Reverts the substrate to the last valid checkpoint.
 	 */
-	public async rollbackSubstrate(): Promise<boolean> {
+	public rollbackSubstrate(): boolean {
 		if (!this.substrateCheckpoint) {
 			Logger.error("[SpiderEngine] Rollback failed: No substrate checkpoint found.")
 			return false
@@ -286,15 +289,22 @@ export class SpiderEngine {
 
 		// V215: Incremental Structural Re-calibration
 		// If the node has dependents, a change might shift the project's gravity.
+		// We use a temporary map for calibration to keep the main registry stable during computation.
 		if (newNode.afferentCoupling > 0 || (oldNode && oldNode.afferentCoupling > 0)) {
-			const fragility = this.forensic.computeFragility(this.nodes)
-			for (const [id, stats] of fragility.entries()) {
-				const n = this.nodes.get(id)
-				if (n) {
-					n.blastRadius = stats.blastRadius
-					n.isFragile = stats.isFragile
-					n.isHotspot = n.isFragile && (n.cognitiveComplexity > 0.4 || n.anyDensity > 0.3)
+			try {
+				const fragility = this.forensic.computeFragility(this.nodes)
+				for (const [id, stats] of fragility.entries()) {
+					const n = this.nodes.get(id)
+					if (n) {
+						n.blastRadius = stats.blastRadius
+						n.isFragile = stats.isFragile
+						n.isHotspot = n.isFragile && (n.cognitiveComplexity > 0.4 || n.anyDensity > 0.3)
+					}
 				}
+			} catch (err) {
+				Logger.error(`[SpiderEngine] Incremental recalibration failed: ${err.message}. Rolling back.`)
+				this.rollbackSubstrate()
+				throw err
 			}
 		}
 
@@ -1111,6 +1121,14 @@ export class SpiderEngine {
 	public compareWith(snapshot: SpiderSnapshot): number {
 		const current = this.computeEntropy()
 		return Math.abs(current.score - snapshot.entropyScore)
+	}
+
+	/**
+	 * V215: Incremental Cache Purge.
+	 * Removes all cached resolutions originating from a specific file.
+	 */
+	public clearFileFromCache(filePath: string) {
+		this.resolver.clearFileFromCache(filePath)
 	}
 
 	public resolveImportLayer(sourcePath: string, specifier: string): string | null {
