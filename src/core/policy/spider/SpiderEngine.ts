@@ -1435,6 +1435,10 @@ export class SpiderEngine {
 		return this.resolver.getBestAlias(filePath)
 	}
 
+	public resolveImportToNodeId(sourcePath: string, specifier: string): string | null {
+		return this.resolver.resolveImportToNodeId(sourcePath, specifier, this.nodes)
+	}
+
 	public resolveLayer(pathOrSource: string, specifier?: string): string | null {
 		if (specifier) {
 			const id = this.resolver.resolveImportToNodeId(pathOrSource, specifier, new Set(this.nodes.keys()))
@@ -1475,10 +1479,6 @@ export class SpiderEngine {
 
 	public isNodeLibrary(specifier: string): boolean {
 		return !specifier.startsWith(".") && !specifier.startsWith("@/")
-	}
-
-	public resolveImportToNodeId(sourceId: string, specifier: string): string | null {
-		return this.resolver.resolveImportToNodeId(sourceId, specifier, new Set(this.nodes.keys()))
 	}
 
 	/**

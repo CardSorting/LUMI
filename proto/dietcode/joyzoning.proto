@@ -84,15 +84,21 @@ message JoyZoningRefactorRequest {
   bool dry_run = 3;
 }
 
-message JoyZoningRefactorResponse {
+message JoyZoningBatchRefactorRequest {
+  repeated JoyZoningRefactorRequest requests = 1;
+  bool dry_run = 2;
+}
+
+message JoyZoningBatchRefactorResponse {
   bool success = 1;
   string message = 2;
   string task_id = 3;
-  string plan_summary = 4; // Summary of what would be changed
+  string plan_summary = 4;
 }
 
 service JoyZoningService {
   // Streams progress updates during the audit, finishing with the full report
   rpc triggerAudit(JoyZoningAuditRequest) returns (stream JoyZoningAuditResponse);
   rpc executeRefactor(JoyZoningRefactorRequest) returns (JoyZoningRefactorResponse);
+  rpc executeBatchRefactor(JoyZoningBatchRefactorRequest) returns (JoyZoningBatchRefactorResponse);
 }
