@@ -6,11 +6,12 @@ JoyZoning 3.0 represents a pivot from passive architectural enforcement to an **
 
 The core diagnostic layer now uses **Archetypal Fingerprinting** to detect structural misfits. Every module in the `src` directory is profiled across three key dimensions:
 
-| Metric | Definition | Industrial Threshold (V210) |
+| Metric | Definition | Industrial Threshold (V215) |
 | :--- | :--- | :--- |
 | **Logic Density** | AST nodes (If/For/Switch/While) per total nodes. | > 15% (Infrastructure) |
 | **I/O Entropy** | Percentage of platform/node imports vs pure imports. | > 20% (Domain/Core) |
 | **AST Complexity** | Total count of unique AST nodes in the file. | > 1500 (Industrial Limit) |
+| **Any Density** | Percentage of unsafe `any` types in the AST. | > 10% (Critical Drift) |
 
 ### Metabolic Sovereign Suite (V210)
 
@@ -100,14 +101,46 @@ The V204 pass introduces the **Integrity Advisory Protocol (TIA)**, a non-blocki
 
 ---
 
+## 🩸 Auditing Logic 3.1: Forensic Grounding (V215)
+
+The V215 hardening pass establishes **Forensic Grounding**, moving from heuristic approximations to deterministic structural truth. The system now aggressively eliminates "Blind Spots" and "Ghost Ratings" through a 1:1 technical parity with the physical substrate:
+
+### 1. Structural Violation Suite (Deterministic SPI)
+Every audit turn evaluates the substrate against four mandatory structural markers:
+- **SPI-201 (Circular Dependencies)**: Detects physical import cycles across the graph using $O(V+E)$ Tarjan-based sensing.
+- **SPI-202 (Systemic Risk)**: Identifies "God Modules" with a **Blast Radius > 60%** (Percentage of project-wide dependencies impacted by a single node failure).
+- **SPI-203 (Metabolic Pressure)**: Monitors real-time V8 heap saturation. Critical alarms trigger at **> 90% pressure** to prevent agentic OOM events.
+- **SPI-204 (Orphan Modules)**: Detects unreachable dead code in the substrate (Afferent Coupling = 0) that is not an explicitly defined entry point.
+
+### 2. Saturated Dependency Sensing
+- **Dynamic Link Resolution**: Implements recursive AST visitors to capture `import()` and `require()` calls, ensuring "Shadow Coupling" is reflected in health scores.
+- **Order-Independent Re-exports**: Uses a post-indexing pass to resolve Barrel files (`index.ts`), ensuring symbol resolution is complete regardless of indexing order.
+
+### 3. High-Fidelity Metrics (V215 Alignment)
+| Metric | Definition | Implementation Detail |
+| :--- | :--- | :--- |
+| **Logic Density** | AST Node Ratio | Counts conditional/loop nodes vs total AST mass. |
+| **I/O Entropy** | Platform Import Ratio | Detects Node.js/Browser globals in Core/Domain layers. |
+| **Cognitive Complexity** | Branching Entropy | Measures logical nesting and control flow weight. |
+| **Any Density** | Unsafe Type Tracking | **Recursive Sensing** of `any` keywords in nested casts. |
+| **Naming Integrity** | Casing Consistency | Enforces PascalCase (Classes) and camelCase (Methods). |
+
+### 4. Forensic Immutability (Transactional Stability)
+- **Binary Snapshots**: Uses V8 binary serialization to take a deterministic "Registry Heartbeat" before every modification.
+- **Atomic Swap-on-Success**: Registry updates either succeed fully (including re-calibration of fragility metrics) or rollback to the previous binary state.
+
+---
+
 ## 🔍 Auditing Logic 3.1: Industrial Realism
 
 When performing an architectural audit, the system produces a **Sovereign Vitality Report**:
-1. **Fever Map**: Hotspot detection via CCI and Churn.
+1. **Fever Map**: Hotspot detection via CCI (Change Complexity Index) and Churn.
 2. **Substrate Heat**: Real-time metabolic pressure and heap stats.
-3. **Axiomatic Purity**: Verifiable adherence to the four core axioms.
-4. **Member Mapping Success**: Forensic fidelity of synthesized symbols.
+3. **Axiomatic Purity**: Verifiable adherence to the four core axioms (Statelessness, DI, ISP, PGA).
+4. **Member Mapping Success**: Forensic fidelity of synthesized symbols during healing sweeps.
 5. **Integrity Drift (TIA)**: Quantitative audit of ghost symbols, brittle paths, and vibrations.
+6. **Forensic Saturation**: 100% verification of saturated dependency and re-export resolution.
 
 > [!IMPORTANT]
-> **V210 Industrial Sovereignty Active**: The DietCode substrate is now a self-hardening, resource-neutral entity capable of autonomous forensic repair and cognitive grounding.
+> **V215 Industrial Sovereignty Active**: The DietCode substrate is now a self-hardening, resource-neutral entity. Forensic grounding ensures that every architectural rating is derived from a deterministic, saturated, and immutable structural truth.
+

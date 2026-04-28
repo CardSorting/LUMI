@@ -39,8 +39,9 @@ npx ts-node src/scripts/align-sovereignty.ts
 
 ## 🛰️ Agent Intelligence Features
 
-### 1. Active Surveillance & TIA (Spider Engine V204+)
+### 1. Active Surveillance & TIA (Spider Engine V215+)
 Every `read_file` turn is now augmented with a `[SOVEREIGN_CONTEXT]` block, powered by the **Integrity Advisory Protocol (TIA)**:
+- **Forensic Grounding (V215)**: Surfaces deterministic structural truth. The substrate implements **Dynamic Dependency Sensing** and **Recursive Re-export Resolution**, ensuring a 100% saturated dependency graph with zero blind spots.
 - **Non-Blocking Forensics**: Surfaces structural "smells" (ghost symbols, brittle paths, circularity) as passive `💡 [ADVISORY]` hints. This ensures peak metabolic velocity by providing guidance without tool rejections.
 - **Global Provider Mapping**: Deterministically identifies the canonical location of missing symbols across the entire substrate and provides ready-to-use alias-based import suggestions.
 - **Fuzzy Forensic Sensing**: Identifies lexicographical similarity to correct typos (e.g., "Did you mean: `MyService`?") project-wide.
@@ -61,10 +62,10 @@ When performing a mission-critical refactor (e.g., `decompose_sovereign_module`)
 
 ---
 
-## 🔋 Metabolic Sovereignty & Immortality (V210)
+## 🔋 Metabolic Sovereignty & Immortality (V215)
 The substrate has achieved absolute metabolic sovereignty through zero-inflation performance and clinical residual purging.
 - **Stability Lock 2.0**: Transaction concurrency is managed via session-authenticated IDs, preventing "Late Return" race conditions and structural corruption.
-- **Substrate Checkpoints**: Binary serialization of the node graph (Merkle-mapped) enables instant **Structural Rollback** if an edit compromises substrate integrity.
+- **Forensic Immutability (V215)**: Binary serialization of the node graph (Merkle-mapped) enables instant **Structural Rollback** if an edit compromises substrate integrity. Every incremental update is **Atomic**; failure during re-calibration triggers an automatic revert to the last stable binary snapshot.
 - **Metabolic Pressure Sensing**: The substrate monitors V8 heap statistics. At **> 80% pressure**, it triggers a **Substrate Sweep**; at **> 90%**, it enforces an **Absolute Sweep** (Forceful purification).
 - **Zero-Inflation Identification**: Eliminates redundant Set/Map allocations in high-velocity structural loops using nested map caching.
 - **Clinical Session Purge**: Forceful nullification of `sessionBuffer` residuals immediately after turn completion.
