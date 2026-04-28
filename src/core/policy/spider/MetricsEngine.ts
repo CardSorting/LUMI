@@ -16,13 +16,23 @@ export class MetricsEngine {
 
 		for (const node of nodes.values()) {
 			node.dependents = []
-			for (const imp of node.imports || []) {
-				const resolved = this.resolver.resolveImportToNodeId(node.path, imp, nodes)
+			// V215: Comprehensive Coupling (Imports + Resolved Re-exports)
+			const imports = node.imports || []
+			const reExports = node.reExports || []
+			const connections = new Set([...imports, ...reExports])
+
+			for (const imp of connections) {
+				// V215: Fast-path for already resolved re-exports (which are IDs)
+				const resolved: string | null = nodes.has(imp) ? imp : this.resolver.resolveImportToNodeId(node.path, imp, nodes)
+
 				if (resolved && couplingMap.has(resolved)) {
 					couplingMap.set(resolved, (couplingMap.get(resolved) || 0) + 1)
 					const targetNode = nodes.get(resolved)
-					if (targetNode?.dependents && !targetNode.dependents.includes(node.id)) {
-						targetNode.dependents.push(node.id)
+					if (targetNode) {
+						if (!targetNode.dependents) targetNode.dependents = []
+						if (!targetNode.dependents.includes(node.id)) {
+							targetNode.dependents.push(node.id)
+						}
 					}
 				}
 			}
@@ -32,7 +42,7 @@ export class MetricsEngine {
 			const node = nodes.get(id)
 			if (node) {
 				node.afferentCoupling = count
-				if (count > 5 && node.imports.length > 5) {
+				if (count > 5 && (node.imports || []).length > 5) {
 					Logger.info(`[MetricsEngine] Efferent Cluster detected in legacy module: ${path.basename(id)}`)
 				}
 			}
@@ -79,7 +89,11 @@ export class MetricsEngine {
 				// Ensures modules connected via wildcard re-exports (export * from '...') are recognized as reachable.
 				const connections = [...(node.imports || []), ...(node.reExports || [])]
 				for (const imp of connections) {
-					const resolved = this.resolver.resolveImportToNodeId(node.path, imp, nodes)
+					// V215: If 'imp' is already a node ID (common for reExports after rebuild), skip resolution.
+					const resolved: string | null = nodes.has(imp)
+						? imp
+						: this.resolver.resolveImportToNodeId(node.path, imp, nodes)
+
 					if (resolved && nodes.has(resolved) && !reachable.has(resolved)) {
 						reachable.add(resolved)
 						queue.push(resolved)
@@ -114,7 +128,8 @@ export class MetricsEngine {
 
 			const node = nodes.get(nodeId)
 			if (node) {
-				for (const imp of node.imports) {
+				const imports = node.imports || []
+				for (const imp of imports) {
 					const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds)
 					if (!targetId || !nodes.has(targetId)) continue
 
@@ -162,7 +177,8 @@ export class MetricsEngine {
 		let crossLayerEdges = 0
 		let totalEdges = 0
 		for (const node of nodesArray) {
-			for (const imp of node.imports) {
+			const imports = node.imports || []
+			for (const imp of imports) {
 				totalEdges++
 				const targetId = this.resolver.resolveImportToNodeId(node.id, imp, new Set(nodes.keys()))
 				const targetLayer = targetId ? this.resolver.resolveLayer(targetId) : null

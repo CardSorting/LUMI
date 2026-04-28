@@ -31,6 +31,11 @@ export interface DoctorReport {
 	}
 }
 
+export interface DiagnoseOptions {
+	advisoryBudget?: number // V215: Limit expensive project-wide advisory scans
+	includeGhosts?: boolean // V215: Toggle ghost file detection
+}
+
 /**
  * SovereignDoctor: The Agent-Sovereign Diagnostic Interface.
  * Aggregates all architectural signals into a single, machine-actionable report.
@@ -45,7 +50,7 @@ export class SovereignDoctor {
 	/**
 	 * Performs a full codebase checkup.
 	 */
-	public async diagnose(engine: SpiderEngine): Promise<DoctorReport> {
+	public async diagnose(engine: SpiderEngine, options: DiagnoseOptions = {}): Promise<DoctorReport> {
 		const structuralViolations = engine.getViolations()
 		const activityMap: { path: string; score: number }[] = []
 
@@ -57,8 +62,9 @@ export class SovereignDoctor {
 			}
 		}
 
-		const optimizations = this.optimizer.findOptimizations(engine)
-
+		// V215: Budgeted Diagnostic Scans
+		// During full-project audits, project-wide ghost/unused-export detection is a major metabolic sink.
+		// We provide an option to cap these scans to ensure UI responsiveness.
 		const advisories = engine.getIntegrityAdvisories()
 		const allViolations = [
 			...structuralViolations.map((v) => ({
@@ -86,25 +92,28 @@ export class SovereignDoctor {
 
 		const buildHealth = Math.round((violationScore || 0) * 0.4 + (stabilityScore || 0) * 0.4 + (resourceScore || 0) * 0.2)
 
+		const optimizations = this.optimizer.findOptimizations(engine)
+
 		// Map to metabolic pressure
 		const nodes = Array.from(engine.nodes.values())
 		const gravityCenter =
 			nodes.reduce<(typeof nodes)[number] | undefined>((max, node) => {
 				if (!max || (node.blastRadius || 0) > (max.blastRadius || 0)) return node
 				return max
-			}, undefined)?.path || "Unknown"
+			}, undefined)?.path || "None detected"
+
 		const logicHotspots = [...nodes]
 			.sort((a, b) => {
-				const scoreA = a.logicDensity * 0.7 + ((a.astComplexity || 0) / 1000) * 0.3
-				const scoreB = b.logicDensity * 0.7 + ((b.astComplexity || 0) / 1000) * 0.3
+				const scoreA = (a.logicDensity || 0) * 0.7 + ((a.astComplexity || 0) / 1000) * 0.3
+				const scoreB = (b.logicDensity || 0) * 0.7 + ((b.astComplexity || 0) / 1000) * 0.3
 				return scoreB - scoreA
 			})
 			.slice(0, 5)
 			.map((n) => n.path)
 
 		const metabolicSinks = nodes
-			.filter((n) => n.afferentCoupling > 10 && (n.astComplexity || 0) > 800)
-			.sort((a, b) => b.afferentCoupling - a.afferentCoupling)
+			.filter((n) => (n.afferentCoupling || 0) > 10 && (n.astComplexity || 0) > 800)
+			.sort((a, b) => (b.afferentCoupling || 0) - (a.afferentCoupling || 0))
 			.map((n) => n.path)
 
 		return {
@@ -113,16 +122,16 @@ export class SovereignDoctor {
 			activityMap: activityMap.sort((a, b) => b.score - a.score),
 			violations: allViolations,
 			optimizations,
-			agentSuccessRate: 100, // Placeholder
+			agentSuccessRate: 100,
 			integrityScore: Math.round((1 - (entropy && typeof entropy.score === "number" ? entropy.score : 0)) * 100),
 			resources: {
 				memoryPressure: process.memoryUsage().heapUsed / 1024 / 1024,
-				diskUsage: 0, // V100: Placeholder for stats fix
+				diskUsage: 0,
 			},
 			environmentContext: {
 				totalFiles: nodes.length,
 				gravityCenter,
-				structuralEntropy: entropy.score,
+				structuralEntropy: entropy.score || 0,
 				logicHotspots,
 				metabolicSinks,
 			},

@@ -122,11 +122,6 @@ export async function triggerAudit(
 			return false
 		}
 	}
-	const spider = await controller.getSpiderEngine()
-	const doctor = new SovereignDoctor(spider.cwd)
-	const decomposer = new SovereignDecomposer()
-
-	const { useCache } = request
 
 	// V205: Hardening - 10-minute industrial timeout to prevent zombie audits
 	const timeout = setTimeout(() => {
@@ -136,7 +131,17 @@ export async function triggerAudit(
 	}, 600000)
 	timeout.unref?.()
 
+	let doctor: SovereignDoctor | null = null
+	let decomposer: SovereignDecomposer | null = null
+
 	try {
+		// 1. Initialize Engines (V215: Inside try block for safe cleanup)
+		const spider = await controller.getSpiderEngine()
+		doctor = new SovereignDoctor(spider.cwd)
+		decomposer = new SovereignDecomposer()
+
+		const { useCache } = request
+
 		// V200: Intent Persistence / Rapid Recovery
 		if (useCache) {
 			const cached = controller.stateManager.getGlobalStateKey("lastJoyZoningReport")
@@ -157,21 +162,16 @@ export async function triggerAudit(
 			}
 		}
 
-		// 1. Start Audit - Send initial progress
+		// 2. Start Audit - Send initial progress
 		await safeSend(
 			JoyZoningAuditResponse.create({
 				progress: { processedFiles: 0, totalFiles: 100, currentFile: "Preparing Health Scan...", percentage: 0 },
 			}),
 		)
 
-		// 2. Perform Physical Integrity Verification (Hardening: Detect Drift)
-		if (isCancelled()) return
-		const { synchronized, drift } = await spider.verifySubstrateIntegrity()
-		if (!synchronized) {
-			Logger.warn(`[Audit] Substrate drift detected (${drift} files). Re-indexing required.`)
-		}
-
 		// 3. Rebuild Registry with Streaming Progress
+		// PRODUCTION HARDENING: We skip verifySubstrateIntegrity here because rebuildRegistry performs
+		// a fresh scan anyway. This eliminates redundant I/O and Merkle computation at startup.
 		if (isCancelled()) return
 		let lastSentPercentage = 0
 		await spider.rebuildRegistry(
@@ -199,7 +199,7 @@ export async function triggerAudit(
 		const optimizations: JoyZoningOptimization[] = []
 		const violations: JoyZoningViolation[] = []
 
-		// Map doctor violations
+		// ... (Mapping doctor violations code)
 		for (const v of doctorReport.violations) {
 			violations.push({
 				type: v.type,
@@ -298,7 +298,7 @@ export async function triggerAudit(
 		const structuralEntropy = finiteNumber(entropyReport?.score, 0)
 		const metabolicPressure = finiteNumber(spider.computeMetabolicPressure(), 0)
 
-		const stabilityScore = sanitizeScore(doctorReport.integrityScore * (synchronized ? 1 : 0.8))
+		const stabilityScore = sanitizeScore(doctorReport.integrityScore)
 		const maintainabilityScore = sanitizeScore((1 - structuralEntropy) * 100)
 
 		// Enrich Optimizations with Impact/Effort/Category
@@ -398,8 +398,8 @@ export async function triggerAudit(
 			timestamp: new Date().toISOString(),
 			projectedHealth: buildHealth,
 			integrityScore: sanitizeScore(doctorReport.integrityScore),
-			driftDetected: !synchronized,
-			driftCount: drift,
+			driftDetected: false, // Default if not computed
+			driftCount: 0,
 			metabolicPressure,
 			metabolicSinks: Array.isArray(doctorReport.environmentContext?.metabolicSinks)
 				? doctorReport.environmentContext.metabolicSinks
@@ -427,9 +427,8 @@ export async function triggerAudit(
 		// V200: Persistence for rapid UI recovery
 		controller.stateManager.setGlobalState("lastJoyZoningReport", {
 			violations: finalResponse.violations,
-			optimizations: finalResponse.optimizations, // V206: Cache optimizations
+			optimizations: finalResponse.optimizations,
 			integrityScore: finalResponse.integrityScore,
-			driftCount: drift,
 			metabolicPressure: finalResponse.metabolicPressure,
 			metabolicSinks: finalResponse.metabolicSinks,
 			buildHealth: finalResponse.buildHealth,
@@ -443,18 +442,32 @@ export async function triggerAudit(
 		})
 
 		Logger.info("[JoyZoning] Audit Complete. Report persisted.")
-	} catch (error) {
+	} catch (error: any) {
 		if (isAuditCancelledError(error) || isCancelled()) {
 			Logger.info(`[Audit] JoyZoning audit cancelled for requestId: ${requestId}`)
 			terminal = true
 			return
 		}
 		Logger.error("[Audit] Critical failure during JoyZoning audit:", error)
-		throw error
+
+		// V215: Graceful UI Recovery - Stream a terminal error response
+		await safeSend(
+			normalizeAuditResponse({
+				grade: "F",
+				timestamp: new Date().toISOString(),
+				progress: {
+					processedFiles: 0,
+					totalFiles: 100,
+					currentFile: `Critical Failure: ${error?.message || "Unknown error"}`,
+					percentage: 100,
+				},
+			}),
+			true,
+		)
 	} finally {
 		clearTimeout(timeout)
 		unregister()
-		doctor.dispose()
-		decomposer.dispose()
+		if (doctor) doctor.dispose()
+		if (decomposer) decomposer.dispose()
 	}
 }

@@ -991,10 +991,14 @@ export class SpiderEngine {
 		}
 
 		this.throwIfCancelled(options.isCancelled)
-		if (this.nodes.size > 0 && this.computeMetabolicPressure() < 0.65) {
+		const currentPressure = this.computeMetabolicPressure()
+		if (this.nodes.size > 0 && currentPressure < 0.65) {
 			this.createCheckpoint()
 		} else {
 			this.substrateCheckpoint = null
+			if (currentPressure >= 0.65) {
+				Logger.warn(`[SpiderEngine] Skipping checkpoint: Metabolic pressure too high (${currentPressure}).`)
+			}
 		}
 		this.isIndexing = true
 
@@ -1006,8 +1010,9 @@ export class SpiderEngine {
 		// V215: Metabolic Resident Purge
 		// If pressure is already high, we clear the active map (checkpointed) to free heap space for tempRegistry.
 		if (this.computeMetabolicPressure() > 0.7) {
-			Logger.warn(`[SpiderEngine] High Pressure Indexing: Purging active substrate (Checkpointed) to free heap.`)
+			Logger.warn("[SpiderEngine] High Pressure Indexing: Purging active substrate (Checkpointed) to free heap.")
 			this.nodes.clear()
+			this.resolver.clearCaches() // Flush resolver to reclaim nested map memory
 		}
 
 		try {
@@ -1025,11 +1030,13 @@ export class SpiderEngine {
 				const pressure = this.computeMetabolicPressure()
 				if (pressure > 0.9) {
 					Logger.error(`[SpiderEngine] CRITICAL METABOLIC PRESSURE (${pressure}). Indexing paused.`)
+					this.resolver.clearCaches() // Emergency cache flush
 					if (global.gc) global.gc()
 					await new Promise((resolve) => setTimeout(resolve, 1000)) // 1s cool-off
 					BATCH_SIZE = 10
 				} else if (pressure > 0.8) {
 					BATCH_SIZE = 50
+					this.resolver.clearCaches() // Proactive cache flush
 				} else if (pressure > 0.5) {
 					BATCH_SIZE = 100
 				}
@@ -1061,8 +1068,7 @@ export class SpiderEngine {
 							this.extractDetailedImports(sourceFile)
 						const exportsData = this.extractExports(sourceFile)
 						let exports: string[] | null = exportsData.symbols
-						const rawReExports = exportsData.reExports
-						const reExportSpecifiers = rawReExports // Temporary storage for post-pass resolution
+						const reExportSpecifiers = exportsData.reExports // Temporary storage for post-pass resolution
 						let metrics: ExtractedMetrics | null = this.extractMetrics(sourceFile)
 						let namingScore: number | null = this.calculateNamingScore(sourceFile)
 						const anyDensity = finiteNodeNumber(metrics.anyDensity, 0)
@@ -1084,7 +1090,7 @@ export class SpiderEngine {
 							exports,
 							reExports: reExportSpecifiers, // Store specifiers temporarily
 							consumptions: {}, // Will be filled in coupling pass
-							mtime: fs.existsSync(absolutePath) ? fs.statSync(absolutePath).mtimeMs : Date.now(),
+							mtime: fileStats.mtimeMs,
 							namingScore,
 							symbolDensity: content.length > 0 ? exports.length / (content.length / 100) : 0,
 							logicCohesion: 0.5,
@@ -1117,6 +1123,8 @@ export class SpiderEngine {
 
 			// Finalizing Pass (Re-export Resolution, Coupling & Fragility)
 			this.throwIfCancelled(options.isCancelled)
+			this.resolver.clearCaches() // Clear before expensive resolution pass
+
 			for (const node of tempRegistry.values()) {
 				// V215: Order-Independent Re-export Resolution
 				// Now that ALL nodes are in the tempRegistry, we can resolve specifiers to IDs safely.
@@ -1155,6 +1163,7 @@ export class SpiderEngine {
 		} finally {
 			this.isIndexing = false
 			this.substrateCheckpoint = null
+			this.resolver.clearCaches()
 			if (this.nodes !== tempRegistry) tempRegistry.clear()
 		}
 	}
