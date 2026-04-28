@@ -90,76 +90,90 @@ export class ForensicEngine {
 			}
 
 			const nodeGhosts: string[] = []
-			let sourceFile = ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true)
-			let imports = this.getImportedSymbols(sourceFile)
-			const hasGhostException = content.includes("[SOVEREIGN_EXCEPTION: Ghost Symbols]")
+			let sourceFile: ts.SourceFile | null = null
+			let imports: { specifier: string; symbols: string[] }[] | null = null
+			try {
+				sourceFile = ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true)
+				imports = this.getImportedSymbols(sourceFile)
+				const hasGhostException = content.includes("[SOVEREIGN_EXCEPTION: Ghost Symbols]")
 
-			for (const { specifier, symbols } of imports) {
-				const diskPath = this.resolver.getDiskPath(node.path, specifier)
-				const targetId = this.resolver.resolveImportToNodeId(node.path, specifier, nodes)
+				for (const { specifier, symbols } of imports) {
+					const diskPath = this.resolver.getDiskPath(node.path, specifier)
+					const targetId = this.resolver.resolveImportToNodeId(node.path, specifier, nodes)
 
-				if (!diskPath) {
-					// PRODUCTION HARDENING: Ignore ghost files for common build/config files, Node builtins, or external packages
-					if (!specifier.startsWith(".") && !this.resolver.isProjectAlias(specifier)) continue
-					if (specifier.endsWith(".config.js") || specifier.endsWith(".config.ts") || specifier.endsWith(".json"))
-						continue
+					if (!diskPath) {
+						// PRODUCTION HARDENING: Ignore ghost files for common build/config files, Node builtins, or external packages
+						if (!specifier.startsWith(".") && !this.resolver.isProjectAlias(specifier)) continue
+						if (specifier.endsWith(".config.js") || specifier.endsWith(".config.ts") || specifier.endsWith(".json"))
+							continue
 
-					const msg = `[SPI-101] GHOST FILE: ${node.path} -> ${specifier}`
-					allGhosts.add(msg)
-					nodeGhosts.push(msg)
-				} else if (symbols.length > 0 && !hasGhostException) {
-					// V16: Use Node exports for high-precision verification
-					const targetNode = targetId ? nodes.get(targetId) : null
+						const msg = `[SPI-101] GHOST FILE: ${node.path} -> ${specifier}`
+						allGhosts.add(msg)
+						nodeGhosts.push(msg)
+					} else if (symbols.length > 0 && !hasGhostException) {
+						// V16: Use Node exports for high-precision verification
+						const targetNode = targetId ? nodes.get(targetId) : null
 
-					if (targetNode) {
-						// V215: Recursive Export Resolution
-						const resolveSymbol = (target: SpiderNode, sym: string, visited = new Set<string>()): boolean => {
-							if (visited.has(target.id)) return false
-							visited.add(target.id)
+						if (targetNode) {
+							// V215: Recursive Export Resolution
+							const resolveSymbol = (target: SpiderNode, sym: string, visited = new Set<string>()): boolean => {
+								if (visited.has(target.id)) return false
+								visited.add(target.id)
 
-							if (target.exports.includes(sym)) return true
-							for (const reExpId of target.reExports || []) {
-								const reExpNode = nodes.get(reExpId)
-								if (reExpNode && resolveSymbol(reExpNode, sym, visited)) return true
+								if (target.exports.includes(sym)) return true
+								for (const reExpId of target.reExports || []) {
+									const reExpNode = nodes.get(reExpId)
+									if (reExpNode && resolveSymbol(reExpNode, sym, visited)) return true
+								}
+								return false
 							}
-							return false
-						}
 
-						let foundMissingInExport = false
-						for (const symbol of symbols) {
-							if (symbol === "*" || resolveSymbol(targetNode, symbol)) continue
-
-							const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
-							allGhosts.add(msg)
-							nodeGhosts.push(msg)
-							foundMissingInExport = true
-						}
-
-						// V150 High-Velocity Calibration: If exports match, don't hit the disk for symbol verification
-						if (foundMissingInExport) continue
-
-						// Fallback to detailed AST check if target is in session but exports are stale
-						const targetSessionId = this.resolver.normalizePath(diskPath)
-						const targetSessionContent = sessionBuffer ? sessionBuffer.get(targetSessionId) : null
-						if (targetSessionContent) {
-							const targetAst = ts.createSourceFile(diskPath, targetSessionContent, ts.ScriptTarget.Latest, true)
-							const exportedSymbols = this.getExportedSymbolsFull(targetAst)
-
+							let foundMissingInExport = false
 							for (const symbol of symbols) {
-								if (symbol === "*" || exportedSymbols.has(symbol)) continue
+								if (symbol === "*" || resolveSymbol(targetNode, symbol)) continue
+
 								const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
 								allGhosts.add(msg)
 								nodeGhosts.push(msg)
+								foundMissingInExport = true
+							}
+
+							// V150 High-Velocity Calibration: If exports match, don't hit the disk for symbol verification
+							if (foundMissingInExport) continue
+
+							// Fallback to detailed AST check if target is in session but exports are stale
+							const targetSessionId = this.resolver.normalizePath(diskPath)
+							const targetSessionContent = sessionBuffer ? sessionBuffer.get(targetSessionId) : null
+							if (targetSessionContent) {
+								let targetAst: ts.SourceFile | null = ts.createSourceFile(
+									diskPath,
+									targetSessionContent,
+									ts.ScriptTarget.Latest,
+									true,
+								)
+								const exportedSymbols = this.getExportedSymbolsFull(targetAst)
+
+								for (const symbol of symbols) {
+									if (symbol === "*" || exportedSymbols.has(symbol)) continue
+									const msg = `[SPI-102] GHOST SYMBOL: ${node.path} -> ${symbol} from ${specifier}`
+									allGhosts.add(msg)
+									nodeGhosts.push(msg)
+								}
+								targetAst = null
 							}
 						}
 					}
 				}
+				this.ghostVerificationCache.set(node.path, {
+					hash: forensicSignature,
+					ghosts: nodeGhosts,
+					turn: this.turnCounter,
+				})
+			} finally {
+				// V200: Forensic Closure Hygiene
+				sourceFile = null
+				imports = null
 			}
-			this.ghostVerificationCache.set(node.path, { hash: forensicSignature, ghosts: nodeGhosts, turn: this.turnCounter })
-
-			// V200: Forensic Closure Hygiene
-			;(sourceFile as unknown) = null
-			;(imports as unknown) = null
 		}
 		this.checkCacheSaturation()
 		return allGhosts

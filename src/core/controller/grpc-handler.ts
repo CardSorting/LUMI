@@ -221,6 +221,10 @@ export function getRequestRegistry(): GrpcRequestRegistry {
 	return requestRegistry
 }
 
+export function disposeRequestRegistry(): void {
+	requestRegistry.dispose()
+}
+
 function getHandler(
 	serviceName: string,
 	methodName: string,

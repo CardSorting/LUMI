@@ -1,3 +1,4 @@
+import { Logger } from "../../shared/services/Logger"
 import { SafeNumber } from "../../shared/utils/SafeNumber"
 import { OptimizationOpportunity, SovereignOptimizer } from "./SovereignOptimizer.js"
 import { SovereignPolicy } from "./SovereignPolicy"
@@ -80,15 +81,15 @@ export class SovereignDoctor {
 		// V210: Comprehensive Build Health (Forensic Aggregate)
 		// Factors: Violations (40%), Stability/Entropy (40%), Resource Stress (20%)
 		const violationScore = Math.max(0, 100 - allViolations.length * 10)
-		const stabilityScore = (1 - entropy.score) * 100
-		const resourceScore = (1 - metabolicPressure) * 100
+		const stabilityScore = (1 - (entropy?.score || 0)) * 100
+		const resourceScore = (1 - (metabolicPressure || 0)) * 100
 
-		const buildHealth = Math.round(violationScore * 0.4 + stabilityScore * 0.4 + resourceScore * 0.2)
+		const buildHealth = Math.round((violationScore || 0) * 0.4 + (stabilityScore || 0) * 0.4 + (resourceScore || 0) * 0.2)
 
 		// Map to metabolic pressure
 		const nodes = Array.from(engine.nodes.values())
-		const gravityCenter = [...nodes].sort((a, b) => b.blastRadius - a.blastRadius)[0]?.path || "Unknown"
-		const logicHotspots = [...nodes]
+		const gravityCenter = nodes.sort((a, b) => (b.blastRadius || 0) - (a.blastRadius || 0))[0]?.path || "Unknown"
+		const logicHotspots = nodes
 			.sort((a, b) => {
 				const scoreA = a.logicDensity * 0.7 + ((a.astComplexity || 0) / 1000) * 0.3
 				const scoreB = b.logicDensity * 0.7 + ((b.astComplexity || 0) / 1000) * 0.3
@@ -134,5 +135,12 @@ export class SovereignDoctor {
 			return `⚠️ [STABILITY NOTICE] Project Build Health: ${SafeNumber.format(report.buildHealth, 0)}%. Focus: Improving current file stability.`
 		}
 		return `✅ Project Build Health: ${SafeNumber.format(report.buildHealth, 0)}%. The codebase is stable and well-organized.`
+	}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose(): void {
+		Logger.info("[SovereignDoctor] Doctor substrate released.")
 	}
 }

@@ -128,7 +128,7 @@ export class SovereignTelemetrics {
 		const loop = this.metabolicMonitor.detectRecursiveLoop()
 		const forensic = this.metabolicMonitor.getForensicRegistry()
 		const doubtFiles = Array.from(forensic.entries())
-			.filter(([p, m]) => this.metabolicMonitor.getDoubtSignal(p) > 10)
+			.filter(([p, _m]) => this.metabolicMonitor.getDoubtSignal(p) > 10)
 			.map(([p]) => path.basename(p))
 
 		return {
@@ -261,5 +261,12 @@ export class SovereignTelemetrics {
 		]
 
 		return shield.join("\n")
+	}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose(): void {
+		Logger.info("[SovereignTelemetrics] Telemetrics substrate released.")
 	}
 }

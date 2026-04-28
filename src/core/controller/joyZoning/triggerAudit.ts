@@ -27,7 +27,7 @@ export async function triggerAudit(
 	requestId?: string,
 ): Promise<void> {
 	const registry = getRequestRegistry()
-	const isCancelled = () => requestId && !registry.hasRequest(requestId)
+	const isCancelled = () => !!requestId && !registry.hasRequest(requestId)
 	const spider = await controller.getSpiderEngine()
 	const doctor = new SovereignDoctor(spider.cwd)
 	const decomposer = new SovereignDecomposer()
@@ -44,17 +44,18 @@ export async function triggerAudit(
 		// V200: Intent Persistence / Rapid Recovery
 		if (useCache) {
 			const cached = controller.stateManager.getGlobalStateKey("lastJoyZoningReport")
-			if (cached) {
+			// V200 Hardening: Forensic Validation of Cache Substrate
+			if (cached && Array.isArray(cached.violations) && typeof cached.integrityScore === "number") {
 				Logger.info("[JoyZoning] Restoring audit from persistent cache.")
 				clearTimeout(timeout)
 				await responseStream(
 					JoyZoningAuditResponse.create({
 						violations: cached.violations,
-						optimizations: cached.optimizations, // V206: Restore optimizations from cache
+						optimizations: cached.optimizations || [], // V206: Restore optimizations from cache
 						integrityScore: cached.integrityScore,
-						driftCount: cached.driftCount,
-						metabolicPressure: cached.metabolicPressure,
-						metabolicSinks: cached.metabolicSinks,
+						driftCount: cached.driftCount || 0,
+						metabolicPressure: cached.metabolicPressure || 0,
+						metabolicSinks: cached.metabolicSinks || [],
 						buildHealth: cached.buildHealth || 100,
 						totalFiles: cached.totalFiles || spider.nodes.size,
 						timestamp: cached.timestamp,
@@ -63,6 +64,9 @@ export async function triggerAudit(
 					true,
 				)
 				return
+			}
+			if (cached) {
+				Logger.warn("[JoyZoning] Cached report substrate corrupted or partial. Triggering fresh audit.")
 			}
 		}
 
@@ -83,19 +87,22 @@ export async function triggerAudit(
 		// 3. Rebuild Registry with Streaming Progress
 		if (isCancelled()) return
 		let lastSentPercentage = 0
-		await spider.rebuildRegistry(async (processed: number, total: number, currentFile: string) => {
-			if (isCancelled()) return
+		await spider.rebuildRegistry(
+			async (processed: number, total: number, currentFile: string) => {
+				if (isCancelled()) return
 
-			const percentage = (processed / total) * 100
-			if (percentage - lastSentPercentage >= 5 || processed === total) {
-				lastSentPercentage = percentage
-				await responseStream(
-					JoyZoningAuditResponse.create({
-						progress: { processedFiles: processed, totalFiles: total, currentFile, percentage },
-					}),
-				)
-			}
-		})
+				const percentage = total > 0 ? (processed / total) * 100 : 100
+				if (percentage - lastSentPercentage >= 5 || processed === total) {
+					lastSentPercentage = percentage
+					await responseStream(
+						JoyZoningAuditResponse.create({
+							progress: { processedFiles: processed, totalFiles: total, currentFile, percentage },
+						}),
+					)
+				}
+			},
+			{ isCancelled },
+		)
 
 		// 4. Generate Doctor Report (Architectural Violations)
 		if (isCancelled()) return
@@ -121,7 +128,8 @@ export async function triggerAudit(
 		// V205: Forensic Depth - Identifying the Gravity Center
 		const nodes = Array.from(spider.nodes.values())
 		if (nodes.length > 0) {
-			const gravityCenter = [...nodes].sort((a, b) => b.blastRadius - a.blastRadius)[0]
+			// V200 Hardening: Removed redundant spread copy
+			const gravityCenter = nodes.sort((a, b) => b.blastRadius - a.blastRadius)[0]
 			if (gravityCenter && (gravityCenter.blastRadius || 0) > 0.4) {
 				violations.push({
 					type: "STRUCTURAL",
@@ -136,7 +144,13 @@ export async function triggerAudit(
 		}
 
 		// Map Decomposer Optimizations for Hotspots/God Modules
-		const hotspots = nodes.filter((n: SpiderNode) => (n.astComplexity || 0) > 1000 || n.afferentCoupling > 10)
+		const hotspots = nodes
+			.filter((n: SpiderNode) => (n.astComplexity || 0) > 1000 || (n.afferentCoupling || 0) > 10)
+			.sort(
+				(a, b) =>
+					(b.astComplexity || 0) + (b.afferentCoupling || 0) - ((a.astComplexity || 0) + (a.afferentCoupling || 0)),
+			)
+			.slice(0, 25)
 
 		for (const node of hotspots) {
 			if (isCancelled()) return
@@ -239,7 +253,7 @@ export async function triggerAudit(
 		// Find Toxic Module
 		const dirViolationCounts: Record<string, number> = {}
 		for (const v of violations) {
-			const parts = v.path.split("/")
+			const parts = (v.path || "unknown").split("/")
 			const module = parts.length > 1 ? parts.slice(0, 2).join("/") : "root"
 			dirViolationCounts[module] = (dirViolationCounts[module] || 0) + 1
 		}
@@ -290,7 +304,9 @@ export async function triggerAudit(
 			driftDetected: !synchronized,
 			driftCount: drift,
 			metabolicPressure: spider.computeMetabolicPressure() || 0,
-			metabolicSinks: doctorReport.environmentContext.metabolicSinks,
+			metabolicSinks: Array.isArray(doctorReport.environmentContext?.metabolicSinks)
+				? doctorReport.environmentContext.metabolicSinks
+				: [],
 			grade: computeGrade(buildHealth),
 			totalTechnicalDebt: techDebtStr,
 			stabilityScore,
@@ -335,5 +351,7 @@ export async function triggerAudit(
 		throw error
 	} finally {
 		clearTimeout(timeout)
+		doctor.dispose()
+		decomposer.dispose()
 	}
 }

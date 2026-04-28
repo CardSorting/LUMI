@@ -5,6 +5,17 @@ import * as fs from "fs"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 
+interface CachedJoyZoningViolation {
+	type?: string
+	message?: string
+	path?: string
+	remediation?: string
+}
+
+interface CachedJoyZoningReport {
+	violations?: CachedJoyZoningViolation[]
+}
+
 export async function executeRefactor(
 	controller: IController,
 	request: JoyZoningRefactorRequest,
@@ -25,11 +36,11 @@ export async function executeRefactor(
 		// 1. Validate the requested action exists in the decomposition plan
 		const step = plan.steps.find((s) => s.action === request.action || `${s.action}: ${s.target}`.includes(request.action))
 
-		let violationToFix: any = null
+		let violationToFix: CachedJoyZoningViolation | undefined
 		if (request.action === "FIX_STRUCTURAL_VIOLATION") {
-			const report = controller.stateManager.getGlobalStateKey("lastJoyZoningReport") as any
-			if (report && report.violations) {
-				violationToFix = report.violations.find((v: any) => v.path === request.path && v.type === "STRUCTURAL")
+			const report = controller.stateManager.getGlobalStateKey("lastJoyZoningReport") as CachedJoyZoningReport | undefined
+			if (report?.violations) {
+				violationToFix = report.violations.find((v) => v.path === request.path && v.type === "STRUCTURAL")
 			}
 			if (!violationToFix) {
 				return JoyZoningRefactorResponse.create({
@@ -65,7 +76,7 @@ export async function executeRefactor(
 		} else {
 			taskPrompt = `Refactor task: ${request.action} on ${request.path}\n\n`
 			taskPrompt += `[SYSTEM_SIGNAL] Component Coupling: ${node?.afferentCoupling || 0}\n`
-			taskPrompt += `[SYSTEM_SIGNAL] Code Complexity: ${node?.cognitiveComplexity.toFixed(2) || 0}\n`
+			taskPrompt += `[SYSTEM_SIGNAL] Code Complexity: ${node?.cognitiveComplexity?.toFixed(2) ?? "0"}\n`
 			taskPrompt += `[SYSTEM_SIGNAL] Organization Score: ${(1 - spider.computeEntropy().score).toFixed(2)}\n\n`
 
 			taskPrompt += `Context from Health Analyzer:\n`

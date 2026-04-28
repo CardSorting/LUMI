@@ -99,7 +99,7 @@ export class FluidPolicyEngine {
 		this.dashboardGenerator = new DashboardGenerator(this.cwd)
 		this.axiomEngine = new SemanticAxiomEngine()
 		this.metabolicMonitor = new MetabolicMonitor(this.cwd)
-		this.optimizer = new SovereignOptimizer(this.cwd)
+		this.optimizer = new SovereignOptimizer()
 		this.pathogens = new PathogenStore(this.cwd)
 		this.refactorHealer = new RefactorHealer(this.cwd)
 		this.forensics = new SovereignForensics(this.cwd, this.metabolicMonitor, this.spiderEngine)
@@ -154,12 +154,21 @@ export class FluidPolicyEngine {
 	 */
 	public dispose(): void {
 		this.spiderEngine.dispose()
+		this.metabolicMonitor.dispose()
+		this.optimizer.dispose()
+		this.forensics.dispose()
+		this.garbageCollector.dispose()
+		this.telemetrics.dispose()
+		this.refactorHealer.dispose()
+		this.verification.dispose()
+
 		this.layerCache.clear()
 		this.sessionFiles.clear()
 		this.restorationTokens.clear()
 		this.gracePeriods.clear()
 		this.isChecking = false
 		this.buildAlarmActive = false
+
 		Logger.info("[FluidPolicyEngine] Sovereign Teardown Complete. All substrates released.")
 	}
 

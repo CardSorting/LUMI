@@ -34,8 +34,9 @@ export class PathResolver {
 				const paths = config.compilerOptions?.paths
 				if (paths) {
 					for (const [alias, targets] of Object.entries(paths)) {
+						if (!Array.isArray(targets) || targets.length === 0) continue
 						const cleanAlias = alias.replace("/*", "")
-						const target = (targets as string[])[0].replace("/*", "")
+						const target = targets[0].replace("/*", "")
 						this.dynamicAliases.set(cleanAlias, target)
 					}
 					Logger.info(`[PathResolver] Dynamically loaded ${this.dynamicAliases.size} aliases from tsconfig.json.`)
@@ -234,6 +235,10 @@ export class PathResolver {
 		if (this.canonicalCache.size > MAX_ENTRIES) {
 			this.canonicalCache.clear()
 			Logger.info("[PathResolver] Canonical cache saturated. Metaphorical sweep performed.")
+		}
+		if (this.stringInterner.size > MAX_ENTRIES) {
+			this.stringInterner.clear()
+			Logger.info("[PathResolver] String interner saturated. Metaphorical sweep performed.")
 		}
 	}
 

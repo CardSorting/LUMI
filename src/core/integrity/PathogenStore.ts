@@ -250,4 +250,12 @@ export class PathogenStore {
 		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 		fs.writeFileSync(this.storePath, JSON.stringify(this.getPathogens(), null, 2))
 	}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose(): void {
+		this.pathogens.clear()
+		Logger.info("[PathogenStore] Pathogen substrate released.")
+	}
 }

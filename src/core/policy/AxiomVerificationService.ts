@@ -1,5 +1,6 @@
 import { DietCodeDefaultTool } from "@shared/tools"
 import * as path from "path"
+import { Logger } from "@/shared/services/Logger"
 import { isLayerTagSupported } from "@/utils/joy-zoning"
 import { ToolUse } from "../assistant-message"
 import { PathogenStore } from "../integrity/PathogenStore"
@@ -186,5 +187,16 @@ export class AxiomVerificationService {
 		}
 
 		return null
+	}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose(): void {
+		this.spiderEngine = null as unknown as SpiderEngine
+		this.axiomEngine = null as unknown as SemanticAxiomEngine
+		this.pathogens = null as unknown as PathogenStore
+		this.forensics = null as unknown as SovereignForensics
+		Logger.info("[AxiomVerificationService] Verification substrate released.")
 	}
 }

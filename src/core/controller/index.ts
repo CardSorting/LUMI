@@ -59,6 +59,7 @@ import { clearRemoteConfig } from "../storage/remote-config/utils"
 import { type PersistenceErrorEvent, StateManager } from "../storage/StateManager"
 import { Task } from "../task"
 import { TaskState } from "../task/TaskState"
+import { disposeRequestRegistry } from "./grpc-handler"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { appendDietCodeStealthModels } from "./models/refreshOpenRouterModels"
 import { checkCliInstallation } from "./state/checkCliInstallation"
@@ -120,7 +121,7 @@ export class Controller implements IController {
 		// V205: Intentional Synchronicity. Ensure workspace manager is ready before initializing spider.
 		const wm = await this.ensureWorkspaceManager()
 		const workspacePaths = await HostProvider.workspace.getWorkspacePaths({})
-		const primaryPath = workspacePaths.paths?.[0]
+		const primaryPath = workspacePaths?.paths?.[0]
 
 		const cwd = wm?.getPrimaryRoot()?.path || primaryPath || process.cwd()
 		Logger.info(`[Controller] Initializing SpiderEngine with CWD: ${cwd}`)
@@ -218,6 +219,9 @@ export class Controller implements IController {
 
 		await this.clearTask()
 		this.mcpHub.dispose()
+		this.spider?.dispose()
+		this.spider = undefined
+		disposeRequestRegistry()
 		await dbPool.stop()
 
 		Logger.log("[Controller] Disposed and resources released")

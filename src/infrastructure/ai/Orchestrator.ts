@@ -33,6 +33,16 @@ export interface AgentTask {
 	createdAt: number
 }
 
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+type ConversationContentBlock = JsonValue
+type ConversationMessage = {
+	role: "user" | "assistant"
+	content: string | ConversationContentBlock[]
+}
+type LogicalSoundnessContext = {
+	getLogicalSoundness(knowledgeIds: string[]): Promise<number>
+}
+
 export class AgentOrchestrator {
 	public async createStream(
 		focus: string,
@@ -115,7 +125,7 @@ export class AgentOrchestrator {
 		result: string | null = null,
 		metadata?: TaskAuditMetadata,
 	): Promise<void> {
-		const values: Record<string, any> = { status }
+		const values: Record<string, unknown> = { status }
 		if (result !== null) values.result = result
 		if (metadata) values.metadata = JSON.stringify(metadata)
 
@@ -253,7 +263,7 @@ export class AgentOrchestrator {
 	 * a compact JSON summary suitable for injection into a
 	 * new agent's context window.
 	 */
-	public async getCompressedContext(streamId: string, agentContext?: any): Promise<string> {
+	public async getCompressedContext(streamId: string, agentContext?: LogicalSoundnessContext): Promise<string> {
 		const tasks = await this.getStreamTasks(streamId)
 		const summary = await this.recallMemory(streamId, "stream_summary")
 		const failureReason = await this.recallMemory(streamId, "failure_reason")
@@ -447,25 +457,26 @@ export class AgentOrchestrator {
 
 		if (activeIds.length === 0) return
 
-		const counts = await Promise.all([
-			dbPool.warmupTable("agent_streams", "status", "active"),
-			dbPool.warmupTable("agent_tasks", "status", "pending"),
-			dbPool.warmupTable("agent_tasks", "status", "running"),
-			...activeIds.map((id) => dbPool.warmupTable("agent_memory", "streamId", id)),
-		])
+		// V215: Throttled Recovery (Concurrency Limit: 5)
+		// Prevents heap exhaustion when reconstituting many active workflows simultaneously.
+		const BATCH_SIZE = 5
+		for (let i = 0; i < activeIds.length; i += BATCH_SIZE) {
+			const batch = activeIds.slice(i, i + BATCH_SIZE)
+			await Promise.all([
+				dbPool.warmupTable("agent_streams", "status", "active"),
+				dbPool.warmupTable("agent_tasks", "status", "pending"),
+				dbPool.warmupTable("agent_tasks", "status", "running"),
+				...batch.map((id) => dbPool.warmupTable("agent_memory", "streamId", id)),
+			])
+		}
 
-		const total = counts.reduce((acc, c) => acc + c, 0)
 		const duration = (performance.now() - start).toFixed(1)
-		Logger.info(`[Orchestrator] Sovereign Warmup: ${total} records reconstituted in ${duration}ms (Level 9 Active)`)
+		Logger.info(`[Orchestrator] Sovereign Warmup Complete in ${duration}ms (Level 9 Active)`)
 	}
 
-	/**
-	 * Reconstructs conversation history for a stream from its constituent tasks.
-	 * V34: Added for Virtual Substrate recovery and Forensic Grounding.
-	 */
-	public async getConversationHistory(streamId: string): Promise<any[]> {
+	public async getConversationHistory(streamId: string): Promise<ConversationMessage[]> {
 		const tasks = await this.getStreamTasks(streamId)
-		const history: any[] = []
+		const history: ConversationMessage[] = []
 
 		for (const task of tasks) {
 			// user turn: description is the intent/prompt
@@ -476,7 +487,7 @@ export class AgentOrchestrator {
 
 			// assistant turn: result is the output (including potential tool calls)
 			if (task.result) {
-				let content: any = task.result
+				let content: JsonValue = task.result
 				try {
 					// Handle JSON results (common in subagent tool-calling outputs)
 					if (task.result.trim().startsWith("{") || task.result.trim().startsWith("[")) {

@@ -40,6 +40,15 @@ type WhereCondition = {
 	operator?: "=" | "<" | ">" | "<=" | ">=" | "!=" | "IN" | "in" | "In" | "UNSAFE_IN" | "IS" | "IS NOT" | "LIKE"
 }
 
+type QueryOperator = NonNullable<WhereCondition["operator"]>
+
+type LooseSelectQuery = {
+	where(...args: unknown[]): LooseSelectQuery
+	orderBy(...args: unknown[]): LooseSelectQuery
+	limit(limit: number): LooseSelectQuery
+	execute(): Promise<unknown[]>
+}
+
 export type Increment = { _type: "increment"; value: number }
 
 export type WriteOp = {
@@ -205,7 +214,10 @@ export class BufferedDbPool {
 			stmt = this.rawDb.prepare(sqlStr)
 			this.stmtCache.set(sqlStr, stmt)
 		}
-		return stmt!
+		if (!stmt) {
+			throw new Error("Raw database connection is not initialized.")
+		}
+		return stmt
 	}
 
 	private enqueueLatencies: number[] = []
@@ -226,6 +238,25 @@ export class BufferedDbPool {
 		return sorted[index] ?? 0
 	}
 
+	private addStatusIndex(op: WriteOp, targetIndex: Map<keyof Schema, Map<string, Set<WriteOp>>>): void {
+		const statusValue = op.values?.status
+		if ((op.table as string) !== "agent_tasks" || typeof statusValue !== "string") return
+
+		let tableIndex = targetIndex.get(op.table)
+		if (!tableIndex) {
+			tableIndex = new Map()
+			targetIndex.set(op.table, tableIndex)
+		}
+
+		const key = `status:${statusValue}`
+		let set = tableIndex.get(key)
+		if (!set) {
+			set = new Set()
+			tableIndex.set(key, set)
+		}
+		set.add(op)
+	}
+
 	public async pushBatch(ops: WriteOp[], agentId?: string, affectedFile?: string) {
 		const enqueueStart = performance.now()
 		let currentBufferLength = 0
@@ -235,22 +266,7 @@ export class BufferedDbPool {
 			this.detectMetadata(op)
 
 			// Level 7: Index maintenance (O(1))
-			const tableName = op.table as string
-			if (tableName === "agent_tasks" && op.values && (op.values as Record<string, any>).status) {
-				const statusValue = (op.values as Record<string, any>).status
-				let tableIndex = this.activeIndex.get(op.table)
-				if (!tableIndex) {
-					tableIndex = new Map()
-					this.activeIndex.set(op.table, tableIndex)
-				}
-				const key = `status:${statusValue}`
-				let set = tableIndex.get(key)
-				if (!set) {
-					set = new Set()
-					tableIndex.set(key, set)
-				}
-				set.add(op)
-			}
+			this.addStatusIndex(op, this.activeIndex)
 		}
 
 		if (agentId) {
@@ -313,7 +329,7 @@ export class BufferedDbPool {
 		}
 	}
 
-	public async commitWork(agentId: string, _validator?: any) {
+	public async commitWork(agentId: string, _validator?: unknown) {
 		let shadowOpsCount = 0
 		const release = await this.stateMutex.acquire()
 		try {
@@ -331,21 +347,7 @@ export class BufferedDbPool {
 					this.activeBufferSize++
 
 					// Level 7: Index maintenance (O(1))
-					const tableName = op.table as string
-					if (tableName === "agent_tasks" && op.values && (op.values as Record<string, any>).status) {
-						let tableIndex = this.activeIndex.get(op.table)
-						if (!tableIndex) {
-							tableIndex = new Map()
-							this.activeIndex.set(op.table, tableIndex)
-						}
-						const key = `status:${(op.values as Record<string, any>).status}`
-						let set = tableIndex.get(key)
-						if (!set) {
-							set = new Set()
-							tableIndex.set(key, set)
-						}
-						set.add(op)
-					}
+					this.addStatusIndex(op, this.activeIndex)
 				}
 			}
 		} finally {
@@ -493,20 +495,7 @@ export class BufferedDbPool {
 						this.activeBufferSize++
 
 						// Level 7: Restore index
-						if ((op.table as string) === "agent_tasks" && op.values && (op.values as any).status) {
-							let tableIndex = this.activeIndex.get(op.table)
-							if (!tableIndex) {
-								tableIndex = new Map()
-								this.activeIndex.set(op.table, tableIndex)
-							}
-							const key = `status:${(op.values as any).status}`
-							let set = tableIndex.get(key)
-							if (!set) {
-								set = new Set()
-								tableIndex.set(key, set)
-							}
-							set.add(op)
-						}
+						this.addStatusIndex(op, this.activeIndex)
 					}
 				}
 				this.inFlightOps.clear()
@@ -528,7 +517,7 @@ export class BufferedDbPool {
 
 		const canBatchIntoSingleStatement = group.every(
 			(op) =>
-				this.isSameValues(op.values as Record<string, any>, first.values as Record<string, any>) &&
+				this.isSameValues(op.values as Record<string, unknown>, first.values as Record<string, unknown>) &&
 				op.where &&
 				!Array.isArray(op.where) &&
 				op.where.column === "id" &&
@@ -595,23 +584,23 @@ export class BufferedDbPool {
 
 			let diskResults: Schema[T][] = []
 			if (!isWarmed) {
-				let query: any = db.selectFrom(table).selectAll()
+				let query = db.selectFrom(table as never).selectAll() as unknown as LooseSelectQuery
 				for (const cond of conditions) {
-					const opStr = cond.operator || "="
+					const opStr: QueryOperator = cond.operator || "="
 					if (Array.isArray(cond.value)) {
-						query = query.where(cond.column as never, "in", cond.value as never)
+						query = query.where(cond.column, "in", cond.value)
 					} else {
-						query = query.where(cond.column as never, opStr as any, cond.value as never)
+						query = query.where(cond.column, opStr, cond.value)
 					}
 				}
 
 				if (options?.orderBy) {
-					query = (query as any).orderBy(options.orderBy.column as never, options.orderBy.direction)
+					query = query.orderBy(options.orderBy.column, options.orderBy.direction)
 				}
 				if (options?.limit) {
-					query = (query as any).limit(options.limit)
+					query = query.limit(options.limit)
 				}
-				diskResults = (await (query as any).execute()) as Schema[T][]
+				diskResults = (await query.execute()) as Schema[T][]
 			}
 
 			const applyOps = (ops: WriteOp[], sourceIndex: Map<string, Set<WriteOp>> | undefined, target: Schema[T][]) => {
@@ -667,7 +656,7 @@ export class BufferedDbPool {
 								// If this is matching against the SELECT's where, just use the array
 								if (queryConditions === opWhere) {
 									const set = inSets[idx]
-									if (set) return set.has(val as any)
+									if (set) return set.has(val as string | number)
 								}
 								if (Array.isArray(c.value)) return (c.value as unknown[]).includes(val)
 								return val === c.value
@@ -782,25 +771,22 @@ export class BufferedDbPool {
 					const targetOp = coalescedOps[existingIdx]
 					if (targetOp?.values && op.values) {
 						for (const [key, val] of Object.entries(op.values)) {
-							const existingVal: any = targetOp.values[key]
-							const isInc = (v: any) => v && typeof v === "object" && (v as any)._type === "increment"
+							const existingVal = targetOp.values[key]
 
-							if (isInc(val)) {
-								if (isInc(existingVal)) {
-									existingVal.value += (val as any).value
+							if (this.isIncrement(val)) {
+								if (this.isIncrement(existingVal)) {
+									existingVal.value += val.value
 								} else if (typeof existingVal === "number") {
-									targetOp.values[key] = existingVal + (val as any).value
+									targetOp.values[key] = existingVal + val.value
 								} else {
-									targetOp.values[key] = { ...(val as any) } // Clone increment
+									targetOp.values[key] = { ...val } // Clone increment
 								}
 							} else {
 								targetOp.values[key] = val // Raw value overrides previous state
 							}
 						}
 						// Recalculate hasIncrements
-						targetOp.hasIncrements = Object.values(targetOp.values).some(
-							(v: any) => v && typeof v === "object" && v._type === "increment",
-						)
+						targetOp.hasIncrements = Object.values(targetOp.values).some((v) => this.isIncrement(v))
 						continue
 					}
 				} else {
@@ -851,7 +837,7 @@ export class BufferedDbPool {
 			// Reuse the pre-allocated parameterBuffer to avoid GC pressure for 1M+ ops
 			let pIdx = 0
 			for (const op of chunk) {
-				const vals = op.values as Record<string, any>
+				const vals = op.values as Record<string, unknown>
 				for (const col of columns) {
 					this.parameterBuffer[pIdx++] = vals[col]
 				}
@@ -923,7 +909,7 @@ export class BufferedDbPool {
 			}
 			await query.execute()
 		} else if (op.type === "update" && op.values) {
-			const sets: Record<string, any> = {}
+			const sets: Record<string, unknown> = {}
 			for (const [k, v] of Object.entries(op.values)) {
 				if (this.isIncrement(v)) {
 					sets[k] = sql`${sql.ref(k)} + ${v.value}`
@@ -934,22 +920,22 @@ export class BufferedDbPool {
 
 			let query = trx.updateTable(op.table).set(sets as never)
 			for (const cond of conditions) {
-				const opStr = cond.operator || "="
+				const opStr: QueryOperator = cond.operator || "="
 				if (Array.isArray(cond.value)) {
 					query = query.where(cond.column as never, "in", cond.value as never)
 				} else {
-					query = query.where(cond.column as never, opStr as any, cond.value as never)
+					query = query.where(cond.column as never, opStr as never, cond.value as never)
 				}
 			}
 			await query.execute()
 		} else if (op.type === "delete") {
 			let query = trx.deleteFrom(op.table)
 			for (const cond of conditions) {
-				const opStr = cond.operator || "="
+				const opStr: QueryOperator = cond.operator || "="
 				if (Array.isArray(cond.value)) {
-					query = (query as any).where(cond.column, "in", cond.value)
+					query = query.where(cond.column as never, "in", cond.value as never)
 				} else {
-					query = (query as any).where(cond.column, opStr, cond.value)
+					query = query.where(cond.column as never, opStr as never, cond.value as never)
 				}
 			}
 			await query.execute()
@@ -976,7 +962,7 @@ export class BufferedDbPool {
 		}
 	}
 
-	private isSameValues(a: Record<string, any>, b: Record<string, any>): boolean {
+	private isSameValues(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
 		if (a === b) return true
 		const keysA = Object.keys(a)
 		const keysB = Object.keys(b)
@@ -1003,18 +989,17 @@ export class BufferedDbPool {
 	 */
 	public async warmupTable<T extends keyof Schema>(table: T, statusCol: string, statusValue: string): Promise<number> {
 		const db = await this.ensureDb()
-		const rows = await db
-			.selectFrom(table as any)
-			.where(statusCol as any, "=", statusValue as any)
-			.selectAll()
-			.execute()
+		const rows = (await (db.selectFrom(table as never).selectAll() as unknown as LooseSelectQuery)
+			.where(statusCol, "=", statusValue)
+			.limit(500)
+			.execute()) as Schema[T][]
 
 		if (rows.length === 0) return 0
 
-		let tableIndex = this.activeIndex.get(table as any)
+		let tableIndex = this.activeIndex.get(table)
 		if (!tableIndex) {
 			tableIndex = new Map()
-			this.activeIndex.set(table as any, tableIndex)
+			this.activeIndex.set(table, tableIndex)
 		}
 
 		const key = `${statusCol}:${statusValue}`
@@ -1028,8 +1013,8 @@ export class BufferedDbPool {
 		for (const row of rows) {
 			const op: WriteOp = {
 				type: "insert",
-				table: table as any,
-				values: row as any,
+				table,
+				values: row as Record<string, unknown>,
 				hasIncrements: false,
 			}
 			set.add(op)

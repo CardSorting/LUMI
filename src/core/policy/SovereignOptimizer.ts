@@ -1,3 +1,4 @@
+import { Logger } from "../../shared/services/Logger"
 import { LayerConfig, SovereignPolicy } from "./SovereignPolicy"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
 import { Layer, SpiderNode } from "./spider/types.js"
@@ -16,14 +17,14 @@ export interface OptimizationOpportunity {
  * that would significantly increase the integrity score.
  */
 export class SovereignOptimizer {
-	constructor(_cwd?: string) {}
-
 	/**
 	 * Scans the project for structural migration opportunities.
 	 */
 	public findOptimizations(engine: SpiderEngine): OptimizationOpportunity[] {
 		const opportunities: OptimizationOpportunity[] = []
-		const policy = SovereignPolicy.getInstance(engine.cwd)
+		if (!engine || !engine.nodes) return []
+
+		const policy = SovereignPolicy.getInstance(engine.cwd || "")
 		const configs = {
 			plumbing: policy.getLayerConfig("plumbing"),
 			domain: policy.getLayerConfig("domain"),
@@ -36,7 +37,7 @@ export class SovereignOptimizer {
 
 			if (recommended && current !== recommended) {
 				const projectedGain = this.calculateProjectedGain(node, recommended)
-				const importsToTarget = Array.from(node.imports).filter((imp) => {
+				const importsToTarget = Array.from(node.imports || []).filter((imp) => {
 					const targetId = engine.resolveImportToNodeId(node.id, imp)
 					return targetId && engine.nodes.get(targetId)?.layer === recommended
 				}).length
@@ -59,10 +60,12 @@ export class SovereignOptimizer {
 		_engine: SpiderEngine,
 		configs?: { plumbing: LayerConfig; domain: LayerConfig; core: LayerConfig },
 	): Layer | null {
-		const plumbing = configs?.plumbing || SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("plumbing")
+		if (!_engine || !_engine.nodes) return node.layer || "plumbing"
+
+		const plumbing = configs?.plumbing || SovereignPolicy.getInstance(_engine.cwd || "").getLayerConfig("plumbing")
 		const layerCounts: Record<string, number> = { domain: 0, core: 0, infrastructure: 0, ui: 0, plumbing: 0 }
 
-		for (const imp of node.imports) {
+		for (const imp of node.imports || []) {
 			const targetId = _engine.resolveImportToNodeId(node.id, imp)
 			if (targetId) {
 				const targetLayer = _engine.nodes.get(targetId)?.layer
@@ -89,7 +92,7 @@ export class SovereignOptimizer {
 			return "plumbing"
 		}
 
-		if (maxCount > node.imports.length * 0.75) return bestLayer // V215: Increased threshold to 75% for gravity moves
+		if (maxCount > (node.imports || []).length * 0.75) return bestLayer // V215: Increased threshold to 75% for gravity moves
 
 		return node.layer || "plumbing"
 	}
@@ -112,5 +115,12 @@ export class SovereignOptimizer {
 		}
 
 		return Math.round(gain)
+	}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose(): void {
+		Logger.info("[SovereignOptimizer] Optimizer substrate released.")
 	}
 }

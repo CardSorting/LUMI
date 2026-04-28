@@ -341,15 +341,16 @@ export class SovereignGarbageCollector {
 			// V201: Structured Forensic Parser
 			// Format: path/to/file.ts(line,col): error TSXXXX: message
 			const regex = /([^(]+)\((\d+),(\d+)\): error TS(\d+): (.*)/g
-			let match: RegExpExecArray | null
-			while ((match = regex.exec(fullOutput)) !== null) {
+			let match = regex.exec(fullOutput)
+			while (match !== null) {
 				diagnostics.push({
 					file: this.spiderEngine.normalizePath(absolutePath),
-					line: Number.parseInt(match[2]),
-					column: Number.parseInt(match[3]),
-					code: Number.parseInt(match[4]),
+					line: Number.parseInt(match[2], 10),
+					column: Number.parseInt(match[3], 10),
+					code: Number.parseInt(match[4], 10),
 					message: match[5].trim(),
 				})
+				match = regex.exec(fullOutput)
 			}
 
 			// Fallback for non-standard formats
@@ -359,21 +360,6 @@ export class SovereignGarbageCollector {
 
 			return { success: false, diagnostics }
 		}
-	}
-
-	/**
-	 * Automatically resolves missing symbols by searching the graph and injecting imports.
-	 * V140: Forensic Realism - Only fixing verified build errors.
-	 * DEPRECATED: Use applyDiagnosticFix for deterministic AST repair.
-	 */
-	private async resolveMissingImports(filePath: string, errors: ForensicDiagnostic[]): Promise<boolean> {
-		let fixed = false
-		for (const diag of errors) {
-			if (await this.healer.applyDiagnosticFix(diag, this.spiderEngine)) {
-				fixed = true
-			}
-		}
-		return fixed
 	}
 
 	/**
@@ -543,7 +529,7 @@ export class SovereignGarbageCollector {
 		const nodes = this.spiderEngine.nodes
 		let orphanCount = 0
 
-		for (const [id, node] of nodes.entries()) {
+		for (const node of nodes.values()) {
 			if (node.orphaned && !node.path.includes("/__tests__/") && !node.path.endsWith(".d.ts")) {
 				// We don't delete them automatically, we neutralize them (stub them or flag them)
 				// For industrial hardening, we add a [DEADWOOD] marker.
@@ -563,5 +549,16 @@ export class SovereignGarbageCollector {
 			}
 		}
 		return orphanCount
+	}
+
+	/**
+	 * V220: Industrial Hygiene (Disposal).
+	 */
+	public dispose(): void {
+		this.healer.dispose()
+		this.spiderEngine = null as unknown as SpiderEngine
+		this.pathogens = undefined
+		this.monitor = undefined
+		Logger.info("[SovereignGarbageCollector] Collector substrate released.")
 	}
 }

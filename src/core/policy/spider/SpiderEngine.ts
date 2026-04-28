@@ -17,6 +17,10 @@ import { SpiderEntropyReport, SpiderNode, SpiderRegistryPayload, SpiderSnapshot,
 
 export type { SpiderNode, SpiderEntropyReport, SpiderViolation, SpiderSnapshot, SpiderRegistryPayload }
 
+export interface RebuildRegistryOptions {
+	isCancelled?: () => boolean
+}
+
 import { MetabolicMonitor } from "../../integrity/MetabolicMonitor.js"
 import { PathogenStore } from "../../integrity/PathogenStore.js"
 
@@ -83,13 +87,29 @@ export class SpiderEngine {
 	 * V200: Structural Resilience.
 	 * Captures a binary snapshot of the current structural truth.
 	 */
-	private createCheckpoint(): void {
-		// V200: Binary Checkpointing (Full Structural Persistence)
-		// We use serialize() to create a deterministic snapshot in a Buffer.
-		// This prevents any shared object references between the active state and the checkpoint.
-		this.substrateCheckpoint = this.persistence.serialize(this.nodes)
-		this.checkpointTimestamp = new Date().toISOString()
-		Logger.info(`[SpiderEngine] Substrate Checkpoint Created: ${this.checkpointTimestamp}`)
+	public createCheckpoint(): void {
+		// V215: Memory-Safe Checkpointing
+		// Check available heap before attempting massive binary serialization.
+		const stats = v8.getHeapStatistics()
+		const available = stats.heap_size_limit - stats.used_heap_size
+		if (available < 100 * 1024 * 1024) {
+			// 100MB Safety Floor
+			Logger.warn("[SpiderEngine] Skipping substrate checkpoint: Memory pressure too high for binary persistence.")
+			this.substrateCheckpoint = null
+			return
+		}
+
+		try {
+			this.substrateCheckpoint = this.persistence.serialize(this.nodes, {
+				timestamp: new Date().toISOString(),
+				version: this.version,
+			})
+			this.checkpointTimestamp = new Date().toISOString()
+			Logger.info(`[SpiderEngine] Substrate Checkpoint Created: ${this.checkpointTimestamp}`)
+		} catch (e) {
+			Logger.error("[SpiderEngine] Failed to create substrate checkpoint:", e)
+			this.substrateCheckpoint = null
+		}
 	}
 
 	/**
@@ -102,8 +122,16 @@ export class SpiderEngine {
 			return false
 		}
 
+		if (!this.substrateCheckpoint) {
+			Logger.warn("[SpiderEngine] Rollback aborted: No valid checkpoint found in the structural substrate.")
+			return false
+		}
+
 		try {
 			const payload = this.persistence.deserialize(this.substrateCheckpoint)
+			if (!payload || !payload.nodes) {
+				throw new Error("Deserialization produced a hollow or corrupted structural payload.")
+			}
 			this.nodes = new Map(payload.nodes)
 			this.version++
 			Logger.info(`[SpiderEngine] Substrate successfully rolled back to checkpoint: ${this.checkpointTimestamp}`)
@@ -153,11 +181,11 @@ export class SpiderEngine {
 	 */
 	public computeMetabolicPressure(): number {
 		const used = process.memoryUsage().heapUsed
-		const total = process.memoryUsage().heapTotal
-		const memPressure = used / total
+		const limit = v8.getHeapStatistics().heap_size_limit
+		const memPressure = used / limit
 
-		const graphDensity = this.nodes.size / 10000 // Normalized to 10k nodes
-		const pressure = memPressure * 0.7 + Math.min(graphDensity, 1.0) * 0.3
+		const graphDensity = this.nodes.size / 15000 // Normalized to 15k nodes (V215)
+		const pressure = memPressure * 0.8 + Math.min(graphDensity, 1.0) * 0.2
 
 		return Number(pressure.toFixed(2))
 	}
@@ -272,7 +300,7 @@ export class SpiderEngine {
 			isInterface: this.detectInterface(normalizedPath, sourceFile),
 			exports: exportedSymbols,
 			consumptions,
-			mtime: fs.statSync(absolutePath).mtimeMs,
+			mtime: fs.existsSync(absolutePath) ? fs.statSync(absolutePath).mtimeMs : Date.now(),
 			namingScore,
 			symbolDensity: content.length > 0 ? exportedSymbols.length / (content.length / 100) : 0,
 			logicCohesion: 0.5,
@@ -321,174 +349,181 @@ export class SpiderEngine {
 	}
 
 	private extractExports(sourceFile: ts.SourceFile): { symbols: string[]; reExports: string[] } {
-		const symbols: string[] = []
-		const reExports: string[] = []
-		const visit = (node: ts.Node) => {
-			if (
-				(ts.isClassDeclaration(node) ||
-					ts.isFunctionDeclaration(node) ||
-					ts.isInterfaceDeclaration(node) ||
-					ts.isTypeAliasDeclaration(node) ||
-					ts.isEnumDeclaration(node) ||
-					ts.isVariableStatement(node)) &&
-				node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
-			) {
-				if (ts.isVariableStatement(node)) {
-					for (const decl of node.declarationList.declarations) {
-						if (ts.isIdentifier(decl.name)) symbols.push(decl.name.text)
-					}
-				} else if (node.name && ts.isIdentifier(node.name)) {
-					symbols.push(node.name.text)
-				}
-			} else if (ts.isExportDeclaration(node)) {
-				if (node.exportClause && ts.isNamedExports(node.exportClause)) {
-					for (const element of node.exportClause.elements) {
-						symbols.push(element.name.text)
-					}
-				} else if (!node.exportClause && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-					// export * from '...'
-					reExports.push(node.moduleSpecifier.text)
-				}
-			}
-			ts.forEachChild(node, visit)
-		}
-		visit(sourceFile)
+		const result = { symbols: [] as string[], reExports: [] as string[] }
+		ts.forEachChild(sourceFile, (node) => this.visitExports(node, result))
 		return {
-			symbols: Array.from(new Set(symbols)),
-			reExports: Array.from(new Set(reExports)),
+			symbols: Array.from(new Set(result.symbols)),
+			reExports: Array.from(new Set(result.reExports)),
 		}
 	}
 
-	/**
-	 * V16: Detailed import extraction including symbols.
-	 */
+	private visitExports(node: ts.Node, result: { symbols: string[]; reExports: string[] }) {
+		if (
+			(ts.isClassDeclaration(node) ||
+				ts.isFunctionDeclaration(node) ||
+				ts.isInterfaceDeclaration(node) ||
+				ts.isTypeAliasDeclaration(node) ||
+				ts.isEnumDeclaration(node) ||
+				ts.isVariableStatement(node)) &&
+			node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+		) {
+			if (ts.isVariableStatement(node)) {
+				for (const decl of node.declarationList.declarations) {
+					if (ts.isIdentifier(decl.name)) result.symbols.push(decl.name.text)
+				}
+			} else if (node.name && ts.isIdentifier(node.name)) {
+				result.symbols.push(node.name.text)
+			}
+		} else if (ts.isExportDeclaration(node)) {
+			if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+				for (const element of node.exportClause.elements) {
+					result.symbols.push(element.name.text)
+				}
+			} else if (!node.exportClause && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+				// export * from '...'
+				result.reExports.push(node.moduleSpecifier.text)
+			}
+		}
+		ts.forEachChild(node, (child) => this.visitExports(child, result))
+	}
+
 	private extractDetailedImports(sourceFile: ts.SourceFile): { specifier: string; symbols: string[] }[] {
 		const imports: { specifier: string; symbols: string[] }[] = []
-		const visit = (node: ts.Node) => {
-			if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-				const specifier = node.moduleSpecifier.text
-				const symbols: string[] = []
-				if (node.importClause) {
-					if (node.importClause.name) symbols.push("default")
-					if (node.importClause.namedBindings) {
-						if (ts.isNamedImports(node.importClause.namedBindings)) {
-							for (const n of node.importClause.namedBindings.elements) {
-								symbols.push(n.name.text)
-							}
-						} else if (ts.isNamespaceImport(node.importClause.namedBindings)) {
-							symbols.push("*")
-						}
-					}
-				}
-				imports.push({ specifier, symbols })
-			} else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-				const specifier = node.moduleSpecifier.text
-				const symbols: string[] = []
-				if (node.exportClause && ts.isNamedExports(node.exportClause)) {
-					for (const n of node.exportClause.elements) {
-						symbols.push(n.name.text)
-					}
-				} else {
-					symbols.push("*")
-				}
-				imports.push({ specifier, symbols })
-			} else if (
-				ts.isCallExpression(node) &&
-				(node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-					(ts.isIdentifier(node.expression) && node.expression.text === "require")) &&
-				node.arguments.length > 0 &&
-				ts.isStringLiteral(node.arguments[0])
-			) {
-				// V215: Dynamic Dependency Sensing (import() and require())
-				imports.push({ specifier: (node.arguments[0] as ts.StringLiteral).text, symbols: ["*"] })
-			}
-			ts.forEachChild(node, visit)
-		}
-		visit(sourceFile)
+		ts.forEachChild(sourceFile, (node) => this.visitDetailedImports(node, imports))
 		return imports
 	}
 
-	private extractMetrics(sourceFile: ts.SourceFile) {
-		let totalNodes = 0
-		let logicNodes = 0
-		let ioImports = 0
-		let totalImports = 0
-		let exportCount = 0
-		let internalReferenceCount = 0
-		let anyCasts = 0
-
-		const visit = (node: ts.Node) => {
-			totalNodes++
-			const kind = node.kind
-
-			// V215: Deep 'any' Sourcing - Recursive type traversal
-			const checkDeepAny = (typeNode: ts.TypeNode | undefined) => {
-				if (!typeNode) return
-				if (typeNode.kind === ts.SyntaxKind.AnyKeyword) {
-					anyCasts++
-					return
+	private visitDetailedImports(node: ts.Node, imports: { specifier: string; symbols: string[] }[]) {
+		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+			const specifier = node.moduleSpecifier.text
+			const symbols: string[] = []
+			if (node.importClause) {
+				if (node.importClause.name) symbols.push("default")
+				if (node.importClause.namedBindings) {
+					if (ts.isNamedImports(node.importClause.namedBindings)) {
+						for (const n of node.importClause.namedBindings.elements) {
+							symbols.push(n.name.text)
+						}
+					} else if (ts.isNamespaceImport(node.importClause.namedBindings)) {
+						symbols.push("*")
+					}
 				}
-				ts.forEachChild(typeNode, (child) => {
-					if (ts.isTypeNode(child)) checkDeepAny(child)
-				})
 			}
-
-			if (ts.isAsExpression(node)) {
-				checkDeepAny(node.type)
-			} else if (ts.isTypeAssertionExpression(node)) {
-				checkDeepAny(node.type)
-			} else if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)) {
-				checkDeepAny(node.type)
+			imports.push({ specifier, symbols })
+		} else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+			const specifier = node.moduleSpecifier.text
+			const symbols: string[] = []
+			if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+				for (const n of node.exportClause.elements) {
+					symbols.push(n.name.text)
+				}
+			} else {
+				symbols.push("*")
 			}
-
-			if (
-				kind === ts.SyntaxKind.IfStatement ||
-				kind === ts.SyntaxKind.ForStatement ||
-				kind === ts.SyntaxKind.ForInStatement ||
-				kind === ts.SyntaxKind.ForOfStatement ||
-				kind === ts.SyntaxKind.WhileStatement ||
-				kind === ts.SyntaxKind.DoStatement ||
-				kind === ts.SyntaxKind.SwitchStatement
-			) {
-				logicNodes++
-			}
-			if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-				totalImports++
-				const text = node.moduleSpecifier.text
-				if (!text.startsWith(".") && !text.startsWith("@/")) ioImports++
-			}
-
-			// V160: Forensic Depth - Identifying exports for density calculation
-			if (
-				(ts.isClassDeclaration(node) ||
-					ts.isFunctionDeclaration(node) ||
-					ts.isInterfaceDeclaration(node) ||
-					ts.isTypeAliasDeclaration(node) ||
-					ts.isVariableStatement(node)) &&
-				node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
-			) {
-				exportCount++
-			}
-
-			// V160: Forensic Depth - Simple Cohesion (Internal identifier re-use)
-			if (ts.isIdentifier(node) && node.parent && !ts.isPropertyAccessExpression(node.parent)) {
-				internalReferenceCount++
-			}
-
-			ts.forEachChild(node, visit)
+			imports.push({ specifier, symbols })
+		} else if (
+			ts.isCallExpression(node) &&
+			(node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+				(ts.isIdentifier(node.expression) && node.expression.text === "require")) &&
+			node.arguments.length > 0 &&
+			ts.isStringLiteral(node.arguments[0])
+		) {
+			// V215: Dynamic Dependency Sensing (import() and require())
+			imports.push({ specifier: (node.arguments[0] as ts.StringLiteral).text, symbols: ["*"] })
 		}
-		visit(sourceFile)
+		ts.forEachChild(node, (child) => this.visitDetailedImports(child, imports))
+	}
 
+	private extractMetrics(sourceFile: ts.SourceFile) {
+		const ctx = {
+			totalNodes: 0,
+			logicNodes: 0,
+			ioImports: 0,
+			totalImports: 0,
+			exportCount: 0,
+			internalReferenceCount: 0,
+			anyCasts: 0,
+		}
+		ts.forEachChild(sourceFile, (node) => this.visitMetrics(node, ctx))
 		return {
-			logicDensity: totalNodes > 0 ? logicNodes / totalNodes : 0,
-			ioEntropy: totalImports > 0 ? ioImports / totalImports : 0,
-			astComplexity: totalNodes,
-			symbolDensity: totalNodes > 0 ? exportCount / totalNodes : 0,
-			logicCohesion: totalNodes > 0 ? internalReferenceCount / totalNodes : 0,
+			logicDensity: ctx.totalNodes > 0 ? ctx.logicNodes / ctx.totalNodes : 0,
+			ioEntropy: ctx.totalImports > 0 ? ctx.ioImports / ctx.totalImports : 0,
+			astComplexity: ctx.totalNodes,
+			symbolDensity: ctx.totalNodes > 0 ? ctx.exportCount / ctx.totalNodes : 0,
+			logicCohesion: ctx.totalNodes > 0 ? ctx.internalReferenceCount / ctx.totalNodes : 0,
 			// V215: Calibrated anyDensity weighting (Logarithmic scaling)
 			// Prevents massive spikes in small files.
-			anyDensity: totalNodes > 0 ? Math.min(1.0, anyCasts / Math.sqrt(totalNodes)) : 0,
+			anyDensity: ctx.totalNodes > 0 ? Math.min(1.0, ctx.anyCasts / Math.sqrt(ctx.totalNodes)) : 0,
 		}
+	}
+
+	private visitMetrics(
+		node: ts.Node,
+		ctx: {
+			totalNodes: number
+			logicNodes: number
+			ioImports: number
+			totalImports: number
+			exportCount: number
+			internalReferenceCount: number
+			anyCasts: number
+		},
+	) {
+		ctx.totalNodes++
+		const kind = node.kind
+
+		if (ts.isAsExpression(node)) {
+			this.checkDeepAny(node.type, ctx)
+		} else if (ts.isTypeAssertionExpression(node)) {
+			this.checkDeepAny(node.type, ctx)
+		} else if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)) {
+			this.checkDeepAny(node.type, ctx)
+		}
+
+		if (
+			kind === ts.SyntaxKind.IfStatement ||
+			kind === ts.SyntaxKind.ForStatement ||
+			kind === ts.SyntaxKind.ForInStatement ||
+			kind === ts.SyntaxKind.ForOfStatement ||
+			kind === ts.SyntaxKind.WhileStatement ||
+			kind === ts.SyntaxKind.DoStatement ||
+			kind === ts.SyntaxKind.SwitchStatement
+		) {
+			ctx.logicNodes++
+		}
+		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+			ctx.totalImports++
+			const text = node.moduleSpecifier.text
+			if (!text.startsWith(".") && !text.startsWith("@/")) ctx.ioImports++
+		}
+
+		if (
+			(ts.isClassDeclaration(node) ||
+				ts.isFunctionDeclaration(node) ||
+				ts.isInterfaceDeclaration(node) ||
+				ts.isTypeAliasDeclaration(node) ||
+				ts.isVariableStatement(node)) &&
+			node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+		) {
+			ctx.exportCount++
+		}
+
+		if (ts.isIdentifier(node) && node.parent && !ts.isPropertyAccessExpression(node.parent)) {
+			ctx.internalReferenceCount++
+		}
+
+		ts.forEachChild(node, (child) => this.visitMetrics(child, ctx))
+	}
+
+	private checkDeepAny(typeNode: ts.TypeNode | undefined, ctx: { anyCasts: number }) {
+		if (!typeNode) return
+		if (typeNode.kind === ts.SyntaxKind.AnyKeyword) {
+			ctx.anyCasts++
+			return
+		}
+		ts.forEachChild(typeNode, (child) => {
+			if (ts.isTypeNode(child)) this.checkDeepAny(child, ctx)
+		})
 	}
 
 	private detectInterface(path: string, sourceFile: ts.SourceFile): boolean {
@@ -571,7 +606,9 @@ export class SpiderEngine {
 			)
 			this.resolver.dispose()
 			this.sessionBuffer.clear()
-			this.substrateCheckpoint = null
+			// PRODUCTION HARDENING: Do not nullify checkpoint if an index is in progress,
+			// as it will cause a crash during rollbackSubstrate.
+			if (!this.isIndexing) this.substrateCheckpoint = null
 			this.ghosts.clear()
 			if (global.gc) global.gc()
 			return
@@ -684,9 +721,11 @@ export class SpiderEngine {
 			const pathMatch = ghostMsg.match(/GHOST (?:FILE|SYMBOL): (.*?) ->/)
 			const path = pathMatch ? pathMatch[1] : "unknown"
 
-			// V204: Fuzzy Enrichment
+			// V215: Fuzzy Enrichment (Path-Aware Throttling)
+			// Only perform expensive lexicographical similarity checks during single-file advisories.
+			// Project-wide fuzzy sensing is a major metabolic sink.
 			let enrichedMessage = ghostMsg
-			if (id === "SPI-102") {
+			if (id === "SPI-102" && filePath) {
 				const symbol = ghostMsg.match(/SYMBOL: (.*?) ->/)?.[1]
 				if (symbol) {
 					const providers = this.findGlobalProviders(symbol)
@@ -823,24 +862,27 @@ export class SpiderEngine {
 	 * Finds symbols in the substrate that are lexicographically similar to the target.
 	 */
 	public findSimilarSymbols(symbol: string, limit = 3): string[] {
+		// V215: Optimized Fuzzy Sensing
 		const allSymbols = new Set<string>()
 		for (const node of this.nodes.values()) {
 			for (const exp of node.exports) allSymbols.add(exp)
 		}
 
 		const lev = (a: string, b: string): number => {
+			if (Math.abs(a.length - b.length) > 3) return 99 // Fast bailout
 			if (a.length === 0) return b.length
 			if (b.length === 0) return a.length
-			const matrix = []
-			for (let i = 0; i <= b.length; i++) matrix[i] = [i]
-			for (let j = 0; j <= a.length; j++) matrix[0][j] = j
+
+			// Linear-space Levenshtein optimization
+			let prev = Array.from({ length: a.length + 1 }, (_, i) => i)
 			for (let i = 1; i <= b.length; i++) {
+				const current = [i]
 				for (let j = 1; j <= a.length; j++) {
-					if (b.charAt(i - 1) === a.charAt(j - 1)) matrix[i][j] = matrix[i - 1][j - 1]
-					else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1)
+					current[j] = b[i - 1] === a[j - 1] ? prev[j - 1] : Math.min(prev[j - 1] + 1, prev[j] + 1, current[j - 1] + 1)
 				}
+				prev = current
 			}
-			return matrix[b.length][a.length]
+			return prev[a.length]
 		}
 
 		return Array.from(allSymbols)
@@ -864,13 +906,18 @@ export class SpiderEngine {
 		if (data) {
 			try {
 				if (typeof data === "string") {
-					this.nodes = new Map(JSON.parse(data))
+					const parsed = JSON.parse(data)
+					if (!Array.isArray(parsed)) throw new Error("Invalid string substrate format.")
+					this.nodes = new Map(parsed)
 				} else {
 					const payload = this.persistence.deserialize(data)
+					if (!payload || !payload.nodes) throw new Error("Invalid binary substrate payload.")
 					this.nodes = new Map(payload.nodes)
 				}
-				this.metrics.computeCouplingMetrics(this.nodes)
-				this.metrics.computeReachability(this.nodes)
+				if (this.nodes.size > 0) {
+					this.metrics.computeCouplingMetrics(this.nodes)
+					this.metrics.computeReachability(this.nodes)
+				}
 				return true
 			} catch (e) {
 				Logger.error("[SpiderEngine] Failed to deserialize substrate data:", e)
@@ -896,49 +943,109 @@ export class SpiderEngine {
 	 * Autonomously rebuilds the graph with throttling to prevent event loop starvation.
 	 */
 	private isIndexing = false
-	public async rebuildRegistry(onProgress?: (processed: number, total: number, currentFile: string) => void): Promise<void> {
+	private activeRebuildPromise: Promise<void> | null = null
+	public async rebuildRegistry(
+		onProgress?: (processed: number, total: number, currentFile: string) => void | Promise<void>,
+		options: RebuildRegistryOptions = {},
+	): Promise<void> {
+		if (this.activeRebuildPromise) {
+			Logger.warn("[SpiderEngine] Rebuild already in progress. Awaiting active rebuild instead of starting a duplicate.")
+			return this.activeRebuildPromise
+		}
+
+		this.activeRebuildPromise = this.performRegistryRebuild(onProgress, options)
+		try {
+			await this.activeRebuildPromise
+		} finally {
+			this.activeRebuildPromise = null
+		}
+	}
+
+	private throwIfCancelled(isCancelled?: () => boolean): void {
+		if (isCancelled?.()) {
+			throw new Error("JoyZoning audit cancelled")
+		}
+	}
+
+	private async performRegistryRebuild(
+		onProgress?: (processed: number, total: number, currentFile: string) => void | Promise<void>,
+		options: RebuildRegistryOptions = {},
+	): Promise<void> {
 		if (this.isIndexing) {
-			Logger.warn("[SpiderEngine] Rebuild already in progress. Skipping redundant request.")
+			Logger.warn("[SpiderEngine] Rebuild already marked in progress. Awaiting existing operation.")
 			return
 		}
 
-		this.createCheckpoint()
+		this.throwIfCancelled(options.isCancelled)
+		if (this.nodes.size > 0 && this.computeMetabolicPressure() < 0.65) {
+			this.createCheckpoint()
+		} else {
+			this.substrateCheckpoint = null
+		}
 		this.isIndexing = true
 
 		// V215: Swap-on-Success Strategy
 		// We build into a temporary registry to prevent zeroing out the main state during a failure.
 		const tempRegistry = new Map<string, SpiderNode>()
-		const originalRegistry = this.nodes
+		const originalRegistrySize = this.nodes.size
+
+		// V215: Metabolic Resident Purge
+		// If pressure is already high, we clear the active map (checkpointed) to free heap space for tempRegistry.
+		if (this.computeMetabolicPressure() > 0.7) {
+			Logger.warn(`[SpiderEngine] High Pressure Indexing: Purging active substrate (Checkpointed) to free heap.`)
+			this.nodes.clear()
+		}
 
 		try {
 			Logger.info("[SpiderEngine] Rebuilding project registry (Throttled Indexing)...")
+			this.throwIfCancelled(options.isCancelled)
 			const files = this.resolver.scanProject()
 
-			if (originalRegistry.size > 50 && files.length === 0) {
-				throw new Error(`Unexpected file count drop (${originalRegistry.size} -> 0). Aborting rebuild.`)
+			if (originalRegistrySize > 50 && files.length === 0) {
+				throw new Error(`Unexpected file count drop (${originalRegistrySize} -> 0). Aborting rebuild.`)
 			}
 
 			let BATCH_SIZE = 250
 			for (let i = 0; i < files.length; i += BATCH_SIZE) {
+				this.throwIfCancelled(options.isCancelled)
 				const pressure = this.computeMetabolicPressure()
-				if (pressure > 0.8) BATCH_SIZE = 50
-				else if (pressure > 0.5) BATCH_SIZE = 100
+				if (pressure > 0.9) {
+					Logger.error(`[SpiderEngine] CRITICAL METABOLIC PRESSURE (${pressure}). Indexing paused.`)
+					if (global.gc) global.gc()
+					await new Promise((resolve) => setTimeout(resolve, 1000)) // 1s cool-off
+					BATCH_SIZE = 10
+				} else if (pressure > 0.8) {
+					BATCH_SIZE = 50
+				} else if (pressure > 0.5) {
+					BATCH_SIZE = 100
+				}
 
 				const batch = files.slice(i, i + BATCH_SIZE)
 				for (const f of batch) {
+					this.throwIfCancelled(options.isCancelled)
 					try {
 						const absolutePath = path.resolve(this.cwd, f)
-						const content = fs.readFileSync(absolutePath, "utf-8")
+						if (!fs.existsSync(absolutePath)) continue
+
+						const content = await fs.promises.readFile(absolutePath, "utf-8")
 						const hash = crypto.createHash("md5").update(content).digest("hex")
 						const layer = this.resolver.resolveLayer(f)
 
 						// Manually create nodes for the temp registry
-						const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
-						const importData = this.extractDetailedImports(sourceFile)
-						const { symbols: exports, reExports: rawReExports } = this.extractExports(sourceFile)
+						let sourceFile: ts.SourceFile | null = ts.createSourceFile(
+							absolutePath,
+							content,
+							ts.ScriptTarget.Latest,
+							true,
+						)
+						let importData: { specifier: string; symbols: string[] }[] | null =
+							this.extractDetailedImports(sourceFile)
+						const exportsData = this.extractExports(sourceFile)
+						let exports: string[] | null = exportsData.symbols
+						const rawReExports = exportsData.reExports
 						const reExportSpecifiers = rawReExports // Temporary storage for post-pass resolution
-						const metrics = this.extractMetrics(sourceFile)
-						const namingScore = this.calculateNamingScore(sourceFile)
+						let metrics: any = this.extractMetrics(sourceFile)
+						let namingScore: number | null = this.calculateNamingScore(sourceFile)
 
 						const node: SpiderNode = {
 							id: f,
@@ -955,7 +1062,7 @@ export class SpiderEngine {
 							exports,
 							reExports: reExportSpecifiers, // Store specifiers temporarily
 							consumptions: {}, // Will be filled in coupling pass
-							mtime: fs.statSync(absolutePath).mtimeMs,
+							mtime: fs.existsSync(absolutePath) ? fs.statSync(absolutePath).mtimeMs : Date.now(),
 							namingScore,
 							symbolDensity: content.length > 0 ? exports.length / (content.length / 100) : 0,
 							logicCohesion: 0.5,
@@ -968,10 +1075,18 @@ export class SpiderEngine {
 						tempRegistry.set(f, node)
 
 						if (onProgress) {
-							onProgress(i + batch.indexOf(f) + 1, files.length, f)
+							const progressResult = onProgress(i + batch.indexOf(f) + 1, files.length, f)
+							if (progressResult instanceof Promise) await progressResult
 						}
-					} catch (e) {
-						Logger.warn(`[SpiderEngine] Failed to index ${f}:`, e)
+
+						// V200: Forensic Closure Hygiene - Forcefully destroy large visitor scopes
+						sourceFile = null
+						importData = null
+						exports = null
+						metrics = null
+						namingScore = null
+					} catch (e: any) {
+						Logger.warn(`[SpiderEngine] Failed to index ${f}: ${e.message}`)
 					}
 				}
 				// Throttling
@@ -979,6 +1094,7 @@ export class SpiderEngine {
 			}
 
 			// Finalizing Pass (Re-export Resolution, Coupling & Fragility)
+			this.throwIfCancelled(options.isCancelled)
 			for (const node of tempRegistry.values()) {
 				// V215: Order-Independent Re-export Resolution
 				// Now that ALL nodes are in the tempRegistry, we can resolve specifiers to IDs safely.
@@ -988,8 +1104,11 @@ export class SpiderEngine {
 					.filter(Boolean) as string[]
 			}
 
+			this.throwIfCancelled(options.isCancelled)
 			this.metrics.computeCouplingMetrics(tempRegistry)
+			this.throwIfCancelled(options.isCancelled)
 			this.metrics.computeReachability(tempRegistry)
+			this.throwIfCancelled(options.isCancelled)
 			const fragility = this.forensic.computeFragility(tempRegistry)
 			for (const [id, stats] of fragility.entries()) {
 				const n = tempRegistry.get(id)
@@ -1002,14 +1121,18 @@ export class SpiderEngine {
 
 			// Swap!
 			this.nodes = tempRegistry
+			this.substrateCheckpoint = null
 			this.version++
 			Logger.info(`[SpiderEngine] Substrate Immortalized: ${this.nodes.size} nodes indexed.`)
 		} catch (error) {
 			Logger.error("[SpiderEngine] Critical failure during registry rebuild:", error)
-			await this.rollbackSubstrate()
+			if (!options.isCancelled?.()) {
+				await this.rollbackSubstrate()
+			}
 			throw error
 		} finally {
 			this.isIndexing = false
+			this.substrateCheckpoint = null
 		}
 	}
 
@@ -1027,11 +1150,13 @@ export class SpiderEngine {
 				this.nodes.delete(id)
 				pruned++
 			} else {
-				const stats = fs.statSync(absPath)
-				if (stats.mtimeMs > (node.mtime || 0)) {
-					const content = await fs.promises.readFile(absPath, "utf-8")
-					this.updateNode(node.path, content)
-					reindexed++
+				if (fs.existsSync(absPath)) {
+					const stats = fs.statSync(absPath)
+					if (stats.mtimeMs > (node.mtime || 0)) {
+						const content = await fs.promises.readFile(absPath, "utf-8")
+						this.updateNode(node.path, content)
+						reindexed++
+					}
 				}
 			}
 		}
@@ -1070,7 +1195,7 @@ export class SpiderEngine {
 
 	public clone(): SpiderEngine {
 		const clone = new SpiderEngine(this.cwd)
-		clone.nodes = new Map(Array.from(this.nodes.entries()).map(([k, v]) => [k, { ...v }]))
+		clone.nodes = new Map(this.nodes)
 		clone.version = this.version
 		return clone
 	}
@@ -1359,7 +1484,8 @@ export class SpiderEngine {
 					if (ts.isIdentifier(nameNode)) {
 						const name = nameNode.text
 						const isConst = (node.parent.flags & ts.NodeFlags.Const) !== 0
-						const isTopLevel = ts.isSourceFile(node.parent.parent.parent)
+						// V215: Safe Top-Level Sensing
+						const isTopLevel = node.parent && node.parent.parent && ts.isSourceFile(node.parent.parent.parent)
 
 						if (isConst && isTopLevel && (/^[A-Z][A-Z0-9_]*$/.test(name) || /^[a-z][a-zA-Z0-9]*$/.test(name))) {
 							total++

@@ -944,4 +944,12 @@ export class RefactorHealer {
 			return false
 		}
 	}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose(): void {
+		this.morphProject = null
+		Logger.info("[RefactorHealer] Healer substrate released.")
+	}
 }

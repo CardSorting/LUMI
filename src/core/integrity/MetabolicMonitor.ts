@@ -69,6 +69,13 @@ export class MetabolicMonitor {
 		metrics.reads++
 		metrics.lastReadTimestamp = Date.now()
 
+		// V215: Rolling Symbol Observation (Limit 100)
+		// Prevents Set bloat in massive structural graphs.
+		if (metrics.symbolObservations.size > 100) {
+			const first = metrics.symbolObservations.values().next().value
+			if (first) metrics.symbolObservations.delete(first)
+		}
+
 		if (content) {
 			metrics.lastObservedHash = this.computeHash(content)
 		}
@@ -485,6 +492,18 @@ export class MetabolicMonitor {
 
 	public getResonance(): number {
 		return this.resonanceMultiplier
+	}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 * Clears the registry and all forensic observations to prevent memory leaks.
+	 */
+	public dispose(): void {
+		for (const metrics of this.registry.values()) {
+			metrics.symbolObservations.clear()
+		}
+		this.registry.clear()
+		Logger.info("[MetabolicMonitor] Substrate released.")
 	}
 }
 

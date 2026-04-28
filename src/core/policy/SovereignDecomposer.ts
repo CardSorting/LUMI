@@ -1,4 +1,5 @@
 import * as ts from "typescript"
+import { Logger } from "../../shared/services/Logger"
 import { getLayer } from "../../utils/joy-zoning"
 
 export interface DecompositionStep {
@@ -42,9 +43,9 @@ export class SovereignDecomposer {
 		// 1. Analyze Method-Level Logic Density vs I/O
 		const visit = (node: ts.Node) => {
 			if (this.isFunctionalNode(node)) {
-				const body = (node as ts.FunctionLikeDeclaration).body
+				const body = node.body
 				if (body) {
-					const { density, hasIO } = this.analyzeNodeLogic(node as ts.FunctionLikeDeclaration, sourceFile)
+					const { density, hasIO } = this.analyzeNodeLogic(node, sourceFile)
 					const name = this.getFunctionName(node)
 
 					// VIOLATION: Pure Logic in INFRASTRUCTURE
@@ -586,5 +587,13 @@ export class SovereignDecomposer {
 		})
 
 		return content.trim()
+	}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose(): void {
+		// Currently stateless instance-level, but reserved for future analysis caches.
+		Logger.info("[SovereignDecomposer] Decomposer substrate released.")
 	}
 }

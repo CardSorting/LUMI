@@ -16,12 +16,12 @@ export class MetricsEngine {
 
 		for (const node of nodes.values()) {
 			node.dependents = []
-			for (const imp of node.imports) {
+			for (const imp of node.imports || []) {
 				const resolved = this.resolver.resolveImportToNodeId(node.path, imp, nodes)
 				if (resolved && couplingMap.has(resolved)) {
 					couplingMap.set(resolved, (couplingMap.get(resolved) || 0) + 1)
 					const targetNode = nodes.get(resolved)
-					if (targetNode && !targetNode.dependents.includes(node.id)) {
+					if (targetNode?.dependents && !targetNode.dependents.includes(node.id)) {
 						targetNode.dependents.push(node.id)
 					}
 				}
@@ -75,7 +75,10 @@ export class MetricsEngine {
 			if (!currentId) continue
 			const node = nodes.get(currentId)
 			if (node) {
-				for (const imp of node.imports) {
+				// V215: Dual-Path Resolution (Imports + Re-exports)
+				// Ensures modules connected via wildcard re-exports (export * from '...') are recognized as reachable.
+				const connections = [...(node.imports || []), ...(node.reExports || [])]
+				for (const imp of connections) {
 					const resolved = this.resolver.resolveImportToNodeId(node.path, imp, nodes)
 					if (resolved && nodes.has(resolved) && !reachable.has(resolved)) {
 						reachable.add(resolved)

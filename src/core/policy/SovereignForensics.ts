@@ -1,6 +1,7 @@
 import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
+import { Logger } from "@/shared/services/Logger"
 import { MetabolicMetrics, MetabolicMonitor } from "../integrity/MetabolicMonitor"
 import type { SpiderEngine } from "./spider/SpiderEngine"
 
@@ -220,5 +221,15 @@ export class SovereignForensics {
 			return true
 		}
 		return false
+	}
+
+	/**
+	 * V220: Industrial Hygiene (Disposal).
+	 * Releases retained service references during policy-engine teardown.
+	 */
+	public dispose(): void {
+		this.metabolicMonitor = null as unknown as MetabolicMonitor
+		this.spiderEngine = undefined
+		Logger.info("[SovereignForensics] Forensic substrate released.")
 	}
 }

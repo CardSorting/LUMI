@@ -23,7 +23,7 @@ export interface RequestInfo {
 	/**
 	 * The streaming response handler for this request
 	 */
-	responseStream?: StreamingResponseHandler<any>
+	responseStream?: StreamingResponseHandler<unknown>
 }
 
 /**
@@ -52,7 +52,7 @@ export class GrpcRequestRegistry {
 		requestId: string,
 		cleanup: () => void,
 		metadata?: unknown,
-		responseStream?: StreamingResponseHandler<any>,
+		responseStream?: StreamingResponseHandler<unknown>,
 	): void {
 		this.activeRequests.set(requestId, {
 			cleanup,
@@ -146,5 +146,19 @@ export class GrpcRequestRegistry {
 				Logger.info(`[GrpcRequestRegistry] Purged ${cleaned} stale requests.`)
 			}
 		}, intervalMs)
+		this.purgeInterval.unref?.()
+	}
+
+	/**
+	 * Stops background purging and releases all request closures.
+	 */
+	public dispose(): void {
+		if (this.purgeInterval) {
+			clearInterval(this.purgeInterval)
+			this.purgeInterval = null
+		}
+		for (const requestId of Array.from(this.activeRequests.keys())) {
+			this.cancelRequest(requestId)
+		}
 	}
 }
