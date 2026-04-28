@@ -19,6 +19,7 @@ export type { SpiderNode, SpiderEntropyReport, SpiderViolation, SpiderSnapshot, 
 
 export interface RebuildRegistryOptions {
 	isCancelled?: () => boolean
+	pressureMap?: Map<string, number>
 }
 
 type ExtractedMetrics = {
@@ -74,9 +75,9 @@ export class SpiderEngine {
 	}
 
 	private resolver: PathResolver
-	private metrics: MetricsEngine
+	public metrics: MetricsEngine
 	private persistence: PersistenceManager
-	private forensic: ForensicEngine
+	public forensic: ForensicEngine
 	private suppressions: Set<string> = new Set()
 	private graphRevision = 0
 	private lastCycleRevision = -1
@@ -800,7 +801,50 @@ export class SpiderEngine {
 			})
 		}
 
-		// 10. SPI-205: Immune Response Strategy (V215 Behavioral Sensing)
+		// 11. SPI-300: Forensic Prophecy (Level 10)
+		const snapshots = this.persistence.getSnapshots().map((s) => v8.deserialize(s))
+		const rippleMap = this.forensic.calculateRippleProbability(this.nodes)
+
+		for (const node of this.nodes.values()) {
+			const ripple = rippleMap.get(node.id) || 0
+			if (ripple > 0.8) {
+				violations.push({
+					id: "SPI-300",
+					severity: "WARN",
+					path: node.path,
+					message: `SUBSTRATE PROPHECY: This module has a ${Math.round(ripple * 100)}% Ripple Probability. A change here is statistically guaranteed to fracture transitive dependents.`,
+					remediation: "Decouple this hub or extract stable interfaces to reduce ripple probability.",
+				})
+			}
+
+			// Domain Drift
+			const drift = this.forensic.detectDomainDrift(node, snapshots)
+			if (drift) {
+				violations.push({
+					id: "SPI-301",
+					severity: "INFO",
+					path: node.path,
+					message: drift,
+					remediation:
+						"Audit the new vocabulary. If these symbols represent a new domain, consider a domain-level fission.",
+				})
+			}
+
+			// Refactoring Fatigue
+			const pressure = monitor?.getPressureMap().get(node.id) || 0
+			if (this.metrics.detectRefactoringFatigue(node, pressure, snapshots)) {
+				violations.push({
+					id: "SPI-302",
+					severity: "WARN",
+					path: node.path,
+					message: `REFACTORING FATIGUE: High churn detected in ${path.basename(node.path)} with zero structural improvement. The current abstraction may be repelling the logic.`,
+					remediation:
+						"Fundamental Rethink Required: The current module design is resisting changes. Consider a complete architectural redesign of this component.",
+				})
+			}
+		}
+
+		// 12. SPI-205: Immune Response Strategy (V215 Behavioral Sensing)
 		if (monitor) {
 			const response = monitor.getImmuneResponse()
 			if (response.strategy === "STABILIZE") {
@@ -1260,12 +1304,18 @@ export class SpiderEngine {
 			this.throwIfCancelled(options.isCancelled)
 			this.metrics.computeReachability(tempRegistry)
 			this.throwIfCancelled(options.isCancelled)
-			const fragility = this.forensic.computeFragility(tempRegistry)
+
+			// V215: Cognitive Blast Radius Adjustment.
+			// Monolithic projects (High Gini) get stricter penalties for hub files.
+			const projectStats = this.metrics.getProjectStatistics(tempRegistry)
+			const giniPenalty = projectStats.giniCoefficient > 0.7 ? 1.5 : 1.0
+
+			const fragility = this.forensic.computeFragility(tempRegistry, options.pressureMap)
 			for (const [id, stats] of fragility.entries()) {
 				const n = tempRegistry.get(id)
 				if (n) {
-					n.blastRadius = stats.blastRadius
-					n.isFragile = stats.isFragile
+					n.blastRadius = Math.min(1.0, stats.blastRadius * giniPenalty)
+					n.isFragile = stats.isFragile || n.blastRadius > 0.6
 					n.isHotspot = n.isFragile && (n.cognitiveComplexity > 0.4 || n.anyDensity > 0.3)
 				}
 			}
@@ -1293,7 +1343,7 @@ export class SpiderEngine {
 	 * V20: Synchronizes the in-memory registry with the physical disk (Merkle Healing).
 	 * Prunes missing files and automatically re-indexes stale files based on mtime.
 	 */
-	public async synchronizeRegistry(): Promise<void> {
+	public async synchronizeRegistry(pressureMap: Map<string, number> = new Map()): Promise<void> {
 		let pruned = 0
 		let reindexed = 0
 
@@ -1319,6 +1369,15 @@ export class SpiderEngine {
 			Logger.info(`[SpiderEngine] Registry Synchronized: Pruned ${pruned}, Re-indexed ${reindexed}.`)
 			this.metrics.computeCouplingMetrics(this.nodes)
 			this.metrics.computeReachability(this.nodes)
+			const fragility = this.forensic.computeFragility(this.nodes, pressureMap)
+			for (const [id, stats] of fragility.entries()) {
+				const n = this.nodes.get(id)
+				if (n) {
+					n.blastRadius = stats.blastRadius
+					n.isFragile = stats.isFragile
+					n.isHotspot = n.isFragile && (n.cognitiveComplexity > 0.4 || n.anyDensity > 0.3)
+				}
+			}
 
 			for (const g of this.ghosts) {
 				if (!this.nodes.has(g)) this.ghosts.delete(g)

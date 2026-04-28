@@ -31,7 +31,17 @@ export class SovereignDecomposer {
 	 * V140: Industrial Decomposition Analysis.
 	 * Calculates real integrity and health scores based on Forensic Node metadata.
 	 */
-	public analyze(filePath: string, content: string, node?: import("./spider/types").SpiderNode): DecompositionPlan {
+	public analyze(
+		filePath: string,
+		content: string,
+		node?: import("./spider/types").SpiderNode,
+		stats?: {
+			complexity: { mean: number; stdDev: number }
+			coupling: { mean: number; stdDev: number }
+			size: { mean: number; stdDev: number }
+			giniCoefficient: number
+		},
+	): DecompositionPlan {
 		const sourceFile = ts.createSourceFile("analyze.ts", content, ts.ScriptTarget.Latest, true)
 		const layer = getLayer(filePath)
 		const totalLines = content.split("\n").length
@@ -146,9 +156,16 @@ export class SovereignDecomposer {
 					const zombies = this.detectZombieSymbols(islandSymbols, symbolGraph)
 					const extendedIsland = [...islandSymbols, ...zombies]
 
-					// V215: Significantly increased extraction thresholds.
-					// If an entity is > 500 lines OR (file is massive and entity is > 300 lines).
-					if (mass > 500 || (totalLines > 2000 && mass > 300)) {
+					// V215: Cognitive Architectural Resonance (Z-Score Analysis)
+					// Instead of hardcoded lines, we check if this entity is a statistical outlier.
+					const zScoreMass = stats ? (mass - stats.size.mean) / (stats.size.stdDev || 1) : 0
+					const zScoreFile = stats ? (totalLines - stats.size.mean) / (stats.size.stdDev || 1) : 0
+
+					// Only flag if it's an outlier (Z > 2.0) OR significantly above industrial norms
+					const isOutlier = zScoreMass > 2.0 || zScoreFile > 2.5
+					const isMassive = mass > 1500 || totalLines > 5000
+
+					if (isOutlier || isMassive) {
 						const boilerplate = this.generateBoilerplate(extendedIsland, sourceFile, islandImports, layer)
 
 						steps.push({
@@ -175,8 +192,11 @@ export class SovereignDecomposer {
 					const methodMass = end - start + 1
 					const name = this.getFunctionName(n)
 
-					// V215: Increased God Method threshold to 300 lines.
-					if (methodMass > 300) {
+					// V215: Statistical God Method Analysis.
+					const zScoreMethod = stats ? (methodMass - stats.complexity.mean) / (stats.complexity.stdDev || 1) : 0
+					const isMethodOutlier = zScoreMethod > 3.0 // More conservative for methods
+
+					if (isMethodOutlier || methodMass > 500) {
 						steps.push({
 							action: "EXTRACT",
 							target: `God Method '${name}'`,
@@ -399,6 +419,24 @@ export class SovereignDecomposer {
 			ts.isArrowFunction(node) ||
 			ts.isFunctionExpression(node)
 		)
+	}
+
+	/**
+	 * V215: Symbol Affinity Analysis.
+	 * Calculates the logical resonance between two symbols.
+	 * High affinity (> 0.5) suggests the symbols should stay in the same module.
+	 */
+	private calculateAffinity(symbolsA: string[], symbolsB: string[], symbolGraph: Map<string, string[]>): number {
+		if (symbolsA.length === 0 || symbolsB.length === 0) return 0
+
+		// Check for shared references (the most basic affinity signal)
+		const refsA = new Set(symbolsA.flatMap((s) => symbolGraph.get(s) || []))
+		const refsB = new Set(symbolsB.flatMap((s) => symbolGraph.get(s) || []))
+
+		const intersection = new Set([...refsA].filter((x) => refsB.has(x)))
+		const union = new Set([...refsA, ...refsB])
+
+		return union.size === 0 ? 0 : intersection.size / union.size
 	}
 
 	private getFunctionName(node: ts.Node): string {

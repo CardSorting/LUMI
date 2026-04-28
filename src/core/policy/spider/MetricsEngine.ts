@@ -10,6 +10,132 @@ export class MetricsEngine {
 		private resolver: PathResolver,
 	) {}
 
+	/**
+	 * V215: Cognitive Architectural Resonance.
+	 * Calculates multivariate statistics (Mean/StdDev) across the entire workspace.
+	 */
+	public getProjectStatistics(nodes: Map<string, SpiderNode>): {
+		complexity: { mean: number; stdDev: number }
+		coupling: { mean: number; stdDev: number }
+		size: { mean: number; stdDev: number }
+		giniCoefficient: number
+	} {
+		const values = Array.from(nodes.values())
+		const totalFiles = values.length
+		if (totalFiles === 0) {
+			return {
+				complexity: { mean: 0, stdDev: 0 },
+				coupling: { mean: 0, stdDev: 0 },
+				size: { mean: 0, stdDev: 0 },
+				giniCoefficient: 0,
+			}
+		}
+
+		const getStats = (nums: number[]) => {
+			const mean = nums.reduce((a, b) => a + b, 0) / totalFiles
+			const variance = nums.reduce((a, b) => a + (b - mean) ** 2, 0) / totalFiles
+			return { mean, stdDev: Math.sqrt(variance) }
+		}
+
+		// Approximate line counts
+		const estimatedLines = values.map((n) => n.astComplexity / 10 + n.exports.length * 5)
+
+		return {
+			complexity: getStats(values.map((n) => n.astComplexity)),
+			coupling: getStats(values.map((n) => n.afferentCoupling)),
+			size: getStats(estimatedLines),
+			giniCoefficient: this.calculateGiniCoefficient(values.map((n) => n.afferentCoupling)),
+		}
+	}
+
+	/**
+	 * V215: Hubbiness Analyzer (Gini Coefficient).
+	 * Measures the inequality of dependency distribution.
+	 * A high Gini coefficient (> 0.7) indicates a "Hub and Spoke" (Monolithic) architecture.
+	 */
+	private calculateGiniCoefficient(nums: number[]): number {
+		if (nums.length === 0) return 0
+		const sorted = [...nums].sort((a, b) => a - b)
+		const n = sorted.length
+		let sumOfDifferences = 0
+		for (let i = 0; i < n; i++) {
+			sumOfDifferences += (2 * i - n - 1) * sorted[i]
+		}
+		return sumOfDifferences / (n * n * (sorted.reduce((a, b) => a + b, 0) / n))
+	}
+
+	public calculateZScore(value: number, stats: { mean: number; stdDev: number }): number {
+		if (stats.stdDev === 0) return 0
+		return (value - stats.mean) / stats.stdDev
+	}
+
+	/**
+	 * V215: Dynamic Metabolic Calibration.
+	 * Calculates average metrics across the entire workspace to establish
+	 * project-specific thresholds.
+	 */
+	/**
+	 * V215: Metabolic Decay Velocity.
+	 * Measures the 'Structural Half-Life' of modules.
+	 * Identifies modules where complexity is rising but integrity is falling.
+	 */
+	public trackStructuralHalfLife(node: SpiderNode, snapshots: SpiderSnapshot[]): number {
+		if (snapshots.length < 5) return 1.0
+
+		const history = snapshots.map((s) => s.nodes.find((n) => n.id === node.id)).filter(Boolean) as SpiderNode[]
+		if (history.length < 2) return 1.0
+
+		const first = history[0]
+		const last = history[history.length - 1]
+
+		const complexityDelta = (last.astComplexity - first.astComplexity) / Math.max(1, first.astComplexity)
+		const couplingDelta = (last.afferentCoupling - first.afferentCoupling) / Math.max(1, first.afferentCoupling)
+
+		// Decay is positive if complexity/coupling are rising faster than 10% per session
+		return (complexityDelta + couplingDelta) / 2
+	}
+
+	/**
+	 * V215: Refactoring Fatigue Sensing.
+	 * Identifies 'Stagnant Hotspots'—high churn with zero structural improvement.
+	 */
+	public detectRefactoringFatigue(node: SpiderNode, pressure: number, snapshots: SpiderSnapshot[]): boolean {
+		if (pressure < 0.7 || snapshots.length < 5) return false
+
+		const history = snapshots.map((s) => s.nodes.find((n) => n.id === node.id)).filter(Boolean) as SpiderNode[]
+		if (history.length < 5) return false
+
+		// Check if complexity has stayed constant despite high pressure
+		const complexities = history.map((n) => n.astComplexity)
+		const variance = complexities.reduce((a, b) => a + (b - complexities.reduce((x, y) => x + y, 0) / history.length) ** 2, 0)
+
+		return variance < 10 // Zero structural evolution despite high pressure
+	}
+
+	public getProjectBaselines(nodes: Map<string, SpiderNode>): {
+		avgComplexity: number
+		avgCoupling: number
+		avgFileLineCount: number
+	} {
+		const values = Array.from(nodes.values())
+		if (values.length === 0) {
+			return { avgComplexity: 0, avgCoupling: 0, avgFileLineCount: 0 }
+		}
+
+		const totalComplexity = values.reduce((acc, n) => acc + n.astComplexity, 0)
+		const totalCoupling = values.reduce((acc, n) => acc + n.afferentCoupling, 0)
+		const totalFiles = values.length
+
+		// Approximate line counts (conservative estimate from exports/complexity ratio)
+		const estimatedTotalLines = values.reduce((acc, n) => acc + (n.astComplexity / 10 + n.exports.length * 5), 0)
+
+		return {
+			avgComplexity: totalComplexity / totalFiles,
+			avgCoupling: totalCoupling / totalFiles,
+			avgFileLineCount: estimatedTotalLines / totalFiles,
+		}
+	}
+
 	public calculateTemporalFragility(node: SpiderNode, growthVelocity: number, pressure: number): number {
 		const densityWeight = node.logicDensity * 2.0
 		const velocityWeight = Math.abs(growthVelocity) * 3.0

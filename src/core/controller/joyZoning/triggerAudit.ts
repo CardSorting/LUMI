@@ -256,8 +256,9 @@ export async function triggerAudit(
 						Logger.warn(`[Audit] Skipping oversized hotspot ${node.path} (${stats.size} bytes).`)
 						continue
 					}
+					const projectStats = spider.metrics.getProjectStatistics(spider.nodes)
 					const content = fs.readFileSync(absPath, "utf-8")
-					const plan = decomposer.analyze(node.path, content, node)
+					const plan = decomposer.analyze(node.path, content, node, projectStats)
 
 					if (plan.steps.length > 0) {
 						for (const step of plan.steps) {

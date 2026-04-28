@@ -275,6 +275,16 @@ export class MetabolicMonitor {
 	/**
 	 * Gets the project-wide stability stats.
 	 */
+	public getPressureMap(): Map<string, number> {
+		const map = new Map<string, number>()
+		for (const [path, metrics] of this.registry.entries()) {
+			// Normalize pressure to a 0-1 scale based on relative writes
+			const pressure = Math.min(1.0, metrics.writes / 10)
+			map.set(path, pressure)
+		}
+		return map
+	}
+
 	public getStabilityStats(): StabilityStats {
 		let totalReads = 0
 		let totalWrites = 0

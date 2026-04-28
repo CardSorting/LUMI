@@ -4,11 +4,65 @@ import * as path from "path"
 import * as ts from "typescript"
 import { Logger } from "../../../shared/services/Logger.js"
 import { PathResolver } from "./PathResolver.js"
-import { SpiderNode } from "./types.js"
+import { SpiderNode, SpiderSnapshot } from "./types.js"
 
 export class ForensicEngine {
 	private ghostVerificationCache: Map<string, { hash: string; ghosts: string[]; turn: number }> = new Map()
 	private turnCounter = 0
+
+	/**
+	 * V215: Substrate Sentience (Forensic Prophecy).
+	 * Calculates the mathematical probability of a change propagating up the graph.
+	 * Returns a map of NodeID -> RippleProbability (0-1.0).
+	 */
+	public calculateRippleProbability(nodes: Map<string, SpiderNode>): Map<string, number> {
+		const rippleMap = new Map<string, number>()
+		for (const node of nodes.values()) {
+			const reachable = new Set<string>()
+			const queue = [node.id]
+			while (queue.length > 0) {
+				const current = queue.shift()
+				if (!current) continue
+				const currNode = nodes.get(current)
+				if (currNode) {
+					for (const dep of currNode.dependents) {
+						if (!reachable.has(dep)) {
+							reachable.add(dep)
+							queue.push(dep)
+						}
+					}
+				}
+			}
+			// Ripple Probability is a function of reachability vs total nodes
+			rippleMap.set(node.id, Math.min(1.0, reachable.size / Math.max(1, nodes.size * 0.2)))
+		}
+		return rippleMap
+	}
+
+	/**
+	 * V215: Domain Drift Detection.
+	 * Identifies modules that are semantically diverging from their historical domain.
+	 */
+	public detectDomainDrift(node: SpiderNode, snapshots: SpiderSnapshot[]): string | null {
+		if (snapshots.length < 5) return null // Need historical baseline
+
+		const vocabulary = new Set(node.exports.flatMap((e) => e.split(/(?=[A-Z])|_/)))
+		const historicalVocabs = snapshots.map((s) => {
+			const n = s.nodes.find((n) => n.id === node.id)
+			return n ? new Set(n.exports.flatMap((e) => e.split(/(?=[A-Z])|_/))) : new Set<string>()
+		})
+
+		const baselineVocab = new Set<string>()
+		for (const v of historicalVocabs) {
+			for (const word of v) baselineVocab.add(word)
+		}
+
+		const newWords = [...vocabulary].filter((w) => !baselineVocab.has(w))
+		if (newWords.length > 3) {
+			return `[SPI-111] DOMAIN DRIFT: ${path.basename(node.path)} is accumulating new domain vocabulary: [${newWords.join(", ")}]. Possible domain fission required.`
+		}
+		return null
+	}
 
 	constructor(
 		private cwd: string,
@@ -269,7 +323,10 @@ export class ForensicEngine {
 	 * Calculates the 'Blast Radius' of each node based on afferent coupling and
 	 * depth in the architectural graph.
 	 */
-	public computeFragility(nodes: Map<string, SpiderNode>): Map<string, { blastRadius: number; isFragile: boolean }> {
+	public computeFragility(
+		nodes: Map<string, SpiderNode>,
+		pressureMap: Map<string, number> = new Map(),
+	): Map<string, { blastRadius: number; isFragile: boolean }> {
 		const results = new Map<string, { blastRadius: number; isFragile: boolean }>()
 		const totalNodes = nodes.size
 		if (totalNodes === 0) return results
@@ -281,6 +338,16 @@ export class ForensicEngine {
 			const scaleFactor = Math.max(50, totalNodes) * 0.1
 			let blastRadius = Math.min((directDependents * layerWeight) / scaleFactor, 1.0)
 
+			// V215: Metabolic Dampening.
+			// If a file is stable (0 pressure), its blast radius is dampened by 50%.
+			// If a file is under high pressure (pressure > 0.5), its blast radius is amplified.
+			const pressure = pressureMap.get(node.id) || 0
+			if (pressure === 0) {
+				blastRadius *= 0.5
+			} else if (pressure > 0.5) {
+				blastRadius = Math.min(1.0, blastRadius * 1.5)
+			}
+
 			if (directDependents < 5) {
 				blastRadius *= 0.5
 			}
@@ -289,19 +356,21 @@ export class ForensicEngine {
 		}
 
 		// 2. Deep Pass: Recursive Blast Radius (Second-Order Impact)
-		// We add a fraction of each dependent's blast radius to the target.
 		for (const node of nodes.values()) {
 			let recursiveImpact = 0
 			for (const depId of node.dependents) {
 				const depRadius = results.get(depId)?.blastRadius || 0
-				recursiveImpact += depRadius * 0.2 // 20% of dependent's impact propagates up
+				recursiveImpact += depRadius * 0.2
 			}
 
 			const stats = results.get(node.id)
 			if (stats) {
 				stats.blastRadius = Math.min(1.0, stats.blastRadius + recursiveImpact)
-				// V215: Root Vulnerability Threshold
-				stats.isFragile = stats.blastRadius > 0.55 || (node.afferentCoupling > 10 && stats.blastRadius > 0.4)
+				// V215: Metabolic Fragility Threshold.
+				const pressure = pressureMap.get(node.id) || 0
+				const fragilityThreshold = pressure > 0.3 ? 0.45 : 0.6
+				stats.isFragile =
+					stats.blastRadius > fragilityThreshold || (node.afferentCoupling > 15 && stats.blastRadius > 0.4)
 			}
 		}
 
