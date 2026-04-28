@@ -269,14 +269,29 @@ export class SpiderEngine {
 			namingScore,
 			symbolDensity: content.length > 0 ? exports.length / (content.length / 100) : 0,
 			logicCohesion: 0.5,
-			blastRadius: 0, // Computed project-wide
-			isFragile: false,
+			blastRadius: oldNode?.blastRadius || 0, // Preserve until re-computed
+			isFragile: oldNode?.isFragile || false,
 			cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
-			isHotspot: false, // Computed project-wide
+			isHotspot: oldNode?.isHotspot || false,
+			anyDensity: metrics.anyDensity,
 		}
 
 		this.nodes.set(normalizedPath, newNode)
 		this.version++
+
+		// V215: Incremental Structural Re-calibration
+		// If the node has dependents, a change might shift the project's gravity.
+		if (newNode.afferentCoupling > 0 || (oldNode && oldNode.afferentCoupling > 0)) {
+			const fragility = this.forensic.computeFragility(this.nodes)
+			for (const [id, stats] of fragility.entries()) {
+				const n = this.nodes.get(id)
+				if (n) {
+					n.blastRadius = stats.blastRadius
+					n.isFragile = stats.isFragile
+					n.isHotspot = n.isFragile && (n.cognitiveComplexity > 0.4 || n.anyDensity > 0.3)
+				}
+			}
+		}
 
 		if (!oldNode || JSON.stringify(oldNode.imports) !== JSON.stringify(newNode.imports)) {
 			this.updateIncrementalCoupling(normalizedPath, oldNode?.imports || [], newNode.imports)
@@ -369,10 +384,21 @@ export class SpiderEngine {
 		let totalImports = 0
 		let exportCount = 0
 		let internalReferenceCount = 0
+		let anyCasts = 0
 
 		const visit = (node: ts.Node) => {
 			totalNodes++
 			const kind = node.kind
+
+			// V210: Forensic marker for unsafe type usage
+			if (ts.isAsExpression(node)) {
+				if (node.type.getText(sourceFile) === "any") anyCasts++
+			} else if (ts.isTypeAssertionExpression(node)) {
+				if (node.type.getText(sourceFile) === "any") anyCasts++
+			} else if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)) {
+				if (node.type && node.type.getText(sourceFile) === "any") anyCasts++
+			}
+
 			if (
 				kind === ts.SyntaxKind.IfStatement ||
 				kind === ts.SyntaxKind.ForStatement ||
@@ -417,6 +443,9 @@ export class SpiderEngine {
 			astComplexity: totalNodes,
 			symbolDensity: totalNodes > 0 ? exportCount / totalNodes : 0,
 			logicCohesion: totalNodes > 0 ? internalReferenceCount / totalNodes : 0,
+			// V215: Calibrated anyDensity weighting (Logarithmic scaling)
+			// Prevents massive spikes in small files.
+			anyDensity: totalNodes > 0 ? Math.min(1.0, anyCasts / Math.sqrt(totalNodes)) : 0,
 		}
 	}
 
@@ -788,28 +817,24 @@ export class SpiderEngine {
 			return
 		}
 
-		// V205: Resilience - Create a checkpoint before clearing the current substrate
 		this.createCheckpoint()
-		const previousCount = this.nodes.size
-
 		this.isIndexing = true
+
+		// V215: Swap-on-Success Strategy
+		// We build into a temporary registry to prevent zeroing out the main state during a failure.
+		const tempRegistry = new Map<string, SpiderNode>()
+		const originalRegistry = this.nodes
+
 		try {
 			Logger.info("[SpiderEngine] Rebuilding project registry (Throttled Indexing)...")
-			this.nodes.clear()
 			const files = this.resolver.scanProject()
 
-			// Safety check for massive file drops (e.g. fs failure or bad filter)
-			if (previousCount > 50 && files.length === 0) {
-				Logger.error(
-					`[SpiderEngine] CRITICAL: Unexpected file count drop (${previousCount} -> 0). Aborting rebuild to protect substrate.`,
-				)
-				await this.rollbackSubstrate()
-				return
+			if (originalRegistry.size > 50 && files.length === 0) {
+				throw new Error(`Unexpected file count drop (${originalRegistry.size} -> 0). Aborting rebuild.`)
 			}
 
 			let BATCH_SIZE = 250
 			for (let i = 0; i < files.length; i += BATCH_SIZE) {
-				// V205: Adaptive Batching - reduce batch size under memory pressure
 				const pressure = this.computeMetabolicPressure()
 				if (pressure > 0.8) BATCH_SIZE = 50
 				else if (pressure > 0.5) BATCH_SIZE = 100
@@ -817,39 +842,71 @@ export class SpiderEngine {
 				const batch = files.slice(i, i + BATCH_SIZE)
 				for (const f of batch) {
 					try {
-						const content = fs.readFileSync(path.resolve(this.cwd, f), "utf-8")
-						this.updateNode(f, content, true)
+						const absolutePath = path.resolve(this.cwd, f)
+						const content = fs.readFileSync(absolutePath, "utf-8")
+						const hash = crypto.createHash("md5").update(content).digest("hex")
+						const layer = this.resolver.resolveLayer(f)
+
+						// Manually create nodes for the temp registry
+						const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
+						const importData = this.extractDetailedImports(sourceFile)
+						const exports = this.extractExports(sourceFile)
+						const metrics = this.extractMetrics(sourceFile)
+						const namingScore = this.calculateNamingScore(sourceFile)
+
+						const node: SpiderNode = {
+							id: f,
+							path: f,
+							layer,
+							imports: importData.map((i) => i.specifier),
+							dependents: [],
+							depth: f.split("/").length - 1,
+							orphaned: false,
+							afferentCoupling: 0,
+							...metrics,
+							hash,
+							isInterface: this.detectInterface(f, sourceFile),
+							exports,
+							consumptions: {}, // Will be filled in coupling pass
+							mtime: fs.statSync(absolutePath).mtimeMs,
+							namingScore,
+							symbolDensity: content.length > 0 ? exports.length / (content.length / 100) : 0,
+							logicCohesion: 0.5,
+							blastRadius: 0,
+							isFragile: false,
+							cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
+							isHotspot: false,
+							anyDensity: metrics.anyDensity * 0.8,
+						}
+						tempRegistry.set(f, node)
+
 						if (onProgress) {
 							onProgress(i + batch.indexOf(f) + 1, files.length, f)
 						}
-					} catch (_e) {
-						// Skip unreachable files
+					} catch (e) {
+						Logger.warn(`[SpiderEngine] Failed to index ${f}:`, e)
 					}
 				}
-
-				// V200: Metabolic Pulse - Emergency reclamation between batches
-				this.checkStabilityPressure()
-
-				// V160: Relinquish control to the event loop between batches
-				if (i + BATCH_SIZE < files.length) {
-					await new Promise((resolve) => setTimeout(resolve, pressure > 0.7 ? 10 : 0))
-				}
+				// Throttling
+				await new Promise((resolve) => setTimeout(resolve, 10))
 			}
 
-			this.metrics.computeCouplingMetrics(this.nodes)
-			this.metrics.computeReachability(this.nodes)
-
-			// 10. Compute Fragility & Hotspots (V200)
-			const fragility = this.forensic.computeFragility(this.nodes)
+			// Finalizing Pass (Coupling & Fragility)
+			this.metrics.computeCouplingMetrics(tempRegistry)
+			this.metrics.computeReachability(tempRegistry)
+			const fragility = this.forensic.computeFragility(tempRegistry)
 			for (const [id, stats] of fragility.entries()) {
-				const n = this.nodes.get(id)
+				const n = tempRegistry.get(id)
 				if (n) {
 					n.blastRadius = stats.blastRadius
 					n.isFragile = stats.isFragile
-					n.isHotspot = n.isFragile && n.cognitiveComplexity > 0.6
+					n.isHotspot = n.isFragile && (n.cognitiveComplexity > 0.4 || n.anyDensity > 0.3)
 				}
 			}
 
+			// Swap!
+			this.nodes = tempRegistry
+			this.version++
 			Logger.info(`[SpiderEngine] Substrate Immortalized: ${this.nodes.size} nodes indexed.`)
 		} catch (error) {
 			Logger.error("[SpiderEngine] Critical failure during registry rebuild:", error)
@@ -1088,9 +1145,11 @@ export class SpiderEngine {
 				const isPropertyKey =
 					(ts.isPropertyAssignment(parent) && parent.name === node) ||
 					(ts.isPropertyAccessExpression(parent) && parent.name === node) ||
-					(ts.isMethodDeclaration(parent) && parent.name === node)
+					(ts.isMethodDeclaration(parent) && parent.name === node) ||
+					(ts.isJsxAttribute(parent) && parent.name === node)
 
-				const isMeaningfulUse = !isDeclaration && !isPropertyKey
+				const isJsxTag = (ts.isJsxOpeningElement(parent) || ts.isJsxSelfClosingElement(parent)) && parent.tagName === node
+				const isMeaningfulUse = (!isDeclaration && !isPropertyKey) || isJsxTag
 
 				if (isMeaningfulUse && name.length > 2 && !/^[A-Z_]+$/.test(name)) {
 					used.add(name)
@@ -1174,7 +1233,7 @@ export class SpiderEngine {
 			if (regex.test(name)) valid++
 		}
 
-		ts.forEachChild(sourceFile, function visit(node: ts.Node) {
+		const visit = (node: ts.Node) => {
 			if (
 				ts.isClassDeclaration(node) ||
 				ts.isInterfaceDeclaration(node) ||
@@ -1185,26 +1244,39 @@ export class SpiderEngine {
 				if (name) check(name, /^[A-Z][a-zA-Z0-9]*$/)
 			} else if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
 				const name = node.name?.getText(sourceFile)
-				if (name && !name.startsWith("[")) check(name, /^[a-z][a-zA-Z0-9]*$/)
-			} else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-				const name = node.name.text
-				const isConst = (node.parent.flags & ts.NodeFlags.Const) !== 0
-				const isTopLevel = ts.isSourceFile(node.parent.parent.parent)
-
-				if (isConst && isTopLevel) {
-					// Allow SCREAMING_SNAKE_CASE or camelCase for top-level constants
-					if (/^[A-Z][A-Z0-9_]*$/.test(name) || /^[a-z][a-zA-Z0-9]*$/.test(name)) {
-						total++
-						valid++
-					} else {
-						total++
-					}
-				} else {
-					check(name, /^[a-z][a-zA-Z0-9]*$/)
+				if (name && !name.startsWith("[")) {
+					const isReact = sourceFile.fileName.endsWith(".tsx") && /^[A-Z]/.test(name)
+					if (isReact) check(name, /^[A-Z][a-zA-Z0-9]*$/)
+					else check(name, /^[a-z][a-zA-Z0-9]*$/)
 				}
+			} else if (ts.isVariableDeclaration(node)) {
+				// V215: Recursive Binding Pattern Support (Destructuring)
+				const processName = (nameNode: ts.BindingName) => {
+					if (ts.isIdentifier(nameNode)) {
+						const name = nameNode.text
+						const isConst = (node.parent.flags & ts.NodeFlags.Const) !== 0
+						const isTopLevel = ts.isSourceFile(node.parent.parent.parent)
+
+						if (isConst && isTopLevel && (/^[A-Z][A-Z0-9_]*$/.test(name) || /^[a-z][a-zA-Z0-9]*$/.test(name))) {
+							total++
+							valid++ // Allowed top-level naming
+						} else {
+							check(name, /^[a-z][a-zA-Z0-9]*$/)
+						}
+					} else if (ts.isObjectBindingPattern(nameNode) || ts.isArrayBindingPattern(nameNode)) {
+						for (const element of nameNode.elements) {
+							if (!ts.isOmittedExpression(element)) {
+								processName(element.name)
+							}
+						}
+					}
+				}
+				processName(node.name)
 			}
 			ts.forEachChild(node, visit)
-		})
+		}
+
+		ts.forEachChild(sourceFile, visit)
 
 		return total === 0 ? 1.0 : valid / total
 	}

@@ -1,4 +1,5 @@
 import * as path from "path"
+import * as ts from "typescript"
 import { Logger } from "../../../shared/services/Logger.js"
 import { PathResolver } from "./PathResolver.js"
 import { SpiderEntropyReport, SpiderNode } from "./types.js"
@@ -101,6 +102,7 @@ export class MetricsEngine {
 		const visiting = new Set<string>()
 		const stack: string[] = []
 		const nodeIds = new Set(nodes.keys())
+		const cycleHashes = new Set<string>()
 
 		const dfs = (nodeId: string) => {
 			visited.add(nodeId)
@@ -115,7 +117,15 @@ export class MetricsEngine {
 
 					if (visiting.has(targetId)) {
 						const cycleStart = stack.indexOf(targetId)
-						cycles.push(stack.slice(cycleStart))
+						const cycleNodes = stack.slice(cycleStart)
+
+						// V215: Canonical Cycle Hashing (Deduplication)
+						// Sort nodes alphabetically to create a deterministic signature for the cycle
+						const hash = [...cycleNodes].sort().join("|")
+						if (!cycleHashes.has(hash)) {
+							cycleHashes.add(hash)
+							cycles.push(cycleNodes)
+						}
 					} else if (!visited.has(targetId)) {
 						dfs(targetId)
 					}
@@ -159,12 +169,13 @@ export class MetricsEngine {
 				}
 			}
 		}
-		const couplingScore = totalEdges > 0 ? crossLayerEdges / totalEdges : 0
+		const couplingScore = totalEdges > 0 ? Math.min(1.0, crossLayerEdges / totalEdges) : 0
 		const cycles = this.detectCycles(nodes)
-		const cyclePenalty = cycles.length > 0 ? Math.min(0.3, cycles.length * 0.1) : 0
+		const cyclePenalty = cycles.length > 0 ? Math.min(0.3, cycles.length * 0.05) : 0
 
 		// V160: Calibrated Industrial Entropy Formula
-		const score = Math.max(0, depthScore * 0.2 + namingScore * 0.2 + orphanScore * 0.2 + couplingScore * 0.4 - cyclePenalty)
+		const rawScore = depthScore * 0.2 + namingScore * 0.2 + orphanScore * 0.2 + couplingScore * 0.4
+		const score = Math.max(0, Math.min(1.0, rawScore + cyclePenalty))
 
 		return { score, components: { depthScore, namingScore, orphanScore, couplingScore, cycles: cycles.length } }
 	}
@@ -173,12 +184,11 @@ export class MetricsEngine {
 	 * V200: Cognitive Entropy (Semantic Analysis).
 	 * Calculates cyclomatic and nesting complexity using the TypeScript AST.
 	 */
-	public calculateCognitiveComplexity(sourceFile: import("typescript").SourceFile): number {
-		const ts = require("typescript")
+	public calculateCognitiveComplexity(sourceFile: ts.SourceFile): number {
 		let complexity = 0
 		let nesting = 0
 
-		let visit = (node: import("typescript").Node) => {
+		const visit = (node: ts.Node) => {
 			// Cyclomatic complexity markers
 			if (
 				ts.isIfStatement(node) ||
@@ -191,9 +201,8 @@ export class MetricsEngine {
 				ts.isCatchClause(node) ||
 				ts.isConditionalExpression(node) ||
 				(ts.isBinaryExpression(node) &&
-					((node as import("typescript").BinaryExpression).operatorToken.kind ===
-						ts.SyntaxKind.AmpersandAmpersandToken ||
-						(node as import("typescript").BinaryExpression).operatorToken.kind === ts.SyntaxKind.BarBarToken))
+					(node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+						node.operatorToken.kind === ts.SyntaxKind.BarBarToken))
 			) {
 				complexity++
 				complexity += nesting * 0.5 // Weighted by depth
@@ -210,10 +219,10 @@ export class MetricsEngine {
 		}
 
 		ts.forEachChild(sourceFile, visit)
-		const result = Math.min(complexity / 10, 1.0)
+		// V215: Calibrated normalization (Logarithmic scale)
+		// Previous linear 1/40 was too sensitive for large modules.
+		const result = Math.min(Math.log10(1 + complexity / 20), 1.0)
 
-		// V200: Forensic Closure Hygiene
-		;(visit as unknown) = null
 		return result
 	}
 }

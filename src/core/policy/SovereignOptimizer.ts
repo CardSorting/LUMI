@@ -1,6 +1,6 @@
-import { SovereignPolicy } from "./SovereignPolicy"
+import { LayerConfig, SovereignPolicy } from "./SovereignPolicy"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
-import { SpiderNode } from "./spider/types.js"
+import { Layer, SpiderNode } from "./spider/types.js"
 
 export interface OptimizationOpportunity {
 	file: string
@@ -36,11 +36,16 @@ export class SovereignOptimizer {
 
 			if (recommended && current !== recommended) {
 				const projectedGain = this.calculateProjectedGain(node, recommended)
+				const importsToTarget = Array.from(node.imports).filter((imp) => {
+					const targetId = engine.resolveImportToNodeId(node.id, imp)
+					return targetId && engine.nodes.get(targetId)?.layer === recommended
+				}).length
+
 				opportunities.push({
 					file: node.path,
 					currentLayer: current,
 					recommendedLayer: recommended,
-					reason: `File has ${node.imports.length} imports from ${recommended} and zero dependencies on ${current}'s peer layers.`,
+					reason: `Structural Gravity: ${node.path} has ${importsToTarget} imports from '${recommended}' but lives in '${current}'. Aligning it will reduce structural entropy.`,
 					integrityGain: projectedGain,
 				})
 			}
@@ -52,54 +57,57 @@ export class SovereignOptimizer {
 	public calculateOptimalLayer(
 		node: SpiderNode,
 		_engine: SpiderEngine,
-		configs?: { plumbing: any; domain: any; core: any },
-	): string | null {
+		configs?: { plumbing: LayerConfig; domain: LayerConfig; core: LayerConfig },
+	): Layer | null {
 		const plumbing = configs?.plumbing || SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("plumbing")
-		const domain = configs?.domain || SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("domain")
-		const core = configs?.core || SovereignPolicy.getInstance(_engine?.cwd || "").getLayerConfig("core")
+		const layerCounts: Record<string, number> = { domain: 0, core: 0, infrastructure: 0, ui: 0, plumbing: 0 }
 
-		// Fingerprint-based recommendation
-		// 1. PLUMBING: Must be Simple & Stateless
-		if (node.astComplexity < plumbing.maxComplexity && node.logicDensity < 0.05) {
+		for (const imp of node.imports) {
+			const targetId = _engine.resolveImportToNodeId(node.id, imp)
+			if (targetId) {
+				const targetLayer = _engine.nodes.get(targetId)?.layer
+				if (targetLayer) layerCounts[targetLayer]++
+			}
+		}
+
+		// V215: Highest Gravity Rule - Recommends the layer with the most dependencies
+		let bestLayer: Layer = node.layer
+		let maxCount = 0
+		for (const [layer, count] of Object.entries(layerCounts)) {
+			if (count > maxCount) {
+				maxCount = count
+				bestLayer = layer as Layer
+			}
+		}
+
+		// Forensic Fallback: Complexity Checks
+		const maxComplexity = plumbing?.maxComplexity || 500
+		if (node.astComplexity < maxComplexity && (node.logicDensity || 0) < 0.05 && maxCount < 2) {
 			return "plumbing"
 		}
 
-		// 2. INFRASTRUCTURE: High I/O Entropy
-		if (node.ioEntropy > 0.2) {
-			return "infrastructure"
-		}
+		if (maxCount > node.imports.length * 0.6) return bestLayer
 
-		// 3. DOMAIN: Pure logic, no I/O
-		if (node.ioEntropy === domain.maxIOEntropy && node.logicDensity > domain.optimalLogicDensity) {
-			return "domain"
-		}
-
-		// 4. CORE: Orchestrator, Zero I/O, Medium Logic
-		if (
-			node.ioEntropy === core.maxIOEntropy &&
-			node.logicDensity >= core.optimalLogicDensity &&
-			node.logicDensity <= domain.optimalLogicDensity
-		) {
-			return "core"
-		}
-
-		return node.layer // Default to current if no strong fingerprint match
+		return node.layer || "plumbing"
 	}
 
 	/**
 	 * PRODUCTION HARDENING: Predicts the exact Integrity Score improvement if an optimization is performed.
 	 */
 	private calculateProjectedGain(node: SpiderNode, recommended: string): number {
-		let gain = 5 // Base gain for layer alignment
+		let gain = 4 // Base gain for layer alignment
 
 		// Bonus for high-coupling nodes (Ca > 10)
-		if (node.afferentCoupling > 10) gain += 5
+		if ((node.afferentCoupling || 0) > 8) gain += 4
+
+		// V215: Impact of Blast Radius
+		gain += (node.blastRadius || 0) * 10
 
 		// Bonus for reducing complexity in core/domain
-		if ((recommended === "core" || recommended === "domain") && node.astComplexity > 200) {
-			gain += 3
+		if ((recommended === "core" || recommended === "domain") && (node.astComplexity || 0) > 200) {
+			gain += 2
 		}
 
-		return gain
+		return Math.round(gain)
 	}
 }

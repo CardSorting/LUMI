@@ -74,19 +74,33 @@ export class SovereignDoctor {
 			})),
 		]
 
-		const buildHealth = Math.max(0, 100 - allViolations.length * 10)
+		const entropy = engine.computeEntropy()
+		const metabolicPressure = engine.computeMetabolicPressure()
+
+		// V210: Comprehensive Build Health (Forensic Aggregate)
+		// Factors: Violations (40%), Stability/Entropy (40%), Resource Stress (20%)
+		const violationScore = Math.max(0, 100 - allViolations.length * 10)
+		const stabilityScore = (1 - entropy.score) * 100
+		const resourceScore = (1 - metabolicPressure) * 100
+
+		const buildHealth = Math.round(violationScore * 0.4 + stabilityScore * 0.4 + resourceScore * 0.2)
 
 		// Map to metabolic pressure
-		const entropy = engine.computeEntropy()
-
 		const nodes = Array.from(engine.nodes.values())
-		const gravityCenter = nodes.sort((a, b) => b.blastRadius - a.blastRadius)[0]?.path || "Unknown"
-		const logicHotspots = nodes
-			.sort((a, b) => b.logicDensity - a.logicDensity)
-			.slice(0, 3)
+		const gravityCenter = [...nodes].sort((a, b) => b.blastRadius - a.blastRadius)[0]?.path || "Unknown"
+		const logicHotspots = [...nodes]
+			.sort((a, b) => {
+				const scoreA = a.logicDensity * 0.7 + ((a.astComplexity || 0) / 1000) * 0.3
+				const scoreB = b.logicDensity * 0.7 + ((b.astComplexity || 0) / 1000) * 0.3
+				return scoreB - scoreA
+			})
+			.slice(0, 5)
 			.map((n) => n.path)
 
-		const metabolicSinks = nodes.filter((n) => n.afferentCoupling > 10 && (n.astComplexity || 0) > 1000).map((n) => n.path)
+		const metabolicSinks = nodes
+			.filter((n) => n.afferentCoupling > 10 && (n.astComplexity || 0) > 800)
+			.sort((a, b) => b.afferentCoupling - a.afferentCoupling)
+			.map((n) => n.path)
 
 		return {
 			buildHealth,
@@ -95,7 +109,7 @@ export class SovereignDoctor {
 			violations: allViolations,
 			optimizations,
 			agentSuccessRate: 100, // Placeholder
-			integrityScore: entropy.score * 100,
+			integrityScore: Math.round((1 - (Number.isNaN(entropy.score) ? 0 : entropy.score)) * 100),
 			resources: {
 				memoryPressure: process.memoryUsage().heapUsed / 1024 / 1024,
 				diskUsage: 0, // V100: Placeholder for stats fix

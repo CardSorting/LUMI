@@ -13,6 +13,7 @@ import * as fs from "fs"
 import * as path from "path"
 import { getRequestRegistry, StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { Logger } from "@/shared/services/Logger"
+import { SafeNumber } from "@/shared/utils/SafeNumber"
 
 /**
  * [HANDLING: JoyZoning Audit]
@@ -120,22 +121,19 @@ export async function triggerAudit(
 		// V205: Forensic Depth - Identifying the Gravity Center
 		const nodes = Array.from(spider.nodes.values())
 		if (nodes.length > 0) {
-			const gravityCenter = nodes.sort((a, b) => b.blastRadius - a.blastRadius)[0]
-			if (gravityCenter && gravityCenter.blastRadius > 5) {
+			const gravityCenter = [...nodes].sort((a, b) => b.blastRadius - a.blastRadius)[0]
+			if (gravityCenter && (gravityCenter.blastRadius || 0) > 0.4) {
 				violations.push({
 					type: "STRUCTURAL",
 					severity: "WARN",
 					path: gravityCenter.path,
-					message: `CRITICAL COMPONENT IDENTIFIED: This file has a high impact risk (${gravityCenter.blastRadius.toFixed(1)}). Changes here affect many other parts of the project.`,
+					message: `CRITICAL COMPONENT IDENTIFIED: This file has a high systemic impact risk (${SafeNumber.formatPercent(gravityCenter.blastRadius, 0)}%). Changes here affect many other parts of the project.`,
 					remediation: "Consider decoupling or extracting stable interfaces to reduce ripple effects.",
 					riskLevel: "HIGH",
 					impactArea: "STABILITY",
 				})
 			}
 		}
-
-		// V206: Automatic Structural Fixes - REMOVED to prevent cascading agent spirals.
-		// User now manually triggers fixes from the JoyZoning view.
 
 		// Map Decomposer Optimizations for Hotspots/God Modules
 		const hotspots = nodes.filter((n: SpiderNode) => (n.astComplexity || 0) > 1000 || n.afferentCoupling > 10)
@@ -187,19 +185,27 @@ export async function triggerAudit(
 		const techDebtStr =
 			techDebtMinutes > 60 ? `${Math.floor(techDebtMinutes / 60)}h ${techDebtMinutes % 60}m` : `${techDebtMinutes}m`
 
-		const stabilityScore = Math.round(doctorReport.integrityScore * (synchronized ? 1 : 0.8))
-		const maintainabilityScore = Math.round((1 - spider.computeEntropy().score) * 100)
+		const sanitizeScore = (v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? Math.round(v) : 0)
+
+		const stabilityScore = sanitizeScore(doctorReport.integrityScore * (synchronized ? 1 : 0.8))
+		const maintainabilityScore = sanitizeScore((1 - (spider.computeEntropy()?.score || 0)) * 100)
 
 		// Enrich Optimizations with Impact/Effort/Category
 		for (const opt of optimizations) {
 			opt.impact = opt.projectedHealthGain > 10 ? "HIGH" : opt.projectedHealthGain > 5 ? "MEDIUM" : "LOW"
 			const node = spider.nodes.get(spider.normalizePath(opt.path))
 			const complexity = node?.astComplexity || 0
-			opt.effort = complexity > 1000 ? "HIGH" : complexity > 500 ? "MEDIUM" : "LOW"
+
+			// V215: Effort Heuristics
+			if (opt.action === "HARDEN") {
+				opt.effort = "LOW" // Hardening fixes are usually localized
+			} else {
+				opt.effort = complexity > 1000 ? "HIGH" : complexity > 500 ? "MEDIUM" : "LOW"
+			}
 
 			if (opt.action === "EXTRACT" || opt.action === "DECOMPOSE") {
 				opt.category = "MAINTAINABILITY"
-			} else if (opt.action === "MOVE" || opt.action === "ALIGN_TAGS") {
+			} else if (opt.action === "MOVE" || opt.action === "ALIGN_TAGS" || opt.action === "HARDEN") {
 				opt.category = "STABILITY"
 			} else {
 				opt.category = "PERFORMANCE"
@@ -226,8 +232,9 @@ export async function triggerAudit(
 
 		// V210: Governance Metrics - Quality Gates and Compliance
 		const policyConfig = SovereignPolicy.getInstance(spider.cwd).getGlobalConfig()
-		const qualityGateStatus = doctorReport.buildHealth >= (policyConfig.integrityAlertThreshold || 70) ? "PASSED" : "FAILED"
-		const complianceScore = Math.max(0, 100 - (violations.length / (nodes.length || 1)) * 100)
+		const buildHealth = sanitizeScore(doctorReport.buildHealth)
+		const qualityGateStatus = buildHealth >= (policyConfig.integrityAlertThreshold || 70) ? "PASSED" : "FAILED"
+		const complianceScore = sanitizeScore(Math.max(0, 100 - (violations.length / (nodes.length || 1)) * 100))
 
 		// Find Toxic Module
 		const dirViolationCounts: Record<string, number> = {}
@@ -251,7 +258,7 @@ export async function triggerAudit(
 		}
 		const layerScores: Record<string, number> = {}
 		for (const [layer, data] of Object.entries(layerHealthMap)) {
-			layerScores[layer] = Math.round(data.total / (data.count || 1))
+			layerScores[layer] = sanitizeScore(data.total / (data.count || 1))
 		}
 
 		const topRecommendations = [...optimizations].sort((a, b) => b.projectedHealthGain - a.projectedHealthGain).slice(0, 3)
@@ -266,31 +273,31 @@ export async function triggerAudit(
 
 		const riskProfile: Record<string, number> = { LOW: 0, MEDIUM: 0, HIGH: 0 }
 		for (const node of nodes) {
-			if (node.blastRadius > 10) riskProfile.HIGH++
-			else if (node.blastRadius > 5) riskProfile.MEDIUM++
+			if (node.blastRadius > 0.7) riskProfile.HIGH++
+			else if (node.blastRadius > 0.3) riskProfile.MEDIUM++
 			else riskProfile.LOW++
 		}
 
 		const finalResponse = JoyZoningAuditResponse.create({
-			buildHealth: doctorReport.buildHealth,
+			buildHealth,
 			totalFiles: nodes.length,
-			structuralEntropy: spider.computeEntropy().score,
+			structuralEntropy: spider.computeEntropy()?.score || 0,
 			violations,
 			optimizations,
 			timestamp: new Date().toISOString(),
-			projectedHealth: doctorReport.buildHealth,
-			integrityScore: doctorReport.integrityScore,
+			projectedHealth: buildHealth,
+			integrityScore: sanitizeScore(doctorReport.integrityScore),
 			driftDetected: !synchronized,
 			driftCount: drift,
-			metabolicPressure: spider.computeMetabolicPressure(),
+			metabolicPressure: spider.computeMetabolicPressure() || 0,
 			metabolicSinks: doctorReport.environmentContext.metabolicSinks,
-			grade: computeGrade(doctorReport.buildHealth),
+			grade: computeGrade(buildHealth),
 			totalTechnicalDebt: techDebtStr,
 			stabilityScore,
 			maintainabilityScore,
-			history: updatedHistory, // V206: Return evolution data
+			history: updatedHistory,
 			qualityGateStatus,
-			complianceScore: Math.round(complianceScore),
+			complianceScore,
 			toxicModule,
 			layerScores,
 			topRecommendations,

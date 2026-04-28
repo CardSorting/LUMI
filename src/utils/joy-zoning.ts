@@ -253,7 +253,6 @@ export function generateLayerComment(filePath: string, layer: string, content?: 
 
 		if (existingMatch) {
 			// Find the line containing the tag and replace Just the tag part
-			// PRODUCTION HARDENING: Ensure it's wrapped in a proper JSDoc block if it's a .ts/.js file
 			if (style === CommentStyle.JSDOC && !content.includes(`* ${label}`)) {
 				// Check if we are inside a JSDoc block already
 				const index = content.search(tagRegex)
@@ -262,7 +261,13 @@ export function generateLayerComment(filePath: string, layer: string, content?: 
 				const lastClose = prefix.lastIndexOf("*/")
 
 				if (lastOpen > lastClose) {
-					// We are inside a JSDoc block, just ensure the asterisk prefix
+					// We are inside a JSDoc block, just ensure the asterisk prefix is handled correctly
+					// If the line already starts with an asterisk, we don't add another one
+					const lineStart = prefix.lastIndexOf("\n")
+					const lineContent = prefix.slice(lineStart + 1)
+					if (lineContent.trim().startsWith("*")) {
+						return content.replace(tagRegex, label)
+					}
 					return content.replace(tagRegex, `* ${label}`)
 				}
 				// Not in a JSDoc block, wrap it

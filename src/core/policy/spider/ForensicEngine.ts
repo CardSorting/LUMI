@@ -86,8 +86,9 @@ export class ForensicEngine {
 
 				if (!diskPath) {
 					// PRODUCTION HARDENING: Ignore ghost files for common build/config files, Node builtins, or external packages
-					if (!specifier.startsWith(".") && !this.isProjectAlias(specifier) && this.isNodeLibrary(specifier)) continue
-					if (specifier.endsWith(".config.js") || specifier.endsWith(".config.ts")) continue
+					if (!specifier.startsWith(".") && !this.resolver.isProjectAlias(specifier)) continue
+					if (specifier.endsWith(".config.js") || specifier.endsWith(".config.ts") || specifier.endsWith(".json"))
+						continue
 
 					const msg = `[SPI-101] GHOST FILE: ${node.path} -> ${specifier}`
 					allGhosts.add(msg)
@@ -217,13 +218,14 @@ export class ForensicEngine {
 			// Afferent Coupling (Incoming dependencies)
 			const directDependents = node.dependents.length
 
-			// V190: Industrial Calibration - Weighted Blast Radius
-			// We consider direct dependents and the layer importance.
-			const layerWeight = node.layer === "domain" ? 1.5 : node.layer === "core" ? 1.2 : 1.0
-			const blastRadius = Math.min((directDependents * layerWeight) / (totalNodes * 0.1), 1.0)
+			// V215: Calibrated Industrial Blast Radius
+			// Normalizes impact based on codebase scale with a safety floor for small projects.
+			const layerWeight = node.layer === "domain" ? 2.0 : node.layer === "core" ? 1.5 : 1.0
+			const scaleFactor = Math.max(10, totalNodes) * 0.1
+			const blastRadius = Math.min((directDependents * layerWeight) / scaleFactor, 1.0)
 
-			// Critical Threshold: If a node affects > 15% of the codebase, it's Fragile.
-			const isFragile = blastRadius > 0.4 || (node.layer === "domain" && directDependents > 5)
+			// Critical Threshold: If a node affects > 10% of the codebase, it's Fragile.
+			const isFragile = blastRadius > 0.35 || ((node.layer === "domain" || node.layer === "core") && directDependents > 3)
 
 			results.set(node.id, { blastRadius, isFragile })
 		}
@@ -293,106 +295,5 @@ export class ForensicEngine {
 			}
 		})
 		return exports
-	}
-
-	private isNodeLibrary(specifier: string): boolean {
-		const builtins = [
-			"assert",
-			"async_hooks",
-			"buffer",
-			"child_process",
-			"cluster",
-			"console",
-			"constants",
-			"crypto",
-			"dgram",
-			"dns",
-			"domain",
-			"events",
-			"fs",
-			"fs/promises",
-			"http",
-			"http2",
-			"https",
-			"inspector",
-			"module",
-			"net",
-			"os",
-			"path",
-			"perf_hooks",
-			"process",
-			"punycode",
-			"querystring",
-			"readline",
-			"repl",
-			"stream",
-			"string_decoder",
-			"timers",
-			"tls",
-			"trace_events",
-			"tty",
-			"url",
-			"util",
-			"v8",
-			"vm",
-			"worker_threads",
-			"zlib",
-			"typescript",
-			"diagnostics_channel",
-			"wasi",
-			"test",
-		]
-		const normalizedSpecifier = specifier.startsWith("node:") ? specifier.slice(5) : specifier
-		if (builtins.includes(normalizedSpecifier)) return true
-
-		// Dynamic package.json Verification (V7)
-		if (!specifier.startsWith(".") && !this.isProjectAlias(specifier)) {
-			// Check if it's a scoped package or a top-level package that exists in node_modules or package.json
-			try {
-				const pkgPath = path.join(this.cwd, "package.json")
-				if (fs.existsSync(pkgPath)) {
-					const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"))
-					const deps = { ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies }
-					const rootSpecifier = specifier.startsWith("@")
-						? specifier.split("/").slice(0, 2).join("/")
-						: specifier.split("/")[0]
-
-					if (deps[rootSpecifier]) return true
-				}
-			} catch (_e) {
-				// Fallback to basic detection if package.json read fails
-			}
-
-			// Final fallback: if it doesn't look like a project path, assume it's an external library
-			// to avoid false positive "Ghost File" errors that block agents.
-			return true
-		}
-		return false
-	}
-
-	private isProjectAlias(specifier: string): boolean {
-		const aliases = [
-			"@/",
-			"@api/",
-			"@core/",
-			"@infrastructure/",
-			"@shared/",
-			"@utils/",
-			"@frontend/",
-			"@shared-utils/",
-			"@generated/",
-			"@hosts/",
-			"@integrations/",
-			"@packages/",
-			"@services/",
-			"@shared-components/",
-			"@ui/",
-			"@domain/",
-			"@plumbing/",
-		]
-		for (const alias of aliases) {
-			if (specifier.startsWith(alias)) return true
-		}
-		return false
 	}
 }

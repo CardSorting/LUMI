@@ -1,4 +1,5 @@
 import { Layer } from "../../../utils/joy-zoning"
+export type { Layer }
 
 export interface SpiderNode {
 	id: string
@@ -24,6 +25,7 @@ export interface SpiderNode {
 	isFragile: boolean // V190: Flag for high-blast radius components
 	cognitiveComplexity: number // V200: Logic depth/branching complexity
 	isHotspot: boolean // V200: Flag for High Risk + High Complexity
+	anyDensity: number // V210: Forensic marker for unsafe type usage (as any)
 }
 
 export interface SpiderSnapshot {

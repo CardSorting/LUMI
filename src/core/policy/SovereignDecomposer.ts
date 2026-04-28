@@ -2,7 +2,7 @@ import * as ts from "typescript"
 import { getLayer } from "../../utils/joy-zoning"
 
 export interface DecompositionStep {
-	action: "EXTRACT" | "MOVE" | "DECOUPLE"
+	action: "EXTRACT" | "MOVE" | "DECOUPLE" | "HARDEN"
 	target: string
 	destination: string
 	reason: string
@@ -41,31 +41,70 @@ export class SovereignDecomposer {
 
 		// 1. Analyze Method-Level Logic Density vs I/O
 		const visit = (node: ts.Node) => {
-			if ((ts.isMethodDeclaration(node) || ts.isFunctionDeclaration(node)) && node.body) {
-				const { density, hasIO } = this.analyzeNodeLogic(node, sourceFile)
-				const name = (node as any).name?.getText(sourceFile) || "anonymous"
+			if (this.isFunctionalNode(node)) {
+				const body = (node as any).body
+				if (body) {
+					const { density, hasIO } = this.analyzeNodeLogic(node as any, sourceFile)
+					const name = this.getFunctionName(node, sourceFile)
 
-				// VIOLATION: Pure Logic in INFRASTRUCTURE
-				if (layer === "infrastructure" && density > 0.3 && !hasIO) {
+					// VIOLATION: Pure Logic in INFRASTRUCTURE
+					if (layer === "infrastructure" && density > 0.3 && !hasIO) {
+						steps.push({
+							action: "MOVE",
+							target: `Logic '${name}'`,
+							destination: "DOMAIN",
+							risk: "MEDIUM",
+							reason: "This logic is purely computational (high density, no I/O) and should live in the Domain layer.",
+							intentSuggestion: `[SOVEREIGN_INTENT: Pure domain logic for ${name}]`,
+						})
+					}
+
+					// VIOLATION: Direct I/O in CORE/DOMAIN
+					if ((layer === "core" || layer === "domain") && hasIO) {
+						steps.push({
+							action: "MOVE",
+							target: `Logic '${name}'`,
+							destination: "INFRASTRUCTURE",
+							risk: "MEDIUM",
+							reason: "This logic performs direct I/O. Extract the I/O to a specialized adapter.",
+							intentSuggestion: `[PROTOCOL_INTENT: I/O Adapter for ${name}]`,
+						})
+					}
+				}
+			}
+
+			// V210: Production Hardening - Direct Forensic Checks
+			if (ts.isTypeAssertionExpression(node) || ts.isAsExpression(node)) {
+				const type = node.kind === ts.SyntaxKind.TypeAssertionExpression ? (node as any).type : (node as any).type
+				if (type && type.getText(sourceFile) === "any") {
 					steps.push({
-						action: "MOVE",
-						target: `Logic '${name}'`,
-						destination: "DOMAIN",
-						risk: "MEDIUM",
-						reason: "This logic is purely computational (high density, no I/O) and should live in the Domain layer.",
-						intentSuggestion: `[SOVEREIGN_INTENT: Pure domain logic for ${name}]`,
+						action: "HARDEN",
+						target: "Unsafe Type Cast",
+						destination: "STABLE_TYPES",
+						risk: "HIGH",
+						reason: "Production Risk: 'as any' cast detected. This bypasses the integrity of the substrate.",
 					})
 				}
+			}
 
-				// VIOLATION: Direct I/O in CORE/DOMAIN
-				if ((layer === "core" || layer === "domain") && hasIO) {
+			if (ts.isPropertyAccessExpression(node)) {
+				const text = node.getText(sourceFile)
+				if (text === "process.env" && !this.isInTryCatch(node)) {
 					steps.push({
-						action: "MOVE",
-						target: `Logic '${name}'`,
-						destination: "INFRASTRUCTURE",
+						action: "HARDEN",
+						target: "Raw Environment Access",
+						destination: "SAFE_CONFIG",
 						risk: "MEDIUM",
-						reason: "This logic performs direct I/O. Extract the I/O to a specialized adapter.",
-						intentSuggestion: `[PROTOCOL_INTENT: I/O Adapter for ${name}]`,
+						reason: "Production Risk: Direct 'process.env' access without a try-catch or safe-loading wrapper.",
+					})
+				}
+				if (text.includes("fs.readFileSync") || text.includes("fs.writeFileSync")) {
+					steps.push({
+						action: "HARDEN",
+						target: "Legacy Sync I/O",
+						destination: "ASYNC_ADAPTER",
+						risk: "HIGH",
+						reason: "Production Risk: Synchronous filesystem I/O will block the substrate event loop.",
 					})
 				}
 			}
@@ -115,21 +154,24 @@ export class SovereignDecomposer {
 
 		// 3. Shadow Complexity & God Methods (V150 Forensic Pass)
 		const complexVisit = (n: ts.Node, depth: number) => {
-			if ((ts.isMethodDeclaration(n) || ts.isFunctionDeclaration(n)) && n.body) {
-				const start = sourceFile.getLineAndCharacterOfPosition(n.getStart()).line
-				const end = sourceFile.getLineAndCharacterOfPosition(n.getEnd()).line
-				const methodMass = end - start + 1
-				const name = (n as any).name?.getText(sourceFile) || "anonymous"
+			if (this.isFunctionalNode(n)) {
+				const body = (n as any).body
+				if (body) {
+					const start = sourceFile.getLineAndCharacterOfPosition(n.getStart()).line
+					const end = sourceFile.getLineAndCharacterOfPosition(n.getEnd()).line
+					const methodMass = end - start + 1
+					const name = this.getFunctionName(n, sourceFile)
 
-				if (methodMass > 150) {
-					steps.push({
-						action: "EXTRACT",
-						target: `God Method '${name}'`,
-						destination: "HELPER_FUNCTIONS",
-						risk: "MEDIUM",
-						reason: `High Method Activity: Method '${name}' is ${methodMass} lines. Factor out sub-procedures for better readability.`,
-						intentSuggestion: `[PROTOCOL_INTENT: Decompose Large Method ${name}]`,
-					})
+					if (methodMass > 150) {
+						steps.push({
+							action: "EXTRACT",
+							target: `God Method '${name}'`,
+							destination: "HELPER_FUNCTIONS",
+							risk: "MEDIUM",
+							reason: `High Method Activity: Method '${name}' is ${methodMass} lines. Factor out sub-procedures for better readability.`,
+							intentSuggestion: `[PROTOCOL_INTENT: Decompose Large Method ${name}]`,
+						})
+					}
 				}
 			}
 
@@ -175,21 +217,36 @@ export class SovereignDecomposer {
 		const complexityPenalty = totalLines > 1500 ? 50 : totalLines > 1200 ? 20 : 0
 		const integrityScore = Math.max(0, 100 - namingPenalty - couplingPenalty - complexityPenalty)
 
-		// V140: Build Health is a forensic aggregate of physical state and structural debt
+		// V207: Build Health is a forensic aggregate of physical state and structural debt
 		let buildHealth = 100
 		if (node) {
 			if (node.orphaned) buildHealth -= 30
 			if (node.afferentCoupling > 15) buildHealth -= 20
 			if (node.namingScore < 0.8) buildHealth -= 10
+			if (node.anyDensity > 0.1) buildHealth -= 15
 		}
+
+		// V207: Complexity Penalties - Forensic markers for structural debt
+		const godMethods = steps.filter((s) => s.target.startsWith("God Method")).length
+		const deepNesting = steps.filter((s) => s.target === "Nested Logic").length
+		const importBloat = steps.filter((s) => s.target === "Module Imports").length
+		const hardeningGaps = steps.filter((s) => s.action === "HARDEN").length
+
+		buildHealth -= godMethods * 8
+		buildHealth -= deepNesting * 4
+		buildHealth -= importBloat * 10
+		buildHealth -= hardeningGaps * 5
+
 		if (totalLines > 1500) buildHealth -= 40
-		buildHealth = Math.max(0, buildHealth)
+		else if (totalLines > 1200) buildHealth -= 20
+
+		buildHealth = Math.max(5, buildHealth) // V208: Maintain floor to avoid negative substrate health
 
 		const plan: DecompositionPlan = {
 			filePath,
 			currentLayer: layer,
-			buildHealth,
-			integrityScore,
+			buildHealth: Math.round(buildHealth),
+			integrityScore: Math.round(integrityScore),
 			steps,
 		}
 
@@ -283,7 +340,7 @@ export class SovereignDecomposer {
 	}
 
 	private analyzeNodeLogic(
-		node: ts.MethodDeclaration | ts.FunctionDeclaration,
+		node: ts.MethodDeclaration | ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression,
 		sourceFile: ts.SourceFile,
 	): { density: number; hasIO: boolean } {
 		let nodes = 0
@@ -292,11 +349,17 @@ export class SovereignDecomposer {
 
 		const visit = (node: ts.Node) => {
 			nodes++
-			if (ts.isIfStatement(node) || ts.isSwitchStatement(node)) logic++
+			if (ts.isIfStatement(node) || ts.isSwitchStatement(node) || ts.isConditionalExpression(node)) logic++
 
 			const text = node.getText(sourceFile)
 			// Detect I/O signals (fs, http, db calls)
-			if (text.includes("fs.") || text.includes("fetch(") || text.includes(".save()")) {
+			if (
+				text.includes("fs.") ||
+				text.includes("fetch(") ||
+				text.includes(".save()") ||
+				text.includes(".find(") ||
+				text.includes("axios.")
+			) {
 				hasIO = true
 			}
 			ts.forEachChild(node, visit)
@@ -310,6 +373,42 @@ export class SovereignDecomposer {
 			density: nodes > 0 ? logic / nodes : 0,
 			hasIO,
 		}
+	}
+
+	private isFunctionalNode(node: ts.Node): node is ts.FunctionLikeDeclaration {
+		return (
+			ts.isFunctionDeclaration(node) ||
+			ts.isMethodDeclaration(node) ||
+			ts.isConstructorDeclaration(node) ||
+			ts.isGetAccessorDeclaration(node) ||
+			ts.isSetAccessorDeclaration(node) ||
+			ts.isArrowFunction(node) ||
+			ts.isFunctionExpression(node)
+		)
+	}
+
+	private getFunctionName(node: ts.Node, sourceFile: ts.SourceFile): string {
+		if ((node as any).name) return (node as any).name.getText(sourceFile)
+
+		// Try to find name from parent if it's a variable assignment
+		if (node.parent && ts.isVariableDeclaration(node.parent) && ts.isIdentifier(node.parent.name)) {
+			return node.parent.name.text
+		}
+
+		if (node.parent && ts.isPropertyAssignment(node.parent) && ts.isIdentifier(node.parent.name)) {
+			return node.parent.name.text
+		}
+
+		return "anonymous"
+	}
+
+	private isInTryCatch(node: ts.Node): boolean {
+		let current = node.parent
+		while (current) {
+			if (ts.isTryStatement(current)) return true
+			current = current.parent
+		}
+		return false
 	}
 
 	private detectZombieSymbols(
@@ -339,32 +438,57 @@ export class SovereignDecomposer {
 		sourceFile: ts.SourceFile,
 	): { projectedHealth: number; projectedIntegrity: number } {
 		let linesRemoved = 0
+
+		// V210: Forensic Target Identification - Recursive search for methods/entities
+		const findEntityMass = (node: ts.Node, targetName: string): number => {
+			let mass = 0
+			const visit = (n: ts.Node) => {
+				const name = (n as any).name?.getText(sourceFile)
+				if (name && targetName.includes(`'${name}'`)) {
+					const start = sourceFile.getLineAndCharacterOfPosition(n.getStart()).line
+					const end = sourceFile.getLineAndCharacterOfPosition(n.getEnd()).line
+					mass = end - start + 1
+					return // Found it
+				}
+				ts.forEachChild(n, visit)
+			}
+			visit(node)
+			return mass
+		}
+
 		steps
-			.filter((s) => s.action === "EXTRACT" && s.risk === "LOW")
+			.filter((s) => s.action === "EXTRACT" && (s.risk === "LOW" || s.risk === "MEDIUM"))
 			.forEach((step) => {
-				// Find the mass of the target to subtract
-				ts.forEachChild(sourceFile, (n) => {
-					const name = (n as any).name?.getText(sourceFile)
-					if (name && step.target.includes(`'${name}'`)) {
-						const start = sourceFile.getLineAndCharacterOfPosition(n.getStart()).line
-						const end = sourceFile.getLineAndCharacterOfPosition(n.getEnd()).line
-						linesRemoved += end - start + 1
-					}
-				})
+				linesRemoved += findEntityMass(sourceFile, step.target)
 			})
 
 		const projectedLines = Math.max(0, totalLines - linesRemoved)
 
-		// Recalculate based on projected lines
-		const projectedIntegrity = Math.max(0, plan.integrityScore + (plan.integrityScore < 100 ? 10 : 0)) // Hypothetical boost
-
+		// V215: Incremental Health Recovery Model
 		let projectedHealth = plan.buildHealth
+
+		// 1. Threshold Recovery
 		if (projectedLines <= 1500 && totalLines > 1500) projectedHealth += 40
 		else if (projectedLines <= 1200 && totalLines > 1200) projectedHealth += 20
 
+		// 2. Structural Debt Recovery (reversing penalties)
+		steps.forEach((step) => {
+			if (step.target.startsWith("God Method")) projectedHealth += 8
+			if (step.target === "Nested Logic") projectedHealth += 4
+			if (step.target === "Module Imports") projectedHealth += 10
+			if (step.action === "HARDEN") projectedHealth += 5
+		})
+
+		// 3. Baseline Improvement for any refactoring
+		if (steps.length > 0) {
+			projectedHealth += Math.min(15, steps.length * 2)
+		}
+
+		const projectedIntegrity = Math.max(0, plan.integrityScore + (plan.integrityScore < 100 ? 10 : 0))
+
 		return {
-			projectedHealth: Math.min(100, projectedHealth),
-			projectedIntegrity: Math.min(100, projectedIntegrity),
+			projectedHealth: Math.min(100, Math.round(projectedHealth)),
+			projectedIntegrity: Math.min(100, Math.round(projectedIntegrity)),
 		}
 	}
 

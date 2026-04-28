@@ -27,8 +27,9 @@ export class PathResolver {
 		if (fs.existsSync(tsconfigPath)) {
 			try {
 				const raw = fs.readFileSync(tsconfigPath, "utf-8")
-				// V160: Use surgical regex for JSON comments if strip-json-comments is missing or to avoid CJS require issues in ESM
-				const cleanJson = raw.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "")
+				// V160: Industrial JSON sanitization (Regex)
+				// Strips comments and handles trailing commas
+				const cleanJson = raw.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "").replace(/,(\s*[}\]])/g, "$1")
 				const config = JSON.parse(cleanJson)
 				const paths = config.compilerOptions?.paths
 				if (paths) {
@@ -139,7 +140,7 @@ export class PathResolver {
 		return false
 	}
 
-	private isProjectAlias(specifier: string): boolean {
+	public isProjectAlias(specifier: string): boolean {
 		for (const alias of this.dynamicAliases.keys()) {
 			if (specifier.startsWith(alias)) return true
 		}
@@ -321,8 +322,10 @@ export class PathResolver {
 
 		for (const [alias, replacement] of sortedAliases) {
 			const normReplacement = this.canonicalize(replacement)
-			if (normTarget === normReplacement || normTarget.startsWith(normReplacement + "/")) {
-				return normTarget.replace(normReplacement, alias).replace(/\\/g, "/")
+			if (normTarget === normReplacement || normTarget.startsWith(`${normReplacement}/`)) {
+				const result = normTarget.replace(normReplacement, alias).replace(/\\/g, "/")
+				// V215: Prevent double-slashes (e.g. @//core -> @/core)
+				return result.replace(/\/+/g, "/")
 			}
 		}
 

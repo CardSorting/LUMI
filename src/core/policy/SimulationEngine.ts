@@ -80,7 +80,8 @@ export class SimulationEngine {
 		const currentReport = currentEngine.computeEntropy()
 		const simReport = simEngine.computeEntropy()
 
-		const scoreDrop = (currentReport.score - simReport.score) * 100
+		// V215: scoreDrop represents structural HEALTH loss (higher entropy = higher drop)
+		const scoreDrop = (simReport.score - currentReport.score) * 100
 		const violations = simEngine.getViolations().map((v) => v.message)
 
 		// PRODUCTION HARDENING: Threshold relaxed from 10% to 15% to allow for ambitious refactors.
@@ -127,12 +128,12 @@ export class SimulationEngine {
 
 		const currentReport = currentEngine.computeEntropy()
 		const forecast = currentEngine.forecastEntropy([{ path: normalizedPath, content }])
-		const scoreDrop = (currentReport.score - forecast.predictedScore) * 100
+		const scoreDrop = (forecast.predictedScore - currentReport.score) * 100
 		const violations = simEngine.getViolations().map((v) => v.message)
 
 		return {
 			safe: scoreDrop < 8,
-			predictedScore: forecast.predictedScore * 100,
+			predictedScore: (1 - forecast.predictedScore) * 100,
 			scoreDrop,
 			violations,
 			message: scoreDrop > 8 ? "Predictive notice: This edit increases structural complexity." : "Safe edit predicted.",
