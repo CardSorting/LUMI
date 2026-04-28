@@ -17,6 +17,9 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const [auditLaunchMessage, setAuditLaunchMessage] = useState<string | null>(null)
 	const [auditLaunchError, setAuditLaunchError] = useState<string | null>(null)
 	const [activeTab, setActiveTab] = useState<"overview" | "fixes" | "improvements">("overview")
+	const [fixesSearch, setFixesSearch] = useState("")
+	const [optsSearch, setOptsSearch] = useState("")
+	const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
 	const cancelRef = useRef<(() => void) | null>(null)
 	const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
@@ -97,6 +100,22 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 		}
 	}, [status])
 
+	const copyReportToClipboard = () => {
+		if (!report) return
+		const summary = `
+Project Health Report (${new Date().toLocaleDateString()})
+Grade: ${report.grade}
+Health: ${report.buildHealth}%
+Critical Fixes: ${report.violations.length}
+Optimizations: ${report.optimizations.length}
+Stability: ${report.stabilityScore}%
+Organization: ${report.maintainabilityScore}%
+		`.trim()
+		navigator.clipboard.writeText(summary)
+		setAuditLaunchMessage("Report summary copied to clipboard!")
+		setTimeout(() => setAuditLaunchMessage(null), 3000)
+	}
+
 	const executeRefactor = async (action: string, path: string, dryRun = false) => {
 		if (!action || !path) {
 			setAuditLaunchError("Missing action or path for refactor.")
@@ -122,24 +141,24 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 
 	return (
 		<Container>
-			<ViewHeader environment={environment} onDone={onDone} title="JoyZoning Substrate" />
+			<ViewHeader environment={environment} onDone={onDone} title="Project Health Center" />
 			<Content>
 				<HeroSection>
 					{report?.driftDetected && (
 						<DriftWarning>
-							<WarningIcon>⚠️</WarningIcon>
-							<WarningText>Substrate Drift: {report.driftCount} files out of sync.</WarningText>
+							<WarningIcon>🔄</WarningIcon>
+							<WarningText>Sync Alert: {report.driftCount} files out of sync with index.</WarningText>
 						</DriftWarning>
 					)}
 					<RadarContainer>
 						<RadarRing $loading={loading} $percentage={progress?.percentage || 0} />
 						<GradeValue $grade={report?.grade || "A"}>{report ? report.grade : loading ? "..." : "--"}</GradeValue>
 						<HealthLabel>
-							{loading ? "Scanning..." : "Build Grade"}
+							{loading ? "Scanning codebase..." : "Overall Health Grade"}
 							{report && report.healthDelta !== 0 && (
 								<DeltaBadge $positive={report.healthDelta > 0}>
-									{report.healthDelta > 0 ? "+" : ""}
-									{report.healthDelta.toFixed(1)}%
+									{report.healthDelta > 0 ? "↑" : "↓"}
+									{Math.abs(report.healthDelta).toFixed(1)}%
 								</DeltaBadge>
 							)}
 						</HealthLabel>
@@ -150,6 +169,11 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 							{loading ? "ANALYZING..." : (report?.buildHealth || 100) > 80 ? "● OPERATIONAL" : "● ACTION REQUIRED"}
 						</SubstrateStatus>
 						{report && <QualityGate $status={report.qualityGateStatus}>{report.qualityGateStatus}</QualityGate>}
+						{report && (
+							<ShareButton onClick={copyReportToClipboard} title="Copy health summary to clipboard">
+								<span>📋</span> Share
+							</ShareButton>
+						)}
 					</HeaderStats>
 				</HeroSection>
 
@@ -158,7 +182,7 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 						Overview
 					</Tab>
 					<Tab $active={activeTab === "fixes"} onClick={() => setActiveTab("fixes")}>
-						Fixes{" "}
+						Critical Fixes{" "}
 						{report?.violations && report.violations.length > 0 ? (
 							<>
 								({report.violations.length})
@@ -174,33 +198,163 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 						)}
 					</Tab>
 					<Tab $active={activeTab === "improvements"} onClick={() => setActiveTab("improvements")}>
-						Roadmap{" "}
+						Optimizations{" "}
 						{report?.optimizations && report.optimizations.length > 0 ? `(${report.optimizations.length})` : ""}
 					</Tab>
 				</TabContainer>
+				{loading && (
+					<ScanningNotice>
+						<ScanningIcon>🔍</ScanningIcon>
+						<ScanningText>Analyzing project architecture and structural patterns...</ScanningText>
+					</ScanningNotice>
+				)}
 
-				{activeTab === "overview" && (
+				{!report && !loading && (
+					<WelcomeView>
+						<WelcomeIcon>🏥</WelcomeIcon>
+						<WelcomeTitle>Welcome to Health Center</WelcomeTitle>
+						<WelcomeDesc>
+							Scan your project to identify structural risks, maintainability hotspots, and architectural debt. Our
+							AI-driven analysis provides actionable remediation paths for a solid foundation.
+						</WelcomeDesc>
+						<AuditButton $primary onClick={triggerAudit} style={{ width: "auto", padding: "12px 24px" }}>
+							Start Initial Health Scan
+						</AuditButton>
+					</WelcomeView>
+				)}
+
+				{activeTab === "overview" && report && (
 					<TabView>
+						<HealthSnapshot $health={report.buildHealth}>
+							<SnapshotIcon>{report.buildHealth > 80 ? "✨" : report.buildHealth > 50 ? "⚡" : "🚨"}</SnapshotIcon>
+							<SnapshotContent>
+								<SnapshotTitleGroup>
+									<SnapshotTitle>Health Snapshot</SnapshotTitle>
+									{report.history.length > 1 && (
+										<TrendSparkline title="Recent Health Trend">
+											<svg height="15" viewBox="0 0 100 20" width="60">
+												<polyline
+													fill="none"
+													points={report.history
+														.slice(-10)
+														.map((p, i) => `${i * 10},${20 - (p.health / 100) * 15}`)
+														.join(" ")}
+													stroke={report.healthDelta >= 0 ? "#52c41a" : "#ff4d4f"}
+													strokeWidth="2"
+												/>
+											</svg>
+										</TrendSparkline>
+									)}
+								</SnapshotTitleGroup>
+								<SnapshotDesc>
+									{report.buildHealth > 80
+										? "Project foundations are solid. No immediate structural action required."
+										: report.buildHealth > 50
+											? "The system is stable but shows signs of organizational debt."
+											: "Critical structural risks detected. Immediate maintenance recommended."}
+								</SnapshotDesc>
+							</SnapshotContent>
+						</HealthSnapshot>
+
+						<RadarChartSection>
+							<RadarChartWrapper>
+								<svg height="100%" viewBox="0 0 200 200" width="100%">
+									{/* Background Hexagon */}
+									<polygon
+										fill="rgba(255,255,255,0.03)"
+										points="100,20 170,60 170,140 100,180 30,140 30,60"
+										stroke="rgba(255,255,255,0.1)"
+										strokeWidth="1"
+									/>
+									{/* Data Polygon (Simulated for visualization) */}
+									<polygon
+										fill="rgba(24, 144, 255, 0.2)"
+										points={`
+											100,${100 - (report.complianceScore / 100) * 80} 
+											${100 + (report.stabilityScore / 100) * 70},${100 - (report.stabilityScore / 100) * 40}
+											${100 + (report.maintainabilityScore / 100) * 70},${100 + (report.maintainabilityScore / 100) * 40}
+											100,${100 + (report.buildHealth / 100) * 80}
+											${100 - (report.integrityScore / 100) * 70},${100 + (report.integrityScore / 100) * 40}
+											${100 - (report.complianceScore / 100) * 70},${100 - (report.complianceScore / 100) * 40}
+										`}
+										stroke="var(--vscode-button-background)"
+										strokeWidth="2"
+									/>
+								</svg>
+								<RadarLabel style={{ top: "0%", left: "50%", transform: "translateX(-50%)" }}>
+									Best Practices
+								</RadarLabel>
+								<RadarLabel style={{ top: "25%", right: "-10%" }}>Stability</RadarLabel>
+								<RadarLabel style={{ bottom: "25%", right: "-10%" }}>Maintainability</RadarLabel>
+								<RadarLabel style={{ bottom: "0%", left: "50%", transform: "translateX(-50%)" }}>
+									Overall
+								</RadarLabel>
+								<RadarLabel style={{ bottom: "25%", left: "-10%" }}>Integrity</RadarLabel>
+								<RadarLabel style={{ top: "25%", left: "-10%" }}>Compliance</RadarLabel>
+							</RadarChartWrapper>
+						</RadarChartSection>
+						{report && report.violations.length > 0 && (
+							<NextActionCard onClick={() => setActiveTab("fixes")}>
+								<NextActionIcon>🚀</NextActionIcon>
+								<NextActionContent>
+									<NextActionTitle>Next Recommended Step</NextActionTitle>
+									<NextActionDesc>
+										Address the <strong>{report.violations.length} critical issues</strong> identified in your
+										foundations to improve system stability.
+									</NextActionDesc>
+								</NextActionContent>
+								<NextActionArrow>→</NextActionArrow>
+							</NextActionCard>
+						)}
 						<GovernanceGrid>
 							<GovernanceCard>
-								<GovernanceTitle>Compliance Posture</GovernanceTitle>
+								<GovernanceTitle>Best Practices</GovernanceTitle>
 								<GovernanceValue>{report?.complianceScore || 0}%</GovernanceValue>
-								<GovernanceDesc>Adherence to Axioms</GovernanceDesc>
+								<GovernanceDesc>Structural Alignment</GovernanceDesc>
 							</GovernanceCard>
 							<GovernanceCard $toxic={!!report?.toxicModule}>
-								<GovernanceTitle>Toxic Module</GovernanceTitle>
+								<GovernanceTitle>Attention Needed</GovernanceTitle>
 								<GovernanceValue style={{ fontSize: "11px", opacity: 0.9 }}>
 									{report?.toxicModule || "None"}
 								</GovernanceValue>
-								<GovernanceDesc>Focus Area</GovernanceDesc>
+								<GovernanceDesc>Highest Risk Area</GovernanceDesc>
 							</GovernanceCard>
 						</GovernanceGrid>
+
+						{report && (
+							<ChecklistSection>
+								<SectionHeader>
+									<SectionTitle>Health Checklist</SectionTitle>
+									<StatLabel>Core Requirements</StatLabel>
+								</SectionHeader>
+								<Checklist>
+									<CheckItem $passed={(report.buildHealth || 0) > 70}>
+										<CheckIcon>{(report.buildHealth || 0) > 70 ? "✅" : "❌"}</CheckIcon>
+										<CheckText>Base Integrity Score {report.buildHealth || 0}%</CheckText>
+									</CheckItem>
+									<CheckItem $passed={!report.driftDetected}>
+										<CheckIcon>{!report.driftDetected ? "✅" : "❌"}</CheckIcon>
+										<CheckText>
+											{!report.driftDetected ? "Index synchronized" : "Substrate drift detected"}
+										</CheckText>
+									</CheckItem>
+									<CheckItem $passed={(report.complianceScore || 0) > 80}>
+										<CheckIcon>{(report.complianceScore || 0) > 80 ? "✅" : "⚠️"}</CheckIcon>
+										<CheckText>Standard alignment</CheckText>
+									</CheckItem>
+									<CheckItem $passed={(report.stabilityScore || 0) > 60}>
+										<CheckIcon>{(report.stabilityScore || 0) > 60 ? "✅" : "⚠️"}</CheckIcon>
+										<CheckText>System stability baseline</CheckText>
+									</CheckItem>
+								</Checklist>
+							</ChecklistSection>
+						)}
 
 						{report?.riskProfile && (
 							<RiskProfileSection>
 								<SectionHeader>
-									<SectionTitle>Substrate Risk Profile</SectionTitle>
-									<StatLabel>File Distribution</StatLabel>
+									<SectionTitle>Project Risk Distribution</SectionTitle>
+									<StatLabel>File Health</StatLabel>
 								</SectionHeader>
 								<RiskBar>
 									<RiskSegment
@@ -259,14 +413,15 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 						<MissionSection>
 							<SectionHeader>
 								<SectionTitle>Guided Missions</SectionTitle>
+								<StatLabel>Recommended Actions</StatLabel>
 							</SectionHeader>
 							<MissionGrid>
 								<MissionCard $active={(report?.violations?.length ?? 0) > 0}>
 									<MissionStatus>
 										{(report?.violations?.length ?? 0) > 0 ? "ACTION REQUIRED" : "STABLE"}
 									</MissionStatus>
-									<MissionTitle>Harden Foundations</MissionTitle>
-									<MissionDesc>Fix {report?.violations?.length || 0} structural risks.</MissionDesc>
+									<MissionTitle>Harden Infrastructure</MissionTitle>
+									<MissionDesc>Resolve {report?.violations?.length || 0} critical risks.</MissionDesc>
 								</MissionCard>
 								<MissionCard $active={(report?.optimizations?.length ?? 0) > 0}>
 									<MissionStatus>
@@ -300,32 +455,38 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 						)}
 
 						{!loading && report && (
-							<DashboardGrid>
-								<DashboardCard>
-									<DashboardIcon>⏳</DashboardIcon>
-									<DashboardValue>{report.totalTechnicalDebt}</DashboardValue>
-									<DashboardLabel>Tech Debt</DashboardLabel>
-								</DashboardCard>
-								<DashboardCard>
-									<DashboardIcon>🛡️</DashboardIcon>
-									<DashboardValue>{report.stabilityScore}%</DashboardValue>
-									<DashboardLabel>Stability Index</DashboardLabel>
-								</DashboardCard>
-								<DashboardCard>
-									<DashboardIcon>🏗️</DashboardIcon>
-									<DashboardValue>{report.maintainabilityScore}%</DashboardValue>
-									<DashboardLabel>Maintainability</DashboardLabel>
-								</DashboardCard>
-							</DashboardGrid>
+							<DashboardSection>
+								<SectionHeader>
+									<SectionTitle>Maintenance Outlook</SectionTitle>
+									<StatLabel>Industry Metrics</StatLabel>
+								</SectionHeader>
+								<DashboardGrid>
+									<DashboardCard title="Estimated time to resolve all identified technical debt.">
+										<DashboardIcon>⏳</DashboardIcon>
+										<DashboardValue>{report.totalTechnicalDebt}</DashboardValue>
+										<DashboardLabel>Recovery Time</DashboardLabel>
+									</DashboardCard>
+									<DashboardCard title="Percentage of project following stable structural patterns.">
+										<DashboardIcon>🛡️</DashboardIcon>
+										<DashboardValue>{report.stabilityScore}%</DashboardValue>
+										<DashboardLabel>System Stability</DashboardLabel>
+									</DashboardCard>
+									<DashboardCard title="Ease of understanding and modifying the existing codebase.">
+										<DashboardIcon>🏗️</DashboardIcon>
+										<DashboardValue>{report.maintainabilityScore}%</DashboardValue>
+										<DashboardLabel>Organization</DashboardLabel>
+									</DashboardCard>
+								</DashboardGrid>
+							</DashboardSection>
 						)}
 
 						{report && (
 							<SummaryNotice>
 								{report.buildHealth > 80
-									? "Your substrate is in excellent condition. Focus on minor maintainability optimizations."
+									? "Your project health is excellent. Continue following established patterns for maximum stability."
 									: report.buildHealth > 50
-										? "The project is stable but has accumulated noticeable technical debt. Consider a hardening sprint."
-										: "CRITICAL: Multiple structural risks detected. Foundation hardening is highly recommended."}
+										? "The project is stable but starting to show signs of structural fatigue. Consider addressing technical debt soon."
+										: "CRITICAL: Significant structural issues detected. Immediate attention to the foundations is recommended to prevent future failures."}
 							</SummaryNotice>
 						)}
 
@@ -350,25 +511,24 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 						{report && (
 							<ActivitySection>
 								<SectionHeader>
-									<SectionTitle>Recent Activity</SectionTitle>
-									<StatLabel>Auto-Healing Log</StatLabel>
+									<SectionTitle>Recent Fixes</SectionTitle>
+									<StatLabel>Repair History</StatLabel>
 								</SectionHeader>
 								<ActivityList>
 									{report.violations
-										.filter((v) => v.message.includes("[AUTO-FIX]"))
+										.filter((v) => v.message.includes("[MANUAL-FIX]"))
 										.slice(0, 3)
 										.map((v) => (
 											<ActivityItem key={`${v.path}-${v.type}`}>
 												<ActivityDot />
 												<ActivityText>
-													<strong>Auto-Healing:</strong> {v.type} in{" "}
-													<code>{v.path.split("/").pop()}</code>
+													<strong>Repaired:</strong> {v.type} in <code>{v.path.split("/").pop()}</code>
 												</ActivityText>
 												<ActivityTime>Just now</ActivityTime>
 											</ActivityItem>
 										))}
 									{report.violations.length === 0 && (
-										<EmptyLog>No recent healing actions required. Substrate is nominal.</EmptyLog>
+										<EmptyLog>No recent repairs required. All systems are nominal.</EmptyLog>
 									)}
 								</ActivityList>
 							</ActivitySection>
@@ -379,7 +539,7 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 							disabled={loading || status === "starting" || status === "streaming"}
 							onClick={triggerAudit}
 							style={{ marginTop: "8px" }}>
-							{loading ? "Forensic Scan in Progress..." : "Run New Forensic Audit"}
+							{loading ? "Scanning Project..." : "Start New Health Audit"}
 						</AuditButton>
 					</TabView>
 				)}
@@ -387,69 +547,160 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 				{activeTab === "fixes" && (
 					<TabView>
 						<SectionHeader>
-							<SectionTitle>Structural Repairs</SectionTitle>
-							<Badge $type="AUTO">AUTO-HEALING ACTIVE</Badge>
+							<SectionTitle>Essential Repairs</SectionTitle>
+							<Badge $type="LOW">MANUAL REPAIR REQUIRED</Badge>
 						</SectionHeader>
+						<FilterGroup>
+							{["ALL", "STABILITY", "SECURITY", "MAINTAINABILITY"].map((cat) => (
+								<FilterBadge
+									$active={selectedCategory === (cat === "ALL" ? null : cat)}
+									key={cat}
+									onClick={() => setSelectedCategory(cat === "ALL" ? null : cat)}>
+									{cat}
+								</FilterBadge>
+							))}
+						</FilterGroup>
+						<SearchInput
+							onChange={(e) => setFixesSearch(e.target.value)}
+							placeholder="Filter fixes by path or type..."
+							value={fixesSearch}
+						/>
 						{report?.violations.length === 0 && !loading && (
-							<EmptyState>No foundational risks detected. Your substrate is solid.</EmptyState>
+							<EmptyState>No critical issues detected. Your codebase foundations are strong.</EmptyState>
 						)}
 						<List>
-							{report?.violations?.map((v, i) => (
-								<ListItem $type="VIOLATION" key={`${v.path}-${i}`}>
-									<ListItemContent>
-										<BadgeGroup>
-											<Badge $type={v.riskLevel || "HIGH"}>{v.riskLevel || "HIGH"} RISK</Badge>
-											<Badge $type="CATEGORY">{v.impactArea || "STABILITY"}</Badge>
-										</BadgeGroup>
-										<ListItemTitle>
-											{v.type} {v.message.includes("[AUTO-FIX]") && <Badge $type="AUTO">AUTO-FIXING</Badge>}
-										</ListItemTitle>
-										<ListItemDesc>{v.message}</ListItemDesc>
-										<ListItemRemediation>Repair Strategy: {v.remediation}</ListItemRemediation>
-										<ListItemPath>{v.path}</ListItemPath>
-									</ListItemContent>
-								</ListItem>
-							))}
+							{report?.violations
+								?.filter(
+									(v) =>
+										(!selectedCategory || v.impactArea === selectedCategory) &&
+										(v.path.toLowerCase().includes(fixesSearch.toLowerCase()) ||
+											v.type.toLowerCase().includes(fixesSearch.toLowerCase()) ||
+											v.message.toLowerCase().includes(fixesSearch.toLowerCase())),
+								)
+								.map((v, i) => (
+									<ListItem $type="VIOLATION" key={`${v.path}-${i}`}>
+										<ListItemContent>
+											<BadgeGroup>
+												<Badge $type={v.riskLevel || "HIGH"}>{v.riskLevel || "HIGH"} RISK</Badge>
+												<Badge $type="CATEGORY">{v.impactArea || "STABILITY"}</Badge>
+											</BadgeGroup>
+											<ListItemTitle>
+												{v.type}
+												<PatternLabel title="Violates core architectural principles for long-term maintainability.">
+													Structural Anti-Pattern
+												</PatternLabel>
+											</ListItemTitle>
+											<ListItemDesc>{v.message}</ListItemDesc>
+											<ListItemRemediation>Repair Strategy: {v.remediation}</ListItemRemediation>
+											<ListItemPath>{v.path}</ListItemPath>
+										</ListItemContent>
+										<ActionGroup>
+											<ActionButton
+												disabled={launchingTaskId === `FIX_STRUCTURAL_VIOLATION:${v.path}`}
+												onClick={() => executeRefactor("FIX_STRUCTURAL_VIOLATION", v.path)}>
+												{launchingTaskId === `FIX_STRUCTURAL_VIOLATION:${v.path}`
+													? "Fixing..."
+													: "Apply Resolution"}
+											</ActionButton>
+										</ActionGroup>
+									</ListItem>
+								))}
 						</List>
 					</TabView>
 				)}
 
 				{activeTab === "improvements" && (
 					<TabView>
+						<SectionTitle style={{ marginBottom: "8px" }}>Priority Matrix (ROI)</SectionTitle>
+						<MatrixContainer>
+							<MatrixQuadrant $type="WIN">
+								<MatrixLabel>QUICK WINS</MatrixLabel>
+								<MatrixDesc>Low Effort, High Impact</MatrixDesc>
+							</MatrixQuadrant>
+							<MatrixQuadrant $type="STRATEGIC">
+								<MatrixLabel>STRATEGIC</MatrixLabel>
+								<MatrixDesc>High Effort, High Impact</MatrixDesc>
+							</MatrixQuadrant>
+							<MatrixQuadrant $type="MINIMAL">
+								<MatrixLabel>MINIMAL</MatrixLabel>
+								<MatrixDesc>Low Effort, Low Impact</MatrixDesc>
+							</MatrixQuadrant>
+							<MatrixQuadrant $type="DEBT">
+								<MatrixLabel>FILLERS</MatrixLabel>
+								<MatrixDesc>High Effort, Low Impact</MatrixDesc>
+							</MatrixQuadrant>
+							{/* Points on the matrix */}
+							{report?.optimizations.slice(0, 8).map((opt, i) => (
+								<MatrixPoint
+									$effort={opt.effort === "HIGH" ? 75 : opt.effort === "MEDIUM" ? 50 : 25}
+									$impact={opt.impact === "HIGH" ? 75 : opt.impact === "MEDIUM" ? 50 : 25}
+									key={opt.title}
+									title={`${opt.title} (${opt.impact} Impact, ${opt.effort} Effort)`}
+								/>
+							))}
+						</MatrixContainer>
+
 						<SectionTitle style={{ marginBottom: "8px" }}>Maintainability Roadmap</SectionTitle>
+						<FilterGroup>
+							{["ALL", "STABILITY", "PERFORMANCE", "MAINTAINABILITY"].map((cat) => (
+								<FilterBadge
+									$active={selectedCategory === (cat === "ALL" ? null : cat)}
+									key={cat}
+									onClick={() => setSelectedCategory(cat === "ALL" ? null : cat)}>
+									{cat}
+								</FilterBadge>
+							))}
+						</FilterGroup>
+						<SearchInput
+							onChange={(e) => setOptsSearch(e.target.value)}
+							placeholder="Filter optimizations..."
+							value={optsSearch}
+						/>
 						{report?.optimizations.length === 0 && !loading && (
-							<EmptyState>Your components are lean and focused. No roadmap items identified.</EmptyState>
+							<EmptyState>
+								No optimization opportunities identified. Your code is currently lean and focused.
+							</EmptyState>
 						)}
 						<List>
-							{report?.optimizations?.map((opt, i) => (
-								<ListItem key={`${opt.path}-${i}`}>
-									<ListItemContent>
-										<BadgeGroup>
-											<Badge $type={opt.impact}>{opt.impact} IMPACT</Badge>
-											<Badge $type="EFFORT">{opt.effort} EFFORT</Badge>
-											<Badge $type="CATEGORY">{opt.category}</Badge>
-										</BadgeGroup>
-										<ListItemTitle>{opt.title}</ListItemTitle>
-										<ListItemDesc>{opt.description}</ListItemDesc>
-										<ListItemPath>{opt.path}</ListItemPath>
-										{opt.projectedHealthGain > 0 && (
-											<HealthGain>Expected Health Boost: +{opt.projectedHealthGain.toFixed(1)}%</HealthGain>
-										)}
-									</ListItemContent>
-									<ActionGroup>
-										<SecondaryButton onClick={() => executeRefactor(opt.action, opt.path, true)}>
-											View Plan
-										</SecondaryButton>
-										<ActionButton
-											disabled={launchingTaskId === `${opt.action}:${opt.path}`}
-											onClick={() => executeRefactor(opt.action, opt.path)}>
-											{launchingTaskId === `${opt.action}:${opt.path}`
-												? "Repairing..."
-												: "Apply Improvement"}
-										</ActionButton>
-									</ActionGroup>
-								</ListItem>
-							))}
+							{report?.optimizations
+								?.filter(
+									(opt) =>
+										(!selectedCategory || opt.category === selectedCategory) &&
+										(opt.title.toLowerCase().includes(optsSearch.toLowerCase()) ||
+											opt.path.toLowerCase().includes(optsSearch.toLowerCase()) ||
+											opt.description.toLowerCase().includes(optsSearch.toLowerCase())),
+								)
+								.map((opt, i) => (
+									<ListItem key={`${opt.path}-${i}`}>
+										<ListItemContent>
+											<BadgeGroup>
+												<Badge $type={opt.impact}>{opt.impact} IMPACT</Badge>
+												<Badge $type="EFFORT">{opt.effort} EFFORT</Badge>
+												<Badge $type="CATEGORY">{opt.category}</Badge>
+											</BadgeGroup>
+											<ListItemTitle>{opt.title}</ListItemTitle>
+											<ListItemDesc>{opt.description}</ListItemDesc>
+											<ListItemPath>{opt.path}</ListItemPath>
+											{opt.projectedHealthGain > 0 && (
+												<HealthGain>
+													Expected Health Boost: +{opt.projectedHealthGain.toFixed(1)}%
+												</HealthGain>
+											)}
+										</ListItemContent>
+										<ActionGroup>
+											<SecondaryButton onClick={() => executeRefactor(opt.action, opt.path, true)}>
+												View Plan
+											</SecondaryButton>
+											<ActionButton
+												disabled={launchingTaskId === `${opt.action}:${opt.path}`}
+												onClick={() => executeRefactor(opt.action, opt.path)}>
+												{launchingTaskId === `${opt.action}:${opt.path}`
+													? "Applying..."
+													: "Apply Optimization"}
+											</ActionButton>
+										</ActionGroup>
+									</ListItem>
+								))}
 						</List>
 					</TabView>
 				)}
@@ -842,6 +1093,12 @@ const SubstrateStatus = styled.div<{ $health: number }>`
   border-radius: 20px;
 `
 
+const DashboardSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
 const DashboardGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1179,6 +1436,60 @@ const SecondaryButton = styled.button`
   flex: 1;
 `
 
+const HealthSnapshot = styled.div<{ $health: number }>`
+  padding: 16px;
+  background: ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.05)" : props.$health > 50 ? "rgba(250, 173, 20, 0.05)" : "rgba(255, 77, 79, 0.05)")};
+  border: 1px solid ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.2)" : props.$health > 50 ? "rgba(250, 173, 20, 0.2)" : "rgba(255, 77, 79, 0.2)")};
+  border-radius: 16px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+`
+
+const SnapshotIcon = styled.div`
+  font-size: 24px;
+`
+
+const SnapshotContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const SnapshotTitle = styled.div`
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`
+
+const SnapshotDesc = styled.div`
+  font-size: 11px;
+  opacity: 0.7;
+  line-height: 1.4;
+`
+
+const ScanningNotice = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(24, 144, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(24, 144, 255, 0.1);
+`
+
+const ScanningIcon = styled.div`
+  font-size: 16px;
+  animation: ${rotate} 2s linear infinite;
+`
+
+const ScanningText = styled.div`
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
+`
+
 const EmptyState = styled.div`
   padding: 40px 20px;
   text-align: center;
@@ -1250,6 +1561,296 @@ const PreviewText = styled.div`
 const PreviewActions = styled.div`
   display: flex;
   justify-content: flex-end;
+`
+
+const FilterGroup = styled.div`
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+`
+
+const FilterBadge = styled.div<{ $active: boolean }>`
+  font-size: 9px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  background: ${(props) => (props.$active ? "var(--vscode-button-background)" : "rgba(255, 255, 255, 0.05)")};
+  color: ${(props) => (props.$active ? "var(--vscode-button-foreground)" : "rgba(255, 255, 255, 0.4)")};
+  border: 1px solid ${(props) => (props.$active ? "transparent" : "rgba(255, 255, 255, 0.1)")};
+  
+  &:hover {
+    background: ${(props) => (props.$active ? "var(--vscode-button-background)" : "rgba(255, 255, 255, 0.1)")};
+  }
+`
+
+const SearchInput = styled.input`
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--vscode-foreground);
+  font-size: 11px;
+  margin-bottom: 8px;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--vscode-button-background);
+  }
+  
+  &::placeholder {
+    opacity: 0.4;
+  }
+`
+
+const SnapshotTitleGroup = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+`
+
+const TrendSparkline = styled.div`
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+`
+
+const PatternLabel = styled.span`
+  font-size: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.4);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  font-weight: 400;
+  cursor: help;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+`
+
+const MatrixContainer = styled.div`
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  width: 100%;
+  height: 180px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+`
+
+const MatrixQuadrant = styled.div<{ $type: string }>`
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  
+  ${(props) => {
+		if (props.$type === "WIN") return "background: rgba(82, 196, 26, 0.02);"
+		if (props.$type === "STRATEGIC") return "background: rgba(24, 144, 255, 0.02);"
+		if (props.$type === "MINIMAL") return "background: rgba(255, 255, 255, 0.01);"
+		return "background: rgba(255, 77, 79, 0.01);"
+  }}
+`
+
+const MatrixLabel = styled.div`
+  font-size: 9px;
+  font-weight: 800;
+  opacity: 0.5;
+  letter-spacing: 1px;
+`
+
+const MatrixDesc = styled.div`
+  font-size: 7px;
+  opacity: 0.3;
+  text-transform: uppercase;
+  margin-top: 2px;
+`
+
+const MatrixPoint = styled.div<{ $effort: number; $impact: number }>`
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vscode-button-background);
+  box-shadow: 0 0 8px var(--vscode-button-background);
+  bottom: ${(props) => props.$impact}%;
+  left: ${(props) => props.$effort}%;
+  transform: translate(-50%, 50%);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+  
+  &:hover {
+    width: 12px;
+    height: 12px;
+    box-shadow: 0 0 12px #fff;
+  }
+`
+
+const ShareButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  span {
+    font-size: 10px;
+  }
+`
+
+const WelcomeView = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  gap: 20px;
+  flex: 1;
+`
+
+const WelcomeIcon = styled.div`
+  font-size: 64px;
+  filter: drop-shadow(0 0 20px rgba(24, 144, 255, 0.3));
+`
+
+const WelcomeTitle = styled.h2`
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0;
+`
+
+const WelcomeDesc = styled.p`
+  font-size: 13px;
+  opacity: 0.6;
+  max-width: 400px;
+  line-height: 1.6;
+  margin: 0;
+`
+
+const RadarChartSection = styled.div`
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+`
+
+const RadarChartWrapper = styled.div`
+  position: relative;
+  width: 180px;
+  height: 180px;
+`
+
+const RadarLabel = styled.div`
+  position: absolute;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.4;
+  white-space: nowrap;
+`
+
+const ChecklistSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const Checklist = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.1);
+  padding: 12px;
+  border-radius: 12px;
+`
+
+const CheckItem = styled.div<{ $passed: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: ${(props) => (props.$passed ? 1 : 0.6)};
+`
+
+const CheckIcon = styled.div`
+  font-size: 14px;
+`
+
+const CheckText = styled.div`
+  font-size: 11px;
+  font-weight: 600;
+`
+
+const NextActionCard = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+`
+
+const NextActionIcon = styled.div`
+  font-size: 20px;
+`
+
+const NextActionContent = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const NextActionTitle = styled.div`
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`
+
+const NextActionDesc = styled.div`
+  font-size: 11px;
+  opacity: 0.9;
+  line-height: 1.4;
+`
+
+const NextActionArrow = styled.div`
+  font-size: 18px;
+  font-weight: 800;
 `
 
 const DriftWarning = styled.div`

@@ -68,7 +68,7 @@ export async function triggerAudit(
 		// 1. Start Audit - Send initial progress
 		await responseStream(
 			JoyZoningAuditResponse.create({
-				progress: { processedFiles: 0, totalFiles: 100, currentFile: "Initializing Forensic Scan...", percentage: 0 },
+				progress: { processedFiles: 0, totalFiles: 100, currentFile: "Preparing Health Scan...", percentage: 0 },
 			}),
 		)
 
@@ -126,7 +126,7 @@ export async function triggerAudit(
 					type: "STRUCTURAL",
 					severity: "WARN",
 					path: gravityCenter.path,
-					message: `GRAVITY CENTER DETECTED: This file has the highest blast radius (${gravityCenter.blastRadius.toFixed(1)}). Changes here ripple project-wide.`,
+					message: `CRITICAL COMPONENT IDENTIFIED: This file has a high impact risk (${gravityCenter.blastRadius.toFixed(1)}). Changes here affect many other parts of the project.`,
 					remediation: "Consider decoupling or extracting stable interfaces to reduce ripple effects.",
 					riskLevel: "HIGH",
 					impactArea: "STABILITY",
@@ -134,30 +134,8 @@ export async function triggerAudit(
 			}
 		}
 
-		// V206: Automatic Structural Fixes - Launch task for violations that require substrate alignment
-		const structuralViolations = violations.filter((v) => v.type === "STRUCTURAL")
-		if (structuralViolations.length > 0) {
-			Logger.info(`[JoyZoning] Automatically triggering fixes for ${structuralViolations.length} structural violations.`)
-
-			// Update the messages in the violations list so the user knows they are being auto-fixed
-			for (const v of violations) {
-				if (v.type === "STRUCTURAL") {
-					v.message = `[AUTO-FIX TRIGGERED] ${v.message}`
-				}
-			}
-
-			let fixPrompt = `JOY_ZONING AUTO-FIX: The following structural violations were detected and must be corrected to maintain substrate integrity:\n\n`
-			for (const v of structuralViolations) {
-				fixPrompt += `- [FILE: ${v.path}] ${v.message}\n`
-				fixPrompt += `  REMEDIATION: ${v.remediation}\n\n`
-			}
-			fixPrompt += `Instructions:\n1. Apply all remediations listed above.\n2. Verify structural integrity using SpiderEngine after fixes.\n3. Do not modify business logic unless necessary for the structural fix.`
-
-			// Launch the task. We don't await completion to avoid blocking the audit report return.
-			controller.createTask(fixPrompt).catch((e) => {
-				Logger.error("[JoyZoning] Failed to trigger auto-fix task:", e)
-			})
-		}
+		// V206: Automatic Structural Fixes - REMOVED to prevent cascading agent spirals.
+		// User now manually triggers fixes from the JoyZoning view.
 
 		// Map Decomposer Optimizations for Hotspots/God Modules
 		const hotspots = nodes.filter((n: SpiderNode) => (n.astComplexity || 0) > 1000 || n.afferentCoupling > 10)

@@ -25,7 +25,19 @@ export async function executeRefactor(
 		// 1. Validate the requested action exists in the decomposition plan
 		const step = plan.steps.find((s) => s.action === request.action || `${s.action}: ${s.target}`.includes(request.action))
 
-		if (!step && request.action !== "ALIGN_TAGS" && request.action !== "HEAL_STATELESSNESS") {
+		let violationToFix: any = null
+		if (request.action === "FIX_STRUCTURAL_VIOLATION") {
+			const report = controller.stateManager.getGlobalStateKey("lastJoyZoningReport") as any
+			if (report && report.violations) {
+				violationToFix = report.violations.find((v: any) => v.path === request.path && v.type === "STRUCTURAL")
+			}
+			if (!violationToFix) {
+				return JoyZoningRefactorResponse.create({
+					success: false,
+					message: `No structural violation found for ${request.path} to fix.`,
+				})
+			}
+		} else if (!step && request.action !== "ALIGN_TAGS" && request.action !== "HEAL_STATELESSNESS") {
 			return JoyZoningRefactorResponse.create({
 				success: false,
 				message: `Action ${request.action} not found in decomposition plan for this file.`,
@@ -44,25 +56,33 @@ export async function executeRefactor(
 		}
 
 		// 3. Construct a high-fidelity agentic task
-		let taskPrompt = `Refactor task: ${request.action} on ${request.path}\n\n`
-		taskPrompt += `[FORENSIC_SIGNAL] Afferent Coupling: ${node?.afferentCoupling || 0}\n`
-		taskPrompt += `[FORENSIC_SIGNAL] Cognitive Complexity: ${node?.cognitiveComplexity.toFixed(2) || 0}\n`
-		taskPrompt += `[FORENSIC_SIGNAL] Structural Entropy: ${spider.computeEntropy().score.toFixed(2)}\n\n`
+		let taskPrompt = ""
+		if (violationToFix) {
+			taskPrompt = `JOY_ZONING FIX: Correct the following structural violation in ${request.path} to maintain substrate integrity:\n\n`
+			taskPrompt += `- VIOLATION: ${violationToFix.message}\n`
+			taskPrompt += `- REMEDIATION: ${violationToFix.remediation}\n\n`
+			taskPrompt += `Instructions:\n1. Apply the remediation listed above.\n2. Verify structural integrity after fixes.\n3. Do not modify business logic unless necessary for the structural fix.`
+		} else {
+			taskPrompt = `Refactor task: ${request.action} on ${request.path}\n\n`
+			taskPrompt += `[SYSTEM_SIGNAL] Component Coupling: ${node?.afferentCoupling || 0}\n`
+			taskPrompt += `[SYSTEM_SIGNAL] Code Complexity: ${node?.cognitiveComplexity.toFixed(2) || 0}\n`
+			taskPrompt += `[SYSTEM_SIGNAL] Organization Score: ${(1 - spider.computeEntropy().score).toFixed(2)}\n\n`
 
-		taskPrompt += `Context from SovereignDecomposer:\n`
-		if (step) {
-			taskPrompt += `- Reason: ${step.reason}\n`
-			taskPrompt += `- Destination: ${step.destination}\n`
-			if (step.boilerplate) {
-				taskPrompt += `\nRecommended Boilerplate for new module:\n\`\`\`typescript\n${step.boilerplate}\n\`\`\`\n`
+			taskPrompt += `Context from Health Analyzer:\n`
+			if (step) {
+				taskPrompt += `- Reason: ${step.reason}\n`
+				taskPrompt += `- Destination: ${step.destination}\n`
+				if (step.boilerplate) {
+					taskPrompt += `\nRecommended Pattern for new module:\n\`\`\`typescript\n${step.boilerplate}\n\`\`\`\n`
+				}
 			}
-		}
 
-		taskPrompt += `\nInstructions:\n`
-		taskPrompt += `1. Analyze the file and its dependents.\n`
-		taskPrompt += `2. Perform the refactoring as suggested.\n`
-		taskPrompt += `3. Ensure all imports are updated project-wide.\n`
-		taskPrompt += `4. Verify build health after completion.\n`
+			taskPrompt += `\nInstructions:\n`
+			taskPrompt += `1. Analyze the file and its impact on the system.\n`
+			taskPrompt += `2. Perform the optimization as suggested.\n`
+			taskPrompt += `3. Update all imports project-wide.\n`
+			taskPrompt += `4. Ensure the system remains stable after changes.\n`
+		}
 
 		const taskId = await controller.createTask(taskPrompt)
 
