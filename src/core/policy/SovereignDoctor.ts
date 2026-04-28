@@ -88,8 +88,12 @@ export class SovereignDoctor {
 
 		// Map to metabolic pressure
 		const nodes = Array.from(engine.nodes.values())
-		const gravityCenter = nodes.sort((a, b) => (b.blastRadius || 0) - (a.blastRadius || 0))[0]?.path || "Unknown"
-		const logicHotspots = nodes
+		const gravityCenter =
+			nodes.reduce<(typeof nodes)[number] | undefined>((max, node) => {
+				if (!max || (node.blastRadius || 0) > (max.blastRadius || 0)) return node
+				return max
+			}, undefined)?.path || "Unknown"
+		const logicHotspots = [...nodes]
 			.sort((a, b) => {
 				const scoreA = a.logicDensity * 0.7 + ((a.astComplexity || 0) / 1000) * 0.3
 				const scoreB = b.logicDensity * 0.7 + ((b.astComplexity || 0) / 1000) * 0.3

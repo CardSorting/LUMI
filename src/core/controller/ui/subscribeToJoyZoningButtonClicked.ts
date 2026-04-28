@@ -1,6 +1,7 @@
 import { IController } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { getRequestRegistry, StreamingResponseHandler } from "@/core/controller/grpc-handler"
+import { Logger } from "@/shared/services/Logger"
 
 let joyZoningButtonClickedCallback: ((response: Empty) => void) | null = null
 
@@ -11,7 +12,10 @@ export async function subscribeToJoyZoningButtonClicked(
 	requestId?: string,
 ): Promise<void> {
 	joyZoningButtonClickedCallback = (response) => {
-		responseStream(response)
+		responseStream(response).catch((error) => {
+			Logger.warn("[JoyZoning] Failed to stream button click event:", error)
+			joyZoningButtonClickedCallback = null
+		})
 	}
 
 	if (requestId) {

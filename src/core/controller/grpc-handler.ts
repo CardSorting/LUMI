@@ -116,6 +116,7 @@ async function handleStreamingRequest(
 	request: GrpcRequest,
 ): Promise<void> {
 	let isTerminated = false
+	let completedWithTerminalResponse = false
 
 	// Create a response stream function with terminal guard
 	const responseStream: StreamingResponseHandler<unknown> = async (
@@ -129,6 +130,7 @@ async function handleStreamingRequest(
 
 		if (isLast) {
 			isTerminated = true
+			completedWithTerminalResponse = true
 		}
 
 		await postMessageToWebview({
@@ -162,10 +164,12 @@ async function handleStreamingRequest(
 
 		// Handle streaming request and pass the requestId to all streaming handlers
 		await handler(controller, request.message, responseStream, request.request_id)
-
-		// If the handler completes without calling responseStream with isLast=true,
-		// we should still ensure the request is cleaned up eventually.
-		// However, many streams are persistent (like button subscriptions).
+		// clean up finite streams. Subscription streams intentionally remain registered
+		// until the webview sends an explicit cancellation request.
+		if (!completedWithTerminalResponse && !isPersistentStreamingRequest(request)) {
+			isTerminated = true
+			requestRegistry.cancelRequest(request.request_id)
+		}
 	} catch (error) {
 		if (isTerminated) {
 			return
@@ -219,6 +223,11 @@ const requestRegistry = new GrpcRequestRegistry()
 export function getRequestRegistry(): GrpcRequestRegistry {
 	requestRegistry.startStalePurge(60000)
 	return requestRegistry
+}
+
+function isPersistentStreamingRequest(request: GrpcRequest): boolean {
+	const method = request.method.toLowerCase()
+	return method.startsWith("subscribe") || method.includes("subscription")
 }
 
 export function disposeRequestRegistry(): void {

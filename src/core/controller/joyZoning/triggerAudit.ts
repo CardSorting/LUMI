@@ -24,11 +24,15 @@ const safeString = (value: unknown, fallback = ""): string => (typeof value === 
 
 const safeArray = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : [])
 
+const boundedArray = <T>(value: unknown, maxItems: number): T[] => safeArray<T>(value).slice(0, maxItems)
+
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
 	!!value && typeof value === "object" && !Array.isArray(value)
 
 const isAuditCancelledError = (error: unknown): boolean =>
 	error instanceof Error && error.message.toLowerCase().includes("joyzoning audit cancelled")
+
+const MAX_HOTSPOT_BYTES = 750_000
 
 const safeRecord = (value: unknown): Record<string, number> => {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {}
@@ -39,17 +43,35 @@ const safeRecord = (value: unknown): Record<string, number> => {
 	return out
 }
 
+const normalizeProgress = (value: unknown): JoyZoningAuditResponse["progress"] => {
+	if (!isObjectRecord(value)) return undefined
+	return {
+		processedFiles: finiteNumber(value.processedFiles, 0),
+		totalFiles: finiteNumber(value.totalFiles, 0),
+		currentFile: safeString(value.currentFile, ""),
+		percentage: finitePercent(value.percentage, 0),
+	}
+}
+
+const normalizeHistory = (value: unknown): { timestamp: string; health: number; stability: number; maintainability: number }[] =>
+	boundedArray<Record<string, unknown>>(value, 20).map((point) => ({
+		timestamp: safeString(point.timestamp, new Date().toISOString()),
+		health: finitePercent(point.health, 0),
+		stability: finitePercent(point.stability, 0),
+		maintainability: finitePercent(point.maintainability, 0),
+	}))
+
 function normalizeAuditResponse(input: Partial<JoyZoningAuditResponse> | Record<string, unknown>): JoyZoningAuditResponse {
 	return JoyZoningAuditResponse.create({
 		buildHealth: finitePercent(input.buildHealth, 0),
 		totalFiles: finiteNumber(input.totalFiles, 0),
 		structuralEntropy: finiteNumber(input.structuralEntropy, 0),
-		violations: safeArray<JoyZoningViolation>(input.violations),
-		optimizations: safeArray<JoyZoningOptimization>(input.optimizations),
+		violations: boundedArray<JoyZoningViolation>(input.violations, 500),
+		optimizations: boundedArray<JoyZoningOptimization>(input.optimizations, 250),
 		timestamp: safeString(input.timestamp, new Date().toISOString()),
 		projectedHealth: finitePercent(input.projectedHealth, finiteNumber(input.buildHealth, 0)),
 		integrityScore: finitePercent(input.integrityScore, 0),
-		progress: input.progress as JoyZoningAuditResponse["progress"],
+		progress: normalizeProgress(input.progress),
 		metabolicPressure: finiteNumber(input.metabolicPressure, 0),
 		driftDetected: Boolean(input.driftDetected),
 		driftCount: finiteNumber(input.driftCount, 0),
@@ -58,12 +80,12 @@ function normalizeAuditResponse(input: Partial<JoyZoningAuditResponse> | Record<
 		totalTechnicalDebt: safeString(input.totalTechnicalDebt, "0m"),
 		stabilityScore: finitePercent(input.stabilityScore, 0),
 		maintainabilityScore: finitePercent(input.maintainabilityScore, 0),
-		history: safeArray(input.history),
+		history: normalizeHistory(input.history),
 		qualityGateStatus: safeString(input.qualityGateStatus, "UNKNOWN"),
 		complianceScore: finitePercent(input.complianceScore, 0),
 		toxicModule: safeString(input.toxicModule, "None detected"),
 		layerScores: safeRecord(input.layerScores),
-		topRecommendations: safeArray<JoyZoningOptimization>(input.topRecommendations),
+		topRecommendations: boundedArray<JoyZoningOptimization>(input.topRecommendations, 3),
 		healthDelta: finiteNumber(input.healthDelta, 0),
 		violationDelta: finiteNumber(input.violationDelta, 0),
 		riskProfile: { LOW: 0, MEDIUM: 0, HIGH: 0, ...safeRecord(input.riskProfile) },
@@ -84,6 +106,9 @@ export async function triggerAudit(
 	const registry = getRequestRegistry()
 	let timedOut = false
 	let terminal = false
+	const unregister = () => {
+		if (requestId && registry.hasRequest(requestId)) registry.unregisterRequest(requestId)
+	}
 	const isCancelled = () => timedOut || (!!requestId && !registry.hasRequest(requestId))
 	const safeSend = async (response: JoyZoningAuditResponse, isLast = false): Promise<boolean> => {
 		if (terminal || isCancelled()) return false
@@ -190,8 +215,10 @@ export async function triggerAudit(
 		// V205: Forensic Depth - Identifying the Gravity Center
 		const nodes = Array.from(spider.nodes.values())
 		if (nodes.length > 0) {
-			// V200 Hardening: Removed redundant spread copy
-			const gravityCenter = [...nodes].sort((a, b) => b.blastRadius - a.blastRadius)[0]
+			const gravityCenter = nodes.reduce<SpiderNode | undefined>((max, node) => {
+				if (!max || (node.blastRadius || 0) > (max.blastRadius || 0)) return node
+				return max
+			}, undefined)
 			if (gravityCenter && (gravityCenter.blastRadius || 0) > 0.4) {
 				violations.push({
 					type: "STRUCTURAL",
@@ -219,6 +246,11 @@ export async function triggerAudit(
 			try {
 				const absPath = path.resolve(spider.cwd, node.path)
 				if (fs.existsSync(absPath)) {
+					const stats = fs.statSync(absPath)
+					if (stats.size > MAX_HOTSPOT_BYTES) {
+						Logger.warn(`[Audit] Skipping oversized hotspot ${node.path} (${stats.size} bytes).`)
+						continue
+					}
 					const content = fs.readFileSync(absPath, "utf-8")
 					const plan = decomposer.analyze(node.path, content, node)
 
@@ -261,10 +293,13 @@ export async function triggerAudit(
 		const techDebtStr =
 			techDebtMinutes > 60 ? `${Math.floor(techDebtMinutes / 60)}h ${techDebtMinutes % 60}m` : `${techDebtMinutes}m`
 
-		const sanitizeScore = (v: unknown) => (typeof v === "number" && !Number.isNaN(v) ? Math.round(v) : 0)
+		const sanitizeScore = (v: unknown) => finitePercent(typeof v === "number" && !Number.isNaN(v) ? Math.round(v) : 0)
+		const entropyReport = spider.computeEntropy()
+		const structuralEntropy = finiteNumber(entropyReport?.score, 0)
+		const metabolicPressure = finiteNumber(spider.computeMetabolicPressure(), 0)
 
 		const stabilityScore = sanitizeScore(doctorReport.integrityScore * (synchronized ? 1 : 0.8))
-		const maintainabilityScore = sanitizeScore((1 - (spider.computeEntropy()?.score || 0)) * 100)
+		const maintainabilityScore = sanitizeScore((1 - structuralEntropy) * 100)
 
 		// Enrich Optimizations with Impact/Effort/Category
 		for (const opt of optimizations) {
@@ -290,12 +325,7 @@ export async function triggerAudit(
 
 		// V206: Evolution Tracking - Appending to historical substrate timeline
 		const rawHistory = controller.stateManager.getGlobalStateKey("joyZoningHistory")
-		const history = safeArray<{
-			timestamp: string
-			health: number
-			stability: number
-			maintainability: number
-		}>(rawHistory)
+		const history = normalizeHistory(rawHistory)
 
 		const newPoint = {
 			timestamp: new Date().toISOString(),
@@ -324,11 +354,15 @@ export async function triggerAudit(
 
 		// V220: Executive Strategy - Layer Scores and Quick Wins
 		const layerHealthMap: Record<string, { total: number; count: number }> = {}
+		const violationCountsByPath = new Map<string, number>()
+		for (const violation of violations) {
+			violationCountsByPath.set(violation.path, (violationCountsByPath.get(violation.path) || 0) + 1)
+		}
 		for (const node of nodes) {
 			const layer = node.layer || "unassigned"
 			if (!layerHealthMap[layer]) layerHealthMap[layer] = { total: 0, count: 0 }
 			// Heuristic: start with 100 and subtract violations related to this node
-			const nodeViolations = violations.filter((v) => v.path === node.path).length
+			const nodeViolations = violationCountsByPath.get(node.path) || 0
 			const nodeHealth = Math.max(0, 100 - nodeViolations * 20)
 			layerHealthMap[layer].total += nodeHealth
 			layerHealthMap[layer].count++
@@ -358,7 +392,7 @@ export async function triggerAudit(
 		const finalResponse = normalizeAuditResponse({
 			buildHealth,
 			totalFiles: nodes.length,
-			structuralEntropy: spider.computeEntropy()?.score || 0,
+			structuralEntropy,
 			violations,
 			optimizations,
 			timestamp: new Date().toISOString(),
@@ -366,7 +400,7 @@ export async function triggerAudit(
 			integrityScore: sanitizeScore(doctorReport.integrityScore),
 			driftDetected: !synchronized,
 			driftCount: drift,
-			metabolicPressure: spider.computeMetabolicPressure() || 0,
+			metabolicPressure,
 			metabolicSinks: Array.isArray(doctorReport.environmentContext?.metabolicSinks)
 				? doctorReport.environmentContext.metabolicSinks
 				: [],
@@ -412,12 +446,14 @@ export async function triggerAudit(
 	} catch (error) {
 		if (isAuditCancelledError(error) || isCancelled()) {
 			Logger.info(`[Audit] JoyZoning audit cancelled for requestId: ${requestId}`)
+			terminal = true
 			return
 		}
 		Logger.error("[Audit] Critical failure during JoyZoning audit:", error)
 		throw error
 	} finally {
 		clearTimeout(timeout)
+		unregister()
 		doctor.dispose()
 		decomposer.dispose()
 	}

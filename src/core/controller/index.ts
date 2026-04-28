@@ -115,21 +115,35 @@ export class Controller implements IController {
 	}
 
 	private spider?: SpiderEngine
+	private spiderInitPromise?: Promise<SpiderEngine>
 	async getSpiderEngine(): Promise<SpiderEngine> {
 		if (this.spider) return this.spider
+		if (this.spiderInitPromise) return this.spiderInitPromise
 
-		// V205: Intentional Synchronicity. Ensure workspace manager is ready before initializing spider.
-		const wm = await this.ensureWorkspaceManager()
-		const workspacePaths = await HostProvider.workspace.getWorkspacePaths({})
-		const primaryPath = workspacePaths?.paths?.[0]
+		this.spiderInitPromise = (async () => {
+			// V205: Intentional Synchronicity. Ensure workspace manager is ready before initializing spider.
+			const wm = await this.ensureWorkspaceManager()
+			const workspacePaths = await HostProvider.workspace.getWorkspacePaths({})
+			const primaryPath = workspacePaths?.paths?.[0]
 
-		const cwd = wm?.getPrimaryRoot()?.path || primaryPath || process.cwd()
-		Logger.info(`[Controller] Initializing SpiderEngine with CWD: ${cwd}`)
+			const cwd = wm?.getPrimaryRoot()?.path || primaryPath || process.cwd()
+			Logger.info(`[Controller] Initializing SpiderEngine with CWD: ${cwd}`)
 
-		this.spider = new SpiderEngine(cwd)
-		// Non-blocking load from persistence to accelerate cold-boot
-		this.spider.loadRegistry().catch((e) => Logger.error("[Controller] Failed to load spider registry:", e))
-		return this.spider
+			const spider = new SpiderEngine(cwd)
+			try {
+				await spider.loadRegistry()
+				this.spider = spider
+				return spider
+			} catch (e) {
+				Logger.error("[Controller] Failed to initialize spider registry:", e)
+				spider.dispose()
+				throw e
+			} finally {
+				this.spiderInitPromise = undefined
+			}
+		})()
+
+		return this.spiderInitPromise
 	}
 
 	async createTask(prompt: string): Promise<string> {
@@ -221,6 +235,7 @@ export class Controller implements IController {
 		this.mcpHub.dispose()
 		this.spider?.dispose()
 		this.spider = undefined
+		this.spiderInitPromise = undefined
 		disposeRequestRegistry()
 		await dbPool.stop()
 

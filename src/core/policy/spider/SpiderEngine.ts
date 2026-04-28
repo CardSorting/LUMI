@@ -21,6 +21,20 @@ export interface RebuildRegistryOptions {
 	isCancelled?: () => boolean
 }
 
+type ExtractedMetrics = {
+	logicDensity: number
+	ioEntropy: number
+	astComplexity: number
+	symbolDensity: number
+	logicCohesion: number
+	anyDensity: number
+}
+
+const MAX_INDEX_FILE_BYTES = 1_500_000
+
+const finiteNodeNumber = (value: unknown, fallback = 0): number =>
+	typeof value === "number" && Number.isFinite(value) ? value : fallback
+
 import { MetabolicMonitor } from "../../integrity/MetabolicMonitor.js"
 import { PathogenStore } from "../../integrity/PathogenStore.js"
 
@@ -1026,6 +1040,11 @@ export class SpiderEngine {
 					try {
 						const absolutePath = path.resolve(this.cwd, f)
 						if (!fs.existsSync(absolutePath)) continue
+						const fileStats = await fs.promises.stat(absolutePath)
+						if (fileStats.size > MAX_INDEX_FILE_BYTES) {
+							Logger.warn(`[SpiderEngine] Skipping oversized file during index: ${f} (${fileStats.size} bytes).`)
+							continue
+						}
 
 						const content = await fs.promises.readFile(absolutePath, "utf-8")
 						const hash = crypto.createHash("md5").update(content).digest("hex")
@@ -1044,8 +1063,10 @@ export class SpiderEngine {
 						let exports: string[] | null = exportsData.symbols
 						const rawReExports = exportsData.reExports
 						const reExportSpecifiers = rawReExports // Temporary storage for post-pass resolution
-						let metrics: any = this.extractMetrics(sourceFile)
+						let metrics: ExtractedMetrics | null = this.extractMetrics(sourceFile)
 						let namingScore: number | null = this.calculateNamingScore(sourceFile)
+						const anyDensity = finiteNodeNumber(metrics.anyDensity, 0)
+						const astComplexity = finiteNodeNumber(metrics.astComplexity, 0)
 
 						const node: SpiderNode = {
 							id: f,
@@ -1057,6 +1078,7 @@ export class SpiderEngine {
 							orphaned: false,
 							afferentCoupling: 0,
 							...metrics,
+							astComplexity,
 							hash,
 							isInterface: this.detectInterface(f, sourceFile),
 							exports,
@@ -1070,7 +1092,7 @@ export class SpiderEngine {
 							isFragile: false,
 							cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
 							isHotspot: false,
-							anyDensity: metrics.anyDensity * 0.8,
+							anyDensity: anyDensity * 0.8,
 						}
 						tempRegistry.set(f, node)
 
