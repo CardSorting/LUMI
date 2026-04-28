@@ -64,6 +64,40 @@ export class ForensicEngine {
 		return null
 	}
 
+	/**
+	 * V400: Hotspot Heat (Toxic Churn).
+	 * Identifies files where complexity is rising but health is falling over multiple sessions.
+	 */
+	public calculateHotspotHeat(node: SpiderNode, snapshots: SpiderSnapshot[]): number {
+		if (snapshots.length < 3) return 0
+		const history = snapshots.map((s) => s.nodes.find((n) => n.id === node.id)).filter(Boolean) as SpiderNode[]
+		if (history.length < 3) return 0
+
+		const first = history[0]
+		const last = history[history.length - 1]
+
+		const complexityRise = (last.astComplexity - first.astComplexity) / Math.max(1, first.astComplexity)
+		const churn = history.filter((h, i) => i > 0 && h.hash !== history[i - 1].hash).length
+
+		return Math.min(1.0, complexityRise * 0.5 + (churn / snapshots.length) * 0.5)
+	}
+
+	/**
+	 * V400: Security Substrate Sensing.
+	 */
+	public detectSecurityAntipatterns(node: SpiderNode, content: string): string[] {
+		const signals: string[] = []
+		if (content.includes("eval("))
+			signals.push("[SPI-401] SECURITY: Use of 'eval()' detected. This is a high-risk architectural anti-pattern.")
+		if (content.includes("innerHTML"))
+			signals.push("[SPI-402] SECURITY: Direct use of 'innerHTML' detected. Possible XSS vector.")
+		if (content.includes("dangerouslySetInnerHTML"))
+			signals.push(
+				"[SPI-403] SECURITY: 'dangerouslySetInnerHTML' detected. Ensure content is sanitized to prevent structural contamination.",
+			)
+		return signals
+	}
+
 	constructor(
 		private cwd: string,
 		private resolver: PathResolver,
@@ -297,6 +331,46 @@ export class ForensicEngine {
 		}
 
 		return unusedViolations
+	}
+
+	/**
+	 * V300: Forensic Deadwood Sensing.
+	 * Identifies symbols imported into a module but never referenced in its AST.
+	 */
+	public findUnusedImports(node: SpiderNode, content: string): string[] {
+		const unused: string[] = []
+		const sourceFile = ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true)
+		const importedData = this.getImportedSymbols(sourceFile)
+
+		const usedSymbols = new Set<string>()
+		const visit = (n: ts.Node) => {
+			if (ts.isIdentifier(n)) {
+				// Ensure it's a reference, not a declaration in an import
+				let isImport = false
+				let p = n.parent
+				while (p && p !== sourceFile) {
+					if (ts.isImportDeclaration(p) || ts.isImportSpecifier(p) || ts.isImportClause(p) || ts.isNamespaceImport(p)) {
+						isImport = true
+						break
+					}
+					p = p.parent
+				}
+				if (!isImport) {
+					usedSymbols.add(n.text)
+				}
+			}
+			ts.forEachChild(n, visit)
+		}
+		visit(sourceFile)
+
+		for (const imp of importedData) {
+			for (const sym of imp.symbols) {
+				if (sym !== "*" && sym !== "default" && !usedSymbols.has(sym)) {
+					unused.push(`[SPI-112] UNUSED IMPORT: ${node.path} -> ${sym} from ${imp.specifier}`)
+				}
+			}
+		}
+		return unused
 	}
 
 	/**

@@ -1,6 +1,7 @@
 import { IController } from "@core/controller/types"
 import { SovereignDecomposer } from "@core/policy/SovereignDecomposer"
 import { SovereignDoctor } from "@core/policy/SovereignDoctor"
+import { SovereignOptimizer } from "@core/policy/SovereignOptimizer"
 import { SovereignPolicy } from "@core/policy/SovereignPolicy"
 import { SpiderNode } from "@core/policy/spider/SpiderEngine"
 import {
@@ -11,6 +12,7 @@ import {
 } from "@shared/proto/dietcode/joyzoning"
 import * as fs from "fs"
 import * as path from "path"
+import * as v8 from "v8"
 import { getRequestRegistry, StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { Logger } from "@/shared/services/Logger"
 import { SafeNumber } from "@/shared/utils/SafeNumber"
@@ -133,6 +135,7 @@ export async function triggerAudit(
 
 	let doctor: SovereignDoctor | null = null
 	let decomposer: SovereignDecomposer | null = null
+	let optimizer: SovereignOptimizer | null = null
 
 	try {
 		// 1. Initialize Engines (V215: Inside try block for safe cleanup)
@@ -142,6 +145,7 @@ export async function triggerAudit(
 
 		doctor = new SovereignDoctor(spider.cwd)
 		decomposer = new SovereignDecomposer()
+		optimizer = new SovereignOptimizer()
 
 		const { useCache } = request
 
@@ -237,9 +241,9 @@ export async function triggerAudit(
 
 		// Map Decomposer Optimizations for Hotspots/God Modules
 		// V215: Hardened Hotspot Selection
-		// Focuses on truly massive modules (> 5000 nodes) or extremely high coupling (> 25 dependents).
+		// Focuses on large modules (> 1000 nodes) or high coupling (> 15 dependents).
 		const hotspots = nodes
-			.filter((n: SpiderNode) => (n.astComplexity || 0) > 5000 || (n.afferentCoupling || 0) > 25)
+			.filter((n: SpiderNode) => (n.astComplexity || 0) > 1000 || (n.afferentCoupling || 0) > 15)
 			.sort(
 				(a, b) =>
 					(b.astComplexity || 0) + (b.afferentCoupling || 0) - ((a.astComplexity || 0) + (a.afferentCoupling || 0)),
@@ -260,6 +264,52 @@ export async function triggerAudit(
 					const content = fs.readFileSync(absPath, "utf-8")
 					const plan = decomposer.analyze(node.path, content, node, projectStats)
 
+					// V300: Unused Import Sensing
+					const unusedImports = spider.forensic.findUnusedImports(node, content)
+					for (const ui of unusedImports) {
+						optimizations.push({
+							title: `HARDEN: Clean up imports`,
+							description: ui,
+							path: node.path,
+							action: "HARDEN",
+							projectedHealthGain: 2,
+							boilerplate: "",
+							impact: "",
+							effort: "",
+							category: "",
+						})
+					}
+
+					// V400: Security Substrate Sensing
+					const securitySignals = spider.forensic.detectSecurityAntipatterns(node, content)
+					for (const sig of securitySignals) {
+						violations.push({
+							type: "POLICY",
+							message: sig,
+							path: node.path,
+							remediation: "Replace unsafe patterns with robust architectural primitives.",
+							severity: "ERROR",
+							riskLevel: "HIGH",
+							impactArea: "STABILITY",
+						})
+					}
+
+					// V400: Hotspot Heat Sensing
+					const snapshots = (spider as any).persistence.getSnapshots().map((s: Buffer) => v8.deserialize(s))
+					const heat = spider.forensic.calculateHotspotHeat(node, snapshots)
+					if (heat > 0.7) {
+						violations.push({
+							type: "STRUCTURAL",
+							message: `HOTSPOT HEAT: ${path.basename(node.path)} is a toxic hotspot (Heat: ${Math.round(heat * 100)}%). Complexity is rising faster than the substrate can absorb.`,
+							path: node.path,
+							remediation:
+								"Immediate architectural cooldown required: Decompose this module to dissipate complexity.",
+							severity: "ERROR",
+							riskLevel: "HIGH",
+							impactArea: "STABILITY",
+						})
+					}
+
 					if (plan.steps.length > 0) {
 						for (const step of plan.steps) {
 							optimizations.push({
@@ -279,6 +329,27 @@ export async function triggerAudit(
 			} catch (e) {
 				Logger.warn(`[Audit] Failed to analyze hotspot ${node.path}:`, e)
 			}
+		}
+
+		// V220: Structural Optimization Integration
+		const structuralOpts = optimizer!.findOptimizations(spider)
+		for (const o of structuralOpts) {
+			let action = "MOVE"
+			if (o.type === "DEADWOOD") action = "PRUNE"
+			if (o.type === "COHESION") action = "DECOMPOSE"
+			if (o.type === "CYCLE_BREAK") action = "EXTRACT"
+
+			optimizations.push({
+				title: `${action}: ${path.basename(o.file)}`,
+				description: o.reason,
+				path: o.file,
+				action,
+				projectedHealthGain: o.integrityGain,
+				boilerplate: "",
+				impact: "", // Enriched below
+				effort: "", // Enriched below
+				category: "", // Enriched below
+			})
 		}
 
 		if (nodes.length === 0) {
@@ -309,23 +380,33 @@ export async function triggerAudit(
 
 		// Enrich Optimizations with Impact/Effort/Category
 		for (const opt of optimizations) {
-			opt.impact = opt.projectedHealthGain > 10 ? "HIGH" : opt.projectedHealthGain > 5 ? "MEDIUM" : "LOW"
+			opt.impact = opt.projectedHealthGain > 12 ? "HIGH" : opt.projectedHealthGain > 6 ? "MEDIUM" : "LOW"
 			const node = spider.nodes.get(spider.normalizePath(opt.path))
 			const complexity = node?.astComplexity || 0
 
-			// V215: Effort Heuristics
-			if (opt.action === "HARDEN") {
-				opt.effort = "LOW" // Hardening fixes are usually localized
+			// V300: Forensic Effort Calibration
+			if (opt.action === "HARDEN" || opt.action === "PRUNE") {
+				opt.effort = "LOW"
+			} else if (opt.action === "EXTRACT" || opt.action === "MOVE") {
+				opt.effort = complexity > 800 ? "HIGH" : "MEDIUM"
 			} else {
-				opt.effort = complexity > 1000 ? "HIGH" : complexity > 500 ? "MEDIUM" : "LOW"
+				opt.effort = complexity > 1200 ? "HIGH" : complexity > 600 ? "MEDIUM" : "LOW"
 			}
 
-			if (opt.action === "EXTRACT" || opt.action === "DECOMPOSE") {
+			// V300: Forensic Categorization
+			if (opt.action === "EXTRACT" || opt.action === "DECOMPOSE" || opt.action === "SPLIT") {
 				opt.category = "MAINTAINABILITY"
-			} else if (opt.action === "MOVE" || opt.action === "ALIGN_TAGS" || opt.action === "HARDEN") {
+			} else if (
+				opt.action === "MOVE" ||
+				opt.action === "ALIGN_TAGS" ||
+				opt.action === "HARDEN" ||
+				opt.action === "INTERFACE"
+			) {
 				opt.category = "STABILITY"
-			} else {
+			} else if (opt.action === "PRUNE") {
 				opt.category = "PERFORMANCE"
+			} else {
+				opt.category = "STABILITY"
 			}
 		}
 
@@ -473,5 +554,6 @@ export async function triggerAudit(
 		unregister()
 		if (doctor) doctor.dispose()
 		if (decomposer) decomposer.dispose()
+		if (optimizer) optimizer.dispose()
 	}
 }

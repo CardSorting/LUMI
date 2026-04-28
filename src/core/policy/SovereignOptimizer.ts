@@ -1,3 +1,4 @@
+import path from "node:path"
 import { Logger } from "../../shared/services/Logger"
 import { LayerConfig, SovereignPolicy } from "./SovereignPolicy"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
@@ -9,6 +10,7 @@ export interface OptimizationOpportunity {
 	recommendedLayer: string
 	reason: string
 	integrityGain: number
+	type?: "STRUCTURAL" | "DEADWOOD" | "COHESION" | "CYCLE_BREAK"
 }
 
 /**
@@ -31,28 +33,136 @@ export class SovereignOptimizer {
 			core: policy.getLayerConfig("core"),
 		}
 
+		// 1. Structural Alignment (Layer Drift)
 		for (const node of engine.nodes.values()) {
 			const current = node.layer
 			const recommended = this.calculateOptimalLayer(node, engine, configs)
 
 			if (recommended && current !== recommended) {
 				const projectedGain = this.calculateProjectedGain(node, recommended)
-				const importsToTarget = Array.from(node.imports || []).filter((imp) => {
-					const targetId = engine.resolveImportToNodeId(node.id, imp)
-					return targetId && engine.nodes.get(targetId)?.layer === recommended
-				}).length
-
 				opportunities.push({
 					file: node.path,
 					currentLayer: current,
 					recommendedLayer: recommended,
-					reason: `Structural Gravity: ${node.path} has ${importsToTarget} imports from '${recommended}' but lives in '${current}'. Aligning it will reduce structural entropy.`,
+					reason: `Layer Drift: ${path.basename(node.path)} is gravitating toward '${recommended}' based on its dependency profile.`,
 					integrityGain: projectedGain,
+					type: "STRUCTURAL",
+				})
+			}
+
+			// 2. Deadwood Sensing (Unused Exports)
+			// V300: ZOMBIE MODULE Detection
+			if (node.exports.length > 0 && node.afferentCoupling === 0 && !node.path.endsWith("index.ts")) {
+				opportunities.push({
+					file: node.path,
+					currentLayer: node.layer,
+					recommendedLayer: "DELETED",
+					reason: `ZOMBIE MODULE: ${path.basename(node.path)} has 0 project-wide dependents. Pruning this deadwood will reduce architectural noise.`,
+					integrityGain: 10,
+					type: "DEADWOOD",
+				})
+			}
+
+			// 3. Semantic Fragmentation (SRP Violation)
+			const cohesion = engine.metrics.calculateSemanticCohesion(node)
+			if (cohesion < 0.3 && node.exports.length > 5) {
+				opportunities.push({
+					file: node.path,
+					currentLayer: node.layer,
+					recommendedLayer: "SPLIT",
+					reason: `Semantic Fragmentation: ${path.basename(node.path)} contains multiple unrelated vocabularies (Cohesion: ${Math.round(cohesion * 100)}%). Decompose this into mission-focused modules.`,
+					integrityGain: 8,
+					type: "COHESION",
+				})
+			}
+
+			// 4. Architectural Archetypes (Distance from Main Sequence)
+			const distance = engine.metrics.calculateDistanceFromMainSequence(node)
+			if (distance > 0.7) {
+				const instability = engine.metrics.calculateInstability(node)
+				const isPainful = instability < 0.3 // Stable but Concrete
+				opportunities.push({
+					file: node.path,
+					currentLayer: node.layer,
+					recommendedLayer: isPainful ? "INTERFACE" : "STABLE_MODULE",
+					reason: `Architectural ${isPainful ? "Rigidity" : "Fragility"}: This module is in the 'Zone of ${isPainful ? "Pain" : "Uselessness"}' (Distance: ${distance.toFixed(2)}). ${isPainful ? "Extract an interface to allow for future flexibility." : "Stabilize or unify this module with its consumers."}`,
+					integrityGain: 12,
+					type: "STRUCTURAL",
+				})
+			}
+
+			// 6. Debt Liquidation (Maintainability Index)
+			const mi = engine.metrics.calculateMaintainabilityIndex(node)
+			if (mi < 30) {
+				opportunities.push({
+					file: node.path,
+					currentLayer: node.layer,
+					recommendedLayer: "REFACTOR",
+					reason: `Critical Technical Debt: ${path.basename(node.path)} has a Maintainability Index of ${mi}. Massive refactoring is required to prevent industrial stagnation.`,
+					integrityGain: 20,
+					type: "STRUCTURAL",
+				})
+			}
+
+			// 7. Structural Bottlenecks (Fan-In * Fan-Out)
+			const bottleneck = engine.metrics.calculateStructuralBottleneck(node)
+			if (bottleneck > 5000) {
+				opportunities.push({
+					file: node.path,
+					currentLayer: node.layer,
+					recommendedLayer: "DECOUPLE",
+					reason: `Structural Bottleneck: ${path.basename(node.path)} is a high-congestion node (Flow Score: ${Math.round(bottleneck)}). Decouple its interfaces to reduce system fragility.`,
+					integrityGain: 15,
+					type: "STRUCTURAL",
+				})
+			}
+
+			// 8. Type Hardening (Primitive Obsession)
+			const obsession = engine.metrics.calculatePrimitiveObsession(node)
+			if (obsession > 0.5) {
+				opportunities.push({
+					file: node.path,
+					currentLayer: node.layer,
+					recommendedLayer: "TYPE_DOMAIN",
+					reason: `Primitive Obsession: ${path.basename(node.path)} relies heavily on generic types. Implement domain-specific types to harden the type substrate.`,
+					integrityGain: 5,
+					type: "STRUCTURAL",
 				})
 			}
 		}
 
-		return opportunities.sort((a, b) => b.integrityGain - a.integrityGain).slice(0, 5)
+		// 5. Cycle Breaking
+		const cycles = engine.detectCycles()
+		for (const cycle of cycles) {
+			const weakLink = this.identifyCycleWeakLink(cycle, engine)
+			if (weakLink) {
+				opportunities.push({
+					file: weakLink.path,
+					currentLayer: weakLink.layer,
+					recommendedLayer: "SHARED_CORE",
+					reason: `Cycle Breaking: Resolving loop (${cycle.map((p) => path.basename(p)).join(" -> ")}). Extract common logic from ${path.basename(weakLink.path)} to a shared package.`,
+					integrityGain: 15,
+					type: "CYCLE_BREAK",
+				})
+			}
+		}
+
+		return opportunities.sort((a, b) => b.integrityGain - a.integrityGain).slice(0, 15) // V300: Increased elite recommendation cap to 15.
+	}
+
+	private identifyCycleWeakLink(cycle: string[], engine: SpiderEngine): SpiderNode | null {
+		// The weak link is usually the node with the highest afferent coupling outside the cycle
+		let bestNode: SpiderNode | null = null
+		let maxCoupling = -1
+
+		for (const path of cycle) {
+			const node = engine.nodes.get(path)
+			if (node && (node.afferentCoupling || 0) > maxCoupling) {
+				maxCoupling = node.afferentCoupling
+				bestNode = node
+			}
+		}
+		return bestNode
 	}
 
 	public calculateOptimalLayer(
@@ -106,7 +216,7 @@ export class SovereignOptimizer {
 		}
 
 		const totalImports = (node.imports || []).length
-		if (maxWeightedCount > totalImports * 1.5) return bestLayer // V215: Weighted gravity threshold (average pull > 1.5)
+		if (maxWeightedCount > totalImports * 1.1) return bestLayer // V215: Weighted gravity threshold (average pull > 1.1)
 
 		return node.layer || "plumbing"
 	}

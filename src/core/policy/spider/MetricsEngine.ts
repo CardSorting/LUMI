@@ -145,6 +145,88 @@ export class MetricsEngine {
 		return Math.min(1.0, score)
 	}
 
+	/**
+	 * V300: Industrial Architectural Metrics (Robert C. Martin).
+	 */
+
+	/**
+	 * Instability (I) = Ce / (Ca + Ce)
+	 * Ce: Efferent Coupling (Outgoing dependencies)
+	 * Ca: Afferent Coupling (Incoming dependencies)
+	 * I = 0: Completely stable (nothing depends on it changing)
+	 * I = 1: Completely unstable (depends on everything)
+	 */
+	public calculateInstability(node: SpiderNode): number {
+		const ca = node.afferentCoupling || 0
+		const ce = (node.imports || []).length
+		if (ca + ce === 0) return 0
+		return ce / (ca + ce)
+	}
+
+	/**
+	 * Abstractness (A) = Na / Nc
+	 * Na: Number of abstract classes/interfaces
+	 * Nc: Total number of classes
+	 * For a single file, we treat it as 1.0 if it's an interface/type-only, and 0.0 otherwise.
+	 */
+	public calculateAbstractness(node: SpiderNode): number {
+		return node.isInterface ? 1.0 : 0.0
+	}
+
+	/**
+	 * Distance from Main Sequence (D) = |A + I - 1|
+	 * Measures the balance between stability and abstractness.
+	 * D = 0: Ideal (Balanced)
+	 * D = 1: Zone of Pain (Stable but concrete) or Zone of Uselessness (Abstract but unstable)
+	 */
+	public calculateDistanceFromMainSequence(node: SpiderNode): number {
+		const a = this.calculateAbstractness(node)
+		const i = this.calculateInstability(node)
+		return Math.abs(a + i - 1)
+	}
+
+	/**
+	 * V400: Predictive Maintenance Metrics.
+	 */
+
+	/**
+	 * Maintainability Index (MI)
+	 * A logarithmic scale (0-100) indicating the long-term maintainability of a module.
+	 * 100 = Perfect, < 20 = Critical Tech Debt.
+	 */
+	public calculateMaintainabilityIndex(node: SpiderNode): number {
+		const sloc = Math.max(1, (node.astComplexity || 0) / 10)
+		const cyc = (node.cognitiveComplexity || 0) * 20
+		// Estimated Halstead Volume
+		const volume = (node.astComplexity || 0) * Math.log2(Math.max(2, (node.exports || []).length + 5))
+
+		const miRaw = 171 - 5.2 * Math.log(volume) - 0.23 * cyc - 16.2 * Math.log(sloc)
+		const mi = Math.max(0, Math.min(100, (miRaw * 100) / 171))
+		return Math.round(mi)
+	}
+
+	/**
+	 * Structural Bottleneck (Fan-In * Fan-Out)^2
+	 * Identifies nodes that are high-congestion points.
+	 */
+	public calculateStructuralBottleneck(node: SpiderNode): number {
+		const fanIn = node.afferentCoupling || 0
+		const fanOut = (node.imports || []).length
+		return (fanIn * fanOut) ** 2
+	}
+
+	/**
+	 * Primitive Obsession Score
+	 * Ratio of any-types and primitive identifiers to total symbols.
+	 */
+	public calculatePrimitiveObsession(node: SpiderNode): number {
+		const any = node.anyDensity || 0
+		const symbolDensity = node.symbolDensity || 0
+		// Heuristic: If symbol density is high but complexity is also high, and anyDensity is > 0.1
+		if (any > 0.2) return any * 1.5
+		return any
+	}
+
 	public computeCouplingMetrics(nodes: Map<string, SpiderNode>) {
 		const couplingMap = new Map<string, number>()
 		for (const id of nodes.keys()) couplingMap.set(id, 0)
