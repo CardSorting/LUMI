@@ -436,6 +436,65 @@ export class ForensicEngine {
 		return interfaceViolations
 	}
 
+	/**
+	 * V215: Implicit Contract Audit.
+	 * Identifies asymmetric abstractions (e.g., init without dispose).
+	 */
+	public auditImplicitContracts(nodes: Map<string, SpiderNode>): string[] {
+		const contractViolations: string[] = []
+		const pairs = [
+			["initialize", "dispose"],
+			["open", "close"],
+			["start", "stop"],
+			["subscribe", "unsubscribe"],
+			["load", "save"],
+		]
+
+		for (const node of nodes.values()) {
+			for (const [pos, neg] of pairs) {
+				const hasPos = node.exports.some((e) => e.toLowerCase().includes(pos))
+				const hasNeg = node.exports.some((e) => e.toLowerCase().includes(neg))
+
+				if (hasPos && !hasNeg) {
+					contractViolations.push(
+						`[SPI-110] ASYMMETRIC CONTRACT: ${path.basename(node.path)} defines '${pos}' but lacks a matching '${neg}' implementation.`,
+					)
+				}
+			}
+		}
+
+		return contractViolations
+	}
+
+	/**
+	 * V215: Logic De-Duplication.
+	 * Identifies 'Silent Clones' where logic has been copy-pasted.
+	 */
+	public findLogicClones(nodes: Map<string, SpiderNode>): string[] {
+		const clones: string[] = []
+		const nodesArray = Array.from(nodes.values())
+
+		for (let i = 0; i < nodesArray.length; i++) {
+			for (let j = i + 1; j < nodesArray.length; j++) {
+				const nodeA = nodesArray[i]
+				const nodeB = nodesArray[j]
+
+				// High similarity in multiple structural metrics
+				const complexityMatch = Math.abs(nodeA.astComplexity - nodeB.astComplexity) < 5
+				const densityMatch = Math.abs(nodeA.logicDensity - nodeB.logicDensity) < 0.01
+				const symbolCountMatch = nodeA.exports.length === nodeB.exports.length
+
+				if (complexityMatch && densityMatch && symbolCountMatch && nodeA.astComplexity > 100) {
+					clones.push(
+						`[SPI-109] SILENT CLONE: ${path.basename(nodeA.path)} and ${path.basename(nodeB.path)} share near-identical logical signatures. Possible copy-pasted logic.`,
+					)
+				}
+			}
+		}
+
+		return clones
+	}
+
 	public getImportedSymbols(sourceFile: ts.SourceFile): { specifier: string; symbols: string[] }[] {
 		const imports: { specifier: string; symbols: string[] }[] = []
 		ts.forEachChild(sourceFile, (n) => {

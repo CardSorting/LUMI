@@ -15,6 +15,10 @@ export class PersistenceManager {
 		this.snapshots = [] // Clear binary residual
 	}
 
+	public getSnapshots(): Buffer[] {
+		return [...this.snapshots]
+	}
+
 	public serialize(nodes: Map<string, SpiderNode>, metadata: Record<string, unknown> = {}): Buffer {
 		const payload: SpiderRegistryPayload = {
 			layerFingerprints: this.computeAllLayerFingerprints(nodes),

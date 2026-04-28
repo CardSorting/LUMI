@@ -774,7 +774,33 @@ export class SpiderEngine {
 			}
 		}
 
-		// 8. SPI-205: Immune Response Strategy (V215 Behavioral Sensing)
+		// 8. SPI-108: Ghost Coupling (Entangled Dependencies)
+		const entanglements = this.metrics.detectEntangledDependencies(
+			this.persistence.getSnapshots().map((s) => v8.deserialize(s)),
+		)
+		for (const e of entanglements) {
+			violations.push({
+				id: "SPI-108",
+				severity: "WARN",
+				path: "SUBSTRATE",
+				message: e,
+				remediation: "Investigate why these files are changing together. Formalize a shared dependency if necessary.",
+			})
+		}
+
+		// 9. SPI-110: Asymmetric Contracts
+		const contracts = this.forensic.auditImplicitContracts(this.nodes)
+		for (const c of contracts) {
+			violations.push({
+				id: "SPI-110",
+				severity: "WARN",
+				path: "SUBSTRATE",
+				message: c,
+				remediation: "Ensure structural balance by implementing the missing half of the architectural contract.",
+			})
+		}
+
+		// 10. SPI-205: Immune Response Strategy (V215 Behavioral Sensing)
 		if (monitor) {
 			const response = monitor.getImmuneResponse()
 			if (response.strategy === "STABILIZE") {

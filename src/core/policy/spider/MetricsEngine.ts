@@ -10,6 +10,15 @@ export class MetricsEngine {
 		private resolver: PathResolver,
 	) {}
 
+	public calculateTemporalFragility(node: SpiderNode, growthVelocity: number, pressure: number): number {
+		const densityWeight = node.logicDensity * 2.0
+		const velocityWeight = Math.abs(growthVelocity) * 3.0
+		const pressureWeight = pressure * 1.5
+
+		const score = (densityWeight + velocityWeight + pressureWeight) / 6.5
+		return Math.min(1.0, score)
+	}
+
 	public computeCouplingMetrics(nodes: Map<string, SpiderNode>) {
 		const couplingMap = new Map<string, number>()
 		for (const id of nodes.keys()) couplingMap.set(id, 0)
@@ -339,5 +348,60 @@ export class MetricsEngine {
 
 		const complexityDelta = node.astComplexity - oldNode.astComplexity
 		return complexityDelta / Math.max(oldNode.astComplexity, 1)
+	}
+
+	/**
+	 * V215: Entangled Dependency Detection.
+	 * Analyzes co-mutation patterns across historical snapshots.
+	 * Identifies pairs of files that change together but share no structural link.
+	 */
+	public detectEntangledDependencies(snapshots: SpiderSnapshot[]): string[] {
+		if (snapshots.length < 3) return []
+
+		const changeMatrix = new Map<string, Set<number>>()
+		for (let i = 1; i < snapshots.length; i++) {
+			const current = snapshots[i]
+			const previous = snapshots[i - 1]
+
+			for (const node of current.nodes) {
+				const prevNode = previous.nodes.find((n) => n.id === node.id)
+				if (prevNode && node.hash !== prevNode.hash) {
+					let changes = changeMatrix.get(node.id)
+					if (!changes) {
+						changes = new Set()
+						changeMatrix.set(node.id, changes)
+					}
+					changes.add(i)
+				}
+			}
+		}
+
+		const entanglements: string[] = []
+		const ids = Array.from(changeMatrix.keys())
+
+		for (let i = 0; i < ids.length; i++) {
+			for (let j = i + 1; j < ids.length; j++) {
+				const idA = ids[i]
+				const idB = ids[j]
+
+				const changesA = changeMatrix.get(idA)
+				const changesB = changeMatrix.get(idB)
+
+				if (!changesA || !changesB) continue
+
+				// Calculate Jaccard similarity of change sets
+				const intersection = new Set([...changesA].filter((x) => changesB.has(x)))
+				const union = new Set([...changesA, ...changesB])
+				const similarity = intersection.size / union.size
+
+				if (similarity > 0.7 && intersection.size >= 2) {
+					entanglements.push(
+						`[SPI-108] GHOST COUPLING: ${path.basename(idA)} and ${path.basename(idB)} changed together in ${intersection.size} sessions. Hidden logical coupling detected.`,
+					)
+				}
+			}
+		}
+
+		return entanglements
 	}
 }
