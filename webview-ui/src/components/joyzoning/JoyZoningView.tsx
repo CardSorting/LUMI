@@ -5,6 +5,15 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { JoyZoningServiceClient } from "@/services/grpc-client"
 import ViewHeader from "../common/ViewHeader"
 
+const asArray = <T,>(value: T[] | null | undefined): T[] => (Array.isArray(value) ? value : [])
+const asRecord = (value: Record<string, number> | null | undefined): Record<string, number> =>
+	value && typeof value === "object" && !Array.isArray(value) ? value : {}
+const asNumber = (value: number | null | undefined, fallback = 0): number =>
+	typeof value === "number" && Number.isFinite(value) ? value : fallback
+const asText = (value: string | null | undefined, fallback = ""): string => (typeof value === "string" ? value : fallback)
+const lower = (value: string | null | undefined): string => asText(value).toLowerCase()
+const fixed = (value: number | null | undefined, digits = 1): string => asNumber(value).toFixed(digits)
+
 const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const { environment } = useExtensionState()
 	const [loading, setLoading] = useState(false)
@@ -23,6 +32,16 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 
 	const cancelRef = useRef<(() => void) | null>(null)
 	const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+	const mountedRef = useRef(true)
+
+	const violations = asArray(report?.violations)
+	const optimizations = asArray(report?.optimizations)
+	const history = asArray(report?.history)
+	const topRecommendations = asArray(report?.topRecommendations)
+	const layerScores = asRecord(report?.layerScores)
+	const riskProfile = { LOW: 0, MEDIUM: 0, HIGH: 0, ...asRecord(report?.riskProfile) }
+	const progressCurrentFile = asText(progress?.currentFile, "Preparing...")
+	const progressPercentage = asNumber(progress?.percentage, 0)
 
 	const cleanupTimers = useCallback(() => {
 		for (const timer of timersRef.current) {
@@ -32,7 +51,9 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	}, [])
 
 	useEffect(() => {
+		mountedRef.current = true
 		return () => {
+			mountedRef.current = false
 			if (cancelRef.current) {
 				cancelRef.current()
 			}
@@ -104,16 +125,19 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 		if (!report) return
 		const summary = `
 Project Health Report (${new Date().toLocaleDateString()})
-Grade: ${report.grade}
-Health: ${report.buildHealth}%
-Critical Fixes: ${report.violations.length}
-Optimizations: ${report.optimizations.length}
-Stability: ${report.stabilityScore}%
-Organization: ${report.maintainabilityScore}%
+Grade: ${asText(report.grade, "--")}
+Health: ${asNumber(report.buildHealth)}%
+Critical Fixes: ${violations.length}
+Optimizations: ${optimizations.length}
+Stability: ${asNumber(report.stabilityScore)}%
+Organization: ${asNumber(report.maintainabilityScore)}%
 		`.trim()
 		navigator.clipboard.writeText(summary)
 		setAuditLaunchMessage("Report summary copied to clipboard!")
-		setTimeout(() => setAuditLaunchMessage(null), 3000)
+		const timer = setTimeout(() => {
+			if (mountedRef.current) setAuditLaunchMessage(null)
+		}, 3000)
+		timersRef.current.push(timer)
 	}
 
 	const executeRefactor = async (action: string, path: string, dryRun = false) => {
@@ -151,14 +175,14 @@ Organization: ${report.maintainabilityScore}%
 						</DriftWarning>
 					)}
 					<RadarContainer>
-						<RadarRing $loading={loading} $percentage={progress?.percentage || 0} />
+						<RadarRing $loading={loading} $percentage={progressPercentage} />
 						<GradeValue $grade={report?.grade || "A"}>{report ? report.grade : loading ? "..." : "--"}</GradeValue>
 						<HealthLabel>
 							{loading ? "Scanning codebase..." : "Overall Health Grade"}
-							{report && report.healthDelta !== 0 && (
-								<DeltaBadge $positive={report.healthDelta > 0}>
-									{report.healthDelta > 0 ? "↑" : "↓"}
-									{Math.abs(report.healthDelta).toFixed(1)}%
+							{report && asNumber(report.healthDelta) !== 0 && (
+								<DeltaBadge $positive={asNumber(report.healthDelta) > 0}>
+									{asNumber(report.healthDelta) > 0 ? "↑" : "↓"}
+									{Math.abs(asNumber(report.healthDelta)).toFixed(1)}%
 								</DeltaBadge>
 							)}
 						</HealthLabel>
@@ -183,13 +207,13 @@ Organization: ${report.maintainabilityScore}%
 					</Tab>
 					<Tab $active={activeTab === "fixes"} onClick={() => setActiveTab("fixes")}>
 						Critical Fixes{" "}
-						{report?.violations && report.violations.length > 0 ? (
+						{violations.length > 0 ? (
 							<>
-								({report.violations.length})
-								{report.violationDelta !== 0 && (
-									<DeltaInline $positive={report.violationDelta < 0}>
-										{report.violationDelta > 0 ? "+" : ""}
-										{report.violationDelta}
+								({violations.length})
+								{asNumber(report?.violationDelta) !== 0 && (
+									<DeltaInline $positive={asNumber(report?.violationDelta) < 0}>
+										{asNumber(report?.violationDelta) > 0 ? "+" : ""}
+										{asNumber(report?.violationDelta)}
 									</DeltaInline>
 								)}
 							</>
@@ -198,8 +222,7 @@ Organization: ${report.maintainabilityScore}%
 						)}
 					</Tab>
 					<Tab $active={activeTab === "improvements"} onClick={() => setActiveTab("improvements")}>
-						Optimizations{" "}
-						{report?.optimizations && report.optimizations.length > 0 ? `(${report.optimizations.length})` : ""}
+						Optimizations {optimizations.length > 0 ? `(${optimizations.length})` : ""}
 					</Tab>
 				</TabContainer>
 				{loading && (
@@ -230,14 +253,14 @@ Organization: ${report.maintainabilityScore}%
 							<SnapshotContent>
 								<SnapshotTitleGroup>
 									<SnapshotTitle>Health Snapshot</SnapshotTitle>
-									{report.history.length > 1 && (
+									{history.length > 1 && (
 										<TrendSparkline title="Recent Health Trend">
 											<svg height="15" viewBox="0 0 100 20" width="60">
 												<polyline
 													fill="none"
-													points={report.history
+													points={history
 														.slice(-10)
-														.map((p, i) => `${i * 10},${20 - (p.health / 100) * 15}`)
+														.map((p, i) => `${i * 10},${20 - (asNumber(p.health) / 100) * 15}`)
 														.join(" ")}
 													stroke={report.healthDelta >= 0 ? "#52c41a" : "#ff4d4f"}
 													strokeWidth="2"
@@ -293,13 +316,13 @@ Organization: ${report.maintainabilityScore}%
 								<RadarLabel style={{ top: "25%", left: "-10%" }}>Compliance</RadarLabel>
 							</RadarChartWrapper>
 						</RadarChartSection>
-						{report && report.violations.length > 0 && (
+						{report && violations.length > 0 && (
 							<NextActionCard onClick={() => setActiveTab("fixes")}>
 								<NextActionIcon>🚀</NextActionIcon>
 								<NextActionContent>
 									<NextActionTitle>Next Recommended Step</NextActionTitle>
 									<NextActionDesc>
-										Address the <strong>{report.violations.length} critical issues</strong> identified in your
+										Address the <strong>{violations.length} critical issues</strong> identified in your
 										foundations to improve system stability.
 									</NextActionDesc>
 								</NextActionContent>
@@ -390,19 +413,19 @@ Organization: ${report.maintainabilityScore}%
 							</RiskProfileSection>
 						)}
 
-						{report?.topRecommendations && report.topRecommendations.length > 0 && (
+						{topRecommendations.length > 0 && (
 							<QuickWinsSection>
 								<SectionHeader>
 									<SectionTitle>Top Recommendations</SectionTitle>
 									<Badge $type="HIGH">QUICK WINS</Badge>
 								</SectionHeader>
 								<QuickWinsGrid>
-									{report.topRecommendations.map((opt) => (
+									{topRecommendations.map((opt) => (
 										<QuickWinCard key={opt.title} onClick={() => setActiveTab("improvements")}>
 											<QuickWinIcon>⚡</QuickWinIcon>
 											<QuickWinContent>
 												<QuickWinTitle>{opt.title}</QuickWinTitle>
-												<QuickWinGain>+{opt.projectedHealthGain.toFixed(1)}% Health Boost</QuickWinGain>
+												<QuickWinGain>+{fixed(opt.projectedHealthGain)}% Health Boost</QuickWinGain>
 											</QuickWinContent>
 										</QuickWinCard>
 									))}
@@ -416,30 +439,26 @@ Organization: ${report.maintainabilityScore}%
 								<StatLabel>Recommended Actions</StatLabel>
 							</SectionHeader>
 							<MissionGrid>
-								<MissionCard $active={(report?.violations?.length ?? 0) > 0}>
-									<MissionStatus>
-										{(report?.violations?.length ?? 0) > 0 ? "ACTION REQUIRED" : "STABLE"}
-									</MissionStatus>
+								<MissionCard $active={violations.length > 0}>
+									<MissionStatus>{violations.length > 0 ? "ACTION REQUIRED" : "STABLE"}</MissionStatus>
 									<MissionTitle>Harden Infrastructure</MissionTitle>
-									<MissionDesc>Resolve {report?.violations?.length || 0} critical risks.</MissionDesc>
+									<MissionDesc>Resolve {violations.length} critical risks.</MissionDesc>
 								</MissionCard>
-								<MissionCard $active={(report?.optimizations?.length ?? 0) > 0}>
-									<MissionStatus>
-										{(report?.optimizations?.length ?? 0) > 0 ? "IN PROGRESS" : "OPTIMIZED"}
-									</MissionStatus>
+								<MissionCard $active={optimizations.length > 0}>
+									<MissionStatus>{optimizations.length > 0 ? "IN PROGRESS" : "OPTIMIZED"}</MissionStatus>
 									<MissionTitle>Tame Complexity</MissionTitle>
-									<MissionDesc>{report?.optimizations?.length || 0} refactor goals identify.</MissionDesc>
+									<MissionDesc>{optimizations.length} refactor goals identify.</MissionDesc>
 								</MissionCard>
 							</MissionGrid>
 						</MissionSection>
 
-						{report?.layerScores && Object.keys(report.layerScores).length > 0 && (
+						{Object.keys(layerScores).length > 0 && (
 							<ArchitectureHealthSection>
 								<SectionHeader>
 									<SectionTitle>Architecture Health</SectionTitle>
 								</SectionHeader>
 								<LayerList>
-									{Object.entries(report.layerScores).map(([layer, score]) => (
+									{Object.entries(layerScores).map(([layer, score]) => (
 										<LayerItem key={layer}>
 											<LayerInfo>
 												<LayerName>{layer}</LayerName>
@@ -490,16 +509,16 @@ Organization: ${report.maintainabilityScore}%
 							</SummaryNotice>
 						)}
 
-						{report && report.history.length > 1 && (
+						{report && history.length > 1 && (
 							<TrendSection>
 								<SectionHeader>
 									<SectionTitle>Health Evolution</SectionTitle>
 									<StatLabel>Last 20 Scans</StatLabel>
 								</SectionHeader>
 								<TrendChart>
-									{report.history.map((point) => (
+									{history.map((point) => (
 										<TrendBar
-											$height={point.health}
+											$height={asNumber(point.health)}
 											key={point.timestamp}
 											title={`${new Date(point.timestamp).toLocaleDateString()}: ${Math.round(point.health)}%`}
 										/>
@@ -515,19 +534,20 @@ Organization: ${report.maintainabilityScore}%
 									<StatLabel>Repair History</StatLabel>
 								</SectionHeader>
 								<ActivityList>
-									{report.violations
-										.filter((v) => v.message.includes("[MANUAL-FIX]"))
+									{violations
+										.filter((v) => asText(v.message).includes("[MANUAL-FIX]"))
 										.slice(0, 3)
 										.map((v) => (
 											<ActivityItem key={`${v.path}-${v.type}`}>
 												<ActivityDot />
 												<ActivityText>
-													<strong>Repaired:</strong> {v.type} in <code>{v.path.split("/").pop()}</code>
+													<strong>Repaired:</strong> {asText(v.type)} in{" "}
+													<code>{asText(v.path).split("/").pop()}</code>
 												</ActivityText>
 												<ActivityTime>Just now</ActivityTime>
 											</ActivityItem>
 										))}
-									{report.violations.length === 0 && (
+									{violations.length === 0 && (
 										<EmptyLog>No recent repairs required. All systems are nominal.</EmptyLog>
 									)}
 								</ActivityList>
@@ -565,17 +585,17 @@ Organization: ${report.maintainabilityScore}%
 							placeholder="Filter fixes by path or type..."
 							value={fixesSearch}
 						/>
-						{report?.violations.length === 0 && !loading && (
+						{violations.length === 0 && !loading && (
 							<EmptyState>No critical issues detected. Your codebase foundations are strong.</EmptyState>
 						)}
 						<List>
-							{report?.violations
+							{violations
 								?.filter(
 									(v) =>
 										(!selectedCategory || v.impactArea === selectedCategory) &&
-										(v.path.toLowerCase().includes(fixesSearch.toLowerCase()) ||
-											v.type.toLowerCase().includes(fixesSearch.toLowerCase()) ||
-											v.message.toLowerCase().includes(fixesSearch.toLowerCase())),
+										(lower(v.path).includes(fixesSearch.toLowerCase()) ||
+											lower(v.type).includes(fixesSearch.toLowerCase()) ||
+											lower(v.message).includes(fixesSearch.toLowerCase())),
 								)
 								.map((v, i) => (
 									<ListItem $type="VIOLATION" key={`${v.path}-${i}`}>
@@ -630,7 +650,7 @@ Organization: ${report.maintainabilityScore}%
 								<MatrixDesc>High Effort, Low Impact</MatrixDesc>
 							</MatrixQuadrant>
 							{/* Points on the matrix */}
-							{report?.optimizations.slice(0, 8).map((opt, i) => (
+							{optimizations.slice(0, 8).map((opt, i) => (
 								<MatrixPoint
 									$effort={opt.effort === "HIGH" ? 75 : opt.effort === "MEDIUM" ? 50 : 25}
 									$impact={opt.impact === "HIGH" ? 75 : opt.impact === "MEDIUM" ? 50 : 25}
@@ -656,19 +676,19 @@ Organization: ${report.maintainabilityScore}%
 							placeholder="Filter optimizations..."
 							value={optsSearch}
 						/>
-						{report?.optimizations.length === 0 && !loading && (
+						{optimizations.length === 0 && !loading && (
 							<EmptyState>
 								No optimization opportunities identified. Your code is currently lean and focused.
 							</EmptyState>
 						)}
 						<List>
-							{report?.optimizations
+							{optimizations
 								?.filter(
 									(opt) =>
 										(!selectedCategory || opt.category === selectedCategory) &&
-										(opt.title.toLowerCase().includes(optsSearch.toLowerCase()) ||
-											opt.path.toLowerCase().includes(optsSearch.toLowerCase()) ||
-											opt.description.toLowerCase().includes(optsSearch.toLowerCase())),
+										(lower(opt.title).includes(optsSearch.toLowerCase()) ||
+											lower(opt.path).includes(optsSearch.toLowerCase()) ||
+											lower(opt.description).includes(optsSearch.toLowerCase())),
 								)
 								.map((opt, i) => (
 									<ListItem key={`${opt.path}-${i}`}>
@@ -682,9 +702,7 @@ Organization: ${report.maintainabilityScore}%
 											<ListItemDesc>{opt.description}</ListItemDesc>
 											<ListItemPath>{opt.path}</ListItemPath>
 											{opt.projectedHealthGain > 0 && (
-												<HealthGain>
-													Expected Health Boost: +{opt.projectedHealthGain.toFixed(1)}%
-												</HealthGain>
+												<HealthGain>Expected Health Boost: +{fixed(opt.projectedHealthGain)}%</HealthGain>
 											)}
 										</ListItemContent>
 										<ActionGroup>
@@ -707,10 +725,10 @@ Organization: ${report.maintainabilityScore}%
 
 				{loading && progress && (
 					<LoadingOverlay>
-						<RadarRing $loading={true} $percentage={progress.percentage} />
-						<ProgressText>Forensic Scan: {progress.currentFile.split("/").pop()}</ProgressText>
+						<RadarRing $loading={true} $percentage={progressPercentage} />
+						<ProgressText>Forensic Scan: {progressCurrentFile.split("/").pop()}</ProgressText>
 						<ProgressBarContainer style={{ width: "160px", marginTop: "16px" }}>
-							<ProgressBar $width={progress.percentage} />
+							<ProgressBar $width={progressPercentage} />
 						</ProgressBarContainer>
 					</LoadingOverlay>
 				)}

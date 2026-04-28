@@ -254,25 +254,40 @@ export interface Schema {
 }
 
 let _db: Kysely<Schema> | null = null
+let _rawDb: Database.Database | null = null
 let _dbPath: string | null = null
 
 export function setDbPath(dbPath: string) {
+	if (_dbPath === dbPath) return
+	if (_db || _rawDb) {
+		throw new Error(
+			`Cannot change JoyZoning database path after initialization (${_dbPath} -> ${dbPath}). Call destroyDb() first.`,
+		)
+	}
 	_dbPath = dbPath
+}
+
+function ensureDbPath(): string {
+	if (!_dbPath) {
+		_dbPath = path.resolve(process.cwd(), "dietcode.db")
+	}
+	return _dbPath
+}
+
+export function getDbPath(): string {
+	return ensureDbPath()
 }
 
 export async function getDb(): Promise<Kysely<Schema>> {
 	if (_db) return _db
-	if (!_dbPath) {
-		// Default path if not set
-		_dbPath = path.resolve(process.cwd(), "dietcode.db")
-	}
+	const dbPath = ensureDbPath()
 
-	const dbDir = path.dirname(_dbPath)
+	const dbDir = path.dirname(dbPath)
 	if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true })
 
 	_db = new Kysely<Schema>({
 		dialect: new SqliteDialect({
-			database: new Database(_dbPath),
+			database: new Database(dbPath),
 		}),
 	})
 
@@ -658,6 +673,27 @@ export async function getDb(): Promise<Kysely<Schema>> {
 }
 
 export async function getRawDb(): Promise<Database.Database> {
+	if (_rawDb) return _rawDb
 	if (!_db) await getDb()
-	return new Database(_dbPath!) as Database.Database
+	_rawDb = new Database(ensureDbPath()) as Database.Database
+	_rawDb.pragma("journal_mode = WAL")
+	_rawDb.pragma("synchronous = NORMAL")
+	return _rawDb
+}
+
+export async function destroyDb(): Promise<void> {
+	if (_rawDb) {
+		try {
+			_rawDb.close()
+		} finally {
+			_rawDb = null
+		}
+	}
+	if (_db) {
+		try {
+			await _db.destroy()
+		} finally {
+			_db = null
+		}
+	}
 }

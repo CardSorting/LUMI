@@ -31,7 +31,7 @@ export class SovereignPulse {
 
 	public async generatePulse(engine: SpiderEngine): Promise<PulseReport> {
 		const refactorer = SpiderRefactorer
-		const optimizer = new SovereignOptimizer(this.cwd)
+		const optimizer = new SovereignOptimizer()
 		const decomposer = new SovereignDecomposer()
 
 		const entropy = engine.computeEntropy()

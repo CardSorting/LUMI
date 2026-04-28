@@ -231,7 +231,7 @@ function getHandler(
 ): (
 	controller: Controller,
 	message: unknown,
-	responseStream?: StreamingResponseHandler<unknown>,
+	responseStream?: StreamingResponseHandler<any>,
 	requestId?: string,
 ) => Promise<unknown> {
 	// Get the service handler from the config

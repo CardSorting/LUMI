@@ -580,13 +580,13 @@ export class SpiderEngine {
 	 */
 	public async verifySubstrateIntegrity(): Promise<{ synchronized: boolean; drift: number }> {
 		const currentMerkle = this.computeMerkleRoot()
-		const backupNodes = new Map(this.nodes)
+		const previousSize = this.nodes.size
 
 		await this.synchronizeRegistry()
 		const freshMerkle = this.computeMerkleRoot()
 
 		if (currentMerkle !== freshMerkle) {
-			const drift = Array.from(this.nodes.keys()).length - Array.from(backupNodes.keys()).length
+			const drift = this.nodes.size - previousSize
 			Logger.warn(
 				`[SpiderEngine] Substrate Drift Detected! Merkle ${currentMerkle.substring(0, 8)} -> ${freshMerkle.substring(0, 8)}`,
 			)
@@ -1133,6 +1133,7 @@ export class SpiderEngine {
 		} finally {
 			this.isIndexing = false
 			this.substrateCheckpoint = null
+			if (this.nodes !== tempRegistry) tempRegistry.clear()
 		}
 	}
 

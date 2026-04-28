@@ -13,7 +13,7 @@ async function main() {
 	const cwd = process.cwd()
 	const engine = new SpiderEngine(cwd)
 	const healer = new RefactorHealer(cwd)
-	const optimizer = new SovereignOptimizer(cwd)
+	const optimizer = new SovereignOptimizer()
 	const axiomEngine = new SemanticAxiomEngine()
 
 	console.log("🛸 Starting Sovereign Alignment audit...")

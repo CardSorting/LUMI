@@ -15,6 +15,61 @@ import { getRequestRegistry, StreamingResponseHandler } from "@/core/controller/
 import { Logger } from "@/shared/services/Logger"
 import { SafeNumber } from "@/shared/utils/SafeNumber"
 
+const finiteNumber = (value: unknown, fallback = 0): number =>
+	typeof value === "number" && Number.isFinite(value) ? value : fallback
+
+const finitePercent = (value: unknown, fallback = 0): number => Math.max(0, Math.min(100, finiteNumber(value, fallback)))
+
+const safeString = (value: unknown, fallback = ""): string => (typeof value === "string" ? value : fallback)
+
+const safeArray = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : [])
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+	!!value && typeof value === "object" && !Array.isArray(value)
+
+const isAuditCancelledError = (error: unknown): boolean =>
+	error instanceof Error && error.message.toLowerCase().includes("joyzoning audit cancelled")
+
+const safeRecord = (value: unknown): Record<string, number> => {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+	const out: Record<string, number> = {}
+	for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+		out[key] = finiteNumber(raw, 0)
+	}
+	return out
+}
+
+function normalizeAuditResponse(input: Partial<JoyZoningAuditResponse> | Record<string, unknown>): JoyZoningAuditResponse {
+	return JoyZoningAuditResponse.create({
+		buildHealth: finitePercent(input.buildHealth, 0),
+		totalFiles: finiteNumber(input.totalFiles, 0),
+		structuralEntropy: finiteNumber(input.structuralEntropy, 0),
+		violations: safeArray<JoyZoningViolation>(input.violations),
+		optimizations: safeArray<JoyZoningOptimization>(input.optimizations),
+		timestamp: safeString(input.timestamp, new Date().toISOString()),
+		projectedHealth: finitePercent(input.projectedHealth, finiteNumber(input.buildHealth, 0)),
+		integrityScore: finitePercent(input.integrityScore, 0),
+		progress: input.progress as JoyZoningAuditResponse["progress"],
+		metabolicPressure: finiteNumber(input.metabolicPressure, 0),
+		driftDetected: Boolean(input.driftDetected),
+		driftCount: finiteNumber(input.driftCount, 0),
+		metabolicSinks: safeArray<string>(input.metabolicSinks),
+		grade: safeString(input.grade, "C"),
+		totalTechnicalDebt: safeString(input.totalTechnicalDebt, "0m"),
+		stabilityScore: finitePercent(input.stabilityScore, 0),
+		maintainabilityScore: finitePercent(input.maintainabilityScore, 0),
+		history: safeArray(input.history),
+		qualityGateStatus: safeString(input.qualityGateStatus, "UNKNOWN"),
+		complianceScore: finitePercent(input.complianceScore, 0),
+		toxicModule: safeString(input.toxicModule, "None detected"),
+		layerScores: safeRecord(input.layerScores),
+		topRecommendations: safeArray<JoyZoningOptimization>(input.topRecommendations),
+		healthDelta: finiteNumber(input.healthDelta, 0),
+		violationDelta: finiteNumber(input.violationDelta, 0),
+		riskProfile: { LOW: 0, MEDIUM: 0, HIGH: 0, ...safeRecord(input.riskProfile) },
+	})
+}
+
 /**
  * [HANDLING: JoyZoning Audit]
  * Triggers a deep forensic scan of the codebase to identify metabolic pressure,
@@ -27,7 +82,21 @@ export async function triggerAudit(
 	requestId?: string,
 ): Promise<void> {
 	const registry = getRequestRegistry()
-	const isCancelled = () => !!requestId && !registry.hasRequest(requestId)
+	let timedOut = false
+	let terminal = false
+	const isCancelled = () => timedOut || (!!requestId && !registry.hasRequest(requestId))
+	const safeSend = async (response: JoyZoningAuditResponse, isLast = false): Promise<boolean> => {
+		if (terminal || isCancelled()) return false
+		try {
+			await responseStream(response, isLast)
+			if (isLast) terminal = true
+			return true
+		} catch (error) {
+			terminal = true
+			Logger.warn("[Audit] Failed to stream JoyZoning audit response:", error)
+			return false
+		}
+	}
 	const spider = await controller.getSpiderEngine()
 	const doctor = new SovereignDoctor(spider.cwd)
 	const decomposer = new SovereignDecomposer()
@@ -36,33 +105,26 @@ export async function triggerAudit(
 
 	// V205: Hardening - 10-minute industrial timeout to prevent zombie audits
 	const timeout = setTimeout(() => {
+		timedOut = true
 		Logger.error(`[Audit] Audit TIMEOUT after 10 minutes. Forcefully terminating requestId: ${requestId}`)
 		if (requestId) registry.unregisterRequest(requestId)
 	}, 600000)
+	timeout.unref?.()
 
 	try {
 		// V200: Intent Persistence / Rapid Recovery
 		if (useCache) {
 			const cached = controller.stateManager.getGlobalStateKey("lastJoyZoningReport")
 			// V200 Hardening: Forensic Validation of Cache Substrate
-			if (cached && Array.isArray(cached.violations) && typeof cached.integrityScore === "number") {
+			if (isObjectRecord(cached) && Array.isArray(cached.violations) && typeof cached.integrityScore === "number") {
 				Logger.info("[JoyZoning] Restoring audit from persistent cache.")
 				clearTimeout(timeout)
-				await responseStream(
-					JoyZoningAuditResponse.create({
-						violations: cached.violations,
-						optimizations: cached.optimizations || [], // V206: Restore optimizations from cache
-						integrityScore: cached.integrityScore,
-						driftCount: cached.driftCount || 0,
-						metabolicPressure: cached.metabolicPressure || 0,
-						metabolicSinks: cached.metabolicSinks || [],
-						buildHealth: cached.buildHealth || 100,
-						totalFiles: cached.totalFiles || spider.nodes.size,
-						timestamp: cached.timestamp,
-						progress: { processedFiles: 100, totalFiles: 100, currentFile: "Restored from Cache", percentage: 100 },
-					}),
-					true,
-				)
+				const restored = normalizeAuditResponse({
+					...cached,
+					progress: { processedFiles: 100, totalFiles: 100, currentFile: "Restored from Cache", percentage: 100 },
+					totalFiles: finiteNumber(cached.totalFiles, spider.nodes.size),
+				})
+				await safeSend(restored, true)
 				return
 			}
 			if (cached) {
@@ -71,7 +133,7 @@ export async function triggerAudit(
 		}
 
 		// 1. Start Audit - Send initial progress
-		await responseStream(
+		await safeSend(
 			JoyZoningAuditResponse.create({
 				progress: { processedFiles: 0, totalFiles: 100, currentFile: "Preparing Health Scan...", percentage: 0 },
 			}),
@@ -94,7 +156,7 @@ export async function triggerAudit(
 				const percentage = total > 0 ? (processed / total) * 100 : 100
 				if (percentage - lastSentPercentage >= 5 || processed === total) {
 					lastSentPercentage = percentage
-					await responseStream(
+					await safeSend(
 						JoyZoningAuditResponse.create({
 							progress: { processedFiles: processed, totalFiles: total, currentFile, percentage },
 						}),
@@ -129,7 +191,7 @@ export async function triggerAudit(
 		const nodes = Array.from(spider.nodes.values())
 		if (nodes.length > 0) {
 			// V200 Hardening: Removed redundant spread copy
-			const gravityCenter = nodes.sort((a, b) => b.blastRadius - a.blastRadius)[0]
+			const gravityCenter = [...nodes].sort((a, b) => b.blastRadius - a.blastRadius)[0]
 			if (gravityCenter && (gravityCenter.blastRadius || 0) > 0.4) {
 				violations.push({
 					type: "STRUCTURAL",
@@ -227,12 +289,13 @@ export async function triggerAudit(
 		}
 
 		// V206: Evolution Tracking - Appending to historical substrate timeline
-		const history = (controller.stateManager.getGlobalStateKey("joyZoningHistory") || []) as Array<{
+		const rawHistory = controller.stateManager.getGlobalStateKey("joyZoningHistory")
+		const history = safeArray<{
 			timestamp: string
 			health: number
 			stability: number
 			maintainability: number
-		}>
+		}>(rawHistory)
 
 		const newPoint = {
 			timestamp: new Date().toISOString(),
@@ -292,7 +355,7 @@ export async function triggerAudit(
 			else riskProfile.LOW++
 		}
 
-		const finalResponse = JoyZoningAuditResponse.create({
+		const finalResponse = normalizeAuditResponse({
 			buildHealth,
 			totalFiles: nodes.length,
 			structuralEntropy: spider.computeEntropy()?.score || 0,
@@ -325,7 +388,7 @@ export async function triggerAudit(
 
 		// 6. Send Final Report
 		if (isCancelled()) return
-		await responseStream(finalResponse, true)
+		await safeSend(finalResponse, true)
 
 		// V200: Persistence for rapid UI recovery
 		controller.stateManager.setGlobalState("lastJoyZoningReport", {
@@ -347,6 +410,10 @@ export async function triggerAudit(
 
 		Logger.info("[JoyZoning] Audit Complete. Report persisted.")
 	} catch (error) {
+		if (isAuditCancelledError(error) || isCancelled()) {
+			Logger.info(`[Audit] JoyZoning audit cancelled for requestId: ${requestId}`)
+			return
+		}
 		Logger.error("[Audit] Critical failure during JoyZoning audit:", error)
 		throw error
 	} finally {

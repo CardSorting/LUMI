@@ -2,7 +2,7 @@ import * as crypto from "node:crypto"
 import type Database from "better-sqlite3"
 import { type Kysely, sql, type Transaction } from "kysely"
 import { Logger } from "@/shared/services/Logger"
-import { getDb, getRawDb, type Schema } from "./Config"
+import { destroyDb, getDb, getRawDb, type Schema } from "./Config"
 
 // Production-grade Mutex implementation
 class Mutex {
@@ -97,6 +97,7 @@ export class BufferedDbPool {
 	private rawDb: Database.Database | null = null
 	private totalTransactions = 0
 	private stmtCache = new Map<string, Database.Statement>()
+	private readonly MAX_STMT_CACHE_SIZE = 250
 	private parameterBuffer = new Array(2000) // Pre-allocated for chunked inserts
 	private activeBufferSize = 0
 	private inFlightSize = 0
@@ -104,9 +105,12 @@ export class BufferedDbPool {
 	private activeIndex = new Map<keyof Schema, Map<string, Set<WriteOp>>>()
 	private inFlightIndex = new Map<keyof Schema, Map<string, Set<WriteOp>>>()
 	private warmedIndices = new Set<string>() // Level 9: Authoritative Memory Indices
+	private started = false
+	private stopped = false
 
 	constructor() {
-		this.startFlushLoop()
+		// Timers are started lazily on first use so importing this singleton cannot
+		// leak intervals before the extension has configured the database path.
 	}
 
 	private flushTimeout: NodeJS.Timeout | null = null
@@ -116,6 +120,7 @@ export class BufferedDbPool {
 	 * Adaptive flush scheduling.
 	 */
 	private scheduleFlush(delay = 10) {
+		if (this.stopped) return
 		if (this.flushTimeout) {
 			if (this.currentFlushDelay !== null && this.currentFlushDelay <= delay) {
 				return
@@ -152,9 +157,18 @@ export class BufferedDbPool {
 	private cleanupInterval: NodeJS.Timeout | null = null
 
 	private startFlushLoop() {
+		if (this.started) return
+		this.started = true
+		this.stopped = false
 		this.scheduleFlush(1000)
 		this.flushInterval = setInterval(() => this.scheduleFlush(1000), 1000)
 		this.cleanupInterval = setInterval(() => this.cleanupShadows(), 30000)
+		this.flushInterval.unref?.()
+		this.cleanupInterval.unref?.()
+	}
+
+	private ensureStarted() {
+		if (!this.started || this.stopped) this.startFlushLoop()
 	}
 
 	private async cleanupShadows() {
@@ -173,6 +187,7 @@ export class BufferedDbPool {
 	}
 
 	public async beginWork(agentId: string) {
+		this.ensureStarted()
 		const release = await this.stateMutex.acquire()
 		try {
 			if (!this.agentShadows.has(agentId)) {
@@ -212,6 +227,10 @@ export class BufferedDbPool {
 		let stmt = this.stmtCache.get(sqlStr)
 		if (!stmt && this.rawDb) {
 			stmt = this.rawDb.prepare(sqlStr)
+			if (this.stmtCache.size >= this.MAX_STMT_CACHE_SIZE) {
+				const oldestKey = this.stmtCache.keys().next().value
+				if (oldestKey !== undefined) this.stmtCache.delete(oldestKey)
+			}
 			this.stmtCache.set(sqlStr, stmt)
 		}
 		if (!stmt) {
@@ -258,6 +277,7 @@ export class BufferedDbPool {
 	}
 
 	public async pushBatch(ops: WriteOp[], agentId?: string, affectedFile?: string) {
+		this.ensureStarted()
 		const enqueueStart = performance.now()
 		let currentBufferLength = 0
 
@@ -330,6 +350,7 @@ export class BufferedDbPool {
 	}
 
 	public async commitWork(agentId: string, _validator?: unknown) {
+		this.ensureStarted()
 		let shadowOpsCount = 0
 		const release = await this.stateMutex.acquire()
 		try {
@@ -360,6 +381,7 @@ export class BufferedDbPool {
 	}
 
 	public async rollbackWork(agentId: string, _reason?: string) {
+		this.ensureStarted()
 		const release = await this.stateMutex.acquire()
 		try {
 			this.agentShadows.delete(agentId)
@@ -382,6 +404,7 @@ export class BufferedDbPool {
 	}
 
 	public async flush() {
+		if (this.stopped && this.activeBufferSize === 0 && this.inFlightSize === 0) return
 		const releaseFlush = await this.flushMutex.acquire()
 		let opsToFlush: WriteOp[] = []
 		const startTime = Date.now()
@@ -572,9 +595,10 @@ export class BufferedDbPool {
 			limit?: number
 		},
 	): Promise<Schema[T][]> {
+		this.ensureStarted()
+		const db = await this.ensureDb()
 		const release = await this.stateMutex.acquire()
 		try {
-			const db = await this.ensureDb()
 			const conditions = normalizeWhere(where)
 			const statusCond = conditions.find(
 				(c) => (c.column === "status" || c.column === "type") && (c.operator === "=" || !c.operator),
@@ -988,6 +1012,7 @@ export class BufferedDbPool {
 	 * This ensures the "Brain" wakes up at full speed after a reboot.
 	 */
 	public async warmupTable<T extends keyof Schema>(table: T, statusCol: string, statusValue: string): Promise<number> {
+		this.ensureStarted()
 		const db = await this.ensureDb()
 		const rows = (await (db.selectFrom(table as never).selectAll() as unknown as LooseSelectQuery)
 			.where(statusCol, "=", statusValue)
@@ -1003,11 +1028,9 @@ export class BufferedDbPool {
 		}
 
 		const key = `${statusCol}:${statusValue}`
-		let set = tableIndex.get(key)
-		if (!set) {
-			set = new Set()
-			tableIndex.set(key, set)
-		}
+		// Rebuild the warmed set every time; never append duplicate synthetic rows.
+		const set = new Set<WriteOp>()
+		tableIndex.set(key, set)
 
 		// Convert disk rows into a "Virtual WriteOp" to satisfy Level 1 Select logic
 		for (const row of rows) {
@@ -1046,9 +1069,32 @@ export class BufferedDbPool {
 	}
 
 	public async stop() {
+		if (this.stopped) return
+		this.stopped = true
 		if (this.flushInterval) clearInterval(this.flushInterval)
 		if (this.cleanupInterval) clearInterval(this.cleanupInterval)
+		if (this.flushTimeout) clearTimeout(this.flushTimeout)
+		this.flushInterval = null
+		this.cleanupInterval = null
+		this.flushTimeout = null
 		await this.flush()
+		this.bufferA.clear()
+		this.bufferB.clear()
+		this.activeBuffer.clear()
+		this.inFlightOps.clear()
+		this.agentShadows.clear()
+		this.activeIndex.clear()
+		this.inFlightIndex.clear()
+		this.warmedIndices.clear()
+		this.stmtCache.clear()
+		this.enqueueLatencies = []
+		this.processingLatencies = []
+		this.activeBufferSize = 0
+		this.inFlightSize = 0
+		this.rawDb = null
+		this.db = null
+		await destroyDb()
+		this.started = false
 	}
 }
 
