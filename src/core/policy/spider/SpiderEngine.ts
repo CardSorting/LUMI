@@ -236,8 +236,9 @@ export class SpiderEngine {
 		let sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
 		let importData = this.extractDetailedImports(sourceFile)
 		const imports = importData.map((i) => i.specifier)
-		let { symbols: exports, reExports: rawReExports } = this.extractExports(sourceFile)
-		const reExports = rawReExports
+		let { symbols: exportedSymbols, reExports: reExportSpecifiers } = this.extractExports(sourceFile)
+		// Resolve re-exports immediately for incremental updates (since most of the graph already exists)
+		const reExports = reExportSpecifiers
 			.map((spec) => this.resolver.resolveImportToNodeId(normalizedPath, spec, this.nodes))
 			.filter(Boolean) as string[]
 		let metrics = this.extractMetrics(sourceFile)
@@ -266,11 +267,11 @@ export class SpiderEngine {
 			...metrics,
 			hash,
 			isInterface: this.detectInterface(normalizedPath, sourceFile),
-			exports,
+			exports: exportedSymbols,
 			consumptions,
 			mtime: fs.statSync(absolutePath).mtimeMs,
 			namingScore,
-			symbolDensity: content.length > 0 ? exports.length / (content.length / 100) : 0,
+			symbolDensity: content.length > 0 ? exportedSymbols.length / (content.length / 100) : 0,
 			logicCohesion: 0.5,
 			blastRadius: oldNode?.blastRadius || 0, // Preserve until re-computed
 			isFragile: oldNode?.isFragile || false,
@@ -302,10 +303,10 @@ export class SpiderEngine {
 			this.resolver.clearFileFromCache(normalizedPath)
 			this.scheduleReachability()
 		}
-		// V200: Forensic Closure Hygiene - Forcefully destroy visitor scopes
+		// V200: Forensic Closure Hygiene - Forcefully destroy large visitor scopes
 		;(sourceFile as unknown) = null
 		;(importData as unknown) = null
-		;(exports as unknown) = null
+		;(exportedSymbols as unknown) = null
 		;(metrics as unknown) = null
 	}
 
@@ -353,14 +354,12 @@ export class SpiderEngine {
 	 */
 	private extractDetailedImports(sourceFile: ts.SourceFile): { specifier: string; symbols: string[] }[] {
 		const imports: { specifier: string; symbols: string[] }[] = []
-		sourceFile.forEachChild((node) => {
+		const visit = (node: ts.Node) => {
 			if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
 				const specifier = node.moduleSpecifier.text
 				const symbols: string[] = []
 				if (node.importClause) {
-					if (node.importClause.name) {
-						symbols.push("default")
-					}
+					if (node.importClause.name) symbols.push("default")
 					if (node.importClause.namedBindings) {
 						if (ts.isNamedImports(node.importClause.namedBindings)) {
 							for (const n of node.importClause.namedBindings.elements) {
@@ -383,8 +382,19 @@ export class SpiderEngine {
 					symbols.push("*")
 				}
 				imports.push({ specifier, symbols })
+			} else if (
+				ts.isCallExpression(node) &&
+				(node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+					(ts.isIdentifier(node.expression) && node.expression.text === "require")) &&
+				node.arguments.length > 0 &&
+				ts.isStringLiteral(node.arguments[0])
+			) {
+				// V215: Dynamic Dependency Sensing (import() and require())
+				imports.push({ specifier: (node.arguments[0] as ts.StringLiteral).text, symbols: ["*"] })
 			}
-		})
+			ts.forEachChild(node, visit)
+		}
+		visit(sourceFile)
 		return imports
 	}
 
@@ -916,9 +926,7 @@ export class SpiderEngine {
 						const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
 						const importData = this.extractDetailedImports(sourceFile)
 						const { symbols: exports, reExports: rawReExports } = this.extractExports(sourceFile)
-						const reExports = rawReExports
-							.map((spec) => this.resolver.resolveImportToNodeId(f, spec, tempRegistry))
-							.filter(Boolean) as string[]
+						const reExportSpecifiers = rawReExports // Temporary storage for post-pass resolution
 						const metrics = this.extractMetrics(sourceFile)
 						const namingScore = this.calculateNamingScore(sourceFile)
 
@@ -935,7 +943,7 @@ export class SpiderEngine {
 							hash,
 							isInterface: this.detectInterface(f, sourceFile),
 							exports,
-							reExports,
+							reExports: reExportSpecifiers, // Store specifiers temporarily
 							consumptions: {}, // Will be filled in coupling pass
 							mtime: fs.statSync(absolutePath).mtimeMs,
 							namingScore,
@@ -960,7 +968,16 @@ export class SpiderEngine {
 				await new Promise((resolve) => setTimeout(resolve, 10))
 			}
 
-			// Finalizing Pass (Coupling & Fragility)
+			// Finalizing Pass (Re-export Resolution, Coupling & Fragility)
+			for (const node of tempRegistry.values()) {
+				// V215: Order-Independent Re-export Resolution
+				// Now that ALL nodes are in the tempRegistry, we can resolve specifiers to IDs safely.
+				const specifiers = node.reExports // Currently contains raw specifiers from rebuildRegistry pass
+				node.reExports = specifiers
+					.map((spec) => this.resolver.resolveImportToNodeId(node.path, spec, tempRegistry))
+					.filter(Boolean) as string[]
+			}
+
 			this.metrics.computeCouplingMetrics(tempRegistry)
 			this.metrics.computeReachability(tempRegistry)
 			const fragility = this.forensic.computeFragility(tempRegistry)

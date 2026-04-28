@@ -42,10 +42,10 @@ export class SovereignDecomposer {
 		// 1. Analyze Method-Level Logic Density vs I/O
 		const visit = (node: ts.Node) => {
 			if (this.isFunctionalNode(node)) {
-				const body = (node as any).body
+				const body = (node as ts.FunctionLikeDeclaration).body
 				if (body) {
-					const { density, hasIO } = this.analyzeNodeLogic(node as any, sourceFile)
-					const name = this.getFunctionName(node, sourceFile)
+					const { density, hasIO } = this.analyzeNodeLogic(node as ts.FunctionLikeDeclaration, sourceFile)
+					const name = this.getFunctionName(node)
 
 					// VIOLATION: Pure Logic in INFRASTRUCTURE
 					if (layer === "infrastructure" && density > 0.3 && !hasIO) {
@@ -73,16 +73,26 @@ export class SovereignDecomposer {
 				}
 			}
 
-			// V210: Production Hardening - Direct Forensic Checks
+			// V215: Production Hardening - Deep 'any' Sourcing
+			const checkDeepAny = (typeNode: ts.TypeNode | undefined): boolean => {
+				if (!typeNode) return false
+				if (typeNode.kind === ts.SyntaxKind.AnyKeyword) return true
+				let found = false
+				ts.forEachChild(typeNode, (child) => {
+					if (ts.isTypeNode(child) && checkDeepAny(child)) found = true
+				})
+				return found
+			}
+
 			if (ts.isTypeAssertionExpression(node) || ts.isAsExpression(node)) {
-				const type = node.kind === ts.SyntaxKind.TypeAssertionExpression ? (node as any).type : (node as any).type
-				if (type && type.getText(sourceFile) === "any") {
+				const type = ts.isTypeAssertionExpression(node) ? node.type : node.type
+				if (checkDeepAny(type)) {
 					steps.push({
 						action: "HARDEN",
 						target: "Unsafe Type Cast",
 						destination: "STABLE_TYPES",
 						risk: "HIGH",
-						reason: "Production Risk: 'as any' cast detected. This bypasses the integrity of the substrate.",
+						reason: "Production Risk: 'any' keyword detected within type cast. This bypasses the integrity of the substrate.",
 					})
 				}
 			}
@@ -120,7 +130,7 @@ export class SovereignDecomposer {
 
 			ts.forEachChild(sourceFile, (n) => {
 				if (ts.isClassDeclaration(n) || ts.isInterfaceDeclaration(n) || ts.isFunctionDeclaration(n)) {
-					const name = (n as any).name?.getText(sourceFile) || "anonymous"
+					const name = (n as ts.NamedDeclaration).name?.getText(sourceFile) || "anonymous"
 					const start = sourceFile.getLineAndCharacterOfPosition(n.getStart()).line
 					const end = sourceFile.getLineAndCharacterOfPosition(n.getEnd()).line
 					const mass = end - start + 1
@@ -155,12 +165,12 @@ export class SovereignDecomposer {
 		// 3. Shadow Complexity & God Methods (V150 Forensic Pass)
 		const complexVisit = (n: ts.Node, depth: number) => {
 			if (this.isFunctionalNode(n)) {
-				const body = (n as any).body
+				const body = (n as ts.FunctionLikeDeclaration).body
 				if (body) {
 					const start = sourceFile.getLineAndCharacterOfPosition(n.getStart()).line
 					const end = sourceFile.getLineAndCharacterOfPosition(n.getEnd()).line
 					const methodMass = end - start + 1
-					const name = this.getFunctionName(n, sourceFile)
+					const name = this.getFunctionName(n)
 
 					if (methodMass > 150) {
 						steps.push({
@@ -293,11 +303,11 @@ export class SovereignDecomposer {
 					if (ts.isIdentifier(n)) {
 						const id = n.getText(sourceFile)
 						if (symbols[id] && id !== currentSymbol) {
-							if (!symbols[currentSymbol!].dependencies.includes(id)) {
-								symbols[currentSymbol!].dependencies.push(id)
+							if (!symbols[currentSymbol].dependencies.includes(id)) {
+								symbols[currentSymbol].dependencies.push(id)
 							}
-							if (!symbols[id].dependents.includes(currentSymbol!)) {
-								symbols[id].dependents.push(currentSymbol!)
+							if (!symbols[id].dependents.includes(currentSymbol)) {
+								symbols[id].dependents.push(currentSymbol)
 							}
 						}
 					}
@@ -321,7 +331,8 @@ export class SovereignDecomposer {
 				visited.add(symbol)
 
 				while (queue.length > 0) {
-					const current = queue.shift()!
+					const current = queue.shift()
+					if (!current) continue
 					island.push(current)
 
 					const neighbors = [...graph[current].dependencies, ...graph[current].dependents]
@@ -339,10 +350,7 @@ export class SovereignDecomposer {
 		return islands
 	}
 
-	private analyzeNodeLogic(
-		node: ts.MethodDeclaration | ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression,
-		sourceFile: ts.SourceFile,
-	): { density: number; hasIO: boolean } {
+	private analyzeNodeLogic(node: ts.FunctionLikeDeclaration, sourceFile: ts.SourceFile): { density: number; hasIO: boolean } {
 		let nodes = 0
 		let logic = 0
 		let hasIO = false
@@ -387,8 +395,9 @@ export class SovereignDecomposer {
 		)
 	}
 
-	private getFunctionName(node: ts.Node, sourceFile: ts.SourceFile): string {
-		if ((node as any).name) return (node as any).name.getText(sourceFile)
+	private getFunctionName(node: ts.Node): string {
+		const nameNode = (node as ts.NamedDeclaration).name
+		if (nameNode && ts.isIdentifier(nameNode)) return nameNode.text
 
 		// Try to find name from parent if it's a variable assignment
 		if (node.parent && ts.isVariableDeclaration(node.parent) && ts.isIdentifier(node.parent.name)) {
@@ -443,7 +452,7 @@ export class SovereignDecomposer {
 		const findEntityMass = (node: ts.Node, targetName: string): number => {
 			let mass = 0
 			const visit = (n: ts.Node) => {
-				const name = (n as any).name?.getText(sourceFile)
+				const name = (n as ts.NamedDeclaration).name?.getText(sourceFile)
 				if (name && targetName.includes(`'${name}'`)) {
 					const start = sourceFile.getLineAndCharacterOfPosition(n.getStart()).line
 					const end = sourceFile.getLineAndCharacterOfPosition(n.getEnd()).line
@@ -522,7 +531,7 @@ export class SovereignDecomposer {
 				ts.isInterfaceDeclaration(n) ||
 				ts.isTypeAliasDeclaration(n)
 			) {
-				const name = (n as any).name?.getText(sourceFile)
+				const name = (n as ts.NamedDeclaration).name?.getText(sourceFile)
 				if (name && symbols.includes(name)) {
 					islandNodes.push(n)
 
@@ -569,11 +578,11 @@ export class SovereignDecomposer {
 		// 3. Construct final content
 		let content = `// [LAYER: ${layer.toUpperCase()}]\n`
 		if (neededImports.length > 0) {
-			content += neededImports.join("\n") + "\n\n"
+			content += `${neededImports.join("\n")}\n\n`
 		}
 
 		islandNodes.forEach((node) => {
-			content += node.getText(sourceFile) + "\n\n"
+			content += `${node.getText(sourceFile)}\n\n`
 		})
 
 		return content.trim()
