@@ -99,6 +99,5 @@ message JoyZoningBatchRefactorResponse {
 service JoyZoningService {
   // Streams progress updates during the audit, finishing with the full report
   rpc triggerAudit(JoyZoningAuditRequest) returns (stream JoyZoningAuditResponse);
-  rpc executeRefactor(JoyZoningRefactorRequest) returns (JoyZoningRefactorResponse);
   rpc executeBatchRefactor(JoyZoningBatchRefactorRequest) returns (JoyZoningBatchRefactorResponse);
 }
