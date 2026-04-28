@@ -2,7 +2,7 @@ import * as path from "path"
 import * as ts from "typescript"
 import { Logger } from "../../../shared/services/Logger.js"
 import { PathResolver } from "./PathResolver.js"
-import { SpiderEntropyReport, SpiderNode } from "./types.js"
+import { SpiderEntropyReport, SpiderNode, SpiderSnapshot } from "./types.js"
 
 export class MetricsEngine {
 	constructor(
@@ -159,10 +159,21 @@ export class MetricsEngine {
 		return cycles
 	}
 
-	public computeEntropy(nodes: Map<string, SpiderNode>): SpiderEntropyReport {
+	public computeEntropy(nodes: Map<string, SpiderNode>, history: number[] = []): SpiderEntropyReport {
 		const totalNodes = nodes.size
 		if (totalNodes === 0)
-			return { score: 0, components: { depthScore: 0, namingScore: 0, orphanScore: 0, couplingScore: 0, cycles: 0 } }
+			return {
+				score: 0,
+				components: {
+					depthScore: 0,
+					namingScore: 0,
+					orphanScore: 0,
+					couplingScore: 0,
+					cycles: 0,
+					cognitiveScore: 0,
+				},
+				entropyVelocity: 0,
+			}
 
 		const nodesArray = Array.from(nodes.values())
 		const avgDepth = nodesArray.reduce((acc, n) => acc + n.depth, 0) / totalNodes
@@ -192,11 +203,23 @@ export class MetricsEngine {
 		const cycles = this.detectCycles(nodes)
 		const cyclePenalty = cycles.length > 0 ? Math.min(0.3, cycles.length * 0.05) : 0
 
-		// V160: Calibrated Industrial Entropy Formula
-		const rawScore = depthScore * 0.2 + namingScore * 0.2 + orphanScore * 0.2 + couplingScore * 0.4
+		const cognitiveScore = nodesArray.reduce((acc, n) => acc + (n.cognitiveComplexity || 0), 0) / totalNodes
+
+		// V215: Calibrated Industrial Entropy Formula
+		// Factors: Depth (10%), Naming (15%), Orphans (15%), Coupling (40%), Cognitive (20%)
+		const rawScore = depthScore * 0.1 + namingScore * 0.15 + orphanScore * 0.15 + couplingScore * 0.4 + cognitiveScore * 0.2
 		const score = Math.max(0, Math.min(1.0, rawScore + cyclePenalty))
 
-		return { score, components: { depthScore, namingScore, orphanScore, couplingScore, cycles: cycles.length } }
+		// V215: Entropy Velocity Sensing
+		// A positive velocity means entropy is GROWING.
+		const lastScore = history.length > 0 ? history[history.length - 1] : score
+		const entropyVelocity = score - lastScore
+
+		return {
+			score,
+			components: { depthScore, namingScore, orphanScore, couplingScore, cycles: cycles.length, cognitiveScore },
+			entropyVelocity,
+		}
 	}
 
 	/**
@@ -227,9 +250,11 @@ export class MetricsEngine {
 				complexity += nesting * 0.5 // Weighted by depth
 			}
 
-			// Nesting depth
+			// V215: Cognitive Depth Scaling
+			// Deeply nested blocks (loops, ifs) contribute more to the overall weight.
 			if (ts.isBlock(node) || ts.isFunctionLike(node)) {
 				nesting++
+				complexity += nesting * 0.2 // V215: Reward shallow structure
 				ts.forEachChild(node, visit)
 				nesting--
 			} else {
@@ -243,5 +268,76 @@ export class MetricsEngine {
 		const result = Math.min(Math.log10(1 + complexity / 20), 1.0)
 
 		return result
+	}
+
+	/**
+	 * V215: Implicit Cohesion Analysis.
+	 * Identifies "Logical Twins"—files that are conceptually similar (logic/symbol density)
+	 * but have no structural connection in the graph.
+	 */
+	public detectLogicalTwins(nodes: Map<string, SpiderNode>): string[][] {
+		const twins: string[][] = []
+		const nodesArray = Array.from(nodes.values()).filter((n) => n.astComplexity > 200)
+
+		for (let i = 0; i < nodesArray.length; i++) {
+			for (let j = i + 1; j < nodesArray.length; j++) {
+				const a = nodesArray[i]
+				const b = nodesArray[j]
+
+				// Check for logical signature similarity
+				const densityDiff = Math.abs(a.logicDensity - b.logicDensity)
+				const symbolDiff = Math.abs(a.symbolDensity - b.symbolDensity)
+				const complexityDiff = Math.abs(a.astComplexity - b.astComplexity) / Math.max(a.astComplexity, b.astComplexity)
+
+				const isSimilar = densityDiff < 0.05 && symbolDiff < 0.1 && complexityDiff < 0.2
+				const isDecoupled = !a.imports.includes(b.path) && !b.imports.includes(a.path)
+
+				if (isSimilar && isDecoupled) {
+					twins.push([a.path, b.path])
+				}
+			}
+		}
+		return twins
+	}
+
+	/**
+	 * V215: Semantic Cohesion Analysis.
+	 * Analyzes method/symbol names for vocabulary overlap.
+	 * High fragmentation indicates a violation of the Single Responsibility Principle.
+	 */
+	public calculateSemanticCohesion(node: SpiderNode): number {
+		if (node.exports.length < 2) return 1.0
+
+		const words = node.exports.flatMap((e) => {
+			// Split camelCase/PascalCase into words
+			return e.split(/(?=[A-Z])|_/).map((w) => w.toLowerCase())
+		})
+
+		const wordCounts = new Map<string, number>()
+		for (const w of words) {
+			if (w.length < 3) continue
+			wordCounts.set(w, (wordCounts.get(w) || 0) + 1)
+		}
+
+		// Calculate overlap: Ratio of recurring words to total unique words
+		const recurring = Array.from(wordCounts.values()).filter((c) => c > 1).length
+		const totalUnique = wordCounts.size
+		if (totalUnique === 0) return 1.0
+
+		return Math.min(recurring / (totalUnique * 0.5), 1.0)
+	}
+
+	/**
+	 * V215: Hotspot Forecasting.
+	 * Compares current AST complexity growth across snapshots.
+	 * Flags files expanding > 20% as "Expanding Hotspots".
+	 */
+	public calculateGrowthVelocity(node: SpiderNode, lastSnapshot?: SpiderSnapshot): number {
+		if (!lastSnapshot) return 0
+		const oldNode = lastSnapshot.nodes.find((n) => n.id === node.id)
+		if (!oldNode) return 0
+
+		const complexityDelta = node.astComplexity - oldNode.astComplexity
+		return complexityDelta / Math.max(oldNode.astComplexity, 1)
 	}
 }

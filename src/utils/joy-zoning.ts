@@ -314,11 +314,15 @@ export function validateSmells(filePath: string, content: string): string[] {
 	const errors: string[] = []
 	const layer = getLayer(filePath)
 
-	// Multiple classes in a single file — only enforced in domain
+	// Multiple classes in a single file — only enforced in domain for large files
 	if (layer === "domain") {
 		const classCount = (content.match(/class\s+/g) || []).length
-		if (classCount > 1) {
-			errors.push(`${path.basename(filePath)}: Multiple classes in a single file — split into separate files.`)
+		const totalLines = content.split("\n").length
+		// V215: Relaxed to allow multiple classes unless the file is getting massive (> 500 lines)
+		if (classCount > 3 || (classCount > 1 && totalLines > 500)) {
+			errors.push(
+				`${path.basename(filePath)}: Multiple classes in a single file — consider splitting for better domain isolation.`,
+			)
 		}
 	}
 

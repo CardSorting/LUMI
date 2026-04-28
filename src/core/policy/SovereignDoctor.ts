@@ -50,8 +50,12 @@ export class SovereignDoctor {
 	/**
 	 * Performs a full codebase checkup.
 	 */
-	public async diagnose(engine: SpiderEngine, options: DiagnoseOptions = {}): Promise<DoctorReport> {
-		const structuralViolations = engine.getViolations()
+	public async diagnose(
+		engine: SpiderEngine,
+		options: DiagnoseOptions = {},
+		monitor?: import("../integrity/MetabolicMonitor").MetabolicMonitor,
+	): Promise<DoctorReport> {
+		const structuralViolations = engine.getViolations(monitor)
 		const activityMap: { path: string; score: number }[] = []
 
 		const policy = SovereignPolicy.getInstance(this.cwd).getGlobalConfig()
@@ -86,11 +90,16 @@ export class SovereignDoctor {
 
 		// V210: Comprehensive Build Health (Forensic Aggregate)
 		// Factors: Violations (40%), Stability/Entropy (40%), Resource Stress (20%)
-		const violationScore = Math.max(0, 100 - allViolations.length * 10)
+		// V215: Non-Linear Sigmoid Scoring (Industrial Hardening)
+		// Instead of linear subtraction, we use an exponential decay to penalize compounding debt.
+		const computeSigmoid = (count: number, severity: number) => 100 / (1 + Math.exp(0.15 * (count - severity)))
+
+		const violationScore = computeSigmoid(allViolations.length, 5) // Threshold of 5 violations
 		const stabilityScore = (1 - (entropy?.score || 0)) * 100
 		const resourceScore = (1 - (metabolicPressure || 0)) * 100
 
-		const buildHealth = Math.round((violationScore || 0) * 0.4 + (stabilityScore || 0) * 0.4 + (resourceScore || 0) * 0.2)
+		// Weighted Aggregate: Focuses on stability as the primary substrate signal
+		const buildHealth = Math.round(violationScore * 0.3 + stabilityScore * 0.5 + resourceScore * 0.2)
 
 		const optimizations = this.optimizer.findOptimizations(engine)
 

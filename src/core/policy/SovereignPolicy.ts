@@ -17,6 +17,7 @@ export interface SovereignConfig {
 		integrityAlertThreshold: number
 		supportedLayerTags?: string[]
 		excludePaths?: string[]
+		auditAggressiveness?: "CONSERVATIVE" | "BALANCED" | "AGGRESSIVE"
 	}
 }
 
@@ -72,6 +73,7 @@ export class SovereignPolicy {
 				integrityAlertThreshold: 70,
 				supportedLayerTags: [".ts", ".tsx", ".js", ".jsx"],
 				excludePaths: [],
+				auditAggressiveness: "BALANCED",
 			},
 		}
 	}

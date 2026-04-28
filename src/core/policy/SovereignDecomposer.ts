@@ -126,7 +126,8 @@ export class SovereignDecomposer {
 		visit(sourceFile)
 
 		// 2. Metabolic Fission: Identify High-Mass Entities (V160 Forensic Tracking)
-		if (totalLines > 800) {
+		// V215: Increased threshold to 1500 lines to avoid fragmentation in standard modules.
+		if (totalLines > 1500) {
 			const islandImports = this.mapSourceImports(sourceFile)
 
 			ts.forEachChild(sourceFile, (n) => {
@@ -145,8 +146,9 @@ export class SovereignDecomposer {
 					const zombies = this.detectZombieSymbols(islandSymbols, symbolGraph)
 					const extendedIsland = [...islandSymbols, ...zombies]
 
-					// If an entity is > 20% of the total file mass and file is large
-					if (mass > 200 || (totalLines > 1200 && mass > 100)) {
+					// V215: Significantly increased extraction thresholds.
+					// If an entity is > 500 lines OR (file is massive and entity is > 300 lines).
+					if (mass > 500 || (totalLines > 2000 && mass > 300)) {
 						const boilerplate = this.generateBoilerplate(extendedIsland, sourceFile, islandImports, layer)
 
 						steps.push({
@@ -154,7 +156,7 @@ export class SovereignDecomposer {
 							target: `${ts.isClassDeclaration(n) ? "Class" : "Entity"} '${name}'`,
 							destination: "NEW_MODULE",
 							risk: isIsland && islandSymbols.length > 0 ? "LOW" : dependents === 0 ? "LOW" : "HIGH",
-							reason: `High Module Activity: '${name}' consumes ${mass} lines (${Math.round((mass / totalLines) * 100)}% of file). ${isIsland ? "Identified as a self-contained island." : dependents === 0 ? "Identified as a leaf node." : `NOTICE: This entity is used by ${dependents} other symbols locally.`}${zombies.length > 0 ? ` [V180: ${zombies.length} helpers detected and included in stability plan].` : ""}`,
+							reason: `High Module Activity: '${name}' consumes ${mass} lines. ${isIsland ? "Identified as a self-contained island." : dependents === 0 ? "Identified as a leaf node." : `NOTICE: This entity is used by ${dependents} other symbols locally.`}${zombies.length > 0 ? ` [V180: ${zombies.length} helpers detected and included in stability plan].` : ""}`,
 							boilerplate,
 							intentSuggestion: `[PROTOCOL_INTENT: Extract ${name} to stable module]`,
 						})
@@ -173,13 +175,14 @@ export class SovereignDecomposer {
 					const methodMass = end - start + 1
 					const name = this.getFunctionName(n)
 
-					if (methodMass > 150) {
+					// V215: Increased God Method threshold to 300 lines.
+					if (methodMass > 300) {
 						steps.push({
 							action: "EXTRACT",
 							target: `God Method '${name}'`,
 							destination: "HELPER_FUNCTIONS",
 							risk: "MEDIUM",
-							reason: `High Method Activity: Method '${name}' is ${methodMass} lines. Factor out sub-procedures for better readability.`,
+							reason: `High Method Activity: Method '${name}' is ${methodMass} lines. Factor out sub-procedures for better maintainability.`,
 							intentSuggestion: `[PROTOCOL_INTENT: Decompose Large Method ${name}]`,
 						})
 					}
@@ -212,13 +215,13 @@ export class SovereignDecomposer {
 			}
 		})
 
-		if (importCount > 12) {
+		if (importCount > 25) {
 			steps.push({
 				action: "DECOUPLE",
 				target: "Module Imports",
 				destination: "MULTIPLE",
 				risk: "HIGH",
-				reason: `High import coupling (${importCount} > 12). Split this module into mission-focused services.`,
+				reason: `High import coupling (${importCount} > 25). Consider splitting this module into mission-focused services.`,
 			})
 		}
 
@@ -232,9 +235,9 @@ export class SovereignDecomposer {
 		let buildHealth = 100
 		if (node) {
 			if (node.orphaned) buildHealth -= 30
-			if (node.afferentCoupling > 15) buildHealth -= 20
+			if (node.afferentCoupling > 30) buildHealth -= 20 // V215: Increased threshold to 30
 			if (node.namingScore < 0.8) buildHealth -= 10
-			if (node.anyDensity > 0.1) buildHealth -= 15
+			if (node.anyDensity > 0.3) buildHealth -= 15 // V215: Increased threshold to 0.3 (calibrated density)
 		}
 
 		// V207: Complexity Penalties - Forensic markers for structural debt
@@ -248,8 +251,10 @@ export class SovereignDecomposer {
 		buildHealth -= importBloat * 10
 		buildHealth -= hardeningGaps * 5
 
-		if (totalLines > 1500) buildHealth -= 40
-		else if (totalLines > 1200) buildHealth -= 20
+		if (totalLines > 2500)
+			buildHealth -= 60 // V215: Massive module penalty
+		else if (totalLines > 1500) buildHealth -= 40
+		else if (totalLines > 1000) buildHealth -= 10 // V215: Minor penalty for 1000+
 
 		buildHealth = Math.max(5, buildHealth) // V208: Maintain floor to avoid negative substrate health
 
@@ -478,8 +483,9 @@ export class SovereignDecomposer {
 		let projectedHealth = plan.buildHealth
 
 		// 1. Threshold Recovery
+		if (projectedLines <= 1000 && totalLines > 1000) projectedHealth += 10
 		if (projectedLines <= 1500 && totalLines > 1500) projectedHealth += 40
-		else if (projectedLines <= 1200 && totalLines > 1200) projectedHealth += 20
+		if (projectedLines <= 2500 && totalLines > 2500) projectedHealth += 20
 
 		// 2. Structural Debt Recovery (reversing penalties)
 		steps.forEach((step) => {

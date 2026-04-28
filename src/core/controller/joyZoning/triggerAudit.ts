@@ -137,6 +137,9 @@ export async function triggerAudit(
 	try {
 		// 1. Initialize Engines (V215: Inside try block for safe cleanup)
 		const spider = await controller.getSpiderEngine()
+		const { MetabolicMonitor } = await import("@core/integrity/MetabolicMonitor")
+		const monitor = new MetabolicMonitor(spider.cwd) // managed instance
+
 		doctor = new SovereignDoctor(spider.cwd)
 		decomposer = new SovereignDecomposer()
 
@@ -193,7 +196,7 @@ export async function triggerAudit(
 
 		// 4. Generate Doctor Report (Architectural Violations)
 		if (isCancelled()) return
-		const doctorReport = await doctor.diagnose(spider)
+		const doctorReport = await doctor.diagnose(spider, {}, monitor)
 
 		// 5. Generate Decomposition Plan (Optimizations)
 		const optimizations: JoyZoningOptimization[] = []
@@ -233,8 +236,10 @@ export async function triggerAudit(
 		}
 
 		// Map Decomposer Optimizations for Hotspots/God Modules
+		// V215: Hardened Hotspot Selection
+		// Focuses on truly massive modules (> 5000 nodes) or extremely high coupling (> 25 dependents).
 		const hotspots = nodes
-			.filter((n: SpiderNode) => (n.astComplexity || 0) > 1000 || (n.afferentCoupling || 0) > 10)
+			.filter((n: SpiderNode) => (n.astComplexity || 0) > 5000 || (n.afferentCoupling || 0) > 25)
 			.sort(
 				(a, b) =>
 					(b.astComplexity || 0) + (b.afferentCoupling || 0) - ((a.astComplexity || 0) + (a.afferentCoupling || 0)),
@@ -296,7 +301,7 @@ export async function triggerAudit(
 		const sanitizeScore = (v: unknown) => finitePercent(typeof v === "number" && !Number.isNaN(v) ? Math.round(v) : 0)
 		const entropyReport = spider.computeEntropy()
 		const structuralEntropy = finiteNumber(entropyReport?.score, 0)
-		const metabolicPressure = finiteNumber(spider.computeMetabolicPressure(), 0)
+		const metabolicPressure = finiteNumber(spider.computeMetabolicPressure(monitor), 0)
 
 		const stabilityScore = sanitizeScore(doctorReport.integrityScore)
 		const maintainabilityScore = sanitizeScore((1 - structuralEntropy) * 100)
@@ -372,7 +377,7 @@ export async function triggerAudit(
 			layerScores[layer] = sanitizeScore(data.total / (data.count || 1))
 		}
 
-		const topRecommendations = [...optimizations].sort((a, b) => b.projectedHealthGain - a.projectedHealthGain).slice(0, 3)
+		const topRecommendations = [...optimizations].sort((a, b) => b.projectedHealthGain - a.projectedHealthGain).slice(0, 5) // V215: Increased slightly to 5, but capped at elite recommendations.
 
 		// V230: Forensic Evolution - Delta Analysis and Risk Profiling
 		const lastPoint = history[history.length - 1]
@@ -401,9 +406,7 @@ export async function triggerAudit(
 			driftDetected: false, // Default if not computed
 			driftCount: 0,
 			metabolicPressure,
-			metabolicSinks: Array.isArray(doctorReport.environmentContext?.metabolicSinks)
-				? doctorReport.environmentContext.metabolicSinks
-				: [],
+			metabolicSinks: monitor.getStabilityStats().hotspots.map((h) => h.path), // V215: Real behavioral sinks
 			grade: computeGrade(buildHealth),
 			totalTechnicalDebt: techDebtStr,
 			stabilityScore,
@@ -442,8 +445,8 @@ export async function triggerAudit(
 		})
 
 		Logger.info("[JoyZoning] Audit Complete. Report persisted.")
-	} catch (error: any) {
-		if (isAuditCancelledError(error) || isCancelled()) {
+	} catch (error: unknown) {
+		if (isAuditCancelledError(error as Error) || isCancelled()) {
 			Logger.info(`[Audit] JoyZoning audit cancelled for requestId: ${requestId}`)
 			terminal = true
 			return
@@ -458,7 +461,7 @@ export async function triggerAudit(
 				progress: {
 					processedFiles: 0,
 					totalFiles: 100,
-					currentFile: `Critical Failure: ${error?.message || "Unknown error"}`,
+					currentFile: `Critical Failure: ${error instanceof Error ? error.message : String(error)}`,
 					percentage: 100,
 				},
 			}),

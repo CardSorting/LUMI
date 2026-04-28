@@ -39,6 +39,7 @@ export interface SpiderSnapshot {
 		orphanScore: number
 		couplingScore: number
 		cycles: number
+		cognitiveScore: number
 	}
 }
 
@@ -50,7 +51,9 @@ export interface SpiderEntropyReport {
 		orphanScore: number
 		couplingScore: number
 		cycles: number
+		cognitiveScore: number
 	}
+	entropyVelocity: number // V215: Temporal structural health (rate of change)
 }
 
 export interface SpiderViolation {

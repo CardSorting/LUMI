@@ -189,19 +189,26 @@ export class SpiderEngine {
 	}
 
 	/**
-	 * V205: Metabolic Pressure Monitoring.
-	 * Calculates the current "Metabolic Pressure" (0.0-1.0) by analyzing
-	 * graph density vs. allocated memory substrate.
+	 * V215: Dynamic Metabolic Pressure.
+	 * Calculates pressure by combining physical memory usage, graph density,
+	 * and behavioral activity (churn/doubt) from the MetabolicMonitor.
 	 */
-	public computeMetabolicPressure(): number {
+	public computeMetabolicPressure(monitor?: import("../../integrity/MetabolicMonitor").MetabolicMonitor): number {
 		const used = process.memoryUsage().heapUsed
 		const limit = v8.getHeapStatistics().heap_size_limit
 		const memPressure = used / limit
 
 		const graphDensity = this.nodes.size / 15000 // Normalized to 15k nodes (V215)
-		const pressure = memPressure * 0.8 + Math.min(graphDensity, 1.0) * 0.2
+		const physicalPressure = memPressure * 0.8 + Math.min(graphDensity, 1.0) * 0.2
 
-		return Number(pressure.toFixed(2))
+		if (monitor) {
+			const stats = monitor.getStabilityStats()
+			// Factor in average churn and doubt signal (investigative thrashing)
+			const behavioralPressure = Math.min(1.0, stats.avgPressure / 10 + stats.avgDoubtSignal / 50)
+			return Number((physicalPressure * 0.7 + behavioralPressure * 0.3).toFixed(2))
+		}
+
+		return Number(physicalPressure.toFixed(2))
 	}
 
 	private clearStabilityHeartbeat(): void {
@@ -466,8 +473,8 @@ export class SpiderEngine {
 			symbolDensity: ctx.totalNodes > 0 ? ctx.exportCount / ctx.totalNodes : 0,
 			logicCohesion: ctx.totalNodes > 0 ? ctx.internalReferenceCount / ctx.totalNodes : 0,
 			// V215: Calibrated anyDensity weighting (Logarithmic scaling)
-			// Prevents massive spikes in small files.
-			anyDensity: ctx.totalNodes > 0 ? Math.min(1.0, ctx.anyCasts / Math.sqrt(ctx.totalNodes)) : 0,
+			// Prevents massive spikes in small files. Increased divisor to Math.sqrt(ctx.totalNodes) * 2 for lower sensitivity.
+			anyDensity: ctx.totalNodes > 0 ? Math.min(1.0, ctx.anyCasts / (Math.sqrt(ctx.totalNodes) * 2)) : 0,
 		}
 	}
 
@@ -641,7 +648,8 @@ export class SpiderEngine {
 	}
 
 	public computeEntropy(): SpiderEntropyReport {
-		return this.metrics.computeEntropy(this.nodes)
+		const history = this.persistence.getHistory()
+		return this.metrics.computeEntropy(this.nodes, history)
 	}
 
 	public computeCouplingMetrics() {
@@ -656,7 +664,7 @@ export class SpiderEngine {
 		return this.metrics.detectCycles(this.nodes)
 	}
 
-	public getViolations(): SpiderViolation[] {
+	public getViolations(monitor?: import("../../integrity/MetabolicMonitor").MetabolicMonitor): SpiderViolation[] {
 		this.pruneDeadNodes()
 		const violations: SpiderViolation[] = []
 
@@ -685,7 +693,8 @@ export class SpiderEngine {
 			}
 
 			// 3. SPI-203: Metabolic Pressure (God Modules)
-			if (node.afferentCoupling > 15 && (node.astComplexity || 0) > 1000) {
+			// V215: Significantly increased thresholds to focus on truly massive modules.
+			if (node.afferentCoupling > 30 && (node.astComplexity || 0) > 5000) {
 				violations.push({
 					id: "SPI-203",
 					severity: "ERROR",
@@ -703,6 +712,86 @@ export class SpiderEngine {
 					path: node.path,
 					message: "ORPHANED MODULE: This file is not reachable from the project core or UI entry points.",
 					remediation: "Either integrate this module or prune it if it is legacy wood.",
+				})
+			}
+		}
+
+		// 5. SPI-206: Axiomatic Violations (Layer Leakage)
+		for (const node of this.nodes.values()) {
+			const imports = node.imports || []
+			for (const imp of imports) {
+				const targetId = this.resolver.resolveImportToNodeId(node.path, imp, this.nodes)
+				const targetNode = targetId ? this.nodes.get(targetId) : null
+				if (!targetNode) continue
+
+				// Axiom 1: Infrastructure/Plumbing cannot import Domain
+				if ((node.layer === "infrastructure" || node.layer === "plumbing") && targetNode.layer === "domain") {
+					violations.push({
+						id: "SPI-206",
+						severity: "ERROR",
+						path: node.path,
+						message: `AXIOMATIC VIOLATION: Layer Leakage detected. '${node.layer}' is not permitted to import 'domain' logic (${targetNode.path}).`,
+						remediation: "Invert the dependency using an interface or move the shared logic to 'core'.",
+					})
+				}
+
+				// Axiom 2: Plumbing cannot import Core
+				if (node.layer === "plumbing" && targetNode.layer === "core") {
+					violations.push({
+						id: "SPI-206",
+						severity: "WARN",
+						path: node.path,
+						message: `AXIOMATIC VIOLATION: Plumbing module should not depend on project 'core' (${targetNode.path}).`,
+						remediation: "Ensure 'plumbing' remains stateless and decoupled from business logic.",
+					})
+				}
+			}
+		}
+		// 6. SPI-106: Symbol Resonance (Naming Collisions)
+		const resonance = this.forensic.detectSymbolResonance(this.nodes)
+		for (const r of resonance) {
+			violations.push({
+				id: "SPI-106",
+				severity: "WARN",
+				path: "SUBSTRATE",
+				message: r,
+				remediation: "Rename one of the symbols or unify the logic if they represent the same intent.",
+			})
+		}
+
+		// 7. SPI-207: Structural Bridges (Single Points of Failure)
+		const bridges = this.forensic.detectStructuralBridges(this.nodes)
+		for (const b of bridges) {
+			const node = this.nodes.get(b)
+			if (node && node.layer !== "plumbing") {
+				violations.push({
+					id: "SPI-207",
+					severity: "WARN",
+					path: node.path,
+					message: `STRUCTURAL BRIDGE: This file is an 'Articulated Point' in the graph. It is the sole connection between module clusters. A change here has extreme systemic risk.`,
+					remediation: "Add redundant paths or decouple the clusters to remove this single point of failure.",
+				})
+			}
+		}
+
+		// 8. SPI-205: Immune Response Strategy (V215 Behavioral Sensing)
+		if (monitor) {
+			const response = monitor.getImmuneResponse()
+			if (response.strategy === "STABILIZE") {
+				violations.push({
+					id: "SPI-205",
+					severity: "WARN",
+					path: "PROJECT_ROOT",
+					message: `STRATEGIC ADVISORY (STABILIZE): Project metabolic pressure (${response.pressure}) or investigative doubt (${response.doubt}) is high.`,
+					remediation: "Focus on stabilizing existing modules rather than adding new features.",
+				})
+			} else if (response.strategy === "PURGE") {
+				violations.push({
+					id: "SPI-205",
+					severity: "WARN",
+					path: "PROJECT_ROOT",
+					message: "STRATEGIC ADVISORY (PURGE): Stagnant substrate detected. High volume of unused files identified.",
+					remediation: "Consider a cleanup turn to remove legacy wood and legacy re-exports.",
 				})
 			}
 		}
@@ -810,11 +899,17 @@ export class SpiderEngine {
 					const removed = node.exports.filter((e) => !newExports.symbols.includes(e))
 
 					if (removed.length > 0) {
+						const sampleDependents = node.dependents.slice(0, 3).map((d) => path.basename(d))
+						const dependentList =
+							sampleDependents.length > 0
+								? ` Sample affected files: ${sampleDependents.join(", ")}${node.dependents.length > 3 ? "..." : ""}`
+								: ""
+
 						advisories.push({
 							id: "SPI-105",
 							severity: "WARN",
 							path: normPath,
-							message: `SUBSTRATE VIBRATION: You are removing/renaming ${removed.length} export(s) in a high-coupling file (${node.afferentCoupling} dependents). This WILL break dependents project-wide.`,
+							message: `SUBSTRATE VIBRATION: You are removing/renaming ${removed.length} export(s) in a high-coupling file (${node.afferentCoupling} dependents). This WILL break dependents project-wide.${dependentList}`,
 						})
 					}
 				}
@@ -1113,8 +1208,8 @@ export class SpiderEngine {
 						exports = null
 						metrics = null
 						namingScore = null
-					} catch (e: any) {
-						Logger.warn(`[SpiderEngine] Failed to index ${f}: ${e.message}`)
+					} catch (e: unknown) {
+						Logger.warn(`[SpiderEngine] Failed to index ${f}: ${(e as Error).message}`)
 					}
 				}
 				// Throttling
@@ -1353,11 +1448,15 @@ export class SpiderEngine {
 		const imported = new Set<string>()
 		const used = new Set<string>()
 
-		// V110: Project-Graph Cross-Reference (Forensic calibration)
-		const allProjectExports = new Set<string>()
+		// V215: Project-Graph Cross-Reference (Apothecary Scope Sensing)
+		const exportToPath = new Map<string, string>()
 		for (const node of this.nodes.values()) {
 			for (const e of node.exports) {
-				allProjectExports.add(e)
+				// We prefer the shortest path (likely the primary definition or barrel)
+				const existingPath = exportToPath.get(e)
+				if (!existingPath || node.path.length < existingPath.length) {
+					exportToPath.set(e, node.path)
+				}
 			}
 		}
 
@@ -1476,9 +1575,9 @@ export class SpiderEngine {
 			"Header",
 		])
 
-		return Array.from(used).filter(
-			(s) => !declared.has(s) && !imported.has(s) && !globals.has(s) && allProjectExports.has(s), // V110: The Provable Provision check
-		)
+		return Array.from(used)
+			.filter((s) => !declared.has(s) && !imported.has(s) && !globals.has(s) && exportToPath.has(s))
+			.map((s) => `${s} (from ${exportToPath.get(s)})`)
 	}
 
 	/**
@@ -1491,7 +1590,15 @@ export class SpiderEngine {
 
 		const check = (name: string, regex: RegExp) => {
 			total++
-			if (regex.test(name)) valid++
+			if (regex.test(name)) {
+				// V215: Ambiguity Penalty
+				const isAmbiguous = /(Manager|Helper|Utils|Data|Info|Common|Base)$|^[A-Z]?[a-z]{1,2}$/.test(name)
+				if (isAmbiguous) {
+					valid += 0.5 // 50% penalty for generic naming
+				} else {
+					valid++
+				}
+			}
 		}
 
 		const visit = (node: ts.Node) => {
@@ -1517,7 +1624,7 @@ export class SpiderEngine {
 						const name = nameNode.text
 						const isConst = (node.parent.flags & ts.NodeFlags.Const) !== 0
 						// V215: Safe Top-Level Sensing
-						const isTopLevel = node.parent && node.parent.parent && ts.isSourceFile(node.parent.parent.parent)
+						const isTopLevel = node.parent?.parent && ts.isSourceFile(node.parent.parent.parent)
 
 						if (isConst && isTopLevel && (/^[A-Z][A-Z0-9_]*$/.test(name) || /^[a-z][a-zA-Z0-9]*$/.test(name))) {
 							total++

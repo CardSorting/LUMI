@@ -73,12 +73,25 @@ export class SovereignOptimizer {
 			}
 		}
 
-		// V215: Highest Gravity Rule - Recommends the layer with the most dependencies
+		// V215: Weighted Structural Gravity - Dependencies pull more strongly based on layer seniority.
+		const weights: Record<string, number> = { domain: 3.0, core: 2.0, infrastructure: 1.5, ui: 1.0, plumbing: 1.0 }
 		let bestLayer: Layer = node.layer
-		let maxCount = 0
+		let maxWeightedCount = 0
+
+		const layerWeightedCounts: Record<string, number> = {
+			domain: 0,
+			core: 0,
+			infrastructure: 0,
+			ui: 0,
+			plumbing: 0,
+		}
+
 		for (const [layer, count] of Object.entries(layerCounts)) {
-			if (count > maxCount) {
-				maxCount = count
+			const weight = weights[layer] || 1.0
+			const weightedCount = count * weight
+			layerWeightedCounts[layer] = weightedCount
+			if (weightedCount > maxWeightedCount) {
+				maxWeightedCount = weightedCount
 				bestLayer = layer as Layer
 			}
 		}
@@ -88,11 +101,12 @@ export class SovereignOptimizer {
 		const isSmall = node.astComplexity < maxComplexity && (node.logicDensity || 0) < 0.05
 		const matchesCurrentLayerPath = node.path.includes(`/${node.layer}/`)
 
-		if (isSmall && maxCount < 2 && !matchesCurrentLayerPath) {
+		if (isSmall && maxWeightedCount < 2 && !matchesCurrentLayerPath) {
 			return "plumbing"
 		}
 
-		if (maxCount > (node.imports || []).length * 0.75) return bestLayer // V215: Increased threshold to 75% for gravity moves
+		const totalImports = (node.imports || []).length
+		if (maxWeightedCount > totalImports * 1.5) return bestLayer // V215: Weighted gravity threshold (average pull > 1.5)
 
 		return node.layer || "plumbing"
 	}

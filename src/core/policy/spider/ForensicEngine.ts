@@ -191,7 +191,10 @@ export class ForensicEngine {
 		const globalConsumption = new Map<string, Set<string>>()
 
 		// 1. Build Global Consumption Map (TargetNodeID -> Set of Symbols)
+		// V215: Forensic Filter - We only count consumption from 'Live' (non-orphaned) nodes.
 		for (const node of nodes.values()) {
+			if (node.orphaned && node.layer !== "plumbing") continue // Skip orphans (except plumbing helpers)
+
 			for (const [targetId, symbols] of Object.entries(node.consumptions)) {
 				if (!globalConsumption.has(targetId)) {
 					globalConsumption.set(targetId, new Set())
@@ -209,15 +212,31 @@ export class ForensicEngine {
 		for (const node of nodes.values()) {
 			const consumedSymbols = globalConsumption.get(node.id) || new Set()
 
-			// V16: Namespace imports or specific root files prevent pruning
+			// V215: Elite Deadwood Suppression
+			// Namespace imports, root files, or barrel files (index.ts) prevent pruning.
 			if (consumedSymbols.has("*")) continue
-			if (node.path === "src/main.ts" || node.path === "src/index.ts" || node.path === "src/extension.ts") continue
+			if (
+				node.path === "src/main.ts" ||
+				node.path.endsWith("/index.ts") ||
+				node.path === "src/extension.ts" ||
+				node.isInterface // V215: Interfaces are low-cost architectural markers
+			) {
+				continue
+			}
 
-			for (const exp of node.exports) {
-				// V160: Forensic Pruning - default exports often used dynamically
-				if (exp === "default") continue
+			// V215: Zombie Module Detection
+			const unusedExports = node.exports.filter((exp) => exp !== "default" && !consumedSymbols.has(exp))
+			const isZombie = unusedExports.length === node.exports.length && node.exports.length > 0
 
-				if (!consumedSymbols.has(exp)) {
+			if (isZombie) {
+				unusedViolations.push(`[SPI-103] ZOMBIE MODULE: ${node.path} (100% of exports are unused).`)
+				continue
+			}
+
+			for (const exp of unusedExports) {
+				// V215: Noise Filtering
+				// Only flag unused exports if the file is significant or the symbol name is unique.
+				if (node.astComplexity > 1000 || node.afferentCoupling > 5) {
 					unusedViolations.push(`[SPI-103] UNUSED EXPORT: ${node.path} -> ${exp}`)
 				}
 			}
@@ -255,22 +274,166 @@ export class ForensicEngine {
 		const totalNodes = nodes.size
 		if (totalNodes === 0) return results
 
+		// 1. Initial Pass: Direct Afferent Coupling
 		for (const node of nodes.values()) {
-			// Afferent Coupling (Incoming dependencies)
 			const directDependents = node.dependents.length
-
-			// V215: Calibrated Industrial Blast Radius
-			// Normalizes impact based on codebase scale with a safety floor for small projects.
 			const layerWeight = node.layer === "domain" ? 2.0 : node.layer === "core" ? 1.5 : 1.0
-			const scaleFactor = Math.max(10, totalNodes) * 0.1
-			const blastRadius = Math.min((directDependents * layerWeight) / scaleFactor, 1.0)
+			const scaleFactor = Math.max(50, totalNodes) * 0.1
+			let blastRadius = Math.min((directDependents * layerWeight) / scaleFactor, 1.0)
 
-			// Critical Threshold: If a node affects > 10% of the codebase, it's Fragile.
-			const isFragile = blastRadius > 0.35 || ((node.layer === "domain" || node.layer === "core") && directDependents > 3)
+			if (directDependents < 5) {
+				blastRadius *= 0.5
+			}
 
-			results.set(node.id, { blastRadius, isFragile })
+			results.set(node.id, { blastRadius, isFragile: false })
 		}
+
+		// 2. Deep Pass: Recursive Blast Radius (Second-Order Impact)
+		// We add a fraction of each dependent's blast radius to the target.
+		for (const node of nodes.values()) {
+			let recursiveImpact = 0
+			for (const depId of node.dependents) {
+				const depRadius = results.get(depId)?.blastRadius || 0
+				recursiveImpact += depRadius * 0.2 // 20% of dependent's impact propagates up
+			}
+
+			const stats = results.get(node.id)
+			if (stats) {
+				stats.blastRadius = Math.min(1.0, stats.blastRadius + recursiveImpact)
+				// V215: Root Vulnerability Threshold
+				stats.isFragile = stats.blastRadius > 0.55 || (node.afferentCoupling > 10 && stats.blastRadius > 0.4)
+			}
+		}
+
 		return results
+	}
+
+	/**
+	 * V215: Structural Bridge Detection.
+	 * Identifies "Articulated Points"—nodes that, if removed, would increase the
+	 * number of disconnected components in the architectural graph.
+	 * These represent 'Single Points of Failure'.
+	 */
+	public detectStructuralBridges(nodes: Map<string, SpiderNode>): string[] {
+		const nodeIds = Array.from(nodes.keys())
+		if (nodeIds.length < 3) return []
+
+		const disc = new Map<string, number>()
+		const low = new Map<string, number>()
+		const parent = new Map<string, string | null>()
+		const ap = new Set<string>()
+		let time = 0
+
+		const dfs = (u: string) => {
+			let children = 0
+			disc.set(u, ++time)
+			low.set(u, time)
+
+			const node = nodes.get(u)
+			if (!node) return
+
+			// We treat the graph as undirected for bridge detection (connectivity is what matters)
+			const neighbors = new Set([
+				...(node.imports
+					.map((i) => this.resolver.resolveImportToNodeId(node.path, i, nodes))
+					.filter(Boolean) as string[]),
+				...node.dependents,
+			])
+
+			for (const v of neighbors) {
+				if (!disc.has(v)) {
+					children++
+					parent.set(v, u)
+					dfs(v)
+
+					const lowU = low.get(u) ?? 0
+					const lowV = low.get(v) ?? 0
+					low.set(u, Math.min(lowU, lowV))
+
+					if (parent.get(u) === null && children > 1) ap.add(u)
+					if (parent.get(u) !== null && lowV >= (disc.get(u) ?? 0)) ap.add(u)
+				} else if (v !== parent.get(u)) {
+					low.set(u, Math.min(low.get(u) ?? 0, disc.get(v) ?? 0))
+				}
+			}
+		}
+
+		for (const id of nodeIds) {
+			if (!disc.has(id)) {
+				parent.set(id, null)
+				dfs(id)
+			}
+		}
+
+		return Array.from(ap)
+	}
+	/**
+	 * V215: Symbol Resonance Detection.
+	 * Identifies symbols with the same name but significantly different logic signatures.
+	 * High resonance indicates potential logic duplication or naming collisions.
+	 */
+	public detectSymbolResonance(nodes: Map<string, SpiderNode>): string[] {
+		const resonanceViolations: string[] = []
+		const symbolsByName = new Map<string, SpiderNode[]>()
+
+		for (const node of nodes.values()) {
+			for (const symbol of node.exports) {
+				if (!symbolsByName.has(symbol)) {
+					symbolsByName.set(symbol, [])
+				}
+				symbolsByName.get(symbol)?.push(node)
+			}
+		}
+
+		for (const [name, nodesArray] of symbolsByName.entries()) {
+			if (nodesArray.length > 1) {
+				const baseNode = nodesArray[0]
+				for (let i = 1; i < nodesArray.length; i++) {
+					const targetNode = nodesArray[i]
+					const complexityDiff = Math.abs(baseNode.astComplexity - targetNode.astComplexity)
+					const densityDiff = Math.abs(baseNode.logicDensity - targetNode.logicDensity)
+
+					if (complexityDiff > 500 || densityDiff > 0.1) {
+						resonanceViolations.push(
+							`[SPI-106] SYMBOL RESONANCE: '${name}' is exported from both ${path.basename(baseNode.path)} and ${path.basename(targetNode.path)} with diverging logic. Possible naming collision or duplication.`,
+						)
+					}
+				}
+			}
+		}
+
+		return resonanceViolations
+	}
+
+	/**
+	 * V215: Implicit Interface Recognition.
+	 * Identifies structural duplication where multiple classes share identical
+	 * method signatures without a formal abstraction.
+	 */
+	public findImplicitInterfaces(nodes: Map<string, SpiderNode>): string[] {
+		const interfaceViolations: string[] = []
+		const signatureMap = new Map<string, string[]>()
+
+		for (const node of nodes.values()) {
+			if (node.exports.length > 2) {
+				const signature = [...node.exports].sort().join("|")
+				if (!signatureMap.has(signature)) {
+					signatureMap.set(signature, [])
+				}
+				signatureMap.get(signature)?.push(node.path)
+			}
+		}
+
+		for (const [sig, paths] of signatureMap.entries()) {
+			if (paths.length > 1) {
+				const sampleNames = sig.split("|").slice(0, 3).join(", ")
+				interfaceViolations.push(
+					`[SPI-107] IMPLICIT INTERFACE: ${paths.length} modules share an identical structural signature (${sampleNames}${sig.split("|").length > 3 ? "..." : ""}). Consider formalizing a shared interface.`,
+				)
+			}
+		}
+
+		return interfaceViolations
 	}
 
 	public getImportedSymbols(sourceFile: ts.SourceFile): { specifier: string; symbols: string[] }[] {

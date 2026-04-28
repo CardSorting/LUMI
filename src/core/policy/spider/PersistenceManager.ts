@@ -95,4 +95,64 @@ export class PersistenceManager {
 		if (this.snapshots.length === 0) return null
 		return v8.deserialize(this.snapshots[this.snapshots.length - 1])
 	}
+
+	/**
+	 * V215: Industrial Checkpointing.
+	 * Creates a long-lived binary checkpoint of the current substrate.
+	 */
+	public createCheckpoint(nodes: Map<string, SpiderNode>): Buffer {
+		return this.serialize(nodes, { checkpoint: true, timestamp: Date.now() })
+	}
+
+	/**
+	 * V215: Silent Drift Detection.
+	 * Compares the live graph against a binary checkpoint to find non-session changes.
+	 */
+	public compareToCheckpoint(current: Map<string, SpiderNode>, checkpoint: Buffer): string[] {
+		const baseline = this.deserialize(checkpoint)
+		const drifts: string[] = []
+
+		const oldNodes = new Map(baseline.nodes)
+		for (const [id, node] of current) {
+			const oldNode = oldNodes.get(id)
+			if (!oldNode) {
+				drifts.push(`[DRIFT] NEW MODULE DETECTED: ${id}`)
+				continue
+			}
+
+			if (node.hash !== oldNode.hash) {
+				drifts.push(`[DRIFT] CONTENT MUTATION: ${id}`)
+			}
+
+			if (node.layer !== oldNode.layer) {
+				drifts.push(`[DRIFT] LAYER DISPLACEMENT: ${id} (${oldNode.layer} -> ${node.layer})`)
+			}
+		}
+
+		return drifts
+	}
+
+	public getHistory(): number[] {
+		return this.snapshots.map((s) => {
+			const snap = v8.deserialize(s) as SpiderSnapshot
+			return snap.entropyScore
+		})
+	}
+
+	/**
+	 * V215: Substrate Checksumming.
+	 * Generates a single sha256 hash representing the entire structural graph.
+	 */
+	public computeSubstrateChecksum(nodes: Map<string, SpiderNode>): string {
+		const hasher = crypto.createHash("sha256")
+		const sortedIds = Array.from(nodes.keys()).sort()
+		for (const id of sortedIds) {
+			const node = nodes.get(id)
+			if (node) {
+				hasher.update(id)
+				hasher.update(node.hash)
+			}
+		}
+		return hasher.digest("hex")
+	}
 }
