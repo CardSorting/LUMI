@@ -465,17 +465,17 @@ export class SpiderEngine {
 			exportCount: 0,
 			internalReferenceCount: 0,
 			anyCasts: 0,
+			cognitiveComplexity: 0,
 		}
-		ts.forEachChild(sourceFile, (node) => this.visitMetrics(node, ctx))
+		ts.forEachChild(sourceFile, (node) => this.visitMetrics(node, ctx, 0))
 		return {
 			logicDensity: ctx.totalNodes > 0 ? ctx.logicNodes / ctx.totalNodes : 0,
 			ioEntropy: ctx.totalImports > 0 ? ctx.ioImports / ctx.totalImports : 0,
 			astComplexity: ctx.totalNodes,
 			symbolDensity: ctx.totalNodes > 0 ? ctx.exportCount / ctx.totalNodes : 0,
 			logicCohesion: ctx.totalNodes > 0 ? ctx.internalReferenceCount / ctx.totalNodes : 0,
-			// V215: Calibrated anyDensity weighting (Logarithmic scaling)
-			// Prevents massive spikes in small files. Increased divisor to Math.sqrt(ctx.totalNodes) * 2 for lower sensitivity.
 			anyDensity: ctx.totalNodes > 0 ? Math.min(1.0, ctx.anyCasts / (Math.sqrt(ctx.totalNodes) * 2)) : 0,
+			cognitiveComplexity: ctx.cognitiveComplexity,
 		}
 	}
 
@@ -489,7 +489,9 @@ export class SpiderEngine {
 			exportCount: number
 			internalReferenceCount: number
 			anyCasts: number
+			cognitiveComplexity: number
 		},
+		depth: number,
 	) {
 		ctx.totalNodes++
 		const kind = node.kind
@@ -509,9 +511,12 @@ export class SpiderEngine {
 			kind === ts.SyntaxKind.ForOfStatement ||
 			kind === ts.SyntaxKind.WhileStatement ||
 			kind === ts.SyntaxKind.DoStatement ||
-			kind === ts.SyntaxKind.SwitchStatement
+			kind === ts.SyntaxKind.SwitchStatement ||
+			kind === ts.SyntaxKind.ConditionalExpression ||
+			kind === ts.SyntaxKind.BinaryExpression
 		) {
 			ctx.logicNodes++
+			ctx.cognitiveComplexity += 1 + depth
 		}
 		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
 			ctx.totalImports++
@@ -534,7 +539,18 @@ export class SpiderEngine {
 			ctx.internalReferenceCount++
 		}
 
-		ts.forEachChild(node, (child) => this.visitMetrics(child, ctx))
+		ts.forEachChild(node, (child) => {
+			const isNesting =
+				kind === ts.SyntaxKind.IfStatement ||
+				kind === ts.SyntaxKind.ForStatement ||
+				kind === ts.SyntaxKind.WhileStatement ||
+				kind === ts.SyntaxKind.SwitchStatement ||
+				kind === ts.SyntaxKind.ArrowFunction ||
+				kind === ts.SyntaxKind.FunctionDeclaration ||
+				kind === ts.SyntaxKind.MethodDeclaration
+
+			this.visitMetrics(child, ctx, isNesting ? depth + 1 : depth)
+		})
 	}
 
 	private checkDeepAny(typeNode: ts.TypeNode | undefined, ctx: { anyCasts: number }) {

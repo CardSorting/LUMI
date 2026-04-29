@@ -20,7 +20,7 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const [report, setReport] = useState<JoyZoningAuditResponse | null>(null)
 	const [progress, setProgress] = useState<JoyZoningAuditProgress | null>(null)
 	const [previewPlan, setPreviewPlan] = useState<string | null>(null)
-	const [selectedOptimizations, setSelectedOptimizations] = useState<Set<number>>(new Set())
+	const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set())
 	const [batchManifest, setBatchManifest] = useState<string | null>(null)
 
 	const [status, setStatus] = useState<"idle" | "starting" | "streaming" | "completed" | "error" | "cancelled">("idle")
@@ -165,30 +165,54 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 		}
 	}
 
-	const toggleOptimizationSelection = (index: number) => {
-		setSelectedOptimizations((prev) => {
+	const toggleTaskSelection = (action: string, path: string) => {
+		const key = `${action}|${path}`
+		setSelectedTasks((prev) => {
 			const next = new Set(prev)
-			if (next.has(index)) next.delete(index)
-			else next.add(index)
+			if (next.has(key)) next.delete(key)
+			else next.add(key)
 			return next
 		})
 	}
 
+	const addAllVisibleTasks = () => {
+		const next = new Set(selectedTasks)
+		if (activeTab === "fixes") {
+			violations
+				.filter((v) => !selectedCategory || v.impactArea === selectedCategory)
+				.forEach((v) => next.add(`FIX_STRUCTURAL_VIOLATION|${v.path}`))
+		} else if (activeTab === "improvements") {
+			optimizations
+				.filter((opt) => !selectedCategory || opt.category === selectedCategory)
+				.forEach((opt) => next.add(`${opt.action}|${opt.path}`))
+		}
+		setSelectedTasks(next)
+	}
+
+	const autoQueueStrategy = () => {
+		const next = new Set(selectedTasks)
+		// Add all violations (highest priority)
+		violations.forEach((v) => next.add(`FIX_STRUCTURAL_VIOLATION|${v.path}`))
+		// Add top 5 optimizations by health gain
+		optimizations
+			.sort((a, b) => (b.projectedHealthGain || 0) - (a.projectedHealthGain || 0))
+			.slice(0, 5)
+			.forEach((opt) => next.add(`${opt.action}|${opt.path}`))
+		setSelectedTasks(next)
+		setActiveTab("batch")
+	}
+
 	const previewBatchManifest = async () => {
-		if (selectedOptimizations.size === 0) return
+		if (selectedTasks.size === 0) return
 
 		setLoading(true)
 		setAuditLaunchError(null)
 		setAuditLaunchMessage(null)
 
 		try {
-			const requests = Array.from(selectedOptimizations).map((index) => {
-				const opt = optimizations[index]
-				return {
-					action: opt.action,
-					path: opt.path,
-					dryRun: true,
-				}
+			const requests = Array.from(selectedTasks).map((key) => {
+				const [action, path] = key.split("|")
+				return { action, path, dryRun: true }
 			})
 
 			const response = await JoyZoningServiceClient.executeBatchRefactor({
@@ -210,20 +234,16 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 	}
 
 	const handleBatchRefactor = async () => {
-		if (selectedOptimizations.size === 0) return
+		if (selectedTasks.size === 0) return
 
 		setLoading(true)
 		setAuditLaunchError(null)
 		setAuditLaunchMessage(null)
 
 		try {
-			const requests = Array.from(selectedOptimizations).map((index) => {
-				const opt = optimizations[index]
-				return {
-					action: opt.action,
-					path: opt.path,
-					dryRun: false,
-				}
+			const requests = Array.from(selectedTasks).map((key) => {
+				const [action, path] = key.split("|")
+				return { action, path, dryRun: false }
 			})
 
 			const response = await JoyZoningServiceClient.executeBatchRefactor({
@@ -235,7 +255,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 				setLaunchingTaskId("batch")
 				setAuditLaunchMessage(response.message)
 				setBatchManifest(null) // Reset after launch
-				setSelectedOptimizations(new Set())
+				setSelectedTasks(new Set())
 				setActiveTab("overview") // Redirect to overview to see progress
 			} else {
 				setAuditLaunchError(response.message)
@@ -296,19 +316,32 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 					</NavItem>
 					<NavItem $active={activeTab === "fixes"} onClick={() => setActiveTab("fixes")}>
 						<NavIcon>🚨</NavIcon>
-						<NavLabel>Urgent Fixes {violations.length > 0 ? `(${violations.length})` : ""}</NavLabel>
+						<NavLabel>Fixes {violations.length > 0 ? `(${violations.length})` : ""}</NavLabel>
 					</NavItem>
 					<NavItem $active={activeTab === "improvements"} onClick={() => setActiveTab("improvements")}>
 						<NavIcon>✨</NavIcon>
-						<NavLabel>Improvements {optimizations.length > 0 ? `(${optimizations.length})` : ""}</NavLabel>
+						<NavLabel>Upgrades {optimizations.length > 0 ? `(${optimizations.length})` : ""}</NavLabel>
 					</NavItem>
-					{selectedOptimizations.size > 0 && (
-						<NavItem $active={activeTab === "batch"} onClick={() => setActiveTab("batch")}>
+					<NavItem
+						$active={activeTab === "batch"}
+						onClick={() => setActiveTab("batch")}
+						style={{
+							opacity: selectedTasks.size > 0 ? 1 : 0.5,
+							pointerEvents: selectedTasks.size > 0 ? "auto" : "none",
+						}}>
+						<div style={{ position: "relative" }}>
 							<NavIcon>🚀</NavIcon>
-							<NavLabel>Launch Queue ({selectedOptimizations.size})</NavLabel>
-						</NavItem>
-					)}
+							{selectedTasks.size > 0 && <NavBadge>{selectedTasks.size}</NavBadge>}
+						</div>
+						<NavLabel>Launch Queue</NavLabel>
+					</NavItem>
 				</NavGroup>
+
+				{selectedTasks.size > 0 && activeTab !== "batch" && (
+					<FloatingActionButton onClick={() => setActiveTab("batch")}>
+						<span>🚀</span> Launch Strategy ({selectedTasks.size})
+					</FloatingActionButton>
+				)}
 				{loading && (
 					<ScanningNotice>
 						<ScanningIcon>🔍</ScanningIcon>
@@ -333,16 +366,33 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 				{activeTab === "overview" && report && (
 					<TabView>
 						{violations.length > 0 && (
-							<NextActionCard onClick={() => setActiveTab("fixes")} style={{ marginBottom: "16px" }}>
-								<NextActionIcon>🚀</NextActionIcon>
+							<NextActionCard
+								onClick={autoQueueStrategy}
+								style={{
+									marginBottom: "16px",
+									background:
+										"linear-gradient(135deg, rgba(24, 144, 255, 0.15) 0%, rgba(24, 144, 255, 0.05) 100%)",
+									border: "1px solid rgba(24, 144, 255, 0.3)",
+								}}>
+								<NextActionIcon>⚡</NextActionIcon>
 								<NextActionContent>
-									<NextActionTitle>Priority: High Impact Fixes</NextActionTitle>
+									<NextActionTitle>One-Click Health Strategy</NextActionTitle>
 									<NextActionDesc>
-										We found <strong>{violations.length} issues</strong> that are dragging down your project
-										health. Fix them now to stabilize your codebase.
+										Auto-queue <strong>{violations.length} critical fixes</strong> and top optimizations to
+										maximize health gains instantly.
 									</NextActionDesc>
 								</NextActionContent>
-								<NextActionArrow>→</NextActionArrow>
+								<NextActionArrow
+									style={{
+										background: "var(--vscode-button-background)",
+										color: "white",
+										borderRadius: "4px",
+										padding: "4px 12px",
+										fontSize: "10px",
+										fontWeight: "bold",
+									}}>
+									GENERATE & LAUNCH
+								</NextActionArrow>
 							</NextActionCard>
 						)}
 						<HealthSnapshot $health={report.buildHealth}>
@@ -665,6 +715,11 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 									{cat}
 								</FilterBadge>
 							))}
+							<SecondaryButton
+								onClick={addAllVisibleTasks}
+								style={{ marginLeft: "auto", padding: "4px 10px", fontSize: "10px" }}>
+								Add All Visible
+							</SecondaryButton>
 						</FilterGroup>
 						<SearchInput
 							onChange={(e) => setFixesSearch(e.target.value)}
@@ -684,9 +739,21 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 											lower(v.message).includes(fixesSearch.toLowerCase())),
 								)
 								.map((v, i) => (
-									<ListItem $type="VIOLATION" key={`${v.path}-${i}`}>
+									<ListItem
+										$type="VIOLATION"
+										key={`${v.path}-${i}`}
+										onClick={() => toggleTaskSelection("FIX_STRUCTURAL_VIOLATION", v.path)}
+										style={{
+											cursor: "pointer",
+											border: selectedTasks.has(`FIX_STRUCTURAL_VIOLATION|${v.path}`)
+												? "1px solid var(--vscode-button-background)"
+												: "1px solid transparent",
+										}}>
 										<ListItemContent>
 											<BadgeGroup>
+												{selectedTasks.has(`FIX_STRUCTURAL_VIOLATION|${v.path}`) && (
+													<Badge $type="HIGH">QUEUED</Badge>
+												)}
 												<Badge $type={v.riskLevel || "HIGH"}>{v.riskLevel || "HIGH"} RISK</Badge>
 												<Badge $type="CATEGORY">{v.impactArea || "STABILITY"}</Badge>
 											</BadgeGroup>
@@ -700,18 +767,33 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 											<ListItemRemediation>Repair Strategy: {v.remediation}</ListItemRemediation>
 											<ListItemPath>{v.path}</ListItemPath>
 										</ListItemContent>
-										<ActionGroup>
+										<ActionGroup onClick={(e) => e.stopPropagation()}>
 											<ActionButton
-												disabled={launchingTaskId === `FIX_STRUCTURAL_VIOLATION:${v.path}`}
-												onClick={() => executeRefactor("FIX_STRUCTURAL_VIOLATION", v.path)}>
-												{launchingTaskId === `FIX_STRUCTURAL_VIOLATION:${v.path}`
-													? "Fixing..."
-													: "Apply Resolution"}
+												onClick={() => toggleTaskSelection("FIX_STRUCTURAL_VIOLATION", v.path)}
+												style={{
+													background: selectedTasks.has(`FIX_STRUCTURAL_VIOLATION|${v.path}`)
+														? "rgba(255,255,255,0.1)"
+														: "var(--vscode-button-background)",
+												}}>
+												{selectedTasks.has(`FIX_STRUCTURAL_VIOLATION|${v.path}`)
+													? "Remove"
+													: "Add to Queue"}
 											</ActionButton>
 										</ActionGroup>
 									</ListItem>
 								))}
 						</List>
+
+						{selectedTasks.size > 0 && (
+							<BulkRefactorBar>
+								<div style={{ fontSize: "12px", fontWeight: "bold" }}>
+									{selectedTasks.size} tasks staged for orchestration
+								</div>
+								<div style={{ display: "flex", gap: "8px" }}>
+									<ActionButton onClick={previewBatchManifest}>Preview & Launch</ActionButton>
+								</div>
+							</BulkRefactorBar>
+						)}
 					</TabView>
 				)}
 
@@ -746,7 +828,22 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 							))}
 						</MatrixContainer>
 
-						<SectionTitle style={{ marginBottom: "8px" }}>Maintainability Roadmap</SectionTitle>
+						<div
+							style={{
+								display: "flex",
+								justifyContent: "space-between",
+								alignItems: "center",
+								marginBottom: "8px",
+							}}>
+							<SectionTitle style={{ margin: 0 }}>Maintainability Roadmap</SectionTitle>
+							{selectedTasks.size > 0 && (
+								<SecondaryButton
+									onClick={() => setSelectedTasks(new Set())}
+									style={{ padding: "4px 8px", fontSize: "10px" }}>
+									Clear Selection
+								</SecondaryButton>
+							)}
+						</div>
 						<FilterGroup>
 							{["ALL", "STABILITY", "PERFORMANCE", "MAINTAINABILITY"].map((cat) => (
 								<FilterBadge
@@ -756,6 +853,11 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 									{cat}
 								</FilterBadge>
 							))}
+							<SecondaryButton
+								onClick={addAllVisibleTasks}
+								style={{ marginLeft: "auto", padding: "4px 10px", fontSize: "10px" }}>
+								Add All Visible
+							</SecondaryButton>
 						</FilterGroup>
 						<SearchInput
 							onChange={(e) => setOptsSearch(e.target.value)}
@@ -779,16 +881,18 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								.map((opt, i) => (
 									<ListItem
 										key={`${opt.path}-${i}`}
-										onClick={() => toggleOptimizationSelection(i)}
+										onClick={() => toggleTaskSelection(opt.action, opt.path)}
 										style={{
 											cursor: "pointer",
-											border: selectedOptimizations.has(i)
+											border: selectedTasks.has(`${opt.action}|${opt.path}`)
 												? "1px solid var(--vscode-button-background)"
 												: "1px solid transparent",
 										}}>
 										<ListItemContent>
 											<BadgeGroup>
-												{selectedOptimizations.has(i) && <Badge $type="HIGH">SELECTED</Badge>}
+												{selectedTasks.has(`${opt.action}|${opt.path}`) && (
+													<Badge $type="HIGH">QUEUED</Badge>
+												)}
 												<Badge $type={opt.impact}>{opt.impact} IMPACT</Badge>
 												<Badge $type="EFFORT">{opt.effort} EFFORT</Badge>
 												<Badge $type="CATEGORY">{opt.category}</Badge>
@@ -801,29 +905,27 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 											)}
 										</ListItemContent>
 										<ActionGroup onClick={(e) => e.stopPropagation()}>
-											<SecondaryButton onClick={() => executeRefactor(opt.action, opt.path, true)}>
-												View Plan
-											</SecondaryButton>
 											<ActionButton
-												disabled={launchingTaskId === `${opt.action}:${opt.path}`}
-												onClick={() => executeRefactor(opt.action, opt.path)}>
-												{launchingTaskId === `${opt.action}:${opt.path}`
-													? "Applying..."
-													: "Apply Optimization"}
+												onClick={() => toggleTaskSelection(opt.action, opt.path)}
+												style={{
+													background: selectedTasks.has(`${opt.action}|${opt.path}`)
+														? "rgba(255,255,255,0.1)"
+														: "var(--vscode-button-background)",
+												}}>
+												{selectedTasks.has(`${opt.action}|${opt.path}`) ? "Remove" : "Add to Queue"}
 											</ActionButton>
 										</ActionGroup>
 									</ListItem>
 								))}
 						</List>
 
-						{selectedOptimizations.size > 0 && (
+						{selectedTasks.size > 0 && (
 							<BulkRefactorBar>
 								<div style={{ fontSize: "12px", fontWeight: "bold" }}>
-									{selectedOptimizations.size} items staged for Apex Orchestration
+									{selectedTasks.size} tasks staged for orchestration
 								</div>
 								<div style={{ display: "flex", gap: "8px" }}>
-									<SecondaryButton onClick={() => setSelectedOptimizations(new Set())}>Clear</SecondaryButton>
-									<ActionButton onClick={previewBatchManifest}>Preview Apex Manifest</ActionButton>
+									<ActionButton onClick={previewBatchManifest}>Preview & Launch</ActionButton>
 								</div>
 							</BulkRefactorBar>
 						)}
@@ -1782,6 +1884,50 @@ const NavLabel = styled.div`
   text-transform: uppercase;
   letter-spacing: 0.5px;
   opacity: 0.8;
+`
+
+const NavBadge = styled.div`
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  background: #ff4d4f;
+  color: white;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 10px;
+  border: 1px solid var(--vscode-sideBar-background);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  min-width: 14px;
+  text-align: center;
+`
+
+const FloatingActionButton = styled.button`
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  background: var(--vscode-button-background);
+  color: white;
+  border: none;
+  border-radius: 30px;
+  padding: 12px 24px;
+  font-weight: bold;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    transform: scale(1.05);
+    background: #40a9ff;
+  }
+  
+  &:active {
+    transform: scale(0.95);
+  }
 `
 
 const TabGroup = styled.div`

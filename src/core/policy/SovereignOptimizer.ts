@@ -172,6 +172,13 @@ export class SovereignOptimizer {
 	): Layer | null {
 		if (!_engine || !_engine.nodes) return node.layer || "plumbing"
 
+		// V310: Archetypal Immunity
+		// UI components (TSX/JSX) are archetypally bound to the UI layer.
+		// They often import heavily from Core/Domain but must remain in the UI substrate.
+		if (node.path.endsWith(".tsx") || node.path.endsWith(".jsx")) {
+			return "ui"
+		}
+
 		const plumbing = configs?.plumbing || SovereignPolicy.getInstance(_engine.cwd || "").getLayerConfig("plumbing")
 		const layerCounts: Record<string, number> = { domain: 0, core: 0, infrastructure: 0, ui: 0, plumbing: 0 }
 
@@ -188,18 +195,9 @@ export class SovereignOptimizer {
 		let bestLayer: Layer = node.layer
 		let maxWeightedCount = 0
 
-		const layerWeightedCounts: Record<string, number> = {
-			domain: 0,
-			core: 0,
-			infrastructure: 0,
-			ui: 0,
-			plumbing: 0,
-		}
-
 		for (const [layer, count] of Object.entries(layerCounts)) {
 			const weight = weights[layer] || 1.0
 			const weightedCount = count * weight
-			layerWeightedCounts[layer] = weightedCount
 			if (weightedCount > maxWeightedCount) {
 				maxWeightedCount = weightedCount
 				bestLayer = layer as Layer
@@ -215,8 +213,13 @@ export class SovereignOptimizer {
 			return "plumbing"
 		}
 
+		// V310: Hysteresis Sensing
+		// If a file is already correctly placed according to its layer path,
+		// we require significantly higher gravity (1.5x) to justify a MOVE.
 		const totalImports = (node.imports || []).length
-		if (maxWeightedCount > totalImports * 1.1) return bestLayer // V215: Weighted gravity threshold (average pull > 1.1)
+		const threshold = matchesCurrentLayerPath ? 1.5 : 1.1
+
+		if (maxWeightedCount > totalImports * threshold) return bestLayer
 
 		return node.layer || "plumbing"
 	}

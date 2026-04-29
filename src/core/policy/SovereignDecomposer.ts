@@ -376,36 +376,63 @@ export class SovereignDecomposer {
 		return islands
 	}
 
-	private analyzeNodeLogic(node: ts.FunctionLikeDeclaration, sourceFile: ts.SourceFile): { density: number; hasIO: boolean } {
+	private analyzeNodeLogic(
+		node: ts.FunctionLikeDeclaration,
+		sourceFile: ts.SourceFile,
+	): { density: number; hasIO: boolean; cognitiveComplexity: number } {
 		let nodes = 0
 		let logic = 0
 		let hasIO = false
+		let cognitiveComplexity = 0
 
-		const visit = (node: ts.Node) => {
+		const visit = (node: ts.Node, depth: number) => {
 			nodes++
-			if (ts.isIfStatement(node) || ts.isSwitchStatement(node) || ts.isConditionalExpression(node)) logic++
+			const kind = node.kind
 
-			const text = node.getText(sourceFile)
-			// Detect I/O signals (fs, http, db calls)
+			// V320: Advanced Cognitive Complexity (Recursive Sensing)
+			// Measures nesting depth and branching friction
 			if (
-				text.includes("fs.") ||
-				text.includes("fetch(") ||
-				text.includes(".save()") ||
-				text.includes(".find(") ||
-				text.includes("axios.")
+				kind === ts.SyntaxKind.IfStatement ||
+				kind === ts.SyntaxKind.ForStatement ||
+				kind === ts.SyntaxKind.ForInStatement ||
+				kind === ts.SyntaxKind.ForOfStatement ||
+				kind === ts.SyntaxKind.WhileStatement ||
+				kind === ts.SyntaxKind.DoStatement ||
+				kind === ts.SyntaxKind.SwitchStatement ||
+				kind === ts.SyntaxKind.ConditionalExpression ||
+				kind === ts.SyntaxKind.BinaryExpression // Detects && and || chains
 			) {
-				hasIO = true
+				logic++
+				cognitiveComplexity += 1 + depth // Penalize depth exponentially
 			}
-			ts.forEachChild(node, visit)
+
+			// V320: Forensic I/O Detection (Type-aware Call Expression Sensing)
+			if (ts.isCallExpression(node)) {
+				const text = node.expression.getText(sourceFile)
+				if (
+					text.includes("fs.") ||
+					text.includes("fetch") ||
+					text.includes("axios") ||
+					text.includes(".save") ||
+					text.includes(".find") ||
+					text.includes(".query") ||
+					text.includes("http")
+				) {
+					hasIO = true
+				}
+			}
+
+			ts.forEachChild(node, (child) => visit(child, depth + (this.isFunctionalNode(child) ? 0 : 1)))
 		}
 
 		if (node.body) {
-			visit(node.body)
+			visit(node.body, 0)
 		}
 
 		return {
 			density: nodes > 0 ? logic / nodes : 0,
 			hasIO,
+			cognitiveComplexity,
 		}
 	}
 
@@ -419,6 +446,21 @@ export class SovereignDecomposer {
 			ts.isArrowFunction(node) ||
 			ts.isFunctionExpression(node)
 		)
+	}
+
+	private getFunctionName(node: ts.Node): string {
+		const nameNode = (node as ts.NamedDeclaration).name
+		if (nameNode && ts.isIdentifier(nameNode)) return nameNode.text
+		return "anonymous"
+	}
+
+	private isInTryCatch(node: ts.Node): boolean {
+		let current = node.parent
+		while (current) {
+			if (ts.isTryStatement(current)) return true
+			current = current.parent
+		}
+		return false
 	}
 
 	/**
@@ -437,31 +479,6 @@ export class SovereignDecomposer {
 		const union = new Set([...refsA, ...refsB])
 
 		return union.size === 0 ? 0 : intersection.size / union.size
-	}
-
-	private getFunctionName(node: ts.Node): string {
-		const nameNode = (node as ts.NamedDeclaration).name
-		if (nameNode && ts.isIdentifier(nameNode)) return nameNode.text
-
-		// Try to find name from parent if it's a variable assignment
-		if (node.parent && ts.isVariableDeclaration(node.parent) && ts.isIdentifier(node.parent.name)) {
-			return node.parent.name.text
-		}
-
-		if (node.parent && ts.isPropertyAssignment(node.parent) && ts.isIdentifier(node.parent.name)) {
-			return node.parent.name.text
-		}
-
-		return "anonymous"
-	}
-
-	private isInTryCatch(node: ts.Node): boolean {
-		let current = node.parent
-		while (current) {
-			if (ts.isTryStatement(current)) return true
-			current = current.parent
-		}
-		return false
 	}
 
 	private detectZombieSymbols(
