@@ -35,7 +35,7 @@ export class SovereignTelemetrics {
 			buildErrors: violations.filter((v) => v.severity === "ERROR").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
 			lintWarnings: violations.filter((v) => v.severity === "WARN").map((v) => `[${v.id}] ${v.path}: ${v.message}`),
 			hotspots: stats.hotspots.map((h) => `${path.basename(h.path)} (${SafeNumber.format(h.stress, 2)})`),
-			resonanceDamping: this.metabolicMonitor.getResonance(),
+			velocityMultiplier: this.metabolicMonitor.getResonance(),
 			projectVelocity:
 				1.0 +
 				(lastEntropyScore - currentEntropy.score > 0.05 ? 0.5 : 0) -

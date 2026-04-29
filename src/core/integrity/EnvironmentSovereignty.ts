@@ -146,20 +146,22 @@ export class EnvironmentSovereignty {
 			},
 		}
 
+		const details = lease.details!
+
 		try {
-			lease.details!.shell = process.env.SHELL || (process.platform === "win32" ? "cmd" : "unknown")
-			lease.details!.memoryFreeGB = (os.freemem() / (1024 * 1024 * 1024)).toFixed(2)
+			details.shell = process.env.SHELL || (process.platform === "win32" ? "cmd" : "unknown")
+			details.memoryFreeGB = (os.freemem() / (1024 * 1024 * 1024)).toFixed(2)
 
 			if (process.platform !== "win32") {
 				const { stdout: dfOut } = await execAsync(`df -h "${this.cwd}" | tail -1 | awk '{print $4}'`)
-				lease.details!.diskSpaceGB = dfOut.trim()
+				details.diskSpaceGB = dfOut.trim()
 			} else {
 				try {
 					const drive = path.parse(this.cwd).root.split(":")[0]
 					const { stdout: psOut } = await execAsync(`powershell -Command "(Get-PSDrive ${drive}).Free / 1GB"`)
-					lease.details!.diskSpaceGB = `${Number.parseFloat(psOut.trim()).toFixed(2)}GB`
+					details.diskSpaceGB = `${Number.parseFloat(psOut.trim()).toFixed(2)}GB`
 				} catch {
-					lease.details!.diskSpaceGB = "Unknown"
+					details.diskSpaceGB = "Unknown"
 				}
 			}
 
@@ -167,16 +169,16 @@ export class EnvironmentSovereignty {
 			try {
 				await fs.writeFile(canaryPath, `canary-${Date.now()}`)
 				await fs.unlink(canaryPath)
-				lease.details!.canWrite = true
-			} catch (e) {
+				details.canWrite = true
+			} catch {
 				lease.success = false
 				lease.error = `Permission Denied: Cannot write to workspace directory (${this.cwd}).`
-				lease.details!.canWrite = false
+				details.canWrite = false
 			}
 
 			try {
 				await execAsync("git --version")
-			} catch (e) {
+			} catch {
 				lease.success = false
 				lease.error = "Git Not Found: Architecture requires git for state tracking."
 			}
@@ -190,16 +192,16 @@ export class EnvironmentSovereignty {
 					(EnvironmentSovereignty.VERSION_MANIFESTS[type]?.some((m) => rootFiles.includes(m)) ?? false)
 
 				if (hasMarker) {
-					lease.details!.detectedProjectTypes!.push(type)
-					if (rootFiles.includes(config.manifest)) lease.details!.manifests!.push(config.manifest)
+					details.detectedProjectTypes?.push(type)
+					if (rootFiles.includes(config.manifest)) details.manifests?.push(config.manifest)
 					EnvironmentSovereignty.VERSION_MANIFESTS[type]?.forEach((m) => {
-						if (rootFiles.includes(m)) lease.details!.manifests!.push(m)
+						if (rootFiles.includes(m)) details.manifests?.push(m)
 					})
 				}
 			}
 
 			// 2. Probe toolchains for DETECTED project types ONLY (plus mandatory git)
-			const toolsToProbe = Array.from(new Set([...lease.details!.detectedProjectTypes!, "git"]))
+			const toolsToProbe = Array.from(new Set([...(details.detectedProjectTypes || []), "git"]))
 
 			for (const type of toolsToProbe) {
 				const config =
@@ -208,13 +210,13 @@ export class EnvironmentSovereignty {
 
 				try {
 					const { stdout } = await execAsync(config.probe)
-					lease.details!.toolchain![type] = {
+					details.toolchain![type] = {
 						status: "found",
 						version: stdout.trim(),
 					}
 
 					const { stdout: binPath } = await execAsync(process.platform === "win32" ? `where ${type}` : `which ${type}`)
-					lease.details!.toolchain![type].path = binPath.trim()
+					details.toolchain![type].path = binPath.trim()
 
 					const isStandardPath =
 						binPath.includes("/usr/local/bin") ||
@@ -222,30 +224,30 @@ export class EnvironmentSovereignty {
 						binPath.includes(".nvm/versions") ||
 						binPath.includes(".asdf/installs")
 
-					if (!isStandardPath && lease.details!.toolchain![type].path!.startsWith(this.cwd)) {
-						lease.details!.shadowingAlerts!.push(
-							`⚠️ CAUTION: ${type} binary is located inside workspace: ${lease.details!.toolchain![type].path}`,
+					if (!isStandardPath && details.toolchain![type].path?.startsWith(this.cwd)) {
+						details.shadowingAlerts?.push(
+							`⚠️ CAUTION: ${type} binary is located inside workspace: ${details.toolchain![type].path}`,
 						)
 					}
-				} catch (e) {
+				} catch {
 					// Fallback for Node via process.execPath
-					if (type === "node" || type === "git" || lease.details!.detectedProjectTypes!.includes(type)) {
+					if (type === "node" || type === "git" || details.detectedProjectTypes?.includes(type)) {
 						if (type === "node") {
 							const execPath = process.execPath
 							try {
 								const { stdout } = await execAsync(`"${execPath}" -v`)
-								lease.details!.toolchain![type] = {
+								details.toolchain![type] = {
 									status: "found",
 									version: stdout.trim(),
 									path: execPath,
 								}
 								Logger.info(`[EnvironmentSovereignty] Node found via process.execPath: ${execPath}`)
 							} catch {
-								lease.details!.toolchain![type] = { status: "missing" }
-								lease.details!.shadowingAlerts!.push("⚠️ [ADVISORY] Node.js not found on PATH.")
+								details.toolchain![type] = { status: "missing" }
+								details.shadowingAlerts?.push("⚠️ [ADVISORY] Node.js not found on PATH.")
 							}
 						} else {
-							lease.details!.toolchain![type] = { status: "missing" }
+							details.toolchain![type] = { status: "missing" }
 						}
 					}
 				}
@@ -255,23 +257,23 @@ export class EnvironmentSovereignty {
 			for (const [tool, cmd] of Object.entries(EnvironmentSovereignty.MGMT_TOOLS)) {
 				try {
 					const { stdout } = await execAsync(cmd)
-					lease.details!.toolchain![tool] = { status: "found", version: stdout.trim() }
+					details.toolchain![tool] = { status: "found", version: stdout.trim() }
 				} catch {
 					// Silent skip
 				}
 			}
 
-			if (lease.details!.toolchain!.node?.status === "found") {
+			if (details.toolchain?.node?.status === "found") {
 				const execPath = process.execPath
-				const nodeBinPath = lease.details!.toolchain!.node.path
+				const nodeBinPath = details.toolchain.node.path
 				if (nodeBinPath && !execPath.includes(path.basename(nodeBinPath))) {
-					lease.details!.shadowingAlerts!.push(
+					details.shadowingAlerts?.push(
 						`⚠️ INTEGRITY: Active Node binary (${execPath}) differs from PATH Node (${nodeBinPath}).`,
 					)
 				}
-				lease.details!.nodeVersion = lease.details!.toolchain!.node.version
-				lease.details!.nodePath = nodeBinPath
-				lease.details!.hasNodeModules = rootFiles.includes("node_modules")
+				details.nodeVersion = details.toolchain.node.version
+				details.nodePath = nodeBinPath
+				details.hasNodeModules = rootFiles.includes("node_modules")
 			}
 		} catch (e) {
 			const error = e as Error

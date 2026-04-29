@@ -448,7 +448,6 @@ export class FluidPolicyEngine {
 		let scratchpadContent = ""
 		let hasAudit = false
 		let hasBreath = false
-		let scratchpadHealed = false
 
 		try {
 			const scratchpadPath = path.join(this.cwd, "scratchpad.md")
