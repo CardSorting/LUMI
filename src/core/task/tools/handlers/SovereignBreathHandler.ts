@@ -15,7 +15,7 @@ import type { TaskConfig } from "../types/TaskConfig"
 export class SovereignBreathHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.SOVEREIGN_BREATH
 
-	getDescription(block: ToolUse): string {
+	getDescription(_block: ToolUse): string {
 		return `[Sovereign Breath: Cognitive Recalibration]`
 	}
 

@@ -476,7 +476,7 @@ export class MetabolicMonitor {
 		}
 
 		this.thresholdMultiplier = state.thresholdMultiplier
-		this.resonanceMultiplier = state.resonanceMultiplier
+		this.velocityDamping = state.velocityDamping
 
 		for (const [p, m] of Object.entries(state.registry)) {
 			this.registry.set(p, {
@@ -512,6 +512,6 @@ export interface MetabolicState {
 	version: number
 	registry: Record<string, SerializableMetabolicMetrics>
 	thresholdMultiplier: number
-	resonanceMultiplier: number
+	velocityDamping: number
 	timestamp: number
 }

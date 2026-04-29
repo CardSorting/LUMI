@@ -1692,7 +1692,7 @@ export class FluidPolicyEngine {
 			const payload = JSON.stringify({
 				version: "V189",
 				spider: spiderData.toString("base64"),
-				activity: activityState,
+				metabolic: metabolicState,
 				telemetrics: telemetricsState,
 				karma: this.karma,
 				checksum,
