@@ -1282,46 +1282,37 @@ export class FluidPolicyEngine {
 			header += `\n🕸️ [STRUCTURAL DRIFT]: Graph is ${SafeNumber.formatPercent(drift.drift, 1)}% cross-layer (Target: < 15%).\n`
 		}
 
-		// V310: Accelerated Flow Signal
+		// V340: Sovereign Drafting & Instruction Pruning
 		const isAgileLayer = ["ui", "infrastructure", "api", "utils", "shared", "plumbing"].includes(layer)
 		const isCoreLayer = layer === "domain" || layer === "core"
+		const isSaturated = totalReadCount >= 5
 
 		if (this.mode === "plan") {
 			const enforcer = new (require("./PlanModeEnforcer").PlanModeEnforcer)(this.cwd)
 			const status = await enforcer.getStrategicReviewStatus(this.stabilityMonitor)
-			if (status.prophecy) {
-				header += `\n${status.prophecy}\n`
-			}
+			if (status.prophecy) header += `\n${status.prophecy}\n`
 
-			// V330: Blast Radius & Dependency Probing
-			const node = this.spiderEngine.nodes.get(this.normalize(absolutePath))
-			if (node && node.dependents.length > 3) {
-				const sampleDependents = node.dependents.slice(0, 3).map((p) => path.basename(p))
-				header += `\n⚠️ [FORENSIC BLAST RADIUS]: This module is a critical dependency for ${node.dependents.length} files (including ${sampleDependents.join(", ")}).\n`
-				header += `👉 INVESTIGATIVE DIRECTIVE: You MUST investigate at least 2 dependents to ensure contract stability before planning.\n`
-			}
-
-			if (isCoreLayer) {
-				header += `\n🛡️ [HARDENED INVESTIGATION]: You are in a CORE layer. Depth and Rigor are mandatory.\n`
-				header += `1. **Deep Forensic Trace**: Your scratchpad MUST include a dependency ripple analysis.\n`
-				header += `2. **Invariant Check**: How does this change affect the global architectural invariants?\n`
-				header += `3. **Scanning Limit**: Your investigative budget has been expanded to 15 files for this turn.\n`
+			if (isSaturated) {
+				header += `\n⚡ [CONTEXT SATURATED]: Sufficient info gathered. Call \`plan_mode_respond\` NOW.\n`
+				header += `📍 [SOVEREIGN DRAFTING]: Focus purely on logic. Secondary audits are DEFERRED to ACT mode.\n`
+			} else {
+				const node = this.spiderEngine.nodes.get(this.normalize(absolutePath))
+				if (node && node.dependents.length > 5 && isCoreLayer) {
+					header += `\n⚠️ [BLAST RADIUS]: Critical module (Dependents: ${node.dependents.length}). Verify impacts before planning.\n`
+				}
+				if (isCoreLayer) {
+					header += `\n🛡️ [CORE RIGOR]: INVESTIGATION BUDGET: 15 files. Draft your ripple analysis in \`scratchpad.md\`.\n`
+				}
+				if (isAgileLayer && !isCoreLayer) {
+					const rapidTemplate = IntegrityProtocol.generateRapidAuditTemplate("Surgical Update")
+					header += `\n⚡ [RAPID-FIRE]: AGILE layer. Use minimalist template to move faster:\n\n\`\`\`markdown\n${rapidTemplate}\`\`\`\n`
+				}
 			}
 
 			if (perFileReadCount >= 3) {
-				// V330: Increased from 2 for core rigor
 				header += `\n⚠️ [RECURSIVE STALLING]: Stop reading and start planning.\n`
 			} else if (totalReadCount >= (isCoreLayer ? 15 : 7)) {
-				// V330: Dynamic Limit
-				header += `\n⚠️ [SCANNING LIMIT]: Call \`plan_mode_respond\` NOW.\n`
-			} else if (totalReadCount >= (isCoreLayer ? 5 : 3)) {
-				header += `\n⚡ [ACCELERATED FLOW]: Sufficient context gathered. Call \`plan_mode_respond\`.\n`
-			}
-
-			if (isAgileLayer && !isCoreLayer) {
-				const rapidTemplate = IntegrityProtocol.generateRapidAuditTemplate("Surgical Update")
-				header += `\n⚡ [RAPID-FIRE]: AGILE layer detected. Use this minimalist template to move faster:\n\n\`\`\`markdown\n${rapidTemplate}\`\`\`\n`
-				header += `💡 [ONE-SHOT NUDGE]: This task is low-risk. Provide analysis and plan in a SINGLE turn.\n`
+				header += `\n⚠️ [SCANNING LIMIT]: Call \`plan_mode_respond\`.\n`
 			}
 		} else if (this.mode === "act") {
 			header += `🛠️ Layer: ${layer.toUpperCase()} | Karma: ${this.karma}\n`
