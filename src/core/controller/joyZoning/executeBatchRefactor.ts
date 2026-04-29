@@ -1,5 +1,5 @@
 import { IController } from "@core/controller/types"
-import { SovereignDecomposer } from "@core/policy/SovereignDecomposer"
+import { ModuleDecomposer } from "@core/policy/ModuleDecomposer"
 import { SpiderEngine } from "@core/policy/spider/SpiderEngine"
 import {
 	JoyZoningBatchRefactorRequest,
@@ -63,7 +63,7 @@ export async function executeBatchRefactor(
 	request: JoyZoningBatchRefactorRequest,
 ): Promise<JoyZoningBatchRefactorResponse> {
 	const spider = await controller.getSpiderEngine()
-	const decomposer = new SovereignDecomposer()
+	const decomposer = new ModuleDecomposer()
 
 	try {
 		const normalized = normalizeBatchRequests(request?.requests)

@@ -177,8 +177,8 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 
 			// V26: Neural Forensic Hardening - Record observations
 			try {
-				const { MetabolicMonitor } = await import("../../../integrity/MetabolicMonitor")
-				const monitor = new MetabolicMonitor() // managed singleton in real env
+				const { StabilityMonitor } = await import("../../../integrity/StabilityMonitor")
+				const monitor = new StabilityMonitor() // managed singleton in real env
 				monitor.recordRead(absolutePath)
 
 				if (fileContent.text) {
@@ -195,7 +195,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		} catch (error) {
 			if (error instanceof Error && error.message.includes("File not found") && absolutePath.endsWith("scratchpad.md")) {
 				// V19: Proactive diagnostic injection on auto-creation
-				let diagnostics: import("../../../policy/SovereignProtocol").SovereignDiagnostics | undefined
+				let diagnostics: import("../../../policy/IntegrityProtocol").StabilityDiagnostics | undefined
 				try {
 					const { FluidPolicyEngine } = await import("../../../policy/FluidPolicyEngine")
 					const engine = new FluidPolicyEngine(config.cwd)
@@ -217,15 +217,15 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 					// Fallback to empty if diagnostics fail
 				}
 
-				const { SovereignProtocol } = await import("../../../policy/SovereignProtocol")
-				const { SovereignForensics } = await import("../../../policy/SovereignForensics")
-				const { MetabolicMonitor } = await import("../../../integrity/MetabolicMonitor")
+				const { IntegrityProtocol } = await import("../../../policy/IntegrityProtocol")
+				const { StabilityForensics } = await import("../../../policy/StabilityForensics")
+				const { StabilityMonitor } = await import("../../../integrity/StabilityMonitor")
 
-				const monitor = new MetabolicMonitor() // In real app, this would be the managed singleton
-				const forensics = new SovereignForensics(config.cwd, monitor)
+				const monitor = new StabilityMonitor() // In real app, this would be the managed singleton
+				const forensics = new StabilityForensics(config.cwd, monitor)
 				const forensicTrace = forensics.generateInvestigationTrace()
 
-				const template = SovereignProtocol.generateAuditTemplate(
+				const template = IntegrityProtocol.generateAuditTemplate(
 					"Initial Architectural Audit",
 					diagnostics,
 					forensicTrace,
@@ -256,12 +256,12 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			await engine.loadRegistry()
 			const node = engine.nodes.get(relPath as string)
 			if (node) {
-				const intentRegex = /\[SOVEREIGN_INTENT:\s*(.*?)\]/
+				const intentRegex = /\[INTEGRITY_INTENT:\s*(.*?)\]/
 				const intentMatch = fileContent.text.match(intentRegex)
 				const intent = intentMatch ? intentMatch[1] : "Not explicitly documented."
 
 				const contextBlock =
-					`\n\n[SOVEREIGN_CONTEXT]\n` +
+					`\n\n[STABILITY_CONTEXT]\n` +
 					`Layer: ${node.layer?.toUpperCase() || "UNKNOWN"}\n` +
 					`Architectural Intent: ${intent}\n` +
 					`Metrics: Logic Density: ${SafeNumber.format(node.logicDensity, 2)}, I/O Entropy: ${SafeNumber.format(node.ioEntropy, 2)}\n` +

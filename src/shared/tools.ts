@@ -57,14 +57,14 @@ export enum DietCodeDefaultTool {
 	MEM_CLAIM = "mem_claim",
 	MEM_RELEASE = "mem_release",
 	MEM_HUBS = "mem_hubs",
-	SOVEREIGN_DIAGNOSE = "diagnose_sovereignty",
-	SOVEREIGN_SCAFFOLD = "scaffold_sovereign_module",
-	SOVEREIGN_QUERY = "query_sovereignty",
-	SOVEREIGN_DECOMPOSE = "decompose_sovereign_module",
-	SOVEREIGN_MAP = "generate_sovereign_map",
-	SOVEREIGN_BREATH = "sovereign_breath",
-	SOVEREIGN_SWEEP = "sovereign_integrity_sweep",
-	SOVEREIGN_HEAL = "sovereign_ast_repair",
+	STABILITY_DIAGNOSE = "diagnose_stability",
+	STABILITY_SCAFFOLD = "scaffold_module",
+	STABILITY_QUERY = "query_stability",
+	STABILITY_DECOMPOSE = "decompose_module",
+	STABILITY_MAP = "generate_dependency_map",
+	STABILITY_RECALIBRATE = "recalibrate_stability",
+	STABILITY_SWEEP = "stability_integrity_sweep",
+	STABILITY_HEAL = "ast_repair",
 }
 
 // Array of all tool names for compatibility
@@ -96,5 +96,5 @@ export const READ_ONLY_TOOLS = [
 	DietCodeDefaultTool.WEB_FETCH,
 	DietCodeDefaultTool.USE_SKILL,
 	DietCodeDefaultTool.USE_SUBAGENTS,
-	DietCodeDefaultTool.SOVEREIGN_DIAGNOSE,
+	DietCodeDefaultTool.STABILITY_DIAGNOSE,
 ] as const

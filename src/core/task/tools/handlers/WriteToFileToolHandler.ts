@@ -12,9 +12,9 @@ import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/pat
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { PathogenStore } from "../../../integrity/PathogenStore"
-import { SovereignDoctor } from "../../../policy/SovereignDoctor"
-import { SovereignGuard } from "../../../policy/SovereignGuard"
+import { AnomalyRegistry } from "../../../integrity/AnomalyRegistry"
+import { StabilityDoctor } from "../../../policy/StabilityDoctor"
+import { StabilityGuard } from "../../../policy/StabilityGuard"
 import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
 import { executor } from "../../ActionExecutor"
 import type { ToolResponse } from "../../index"
@@ -25,7 +25,7 @@ import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { applyModelContentFixes } from "../utils/ModelContentProcessor"
-import { SovereignScribe } from "../utils/SovereignScribe"
+import { StabilityScribe } from "../utils/StabilityScribe"
 import { ToolDisplayUtils } from "../utils/ToolDisplayUtils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
@@ -322,18 +322,18 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			try {
 				const engine = new SpiderEngine(config.cwd)
 				await engine.loadRegistry()
-				const guard = new SovereignGuard(config.cwd)
+				const guard = new StabilityGuard(config.cwd)
 
 				// Audit the proposed content
-				const pathogens = new PathogenStore(config.cwd)
-				const signal = await guard.scrutinize(relPath, newContent, engine, pathogens)
+				const anomalies = new AnomalyRegistry(config.cwd)
+				const signal = await guard.scrutinize(relPath, newContent, engine, anomalies)
 
 				if (!signal.approved) {
-					await config.callbacks.say("error", `Sovereign Interdiction: ${signal.reason}`)
+					await config.callbacks.say("error", `Stability Blockade: ${signal.reason}`)
 				}
 
 				// Check for drift/optimizations
-				const doctor = new SovereignDoctor(config.cwd)
+				const doctor = new StabilityDoctor(config.cwd)
 				const report = await doctor.diagnose(engine)
 				const optimization = report.optimizations.find((o) => o.file === relPath)
 
@@ -395,17 +395,17 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				newProblemsMessage,
 			)
 
-			// PROACTIVE SOVEREIGN AUDIT (V12 Double Down)
+			// PROACTIVE STABILITY AUDIT (V12 Double Down)
 			let auditReport = ""
 			if (relPath.endsWith("scratchpad.md") && finalContent) {
-				const scribe = new SovereignScribe(config.cwd)
-				const isAgile = finalContent.includes("# SOVEREIGN_AGILE")
+				const scribe = new StabilityScribe(config.cwd)
+				const isAgile = finalContent.includes("# AGILE_MODE")
 				const audit = await scribe.validate(finalContent, isAgile)
 
 				if (!audit.success) {
-					auditReport = `\n\n⚠️ SOVEREIGN AUDIT FAILED:\n${audit.errors.map((e) => `- ${e}`).join("\n")}`
+					auditReport = `\n\n⚠️ STABILITY AUDIT FAILED:\n${audit.errors.map((e) => `- ${e}`).join("\n")}`
 				} else {
-					auditReport = `\n\n✅ SOVEREIGN AUDIT PASSED: Substrate integrity verified.`
+					auditReport = `\n\n✅ STABILITY AUDIT PASSED: Substrate integrity verified.`
 				}
 			}
 

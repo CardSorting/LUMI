@@ -270,7 +270,7 @@ export class Task {
 	// Command executor for running shell commands (extracted from executeCommandTool)
 	private commandExecutor!: CommandExecutor
 
-	private environmentLeasePromise: Promise<import("../integrity/EnvironmentSovereignty").EnvironmentLease>
+	private environmentLeasePromise: Promise<import("../integrity/EnvironmentIntegrity").EnvironmentLease>
 
 	constructor(params: TaskParams) {
 		const {

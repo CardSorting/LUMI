@@ -59,10 +59,10 @@ message JoyZoningAuditResponse {
   double projected_health = 7; // After applying optimizations
   double integrity_score = 8;
   JoyZoningAuditProgress progress = 9; // For streaming progress updates
-  double metabolic_pressure = 10; // Current resource usage/indexing stress (0-1.0)
+  double activity_pressure = 10; // Current resource usage/indexing stress (0-1.0)
   bool drift_detected = 11;
   int32 drift_count = 12;
-  repeated string metabolic_sinks = 13;
+  repeated string structural_sinks = 13;
   string grade = 14; // A, B, C, D, F
   string total_technical_debt = 15; // e.g. "2h 15m"
   int32 stability_score = 16; // 0-100

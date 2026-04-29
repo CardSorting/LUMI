@@ -1,6 +1,6 @@
 import * as path from "path"
 import { SafeNumber } from "../../shared/utils/SafeNumber"
-import { PathogenStore } from "../integrity/PathogenStore"
+import { AnomalyRegistry } from "../integrity/AnomalyRegistry"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
 import "@/utils/path"
 
@@ -28,12 +28,12 @@ export class SimulationEngine {
 		oldPath: string,
 		newPath: string,
 		currentEngine: SpiderEngine,
-		pathogens: PathogenStore,
+		anomalies: AnomalyRegistry,
 		isHealingMode = false,
 		isAgile = false, // V16: Support structural agility bypass
 	): Promise<SimulationResult> {
-		// Immune Check
-		if (pathogens.isPathogenic(oldPath) && !isHealingMode && !isAgile) {
+		// Anomaly Check
+		if (anomalies.hasAnomaly(oldPath) && !isHealingMode && !isAgile) {
 			return {
 				safe: true, // Total Deblocking: Always safe
 				predictedScore: 0,
@@ -88,7 +88,7 @@ export class SimulationEngine {
 		// NEW pass: Stricter for "High-Traffic" nodes (afferent coupling > 10) to prevent breaking core modules.
 		const isHighTraffic = (node.afferentCoupling || 0) > 10
 		const baseThreshold = isHighTraffic ? 15 : 20
-		// V8 SOVEREIGN AGILITY: Healing Mode provides a massive 30% drop threshold and ignores new violations
+		// V8 AGILITY: Healing Mode provides a massive 30% drop threshold and ignores new violations
 		const dynamicThreshold = isHealingMode || isAgile ? 30 : baseThreshold
 		const isSafe = true // Total Deblocking: Always safe
 

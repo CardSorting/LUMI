@@ -11,7 +11,7 @@ import type { ToolResponse } from "../../index"
 import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
-import { SovereignScribe } from "../utils/SovereignScribe"
+import { StabilityScribe } from "../utils/StabilityScribe"
 
 export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.PLAN_MODE
@@ -61,11 +61,11 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 
 		// SOVEREIGN DRAFTER ENFORCEMENT (V6) - Legacy validation
 		if (config.strictPlanModeEnabled && config.mode === "plan") {
-			const { content, source } = SovereignScribe.getLatestScratchpadContent(
+			const { content, source } = StabilityScribe.getLatestScratchpadContent(
 				config.messageState.getApiConversationHistory(),
 			)
 			const forensics = config.universalGuard ? config.universalGuard.getForensics() : undefined
-			const scribe = new SovereignScribe(config.cwd, forensics)
+			const scribe = new StabilityScribe(config.cwd, forensics)
 			const audit = await scribe.validate(content, false, undefined, config.messageState.getApiConversationHistory())
 
 			if (!audit.ok && source === "disk" && content === "") {
@@ -200,7 +200,7 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 		}
 		// if we didn't switch to ACT MODE, then we can just send the user_feedback message
 		const layerSummary = await this.getLayerPlanningSummary(config)
-		const sovereignHandover = config.strictPlanModeEnabled ? this.getSovereignHandover(config) : ""
+		const stabilityHandover = config.strictPlanModeEnabled ? this.getStabilityHandover(config) : ""
 		const architecturalCommitment = layerSummary
 			? `\n\n[ARCHITECTURAL COMMITMENT SEAL]
 By proceeding to ACT mode, you commit to maintaining the integrity of the layers explored:
@@ -210,7 +210,7 @@ By proceeding to ACT mode, you commit to maintaining the integrity of the layers
 			: ""
 
 		return formatResponse.toolResult(
-			`<user_message>\n${text}\n</user_message>${layerSummary}${sovereignHandover}${architecturalCommitment}`,
+			`<user_message>\n${text}\n</user_message>${layerSummary}${stabilityHandover}${architecturalCommitment}`,
 			images,
 			fileContentString,
 		)
@@ -219,11 +219,11 @@ By proceeding to ACT mode, you commit to maintaining the integrity of the layers
 	/**
 	 * Extracts the hardening synthesis from the scratchpad for the final handover.
 	 */
-	private getSovereignHandover(config: TaskConfig): string {
+	private getStabilityHandover(config: TaskConfig): string {
 		const synthesis = config.taskState.sovereignAuditSynthesis
 		if (!synthesis) return ""
 
-		return `\n\n[SOVEREIGN HANDOVER]
+		return `\n\n[STABILITY HANDOVER]
 Your architectural audit resulted in the following hardening synthesis:
 > ${synthesis}
 

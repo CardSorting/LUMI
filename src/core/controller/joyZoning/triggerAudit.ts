@@ -1,8 +1,8 @@
 import { IController } from "@core/controller/types"
-import { SovereignDecomposer } from "@core/policy/SovereignDecomposer"
-import { SovereignDoctor } from "@core/policy/SovereignDoctor"
-import { SovereignOptimizer } from "@core/policy/SovereignOptimizer"
-import { SovereignPolicy } from "@core/policy/SovereignPolicy"
+import { IntegrityOptimizer } from "@core/policy/IntegrityOptimizer"
+import { ModuleDecomposer } from "@core/policy/ModuleDecomposer"
+import { StabilityDoctor } from "@core/policy/StabilityDoctor"
+import { StabilityPolicy } from "@core/policy/StabilityPolicy"
 import { SpiderNode } from "@core/policy/spider/SpiderEngine"
 import {
 	JoyZoningAuditRequest,
@@ -118,10 +118,10 @@ function normalizeAuditResponse(input: Partial<JoyZoningAuditResponse> | Record<
 		projectedHealth: finitePercent(input.projectedHealth, finiteNumber(input.buildHealth, 0)),
 		integrityScore: finitePercent(input.integrityScore, 0),
 		progress: normalizeProgress(input.progress),
-		metabolicPressure: finiteNumber(input.metabolicPressure, 0),
+		activityPressure: finiteNumber(input.activityPressure, 0),
 		driftDetected: Boolean(input.driftDetected),
 		driftCount: finiteNumber(input.driftCount, 0),
-		metabolicSinks: safeArray<string>(input.metabolicSinks),
+		structuralSinks: safeArray<string>(input.structuralSinks),
 		grade: safeString(input.grade, "C"),
 		totalTechnicalDebt: safeString(input.totalTechnicalDebt, "0m"),
 		stabilityScore: finitePercent(input.stabilityScore, 0),
@@ -140,7 +140,7 @@ function normalizeAuditResponse(input: Partial<JoyZoningAuditResponse> | Record<
 
 /**
  * [HANDLING: JoyZoning Audit]
- * Triggers a deep forensic scan of the codebase to identify metabolic pressure,
+ * Triggers a deep forensic scan of the codebase to identify structural load,
  * substrate drift, and decomposition opportunities.
  */
 export async function triggerAudit(
@@ -177,19 +177,19 @@ export async function triggerAudit(
 	}, 600000)
 	timeout.unref?.()
 
-	let doctor: SovereignDoctor | null = null
-	let decomposer: SovereignDecomposer | null = null
-	let optimizer: SovereignOptimizer | null = null
+	let doctor: StabilityDoctor | null = null
+	let decomposer: ModuleDecomposer | null = null
+	let optimizer: IntegrityOptimizer | null = null
 
 	try {
 		// 1. Initialize Engines (V215: Inside try block for safe cleanup)
 		const spider = await controller.getSpiderEngine()
-		const { MetabolicMonitor } = await import("@core/integrity/MetabolicMonitor")
-		const monitor = new MetabolicMonitor(spider.cwd) // managed instance
+		const { StabilityMonitor } = await import("@core/integrity/StabilityMonitor")
+		const monitor = new StabilityMonitor(spider.cwd) // managed instance
 
-		doctor = new SovereignDoctor(spider.cwd)
-		decomposer = new SovereignDecomposer()
-		optimizer = new SovereignOptimizer()
+		doctor = new StabilityDoctor(spider.cwd)
+		decomposer = new ModuleDecomposer()
+		optimizer = new IntegrityOptimizer()
 
 		const { useCache } = request
 
@@ -283,7 +283,7 @@ export async function triggerAudit(
 			}
 		}
 
-		// Map Decomposer Optimizations for Hotspots/God Modules
+		// Map Decomposer Optimizations for Hotspots/Monoliths
 		// V215: Hardened Hotspot Selection
 		// Focuses on large modules (> 1000 nodes) or high coupling (> 15 dependents).
 		const hotspots = nodes
@@ -417,7 +417,6 @@ export async function triggerAudit(
 		const sanitizeScore = (v: unknown) => finitePercent(typeof v === "number" && !Number.isNaN(v) ? Math.round(v) : 0)
 		const entropyReport = spider.computeEntropy()
 		const structuralEntropy = finiteNumber(entropyReport?.score, 0)
-		const metabolicPressure = finiteNumber(spider.computeMetabolicPressure(monitor), 0)
 
 		const stabilityScore = sanitizeScore(doctorReport.integrityScore)
 		const maintainabilityScore = sanitizeScore((1 - structuralEntropy) * 100)
@@ -469,7 +468,7 @@ export async function triggerAudit(
 		controller.stateManager.setGlobalState("joyZoningHistory", updatedHistory)
 
 		// V210: Governance Metrics - Quality Gates and Compliance
-		const policyConfig = SovereignPolicy.getInstance(spider.cwd).getGlobalConfig()
+		const policyConfig = StabilityPolicy.getInstance(spider.cwd).getGlobalConfig()
 		const buildHealth = sanitizeScore(doctorReport.buildHealth)
 		const qualityGateStatus = buildHealth >= (policyConfig.integrityAlertThreshold || 70) ? "PASSED" : "FAILED"
 		const complianceScore = sanitizeScore(Math.max(0, 100 - (violations.length / (nodes.length || 1)) * 100))
@@ -537,8 +536,7 @@ export async function triggerAudit(
 			integrityScore: sanitizeScore(doctorReport.integrityScore),
 			driftDetected: false, // Default if not computed
 			driftCount: 0,
-			metabolicPressure,
-			metabolicSinks: toxicHeatmap.length > 0 ? toxicHeatmap : monitor.getStabilityStats().hotspots.map((h) => h.path),
+			structuralSinks: toxicHeatmap.length > 0 ? toxicHeatmap : monitor.getStabilityStats().hotspots.map((h) => h.path),
 			grade: computeGrade(buildHealth),
 			totalTechnicalDebt: techDebtStr,
 			stabilityScore,
@@ -564,8 +562,8 @@ export async function triggerAudit(
 			violations: finalResponse.violations,
 			optimizations: finalResponse.optimizations,
 			integrityScore: finalResponse.integrityScore,
-			metabolicPressure: finalResponse.metabolicPressure,
-			metabolicSinks: finalResponse.metabolicSinks,
+			activityPressure: finalResponse.activityPressure,
+			structuralSinks: finalResponse.structuralSinks,
 			buildHealth: finalResponse.buildHealth,
 			totalFiles: finalResponse.totalFiles,
 			timestamp: finalResponse.timestamp,

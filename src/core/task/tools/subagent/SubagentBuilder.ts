@@ -24,8 +24,8 @@ export const SUBAGENT_DEFAULT_ALLOWED_TOOLS: DietCodeDefaultTool[] = [
 	DietCodeDefaultTool.MCP_USE,
 	DietCodeDefaultTool.MCP_ACCESS,
 	DietCodeDefaultTool.MEM_REFRESH,
-	DietCodeDefaultTool.SOVEREIGN_DIAGNOSE,
-	DietCodeDefaultTool.SOVEREIGN_SWEEP,
+	DietCodeDefaultTool.STABILITY_DIAGNOSE,
+	DietCodeDefaultTool.STABILITY_SWEEP,
 ]
 
 // Peer-Review & Consensus loops

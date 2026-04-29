@@ -37,8 +37,8 @@ const MAX_INDEX_FILE_BYTES = 1_500_000
 const finiteNodeNumber = (value: unknown, fallback = 0): number =>
 	typeof value === "number" && Number.isFinite(value) ? value : fallback
 
-import { MetabolicMonitor } from "../../integrity/MetabolicMonitor.js"
-import { PathogenStore } from "../../integrity/PathogenStore.js"
+import { AnomalyRegistry } from "../../integrity/AnomalyRegistry.js"
+import { StabilityMonitor } from "../../integrity/StabilityMonitor.js"
 
 /**
  * SpiderEngine: The Facade orchestrating structural graph analysis,
@@ -160,7 +160,7 @@ export class SpiderEngine {
 	}
 
 	/**
-	 * V190: Stability Sovereignty.
+	 * V190: Stability Governance.
 	 * Acquires a mutual exclusion lock to prevent structural corruption during
 	 * concurrent or multi-step refactoring operations.
 	 */
@@ -191,11 +191,11 @@ export class SpiderEngine {
 	}
 
 	/**
-	 * V215: Dynamic Metabolic Pressure.
+	 * V215: Dynamic Activity Pressure.
 	 * Calculates pressure by combining physical memory usage, graph density,
-	 * and behavioral activity (churn/doubt) from the MetabolicMonitor.
+	 * and behavioral activity (churn/doubt) from the StabilityMonitor.
 	 */
-	public computeMetabolicPressure(monitor?: import("../../integrity/MetabolicMonitor").MetabolicMonitor): number {
+	public computeActivityPressure(monitor?: import("../../integrity/StabilityMonitor").StabilityMonitor): number {
 		const used = process.memoryUsage().heapUsed
 		const limit = v8.getHeapStatistics().heap_size_limit
 		const memPressure = used / limit
@@ -221,7 +221,7 @@ export class SpiderEngine {
 	}
 
 	/**
-	 * V200: Metabolic Hygiene (Disposal).
+	 * V200: Structural Hygiene (Disposal).
 	 * Forcefully releases all persistent memory and timers to prevent leaks.
 	 */
 	public dispose(): void {
@@ -282,7 +282,7 @@ export class SpiderEngine {
 		const layer = this.resolver.resolveLayer(filePath)
 
 		// V350: Large File Guard (Industrial Safety)
-		// If a file is > 500KB, we perform a shallow scan to prevent metabolic collapse (OOM).
+		// If a file is > 500KB, we perform a shallow scan to prevent structural collapse (OOM).
 		const stats = fs.existsSync(absolutePath) ? fs.statSync(absolutePath) : null
 		const isMassive = stats && stats.size > 500 * 1024
 
@@ -304,7 +304,7 @@ export class SpiderEngine {
 			.map((spec) => this.resolver.resolveImportToNodeId(normalizedPath, spec, this.nodes))
 			.filter(Boolean) as string[]
 
-		// V350: Metabolic Fission Guard
+		// V350: Structural Scale Guard
 		// Skip expensive recursive complexity sensing for massive files.
 		let metrics = isMassive ? this.getDefaultMetrics() : this.extractMetrics(sourceFile)
 
@@ -688,7 +688,7 @@ export class SpiderEngine {
 
 		if (usedPercent > 90) {
 			Logger.error(
-				`[SpiderEngine] CRITICAL Metabolic Pressure (${SafeNumber.format(usedPercent, 1)}%). Triggering ABSOLUTE SWEEP.`,
+				`[SpiderEngine] CRITICAL Activity Pressure (${SafeNumber.format(usedPercent, 1)}%). Triggering ABSOLUTE SWEEP.`,
 			)
 			this.resolver.dispose()
 			this.sessionBuffer.clear()
@@ -703,7 +703,7 @@ export class SpiderEngine {
 		// V200: Node Immortality - Protect hotspots even during high pressure
 		if (usedPercent > 80) {
 			Logger.warn(
-				`[SpiderEngine] High Metabolic Pressure detected (${SafeNumber.format(usedPercent, 1)}%). Triggering Selective Sweep.`,
+				`[SpiderEngine] High Activity Pressure detected (${SafeNumber.format(usedPercent, 1)}%). Triggering Selective Sweep.`,
 			)
 			// Protective sweep: Keep hotspots, only clear legacy caches
 			this.resolver.clearCaches()
@@ -729,7 +729,7 @@ export class SpiderEngine {
 		return this.metrics.detectCycles(this.nodes)
 	}
 
-	public getViolations(monitor?: import("../../integrity/MetabolicMonitor").MetabolicMonitor): SpiderViolation[] {
+	public getViolations(monitor?: import("../../integrity/StabilityMonitor").StabilityMonitor): SpiderViolation[] {
 		this.pruneDeadNodes()
 		const violations: SpiderViolation[] = []
 
@@ -759,15 +759,15 @@ export class SpiderEngine {
 				})
 			}
 
-			// 3. SPI-203: Metabolic Pressure (God Modules)
+			// 3. SPI-203: Structural Load (Monolith Detection)
 			// V215: Significantly increased thresholds to focus on truly massive modules.
 			if (node.afferentCoupling > 30 && (node.astComplexity || 0) > 5000) {
 				violations.push({
 					id: "SPI-203",
 					severity: "ERROR",
 					path: node.path,
-					message: `METABOLIC PRESSURE: God Module detected (Coupling: ${node.afferentCoupling}, Complexity: ${node.astComplexity}).`,
-					remediation: "Perform metabolic fission using the SovereignDecomposer.",
+					message: `STRUCTURAL LOAD: Monolith detected (Coupling: ${node.afferentCoupling}, Complexity: ${node.astComplexity}).`,
+					remediation: "Perform structural decomposition using the ModuleDecomposer.",
 				})
 			}
 
@@ -1225,13 +1225,13 @@ export class SpiderEngine {
 		}
 
 		this.throwIfCancelled(options.isCancelled)
-		const currentPressure = this.computeMetabolicPressure()
+		const currentPressure = this.computeActivityPressure()
 		if (this.nodes.size > 0 && currentPressure < 0.65) {
 			this.createCheckpoint()
 		} else {
 			this.substrateCheckpoint = null
 			if (currentPressure >= 0.65) {
-				Logger.warn(`[SpiderEngine] Skipping checkpoint: Metabolic pressure too high (${currentPressure}).`)
+				Logger.warn(`[SpiderEngine] Skipping checkpoint: Activity pressure too high (${currentPressure}).`)
 			}
 		}
 		this.isIndexing = true
@@ -1244,7 +1244,7 @@ export class SpiderEngine {
 
 		// V215: Metabolic Resident Purge
 		// If pressure is already high, we clear the active map (checkpointed) to free heap space for tempRegistry.
-		if (this.computeMetabolicPressure() > 0.7) {
+		if (this.computeActivityPressure() > 0.7) {
 			Logger.warn("[SpiderEngine] High Pressure Indexing: Purging active substrate (Checkpointed) to free heap.")
 			this.nodes.clear()
 			this.resolver.clearCaches() // Flush resolver to reclaim nested map memory
@@ -1262,9 +1262,9 @@ export class SpiderEngine {
 			let BATCH_SIZE = 250
 			for (let i = 0; i < files.length; i += BATCH_SIZE) {
 				this.throwIfCancelled(options.isCancelled)
-				const pressure = this.computeMetabolicPressure()
+				const pressure = this.computeActivityPressure()
 				if (pressure > 0.9) {
-					Logger.error(`[SpiderEngine] CRITICAL METABOLIC PRESSURE (${pressure}). Indexing paused.`)
+					Logger.error(`[SpiderEngine] CRITICAL ACTIVITY PRESSURE (${pressure}). Indexing paused.`)
 					this.resolver.clearCaches() // Emergency cache flush
 					if (global.gc) global.gc()
 					await new Promise((resolve) => setTimeout(resolve, 1000)) // 1s cool-off
@@ -1578,13 +1578,13 @@ export class SpiderEngine {
 		return providers
 	}
 
-	public computeCCI(filePath: string, pathogens: PathogenStore, monitor: MetabolicMonitor): number {
+	public computeCCI(filePath: string, anomalies: AnomalyRegistry, monitor: StabilityMonitor): number {
 		const node = this.nodes.get(this.resolver.normalizePath(filePath))
 		if (!node) return 0
 		const couplingLoad = Math.min(node.afferentCoupling / 20, 1.0)
 		const complexityLoad = Math.min(node.astComplexity / 2000, 1.0)
 		const structuralWeight = ((couplingLoad + complexityLoad) / 2) * 0.4
-		const prediction = pathogens.predictFailure(filePath)
+		const prediction = anomalies.predictAnomaly(filePath)
 		const historicalRisk = prediction.likely ? 0.4 : 0
 		const activity = monitor.isHighlyActive(filePath)
 		const activityPressure = activity.active ? 0.2 : 0

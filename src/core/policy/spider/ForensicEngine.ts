@@ -225,7 +225,7 @@ export class ForensicEngine {
 			try {
 				sourceFile = ts.createSourceFile(node.path, content, ts.ScriptTarget.Latest, true)
 				imports = this.getImportedSymbols(sourceFile)
-				const hasGhostException = content.includes("[SOVEREIGN_EXCEPTION: Ghost Symbols]")
+				const hasGhostException = content.includes("[STABILITY_EXCEPTION: Ghost Symbols]")
 
 				for (const { specifier, symbols } of imports) {
 					const diskPath = this.resolver.getDiskPath(node.path, specifier)

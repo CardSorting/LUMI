@@ -1,5 +1,5 @@
 import * as path from "path"
-import { SovereignDecomposer } from "./SovereignDecomposer"
+import { ModuleDecomposer } from "./ModuleDecomposer"
 import { SpiderEngine } from "./spider/SpiderEngine.js"
 
 export interface AxiomViolation {
@@ -17,7 +17,7 @@ export interface AxiomViolation {
 export class SemanticAxiomEngine {
 	private readonly SIMPLICITY_THRESHOLD = 1500 // V15: Industrial limit for Domain logic
 	private readonly PREEMPTIVE_THRESHOLD = 1200 // V150: Proactive warning threshold
-	private readonly decomposer = new SovereignDecomposer()
+	private readonly decomposer = new ModuleDecomposer()
 
 	constructor() {}
 

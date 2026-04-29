@@ -1,7 +1,7 @@
 /**
  * [LAYER: CORE]
  *
- * PlanModeEnforcer: Enforces SOVEREIGN DRAFTING workflow during Plan Mode.
+ * PlanModeEnforcer: Enforces INTEGRITY DRAFTING workflow during Plan Mode.
  * Ensures scratchpad.md is created before presenting architectural plans.
  */
 
@@ -17,10 +17,10 @@ export interface PlanModeRequirements {
 }
 
 /**
- * PlanModeEnforcer: Sovereign Drafting Workflow Enforcement
+ * PlanModeEnforcer: Integrity Drafting Workflow Enforcement
  *
- * SOVEREIGN DRAFTING WORKFLOW:
- * 1. Create/Update scratchpad.md with SOVEREIGN DRAFTING template
+ * INTEGRITY DRAFTING WORKFLOW:
+ * 1. Create/Update scratchpad.md with INTEGRITY DRAFTING template
  * 2. Perform Double Down Passes on requirement analysis
  * 3. Execute TRIAD AUDIT (The Architect, The Critic, The SRE)
  * 4. Only then can plan_mode_respond be called
@@ -51,8 +51,8 @@ export class PlanModeEnforcer {
 		const content = await this.readScratchpad()
 
 		if (!content || content.trim().length === 0) {
-			const { SovereignProtocol } = await import("./SovereignProtocol")
-			const template = SovereignProtocol.generateAuditTemplate("Architectural Drafting")
+			const { IntegrityProtocol } = await import("./IntegrityProtocol")
+			const template = IntegrityProtocol.generateAuditTemplate("Architectural Drafting")
 			return {
 				allowed: false,
 				reason:

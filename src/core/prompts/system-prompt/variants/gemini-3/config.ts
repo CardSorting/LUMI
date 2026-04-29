@@ -41,7 +41,7 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 		SystemPromptSection.FEEDBACK,
 		SystemPromptSection.TODO,
 		SystemPromptSection.TASK_PROGRESS,
-		SystemPromptSection.SOVEREIGN_WIKI,
+		SystemPromptSection.INTEGRITY_WIKI,
 		SystemPromptSection.SYSTEM_INFO,
 		SystemPromptSection.OBJECTIVE,
 		SystemPromptSection.USER_INSTRUCTIONS,

@@ -2,7 +2,7 @@ import { SystemPromptSection } from "../../templates/placeholders"
 
 export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 {{${SystemPromptSection.JOY_ZONING}}}
-{{${SystemPromptSection.SOVEREIGN_WIKI}}}
+{{${SystemPromptSection.INTEGRITY_WIKI}}}
 
 {{${SystemPromptSection.TOOL_USE}}}
 

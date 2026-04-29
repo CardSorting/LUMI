@@ -41,7 +41,7 @@ export class SystemGuardrails {
 		// Unref to allow process to exit even if interval is running
 		this.intervalId.unref()
 
-		Logger.info("Sovereign system guardrails started")
+		Logger.info("Stability guardrails started")
 	}
 
 	/**

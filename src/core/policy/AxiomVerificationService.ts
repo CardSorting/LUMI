@@ -3,9 +3,9 @@ import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 import { isLayerTagSupported } from "@/utils/joy-zoning"
 import { ToolUse } from "../assistant-message"
-import { PathogenStore } from "../integrity/PathogenStore"
+import { AnomalyRegistry } from "../integrity/AnomalyRegistry"
 import { SemanticAxiomEngine } from "./SemanticAxiomEngine"
-import { SovereignForensics } from "./SovereignForensics"
+import { StabilityForensics } from "./StabilityForensics"
 import { SpiderEngine } from "./spider/SpiderEngine"
 
 export interface VerificationResult {
@@ -23,8 +23,8 @@ export class AxiomVerificationService {
 		private cwd: string,
 		private spiderEngine: SpiderEngine,
 		private axiomEngine: SemanticAxiomEngine,
-		private pathogens: PathogenStore,
-		private forensics: SovereignForensics,
+		private anomalies: AnomalyRegistry,
+		private forensics: StabilityForensics,
 	) {}
 
 	/**
@@ -67,7 +67,7 @@ export class AxiomVerificationService {
 					"Break the circular dependency by extracting shared logic to a lower layer (Plumbing) or using Dependency Inversion.",
 				)
 				snippets.push("// Pattern: Extract shared state/logic to src/plumbing/shared-utils.ts")
-			} else if (err.includes("Sovereign Leak") || err.includes("DEPENDENCY_INVERSION")) {
+			} else if (err.includes("Stability Leak") || err.includes("DEPENDENCY_INVERSION")) {
 				fixes.push("Domain/Core logic cannot depend on concrete Infrastructure. Extract an interface.")
 				snippets.push("export interface IService { sync(): Promise<void>; }")
 			} else {
@@ -92,10 +92,10 @@ export class AxiomVerificationService {
 	}
 
 	/**
-	 * Detects pathogens in the violation list.
+	 * Detects anomalies in the violation list.
 	 */
-	public detectPathogens(violations: string[]): string[] {
-		return violations.filter((v) => this.pathogens.isPathogenic(v))
+	public detectAnomalies(violations: string[]): string[] {
+		return violations.filter((v) => this.anomalies.hasAnomaly(v))
 	}
 
 	/**
@@ -126,7 +126,7 @@ export class AxiomVerificationService {
 	public isImplicitlyAudited(filePath: string, scratchpadContent: string, block?: ToolUse): boolean {
 		const absolutePath = path.resolve(this.cwd, filePath)
 
-		if (scratchpadContent.includes("# SOVEREIGN_AGILE")) return true
+		if (scratchpadContent.includes("# AGILE_MODE")) return true
 
 		// 1. Directory-level coverage
 		const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+(?:\/|$)/g
@@ -195,8 +195,8 @@ export class AxiomVerificationService {
 	public dispose(): void {
 		this.spiderEngine = null as unknown as SpiderEngine
 		this.axiomEngine = null as unknown as SemanticAxiomEngine
-		this.pathogens = null as unknown as PathogenStore
-		this.forensics = null as unknown as SovereignForensics
+		this.anomalies = null as unknown as AnomalyRegistry
+		this.forensics = null as unknown as StabilityForensics
 		Logger.info("[AxiomVerificationService] Verification substrate released.")
 	}
 }

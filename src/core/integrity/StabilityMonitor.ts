@@ -1,0 +1,517 @@
+import * as crypto from "crypto"
+import * as path from "path"
+import { Logger } from "@/shared/services/Logger"
+import { SafeNumber } from "../../shared/utils/SafeNumber"
+
+export interface StabilityMetrics {
+	reads: number
+	writes: number
+	linesAdded: number
+	linesDeleted: number
+	lastEditTimestamp: number
+	lastReadTimestamp: number
+	lastObservedHash?: string // V30 Merkle Drift Detection
+	lastAestheticHash?: string // V100: Structural integrity hash
+	lastTurnId?: string // V100: Synthesis tracking
+	symbolObservations: Set<string> // V26: Neural Forensic Tracking
+	aestheticWrites: number // V188: Noise filtering count
+}
+
+/**
+ * Serializable version of metrics for persistence.
+ */
+export interface SerializableStabilityMetrics extends Omit<StabilityMetrics, "symbolObservations"> {
+	symbolObservations: string[]
+}
+
+export interface StabilityStats {
+	totalReads: number
+	totalWrites: number
+	avgPressure: number
+	avgDoubtSignal: number
+	hotspots: { path: string; stress: number }[]
+	aestheticResilience: number
+}
+
+/**
+ * StabilityMonitor: Tracks the "Stability" and "Activity Level" of the project.
+ * Implements activity detection: Churn, High Activity, and Workload.
+ */
+export class StabilityMonitor {
+	private registry: Map<string, StabilityMetrics> = new Map()
+	private cooldownThreshold = 500 // Silent High-Velocity: Massively expanded budget
+	private refactorThreshold = 1000 // Silent High-Velocity: Massively expanded budget
+	private thresholdMultiplier = 1.0 // V80: Adaptive activity budget
+	private velocityDamping = 1.0 // V100: Velocity Damping (formerly resonance)
+	private sessionVersion = 1 // V150: State Evolution
+
+	constructor(private readonly cwd: string = process.cwd()) {}
+
+	/**
+	 * Normalizes a path to a consistent registry key (relative, lowercase).
+	 */
+	public normalize(p: string): string {
+		try {
+			const absolutePath = path.resolve(this.cwd, p)
+			const relativePath = path.relative(this.cwd, absolutePath)
+			return relativePath.replace(/\\/g, "/").toLowerCase()
+		} catch {
+			return p.replace(/\\/g, "/").toLowerCase()
+		}
+	}
+
+	/**
+	 * Records a read operation.
+	 */
+	public recordRead(filePath: string, content?: string) {
+		const norm = this.normalize(filePath)
+		const metrics = this.getOrCreateMetrics(norm)
+		metrics.reads++
+		metrics.lastReadTimestamp = Date.now()
+
+		// V215: Rolling Symbol Observation (Limit 100)
+		// Prevents Set bloat in massive structural graphs.
+		if (metrics.symbolObservations.size > 100) {
+			const first = metrics.symbolObservations.values().next().value
+			if (first) metrics.symbolObservations.delete(first)
+		}
+
+		if (content) {
+			metrics.lastObservedHash = this.computeHash(content)
+		}
+	}
+
+	/**
+	 * Records a write/edit operation.
+	 * V100: Metabolic Synthesis & Aesthetic Agility.
+	 */
+	public recordWrite(filePath: string, content?: string, added = 0, deleted = 0, turnId?: string) {
+		const norm = this.normalize(filePath)
+		const metrics = this.getOrCreateMetrics(norm)
+
+		let impactMultiplier = this.velocityDamping
+
+		if (content) {
+			const aesHash = this.computeAestheticHash(content)
+			if (metrics.lastAestheticHash === aesHash) {
+				impactMultiplier *= 0.1 // V100: Aesthetic changes have minimal impact
+				metrics.aestheticWrites++
+				Logger.info(`[StabilityMonitor] Visual Alignment: Minimal structural change in ${path.basename(filePath)}`)
+			} else if (turnId && metrics.lastTurnId === turnId) {
+				impactMultiplier *= 0.5 // V100: Activity Consolidation: iterative edits in same turn discounted
+				Logger.info(`[StabilityMonitor] Activity Consolidation: Repeated session update for ${path.basename(filePath)}`)
+			}
+			metrics.lastAestheticHash = aesHash
+		}
+
+		metrics.writes += 1 * impactMultiplier
+		metrics.linesAdded += added * impactMultiplier
+		metrics.linesDeleted += deleted * impactMultiplier
+		metrics.lastEditTimestamp = Date.now()
+		metrics.lastTurnId = turnId
+
+		if (content) {
+			metrics.lastObservedHash = this.computeHash(content)
+		}
+	}
+
+	/**
+	 * Computes a structural hash for the given content.
+	 */
+	private computeHash(content: string): string {
+		return crypto.createHash("md5").update(content).digest("hex")
+	}
+
+	/**
+	 * V100: Computes a hash after stripping comments and whitespace.
+	 * Enables Aesthetic Agility (ignoring formatting churn).
+	 */
+	private computeAestheticHash(content: string): string {
+		const normalized = content
+			.replace(/\/\/.*$/gm, "") // Remove single-line comments
+			.replace(/\/\*[\s\S]*?\*\//g, "") // Remove multi-line comments
+			.replace(/\s+/g, "") // Remove all whitespace
+		return crypto.createHash("md5").update(normalized).digest("hex")
+	}
+
+	public getDoubtSignal(filePath: string, layer = "infrastructure", lineCount = 0): number {
+		const norm = this.normalize(filePath)
+		const metrics = this.registry.get(norm)
+		if (!metrics) return 0
+		const baseDoubt = metrics.reads / (metrics.writes || 1)
+
+		// PRODUCTION HARDENING: Layer-Aware Throttling.
+		// High-Velocity: Increased thresholds for activity alerts.
+		const threshold = layer === "domain" || layer === "core" ? 15.0 : 45.0
+
+		if (metrics.reads > threshold && metrics.writes === 0) return 100.0 // High workload advisory (relaxed from 999)
+
+		// Lenience factor for large files (> 500 lines)
+		const lenience = lineCount > 500 ? Math.min(2.0, lineCount / 500) : 1.0
+		return baseDoubt / lenience
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Detects if the agent is stuck in a high-entropy recursive scanning loop.
+	 */
+	public detectRecursiveLoop(): { loop: boolean; files?: string[] } {
+		const loopingFiles = Array.from(this.registry.entries())
+			.filter(([_p, m]) => m.lastEditTimestamp === 0 && m.reads > 5) // Read multiple times but never edited
+			.map(([p]) => p)
+
+		if (loopingFiles.length >= 3) {
+			return {
+				loop: true,
+				files: loopingFiles,
+			}
+		}
+		return { loop: false }
+	}
+
+	/**
+	 * Detects if a file has high activity (High churn in a short period).
+	 * V189: Calibrated with nodal scale factor.
+	 */
+	public isHighlyActive(filePath: string, isRefactoring = false, lineCount = 0): { active: boolean; reason?: string } {
+		const norm = this.normalize(filePath)
+		const metrics = this.registry.get(norm)
+		if (!metrics) return { active: false }
+
+		const pressure = this.getPressure(filePath)
+		const sizeFactor = lineCount > 0 ? Math.log10(Math.max(10, lineCount)) : 1.0
+		const threshold = (isRefactoring ? 15.0 : 7.0) * sizeFactor
+
+		if (pressure > threshold) {
+			return {
+				active: true,
+				reason: `Activity level (${SafeNumber.format(pressure, 1)}) suggests a focus break may be helpful.`,
+			}
+		}
+
+		return { active: false }
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Normalized pressure score [0.0 - 10.0+] for a file.
+	 * V189: Calibrated with Doubt Signal weighting to detect "Investigative Thrashing".
+	 */
+	public getPressure(filePath: string): number {
+		const norm = this.normalize(filePath)
+		const metrics = this.registry.get(norm)
+		if (!metrics) return 0
+
+		const churn = metrics.writes + (metrics.linesAdded + metrics.linesDeleted) / 100
+		const doubt = this.getDoubtSignal(filePath)
+
+		// If high doubt (> 10), it acts as a pressure multiplier
+		const doubtMultiplier = doubt > 10 ? Math.min(2.0, 1.0 + (doubt - 10) / 20) : 1.0
+
+		return churn * this.velocityDamping * doubtMultiplier
+	}
+
+	/**
+	 * Detects "Task Drift" — changing too many unrelated files in a short burst.
+	 * Calibrated for high-velocity agents: Planning mode is 2x more lenient to allow for broad exploration.
+	 */
+	public getTaskDrift(
+		isPlanning = false,
+		isRefactoring = false,
+		scratchpadContent = "",
+	): { drift: number; warning?: string; isInfraTurn?: boolean } {
+		const recentThreshold = Date.now() - 600000 // 10 minutes
+		const recentEntries = Array.from(this.registry.entries()).filter(([_p, m]) => m.lastEditTimestamp > recentThreshold)
+
+		const drift = recentEntries.length
+		// PRODUCTION HARDENING: "Refactor Mode" allows for 50% more drift to support complex cross-module changes.
+		const baseThreshold = (isPlanning ? 20 : 10) * this.thresholdMultiplier
+		const threshold = isRefactoring ? Math.floor(baseThreshold * 1.5) : baseThreshold
+
+		// V8: Infrastructure Turn Suppression
+		const isInfraTurn = scratchpadContent.includes("# INFRASTRUCTURE TURN") || scratchpadContent.includes("# TECH DEBT TURN")
+
+		if (drift > threshold && !isInfraTurn) {
+			return {
+				drift,
+				warning: `⚠️ [SPI-202] TASK DRIFT DETECTED: You have modified ${drift} different files in 10m. Focus on one module at a time.`,
+			}
+		}
+
+		// v9 HARDENING: Mission Drift Detection (Yak Shaving Protection)
+		if (drift >= 5 && !isPlanning && !isInfraTurn) {
+			const nonDomainEdits = recentEntries.filter(([p]) => !p.includes("/domain/") && !p.includes("/core/")).length
+			const missionRatio = nonDomainEdits / drift
+
+			if (missionRatio >= 0.9) {
+				return {
+					drift,
+					warning: `🛑 [SPI-203] MISSION DRIFT: 90% of updates are in peripheral files. Return focus to Domain/Core logic.`,
+				}
+			}
+		}
+
+		// V16: Breather Support
+		if (scratchpadContent.includes("# STABILITY_RECALIBRATEER") || scratchpadContent.includes("# STABILITY BREAK")) {
+			this.resetStabilityPressure(true) // V189: Transient reset only
+			return { drift: 0, isInfraTurn: true }
+		}
+
+		return { drift, isInfraTurn }
+	}
+
+	/**
+	 * V8: Resets activity history for a specific file (Stability break recovery)
+	 */
+	public resetFileActivity(filePath: string) {
+		const norm = this.normalize(filePath)
+		const metrics = this.registry.get(norm)
+		if (metrics) {
+			metrics.linesAdded = 0
+			metrics.linesDeleted = 0
+			metrics.writes = 0
+			Logger.info(`[StabilityMonitor] Activity history cleared for ${path.basename(filePath)}`)
+		}
+	}
+
+	/**
+	 * Gets the project-wide stability stats.
+	 */
+	public getPressureMap(): Map<string, number> {
+		const map = new Map<string, number>()
+		for (const [path, metrics] of this.registry.entries()) {
+			// Normalize pressure to a 0-1 scale based on relative writes
+			const pressure = Math.min(1.0, metrics.writes / 10)
+			map.set(path, pressure)
+		}
+		return map
+	}
+
+	public getStabilityStats(): StabilityStats {
+		let totalReads = 0
+		let totalWrites = 0
+		const hotspots: { path: string; stress: number }[] = []
+
+		for (const [p, m] of this.registry.entries()) {
+			totalReads += m.reads
+			totalWrites += m.writes
+			const stress = this.getPressure(p)
+			if (stress > 1) {
+				hotspots.push({ path: p, stress })
+			}
+		}
+
+		return {
+			totalReads,
+			totalWrites,
+			avgPressure:
+				Array.from(this.registry.keys()).reduce((acc, p) => acc + this.getPressure(p), 0) / (this.registry.size || 1),
+			avgDoubtSignal: totalReads / (totalWrites || 1),
+			hotspots: hotspots.sort((a, b) => b.stress - a.stress).slice(0, 5),
+			aestheticResilience: this.getAestheticStatus(),
+		}
+	}
+
+	/**
+	 * V188: Computes the efficiency of the substrate in filtering aesthetic noise.
+	 */
+	public getAestheticStatus(): number {
+		let total = 0
+		let aesthetic = 0
+		for (const m of this.registry.values()) {
+			total += m.writes || 0
+			aesthetic += m.aestheticWrites || 0
+		}
+		return total === 0 ? 1.0 : aesthetic / total
+	}
+
+	/**
+	 * V26: Records a focused observation of a specific symbol (class/function).
+	 */
+	public recordSymbolObservation(filePath: string, symbol: string) {
+		const norm = this.normalize(filePath)
+		const metrics = this.getOrCreateMetrics(norm)
+		metrics.symbolObservations.add(symbol)
+		Logger.info(`[StabilityMonitor] Focus recorded: ${symbol} in ${path.basename(filePath)}`)
+	}
+
+	/**
+	 * V26: Returns a read-only snapshot of the investigation registry.
+	 */
+	public getForensicRegistry(): ReadonlyMap<string, StabilityMetrics> {
+		return this.registry
+	}
+
+	/**
+	 * V228: Path-aware metrics lookup.
+	 */
+	public getMetrics(filePath: string): StabilityMetrics | undefined {
+		return this.registry.get(this.normalize(filePath))
+	}
+
+	private getOrCreateMetrics(filePath: string): StabilityMetrics {
+		let metrics = this.registry.get(filePath)
+		if (!metrics) {
+			metrics = {
+				reads: 0,
+				writes: 0,
+				linesAdded: 0,
+				linesDeleted: 0,
+				lastEditTimestamp: 0,
+				lastReadTimestamp: Date.now(),
+				symbolObservations: new Set<string>(),
+				aestheticWrites: 0,
+			}
+			this.registry.set(filePath, metrics)
+		}
+		return metrics
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Identifies "Stagnant Substrate" — files with high age-to-utility ratios.
+	 */
+	public getStagnantSubstrate(): { path: string; ageInDays: number; utility: number }[] {
+		// Silent High-Velocity: Disabled to reduce noise.
+		return []
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Evaluates the project-wide cognitive load and triggers a COOLDOWN
+	 * if the metabolic churn exceeds the safety capacity of the substrate.
+	 */
+	/**
+	 * V200: Evolutionary Resilience.
+	 * Aggregates activity data to recommend a structural strategy.
+	 */
+	public getStabilityStrategy(): { strategy: "STABILIZE" | "PURGE" | "RESONATE" | "NEUTRAL"; pressure: number; doubt: number } {
+		const stats = this.getStabilityStats()
+		const stagnant = this.getStagnantSubstrate()
+		const doubt = stats.avgDoubtSignal
+		const pressure = stats.avgPressure
+
+		if (pressure > 8.0 || doubt > 10.0) return { strategy: "STABILIZE", pressure, doubt }
+		if (stagnant.length > 5) return { strategy: "PURGE", pressure, doubt }
+		if (pressure < 2.0 && doubt < 2.0) return { strategy: "RESONATE", pressure, doubt }
+
+		return { strategy: "NEUTRAL", pressure, doubt }
+	}
+
+	public getCooldownStatus(isRefactoring = false): { active: boolean; reason?: string } {
+		const recentThreshold = Date.now() - 1800000 // 30 minutes
+		const totalRecentWrites = Array.from(this.registry.values()).reduce((acc, m) => {
+			return m.lastEditTimestamp > recentThreshold ? acc + m.writes : acc
+		}, 0)
+
+		const threshold = (isRefactoring ? this.refactorThreshold : this.cooldownThreshold) * this.thresholdMultiplier
+
+		if (totalRecentWrites > threshold) {
+			return {
+				active: true,
+				reason: `System-wide activity peaking (${totalRecentWrites} edits in 30m). ${isRefactoring ? "(Refactor mode: Extra budget applied)" : "Stability safety threshold reached."}`,
+			}
+		}
+
+		return { active: false }
+	}
+
+	/**
+	 * PRODUCTION HARDENING: Emergency override to reset project activity.
+	 * V189: Forensic Separation - Clear pressure without destroying historical logs.
+	 */
+	public resetStabilityPressure(onlyTransient = false) {
+		if (onlyTransient) {
+			for (const m of this.registry.values()) {
+				m.writes = 0
+				m.linesAdded = 0
+				m.linesDeleted = 0
+				m.aestheticWrites = 0
+			}
+		} else {
+			this.registry.clear()
+		}
+		this.thresholdMultiplier = 1.0 // Reset velocity to base
+		Logger.info(`🔋 [StabilityMonitor] Activity level reset (${onlyTransient ? "Transient" : "Full"}).`)
+	}
+
+	/**
+	 * V80: Adjusts the metabolic agility of the substrate.
+	 */
+	public setThresholdMultiplier(multiplier: number) {
+		this.thresholdMultiplier = multiplier
+	}
+
+	/**
+	 * V100: Sets the velocity damping factor.
+	 */
+	public setVelocityDamping(multiplier: number) {
+		this.velocityDamping = multiplier
+	}
+	/**
+	 * V150: Cognitive Immortality.
+	 */
+	public exportState(): StabilityState {
+		const registryObj: Record<string, SerializableStabilityMetrics> = {}
+		for (const [p, m] of this.registry.entries()) {
+			registryObj[p] = {
+				...m,
+				symbolObservations: Array.from(m.symbolObservations),
+			}
+		}
+
+		return {
+			version: this.sessionVersion,
+			registry: registryObj,
+			thresholdMultiplier: this.thresholdMultiplier,
+			velocityDamping: this.velocityDamping,
+			timestamp: Date.now(),
+		}
+	}
+
+	/**
+	 * V150: Substrate Restoration.
+	 */
+	public importState(state: StabilityState) {
+		if (!state || state.version !== this.sessionVersion) {
+			Logger.warn("[StabilityMonitor] Incompatible state version. Resetting memory.")
+			this.resetStabilityPressure()
+			return
+		}
+
+		this.thresholdMultiplier = state.thresholdMultiplier
+		this.velocityDamping = state.velocityDamping
+
+		for (const [p, m] of Object.entries(state.registry)) {
+			this.registry.set(p, {
+				...m,
+				symbolObservations: new Set(m.symbolObservations),
+			})
+		}
+		Logger.info(`[StabilityMonitor] Project Restored: ${this.registry.size} files restored to context registry.`)
+	}
+
+	public getVelocityDamping(): number {
+		return this.velocityDamping
+	}
+
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 * Clears the registry and all forensic observations to prevent memory leaks.
+	 */
+	public dispose(): void {
+		for (const metrics of this.registry.values()) {
+			metrics.symbolObservations.clear()
+		}
+		this.registry.clear()
+		Logger.info("[StabilityMonitor] Substrate released.")
+	}
+}
+
+/**
+ * V150: Industrial Maturity.
+ * Helper for deep state serialization.
+ */
+export interface StabilityState {
+	version: number
+	registry: Record<string, SerializableStabilityMetrics>
+	thresholdMultiplier: number
+	velocityDamping: number
+	timestamp: number
+}

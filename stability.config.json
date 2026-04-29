@@ -1,0 +1,53 @@
+{
+	"layers": {
+		"domain": {
+			"optimalLogicDensity": 0.15,
+			"maxIOEntropy": 0.0,
+			"maxComplexity": 5000
+		},
+		"core": {
+			"optimalLogicDensity": 0.05,
+			"maxIOEntropy": 0.0,
+			"maxComplexity": 3000
+		},
+		"infrastructure": {
+			"optimalLogicDensity": 0.05,
+			"maxIOEntropy": 1.0,
+			"maxComplexity": 10000
+		},
+		"plumbing": {
+			"optimalLogicDensity": 0.0,
+			"maxIOEntropy": 0.0,
+			"maxComplexity": 500
+		},
+		"ui": {
+			"optimalLogicDensity": 0.0,
+			"maxIOEntropy": 1.0,
+			"maxComplexity": 15000
+		}
+	},
+	"global": {
+		"maxPathDepth": 4,
+		"enforceKebabCase": false,
+		"activityThreshold": 5.0,
+		"integrityAlertThreshold": 40,
+		"supportedLayerTags": [
+			".ts",
+			".tsx",
+			".js",
+			".jsx",
+			".md",
+			".sh",
+			".py",
+			".go",
+			".sql"
+		],
+		"excludePaths": [
+			"**/generated/**",
+			"**/dist/**",
+			"**/node_modules/**",
+			"**/out/**",
+			"**/*.config.js"
+		]
+	}
+}

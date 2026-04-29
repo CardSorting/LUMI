@@ -29,24 +29,24 @@ import { CognitiveMemoryReleaseHandler } from "./handlers/CognitiveMemoryRelease
 import { CognitiveMemorySnapshotHandler } from "./handlers/CognitiveMemorySnapshotHandler"
 import { CognitiveMemorySubgraphHandler } from "./handlers/CognitiveMemorySubgraphHandler"
 import { CondenseHandler } from "./handlers/CondenseHandler"
+import { DependencyMapHandler } from "./handlers/DependencyMapHandler"
 import { ExecuteCommandToolHandler } from "./handlers/ExecuteCommandToolHandler"
 import { GenerateExplanationToolHandler } from "./handlers/GenerateExplanationToolHandler"
 import { ListCodeDefinitionNamesToolHandler } from "./handlers/ListCodeDefinitionNamesToolHandler"
 import { ListFilesToolHandler } from "./handlers/ListFilesToolHandler"
 import { LoadMcpDocumentationHandler } from "./handlers/LoadMcpDocumentationHandler"
+import { ModuleDecomposeHandler } from "./handlers/ModuleDecomposeHandler"
+import { ModuleScaffoldHandler } from "./handlers/ModuleScaffoldHandler"
 import { NewTaskHandler } from "./handlers/NewTaskHandler"
 import { PlanModeRespondHandler } from "./handlers/PlanModeRespondHandler"
 import { ReadFileToolHandler } from "./handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./handlers/ReportBugHandler"
 import { SearchFilesToolHandler } from "./handlers/SearchFilesToolHandler"
-import { SovereignBreathHandler } from "./handlers/SovereignBreathHandler"
-import { SovereignDecomposeHandler } from "./handlers/SovereignDecomposeHandler"
-import { SovereignDoctorHandler } from "./handlers/SovereignDoctorHandler"
-import { SovereignHealHandler } from "./handlers/SovereignHealHandler"
-import { SovereignMapHandler } from "./handlers/SovereignMapHandler"
-import { SovereignQueryHandler } from "./handlers/SovereignQueryHandler"
-import { SovereignScaffoldHandler } from "./handlers/SovereignScaffoldHandler"
-import { SovereignSweepHandler } from "./handlers/SovereignSweepHandler"
+import { StabilityDoctorHandler } from "./handlers/StabilityDoctorHandler"
+import { StabilityHealHandler } from "./handlers/StabilityHealHandler"
+import { StabilityQueryHandler } from "./handlers/StabilityQueryHandler"
+import { StabilityRecalibrateHandler } from "./handlers/StabilityRecalibrateHandler"
+import { StabilitySweepHandler } from "./handlers/StabilitySweepHandler"
 import { UseSubagentsToolHandler } from "./handlers/SubagentToolHandler"
 import { SummarizeTaskHandler } from "./handlers/SummarizeTaskHandler"
 import { UseMcpToolHandler } from "./handlers/UseMcpToolHandler"
@@ -154,14 +154,14 @@ export class ToolExecutorCoordinator {
 		[DietCodeDefaultTool.MEM_CLAIM]: (_v: ToolValidator) => new CognitiveMemoryClaimHandler(),
 		[DietCodeDefaultTool.MEM_RELEASE]: (_v: ToolValidator) => new CognitiveMemoryReleaseHandler(),
 		[DietCodeDefaultTool.MEM_HUBS]: (_v: ToolValidator) => new CognitiveMemoryHubsHandler(),
-		[DietCodeDefaultTool.SOVEREIGN_DIAGNOSE]: (_v: ToolValidator) => new SovereignDoctorHandler(),
-		[DietCodeDefaultTool.SOVEREIGN_SCAFFOLD]: (_v: ToolValidator) => new SovereignScaffoldHandler(),
-		[DietCodeDefaultTool.SOVEREIGN_QUERY]: (_v: ToolValidator) => new SovereignQueryHandler(),
-		[DietCodeDefaultTool.SOVEREIGN_DECOMPOSE]: (_v: ToolValidator) => new SovereignDecomposeHandler(),
-		[DietCodeDefaultTool.SOVEREIGN_MAP]: (_v: ToolValidator) => new SovereignMapHandler(),
-		[DietCodeDefaultTool.SOVEREIGN_BREATH]: (_v: ToolValidator) => new SovereignBreathHandler(),
-		[DietCodeDefaultTool.SOVEREIGN_SWEEP]: (_v: ToolValidator) => new SovereignSweepHandler(),
-		[DietCodeDefaultTool.SOVEREIGN_HEAL]: (_v: ToolValidator) => new SovereignHealHandler(),
+		[DietCodeDefaultTool.STABILITY_DIAGNOSE]: (_v: ToolValidator) => new StabilityDoctorHandler(),
+		[DietCodeDefaultTool.STABILITY_SCAFFOLD]: (_v: ToolValidator) => new ModuleScaffoldHandler(),
+		[DietCodeDefaultTool.STABILITY_QUERY]: (_v: ToolValidator) => new StabilityQueryHandler(),
+		[DietCodeDefaultTool.STABILITY_DECOMPOSE]: (_v: ToolValidator) => new ModuleDecomposeHandler(),
+		[DietCodeDefaultTool.STABILITY_MAP]: (_v: ToolValidator) => new DependencyMapHandler(),
+		[DietCodeDefaultTool.STABILITY_RECALIBRATE]: (_v: ToolValidator) => new StabilityRecalibrateHandler(),
+		[DietCodeDefaultTool.STABILITY_SWEEP]: (_v: ToolValidator) => new StabilitySweepHandler(),
+		[DietCodeDefaultTool.STABILITY_HEAL]: (_v: ToolValidator) => new StabilityHealHandler(),
 		[DietCodeDefaultTool.RENAME]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.MOVE]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.DELETE]: (_v: ToolValidator) => undefined,

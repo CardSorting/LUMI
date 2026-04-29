@@ -6,13 +6,13 @@ import { getEditingFilesSection } from "./editing_files"
 import { getEnvironmentStateSection } from "./environment_state"
 import { getFeedbackSection } from "./feedback"
 import { getForensicToolsSection } from "./forensic_tools"
+import { getIntegrityDraftingSection } from "./integrity_drafting"
+import { getIntegrityWikiSection } from "./integrity_wiki"
 import { getJoyZoningSection } from "./joy_zoning"
 import { getMcp } from "./mcp"
 import { getObjectiveSection } from "./objective"
 import { getRulesSection } from "./rules"
 import { getSkillsSection } from "./skills"
-import { getSovereignDraftingSection } from "./sovereign_drafting"
-import { getSovereignWikiSection } from "./sovereign_wiki"
 import { getSystemInfo } from "./system_info"
 import { getUpdatingTaskProgress } from "./task_progress"
 import { getToolUseSection } from "./tool_use"
@@ -36,8 +36,8 @@ export function getSystemPromptComponents() {
 		{ id: SystemPromptSection.OBJECTIVE, fn: getObjectiveSection },
 		{ id: SystemPromptSection.RULES, fn: getRulesSection },
 		{ id: SystemPromptSection.SKILLS, fn: getSkillsSection },
-		{ id: SystemPromptSection.SOVEREIGN_DRAFTING, fn: getSovereignDraftingSection },
-		{ id: SystemPromptSection.SOVEREIGN_WIKI, fn: getSovereignWikiSection },
+		{ id: SystemPromptSection.INTEGRITY_DRAFTING, fn: getIntegrityDraftingSection },
+		{ id: SystemPromptSection.INTEGRITY_WIKI, fn: getIntegrityWikiSection },
 		{ id: SystemPromptSection.FORENSIC_TOOLS, fn: getForensicToolsSection },
 		{ id: SystemPromptSection.SYSTEM_INFO, fn: getSystemInfo },
 		{ id: SystemPromptSection.TASK_PROGRESS, fn: getUpdatingTaskProgress },

@@ -7,7 +7,7 @@ import type { SystemPromptContext } from "../../types"
  */
 export const BASE = `{{${SystemPromptSection.AGENT_ROLE}}}
 {{${SystemPromptSection.JOY_ZONING}}}
-{{${SystemPromptSection.SOVEREIGN_WIKI}}}
+{{${SystemPromptSection.INTEGRITY_WIKI}}}
 {{${SystemPromptSection.FORENSIC_TOOLS}}}
 
 {{${SystemPromptSection.TOOL_USE}}}

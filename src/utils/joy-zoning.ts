@@ -2,7 +2,7 @@ import * as fs from "fs"
 import minimatch from "minimatch"
 import * as path from "path"
 import * as ts from "typescript"
-import { SovereignPolicy } from "../core/policy/SovereignPolicy"
+import { StabilityPolicy } from "../core/policy/StabilityPolicy"
 
 export type Layer = "domain" | "core" | "infrastructure" | "plumbing" | "ui"
 
@@ -170,7 +170,7 @@ export function isLayerTagSupported(filePath: string, content?: string): boolean
 	const ext = path.extname(filePath).toLowerCase()
 	if (filePath.toLowerCase().endsWith(".d.ts") || STRICT_BLOCKLIST.includes(ext)) return false
 
-	const policy = SovereignPolicy.getInstance(process.cwd())
+	const policy = StabilityPolicy.getInstance(process.cwd())
 	const config = policy.getGlobalConfig()
 	const supportedExtensions = config.supportedLayerTags
 	const excludePaths = config.excludePaths || []

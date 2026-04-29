@@ -2,21 +2,21 @@ import fs from "node:fs"
 import path from "node:path"
 
 import { Logger } from "@/shared/services/Logger"
-import { SovereignOptimizer } from "../policy/SovereignOptimizer.js"
+import { IntegrityOptimizer } from "../policy/IntegrityOptimizer.js"
 import type { SpiderEngine } from "../policy/spider/SpiderEngine.js"
+import { AnomalyRegistry } from "./AnomalyRegistry.js"
 import type { AuditRecorder } from "./AuditRecorder.js"
-import { MetabolicMonitor, StabilityStats } from "./MetabolicMonitor.js"
-import { PathogenStore } from "./PathogenStore.js"
+import { StabilityMonitor, StabilityStats } from "./StabilityMonitor.js"
 
 /**
- * DashboardGenerator: Generates a live JOY_DASHBOARD.md report.
- * Provides real-time visibility into project sovereignty and structural joy.
+ * DashboardGenerator: Generates a live STABILITY_DASHBOARD.md report.
+ * Provides real-time visibility into project stability and structural integrity.
  */
 export class DashboardGenerator {
 	private dashboardPath: string
 
 	constructor(private cwd: string) {
-		this.dashboardPath = path.join(cwd, "JOY_DASHBOARD.md")
+		this.dashboardPath = path.join(cwd, "STABILITY_DASHBOARD.md")
 	}
 
 	/**
@@ -25,9 +25,9 @@ export class DashboardGenerator {
 	public async updateDashboard(
 		engine: SpiderEngine,
 		recorder: AuditRecorder,
-		metabolic: MetabolicMonitor,
-		optimizer: SovereignOptimizer,
-		pathogens: PathogenStore,
+		monitor: StabilityMonitor,
+		optimizer: IntegrityOptimizer,
+		anomalies: AnomalyRegistry,
 	): Promise<void> {
 		try {
 			const report = engine.computeEntropy()
@@ -35,15 +35,15 @@ export class DashboardGenerator {
 			const trend = await recorder.getTrend()
 			const violations = engine.getViolations()
 			const mermaid = engine.toMermaid()
-			const vitals = metabolic.getStabilityStats()
+			const vitals = monitor.getStabilityStats()
 			const opts = optimizer.findOptimizations(engine)
-			const immuneMemory = pathogens.getPathogens()
+			const patternMemory = anomalies.getAnomalies()
 
-			const content = `# 🏗️ JoyZoning Architectural Dashboard
+			const content = `# 🏗️ Stability Architectural Dashboard
 
 > **Current Integrity Score: ${score}/100**
 > **Structural Trend: ${trend.message}**
-> **Metabolic Heartbeat: ${vitals.totalWrites} edits / ${vitals.totalReads} reads**
+> **Activity Heartbeat: ${vitals.totalWrites} edits / ${vitals.totalReads} reads**
 > **Forensic Health: ${this.computeForensicHealth(engine, vitals)}% Evidence Grounding**
 > **Last Updated: ${new Date().toLocaleString()}**
 
@@ -61,12 +61,12 @@ ${mermaid}
 ${
 	violations.length > 0
 		? violations.map((v) => `- **[${v.severity}]** ${v.message} (\`${path.basename(v.path)}\`)`).join("\n")
-		: "✅ All layers aligned. Project is in a state of high sovereignty."
+		: "✅ All layers aligned. Project is in a state of high integrity."
 }
 
 ---
 
-## 👻 Ghost Files (Missing Sovereignty)
+## 👻 Reference Drift (Missing Files)
 ${this.generateGhostSection(engine)}
 
 ## 🧪 Structural Metrics
@@ -77,11 +77,11 @@ ${this.generateGhostSection(engine)}
 
 ---
 
-## 💓 Metabolic Pulse (Vitality)
+## 💓 Activity Pulse (Vitality)
 - **Overall Doubt Signal**: ${vitals.avgDoubtSignal.toFixed(2)}
 - **Agent Churn**: ${vitals.totalWrites} writes across current session.
 
-### 🔥 Metabolic Hotspots (High Stress)
+### 🔥 Activity Hotspots (High Stress)
 ${
 	vitals.hotspots.length > 0
 		? vitals.hotspots.map((h) => `- \`${path.basename(h.path)}\`: Activity Index **${h.stress.toFixed(1)}**`).join("\n")
@@ -90,7 +90,7 @@ ${
 
 ---
 
-## ⚡ Sovereign Optimization Queue
+## ⚡ Structural Optimization Queue
 *The substrate has identified the following structural migrations to maximize integrity.*
 
 ${
@@ -106,19 +106,19 @@ ${
 
 ---
 
-## 🛡️ Immune System Status
-- **Pathogen Memory**: ${immuneMemory.length} antigens recorded.
+## 🛡️ Structural Safety Status
+- **Pathogen Memory**: ${patternMemory.length} patterns recorded.
 - **Defense Activity**: Blocked 0 regressions this session.
 - **Memory Efficiency**: SHA-256 Compressed (LRU Active).
 
-### 🧪 Detected Pathogens (Architectural Antigens)
+### 🧪 Detected Pathogens (Architectural Regressions)
 ${
-	immuneMemory.length > 0
-		? immuneMemory
+	patternMemory.length > 0
+		? patternMemory
 				.slice(-5)
 				.map((p) => `- **[${p.type}]** \`${path.basename(p.originalSummary)}\` (Hits: ${p.hitCount})`)
 				.join("\n")
-		: "✅ Immune memory is healthy. No pathogens detected."
+		: "✅ Structural memory is healthy. No pathogens detected."
 }
 
 ---

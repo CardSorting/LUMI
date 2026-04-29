@@ -5,9 +5,9 @@ import { Project, SourceFile, VariableDeclarationKind } from "ts-morph"
 import * as ts from "typescript"
 import { Logger } from "@/shared/services/Logger"
 import { generateLayerComment, getLayer, isLayerTagSupported, parseLayerTag } from "@/utils/joy-zoning"
-import { SovereignTransaction } from "../../integrity/SovereignTransaction"
+import { IntegrityTransaction } from "../../integrity/IntegrityTransaction"
+import { IntegrityOptimizer } from "../../policy/IntegrityOptimizer"
 import { AxiomViolation } from "../../policy/SemanticAxiomEngine"
-import { SovereignOptimizer } from "../../policy/SovereignOptimizer"
 import { SpiderEngine } from "../../policy/spider/SpiderEngine"
 import { SpiderNode, SpiderViolation } from "../../policy/spider/types"
 
@@ -51,7 +51,7 @@ export class RefactorHealer {
 	 * Strategic Pivoting: Heals a move violation, but pivots to extraction if move is impossible.
 	 */
 	public async healMove(filePath: string, targetPath: string): Promise<{ success: boolean; pivot?: string }> {
-		const tx = new SovereignTransaction(`heal_move_${path.basename(filePath)}`, this.projectRoot)
+		const tx = new IntegrityTransaction(`heal_move_${path.basename(filePath)}`, this.projectRoot)
 		tx.start()
 
 		try {
@@ -156,9 +156,9 @@ export class RefactorHealer {
 	public detectRelativeImports(filePath: string, content: string, engine: SpiderEngine): string[] {
 		const relativeImportRegex = /import\s+.*from\s+["'](\.\.?\/[^"']+)["']/g
 		const suggestions: string[] = []
-		let match: RegExpExecArray | null
 
-		while ((match = relativeImportRegex.exec(content)) !== null) {
+		const matches = content.matchAll(relativeImportRegex)
+		for (const match of matches) {
 			const specifier = match[1]
 			const absPath = path.resolve(path.dirname(path.resolve(this.projectRoot, filePath)), specifier)
 			const alias = engine.getBestAlias(absPath)
@@ -197,20 +197,21 @@ export class RefactorHealer {
 	 * V204: Shadowing Detection.
 	 * Detects if an imported symbol is redefined in the local scope.
 	 */
-	public detectShadowing(filePath: string, content: string): string[] {
+	public detectShadowing(_filePath: string, content: string): string[] {
 		const suggestions: string[] = []
 		const importedSymbols = new Set<string>()
 
 		// Extract imports
 		const importRegex = /import\s+\{([^}]*)\}\s+from/g
-		let match: RegExpExecArray | null
-		while ((match = importRegex.exec(content)) !== null) {
+		const importMatches = content.matchAll(importRegex)
+		for (const match of importMatches) {
 			match[1].split(",").forEach((s) => importedSymbols.add(s.trim()))
 		}
 
 		// Detect redefinitions (class, const, let, function)
 		const redefRegex = /^(?:class|const|let|function)\s+([a-zA-Z0-9_]+)/gm
-		while ((match = redefRegex.exec(content)) !== null) {
+		const redefMatches = content.matchAll(redefRegex)
+		for (const match of redefMatches) {
 			const symbol = match[1]
 			if (importedSymbols.has(symbol)) {
 				suggestions.push(
@@ -226,12 +227,12 @@ export class RefactorHealer {
 	 * V204: Deadwood Detection (Local).
 	 * Detects imports that are never used in the file body.
 	 */
-	public detectUnusedImports(filePath: string, content: string): string[] {
+	public detectUnusedImports(_filePath: string, content: string): string[] {
 		const suggestions: string[] = []
 		const importRegex = /import\s+\{([^}]*)\}\s+from\s+["']([^"']+)["']/g
-		let match: RegExpExecArray | null
+		const matches = content.matchAll(importRegex)
 
-		while ((match = importRegex.exec(content)) !== null) {
+		for (const match of matches) {
 			const symbols = match[1].split(",").map((s) => s.trim())
 			const specifier = match[2]
 
@@ -459,9 +460,7 @@ export class RefactorHealer {
 				}
 			}
 
-			// If no provider found, we no longer blindly materialize.
 			// Instead, we propose a high-fidelity definition in a valid architectural layer.
-			const layer = getLayer(filePath)
 			const isCap = /^[A-Z]/.test(symbol)
 			const targetDir = isCap ? "src/domain/services" : "src/plumbing"
 			const targetFile = path.join(targetDir, `${symbol}.ts`)
@@ -536,10 +535,8 @@ export class RefactorHealer {
 			if (sameLayer) provider = sameLayer
 		}
 
-		// V204: Deterministic Aliasing.
 		// Always prefer project aliases (@/) over brittle relative paths.
 		const bestPath = engine.getBestAlias(provider).replace(/\.tsx?$/, "")
-		const sourceFilePath = sourceFile.getFilePath()
 
 		// Verify existing imports to avoid duplicates
 		const existing = sourceFile.getImportDeclaration(
@@ -621,7 +618,7 @@ export class RefactorHealer {
 	/**
 	 * Re-aligns a file's tag based on its ARCHETYPAL fingerprint, not just its location.
 	 */
-	public async alignTagByFingerprint(node: SpiderNode, optimizer: SovereignOptimizer): Promise<void> {
+	public async alignTagByFingerprint(node: SpiderNode, optimizer: IntegrityOptimizer): Promise<void> {
 		const recommended = optimizer.calculateOptimalLayer(node, {} as SpiderEngine)
 		if (recommended && recommended !== node.layer) {
 			Logger.info(`Re-aligning ${node.path} from ${node.layer} to ${recommended} (Fingerprint Match)`)
@@ -682,11 +679,11 @@ export class RefactorHealer {
 			case "SPI-004": // Cycle
 				return `${riskPrefix}Break Cycle via Dependency Inversion or move shared logic to src/plumbing/.`
 			case "SPI-005": // Ghost
-				return `${riskPrefix}Materialize missing symbols via Sovereign Garbage Collector Sweep.`
+				return `${riskPrefix}Materialize missing symbols via Integrity Garbage Collector Sweep.`
 			case "SPI-103": // Unused Export
-				return `🧹 [METABOLIC_PRUNE]: Autonomously demote unused export in ${path.basename(violation.path)}.`
+				return `🧹 [STRUCTURAL_PRUNE]: Autonomously demote unused export in ${path.basename(violation.path)}.`
 			case "SPI-003": // Orphan
-				return `🗑️ [METABOLIC_TRASH]: Delete this file if redundant (Disconnected from Root).`
+				return `🗑️ [STRUCTURAL_TRASH]: Delete this file if redundant (Disconnected from Root).`
 			default:
 				if (violation.message.includes("Geographic Misalignment")) {
 					return `${riskPrefix}Align [LAYER] tag to match physical path and synchronize registry.`

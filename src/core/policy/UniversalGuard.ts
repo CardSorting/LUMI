@@ -72,7 +72,7 @@ export class UniversalGuard {
 		return this.engine.validatePostExecution(block, toolOutput, prevHash)
 	}
 
-	public getForensics(): import("./SovereignForensics").SovereignForensics {
+	public getForensics(): import("./StabilityForensics").StabilityForensics {
 		return this.engine.getForensics()
 	}
 

@@ -761,7 +761,7 @@ export class SubagentRunner {
 
 							if (!toolResult) {
 								// V227: Sovereign Audit Integration for Swarms
-								// Ensure subagent actions are recorded in the shared MetabolicMonitor
+								// Ensure subagent actions are recorded in the shared StabilityMonitor
 								const guard = this.baseConfig.universalGuard
 								if (guard) {
 									const preExecResult = await guard.guardPreExecution(toolCallBlock)
