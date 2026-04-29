@@ -47,7 +47,7 @@ export async function executeBatchRefactor(
 					const content = fs.readFileSync(absPath, "utf-8")
 					const plan = decomposer.analyze(req.path, content, node)
 					const step = plan.steps.find(
-						(s) => s.action === req.action || `${s.action}: ${s.target}`.includes(req.action),
+						(s) => s.action === req.action || (s.target && `${s.action}: ${s.target}`.includes(req.action)),
 					)
 					if (step) {
 						manifest += `- RATIONALE: ${step.reason}\n`
@@ -59,7 +59,7 @@ export async function executeBatchRefactor(
 				}
 
 				// Tactical SOP Integration
-				const sop = TACTICAL_SOP[req.action] || TACTICAL_SOP["MOVE"]
+				const sop = TACTICAL_SOP[req.action] || TACTICAL_SOP.MOVE
 				manifest += `\nTACTICAL SOP:\n${sop}\n`
 				manifest += `\nHEAL PROTOCOL: Use \`grep\` to ripple changes to all ${impactedCount} consumers for this specific action.\n\n`
 			}

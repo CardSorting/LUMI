@@ -29,6 +29,7 @@ type ExtractedMetrics = {
 	symbolDensity: number
 	logicCohesion: number
 	anyDensity: number
+	cognitiveComplexity: number
 }
 
 const MAX_INDEX_FILE_BYTES = 1_500_000
@@ -342,6 +343,10 @@ export class SpiderEngine {
 			isHotspot: oldNode?.isHotspot || false,
 			anyDensity: metrics.anyDensity,
 			reExports,
+			churnIntensity: (oldNode?.churnIntensity || 0) + 1,
+			semanticDrift: (oldNode?.semanticDrift || 0) + (oldNode && oldNode.layer !== layer ? 1 : 0),
+			lastLayer: oldNode?.layer,
+			hazardScore: 0, // Will be re-calculated during global metrics pass
 		}
 
 		this.nodes.set(normalizedPath, newNode)
@@ -474,7 +479,7 @@ export class SpiderEngine {
 		ts.forEachChild(node, (child) => this.visitDetailedImports(child, imports))
 	}
 
-	private getDefaultMetrics(): any {
+	private getDefaultMetrics(): ExtractedMetrics {
 		return {
 			logicDensity: 0,
 			ioEntropy: 0,
@@ -1075,6 +1080,10 @@ export class SpiderEngine {
 		return this.persistence.takeSnapshot(this.nodes)
 	}
 
+	public getSnapshotHistory(): SpiderSnapshot[] {
+		return this.persistence.getSnapshots().map((snapshot) => v8.deserialize(snapshot) as SpiderSnapshot)
+	}
+
 	/**
 	 * V204: Fuzzy Forensic Sensing.
 	 * Finds symbols in the substrate that are lexicographically similar to the target.
@@ -1321,6 +1330,9 @@ export class SpiderEngine {
 							cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
 							isHotspot: false,
 							anyDensity: anyDensity * 0.8,
+							churnIntensity: 0,
+							semanticDrift: 0,
+							hazardScore: 0,
 						}
 						tempRegistry.set(f, node)
 

@@ -85,7 +85,7 @@ export class ForensicEngine {
 	/**
 	 * V400: Security Substrate Sensing.
 	 */
-	public detectSecurityAntipatterns(node: SpiderNode, content: string): string[] {
+	public detectSecurityAntipatterns(_node: SpiderNode, content: string): string[] {
 		const signals: string[] = []
 		if (content.includes("eval("))
 			signals.push("[SPI-401] SECURITY: Use of 'eval()' detected. This is a high-risk architectural anti-pattern.")
@@ -96,6 +96,48 @@ export class ForensicEngine {
 				"[SPI-403] SECURITY: 'dangerouslySetInnerHTML' detected. Ensure content is sanitized to prevent structural contamination.",
 			)
 		return signals
+	}
+	/**
+	 * V450: Multivariate Architectural Resonance.
+	 * Detects nodes that are statistically out of phase with their direct neighborhood.
+	 * Resonance = abs(NodeMetrics - MeanNeighborhoodMetrics) / StdDevNeighborhoodMetrics
+	 */
+	public calculateArchitecturalResonance(node: SpiderNode, nodes: Map<string, SpiderNode>): number {
+		const neighborhood = new Set<string>()
+		// Get immediate neighbors (imports and dependents)
+		for (const imp of node.imports) neighborhood.add(imp)
+		for (const dep of node.dependents) neighborhood.add(dep)
+
+		if (neighborhood.size < 3) return 0
+
+		const neighborNodes = Array.from(neighborhood)
+			.map((id) => nodes.get(id))
+			.filter((n): n is SpiderNode => n !== undefined)
+
+		if (neighborNodes.length < 3) return 0
+
+		const metric = node.astComplexity + node.afferentCoupling * 10
+		const neighborMetrics = neighborNodes.map((n) => n.astComplexity + n.afferentCoupling * 10)
+
+		const mean = neighborMetrics.reduce((a, b) => a + b, 0) / neighborMetrics.length
+		const stdDev = Math.sqrt(neighborMetrics.reduce((a, b) => a + (b - mean) ** 2, 0) / neighborMetrics.length) || 1
+
+		return Math.min(5.0, Math.abs(metric - mean) / stdDev)
+	}
+
+	/**
+	 * V450: Toxicity Score (Sentient Hazard).
+	 * Aggregates churn, drift, and resonance into a single probability of catastrophic failure.
+	 */
+	public calculateHazardScore(node: SpiderNode, nodes: Map<string, SpiderNode>): number {
+		const resonance = this.calculateArchitecturalResonance(node, nodes)
+		const churnFactor = Math.min(1.0, (node.churnIntensity || 0) / 10)
+		const driftFactor = Math.min(1.0, (node.semanticDrift || 0) / 3)
+
+		// Resonance > 2.0 is a statistical outlier
+		const resonanceFactor = Math.min(1.0, resonance / 2.0)
+
+		return resonanceFactor * 0.5 + churnFactor * 0.3 + driftFactor * 0.2
 	}
 
 	constructor(

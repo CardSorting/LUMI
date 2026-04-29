@@ -12,7 +12,6 @@ import {
 } from "@shared/proto/dietcode/joyzoning"
 import * as fs from "fs"
 import * as path from "path"
-import * as v8 from "v8"
 import { getRequestRegistry, StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { Logger } from "@/shared/services/Logger"
 import { SafeNumber } from "@/shared/utils/SafeNumber"
@@ -295,7 +294,7 @@ export async function triggerAudit(
 					}
 
 					// V400: Hotspot Heat Sensing
-					const snapshots = (spider as any).persistence.getSnapshots().map((s: Buffer) => v8.deserialize(s))
+					const snapshots = spider.getSnapshotHistory()
 					const heat = spider.forensic.calculateHotspotHeat(node, snapshots)
 					if (heat > 0.7) {
 						violations.push({
@@ -332,7 +331,7 @@ export async function triggerAudit(
 		}
 
 		// V220: Structural Optimization Integration
-		const structuralOpts = optimizer!.findOptimizations(spider)
+		const structuralOpts = optimizer ? optimizer.findOptimizations(spider) : []
 		for (const o of structuralOpts) {
 			let action = "MOVE"
 			if (o.type === "DEADWOOD") action = "PRUNE"
@@ -430,14 +429,18 @@ export async function triggerAudit(
 		const qualityGateStatus = buildHealth >= (policyConfig.integrityAlertThreshold || 70) ? "PASSED" : "FAILED"
 		const complianceScore = sanitizeScore(Math.max(0, 100 - (violations.length / (nodes.length || 1)) * 100))
 
-		// Find Toxic Module
-		const dirViolationCounts: Record<string, number> = {}
-		for (const v of violations) {
-			const parts = (v.path || "unknown").split("/")
-			const module = parts.length > 1 ? parts.slice(0, 2).join("/") : "root"
-			dirViolationCounts[module] = (dirViolationCounts[module] || 0) + 1
-		}
-		const toxicModule = Object.entries(dirViolationCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "None detected"
+		// V450: Sentient Hazard Tracking
+		const hazardNodes = nodes.filter((n) => (n.hazardScore || 0) > 0.5)
+		const toxicHeatmap = hazardNodes
+			.sort((a, b) => (b.hazardScore || 0) - (a.hazardScore || 0))
+			.slice(0, 5)
+			.map((n) => `${path.basename(n.path)}: Hazard ${(n.hazardScore * 100).toFixed(1)}%`)
+
+		const mostToxic = nodes.sort((a, b) => (b.hazardScore || 0) - (a.hazardScore || 0))[0]
+		const toxicModuleLabel =
+			mostToxic && (mostToxic.hazardScore || 0) > 0.6
+				? `${path.basename(mostToxic.path)} (${mostToxic.layer.toUpperCase()})`
+				: "None detected"
 
 		// V220: Executive Strategy - Layer Scores and Quick Wins
 		const layerHealthMap: Record<string, { total: number; count: number }> = {}
@@ -488,7 +491,7 @@ export async function triggerAudit(
 			driftDetected: false, // Default if not computed
 			driftCount: 0,
 			metabolicPressure,
-			metabolicSinks: monitor.getStabilityStats().hotspots.map((h) => h.path), // V215: Real behavioral sinks
+			metabolicSinks: toxicHeatmap.length > 0 ? toxicHeatmap : monitor.getStabilityStats().hotspots.map((h) => h.path),
 			grade: computeGrade(buildHealth),
 			totalTechnicalDebt: techDebtStr,
 			stabilityScore,
@@ -496,7 +499,7 @@ export async function triggerAudit(
 			history: updatedHistory,
 			qualityGateStatus,
 			complianceScore,
-			toxicModule,
+			toxicModule: toxicModuleLabel,
 			layerScores,
 			topRecommendations,
 			healthDelta,

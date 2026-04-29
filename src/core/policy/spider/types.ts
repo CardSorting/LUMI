@@ -27,6 +27,10 @@ export interface SpiderNode {
 	isHotspot: boolean // V200: Flag for High Risk + High Complexity
 	anyDensity: number // V210: Forensic marker for unsafe type usage (as any)
 	reExports: string[] // V215: Resolved Node IDs of wildcard re-exports (export * from ...)
+	churnIntensity: number // V350: Forensic volatility (update count)
+	semanticDrift: number // V350: Architectural drift (layer change count)
+	lastLayer?: Layer // V350: Historical layer for drift sensing
+	hazardScore: number // V450: Probability of catastrophic failure (0-1.0)
 }
 
 export interface SpiderSnapshot {

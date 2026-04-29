@@ -11,6 +11,7 @@ export interface OptimizationOpportunity {
 	reason: string
 	integrityGain: number
 	type?: "STRUCTURAL" | "DEADWOOD" | "COHESION" | "CYCLE_BREAK"
+	action: string // V350: Explicit action for batch orchestration
 }
 
 /**
@@ -47,6 +48,7 @@ export class SovereignOptimizer {
 					reason: `Layer Drift: ${path.basename(node.path)} is gravitating toward '${recommended}' based on its dependency profile.`,
 					integrityGain: projectedGain,
 					type: "STRUCTURAL",
+					action: "MOVE",
 				})
 			}
 
@@ -71,6 +73,7 @@ export class SovereignOptimizer {
 					reason: `ZOMBIE MODULE: ${path.basename(node.path)} has 0 project-wide dependents. Pruning this deadwood will reduce architectural noise.`,
 					integrityGain: 10,
 					type: "DEADWOOD",
+					action: "PRUNE",
 				})
 			}
 
@@ -84,6 +87,7 @@ export class SovereignOptimizer {
 					reason: `Semantic Fragmentation: ${path.basename(node.path)} contains multiple unrelated vocabularies (Cohesion: ${Math.round(cohesion * 100)}%). Decompose this into mission-focused modules.`,
 					integrityGain: 8,
 					type: "COHESION",
+					action: "DECOMPOSE",
 				})
 			}
 
@@ -99,6 +103,7 @@ export class SovereignOptimizer {
 					reason: `Architectural ${isPainful ? "Rigidity" : "Fragility"}: This module is in the 'Zone of ${isPainful ? "Pain" : "Uselessness"}' (Distance: ${distance.toFixed(2)}). ${isPainful ? "Extract an interface to allow for future flexibility." : "Stabilize or unify this module with its consumers."}`,
 					integrityGain: 12,
 					type: "STRUCTURAL",
+					action: isPainful ? "EXTRACT" : "MOVE",
 				})
 			}
 
@@ -112,6 +117,7 @@ export class SovereignOptimizer {
 					reason: `Critical Technical Debt: ${path.basename(node.path)} has a Maintainability Index of ${mi}. Massive refactoring is required to prevent industrial stagnation.`,
 					integrityGain: 20,
 					type: "STRUCTURAL",
+					action: "DECOMPOSE",
 				})
 			}
 
@@ -134,6 +140,7 @@ export class SovereignOptimizer {
 					reason: `Structural Bottleneck: ${path.basename(node.path)} is a high-congestion node (Flow Score: ${Math.round(bottleneck)}). Decouple its interfaces to reduce system fragility.`,
 					integrityGain: 15,
 					type: "STRUCTURAL",
+					action: "EXTRACT",
 				})
 			}
 
@@ -147,6 +154,21 @@ export class SovereignOptimizer {
 					reason: `Primitive Obsession: ${path.basename(node.path)} relies heavily on generic types. Implement domain-specific types to harden the type substrate.`,
 					integrityGain: 5,
 					type: "STRUCTURAL",
+					action: "HARDEN",
+				})
+			}
+
+			// 9. Architectural Hazard (Resonance + Churn + Drift)
+			const hazardScore = engine.forensic.calculateHazardScore(node, engine.nodes)
+			if (hazardScore > 0.7) {
+				opportunities.push({
+					file: node.path,
+					currentLayer: node.layer,
+					recommendedLayer: "STABILIZE",
+					reason: `Architectural Hazard: ${path.basename(node.path)} is vibrating with extreme toxicity (Hazard Score: ${hazardScore.toFixed(2)}). High churn and resonance suggest imminent structural collapse.`,
+					integrityGain: 25,
+					type: "STRUCTURAL",
+					action: "HARDEN",
 				})
 			}
 		}
@@ -163,6 +185,7 @@ export class SovereignOptimizer {
 					reason: `Cycle Breaking: Resolving loop (${cycle.map((p) => path.basename(p)).join(" -> ")}). Extract common logic from ${path.basename(weakLink.path)} to a shared package.`,
 					integrityGain: 15,
 					type: "CYCLE_BREAK",
+					action: "EXTRACT",
 				})
 			}
 		}

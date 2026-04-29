@@ -189,13 +189,12 @@ export class SovereignDecomposer {
 				if (body) {
 					const start = sourceFile.getLineAndCharacterOfPosition(n.getStart()).line
 					const end = sourceFile.getLineAndCharacterOfPosition(n.getEnd()).line
-					const methodMass = end - start + 1
 					const name = this.getFunctionName(n)
 
 					// V320: Cognitive God Method Analysis.
 					// Replaces naive line-count checking with the higher-fidelity Cognitive Complexity metric.
 					const { cognitiveComplexity } = this.analyzeNodeLogic(n, sourceFile)
-					const zScoreCognitive = stats
+					const zScoreCognitive = stats?.complexity
 						? (cognitiveComplexity - stats.complexity.mean) / (stats.complexity.stdDev || 1)
 						: 0
 
@@ -467,24 +466,6 @@ export class SovereignDecomposer {
 		return false
 	}
 
-	/**
-	 * V215: Symbol Affinity Analysis.
-	 * Calculates the logical resonance between two symbols.
-	 * High affinity (> 0.5) suggests the symbols should stay in the same module.
-	 */
-	private calculateAffinity(symbolsA: string[], symbolsB: string[], symbolGraph: Map<string, string[]>): number {
-		if (symbolsA.length === 0 || symbolsB.length === 0) return 0
-
-		// Check for shared references (the most basic affinity signal)
-		const refsA = new Set(symbolsA.flatMap((s) => symbolGraph.get(s) || []))
-		const refsB = new Set(symbolsB.flatMap((s) => symbolGraph.get(s) || []))
-
-		const intersection = new Set([...refsA].filter((x) => refsB.has(x)))
-		const union = new Set([...refsA, ...refsB])
-
-		return union.size === 0 ? 0 : intersection.size / union.size
-	}
-
 	private detectZombieSymbols(
 		island: string[],
 		graph: Record<string, { dependents: string[]; dependencies: string[] }>,
@@ -518,7 +499,7 @@ export class SovereignDecomposer {
 			let mass = 0
 			const visit = (n: ts.Node) => {
 				const name = (n as ts.NamedDeclaration).name?.getText(sourceFile)
-				if (name && targetName.includes(`'${name}'`)) {
+				if (name && targetName && targetName.includes(`'${name}'`)) {
 					const start = sourceFile.getLineAndCharacterOfPosition(n.getStart()).line
 					const end = sourceFile.getLineAndCharacterOfPosition(n.getEnd()).line
 					mass = end - start + 1
