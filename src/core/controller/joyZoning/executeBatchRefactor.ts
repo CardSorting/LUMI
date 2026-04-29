@@ -10,6 +10,50 @@ import * as fs from "fs"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
 
+const isNonEmptyString = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0
+
+const normalizeRequestField = (value: unknown): string => (typeof value === "string" ? value.trim() : "")
+
+function normalizeBatchRequests(requests: unknown): {
+	requests: JoyZoningRefactorRequest[]
+	rejectedCount: number
+	dedupedCount: number
+} {
+	const input = Array.isArray(requests) ? requests : []
+	const deduped = new Map<string, JoyZoningRefactorRequest>()
+	let rejectedCount = Array.isArray(requests) ? 0 : 1
+	let duplicateCount = 0
+
+	for (const raw of input) {
+		if (!raw || typeof raw !== "object") {
+			rejectedCount++
+			continue
+		}
+		const item = raw as Partial<JoyZoningRefactorRequest>
+		const action = normalizeRequestField(item.action)
+		const path = normalizeRequestField(item.path)
+		if (!action || !path) {
+			rejectedCount++
+			continue
+		}
+
+		const key = JSON.stringify([action, path])
+		if (deduped.has(key)) duplicateCount++
+		deduped.set(key, JoyZoningRefactorRequest.create({ ...item, action, path }))
+	}
+
+	return { requests: Array.from(deduped.values()), rejectedCount, dedupedCount: duplicateCount }
+}
+
+function getStringArray(value: unknown): string[] {
+	return Array.isArray(value) ? value.filter(isNonEmptyString).map((entry) => entry.trim()) : []
+}
+
+function resolveNodeImport(engine: SpiderEngine, sourcePath: unknown, specifier: unknown): string | null {
+	if (!isNonEmptyString(sourcePath) || !isNonEmptyString(specifier)) return null
+	return engine.resolveImportToNodeId(sourcePath, specifier)
+}
+
 /**
  * V500: Industrial Batch Orchestration.
  * Orchestrates multi-file refactors using dependency-aware sorting and context grouping.
@@ -22,14 +66,26 @@ export async function executeBatchRefactor(
 	const decomposer = new SovereignDecomposer()
 
 	try {
+		const normalized = normalizeBatchRequests(request?.requests)
+		if (normalized.requests.length === 0) {
+			return JoyZoningBatchRefactorResponse.create({
+				success: false,
+				message:
+					"No valid batch refactor requests were provided. Select tasks with non-empty action and path, then try again.",
+			})
+		}
+
 		// 1. Apex Orchestration: Symbol-Level Dependency Sequencing
-		const sortedRequests = sortRequestsBySymbolDependency(request.requests, spider)
+		const sortedRequests = sortRequestsBySymbolDependency(normalized.requests, spider)
 		const groupedRequests = groupRequestsByContext(sortedRequests, spider)
 
 		let manifest = "JOY_ZONING ADAPTIVE ORCHESTRATION MANIFEST (v8.0)\n"
 		manifest += "===================================================\n\n"
 		manifest += "This manifest is governed by the SOVEREIGN ARCHITECTURAL POLICY.\n"
 		manifest += "Each refactor step is subject to a TECHNICAL DEBT BUDGET and mandatory SELF-REVIEW.\n\n"
+		if (normalized.rejectedCount > 0 || normalized.dedupedCount > 0) {
+			manifest += `[BOUNDARY VALIDATION] Ignored ${normalized.rejectedCount} malformed request(s) and deduplicated ${normalized.dedupedCount} duplicate request(s).\n\n`
+		}
 
 		for (const [groupName, groupItems] of Object.entries(groupedRequests)) {
 			manifest += `## [TRANSACTION] ARCHITECTURAL BLOCK: ${groupName.toUpperCase()}\n`
@@ -46,9 +102,11 @@ export async function executeBatchRefactor(
 				if (fs.existsSync(absPath)) {
 					const content = fs.readFileSync(absPath, "utf-8")
 					const plan = decomposer.analyze(req.path, content, node)
-					const step = plan.steps.find(
-						(s) => s.action === req.action || (s.target && `${s.action}: ${s.target}`.includes(req.action)),
-					)
+					const step = plan.steps.find((s) => {
+						const stepAction = normalizeRequestField(s.action)
+						const stepTarget = normalizeRequestField(s.target)
+						return stepAction === req.action || (!!stepTarget && `${stepAction}: ${stepTarget}`.includes(req.action))
+					})
 					if (step) {
 						manifest += `- RATIONALE: ${step.reason}\n`
 						if (step.destination) manifest += `- DESTINATION: ${step.destination}\n`
@@ -59,7 +117,7 @@ export async function executeBatchRefactor(
 				}
 
 				// Tactical SOP Integration
-				const sop = TACTICAL_SOP[req.action] || TACTICAL_SOP.MOVE
+				const sop = TACTICAL_SOP[req.action] || TACTICAL_SOP.GENERIC
 				manifest += `\nTACTICAL SOP:\n${sop}\n`
 				manifest += `\nHEAL PROTOCOL: Use \`grep\` to ripple changes to all ${impactedCount} consumers for this specific action.\n\n`
 			}
@@ -88,14 +146,14 @@ export async function executeBatchRefactor(
 		}
 
 		// Stability Lock: Log the batch operation
-		Logger.info(`[BatchRefactor] Launching agentic manifest with ${request.requests.length} operations.`)
+		Logger.info(`[BatchRefactor] Launching agentic manifest with ${normalized.requests.length} operations.`)
 
 		// Create the task through the controller interface
 		const taskId = await controller.createTask(manifest)
 
 		return JoyZoningBatchRefactorResponse.create({
 			success: true,
-			message: `Batch refactor launched successfully with ${request.requests.length} operations.`,
+			message: `Batch refactor launched successfully with ${normalized.requests.length} operations.`,
 			taskId: taskId,
 			planSummary: manifest,
 		})
@@ -113,7 +171,8 @@ export async function executeBatchRefactor(
  * Ensures Producers are refactored before Consumers.
  */
 function sortRequestsBySymbolDependency(requests: JoyZoningRefactorRequest[], engine: SpiderEngine): JoyZoningRefactorRequest[] {
-	const nodeMap = new Map(requests.map((r) => [engine.normalizePath(r.path), r]))
+	const validRequests = requests.filter((request) => isNonEmptyString(request.action) && isNonEmptyString(request.path))
+	const nodeMap = new Map(validRequests.map((r) => [engine.normalizePath(r.path), r]))
 	const sorted: JoyZoningRefactorRequest[] = []
 	const visited = new Set<string>()
 	const visiting = new Set<string>()
@@ -125,8 +184,8 @@ function sortRequestsBySymbolDependency(requests: JoyZoningRefactorRequest[], en
 		visiting.add(path)
 		const node = engine.nodes.get(path)
 		if (node) {
-			for (const imp of node.imports || []) {
-				const targetId = engine.resolveImportToNodeId(node.path, imp)
+			for (const imp of getStringArray(node.imports)) {
+				const targetId = resolveNodeImport(engine, node.path, imp)
 				if (targetId && nodeMap.has(targetId)) {
 					visit(targetId)
 				}
@@ -138,12 +197,12 @@ function sortRequestsBySymbolDependency(requests: JoyZoningRefactorRequest[], en
 		if (req) sorted.push(req)
 	}
 
-	for (const req of requests) {
+	for (const req of validRequests) {
 		visit(engine.normalizePath(req.path))
 	}
 
 	// For any remaining requests not in the dependency graph, sort by layer as fallback
-	const remaining = requests.filter((r) => !visited.has(engine.normalizePath(r.path)))
+	const remaining = validRequests.filter((r) => !visited.has(engine.normalizePath(r.path)))
 	const layerSortedRemaining = sortRequestsByDependency(remaining, engine)
 
 	return [...sorted, ...layerSortedRemaining]
@@ -162,15 +221,17 @@ function sortRequestsByDependency(requests: JoyZoningRefactorRequest[], engine: 
 		unassigned: 5,
 	}
 
-	return [...requests].sort((a, b) => {
-		const nodeA = engine.nodes.get(engine.normalizePath(a.path))
-		const nodeB = engine.nodes.get(engine.normalizePath(b.path))
-		const layerA = layerOrder[nodeA?.layer || "unassigned"] ?? 10
-		const layerB = layerOrder[nodeB?.layer || "unassigned"] ?? 10
+	return [...requests]
+		.filter((request) => isNonEmptyString(request.path))
+		.sort((a, b) => {
+			const nodeA = engine.nodes.get(engine.normalizePath(a.path))
+			const nodeB = engine.nodes.get(engine.normalizePath(b.path))
+			const layerA = layerOrder[nodeA?.layer || "unassigned"] ?? 10
+			const layerB = layerOrder[nodeB?.layer || "unassigned"] ?? 10
 
-		if (layerA !== layerB) return layerA - layerB
-		return (nodeB?.blastRadius || 0) - (nodeA?.blastRadius || 0)
-	})
+			if (layerA !== layerB) return layerA - layerB
+			return (nodeB?.blastRadius || 0) - (nodeA?.blastRadius || 0)
+		})
 }
 
 /**
@@ -187,6 +248,13 @@ const TACTICAL_SOP: Record<string, string> = {
 		"1. Audit architectural metadata tags.\n2. Align with Sovereign Policy layer config.\n3. Propagate changes to all dependent modules.",
 	HEAL_STATELESSNESS:
 		"1. Identify hidden state dependencies.\n2. Formalize state substrate using Immutable patterns.\n3. Verify function purity across the module.",
+	HARDEN: "1. Identify unsafe or unused structural edges.\n2. Remove or replace the smallest risky primitive.\n3. Verify imports, tests, and public behavior remain stable.",
+	DECOUPLE:
+		"1. Identify bidirectional or cross-layer coupling.\n2. Extract a stable boundary or interface.\n3. Redirect consumers through the new dependency seam.",
+	FIX_STRUCTURAL_VIOLATION:
+		"1. Read the reported violation and remediation.\n2. Apply the smallest structural correction that restores policy alignment.\n3. Re-run validation and inspect dependent imports.",
+	GENERIC:
+		"1. Inspect the target file and requested action.\n2. Apply a minimal, policy-aligned refactor.\n3. Validate type safety, imports, and architectural boundaries.",
 }
 
 /**
@@ -198,6 +266,7 @@ function groupRequestsByContext(
 ): Record<string, JoyZoningRefactorRequest[]> {
 	const groups: Record<string, JoyZoningRefactorRequest[]> = {}
 	for (const req of requests) {
+		if (!isNonEmptyString(req.path)) continue
 		const node = engine.nodes.get(engine.normalizePath(req.path))
 		const context = node?.layer || "unassigned"
 		if (!groups[context]) groups[context] = []

@@ -1,5 +1,5 @@
 import { JoyZoningAuditProgress, JoyZoningAuditResponse } from "@shared/proto/dietcode/joyzoning"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import styled, { keyframes } from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { JoyZoningServiceClient } from "@/services/grpc-client"
@@ -13,6 +13,63 @@ const asNumber = (value: number | null | undefined, fallback = 0): number =>
 const asText = (value: string | null | undefined, fallback = ""): string => (typeof value === "string" ? value : fallback)
 const lower = (value: string | null | undefined): string => asText(value).toLowerCase()
 const fixed = (value: number | null | undefined, digits = 1): string => asNumber(value).toFixed(digits)
+
+type QueuedJoyTask = { action: string; path: string }
+
+const normalizeTaskField = (value: unknown): string => (typeof value === "string" ? value.trim() : "")
+const isQueueableTask = (action: unknown, path: unknown): boolean =>
+	normalizeTaskField(action).length > 0 && normalizeTaskField(path).length > 0
+const createTaskKey = (action: unknown, path: unknown): string | null => {
+	const normalizedAction = normalizeTaskField(action)
+	const normalizedPath = normalizeTaskField(path)
+	return normalizedAction && normalizedPath ? JSON.stringify([normalizedAction, normalizedPath]) : null
+}
+const parseTaskKey = (key: string): QueuedJoyTask | null => {
+	try {
+		const parsed = JSON.parse(key)
+		if (Array.isArray(parsed) && parsed.length === 2 && isQueueableTask(parsed[0], parsed[1])) {
+			return { action: normalizeTaskField(parsed[0]), path: normalizeTaskField(parsed[1]) }
+		}
+	} catch {
+		// Legacy keys used ACTION|path. Keep a tolerant parser so stale in-memory selections do not crash.
+	}
+
+	const separatorIndex = key.indexOf("|")
+	if (separatorIndex <= 0) return null
+	const action = key.slice(0, separatorIndex)
+	const path = key.slice(separatorIndex + 1)
+	return isQueueableTask(action, path) ? { action: normalizeTaskField(action), path: normalizeTaskField(path) } : null
+}
+
+const buildBatchRequests = (selectedTasks: Set<string>, dryRun: boolean) => {
+	const deduped = new Map<string, QueuedJoyTask>()
+	let rejectedCount = 0
+
+	for (const key of selectedTasks) {
+		const task = parseTaskKey(key)
+		if (!task) {
+			rejectedCount++
+			continue
+		}
+		const normalizedKey = createTaskKey(task.action, task.path)
+		if (!normalizedKey) {
+			rejectedCount++
+			continue
+		}
+		deduped.set(normalizedKey, task)
+	}
+
+	return {
+		requests: Array.from(deduped.values()).map(({ action, path }) => ({ action, path, dryRun })),
+		rejectedCount,
+		keys: new Set(deduped.keys()),
+	}
+}
+
+const isTaskSelected = (selectedTasks: Set<string>, action: unknown, path: unknown): boolean => {
+	const key = createTaskKey(action, path)
+	return key ? selectedTasks.has(key) : false
+}
 
 const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const { environment } = useExtensionState()
@@ -44,6 +101,33 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const riskProfileValues = { LOW: 0, MEDIUM: 0, HIGH: 0, ...asRecord(report?.riskProfile) }
 	const progressCurrentFile = asText(progress?.currentFile, "Preparing...")
 	const progressPercentage = asNumber(progress?.percentage, 0)
+	const fixesSearchTerm = fixesSearch.toLowerCase()
+	const optsSearchTerm = optsSearch.toLowerCase()
+	const visibleViolations = useMemo(
+		() =>
+			violations.filter(
+				(v) =>
+					(!selectedCategory || v.impactArea === selectedCategory) &&
+					(lower(v.path).includes(fixesSearchTerm) ||
+						lower(v.type).includes(fixesSearchTerm) ||
+						lower(v.message).includes(fixesSearchTerm)),
+			),
+		[violations, selectedCategory, fixesSearchTerm],
+	)
+	const visibleOptimizations = useMemo(
+		() =>
+			optimizations.filter(
+				(opt) =>
+					(!selectedCategory || opt.category === selectedCategory) &&
+					(lower(opt.title).includes(optsSearchTerm) ||
+						lower(opt.path).includes(optsSearchTerm) ||
+						lower(opt.description).includes(optsSearchTerm)),
+			),
+		[optimizations, selectedCategory, optsSearchTerm],
+	)
+	const validQueuedTaskState = useMemo(() => buildBatchRequests(selectedTasks, false), [selectedTasks])
+	const validSelectedTaskCount = validQueuedTaskState.requests.length
+	const invalidSelectedTaskCount = validQueuedTaskState.rejectedCount
 
 	const cleanupTimers = useCallback(() => {
 		for (const timer of timersRef.current) {
@@ -166,7 +250,11 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 	}
 
 	const toggleTaskSelection = (action: string, path: string) => {
-		const key = `${action}|${path}`
+		const key = createTaskKey(action, path)
+		if (!key) {
+			setAuditLaunchError("Cannot queue this task because it is missing an action or path.")
+			return
+		}
 		setSelectedTasks((prev) => {
 			const next = new Set(prev)
 			if (next.has(key)) next.delete(key)
@@ -177,44 +265,61 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 	const addAllVisibleTasks = () => {
 		const next = new Set(selectedTasks)
+		let skipped = 0
 		if (activeTab === "fixes") {
-			violations
-				.filter((v) => !selectedCategory || v.impactArea === selectedCategory)
-				.forEach((v) => next.add(`FIX_STRUCTURAL_VIOLATION|${v.path}`))
+			visibleViolations.forEach((v) => {
+				const key = createTaskKey("FIX_STRUCTURAL_VIOLATION", v.path)
+				if (key) next.add(key)
+				else skipped++
+			})
 		} else if (activeTab === "improvements") {
-			optimizations
-				.filter((opt) => !selectedCategory || opt.category === selectedCategory)
-				.forEach((opt) => next.add(`${opt.action}|${opt.path}`))
+			visibleOptimizations.forEach((opt) => {
+				const key = createTaskKey(opt.action, opt.path)
+				if (key) next.add(key)
+				else skipped++
+			})
 		}
 		setSelectedTasks(next)
+		if (skipped > 0) {
+			setAuditLaunchMessage(`${skipped} incomplete visible task${skipped === 1 ? " was" : "s were"} skipped.`)
+		}
 	}
 
 	const autoQueueStrategy = () => {
 		const next = new Set(selectedTasks)
 		// Add all violations (highest priority)
-		violations.forEach((v) => next.add(`FIX_STRUCTURAL_VIOLATION|${v.path}`))
+		violations.forEach((v) => {
+			const key = createTaskKey("FIX_STRUCTURAL_VIOLATION", v.path)
+			if (key) next.add(key)
+		})
 		// Add top 5 optimizations by health gain
 		optimizations
-			.sort((a, b) => (b.projectedHealthGain || 0) - (a.projectedHealthGain || 0))
+			.toSorted((a, b) => (b.projectedHealthGain || 0) - (a.projectedHealthGain || 0))
 			.slice(0, 5)
-			.forEach((opt) => next.add(`${opt.action}|${opt.path}`))
+			.forEach((opt) => {
+				const key = createTaskKey(opt.action, opt.path)
+				if (key) next.add(key)
+			})
 		setSelectedTasks(next)
 		setActiveTab("batch")
 	}
 
 	const previewBatchManifest = async () => {
-		if (selectedTasks.size === 0) return
+		const { requests, rejectedCount, keys } = buildBatchRequests(selectedTasks, true)
+		if (requests.length === 0) {
+			setSelectedTasks(new Set())
+			setAuditLaunchError("No valid tasks are staged. Re-run the audit or select tasks with a valid action and path.")
+			return
+		}
+		if (rejectedCount > 0) {
+			setSelectedTasks(keys)
+			setAuditLaunchMessage(`${rejectedCount} stale queue entr${rejectedCount === 1 ? "y was" : "ies were"} removed.`)
+		}
 
 		setLoading(true)
 		setAuditLaunchError(null)
-		setAuditLaunchMessage(null)
 
 		try {
-			const requests = Array.from(selectedTasks).map((key) => {
-				const [action, path] = key.split("|")
-				return { action, path, dryRun: true }
-			})
-
 			const response = await JoyZoningServiceClient.executeBatchRefactor({
 				requests,
 				dryRun: true,
@@ -234,18 +339,21 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 	}
 
 	const handleBatchRefactor = async () => {
-		if (selectedTasks.size === 0) return
+		const { requests, rejectedCount, keys } = buildBatchRequests(selectedTasks, false)
+		if (requests.length === 0) {
+			setSelectedTasks(new Set())
+			setAuditLaunchError("No valid tasks are staged. Re-run the audit or select tasks with a valid action and path.")
+			return
+		}
+		if (rejectedCount > 0) {
+			setSelectedTasks(keys)
+			setAuditLaunchMessage(`${rejectedCount} stale queue entr${rejectedCount === 1 ? "y was" : "ies were"} removed.`)
+		}
 
 		setLoading(true)
 		setAuditLaunchError(null)
-		setAuditLaunchMessage(null)
 
 		try {
-			const requests = Array.from(selectedTasks).map((key) => {
-				const [action, path] = key.split("|")
-				return { action, path, dryRun: false }
-			})
-
 			const response = await JoyZoningServiceClient.executeBatchRefactor({
 				requests,
 				dryRun: false,
@@ -326,20 +434,20 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						$active={activeTab === "batch"}
 						onClick={() => setActiveTab("batch")}
 						style={{
-							opacity: selectedTasks.size > 0 ? 1 : 0.5,
-							pointerEvents: selectedTasks.size > 0 ? "auto" : "none",
+							opacity: validSelectedTaskCount > 0 ? 1 : 0.5,
+							pointerEvents: validSelectedTaskCount > 0 ? "auto" : "none",
 						}}>
 						<div style={{ position: "relative" }}>
 							<NavIcon>🚀</NavIcon>
-							{selectedTasks.size > 0 && <NavBadge>{selectedTasks.size}</NavBadge>}
+							{validSelectedTaskCount > 0 && <NavBadge>{validSelectedTaskCount}</NavBadge>}
 						</div>
 						<NavLabel>Launch Queue</NavLabel>
 					</NavItem>
 				</NavGroup>
 
-				{selectedTasks.size > 0 && activeTab !== "batch" && (
+				{validSelectedTaskCount > 0 && activeTab !== "batch" && (
 					<FloatingActionButton onClick={() => setActiveTab("batch")}>
-						<span>🚀</span> Launch Strategy ({selectedTasks.size})
+						<span>🚀</span> Launch Strategy ({validSelectedTaskCount})
 					</FloatingActionButton>
 				)}
 				{loading && (
@@ -716,6 +824,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								</FilterBadge>
 							))}
 							<SecondaryButton
+								disabled={visibleViolations.length === 0}
 								onClick={addAllVisibleTasks}
 								style={{ marginLeft: "auto", padding: "4px 10px", fontSize: "10px" }}>
 								Add All Visible
@@ -730,30 +839,25 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 							<EmptyState>No critical issues detected. Your codebase foundations are strong.</EmptyState>
 						)}
 						<List>
-							{violations
-								?.filter(
-									(v) =>
-										(!selectedCategory || v.impactArea === selectedCategory) &&
-										(lower(v.path).includes(fixesSearch.toLowerCase()) ||
-											lower(v.type).includes(fixesSearch.toLowerCase()) ||
-											lower(v.message).includes(fixesSearch.toLowerCase())),
-								)
-								.map((v, i) => (
+							{visibleViolations.map((v, i) => {
+								const queueable = isQueueableTask("FIX_STRUCTURAL_VIOLATION", v.path)
+								const selected = isTaskSelected(selectedTasks, "FIX_STRUCTURAL_VIOLATION", v.path)
+								return (
 									<ListItem
 										$type="VIOLATION"
 										key={`${v.path}-${i}`}
-										onClick={() => toggleTaskSelection("FIX_STRUCTURAL_VIOLATION", v.path)}
+										onClick={() => queueable && toggleTaskSelection("FIX_STRUCTURAL_VIOLATION", v.path)}
 										style={{
-											cursor: "pointer",
-											border: selectedTasks.has(`FIX_STRUCTURAL_VIOLATION|${v.path}`)
+											cursor: queueable ? "pointer" : "not-allowed",
+											opacity: queueable ? 1 : 0.65,
+											border: selected
 												? "1px solid var(--vscode-button-background)"
 												: "1px solid transparent",
 										}}>
 										<ListItemContent>
 											<BadgeGroup>
-												{selectedTasks.has(`FIX_STRUCTURAL_VIOLATION|${v.path}`) && (
-													<Badge $type="HIGH">QUEUED</Badge>
-												)}
+												{selected && <Badge $type="HIGH">QUEUED</Badge>}
+												{!queueable && <Badge $type="LOW">INCOMPLETE</Badge>}
 												<Badge $type={v.riskLevel || "HIGH"}>{v.riskLevel || "HIGH"} RISK</Badge>
 												<Badge $type="CATEGORY">{v.impactArea || "STABILITY"}</Badge>
 											</BadgeGroup>
@@ -769,28 +873,39 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 										</ListItemContent>
 										<ActionGroup onClick={(e) => e.stopPropagation()}>
 											<ActionButton
+												disabled={!queueable}
 												onClick={() => toggleTaskSelection("FIX_STRUCTURAL_VIOLATION", v.path)}
 												style={{
-													background: selectedTasks.has(`FIX_STRUCTURAL_VIOLATION|${v.path}`)
+													background: selected
 														? "rgba(255,255,255,0.1)"
 														: "var(--vscode-button-background)",
 												}}>
-												{selectedTasks.has(`FIX_STRUCTURAL_VIOLATION|${v.path}`)
-													? "Remove"
-													: "Add to Queue"}
+												{!queueable ? "Missing Path" : selected ? "Remove" : "Add to Queue"}
 											</ActionButton>
 										</ActionGroup>
 									</ListItem>
-								))}
+								)
+							})}
 						</List>
 
-						{selectedTasks.size > 0 && (
+						{invalidSelectedTaskCount > 0 && (
+							<SummaryNotice>
+								{invalidSelectedTaskCount} stale queue entr{invalidSelectedTaskCount === 1 ? "y" : "ies"} will be
+								ignored. Clear selection or preview to clean the queue.
+							</SummaryNotice>
+						)}
+
+						{validSelectedTaskCount > 0 && (
 							<BulkRefactorBar>
 								<div style={{ fontSize: "12px", fontWeight: "bold" }}>
-									{selectedTasks.size} tasks staged for orchestration
+									{validSelectedTaskCount} tasks staged for orchestration
 								</div>
 								<div style={{ display: "flex", gap: "8px" }}>
-									<ActionButton onClick={previewBatchManifest}>Preview & Launch</ActionButton>
+									<ActionButton
+										disabled={loading || validSelectedTaskCount === 0}
+										onClick={previewBatchManifest}>
+										Preview & Launch
+									</ActionButton>
 								</div>
 							</BulkRefactorBar>
 						)}
@@ -836,7 +951,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								marginBottom: "8px",
 							}}>
 							<SectionTitle style={{ margin: 0 }}>Maintainability Roadmap</SectionTitle>
-							{selectedTasks.size > 0 && (
+							{validSelectedTaskCount > 0 && (
 								<SecondaryButton
 									onClick={() => setSelectedTasks(new Set())}
 									style={{ padding: "4px 8px", fontSize: "10px" }}>
@@ -854,6 +969,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								</FilterBadge>
 							))}
 							<SecondaryButton
+								disabled={visibleOptimizations.length === 0}
 								onClick={addAllVisibleTasks}
 								style={{ marginLeft: "auto", padding: "4px 10px", fontSize: "10px" }}>
 								Add All Visible
@@ -870,29 +986,24 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 							</EmptyState>
 						)}
 						<List>
-							{optimizations
-								?.filter(
-									(opt) =>
-										(!selectedCategory || opt.category === selectedCategory) &&
-										(lower(opt.title).includes(optsSearch.toLowerCase()) ||
-											lower(opt.path).includes(optsSearch.toLowerCase()) ||
-											lower(opt.description).includes(optsSearch.toLowerCase())),
-								)
-								.map((opt, i) => (
+							{visibleOptimizations.map((opt, i) => {
+								const queueable = isQueueableTask(opt.action, opt.path)
+								const selected = isTaskSelected(selectedTasks, opt.action, opt.path)
+								return (
 									<ListItem
 										key={`${opt.path}-${i}`}
-										onClick={() => toggleTaskSelection(opt.action, opt.path)}
+										onClick={() => queueable && toggleTaskSelection(opt.action, opt.path)}
 										style={{
-											cursor: "pointer",
-											border: selectedTasks.has(`${opt.action}|${opt.path}`)
+											cursor: queueable ? "pointer" : "not-allowed",
+											opacity: queueable ? 1 : 0.65,
+											border: selected
 												? "1px solid var(--vscode-button-background)"
 												: "1px solid transparent",
 										}}>
 										<ListItemContent>
 											<BadgeGroup>
-												{selectedTasks.has(`${opt.action}|${opt.path}`) && (
-													<Badge $type="HIGH">QUEUED</Badge>
-												)}
+												{selected && <Badge $type="HIGH">QUEUED</Badge>}
+												{!queueable && <Badge $type="LOW">INCOMPLETE</Badge>}
 												<Badge $type={opt.impact}>{opt.impact} IMPACT</Badge>
 												<Badge $type="EFFORT">{opt.effort} EFFORT</Badge>
 												<Badge $type="CATEGORY">{opt.category}</Badge>
@@ -906,26 +1017,39 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 										</ListItemContent>
 										<ActionGroup onClick={(e) => e.stopPropagation()}>
 											<ActionButton
+												disabled={!queueable}
 												onClick={() => toggleTaskSelection(opt.action, opt.path)}
 												style={{
-													background: selectedTasks.has(`${opt.action}|${opt.path}`)
+													background: selected
 														? "rgba(255,255,255,0.1)"
 														: "var(--vscode-button-background)",
 												}}>
-												{selectedTasks.has(`${opt.action}|${opt.path}`) ? "Remove" : "Add to Queue"}
+												{!queueable ? "Missing Data" : selected ? "Remove" : "Add to Queue"}
 											</ActionButton>
 										</ActionGroup>
 									</ListItem>
-								))}
+								)
+							})}
 						</List>
 
-						{selectedTasks.size > 0 && (
+						{invalidSelectedTaskCount > 0 && (
+							<SummaryNotice>
+								{invalidSelectedTaskCount} stale queue entr{invalidSelectedTaskCount === 1 ? "y" : "ies"} will be
+								ignored. Clear selection or preview to clean the queue.
+							</SummaryNotice>
+						)}
+
+						{validSelectedTaskCount > 0 && (
 							<BulkRefactorBar>
 								<div style={{ fontSize: "12px", fontWeight: "bold" }}>
-									{selectedTasks.size} tasks staged for orchestration
+									{validSelectedTaskCount} tasks staged for orchestration
 								</div>
 								<div style={{ display: "flex", gap: "8px" }}>
-									<ActionButton onClick={previewBatchManifest}>Preview & Launch</ActionButton>
+									<ActionButton
+										disabled={loading || validSelectedTaskCount === 0}
+										onClick={previewBatchManifest}>
+										Preview & Launch
+									</ActionButton>
 								</div>
 							</BulkRefactorBar>
 						)}
@@ -949,7 +1073,10 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 									<SecondaryButton onClick={() => setActiveTab("improvements")}>
 										Back to Selection
 									</SecondaryButton>
-									<ActionButton onClick={handleBatchRefactor} style={{ padding: "12px 24px" }}>
+									<ActionButton
+										disabled={loading || validSelectedTaskCount === 0}
+										onClick={handleBatchRefactor}
+										style={{ padding: "12px 24px" }}>
 										Queue & Launch Tasks
 									</ActionButton>
 								</ActionGroup>

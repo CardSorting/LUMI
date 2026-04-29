@@ -3,6 +3,12 @@ import * as path from "path"
 import { Logger } from "../../../shared/services/Logger.js"
 import { getLayer, Layer } from "../../../utils/joy-zoning.js"
 
+const asNonEmptyString = (value: unknown): string | null => {
+	if (typeof value !== "string") return null
+	const trimmed = value.trim()
+	return trimmed.length > 0 ? trimmed : null
+}
+
 export class PathResolver {
 	private dynamicAliases: Map<string, string> = new Map()
 	private resolutionCache: Map<string, Map<string, string | null>> = new Map()
@@ -62,15 +68,18 @@ export class PathResolver {
 		nodeIds: Map<string, any> | Set<string>,
 		visited: Set<string> = new Set(),
 	): string | null {
+		const safeSourcePath = asNonEmptyString(sourcePath)
+		const safeSpecifier = asNonEmptyString(specifier)
+		if (!safeSourcePath || !safeSpecifier) return null
+
 		this.checkCacheSaturation()
 
-		const cacheKey = `${sourcePath}::${specifier}`
-		let sourceMap = this.resolutionCache.get(sourcePath)
-		if (sourceMap?.has(specifier)) return sourceMap.get(specifier) ?? null
+		let sourceMap = this.resolutionCache.get(safeSourcePath)
+		if (sourceMap?.has(safeSpecifier)) return sourceMap.get(safeSpecifier) ?? null
 
 		let result: string | null = null
-		if (specifier.startsWith(".")) {
-			const abs = path.resolve(this.cwd, path.dirname(sourcePath), specifier)
+		if (safeSpecifier.startsWith(".")) {
+			const abs = path.resolve(this.cwd, path.dirname(safeSourcePath), safeSpecifier)
 			const rel = this.canonicalize(abs)
 			if (nodeIds instanceof Set ? nodeIds.has(rel) : nodeIds.has(rel)) result = rel
 			else if (nodeIds.has(`${rel}.ts`)) result = `${rel}.ts`
@@ -85,8 +94,8 @@ export class PathResolver {
 			}
 		} else {
 			for (const [alias, target] of this.dynamicAliases) {
-				if (specifier.startsWith(alias)) {
-					const rel = specifier.replace(alias, target).replace(/\\/g, "/")
+				if (safeSpecifier.startsWith(alias)) {
+					const rel = safeSpecifier.replace(alias, target).replace(/\\/g, "/")
 					if (nodeIds instanceof Set ? nodeIds.has(rel) : nodeIds.has(rel)) result = rel
 					else if (nodeIds.has(`${rel}.ts`)) result = `${rel}.ts`
 					else if (nodeIds.has(`${rel}.tsx`)) result = `${rel}.tsx`
@@ -110,21 +119,25 @@ export class PathResolver {
 
 		if (!sourceMap) {
 			sourceMap = new Map()
-			this.resolutionCache.set(sourcePath, sourceMap)
+			this.resolutionCache.set(safeSourcePath, sourceMap)
 		}
-		sourceMap.set(specifier, result)
+		sourceMap.set(safeSpecifier, result)
 		return result ? this.intern(result) : null
 	}
 
 	public getDiskPath(sourcePath: string, specifier: string): string | null {
+		const safeSourcePath = asNonEmptyString(sourcePath)
+		const safeSpecifier = asNonEmptyString(specifier)
+		if (!safeSourcePath || !safeSpecifier) return null
+
 		let absPath = ""
-		if (specifier.startsWith(".")) {
-			absPath = path.resolve(this.cwd, path.dirname(sourcePath), specifier)
+		if (safeSpecifier.startsWith(".")) {
+			absPath = path.resolve(this.cwd, path.dirname(safeSourcePath), safeSpecifier)
 		} else {
 			let resolved = false
 			for (const [alias, target] of this.dynamicAliases) {
-				if (specifier.startsWith(alias)) {
-					absPath = path.resolve(this.cwd, specifier.replace(alias, target))
+				if (safeSpecifier.startsWith(alias)) {
+					absPath = path.resolve(this.cwd, safeSpecifier.replace(alias, target))
 					resolved = true
 					break
 				}
@@ -142,32 +155,38 @@ export class PathResolver {
 	}
 
 	public verifyOnDisk(sourcePath: string, specifier: string): boolean {
-		let sourceMap = this.negativeCache.get(sourcePath)
-		if (sourceMap?.has(specifier)) return false
+		const safeSourcePath = asNonEmptyString(sourcePath)
+		const safeSpecifier = asNonEmptyString(specifier)
+		if (!safeSourcePath || !safeSpecifier) return false
 
-		const diskPath = this.getDiskPath(sourcePath, specifier)
+		let sourceMap = this.negativeCache.get(safeSourcePath)
+		if (sourceMap?.has(safeSpecifier)) return false
+
+		const diskPath = this.getDiskPath(safeSourcePath, safeSpecifier)
 		if (diskPath) return true
 
 		// External check fallback
-		if (!specifier.startsWith(".") && !this.isProjectAlias(specifier)) return true
+		if (!safeSpecifier.startsWith(".") && !this.isProjectAlias(safeSpecifier)) return true
 
 		if (!sourceMap) {
 			sourceMap = new Map()
-			this.negativeCache.set(sourcePath, sourceMap)
+			this.negativeCache.set(safeSourcePath, sourceMap)
 		}
-		sourceMap.set(specifier, true)
+		sourceMap.set(safeSpecifier, true)
 		return false
 	}
 
 	public isProjectAlias(specifier: string): boolean {
+		const safeSpecifier = asNonEmptyString(specifier)
+		if (!safeSpecifier) return false
 		for (const alias of this.dynamicAliases.keys()) {
-			if (specifier.startsWith(alias)) return true
+			if (safeSpecifier.startsWith(alias)) return true
 		}
 		return false
 	}
 
 	public resolveLayer(filePath: string): Layer {
-		return getLayer(path.resolve(this.cwd, filePath))
+		return getLayer(path.resolve(this.cwd, asNonEmptyString(filePath) ?? ""))
 	}
 
 	public normalizePath(filePath: string): string {
@@ -179,21 +198,22 @@ export class PathResolver {
 	 * Memoized fingerprinting for extreme performance on massive structural graphs.
 	 */
 	public canonicalize(p: string): string {
-		if (!p) return ""
+		const safePath = asNonEmptyString(p)
+		if (!safePath) return ""
 		this.checkCacheSaturation()
-		const cached = this.canonicalCache.get(p)
+		const cached = this.canonicalCache.get(safePath)
 		if (cached) return cached
 
 		let result: string
 		try {
-			const absolutePath = path.resolve(this.cwd, p)
+			const absolutePath = path.resolve(this.cwd, safePath)
 			const relativePath = path.relative(this.cwd, absolutePath)
 			result = relativePath.replace(/\\/g, "/").toLowerCase()
 		} catch {
-			result = p.replace(/\\/g, "/").toLowerCase()
+			result = safePath.replace(/\\/g, "/").toLowerCase()
 		}
 
-		this.canonicalCache.set(p, result)
+		this.canonicalCache.set(safePath, result)
 		return this.intern(result)
 	}
 
@@ -202,10 +222,12 @@ export class PathResolver {
 	 * Ensures that every unique path string exists exactly once in memory.
 	 */
 	public intern(s: string): string {
-		const existing = this.stringInterner.get(s)
+		const safeString = asNonEmptyString(s)
+		if (!safeString) return ""
+		const existing = this.stringInterner.get(safeString)
 		if (existing) return existing
-		this.stringInterner.set(s, s)
-		return s
+		this.stringInterner.set(safeString, safeString)
+		return safeString
 	}
 
 	/**

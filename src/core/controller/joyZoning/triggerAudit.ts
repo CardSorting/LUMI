@@ -23,6 +23,11 @@ const finitePercent = (value: unknown, fallback = 0): number => Math.max(0, Math
 
 const safeString = (value: unknown, fallback = ""): string => (typeof value === "string" ? value : fallback)
 
+const safeTrimmedString = (value: unknown, fallback = ""): string => {
+	const text = safeString(value, fallback).trim()
+	return text.length > 0 ? text : fallback
+}
+
 const safeArray = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : [])
 
 const boundedArray = <T>(value: unknown, maxItems: number): T[] => safeArray<T>(value).slice(0, maxItems)
@@ -62,13 +67,53 @@ const normalizeHistory = (value: unknown): { timestamp: string; health: number; 
 		maintainability: finitePercent(point.maintainability, 0),
 	}))
 
+const normalizeViolation = (value: unknown): JoyZoningViolation => {
+	const item = isObjectRecord(value) ? value : {}
+	return JoyZoningViolation.create({
+		type: safeTrimmedString(item.type, "STRUCTURAL"),
+		message: safeTrimmedString(item.message, "Structural issue detected."),
+		path: safeTrimmedString(item.path, ""),
+		remediation: safeTrimmedString(item.remediation, "Review this file and apply the smallest safe structural fix."),
+		severity: safeTrimmedString(item.severity, "WARN"),
+		riskLevel: safeTrimmedString(item.riskLevel, "MEDIUM"),
+		impactArea: safeTrimmedString(item.impactArea, "STABILITY"),
+	})
+}
+
+const normalizeOptimization = (value: unknown): JoyZoningOptimization => {
+	const item = isObjectRecord(value) ? value : {}
+	const action = safeTrimmedString(item.action, "")
+	const pathValue = safeTrimmedString(item.path, "")
+	const title = safeTrimmedString(
+		item.title,
+		action && pathValue ? `${action}: ${path.basename(pathValue)}` : "Optimization opportunity",
+	)
+
+	return JoyZoningOptimization.create({
+		title,
+		description: safeTrimmedString(item.description, "Review this opportunity before queuing a refactor."),
+		path: pathValue,
+		action,
+		projectedHealthGain: finiteNumber(item.projectedHealthGain, 0),
+		boilerplate: safeString(item.boilerplate, ""),
+		impact: safeTrimmedString(item.impact, "LOW"),
+		effort: safeTrimmedString(item.effort, "MEDIUM"),
+		category: safeTrimmedString(item.category, "STABILITY"),
+	})
+}
+
+const normalizeViolations = (value: unknown): JoyZoningViolation[] => boundedArray<unknown>(value, 500).map(normalizeViolation)
+
+const normalizeOptimizations = (value: unknown, maxItems = 250): JoyZoningOptimization[] =>
+	boundedArray<unknown>(value, maxItems).map(normalizeOptimization)
+
 function normalizeAuditResponse(input: Partial<JoyZoningAuditResponse> | Record<string, unknown>): JoyZoningAuditResponse {
 	return JoyZoningAuditResponse.create({
 		buildHealth: finitePercent(input.buildHealth, 0),
 		totalFiles: finiteNumber(input.totalFiles, 0),
 		structuralEntropy: finiteNumber(input.structuralEntropy, 0),
-		violations: boundedArray<JoyZoningViolation>(input.violations, 500),
-		optimizations: boundedArray<JoyZoningOptimization>(input.optimizations, 250),
+		violations: normalizeViolations(input.violations),
+		optimizations: normalizeOptimizations(input.optimizations, 250),
 		timestamp: safeString(input.timestamp, new Date().toISOString()),
 		projectedHealth: finitePercent(input.projectedHealth, finiteNumber(input.buildHealth, 0)),
 		integrityScore: finitePercent(input.integrityScore, 0),
@@ -86,7 +131,7 @@ function normalizeAuditResponse(input: Partial<JoyZoningAuditResponse> | Record<
 		complianceScore: finitePercent(input.complianceScore, 0),
 		toxicModule: safeString(input.toxicModule, "None detected"),
 		layerScores: safeRecord(input.layerScores),
-		topRecommendations: boundedArray<JoyZoningOptimization>(input.topRecommendations, 3),
+		topRecommendations: normalizeOptimizations(input.topRecommendations, 3),
 		healthDelta: finiteNumber(input.healthDelta, 0),
 		violationDelta: finiteNumber(input.violationDelta, 0),
 		riskProfile: { LOW: 0, MEDIUM: 0, HIGH: 0, ...safeRecord(input.riskProfile) },
