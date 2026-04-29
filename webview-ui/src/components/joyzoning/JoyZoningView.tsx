@@ -16,75 +16,19 @@ const fixed = (value: number | null | undefined, digits = 1): string => asNumber
 
 type QueuedJoyTask = { action: string; path: string }
 
-const normalizeTaskField = (value: unknown): string => (typeof value === "string" ? value.trim() : "")
-const isQueueableTask = (action: unknown, path: unknown): boolean =>
-	normalizeTaskField(action).length > 0 && normalizeTaskField(path).length > 0
-const createTaskKey = (action: unknown, path: unknown): string | null => {
-	const normalizedAction = normalizeTaskField(action)
-	const normalizedPath = normalizeTaskField(path)
-	return normalizedAction && normalizedPath ? JSON.stringify([normalizedAction, normalizedPath]) : null
-}
-const parseTaskKey = (key: string): QueuedJoyTask | null => {
-	try {
-		const parsed = JSON.parse(key)
-		if (Array.isArray(parsed) && parsed.length === 2 && isQueueableTask(parsed[0], parsed[1])) {
-			return { action: normalizeTaskField(parsed[0]), path: normalizeTaskField(parsed[1]) }
-		}
-	} catch {
-		// Legacy keys used ACTION|path. Keep a tolerant parser so stale in-memory selections do not crash.
-	}
-
-	const separatorIndex = key.indexOf("|")
-	if (separatorIndex <= 0) return null
-	const action = key.slice(0, separatorIndex)
-	const path = key.slice(separatorIndex + 1)
-	return isQueueableTask(action, path) ? { action: normalizeTaskField(action), path: normalizeTaskField(path) } : null
-}
-
-const buildBatchRequests = (selectedTasks: Set<string>, dryRun: boolean) => {
-	const deduped = new Map<string, QueuedJoyTask>()
-	let rejectedCount = 0
-
-	for (const key of selectedTasks) {
-		const task = parseTaskKey(key)
-		if (!task) {
-			rejectedCount++
-			continue
-		}
-		const normalizedKey = createTaskKey(task.action, task.path)
-		if (!normalizedKey) {
-			rejectedCount++
-			continue
-		}
-		deduped.set(normalizedKey, task)
-	}
-
-	return {
-		requests: Array.from(deduped.values()).map(({ action, path }) => ({ action, path, dryRun })),
-		rejectedCount,
-		keys: new Set(deduped.keys()),
-	}
-}
-
-const isTaskSelected = (selectedTasks: Set<string>, action: unknown, path: unknown): boolean => {
-	const key = createTaskKey(action, path)
-	return key ? selectedTasks.has(key) : false
-}
-
 const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const { environment } = useExtensionState()
 	const [loading, setLoading] = useState(false)
 	const [report, setReport] = useState<JoyZoningAuditResponse | null>(null)
 	const [progress, setProgress] = useState<JoyZoningAuditProgress | null>(null)
-	const [previewPlan, setPreviewPlan] = useState<string | null>(null)
-	const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set())
+	const [activeTask, setActiveTask] = useState<QueuedJoyTask | null>(null)
 	const [batchManifest, setBatchManifest] = useState<string | null>(null)
 
 	const [status, setStatus] = useState<"idle" | "starting" | "streaming" | "completed" | "error" | "cancelled">("idle")
 	const [launchingTaskId, setLaunchingTaskId] = useState<string | null>(null)
 	const [auditLaunchMessage, setAuditLaunchMessage] = useState<string | null>(null)
 	const [auditLaunchError, setAuditLaunchError] = useState<string | null>(null)
-	const [activeTab, setActiveTab] = useState<"overview" | "fixes" | "improvements" | "batch">("overview")
+	const [activeTab, setActiveTab] = useState<"overview" | "fixes" | "improvements" | "strategy">("overview")
 	const [fixesSearch, setFixesSearch] = useState("")
 	const [optsSearch, setOptsSearch] = useState("")
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
@@ -103,6 +47,7 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const progressPercentage = asNumber(progress?.percentage, 0)
 	const fixesSearchTerm = fixesSearch.toLowerCase()
 	const optsSearchTerm = optsSearch.toLowerCase()
+
 	const visibleViolations = useMemo(
 		() =>
 			violations.filter(
@@ -114,6 +59,7 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 			),
 		[violations, selectedCategory, fixesSearchTerm],
 	)
+
 	const visibleOptimizations = useMemo(
 		() =>
 			optimizations.filter(
@@ -125,9 +71,6 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 			),
 		[optimizations, selectedCategory, optsSearchTerm],
 	)
-	const validQueuedTaskState = useMemo(() => buildBatchRequests(selectedTasks, false), [selectedTasks])
-	const validSelectedTaskCount = validQueuedTaskState.requests.length
-	const invalidSelectedTaskCount = validQueuedTaskState.rejectedCount
 
 	const cleanupTimers = useCallback(() => {
 		for (const timer of timersRef.current) {
@@ -152,7 +95,6 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 			return
 		}
 
-		// Cancel any existing stream
 		if (cancelRef.current) {
 			cancelRef.current()
 			cancelRef.current = null
@@ -174,7 +116,6 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 						if (response.progress) {
 							setProgress(response.progress)
 						}
-						// If response has violations or health info, it's a partial or final report
 						if (
 							(response.violations && response.violations.length > 0) ||
 							(response.optimizations && response.optimizations.length > 0) ||
@@ -226,162 +167,58 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 		timersRef.current.push(timer)
 	}
 
-	const executeRefactor = async (action: string, path: string, dryRun = false) => {
+	const prepareStrategy = async (action: string, path: string) => {
 		if (!action || !path) {
-			setAuditLaunchError("Missing action or path for refactor.")
+			setAuditLaunchError("Cannot prepare strategy: missing action or path.")
 			return
-		}
-
-		try {
-			const response = await JoyZoningServiceClient.executeRefactor({ action, path, dryRun })
-			if (dryRun) {
-				setPreviewPlan(response.planSummary || "No plan summary available.")
-			} else if (response.success) {
-				setLaunchingTaskId(`${action}:${path}`)
-				const timer = setTimeout(() => setLaunchingTaskId(null), 5000)
-				timersRef.current.push(timer)
-			} else if (response.message) {
-				setAuditLaunchError(`Refactor failed: ${response.message}`)
-			}
-		} catch (error) {
-			console.error("Refactor failed:", error)
-			setAuditLaunchError(error instanceof Error ? error.message : "Refactor execution failed.")
-		}
-	}
-
-	const toggleTaskSelection = (action: string, path: string) => {
-		const key = createTaskKey(action, path)
-		if (!key) {
-			setAuditLaunchError("Cannot queue this task because it is missing an action or path.")
-			return
-		}
-		setSelectedTasks((prev) => {
-			const next = new Set(prev)
-			if (next.has(key)) next.delete(key)
-			else next.add(key)
-			return next
-		})
-	}
-
-	const addAllVisibleTasks = () => {
-		const next = new Set(selectedTasks)
-		let skipped = 0
-		if (activeTab === "fixes") {
-			visibleViolations.forEach((v) => {
-				const key = createTaskKey("FIX_STRUCTURAL_VIOLATION", v.path)
-				if (key) next.add(key)
-				else skipped++
-			})
-		} else if (activeTab === "improvements") {
-			visibleOptimizations.forEach((opt) => {
-				const key = createTaskKey(opt.action, opt.path)
-				if (key) next.add(key)
-				else skipped++
-			})
-		}
-		setSelectedTasks(next)
-		if (skipped > 0) {
-			setAuditLaunchMessage(`${skipped} incomplete visible task${skipped === 1 ? " was" : "s were"} skipped.`)
-		}
-	}
-
-	const autoQueueStrategy = () => {
-		const next = new Set(selectedTasks)
-
-		// 1. Core Repairs (Industry Standard: Fix structural violations first)
-		violations.forEach((v) => {
-			const key = createTaskKey("FIX_STRUCTURAL_VIOLATION", v.path)
-			if (key) next.add(key)
-		})
-
-		// 2. High ROI Enhancements (Industry Standard: Low Effort / High Impact)
-		const quickWins = optimizations.filter((opt) => opt.impact === "HIGH" && opt.effort === "LOW")
-		quickWins.forEach((opt) => {
-			const key = createTaskKey(opt.action, opt.path)
-			if (key) next.add(key)
-		})
-
-		// 3. Strategic Gains (Top remaining by health gain)
-		optimizations
-			.filter((opt) => !(opt.impact === "HIGH" && opt.effort === "LOW"))
-			.toSorted((a, b) => (b.projectedHealthGain || 0) - (a.projectedHealthGain || 0))
-			.slice(0, 10)
-			.forEach((opt) => {
-				const key = createTaskKey(opt.action, opt.path)
-				if (key) next.add(key)
-			})
-
-		setSelectedTasks(next)
-		previewBatchManifest(next)
-	}
-
-	const previewBatchManifest = async (tasksToPreview?: Set<string>) => {
-		const targetTasks = tasksToPreview || selectedTasks
-		const { requests, rejectedCount, keys } = buildBatchRequests(targetTasks, true)
-		if (requests.length === 0) {
-			setSelectedTasks(new Set())
-			setAuditLaunchError("No valid tasks are staged. Re-run the audit or select tasks with a valid action and path.")
-			return
-		}
-		if (rejectedCount > 0) {
-			setSelectedTasks(keys)
-			setAuditLaunchMessage(`${rejectedCount} stale queue entr${rejectedCount === 1 ? "y was" : "ies were"} removed.`)
 		}
 
 		setLoading(true)
 		setAuditLaunchError(null)
+		setActiveTask({ action, path })
 
 		try {
 			const response = await JoyZoningServiceClient.executeBatchRefactor({
-				requests,
+				requests: [{ action, path, dryRun: true }],
 				dryRun: true,
 			})
 
 			if (response.success) {
 				setBatchManifest(response.planSummary)
-				setActiveTab("batch")
+				setActiveTab("strategy")
 			} else {
 				setAuditLaunchError(response.message)
 			}
 		} catch (e) {
-			setAuditLaunchError(asText((e as Error).message, "Failed to generate batch manifest"))
+			setAuditLaunchError(asText((e as Error).message, "Failed to generate strategy manifest"))
 		} finally {
 			setLoading(false)
 		}
 	}
 
-	const handleBatchRefactor = async () => {
-		const { requests, rejectedCount, keys } = buildBatchRequests(selectedTasks, false)
-		if (requests.length === 0) {
-			setSelectedTasks(new Set())
-			setAuditLaunchError("No valid tasks are staged. Re-run the audit or select tasks with a valid action and path.")
-			return
-		}
-		if (rejectedCount > 0) {
-			setSelectedTasks(keys)
-			setAuditLaunchMessage(`${rejectedCount} stale queue entr${rejectedCount === 1 ? "y was" : "ies were"} removed.`)
-		}
+	const executePreparedStrategy = async () => {
+		if (!activeTask) return
 
 		setLoading(true)
 		setAuditLaunchError(null)
 
 		try {
 			const response = await JoyZoningServiceClient.executeBatchRefactor({
-				requests,
+				requests: [{ ...activeTask, dryRun: false }],
 				dryRun: false,
 			})
 
 			if (response.success) {
-				setLaunchingTaskId("batch")
+				setLaunchingTaskId(`${activeTask.action}:${activeTask.path}`)
 				setAuditLaunchMessage(response.message)
-				setBatchManifest(null) // Reset after launch
-				setSelectedTasks(new Set())
-				setActiveTab("overview") // Redirect to overview to see progress
+				setBatchManifest(null)
+				setActiveTask(null)
+				setActiveTab("overview")
 			} else {
 				setAuditLaunchError(response.message)
 			}
 		} catch (e) {
-			setAuditLaunchError(asText((e as Error).message, "Failed to launch batch refactor"))
+			setAuditLaunchError(asText((e as Error).message, "Failed to launch refactor"))
 		} finally {
 			setLoading(false)
 		}
@@ -443,25 +280,17 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						<NavLabel>Upgrades {optimizations.length > 0 ? `(${optimizations.length})` : ""}</NavLabel>
 					</NavItem>
 					<NavItem
-						$active={activeTab === "batch"}
-						onClick={() => setActiveTab("batch")}
+						$active={activeTab === "strategy"}
+						onClick={() => setActiveTab("strategy")}
 						style={{
-							opacity: validSelectedTaskCount > 0 ? 1 : 0.5,
-							pointerEvents: validSelectedTaskCount > 0 ? "auto" : "none",
+							opacity: activeTask ? 1 : 0.5,
+							pointerEvents: activeTask ? "auto" : "none",
 						}}>
-						<div style={{ position: "relative" }}>
-							<NavIcon>🚀</NavIcon>
-							{validSelectedTaskCount > 0 && <NavBadge>{validSelectedTaskCount}</NavBadge>}
-						</div>
-						<NavLabel>Launch Queue</NavLabel>
+						<NavIcon>📜</NavIcon>
+						<NavLabel>Strategy</NavLabel>
 					</NavItem>
 				</NavGroup>
 
-				{validSelectedTaskCount > 0 && activeTab !== "batch" && (
-					<FloatingActionButton onClick={() => setActiveTab("batch")}>
-						<span>🚀</span> Launch Strategy ({validSelectedTaskCount})
-					</FloatingActionButton>
-				)}
 				{loading && (
 					<ScanningNotice>
 						<ScanningIcon>🔍</ScanningIcon>
@@ -485,62 +314,6 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 				{activeTab === "overview" && report && (
 					<TabView>
-						{violations.length > 0 && (
-							<NextActionCard
-								onClick={() => !loading && autoQueueStrategy()}
-								style={{
-									marginBottom: "16px",
-									background:
-										"linear-gradient(135deg, rgba(24, 144, 255, 0.2) 0%, rgba(24, 144, 255, 0.08) 100%)",
-									border: "1px solid rgba(24, 144, 255, 0.4)",
-									cursor: loading ? "wait" : "pointer",
-									position: "relative",
-									overflow: "hidden",
-									opacity: loading ? 0.7 : 1,
-								}}>
-								{loading && (
-									<div
-										style={{
-											position: "absolute",
-											top: 0,
-											left: 0,
-											right: 0,
-											bottom: 0,
-											background: "rgba(0,0,0,0.1)",
-											zIndex: 1,
-										}}
-									/>
-								)}
-								<NextActionIcon>⚡</NextActionIcon>
-								<NextActionContent>
-									<div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-										<NextActionTitle>One-Click Health Strategy</NextActionTitle>
-										{optimizations.length > 0 && (
-											<Badge $type="AUTO" style={{ padding: "1px 4px", fontSize: "7px" }}>
-												OPTIMIZED
-											</Badge>
-										)}
-									</div>
-									<NextActionDesc>
-										Auto-queue <strong>{violations.length} critical fixes</strong> and{" "}
-										{Math.min(optimizations.length, 10)} top optimizations to maximize health gains instantly.
-									</NextActionDesc>
-								</NextActionContent>
-								<NextActionArrow
-									style={{
-										background: loading ? "rgba(255,255,255,0.1)" : "var(--vscode-button-background)",
-										color: loading ? "rgba(255,255,255,0.3)" : "white",
-										borderRadius: "4px",
-										padding: "6px 14px",
-										fontSize: "10px",
-										fontWeight: "900",
-										letterSpacing: "0.5px",
-										zIndex: 2,
-									}}>
-									{loading ? "GENERATING..." : "GENERATE & LAUNCH"}
-								</NextActionArrow>
-							</NextActionCard>
-						)}
 						<HealthSnapshot $health={report.buildHealth}>
 							<SnapshotIcon>{report.buildHealth > 80 ? "✨" : report.buildHealth > 50 ? "⚡" : "🚨"}</SnapshotIcon>
 							<SnapshotContent>
@@ -577,14 +350,12 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 							<RadarChartWrapper>
 								<svg height="100%" viewBox="0 0 200 200" width="100%">
 									<title>Architectural Health Radar</title>
-									{/* Background Hexagon */}
 									<polygon
 										fill="rgba(255,255,255,0.03)"
 										points="100,20 170,60 170,140 100,180 30,140 30,60"
 										stroke="rgba(255,255,255,0.1)"
 										strokeWidth="1"
 									/>
-									{/* Data Polygon (Simulated for visualization) */}
 									<polygon
 										fill="rgba(24, 144, 255, 0.2)"
 										points={`
@@ -703,7 +474,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								</SectionHeader>
 								<QuickWinsGrid>
 									{topRecommendations.map((opt) => (
-										<QuickWinCard key={opt.title} onClick={() => setActiveTab("improvements")}>
+										<QuickWinCard key={opt.title} onClick={() => prepareStrategy(opt.action, opt.path)}>
 											<QuickWinIcon>⚡</QuickWinIcon>
 											<QuickWinContent>
 												<QuickWinTitle>{opt.title}</QuickWinTitle>
@@ -721,12 +492,12 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								<StatLabel>Recommended Actions</StatLabel>
 							</SectionHeader>
 							<MissionGrid>
-								<MissionCard $active={violations.length > 0}>
+								<MissionCard $active={violations.length > 0} onClick={() => setActiveTab("fixes")}>
 									<MissionStatus>{violations.length > 0 ? "ACTION REQUIRED" : "STABLE"}</MissionStatus>
 									<MissionTitle>Harden Infrastructure</MissionTitle>
 									<MissionDesc>Resolve {violations.length} critical risks.</MissionDesc>
 								</MissionCard>
-								<MissionCard $active={optimizations.length > 0}>
+								<MissionCard $active={optimizations.length > 0} onClick={() => setActiveTab("improvements")}>
 									<MissionStatus>{optimizations.length > 0 ? "IN PROGRESS" : "OPTIMIZED"}</MissionStatus>
 									<MissionTitle>Tame Complexity</MissionTitle>
 									<MissionDesc>{optimizations.length} refactor goals identify.</MissionDesc>
@@ -861,12 +632,6 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 									{cat}
 								</FilterBadge>
 							))}
-							<SecondaryButton
-								disabled={visibleViolations.length === 0}
-								onClick={addAllVisibleTasks}
-								style={{ marginLeft: "auto", padding: "4px 10px", fontSize: "10px" }}>
-								Add All Visible
-							</SecondaryButton>
 						</FilterGroup>
 						<SearchInput
 							onChange={(e) => setFixesSearch(e.target.value)}
@@ -878,23 +643,24 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						)}
 						<List>
 							{visibleViolations.map((v, i) => {
-								const queueable = isQueueableTask("FIX_STRUCTURAL_VIOLATION", v.path)
-								const selected = isTaskSelected(selectedTasks, "FIX_STRUCTURAL_VIOLATION", v.path)
+								const action = "FIX_STRUCTURAL_VIOLATION"
+								const queueable = isQueueableTask(action, v.path)
+								const isActive = activeTask?.action === action && activeTask?.path === v.path
 								return (
 									<ListItem
 										$type="VIOLATION"
 										key={`${v.path}-${i}`}
-										onClick={() => queueable && toggleTaskSelection("FIX_STRUCTURAL_VIOLATION", v.path)}
+										onClick={() => queueable && prepareStrategy(action, v.path)}
 										style={{
 											cursor: queueable ? "pointer" : "not-allowed",
 											opacity: queueable ? 1 : 0.65,
-											border: selected
+											border: isActive
 												? "1px solid var(--vscode-button-background)"
 												: "1px solid transparent",
 										}}>
 										<ListItemContent>
 											<BadgeGroup>
-												{selected && <Badge $type="HIGH">QUEUED</Badge>}
+												{isActive && <Badge $type="HIGH">ACTIVE</Badge>}
 												{!queueable && <Badge $type="LOW">INCOMPLETE</Badge>}
 												<Badge $type={v.riskLevel || "HIGH"}>{v.riskLevel || "HIGH"} RISK</Badge>
 												<Badge $type="CATEGORY">{v.impactArea || "STABILITY"}</Badge>
@@ -911,42 +677,15 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 										</ListItemContent>
 										<ActionGroup onClick={(e) => e.stopPropagation()}>
 											<ActionButton
-												disabled={!queueable}
-												onClick={() => toggleTaskSelection("FIX_STRUCTURAL_VIOLATION", v.path)}
-												style={{
-													background: selected
-														? "rgba(255,255,255,0.1)"
-														: "var(--vscode-button-background)",
-												}}>
-												{!queueable ? "Missing Path" : selected ? "Remove" : "Add to Queue"}
+												disabled={!queueable || loading}
+												onClick={() => prepareStrategy(action, v.path)}>
+												Prepare Strategy
 											</ActionButton>
 										</ActionGroup>
 									</ListItem>
 								)
 							})}
 						</List>
-
-						{invalidSelectedTaskCount > 0 && (
-							<SummaryNotice>
-								{invalidSelectedTaskCount} stale queue entr{invalidSelectedTaskCount === 1 ? "y" : "ies"} will be
-								ignored. Clear selection or preview to clean the queue.
-							</SummaryNotice>
-						)}
-
-						{validSelectedTaskCount > 0 && (
-							<BulkRefactorBar>
-								<div style={{ fontSize: "12px", fontWeight: "bold" }}>
-									{validSelectedTaskCount} tasks staged for orchestration
-								</div>
-								<div style={{ display: "flex", gap: "8px" }}>
-									<ActionButton
-										disabled={loading || validSelectedTaskCount === 0}
-										onClick={() => previewBatchManifest()}>
-										Preview & Launch
-									</ActionButton>
-								</div>
-							</BulkRefactorBar>
-						)}
 					</TabView>
 				)}
 
@@ -970,7 +709,6 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								<MatrixLabel>FILLERS</MatrixLabel>
 								<MatrixDesc>High Effort, Low Impact</MatrixDesc>
 							</MatrixQuadrant>
-							{/* Points on the matrix */}
 							{optimizations.slice(0, 8).map((opt) => (
 								<MatrixPoint
 									$effort={opt.effort === "HIGH" ? 75 : opt.effort === "MEDIUM" ? 50 : 25}
@@ -981,22 +719,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 							))}
 						</MatrixContainer>
 
-						<div
-							style={{
-								display: "flex",
-								justifyContent: "space-between",
-								alignItems: "center",
-								marginBottom: "8px",
-							}}>
-							<SectionTitle style={{ margin: 0 }}>Maintainability Roadmap</SectionTitle>
-							{validSelectedTaskCount > 0 && (
-								<SecondaryButton
-									onClick={() => setSelectedTasks(new Set())}
-									style={{ padding: "4px 8px", fontSize: "10px" }}>
-									Clear Selection
-								</SecondaryButton>
-							)}
-						</div>
+						<SectionTitle style={{ marginBottom: "8px" }}>Maintainability Roadmap</SectionTitle>
 						<FilterGroup>
 							{["ALL", "STABILITY", "PERFORMANCE", "MAINTAINABILITY"].map((cat) => (
 								<FilterBadge
@@ -1006,12 +729,6 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 									{cat}
 								</FilterBadge>
 							))}
-							<SecondaryButton
-								disabled={visibleOptimizations.length === 0}
-								onClick={addAllVisibleTasks}
-								style={{ marginLeft: "auto", padding: "4px 10px", fontSize: "10px" }}>
-								Add All Visible
-							</SecondaryButton>
 						</FilterGroup>
 						<SearchInput
 							onChange={(e) => setOptsSearch(e.target.value)}
@@ -1026,21 +743,21 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						<List>
 							{visibleOptimizations.map((opt, i) => {
 								const queueable = isQueueableTask(opt.action, opt.path)
-								const selected = isTaskSelected(selectedTasks, opt.action, opt.path)
+								const isActive = activeTask?.action === opt.action && activeTask?.path === opt.path
 								return (
 									<ListItem
 										key={`${opt.path}-${i}`}
-										onClick={() => queueable && toggleTaskSelection(opt.action, opt.path)}
+										onClick={() => queueable && prepareStrategy(opt.action, opt.path)}
 										style={{
 											cursor: queueable ? "pointer" : "not-allowed",
 											opacity: queueable ? 1 : 0.65,
-											border: selected
+											border: isActive
 												? "1px solid var(--vscode-button-background)"
 												: "1px solid transparent",
 										}}>
 										<ListItemContent>
 											<BadgeGroup>
-												{selected && <Badge $type="HIGH">QUEUED</Badge>}
+												{isActive && <Badge $type="HIGH">ACTIVE</Badge>}
 												{!queueable && <Badge $type="LOW">INCOMPLETE</Badge>}
 												<Badge $type={opt.impact}>{opt.impact} IMPACT</Badge>
 												<Badge $type="EFFORT">{opt.effort} EFFORT</Badge>
@@ -1055,51 +772,23 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 										</ListItemContent>
 										<ActionGroup onClick={(e) => e.stopPropagation()}>
 											<ActionButton
-												disabled={!queueable}
-												onClick={() => toggleTaskSelection(opt.action, opt.path)}
-												style={{
-													background: selected
-														? "rgba(255,255,255,0.1)"
-														: "var(--vscode-button-background)",
-												}}>
-												{!queueable ? "Missing Data" : selected ? "Remove" : "Add to Queue"}
+												disabled={!queueable || loading}
+												onClick={() => prepareStrategy(opt.action, opt.path)}>
+												Prepare Strategy
 											</ActionButton>
 										</ActionGroup>
 									</ListItem>
 								)
 							})}
 						</List>
-
-						{invalidSelectedTaskCount > 0 && (
-							<SummaryNotice>
-								{invalidSelectedTaskCount} stale queue entr{invalidSelectedTaskCount === 1 ? "y" : "ies"} will be
-								ignored. Clear selection or preview to clean the queue.
-							</SummaryNotice>
-						)}
-
-						{validSelectedTaskCount > 0 && (
-							<BulkRefactorBar>
-								<div style={{ fontSize: "12px", fontWeight: "bold" }}>
-									{validSelectedTaskCount} tasks staged for orchestration
-								</div>
-								<div style={{ display: "flex", gap: "8px" }}>
-									<ActionButton
-										disabled={loading || validSelectedTaskCount === 0}
-										onClick={() => previewBatchManifest()}>
-										Preview & Launch
-									</ActionButton>
-								</div>
-							</BulkRefactorBar>
-						)}
 					</TabView>
 				)}
 
-				{activeTab === "batch" && (
+				{activeTab === "strategy" && (
 					<TabView>
-						<SectionTitle>Apex Orchestration Strategy</SectionTitle>
+						<SectionTitle>Sovereign Strategy Manifest</SectionTitle>
 						<SectionDesc>
-							The following strategy has been generated to maximize architectural gain while maintaining absolute
-							substrate integrity.
+							The following strategy has been generated to maximize architectural gain for the target module.
 						</SectionDesc>
 
 						{batchManifest ? (
@@ -1108,21 +797,19 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 									<ManifestContent>{batchManifest}</ManifestContent>
 								</ManifestPreview>
 								<ActionGroup style={{ marginTop: "20px", justifyContent: "flex-end" }}>
-									<SecondaryButton onClick={() => setActiveTab("improvements")}>
-										Back to Selection
-									</SecondaryButton>
+									<SecondaryButton onClick={() => setActiveTab("overview")}>Cancel</SecondaryButton>
 									<ActionButton
-										disabled={loading || validSelectedTaskCount === 0}
-										onClick={handleBatchRefactor}
+										disabled={loading || !activeTask}
+										onClick={executePreparedStrategy}
 										style={{ padding: "12px 24px" }}>
-										Queue & Launch Tasks
+										Launch Refactor
 									</ActionButton>
 								</ActionGroup>
 							</>
 						) : (
 							<EmptyState>
-								Generating Apex Manifest... Please select optimizations from the previous tab to stage them for
-								orchestration.
+								Generating Manifest... Please select a task from the Repairs or Upgrades tabs to prepare a
+								strategy.
 							</EmptyState>
 						)}
 					</TabView>
@@ -1140,18 +827,6 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 				{auditLaunchMessage && <SuccessNotice>{auditLaunchMessage}</SuccessNotice>}
 				{auditLaunchError && <ErrorNotice>{auditLaunchError}</ErrorNotice>}
-
-				{previewPlan && (
-					<PreviewModal>
-						<PreviewContent>
-							<PreviewTitle>Improvement Strategy</PreviewTitle>
-							<PreviewText>{previewPlan}</PreviewText>
-							<PreviewActions>
-								<SecondaryButton onClick={() => setPreviewPlan(null)}>Dismiss</SecondaryButton>
-							</PreviewActions>
-						</PreviewContent>
-					</PreviewModal>
-				)}
 			</Content>
 		</Container>
 	)
@@ -1193,409 +868,6 @@ const HeroSection = styled.div`
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.06);
-`
-
-const HeaderStats = styled.div`
-  display: flex;
-  gap: 8px;
-  align-items: center;
-`
-
-const SystemStatus = styled.div<{ $health: number }>`
-  font-size: 10px;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: 20px;
-  letter-spacing: 1px;
-  background: ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.1)" : props.$health > 50 ? "rgba(250, 173, 20, 0.1)" : "rgba(255, 77, 79, 0.1)")};
-  color: ${(props) => (props.$health > 80 ? "#52c41a" : props.$health > 50 ? "#faad14" : "#ff4d4f")};
-  border: 1px solid ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.2)" : props.$health > 50 ? "rgba(250, 173, 20, 0.2)" : "rgba(255, 77, 79, 0.2)")};
-`
-
-const QualityGate = styled.div<{ $status: string }>`
-  font-size: 9px;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: 20px;
-  letter-spacing: 1px;
-  background: ${(props) => (props.$status === "PASSED" ? "rgba(82, 196, 26, 0.2)" : "rgba(255, 77, 79, 0.2)")};
-  color: ${(props) => (props.$status === "PASSED" ? "#52c41a" : "#ff4d4f")};
-  border: 1px solid ${(props) => (props.$status === "PASSED" ? "rgba(82, 196, 26, 0.3)" : "rgba(255, 77, 79, 0.3)")};
-`
-
-const GovernanceGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 8px;
-`
-
-const GovernanceCard = styled.div<{ $toxic?: boolean }>`
-  padding: 14px;
-  background: ${(props) => (props.$toxic ? "rgba(255, 77, 79, 0.03)" : "rgba(255, 255, 255, 0.02)")};
-  border: 1px solid ${(props) => (props.$toxic ? "rgba(255, 77, 79, 0.2)" : "rgba(255, 255, 255, 0.04)")};
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 4px;
-`
-
-const GovernanceTitle = styled.div`
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  opacity: 0.5;
-  font-weight: 700;
-`
-
-const GovernanceValue = styled.div`
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--vscode-foreground);
-`
-
-const GovernanceDesc = styled.div`
-  font-size: 9px;
-  opacity: 0.4;
-  font-weight: 600;
-`
-
-const MissionSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`
-
-const QuickWinsSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`
-
-const QuickWinsGrid = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const QuickWinCard = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background: rgba(24, 144, 255, 0.05);
-    border-color: rgba(24, 144, 255, 0.2);
-    transform: translateX(4px);
-  }
-`
-
-const QuickWinIcon = styled.div`
-  font-size: 16px;
-  filter: drop-shadow(0 0 4px rgba(24, 144, 255, 0.5));
-`
-
-const QuickWinContent = styled.div`
-  display: flex;
-  flex-direction: column;
-`
-
-const QuickWinTitle = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0.9;
-`
-
-const QuickWinGain = styled.div`
-  font-size: 9px;
-  color: #52c41a;
-  font-weight: 800;
-  letter-spacing: 0.3px;
-`
-
-const ArchitectureHealthSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 16px;
-`
-
-const LayerList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-`
-
-const LayerItem = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const LayerInfo = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`
-
-const LayerName = styled.div`
-  font-size: 10px;
-  text-transform: uppercase;
-  font-weight: 800;
-  opacity: 0.5;
-  letter-spacing: 1px;
-`
-
-const LayerScore = styled.div`
-  font-size: 10px;
-  font-weight: 800;
-  opacity: 0.8;
-`
-
-const LayerProgressBarContainer = styled.div`
-  height: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 2px;
-  overflow: hidden;
-`
-
-const LayerProgressBar = styled.div<{ $width: number; $health: number }>`
-  height: 100%;
-  width: ${(props) => props.$width}%;
-  background: ${(props) => (props.$health > 80 ? "#52c41a" : props.$health > 50 ? "#faad14" : "#ff4d4f")};
-  box-shadow: 0 0 8px ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.3)" : "rgba(255, 77, 79, 0.3)")};
-  transition: width 1s ease-in-out;
-`
-
-const MissionGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-`
-
-const MissionCard = styled.div<{ $active?: boolean }>`
-  padding: 12px;
-  background: ${(props) => (props.$active ? "rgba(24, 144, 255, 0.05)" : "rgba(255, 255, 255, 0.02)")};
-  border: 1px solid ${(props) => (props.$active ? "rgba(24, 144, 255, 0.2)" : "rgba(255, 255, 255, 0.05)")};
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
-
-const MissionStatus = styled.div`
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  opacity: 0.6;
-`
-
-const MissionTitle = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-`
-
-const MissionDesc = styled.div`
-  font-size: 9px;
-  opacity: 0.5;
-  line-height: 1.3;
-`
-
-const SummaryNotice = styled.div`
-  font-size: 11px;
-  line-height: 1.5;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border-left: 2px solid var(--vscode-button-background);
-  border-radius: 4px;
-  opacity: 0.9;
-`
-
-const ActivitySection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
-`
-
-const ActivityList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const ActivityItem = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  position: relative;
-  padding-left: 12px;
-`
-
-const ActivityDot = styled.div`
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #1890ff;
-  margin-top: 5px;
-  box-shadow: 0 0 6px rgba(24, 144, 255, 0.5);
-  flex-shrink: 0;
-`
-
-const ActivityText = styled.div`
-  font-size: 10px;
-  opacity: 0.8;
-  line-height: 1.4;
-  
-  code {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-family: var(--vscode-editor-font-family);
-  }
-`
-
-const ActivityTime = styled.div`
-  font-size: 8px;
-  opacity: 0.3;
-  margin-left: auto;
-  white-space: nowrap;
-`
-
-const StatLabel = styled.div`
-  font-size: 9px;
-  text-transform: uppercase;
-  opacity: 0.4;
-  font-weight: 700;
-`
-
-const EmptyLog = styled.div`
-  font-size: 10px;
-  opacity: 0.4;
-  text-align: center;
-  padding: 8px;
-  font-style: italic;
-`
-
-const TabContainer = styled.div`
-  display: flex;
-  background: rgba(0, 0, 0, 0.15);
-  padding: 3px;
-  border-radius: 10px;
-  gap: 2px;
-`
-
-const Tab = styled.div<{ $active: boolean }>`
-  flex: 1;
-  text-align: center;
-  padding: 6px 2px;
-  font-size: 10px;
-  font-weight: 700;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: ${(props) => (props.$active ? "rgba(255, 255, 255, 0.08)" : "transparent")};
-  color: ${(props) => (props.$active ? "var(--vscode-foreground)" : "rgba(255, 255, 255, 0.4)")};
-`
-
-const TabView = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  animation: ${keyframes`from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); }`} 0.3s ease;
-`
-
-const SubstrateStatus = styled.div<{ $health: number }>`
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  color: ${(props) => (props.$health > 80 ? "#52c41a" : "#faad14")};
-  background: ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.1)" : "rgba(250, 173, 20, 0.1)")};
-  padding: 4px 12px;
-  border-radius: 20px;
-`
-
-const DashboardSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-`
-
-const DashboardGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  width: 100%;
-`
-
-const DashboardCard = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 12px 4px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-`
-
-const DashboardIcon = styled.div`
-  font-size: 16px;
-  margin-bottom: 4px;
-`
-
-const DashboardValue = styled.div`
-  font-size: 14px;
-  font-weight: 700;
-`
-
-const DashboardLabel = styled.div`
-  font-size: 9px;
-  text-transform: uppercase;
-  opacity: 0.4;
-  letter-spacing: 0.5px;
-`
-
-const TrendSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-`
-
-const TrendChart = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  height: 40px;
-  padding: 4px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-`
-
-const TrendBar = styled.div<{ $height: number }>`
-  flex: 1;
-  height: ${(props) => props.$height}%;
-  background: var(--vscode-button-background);
-  opacity: 0.6;
-  border-radius: 2px 2px 0 0;
-  min-width: 4px;
-  transition: all 0.3s ease;
-  
-  &:hover {
-    opacity: 1;
-    background: #40a9ff;
-  }
 `
 
 const RadarContainer = styled.div`
@@ -1655,11 +927,296 @@ const DeltaBadge = styled.div<{ $positive: boolean }>`
   font-weight: 800;
 `
 
-const DeltaInline = styled.span<{ $positive: boolean }>`
-  font-size: 9px;
-  margin-left: 4px;
-  color: ${(props) => (props.$positive ? "#52c41a" : "#ff4d4f")};
+const HeaderStats = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
+`
+
+const SystemStatus = styled.div<{ $health: number }>`
+  font-size: 10px;
   font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 1px;
+  background: ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.1)" : props.$health > 50 ? "rgba(250, 173, 20, 0.1)" : "rgba(255, 77, 79, 0.1)")};
+  color: ${(props) => (props.$health > 80 ? "#52c41a" : props.$health > 50 ? "#faad14" : "#ff4d4f")};
+  border: 1px solid ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.2)" : props.$health > 50 ? "rgba(250, 173, 20, 0.2)" : "rgba(255, 77, 79, 0.2)")};
+`
+
+const QualityGate = styled.div<{ $status: string }>`
+  font-size: 9px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 1px;
+  background: ${(props) => (props.$status === "PASSED" ? "rgba(82, 196, 26, 0.2)" : "rgba(255, 77, 79, 0.2)")};
+  color: ${(props) => (props.$status === "PASSED" ? "#52c41a" : "#ff4d4f")};
+  border: 1px solid ${(props) => (props.$status === "PASSED" ? "rgba(82, 196, 26, 0.3)" : "rgba(255, 77, 79, 0.3)")};
+`
+
+const ShareButton = styled.button`
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--vscode-foreground);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  &:hover { background: rgba(255, 255, 255, 0.1); }
+`
+
+const NavGroup = styled.div`
+  display: flex;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  gap: 4px;
+`
+
+const NavItem = styled.div<{ $active: boolean }>`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: ${(props) => (props.$active ? "rgba(255, 255, 255, 0.1)" : "transparent")};
+  border: 1px solid ${(props) => (props.$active ? "rgba(255, 255, 255, 0.1)" : "transparent")};
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+`
+
+const NavIcon = styled.div`
+  font-size: 16px;
+`
+
+const NavLabel = styled.div`
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.8;
+`
+
+const ScanningNotice = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(24, 144, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(24, 144, 255, 0.1);
+`
+
+const ScanningIcon = styled.div`
+  font-size: 16px;
+  animation: ${rotate} 2s linear infinite;
+`
+
+const ScanningText = styled.div`
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
+`
+
+const WelcomeView = styled.div`
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 20px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+`
+
+const WelcomeIcon = styled.div`
+  font-size: 48px;
+`
+
+const WelcomeTitle = styled.h2`
+  font-size: 18px;
+  margin: 0;
+`
+
+const WelcomeDesc = styled.p`
+  font-size: 12px;
+  opacity: 0.6;
+  line-height: 1.6;
+  margin: 0;
+`
+
+const TabView = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: ${keyframes`from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); }`} 0.3s ease;
+`
+
+const HealthSnapshot = styled.div<{ $health: number }>`
+  padding: 16px;
+  background: ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.05)" : props.$health > 50 ? "rgba(250, 173, 20, 0.05)" : "rgba(255, 77, 79, 0.05)")};
+  border: 1px solid ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.2)" : props.$health > 50 ? "rgba(250, 173, 20, 0.2)" : "rgba(255, 77, 79, 0.2)")};
+  border-radius: 16px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+`
+
+const SnapshotIcon = styled.div`
+  font-size: 24px;
+`
+
+const SnapshotContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const SnapshotTitleGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const SnapshotTitle = styled.div`
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`
+
+const SnapshotDesc = styled.div`
+  font-size: 11px;
+  opacity: 0.7;
+  line-height: 1.4;
+`
+
+const TrendSparkline = styled.div`
+  display: flex;
+  align-items: center;
+`
+
+const RadarChartSection = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+`
+
+const RadarChartWrapper = styled.div`
+  width: 200px;
+  height: 200px;
+  position: relative;
+`
+
+const RadarLabel = styled.div`
+  position: absolute;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  opacity: 0.5;
+  white-space: nowrap;
+`
+
+const GovernanceGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+`
+
+const GovernanceCard = styled.div<{ $toxic?: boolean }>`
+  padding: 14px;
+  background: ${(props) => (props.$toxic ? "rgba(255, 77, 79, 0.03)" : "rgba(255, 255, 255, 0.02)")};
+  border: 1px solid ${(props) => (props.$toxic ? "rgba(255, 77, 79, 0.2)" : "rgba(255, 255, 255, 0.04)")};
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+`
+
+const GovernanceTitle = styled.div`
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.5;
+  font-weight: 700;
+`
+
+const GovernanceValue = styled.div`
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--vscode-foreground);
+`
+
+const GovernanceDesc = styled.div`
+  font-size: 9px;
+  opacity: 0.4;
+  font-weight: 600;
+`
+
+const ChecklistSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const SectionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`
+
+const SectionTitle = styled.h3`
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.8;
+`
+
+const StatLabel = styled.div`
+  font-size: 9px;
+  text-transform: uppercase;
+  opacity: 0.4;
+  font-weight: 700;
+`
+
+const Checklist = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const CheckItem = styled.div<{ $passed: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  opacity: ${(props) => (props.$passed ? 0.9 : 0.5)};
+`
+
+const CheckIcon = styled.div`
+  font-size: 12px;
+`
+
+const CheckText = styled.div`
+  font-weight: 600;
 `
 
 const RiskProfileSection = styled.div`
@@ -1686,7 +1243,6 @@ const RiskSegment = styled.div<{ $type: string; $width: number; $total: number }
   background: ${(props) => (props.$type === "HIGH" ? "#ff4d4f" : props.$type === "MEDIUM" ? "#faad14" : "#52c41a")};
   transition: width 1s ease-in-out;
   border-right: 1px solid rgba(0, 0, 0, 0.2);
-  
   &:last-child { border-right: none; }
 `
 
@@ -1726,7 +1282,6 @@ const Badge = styled.div<{ $type: string }>`
   padding: 1px 6px;
   border-radius: 4px;
   letter-spacing: 0.5px;
-  
   ${(props) => {
 		if (props.$type === "HIGH") return "background: rgba(82, 196, 26, 0.2); color: #52c41a;"
 		if (props.$type === "MEDIUM") return "background: rgba(250, 173, 20, 0.2); color: #faad14;"
@@ -1737,31 +1292,291 @@ const Badge = styled.div<{ $type: string }>`
   }}
 `
 
-const LoadingOverlay = styled.div`
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.8);
+const QuickWinsSection = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  backdrop-filter: blur(4px);
+  gap: 10px;
 `
 
-const SectionHeader = styled.div`
+const QuickWinsGrid = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const QuickWinCard = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  &:hover {
+    background: rgba(24, 144, 255, 0.05);
+    border-color: rgba(24, 144, 255, 0.2);
+    transform: translateX(4px);
+  }
+`
+
+const QuickWinIcon = styled.div`
+  font-size: 16px;
+  filter: drop-shadow(0 0 4px rgba(24, 144, 255, 0.5));
+`
+
+const QuickWinContent = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const QuickWinTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.9;
+`
+
+const QuickWinGain = styled.div`
+  font-size: 9px;
+  color: #52c41a;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+`
+
+const MissionSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const MissionGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+`
+
+const MissionCard = styled.div<{ $active?: boolean }>`
+  padding: 12px;
+  background: ${(props) => (props.$active ? "rgba(24, 144, 255, 0.05)" : "rgba(255, 255, 255, 0.02)")};
+  border: 1px solid ${(props) => (props.$active ? "rgba(24, 144, 255, 0.2)" : "rgba(255, 255, 255, 0.05)")};
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  &:hover { background: rgba(255, 255, 255, 0.04); }
+`
+
+const MissionStatus = styled.div`
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  opacity: 0.6;
+`
+
+const MissionTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+`
+
+const MissionDesc = styled.div`
+  font-size: 9px;
+  opacity: 0.5;
+  line-height: 1.3;
+`
+
+const ArchitectureHealthSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+`
+
+const LayerList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const LayerItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const LayerInfo = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
 `
 
-const SectionTitle = styled.h3`
-  font-size: 13px;
-  font-weight: 800;
-  margin: 0;
+const LayerName = styled.div`
+  font-size: 10px;
   text-transform: uppercase;
+  font-weight: 800;
+  opacity: 0.5;
   letter-spacing: 1px;
+`
+
+const LayerScore = styled.div`
+  font-size: 10px;
+  font-weight: 800;
   opacity: 0.8;
+`
+
+const LayerProgressBarContainer = styled.div`
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+`
+
+const LayerProgressBar = styled.div<{ $width: number; $health: number }>`
+  height: 100%;
+  width: ${(props) => props.$width}%;
+  background: ${(props) => (props.$health > 80 ? "#52c41a" : props.$health > 50 ? "#faad14" : "#ff4d4f")};
+  box-shadow: 0 0 8px ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.3)" : "rgba(255, 77, 79, 0.3)")};
+  transition: width 1s ease-in-out;
+`
+
+const DashboardSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const DashboardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+`
+
+const DashboardCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+`
+
+const DashboardIcon = styled.div`
+  font-size: 16px;
+  margin-bottom: 4px;
+`
+
+const DashboardValue = styled.div`
+  font-size: 14px;
+  font-weight: 700;
+`
+
+const DashboardLabel = styled.div`
+  font-size: 9px;
+  text-transform: uppercase;
+  opacity: 0.4;
+  letter-spacing: 0.5px;
+`
+
+const SummaryNotice = styled.div`
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid var(--vscode-button-background);
+  border-radius: 4px;
+  opacity: 0.9;
+`
+
+const TrendSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const TrendChart = styled.div`
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 40px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+`
+
+const TrendBar = styled.div<{ $height: number }>`
+  flex: 1;
+  height: ${(props) => props.$height}%;
+  background: var(--vscode-button-background);
+  opacity: 0.6;
+  border-radius: 2px 2px 0 0;
+  min-width: 4px;
+  transition: all 0.3s ease;
+  &:hover { opacity: 1; background: #40a9ff; }
+`
+
+const ActivitySection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+`
+
+const ActivityList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const ActivityItem = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  position: relative;
+  padding-left: 12px;
+`
+
+const ActivityDot = styled.div`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1890ff;
+  margin-top: 5px;
+  box-shadow: 0 0 6px rgba(24, 144, 255, 0.5);
+  flex-shrink: 0;
+`
+
+const ActivityText = styled.div`
+  font-size: 10px;
+  opacity: 0.8;
+  line-height: 1.4;
+  code {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: var(--vscode-editor-font-family);
+  }
+`
+
+const ActivityTime = styled.div`
+  font-size: 8px;
+  opacity: 0.3;
+  margin-left: auto;
+  white-space: nowrap;
+`
+
+const EmptyLog = styled.div`
+  font-size: 10px;
+  opacity: 0.4;
+  text-align: center;
+  padding: 8px;
+  font-style: italic;
 `
 
 const AuditButton = styled.button<{ $primary?: boolean }>`
@@ -1776,6 +1591,7 @@ const AuditButton = styled.button<{ $primary?: boolean }>`
   width: 100%;
   transition: all 0.2s ease;
   &:hover { opacity: 0.9; transform: translateY(-1px); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 `
 
 const List = styled.div`
@@ -1806,6 +1622,14 @@ const ListItemTitle = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+`
+
+const PatternLabel = styled.div`
+  font-size: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0.6;
 `
 
 const ListItemDesc = styled.div`
@@ -1856,6 +1680,7 @@ const ActionButton = styled.button`
   font-size: 10px;
   font-weight: 800;
   flex: 2;
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 `
 
 const SecondaryButton = styled.button`
@@ -1868,60 +1693,37 @@ const SecondaryButton = styled.button`
   font-size: 10px;
   font-weight: 700;
   flex: 1;
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 `
 
-const HealthSnapshot = styled.div<{ $health: number }>`
-  padding: 16px;
-  background: ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.05)" : props.$health > 50 ? "rgba(250, 173, 20, 0.05)" : "rgba(255, 77, 79, 0.05)")};
-  border: 1px solid ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.2)" : props.$health > 50 ? "rgba(250, 173, 20, 0.2)" : "rgba(255, 77, 79, 0.2)")};
-  border-radius: 16px;
+const FilterGroup = styled.div`
   display: flex;
-  gap: 16px;
+  gap: 8px;
   align-items: center;
+  overflow-x: auto;
+  padding-bottom: 4px;
 `
 
-const SnapshotIcon = styled.div`
-  font-size: 24px;
+const FilterBadge = styled.div<{ $active: boolean }>`
+  font-size: 9px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  background: ${(props) => (props.$active ? "var(--vscode-button-background)" : "rgba(255, 255, 255, 0.05)")};
+  color: ${(props) => (props.$active ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)")};
+  white-space: nowrap;
 `
 
-const SnapshotContent = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
-
-const SnapshotTitle = styled.div`
-  font-size: 13px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-`
-
-const SnapshotDesc = styled.div`
+const SearchInput = styled.input`
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: var(--vscode-foreground);
   font-size: 11px;
-  opacity: 0.7;
-  line-height: 1.4;
-`
-
-const ScanningNotice = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  background: rgba(24, 144, 255, 0.05);
-  border-radius: 12px;
-  border: 1px solid rgba(24, 144, 255, 0.1);
-`
-
-const ScanningIcon = styled.div`
-  font-size: 16px;
-  animation: ${rotate} 2s linear infinite;
-`
-
-const ScanningText = styled.div`
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0.8;
+  outline: none;
+  &:focus { border-color: var(--vscode-button-background); }
 `
 
 const EmptyState = styled.div`
@@ -1931,6 +1733,31 @@ const EmptyState = styled.div`
   font-size: 12px;
   border: 1px dashed rgba(255, 255, 255, 0.1);
   border-radius: 16px;
+`
+
+const SectionDesc = styled.div`
+  font-size: 11px;
+  opacity: 0.6;
+  line-height: 1.4;
+  margin-bottom: 8px;
+`
+
+const ManifestPreview = styled.div`
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+`
+
+const ManifestContent = styled.pre`
+  margin: 0;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: rgba(255, 255, 255, 0.9);
 `
 
 const SuccessNotice = styled.div`
@@ -1951,6 +1778,39 @@ const ErrorNotice = styled.div`
   font-size: 11px;
   font-weight: 700;
   text-align: center;
+`
+
+const LoadingOverlay = styled.div`
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+`
+
+const ProgressText = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 20px;
+  opacity: 0.8;
+`
+
+const ProgressBarContainer = styled.div`
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+`
+
+const ProgressBar = styled.div<{ $width: number }>`
+  height: 100%;
+  width: ${(props) => props.$width}%;
+  background: var(--vscode-button-background);
+  transition: width 0.3s ease;
 `
 
 const PreviewModal = styled.div`
@@ -1997,433 +1857,64 @@ const PreviewActions = styled.div`
   justify-content: flex-end;
 `
 
-const BulkRefactorBar = styled.div`
-  position: sticky;
-  bottom: 0;
-  background: var(--vscode-sideBar-background);
-  padding: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  z-index: 100;
-  box-shadow: 0 -4px 12px rgba(0,0,0,0.2);
-  border-radius: 0 0 16px 16px;
-`
-
-const NavGroup = styled.div`
-  display: flex;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 4px;
-  border-radius: 12px;
-  margin-bottom: 8px;
-  gap: 4px;
-`
-
-const NavItem = styled.div<{ $active: boolean }>`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 8px 4px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: ${(props) => (props.$active ? "rgba(255, 255, 255, 0.1)" : "transparent")};
-  border: 1px solid ${(props) => (props.$active ? "rgba(255, 255, 255, 0.1)" : "transparent")};
-  
-  &:hover {
-    background: rgba(255, 255, 255, 0.05);
-  }
-`
-
-const NavIcon = styled.div`
-  font-size: 16px;
-`
-
-const NavLabel = styled.div`
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  opacity: 0.8;
-`
-
-const NavBadge = styled.div`
-  position: absolute;
-  top: -6px;
-  right: -8px;
-  background: #ff4d4f;
-  color: white;
-  font-size: 8px;
-  font-weight: 800;
-  padding: 2px 5px;
-  border-radius: 10px;
-  border: 1px solid var(--vscode-sideBar-background);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-  min-width: 14px;
-  text-align: center;
-`
-
-const FloatingActionButton = styled.button`
-  position: fixed;
-  bottom: 80px;
-  right: 20px;
-  background: var(--vscode-button-background);
-  color: white;
-  border: none;
-  border-radius: 30px;
-  padding: 12px 24px;
-  font-weight: bold;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  z-index: 1000;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    transform: scale(1.05);
-    background: #40a9ff;
-  }
-  
-  &:active {
-    transform: scale(0.95);
-  }
-`
-
-const TabGroup = styled.div`
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-`
-
-const SectionDesc = styled.div`
-  font-size: 11px;
-  opacity: 0.6;
-  margin-bottom: 20px;
-  line-height: 1.5;
-`
-
-const ManifestPreview = styled.div`
-  background: rgba(0,0,0,0.2);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  padding: 20px;
-  max-height: 400px;
-  overflow-y: auto;
-`
-
-const ManifestContent = styled.div`
-  font-family: var(--vscode-editor-font-family);
-  font-size: 11px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  color: var(--vscode-editor-foreground);
-`
-
-const FilterGroup = styled.div`
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-`
-
-const FilterBadge = styled.div<{ $active: boolean }>`
-  font-size: 9px;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  background: ${(props) => (props.$active ? "var(--vscode-button-background)" : "rgba(255, 255, 255, 0.05)")};
-  color: ${(props) => (props.$active ? "var(--vscode-button-foreground)" : "rgba(255, 255, 255, 0.4)")};
-  border: 1px solid ${(props) => (props.$active ? "transparent" : "rgba(255, 255, 255, 0.1)")};
-  
-  &:hover {
-    background: ${(props) => (props.$active ? "var(--vscode-button-background)" : "rgba(255, 255, 255, 0.1)")};
-  }
-`
-
-const SearchInput = styled.input`
-  width: 100%;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 8px 12px;
-  color: var(--vscode-foreground);
-  font-size: 11px;
-  margin-bottom: 8px;
-  
-  &:focus {
-    outline: none;
-    border-color: var(--vscode-button-background);
-  }
-  
-  &::placeholder {
-    opacity: 0.4;
-  }
-`
-
-const SnapshotTitleGroup = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-`
-
-const TrendSparkline = styled.div`
-  background: rgba(0, 0, 0, 0.1);
-  padding: 2px 4px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-`
-
-const PatternLabel = styled.span`
-  font-size: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.4);
-  padding: 1px 6px;
-  border-radius: 4px;
-  margin-left: 8px;
-  font-weight: 400;
-  cursor: help;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-`
-
 const MatrixContainer = styled.div`
-  position: relative;
+  height: 120px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  width: 100%;
-  height: 180px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 16px;
+  position: relative;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.05);
 `
 
 const MatrixQuadrant = styled.div<{ $type: string }>`
-  padding: 12px;
+  border: 0.5px solid rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.03);
-  
-  ${(props) => {
-		if (props.$type === "WIN") return "background: rgba(82, 196, 26, 0.02);"
-		if (props.$type === "STRATEGIC") return "background: rgba(24, 144, 255, 0.02);"
-		if (props.$type === "MINIMAL") return "background: rgba(255, 255, 255, 0.01);"
-		return "background: rgba(255, 77, 79, 0.01);"
-  }}
+  justify-content: center;
+  background: ${(props) => {
+		if (props.$type === "WIN") return "rgba(82, 196, 26, 0.02)"
+		if (props.$type === "STRATEGIC") return "rgba(24, 144, 255, 0.02)"
+		return "transparent"
+  }};
 `
 
 const MatrixLabel = styled.div`
-  font-size: 9px;
-  font-weight: 800;
-  opacity: 0.5;
-  letter-spacing: 1px;
+  font-size: 7px;
+  font-weight: 900;
+  opacity: 0.3;
 `
 
 const MatrixDesc = styled.div`
-  font-size: 7px;
-  opacity: 0.3;
-  text-transform: uppercase;
-  margin-top: 2px;
+  font-size: 5px;
+  opacity: 0.2;
 `
 
 const MatrixPoint = styled.div<{ $effort: number; $impact: number }>`
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
+  background: var(--vscode-button-background);
   border-radius: 50%;
-  background: var(--vscode-button-background);
-  box-shadow: 0 0 8px var(--vscode-button-background);
-  bottom: ${(props) => props.$impact}%;
   left: ${(props) => props.$effort}%;
+  bottom: ${(props) => props.$impact}%;
   transform: translate(-50%, 50%);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  z-index: 10;
-  
-  &:hover {
-    width: 12px;
-    height: 12px;
-    box-shadow: 0 0 12px #fff;
-  }
-`
-
-const ShareButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  color: var(--vscode-foreground);
-  font-size: 9px;
-  font-weight: 700;
-  padding: 3px 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-  
-  span {
-    font-size: 10px;
-  }
-`
-
-const WelcomeView = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 40px 20px;
-  gap: 20px;
-  flex: 1;
-`
-
-const WelcomeIcon = styled.div`
-  font-size: 64px;
-  filter: drop-shadow(0 0 20px rgba(24, 144, 255, 0.3));
-`
-
-const WelcomeTitle = styled.h2`
-  font-size: 20px;
-  font-weight: 800;
-  margin: 0;
-`
-
-const WelcomeDesc = styled.p`
-  font-size: 13px;
-  opacity: 0.6;
-  max-width: 400px;
-  line-height: 1.6;
-  margin: 0;
-`
-
-const RadarChartSection = styled.div`
-  padding: 20px;
-  display: flex;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 20px;
-`
-
-const RadarChartWrapper = styled.div`
-  position: relative;
-  width: 180px;
-  height: 180px;
-`
-
-const RadarLabel = styled.div`
-  position: absolute;
-  font-size: 8px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  opacity: 0.4;
-  white-space: nowrap;
-`
-
-const ChecklistSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-`
-
-const Checklist = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.1);
-  padding: 12px;
-  border-radius: 12px;
-`
-
-const CheckItem = styled.div<{ $passed: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  opacity: ${(props) => (props.$passed ? 1 : 0.6)};
-`
-
-const CheckIcon = styled.div`
-  font-size: 14px;
-`
-
-const CheckText = styled.div`
-  font-size: 11px;
-  font-weight: 600;
-`
-
-const NextActionCard = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
-  border-radius: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  }
-`
-
-const NextActionIcon = styled.div`
-  font-size: 20px;
-`
-
-const NextActionContent = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
-const NextActionTitle = styled.div`
-  font-size: 13px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-`
-
-const NextActionDesc = styled.div`
-  font-size: 11px;
-  opacity: 0.9;
-  line-height: 1.4;
-`
-
-const NextActionArrow = styled.div`
-  font-size: 18px;
-  font-weight: 800;
+  box-shadow: 0 0 6px var(--vscode-button-background);
 `
 
 const DriftWarning = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  width: 100%;
   padding: 8px 12px;
   background: rgba(250, 173, 20, 0.1);
-  border-radius: 10px;
   border: 1px solid rgba(250, 173, 20, 0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
 `
 
 const WarningIcon = styled.div`
@@ -2432,28 +1923,23 @@ const WarningIcon = styled.div`
 
 const WarningText = styled.div`
   font-size: 10px;
-  color: #faad14;
   font-weight: 700;
-`
-
-const ProgressBarContainer = styled.div`
-  height: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-  overflow: hidden;
-`
-
-const ProgressBar = styled.div<{ $width: number }>`
-  height: 100%;
-  width: ${(props) => props.$width}%;
-  background: var(--vscode-button-background);
-`
-
-const ProgressText = styled.div`
-  font-size: 11px;
-  font-weight: 500;
-  opacity: 0.9;
-  font-family: var(--vscode-editor-font-family);
+  color: #faad14;
 `
 
 export default JoyZoningView
+
+const isQueueableTask = (action: string, path: string): boolean => {
+	return !!action && !!path && path !== "Unknown" && path !== ""
+}
+
+const normalizeTaskField = (value: string | null | undefined): string => {
+	return (value || "").trim()
+}
+
+const createTaskKey = (action: string, path: string): string | null => {
+	const a = normalizeTaskField(action)
+	const p = normalizeTaskField(path)
+	if (!a || !p) return null
+	return JSON.stringify([a, p])
+}
