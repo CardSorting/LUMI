@@ -16,16 +16,16 @@ export interface SovereignDiagnostics {
 	safetyGuard?: string
 	agenticThrashing?: { loop: boolean; doubtFiles: string[] } // V185: Fail-signal detection
 	healthTrend?: number // V185: Success tracking
-	fragilityIndex?: Record<string, number> // V186: CCI surgical telemetry
+	fragilityIndex?: Record<string, number> // V186: Complexity telemetry
 	namingIntegrity?: number // V186: identifier casing health
-	heartbeatStatus?: number // V187: 💓 Heartbeat metric
-	resonanceDamping?: number // V100: 0.5x, 1.0x etc
+	activityLevel?: number // V187: Activity metric (formerly heartbeat)
+	velocityMultiplier?: number // V100: 0.5x, 1.0x etc
 	restorationActive?: boolean // V100: Recovery Buffer
 	neuralFocus?: string[] // V188: Cognitive obsession tracking
 	aestheticResilience?: number // V188: Noise filtering efficiency
 	recoveryHint?: string // V188: Predictive restoration directive
 	projectVelocity?: number // Bumping hardening
-	merkleDrift?: string // Bumping hardening
+	syncDrift?: string // Bumping hardening (formerly merkleDrift)
 	suggestedRepairs?: string[] // V202-B: Passive healing advisories
 }
 
@@ -84,8 +84,8 @@ export namespace SovereignProtocol {
 					? `🏗️ **Refactor Window Active**: ${diagnostics.refactorTurns} turns remaining\n`
 					: "") +
 				(diagnostics.karmaStatus ? `✨ **Karma Status**: ${diagnostics.karmaStatus}\n` : "") +
-				(diagnostics.heartbeatStatus !== undefined
-					? `💓 **Heartbeat Status**: ${SafeNumber.format(diagnostics.heartbeatStatus, 0)}% (${diagnostics.heartbeatStatus > 80 ? "Stable" : diagnostics.heartbeatStatus > 50 ? "Strained" : "Flatlining"})\n`
+				(diagnostics.activityLevel !== undefined
+					? `📈 **Activity Level (Churn)**: ${SafeNumber.format(diagnostics.activityLevel, 0)}% (${diagnostics.activityLevel > 80 ? "Stable" : diagnostics.activityLevel > 50 ? "High Churn" : "Extreme Churn"})\n`
 					: "") +
 				(diagnostics.projectVelocity
 					? `🚀 **Project Velocity**: ${SafeNumber.format(diagnostics.projectVelocity, 2)}x\n`
@@ -93,8 +93,8 @@ export namespace SovereignProtocol {
 				(diagnostics.aestheticResilience !== undefined
 					? `🎨 **Aesthetic Resilience**: ${SafeNumber.format(diagnostics.aestheticResilience * 100, 1)}%\n`
 					: "") +
-				(diagnostics.resonanceDamping && diagnostics.resonanceDamping < 1.0
-					? `🧘 **Cognitive Resonance Active**: ${diagnostics.resonanceDamping}x pressure accumulation (Refactor Mode)\n`
+				(diagnostics.velocityMultiplier && diagnostics.velocityMultiplier < 1.0
+					? `🧘 **Velocity Multiplier Active**: ${diagnostics.velocityMultiplier}x accumulation (Refactor Mode)\n`
 					: "") +
 				(diagnostics.restorationActive
 					? `🩹 **Supportive Healing Active**: Auto-repair is helping with critical fixes\n`
@@ -129,18 +129,18 @@ export namespace SovereignProtocol {
 				(diagnostics.namingIntegrity !== undefined
 					? `⚖️ **Naming Consistency**: ${SafeNumber.format(diagnostics.namingIntegrity * 100, 1)}%\n`
 					: "") +
-				(diagnostics.merkleDrift
-					? `🌀 **Synchronization**: Slight drift detected. Local hash: ${diagnostics.merkleDrift.substring(0, 8)}...\n`
-					: "✅ **Synchronization**: Files are fully synchronized.\n") +
+				(diagnostics.syncDrift
+					? `🌀 **Sync Status (Drift)**: Slight drift detected. Local hash: ${diagnostics.syncDrift.substring(0, 8)}...\n`
+					: "✅ **Sync Status**: Files are fully synchronized.\n") +
 				(diagnostics.neuralFocus && diagnostics.neuralFocus.length > 0
 					? `🧠 **Current Focus**: ${diagnostics.neuralFocus.join(", ")}\n`
 					: "") +
 				(diagnostics.fragilityIndex
-					? `🔴 **High-Activity Areas**:\n` +
+					? `🔴 **High-Complexity Areas**:\n` +
 						Object.entries(diagnostics.fragilityIndex)
 							.sort((a, b) => b[1] - a[1])
 							.slice(0, 3)
-							.map(([p, s]) => `  - ${p}: ${SafeNumber.format(s, 2)} (Complexity)`)
+							.map(([p, s]) => `  - ${p}: ${SafeNumber.format(s, 2)} (Complexity Index)`)
 							.join("\n")
 					: "") +
 				(diagnostics.recoveryHint ? `\n💡 **HELPFUL TIP**: ${diagnostics.recoveryHint}\n` : "") +

@@ -23,11 +23,9 @@ export interface EnvironmentLease {
 		diskSpaceGB?: string
 		hasNodeModules?: boolean
 		memoryFreeGB?: string
-		// Pass 3 additions
 		detectedProjectTypes?: string[]
 		toolchain?: Record<string, { version?: string; path?: string; status: "found" | "missing" | "broken" }>
 		manifests?: string[]
-		// Pass 4 additions
 		hostname?: string
 		shadowingAlerts?: string[]
 	}
@@ -57,27 +55,21 @@ export class EnvironmentSovereignty {
 		private readonly stateManager?: StateManager,
 	) {}
 
-	/**
-	 * Returns the current environment fingerprint based on PATH, USER, CWD, Runtime, and Machine ID.
-	 */
 	public getFingerprint(): string {
 		const env = process.env
 		const data = [
-			os.hostname(), // Machine anchor
+			os.hostname(),
 			env.PATH,
 			env.USER || env.USERNAME,
 			this.cwd,
 			process.platform,
 			process.arch,
-			process.version, // Node version
-			"v2", // Force re-probe for de-blocking fixes
+			process.version,
+			"v2",
 		].join("|")
 		return createHash("sha256").update(data).digest("hex")
 	}
 
-	/**
-	 * L0 Check: Immediate cache validation.
-	 */
 	private getL0Lease(): EnvironmentLease | null {
 		if (this.lease) return this.lease
 		if (this.stateManager) {
@@ -89,9 +81,6 @@ export class EnvironmentSovereignty {
 		return null
 	}
 
-	/**
-	 * L1 Check: Deterministic fingerprint validation.
-	 */
 	public isLeaseValid(lease: EnvironmentLease | null): boolean {
 		if (!lease) return false
 		if (Date.now() - lease.timestamp > this.LEASE_DURATION) return false
@@ -99,9 +88,6 @@ export class EnvironmentSovereignty {
 		return true
 	}
 
-	/**
-	 * Revokes the current lease, forcing a full probe on the next check.
-	 */
 	public revokeLease(): void {
 		this.lease = null
 		if (this.stateManager) {
@@ -110,15 +96,11 @@ export class EnvironmentSovereignty {
 		Logger.warn("[EnvironmentSovereignty] Environmental Lease revoked.")
 	}
 
-	/**
-	 * Performs a tiered environment probe (L0 -> L1 -> L2).
-	 */
 	public async validateEnvironment(): Promise<EnvironmentLease> {
 		if (this.probePromise) {
 			return this.probePromise
 		}
 
-		// Tier L0/L1: Persistent Check
 		const cachedLease = this.getL0Lease()
 		if (this.isLeaseValid(cachedLease)) {
 			this.lease = cachedLease
@@ -148,10 +130,7 @@ export class EnvironmentSovereignty {
 		asdf: "asdf --version",
 	}
 
-	// ... constructor ...
-
 	private async performFullProbe(): Promise<EnvironmentLease> {
-		// Tier L2: Full Forensic Probe
 		Logger.info("[EnvironmentSovereignty] Performing Industrial Forensic Probe (L2)...")
 		const fingerprint = this.getFingerprint()
 		const lease: EnvironmentLease = {
@@ -168,14 +147,13 @@ export class EnvironmentSovereignty {
 		}
 
 		try {
-			// 1. Basic Metadata & Permission Probe
 			lease.details!.shell = process.env.SHELL || (process.platform === "win32" ? "cmd" : "unknown")
 			lease.details!.memoryFreeGB = (os.freemem() / (1024 * 1024 * 1024)).toFixed(2)
+
 			if (process.platform !== "win32") {
 				const { stdout: dfOut } = await execAsync(`df -h "${this.cwd}" | tail -1 | awk '{print $4}'`)
 				lease.details!.diskSpaceGB = dfOut.trim()
 			} else {
-				// Windows fallback via PowerShell
 				try {
 					const drive = path.parse(this.cwd).root.split(":")[0]
 					const { stdout: psOut } = await execAsync(`powershell -Command "(Get-PSDrive ${drive}).Free / 1GB"`)
@@ -196,7 +174,6 @@ export class EnvironmentSovereignty {
 				lease.details!.canWrite = false
 			}
 
-			// 2. Substrate & Git Probe
 			try {
 				await execAsync("git --version")
 			} catch (e) {
@@ -204,10 +181,9 @@ export class EnvironmentSovereignty {
 				lease.error = "Git Not Found: Architecture requires git for state tracking."
 			}
 
-			// 3. Multi-Language Discovery & Deep Manifest Scanning
 			const rootFiles = await fs.readdir(this.cwd)
 
-			// 3a. Marker-based Discovery
+			// 1. Detect project types based on markers
 			for (const [type, config] of Object.entries(EnvironmentSovereignty.PROJECT_MARKERS)) {
 				const hasMarker =
 					rootFiles.includes(config.manifest) ||
@@ -216,38 +192,44 @@ export class EnvironmentSovereignty {
 				if (hasMarker) {
 					lease.details!.detectedProjectTypes!.push(type)
 					if (rootFiles.includes(config.manifest)) lease.details!.manifests!.push(config.manifest)
-
-					// Register all relevant version manifests found
 					EnvironmentSovereignty.VERSION_MANIFESTS[type]?.forEach((m) => {
 						if (rootFiles.includes(m)) lease.details!.manifests!.push(m)
 					})
+				}
+			}
 
-					try {
-						const { stdout } = await execAsync(config.probe)
-						lease.details!.toolchain![type] = {
-							status: "found",
-							version: stdout.trim(),
-						}
-						// Binary Shadowing Check
-						const { stdout: binPath } = await execAsync(
-							process.platform === "win32" ? `where ${type}` : `which ${type}`,
+			// 2. Probe toolchains for DETECTED project types ONLY (plus mandatory git)
+			const toolsToProbe = Array.from(new Set([...lease.details!.detectedProjectTypes!, "git"]))
+
+			for (const type of toolsToProbe) {
+				const config =
+					EnvironmentSovereignty.PROJECT_MARKERS[type] || (type === "git" ? { probe: "git --version" } : null)
+				if (!config) continue
+
+				try {
+					const { stdout } = await execAsync(config.probe)
+					lease.details!.toolchain![type] = {
+						status: "found",
+						version: stdout.trim(),
+					}
+
+					const { stdout: binPath } = await execAsync(process.platform === "win32" ? `where ${type}` : `which ${type}`)
+					lease.details!.toolchain![type].path = binPath.trim()
+
+					const isStandardPath =
+						binPath.includes("/usr/local/bin") ||
+						binPath.includes("/usr/bin") ||
+						binPath.includes(".nvm/versions") ||
+						binPath.includes(".asdf/installs")
+
+					if (!isStandardPath && lease.details!.toolchain![type].path!.startsWith(this.cwd)) {
+						lease.details!.shadowingAlerts!.push(
+							`⚠️ CAUTION: ${type} binary is located inside workspace: ${lease.details!.toolchain![type].path}`,
 						)
-						lease.details!.toolchain![type].path = binPath.trim()
-
-						// High-Velocity: Ignore shadowing in standard system/nvm paths
-						const isStandardPath =
-							binPath.includes("/usr/local/bin") ||
-							binPath.includes("/usr/bin") ||
-							binPath.includes(".nvm/versions") ||
-							binPath.includes(".asdf/installs")
-
-						if (!isStandardPath && lease.details!.toolchain![type].path!.startsWith(this.cwd)) {
-							lease.details!.shadowingAlerts!.push(
-								`⚠️ CAUTION: ${type} binary is located inside workspace: ${lease.details!.toolchain![type].path}`,
-							)
-						}
-					} catch (e) {
-						// V218 Hardening: Use current process as fallback for Node
+					}
+				} catch (e) {
+					// Fallback for Node via process.execPath
+					if (type === "node" || type === "git" || lease.details!.detectedProjectTypes!.includes(type)) {
 						if (type === "node") {
 							const execPath = process.execPath
 							try {
@@ -260,10 +242,7 @@ export class EnvironmentSovereignty {
 								Logger.info(`[EnvironmentSovereignty] Node found via process.execPath: ${execPath}`)
 							} catch {
 								lease.details!.toolchain![type] = { status: "missing" }
-								// High-Velocity: Still keep as warning, but more subtle
-								lease.details!.shadowingAlerts!.push(
-									"⚠️ [ADVISORY] Node.js not found on PATH. Operations may be restricted.",
-								)
+								lease.details!.shadowingAlerts!.push("⚠️ [ADVISORY] Node.js not found on PATH.")
 							}
 						} else {
 							lease.details!.toolchain![type] = { status: "missing" }
@@ -272,17 +251,16 @@ export class EnvironmentSovereignty {
 				}
 			}
 
-			// 3b. Management Tool Probes
+			// 3. Management Tool Probes (Only if relevant)
 			for (const [tool, cmd] of Object.entries(EnvironmentSovereignty.MGMT_TOOLS)) {
 				try {
 					const { stdout } = await execAsync(cmd)
 					lease.details!.toolchain![tool] = { status: "found", version: stdout.trim() }
 				} catch {
-					// Silent skip for mgmt tools
+					// Silent skip
 				}
 			}
 
-			// 4. Runtime Integrity Check
 			if (lease.details!.toolchain!.node?.status === "found") {
 				const execPath = process.execPath
 				const nodeBinPath = lease.details!.toolchain!.node.path

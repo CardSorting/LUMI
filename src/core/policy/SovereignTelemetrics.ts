@@ -7,8 +7,8 @@ import { SovereignProtocol } from "./SovereignProtocol"
 import { SpiderEngine } from "./spider/SpiderEngine"
 
 /**
- * SystemTelemetrics: The Substrate Diagnostic Layer.
- * Extracts health, entropy, and vitality telemetry from the architectural graph.
+ * SystemTelemetrics: The System Telemetry Layer.
+ * Extracts health, complexity, and activity telemetry from the architectural graph.
  */
 export class SovereignTelemetrics {
 	private lastBuildHealth = 100
@@ -42,7 +42,7 @@ export class SovereignTelemetrics {
 				(currentEntropy.components.couplingScore > 0.15 ? 0.5 : 0),
 			agenticThrashing: this.getAgenticHealth(),
 			healthTrend: buildHealth - this.lastBuildHealth,
-			heartbeatStatus: this.getStabilityPulse(),
+			activityLevel: this.getStabilityPulse(),
 			neuralFocus: this.getNeuralFocus(),
 			aestheticResilience: stats.aestheticResilience,
 			recoveryHint: this.getRecoveryHint(this.getStabilityPulse()),
@@ -74,13 +74,13 @@ export class SovereignTelemetrics {
 	 */
 	public getRecoveryHint(vitality: number): string | undefined {
 		if (vitality > 40) return undefined
-		return `💓 STABILITY WARNING: Heartbeat signal is at ${SafeNumber.format(vitality, 0)}%. 
+		return `⚠️ STABILITY WARNING: Activity level (Churn) is at ${SafeNumber.format(vitality, 0)}%. 
   STEP 1: Implement a Strategic Stability Break. Simplify your current changes.
   STEP 2: Trigger a # STRATEGIC REVIEW in \`scratchpad.md\` to re-ground your plan.`
 	}
 
 	/**
-	 * V187: Computes the 💓 Stability Pulse based on workload, doubt, and complexity.
+	 * V187: Computes the Activity Level (Churn) based on workload, doubt, and complexity.
 	 */
 	public getStabilityPulse(): number {
 		const stats = this.metabolicMonitor.getStabilityStats()

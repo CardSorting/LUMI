@@ -323,7 +323,7 @@ export class FluidPolicyEngine {
 				return {
 					success: false,
 					error:
-						`🛑 METABOLIC BLOCKADE [CRITICAL]: Disk space dangerously low.\n\n` +
+						`🛑 PHYSICAL BLOCKADE [CRITICAL]: Disk space dangerously low.\n\n` +
 						`I've detected your environment has less than 500MB of free space (${lease.details.diskSpaceGB}).\n\n` +
 						`💡 WHY THIS MATTERS: Coding with near-zero disk space causes silent corruption of the database and source files during write operations.\n\n` +
 						`📊 STATE:\n${forensicReport}\n\n` +
@@ -382,7 +382,7 @@ export class FluidPolicyEngine {
 			if (isCriticalPhysicalResource) {
 				return {
 					success: false,
-					error: `🛑 STRATEGIC ENVIRONMENT ALERT [GATEKEEPER]\n\nCritical physical environment requirements not met.\n\n❌ ISSUE: ${lease.error || "Metabolic health critical"}\n\n${forensicReport}\n\n${shellWarning}💡 WHY THIS MATTERS: Attempting to modify code without disk space or permissions causes data loss.\n\n🛠️ GUIDED SETUP:\n${guidedSetup}\n\n⚙️ I will re-probe the environment on your next attempt.`,
+					error: `🛑 ENVIRONMENT ALERT [GATEKEEPER]\n\nCritical physical environment requirements not met.\n\n❌ ISSUE: ${lease.error || "Substrate health critical"}\n\n${forensicReport}\n\n${shellWarning}💡 WHY THIS MATTERS: Attempting to modify code without disk space or permissions causes data loss.\n\n🛠️ GUIDED SETUP:\n${guidedSetup}\n\n⚙️ I will re-probe the environment on your next attempt.`,
 				}
 			}
 

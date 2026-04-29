@@ -18,7 +18,7 @@ export interface DoctorReport {
 
 /**
  * SovereignDoctor: Performs deep environment-level health checks.
- * Ensures the substrate for JoyZoning is stable.
+ * Ensures the environment for JoyZoning is stable.
  */
 export class SovereignDoctor {
 	constructor(private cwd: string) {}
@@ -116,10 +116,10 @@ export class SovereignDoctor {
 					id: "DOC-101",
 					category: "STATE",
 					severity: "LOW",
-					message: "Metabolic velocity is currently high (high operation frequency). Substrate is under pressure.",
+					message: "Write frequency is currently high (high operation rate). Project is under heavy workload.",
 					remediable: true,
 					remediationHint:
-						"Pause high-frequency operations or use # SOVEREIGN_BREATHER to allow structural stabilization.",
+						"Pause high-frequency operations or use # STABILITY BREAK to allow structural stabilization.",
 				})
 			}
 		}
@@ -135,9 +135,9 @@ export class SovereignDoctor {
 					id: "DOC-102",
 					category: "STATE",
 					severity: "MEDIUM",
-					message: "Immune memory (PathogenStore) is bloating (large state file). Systemic instability detected.",
+					message: "Diagnostic history cache (PathogenStore) is bloating (large state file).",
 					remediable: true,
-					remediationHint: "Run 'DietCode: Audit Immune Memory' to prune stale data (antigens).",
+					remediationHint: "Run 'DietCode: Audit Cache' to prune stale data.",
 				})
 			}
 		}
