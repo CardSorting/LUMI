@@ -186,6 +186,23 @@ export namespace IntegrityProtocol {
 	}
 
 	/**
+	 * V320: Generates a lightweight Rapid Audit template for high-velocity turns.
+	 * Used for agile-safe layers or low-complexity tasks to minimize drafting overhead.
+	 */
+	export function generateRapidAuditTemplate(taskName: string): string {
+		return (
+			`${IntegrityProtocol.HEADERS.AUDIT}: ${taskName} (RAPID-FIRE)\n` +
+			`Timestamp: ${new Date().toISOString()}\n` +
+			`GUIDANCE: Low-risk turn. Focus on surgical implementation.\n\n` +
+			`### [QUICK ANALYSIS]\n` +
+			`- **Objective**: [Surgical goal]\n` +
+			`- **Risk**: [One-line risk check]\n\n` +
+			`### ACTION PLAN\n` +
+			`- [ ] 1. ...\n`
+		)
+	}
+
+	/**
 	 * V16: Generates a lightweight Stability Recalibration template for activity recovery.
 	 */
 	export function generateBreathTemplate(taskName: string, reason?: string): string {

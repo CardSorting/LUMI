@@ -2,7 +2,7 @@
 	"name": "dietcode",
 	"displayName": "DietCode",
 	"description": "DietCode is your autonomous architectural substrate, maintaining codebase integrity with zero bloat.",
-	"version": "5.10.68",
+	"version": "5.10.69",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",

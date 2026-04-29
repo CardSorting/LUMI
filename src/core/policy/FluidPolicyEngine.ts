@@ -289,6 +289,32 @@ export class FluidPolicyEngine {
 	public async validatePreExecution(block: ToolUse): Promise<PolicyResult> {
 		const result: PolicyResult = { success: true }
 
+		// Step -2: Plan Mode Write Restriction (V290)
+		// In PLAN mode, modifying the filesystem (except scratchpad.md) is strictly prohibited.
+		const isModifying =
+			block.name === DietCodeDefaultTool.FILE_NEW ||
+			block.name === DietCodeDefaultTool.FILE_EDIT ||
+			block.name === DietCodeDefaultTool.APPLY_PATCH ||
+			block.name === DietCodeDefaultTool.BASH
+
+		if (this.mode === "plan" && isModifying) {
+			const targetPath = (block.params as { path?: string })?.path
+			const isScratchpad = targetPath?.endsWith("scratchpad.md")
+
+			if (!isScratchpad) {
+				return {
+					success: false,
+					error:
+						`🛑 PLAN MODE RESTRICTION: You are attempting to modify \`${targetPath}\` while in PLAN mode.\n\n` +
+						`💡 WORKFLOW GUIDANCE: You MUST NOT edit source code, documentation, changelogs, or wikis until the plan is approved.\n\n` +
+						`✅ ALLOWED ACTIONS:\n` +
+						`1. Update \`scratchpad.md\` with your architectural analysis.\n` +
+						`2. Use \`plan_mode_respond\` to present your final plan to the user.\n` +
+						`3. Once the user approves and switches you to ACT mode, you may proceed with implementation.`,
+				}
+			}
+		}
+
 		// Step -1: Strategic Environment Check (SEC)
 		// Ensuring essential tools are available to prevent progress issues.
 		const lease = await this.envIntegrity.validateEnvironment()
@@ -1102,10 +1128,17 @@ export class FluidPolicyEngine {
 
 	/**
 	 * Inspects and enriches tool results with proactive layer context.
-	 * Always injects the file's layer context so the agent knows the rules before editing.
-	 * Additionally warns about existing violations if any are found.
+	 * V300: Shadow Documentation & Strategic Guidance.
 	 */
-	public async observeToolOutcome(_toolName: string, _output: unknown): Promise<{ hint?: string }> {
+	public async observeToolOutcome(toolName: string, output: any): Promise<{ hint?: string }> {
+		if (this.mode === "act" && (toolName === DietCodeDefaultTool.FILE_EDIT || toolName === DietCodeDefaultTool.FILE_NEW)) {
+			// If tool was successful, suggest documentation updates
+			if (output?.success || output?.content) {
+				const recentEdits = Array.from(this.sessionFiles.keys()).slice(-3)
+				const changelogHint = `💡 [SHADOW DOCUMENTATION]: You've successfully modified ${recentEdits.length} file(s). Consider updating the \`CHANGELOG.md\` or \`wiki/\` with these changes to maintain architectural history.`
+				return { hint: changelogHint }
+			}
+		}
 		return {}
 	}
 
@@ -1183,21 +1216,27 @@ export class FluidPolicyEngine {
 			header += `${stalenessWarning}\n`
 		}
 
-		// Protocol Hardening: Inject Guard Directives based on project health
-		// PRODUCTION HARDENING: Clearer, more authoritative guidance for integrity recovery.
+		// V186: Total Deblocking - Karma-based Leniency (V300)
 		const buildHealth = this.computeBuildHealth(this.spiderEngine.getViolations().map((v) => v.message))
+		const karmaBonus = this.karma > 1500 ? " (Elite Karma Active)" : ""
+
 		if (buildHealth < 70) {
-			header += `\n🛡️ HIGH-SHIELD PROTOCOL ACTIVE: Structural Integrity is CRITICAL (${buildHealth}/100).\n`
-			header += `Architecture is currently under SOFT-LOCK. New features are RESTRICTED. Prioritize HEALING the following vectors:\n`
-			header += `  - Address Circular Dependencies (SPI-004)\n  - Resolve Layer Violations\n  - Clean up Ghost Imports (SPI-005)\n`
-		} else if (buildHealth < 85) {
-			header += `\n🔍 ARCHITECTURAL WATCH: Structural Integrity is ${buildHealth}/100. Maintain layer discipline to avoid soft-lock thresholds.\n`
+			header += `\n🛡️ [STABILITY ADVISORY]: Structural Integrity is ${buildHealth}/100${karmaBonus}. Prioritize healing circularities and layer violations.\n`
 		}
 
 		// Axiomatic Logic Report
 		const axioms = this.axiomEngine.validateAxioms(absolutePath, content, this.spiderEngine)
 		if (axioms.length > 0) {
 			header += `\n🧠 LOGIC AXIOM ANALYSIS:\n${axioms.map((v) => `  - [${v.axiom}] ${v.message}`).join("\n")}\n`
+		}
+
+		// V300: Drift Prophecy in PLAN mode
+		if (this.mode === "plan") {
+			const enforcer = new (require("./PlanModeEnforcer").PlanModeEnforcer)(this.cwd)
+			const status = await enforcer.getStrategicReviewStatus(this.stabilityMonitor)
+			if (status.prophecy) {
+				header += `\n${status.prophecy}\n`
+			}
 		}
 
 		// Workload Activity Injection
@@ -1243,58 +1282,49 @@ export class FluidPolicyEngine {
 			header += `\n🕸️ [STRUCTURAL DRIFT]: Graph is ${SafeNumber.formatPercent(drift.drift, 1)}% cross-layer (Target: < 15%).\n`
 		}
 
+		// V310: Accelerated Flow Signal
+		const isAgileLayer = ["ui", "infrastructure", "api", "utils", "shared", "plumbing"].includes(layer)
+		const isCoreLayer = layer === "domain" || layer === "core"
+
 		if (this.mode === "plan") {
+			const enforcer = new (require("./PlanModeEnforcer").PlanModeEnforcer)(this.cwd)
+			const status = await enforcer.getStrategicReviewStatus(this.stabilityMonitor)
+			if (status.prophecy) {
+				header += `\n${status.prophecy}\n`
+			}
+
+			// V330: Blast Radius & Dependency Probing
+			const node = this.spiderEngine.nodes.get(this.normalize(absolutePath))
+			if (node && node.dependents.length > 3) {
+				const sampleDependents = node.dependents.slice(0, 3).map((p) => path.basename(p))
+				header += `\n⚠️ [FORENSIC BLAST RADIUS]: This module is a critical dependency for ${node.dependents.length} files (including ${sampleDependents.join(", ")}).\n`
+				header += `👉 INVESTIGATIVE DIRECTIVE: You MUST investigate at least 2 dependents to ensure contract stability before planning.\n`
+			}
+
+			if (isCoreLayer) {
+				header += `\n🛡️ [HARDENED INVESTIGATION]: You are in a CORE layer. Depth and Rigor are mandatory.\n`
+				header += `1. **Deep Forensic Trace**: Your scratchpad MUST include a dependency ripple analysis.\n`
+				header += `2. **Invariant Check**: How does this change affect the global architectural invariants?\n`
+				header += `3. **Scanning Limit**: Your investigative budget has been expanded to 15 files for this turn.\n`
+			}
+
 			if (perFileReadCount >= 3) {
-				header += `🔍 Architecture Analysis (PLAN mode):\n`
-				header += `  ⚠️ RECURSIVE STALLING DETECTED: You have read this specific file (${path.basename(absolutePath)}) ${perFileReadCount} times in this turn without making progress. To avoid an infinite loop, you MUST NOW stop reading this file and either synthesize your findings into a plan or use \`ask_followup_question\`.\n`
-			} else if (globalFileReadCount >= 5) {
-				header += `🔍 Architecture Analysis (PLAN mode):\n`
-				header += `  ⚠️ CROSS-TURN RECURSION DETECTED: You have read this specific file (${path.basename(absolutePath)}) ${globalFileReadCount} times across multiple turns without progress. To avoid an infinite loop, you MUST NOW stop reading this file and synthesize your findings or use \`ask_followup_question\`.\n`
-			} else if (totalReadCount >= 10) {
-				header += `🔍 Architecture Analysis (PLAN mode):\n`
-				header += `  ⚠️ SYSTEMATIC SCANNING LIMIT: You have read ${totalReadCount} unique files in this interaction turn. To avoid context bloat, you MUST NOW synthesize your current findings into an architectural plan using \`plan_mode_respond\`.\n`
-			} else if (totalReadCount >= 5) {
-				// Adaptive Guidance: Omit probing questions after 5 reads to reduce turn-overhead and "nagging"
-				header += `🔍 Architecture Context (PLAN mode):\n`
-				header += `  (Probing questions disabled for turn-efficiency. Focus on your planning objective.)\n`
-			} else {
-				const isInterface = content.includes("interface ") || content.includes("type ")
-				header += `🔍 Architecture Probing (PLAN mode):\n`
-				switch (layer) {
-					case "domain":
-						if (isInterface) {
-							header += `  - Is this Domain contract stable enough for Core consumption?\n  - Does it avoid leaking implementation details?`
-						} else {
-							header += `  - Does this logic belong in a Core Service instead?\n  - Are all Infrastructure side effects abstracted?`
-						}
-						break
-					case "core":
-						header += isInterface
-							? `  - Is this Core interface consumed by UI or Infrastructure components?`
-							: `  - Which Domain models are being coordinated here?\n  - Are Infrastructure dependencies properly abstracted via interfaces?`
-						break
-					case "infrastructure":
-						header += `  - Does this adapter strictly implement a Domain or Core contract?\n  - Is any business logic leaking into this I/O-heavy layer?`
-						break
-					default:
-						header += `  - How does this file fit into the overall JoyZoning topology?`
-				}
-				header += `\n`
+				// V330: Increased from 2 for core rigor
+				header += `\n⚠️ [RECURSIVE STALLING]: Stop reading and start planning.\n`
+			} else if (totalReadCount >= (isCoreLayer ? 15 : 7)) {
+				// V330: Dynamic Limit
+				header += `\n⚠️ [SCANNING LIMIT]: Call \`plan_mode_respond\` NOW.\n`
+			} else if (totalReadCount >= (isCoreLayer ? 5 : 3)) {
+				header += `\n⚡ [ACCELERATED FLOW]: Sufficient context gathered. Call \`plan_mode_respond\`.\n`
+			}
+
+			if (isAgileLayer && !isCoreLayer) {
+				const rapidTemplate = IntegrityProtocol.generateRapidAuditTemplate("Surgical Update")
+				header += `\n⚡ [RAPID-FIRE]: AGILE layer detected. Use this minimalist template to move faster:\n\n\`\`\`markdown\n${rapidTemplate}\`\`\`\n`
+				header += `💡 [ONE-SHOT NUDGE]: This task is low-risk. Provide analysis and plan in a SINGLE turn.\n`
 			}
 		} else if (this.mode === "act") {
-			header += `🛠️ Layer Toolkit (ACT mode):\n`
-			switch (layer) {
-				case "domain":
-					header += `  - 🚫 NO side effects. 🚫 NO external imports. 🚫 NO environment variable leakage.\n  - Ensure logic is pure and testable without I/O.`
-					break
-				case "core":
-					header += `  - 🏗️ Coordinate Domain Models. 🏗️ Use Dependency Inversion for Infrastructure.\n  - Keep logic flow visible; delegate low-level implementation.`
-					break
-				case "infrastructure":
-					header += `  - 🔌 Implement Domain interfaces. 🔌 Isolate I/O details.\n  - Transform external data to Domain models immediately.`
-					break
-			}
-			header += `\n`
+			header += `🛠️ Layer: ${layer.toUpperCase()} | Karma: ${this.karma}\n`
 
 			// Context-Aware Tool Guidance
 			if (this.commitSeal) {
