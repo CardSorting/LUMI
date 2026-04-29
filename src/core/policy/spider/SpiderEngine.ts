@@ -278,6 +278,12 @@ export class SpiderEngine {
 
 		const absolutePath = path.resolve(this.cwd, filePath)
 		const layer = this.resolver.resolveLayer(filePath)
+
+		// V350: Large File Guard (Industrial Safety)
+		// If a file is > 500KB, we perform a shallow scan to prevent metabolic collapse (OOM).
+		const stats = fs.existsSync(absolutePath) ? fs.statSync(absolutePath) : null
+		const isMassive = stats && stats.size > 500 * 1024
+
 		const hash = crypto.createHash("md5").update(content).digest("hex")
 
 		const oldNode = this.nodes.get(normalizedPath)
@@ -290,11 +296,15 @@ export class SpiderEngine {
 		let importData = this.extractDetailedImports(sourceFile)
 		const imports = importData.map((i) => i.specifier)
 		let { symbols: exportedSymbols, reExports: reExportSpecifiers } = this.extractExports(sourceFile)
-		// Resolve re-exports immediately for incremental updates (since most of the graph already exists)
+
+		// Resolve re-exports immediately for incremental updates
 		const reExports = reExportSpecifiers
 			.map((spec) => this.resolver.resolveImportToNodeId(normalizedPath, spec, this.nodes))
 			.filter(Boolean) as string[]
-		let metrics = this.extractMetrics(sourceFile)
+
+		// V350: Metabolic Fission Guard
+		// Skip expensive recursive complexity sensing for massive files.
+		let metrics = isMassive ? this.getDefaultMetrics() : this.extractMetrics(sourceFile)
 
 		const consumptions: Record<string, string[]> = {}
 		if (!skipResolution) {
@@ -417,6 +427,10 @@ export class SpiderEngine {
 
 	private visitDetailedImports(node: ts.Node, imports: { specifier: string; symbols: string[] }[]) {
 		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+			// V330: Type-Only Exclusion
+			// Prevents false positive cycles from purely structural (non-runtime) type dependencies.
+			if (node.importClause?.isTypeOnly) return
+
 			const specifier = node.moduleSpecifier.text
 			const symbols: string[] = []
 			if (node.importClause) {
@@ -424,6 +438,8 @@ export class SpiderEngine {
 				if (node.importClause.namedBindings) {
 					if (ts.isNamedImports(node.importClause.namedBindings)) {
 						for (const n of node.importClause.namedBindings.elements) {
+							// Skip individual type-only elements
+							if (n.isTypeOnly) continue
 							symbols.push(n.name.text)
 						}
 					} else if (ts.isNamespaceImport(node.importClause.namedBindings)) {
@@ -431,7 +447,9 @@ export class SpiderEngine {
 					}
 				}
 			}
-			imports.push({ specifier, symbols })
+			if (symbols.length > 0 || !node.importClause) {
+				imports.push({ specifier, symbols })
+			}
 		} else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
 			const specifier = node.moduleSpecifier.text
 			const symbols: string[] = []
@@ -454,6 +472,18 @@ export class SpiderEngine {
 			imports.push({ specifier: (node.arguments[0] as ts.StringLiteral).text, symbols: ["*"] })
 		}
 		ts.forEachChild(node, (child) => this.visitDetailedImports(child, imports))
+	}
+
+	private getDefaultMetrics(): any {
+		return {
+			logicDensity: 0,
+			ioEntropy: 0,
+			astComplexity: 0,
+			symbolDensity: 0,
+			logicCohesion: 0,
+			anyDensity: 0,
+			cognitiveComplexity: 0,
+		}
 	}
 
 	private extractMetrics(sourceFile: ts.SourceFile) {
@@ -581,21 +611,32 @@ export class SpiderEngine {
 	}
 
 	private updateIncrementalCoupling(nodeId: string, oldImports: string[], newImports: string[]) {
-		const removed = oldImports.filter((o) => !newImports.includes(o))
-		const added = newImports.filter((n) => !oldImports.includes(n))
 		const nodeIds = new Set(this.nodes.keys())
 
-		for (const imp of removed) {
-			const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds)
-			const target = targetId ? this.nodes.get(targetId) : null
+		// V340: Deterministic ID-Level Comparison
+		// We resolve all specifiers to physical Node IDs before comparing.
+		// This ensures that if a specifier (e.g. '@/core') now points to a different file
+		// (e.g. after a MOVE), the coupling is correctly transferred.
+		const oldResolved = oldImports
+			.map((imp) => this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds))
+			.filter(Boolean) as string[]
+
+		const newResolved = newImports
+			.map((imp) => this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds))
+			.filter(Boolean) as string[]
+
+		const removed = oldResolved.filter((o) => !newResolved.includes(o))
+		const added = newResolved.filter((n) => !oldResolved.includes(n))
+
+		for (const targetId of removed) {
+			const target = this.nodes.get(targetId)
 			if (target) {
 				target.dependents = target.dependents.filter((d) => d !== nodeId)
 				target.afferentCoupling = target.dependents.length
 			}
 		}
-		for (const imp of added) {
-			const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds)
-			const target = targetId ? this.nodes.get(targetId) : null
+		for (const targetId of added) {
+			const target = this.nodes.get(targetId)
 			if (target && !target.dependents.includes(nodeId)) {
 				target.dependents.push(nodeId)
 				target.afferentCoupling = target.dependents.length

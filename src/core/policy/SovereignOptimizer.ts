@@ -51,8 +51,19 @@ export class SovereignOptimizer {
 			}
 
 			// 2. Deadwood Sensing (Unused Exports)
-			// V300: ZOMBIE MODULE Detection
-			if (node.exports.length > 0 && node.afferentCoupling === 0 && !node.path.endsWith("index.ts")) {
+			// V320: Archetypal Protection
+			// Prevents entry points, extension manifests, and scripts from being flagged as deadwood.
+			const isArchetypal =
+				node.path.endsWith("index.ts") ||
+				node.path.endsWith("extension.ts") ||
+				node.path.endsWith("main.ts") ||
+				node.path.endsWith("plugin.ts") ||
+				node.path.includes("/bin/") ||
+				node.path.includes("/scripts/") ||
+				node.path.includes("/test/") ||
+				node.path.includes("/__tests__/")
+
+			if (node.exports.length > 0 && node.afferentCoupling === 0 && !isArchetypal) {
 				opportunities.push({
 					file: node.path,
 					currentLayer: node.layer,
@@ -105,8 +116,17 @@ export class SovereignOptimizer {
 			}
 
 			// 7. Structural Bottlenecks (Fan-In * Fan-Out)
+			// V330: Utility Immunity
+			// Prevents 'Common Utilities' and 'Shared Types' from being flagged as bottlenecks.
+			const isUtility =
+				node.path.includes("/utils/") ||
+				node.path.includes("/shared/") ||
+				node.path.includes("/types/") ||
+				node.path.includes("/interfaces/") ||
+				node.path.includes("common.ts")
+
 			const bottleneck = engine.metrics.calculateStructuralBottleneck(node)
-			if (bottleneck > 5000) {
+			if (bottleneck > 5000 && !isUtility) {
 				opportunities.push({
 					file: node.path,
 					currentLayer: node.layer,

@@ -192,17 +192,21 @@ export class SovereignDecomposer {
 					const methodMass = end - start + 1
 					const name = this.getFunctionName(n)
 
-					// V215: Statistical God Method Analysis.
-					const zScoreMethod = stats ? (methodMass - stats.complexity.mean) / (stats.complexity.stdDev || 1) : 0
-					const isMethodOutlier = zScoreMethod > 3.0 // More conservative for methods
+					// V320: Cognitive God Method Analysis.
+					// Replaces naive line-count checking with the higher-fidelity Cognitive Complexity metric.
+					const { cognitiveComplexity } = this.analyzeNodeLogic(n, sourceFile)
+					const zScoreCognitive = stats
+						? (cognitiveComplexity - stats.complexity.mean) / (stats.complexity.stdDev || 1)
+						: 0
 
-					if (isMethodOutlier || methodMass > 500) {
+					// Flag as God Method if it's a statistical outlier (Z > 3.0) OR exceeds industrial friction threshold (50)
+					if (zScoreCognitive > 3.0 || cognitiveComplexity > 50) {
 						steps.push({
 							action: "EXTRACT",
 							target: `God Method '${name}'`,
 							destination: "HELPER_FUNCTIONS",
 							risk: "MEDIUM",
-							reason: `High Method Activity: Method '${name}' is ${methodMass} lines. Factor out sub-procedures for better maintainability.`,
+							reason: `High Cognitive Friction: Method '${name}' has a complexity score of ${cognitiveComplexity}. Factor out sub-procedures for better maintainability.`,
 							intentSuggestion: `[PROTOCOL_INTENT: Decompose Large Method ${name}]`,
 						})
 					}

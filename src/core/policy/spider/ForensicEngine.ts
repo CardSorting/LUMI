@@ -521,6 +521,19 @@ export class ForensicEngine {
 
 		for (const node of nodes.values()) {
 			for (const symbol of node.exports) {
+				// V350: Common Symbol Immunity
+				// Skip generic names that are archetypally expected to collide (Props, State, Config, etc.)
+				if (
+					symbol === "default" ||
+					symbol === "Props" ||
+					symbol === "State" ||
+					symbol === "Config" ||
+					symbol === "Params" ||
+					symbol === "Response" ||
+					(symbol.startsWith("I") && symbol.length < 8 && /[A-Z]/.test(symbol[1])) // Catch IProps, IState, IConfig
+				)
+					continue
+
 				if (!symbolsByName.has(symbol)) {
 					symbolsByName.set(symbol, [])
 				}
