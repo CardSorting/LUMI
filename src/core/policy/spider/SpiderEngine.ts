@@ -270,6 +270,7 @@ export class SpiderEngine {
 		this.sessionBuffer.clear() // V200: Memory-Resident Residual Purge
 		this.metrics.computeCouplingMetrics(this.nodes)
 		this.metrics.computeReachability(this.nodes)
+		this.recalculateHazardScores(this.nodes)
 		this.resolver.clearCaches()
 	}
 
@@ -364,6 +365,7 @@ export class SpiderEngine {
 						n.blastRadius = stats.blastRadius
 						n.isFragile = stats.isFragile
 						n.isHotspot = n.isFragile && (n.cognitiveComplexity > 0.4 || n.anyDensity > 0.3)
+						n.hazardScore = finiteNodeNumber(this.forensic.calculateHazardScore(n, this.nodes), 0)
 					}
 				}
 			} catch (err) {
@@ -838,9 +840,8 @@ export class SpiderEngine {
 		}
 
 		// 8. SPI-108: Ghost Coupling (Entangled Dependencies)
-		const entanglements = this.metrics.detectEntangledDependencies(
-			this.persistence.getSnapshots().map((s) => v8.deserialize(s)),
-		)
+		const snapshotHistory = this.getSnapshotHistory()
+		const entanglements = this.metrics.detectEntangledDependencies(snapshotHistory)
 		for (const e of entanglements) {
 			violations.push({
 				id: "SPI-108",
@@ -864,7 +865,7 @@ export class SpiderEngine {
 		}
 
 		// 11. SPI-300: Forensic Prophecy (Level 10)
-		const snapshots = this.persistence.getSnapshots().map((s) => v8.deserialize(s))
+		const snapshots = snapshotHistory
 		const rippleMap = this.forensic.calculateRippleProbability(this.nodes)
 
 		for (const node of this.nodes.values()) {
@@ -1081,7 +1082,7 @@ export class SpiderEngine {
 	}
 
 	public getSnapshotHistory(): SpiderSnapshot[] {
-		return this.persistence.getSnapshots().map((snapshot) => v8.deserialize(snapshot) as SpiderSnapshot)
+		return this.persistence.getSnapshotHistory()
 	}
 
 	/**
@@ -1235,6 +1236,7 @@ export class SpiderEngine {
 
 		// V215: Swap-on-Success Strategy
 		// We build into a temporary registry to prevent zeroing out the main state during a failure.
+		const previousRegistry = new Map(this.nodes)
 		const tempRegistry = new Map<string, SpiderNode>()
 		const originalRegistrySize = this.nodes.size
 
@@ -1287,6 +1289,7 @@ export class SpiderEngine {
 						const content = await fs.promises.readFile(absolutePath, "utf-8")
 						const hash = crypto.createHash("md5").update(content).digest("hex")
 						const layer = this.resolver.resolveLayer(f)
+						const oldNode = previousRegistry.get(f)
 
 						// Manually create nodes for the temp registry
 						let sourceFile: ts.SourceFile | null = ts.createSourceFile(
@@ -1330,8 +1333,9 @@ export class SpiderEngine {
 							cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
 							isHotspot: false,
 							anyDensity: anyDensity * 0.8,
-							churnIntensity: 0,
-							semanticDrift: 0,
+							churnIntensity: (oldNode?.churnIntensity || 0) + (oldNode && oldNode.hash !== hash ? 1 : 0),
+							semanticDrift: (oldNode?.semanticDrift || 0) + (oldNode && oldNode.layer !== layer ? 1 : 0),
+							lastLayer: oldNode?.layer,
 							hazardScore: 0,
 						}
 						tempRegistry.set(f, node)
@@ -1388,6 +1392,7 @@ export class SpiderEngine {
 					n.isHotspot = n.isFragile && (n.cognitiveComplexity > 0.4 || n.anyDensity > 0.3)
 				}
 			}
+			this.recalculateHazardScores(tempRegistry)
 
 			// Swap!
 			this.nodes = tempRegistry
@@ -1447,6 +1452,7 @@ export class SpiderEngine {
 					n.isHotspot = n.isFragile && (n.cognitiveComplexity > 0.4 || n.anyDensity > 0.3)
 				}
 			}
+			this.recalculateHazardScores(this.nodes)
 
 			for (const g of this.ghosts) {
 				if (!this.nodes.has(g)) this.ghosts.delete(g)
@@ -1490,6 +1496,13 @@ export class SpiderEngine {
 		this.nodes = new Map(payload.nodes)
 		this.metrics.computeCouplingMetrics(this.nodes)
 		this.metrics.computeReachability(this.nodes)
+		this.recalculateHazardScores(this.nodes)
+	}
+
+	private recalculateHazardScores(nodes: Map<string, SpiderNode>): void {
+		for (const node of nodes.values()) {
+			node.hazardScore = finiteNodeNumber(this.forensic.calculateHazardScore(node, nodes), 0)
+		}
 	}
 
 	public computeAllLayerFingerprints(): Record<string, string> {

@@ -3,6 +3,12 @@ import * as v8 from "v8"
 import { MetricsEngine } from "./MetricsEngine.js"
 import { SpiderNode, SpiderRegistryPayload, SpiderSnapshot } from "./types.js"
 
+const isSpiderSnapshot = (value: unknown): value is SpiderSnapshot => {
+	if (!value || typeof value !== "object") return false
+	const snapshot = value as Partial<SpiderSnapshot>
+	return typeof snapshot.timestamp === "string" && typeof snapshot.entropyScore === "number" && Array.isArray(snapshot.nodes)
+}
+
 export class PersistenceManager {
 	private snapshots: Buffer[] = [] // V190: Binary Snapshot Buffer (Industrial Fidelity)
 
@@ -17,6 +23,28 @@ export class PersistenceManager {
 
 	public getSnapshots(): Buffer[] {
 		return [...this.snapshots]
+	}
+
+	public getSnapshotHistory(): SpiderSnapshot[] {
+		const history: SpiderSnapshot[] = []
+		const healthySnapshots: Buffer[] = []
+
+		for (const snapshot of this.snapshots) {
+			try {
+				const decoded = v8.deserialize(snapshot)
+				if (!isSpiderSnapshot(decoded)) continue
+				history.push(decoded)
+				healthySnapshots.push(snapshot)
+			} catch {
+				// Drop corrupt binary snapshots instead of letting audit paths fail closed.
+			}
+		}
+
+		if (healthySnapshots.length !== this.snapshots.length) {
+			this.snapshots = healthySnapshots
+		}
+
+		return history
 	}
 
 	public serialize(nodes: Map<string, SpiderNode>, metadata: Record<string, unknown> = {}): Buffer {
@@ -96,8 +124,7 @@ export class PersistenceManager {
 	}
 
 	public async getLatestSnapshot(): Promise<SpiderSnapshot | null> {
-		if (this.snapshots.length === 0) return null
-		return v8.deserialize(this.snapshots[this.snapshots.length - 1])
+		return this.getSnapshotHistory().at(-1) ?? null
 	}
 
 	/**
@@ -137,10 +164,7 @@ export class PersistenceManager {
 	}
 
 	public getHistory(): number[] {
-		return this.snapshots.map((s) => {
-			const snap = v8.deserialize(s) as SpiderSnapshot
-			return snap.entropyScore
-		})
+		return this.getSnapshotHistory().map((snapshot) => snapshot.entropyScore)
 	}
 
 	/**

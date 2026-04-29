@@ -248,6 +248,8 @@ export async function triggerAudit(
 					(b.astComplexity || 0) + (b.afferentCoupling || 0) - ((a.astComplexity || 0) + (a.afferentCoupling || 0)),
 			)
 			.slice(0, 25)
+		const snapshots = spider.getSnapshotHistory()
+		const projectStats = spider.metrics.getProjectStatistics(spider.nodes)
 
 		for (const node of hotspots) {
 			if (isCancelled()) return
@@ -259,7 +261,6 @@ export async function triggerAudit(
 						Logger.warn(`[Audit] Skipping oversized hotspot ${node.path} (${stats.size} bytes).`)
 						continue
 					}
-					const projectStats = spider.metrics.getProjectStatistics(spider.nodes)
 					const content = fs.readFileSync(absPath, "utf-8")
 					const plan = decomposer.analyze(node.path, content, node, projectStats)
 
@@ -294,7 +295,6 @@ export async function triggerAudit(
 					}
 
 					// V400: Hotspot Heat Sensing
-					const snapshots = spider.getSnapshotHistory()
 					const heat = spider.forensic.calculateHotspotHeat(node, snapshots)
 					if (heat > 0.7) {
 						violations.push({
@@ -436,7 +436,7 @@ export async function triggerAudit(
 			.slice(0, 5)
 			.map((n) => `${path.basename(n.path)}: Hazard ${(n.hazardScore * 100).toFixed(1)}%`)
 
-		const mostToxic = nodes.sort((a, b) => (b.hazardScore || 0) - (a.hazardScore || 0))[0]
+		const mostToxic = [...nodes].sort((a, b) => (b.hazardScore || 0) - (a.hazardScore || 0))[0]
 		const toxicModuleLabel =
 			mostToxic && (mostToxic.hazardScore || 0) > 0.6
 				? `${path.basename(mostToxic.path)} (${mostToxic.layer.toUpperCase()})`
@@ -467,8 +467,10 @@ export async function triggerAudit(
 		// V230: Forensic Evolution - Delta Analysis and Risk Profiling
 		const lastPoint = history[history.length - 1]
 		const healthDelta = lastPoint ? doctorReport.buildHealth - lastPoint.health : 0
-		const lastViolationCount =
-			(controller.stateManager.getGlobalStateKey("lastViolationCount") as number) || violations.length
+		const lastViolationCount = finiteNumber(
+			controller.stateManager.getGlobalStateKey("lastViolationCount"),
+			violations.length,
+		)
 		const violationDelta = violations.length - lastViolationCount
 		controller.stateManager.setGlobalState("lastViolationCount", violations.length)
 
