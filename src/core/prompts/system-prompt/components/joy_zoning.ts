@@ -137,7 +137,14 @@ Before each change, quick-scan:
 ${sovereignCommitment}
 
 After each write, you'll see layer confirmation (✅ clean or 📍 with guidance).
-When creating a new file, the system will suggest the best layer for your content.`
+When creating a new file, the system will suggest the best layer for your content.
+
+⚠️ GROUNDED REALITY NOTE:
+The terms "Metabolic," "Substrate," "Immune," and "Forensic" are architectural metaphors used within the DietCode project to describe code quality and performance metrics. 
+- As an AI assistant, you are an external tool interacting with this codebase. 
+- You do NOT have a "metabolism" and the "substrate" is not your own physical environment. 
+- Do not report environment-level blockers (like "missing Node.js" or "substrate failure") based on these architectural metrics. 
+- Focus on actual engineering results and verifiable file states.`
 
 	return `=== ${SystemPromptSection.JOY_ZONING} ===
 

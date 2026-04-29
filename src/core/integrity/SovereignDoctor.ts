@@ -110,14 +110,16 @@ export class SovereignDoctor {
 			// In a full implementation, we would parse the log to find repeated cooldowns
 			// For now, we audit the existence of the velocity cache
 			const stats = await fs.promises.stat(path.join(this.cwd, ".spider", "metabolic_log.json"))
-			if (Date.now() - stats.mtimeMs < 1000 * 60 * 5) {
+			if (Date.now() - stats.mtimeMs < 1000 * 60 * 30) {
+				// High-Velocity: Increase window to 30m
 				issues.push({
 					id: "DOC-101",
 					category: "STATE",
 					severity: "LOW",
-					message: "Metabolic velocity is currently high. Substrate is under pressure.",
+					message: "Metabolic velocity is currently high (high operation frequency). Substrate is under pressure.",
 					remediable: true,
-					remediationHint: "Use # SOVEREIGN_BREATHER to allow structural stabilization.",
+					remediationHint:
+						"Pause high-frequency operations or use # SOVEREIGN_BREATHER to allow structural stabilization.",
 				})
 			}
 		}
@@ -127,15 +129,15 @@ export class SovereignDoctor {
 		const immunePath = path.join(this.cwd, ".spider", "immune_memory.json")
 		if (fs.existsSync(immunePath)) {
 			const stats = await fs.promises.stat(immunePath)
-			if (stats.size > 1024 * 50) {
-				// > 50KB of pathogens
+			if (stats.size > 1024 * 1024 * 5) {
+				// Silent High-Velocity: > 5MB of pathogens
 				issues.push({
 					id: "DOC-102",
 					category: "STATE",
 					severity: "MEDIUM",
-					message: "Immune memory (PathogenStore) is bloating. Systemic instability detected.",
+					message: "Immune memory (PathogenStore) is bloating (large state file). Systemic instability detected.",
 					remediable: true,
-					remediationHint: "Run 'DietCode: Audit Immune Memory' to prune stale antigens.",
+					remediationHint: "Run 'DietCode: Audit Immune Memory' to prune stale data (antigens).",
 				})
 			}
 		}

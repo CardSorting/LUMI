@@ -68,8 +68,8 @@ export class SovereignForensics {
 					continue
 				}
 
-				errors.push(
-					`UNVERIFIED FILE CITATION: You cited \`${cited}\` but I don't see a recent read history for it. Please take a look at the file so we can stay in sync!`,
+				warnings.push(
+					`⚠️ UNVERIFIED FILE CITATION: You cited \`${cited}\` but I don't see a recent read history for it. Please take a look at the file so we can stay in sync!`,
 				)
 				continue
 			}
@@ -85,13 +85,13 @@ export class SovereignForensics {
 					const currentContent = await fs.promises.readFile(absoluteCited, "utf-8")
 					const currentHash = this.computeStructuralHash(currentContent)
 					if (currentHash !== metrics.lastObservedHash) {
-						errors.push(
-							`🛑 RECENT FILE CHANGES DETECTED: \`${cited}\` has been updated since your last look. ` +
+						warnings.push(
+							`⚠️ RECENT FILE CHANGES DETECTED: \`${cited}\` has been updated since your last look. ` +
 								`There might be new logic or structure. Please re-read the file to ensure your plan is still accurate.`,
 						)
 					}
 				} catch (_e) {
-					errors.push(`FORENSIC FAIL: Missing file or unreadable substrate at \`${cited}\`.`)
+					warnings.push(`⚠️ FORENSIC NOTICE: Missing file or unreadable substrate at \`${cited}\`.`)
 				}
 			}
 

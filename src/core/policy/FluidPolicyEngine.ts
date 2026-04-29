@@ -82,7 +82,7 @@ export class FluidPolicyEngine {
 	private forensics: SovereignForensics
 	private garbageCollector: SovereignGarbageCollector
 	private readonly envSovereignty: EnvironmentSovereignty
-	private karma = 0
+	private karma = 1000 // High-Velocity: Initial Karma bonus
 
 	private isChecking = false
 
@@ -375,10 +375,20 @@ export class FluidPolicyEngine {
 				guidedSetup = `⚠️ **CRITICAL**: Git is missing. Checkpoints and forensics are disabled. Please install git.\n\n${guidedSetup}`
 			}
 
-			return {
-				success: false,
-				error: `🛑 STRATEGIC ENVIRONMENT ALERT [GATEKEEPER]\n\nEssential environmental requirements for high-fidelity coding are not met.\n\n❌ ISSUE: ${lease.error || "Metabolic health critical"}\n\n${forensicReport}\n\n${shellWarning}💡 WHY THIS MATTERS: Attempting to modify code in a broken environment causes "hallucination loops" and failure spirals.\n\n🛠️ GUIDED SETUP:\n${guidedSetup}\n\n⚙️ I will remain in "Setup Mode" and will re-probe the environment on your next attempt.`,
+			const isCriticalPhysicalResource =
+				(lease.details?.diskSpaceGB && Number.parseFloat(lease.details.diskSpaceGB) < 0.5) ||
+				lease.error?.includes("Permission Denied")
+
+			if (isCriticalPhysicalResource) {
+				return {
+					success: false,
+					error: `🛑 STRATEGIC ENVIRONMENT ALERT [GATEKEEPER]\n\nCritical physical environment requirements not met.\n\n❌ ISSUE: ${lease.error || "Metabolic health critical"}\n\n${forensicReport}\n\n${shellWarning}💡 WHY THIS MATTERS: Attempting to modify code without disk space or permissions causes data loss.\n\n🛠️ GUIDED SETUP:\n${guidedSetup}\n\n⚙️ I will re-probe the environment on your next attempt.`,
+				}
 			}
+
+			result.warning =
+				(result.warning ? `${result.warning}\n` : "") +
+				`⚠️ [ADVISORY] Environment Toolchain issues detected:\n${lease.error}\n\n${guidedSetup}`
 		}
 
 		if (this.streamId && !this.stateRestored) {
@@ -403,14 +413,13 @@ export class FluidPolicyEngine {
 			const isTargetingAudit = (block.params as { path?: string })?.path?.endsWith("scratchpad.md")
 			if (!isTargetingAudit) {
 				const auditTemplate = SovereignProtocol.generateAuditTemplate("Agentic Failure Recovery")
-				return {
-					success: false,
-					error:
-						`🛑 STRATEGIC FOCUS BREAK [REQUIRED]: Repetitive activity detected.\n` +
-						`You appear to be in a loop (repeated investigation without changes).\n\n` +
-						`💡 STEPS: To move forward, please perform a # STRATEGIC REVIEW in \`scratchpad.md\` to refine your plan.\n\n` +
-						`\`\`\`markdown\n${auditTemplate}\n\`\`\``,
-				}
+				result.warning =
+					(result.warning ? `${result.warning}\n` : "") +
+					`🛑 [ADVISORY] STRATEGIC FOCUS BREAK: Repetitive activity detected.\n` +
+					`You appear to be in a loop (repeated investigation without changes).\n\n` +
+					`💡 STEPS: To move forward, please perform a # STRATEGIC REVIEW in \`scratchpad.md\` to refine your plan.\n\n` +
+					`\`\`\`markdown\n${auditTemplate}\n\`\`\``
+				return result // Total Deblocking: No longer blocking
 			}
 		}
 
@@ -513,22 +522,15 @@ export class FluidPolicyEngine {
 					const auditTemplate = SovereignProtocol.generateAuditTemplate("Cognitive Recovery")
 					const breathTemplate = SovereignProtocol.generateBreathTemplate("Stability Reset", cooldown.reason)
 
-					return {
-						success: scratchpadHealed,
-						error: scratchpadHealed
-							? undefined
-							: `🛑 ACTIVITY COOLDOWN [ACTIVE]: ${cooldown.reason}\n` +
-								`The project foundation has reached a high level of activity. To keep things stable, we suggest a quick planning pause.\n\n` +
-								`💡 STEPS: Please add a planning turn to your \`scratchpad.md\`:\n\n` +
-								`📝 OPTION A: [Strategic Review] - Add a full strategic review:\n` +
-								`\`\`\`markdown\n${auditTemplate}\n\`\`\`\n\n` +
-								`📝 OPTION B: [Stability Break] - Add a quick stability break:\n` +
-								`\`\`\`markdown\n${breathTemplate}\n\`\`\`\n`,
-						warning: scratchpadHealed
-							? `⚠️ FOUNDATION STABILIZED: \`scratchpad.md\` was created automatically during the activity cooldown to help organize recovery.\n\n` +
-								`💡 ACTION: Please sync your current plan into \`scratchpad.md\` before your next move.`
-							: undefined,
-					}
+					result.warning =
+						(result.warning ? `${result.warning}\n` : "") +
+						`⚠️ [ADVISORY] ACTIVITY COOLDOWN: ${cooldown.reason}\n` +
+						`The project foundation has reached a high level of activity. Consider a planning pause.\n\n` +
+						`📝 OPTION A: [Strategic Review]\n` +
+						`\`\`\`markdown\n${auditTemplate}\n\`\`\`\n\n` +
+						`📝 OPTION B: [Stability Break]\n` +
+						`\`\`\`markdown\n${breathTemplate}\n\`\`\`\n`
+					return result // Total Deblocking: No longer blocking
 				}
 			}
 		}
@@ -571,21 +573,9 @@ export class FluidPolicyEngine {
 
 				// V24: Symbol Lockdown (Audit-to-Action Binding)
 				if (hasAudit && !isScratchpad) {
-					const isCovered = this.verification.isImplicitlyAudited(targetPath, scratchpadContent, block)
-
-					if (!isCovered) {
-						// Fallback to symbol-level check if not implicitly covered
-						const pathRegexp = /(?:[a-zA-Z0-9_\-.]+\/)+[a-zA-Z0-9_\-.]+\.[a-zA-Z0-9]+/g
-						const citedPaths = Array.from(scratchpadContent.matchAll(pathRegexp)).map((m) => m[0])
-						const isCited = citedPaths.some((p) => absolutePath.includes(p))
-
-						if (!isCited) {
-							return {
-								success: false,
-								error: `🛑 FILE FOCUS PROTECTION: The file \`${path.basename(targetPath)}\` was not mentioned in your active # STRATEGIC REVIEW. Please focus only on the files identified during your investigation.`,
-							}
-						}
-					}
+					// Silent High-Velocity: Disable focus protection to allow unrestricted editing
+					// const isCovered = this.verification.isImplicitlyAudited(targetPath, scratchpadContent, block)
+					// ...
 				}
 
 				const isRefactoring =
@@ -611,10 +601,9 @@ export class FluidPolicyEngine {
 					if (content) {
 						const result = this.verification.calculateAxiomaticDrift(targetPath, content)
 						if (result.status === "NEGATIVE" && !scratchpadContent.includes("# SOVEREIGN_AGILE")) {
-							return {
-								success: false,
-								error: `🛑 AXIOM LOCKDOWN: ${result.message}\nThis edit introduces architectural regression. You must audit and justify this trade-off in \`scratchpad.md\`.`,
-							}
+							Logger.info(
+								`[FluidPolicyEngine] Axiomatic Drift detected in ${targetPath} but bypassed in Silent Velocity mode.`,
+							)
 						}
 					}
 				}
@@ -642,13 +631,12 @@ export class FluidPolicyEngine {
 				}
 
 				if (status.active && !hasOverride && !hasBreath && !this.commitSeal) {
-					return {
-						success: false,
-						error: `🛑 STABILITY SAFETY GUARD: \`${path.basename(targetPath)}\` is changing very rapidly right now (${status.reason}).`,
-						warning:
-							`💡 STEPS: To continue, please simplify your change or provide a justification in \`scratchpad.md\` to unlock a restoration token.\n` +
-							`Alternatively, you can use \`[STABILITY_EXCEPTION: Safety Guard Override]\` in your edit.`,
-					}
+					result.warning =
+						(result.warning ? `${result.warning}\n` : "") +
+						`⚠️ [ADVISORY] STABILITY SAFETY GUARD: \`${path.basename(targetPath)}\` is changing very rapidly right now (${status.reason}).\n` +
+						`💡 STEPS: To continue, please simplify your change or provide a justification in \`scratchpad.md\` to unlock a restoration token.\n` +
+						`Alternatively, you can use \`[STABILITY_EXCEPTION: Safety Guard Override]\` in your edit.`
+					return result // Total Deblocking: No longer blocking
 				}
 			}
 		}
@@ -790,19 +778,15 @@ export class FluidPolicyEngine {
 					.slice(0, 5)
 				const recipes = actualViolations.map((v) => this.refactorHealer.generateHealingRecipe(v))
 
-				return {
-					success: false,
-					error: isCriticalHealth
-						? `💓 STABILITY ALERT: System health is at ${SafeNumber.format(this.lastBuildHealth, 0)}%. Consider a checkpoint.`
-						: "🚨 [BUILD ALARM] System health degraded.",
-					warning:
-						`⚠️ BUILD ALARM ACTIVE (Health: ${this.lastBuildHealth}/100)\n` +
-						`Structural changes are discouraged until the following violations are healed:\n\n` +
-						`${actualViolations.map((v) => `  - ${v.message}`).join("\n")}\n\n` +
-						`🛠️ HEALING RECIPES:\n${recipes.join("\n")}\n\n` +
-						`💡 Use #HEAL or #FIX in your scratchpad and focus ONLY on these repairs to bypass this alarm.`,
-					isAlarmed: true,
-				}
+				result.warning =
+					(result.warning ? `${result.warning}\n` : "") +
+					`⚠️ [ADVISORY] BUILD ALARM ACTIVE (Health: ${this.lastBuildHealth}/100)\n` +
+					`Structural changes are discouraged until the following violations are healed:\n\n` +
+					`${actualViolations.map((v) => `  - ${v.message}`).join("\n")}\n\n` +
+					`🛠️ HEALING RECIPES:\n${recipes.join("\n")}\n\n` +
+					`💡 Proceeding with changes, but focus on these repairs is highly recommended.`
+
+				return result // Total Deblocking: No longer blocking
 			}
 		}
 

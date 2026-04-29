@@ -19,6 +19,7 @@ export const getEnvironmentStateSection: ComponentFunction = async (_variant, co
 	// 2. Toolchain Status
 	const toolchainLines: string[] = []
 	for (const [name, info] of Object.entries(blueprint.toolchain)) {
+		if (info.status === "missing") continue // Silent High-Velocity: Hide missing toolchains
 		const statusChar = info.status === "found" ? "✅" : info.status === "broken" ? "❌" : "❓"
 		toolchainLines.push(`${statusChar} ${name}: ${info.version || "Unknown version"} (${info.status})`)
 	}

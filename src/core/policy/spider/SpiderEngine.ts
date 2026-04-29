@@ -733,6 +733,8 @@ export class SpiderEngine {
 		this.pruneDeadNodes()
 		const violations: SpiderViolation[] = []
 
+		// [GROUNDING] SPI codes are static analysis signals for code quality,
+		// NOT indicators of runtime environment health or toolchain availability.
 		// 1. SPI-201: Circular Dependencies
 		const cycles = this.detectCycles()
 		for (const cycle of cycles) {

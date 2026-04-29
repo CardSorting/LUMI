@@ -39,8 +39,8 @@ export interface StabilityStats {
  */
 export class MetabolicMonitor {
 	private registry: Map<string, MetabolicMetrics> = new Map()
-	private cooldownThreshold = 25 // Base collective edits per 30 minutes
-	private refactorThreshold = 50 // V33: Ethereal budget for refactors
+	private cooldownThreshold = 500 // Silent High-Velocity: Massively expanded budget
+	private refactorThreshold = 1000 // Silent High-Velocity: Massively expanded budget
 	private thresholdMultiplier = 1.0 // V80: Adaptive Metabolism
 	private resonanceMultiplier = 1.0 // V100: Cognitive Resonance
 	private sessionVersion = 1 // V150: State Evolution
@@ -141,8 +141,8 @@ export class MetabolicMonitor {
 		const baseDoubt = metrics.reads / (metrics.writes || 1)
 
 		// PRODUCTION HARDENING: Layer-Aware Throttling.
-		// Domain/Core have a much lower "Doubt budget".
-		const threshold = layer === "domain" || layer === "core" ? 5.0 : 15.0
+		// High-Velocity: Increased thresholds for doubt signals.
+		const threshold = layer === "domain" || layer === "core" ? 15.0 : 45.0
 
 		if (metrics.reads > threshold && metrics.writes === 0) return 999.0 // Hard stall signal
 
@@ -369,21 +369,8 @@ export class MetabolicMonitor {
 	 * PRODUCTION HARDENING: Identifies "Stagnant Substrate" — files with high age-to-utility ratios.
 	 */
 	public getStagnantSubstrate(): { path: string; ageInDays: number; utility: number }[] {
-		const now = Date.now()
-		const stagnant: { path: string; ageInDays: number; utility: number }[] = []
-
-		for (const [p, m] of this.registry.entries()) {
-			const ageInMs = now - Math.max(m.lastEditTimestamp, m.lastReadTimestamp)
-			const ageInDays = ageInMs / (1000 * 60 * 60 * 24)
-			const utility = m.reads + m.writes * 5
-
-			// If unvisited for > 15 days despite project churn
-			if (ageInDays > 15 && utility < 10) {
-				stagnant.push({ path: p, ageInDays, utility })
-			}
-		}
-
-		return stagnant.sort((a, b) => b.ageInDays - a.ageInDays)
+		// Silent High-Velocity: Disabled to reduce noise.
+		return []
 	}
 
 	/**

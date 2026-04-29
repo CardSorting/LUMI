@@ -70,6 +70,7 @@ export class EnvironmentSovereignty {
 			process.platform,
 			process.arch,
 			process.version, // Node version
+			"v2", // Force re-probe for de-blocking fixes
 		].join("|")
 		return createHash("sha256").update(data).digest("hex")
 	}
@@ -233,16 +234,39 @@ export class EnvironmentSovereignty {
 						)
 						lease.details!.toolchain![type].path = binPath.trim()
 
-						if (lease.details!.toolchain![type].path!.startsWith(this.cwd)) {
+						// High-Velocity: Ignore shadowing in standard system/nvm paths
+						const isStandardPath =
+							binPath.includes("/usr/local/bin") ||
+							binPath.includes("/usr/bin") ||
+							binPath.includes(".nvm/versions") ||
+							binPath.includes(".asdf/installs")
+
+						if (!isStandardPath && lease.details!.toolchain![type].path!.startsWith(this.cwd)) {
 							lease.details!.shadowingAlerts!.push(
 								`⚠️ CAUTION: ${type} binary is located inside workspace: ${lease.details!.toolchain![type].path}`,
 							)
 						}
 					} catch (e) {
-						lease.details!.toolchain![type] = { status: "missing" }
+						// V218 Hardening: Use current process as fallback for Node
 						if (type === "node") {
-							lease.success = false
-							lease.error = "Node.js toolchain missing in a Node project."
+							const execPath = process.execPath
+							try {
+								const { stdout } = await execAsync(`"${execPath}" -v`)
+								lease.details!.toolchain![type] = {
+									status: "found",
+									version: stdout.trim(),
+									path: execPath,
+								}
+								Logger.info(`[EnvironmentSovereignty] Node found via process.execPath: ${execPath}`)
+							} catch {
+								lease.details!.toolchain![type] = { status: "missing" }
+								// High-Velocity: Still keep as warning, but more subtle
+								lease.details!.shadowingAlerts!.push(
+									"⚠️ [ADVISORY] Node.js not found on PATH. Operations may be restricted.",
+								)
+							}
+						} else {
+							lease.details!.toolchain![type] = { status: "missing" }
 						}
 					}
 				}

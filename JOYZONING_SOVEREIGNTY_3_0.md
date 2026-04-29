@@ -1,5 +1,8 @@
 # JoyZoning 3.0: Sovereign Autonomy Architecture
 
+> [!NOTE]
+> **AGENT GROUNDING NOTICE**: This document uses architectural metaphors (e.g., "Metabolic," "Substrate," "Healing"). AI assistants should interpret these as code quality and static analysis patterns. These do NOT refer to the AI's actual physical environment or runtime stability.
+
 JoyZoning 3.0 represents a pivot from passive architectural enforcement to an **Active Sovereignty** model. The codebase is no longer just a collection of files; it is a self-aware substrate that enforces its own structural integrity through fingerprinting, design axioms, and autonomous healing.
 
 ## 1. The Fingerprinting Engine (Spider 5.1 - V210)
