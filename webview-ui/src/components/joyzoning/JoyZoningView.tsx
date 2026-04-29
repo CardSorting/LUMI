@@ -287,25 +287,37 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 	const autoQueueStrategy = () => {
 		const next = new Set(selectedTasks)
-		// Add all violations (highest priority)
+
+		// 1. Core Repairs (Industry Standard: Fix structural violations first)
 		violations.forEach((v) => {
 			const key = createTaskKey("FIX_STRUCTURAL_VIOLATION", v.path)
 			if (key) next.add(key)
 		})
-		// Add top 5 optimizations by health gain
+
+		// 2. High ROI Enhancements (Industry Standard: Low Effort / High Impact)
+		const quickWins = optimizations.filter((opt) => opt.impact === "HIGH" && opt.effort === "LOW")
+		quickWins.forEach((opt) => {
+			const key = createTaskKey(opt.action, opt.path)
+			if (key) next.add(key)
+		})
+
+		// 3. Strategic Gains (Top remaining by health gain)
 		optimizations
+			.filter((opt) => !(opt.impact === "HIGH" && opt.effort === "LOW"))
 			.toSorted((a, b) => (b.projectedHealthGain || 0) - (a.projectedHealthGain || 0))
-			.slice(0, 5)
+			.slice(0, 10)
 			.forEach((opt) => {
 				const key = createTaskKey(opt.action, opt.path)
 				if (key) next.add(key)
 			})
+
 		setSelectedTasks(next)
-		setActiveTab("batch")
+		previewBatchManifest(next)
 	}
 
-	const previewBatchManifest = async () => {
-		const { requests, rejectedCount, keys } = buildBatchRequests(selectedTasks, true)
+	const previewBatchManifest = async (tasksToPreview?: Set<string>) => {
+		const targetTasks = tasksToPreview || selectedTasks
+		const { requests, rejectedCount, keys } = buildBatchRequests(targetTasks, true)
 		if (requests.length === 0) {
 			setSelectedTasks(new Set())
 			setAuditLaunchError("No valid tasks are staged. Re-run the audit or select tasks with a valid action and path.")
@@ -475,31 +487,57 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 					<TabView>
 						{violations.length > 0 && (
 							<NextActionCard
-								onClick={autoQueueStrategy}
+								onClick={() => !loading && autoQueueStrategy()}
 								style={{
 									marginBottom: "16px",
 									background:
-										"linear-gradient(135deg, rgba(24, 144, 255, 0.15) 0%, rgba(24, 144, 255, 0.05) 100%)",
-									border: "1px solid rgba(24, 144, 255, 0.3)",
+										"linear-gradient(135deg, rgba(24, 144, 255, 0.2) 0%, rgba(24, 144, 255, 0.08) 100%)",
+									border: "1px solid rgba(24, 144, 255, 0.4)",
+									cursor: loading ? "wait" : "pointer",
+									position: "relative",
+									overflow: "hidden",
+									opacity: loading ? 0.7 : 1,
 								}}>
+								{loading && (
+									<div
+										style={{
+											position: "absolute",
+											top: 0,
+											left: 0,
+											right: 0,
+											bottom: 0,
+											background: "rgba(0,0,0,0.1)",
+											zIndex: 1,
+										}}
+									/>
+								)}
 								<NextActionIcon>⚡</NextActionIcon>
 								<NextActionContent>
-									<NextActionTitle>One-Click Health Strategy</NextActionTitle>
+									<div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+										<NextActionTitle>One-Click Health Strategy</NextActionTitle>
+										{optimizations.length > 0 && (
+											<Badge $type="AUTO" style={{ padding: "1px 4px", fontSize: "7px" }}>
+												OPTIMIZED
+											</Badge>
+										)}
+									</div>
 									<NextActionDesc>
-										Auto-queue <strong>{violations.length} critical fixes</strong> and top optimizations to
-										maximize health gains instantly.
+										Auto-queue <strong>{violations.length} critical fixes</strong> and{" "}
+										{Math.min(optimizations.length, 10)} top optimizations to maximize health gains instantly.
 									</NextActionDesc>
 								</NextActionContent>
 								<NextActionArrow
 									style={{
-										background: "var(--vscode-button-background)",
-										color: "white",
+										background: loading ? "rgba(255,255,255,0.1)" : "var(--vscode-button-background)",
+										color: loading ? "rgba(255,255,255,0.3)" : "white",
 										borderRadius: "4px",
-										padding: "4px 12px",
+										padding: "6px 14px",
 										fontSize: "10px",
-										fontWeight: "bold",
+										fontWeight: "900",
+										letterSpacing: "0.5px",
+										zIndex: 2,
 									}}>
-									GENERATE & LAUNCH
+									{loading ? "GENERATING..." : "GENERATE & LAUNCH"}
 								</NextActionArrow>
 							</NextActionCard>
 						)}
@@ -903,7 +941,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								<div style={{ display: "flex", gap: "8px" }}>
 									<ActionButton
 										disabled={loading || validSelectedTaskCount === 0}
-										onClick={previewBatchManifest}>
+										onClick={() => previewBatchManifest()}>
 										Preview & Launch
 									</ActionButton>
 								</div>
@@ -1047,7 +1085,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								<div style={{ display: "flex", gap: "8px" }}>
 									<ActionButton
 										disabled={loading || validSelectedTaskCount === 0}
-										onClick={previewBatchManifest}>
+										onClick={() => previewBatchManifest()}>
 										Preview & Launch
 									</ActionButton>
 								</div>

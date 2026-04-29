@@ -79,58 +79,88 @@ export async function executeBatchRefactor(
 		const sortedRequests = sortRequestsBySymbolDependency(normalized.requests, spider)
 		const groupedRequests = groupRequestsByContext(sortedRequests, spider)
 
-		let manifest = "JOY_ZONING ADAPTIVE ORCHESTRATION MANIFEST (v8.0)\n"
+		let totalProjectedGain = 0
+		let highRiskCount = 0
+
+		let manifest = "JOY_ZONING ADAPTIVE ORCHESTRATION MANIFEST (v9.0)\n"
 		manifest += "===================================================\n\n"
-		manifest += "This manifest is governed by the SOVEREIGN ARCHITECTURAL POLICY.\n"
-		manifest += "Each refactor step is subject to a TECHNICAL DEBT BUDGET and mandatory SELF-REVIEW.\n\n"
+
+		manifest += "## [STRATEGY OVERVIEW]\n"
+		manifest += "This mission implements a MULTI-PHASE ARCHITECTURAL RECOVERY strategy.\n"
+		manifest += "Target: Restore structural integrity and reduce cognitive friction across the substrate.\n\n"
+
 		if (normalized.rejectedCount > 0 || normalized.dedupedCount > 0) {
 			manifest += `[BOUNDARY VALIDATION] Ignored ${normalized.rejectedCount} malformed request(s) and deduplicated ${normalized.dedupedCount} duplicate request(s).\n\n`
 		}
 
+		let taskSections = ""
 		for (const [groupName, groupItems] of Object.entries(groupedRequests)) {
-			manifest += `## [TRANSACTION] ARCHITECTURAL BLOCK: ${groupName.toUpperCase()}\n`
-			manifest += "------------------------------------\n"
+			taskSections += `## [TRANSACTION] ARCHITECTURAL BLOCK: ${groupName.toUpperCase()}\n`
+			taskSections += "------------------------------------\n"
 			for (const req of groupItems) {
 				const node = spider.nodes.get(spider.normalizePath(req.path))
-				manifest += `### ACTION: ${req.action} on ${req.path}\n`
+				taskSections += `### ACTION: ${req.action} on ${req.path}\n`
 
 				// Blast Radius Visualization
 				const impactedCount = node?.afferentCoupling || 0
-				manifest += `[APEX SIGNAL] Impact Radius: ${impactedCount} consumers will require import updates.\n`
+				taskSections += `[APEX SIGNAL] Impact Radius: ${impactedCount} consumers will require import updates.\n`
 
 				const absPath = path.resolve(spider.cwd, req.path)
 				if (fs.existsSync(absPath)) {
 					const content = fs.readFileSync(absPath, "utf-8")
 					const plan = decomposer.analyze(req.path, content, node)
+
+					// Calculate outcomes for summary
+					totalProjectedGain += (plan.projectedHealth || 0) - plan.buildHealth
+
 					const step = plan.steps.find((s) => {
 						const stepAction = normalizeRequestField(s.action)
 						const stepTarget = normalizeRequestField(s.target)
 						return stepAction === req.action || (!!stepTarget && `${stepAction}: ${stepTarget}`.includes(req.action))
 					})
+
 					if (step) {
-						manifest += `- RATIONALE: ${step.reason}\n`
-						if (step.destination) manifest += `- DESTINATION: ${step.destination}\n`
+						if (step.risk === "HIGH") highRiskCount++
+						taskSections += `- RATIONALE: ${step.reason}\n`
+						taskSections += `- RISK PROFILE: ${step.risk || "MEDIUM"}\n`
+						if (step.destination) taskSections += `- DESTINATION: ${step.destination}\n`
 						if (step.boilerplate) {
-							manifest += `- MISSION-FOCUSED TEMPLATE:\n\`\`\`typescript\n${step.boilerplate}\n\`\`\`\n`
+							taskSections += `- MISSION-FOCUSED TEMPLATE:\n\`\`\`typescript\n${step.boilerplate}\n\`\`\`\n`
 						}
+					} else {
+						taskSections += `- RATIONALE: Restore policy compliance and improve local maintainability.\n`
 					}
 				}
 
 				// Tactical SOP Integration
 				const sop = TACTICAL_SOP[req.action] || TACTICAL_SOP.GENERIC
-				manifest += `\nTACTICAL SOP:\n${sop}\n`
-				manifest += `\nHEAL PROTOCOL: Use \`grep\` to ripple changes to all ${impactedCount} consumers for this specific action.\n\n`
+				taskSections += `\nTACTICAL SOP:\n${sop}\n`
+				taskSections += `\nHEAL PROTOCOL: Use \`grep\` to ripple changes to all ${impactedCount} consumers for this specific action.\n\n`
 			}
 		}
 
-		manifest += "ADAPTIVE EXECUTION PROTOCOL:\n"
+		manifest += "## [PROJECTED OUTCOMES]\n"
+		manifest += `- Total Estimated Health Boost: +${Math.round(totalProjectedGain)}%\n`
+		manifest += `- Structural Integrity Gain: SIGNIFICANT (Consolidation of leaf nodes and island extraction)\n`
+		manifest += `- Technical Debt Reduction: ${normalized.requests.length} hotspots addressed.\n\n`
+
+		manifest += "## [RISK MITIGATION SUMMARY]\n"
+		manifest += `- High Risk Operations: ${highRiskCount}\n`
+		manifest += `- Strategy: Transactional blocks. Each layer must be validated before moving to the next.\n`
+		manifest += `- Rollback: Substrate is managed by Git. Use \`git checkout\` to revert unsuccessful steps.\n\n`
+
+		manifest += taskSections
+
+		manifest += "## [ADAPTIVE EXECUTION PROTOCOL]\n"
 		manifest += "1. TRANSACTION: Work within the current ARCHITECTURAL BLOCK.\n"
 		manifest += "2. TRANSFORM & HEAL: Execute the Tactical SOP and ripple changes.\n"
 		manifest += "3. SOVEREIGN PEER REVIEW: Before committing, verify the following:\n"
 		manifest += "   - Does this change introduce a CROSS-LAYER dependency?\n"
 		manifest += "   - Is the 'Hotspot Heat' reduced for the target file?\n"
 		manifest += "   - Are all new symbols following the MISSION-FOCUSED naming convention?\n"
-		manifest += "4. VALIDATE: Ensure zero type errors and zero lint violations.\n"
+		manifest += "4. VALIDATE: Run mandatory verification commands:\n"
+		manifest += "   - `npm run lint` (Ensure structural compliance)\n"
+		manifest += "   - `npm run check-types` (Ensure substrate integrity)\n"
 		manifest += "5. BUDGET CHECK: If the change increases structural entropy, REVISE or ROLLBACK.\n\n"
 
 		manifest += "SURGICAL RECOVERY (Adaptive Retry):\n"
