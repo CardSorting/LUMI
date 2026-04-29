@@ -21,12 +21,13 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 	const [progress, setProgress] = useState<JoyZoningAuditProgress | null>(null)
 	const [previewPlan, setPreviewPlan] = useState<string | null>(null)
 	const [selectedOptimizations, setSelectedOptimizations] = useState<Set<number>>(new Set())
+	const [batchManifest, setBatchManifest] = useState<string | null>(null)
 
 	const [status, setStatus] = useState<"idle" | "starting" | "streaming" | "completed" | "error" | "cancelled">("idle")
 	const [launchingTaskId, setLaunchingTaskId] = useState<string | null>(null)
 	const [auditLaunchMessage, setAuditLaunchMessage] = useState<string | null>(null)
 	const [auditLaunchError, setAuditLaunchError] = useState<string | null>(null)
-	const [activeTab, setActiveTab] = useState<"overview" | "fixes" | "improvements">("overview")
+	const [activeTab, setActiveTab] = useState<"overview" | "fixes" | "improvements" | "batch">("overview")
 	const [fixesSearch, setFixesSearch] = useState("")
 	const [optsSearch, setOptsSearch] = useState("")
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
@@ -173,6 +174,41 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 		})
 	}
 
+	const previewBatchManifest = async () => {
+		if (selectedOptimizations.size === 0) return
+
+		setLoading(true)
+		setAuditLaunchError(null)
+		setAuditLaunchMessage(null)
+
+		try {
+			const requests = Array.from(selectedOptimizations).map((index) => {
+				const opt = optimizations[index]
+				return {
+					action: opt.action,
+					path: opt.path,
+					dryRun: true,
+				}
+			})
+
+			const response = await JoyZoningServiceClient.executeBatchRefactor({
+				requests,
+				dryRun: true,
+			})
+
+			if (response.success) {
+				setBatchManifest(response.planSummary)
+				setActiveTab("batch")
+			} else {
+				setAuditLaunchError(response.message)
+			}
+		} catch (e) {
+			setAuditLaunchError(asText((e as Error).message, "Failed to generate batch manifest"))
+		} finally {
+			setLoading(false)
+		}
+	}
+
 	const handleBatchRefactor = async () => {
 		if (selectedOptimizations.size === 0) return
 
@@ -198,8 +234,9 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 			if (response.success) {
 				setLaunchingTaskId("batch")
 				setAuditLaunchMessage(response.message)
-				setPreviewPlan(response.planSummary)
+				setBatchManifest(null) // Reset after launch
 				setSelectedOptimizations(new Set())
+				setActiveTab("overview") // Redirect to overview to see progress
 			} else {
 				setAuditLaunchError(response.message)
 			}
@@ -236,9 +273,13 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 					</RadarContainer>
 
 					<HeaderStats>
-						<SubstrateStatus $health={report?.buildHealth || 100}>
-							{loading ? "ANALYZING..." : (report?.buildHealth || 100) > 80 ? "● OPERATIONAL" : "● ACTION REQUIRED"}
-						</SubstrateStatus>
+						<SystemStatus $health={report?.buildHealth || 100}>
+							{loading
+								? "ANALYZING..."
+								: (report?.buildHealth || 100) > 80
+									? "● SYSTEM HEALTHY"
+									: "● NEEDS ATTENTION"}
+						</SystemStatus>
 						{report && <QualityGate $status={report.qualityGateStatus}>{report.qualityGateStatus}</QualityGate>}
 						{report && (
 							<ShareButton onClick={copyReportToClipboard} title="Copy health summary to clipboard">
@@ -248,30 +289,26 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 					</HeaderStats>
 				</HeroSection>
 
-				<TabContainer>
-					<Tab $active={activeTab === "overview"} onClick={() => setActiveTab("overview")}>
-						Overview
-					</Tab>
-					<Tab $active={activeTab === "fixes"} onClick={() => setActiveTab("fixes")}>
-						Critical Fixes{" "}
-						{violations.length > 0 ? (
-							<>
-								({violations.length})
-								{asNumber(report?.violationDelta) !== 0 && (
-									<DeltaInline $positive={asNumber(report?.violationDelta) < 0}>
-										{asNumber(report?.violationDelta) > 0 ? "+" : ""}
-										{asNumber(report?.violationDelta)}
-									</DeltaInline>
-								)}
-							</>
-						) : (
-							""
-						)}
-					</Tab>
-					<Tab $active={activeTab === "improvements"} onClick={() => setActiveTab("improvements")}>
-						Optimizations {optimizations.length > 0 ? `(${optimizations.length})` : ""}
-					</Tab>
-				</TabContainer>
+				<NavGroup>
+					<NavItem $active={activeTab === "overview"} onClick={() => setActiveTab("overview")}>
+						<NavIcon>📊</NavIcon>
+						<NavLabel>Dashboard</NavLabel>
+					</NavItem>
+					<NavItem $active={activeTab === "fixes"} onClick={() => setActiveTab("fixes")}>
+						<NavIcon>🚨</NavIcon>
+						<NavLabel>Urgent Fixes {violations.length > 0 ? `(${violations.length})` : ""}</NavLabel>
+					</NavItem>
+					<NavItem $active={activeTab === "improvements"} onClick={() => setActiveTab("improvements")}>
+						<NavIcon>✨</NavIcon>
+						<NavLabel>Improvements {optimizations.length > 0 ? `(${optimizations.length})` : ""}</NavLabel>
+					</NavItem>
+					{selectedOptimizations.size > 0 && (
+						<NavItem $active={activeTab === "batch"} onClick={() => setActiveTab("batch")}>
+							<NavIcon>🚀</NavIcon>
+							<NavLabel>Launch Queue ({selectedOptimizations.size})</NavLabel>
+						</NavItem>
+					)}
+				</NavGroup>
 				{loading && (
 					<ScanningNotice>
 						<ScanningIcon>🔍</ScanningIcon>
@@ -295,6 +332,19 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 				{activeTab === "overview" && report && (
 					<TabView>
+						{violations.length > 0 && (
+							<NextActionCard onClick={() => setActiveTab("fixes")} style={{ marginBottom: "16px" }}>
+								<NextActionIcon>🚀</NextActionIcon>
+								<NextActionContent>
+									<NextActionTitle>Priority: High Impact Fixes</NextActionTitle>
+									<NextActionDesc>
+										We found <strong>{violations.length} issues</strong> that are dragging down your project
+										health. Fix them now to stabilize your codebase.
+									</NextActionDesc>
+								</NextActionContent>
+								<NextActionArrow>→</NextActionArrow>
+							</NextActionCard>
+						)}
 						<HealthSnapshot $health={report.buildHealth}>
 							<SnapshotIcon>{report.buildHealth > 80 ? "✨" : report.buildHealth > 50 ? "⚡" : "🚨"}</SnapshotIcon>
 							<SnapshotContent>
@@ -365,19 +415,6 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								<RadarLabel style={{ top: "25%", left: "-10%" }}>Compliance</RadarLabel>
 							</RadarChartWrapper>
 						</RadarChartSection>
-						{report && violations.length > 0 && (
-							<NextActionCard onClick={() => setActiveTab("fixes")}>
-								<NextActionIcon>🚀</NextActionIcon>
-								<NextActionContent>
-									<NextActionTitle>Next Recommended Step</NextActionTitle>
-									<NextActionDesc>
-										Address the <strong>{violations.length} critical issues</strong> identified in your
-										foundations to improve system stability.
-									</NextActionDesc>
-								</NextActionContent>
-								<NextActionArrow>→</NextActionArrow>
-							</NextActionCard>
-						)}
 						<GovernanceGrid>
 							<GovernanceCard>
 								<GovernanceTitle>Best Practices</GovernanceTitle>
@@ -782,13 +819,44 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						{selectedOptimizations.size > 0 && (
 							<BulkRefactorBar>
 								<div style={{ fontSize: "12px", fontWeight: "bold" }}>
-									{selectedOptimizations.size} optimizations selected
+									{selectedOptimizations.size} items staged for Apex Orchestration
 								</div>
 								<div style={{ display: "flex", gap: "8px" }}>
 									<SecondaryButton onClick={() => setSelectedOptimizations(new Set())}>Clear</SecondaryButton>
-									<ActionButton onClick={handleBatchRefactor}>Execute Industrial Batch</ActionButton>
+									<ActionButton onClick={previewBatchManifest}>Preview Apex Manifest</ActionButton>
 								</div>
 							</BulkRefactorBar>
+						)}
+					</TabView>
+				)}
+
+				{activeTab === "batch" && (
+					<TabView>
+						<SectionTitle>Apex Orchestration Strategy</SectionTitle>
+						<SectionDesc>
+							The following strategy has been generated to maximize architectural gain while maintaining absolute
+							substrate integrity.
+						</SectionDesc>
+
+						{batchManifest ? (
+							<>
+								<ManifestPreview>
+									<ManifestContent>{batchManifest}</ManifestContent>
+								</ManifestPreview>
+								<ActionGroup style={{ marginTop: "20px", justifyContent: "flex-end" }}>
+									<SecondaryButton onClick={() => setActiveTab("improvements")}>
+										Back to Selection
+									</SecondaryButton>
+									<ActionButton onClick={handleBatchRefactor} style={{ padding: "12px 24px" }}>
+										Queue & Launch Tasks
+									</ActionButton>
+								</ActionGroup>
+							</>
+						) : (
+							<EmptyState>
+								Generating Apex Manifest... Please select optimizations from the previous tab to stage them for
+								orchestration.
+							</EmptyState>
 						)}
 					</TabView>
 				)}
@@ -864,6 +932,17 @@ const HeaderStats = styled.div`
   display: flex;
   gap: 8px;
   align-items: center;
+`
+
+const SystemStatus = styled.div<{ $health: number }>`
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 1px;
+  background: ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.1)" : props.$health > 50 ? "rgba(250, 173, 20, 0.1)" : "rgba(255, 77, 79, 0.1)")};
+  color: ${(props) => (props.$health > 80 ? "#52c41a" : props.$health > 50 ? "#faad14" : "#ff4d4f")};
+  border: 1px solid ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.2)" : props.$health > 50 ? "rgba(250, 173, 20, 0.2)" : "rgba(255, 77, 79, 0.2)")};
 `
 
 const QualityGate = styled.div<{ $status: string }>`
@@ -1663,6 +1742,77 @@ const BulkRefactorBar = styled.div`
   z-index: 100;
   box-shadow: 0 -4px 12px rgba(0,0,0,0.2);
   border-radius: 0 0 16px 16px;
+`
+
+const NavGroup = styled.div`
+  display: flex;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  gap: 4px;
+`
+
+const NavItem = styled.div<{ $active: boolean }>`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: ${(props) => (props.$active ? "rgba(255, 255, 255, 0.1)" : "transparent")};
+  border: 1px solid ${(props) => (props.$active ? "rgba(255, 255, 255, 0.1)" : "transparent")};
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+`
+
+const NavIcon = styled.div`
+  font-size: 16px;
+`
+
+const NavLabel = styled.div`
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.8;
+`
+
+const TabGroup = styled.div`
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+`
+
+const SectionDesc = styled.div`
+  font-size: 11px;
+  opacity: 0.6;
+  margin-bottom: 20px;
+  line-height: 1.5;
+`
+
+const ManifestPreview = styled.div`
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+`
+
+const ManifestContent = styled.div`
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--vscode-editor-foreground);
 `
 
 const FilterGroup = styled.div`
