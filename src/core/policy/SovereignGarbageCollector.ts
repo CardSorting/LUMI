@@ -149,7 +149,7 @@ export class SovereignGarbageCollector {
 
 				// 🌊 Wave-Front Expansion: If file was modified, sweep its dependents
 				// V200: Metabolic Throttling — Adjust expansion depth based on pressure
-				const immune = this.monitor?.getImmuneResponse()
+				const immune = this.monitor?.getStabilityStrategy()
 				const maxDepth = immune?.strategy === "STABILIZE" ? 1 : 2
 
 				if (fileModified && depth < maxDepth) {
@@ -168,7 +168,7 @@ export class SovereignGarbageCollector {
 			}
 
 			// V200: Orphanage Hardening (Evolutionary Purge)
-			if (this.monitor?.getImmuneResponse().strategy === "PURGE") {
+			if (this.monitor?.getStabilityStrategy().strategy === "PURGE") {
 				const orphansFixed = await this.pruneOrphans()
 				if (orphansFixed > 0) {
 					totalFixed += orphansFixed

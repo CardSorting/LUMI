@@ -34,15 +34,15 @@ export interface StabilityStats {
 }
 
 /**
- * MetabolicMonitor: Tracks the "Stability" and "Activity Level" of the project.
- * Implements activity detection: Churn, High Activity, and Doubt.
+ * StabilityMonitor: Tracks the "Stability" and "Activity Level" of the project.
+ * Implements activity detection: Churn, High Activity, and Workload.
  */
 export class MetabolicMonitor {
 	private registry: Map<string, MetabolicMetrics> = new Map()
 	private cooldownThreshold = 500 // Silent High-Velocity: Massively expanded budget
 	private refactorThreshold = 1000 // Silent High-Velocity: Massively expanded budget
-	private thresholdMultiplier = 1.0 // V80: Adaptive Metabolism
-	private resonanceMultiplier = 1.0 // V100: Cognitive Resonance
+	private thresholdMultiplier = 1.0 // V80: Adaptive activity budget
+	private velocityDamping = 1.0 // V100: Velocity Damping (formerly resonance)
 	private sessionVersion = 1 // V150: State Evolution
 
 	constructor(private readonly cwd: string = process.cwd()) {}
@@ -89,7 +89,7 @@ export class MetabolicMonitor {
 		const norm = this.normalize(filePath)
 		const metrics = this.getOrCreateMetrics(norm)
 
-		let impactMultiplier = this.resonanceMultiplier
+		let impactMultiplier = this.velocityDamping
 
 		if (content) {
 			const aesHash = this.computeAestheticHash(content)
@@ -141,10 +141,10 @@ export class MetabolicMonitor {
 		const baseDoubt = metrics.reads / (metrics.writes || 1)
 
 		// PRODUCTION HARDENING: Layer-Aware Throttling.
-		// High-Velocity: Increased thresholds for doubt signals.
+		// High-Velocity: Increased thresholds for activity alerts.
 		const threshold = layer === "domain" || layer === "core" ? 15.0 : 45.0
 
-		if (metrics.reads > threshold && metrics.writes === 0) return 999.0 // Hard stall signal
+		if (metrics.reads > threshold && metrics.writes === 0) return 100.0 // High workload advisory (relaxed from 999)
 
 		// Lenience factor for large files (> 500 lines)
 		const lenience = lineCount > 500 ? Math.min(2.0, lineCount / 500) : 1.0
@@ -184,7 +184,7 @@ export class MetabolicMonitor {
 		if (pressure > threshold) {
 			return {
 				active: true,
-				reason: `Activity level (${SafeNumber.format(pressure, 1)}) exceeded stability limit.`,
+				reason: `Activity level (${SafeNumber.format(pressure, 1)}) suggests a focus break may be helpful.`,
 			}
 		}
 
@@ -206,7 +206,7 @@ export class MetabolicMonitor {
 		// If high doubt (> 10), it acts as a pressure multiplier
 		const doubtMultiplier = doubt > 10 ? Math.min(2.0, 1.0 + (doubt - 10) / 20) : 1.0
 
-		return churn * this.resonanceMultiplier * doubtMultiplier
+		return churn * this.velocityDamping * doubtMultiplier
 	}
 
 	/**
@@ -261,7 +261,7 @@ export class MetabolicMonitor {
 	/**
 	 * V8: Resets activity history for a specific file (Stability break recovery)
 	 */
-	public resetFileInflammation(filePath: string) {
+	public resetFileActivity(filePath: string) {
 		const norm = this.normalize(filePath)
 		const metrics = this.registry.get(norm)
 		if (metrics) {
@@ -379,9 +379,9 @@ export class MetabolicMonitor {
 	 */
 	/**
 	 * V200: Evolutionary Resilience.
-	 * Aggregates metabolic data to recommend a structural strategy.
+	 * Aggregates activity data to recommend a structural strategy.
 	 */
-	public getImmuneResponse(): { strategy: "STABILIZE" | "PURGE" | "RESONATE" | "NEUTRAL"; pressure: number; doubt: number } {
+	public getStabilityStrategy(): { strategy: "STABILIZE" | "PURGE" | "RESONATE" | "NEUTRAL"; pressure: number; doubt: number } {
 		const stats = this.getStabilityStats()
 		const stagnant = this.getStagnantSubstrate()
 		const doubt = stats.avgDoubtSignal
@@ -439,10 +439,10 @@ export class MetabolicMonitor {
 	}
 
 	/**
-	 * V100: Sets the cognitive resonance factor (Damping).
+	 * V100: Sets the velocity damping factor.
 	 */
-	public setResonance(multiplier: number) {
-		this.resonanceMultiplier = multiplier
+	public setVelocityDamping(multiplier: number) {
+		this.velocityDamping = multiplier
 	}
 	/**
 	 * V150: Cognitive Immortality.
@@ -460,7 +460,7 @@ export class MetabolicMonitor {
 			version: this.sessionVersion,
 			registry: registryObj,
 			thresholdMultiplier: this.thresholdMultiplier,
-			resonanceMultiplier: this.resonanceMultiplier,
+			velocityDamping: this.velocityDamping,
 			timestamp: Date.now(),
 		}
 	}
@@ -487,8 +487,8 @@ export class MetabolicMonitor {
 		Logger.info(`[StabilityMonitor] Project Restored: ${this.registry.size} files restored to context registry.`)
 	}
 
-	public getResonance(): number {
-		return this.resonanceMultiplier
+	public getVelocityDamping(): number {
+		return this.velocityDamping
 	}
 
 	/**

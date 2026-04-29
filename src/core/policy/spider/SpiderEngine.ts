@@ -911,7 +911,7 @@ export class SpiderEngine {
 
 		// 12. SPI-205: Immune Response Strategy (V215 Behavioral Sensing)
 		if (monitor) {
-			const response = monitor.getImmuneResponse()
+			const response = monitor.getStabilityStrategy()
 			if (response.strategy === "STABILIZE") {
 				violations.push({
 					id: "SPI-205",

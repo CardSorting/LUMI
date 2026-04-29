@@ -22,7 +22,7 @@ export class SovereignDoctorHandler implements IToolHandler {
 	async execute(config: TaskConfig, _block: ToolUse): Promise<ToolResponse> {
 		if (!config.isSubagentExecution) {
 			return formatResponse.toolError(
-				"🛑 **ACCESS DENIED**: Specialized forensic tools are reserved for Forensic Sub-Agents. Please use 'attempt_completion' to trigger an autonomous documentation phase.",
+				"🛑 **ACCESS DENIED**: Specialized diagnostic tools are reserved for Stability Sub-Agents. Please use 'attempt_completion' to trigger an autonomous documentation phase.",
 			)
 		}
 		try {
@@ -33,7 +33,7 @@ export class SovereignDoctorHandler implements IToolHandler {
 				// If no registry, we must build from scratch (expensive, but necessary here)
 				// Agents should ideally run a scan first, but we handle the fallback.
 				return formatResponse.toolResult(
-					"Architectural Registry not found. Please run a full project scan via 'execute_command { command: \"npm run scan\" }' to initialize JoyZoning.",
+					"Architectural Registry not found. Please run a full project scan via 'execute_command { command: \"npm run scan\" }' to initialize stability tracking.",
 				)
 			}
 
@@ -41,7 +41,7 @@ export class SovereignDoctorHandler implements IToolHandler {
 			const report = await doctor.diagnose(engine)
 
 			return formatResponse.toolResult(
-				`JoyZoning Sovereignty Report [Status: ${doctor.getAgentSignal(report)}]\n\n` +
+				`Stability Diagnostic Report [Status: ${doctor.getAgentSignal(report)}]\n\n` +
 					`Integrity Score: ${SafeNumber.format(report.integrityScore, 1)}%\n` +
 					`Environment Context:\n` +
 					`- Total Files: ${report.environmentContext.totalFiles}\n` +
@@ -55,7 +55,7 @@ export class SovereignDoctorHandler implements IToolHandler {
 					`Optimization Opportunities:\n${report.optimizations.map((o) => `- Move ${o.file} to ${o.recommendedLayer}: ${o.reason}`).join("\n")}`,
 			)
 		} catch (error) {
-			return `Error during sovereign diagnosis: ${(error as Error)?.message}`
+			return `Error during stability diagnosis: ${(error as Error)?.message}`
 		}
 	}
 }

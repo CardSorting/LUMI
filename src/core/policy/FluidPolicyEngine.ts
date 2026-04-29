@@ -121,7 +121,7 @@ export class FluidPolicyEngine {
 	}
 
 	/**
-	 * Clears architectural alarms and metabolic blockades.
+	 * Clears architectural alarms and activity alerts.
 	 * Explicitly used by orchestrator during a Cognitive Reflection Nudge to grant a clean slate.
 	 */
 	public resetSystemPressure(): void {
@@ -309,16 +309,16 @@ export class FluidPolicyEngine {
 				.filter(Boolean)
 				.join("\n")
 
-			const metabolicContext = [
+			const stabilityContext = [
 				details?.diskSpaceGB ? `• Disk: ${details.diskSpaceGB} available` : "• Disk: Sensing failed",
 				details?.memoryFreeGB ? `• Memory: ${details.memoryFreeGB}GB free` : "",
 			]
 				.filter(Boolean)
 				.join("\n")
 
-			const forensicReport = `📊 [SUBSTRATE]\n${substrateContext}\n\n🛠️ [TOOLCHAIN]\n${toolchainContext}\n\n🔋 [METABOLICS]\n${metabolicContext}`
+			const forensicReport = `📊 [ENVIRONMENT]\n${substrateContext}\n\n🛠️ [TOOLCHAIN]\n${toolchainContext}\n\n🔋 [ACTIVITY]\n${stabilityContext}`
 
-			// V191 Hardening: Metabolic Blockade
+			// V191 Hardening: Physical Blockade
 			if (lease.details?.diskSpaceGB && Number.parseFloat(lease.details.diskSpaceGB) < 0.5) {
 				return {
 					success: false,
@@ -392,7 +392,7 @@ export class FluidPolicyEngine {
 		}
 
 		if (this.streamId && !this.stateRestored) {
-			// V189: Unified Substrate handles metabolic state
+			// V189: Unified Environment handles activity state
 		}
 
 		// V150: Sovereign Breath tool is ALWAYS allowed for cognitive recovery
@@ -440,7 +440,7 @@ export class FluidPolicyEngine {
 				result.warning =
 					(result.warning ? `${result.warning}\n` : "") +
 					`🛑 [STABILITY SAFETY ALERT]: \`${path.basename(targetPath)}\` has high complexity (Index: ${SafeNumber.format(cci, 2)}). ` +
-					`This module is a 'Structural Hotspot' (${SafeNumber.formatPercent(cci, 0)} risk). Deep audit required before further edits.`
+					`This module is a 'Structural Hotspot' (${SafeNumber.formatPercent(cci, 0)} risk). Strategic Review suggested before further edits.`
 			}
 		}
 
@@ -458,7 +458,7 @@ export class FluidPolicyEngine {
 			// V27 Agent Success: Auto-heal if we're trending towards a block
 			const cooldown = this.metabolicMonitor.getCooldownStatus()
 			if (cooldown.active || this.buildAlarmActive) {
-				const healing = await this.ensureScratchpadIntegrity("Metabolic Recovery")
+				const healing = await this.ensureScratchpadIntegrity("Activity Stabilization")
 				scratchpadContent = healing.content
 				hasAudit = scratchpadContent.includes(SovereignProtocol.HEADERS.AUDIT)
 			}
@@ -472,7 +472,7 @@ export class FluidPolicyEngine {
 						scratchpadContent = virtual.content
 						hasAudit = true
 						Logger.info(
-							"[FluidPolicyEngine] Sovereign interdiction bypassed via Virtual Scratchpad (History Synthesis).",
+							"[FluidPolicyEngine] Strategic Interdiction bypassed via Virtual Scratchpad (History Synthesis).",
 						)
 					}
 				}
@@ -485,16 +485,16 @@ export class FluidPolicyEngine {
 		) {
 			intent = this.verification.detectHealingIntent(block)
 			if (intent) {
-				Logger.info(`[FluidPolicyEngine] Healing Intent detected. Resetting metabolic pressure for ${intent}.`)
+				Logger.info(`[FluidPolicyEngine] Stabilization Intent detected. Resetting activity pressure for ${intent}.`)
 				this.resetSystemPressure()
 			}
 		}
 
 		const isHealingMode = this.buildAlarmActive || !!intent || !!content.match(/#HEAL|#HEALING|#CURE|#FIX|#REPAIR|#TIDY/)
 
-		// V100: Cognitive Resonance Scaling
+		// V100: Activity Damping Scaling
 		const resonance = isHealingMode || this.refactorTurnsRemaining > 0 ? 0.5 : 1.0
-		this.metabolicMonitor.setResonance(resonance)
+		this.metabolicMonitor.setVelocityDamping(resonance)
 
 		// 0. Rule: Cognitive Drift Sensing (Thrashing Prevention)
 		// 0. Rule: Activity Cooldown Enforcement (Substrate Immune System)
@@ -607,7 +607,7 @@ export class FluidPolicyEngine {
 				}
 
 				const hasOverride = (block.params as { content?: string }).content?.includes(
-					"[SOVEREIGN_EXCEPTION: Metabolic Cooldown Override]",
+					"[STABILITY_EXCEPTION: Activity Cooldown Override]",
 				)
 				const hasBreath = (block.params as { content?: string }).content?.includes("# SOVEREIGN_BREATH")
 
@@ -679,7 +679,7 @@ export class FluidPolicyEngine {
 					return {
 						success: true,
 						warning:
-							`⚠️ AXIOMATIC LOGIC WARNING: Logic Sovereignty has been compromised.\n` +
+							`⚠️ LOGIC CONSISTENCY WARNING: Logic Integrity has been compromised.\n` +
 							`${errors.map((v) => `  - [AXIOM: ${v.axiom}] ${v.message}`).join("\n")}\n\n` +
 							`💡 You must split this logic or maintain purity before the substrate will accept these changes.${directive}`,
 					}
@@ -716,7 +716,7 @@ export class FluidPolicyEngine {
 				return {
 					success: true,
 					[isHealingMode ? "info" : "warning"]:
-						`⚠️ SIMULATION RESONANCE: ${sim.message}\n` +
+						`⚠️ SIMULATION ALERT: ${sim.message}\n` +
 						`Your proposed move predicts a significant architectural regression.\n` +
 						`Violations predicted: \n${sim.violations.map((v: string) => `  - ${v}`).join("\n")}\n\n` +
 						`💡 Fix these structural issues in the source before moving, or use a Commit Seal to bypass.${healingHint}`,
@@ -731,9 +731,9 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// V40: Pre-flight Sweep (Metabolic cleanup)
+		// V40: Pre-flight Sweep (Stability cleanup)
 		if (this.metabolicMonitor.getCooldownStatus().active && block.params?.path) {
-			Logger.warn(`[FluidPolicyEngine] High Metabolic Pressure detected. Running Pre-flight Sweep on ${block.params.path}`)
+			Logger.warn(`[FluidPolicyEngine] High Activity Pressure detected. Running Pre-flight Sweep on ${block.params.path}`)
 			await this.garbageCollector.sweep([this.normalize(block.params.path)])
 		}
 
@@ -748,12 +748,12 @@ export class FluidPolicyEngine {
 		// 0. Update Session Awareness (V71)
 		this.spiderEngine.setSessionBuffer(this.sessionFiles)
 
-		// V80: Adaptive Metabolism (Metabolic Velocity Tuning)
+		// V80: Adaptive Activity Rate Tuning
 		// V189: Removed unused diagnostic variables (entropyDiscovery, drift)
 
 		const velocity = 1.0 + (this.karma / 1000) * 0.5
 		this.metabolicMonitor.setThresholdMultiplier(Math.max(0.5, Math.min(2.0, velocity)))
-		Logger.info(`[FluidPolicyEngine] Metabolic Velocity calibrated to ${SafeNumber.format(velocity, 2)}x.`)
+		Logger.info(`[FluidPolicyEngine] Activity Rate calibrated to ${SafeNumber.format(velocity, 2)}x.`)
 
 		// 0. Rule: Architectural Alarm (Soft-Lock / Healing Mode)
 		const isCriticalHealth = this.lastBuildHealth < 50
@@ -867,7 +867,7 @@ export class FluidPolicyEngine {
 				const filePath = path.resolve(this.cwd, block.params.path)
 				const content = block.params.content as string
 
-				// 0. Rule: Contextual Sovereignty Guard (Staleness Protection)
+				// 0. Rule: Contextual Integrity Guard (Staleness Protection)
 				// PRODUCTION HARDENING: Proactively block edits based on verifiably stale context.
 				const staleness = this.stalenessTracker.checkStaleness(filePath)
 				if (staleness.isStale && !this.commitSeal) {
@@ -875,7 +875,7 @@ export class FluidPolicyEngine {
 					// PRODUCTION HARDENING: Proactive recovery hint with a ready-to-use tool call snippet
 					return {
 						success: true,
-						warning: `⚠️ CONTEXTUAL SOVEREIGNTY BREACH: You are attempting to edit \`${fileName}\` based on a stale mental model.\nReason: ${staleness.reason}\n\n💡 RECOVERY: Execute the following command to synchronize your context:\n\`\`\`json\n{\n  "name": "read_file",\n  "params": { "path": "${filePath}" }\n}\n\`\`\``,
+						warning: `⚠️ STALE CONTEXT ALERT: You are attempting to edit \`${fileName}\` based on a stale mental model.\nReason: ${staleness.reason}\n\n💡 RECOVERY: Execute the following command to synchronize your context:\n\`\`\`json\n{\n  "name": "read_file",\n  "params": { "path": "${filePath}" }\n}\n\`\`\``,
 					}
 				}
 
@@ -884,7 +884,7 @@ export class FluidPolicyEngine {
 				this.spiderEngine.updateNode(filePath, content)
 
 				// 1. AST Validation (TSP)
-				// V9: Pass trend signals for Absolute Metabolic Integrity
+				// V9: Pass trend signals for Absolute Activity Integrity
 				const isRecovering = this.spiderEngine.isRecovering
 				const isHealing = content.includes("[SOVEREIGN_HEALING]") || content.includes("# HEALING TURN")
 				const astValidation = this.tspPlugin.validateSource(
@@ -915,7 +915,7 @@ export class FluidPolicyEngine {
 
 					if (shouldBlock) {
 						const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
-						const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN SOVEREIGNTY BREACH" : "🏗️ CORE INTEGRITY PROTECT"
+						const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN LAYER VIOLATION" : "🏗️ CORE INTEGRITY PROTECT"
 
 						// PFH: Proactive Forensic Healing - We allow the write but force a repair turn
 						return {
@@ -951,7 +951,7 @@ export class FluidPolicyEngine {
 							warning:
 								`⚠️ RECURSIVE DRIFT INTERDICTION: You have attempted to edit \`${path.basename(filePath)}\` 3 times with unresolved Domain/Core violations.\n` +
 								`The substrate is rejecting these atomic changes. You are likely trying to perform a complex refactor in too small of a window.\n\n` +
-								`💡 STRATEGIC PIVOT: You MUST extract this logic or implement a formal interface rather than forcing the current approach. Use \`RefactorHealer\` to materialize a contract, or perform a # SOVEREIGN AUDIT.`,
+								`💡 STRATEGIC PIVOT: You MUST extract this logic or implement a formal interface rather than forcing the current approach. Use \`RefactorHealer\` to materialize a contract, or perform a # STRATEGIC REVIEW.`,
 						}
 					}
 
@@ -1051,7 +1051,7 @@ export class FluidPolicyEngine {
 
 			// V150: Cognitive Immortality (Eager Persistence)
 			if (this.streamId) {
-				// V189: Unified Substrate handles metabolic persistence
+				// V189: Unified Environment handles activity persistence
 			}
 
 			// V204: Non-Blocking Integrity Advisories (TIA)
@@ -1226,12 +1226,12 @@ export class FluidPolicyEngine {
 			header += `\n🧠 LOGIC AXIOM ANALYSIS:\n${axioms.map((v) => `  - [${v.axiom}] ${v.message}`).join("\n")}\n`
 		}
 
-		// Metabolic Vitality Injection
+		// Workload Activity Injection
 		const doubt = this.metabolicMonitor.getDoubtSignal(path.relative(this.cwd, absolutePath))
 		const cooldown = this.metabolicMonitor.getCooldownStatus()
 
 		if (doubt > 1.0) {
-			header += `\n⚠️ METABOLIC PRESSURE DETECTED (Doubt: ${SafeNumber.format(doubt, 1)}, Cooldown: ${cooldown.active})\n`
+			header += `\n⚠️ HIGH WORKLOAD DETECTED (Ratio: ${SafeNumber.format(doubt, 1)}, Cooldown: ${cooldown.active})\n`
 		}
 
 		// V28: Proactive Recovery Template Injection
@@ -1244,7 +1244,7 @@ export class FluidPolicyEngine {
 		if (!scratchpadExists && (doubt > 5 || cooldown.active)) {
 			const template = this.getSystemDiagnostics()
 			header +=
-				`🛑 ARCHITECTURAL STALL: Your investigation is thrashed. Sovereignty protocol requires an audit.\n` +
+				`⚠️ HEAVY INVESTIGATION DETECTED: Your activity suggests a plan update is needed.\n` +
 				`💡 I have synthesized a recovery template for you. Initialize \`scratchpad.md\` NOW to proceed:\n\n` +
 				`\`\`\`markdown\n${template}\n\`\`\`\n`
 		}
@@ -1266,7 +1266,7 @@ export class FluidPolicyEngine {
 		}
 
 		if (drift.drift > 0.15) {
-			header += `\n🕸️ [AXIOMATIC DRIFT]: Graph is ${SafeNumber.formatPercent(drift.drift, 1)}% cross-layer (Target: < 15%).\n`
+			header += `\n🕸️ [STRUCTURAL DRIFT]: Graph is ${SafeNumber.formatPercent(drift.drift, 1)}% cross-layer (Target: < 15%).\n`
 		}
 
 		if (this.mode === "plan") {
@@ -1366,7 +1366,7 @@ export class FluidPolicyEngine {
 					// 0. Update Session Awareness (V71)
 					this.spiderEngine.setSessionBuffer(this.sessionFiles)
 
-					// 0.1: Acquire Stability Lock (V190: Industrial Sovereignty)
+					// 0.1: Acquire Stability Lock (V190: Industrial Integrity)
 					const lockId = await this.spiderEngine.acquireStabilityLock("AGENT_MUTATION")
 					if (!lockId) {
 						result.success = false
@@ -1385,7 +1385,7 @@ export class FluidPolicyEngine {
 						const content = await fs.readFile(absPath, "utf-8")
 						const lastIntegrity = this.spiderEngine.nodes.get(normPath)?.namingScore || 1.0
 
-						// 2.1: Axiomatic Resonance Snapshot (V187)
+						// 2.1: System Consistency Snapshot (V187)
 						const lastAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
 
 						this.spiderEngine.updateNode(normPath, content)
@@ -1393,10 +1393,10 @@ export class FluidPolicyEngine {
 						const currentAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
 						const axiomaticResult = this.axiomEngine.compareAxiomSessions(lastAxioms, currentAxioms)
 
-						// 2.2: Merkle Resonance Tracking (V186)
+						// 2.2: Sync Status Tracking (V186)
 						const merkle = this.spiderEngine.computeMerkleRoot()
 						if (this.streamId) {
-							await orchestrator.storeMemory(this.streamId, "merkle_resonance", merkle)
+							await orchestrator.storeMemory(this.streamId, "sync_status", merkle)
 						}
 
 						this.metabolicMonitor.recordWrite(normPath, content, 0, 0, this.streamId)
@@ -1552,7 +1552,7 @@ export class FluidPolicyEngine {
 			const filePath = params.path
 			if (filePath) {
 				const norm = this.normalize(path.resolve(this.cwd, filePath))
-				this.metabolicMonitor.resetFileInflammation(norm)
+				this.metabolicMonitor.resetFileActivity(norm)
 			}
 
 			this.metabolicMonitor.resetMetabolicPressure()
@@ -1572,13 +1572,13 @@ export class FluidPolicyEngine {
 				result.warning =
 					(result.warning ? `${result.warning}\n` : "") +
 					`🌟 [SOVEREIGN PRAISE]: You have successfully stabilized the substrate (Health: ${oldHealth}% -> ${health}%).\n` +
-					`Metabolic pressure has been reset. Sovereignty is maintained.`
+					`Activity pressure has been reset. Stability is maintained.`
 				Logger.info(`[FluidPolicyEngine] Success Reinforcement triggered: ${oldHealth} -> ${health}`)
 
 				// V200: Resilience Insurance - Automatic Checkpoint on Recovery
 				this.spiderEngine.createCheckpoint()
 			} else {
-				Logger.info(`[FluidPolicyEngine] Metabolic Forgiveness applied (Structural Improvement Detected).`)
+				Logger.info(`[FluidPolicyEngine] Activity Forgiveness applied (Structural Improvement Detected).`)
 			}
 			const errorCount = currentViolations.filter((v) => v.severity === "ERROR").length
 			if (errorCount > 0) {
@@ -1600,7 +1600,7 @@ export class FluidPolicyEngine {
 	}
 
 	/**
-	 * Performs a final architectural audit on a set of changes before they are committed.
+	 * Performs a final stability audit on a set of changes before they are committed.
 	 * Only domain-layer changes with violations block the commit; others produce warnings.
 	 */
 	public async validateCommit(
@@ -1678,7 +1678,7 @@ export class FluidPolicyEngine {
 
 	/**
 	 * V189: Industrial Hardening - Sovereign Substrate Immortalization.
-	 * Consolidates Metabolic, Spider, and Telemetry trends into a single atomic persistence transaction.
+	 * Consolidates Activity, Spider, and Telemetry trends into a single atomic persistence transaction.
 	 */
 	private async persistSovereignSubstrate() {
 		if (!this.streamId) return
@@ -1692,7 +1692,7 @@ export class FluidPolicyEngine {
 			const payload = JSON.stringify({
 				version: "V189",
 				spider: spiderData.toString("base64"),
-				metabolic: metabolicState,
+				activity: activityState,
 				telemetrics: telemetricsState,
 				karma: this.karma,
 				checksum,
@@ -1708,7 +1708,7 @@ export class FluidPolicyEngine {
 
 	/**
 	 * V189: Industrial Hardening - Sovereign Substrate Restoration.
-	 * Restores the entire structural and metabolic context from Ghost Memory.
+	 * Restores the entire structural and activity context from memory.
 	 */
 	private async restoreSovereignSubstrate() {
 		if (!this.streamId) {

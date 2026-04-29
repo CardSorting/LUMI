@@ -20,32 +20,32 @@ export class SovereignBreathHandler implements IToolHandler {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		const justification = (block.params as { justification?: string })?.justification || "Routine recalibration."
+		const justification = (block.params as { justification?: string })?.justification || "Routine stabilization."
 		const streamId = config.taskId
 
 		if (!streamId) {
-			return formatResponse.toolError("Sovereign Breath requires an active execution stream.")
+			return formatResponse.toolError("Stability Recalibration requires an active execution stream.")
 		}
 
 		try {
 			Logger.info(
-				`[SovereignBreath] Agent is taking a cognitive breather in stream ${streamId}. Justification: ${justification}`,
+				`[StabilityRecalibration] Agent is performing a Strategic Review in stream ${streamId}. Justification: ${justification}`,
 			)
 
 			// V150: Grounded Reset.
-			// We create a fresh MetabolicMonitor, reset it, and export its state to cognitive memory.
+			// We create a fresh StabilityMonitor, reset it, and export its state to activity memory.
 			const monitor = new MetabolicMonitor(config.cwd)
 			monitor.resetMetabolicPressure()
 
 			const state = monitor.exportState()
-			await orchestrator.storeMemory(streamId, "metabolic_state", JSON.stringify(state))
+			await orchestrator.storeMemory(streamId, "activity_state", JSON.stringify(state))
 
-			// Log specific breath event for audit forensics
-			await orchestrator.storeMemory(streamId, `breath_event_${Date.now()}`, justification)
+			// Log specific event for audit forensics
+			await orchestrator.storeMemory(streamId, `stability_event_${Date.now()}`, justification)
 
 			return formatResponse.toolResult(
-				"🌬️ [SOVEREIGN BREATH] Cognitive recalibration successful. Metabolic pressure has been reset to zero.\n" +
-					"You may now proceed with high-velocity operations. Ensure you maintain architectural sovereignty in subsequent turns.",
+				"🌬️ [STABILITY RECALIBRATION] Successful. Activity pressure has been reset to zero.\n" +
+					"You may now proceed with standard operations. Maintain architectural integrity in subsequent turns.",
 			)
 		} catch (error) {
 			Logger.error("[SovereignBreath] Failed to execute breath:", error)
