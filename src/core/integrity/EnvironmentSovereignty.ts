@@ -210,13 +210,17 @@ export class EnvironmentSovereignty {
 
 				try {
 					const { stdout } = await execAsync(config.probe)
-					details.toolchain![type] = {
-						status: "found",
-						version: stdout.trim(),
+					if (details.toolchain) {
+						details.toolchain[type] = {
+							status: "found",
+							version: stdout.trim(),
+						}
 					}
 
 					const { stdout: binPath } = await execAsync(process.platform === "win32" ? `where ${type}` : `which ${type}`)
-					details.toolchain![type].path = binPath.trim()
+					if (details.toolchain?.[type]) {
+						details.toolchain[type].path = binPath.trim()
+					}
 
 					const isStandardPath =
 						binPath.includes("/usr/local/bin") ||
@@ -224,9 +228,9 @@ export class EnvironmentSovereignty {
 						binPath.includes(".nvm/versions") ||
 						binPath.includes(".asdf/installs")
 
-					if (!isStandardPath && details.toolchain![type].path?.startsWith(this.cwd)) {
+					if (!isStandardPath && details.toolchain?.[type]?.path?.startsWith(this.cwd)) {
 						details.shadowingAlerts?.push(
-							`⚠️ CAUTION: ${type} binary is located inside workspace: ${details.toolchain![type].path}`,
+							`⚠️ CAUTION: ${type} binary is located inside workspace: ${details.toolchain[type].path}`,
 						)
 					}
 				} catch {
@@ -236,18 +240,20 @@ export class EnvironmentSovereignty {
 							const execPath = process.execPath
 							try {
 								const { stdout } = await execAsync(`"${execPath}" -v`)
-								details.toolchain![type] = {
-									status: "found",
-									version: stdout.trim(),
-									path: execPath,
+								if (details.toolchain) {
+									details.toolchain[type] = {
+										status: "found",
+										version: stdout.trim(),
+										path: execPath,
+									}
 								}
 								Logger.info(`[EnvironmentSovereignty] Node found via process.execPath: ${execPath}`)
 							} catch {
-								details.toolchain![type] = { status: "missing" }
+								if (details.toolchain) details.toolchain[type] = { status: "missing" }
 								details.shadowingAlerts?.push("⚠️ [ADVISORY] Node.js not found on PATH.")
 							}
 						} else {
-							details.toolchain![type] = { status: "missing" }
+							if (details.toolchain) details.toolchain[type] = { status: "missing" }
 						}
 					}
 				}
@@ -257,7 +263,7 @@ export class EnvironmentSovereignty {
 			for (const [tool, cmd] of Object.entries(EnvironmentSovereignty.MGMT_TOOLS)) {
 				try {
 					const { stdout } = await execAsync(cmd)
-					details.toolchain![tool] = { status: "found", version: stdout.trim() }
+					if (details.toolchain) details.toolchain[tool] = { status: "found", version: stdout.trim() }
 				} catch {
 					// Silent skip
 				}
@@ -288,7 +294,7 @@ export class EnvironmentSovereignty {
 
 		if (lease.success) {
 			Logger.info(
-				`[EnvironmentSovereignty] Industrial lease issued for ${lease.details!.hostname}. Detected: ${lease.details?.detectedProjectTypes?.join(", ")}`,
+				`[EnvironmentSovereignty] Industrial lease issued for ${details.hostname}. Detected: ${details.detectedProjectTypes?.join(", ")}`,
 			)
 		} else {
 			Logger.error(`[EnvironmentSovereignty] Lease REJECTED: ${lease.error}`)

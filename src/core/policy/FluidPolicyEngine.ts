@@ -461,7 +461,6 @@ export class FluidPolicyEngine {
 				const healing = await this.ensureScratchpadIntegrity("Metabolic Recovery")
 				scratchpadContent = healing.content
 				hasAudit = scratchpadContent.includes(SovereignProtocol.HEADERS.AUDIT)
-				scratchpadHealed = healing.created
 			}
 
 			// V28: Virtual Substrate Fallback (Search history if disk is empty)
