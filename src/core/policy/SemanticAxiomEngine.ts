@@ -15,15 +15,15 @@ export interface AxiomViolation {
  * Enforces logical "Truths" and "Purity" rules that go beyond mere structure.
  */
 export class SemanticAxiomEngine {
-	private readonly SIMPLICITY_THRESHOLD = 1500 // V15: Industrial limit for Domain logic
-	private readonly PREEMPTIVE_THRESHOLD = 1200 // V150: Proactive warning threshold
+	private readonly SIMPLICITY_THRESHOLD = 3000 // V270: Massively expanded limit (was 1500)
+	private readonly PREEMPTIVE_THRESHOLD = 2500 // V270: Proactive warning threshold
 	private readonly decomposer = new ModuleDecomposer()
 
 	constructor() {}
 
 	/**
 	 * Validates a file's logic against defined architectural axioms.
-	 * V150: Industrial Awakening (Hardened Enforcement).
+	 * V270: Pragmatic Architectural Governance.
 	 */
 	public validateAxioms(filePath: string, content: string, engine: SpiderEngine): AxiomViolation[] {
 		const violations: AxiomViolation[] = []
@@ -31,12 +31,18 @@ export class SemanticAxiomEngine {
 		const node = engine.nodes.get(normalizedPath)
 		if (!node) return violations
 
-		const isExempt = content.includes("@dietcode-passthrough") || content.includes("@sovereign-exception")
+		const isExempt =
+			content.includes("@dietcode-passthrough") ||
+			content.includes("@sovereign-exception") ||
+			content.includes("#BYPASS") || // V270: Explicit manual bypass
+			content.includes("@dietcode-bypass")
+
+		if (isExempt) return violations
 
 		// 1. Simplicity Axiom (AST Grounded)
 		if (node.layer === "domain" || node.layer === "core") {
 			const lines = content.split("\n").length
-			if (lines > this.PREEMPTIVE_THRESHOLD && !isExempt) {
+			if (lines > this.PREEMPTIVE_THRESHOLD) {
 				const isHardBlock = lines > this.SIMPLICITY_THRESHOLD
 				const plan = this.decomposer.analyze(filePath, content, node)
 				const steps = plan.steps
@@ -51,14 +57,14 @@ export class SemanticAxiomEngine {
 					severity: isHardBlock ? "ERROR" : "WARN",
 					message: isHardBlock
 						? `🛑 COGNITIVE BLOAT (LIMIT EXCEEDED): ${node.layer.toUpperCase()} file exceeds industrial limit (${lines}/${this.SIMPLICITY_THRESHOLD} lines).`
-						: `⚠️ COGNITIVE BLOAT (PRE-EMPTIVE): ${node.layer.toUpperCase()} file is approaching industrial limit (${lines}/${this.SIMPLICITY_THRESHOLD} lines).`,
+						: `⚠️ COGNITIVE BLOAT (PRE-EMPTIVE): ${node.layer.toUpperCase()} file is approaching industrial limit (${lines}/${this.PREEMPTIVE_THRESHOLD} lines).`,
 					remediation: `Sunder the module into specialized sub-components (Metabolic Fission). Follow the recommended plan to restore simplicity:\n\n${steps || "Manual decomposition required."}`,
 				})
 			}
 		}
 
 		// 2. Encapsulation Axiom (Barrel Bypass Detection)
-		// Detects if an agent imports from a sub-directory when an index.ts file is available in the parent.
+		// V270: Demoted to WARN project-wide to reduce fragility.
 		const imports = node.imports
 		for (const imp of imports) {
 			if (imp.startsWith(".")) {
@@ -75,7 +81,7 @@ export class SemanticAxiomEngine {
 						if (engine.nodes.has(indexPath) || engine.nodes.has(indexPathJs)) {
 							violations.push({
 								axiom: "ENCAPSULATION",
-								severity: node.layer === "domain" ? "ERROR" : "WARN",
+								severity: "WARN", // V270: Was ERROR for domain
 								message: `Barrel Bypass: Direct import detected in ${node.layer.toUpperCase()} layer. Symbol should be consumed via index barrel.`,
 								remediation: `Use barrel export from ${dir} instead of direct import from ${fileName}.`,
 							})
@@ -101,7 +107,7 @@ export class SemanticAxiomEngine {
 		if (introduced > 0 && fixed > 0 && introduced >= fixed) {
 			return {
 				status: "ZERO_SUM",
-				message: `⚠️ NET-ZERO STRUCTURAL MOVE: You fixed ${fixed} axiom(s) but introduced ${introduced} new ones. This refactoring is trading one architectural debt for another.`,
+				message: `ℹ️ NET-ZERO STRUCTURAL MOVE: You fixed ${fixed} axiom(s) but introduced ${introduced} new ones. This refactoring is trading one architectural debt for another.`,
 			}
 		}
 

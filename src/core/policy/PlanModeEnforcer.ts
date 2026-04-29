@@ -8,6 +8,7 @@
 import fs from "fs/promises"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
+import { IntegrityProtocol } from "./IntegrityProtocol"
 
 export interface PlanModeRequirements {
 	draftRequirements: boolean
@@ -51,7 +52,6 @@ export class PlanModeEnforcer {
 		const content = await this.readScratchpad()
 
 		if (!content || content.trim().length === 0) {
-			const { IntegrityProtocol } = await import("./IntegrityProtocol")
 			const template = IntegrityProtocol.generateAuditTemplate("Architectural Drafting")
 			return {
 				allowed: false,
@@ -68,38 +68,50 @@ export class PlanModeEnforcer {
 
 		// Check for Double Down Passes (at least 2 rounds of focused analysis)
 		const lines = content.split("\n")
-		const requirementAnalysis = lines.some((l) => l.includes("## Requirement Analysis") || l.includes("- Deep Dive"))
-		const architecturalAnalysis = lines.some((l) => l.includes("## The Architect") || l.includes("The Architect"))
-		const criticAnalysis = lines.some((l) => l.includes("## The Critic") || l.includes("The Critic"))
-		const sreAnalysis = lines.some((l) => l.includes("## The SRE") || l.includes("The SRE"))
+		const requirementAnalysis = lines.some(
+			(l) =>
+				l.includes("## Requirement Analysis") ||
+				l.includes("## Analysis") ||
+				l.includes("- Deep Dive") ||
+				l.includes("Objective:"),
+		)
+		const architecturalAnalysis = lines.some(
+			(l) => l.includes(IntegrityProtocol.HEADERS.ARCHITECT) || IntegrityProtocol.SEMANTIC_PATTERNS.ARCHITECT.test(l),
+		)
+		const criticAnalysis = lines.some(
+			(l) => l.includes(IntegrityProtocol.HEADERS.CRITIC) || IntegrityProtocol.SEMANTIC_PATTERNS.CRITIC.test(l),
+		)
+		const sreAnalysis = lines.some(
+			(l) => l.includes(IntegrityProtocol.HEADERS.SRE) || IntegrityProtocol.SEMANTIC_PATTERNS.SRE.test(l),
+		)
 
 		if (!requirementAnalysis || !architecturalAnalysis || !criticAnalysis || !sreAnalysis) {
 			return {
 				allowed: false,
 				reason:
 					`⚠️ STRATEGIC REVIEW INCOMPLETE\n\n` +
-					`Your scratchpad.md ${this.scratchpadPath} is missing required sections:\n` +
-					`- ✓ Requirement Analysis\n` +
-					`- ✓ The Architect review\n` +
-					`- ✓ The Critic review\n` +
-					`- ✓ The SRE review\n\n` +
-					`Complete all four sections before presenting a plan.`,
+					`Your scratchpad.md ${this.scratchpadPath} is missing required sections.\n` +
+					`Ensure you have: Requirement Analysis, ${IntegrityProtocol.HEADERS.ARCHITECT.replace(/^#+\s+/, "")}, ` +
+					`${IntegrityProtocol.HEADERS.CRITIC.replace(/^#+\s+/, "")}, and ${IntegrityProtocol.HEADERS.SRE.replace(/^#+\s+/, "")}.`,
 			}
 		}
 
+		// V240: Surgical Bypass
+		// If the plan is very short, don't block on the [x] markers if the text sections are already present.
+		const isSurgical = (content.match(/- \[ \]/g) || []).length <= 2
+
 		// Check for TRIAD AUDIT completion markers
-		const reviewers = content.includes("[ ] The Architect")
-		if (reviewers) {
+		const reviewers =
+			content.includes("[ ] " + IntegrityProtocol.HEADERS.ARCHITECT.replace(/^#+\s+/, "")) ||
+			(IntegrityProtocol.SEMANTIC_PATTERNS.ARCHITECT.test(content) && content.includes("[ ]"))
+
+		if (reviewers && !isSurgical) {
 			return {
 				allowed: false,
 				reason:
 					`⚠️ STABILITY GUARD NOT COMPLETED\n\n` +
 					`You must complete the STABILITY GUARD review before presenting a plan.\n` +
-					`Find the Required Reviewers section in your scratchpad.md and mark:\n` +
-					`- [x] The Architect\n` +
-					`- [x] The Critic\n` +
-					`- [x] The SRE\n\n` +
-					`Then you can call plan_mode_respond.`,
+					`Mark [x] for Architect, Critic, and SRE sections in your scratchpad.md.`,
 			}
 		}
 
@@ -135,10 +147,17 @@ export class PlanModeEnforcer {
 		return {
 			hasScratchpad: true,
 			Requirements: lines.some((l) => l.includes("## Requirement Analysis") || l.includes("Deep Dive")),
-			Architect: lines.some((l) => l.includes("## The Architect") || l.includes("The Architect")),
-			Critic: lines.some((l) => l.includes("## The Critic") || l.includes("The Critic")),
-			SRE: lines.some((l) => l.includes("## The SRE") || l.includes("The SRE")),
-			TRIADAudit: !content.includes("[ ] The Architect") && lines.length > 10,
+			Architect: lines.some(
+				(l) => l.includes(IntegrityProtocol.HEADERS.ARCHITECT) || IntegrityProtocol.SEMANTIC_PATTERNS.ARCHITECT.test(l),
+			),
+			Critic: lines.some(
+				(l) => l.includes(IntegrityProtocol.HEADERS.CRITIC) || IntegrityProtocol.SEMANTIC_PATTERNS.CRITIC.test(l),
+			),
+			SRE: lines.some((l) => l.includes(IntegrityProtocol.HEADERS.SRE) || IntegrityProtocol.SEMANTIC_PATTERNS.SRE.test(l)),
+			TRIADAudit:
+				!content.includes("[ ] " + IntegrityProtocol.HEADERS.ARCHITECT.replace(/^#+\s+/, "")) &&
+				!IntegrityProtocol.SEMANTIC_PATTERNS.ARCHITECT.test(content) &&
+				lines.length > 10,
 		}
 	}
 
@@ -183,9 +202,9 @@ export class PlanModeEnforcer {
 
 		const missing = []
 		if (!status.Requirements) missing.push("Requirement Analysis")
-		if (!status.Architect) missing.push("The Architect review")
-		if (!status.Critic) missing.push("The Critic review")
-		if (!status.SRE) missing.push("The SRE review")
+		if (!status.Architect) missing.push(IntegrityProtocol.HEADERS.ARCHITECT.replace(/^#+\s+/, "") + " review")
+		if (!status.Critic) missing.push(IntegrityProtocol.HEADERS.CRITIC.replace(/^#+\s+/, "") + " review")
+		if (!status.SRE) missing.push(IntegrityProtocol.HEADERS.SRE.replace(/^#+\s+/, "") + " review")
 		if (!status.TRIADAudit) missing.push("STABILITY GUARD ([x] marks)")
 
 		if (missing.length === 0) {

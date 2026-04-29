@@ -339,31 +339,35 @@ export class MetricsEngine {
 		const cycleHashes = new Set<string>()
 
 		const dfs = (nodeId: string) => {
+			const node = nodes.get(nodeId)
+			// V270: Exclude interface-only nodes from runtime cycle detection.
+			// Structural loops between interfaces are harmless and should not block progress.
+			if (!node || node.isInterface) {
+				visited.add(nodeId)
+				return
+			}
+
 			visited.add(nodeId)
 			visiting.add(nodeId)
 			stack.push(nodeId)
 
-			const node = nodes.get(nodeId)
-			if (node) {
-				const imports = node.imports || []
-				for (const imp of imports) {
-					const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds)
-					if (!targetId || !nodes.has(targetId)) continue
+			const imports = node.imports || []
+			for (const imp of imports) {
+				const targetId = this.resolver.resolveImportToNodeId(nodeId, imp, nodeIds)
+				if (!targetId || !nodes.has(targetId)) continue
 
-					if (visiting.has(targetId)) {
-						const cycleStart = stack.indexOf(targetId)
-						const cycleNodes = stack.slice(cycleStart)
+				if (visiting.has(targetId)) {
+					const cycleStart = stack.indexOf(targetId)
+					const cycleNodes = stack.slice(cycleStart)
 
-						// V215: Canonical Cycle Hashing (Deduplication)
-						// Sort nodes alphabetically to create a deterministic signature for the cycle
-						const hash = [...cycleNodes].sort().join("|")
-						if (!cycleHashes.has(hash)) {
-							cycleHashes.add(hash)
-							cycles.push(cycleNodes)
-						}
-					} else if (!visited.has(targetId)) {
-						dfs(targetId)
+					// V215: Canonical Cycle Hashing (Deduplication)
+					const hash = [...cycleNodes].sort().join("|")
+					if (!cycleHashes.has(hash)) {
+						cycleHashes.add(hash)
+						cycles.push(cycleNodes)
 					}
+				} else if (!visited.has(targetId)) {
+					dfs(targetId)
 				}
 			}
 			visiting.delete(nodeId)

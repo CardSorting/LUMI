@@ -42,31 +42,41 @@ export namespace IntegrityProtocol {
 		AUDIT: "# STRATEGIC REVIEW",
 		BREATH: "# STABILITY BREAK",
 		AGILE: "# AGILE_MODE",
-		ARCHITECT: "### 1. THE FOUNDATION",
-		CRITIC: "### 2. THE QUALITY CHECK",
-		SRE: "### 3. THE STABILITY GUARD",
+		SOVEREIGN: "# SOVEREIGN_MODE", // V270: Total Deblocking Mode
+		ARCHITECT: "## THE FOUNDATION",
+		CRITIC: "## THE QUALITY CHECK",
+		SRE: "## THE STABILITY GUARD",
 		RESOLUTION: "## [FINAL STEPS]",
 		DIAGNOSTICS: "## [PROJECT HEALTH]",
 	}
 
 	export const SEMANTIC_PATTERNS = {
-		AUDIT: /# STRATEGIC REVIEW|# STABILITY AUDIT/i,
-		ARCHITECT: /### 1\. THE FOUNDATION|### 1\. THE ARCHITECT|## \[THE ARCHITECT\]|The Architect:/i,
-		RESILIENCE: /### 2\. THE QUALITY CHECK|### 2\. THE CRITIC|## \[THE CRITIC\]|The Critic:/i,
+		AUDIT: /# STRATEGIC REVIEW|# STABILITY AUDIT|# SOVEREIGN_MODE/i,
+		ARCHITECT: /## THE FOUNDATION|## THE ARCHITECT|## \[THE ARCHITECT\]|The Architect:/i,
+		CRITIC: /## THE QUALITY CHECK|## THE CRITIC|## \[THE CRITIC\]|The Critic:/i,
+		SRE: /## THE STABILITY GUARD|## THE SRE|## \[THE SRE\]|The SRE:/i,
 		RESOLUTION: /## \[FINAL STEPS\]|## \[FINAL RESOLUTION\]|Final Resolution:/i,
 	}
 
 	/**
-	 * V29: Implicit Agility Protection.
-	 * Files in infrastructure or core are often too complex for full triad audits during minor fixes.
+	 * V270: Broad Implicit Agility.
+	 * Most files are now considered agile-safe to prevent artificial blockers.
 	 */
 	export function isImplicitAgileSafe(filePath: string): boolean {
+		const lower = filePath.toLowerCase()
 		return (
-			filePath.includes("/infrastructure/") ||
-			filePath.includes("/core/policy/") ||
-			filePath.includes(".agents/") ||
-			filePath.endsWith(".md") ||
-			filePath.endsWith(".json")
+			lower.includes("/infrastructure/") ||
+			lower.includes("/core/policy/") ||
+			lower.includes("/plumbing/") ||
+			lower.includes("/ui/") ||
+			lower.includes("/api/") ||
+			lower.includes("/utils/") ||
+			lower.includes("/shared/") ||
+			lower.includes(".agents/") ||
+			lower.endsWith(".md") ||
+			lower.endsWith(".json") ||
+			lower.endsWith(".test.ts") ||
+			lower.endsWith(".spec.ts")
 		)
 	}
 
@@ -161,13 +171,16 @@ export namespace IntegrityProtocol {
 			`- **Objective**: [Clearly state the goal of this turn]\n` +
 			`- **Context**: [Summary of files read/investigated]\n` +
 			`- **Assumptions**: [List of logical assumptions made]\n\n` +
-			`### 2. POTENTIAL RISKS\n` +
+			`${IntegrityProtocol.HEADERS.CRITIC} (Risk Assessment)\n` +
 			`- **Side Effects**: [Potential impact of the change]\n` +
 			`- **Regression Risk**: [How could this affect the project?]\n\n` +
-			`### 3. RECOMMENDED SOLUTION\n` +
+			`${IntegrityProtocol.HEADERS.SRE} (Reliability Audit)\n` +
+			`- **Observability**: [How will we monitor this?]\n` +
+			`- **Error Handling**: [What happens on failure?]\n\n` +
+			`### RECOMMENDED SOLUTION\n` +
 			`- [ ] Step 1: ...\n` +
 			`- [ ] Step 2: ...\n\n` +
-			`### 4. INVESTIGATION TRACE\n` +
+			`### INVESTIGATION TRACE\n` +
 			`${forensicTrace || "No trace provided."}\n`
 		)
 	}

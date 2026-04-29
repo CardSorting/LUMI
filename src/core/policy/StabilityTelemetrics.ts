@@ -26,7 +26,7 @@ export class StabilityTelemetrics {
 	public getSystemDiagnostics(lastEntropyScore: number): string {
 		const violations = this.spiderEngine.getViolations()
 		const stats = this.stabilityMonitor.getStabilityStats()
-		const buildHealth = this.computeBuildHealth(violations.map((v) => v.message))
+		const buildHealth = this.computeBuildHealth(violations)
 		const currentEntropy = this.spiderEngine.computeEntropy()
 
 		return IntegrityProtocol.generateAuditTemplate("System Recovery", {
@@ -46,8 +46,44 @@ export class StabilityTelemetrics {
 			neuralFocus: this.getNeuralFocus(),
 			aestheticResilience: stats.aestheticResilience,
 			recoveryHint: this.getRecoveryHint(this.getStabilityPulse()),
+			// V230: Forensic Prophecy Integration
+			suggestedRepairs: this.getHazardAnalysis(),
 			...this.getStructuralForensics(),
 		})
+	}
+
+	/**
+	 * V230: Performs a multivariate hazard analysis to identify imminent structural risks.
+	 */
+	private getHazardAnalysis(): string[] {
+		const nodes = Array.from(this.spiderEngine.nodes.values())
+		const repairs: string[] = []
+
+		// 1. Identify High-Hazard Nodes
+		const highHazard = nodes
+			.filter((n) => n.hazardScore > 0.6)
+			.sort((a, b) => b.hazardScore - a.hazardScore)
+			.slice(0, 3)
+
+		for (const node of highHazard) {
+			repairs.push(
+				`High Hazard [Score: ${SafeNumber.format(node.hazardScore, 2)}] in ${path.basename(node.path)}. Potential structural drift or statistical outlier.`,
+			)
+		}
+
+		// 2. Identify High-Blast Radius Fragility
+		const fragile = nodes
+			.filter((n) => n.isFragile && n.blastRadius > 0.7)
+			.sort((a, b) => b.blastRadius - a.blastRadius)
+			.slice(0, 2)
+
+		for (const node of fragile) {
+			repairs.push(
+				`Critical Fragility [Radius: ${SafeNumber.format(node.blastRadius, 2)}] in ${path.basename(node.path)}. Decompose to reduce ripple probability.`,
+			)
+		}
+
+		return repairs
 	}
 
 	/**
@@ -139,44 +175,144 @@ export class StabilityTelemetrics {
 
 	/**
 	 * Computes the build health score (0-100).
-	 * V189: Hardened with Dynamic Scale Normalization.
+	 * V250: Surgical Local Isolation - Eliminating Global Noise.
 	 */
-	public computeBuildHealth(violations: string[]): number {
+	public computeBuildHealth(violations: any[], focusPath?: string): number {
 		if (violations.length === 0) return 100
 
 		const nodeCount = this.spiderEngine.nodes.size || 1
-		// Large projects (1000+ nodes) have more surface area for warnings.
-		// Scale factor reduces penalty intensity proportional to project scale.
-		const scaleFactor = Math.max(0.2, 1.0 / (Math.log10(Math.max(10, nodeCount)) / 1.5))
+		// Large projects have more surface area; scale factor reduces global penalty intensity.
+		const scaleFactor = Math.max(0.05, 1.0 / (Math.log10(Math.max(10, nodeCount)) / 1.1))
 
-		let totalPenalty = 0
+		let localPenalty = 0
+		let globalPenalty = 0
+
+		// Distance Cache to avoid repeated BFS for the same focusPath
+		const distanceMap = new Map<string, number>()
+		if (focusPath && this.spiderEngine.nodes.has(focusPath)) {
+			this.calculateGraphDistances(focusPath, distanceMap)
+		}
+
 		for (const violation of violations) {
-			if (violation.includes("Circular Dependency")) {
-				totalPenalty += 30 * scaleFactor
-			} else if (violation.includes("[ERROR]") || violation.includes("Build Error")) {
-				totalPenalty += 20 * scaleFactor
-			} else if (violation.includes("Geographic Misalignment") || violation.includes("Layer violation")) {
-				totalPenalty += 15 * scaleFactor
-			} else if (
-				violation.includes("[WARN]") ||
-				violation.includes("Linter Warning") ||
-				violation.includes("Ghost import")
-			) {
-				totalPenalty += 5 * scaleFactor
+			const vPath = violation.path
+			let weight = 0.001 // V250: Global noise floor reduced (was 0.01)
+			let isLocal = false
+
+			if (focusPath && vPath === focusPath) {
+				weight = 1.0 // Direct impact
+				isLocal = true
+			} else if (vPath === "PROJECT_ROOT" || vPath === "SUBSTRATE") {
+				weight = 0.3 // V250: Reduced foundational weight (was 0.5)
+				isLocal = true
+			} else if (focusPath) {
+				const distance = distanceMap.get(vPath) ?? 10 // Default to distant
+				if (distance === 1) {
+					weight = 0.75
+					isLocal = true
+				} else if (distance === 2) {
+					weight = 0.4
+					isLocal = true
+				} // V250: Reduced transitive weight
+				else if (distance === 3) {
+					weight = 0.1
+				} else if (path.dirname(vPath) === path.dirname(focusPath)) {
+					weight = 0.1
+					isLocal = true
+				}
+			}
+
+			const msg = violation.message || ""
+			let penalty = 0
+
+			// Semantic Penalty Mapping (Industrial Standards)
+			if (msg.includes("CIRCULAR DEPENDENCY") || violation.id === "SPI-201") {
+				penalty = 40
+			} else if (msg.includes("AXIOMATIC VIOLATION") || violation.id === "SPI-206") {
+				penalty = 35
+			} else if (msg.includes("STRUCTURAL LOAD") || violation.id === "SPI-203") {
+				penalty = 30
+			} else if (violation.severity === "ERROR") {
+				penalty = 20
+			} else if (msg.includes("SYSTEMIC RISK") || violation.id === "SPI-202") {
+				penalty = 15
+			} else if (violation.severity === "WARN") {
+				penalty = 5
 			} else {
-				totalPenalty += 1 * scaleFactor
+				penalty = 2
+			}
+
+			// V230: Forensic Amplification (Only for local or foundational nodes)
+			if (isLocal) {
+				const node = this.spiderEngine.nodes.get(vPath)
+				if (node) {
+					if (node.hazardScore > 0.5) penalty *= 1 + node.hazardScore
+					if (node.blastRadius > 0.7) penalty *= 1.2
+					if (node.isHotspot) penalty *= 1.1
+				}
+				localPenalty += penalty * weight * scaleFactor
+			} else {
+				globalPenalty += penalty * weight * scaleFactor
 			}
 		}
 
+		// V250: Global Amnesty Cap
+		// When focused on a file, we cap the penalty from unrelated parts of the project to 5 points.
+		// This prevents distant lint errors from blocking progress on a healthy module.
+		const effectiveGlobalPenalty = focusPath ? Math.min(5, globalPenalty) : globalPenalty
+		let totalPenalty = localPenalty + effectiveGlobalPenalty
+
+		// V250: High-Velocity Amnesty
+		// If the project is verifiably recovering, cut penalties in half to encourage completion.
+		if (this.spiderEngine.isRecovering) {
+			totalPenalty *= 0.5
+		}
+
 		const base = 100
-		const penalty = Math.min(95, totalPenalty)
-		const score = Math.max(5, base - penalty)
+		// High Velocity Buffer: Minor issues should not block progress
+		const finalPenalty = totalPenalty < 2.0 ? totalPenalty * 0.3 : totalPenalty
+		const score = Math.max(5, Math.round(base - Math.min(95, finalPenalty)))
 
-		const isRecovering = score > this.lastBuildHealth
 		this.lastBuildHealth = score
-		this.spiderEngine.isRecovering = isRecovering
-
 		return score
+	}
+
+	/**
+	 * V230: Calculates shortest path distance in the dependency graph using BFS.
+	 * Uses resolved Node IDs from consumptions (outgoing) and dependents (incoming).
+	 */
+	private calculateGraphDistances(startPath: string, distanceMap: Map<string, number>): void {
+		const queue: [string, number][] = [[startPath, 0]]
+		distanceMap.set(startPath, 0)
+		const visited = new Set<string>([startPath])
+
+		let iterations = 0
+		const MAX_ITERATIONS = 1000 // Industrial Breadth
+
+		while (queue.length > 0 && iterations < MAX_ITERATIONS) {
+			const [current, dist] = queue.shift()!
+			iterations++
+
+			if (dist >= 3) continue // Only care about local neighborhood
+
+			const node = this.spiderEngine.nodes.get(current)
+			if (!node) continue
+
+			// V230: High-Precision Neighbor Detection
+			// 1. Outgoing dependencies (files this node imports)
+			const outgoing = Object.keys(node.consumptions || {})
+			// 2. Incoming dependencies (files that import this node)
+			const incoming = node.dependents || []
+
+			const neighbors = new Set([...outgoing, ...incoming])
+
+			for (const neighborId of neighbors) {
+				if (!visited.has(neighborId)) {
+					visited.add(neighborId)
+					distanceMap.set(neighborId, dist + 1)
+					queue.push([neighborId, dist + 1])
+				}
+			}
+		}
 	}
 
 	/**
@@ -190,7 +326,7 @@ export class StabilityTelemetrics {
 		return {
 			pressure: this.stabilityMonitor.getPressure(normPath),
 			resonance: this.stabilityMonitor.getVelocityDamping(),
-			health: this.computeBuildHealth(currentViolations.map((v) => v.message)),
+			health: this.computeBuildHealth(currentViolations, normPath),
 			vitalityPulse: this.getStabilityPulse(),
 			tokens,
 			layer,
@@ -206,7 +342,7 @@ export class StabilityTelemetrics {
 
 		return {
 			timestamp: Date.now(),
-			health: this.computeBuildHealth(violations.map((v) => v.message)),
+			health: this.computeBuildHealth(violations),
 			pulse: this.getStabilityPulse(),
 			entropy: this.spiderEngine.computeEntropy(),
 			merkle: this.spiderEngine.computeMerkleRoot(),

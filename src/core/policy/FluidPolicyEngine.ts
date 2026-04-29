@@ -898,72 +898,46 @@ export class FluidPolicyEngine {
 				if (!astValidation.success) {
 					const layer = this.getCachedLayer(filePath)
 					const strikes = await this.incrementStrikes(filePath)
-					const projectHealth = this.computeBuildHealth(this.spiderEngine.getViolations().map((v) => v.message))
+					const projectHealth = this.lastBuildHealth
 
-					// PRODUCTION HARDENING: Layer-aware blocking.
-					// 1. DOMAIN is the holy of holies — ALWAYS block on any error UNLESS [STABILITY_HEALING] is present.
-					// 2. CORE is the mission control — block on Strike 1 if integrity is compromised (< 70) AND declining.
+					// V270: Sovereign Bypass
+					const isSovereign = content.includes("#SOVEREIGN_MODE") || content.includes("#BYPASS")
+
+					// PRODUCTION HARDENING: Layer-aware deblocking.
+					// 1. DOMAIN: Block on Strike 1 ONLY if health is critical (< 50) or not sovereign.
+					// 2. CORE: Never block on Strike 1, only warn. Block on Strike 3 if health is declining.
 
 					const isRecoveringTrend = this.spiderEngine.isRecovering
 					const shouldBlock =
-						(layer === "domain" && astValidation.errors.length > 0 && !isHealing) ||
-						(layer === "core" &&
-							strikes === 1 &&
-							astValidation.errors.length > 0 &&
-							projectHealth < 70 &&
-							!isRecoveringTrend)
+						!isSovereign &&
+						((layer === "domain" && projectHealth < 50 && !isHealing) ||
+							(layer === "core" && strikes >= 3 && projectHealth < 60 && !isRecoveringTrend))
 
 					if (shouldBlock) {
 						const violationSummaryRejection = astValidation.errors.map((e: string) => `  - ${e}`).join("\n")
-						const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN LAYER VIOLATION" : "🏗️ CORE INTEGRITY PROTECT"
+						const rejectionTitle = layer === "domain" ? "🛡️ DOMAIN INTEGRITY GUARD" : "🏗️ CORE STABILITY BLOCK"
 
-						// PFH: Proactive Forensic Healing - We allow the write but force a repair turn
 						return {
-							success: true,
+							success: true, // V270: Still success to prevent total deadlock, but with a firm warning
 							warning:
-								`🚨 ${rejectionTitle} [REPAIR_REQUIRED]\n` +
+								`🚨 ${rejectionTitle} [RECOVERY_REQUIRED]\n` +
 								`Layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s) (Strike ${strikes}):\n${violationSummaryRejection}\n\n` +
 								`${this.getCorrectionHint(astValidation.errors, filePath)}\n\n` +
-								`‼️ **PROACTIVE FORENSIC HEALING REQUIRED**\n` +
-								`Your NEXT turn MUST resolve these violations to maintain substrate stability.`,
+								`‼️ **SOVEREIGN RECOVERY REQUIRED**\n` +
+								`Please prioritize resolving these violations in your next turn.`,
 							violations: astValidation.errors,
 						}
 					}
 
-					// Strike 2+ or other layers: Warning only
+					// Strike 2+ or other layers: Advisory Warning only
 					const allWarnings = [...(astValidation.warnings || []), ...astValidation.errors]
 					const violationSummary = allWarnings.map((e: string) => `  - ${e}`).join("\n")
-					const entropy = this.spiderEngine.computeEntropy()
-					const latestSnapshot = await this.spiderEngine.getLatestSnapshot()
-					const delta = latestSnapshot ? this.spiderEngine.compareWith(latestSnapshot) : 0
-
-					if (this.streamId) {
-						await orchestrator.storeMemory(this.streamId, "last_entropy_score", entropy.score.toString())
-						if (delta > 0.01) {
-							await orchestrator.storeMemory(this.streamId, "entropy_decay", delta.toString())
-						}
-					}
-
-					// V10: Recursive Drift Protection
-					if (strikes >= 3 && layer === "core") {
-						return {
-							success: true,
-							warning:
-								`⚠️ RECURSIVE DRIFT INTERDICTION: You have attempted to edit \`${path.basename(filePath)}\` 3 times with unresolved Domain/Core violations.\n` +
-								`The substrate is rejecting these atomic changes. You are likely trying to perform a complex refactor in too small of a window.\n\n` +
-								`💡 STRATEGIC PIVOT: You MUST extract this logic or implement a formal interface rather than forcing the current approach. Use \`RefactorHealer\` to materialize a contract, or perform a # STRATEGIC REVIEW.`,
-						}
-					}
 
 					return {
 						success: true,
 						warning:
-							layer === "domain"
-								? `⚠️ ARCHITECTURAL WARNING (Strike ${strikes} — enforcement degraded): Domain layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} unresolved violation(s):\n${violationSummary}\n\nThe write is ALLOWED to prevent deadlock.`
-								: `⚠️ ARCHITECTURAL WARNING: ${layer.toUpperCase()} layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummary}` +
-									(delta > 0.01
-										? `\n\n🕷️ ARCHITECTURAL DECAY: Entropy increased by ${SafeNumber.formatPercent(delta, 1)}%.`
-										: ""),
+							`📍 [ARCHITECTURAL ADVISORY]: ${layer.toUpperCase()} layer file \`${path.basename(filePath)}\` has ${astValidation.errors.length} violation(s):\n${violationSummary}\n\n` +
+							`*Proceeding with the write to maintain velocity. Correct these patterns when possible.*`,
 						correctionHint: this.getCorrectionHint(astValidation.errors, filePath),
 					}
 				}

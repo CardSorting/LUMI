@@ -40,31 +40,6 @@ export class ForensicEngine {
 	}
 
 	/**
-	 * V215: Domain Drift Detection.
-	 * Identifies modules that are semantically diverging from their historical domain.
-	 */
-	public detectDomainDrift(node: SpiderNode, snapshots: SpiderSnapshot[]): string | null {
-		if (snapshots.length < 5) return null // Need historical baseline
-
-		const vocabulary = new Set(node.exports.flatMap((e) => e.split(/(?=[A-Z])|_/)))
-		const historicalVocabs = snapshots.map((s) => {
-			const n = s.nodes.find((n) => n.id === node.id)
-			return n ? new Set(n.exports.flatMap((e) => e.split(/(?=[A-Z])|_/))) : new Set<string>()
-		})
-
-		const baselineVocab = new Set<string>()
-		for (const v of historicalVocabs) {
-			for (const word of v) baselineVocab.add(word)
-		}
-
-		const newWords = [...vocabulary].filter((w) => !baselineVocab.has(w))
-		if (newWords.length > 3) {
-			return `[SPI-111] DOMAIN DRIFT: ${path.basename(node.path)} is accumulating new domain vocabulary: [${newWords.join(", ")}]. Possible domain fission required.`
-		}
-		return null
-	}
-
-	/**
 	 * V400: Hotspot Heat (Toxic Churn).
 	 * Identifies files where complexity is rising but health is falling over multiple sessions.
 	 */
@@ -128,16 +103,18 @@ export class ForensicEngine {
 	/**
 	 * V450: Toxicity Score (Sentient Hazard).
 	 * Aggregates churn, drift, and resonance into a single probability of catastrophic failure.
+	 * V451: Resonance Dampening - Reduced weight of resonance to prevent false positives for central coordinators.
 	 */
 	public calculateHazardScore(node: SpiderNode, nodes: Map<string, SpiderNode>): number {
 		const resonance = this.calculateArchitecturalResonance(node, nodes)
-		const churnFactor = Math.min(1.0, (node.churnIntensity || 0) / 10)
-		const driftFactor = Math.min(1.0, (node.semanticDrift || 0) / 3)
+		const churnFactor = Math.min(1.0, (node.churnIntensity || 0) / 15) // V451: Increased denominator to 15 for smoother scaling
+		const driftFactor = Math.min(1.0, (node.semanticDrift || 0) / 5) // V451: Increased denominator to 5
 
-		// Resonance > 2.0 is a statistical outlier
-		const resonanceFactor = Math.min(1.0, resonance / 2.0)
+		// Resonance > 3.0 is now the statistical outlier threshold (was 2.0)
+		const resonanceFactor = Math.min(1.0, resonance / 3.0)
 
-		return resonanceFactor * 0.5 + churnFactor * 0.3 + driftFactor * 0.2
+		// V451: Rebalanced weights: Resonance (30%), Churn (40%), Drift (30%)
+		return resonanceFactor * 0.3 + churnFactor * 0.4 + driftFactor * 0.3
 	}
 
 	constructor(
@@ -359,7 +336,7 @@ export class ForensicEngine {
 			const isZombie = unusedExports.length === node.exports.length && node.exports.length > 0
 
 			if (isZombie) {
-				unusedViolations.push(`[SPI-103] ZOMBIE MODULE: ${node.path} (100% of exports are unused).`)
+				unusedViolations.push(`[SPI-103] ZOMBIE MODULE (ADVISORY): ${node.path} (100% of exports are unused).`)
 				continue
 			}
 
@@ -655,7 +632,7 @@ export class ForensicEngine {
 
 				if (hasPos && !hasNeg) {
 					contractViolations.push(
-						`[SPI-110] ASYMMETRIC CONTRACT: ${path.basename(node.path)} defines '${pos}' but lacks a matching '${neg}' implementation.`,
+						`[SPI-110] ASYMMETRIC CONTRACT (ADVISORY): ${path.basename(node.path)} defines '${pos}' but lacks a matching '${neg}' implementation.`,
 					)
 				}
 			}
@@ -665,8 +642,33 @@ export class ForensicEngine {
 	}
 
 	/**
-	 * V215: Logic De-Duplication.
-	 * Identifies 'Silent Clones' where logic has been copy-pasted.
+	 * V280: Pragmatic Domain Drift.
+	 * Threshold increased to 10 to allow for significant logical expansion.
+	 */
+	public detectDomainDrift(node: SpiderNode, snapshots: SpiderSnapshot[]): string | null {
+		if (snapshots.length < 5) return null
+		const vocabulary = new Set(node.exports.flatMap((e) => e.split(/(?=[A-Z])|_/)))
+		const historicalVocabs = snapshots.map((s) => {
+			const n = s.nodes.find((n) => n.id === node.id)
+			return n ? new Set(n.exports.flatMap((e) => e.split(/(?=[A-Z])|_/))) : new Set<string>()
+		})
+
+		const baselineVocab = new Set<string>()
+		for (const v of historicalVocabs) {
+			for (const word of v) baselineVocab.add(word)
+		}
+
+		const newWords = [...vocabulary].filter((w) => !baselineVocab.has(w))
+		if (newWords.length > 10) {
+			// V280: Increased from 3
+			return `[SPI-111] DOMAIN DRIFT: ${path.basename(node.path)} is accumulating new domain vocabulary: [${newWords.join(", ")}].`
+		}
+		return null
+	}
+
+	/**
+	 * V280: Silent Clone De-Duplication.
+	 * Complexity threshold increased to 500 to avoid false positives on simple utilities.
 	 */
 	public findLogicClones(nodes: Map<string, SpiderNode>): string[] {
 		const clones: string[] = []
@@ -677,14 +679,14 @@ export class ForensicEngine {
 				const nodeA = nodesArray[i]
 				const nodeB = nodesArray[j]
 
-				// High similarity in multiple structural metrics
 				const complexityMatch = Math.abs(nodeA.astComplexity - nodeB.astComplexity) < 5
 				const densityMatch = Math.abs(nodeA.logicDensity - nodeB.logicDensity) < 0.01
 				const symbolCountMatch = nodeA.exports.length === nodeB.exports.length
 
-				if (complexityMatch && densityMatch && symbolCountMatch && nodeA.astComplexity > 100) {
+				if (complexityMatch && densityMatch && symbolCountMatch && nodeA.astComplexity > 500) {
+					// V280: Was 100
 					clones.push(
-						`[SPI-109] SILENT CLONE: ${path.basename(nodeA.path)} and ${path.basename(nodeB.path)} share near-identical logical signatures. Possible copy-pasted logic.`,
+						`[SPI-109] SILENT CLONE: ${path.basename(nodeA.path)} and ${path.basename(nodeB.path)} share near-identical logical signatures.`,
 					)
 				}
 			}

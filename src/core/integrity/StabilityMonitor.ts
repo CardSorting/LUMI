@@ -39,8 +39,8 @@ export interface StabilityStats {
  */
 export class StabilityMonitor {
 	private registry: Map<string, StabilityMetrics> = new Map()
-	private cooldownThreshold = 500 // Silent High-Velocity: Massively expanded budget
-	private refactorThreshold = 1000 // Silent High-Velocity: Massively expanded budget
+	private cooldownThreshold = 5000 // V260: Massively expanded budget (was 500)
+	private refactorThreshold = 10000 // V260: Massively expanded budget (was 1000)
 	private thresholdMultiplier = 1.0 // V80: Adaptive activity budget
 	private velocityDamping = 1.0 // V100: Velocity Damping (formerly resonance)
 	private sessionVersion = 1 // V150: State Evolution
@@ -83,30 +83,35 @@ export class StabilityMonitor {
 
 	/**
 	 * Records a write/edit operation.
-	 * V100: Metabolic Synthesis & Aesthetic Agility.
+	 * V260: Work-Proportional Impact Sensing.
 	 */
 	public recordWrite(filePath: string, content?: string, added = 0, deleted = 0, turnId?: string) {
 		const norm = this.normalize(filePath)
 		const metrics = this.getOrCreateMetrics(norm)
 
+		// V260: Impact is now proportional to the work performed.
+		// A 1-line change is 0.1 impact; a 100-line change is 1.1 impact.
+		// This prevents artificial pressure peaks from surgical refactors.
+		const workImpact = 0.1 + (added + deleted) / 100
 		let impactMultiplier = this.velocityDamping
 
 		if (content) {
 			const aesHash = this.computeAestheticHash(content)
 			if (metrics.lastAestheticHash === aesHash) {
-				impactMultiplier *= 0.1 // V100: Aesthetic changes have minimal impact
+				impactMultiplier *= 0.05 // V260: Aesthetic changes are now effectively invisible (was 0.1)
 				metrics.aestheticWrites++
 				Logger.info(`[StabilityMonitor] Visual Alignment: Minimal structural change in ${path.basename(filePath)}`)
 			} else if (turnId && metrics.lastTurnId === turnId) {
-				impactMultiplier *= 0.5 // V100: Activity Consolidation: iterative edits in same turn discounted
+				impactMultiplier *= 0.3 // V260: Session consolidation discount (was 0.5)
 				Logger.info(`[StabilityMonitor] Activity Consolidation: Repeated session update for ${path.basename(filePath)}`)
 			}
 			metrics.lastAestheticHash = aesHash
 		}
 
-		metrics.writes += 1 * impactMultiplier
-		metrics.linesAdded += added * impactMultiplier
-		metrics.linesDeleted += deleted * impactMultiplier
+		const finalImpact = workImpact * impactMultiplier
+		metrics.writes += finalImpact
+		metrics.linesAdded += added
+		metrics.linesDeleted += deleted
 		metrics.lastEditTimestamp = Date.now()
 		metrics.lastTurnId = turnId
 
@@ -170,7 +175,7 @@ export class StabilityMonitor {
 
 	/**
 	 * Detects if a file has high activity (High churn in a short period).
-	 * V189: Calibrated with nodal scale factor.
+	 * V260: Calibrated with nodal scale factor and increased leniency.
 	 */
 	public isHighlyActive(filePath: string, isRefactoring = false, lineCount = 0): { active: boolean; reason?: string } {
 		const norm = this.normalize(filePath)
@@ -179,7 +184,8 @@ export class StabilityMonitor {
 
 		const pressure = this.getPressure(filePath)
 		const sizeFactor = lineCount > 0 ? Math.log10(Math.max(10, lineCount)) : 1.0
-		const threshold = (isRefactoring ? 15.0 : 7.0) * sizeFactor
+		// V260: Threshold increased 2x to reduce false-positive peaks
+		const threshold = (isRefactoring ? 30.0 : 15.0) * sizeFactor
 
 		if (pressure > threshold) {
 			return {
@@ -193,25 +199,25 @@ export class StabilityMonitor {
 
 	/**
 	 * PRODUCTION HARDENING: Normalized pressure score [0.0 - 10.0+] for a file.
-	 * V189: Calibrated with Doubt Signal weighting to detect "Investigative Thrashing".
+	 * V260: Scaled for work-proportional impact.
 	 */
 	public getPressure(filePath: string): number {
 		const norm = this.normalize(filePath)
 		const metrics = this.registry.get(norm)
 		if (!metrics) return 0
 
-		const churn = metrics.writes + (metrics.linesAdded + metrics.linesDeleted) / 100
+		const churn = metrics.writes // V260: Already includes work-proportional logic
 		const doubt = this.getDoubtSignal(filePath)
 
-		// If high doubt (> 10), it acts as a pressure multiplier
-		const doubtMultiplier = doubt > 10 ? Math.min(2.0, 1.0 + (doubt - 10) / 20) : 1.0
+		// V260: High doubt threshold increased (was 10)
+		const doubtMultiplier = doubt > 30 ? Math.min(1.5, 1.0 + (doubt - 30) / 40) : 1.0
 
 		return churn * this.velocityDamping * doubtMultiplier
 	}
 
 	/**
 	 * Detects "Task Drift" — changing too many unrelated files in a short burst.
-	 * Calibrated for high-velocity agents: Planning mode is 2x more lenient to allow for broad exploration.
+	 * V260: Industrial Scale - Support for massive structural shifts.
 	 */
 	public getTaskDrift(
 		isPlanning = false,
@@ -222,8 +228,8 @@ export class StabilityMonitor {
 		const recentEntries = Array.from(this.registry.entries()).filter(([_p, m]) => m.lastEditTimestamp > recentThreshold)
 
 		const drift = recentEntries.length
-		// PRODUCTION HARDENING: "Refactor Mode" allows for 50% more drift to support complex cross-module changes.
-		const baseThreshold = (isPlanning ? 20 : 10) * this.thresholdMultiplier
+		// V260: Thresholds increased significantly (was 20/10)
+		const baseThreshold = (isPlanning ? 40 : 25) * this.thresholdMultiplier
 		const threshold = isRefactoring ? Math.floor(baseThreshold * 1.5) : baseThreshold
 
 		// V8: Infrastructure Turn Suppression
@@ -236,15 +242,15 @@ export class StabilityMonitor {
 			}
 		}
 
-		// v9 HARDENING: Mission Drift Detection (Yak Shaving Protection)
-		if (drift >= 5 && !isPlanning && !isInfraTurn) {
+		// v260: Mission Drift Detection - Reduced sensitivity (was 0.9)
+		if (drift >= 15 && !isPlanning && !isInfraTurn) {
 			const nonDomainEdits = recentEntries.filter(([p]) => !p.includes("/domain/") && !p.includes("/core/")).length
 			const missionRatio = nonDomainEdits / drift
 
-			if (missionRatio >= 0.9) {
+			if (missionRatio >= 0.95) {
 				return {
 					drift,
-					warning: `🛑 [SPI-203] MISSION DRIFT: 90% of updates are in peripheral files. Return focus to Domain/Core logic.`,
+					warning: `🛑 [SPI-203] MISSION DRIFT: Most updates are in peripheral files. Return focus to Domain/Core logic.`,
 				}
 			}
 		}

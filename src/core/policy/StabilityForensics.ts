@@ -145,6 +145,17 @@ export class StabilityForensics {
 	}
 
 	/**
+	 * V235: Multivariate Hazard Sensing.
+	 * Returns the hazard score for a specific file from the structural substrate.
+	 */
+	public getHazardLevel(filePath: string): number {
+		if (!this.spiderEngine) return 0
+		const relPath = this.stabilityMonitor.normalize(path.resolve(this.cwd, filePath))
+		const node = this.spiderEngine.nodes.get(relPath)
+		return node?.hazardScore || 0
+	}
+
+	/**
 	 * V31: Computes an aesthetically-normalized hashing of the content.
 	 */
 	public computeStructuralHash(content: string): string {
