@@ -2,7 +2,7 @@
 	"name": "dietcode",
 	"displayName": "DietCode",
 	"description": "DietCode is your autonomous architectural substrate, maintaining codebase integrity with zero bloat.",
-	"version": "5.10.69",
+	"version": "5.10.70",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",
@@ -409,7 +409,7 @@
 		}
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run build:webview && node esbuild.mjs --production",
+		"vscode:prepublish": "npm run rebuild:electron:better-sqlite3 && npm run build:webview && node esbuild.mjs --production",
 		"compile": "npm run check-types && npm run lint && node esbuild.mjs",
 		"compile-standalone": "npm run check-types && npm run lint && node esbuild.mjs --standalone",
 		"compile-standalone-npm": "npm run protos && npm run check-types && npm run lint && node esbuild.mjs --standalone",
@@ -427,7 +427,7 @@
 		"watch": "npx npm-run-all -p watch:*",
 		"watch:esbuild": "node esbuild.mjs --watch",
 		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-		"package": "npm run build:webview && npm run lint && node esbuild.mjs --production",
+		"package": "npm run rebuild:electron:better-sqlite3 && npm run build:webview && npm run lint && node esbuild.mjs --production",
 		"protos": "node scripts/build-proto.mjs",
 		"protos-python": "node scripts/build-python-proto.mjs",
 		"download-ripgrep": "node scripts/download-ripgrep.mjs",
@@ -477,7 +477,8 @@
 		"eval:smoke:run": "npx tsx evals/smoke-tests/run-smoke-tests.ts",
 		"eval:smoke": "npm run eval:smoke:build && npm run eval:smoke:run",
 		"eval:smoke:ci": "npm run eval:smoke:build && npm run eval:smoke:run -- --trials 1 --parallel",
-		"rebuild:electron": "electron-rebuild -v 39.2.3"
+		"rebuild:electron": "electron-rebuild -v 39.2.3",
+		"rebuild:electron:better-sqlite3": "electron-rebuild -v 39.2.3 -f -w better-sqlite3 --build-from-source"
 	},
 	"lint-staged": {
 		"src/shared/storage/state-keys.ts": [
