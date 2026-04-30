@@ -355,13 +355,43 @@ async function main() {
 		const violations = engine.getViolations()
 		const unused = engine.forensic.findUnusedExports(engine.nodes)
 		const contracts = engine.forensic.auditImplicitContracts(engine.nodes)
+		const snapshots = await engine.getSnapshotHistory(5)
 
-		if (violations.length === 0 && unused.length === 0 && contracts.length === 0) {
+		const decay: string[] = []
+		const fatigue: string[] = []
+		for (const node of engine.nodes.values()) {
+			const halfLife = engine.metrics.trackStructuralHalfLife(node, snapshots)
+			if (halfLife > 1.2) {
+				decay.push(
+					`[SPI-112] STRUCTURAL DECAY: ${node.path} (Entropy increased ${(halfLife * 100 - 100).toFixed(0)}% over 5 sessions)`,
+				)
+			}
+			const pressure = engine.forensic.calculateHazardScore(node, engine.nodes)
+			if (engine.metrics.detectRefactoringFatigue(node, pressure, snapshots)) {
+				fatigue.push(`[SPI-113] REFACTORING FATIGUE: ${node.path} (High churn, zero improvement)`)
+			}
+		}
+
+		if (
+			violations.length === 0 &&
+			unused.length === 0 &&
+			contracts.length === 0 &&
+			decay.length === 0 &&
+			fatigue.length === 0
+		) {
 			console.log("  ✅ Substrate is clean. Zero violations.")
 		} else {
 			if (violations.length > 0) {
 				console.log(`  ⚠️  Architectural Violations (${violations.length}):`)
 				for (const v of violations) console.log(`    - [${v.id}] ${v.path}: ${v.message}`)
+			}
+			if (decay.length > 0) {
+				console.log(`  📉 Structural Decay (${decay.length}):`)
+				for (const d of decay) console.log(`    - ${d}`)
+			}
+			if (fatigue.length > 0) {
+				console.log(`  😫 Refactoring Fatigue (${fatigue.length}):`)
+				for (const f of fatigue) console.log(`    - ${f}`)
 			}
 			if (unused.length > 0) {
 				console.log(`  💀 Deadwood (${unused.length}):`)
@@ -371,6 +401,56 @@ async function main() {
 				console.log(`  📝 Contract Asymmetry (${contracts.length}):`)
 				for (const c of contracts) console.log(`    - ${c}`)
 			}
+		}
+		process.exit(0)
+	}
+
+	if (command === "blast-radius") {
+		const filePath = args[1]
+		if (!filePath) {
+			console.error("Usage: blast-radius <file>")
+			process.exit(1)
+		}
+		const node = engine.nodes.get(engine.normalizePath(filePath))
+		if (!node) {
+			console.error(`File not found in graph: ${filePath}`)
+			process.exit(1)
+		}
+		const ripple = engine.forensic.calculateRippleProbability(engine.nodes)
+		const prob = ripple.get(node.id) || 0
+		console.log(`☢️  Blast Radius for ${node.path}:`)
+		console.log(`   - Systemic Impact: ${(prob * 100).toFixed(1)}%`)
+		console.log(`   - Direct Dependents: ${node.dependents.length}`)
+		console.log(`   - Afferent Coupling: ${node.afferentCoupling}`)
+
+		if (prob > 0.6) console.log("   🚨 CRITICAL COMPONENT: High ripple probability detected.")
+		process.exit(0)
+	}
+
+	if (command === "mermaid") {
+		const filePath = args[1]
+		const depth = Number.parseInt(args[2] || "1", 10)
+		if (!filePath) {
+			console.log(engine.toMermaid())
+		} else {
+			const scope = engine.getNeighborhood(filePath, depth)
+			console.log(engine.toMermaid(scope))
+		}
+		process.exit(0)
+	}
+
+	if (command === "pre-heat") {
+		const filePath = args[1]
+		const depth = Number.parseInt(args[2] || "1")
+		if (!filePath) {
+			console.error("Usage: pre-heat <file> [depth]")
+			process.exit(1)
+		}
+		const scope = engine.getNeighborhood(filePath, depth)
+		console.log(`🌡️  Pre-heating neighborhood for ${filePath} (depth: ${depth})...`)
+		console.log(`   Added ${scope.size} files to study scope.`)
+		for (const id of scope) {
+			console.log(`    - ${id}`)
 		}
 		process.exit(0)
 	}

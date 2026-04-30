@@ -298,9 +298,10 @@ export class SpiderEngine {
 		this.resolver.clearCaches()
 
 		let sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
-		let importData = this.extractDetailedImports(sourceFile)
-		const imports = importData.map((i) => i.specifier)
-		let { symbols: exportedSymbols, reExports: reExportSpecifiers } = this.extractExports(sourceFile)
+		const analysis = this.analyzeStructuralData(sourceFile)
+		const metrics = isMassive ? this.getDefaultMetrics() : analysis.metrics
+		const imports = analysis.imports.map((i) => i.specifier)
+		const { symbols: exportedSymbols, reExports: reExportSpecifiers } = analysis.exports
 
 		// Register symbols in the registry
 		this.registry.unregisterFile(normalizedPath)
@@ -317,12 +318,10 @@ export class SpiderEngine {
 			.map((spec) => this.resolver.resolveImportToNodeId(normalizedPath, spec, this.nodes))
 			.filter(Boolean) as string[]
 
-		let metrics = isMassive ? this.getDefaultMetrics() : this.extractMetrics(sourceFile)
-
 		const consumptions: Record<string, string[]> = {}
 		const resolvedImports = new Map<string, string>()
 		if (!skipResolution) {
-			for (const { specifier, symbols } of importData) {
+			for (const { specifier, symbols } of analysis.imports) {
 				const targetId = this.resolver.resolveImportToNodeId(normalizedPath, specifier, this.nodes)
 				if (targetId) {
 					consumptions[targetId] = (consumptions[targetId] || []).concat(symbols)
@@ -331,7 +330,7 @@ export class SpiderEngine {
 			}
 		}
 
-		const namingScore = this.calculateNamingScore(sourceFile)
+		const namingScore = analysis.namingScore
 
 		const newNode: SpiderNode = {
 			id: normalizedPath,
@@ -346,22 +345,21 @@ export class SpiderEngine {
 			hash,
 			isInterface: this.detectInterface(normalizedPath, sourceFile),
 			exports: exportedSymbols,
+			reExports,
 			consumptions,
-			mtime: fs.existsSync(absolutePath) ? fs.statSync(absolutePath).mtimeMs : Date.now(),
+			resolvedImports,
+			mtime: fs.statSync(absolutePath).mtimeMs,
 			namingScore,
 			symbolDensity: content.length > 0 ? exportedSymbols.length / (content.length / 100) : 0,
-			logicCohesion: 0.5,
-			blastRadius: oldNode?.blastRadius || 0, 
-			isFragile: oldNode?.isFragile || false,
-			cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
+			blastRadius: 0,
+			isFragile: false,
+			cognitiveComplexity: analysis.cognitiveComplexity,
 			isHotspot: oldNode?.isHotspot || false,
 			anyDensity: metrics.anyDensity,
-			reExports,
 			churnIntensity: (oldNode?.churnIntensity || 0) + 1,
 			semanticDrift: (oldNode?.semanticDrift || 0) + (oldNode && oldNode.layer !== layer ? 1 : 0),
 			lastLayer: oldNode?.layer,
 			hazardScore: 0, 
-			resolvedImports,
 		}
 
 		this.nodes.set(normalizedPath, newNode)
@@ -392,47 +390,118 @@ export class SpiderEngine {
 			this.scheduleReachability()
 		}
 		;(sourceFile as any) = null
-		;(importData as any) = null
 		;(exportedSymbols as any) = null
 		;(metrics as any) = null
 	}
 
-	private extractExports(sourceFile: ts.SourceFile): { symbols: string[]; reExports: string[] } {
-		const result = { symbols: [] as string[], reExports: [] as string[] }
-		ts.forEachChild(sourceFile, (node) => this.visitExports(node, result))
-		return {
-			symbols: Array.from(new Set(result.symbols)),
-			reExports: Array.from(new Set(result.reExports)),
+	private analyzeStructuralData(sourceFile: ts.SourceFile): { 
+		metrics: {
+			anyDensity: number,
+			logicDensity: number,
+			symbolDensity: number,
+			astComplexity: number,
+			ioEntropy: number,
+			logicCohesion: number
+		},
+		imports: { specifier: string; symbols: string[] }[],
+		exports: { symbols: string[]; reExports: string[] },
+		namingScore: number,
+		cognitiveComplexity: number
+	} {
+		const ctx = {
+			anyCasts: 0,
+			logicDensity: 0,
+			symbolDensity: 0,
+			internalReferenceCount: 0,
+			imports: [] as { specifier: string; symbols: string[] }[],
+			exports: { symbols: [] as string[], reExports: [] as string[] },
+			names: [] as string[]
 		}
-	}
 
-	private visitExports(node: ts.Node, result: { symbols: string[]; reExports: string[] }) {
-		if (
-			(ts.isClassDeclaration(node) ||
-				ts.isFunctionDeclaration(node) ||
-				ts.isInterfaceDeclaration(node) ||
-				ts.isTypeAliasDeclaration(node) ||
-				ts.isEnumDeclaration(node) ||
-				ts.isVariableStatement(node)) &&
-			node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
-		) {
-			if (ts.isVariableStatement(node)) {
-				for (const decl of node.declarationList.declarations) {
-					if (ts.isIdentifier(decl.name)) result.symbols.push(decl.name.text)
+		const visit = (node: ts.Node, depth: number) => {
+			const kind = node.kind
+
+			// Metrics logic
+			if (ts.isAsExpression(node)) {
+				if (node.type.kind === ts.SyntaxKind.AnyKeyword) {
+					ctx.anyCasts++
 				}
-			} else if (node.name && ts.isIdentifier(node.name)) {
-				result.symbols.push(node.name.text)
 			}
-		} else if (ts.isExportDeclaration(node)) {
-			if (node.exportClause && ts.isNamedExports(node.exportClause)) {
-				for (const element of node.exportClause.elements) {
-					result.symbols.push(element.name.text)
+			if (ts.isTypeNode(node)) this.checkDeepAny(node as ts.TypeNode, ctx)
+			if (ts.isIdentifier(node) && node.parent && !ts.isPropertyAccessExpression(node.parent)) {
+				ctx.internalReferenceCount++
+				ctx.names.push(node.text)
+			}
+
+			// Exports logic
+			if (
+				(ts.isClassDeclaration(node) ||
+					ts.isFunctionDeclaration(node) ||
+					ts.isInterfaceDeclaration(node) ||
+					ts.isTypeAliasDeclaration(node) ||
+					ts.isEnumDeclaration(node) ||
+					ts.isVariableStatement(node)) &&
+				node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+			) {
+				if (ts.isVariableStatement(node)) {
+					for (const decl of node.declarationList.declarations) {
+						if (ts.isIdentifier(decl.name)) ctx.exports.symbols.push(decl.name.text)
+					}
+				} else if ((node as any).name && ts.isIdentifier((node as any).name)) {
+					ctx.exports.symbols.push((node as any).name.text)
 				}
-			} else if (!node.exportClause && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-				result.reExports.push(node.moduleSpecifier.text)
+			} else if (ts.isExportDeclaration(node)) {
+				if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+					for (const element of node.exportClause.elements) {
+						ctx.exports.symbols.push(element.name.text)
+					}
+				} else if (!node.exportClause && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+					ctx.exports.reExports.push(node.moduleSpecifier.text)
+				}
 			}
+
+			// Imports logic
+			if (ts.isImportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+				const specifier = node.moduleSpecifier.text
+				const symbols: string[] = []
+				if (node.importClause) {
+					if (node.importClause.name) symbols.push(node.importClause.name.text)
+					if (node.importClause.namedBindings) {
+						if (ts.isNamedImports(node.importClause.namedBindings)) {
+							for (const element of node.importClause.namedBindings.elements) {
+								symbols.push(element.name.text)
+							}
+						} else if (ts.isNamespaceImport(node.importClause.namedBindings)) {
+							symbols.push("*")
+						}
+					}
+				}
+				ctx.imports.push({ specifier, symbols })
+			}
+
+			ts.forEachChild(node, (child) => visit(child, depth + 1))
 		}
-		ts.forEachChild(node, (child) => this.visitExports(child, result))
+
+		visit(sourceFile, 0)
+
+		const contentLen = sourceFile.text.length || 1
+		return {
+			metrics: {
+				anyDensity: ctx.anyCasts / (contentLen / 500),
+				logicDensity: ctx.internalReferenceCount / (contentLen / 100),
+				symbolDensity: ctx.exports.symbols.length / (contentLen / 1000),
+				astComplexity: sourceFile.statements.length, // Simplified for consolidation
+				ioEntropy: ctx.imports.length > 0 ? ctx.imports.filter(i => !i.specifier.startsWith(".") && !i.specifier.startsWith("@/")).length / ctx.imports.length : 0,
+				logicCohesion: ctx.internalReferenceCount > 0 ? (ctx.names.length / ctx.internalReferenceCount) : 0.5
+			},
+			imports: ctx.imports,
+			exports: {
+				symbols: Array.from(new Set(ctx.exports.symbols)),
+				reExports: Array.from(new Set(ctx.exports.reExports)),
+			},
+			namingScore: ctx.names.filter(n => n.length > 3).length / Math.max(1, ctx.names.length),
+			cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile)
+		}
 	}
 
 	private extractDetailedImports(sourceFile: ts.SourceFile): { specifier: string; symbols: string[] }[] {
@@ -990,13 +1059,6 @@ export class SpiderEngine {
 		return Array.from(this.nodes.keys()).filter((p) => p.startsWith(dir))
 	}
 
-	public async takeSnapshot(): Promise<SpiderSnapshot> {
-		return this.persistence.takeSnapshot(this.nodes)
-	}
-
-	public getSnapshotHistory(): SpiderSnapshot[] {
-		return this.persistence.getSnapshotHistory()
-	}
 
 	public findGlobalProviders(symbol: string): string[] {
 		const providers: string[] = []
@@ -1038,9 +1100,6 @@ export class SpiderEngine {
 			.map((item) => item.symbol)
 	}
 
-	public async getLatestSnapshot(): Promise<SpiderSnapshot | null> {
-		return this.persistence.getLatestSnapshot()
-	}
 
 	public async loadRegistry(data?: Buffer | string): Promise<boolean> {
 		if (data) {
@@ -1149,16 +1208,17 @@ export class SpiderEngine {
 						const oldNode = previousRegistry.get(f)
 
 						let sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
-						let importData = this.extractDetailedImports(sourceFile)
-						const exportsData = this.extractExports(sourceFile)
-						let metrics = this.extractMetrics(sourceFile)
-						let namingScore = this.calculateNamingScore(sourceFile)
+						const analysis = this.analyzeStructuralData(sourceFile)
+						const metrics = analysis.metrics
+						const namingScore = analysis.namingScore
+						const importsData = analysis.imports
+						const exportsData = analysis.exports
 
 						const node: SpiderNode = {
 							id: f,
 							path: f,
 							layer,
-							imports: importData.map((i) => i.specifier),
+							imports: importsData.map((i) => i.specifier),
 							dependents: [],
 							depth: f.split("/").length - 1,
 							orphaned: false,
@@ -1173,10 +1233,9 @@ export class SpiderEngine {
 							mtime: fileStats.mtimeMs,
 							namingScore,
 							symbolDensity: content.length > 0 ? exportsData.symbols.length / (content.length / 100) : 0,
-							logicCohesion: 0.5,
 							blastRadius: 0,
 							isFragile: false,
-							cognitiveComplexity: this.metrics.calculateCognitiveComplexity(sourceFile),
+							cognitiveComplexity: analysis.cognitiveComplexity,
 							isHotspot: false,
 							anyDensity: finiteNodeNumber(metrics.anyDensity, 0),
 							churnIntensity: (oldNode?.churnIntensity || 0) + (oldNode && oldNode.hash !== hash ? 1 : 0),
@@ -1298,6 +1357,20 @@ export class SpiderEngine {
 		return this.metrics.computeEntropy(this.nodes)
 	}
 
+	public async takeSnapshot(): Promise<SpiderSnapshot> {
+		return this.persistence.takeSnapshot(this.nodes)
+	}
+
+	public getLatestSnapshot(): SpiderSnapshot | null {
+		const history = this.persistence.getSnapshotHistory()
+		return history[history.length - 1] || null
+	}
+
+	public getSnapshotHistory(limit: number = 5): SpiderSnapshot[] {
+		const history = this.persistence.getSnapshotHistory()
+		return history.slice(-limit)
+	}
+
 	public compareWith(checkpoint: Buffer): string[] {
 		return this.persistence.compareToCheckpoint(this.nodes, checkpoint)
 	}
@@ -1332,20 +1405,54 @@ export class SpiderEngine {
 		return this.resolver.resolveLayer(pathOrSource)
 	}
 
-	public toMermaid(): string {
+	public toMermaid(scope?: Set<string>): string {
 		let graph = "graph TD\n"
-		for (const node of this.nodes.values()) {
+		const nodesToRender = scope ? Array.from(this.nodes.values()).filter(n => scope.has(n.id)) : Array.from(this.nodes.values())
+		
+		for (const node of nodesToRender) {
 			const label = path.basename(node.path)
 			const id = node.id.replace(/\W/g, "_")
 			graph += `  ${id}["${label}"]\n`
 			for (const imp of node.imports) {
 				const depNodeId = this.resolver.resolveImportToNodeId(node.id, imp, this.nodes)
-				if (depNodeId) {
+				if (depNodeId && (!scope || scope.has(depNodeId))) {
 					graph += `  ${id} --> ${depNodeId.replace(/\W/g, "_")}\n`
 				}
 			}
 		}
 		return graph
+	}
+
+	/**
+	 * V250: Localized Structural Scoping.
+	 * Returns a set of Node IDs within a specific N-depth radius of the target file.
+	 */
+	public getNeighborhood(filePath: string, depth: number = 1): Set<string> {
+		const normPath = this.resolver.normalizePath(filePath)
+		const result = new Set<string>([normPath])
+		if (depth <= 0) return result
+
+		let currentLevel = new Set<string>([normPath])
+		for (let i = 0; i < depth; i++) {
+			const nextLevel = new Set<string>()
+			for (const id of currentLevel) {
+				const node = this.nodes.get(id)
+				if (node) {
+					// Outgoing (Imports)
+					for (const imp of node.imports) {
+						const resolved = this.resolver.resolveImportToNodeId(id, imp, this.nodes)
+						if (resolved) nextLevel.add(resolved)
+					}
+					// Incoming (Dependents)
+					for (const dep of node.dependents) {
+						nextLevel.add(dep)
+					}
+				}
+			}
+			for (const id of nextLevel) result.add(id)
+			currentLevel = nextLevel
+		}
+		return result
 	}
 
 	private calculateNamingScore(sourceFile: ts.SourceFile): number {
