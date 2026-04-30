@@ -105,7 +105,7 @@ export class SpiderService {
   async getEntropyDelta(): Promise<number> {
     const latest = await this.engine.getLatestSnapshot();
     if (!latest) return 0;
-    return this.engine.compareWith(latest);
+    return this.engine.getEntropy().score - latest.entropyScore;
   }
 
   /**
@@ -201,7 +201,7 @@ export class SpiderService {
       if (cache) {
         const metadata = JSON.parse(cache.metadata || '{}');
         if (metadata.isBootstrapCache) {
-          this.engine.deserialize(cache.content);
+          this.engine.deserialize(Buffer.from(cache.content as string, 'utf8'));
           lastCommit = metadata.commitHash;
           Logger.info(
             `[SpiderService] Loaded bootstrap cache from commit: ${lastCommit?.substring(0, 7)}`
@@ -452,7 +452,7 @@ export class SpiderService {
       if (node) {
           // 1. Direct dependencies
           for (const resolved of Array.from(node.resolvedImports.values())) {
-              studyItems.push({ path: resolved, reason: 'Direct Dependency' });
+              studyItems.push({ path: resolved as string, reason: 'Direct Dependency' });
           }
 
           // 2. Critical dependents (from Blast Radius)

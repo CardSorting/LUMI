@@ -101,20 +101,20 @@ export class ForensicEngine {
 	}
 
 	/**
-	 * V450: Toxicity Score (Sentient Hazard).
-	 * Aggregates churn, drift, and resonance into a single probability of catastrophic failure.
-	 * V451: Resonance Dampening - Reduced weight of resonance to prevent false positives for central coordinators.
+	 * V500: Toxicity Score (Sovereign Hazard).
+	 * Aggregates systemic impact (blast radius), behavioral churn, semantic drift, and statistical resonance.
 	 */
 	public calculateHazardScore(node: SpiderNode, nodes: Map<string, SpiderNode>): number {
 		const resonance = this.calculateArchitecturalResonance(node, nodes)
-		const churnFactor = Math.min(1.0, (node.churnIntensity || 0) / 15) // V451: Increased denominator to 15 for smoother scaling
-		const driftFactor = Math.min(1.0, (node.semanticDrift || 0) / 5) // V451: Increased denominator to 5
+		const churnFactor = Math.min(1.0, (node.churnIntensity || 0) / 15)
+		const driftFactor = Math.min(1.0, (node.semanticDrift || 0) / 5)
+		const blastRadius = node.blastRadius || 0
 
-		// Resonance > 3.0 is now the statistical outlier threshold (was 2.0)
+		// Resonance > 3.0 is now the statistical outlier threshold
 		const resonanceFactor = Math.min(1.0, resonance / 3.0)
 
-		// V451: Rebalanced weights: Resonance (30%), Churn (40%), Drift (30%)
-		return resonanceFactor * 0.3 + churnFactor * 0.4 + driftFactor * 0.3
+		// V500: Rebalanced weights: Blast Radius (40%), Churn (20%), Drift (20%), Resonance (20%)
+		return blastRadius * 0.4 + churnFactor * 0.2 + driftFactor * 0.2 + resonanceFactor * 0.2
 	}
 
 	constructor(

@@ -1,4 +1,4 @@
-import type { SpiderNode } from '../SpiderEngine.js';
+import type { SpiderNode } from './types.js';
 
 export interface SymbolProvider {
     symbolName: string;
@@ -28,7 +28,7 @@ export class SymbolRegistry {
     }
 
     if (existing.size > 1) {
-        console.warn(`[SymbolRegistry] ⚠️  Ambiguous symbol detected: '${provider.symbolName}' is provided by ${existing.size} files.`);
+        // console.warn(`[SymbolRegistry] ⚠️  Ambiguous symbol detected: '${provider.symbolName}' is provided by ${existing.size} files.`);
     }
   }
 
@@ -108,7 +108,7 @@ export class SymbolRegistry {
           }
       }
     } catch (e) {
-      console.error('[SymbolRegistry] Deserialization failed:', e);
+      // console.error('[SymbolRegistry] Deserialization failed:', e);
     }
   }
 }

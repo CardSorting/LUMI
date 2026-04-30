@@ -39,6 +39,7 @@ async function main() {
 	const conn = new Connection({ dbPath })
 	const pool = conn.getPool()
 	const ws = new Workspace(pool, "local-user", "local-workspace")
+	ws.setPhysicalPath(process.cwd())
 
 	// Pass 6: Idempotent Substrate Initialization
 	await ws.init()
@@ -199,9 +200,9 @@ async function main() {
 			process.exit(1)
 		}
 		console.log(`📦 Dependencies for ${node.path}:`)
-		for (const imp of Array.from(node.imports)) {
-			const resolved = node.resolvedImports.get(imp.specifier)
-			console.log(`  -> ${imp.specifier} ${resolved ? `(${resolved})` : "[UNRESOLVED]"}`)
+		for (const imp of node.imports) {
+			const resolved = node.resolvedImports.get(imp)
+			console.log(`  -> ${imp} ${resolved ? `(${resolved})` : "[UNRESOLVED]"}`)
 		}
 		console.log(`🔗 Dependents:`)
 		const dependents = Array.from(engine.nodes.values()).filter((n) =>
@@ -231,8 +232,8 @@ async function main() {
 
 		const usages: string[] = []
 		for (const node of Array.from(engine.nodes.values())) {
-			for (const imp of Array.from(node.imports)) {
-				const resolvedId = node.resolvedImports.get(imp.specifier)
+			for (const imp of node.imports) {
+				const resolvedId = node.resolvedImports.get(imp)
 				if (resolvedId && providerFileIds.includes(resolvedId)) {
 					usages.push(node.path)
 					break
@@ -304,14 +305,86 @@ async function main() {
 		process.exit(0)
 	}
 
+	if (command === "bridges") {
+		console.log("🌉 Detecting Structural Bridges (Articulated Points)...")
+		const bridges = engine.forensic.detectStructuralBridges(engine.nodes)
+		if (bridges.length === 0) {
+			console.log("  ✅ No single points of failure detected.")
+		} else {
+			console.log(`  Found ${bridges.length} architectural bridges:`)
+			for (const b of bridges) console.log(`    - ${b}`)
+		}
+		process.exit(0)
+	}
+
+	if (command === "hotspots") {
+		console.log("🔥 Detecting High-Hazard Hotspots...")
+		const results: { path: string; score: number }[] = []
+		for (const node of engine.nodes.values()) {
+			const score = engine.forensic.calculateHazardScore(node, engine.nodes)
+			if (score > 0.4) results.push({ path: node.path, score })
+		}
+		results.sort((a, b) => b.score - a.score)
+		if (results.length === 0) {
+			console.log("  ✅ No critical hotspots detected.")
+		} else {
+			for (const r of results) {
+				console.log(`    - [${(r.score * 100).toFixed(0)}%] ${r.path}`)
+			}
+		}
+		process.exit(0)
+	}
+
+	if (command === "debt") {
+		console.log("📉 Analyzing Structural Debt (Clones & Implicit Interfaces)...")
+		const clones = engine.forensic.findLogicClones(engine.nodes)
+		const interfaces = engine.forensic.findImplicitInterfaces(engine.nodes)
+		const resonance = engine.forensic.detectSymbolResonance(engine.nodes)
+
+		console.log(`  - Logic Clones: ${clones.length}`)
+		for (const c of clones) console.log(`    ${c}`)
+		console.log(`  - Implicit Interfaces: ${interfaces.length}`)
+		for (const i of interfaces) console.log(`    ${i}`)
+		console.log(`  - Symbol Resonance: ${resonance.length}`)
+		for (const r of resonance) console.log(`    ${r}`)
+		process.exit(0)
+	}
+
+	if (command === "audit") {
+		console.log("🕵️  Performing Global Architectural Audit...")
+		const violations = engine.getViolations()
+		const unused = engine.forensic.findUnusedExports(engine.nodes)
+		const contracts = engine.forensic.auditImplicitContracts(engine.nodes)
+
+		if (violations.length === 0 && unused.length === 0 && contracts.length === 0) {
+			console.log("  ✅ Substrate is clean. Zero violations.")
+		} else {
+			if (violations.length > 0) {
+				console.log(`  ⚠️  Architectural Violations (${violations.length}):`)
+				for (const v of violations) console.log(`    - [${v.id}] ${v.path}: ${v.message}`)
+			}
+			if (unused.length > 0) {
+				console.log(`  💀 Deadwood (${unused.length}):`)
+				for (const u of unused) console.log(`    - ${u}`)
+			}
+			if (contracts.length > 0) {
+				console.log(`  📝 Contract Asymmetry (${contracts.length}):`)
+				for (const c of contracts) console.log(`    - ${c}`)
+			}
+		}
+		process.exit(0)
+	}
+
 	if (command === "tutor") {
 		const entropy = engine.computeEntropy().score
 		console.log("🎓  Sovereign Navigation Tutor")
 		console.log("--------------------------------")
 		console.log("Interaction Pattern: The Hybrid Anchor")
-		console.log("1. SCOPE  (Spider): Use 'find-symbol' or 'find-usage' to narrow the search area.")
-		console.log("2. VERIFY (Grep)  : Use 'grep_search' on those specific files to confirm code reality.")
-		console.log("3. ALIGN  (Seed)  : If Spider and Grep diverge, run 're-seed' to update the cache.")
+		console.log("1. SCOPE    (Spider)  : Use 'find-symbol' or 'find-usage' to narrow the area.")
+		console.log("2. AUDIT    (Forensic): Use 'audit', 'bridges', or 'hotspots' to find hazards.")
+		console.log("3. VERIFY   (Grep)    : Use 'grep_search' to confirm code reality on disk.")
+		console.log("4. FORECAST (Ghost)   : Use 'blast-radius' to quantify the ripple effect.")
+		console.log("5. ALIGN    (Seed)    : If things diverge, run 're-seed' to update the substrate.")
 		console.log("")
 		console.log(
 			`Current Entropy: ${entropy.toFixed(2)}% ${entropy > 20 ? "🚨 (High - Re-seed recommended)" : "✅ (Healthy)"}`,
@@ -319,6 +392,8 @@ async function main() {
 		console.log("")
 		console.log("Checklist for Agentic Success:")
 		console.log("[ ] Did I run 're-seed' at the start of the session?")
+		console.log("[ ] Did I run 'audit' to check for layer violations or deadwood?")
+		console.log("[ ] Did I check 'hotspots' for toxic churn before editing?")
 		console.log("[ ] Did I use 'pre-heat' to study the module architecture?")
 		console.log("[ ] Did I verify the graph's scope with a physical Grep?")
 		process.exit(0)

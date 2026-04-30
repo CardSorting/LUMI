@@ -22,6 +22,8 @@ export class Workspace {
   readonly workspaceId: string;
   public sharedMemoryLayer: string[] = [];
 
+  private _physicalPath?: string;
+
   constructor(
     dbOrConnection: BufferedDbPool | Connection,
     userId: string,
@@ -43,13 +45,17 @@ export class Workspace {
     this.workspaceId = workspaceId.trim();
   }
 
+  setPhysicalPath(path: string) {
+    this._physicalPath = path;
+  }
+
   getDb(): BufferedDbPool {
     return this.db;
   }
 
   /** Base path for this specific workspace */
   get workspacePath(): string {
-    return `workspaces/${this.workspaceId}`;
+    return this._physicalPath || `workspaces/${this.workspaceId}`;
   }
 
   /** Base path for the user silo */

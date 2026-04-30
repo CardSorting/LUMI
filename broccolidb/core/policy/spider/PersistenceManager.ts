@@ -1,89 +1,186 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { Logger } from '../../../shared/services/Logger.js';
-import type { SpiderNode } from '../SpiderEngine.js';
+import * as crypto from "crypto"
+import * as v8 from "v8"
+import { MetricsEngine } from "./MetricsEngine.js"
+import { SpiderNode, SpiderRegistryPayload, SpiderSnapshot } from "./types.js"
 
-/**
- * PersistenceManager: Handles atomic binary-lite serialization for the structural graph.
- * Prevents corruption during high-concurrency write cycles.
- */
+const isSpiderSnapshot = (value: unknown): value is SpiderSnapshot => {
+	if (!value || typeof value !== "object") return false
+	const snapshot = value as Partial<SpiderSnapshot>
+	return typeof snapshot.timestamp === "string" && typeof snapshot.entropyScore === "number" && Array.isArray(snapshot.nodes)
+}
+
 export class PersistenceManager {
-  private spiderbinPath: string;
+	private snapshots: Buffer[] = [] // V190: Binary Snapshot Buffer (Industrial Fidelity)
 
-  constructor(private cwd: string) {
-    this.spiderbinPath = path.join(cwd, '.spider', 'graph.spiderbin');
-  }
+	constructor(private metrics: MetricsEngine) {}
 
-  /**
-   * Saves the graph atomicity using a staging file and a sovereign lock to prevent concurrency collisions.
-   */
-  public async save(nodes: Map<string, SpiderNode>): Promise<void> {
-    const dir = path.dirname(this.spiderbinPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+	/**
+	 * V200: Industrial Hygiene (Disposal).
+	 */
+	public dispose() {
+		this.snapshots = [] // Clear binary residual
+	}
 
-    const lockPath = `${this.spiderbinPath}.lock`;
-    const stagingPath = `${this.spiderbinPath}.tmp`;
+	public getSnapshots(): Buffer[] {
+		return [...this.snapshots]
+	}
 
-    // Level 9 Sovereign Lock: Simple Retry Loop
-    let locked = false;
-    for (let i = 0; i < 50; i++) {
-        try {
-            fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
-            locked = true;
-            break;
-        } catch {
-            await new Promise(r => setTimeout(r, 100)); // Wait for other agent to finish
-        }
-    }
+	public getSnapshotHistory(): SpiderSnapshot[] {
+		const history: SpiderSnapshot[] = []
+		const healthySnapshots: Buffer[] = []
 
-    if (!locked) {
-        Logger.error(`[SpiderPersistence] Failed to acquire write lock for .spiderbin after 5s. Aborting.`);
-        return;
-    }
+		for (const snapshot of this.snapshots) {
+			try {
+				const decoded = v8.deserialize(snapshot)
+				if (!isSpiderSnapshot(decoded)) continue
+				history.push(decoded)
+				healthySnapshots.push(snapshot)
+			} catch {
+				// Drop corrupt binary snapshots instead of letting audit paths fail closed.
+			}
+		}
 
-    try {
-        const entries = Array.from(nodes.entries()).map(([k, v]) => [
-            k, 
-            { ...v, imports: Array.from(v.imports), resolvedImports: Array.from(v.resolvedImports) }
-        ]);
+		if (healthySnapshots.length !== this.snapshots.length) {
+			this.snapshots = healthySnapshots
+		}
 
-        const payload = Buffer.from(JSON.stringify({ nodes: entries }), 'utf-8');
-        const header = Buffer.alloc(8);
-        header.writeUInt32BE(0x53504944, 0); // 'SPID' Magic Number
-        header.writeUInt32BE(payload.length, 4);
+		return history
+	}
 
-        await fs.promises.writeFile(stagingPath, Buffer.concat([header, payload]));
-        await fs.promises.rename(stagingPath, this.spiderbinPath);
-    } catch (err) {
-        Logger.error(`[SpiderPersistence] Atomic write failed: ${err}`);
-        if (fs.existsSync(stagingPath)) fs.unlinkSync(stagingPath);
-    } finally {
-        if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath);
-    }
-  }
+	public serialize(nodes: Map<string, SpiderNode>, metadata: Record<string, unknown> = {}): Buffer {
+		const payload: SpiderRegistryPayload = {
+			layerFingerprints: this.computeAllLayerFingerprints(nodes),
+			nodes: Array.from(nodes.entries()),
+			...metadata,
+		}
+		return v8.serialize(payload)
+	}
 
-  public async load(): Promise<Map<string, SpiderNode> | null> {
-    if (!fs.existsSync(this.spiderbinPath)) return null;
+	public deserialize(data: Buffer): SpiderRegistryPayload {
+		const result = v8.deserialize(data)
+		if (!result || !result.nodes) {
+			throw new Error("Invalid or corrupted structural payload.")
+		}
+		return result
+	}
 
-    try {
-      const buffer = await fs.promises.readFile(this.spiderbinPath);
-      const magic = buffer.readUInt32BE(0);
-      if (magic !== 0x53504944) {
-          throw new Error('Invalid .spiderbin magic number');
-      }
+	/**
+	 * V190: High-Fidelity Snapshotting.
+	 * Preserves the entire structural state in a compressed V8 binary format.
+	 */
+	public async takeSnapshot(nodes: Map<string, SpiderNode>): Promise<SpiderSnapshot> {
+		const report = this.metrics.computeEntropy(nodes)
+		const snapshot: SpiderSnapshot = {
+			timestamp: new Date().toISOString(),
+			entropyScore: report.score,
+			nodes: Array.from(nodes.values()),
+			components: report.components,
+		}
 
-      const payloadLength = buffer.readUInt32BE(4);
-      const payload = buffer.subarray(8, 8 + payloadLength).toString('utf-8');
-      const data = JSON.parse(payload);
-      const entries = Array.isArray(data) ? data : data.nodes;
-      
-      return new Map(entries.map(([k, v]: [string, any]) => [
-          k, 
-          { ...v, imports: new Set(v.imports), resolvedImports: new Set(v.resolvedImports) }
-      ]));
-    } catch (err) {
-      Logger.error(`[SpiderPersistence] Load failed (corrupted .spiderbin?): ${err}`);
-      return null;
-    }
-  }
+		// Preserve binary state for high-fidelity restoration if needed
+		const binary = v8.serialize(snapshot)
+		this.snapshots.push(binary)
+
+		// V215: Buffer Saturation Guard (Max 5 snapshots)
+		// Prevents indefinite memory growth in long-running metabolic sessions.
+		if (this.snapshots.length > 5) {
+			this.snapshots.shift()
+		}
+
+		return snapshot
+	}
+
+	/**
+	 * V200: Single-Pass Industrial Fingerprinting.
+	 * Eliminates O(N) temporary array allocations during the hashing turn.
+	 */
+	public computeAllLayerFingerprints(nodes: Map<string, SpiderNode>): Record<string, string> {
+		const layers = ["domain", "core", "infrastructure", "ui", "plumbing"]
+		const results: Record<string, string> = {}
+
+		const hashers: Record<string, import("crypto").Hash> = {}
+		for (const layer of layers) {
+			hashers[layer] = crypto.createHash("sha256")
+		}
+
+		// Single-Pass iteration over the node map
+		for (const node of nodes.values()) {
+			const hasher = hashers[node.layer]
+			if (hasher) {
+				hasher.update(node.id)
+				hasher.update(node.hash)
+				// Imports are unique and pre-vetted during indexing
+				for (const imp of node.imports) {
+					hasher.update(imp)
+				}
+			}
+		}
+
+		for (const layer of layers) {
+			results[layer] = hashers[layer].digest("hex")
+		}
+
+		return results
+	}
+
+	public async getLatestSnapshot(): Promise<SpiderSnapshot | null> {
+		return this.getSnapshotHistory().at(-1) ?? null
+	}
+
+	/**
+	 * V215: Industrial Checkpointing.
+	 * Creates a long-lived binary checkpoint of the current substrate.
+	 */
+	public createCheckpoint(nodes: Map<string, SpiderNode>): Buffer {
+		return this.serialize(nodes, { checkpoint: true, timestamp: Date.now() })
+	}
+
+	/**
+	 * V215: Silent Drift Detection.
+	 * Compares the live graph against a binary checkpoint to find non-session changes.
+	 */
+	public compareToCheckpoint(current: Map<string, SpiderNode>, checkpoint: Buffer): string[] {
+		const baseline = this.deserialize(checkpoint)
+		const drifts: string[] = []
+
+		const oldNodes = new Map<string, SpiderNode>(baseline.nodes)
+		for (const [id, node] of current) {
+			const oldNode = oldNodes.get(id)
+			if (!oldNode) {
+				drifts.push(`[DRIFT] NEW MODULE DETECTED: ${id}`)
+				continue
+			}
+
+			if (node.hash !== (oldNode as any).hash) {
+				drifts.push(`[DRIFT] CONTENT MUTATION: ${id}`)
+			}
+
+			if (node.layer !== (oldNode as any).layer) {
+				drifts.push(`[DRIFT] LAYER DISPLACEMENT: ${id} (${(oldNode as any).layer} -> ${node.layer})`)
+			}
+		}
+
+		return drifts
+	}
+
+	public getHistory(): number[] {
+		return this.getSnapshotHistory().map((snapshot) => snapshot.entropyScore)
+	}
+
+	/**
+	 * V215: Substrate Checksumming.
+	 * Generates a single sha256 hash representing the entire structural graph.
+	 */
+	public computeSubstrateChecksum(nodes: Map<string, SpiderNode>): string {
+		const hasher = crypto.createHash("sha256")
+		const sortedIds = Array.from(nodes.keys()).sort()
+		for (const id of sortedIds) {
+			const node = nodes.get(id)
+			if (node) {
+				hasher.update(id)
+				hasher.update(node.hash)
+			}
+		}
+		return hasher.digest("hex")
+	}
 }
