@@ -10,7 +10,7 @@ const GENERIC: DietCodeToolSpec = {
 	id,
 	name: "project_map",
 	description:
-		"Build a Project Map for planning. Use this before broad grep/read exploration in Plan Mode to identify starting files, connected files, risk areas, and targeted fact-check searches/reads. Internally this uses structural and cognitive project context when available.",
+		"Build a Project Map for planning. Use this before broad grep/read exploration in Plan Mode to identify starting files, connected files, risk areas with mitigations, targeted fact-check searches/reads, confidence, and safe/recommended/refactor choices. Internally this uses structural and cognitive project context when available.",
 	parameters: [
 		{
 			name: "query",
