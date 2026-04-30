@@ -39,6 +39,7 @@ import { ModuleDecomposeHandler } from "./handlers/ModuleDecomposeHandler"
 import { ModuleScaffoldHandler } from "./handlers/ModuleScaffoldHandler"
 import { NewTaskHandler } from "./handlers/NewTaskHandler"
 import { PlanModeRespondHandler } from "./handlers/PlanModeRespondHandler"
+import { ProjectMapHandler } from "./handlers/ProjectMapHandler"
 import { ReadFileToolHandler } from "./handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./handlers/ReportBugHandler"
 import { SearchFilesToolHandler } from "./handlers/SearchFilesToolHandler"
@@ -133,6 +134,7 @@ export class ToolExecutorCoordinator {
 		[DietCodeDefaultTool.APPLY_PATCH]: (_v: ToolValidator) => new ApplyPatchHandler(_v),
 		[DietCodeDefaultTool.GENERATE_EXPLANATION]: (_v: ToolValidator) => new GenerateExplanationToolHandler(),
 		[DietCodeDefaultTool.USE_SKILL]: (_v: ToolValidator) => new UseSkillToolHandler(),
+		[DietCodeDefaultTool.PROJECT_MAP]: (_v: ToolValidator) => new ProjectMapHandler(),
 		[DietCodeDefaultTool.USE_SUBAGENTS]: (_v: ToolValidator) => new UseSubagentsToolHandler(),
 		[DietCodeDefaultTool.MEM_QUERY]: (_v: ToolValidator) => new CognitiveMemoryQueryHandler(),
 		[DietCodeDefaultTool.MEM_SNAPSHOT]: (_v: ToolValidator) => new CognitiveMemorySnapshotHandler(),

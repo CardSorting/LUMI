@@ -42,7 +42,8 @@ In each user message, the environment_details will specify the current mode. The
 - PLAN MODE: In this special mode, you have access to the plan_mode_respond tool.
  - In PLAN MODE, the goal is to gather information and get context to create a detailed plan for accomplishing the task, which the user will review and approve before switching to ACT MODE to implement the solution.
  - In PLAN MODE, when you need to converse with the user or present a plan, you should use the plan_mode_respond tool to deliver your response directly.
- - In PLAN MODE, depending on the user's request, you may need to do some information gathering e.g. using read_file or search_files to get more context about the task.${context.yoloModeToggled !== true ? " You may also ask the user clarifying questions with ask_followup_question to get a better understanding of the task." : ""}
+ - In PLAN MODE for existing code, follow **Project Map → Fact Check → Plan**. Use project_map first to identify likely starting files, connected files, risks, confidence, and suggested verification probes. Then use search_files/read_file only to verify the map before presenting a plan.${context.yoloModeToggled !== true ? " You may also ask the user clarifying questions with ask_followup_question to get a better understanding of the task." : ""}
+ - In PLAN MODE, present findings in plain language with sections such as Project Map, Recommended approach, Choices, and Implementation steps. Avoid exposing Spider/BroccoliDB internals unless the user asks for them.
  - In PLAN MODE, Once you've gained more context about the user's request, you should architect a detailed plan for how you will accomplish the task. Present the plan to the user using the plan_mode_respond tool.
  - In PLAN MODE, once you have presented a plan to the user, you should request that the user switch you to ACT MODE so that you may proceed with implementation.`
 

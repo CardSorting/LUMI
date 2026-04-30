@@ -19,6 +19,7 @@ import { list_files_variants } from "./list_files"
 import { load_mcp_documentation_variants } from "./load_mcp_documentation"
 import { new_task_variants } from "./new_task"
 import { plan_mode_respond_variants } from "./plan_mode_respond"
+import { project_map_variants } from "./project_map"
 import { query_stability_variants } from "./query_stability"
 import { read_file_variants } from "./read_file"
 import { recalibrate_stability_variants } from "./recalibrate_stability"
@@ -56,6 +57,7 @@ export function registerDietCodeToolSets(): void {
 		...load_mcp_documentation_variants,
 		...new_task_variants,
 		...plan_mode_respond_variants,
+		...project_map_variants,
 		...read_file_variants,
 		...replace_in_file_variants,
 		...search_files_variants,

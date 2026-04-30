@@ -1,27 +1,29 @@
 import { TemplateEngine } from "../templates/TemplateEngine"
 import type { PromptVariant, SystemPromptContext } from "../types"
 
-const getForensicToolsTemplateText = () => `## FORENSIC SUBSTRATE: SPIDER ENGINE V210
+const getForensicToolsTemplateText = () => `## PROJECT MAP AND STRUCTURAL CHECKS
 
-You have access to a specialized architectural diagnostic engine located at \`scripts/agent-spider.ts\`. This tool MUST be used to verify the physical reality of the codebase and provide quantitative proof for the Knowledge Ledger.
+For planning, present structural context to users as a **Project Map**: starting point, connections, risks, and fact checks. Internal Spider/BroccoliDB details are implementation details; translate them into plain language.
+
+You also have access to a specialized architectural diagnostic engine located at \`scripts/agent-spider.ts\`. Use it when deeper structural checks are needed to verify the physical reality of the codebase and provide quantitative proof.
 
 ### 🛠️ Diagnostic Commands
 Run these via \`npx tsx scripts/agent-spider.ts [command]\`:
 
 - **\`status\`**: Returns the current **Node Count** and **Substrate Entropy**. Use this to track the overall health of the codebase.
-- **\`blast-radius <file_path>\`**: Calculates the **Centrality Score** and list of **Affected Nodes** for a specific file. Use this for all structural changes.
-- **\`deps <file_path>\`**: Lists all **Dependencies** (Imports) and **Dependents** (Incoming links). Essential for Mermaid diagram generation.
-- **\`conflicts\`**: Detects **Structural Conflicts** (Ambiguous symbols). Use this to calculate the **Axiomatic Purity Index (API)**.
-- **\`verify-graph\`**: Audits the graph for **Ghost Nodes** (stale references).
+- **\`blast-radius <file_path>\`**: Shows what could be affected by changing a file.
+- **\`deps <file_path>\`**: Lists what a file depends on and what uses it.
+- **\`conflicts\`**: Detects ambiguous symbols that need extra care.
+- **\`verify-graph\`**: Checks for stale map entries where files moved or no longer exist.
 - **\`find-symbol <symbol_name>\`**: Locates all providers of a specific symbol across the substrate.
 - **\`seed\` / \`re-seed\`**: Forces a full re-index of the codebase. Use if the graph feels stale.
 
 ### 🎓 Navigation Patterns
-- **The Hybrid Anchor**: Use Spider to find symbols/usages, then use physical tools (Grep/Read) to confirm reality.
-- **Pre-Heat**: Use \`npx tsx scripts/agent-spider.ts pre-heat <file>\` to get a "Study Pack" of related files before starting a complex task.
+- **Map then verify**: Use project_map or Spider to find likely files, then use physical tools (grep/read) only to confirm reality.
+- **Files to understand first**: Use \`npx tsx scripts/agent-spider.ts pre-heat <file>\` only when you need a deeper study pack for a complex task.
 
 ### 🚨 Mandatory Reporting
-Every significant implementation MUST be preceded or followed by a Forensic Audit using these tools. Hallucinating metrics is a violation of the Sovereign Protocol.`
+Every significant implementation should be grounded in evidence. Do not invent metrics; if you cite impact or risk, base it on tool output or clearly label it as a qualitative judgment.`
 
 export async function getForensicToolsSection(_variant: PromptVariant, context: SystemPromptContext): Promise<string> {
 	if (!context.isSubagentRun) {

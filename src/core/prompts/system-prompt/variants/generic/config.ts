@@ -77,6 +77,7 @@ export const config = createVariant(ModelFamily.GENERIC)
 		DietCodeDefaultTool.TODO,
 		DietCodeDefaultTool.GENERATE_EXPLANATION,
 		DietCodeDefaultTool.USE_SKILL,
+		DietCodeDefaultTool.PROJECT_MAP,
 		DietCodeDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({

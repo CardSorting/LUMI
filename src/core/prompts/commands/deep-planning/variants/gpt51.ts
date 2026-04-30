@@ -41,11 +41,11 @@ export function generateGPT51Template(focusChainEnabled: boolean, enableNativeTo
 
 	return `<explicit_instructions type="deep-planning">
 Your task is to create a comprehensive implementation plan before writing any code. This process has five distinct steps that must be completed in order:
-1. Spectral Scoping (Spider)
-2. Physical Verification (Two-Lock Check)
-3. Discussion and Questions
-4. Create Implementation Plan Document
-5. Create new_task for Implementation Phase
+1. Map the project
+2. Check the facts
+3. Discuss choices
+4. Create the implementation plan document
+5. Create new_task for the build phase
 
 ${focusChainEnabled ? `You should track these five steps in your task_progress parameter, and update it only when steps are completed.` : ""}
 Your behavior should be methodical and thorough - take time to understand the codebase completely before making any recommendations. The quality of your investigation and use of targeted reads/searches directly impacts the success of the implementation.
@@ -56,28 +56,27 @@ You must thoroughly understand the existing codebase before proposing any change
 Perform your research without commentary or narration. Execute commands and read files without explaining what you're about to do. Only speak up if you have specific questions for the user.
 </IMPORTANT>
 
-## STEP 1: Spectral Scoping & Forensic Analysis
+## STEP 1: Map the project
 
 ### Required Research Activities
-You MUST use the **Spider Engine** and **BroccoliDB** to scope and audit your analysis.
-- **Scope**: Use \`npx tsx scripts/agent-spider.ts find-symbol <name>\` and \`find-usage <symbol>\`.
-- **Forensic Audit**: Run \`npx tsx scripts/agent-spider.ts audit\` and \`npx tsx scripts/agent-spider.ts hotspots\`.
-  - Identify if your target files are **Structural Bridges** (Single Points of Failure) using \`npx tsx scripts/agent-spider.ts bridges\`.
-  - Identify **Structural Debt** (Clones/Implicit Interfaces) using \`npx tsx scripts/agent-spider.ts debt\`.
-- **Pre-Heat**: Use \`npx tsx scripts/agent-spider.ts pre-heat <file>\` to generate a Study Pack.
-- **Context**: Use \`broccolidb_semantic_search\` or \`broccolidb_query_graph\` to find logically related context.
+For existing code, start with a **Project Map**. Prefer the \`project_map\` tool when available; use Spider/BroccoliDB commands only as deeper internal checks.
+- **Starting point**: Resolve likely files or symbols from the user's request.
+- **Connections**: Identify files that import, depend on, use, or often change with the starting point.
+- **Risks**: Identify what could be affected, risky hubs, ambiguous symbols, stale map warnings, and files that need extra care.
+- **Files to understand first**: Use \`npx tsx scripts/agent-spider.ts pre-heat <file>\` only when a deeper study pack is needed.
+- **Context**: Use cognitive memory context where available to find semantically related files.
 
 Use these tools to determine the language(s) used in the codebase, and to identify the domain(s) and layers (Domain, Core, Infrastructure) relevant to the user's request.
 
 
-## STEP 2: Physical Verification (Two-Lock Check)
+## STEP 2: Check the facts
 
 ### Required Research Activities
-You MUST follow the **Hybrid Anchor** protocol: verify the structural findings from Step 1 with targeted terminal commands and file reads.
-If the Spider Engine and Grep results diverge, run \`npx tsx scripts/agent-spider.ts re-seed\` to re-align the graph.
+Verify the Project Map with targeted terminal commands and file reads. Use the map's suggested searches and reads first instead of broad exploration.
+If the map and disk results diverge, mark the map as stale and run \`npx tsx scripts/agent-spider.ts re-seed\` only when re-indexing is necessary.
 
 You will tailor these commands to explore and identify key functions, classes, methods, types, and variables that are directly, or indirectly related to the task.
-These commands must be crafted to not produce exceptionally long or verbose search results. For example, you should exclude dependency folders such as node_modules, venv or php vendor, etc. Carefully consider the scope of search patterns. Use the results of your spectral scoping to tailor the commands for balanced search result lengths. If a command returns no results, you may loosen the search patterns or scope slightly.
+These commands must be crafted to not produce exceptionally long or verbose search results. For example, you should exclude dependency folders such as node_modules, venv or php vendor, etc. Carefully consider the scope of search patterns. Use the Project Map to tailor the commands for balanced search result lengths. If a command returns no results, you may loosen the search patterns or scope slightly.
 
 Here are some example commands, remember to adjust them as instructed previously:
 ${
@@ -133,12 +132,12 @@ Your questions should be direct and specific. Avoid long explanations or multipl
 
 ## STEP 4: Create Implementation Plan Document
 
-### Grounded Triad Audit (V8: Sovereign Hazard)
+### Grounded review
 Before finalizing your plan, you must follow the **Double Down Planning** workflow:
 1. **Draft**: Use \`scratchpad.md\` for your investigation. You MUST follow the **Sovereign Triad V8 Template** (Grounding Probes -> Hazard Analysis -> Resolution).
 2. **Grounded Audit**: Answer the three investigative probes (Boundary, Assumption, Atomic) in the scratchpad.
-3. **Hazard Analysis**: Explicitly list any **Architectural Hazards** found in Step 1 (Bridges, Hotspots, Debt) and explain how your plan mitigates them.
-4. **Ghost Grounding**: Use \`broccolidb_simulate_merge\` to forecast conflicts and \`npx tsx scripts/agent-spider.ts blast-radius\` to quantify impact.
+3. **Risk analysis**: Explicitly list any risk areas found in Step 1 (high-impact files, hotspots, ambiguous symbols, or cleanup/debt areas) and explain how your plan mitigates them.
+4. **Stale-map and impact check**: Verify mapped files still exist, forecast conflicts where available, and use \`npx tsx scripts/agent-spider.ts blast-radius\` when impact needs quantifying.
 5. **Draft Resolution**: Synthesize all hardening results into the formal \`implementation_plan.md\`.
 6. **User Presentation**: Use the \`plan_mode_respond\` tool as your VERY NEXT action to deliver the finalized plan to the user for approval.
 
@@ -150,6 +149,15 @@ Your implementation plan must be saved as implementation_plan.md, and *must* be 
 
 <example_implementation_plan>
 # Implementation Plan
+
+[Project Map]
+Starting point, connected files, risk areas, verified facts, and confidence in plain language.
+
+[Recommended Approach]
+The preferred path forward and why it balances safety, scope, and maintainability.
+
+[Choices]
+Any meaningful alternatives, such as minimal fix, recommended approach, or larger cleanup/refactor.
 
 [Overview]
 Single sentence describing the overall goal.

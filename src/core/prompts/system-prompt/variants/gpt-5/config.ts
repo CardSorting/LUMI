@@ -67,6 +67,7 @@ export const config = createVariant(ModelFamily.GPT_5)
 		DietCodeDefaultTool.TODO,
 		DietCodeDefaultTool.GENERATE_EXPLANATION,
 		DietCodeDefaultTool.USE_SKILL,
+		DietCodeDefaultTool.PROJECT_MAP,
 		DietCodeDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({
