@@ -2,6 +2,15 @@
 
 Welcome to the DietCode documentation guide. This page provides a high-level map of our guides, tutorials, and technical references, organized to help you find exactly what you need.
 
+## 🏛️ The DietCode Philosophy
+
+Unlike traditional AI assistants that rely on metaphors, DietCode documentation is **Forensic and Literal**. We prioritize:
+- **1-to-1 Code Parity**: Every architectural guide mirrors the physical structure of the `src/` directory.
+- **Architectural Sovereignty**: We focus on how the agent respects your project's layering and standards.
+- **Human-in-the-Loop**: We emphasize your control over every tool execution and file modification.
+
+---
+
 ## 🧭 Documentation Map
 
 ### 1. 🚀 Getting Started

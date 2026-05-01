@@ -62,7 +62,7 @@ DietCode is architected for transparency and professional scale.
 2.  **Configure**: Add your API key (Anthropic, OpenAI, or local).
 3.  **Command**: Open the panel and try `/deep-planning` to see the agent in action.
 
-[Explore the Full Documentation](https://docs.dietcode.com) | [The DietCode Edge](docs/THE_DIETCODE_EDGE.md) | [Architectural Enforcement](docs/ARCHITECTURAL_ENFORCEMENT.md)
+[Explore the Full Documentation](docs/DOCS_GUIDE.md) | [The DietCode Edge](docs/THE_DIETCODE_EDGE.md) | [Architectural Enforcement](docs/ARCHITECTURAL_ENFORCEMENT.md)
 
 ---
 *Built for quality. Orchestrated for speed. You stay in control.*
