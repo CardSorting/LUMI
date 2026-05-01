@@ -1,104 +1,68 @@
-# DietCode: Your AI Coding Partner
+# DietCode: The Agentic Orchestrator
 
 ![DietCode Banner](assets/branding/banner.png)
 
-**DietCode** is an open-source AI coding agent that lives in your editor. It's designed to help you build complex software by understanding your entire project, suggesting smart changes, and automating repetitive tasks—all while keeping you in full control.
-
-> [!IMPORTANT]
-> **Performance First**: The latest version of DietCode features a redesigned analysis engine that is faster and more memory-efficient, allowing it to handle projects with thousands of files with ease.
+**Stop Chatting. Start Building.** DietCode is a professional-grade agentic pair programmer that doesn't just suggest code—it **orchestrates** your entire development environment.
 
 ---
 
+## ⚡ The Agentic Leap
+Most AI tools are "reactive chatbots" that wait for you to copy-paste. DietCode is a **proactive agent** that observes your codebase, creates formal implementation plans, and executes changes across your terminal, browser, and file system.
+
+| Feature | Standard AI Assistants | DietCode |
+| :--- | :--- | :--- |
+| **Logic** | Reactive Autocomplete | **Proactive Agentic Reasoning** |
+| **Workflow** | Blocks your main window | **Git Worktrees** (Parallel Windows) |
+| **Planning** | Informal Chat | **Deep Planning** & Implementation Docs |
+| **Privacy** | Cloud-indexed | **Local-first / Zero-Trust** |
+| **Model** | Provider Lock-in | **Model Agnostic** (Claude, GPT, Gemini, Llama) |
+
 ---
 
-## 🚀 The DietCode Edge
+## 🚀 The First 5 Minutes: Your First Task
 
-DietCode is a true **agentic pair programmer** that offers significant advantages over traditional AI assistants:
+Traditional onboarding is boring. Let's build something real in your first 5 minutes with DietCode.
 
-- **Proactive Agency**: Unlike standard assistants that just suggest code, DietCode analyzes problems, creates multi-step plans, and executes them using its built-in terminal, browser, and sub-agents.
-- **Architectural Maturity**: Use `/deep-planning` for complex features. DietCode investigates your codebase silently, builds a formal implementation plan, and tracks progress with a visual todo list.
-- **Parallel Productivity**: With **Git Worktrees**, DietCode can build features in a separate window while you continue coding in your main window—no more stashing or interruptions.
-- **Architectural Sovereignty**: The built-in **Universal Guard** enforces your project's layering rules in real-time. Every edit is followed by a **Self-Healing** pass that ensures architectural consistency and structural health.
-- **Extensible Lifecycle**: Write your own **Custom Interceptors** (Hooks) in any language to monitor, modify, or block the agent's actions at every stage of the lifecycle.
+### Step 1: Forensic Investigation
+Type `/deep-planning` followed by a feature you've been putting off.
+> "DietCode performs a silent investigation of your codebase, mapping dependencies and creating a formal `implementation_plan.md` before touching a single line."
+
+### Step 2: Parallel Productivity
+Click the **"New Worktree Window"** button on the home screen.
+> "DietCode opens a separate window on a parallel branch. You keep coding in your main window while the agent builds the new feature in the background. No more stashing or interruptions."
+
+### Step 3: Set Your Guardrails
+Add a rule to your `.dietcoderules` or create a **Custom Interceptor**.
+> "The **Universal Guard** ensures every change the agent makes follows your architectural standards. You remain the 'Human-in-the-Loop', approving every action."
+
+---
+
+## 💎 The DietCode Edge
+
+- **Architectural Sovereignty**: The built-in **Universal Guard** enforces your project's layering rules in real-time. Every edit is followed by a **Self-Healing** pass that ensures architectural consistency.
 - **Forensic Context**: DietCode uses a **Knowledge Graph** to calculate the "Blast Radius" of every change and maintains **Long-Term Memory** via AI-compacted landmarks.
-- **Privacy & Security**: Your source code never touches DietCode's servers. The agent runs entirely on your machine, with all context stored in a local SQLite database (**BroccoliDB**).
-- **Model Agnostic**: Switch instantly between Claude, GPT-4, Gemini, or run local models (like Llama 3) for 100% private development.
+- **Extensible Lifecycle**: Write your own **Custom Interceptors** (Hooks) in any language to monitor, modify, or block the agent's actions at every stage.
+- **Privacy First**: Your code stays on your machine. Task history and context are stored in a local SQLite database (**BroccoliDB**).
 
 ---
 
-## 🛠️ The Developer's Toolkit
+## 📐 Project Blueprint
+DietCode is architected for transparency and professional scale.
 
-DietCode offers a complete suite of tools to help you build faster:
-
-- **Smart Project Analysis**: Automatically maps your project's structure, understanding dependencies and coding patterns without manual setup.
-- **Local Context Memory**: Uses a local SQLite database (**BroccoliDB**) to store task history and project context safely on your machine.
-- **Universal Guard**: Ensures all AI-suggested changes follow your project's rules and architectural standards.
-- **Human-in-the-Loop**: You approve every file edit, terminal command, and browser action. Nothing happens without your permission.
-- **Extensible Tools**: Support for terminal commands, browser automation, and 3rd-party tool integration via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
+- **`src/core/`**: The reasoning engine and Observe-Plan-Act loop.
+- **`src/integrity/`**: The forensic monitors (Guard, Stability, Policy).
+- **`src/services/`**: Context mapping, Knowledge Graphs, and AI communication.
+- **`src/infrastructure/`**: The tools (Terminal, Browser, File System, MCP).
 
 ---
 
-## 📐 Project Blueprint (1-to-1 Parity)
+## 🛠️ How to Start
 
-DietCode is architected for transparency. Here is how the project is organized:
+1.  **Install**: Search for "DietCode" in your IDE marketplace.
+2.  **Configure**: Add your API key (Anthropic, OpenAI, or local).
+3.  **Command**: Open the panel and try `/deep-planning` to see the agent in action.
 
-### Core Modules (`src/`)
-- **`src/core/`**: The main orchestration loop and reasoning engine. This is where DietCode "thinks" and decides which tools to use.
-- **`src/domain/`**: Business logic and project-wide rules. It defines the standards and constraints that DietCode must follow.
-- **`src/services/`**: Shared capabilities like AI model communication, prompt generation, and context management.
-- **`src/infrastructure/`**: The "hands" of DietCode. This layer handles file system access, terminal execution, and browser automation.
-- **`src/integrations/`**: Adapters that connect DietCode to specific editors like VS Code and JetBrains.
-- **`src/integrity/`**: Stability monitors and policy enforcement that prevent agent errors and ensure structural quality.
-- **`src/types/`**: The central repository for all project-wide TypeScript definitions.
-
-### Supporting Folders
-- **`webview-ui/`**: The frontend code for the interactive sidebar you see in your editor.
-- **`cli/`**: The standalone version for terminal power-users and automated CI/CD workflows.
-- **`broccolidb/`**: Local storage (SQLite) where your task history and project context are safely persisted.
-- **`proto/`**: The high-performance communication protocol between the agent and your host environment.
-- **`mcp/`**: A plugin hub for extending DietCode with new tools (databases, API clients, custom scripts).
+[Explore the Full Documentation](https://docs.dietcode.com) | [The DietCode Edge](docs/THE_DIETCODE_EDGE.md) | [Architectural Enforcement](docs/ARCHITECTURAL_ENFORCEMENT.md)
 
 ---
-
-## 🛠️ How it Works
-
-DietCode uses a simple **Observe → Plan → Act** loop to help you solve problems.
-
-```mermaid
-graph LR
-    Start([User Request]) --> Observe[1. Observe]
-    Observe -- "Read Code & Logs" --> Plan[2. Plan]
-    Plan -- "Proposed Solution" --> Act[3. Act]
-    Act -- "Execute Tools" --> Audit{4. User Review}
-    Audit -- "Request Change" --> Plan
-    Audit -- "Approve" --> Result[5. Finalize]
-    Result --> Observe
-```
-
-### 1. Smart Code Analysis
-DietCode uses advanced static analysis to map your project's architecture. It identifies patterns, detects potential bugs, and ensures that new code follows your project's existing standards.
-
-### 2. Intelligent Suggestions
-When you ask for a change, DietCode analyzes the impact across your entire codebase. It identifies which files need to change and ensures that imports and dependencies are handled correctly.
-
-### 3. Safe Execution
-DietCode can run tests, install packages, and debug errors directly in your terminal. It can also launch a browser to verify that your UI changes look exactly right.
-
----
-
-## ⚡ Quick Start
-
-1.  **Install**: Search for "DietCode" in your IDE's marketplace (VS Code, JetBrains, etc.).
-2.  **Configure**: Connect your preferred AI provider (Anthropic, OpenAI, Google, or local).
-3.  **Start Building**: Open the DietCode panel and describe what you want to build.
-
-For a detailed walkthrough, see our **[Getting Started Guide](https://docs.dietcode.com/getting-started)**.
-
----
-
-## 🕰️ History & Origins
-
-**DietCode** is a professionally hardened evolution of the [Cline](https://github.com/cline/cline) open-source project. While it shares some foundational concepts, DietCode has been significantly refactored to focus on enterprise-grade stability, advanced project analysis, and strict adherence to coding standards.
-
----
-*Built with ❤️ by the DietCode Team. Focus on quality, stay in control.*
+*Built for quality. Orchestrated for speed. You stay in control.*
