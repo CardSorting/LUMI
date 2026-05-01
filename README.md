@@ -9,7 +9,24 @@
 
 ---
 
-## 🚀 The Developer's Toolkit
+---
+
+## 🚀 The DietCode Edge
+
+DietCode is a true **agentic pair programmer** that offers significant advantages over traditional AI assistants:
+
+- **Proactive Agency**: Unlike standard assistants that just suggest code, DietCode analyzes problems, creates multi-step plans, and executes them using its built-in terminal, browser, and sub-agents.
+- **Architectural Maturity**: Use `/deep-planning` for complex features. DietCode investigates your codebase silently, builds a formal implementation plan, and tracks progress with a visual todo list.
+- **Parallel Productivity**: With **Git Worktrees**, DietCode can build features in a separate window while you continue coding in your main window—no more stashing or interruptions.
+- **Architectural Sovereignty**: The built-in **Universal Guard** enforces your project's layering rules in real-time. Every edit is followed by a **Self-Healing** pass that ensures architectural consistency and structural health.
+- **Extensible Lifecycle**: Write your own **Custom Interceptors** (Hooks) in any language to monitor, modify, or block the agent's actions at every stage of the lifecycle.
+- **Forensic Context**: DietCode uses a **Knowledge Graph** to calculate the "Blast Radius" of every change and maintains **Long-Term Memory** via AI-compacted landmarks.
+- **Privacy & Security**: Your source code never touches DietCode's servers. The agent runs entirely on your machine, with all context stored in a local SQLite database (**BroccoliDB**).
+- **Model Agnostic**: Switch instantly between Claude, GPT-4, Gemini, or run local models (like Llama 3) for 100% private development.
+
+---
+
+## 🛠️ The Developer's Toolkit
 
 DietCode offers a complete suite of tools to help you build faster:
 

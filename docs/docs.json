@@ -70,6 +70,7 @@
 						"group": "Getting Started",
 						"pages": [
 							"getting-started/what-is-dietcode",
+							"THE_DIETCODE_EDGE",
 							"getting-started/installing-dietcode",
 							"getting-started/authorizing-with-dietcode",
 							"getting-started/your-first-project",
