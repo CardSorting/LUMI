@@ -1,3 +1,8 @@
+---
+title: "Enterprise Deployment"
+sidebarTitle: "Enterprise"
+---
+
 # Enterprise Deployment & Self-Hosting
 
 DietCode is architected for maximum data sovereignty. For enterprise environments with strict security requirements, the substrate supports **Self-Hosted (On-Premise)** mode, allowing you to bypass external cloud dependencies and manage your own industrial endpoints.

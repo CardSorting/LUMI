@@ -1,4 +1,9 @@
-# Architectural Enforcement: From Crash to Correction
+---
+title: "Code Standard Enforcement"
+sidebarTitle: "Enforcement"
+---
+
+# Code Standard Enforcement
 
 This document summarizes the changes made to the DietCode architectural policy engine to resolve agent crashing on strikes and implement production-grade hardening.
 

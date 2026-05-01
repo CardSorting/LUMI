@@ -52,9 +52,15 @@ These are the patterns you'll use daily with DietCode:
 | [Commands](/core-workflows/using-commands) | Keyboard shortcuts, slash commands, and terminal integration. |
 | [Checkpoints](/core-workflows/checkpoints) | Automatic snapshots of your project. Restore to any previous state instantly. |
 
-## Why DietCode
+## Workspace Integration
 
-- **Transparent by default** - Watch every file read, every decision considered, every token used. No black box.
-- **Any model, any provider** - Use Claude, GPT-4, Gemini, DeepSeek, or local models. Switch instantly as new models launch.
-- **Zero trust architecture** - Your code never touches our servers. DietCode runs entirely client-side with your API keys.
-- **Open source** - Every line of code on [GitHub](https://github.com/dietcode/dietcode). 50k+ stars from developers who use it daily.
+DietCode isn't a separate app; it's a part of your local development environment. It has a direct, 1-to-1 parity with your project structure:
+
+- **Local File Access**: DietCode reads and writes files directly in your workspace. It sees what you see—your `.env` files, your `node_modules`, and your local Git history.
+- **Local Tool Execution**: When you approve a command, DietCode runs it in your local terminal. It has access to your `npm`, `python`, `go`, and any other tools you have installed.
+- **Local Persistence**: All project context, task history, and AI "memory" are stored on your machine in a local **SQLite database** (`broccolidb.db`). Nothing about your codebase is stored on our servers.
+- **Human-in-the-Loop**: DietCode acts as an extension of your own actions. It proposes a change, you review it in your editor's diff view, and only when you click **Approve** does it modify your files.
+
+---
+
+## Why DietCode

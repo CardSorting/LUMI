@@ -2,7 +2,7 @@
 	"$schema": "https://mintlify.com/docs.json",
 	"theme": "mint",
 	"name": "DietCode",
-	"description": "The self-hardening, sovereign AI coding agent.",
+	"description": "The AI coding agent that understands your codebase.",
 	"colors": {
 		"primary": "#9D4EDD",
 		"light": "#F0E6FF",
@@ -49,15 +49,15 @@
 		],
 		"primary": {
 			"type": "button",
-			"label": "Install Cline",
+			"label": "Install DietCode",
 			"href": "https://cline.bot/install?utm_source=website&utm_medium=header"
 		}
 	},
 	"navigation": {
 		"tabs": [
 			{
-				"tab": "Docs",
-				"icon": "square-terminal",
+				"tab": "Getting Started",
+				"icon": "rocket",
 				"groups": [
 					{
 						"group": "Home",
@@ -69,12 +69,19 @@
 					{
 						"group": "Getting Started",
 						"pages": [
-							"getting-started/what-is-cline",
-							"getting-started/installing-cline",
-							"getting-started/authorizing-with-cline",
-							"getting-started/your-first-project"
+							"getting-started/what-is-dietcode",
+							"getting-started/installing-dietcode",
+							"getting-started/authorizing-with-dietcode",
+							"getting-started/your-first-project",
+							"getting-started/glossary"
 						]
-					},
+					}
+				]
+			},
+			{
+				"tab": "User Guide",
+				"icon": "book-open-reader",
+				"groups": [
 					{
 						"group": "Core Workflows",
 						"pages": [
@@ -83,6 +90,21 @@
 							"core-workflows/working-with-files",
 							"core-workflows/using-commands",
 							"core-workflows/checkpoints"
+						]
+					},
+					{
+						"group": "Core Features",
+						"pages": [
+							"features/focus-chain",
+							"features/auto-approve",
+							"features/auto-compact",
+							"features/multiroot-workspace",
+							"features/subagents",
+							"features/background-edit",
+							"features/jupyter-notebooks",
+							"features/deep-planning",
+							"features/web-tools",
+							"features/worktrees"
 						]
 					},
 					{
@@ -96,6 +118,86 @@
 							"customization/clineignore"
 						]
 					},
+					{
+						"group": "Tools Reference",
+						"pages": [
+							"tools-reference/all-dietcode-tools",
+							"tools-reference/browser-automation"
+						]
+					},
+					{
+						"group": "Troubleshooting",
+						"pages": [
+							"troubleshooting/terminal-quick-fixes",
+							"troubleshooting/networking-and-proxies",
+							"troubleshooting/task-history-recovery"
+						]
+					}
+				]
+			},
+			{
+				"tab": "Advanced",
+				"icon": "bolt",
+				"groups": [
+					{
+						"group": "AI & Reasoning",
+						"pages": [
+							"features/intent-grounding",
+							"multi-agent-system",
+							"features/memory-bank",
+							"hyper-cognition/MAS_ARCHITECTURE"
+						]
+					},
+					{
+						"group": "Security & Stability",
+						"pages": [
+							"SECURITY_BEST_PRACTICES",
+							"CODEBASE_STANDARDS",
+							"STABILITY_REPORT",
+							"ARCHITECTURAL_ENFORCEMENT_HARDENING"
+						]
+					},
+					{
+						"group": "Agents & Memory",
+						"pages": [
+							"WORKING_WITH_SUBAGENTS",
+							"MEMORY_AND_REASONING"
+						]
+					}
+				]
+			},
+			{
+				"tab": "Architecture",
+				"icon": "compass-drafting",
+				"groups": [
+					{
+						"group": "System Architecture",
+						"pages": [
+							"PROJECT_MAP",
+							"SYSTEM_COMMUNICATION",
+							"ENTERPRISE_DEPLOYMENT",
+							"USER_INTERFACE_DESIGN"
+						]
+					},
+					{
+						"group": "Documentation Guide",
+						"pages": [
+							"DOCS_GUIDE"
+						]
+					},
+					{
+						"group": "Contributing",
+						"pages": [
+							"contributing/documentation-guide",
+							"contributing/doc-templates"
+						]
+					}
+				]
+			},
+			{
+				"tab": "Integrations",
+				"icon": "plug",
+				"groups": [
 					{
 						"group": "DietCode CLI",
 						"pages": [
@@ -117,62 +219,6 @@
 							"dietcode-cli/configuration",
 							"dietcode-cli/acp-editor-integrations",
 							"dietcode-cli/cli-reference"
-						]
-					},
-					{
-						"group": "Industrial Infrastructure (1:1 Parity)",
-						"pages": [
-							"SYSTEM_ARCHITECTURE",
-							"HOSTBRIDGE_PROTOBUS",
-							"ENTERPRISE_DEPLOYMENT",
-							"UX_PROJECTION_LAYER"
-						]
-					},
-					{
-						"group": "Swarm Protocols & BroccoliDB (1:1 Parity)",
-						"pages": [
-							"SUBAGENT_PROTOCOLS",
-							"COGNITIVE_PRIMITIVES"
-						]
-					},
-					{
-						"group": "Sovereign Substrate (V210)",
-						"pages": [
-							"SOVEREIGN_GUIDE",
-							"JOYZONING_SOVEREIGNTY_3_0",
-							"FORENSIC_SUBSTRATE_REPORT",
-							"PATHOGEN_REGISTRY",
-							"ARCHITECTURAL_ENFORCEMENT_HARDENING"
-						]
-					},
-					{
-						"group": "Knowledge Base Guide",
-						"pages": [
-							"KNOWLEDGE_BASE_GUIDE"
-						]
-					},
-					{
-						"group": "Cognitive Architecture (V210)",
-						"pages": [
-							"features/intent-grounding",
-							"multi-agent-system",
-							"features/memory-bank",
-							"hyper-cognition/MAS_ARCHITECTURE"
-						]
-					},
-					{
-						"group": "Core Features",
-						"pages": [
-							"features/focus-chain",
-							"features/auto-approve",
-							"features/auto-compact",
-							"features/multiroot-workspace",
-							"features/subagents",
-							"features/background-edit",
-							"features/jupyter-notebooks",
-							"features/deep-planning",
-							"features/web-tools",
-							"features/worktrees"
 						]
 					},
 					{
@@ -233,20 +279,6 @@
 										]
 									}
 								]
-							},
-							{
-								"group": "Advanced Configuration",
-								"pages": [
-									"provider-config/aihubmix",
-									"provider-config/dify",
-									"provider-config/hicap",
-									"provider-config/litellm-and-cline-using-codestral",
-									"provider-config/openai-compatible",
-									"provider-config/requesty",
-									"provider-config/sap-aicore",
-									"provider-config/vercel-ai-gateway",
-									"provider-config/vscode-language-model-api"
-								]
 							}
 						]
 					},
@@ -259,28 +291,6 @@
 							"mcp/mcp-server-development-protocol",
 							"mcp/connecting-to-a-remote-server",
 							"mcp/mcp-transport-mechanisms"
-						]
-					},
-					{
-						"group": "Tools Reference",
-						"pages": [
-							"tools-reference/all-dietcode-tools",
-							"tools-reference/browser-automation"
-						]
-					},
-					{
-						"group": "Troubleshooting",
-						"pages": [
-							"troubleshooting/terminal-quick-fixes",
-							"troubleshooting/networking-and-proxies",
-							"troubleshooting/task-history-recovery"
-						]
-					},
-					{
-						"group": "Contributing",
-						"pages": [
-							"contributing/documentation-guide",
-							"contributing/doc-templates"
 						]
 					}
 				]
@@ -324,7 +334,7 @@
 								]
 							},
 							{
-								"group": "Control Other Cline Features",
+								"group": "Organization Settings",
 								"pages": [
 									"enterprise-solutions/configuration/infrastructure-configuration/control-other-cline-features/yolo-mode",
 									"enterprise-solutions/configuration/infrastructure-configuration/control-other-cline-features/mcp-marketplace"
@@ -360,29 +370,29 @@
 		{
 			"name": "Overview",
 			"icon": "house",
-			"url": "getting-started/what-is-cline"
+			"url": "getting-started/what-is-dietcode"
 		}
 	],
 	"redirects": [
 		{
-			"source": "/getting-started/installing-cline-jetbrains",
-			"destination": "/getting-started/installing-cline"
+			"source": "/getting-started/installing-dietcode-jetbrains",
+			"destination": "/getting-started/installing-dietcode"
 		},
 		{
 			"source": "/getting-started/overview",
-			"destination": "/getting-started/what-is-cline"
+			"destination": "/getting-started/what-is-dietcode"
 		},
 		{
 			"source": "/introduction",
-			"destination": "/getting-started/what-is-cline"
+			"destination": "/getting-started/what-is-dietcode"
 		},
 		{
 			"source": "/introduction/welcome",
-			"destination": "/getting-started/what-is-cline"
+			"destination": "/getting-started/what-is-dietcode"
 		},
 		{
 			"source": "/introduction/overview",
-			"destination": "/getting-started/what-is-cline"
+			"destination": "/getting-started/what-is-dietcode"
 		},
 		{
 			"source": "/getting-started/model-selection-guide",
@@ -413,7 +423,7 @@
 			"destination": "/customization/cline-rules"
 		},
 		{
-			"source": "/prompting/cline-memory-bank",
+			"source": "/prompting/dietcode-memory-bank",
 			"destination": "/features/memory-bank"
 		},
 		{
@@ -513,16 +523,16 @@
 			"destination": "/features/auto-approve"
 		},
 		{
-			"source": "/features/cline-rules",
-			"destination": "/customization/cline-rules"
+			"source": "/features/dietcode-rules",
+			"destination": "/customization/dietcode-rules"
 		},
 		{
-			"source": "/features/cline-rules/overview",
-			"destination": "/customization/cline-rules"
+			"source": "/features/dietcode-rules/overview",
+			"destination": "/customization/dietcode-rules"
 		},
 		{
-			"source": "/features/cline-rules/conditional-rules",
-			"destination": "/customization/cline-rules"
+			"source": "/features/dietcode-rules/conditional-rules",
+			"destination": "/customization/dietcode-rules"
 		},
 		{
 			"source": "/features/commands-and-shortcuts/overview",
@@ -561,15 +571,15 @@
 			"destination": "/customization/workflows"
 		},
 		{
-			"source": "/exploring-clines-tools/cline-tools-guide",
+			"source": "/exploring-dietcodes-tools/dietcode-tools-guide",
 			"destination": "/tools-reference/all-dietcode-tools"
 		},
 		{
-			"source": "/exploring-clines-tools/new-task-tool",
+			"source": "/exploring-dietcodes-tools/new-task-tool",
 			"destination": "/tools-reference/all-dietcode-tools"
 		},
 		{
-			"source": "/exploring-clines-tools/remote-browser-support",
+			"source": "/exploring-dietcodes-tools/remote-browser-support",
 			"destination": "/tools-reference/browser-automation"
 		},
 		{
@@ -609,16 +619,16 @@
 			"destination": "/enterprise-solutions/team-management/managing-members"
 		},
 		{
-			"source": "/features/customization/opening-cline-in-sidebar",
-			"destination": "/getting-started/installing-cline"
+			"source": "/features/customization/opening-dietcode-in-sidebar",
+			"destination": "/getting-started/installing-dietcode"
 		},
 		{
-			"source": "/prompting/prompt-engineering-guide/clineignore-file-guide",
-			"destination": "/customization/clineignore"
+			"source": "/prompting/prompt-engineering-guide/dietcodeignore-file-guide",
+			"destination": "/customization/dietcodeignore"
 		},
 		{
 			"source": "/getting-started/selecting-your-model",
-			"destination": "/getting-started/authorizing-with-cline"
+			"destination": "/getting-started/authorizing-with-dietcode"
 		},
 		{
 			"source": "/model-config/model-comparison",
@@ -650,6 +660,6 @@
 		}
 	],
 	"search": {
-		"prompt": "Search Cline documentation..."
+		"prompt": "Search DietCode documentation..."
 	}
 }
