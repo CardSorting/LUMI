@@ -4857,4 +4857,15 @@ export const nousResearchModels = {
 		description:
 			"Kimi K2.6 is a frontier-scale open-source 1T parameter model with a 262.1k context window, vision inputs, and structured outputs for agentic workloads.",
 	},
+	"arcee-ai/trinity-large-thinking": {
+		maxTokens: 64_000,
+		contextWindow: 262_144,
+		supportsImages: false,
+		supportsPromptCache: false,
+		supportsReasoning: true,
+		inputPrice: 0.22,
+		outputPrice: 0.85,
+		description:
+			"Trinity Large Thinking is a reasoning-optimized, sparse Mixture-of-Experts (MoE) model developed by Arcee AI. It is designed for complex, long-horizon agentic workflows, multi-turn tool calling, and structured outputs.",
+	},
 } as const satisfies Record<string, ModelInfo>
