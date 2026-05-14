@@ -4868,4 +4868,14 @@ export const nousResearchModels = {
 		description:
 			"Trinity Large Thinking is a reasoning-optimized, sparse Mixture-of-Experts (MoE) model developed by Arcee AI. It is designed for complex, long-horizon agentic workflows, multi-turn tool calling, and structured outputs.",
 	},
+	"deepseek/deepseek-v4-flash": {
+		maxTokens: 65_536,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		inputPrice: 0.14,
+		outputPrice: 0.28,
+		description:
+			"DeepSeek-V4-Flash is an efficiency-optimized Mixture-of-Experts (MoE) model designed for fast, cost-effective inference with a 1M token context window.",
+	},
 } as const satisfies Record<string, ModelInfo>
