@@ -4,7 +4,7 @@ package dietcode;
 
 import "dietcode/common.proto";
 
-option go_package = "github.com/cardsorting/grpc-go/dietcode";
+option go_package = "github.com/dietcode/grpc-go/dietcode";
 option java_multiple_files = true;
 option java_package = "bot.dietcode.proto";
 
