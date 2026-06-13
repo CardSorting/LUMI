@@ -1,4 +1,4 @@
-import { mentionRegex, mentionRegexGlobal } from "@shared/context-mentions"
+import { mentionRegex } from "@shared/context-mentions"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { FileSearchRequest, FileSearchType, RelativePathsRequest } from "@shared/proto/dietcode/file"
 import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/dietcode/state"
@@ -9,12 +9,9 @@ import type React from "react"
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
 import styled from "styled-components"
-import DietCodeLogoVariable from "@/assets/DietCodeLogoVariable"
 import ContextMenu from "@/components/chat/ContextMenu"
 import { CHAT_CONSTANTS } from "@/components/chat/chat-view/constants"
 import SlashCommandMenu from "@/components/chat/SlashCommandMenu"
-import type { MiraCalmTier, MiraOrbMood } from "@/components/common/MiraAmbientOrb"
-import { MiraAmbientOrb } from "@/components/common/MiraAmbientOrb"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { Icon } from "@/components/ui/icons"
@@ -41,8 +38,6 @@ import {
 	removeSlashCommand,
 	shouldShowSlashCommandsMenu,
 	slashCommandDeleteRegex,
-	slashCommandRegexGlobal,
-	validateSlashCommand,
 } from "@/utils/slash-commands"
 import DietCodeRulesToggleModal from "../dietcode-rules/DietCodeRulesToggleModal"
 import ServersToggleModal from "./ServersToggleModal"
@@ -85,8 +80,6 @@ interface ChatTextAreaProps {
 	shouldDisableFilesAndImages: boolean
 	onHeightChange?: (height: number) => void
 	onFocusChange?: (isFocused: boolean) => void
-	calmTier?: MiraCalmTier
-	companionMood?: MiraOrbMood
 }
 
 interface GitCommit {
@@ -214,8 +207,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			shouldDisableFilesAndImages,
 			onHeightChange,
 			onFocusChange,
-			calmTier = "normal",
-			companionMood = "idle",
 		},
 		ref,
 	) => {
@@ -223,7 +214,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			mode,
 			apiConfiguration,
 			platform,
-			environment,
 			localWorkflowToggles,
 			globalWorkflowToggles,
 			remoteWorkflowToggles,
@@ -231,7 +221,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			navigateToSettingsModelPicker,
 			mcpServers,
 		} = useExtensionState()
-		const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
 		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
 		const [showSlashCommandsMenu, setShowSlashCommandsMenu] = useState(false)
@@ -239,14 +228,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [slashCommandsQuery, setSlashCommandsQuery] = useState("")
 		const slashCommandsMenuContainerRef = useRef<HTMLDivElement>(null)
 
-		const [thumbnailsHeight, setThumbnailsHeight] = useState(0)
-		const [textAreaBaseHeight, setTextAreaBaseHeight] = useState<number | undefined>(undefined)
 		const [showContextMenu, setShowContextMenu] = useState(false)
 		const [cursorPosition, setCursorPosition] = useState(0)
 		const [searchQuery, setSearchQuery] = useState("")
 		const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
 		const [isMouseDownOnMenu, setIsMouseDownOnMenu] = useState(false)
-		const highlightLayerRef = useRef<HTMLDivElement>(null)
 		const [selectedMenuIndex, setSelectedMenuIndex] = useState(-1)
 		const [selectedType, setSelectedType] = useState<ContextMenuOptionType | null>(null)
 		const [justDeletedSpaceAfterMention, setJustDeletedSpaceAfterMention] = useState(false)
@@ -595,8 +581,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				setShowContextMenu(false)
 				setShowSlashCommandsMenu(false)
 			}
-			setIsTextAreaFocused(false)
-			onFocusChange?.(false) // Call prop on blur
+			onFocusChange?.(false)
 		}, [isMouseDownOnMenu, onFocusChange])
 
 		const showDimensionErrorMessage = useCallback(() => {
@@ -706,69 +691,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			],
 		)
 
-		const handleThumbnailsHeightChange = useCallback((height: number) => {
-			setThumbnailsHeight(height)
-		}, [])
-
-		useEffect(() => {
-			if (selectedImages.length === 0 && selectedFiles.length === 0) {
-				setThumbnailsHeight(0)
-			}
-		}, [selectedImages, selectedFiles])
-
 		const handleMenuMouseDown = useCallback(() => {
 			setIsMouseDownOnMenu(true)
 		}, [])
-
-		const updateHighlights = useCallback(() => {
-			if (!textAreaRef.current || !highlightLayerRef.current) {
-				return
-			}
-
-			let processedText = textAreaRef.current.value
-
-			processedText = processedText
-				.replace(/\n$/, "\n\n")
-				.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c] || c)
-				// highlight @mentions
-				.replace(mentionRegexGlobal, '<mark class="mention-context-textarea-highlight">$&</mark>')
-
-			// Highlight only the FIRST valid /slash-command in the text
-			// Only one slash command is processed per message, so we only highlight the first one
-			slashCommandRegexGlobal.lastIndex = 0
-			let hasHighlightedSlashCommand = false
-			processedText = processedText.replace(slashCommandRegexGlobal, (match, prefix, command) => {
-				// Only highlight the first valid slash command
-				if (hasHighlightedSlashCommand) {
-					return match
-				}
-
-				// Extract just the command name (without the slash)
-				const commandName = command.substring(1)
-				const isValidCommand = validateSlashCommand(
-					commandName,
-					localWorkflowToggles,
-					globalWorkflowToggles,
-					remoteWorkflowToggles,
-					remoteConfigSettings?.remoteGlobalWorkflows,
-				)
-
-				if (isValidCommand) {
-					hasHighlightedSlashCommand = true
-					// Keep the prefix (whitespace or empty) and wrap the command in highlight
-					return `${prefix}<mark class="mention-context-textarea-highlight">${command}</mark>`
-				}
-				return match
-			})
-
-			highlightLayerRef.current.innerHTML = processedText
-			highlightLayerRef.current.scrollTop = textAreaRef.current.scrollTop
-			highlightLayerRef.current.scrollLeft = textAreaRef.current.scrollLeft
-		}, [localWorkflowToggles, globalWorkflowToggles, remoteWorkflowToggles, remoteConfigSettings])
-
-		useLayoutEffect(() => {
-			updateHighlights()
-		}, [updateHighlights])
 
 		const updateCursorPosition = useCallback(() => {
 			if (textAreaRef.current) {
@@ -823,7 +748,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					},
 				} as React.ChangeEvent<HTMLTextAreaElement>
 				handleInputChange(event)
-				updateHighlights()
 				return
 			}
 
@@ -836,7 +760,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					},
 				} as React.ChangeEvent<HTMLTextAreaElement>
 				handleInputChange(event)
-				updateHighlights()
 				return
 			}
 
@@ -848,8 +771,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				},
 			} as React.ChangeEvent<HTMLTextAreaElement>
 			handleInputChange(event)
-			updateHighlights()
-		}, [inputValue, handleInputChange, updateHighlights])
+		}, [inputValue, handleInputChange])
 
 		const handleModelButtonClick = () => {
 			navigateToSettingsModelPicker({ targetSection: "api-config" })
@@ -1254,7 +1176,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					event.preventDefault()
 
 					if (!sendingDisabled) {
-						setIsTextAreaFocused(false)
 						onSend()
 					}
 				}
@@ -1357,26 +1278,21 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		return (
 			<div>
 				<div
-					className="relative flex transition-colors ease-in-out duration-200 px-3.5 py-3 gap-2.5"
+					className="px-3 pt-3 pb-2 flex flex-col gap-2"
 					onDragEnter={handleDragEnter}
 					onDragLeave={handleDragLeave}
 					onDragOver={onDragOver}
 					onDrop={onDrop}
 					role="presentation">
-					<MiraAmbientOrb calmTier={calmTier} className="hidden sm:flex items-end pb-1 shrink-0" mood={companionMood}>
-						<DietCodeLogoVariable className="size-7" environment={environment} />
-					</MiraAmbientOrb>
-					<div className="relative flex-1 min-w-0">
+					<div className="relative">
 						{showDimensionError && (
-							<div className="absolute inset-2.5 bg-[rgba(var(--vscode-errorForeground-rgb),0.1)] border-2 border-error rounded-xs flex items-center justify-center z-10 pointer-events-none">
-								<span className="text-error font-bold text-xs text-center">Image dimensions exceed 7500px</span>
+							<div className="mb-2 px-2 py-1 text-error text-xs border border-error rounded">
+								Image dimensions exceed 7500px
 							</div>
 						)}
 						{showUnsupportedFileError && (
-							<div className="absolute inset-2.5 bg-[rgba(var(--vscode-errorForeground-rgb),0.1)] border-2 border-error rounded-xs flex items-center justify-center z-10 pointer-events-none">
-								<span className="text-error font-bold text-xs">
-									Files other than images are currently disabled
-								</span>
+							<div className="mb-2 px-2 py-1 text-error text-xs border border-error rounded">
+								Files other than images are currently disabled
 							</div>
 						)}
 						{showSlashCommandsMenu && (
@@ -1411,57 +1327,25 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								/>
 							</div>
 						)}
-						<div
-							className={cn(
-								"absolute bottom-2.5 top-2.5 whitespace-pre-wrap break-words rounded-xl overflow-hidden bg-input-background/80 glass-panel",
-								isTextAreaFocused
-									? "left-2 right-2 ring-1 ring-mira/15"
-									: "left-2 right-2 border border-input-border/50",
-							)}
-							ref={highlightLayerRef}
-							style={{
-								position: "absolute",
-								pointerEvents: "none",
-								whiteSpace: "pre-wrap",
-								wordWrap: "break-word",
-								color: "transparent",
-								overflow: "hidden",
-								fontFamily: "var(--vscode-font-family)",
-								fontSize: "var(--vscode-editor-font-size)",
-								lineHeight: "var(--vscode-editor-line-height)",
-								borderRadius: 2,
-								borderLeft: isTextAreaFocused ? 0 : undefined,
-								borderRight: isTextAreaFocused ? 0 : undefined,
-								borderTop: isTextAreaFocused ? 0 : undefined,
-								borderBottom: isTextAreaFocused ? 0 : undefined,
-								padding: `9px 28px ${9 + thumbnailsHeight}px 9px`,
-							}}
-						/>
 						<DynamicTextArea
 							autoFocus={true}
+							className={cn(
+								"chat-input-textarea w-full resize-none rounded-sm",
+								isDraggingOver &&
+									!showUnsupportedFileError &&
+									"outline-2 outline-dashed outline-[var(--vscode-focusBorder)]",
+							)}
 							data-testid="chat-input"
 							maxRows={10}
 							minRows={3}
 							onBlur={handleBlur}
-							onChange={(e) => {
-								handleInputChange(e)
-								updateHighlights()
-							}}
-							onFocus={() => {
-								setIsTextAreaFocused(true)
-								onFocusChange?.(true) // Call prop on focus
-							}}
-							onHeightChange={(height) => {
-								if (textAreaBaseHeight === undefined || height < textAreaBaseHeight) {
-									setTextAreaBaseHeight(height)
-								}
-								onHeightChange?.(height)
-							}}
+							onChange={handleInputChange}
+							onFocus={() => onFocusChange?.(true)}
+							onHeightChange={onHeightChange}
 							onKeyDown={handleKeyDown}
 							onKeyUp={handleKeyUp}
 							onMouseUp={updateCursorPosition}
 							onPaste={handlePaste}
-							onScroll={() => updateHighlights()}
 							onSelect={updateCursorPosition}
 							placeholder={showUnsupportedFileError || showDimensionError ? "" : placeholderText}
 							ref={(el) => {
@@ -1472,83 +1356,30 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								}
 								textAreaRef.current = el
 							}}
-							style={{
-								width: "100%",
-								boxSizing: "border-box",
-								backgroundColor: "transparent",
-								color: "var(--vscode-input-foreground)",
-								//border: "1px solid var(--vscode-input-border)",
-								borderRadius: 2,
-								fontFamily: "var(--vscode-font-family)",
-								fontSize: "var(--vscode-editor-font-size)",
-								lineHeight: "var(--vscode-editor-line-height)",
-								resize: "none",
-								overflowX: "hidden",
-								overflowY: "scroll",
-								scrollbarWidth: "none",
-								// Since we have maxRows, when text is long enough it starts to overflow the bottom padding, appearing behind the thumbnails. To fix this, we use a transparent border to push the text up instead. (https://stackoverflow.com/questions/42631947/maintaining-a-padding-inside-of-text-area/52538410#52538410)
-								// borderTop: "9px solid transparent",
-								borderLeft: 0,
-								borderRight: 0,
-								borderTop: 0,
-								borderBottom: `${thumbnailsHeight}px solid transparent`,
-								borderColor: "transparent",
-								// borderRight: "54px solid transparent",
-								// borderLeft: "9px solid transparent", // NOTE: react-textarea-autosize doesn't calculate correct height when using borderLeft/borderRight so we need to use horizontal padding instead
-								// Instead of using boxShadow, we use a div with a border to better replicate the behavior when the textarea is focused
-								// boxShadow: "0px 0px 0px 1px var(--vscode-input-border)",
-								padding: "9px 28px 9px 9px",
-								cursor: "text",
-								flex: 1,
-								zIndex: 1,
-								outline:
-									isDraggingOver && !showUnsupportedFileError // Only show drag outline if not showing error
-										? "2px dashed var(--vscode-focusBorder)"
-										: isTextAreaFocused
-											? `none` // Handled by ring class above
-											: "none",
-								boxShadow: isTextAreaFocused ? "var(--glow-mira-soft)" : "none",
-							}}
 							value={inputValue}
 						/>
-						{(selectedImages.length > 0 || selectedFiles.length > 0) && (
-							<Thumbnails
-								files={selectedFiles}
-								images={selectedImages}
-								onHeightChange={handleThumbnailsHeightChange}
-								setFiles={setSelectedFiles}
-								setImages={setSelectedImages}
-								style={{
-									position: "absolute",
-									paddingTop: 4,
-									bottom: 14,
-									left: 22,
-									right: 47, // (54 + 9) + 4 extra padding
-									zIndex: 2,
-								}}
-							/>
-						)}
-						<div
-							className="absolute flex items-end bottom-4.5 right-5 z-10 h-8 text-xs"
-							style={{ height: textAreaBaseHeight }}>
-							<div className="flex flex-row items-center">
-								<Icon
-									className={cn(
-										"input-icon-button cursor-pointer",
-										{ "opacity-50 pointer-events-none": sendingDisabled },
-										"text-sm",
-									)}
-									data-testid="send-button"
-									name="send"
-									onClick={() => {
-										if (!sendingDisabled) {
-											setIsTextAreaFocused(false)
-											onSend()
-										}
-									}}
-								/>
-							</div>
-						</div>
+					</div>
+					{(selectedImages.length > 0 || selectedFiles.length > 0) && (
+						<Thumbnails
+							files={selectedFiles}
+							images={selectedImages}
+							setFiles={setSelectedFiles}
+							setImages={setSelectedImages}
+						/>
+					)}
+					<div className="flex justify-end">
+						<Icon
+							className={cn("input-icon-button cursor-pointer text-sm", {
+								"opacity-50 pointer-events-none": sendingDisabled,
+							})}
+							data-testid="send-button"
+							name="send"
+							onClick={() => {
+								if (!sendingDisabled) {
+									onSend()
+								}
+							}}
+						/>
 					</div>
 				</div>
 				<div className="flex justify-between items-center -mt-[2px] px-3 pb-2">

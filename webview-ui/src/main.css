@@ -157,27 +157,25 @@ vscode-dropdown::part(listbox) {
 	opacity: 0.4;
 }
 
-/* Context mentions */
-
-/* Needs to match the highlightLayerRef in ChatTextArea for proper positioning */
-.mention-context-textarea-highlight,
-.mention-context-highlight,
-.mention-context-highlight-with-shadow,
-.slash-command-match-textarea-highlight {
+/* Chat input */
+.chat-input-textarea {
+	box-sizing: border-box;
+	background-color: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border);
 	font-family: var(--vscode-font-family);
 	font-size: var(--vscode-editor-font-size);
 	line-height: var(--vscode-editor-line-height);
+	padding: 8px;
 }
 
-.mention-context-textarea-highlight {
-	background-color: color-mix(in srgb, var(--vscode-badge-foreground) 30%, transparent);
-	border-radius: 3px;
-	box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--vscode-badge-foreground) 30%, transparent);
-	color: transparent;
-	/* padding: 0.5px;
-	margin: -0.5px;
-	position: relative;
-	bottom: -0.5px; */
+/* Context mentions */
+
+.mention-context-highlight,
+.mention-context-highlight-with-shadow {
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-editor-font-size);
+	line-height: var(--vscode-editor-line-height);
 }
 
 .mention-context-highlight {
@@ -189,13 +187,6 @@ vscode-dropdown::part(listbox) {
 	background-color: color-mix(in srgb, var(--vscode-badge-foreground) 30%, transparent);
 	border-radius: 3px;
 	box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--vscode-badge-foreground) 30%, transparent);
-}
-
-.slash-command-match-textarea-highlight {
-	background-color: color-mix(in srgb, var(--vscode-focusBorder) 30%, transparent);
-	border-radius: 3px;
-	box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--vscode-focusBorder) 30%, transparent);
-	color: transparent;
 }
 
 /* Pulse animation for running command indicator */

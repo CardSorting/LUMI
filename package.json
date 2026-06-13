@@ -1,8 +1,8 @@
 {
 	"name": "mira",
 	"displayName": "MIRA",
-	"description": "MIRA is your calm coding companion — comfort-first developer tooling for long sessions.",
-	"version": "1.0.0",
+	"description": "MIRA is your calm coding companion \u2014 comfort-first developer tooling for long sessions.",
+	"version": "1.0.1",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",
@@ -63,22 +63,22 @@
 		},
 		"walkthroughs": [
 			{
-				"id": "DietCodeWalkthrough",
-				"title": "Meet DietCode, your new coding partner",
-				"description": "DietCode codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
+				"id": "MIRAWalkthrough",
+				"title": "Meet MIRA, your calm coding companion",
+				"description": "MIRA codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
 				"steps": [
 					{
 						"id": "welcome",
 						"title": "Start with a Goal, Not Just a Prompt",
-						"description": "Tell DietCode what you want to achieve. It plans, asks, and then codes, like a true partner.",
+						"description": "Tell MIRA what you want to achieve. It plans, asks, and then codes, like a true partner.",
 						"media": {
 							"markdown": "walkthrough/step1.md"
 						}
 					},
 					{
 						"id": "learn",
-						"title": "Let DietCode Learn Your Codebase",
-						"description": "Point DietCode to your project. It builds understanding to make smart, context-aware changes.",
+						"title": "Let MIRA learn your codebase",
+						"description": "Point MIRA to your project. It builds understanding to make smart, context-aware changes.",
 						"media": {
 							"markdown": "walkthrough/step2.md"
 						}
@@ -86,7 +86,7 @@
 					{
 						"id": "advanced-features",
 						"title": "Always Use the Best AI Models",
-						"description": "DietCode empowers you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
+						"description": "MIRA connects you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
 						"media": {
 							"markdown": "walkthrough/step3.md"
 						}
@@ -102,7 +102,7 @@
 					{
 						"id": "getting-started",
 						"title": "You're Always in Control",
-						"description": "Review DietCode's plans and diffs. Approve changes before they happen. No surprises.",
+						"description": "Review MIRA's plans and diffs. Approve changes before they happen. No surprises.",
 						"media": {
 							"markdown": "walkthrough/step5.md"
 						},
@@ -116,17 +116,17 @@
 		"viewsContainers": {
 			"activitybar": [
 				{
-					"id": "dietcode-ActivityBar",
+					"id": "mira-ActivityBar",
 					"title": "MIRA",
 					"icon": "assets/icons/icon.svg"
 				}
 			]
 		},
 		"views": {
-			"dietcode-ActivityBar": [
+			"mira-ActivityBar": [
 				{
 					"type": "webview",
-					"id": "dietcode.SidebarProvider",
+					"id": "mira.SidebarProvider",
 					"name": "MIRA",
 					"icon": "assets/icons/icon.svg"
 				}
@@ -134,128 +134,128 @@
 		},
 		"commands": [
 			{
-				"command": "dietcode.plusButtonClicked",
+				"command": "mira.plusButtonClicked",
 				"title": "New Task",
 				"icon": "$(add)"
 			},
 			{
-				"command": "dietcode.mcpButtonClicked",
+				"command": "mira.mcpButtonClicked",
 				"title": "MCP Servers",
 				"icon": "$(server)"
 			},
 			{
-				"command": "dietcode.historyButtonClicked",
+				"command": "mira.historyButtonClicked",
 				"title": "History",
 				"icon": "$(history)"
 			},
 			{
-				"command": "dietcode.accountButtonClicked",
+				"command": "mira.accountButtonClicked",
 				"title": "Account",
 				"icon": "$(account)"
 			},
 			{
-				"command": "dietcode.settingsButtonClicked",
+				"command": "mira.settingsButtonClicked",
 				"title": "Settings",
 				"icon": "$(settings-gear)"
 			},
 			{
-				"command": "dietcode.joyZoningButtonClicked",
+				"command": "mira.joyZoningButtonClicked",
 				"title": "JoyZoning Audit",
 				"icon": "$(shield)"
 			},
 			{
-				"command": "dietcode.joyZoningAudit",
+				"command": "mira.joyZoningAudit",
 				"title": "Run JoyZoning Audit",
-				"category": "DietCode",
+				"category": "MIRA",
 				"icon": "$(shield)"
 			},
 			{
-				"command": "dietcode.dev.createTestTasks",
+				"command": "mira.dev.createTestTasks",
 				"title": "Create Test Tasks",
-				"category": "DietCode",
+				"category": "MIRA",
 				"when": "dietcode.isDevMode"
 			},
 			{
-				"command": "dietcode.dev.expireMcpOAuthTokens",
+				"command": "mira.dev.expireMcpOAuthTokens",
 				"title": "Expire MCP OAuth Tokens (for testing)",
-				"category": "DietCode",
+				"category": "MIRA",
 				"when": "dietcode.isDevMode"
 			},
 			{
-				"command": "dietcode.addToChat",
-				"title": "Add to DietCode",
-				"category": "DietCode"
+				"command": "mira.addToChat",
+				"title": "Add to MIRA",
+				"category": "MIRA"
 			},
 			{
-				"command": "dietcode.addTerminalOutputToChat",
-				"title": "Add to DietCode",
-				"category": "DietCode"
+				"command": "mira.addTerminalOutputToChat",
+				"title": "Add to MIRA",
+				"category": "MIRA"
 			},
 			{
-				"command": "dietcode.focusChatInput",
+				"command": "mira.focusChatInput",
 				"title": "Jump to Chat Input",
-				"category": "DietCode"
+				"category": "MIRA"
 			},
 			{
-				"command": "dietcode.generateGitCommitMessage",
-				"title": "Generate Commit Message with DietCode",
-				"category": "DietCode",
+				"command": "mira.generateGitCommitMessage",
+				"title": "Generate Commit Message with MIRA",
+				"category": "MIRA",
 				"icon": "$(mira-icon)"
 			},
 			{
-				"command": "dietcode.abortGitCommitMessage",
-				"title": "Generate Commit Message with DietCode - Stop",
-				"category": "DietCode",
+				"command": "mira.abortGitCommitMessage",
+				"title": "Generate Commit Message with MIRA - Stop",
+				"category": "MIRA",
 				"icon": "$(debug-stop)"
 			},
 			{
-				"command": "dietcode.explainCode",
-				"title": "Explain with DietCode",
-				"category": "DietCode"
+				"command": "mira.explainCode",
+				"title": "Explain with MIRA",
+				"category": "MIRA"
 			},
 			{
-				"command": "dietcode.improveCode",
-				"title": "Improve with DietCode",
-				"category": "DietCode"
+				"command": "mira.improveCode",
+				"title": "Improve with MIRA",
+				"category": "MIRA"
 			},
 			{
-				"command": "dietcode.jupyterGenerateCell",
-				"title": "Generate Jupyter Cell with DietCode",
-				"category": "DietCode",
+				"command": "mira.jupyterGenerateCell",
+				"title": "Generate Jupyter Cell with MIRA",
+				"category": "MIRA",
 				"icon": "$(sparkle)"
 			},
 			{
-				"command": "dietcode.jupyterExplainCell",
-				"title": "Explain Jupyter Cell with DietCode",
-				"category": "DietCode",
+				"command": "mira.jupyterExplainCell",
+				"title": "Explain Jupyter Cell with MIRA",
+				"category": "MIRA",
 				"icon": "$(question)"
 			},
 			{
-				"command": "dietcode.jupyterImproveCell",
-				"title": "Improve Jupyter Cell with DietCode",
-				"category": "DietCode",
+				"command": "mira.jupyterImproveCell",
+				"title": "Improve Jupyter Cell with MIRA",
+				"category": "MIRA",
 				"icon": "$(lightbulb)"
 			},
 			{
-				"command": "dietcode.openWalkthrough",
+				"command": "mira.openWalkthrough",
 				"title": "Open Walkthrough",
-				"category": "DietCode"
+				"category": "MIRA"
 			},
 			{
-				"command": "dietcode.reconstructTaskHistory",
+				"command": "mira.reconstructTaskHistory",
 				"title": "Reconstruct Task History",
-				"category": "DietCode"
+				"category": "MIRA"
 			},
 			{
-				"command": "dietcode.reviewComment.reply",
+				"command": "mira.reviewComment.reply",
 				"title": "Reply",
-				"category": "DietCode",
+				"category": "MIRA",
 				"enablement": "!commentIsEmpty"
 			},
 			{
-				"command": "dietcode.reviewComment.addToChat",
-				"title": "Add to DietCode Chat",
-				"category": "DietCode",
+				"command": "mira.reviewComment.addToChat",
+				"title": "Add to MIRA Chat",
+				"category": "MIRA",
 				"icon": "$(link-external)"
 			},
 			{
@@ -281,7 +281,7 @@
 				"when": "commentEditorFocused && commentController == dietcode-review && !commentIsEmpty"
 			},
 			{
-				"command": "dietcode.addToChat",
+				"command": "mira.addToChat",
 				"key": "cmd+'",
 				"mac": "cmd+'",
 				"win": "ctrl+'",
@@ -289,7 +289,7 @@
 				"when": "editorHasSelection"
 			},
 			{
-				"command": "dietcode.focusChatInput",
+				"command": "mira.focusChatInput",
 				"key": "cmd+'",
 				"mac": "cmd+'",
 				"win": "ctrl+'",
@@ -300,111 +300,111 @@
 		"menus": {
 			"view/title": [
 				{
-					"command": "dietcode.plusButtonClicked",
+					"command": "mira.plusButtonClicked",
 					"group": "navigation@1",
-					"when": "view == dietcode.SidebarProvider"
+					"when": "view == mira.SidebarProvider"
 				},
 				{
-					"command": "dietcode.mcpButtonClicked",
+					"command": "mira.mcpButtonClicked",
 					"group": "navigation@2",
-					"when": "view == dietcode.SidebarProvider"
+					"when": "view == mira.SidebarProvider"
 				},
 				{
-					"command": "dietcode.historyButtonClicked",
+					"command": "mira.historyButtonClicked",
 					"group": "navigation@3",
-					"when": "view == dietcode.SidebarProvider"
+					"when": "view == mira.SidebarProvider"
 				},
 				{
-					"command": "dietcode.accountButtonClicked",
+					"command": "mira.accountButtonClicked",
 					"group": "navigation@5",
-					"when": "view == dietcode.SidebarProvider"
+					"when": "view == mira.SidebarProvider"
 				},
 				{
-					"command": "dietcode.settingsButtonClicked",
+					"command": "mira.settingsButtonClicked",
 					"group": "navigation@6",
-					"when": "view == dietcode.SidebarProvider"
+					"when": "view == mira.SidebarProvider"
 				},
 				{
-					"command": "dietcode.joyZoningButtonClicked",
+					"command": "mira.joyZoningButtonClicked",
 					"group": "navigation@4",
-					"when": "view == dietcode.SidebarProvider"
+					"when": "view == mira.SidebarProvider"
 				}
 			],
 			"editor/context": [
 				{
-					"command": "dietcode.addToChat",
+					"command": "mira.addToChat",
 					"group": "navigation",
 					"when": "editorHasSelection"
 				}
 			],
 			"terminal/context": [
 				{
-					"command": "dietcode.addTerminalOutputToChat",
+					"command": "mira.addTerminalOutputToChat",
 					"group": "navigation"
 				}
 			],
 			"scm/title": [
 				{
-					"command": "dietcode.generateGitCommitMessage",
+					"command": "mira.generateGitCommitMessage",
 					"group": "navigation",
 					"when": "config.git.enabled && scmProvider == git && !dietcode.isGeneratingCommit"
 				},
 				{
-					"command": "dietcode.abortGitCommitMessage",
+					"command": "mira.abortGitCommitMessage",
 					"group": "navigation",
 					"when": "config.git.enabled && scmProvider == git && dietcode.isGeneratingCommit"
 				}
 			],
 			"notebook/toolbar": [
 				{
-					"command": "dietcode.jupyterGenerateCell",
+					"command": "mira.jupyterGenerateCell",
 					"group": "navigation/add@1",
 					"when": "notebookType == 'jupyter-notebook'"
 				}
 			],
 			"notebook/cell/title": [
 				{
-					"command": "dietcode.jupyterExplainCell",
+					"command": "mira.jupyterExplainCell",
 					"group": "inline@1",
 					"when": "notebookType == 'jupyter-notebook'"
 				},
 				{
-					"command": "dietcode.jupyterImproveCell",
+					"command": "mira.jupyterImproveCell",
 					"group": "inline@2",
 					"when": "notebookType == 'jupyter-notebook'"
 				}
 			],
 			"commandPalette": [
 				{
-					"command": "dietcode.generateGitCommitMessage",
+					"command": "mira.generateGitCommitMessage",
 					"when": "config.git.enabled && !dietcode.isGeneratingCommit"
 				},
 				{
-					"command": "dietcode.abortGitCommitMessage",
+					"command": "mira.abortGitCommitMessage",
 					"when": "config.git.enabled && dietcode.isGeneratingCommit"
 				},
 				{
-					"command": "dietcode.reviewComment.reply",
+					"command": "mira.reviewComment.reply",
 					"when": "false"
 				}
 			],
 			"comments/commentThread/context": [
 				{
-					"command": "dietcode.reviewComment.reply",
+					"command": "mira.reviewComment.reply",
 					"group": "inline",
 					"when": "commentController == dietcode-review"
 				}
 			],
 			"comments/commentThread/title": [
 				{
-					"command": "dietcode.reviewComment.addToChat",
+					"command": "mira.reviewComment.addToChat",
 					"group": "inline",
 					"when": "commentController == dietcode-review"
 				}
 			]
 		},
 		"configuration": {
-			"title": "DietCode",
+			"title": "MIRA",
 			"properties": {}
 		}
 	},

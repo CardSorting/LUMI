@@ -20,14 +20,13 @@ import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
-import type { MiraOrbMood } from "@/components/common/MiraAmbientOrb"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
 import { pickChatPlaceholder } from "@/copy/miraVoice"
 import { useAuditAutoScrollPolicy } from "@/hooks/useAuditAutoScrollPolicy"
 import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
-import { resolveOrbMood, useMiraSessionComfort } from "@/hooks/useMiraSessionComfort"
+import { useMiraSessionComfort } from "@/hooks/useMiraSessionComfort"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
 import AutoApproveBar from "./auto-approve-menu/AutoApproveBar"
@@ -124,45 +123,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		textAreaRef,
 	} = chatState
 
-	const [companionMood, setCompanionMood] = useState<MiraOrbMood>("idle")
-	const { sessionMinutes, isStill, calmTier, isNightDesk, serenityLevel } = useMiraSessionComfort()
-	const orbMood = resolveOrbMood(companionMood, isStill)
-
-	useEffect(() => {
-		if (sendingDisabled) {
-			setCompanionMood("waiting")
-			return
-		}
-
-		const last = messages.at(-1)
-		if (last) {
-			const isHeld =
-				last.ask === "api_req_failed" ||
-				last.say === "error" ||
-				last.ask === "mistake_limit_reached" ||
-				(last.say === "error_retry" &&
-					(() => {
-						try {
-							return JSON.parse(last.text || "{}").failed === true
-						} catch {
-							return false
-						}
-					})())
-			if (isHeld) {
-				setCompanionMood("held")
-				return
-			}
-		}
-
-		const isCompletion = last?.say === "completion_result" || last?.ask === "completion_result"
-		if (isCompletion) {
-			setCompanionMood("success")
-			const timer = window.setTimeout(() => setCompanionMood("idle"), 3200)
-			return () => window.clearTimeout(timer)
-		}
-
-		setCompanionMood("idle")
-	}, [sendingDisabled, messages])
+	const { sessionMinutes, isNightDesk, serenityLevel } = useMiraSessionComfort()
 
 	useEffect(() => {
 		const handleCopy = async (e: ClipboardEvent) => {
@@ -507,9 +468,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					task={task}
 				/>
 				<InputSection
-					calmTier={calmTier}
 					chatState={chatState}
-					companionMood={orbMood}
 					messageHandlers={messageHandlers}
 					placeholderText={placeholderText}
 					scrollBehavior={scrollBehavior}

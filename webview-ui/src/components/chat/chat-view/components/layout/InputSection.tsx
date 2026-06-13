@@ -1,13 +1,10 @@
 import React from "react"
 import ChatTextArea from "@/components/chat/ChatTextArea"
 import QuotedMessagePreview from "@/components/chat/QuotedMessagePreview"
-import type { MiraCalmTier, MiraOrbMood } from "@/components/common/MiraAmbientOrb"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 
 interface InputSectionProps {
-	calmTier?: MiraCalmTier
 	chatState: ChatState
-	companionMood?: MiraOrbMood
 	messageHandlers: MessageHandlers
 	scrollBehavior: ScrollBehavior
 	placeholderText: string
@@ -19,9 +16,7 @@ interface InputSectionProps {
  * Input section including quoted message preview and chat text area
  */
 export const InputSection: React.FC<InputSectionProps> = ({
-	calmTier = "normal",
 	chatState,
-	companionMood = "idle",
 	messageHandlers,
 	scrollBehavior,
 	placeholderText,
@@ -59,8 +54,6 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
 			<ChatTextArea
 				activeQuote={activeQuote}
-				calmTier={calmTier}
-				companionMood={companionMood}
 				inputValue={inputValue}
 				onFocusChange={handleFocusChange}
 				onHeightChange={() => {
