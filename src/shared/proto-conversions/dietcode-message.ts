@@ -113,6 +113,7 @@ function convertDietCodeSayToProtoEnum(say: AppDietCodeSay | undefined): DietCod
 		subagent: DietCodeSay.SUBAGENT_STATUS,
 		use_subagents: DietCodeSay.USE_SUBAGENTS_SAY,
 		subagent_usage: DietCodeSay.SUBAGENT_USAGE,
+		plan_summary: DietCodeSay.PLAN_SUMMARY,
 		generate_explanation: DietCodeSay.GENERATE_EXPLANATION,
 	}
 
@@ -165,6 +166,7 @@ function convertProtoEnumToDietCodeSay(say: DietCodeSay): AppDietCodeSay | undef
 		[DietCodeSay.SUBAGENT_STATUS]: "subagent",
 		[DietCodeSay.USE_SUBAGENTS_SAY]: "use_subagents",
 		[DietCodeSay.SUBAGENT_USAGE]: "subagent_usage",
+		[DietCodeSay.PLAN_SUMMARY]: "plan_summary",
 	}
 
 	return mapping[say]

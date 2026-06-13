@@ -1051,6 +1051,23 @@ export const ChatRowContent = memo(
 							</div>
 						)
 					}
+					case "plan_summary": {
+						let planResponse: string | undefined
+						try {
+							const parsedMessage = JSON.parse(message.text || "{}") as DietCodePlanModeResponse
+							planResponse = parsedMessage.response
+						} catch {
+							planResponse = message.text
+						}
+						return (
+							<PlanCompletionOutputRow
+								auditMetadata={message.auditMetadata}
+								headClassNames={HEADER_CLASSNAMES}
+								isStreaming={message.partial === true}
+								text={planResponse || message.text || ""}
+							/>
+						)
+					}
 					case "completion_result":
 						const hasChanges = message.text?.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
 						const text = hasChanges ? message.text?.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
@@ -1350,15 +1367,10 @@ export const ChatRowContent = memo(
 						)
 					case "plan_mode_respond": {
 						let response: string | undefined
-						let options: string[] | undefined
-						let selected: string | undefined
 						try {
 							const parsedMessage = JSON.parse(message.text || "{}") as DietCodePlanModeResponse
 							response = parsedMessage.response
-							options = parsedMessage.options
-							selected = parsedMessage.selected
 						} catch (_e) {
-							// legacy messages would pass response directly
 							response = message.text
 						}
 						return (
@@ -1367,15 +1379,6 @@ export const ChatRowContent = memo(
 									auditMetadata={message.auditMetadata}
 									headClassNames={HEADER_CLASSNAMES}
 									text={response || message.text || ""}
-								/>
-								<OptionsButtons
-									inputValue={inputValue}
-									isActive={
-										(isLast && lastModifiedMessage?.ask === "plan_mode_respond") ||
-										(!selected && options && options.length > 0)
-									}
-									options={options}
-									selected={selected}
 								/>
 							</div>
 						)

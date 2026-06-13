@@ -1,81 +1,82 @@
 ---
 title: "Plan & Act Mode"
 sidebarTitle: "Plan & Act Mode"
-description: "Think first, then build. DietCode's dual-mode system for structured development."
+description: "Think first, then build. DietCode automatically plans before implementing."
 ---
 
-Plan & Act modes separate thinking from doing. Plan mode lets you explore and strategize without changing files. Act mode executes against your plan.
+Plan and Act are internal phases that separate thinking from doing. You do not switch modes manually — DietCode manages the transition for you.
 
 <Tip>
-	**New to Plan & Act?** Watch [Plan & Act Deep Dive](https://youtu.be/b7o6URFPp64) to see it in action.
+	**New to Plan & Act?** Watch [Plan & Act Deep Dive](https://youtu.be/b7o6URFPp64) for the concepts. The product now automates the handoff between phases.
 </Tip>
 
-## Plan Mode
+## How It Works
 
-Plan mode is where you and DietCode figure out what you're building and how. In this mode, DietCode can read your codebase, run searches, and discuss strategy, but cannot modify any files or execute commands.
+Every new task follows this flow automatically:
 
-This constraint is intentional. It keeps the conversation focused on understanding and planning, without the distraction of implementation details. You can explore freely, ask questions, and iterate on the approach before committing to changes.
+1. **Plan phase** — DietCode explores your codebase (read-only), asks clarifying questions if needed, and architects an approach
+2. **Plan delivery** — The finalized plan appears in chat as a structured summary (non-blocking — you can keep typing)
+3. **Act phase** — DietCode automatically transitions to implementation and begins making changes (with your approval on each tool use)
 
-Use Plan mode to:
+There is no Plan/Act toggle in the chat UI. Mode transitions are invisible by design — similar to how Cursor, Devin, and other agents handle plan-then-execute workflows.
+
+<Note>
+	**YOLO mode** skips the planning phase and starts directly in Act mode for maximum autonomy. Enable it in Settings when you want immediate implementation without a planning step.
+</Note>
+
+## Plan Phase
+
+During planning, DietCode can read your codebase, run searches, and discuss strategy, but cannot modify files or execute commands.
+
+This constraint keeps the conversation focused on understanding before changes. Use this phase to:
 
 - Explore unfamiliar codebases before making changes
 - Discuss architecture decisions and tradeoffs
 - Identify edge cases and potential issues upfront
 - Create a clear implementation strategy
-- Review code and understand complex workflows
 
-## Act Mode
+## Act Phase
 
-Once you have a plan, switch to Act mode. DietCode retains the full context from your planning session and can now modify files, run commands, and execute your strategy.
+After the plan is delivered, DietCode retains full context from planning and implements the solution. File edits and commands still require your approval (unless auto-approve is configured).
 
-The conversation history carries over when you switch modes. DietCode remembers everything you discussed in Plan mode, so you don't need to repeat yourself. This makes the transition seamless.
-
-<Note>
-	While you can start directly in Act mode, planning first is highly recommended. The planning phase intentionally builds context that DietCode needs to implement changes effectively. Without it, DietCode may lack the understanding required to make the right decisions.
-</Note>
+During Act Mode, send follow-up messages at any time to steer direction — even while the agent is working. DietCode incorporates feedback immediately and may automatically return to planning when you request a scope pivot (e.g., "let's replan with a different approach").
 
 ## Typical Workflow
 
-1. Start in Plan mode and describe what you want to build
-2. Let DietCode explore relevant files and understand the codebase
-3. Discuss the approach, considering edge cases and potential issues
-4. When confident in the plan, switch to Act mode
-5. DietCode implements the solution based on your planning session
+1. Describe what you want to build
+2. DietCode explores relevant files and understands the codebase
+3. DietCode presents a plan in chat
+4. Implementation begins automatically — approve tool uses as they appear
+5. DietCode completes the task with `attempt_completion`
 
-For complex projects, you may cycle between modes multiple times. Return to Plan mode when you hit unexpected complexity or need to rethink the approach, then switch back to Act mode to continue implementation.
+For complex projects, you may iterate: send feedback mid-task, ask for scope changes, or start a new task with `/newtask` context.
 
-## When to Use Each Mode
+## When Planning Helps Most
 
-| Scenario | Recommended Mode |
-|----------|-----------------|
-| Starting new features where the approach isn't obvious | Plan |
-| Debugging tricky issues where you're unsure what's wrong | Plan |
-| Making architectural decisions affecting multiple files | Plan |
-| Understanding complex workflows before modifying them | Plan |
-| Code review and security analysis | Plan |
-| Learning a new codebase | Plan |
-| Implementing a solution you've already planned | Act |
-| Making routine changes with a clear approach | Act |
-| Following established patterns in the codebase | Act |
-| Running tests and making adjustments | Act |
-| Quick fixes where the solution is obvious | Act |
+| Scenario | Why plan first |
+|----------|----------------|
+| Starting new features where the approach isn't obvious | Reduces rework |
+| Debugging tricky issues | Investigation before edits |
+| Architectural decisions affecting multiple files | Coherent design |
+| Understanding complex workflows before modifying | Safer changes |
+| Learning a new codebase | Read-only exploration |
 
-## Using Different Models for Each Mode
+For obvious quick fixes (typos, missing imports), enable **YOLO mode** to skip planning and implement immediately.
 
-You can configure separate models for Plan and Act modes. This is useful when you want to use a stronger reasoning model for planning and a faster model for implementation.
+## Using Different Models for Each Phase
 
-To enable this:
+You can configure separate models for Plan and Act phases in Settings. This is useful when you want a stronger reasoning model for planning and a faster model for implementation.
 
 1. Open DietCode Settings
-2. Enable "Use different models for Plan and Act"
-3. Select your preferred model for each mode
+2. Enable "Use different models for Plan and Act modes"
+3. Select your preferred model for each phase
 
-When enabled, switching between Plan and Act mode automatically switches to the configured model for that mode. Your model selection is preserved when you switch back.
+The agent automatically uses the correct model when transitioning between phases.
 
 **Example configurations:**
 
-| Use Case | Plan Mode | Act Mode |
-|----------|-----------|----------|
+| Use Case | Plan Phase | Act Phase |
+|----------|------------|-----------|
 | Cost optimization | GLM 4.6 | Grok Code Fast |
 | Maximum quality | Claude Opus | Claude Sonnet |
 | Speed-focused | Gemini 3 Flash | Cerebras |
@@ -86,35 +87,35 @@ For complex tasks that need thorough analysis, use the `/deep-planning` slash co
 
 1. Explores the codebase systematically
 2. Identifies all affected files and dependencies
-3. Creates a detailed implementation plan
-4. Asks clarifying questions before proceeding
+3. Creates a detailed implementation plan document
+4. Presents the plan and automatically transitions to implementation
 
-The deep planning prompt is optimized for each model family, so it adapts to the strengths of whatever model you're using. See the [Deep Planning docs](/features/deep-planning) for more details.
+See the [Deep Planning docs](/features/deep-planning) for more details.
 
 ## Choosing the Right Approach by Task Size
 
-### Small tasks: Act mode only
+### Small tasks: YOLO / Act only
 
-For quick fixes like typos, simple bug fixes, or following established patterns, start directly in Act mode. Planning adds overhead when the solution is obvious.
+For quick fixes like typos, simple bug fixes, or following established patterns, enable YOLO mode or expect a brief planning pass before rapid implementation.
 
 **Examples:** Fix a typo, add a missing import, update a config value, rename a variable.
 
-### Medium tasks: Plan → Act
+### Medium tasks: Automatic Plan → Act
 
-For most development work, start in Plan mode to understand the scope and approach, then switch to Act mode to implement. This is the sweet spot for features that touch a few files and have some complexity.
+For most development work, DietCode plans first, then implements. This is the default for features that touch a few files and have some complexity.
 
 **Examples:** Add a new API endpoint, implement a UI component, fix a bug that requires investigation, refactor a single module.
 
 ### Large tasks: Use `/deep-planning`
 
-For complex features that span multiple files, require architectural decisions, or will take multiple sessions to complete, use the `/deep-planning` slash command. This creates a detailed implementation plan that DietCode can reference throughout the work.
+For complex features spanning multiple files, requiring architectural decisions, or taking multiple sessions, use `/deep-planning` for a documented implementation spec.
 
-**Examples:** Add a new feature across frontend and backend, major refactoring across the codebase, implementing a new system or integration, multi-step migrations.
+**Examples:** Add a new feature across frontend and backend, major refactoring, implementing a new system or integration, multi-step migrations.
 
 ## Tips
 
-- Have DietCode write a markdown file summarizing the plan for future reference
-- Use [file mentions](/core-workflows/working-with-files) to point DietCode at relevant files during planning
-- Switch back to Plan mode when encountering unexpected complexity rather than pushing through
-- Enable [Checkpoints](/core-workflows/checkpoints) before Act mode so you can roll back if needed
-- For large tasks, ask DietCode to create a todo list during planning that you can track in Act mode
+- Plans appear as structured chat messages — scroll up to review anytime during implementation
+- Use [file mentions](/core-workflows/working-with-files) to point DietCode at relevant files
+- Enable [Checkpoints](/core-workflows/checkpoints) before large implementations so you can roll back
+- [Focus Chain](/features/focus-chain) tracks implementation progress after the plan phase
+- Send follow-up messages to steer direction — no mode switching required

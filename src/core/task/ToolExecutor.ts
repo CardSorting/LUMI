@@ -128,6 +128,7 @@ export class ToolExecutor {
 		private doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>,
 		private updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>,
 		private switchToActMode: () => Promise<boolean>,
+		private switchToPlanMode: () => Promise<boolean>,
 		private cancelTask: () => Promise<void>,
 		private setActiveHookExecution: (hookExecution: NonNullable<typeof taskState.activeHookExecution>) => Promise<void>,
 		private clearActiveHookExecution: () => Promise<void>,
@@ -218,6 +219,7 @@ export class ToolExecutor {
 				shouldAutoApproveToolWithPath: this.shouldAutoApproveToolWithPath.bind(this),
 				applyLatestBrowserSettings: this.applyLatestBrowserSettings.bind(this),
 				switchToActMode: this.switchToActMode,
+				switchToPlanMode: this.switchToPlanMode,
 				setActiveHookExecution: this.setActiveHookExecution,
 				clearActiveHookExecution: this.clearActiveHookExecution,
 				getActiveHookExecution: this.getActiveHookExecution,
@@ -415,7 +417,7 @@ export class ToolExecutor {
 				if (isNaturallyRestricted || isLayerRestricted) {
 					const errorMessage = isLayerRestricted
 						? `Tool '${block.name}' is temporarily restricted for this target in PLAN MODE.${layerHint}`
-						: `Tool '${block.name}' is not available in PLAN MODE. Switch to ACT MODE to make changes.${layerHint}`
+						: `Tool '${block.name}' is not available in PLAN MODE. The system will automatically transition to ACT MODE after you finalize your plan with plan_mode_respond.${layerHint}`
 
 					await this.removeLastPartialMessageIfExistsWithType("say", "error")
 					await this.say("error", errorMessage)

@@ -35,7 +35,7 @@ const ApiConfigurationSection = ({ renderSectionHeader, initialModelTab }: ApiCo
 									opacity: 1,
 									cursor: "pointer",
 								}}>
-								Plan Mode
+								Planning phase
 							</TabButton>
 							<TabButton
 								disabled={currentTab === "act"}
@@ -45,7 +45,7 @@ const ApiConfigurationSection = ({ renderSectionHeader, initialModelTab }: ApiCo
 									opacity: 1,
 									cursor: "pointer",
 								}}>
-								Act Mode
+								Implementation phase
 							</TabButton>
 						</div>
 
@@ -81,8 +81,9 @@ const ApiConfigurationSection = ({ renderSectionHeader, initialModelTab }: ApiCo
 						Use different models for Plan and Act modes
 					</VSCodeCheckbox>
 					<p className="text-xs mt-[5px] text-(--vscode-descriptionForeground)">
-						Switching between Plan and Act mode will persist the API and model used in the previous mode. This may be
-						helpful e.g. when using a strong reasoning model to architect a plan for a cheaper coding model to act on.
+						Configure separate models for the planning and implementation phases. The agent automatically transitions
+						between these modes — for example, a strong reasoning model can plan while a faster coding model
+						implements.
 					</p>
 				</div>
 			</Section>

@@ -507,26 +507,24 @@ Key aspects of task state management:
 
 ## Plan/Act Mode System
 
-Cline implements a dual-mode system that separates planning from execution:
+DietCode implements an automatic plan-then-execute workflow that separates planning from implementation without user-facing mode toggles:
 
 ### Mode Architecture
 
 The Plan/Act mode system consists of:
 
-1. **Mode State**: Stored in `chatSettings.mode` in the Controller's state
-2. **Mode Switching**: Handled by `togglePlanActModeWithChatSettings` in the Controller
+1. **Mode State**: Stored in global settings (`mode`) in the Controller's state
+2. **Automatic Transitions**: Handled by `switchAgentMode()` in the Controller — new tasks start in PLAN MODE, finalized plans auto-transition to ACT MODE via `PlanModeRespondHandler`, and scope pivots can return to PLAN MODE
 3. **Mode-specific Models**: Optional configuration to use different models for each mode
-4. **Mode-specific Prompting**: Different system prompts for planning vs. execution
+4. **Mode-specific Prompting**: Different system prompts and tool availability for planning vs. execution
 
-### Mode Switching Process
+### Automatic Transition Flow
 
-When switching between modes:
-
-1. The current model configuration is saved to mode-specific state
-2. The previous mode's model configuration is restored
-3. The Task instance is updated with the new mode
-4. The webview is notified of the mode change
-5. Telemetry events are captured for analytics
+1. New tasks start in **PLAN MODE** (unless YOLO mode is enabled)
+2. Agent explores with read-only tools and presents a plan via `plan_mode_respond`
+3. Plan is streamed/finalized as a non-blocking `plan_summary` message
+4. System automatically switches to **ACT MODE** and implementation continues
+5. If the user redirects scope during ACT (replan, different approach), the system may switch back to PLAN MODE
 
 ### Plan Mode
 
@@ -534,9 +532,8 @@ Plan mode is designed for:
 - Information gathering and context building
 - Asking clarifying questions
 - Creating detailed execution plans
-- Discussing approaches with the user
 
-In Plan mode, the AI uses the `plan_mode_respond` tool to engage in conversational planning without executing actions.
+In Plan mode, the AI uses the `plan_mode_respond` tool to present plans without blocking for manual approval.
 
 ### Act Mode
 

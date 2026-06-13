@@ -174,8 +174,9 @@ export class FocusChainManager {
 				${progressGuidance}\n
 				`
 		}
-		// When switching from Plan to Act, request that a new list be generated
+		// When switching from Plan to Act, request that a new list be generated (once)
 		if (this.taskState.didRespondToPlanAskBySwitchingMode) {
+			this.taskState.didRespondToPlanAskBySwitchingMode = false
 			return `${FocusChainPrompts.initial}`
 		}
 

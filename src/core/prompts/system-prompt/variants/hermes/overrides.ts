@@ -101,7 +101,7 @@ Param: context (Current Work; Key Concepts; Relevant Files/Code; Problem Solving
 
 **plan_mode_respond** — PLAN-only reply.
 Params: response, needs_more_exploration (optional).  
-Include options/trade-offs when helpful, ask if plan matches, then add the exact mode-switch line.
+Include options/trade-offs when helpful. After presenting a finalized plan, the system automatically transitions to ACT MODE.
 *Example:*
 <plan_mode_respond>
 <response>Your response here</response>
@@ -122,7 +122,6 @@ const HERMES_TASK_PROGRESS_TEMPLATE = `UPDATING TASK PROGRESS
 
 Each tool supports an optional task_progress parameter for maintaining a Markdown checklist of your progress. Use it to show completed and remaining steps throughout a task.
 
-- Normally, skip task_progress during PLAN MODE until the plan is approved and you enter ACT MODE.
 - When switching from PLAN MODE to ACT MODE, you should create a comprehensive todo list for the task
 - Todo list updates should be done silently using the task_progress parameter - do not announce these updates to the user
 - Focus on creating actionable, meaningful steps rather than granular technical details

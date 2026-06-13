@@ -45,6 +45,7 @@ export function pickCompletionCloser(seed: number): string | null {
 
 /** Stable placeholders — no rotation; quiet availability. */
 const PLACEHOLDER_WITH_TASK = "Ask me anything…"
+const PLACEHOLDER_STEERING = "Add a follow-up, steer the task, or type /replan…"
 const PLACEHOLDER_EMPTY = "Take your time."
 const PLACEHOLDER_LONG_SESSION = "Still here."
 const PLACEHOLDER_NIGHT = "…"
@@ -53,7 +54,13 @@ export function pickEmptyStateLine(_seed: number): string {
 	return PLACEHOLDER_EMPTY
 }
 
-export function pickChatPlaceholder(hasTask: boolean, _seed: number, sessionMinutes = 0, isNightDesk = false): string {
+export function pickChatPlaceholder(
+	hasTask: boolean,
+	_seed: number,
+	sessionMinutes = 0,
+	isNightDesk = false,
+	agentActive = false,
+): string {
 	if (isNightDesk) {
 		return PLACEHOLDER_NIGHT
 	}
@@ -62,6 +69,9 @@ export function pickChatPlaceholder(hasTask: boolean, _seed: number, sessionMinu
 	}
 	if (!hasTask) {
 		return PLACEHOLDER_EMPTY
+	}
+	if (agentActive) {
+		return PLACEHOLDER_STEERING
 	}
 	return PLACEHOLDER_WITH_TASK
 }

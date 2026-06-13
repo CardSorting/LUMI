@@ -1,4 +1,4 @@
-import { buildAuditEventLiveAnnouncement } from "@shared/audit/auditEventAnnouncements"
+import { isAgentActiveForPlaceholder } from "@shared/agentActivity"
 import { buildUIGateEvaluationOptions } from "@shared/audit/auditGateUiOptions"
 import { getAutoScrollAuditEventTs, getLatestAdvisorySnapshot, getLatestGateBlockSnapshot } from "@shared/audit/auditHistoryUtils"
 import {
@@ -399,8 +399,9 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 
 	const placeholderText = useMemo(() => {
 		const seed = task?.ts ?? 0
-		return pickChatPlaceholder(Boolean(task), seed, sessionMinutes, isNightDesk)
-	}, [task, sessionMinutes, isNightDesk])
+		const agentActive = isAgentActiveForPlaceholder(messages, chatState.dietcodeAsk)
+		return pickChatPlaceholder(Boolean(task), seed, sessionMinutes, isNightDesk, agentActive)
+	}, [task, sessionMinutes, isNightDesk, messages, chatState.dietcodeAsk])
 
 	return (
 		<ChatLayout isHidden={isHidden} isNightDesk={isNightDesk} serenityLevel={serenityLevel}>

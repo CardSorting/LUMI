@@ -232,14 +232,7 @@ export async function createTestServer(controller: Controller): Promise<http.Ser
 						await visibleWebview.controller.postStateToWebview()
 					}
 
-					// Ensure we're in Act mode before initiating the task
-					const { mode } = await visibleWebview.controller.getStateToPostToWebview()
-					if (mode === "plan") {
-						// Switch to Act mode if currently in Plan mode
-						await visibleWebview.controller.togglePlanActMode("act")
-					}
-
-					// Initialize tool call tracker
+					// Initiate the new task (startTask automatically begins in PLAN MODE)
 					const toolTracker = createToolCallTracker()
 
 					// Record task start time

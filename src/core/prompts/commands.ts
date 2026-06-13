@@ -304,6 +304,19 @@ Below is the user's input describing what changes they want explained. If no inp
 </explicit_instructions>\n
 `
 
+export const replanToolResponse = () =>
+	`<explicit_instructions type="replan">
+The user has explicitly asked you to revisit the plan or change direction before continuing implementation.
+
+You MUST return to planning behavior:
+1. Re-read relevant context with read-only tools as needed
+2. Present a revised plan via plan_mode_respond
+3. The system automatically transitions back to ACT MODE after your finalized plan
+
+Do NOT proceed with file edits, commands, or other side-effect tools until you have presented an updated plan via plan_mode_respond.
+</explicit_instructions>\n
+`
+
 /**
  * Generates the deep-planning slash command response with model-family-aware variant selection
  * @param focusChainSettings Optional focus chain settings to include in the prompt

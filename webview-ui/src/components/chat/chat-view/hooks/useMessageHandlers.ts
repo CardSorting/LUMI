@@ -1,3 +1,4 @@
+import { canSendTaskFeedback } from "@shared/agentActivity"
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { EmptyRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { AskResponseRequest, NewTaskRequest } from "@shared/proto/dietcode/task"
@@ -95,35 +96,30 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 								break
 						}
 					}
-				} else if (messages.length > 0) {
-					// No dietcodeAsk set - check if task is actively running
-					// If so, allow interrupting it with feedback
-					const lastMessage = messages[messages.length - 1]
-					const isTaskRunning =
-						lastMessage.partial === true || (lastMessage.type === "say" && lastMessage.say === "api_req_started")
-
-					if (isTaskRunning) {
-						// Task is running - send message as interruption/feedback
-						await TaskServiceClient.askResponse(
-							AskResponseRequest.create({
-								responseType: "messageResponse",
-								text: messageToSend,
-								images,
-								files,
-							}),
-						)
-						messageSent = true
-					}
+				} else if (canSendTaskFeedback(messages, dietcodeAsk)) {
+					// Active task with no blocking ask — mid-stream steering or between-turn follow-up
+					await TaskServiceClient.askResponse(
+						AskResponseRequest.create({
+							responseType: "messageResponse",
+							text: messageToSend,
+							images,
+							files,
+						}),
+					)
+					messageSent = true
 				}
 
 				// Only clear input and disable UI if message was actually sent
 				if (messageSent) {
+					const isFollowUpMessage = canSendTaskFeedback(messages, dietcodeAsk)
 					setInputValue("")
 					setActiveQuote(null)
-					setSendingDisabled(true)
+					if (!isFollowUpMessage) {
+						setSendingDisabled(true)
+						setEnableButtons(false)
+					}
 					setSelectedImages([])
 					setSelectedFiles([])
-					setEnableButtons(false)
 
 					// Reset auto-scroll
 					if ("disableAutoScrollRef" in chatState) {

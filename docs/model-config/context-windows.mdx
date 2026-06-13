@@ -98,11 +98,12 @@ DietCode can automatically summarize long conversations:
 
 ## Advanced Context Management
 
-### Plan/Act Mode Optimization
+### Plan/Act Phase Optimization
 
-Leverage Plan/Act mode for better context usage:
-- **Plan Mode**: Use smaller context for discussion
-- **Act Mode**: Include necessary files for implementation
+Configure separate models for the planning and implementation phases (Settings → "Use different models for Plan and Act modes"). DietCode automatically selects the right model when transitioning between phases:
+
+- **Plan phase**: Use a cost-efficient or reasoning-focused model for exploration
+- **Act phase**: Use a coding-optimized model with larger context for implementation
 
 Configuration:
 ```text

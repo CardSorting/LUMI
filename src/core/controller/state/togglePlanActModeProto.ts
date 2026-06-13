@@ -5,10 +5,8 @@ import { Mode } from "@shared/storage/types"
 import { Logger } from "@/shared/services/Logger"
 
 /**
- * Toggles between Plan and Act modes
- * @param controller The controller instance
- * @param request The request containing the chat settings and optional chat content
- * @returns An empty response
+ * Updates plan/act mode for settings or legacy RPC callers.
+ * Delegates to switchAgentMode — does not cancel active tasks.
  */
 export async function togglePlanActModeProto(controller: Controller, request: TogglePlanActModeRequest): Promise<Boolean> {
 	try {

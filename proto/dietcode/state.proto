@@ -103,7 +103,7 @@ message Secrets {
   optional string cloudflare_api_token = 50;
   optional string embedding_api_key = 53;
   optional string vertex_api_key = 58;
-  optional string openai_codex_oauth_credentials = 91;
+  optional string openai_codex_oauth_credentials = 92;
 }
 
 // NOTE: Add new fields under API_HANDLER_SETTINGS_FIELDS or USER_SETTINGS_FIELDS

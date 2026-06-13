@@ -36,7 +36,11 @@ export function useIdleIndicator(
 
 		// Check if task is complete
 		const isTaskComplete = dietcodeMessages.some(
-			(msg) => msg.ask === "completion_result" || msg.say === "completion_result" || msg.ask === "plan_mode_respond",
+			(msg) =>
+				msg.ask === "completion_result" ||
+				msg.say === "completion_result" ||
+				msg.say === "plan_summary" ||
+				msg.ask === "plan_mode_respond",
 		)
 
 		if (isTaskComplete) {

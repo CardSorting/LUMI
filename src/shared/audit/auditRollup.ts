@@ -82,7 +82,7 @@ export function computeAuditHealthSummary(
 		}
 		suppressedViolationCount += auditMetadata.suppressed_violations?.length ?? 0
 		const hardeningScore = auditMetadata.hardening_score
-		if (Number.isFinite(hardeningScore)) {
+		if (hardeningScore !== undefined && Number.isFinite(hardeningScore)) {
 			scoreSum += hardeningScore
 			scoredCount += 1
 		}
@@ -101,13 +101,24 @@ export function computeAuditHealthSummary(
 	if (snapshots.length > 1) {
 		const previous = snapshots[snapshots.length - 2].auditMetadata
 		const previousScore = previous.hardening_score
-		if (Number.isFinite(latestScore) && Number.isFinite(previousScore)) {
+		if (
+			latestScore !== undefined &&
+			previousScore !== undefined &&
+			Number.isFinite(latestScore) &&
+			Number.isFinite(previousScore)
+		) {
 			latestScoreDelta = latestScore - previousScore
 		}
 	}
 
 	let trend: AuditHealthSummary["trend"] = "unknown"
-	if (Number.isFinite(latestScore) && Number.isFinite(earliestScore) && snapshots.length > 1) {
+	if (
+		latestScore !== undefined &&
+		earliestScore !== undefined &&
+		Number.isFinite(latestScore) &&
+		Number.isFinite(earliestScore) &&
+		snapshots.length > 1
+	) {
 		const delta = latestScore - earliestScore
 		if (delta >= 5) trend = "improving"
 		else if (delta <= -5) trend = "degrading"

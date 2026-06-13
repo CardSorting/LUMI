@@ -320,7 +320,7 @@
           },
           "needs_more_exploration": {
             "type": "boolean",
-            "description": "Set to true if while formulating your response that you found you need to do more exploration with tools, for example reading files. (Remember, you can explore the project with tools like read_file in PLAN MODE without the user having to toggle to ACT MODE.) Defaults to false if not specified."
+            "description": "Set to true if while formulating your response that you found you need to do more exploration with tools, for example reading files. (You can explore the project with tools like read_file while remaining in PLAN MODE.) Defaults to false if not specified."
           },
           "task_progress": {
             "type": "string",

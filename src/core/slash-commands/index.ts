@@ -12,6 +12,7 @@ import {
 	explainChangesToolResponse,
 	newRuleToolResponse,
 	newTaskToolResponse,
+	replanToolResponse,
 	reportBugToolResponse,
 } from "../prompts/commands"
 import { StateManager } from "../storage/StateManager"
@@ -57,6 +58,7 @@ export async function parseSlashCommands(
 		"newrule",
 		"reportbug",
 		"deep-planning",
+		"replan",
 		"explain-changes",
 		"document",
 	]
@@ -71,6 +73,7 @@ export async function parseSlashCommands(
 		newrule: newRuleToolResponse(),
 		reportbug: reportBugToolResponse(),
 		"deep-planning": deepPlanningToolResponse(focusChainSettings, providerInfo, willUseNativeTools),
+		replan: replanToolResponse(),
 		"explain-changes": explainChangesToolResponse(),
 		document: documentToolResponse(),
 	}

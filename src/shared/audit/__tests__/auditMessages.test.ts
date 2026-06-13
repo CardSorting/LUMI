@@ -33,6 +33,14 @@ describe("auditMessages", () => {
 		expect(
 			messageCarriesAuditMetadata({
 				ts: 1,
+				type: "say",
+				say: "plan_summary",
+				auditMetadata: audit,
+			} as DietCodeMessage),
+		).to.equal(true)
+		expect(
+			messageCarriesAuditMetadata({
+				ts: 1,
 				type: "ask",
 				ask: "plan_mode_respond",
 				auditMetadata: audit,
@@ -58,6 +66,17 @@ describe("auditMessages", () => {
 
 		const latest = getLatestAuditFromMessages(messages)
 		expect(latest?.hardening_grade).to.equal("A")
+	})
+
+	it("returns the latest plan audit from plan_summary say messages", () => {
+		const legacyPlan = enrichAuditMetadata({ violations: ["legacy"] })
+		const planSummary = enrichAuditMetadata({ violations: [] })
+		const messages = [
+			{ ts: 1, type: "ask", ask: "plan_mode_respond", auditMetadata: legacyPlan },
+			{ ts: 2, type: "say", say: "plan_summary", auditMetadata: planSummary },
+		] as DietCodeMessage[]
+
+		expect(getLatestPlanAuditFromMessages(messages)?.violations).to.deep.equal([])
 	})
 
 	it("returns the latest plan audit for regression baselines", () => {
@@ -105,7 +124,7 @@ describe("auditMessages", () => {
 		const audit = enrichAuditMetadata({ violations: [] })
 		const messages = [
 			{ ts: 1000, type: "say", say: "completion_result", auditMetadata: audit },
-			{ ts: 2000, type: "ask", ask: "plan_mode_respond", auditMetadata: audit },
+			{ ts: 2000, type: "say", say: "plan_summary", auditMetadata: audit },
 		] as DietCodeMessage[]
 
 		const snapshots = getAuditSnapshotsFromMessages(messages)

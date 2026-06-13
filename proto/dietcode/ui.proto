@@ -75,6 +75,7 @@ enum DietCodeSay {
   SUBAGENT_STATUS = 34;
   USE_SUBAGENTS_SAY = 35;
   SUBAGENT_USAGE = 36;
+  PLAN_SUMMARY = 37;
 }
 
 // Enum for DietCodeSayTool tool types

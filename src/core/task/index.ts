@@ -67,6 +67,7 @@ import {
 	TaskAuditMetadata,
 } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
+import { inferAgentModeFromMessages, stripPartialPlanSummaryMessages } from "@shared/inferAgentModeFromMessages"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay } from "@shared/Languages"
 import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertDietCodeMessageToProto } from "@shared/proto-conversions/dietcode-message"
@@ -131,6 +132,13 @@ import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
 import { detectAvailableCliTools, extractProviderDomainFromUrl, updateApiReqMsg } from "./utils"
 import { buildUserFeedbackContent } from "./utils/buildUserFeedbackContent"
+import { consumeIdleGapFeedback, shouldAcceptIdleGapFeedback } from "./utils/idleGapFeedback"
+import { maybeTransitionToReplanMode } from "./utils/replanModeTransition"
+import {
+	appendInterruptedAssistantTurn,
+	consumeSteeringInterrupt,
+	shouldAcceptSteeringInterrupt,
+} from "./utils/steeringInterrupt"
 
 export type ToolResponse = DietCodeToolResponseContent
 
@@ -575,6 +583,7 @@ export class Task {
 			() => this.checkpointManager?.doesLatestTaskCompletionHaveNewChanges() ?? Promise.resolve(false),
 			this.FocusChainManager?.updateFCListFromToolResponse.bind(this.FocusChainManager) || (async () => {}),
 			this.switchToActModeCallback.bind(this),
+			this.switchToPlanModeCallback.bind(this),
 			this.cancelTask,
 			// Atomic hook state helpers for ToolExecutor
 			this.setActiveHookExecution.bind(this),
@@ -728,10 +737,91 @@ export class Task {
 	}
 
 	async handleWebviewAskResponse(askResponse: DietCodeAskResponse, text?: string, images?: string[], files?: string[]) {
+		const feedback = { text, images, files }
+		if (
+			shouldAcceptSteeringInterrupt({
+				askResponse,
+				feedback,
+				isStreaming: this.taskState.isStreaming,
+				isWaitingForFirstChunk: this.taskState.isWaitingForFirstChunk,
+				hasUnansweredAsk: this.hasUnansweredAsk(),
+			})
+		) {
+			this.taskState.pendingSteeringFeedback = feedback
+			this.taskState.steeringInterruptRequested = true
+			this.api.abort?.()
+			return
+		}
+
+		if (
+			shouldAcceptIdleGapFeedback({
+				askResponse,
+				feedback,
+				isStreaming: this.taskState.isStreaming,
+				isWaitingForFirstChunk: this.taskState.isWaitingForFirstChunk,
+				hasUnansweredAsk: this.hasUnansweredAsk(),
+				isTaskInitialized: this.taskState.isInitialized,
+				abort: this.taskState.abort,
+			})
+		) {
+			this.taskState.pendingIdleGapFeedback = feedback
+			this.taskState.idleGapFeedbackRequested = true
+			return
+		}
+
 		this.taskState.askResponse = askResponse
 		this.taskState.askResponseText = text
 		this.taskState.askResponseImages = images
 		this.taskState.askResponseFiles = files
+	}
+
+	private hasUnansweredAsk(): boolean {
+		const lastMessage = this.messageStateHandler.getDietCodeMessages().at(-1)
+		return lastMessage?.type === "ask" && lastMessage.partial !== true
+	}
+
+	private async consumeIdleGapFeedbackIfPending(): Promise<DietCodeContent[] | null> {
+		return consumeIdleGapFeedback({
+			taskState: this.taskState,
+			mode: this.stateManager.getGlobalSettingsKey("mode"),
+			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
+			switchToPlanMode: this.switchToPlanModeCallback.bind(this),
+			say: this.say.bind(this),
+		})
+	}
+
+	private async continueFromSteeringInterrupt(params: {
+		assistantTextOnly: string
+		taskMetrics: {
+			inputTokens: number
+			outputTokens: number
+			cacheWriteTokens: number
+			cacheReadTokens: number
+			totalCost: number | undefined
+		}
+		modelInfo: DietCodeMessageModelInfo
+	}): Promise<boolean> {
+		const steeringUserContent = await consumeSteeringInterrupt({
+			taskState: this.taskState,
+			mode: this.stateManager.getGlobalSettingsKey("mode"),
+			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
+			switchToPlanMode: this.switchToPlanModeCallback.bind(this),
+			say: this.say.bind(this),
+		})
+		if (!steeringUserContent) {
+			return false
+		}
+
+		if (params.assistantTextOnly.trim()) {
+			await appendInterruptedAssistantTurn({
+				messageStateHandler: this.messageStateHandler,
+				assistantTextOnly: params.assistantTextOnly,
+				modelInfo: params.modelInfo,
+				taskMetrics: params.taskMetrics,
+			})
+		}
+
+		return await this.recursivelyMakeDietCodeRequests(steeringUserContent)
 	}
 
 	async say(
@@ -881,6 +971,10 @@ export class Task {
 		return await this.controller.toggleActModeForYoloMode()
 	}
 
+	private async switchToPlanModeCallback(): Promise<boolean> {
+		return await this.controller.switchToPlanModeForAgent()
+	}
+
 	/**
 	 * Unified cancellation handler for hook-requested cancellations.
 	 * Ensures state is always saved before aborting, regardless of whether
@@ -971,6 +1065,12 @@ export class Task {
 	// Task lifecycle
 
 	public async startTask(task?: string, images?: string[], files?: string[]): Promise<void> {
+		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
+			await this.controller.toggleActModeForYoloMode()
+		} else {
+			await this.controller.switchToPlanModeForAgent()
+		}
+
 		try {
 			await this.dietcodeIgnoreController.initialize()
 		} catch (error) {
@@ -1111,7 +1211,7 @@ export class Task {
 			// Optionally, inform the user or handle the error appropriately
 		}
 
-		const savedDietCodeMessages = await getSavedDietCodeMessages(this.taskId)
+		const savedDietCodeMessages = stripPartialPlanSummaryMessages(await getSavedDietCodeMessages(this.taskId))
 
 		// Remove any resume messages that may have been added before
 
@@ -1137,7 +1237,7 @@ export class Task {
 		}
 
 		await this.messageStateHandler.overwriteDietCodeMessages(savedDietCodeMessages)
-		this.messageStateHandler.setDietCodeMessages(await getSavedDietCodeMessages(this.taskId))
+		this.messageStateHandler.setDietCodeMessages(savedDietCodeMessages)
 
 		// Now present the dietcode messages to the user and ask if they want to resume (NOTE: we ran into a bug before where the apiconversationhistory wouldn't be initialized when opening a old task, and it was because we were waiting for resume)
 		// This is important in case the user deletes messages without resuming the task first
@@ -1164,6 +1264,14 @@ export class Task {
 
 		this.taskState.isInitialized = true
 		this.taskState.abort = false // Reset abort flag when resuming task
+
+		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
+		const inferredMode = inferAgentModeFromMessages(this.messageStateHandler.getDietCodeMessages(), yoloModeToggled)
+		if (inferredMode === "act") {
+			await this.controller.toggleActModeForYoloMode()
+		} else {
+			await this.controller.switchToPlanModeForAgent()
+		}
 
 		try {
 			const recalledIntent = await orchestrator.recallMemory(this.taskId, "pre_audited_intent")
@@ -1244,6 +1352,16 @@ export class Task {
 			responseImages = images
 			responseFiles = files
 		}
+
+		await maybeTransitionToReplanMode({
+			feedback: responseText,
+			currentMode: this.stateManager.getGlobalSettingsKey("mode"),
+			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
+			switchToPlanMode: this.switchToPlanModeCallback.bind(this),
+			sayInfo: async (message) => {
+				await this.say("info", message)
+			},
+		})
 
 		// need to make sure that the api conversation history can be resumed by the api, even if it goes out of sync with dietcode messages
 
@@ -1393,6 +1511,11 @@ export class Task {
 		let includeFileDetails = true
 
 		while (!this.taskState.abort) {
+			const idleGapAtLoopStart = await this.consumeIdleGapFeedbackIfPending()
+			if (idleGapAtLoopStart) {
+				nextUserContent = idleGapAtLoopStart
+			}
+
 			this.taskState.currentTurnReadHistory.clear() // Reset read history for the new turn
 			this.taskState.currentTurnTotalReadCount = 0 // Reset total read counter for the new turn
 			this.taskState.currentTurnUniqueReadCount = 0 // Reset unique read counter for the new turn
@@ -2347,6 +2470,11 @@ export class Task {
 			throw new Error("Task instance aborted")
 		}
 
+		const idleGapAtRequestStart = await this.consumeIdleGapFeedbackIfPending()
+		if (idleGapAtRequestStart) {
+			return await this.recursivelyMakeDietCodeRequests(idleGapAtRequestStart, includeFileDetails)
+		}
+
 		// Increment API request counter for focus chain list management
 		this.taskState.apiRequestCount++
 		this.taskState.apiRequestsSinceLastTodoUpdate++
@@ -2620,6 +2748,11 @@ export class Task {
 
 		// Replace userContent with parsed content that includes file details and command instructions.
 		userContent = parsedUserContent
+
+		const idleGapAfterContext = await this.consumeIdleGapFeedbackIfPending()
+		if (idleGapAfterContext) {
+			return await this.recursivelyMakeDietCodeRequests(idleGapAfterContext, false)
+		}
 
 		// add environment details as its own text block, separate from tool results
 		// do not add environment details to the message which we are compacting the context window
@@ -2926,6 +3059,11 @@ export class Task {
 						break
 					}
 
+					if (this.taskState.steeringInterruptRequested) {
+						assistantMessage += "\n\n[Response interrupted by user steering message]"
+						break
+					}
+
 					// Interrupt stream if a tool was used and parallel calling is disabled
 					// PREV: we need to let the request finish for openrouter to get generation details
 					// UPDATE: it's better UX to interrupt the request at the cost of the api cost not being retrieved
@@ -3033,6 +3171,14 @@ export class Task {
 			)
 
 			await this.postStateToWebview()
+
+			if (this.taskState.steeringInterruptRequested) {
+				return await this.continueFromSteeringInterrupt({
+					assistantTextOnly,
+					taskMetrics,
+					modelInfo,
+				})
+			}
 
 			// need to call here in case the stream was aborted
 			if (this.taskState.abort) {
@@ -3148,7 +3294,15 @@ export class Task {
 				// 	this.userMessageContentReady = true
 				// }
 
-				await pWaitFor(() => this.taskState.userMessageContentReady)
+				await pWaitFor(() => this.taskState.userMessageContentReady || this.taskState.idleGapFeedbackRequested)
+
+				if (this.taskState.idleGapFeedbackRequested) {
+					this.taskState.userMessageContent = []
+					const idleGapContent = await this.consumeIdleGapFeedbackIfPending()
+					if (idleGapContent) {
+						return await this.recursivelyMakeDietCodeRequests(idleGapContent, false)
+					}
+				}
 
 				// Save checkpoint after all tools in this response have finished executing
 				await this.checkpointManager?.saveCheckpoint()
@@ -3167,6 +3321,14 @@ export class Task {
 
 				// Reset auto-retry counter for each new API request
 				this.taskState.autoRetryAttempts = 0
+
+				if (this.taskState.idleGapFeedbackRequested) {
+					this.taskState.userMessageContent = []
+					const idleGapBeforeContinuation = await this.consumeIdleGapFeedbackIfPending()
+					if (idleGapBeforeContinuation) {
+						return await this.recursivelyMakeDietCodeRequests(idleGapBeforeContinuation, false)
+					}
+				}
 
 				const recDidEndLoop = await this.recursivelyMakeDietCodeRequests(this.taskState.userMessageContent)
 				didEndLoop = recDidEndLoop
@@ -3263,6 +3425,24 @@ export class Task {
 
 			return didEndLoop // will always be false for now
 		} catch (_error) {
+			if (this.taskState.steeringInterruptRequested) {
+				const providerInfo = this.getCurrentProviderInfo()
+				return await this.continueFromSteeringInterrupt({
+					assistantTextOnly: "",
+					taskMetrics: {
+						inputTokens: 0,
+						outputTokens: 0,
+						cacheWriteTokens: 0,
+						cacheReadTokens: 0,
+						totalCost: undefined,
+					},
+					modelInfo: {
+						providerId: providerInfo.providerId,
+						modelId: providerInfo.model.id,
+						mode: providerInfo.mode,
+					},
+				})
+			}
 			// this should never happen since the only thing that can throw an error is the attemptApiRequest, which is wrapped in a try catch that sends an ask where if noButtonClicked, will clear current task and destroy this instance. However to avoid unhandled promise rejection, we will end this loop which will end execution of this instance (see startTask)
 			return true // needs to be true so parent loop knows to end task
 		}
@@ -3704,8 +3884,11 @@ export class Task {
 		if (mode === "plan") {
 			details += `\nPLAN MODE\n${formatResponse.planModeInstructions()}`
 		} else {
-			details += "\nACT MODE"
+			details += `\nACT MODE\n${formatResponse.actModeInstructions()}`
 		}
+
+		details +=
+			"\n\n# Phase Transitions\nPlan and Act phases are managed automatically. Do not ask the user to switch modes. Finalized plans via plan_mode_respond auto-transition to ACT MODE; user steering may return you to PLAN MODE for scope pivots."
 
 		return `<environment_details>\n${details.trim()}\n</environment_details>`
 	}

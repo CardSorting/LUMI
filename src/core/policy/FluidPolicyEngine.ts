@@ -306,11 +306,11 @@ export class FluidPolicyEngine {
 					success: false,
 					error:
 						`🛑 PLAN MODE RESTRICTION: You are attempting to modify \`${targetPath}\` while in PLAN mode.\n\n` +
-						`💡 WORKFLOW GUIDANCE: You MUST NOT edit source code, documentation, changelogs, or wikis until the plan is approved.\n\n` +
+						`💡 WORKFLOW GUIDANCE: You MUST NOT edit source code, documentation, changelogs, or wikis until your plan is finalized.\n\n` +
 						`✅ ALLOWED ACTIONS:\n` +
 						`1. Update \`scratchpad.md\` with your architectural analysis.\n` +
 						`2. Use \`plan_mode_respond\` to present your final plan to the user.\n` +
-						`3. Once the user approves and switches you to ACT mode, you may proceed with implementation.`,
+						`3. The system will automatically transition to ACT mode after your plan is finalized.`,
 				}
 			}
 		}

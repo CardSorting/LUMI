@@ -75,6 +75,7 @@ export interface IController {
 	// ─── Mode / settings ───
 	updateBackgroundCommandState(isRunning: boolean, taskId?: string): void
 	toggleActModeForYoloMode(): Promise<boolean>
+	switchToPlanModeForAgent(): Promise<boolean>
 	togglePlanActMode(modeToSwitchTo: Mode, chatContent?: ChatContent): Promise<boolean>
 	updateTelemetrySetting(telemetrySetting: TelemetrySetting): Promise<void>
 

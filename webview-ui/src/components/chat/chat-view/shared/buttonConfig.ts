@@ -125,6 +125,14 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		primaryAction: undefined,
 		secondaryAction: undefined,
 	},
+	plan_summary: {
+		sendingDisabled: false,
+		enableButtons: false,
+		primaryText: undefined,
+		secondaryText: undefined,
+		primaryAction: undefined,
+		secondaryAction: undefined,
+	},
 
 	// Task lifecycle states
 	completion_result: {
@@ -178,9 +186,9 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		secondaryAction: undefined,
 	},
 
-	// Streaming/partial states - disable interaction during streaming
+	// Streaming/partial states — allow steering messages while agent works (Cancel still available)
 	partial: {
-		sendingDisabled: true,
+		sendingDisabled: false,
 		enableButtons: true,
 		primaryText: undefined,
 		secondaryText: "Cancel",
@@ -198,7 +206,7 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		secondaryAction: undefined,
 	},
 	api_req_active: {
-		sendingDisabled: true,
+		sendingDisabled: false,
 		enableButtons: true,
 		primaryText: undefined,
 		secondaryText: "Cancel",
@@ -306,5 +314,9 @@ export function getButtonConfig(message: DietCodeMessage | undefined, _mode: Mod
 		return BUTTON_CONFIGS.command_output
 	}
 
-	return BUTTON_CONFIGS.partial
+	if (message.type === "say" && message.say === "plan_summary") {
+		return BUTTON_CONFIGS.plan_summary
+	}
+
+	return BUTTON_CONFIGS.default
 }

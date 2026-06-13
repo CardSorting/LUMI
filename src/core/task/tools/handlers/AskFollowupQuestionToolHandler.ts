@@ -9,6 +9,7 @@ import { DietCodeDefaultTool } from "@shared/tools"
 import { telemetryService } from "@/services/telemetry"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
+import { maybeTransitionToReplanMode } from "../../utils/replanModeTransition"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -94,6 +95,15 @@ export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlo
 		} else {
 			// Option not selected, send user feedback
 			telemetryService.captureOptionsIgnored(config.ulid, options.length, "act")
+			await maybeTransitionToReplanMode({
+				feedback: text,
+				currentMode: config.mode,
+				yoloModeToggled: config.yoloModeToggled,
+				switchToPlanMode: config.callbacks.switchToPlanMode,
+				sayInfo: async (message) => {
+					await config.callbacks.say("info", message)
+				},
+			})
 			await config.callbacks.say("user_feedback", text ?? "", images, followupFiles)
 		}
 

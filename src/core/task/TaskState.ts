@@ -38,8 +38,23 @@ export class TaskState {
 	lastMessageTs?: number
 
 	// Plan mode specific state
-	isAwaitingPlanResponse = false
 	didRespondToPlanAskBySwitchingMode = false
+
+	// Mid-stream user steering (message sent while agent is working)
+	steeringInterruptRequested = false
+	pendingSteeringFeedback?: {
+		text?: string
+		images?: string[]
+		files?: string[]
+	}
+
+	// Between-turn user feedback (after a response completes, before the next API request)
+	idleGapFeedbackRequested = false
+	pendingIdleGapFeedback?: {
+		text?: string
+		images?: string[]
+		files?: string[]
+	}
 
 	// Context and history
 	conversationHistoryDeletedRange?: [number, number]

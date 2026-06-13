@@ -413,61 +413,28 @@ export class Controller implements IController {
 	}
 
 	async toggleActModeForYoloMode(): Promise<boolean> {
-		const modeToSwitchTo: Mode = "act"
-
-		// Switch to act mode
-		this.stateManager.setGlobalState("mode", modeToSwitchTo)
-
-		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
-		if (this.task) {
-			const apiConfiguration = this.stateManager.getApiConfiguration()
-			this.task.api = buildApiHandler({ ...apiConfiguration, ulid: this.task.ulid }, modeToSwitchTo)
-		}
-
-		await this.postStateToWebview()
-
-		// Additional safety
-		if (this.task) {
-			return true
-		}
-		return false
+		return this.switchAgentMode("act")
 	}
 
-	async togglePlanActMode(modeToSwitchTo: Mode, chatContent?: ChatContent): Promise<boolean> {
-		const didSwitchToActMode = modeToSwitchTo === "act"
+	async switchToPlanModeForAgent(): Promise<boolean> {
+		return this.switchAgentMode("plan")
+	}
 
-		// Store mode to global state
+	private async switchAgentMode(modeToSwitchTo: Mode): Promise<boolean> {
 		this.stateManager.setGlobalState("mode", modeToSwitchTo)
-
-		// Capture mode switch telemetry | Capture regardless of if we know the taskId
 		telemetryService.captureModeSwitch(this.task?.ulid ?? "0", modeToSwitchTo)
 
-		// Update API handler with new mode (buildApiHandler now selects provider based on mode)
 		if (this.task) {
 			const apiConfiguration = this.stateManager.getApiConfiguration()
 			this.task.api = buildApiHandler({ ...apiConfiguration, ulid: this.task.ulid }, modeToSwitchTo)
 		}
 
 		await this.postStateToWebview()
+		return true
+	}
 
-		if (this.task) {
-			if (this.task.taskState.isAwaitingPlanResponse && didSwitchToActMode) {
-				this.task.taskState.didRespondToPlanAskBySwitchingMode = true
-				// Use chatContent if provided, otherwise use default message
-				await this.task.handleWebviewAskResponse(
-					"messageResponse",
-					chatContent?.message || "PLAN_MODE_TOGGLE_RESPONSE",
-					chatContent?.images || [],
-					chatContent?.files || [],
-				)
-
-				return true
-			}
-			this.cancelTask()
-			return false
-		}
-
-		return false
+	async togglePlanActMode(modeToSwitchTo: Mode, _chatContent?: ChatContent): Promise<boolean> {
+		return this.switchAgentMode(modeToSwitchTo)
 	}
 
 	async cancelTask() {

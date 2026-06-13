@@ -6,7 +6,7 @@ export type AuditSnapshotSource = "completion" | "plan" | "gate_block" | "adviso
 
 /** Message types that carry architectural audit metadata. */
 const AUDIT_BEARING_ASKS = new Set<DietCodeMessage["ask"]>(["plan_mode_respond", "completion_result"])
-const AUDIT_BEARING_SAYS = new Set<DietCodeMessage["say"]>(["completion_result", "info"])
+const AUDIT_BEARING_SAYS = new Set<DietCodeMessage["say"]>(["completion_result", "info", "plan_summary"])
 
 export interface AuditMessageSnapshot {
 	ts: number
@@ -109,6 +109,9 @@ export function getPreviousAdvisoryAuditBeforeTs(messages: DietCodeMessage[], be
 export function getLatestPlanAuditFromMessages(messages: DietCodeMessage[]): TaskAuditMetadata | undefined {
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const message = messages[i]
+		if (message.auditMetadata && message.type === "say" && message.say === "plan_summary") {
+			return message.auditMetadata
+		}
 		if (message.type === "ask" && message.ask === "plan_mode_respond" && message.auditMetadata) {
 			return message.auditMetadata
 		}
@@ -134,6 +137,7 @@ export function resolveAuditSource(message: DietCodeMessage): AuditSnapshotSourc
 		return undefined
 	}
 	if (message.type === "say" && message.say === "completion_result") return "completion"
+	if (message.type === "say" && message.say === "plan_summary") return "plan"
 	if (message.type === "ask" && message.ask === "plan_mode_respond") return "plan"
 	if (message.type === "ask" && message.ask === "completion_result") return "completion"
 	return undefined

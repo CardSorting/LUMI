@@ -106,7 +106,7 @@ Before finalizing your plan, you must follow the **Double Down Planning** workfl
 1. **Draft**: Use \`scratchpad.md\` for your investigation. You MUST follow the **Sovereign Triad V6 Template** (Grounding Probes -> Resolution).
 2. **Grounded Audit**: Answer the three investigative probes (Boundary, Assumption, Atomic) in the scratchpad.
 3. **Draft Resolution**: Synthesize all hardening results into the formal \`implementation_plan.md\`.
-4. **User Presentation**: Use the \`plan_mode_respond\` tool as your VERY NEXT action to deliver the finalized plan to the user for approval.
+4. **User Presentation**: Use the \`plan_mode_respond\` tool as your VERY NEXT action to deliver the finalized plan. The system will automatically transition to ACT MODE for implementation.
 5. **Mantra Standard**: **Double down on this concept**: use the mantra to drive investigative depth. **Double down on this concept** - audit and revise in its entirety.
 
 Create a structured markdown document containing your complete implementation plan. The document must follow this exact format with clearly marked sections:
@@ -255,9 +255,9 @@ Refer to @path/to/file/markdown.md for a complete breakdown of the task requirem
 
 {{NEW_TASK_INSTRUCTIONS}}
 
-### Mode Switching
+### Automatic Mode Transition
 
-When creating the new task, request a switch to "act mode" if you are currently in "plan mode". This ensures the implementation agent operates in execution mode rather than planning mode.
+The system automatically manages plan and act mode. New tasks begin in PLAN MODE. When the implementation task starts, call plan_mode_respond with a brief summary referencing your spec document; the system will automatically transition to ACT MODE for implementation.
 </IMPORTANT>
 
 ## Quality Standards

@@ -208,6 +208,7 @@ export type DietCodeSay =
 	| "subagent"
 	| "use_subagents"
 	| "subagent_usage"
+	| "plan_summary"
 	| "conditional_rules_applied"
 
 export interface DietCodeSayTool {

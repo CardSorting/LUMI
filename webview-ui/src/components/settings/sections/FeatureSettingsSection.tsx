@@ -59,8 +59,8 @@ const agentFeatures: FeatureToggle[] = [
 	},
 	{
 		id: "strict-plan-mode",
-		label: "Plan mode stays read-only",
-		description: "In Plan mode, MIRA won't edit files until you switch to Act.",
+		label: "Planning stays read-only",
+		description: "During the automatic planning phase, MIRA won't edit files until it begins implementation.",
 		stateKey: "strictPlanModeEnabled",
 		settingKey: "strictPlanModeEnabled",
 	},

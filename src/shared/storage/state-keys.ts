@@ -167,7 +167,7 @@ const USER_SETTINGS_FIELDS = {
 	dietcodeWebToolsEnabled: { default: true as boolean },
 	worktreesEnabled: { default: false as boolean },
 	preferredLanguage: { default: "English" as string },
-	mode: { default: "act" as Mode },
+	mode: { default: "plan" as Mode },
 	focusChainSettings: { default: DEFAULT_FOCUS_CHAIN_SETTINGS as FocusChainSettings },
 	customPrompt: { default: undefined as "compact" | undefined },
 	enableParallelToolCalling: { default: true as boolean },

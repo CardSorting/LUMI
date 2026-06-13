@@ -19,6 +19,12 @@ export const BASE_SLASH_COMMANDS: SlashCommand[] = [
 		cliCompatible: true,
 	},
 	{
+		name: "replan",
+		description: "Return to planning and revise the approach before continuing",
+		section: "default",
+		cliCompatible: true,
+	},
+	{
 		name: "smol",
 		description: "Condenses your current context window",
 		section: "default",

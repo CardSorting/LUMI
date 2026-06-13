@@ -277,7 +277,7 @@ Otherwise, if you have not completed the task and do not need additional informa
 			responseText
 				? `${mode === "plan" ? "New message to respond to with plan_mode_respond tool (be sure to provide your response in the <response> parameter)" : "New instructions for task continuation"}:\n<user_message>\n${responseText}\n</user_message>`
 				: mode === "plan"
-					? "(The user did not provide a new message. Consider asking them how they'd like you to proceed, or suggest to them to switch to Act mode to continue with the task.)"
+					? "(The user did not provide a new message. Consider asking them how they'd like you to proceed, or continue planning with the tools available in PLAN MODE.)"
 					: ""
 		}`
 
@@ -292,9 +292,11 @@ Otherwise, if you have not completed the task and do not need additional informa
 2. **Decompose by layer**: Plan your implementation in a "Domain-first" manner (logic/models) before Infrastructure (adapters/IO) or UI.
 3. **Map the bridges**: If a change crosses layers, explicitly plan the interfaces or adapters needed to maintain purity.
 
-Once you have a detailed architectural plan, use the plan_mode_respond tool to engage in a conversational back and forth with the user. Do not use the plan_mode_respond tool until you've gathered all the information you need e.g. with read_file or ask_followup_question.
+Once you have a detailed architectural plan, use the plan_mode_respond tool to present it. The system will automatically transition to ACT MODE so you can implement. Do not use the plan_mode_respond tool until you've gathered all the information you need e.g. with read_file or ask_followup_question.`
+	},
 
-(Remember: If it seems the user wants you to use tools only available in Act Mode, you should ask the user to "toggle to Act mode" (use those words) - they will have to manually do this themselves with the Plan/Act toggle button below.)`
+	actModeInstructions: () => {
+		return `In this mode you should implement the user's task using write/edit/execute tools. Use act_mode_respond sparingly for brief non-blocking progress updates, then continue with substantive tool work. If the user redirects scope (replan, different approach), the system may automatically return you to PLAN MODE — follow the revised plan after plan_mode_respond. When the task is complete, use attempt_completion.`
 	},
 
 	fileEditWithUserChanges: (

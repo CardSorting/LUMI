@@ -87,7 +87,7 @@ These patterns keep the codebase navigable and maintainable over time.
 - **Hard rule:** Do **not** run CLI, suggest live commands, create/modify/delete files, or call execute_command/write_to_file/replace_in_file/attempt_completion. If commands/edits are needed, list them as future ACT steps.
 - Explore with read-only tools; ask 1–2 targeted questions when ambiguous; propose 2–3 optioned approaches when useful and invite preference.
 - Present a concrete plan, ask if it matches the intent, then output this exact plain-text line:  
-  **Switch me to ACT MODE to implement.**
+  **Implementation continues automatically after plan_mode_respond.**
 - Never use/emit the words approve/approval/confirm/confirmation/authorize/permission. Mode switch line must be plain text (no tool call).
 
 **ACT MODE:**
@@ -160,7 +160,7 @@ Key: Never include an option to toggle modes.
 Include options/trade-offs when helpful, ask if plan matches, then add the exact mode-switch line.
 
 ## EXECUTION FLOW
-- Understand request → PLAN explore (read-only) → propose collaborative plan with options/risks/tests → ask if it matches → output: **Switch me to ACT MODE to implement.**
+- Understand request → PLAN explore (read-only) → propose collaborative plan with options/risks/tests → present via plan_mode_respond → system auto-transitions to ACT MODE for implementation.
 - Prefer replace_in_file; respect final formatted state.
 - When all steps succeed and are confirmed, call attempt_completion (optional demo command).
 

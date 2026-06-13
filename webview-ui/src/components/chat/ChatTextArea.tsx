@@ -1,9 +1,6 @@
 import { mentionRegex } from "@shared/context-mentions"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { FileSearchRequest, FileSearchType, RelativePathsRequest } from "@shared/proto/dietcode/file"
-import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/dietcode/state"
-import { type SlashCommand } from "@shared/slashCommands"
-import { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
@@ -17,9 +14,8 @@ import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/s
 import { Icon } from "@/components/ui/icons"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { usePlatform } from "@/context/PlatformContext"
 import { cn } from "@/lib/utils"
-import { FileServiceClient, StateServiceClient } from "@/services/grpc-client"
+import { FileServiceClient } from "@/services/grpc-client"
 import {
 	ContextMenuOptionType,
 	getContextMenuOptionIndex,
@@ -30,7 +26,6 @@ import {
 	type SearchResult,
 	shouldShowContextMenu,
 } from "@/utils/context-mentions"
-import { useMetaKeyDetection, useShortcut } from "@/utils/hooks"
 import { isSafari } from "@/utils/platformUtils"
 import {
 	getMatchingSlashCommands,
@@ -88,35 +83,6 @@ interface GitCommit {
 	label: string
 	description: string
 }
-
-const PLAN_MODE_COLOR = "var(--color-mira)"
-const ACT_MODE_COLOR = "#95a5a6"
-
-const SwitchContainer = styled.div<{ disabled: boolean }>`
-	display: flex;
-	align-items: center;
-	background-color: transparent;
-	border: 1px solid var(--vscode-input-border);
-	border-radius: 12px;
-	overflow: hidden;
-	cursor: ${(props) => (props.disabled ? "not-allowed" : "pointer")};
-	opacity: ${(props) => (props.disabled ? 0.5 : 1)};
-	transform: scale(1);
-	transform-origin: right center;
-	margin-left: 0;
-	user-select: none; // Prevent text selection
-`
-
-const Slider = styled.div.withConfig({
-	shouldForwardProp: (prop) => !["isAct", "isPlan"].includes(prop),
-})<{ isAct: boolean; isPlan?: boolean }>`
-	position: absolute;
-	height: 100%;
-	width: 50%;
-	background-color: ${(props) => (props.isPlan ? PLAN_MODE_COLOR : ACT_MODE_COLOR)};
-	transition: transform 0.2s ease;
-	transform: translateX(${(props) => (props.isAct ? "100%" : "0%")});
-`
 
 const ButtonGroup = styled.div`
 	display: flex;
@@ -213,7 +179,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const {
 			mode,
 			apiConfiguration,
-			platform,
 			localWorkflowToggles,
 			globalWorkflowToggles,
 			remoteWorkflowToggles,
@@ -240,7 +205,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const [intendedCursorPosition, setIntendedCursorPosition] = useState<number | null>(null)
 		const contextMenuContainerRef = useRef<HTMLDivElement>(null)
 
-		const [shownTooltipMode, setShownTooltipMode] = useState<Mode | null>(null)
 		const [pendingInsertions, setPendingInsertions] = useState<string[]>([])
 		const _shiftHoldTimerRef = useRef<NodeJS.Timeout | null>(null)
 		const [showUnsupportedFileError, setShowUnsupportedFileError] = useState(false)
@@ -250,7 +214,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
 		const [searchLoading, setSearchLoading] = useState(false)
-		const [, metaKeyChar] = useMetaKeyDetection(platform)
 
 		// Fetch git commits when Git is selected or when typing a hash
 		useEffect(() => {
@@ -709,31 +672,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			},
 			[updateCursorPosition],
 		)
-
-		const onModeToggle = useCallback(() => {
-			void (async () => {
-				const convertedProtoMode = mode === "plan" ? PlanActMode.ACT : PlanActMode.PLAN
-				const response = await StateServiceClient.togglePlanActModeProto(
-					TogglePlanActModeRequest.create({
-						mode: convertedProtoMode,
-						chatContent: {
-							message: inputValue.trim() ? inputValue : undefined,
-							images: selectedImages,
-							files: selectedFiles,
-						},
-					}),
-				)
-				// Focus the textarea after mode toggle with slight delay
-				setTimeout(() => {
-					if (response.value) {
-						setInputValue("")
-					}
-					textAreaRef.current?.focus()
-				}, 100)
-			})()
-		}, [mode, inputValue, selectedImages, selectedFiles, setInputValue])
-
-		useShortcut(usePlatform().togglePlanActKeys, onModeToggle, { disableTextInputs: false }) // important that we don't disable the text input here
 
 		const handleContextButtonClick = useCallback(() => {
 			// Focus the textarea first
@@ -1270,10 +1208,6 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				remoteWorkflowToggles,
 			],
 		)
-		// Replace Meta with the platform specific key and uppercase the command letter.
-		const togglePlanActKeys = usePlatform()
-			.togglePlanActKeys.replace("Meta", metaKeyChar)
-			.replace(/.$/, (match) => match.toUpperCase())
 
 		return (
 			<div>
@@ -1382,116 +1316,80 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						/>
 					</div>
 				</div>
-				<div className="flex justify-between items-center -mt-[2px] px-3 pb-2">
-					{/* Always render both components, but control visibility with CSS */}
-					<div className="relative flex-1 min-w-0 h-5">
-						{/* ButtonGroup - always in DOM but visibility controlled */}
-						<ButtonGroup className="absolute top-0 left-0 right-0 ease-in-out w-full h-5 z-10 flex items-center">
-							<Tooltip>
-								<TooltipContent>Add Context</TooltipContent>
-								<TooltipTrigger>
-									<VSCodeButton
-										appearance="icon"
-										aria-label="Add Context"
-										className="p-0 m-0 flex items-center"
-										data-testid="context-button"
-										onClick={handleContextButtonClick}>
-										<ButtonContainer>
-											<Icon name="AtSignIcon" size={12} />
-										</ButtonContainer>
-									</VSCodeButton>
-								</TooltipTrigger>
-							</Tooltip>
+				<div className="px-3 pb-2">
+					<ButtonGroup className="flex items-center w-full h-5">
+						<Tooltip>
+							<TooltipContent>Add Context</TooltipContent>
+							<TooltipTrigger>
+								<VSCodeButton
+									appearance="icon"
+									aria-label="Add Context"
+									className="p-0 m-0 flex items-center"
+									data-testid="context-button"
+									onClick={handleContextButtonClick}>
+									<ButtonContainer>
+										<Icon name="AtSignIcon" size={12} />
+									</ButtonContainer>
+								</VSCodeButton>
+							</TooltipTrigger>
+						</Tooltip>
 
-							<Tooltip>
-								<TooltipContent>Add Files & Images</TooltipContent>
-								<TooltipTrigger>
-									<VSCodeButton
-										appearance="icon"
-										aria-label="Add Files & Images"
-										className="p-0 m-0 flex items-center"
-										data-testid="files-button"
-										disabled={shouldDisableFilesAndImages}
-										onClick={() => {
-											if (!shouldDisableFilesAndImages) {
-												onSelectFilesAndImages()
-											}
-										}}>
-										<ButtonContainer>
-											<Icon name="PlusIcon" size={13} />
-										</ButtonContainer>
-									</VSCodeButton>
-								</TooltipTrigger>
-							</Tooltip>
+						<Tooltip>
+							<TooltipContent>Add Files & Images</TooltipContent>
+							<TooltipTrigger>
+								<VSCodeButton
+									appearance="icon"
+									aria-label="Add Files & Images"
+									className="p-0 m-0 flex items-center"
+									data-testid="files-button"
+									disabled={shouldDisableFilesAndImages}
+									onClick={() => {
+										if (!shouldDisableFilesAndImages) {
+											onSelectFilesAndImages()
+										}
+									}}>
+									<ButtonContainer>
+										<Icon name="PlusIcon" size={13} />
+									</ButtonContainer>
+								</VSCodeButton>
+							</TooltipTrigger>
+						</Tooltip>
 
-							<ServersToggleModal />
-							<DietCodeRulesToggleModal />
+						<ServersToggleModal />
+						<DietCodeRulesToggleModal />
 
-							<Tooltip>
-								<TooltipContent>Document Phase</TooltipContent>
-								<TooltipTrigger>
-									<VSCodeButton
-										appearance="icon"
-										aria-label="Document Phase"
-										className="p-0 m-0 flex items-center"
-										data-testid="document-button"
-										onClick={() => {
-											setInputValue("")
-											onSend("/document ")
-										}}>
-										<ButtonContainer>
-											<Icon name="book" size={13} style={{ color: "var(--color-mira)" }} />
-										</ButtonContainer>
-									</VSCodeButton>
-								</TooltipTrigger>
-							</Tooltip>
+						<Tooltip>
+							<TooltipContent>Document Phase</TooltipContent>
+							<TooltipTrigger>
+								<VSCodeButton
+									appearance="icon"
+									aria-label="Document Phase"
+									className="p-0 m-0 flex items-center"
+									data-testid="document-button"
+									onClick={() => {
+										setInputValue("")
+										onSend("/document ")
+									}}>
+									<ButtonContainer>
+										<Icon name="book" size={13} style={{ color: "var(--color-mira)" }} />
+									</ButtonContainer>
+								</VSCodeButton>
+							</TooltipTrigger>
+						</Tooltip>
 
-							<ModelContainer>
-								<ModelButtonWrapper>
-									<ModelDisplayButton
-										disabled={false}
-										onClick={handleModelButtonClick}
-										role="button"
-										tabIndex={0}
-										title="Open API Settings">
-										<ModelButtonContent className="text-xs">{modelDisplayName}</ModelButtonContent>
-									</ModelDisplayButton>
-								</ModelButtonWrapper>
-							</ModelContainer>
-						</ButtonGroup>
-					</div>
-					{/* Tooltip for Plan/Act toggle remains outside the conditional rendering */}
-					<Tooltip>
-						<TooltipContent
-							className="text-xs px-2 flex flex-col gap-1"
-							hidden={shownTooltipMode === null}
-							side="top">
-							{`In ${shownTooltipMode === "act" ? "Act" : "Plan"} mode, MIRA will ${shownTooltipMode === "act" ? "work on the task right away" : "gather context and outline next steps before making changes"}`}
-							<p className="text-description/80 text-xs mb-0">
-								Toggle w/ <kbd className="text-muted-foreground mx-1">{togglePlanActKeys}</kbd>
-							</p>
-						</TooltipContent>
-						<TooltipTrigger>
-							<SwitchContainer data-testid="mode-switch" disabled={false} onClick={onModeToggle}>
-								<Slider isAct={mode === "act"} isPlan={mode === "plan"} />
-								{["Plan", "Act"].map((m) => (
-									<div
-										aria-checked={mode === m.toLowerCase()}
-										className={cn(
-											"pt-0.5 pb-px px-2 z-10 text-xs w-1/2 text-center bg-transparent",
-											mode === m.toLowerCase() ? "text-white" : "text-input-foreground",
-										)}
-										onFocus={() => setShownTooltipMode(m.toLowerCase() === "plan" ? "plan" : "act")}
-										onMouseLeave={() => setShownTooltipMode(null)}
-										onMouseOver={() => setShownTooltipMode(m.toLowerCase() === "plan" ? "plan" : "act")}
-										role="switch"
-										tabIndex={0}>
-										{m}
-									</div>
-								))}
-							</SwitchContainer>
-						</TooltipTrigger>
-					</Tooltip>
+						<ModelContainer>
+							<ModelButtonWrapper>
+								<ModelDisplayButton
+									disabled={false}
+									onClick={handleModelButtonClick}
+									role="button"
+									tabIndex={0}
+									title="Open API Settings">
+									<ModelButtonContent className="text-xs">{modelDisplayName}</ModelButtonContent>
+								</ModelDisplayButton>
+							</ModelButtonWrapper>
+						</ModelContainer>
+					</ButtonGroup>
 				</div>
 			</div>
 		)

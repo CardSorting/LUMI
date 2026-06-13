@@ -1,5 +1,4 @@
 import { StringRequest } from "@shared/proto/dietcode/common"
-import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/dietcode/state"
 import { marked } from "marked"
 import type { ComponentProps } from "react"
 import React, { memo, useEffect, useMemo, useRef, useState } from "react"
@@ -11,9 +10,8 @@ import { visit } from "unist-util-visit"
 import MermaidBlock from "@/components/common/MermaidBlock"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
-import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
-import { FileServiceClient, StateServiceClient } from "@/services/grpc-client"
+import { FileServiceClient } from "@/services/grpc-client"
 import { WithCopyButton } from "./CopyButton"
 
 function parseMarkdownIntoBlocks(markdown: string): string[] {
@@ -64,11 +62,9 @@ const MemoizedMarkdownBlock = memo(
 							})
 							.join("")
 
-						// Case-insensitive check for "Act Mode (⌘⇧A)" pattern
-						// This ensures we only style the exact "Act Mode" mentions with keyboard shortcut
-						// Using case-insensitive flag to catch all capitalization variations
+						// Legacy plan/act copy may mention "Act Mode (⌘⇧A)" — render as plain text now.
 						if (/^act mode\s*\(⌘⇧A\)$/i.test(childrenText)) {
-							return <ActModeHighlight />
+							return <strong {...props}>Act Mode</strong>
 						}
 
 						return <strong {...props} />
@@ -79,7 +75,6 @@ const MemoizedMarkdownBlock = memo(
 					[remarkGfm, { singleTilde: false }],
 					remarkPreventBoldFilenames,
 					remarkUrlToLink,
-					remarkHighlightActMode,
 					remarkMarkPotentialFilePaths,
 					() => {
 						return (tree: any) => {
@@ -111,37 +106,6 @@ const MemoizedMarkdown = memo(({ content, id }: { content: string; id: string })
 })
 
 MemoizedMarkdown.displayName = "MemoizedMarkdown"
-
-/**
- * A component for Act Mode text that contains a clickable toggle and keyboard shortcut hint.
- */
-const ActModeHighlight: React.FC = () => {
-	const { mode } = useExtensionState()
-
-	return (
-		<span
-			className={cn("text-link inline-flex items-center gap-1", {
-				"hover:opacity-90 cursor-pointer": mode === "plan",
-				"cursor-not-allowed opacity-60": mode !== "plan",
-			})}
-			onClick={() => {
-				// Only toggle to Act mode if we're currently in Plan mode
-				if (mode === "plan") {
-					StateServiceClient.togglePlanActModeProto(
-						TogglePlanActModeRequest.create({
-							mode: PlanActMode.ACT,
-						}),
-					)
-				}
-			}}
-			title={mode === "plan" ? "Click to toggle to Act Mode" : "Already in Act Mode"}>
-			<div className="p-1 rounded-md bg-code flex items-center justify-end w-7 border border-input-border">
-				<div className="rounded-full bg-link w-2 h-2" />
-			</div>
-			Act Mode (⌘⇧A)
-		</span>
-	)
-}
 
 interface MarkdownBlockProps {
 	markdown?: string
@@ -186,74 +150,6 @@ const remarkUrlToLink = () => {
 			// Fix: Instead of converting the node to a paragraph (which broke things),
 			// we replace the original text node with our new nodes in the parent's children array.
 			// This preserves the document structure while adding our links.
-			if (parent) {
-				parent.children.splice(index, 1, ...children)
-			}
-		})
-	}
-}
-
-/**
- * Custom remark plugin that highlights "to Act Mode" mentions and adds keyboard shortcut hint
- */
-const remarkHighlightActMode = () => {
-	return (tree: Node) => {
-		visit(tree, "text", (node: any, index, parent) => {
-			// Case-insensitive regex to match "to Act Mode" in various capitalizations
-			// Using word boundaries to avoid matching within words
-			// Added negative lookahead to avoid matching if already followed by the shortcut
-			const actModeRegex = /\bto\s+Act\s+Mode\b(?!\s*\(⌘⇧A\))/i
-
-			if (!node.value.match(actModeRegex)) {
-				return
-			}
-
-			// Split the text by the matches
-			const parts = node.value.split(actModeRegex)
-			const matches = node.value.match(actModeRegex)
-
-			if (!matches || parts.length <= 1) {
-				return
-			}
-
-			const children: any[] = []
-
-			parts.forEach((part: string, i: number) => {
-				// Add the text before the match
-				if (part) {
-					children.push({ type: "text", value: part })
-				}
-
-				// Add the match, but only make "Act Mode" bold (not the "to" part)
-				if (matches[i]) {
-					// Extract "to" and "Act Mode" parts
-					const matchText = matches[i]
-					const toIndex = matchText.toLowerCase().indexOf("to")
-					const actModeIndex = matchText.toLowerCase().indexOf("act mode", toIndex + 2)
-
-					if (toIndex !== -1 && actModeIndex !== -1) {
-						// Add "to" as regular text
-						const toPart = matchText.substring(toIndex, actModeIndex).trim()
-						children.push({ type: "text", value: `${toPart} ` })
-
-						// Add "Act Mode" as bold with keyboard shortcut
-						const actModePart = matchText.substring(actModeIndex)
-						children.push({
-							type: "strong",
-							children: [{ type: "text", value: `${actModePart} (⌘⇧A)` }],
-						})
-					} else {
-						// Fallback if we can't parse it correctly
-						children.push({ type: "text", value: `${matchText} ` })
-						children.push({
-							type: "strong",
-							children: [{ type: "text", value: `(⌘⇧A)` }],
-						})
-					}
-				}
-			})
-
-			// Replace the original text node with our new nodes
 			if (parent) {
 				parent.children.splice(index, 1, ...children)
 			}

@@ -122,6 +122,33 @@ describe("getButtonConfig", () => {
 		})
 	})
 
+	it("allows steering messages during streaming and in-flight api requests", () => {
+		expect(BUTTON_CONFIGS.partial.sendingDisabled).to.equal(false)
+		expect(BUTTON_CONFIGS.api_req_active.sendingDisabled).to.equal(false)
+	})
+
+	it("returns plan_summary config for non-blocking plan presentation", () => {
+		const planMessage: DietCodeMessage = {
+			type: "say",
+			say: "plan_summary",
+			text: JSON.stringify({ response: "Plan details" }),
+			ts: Date.now(),
+		}
+		const config = getButtonConfig(planMessage)
+		expect(config).toEqual(BUTTON_CONFIGS.plan_summary)
+	})
+
+	it("returns default config for completed non-interactive say messages", () => {
+		const textMessage: DietCodeMessage = {
+			type: "say",
+			say: "text",
+			text: "Progress update",
+			ts: Date.now(),
+		}
+		const config = getButtonConfig(textMessage)
+		expect(config).toEqual(BUTTON_CONFIGS.default)
+	})
+
 	// Test API request states
 	it("returns api_req_active config for api_req_started say message", () => {
 		const apiReqMessage: DietCodeMessage = {

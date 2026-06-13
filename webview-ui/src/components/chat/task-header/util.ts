@@ -53,6 +53,8 @@ export const getColor = (message: DietCodeMessage): string => {
 				return COLOR_PURPLE // Purple for browser actions
 			case "completion_result":
 				return COLOR_GREEN // Green for task success
+			case "plan_summary":
+				return COLOR_GRAY // Gray for plan presentation
 			default:
 				return COLOR_DARK_GRAY // Dark gray for unknown
 		}

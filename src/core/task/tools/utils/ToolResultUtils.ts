@@ -1,6 +1,7 @@
 import { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { ToolResponse } from "@core/task"
+import { maybeTransitionToReplanMode } from "@core/task/utils/replanModeTransition"
 import { processFilesIntoText } from "@/integrations/misc/extract-text"
 import { DietCodeAsk } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
@@ -134,6 +135,16 @@ export class ToolResultUtils {
 			if (files && files.length > 0) {
 				fileContentString = await processFilesIntoText(files)
 			}
+
+			await maybeTransitionToReplanMode({
+				feedback: text,
+				currentMode: config.mode,
+				yoloModeToggled: config.yoloModeToggled,
+				switchToPlanMode: config.callbacks.switchToPlanMode,
+				sayInfo: async (message) => {
+					await config.callbacks.say("info", message)
+				},
+			})
 
 			ToolResultUtils.pushAdditionalToolFeedback(config.taskState.userMessageContent, text, images, fileContentString)
 			await config.callbacks.say("user_feedback", text, images, files)

@@ -89,27 +89,25 @@ Build a todo app in a single HTML file. Include:
 
 DietCode will now read your message and start working on a response. You'll see text appearing in the chat area as DietCode thinks through your request.
 
-## Step 4: Understand Plan Mode vs Act Mode
+## Step 4: Understand Plan and Act Phases
 
-When DietCode receives your task, it may start in one of two modes. Look at the **bottom of the DietCode panel**. You'll see a toggle button that says either **"Plan"** or **"Act"**.
+DietCode automatically manages two internal phases — you do not need to switch modes yourself.
 
-### If DietCode is in Plan Mode
+### Planning phase (starts automatically)
 
-In Plan mode, DietCode **only talks**. It analyzes your request and discusses the approach, but it does **not** create or modify any files. You'll see DietCode describe what it plans to build, but nothing will change in your project folder yet.
+For new tasks, DietCode begins in a **read-only planning phase**. It analyzes your request and explores the project, but does **not** create or modify files yet. You'll see DietCode describe what it plans to build before any changes appear in your project folder.
 
-This is useful for complex tasks where you want to discuss the approach first. You can:
-- Ask DietCode questions about its plan
-- Suggest changes to the approach
-- Clarify your requirements
+You can:
+- Ask questions or clarify requirements in the chat at any time
+- Review the plan when it appears as a structured message
+- Send follow-up instructions — no toggle required
 
-**When you're ready for DietCode to start writing code**, click the toggle button at the bottom of the panel to switch from **"Plan"** to **"Act"**. DietCode will then begin proposing actual file changes.
+### Implementation phase (automatic)
 
-### If DietCode is in Act Mode
-
-In Act mode, DietCode will start creating files and writing code right away (but it still asks for your approval before making any changes, see the next step).
+After DietCode presents its plan, it **automatically** transitions to implementation and begins proposing file changes (still subject to your approval on each action).
 
 <Note>
-For this tutorial, you want to be in **Act mode** so DietCode creates the todo app. If you see "Plan" at the bottom, click it to switch to "Act". Learn more about when to use each mode in the [Plan and Act guide](/core-workflows/plan-and-act).
+For this tutorial, wait for DietCode to finish its brief planning pass — implementation will start on its own. To skip planning entirely, enable **YOLO mode** in Settings. Learn more in the [Plan and Act guide](/core-workflows/plan-and-act).
 </Note>
 
 ## Step 5: Approve the Changes

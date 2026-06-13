@@ -69,11 +69,6 @@ export async function downloadMcp(controller: Controller, request: StringRequest
 - Once installed, demonstrate the server's capabilities by using one of its tools.
 Here is the project's README to help you get started:\n\n${mcpDetails.readmeContent}\n${mcpDetails.llmsInstallationContent}`
 
-		const { mode } = await controller.getStateToPostToWebview()
-		if (mode === "plan") {
-			await controller.togglePlanActMode("act")
-		}
-
 		// Initialize task and show chat view
 		await controller.initTask(task)
 		await sendChatButtonClickedEvent()

@@ -9,7 +9,7 @@ The E2E test suite consists of several key components:
 ### Test Files
 
 - **`auth.test.ts`** - Tests API key setup, provider selection, and navigation to settings
-- **`chat.test.ts`** - Tests chat functionality including message sending, mode switching (Plan/Act), slash commands, and @ mentions
+- **`chat.test.ts`** - Tests chat functionality including message sending, slash commands, and @ mentions
 - **`diff.test.ts`** - Tests the diff editor functionality for file modifications
 - **`editor.test.ts`** - Tests code actions, editor panel integration, and code selection features
 

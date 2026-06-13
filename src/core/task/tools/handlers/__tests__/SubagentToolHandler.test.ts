@@ -39,6 +39,7 @@ function createConfig(options?: {
 		updateTaskHistory: sinon.stub().resolves([]),
 		applyLatestBrowserSettings: sinon.stub().resolves(undefined),
 		switchToActMode: sinon.stub().resolves(false),
+		switchToPlanMode: sinon.stub().resolves(false),
 		setActiveHookExecution: sinon.stub().resolves(),
 		clearActiveHookExecution: sinon.stub().resolves(),
 		getActiveHookExecution: sinon.stub().resolves(undefined),

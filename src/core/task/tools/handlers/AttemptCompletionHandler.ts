@@ -2,10 +2,10 @@ import type Anthropic from "@anthropic-ai/sdk"
 import type { ToolUse } from "@core/assistant-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { formatResponse } from "@core/prompts/responses"
+import { maybeTransitionToReplanMode } from "@core/task/utils/replanModeTransition"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { telemetryService } from "@services/telemetry"
-import { findLastIndex } from "@shared/array"
 import { buildGateBlockEventSummary, enrichAuditMetadataWithGateDecision } from "@shared/audit/auditGateCatalog"
 import {
 	applyWorkspaceAuditPolicy,
@@ -24,6 +24,7 @@ import {
 	runCompletionAudit,
 } from "@shared/audit/completionAudit"
 import { parseIntentThresholdOverrides } from "@shared/audit/gatePolicy"
+import { detectReplanIntent } from "@shared/detectReplanIntent"
 import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
@@ -449,6 +450,16 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 		await config.callbacks.say("user_feedback", text ?? "", images, completionFiles)
 
+		await maybeTransitionToReplanMode({
+			feedback: text,
+			currentMode: config.mode,
+			yoloModeToggled: config.yoloModeToggled,
+			switchToPlanMode: config.callbacks.switchToPlanMode,
+			sayInfo: async (message) => {
+				await config.callbacks.say("info", message)
+			},
+		})
+
 		// Run UserPromptSubmit hook when user provides post-completion feedback
 		let hookContextModification: string | undefined
 		if (text || (images && images.length > 0) || (completionFiles && completionFiles.length > 0)) {
@@ -477,10 +488,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 
 		if (text) {
+			const replanRequested = detectReplanIntent(text)
 			toolResults.push(
 				{
 					type: "text",
-					text: "The user has provided feedback on the results. Consider their input to continue the task, and then attempt completion again.",
+					text: replanRequested
+						? "The user has provided feedback requesting a scope pivot. Return to PLAN MODE workflow — explore the updated requirements and present a revised plan via plan_mode_respond before implementing."
+						: "The user has provided feedback on the results. Consider their input to continue the task, and then attempt completion again.",
 				},
 				{
 					type: "text",

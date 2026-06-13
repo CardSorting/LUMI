@@ -3,7 +3,6 @@
 		"messageEncoding": "none",
 		"showNavbar": false,
 		"postMessageHandler": "vscode",
-		"togglePlanActKeys": "Meta+Shift+a",
 		"supportsTerminalMentions": true
 	}
 }
