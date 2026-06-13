@@ -248,6 +248,8 @@ message TaskAuditMetadataProto {
   string artifact_sarif_path = 15;
   string artifact_report_path = 16;
   string artifact_manifest_path = 17;
+  repeated string suppressed_violations = 18;
+  bool workspace_gate_policy_applied = 19;
 }
 
 message ShowWebviewEvent {

@@ -85,6 +85,13 @@ describe("auditWorkspaceArtifacts", () => {
 			await fs.readFile(path.join(tempDir, DEFAULT_AUDIT_ARTIFACT_DIR, "gate-policy.snapshot.json"), "utf8"),
 		)
 		expect(policySnapshot.gateEnabled).to.equal(true)
+
+		const junitPath = path.join(tempDir, DEFAULT_AUDIT_ARTIFACT_DIR, "junit")
+		const junitFiles = await fs.readdir(junitPath)
+		expect(junitFiles.some((file) => file.endsWith(".junit.xml"))).to.equal(true)
+
+		const gatePolicyPath = path.join(tempDir, DEFAULT_AUDIT_ARTIFACT_DIR, "gate-policy.json")
+		expect(await fs.stat(gatePolicyPath)).to.exist
 	})
 
 	it("enriches audit metadata with relative artifact paths", () => {

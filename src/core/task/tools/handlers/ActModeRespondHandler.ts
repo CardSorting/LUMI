@@ -1,5 +1,6 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
+import { applyWorkspaceAuditPolicy } from "@shared/audit/auditGatePolicyLoader"
 import { buildActModeAuditAdvisory, runAdvisoryAudit } from "@shared/audit/completionAudit"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
@@ -81,7 +82,8 @@ export class ActModeRespondHandler implements IToolHandler, IPartialBlockHandler
 			if (shouldAudit) {
 				try {
 					const taskPreview = getInitialTaskPreview(config) || ""
-					const advisoryMetadata = await runAdvisoryAudit(config.taskId, taskPreview, response, taskPreview)
+					let advisoryMetadata = await runAdvisoryAudit(config.taskId, taskPreview, response, taskPreview)
+					advisoryMetadata = await applyWorkspaceAuditPolicy(config.cwd, advisoryMetadata, config)
 					config.taskState.lastAdvisoryAudit = advisoryMetadata
 					auditAdvisory = buildActModeAuditAdvisory(advisoryMetadata)
 				} catch (error) {

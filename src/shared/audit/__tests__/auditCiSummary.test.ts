@@ -24,12 +24,23 @@ describe("auditCiSummary", () => {
 	})
 
 	it("builds machine-readable gate status JSON", () => {
-		const metadata = enrichAuditMetadata({ violations: [] })
+		const metadata = enrichAuditMetadata({
+			violations: [],
+			suppressed_violations: ["missing_validation_evidence"],
+			workspace_gate_policy_applied: true,
+		})
 		const status = buildQualityGateStatus(metadata, { gateEnabled: true, scoreThreshold: 50 })!
-		const payload = buildCiGateStatusJson(metadata, status, "task-2", "completion")
+		const payload = buildCiGateStatusJson(metadata, status, "task-2", "completion", {
+			source: "workspace",
+			workspacePolicyApplied: true,
+			overriddenFields: ["scoreThreshold"],
+		})
 		expect(payload.schemaVersion).to.equal(1)
 		expect(payload.passed).to.equal(true)
 		expect(payload.taskId).to.equal("task-2")
+		expect(payload.suppressedViolationCount).to.equal(1)
+		expect(payload.workspacePolicyApplied).to.equal(true)
+		expect(payload.policyProvenance?.source).to.equal("workspace")
 	})
 
 	it("snapshots gate policy settings", () => {

@@ -202,7 +202,7 @@ const experimentalFeatures: FeatureToggle[] = [
 		id: "audit-workspace-artifacts",
 		label: "Workspace Audit Artifacts",
 		description:
-			"Writes SARIF and markdown audit reports to `.audit/` in the workspace on completion and gate blocks — mirrors CI artifact upload.",
+			"Writes SARIF and markdown audit reports to `.audit/` in the workspace on completion and gate blocks. Override gate thresholds via `.audit/gate-policy.json` and waive violations via `.audit/suppressions.json` — mirrors config-as-code quality gates.",
 		stateKey: "auditWorkspaceArtifactsEnabled",
 		settingKey: "auditWorkspaceArtifactsEnabled",
 	},

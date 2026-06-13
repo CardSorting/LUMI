@@ -237,6 +237,8 @@ export function convertDietCodeMessageToProto(message: AppDietCodeMessage): Prot
 					artifactSarifPath: message.auditMetadata.artifact_sarif_path ?? "",
 					artifactReportPath: message.auditMetadata.artifact_report_path ?? "",
 					artifactManifestPath: message.auditMetadata.artifact_manifest_path ?? "",
+					suppressedViolations: message.auditMetadata.suppressed_violations ?? [],
+					workspaceGatePolicyApplied: message.auditMetadata.workspace_gate_policy_applied ?? false,
 				}
 			: undefined,
 	}
@@ -329,6 +331,10 @@ export function convertProtoToDietCodeMessage(protoMessage: ProtoDietCodeMessage
 			artifact_sarif_path: protoMessage.auditMetadata.artifactSarifPath || undefined,
 			artifact_report_path: protoMessage.auditMetadata.artifactReportPath || undefined,
 			artifact_manifest_path: protoMessage.auditMetadata.artifactManifestPath || undefined,
+			suppressed_violations: protoMessage.auditMetadata.suppressedViolations?.length
+				? protoMessage.auditMetadata.suppressedViolations
+				: undefined,
+			workspace_gate_policy_applied: protoMessage.auditMetadata.workspaceGatePolicyApplied || undefined,
 		}
 	}
 

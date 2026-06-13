@@ -8,7 +8,7 @@ import { PromptRegistry } from "@core/prompts/system-prompt"
 import type { SystemPromptContext } from "@core/prompts/system-prompt/types"
 import { StreamResponseHandler } from "@core/task/StreamResponseHandler"
 import { ModelInfo } from "@shared/api"
-import { buildCompletionGateOptionsFromSettings } from "@shared/audit/auditGateOptions"
+import { resolveCompletionGateOptions } from "@shared/audit/auditGatePolicyLoader"
 import { buildSubagentAuditContext, buildSubagentGateSignals } from "@shared/audit/auditSubagentContext"
 import {
 	DietCodeAssistantToolUseBlock,
@@ -381,7 +381,7 @@ export class SubagentRunner {
 		this.onProgress = onProgress
 		onProgress({ status: "running", stats })
 
-		const gateOptions = buildCompletionGateOptionsFromSettings(this.baseConfig, {
+		const gateOptions = await resolveCompletionGateOptions(this.baseConfig, this.baseConfig.cwd, {
 			lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
 		})
 		const parentGateSignals = buildSubagentGateSignals({

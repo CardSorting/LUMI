@@ -1,4 +1,5 @@
 import { formatGateReasonLabel } from "./auditGateCatalog"
+import type { GatePolicyProvenance } from "./auditGatePolicyLoader"
 import type { QualityGateStatus } from "./auditGateStatus"
 import type { AuditArtifactEvent, AuditArtifactIndexEntry } from "./auditWorkspaceArtifacts"
 import { formatViolationLabel } from "./taskAuditUtils"
@@ -24,6 +25,15 @@ export function buildCiJobSummaryMarkdown(
 		"",
 	]
 
+	const suppressed = metadata.suppressed_violations ?? []
+	if (suppressed.length > 0) {
+		lines.push(`| Suppressed | ${suppressed.length} (waived) |`, "")
+	}
+
+	if (metadata.workspace_gate_policy_applied) {
+		lines.push("| Policy | Workspace `.audit/gate-policy.json` applied |", "")
+	}
+
 	if (status.reasonCodes.length > 0) {
 		lines.push("### Gate Reasons", "")
 		for (const code of status.reasonCodes) {
@@ -40,6 +50,17 @@ export function buildCiJobSummaryMarkdown(
 		}
 		if (violations.length > 8) {
 			lines.push(`- _…and ${violations.length - 8} more_`)
+		}
+		lines.push("")
+	}
+
+	if (suppressed.length > 0) {
+		lines.push("### Suppressed Violations", "")
+		for (const violation of suppressed.slice(0, 8)) {
+			lines.push(`- \`${violation}\` — ${formatViolationLabel(violation)} _(waived)_`)
+		}
+		if (suppressed.length > 8) {
+			lines.push(`- _…and ${suppressed.length - 8} more_`)
 		}
 		lines.push("")
 	}
@@ -66,6 +87,9 @@ export interface CiGateStatusPayload {
 	reasonCodes: string[]
 	violationCount: number
 	criticalViolationCount: number
+	suppressedViolationCount?: number
+	workspacePolicyApplied?: boolean
+	policyProvenance?: Pick<GatePolicyProvenance, "source" | "overriddenFields">
 	artifacts?: {
 		sarif?: string
 		report?: string
@@ -79,6 +103,7 @@ export function buildCiGateStatusJson(
 	status: QualityGateStatus,
 	taskId: string,
 	event: AuditArtifactEvent,
+	policyProvenance?: GatePolicyProvenance,
 ): CiGateStatusPayload {
 	return {
 		schemaVersion: 1,
@@ -94,6 +119,11 @@ export function buildCiGateStatusJson(
 		reasonCodes: status.reasonCodes,
 		violationCount: status.violationCount,
 		criticalViolationCount: status.criticalViolationCount,
+		suppressedViolationCount: metadata.suppressed_violations?.length ?? 0,
+		workspacePolicyApplied: metadata.workspace_gate_policy_applied ?? policyProvenance?.workspacePolicyApplied,
+		policyProvenance: policyProvenance
+			? { source: policyProvenance.source, overriddenFields: policyProvenance.overriddenFields }
+			: undefined,
 		artifacts: status.artifactPaths,
 	}
 }

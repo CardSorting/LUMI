@@ -771,6 +771,8 @@ export class TelemetryService {
 			effectiveThreshold: number
 			grade?: string
 			reasonCodes?: string[]
+			suppressedViolationCount?: number
+			workspacePolicyApplied?: boolean
 		},
 	) {
 		const gateAttributes = {
@@ -790,6 +792,8 @@ export class TelemetryService {
 				effectiveThreshold: args.effectiveThreshold,
 				grade: args.grade,
 				reasonCodes: args.reasonCodes?.join(","),
+				suppressedViolationCount: args.suppressedViolationCount,
+				workspacePolicyApplied: args.workspacePolicyApplied,
 			},
 		})
 

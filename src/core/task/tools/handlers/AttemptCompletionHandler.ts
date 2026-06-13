@@ -7,7 +7,11 @@ import { showSystemNotification } from "@integrations/notifications"
 import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
 import { buildGateBlockEventSummary, enrichAuditMetadataWithGateDecision } from "@shared/audit/auditGateCatalog"
-import { buildCompletionGateOptionsFromSettings } from "@shared/audit/auditGateOptions"
+import {
+	applyWorkspaceAuditPolicy,
+	resolveCompletionGateContext,
+	resolveCompletionGateOptions,
+} from "@shared/audit/auditGatePolicyLoader"
 import { buildPreCompletionChecklist, evaluateCompletionGate } from "@shared/audit/auditGateReport"
 import { getLatestPlanAuditFromMessages } from "@shared/audit/auditMessages"
 import { enrichAuditMetadataWithArtifactPaths, persistAuditWorkspaceArtifacts } from "@shared/audit/auditWorkspaceArtifacts"
@@ -32,23 +36,28 @@ import { getTaskCompletionTelemetry } from "../utils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 import { getInitialTaskPreview } from "../utils/taskPreview"
 
-function buildAuditGateOptions(
+async function buildAuditGateOptions(
 	config: TaskConfig,
 	extras?: {
 		advisoryMetadata?: TaskAuditMetadata
 		planBaselineMetadata?: TaskAuditMetadata
 	},
 ) {
-	return buildCompletionGateOptionsFromSettings(config, {
+	return resolveCompletionGateOptions(config, config.cwd, {
 		...extras,
 		lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
 	})
+}
+
+async function applyWorkspaceAuditPolicyForTask(config: TaskConfig, metadata: TaskAuditMetadata): Promise<TaskAuditMetadata> {
+	return applyWorkspaceAuditPolicy(config.cwd, metadata, config)
 }
 
 async function persistAuditArtifactsIfEnabled(
 	config: TaskConfig,
 	metadata: TaskAuditMetadata,
 	event: "completion" | "gate_block",
+	gateOptions?: Awaited<ReturnType<typeof buildAuditGateOptions>>,
 ): Promise<TaskAuditMetadata> {
 	if (!config.auditWorkspaceArtifactsEnabled) {
 		return metadata
@@ -60,7 +69,7 @@ async function persistAuditArtifactsIfEnabled(
 			metadata,
 			event,
 			includeSarif: config.auditSarifHookExportEnabled,
-			gateOptions: buildAuditGateOptions(config),
+			gateOptions: gateOptions ?? (await buildAuditGateOptions(config)),
 			gatePolicySettings: config,
 		})
 		if (result) {
@@ -142,11 +151,12 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			let auditPreviewSection = ""
 			try {
 				const previewAudit = await runAdvisoryAudit(config.taskId, taskPreview || "", result, taskPreview || "")
-				config.taskState.lastAdvisoryAudit = previewAudit
-				auditPreviewSection = buildDoubleCheckAuditSection(previewAudit)
+				const policyAppliedAudit = await applyWorkspaceAuditPolicyForTask(config, previewAudit)
+				config.taskState.lastAdvisoryAudit = policyAppliedAudit
+				auditPreviewSection = buildDoubleCheckAuditSection(policyAppliedAudit)
 				auditPreviewSection += buildPreCompletionChecklist(
-					previewAudit,
-					buildAuditGateOptions(config, {
+					policyAppliedAudit,
+					await buildAuditGateOptions(config, {
 						planBaselineMetadata: getLatestPlanAuditFromMessages(config.messageState.getDietCodeMessages()),
 					}),
 				)
@@ -246,9 +256,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			const taskDescription = getInitialTaskPreview(config) || ""
 			planBaseline = getLatestPlanAuditFromMessages(config.messageState.getDietCodeMessages())
 			auditMetadata = await runCompletionAudit(config.taskId, taskDescription, result, taskDescription)
-			config.taskState.lastCompletionAudit = auditMetadata
+			auditMetadata = await applyWorkspaceAuditPolicyForTask(config, auditMetadata)
 
-			const gateOptions = buildAuditGateOptions(config, { planBaselineMetadata: planBaseline })
+			const gateContext = await resolveCompletionGateContext(config, config.cwd, {
+				planBaselineMetadata: planBaseline,
+				lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
+			})
+			const gateOptions = gateContext.options
 			const gateDecision = evaluateCompletionGate(auditMetadata, gateOptions)
 
 			telemetryService.captureAuditGateEvaluation(config.ulid, {
@@ -258,6 +272,8 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				effectiveThreshold: gateDecision.effectiveThreshold,
 				grade: gateDecision.grade,
 				reasonCodes: gateDecision.reasons.map((reason) => reason.code),
+				suppressedViolationCount: auditMetadata.suppressed_violations?.length ?? 0,
+				workspacePolicyApplied: gateContext.policyProvenance.workspacePolicyApplied,
 			})
 
 			if (gateDecision.blocked) {
@@ -268,7 +284,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 					gateDecision,
 					config.taskState.completionGateBlockCount,
 				)
-				enrichedAudit = await persistAuditArtifactsIfEnabled(config, enrichedAudit, "gate_block")
+				enrichedAudit = await persistAuditArtifactsIfEnabled(config, enrichedAudit, "gate_block", gateOptions)
 				config.taskState.lastCompletionAudit = enrichedAudit
 
 				if (config.autoApprovalSettings.enableNotifications) {
@@ -304,7 +320,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			}
 
 			if (auditMetadata) {
-				auditMetadata = await persistAuditArtifactsIfEnabled(config, auditMetadata, "completion")
+				auditMetadata = await persistAuditArtifactsIfEnabled(config, auditMetadata, "completion", gateOptions)
 				config.taskState.lastCompletionAudit = auditMetadata
 			}
 		} catch (error) {

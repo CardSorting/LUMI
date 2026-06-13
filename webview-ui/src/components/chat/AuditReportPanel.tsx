@@ -14,9 +14,19 @@ import {
 	INTENT_CLASSIFICATION_STYLES,
 } from "@shared/audit/taskAuditUtils"
 import { TaskAuditMetadata } from "@shared/ExtensionMessage"
-import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CopyIcon, ShieldCheckIcon } from "lucide-react"
+import { StringRequest } from "@shared/proto/dietcode/common"
+import {
+	AlertTriangleIcon,
+	CheckIcon,
+	ChevronDownIcon,
+	ChevronRightIcon,
+	CopyIcon,
+	ExternalLinkIcon,
+	ShieldCheckIcon,
+} from "lucide-react"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
+import { FileServiceClient } from "@/services/grpc-client"
 
 const COPY_FEEDBACK_DURATION_MS = 2000
 
@@ -113,6 +123,17 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 	const intentClassification = getIntentClassification(auditMetadata.intent_classification)
 	const entropyScore = formatEntropyScore(auditMetadata.entropy_score)
 	const intentCoveragePercentage = getIntentCoveragePercentage(auditMetadata.intent_coverage)
+	const handleOpenArtifact = useCallback((relativePath: string) => {
+		FileServiceClient.openFileRelativePath(StringRequest.create({ value: relativePath })).catch((error) =>
+			console.error("Failed to open audit artifact:", error),
+		)
+	}, [])
+
+	const artifactPaths = [
+		auditMetadata.artifact_sarif_path,
+		auditMetadata.artifact_report_path,
+		auditMetadata.artifact_manifest_path,
+	].filter(Boolean) as string[]
 	const auditTime = formatAuditTime(auditMetadata.audited_at)
 	const auditReportId = getAuditReportId(auditMetadata.audited_at)
 	const violationSeverity = partitionViolationsBySeverity(auditMetadata.violations)
@@ -271,6 +292,11 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 							Audit Timestamp
 						</span>
 						<span className="mt-0.5 font-mono text-[9px]">{auditTime}</span>
+						{auditMetadata.workspace_gate_policy_applied && (
+							<span className="mt-0.5 w-fit px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-widest bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+								Workspace gate policy
+							</span>
+						)}
 					</div>
 
 					{auditMetadata.gate_blocked && (
@@ -355,23 +381,48 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 						</div>
 					)}
 
-					{(auditMetadata.artifact_sarif_path ||
-						auditMetadata.artifact_report_path ||
-						auditMetadata.artifact_manifest_path) && (
+					{(auditMetadata.suppressed_violations?.length ?? 0) > 0 && (
+						<div className="col-span-2 flex flex-col gap-1 border-t border-description/10 pt-2">
+							<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
+								Suppressed Violations
+							</span>
+							<ul className="list-disc list-inside text-[8.5px] text-description/70 space-y-0.5">
+								{auditMetadata.suppressed_violations!.map((violation) => (
+									<li className="font-mono truncate" key={violation}>
+										{formatViolationLabel(violation)}
+									</li>
+								))}
+							</ul>
+						</div>
+					)}
+
+					{artifactPaths.length > 0 && (
 						<div className="col-span-2 flex flex-col gap-1 border-t border-description/10 pt-2">
 							<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
 								Workspace Artifacts
 							</span>
-							<ul className="list-none text-[9px] font-mono text-description/80 space-y-0.5">
-								{auditMetadata.artifact_sarif_path && (
-									<li title={auditMetadata.artifact_sarif_path}>{auditMetadata.artifact_sarif_path}</li>
-								)}
-								{auditMetadata.artifact_report_path && (
-									<li title={auditMetadata.artifact_report_path}>{auditMetadata.artifact_report_path}</li>
-								)}
-								{auditMetadata.artifact_manifest_path && (
-									<li title={auditMetadata.artifact_manifest_path}>{auditMetadata.artifact_manifest_path}</li>
-								)}
+							<ul className="list-none text-[9px] font-mono text-description/80 space-y-1">
+								{artifactPaths.map((artifactPath) => (
+									<li className="flex items-center justify-between gap-2" key={artifactPath}>
+										<span className="truncate" title={artifactPath}>
+											{artifactPath}
+										</span>
+										<button
+											aria-label={`Open ${artifactPath}`}
+											className={cn(
+												"inline-flex items-center gap-1 shrink-0 cursor-pointer bg-transparent border-0 p-0",
+												accentText,
+											)}
+											onClick={(event) => {
+												event.stopPropagation()
+												handleOpenArtifact(artifactPath)
+											}}
+											type="button">
+											<ExternalLinkIcon className="size-2.5" />
+											<span>Open</span>
+										</button>
+									</li>
+								))}
 							</ul>
 						</div>
 					)}

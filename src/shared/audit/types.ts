@@ -30,4 +30,8 @@ export interface TaskAuditMetadata {
 	artifact_sarif_path?: string
 	artifact_report_path?: string
 	artifact_manifest_path?: string
+	/** Violations waived via `.audit/suppressions.json`. */
+	suppressed_violations?: string[]
+	/** True when `.audit/gate-policy.json` overrides extension gate settings. */
+	workspace_gate_policy_applied?: boolean
 }

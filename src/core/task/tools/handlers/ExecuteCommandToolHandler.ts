@@ -329,7 +329,10 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			try {
 				const outputText = extractTextFromToolResponse(result)
 				const taskPreview = getInitialTaskPreview(config) || ""
-				const advisory = await buildCommandOutputAuditAdvisory(config.taskId, taskPreview, finalCommand, outputText)
+				const advisory = await buildCommandOutputAuditAdvisory(config.taskId, taskPreview, finalCommand, outputText, {
+					cwd: config.cwd,
+					settings: config,
+				})
 				if (advisory) {
 					return appendTextToToolResponse(result, advisory)
 				}

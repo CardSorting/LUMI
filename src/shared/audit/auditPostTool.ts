@@ -1,4 +1,6 @@
 import { detectVerificationOutputFailures } from "./auditFileWrite"
+import type { AuditGateSettingsSource } from "./auditGateOptions"
+import { applyWorkspaceAuditPolicy } from "./auditGatePolicyLoader"
 import { runAdvisoryAudit } from "./completionAudit"
 import { formatViolationLabel } from "./taskAuditUtils"
 import type { TaskAuditMetadata } from "./types"
@@ -57,6 +59,7 @@ export async function buildCommandOutputAuditAdvisory(
 	taskDescription: string,
 	command: string,
 	output: string,
+	policyContext?: { cwd: string; settings: AuditGateSettingsSource },
 ): Promise<string> {
 	if (!isVerificationCommand(command) || output.trim().length < 20) {
 		return ""
@@ -73,7 +76,10 @@ export async function buildCommandOutputAuditAdvisory(
 	}
 
 	const excerpt = output.slice(0, 3000)
-	const metadata = await runAdvisoryAudit(taskId, taskDescription, excerpt, taskDescription)
+	let metadata = await runAdvisoryAudit(taskId, taskDescription, excerpt, taskDescription)
+	if (policyContext) {
+		metadata = await applyWorkspaceAuditPolicy(policyContext.cwd, metadata, policyContext.settings)
+	}
 	if (!metadata.divergence_detected && (metadata.violations?.length ?? 0) === 0) {
 		return ""
 	}

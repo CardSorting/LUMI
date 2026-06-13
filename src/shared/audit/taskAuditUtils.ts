@@ -185,6 +185,14 @@ export function buildAuditReportMarkdown(auditMetadata: TaskAuditMetadata): stri
 		`- **Intent Coverage:** ${getIntentCoveragePercentage(auditMetadata.intent_coverage)}%`,
 		`- **Alignment Status:** ${auditMetadata.divergence_detected ? "Divergent" : "Aligned"}`,
 		`- **Policy Violations:** ${policyViolations}`,
+		...(auditMetadata.suppressed_violations?.length
+			? [
+					`- **Suppressed Violations:** ${auditMetadata.suppressed_violations.map(formatViolationLabel).join(", ")} _(waived)_`,
+				]
+			: []),
+		...(auditMetadata.workspace_gate_policy_applied
+			? ["- **Gate Policy:** Workspace `.audit/gate-policy.json` overrides applied"]
+			: []),
 		`- **Joy-Zoning Violations:** ${joyZoningViolations}`,
 		`- **Audited At:** ${formatAuditDateTime(auditMetadata.audited_at)}`,
 	].join("\n")

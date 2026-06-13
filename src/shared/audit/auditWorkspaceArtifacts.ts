@@ -2,8 +2,11 @@ import fs from "fs/promises"
 import path from "path"
 import { buildCiGateStatusJson, buildCiJobSummaryMarkdown, buildGatePolicySnapshot } from "./auditCiSummary"
 import type { AuditGateSettingsSource } from "./auditGateOptions"
+import { serializeWorkspaceGatePolicy, WORKSPACE_GATE_POLICY_FILE } from "./auditGatePolicyLoader"
 import type { CompletionGateOptions } from "./auditGateReport"
+import { evaluateCompletionGate } from "./auditGateReport"
 import { buildQualityGateStatus } from "./auditGateStatus"
+import { buildAuditJunitXml } from "./auditJunitExport"
 import { buildAuditSarifJson } from "./auditSarifExport"
 import { partitionViolationsBySeverity } from "./auditSeverity"
 import { buildAuditReportMarkdown } from "./taskAuditUtils"
@@ -30,9 +33,11 @@ export interface PersistAuditArtifactsInput {
 export interface PersistAuditArtifactsResult {
 	sarifPath?: string
 	markdownPath?: string
+	junitPath?: string
 	manifestPath: string
 	relativeSarifPath?: string
 	relativeReportPath?: string
+	relativeJunitPath?: string
 	relativeManifestPath: string
 }
 
@@ -85,6 +90,9 @@ async function copyLatestArtifacts(
 	}
 	if (includeMarkdown && result.markdownPath) {
 		writes.push(fs.copyFile(result.markdownPath, path.join(latestDir, "latest.audit.md")))
+	}
+	if (result.junitPath) {
+		writes.push(fs.copyFile(result.junitPath, path.join(latestDir, "latest.junit.xml")))
 	}
 	writes.push(fs.copyFile(result.manifestPath, path.join(latestDir, "latest.manifest.json")))
 	await Promise.all(writes)
@@ -181,6 +189,18 @@ async function writeCiArtifacts(
 	await Promise.all(writes)
 }
 
+async function ensureWorkspacePolicyTemplate(rootDir: string, gatePolicySettings?: AuditGateSettingsSource): Promise<void> {
+	if (!gatePolicySettings) {
+		return
+	}
+	const policyPath = path.join(rootDir, WORKSPACE_GATE_POLICY_FILE)
+	try {
+		await fs.access(policyPath)
+	} catch {
+		await fs.writeFile(policyPath, `${JSON.stringify(serializeWorkspaceGatePolicy(gatePolicySettings), null, 2)}\n`, "utf8")
+	}
+}
+
 export function enrichAuditMetadataWithArtifactPaths(
 	metadata: TaskAuditMetadata,
 	result: PersistAuditArtifactsResult,
@@ -216,8 +236,13 @@ export async function persistAuditWorkspaceArtifacts(
 	const rootDir = path.isAbsolute(artifactDir) ? artifactDir : path.resolve(cwd, artifactDir)
 	const sarifDir = path.join(rootDir, "sarif")
 	const reportsDir = path.join(rootDir, "reports")
+	const junitDir = path.join(rootDir, "junit")
 	await fs.mkdir(sarifDir, { recursive: true })
 	await fs.mkdir(reportsDir, { recursive: true })
+	await fs.mkdir(junitDir, { recursive: true })
+	await ensureWorkspacePolicyTemplate(rootDir, gatePolicySettings)
+
+	const gateDecision = gateOptions ? evaluateCompletionGate(metadata, gateOptions) : undefined
 
 	const baseName = buildArtifactBaseName(taskId, event, metadata.audited_at ?? Date.now())
 	const taskUri = `task://${taskId}/${event}`
@@ -242,6 +267,11 @@ export async function persistAuditWorkspaceArtifacts(
 		writes.push(fs.writeFile(markdownPath, buildAuditReportMarkdown(metadata), "utf8"))
 	}
 
+	const junitPath = path.join(junitDir, `${baseName}.junit.xml`)
+	result.junitPath = junitPath
+	result.relativeJunitPath = path.relative(cwd, junitPath)
+	writes.push(fs.writeFile(junitPath, buildAuditJunitXml(metadata, { taskId, gateDecision }), "utf8"))
+
 	result.relativeManifestPath = path.relative(cwd, result.manifestPath)
 
 	const manifest = {
@@ -254,8 +284,11 @@ export async function persistAuditWorkspaceArtifacts(
 		gateReasonCodes: metadata.gate_reason_codes ?? [],
 		violationCount: metadata.violations?.length ?? 0,
 		criticalViolationCount: partitionViolationsBySeverity(metadata.violations).critical.length,
+		suppressedViolationCount: metadata.suppressed_violations?.length ?? 0,
+		workspaceGatePolicyApplied: metadata.workspace_gate_policy_applied ?? false,
 		sarifPath: result.relativeSarifPath,
 		markdownPath: result.relativeReportPath,
+		junitPath: result.relativeJunitPath,
 		manifestPath: result.relativeManifestPath,
 	}
 

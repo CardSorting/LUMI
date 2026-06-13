@@ -3,6 +3,7 @@
  */
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
+import { applyWorkspaceAuditPolicy } from "@shared/audit/auditGatePolicyLoader"
 import { findLast, parsePartialArrayString } from "@/shared/array"
 import { runCompletionAudit } from "@/shared/audit/completionAudit"
 import { DietCodePlanModeResponse, type TaskAuditMetadata } from "@/shared/ExtensionMessage"
@@ -119,6 +120,7 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 		try {
 			const taskPreview = getInitialTaskPreview(config) || "plan mode response"
 			planAuditMetadata = await runCompletionAudit(config.taskId, taskPreview, response, taskPreview)
+			planAuditMetadata = await applyWorkspaceAuditPolicy(config.cwd, planAuditMetadata, config)
 		} catch (error) {
 			Logger.warn("[PlanModeRespondHandler] Plan audit metadata generation failed:", error)
 		}
