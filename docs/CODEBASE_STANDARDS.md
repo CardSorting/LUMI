@@ -16,7 +16,7 @@ We follow a modular architecture to prevent complexity from spiraling out of con
 2.  **Domain (`src/domain`)**: Pure interfaces and models. No external dependencies.
 3.  **Services (`src/services`)**: Business logic and capabilities (AI, Analysis).
 4.  **Infrastructure (`src/infrastructure`)**: Concrete adapters for files, terminal, and browser.
-5.  **Interface (`webview-ui`)**: User-facing React components.
+5.  **Interface (`webview-ui`)**: User-facing React components. The sidebar presents as **MIRA** — comfort-first emotional UX documented in [User Interface Design](USER_INTERFACE_DESIGN.md). Conversational copy belongs in `webview-ui/src/copy/miraVoice.ts`.
 
 ### 🚫 Dependency Rules
 - **Outside-In only**: Infrastructure can import from Domain, but Domain cannot import from Infrastructure.

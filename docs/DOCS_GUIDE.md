@@ -35,7 +35,12 @@ Unlock more power with specialized agent behaviors and integrations.
 - [**Custom Interceptors (Hooks)**](CUSTOM_INTERCEPTORS.md): Write your own lifecycle interceptors.
 - [**Rules & Customization**](customization/overview.mdx): Personalize the agent's behavior for your project.
 
-### 4. 📐 Architecture & Security
+### 4. 🎨 Interface & Experience (MIRA)
+The sidebar presents as **MIRA** — comfort-first developer tooling designed to reduce tension during long sessions.
+- [**User Interface Design**](USER_INTERFACE_DESIGN.md): MIRA emotional UX strategy, voice system, audit-as-notebook, and contributor guidelines.
+- [**MIRA UX Implementation**](MIRA_UX_IMPLEMENTATION.md): Engineer-facing file map, APIs (`miraVoice`, session comfort, audit tokens), and wiring checklist.
+
+### 5. 📐 Architecture & Security
 Deep dives into how DietCode works and how it keeps your code safe.
 - [**Architectural Enforcement**](ARCHITECTURAL_ENFORCEMENT.md): The Forensic Architect engine.
 - [**Knowledge Graph Forensics**](KNOWLEDGE_GRAPH_FORENSICS.md): Semantic mapping and Blast Radius analysis.

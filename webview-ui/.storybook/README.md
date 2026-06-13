@@ -12,6 +12,32 @@ Storybook is a frontend workshop for building UI components and pages in isolati
 
 In DietCode's webview, Storybook helps us develop and test React components that make up the chat interface, settings panels, and other UI elements in isolation from the VSCode extension environment.
 
+## MIRA design principles
+
+The sidebar presents as **MIRA** to users. When building or reviewing stories, apply these filters:
+
+1. **Can someone keep this open all day without feeling managed by it?**
+2. **Does this interface reduce tension?**
+
+### Copy
+
+- Route conversational strings through `src/copy/miraVoice.ts`
+- Use collaborative first-person ("I looked at…", "Want me to…?") — not CI-style verbs ("Executed", "Fetched", "Validation failed")
+- Stable placeholders; no rotating engagement copy
+- Sentence case; avoid uppercase alert labels
+
+### Visual tone
+
+- Audit surfaces: amber whispers and notebook layout (`src/components/chat/audit/auditUiStyles.ts`), not alarm-red command centers
+- Motion: use `animate-mira-*` tokens — breathing, not reactive
+- Long sessions: test with `data-serenity-level` and `data-night-desk` attributes where relevant
+
+### Scope
+
+MIRA changes are **webview presentation only**. Internal prop names, proto types, and mock state keys may still use `dietcode` naming.
+
+Full documentation: [User Interface Design](../../docs/USER_INTERFACE_DESIGN.md) · [MIRA UX Implementation](../../docs/MIRA_UX_IMPLEMENTATION.md)
+
 ## Getting Started
 
 ### Starting Storybook

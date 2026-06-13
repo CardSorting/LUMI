@@ -39,7 +39,9 @@ Transition the DietCode documentation from a jargon-heavy, "industrial" sci-fi m
 - [x] `docs/COGNITIVE_PRIMITIVES.md` -> **`docs/MEMORY_AND_REASONING.md`** (Complete)
 - [x] `docs/SUBAGENT_PROTOCOLS.md` -> **`docs/WORKING_WITH_SUBAGENTS.md`** (Complete)
 - [x] `docs/HOSTBRIDGE_PROTOBUS.md` -> **`docs/SYSTEM_COMMUNICATION.md`** (Complete)
-- [x] `docs/UX_PROJECTION_LAYER.md` -> **`docs/USER_INTERFACE_DESIGN.md`** (Complete)
+- [x] `docs/UX_PROJECTION_LAYER.md` -> **`docs/USER_INTERFACE_DESIGN.md`** (Complete — expanded for MIRA emotional UX strategy, passes 1–10)
+- [x] **`docs/MIRA_UX_IMPLEMENTATION.md`** (New — engineer-facing file map and APIs)
+- [x] **`webview-ui/docs/MIRA_UX.md`** (New — repo-local quick reference)
 
 ### 5. Integrations & Reference
 - [ ] `docs/mcp/*.mdx`

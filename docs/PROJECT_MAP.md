@@ -21,7 +21,7 @@ The project is organized into several key modules, each with a clear responsibil
 | **`src/integrations/`** | **Editor Adapters** | Connects the core logic to specific IDEs (VS Code, JetBrains) and handles UI event synchronization. |
 | **`src/integrity/`** | **Stability & Policy** | Monitors the system for errors, enforces security policies, and ensures that code changes follow project standards. |
 | **`src/types/`** | **Type System** | Central repository for TypeScript definitions used across the entire project. |
-| **`webview-ui/`** | **Interface** | The React-based frontend for the DietCode sidebar and interactive panels. |
+| **`webview-ui/`** | **Interface (MIRA)** | The React-based frontend for the sidebar. User-facing copy and visuals present as **MIRA** — see [User Interface Design](USER_INTERFACE_DESIGN.md) and [MIRA UX Implementation](MIRA_UX_IMPLEMENTATION.md). Voice helpers live in `webview-ui/src/copy/miraVoice.ts`. |
 | **`broccolidb/`** | **Context Store** | A local SQLite database that persists your task history and project-specific knowledge. |
 
 ---
