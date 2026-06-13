@@ -8,7 +8,7 @@ import { getErrorLevelFromString } from "@/services/error"
 import { getDistinctId, setDistinctId } from "@/services/logging/distinctId"
 import { Setting } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
-import type { DietCodeAccountUserInfo } from "../../../auth/AuthService"
+import type { DietCodeAccountUserInfo } from "../../../auth/types"
 import type { ITelemetryProvider, TelemetryProperties, TelemetrySettings } from "../ITelemetryProvider"
 
 /**

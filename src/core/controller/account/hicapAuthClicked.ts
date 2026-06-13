@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
 import { HostProvider } from "@/hosts/host-provider"
 import { openExternal } from "@/utils/env"
-import { Controller } from ".."
 
 /**
  * Initiates Hicap auth

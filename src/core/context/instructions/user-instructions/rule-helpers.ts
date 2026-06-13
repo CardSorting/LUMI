@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import { ensureRulesDirectoryExists, ensureWorkflowsDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { GlobalInstructionsFile } from "@shared/remote-config/schema"
 import { fileExistsAtPath, isDirectory, readDirectory } from "@utils/fs"
 import fs from "fs/promises"
 import * as path from "path"
-import { Controller } from "@/core/controller"
 import { Logger } from "@/shared/services/Logger"
 import { parseYamlFrontmatter } from "./frontmatter"
 import { evaluateRuleConditionals, RuleEvaluationContext } from "./rule-conditionals"
@@ -184,11 +184,6 @@ export const getRuleFilesTotalContentWithMetadata = async (
 ): Promise<RuleLoadResult> => {
 	const evaluationContext = opts?.evaluationContext ?? {}
 	const prefix = RULE_SOURCE_PREFIX[opts?.ruleNamePrefix ?? "global"]
-
-	type RuleLoadPart = {
-		contentPart: string | null
-		activatedRule: ActivatedConditionalRule | null
-	}
 
 	const parts = await Promise.all(
 		rulesFilePaths.map(async (filePath) => {

@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import { HostProvider } from "@/hosts/host-provider"
 import { toRequestyServiceUrl } from "@/shared/clients/requesty"
 import { openExternal } from "@/utils/env"
-import { Controller } from ".."
 
 /**
  * Initiates Requesty auth with optional custom base URL

@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { CheckpointEvent, CheckpointEvent_OperationType, CheckpointSubscriptionRequest } from "@shared/proto/dietcode/checkpoints"
 import { Timestamp } from "@shared/proto/google/protobuf/timestamp"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
-import { Controller } from "../index"
 
 /**
  * Parameters for creating a checkpoint event

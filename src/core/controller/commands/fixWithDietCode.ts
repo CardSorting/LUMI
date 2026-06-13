@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { getFileMentionFromPath } from "@/core/mentions"
 import { singleFileDiagnosticsToProblemsString } from "@/integrations/diagnostics"
 import { telemetryService } from "@/services/telemetry"
 import { CommandContext, Empty } from "@/shared/proto/index.dietcode"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from "../index"
 
 export async function fixWithDietCode(controller: Controller, request: CommandContext): Promise<Empty> {
 	const filePath = request.filePath || ""

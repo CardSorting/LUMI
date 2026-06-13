@@ -1,4 +1,5 @@
 import { buildApiHandler } from "@core/api"
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { PlanActMode, McpDisplayMode as ProtoMcpDisplayMode, UpdateSettingsRequest } from "@shared/proto/dietcode/state"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
@@ -13,7 +14,6 @@ import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { telemetryService } from "../../../services/telemetry"
 import { BrowserSettings as SharedBrowserSettings } from "../../../shared/BrowserSettings"
-import { Controller } from ".."
 import { accountLogoutClicked } from "../account/accountLogoutClicked"
 
 /**
@@ -264,8 +264,11 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			// Update the terminal manager of the current task if it exists
 			if (controller.task) {
 				// Call the updated setDefaultTerminalProfile method that returns closed terminal info
-				// Use `as any` to handle type incompatibility between VSCode's TerminalInfo and standalone TerminalInfo
-				const result = controller.task.terminalManager.setDefaultTerminalProfile(profileId) as any
+				// Cast via unknown to handle type incompatibility between VSCode's TerminalInfo and standalone TerminalInfo
+				const result = controller.task.terminalManager.setDefaultTerminalProfile(profileId) as unknown as {
+					closedCount: number
+					busyTerminals?: unknown[]
+				}
 				closedCount = result.closedCount
 				busyTerminalsCount = result.busyTerminals?.length ?? 0
 

@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { BannerService } from "@/services/banner/BannerService"
 import type { StringRequest } from "@/shared/proto/dietcode/common"
 import { Empty } from "@/shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from ".."
 
 /**
  * Dismisses a banner and sends telemetry

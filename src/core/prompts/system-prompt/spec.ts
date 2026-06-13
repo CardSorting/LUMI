@@ -1,48 +1,12 @@
 import { Tool as AnthropicTool } from "@anthropic-ai/sdk/resources/index"
-import { FunctionDeclaration as GoogleTool, Type as GoogleToolParamType } from "@google/genai"
+import { FunctionDeclaration as GoogleTool, Type as GoogleToolParamType, Schema } from "@google/genai"
 import { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
 import { FunctionTool as OpenAIResponseFunctionTool, Tool as OpenAIResponseTool } from "openai/resources/responses/responses"
-import { ModelFamily } from "@/shared/prompts"
-import type { DietCodeDefaultTool } from "@/shared/tools"
-import type { SystemPromptContext } from "./types"
+import type { DietCodeToolSpec, DietCodeToolSpecParameter, SystemPromptContext } from "./types"
 
-export interface DietCodeToolSpec {
-	variant: ModelFamily
-	id: DietCodeDefaultTool
-	name: string
-	description: string
-	instruction?: string
-	contextRequirements?: (context: SystemPromptContext) => boolean
-	parameters?: Array<DietCodeToolSpecParameter>
-}
-
-interface DietCodeToolSpecParameter {
-	name: string
-	required: boolean
-	instruction: string | ((context: SystemPromptContext) => string)
-	usage?: string
-	dependencies?: DietCodeDefaultTool[]
-	description?: string
-	contextRequirements?: (context: SystemPromptContext) => boolean
-	// TODO: Confirm if "integer" is actually supported across providers
-	/**
-	 * The type of the parameter. Default to string if not provided.
-	 * Supported types: string, boolean, integer, array, object
-	 */
-	type?: "string" | "boolean" | "integer" | "array" | "object"
-	/**
-	 * For array types, this defines the schema of array items
-	 */
-	items?: any
-	/**
-	 * For object types, this defines the properties
-	 */
-	properties?: Record<string, any>
-	/**
-	 * Additional JSON Schema fields to preserve from MCP tools
-	 */
-	[key: string]: any
-}
+// Re-export the tool-spec contracts for backward compatibility.
+// Canonical definitions live in ./types (a leaf) to break the spec ↔ types cycle.
+export type { DietCodeToolSpec, DietCodeToolSpecParameter }
 
 /**
  * Converts a DietCodeToolSpec into an OpenAI ChatCompletionTool definition
@@ -55,7 +19,7 @@ export function toolSpecFunctionDefinition(tool: DietCodeToolSpec, context: Syst
 	}
 
 	// Build the properties object for parameters
-	const properties: Record<string, any> = {}
+	const properties: Record<string, unknown> = {}
 	const required: string[] = []
 
 	if (tool.parameters) {
@@ -75,7 +39,7 @@ export function toolSpecFunctionDefinition(tool: DietCodeToolSpec, context: Syst
 			const paramType: string = param.type || "string"
 
 			// Build parameter schema
-			const paramSchema: any = {
+			const paramSchema: Record<string, unknown> = {
 				type: paramType,
 				description: replacer(resolveInstruction(param.instruction, context), context),
 			}
@@ -148,7 +112,7 @@ export function toolSpecInputSchema(tool: DietCodeToolSpec, context: SystemPromp
 	}
 
 	// Build the properties object for parameters
-	const properties: Record<string, any> = {}
+	const properties: Record<string, unknown> = {}
 	const required: string[] = []
 
 	if (tool.parameters) {
@@ -168,7 +132,7 @@ export function toolSpecInputSchema(tool: DietCodeToolSpec, context: SystemPromp
 			const paramType: string = param.type || "string"
 
 			// Build parameter schema
-			const paramSchema: any = {
+			const paramSchema: Record<string, unknown> = {
 				type: paramType,
 				description: replacer(resolveInstruction(param.instruction, context), context),
 			}
@@ -226,13 +190,13 @@ export function toolSpecInputSchema(tool: DietCodeToolSpec, context: SystemPromp
 	return toolInputSchema
 }
 
-const GOOGLE_TOOL_PARAM_MAP: Record<string, string> = {
-	string: "STRING",
-	number: "NUMBER",
-	integer: "NUMBER",
-	boolean: "BOOLEAN",
-	object: "OBJECT",
-	array: "STRING",
+const GOOGLE_TOOL_PARAM_MAP: Record<string, GoogleToolParamType> = {
+	string: GoogleToolParamType.STRING,
+	number: GoogleToolParamType.NUMBER,
+	integer: GoogleToolParamType.NUMBER,
+	boolean: GoogleToolParamType.BOOLEAN,
+	object: GoogleToolParamType.OBJECT,
+	array: GoogleToolParamType.STRING,
 }
 
 /**
@@ -246,7 +210,7 @@ export function toolSpecFunctionDeclarations(tool: DietCodeToolSpec, context: Sy
 	}
 
 	// Build the parameters object for parameters
-	const properties: Record<string, any> = {}
+	const properties: Record<string, Schema> = {}
 	const required: string[] = []
 
 	if (tool.parameters) {
@@ -265,26 +229,29 @@ export function toolSpecFunctionDeclarations(tool: DietCodeToolSpec, context: Sy
 				required.push(param.name)
 			}
 
-			const paramSchema: any = {
+			const paramSchema: Schema = {
 				type: GOOGLE_TOOL_PARAM_MAP[param.type || "string"] || GoogleToolParamType.OBJECT,
 			}
 
 			if (param.properties) {
-				paramSchema.properties = {}
-				for (const [key, prop] of Object.entries<any>(param.properties)) {
+				const paramProperties: Record<string, Schema> = {}
+				paramSchema.properties = paramProperties
+				for (const [key, propVal] of Object.entries(param.properties)) {
 					// Skip $schema property
 					if (key === "$schema") {
 						continue
 					}
-					paramSchema.properties[key] = {
-						type: GOOGLE_TOOL_PARAM_MAP[prop.type || "string"] || GoogleToolParamType.OBJECT,
+					const prop = propVal as Record<string, unknown>
+					const propSchema: Schema = {
+						type: GOOGLE_TOOL_PARAM_MAP[(prop.type as string) || "string"] || GoogleToolParamType.OBJECT,
 						description: replacer(resolveInstruction(param.instruction, context), context),
 					}
 
 					// Handle enum values
 					if (prop.enum) {
-						paramSchema.properties[key].enum = prop.enum
+						propSchema.enum = prop.enum as string[]
 					}
+					paramProperties[key] = propSchema
 				}
 			}
 

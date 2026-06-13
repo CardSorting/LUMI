@@ -1,19 +1,26 @@
-import { Controller } from "@core/controller"
+import type { IController } from "@core/controller/types"
 import * as grpc from "@grpc/grpc-js"
 import { Channel, createChannel } from "nice-grpc"
 
 /**
  * Type definition for a gRPC handler function.
- * This represents a function that takes a Controller instance and a request object,
- * and returns a Promise of the response type.
+ * This represents a function that takes a controller (via the IController port,
+ * not the concrete class) and a request object, and returns a Promise of the
+ * response type.
+ *
+ * NOTE: The transport seam depends on the IController ABSTRACTION (Ports &
+ * Adapters / Dependency Inversion). The concrete `Controller` implements
+ * `IController`, so the composition root still works, while handlers and
+ * generated transport code stay decoupled from the controller barrel — keeping
+ * the dependency graph acyclic.
  *
  * @template TRequest - The type of the request object
  * @template TResponse - The type of the response object
  */
-export type GrpcHandler<TRequest, TResponse> = (controller: Controller, req: TRequest) => Promise<TResponse>
+export type GrpcHandler<TRequest, TResponse> = (controller: IController, req: TRequest) => Promise<TResponse>
 
 export type GrpcStreamingResponseHandler<TRequest, TResponse> = (
-	controller: Controller,
+	controller: IController,
 	req: TRequest,
 	streamResponseHandler: StreamingResponseWriter<TResponse>,
 	requestId?: string,
@@ -28,12 +35,12 @@ export type GrpcStreamingResponseHandler<TRequest, TResponse> = (
  */
 export type GrpcHandlerWrapper = <TRequest, TResponse>(
 	handler: GrpcHandler<TRequest, TResponse>,
-	controller: Controller,
+	controller: IController,
 ) => grpc.handleUnaryCall<TRequest, TResponse>
 
 export type GrpcStreamingResponseHandlerWrapper = <TRequest, TResponse>(
 	handler: GrpcStreamingResponseHandler<TRequest, TResponse>,
-	controller: Controller,
+	controller: IController,
 ) => grpc.handleServerStreamingCall<TRequest, TResponse>
 
 export type StreamingResponseWriter<TResponse> = (response: TResponse, isLast?: boolean, sequenceNumber?: number) => Promise<void>

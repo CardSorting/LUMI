@@ -1,7 +1,6 @@
 import type { ToolUse } from "@core/assistant-message"
 import { CLINE_MCP_TOOL_IDENTIFIER } from "@/shared/mcp"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import type { ToolResponse } from "../index"
 import { AccessMcpResourceHandler } from "./handlers/AccessMcpResourceHandler"
 import { ActModeRespondHandler } from "./handlers/ActModeRespondHandler"
 import { ApplyPatchHandler } from "./handlers/ApplyPatchHandler"
@@ -60,44 +59,19 @@ import { WriteToFileToolHandler } from "./handlers/WriteToFileToolHandler"
 import { AgentConfigLoader } from "./subagent/AgentConfigLoader"
 import { ToolValidator } from "./ToolValidator"
 import type { TaskConfig } from "./types/TaskConfig"
-import type { StronglyTypedUIHelpers } from "./types/UIHelpers"
+import {
+	IFullyManagedTool,
+	IPartialBlockHandler,
+	IToolHandler,
+	SharedToolHandler,
+	type ToolResponse,
+} from "./types/ToolContracts"
 
-export interface IToolHandler {
-	readonly name: DietCodeDefaultTool
-	execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse>
-	getDescription(block: ToolUse): string
-}
-
-export interface IPartialBlockHandler {
-	handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void>
-}
-
-export interface IFullyManagedTool extends IToolHandler, IPartialBlockHandler {
-	// Marker interface for tools that handle their own complete approval flow
-}
-
-/**
- * A wrapper class that allows a single tool handler to be registered under multiple names.
- * This provides proper typing for tools that share the same implementation logic.
- */
-export class SharedToolHandler implements IFullyManagedTool {
-	constructor(
-		public readonly name: DietCodeDefaultTool,
-		private baseHandler: IFullyManagedTool,
-	) {}
-
-	getDescription(block: ToolUse): string {
-		return this.baseHandler.getDescription(block)
-	}
-
-	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		return this.baseHandler.execute(config, block)
-	}
-
-	async handlePartialBlock(block: ToolUse, uiHelpers: StronglyTypedUIHelpers): Promise<void> {
-		return this.baseHandler.handlePartialBlock(block, uiHelpers)
-	}
-}
+// Re-export the tool handler contract for backward compatibility.
+// The canonical definitions live in ./types/ToolContracts to break the
+// coordinator↔handlers cycle.
+export { SharedToolHandler }
+export type { IFullyManagedTool, IPartialBlockHandler, IToolHandler, ToolResponse }
 
 /**
  * Coordinates tool execution by routing to registered handlers.

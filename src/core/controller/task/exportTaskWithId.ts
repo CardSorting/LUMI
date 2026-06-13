@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Exports a task with the given ID to markdown

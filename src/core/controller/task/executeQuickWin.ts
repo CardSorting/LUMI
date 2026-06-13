@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { ExecuteQuickWinRequest } from "@shared/proto/dietcode/task"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Executes a quick win task with command and title

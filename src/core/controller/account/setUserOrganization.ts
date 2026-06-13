@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { UserOrganizationUpdateRequest } from "@shared/proto/dietcode/account"
 import { Empty } from "@shared/proto/dietcode/common"
 import { fetchRemoteConfig } from "@/core/storage/remote-config/fetch"
-import type { Controller } from "../index"
 
 /**
  * Handles setting the user's active organization

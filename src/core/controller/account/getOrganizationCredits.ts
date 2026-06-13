@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import {
 	GetOrganizationCreditsRequest,
 	OrganizationCreditsData,
 	OrganizationUsageTransaction,
 } from "@shared/proto/dietcode/account"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Handles fetching all organization credits data (balance, usage, payments)

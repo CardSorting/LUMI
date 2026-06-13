@@ -1,3 +1,4 @@
+import { ApiProvider } from "@shared/api"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import PROVIDERS from "@shared/providers/providers.json"
 import { Mode } from "@shared/storage/types"
@@ -11,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ModelsServiceClient } from "@/services/grpc-client"
-import { OPENROUTER_MODEL_PICKER_Z_INDEX } from "./OpenRouterModelPicker"
+import { DROPDOWN_Z_INDEX, DropdownContainer } from "./constants"
 import { AIhubmixProvider } from "./providers/AihubmixProvider"
 import { AnthropicProvider } from "./providers/AnthropicProvider"
 import { AskSageProvider } from "./providers/AskSageProvider"
@@ -65,19 +66,10 @@ interface ApiOptionsProps {
 }
 
 // This is necessary to ensure dropdown opens downward, important for when this is used in popup
-export const DROPDOWN_Z_INDEX = OPENROUTER_MODEL_PICKER_Z_INDEX + 2 // Higher than the OpenRouterModelPicker's and ModelSelectorTooltip's z-index
+export { DROPDOWN_Z_INDEX }
 
-export const DropdownContainer = styled.div<{ zIndex?: number }>`
-	position: relative;
-	z-index: ${(props) => props.zIndex || DROPDOWN_Z_INDEX};
-
-	// Force dropdowns to open downward
-	& vscode-dropdown::part(listbox) {
-		position: absolute !important;
-		top: 100% !important;
-		bottom: auto !important;
-	}
-`
+// DropdownContainer lives in ./constants leaf (breaks ApiOptions<->provider cycle).
+export { DropdownContainer }
 
 declare module "vscode" {
 	interface LanguageModelChatSelector {
@@ -118,7 +110,6 @@ const ApiOptions = ({
 					setOllamaModels(response.values)
 				}
 			} catch (error) {
-				// biome-ignore lint/suspicious/noConsole: No Logger service available in remote-ui
 				console.error("Failed to fetch Ollama models:", error)
 				setOllamaModels([])
 			}
@@ -191,7 +182,7 @@ const ApiOptions = ({
 	}, [searchableItems, searchTerm, fuse, currentProviderLabel])
 
 	const handleProviderChange = (newProvider: string) => {
-		handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, newProvider as any, currentMode)
+		handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, newProvider as ApiProvider, currentMode)
 		setIsDropdownVisible(false)
 		setSelectedIndex(-1)
 	}
@@ -317,12 +308,19 @@ const ApiOptions = ({
 						}}
 						value={searchTerm}>
 						{searchTerm && searchTerm !== currentProviderLabel && (
-							<div
+							<button
 								aria-label="Clear search"
 								className="input-icon-button codicon codicon-close"
 								onClick={() => {
 									setSearchTerm("")
 									setIsDropdownVisible(true)
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault()
+										setSearchTerm("")
+										setIsDropdownVisible(true)
+									}
 								}}
 								slot="end"
 								style={{
@@ -330,7 +328,12 @@ const ApiOptions = ({
 									justifyContent: "center",
 									alignItems: "center",
 									height: "100%",
+									cursor: "pointer",
+									background: "none",
+									border: "none",
+									padding: 0,
 								}}
+								type="button"
 							/>
 						)}
 					</VSCodeTextField>

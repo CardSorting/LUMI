@@ -1,12 +1,12 @@
 import { ModelFamily } from "@/shared/prompts"
 import { Logger } from "@/shared/services/Logger"
 import type { DietCodeTool } from "@/shared/tools"
-import { DietCodeToolSet } from ".."
 import { getSystemPromptComponents } from "../components"
 import { registerDietCodeToolSets } from "../tools"
 import type { ComponentFunction, ComponentRegistry, PromptVariant, SystemPromptContext } from "../types"
 import { loadAllVariantConfigs } from "../variants"
 import { config as genericConfig } from "../variants/generic/config"
+import { DietCodeToolSet } from "./DietCodeToolSet"
 import { PromptBuilder } from "./PromptBuilder"
 
 export class PromptRegistry {

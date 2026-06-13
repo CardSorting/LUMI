@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import axios from "axios"
 import { type JwtPayload } from "jwt-decode"
 import { DietCodeEnv, EnvironmentConfig } from "@/config"
-import { Controller } from "@/core/controller"
 import { HostProvider } from "@/hosts/host-provider"
 import { buildBasicDietCodeHeaders } from "@/services/EnvUtils"
 import { AuthInvalidTokenError, AuthNetworkError } from "@/services/error/DietCodeError"
@@ -9,8 +9,8 @@ import { telemetryService } from "@/services/telemetry"
 import { DIETCODE_API_ENDPOINT } from "@/shared/dietcode/api"
 import { fetch, getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import { type DietCodeAccountUserInfo, type DietCodeAuthInfo } from "../AuthService"
 import { parseJwtPayload } from "../oca/utils/utils"
+import { type DietCodeAccountUserInfo, type DietCodeAuthInfo } from "../types"
 import { IAuthProvider } from "./IAuthProvider"
 
 interface DietCodeAuthApiUser {

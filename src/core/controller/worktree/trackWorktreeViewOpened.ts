@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { TrackWorktreeViewOpenedRequest } from "@shared/proto/dietcode/worktree"
 import { telemetryService } from "@/services/telemetry"
-import { Controller } from ".."
 
 /**
  * Tracks when the worktrees view is opened (for telemetry)

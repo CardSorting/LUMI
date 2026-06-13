@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { GitCommits } from "@shared/proto/dietcode/file"
 import { searchCommits as searchCommitsUtil } from "@utils/git"
 import { getWorkspacePath } from "@utils/path"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Searches for git commits in the workspace repository

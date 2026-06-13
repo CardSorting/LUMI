@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
 import { writeTextToClipboard } from "@/utils/env"
-import { Controller } from ".."
 
 /**
  * Copies text to the system clipboard

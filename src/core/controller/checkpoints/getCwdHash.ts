@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { PathHashMap } from "@shared/proto/dietcode/checkpoints"
 import { StringArrayRequest } from "@shared/proto/dietcode/common"
 import { hashWorkingDir } from "@/integrations/checkpoints/CheckpointUtils"
-import { Controller } from ".."
 
 export async function getCwdHash(_controller: Controller, request: StringArrayRequest): Promise<PathHashMap> {
 	const pathHash: Record<string, string> = {}

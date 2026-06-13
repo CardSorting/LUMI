@@ -4,9 +4,8 @@ import * as fs from "fs"
 import * as nodePath from "path"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
-import type { ToolResponse } from "../../index"
-import type { IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
+import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
 
 type ProjectMapItem = {
 	path: string

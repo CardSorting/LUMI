@@ -1,7 +1,7 @@
 import * as crypto from "crypto"
 import * as v8 from "v8"
-import { MetricsEngine } from "./MetricsEngine.js"
-import { SpiderNode, SpiderRegistryPayload, SpiderSnapshot } from "./types.js"
+import { MetricsEngine } from "./MetricsEngine"
+import { SpiderNode, SpiderRegistryPayload, SpiderSnapshot } from "./types"
 
 const isSpiderSnapshot = (value: unknown): value is SpiderSnapshot => {
 	if (!value || typeof value !== "object") return false

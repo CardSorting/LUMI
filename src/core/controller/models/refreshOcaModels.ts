@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { ApiFormat, OcaCompatibleModelInfo, OcaModelInfo } from "@shared/proto/dietcode/models"
 import axios from "axios"
@@ -15,7 +16,6 @@ import { getAxiosSettings } from "@/shared/net"
 import { ShowMessageType } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
 import { GlobalStateAndSettings } from "@/shared/storage/state-keys"
-import { Controller } from ".."
 
 /**
  * Refreshes the Oca models and returns the updated model list
@@ -24,9 +24,10 @@ import { Controller } from ".."
  * @returns Response containing the Oca models
  */
 export async function refreshOcaModels(controller: Controller, request: StringRequest): Promise<OcaCompatibleModelInfo> {
-	const parsePrice = (price: any) => {
-		if (price) {
-			return Number.parseFloat(price) * 1_000_000
+	const parsePrice = (price: unknown) => {
+		if (typeof price === "string" || typeof price === "number") {
+			const num = typeof price === "number" ? price : Number.parseFloat(price)
+			return Number.isNaN(num) ? undefined : num * 1_000_000
 		}
 		return undefined
 	}
@@ -43,7 +44,7 @@ export async function refreshOcaModels(controller: Controller, request: StringRe
 	const ocaMode = controller.stateManager.getGlobalSettingsKey("ocaMode") || "internal"
 	const baseUrl = request.value || (ocaMode === "internal" ? DEFAULT_INTERNAL_OCA_BASE_URL : DEFAULT_EXTERNAL_OCA_BASE_URL)
 	const modelsUrl = `${baseUrl}/v1/model/info`
-	const headers = await createOcaHeaders(ocaAccessToken!, "models-refresh")
+	const headers = await createOcaHeaders(ocaAccessToken, "models-refresh")
 	try {
 		Logger.log(`Making refresh oca model request with customer opc-request-id: ${headers["opc-request-id"]}`)
 		const response = await axios.get(modelsUrl, { headers, ...getAxiosSettings() })
@@ -105,14 +106,14 @@ export async function refreshOcaModels(controller: Controller, request: StringRe
 			const planModeSelectedModelId =
 				apiConfiguration?.planModeOcaModelId && models[apiConfiguration.planModeOcaModelId]
 					? apiConfiguration.planModeOcaModelId
-					: defaultModelId!
+					: defaultModelId || ""
 			const actModeSelectedModelId =
 				apiConfiguration?.actModeOcaModelId && models[apiConfiguration.actModeOcaModelId]
 					? apiConfiguration.actModeOcaModelId
-					: defaultModelId!
+					: defaultModelId || ""
 
-			let planModeOcaReasoningEffort
-			let actModeOcaReasoningEffort
+			let planModeOcaReasoningEffort: string | undefined
+			let actModeOcaReasoningEffort: string | undefined
 			if (
 				models[planModeSelectedModelId].supportsReasoning &&
 				models[planModeSelectedModelId].reasoningEffortOptions.length > 0
@@ -168,7 +169,7 @@ export async function refreshOcaModels(controller: Controller, request: StringRe
 			})
 		}
 	} catch (err) {
-		let userMsg
+		let userMsg = ""
 		if (err.response) {
 			// The request was made and the server responded with a status code that falls out of the range of 2xx
 			userMsg = `Did you set up your OCA access (possibly through entitlements)? OCA service returned ${err.response.status} ${err.response.statusText}.`
@@ -188,14 +189,14 @@ export async function refreshOcaModels(controller: Controller, request: StringRe
 	return OcaCompatibleModelInfo.create({ models })
 }
 
-function supportsChatCompletions(modelSupportedApiList: any): boolean {
+function supportsChatCompletions(modelSupportedApiList: string[]): boolean {
 	return modelSupportedApiList.includes(CHAT_COMPLETIONS_API)
 }
 
-function supportsResponses(modelSupportedApiList: any): boolean {
+function supportsResponses(modelSupportedApiList: string[]): boolean {
 	return modelSupportedApiList.includes(RESPONSES_API)
 }
 
-function supportsMessages(modelSupportedApiList: any): boolean {
+function supportsMessages(modelSupportedApiList: string[]): boolean {
 	return modelSupportedApiList.includes(MESSAGES_API)
 }

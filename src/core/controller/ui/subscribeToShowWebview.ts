@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { ShowWebviewEvent } from "@shared/proto/dietcode/ui"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
-import type { Controller } from "../index"
 
 // Keep track of active show webview subscriptions
 const showWebviewSubscriptions = new Set<StreamingResponseHandler<ShowWebviewEvent>>()

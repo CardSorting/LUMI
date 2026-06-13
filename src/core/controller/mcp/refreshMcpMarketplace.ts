@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { EmptyRequest } from "@shared/proto/dietcode/common"
 import { McpMarketplaceCatalog } from "@shared/proto/dietcode/mcp"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * RPC handler that silently refreshes the MCP marketplace catalog

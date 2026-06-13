@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { CheckpointRestoreRequest } from "@shared/proto/dietcode/checkpoints"
 import { Empty } from "@shared/proto/dietcode/common"
 import pWaitFor from "p-wait-for"
@@ -5,7 +6,6 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeCheckpointRestore } from "../../../shared/WebviewMessage"
-import { Controller } from ".."
 
 export async function checkpointRestore(controller: Controller, request: CheckpointRestoreRequest): Promise<Empty> {
 	await controller.cancelTask() // we cannot alter message history say if the task is active, as it could be in the middle of editing a file or running a command, which expect the ask to be responded to rather than being superseded by a new message eg add deleted_api_reqs

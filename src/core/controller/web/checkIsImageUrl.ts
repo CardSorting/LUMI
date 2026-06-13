@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { detectImageUrl } from "@integrations/misc/link-preview"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { IsImageUrl } from "@shared/proto/dietcode/web"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from "../index"
 
 /**
  * Checks if a URL is an image URL

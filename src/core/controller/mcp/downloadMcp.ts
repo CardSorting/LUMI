@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { McpServer } from "@shared/mcp"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { McpDownloadResponse } from "@shared/proto/dietcode/mcp"
@@ -5,7 +6,6 @@ import axios from "axios"
 import { DietCodeEnv } from "@/config"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 import { sendChatButtonClickedEvent } from "../ui/subscribeToChatButtonClicked"
 
 /**

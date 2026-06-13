@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
 import { fetchRemoteConfig } from "@/core/storage/remote-config/fetch"
-import { Controller } from ".."
 
 /**
  * fetches the remote config

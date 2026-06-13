@@ -15,7 +15,6 @@ import {
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeMemento } from "@/shared/storage"
 import { readTaskHistoryFromState } from "../disk"
-import { StateManager } from "../StateManager"
 
 // ─── File-backed storage readers (used by StateManager) ────────────────────
 
@@ -45,13 +44,13 @@ export function readWorkspaceStateFromStorage(store: DietCodeFileStorage): Local
 export async function readGlobalStateFromStorage(store: DietCodeMemento): Promise<GlobalStateAndSettings> {
 	try {
 		// Batch read all state values in a single optimized pass
-		const stateValues = new Map<string, any>()
+		const stateValues = new Map<string, unknown>()
 		for (const key of GlobalStateAndSettingKeys) {
 			const value = store.get(key as string)
 			stateValues.set(key, value)
 		}
 
-		const result = {} as any
+		const result: Record<string, unknown> = {}
 
 		for (const key of GlobalStateAndSettingKeys) {
 			const stateKey = key as keyof GlobalStateAndSettings
@@ -90,7 +89,7 @@ export async function readGlobalStateFromStorage(store: DietCodeMemento): Promis
 /**
  * Handle properties that require computed logic
  */
-async function handleComputedProperties(result: any, stateValues: Map<string, any>): Promise<void> {
+async function handleComputedProperties(result: Record<string, unknown>, stateValues: Map<string, unknown>): Promise<void> {
 	// 1. API Provider logic - set defaults based on existing values
 	const defaultApiProvider: ApiProvider = "openrouter"
 	result.planModeApiProvider = result.planModeApiProvider || defaultApiProvider
@@ -109,18 +108,20 @@ async function handleComputedProperties(result: any, stateValues: Map<string, an
 /**
  * Handle properties that require async operations
  */
-async function handleAsyncProperties(result: any): Promise<void> {
+async function handleAsyncProperties(result: Record<string, unknown>): Promise<void> {
 	// Task history requires async disk read
 	result.taskHistory = await readTaskHistoryFromState()
 }
 
 export async function resetWorkspaceState() {
+	const { StateManager } = await import("../StateManager")
 	const stateManager = StateManager.get()
 	LocalStateKeys.map((key) => stateManager.setWorkspaceState(key, {}))
 	await stateManager.reInitialize()
 }
 
 export async function resetGlobalState(shouldResetWorkspaces = true) {
+	const { StateManager } = await import("../StateManager")
 	const stateManager = StateManager.get()
 
 	if (shouldResetWorkspaces) {

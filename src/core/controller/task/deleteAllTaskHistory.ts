@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { DeleteAllTaskHistoryCount } from "@shared/proto/dietcode/task"
 import fs from "fs/promises"
 import path from "path"
@@ -5,7 +6,6 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageRequest, ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { fileExistsAtPath } from "../../../utils/fs"
-import { Controller } from ".."
 
 /**
  * Deletes all task history, with an option to preserve favorites

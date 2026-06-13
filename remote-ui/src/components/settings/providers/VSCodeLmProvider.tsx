@@ -6,7 +6,7 @@ import { useInterval } from "react-use"
 import * as vscodemodels from "vscode"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ModelsServiceClient } from "@/services/grpc-client"
-import { DROPDOWN_Z_INDEX, DropdownContainer } from "../ApiOptions"
+import { DROPDOWN_Z_INDEX, DropdownContainer } from "../constants"
 import { getModeSpecificFields } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
@@ -17,7 +17,7 @@ interface VSCodeLmProviderProps {
 export const VSCodeLmProvider = ({ currentMode }: VSCodeLmProviderProps) => {
 	const [vsCodeLmModels, setVsCodeLmModels] = useState<vscodemodels.LanguageModelChatSelector[]>([])
 	const { apiConfiguration } = useExtensionState()
-	const { handleFieldChange, handleModeFieldChange } = useApiConfigurationHandlers()
+	const { handleModeFieldChange } = useApiConfigurationHandlers()
 
 	const { vsCodeLmModelSelector } = getModeSpecificFields(apiConfiguration, currentMode)
 
@@ -29,7 +29,6 @@ export const VSCodeLmProvider = ({ currentMode }: VSCodeLmProviderProps) => {
 				setVsCodeLmModels(response.models)
 			}
 		} catch (error) {
-			// biome-ignore lint/suspicious/noConsole: No Logger service available in remote-ui
 			console.error("Failed to fetch VS Code LM models:", error)
 			setVsCodeLmModels([])
 		}

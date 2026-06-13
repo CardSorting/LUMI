@@ -2,9 +2,9 @@ import { AuthState, UserInfo } from "@shared/proto/dietcode/account"
 import { type EmptyRequest, String } from "@shared/proto/dietcode/common"
 import { DietCodeEnv } from "@/config"
 import { clearGooglePersonalOnboardingCache } from "@/core/api/providers/google-personal"
-import { Controller } from "@/core/controller"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { setWelcomeViewCompleted } from "@/core/controller/state/setWelcomeViewCompleted"
+import type { IController as Controller } from "@/core/controller/types"
 import { HostProvider } from "@/hosts/host-provider"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
@@ -15,57 +15,18 @@ import { featureFlagsService } from "../feature-flags"
 import { DietCodeAuthProvider } from "./providers/DietCodeAuthProvider"
 import { GoogleAuthProvider } from "./providers/GoogleAuthProvider"
 import { IAuthProvider } from "./providers/IAuthProvider"
-import { LogoutReason } from "./types"
+import {
+	type DietCodeAccountOrganization,
+	type DietCodeAccountUserInfo,
+	type DietCodeAuthInfo,
+	LogoutReason,
+	type ServiceConfig,
+} from "./types"
 
-export type ServiceConfig = {
-	URI?: string
-	[key: string]: any
-}
-
-export interface DietCodeAuthInfo {
-	/**
-	 * accessToken
-	 */
-	idToken: string
-	/**
-	 * Short-lived refresh token
-	 */
-	refreshToken?: string
-	/**
-	 * Access token expiration time
-	 * When expired, the access token needs to be refreshed using the refresh token.
-	 */
-	expiresAt?: number
-	userInfo: DietCodeAccountUserInfo
-	provider: string
-	startedAt?: number
-	lastRefreshedAt?: number
-	rotationCount?: number
-}
-
-export interface DietCodeAccountUserInfo {
-	createdAt: string
-	displayName: string
-	email: string
-	id: string
-	organizations: DietCodeAccountOrganization[]
-	/**
-	 * DietCode app base URL, used for webview UI and other client-side operations
-	 */
-	appBaseUrl?: string
-	/**
-	 * WorkOS IDP ID if user logged in via SSO
-	 */
-	subject?: string
-}
-
-export interface DietCodeAccountOrganization {
-	active: boolean
-	memberId: string
-	name: string
-	organizationId: string
-	roles: string[]
-}
+// Re-export the auth data contracts for backward compatibility.
+// Canonical definitions live in ./types (a leaf module) to break the
+// telemetry→auth→controller cycle.
+export type { DietCodeAccountOrganization, DietCodeAccountUserInfo, DietCodeAuthInfo, ServiceConfig }
 
 export class AuthService {
 	protected static instance: AuthService | null = null
@@ -445,7 +406,12 @@ export class AuthService {
 		}
 		// Register the cleanup function with the request registry if we have a requestId
 		if (requestId) {
-			getRequestRegistry().registerRequest(requestId, cleanup, { type: "authStatusUpdate_subscription" }, responseStream)
+			getRequestRegistry().registerRequest(
+				requestId,
+				cleanup,
+				{ type: "authStatusUpdate_subscription" },
+				responseStream as unknown as StreamingResponseHandler,
+			)
 		}
 
 		// Send the current authentication status immediately

@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { ensureCacheDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import type { ModelInfo } from "@shared/api"
 import axios from "axios"
@@ -16,7 +17,6 @@ import {
 } from "@/shared/api"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from ".."
 
 type OpenRouterSupportedParams =
 	| "frequency_penalty"
@@ -71,7 +71,7 @@ interface OpenRouterRawModelInfo {
 		input_cache_write: string
 	} | null
 	supports_global_endpoint: boolean | null
-	tiers: any[] | null
+	tiers: unknown[] | null
 	supported_parameters?: OpenRouterSupportedParams[] | null
 }
 
@@ -117,9 +117,10 @@ async function fetchAndCacheModels(controller: Controller): Promise<Record<strin
 
 		if (response.data?.data) {
 			const rawModels = response.data.data
-			const parsePrice = (price: any) => {
-				if (price) {
-					return Number.parseFloat(price) * 1_000_000
+			const parsePrice = (price: unknown) => {
+				if (price && (typeof price === "string" || typeof price === "number")) {
+					const num = typeof price === "number" ? price : Number.parseFloat(price)
+					return Number.isNaN(num) ? undefined : num * 1_000_000
 				}
 				return undefined
 			}
@@ -141,7 +142,7 @@ async function fetchAndCacheModels(controller: Controller): Promise<Record<strin
 					// to ensure it has a valid thinkingConfig that lets the application know thinking is supported.
 					thinkingConfig: supportThinking ? { maxBudget: ANTHROPIC_MAX_THINKING_BUDGET } : undefined,
 					supportsGlobalEndpoint: rawModel.supports_global_endpoint ?? undefined,
-					tiers: rawModel.tiers ?? undefined,
+					tiers: (rawModel.tiers as ModelInfo["tiers"]) ?? undefined,
 				}
 
 				switch (rawModel.id) {

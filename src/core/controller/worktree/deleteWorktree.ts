@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { DeleteWorktreeRequest, WorktreeResult } from "@shared/proto/dietcode/worktree"
 import { deleteWorktree as deleteWorktreeUtil } from "@utils/git-worktree"
 import { getWorkspacePath } from "@utils/path"
@@ -7,7 +8,6 @@ import simpleGit from "simple-git"
 import { HostProvider } from "@/hosts/host-provider"
 import { hashWorkingDir } from "@/integrations/checkpoints/CheckpointUtils"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Deletes an existing git worktree

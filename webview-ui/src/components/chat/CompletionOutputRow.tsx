@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { CopyButton } from "../common/CopyButton"
 import SuccessButton from "../common/SuccessButton"
-import { QuoteButtonState } from "./ChatRow"
+import { QuoteButtonState } from "./chat-types"
 import { MarkdownRow } from "./MarkdownRow"
 import QuoteButton from "./QuoteButton"
 

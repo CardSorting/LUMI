@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { getFileMentionFromPath } from "@/core/mentions"
 import { singleFileDiagnosticsToProblemsString } from "@/integrations/diagnostics"
 import { telemetryService } from "@/services/telemetry"
 import { CommandContext, Empty } from "@/shared/proto/index.dietcode"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from "../index"
 import { sendAddToInputEvent } from "../ui/subscribeToAddToInput"
 
 // 'Add to DietCode' context menu in editor and code action

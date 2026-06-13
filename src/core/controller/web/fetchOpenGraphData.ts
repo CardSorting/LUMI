@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { OpenGraphData } from "@shared/proto/dietcode/web"
 import { Logger } from "@/shared/services/Logger"
 import { fetchOpenGraphData as fetchOGData } from "../../../integrations/misc/link-preview"
 import { convertDomainOpenGraphDataToProto } from "../../../shared/proto-conversions/web/open-graph-conversion"
-import { Controller } from ".."
 
 /**
  * Fetches Open Graph metadata from a URL

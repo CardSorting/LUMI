@@ -3,10 +3,10 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { DropdownContainer, ModelSelector } from "../common/ModelSelector"
+import { DROPDOWN_Z_INDEX } from "../constants"
 import { getModeSpecificFields, normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
 
@@ -58,10 +58,10 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 					<ModelSelector
 						label="Model"
 						models={xaiModels}
-						onChange={(e: any) =>
+						onChange={(e) =>
 							handleModeFieldChange(
 								{ plan: "planModeApiModelId", act: "actModeApiModelId" },
-								e.target.value,
+								(e.target as HTMLSelectElement).value,
 								currentMode,
 							)
 						}
@@ -72,8 +72,8 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 						<>
 							<VSCodeCheckbox
 								checked={reasoningEffortSelected}
-								onChange={(e: any) => {
-									const isChecked = e.target.checked === true
+								onChange={(e) => {
+									const isChecked = (e.target as HTMLInputElement).checked === true
 									setReasoningEffortSelected(isChecked)
 									if (!isChecked) {
 										handleModeFieldChange(
@@ -95,10 +95,10 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 									<DropdownContainer className="dropdown-container" zIndex={DROPDOWN_Z_INDEX - 100}>
 										<VSCodeDropdown
 											id="reasoning-effort-dropdown"
-											onChange={(e: any) => {
+											onChange={(e) => {
 												handleModeFieldChange(
 													{ plan: "planModeReasoningEffort", act: "actModeReasoningEffort" },
-													e.target.value,
+													(e.target as HTMLSelectElement).value,
 													currentMode,
 												)
 											}}

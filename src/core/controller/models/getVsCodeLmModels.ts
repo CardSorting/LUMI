@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { VsCodeLmModelsArray } from "@shared/proto/dietcode/models"
 import * as vscode from "vscode"
 import { Logger } from "@/shared/services/Logger"
 import { convertVsCodeNativeModelsToProtoModels } from "../../../shared/proto-conversions/models/vscode-lm-models-conversion"
-import { Controller } from ".."
 
 /**
  * Fetches available models from VS Code LM API

@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import { String } from "@shared/proto/dietcode/common"
 import { PlanActMode } from "@shared/proto/dietcode/state"
 import { NewTaskRequest } from "@shared/proto/dietcode/task"
 import { Settings } from "@shared/storage/state-keys"
 import { convertProtoToApiProvider } from "@/shared/proto-conversions/models/api-configuration-conversion"
 import { DEFAULT_BROWSER_SETTINGS } from "../../../shared/BrowserSettings"
-import { Controller } from ".."
 import { normalizeOpenaiReasoningEffort } from "../state/reasoningEffort"
 
 /**

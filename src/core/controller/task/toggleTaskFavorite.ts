@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { TaskFavoriteRequest } from "@shared/proto/dietcode/task"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from "../"
 
 export async function toggleTaskFavorite(controller: Controller, request: TaskFavoriteRequest): Promise<Empty> {
 	if (!request.taskId || request.isFavorited === undefined) {

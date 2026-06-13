@@ -1,5 +1,5 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, Int64Request } from "@shared/proto/dietcode/common"
-import { Controller } from ".."
 
 /**
  * Updates the CLI banner version to hide it

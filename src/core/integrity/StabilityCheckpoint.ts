@@ -1,5 +1,5 @@
 import { SafeNumber } from "../../shared/utils/SafeNumber"
-import { SpiderSnapshot } from "../policy/spider/SpiderEngine.js"
+import { SpiderSnapshot } from "../policy/spider/SpiderEngine"
 
 /**
  * StabilityCheckpoint: The architectural safety net.

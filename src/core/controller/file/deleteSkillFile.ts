@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { DeleteSkillRequest, SkillsToggles } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import path from "path"
 import { Logger } from "@/shared/services/Logger"
 import { fileExistsAtPath } from "@/utils/fs"
-import { Controller } from ".."
 
 /**
  * Deletes an existing skill directory

@@ -1,9 +1,8 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import type { ToolResponse } from "../../index"
-import type { IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
+import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
 
 export class CognitiveMemoryForecastHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_FORECAST

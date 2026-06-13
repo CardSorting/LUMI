@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, it } from "mocha"
 import * as sinon from "sinon"
 import { Controller } from "@/core/controller"
 import { handleGrpcRequest } from "@/core/controller/grpc-handler"
-import { GrpcRecorder } from "@/core/controller/grpc-recorder/grpc-recorder"
+import { GrpcRecorderBuilder } from "@/core/controller/grpc-recorder/grpc-recorder.builder"
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import type { GrpcRequest } from "@/shared/WebviewMessage"
 
@@ -29,7 +29,7 @@ describe("GrpcHandler Recording Middleware", () => {
 			build: sinon.stub().returns(recorderStub),
 		}
 
-		sinon.stub(GrpcRecorder, "builder").returns(builderStub)
+		sinon.stub(GrpcRecorderBuilder, "getRecorder").returns(recorderStub)
 		_consoleWarnStub = sinon.stub(console, "warn")
 		mockController = sinon.createStubInstance(Controller)
 		mockPostMessage = sinon.stub().resolves(true)

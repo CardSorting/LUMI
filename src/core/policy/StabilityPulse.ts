@@ -3,11 +3,11 @@
  */
 
 import * as fs from "fs/promises"
-import { RefactorHealer } from "../task/tools/RefactorHealer.js"
-import { IntegrityOptimizer, OptimizationOpportunity } from "./IntegrityOptimizer.js"
-import { DecompositionPlan, ModuleDecomposer } from "./ModuleDecomposer.js"
-import { RefactoringSuggestion, SpiderRefactorer } from "./SpiderRefactorer.js"
-import { SpiderEngine } from "./spider/SpiderEngine.js"
+import { RefactorHealer } from "../task/tools/RefactorHealer"
+import { IntegrityOptimizer, OptimizationOpportunity } from "./IntegrityOptimizer"
+import { DecompositionPlan, ModuleDecomposer } from "./ModuleDecomposer"
+import { RefactoringSuggestion, SpiderRefactorer } from "./SpiderRefactorer"
+import { SpiderEngine } from "./spider/SpiderEngine"
 
 export interface PulseReport {
 	timestamp: string

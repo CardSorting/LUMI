@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { WorktreeList } from "@shared/proto/dietcode/worktree"
 import { getGitRootPath, listWorktrees as listWorktreesUtil } from "@utils/git-worktree"
 import { arePathsEqual, getWorkspacePath } from "@utils/path"
 import { HostProvider } from "@/hosts/host-provider"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Lists all git worktrees in the current repository

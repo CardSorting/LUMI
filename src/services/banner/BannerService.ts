@@ -1,13 +1,12 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { Banner, BannerAction, BannerRules, BannersResponse } from "@shared/DietCodeBanner"
 import { BannerActionType, type BannerCardData } from "@shared/dietcode/banner"
 import { DietCodeEnv } from "@/config"
-import { Controller } from "@/core/controller"
 import { StateManager } from "@/core/storage/StateManager"
 import { HostInfo, HostRegistryInfo } from "@/registry"
 import { fetch } from "@/shared/net"
 import { FeatureFlag } from "@/shared/services/feature-flags/feature-flags"
 import { Logger } from "@/shared/services/Logger"
-import { AuthService } from "../auth/AuthService"
 import { buildBasicDietCodeHeaders } from "../EnvUtils"
 import { featureFlagsService } from "../feature-flags"
 
@@ -292,6 +291,7 @@ export class BannerService {
 				"Content-Type": "application/json",
 				...(await buildBasicDietCodeHeaders()),
 			}
+			const { AuthService } = await import("../auth/AuthService")
 			const authToken = await AuthService.getInstance().getAuthToken()
 			if (authToken) {
 				headers.Authorization = `Bearer ${authToken}`

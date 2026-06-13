@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { CopyButton } from "../common/CopyButton"
 import SuccessButton from "../common/SuccessButton"
-import { QuoteButtonState } from "./ChatRow"
+import { QuoteButtonState } from "./chat-types"
 import { MarkdownRow } from "./MarkdownRow"
 import QuoteButton from "./QuoteButton"
 
@@ -98,7 +98,6 @@ const CompletionOutputActionRow = memo(
 							Int64Request.create({
 								value: messageTs,
 							}),
-							// biome-ignore lint/suspicious/noConsole: No Logger service available in remote-ui
 						).catch((err) => console.error("Failed to show task completion view changes:", err))
 					}}
 					style={{
@@ -118,7 +117,6 @@ const CompletionOutputActionRow = memo(
 								metadata: {},
 								messageTs,
 							}).catch((err) => {
-								// biome-ignore lint/suspicious/noConsole: No Logger service available in remote-ui
 								console.error("Failed to explain changes:", err)
 								setExplainChangesDisabled(false)
 							})

@@ -28,7 +28,7 @@ import {
 	writeTaskSettingsToStorage,
 } from "./disk"
 import { STATE_MANAGER_NOT_INITIALIZED } from "./error-messages"
-import { filterAllowedRemoteConfigFields } from "./remote-config/utils"
+import { filterAllowedRemoteConfigFields } from "./remote-config/field-filter"
 import { readGlobalStateFromStorage, readSecretsFromStorage, readWorkspaceStateFromStorage } from "./utils/state-helpers"
 export interface PersistenceErrorEvent {
 	error: Error
@@ -235,7 +235,7 @@ export class StateManager {
 		// Update cache in one go
 		this.remoteConfigCache = {
 			...this.remoteConfigCache,
-			...filterAllowedRemoteConfigFields(updates),
+			...filterAllowedRemoteConfigFields(updates, this.getRemoteConfigSettings().remoteConfiguredProviders),
 		}
 	}
 
@@ -610,10 +610,10 @@ export class StateManager {
 
 				if (isSecretKey(key)) {
 					// This is a secret key
-					acc.secretsUpdates[key as keyof Secrets] = value as any
+					;(acc.secretsUpdates as Record<string, unknown>)[key] = value
 				} else if (isSettingsKey(key)) {
 					// This is a settings key
-					acc.settingsUpdates[key as keyof Settings] = value as any
+					;(acc.settingsUpdates as Record<string, unknown>)[key] = value
 				}
 
 				return acc
@@ -841,7 +841,7 @@ export class StateManager {
 	 */
 	private async persistGlobalStateBatch(keys: Set<GlobalStateAndSettingsKey>): Promise<void> {
 		// Separate taskHistory (goes to its own file) from regular global state
-		const regularEntries: Record<string, any> = {}
+		const regularEntries: Record<string, unknown> = {}
 
 		for (const key of keys) {
 			if (key === "taskHistory") {
@@ -871,14 +871,14 @@ export class StateManager {
 				if (keys.size === 0) {
 					return Promise.resolve()
 				}
-				const settingsToWrite: Record<string, any> = {}
+				const settingsToWrite: Record<string, unknown> = {}
 				for (const key of keys) {
 					const value = this.taskStateCache[key]
 					if (value !== undefined) {
 						settingsToWrite[key] = value
 					}
 				}
-				return writeTaskSettingsToStorage(taskId, settingsToWrite)
+				return writeTaskSettingsToStorage(taskId, settingsToWrite as Partial<Settings>)
 			}),
 		)
 	}
@@ -901,7 +901,7 @@ export class StateManager {
 	 * Uses setBatch for efficiency (single disk write).
 	 */
 	private async persistWorkspaceStateBatch(keys: Set<LocalStateKey>): Promise<void> {
-		const entries: Record<string, any> = {}
+		const entries: Record<string, unknown> = {}
 		for (const key of keys) {
 			entries[key] = this.workspaceStateCache[key]
 		}

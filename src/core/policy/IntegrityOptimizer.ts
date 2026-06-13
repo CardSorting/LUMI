@@ -1,8 +1,8 @@
 import path from "node:path"
 import { Logger } from "../../shared/services/Logger"
 import { LayerConfig, StabilityPolicy } from "./StabilityPolicy"
-import { SpiderEngine } from "./spider/SpiderEngine.js"
-import { Layer, SpiderNode } from "./spider/types.js"
+import { SpiderEngine } from "./spider/SpiderEngine"
+import { Layer, SpiderNode } from "./spider/types"
 
 export interface OptimizationOpportunity {
 	file: string

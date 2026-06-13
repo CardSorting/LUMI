@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { openFile as openFileIntegration } from "@integrations/misc/open-file"
 import { telemetryService } from "../../../services/telemetry"
 import { Empty, StringRequest } from "../../../shared/proto/dietcode/common"
 import { ensureFocusChainFile, extractFocusChainListFromText } from "../../task/focus-chain/file-utils"
-import { Controller } from ".."
 
 /**
  * Opens or creates a focus chain checklist markdown file for editing

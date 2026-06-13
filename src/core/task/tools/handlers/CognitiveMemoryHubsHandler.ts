@@ -1,7 +1,7 @@
 import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
-import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
+import { IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryHubsHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_HUBS

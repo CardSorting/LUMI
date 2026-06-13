@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { StringRequest } from "@shared/proto/dietcode/common"
 import { Empty } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
 import { openUrlInBrowser } from "../../../utils/github-url-utils"
-import type { Controller } from "../index"
 
 /**
  * Opens a URL in the default browser

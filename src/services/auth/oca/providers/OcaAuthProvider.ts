@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { OcaAuthState, OcaUserInfo } from "@shared/proto/dietcode/oca_account"
 import axios from "axios"
 import { jwtDecode } from "jwt-decode"
-import { Controller } from "@/core/controller"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import type { OcaConfig } from "../utils/types"

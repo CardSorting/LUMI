@@ -1,10 +1,10 @@
-import { Controller } from "@core/controller"
+import type { IController as Controller } from "@core/controller/types"
 import { serviceHandlers } from "@generated/hosts/vscode/protobus-services"
 import { GrpcCancel, GrpcRequest } from "@shared/WebviewMessage"
 import { expect } from "chai"
 import { afterEach, beforeEach, describe, it } from "mocha"
 import * as sinon from "sinon"
-import { getRequestRegistry, handleGrpcRequest, handleGrpcRequestCancel } from "./grpc-handler"
+import { getRequestRegistry, handleGrpcRequest, handleGrpcRequestCancel, type StreamingResponseHandler } from "./grpc-handler"
 
 describe("grpc-handler", () => {
 	let sandbox: sinon.SinonSandbox
@@ -23,7 +23,7 @@ describe("grpc-handler", () => {
 		sandbox = sinon.createSandbox()
 
 		// Create a mock controller
-		mockController = {} as any
+		mockController = {} as unknown as Controller
 		mockPostMessageToWebview = sandbox.stub().resolves()
 
 		// Create mock service handlers
@@ -149,7 +149,12 @@ describe("grpc-handler", () => {
 				// Reset the mock and set up the handler using callsFake
 				mockStreamingHandler.reset()
 				mockStreamingHandler.callsFake(
-					async (_controller: any, _message: any, responseStream: any, _requestId: string) => {
+					async (
+						_controller: unknown,
+						_message: unknown,
+						responseStream: StreamingResponseHandler,
+						_requestId: string,
+					) => {
 						// Simulate streaming multiple messages
 						await responseStream({ value: 1 }, false, 0)
 						await responseStream({ value: 2 }, false, 1)
@@ -239,7 +244,12 @@ describe("grpc-handler", () => {
 				// Reset the mock and set up the handler to throw an error after being called
 				mockStreamingHandler.reset()
 				mockStreamingHandler.callsFake(
-					async (_controller: any, _message: any, responseStream: any, _requestId: string) => {
+					async (
+						_controller: unknown,
+						_message: unknown,
+						responseStream: StreamingResponseHandler,
+						_requestId: string,
+					) => {
 						// Send first message successfully
 						await responseStream({ value: "first" }, false, 0)
 						// Throw an error
@@ -372,10 +382,12 @@ describe("grpc-handler", () => {
 			it("should handle concurrent requests", async () => {
 				// Set up handlers
 				mockUnaryHandler.resolves({ result: "unary" })
-				mockStreamingHandler.callsFake(async (_controller: any, _message: any, responseStream: any) => {
-					await responseStream({ value: "stream1" }, false, 0)
-					await responseStream({ value: "stream2" }, true, 1)
-				})
+				mockStreamingHandler.callsFake(
+					async (_controller: unknown, _message: unknown, responseStream: StreamingResponseHandler) => {
+						await responseStream({ value: "stream1" }, false, 0)
+						await responseStream({ value: "stream2" }, true, 1)
+					},
+				)
 
 				// Send multiple requests concurrently
 				const requests = [

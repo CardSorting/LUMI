@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { ensureCacheDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import type { ModelInfo } from "@shared/api"
 import { fileExistsAtPath } from "@utils/fs"
@@ -20,7 +21,6 @@ import {
 import { getAxiosSettings } from "@/shared/net"
 import { FeatureFlag } from "@/shared/services/feature-flags/feature-flags"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from ".."
 import { refreshOpenRouterModels } from "./refreshOpenRouterModels"
 
 type DietCodeSupportedParams =
@@ -75,7 +75,7 @@ interface DietCodeRawModelInfo {
 		input_cache_write?: string
 	} | null
 	supports_global_endpoint?: boolean | null
-	tiers?: any[] | null
+	tiers?: unknown[] | null
 	supported_parameters?: DietCodeSupportedParams[] | null
 }
 
@@ -137,7 +137,7 @@ async function fetchAndCacheDietCodeModels(): Promise<Record<string, ModelInfo>>
 	let models: Record<string, ModelInfo> = {}
 	try {
 		const rawModels = await fetchRawDietCodeModels()
-		const parsePrice = (price: any) => {
+		const parsePrice = (price: unknown) => {
 			if (price === undefined || price === null || price === "") {
 				return undefined
 			}

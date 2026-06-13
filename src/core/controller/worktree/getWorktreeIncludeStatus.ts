@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { WorktreeIncludeStatus } from "@shared/proto/dietcode/worktree"
 import { getWorkspacePath } from "@utils/path"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { Controller } from ".."
 
 /**
  * Gets the status of .worktreeinclude file and .gitignore contents

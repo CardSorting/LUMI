@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import axios from "axios"
 import { getAxiosSettings } from "@/shared/net"
 import { SapAiCoreModelDeployment, SapAiCoreModelsRequest, SapAiCoreModelsResponse } from "@/shared/proto/dietcode/models"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 interface Token {
 	access_token: string
@@ -42,6 +42,22 @@ async function getToken(clientId: string, clientSecret: string, tokenUrl: string
 	return token
 }
 
+interface RawDeployment {
+	id: string
+	targetStatus?: string
+	scenarioId?: string
+	details?: {
+		resources?: {
+			backend_details?: {
+				model?: {
+					name?: string
+					version?: string
+				}
+			}
+		}
+	}
+}
+
 /**
  * Fetches deployments and orchestration availability from SAP AI Core deployments
  * @param accessToken Access token for authentication
@@ -69,17 +85,19 @@ async function fetchAiCoreDeploymentsAndOrchestration(
 
 	try {
 		const response = await axios.get(url, { headers, ...getAxiosSettings() })
-		const allDeployments = response.data.resources
+		const allDeployments = (response.data.resources || []) as RawDeployment[]
 
 		// Filter running deployments
-		const runningDeployments = allDeployments.filter((deployment: any) => deployment.targetStatus === "RUNNING")
+		const runningDeployments = allDeployments.filter((deployment: RawDeployment) => deployment.targetStatus === "RUNNING")
 
 		// Check for orchestration deployment
-		const orchestrationAvailable = runningDeployments.some((deployment: any) => deployment.scenarioId === "orchestration")
+		const orchestrationAvailable = runningDeployments.some(
+			(deployment: RawDeployment) => deployment.scenarioId === "orchestration",
+		)
 
 		// Extract deployments with model names and IDs
 		const deployments = runningDeployments
-			.map((deployment: any) => {
+			.map((deployment: RawDeployment) => {
 				const model = deployment.details?.resources?.backend_details?.model
 				if (!model?.name || !model?.version) {
 					return null // Skip this row
@@ -89,7 +107,10 @@ async function fetchAiCoreDeploymentsAndOrchestration(
 					name: `${model.name}:${model.version}`,
 				}
 			})
-			.filter((deployment: any) => deployment !== null)
+			.filter(
+				(deployment: { id: string; name: string } | null): deployment is { id: string; name: string } =>
+					deployment !== null,
+			)
 
 		return { deployments, orchestrationAvailable }
 	} catch (error) {

@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Boolean } from "@shared/proto/dietcode/common"
 import { isDietCodeCliInstalled } from "@/utils/cli-detector"
-import { Controller } from ".."
 
 /**
  * Check if the DietCode CLI is installed

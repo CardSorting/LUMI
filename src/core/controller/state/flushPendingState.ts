@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Empty } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Flush all pending state changes immediately to disk

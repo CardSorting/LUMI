@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import { openExternal } from "@utils/env"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Opens a URL in the user's default browser

@@ -2,7 +2,7 @@ import * as crypto from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { Logger } from "@/shared/services/Logger"
-import { SEVEN_DAYS_MS } from "./worker"
+import { SEVEN_DAYS_MS } from "./constants"
 
 /**
  * Sync queue item status.

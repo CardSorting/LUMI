@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { UserCreditsData } from "@shared/proto/dietcode/account"
 import type { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Handles fetching all user credits data (balance, usage, payments)

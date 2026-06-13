@@ -1,6 +1,6 @@
 import * as path from "path"
 import { ModuleDecomposer } from "./ModuleDecomposer"
-import { SpiderEngine } from "./spider/SpiderEngine.js"
+import { SpiderEngine } from "./spider/SpiderEngine"
 
 export interface AxiomViolation {
 	axiom: string
@@ -18,8 +18,6 @@ export class SemanticAxiomEngine {
 	private readonly SIMPLICITY_THRESHOLD = 3000 // V270: Massively expanded limit (was 1500)
 	private readonly PREEMPTIVE_THRESHOLD = 2500 // V270: Proactive warning threshold
 	private readonly decomposer = new ModuleDecomposer()
-
-	constructor() {}
 
 	/**
 	 * Validates a file's logic against defined architectural axioms.

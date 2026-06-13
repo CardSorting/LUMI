@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { DeleteHookRequest, DeleteHookResponse } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import { HookDiscoveryCache } from "../../hooks/HookDiscoveryCache"
 import { resolveExistingHookPath, resolveHooksDirectory } from "../../hooks/utils"
-import { Controller } from ".."
 import { refreshHooks } from "./refreshHooks"
 
 export async function deleteHook(

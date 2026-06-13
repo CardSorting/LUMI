@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { StateManager } from "@core/storage/StateManager"
 import { openFile as openFileIntegration } from "@integrations/misc/open-file"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
@@ -5,7 +6,6 @@ import { REMOTE_URI_SCHEME } from "@shared/remote-config/constants"
 import { writeFile } from "@utils/fs"
 import * as os from "os"
 import * as path from "path"
-import { Controller } from ".."
 
 /**
  * Opens a file in the editor

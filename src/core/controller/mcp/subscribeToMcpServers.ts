@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { McpServers } from "@shared/proto/dietcode/mcp"
 import { convertMcpServersToProtoMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
-import { Controller } from "../index"
 
 // Keep track of active subscriptions
 const activeMcpServersSubscriptions = new Set<StreamingResponseHandler<McpServers>>()
@@ -31,7 +31,12 @@ export async function subscribeToMcpServers(
 
 	// Register the cleanup function with the request registry if we have a requestId
 	if (requestId) {
-		getRequestRegistry().registerRequest(requestId, cleanup, { type: "mcpServers_subscription" }, responseStream)
+		getRequestRegistry().registerRequest(
+			requestId,
+			cleanup,
+			{ type: "mcpServers_subscription" },
+			responseStream as unknown as StreamingResponseHandler,
+		)
 	}
 
 	// Send initial state if available

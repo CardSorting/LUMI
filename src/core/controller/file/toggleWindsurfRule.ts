@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { ToggleWindsurfRuleRequest } from "@shared/proto/dietcode/file"
 import { DietCodeRulesToggles } from "@shared/proto/dietcode/file"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Toggles a Windsurf rule (enable or disable)

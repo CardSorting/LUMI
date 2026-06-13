@@ -13,7 +13,6 @@ import * as path from "node:path"
 import { HostProvider } from "@/hosts/host-provider"
 import { Logger } from "@/shared/services/Logger"
 import { blobStorage } from "../../storage/DietCodeBlobStorage"
-import { backfillTasks } from "./backfill"
 import { SyncQueue } from "./queue"
 import type { SyncWorkerOptions } from "./worker"
 import { disposeSyncWorker, initSyncWorker, SyncWorker } from "./worker"
@@ -76,7 +75,11 @@ function init(options?: SyncWorkerOptions): SyncWorker | null {
 	worker.start()
 
 	if (options.backfillEnabled) {
-		backfillTasks().catch((err) => Logger.error("Backfill tasks failed:", err))
+		// Lazy import to break the sync.ts ↔ backfill.ts cycle (backfill imports
+		// the syncWorker singleton from here). Fire-and-forget at a true runtime seam.
+		import("./backfill")
+			.then(({ backfillTasks }) => backfillTasks())
+			.catch((err) => Logger.error("Backfill tasks failed:", err))
 	}
 
 	return worker

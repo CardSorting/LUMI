@@ -1,8 +1,8 @@
 import * as path from "path"
 import * as ts from "typescript"
-import { Logger } from "../../../shared/services/Logger.js"
-import { PathResolver } from "./PathResolver.js"
-import { SpiderEntropyReport, SpiderNode, SpiderSnapshot } from "./types.js"
+import { Logger } from "../../../shared/services/Logger"
+import { PathResolver } from "./PathResolver"
+import { SpiderEntropyReport, SpiderNode, SpiderSnapshot } from "./types"
 
 export class MetricsEngine {
 	constructor(
@@ -221,7 +221,6 @@ export class MetricsEngine {
 	 */
 	public calculatePrimitiveObsession(node: SpiderNode): number {
 		const any = node.anyDensity || 0
-		const symbolDensity = node.symbolDensity || 0
 		// Heuristic: If symbol density is high but complexity is also high, and anyDensity is > 0.1
 		if (any > 0.2) return any * 1.5
 		return any

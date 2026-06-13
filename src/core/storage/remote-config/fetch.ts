@@ -1,5 +1,5 @@
+import type { IController as Controller } from "@core/controller/types"
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios"
-import { Controller } from "@/core/controller"
 import { buildBasicDietCodeHeaders } from "@/services/EnvUtils"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"

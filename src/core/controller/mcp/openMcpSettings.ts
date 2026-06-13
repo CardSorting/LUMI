@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { openFile as openFileIntegration } from "@integrations/misc/open-file"
 import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
-import { Controller } from ".."
 
 /**
  * Opens the MCP settings file in the editor

@@ -1,6 +1,6 @@
 import { AwsClient } from "aws4fetch"
 import { Logger } from "../services/Logger"
-import type { BlobStoreSettings } from "./DietCodeBlobStorage"
+import type { BlobStoreSettings } from "./blob-store-settings"
 
 export interface StorageAdapter {
 	read(path: string): Promise<string | undefined>

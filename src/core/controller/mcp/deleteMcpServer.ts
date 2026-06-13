@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { McpServers } from "@shared/proto/dietcode/mcp"
 import { Logger } from "@/shared/services/Logger"
 import { convertMcpServersToProtoMcpServers } from "../../../shared/proto-conversions/mcp/mcp-server-conversion"
-import type { Controller } from "../index"
 
 /**
  * Deletes an MCP server

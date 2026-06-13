@@ -1,8 +1,8 @@
 import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
 import { SwarmMutexService } from "../../../swarm/SwarmMutexService"
-import { IToolHandler } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
+import { IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryClaimHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_CLAIM

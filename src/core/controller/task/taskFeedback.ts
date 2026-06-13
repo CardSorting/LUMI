@@ -1,7 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
+import type { TaskFeedbackType } from "@shared/WebviewMessage"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Handles task feedback submission (thumbs up/down)
@@ -17,7 +18,7 @@ export async function taskFeedback(controller: Controller, request: StringReques
 
 	try {
 		if (controller.task?.ulid) {
-			telemetryService.captureTaskFeedback(controller.task.ulid, request.value as any)
+			telemetryService.captureTaskFeedback(controller.task.ulid, request.value as TaskFeedbackType)
 		} else {
 			Logger.warn("taskFeedback: No active task to receive feedback")
 		}

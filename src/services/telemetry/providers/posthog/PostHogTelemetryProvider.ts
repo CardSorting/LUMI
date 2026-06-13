@@ -7,7 +7,7 @@ import { fetch } from "@/shared/net"
 import { Setting } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
 import { posthogConfig } from "../../../../shared/services/config/posthog-config"
-import type { DietCodeAccountUserInfo } from "../../../auth/AuthService"
+import type { DietCodeAccountUserInfo } from "../../../auth/types"
 import type { ITelemetryProvider, TelemetryProperties, TelemetrySettings } from "../ITelemetryProvider"
 /**
  * PostHog implementation of the telemetry provider interface

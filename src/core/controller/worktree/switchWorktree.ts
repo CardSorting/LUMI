@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { SwitchWorktreeRequest, WorktreeResult } from "@shared/proto/dietcode/worktree"
 import { HostProvider } from "@/hosts/host-provider"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Switches to a different worktree by opening it in VS Code

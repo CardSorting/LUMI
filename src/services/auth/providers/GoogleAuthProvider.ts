@@ -1,12 +1,11 @@
+import type { IController as Controller } from "@core/controller/types"
 import * as crypto from "crypto"
 import { type Credentials, OAuth2Client } from "google-auth-library"
-
-import { Controller } from "@/core/controller"
 import { AuthHandler } from "@/hosts/external/AuthHandler"
 import { Logger } from "@/shared/services/Logger"
 import { AuthInvalidGrantError, AuthInvalidTokenError } from "../../error/DietCodeError"
-import { type DietCodeAccountUserInfo, type DietCodeAuthInfo } from "../AuthService"
 import { parseJwtPayload } from "../oca/utils/utils"
+import { type DietCodeAccountUserInfo, type DietCodeAuthInfo } from "../types"
 import { IAuthProvider } from "./IAuthProvider"
 
 interface GoogleJwtPayload {

@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { discoverChromeInstances } from "@services/browser/BrowserDiscovery"
 import { BrowserSession } from "@services/browser/BrowserSession"
 import { BrowserConnection } from "@shared/proto/dietcode/browser"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
-import { Controller } from "../index"
 
 /**
  * Discover Chrome instances

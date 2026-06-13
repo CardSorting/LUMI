@@ -1,5 +1,6 @@
 import { refreshDietCodeRulesToggles } from "@core/context/instructions/user-instructions/dietcode-rules"
 import { createRuleFile as createRuleFileImpl } from "@core/context/instructions/user-instructions/rule-helpers"
+import type { IController as Controller } from "@core/controller/types"
 import { getWorkspaceBasename } from "@core/workspace"
 import { RuleFile, RuleFileRequest } from "@shared/proto/dietcode/file"
 import { refreshWorkflowToggles } from "@/core/context/instructions/user-instructions/workflows"
@@ -7,7 +8,6 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { getCwd, getDesktopDir } from "@/utils/path"
-import { Controller } from ".."
 import { openFile } from "./openFile"
 
 /**

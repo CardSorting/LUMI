@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { EmptyRequest, String as ProtoString } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, type StreamingResponseHandler } from "../grpc-handler"
-import type { Controller } from "../index"
 
 // Keep track of active addToInput subscriptions
 const activeAddToInputSubscriptions = new Set<StreamingResponseHandler<ProtoString>>()

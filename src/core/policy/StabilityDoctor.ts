@@ -2,9 +2,9 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { Logger } from "../../shared/services/Logger"
 import { SafeNumber } from "../../shared/utils/SafeNumber"
-import { IntegrityOptimizer, OptimizationOpportunity } from "./IntegrityOptimizer.js"
+import { IntegrityOptimizer, OptimizationOpportunity } from "./IntegrityOptimizer"
 import { StabilityPolicy } from "./StabilityPolicy"
-import { SpiderEngine } from "./spider/SpiderEngine.js"
+import { SpiderEngine } from "./spider/SpiderEngine"
 
 export interface DoctorReport {
 	buildHealth: number
@@ -54,7 +54,7 @@ export class StabilityDoctor {
 	 */
 	public async diagnose(
 		engine: SpiderEngine,
-		options: DiagnoseOptions = {},
+		_options: DiagnoseOptions = {},
 		monitor?: import("../integrity/StabilityMonitor").StabilityMonitor,
 	): Promise<DoctorReport> {
 		const structuralViolations = engine.getViolations(monitor)

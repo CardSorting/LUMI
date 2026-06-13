@@ -2,9 +2,9 @@ import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
 import * as ts from "typescript"
-import { Logger } from "../../../shared/services/Logger.js"
-import { PathResolver } from "./PathResolver.js"
-import { SpiderNode, SpiderSnapshot } from "./types.js"
+import { Logger } from "../../../shared/services/Logger"
+import { PathResolver } from "./PathResolver"
+import { SpiderNode, SpiderSnapshot } from "./types"
 
 export class ForensicEngine {
 	private ghostVerificationCache: Map<string, { hash: string; ghosts: string[]; turn: number }> = new Map()

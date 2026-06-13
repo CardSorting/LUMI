@@ -1,7 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
-import { Logger } from "../../../shared/services/Logger.js"
-import { getLayer, Layer } from "../../../utils/joy-zoning.js"
+import { Logger } from "../../../shared/services/Logger"
+import { getLayer, Layer } from "../../../utils/joy-zoning"
 
 const asNonEmptyString = (value: unknown): string | null => {
 	if (typeof value !== "string") return null
@@ -65,8 +65,8 @@ export class PathResolver {
 	public resolveImportToNodeId(
 		sourcePath: string,
 		specifier: string,
-		nodeIds: Map<string, any> | Set<string>,
-		visited: Set<string> = new Set(),
+		nodeIds: Map<string, unknown> | Set<string>,
+		_visited: Set<string> = new Set(),
 	): string | null {
 		const safeSourcePath = asNonEmptyString(sourcePath)
 		const safeSpecifier = asNonEmptyString(specifier)

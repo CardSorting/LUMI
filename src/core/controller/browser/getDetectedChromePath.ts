@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { ChromePath } from "@shared/proto/dietcode/browser"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
 import { BrowserSession } from "../../../services/browser/BrowserSession"
-import { Controller } from "../index"
 
 /**
  * Get the detected Chrome executable path

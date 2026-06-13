@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { AskResponseRequest } from "@shared/proto/dietcode/task"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeAskResponse } from "../../../shared/WebviewMessage"
-import { Controller } from ".."
 
 /**
  * Handles a response from the webview for a previous ask operation

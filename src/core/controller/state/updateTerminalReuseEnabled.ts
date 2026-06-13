@@ -1,5 +1,5 @@
+import type { IController as Controller } from "@core/controller/types"
 import * as proto from "@/shared/proto"
-import { Controller } from "../index"
 
 export async function updateTerminalReuseEnabled(
 	controller: Controller,

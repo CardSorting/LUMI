@@ -1,9 +1,11 @@
 import { Logger } from "@/shared/services/Logger"
 import { BlobStoreSettings, blobStorage } from "../../storage/DietCodeBlobStorage"
 
+import { SEVEN_DAYS_MS } from "./constants"
 import { SyncQueue, SyncQueueItem } from "./queue"
 
-export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+// Re-export for backward compatibility; canonical home is ./constants.
+export { SEVEN_DAYS_MS }
 
 /**
  * Configuration options for SyncWorker.

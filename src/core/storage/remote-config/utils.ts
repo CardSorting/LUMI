@@ -15,6 +15,7 @@ import { syncWorker } from "@/shared/services/worker/sync"
 import { BlobStoreSettings } from "@/shared/storage"
 import { ensureSettingsDirectoryExists } from "../disk"
 import { StateManager } from "../StateManager"
+import { filterAllowedRemoteConfigFields, isProviderAllowed } from "./field-filter"
 import { syncRemoteMcpServersToSettings } from "./syncRemoteMcpServers"
 
 function accessSettingsToBlobStorage(type: BlobStoreSettings["adapterType"], settings: S3AccessKeySettings): BlobStoreSettings {
@@ -363,31 +364,21 @@ export async function applyRemoteConfig(
 const isProviderValid = (provider?: ApiProvider, remoteConfig?: Partial<RemoteConfigFields>) => {
 	const remoteConfiguredProviders =
 		remoteConfig?.remoteConfiguredProviders ?? StateManager.get().getRemoteConfigSettings().remoteConfiguredProviders
-	if (!remoteConfiguredProviders || !remoteConfiguredProviders.length) {
-		return true
-	}
-
-	return provider && remoteConfiguredProviders.includes(provider)
+	return isProviderAllowed(provider, remoteConfiguredProviders)
 }
 
 /**
- * Receives a config and returns the subset of fields that can be overriden in the cache
+ * Receives a config and returns the subset of fields that can be overriden in the cache.
+ *
+ * @deprecated Canonical, pure implementation lives in ./field-filter. This
+ * wrapper preserves the legacy StateManager-fallback behaviour for existing
+ * callers. Re-exported below for backward compatibility.
  */
-export function filterAllowedRemoteConfigFields(config: Partial<GlobalStateAndSettings>): Partial<GlobalStateAndSettings> {
-	const updatedFields: Partial<GlobalStateAndSettings> = {}
-
-	const actModeApiProvider = config.actModeApiProvider
-	if (isProviderValid(actModeApiProvider)) {
-		updatedFields.actModeApiProvider = actModeApiProvider
-	}
-
-	const planModeApiProvider = config.planModeApiProvider
-	if (isProviderValid(planModeApiProvider)) {
-		updatedFields.planModeApiProvider = planModeApiProvider
-	}
-
-	return updatedFields
+function filterAllowedRemoteConfigFieldsLegacy(config: Partial<GlobalStateAndSettings>): Partial<GlobalStateAndSettings> {
+	return filterAllowedRemoteConfigFields(config, StateManager.get().getRemoteConfigSettings().remoteConfiguredProviders)
 }
+
+export { filterAllowedRemoteConfigFieldsLegacy as filterAllowedRemoteConfigFields }
 
 const canDisableRemoteConfig = (orgId: string) => {
 	// Check if they're an admin/owner

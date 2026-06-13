@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest, String as StringMessage } from "@shared/proto/dietcode/common"
 import { BrowserSession } from "../../../services/browser/BrowserSession"
-import { Controller } from "../index"
 
 /**
  * Relaunch Chrome in debug mode

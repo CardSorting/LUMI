@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { BranchList } from "@shared/proto/dietcode/worktree"
 import { getAvailableBranches as getAvailableBranchesUtil } from "@utils/git-worktree"
 import { getWorkspacePath } from "@utils/path"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Gets available branches for creating worktrees

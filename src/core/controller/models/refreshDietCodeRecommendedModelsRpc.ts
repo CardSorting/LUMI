@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { DietCodeRecommendedModel, DietCodeRecommendedModelsResponse } from "@shared/proto/dietcode/models"
-import type { Controller } from "../index"
 import { refreshDietCodeRecommendedModels } from "./refreshDietCodeRecommendedModels"
 
 export async function refreshDietCodeRecommendedModelsRpc(

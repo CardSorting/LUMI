@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { StringArray, type StringRequest } from "@shared/proto/dietcode/common"
 import { fetch } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from ".."
 
 /**
  * Fetches available models from LM Studio

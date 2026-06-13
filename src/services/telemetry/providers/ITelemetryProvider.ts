@@ -3,7 +3,7 @@
  * Allows switching between different analytics providers (PostHog, etc.)
  */
 
-import type { DietCodeAccountUserInfo } from "../../auth/AuthService"
+import type { DietCodeAccountUserInfo } from "../../auth/types"
 
 /**
  * JSON-serializable primitive types for telemetry properties

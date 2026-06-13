@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, Int64Request } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Shows task completion changes in a diff view

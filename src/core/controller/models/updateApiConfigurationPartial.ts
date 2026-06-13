@@ -1,9 +1,9 @@
 import { buildApiHandler } from "@core/api"
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { UpdateApiConfigurationPartialRequest } from "@shared/proto/dietcode/models"
 import { convertProtoToApiConfiguration } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Updates API configuration with partial values using FieldMask
@@ -37,7 +37,7 @@ export async function updateApiConfigurationPartial(
 		// Apply only the fields specified in the mask
 		const updatedConfig = { ...currentConfig }
 		for (const field of request.updateMask) {
-			;(updatedConfig as Record<string, any>)[field] = (newConfigValues as Record<string, any>)[field]
+			;(updatedConfig as Record<string, unknown>)[field] = (newConfigValues as Record<string, unknown>)[field]
 		}
 
 		// Update storage and task API handler

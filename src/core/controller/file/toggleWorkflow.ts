@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { DietCodeRulesToggles, RuleScope, ToggleWorkflowRequest } from "@shared/proto/dietcode/file"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Toggles a workflow on or off

@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { UpdateApiConfigurationRequest } from "@shared/proto/dietcode/models"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
@@ -10,7 +11,6 @@ import {
 import { OpenaiReasoningEffort } from "@shared/storage/types"
 import { buildApiHandler } from "@/core/api"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Updates API configuration
@@ -35,15 +35,15 @@ export async function updateApiConfigurationProto(
 			// Convert proto ApiProvider enums to native string types
 			planModeApiProvider:
 				protoApiConfiguration.planModeApiProvider !== undefined
-					? convertProtoToApiProvider(protoApiConfiguration.planModeApiProvider!)
+					? convertProtoToApiProvider(protoApiConfiguration.planModeApiProvider)
 					: undefined,
 			actModeApiProvider:
 				protoApiConfiguration.actModeApiProvider !== undefined
-					? convertProtoToApiProvider(protoApiConfiguration.actModeApiProvider!)
+					? convertProtoToApiProvider(protoApiConfiguration.actModeApiProvider)
 					: undefined,
 			embeddingProvider:
 				protoApiConfiguration.embeddingProvider !== undefined
-					? convertProtoToApiProvider(protoApiConfiguration.embeddingProvider!)
+					? convertProtoToApiProvider(protoApiConfiguration.embeddingProvider)
 					: undefined,
 
 			// Convert ModelInfo objects (empty arrays → undefined)

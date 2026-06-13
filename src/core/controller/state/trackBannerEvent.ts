@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { BannerService } from "@/services/banner/BannerService"
 import { Empty } from "@/shared/proto/dietcode/common"
 import type { TrackBannerEventRequest } from "@/shared/proto/dietcode/state"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from ".."
 
 /**
  * Tracks a banner event (e.g., dismiss, click)

@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import { CreateHookRequest, CreateHookResponse } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import path from "path"
 import { HookDiscoveryCache } from "../../hooks/HookDiscoveryCache"
 import { getHookTemplate } from "../../hooks/templates"
 import { isValidHookType, resolveHooksDirectory, VALID_HOOK_TYPES } from "../../hooks/utils"
-import { Controller } from ".."
 import { refreshHooks } from "./refreshHooks"
 
 export async function createHook(

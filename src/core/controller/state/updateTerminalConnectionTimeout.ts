@@ -1,5 +1,5 @@
+import type { IController as Controller } from "@core/controller/types"
 import { UpdateTerminalConnectionTimeoutRequest, UpdateTerminalConnectionTimeoutResponse } from "@shared/proto/dietcode/state"
-import { Controller } from "../index"
 
 export async function updateTerminalConnectionTimeout(
 	controller: Controller,

@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { OpenRouterCompatibleModelInfo, OpenRouterModelInfo } from "@shared/proto/dietcode/models"
 import axios from "axios"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Fetches available models from AIhubmix
@@ -19,8 +19,25 @@ export async function getAihubmixModels(_controller: Controller, _request: Empty
 			Logger.error("Invalid response from AIhubmix API:", response.data)
 			return OpenRouterCompatibleModelInfo.create({ models: {} })
 		}
-		// 原始数据为数组，不能直接复用为 map；需构造独立的 modelsMap
-		const modelsArray = response.data.data as any[]
+		interface AIhubmixModelData {
+			model?: string
+			modalities?: string[]
+			features?: string[]
+			cache_ratio?: number
+			pricing?: {
+				input?: number
+				output?: number
+				cache_write?: number
+				cache_read?: number
+			}
+			max_output?: number
+			context_window?: number
+			desc_en?: string
+			desc?: string
+			thinking_config?: unknown
+			supports_global_endpoint?: boolean
+		}
+		const modelsArray = response.data.data as AIhubmixModelData[]
 		const modelsMap: Record<string, OpenRouterModelInfo> = {}
 
 		for (const modelData of modelsArray) {

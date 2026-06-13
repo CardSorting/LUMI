@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
-import { Controller } from "../index"
 
 // Keep track of active LiteLLM models subscriptions
 const activeLiteLlmModelsSubscriptions = new Set<StreamingResponseHandler<OpenRouterCompatibleModelInfo>>()

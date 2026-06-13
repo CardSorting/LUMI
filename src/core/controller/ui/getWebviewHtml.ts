@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest, String } from "@shared/proto/dietcode/common"
 import { WebviewProvider } from "@/core/webview"
-import type { Controller } from "../index"
 
 /**
  * Returns the HTML content of the webview.

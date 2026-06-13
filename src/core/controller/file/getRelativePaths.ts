@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import { RelativePaths, RelativePathsRequest } from "@shared/proto/dietcode/file"
 import * as path from "path"
 import { URI } from "vscode-uri"
 import { Logger } from "@/shared/services/Logger"
 import { isDirectory } from "@/utils/fs"
 import { asRelativePath } from "@/utils/path"
-import { Controller } from ".."
 
 /**
  * Converts a list of URIs to workspace-relative paths

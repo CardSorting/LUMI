@@ -5,9 +5,8 @@ import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { DietCodeAsk } from "@shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import type { ToolResponse } from "../../index"
-import type { IPartialBlockHandler, IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
+import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 
 export class CondenseHandler implements IToolHandler, IPartialBlockHandler {

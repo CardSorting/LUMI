@@ -68,12 +68,11 @@ interface ChatRowProps {
 	isRequestInProgress?: boolean
 }
 
-export interface QuoteButtonState {
-	visible: boolean
-	top: number
-	left: number
-	selectedText: string
-}
+// QuoteButtonState lives in the ./chat-types leaf to break the
+// ChatRow ↔ CompletionOutputRow cycle. Re-exported for backward compatibility.
+export type { QuoteButtonState } from "./chat-types"
+
+import type { QuoteButtonState } from "./chat-types"
 
 interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
 

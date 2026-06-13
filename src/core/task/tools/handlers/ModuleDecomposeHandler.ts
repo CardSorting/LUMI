@@ -4,9 +4,8 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { ModuleDecomposer } from "../../../policy/ModuleDecomposer"
-import type { ToolResponse } from "../../index"
-import type { IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
+import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
 
 interface DecomposeParams {
 	path: string

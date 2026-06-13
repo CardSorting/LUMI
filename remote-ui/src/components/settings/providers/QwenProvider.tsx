@@ -3,10 +3,10 @@ import { Mode } from "@shared/storage/types"
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useMemo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { ApiKeyField } from "../common/ApiKeyField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { DropdownContainer, ModelSelector } from "../common/ModelSelector"
+import { DROPDOWN_Z_INDEX } from "../constants"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { normalizeApiConfiguration } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
@@ -60,7 +60,7 @@ export const QwenProvider = ({ showModelOptions, isPopup, currentMode }: QwenPro
 				</label>
 				<VSCodeDropdown
 					id="qwen-line-provider"
-					onChange={(e: any) => handleFieldChange("qwenApiLine", e.target.value as QwenApiRegions)}
+					onChange={(e) => handleFieldChange("qwenApiLine", (e.target as HTMLSelectElement).value as QwenApiRegions)}
 					style={{
 						minWidth: 130,
 						position: "relative",
@@ -95,10 +95,10 @@ export const QwenProvider = ({ showModelOptions, isPopup, currentMode }: QwenPro
 					<ModelSelector
 						label="Model"
 						models={qwenModels}
-						onChange={(e: any) =>
+						onChange={(e) =>
 							handleModeFieldChange(
 								{ plan: "planModeApiModelId", act: "actModeApiModelId" },
-								e.target.value,
+								(e.target as HTMLSelectElement).value,
 								currentMode,
 							)
 						}

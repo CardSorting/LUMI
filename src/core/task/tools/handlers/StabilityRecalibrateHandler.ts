@@ -4,9 +4,8 @@ import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { orchestrator } from "../../../../infrastructure/ai/Orchestrator"
 import { StabilityMonitor } from "../../../integrity/StabilityMonitor"
-import type { ToolResponse } from "../../index"
-import type { IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
+import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
 
 /**
  * StabilityRecalibrateHandler: Handles the 'recalibrate_stability' tool.

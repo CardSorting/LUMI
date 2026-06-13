@@ -1,14 +1,14 @@
+import type { IController as Controller } from "@core/controller/types"
 import { HookInfo, HooksToggles, WorkspaceHooks } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { HostProvider } from "@/hosts/host-provider"
 import { resolveExistingHookPath, VALID_HOOK_TYPES } from "../../hooks/utils"
-import { Controller } from ".."
 
 export async function refreshHooks(
 	_controller: Controller,
-	_request?: any,
+	_request?: unknown,
 	globalHooksDirOverride?: string,
 ): Promise<HooksToggles> {
 	const globalHooksDir = globalHooksDirOverride || path.join(os.homedir(), "Documents", "DietCode", "Hooks")

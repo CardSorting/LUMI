@@ -16,8 +16,16 @@ import { telemetryService } from "@/services/telemetry"
 import { McpMarketplaceCatalog } from "@/shared/mcp"
 import { Logger } from "@/shared/services/Logger"
 import { syncWorker } from "@/shared/services/worker/sync"
-import { reconstructTaskHistory } from "../commands/reconstructTaskHistory"
-import { StateManager } from "./StateManager"
+
+/**
+ * NOTE: `reconstructTaskHistory` (../commands/reconstructTaskHistory) and
+ * `StateManager` (./StateManager) are intentionally imported lazily via dynamic
+ * `import()` at their single call sites below. Both are higher-level modules
+ * that depend (transitively) on this low-level IO module, so a static import
+ * here would invert the dependency direction and form a circular dependency.
+ * Lazy import keeps the static graph acyclic; the runtime cost is negligible
+ * (modules are cached after first load, and StateManager is a singleton).
+ */
 
 /**
  * Atomically write data to a file using temp file + rename pattern.
@@ -447,6 +455,7 @@ export async function readTaskHistoryFromState(): Promise<HistoryItem[]> {
 		} catch (parseError) {
 			telemetryService.captureExtensionStorageError(parseError, "parseError_attemptingRecovery")
 
+			const { reconstructTaskHistory } = await import("../commands/reconstructTaskHistory")
 			const result = await reconstructTaskHistory(false)
 			if (result && result.reconstructedTasks > 0) {
 				// Read the reconstructed file
@@ -589,6 +598,7 @@ export async function getAllHooksDirs(): Promise<string[]> {
  * multi-root workspace may have multiple hooks directories.
  */
 export async function getWorkspaceHooksDirs(): Promise<string[]> {
+	const { StateManager } = await import("./StateManager")
 	const workspaceRootPaths =
 		StateManager.get()
 			.getGlobalStateKey("workspaceRoots")

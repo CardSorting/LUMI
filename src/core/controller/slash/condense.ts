@@ -1,5 +1,5 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
-import { Controller } from ".."
 
 /**
  * Command slash command logic

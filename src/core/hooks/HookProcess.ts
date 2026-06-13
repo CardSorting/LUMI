@@ -3,6 +3,7 @@ import { EventEmitter } from "events"
 import { Logger } from "@/shared/services/Logger"
 import { resolveWindowsPowerShellExecutable } from "@/utils/powershell"
 import { HookProcessRegistry } from "./HookProcessRegistry"
+import type { IHookProcess } from "./IHookProcess"
 import { escapeShellPath } from "./shell-escape"
 
 // Maximum total output size (stdout + stderr combined)
@@ -49,7 +50,7 @@ export async function getHookLaunchConfig(
  * - 1MB output size limit (prevents memory issues)
  * - Process lifecycle management with abort support
  */
-export class HookProcess extends EventEmitter {
+export class HookProcess extends EventEmitter implements IHookProcess {
 	private childProcess: ChildProcess | null = null
 	private buffer = ""
 	private fullOutput = ""
@@ -297,11 +298,12 @@ export class HookProcess extends EventEmitter {
 	 */
 	private emitLines(chunk: string, stream: "stdout" | "stderr"): void {
 		this.buffer += chunk
-		let lineEndIndex
-		while ((lineEndIndex = this.buffer.indexOf("\n")) !== -1) {
+		let lineEndIndex = this.buffer.indexOf("\n")
+		while (lineEndIndex !== -1) {
 			const line = this.buffer.slice(0, lineEndIndex).trimEnd()
 			this.emit("line", line, stream)
 			this.buffer = this.buffer.slice(lineEndIndex + 1)
+			lineEndIndex = this.buffer.indexOf("\n")
 		}
 		this.lastRetrievedIndex = this.fullOutput.length - this.buffer.length
 	}

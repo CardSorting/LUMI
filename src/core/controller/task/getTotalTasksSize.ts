@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest, Int64 } from "@shared/proto/dietcode/common"
 import { getTotalTasksSize as calculateTotalTasksSize } from "../../../utils/storage"
-import { Controller } from ".."
 
 /**
  * Gets the total size of all tasks including task data and checkpoints

@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
 import { ShowMessageType } from "@shared/proto/host/window"
 import { HostProvider } from "@/hosts/host-provider"
 import { openAiCodexOAuthManager } from "@/integrations/openai-codex/oauth"
 import { Logger } from "@/shared/services/Logger"
 import { openExternal } from "@/utils/env"
-import { Controller } from ".."
 
 /**
  * Initiates OpenAI Codex OAuth authentication flow

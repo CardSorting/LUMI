@@ -1,5 +1,5 @@
-import { Controller } from "@/core/controller"
-import { DietCodeAuthInfo } from "../AuthService"
+import type { IController as Controller } from "@core/controller/types"
+import type { DietCodeAuthInfo } from "../types"
 
 export interface IAuthProvider {
 	readonly name: string

@@ -1,6 +1,5 @@
 import { GrpcResponse } from "@shared/ExtensionMessage"
 import { GrpcRequest } from "@shared/WebviewMessage"
-import { GrpcRecorderBuilder } from "@/core/controller/grpc-recorder/grpc-recorder.builder"
 import { ILogFileHandler } from "@/core/controller/grpc-recorder/log-file-handler"
 import {
 	GrpcLogEntry,
@@ -58,10 +57,6 @@ export class GrpcRecorder implements IRecorder {
 		this.fileHandler.initialize(this.sessionLog).catch((error) => {
 			Logger.error("Failed to initialize gRPC log file:", error)
 		})
-	}
-
-	public static builder(): GrpcRecorderBuilder {
-		return new GrpcRecorderBuilder()
 	}
 
 	/**

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import type { IController as Controller } from "@core/controller/types"
 import { ensureCacheDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { ANTHROPIC_MAX_THINKING_BUDGET, ModelInfo } from "@shared/api"
 import { fileExistsAtPath } from "@utils/fs"
@@ -9,7 +10,6 @@ import { StateManager } from "@/core/storage/StateManager"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import { basetenModels } from "../../../shared/api"
-import { Controller } from ".."
 
 // Track pending refresh promise to prevent duplicate concurrent fetches
 let pendingRefresh: Promise<Record<string, ModelInfo>> | null = null
@@ -152,9 +152,9 @@ async function fetchAndCacheModels(controller: Controller): Promise<Record<strin
 					supportsPromptCache: modelInfo.supportsPromptCache,
 					inputPrice: modelInfo.inputPrice,
 					outputPrice: modelInfo.outputPrice,
-					cacheWritesPrice: (modelInfo as any).cacheWritesPrice || 0,
-					cacheReadsPrice: (modelInfo as any).cacheReadsPrice || 0,
-					description: (modelInfo as any).description || `${modelId} model`,
+					cacheWritesPrice: modelInfo.cacheWritesPrice || 0,
+					cacheReadsPrice: modelInfo.cacheReadsPrice || 0,
+					description: modelInfo.description || `${modelId} model`,
 					supportsReasoning: modelInfo.supportsReasoning || false,
 					thinkingConfig: modelInfo.supportsReasoning ? { maxBudget: ANTHROPIC_MAX_THINKING_BUDGET } : undefined,
 				}
@@ -209,14 +209,18 @@ async function readBasetenModels(): Promise<Record<string, Partial<ModelInfo>> |
 /**
  * Validates if a model is suitable for chat completions
  */
-function isValidChatModel(rawModel: any): boolean {
+function isValidChatModel(rawModel: unknown): boolean {
+	const model = rawModel as { id?: string; object?: string }
+	if (!model || typeof model !== "object") {
+		return false
+	}
 	// Filter out non-chat models (whisper, TTS, guard models, etc.)
-	if (rawModel.id.includes("whisper") || rawModel.id.includes("tts") || rawModel.id.includes("embedding")) {
+	if (model.id?.includes("whisper") || model.id?.includes("tts") || model.id?.includes("embedding")) {
 		return false
 	}
 
 	// Check if model supports chat completions
-	if (rawModel.object === "model" && rawModel.id) {
+	if (model.object === "model" && model.id) {
 		return true
 	}
 
@@ -226,19 +230,31 @@ function isValidChatModel(rawModel: any): boolean {
 /**
  * Generates a descriptive name for the model
  */
-function generateModelDescription(rawModel: any, staticModelInfo?: any): string {
+function generateModelDescription(rawModel: unknown, staticModelInfo?: ModelInfo): string {
+	const model = rawModel as {
+		id?: string
+		description?: string
+		context_length?: number
+		quantization?: string
+		supported_features?: string[]
+		name?: string
+		owned_by?: string
+	}
+	if (!model || typeof model !== "object") {
+		return ""
+	}
 	// Use static description if available and preferred
 	if (staticModelInfo?.description) {
 		return staticModelInfo.description
 	}
 
 	// Use API description if available
-	if (rawModel.description) {
-		const contextWindow = rawModel.context_length
-		const quantization = rawModel.quantization
-		const features = rawModel.supported_features || []
+	if (model.description) {
+		const contextWindow = model.context_length
+		const quantization = model.quantization
+		const features = model.supported_features || []
 
-		let description = rawModel.description
+		let description = model.description
 
 		// Add technical details if available
 		const technicalDetails = []
@@ -261,9 +277,9 @@ function generateModelDescription(rawModel: any, staticModelInfo?: any): string 
 	}
 
 	// Fallback: use name or model ID
-	const modelName = rawModel.name || rawModel.id
-	const contextWindow = rawModel.context_length
-	const ownedBy = rawModel.owned_by || "Baseten"
+	const modelName = model.name || model.id
+	const contextWindow = model.context_length
+	const ownedBy = model.owned_by || "Baseten"
 
 	if (contextWindow) {
 		return `${ownedBy} ${modelName} with ${contextWindow.toLocaleString()} token context window`

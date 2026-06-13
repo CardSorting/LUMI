@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Empty } from "@shared/proto/dietcode/common"
 import { AuthService } from "@/services/auth/AuthService"
 import { LogoutReason } from "@/services/auth/types"
-import type { Controller } from "../index"
 
 /**
  * Handles the account logout action

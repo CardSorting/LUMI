@@ -1,21 +1,16 @@
-import { Controller } from "@core/controller/index"
+import type { IController as Controller } from "@core/controller/types"
 import { serviceHandlers } from "@generated/hosts/vscode/protobus-services"
 import { GrpcRecorderBuilder } from "@/core/controller/grpc-recorder/grpc-recorder.builder"
 import { GrpcRequestRegistry } from "@/core/controller/grpc-request-registry"
 import { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { GrpcCancel, GrpcRequest } from "@/shared/WebviewMessage"
+import type { PostMessageToWebview, StreamingResponseHandler } from "./grpc-handler-types"
 
-/**
- * Type definition for a streaming response handler
- */
-export type StreamingResponseHandler<TResponse = unknown> = (
-	response: TResponse,
-	isLast?: boolean,
-	sequenceNumber?: number,
-) => Promise<void>
-
-export type PostMessageToWebview = (message: ExtensionMessage) => Thenable<boolean | undefined>
+// Re-export the gRPC handler type contracts for backward compatibility.
+// Canonical definitions live in ./grpc-handler-types (a leaf) to break the
+// grpc-handler ↔ grpc-request-registry cycle.
+export type { PostMessageToWebview, StreamingResponseHandler }
 
 /**
  * Creates a middleware wrapper for recording gRPC requests and responses
@@ -237,12 +232,7 @@ export function disposeRequestRegistry(): void {
 function getHandler(
 	serviceName: string,
 	methodName: string,
-): (
-	controller: Controller,
-	message: unknown,
-	responseStream?: StreamingResponseHandler<any>,
-	requestId?: string,
-) => Promise<unknown> {
+): (controller: Controller, message: unknown, responseStream?: StreamingResponseHandler, requestId?: string) => Promise<unknown> {
 	// Get the service handler from the config
 	const serviceConfig = serviceHandlers[serviceName]
 	if (!serviceConfig) {

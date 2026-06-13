@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
 import { openAiCodexOAuthManager } from "@/integrations/openai-codex/oauth"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Signs out of OpenAI Codex by clearing stored credentials

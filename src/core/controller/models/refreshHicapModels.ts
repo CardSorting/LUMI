@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { GlobalFileNames } from "@core/storage/disk"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { OpenRouterCompatibleModelInfo, OpenRouterModelInfo } from "@shared/proto/dietcode/models"
@@ -6,7 +7,6 @@ import axios from "axios"
 import fs from "fs/promises"
 import path from "path"
 import { getAxiosSettings } from "@/shared/net"
-import { Controller } from ".."
 
 /**
  * The raw model information returned by the Hicap API to list models

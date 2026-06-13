@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest, String as ProtoString } from "@shared/proto/dietcode/common"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
-import { Controller } from "../index"
 
 /**
  * Handles the user clicking the login link in the UI.

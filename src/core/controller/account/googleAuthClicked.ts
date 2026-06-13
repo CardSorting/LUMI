@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
 import { AuthService } from "@/services/auth/AuthService"
-import { Controller } from "../index"
 
 /**
  * Handles the user clicking the Google login link in the UI.

@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { AutoApprovalSettingsRequest } from "@shared/proto/dietcode/state"
-import { Controller } from ".."
 
 /**
  * Updates the auto approval settings

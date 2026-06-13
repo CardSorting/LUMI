@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { openFile as openFileIntegration } from "@integrations/misc/open-file"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import path from "path"
 import { HostProvider } from "@/hosts/host-provider"
-import { Controller } from ".."
 /**
  * Opens a file in the editor
  * @param controller The controller instance

@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import { StringArray } from "@shared/proto/dietcode/common"
 import { OpenAiModelsRequest } from "@shared/proto/dietcode/models"
 import type { AxiosRequestConfig } from "axios"
 import axios from "axios"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Fetches available models from the OpenAI API
@@ -28,7 +28,7 @@ export async function refreshOpenAiModels(_controller: Controller, request: Open
 		}
 
 		const response = await axios.get(`${request.baseUrl}/models`, { ...config, ...getAxiosSettings() })
-		const modelsArray = response.data?.data?.map((model: any) => model.id) || []
+		const modelsArray = response.data?.data?.map((model: { id: string }) => model.id) || []
 		const models = [...new Set<string>(modelsArray)]
 
 		return StringArray.create({ values: models })

@@ -1,3 +1,4 @@
+import { ApiProvider } from "@shared/api"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import PROVIDERS from "@shared/providers/providers.json"
 import { Mode } from "@shared/storage/types"
@@ -12,7 +13,7 @@ import { VscIcon } from "@/components/ui/vsc-icon"
 import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { ModelsServiceClient } from "@/services/grpc-client"
-import { OPENROUTER_MODEL_PICKER_Z_INDEX } from "./OpenRouterModelPicker"
+import { DROPDOWN_Z_INDEX, DropdownContainer } from "./constants"
 import { AIhubmixProvider } from "./providers/AihubmixProvider"
 import { AnthropicProvider } from "./providers/AnthropicProvider"
 import { AskSageProvider } from "./providers/AskSageProvider"
@@ -67,20 +68,13 @@ interface ApiOptionsProps {
 	initialModelTab?: "recommended" | "free"
 }
 
-// This is necessary to ensure dropdown opens downward, important for when this is used in popup
-export const DROPDOWN_Z_INDEX = OPENROUTER_MODEL_PICKER_Z_INDEX + 2 // Higher than the OpenRouterModelPicker's and ModelSelectorTooltip's z-index
+// This is necessary to ensure dropdown opens downward, important for when this is used in popup.
+// Canonical home is ./constants; re-exported here for backward compatibility.
+export { DROPDOWN_Z_INDEX }
 
-export const DropdownContainer = styled.div<{ zIndex?: number }>`
-	position: relative;
-	z-index: ${(props) => props.zIndex || DROPDOWN_Z_INDEX};
-
-	// Force dropdowns to open downward
-	& vscode-dropdown::part(listbox) {
-		position: absolute !important;
-		top: 100% !important;
-		bottom: auto !important;
-	}
-`
+// DropdownContainer lives in the ./constants leaf to break the ApiOptions ↔
+// provider-component cycle. Imported above for local use + re-exported for compat.
+export { DropdownContainer }
 
 declare module "vscode" {
 	interface LanguageModelChatSelector {
@@ -193,7 +187,7 @@ const ApiOptions = ({
 	}, [searchableItems, searchTerm, fuse, currentProviderLabel])
 
 	const handleProviderChange = (newProvider: string) => {
-		handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, newProvider as any, currentMode)
+		handleModeFieldChange({ plan: "planModeApiProvider", act: "actModeApiProvider" }, newProvider as ApiProvider, currentMode)
 		setIsDropdownVisible(false)
 		setSelectedIndex(-1)
 	}

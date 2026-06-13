@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { getWorkspaceBasename } from "@core/workspace"
 import type { ToggleDietCodeRuleRequest } from "@shared/proto/dietcode/file"
 import { RuleScope, ToggleDietCodeRules } from "@shared/proto/dietcode/file"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Toggles a DietCode rule (enable or disable)

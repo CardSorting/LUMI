@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { CheckoutBranchRequest, WorktreeResult } from "@shared/proto/dietcode/worktree"
 import { getWorkspacePath } from "@utils/path"
 import simpleGit from "simple-git"
-import { Controller } from ".."
 
 /**
  * Checks out a branch in the current worktree (git checkout)

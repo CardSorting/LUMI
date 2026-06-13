@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { CreateWorktreeRequest, WorktreeResult } from "@shared/proto/dietcode/worktree"
 import { createWorktree as createWorktreeUtil, listWorktrees } from "@utils/git-worktree"
 import { getWorkspacePath } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Creates a new git worktree

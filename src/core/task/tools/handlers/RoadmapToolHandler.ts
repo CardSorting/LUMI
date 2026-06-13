@@ -1,9 +1,8 @@
 import type { ToolUse } from "@core/assistant-message"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
-import type { ToolResponse } from "../../index"
-import type { IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
+import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
 
 export class RoadmapToolHandler implements IToolHandler {
 	readonly name: DietCodeDefaultTool

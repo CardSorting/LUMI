@@ -1,7 +1,7 @@
 import { InMemoryLogRecordExporter, LoggerProvider, SimpleLogRecordProcessor } from "@opentelemetry/sdk-logs"
 import { expect } from "chai"
 import * as sinon from "sinon"
-import type { DietCodeAccountUserInfo } from "@/services/auth/AuthService"
+import type { DietCodeAccountUserInfo } from "@/services/auth/types"
 import * as distinctIdModule from "@/services/logging/distinctId"
 import { OpenTelemetryTelemetryProvider } from "../OpenTelemetryTelemetryProvider"
 

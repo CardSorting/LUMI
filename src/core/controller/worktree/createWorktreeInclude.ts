@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { CreateWorktreeIncludeRequest, WorktreeResult } from "@shared/proto/dietcode/worktree"
 import { getWorkspacePath } from "@utils/path"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { Controller } from ".."
 
 /**
  * Creates a .worktreeinclude file with the provided content

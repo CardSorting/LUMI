@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { StringArray, StringRequest } from "@shared/proto/dietcode/common"
 import axios from "axios"
 import { getAxiosSettings } from "@/shared/net"
-import { Controller } from ".."
 
 /**
  * Fetches available models from Ollama
@@ -18,7 +18,7 @@ export async function getOllamaModels(_controller: Controller, request: StringRe
 		}
 
 		const response = await axios.get(`${baseUrl}/api/tags`, getAxiosSettings())
-		const modelsArray = response.data?.models?.map((model: any) => model.name) || []
+		const modelsArray = response.data?.models?.map((model: { name: string }) => model.name) || []
 		const models = [...new Set<string>(modelsArray)].sort()
 
 		return StringArray.create({ values: models })

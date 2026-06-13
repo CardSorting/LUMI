@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { huggingFaceModels } from "@shared/api"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { OpenRouterCompatibleModelInfo, OpenRouterModelInfo } from "@shared/proto/dietcode/models"
@@ -8,7 +9,6 @@ import path from "path"
 import { ensureCacheDirectoryExists } from "@/core/storage/disk"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Refreshes the Hugging Face models and returns the updated model list
@@ -91,8 +91,8 @@ export async function refreshHuggingFaceModels(
 					supportsPromptCache: modelInfo.supportsPromptCache,
 					inputPrice: modelInfo.inputPrice,
 					outputPrice: modelInfo.outputPrice,
-					cacheWritesPrice: (modelInfo as any).cacheWritesPrice || 0,
-					cacheReadsPrice: (modelInfo as any).cacheReadsPrice || 0,
+					cacheWritesPrice: modelInfo.cacheWritesPrice || 0,
+					cacheReadsPrice: modelInfo.cacheReadsPrice || 0,
 					description: modelInfo.description || "",
 				})
 			}

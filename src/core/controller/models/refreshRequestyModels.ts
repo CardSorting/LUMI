@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { OpenRouterCompatibleModelInfo, OpenRouterModelInfo } from "@shared/proto/dietcode/models"
 import axios from "axios"
 import { toRequestyServiceUrl } from "@/shared/clients/requesty"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Refreshes the Requesty models and returns the updated model list
@@ -13,9 +13,10 @@ import { Controller } from ".."
  * @returns Response containing the Requesty models
  */
 export async function refreshRequestyModels(controller: Controller, _: EmptyRequest): Promise<OpenRouterCompatibleModelInfo> {
-	const parsePrice = (price: any) => {
-		if (price) {
-			return Number.parseFloat(price) * 1_000_000
+	const parsePrice = (price: unknown) => {
+		if (price && (typeof price === "string" || typeof price === "number")) {
+			const num = typeof price === "number" ? price : Number.parseFloat(price)
+			return Number.isNaN(num) ? undefined : num * 1_000_000
 		}
 		return undefined
 	}

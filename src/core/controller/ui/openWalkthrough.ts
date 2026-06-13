@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Empty } from "@shared/proto/dietcode/common"
 import * as vscode from "vscode"
 import { ExtensionRegistryInfo } from "@/registry"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Opens the DietCode walkthrough in VSCode

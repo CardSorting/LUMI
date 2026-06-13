@@ -4,9 +4,8 @@ import { DietCodeDefaultTool } from "@/shared/tools"
 import { SafeNumber } from "../../../../shared/utils/SafeNumber"
 import { StabilityDoctor } from "../../../policy/StabilityDoctor"
 import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
-import type { ToolResponse } from "../../index"
-import type { IToolHandler } from "../ToolExecutorCoordinator"
 import type { TaskConfig } from "../types/TaskConfig"
+import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
 
 /**
  * StabilityDoctorHandler: Handles the 'diagnose_sovereignty' tool.

@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { TestConnectionResult } from "@shared/proto/dietcode/state"
 import { REMOTE_CONFIG_OTEL_PROVIDER_ID } from "@/core/storage/remote-config/utils"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Tests the OpenTelemetry connection by sending a test log event

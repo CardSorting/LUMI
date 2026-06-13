@@ -3,14 +3,60 @@
  */
 
 import { ApiProviderInfo } from "@/core/api"
+import type { TaskState } from "@/core/task/TaskState"
 import type { McpHub } from "@/services/mcp/McpHub"
 import type { BrowserSettings } from "@/shared/BrowserSettings"
 import type { FocusChainSettings } from "@/shared/FocusChainSettings"
 import { ModelFamily } from "@/shared/prompts"
 import type { SkillMetadata } from "@/shared/skills"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import type { DietCodeToolSpec } from "./spec"
 import { SystemPromptSection } from "./templates/placeholders"
+
+/**
+ * Tool specification contracts.
+ *
+ * NOTE: These interfaces are defined here (the canonical types leaf) rather than
+ * in ./spec so that ./spec can import them WITHOUT ./types importing back from
+ * ./spec — breaking the spec.ts ↔ types.ts type cycle. The conversion functions
+ * that operate on these specs live in ./spec and import these contracts from here.
+ */
+export interface DietCodeToolSpec {
+	variant: ModelFamily
+	id: DietCodeDefaultTool
+	name: string
+	description: string
+	instruction?: string
+	contextRequirements?: (context: SystemPromptContext) => boolean
+	parameters?: Array<DietCodeToolSpecParameter>
+}
+
+export interface DietCodeToolSpecParameter {
+	name: string
+	required: boolean
+	instruction: string | ((context: SystemPromptContext) => string)
+	usage?: string
+	dependencies?: DietCodeDefaultTool[]
+	description?: string
+	contextRequirements?: (context: SystemPromptContext) => boolean
+	// TODO: Confirm if "integer" is actually supported across providers
+	/**
+	 * The type of the parameter. Default to string if not provided.
+	 * Supported types: string, boolean, integer, array, object
+	 */
+	type?: "string" | "boolean" | "integer" | "array" | "object"
+	/**
+	 * For array types, this defines the schema of array items
+	 */
+	items?: unknown
+	/**
+	 * For object types, this defines the properties
+	 */
+	properties?: Record<string, unknown>
+	/**
+	 * Additional JSON Schema fields to preserve from MCP tools
+	 */
+	[key: string]: unknown
+}
 
 /**
  * Strongly typed configuration override with validation
@@ -128,7 +174,7 @@ export interface SystemPromptContext {
 	readonly terminalExecutionMode?: "vscodeTerminal" | "backgroundExec"
 	readonly mode?: "plan" | "act"
 	readonly parentMode?: "plan" | "act"
-	readonly taskState?: any // To avoid circular dependency issues if TaskState isn't exported well, but we can try proper import first.
+	readonly taskState?: TaskState // To avoid circular dependency issues if TaskState isn't exported well, but we can try proper import first.
 	readonly environmentBlueprint?: {
 		readonly detectedProjectTypes: readonly string[]
 		readonly toolchain: Readonly<Record<string, { readonly version?: string; readonly status: string }>>

@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { workspaceResolver } from "@core/workspace"
 import { openFile as openFileIntegration } from "@integrations/misc/open-file"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import { getWorkspacePath } from "@utils/path"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Opens a file in the editor by a relative path

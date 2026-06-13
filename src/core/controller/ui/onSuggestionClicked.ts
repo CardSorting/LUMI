@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { StringRequest } from "@shared/proto/dietcode/common"
 import { Empty } from "@shared/proto/dietcode/common"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Records that a prompt suggestion was clicked

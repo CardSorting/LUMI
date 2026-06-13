@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { UserOrganization, UserOrganizationsResponse } from "@shared/proto/dietcode/account"
 import type { EmptyRequest } from "@shared/proto/dietcode/common"
-import type { Controller } from "../index"
 
 /**
  * Handles fetching all user credits data (balance, usage, payments)

@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { McpServers, UpdateMcpTimeoutRequest } from "@shared/proto/dietcode/mcp"
 import { convertMcpServersToProtoMcpServers } from "@/shared/proto-conversions/mcp/mcp-server-conversion"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Updates the timeout configuration for an MCP server.

@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { SlashCommandInfo, SlashCommandsResponse } from "@shared/proto/dietcode/slash"
 import { BASE_SLASH_COMMANDS } from "@/shared/slashCommands"
-import { Controller } from ".."
 
 /**
  * Returns all available slash commands for autocomplete.

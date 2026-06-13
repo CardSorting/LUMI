@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { TelemetrySettingRequest } from "@shared/proto/dietcode/state"
 import { convertProtoTelemetrySettingToDomain } from "../../../shared/proto-conversions/state/telemetry-setting-conversion"
-import { Controller } from ".."
 
 /**
  * Updates the telemetry setting

@@ -1,9 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { WorktreeDefaults } from "@shared/proto/dietcode/worktree"
 import { getWorkspacePath } from "@utils/path"
 import path from "path"
 import { getDocumentsPath } from "@/core/storage/disk"
-import { Controller } from ".."
 
 /**
  * Generates a random suffix for worktree names

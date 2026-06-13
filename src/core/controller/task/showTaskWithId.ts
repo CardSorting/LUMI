@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { TaskResponse } from "@shared/proto/dietcode/task"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 import { sendChatButtonClickedEvent } from "../ui/subscribeToChatButtonClicked"
 
 /**

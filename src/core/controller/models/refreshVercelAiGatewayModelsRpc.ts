@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
 import { toProtobufModels } from "../../../shared/proto-conversions/models/typeConversion"
-import { Controller } from ".."
 import { refreshVercelAiGatewayModels } from "./refreshVercelAiGatewayModels"
 
 /**

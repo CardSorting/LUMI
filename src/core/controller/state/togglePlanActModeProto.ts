@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Boolean } from "@shared/proto/dietcode/common"
 import { PlanActMode, TogglePlanActModeRequest } from "@shared/proto/dietcode/state"
 import { Mode } from "@shared/storage/types"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 
 /**
  * Toggles between Plan and Act modes

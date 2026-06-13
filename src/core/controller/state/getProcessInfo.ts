@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { ProcessInfo } from "@shared/proto/dietcode/state"
-import { Controller } from ".."
 
 /**
  * Gets process information including PID, version, and uptime

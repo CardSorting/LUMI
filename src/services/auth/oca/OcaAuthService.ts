@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { type EmptyRequest, String as ProtoString } from "@shared/proto/dietcode/common"
 import { OcaAuthState, OcaUserInfo } from "@shared/proto/dietcode/oca_account"
-import type { Controller } from "@/core/controller"
 import { getRequestRegistry, type StreamingResponseHandler } from "@/core/controller/grpc-handler"
 import { AuthHandler } from "@/hosts/external/AuthHandler"
 import { Logger } from "@/shared/services/Logger"
@@ -253,7 +253,12 @@ export class OcaAuthService {
 			this._activeAuthStatusUpdateSubscriptions.delete(entry)
 		}
 		if (requestId) {
-			getRequestRegistry().registerRequest(requestId, cleanup, { type: "authStatusUpdate_subscription" }, responseStream)
+			getRequestRegistry().registerRequest(
+				requestId,
+				cleanup,
+				{ type: "authStatusUpdate_subscription" },
+				responseStream as unknown as StreamingResponseHandler,
+			)
 		}
 		try {
 			await this.sendAuthStatusUpdate()

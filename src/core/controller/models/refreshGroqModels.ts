@@ -1,3 +1,4 @@
+import type { IController as Controller } from "@core/controller/types"
 import { ensureCacheDirectoryExists, GlobalFileNames } from "@core/storage/disk"
 import { ModelInfo } from "@shared/api"
 import { fileExistsAtPath } from "@utils/fs"
@@ -9,7 +10,6 @@ import { telemetryService } from "@/services/telemetry"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import { groqModels } from "../../../shared/api"
-import { Controller } from ".."
 
 // Track pending refresh promise to prevent duplicate concurrent fetches
 let pendingRefresh: Promise<Record<string, ModelInfo>> | null = null
@@ -62,8 +62,8 @@ async function fetchAndCacheModels(controller: Controller): Promise<Record<strin
 					supportsPromptCache: modelInfo.supportsPromptCache,
 					inputPrice: modelInfo.inputPrice,
 					outputPrice: modelInfo.outputPrice,
-					cacheWritesPrice: (modelInfo as any).cacheWritesPrice || 0,
-					cacheReadsPrice: (modelInfo as any).cacheReadsPrice || 0,
+					cacheWritesPrice: modelInfo.cacheWritesPrice || 0,
+					cacheReadsPrice: modelInfo.cacheReadsPrice || 0,
 					description: modelInfo.description || `${modelId} model`,
 				}
 			}
@@ -105,8 +105,8 @@ async function fetchAndCacheModels(controller: Controller): Promise<Record<strin
 						supportsPromptCache: staticModelInfo?.supportsPromptCache || false,
 						inputPrice: staticModelInfo?.inputPrice || 0,
 						outputPrice: staticModelInfo?.outputPrice || 0,
-						cacheWritesPrice: (staticModelInfo as any)?.cacheWritesPrice || 0,
-						cacheReadsPrice: (staticModelInfo as any).cacheReadsPrice || 0,
+						cacheWritesPrice: staticModelInfo?.cacheWritesPrice || 0,
+						cacheReadsPrice: staticModelInfo?.cacheReadsPrice || 0,
 						description: generateModelDescription(rawModel, staticModelInfo),
 					}
 
@@ -163,8 +163,8 @@ async function fetchAndCacheModels(controller: Controller): Promise<Record<strin
 					supportsPromptCache: modelInfo.supportsPromptCache,
 					inputPrice: modelInfo.inputPrice,
 					outputPrice: modelInfo.outputPrice,
-					cacheWritesPrice: (modelInfo as any).cacheWritesPrice || 0,
-					cacheReadsPrice: (modelInfo as any).cacheReadsPrice || 0,
+					cacheWritesPrice: modelInfo.cacheWritesPrice || 0,
+					cacheReadsPrice: modelInfo.cacheReadsPrice || 0,
 					description: modelInfo.description || `${modelId} model`,
 				}
 			}
@@ -216,25 +216,29 @@ async function readGroqModels(): Promise<Record<string, Partial<ModelInfo>> | un
 /**
  * Validates if a model is suitable for chat completions
  */
-function isValidChatModel(rawModel: any): boolean {
+function isValidChatModel(rawModel: unknown): boolean {
+	const model = rawModel as { id?: string; object?: string; active?: boolean }
+	if (!model || typeof model !== "object") {
+		return false
+	}
 	// Check if model is active (if the property exists)
-	if (Object.hasOwn(rawModel, "active") && !rawModel.active) {
+	if (Object.hasOwn(model, "active") && !model.active) {
 		return false
 	}
 	// Filter out non-chat models (whisper, TTS, guard models, etc.)
 	if (
-		rawModel.id.includes("whisper") ||
-		rawModel.id.includes("tts") ||
-		rawModel.id.includes("guard") ||
-		rawModel.id.includes("embedding") ||
-		rawModel.id.includes("moderation") ||
-		rawModel.id.includes("allam")
+		model.id?.includes("whisper") ||
+		model.id?.includes("tts") ||
+		model.id?.includes("guard") ||
+		model.id?.includes("embedding") ||
+		model.id?.includes("moderation") ||
+		model.id?.includes("allam")
 	) {
 		return false
 	}
 
 	// Check if model supports chat completions
-	if (rawModel.object === "model" && rawModel.id) {
+	if (model.object === "model" && model.id) {
 		return true
 	}
 
@@ -244,14 +248,19 @@ function isValidChatModel(rawModel: any): boolean {
 /**
  * Detects if a model supports image input
  */
-function detectImageSupport(rawModel: any, staticModelInfo?: any): boolean {
+function detectImageSupport(rawModel: unknown, staticModelInfo?: ModelInfo): boolean {
 	// Use static info if available
 	if (staticModelInfo?.supportsImages !== undefined) {
 		return staticModelInfo.supportsImages
 	}
 
+	const model = rawModel as { id?: string }
+	if (!model?.id) {
+		return false
+	}
+
 	// Detect based on model name patterns
-	const modelId = rawModel.id.toLowerCase()
+	const modelId = model.id.toLowerCase()
 	if (modelId.includes("vision") || modelId.includes("maverick") || modelId.includes("scout")) {
 		return true
 	}
@@ -262,16 +271,21 @@ function detectImageSupport(rawModel: any, staticModelInfo?: any): boolean {
 /**
  * Generates a descriptive name for the model
  */
-function generateModelDescription(rawModel: any, staticModelInfo?: any): string {
+function generateModelDescription(rawModel: unknown, staticModelInfo?: ModelInfo): string {
 	// Use static description if available
 	if (staticModelInfo?.description) {
 		return staticModelInfo.description
 	}
 
+	const model = rawModel as { id?: string; context_window?: number; owned_by?: string }
+	if (!model || typeof model !== "object") {
+		return ""
+	}
+
 	// Generate description based on model characteristics
-	const modelId = rawModel.id
-	const contextWindow = rawModel.context_window || 8192
-	const ownedBy = rawModel.owned_by || "Unknown"
+	const modelId = model.id || ""
+	const contextWindow = model.context_window || 8192
+	const ownedBy = model.owned_by || "Unknown"
 
 	// Special handling for new models
 	if (modelId.includes("compound")) {

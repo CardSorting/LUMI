@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { TestConnectionResult } from "@shared/proto/dietcode/state"
 import { Logger } from "@/shared/services/Logger"
 import { blobStorage } from "@/shared/storage/DietCodeBlobStorage"
-import { Controller } from ".."
 
 /**
  * Tests the prompt uploading (blob storage) connection by uploading a test file

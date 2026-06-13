@@ -4,11 +4,11 @@ import { RemoteConfigFields } from "@shared/storage/state-keys"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { DROPDOWN_Z_INDEX } from "../ApiOptions"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import { ModelInfoView } from "../common/ModelInfoView"
 import { ModelSelector } from "../common/ModelSelector"
 import { LockIcon, RemotelyConfiguredInputWrapper } from "../common/RemotelyConfiguredInputWrapper"
+import { DROPDOWN_Z_INDEX } from "../constants"
 import ReasoningEffortSelector from "../ReasoningEffortSelector"
 import ThinkingBudgetSlider from "../ThinkingBudgetSlider"
 import { normalizeApiConfiguration } from "../utils/providerUtils"
@@ -51,8 +51,8 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 	const { handleFieldChange: originalHandleFieldChange, handleModeFieldChange } = useApiConfigurationHandlers()
 
 	// Override handleFieldChange to correctly type it for both ApiConfiguration and RemoteConfigFields
-	const handleFieldChange = async (field: keyof ApiConfiguration | keyof RemoteConfigFields, value: any) => {
-		await originalHandleFieldChange(field as any, value)
+	const handleFieldChange = async (field: keyof ApiConfiguration | keyof RemoteConfigFields, value: unknown) => {
+		await originalHandleFieldChange(field as keyof ApiConfiguration, value as ApiConfiguration[keyof ApiConfiguration])
 	}
 
 	// Get the normalized configuration
@@ -103,10 +103,10 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 					<ModelSelector
 						label="Model"
 						models={modelsToUse}
-						onChange={(e: any) =>
+						onChange={(e) =>
 							handleModeFieldChange(
 								{ plan: "planModeApiModelId", act: "actModeApiModelId" },
-								e.target.value,
+								(e.target as HTMLSelectElement).value,
 								currentMode,
 							)
 						}

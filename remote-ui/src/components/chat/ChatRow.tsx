@@ -84,12 +84,10 @@ interface ChatRowProps {
 	isRequestInProgress?: boolean
 }
 
-export interface QuoteButtonState {
-	visible: boolean
-	top: number
-	left: number
-	selectedText: string
-}
+// QuoteButtonState lives in ./chat-types leaf (breaks ChatRow<->CompletionOutputRow cycle).
+export type { QuoteButtonState } from "./chat-types"
+
+import type { QuoteButtonState } from "./chat-types"
 
 interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
 
@@ -98,7 +96,7 @@ const InvisibleSpacer = () => <div aria-hidden className="h-px" />
 
 const ChatRow = memo(
 	(props: ChatRowProps) => {
-		const { isLast, onHeightChange, message } = props
+		const { isLast, onHeightChange } = props
 		// Store the previous height to compare with the current height
 		// This allows us to detect changes without causing re-renders
 		const prevHeightRef = useRef(0)
@@ -237,6 +235,30 @@ export const ChatRowContent = memo(
 			})
 		}, [onRelinquishControl])
 
+		// Reset output expansion state when command stops (completes or is cancelled)
+		useEffect(() => {
+			// If command was executing and now isn't, clean up
+			if (isCommandMessage && prevCommandExecutingRef.current && !isCommandExecuting) {
+				setIsOutputFullyExpanded(false)
+			}
+
+			// Update ref for next render
+			prevCommandExecutingRef.current = isCommandExecuting
+		}, [isCommandMessage, isCommandExecuting])
+
+		// Auto-expand when command starts executing (only if running > 500ms)
+		useEffect(() => {
+			if (isCommandMessage && isCommandExecuting && !isExpanded) {
+				// Wait 500ms before auto-expanding to avoid animating fast commands
+				const timer = setTimeout(() => {
+					// Expand after 500ms
+					onToggleExpand(message.ts)
+				}, 500)
+
+				return () => clearTimeout(timer)
+			}
+		}, [isCommandMessage, isCommandExecuting, isExpanded, onToggleExpand, message.ts])
+
 		// --- Quote Button Logic ---
 		// MOVE handleQuoteClick INSIDE ChatRowContent
 		const handleQuoteClick = useCallback(() => {
@@ -371,7 +393,12 @@ export const ChatRowContent = memo(
 			if (message.say !== "conditional_rules_applied" || !message.text) return null
 			try {
 				const parsed = JSON.parse(message.text) as unknown
-				if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as any).rules)) {
+				if (
+					!parsed ||
+					typeof parsed !== "object" ||
+					!("rules" in parsed) ||
+					!Array.isArray((parsed as Record<string, unknown>).rules)
+				) {
 					return null
 				}
 				return parsed as {
@@ -445,7 +472,7 @@ export const ChatRowContent = memo(
 									code={tool.content}
 									isExpanded={isExpanded}
 									onToggleExpand={handleToggle}
-									path={tool.path!}
+									path={tool.path}
 								/>
 							)}
 						</div>
@@ -464,7 +491,7 @@ export const ChatRowContent = memo(
 								code={tool.content}
 								isExpanded={isExpanded}
 								onToggleExpand={handleToggle}
-								path={tool.path!}
+								path={tool.path}
 							/>
 						</div>
 					)
@@ -481,11 +508,11 @@ export const ChatRowContent = memo(
 								<DiffEditRow patch={tool.content} path={tool.path} startLineNumbers={tool.startLineNumbers} />
 							) : (
 								<CodeAccordian
-									code={tool.content!}
+									code={tool.content}
 									isExpanded={isExpanded}
 									isLoading={message.partial}
 									onToggleExpand={handleToggle}
-									path={tool.path!}
+									path={tool.path}
 								/>
 							)}
 						</div>
@@ -501,18 +528,28 @@ export const ChatRowContent = memo(
 								<span className="font-bold">DietCode wants to read this file:</span>
 							</div>
 							<div className="bg-code rounded-sm overflow-hidden border border-editor-group-border">
+								{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: Static element is used interactively to support click/keydown file opening behavior */}
 								<div
 									className={cn("text-description flex items-center cursor-pointer select-none py-2 px-2.5", {
 										"cursor-default select-text": isImage,
 									})}
 									onClick={() => {
 										if (!isImage) {
-											FileServiceClient.openFile(StringRequest.create({ value: tool.content })).catch(
-												// biome-ignore lint/suspicious/noConsole: No Logger service available in remote-ui
+											FileServiceClient.openFile(StringRequest.create({ value: tool.content ?? "" })).catch(
 												(err) => console.error("Failed to open file:", err),
 											)
 										}
-									}}>
+									}}
+									onKeyDown={(e) => {
+										if (!isImage && (e.key === "Enter" || e.key === " ")) {
+											e.preventDefault()
+											FileServiceClient.openFile(StringRequest.create({ value: tool.content ?? "" })).catch(
+												(err) => console.error("Failed to open file:", err),
+											)
+										}
+									}}
+									role={isImage ? undefined : "button"}
+									tabIndex={isImage ? undefined : 0}>
 									{tool.path?.startsWith(".") && <span>.</span>}
 									{tool.path && !tool.path.startsWith(".") && <span>/</span>}
 									<span className="ph-no-capture whitespace-nowrap overflow-hidden text-ellipsis mr-2 text-left [direction: rtl]">
@@ -538,11 +575,11 @@ export const ChatRowContent = memo(
 								</span>
 							</div>
 							<CodeAccordian
-								code={tool.content!}
+								code={tool.content ?? ""}
 								isExpanded={isExpanded}
 								language="shell-session"
 								onToggleExpand={handleToggle}
-								path={tool.path!}
+								path={tool.path ?? ""}
 							/>
 						</div>
 					)
@@ -560,11 +597,11 @@ export const ChatRowContent = memo(
 								</span>
 							</div>
 							<CodeAccordian
-								code={tool.content!}
+								code={tool.content ?? ""}
 								isExpanded={isExpanded}
 								language="shell-session"
 								onToggleExpand={handleToggle}
-								path={tool.path!}
+								path={tool.path ?? ""}
 							/>
 						</div>
 					)
@@ -582,10 +619,10 @@ export const ChatRowContent = memo(
 								</span>
 							</div>
 							<CodeAccordian
-								code={tool.content!}
+								code={tool.content ?? ""}
 								isExpanded={isExpanded}
 								onToggleExpand={handleToggle}
-								path={tool.path!}
+								path={tool.path ?? ""}
 							/>
 						</div>
 					)
@@ -601,11 +638,11 @@ export const ChatRowContent = memo(
 								</span>
 							</div>
 							<SearchResultsDisplay
-								content={tool.content!}
+								content={tool.content ?? ""}
 								filePattern={tool.filePattern}
 								isExpanded={isExpanded}
 								onToggleExpand={handleToggle}
-								path={tool.path!}
+								path={tool.path ?? ""}
 							/>
 						</div>
 					)
@@ -617,6 +654,7 @@ export const ChatRowContent = memo(
 								<span className="font-bold">DietCode is condensing the conversation:</span>
 							</div>
 							<div className="bg-code overflow-hidden border border-editor-group-border rounded-[3px]">
+								{/* biome-ignore lint/a11y/useSemanticElements: Div is styled to wrap a summary accordion layout rather than a standard native button */}
 								<div
 									aria-label={isExpanded ? "Collapse summary" : "Expand summary"}
 									className="text-description py-2 px-2.5 cursor-pointer select-none"
@@ -627,7 +665,9 @@ export const ChatRowContent = memo(
 											e.stopPropagation()
 											handleToggle()
 										}
-									}}>
+									}}
+									role="button"
+									tabIndex={0}>
 									{isExpanded ? (
 										<div>
 											<div className="flex items-center mb-2">
@@ -662,17 +702,29 @@ export const ChatRowContent = memo(
 										: "DietCode fetched content from this URL:"}
 								</span>
 							</div>
+							{/* biome-ignore lint/a11y/useSemanticElements: Div is styled as a rounded code box matching other code row layouts */}
 							<div
 								className="bg-code rounded-xs overflow-hidden border border-editor-group-border py-2 px-2.5 cursor-pointer select-none"
 								onClick={() => {
 									// Open the URL in the default browser using gRPC
 									if (tool.path) {
 										UiServiceClient.openUrl(StringRequest.create({ value: tool.path })).catch((err) => {
-											// biome-ignore lint/suspicious/noConsole: No Logger service available in remote-ui
 											console.error("Failed to open URL:", err)
 										})
 									}
-								}}>
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault()
+										if (tool.path) {
+											UiServiceClient.openUrl(StringRequest.create({ value: tool.path })).catch((err) => {
+												console.error("Failed to open URL:", err)
+											})
+										}
+									}
+								}}
+								role="button"
+								tabIndex={0}>
 								<span className="ph-no-capture whitespace-nowrap overflow-hidden text-ellipsis mr-2 [direction:rtl] text-left text-link underline">
 									{`${tool.path}\u200E`}
 								</span>
@@ -716,29 +768,7 @@ export const ChatRowContent = memo(
 			}
 		}
 
-		// Reset output expansion state when command stops (completes or is cancelled)
-		useEffect(() => {
-			// If command was executing and now isn't, clean up
-			if (isCommandMessage && prevCommandExecutingRef.current && !isCommandExecuting) {
-				setIsOutputFullyExpanded(false)
-			}
-
-			// Update ref for next render
-			prevCommandExecutingRef.current = isCommandExecuting
-		}, [isCommandMessage, isCommandExecuting])
-
-		// Auto-expand when command starts executing (only if running > 500ms)
-		useEffect(() => {
-			if (isCommandMessage && isCommandExecuting && !isExpanded) {
-				// Wait 500ms before auto-expanding to avoid animating fast commands
-				const timer = setTimeout(() => {
-					// Expand after 500ms
-					onToggleExpand(message.ts)
-				}, 500)
-
-				return () => clearTimeout(timer)
-			}
-		}, [isCommandMessage, isCommandExecuting, isExpanded, onToggleExpand, message.ts])
+		// Removed conditional useEffect hooks and moved to top-level
 
 		if (message.ask === "command" || message.say === "command") {
 			return (
@@ -791,6 +821,7 @@ export const ChatRowContent = memo(
 
 						{useMcpServer.type === "use_mcp_tool" && (
 							<div>
+								{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents lint/a11y/noNoninteractiveElementInteractions: Stopped propagation prevents parent Accordion click handler */}
 								<div onClick={(e) => e.stopPropagation()}>
 									<McpToolRow
 										serverName={useMcpServer.serverName}
@@ -908,7 +939,7 @@ export const ChatRowContent = memo(
 						return (
 							<div className="w-full -mt-2.5">
 								<CodeAccordian
-									diff={tool.diff!}
+									diff={tool.diff ?? ""}
 									isExpanded={isExpanded}
 									isFeedback={true}
 									onToggleExpand={handleToggle}
@@ -1114,10 +1145,10 @@ export const ChatRowContent = memo(
 											// Enable background terminal execution mode
 											await UiServiceClient.setTerminalExecutionMode(BooleanRequest.create({ value: true }))
 										} catch (error) {
-											// biome-ignore lint/suspicious/noConsole: No Logger service available in remote-ui
 											console.error("Failed to enable background terminal:", error)
 										}
-									}}>
+									}}
+									type="button">
 									<SettingsIcon className="size-2" />
 									{isBackgroundModeEnabled
 										? "Background Terminal Enabled"

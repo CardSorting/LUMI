@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import * as proto from "@/shared/proto"
 import { getAvailableTerminalProfiles as getTerminalProfilesFromShell } from "../../../utils/shell"
-import { Controller } from "../index"
 
 export async function getAvailableTerminalProfiles(
 	_controller: Controller,

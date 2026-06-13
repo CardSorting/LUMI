@@ -1,5 +1,5 @@
 import { Logger } from "@/shared/services/Logger"
-import { StreamingResponseHandler } from "./grpc-handler"
+import type { StreamingResponseHandler } from "./grpc-handler-types"
 
 /**
  * Information about a registered gRPC request
@@ -23,6 +23,7 @@ export interface RequestInfo {
 	/**
 	 * The streaming response handler for this request
 	 */
+	// biome-ignore lint/suspicious/noExplicitAny: The registry stores streams of arbitrary type, so any is required.
 	responseStream?: StreamingResponseHandler<any>
 }
 
@@ -52,6 +53,7 @@ export class GrpcRequestRegistry {
 		requestId: string,
 		cleanup: () => void,
 		metadata?: unknown,
+		// biome-ignore lint/suspicious/noExplicitAny: The registry stores streams of arbitrary type, so any is required.
 		responseStream?: StreamingResponseHandler<any>,
 	): void {
 		this.activeRequests.set(requestId, {

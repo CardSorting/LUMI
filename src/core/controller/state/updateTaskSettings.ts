@@ -1,8 +1,9 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty } from "@shared/proto/dietcode/common"
 import { PlanActMode, UpdateTaskSettingsRequest } from "@shared/proto/dietcode/state"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
+import { Settings } from "@shared/storage/state-keys"
 import { Mode } from "@/shared/storage/types"
-import { Controller } from ".."
 import { normalizeOpenaiReasoningEffort } from "./reasoningEffort"
 
 /**
@@ -44,7 +45,7 @@ export async function updateTaskSettings(controller: Controller, request: Update
 		} = request.settings
 
 		// Batch update for simple pass-through fields
-		const filteredSettings: any = Object.fromEntries(
+		const filteredSettings: Partial<Settings> = Object.fromEntries(
 			Object.entries(simpleSettings).filter(([key, value]) => key !== "openaiReasoningEffort" && value !== undefined),
 		)
 

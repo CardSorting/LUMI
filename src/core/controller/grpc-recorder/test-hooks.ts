@@ -1,4 +1,4 @@
-import { Controller } from "@/core/controller"
+import type { IController as Controller } from "@core/controller/types"
 import { GrpcRecorderBuilder } from "@/core/controller/grpc-recorder/grpc-recorder.builder"
 import { GrpcPostRecordHook } from "@/core/controller/grpc-recorder/types"
 import { getLatestState } from "@/core/controller/state/getLatestState"

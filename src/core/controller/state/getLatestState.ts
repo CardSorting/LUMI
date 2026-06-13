@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { State } from "@shared/proto/dietcode/state"
-import { Controller } from "../index"
 
 /**
  * Get the latest extension state

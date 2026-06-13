@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { BrowserConnectionInfo } from "@shared/proto/dietcode/browser"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from "../index"
 
 /**
  * Get information about the current browser connection

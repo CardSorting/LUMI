@@ -2,11 +2,11 @@ import fs from "node:fs"
 import path from "node:path"
 
 import { Logger } from "@/shared/services/Logger"
-import { IntegrityOptimizer } from "../policy/IntegrityOptimizer.js"
-import type { SpiderEngine } from "../policy/spider/SpiderEngine.js"
-import { AnomalyRegistry } from "./AnomalyRegistry.js"
-import type { AuditRecorder } from "./AuditRecorder.js"
-import { StabilityMonitor, StabilityStats } from "./StabilityMonitor.js"
+import { IntegrityOptimizer } from "../policy/IntegrityOptimizer"
+import type { SpiderEngine } from "../policy/spider/SpiderEngine"
+import { AnomalyRegistry } from "./AnomalyRegistry"
+import type { AuditRecorder } from "./AuditRecorder"
+import { StabilityMonitor, StabilityStats } from "./StabilityMonitor"
 
 /**
  * DashboardGenerator: Generates a live STABILITY_DASHBOARD.md report.

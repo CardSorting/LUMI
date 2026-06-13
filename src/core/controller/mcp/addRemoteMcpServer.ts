@@ -1,8 +1,8 @@
+import type { IController as Controller } from "@core/controller/types"
 import type { AddRemoteMcpServerRequest } from "@shared/proto/dietcode/mcp"
 import { McpServers } from "@shared/proto/dietcode/mcp"
 import { convertMcpServersToProtoMcpServers } from "@/shared/proto-conversions/mcp/mcp-server-conversion"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Adds a new remote MCP server via gRPC

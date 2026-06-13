@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
 import { Logger } from "@/shared/services/Logger"
 import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
-import { Controller } from "../index"
 
 // Keep track of active account button clicked subscriptions
 const activeAccountButtonClickedSubscriptions = new Set<StreamingResponseHandler<Empty>>()

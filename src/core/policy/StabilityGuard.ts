@@ -1,9 +1,9 @@
 import * as path from "path"
 import { SafeNumber } from "../../shared/utils/SafeNumber"
-import { AnomalyRegistry } from "../integrity/AnomalyRegistry.js"
-import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine.js"
-import { SimulationEngine } from "./SimulationEngine.js"
-import { SpiderEngine } from "./spider/SpiderEngine.js"
+import { AnomalyRegistry } from "../integrity/AnomalyRegistry"
+import { AxiomViolation, SemanticAxiomEngine } from "./SemanticAxiomEngine"
+import { SimulationEngine } from "./SimulationEngine"
+import { SpiderEngine } from "./spider/SpiderEngine"
 
 export interface GuardSignal {
 	approved: boolean

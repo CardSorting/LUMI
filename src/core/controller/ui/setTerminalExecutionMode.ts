@@ -1,5 +1,5 @@
+import type { IController as Controller } from "@core/controller/types"
 import { BooleanRequest, KeyValuePair } from "@shared/proto/dietcode/common"
-import { Controller } from ".."
 
 /**
  * Sets the terminal execution mode

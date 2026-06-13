@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { AuthState, AuthStateChangedRequest } from "@shared/proto/dietcode/account"
 import { Logger } from "@/shared/services/Logger"
-import type { Controller } from "../index"
 
 /**
  * Handles authentication state changes from the Firebase context.

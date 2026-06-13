@@ -1,7 +1,7 @@
 import * as path from "path"
 import { SafeNumber } from "../../shared/utils/SafeNumber"
 import { AnomalyRegistry } from "../integrity/AnomalyRegistry"
-import { SpiderEngine } from "./spider/SpiderEngine.js"
+import { SpiderEngine } from "./spider/SpiderEngine"
 import "@/utils/path"
 
 export interface SimulationResult {
@@ -89,7 +89,7 @@ export class SimulationEngine {
 		const isHighTraffic = (node.afferentCoupling || 0) > 10
 		const baseThreshold = isHighTraffic ? 15 : 20
 		// V8 AGILITY: Healing Mode provides a massive 30% drop threshold and ignores new violations
-		const dynamicThreshold = isHealingMode || isAgile ? 30 : baseThreshold
+		const _dynamicThreshold = isHealingMode || isAgile ? 30 : baseThreshold
 		const isSafe = true // Total Deblocking: Always safe
 
 		// V16: Blast Radius Analysis

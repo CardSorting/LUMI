@@ -1,8 +1,8 @@
 import * as fs from "fs"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
-import { SpiderEngine } from "../policy/spider/SpiderEngine.js"
-import { AuditRecorder } from "./AuditRecorder.js"
+import { SpiderEngine } from "../policy/spider/SpiderEngine"
+import { AuditRecorder } from "./AuditRecorder"
 
 export interface StabilityHandoverData {
 	projectId: string
@@ -27,7 +27,7 @@ export class StabilityHandover {
 	/**
 	 * Exports the full architectural state.
 	 */
-	public async exportStability(engine: SpiderEngine, recorder: AuditRecorder) {
+	public async exportStability(engine: SpiderEngine, _recorder: AuditRecorder) {
 		const report = engine.computeEntropy()
 		const score = Math.round((1 - report.score) * 100)
 		const violations = engine.getViolations().map((v) => v.message)

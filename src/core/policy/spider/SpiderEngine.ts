@@ -7,13 +7,13 @@ import * as fs from "fs"
 import * as path from "path"
 import * as ts from "typescript"
 import * as v8 from "v8"
-import { Logger } from "../../../shared/services/Logger.js"
+import { Logger } from "../../../shared/services/Logger"
 import { SafeNumber } from "../../../shared/utils/SafeNumber"
-import { ForensicEngine } from "./ForensicEngine.js"
-import { MetricsEngine } from "./MetricsEngine.js"
-import { PathResolver } from "./PathResolver.js"
-import { PersistenceManager } from "./PersistenceManager.js"
-import { SpiderEntropyReport, SpiderNode, SpiderRegistryPayload, SpiderSnapshot, SpiderViolation } from "./types.js"
+import { ForensicEngine } from "./ForensicEngine"
+import { MetricsEngine } from "./MetricsEngine"
+import { PathResolver } from "./PathResolver"
+import { PersistenceManager } from "./PersistenceManager"
+import { SpiderEntropyReport, SpiderNode, SpiderRegistryPayload, SpiderSnapshot, SpiderViolation } from "./types"
 
 export type { SpiderNode, SpiderEntropyReport, SpiderViolation, SpiderSnapshot, SpiderRegistryPayload }
 
@@ -37,8 +37,8 @@ const MAX_INDEX_FILE_BYTES = 1_500_000
 const finiteNodeNumber = (value: unknown, fallback = 0): number =>
 	typeof value === "number" && Number.isFinite(value) ? value : fallback
 
-import { AnomalyRegistry } from "../../integrity/AnomalyRegistry.js"
-import { StabilityMonitor } from "../../integrity/StabilityMonitor.js"
+import { AnomalyRegistry } from "../../integrity/AnomalyRegistry"
+import { StabilityMonitor } from "../../integrity/StabilityMonitor"
 
 /**
  * SpiderEngine: The Facade orchestrating structural graph analysis,

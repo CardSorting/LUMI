@@ -1,6 +1,6 @@
+import type { IController as Controller } from "@core/controller/types"
 import { Empty, StringRequest } from "@shared/proto/dietcode/common"
 import { openMention as coreOpenMention } from "../../mentions"
-import { Controller } from ".."
 
 /**
  * Opens a mention (file path, problem, terminal, or URL)

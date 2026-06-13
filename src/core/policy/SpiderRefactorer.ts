@@ -1,6 +1,6 @@
 import * as path from "path"
-import type { SpiderEngine } from "./spider/SpiderEngine.js"
-import type { SpiderNode } from "./spider/types.js"
+import type { SpiderEngine } from "./spider/SpiderEngine"
+import type { SpiderNode } from "./spider/types"
 
 export interface RefactoringSuggestion {
 	type: "RENAME" | "MOVE" | "EXTRACT" | "DELETE"

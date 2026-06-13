@@ -1,5 +1,5 @@
+import type { IController as Controller } from "@core/controller/types"
 import { KeyValuePair, StringRequest } from "@shared/proto/dietcode/common"
-import { Controller } from ".."
 
 /**
  * Executes a scroll to settings action

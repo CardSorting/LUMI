@@ -6,6 +6,7 @@ import simpleGit, { type SimpleGit } from "simple-git"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { getLfsPatterns, writeExcludesFile } from "./CheckpointExclusions"
+import { GIT_DISABLED_SUFFIX } from "./constants"
 
 interface CheckpointAddResult {
 	success: boolean
@@ -214,4 +215,5 @@ export class GitOperations {
 	}
 }
 
-export const GIT_DISABLED_SUFFIX = "_disabled"
+// Re-exported for backward compatibility; canonical home is ./constants.
+export { GIT_DISABLED_SUFFIX }

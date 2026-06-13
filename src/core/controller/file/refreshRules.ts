@@ -1,11 +1,11 @@
 import { refreshDietCodeRulesToggles } from "@core/context/instructions/user-instructions/dietcode-rules"
 import { refreshExternalRulesToggles } from "@core/context/instructions/user-instructions/external-rules"
 import { refreshWorkflowToggles } from "@core/context/instructions/user-instructions/workflows"
+import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { RefreshedRules } from "@shared/proto/dietcode/file"
 import { Logger } from "@/shared/services/Logger"
 import { getCwd, getDesktopDir } from "@/utils/path"
-import type { Controller } from "../index"
 
 /**
  * Refreshes all rule toggles (DietCode, External, and Workflows)

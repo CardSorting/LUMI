@@ -1,5 +1,5 @@
 import { Logger } from "@/shared/services/Logger"
-import { HookProcess } from "./HookProcess"
+import type { IHookProcess } from "./IHookProcess"
 
 /**
  * Global registry for tracking active hook processes.
@@ -14,51 +14,51 @@ import { HookProcess } from "./HookProcess"
  * - Extension deactivation calls terminateAll()
  * - Can query active count for monitoring/debugging
  */
-export class HookProcessRegistry {
-	private static activeProcesses = new Set<HookProcess>()
+const activeProcesses = new Set<IHookProcess>()
 
+export const HookProcessRegistry = {
 	/**
 	 * Register a hook process as active.
 	 * Called by HookProcess when execution starts.
 	 */
-	static register(process: HookProcess): void {
-		HookProcessRegistry.activeProcesses.add(process)
-	}
+	register(process: IHookProcess): void {
+		activeProcesses.add(process)
+	},
 
 	/**
 	 * Unregister a hook process (completed or failed).
 	 * Called by HookProcess when execution ends.
 	 */
-	static unregister(process: HookProcess): void {
-		HookProcessRegistry.activeProcesses.delete(process)
-	}
+	unregister(process: IHookProcess): void {
+		activeProcesses.delete(process)
+	},
 
 	/**
 	 * Terminate all active hook processes.
 	 * Called during extension deactivation to prevent zombie processes.
 	 */
-	static async terminateAll(): Promise<void> {
-		const processes = Array.from(HookProcessRegistry.activeProcesses)
+	async terminateAll(): Promise<void> {
+		const processes = Array.from(activeProcesses)
 		if (processes.length > 0) {
 			Logger.log(`[HookProcessRegistry] Terminating ${processes.length} active hook process(es)`)
 			await Promise.all(processes.map((p) => p.terminate()))
-			HookProcessRegistry.activeProcesses.clear()
+			activeProcesses.clear()
 		}
-	}
+	},
 
 	/**
 	 * Get the number of currently active hook processes.
 	 * Useful for monitoring and debugging.
 	 */
-	static getActiveCount(): number {
-		return HookProcessRegistry.activeProcesses.size
-	}
+	getActiveCount(): number {
+		return activeProcesses.size
+	},
 
 	/**
 	 * Clear the registry (for testing only).
 	 * @internal
 	 */
-	static resetForTesting(): void {
-		HookProcessRegistry.activeProcesses.clear()
-	}
+	resetForTesting(): void {
+		activeProcesses.clear()
+	},
 }

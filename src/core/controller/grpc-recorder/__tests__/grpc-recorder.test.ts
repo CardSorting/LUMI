@@ -1,13 +1,15 @@
-import { GrpcRecorder, IRecorder } from "@core/controller/grpc-recorder/grpc-recorder"
+import { IRecorder } from "@core/controller/grpc-recorder/grpc-recorder"
+import { GrpcRecorderBuilder } from "@core/controller/grpc-recorder/grpc-recorder.builder"
 import { expect } from "chai"
 import { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { GrpcRequest } from "@/shared/WebviewMessage"
+import { GrpcLogEntry } from "../types"
 
 describe("grpc-recorder", () => {
 	let recorder: IRecorder
 
 	before(async () => {
-		recorder = GrpcRecorder.builder()
+		recorder = new GrpcRecorderBuilder()
 			.withFilters((req: GrpcRequest) => req.service === "the-unwanted-service")
 			.enableIf(true)
 			.build()
@@ -117,7 +119,7 @@ describe("grpc-recorder", () => {
 		})
 
 		it("using default filtering should filter out unwanted requests", async () => {
-			const customRecorder = GrpcRecorder.builder()
+			const customRecorder = new GrpcRecorderBuilder()
 				.withFilters(
 					(req) => req.is_streaming,
 					(req) => ["dietcode.UiService", "dietcode.McpService", "dietcode.WebService"].includes(req.service),
@@ -148,7 +150,7 @@ describe("grpc-recorder", () => {
 		})
 
 		it("cleanupSyntheticEntries removes synthetic entries from session log", async () => {
-			const testRecorder = GrpcRecorder.builder().enableIf(true).build()
+			const testRecorder = new GrpcRecorderBuilder().enableIf(true).build()
 
 			// Add regular request
 			testRecorder.recordRequest({
@@ -183,14 +185,14 @@ describe("grpc-recorder", () => {
 
 		it("recordResponse executes post-record hooks", async () => {
 			let hookExecuted = false
-			let hookEntry: any = null
+			let hookEntry: GrpcLogEntry | undefined
 
-			const mockHook = async (entry: any) => {
+			const mockHook = async (entry: GrpcLogEntry) => {
 				hookExecuted = true
 				hookEntry = entry
 			}
 
-			const testRecorder = GrpcRecorder.builder().withPostRecordHooks(mockHook).enableIf(true).build()
+			const testRecorder = new GrpcRecorderBuilder().withPostRecordHooks(mockHook).enableIf(true).build()
 
 			testRecorder.recordRequest({
 				service: "test-service",
@@ -207,8 +209,8 @@ describe("grpc-recorder", () => {
 			})
 
 			expect(hookExecuted).to.be.true
-			expect(hookEntry).to.not.be.null
-			expect(hookEntry.requestId).equal("test-id")
+			expect(hookEntry).to.exist
+			expect(hookEntry?.requestId).equal("test-id")
 		})
 	})
 })

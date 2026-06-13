@@ -1,10 +1,10 @@
+import type { IController as Controller } from "@core/controller/types"
 import { RefreshedSkills, SkillInfo } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
 import path from "path"
 import { getSkillsDirectoriesForScan } from "@/core/storage/disk"
 import { HostProvider } from "@/hosts/host-provider"
 import { fileExistsAtPath, isDirectory } from "@/utils/fs"
-import { Controller } from ".."
 
 /**
  * Parse YAML frontmatter from markdown content.

@@ -1,7 +1,7 @@
+import type { IController as Controller } from "@core/controller/types"
 import { GetTaskHistoryRequest, TaskHistoryArray } from "@shared/proto/dietcode/task"
 import { Logger } from "@/shared/services/Logger"
 import { arePathsEqual, getWorkspacePath } from "../../../utils/path"
-import { Controller } from ".."
 
 /**
  * Gets filtered task history

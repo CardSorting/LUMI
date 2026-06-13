@@ -1,11 +1,12 @@
+import type { IController as Controller } from "@core/controller/types"
 import CheckpointTracker from "@integrations/checkpoints/CheckpointTracker"
 import { findLast } from "@shared/array"
 import { Empty } from "@shared/proto/dietcode/common"
 import { ExplainChangesRequest } from "@shared/proto/dietcode/task"
 import { HostProvider } from "@/hosts/host-provider"
+import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { ShowMessageType } from "@/shared/proto/index.host"
 import { Logger } from "@/shared/services/Logger"
-import { Controller } from ".."
 import { sendRelinquishControlEvent } from "../ui/subscribeToRelinquishControl"
 import {
 	buildDiffContent,
@@ -40,7 +41,26 @@ export async function explainChanges(controller: Controller, request: ExplainCha
 			return Empty.create({})
 		}
 
-		const checkpointManager = controller.task.checkpointManager as any
+		const checkpointManager = controller.task.checkpointManager as unknown as {
+			config: { enableCheckpoints: boolean }
+			services: {
+				messageStateHandler: {
+					getDietCodeMessages(): Array<{
+						ts: number
+						say?: string
+						lastCheckpointHash?: string
+					}>
+					getApiConversationHistory(): DietCodeStorageMessage[]
+					setCheckpointTracker(tracker: CheckpointTracker | undefined): void
+				}
+			}
+			state: {
+				checkpointTracker?: CheckpointTracker
+				checkpointManagerErrorMessage?: string
+			}
+			getWorkspacePath(): Promise<string>
+			task: { taskId: string }
+		}
 		if (!checkpointManager) {
 			HostProvider.window.showMessage({
 				type: ShowMessageType.ERROR,
@@ -73,7 +93,7 @@ export async function explainChanges(controller: Controller, request: ExplainCha
 
 		// Find the message
 		const dietcodeMessages = messageStateHandler.getDietCodeMessages()
-		const messageIndex = dietcodeMessages.findIndex((m: any) => m.ts === request.messageTs)
+		const messageIndex = dietcodeMessages.findIndex((m) => m.ts === request.messageTs)
 		const message = dietcodeMessages[messageIndex]
 
 		if (!message) {
@@ -130,11 +150,11 @@ export async function explainChanges(controller: Controller, request: ExplainCha
 		// Get changed files (using seeNewChangesSinceLastTaskCompletion logic)
 		const lastTaskCompletedMessageCheckpointHash = findLast(
 			dietcodeMessages.slice(0, messageIndex),
-			(m: any) => m.say === "completion_result",
+			(m) => m.say === "completion_result",
 		)?.lastCheckpointHash
 
 		const firstCheckpointMessageCheckpointHash = dietcodeMessages.find(
-			(m: any) => m.say === "checkpoint_created",
+			(m) => m.say === "checkpoint_created",
 		)?.lastCheckpointHash
 
 		const previousCheckpointHash = lastTaskCompletedMessageCheckpointHash || firstCheckpointMessageCheckpointHash
