@@ -714,6 +714,16 @@ export class ToolExecutor {
 					newCount,
 					globalCount,
 				)
+
+				if (block.name === DietCodeDefaultTool.FILE_READ && typeof toolResult === "string") {
+					try {
+						const { NativeMutationManager } = require("@/services/mutation/NativeMutationManager")
+						const mutationManager = NativeMutationManager.getInstance()
+						await mutationManager.autoTrackFileRead(this.cwd, block.params.path, config.taskId || config.ulid)
+					} catch (err) {
+						// Silent fallback
+					}
+				}
 			}
 
 			this.pushToolResult(toolResult, block)

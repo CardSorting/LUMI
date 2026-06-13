@@ -1024,6 +1024,39 @@ export async function buildProjectFingerprint(workspace: string): Promise<any> {
 		operators_hint = "Hermes operators and agent-assisted developers extending the plugin surface"
 	}
 
+	const catalogPath = path.join(workspace, "catalog-info.yaml")
+	const has_backstage_catalog = await fileExists(catalogPath)
+	let catalog_name: string | null = null
+	let catalog_description: string | null = null
+	if (has_backstage_catalog) {
+		try {
+			const content = await fs.readFile(catalogPath, "utf8")
+			const lines = content.split(/\r?\n/)
+			let inMetadata = false
+			for (const line of lines) {
+				const trimmed = line.trim()
+				if (/^metadata\s*:/i.test(trimmed)) {
+					inMetadata = true
+					continue
+				}
+				if (inMetadata) {
+					if (line.length > 0 && !/^\s/.test(line)) {
+						inMetadata = false
+						continue
+					}
+					const nameMatch = /^\s*name\s*:\s*['"]?([^'"]+)['"]?/i.exec(line)
+					if (nameMatch && !catalog_name) {
+						catalog_name = nameMatch[1].trim()
+					}
+					const descMatch = /^\s*description\s*:\s*['"]?([^'"]+)['"]?/i.exec(line)
+					if (descMatch && !catalog_description) {
+						catalog_description = descMatch[1].trim()
+					}
+				}
+			}
+		} catch {}
+	}
+
 	return {
 		project_name: display_name,
 		package_name,
@@ -1063,9 +1096,9 @@ export async function buildProjectFingerprint(workspace: string): Promise<any> {
 		ci_workflow_names: ci_workflow_names.length > 0 ? ci_workflow_names : null,
 		issue_templates: issue_templates.length > 0 ? issue_templates : null,
 		has_pre_commit,
-		has_backstage_catalog: await fileExists(path.join(workspace, "catalog-info.yaml")),
-		catalog_name: null,
-		catalog_description: null,
+		has_backstage_catalog,
+		catalog_name,
+		catalog_description,
 	}
 }
 
