@@ -1,7 +1,7 @@
 import { getNewAdvisoryViolations } from "@shared/audit/auditAdvisoryDedup"
 import { getPreviousAdvisoryAuditBeforeTs } from "@shared/audit/auditMessages"
 import { hasCriticalViolations } from "@shared/audit/auditSeverity"
-import { getViolationRemediation } from "@shared/audit/completionAudit"
+import { getViolationRemediation } from "@shared/audit/auditViolationRemediation"
 import { formatViolationLabel, HARDENING_GRADE_STYLES, type HardeningGrade } from "@shared/audit/taskAuditUtils"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { AlertTriangleIcon } from "lucide-react"

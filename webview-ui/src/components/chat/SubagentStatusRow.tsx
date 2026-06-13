@@ -18,7 +18,7 @@ import {
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import MarkdownBlock from "../common/MarkdownBlock"
-import ParentAuditGateBadge from "./ParentAuditGateBadge"
+import { ParentAuditGateBadge } from "./ParentAuditGateBadge"
 
 interface SubagentStatusRowProps {
 	message: DietCodeMessage

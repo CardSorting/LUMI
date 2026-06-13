@@ -5,6 +5,7 @@ import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { VirtuosoHandle } from "react-virtuoso"
 import { VscIcon } from "@/components/ui/vsc-icon"
+import { cn } from "@/lib/utils"
 import { ButtonActionType, getButtonConfig } from "../../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../../types/chatTypes"
 

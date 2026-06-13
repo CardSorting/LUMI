@@ -5,7 +5,7 @@ import {
 	shouldAutoExpandViolationLedger,
 	type ViolationLedgerEntry,
 } from "@shared/audit/auditSessionLedger"
-import { getViolationRemediation } from "@shared/audit/completionAudit"
+import { getViolationRemediation } from "@shared/audit/auditViolationRemediation"
 import { formatViolationLabel } from "@shared/audit/taskAuditUtils"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"

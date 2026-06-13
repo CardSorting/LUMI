@@ -1,6 +1,9 @@
 import type { AuditMessageSnapshot } from "./auditMessages"
-import { shouldEmitAdvisoryAuditEvent } from "./completionAudit"
 import type { TaskAuditMetadata } from "./types"
+
+export function shouldEmitAdvisoryAuditEvent(metadata: TaskAuditMetadata): boolean {
+	return (metadata.violations?.length ?? 0) > 0 || metadata.divergence_detected === true
+}
 
 function normalizeViolationSet(violations: string[] | undefined): string[] {
 	return [...(violations ?? [])].sort()

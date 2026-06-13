@@ -1,11 +1,13 @@
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
+import { shouldEmitAdvisoryAuditEvent } from "./auditAdvisoryDedup"
 import { formatGateReasonsForDisplay } from "./auditGateCatalog"
 import { type CompletionGateDecision, type CompletionGateOptions, evaluateCompletionGate } from "./auditGateReport"
 import { buildAdvisoryEscalationSection } from "./auditPostTool"
 import { buildRegressionGateSection, hasAuditScoreRegression } from "./auditRegression"
 import { buildAdvisoryRollupSection, shouldEscalateFromAdvisory } from "./auditRollup"
 import { partitionViolationsBySeverity } from "./auditSeverity"
+import { getViolationRemediation } from "./auditViolationRemediation"
 import { COMPLETION_GATE_SCORE_THRESHOLD } from "./gatePolicy"
 import {
 	buildAuditReportMarkdown,
@@ -20,31 +22,7 @@ export async function persistCompletionAudit(streamId: string, metadata: TaskAud
 	await orchestrator.persistTaskAudit(streamId, metadata)
 }
 
-const REMEDIATION_HINTS: Record<string, string> = {
-	result_empty: "Provide a substantive completion summary describing what was done.",
-	missing_validation_evidence: "Include explicit verification evidence (tests run, build output, lint results).",
-	reported_blocker: "Resolve the reported blocker or document why it cannot be completed.",
-	security_leak: "Remove sensitive data from the completion result before finishing.",
-	result_too_short: "Expand the result to cover the scope of the original task.",
-	stalled_task_timeout: "Investigate why the task stalled and retry with a complete result.",
-	verification_output_failure: "Fix failing verification commands (tests, lint, build) before completing.",
-}
-
-export function getViolationRemediation(violation: string): string | undefined {
-	if (REMEDIATION_HINTS[violation]) {
-		return REMEDIATION_HINTS[violation]
-	}
-	if (violation.startsWith("unresolved_work_marker:")) {
-		return "Remove or resolve all TODO/FIXME/placeholder markers before completing."
-	}
-	if (violation.startsWith("low_intent_coverage:")) {
-		return "Ensure the result addresses the terms and goals stated in the original task."
-	}
-	if (violation.startsWith("high_entropy_low_coverage:")) {
-		return "Reduce scope drift: align the result more closely with the stated intent."
-	}
-	return undefined
-}
+export { getViolationRemediation } from "./auditViolationRemediation"
 
 export function isCompletionBlockedByAudit(metadata: TaskAuditMetadata, options?: CompletionGateOptions): boolean {
 	return evaluateCompletionGate(metadata, options).blocked
@@ -158,6 +136,8 @@ export async function runAdvisoryAudit(
 	return orchestrator.auditTask(taskId, taskDescription, result, streamFocus || taskDescription)
 }
 
+export { shouldEmitAdvisoryAuditEvent } from "./auditAdvisoryDedup"
+
 export function buildActModeAuditAdvisory(metadata: TaskAuditMetadata): string {
 	if (!shouldEmitAdvisoryAuditEvent(metadata)) {
 		return ""
@@ -180,11 +160,6 @@ export function buildActModeAuditAdvisory(metadata: TaskAuditMetadata): string {
 	)
 }
 
-export function shouldEmitAdvisoryAuditEvent(metadata: TaskAuditMetadata): boolean {
-	return (metadata.violations?.length ?? 0) > 0 || metadata.divergence_detected === true
-}
-
-/** Human-readable summary for act-mode advisory chat events — SonarQube issue annotation pattern. */
 export function buildAdvisoryAuditEventSummary(metadata: TaskAuditMetadata, previousMetadata?: TaskAuditMetadata): string {
 	const assessment = computeHardeningAssessment(metadata)
 	const newViolations = previousMetadata

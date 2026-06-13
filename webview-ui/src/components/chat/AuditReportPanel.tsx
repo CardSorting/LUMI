@@ -4,7 +4,7 @@ import { describeGateReadiness } from "@shared/audit/auditGateReadiness"
 import { buildQualityGateStatus } from "@shared/audit/auditGateStatus"
 import { buildAuditSarifJson } from "@shared/audit/auditSarifExport"
 import { partitionViolationsBySeverity } from "@shared/audit/auditSeverity"
-import { getViolationRemediation } from "@shared/audit/completionAudit"
+import { getViolationRemediation } from "@shared/audit/auditViolationRemediation"
 import {
 	buildAuditReportMarkdown,
 	formatAuditTime,

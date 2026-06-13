@@ -1,0 +1,13 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MIRA">
+  <title>MIRA</title>
+  <circle cx="50" cy="50" r="40" fill="#b8b5d6" opacity="0.12"/>
+  <circle cx="50" cy="50" r="36" fill="none" stroke="#6366a0" stroke-width="1.25" opacity="0.22"/>
+  <path d="M22 48Q36 34 50 38" stroke="#6bb5c9" stroke-width="1.25" stroke-linecap="round" opacity="0.28"/>
+  <path d="M78 52Q64 66 50 62" stroke="#6bb5c9" stroke-width="1.25" stroke-linecap="round" opacity="0.24"/>
+  <circle cx="50" cy="50" r="24" fill="#6366a0" opacity="0.18"/>
+  <circle cx="50" cy="50" r="17" fill="#6366a0"/>
+  <circle cx="50" cy="51" r="10" fill="#6bb5c9" opacity="0.42"/>
+  <path d="M42 47Q44 45.5 46 47" stroke="#faf9f7" stroke-width="1.6" stroke-linecap="round" opacity="0.88"/>
+  <path d="M54 47Q56 45.5 58 47" stroke="#faf9f7" stroke-width="1.6" stroke-linecap="round" opacity="0.88"/>
+  <path d="M50 67V74L54 71" stroke="#faf9f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/>
+</svg>

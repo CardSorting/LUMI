@@ -1,6 +1,6 @@
 import { formatGateReasonLabel, GATE_REASON_REMEDIATION } from "./auditGateCatalog"
 import { getViolationSeverity } from "./auditSeverity"
-import { getViolationRemediation } from "./completionAudit"
+import { getViolationRemediation } from "./auditViolationRemediation"
 import { formatViolationLabel } from "./taskAuditUtils"
 import type { CompletionGateReasonCode, TaskAuditMetadata } from "./types"
 
