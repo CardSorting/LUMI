@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import MarkdownBlock from "../common/MarkdownBlock"
+import ParentAuditGateBadge from "./ParentAuditGateBadge"
 
 interface SubagentStatusRowProps {
 	message: DietCodeMessage
@@ -216,9 +217,10 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 
 	return (
 		<div className="mb-2">
-			<div className="flex items-center gap-2.5 mb-3">
+			<div className="flex items-center gap-2.5 mb-3 flex-wrap">
 				<NetworkIcon className="size-2 text-foreground" />
 				<span className="font-bold text-foreground">{title}</span>
+				<ParentAuditGateBadge />
 			</div>
 			<div className="space-y-2">
 				{data.items.map((entry, index) => {

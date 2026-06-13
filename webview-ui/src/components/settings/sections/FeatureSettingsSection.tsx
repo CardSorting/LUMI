@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { AuditIntentThresholdPanel } from "../AuditIntentThresholdPanel"
 import Section from "../Section"
 import SettingsSlider from "../SettingsSlider"
 import { updateSetting } from "../utils/settingsHandlers"
@@ -127,6 +128,84 @@ const experimentalFeatures: FeatureToggle[] = [
 		stateKey: "doubleCheckCompletionEnabled",
 		settingKey: "doubleCheckCompletionEnabled",
 	},
+	{
+		id: "audit-completion-gate",
+		label: "Audit Completion Gate",
+		description:
+			"Blocks attempt_completion when the architectural hardening audit fails (Grade F with policy violations). Mirrors production quality gates in CI/CD pipelines.",
+		stateKey: "auditCompletionGateEnabled",
+		settingKey: "auditCompletionGateEnabled",
+	},
+	{
+		id: "audit-gate-critical-only",
+		label: "Critical-Only Completion Gate",
+		description:
+			"When enabled, only critical-severity violations block completion. Warning-level issues are advisory — mirrors SonarQube blocker vs. major severities.",
+		stateKey: "auditCompletionGateCriticalOnly",
+		settingKey: "auditCompletionGateCriticalOnly",
+	},
+	{
+		id: "audit-act-mode-advisory",
+		label: "Act Mode Audit Advisory",
+		description:
+			"Runs lightweight hardening checks on act_mode_respond progress updates and injects remediation hints before completion.",
+		stateKey: "auditActModeAdvisoryEnabled",
+		settingKey: "auditActModeAdvisoryEnabled",
+	},
+	{
+		id: "audit-advisory-escalation",
+		label: "Advisory Escalation Gate",
+		description:
+			"Blocks completion when critical act-mode advisory findings remain unresolved — mirrors CI escalation from warning to blocker.",
+		stateKey: "auditAdvisoryEscalationEnabled",
+		settingKey: "auditAdvisoryEscalationEnabled",
+	},
+	{
+		id: "audit-plan-regression-gate",
+		label: "Plan Regression Gate",
+		description: "Blocks completion when hardening score drops significantly from the last plan audit baseline.",
+		stateKey: "auditPlanRegressionGateEnabled",
+		settingKey: "auditPlanRegressionGateEnabled",
+	},
+	{
+		id: "audit-tool-output-advisory",
+		label: "Command Output Audit Advisory",
+		description: "Audits verification command output (tests, lint, build) and injects remediation hints into tool results.",
+		stateKey: "auditToolOutputAdvisoryEnabled",
+		settingKey: "auditToolOutputAdvisoryEnabled",
+	},
+	{
+		id: "audit-file-write-advisory",
+		label: "File Write Audit Advisory",
+		description:
+			"Flags TODO/FIXME/placeholder markers in written file content before completion — mirrors pre-commit content scanners.",
+		stateKey: "auditFileWriteAdvisoryEnabled",
+		settingKey: "auditFileWriteAdvisoryEnabled",
+	},
+	{
+		id: "audit-intent-threshold-adjustments",
+		label: "Intent-Adjusted Gate Thresholds",
+		description:
+			"Raises completion gate thresholds for high-risk intents (FIX +10, TEST +10) — mirrors CI branch protection tiers.",
+		stateKey: "auditIntentThresholdAdjustmentsEnabled",
+		settingKey: "auditIntentThresholdAdjustmentsEnabled",
+	},
+	{
+		id: "audit-sarif-hook-export",
+		label: "SARIF Export on TaskComplete",
+		description:
+			"Includes SARIF 2.1.0 report in TaskComplete hook metadata for CI/CD ingestion (GitHub Code Scanning, Azure DevOps).",
+		stateKey: "auditSarifHookExportEnabled",
+		settingKey: "auditSarifHookExportEnabled",
+	},
+	{
+		id: "audit-workspace-artifacts",
+		label: "Workspace Audit Artifacts",
+		description:
+			"Writes SARIF and markdown audit reports to `.audit/` in the workspace on completion and gate blocks — mirrors CI artifact upload.",
+		stateKey: "auditWorkspaceArtifactsEnabled",
+		settingKey: "auditWorkspaceArtifactsEnabled",
+	},
 ]
 
 const FeatureRow = memo(
@@ -201,6 +280,18 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		enableParallelToolCalling,
 		backgroundEditEnabled,
 		doubleCheckCompletionEnabled,
+		auditCompletionGateEnabled,
+		auditCompletionGateThreshold,
+		auditCompletionGateCriticalOnly,
+		auditActModeAdvisoryEnabled,
+		auditAdvisoryEscalationEnabled,
+		auditPlanRegressionGateEnabled,
+		auditToolOutputAdvisoryEnabled,
+		auditFileWriteAdvisoryEnabled,
+		auditIntentThresholdAdjustmentsEnabled,
+		auditIntentThresholdOverrides,
+		auditSarifHookExportEnabled,
+		auditWorkspaceArtifactsEnabled,
 	} = useExtensionState()
 
 	const handleFocusChainIntervalChange = useCallback(
@@ -225,6 +316,16 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		enableParallelToolCalling,
 		backgroundEditEnabled,
 		doubleCheckCompletionEnabled,
+		auditCompletionGateEnabled,
+		auditCompletionGateCriticalOnly,
+		auditActModeAdvisoryEnabled,
+		auditAdvisoryEscalationEnabled,
+		auditPlanRegressionGateEnabled,
+		auditToolOutputAdvisoryEnabled,
+		auditFileWriteAdvisoryEnabled,
+		auditIntentThresholdAdjustmentsEnabled,
+		auditSarifHookExportEnabled,
+		auditWorkspaceArtifactsEnabled,
 		yoloModeToggled: isYoloRemoteLocked ? remoteConfigSettings?.yoloModeToggled : yoloModeToggled,
 	}
 
@@ -276,6 +377,23 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 												: updateSetting(feature.settingKey, checked)
 										}
 									/>
+									{feature.id === "audit-completion-gate" && featureState[feature.stateKey] && (
+										<SettingsSlider
+											label="Gate Score Threshold (0-100)"
+											max={100}
+											min={0}
+											onChange={(value) => updateSetting("auditCompletionGateThreshold", value)}
+											step={5}
+											value={auditCompletionGateThreshold ?? 50}
+											valueWidth="w-8"
+										/>
+									)}
+									{feature.id === "audit-intent-threshold-adjustments" && featureState[feature.stateKey] && (
+										<AuditIntentThresholdPanel
+											enabled={!!featureState[feature.stateKey]}
+											overridesJson={auditIntentThresholdOverrides}
+										/>
+									)}
 									{feature.id === "focus-chain" && featureState[feature.stateKey] && (
 										<SettingsSlider
 											label="Reminder Interval (1-10)"

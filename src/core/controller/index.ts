@@ -987,6 +987,20 @@ export class Controller implements IController {
 		const lastDismissedCliBannerVersion = this.stateManager.getGlobalStateKey("lastDismissedCliBannerVersion") || 0
 		const dismissedBanners = this.stateManager.getGlobalStateKey("dismissedBanners")
 		const doubleCheckCompletionEnabled = this.stateManager.getGlobalSettingsKey("doubleCheckCompletionEnabled")
+		const auditCompletionGateEnabled = this.stateManager.getGlobalSettingsKey("auditCompletionGateEnabled")
+		const auditCompletionGateThreshold = this.stateManager.getGlobalSettingsKey("auditCompletionGateThreshold")
+		const auditCompletionGateCriticalOnly = this.stateManager.getGlobalSettingsKey("auditCompletionGateCriticalOnly")
+		const auditActModeAdvisoryEnabled = this.stateManager.getGlobalSettingsKey("auditActModeAdvisoryEnabled")
+		const auditAdvisoryEscalationEnabled = this.stateManager.getGlobalSettingsKey("auditAdvisoryEscalationEnabled")
+		const auditPlanRegressionGateEnabled = this.stateManager.getGlobalSettingsKey("auditPlanRegressionGateEnabled")
+		const auditToolOutputAdvisoryEnabled = this.stateManager.getGlobalSettingsKey("auditToolOutputAdvisoryEnabled")
+		const auditFileWriteAdvisoryEnabled = this.stateManager.getGlobalSettingsKey("auditFileWriteAdvisoryEnabled")
+		const auditIntentThresholdAdjustmentsEnabled = this.stateManager.getGlobalSettingsKey(
+			"auditIntentThresholdAdjustmentsEnabled",
+		)
+		const auditIntentThresholdOverrides = this.stateManager.getGlobalSettingsKey("auditIntentThresholdOverrides")
+		const auditSarifHookExportEnabled = this.stateManager.getGlobalSettingsKey("auditSarifHookExportEnabled")
+		const auditWorkspaceArtifactsEnabled = this.stateManager.getGlobalSettingsKey("auditWorkspaceArtifactsEnabled")
 
 		const localDietCodeRulesToggles = this.stateManager.getWorkspaceStateKey("localDietCodeRulesToggles")
 		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
@@ -1096,6 +1110,18 @@ export class Controller implements IController {
 			backgroundEditEnabled: this.stateManager.getGlobalSettingsKey("backgroundEditEnabled"),
 			optOutOfRemoteConfig: this.stateManager.getGlobalSettingsKey("optOutOfRemoteConfig"),
 			doubleCheckCompletionEnabled,
+			auditCompletionGateEnabled,
+			auditCompletionGateThreshold,
+			auditCompletionGateCriticalOnly,
+			auditActModeAdvisoryEnabled,
+			auditAdvisoryEscalationEnabled,
+			auditPlanRegressionGateEnabled,
+			auditToolOutputAdvisoryEnabled,
+			auditFileWriteAdvisoryEnabled,
+			auditIntentThresholdAdjustmentsEnabled,
+			auditIntentThresholdOverrides,
+			auditSarifHookExportEnabled,
+			auditWorkspaceArtifactsEnabled,
 			banners,
 			welcomeBanners,
 			openAiCodexIsAuthenticated,

@@ -8,6 +8,8 @@ import { PromptRegistry } from "@core/prompts/system-prompt"
 import type { SystemPromptContext } from "@core/prompts/system-prompt/types"
 import { StreamResponseHandler } from "@core/task/StreamResponseHandler"
 import { ModelInfo } from "@shared/api"
+import { buildCompletionGateOptionsFromSettings } from "@shared/audit/auditGateOptions"
+import { buildSubagentAuditContext, buildSubagentGateSignals } from "@shared/audit/auditSubagentContext"
 import {
 	DietCodeAssistantToolUseBlock,
 	DietCodeStorageMessage,
@@ -375,8 +377,23 @@ export class SubagentRunner {
 		}
 		const stats = this.stats
 
+		this.activeSignals = []
 		this.onProgress = onProgress
 		onProgress({ status: "running", stats })
+
+		const gateOptions = buildCompletionGateOptionsFromSettings(this.baseConfig, {
+			lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
+		})
+		const parentGateSignals = buildSubagentGateSignals({
+			lastCompletionAudit: this.baseConfig.taskState.lastCompletionAudit,
+			lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
+			completionGateBlockCount: this.baseConfig.taskState.completionGateBlockCount,
+			gateOptions,
+		})
+		if (parentGateSignals.length > 0) {
+			this.activeSignals = parentGateSignals
+			onProgress({ activeSignals: parentGateSignals })
+		}
 
 		try {
 			const mode = this.baseConfig.services.stateManager.getGlobalSettingsKey("mode")
@@ -437,8 +454,15 @@ export class SubagentRunner {
 			const parentStreamId = (this.baseConfig as ConfigWithExtensions).getSessionStreamId?.()
 			if (parentStreamId) {
 				try {
+					const auditContext = buildSubagentAuditContext({
+						lastCompletionAudit: this.baseConfig.taskState.lastCompletionAudit,
+						lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
+						completionGateBlockCount: this.baseConfig.taskState.completionGateBlockCount,
+						gateOptions,
+					})
 					const compressed = await orchestrator.getCompressedContext(parentStreamId)
-					this.agent.setParentStreamContext(compressed)
+					const combined = [auditContext, compressed].filter(Boolean).join("\n\n")
+					this.agent.setParentStreamContext(combined)
 				} catch (err) {
 					Logger.error("[SubagentRunner] Failed to fetch parent context:", err)
 				}

@@ -174,6 +174,18 @@ const USER_SETTINGS_FIELDS = {
 	backgroundEditEnabled: { default: false as boolean },
 	optOutOfRemoteConfig: { default: false as boolean },
 	doubleCheckCompletionEnabled: { default: false as boolean },
+	auditCompletionGateEnabled: { default: true as boolean },
+	auditCompletionGateThreshold: { default: 50 as number },
+	auditCompletionGateCriticalOnly: { default: false as boolean },
+	auditActModeAdvisoryEnabled: { default: true as boolean },
+	auditAdvisoryEscalationEnabled: { default: true as boolean },
+	auditPlanRegressionGateEnabled: { default: true as boolean },
+	auditToolOutputAdvisoryEnabled: { default: true as boolean },
+	auditFileWriteAdvisoryEnabled: { default: true as boolean },
+	auditIntentThresholdAdjustmentsEnabled: { default: true as boolean },
+	auditIntentThresholdOverrides: { default: "{}" as string },
+	auditSarifHookExportEnabled: { default: true as boolean },
+	auditWorkspaceArtifactsEnabled: { default: true as boolean },
 	masEnabled: { default: true as boolean },
 
 	// OpenTelemetry configuration

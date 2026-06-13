@@ -4,13 +4,15 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { findLast, parsePartialArrayString } from "@/shared/array"
-import { DietCodePlanModeResponse } from "@/shared/ExtensionMessage"
+import { runCompletionAudit } from "@/shared/audit/completionAudit"
+import { DietCodePlanModeResponse, type TaskAuditMetadata } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { StabilityScribe } from "../utils/StabilityScribe"
+import { getInitialTaskPreview } from "../utils/taskPreview"
 
 export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandler {
 	readonly name = DietCodeDefaultTool.PLAN_MODE
@@ -113,6 +115,25 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 			options: options,
 		}
 
+		let planAuditMetadata: TaskAuditMetadata | undefined
+		try {
+			const taskPreview = getInitialTaskPreview(config) || "plan mode response"
+			planAuditMetadata = await runCompletionAudit(config.taskId, taskPreview, response, taskPreview)
+		} catch (error) {
+			Logger.warn("[PlanModeRespondHandler] Plan audit metadata generation failed:", error)
+		}
+
+		const attachAuditToLastPlanMessage = async () => {
+			if (!planAuditMetadata) return
+			const messages = config.messageState.getDietCodeMessages()
+			const lastPlanMessage = findLast(messages, (m) => m.ask === this.name)
+			if (!lastPlanMessage) return
+			const lastIndex = messages.indexOf(lastPlanMessage)
+			if (lastIndex !== -1) {
+				await config.messageState.updateDietCodeMessage(lastIndex, { auditMetadata: planAuditMetadata })
+			}
+		}
+
 		// Auto-switch to Act mode while in yolo mode
 		if (config.mode === "plan" && config.yoloModeToggled && !needsMoreExploration) {
 			// Trigger automatic mode switch
@@ -147,6 +168,8 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 			images,
 			files: planResponseFiles,
 		} = await config.callbacks.ask(this.name, JSON.stringify(sharedMessage), false)
+
+		await attachAuditToLastPlanMessage()
 
 		config.taskState.isAwaitingPlanResponse = false
 

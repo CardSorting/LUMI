@@ -2,6 +2,7 @@ import {
 	DietCodeAsk as AppDietCodeAsk,
 	DietCodeMessage as AppDietCodeMessage,
 	DietCodeSay as AppDietCodeSay,
+	TaskAuditMetadata,
 } from "@shared/ExtensionMessage"
 import { DietCodeAsk, DietCodeMessageType, DietCodeSay, DietCodeMessage as ProtoDietCodeMessage } from "@shared/proto/dietcode/ui"
 
@@ -227,6 +228,15 @@ export function convertDietCodeMessageToProto(message: AppDietCodeMessage): Prot
 					intentClassification: message.auditMetadata.intent_classification ?? "",
 					intentCoverage: message.auditMetadata.intent_coverage ?? 0,
 					auditedAt: message.auditMetadata.audited_at ?? 0,
+					hardeningScore: message.auditMetadata.hardening_score ?? 0,
+					hardeningGrade: message.auditMetadata.hardening_grade ?? "",
+					gateBlocked: message.auditMetadata.gate_blocked ?? false,
+					gateBlockCount: message.auditMetadata.gate_block_count ?? 0,
+					gateReasonCodes: message.auditMetadata.gate_reason_codes ?? [],
+					gateEffectiveThreshold: message.auditMetadata.gate_effective_threshold ?? 0,
+					artifactSarifPath: message.auditMetadata.artifact_sarif_path ?? "",
+					artifactReportPath: message.auditMetadata.artifact_report_path ?? "",
+					artifactManifestPath: message.auditMetadata.artifact_manifest_path ?? "",
 				}
 			: undefined,
 	}
@@ -306,6 +316,19 @@ export function convertProtoToDietCodeMessage(protoMessage: ProtoDietCodeMessage
 			intent_classification: protoMessage.auditMetadata.intentClassification || undefined,
 			intent_coverage: protoMessage.auditMetadata.intentCoverage,
 			audited_at: protoMessage.auditMetadata.auditedAt,
+			hardening_score: protoMessage.auditMetadata.hardeningScore || undefined,
+			hardening_grade: (protoMessage.auditMetadata.hardeningGrade || undefined) as
+				| TaskAuditMetadata["hardening_grade"]
+				| undefined,
+			gate_blocked: protoMessage.auditMetadata.gateBlocked || undefined,
+			gate_block_count: protoMessage.auditMetadata.gateBlockCount || undefined,
+			gate_reason_codes: protoMessage.auditMetadata.gateReasonCodes?.length
+				? (protoMessage.auditMetadata.gateReasonCodes as TaskAuditMetadata["gate_reason_codes"])
+				: undefined,
+			gate_effective_threshold: protoMessage.auditMetadata.gateEffectiveThreshold || undefined,
+			artifact_sarif_path: protoMessage.auditMetadata.artifactSarifPath || undefined,
+			artifact_report_path: protoMessage.auditMetadata.artifactReportPath || undefined,
+			artifact_manifest_path: protoMessage.auditMetadata.artifactManifestPath || undefined,
 		}
 	}
 

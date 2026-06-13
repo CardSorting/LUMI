@@ -6,10 +6,22 @@ import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
+import { buildGateBlockEventSummary, enrichAuditMetadataWithGateDecision } from "@shared/audit/auditGateCatalog"
+import { buildCompletionGateOptionsFromSettings } from "@shared/audit/auditGateOptions"
+import { buildPreCompletionChecklist, evaluateCompletionGate } from "@shared/audit/auditGateReport"
+import { getLatestPlanAuditFromMessages } from "@shared/audit/auditMessages"
+import { enrichAuditMetadataWithArtifactPaths, persistAuditWorkspaceArtifacts } from "@shared/audit/auditWorkspaceArtifacts"
+import {
+	buildAuditHookMetadata,
+	buildCompletionGateMessage,
+	buildDoubleCheckAuditSection,
+	runAdvisoryAudit,
+	runCompletionAudit,
+} from "@shared/audit/completionAudit"
+import { parseIntentThresholdOverrides } from "@shared/audit/gatePolicy"
 import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
-import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
@@ -18,21 +30,46 @@ import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { getTaskCompletionTelemetry } from "../utils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
+import { getInitialTaskPreview } from "../utils/taskPreview"
 
-const TASK_PREVIEW_MAX_CHARS = 8000
+function buildAuditGateOptions(
+	config: TaskConfig,
+	extras?: {
+		advisoryMetadata?: TaskAuditMetadata
+		planBaselineMetadata?: TaskAuditMetadata
+	},
+) {
+	return buildCompletionGateOptionsFromSettings(config, {
+		...extras,
+		lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
+	})
+}
 
-function getInitialTaskPreview(config: TaskConfig): string | undefined {
-	const firstTaskMessage = config.messageState
-		.getDietCodeMessages()
-		.find((message) => message.say === "task")
-		?.text?.trim()
-	if (!firstTaskMessage) {
-		return undefined
+async function persistAuditArtifactsIfEnabled(
+	config: TaskConfig,
+	metadata: TaskAuditMetadata,
+	event: "completion" | "gate_block",
+): Promise<TaskAuditMetadata> {
+	if (!config.auditWorkspaceArtifactsEnabled) {
+		return metadata
 	}
-	if (firstTaskMessage.length <= TASK_PREVIEW_MAX_CHARS) {
-		return firstTaskMessage
+	try {
+		const result = await persistAuditWorkspaceArtifacts({
+			cwd: config.cwd,
+			taskId: config.taskId,
+			metadata,
+			event,
+			includeSarif: config.auditSarifHookExportEnabled,
+			gateOptions: buildAuditGateOptions(config),
+			gatePolicySettings: config,
+		})
+		if (result) {
+			return enrichAuditMetadataWithArtifactPaths(metadata, result)
+		}
+	} catch (error) {
+		Logger.warn("[AttemptCompletionHandler] Failed to persist audit workspace artifacts:", error)
 	}
-	return `${firstTaskMessage.slice(0, TASK_PREVIEW_MAX_CHARS)}\n...[truncated]`
+	return metadata
 }
 
 export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHandler {
@@ -97,11 +134,25 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// Double-check completion: reject attempt_completion calls that haven't been re-verified
 		if (config.doubleCheckCompletionEnabled && !config.taskState.doubleCheckCompletionPending) {
 			config.taskState.doubleCheckCompletionPending = true
-			// Remove the partial completion_result message that was shown during streaming
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "completion_result")
 
 			const taskPreview = getInitialTaskPreview(config)
 			const taskSection = taskPreview ? `\n\n<initial_task>\n${taskPreview}\n</initial_task>` : ""
+
+			let auditPreviewSection = ""
+			try {
+				const previewAudit = await runAdvisoryAudit(config.taskId, taskPreview || "", result, taskPreview || "")
+				config.taskState.lastAdvisoryAudit = previewAudit
+				auditPreviewSection = buildDoubleCheckAuditSection(previewAudit)
+				auditPreviewSection += buildPreCompletionChecklist(
+					previewAudit,
+					buildAuditGateOptions(config, {
+						planBaselineMetadata: getLatestPlanAuditFromMessages(config.messageState.getDietCodeMessages()),
+					}),
+				)
+			} catch (error) {
+				Logger.warn("[AttemptCompletionHandler] Pre-completion audit preview failed:", error)
+			}
 
 			return formatResponse.toolError(
 				"Before completing, re-verify your work against the original task requirements. Check that:\n" +
@@ -112,6 +163,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 					"5. Output files contain exactly what was specified--no extra columns, fields, debug output, or commentary\n" +
 					"6. If the task specifies numerical thresholds or accuracy targets, verify your result meets the criteria. If close but not passing, iterate rather than declaring completion" +
 					taskSection +
+					auditPreviewSection +
 					"\n\nIf everything checks out, call attempt_completion again with your final result.",
 			)
 		}
@@ -187,11 +239,74 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			await config.messageState.saveDietCodeMessagesAndUpdateHistory()
 		}
 
-		// Run task audit to capture hardening & safety metrics
+		// Run task audit to capture hardening & safety metrics (before emitting completion_result)
 		let auditMetadata: TaskAuditMetadata | undefined
+		let planBaseline: TaskAuditMetadata | undefined
 		try {
 			const taskDescription = getInitialTaskPreview(config) || ""
-			auditMetadata = await orchestrator.auditTask(config.taskId, taskDescription, result, "")
+			planBaseline = getLatestPlanAuditFromMessages(config.messageState.getDietCodeMessages())
+			auditMetadata = await runCompletionAudit(config.taskId, taskDescription, result, taskDescription)
+			config.taskState.lastCompletionAudit = auditMetadata
+
+			const gateOptions = buildAuditGateOptions(config, { planBaselineMetadata: planBaseline })
+			const gateDecision = evaluateCompletionGate(auditMetadata, gateOptions)
+
+			telemetryService.captureAuditGateEvaluation(config.ulid, {
+				taskId: config.taskId,
+				blocked: gateDecision.blocked,
+				score: gateDecision.score,
+				effectiveThreshold: gateDecision.effectiveThreshold,
+				grade: gateDecision.grade,
+				reasonCodes: gateDecision.reasons.map((reason) => reason.code),
+			})
+
+			if (gateDecision.blocked) {
+				config.taskState.consecutiveMistakeCount++
+				config.taskState.completionGateBlockCount = (config.taskState.completionGateBlockCount ?? 0) + 1
+				let enrichedAudit = enrichAuditMetadataWithGateDecision(
+					auditMetadata,
+					gateDecision,
+					config.taskState.completionGateBlockCount,
+				)
+				enrichedAudit = await persistAuditArtifactsIfEnabled(config, enrichedAudit, "gate_block")
+				config.taskState.lastCompletionAudit = enrichedAudit
+
+				if (config.autoApprovalSettings.enableNotifications) {
+					showSystemNotification({
+						subtitle: "Completion Gate Blocked",
+						message: `Hardening audit failed (${gateDecision.score}/100, threshold ${gateDecision.effectiveThreshold})`,
+					})
+				}
+
+				try {
+					await config.callbacks.say(
+						"info",
+						buildGateBlockEventSummary(gateDecision, config.taskState.completionGateBlockCount),
+						undefined,
+						undefined,
+						false,
+						enrichedAudit,
+					)
+				} catch (error) {
+					Logger.warn("[AttemptCompletionHandler] Failed to emit gate block audit event:", error)
+				}
+				return formatResponse.toolError(
+					buildCompletionGateMessage(auditMetadata, {
+						scoreThreshold: config.auditCompletionGateThreshold,
+						criticalOnly: config.auditCompletionGateCriticalOnly,
+						intentAdjustedThreshold: config.auditIntentThresholdAdjustmentsEnabled,
+						intentThresholdOverrides: parseIntentThresholdOverrides(config.auditIntentThresholdOverrides),
+						advisoryMetadata: config.taskState.lastAdvisoryAudit,
+						planBaselineMetadata: planBaseline,
+						gateDecision,
+					}),
+				)
+			}
+
+			if (auditMetadata) {
+				auditMetadata = await persistAuditArtifactsIfEnabled(config, auditMetadata, "completion")
+				config.taskState.lastCompletionAudit = auditMetadata
+			}
 		} catch (error) {
 			Logger.error("[AttemptCompletionHandler] Failed to run task audit:", error)
 		}
@@ -212,7 +327,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				)
 				await config.callbacks.saveCheckpoint(true, completionMessageTs)
 				await addNewChangesFlagToLastCompletionResultMessage()
-				telemetryService.captureTaskCompleted(config.ulid, getTaskCompletionTelemetry(config))
+				telemetryService.captureTaskCompleted(
+					config.ulid,
+					getTaskCompletionTelemetry(config, auditMetadata, {
+						advisoryMetadata: config.taskState.lastAdvisoryAudit,
+						planBaseline,
+					}),
+				)
 			} else {
 				// we already sent a command message, meaning the complete completion message has also been sent
 				await config.callbacks.saveCheckpoint(true)
@@ -266,7 +387,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			)
 			await config.callbacks.saveCheckpoint(true, completionMessageTs)
 			await addNewChangesFlagToLastCompletionResultMessage()
-			telemetryService.captureTaskCompleted(config.ulid, getTaskCompletionTelemetry(config))
+			telemetryService.captureTaskCompleted(
+				config.ulid,
+				getTaskCompletionTelemetry(config, auditMetadata, {
+					advisoryMetadata: config.taskState.lastAdvisoryAudit,
+					planBaseline,
+				}),
+			)
 		}
 
 		// we already sent completion_result says, an empty string asks relinquishes control over button and field
@@ -384,6 +511,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 							ulid: config.ulid,
 							result: block.params.result || "",
 							command: block.params.command || "",
+							...(config.taskState.lastCompletionAudit
+								? buildAuditHookMetadata(config.taskState.lastCompletionAudit, {
+										includeSarif: config.auditSarifHookExportEnabled,
+										gateOptions: buildAuditGateOptions(config),
+										taskUri: `task://${config.taskId}`,
+									})
+								: {}),
 						},
 					},
 				},

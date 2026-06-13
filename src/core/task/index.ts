@@ -90,6 +90,7 @@ import { ulid } from "ulid"
 import type { SystemPromptContext } from "@/core/prompts/system-prompt"
 import { getSystemPrompt } from "@/core/prompts/system-prompt"
 import { HostProvider } from "@/hosts/host-provider"
+import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { FileEditProvider } from "@/integrations/editor/FileEditProvider"
 import {
 	type CommandExecutionOptions,
@@ -985,6 +986,14 @@ export class Task {
 
 		await this.say("task", task, images, files)
 
+		if (task?.trim()) {
+			try {
+				this.taskState.preAuditedIntent = await orchestrator.recordPreAuditedIntent(this.taskId, task)
+			} catch (error) {
+				Logger.warn(`[Task] Pre-audit intent classification failed for ${this.taskId.slice(0, 8)}:`, error)
+			}
+		}
+
 		// Phase 0: Multi-Agent Stream Initiation moved to Phase 2 (Intent Grounding Handoff)
 		// in initiateTaskLoop() to ensure grounded context is available.
 
@@ -1155,6 +1164,15 @@ export class Task {
 
 		this.taskState.isInitialized = true
 		this.taskState.abort = false // Reset abort flag when resuming task
+
+		try {
+			const recalledIntent = await orchestrator.recallMemory(this.taskId, "pre_audited_intent")
+			if (recalledIntent?.trim()) {
+				this.taskState.preAuditedIntent = recalledIntent.trim()
+			}
+		} catch (error) {
+			Logger.warn(`[Task] Failed to recall pre-audited intent for ${this.taskId.slice(0, 8)}:`, error)
+		}
 
 		// Task is initialized
 

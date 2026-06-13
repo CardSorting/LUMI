@@ -1,3 +1,5 @@
+import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessages"
+import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import React from "react"
 import TaskHeader from "@/components/chat/task-header/TaskHeader"
@@ -13,6 +15,10 @@ interface TaskSectionProps {
 		totalCost: number
 	}
 	lastApiReqTotalTokens?: number
+	latestAuditMetadata?: DietCodeMessage["auditMetadata"]
+	auditTrend?: AuditTrend
+	auditSnapshots?: AuditMessageSnapshot[]
+	auditHealth?: AuditHealthSummary
 	selectedModelInfo: {
 		supportsPromptCache: boolean
 		supportsImages: boolean
@@ -20,6 +26,7 @@ interface TaskSectionProps {
 	messageHandlers: MessageHandlers
 	lastProgressMessageText?: string
 	showFocusChainPlaceholder?: boolean
+	onScrollToAuditMessage?: (ts: number) => void
 }
 
 /**
@@ -30,19 +37,29 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 	task,
 	apiMetrics,
 	lastApiReqTotalTokens,
+	latestAuditMetadata,
+	auditTrend,
+	auditSnapshots,
+	auditHealth,
 	selectedModelInfo,
 	messageHandlers,
 	lastProgressMessageText,
 	showFocusChainPlaceholder,
+	onScrollToAuditMessage,
 }) => {
 	return (
 		<TaskHeader
+			auditHealth={auditHealth}
+			auditSnapshots={auditSnapshots}
+			auditTrend={auditTrend}
 			cacheReads={apiMetrics.totalCacheReads}
 			cacheWrites={apiMetrics.totalCacheWrites}
 			doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
 			lastApiReqTotalTokens={lastApiReqTotalTokens}
 			lastProgressMessageText={lastProgressMessageText}
+			latestAuditMetadata={latestAuditMetadata}
 			onClose={messageHandlers.handleTaskCloseButtonClick}
+			onScrollToAuditMessage={onScrollToAuditMessage}
 			onSendMessage={messageHandlers.handleSendMessage}
 			showFocusChainPlaceholder={showFocusChainPlaceholder}
 			task={task}

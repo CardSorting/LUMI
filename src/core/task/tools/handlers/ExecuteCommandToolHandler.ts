@@ -2,8 +2,14 @@ import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
 import { showSystemNotification } from "@integrations/notifications"
+import {
+	appendTextToToolResponse,
+	buildCommandOutputAuditAdvisory,
+	extractTextFromToolResponse,
+} from "@shared/audit/auditPostTool"
 import { COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
 import { DietCodeAsk } from "@shared/ExtensionMessage"
+import { Logger } from "@shared/services/Logger"
 import { arePathsEqual } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
@@ -15,6 +21,7 @@ import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { applyModelContentFixes } from "../utils/ModelContentProcessor"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
+import { getInitialTaskPreview } from "../utils/taskPreview"
 
 // Default timeout for commands in yolo mode and background exec mode
 const DEFAULT_COMMAND_TIMEOUT_SECONDS = 30
@@ -316,6 +323,19 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 
 		if (userRejected) {
 			config.taskState.didRejectTool = true
+		}
+
+		if (!userRejected && config.auditToolOutputAdvisoryEnabled && !config.isSubagentExecution) {
+			try {
+				const outputText = extractTextFromToolResponse(result)
+				const taskPreview = getInitialTaskPreview(config) || ""
+				const advisory = await buildCommandOutputAuditAdvisory(config.taskId, taskPreview, finalCommand, outputText)
+				if (advisory) {
+					return appendTextToToolResponse(result, advisory)
+				}
+			} catch (error) {
+				Logger.warn("[ExecuteCommandToolHandler] Command output audit advisory failed:", error)
+			}
 		}
 
 		return result

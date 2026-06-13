@@ -42,6 +42,18 @@ export interface TaskConfig {
 	strictPlanModeEnabled: boolean
 	yoloModeToggled: boolean
 	doubleCheckCompletionEnabled: boolean
+	auditCompletionGateEnabled: boolean
+	auditCompletionGateThreshold: number
+	auditCompletionGateCriticalOnly: boolean
+	auditActModeAdvisoryEnabled: boolean
+	auditAdvisoryEscalationEnabled: boolean
+	auditPlanRegressionGateEnabled: boolean
+	auditToolOutputAdvisoryEnabled: boolean
+	auditFileWriteAdvisoryEnabled: boolean
+	auditIntentThresholdAdjustmentsEnabled: boolean
+	auditIntentThresholdOverrides: string
+	auditSarifHookExportEnabled: boolean
+	auditWorkspaceArtifactsEnabled: boolean
 	vscodeTerminalExecutionMode: "vscodeTerminal"
 	enableParallelToolCalling: boolean
 	isSubagentExecution: boolean

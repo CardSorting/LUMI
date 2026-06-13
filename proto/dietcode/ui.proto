@@ -239,6 +239,15 @@ message TaskAuditMetadataProto {
   string intent_classification = 6;
   double intent_coverage = 7;
   int64 audited_at = 8;
+  double hardening_score = 9;
+  string hardening_grade = 10;
+  bool gate_blocked = 11;
+  int32 gate_block_count = 12;
+  repeated string gate_reason_codes = 13;
+  double gate_effective_threshold = 14;
+  string artifact_sarif_path = 15;
+  string artifact_report_path = 16;
+  string artifact_manifest_path = 17;
 }
 
 message ShowWebviewEvent {

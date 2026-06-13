@@ -107,6 +107,18 @@ export interface ExtensionState {
 	backgroundEditEnabled?: boolean
 	optOutOfRemoteConfig?: boolean
 	doubleCheckCompletionEnabled?: boolean
+	auditCompletionGateEnabled?: boolean
+	auditCompletionGateThreshold?: number
+	auditCompletionGateCriticalOnly?: boolean
+	auditActModeAdvisoryEnabled?: boolean
+	auditAdvisoryEscalationEnabled?: boolean
+	auditPlanRegressionGateEnabled?: boolean
+	auditToolOutputAdvisoryEnabled?: boolean
+	auditFileWriteAdvisoryEnabled?: boolean
+	auditIntentThresholdAdjustmentsEnabled?: boolean
+	auditIntentThresholdOverrides?: string
+	auditSarifHookExportEnabled?: boolean
+	auditWorkspaceArtifactsEnabled?: boolean
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
@@ -114,16 +126,7 @@ export interface ExtensionState {
 	googleUserInfo?: UserInfo
 }
 
-export interface TaskAuditMetadata {
-	joy_zoning_violations?: string[]
-	result_checksum?: string
-	divergence_detected?: boolean
-	entropy_score?: number
-	violations?: string[]
-	intent_classification?: string
-	intent_coverage?: number
-	audited_at?: number
-}
+export type { TaskAuditMetadata } from "@shared/audit/types"
 
 export interface DietCodeMessage {
 	ts: number

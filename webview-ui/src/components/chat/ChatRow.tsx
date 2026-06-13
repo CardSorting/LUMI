@@ -1316,6 +1316,7 @@ export const ChatRowContent = memo(
 						return (
 							<div>
 								<PlanCompletionOutputRow
+									auditMetadata={message.auditMetadata}
 									headClassNames={HEADER_CLASSNAMES}
 									text={response || message.text || ""}
 								/>

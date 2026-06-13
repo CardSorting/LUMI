@@ -337,6 +337,58 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("doubleCheckCompletionEnabled", request.doubleCheckCompletionEnabled)
 		}
 
+		if (request.auditCompletionGateEnabled !== undefined) {
+			controller.stateManager.setGlobalState("auditCompletionGateEnabled", request.auditCompletionGateEnabled)
+		}
+
+		if (request.auditCompletionGateThreshold !== undefined) {
+			const threshold = Math.max(0, Math.min(100, Number(request.auditCompletionGateThreshold)))
+			controller.stateManager.setGlobalState("auditCompletionGateThreshold", threshold)
+		}
+
+		if (request.auditCompletionGateCriticalOnly !== undefined) {
+			controller.stateManager.setGlobalState("auditCompletionGateCriticalOnly", request.auditCompletionGateCriticalOnly)
+		}
+
+		if (request.auditActModeAdvisoryEnabled !== undefined) {
+			controller.stateManager.setGlobalState("auditActModeAdvisoryEnabled", request.auditActModeAdvisoryEnabled)
+		}
+
+		if (request.auditAdvisoryEscalationEnabled !== undefined) {
+			controller.stateManager.setGlobalState("auditAdvisoryEscalationEnabled", request.auditAdvisoryEscalationEnabled)
+		}
+
+		if (request.auditPlanRegressionGateEnabled !== undefined) {
+			controller.stateManager.setGlobalState("auditPlanRegressionGateEnabled", request.auditPlanRegressionGateEnabled)
+		}
+
+		if (request.auditToolOutputAdvisoryEnabled !== undefined) {
+			controller.stateManager.setGlobalState("auditToolOutputAdvisoryEnabled", request.auditToolOutputAdvisoryEnabled)
+		}
+
+		if (request.auditFileWriteAdvisoryEnabled !== undefined) {
+			controller.stateManager.setGlobalState("auditFileWriteAdvisoryEnabled", request.auditFileWriteAdvisoryEnabled)
+		}
+
+		if (request.auditIntentThresholdAdjustmentsEnabled !== undefined) {
+			controller.stateManager.setGlobalState(
+				"auditIntentThresholdAdjustmentsEnabled",
+				request.auditIntentThresholdAdjustmentsEnabled,
+			)
+		}
+
+		if (request.auditIntentThresholdOverrides !== undefined) {
+			controller.stateManager.setGlobalState("auditIntentThresholdOverrides", request.auditIntentThresholdOverrides)
+		}
+
+		if (request.auditSarifHookExportEnabled !== undefined) {
+			controller.stateManager.setGlobalState("auditSarifHookExportEnabled", request.auditSarifHookExportEnabled)
+		}
+
+		if (request.auditWorkspaceArtifactsEnabled !== undefined) {
+			controller.stateManager.setGlobalState("auditWorkspaceArtifactsEnabled", request.auditWorkspaceArtifactsEnabled)
+		}
+
 		// Post updated state to webview
 		await controller.postStateToWebview()
 

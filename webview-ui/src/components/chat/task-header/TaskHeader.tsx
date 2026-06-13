@@ -1,11 +1,15 @@
+import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessages"
+import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
 import { cn } from "@/lib/utils"
 import { getEnvironmentColor } from "@/utils/environmentColors"
+import { AuditHistoryStrip } from "./AuditHistoryStrip"
 import CopyTaskButton from "./buttons/CopyTaskButton"
 import DeleteTaskButton from "./buttons/DeleteTaskButton"
 import NewTaskButton from "./buttons/NewTaskButton"
@@ -14,6 +18,7 @@ import { CheckpointError } from "./CheckpointError"
 import ContextWindow from "./ContextWindow"
 import { FocusChain } from "./FocusChain"
 import { highlightText } from "./Highlights"
+import { TaskAuditBadge } from "./TaskAuditBadge"
 
 const IS_DEV = process.env.IS_DEV === '"true"'
 interface TaskHeaderProps {
@@ -26,7 +31,12 @@ interface TaskHeaderProps {
 	totalCost: number
 	lastApiReqTotalTokens?: number
 	lastProgressMessageText?: string
+	latestAuditMetadata?: DietCodeMessage["auditMetadata"]
+	auditTrend?: AuditTrend
+	auditSnapshots?: AuditMessageSnapshot[]
+	auditHealth?: AuditHealthSummary
 	showFocusChainPlaceholder?: boolean
+	onScrollToAuditMessage?: (ts: number) => void
 	onClose: () => void
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
 }
@@ -42,7 +52,12 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	totalCost,
 	lastApiReqTotalTokens,
 	lastProgressMessageText,
+	latestAuditMetadata,
+	auditTrend,
+	auditSnapshots,
+	auditHealth,
 	showFocusChainPlaceholder,
+	onScrollToAuditMessage,
 	onClose,
 	onSendMessage,
 }) => {
@@ -57,6 +72,8 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		setExpandTaskHeader: setIsTaskExpanded,
 		environment,
 	} = useExtensionState()
+
+	const auditGateConfig = useAuditGateConfig()
 
 	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
 	const [isTextOverflowing, setIsTextOverflowing] = useState(false)
@@ -167,7 +184,13 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							</div>
 						)}
 					</div>
-					<div className="inline-flex items-center justify-end select-none shrink-0">
+					<div className="inline-flex items-center justify-end select-none shrink-0 gap-1">
+						<TaskAuditBadge
+							auditHealth={auditHealth}
+							auditMetadata={latestAuditMetadata}
+							auditTrend={auditTrend}
+							gateConfig={auditGateConfig}
+						/>
 						{isCostAvailable && (
 							<div
 								className="mx-1 px-1 py-0.25 rounded-full inline-flex shrink-0 text-badge-background bg-badge-foreground/80 items-center"
@@ -229,6 +252,12 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 					lastProgressMessageText={lastProgressMessageText}
 					showPlaceholderWhenEmpty={showFocusChainPlaceholder}
 				/>
+			)}
+
+			{auditSnapshots && auditSnapshots.length > 1 && (
+				<div className="px-2 pb-1">
+					<AuditHistoryStrip onScrollToAuditMessage={onScrollToAuditMessage} snapshots={auditSnapshots} />
+				</div>
 			)}
 		</div>
 	)

@@ -1,4 +1,4 @@
-import type { DietCodeAsk, DietCodeSay } from "@shared/ExtensionMessage"
+import type { DietCodeAsk, DietCodeSay, TaskAuditMetadata } from "@shared/ExtensionMessage"
 import type { DietCodeDefaultTool } from "@shared/tools"
 import type { DietCodeAskResponse } from "@shared/WebviewMessage"
 import { telemetryService } from "@/services/telemetry"
@@ -18,7 +18,7 @@ export interface StronglyTypedUIHelpers {
 		images?: string[],
 		files?: string[],
 		partial?: boolean,
-		auditMetadata?: any,
+		auditMetadata?: TaskAuditMetadata,
 	) => Promise<number | undefined>
 
 	ask: (

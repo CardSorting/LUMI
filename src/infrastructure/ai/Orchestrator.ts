@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto"
+import { buildOrchestratorGateStatus } from "@shared/audit/auditOrchestratorDigest"
+import { enrichAuditMetadata } from "@shared/audit/taskAuditUtils"
+import type { IntentClassification, TaskAuditMetadata } from "@shared/audit/types"
 import * as path from "path"
 import { v4 as uuidv4 } from "uuid"
 import { Logger } from "@/shared/services/Logger"
 import { dbPool } from "../db/BufferedDbPool"
 
-type IntentName = "REFACTOR" | "CREATE" | "FIX" | "INVESTIGATE" | "CONFIGURE" | "DELETE" | "TEST" | "GENERAL"
+type IntentName = IntentClassification
 type IntentScore = { intent: IntentName; score: number }
 
 export interface AgentStream {
@@ -17,16 +20,7 @@ export interface AgentStream {
 	createdAt: number
 }
 
-export interface TaskAuditMetadata {
-	joy_zoning_violations?: string[]
-	result_checksum?: string
-	divergence_detected?: boolean
-	entropy_score?: number
-	violations?: string[]
-	intent_classification?: IntentName
-	intent_coverage?: number
-	audited_at?: number
-}
+export type { TaskAuditMetadata } from "@shared/audit/types"
 
 export interface AgentTask {
 	id: string
@@ -120,6 +114,7 @@ const INTENT_TAXONOMY: Record<Exclude<IntentName, "GENERAL">, { keywords: string
 		{ keywords: ["investigate", "analyze", "audit", "review", "inspect"], weight: 3 },
 		{ keywords: ["understand", "explain", "why", "how", "what", "where"], weight: 2 },
 		{ keywords: ["look", "check", "find", "search", "explore", "trace"], weight: 1.5 },
+		{ keywords: ["double down", "production harden", "deep audit", "dig deeper"], weight: 2.5 },
 	],
 	CONFIGURE: [
 		{ keywords: ["configure", "config", "setting", "environment", "setup"], weight: 3 },
@@ -199,8 +194,18 @@ const UNRESOLVED_MARKERS = [
 	"simulation",
 ]
 
+const GRADE_ORDER: Record<string, number> = { A: 5, B: 4, C: 3, D: 2, F: 1 }
+
 const RESOLVED_MARKER_CONTEXT =
 	/\b(no|none|not found|removed|replaced|resolved|eliminated|cleared|without|no longer|implemented|production)\b/i
+const SECURITY_LEAK_PATTERNS: RegExp[] = [
+	/\bsk-[a-zA-Z0-9]{20,}\b/,
+	/\bAKIA[0-9A-Z]{16}\b/,
+	/\b(api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[:=]\s*['"]?[a-zA-Z0-9_\-./]{8,}/i,
+	/\bBearer\s+[a-zA-Z0-9_\-.]{20,}\b/i,
+	/\bghp_[a-zA-Z0-9]{20,}\b/,
+	/\bgho_[a-zA-Z0-9]{20,}\b/,
+]
 const BLOCKER_PATTERN = /\b(blocked|could not|couldn't|unable to|failed to|not possible|cannot complete)\b/i
 const VALIDATION_REQUEST_PATTERN =
 	/\b(test|verify|validate|audit|check|lint|typecheck|compile|build|review|fix|resolve|harden)\b/i
@@ -285,9 +290,22 @@ export class AgentOrchestrator {
 				return []
 			},
 		})
+
+		this.registerAuditHook({
+			name: "SecurityLeakValidator",
+			validate: (ctx) => {
+				for (const pattern of SECURITY_LEAK_PATTERNS) {
+					if (pattern.test(ctx.taskResult)) {
+						return ["security_leak"]
+					}
+				}
+				return []
+			},
+		})
 	}
 
 	public registerAuditHook(hook: AuditHook): void {
+		this.unregisterAuditHook(hook.name)
 		this.auditHooks.push(hook)
 	}
 
@@ -387,22 +405,91 @@ export class AgentOrchestrator {
 		})
 		const joyZoningViolations = this.extractJoyZoningSignals(normalizedResult)
 
-		const metadata: TaskAuditMetadata = {
-			joy_zoning_violations: joyZoningViolations,
-			result_checksum: this.createResultChecksum(normalizedResult),
-			divergence_detected: violations.length > 0 || joyZoningViolations.length > 0,
-			entropy_score: entropyScore,
-			violations: this.dedupe(violations),
+		const metadata = {
+			...enrichAuditMetadata({
+				joy_zoning_violations: joyZoningViolations,
+				result_checksum: this.createResultChecksum(normalizedResult),
+				divergence_detected: violations.length > 0 || joyZoningViolations.length > 0,
+				entropy_score: entropyScore,
+				violations: this.dedupe(violations),
+				intent_classification: intent.intent,
+				intent_coverage: Number(intentCoverage.toFixed(2)),
+				audited_at: Date.now(),
+			}),
 			intent_classification: intent.intent,
-			intent_coverage: Number(intentCoverage.toFixed(2)),
-			audited_at: Date.now(),
-		}
+		} satisfies TaskAuditMetadata
 
 		Logger.info(
-			`[Orchestrator] Audited task ${taskId.slice(0, 8)} (${intent.intent}, coverage=${metadata.intent_coverage}, violations=${metadata.violations?.length ?? 0})`,
+			`[Orchestrator] Audited task ${taskId.slice(0, 8)} (${intent.intent}, coverage=${metadata.intent_coverage}, grade=${metadata.hardening_grade}, violations=${metadata.violations?.length ?? 0})`,
 		)
 
 		return metadata
+	}
+
+	public async resolveStreamFocus(streamId: string, fallback = ""): Promise<string> {
+		const stream =
+			(await dbPool.selectOne("agent_streams", { column: "id", value: streamId })) ??
+			(await dbPool.selectOne("agent_streams", { column: "externalId", value: streamId }))
+		if (stream?.focus?.trim()) {
+			return stream.focus.trim()
+		}
+
+		const preAuditedIntent = await this.recallMemory(streamId, "pre_audited_intent")
+		if (preAuditedIntent?.trim()) {
+			return preAuditedIntent.trim()
+		}
+
+		const summary = await this.recallMemory(streamId, "stream_summary")
+		if (summary?.trim()) {
+			return summary.trim().slice(0, 500)
+		}
+
+		return fallback.trim()
+	}
+
+	public async persistTaskAudit(streamId: string, metadata: TaskAuditMetadata): Promise<void> {
+		const serialized = JSON.stringify(metadata)
+		await this.storeMemory(streamId, "last_completion_audit", serialized)
+		await this.storeMemory(streamId, `audit_trail_${Date.now()}`, serialized)
+	}
+
+	public async recallLastTaskAudit(streamId: string): Promise<TaskAuditMetadata | undefined> {
+		const raw = await this.recallMemory(streamId, "last_completion_audit")
+		if (!raw) {
+			return undefined
+		}
+		try {
+			return JSON.parse(raw) as TaskAuditMetadata
+		} catch {
+			return undefined
+		}
+	}
+
+	public async recallAuditTrail(streamId: string, limit = 10): Promise<TaskAuditMetadata[]> {
+		const items = await dbPool.selectWhere("agent_memory", { column: "streamId", value: streamId })
+		const trail: Array<{ ts: number; metadata: TaskAuditMetadata }> = []
+
+		for (const item of items) {
+			if (!item.key.startsWith("audit_trail_")) continue
+			const ts = Number(item.key.replace("audit_trail_", ""))
+			if (!Number.isFinite(ts)) continue
+			try {
+				trail.push({ ts, metadata: JSON.parse(item.value) as TaskAuditMetadata })
+			} catch {
+				// skip malformed entries
+			}
+		}
+
+		return trail
+			.sort((a, b) => b.ts - a.ts)
+			.slice(0, limit)
+			.map((entry) => entry.metadata)
+	}
+
+	public async recordPreAuditedIntent(streamId: string, userInput: string): Promise<string> {
+		const intent = await this.preAuditIntent(userInput)
+		await this.storeMemory(streamId, "pre_audited_intent", intent)
+		return intent
 	}
 
 	public async getExecutionTrace(streamId: string): Promise<StreamTrace> {
@@ -415,20 +502,19 @@ export class AgentOrchestrator {
 		const summary = await this.recallMemory(streamId, "stream_summary")
 		const failureReason = await this.recallMemory(streamId, "failure_reason")
 
-		const soundness = 1.0
-		const knowledgeIds = tasks.flatMap((t) => t.linkedKnowledgeIds || [])
-		if (knowledgeIds.length > 0) {
-			// Compute soundness score if needed, default to 1.0
-		}
-
-		const avgEntropy =
-			tasks
-				.filter((t) => t.metadata?.entropy_score !== undefined)
-				.reduce((acc, t) => acc + (t.metadata?.entropy_score || 0), 0) /
-			(tasks.filter((t) => t.metadata?.entropy_score !== undefined).length || 1)
-
 		const childStreams = await dbPool.selectWhere("agent_streams", { column: "parentId", value: streamId })
 		const childrenTraces = await Promise.all(childStreams.map((child: any) => this.getExecutionTrace(child.id)))
+
+		const allTraces = [streamId, ...childrenTraces.flatMap((child) => this.collectTraceStreamIds(child))]
+		const allTasksForMetrics = (await Promise.all(allTraces.map((id) => this.getStreamTasks(id)))).flat()
+
+		const entropyTasks = allTasksForMetrics.filter((t) => t.metadata?.entropy_score !== undefined)
+		const avgEntropy = entropyTasks.reduce((acc, t) => acc + (t.metadata?.entropy_score || 0), 0) / (entropyTasks.length || 1)
+
+		const gradedTasks = allTasksForMetrics.filter((t) => t.metadata?.hardening_score !== undefined)
+		const avgHardeningScore =
+			gradedTasks.reduce((acc, t) => acc + (t.metadata?.hardening_score || 0), 0) / (gradedTasks.length || 1)
+		const soundness = Number.isFinite(avgHardeningScore) ? avgHardeningScore / 100 : 1.0
 
 		const taskTraces: TaskTrace[] = tasks.map((t) => ({
 			id: t.id,
@@ -457,6 +543,10 @@ export class AgentOrchestrator {
 			soundnessScore: Number(soundness.toFixed(2)),
 			avgEntropy: Number(avgEntropy.toFixed(2)),
 		}
+	}
+
+	private collectTraceStreamIds(trace: StreamTrace): string[] {
+		return [trace.id, ...trace.children.flatMap((child) => this.collectTraceStreamIds(child))]
 	}
 
 	public async recordHeartbeat(taskId: string): Promise<void> {
@@ -491,11 +581,11 @@ export class AgentOrchestrator {
 		const stalled = await this.detectStalledTasks(timeoutMs)
 		for (const task of stalled) {
 			const metadata = task.metadata || {}
-			const updatedMetadata: TaskAuditMetadata = {
+			const updatedMetadata: TaskAuditMetadata = enrichAuditMetadata({
 				...metadata,
 				violations: this.dedupe([...(metadata.violations || []), "stalled_task_timeout"]),
 				audited_at: Date.now(),
-			}
+			})
 
 			await this.updateTaskStatus(task.id, "failed", `Stalled task failed: ${reason}`, updatedMetadata)
 			await this.emitSwarmSignal(task.streamId, {
@@ -669,8 +759,9 @@ export class AgentOrchestrator {
 		} else {
 			for (const t of recentTasks) {
 				const intentStr = t.metadata?.intent_classification ? ` [${t.metadata.intent_classification}]` : ""
+				const gradeStr = t.metadata?.hardening_grade ? ` (Grade ${t.metadata.hardening_grade})` : ""
 				const statusIcon = t.status === "completed" ? "✔" : t.status === "failed" ? "❌" : "⏳"
-				lines.push(`- ${statusIcon} **${t.description}**${intentStr}`)
+				lines.push(`- ${statusIcon} **${t.description}**${intentStr}${gradeStr}`)
 				if (t.result) {
 					const resultPreview = t.result.length > 120 ? `${t.result.slice(0, 120)}...` : t.result
 					lines.push(`  *Result*: ${resultPreview.replace(/\n/g, " ")}`)
@@ -871,12 +962,46 @@ export class AgentOrchestrator {
 				.reduce((acc, t) => acc + (t.metadata?.entropy_score || 0), 0) /
 			(tasks.filter((t) => t.metadata?.entropy_score !== undefined).length || 1)
 
+		const policyViolations = tasks.flatMap((t) => t.metadata?.violations ?? [])
+		const gradedTasks = tasks.filter((t) => t.metadata?.hardening_score !== undefined)
+		const avgHardeningScore =
+			gradedTasks.reduce((acc, t) => acc + (t.metadata?.hardening_score || 0), 0) / (gradedTasks.length || 1)
+		const lowestGrade = gradedTasks.reduce<string | undefined>((worst, t) => {
+			const grade = t.metadata?.hardening_grade
+			if (!grade) return worst
+			if (!worst) return grade
+			return (GRADE_ORDER[grade] ?? 0) < (GRADE_ORDER[worst] ?? 0) ? grade : worst
+		}, undefined)
+
+		const lastCompletionAudit = await this.recallLastTaskAudit(streamId)
+		const preAuditedIntent = await this.recallMemory(streamId, "pre_audited_intent")
+		const auditTrail = await this.recallAuditTrail(streamId, 5)
+		const gateStatus = buildOrchestratorGateStatus(lastCompletionAudit)
+
 		const digest = {
 			streamId,
 			summary: summary || "No summary available",
 			failureReason: failureReason || undefined,
 			soundnessScore: Number(soundness.toFixed(2)),
 			avgEntropy: Number(avgEntropy.toFixed(2)),
+			preAuditedIntent: preAuditedIntent || undefined,
+			audit: {
+				avgHardeningScore: gradedTasks.length > 0 ? Number(avgHardeningScore.toFixed(1)) : undefined,
+				lowestHardeningGrade: lowestGrade,
+				policyViolationCount: policyViolations.length,
+				uniquePolicyViolations: [...new Set(policyViolations)],
+				lastCompletionAudit: lastCompletionAudit
+					? {
+							hardeningGrade: lastCompletionAudit.hardening_grade,
+							hardeningScore: lastCompletionAudit.hardening_score,
+							intentClassification: lastCompletionAudit.intent_classification,
+							divergenceDetected: lastCompletionAudit.divergence_detected,
+							violationCount: lastCompletionAudit.violations?.length ?? 0,
+						}
+					: undefined,
+				trailSnapshotCount: auditTrail.length,
+				gateStatus,
+			},
 			stats: {
 				totalTasks: tasks.length,
 				completedTasks,

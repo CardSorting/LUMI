@@ -20,6 +20,7 @@ broccolidb.db*
 pnpm-lock.yaml
 
 .clineignore
+.audit/
 .venv
 .actrc
 CLAUDE.local.md

@@ -5,6 +5,7 @@ import { constructNewFileContent, getLineNumberFromCharIndex } from "@core/assis
 import { formatResponse } from "@core/prompts/responses"
 import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
+import { buildFileWriteContentAdvisory } from "@shared/audit/auditFileWrite"
 import { DietCodeSayTool } from "@shared/ExtensionMessage"
 import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { fileExistsAtPath } from "@utils/fs"
@@ -411,7 +412,13 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			const state = config.taskState as unknown as { sovereignDirective?: string }
 			const directive = state.sovereignDirective || ""
 			if (directive) delete state.sovereignDirective
-			return baseResult + directive + auditReport
+
+			let fileWriteAdvisory = ""
+			if (config.auditFileWriteAdvisoryEnabled && !config.isSubagentExecution && finalContent) {
+				fileWriteAdvisory = buildFileWriteContentAdvisory(finalContent, relPath)
+			}
+
+			return baseResult + directive + auditReport + fileWriteAdvisory
 		} catch (error) {
 			// Reset diff view on error
 			await config.services.diffViewProvider.revertChanges()

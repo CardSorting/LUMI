@@ -157,6 +157,11 @@ export class TelemetryService {
 			CONTEXT_MODIFICATIONS_TOTAL: "dietcode.hooks.context_modifications.total",
 			CACHE_ACCESSES_TOTAL: "dietcode.hooks.cache.accesses.total",
 		},
+		AUDIT: {
+			GATE_EVALUATIONS_TOTAL: "dietcode.audit.gate.evaluations.total",
+			GATE_BLOCKED_TOTAL: "dietcode.audit.gate.blocked.total",
+			HARDENING_SCORE: "dietcode.audit.hardening.score",
+		},
 	}
 	// Event constants for tracking user interactions and system events
 	private static readonly EVENTS = {
@@ -194,6 +199,8 @@ export class TelemetryService {
 			RESTARTED: "task.restarted",
 			// Tracks when a task is finished, with acceptance or rejection status
 			COMPLETED: "task.completed",
+			// Tracks completion gate evaluation (pass/block)
+			AUDIT_GATE_EVALUATED: "task.audit_gate_evaluated",
 			// Tracks user feedback on completed tasks
 			FEEDBACK: "task.feedback",
 			// Tracks when a message is sent in a conversation
@@ -689,6 +696,18 @@ export class TelemetryService {
 			timeToFirstTokenMs?: number
 			durationMs?: number
 			mode: Mode
+			auditHardeningGrade?: string
+			auditHardeningScore?: number
+			auditViolationCount?: number
+			auditCriticalViolationCount?: number
+			auditIntentClassification?: string
+			auditDivergenceDetected?: boolean
+			auditAdvisoryEscalated?: boolean
+			auditPlanRegressionDetected?: boolean
+			auditCompletionGateBlockCount?: number
+			auditGateBlocked?: boolean
+			auditSarifExported?: boolean
+			auditArtifactsPersisted?: boolean
 		},
 	) {
 		const apiFormatName = args?.apiFormat !== undefined ? apiFormatToJSON(args.apiFormat) : undefined
@@ -703,6 +722,18 @@ export class TelemetryService {
 				timeToFirstTokenMs: args?.timeToFirstTokenMs,
 				durationMs: args?.durationMs,
 				mode: args?.mode,
+				auditHardeningGrade: args?.auditHardeningGrade,
+				auditHardeningScore: args?.auditHardeningScore,
+				auditViolationCount: args?.auditViolationCount,
+				auditCriticalViolationCount: args?.auditCriticalViolationCount,
+				auditIntentClassification: args?.auditIntentClassification,
+				auditDivergenceDetected: args?.auditDivergenceDetected,
+				auditAdvisoryEscalated: args?.auditAdvisoryEscalated,
+				auditPlanRegressionDetected: args?.auditPlanRegressionDetected,
+				auditCompletionGateBlockCount: args?.auditCompletionGateBlockCount,
+				auditGateBlocked: args?.auditGateBlocked,
+				auditSarifExported: args?.auditSarifExported,
+				auditArtifactsPersisted: args?.auditArtifactsPersisted,
 			},
 		})
 
@@ -728,6 +759,47 @@ export class TelemetryService {
 		}
 
 		this.resetTaskAggregates(ulid)
+	}
+
+	/** Records completion gate evaluation — mirrors CI quality gate telemetry. */
+	public captureAuditGateEvaluation(
+		ulid: string,
+		args: {
+			taskId: string
+			blocked: boolean
+			score: number
+			effectiveThreshold: number
+			grade?: string
+			reasonCodes?: string[]
+		},
+	) {
+		const gateAttributes = {
+			ulid,
+			taskId: args.taskId,
+			blocked: String(args.blocked),
+			grade: args.grade,
+		}
+
+		this.capture({
+			event: TelemetryService.EVENTS.TASK.AUDIT_GATE_EVALUATED,
+			properties: {
+				ulid,
+				taskId: args.taskId,
+				blocked: args.blocked,
+				score: args.score,
+				effectiveThreshold: args.effectiveThreshold,
+				grade: args.grade,
+				reasonCodes: args.reasonCodes?.join(","),
+			},
+		})
+
+		this.recordCounter(TelemetryService.METRICS.AUDIT.GATE_EVALUATIONS_TOTAL, 1, gateAttributes)
+		if (args.blocked) {
+			this.recordCounter(TelemetryService.METRICS.AUDIT.GATE_BLOCKED_TOTAL, 1, gateAttributes)
+		}
+		if (Number.isFinite(args.score)) {
+			this.recordHistogram(TelemetryService.METRICS.AUDIT.HARDENING_SCORE, args.score, gateAttributes)
+		}
 	}
 
 	/**

@@ -1,5 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { AssistantMessageContent } from "@core/assistant-message"
+import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { DietCodeAskResponse } from "@shared/WebviewMessage"
 import type { HookExecution } from "./types/HookExecution"
 
@@ -95,6 +96,13 @@ export class TaskState {
 	// Cross-Agent Intelligence (Blackboard)
 	public swarmBlackboard: string[] = []
 	public sovereignAuditSynthesis?: string
+
+	// Agent ergonomics: intent routing + completion audit state
+	preAuditedIntent?: string
+	lastCompletionAudit?: TaskAuditMetadata
+	lastAdvisoryAudit?: TaskAuditMetadata
+	actModeAuditCounter?: number
+	completionGateBlockCount?: number
 }
 
 export enum PolicyHealth {

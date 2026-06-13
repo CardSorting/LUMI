@@ -56,6 +56,8 @@ describe("AgentOrchestrator audit ergonomics", () => {
 		expect(metadata.intent_classification).to.equal("INVESTIGATE")
 		expect(metadata.entropy_score).to.be.a("number")
 		expect(metadata.intent_coverage).to.be.a("number")
+		expect(metadata.hardening_score).to.be.a("number")
+		expect(metadata.hardening_grade).to.be.oneOf(["A", "B", "C", "D", "F"])
 		expect(metadata.violations).to.not.include("missing_validation_evidence")
 	})
 
@@ -68,10 +70,147 @@ describe("AgentOrchestrator audit ergonomics", () => {
 		)
 
 		expect(metadata.divergence_detected).to.equal(true)
+		expect(metadata.hardening_grade).to.equal("F")
 		expect(metadata.violations).to.include("unresolved_work_marker:todo")
 		expect(metadata.violations).to.include("unresolved_work_marker:not_implemented")
 		expect(metadata.violations).to.include("unresolved_work_marker:stub")
 		expect(metadata.violations).to.include("missing_validation_evidence")
+	})
+
+	it("flags potential credential leaks in completion results", async () => {
+		const metadata = await orchestrator.auditTask(
+			"task-leak",
+			"Document the API integration setup.",
+			"Configured with api_key=sk-abcdefghijklmnopqrstuvwxyz1234567890 for testing.",
+			"api integration",
+		)
+
+		expect(metadata.violations).to.include("security_leak")
+		expect(metadata.hardening_grade).to.equal("F")
+	})
+
+	it("resolves stream focus from stream records and memory fallbacks", async () => {
+		const focus = await withPatchedDbPool(
+			{
+				selectOne: async (table, where) => {
+					if (table === "agent_streams" && where.value === "stream-focus") {
+						return { id: "stream-focus", focus: "agent ergonomics production hardening" }
+					}
+					if (table === "agent_memory") {
+						return null
+					}
+					return null
+				},
+			},
+			() => orchestrator.resolveStreamFocus("stream-focus", "fallback focus"),
+		)
+
+		expect(focus).to.equal("agent ergonomics production hardening")
+	})
+
+	it("resolves stream focus from pre-audited intent memory when stream focus is absent", async () => {
+		const focus = await withPatchedDbPool(
+			{
+				selectOne: async (table) => {
+					if (table === "agent_streams") return null
+					if (table === "agent_memory") {
+						return { value: "INVESTIGATE" }
+					}
+					return null
+				},
+			},
+			() => orchestrator.resolveStreamFocus("stream-intent-only", "fallback focus"),
+		)
+
+		expect(focus).to.equal("INVESTIGATE")
+	})
+
+	it("persists and recalls task audit metadata", async () => {
+		const stored: Record<string, string> = {}
+		const memoryRows: Array<{ key: string; value: string; streamId: string }> = []
+		await withPatchedDbPool(
+			{
+				selectOne: async (_table, where) => {
+					if (Array.isArray(where)) {
+						const keyCond = where.find((w: { column: string }) => w.column === "key")
+						if (keyCond?.value === "last_completion_audit") {
+							return stored.last_completion_audit ? { value: stored.last_completion_audit } : null
+						}
+					}
+					return null
+				},
+				selectWhere: async (_table, where) => {
+					if (where?.column === "streamId" && where?.value === "stream-persist") {
+						return memoryRows
+					}
+					return []
+				},
+				push: async (op: {
+					type: string
+					table: string
+					values?: { key?: string; value?: string; streamId?: string }
+				}) => {
+					if (op.type === "upsert" && op.values?.key?.startsWith("audit_trail_")) {
+						stored.last_completion_audit = op.values.value ?? ""
+						memoryRows.push({
+							key: op.values.key,
+							value: op.values.value ?? "",
+							streamId: op.values.streamId ?? "stream-persist",
+						})
+					}
+					if (op.type === "upsert" && op.values?.key === "last_completion_audit") {
+						stored.last_completion_audit = op.values.value ?? ""
+					}
+				},
+			},
+			async () => {
+				const metadata = await orchestrator.auditTask(
+					"task-persist",
+					"Verify persistence",
+					"Implemented audit persistence and ran tests.",
+					"persistence hardening",
+				)
+				await orchestrator.persistTaskAudit("stream-persist", metadata)
+				const recalled = await orchestrator.recallLastTaskAudit("stream-persist")
+				expect(recalled?.hardening_grade).to.equal(metadata.hardening_grade)
+				expect(recalled?.result_checksum).to.equal(metadata.result_checksum)
+
+				const trail = await orchestrator.recallAuditTrail("stream-persist", 5)
+				expect(trail).to.have.length(1)
+				expect(trail[0]?.hardening_grade).to.equal(metadata.hardening_grade)
+			},
+		)
+	})
+
+	it("replaces duplicate audit hooks instead of stacking them", async () => {
+		const hookName = "DuplicateHookGuard"
+		let callCount = 0
+
+		orchestrator.registerAuditHook({
+			name: hookName,
+			validate: () => {
+				callCount += 1
+				return ["duplicate_hook_marker"]
+			},
+		})
+		orchestrator.registerAuditHook({
+			name: hookName,
+			validate: () => {
+				callCount += 1
+				return ["duplicate_hook_marker"]
+			},
+		})
+
+		const metadata = await orchestrator.auditTask(
+			"task-dedupe",
+			"Check hook dedupe",
+			"verified result with tests",
+			"hook dedupe",
+		)
+		expect(metadata.violations).to.include("duplicate_hook_marker")
+		expect(callCount).to.equal(1)
+
+		orchestrator.unregisterAuditHook(hookName)
 	})
 
 	it("pre-audits validation-oriented requests as test intent", async () => {
@@ -114,6 +253,7 @@ describe("AgentOrchestrator audit ergonomics", () => {
 		const metadata = JSON.parse(String(pushedUpdate?.values?.metadata ?? "{}"))
 		expect(metadata.result_checksum).to.match(/^[a-f0-9]{64}$/)
 		expect(metadata.intent_classification).to.equal("FIX")
+		expect(metadata.hardening_grade).to.be.oneOf(["A", "B", "C", "D", "F"])
 		expect(metadata.violations).to.not.include("missing_validation_evidence")
 	})
 
@@ -122,6 +262,7 @@ describe("AgentOrchestrator audit ergonomics", () => {
 			{
 				commitWork: async () => undefined,
 				pushBatch: async () => undefined,
+				selectWhere: async () => [],
 			},
 			() => orchestrator.completeStream("stream-xml", `Use <xml> & "quotes" safely.`),
 		)

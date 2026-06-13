@@ -103,7 +103,7 @@ message Secrets {
   optional string cloudflare_api_token = 50;
   optional string embedding_api_key = 53;
   optional string vertex_api_key = 58;
-  optional string openai_codex_oauth_credentials = 79;
+  optional string openai_codex_oauth_credentials = 89;
 }
 
 // NOTE: Add new fields under API_HANDLER_SETTINGS_FIELDS or USER_SETTINGS_FIELDS
@@ -173,7 +173,19 @@ message Settings {
   optional bool safe_yolo_mode_toggled = 196;
   optional bool mas_enabled = 198;
   optional string global_diet_code_rules_toggles = 200;
-  map<string, string> open_ai_headers = 206;
+  optional bool audit_completion_gate_enabled = 202;
+  optional int32 audit_completion_gate_threshold = 204;
+  optional bool audit_completion_gate_critical_only = 206;
+  optional bool audit_act_mode_advisory_enabled = 207;
+  optional bool audit_advisory_escalation_enabled = 209;
+  optional bool audit_plan_regression_gate_enabled = 210;
+  optional bool audit_tool_output_advisory_enabled = 211;
+  optional bool audit_file_write_advisory_enabled = 213;
+  optional bool audit_intent_threshold_adjustments_enabled = 215;
+  optional string audit_intent_threshold_overrides = 217;
+  optional bool audit_sarif_hook_export_enabled = 219;
+  optional bool audit_workspace_artifacts_enabled = 220;
+  map<string, string> open_ai_headers = 221;
 }
 
 message State {

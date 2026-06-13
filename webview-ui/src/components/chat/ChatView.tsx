@@ -1,3 +1,11 @@
+import {
+	getAuditSnapshotsFromMessages,
+	getAuditTrend,
+	getLatestAuditFromMessages,
+	getPreviousAuditFromMessages,
+} from "@shared/audit/auditMessages"
+import { findMessageIndexForAuditTs } from "@shared/audit/auditNavigation"
+import { computeAuditHealthSummary } from "@shared/audit/auditRollup"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
@@ -66,6 +74,14 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	const apiMetrics = useMemo(() => getApiMetrics(modifiedMessages), [modifiedMessages])
 
 	const lastApiReqTotalTokens = useMemo(() => getLastApiReqTotalTokens(modifiedMessages) || undefined, [modifiedMessages])
+
+	const latestAuditMetadata = useMemo(() => getLatestAuditFromMessages(messages), [messages])
+	const auditTrend = useMemo(() => {
+		const previous = getPreviousAuditFromMessages(messages)
+		return getAuditTrend(previous, latestAuditMetadata)
+	}, [messages, latestAuditMetadata])
+	const auditSnapshots = useMemo(() => getAuditSnapshotsFromMessages(messages), [messages])
+	const auditHealth = useMemo(() => computeAuditHealthSummary(auditSnapshots), [auditSnapshots])
 
 	// Use custom hooks for state management
 	const chatState = useChatState(messages)
@@ -315,6 +331,16 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	// Use scroll behavior hook
 	const scrollBehavior = useScrollBehavior(messages, visibleMessages, groupedMessages, expandedRows, setExpandedRows)
 
+	const handleScrollToAuditMessage = useCallback(
+		(ts: number) => {
+			const index = findMessageIndexForAuditTs(messages, ts)
+			if (index >= 0) {
+				scrollBehavior.scrollToMessage(index)
+			}
+		},
+		[messages, scrollBehavior.scrollToMessage],
+	)
+
 	const placeholderText = useMemo(() => {
 		const text = task ? "Type a message..." : "Type your task here..."
 		return text
@@ -327,9 +353,14 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				{task ? (
 					<TaskSection
 						apiMetrics={apiMetrics}
+						auditHealth={auditHealth}
+						auditSnapshots={auditSnapshots}
+						auditTrend={auditTrend}
 						lastApiReqTotalTokens={lastApiReqTotalTokens}
 						lastProgressMessageText={lastProgressMessageText}
+						latestAuditMetadata={latestAuditMetadata}
 						messageHandlers={messageHandlers}
+						onScrollToAuditMessage={handleScrollToAuditMessage}
 						selectedModelInfo={{
 							supportsPromptCache: selectedModelInfo.supportsPromptCache,
 							supportsImages: selectedModelInfo.supportsImages || false,
