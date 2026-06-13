@@ -42,6 +42,7 @@ export interface AuditHealthSummary {
 	criticalViolationCount: number
 	warningViolationCount: number
 	gateBlockCount: number
+	suppressedViolationCount: number
 	trend: "improving" | "degrading" | "stable" | "unknown"
 }
 
@@ -57,11 +58,13 @@ export function computeAuditHealthSummary(
 	let criticalViolationCount = 0
 	let warningViolationCount = 0
 	let gateBlockCount = 0
+	let suppressedViolationCount = 0
 
 	for (const { auditMetadata } of snapshots) {
 		if (auditMetadata.gate_blocked) {
 			gateBlockCount += 1
 		}
+		suppressedViolationCount += auditMetadata.suppressed_violations?.length ?? 0
 		if (Number.isFinite(auditMetadata.hardening_score)) {
 			scoreSum += auditMetadata.hardening_score!
 			scoredCount += 1
@@ -91,6 +94,7 @@ export function computeAuditHealthSummary(
 		criticalViolationCount,
 		warningViolationCount,
 		gateBlockCount,
+		suppressedViolationCount,
 		trend,
 	}
 }

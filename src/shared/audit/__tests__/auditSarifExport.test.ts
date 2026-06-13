@@ -23,4 +23,15 @@ describe("auditSarifExport", () => {
 		const parsed = JSON.parse(json)
 		expect(parsed.version).to.equal("2.1.0")
 	})
+
+	it("includes suppressed violations with SARIF suppressions metadata", () => {
+		const metadata = enrichAuditMetadata({
+			violations: ["result_empty"],
+			suppressed_violations: ["missing_validation_evidence"],
+		})
+		const sarif = buildAuditSarifReport(metadata)
+		const suppressedResult = sarif.runs[0].results.find((r) => r.ruleId === "missing_validation_evidence")
+		expect(suppressedResult?.suppressions?.[0]?.kind).to.equal("external")
+		expect(suppressedResult?.suppressions?.[0]?.justification).to.contain("suppressions.json")
+	})
 })

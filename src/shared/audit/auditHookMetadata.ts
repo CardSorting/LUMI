@@ -30,6 +30,12 @@ export function buildAuditHookMetadata(metadata: TaskAuditMetadata, options?: Au
 		gateEffectiveThreshold: String(metadata.gate_effective_threshold ?? gateStatus?.effectiveThreshold ?? ""),
 		qualityGatePassed: String(qualityGate?.passed ?? !metadata.gate_blocked),
 		qualityGateStatus: qualityGate?.status ?? "",
+		suppressedViolationCount: String(metadata.suppressed_violations?.length ?? 0),
+		workspacePolicyApplied: String(metadata.workspace_gate_policy_applied ?? false),
+	}
+
+	if (metadata.workspace_gate_policy_applied) {
+		hookMeta.policySource = "workspace"
 	}
 
 	if (metadata.artifact_sarif_path) {

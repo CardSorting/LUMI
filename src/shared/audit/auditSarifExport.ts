@@ -38,6 +38,7 @@ export interface SarifResult {
 	level: SarifLevel
 	message: { text: string }
 	locations: Array<{ physicalLocation: { artifactLocation: { uri: string } } }>
+	suppressions?: Array<{ kind: "external" | "inSource"; justification?: string }>
 }
 
 const SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
@@ -90,9 +91,10 @@ function buildGateRules(codes: CompletionGateReasonCode[]): SarifRule[] {
 
 export function buildAuditSarifReport(metadata: TaskAuditMetadata, options?: { taskUri?: string; runLabel?: string }): SarifLog {
 	const violations = metadata.violations ?? []
+	const suppressed = metadata.suppressed_violations ?? []
 	const gateCodes = metadata.gate_reason_codes ?? []
 	const artifactUri = options?.taskUri ?? "task://completion-audit"
-	const rules = [...buildViolationRules(violations), ...buildGateRules(gateCodes)]
+	const rules = [...buildViolationRules([...violations, ...suppressed]), ...buildGateRules(gateCodes)]
 
 	const results: SarifResult[] = violations.map((violation) => ({
 		ruleId: violation,
@@ -102,6 +104,18 @@ export function buildAuditSarifReport(metadata: TaskAuditMetadata, options?: { t
 		},
 		locations: [{ physicalLocation: { artifactLocation: { uri: artifactUri } } }],
 	}))
+
+	for (const violation of suppressed) {
+		results.push({
+			ruleId: violation,
+			level: "note",
+			message: {
+				text: `${formatViolationLabel(violation)} (waived via .audit/suppressions.json)`,
+			},
+			locations: [{ physicalLocation: { artifactLocation: { uri: artifactUri } } }],
+			suppressions: [{ kind: "external", justification: "Waived via workspace suppressions.json" }],
+		})
+	}
 
 	for (const code of gateCodes) {
 		if (code === "gate_disabled") continue

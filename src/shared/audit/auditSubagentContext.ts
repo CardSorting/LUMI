@@ -44,6 +44,14 @@ export function buildSubagentGateSignals(input: SubagentAuditContextInput): stri
 		signals.push("SIGNAL: PARENT_ADVISORY_FINDINGS")
 	}
 
+	if (input.lastCompletionAudit?.workspace_gate_policy_applied) {
+		signals.push("SIGNAL: PARENT_WORKSPACE_GATE_POLICY")
+	}
+
+	if ((input.lastCompletionAudit?.suppressed_violations?.length ?? 0) > 0) {
+		signals.push("SIGNAL: PARENT_SUPPRESSED_VIOLATIONS")
+	}
+
 	return Array.from(new Set(signals))
 }
 
@@ -74,6 +82,13 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 			if (labels.length > 0) {
 				lines.push(`- Gate reasons: ${labels.join("; ")}`)
 			}
+		}
+		if (lastCompletionAudit.workspace_gate_policy_applied) {
+			lines.push("- Workspace gate policy: APPLIED (.audit/gate-policy.json)")
+		}
+		const suppressedCount = lastCompletionAudit.suppressed_violations?.length ?? 0
+		if (suppressedCount > 0) {
+			lines.push(`- Suppressed violations: ${suppressedCount} waived`)
 		}
 	}
 

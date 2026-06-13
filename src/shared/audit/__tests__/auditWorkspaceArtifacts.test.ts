@@ -92,6 +92,35 @@ describe("auditWorkspaceArtifacts", () => {
 
 		const gatePolicyPath = path.join(tempDir, DEFAULT_AUDIT_ARTIFACT_DIR, "gate-policy.json")
 		expect(await fs.stat(gatePolicyPath)).to.exist
+
+		const suppressionsPath = path.join(tempDir, DEFAULT_AUDIT_ARTIFACT_DIR, "suppressions.json")
+		expect(await fs.stat(suppressionsPath)).to.exist
+	})
+
+	it("writes policy provenance into gate-status.json", async () => {
+		const metadata = enrichAuditMetadata({
+			violations: [],
+			workspace_gate_policy_applied: true,
+			suppressed_violations: ["missing_validation_evidence"],
+		})
+		await persistAuditWorkspaceArtifacts({
+			cwd: tempDir,
+			taskId: "task-prov",
+			metadata,
+			event: "completion",
+			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
+			policyProvenance: {
+				source: "workspace",
+				workspacePolicyApplied: true,
+				overriddenFields: ["scoreThreshold"],
+			},
+		})
+		const gateStatus = JSON.parse(
+			await fs.readFile(path.join(tempDir, DEFAULT_AUDIT_ARTIFACT_DIR, "latest", "gate-status.json"), "utf8"),
+		)
+		expect(gateStatus.workspacePolicyApplied).to.equal(true)
+		expect(gateStatus.policyProvenance?.source).to.equal("workspace")
+		expect(gateStatus.suppressedViolationCount).to.equal(1)
 	})
 
 	it("enriches audit metadata with relative artifact paths", () => {

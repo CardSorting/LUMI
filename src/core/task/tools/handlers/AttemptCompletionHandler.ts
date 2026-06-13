@@ -9,6 +9,7 @@ import { findLastIndex } from "@shared/array"
 import { buildGateBlockEventSummary, enrichAuditMetadataWithGateDecision } from "@shared/audit/auditGateCatalog"
 import {
 	applyWorkspaceAuditPolicy,
+	type GatePolicyProvenance,
 	resolveCompletionGateContext,
 	resolveCompletionGateOptions,
 } from "@shared/audit/auditGatePolicyLoader"
@@ -58,6 +59,7 @@ async function persistAuditArtifactsIfEnabled(
 	metadata: TaskAuditMetadata,
 	event: "completion" | "gate_block",
 	gateOptions?: Awaited<ReturnType<typeof buildAuditGateOptions>>,
+	policyProvenance?: GatePolicyProvenance,
 ): Promise<TaskAuditMetadata> {
 	if (!config.auditWorkspaceArtifactsEnabled) {
 		return metadata
@@ -71,6 +73,7 @@ async function persistAuditArtifactsIfEnabled(
 			includeSarif: config.auditSarifHookExportEnabled,
 			gateOptions: gateOptions ?? (await buildAuditGateOptions(config)),
 			gatePolicySettings: config,
+			policyProvenance,
 		})
 		if (result) {
 			return enrichAuditMetadataWithArtifactPaths(metadata, result)
@@ -284,7 +287,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 					gateDecision,
 					config.taskState.completionGateBlockCount,
 				)
-				enrichedAudit = await persistAuditArtifactsIfEnabled(config, enrichedAudit, "gate_block", gateOptions)
+				enrichedAudit = await persistAuditArtifactsIfEnabled(
+					config,
+					enrichedAudit,
+					"gate_block",
+					gateOptions,
+					gateContext.policyProvenance,
+				)
 				config.taskState.lastCompletionAudit = enrichedAudit
 
 				if (config.autoApprovalSettings.enableNotifications) {
@@ -320,7 +329,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			}
 
 			if (auditMetadata) {
-				auditMetadata = await persistAuditArtifactsIfEnabled(config, auditMetadata, "completion", gateOptions)
+				auditMetadata = await persistAuditArtifactsIfEnabled(
+					config,
+					auditMetadata,
+					"completion",
+					gateOptions,
+					gateContext.policyProvenance,
+				)
 				config.taskState.lastCompletionAudit = auditMetadata
 			}
 		} catch (error) {

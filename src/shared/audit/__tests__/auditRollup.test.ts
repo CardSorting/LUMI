@@ -45,4 +45,13 @@ describe("auditRollup", () => {
 		const summary = computeAuditHealthSummary([{ auditMetadata: blocked }, { auditMetadata: blocked }])
 		expect(summary?.gateBlockCount).to.equal(2)
 	})
+
+	it("aggregates suppressed violation counts across snapshots", () => {
+		const withSuppressed = enrichAuditMetadata({
+			violations: [],
+			suppressed_violations: ["missing_validation_evidence", "result_empty"],
+		})
+		const summary = computeAuditHealthSummary([{ auditMetadata: withSuppressed }])
+		expect(summary?.suppressedViolationCount).to.equal(2)
+	})
 })

@@ -63,12 +63,24 @@ async function readJsonFile<T>(filePath: string): Promise<T | undefined> {
 	}
 }
 
+/** Clamps and validates workspace gate policy fields — mirrors SonarQube quality gate schema validation. */
+export function validateWorkspaceGatePolicy(policy: WorkspaceGatePolicyFile): WorkspaceGatePolicyFile {
+	const validated = { ...policy }
+	if (validated.scoreThreshold !== undefined) {
+		validated.scoreThreshold = Math.max(0, Math.min(100, Math.round(validated.scoreThreshold)))
+	}
+	if (validated.schemaVersion !== undefined && validated.schemaVersion !== 1) {
+		validated.schemaVersion = 1
+	}
+	return validated
+}
+
 /** Loads workspace `.audit/gate-policy.json` — config-as-code overrides (SonarQube quality gate file pattern). */
 export async function loadWorkspaceGatePolicy(cwd: string): Promise<WorkspaceGatePolicyFile | undefined> {
 	if (!cwd?.trim()) return undefined
 	const policy = await readJsonFile<WorkspaceGatePolicyFile>(gatePolicyPath(cwd))
 	if (!policy || typeof policy !== "object") return undefined
-	return policy
+	return validateWorkspaceGatePolicy(policy)
 }
 
 /** Loads workspace `.audit/suppressions.json` — active violation waivers. */

@@ -5,6 +5,7 @@ import {
 	loadWorkspaceSuppressions,
 	mergeWorkspaceGatePolicy,
 	resolveCompletionGateContext,
+	validateWorkspaceGatePolicy,
 	WORKSPACE_GATE_POLICY_FILE,
 	WORKSPACE_SUPPRESSIONS_FILE,
 } from "@shared/audit/auditGatePolicyLoader"
@@ -123,5 +124,11 @@ describe("auditGatePolicyLoader", () => {
 		}
 		const result = await applyWorkspaceAuditPolicy(tempDir, enrichAuditMetadata({ violations: [] }), settings)
 		expect(result.workspace_gate_policy_applied).to.equal(true)
+	})
+
+	it("validates and clamps workspace gate policy score threshold", () => {
+		const validated = validateWorkspaceGatePolicy({ scoreThreshold: 150, schemaVersion: 99 })
+		expect(validated.scoreThreshold).to.equal(100)
+		expect(validated.schemaVersion).to.equal(1)
 	})
 })

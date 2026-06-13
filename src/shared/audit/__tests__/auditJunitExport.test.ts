@@ -22,4 +22,15 @@ describe("auditJunitExport", () => {
 		expect(xml).to.contain("missing_validation_evidence")
 		expect(xml).to.contain("audit.gate")
 	})
+
+	it("includes suppressed violations as skipped testcases", () => {
+		const metadata = enrichAuditMetadata({
+			violations: [],
+			suppressed_violations: ["missing_validation_evidence"],
+		})
+		const xml = buildAuditJunitXml(metadata, { taskId: "task-3" })
+		expect(xml).to.contain('skipped="1"')
+		expect(xml).to.contain("audit.suppressed")
+		expect(xml).to.contain("<skipped")
+	})
 })

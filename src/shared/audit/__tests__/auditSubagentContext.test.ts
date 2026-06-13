@@ -45,4 +45,21 @@ describe("auditSubagentContext", () => {
 		})
 		expect(signals).to.deep.equal([])
 	})
+
+	it("emits workspace policy and suppression signals", () => {
+		const lastCompletionAudit = enrichAuditMetadata({
+			violations: [],
+			suppressed_violations: ["missing_validation_evidence"],
+			workspace_gate_policy_applied: true,
+		})
+		const signals = buildSubagentGateSignals({
+			lastCompletionAudit,
+			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
+		})
+		expect(signals).to.include("SIGNAL: PARENT_WORKSPACE_GATE_POLICY")
+		expect(signals).to.include("SIGNAL: PARENT_SUPPRESSED_VIOLATIONS")
+		const context = buildSubagentAuditContext({ lastCompletionAudit })
+		expect(context).to.contain("Workspace gate policy")
+		expect(context).to.contain("Suppressed violations")
+	})
 })

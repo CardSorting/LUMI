@@ -2,7 +2,8 @@ import fs from "fs/promises"
 import path from "path"
 import { buildCiGateStatusJson, buildCiJobSummaryMarkdown, buildGatePolicySnapshot } from "./auditCiSummary"
 import type { AuditGateSettingsSource } from "./auditGateOptions"
-import { serializeWorkspaceGatePolicy, WORKSPACE_GATE_POLICY_FILE } from "./auditGatePolicyLoader"
+import type { GatePolicyProvenance } from "./auditGatePolicyLoader"
+import { serializeWorkspaceGatePolicy, WORKSPACE_GATE_POLICY_FILE, WORKSPACE_SUPPRESSIONS_FILE } from "./auditGatePolicyLoader"
 import type { CompletionGateOptions } from "./auditGateReport"
 import { evaluateCompletionGate } from "./auditGateReport"
 import { buildQualityGateStatus } from "./auditGateStatus"
@@ -28,6 +29,7 @@ export interface PersistAuditArtifactsInput {
 	artifactDir?: string
 	gateOptions?: CompletionGateOptions
 	gatePolicySettings?: AuditGateSettingsSource
+	policyProvenance?: GatePolicyProvenance
 }
 
 export interface PersistAuditArtifactsResult {
@@ -159,6 +161,7 @@ async function writeCiArtifacts(
 	entry: AuditArtifactIndexEntry,
 	gateOptions?: CompletionGateOptions,
 	gatePolicySettings?: AuditGateSettingsSource,
+	policyProvenance?: GatePolicyProvenance,
 ): Promise<void> {
 	const qualityGate = buildQualityGateStatus(metadata, gateOptions)
 	if (!qualityGate) {
@@ -166,7 +169,7 @@ async function writeCiArtifacts(
 	}
 
 	const summaryMarkdown = buildCiJobSummaryMarkdown(metadata, qualityGate, entry)
-	const gateStatusJson = buildCiGateStatusJson(metadata, qualityGate, entry.taskId, entry.event)
+	const gateStatusJson = buildCiGateStatusJson(metadata, qualityGate, entry.taskId, entry.event, policyProvenance)
 	const latestDir = path.join(rootDir, "latest")
 	await fs.mkdir(latestDir, { recursive: true })
 
@@ -187,6 +190,15 @@ async function writeCiArtifacts(
 	}
 
 	await Promise.all(writes)
+}
+
+async function ensureWorkspaceSuppressionsTemplate(rootDir: string): Promise<void> {
+	const suppressionsPath = path.join(rootDir, WORKSPACE_SUPPRESSIONS_FILE)
+	try {
+		await fs.access(suppressionsPath)
+	} catch {
+		await fs.writeFile(suppressionsPath, `${JSON.stringify({ schemaVersion: 1, suppressions: [] }, null, 2)}\n`, "utf8")
+	}
 }
 
 async function ensureWorkspacePolicyTemplate(rootDir: string, gatePolicySettings?: AuditGateSettingsSource): Promise<void> {
@@ -227,6 +239,7 @@ export async function persistAuditWorkspaceArtifacts(
 		artifactDir = DEFAULT_AUDIT_ARTIFACT_DIR,
 		gateOptions,
 		gatePolicySettings,
+		policyProvenance,
 	} = input
 
 	if (!cwd?.trim() || !taskId?.trim()) {
@@ -241,6 +254,7 @@ export async function persistAuditWorkspaceArtifacts(
 	await fs.mkdir(reportsDir, { recursive: true })
 	await fs.mkdir(junitDir, { recursive: true })
 	await ensureWorkspacePolicyTemplate(rootDir, gatePolicySettings)
+	await ensureWorkspaceSuppressionsTemplate(rootDir)
 
 	const gateDecision = gateOptions ? evaluateCompletionGate(metadata, gateOptions) : undefined
 
@@ -308,7 +322,7 @@ export async function persistAuditWorkspaceArtifacts(
 		manifestPath: result.relativeManifestPath,
 	}
 	await updateAuditArtifactIndex(rootDir, indexEntry, cwd)
-	await writeCiArtifacts(rootDir, metadata, indexEntry, gateOptions, gatePolicySettings)
+	await writeCiArtifacts(rootDir, metadata, indexEntry, gateOptions, gatePolicySettings, policyProvenance)
 
 	return result
 }

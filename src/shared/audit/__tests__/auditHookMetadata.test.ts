@@ -27,4 +27,16 @@ describe("auditHookMetadata", () => {
 		expect(Number(hookMeta.sarifResultCount)).to.be.greaterThan(0)
 		expect(hookMeta.sarifReport?.length ?? 0).to.be.at.most(SARIF_HOOK_EXPORT_MAX_CHARS + 3)
 	})
+
+	it("includes suppressed violations and workspace policy in hook metadata", () => {
+		const metadata = enrichAuditMetadata({
+			violations: [],
+			suppressed_violations: ["missing_validation_evidence"],
+			workspace_gate_policy_applied: true,
+		})
+		const hookMeta = buildAuditHookMetadata(metadata)
+		expect(hookMeta.suppressedViolationCount).to.equal("1")
+		expect(hookMeta.workspacePolicyApplied).to.equal("true")
+		expect(hookMeta.policySource).to.equal("workspace")
+	})
 })

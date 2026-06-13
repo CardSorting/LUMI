@@ -142,6 +142,11 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 							{health.gateBlockCount} gate block{health.gateBlockCount === 1 ? "" : "s"}
 						</span>
 					)}
+					{health && health.suppressedViolationCount > 0 && (
+						<span className="text-[8px] uppercase tracking-wider text-blue-500/80 font-bold">
+							{health.suppressedViolationCount} waived
+						</span>
+					)}
 				</div>
 				{expanded ? (
 					<ChevronDownIcon className="size-3 text-description/60" />
@@ -256,6 +261,14 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 										<span className="text-amber-500 font-bold">{warning.length} warning</span>
 									)}
 									{info.length > 0 && <span className="text-description/60">{info.length} info</span>}
+									{(snapshot.auditMetadata.suppressed_violations?.length ?? 0) > 0 && (
+										<span className="text-blue-500/80 font-bold">
+											{snapshot.auditMetadata.suppressed_violations!.length} waived
+										</span>
+									)}
+									{snapshot.auditMetadata.workspace_gate_policy_applied && (
+										<span className="text-blue-600 dark:text-blue-400 font-bold">workspace policy</span>
+									)}
 								</div>
 								{snapshot.auditMetadata.gate_reason_codes &&
 									snapshot.auditMetadata.gate_reason_codes.length > 0 && (
