@@ -6,9 +6,10 @@ import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
-import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage } from "@shared/ExtensionMessage"
+import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
+import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
@@ -79,7 +80,9 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				if (!status.kanban_complete_allowed) {
 					config.taskState.consecutiveMistakeCount++
 					const blockingGates = status.roadmap_gate?.blocking_gates || []
-					const closedGatesMsg = blockingGates.map((g: any) => `- ${g.label}: ${g.why}. Fix: ${g.fix}`).join("\n")
+					const closedGatesMsg = blockingGates
+						.map((g: { label: string; why: string; fix: string }) => `- ${g.label}: ${g.why}. Fix: ${g.fix}`)
+						.join("\n")
 					return formatResponse.toolError(
 						"Task completion blocked by Roadmap Governance Gates:\n" +
 							closedGatesMsg +
@@ -184,13 +187,29 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			await config.messageState.saveDietCodeMessagesAndUpdateHistory()
 		}
 
+		// Run task audit to capture hardening & safety metrics
+		let auditMetadata: TaskAuditMetadata | undefined
+		try {
+			const taskDescription = getInitialTaskPreview(config) || ""
+			auditMetadata = await orchestrator.auditTask(config.taskId, taskDescription, result, "")
+		} catch (error) {
+			Logger.error("[AttemptCompletionHandler] Failed to run task audit:", error)
+		}
+
 		let commandResult: ToolResponse | undefined
 		const lastMessage = config.messageState.getDietCodeMessages().at(-1)
 
 		if (command) {
 			if (lastMessage && lastMessage.ask !== "command") {
 				// haven't sent a command message yet so first send completion_result then command
-				const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+				const completionMessageTs = await config.callbacks.say(
+					"completion_result",
+					result,
+					undefined,
+					undefined,
+					false,
+					auditMetadata,
+				)
 				await config.callbacks.saveCheckpoint(true, completionMessageTs)
 				await addNewChangesFlagToLastCompletionResultMessage()
 				telemetryService.captureTaskCompleted(config.ulid, getTaskCompletionTelemetry(config))
@@ -237,7 +256,14 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			commandResult = execCommandResult
 		} else {
 			// Send the complete completion_result message (partial was already removed above)
-			const completionMessageTs = await config.callbacks.say("completion_result", result, undefined, undefined, false)
+			const completionMessageTs = await config.callbacks.say(
+				"completion_result",
+				result,
+				undefined,
+				undefined,
+				false,
+				auditMetadata,
+			)
 			await config.callbacks.saveCheckpoint(true, completionMessageTs)
 			await addNewChangesFlagToLastCompletionResultMessage()
 			telemetryService.captureTaskCompleted(config.ulid, getTaskCompletionTelemetry(config))

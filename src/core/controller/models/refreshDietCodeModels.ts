@@ -169,7 +169,7 @@ async function fetchAndCacheDietCodeModels(): Promise<Record<string, ModelInfo>>
 				// to ensure it has a valid thinkingConfig that lets the application know thinking is supported.
 				thinkingConfig: supportThinking ? { maxBudget: ANTHROPIC_MAX_THINKING_BUDGET } : undefined,
 				supportsGlobalEndpoint: rawModel.supports_global_endpoint ?? undefined,
-				tiers: rawModel.tiers ?? undefined,
+				tiers: (rawModel.tiers as any) ?? undefined,
 			}
 
 			// Apply model-specific overrides for known models

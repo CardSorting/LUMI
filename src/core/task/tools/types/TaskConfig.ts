@@ -14,7 +14,7 @@ import type { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import type { McpHub } from "@services/mcp/McpHub"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { BrowserSettings } from "@shared/BrowserSettings"
-import type { DietCodeAsk, DietCodeSay } from "@shared/ExtensionMessage"
+import type { DietCodeAsk, DietCodeSay, TaskAuditMetadata } from "@shared/ExtensionMessage"
 import type { FocusChainSettings } from "@shared/FocusChainSettings"
 import type { DietCodeContent, DietCodeToolResponseContent } from "@shared/messages/content"
 import type { Mode } from "@shared/storage/types"
@@ -95,7 +95,14 @@ export interface TaskServices {
  * All callback functions available to tool handlers
  */
 export interface TaskCallbacks {
-	say: (type: DietCodeSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
+	say: (
+		type: DietCodeSay,
+		text?: string,
+		images?: string[],
+		files?: string[],
+		partial?: boolean,
+		auditMetadata?: TaskAuditMetadata,
+	) => Promise<number | undefined>
 
 	ask: (
 		type: DietCodeAsk,

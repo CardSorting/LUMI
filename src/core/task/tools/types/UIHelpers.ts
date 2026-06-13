@@ -12,7 +12,14 @@ import type { TaskConfig } from "./TaskConfig"
  */
 export interface StronglyTypedUIHelpers {
 	// Core UI methods
-	say: (type: DietCodeSay, text?: string, images?: string[], files?: string[], partial?: boolean) => Promise<number | undefined>
+	say: (
+		type: DietCodeSay,
+		text?: string,
+		images?: string[],
+		files?: string[],
+		partial?: boolean,
+		auditMetadata?: any,
+	) => Promise<number | undefined>
 
 	ask: (
 		type: DietCodeAsk,

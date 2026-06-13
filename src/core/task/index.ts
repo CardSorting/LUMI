@@ -64,6 +64,7 @@ import {
 	DietCodeAsk,
 	DietCodeMessage,
 	DietCodeSay,
+	TaskAuditMetadata,
 } from "@shared/ExtensionMessage"
 import { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay } from "@shared/Languages"
@@ -751,6 +752,7 @@ export class Task {
 		images?: string[],
 		files?: string[],
 		partial?: boolean,
+		auditMetadata?: TaskAuditMetadata,
 	): Promise<number | undefined> {
 		// Allow hook messages even when aborted to enable proper cleanup
 		if (this.taskState.abort && type !== "hook_status" && type !== "hook_output_stream") {
@@ -776,6 +778,7 @@ export class Task {
 						images,
 						files,
 						partial,
+						auditMetadata,
 					})
 
 					const protoMessage = convertDietCodeMessageToProto(lastMessage)
@@ -794,6 +797,7 @@ export class Task {
 					files,
 					partial,
 					modelInfo,
+					auditMetadata,
 				})
 				await this.postStateToWebview()
 				return sayTs
@@ -809,6 +813,7 @@ export class Task {
 					images,
 					files,
 					partial: false,
+					auditMetadata,
 				})
 
 				// await this.postStateToWebview()
@@ -827,6 +832,7 @@ export class Task {
 				images,
 				files,
 				modelInfo,
+				auditMetadata,
 			})
 			await this.postStateToWebview()
 			return sayTs
@@ -842,6 +848,7 @@ export class Task {
 			images,
 			files,
 			modelInfo,
+			auditMetadata,
 		})
 		await this.postStateToWebview()
 		return sayTs

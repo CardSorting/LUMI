@@ -226,6 +226,19 @@ message DietCodeMessage {
   DietCodeAskNewTask ask_new_task = 21;
   DietCodeApiReqInfo api_req_info = 22;
   DietCodeModelInfo model_info = 23;
+  TaskAuditMetadataProto audit_metadata = 24;
+}
+
+// Message for TaskAuditMetadata
+message TaskAuditMetadataProto {
+  repeated string joy_zoning_violations = 1;
+  string result_checksum = 2;
+  bool divergence_detected = 3;
+  double entropy_score = 4;
+  repeated string violations = 5;
+  string intent_classification = 6;
+  double intent_coverage = 7;
+  int64 audited_at = 8;
 }
 
 message ShowWebviewEvent {

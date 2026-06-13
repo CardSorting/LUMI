@@ -1014,6 +1014,7 @@ export const ChatRowContent = memo(
 
 						return (
 							<CompletionOutputRow
+								auditMetadata={message.auditMetadata}
 								explainChangesDisabled={explainChangesDisabled}
 								handleQuoteClick={handleQuoteClick}
 								headClassNames={HEADER_CLASSNAMES}
@@ -1162,6 +1163,7 @@ export const ChatRowContent = memo(
 							const text = hasChanges ? message.text.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
 							return (
 								<CompletionOutputRow
+									auditMetadata={message.auditMetadata}
 									explainChangesDisabled={explainChangesDisabled}
 									handleQuoteClick={handleQuoteClick}
 									headClassNames={HEADER_CLASSNAMES}

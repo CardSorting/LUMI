@@ -62,8 +62,8 @@ async function fetchAndCacheModels(controller: Controller): Promise<Record<strin
 					supportsPromptCache: modelInfo.supportsPromptCache,
 					inputPrice: modelInfo.inputPrice,
 					outputPrice: modelInfo.outputPrice,
-					cacheWritesPrice: modelInfo.cacheWritesPrice || 0,
-					cacheReadsPrice: modelInfo.cacheReadsPrice || 0,
+					cacheWritesPrice: (modelInfo as any).cacheWritesPrice || 0,
+					cacheReadsPrice: (modelInfo as any).cacheReadsPrice || 0,
 					description: modelInfo.description || `${modelId} model`,
 				}
 			}
@@ -105,8 +105,8 @@ async function fetchAndCacheModels(controller: Controller): Promise<Record<strin
 						supportsPromptCache: staticModelInfo?.supportsPromptCache || false,
 						inputPrice: staticModelInfo?.inputPrice || 0,
 						outputPrice: staticModelInfo?.outputPrice || 0,
-						cacheWritesPrice: staticModelInfo?.cacheWritesPrice || 0,
-						cacheReadsPrice: staticModelInfo?.cacheReadsPrice || 0,
+						cacheWritesPrice: (staticModelInfo as any)?.cacheWritesPrice || 0,
+						cacheReadsPrice: (staticModelInfo as any)?.cacheReadsPrice || 0,
 						description: generateModelDescription(rawModel, staticModelInfo),
 					}
 
@@ -163,8 +163,8 @@ async function fetchAndCacheModels(controller: Controller): Promise<Record<strin
 					supportsPromptCache: modelInfo.supportsPromptCache,
 					inputPrice: modelInfo.inputPrice,
 					outputPrice: modelInfo.outputPrice,
-					cacheWritesPrice: modelInfo.cacheWritesPrice || 0,
-					cacheReadsPrice: modelInfo.cacheReadsPrice || 0,
+					cacheWritesPrice: (modelInfo as any).cacheWritesPrice || 0,
+					cacheReadsPrice: (modelInfo as any).cacheReadsPrice || 0,
 					description: modelInfo.description || `${modelId} model`,
 				}
 			}

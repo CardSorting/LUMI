@@ -114,6 +114,17 @@ export interface ExtensionState {
 	googleUserInfo?: UserInfo
 }
 
+export interface TaskAuditMetadata {
+	joy_zoning_violations?: string[]
+	result_checksum?: string
+	divergence_detected?: boolean
+	entropy_score?: number
+	violations?: string[]
+	intent_classification?: string
+	intent_coverage?: number
+	audited_at?: number
+}
+
 export interface DietCodeMessage {
 	ts: number
 	type: "ask" | "say"
@@ -131,6 +142,7 @@ export interface DietCodeMessage {
 	conversationHistoryIndex?: number
 	conversationHistoryDeletedRange?: [number, number] // for when conversation history is truncated for API requests
 	modelInfo?: DietCodeMessageModelInfo
+	auditMetadata?: TaskAuditMetadata
 }
 
 export type DietCodeAsk =

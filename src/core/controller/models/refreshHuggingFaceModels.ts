@@ -91,8 +91,8 @@ export async function refreshHuggingFaceModels(
 					supportsPromptCache: modelInfo.supportsPromptCache,
 					inputPrice: modelInfo.inputPrice,
 					outputPrice: modelInfo.outputPrice,
-					cacheWritesPrice: modelInfo.cacheWritesPrice || 0,
-					cacheReadsPrice: modelInfo.cacheReadsPrice || 0,
+					cacheWritesPrice: (modelInfo as any).cacheWritesPrice || 0,
+					cacheReadsPrice: (modelInfo as any).cacheReadsPrice || 0,
 					description: modelInfo.description || "",
 				})
 			}

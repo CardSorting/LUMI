@@ -217,6 +217,18 @@ export function convertDietCodeMessageToProto(message: AppDietCodeMessage): Prot
 		askNewTask: undefined,
 		apiReqInfo: undefined,
 		modelInfo: message.modelInfo ?? undefined,
+		auditMetadata: message.auditMetadata
+			? {
+					joyZoningViolations: message.auditMetadata.joy_zoning_violations ?? [],
+					resultChecksum: message.auditMetadata.result_checksum ?? "",
+					divergenceDetected: message.auditMetadata.divergence_detected ?? false,
+					entropyScore: message.auditMetadata.entropy_score ?? 0,
+					violations: message.auditMetadata.violations ?? [],
+					intentClassification: message.auditMetadata.intent_classification ?? "",
+					intentCoverage: message.auditMetadata.intent_coverage ?? 0,
+					auditedAt: message.auditMetadata.audited_at ?? 0,
+				}
+			: undefined,
 	}
 
 	return protoMessage
@@ -282,6 +294,19 @@ export function convertProtoToDietCodeMessage(protoMessage: ProtoDietCodeMessage
 			protoMessage.conversationHistoryDeletedRange.startIndex,
 			protoMessage.conversationHistoryDeletedRange.endIndex,
 		]
+	}
+
+	if (protoMessage.auditMetadata) {
+		message.auditMetadata = {
+			joy_zoning_violations: protoMessage.auditMetadata.joyZoningViolations,
+			result_checksum: protoMessage.auditMetadata.resultChecksum,
+			divergence_detected: protoMessage.auditMetadata.divergenceDetected,
+			entropy_score: protoMessage.auditMetadata.entropyScore,
+			violations: protoMessage.auditMetadata.violations,
+			intent_classification: protoMessage.auditMetadata.intentClassification || undefined,
+			intent_coverage: protoMessage.auditMetadata.intentCoverage,
+			audited_at: protoMessage.auditMetadata.auditedAt,
+		}
 	}
 
 	return message
