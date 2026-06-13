@@ -72,7 +72,7 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVis
 					maxHeight: "60vh",
 				}}>
 				<div className="mb-2.5 text-muted-foreground text-xs cursor-pointer" onClick={() => setIsVisible(false)}>
-					Let DietCode take these actions without asking for approval.{" "}
+					Let me handle these without asking each time.{" "}
 					<a
 						className="text-link hover:text-link-hover"
 						href="https://docs.dietcode.bot/features/auto-approve#auto-approve"

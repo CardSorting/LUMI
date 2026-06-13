@@ -60,10 +60,10 @@ AccordionItem.displayName = "AccordionItem"
 
 // Constants
 const TOKEN_DETAILS_CONFIG: Omit<TokenDetail, "icon" | "value">[] = [
-	{ title: "Prompt Tokens" },
-	{ title: "Completion Tokens" },
-	{ title: "Cache Writes" },
-	{ title: "Cache Reads" },
+	{ title: "Input" },
+	{ title: "Output" },
+	{ title: "Cached writes" },
+	{ title: "Cached reads" },
 ]
 
 const TokenUsageDetails = memo<TokenUsageInfoProps>(({ tokensIn, tokensOut, cacheWrites, cacheReads }) => {
@@ -126,14 +126,14 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 				<AccordionItem
 					isExpanded={expandedSections.has("threshold")}
 					onToggle={(event) => toggleSection("threshold", event)}
-					title="Auto Condense Threshold"
+					title="Auto shorten chats"
 					value={<span className="text-muted-foreground">{`${(autoCompactThreshold * 100).toFixed(0)}%`}</span>}>
 					<div className="space-y-1">
 						<p className="text-xs leading-relaxed text-white">
-							Click on the context window bar to set a new threshold.
+							Click the memory bar to choose when chats get shortened.
 						</p>
 						<p className="text-xs leading-relaxed mt-0 mb-0">
-							When the context window usage exceeds this threshold, the task will be automatically condensed.
+							When the chat gets long, MIRA tidies it up so things stay comfortable.
 						</p>
 					</div>
 				</AccordionItem>
@@ -142,7 +142,7 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 			<AccordionItem
 				isExpanded={expandedSections.has("context")}
 				onToggle={(event) => toggleSection("context", event)}
-				title="Context Window"
+				title="Chat memory"
 				value={percentage ? `${percentage.toFixed(1)}%` : formatTokenNumber(contextWindow)}>
 				<div className="space-y-1">
 					<div className="flex justify-between">
@@ -164,7 +164,7 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 				<AccordionItem
 					isExpanded={expandedSections.has("tokens")}
 					onToggle={(event) => toggleSection("tokens", event)}
-					title="Token Usage"
+					title="Usage details"
 					value={`${formatTokenNumber(totalTokens)}`}>
 					<TokenUsageDetails
 						cacheReads={cacheReads}

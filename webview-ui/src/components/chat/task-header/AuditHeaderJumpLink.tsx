@@ -32,7 +32,7 @@ export const AuditHeaderJumpLink = memo(
 		return (
 			<button
 				className={cn(
-					"text-[8px] uppercase tracking-wider font-bold text-description/70 hover:text-foreground cursor-pointer bg-transparent border-0 p-0",
+					"text-[9px] font-medium text-description/70 hover:text-foreground cursor-pointer bg-transparent border-0 p-0",
 					className,
 				)}
 				onClick={handleClick}

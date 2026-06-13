@@ -56,11 +56,11 @@ const ServersToggleModal: React.FC = () => {
 		<div className="inline-flex min-w-0 max-w-full items-center" ref={modalRef}>
 			<div className="inline-flex w-full items-center" ref={buttonRef}>
 				<Tooltip>
-					{!isVisible && <TooltipContent>Manage MCP Servers</TooltipContent>}
+					{!isVisible && <TooltipContent>Manage extra tools</TooltipContent>}
 					<TooltipTrigger>
 						<VSCodeButton
 							appearance="icon"
-							aria-label={isVisible ? "Hide MCP Servers" : "Show MCP Servers"}
+							aria-label={isVisible ? "Hide extra tools" : "Show extra tools"}
 							className="p-0 m-0 flex items-center"
 							onClick={() => setIsVisible(!isVisible)}>
 							<VscIcon className="" name="server" style={{ fontSize: "12.5px" }} />
@@ -73,10 +73,10 @@ const ServersToggleModal: React.FC = () => {
 				<PopupModalContainer $arrowPosition={arrowPosition} $menuPosition={menuPosition}>
 					<div className="flex-shrink-0 px-3 pt-2">
 						<div className="flex justify-between items-center mb-2.5">
-							<div className="m-0 text-sm font-medium">MCP Servers</div>
+							<div className="m-0 text-sm font-medium">Extra tools</div>
 							<VSCodeButton
 								appearance="icon"
-								aria-label="Go to MCP server settings"
+								aria-label="Open extra tools settings"
 								onClick={() => {
 									setIsVisible(false)
 									navigateToMcp("configure")

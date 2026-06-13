@@ -65,7 +65,7 @@ export const TaskAuditBadge = memo(
 		const canJumpToGate = gateVisualLevel === "blocked" && onJumpToGateBlock !== undefined
 		const canExpandHeader = gateVisualLevel === "warning" && onExpandTaskHeader !== undefined
 		const badgeClassName = cn(
-			"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider border",
+			"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border",
 			HARDENING_GRADE_STYLES[grade],
 			gateVisualLevel && GATE_READINESS_STYLES[gateVisualLevel],
 			canJumpToGate && "cursor-pointer hover:opacity-90",
@@ -97,8 +97,8 @@ export const TaskAuditBadge = memo(
 						: undefined,
 					auditMetadata.workspace_gate_policy_applied ? "Workspace gate policy" : undefined,
 					gateReadiness?.tooltip,
-					canJumpToGate ? "Click to jump to latest gate block" : undefined,
-					canExpandHeader ? "Click to open quality gate panel" : undefined,
+					canJumpToGate ? "Click to see what needs attention" : undefined,
+					canExpandHeader ? "Click for a quick look" : undefined,
 					gateDecision && !gateReadiness
 						? gateDecision.blocked
 							? `Gate blocked: ${gateDecision.reasons.map((r) => r.message).join("; ")}`

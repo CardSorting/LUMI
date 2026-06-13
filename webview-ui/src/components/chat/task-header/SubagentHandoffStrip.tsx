@@ -2,6 +2,7 @@ import { formatSubagentParentSignal, type SubagentAuditSummary } from "@shared/a
 import { NetworkIcon } from "lucide-react"
 import { memo, useMemo } from "react"
 import { cn } from "@/lib/utils"
+import { auditStrip } from "../audit/auditUiStyles"
 
 interface SubagentHandoffStripProps {
 	summary?: SubagentAuditSummary
@@ -20,22 +21,22 @@ export const SubagentHandoffStrip = memo(({ summary, className }: SubagentHandof
 
 	return (
 		<section
-			aria-label="Subagent audit handoff"
+			aria-label="A few notes"
 			className={cn(
-				"mt-2 rounded-xs border px-2.5 py-2 text-[9px]",
-				isActive ? "border-blue-500/25 bg-blue-500/5" : "border-description/15 bg-black/5 dark:bg-white/5",
+				"mt-2 px-3 py-2.5 text-[10px] mira-audit-exhale transition-opacity duration-[2s]",
+				auditStrip,
 				className,
 			)}>
 			<div className="flex items-center gap-2 flex-wrap mb-1.5">
 				<NetworkIcon className="size-3 shrink-0 text-blue-600 dark:text-blue-400" />
-				<span className="font-bold uppercase tracking-wider text-description/80">Subagent Handoff</span>
+				<span className="font-medium text-description/85">A few notes</span>
 				{isActive && (
-					<span className="text-[8px] font-bold uppercase text-blue-600 dark:text-blue-400">
-						{summary.runningCount + summary.pendingCount} active
+					<span className="text-[8px] font-medium text-blue-600 dark:text-blue-400">
+						{summary.runningCount + summary.pendingCount} helping
 					</span>
 				)}
 				{summary.hasParentGateBlocked && (
-					<span className="text-[8px] font-bold uppercase text-red-500">parent gate blocked</span>
+					<span className="text-[8px] font-medium text-amber-700 dark:text-amber-400">Waiting on earlier check</span>
 				)}
 			</div>
 			<ul className="list-disc list-inside space-y-0.5 text-description/85">

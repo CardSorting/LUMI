@@ -30,7 +30,7 @@ export const AuditScoreSparkline = memo(({ scores, className }: AuditScoreSparkl
 					<div
 						className={cn(
 							"w-1 rounded-[1px] transition-all",
-							passing ? "bg-emerald-500/70" : score >= SCORE_THRESHOLD - 15 ? "bg-amber-500/70" : "bg-red-500/70",
+							passing ? "bg-emerald-500/60" : score >= SCORE_THRESHOLD - 15 ? "bg-amber-500/55" : "bg-amber-700/45",
 						)}
 						key={`${index}-${score}`}
 						style={{ height: `${height}%` }}

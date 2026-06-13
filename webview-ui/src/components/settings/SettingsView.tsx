@@ -59,23 +59,23 @@ interface SettingsTab {
 export const SETTINGS_TABS: SettingsTab[] = [
 	{
 		id: "api-config",
-		name: "API Configuration",
-		tooltipText: "API Configuration",
-		headerText: "API Configuration",
+		name: "Models",
+		tooltipText: "Choose models and API keys",
+		headerText: "Models & keys",
 		icon: SlidersHorizontal,
 	},
 	{
 		id: "embedding",
-		name: "Embeddings",
-		tooltipText: "Embedding Configuration",
-		headerText: "Embedding Configuration",
+		name: "Search",
+		tooltipText: "Optional code search settings",
+		headerText: "Code search",
 		icon: HardDriveDownload,
 	},
 	{
 		id: "features",
-		name: "Features",
-		tooltipText: "Feature Settings",
-		headerText: "Feature Settings",
+		name: "Preferences",
+		tooltipText: "How MIRA behaves",
+		headerText: "Preferences",
 		icon: CheckCheck,
 	},
 	{
@@ -95,8 +95,8 @@ export const SETTINGS_TABS: SettingsTab[] = [
 	{
 		id: "general",
 		name: "General",
-		tooltipText: "General Settings",
-		headerText: "General Settings",
+		tooltipText: "Language and privacy",
+		headerText: "General",
 		icon: Wrench,
 	},
 	{
@@ -111,7 +111,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
 	{
 		id: "about",
 		name: "About",
-		tooltipText: "About DietCode",
+		tooltipText: "About MIRA",
 		headerText: "About",
 		icon: Info,
 	},

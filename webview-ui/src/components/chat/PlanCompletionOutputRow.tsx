@@ -19,11 +19,11 @@ interface PlanCompletionOutputProps {
  */
 const PlanCompletionOutputRow = memo(({ text, headClassNames, auditMetadata }: PlanCompletionOutputProps) => {
 	return (
-		<div className="rounded-sm border border-description/50 overflow-visible bg-code p-2 pt-3">
+		<div className="rounded-lg border border-description/40 overflow-visible bg-code/80 p-4 pt-4 animate-mira-reveal">
 			<div className={cn(headClassNames, "justify-between px-1")}>
 				<div className="flex gap-2 items-center">
 					<NotepadTextIcon className="size-2" />
-					<span className="text-foreground font-bold">Plan Created</span>
+					<span className="text-foreground font-medium">Here's the plan</span>
 				</div>
 				<CopyButton textToCopy={text || ""} />
 			</div>

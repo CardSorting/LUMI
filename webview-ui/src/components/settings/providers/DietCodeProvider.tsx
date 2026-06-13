@@ -13,12 +13,12 @@ interface DietCodeProviderProps {
 }
 
 /**
- * The DietCode provider configuration component
+ * The MIRA provider configuration component
  */
 export const DietCodeProvider = ({ showModelOptions, isPopup, currentMode, initialModelTab }: DietCodeProviderProps) => {
 	return (
 		<div>
-			{/* DietCode Account Info Card */}
+			{/* MIRA Account Info Card */}
 			<div style={{ marginBottom: 14, marginTop: 4 }}>
 				<DietCodeAccountInfoCard />
 			</div>

@@ -253,7 +253,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 				}
 			})
 			.catch((error) => {
-				console.error("Error toggling DietCode rule:", error)
+				console.error("Error toggling MIRA rule:", error)
 			})
 	}
 
@@ -437,11 +437,11 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		<div className="inline-flex min-w-0 max-w-full items-center" ref={modalRef}>
 			<div className="inline-flex w-full items-center" ref={buttonRef}>
 				<Tooltip>
-					{!isVisible && <TooltipContent>Manage DietCode Rules & Workflows</TooltipContent>}
+					{!isVisible && <TooltipContent>Manage MIRA Rules & Workflows</TooltipContent>}
 					<TooltipTrigger>
 						<VSCodeButton
 							appearance="icon"
-							aria-label={isVisible ? "Hide DietCode Rules & Workflows" : "Show DietCode Rules & Workflows"}
+							aria-label={isVisible ? "Hide MIRA Rules & Workflows" : "Show MIRA Rules & Workflows"}
 							className="p-0 m-0 flex items-center"
 							onClick={() => setIsVisible(!isVisible)}>
 							<VscIcon className="" name="law" style={{ fontSize: "12.5px" }} />
@@ -500,8 +500,8 @@ const DietCodeRulesToggleModal: React.FC = () => {
 						<div className="text-xs text-description mb-4">
 							{currentView === "rules" ? (
 								<p>
-									Rules allow you to provide DietCode with system-level guidance. Think of them as a persistent
-									way to include context and preferences for your projects or globally for every conversation.{" "}
+									Rules are gentle nudges for how you'd like MIRA to work — project notes, preferences, or
+									habits you want to keep across chats.{" "}
 									<VSCodeLink
 										className="text-xs"
 										href="https://docs.dietcode.bot/features/dietcode-rules"
@@ -511,9 +511,8 @@ const DietCodeRulesToggleModal: React.FC = () => {
 								</p>
 							) : currentView === "workflows" ? (
 								<p>
-									Workflows allow you to define a series of steps to guide DietCode through a repetitive set of
-									tasks, such as deploying a service or submitting a PR. To invoke a workflow, type{" "}
-									<span className="text-foreground font-bold">/workflow-name</span> in the chat.{" "}
+									Workflows are saved step-by-step routines — handy for things you do often. Type{" "}
+									<span className="text-foreground font-bold">/workflow-name</span> in chat to run one.{" "}
 									<VSCodeLink
 										className="text-xs inline"
 										href="https://docs.dietcode.bot/features/slash-commands/workflows">
@@ -522,14 +521,13 @@ const DietCodeRulesToggleModal: React.FC = () => {
 								</p>
 							) : currentView === "skills" ? (
 								<p>
-									Skills are reusable instruction sets that DietCode can activate on-demand. When a task matches
-									a skill's description, DietCode uses the <span className="font-bold">use_skill</span> tool to
-									load the full instructions.
+									Skills are little playbooks MIRA can pull in when a task fits. When something matches, MIRA
+									loads the full instructions automatically.{" "}
 								</p>
 							) : (
 								<p>
-									Hooks allow you to execute custom scripts at specific points in DietCode's execution
-									lifecycle, enabling automation and integration with external tools.
+									Hooks run little scripts at certain moments — useful if you want to wire MIRA into your own
+									tools.
 								</p>
 							)}
 						</div>

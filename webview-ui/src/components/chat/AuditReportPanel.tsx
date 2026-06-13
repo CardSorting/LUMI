@@ -27,10 +27,18 @@ import {
 	ExternalLinkIcon,
 	ShieldCheckIcon,
 } from "lucide-react"
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
+import {
+	auditBadge,
+	auditLabel,
+	auditReadingGroup,
+	auditReadingRow,
+	auditReadingSurface,
+	auditSoftDivider,
+} from "./audit/auditUiStyles"
 
 const COPY_FEEDBACK_DURATION_MS = 2000
 
@@ -55,12 +63,12 @@ const EntropyBadge = memo(({ score = 0 }: EntropyBadgeProps) => {
 	const isCritical = score > 0.6
 	const isWarning = score > 0.4
 	const badgeClass = isCritical
-		? "text-red-500 bg-red-500/10 border border-red-500/20"
+		? "text-amber-700/80 dark:text-amber-400/80 bg-amber-500/5 border border-amber-500/15"
 		: isWarning
-			? "text-amber-500 bg-amber-500/10 border border-amber-500/20"
-			: "text-emerald-500 bg-emerald-500/10 border border-emerald-500/20"
-	const label = isCritical ? "CRITICAL" : isWarning ? "WARNING" : "STABLE"
-	return <span className={cn("text-[8px] px-1 rounded-xs font-sans font-extrabold tracking-wider", badgeClass)}>{label}</span>
+			? "text-amber-600/70 dark:text-amber-400/70 bg-amber-500/5 border border-amber-500/10"
+			: "text-description/65 bg-black/[0.02] dark:bg-white/[0.02] border border-description/10"
+	const label = isCritical ? "Elevated" : isWarning ? "Worth noting" : "Steady"
+	return <span className={cn("text-[8px] px-1.5 py-0.5 rounded-full font-normal", badgeClass)}>{label}</span>
 })
 
 EntropyBadge.displayName = "EntropyBadge"
@@ -74,17 +82,23 @@ const HardeningGradeBadge = memo(({ grade, score }: HardeningGradeBadgeProps) =>
 	if (!grade) return null
 	return (
 		<span
-			className={cn(
-				"px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-widest shadow-sm",
-				HARDENING_GRADE_STYLES[grade],
-			)}
-			title={Number.isFinite(score) ? `Hardening score: ${score}/100` : undefined}>
+			className={cn(auditBadge, HARDENING_GRADE_STYLES[grade], "shadow-none tracking-normal")}
+			title={Number.isFinite(score) ? `Score ${score}/100` : undefined}>
 			Grade {grade}
 		</span>
 	)
 })
 
 HardeningGradeBadge.displayName = "HardeningGradeBadge"
+
+const AuditReadingField = memo(({ label, children }: { label: string; children: ReactNode }) => (
+	<div className="min-w-0 flex-1 basis-[9rem] max-w-full">
+		<span className={auditLabel}>{label}</span>
+		<div className="mt-0.5">{children}</div>
+	</div>
+))
+
+AuditReadingField.displayName = "AuditReadingField"
 
 export interface AuditReportPanelProps {
 	auditMetadata: TaskAuditMetadata
@@ -176,16 +190,20 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 		if (await copyTextToClipboard(JSON.stringify(payload, null, 2))) showCopyFeedback("gateStatus")
 	}
 
-	const borderClass = variant === "success" ? "border-success/20" : "border-description/30"
-	const accentText = variant === "success" ? "text-success/80 hover:text-success" : "text-foreground/80 hover:text-foreground"
-	const panelBorder = variant === "success" ? "border-success/15" : "border-description/20"
-	const hoverBg = variant === "success" ? "hover:bg-success/5" : "hover:bg-foreground/5"
+	const borderClass = variant === "success" ? "border-success/10" : "border-description/10"
+	const accentText =
+		variant === "success" ? "text-success/70 hover:text-success/85" : "text-foreground/70 hover:text-foreground/85"
+	const hoverBg = variant === "success" ? "hover:bg-success/[0.03]" : "hover:bg-foreground/[0.03]"
 
 	return (
-		<div className={cn("mt-3 border-t pt-3 text-[11px] font-sans", borderClass)}>
+		<div
+			className={cn(
+				"mt-3 border-t pt-3 text-[11px] font-sans mira-audit-exhale transition-opacity duration-[2s]",
+				borderClass,
+			)}>
 			<button
 				aria-expanded={isAuditExpanded}
-				aria-label="Toggle architectural hardening report"
+				aria-label="Toggle architecture notes"
 				className={cn(
 					"flex w-full items-center justify-between cursor-pointer select-none transition-colors py-1 px-1 rounded-sm border-0 bg-transparent text-left outline-none font-sans",
 					accentText,
@@ -193,149 +211,129 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 				)}
 				onClick={() => setIsAuditExpanded(!isAuditExpanded)}
 				type="button">
-				<div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[9px]">
+				<div className="flex items-center gap-1.5 font-medium text-[9px] text-description/65">
 					<ShieldCheckIcon
-						className={cn("size-3 animate-pulse", variant === "success" ? "text-success" : "text-foreground")}
+						className={cn("size-3", variant === "success" ? "text-success/70" : "text-description/60")}
 					/>
-					<span>Architectural Hardening Report</span>
+					<span>Architecture notes</span>
 					<HardeningGradeBadge grade={auditMetadata.hardening_grade} score={auditMetadata.hardening_score} />
 				</div>
 				{isAuditExpanded ? <ChevronDownIcon className="size-3.5" /> : <ChevronRightIcon className="size-3.5" />}
 			</button>
 
 			{isAuditExpanded && (
-				<div
-					className={cn(
-						"mt-2.5 grid grid-cols-2 gap-2.5 bg-black/10 dark:bg-white/5 p-3 rounded-sm border animate-fadeIn",
-						panelBorder,
-					)}>
-					<div className="flex flex-col gap-1">
-						<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-							Intent Classification
-						</span>
-						<span
-							className={cn(
-								"mt-0.5 w-fit px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-widest shadow-sm",
-								INTENT_CLASSIFICATION_STYLES[intentClassification],
-							)}>
-							{intentClassification}
-						</span>
-					</div>
-
-					<div className="flex flex-col gap-1">
-						<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-							Hardening Grade
-						</span>
-						<div className="mt-0.5 flex items-center gap-1.5">
-							<HardeningGradeBadge grade={auditMetadata.hardening_grade} score={auditMetadata.hardening_score} />
-							{Number.isFinite(auditMetadata.hardening_score) && (
-								<span className="font-mono text-[9px] font-bold">{auditMetadata.hardening_score}/100</span>
-							)}
-						</div>
-					</div>
-
-					<div className="flex flex-col gap-1">
-						<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-							Result Checksum
-						</span>
-						<div className="flex items-center gap-1 mt-0.5">
+				<div className={cn(auditReadingSurface, "mira-workshop-haze")}>
+					<div className={auditReadingRow}>
+						<AuditReadingField label="Intent">
 							<span
 								className={cn(
-									"font-mono text-[9px] px-1.5 py-0.5 rounded-xs truncate max-w-[100px]",
-									variant === "success"
-										? "text-success/90 bg-success/10"
-										: "text-foreground/90 bg-foreground/10",
-								)}
-								title={auditMetadata.result_checksum}>
-								{auditMetadata.result_checksum ? auditMetadata.result_checksum.substring(0, 10) : "N/A"}
-							</span>
-							{auditMetadata.result_checksum && (
-								<button
-									aria-label="Copy checksum"
-									className={cn("p-0.5 rounded-xs transition-colors cursor-pointer", accentText)}
-									onClick={(e) => handleCopyChecksum(e, auditMetadata.result_checksum as string)}
-									type="button">
-									{copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-								</button>
-							)}
-						</div>
-					</div>
-
-					<div className="flex flex-col gap-1">
-						<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-							Structural Entropy
-						</span>
-						<div className="flex items-center gap-1.5 mt-0.5 font-mono text-[10px]">
-							<span className="font-bold">{entropyScore}</span>
-							<EntropyBadge score={auditMetadata.entropy_score} />
-						</div>
-					</div>
-
-					<div className="flex flex-col gap-1">
-						<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-							Intent Coverage
-						</span>
-						<div className="flex items-center gap-2 mt-1">
-							<div
-								className={cn(
-									"w-16 h-1.5 rounded-full overflow-hidden border",
-									variant === "success"
-										? "bg-success/20 border-success/10"
-										: "bg-foreground/20 border-foreground/10",
+									"inline-flex px-1.5 py-0.5 rounded-full text-[8px] font-normal",
+									INTENT_CLASSIFICATION_STYLES[intentClassification],
 								)}>
-								<div
-									className={cn(
-										"h-full transition-all duration-500",
-										variant === "success" ? "bg-success" : "bg-foreground",
-									)}
-									style={{ width: `${intentCoveragePercentage}%` }}
+								{intentClassification}
+							</span>
+						</AuditReadingField>
+						<AuditReadingField label="Grade">
+							<div className="flex items-center gap-1.5 flex-wrap">
+								<HardeningGradeBadge
+									grade={auditMetadata.hardening_grade}
+									score={auditMetadata.hardening_score}
 								/>
+								{Number.isFinite(auditMetadata.hardening_score) && (
+									<span className="font-mono text-[9px] text-description/60">
+										{auditMetadata.hardening_score}/100
+									</span>
+								)}
 							</div>
-							<span className="font-mono text-[9px] font-bold">{intentCoveragePercentage}%</span>
-						</div>
+						</AuditReadingField>
+						<AuditReadingField label="Alignment">
+							{auditMetadata.divergence_detected ? (
+								<span
+									className={cn(
+										auditBadge,
+										"inline-flex items-center gap-1 text-amber-700/75 dark:text-amber-400/75",
+									)}>
+									<AlertTriangleIcon className="size-2" /> Some drift
+								</span>
+							) : (
+								<span className={cn(auditBadge, "inline-flex items-center gap-1")}>
+									<ShieldCheckIcon className="size-2" /> Aligned
+								</span>
+							)}
+						</AuditReadingField>
 					</div>
 
-					<div className="flex flex-col gap-1">
-						<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-							Alignment Status
-						</span>
-						{auditMetadata.divergence_detected ? (
-							<span className="mt-0.5 w-fit px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-widest bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 flex items-center gap-1">
-								<AlertTriangleIcon className="size-2 animate-pulse" /> Divergent
-							</span>
-						) : (
-							<span className="mt-0.5 w-fit px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-widest bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-								<ShieldCheckIcon className="size-2" /> Aligned
-							</span>
-						)}
+					<div className={auditReadingRow}>
+						<AuditReadingField label="Intent coverage">
+							<div className="flex items-center gap-2">
+								<div className="w-14 h-1 rounded-full overflow-hidden bg-black/[0.04] dark:bg-white/[0.04]">
+									<div
+										className={cn(
+											"h-full transition-all duration-700",
+											variant === "success" ? "bg-success/60" : "bg-foreground/40",
+										)}
+										style={{ width: `${intentCoveragePercentage}%` }}
+									/>
+								</div>
+								<span className="font-mono text-[9px] text-description/60">{intentCoveragePercentage}%</span>
+							</div>
+						</AuditReadingField>
+						<AuditReadingField label="Structural entropy">
+							<div className="flex items-center gap-1.5 font-mono text-[10px] text-description/65">
+								<span>{entropyScore}</span>
+								<EntropyBadge score={auditMetadata.entropy_score} />
+							</div>
+						</AuditReadingField>
+						<AuditReadingField label="Checked at">
+							<span className="font-mono text-[9px] text-description/60">{auditTime}</span>
+							{auditMetadata.workspace_gate_policy_applied && (
+								<span className={cn("mt-1 inline-flex", auditBadge, "text-description/55")}>
+									Workspace policy
+								</span>
+							)}
+						</AuditReadingField>
 					</div>
 
-					<div className="flex flex-col gap-1">
-						<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-							Audit Timestamp
-						</span>
-						<span className="mt-0.5 font-mono text-[9px]">{auditTime}</span>
-						{auditMetadata.workspace_gate_policy_applied && (
-							<span className="mt-0.5 w-fit px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-widest bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30">
-								Workspace gate policy
-							</span>
-						)}
+					<div className={auditReadingRow}>
+						<AuditReadingField label="Checksum">
+							<div className="flex items-center gap-1">
+								<span
+									className="font-mono text-[9px] px-1.5 py-0.5 rounded-md truncate max-w-[100px] text-description/65 bg-black/[0.03] dark:bg-white/[0.03]"
+									title={auditMetadata.result_checksum}>
+									{auditMetadata.result_checksum ? auditMetadata.result_checksum.substring(0, 10) : "N/A"}
+								</span>
+								{auditMetadata.result_checksum && (
+									<button
+										aria-label="Copy checksum"
+										className={cn(
+											"p-0.5 rounded-xs transition-colors cursor-pointer opacity-60 hover:opacity-100",
+											accentText,
+										)}
+										onClick={(e) => handleCopyChecksum(e, auditMetadata.result_checksum as string)}
+										type="button">
+										{copied ? (
+											<CheckIcon className="size-3 text-emerald-500/80" />
+										) : (
+											<CopyIcon className="size-3" />
+										)}
+									</button>
+								)}
+							</div>
+						</AuditReadingField>
 					</div>
 
 					{gateReadiness && gateReadiness.level !== "disabled" && (
-						<div className="col-span-2 flex flex-col gap-1 border-t border-description/10 pt-2">
-							<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-								Quality Gate
-							</span>
+						<div className={cn(auditReadingGroup, auditSoftDivider)}>
+							<span className={auditLabel}>Quality check</span>
 							<span
 								className={cn(
-									"mt-0.5 w-fit px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-widest border",
+									"mt-0.5 w-fit px-1.5 py-0.5 rounded-full text-[8px] font-normal border",
 									gateReadiness.level === "ready" &&
-										"bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+										"bg-black/[0.02] dark:bg-white/[0.02] text-description/70 border-description/10",
 									gateReadiness.level === "warning" &&
-										"bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30",
+										"bg-amber-500/8 text-amber-700/80 dark:text-amber-400/80 border-amber-500/15",
 									gateReadiness.level === "blocked" &&
-										"bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30",
+										"bg-amber-500/8 text-amber-700/80 dark:text-amber-400/80 border-amber-500/15",
 								)}>
 								{gateReadiness.label}
 								{qualityGate ? ` · ${qualityGate.score}/${qualityGate.effectiveThreshold}` : ""}
@@ -347,19 +345,17 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 					)}
 
 					{auditMetadata.gate_blocked && (
-						<div className="col-span-2 flex flex-col gap-1 border-t border-description/10 pt-2">
-							<span className="text-[9px] uppercase tracking-wider text-red-500 font-semibold">
-								Completion Gate
-							</span>
-							<span className="text-[9px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">
-								Blocked
-								{auditMetadata.gate_block_count ? ` · Attempt ${auditMetadata.gate_block_count}` : ""}
+						<div className={cn(auditReadingGroup, auditSoftDivider)}>
+							<span className={auditLabel}>Before finishing</span>
+							<span className="text-[9px] text-amber-700/80 dark:text-amber-400/80">
+								Paused
+								{auditMetadata.gate_block_count ? ` · attempt ${auditMetadata.gate_block_count}` : ""}
 								{Number.isFinite(auditMetadata.gate_effective_threshold)
-									? ` · Threshold ${auditMetadata.gate_effective_threshold}`
+									? ` · threshold ${auditMetadata.gate_effective_threshold}`
 									: ""}
 							</span>
 							{auditMetadata.gate_reason_codes && auditMetadata.gate_reason_codes.length > 0 && (
-								<ul className="list-disc list-inside text-[9px] text-red-500/90 space-y-0.5">
+								<ul className="list-disc list-inside text-[9px] text-description/70 space-y-0.5">
 									{auditMetadata.gate_reason_codes
 										.filter((code) => code !== "gate_disabled")
 										.map((code) => (
@@ -370,31 +366,31 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 						</div>
 					)}
 
-					<div className="col-span-2 mt-1 border-t border-description/10 pt-2.5">
+					<div className={cn(auditReadingGroup, auditSoftDivider)}>
 						{auditMetadata.violations && auditMetadata.violations.length > 0 ? (
 							<div className="w-full">
-								<div className="flex items-center gap-1 text-red-500 font-extrabold text-[9px] uppercase tracking-wider">
-									<AlertTriangleIcon className="size-3 animate-bounce" />
-									<span>Policy Violations ({auditMetadata.violations.length})</span>
+								<div className="flex items-center gap-1 text-amber-700/80 dark:text-amber-400/80 font-medium text-[9px] mb-1.5">
+									<AlertTriangleIcon className="size-3" />
+									<span>Things to revisit ({auditMetadata.violations.length})</span>
 									{violationSeverity.critical.length > 0 && (
-										<span className="ml-1 px-1 py-0.5 rounded-xs bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30">
-											{violationSeverity.critical.length} critical
+										<span className="ml-1 px-1 py-0.5 rounded-full text-[8px] font-normal bg-amber-500/8 border border-amber-500/12 text-amber-700/80 dark:text-amber-400/80">
+											{violationSeverity.critical.length} notable
 										</span>
 									)}
 									{violationSeverity.warning.length > 0 && (
-										<span className="px-1 py-0.5 rounded-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-											{violationSeverity.warning.length} warning
+										<span className="px-1 py-0.5 rounded-full text-[8px] font-normal bg-black/[0.02] dark:bg-white/[0.02] border border-description/10 text-description/65">
+											{violationSeverity.warning.length} minor
 										</span>
 									)}
 								</div>
-								<ul className="mt-1.5 list-disc list-inside text-[9.5px] text-red-600 dark:text-red-400 space-y-1 bg-red-500/5 p-2 rounded-xs border border-red-500/15">
+								<ul className="mt-1 list-disc list-inside text-[9.5px] text-description/75 space-y-1 bg-black/[0.02] dark:bg-white/[0.02] p-2 rounded-md">
 									{auditMetadata.violations.map((v) => {
 										const hint = getViolationRemediation(v)
 										return (
 											<li className="font-mono" key={v} title={v}>
-												<span className="font-bold">{formatViolationLabel(v)}</span>
+												<span className="font-normal font-sans">{formatViolationLabel(v)}</span>
 												{hint && (
-													<span className="block text-[9px] text-red-500/80 font-sans font-normal mt-0.5 pl-3">
+													<span className="block text-[9px] text-description/60 font-sans font-normal mt-0.5 pl-3">
 														{hint}
 													</span>
 												)}
@@ -404,21 +400,19 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 								</ul>
 							</div>
 						) : (
-							<div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 px-2.5 py-1.5 rounded-xs border border-emerald-500/15 w-full">
-								<CheckIcon className="size-3.5 stroke-[3]" />
-								<span className="font-bold text-[9.5px] uppercase tracking-wider">
-									0 Violations — Fully Hardened
-								</span>
+							<div className="flex items-center gap-1.5 text-description/65 bg-black/[0.02] dark:bg-white/[0.02] px-2.5 py-1.5 rounded-md w-full">
+								<CheckIcon className="size-3.5" />
+								<span className="font-normal text-[9.5px]">Nothing flagged</span>
 							</div>
 						)}
 					</div>
 
 					{auditMetadata.joy_zoning_violations && auditMetadata.joy_zoning_violations.length > 0 && (
-						<div className="col-span-2 mt-1 border-t border-description/10 pt-2.5">
-							<div className="flex items-center gap-1 text-amber-500 font-extrabold text-[9px] uppercase tracking-wider mb-1.5">
-								<AlertTriangleIcon className="size-3" /> Architecture Layer Violations
+						<div className={cn(auditReadingGroup, auditSoftDivider)}>
+							<div className="flex items-center gap-1 text-amber-600/80 dark:text-amber-400/80 font-medium text-[9px] mb-1.5">
+								<AlertTriangleIcon className="size-3" /> Layer observations
 							</div>
-							<ul className="list-disc list-inside text-[9.5px] text-amber-600 dark:text-amber-400 space-y-1 bg-amber-500/5 p-2 rounded-xs border border-amber-500/15">
+							<ul className="list-disc list-inside text-[9.5px] text-description/75 space-y-1 bg-black/[0.02] dark:bg-white/[0.02] p-2 rounded-md">
 								{auditMetadata.joy_zoning_violations.map((v) => (
 									<li className="truncate font-mono" key={v}>
 										{v}
@@ -429,10 +423,8 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 					)}
 
 					{(auditMetadata.suppressed_violations?.length ?? 0) > 0 && (
-						<div className="col-span-2 flex flex-col gap-1 border-t border-description/10 pt-2">
-							<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-								Suppressed Violations
-							</span>
+						<div className={cn(auditReadingGroup, auditSoftDivider)}>
+							<span className={auditLabel}>Waived observations</span>
 							<ul className="list-disc list-inside text-[8.5px] text-description/70 space-y-0.5">
 								{auditMetadata.suppressed_violations?.map((violation) => (
 									<li className="font-mono truncate" key={violation}>
@@ -444,10 +436,8 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 					)}
 
 					{artifactPaths.length > 0 && (
-						<div className="col-span-2 flex flex-col gap-1 border-t border-description/10 pt-2">
-							<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-								Workspace Artifacts
-							</span>
+						<div className={cn(auditReadingGroup, auditSoftDivider)}>
+							<span className={auditLabel}>Saved files</span>
 							<ul className="list-none text-[9px] font-mono text-description/80 space-y-1">
 								{artifactPaths.map((artifactPath) => (
 									<li className="flex items-center justify-between gap-2" key={artifactPath}>
@@ -475,66 +465,71 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 					)}
 
 					{auditReportId && (
-						<div className="col-span-2 mt-1 border-t border-description/10 pt-2 flex items-center justify-between gap-2 text-[9px] text-description/60 font-mono flex-wrap">
-							<span>Report ID: {auditReportId}</span>
+						<div
+							className={cn(
+								auditReadingGroup,
+								auditSoftDivider,
+								"flex items-center justify-between gap-2 text-[9px] text-description/45 font-mono flex-wrap",
+							)}>
+							<span>Note ref · {auditReportId}</span>
 							<div className="flex items-center gap-2">
 								<button
-									aria-label="Copy audit report"
+									aria-label="Copy project notes"
 									className={cn(
-										"flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-0",
+										"flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-0 opacity-70 hover:opacity-100",
 										accentText,
 									)}
 									onClick={handleCopyReport}
 									type="button">
 									{reportCopied ? (
 										<>
-											<CheckIcon className="size-3 text-emerald-500" />
-											<span>Copied!</span>
+											<CheckIcon className="size-3 text-emerald-500/80" />
+											<span>Copied</span>
 										</>
 									) : (
 										<>
 											<CopyIcon className="size-3" />
-											<span>Markdown</span>
+											<span>Project notes</span>
 										</>
 									)}
 								</button>
 								<button
-									aria-label="Copy gate status JSON"
+									aria-label="Copy detailed notes"
 									className={cn(
-										"flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-0",
+										"flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-0 opacity-70 hover:opacity-100",
 										accentText,
 									)}
 									onClick={handleCopyGateStatus}
 									type="button">
 									{gateStatusCopied ? (
 										<>
-											<CheckIcon className="size-3 text-emerald-500" />
-											<span>Copied!</span>
+											<CheckIcon className="size-3 text-emerald-500/80" />
+											<span>Copied</span>
 										</>
 									) : (
 										<>
 											<CopyIcon className="size-3" />
-											<span>Gate JSON</span>
+											<span>Detailed notes</span>
 										</>
 									)}
 								</button>
 								<button
-									aria-label="Copy SARIF report"
+									aria-label="Copy tool report"
 									className={cn(
-										"flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-0",
+										"flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-0 opacity-70 hover:opacity-100",
 										accentText,
 									)}
 									onClick={handleCopySarif}
 									type="button">
 									{sarifCopied ? (
 										<>
-											<CheckIcon className="size-3 text-emerald-500" />
-											<span>Copied!</span>
+											<CheckIcon className="size-3 text-emerald-500/80" />
+											<span>Copied</span>
 										</>
 									) : (
 										<>
 											<CopyIcon className="size-3" />
-											<span>SARIF</span>
+											<span>Tool report</span>
 										</>
 									)}
 								</button>

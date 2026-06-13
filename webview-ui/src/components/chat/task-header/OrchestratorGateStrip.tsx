@@ -4,6 +4,7 @@ import { ChevronDownIcon, ChevronRightIcon, NetworkIcon } from "lucide-react"
 import { memo, useMemo, useState } from "react"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
+import { auditStrip } from "../audit/auditUiStyles"
 import { AuditArtifactQuickLinks } from "./AuditArtifactQuickLinks"
 
 interface OrchestratorGateStripProps {
@@ -29,10 +30,10 @@ export const OrchestratorGateStrip = memo(({ auditMetadata, className }: Orchest
 
 	return (
 		<section
-			aria-label="Orchestrator gate digest"
+			aria-label="A quick look"
 			className={cn(
-				"mt-2 rounded-xs border px-2.5 py-2 text-[9px]",
-				status.ready ? "border-emerald-500/20 bg-emerald-500/5" : "border-red-500/25 bg-red-500/5",
+				"mt-2 px-3 py-2.5 text-[10px] mira-audit-exhale transition-opacity duration-[2s]",
+				auditStrip,
 				className,
 			)}>
 			<button
@@ -42,21 +43,23 @@ export const OrchestratorGateStrip = memo(({ auditMetadata, className }: Orchest
 				type="button">
 				<div className="flex items-center gap-2 flex-wrap">
 					<NetworkIcon className="size-3 shrink-0 text-description/70" />
-					<span className="font-bold uppercase tracking-wider text-description/80">Orchestrator Gate</span>
+					<span className="font-medium text-description/85">A quick look</span>
 					<span
 						className={cn(
-							"px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider border",
+							"px-2 py-0.5 rounded-full text-[9px] font-medium border",
 							status.ready
 								? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-								: "border-red-500/40 text-red-600 dark:text-red-400",
+								: "border-amber-500/40 text-amber-700 dark:text-amber-400",
 						)}>
-						{status.ready ? "Ready" : "Blocked"}
+						{status.ready ? "Looking good" : "Worth revisiting"}
 					</span>
 					<span className="font-mono text-description/70">
 						{status.score}/{status.effectiveThreshold}
 					</span>
 					{status.gateBlockCount ? (
-						<span className="text-red-500 font-bold">{status.gateBlockCount} block(s)</span>
+						<span className="text-amber-700 dark:text-amber-400">
+							{status.gateBlockCount} pause{status.gateBlockCount === 1 ? "" : "s"}
+						</span>
 					) : null}
 				</div>
 				{expanded ? (
@@ -69,7 +72,7 @@ export const OrchestratorGateStrip = memo(({ auditMetadata, className }: Orchest
 			{expanded && (
 				<div className="mt-2 space-y-1.5">
 					{status.reasonLabels.length > 0 && (
-						<ul className="list-disc list-inside text-red-600/90 dark:text-red-400/90 space-y-0.5">
+						<ul className="list-disc list-inside text-amber-800/90 dark:text-amber-300/90 space-y-0.5">
 							{status.reasonLabels.map((label) => (
 								<li className="break-words" key={label}>
 									{label}
@@ -80,10 +83,14 @@ export const OrchestratorGateStrip = memo(({ auditMetadata, className }: Orchest
 					{(status.criticalViolationCount > 0 || status.warningViolationCount > 0) && (
 						<p className="text-description/75">
 							{status.criticalViolationCount > 0 && (
-								<span className="text-red-500 font-bold">{status.criticalViolationCount} critical </span>
+								<span className="text-amber-700 dark:text-amber-400">
+									{status.criticalViolationCount} needs attention{" "}
+								</span>
 							)}
 							{status.warningViolationCount > 0 && (
-								<span className="text-amber-500 font-bold">{status.warningViolationCount} warning</span>
+								<span className="text-amber-600 dark:text-amber-400">
+									{status.warningViolationCount} to review
+								</span>
 							)}
 						</p>
 					)}

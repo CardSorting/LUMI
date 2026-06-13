@@ -38,36 +38,35 @@ export const ErrorBlockTitle = ({
 		) : cost != null ? (
 			getIconSpan("check", "text-(--vscode-charts-green)")
 		) : apiRequestFailedMessage ? (
-			getIconSpan("error", "text-(--vscode-errorForeground)")
+			getIconSpan("error", "text-(--vscode-descriptionForeground)")
 		) : (
 			<ProgressIndicator />
 		)
 
 	const title = (() => {
-		// Default loading state
-		const details = { title: "API Request...", classNames: ["font-bold"] }
-		// Handle cancellation states first
+		const details = { title: "Working on it...", classNames: ["font-medium"] }
 		if (apiReqCancelReason === "user_cancelled") {
-			details.title = "API Request Cancelled"
+			details.title = "Stopped"
 			details.classNames.push("text-(--vscode-foreground)")
 		} else if (apiReqCancelReason != null) {
-			details.title = "API Request Failed"
-			details.classNames.push("text-(--vscode-errorForeground)")
+			details.title = "That didn't quite work"
+			details.classNames.push("text-(--vscode-foreground)")
 		} else if (cost != null) {
-			// Handle completed request
-			details.title = "API Request"
+			details.title = "Done."
 			details.classNames.push("text-(--vscode-foreground)")
 		} else if (apiRequestFailedMessage) {
-			// Handle failed request
 			const dietcodeError = DietCodeError.parse(apiRequestFailedMessage)
 			const titleText = dietcodeError?.isErrorType(DietCodeErrorType.Balance)
-				? "Credit Limit Reached"
-				: "API Request Failed"
+				? "You're out of credits"
+				: "That didn't quite work"
 			details.title = titleText
-			details.classNames.push("font-bold text-(--vscode-errorForeground)")
+			details.classNames.push(
+				dietcodeError?.isErrorType(DietCodeErrorType.Balance)
+					? "font-medium text-(--vscode-errorForeground)"
+					: "font-medium text-(--vscode-foreground)",
+			)
 		} else if (retryStatus) {
-			// Handle retry state
-			details.title = "API Request"
+			details.title = "Taking another look…"
 			details.classNames.push("text-(--vscode-foreground)")
 		}
 

@@ -21,7 +21,7 @@ export const AccountWelcomeView = () => {
 			</p>
 
 			<VSCodeButton className="w-full mb-4" disabled={isLoginLoading} onClick={handleSignIn}>
-				Sign up with DietCode
+				Sign up with MIRA
 				{isLoginLoading && (
 					<span className="ml-1 animate-spin">
 						<VscIcon className="" name="refresh" />

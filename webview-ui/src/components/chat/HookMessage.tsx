@@ -203,13 +203,13 @@ const HookMessage = memo(({ message, CommandOutput }: HookMessageProps) => {
 								flexShrink: 0,
 							}}>
 							{isRunning
-								? "Running"
+								? "Working on it…"
 								: isFailed
-									? "Failed"
+									? "That didn't work"
 									: isCancelled
-										? "Aborted"
+										? "Stopped"
 										: isCompleted
-											? "Completed"
+											? "Done"
 											: "Unknown"}
 						</span>
 						{metadata.exitCode !== undefined && metadata.exitCode !== 0 && (

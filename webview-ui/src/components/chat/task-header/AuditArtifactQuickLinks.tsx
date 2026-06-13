@@ -11,9 +11,9 @@ interface AuditArtifactQuickLinksProps {
 }
 
 const ARTIFACT_LABELS: Record<string, string> = {
-	sarif: "SARIF",
+	sarif: "Details",
 	report: "Report",
-	manifest: "Manifest",
+	manifest: "Summary",
 }
 
 function artifactKind(path: string): string {
@@ -42,10 +42,10 @@ export const AuditArtifactQuickLinks = memo(({ auditMetadata, className }: Audit
 
 	return (
 		<div className={cn("flex flex-wrap items-center gap-2", className)}>
-			<span className="text-[8px] uppercase tracking-wider font-bold text-description/60">Artifacts</span>
+			<span className="text-[9px] font-medium text-description/60">Details</span>
 			{paths.map((path) => (
 				<button
-					className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider text-description/80 hover:text-foreground cursor-pointer bg-transparent border-0 p-0"
+					className="inline-flex items-center gap-1 text-[9px] font-medium text-description/80 hover:text-foreground cursor-pointer bg-transparent border-0 p-0"
 					key={path}
 					onClick={() => handleOpen(path)}
 					title={path}

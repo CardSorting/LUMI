@@ -73,7 +73,7 @@ export const WelcomeSection: React.FC<WelcomeSectionProps> = ({ showHistoryView,
 										</button>
 									</TooltipTrigger>
 									<TooltipContent side="bottom">
-										View and manage git worktrees. Great for running parallel DietCode tasks.
+										View and manage git worktrees. Handy for working on multiple tasks in parallel.
 									</TooltipContent>
 								</Tooltip>
 							)}

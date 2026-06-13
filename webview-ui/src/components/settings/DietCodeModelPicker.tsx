@@ -143,7 +143,7 @@ const DietCodeModelPicker: React.FC<DietCodeModelPickerProps> = ({ isPopup, curr
 			setDietCodeFreeModels(free)
 			return true
 		} catch (error) {
-			console.error("Failed to refresh DietCode recommended models:", error)
+			console.error("Failed to refresh MIRA recommended models:", error)
 			return false
 		}
 	}, [])
@@ -564,8 +564,8 @@ const DietCodeModelPicker: React.FC<DietCodeModelPickerProps> = ({ isPopup, curr
 						marginTop: 0,
 						color: "var(--vscode-descriptionForeground)",
 					}}>
-					The extension automatically fetches the latest DietCode model list. If you're unsure which model to choose,
-					DietCode works best with <strong>anthropic/claude-sonnet-4.5</strong>.
+					The extension automatically fetches the latest MIRA model list. If you're unsure which model to choose, MIRA
+					works best with <strong>anthropic/claude-sonnet-4.5</strong>.
 				</p>
 			)}
 		</div>

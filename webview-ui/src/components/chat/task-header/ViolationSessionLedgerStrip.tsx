@@ -10,6 +10,7 @@ import { formatViolationLabel } from "@shared/audit/taskAuditUtils"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
+import { auditStrip } from "../audit/auditUiStyles"
 
 interface ViolationSessionLedgerStripProps {
 	snapshots: AuditMessageSnapshot[]
@@ -88,9 +89,10 @@ export const ViolationSessionLedgerStrip = memo(
 
 		return (
 			<section
-				aria-label="Session violation ledger"
+				aria-label="Open notes"
 				className={cn(
-					"mt-2 rounded-xs border border-description/15 px-2.5 py-2 text-[9px] bg-black/5 dark:bg-white/5",
+					"mt-2 px-2.5 py-2 text-[9px] mira-audit-exhale transition-opacity duration-[2s]",
+					auditStrip,
 					className,
 				)}>
 				<button
@@ -99,11 +101,11 @@ export const ViolationSessionLedgerStrip = memo(
 					onClick={() => setExpanded(!expanded)}
 					type="button">
 					<div className="flex items-center gap-2 flex-wrap">
-						<span className="font-bold uppercase tracking-wider text-description/80">Issue Ledger</span>
-						{openCount > 0 && <span className="text-amber-500 font-bold">{openCount} open</span>}
-						{resolvedCount > 0 && (
-							<span className="text-emerald-600 dark:text-emerald-400 font-bold">{resolvedCount} resolved</span>
+						<span className="font-medium text-description/85">Open notes</span>
+						{openCount > 0 && (
+							<span className="text-amber-600/80 dark:text-amber-400/80 font-normal">{openCount} open</span>
 						)}
+						{resolvedCount > 0 && <span className="text-description/55 font-normal">{resolvedCount} settled</span>}
 					</div>
 					{expanded ? (
 						<ChevronDownIcon className="size-3 text-description/60" />

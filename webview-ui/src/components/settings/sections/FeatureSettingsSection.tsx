@@ -38,43 +38,43 @@ interface FeatureToggle {
 const agentFeatures: FeatureToggle[] = [
 	{
 		id: "subagents",
-		label: "Subagents",
-		description: "Let DietCode run focused subagents in parallel to explore the codebase for you.",
+		label: "Think together",
+		description: "Explore a few parts of your codebase at once — like having extra helpers.",
 		stateKey: "subagentsEnabled",
 		settingKey: "subagentsEnabled",
 	},
 	{
 		id: "native-tool-call",
-		label: "Native Tool Call",
-		description: "Use native function calling when available",
+		label: "Direct tool calls",
+		description: "Use built-in tool calling when your model supports it.",
 		stateKey: "nativeToolCallSetting",
 		settingKey: "nativeToolCallEnabled",
 	},
 	{
 		id: "parallel-tool-calling",
-		label: "Parallel Tool Calling",
-		description: "Execute multiple tool calls simultaneously",
+		label: "Multitask a little",
+		description: "Handle a few small steps at once when possible.",
 		stateKey: "enableParallelToolCalling",
 		settingKey: "enableParallelToolCalling",
 	},
 	{
 		id: "strict-plan-mode",
-		label: "Strict Plan Mode",
-		description: "Prevents file edits while in Plan mode",
+		label: "Plan mode stays read-only",
+		description: "In Plan mode, MIRA won't edit files until you switch to Act.",
 		stateKey: "strictPlanModeEnabled",
 		settingKey: "strictPlanModeEnabled",
 	},
 	{
 		id: "auto-compact",
-		label: "Auto Compact",
-		description: "Automatically compress conversation history.",
+		label: "Shorten long chats",
+		description: "Automatically tidy up when the conversation gets very long.",
 		stateKey: "useAutoCondense",
 		settingKey: "useAutoCondense",
 	},
 	{
 		id: "focus-chain",
-		label: "Focus Chain",
-		description: "Maintain context focus across interactions",
+		label: "Gentle reminders",
+		description: "Soft nudges to stay on track during longer tasks.",
 		stateKey: "focusChainEnabled",
 		settingKey: "focusChainSettings",
 		nestedKey: "enabled",
@@ -98,15 +98,15 @@ const editorFeatures: FeatureToggle[] = [
 	},
 	{
 		id: "dietcode-web-tools",
-		label: "DietCode Web Tools",
-		description: "Access web browsing and search capabilities",
+		label: "Browse the web",
+		description: "Let MIRA search the web and open pages when you need outside info.",
 		stateKey: "dietcodeWebToolsEnabled",
 		settingKey: "dietcodeWebToolsEnabled",
 	},
 	{
 		id: "worktrees",
 		label: "Worktrees",
-		description: "Enables git worktree management for running parallel DietCode tasks.",
+		description: "Run a few MIRA tasks side by side with git worktrees.",
 		stateKey: "worktreesEnabled",
 		settingKey: "worktreesEnabled",
 	},
@@ -115,95 +115,85 @@ const editorFeatures: FeatureToggle[] = [
 const experimentalFeatures: FeatureToggle[] = [
 	{
 		id: "yolo",
-		label: "Yolo Mode",
-		description:
-			"Execute tasks without user's confirmation. Auto-switches from Plan to Act mode and disables the ask question tool. Use with extreme caution.",
+		label: "Skip confirmations",
+		description: "Let MIRA move ahead without asking each time. Only turn this on if you really trust the workflow.",
 		stateKey: "yoloModeToggled",
 		settingKey: "yoloModeToggled",
 	},
 	{
 		id: "double-check-completion",
-		label: "Double-Check Completion",
-		description:
-			"Rejects the first completion attempt and asks the model to re-verify its work against the original task requirements before accepting.",
+		label: "Double-check my work",
+		description: "Before saying we're done, MIRA takes a second look at what you originally asked for.",
 		stateKey: "doubleCheckCompletionEnabled",
 		settingKey: "doubleCheckCompletionEnabled",
 	},
 	{
 		id: "audit-completion-gate",
-		label: "Audit Completion Gate",
-		description:
-			"Blocks attempt_completion when the architectural hardening audit fails (Grade F with policy violations). Mirrors production quality gates in CI/CD pipelines.",
+		label: "Look things over before finishing",
+		description: "Pause at the finish line if something still looks off.",
 		stateKey: "auditCompletionGateEnabled",
 		settingKey: "auditCompletionGateEnabled",
 	},
 	{
 		id: "audit-gate-critical-only",
-		label: "Critical-Only Completion Gate",
-		description:
-			"When enabled, only critical-severity violations block completion. Warning-level issues are advisory — mirrors SonarQube blocker vs. major severities.",
+		label: "Only pause on serious issues",
+		description: "Smaller warnings stay as gentle notes — only big problems block finishing.",
 		stateKey: "auditCompletionGateCriticalOnly",
 		settingKey: "auditCompletionGateCriticalOnly",
 	},
 	{
 		id: "audit-act-mode-advisory",
-		label: "Act Mode Audit Advisory",
-		description:
-			"Runs lightweight hardening checks on act_mode_respond progress updates and injects remediation hints before completion.",
+		label: "Helpful nudges while coding",
+		description: "Light suggestions as you go, before wrapping up.",
 		stateKey: "auditActModeAdvisoryEnabled",
 		settingKey: "auditActModeAdvisoryEnabled",
 	},
 	{
 		id: "audit-advisory-escalation",
-		label: "Advisory Escalation Gate",
-		description:
-			"Blocks completion when critical act-mode advisory findings remain unresolved — mirrors CI escalation from warning to blocker.",
+		label: "Don't finish with open concerns",
+		description: "Ask to resolve important nudges before marking a task complete.",
 		stateKey: "auditAdvisoryEscalationEnabled",
 		settingKey: "auditAdvisoryEscalationEnabled",
 	},
 	{
 		id: "audit-plan-regression-gate",
-		label: "Plan Regression Gate",
-		description: "Blocks completion when hardening score drops significantly from the last plan audit baseline.",
+		label: "Check we didn't backslide",
+		description: "Notice if things look worse than when we started planning.",
 		stateKey: "auditPlanRegressionGateEnabled",
 		settingKey: "auditPlanRegressionGateEnabled",
 	},
 	{
 		id: "audit-tool-output-advisory",
-		label: "Command Output Audit Advisory",
-		description: "Audits verification command output (tests, lint, build) and injects remediation hints into tool results.",
+		label: "Review command output",
+		description: "Glance at test or build output and suggest fixes when something looks wrong.",
 		stateKey: "auditToolOutputAdvisoryEnabled",
 		settingKey: "auditToolOutputAdvisoryEnabled",
 	},
 	{
 		id: "audit-file-write-advisory",
-		label: "File Write Audit Advisory",
-		description:
-			"Flags TODO/FIXME/placeholder markers in written file content before completion — mirrors pre-commit content scanners.",
+		label: "Catch rough drafts",
+		description: "Flag TODOs or placeholders left in files before we call it done.",
 		stateKey: "auditFileWriteAdvisoryEnabled",
 		settingKey: "auditFileWriteAdvisoryEnabled",
 	},
 	{
 		id: "audit-intent-threshold-adjustments",
-		label: "Intent-Adjusted Gate Thresholds",
-		description:
-			"Raises completion gate thresholds for high-risk intents (FIX +10, TEST +10) — mirrors CI branch protection tiers.",
+		label: "Stricter checks for risky tasks",
+		description: "A little extra care when fixing bugs or writing tests.",
 		stateKey: "auditIntentThresholdAdjustmentsEnabled",
 		settingKey: "auditIntentThresholdAdjustmentsEnabled",
 	},
 	{
 		id: "audit-sarif-hook-export",
-		label: "SARIF Export on TaskComplete",
-		description:
-			"Includes SARIF 2.1.0 report in TaskComplete hook metadata for CI/CD ingestion (GitHub Code Scanning, Azure DevOps).",
+		label: "Export check results (advanced)",
+		description: "Include structured reports for teams that want them. Most people can leave this off.",
 		stateKey: "auditSarifHookExportEnabled",
 		settingKey: "auditSarifHookExportEnabled",
 	},
 	{
 		id: "audit-workspace-artifacts",
-		label: "Workspace Audit Artifacts",
-		description:
-			"Writes SARIF and markdown audit reports to `.audit/` in the workspace on completion and gate blocks. Override gate thresholds via `.audit/gate-policy.json`, waive violations via `.audit/suppressions.json`, and enable new-violations-only mode with `.audit/baseline.json` — mirrors config-as-code quality gates.",
+		label: "Save check notes in your project",
+		description: "Write summary notes to a `.audit/` folder in your workspace when you finish.",
 		stateKey: "auditWorkspaceArtifactsEnabled",
 		settingKey: "auditWorkspaceArtifactsEnabled",
 	},
@@ -361,9 +351,9 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 				<div className="mb-5 flex flex-col gap-3">
 					{/* Core features */}
 					<div>
-						<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">Agent</div>
+						<div className="text-xs font-medium text-foreground/70 mb-3">While you chat</div>
 						<div
-							className="relative p-3 pt-0 my-3 rounded-md border border-editor-widget-border/50"
+							className="relative p-3 pt-0 my-3 rounded-lg border border-editor-widget-border/40"
 							id="agent-features">
 							{agentFeatures.map((feature) => (
 								<div key={feature.id}>
@@ -381,7 +371,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									/>
 									{feature.id === "audit-completion-gate" && featureState[feature.stateKey] && (
 										<SettingsSlider
-											label="Gate Score Threshold (0-100)"
+											label="How picky before finishing (0–100)"
 											max={100}
 											min={0}
 											onChange={(value) => updateSetting("auditCompletionGateThreshold", value)}
@@ -392,7 +382,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									)}
 									{feature.id === "audit-act-mode-advisory" && featureState[feature.stateKey] && (
 										<div className="ml-6 mb-2 space-y-1">
-											<Label className="text-[10px] text-description/80">Advisory chat auto-scroll</Label>
+											<Label className="text-[10px] text-description/80">Auto-scroll to nudges</Label>
 											<Select
 												onValueChange={(value) => updateSetting("auditAdvisoryAutoScrollMode", value)}
 												value={auditAdvisoryAutoScrollMode ?? "critical"}>
@@ -437,7 +427,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 
 					{/* Editor features */}
 					<div>
-						<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">Editor</div>
+						<div className="text-xs font-medium text-foreground/70 mb-3">In your editor</div>
 						<div
 							className="relative p-3 pt-0 my-3 rounded-md border border-editor-widget-border/50"
 							id="optional-features">
@@ -456,7 +446,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 
 					{/* Experimental features */}
 					<div>
-						<div className="text-xs font-medium uppercase tracking-wider mb-3 text-warning/80">Experimental</div>
+						<div className="text-xs font-medium mb-3 text-description/80">Optional — for power users</div>
 						<div
 							className="relative p-3 pt-0 my-3 rounded-md border border-editor-widget-border/50 w-full"
 							id="experimental-features">
@@ -479,13 +469,12 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 
 				{/* Advanced */}
 				<div>
-					<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">Advanced</div>
-					<div className="relative p-3 my-3 rounded-md border border-editor-widget-border/50" id="advanced-features">
+					<div className="text-xs font-medium text-foreground/70 mb-3">More options</div>
+					<div className="relative p-3 my-3 rounded-lg border border-editor-widget-border/40" id="advanced-features">
 						<div className="space-y-3">
-							{/* MCP Display Mode */}
 							<div className="space-y-2">
-								<Label className="text-sm font-medium text-foreground">MCP Display Mode</Label>
-								<p className="text-xs text-muted-foreground">Controls how MCP responses are displayed</p>
+								<Label className="text-sm font-medium text-foreground">Tool reply style</Label>
+								<p className="text-xs text-muted-foreground">How responses from extra tools appear in chat</p>
 								<Select onValueChange={(v) => updateSetting("mcpDisplayMode", v)} value={mcpDisplayMode}>
 									<SelectTrigger className="w-full">
 										<SelectValue />

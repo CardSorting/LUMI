@@ -41,14 +41,14 @@ const getActivityText = (tool: DietCodeSayTool): string | null => {
 
 	switch (tool.tool) {
 		case "readFile":
-			return tool.path ? `Reading ${cleanedPath}...` : null
+			return tool.path ? `Taking a look at ${cleanedPath}…` : null
 		case "listFilesTopLevel":
 		case "listFilesRecursive":
-			return tool.path ? `Exploring ${cleanedPath}/...` : null
+			return tool.path ? `Looking around ${cleanedPath}/…` : null
 		case "searchFiles":
-			return tool.regex && tool.path ? `Searching ${formatSearchRegex(tool.regex, tool.path, tool.filePattern)}...` : null
+			return tool.regex && tool.path ? `Searching ${formatSearchRegex(tool.regex, tool.path, tool.filePattern)}…` : null
 		case "listCodeDefinitionNames":
-			return tool.path ? `Analyzing ${cleanedPath}/...` : null
+			return tool.path ? `Checking definitions in ${cleanedPath}/…` : null
 		default:
 			return null
 	}
@@ -101,6 +101,7 @@ const getCurrentActivities = (allMessages: DietCodeMessage[]): DietCodeMessage[]
  */
 export const ToolGroupRenderer = memo(({ messages, allMessages, isLastGroup }: ToolGroupRendererProps) => {
 	const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({})
+	const [detailsExpanded, setDetailsExpanded] = useState(false)
 
 	// Filter out tools in the "current activities" range (being shown in loading state)
 	const filteredMessages = useMemo(() => getToolsNotInCurrentActivities(messages, allMessages), [messages, allMessages])
@@ -156,76 +157,85 @@ export const ToolGroupRenderer = memo(({ messages, allMessages, isLastGroup }: T
 		setExpandedItems((prev) => ({ ...prev, [ts]: !prev[ts] }))
 	}, [])
 
+	const hasActive = activeTools.length > 0
+	const showDetails = detailsExpanded || hasActive
+
 	// Don't render if no tools to show
 	if (allTools.length === 0) {
 		return null
 	}
 
 	return (
-		<div className={cn("px-4 py-2 ml-1 text-description")}>
-			{/* Header */}
-			<div className="text-[13px] text-description font-semibold mb-1">{summary}:</div>
+		<div className={cn("px-4 py-3 ml-1 text-description/80")}>
+			<button
+				className="flex items-center gap-1.5 text-[13px] text-description/75 font-medium mb-1 cursor-pointer bg-transparent border-0 p-0 text-left font-sans hover:text-description"
+				onClick={() => setDetailsExpanded((prev) => !prev)}
+				type="button">
+				<span className="opacity-50 text-[10px]">{showDetails ? "▾" : "▸"}</span>
+				<span>{summary}</span>
+			</button>
 
-			{/* Content - unified list of completed + active tools */}
-			<div className="min-w-0">
-				{allTools.map(({ tool, parsedTool, isActive, activityText }) => {
-					const info = getToolDisplayInfo(parsedTool)
-					if (!info) {
-						return null
-					}
+			{showDetails && (
+				<div className="min-w-0 mt-1 animate-mira-reveal">
+					{allTools.map(({ tool, parsedTool, isActive, activityText }) => {
+						const info = getToolDisplayInfo(parsedTool)
+						if (!info) {
+							return null
+						}
 
-					const isExpandable = EXPANDABLE_TOOLS.has(parsedTool.tool)
-					const isItemExpanded = expandedItems[tool.ts] ?? false
-					const content = parsedTool.content || null
+						const isExpandable = EXPANDABLE_TOOLS.has(parsedTool.tool)
+						const isItemExpanded = expandedItems[tool.ts] ?? false
+						const content = parsedTool.content || null
 
-					// Active items render with "Reading..." TypewriterText (match completed item structure exactly)
-					if (isActive && activityText) {
+						// Active items render with "Reading..." TypewriterText (match completed item structure exactly)
+						if (isActive && activityText) {
+							return (
+								<div className="min-w-0" key={tool.ts}>
+									{/* ACTIVE "READING..." ITEM STYLING - Modify vertical spacing here via py-0 and -my-0.5 */}
+									<Button
+										className="flex items-center gap-[3px] text-[13px] text-description py-[1px] min-w-0 max-w-full px-0 leading-tight -my-0.5"
+										disabled
+										size="icon"
+										variant="text">
+										<info.icon className="opacity-70 shrink-0 size-[12px]" />
+										<span className="flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis text-left text-[13px]">
+											<TypewriterText speed={15} text={activityText} />
+										</span>{" "}
+									</Button>
+								</div>
+							)
+						}
+
+						// Completed items render normally (clickable)
 						return (
 							<div className="min-w-0" key={tool.ts}>
-								{/* ACTIVE "READING..." ITEM STYLING - Modify vertical spacing here via py-0 and -my-0.5 */}
 								<Button
-									className="flex items-center gap-[3px] text-[13px] text-description py-[1px] min-w-0 max-w-full px-0 leading-tight -my-0.5"
-									disabled
+									className="flex items-center gap-[3px] cursor-pointer text-[13px] text-description py-[1px] hover:text-link min-w-0 max-w-full px-0 leading-tight -my-0.5"
+									onClick={() => (isExpandable ? handleItemToggle(tool.ts) : handleOpenFile(info.path))}
 									size="icon"
 									variant="text">
 									<info.icon className="opacity-70 shrink-0 size-[12px]" />
-									<span className="flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis text-left text-[13px]">
-										<TypewriterText speed={15} text={activityText} />
-									</span>{" "}
+									<span
+										className={cn(
+											"flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis text-left [direction:rtl] text-[13px]",
+											{
+												"[direction:ltr]": !!info.displayText,
+											},
+										)}>
+										{`${info.displayText || cleanPathPrefix(info.path)}\u200E`}
+									</span>
 								</Button>
+								{/* Expanded content for folders/search/definitions - file lists only */}
+								{isExpandable && isItemExpanded && content && (
+									<pre className="m-1 ml-4 text-xs opacity-80 whitespace-pre-wrap break-words p-2 max-h-40 overflow-auto rounded-xs">
+										{content}
+									</pre>
+								)}
 							</div>
 						)
-					}
-
-					// Completed items render normally (clickable)
-					return (
-						<div className="min-w-0" key={tool.ts}>
-							<Button
-								className="flex items-center gap-[3px] cursor-pointer text-[13px] text-description py-[1px] hover:text-link min-w-0 max-w-full px-0 leading-tight -my-0.5"
-								onClick={() => (isExpandable ? handleItemToggle(tool.ts) : handleOpenFile(info.path))}
-								size="icon"
-								variant="text">
-								<info.icon className="opacity-70 shrink-0 size-[12px]" />
-								<span
-									className={cn(
-										"flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis text-left [direction:rtl] text-[13px]",
-										{
-											"[direction:ltr]": !!info.displayText,
-										},
-									)}>
-									{`${info.displayText || cleanPathPrefix(info.path)}\u200E`}
-								</span>
-							</Button>
-							{/* Expanded content for folders/search/definitions - file lists only */}
-							{isExpandable && isItemExpanded && content && (
-								<pre className="m-1 ml-4 text-xs opacity-80 whitespace-pre-wrap break-words p-2 max-h-40 overflow-auto rounded-xs">
-									{content}
-								</pre>
-							)}
-						</div>
-					)
-				})}
-			</div>
+					})}
+				</div>
+			)}
 		</div>
 	)
 })
@@ -277,13 +287,13 @@ function getToolDisplayInfo(tool: DietCodeSayTool) {
 
 	switch (tool.tool) {
 		case "readFile":
-			return { icon, path: filePath, label: "read" }
+			return { icon, path: filePath, label: "looked at" }
 		case "listFilesTopLevel":
-			return { icon, path: folderPath, label: "listed" }
+			return { icon, path: folderPath, label: "browsed" }
 		case "listFilesRecursive":
-			return { icon, path: folderPath, label: "listed recursively" }
+			return { icon, path: folderPath, label: "explored" }
 		case "listCodeDefinitionNames":
-			return { icon, path: folderPath, label: "definitions" }
+			return { icon, path: folderPath, label: "checked" }
 		case "searchFiles":
 			return {
 				icon,
@@ -346,7 +356,6 @@ function getToolGroupSummary(messages: DietCodeMessage[]): string {
 	}
 
 	const parts: string[] = []
-	const action = counts.read > 0 || counts.list > 0 ? " read " : " "
 
 	if (counts.read > 0) {
 		parts.push(`${counts.read} file${counts.read > 1 ? "s" : ""}`)
@@ -355,11 +364,15 @@ function getToolGroupSummary(messages: DietCodeMessage[]): string {
 		parts.push(`${counts.list} folder${counts.list > 1 ? "s" : ""}`)
 	}
 	if (counts.def > 0) {
-		parts.push(`${counts.def} definition${counts.def > 1 ? "s" : ""}`)
+		parts.push(`${counts.def} area${counts.def > 1 ? "s" : ""}`)
 	}
 	if (counts.search > 0) {
-		parts.push(`performed ${counts.search} search${counts.search > 1 ? "es" : ""}`)
+		parts.push(`${counts.search} search${counts.search > 1 ? "es" : ""}`)
 	}
 
-	return parts.length === 0 ? "Context" : `DietCode${action}${parts.join(", ")}`
+	if (parts.length === 0) {
+		return "Getting oriented"
+	}
+
+	return `I looked through ${parts.join(", ")}`
 }

@@ -12,6 +12,7 @@ import { ChatRowContent, ProgressIndicator } from "@/components/chat/ChatRow"
 import CodeBlock, { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { APPROVAL } from "@/copy/miraVoice"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
 
@@ -360,9 +361,7 @@ const BrowserSessionRow = memo((props: BrowserSessionRowProps) => {
 				) : (
 					<VscIcon className="" name="inspect" style={browserIconStyle} />
 				)}
-				<span style={approveTextStyle}>
-					{isAutoApproved ? "DietCode is using the browser:" : "DietCode wants to use the browser:"}
-				</span>
+				<span style={approveTextStyle}>{isAutoApproved ? "Browsing:" : APPROVAL.browser}</span>
 			</div>
 			<div
 				style={{

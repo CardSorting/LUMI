@@ -20,11 +20,14 @@ import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
+import type { MiraOrbMood } from "@/components/common/MiraAmbientOrb"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
+import { pickChatPlaceholder } from "@/copy/miraVoice"
 import { useAuditAutoScrollPolicy } from "@/hooks/useAuditAutoScrollPolicy"
 import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
+import { resolveOrbMood, useMiraSessionComfort } from "@/hooks/useMiraSessionComfort"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
 import AutoApproveBar from "./auto-approve-menu/AutoApproveBar"
@@ -71,7 +74,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		isNewUser,
 	} = useExtensionState()
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
-	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see DietCode.abort)
+	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see MIRA.abort)
 	const modifiedMessages = useMemo(() => {
 		const slicedMessages = messages.slice(1)
 		// Only combine hook sequences if hooks are enabled
@@ -120,6 +123,46 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		setExpandedRows,
 		textAreaRef,
 	} = chatState
+
+	const [companionMood, setCompanionMood] = useState<MiraOrbMood>("idle")
+	const { sessionMinutes, isStill, calmTier, isNightDesk, serenityLevel } = useMiraSessionComfort()
+	const orbMood = resolveOrbMood(companionMood, isStill)
+
+	useEffect(() => {
+		if (sendingDisabled) {
+			setCompanionMood("waiting")
+			return
+		}
+
+		const last = messages.at(-1)
+		if (last) {
+			const isHeld =
+				last.ask === "api_req_failed" ||
+				last.say === "error" ||
+				last.ask === "mistake_limit_reached" ||
+				(last.say === "error_retry" &&
+					(() => {
+						try {
+							return JSON.parse(last.text || "{}").failed === true
+						} catch {
+							return false
+						}
+					})())
+			if (isHeld) {
+				setCompanionMood("held")
+				return
+			}
+		}
+
+		const isCompletion = last?.say === "completion_result" || last?.ask === "completion_result"
+		if (isCompletion) {
+			setCompanionMood("success")
+			const timer = window.setTimeout(() => setCompanionMood("idle"), 3200)
+			return () => window.clearTimeout(timer)
+		}
+
+		setCompanionMood("idle")
+	}, [sendingDisabled, messages])
 
 	useEffect(() => {
 		const handleCopy = async (e: ClipboardEvent) => {
@@ -394,12 +437,12 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	}, [auditSnapshots, handleScrollToAuditMessage])
 
 	const placeholderText = useMemo(() => {
-		const text = task ? "Type a message..." : "Type your task here..."
-		return text
-	}, [task])
+		const seed = task?.ts ?? 0
+		return pickChatPlaceholder(Boolean(task), seed, sessionMinutes, isNightDesk)
+	}, [task, sessionMinutes, isNightDesk])
 
 	return (
-		<ChatLayout isHidden={isHidden}>
+		<ChatLayout isHidden={isHidden} isNightDesk={isNightDesk} serenityLevel={serenityLevel}>
 			<div aria-atomic="true" aria-live="polite" className="sr-only">
 				{auditLiveAnnouncement}
 			</div>
@@ -464,7 +507,9 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					task={task}
 				/>
 				<InputSection
+					calmTier={calmTier}
 					chatState={chatState}
+					companionMood={orbMood}
 					messageHandlers={messageHandlers}
 					placeholderText={placeholderText}
 					scrollBehavior={scrollBehavior}

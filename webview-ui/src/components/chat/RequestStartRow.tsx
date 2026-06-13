@@ -42,14 +42,14 @@ const getActivityText = (tool: DietCodeSayTool): string | null => {
 	const cleanedPath = cleanPathPrefix(tool.path || "")
 	switch (tool.tool) {
 		case "readFile":
-			return tool.path ? `Reading ${cleanedPath}...` : null
+			return tool.path ? `Taking a look at ${cleanedPath}…` : null
 		case "listFilesTopLevel":
 		case "listFilesRecursive":
-			return tool.path ? `Exploring ${cleanedPath}/...` : null
+			return tool.path ? `Looking around ${cleanedPath}/…` : null
 		case "searchFiles":
-			return tool.regex && tool.path ? `Searching ${formatSearchRegex(tool.regex, tool.path, tool.filePattern)}...` : null
+			return tool.regex && tool.path ? `Searching ${formatSearchRegex(tool.regex, tool.path, tool.filePattern)}…` : null
 		case "listCodeDefinitionNames":
-			return tool.path ? `Analyzing ${cleanedPath}/...` : null
+			return tool.path ? `Checking definitions in ${cleanedPath}/…` : null
 		default:
 			return null
 	}

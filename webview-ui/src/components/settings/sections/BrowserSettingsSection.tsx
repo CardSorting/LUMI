@@ -176,7 +176,7 @@ export const BrowserSettingsSection: React.FC<BrowserSettingsSectionProps> = ({ 
 								color: "var(--vscode-descriptionForeground)",
 								margin: "4px 0 0 0px",
 							}}>
-							Prevent DietCode from using browser actions (e.g. launch, click, type).
+							Prevent MIRA from using browser actions (e.g. launch, click, type).
 						</p>
 					</div>
 
@@ -247,7 +247,7 @@ export const BrowserSettingsSection: React.FC<BrowserSettingsSectionProps> = ({ 
 									color: "var(--vscode-descriptionForeground)",
 									margin: "0 0 6px 0px",
 								}}>
-								Enable DietCode to use your Chrome
+								Enable MIRA to use your Chrome
 								{isBundled
 									? "(not detected on your machine)"
 									: detectedChromePath

@@ -187,7 +187,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 	const data = useMemo(() => parseSubagentRowData(message), [message])
 
 	if (!data) {
-		return <div className="text-foreground opacity-80">Subagent status update unavailable.</div>
+		return <div className="text-foreground opacity-80">Couldn't show helper status just now.</div>
 	}
 
 	const resumedBeforeNextVisibleMessage =
@@ -201,7 +201,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 			resumedBeforeNextVisibleMessage)
 
 	const singular = data.items.length === 1
-	const title = singular ? "DietCode wants to use a subagent:" : "DietCode wants to use subagents:"
+	const title = singular ? "I could use a little extra help here:" : "A few helpers could explore this together:"
 	const isPromptConstructionRow = message.ask === "use_subagents" || message.say === "use_subagents"
 	const toggleItem = (index: number) => {
 		setExpandedItems((prev) => ({
@@ -220,7 +220,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 		<div className="mb-2">
 			<div className="flex items-center gap-2.5 mb-3 flex-wrap">
 				<NetworkIcon className="size-2 text-foreground" />
-				<span className="font-bold text-foreground">{title}</span>
+				<span className="font-medium text-foreground">{title}</span>
 				<ParentAuditGateBadge />
 			</div>
 			<div className="space-y-2">
@@ -234,7 +234,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 					const isStreamingPromptUnderConstruction =
 						isPromptConstructionRow && message.partial === true && index === data.items.length - 1
 					const shouldShowStats = !isStreamingPromptUnderConstruction
-					const statsText = `${formatCount(entry.toolCalls)} tools called · ${formatCount(entry.contextTokens)} tokens · ${formatCost(entry.totalCost)}`
+					const statsText = `${formatCount(entry.toolCalls)} steps · ${formatCount(entry.contextTokens)} tokens · ${formatCost(entry.totalCost)}`
 					const latestToolCallText = entry.latestToolCall?.trim() || ""
 					return (
 						<div

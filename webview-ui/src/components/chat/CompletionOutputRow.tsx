@@ -4,6 +4,7 @@ import { CheckIcon } from "lucide-react"
 import { memo } from "react"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
+import { pickCompletionPresentation } from "@/copy/miraVoice"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { CopyButton } from "../common/CopyButton"
@@ -41,17 +42,36 @@ export const CompletionOutputRow = memo(
 		handleQuoteClick,
 		auditMetadata,
 	}: CompletionOutputRowProps) => {
+		const presentation = pickCompletionPresentation(messageTs)
+
 		return (
 			<div>
-				<div className="rounded-sm border border-success/20 overflow-visible bg-success/10 p-2 pt-3">
-					<div className={cn(headClassNames, "justify-between px-1")}>
-						<div className="flex gap-2 items-center">
-							<CheckIcon className="size-3 text-success" />
-							<span className="text-success font-bold">Task Completed</span>
+				<div className="group/completion relative rounded-lg border border-success/10 overflow-visible bg-success/[0.04] p-4 pt-4 animate-mira-settle">
+					{presentation.showHeader ? (
+						<div className={cn(headClassNames, "justify-between px-1 mb-1")}>
+							<div className="flex flex-col gap-0.5">
+								<div className="flex gap-2 items-center">
+									<CheckIcon className="size-3 text-success/70 animate-mira-reveal [animation-duration:0.75s]" />
+									{presentation.header && (
+										<span className="text-success/80 font-medium">{presentation.header}</span>
+									)}
+								</div>
+								{presentation.closer && (
+									<span className="text-success/60 text-xs pl-5">{presentation.closer}</span>
+								)}
+							</div>
+							<CopyButton className="text-success/80" textToCopy={text} />
 						</div>
-						<CopyButton className="text-success" textToCopy={text} />
-					</div>
-					<div className="w-full relative border-t-1 border-description/20 rounded-b-sm">
+					) : (
+						<div className="absolute top-3 right-3 z-10 opacity-0 transition-opacity duration-500 group-hover/completion:opacity-60 hover:opacity-100">
+							<CopyButton className="text-success/70" textToCopy={text} />
+						</div>
+					)}
+					<div
+						className={cn(
+							"w-full relative rounded-b-sm",
+							presentation.showHeader ? "border-t-1 border-description/15" : "",
+						)}>
 						<div className="completion-output-content p-2 pt-3 w-full [&_hr]:opacity-20 [&_p:last-child]:mb-0 rounded-sm">
 							<MarkdownRow markdown={text} />
 							{quoteButtonState.visible && (

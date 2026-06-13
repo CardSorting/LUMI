@@ -22,17 +22,17 @@ export const AuditHealthChip = memo(({ auditHealth, onExpandTaskHeader, classNam
 		return (
 			<button
 				className={cn(
-					"inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider border cursor-pointer bg-transparent font-sans hover:opacity-90",
+					"inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-normal border cursor-pointer bg-transparent font-sans hover:opacity-80 transition-opacity",
 					isBlocked
-						? "border-red-500/40 text-red-600 dark:text-red-400"
-						: "border-amber-500/40 text-amber-600 dark:text-amber-400",
+						? "border-amber-500/25 text-amber-700/80 dark:text-amber-400/80"
+						: "border-description/15 text-description/70",
 					className,
 				)}
 				onClick={(event) => {
 					event.stopPropagation()
 					onExpandTaskHeader()
 				}}
-				title={`Audit health: ${label}. Click to open audit panel.`}
+				title={`Check-in: ${label}. Click for details.`}
 				type="button">
 				{label}
 			</button>
@@ -42,10 +42,10 @@ export const AuditHealthChip = memo(({ auditHealth, onExpandTaskHeader, classNam
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider border",
+				"inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-normal border",
 				isBlocked
-					? "border-red-500/40 text-red-600 dark:text-red-400"
-					: "border-amber-500/40 text-amber-600 dark:text-amber-400",
+					? "border-amber-500/25 text-amber-700/80 dark:text-amber-400/80"
+					: "border-description/15 text-description/70",
 				className,
 			)}
 			title={label}>

@@ -74,7 +74,7 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 				display: "flex",
 				flexDirection: "column",
 			}}>
-			<ViewHeader environment={environment} onDone={onDone} title="MCP Servers" />
+			<ViewHeader environment={environment} onDone={onDone} title="Extra tools" />
 
 			<div style={{ flex: 1, overflow: "auto" }}>
 				{/* Tabs container */}

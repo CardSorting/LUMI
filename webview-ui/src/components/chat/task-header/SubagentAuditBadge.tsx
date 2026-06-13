@@ -15,7 +15,7 @@ interface SubagentAuditBadgeProps {
 
 const STATUS_STYLES = {
 	running: "border-blue-500/40 text-blue-600 dark:text-blue-400",
-	blocked: "border-red-500/40 text-red-600 dark:text-red-400",
+	blocked: "border-amber-500/35 text-amber-700 dark:text-amber-400",
 	warning: "border-amber-500/40 text-amber-600 dark:text-amber-400",
 	idle: "border-description/30 text-description/70",
 } as const
@@ -41,17 +41,17 @@ export const SubagentAuditBadge = memo(({ summary, onExpandTaskHeader, className
 
 	const titleText =
 		[
-			summary?.totalAgents ? `${summary.totalAgents} subagent(s)` : undefined,
+			summary?.totalAgents ? `${summary.totalAgents} helper(s)` : undefined,
 			isRunning ? `${activeAgents} active` : undefined,
-			summary?.failedCount ? `${summary.failedCount} failed` : undefined,
+			summary?.failedCount ? `${summary.failedCount} didn't work out` : undefined,
 			labels.length > 0 ? labels.join(" · ") : undefined,
-			onExpandTaskHeader ? "Click to open subagent handoff panel" : undefined,
+			onExpandTaskHeader ? "Click for a little more detail" : undefined,
 		]
 			.filter(Boolean)
 			.join(" · ") || undefined
 
 	const badgeClassName = cn(
-		"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider border",
+		"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border",
 		STATUS_STYLES[visualLevel],
 		onExpandTaskHeader && "cursor-pointer hover:opacity-90",
 		className,
@@ -60,7 +60,7 @@ export const SubagentAuditBadge = memo(({ summary, onExpandTaskHeader, className
 	const badgeContent = (
 		<>
 			<Icon className="size-2.5" />
-			{isRunning ? `${activeAgents} swarm` : "Swarm"}
+			{isRunning ? `${activeAgents} helping` : "Extra help"}
 			{summary?.hasParentGateBlocked && <span className="opacity-90">· gate</span>}
 			{summary?.parentGateSignals.length ? (
 				<span className="font-mono opacity-80">{summary.parentGateSignals.length}</span>

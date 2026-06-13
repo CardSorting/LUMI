@@ -175,7 +175,7 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 							</HoverCardTrigger>
 						</HoverCard>
 					</div>
-					<span className="cursor-pointer text-sm" title="Maximum context window size for this model">
+					<span className="cursor-pointer text-sm" title="How much chat memory this model can hold">
 						{formatTokenNumber(tokenData.max)}
 					</span>
 				</div>

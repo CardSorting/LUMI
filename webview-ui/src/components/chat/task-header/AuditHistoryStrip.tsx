@@ -26,6 +26,7 @@ import { ChevronDownIcon, ChevronRightIcon, CopyIcon } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { AuditReportPanel } from "../AuditReportPanel"
+import { auditExhaleOpacity } from "../audit/auditUiStyles"
 import { AuditScoreSparkline } from "./AuditScoreSparkline"
 
 interface AuditHistoryStripProps {
@@ -43,7 +44,7 @@ const SOURCE_LABELS = AUDIT_SNAPSHOT_SOURCE_LABELS
 const HEALTH_TREND_LABELS = AUDIT_HEALTH_TREND_LABELS
 
 const SOURCE_CHIP_STYLES: Partial<Record<AuditMessageSnapshot["source"], string>> = {
-	gate_block: "border-red-500/50 text-red-600 dark:text-red-400",
+	gate_block: "border-amber-500/50 text-amber-700 dark:text-amber-400",
 	advisory: "border-amber-500/50 text-amber-600 dark:text-amber-400",
 }
 
@@ -186,7 +187,10 @@ export const AuditHistoryStrip = memo(
 		return (
 			<section
 				aria-label="Task audit history"
-				className={cn("mt-2 border-t border-description/15 pt-2", className)}
+				className={cn(
+					"mt-2 border-t border-description/8 pt-2 mira-audit-exhale transition-opacity duration-[2s]",
+					className,
+				)}
 				ref={stripRef}
 				tabIndex={expanded ? 0 : -1}>
 				<div aria-atomic="true" aria-live="polite" className="sr-only">
@@ -200,13 +204,13 @@ export const AuditHistoryStrip = memo(
 					ref={toggleButtonRef}
 					type="button">
 					<div className="flex items-center gap-2 flex-wrap">
-						<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
-							Audit History ({snapshots.length})
+						<span className="text-[10px] text-description/70 font-medium">
+							What we've checked ({snapshots.length})
 						</span>
 						{latestGrade && (
 							<span
 								className={cn(
-									"inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider border",
+									"inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-medium border",
 									HARDENING_GRADE_STYLES[latestGrade],
 								)}>
 								Latest {latestGrade}
@@ -218,7 +222,7 @@ export const AuditHistoryStrip = memo(
 							</span>
 						)}
 						{health && health.trend !== "unknown" && (
-							<span className="text-[8px] uppercase tracking-wider text-description/60 font-bold">
+							<span className="text-[8px] text-description/60 font-medium">
 								{HEALTH_TREND_LABELS[health.trend]}
 								{health.averageScore > 0 ? ` · avg ${health.averageScore}` : ""}
 								{health.latestScoreDelta !== undefined && health.latestScoreDelta !== 0
@@ -227,35 +231,35 @@ export const AuditHistoryStrip = memo(
 							</span>
 						)}
 						{health && health.advisorySnapshotCount > 0 && (
-							<span className="text-[8px] uppercase tracking-wider text-amber-500 font-bold">
-								{health.advisorySnapshotCount} advisory{health.advisorySnapshotCount === 1 ? "" : "ies"}
+							<span className="text-[8px] text-amber-600 dark:text-amber-400 font-medium">
+								{health.advisorySnapshotCount} note{health.advisorySnapshotCount === 1 ? "" : "s"}
 							</span>
 						)}
 						{health && health.gateBlockCount > 0 && (
-							<span className="text-[8px] uppercase tracking-wider text-red-500 font-bold">
-								{health.gateBlockCount} gate block{health.gateBlockCount === 1 ? "" : "s"}
+							<span className="text-[8px] text-amber-700 dark:text-amber-400 font-medium">
+								{health.gateBlockCount} to revisit
 							</span>
 						)}
 						{health && health.trailingGateBlockStreak > 1 && (
-							<span className="text-[8px] uppercase tracking-wider text-red-500 font-bold">
-								{health.trailingGateBlockStreak}× blocked
+							<span className="text-[8px] text-amber-700 dark:text-amber-400 font-medium">
+								{health.trailingGateBlockStreak} in a row
 							</span>
 						)}
 						{health?.planRegressionDetected && (
-							<span className="text-[8px] uppercase tracking-wider text-amber-500 font-bold">plan regression</span>
+							<span className="text-[8px] text-amber-600 dark:text-amber-400 font-medium">Plan shifted</span>
 						)}
 						{health && health.persistentViolationCount > 0 && (
-							<span className="text-[8px] uppercase tracking-wider text-amber-500/90 font-bold">
-								{health.persistentViolationCount} persistent
+							<span className="text-[8px] text-amber-600/90 font-medium">
+								{health.persistentViolationCount} still open
 							</span>
 						)}
 						{trailingViolationAges.size > 0 && Math.max(...trailingViolationAges.values()) > 1 && (
-							<span className="text-[8px] uppercase tracking-wider text-amber-500/90 font-bold">
+							<span className="text-[8px] text-amber-600/90 font-medium">
 								oldest open ×{Math.max(...trailingViolationAges.values())}
 							</span>
 						)}
 						{health && health.suppressedViolationCount > 0 && (
-							<span className="text-[8px] uppercase tracking-wider text-blue-500/80 font-bold">
+							<span className="text-[8px] text-blue-600/80 font-medium">
 								{health.suppressedViolationCount} waived
 							</span>
 						)}
@@ -263,10 +267,10 @@ export const AuditHistoryStrip = memo(
 					<div className="flex items-center gap-2 shrink-0">
 						<AuditScoreSparkline scores={scoreTimeline} />
 						<button
-							aria-label="Copy audit history as markdown"
+							aria-label="Copy project notes"
 							className="inline-flex items-center cursor-pointer bg-transparent border-0 p-0 text-description/60 hover:text-foreground"
 							onClick={handleCopyHistory}
-							title={copied ? "Copied" : "Copy audit timeline"}
+							title={copied ? "Copied" : "Copy timeline notes"}
 							type="button">
 							<CopyIcon className="size-3" />
 						</button>
@@ -280,18 +284,18 @@ export const AuditHistoryStrip = memo(
 
 				{latestGateBlock && onScrollToLatestGateBlock && (
 					<button
-						className="mt-1.5 text-[8px] uppercase tracking-wider font-bold text-red-600/80 dark:text-red-400/80 hover:text-red-600 dark:hover:text-red-400 cursor-pointer bg-transparent border-0 p-0"
+						className="mt-1.5 text-[9px] font-medium text-amber-700/80 dark:text-amber-400/80 hover:text-amber-800 dark:hover:text-amber-300 cursor-pointer bg-transparent border-0 p-0"
 						onClick={(event) => {
 							event.stopPropagation()
 							onScrollToLatestGateBlock()
 						}}
 						type="button">
-						Jump to latest gate block
+						Jump to latest note
 					</button>
 				)}
 
 				{expanded && (
-					<div className="mt-2 space-y-2 animate-fadeIn" id="audit-history-details">
+					<div className="mt-2 space-y-2 animate-mira-reading-reveal" id="audit-history-details">
 						<div aria-label="Audit snapshot grades" className="flex flex-wrap gap-1.5" role="listbox">
 							{snapshots.map((snapshot, index) => {
 								const grade = snapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
@@ -306,7 +310,7 @@ export const AuditHistoryStrip = memo(
 									<button
 										aria-selected={isSelected}
 										className={cn(
-											"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider border cursor-pointer transition-opacity",
+											"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-medium border cursor-pointer transition-opacity",
 											grade ? HARDENING_GRADE_STYLES[grade] : "border-description/30 text-description/70",
 											SOURCE_CHIP_STYLES[snapshot.source],
 											isSelected && "ring-1 ring-foreground/40 opacity-100",
@@ -334,7 +338,7 @@ export const AuditHistoryStrip = memo(
 						</div>
 
 						<div className="space-y-1.5">
-							{[...snapshots].reverse().map((snapshot) => {
+							{[...snapshots].reverse().map((snapshot, reverseIndex) => {
 								const grade = snapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
 								const { critical, warning, info } = partitionViolationsBySeverity(
 									snapshot.auditMetadata.violations,
@@ -346,14 +350,15 @@ export const AuditHistoryStrip = memo(
 								return (
 									<div
 										className={cn(
-											"rounded-xs border border-description/15 bg-black/5 dark:bg-white/5 p-2 text-[9px] transition-colors",
-											selectedKey === key && "border-foreground/30 bg-black/10 dark:bg-white/10",
+											"rounded-md border border-description/10 bg-black/[0.015] dark:bg-white/[0.015] p-2 text-[9px] transition-all duration-[2s]",
+											auditExhaleOpacity(reverseIndex, selectedKey === key),
+											selectedKey === key && "border-description/18 bg-black/[0.025] dark:bg-white/[0.025]",
 										)}
 										key={`detail-${key}`}>
 										<div className="flex items-center justify-between gap-2 mb-1">
 											<button
 												className={cn(
-													"font-bold uppercase tracking-wider text-description/80 cursor-pointer bg-transparent border-0 p-0 text-left font-sans text-[9px]",
+													"font-medium text-description/80 cursor-pointer bg-transparent border-0 p-0 text-left font-sans text-[9px]",
 													selectedKey === key && "text-foreground",
 												)}
 												onClick={() => setSelectedKey(selectedKey === key ? null : key)}
@@ -363,7 +368,7 @@ export const AuditHistoryStrip = memo(
 											<div className="flex items-center gap-2">
 												{onScrollToAuditMessage && (
 													<button
-														className="text-[8px] uppercase tracking-wider font-bold text-foreground/70 hover:text-foreground cursor-pointer bg-transparent border-0 p-0"
+														className="text-[9px] font-medium text-foreground/70 hover:text-foreground cursor-pointer bg-transparent border-0 p-0"
 														onClick={() => onScrollToAuditMessage(snapshot.ts)}
 														type="button">
 														View in chat
@@ -382,40 +387,42 @@ export const AuditHistoryStrip = memo(
 												{grade && (
 													<span
 														className={cn(
-															"px-1.5 py-0.5 rounded-full font-extrabold border",
+															"px-1.5 py-0.5 rounded-full font-normal border",
 															HARDENING_GRADE_STYLES[grade],
 														)}>
 														{grade}
 													</span>
 												)}
 												{Number.isFinite(snapshot.auditMetadata.hardening_score) && (
-													<span className="font-mono font-bold">
+													<span className="font-mono text-description/65">
 														{snapshot.auditMetadata.hardening_score}/100
 													</span>
 												)}
 												{critical.length > 0 && (
-													<span className="text-red-500 font-bold">{critical.length} critical</span>
+													<span className="text-amber-700/80 dark:text-amber-400/80 font-normal">
+														{critical.length} to revisit
+													</span>
 												)}
 												{warning.length > 0 && (
-													<span className="text-amber-500 font-bold">{warning.length} warning</span>
+													<span className="text-amber-600 dark:text-amber-400 font-medium">
+														{warning.length} to review
+													</span>
 												)}
 												{info.length > 0 && (
 													<span className="text-description/60">{info.length} info</span>
 												)}
 												{(snapshot.auditMetadata.suppressed_violations?.length ?? 0) > 0 && (
-													<span className="text-blue-500/80 font-bold">
+													<span className="text-description/55 font-normal">
 														{snapshot.auditMetadata.suppressed_violations?.length} waived
 													</span>
 												)}
 												{snapshot.auditMetadata.workspace_gate_policy_applied && (
-													<span className="text-blue-600 dark:text-blue-400 font-bold">
-														workspace policy
-													</span>
+													<span className="text-description/55 font-normal">workspace policy</span>
 												)}
 											</div>
 											{snapshot.auditMetadata.gate_reason_codes &&
 												snapshot.auditMetadata.gate_reason_codes.length > 0 && (
-													<ul className="mt-1 list-disc list-inside text-[8.5px] text-red-500/90 space-y-0.5">
+													<ul className="mt-1 list-disc list-inside text-[8.5px] text-description/65 space-y-0.5">
 														{snapshot.auditMetadata.gate_reason_codes
 															.filter((code) => code !== "gate_disabled")
 															.map((code) => (
@@ -434,7 +441,7 @@ export const AuditHistoryStrip = memo(
 															<li className="truncate font-mono" key={v} title={hint}>
 																{formatViolationLabel(v)}
 																{age !== undefined && age > 1 && (
-																	<span className="ml-1 font-sans font-bold text-amber-500/90">
+																	<span className="ml-1 font-sans font-normal text-amber-600/80 dark:text-amber-400/80">
 																		open ×{age}
 																	</span>
 																)}
@@ -480,7 +487,9 @@ export const AuditHistoryStrip = memo(
 						</div>
 
 						{selectedSnapshot && (
-							<div className="rounded-sm border border-description/20 p-1 animate-fadeIn" ref={detailPanelRef}>
+							<div
+								className="rounded-md border border-description/10 p-1 animate-mira-reading-reveal opacity-[0.96]"
+								ref={detailPanelRef}>
 								<AuditReportPanel auditMetadata={selectedSnapshot.auditMetadata} variant="neutral" />
 							</div>
 						)}

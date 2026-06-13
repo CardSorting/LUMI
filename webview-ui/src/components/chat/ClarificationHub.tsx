@@ -133,11 +133,11 @@ export const ClarificationHub = ({ interactiveClarifications, swarmConsensus }: 
 			<HubHeader>
 				<Title>
 					<HelpCircleIcon className="text-purple-400" size={14} />
-					<LabelText>Interactive Clarification & Consensus</LabelText>
+					<LabelText>Let's figure this out together</LabelText>
 				</Title>
 				{swarmConsensus && (
 					<Badge className="text-[10px] font-bold" variant="dietcode">
-						{Math.round(swarmConsensus.agreementScore * 100)}% CONSENSUS
+						{Math.round(swarmConsensus.agreementScore * 100)}% aligned
 					</Badge>
 				)}
 			</HubHeader>

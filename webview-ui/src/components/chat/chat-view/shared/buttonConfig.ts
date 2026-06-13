@@ -34,16 +34,16 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	api_req_failed: {
 		sendingDisabled: true,
 		enableButtons: true,
-		primaryText: "Retry",
-		secondaryText: "Start New Task",
+		primaryText: "Try again",
+		secondaryText: "Start fresh",
 		primaryAction: "retry",
 		secondaryAction: "new_task",
 	},
 	mistake_limit_reached: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Proceed Anyways",
-		secondaryText: "Start New Task",
+		primaryText: "Continue anyway",
+		secondaryText: "Start fresh",
 		primaryAction: "proceed",
 		secondaryAction: "new_task",
 	},
@@ -52,16 +52,16 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	tool_approve: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Approve",
-		secondaryText: "Reject",
+		primaryText: "Go ahead",
+		secondaryText: "Not now",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
 	tool_save: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Save",
-		secondaryText: "Reject",
+		primaryText: "Apply changes",
+		secondaryText: "Not now",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -70,15 +70,15 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	command: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Run Command",
-		secondaryText: "Reject",
+		primaryText: "Try it",
+		secondaryText: "Not now",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
 	command_output: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Proceed While Running",
+		primaryText: "Continue while it runs",
 		secondaryText: undefined,
 		primaryAction: "proceed",
 		secondaryAction: undefined,
@@ -88,24 +88,24 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	browser_action_launch: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Approve",
-		secondaryText: "Reject",
+		primaryText: "Go ahead",
+		secondaryText: "Not now",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
 	use_mcp_server: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Approve",
-		secondaryText: "Reject",
+		primaryText: "Go ahead",
+		secondaryText: "Not now",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
 	use_subagents: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Approve",
-		secondaryText: "Reject",
+		primaryText: "Go ahead",
+		secondaryText: "Not now",
 		primaryAction: "approve",
 		secondaryAction: "reject",
 	},
@@ -221,7 +221,7 @@ export function getButtonConfig(message: DietCodeMessage | undefined, _mode: Mod
 	const isStreaming = message.partial === true
 	const isError = message?.ask ? errorTypes.includes(message.ask) : false
 
-	// Special case: command_output should show "Proceed While Running" button even while streaming
+	// Special case: command_output should show continue-while-running button even while streaming
 	// This allows terminal output to stream while still showing the action button
 	if (message.type === "ask" && message.ask === "command_output") {
 		return BUTTON_CONFIGS.command_output
@@ -300,7 +300,7 @@ export function getButtonConfig(message: DietCodeMessage | undefined, _mode: Mod
 		return BUTTON_CONFIGS.api_req_active
 	}
 
-	// Special case: command_output say messages should show "Proceed While Running" button
+	// Special case: command_output say messages should show continue-while-running button
 	// This allows terminal output to stream while still showing the action button
 	if (message.type === "say" && message.say === "command_output") {
 		return BUTTON_CONFIGS.command_output

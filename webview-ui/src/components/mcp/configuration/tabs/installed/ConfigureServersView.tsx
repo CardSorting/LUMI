@@ -20,16 +20,8 @@ const ConfigureServersView = () => {
 					marginBottom: "16px",
 					marginTop: "5px",
 				}}>
-				The{" "}
-				<VSCodeLink href="https://github.com/modelcontextprotocol" style={{ display: "inline" }}>
-					Model Context Protocol
-				</VSCodeLink>{" "}
-				enables communication with locally running MCP servers that provide additional tools and resources to extend
-				DietCode's capabilities. You can use{" "}
-				<VSCodeLink href="https://github.com/modelcontextprotocol/servers" style={{ display: "inline" }}>
-					community-made servers
-				</VSCodeLink>{" "}
-				or ask DietCode to create new tools specific to your workflow (e.g., "add a tool that gets the latest npm docs").{" "}
+				Connect MIRA to extra tools in your workspace — pick from the community, or describe what you need in chat (like
+				"add a tool that fetches npm docs").{" "}
 				<VSCodeLink href="https://x.com/sdrzn/status/1867271665086074969" style={{ display: "inline" }}>
 					See a demo here.
 				</VSCodeLink>
@@ -39,7 +31,7 @@ const ConfigureServersView = () => {
 			{hasRemoteMCPServers && (
 				<div className="flex items-center gap-2 px-5 py-3 mb-4 bg-vscode-textBlockQuote-background border-l-[3px] border-vscode-textLink-foreground">
 					<VscIcon className="text-sm" name="lock" />
-					<span className="text-base">Your organization manages some MCP servers</span>
+					<span className="text-base">Your organization manages some extra tools</span>
 				</div>
 			)}
 

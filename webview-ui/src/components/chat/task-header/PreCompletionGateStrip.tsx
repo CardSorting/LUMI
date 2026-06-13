@@ -8,6 +8,7 @@ import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
+import { auditStrip } from "../audit/auditUiStyles"
 import { AuditChecklistItems } from "./AuditChecklistItems"
 import { TASK_AUDIT_QUALITY_GATE_ID } from "./AuditHeaderJumpLink"
 
@@ -48,14 +49,10 @@ export const PreCompletionGateStrip = memo(
 
 		return (
 			<section
-				aria-label="Pre-completion quality gate"
+				aria-label="Before we wrap up"
 				className={cn(
-					"mt-2 rounded-xs border px-2.5 py-2 text-[9px]",
-					checklist.blocked
-						? "border-red-500/25 bg-red-500/5"
-						: warnCount > 0
-							? "border-amber-500/25 bg-amber-500/5"
-							: "border-emerald-500/20 bg-emerald-500/5",
+					"mt-2 px-3 py-2.5 text-[10px] mira-audit-exhale transition-opacity duration-[2s]",
+					auditStrip,
 					className,
 				)}
 				id={TASK_AUDIT_QUALITY_GATE_ID}>
@@ -65,25 +62,27 @@ export const PreCompletionGateStrip = memo(
 					onClick={() => setExpanded(!expanded)}
 					type="button">
 					<div className="flex items-center gap-2 flex-wrap">
-						<span className="font-bold uppercase tracking-wider text-description/80">Quality Gate</span>
+						<span className="font-medium text-description/85">Before we wrap up</span>
 						<span
 							className={cn(
-								"px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider border",
+								"px-1.5 py-0.5 rounded-full text-[8px] font-medium border",
 								checklist.blocked
-									? "border-red-500/40 text-red-600 dark:text-red-400"
+									? "border-amber-500/40 text-amber-700 dark:text-amber-400"
 									: warnCount > 0
 										? "border-amber-500/40 text-amber-600 dark:text-amber-400"
 										: "border-emerald-500/40 text-emerald-600 dark:text-emerald-400",
 							)}>
-							{checklist.blocked ? "Blocked" : warnCount > 0 ? "Marginal" : "Ready"}
+							{checklist.blocked ? "Worth revisiting" : warnCount > 0 ? "Almost there" : "Looking good"}
 						</span>
 						<span className="font-mono text-description/70">
 							{checklist.score}/{checklist.effectiveThreshold}
 						</span>
-						{failCount > 0 && <span className="text-red-500 font-bold">{failCount} failed</span>}
-						{warnCount > 0 && <span className="text-amber-500 font-bold">{warnCount} warning</span>}
+						{failCount > 0 && <span className="text-amber-600 dark:text-amber-400">{failCount} to revisit</span>}
+						{warnCount > 0 && <span className="text-amber-600 dark:text-amber-400">{warnCount} to review</span>}
 						{pendingAdvisoryCount > 0 && !checklist.blocked && (
-							<span className="text-amber-500/90 font-bold">{pendingAdvisoryCount} advisory</span>
+							<span className="text-amber-600/90">
+								{pendingAdvisoryCount} note{pendingAdvisoryCount === 1 ? "" : "s"}
+							</span>
 						)}
 					</div>
 					{expanded ? (
@@ -97,19 +96,19 @@ export const PreCompletionGateStrip = memo(
 
 				{checklist.blocked && onScrollToLatestGateBlock && (
 					<button
-						className="mt-2 text-[8px] uppercase tracking-wider font-bold text-red-600/80 dark:text-red-400/80 hover:text-red-600 dark:hover:text-red-400 cursor-pointer bg-transparent border-0 p-0"
+						className="mt-2 text-[9px] font-medium text-amber-700/80 dark:text-amber-400/80 hover:text-amber-800 dark:hover:text-amber-300 cursor-pointer bg-transparent border-0 p-0"
 						onClick={onScrollToLatestGateBlock}
 						type="button">
-						Jump to latest gate block
+						Jump to latest note
 					</button>
 				)}
 
 				{pendingAdvisoryCount > 0 && onScrollToLatestAdvisory && (
 					<button
-						className="mt-2 text-[8px] uppercase tracking-wider font-bold text-amber-600/80 dark:text-amber-400/80 hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer bg-transparent border-0 p-0"
+						className="mt-2 text-[9px] font-medium text-amber-700/80 dark:text-amber-400/80 hover:text-amber-800 dark:hover:text-amber-300 cursor-pointer bg-transparent border-0 p-0"
 						onClick={onScrollToLatestAdvisory}
 						type="button">
-						Jump to latest advisory
+						Jump to latest note
 					</button>
 				)}
 			</section>

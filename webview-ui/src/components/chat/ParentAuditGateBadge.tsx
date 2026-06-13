@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 const LEVEL_STYLES = {
 	ready: "text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
 	warning: "text-amber-600 dark:text-amber-400 border-amber-500/30",
-	blocked: "text-red-600 dark:text-red-400 border-red-500/30",
+	blocked: "text-amber-700 dark:text-amber-400 border-amber-500/30",
 	disabled: "text-description/60 border-description/30",
 } as const
 
@@ -29,12 +29,12 @@ export const ParentAuditGateBadge = memo(() => {
 	return (
 		<span
 			className={cn(
-				"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border",
+				"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium border",
 				LEVEL_STYLES[readiness.level],
 			)}
 			title={readiness.tooltip}>
 			<Icon className="size-2.5" />
-			Parent gate: {readiness.shortLabel}
+			Parent check: {readiness.shortLabel}
 		</span>
 	)
 })

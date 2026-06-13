@@ -17,10 +17,10 @@ export function getConfiguredProviders(
 	const configured: ApiProvider[] = []
 
 	if (!apiConfiguration) {
-		return ["dietcode"] // DietCode is always available
+		return ["dietcode"] // MIRA is always available
 	}
 
-	// DietCode - always available (uses account-based auth)
+	// MIRA - always available (uses account-based auth)
 	configured.push("dietcode")
 
 	// Anthropic - requires API key

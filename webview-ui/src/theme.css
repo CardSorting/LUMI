@@ -1,6 +1,18 @@
 /* Editor theme mapping */
 @theme {
-	--color-dietcode: #2ecc71;
+	/* MIRA brand palette — calm, technical, approachable */
+	--color-mira: #6366a0;
+	--color-mira-cyan: #6bb5c9;
+	--color-mira-lavender: #b8b5d6;
+	--color-mira-graphite: #3d4451;
+	--color-mira-slate: #64748b;
+	--color-mira-warm: #faf9f7;
+	--color-mira-foreground: #faf9f7;
+	--color-fg-mira: #6366a0;
+	/* Legacy aliases — keep existing utility class names working */
+	--color-dietcode: var(--color-mira);
+	--color-dietcode-foreground: var(--color-mira-foreground);
+	--color-fg-dietcode: var(--color-fg-mira);
 	--color-background: var(--vscode-sideBar-background);
 	--color-border: var(--vscode-focusBorder);
 	--color-border-panel: var(--vscode-panel-border);
@@ -95,6 +107,7 @@
 	--breakpoint-xxs: 180px;
 
 	--animate-fade-in: fadeIn 0.4s ease-out forwards;
+	--animate-mira-reading-reveal: miraReadingReveal 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 	@keyframes fadeIn {
 		from {
 			opacity: 0;
@@ -103,6 +116,16 @@
 		to {
 			opacity: 1;
 			transform: scale(1);
+		}
+	}
+	@keyframes miraReadingReveal {
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+		to {
+			opacity: 0.96;
+			transform: translateY(0);
 		}
 	}
 
@@ -138,11 +161,11 @@
 		}
 	}
 
-	--animate-fade-slide-in: fadeSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+	--animate-fade-slide-in: fadeSlideIn 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 	@keyframes fadeSlideIn {
 		from {
 			opacity: 0;
-			transform: translateY(-12px);
+			transform: translateY(-6px);
 		}
 		to {
 			opacity: 1;
@@ -150,12 +173,112 @@
 		}
 	}
 
-	/* Premium Branding Tokens */
-	--gradient-cola: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
-	--gradient-silver: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%);
+	--animate-mira-breathe: miraBreathe 5s ease-in-out infinite;
+	--animate-mira-breathe-slow: miraBreathe 7s ease-in-out infinite;
+	--animate-mira-breathe-rest: miraBreatheRest 8.5s ease-in-out infinite;
+	@keyframes miraBreathe {
+		0%,
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+		50% {
+			transform: scale(1.02);
+			opacity: 0.92;
+		}
+	}
+	@keyframes miraBreatheRest {
+		0%,
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+		50% {
+			transform: scale(1.012);
+			opacity: 0.94;
+		}
+	}
+
+	--animate-mira-blink: miraBlink 5s ease-in-out infinite;
+	@keyframes miraBlink {
+		0%,
+		42%,
+		58%,
+		100% {
+			opacity: 0.75;
+		}
+		50% {
+			opacity: 0.15;
+		}
+	}
+
+	--animate-mira-dot-pulse: miraDotPulse 1.4s ease-in-out infinite;
+	--animate-mira-dot-pulse-slow: miraDotPulse 3.2s ease-in-out infinite;
+	--animate-mira-drift: miraDrift 10s ease-in-out infinite;
+	--animate-mira-glow-pulse: miraGlowPulse 8s ease-in-out infinite;
+	--animate-mira-settle: miraSettle 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	--animate-mira-reveal: miraReveal 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	@keyframes miraSettle {
+		0% {
+			box-shadow: 0 0 0 rgba(122, 126, 184, 0);
+		}
+		40% {
+			box-shadow: var(--glow-mira-soft);
+		}
+		100% {
+			box-shadow: 0 0 0 rgba(122, 126, 184, 0);
+		}
+	}
+	@keyframes miraReveal {
+		from {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+	@keyframes miraDrift {
+		0%,
+		100% {
+			transform: translateY(0);
+		}
+		50% {
+			transform: translateY(-1px);
+		}
+	}
+	@keyframes miraGlowPulse {
+		0%,
+		100% {
+			opacity: 0.05;
+		}
+		50% {
+			opacity: 0.1;
+		}
+	}
+	@keyframes miraDotPulse {
+		0%,
+		100% {
+			transform: translateY(0);
+			opacity: 0.25;
+		}
+		50% {
+			transform: translateY(-1px);
+			opacity: 0.55;
+		}
+	}
+
+	/* MIRA brand gradients & glow */
+	--gradient-mira: linear-gradient(135deg, #7a7eb8 0%, #8ec4d4 100%);
+	--gradient-cola: var(--gradient-mira);
+	--gradient-silver: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
 	--shadow-premium: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1), 0 10px 15px -3px rgb(0 0 0 / 0.1);
-	--glow-dietcode: 0 0 15px rgba(46, 204, 113, 0.4);
-	--glow-dietcode-intense: 0 0 25px rgba(46, 204, 113, 0.6);
+	--glow-mira: 0 0 16px rgba(99, 102, 160, 0.12);
+	--glow-mira-soft: 0 0 12px rgba(99, 102, 160, 0.07);
+	--glow-mira-intense: 0 0 24px rgba(184, 181, 214, 0.2);
+	--glow-dietcode: var(--glow-mira);
+	--glow-dietcode-intense: var(--glow-mira-intense);
 }
 
 @theme inline {
@@ -200,7 +323,7 @@
 }
 
 :root {
-	--radius: 0.625rem;
+	--radius: 0.75rem;
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.145 0 0);
 	--card: oklch(1 0 0);

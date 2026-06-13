@@ -19,11 +19,13 @@ import { ActionCheckboxes } from "@/components/chat/ActionCheckboxes"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { CheckmarkControl } from "@/components/common/CheckmarkControl"
 import { WithCopyButton } from "@/components/common/CopyButton"
+import { MiraProgressIndicator } from "@/components/common/MiraProgressIndicator"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
 import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server-row/McpResourceRow"
 import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row/McpToolRow"
 import { Icon } from "@/components/ui/icons"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { APPROVAL, pickRecoveryLine, pickStuckLine } from "@/copy/miraVoice"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
@@ -53,6 +55,7 @@ import { ThinkingRow } from "./ThinkingRow"
 import UserMessage from "./UserMessage"
 
 const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
+const ASK_PANEL_CLASSNAMES = "rounded-lg border border-description/10 bg-black/[0.02] dark:bg-white/[0.03] p-3.5 mb-1"
 
 interface ChatRowProps {
 	message: DietCodeMessage
@@ -79,7 +82,7 @@ import type { QuoteButtonState } from "./chat-types"
 
 interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
 
-export const ProgressIndicator = () => <Icon className="size-2 mr-2 animate-spin" name="LoaderCircleIcon" />
+export const ProgressIndicator = MiraProgressIndicator
 const InvisibleSpacer = () => <div aria-hidden className="h-px" />
 
 const ChatRow = memo(
@@ -90,7 +93,7 @@ const ChatRow = memo(
 		const prevHeightRef = useRef(0)
 
 		const [chatrow, { height }] = useSize(
-			<div className="relative pt-2.5 px-4">
+			<div className="relative pt-3 px-5">
 				<ChatRowContent {...props} />
 			</div>,
 		)
@@ -306,23 +309,29 @@ export const ChatRowContent = memo(
 			switch (type) {
 				case "error":
 					return [
-						<Icon className="text-error mb-[-1.5px]" key="error-icon" name="error" />,
-						<span className="text-error font-bold text-sm" key="error-title">
-							Error
+						<Icon className="text-description/70 mb-[-1.5px]" key="error-icon" name="error" />,
+						<span className="text-foreground/90 font-medium text-sm" key="error-title">
+							That didn't quite work
 						</span>,
 					]
 				case "mistake_limit_reached":
 					return [
-						<Icon className="text-error size-2" key="mistake-icon" name="CircleXIcon" />,
-						<span className="text-error font-bold text-sm" key="mistake-title">
-							DietCode is having trouble...
+						<Icon className="text-description/60 size-2" key="mistake-icon" name="CircleXIcon" />,
+						<span className="text-foreground font-medium text-sm" key="mistake-title">
+							{pickStuckLine(message.ts)}
 						</span>,
 					]
 				case "command":
 					return [
 						<Icon className="text-foreground size-2" key="command-icon" name="TerminalIcon" />,
-						<span className="font-bold text-foreground text-sm" key="command-title">
-							DietCode wants to execute this command:
+						<span className="font-medium text-foreground text-sm" key="command-title">
+							{message.type === "ask"
+								? APPROVAL.command
+								: isCommandExecuting
+									? "Trying that in the terminal…"
+									: isCommandCompleted
+										? "I tried that in the terminal."
+										: "Running a command…"}
 						</span>,
 					]
 				case "use_mcp_server":
@@ -333,19 +342,19 @@ export const ChatRowContent = memo(
 						) : (
 							<Icon className="text-foreground mb-[-1.5px]" key="mcp-icon" name="server" />
 						),
-						<span className="ph-no-capture font-bold text-foreground break-words text-sm" key="mcp-title">
-							DietCode wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
+						<span className="ph-no-capture font-medium text-foreground break-words text-sm" key="mcp-title">
+							{APPROVAL.mcpPrefix}{" "}
 							<code className="break-all text-xs">
 								{getMcpServerDisplayName(mcpServerUse.serverName, mcpMarketplaceCatalog)}
-							</code>{" "}
-							MCP server:
+							</code>
+							:
 						</span>,
 					]
 				case "completion_result":
 					return [
-						<Icon className="text-success mb-[-1.5px]" key="completion-icon" name="check" />,
-						<span className="text-success font-bold text-sm" key="completion-title">
-							Task Completed
+						<Icon className="text-success/80 mb-[-1.5px]" key="completion-icon" name="check" />,
+						<span className="text-success/80 font-medium text-sm" key="completion-title">
+							All done.
 						</span>,
 					]
 				case "api_req_started":
@@ -355,14 +364,23 @@ export const ChatRowContent = memo(
 				case "followup":
 					return [
 						<Icon className="text-foreground mb-[-1.5px]" key="followup-icon" name="question" />,
-						<span className="font-bold text-foreground text-sm" key="followup-title">
-							DietCode has a question:
+						<span className="font-medium text-foreground text-sm" key="followup-title">
+							A question
 						</span>,
 					]
 				default:
 					return [null, null]
 			}
-		}, [type, isMcpServerResponding, message.text, mcpMarketplaceCatalog])
+		}, [
+			type,
+			isMcpServerResponding,
+			message.text,
+			mcpMarketplaceCatalog,
+			message.type,
+			isCommandExecuting,
+			isCommandCompleted,
+			message.ts,
+		])
 
 		const tool = useMemo(() => {
 			if (message.ask === "tool" || message.say === "tool") {
@@ -427,10 +445,12 @@ export const ChatRowContent = memo(
 					const content = tool?.content || ""
 					const isApplyingPatch = content?.startsWith("%%bash") && !content.endsWith("*** End Patch\nEOF")
 					const editToolTitle = isApplyingPatch
-						? "DietCode is creating patches to edit this file:"
-						: "DietCode wants to edit this file:"
+						? "Updating this file for you…"
+						: message.type === "ask"
+							? APPROVAL.editFile
+							: "I updated this file:"
 					return (
-						<div>
+						<div className={message.type === "ask" ? ASK_PANEL_CLASSNAMES : undefined}>
 							<div className={HEADER_CLASSNAMES}>
 								<Icon className="size-2" name="PencilIcon" />
 								{tool.operationIsLocatedInWorkspace === false &&
@@ -457,12 +477,14 @@ export const ChatRowContent = memo(
 					)
 				case "fileDeleted":
 					return (
-						<div>
+						<div className={message.type === "ask" ? ASK_PANEL_CLASSNAMES : undefined}>
 							<div className={HEADER_CLASSNAMES}>
 								<Icon className="size-2" name="SquareMinusIcon" />
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span style={{ fontWeight: "bold" }}>DietCode wants to delete this file:</span>
+								<span style={{ fontWeight: "500" }}>
+									{message.type === "ask" ? APPROVAL.deleteFile : "I removed that file."}
+								</span>
 							</div>
 							<CodeAccordian
 								// isLoading={message.partial}
@@ -475,12 +497,14 @@ export const ChatRowContent = memo(
 					)
 				case "newFileCreated":
 					return (
-						<div>
+						<div className={message.type === "ask" ? ASK_PANEL_CLASSNAMES : undefined}>
 							<div className={HEADER_CLASSNAMES}>
 								<Icon className="size-2" name="FilePlus2Icon" />
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">DietCode wants to create a new file:</span>
+								<span className="font-medium">
+									{message.type === "ask" ? APPROVAL.newFile : "I added this file for you."}
+								</span>
 							</div>
 							{backgroundEditEnabled && tool.path && tool.content ? (
 								<DiffEditRow patch={tool.content} path={tool.path} startLineNumbers={tool.startLineNumbers} />
@@ -498,7 +522,7 @@ export const ChatRowContent = memo(
 				case "readFile":
 					const isImage = isImageFile(tool.path || "")
 					return (
-						<div>
+						<div className={message.type === "ask" ? ASK_PANEL_CLASSNAMES : undefined}>
 							<div className={HEADER_CLASSNAMES}>
 								{isImage ? (
 									<Icon className="size-2" name="ImageUpIcon" />
@@ -507,7 +531,9 @@ export const ChatRowContent = memo(
 								)}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span className="font-bold">DietCode wants to read this file:</span>
+								<span className="font-medium">
+									{message.type === "ask" ? APPROVAL.readFile : "I looked at this file."}
+								</span>
 							</div>
 							<div className="bg-code rounded-sm overflow-hidden border border-editor-group-border">
 								<div
@@ -539,10 +565,8 @@ export const ChatRowContent = memo(
 								{toolIcon("folder-opened")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
-								<span style={{ fontWeight: "bold" }}>
-									{message.type === "ask"
-										? "DietCode wants to view the top level files in this directory:"
-										: "DietCode viewed the top level files in this directory:"}
+								<span style={{ fontWeight: "500" }}>
+									{message.type === "ask" ? APPROVAL.listFiles : "I peeked at the files here."}
 								</span>
 							</div>
 							<CodeAccordian
@@ -561,10 +585,8 @@ export const ChatRowContent = memo(
 								{toolIcon("folder-opened")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
-								<span style={{ fontWeight: "bold" }}>
-									{message.type === "ask"
-										? "DietCode wants to recursively view all files in this directory:"
-										: "DietCode recursively viewed all files in this directory:"}
+								<span style={{ fontWeight: "500" }}>
+									{message.type === "ask" ? APPROVAL.listRecursive : "I took a quick look through the files."}
 								</span>
 							</div>
 							<CodeAccordian
@@ -583,10 +605,8 @@ export const ChatRowContent = memo(
 								{toolIcon("file-code")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This file is outside of your workspace")}
-								<span style={{ fontWeight: "bold" }}>
-									{message.type === "ask"
-										? "DietCode wants to view source code definition names used in this directory:"
-										: "DietCode viewed source code definition names used in this directory:"}
+								<span style={{ fontWeight: "500" }}>
+									{message.type === "ask" ? APPROVAL.definitions : "I checked the definitions in this folder."}
 								</span>
 							</div>
 							<CodeAccordian
@@ -604,8 +624,14 @@ export const ChatRowContent = memo(
 								{toolIcon("search")}
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This is outside of your workspace")}
-								<span className="font-bold">
-									DietCode wants to search this directory for <code className="break-all">{tool.regex}</code>:
+								<span className="font-medium">
+									{message.type === "ask" ? (
+										<>
+											{APPROVAL.searchPrefix} <code className="break-all">{tool.regex}</code>?
+										</>
+									) : (
+										<>Here's what I found in this folder.</>
+									)}
 								</span>
 							</div>
 							<SearchResultsDisplay
@@ -622,7 +648,7 @@ export const ChatRowContent = memo(
 						<div>
 							<div className={HEADER_CLASSNAMES}>
 								<Icon className="size-2" name="FoldVerticalIcon" />
-								<span className="font-bold">DietCode is condensing the conversation:</span>
+								<span className="font-medium">I tidied up our chat.</span>
 							</div>
 							<div className="bg-code overflow-hidden border border-editor-group-border rounded-[3px]">
 								<div
@@ -639,7 +665,7 @@ export const ChatRowContent = memo(
 									{isExpanded ? (
 										<div>
 											<div className="flex items-center mb-2">
-												<span className="font-bold mr-1">Summary:</span>
+												<span className="font-medium mr-1">Summary</span>
 												<div className="grow" />
 												<Icon className="my-0.5 shrink-0 size-4" name="ChevronDownIcon" />
 											</div>
@@ -664,10 +690,8 @@ export const ChatRowContent = memo(
 								<Icon className="size-2" name="Link2Icon" />
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This URL is external")}
-								<span className="font-bold">
-									{message.type === "ask"
-										? "DietCode wants to fetch content from this URL:"
-										: "DietCode fetched content from this URL:"}
+								<span className="font-medium">
+									{message.type === "ask" ? APPROVAL.webFetch : "Here's what I found on that page."}
 								</span>
 							</div>
 							<div
@@ -693,10 +717,8 @@ export const ChatRowContent = memo(
 								<Icon className="size-2 rotate-90" name="SearchIcon" />
 								{tool.operationIsLocatedInWorkspace === false &&
 									toolIcon("sign-out", "yellow", -90, "This search is external")}
-								<span className="font-bold">
-									{message.type === "ask"
-										? "DietCode wants to search the web for:"
-										: "DietCode searched the web for:"}
+								<span className="font-medium">
+									{message.type === "ask" ? APPROVAL.webSearch : "Here's what turned up:"}
 								</span>
 							</div>
 							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs select-text py-[9px] px-2.5">
@@ -711,7 +733,7 @@ export const ChatRowContent = memo(
 						<div>
 							<div className={HEADER_CLASSNAMES}>
 								<Icon className="size-2" name="LightbulbIcon" />
-								<span className="font-bold">DietCode loaded the skill:</span>
+								<span className="font-medium">Found a skill:</span>
 							</div>
 							<div className="bg-code border border-editor-group-border overflow-hidden rounded-xs py-[9px] px-2.5">
 								<span className="ph-no-capture font-medium">{tool.path}</span>
@@ -881,7 +903,7 @@ export const ChatRowContent = memo(
 							<div className="flex items-start gap-2 py-2.5 px-3 bg-quote rounded-sm text-base text-foreground opacity-90 mb-2">
 								<Icon className="mt-0.5 size-2 text-notification-foreground shrink-0" name="BellIcon" />
 								<div className="break-words flex-1">
-									<span className="font-medium">MCP Notification: </span>
+									<span className="font-medium">Note from your tools: </span>
 									<span className="ph-no-capture">{message.text}</span>
 								</div>
 							</div>
@@ -958,7 +980,7 @@ export const ChatRowContent = memo(
 						return (
 							<div className="text-foreground flex items-center opacity-70 text-[12px] py-1 px-0">
 								<Icon className="mr-1.5" name="book" />
-								Loading MCP documentation
+								Loading tool docs
 							</div>
 						)
 					case "generate_explanation": {
@@ -999,12 +1021,12 @@ export const ChatRowContent = memo(
 									)}
 									<span className="font-semibold">
 										{isGenerating
-											? "Generating explanation"
+											? "Putting together an explanation…"
 											: isError
-												? "Failed to generate explanation"
+												? "Couldn't put that together yet"
 												: wasCancelled
-													? "Explanation cancelled"
-													: "Generated explanation"}
+													? "Explanation skipped"
+													: "Here's a quick explanation"}
 									</span>
 								</div>
 								{isError && explanationInfo.error && (
@@ -1056,7 +1078,7 @@ export const ChatRowContent = memo(
 									<span className="font-medium text-foreground">Shell Integration Unavailable</span>
 								</div>
 								<div className="text-foreground opacity-80">
-									DietCode may have trouble viewing the command's output. Please update VSCode (
+									I might not see the full command output here. Please update VSCode (
 									<code>CMD/CTRL + Shift + P</code> → "Update") and make sure you're using a supported shell:
 									zsh, bash, fish, or PowerShell (<code>CMD/CTRL + Shift + P</code> → "Terminal: Select Default
 									Profile").
@@ -1075,31 +1097,32 @@ export const ChatRowContent = memo(
 							const isFailed = failed === true
 
 							return (
-								<div className="flex flex-col gap-2">
+								<div className="flex flex-col gap-3 rounded-lg border border-description/10 bg-black/[0.02] dark:bg-white/[0.02] p-3.5 animate-mira-reveal [animation-duration:1.2s]">
 									{errorMessage && (
-										<p className="m-0 whitespace-pre-wrap text-error wrap-anywhere text-xs">{errorMessage}</p>
+										<p className="m-0 whitespace-pre-wrap text-description/90 wrap-anywhere text-xs leading-relaxed">
+											{errorMessage}
+										</p>
 									)}
-									<div className="flex flex-col bg-quote p-0 rounded-[3px] text-[12px]">
-										<div className="flex items-center mb-1">
-											{isFailed && !isRequestInProgress ? (
-												<Icon className="mr-2 size-2" name="TriangleAlertIcon" />
-											) : (
-												<Icon className="mr-2 size-2 animate-spin" name="RefreshCwIcon" />
-											)}
-											<span className="font-medium text-foreground">
-												{isFailed ? "Auto-Retry Failed" : "Auto-Retry in Progress"}
+									<div className="flex flex-col gap-1.5">
+										<div className="flex items-center gap-2">
+											{(!isFailed || isRequestInProgress) && <ProgressIndicator />}
+											<span className="font-medium text-foreground/90 text-xs">
+												{isFailed ? "That didn't quite work" : "Taking another look…"}
 											</span>
 										</div>
-										<div className="text-foreground opacity-80">
+										<div className="text-description text-xs leading-relaxed">
 											{isFailed ? (
 												<span>
-													Auto-retry failed after <strong>{maxAttempts}</strong> attempts. Manual
-													intervention required.
+													I tried{" "}
+													<strong className="font-medium text-foreground/80">{maxAttempts}</strong>{" "}
+													times. {pickRecoveryLine(message.ts)}
 												</span>
 											) : (
 												<span>
-													Attempt <strong>{attempt}</strong> of <strong>{maxAttempts}</strong> -
-													Retrying in {delaySeconds} seconds...
+													Giving it another go (
+													<strong className="font-medium text-foreground/80">{attempt}</strong> of{" "}
+													<strong className="font-medium text-foreground/80">{maxAttempts}</strong>) in{" "}
+													{delaySeconds}s…
 												</span>
 											)}
 										</div>
@@ -1300,19 +1323,17 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<Icon className="size-2" name="FilePlus2Icon" />
-									<span className="text-foreground font-bold">DietCode wants to start a new task:</span>
+									<span className="text-foreground font-medium">Should we start fresh?</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
 							</div>
 						)
 					case "condense":
 						return (
-							<div>
+							<div className={ASK_PANEL_CLASSNAMES}>
 								<div className={HEADER_CLASSNAMES}>
-									<Icon className="size-2" name="FilePlus2Icon" />
-									<span className="text-foreground font-bold">
-										DietCode wants to condense your conversation:
-									</span>
+									<Icon className="size-2" name="FoldVerticalIcon" />
+									<span className="text-foreground font-medium">{APPROVAL.condense}</span>
 								</div>
 								<NewTaskPreview context={message.text || ""} />
 							</div>
@@ -1322,7 +1343,7 @@ export const ChatRowContent = memo(
 							<div>
 								<div className={HEADER_CLASSNAMES}>
 									<Icon className="size-2" name="FilePlus2Icon" />
-									<span className="text-foreground font-bold">DietCode wants to create a Github issue:</span>
+									<span className="text-foreground font-medium">Should I open a GitHub issue?</span>
 								</div>
 								<ReportBugPreview data={message.text || ""} />
 							</div>

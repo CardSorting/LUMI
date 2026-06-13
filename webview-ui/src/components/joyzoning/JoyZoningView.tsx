@@ -226,20 +226,20 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 	return (
 		<Container>
-			<ViewHeader environment={environment} onDone={onDone} title="Project Health Center" />
+			<ViewHeader environment={environment} onDone={onDone} title="Project reflection" />
 			<Content>
 				<HeroSection>
 					{report?.driftDetected && (
 						<DriftWarning>
 							<WarningIcon>🔄</WarningIcon>
-							<WarningText>Sync Alert: {report.driftCount} files out of sync with index.</WarningText>
+							<WarningText>A few files may be out of sync with the index.</WarningText>
 						</DriftWarning>
 					)}
 					<RadarContainer>
 						<RadarRing $loading={loading} $percentage={progressPercentage} />
 						<GradeValue $grade={report?.grade || "A"}>{report ? report.grade : loading ? "..." : "--"}</GradeValue>
 						<HealthLabel>
-							{loading ? "Scanning codebase..." : "Overall Health Grade"}
+							{loading ? "Looking through the project…" : "Overall project note"}
 							{report && asNumber(report.healthDelta) !== 0 && (
 								<DeltaBadge $positive={asNumber(report.healthDelta) > 0}>
 									{asNumber(report.healthDelta) > 0 ? "↑" : "↓"}
@@ -251,16 +251,16 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 					<HeaderStats>
 						<SystemStatus $health={report?.buildHealth || 100}>
-							{loading
-								? "ANALYZING..."
-								: (report?.buildHealth || 100) > 80
-									? "● SYSTEM HEALTHY"
-									: "● NEEDS ATTENTION"}
+							{loading ? "Looking…" : (report?.buildHealth || 100) > 80 ? "Feeling steady" : "Worth a look"}
 						</SystemStatus>
-						{report && <QualityGate $status={report.qualityGateStatus}>{report.qualityGateStatus}</QualityGate>}
 						{report && (
-							<ShareButton onClick={copyReportToClipboard} title="Copy health summary to clipboard">
-								<span>📋</span> Share
+							<QualityGate $status={report.qualityGateStatus}>
+								{report.qualityGateStatus === "PASSED" ? "Steady" : "Worth a look"}
+							</QualityGate>
+						)}
+						{report && (
+							<ShareButton onClick={copyReportToClipboard} title="Copy a short project summary">
+								<span>📋</span> Copy summary
 							</ShareButton>
 						)}
 					</HeaderStats>
@@ -269,15 +269,15 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 				<NavGroup>
 					<NavItem $active={activeTab === "overview"} onClick={() => setActiveTab("overview")}>
 						<NavIcon>📊</NavIcon>
-						<NavLabel>Dashboard</NavLabel>
+						<NavLabel>Overview</NavLabel>
 					</NavItem>
 					<NavItem $active={activeTab === "fixes"} onClick={() => setActiveTab("fixes")}>
 						<NavIcon>🚨</NavIcon>
-						<NavLabel>Fixes {violations.length > 0 ? `(${violations.length})` : ""}</NavLabel>
+						<NavLabel>Repairs {violations.length > 0 ? `(${violations.length})` : ""}</NavLabel>
 					</NavItem>
 					<NavItem $active={activeTab === "improvements"} onClick={() => setActiveTab("improvements")}>
 						<NavIcon>✨</NavIcon>
-						<NavLabel>Upgrades {optimizations.length > 0 ? `(${optimizations.length})` : ""}</NavLabel>
+						<NavLabel>Ideas {optimizations.length > 0 ? `(${optimizations.length})` : ""}</NavLabel>
 					</NavItem>
 					<NavItem
 						$active={activeTab === "strategy"}
@@ -287,27 +287,27 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 							pointerEvents: activeTask ? "auto" : "none",
 						}}>
 						<NavIcon>📜</NavIcon>
-						<NavLabel>Strategy</NavLabel>
+						<NavLabel>Plan</NavLabel>
 					</NavItem>
 				</NavGroup>
 
 				{loading && (
 					<ScanningNotice>
 						<ScanningIcon>🔍</ScanningIcon>
-						<ScanningText>Analyzing project architecture and structural patterns...</ScanningText>
+						<ScanningText>Looking through structure and patterns…</ScanningText>
 					</ScanningNotice>
 				)}
 
 				{!report && !loading && (
 					<WelcomeView>
 						<WelcomeIcon>🏥</WelcomeIcon>
-						<WelcomeTitle>Welcome to Health Center</WelcomeTitle>
+						<WelcomeTitle>A quiet look at your project</WelcomeTitle>
 						<WelcomeDesc>
-							Scan your project to identify structural risks, maintainability hotspots, and architectural debt. Our
-							AI-driven analysis provides actionable remediation paths for a solid foundation.
+							Walk through the codebase together — structural notes, gentle observations, and places that might
+							benefit from a second pass.
 						</WelcomeDesc>
 						<AuditButton $primary onClick={triggerAudit} style={{ width: "auto", padding: "12px 24px" }}>
-							Start Initial Health Scan
+							Start a project walkthrough
 						</AuditButton>
 					</WelcomeView>
 				)}
@@ -318,11 +318,11 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 							<SnapshotIcon>{report.buildHealth > 80 ? "✨" : report.buildHealth > 50 ? "⚡" : "🚨"}</SnapshotIcon>
 							<SnapshotContent>
 								<SnapshotTitleGroup>
-									<SnapshotTitle>Health Snapshot</SnapshotTitle>
+									<SnapshotTitle>Project snapshot</SnapshotTitle>
 									{history.length > 1 && (
-										<TrendSparkline title="Recent Health Trend">
+										<TrendSparkline title="Recent shape">
 											<svg height="15" viewBox="0 0 100 20" width="60">
-												<title>Health Trend Sparkline</title>
+												<title>Recent project shape</title>
 												<polyline
 													fill="none"
 													points={history
@@ -338,27 +338,32 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 								</SnapshotTitleGroup>
 								<SnapshotDesc>
 									{report.buildHealth > 80
-										? "Project foundations are solid. No immediate structural action required."
+										? "Foundations feel solid. Nothing urgent on the horizon."
 										: report.buildHealth > 50
-											? "The system is stable but shows signs of organizational debt."
-											: "Critical structural risks detected. Immediate maintenance recommended."}
+											? "Mostly steady, with a few areas worth revisiting when you have time."
+											: "A few structural notes stood out — we can take them one at a time."}
 								</SnapshotDesc>
 							</SnapshotContent>
 						</HealthSnapshot>
 
-						<RadarChartSection>
-							<RadarChartWrapper>
-								<svg height="100%" viewBox="0 0 200 200" width="100%">
-									<title>Architectural Health Radar</title>
-									<polygon
-										fill="rgba(255,255,255,0.03)"
-										points="100,20 170,60 170,140 100,180 30,140 30,60"
-										stroke="rgba(255,255,255,0.1)"
-										strokeWidth="1"
-									/>
-									<polygon
-										fill="rgba(24, 144, 255, 0.2)"
-										points={`
+						<ReflectionMapSection>
+							<SectionHeader>
+								<SectionTitle>Project shape</SectionTitle>
+								<StatLabel>Balance view</StatLabel>
+							</SectionHeader>
+							<RadarChartSection>
+								<RadarChartWrapper>
+									<svg height="100%" viewBox="0 0 200 200" width="100%">
+										<title>Project shape reflection map</title>
+										<polygon
+											fill="rgba(255,255,255,0.02)"
+											points="100,20 170,60 170,140 100,180 30,140 30,60"
+											stroke="rgba(255,255,255,0.06)"
+											strokeWidth="0.75"
+										/>
+										<polygon
+											fill="rgba(122, 126, 184, 0.12)"
+											points={`
 											100,${100 - (report.complianceScore / 100) * 80} 
 											${100 + (report.stabilityScore / 100) * 70},${100 - (report.stabilityScore / 100) * 40}
 											${100 + (report.maintainabilityScore / 100) * 70},${100 + (report.maintainabilityScore / 100) * 40}
@@ -366,61 +371,66 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 											${100 - (report.integrityScore / 100) * 70},${100 + (report.integrityScore / 100) * 40}
 											${100 - (report.complianceScore / 100) * 70},${100 - (report.complianceScore / 100) * 40}
 										`}
-										stroke="var(--vscode-button-background)"
-										strokeWidth="2"
-									/>
-								</svg>
-								<RadarLabel style={{ top: "0%", left: "50%", transform: "translateX(-50%)" }}>
-									Best Practices
-								</RadarLabel>
-								<RadarLabel style={{ top: "25%", right: "-10%" }}>Stability</RadarLabel>
-								<RadarLabel style={{ bottom: "25%", right: "-10%" }}>Maintainability</RadarLabel>
-								<RadarLabel style={{ bottom: "0%", left: "50%", transform: "translateX(-50%)" }}>
-									Overall
-								</RadarLabel>
-								<RadarLabel style={{ bottom: "25%", left: "-10%" }}>Integrity</RadarLabel>
-								<RadarLabel style={{ top: "25%", left: "-10%" }}>Compliance</RadarLabel>
-							</RadarChartWrapper>
-						</RadarChartSection>
-						<GovernanceGrid>
-							<GovernanceCard>
-								<GovernanceTitle>Best Practices</GovernanceTitle>
-								<GovernanceValue>{report?.complianceScore || 0}%</GovernanceValue>
-								<GovernanceDesc>Structural Alignment</GovernanceDesc>
-							</GovernanceCard>
-							<GovernanceCard $toxic={!!report?.toxicModule}>
-								<GovernanceTitle>Attention Needed</GovernanceTitle>
-								<GovernanceValue style={{ fontSize: "11px", opacity: 0.9 }}>
-									{report?.toxicModule || "None"}
-								</GovernanceValue>
-								<GovernanceDesc>Highest Risk Area</GovernanceDesc>
-							</GovernanceCard>
-						</GovernanceGrid>
+											stroke="rgba(122, 126, 184, 0.35)"
+											strokeWidth="1.25"
+										/>
+									</svg>
+									<RadarLabel style={{ top: "0%", left: "50%", transform: "translateX(-50%)" }}>
+										Patterns
+									</RadarLabel>
+									<RadarLabel style={{ top: "25%", right: "-10%" }}>Steady</RadarLabel>
+									<RadarLabel style={{ bottom: "25%", right: "-10%" }}>Readable</RadarLabel>
+									<RadarLabel style={{ bottom: "0%", left: "50%", transform: "translateX(-50%)" }}>
+										Overall feel
+									</RadarLabel>
+									<RadarLabel style={{ bottom: "25%", left: "-10%" }}>Structure</RadarLabel>
+									<RadarLabel style={{ top: "25%", left: "-10%" }}>Conventions</RadarLabel>
+								</RadarChartWrapper>
+							</RadarChartSection>
+						</ReflectionMapSection>
+						<WorkspacePatternsSection>
+							<SectionHeader>
+								<SectionTitle>Workspace patterns</SectionTitle>
+								<StatLabel>Things worth noticing</StatLabel>
+							</SectionHeader>
+							<GovernanceGrid>
+								<GovernanceCard>
+									<GovernanceTitle>Recurring patterns</GovernanceTitle>
+									<GovernanceValue>{report?.complianceScore || 0}%</GovernanceValue>
+									<GovernanceDesc>How things are organized</GovernanceDesc>
+								</GovernanceCard>
+								<GovernanceCard $toxic={!!report?.toxicModule}>
+									<GovernanceTitle>Worth noticing</GovernanceTitle>
+									<GovernanceValue style={{ fontSize: "11px", opacity: 0.85 }}>
+										{report?.toxicModule || "Nothing standing out"}
+									</GovernanceValue>
+									<GovernanceDesc>A module receiving attention</GovernanceDesc>
+								</GovernanceCard>
+							</GovernanceGrid>
+						</WorkspacePatternsSection>
 
 						{report && (
 							<ChecklistSection>
 								<SectionHeader>
-									<SectionTitle>Health Checklist</SectionTitle>
-									<StatLabel>Core Requirements</StatLabel>
+									<SectionTitle>A few checks</SectionTitle>
+									<StatLabel>Core observations</StatLabel>
 								</SectionHeader>
 								<Checklist>
 									<CheckItem $passed={(report.buildHealth || 0) > 70}>
 										<CheckIcon>{(report.buildHealth || 0) > 70 ? "✅" : "❌"}</CheckIcon>
-										<CheckText>Base Integrity Score {report.buildHealth || 0}%</CheckText>
+										<CheckText>Base integrity {report.buildHealth || 0}%</CheckText>
 									</CheckItem>
 									<CheckItem $passed={!report.driftDetected}>
 										<CheckIcon>{!report.driftDetected ? "✅" : "❌"}</CheckIcon>
-										<CheckText>
-											{!report.driftDetected ? "Index synchronized" : "Substrate drift detected"}
-										</CheckText>
+										<CheckText>{!report.driftDetected ? "Index in sync" : "Some drift noticed"}</CheckText>
 									</CheckItem>
 									<CheckItem $passed={(report.complianceScore || 0) > 80}>
 										<CheckIcon>{(report.complianceScore || 0) > 80 ? "✅" : "⚠️"}</CheckIcon>
-										<CheckText>Standard alignment</CheckText>
+										<CheckText>Patterns mostly aligned</CheckText>
 									</CheckItem>
 									<CheckItem $passed={(report.stabilityScore || 0) > 60}>
 										<CheckIcon>{(report.stabilityScore || 0) > 60 ? "✅" : "⚠️"}</CheckIcon>
-										<CheckText>System stability baseline</CheckText>
+										<CheckText>Stability baseline</CheckText>
 									</CheckItem>
 								</Checklist>
 							</ChecklistSection>
@@ -429,38 +439,38 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						{report?.riskProfile && (
 							<RiskProfileSection>
 								<SectionHeader>
-									<SectionTitle>Project Risk Distribution</SectionTitle>
-									<StatLabel>File Health</StatLabel>
+									<SectionTitle>Project risk notes</SectionTitle>
+									<StatLabel>File notes</StatLabel>
 								</SectionHeader>
 								<RiskBar>
 									<RiskSegment
 										$total={report.totalFiles}
 										$type="LOW"
 										$width={riskProfileValues.LOW || 0}
-										title="Low Risk"
+										title="Quiet files"
 									/>
 									<RiskSegment
 										$total={report.totalFiles}
 										$type="MEDIUM"
 										$width={riskProfileValues.MEDIUM || 0}
-										title="Medium Risk"
+										title="Mixed files"
 									/>
 									<RiskSegment
 										$total={report.totalFiles}
 										$type="HIGH"
 										$width={riskProfileValues.HIGH || 0}
-										title="High Risk"
+										title="Needs care"
 									/>
 								</RiskBar>
 								<RiskLegend>
 									<LegendItem>
-										<Dot $type="LOW" /> Low
+										<Dot $type="LOW" /> Quiet
 									</LegendItem>
 									<LegendItem>
-										<Dot $type="MEDIUM" /> Medium
+										<Dot $type="MEDIUM" /> Mixed
 									</LegendItem>
 									<LegendItem>
-										<Dot $type="HIGH" /> High Risk
+										<Dot $type="HIGH" /> Needs care
 									</LegendItem>
 								</RiskLegend>
 							</RiskProfileSection>
@@ -469,8 +479,8 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						{topRecommendations.length > 0 && (
 							<QuickWinsSection>
 								<SectionHeader>
-									<SectionTitle>Top Recommendations</SectionTitle>
-									<Badge $type="HIGH">QUICK WINS</Badge>
+									<SectionTitle>Gentle suggestions</SectionTitle>
+									<Badge $type="HIGH">Easy starts</Badge>
 								</SectionHeader>
 								<QuickWinsGrid>
 									{topRecommendations.map((opt) => (
@@ -478,7 +488,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 											<QuickWinIcon>⚡</QuickWinIcon>
 											<QuickWinContent>
 												<QuickWinTitle>{opt.title}</QuickWinTitle>
-												<QuickWinGain>+{fixed(opt.projectedHealthGain)}% Health Boost</QuickWinGain>
+												<QuickWinGain>+{fixed(opt.projectedHealthGain)}% possible lift</QuickWinGain>
 											</QuickWinContent>
 										</QuickWinCard>
 									))}
@@ -488,19 +498,23 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 						<MissionSection>
 							<SectionHeader>
-								<SectionTitle>Guided Missions</SectionTitle>
-								<StatLabel>Recommended Actions</StatLabel>
+								<SectionTitle>Gentle next steps</SectionTitle>
+								<StatLabel>When you're ready</StatLabel>
 							</SectionHeader>
 							<MissionGrid>
 								<MissionCard $active={violations.length > 0} onClick={() => setActiveTab("fixes")}>
-									<MissionStatus>{violations.length > 0 ? "ACTION REQUIRED" : "STABLE"}</MissionStatus>
-									<MissionTitle>Harden Infrastructure</MissionTitle>
-									<MissionDesc>Resolve {violations.length} critical risks.</MissionDesc>
+									<MissionStatus>{violations.length > 0 ? "Worth revisiting" : "Steady"}</MissionStatus>
+									<MissionTitle>Structural repairs</MissionTitle>
+									<MissionDesc>
+										{violations.length} observation{violations.length === 1 ? "" : "s"} noted.
+									</MissionDesc>
 								</MissionCard>
 								<MissionCard $active={optimizations.length > 0} onClick={() => setActiveTab("improvements")}>
-									<MissionStatus>{optimizations.length > 0 ? "IN PROGRESS" : "OPTIMIZED"}</MissionStatus>
-									<MissionTitle>Tame Complexity</MissionTitle>
-									<MissionDesc>{optimizations.length} refactor goals identify.</MissionDesc>
+									<MissionStatus>{optimizations.length > 0 ? "In progress" : "Quiet for now"}</MissionStatus>
+									<MissionTitle>Simplify structure</MissionTitle>
+									<MissionDesc>
+										{optimizations.length} idea{optimizations.length === 1 ? "" : "s"} to explore.
+									</MissionDesc>
 								</MissionCard>
 							</MissionGrid>
 						</MissionSection>
@@ -508,7 +522,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						{Object.keys(layerScores).length > 0 && (
 							<ArchitectureHealthSection>
 								<SectionHeader>
-									<SectionTitle>Architecture Health</SectionTitle>
+									<SectionTitle>Layer notes</SectionTitle>
 								</SectionHeader>
 								<LayerList>
 									{Object.entries(layerScores).map(([layer, score]) => (
@@ -529,24 +543,24 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						{!loading && report && (
 							<DashboardSection>
 								<SectionHeader>
-									<SectionTitle>Maintenance Outlook</SectionTitle>
-									<StatLabel>Industry Metrics</StatLabel>
+									<SectionTitle>Maintenance notes</SectionTitle>
+									<StatLabel>Background context</StatLabel>
 								</SectionHeader>
 								<DashboardGrid>
-									<DashboardCard title="Estimated time to resolve all identified technical debt.">
+									<DashboardCard title="Rough sense of how long open notes might take to revisit.">
 										<DashboardIcon>⏳</DashboardIcon>
 										<DashboardValue>{report.totalTechnicalDebt}</DashboardValue>
-										<DashboardLabel>Recovery Time</DashboardLabel>
+										<DashboardLabel>Time to revisit</DashboardLabel>
 									</DashboardCard>
-									<DashboardCard title="Percentage of project following stable structural patterns.">
+									<DashboardCard title="How much of the project follows familiar patterns.">
 										<DashboardIcon>🛡️</DashboardIcon>
 										<DashboardValue>{report.stabilityScore}%</DashboardValue>
-										<DashboardLabel>System Stability</DashboardLabel>
+										<DashboardLabel>Steady feel</DashboardLabel>
 									</DashboardCard>
-									<DashboardCard title="Ease of understanding and modifying the existing codebase.">
+									<DashboardCard title="How easy the codebase feels to read and change.">
 										<DashboardIcon>🏗️</DashboardIcon>
 										<DashboardValue>{report.maintainabilityScore}%</DashboardValue>
-										<DashboardLabel>Organization</DashboardLabel>
+										<DashboardLabel>Layout clarity</DashboardLabel>
 									</DashboardCard>
 								</DashboardGrid>
 							</DashboardSection>
@@ -555,18 +569,18 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						{report && (
 							<SummaryNotice>
 								{report.buildHealth > 80
-									? "Your project health is excellent. Continue following established patterns for maximum stability."
+									? "The project feels well-organized. Keep following the patterns that already work for you."
 									: report.buildHealth > 50
-										? "The project is stable but starting to show signs of structural fatigue. Consider addressing technical debt soon."
-										: "CRITICAL: Significant structural issues detected. Immediate attention to the foundations is recommended to prevent future failures."}
+										? "Mostly steady — a few areas could use attention when you have the bandwidth."
+										: "Some structural notes came up. We can work through them calmly, one at a time."}
 							</SummaryNotice>
 						)}
 
 						{report && history.length > 1 && (
 							<TrendSection>
 								<SectionHeader>
-									<SectionTitle>Health Evolution</SectionTitle>
-									<StatLabel>Last 20 Scans</StatLabel>
+									<SectionTitle>How things shifted</SectionTitle>
+									<StatLabel>Recent walks</StatLabel>
 								</SectionHeader>
 								<TrendChart>
 									{history.map((point) => (
@@ -583,7 +597,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						{report && (
 							<ActivitySection>
 								<SectionHeader>
-									<SectionTitle>Recent Fixes</SectionTitle>
+									<SectionTitle>Recent repairs</SectionTitle>
 									<StatLabel>Repair History</StatLabel>
 								</SectionHeader>
 								<ActivityList>
@@ -620,7 +634,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 				{activeTab === "fixes" && (
 					<TabView>
 						<SectionHeader>
-							<SectionTitle>Essential Repairs</SectionTitle>
+							<SectionTitle>Repairs to consider</SectionTitle>
 							<Badge $type="LOW">MANUAL REPAIR REQUIRED</Badge>
 						</SectionHeader>
 						<FilterGroup>
@@ -660,8 +674,8 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 										}}>
 										<ListItemContent>
 											<BadgeGroup>
-												{isActive && <Badge $type="HIGH">ACTIVE</Badge>}
-												{!queueable && <Badge $type="LOW">INCOMPLETE</Badge>}
+												{isActive && <Badge $type="HIGH">Selected</Badge>}
+												{!queueable && <Badge $type="LOW">Needs detail</Badge>}
 												<Badge $type={v.riskLevel || "HIGH"}>{v.riskLevel || "HIGH"} RISK</Badge>
 												<Badge $type="CATEGORY">{v.impactArea || "STABILITY"}</Badge>
 											</BadgeGroup>
@@ -679,7 +693,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 											<ActionButton
 												disabled={!queueable || loading}
 												onClick={() => prepareStrategy(action, v.path)}>
-												Prepare Strategy
+												Prepare a plan
 											</ActionButton>
 										</ActionGroup>
 									</ListItem>
@@ -691,22 +705,22 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 				{activeTab === "improvements" && (
 					<TabView>
-						<SectionTitle style={{ marginBottom: "8px" }}>Priority Matrix (ROI)</SectionTitle>
+						<SectionTitle style={{ marginBottom: "8px" }}>What might help most</SectionTitle>
 						<MatrixContainer>
 							<MatrixQuadrant $type="WIN">
-								<MatrixLabel>QUICK WINS</MatrixLabel>
+								<MatrixLabel>Easy starts</MatrixLabel>
 								<MatrixDesc>Low Effort, High Impact</MatrixDesc>
 							</MatrixQuadrant>
 							<MatrixQuadrant $type="STRATEGIC">
-								<MatrixLabel>STRATEGIC</MatrixLabel>
+								<MatrixLabel>Later</MatrixLabel>
 								<MatrixDesc>High Effort, High Impact</MatrixDesc>
 							</MatrixQuadrant>
 							<MatrixQuadrant $type="MINIMAL">
-								<MatrixLabel>MINIMAL</MatrixLabel>
+								<MatrixLabel>Small steps</MatrixLabel>
 								<MatrixDesc>Low Effort, Low Impact</MatrixDesc>
 							</MatrixQuadrant>
 							<MatrixQuadrant $type="DEBT">
-								<MatrixLabel>FILLERS</MatrixLabel>
+								<MatrixLabel>When ready</MatrixLabel>
 								<MatrixDesc>High Effort, Low Impact</MatrixDesc>
 							</MatrixQuadrant>
 							{optimizations.slice(0, 8).map((opt) => (
@@ -719,7 +733,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 							))}
 						</MatrixContainer>
 
-						<SectionTitle style={{ marginBottom: "8px" }}>Maintainability Roadmap</SectionTitle>
+						<SectionTitle style={{ marginBottom: "8px" }}>Ideas to explore</SectionTitle>
 						<FilterGroup>
 							{["ALL", "STABILITY", "PERFORMANCE", "MAINTAINABILITY"].map((cat) => (
 								<FilterBadge
@@ -732,13 +746,11 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 						</FilterGroup>
 						<SearchInput
 							onChange={(e) => setOptsSearch(e.target.value)}
-							placeholder="Filter optimizations..."
+							placeholder="Filter ideas…"
 							value={optsSearch}
 						/>
 						{optimizations.length === 0 && !loading && (
-							<EmptyState>
-								No optimization opportunities identified. Your code is currently lean and focused.
-							</EmptyState>
+							<EmptyState>No ideas noted right now. The codebase looks lean from here.</EmptyState>
 						)}
 						<List>
 							{visibleOptimizations.map((opt, i) => {
@@ -757,24 +769,24 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 										}}>
 										<ListItemContent>
 											<BadgeGroup>
-												{isActive && <Badge $type="HIGH">ACTIVE</Badge>}
-												{!queueable && <Badge $type="LOW">INCOMPLETE</Badge>}
-												<Badge $type={opt.impact}>{opt.impact} IMPACT</Badge>
-												<Badge $type="EFFORT">{opt.effort} EFFORT</Badge>
+												{isActive && <Badge $type="HIGH">Selected</Badge>}
+												{!queueable && <Badge $type="LOW">Needs detail</Badge>}
+												<Badge $type={opt.impact}>{opt.impact} reach</Badge>
+												<Badge $type="EFFORT">{opt.effort} effort</Badge>
 												<Badge $type="CATEGORY">{opt.category}</Badge>
 											</BadgeGroup>
 											<ListItemTitle>{opt.title}</ListItemTitle>
 											<ListItemDesc>{opt.description}</ListItemDesc>
 											<ListItemPath>{opt.path}</ListItemPath>
 											{opt.projectedHealthGain > 0 && (
-												<HealthGain>Expected Health Boost: +{fixed(opt.projectedHealthGain)}%</HealthGain>
+												<HealthGain>Possible lift: +{fixed(opt.projectedHealthGain)}%</HealthGain>
 											)}
 										</ListItemContent>
 										<ActionGroup onClick={(e) => e.stopPropagation()}>
 											<ActionButton
 												disabled={!queueable || loading}
 												onClick={() => prepareStrategy(opt.action, opt.path)}>
-												Prepare Strategy
+												Prepare a plan
 											</ActionButton>
 										</ActionGroup>
 									</ListItem>
@@ -786,9 +798,9 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 
 				{activeTab === "strategy" && (
 					<TabView>
-						<SectionTitle>Sovereign Strategy Manifest</SectionTitle>
+						<SectionTitle>Draft plan</SectionTitle>
 						<SectionDesc>
-							The following strategy has been generated to maximize architectural gain for the target module.
+							A gentle plan for the module you selected — review it, adjust it, then try it when it feels right.
 						</SectionDesc>
 
 						{batchManifest ? (
@@ -802,15 +814,12 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 										disabled={loading || !activeTask}
 										onClick={executePreparedStrategy}
 										style={{ padding: "12px 24px" }}>
-										Launch Refactor
+										Try the plan
 									</ActionButton>
 								</ActionGroup>
 							</>
 						) : (
-							<EmptyState>
-								Generating Manifest... Please select a task from the Repairs or Upgrades tabs to prepare a
-								strategy.
-							</EmptyState>
+							<EmptyState>Select something from Repairs or Ideas to sketch a plan here.</EmptyState>
 						)}
 					</TabView>
 				)}
@@ -818,7 +827,7 @@ Organization: ${asNumber(report.maintainabilityScore)}%
 				{loading && progress && (
 					<LoadingOverlay>
 						<RadarRing $loading={true} $percentage={progressPercentage} />
-						<ProgressText>Forensic Scan: {progressCurrentFile.split("/").pop()}</ProgressText>
+						<ProgressText>Walking through: {progressCurrentFile.split("/").pop()}</ProgressText>
 						<ProgressBarContainer style={{ width: "160px", marginTop: "16px" }}>
 							<ProgressBar $width={progressPercentage} />
 						</ProgressBarContainer>
@@ -845,7 +854,7 @@ const Container = styled.div`
   bottom: 0;
   display: flex;
   flex-direction: column;
-  background: var(--vscode-sideBar-background);
+  background: linear-gradient(180deg, var(--vscode-sideBar-background) 0%, color-mix(in srgb, var(--vscode-sideBar-background) 96%, #7a7eb8 4%) 100%);
   color: var(--vscode-foreground);
   font-family: var(--vscode-font-family);
 `
@@ -935,39 +944,42 @@ const HeaderStats = styled.div`
 
 const SystemStatus = styled.div<{ $health: number }>`
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 500;
   padding: 4px 10px;
   border-radius: 20px;
-  letter-spacing: 1px;
-  background: ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.1)" : props.$health > 50 ? "rgba(250, 173, 20, 0.1)" : "rgba(255, 77, 79, 0.1)")};
-  color: ${(props) => (props.$health > 80 ? "#52c41a" : props.$health > 50 ? "#faad14" : "#ff4d4f")};
-  border: 1px solid ${(props) => (props.$health > 80 ? "rgba(82, 196, 26, 0.2)" : props.$health > 50 ? "rgba(250, 173, 20, 0.2)" : "rgba(255, 77, 79, 0.2)")};
+  letter-spacing: 0.02em;
+  background: ${(props) => (props.$health > 80 ? "rgba(255, 255, 255, 0.04)" : props.$health > 50 ? "rgba(250, 173, 20, 0.08)" : "rgba(255, 255, 255, 0.03)")};
+  color: ${(props) => (props.$health > 80 ? "var(--vscode-foreground)" : props.$health > 50 ? "#d4a574" : "#c49a9a")};
+  border: 1px solid ${(props) => (props.$health > 80 ? "rgba(255, 255, 255, 0.08)" : props.$health > 50 ? "rgba(250, 173, 20, 0.15)" : "rgba(255, 255, 255, 0.06)")};
+  opacity: 0.85;
 `
 
 const QualityGate = styled.div<{ $status: string }>`
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 500;
   padding: 4px 10px;
   border-radius: 20px;
-  letter-spacing: 1px;
-  background: ${(props) => (props.$status === "PASSED" ? "rgba(82, 196, 26, 0.2)" : "rgba(255, 77, 79, 0.2)")};
-  color: ${(props) => (props.$status === "PASSED" ? "#52c41a" : "#ff4d4f")};
-  border: 1px solid ${(props) => (props.$status === "PASSED" ? "rgba(82, 196, 26, 0.3)" : "rgba(255, 77, 79, 0.3)")};
+  letter-spacing: 0.02em;
+  background: ${(props) => (props.$status === "PASSED" ? "rgba(255, 255, 255, 0.04)" : "rgba(250, 173, 20, 0.08)")};
+  color: ${(props) => (props.$status === "PASSED" ? "var(--vscode-foreground)" : "#d4a574")};
+  border: 1px solid ${(props) => (props.$status === "PASSED" ? "rgba(255, 255, 255, 0.08)" : "rgba(250, 173, 20, 0.15)")};
+  opacity: 0.85;
 `
 
 const ShareButton = styled.button`
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--vscode-foreground);
   padding: 4px 10px;
   border-radius: 20px;
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 4px;
-  &:hover { background: rgba(255, 255, 255, 0.1); }
+  opacity: 0.8;
+  &:hover { background: rgba(255, 255, 255, 0.07); opacity: 1; }
 `
 
 const NavGroup = styled.div`
@@ -1113,7 +1125,21 @@ const TrendSparkline = styled.div`
 const RadarChartSection = styled.div`
   display: flex;
   justify-content: center;
-  padding: 10px 0;
+  padding: 6px 0 4px;
+`
+
+const ReflectionMapSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 4px;
+`
+
+const WorkspacePatternsSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 8px;
 `
 
 const RadarChartWrapper = styled.div`
@@ -1125,9 +1151,9 @@ const RadarChartWrapper = styled.div`
 const RadarLabel = styled.div`
   position: absolute;
   font-size: 8px;
-  font-weight: 700;
-  text-transform: uppercase;
-  opacity: 0.5;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.38;
   white-space: nowrap;
 `
 
@@ -1139,34 +1165,34 @@ const GovernanceGrid = styled.div`
 
 const GovernanceCard = styled.div<{ $toxic?: boolean }>`
   padding: 14px;
-  background: ${(props) => (props.$toxic ? "rgba(255, 77, 79, 0.03)" : "rgba(255, 255, 255, 0.02)")};
-  border: 1px solid ${(props) => (props.$toxic ? "rgba(255, 77, 79, 0.2)" : "rgba(255, 255, 255, 0.04)")};
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 4px;
+  gap: 5px;
 `
 
 const GovernanceTitle = styled.div`
   font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.02em;
   opacity: 0.5;
-  font-weight: 700;
+  font-weight: 500;
 `
 
 const GovernanceValue = styled.div`
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 600;
   color: var(--vscode-foreground);
+  opacity: 0.88;
 `
 
 const GovernanceDesc = styled.div`
   font-size: 9px;
-  opacity: 0.4;
-  font-weight: 600;
+  opacity: 0.42;
+  font-weight: 500;
 `
 
 const ChecklistSection = styled.div`
@@ -1183,18 +1209,16 @@ const SectionHeader = styled.div`
 
 const SectionTitle = styled.h3`
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  opacity: 0.8;
+  letter-spacing: 0.01em;
+  opacity: 0.75;
 `
 
 const StatLabel = styled.div`
   font-size: 9px;
-  text-transform: uppercase;
   opacity: 0.4;
-  font-weight: 700;
+  font-weight: 500;
 `
 
 const Checklist = styled.div`
@@ -1216,7 +1240,7 @@ const CheckIcon = styled.div`
 `
 
 const CheckText = styled.div`
-  font-weight: 600;
+  font-weight: 500;
 `
 
 const RiskProfileSection = styled.div`
@@ -1357,27 +1381,28 @@ const MissionGrid = styled.div`
 `
 
 const MissionCard = styled.div<{ $active?: boolean }>`
-  padding: 12px;
-  background: ${(props) => (props.$active ? "rgba(24, 144, 255, 0.05)" : "rgba(255, 255, 255, 0.02)")};
-  border: 1px solid ${(props) => (props.$active ? "rgba(24, 144, 255, 0.2)" : "rgba(255, 255, 255, 0.05)")};
-  border-radius: 12px;
+  padding: 14px;
+  background: ${(props) => (props.$active ? "rgba(255, 255, 255, 0.03)" : "rgba(255, 255, 255, 0.015)")};
+  border: 1px solid ${(props) => (props.$active ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.04)")};
+  border-radius: 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   cursor: pointer;
-  &:hover { background: rgba(255, 255, 255, 0.04); }
+  transition: background 0.4s ease, border-color 0.4s ease;
+  &:hover { background: rgba(255, 255, 255, 0.035); }
 `
 
 const MissionStatus = styled.div`
   font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  opacity: 0.6;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.55;
 `
 
 const MissionTitle = styled.div`
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 `
 
 const MissionDesc = styled.div`
@@ -1884,8 +1909,9 @@ const MatrixQuadrant = styled.div<{ $type: string }>`
 
 const MatrixLabel = styled.div`
   font-size: 7px;
-  font-weight: 900;
-  opacity: 0.3;
+  font-weight: 500;
+  opacity: 0.32;
+  letter-spacing: 0.02em;
 `
 
 const MatrixDesc = styled.div`

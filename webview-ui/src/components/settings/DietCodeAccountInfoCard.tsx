@@ -35,7 +35,7 @@ export const DietCodeAccountInfoCard = () => {
 			) : (
 				<div>
 					<VSCodeButton className="mt-0" disabled={isLoading} onClick={handleLogin}>
-						Sign Up with DietCode
+						Sign Up with MIRA
 						{isLoading && (
 							<span className="ml-1 animate-spin">
 								<VscIcon className="" name="refresh" />

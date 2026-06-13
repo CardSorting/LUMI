@@ -59,16 +59,14 @@ describe("ErrorRow", () => {
 	it("renders diff error", () => {
 		render(<ErrorRow errorType="diff_error" message={mockMessage} />)
 
-		expect(
-			screen.getByText("The model used search patterns that don't match anything in the file. Retrying..."),
-		).toBeInTheDocument()
+		expect(screen.getByText("That didn't quite match — I'll try again.")).toBeInTheDocument()
 	})
 
 	it("renders dietcodeignore error", () => {
 		const dietcodeignoreMessage = { ...mockMessage, text: "/path/to/file.txt" }
 		render(<ErrorRow errorType="dietcodeignore_error" message={dietcodeignoreMessage} />)
 
-		expect(screen.getByText(/DietCode tried to access/)).toBeInTheDocument()
+		expect(screen.getByText(/I can't open/)).toBeInTheDocument()
 		expect(screen.getByText("/path/to/file.txt")).toBeInTheDocument()
 	})
 
@@ -129,7 +127,7 @@ describe("ErrorRow", () => {
 			render(<ErrorRow apiRequestFailedMessage="Authentication failed" errorType="error" message={mockMessage} />)
 
 			expect(screen.getByText("Authentication failed")).toBeInTheDocument()
-			expect(screen.getByText("Sign in to DietCode")).toBeInTheDocument()
+			expect(screen.getByText("Sign in to MIRA")).toBeInTheDocument()
 		})
 
 		it("renders PowerShell troubleshooting link when error mentions PowerShell", async () => {
@@ -179,7 +177,7 @@ describe("ErrorRow", () => {
 
 			render(<ErrorRow apiRequestFailedMessage="Some API error" errorType="error" message={mockMessage} />)
 
-			// When DietCodeError.parse returns null, we display the raw error message for non-DietCode providers
+			// When DietCodeError.parse returns null, we display the raw error message for non-MIRA providers
 			// Since dietcodeError is undefined, isDietCodeProvider is false, so we show the raw apiRequestFailedMessage
 			expect(screen.getByText("Some API error")).toBeInTheDocument()
 		})
