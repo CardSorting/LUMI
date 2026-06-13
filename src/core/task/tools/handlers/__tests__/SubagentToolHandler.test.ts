@@ -52,7 +52,7 @@ function createConfig(options?: {
 		mode: "act",
 		strictPlanModeEnabled: false,
 		yoloModeToggled: false,
-		vscodeTerminalExecutionMode: "backgroundExec",
+		vscodeTerminalExecutionMode: "vscodeTerminal",
 		enableParallelToolCalling: true,
 		context: {},
 		taskState,

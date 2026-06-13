@@ -94,7 +94,7 @@ export class ToolExecutor {
 		private cwd: string,
 		private taskId: string,
 		private ulid: string,
-		private vscodeTerminalExecutionMode: "vscodeTerminal" | "backgroundExec",
+		private vscodeTerminalExecutionMode: "vscodeTerminal",
 		private workspaceManager: WorkspaceRootManager | undefined,
 		private isMultiRootEnabled: boolean,
 		private say: (

@@ -13,8 +13,6 @@ export enum BannerActionType {
 	ShowAccount = "show-account",
 	/** Set the active model */
 	SetModel = "set-model",
-	/** Trigger CLI installation flow */
-	InstallCli = "install-cli",
 }
 
 /**
@@ -144,16 +142,6 @@ export const BANNER_DATA: BannerCardData[] = [
 		title: "Jupyter Notebooks",
 		description:
 			"Comprehensive AI-assisted editing of `.ipynb` files with full cell-level context awareness. [Learn More →](https://docs.dietcode.bot/features/jupyter-notebooks)",
-	},
-
-	// Platform-specific banner (Windows)
-	{
-		id: "cli-info-windows-v1",
-		icon: "terminal",
-		title: "DietCode CLI Info",
-		platforms: ["windows"] satisfies BannerCardData["platforms"],
-		description:
-			"Available for macOS and Linux. Coming soon to other platforms. [Learn more](https://docs.dietcode.bot/dietcode-cli/overview)",
 	},
 
 	// Info banner with inline link

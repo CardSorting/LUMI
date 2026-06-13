@@ -18,7 +18,7 @@ const PROTO_DIR = path.resolve("proto")
 const TS_OUT_DIR = path.resolve("src/shared/proto")
 const GRPC_JS_OUT_DIR = path.resolve("src/generated/grpc-js")
 const NICE_JS_OUT_DIR = path.resolve("src/generated/nice-grpc")
-const DESCRIPTOR_OUT_DIR = path.resolve("dist-standalone/proto")
+const DESCRIPTOR_OUT_DIR = path.resolve("dist/proto")
 
 const isWindows = process.platform === "win32"
 const TS_PROTO_PLUGIN = isWindows
@@ -108,8 +108,6 @@ async function cleanup() {
 	await rmrf("src/generated")
 
 	// Clean up generated files that were moved.
-	await rmrf("src/standalone/services/host-grpc-client.ts")
-	await rmrf("src/standalone/server-setup.ts")
 	await rmrf("src/hosts/vscode/host-grpc-service-config.ts")
 	await rmrf("src/core/controller/grpc-service-config.ts")
 	const oldhostbridgefiles = [

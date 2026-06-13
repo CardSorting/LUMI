@@ -1,5 +1,4 @@
 import { Logger } from "@/shared/services/Logger"
-import type { SqliteLockManager } from "./SqliteLockManager"
 import type { FolderLockOptions, FolderLockResult, FolderLockWithRetryResult } from "./types"
 
 /**
@@ -24,19 +23,6 @@ export const DEFAULT_RETRY_CONFIG: FolderLockRetryConfig = {
 }
 
 /**
- * Get the lock manager instance for standalone mode.
- */
-export async function getStandaloneLockManager(): Promise<SqliteLockManager | undefined> {
-	try {
-		const { getLockManager } = await import("../../standalone/lock-manager")
-		return getLockManager()
-	} catch (_importError) {
-		Logger.debug("Lock manager not available")
-		return undefined
-	}
-}
-
-/**
  * Attempt to acquire a folder lock with retry logic.
  * This is a generic utility that works with any folder path.
  *
@@ -50,18 +36,8 @@ export async function tryAcquireFolderLockWithRetry(
 ): Promise<FolderLockWithRetryResult> {
 	return await retryFolderLockAcquisition(async () => {
 		try {
-			const lockManager = await getStandaloneLockManager()
-
-			if (!lockManager) {
-				Logger.debug("Lock manager not available - skipping lock acquisition")
-				return { acquired: false, skipped: true }
-			}
-
-			Logger.log(`Attempting to acquire folder lock for: ${options.lockTarget}`)
-
-			const result = await acquireFolderLock(options)
-
-			return { acquired: result.acquired, conflictingLock: result.conflictingLock, skipped: false }
+			Logger.debug(`Folder lock manager not available - skipping lock acquisition for ${options.lockTarget}`)
+			return { acquired: false, skipped: true }
 		} catch (error) {
 			Logger.error("Error in folder lock acquisition attempt:", error)
 			return { acquired: false }
@@ -77,15 +53,7 @@ export async function tryAcquireFolderLockWithRetry(
  */
 export async function releaseFolderLock(taskId: string, lockTarget: string): Promise<void> {
 	try {
-		const lockManager = await getStandaloneLockManager()
-
-		if (!lockManager) {
-			Logger.debug("Lock manager not available - skipping lock release")
-			return
-		}
-
-		await lockManager.releaseFolderLockByTarget(taskId, lockTarget)
-		Logger.log(`Released folder lock for: ${lockTarget}`)
+		Logger.debug(`Folder lock manager not available - skipping lock release for ${taskId}:${lockTarget}`)
 	} catch (error) {
 		Logger.error("Error releasing folder lock:", error)
 	}
@@ -97,29 +65,8 @@ export async function releaseFolderLock(taskId: string, lockTarget: string): Pro
  * @returns Result indicating if lock was acquired and any conflicting lock
  */
 export async function acquireFolderLock(options: FolderLockOptions): Promise<FolderLockResult> {
-	const lockManager = await getStandaloneLockManager()
-
-	if (!lockManager) {
-		Logger.debug("Lock manager not available - cannot acquire folder lock")
-		return { acquired: false }
-	}
-
-	try {
-		const conflictingLock = await lockManager.registerFolderLock(options.heldBy, options.lockTarget)
-
-		if (conflictingLock === null) {
-			// Lock was successfully acquired
-			return { acquired: true }
-		}
-		// Lock already exists, return the conflicting lock
-		return {
-			acquired: false,
-			conflictingLock,
-		}
-	} catch (error) {
-		Logger.error("Failed to acquire folder lock:", error)
-		return { acquired: false }
-	}
+	Logger.debug(`Folder lock manager not available - cannot acquire lock for ${options.heldBy}:${options.lockTarget}`)
+	return { acquired: false }
 }
 
 /**

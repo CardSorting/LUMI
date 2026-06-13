@@ -1,22 +1,5 @@
 /**
- * Shared terminal module for both VSCode and Standalone environments.
- *
- * This module provides terminal management functionality that works across:
- * - VSCode Extension (using VSCode's terminal API or background execution)
- * - CLI (using StandaloneTerminalManager)
- * - JetBrains (using StandaloneTerminalManager via dietcode-core)
- *
- * @example
- * ```typescript
- * import { StandaloneTerminalManager, ITerminalManager } from "@integrations/terminal"
- *
- * const manager: ITerminalManager = new StandaloneTerminalManager()
- * const terminalInfo = await manager.getOrCreateTerminal("/path/to/cwd")
- * const process = manager.runCommand(terminalInfo, "npm install")
- *
- * process.on("line", (line) => console.log(line))
- * await process
- * ```
+ * Terminal command execution shared by the VS Code extension runtime.
  */
 
 // Export unified command executor
@@ -25,16 +8,9 @@ export { CommandExecutor } from "./CommandExecutor"
 // Export command orchestrator (shared logic)
 export { findLastIndex, orchestrateCommandExecution } from "./CommandOrchestrator"
 
-// Export standalone terminal implementations
-export { StandaloneTerminal } from "./standalone/StandaloneTerminal"
-export { StandaloneTerminalManager } from "./standalone/StandaloneTerminalManager"
-export { StandaloneTerminalProcess } from "./standalone/StandaloneTerminalProcess"
-export { StandaloneTerminalRegistry } from "./standalone/StandaloneTerminalRegistry"
-
 // Export all types from types.ts
 export type {
 	// Command Executor types
-	ActiveBackgroundCommand,
 	AskResponse,
 	CommandExecutionOptions,
 	CommandExecutorCallbacks,
@@ -48,7 +24,6 @@ export type {
 	// Command Orchestrator types
 	OrchestrationOptions,
 	OrchestrationResult,
-	StandaloneTerminalOptions,
 	TerminalInfo,
 	TerminalProcessEvents,
 	TerminalProcessResultPromise,

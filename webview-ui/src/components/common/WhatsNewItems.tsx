@@ -87,10 +87,6 @@ export const WhatsNewItems: React.FC<WhatsNewItemsProps> = ({
 						<InlineModelLink label="Try now" modelId="anthropic/claude-sonnet-4.6" pickerTab="recommended" />
 					</li>
 					<li className="mb-2">
-						<strong>Try DietCode CLI 2.0:</strong> with /mcp functionality added in CLI{" "}
-						<code style={inlineCodeStyle}>npm install -g dietcode</code>
-					</li>
-					<li className="mb-2">
 						<strong>Minimax M2.5 and Z.ai GLM 5:</strong> no longer free starting Feb 23, 2026
 					</li>
 				</>

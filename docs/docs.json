@@ -200,29 +200,6 @@
 				"icon": "plug",
 				"groups": [
 					{
-						"group": "DietCode CLI",
-						"pages": [
-							"dietcode-cli/overview",
-							"dietcode-cli/installation",
-							"dietcode-cli/interactive-mode",
-							{
-								"group": "Headless Mode",
-								"pages": [
-									"dietcode-cli/three-core-flows",
-									"dietcode-cli/samples/overview",
-									"dietcode-cli/samples/github-issue-rca",
-									"dietcode-cli/samples/github-integration",
-									"dietcode-cli/samples/github-pr-review",
-									"dietcode-cli/samples/model-orchestration",
-									"dietcode-cli/samples/worktree-workflows"
-								]
-							},
-							"dietcode-cli/configuration",
-							"dietcode-cli/acp-editor-integrations",
-							"dietcode-cli/cli-reference"
-						]
-					},
-					{
 						"group": "Models & Providers",
 						"pages": [
 							{
@@ -446,14 +423,6 @@
 		{
 			"source": "/getting-started/your-first-task",
 			"destination": "/getting-started/your-first-project"
-		},
-		{
-			"source": "/dietcode-cli/samples",
-			"destination": "/dietcode-cli/samples/overview"
-		},
-		{
-			"source": "/dietcode-cli/overview",
-			"destination": "/dietcode-cli/getting-started"
 		},
 		{
 			"source": "/features/hooks/real-world-examples",

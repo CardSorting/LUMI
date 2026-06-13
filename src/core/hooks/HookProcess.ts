@@ -41,7 +41,6 @@ export async function getHookLaunchConfig(
 
 /**
  * HookProcess manages the execution of a hook script with streaming output capabilities.
- * Similar to StandaloneTerminalProcess but specialized for hook execution.
  *
  * Key features:
  * - Real-time stdout/stderr streaming via line events

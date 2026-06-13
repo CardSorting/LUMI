@@ -16,7 +16,7 @@ import { AuthHandler } from "@/hosts/external/AuthHandler"
  * - Web: returns asExternalUri(vscode://extension-id/path) → HTTPS web-reachable URL
  */
 describe("Auth Callback URL", () => {
-	describe("AuthHandler.getCallbackUrl (standalone/CLI)", () => {
+	describe("AuthHandler.getCallbackUrl", () => {
 		let authHandler: AuthHandler
 
 		afterEach(() => {

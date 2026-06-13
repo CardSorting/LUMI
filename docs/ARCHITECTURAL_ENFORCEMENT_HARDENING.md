@@ -155,7 +155,7 @@ All environmental health indicators are consolidated into a high-fidelity dashbo
 
 ### 8.6 Orphan Resilience & Root Sovereignty (v12.3)
 To eliminate false-positive structural alarms and prevent agent deadlock during mission-critical refactoring:
-- **Expanded Root Discovery**: Valid entry points now include logic in `src/common/`, `src/standalone/`, `src/scripts/`, and all `.test.ts` / `.spec.ts` files. This ensures that utility modules and test suites are recognized as legitimate architectural roots.
+- **Expanded Root Discovery**: Valid entry points now include logic in `src/common/`, `src/scripts/`, and all `.test.ts` / `.spec.ts` files. This ensures that utility modules and test suites are recognized as legitimate architectural roots.
 - **Healing Leniency Protocol**: If an architectural alarm is caused EXCLUSIVELY by orphaned nodes, the system relaxes the file-edit lock. This allows the agent to edit root files (e.g., `src/extension.ts`) to add the missing imports required to reconcile the orphans, breaking the "circular lock" deadlock.
 
 ## 13. V200 Hardening: Forensic Realism (The Industrial Pass)

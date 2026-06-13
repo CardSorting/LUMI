@@ -5,12 +5,5 @@
 		"postMessageHandler": "vscode",
 		"togglePlanActKeys": "Meta+Shift+a",
 		"supportsTerminalMentions": true
-	},
-	"standalone": {
-		"messageEncoding": "json",
-		"showNavbar": true,
-		"postMessageHandler": "standalone",
-		"togglePlanActKeys": "Meta+Shift+p",
-		"supportsTerminalMentions": false
 	}
 }

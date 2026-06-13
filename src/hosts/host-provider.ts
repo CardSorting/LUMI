@@ -158,6 +158,5 @@ export type LogToChannel = (message: string) => void
 
 /**
  * A function that creates TerminalManager instances
- * Returns the platform-appropriate terminal manager (VSCode TerminalManager or StandaloneTerminalManager)
  */
 export type TerminalManagerCreator = () => ITerminalManager

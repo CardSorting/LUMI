@@ -69,14 +69,6 @@ export const TRUNCATE_KEEP_LINES = 100
 export const DEFAULT_TERMINAL_OUTPUT_LINE_LIMIT = 500
 
 // =============================================================================
-// Background Command Tracking
-// =============================================================================
-// Controls background command behavior for "Proceed While Running"
-
-/** Hard timeout for background commands to prevent zombie processes (10 minutes) */
-export const BACKGROUND_COMMAND_TIMEOUT_MS = 10 * 60 * 1000
-
-// =============================================================================
 // Compilation Detection Markers
 // =============================================================================
 // Used to detect if a command is compiling/building

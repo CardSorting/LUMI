@@ -32,7 +32,6 @@ Everything you need to know for your daily development with DietCode.
 Unlock more power with specialized agent behaviors and integrations.
 - [**Sub-agents**](WORKING_WITH_SUBAGENTS.md): Delegating complex work to background agents.
 - [**Model Context Protocol (MCP)**](mcp/mcp-overview.mdx): Extending DietCode with custom tools and APIs.
-- [**DietCode CLI**](dietcode-cli/overview.mdx): Headless automation and terminal power-use.
 - [**Custom Interceptors (Hooks)**](CUSTOM_INTERCEPTORS.md): Write your own lifecycle interceptors.
 - [**Rules & Customization**](customization/overview.mdx): Personalize the agent's behavior for your project.
 

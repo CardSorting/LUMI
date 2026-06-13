@@ -42,7 +42,6 @@ Transition the DietCode documentation from a jargon-heavy, "industrial" sci-fi m
 - [x] `docs/UX_PROJECTION_LAYER.md` -> **`docs/USER_INTERFACE_DESIGN.md`** (Complete)
 
 ### 5. Integrations & Reference
-- [ ] `docs/dietcode-cli/*.mdx`
 - [ ] `docs/mcp/*.mdx`
 - [ ] `docs/tools-reference/*.mdx`
 

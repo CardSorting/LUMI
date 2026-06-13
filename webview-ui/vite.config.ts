@@ -28,9 +28,8 @@ const writePortToFile = (): Plugin => {
 
 const isDevBuild = process.argv.includes("--dev-build")
 
-// Valid platforms, these should the keys in platform-configs.json
-const VALID_PLATFORMS = ["vscode", "standalone"]
-const platform = process.env.PLATFORM || "vscode" // Default to vscode
+const VALID_PLATFORMS = ["vscode"]
+const platform = process.env.PLATFORM || "vscode"
 
 if (!VALID_PLATFORMS.includes(platform)) {
 	throw new Error(`Invalid PLATFORM "${platform}". Must be one of: ${VALID_PLATFORMS.join(", ")}`)

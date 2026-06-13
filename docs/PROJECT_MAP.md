@@ -28,8 +28,8 @@ The project is organized into several key modules, each with a clear responsibil
 
 ## 🏗️ Core Architectural Patterns
 
-### 1. Host-Agnostic Core
-DietCode's reasoning engine is decoupled from the editor. This allows it to run as a standalone process (managed in `src/standalone`), communicating with the editor extension via a high-performance protocol. This ensures that the editor remains responsive even during complex background tasks.
+### 1. VS Code Extension Core
+DietCode's reasoning engine runs inside the VS Code extension and communicates with the webview through the extension host.
 
 ### 2. Forensic Code Analysis
 To provide accurate suggestions, DietCode uses deep static analysis (powered by Tree-Sitter in `src/services/`). It maps your project's symbols and dependencies in real-time, allowing it to understand the "blast radius" of any suggested change.

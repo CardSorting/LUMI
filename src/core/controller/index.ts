@@ -62,7 +62,6 @@ import { TaskState } from "../task/TaskState"
 import { disposeRequestRegistry } from "./grpc-handler"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { appendDietCodeStealthModels } from "./models/refreshOpenRouterModels"
-import { checkCliInstallation } from "./state/checkCliInstallation"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
 
@@ -198,9 +197,6 @@ export class Controller implements IController {
 			Logger.error("Failed to cleanup legacy checkpoints:", error)
 		})
 
-		// Check CLI installation status once on startup
-		checkCliInstallation(this)
-
 		// Initialize Joy-Zoning Persistence Layer
 		const dbPath = path.join(this.context.globalStorageUri.fsPath, "joyzoning.sqlite")
 		setDbPath(dbPath)
@@ -305,7 +301,6 @@ export class Controller implements IController {
 		const terminalReuseEnabled = this.stateManager.getGlobalStateKey("terminalReuseEnabled")
 		const terminalOutputLineLimit = this.stateManager.getGlobalSettingsKey("terminalOutputLineLimit")
 		const defaultTerminalProfile = this.stateManager.getGlobalSettingsKey("defaultTerminalProfile")
-		const vscodeTerminalExecutionMode = this.stateManager.getGlobalStateKey("vscodeTerminalExecutionMode")
 		const isNewUser = this.stateManager.getGlobalStateKey("isNewUser")
 		const taskHistory = this.stateManager.getGlobalStateKey("taskHistory")
 
@@ -367,7 +362,6 @@ export class Controller implements IController {
 			terminalReuseEnabled: terminalReuseEnabled ?? true,
 			terminalOutputLineLimit: terminalOutputLineLimit ?? 500,
 			defaultTerminalProfile: defaultTerminalProfile ?? "default",
-			vscodeTerminalExecutionMode,
 			cwd,
 			stateManager: this.stateManager,
 			workspaceManager: this.workspaceManager,

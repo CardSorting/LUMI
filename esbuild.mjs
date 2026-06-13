@@ -11,9 +11,8 @@ const __dirname = path.dirname(__filename)
 
 const production = process.argv.includes("--production") || process.env.IS_DEBUG_BUILD === "false"
 const watch = process.argv.includes("--watch")
-const standalone = process.argv.includes("--standalone")
 const e2eBuild = process.argv.includes("--e2e-build")
-const destDir = standalone ? "dist-standalone" : "dist"
+const destDir = "dist"
 
 /**
  * @type {import('esbuild').Plugin}
@@ -146,7 +145,7 @@ const copyWasmFiles = {
 
 const buildEnvVars = {
 	"import.meta.url": "_importMetaUrl",
-	"process.env.IS_STANDALONE": JSON.stringify(standalone ? "true" : "false"),
+	"process.env.IS_STANDALONE": JSON.stringify("false"),
 	"process.env.GOOGLE_OAUTH_CLIENT_ID": JSON.stringify(process.env.GOOGLE_OAUTH_CLIENT_ID || ""),
 	"process.env.GOOGLE_OAUTH_CLIENT_SECRET": JSON.stringify(process.env.GOOGLE_OAUTH_CLIENT_SECRET || ""),
 }
@@ -195,7 +194,7 @@ if (process.env.OTEL_EXPORTER_OTLP_HEADERS) {
 if (process.env.OTEL_METRIC_EXPORT_INTERVAL) {
 	buildEnvVars["process.env.OTEL_METRIC_EXPORT_INTERVAL"] = JSON.stringify(process.env.OTEL_METRIC_EXPORT_INTERVAL)
 }
-// Base configuration shared between extension and standalone builds
+// Base configuration shared by extension builds
 const baseConfig = {
 	bundle: true,
 	minify: production,
@@ -225,16 +224,6 @@ const extensionConfig = {
 	external: ["vscode", "better-sqlite3", "bindings", "file-uri-to-path"],
 }
 
-// Standalone-specific configuration
-const standaloneConfig = {
-	...baseConfig,
-	entryPoints: ["src/standalone/dietcode-core.ts"],
-	outfile: `${destDir}/dietcode-core.js`,
-	// These modules need to load files from the module directory at runtime,
-	// so they cannot be bundled.
-	external: ["vscode", "@grpc/reflection", "grpc-health-check", "better-sqlite3", "bindings", "file-uri-to-path"],
-}
-
 // E2E build script configuration
 const e2eBuildConfig = {
 	...baseConfig,
@@ -246,7 +235,7 @@ const e2eBuildConfig = {
 }
 
 async function main() {
-	const config = standalone ? standaloneConfig : e2eBuild ? e2eBuildConfig : extensionConfig
+	const config = e2eBuild ? e2eBuildConfig : extensionConfig
 	const extensionCtx = await esbuild.context(config)
 	if (watch) {
 		await extensionCtx.watch()

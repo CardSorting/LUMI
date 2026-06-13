@@ -10,7 +10,6 @@ export {
 } from "./TelemetryProviderFactory"
 // Export terminal type definitions for type-safe telemetry
 export type {
-	StandaloneOutputMethod,
 	TerminalOutputMethod,
 	TerminalType,
 	VscodeOutputMethod,

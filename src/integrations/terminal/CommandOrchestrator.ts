@@ -2,15 +2,14 @@
  * CommandOrchestrator - Shared command execution orchestration logic.
  *
  * This module contains the common orchestration logic for command execution
- * that is shared between VSCode and Standalone terminal modes. It handles:
+ * used by the VS Code terminal manager. It handles:
  * - Output buffering and chunking
  * - User interaction (ask/say callbacks)
  * - "Proceed While Running" behavior
  * - Timeout handling
  * - Result formatting
  *
- * The actual process spawning/management is handled by the TerminalProcess
- * implementations (VscodeTerminalProcess, StandaloneTerminalProcess).
+ * The actual process management is handled by VscodeTerminalProcess.
  */
 
 import { setTimeout as setTimeoutPromise } from "node:timers/promises"
@@ -55,14 +54,7 @@ export async function orchestrateCommandExecution(
 	callbacks: CommandExecutorCallbacks,
 	options: OrchestrationOptions,
 ): Promise<OrchestrationResult> {
-	const {
-		timeoutSeconds,
-		onOutputLine,
-		showShellIntegrationSuggestion,
-		onProceedWhileRunning,
-		terminalType = "vscode",
-		suppressUserInteraction = false,
-	} = options
+	const { timeoutSeconds, showShellIntegrationSuggestion, terminalType = "vscode", suppressUserInteraction = false } = options
 
 	const say = async (
 		type: Parameters<CommandExecutorCallbacks["say"]>[0],
@@ -115,7 +107,6 @@ export async function orchestrateCommandExecution(
 	let userFeedback: { text?: string; images?: string[]; files?: string[] } | undefined
 	let didContinue = false
 	let didCancelViaUi = false
-	let backgroundTrackingResult: OrchestrationResult | null = null // Set when background tracking returns early
 
 	// Chunked terminal output buffering
 	let outputBuffer: string[] = []
@@ -165,46 +156,6 @@ export async function orchestrateCommandExecution(
 						userFeedback = { text, images, files }
 					}
 					didContinue = true
-
-					// Notify caller to start background command tracking
-					// Pass existing output lines so they can be written to the log file
-					// and send log file path to UI if tracking was started
-					if (onProceedWhileRunning) {
-						const trackingResult = onProceedWhileRunning(outputLines)
-
-						// Clear timers first
-						if (chunkTimer) {
-							clearTimeout(chunkTimer)
-							chunkTimer = null
-						}
-						if (completionTimer) {
-							clearTimeout(completionTimer)
-							completionTimer = null
-						}
-
-						// Set early return result BEFORE resuming the process
-						// This prevents the orchestrator's listener from processing new lines
-						const result = terminalManager.processOutput(outputLines)
-						const logMsg = trackingResult?.logFilePath ? `Log file: ${trackingResult.logFilePath}\n` : ""
-						const outputMsg = result.length > 0 ? `Output so far:\n${result}` : ""
-
-						backgroundTrackingResult = {
-							userRejected: false,
-							result: `Command is running in the background. You can proceed with other tasks.\n${logMsg}${outputMsg}`,
-							completed: false,
-							outputLines,
-						}
-
-						// Send log file message to UI BEFORE resuming the process
-						// This ensures the message appears before any new output lines
-						if (trackingResult?.logFilePath) {
-							await say("command_output", `\n📋 Output is being logged to: ${trackingResult.logFilePath}`)
-						}
-
-						// Now resume the process - any new lines will be handled by the background tracker
-						process.continue()
-						return
-					}
 
 					process.continue()
 				} else if (response === "noButtonClicked" && text === COMMAND_CANCEL_TOKEN) {
@@ -324,12 +275,6 @@ export async function orchestrateCommandExecution(
 			return
 		}
 
-		// If background tracking is active, don't process lines here
-		// The background tracker's listener will handle them
-		if (backgroundTrackingResult) {
-			return
-		}
-
 		const lineBytes = Buffer.byteLength(line, "utf8")
 		totalOutputBytes += lineBytes
 		totalLineCount++
@@ -355,11 +300,6 @@ export async function orchestrateCommandExecution(
 			outputLines.push(line)
 		}
 
-		// Notify caller about output line (for background command tracking)
-		if (onOutputLine) {
-			onOutputLine(line)
-		}
-
 		// Apply buffered streaming (only if not in file mode or still showing initial output)
 		if (!didContinue) {
 			if (!isWritingToFile) {
@@ -374,7 +314,7 @@ export async function orchestrateCommandExecution(
 			}
 			// When in file mode, we've already notified the user, so don't keep buffering
 		} else {
-			// After "Proceed While Running" (without background tracking): stream output directly to UI
+			// After "Proceed While Running": stream output directly to UI
 			// But throttle if we're in file mode to avoid flooding UI
 			if (!isWritingToFile) {
 				await say("command_output", line)
@@ -446,41 +386,6 @@ export async function orchestrateCommandExecution(
 						completionTimer = null
 					}
 
-					// If background tracking is available (standalone mode only), use it
-					// This writes output to a log file and detaches the command
-					if (onProceedWhileRunning) {
-						const trackingResult = onProceedWhileRunning(outputLines)
-
-						// Set early return result BEFORE resuming the process
-						// This prevents the orchestrator's listener from processing new lines
-						const result = terminalManager.processOutput(outputLines)
-						const logMsg = trackingResult?.logFilePath ? `Log file: ${trackingResult.logFilePath}\n` : ""
-						const outputMsg = result.length > 0 ? `Output so far:\n${result}` : ""
-
-						backgroundTrackingResult = {
-							userRejected: false,
-							result: `Command timed out after ${timeoutSeconds} seconds. Running in background.\n${logMsg}${outputMsg}`,
-							completed: false,
-							outputLines,
-						}
-
-						// Send log file message to UI BEFORE resuming the process
-						if (trackingResult?.logFilePath) {
-							await say(
-								"command_output",
-								`\n⏱️ Command timed out. Output is being logged to: ${trackingResult.logFilePath}`,
-							)
-						}
-
-						// Now resume the process - any new lines will be handled by the background tracker
-						process.continue()
-						// Clean up file-based logging if active before returning
-						cleanupFileBased()
-						return backgroundTrackingResult
-					}
-
-					// VSCode terminal mode: no background tracking available
-					// Just continue the process and return timeout result
 					process.continue()
 
 					// Process any output we captured before timeout
@@ -502,14 +407,6 @@ export async function orchestrateCommandExecution(
 			// No timeout - wait for process to complete
 			await process
 		}
-	}
-
-	// Check if we returned early due to background tracking
-	// This happens when user clicks "Proceed While Running" with background tracking enabled
-	if (backgroundTrackingResult) {
-		// Clean up file-based logging if active before returning
-		cleanupFileBased()
-		return backgroundTrackingResult
 	}
 
 	// Clear timer if process completes normally

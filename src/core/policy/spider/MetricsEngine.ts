@@ -275,7 +275,6 @@ export class MetricsEngine {
 				p.includes("index.") ||
 				p === "src/extension.ts" ||
 				p === "src/common.ts" ||
-				p.startsWith("src/standalone/") ||
 				p.startsWith("src/scripts/") ||
 				p.startsWith("src/common/") ||
 				p.includes("/__tests__/") ||

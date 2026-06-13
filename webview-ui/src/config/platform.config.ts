@@ -13,15 +13,11 @@ export interface PlatformConfig {
 
 export enum PlatformType {
 	VSCODE = 0,
-	STANDALONE = 1,
-	REMOTE = 2,
 }
 
 function stringToPlatformType(name: string): PlatformType {
 	const mapping: Record<string, PlatformType> = {
 		vscode: PlatformType.VSCODE,
-		standalone: PlatformType.STANDALONE,
-		remote: PlatformType.REMOTE,
 	}
 	if (name in mapping) {
 		return mapping[name]
@@ -35,7 +31,7 @@ function stringToPlatformType(name: string): PlatformType {
 type PlatformConfigJson = {
 	messageEncoding: "none" | "json"
 	showNavbar: boolean
-	postMessageHandler: "vscode" | "standalone"
+	postMessageHandler: "vscode"
 	togglePlanActKeys: string
 	supportsTerminalMentions: boolean
 }
@@ -44,13 +40,6 @@ type PlatformConfigs = Record<string, PlatformConfigJson>
 
 // Global type declarations for postMessage and vscode API
 declare global {
-	interface Window {
-		// This is the post message handler injected by JetBrains.
-		// !! Do not change the name of the handler without updating it on
-		// the JetBrains side as well. !!
-		standalonePostMessage?: (message: string) => void
-		remoteSocket?: WebSocket
-	}
 	interface VsCodeApi {
 		postMessage(message: unknown): void
 		getState(): unknown
@@ -70,25 +59,6 @@ const postMessageStrategies: Record<string, PostMessageFunction> = {
 		} else {
 			console.log("postMessage fallback: ", message)
 		}
-	},
-	standalone: (message: unknown) => {
-		const standalonePostMessage = window.standalonePostMessage
-		if (!standalonePostMessage) {
-			console.error("Standalone postMessage not found.")
-			return
-		}
-		const json = JSON.stringify(message)
-		console.log(`Standalone postMessage: ${json.slice(0, 200)}`)
-		standalonePostMessage(json)
-	},
-	remote: (message: unknown) => {
-		const remoteSocket = window.remoteSocket
-		if (!remoteSocket || remoteSocket.readyState !== WebSocket.OPEN) {
-			console.warn("Remote socket not connected. Queuing message not implemented here yet.")
-			return
-		}
-		const json = JSON.stringify(message)
-		remoteSocket.send(json)
 	},
 }
 

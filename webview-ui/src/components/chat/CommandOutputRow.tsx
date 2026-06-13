@@ -113,7 +113,7 @@ export const CommandOutputRow = memo(
 		isCommandExecuting = false,
 		isCommandPending = false,
 		isCommandCompleted = false,
-		isBackgroundExec = false, // vscodeTerminalExecutionMode === "backgroundExec"
+		isBackgroundExec = false,
 		onCancelCommand,
 		icon,
 		title,
@@ -209,7 +209,7 @@ export const CommandOutputRow = memo(
 											} else {
 												// For regular terminal mode, show a message
 												alert(
-													"This command is running in the VSCode terminal. You can manually stop it using Ctrl+C in the terminal, or switch to Background Execution mode in settings for cancellable commands.",
+													"This command is running in the VS Code terminal. You can manually stop it using Ctrl+C in the terminal.",
 												)
 											}
 										}}

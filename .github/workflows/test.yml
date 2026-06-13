@@ -115,11 +115,6 @@ jobs:
                   cd webview-ui
                   npm run test:coverage
 
-            - name: CLI Tests
-              id: cli_tests
-              if: ${{ !cancelled() && steps.build_step.outcome == 'success' }}
-              run: cd cli && npm run test:run
-
             - name: Save Coverage Reports
               uses: actions/upload-artifact@v4
               # Only upload artifacts on Linux - We only need coverage from one OS
@@ -130,52 +125,8 @@ jobs:
                       coverage-unit/lcov.info
                       webview-ui/coverage/lcov.info
 
-    test-platform-integration:
-        needs: quality-checks
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-
-            - name: Setup Node.js environment
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 22
-                  cache: 'npm'
-                  cache-dependency-path: |
-                      package-lock.json
-                      webview-ui/package-lock.json
-                      testing-platform/package-lock.json
-
-            - name: Install root dependencies
-              run: npm ci
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install webview-ui dependencies
-              run: cd webview-ui && npm ci
-
-            - name: Download ripgrep binaries
-              run: npm run download-ripgrep
-
-            - name: Compile Standalone
-              run: npm run compile-standalone
-
-            - name: Install testing platform dependencies
-              run: cd testing-platform && npm ci
-
-            - name: Running testing platform integration spec tests
-              timeout-minutes: 7
-              run: npm run test:tp-orchestrator -- tests/specs/ --count=1 --coverage
-
-            - name: Save Coverage Reports
-              uses: actions/upload-artifact@v4
-              with:
-                name: test-platform-integration-core-coverage
-                path: coverage/**/lcov.info
-
     qlty:
-        needs: [test, test-platform-integration]
+        needs: test
         runs-on: ubuntu-latest
         # Run on PRs to main, pushes to main, and manual dispatches
         steps:
@@ -206,19 +157,3 @@ jobs:
                     webview-ui/coverage/lcov.info
                   tag: unit:webview-ui
                   add-prefix: webview-ui/
-
-            - name: Download test platform integration core coverage artifact
-              uses: actions/download-artifact@v4
-              continue-on-error: true
-              id: download-integration-coverage
-              with:
-                name: test-platform-integration-core-coverage
-                path: integration-core-coverage-reports
-
-            - name: Upload core integration tests coverage to Qlty
-              if: steps.download-integration-coverage.outcome == 'success'
-              uses: qltysh/qlty-action/coverage@v2
-              with:
-                token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
-                files: integration-core-coverage-reports/**/lcov.info
-                tag: integration:core

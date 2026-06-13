@@ -906,7 +906,7 @@ export class SubagentRunner {
 			messageState: this.baseConfig.messageState, // Use parent's message state handler but they will have their own stream
 			recursionDepth: this.recursionDepth,
 			isSubagentExecution: true,
-			vscodeTerminalExecutionMode: "backgroundExec",
+			vscodeTerminalExecutionMode: "vscodeTerminal",
 			callbacks: {
 				...baseCallbacks,
 				say: async () => undefined,
@@ -916,7 +916,6 @@ export class SubagentRunner {
 					this.activeCommandExecutions += 1
 					try {
 						return await baseCallbacks.executeCommandTool(command, timeoutSeconds, {
-							useBackgroundExecution: true,
 							suppressUserInteraction: true,
 						})
 					} finally {

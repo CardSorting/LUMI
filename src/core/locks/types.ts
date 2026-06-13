@@ -8,11 +8,6 @@ export interface LockRow {
 	locked_at: number
 }
 
-export interface SqliteLockManagerOptions {
-	dbPath: string
-	instanceAddress: string // dietcode core address
-}
-
 export interface FolderLockOptions {
 	lockTarget: string // The cwdHash of the folder to lock
 	heldBy: string // taskId of the locking task

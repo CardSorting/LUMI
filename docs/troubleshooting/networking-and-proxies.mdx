@@ -5,8 +5,7 @@ description: "Configure DietCode to work behind firewalls and proxies"
 ---
 
 If you're working behind a corporate proxy or firewall, you'll need to configure
-proxy settings for DietCode to connect to AI providers. The configuration varies
-depending on which version of DietCode you're using.
+proxy settings for DietCode to connect to AI providers.
 
 ## VSCode Extension
 
@@ -14,100 +13,6 @@ The VSCode extension automatically uses VSCode's built-in proxy settings. See
 [Network Connections in Visual Studio Code, Proxy server support](https://code.visualstudio.com/docs/setup/network#_proxy-server-support)
 for instructions on how to set up proxies in VSCode. No additional configuration
 is needed for DietCode itself.
-
-## CLI
-
-The DietCode CLI uses standard HTTP proxy environment variables. Configure these before running `dietcode` commands.
-
-### Basic Configuration
-
-**Windows (Command Prompt)**
-```cmd
-set https_proxy=http://proxy.company.com:8080
-set http_proxy=http://proxy.company.com:8080
-dietcode start
-```
-
-**Windows (PowerShell)**
-```powershell
-$env:https_proxy="http://proxy.company.com:8080"
-$env:http_proxy="http://proxy.company.com:8080"
-dietcode start
-```
-
-**macOS/Linux**
-```bash
-export https_proxy=http://proxy.company.com:8080
-export http_proxy=http://proxy.company.com:8080
-dietcode start
-```
-
-### Proxy with Authentication
-
-If your proxy requires authentication, include credentials in the URL:
-
-```bash
-export https_proxy=http://username:password@proxy.company.com:8080
-export http_proxy=http://username:password@proxy.company.com:8080
-```
-
-<Warning>
-Storing credentials in environment variables can be a security risk.
-</Warning>
-
-### Bypass Proxy for Localhost
-
-To prevent localhost traffic from going through the proxy, set the `no_proxy` environment variable:
-
-**Windows**
-```cmd
-set no_proxy=localhost,127.0.0.1,.local
-```
-
-**macOS/Linux**
-```bash
-export no_proxy=localhost,127.0.0.1,.local
-```
-
-### Custom Certificate Authority
-
-If your proxy uses a custom CA certificate:
-
-**Windows**
-```cmd
-set NODE_EXTRA_CA_CERTS=C:\path\to\ca-certificate.crt
-dietcode start
-```
-
-**macOS/Linux**
-```bash
-export NODE_EXTRA_CA_CERTS=/path/to/ca-certificate.pem
-dietcode start
-```
-
-### Permanent Configuration
-
-To avoid setting these variables every time, add them to your shell profile or system environment variables.
-
-**macOS/Linux** (add to `~/.bashrc`, `~/.zshrc`, or `~/.profile`):
-```bash
-# Proxy configuration
-export https_proxy=http://proxy.company.com:8080
-export http_proxy=http://proxy.company.com:8080
-export no_proxy=localhost,127.0.0.1,.local
-export NODE_EXTRA_CA_CERTS=/path/to/ca-certificate.pem
-```
-
-**Windows** (System Environment Variables):
-1. Search for "Environment Variables" in Windows Settings
-2. Add the variables under "User variables" or "System variables"
-3. Restart your terminal or IDE
-
-### Known Limitations
-
-DietCode CLI only supports HTTP proxies. It does not support SOCKS proxies,
-proxy autoconfiguration (PAC) scripts, or HTTP proxies which require
-authentication beyond a basic username and password.
 
 ## JetBrains IDEs
 

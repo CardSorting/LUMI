@@ -46,7 +46,7 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 		strictPlanModeEnabled: false,
 		yoloModeToggled: false,
 		doubleCheckCompletionEnabled: false,
-		vscodeTerminalExecutionMode: "backgroundExec",
+		vscodeTerminalExecutionMode: "vscodeTerminal",
 		enableParallelToolCalling: false,
 		isSubagentExecution: false,
 		context: {},

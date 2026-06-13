@@ -23,7 +23,7 @@ type TelemetryCategory = "checkpoints" | "browser" | "focus_chain" | "subagents"
 /**
  * Terminal type for telemetry differentiation
  */
-export type TerminalType = "vscode" | "standalone"
+export type TerminalType = "vscode"
 
 /**
  * VSCode-specific output capture methods
@@ -31,14 +31,9 @@ export type TerminalType = "vscode" | "standalone"
 export type VscodeOutputMethod = "shell_integration" | "clipboard" | "none"
 
 /**
- * Standalone-specific output capture methods
- */
-export type StandaloneOutputMethod = "child_process" | "child_process_error"
-
-/**
  * Combined type for terminal output methods
  */
-export type TerminalOutputMethod = VscodeOutputMethod | StandaloneOutputMethod
+export type TerminalOutputMethod = VscodeOutputMethod
 
 /**
  * Enum for terminal output failure reasons
@@ -1633,35 +1628,15 @@ export class TelemetryService {
 	 */
 	public captureTerminalExecution(success: boolean, terminalType: "vscode", method: VscodeOutputMethod): void
 	/**
-	 * Records terminal command execution outcomes for standalone terminal
-	 * @param success Whether the command output was successfully captured
-	 * @param terminalType The type of terminal ("standalone")
-	 * @param method The standalone-specific method used to capture output
-	 * @param exitCode The process exit code (useful for diagnosing failure types: 1=error, 127=not found, 126=permission denied)
-	 */
-	public captureTerminalExecution(
-		success: boolean,
-		terminalType: "standalone",
-		method: StandaloneOutputMethod,
-		exitCode?: number | null,
-	): void
-	/**
 	 * Implementation of captureTerminalExecution
 	 */
-	public captureTerminalExecution(
-		success: boolean,
-		terminalType: TerminalType,
-		method: TerminalOutputMethod,
-		exitCode?: number | null,
-	): void {
+	public captureTerminalExecution(success: boolean, terminalType: TerminalType, method: TerminalOutputMethod): void {
 		this.capture({
 			event: TelemetryService.EVENTS.TASK.TERMINAL_EXECUTION,
 			properties: {
 				success,
 				terminalType,
 				method,
-				// Only include exitCode for standalone terminals when it's a meaningful value
-				...(terminalType === "standalone" && exitCode !== undefined && exitCode !== null && { exitCode }),
 			},
 		})
 	}

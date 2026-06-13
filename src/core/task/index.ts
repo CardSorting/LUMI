@@ -96,7 +96,6 @@ import {
 	CommandExecutor,
 	CommandExecutorCallbacks,
 	FullCommandExecutorConfig,
-	StandaloneTerminalManager,
 } from "@/integrations/terminal"
 import { DietCodeError, DietCodeErrorType, ErrorService } from "@/services/error"
 import { telemetryService } from "@/services/telemetry"
@@ -145,7 +144,6 @@ type TaskParams = {
 	terminalReuseEnabled: boolean
 	terminalOutputLineLimit: number
 	defaultTerminalProfile: string
-	vscodeTerminalExecutionMode: "vscodeTerminal" | "backgroundExec"
 	cwd: string
 	stateManager: StateManager
 	workspaceManager?: WorkspaceRootManager
@@ -237,7 +235,7 @@ export class Task {
 	private useNativeToolCalls = false
 	private streamHandler: StreamResponseHandler
 
-	private terminalExecutionMode: "vscodeTerminal" | "backgroundExec"
+	private terminalExecutionMode: "vscodeTerminal"
 
 	// Metadata tracking
 	private fileContextTracker: FileContextTracker
@@ -285,7 +283,6 @@ export class Task {
 			terminalReuseEnabled,
 			terminalOutputLineLimit,
 			defaultTerminalProfile,
-			vscodeTerminalExecutionMode,
 			cwd,
 			stateManager,
 			workspaceManager,
@@ -311,20 +308,10 @@ export class Task {
 		this.dietcodeIgnoreController = new DietCodeIgnoreController(cwd)
 		this.commandPermissionController = new CommandPermissionController()
 		this.taskLockAcquired = taskLockAcquired
-		// Determine terminal execution mode and create appropriate terminal manager
-		this.terminalExecutionMode = vscodeTerminalExecutionMode || "vscodeTerminal"
-
-		// When backgroundExec mode is selected, use StandaloneTerminalManager for hidden execution
-		// Otherwise, use the HostProvider's terminal manager (VSCode terminal in VSCode, standalone in CLI)
-		if (this.terminalExecutionMode === "backgroundExec") {
-			// Import StandaloneTerminalManager for background execution
-			this.terminalManager = new StandaloneTerminalManager()
-			Logger.info(`[Task ${taskId}] Using StandaloneTerminalManager for backgroundExec mode`)
-		} else {
-			// Use the host-provided terminal manager (VSCode terminal in VSCode environment)
-			this.terminalManager = HostProvider.get().createTerminalManager()
-			Logger.info(`[Task ${taskId}] Using HostProvider terminal manager for vscodeTerminal mode`)
-		}
+		// Extension-only runtime: always use the host-provided VS Code terminal manager.
+		this.terminalExecutionMode = "vscodeTerminal"
+		this.terminalManager = HostProvider.get().createTerminalManager()
+		Logger.info(`[Task ${taskId}] Using HostProvider terminal manager`)
 		this.terminalManager.setShellIntegrationTimeout(shellIntegrationTimeout)
 		this.terminalManager.setTerminalReuseEnabled(terminalReuseEnabled ?? true)
 		this.terminalManager.setTerminalOutputLineLimit(terminalOutputLineLimit)

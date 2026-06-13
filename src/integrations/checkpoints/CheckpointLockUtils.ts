@@ -12,7 +12,7 @@ const CHECKPOINTS_BASE_PATH = "~/.dietcode/data/checkpoints"
  * that automatically derives the correct folder path from the cwdHash.
  *
  * @param cwdHash - The hash of the working directory
- * @param taskId - The task ID (swapped to instance address in SqliteLockManager)
+ * @param taskId - The task ID requesting the lock
  * @returns Promise<FolderLockWithRetryResult> with acquisition status and any conflicting lock info
  */
 export async function tryAcquireCheckpointLockWithRetry(cwdHash: string, taskId: string): Promise<FolderLockWithRetryResult> {
