@@ -632,6 +632,29 @@ export class ToolExecutor {
 			block.layer = getLayer(path.resolve(this.cwd, block.params.path))
 		}
 
+		// Raw Writes Warn/Block: Block standard file edits if governed mutation is active
+		if ((block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) && block.params.path) {
+			const resolvedPath = path.resolve(this.cwd, block.params.path)
+			const isRoadmapFile =
+				resolvedPath === path.resolve(this.cwd, "ROADMAP.md") || resolvedPath.includes(path.sep + ".dietcode" + path.sep)
+			if (!isRoadmapFile) {
+				try {
+					const { RoadmapService } = require("@/services/roadmap/RoadmapService")
+					const roadmapService = RoadmapService.getInstance()
+					const status = await roadmapService.getOperationalStatus(this.cwd)
+					if (status.enabled) {
+						const blockMsg = "Use dietcode_kernel(action='patch') for coherent mutation."
+						await this.say("error_retry" as any, blockMsg)
+						this.taskState.consecutiveMistakeCount++
+						this.pushToolResult((formatResponse as any).architecturalCorrection(blockMsg), block)
+						return
+					}
+				} catch (error) {
+					// Fallback
+				}
+			}
+		}
+
 		try {
 			// Policy Enforcement: Pre-Execution
 			const preExecResult = await this.guard.guardPreExecution(block)

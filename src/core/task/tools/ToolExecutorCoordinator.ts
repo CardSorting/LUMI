@@ -30,6 +30,7 @@ import { CognitiveMemorySnapshotHandler } from "./handlers/CognitiveMemorySnapsh
 import { CognitiveMemorySubgraphHandler } from "./handlers/CognitiveMemorySubgraphHandler"
 import { CondenseHandler } from "./handlers/CondenseHandler"
 import { DependencyMapHandler } from "./handlers/DependencyMapHandler"
+import { DietcodeKernelToolHandler } from "./handlers/DietcodeKernelToolHandler"
 import { ExecuteCommandToolHandler } from "./handlers/ExecuteCommandToolHandler"
 import { GenerateExplanationToolHandler } from "./handlers/GenerateExplanationToolHandler"
 import { ListCodeDefinitionNamesToolHandler } from "./handlers/ListCodeDefinitionNamesToolHandler"
@@ -42,6 +43,7 @@ import { PlanModeRespondHandler } from "./handlers/PlanModeRespondHandler"
 import { ProjectMapHandler } from "./handlers/ProjectMapHandler"
 import { ReadFileToolHandler } from "./handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./handlers/ReportBugHandler"
+import { RoadmapToolHandler } from "./handlers/RoadmapToolHandler"
 import { SearchFilesToolHandler } from "./handlers/SearchFilesToolHandler"
 import { StabilityDoctorHandler } from "./handlers/StabilityDoctorHandler"
 import { StabilityHealHandler } from "./handlers/StabilityHealHandler"
@@ -167,6 +169,10 @@ export class ToolExecutorCoordinator {
 		[DietCodeDefaultTool.RENAME]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.MOVE]: (_v: ToolValidator) => undefined,
 		[DietCodeDefaultTool.DELETE]: (_v: ToolValidator) => undefined,
+		[DietCodeDefaultTool.ROADMAP]: (_v: ToolValidator) => new RoadmapToolHandler(DietCodeDefaultTool.ROADMAP),
+		[DietCodeDefaultTool.ROADMAP_CHECKPOINT]: (_v: ToolValidator) =>
+			new RoadmapToolHandler(DietCodeDefaultTool.ROADMAP_CHECKPOINT),
+		[DietCodeDefaultTool.DIETCODE_KERNEL]: (_v: ToolValidator) => new DietcodeKernelToolHandler(),
 	}
 
 	/**

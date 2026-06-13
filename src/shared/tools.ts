@@ -66,6 +66,9 @@ export enum DietCodeDefaultTool {
 	STABILITY_RECALIBRATE = "recalibrate_stability",
 	STABILITY_SWEEP = "stability_integrity_sweep",
 	STABILITY_HEAL = "ast_repair",
+	ROADMAP = "roadmap",
+	ROADMAP_CHECKPOINT = "roadmap_checkpoint",
+	DIETCODE_KERNEL = "dietcode_kernel",
 }
 
 // Array of all tool names for compatibility

@@ -9,6 +9,7 @@ import { findLastIndex } from "@shared/array"
 import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
+import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import type { ToolResponse } from "../../index"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
@@ -63,6 +64,33 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 
 		config.taskState.consecutiveMistakeCount = 0
+
+		// Roadmap Governance: Kanban Completion Gates
+		try {
+			const roadmapService = RoadmapService.getInstance()
+			const status = await roadmapService.getOperationalStatus(config.cwd)
+			if (status.enabled) {
+				if (status.validation_pending) {
+					config.taskState.consecutiveMistakeCount++
+					return formatResponse.toolError(
+						"Task completion blocked: ROADMAP.md has pending modifications that must be validated first.\n" +
+							"Please run: roadmap(action='validate')",
+					)
+				}
+				if (!status.kanban_complete_allowed) {
+					config.taskState.consecutiveMistakeCount++
+					const blockingGates = status.roadmap_gate?.blocking_gates || []
+					const closedGatesMsg = blockingGates.map((g: any) => `- ${g.label}: ${g.why}. Fix: ${g.fix}`).join("\n")
+					return formatResponse.toolError(
+						"Task completion blocked by Roadmap Governance Gates:\n" +
+							closedGatesMsg +
+							"\n\nPlease resolve these gates before calling attempt_completion.",
+					)
+				}
+			}
+		} catch (error) {
+			Logger.error("[AttemptCompletionHandler] Failed to evaluate Roadmap Governance Gates:", error)
+		}
 
 		// Double-check completion: reject attempt_completion calls that haven't been re-verified
 		if (config.doubleCheckCompletionEnabled && !config.taskState.doubleCheckCompletionPending) {
