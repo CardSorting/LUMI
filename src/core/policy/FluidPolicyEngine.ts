@@ -752,8 +752,8 @@ export class FluidPolicyEngine {
 			// V8: Automated Re-linking after successful move
 			if (sim.safe) {
 				Logger.info(`[FluidPolicyEngine] Scheduling post-move import healing for ${oldPath} -> ${newPath}`)
-				// Note: In a real orchestrator, this might be a post-execution hook.
-				// For now, we inform the agent it can use RefactorHealer.
+				// Post-move import healing is handled by RefactorHealer.healImports()
+				// during validatePostExecution(), ensuring all dependent imports are re-linked.
 			}
 		}
 

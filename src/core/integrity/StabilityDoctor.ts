@@ -105,23 +105,60 @@ export class StabilityDoctor {
 	}
 
 	private async checkActivitySaturation(issues: DiagnosticIssue[]) {
-		// V140: Sensing 'High-Velocity Fatigue'
-		if (fs.existsSync(path.join(this.cwd, ".spider", "activity_log.json"))) {
-			// In a full implementation, we would parse the log to find repeated cooldowns
-			// For now, we audit the existence of the activity log
-			const stats = await fs.promises.stat(path.join(this.cwd, ".spider", "activity_log.json"))
-			if (Date.now() - stats.mtimeMs < 1000 * 60 * 30) {
-				// High-Velocity: Increase window to 30m
+		const activityLogPath = path.join(this.cwd, ".spider", "activity_log.json")
+		if (!fs.existsSync(activityLogPath)) return
+
+		try {
+			const stats = await fs.promises.stat(activityLogPath)
+			const isRecent = Date.now() - stats.mtimeMs < 1000 * 60 * 30 // Within 30 minutes
+
+			if (!isRecent) return
+
+			const raw = await fs.promises.readFile(activityLogPath, "utf-8")
+			const entries: Array<{ type?: string; timestamp?: number; reason?: string }> = JSON.parse(raw)
+
+			if (!Array.isArray(entries)) return
+
+			// Count cooldown events in the last 30 minutes
+			const recentWindow = Date.now() - 1000 * 60 * 30
+			const recentEntries = entries.filter((e) => (e.timestamp || 0) > recentWindow)
+			const cooldownCount = recentEntries.filter(
+				(e) => e.type === "cooldown" || e.type === "COOLDOWN" || (e.reason || "").toLowerCase().includes("cooldown"),
+			).length
+			const writeCount = recentEntries.filter((e) => e.type === "write" || e.type === "WRITE").length
+
+			if (cooldownCount >= 3) {
+				issues.push({
+					id: "DOC-101",
+					category: "STATE",
+					severity: "MEDIUM",
+					message: `Repeated cooldown events detected (${cooldownCount} in last 30m). The project is under sustained heavy workload.`,
+					remediable: true,
+					remediationHint:
+						"Consider a # STABILITY BREAK to allow structural stabilization. Reduce parallel operations.",
+				})
+			} else if (writeCount > 50) {
 				issues.push({
 					id: "DOC-101",
 					category: "STATE",
 					severity: "LOW",
-					message: "Write frequency is currently high (high operation rate). Project is under heavy workload.",
+					message: `High write frequency detected (${writeCount} writes in last 30m). Project is under heavy workload.`,
 					remediable: true,
 					remediationHint:
 						"Pause high-frequency operations or use # STABILITY BREAK to allow structural stabilization.",
 				})
+			} else if (recentEntries.length > 0) {
+				issues.push({
+					id: "DOC-101",
+					category: "STATE",
+					severity: "LOW",
+					message: "Write frequency is currently active (normal operation rate). Project is under moderate workload.",
+					remediable: true,
+					remediationHint: "No action needed. Monitor if write frequency increases significantly.",
+				})
 			}
+		} catch {
+			// Non-fatal: log might be malformed or unreadable
 		}
 	}
 

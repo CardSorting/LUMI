@@ -391,17 +391,28 @@ export class Task {
 			})
 		}
 
-		// Check for multiroot workspace and warn about checkpoints
-		const isMultiRootWorkspace = this.workspaceManager && this.workspaceManager.getRoots().length > 1
+		// Check for multiroot workspace and warn about checkpoints unless the gated manager is enabled.
+		const isMultiRootWorkspace = Boolean(this.workspaceManager && this.workspaceManager.getRoots().length > 1)
 		const checkpointsEnabled = this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting")
+		const useMultiRootCheckpointManager = shouldUseMultiRoot({
+			workspaceManager: this.workspaceManager,
+			enableCheckpoints: checkpointsEnabled,
+			stateManager: this.stateManager,
+		})
 
-		if (isMultiRootWorkspace && checkpointsEnabled) {
+		const multiRootUnsupportedMessage = "Checkpoints are not currently supported in multi-root workspaces."
+		if (isMultiRootWorkspace && checkpointsEnabled && !useMultiRootCheckpointManager) {
 			// Set checkpoint manager error message to display warning in TaskHeader
-			this.taskState.checkpointManagerErrorMessage = "Checkpoints are not currently supported in multi-root workspaces."
+			this.taskState.checkpointManagerErrorMessage = multiRootUnsupportedMessage
+		} else if (
+			useMultiRootCheckpointManager &&
+			this.taskState.checkpointManagerErrorMessage === multiRootUnsupportedMessage
+		) {
+			this.taskState.checkpointManagerErrorMessage = undefined
 		}
 
 		// Initialize checkpoint manager based on workspace configuration
-		if (!isMultiRootWorkspace) {
+		if (!isMultiRootWorkspace || useMultiRootCheckpointManager) {
 			try {
 				this.checkpointManager = buildCheckpointManager({
 					taskId: this.taskId,
@@ -420,15 +431,8 @@ export class Task {
 					stateManager: this.stateManager,
 				})
 
-				// If multi-root, kick off non-blocking initialization
-				// Unreachable for now, leaving in for future multi-root checkpoint support
-				if (
-					shouldUseMultiRoot({
-						workspaceManager: this.workspaceManager,
-						enableCheckpoints: this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting"),
-						stateManager: this.stateManager,
-					})
-				) {
+				// If multi-root is enabled, kick off non-blocking initialization.
+				if (useMultiRootCheckpointManager) {
 					this.checkpointManager.initialize?.().catch((error: Error) => {
 						Logger.error("Failed to initialize multi-root checkpoint manager:", error)
 						this.taskState.checkpointManagerErrorMessage = error?.message || String(error)

@@ -1,3 +1,5 @@
+import * as fs from "fs/promises"
+import * as path from "path"
 import { Logger } from "../../shared/services/Logger"
 import { SafeNumber } from "../../shared/utils/SafeNumber"
 import { IntegrityOptimizer, OptimizationOpportunity } from "./IntegrityOptimizer.js"
@@ -131,11 +133,11 @@ export class StabilityDoctor {
 			activityMap: activityMap.sort((a, b) => b.score - a.score),
 			violations: allViolations,
 			optimizations,
-			agentSuccessRate: 100,
+			agentSuccessRate: this.computeAgentSuccessRate(engine),
 			integrityScore: Math.round((1 - (entropy && typeof entropy.score === "number" ? entropy.score : 0)) * 100),
 			resources: {
 				memoryPressure: process.memoryUsage().heapUsed / 1024 / 1024,
-				diskUsage: 0,
+				diskUsage: await this.estimateWorkspaceDiskUsage(),
 			},
 			environmentContext: {
 				totalFiles: nodes.length,
@@ -157,6 +159,53 @@ export class StabilityDoctor {
 			return `⚠️ [STABILITY NOTICE] Project Build Health: ${SafeNumber.format(report.buildHealth, 0)}%. Focus: Improving current file stability.`
 		}
 		return `✅ Project Build Health: ${SafeNumber.format(report.buildHealth, 0)}%. The codebase is stable and well-organized.`
+	}
+
+	/**
+	 * V350: Computes a real agent success rate based on the ratio of
+	 * healthy nodes (no violations) to total nodes in the structural graph.
+	 * A node with no violations is considered a "successful" edit surface.
+	 */
+	private computeAgentSuccessRate(engine: SpiderEngine): number {
+		const nodes = Array.from(engine.nodes.values())
+		if (nodes.length === 0) return 100
+
+		const violations = engine.getViolations()
+		const violatedPaths = new Set(violations.map((v) => v.path))
+		const healthyNodes = nodes.filter((n) => !violatedPaths.has(n.path))
+		const rate = (healthyNodes.length / nodes.length) * 100
+
+		return Math.round(rate)
+	}
+
+	/**
+	 * V350: Estimates workspace disk usage by aggregating file sizes from
+	 * the structural graph (already indexed by Spider). Returns MB.
+	 */
+	private async estimateWorkspaceDiskUsage(): Promise<number> {
+		try {
+			const srcPath = path.join(this.cwd, "src")
+			let totalBytes = 0
+
+			const walk = async (dir: string): Promise<void> => {
+				const entries = await fs.readdir(dir, { withFileTypes: true })
+				for (const entry of entries) {
+					const entryPath = path.join(dir, entry.name)
+					if (entry.isDirectory()) {
+						if (entry.name === "node_modules" || entry.name === ".git") continue
+						await walk(entryPath)
+					} else {
+						const stats = await fs.stat(entryPath)
+						totalBytes += stats.size
+					}
+				}
+			}
+
+			await walk(srcPath)
+			return Math.round((totalBytes / (1024 * 1024)) * 100) / 100 // MB with 2 decimals
+		} catch {
+			return 0 // Fallback if src directory doesn't exist
+		}
 	}
 
 	/**

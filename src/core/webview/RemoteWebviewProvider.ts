@@ -3,8 +3,11 @@
  * Bridges communication between the Controller and a WebSocket client.
  */
 import type { WebSocket } from "ws"
+import { handleGrpcRequest, handleGrpcRequestCancel } from "@/core/controller/grpc-handler"
+import { HostProvider } from "@/hosts/host-provider"
 import type { DietCodeExtensionContext } from "@/shared/dietcode"
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
+import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import type { WebviewMessage } from "@/shared/WebviewMessage"
 import { WebviewProvider } from "./WebviewProvider"
@@ -52,13 +55,30 @@ export class RemoteWebviewProvider extends WebviewProvider {
 	/**
 	 * Handle incoming messages from the remote webapp
 	 */
-	handleRemoteMessage(message: WebviewMessage) {
-		// This would be called by the RemoteServer when it receives a WS message
-		// Bridge it to the controller just like VS Code does
-		// The controller should have been set up in the base class constructor
-		// But we need to make sure the controller knows how to handle these messages
-		// (handleGrpcRequest, etc.)
-		Logger.debug("[RemoteWebviewProvider] Received remote message:", (message as { command?: string }).command)
+	async handleRemoteMessage(message: WebviewMessage): Promise<void> {
+		const postMessageToWebview = (response: ExtensionMessage) => this.postMessage(response)
+
+		switch (message.type) {
+			case "grpc_request": {
+				await handleGrpcRequest(this.controller, postMessageToWebview, message.grpc_request)
+				break
+			}
+			case "grpc_request_cancel": {
+				await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
+				break
+			}
+			case "execute_command": {
+				Logger.warn("[RemoteWebviewProvider] Rejected remote execute_command message:", message.execute_command.command)
+				await HostProvider.window.showMessage({
+					type: ShowMessageType.ERROR,
+					message: "Remote webview command execution is not available.",
+				})
+				break
+			}
+			default: {
+				Logger.error("[RemoteWebviewProvider] Received unhandled WebviewMessage type:", JSON.stringify(message))
+			}
+		}
 	}
 
 	postMessage(message: ExtensionMessage): Thenable<boolean | undefined> {
@@ -78,8 +98,6 @@ export class RemoteWebviewProvider extends WebviewProvider {
 	}
 
 	override getWebviewUrl(path: string): string {
-		// For remote control, we might serve assets over HTTP
-		// For now, return a placeholder or relative path
 		return `/assets/${path}`
 	}
 

@@ -205,7 +205,9 @@ export class RefactorHealer {
 		const importRegex = /import\s+\{([^}]*)\}\s+from/g
 		const importMatches = content.matchAll(importRegex)
 		for (const match of importMatches) {
-			match[1].split(",").forEach((s) => importedSymbols.add(s.trim()))
+			for (const symbol of match[1].split(",")) {
+				importedSymbols.add(symbol.trim())
+			}
 		}
 
 		// Detect redefinitions (class, const, let, function)
@@ -304,14 +306,14 @@ export class RefactorHealer {
 		const isInterface = symbol.startsWith("I") && symbol.length > 2 && /^[A-Z]/.test(symbol.charAt(1))
 
 		if (isInterface) {
-			return `export interface ${symbol} {\n\t// TODO: Define the contract for ${symbol}\n}`
+			return `export interface ${symbol} {\n\treadonly id: string\n\tinitialize?(): Promise<void>\n\tdispose?(): void\n}`
 		}
 
 		if (isCap) {
 			return `/**\n * [LAYER: ${layer.toUpperCase()}]\n */\nexport class ${symbol} {\n\tconstructor() {}\n}`
 		}
 
-		return `export const ${symbol} = () => {\n\t// TODO: Implement ${symbol}\n}`
+		return `export const ${symbol} = (..._args: unknown[]): never => {\n\tthrow new Error("${symbol} requires a concrete implementation before runtime use")\n}`
 	}
 
 	/**
@@ -777,118 +779,11 @@ export class RefactorHealer {
 		}
 
 		if (signatures.length === 0) {
-			signatures.push("  // TODO: Add formal contract methods")
 			signatures.push("  initialize(): Promise<void>;")
 			signatures.push("  dispose(): void;")
 		}
 
 		return [`/** [LAYER: DOMAIN] */`, `export interface ${interfaceName} {`, ...signatures, `}`].join("\n")
-	}
-
-	/**
-	 * V140: Forensic Member Extraction.
-	 * Attempts to find the symbol in other modules to extract its physical signature.
-	 */
-	private extractMemberSignatures(symbol: string, engine: SpiderEngine): string[] {
-		const signatures: string[] = []
-		for (const node of Array.from(engine.nodes.values())) {
-			if (node.exports.includes(symbol)) {
-				const absolutePath = path.resolve(this.projectRoot, node.path)
-				try {
-					if (!fsSync.existsSync(absolutePath)) continue
-					const content = fsSync.readFileSync(absolutePath, "utf-8")
-					const sourceFile = ts.createSourceFile(absolutePath, content, ts.ScriptTarget.Latest, true)
-
-					// Helper to extract signatures from a declaration
-					const processDeclaration = (decl: ts.Node) => {
-						if (ts.isClassDeclaration(decl) || ts.isInterfaceDeclaration(decl)) {
-							for (const member of (decl as ts.ClassDeclaration | ts.InterfaceDeclaration).members) {
-								if (
-									ts.isMethodDeclaration(member) ||
-									ts.isPropertyDeclaration(member) ||
-									ts.isMethodSignature(member) ||
-									ts.isPropertySignature(member)
-								) {
-									const isAsync = member.modifiers?.some(
-										(m: ts.ModifierLike) => m.kind === ts.SyntaxKind.AsyncKeyword,
-									)
-										? "async "
-										: ""
-									const name = member.name?.getText(sourceFile) || "unknown"
-									const params =
-										ts.isMethodDeclaration(member) || ts.isMethodSignature(member)
-											? `(${member.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
-											: ""
-									const typeNode = (
-										member as
-											| ts.PropertyDeclaration
-											| ts.PropertySignature
-											| ts.MethodDeclaration
-											| ts.MethodSignature
-									).type
-									const type = typeNode ? `: ${typeNode.getText(sourceFile)}` : ""
-									signatures.push(`public ${isAsync}${name}${params}${type};`)
-								}
-							}
-						} else if (ts.isFunctionDeclaration(decl)) {
-							const isAsync = decl.modifiers?.some((m: ts.ModifierLike) => m.kind === ts.SyntaxKind.AsyncKeyword)
-								? "async "
-								: ""
-							const name = decl.name?.getText(sourceFile) || "unknown"
-							const params = `(${decl.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
-							const type = decl.type ? `: ${decl.type.getText(sourceFile)}` : ""
-							signatures.push(`export ${isAsync}function ${name}${params}${type} { /* Forensic Stub */ }`)
-						}
-					}
-
-					// Find the symbol declaration
-					ts.forEachChild(sourceFile, (child) => {
-						if (
-							ts.isClassDeclaration(child) ||
-							ts.isInterfaceDeclaration(child) ||
-							ts.isFunctionDeclaration(child) ||
-							ts.isTypeAliasDeclaration(child)
-						) {
-							const namedNode = child as
-								| ts.ClassDeclaration
-								| ts.InterfaceDeclaration
-								| ts.FunctionDeclaration
-								| ts.TypeAliasDeclaration
-							if (namedNode.name?.getText(sourceFile) === symbol) {
-								processDeclaration(child)
-							}
-						}
-						// Also check for 'export const X = ...'
-						if (ts.isVariableStatement(child)) {
-							for (const desc of child.declarationList.declarations) {
-								if (desc.name.getText(sourceFile) === symbol) {
-									if (
-										desc.initializer &&
-										(ts.isArrowFunction(desc.initializer) || ts.isFunctionExpression(desc.initializer))
-									) {
-										const func = desc.initializer as ts.ArrowFunction | ts.FunctionExpression
-										const isAsync = func.modifiers?.some(
-											(m: ts.ModifierLike) => m.kind === ts.SyntaxKind.AsyncKeyword,
-										)
-											? "async "
-											: ""
-										const params = `(${func.parameters.map((p) => p.getText(sourceFile)).join(", ")})`
-										const type = func.type ? `: ${func.type.getText(sourceFile)}` : ""
-										signatures.push(
-											`export const ${symbol} = ${isAsync}${params}${type} => { /* Forensic Stub */ };`,
-										)
-									}
-								}
-							}
-						}
-					})
-				} catch (err) {
-					Logger.error(`[RefactorHealer] Failed to extract signatures for ${symbol} from ${node.path}:`, err)
-				}
-			}
-		}
-		// Dedup signatures
-		return Array.from(new Set(signatures))
 	}
 
 	/**

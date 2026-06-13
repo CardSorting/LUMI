@@ -385,14 +385,88 @@ export class AgentOrchestrator {
 	}
 
 	/**
-	 * Pre-audit user intent using the Ephemeral Side Reasoning thread.
-	 * Absorbed from src/utils/sideQuery.ts.
+	 * Pre-audit user intent using keyword-based intent classification.
+	 * Analyzes user input to determine the primary structural intent category,
+	 * enabling proactive policy enforcement and workflow routing.
 	 */
-	public async preAuditIntent(_userInput: string): Promise<string> {
+	public async preAuditIntent(userInput: string): Promise<string> {
 		Logger.info(`[Orchestrator] 🌓 Pre-Auditing User Intent...`)
-		// Direct instantiation for now, assuming workspace will provide this in production
-		// For this implementation, we use a placeholder that delegates to our SideQueryService pattern
-		return "REFACTOR" // Simplified placeholder for the walkthrough
+
+		const normalized = userInput.toLowerCase()
+
+		// Weighted intent classification via keyword frequency scoring
+		const intentScores: Record<string, number> = {
+			REFACTOR: 0,
+			CREATE: 0,
+			FIX: 0,
+			INVESTIGATE: 0,
+			CONFIGURE: 0,
+			DELETE: 0,
+		}
+
+		const intentKeywords: Record<string, { keywords: string[]; weight: number }[]> = {
+			REFACTOR: [
+				{ keywords: ["refactor", "restructure", "reorganize", "decompose", "extract", "split"], weight: 3 },
+				{ keywords: ["move", "rename", "migrate", "consolidate", "merge"], weight: 2 },
+				{ keywords: ["clean", "simplify", "reduce", "decouple"], weight: 1.5 },
+			],
+			CREATE: [
+				{ keywords: ["create", "new", "add", "implement", "build", "scaffold"], weight: 3 },
+				{ keywords: ["generate", "initialize", "setup", "introduce", "write"], weight: 2 },
+				{ keywords: ["feature", "component", "service", "module", "class"], weight: 1 },
+			],
+			FIX: [
+				{ keywords: ["fix", "bug", "broken", "crash", "error", "fail"], weight: 3 },
+				{ keywords: ["repair", "resolve", "patch", "heal", "correct"], weight: 2.5 },
+				{ keywords: ["issue", "problem", "wrong", "incorrect", "regression"], weight: 1.5 },
+			],
+			INVESTIGATE: [
+				{ keywords: ["investigate", "analyze", "audit", "review", "inspect"], weight: 3 },
+				{ keywords: ["understand", "explain", "why", "how", "what", "where"], weight: 2 },
+				{ keywords: ["look", "check", "find", "search", "explore", "trace"], weight: 1.5 },
+			],
+			CONFIGURE: [
+				{ keywords: ["configure", "config", "setting", "environment", "setup"], weight: 3 },
+				{ keywords: ["update", "change", "modify", "adjust", "tune"], weight: 1.5 },
+				{ keywords: ["enable", "disable", "toggle", "switch", "option"], weight: 2 },
+			],
+			DELETE: [
+				{ keywords: ["delete", "remove", "prune", "drop", "eliminate"], weight: 3 },
+				{ keywords: ["clean up", "deprecate", "retire", "decommission"], weight: 2 },
+				{ keywords: ["unused", "dead", "orphan", "stale"], weight: 1.5 },
+			],
+		}
+
+		for (const [intent, groups] of Object.entries(intentKeywords)) {
+			for (const group of groups) {
+				for (const keyword of group.keywords) {
+					// Count occurrences and weight them
+					const regex = new RegExp(`\\b${keyword}\\b`, "gi")
+					const matches = normalized.match(regex)
+					if (matches) {
+						intentScores[intent] += matches.length * group.weight
+					}
+				}
+			}
+		}
+
+		// Find the highest-scoring intent
+		let bestIntent = "GENERAL"
+		let bestScore = 0
+		for (const [intent, score] of Object.entries(intentScores)) {
+			if (score > bestScore) {
+				bestScore = score
+				bestIntent = intent
+			}
+		}
+
+		// Require a minimum confidence threshold to avoid false classification
+		if (bestScore < 1.5) {
+			bestIntent = "GENERAL"
+		}
+
+		Logger.info(`[Orchestrator] Intent classified as ${bestIntent} (confidence: ${bestScore.toFixed(1)})`)
+		return bestIntent
 	}
 
 	/**

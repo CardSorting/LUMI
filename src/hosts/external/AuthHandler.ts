@@ -157,7 +157,7 @@ export class AuthHandler {
 			// Use SharedUriHandler directly - it handles all validation and processing
 			const success = await SharedUriHandler.handleUri(fullUrl)
 
-			// Try to get redirect URI, but don't fail if not implemented (CLI/JetBrains)
+			// Try to get redirect URI, but allow hosts that do not expose IDE redirects.
 			let redirectUri: string | undefined
 			try {
 				redirectUri = (await HostProvider.env.getIdeRedirectUri({})).value

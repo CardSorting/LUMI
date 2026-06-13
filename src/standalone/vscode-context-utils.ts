@@ -1,5 +1,10 @@
 import * as fs from "fs"
-import type { EnvironmentVariableMutator, EnvironmentVariableMutatorOptions, EnvironmentVariableScope } from "vscode"
+import type {
+	EnvironmentVariableMutator,
+	EnvironmentVariableMutatorOptions,
+	EnvironmentVariableScope,
+	EnvironmentVariableCollection as VSCodeEnvironmentVariableCollection,
+} from "vscode"
 import * as vscode from "vscode"
 export class SecretStore implements vscode.SecretStorage {
 	private data: JsonKeyValueStore<string>
@@ -30,7 +35,8 @@ export class SecretStore implements vscode.SecretStorage {
 
 // Create a class that implements Memento interface with the required setKeysForSync method
 export class MementoStore implements vscode.Memento {
-	private data: JsonKeyValueStore<any>
+	private data: JsonKeyValueStore<unknown>
+	private syncKeys = new Set<string>()
 
 	constructor(filepath: string) {
 		this.data = new JsonKeyValueStore(filepath)
@@ -41,17 +47,24 @@ export class MementoStore implements vscode.Memento {
 	get<T>(key: string): T | undefined {
 		return this.data.get(key) as T
 	}
-	update(key: string, value: any): Thenable<void> {
-		this.data.put(key, value)
+	update(key: string, value: unknown): Thenable<void> {
+		if (value === undefined) {
+			this.data.delete(key)
+		} else {
+			this.data.put(key, value)
+		}
 		return Promise.resolve()
 	}
-	setKeysForSync(_keys: readonly string[]): void {
-		throw new Error("Method not implemented.")
+	setKeysForSync(keys: readonly string[]): void {
+		this.syncKeys = new Set(keys)
+	}
+	getSyncedKeys(): readonly string[] {
+		return Array.from(this.syncKeys)
 	}
 }
 
 // Simple implementation of VSCode's EventEmitter
-type EventCallback<T> = (e: T) => any
+type EventCallback<T> = (e: T) => unknown
 export class EventEmitter<T> {
 	private listeners: EventCallback<T>[] = []
 
@@ -68,7 +81,9 @@ export class EventEmitter<T> {
 	}
 
 	fire(data: T): void {
-		this.listeners.forEach((listener) => listener(data))
+		for (const listener of this.listeners) {
+			listener(data)
+		}
 	}
 }
 
@@ -100,10 +115,14 @@ export class JsonKeyValueStore<T> {
 	}
 	private load(): void {
 		if (fs.existsSync(this.filePath)) {
-			const data = JSON.parse(fs.readFileSync(this.filePath, "utf-8"))
-			Object.entries(data).forEach(([k, v]) => {
-				this.data.set(k, v as T)
-			})
+			try {
+				const data = JSON.parse(fs.readFileSync(this.filePath, "utf-8"))
+				Object.entries(data).forEach(([k, v]) => {
+					this.data.set(k, v as T)
+				})
+			} catch {
+				this.data.clear()
+			}
 		}
 	}
 	private save(): void {
@@ -112,42 +131,66 @@ export class JsonKeyValueStore<T> {
 	}
 }
 
-/** This is not used in dietcode, none of the methods are implemented. */
-export class EnvironmentVariableCollection implements EnvironmentVariableCollection {
+export class EnvironmentVariableCollection implements VSCodeEnvironmentVariableCollection {
 	persistent = false
 	description: string | undefined = undefined
-	replace(_variable: string, _value: string, _options?: EnvironmentVariableMutatorOptions): void {
-		throw new Error("Method not implemented.")
+	private readonly mutators = new Map<string, EnvironmentVariableMutator>()
+	private readonly scopedCollections = new Map<EnvironmentVariableScope, EnvironmentVariableCollection>()
+
+	replace(variable: string, value: string, options?: EnvironmentVariableMutatorOptions): void {
+		this.setMutator(variable, value, vscode.EnvironmentVariableMutatorType.Replace, options)
 	}
-	append(_variable: string, _value: string, _options?: EnvironmentVariableMutatorOptions): void {
-		throw new Error("Method not implemented.")
+	append(variable: string, value: string, options?: EnvironmentVariableMutatorOptions): void {
+		this.setMutator(variable, value, vscode.EnvironmentVariableMutatorType.Append, options)
 	}
-	prepend(_variable: string, _value: string, _options?: EnvironmentVariableMutatorOptions): void {
-		throw new Error("Method not implemented.")
+	prepend(variable: string, value: string, options?: EnvironmentVariableMutatorOptions): void {
+		this.setMutator(variable, value, vscode.EnvironmentVariableMutatorType.Prepend, options)
 	}
-	get(_variable: string): EnvironmentVariableMutator | undefined {
-		throw new Error("Method not implemented.")
+	get(variable: string): EnvironmentVariableMutator | undefined {
+		return this.mutators.get(variable)
 	}
 	forEach(
-		_callback: (variable: string, mutator: EnvironmentVariableMutator, collection: EnvironmentVariableCollection) => any,
-		_thisArg?: any,
+		_callback: (variable: string, mutator: EnvironmentVariableMutator, collection: EnvironmentVariableCollection) => unknown,
+		thisArg?: unknown,
 	): void {
-		throw new Error("Method not implemented.")
+		for (const [variable, mutator] of this.mutators.entries()) {
+			_callback.call(thisArg, variable, mutator, this)
+		}
 	}
-	delete(_variable: string): void {
-		throw new Error("Method not implemented.")
+	delete(variable: string): void {
+		this.mutators.delete(variable)
 	}
 	clear(): void {
-		throw new Error("Method not implemented.")
+		this.mutators.clear()
 	}
-	[Symbol.iterator](): Iterator<[variable: string, mutator: EnvironmentVariableMutator], any, any> {
-		throw new Error("Method not implemented.")
+	[Symbol.iterator](): IterableIterator<[variable: string, mutator: EnvironmentVariableMutator]> {
+		return this.mutators[Symbol.iterator]()
 	}
-	getScoped(_scope: EnvironmentVariableScope): EnvironmentVariableCollection {
-		throw new Error("Method not implemented.")
+	getScoped(scope: EnvironmentVariableScope): EnvironmentVariableCollection {
+		let scoped = this.scopedCollections.get(scope)
+		if (!scoped) {
+			scoped = new EnvironmentVariableCollection()
+			scoped.persistent = this.persistent
+			scoped.description = this.description
+			this.scopedCollections.set(scope, scoped)
+		}
+		return scoped
+	}
+
+	private setMutator(
+		variable: string,
+		value: string,
+		type: vscode.EnvironmentVariableMutatorType,
+		options?: EnvironmentVariableMutatorOptions,
+	): void {
+		this.mutators.set(variable, {
+			type,
+			value,
+			options: options ?? {},
+		})
 	}
 }
 
-export function readJson(filePath: string): any {
+export function readJson(filePath: string): unknown {
 	return JSON.parse(fs.readFileSync(filePath, "utf8"))
 }

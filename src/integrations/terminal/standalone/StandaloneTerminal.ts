@@ -5,7 +5,7 @@
  * implementing the ITerminal interface for compatibility with the terminal manager.
  */
 
-import type { ChildProcess } from "child_process"
+import { type ChildProcess, spawn } from "child_process"
 import { Logger } from "@/shared/services/Logger"
 import type { ITerminal, StandaloneTerminalOptions } from "../types"
 
@@ -41,7 +41,7 @@ export class StandaloneTerminal implements ITerminal {
 	/** Process ID of the active process */
 	_processId: number | null = null
 
-	/** Mock shell integration for compatibility */
+	/** Shell integration adapter for compatibility with VS Code terminal callers */
 	shellIntegration: {
 		cwd: { fsPath: string }
 		executeCommand: (command: string) => {
@@ -58,18 +58,11 @@ export class StandaloneTerminal implements ITerminal {
 		this._cwd = options.cwd || process.cwd()
 		this._shellPath = options.shellPath
 
-		// Mock shell integration for compatibility
 		this.shellIntegration = {
 			cwd: { fsPath: this._cwd },
-			executeCommand: (_command: string) => {
-				// Return a mock execution object that the TerminalProcess expects
-				return {
-					read: async function* (): AsyncGenerator<string, void, unknown> {
-						// This will be handled by our StandaloneTerminalProcess
-						yield ""
-					},
-				}
-			},
+			executeCommand: (command: string) => ({
+				read: () => this.readShellIntegrationCommand(command),
+			}),
 		}
 
 		Logger.log(`[StandaloneTerminal] Created terminal: ${this.name} in ${this._cwd}`)
@@ -119,5 +112,90 @@ export class StandaloneTerminal implements ITerminal {
 		if (this._process && !this._process.killed) {
 			this._process.kill("SIGTERM")
 		}
+	}
+
+	private async *readShellIntegrationCommand(command: string): AsyncGenerator<string, void, unknown> {
+		const shell = this._shellPath || this.getDefaultShell()
+		const args = this.getShellArgs(shell, command)
+		const chunks: string[] = []
+		const waiters: Array<() => void> = []
+		let done = false
+		let spawnError: Error | undefined
+
+		const notify = () => {
+			while (waiters.length > 0) {
+				waiters.shift()?.()
+			}
+		}
+
+		const child = spawn(shell, args, {
+			cwd: this._cwd,
+			env: {
+				...process.env,
+				TERM: "xterm-256color",
+				PAGER: "cat",
+				GIT_PAGER: "cat",
+			},
+			stdio: ["ignore", "pipe", "pipe"],
+			detached: process.platform !== "win32",
+		})
+
+		this._process = child
+		this._processId = child.pid ?? null
+		this.processId = Promise.resolve(child.pid)
+		this.state.isInteractedWith = true
+
+		child.stdout?.on("data", (data: Buffer) => {
+			chunks.push(data.toString())
+			notify()
+		})
+		child.stderr?.on("data", (data: Buffer) => {
+			chunks.push(data.toString())
+			notify()
+		})
+		child.once("error", (error: Error) => {
+			spawnError = error
+			done = true
+			notify()
+		})
+		child.once("close", (code: number | null) => {
+			this.exitStatus = typeof code === "number" ? { code } : undefined
+			done = true
+			notify()
+		})
+
+		while (!done || chunks.length > 0) {
+			const chunk = chunks.shift()
+			if (chunk !== undefined) {
+				yield chunk
+				continue
+			}
+			if (spawnError) {
+				throw spawnError
+			}
+			await new Promise<void>((resolve) => waiters.push(resolve))
+		}
+
+		if (spawnError) {
+			throw spawnError
+		}
+	}
+
+	private getDefaultShell(): string {
+		if (process.platform === "win32") {
+			return process.env.COMSPEC || "cmd.exe"
+		}
+		return process.env.SHELL || "/bin/sh"
+	}
+
+	private getShellArgs(shell: string, command: string): string[] {
+		const basename = shell.split(/[\\/]/).pop()?.toLowerCase() || shell.toLowerCase()
+		if (basename === "cmd.exe" || basename === "cmd") {
+			return ["/d", "/s", "/c", command]
+		}
+		if (basename.includes("powershell") || basename === "pwsh") {
+			return ["-NoProfile", "-Command", command]
+		}
+		return ["-lc", command]
 	}
 }

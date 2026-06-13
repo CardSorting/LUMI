@@ -7,7 +7,21 @@ import { createTaskCheckpointManager } from "@integrations/checkpoints"
 import { MultiRootCheckpointManager } from "@integrations/checkpoints/MultiRootCheckpointManager"
 import type { ICheckpointManager } from "@integrations/checkpoints/types"
 import type { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
-import { StateManager } from "@/core/storage/StateManager"
+import type { DietCodeSay } from "@shared/ExtensionMessage"
+import type { HistoryItem } from "@shared/HistoryItem"
+import type { StateManager } from "@/core/storage/StateManager"
+
+type KnowledgeGraphServiceLike = {
+	addKnowledge(taskId: string, type: string, content: string, options?: Record<string, unknown>): Promise<unknown>
+}
+
+type SayFunction = (
+	type: DietCodeSay,
+	text?: string,
+	images?: string[],
+	files?: string[],
+	partial?: boolean,
+) => Promise<number | undefined>
 
 /**
  * Simple predicate abstracting our multi-root decision.
@@ -37,11 +51,11 @@ type BuildArgs = {
 	taskState: TaskState
 	// multi-root deps
 	workspaceManager?: WorkspaceRootManager
-	getKnowledgeGraphService: () => Promise<any>
+	getKnowledgeGraphService: () => Promise<KnowledgeGraphServiceLike | null | undefined>
 
 	// callbacks for single-root TaskCheckpointManager
-	updateTaskHistory: (historyItem: any) => Promise<any[]>
-	say: (...args: any[]) => Promise<number | undefined>
+	updateTaskHistory: (historyItem: HistoryItem) => Promise<HistoryItem[]>
+	say: SayFunction
 	cancelTask: () => Promise<void>
 	postStateToWebview: () => Promise<void>
 
@@ -78,8 +92,14 @@ export function buildCheckpointManager(args: BuildArgs): ICheckpointManager {
 	const enableCheckpoints = stateManager.getGlobalSettingsKey("enableCheckpointsSetting")
 
 	if (shouldUseMultiRoot({ workspaceManager, enableCheckpoints, stateManager })) {
+		if (!workspaceManager) {
+			throw new Error("Multi-root checkpoint manager requires a workspace manager.")
+		}
 		// Multi-root manager (init should be kicked off externally, non-blocking)
-		return new MultiRootCheckpointManager(workspaceManager!, taskId, enableCheckpoints, messageStateHandler)
+		return new MultiRootCheckpointManager(workspaceManager, taskId, enableCheckpoints, messageStateHandler, taskState, {
+			say,
+			getKnowledgeGraphService,
+		})
 	}
 
 	// Single-root manager
