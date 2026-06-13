@@ -1,3 +1,4 @@
+import { filterNewViolationsSinceBaseline } from "./auditBaseline"
 import { hasAuditScoreRegression } from "./auditRegression"
 import { shouldEscalateFromAdvisory } from "./auditRollup"
 import { hasCriticalViolations, partitionViolationsBySeverity } from "./auditSeverity"
@@ -30,10 +31,18 @@ export interface CompletionGateOptions {
 	advisoryEscalationEnabled?: boolean
 	planBaselineMetadata?: TaskAuditMetadata
 	planRegressionGateEnabled?: boolean
+	/** When true, only violations not in workspace baseline block the gate — SonarQube new-code pattern. */
+	newViolationsOnly?: boolean
+	baselineMetadata?: TaskAuditMetadata
 }
 
 /** Unified quality-gate evaluator — mirrors CI/SonarQube gate decision APIs. */
 export function evaluateCompletionGate(metadata: TaskAuditMetadata, options?: CompletionGateOptions): CompletionGateDecision {
+	const gateViolations =
+		options?.newViolationsOnly && options.baselineMetadata
+			? filterNewViolationsSinceBaseline(metadata.violations, options.baselineMetadata)
+			: (metadata.violations ?? [])
+
 	const assessment = computeHardeningAssessment(metadata)
 	const score = metadata.hardening_score ?? assessment.score
 	const grade = metadata.hardening_grade ?? assessment.grade
@@ -74,7 +83,21 @@ export function evaluateCompletionGate(metadata: TaskAuditMetadata, options?: Co
 		}
 	}
 
-	if (score < effectiveThreshold) {
+	if (options?.newViolationsOnly) {
+		if (options.criticalOnly) {
+			if (hasCriticalViolations(gateViolations)) {
+				reasons.push({
+					code: "critical_violations",
+					message: `${gateViolations.length} new critical violation(s) since baseline`,
+				})
+			}
+		} else if (gateViolations.length > 0) {
+			reasons.push({
+				code: "policy_violations",
+				message: `${gateViolations.length} new violation(s) since baseline`,
+			})
+		}
+	} else if (score < effectiveThreshold) {
 		if (options?.criticalOnly) {
 			if (hasCriticalViolations(metadata.violations)) {
 				reasons.push({
@@ -124,6 +147,10 @@ export function buildPreCompletionChecklist(metadata: TaskAuditMetadata, options
 	}
 	if (warning.length > 0) {
 		lines.push(`Warnings (${warning.length}): ${warning.slice(0, 3).map(formatViolationLabel).join(", ")}`)
+	}
+	const suppressed = metadata.suppressed_violations ?? []
+	if (suppressed.length > 0) {
+		lines.push(`Suppressed (${suppressed.length}): ${suppressed.slice(0, 3).map(formatViolationLabel).join(", ")} _(waived)_`)
 	}
 	if (decision.reasons.length > 0) {
 		for (const reason of decision.reasons) {

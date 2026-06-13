@@ -21,11 +21,15 @@ describe("auditGateStatus", () => {
 			gate_blocked: true,
 			gate_reason_codes: ["score_below_threshold"],
 			artifact_manifest_path: ".audit/task-1.manifest.json",
+			suppressed_violations: ["result_empty"],
+			workspace_gate_policy_applied: true,
 		})
 		const status = buildQualityGateStatus(metadata, { gateEnabled: true, scoreThreshold: 90 })
 		expect(status?.blocked).to.equal(true)
 		expect(status?.passed).to.equal(false)
 		expect(status?.reasonCodes).to.include("score_below_threshold")
 		expect(status?.artifactPaths?.manifest).to.equal(".audit/task-1.manifest.json")
+		expect(status?.suppressedViolationCount).to.equal(1)
+		expect(status?.workspacePolicyApplied).to.equal(true)
 	})
 })

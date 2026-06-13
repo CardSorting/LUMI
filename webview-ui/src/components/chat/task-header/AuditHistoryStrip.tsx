@@ -2,6 +2,7 @@ import { formatGateReasonLabel } from "@shared/audit/auditGateCatalog"
 import { AUDIT_TREND_LABELS, type AuditMessageSnapshot, getAuditTrend } from "@shared/audit/auditMessages"
 import { computeAuditHealthSummary } from "@shared/audit/auditRollup"
 import { partitionViolationsBySeverity } from "@shared/audit/auditSeverity"
+import { computeAuditSnapshotDiff } from "@shared/audit/auditSnapshotDiff"
 import { formatAuditTime, formatViolationLabel, HARDENING_GRADE_STYLES } from "@shared/audit/taskAuditUtils"
 import type { HardeningGrade } from "@shared/audit/types"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
@@ -204,6 +205,9 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 						const grade = snapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
 						const { critical, warning, info } = partitionViolationsBySeverity(snapshot.auditMetadata.violations)
 						const key = `${snapshot.ts}-${snapshot.source}`
+						const origIndex = snapshots.findIndex((s) => s.ts === snapshot.ts && s.source === snapshot.source)
+						const previousMetadata = origIndex > 0 ? snapshots[origIndex - 1].auditMetadata : undefined
+						const diff = computeAuditSnapshotDiff(previousMetadata, snapshot.auditMetadata)
 						return (
 							<div
 								className={cn(
@@ -263,7 +267,7 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 									{info.length > 0 && <span className="text-description/60">{info.length} info</span>}
 									{(snapshot.auditMetadata.suppressed_violations?.length ?? 0) > 0 && (
 										<span className="text-blue-500/80 font-bold">
-											{snapshot.auditMetadata.suppressed_violations!.length} waived
+											{snapshot.auditMetadata.suppressed_violations?.length} waived
 										</span>
 									)}
 									{snapshot.auditMetadata.workspace_gate_policy_applied && (
@@ -284,12 +288,30 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 									)}
 								{(snapshot.auditMetadata.violations?.length ?? 0) > 0 && (
 									<ul className="mt-1 list-disc list-inside text-[8.5px] text-description/80 space-y-0.5">
-										{snapshot.auditMetadata.violations!.slice(0, 4).map((v) => (
+										{snapshot.auditMetadata.violations?.slice(0, 4).map((v) => (
 											<li className="truncate font-mono" key={v}>
 												{formatViolationLabel(v)}
 											</li>
 										))}
 									</ul>
+								)}
+								{diff && (diff.newViolations.length > 0 || diff.resolvedViolations.length > 0) && (
+									<div className="mt-1 text-[8px] text-description/70 space-y-0.5">
+										{diff.scoreDelta !== undefined && (
+											<span className="font-mono">
+												Score {diff.scoreDelta >= 0 ? "+" : ""}
+												{diff.scoreDelta}
+											</span>
+										)}
+										{diff.newViolations.length > 0 && (
+											<span className="block text-red-500/90">+{diff.newViolations.length} new</span>
+										)}
+										{diff.resolvedViolations.length > 0 && (
+											<span className="block text-emerald-600 dark:text-emerald-400">
+												−{diff.resolvedViolations.length} resolved
+											</span>
+										)}
+									</div>
 								)}
 							</div>
 						)

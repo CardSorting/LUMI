@@ -123,6 +123,22 @@ describe("auditWorkspaceArtifacts", () => {
 		expect(gateStatus.suppressedViolationCount).to.equal(1)
 	})
 
+	it("writes github-check.json and baseline on successful completion", async () => {
+		const metadata = enrichAuditMetadata({ violations: [] })
+		await persistAuditWorkspaceArtifacts({
+			cwd: tempDir,
+			taskId: "task-pass",
+			metadata,
+			event: "completion",
+			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
+		})
+		const githubCheck = JSON.parse(
+			await fs.readFile(path.join(tempDir, DEFAULT_AUDIT_ARTIFACT_DIR, "latest", "github-check.json"), "utf8"),
+		)
+		expect(githubCheck.conclusion).to.equal("success")
+		expect(await fs.stat(path.join(tempDir, DEFAULT_AUDIT_ARTIFACT_DIR, "baseline.json"))).to.exist
+	})
+
 	it("enriches audit metadata with relative artifact paths", () => {
 		const metadata = enrichAuditMetadata({ violations: [] })
 		const enriched = enrichAuditMetadataWithArtifactPaths(metadata, {

@@ -55,4 +55,16 @@ describe("auditGateReport", () => {
 		const decision = evaluateCompletionGate(metadata)
 		expect(buildGateDecisionSummary(decision)).to.contain("Gate ready")
 	})
+
+	it("blocks only on new violations when newViolationsOnly is enabled", () => {
+		const baseline = enrichAuditMetadata({ violations: ["result_empty"] })
+		const metadata = enrichAuditMetadata({ violations: ["result_empty"] })
+		const passing = evaluateCompletionGate(metadata, { newViolationsOnly: true, baselineMetadata: baseline })
+		expect(passing.blocked).to.equal(false)
+
+		const withNew = enrichAuditMetadata({ violations: ["result_empty", "missing_validation_evidence"] })
+		const blocked = evaluateCompletionGate(withNew, { newViolationsOnly: true, baselineMetadata: baseline })
+		expect(blocked.blocked).to.equal(true)
+		expect(blocked.reasons.some((r) => r.code === "policy_violations")).to.equal(true)
+	})
 })

@@ -1,5 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
+import { baselineToAuditMetadata, loadWorkspaceAuditBaseline } from "./auditBaseline"
 import type { AuditGateSettingsSource } from "./auditGateOptions"
 import { buildCompletionGateOptionsFromSettings } from "./auditGateOptions"
 import type { CompletionGateOptions } from "./auditGateReport"
@@ -33,6 +34,8 @@ export interface WorkspaceGatePolicyFile {
 	planRegressionGateEnabled?: boolean
 	intentThresholdAdjustmentsEnabled?: boolean
 	intentThresholdOverrides?: Record<string, number> | string
+	/** Only block on violations not present in `.audit/baseline.json` — SonarQube new-code gate. */
+	newViolationsOnly?: boolean
 }
 
 export interface AuditSuppressionEntry {
@@ -161,6 +164,7 @@ function buildGatePolicyProvenance(
 		overriddenFields.push("intentThresholdAdjustmentsEnabled")
 	}
 	if (workspacePolicy.intentThresholdOverrides !== undefined) overriddenFields.push("intentThresholdOverrides")
+	if (workspacePolicy.newViolationsOnly !== undefined) overriddenFields.push("newViolationsOnly")
 	return {
 		source: overriddenFields.length > 0 ? "workspace" : "extension",
 		workspacePolicyApplied: overriddenFields.length > 0,
@@ -175,8 +179,18 @@ export async function resolveCompletionGateContext(
 ): Promise<CompletionGateContext> {
 	const workspacePolicy = await loadWorkspaceGatePolicy(cwd)
 	const merged = mergeWorkspaceGatePolicy(settings, workspacePolicy)
+	const options = buildCompletionGateOptionsFromSettings(merged, extras)
+
+	if (workspacePolicy?.newViolationsOnly) {
+		const baseline = await loadWorkspaceAuditBaseline(cwd)
+		if (baseline) {
+			options.newViolationsOnly = true
+			options.baselineMetadata = baselineToAuditMetadata(baseline)
+		}
+	}
+
 	return {
-		options: buildCompletionGateOptionsFromSettings(merged, extras),
+		options,
 		policyProvenance: buildGatePolicyProvenance(settings, workspacePolicy),
 	}
 }

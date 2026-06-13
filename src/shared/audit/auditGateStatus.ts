@@ -15,6 +15,8 @@ export interface QualityGateStatus {
 	reasonCodes: CompletionGateReasonCode[]
 	violationCount: number
 	criticalViolationCount: number
+	suppressedViolationCount: number
+	workspacePolicyApplied: boolean
 	artifactPaths?: {
 		sarif?: string
 		report?: string
@@ -44,6 +46,8 @@ export function buildQualityGateStatus(
 		reasonCodes: decision.reasons.map((reason) => reason.code).filter((code) => code !== "gate_disabled"),
 		violationCount: violations.length,
 		criticalViolationCount: partitionViolationsBySeverity(violations).critical.length,
+		suppressedViolationCount: metadata.suppressed_violations?.length ?? 0,
+		workspacePolicyApplied: metadata.workspace_gate_policy_applied ?? false,
 		artifactPaths:
 			metadata.artifact_sarif_path || metadata.artifact_report_path || metadata.artifact_manifest_path
 				? {

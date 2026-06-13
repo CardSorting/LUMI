@@ -1,4 +1,7 @@
+import { buildCiGateStatusJson } from "@shared/audit/auditCiSummary"
 import { formatGateReasonLabel } from "@shared/audit/auditGateCatalog"
+import { auditGateConfigToOptions } from "@shared/audit/auditGateConfig"
+import { buildQualityGateStatus } from "@shared/audit/auditGateStatus"
 import { buildAuditSarifJson } from "@shared/audit/auditSarifExport"
 import { partitionViolationsBySeverity } from "@shared/audit/auditSeverity"
 import { getViolationRemediation } from "@shared/audit/completionAudit"
@@ -25,6 +28,7 @@ import {
 	ShieldCheckIcon,
 } from "lucide-react"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
 
@@ -93,28 +97,34 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 	const [copied, setCopied] = useState(false)
 	const [reportCopied, setReportCopied] = useState(false)
 	const [sarifCopied, setSarifCopied] = useState(false)
+	const [gateStatusCopied, setGateStatusCopied] = useState(false)
 	const feedbackTimers = useRef<{
 		checksum?: ReturnType<typeof setTimeout>
 		report?: ReturnType<typeof setTimeout>
 		sarif?: ReturnType<typeof setTimeout>
+		gateStatus?: ReturnType<typeof setTimeout>
 	}>({})
+	const gateConfig = useAuditGateConfig()
 
 	useEffect(() => {
 		return () => {
 			if (feedbackTimers.current.checksum) clearTimeout(feedbackTimers.current.checksum)
 			if (feedbackTimers.current.report) clearTimeout(feedbackTimers.current.report)
 			if (feedbackTimers.current.sarif) clearTimeout(feedbackTimers.current.sarif)
+			if (feedbackTimers.current.gateStatus) clearTimeout(feedbackTimers.current.gateStatus)
 		}
 	}, [])
 
-	const showCopyFeedback = useCallback((kind: "checksum" | "report" | "sarif") => {
+	const showCopyFeedback = useCallback((kind: "checksum" | "report" | "sarif" | "gateStatus") => {
 		if (feedbackTimers.current[kind]) clearTimeout(feedbackTimers.current[kind])
 		if (kind === "checksum") setCopied(true)
 		else if (kind === "report") setReportCopied(true)
+		else if (kind === "gateStatus") setGateStatusCopied(true)
 		else setSarifCopied(true)
 		feedbackTimers.current[kind] = setTimeout(() => {
 			if (kind === "checksum") setCopied(false)
 			else if (kind === "report") setReportCopied(false)
+			else if (kind === "gateStatus") setGateStatusCopied(false)
 			else setSarifCopied(false)
 			feedbackTimers.current[kind] = undefined
 		}, COPY_FEEDBACK_DURATION_MS)
@@ -151,6 +161,14 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 	const handleCopySarif = async (e: React.MouseEvent) => {
 		e.stopPropagation()
 		if (await copyTextToClipboard(buildAuditSarifJson(auditMetadata))) showCopyFeedback("sarif")
+	}
+
+	const handleCopyGateStatus = async (e: React.MouseEvent) => {
+		e.stopPropagation()
+		const status = buildQualityGateStatus(auditMetadata, auditGateConfigToOptions(gateConfig))
+		if (!status) return
+		const payload = buildCiGateStatusJson(auditMetadata, status, "task-audit", "completion")
+		if (await copyTextToClipboard(JSON.stringify(payload, null, 2))) showCopyFeedback("gateStatus")
 	}
 
 	const borderClass = variant === "success" ? "border-success/20" : "border-description/30"
@@ -387,7 +405,7 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 								Suppressed Violations
 							</span>
 							<ul className="list-disc list-inside text-[8.5px] text-description/70 space-y-0.5">
-								{auditMetadata.suppressed_violations!.map((violation) => (
+								{auditMetadata.suppressed_violations?.map((violation) => (
 									<li className="font-mono truncate" key={violation}>
 										{formatViolationLabel(violation)}
 									</li>
@@ -448,6 +466,26 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 										<>
 											<CopyIcon className="size-3" />
 											<span>Markdown</span>
+										</>
+									)}
+								</button>
+								<button
+									aria-label="Copy gate status JSON"
+									className={cn(
+										"flex items-center gap-1 transition-colors cursor-pointer bg-transparent border-0",
+										accentText,
+									)}
+									onClick={handleCopyGateStatus}
+									type="button">
+									{gateStatusCopied ? (
+										<>
+											<CheckIcon className="size-3 text-emerald-500" />
+											<span>Copied!</span>
+										</>
+									) : (
+										<>
+											<CopyIcon className="size-3" />
+											<span>Gate JSON</span>
 										</>
 									)}
 								</button>

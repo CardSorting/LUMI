@@ -67,6 +67,10 @@ export const TaskAuditBadge = memo(({ auditMetadata, auditTrend, auditHealth, ga
 							auditHealth && auditHealth.gateBlockCount > 0
 								? `${auditHealth.gateBlockCount} gate block(s)`
 								: undefined,
+							auditHealth && auditHealth.suppressedViolationCount > 0
+								? `${auditHealth.suppressedViolationCount} waived`
+								: undefined,
+							auditMetadata.workspace_gate_policy_applied ? "Workspace gate policy" : undefined,
 							gateDecision
 								? gateDecision.blocked
 									? `Gate blocked: ${gateDecision.reasons.map((r) => r.message).join("; ")}`

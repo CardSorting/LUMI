@@ -138,5 +138,10 @@ export function getAuditSummaryLabel(metadata: TaskAuditMetadata): string {
 	const grade = metadata.hardening_grade ?? "?"
 	const score = Number.isFinite(metadata.hardening_score) ? `${metadata.hardening_score}/100` : "N/A"
 	const violations = metadata.violations?.length ?? 0
-	return violations > 0 ? `Grade ${grade} (${score}) · ${violations} violation(s)` : `Grade ${grade} (${score})`
+	const suppressed = metadata.suppressed_violations?.length ?? 0
+	const parts = [violations > 0 ? `Grade ${grade} (${score}) · ${violations} violation(s)` : `Grade ${grade} (${score})`]
+	if (suppressed > 0) {
+		parts.push(`${suppressed} waived`)
+	}
+	return parts.join(" · ")
 }

@@ -1,5 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
+import { persistWorkspaceAuditBaseline } from "./auditBaseline"
 import { buildCiGateStatusJson, buildCiJobSummaryMarkdown, buildGatePolicySnapshot } from "./auditCiSummary"
 import type { AuditGateSettingsSource } from "./auditGateOptions"
 import type { GatePolicyProvenance } from "./auditGatePolicyLoader"
@@ -7,6 +8,7 @@ import { serializeWorkspaceGatePolicy, WORKSPACE_GATE_POLICY_FILE, WORKSPACE_SUP
 import type { CompletionGateOptions } from "./auditGateReport"
 import { evaluateCompletionGate } from "./auditGateReport"
 import { buildQualityGateStatus } from "./auditGateStatus"
+import { buildGitHubCheckRunJson } from "./auditGitHubCheck"
 import { buildAuditJunitXml } from "./auditJunitExport"
 import { buildAuditSarifJson } from "./auditSarifExport"
 import { partitionViolationsBySeverity } from "./auditSeverity"
@@ -50,8 +52,11 @@ export interface AuditArtifactIndexEntry {
 	hardeningGrade?: string
 	hardeningScore?: number
 	gateBlocked: boolean
+	suppressedViolationCount?: number
+	workspaceGatePolicyApplied?: boolean
 	sarifPath?: string
 	markdownPath?: string
+	junitPath?: string
 	manifestPath: string
 }
 
@@ -170,12 +175,14 @@ async function writeCiArtifacts(
 
 	const summaryMarkdown = buildCiJobSummaryMarkdown(metadata, qualityGate, entry)
 	const gateStatusJson = buildCiGateStatusJson(metadata, qualityGate, entry.taskId, entry.event, policyProvenance)
+	const githubCheckJson = buildGitHubCheckRunJson(metadata, qualityGate, { taskId: entry.taskId })
 	const latestDir = path.join(rootDir, "latest")
 	await fs.mkdir(latestDir, { recursive: true })
 
 	const writes: Promise<void>[] = [
 		fs.writeFile(path.join(rootDir, "summary.md"), summaryMarkdown, "utf8"),
 		fs.writeFile(path.join(latestDir, "gate-status.json"), JSON.stringify(gateStatusJson, null, 2), "utf8"),
+		fs.writeFile(path.join(latestDir, "github-check.json"), githubCheckJson, "utf8"),
 		fs.writeFile(path.join(latestDir, "summary.md"), summaryMarkdown, "utf8"),
 	]
 
@@ -317,12 +324,19 @@ export async function persistAuditWorkspaceArtifacts(
 		hardeningGrade: metadata.hardening_grade,
 		hardeningScore: metadata.hardening_score,
 		gateBlocked: metadata.gate_blocked ?? false,
+		suppressedViolationCount: metadata.suppressed_violations?.length ?? 0,
+		workspaceGatePolicyApplied: metadata.workspace_gate_policy_applied ?? false,
 		sarifPath: result.relativeSarifPath,
 		markdownPath: result.relativeReportPath,
+		junitPath: result.relativeJunitPath,
 		manifestPath: result.relativeManifestPath,
 	}
 	await updateAuditArtifactIndex(rootDir, indexEntry, cwd)
 	await writeCiArtifacts(rootDir, metadata, indexEntry, gateOptions, gatePolicySettings, policyProvenance)
+
+	if (event === "completion" && !metadata.gate_blocked && !(gateDecision?.blocked ?? false)) {
+		await persistWorkspaceAuditBaseline(cwd, metadata, taskId)
+	}
 
 	return result
 }
