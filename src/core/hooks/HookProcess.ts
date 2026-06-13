@@ -92,40 +92,52 @@ export class HookProcess extends EventEmitter implements IHookProcess {
 				HookProcessRegistry.register(this)
 				this.isRegistered = true
 
+				let abortHandler: (() => void) | undefined
+
+				const cleanup = () => {
+					if (this.timeoutHandle) {
+						clearTimeout(this.timeoutHandle)
+						this.timeoutHandle = null
+					}
+					if (this.abortSignal && abortHandler) {
+						this.abortSignal.removeEventListener("abort", abortHandler)
+					}
+					this.safeUnregister()
+				}
+
+				const settle = (complete: () => void): boolean => {
+					if (this.isCompleted) {
+						return false
+					}
+					this.isCompleted = true
+					cleanup()
+					complete()
+					return true
+				}
+
+				const rejectOnce = (error: Error, killSignal?: NodeJS.Signals) => {
+					const shouldKill = Boolean(killSignal && this.childProcess)
+					if (
+						settle(() => {
+							if (shouldKill) {
+								this.killProcessTree(killSignal!)
+							}
+							reject(error)
+						})
+					) {
+						return
+					}
+				}
+
 				// Check if already aborted
 				if (this.abortSignal?.aborted) {
-					this.safeUnregister()
-					reject(new Error("Hook execution cancelled"))
+					rejectOnce(new Error("Hook execution cancelled"))
 					return
 				}
 
-				// Set up abort handler
-				const abortHandler = () => {
-					if (this.childProcess && !this.isCompleted) {
-						this.isCompleted = true // Mark as completed immediately
-
-						// Remove abort listener immediately to prevent double-rejection
-						if (this.abortSignal) {
-							this.abortSignal.removeEventListener("abort", abortHandler)
-						}
-
-						// Clean up execution timeout timer
-						if (this.timeoutHandle) {
-							clearTimeout(this.timeoutHandle)
-							this.timeoutHandle = null
-						}
-
-						// Unregister from active processes
-						this.safeUnregister()
-
-						// Kill the process (async, fire-and-forget)
-						if (this.childProcess.pid) {
-							this.childProcess.kill("SIGTERM")
-						}
-
-						// Reject immediately - don't wait for process to die
-						reject(new Error("Hook execution cancelled by user"))
-					}
+				// Set up abort handler. It must settle even if abort arrives before spawn finishes.
+				abortHandler = () => {
+					rejectOnce(new Error("Hook execution cancelled by user"), "SIGTERM")
 				}
 
 				if (this.abortSignal) {
@@ -137,6 +149,14 @@ export class HookProcess extends EventEmitter implements IHookProcess {
 				void (async () => {
 					try {
 						const launchConfig = await getHookLaunchConfig(this.scriptPath)
+						if (this.isCompleted) {
+							return
+						}
+						if (this.abortSignal?.aborted) {
+							abortHandler?.()
+							return
+						}
+
 						this.childProcess = spawn(launchConfig.command, launchConfig.args, {
 							stdio: ["pipe", "pipe", "pipe"],
 							shell: launchConfig.shell,
@@ -149,14 +169,12 @@ export class HookProcess extends EventEmitter implements IHookProcess {
 
 						// Set up timeout
 						this.timeoutHandle = setTimeout(() => {
-							if (this.childProcess && !this.isCompleted) {
-								this.childProcess.kill("SIGTERM")
-								reject(
-									new Error(
-										`Hook execution timed out after ${this.timeoutMs}ms. The hook script at '${this.scriptPath}' took too long to complete.`,
-									),
-								)
-							}
+							rejectOnce(
+								new Error(
+									`Hook execution timed out after ${this.timeoutMs}ms. The hook script at '${this.scriptPath}' took too long to complete.`,
+								),
+								"SIGTERM",
+							)
 						}, this.timeoutMs)
 
 						// Handle stdout
@@ -183,48 +201,30 @@ export class HookProcess extends EventEmitter implements IHookProcess {
 
 						// Handle process completion
 						this.childProcess.on("close", (code, signal) => {
+							if (this.isCompleted) {
+								cleanup()
+								return
+							}
 							this.exitCode = code
-							this.isCompleted = true
 							this.emitRemainingBuffer()
 
-							// Unregister from active processes
-							this.safeUnregister()
+							settle(() => {
+								this.emit("completed", code, signal)
 
-							// Clear execution timeout timer
-							if (this.timeoutHandle) {
-								clearTimeout(this.timeoutHandle)
-								this.timeoutHandle = null
-							}
-
-							// Remove abort listener
-							if (this.abortSignal) {
-								this.abortSignal.removeEventListener("abort", abortHandler)
-							}
-
-							this.emit("completed", code, signal)
-
-							if (code === 0) {
-								resolve()
-							} else {
-								reject(new Error(`Hook exited with code ${code}${signal ? `, signal ${signal}` : ""}`))
-							}
+								if (code === 0) {
+									resolve()
+								} else {
+									reject(new Error(`Hook exited with code ${code}${signal ? `, signal ${signal}` : ""}`))
+								}
+							})
 						})
 
 						// Handle process errors
 						this.childProcess.on("error", (error) => {
-							// Unregister from active processes
-							this.safeUnregister()
-
-							if (this.timeoutHandle) {
-								clearTimeout(this.timeoutHandle)
-								this.timeoutHandle = null
-							}
-							// Remove abort listener
-							if (this.abortSignal) {
-								this.abortSignal.removeEventListener("abort", abortHandler)
-							}
-							this.emit("error", error)
-							reject(error)
+							settle(() => {
+								this.emit("error", error)
+								reject(error)
+							})
 						})
 
 						// Send input to the process
@@ -232,14 +232,10 @@ export class HookProcess extends EventEmitter implements IHookProcess {
 							this.childProcess.stdin?.write(inputJson)
 							this.childProcess.stdin?.end()
 						} catch (error) {
-							reject(new Error(`Failed to write input to hook: ${error}`))
+							rejectOnce(new Error(`Failed to write input to hook: ${error}`), "SIGTERM")
 						}
 					} catch (error) {
-						this.safeUnregister()
-						if (this.abortSignal) {
-							this.abortSignal.removeEventListener("abort", abortHandler)
-						}
-						reject(error)
+						rejectOnce(error instanceof Error ? error : new Error(String(error)))
 					}
 				})()
 			})
@@ -257,6 +253,27 @@ export class HookProcess extends EventEmitter implements IHookProcess {
 		if (this.isRegistered) {
 			HookProcessRegistry.unregister(this)
 			this.isRegistered = false
+		}
+	}
+
+	private killProcessTree(signal: NodeJS.Signals): void {
+		if (!this.childProcess) {
+			return
+		}
+
+		const pid = this.childProcess.pid
+		try {
+			if (pid && process.platform !== "win32") {
+				process.kill(-pid, signal)
+			} else {
+				this.childProcess.kill(signal)
+			}
+		} catch (error) {
+			try {
+				this.childProcess.kill(signal)
+			} catch (fallbackError) {
+				Logger.debug(`[HookProcess] Error sending ${signal}: ${error}; fallback failed: ${fallbackError}`)
+			}
 		}
 	}
 

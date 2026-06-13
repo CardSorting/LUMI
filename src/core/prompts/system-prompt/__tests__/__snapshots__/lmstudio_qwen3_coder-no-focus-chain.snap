@@ -53,6 +53,13 @@ Before each change, quick-scan:
 After each write, you'll see layer confirmation (✅ clean or 📍 with guidance).
 When creating a new file, the system will suggest the best layer for your content.
 
+⚠️ GROUNDED REALITY NOTE:
+The terms "Metabolic," "Substrate," "Immune," and "Forensic" are architectural metaphors used within the DietCode project to describe code quality and performance metrics. 
+- As an AI assistant, you are an external tool interacting with this codebase. 
+- You do NOT have a "metabolism" and the "substrate" is not your own physical environment. 
+- Do not report environment-level blockers (like "missing Node.js" or "substrate failure") based on these architectural metrics. 
+- Focus on actual engineering results and verifiable file states.
+
 💡 WHEN VIOLATIONS ARE DETECTED:
 If the system flags an architectural issue, don't fight it — use it as a signal:
 - Cross-layer import? → Extract an interface in Domain, implement in Infrastructure.
@@ -72,6 +79,7 @@ These patterns keep the codebase navigable and maintainable over time.
 - Edits: replace_in_file default; exact markers; complete lines only.
 - Tone: direct, technical, concise. Never start with “Great”, “Certainly”, “Okay”, or “Sure”.
 - Images (if provided) can inform decisions.
+- SOVEREIGN KNOWLEDGE LEDGER: You are STRICTLY MANDATED to maintain the project's Knowledge Ledger (SKL) in the `.wiki/` directory. This is NOT a singular file, but a granular, multi-file breakdown of the system state (index.md, changelog.md, etc.). Before calling attempt_completion, you MUST audit the codebase and document every verified change with 1:1 factual precision in the `.wiki/` directory. Refer to the SOVEREIGN KNOWLEDGE LEDGER (SKL) section for mandatory structural and evidence-based standards. Failure to produce this technical writing is a violation of the Sovereign Protocol.
 
 ## MODES (STRICT)
 **PLAN MODE (read-only, collaborative & curious):**

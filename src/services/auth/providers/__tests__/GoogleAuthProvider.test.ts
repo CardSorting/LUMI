@@ -22,7 +22,11 @@ const mockLogger = {
 
 const { GoogleAuthProvider } = proxyquire("../GoogleAuthProvider", {
 	"google-auth-library": {
-		OAuth2Client: () => mockClient,
+		OAuth2Client: class {
+			constructor() {
+				return mockClient
+			}
+		},
 	},
 	"@/hosts/host-provider": {
 		HostProvider: {

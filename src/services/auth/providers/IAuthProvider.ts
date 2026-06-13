@@ -16,6 +16,12 @@ export interface IAuthProvider {
 	signIn(controller: Controller, authorizationCode: string, provider: string, state?: string): Promise<DietCodeAuthInfo | null>
 
 	/**
+	 * Optional provider-specific sign-out cleanup.
+	 * If implemented, called during signOutProvider() to clear provider-managed tokens.
+	 */
+	signOut?(controller: Controller): Promise<void>
+
+	/**
 	 * Checks if the ID token should be refreshed.
 	 */
 	shouldRefreshIdToken(refreshToken: string, expiresAt?: number): Promise<boolean>

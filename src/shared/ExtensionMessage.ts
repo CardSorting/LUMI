@@ -337,8 +337,15 @@ export interface DietCodeAskUseSubagents {
 	prompts: string[]
 }
 
-export interface DietCodePlanModeResponse {
-	response: string
+/**
+ * Shared decision-engine metadata used by both plan responses and follow-up questions.
+ *
+ * NOTE: This interface captures the structural overlap between DietCodePlanModeResponse
+ * and DietCodeAskQuestion — both carry the same action/risk/constraint/critique fields.
+ * Extracting a shared base (Dependency Inversion) ensures new agent-decision fields
+ * are added in one place and avoids silent type drift.
+ */
+export interface AgentDecisionMetadata {
 	options?: string[]
 	selected?: string
 	confidenceScore?: number
@@ -397,64 +404,12 @@ export interface DietCodePlanModeResponse {
 	}
 }
 
-export interface DietCodeAskQuestion {
+export interface DietCodePlanModeResponse extends AgentDecisionMetadata {
+	response: string
+}
+
+export interface DietCodeAskQuestion extends AgentDecisionMetadata {
 	question: string
-	options?: string[]
-	selected?: string
-	confidenceScore?: number
-	ambiguityReasoning?: string
-	verifiedEntities?: string[]
-	actions?: Array<{
-		id: string
-		label: string
-		description?: string
-		rationale?: string
-		priority: "critical" | "recommended" | "optional"
-		impact: "low" | "medium" | "high"
-		dependsOn?: string[]
-		isChecked: boolean
-	}>
-	risks?: Array<{
-		impact: "high" | "medium" | "low"
-		description: string
-	}>
-	intentDecomposition?: Array<{
-		phase: string
-		goal: string
-	}>
-	constraints?: string[]
-	constraintExplanations?: Record<string, string>
-	architecturalLayers?: Record<string, "domain" | "core" | "infrastructure" | "ui" | "plumbing">
-	policyCompliance?: {
-		isAligned: boolean
-		reasoning: string
-		violations?: string[]
-	}
-	outcomeMapping?: {
-		blastRadius?: Array<{ path: string; reason: string }>
-		complexityDelta?: {
-			linesAdded: number
-			linesDeleted: number
-			filesCreated: number
-		}
-		predictedOutcome?: string
-	}
-	adversarialCritique?: {
-		critique: string
-		pitfalls: string[]
-		mitigations: string[]
-		redTeamScore: number
-	}
-	interactiveClarifications?: Array<{
-		label: string
-		type: "provide_path" | "clarify_intent" | "select_variant" | "confirm_risk"
-		data?: Record<string, unknown>
-	}>
-	swarmConsensus?: {
-		agreementScore: number
-		consensusNarrative: string
-		agentFeedback: string[]
-	}
 }
 
 export interface DietCodeAskNewTask {

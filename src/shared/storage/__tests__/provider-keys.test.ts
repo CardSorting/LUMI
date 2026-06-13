@@ -19,7 +19,7 @@ describe("Provider key mapping", () => {
 	})
 
 	it("uses provider-specific model key behavior for DietCode", () => {
-		expect(getProviderModelIdKey("dietcode", "act")).to.equal("actModeDietcodeModelId")
-		expect(getProviderModelIdKey("dietcode", "plan")).to.equal("planModeDietcodeModelId")
+		expect(getProviderModelIdKey("dietcode", "act")).to.equal("actModeDietCodeModelId")
+		expect(getProviderModelIdKey("dietcode", "plan")).to.equal("planModeDietCodeModelId")
 	})
 })

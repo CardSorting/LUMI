@@ -223,14 +223,12 @@ export class AuthService {
 	}
 
 	getInfo(): AuthState {
-		// TODO: this logic should be cleaner, but this will determine the authentication state for the webview -- if a user object is returned then the webview assumes authenticated, otherwise it assumes logged out (we previously returned a UserInfo object with empty fields, and this represented a broken logged in state)
-		let user: any = null
+		let user: UserInfo | undefined
 		if (this._dietcodeAuthInfo && this._authenticated) {
 			const userInfo = this._dietcodeAuthInfo.userInfo
 			this._dietcodeAuthInfo.userInfo.appBaseUrl = DietCodeEnv.config()?.appBaseUrl
 
 			user = UserInfo.create({
-				// TODO: create proto for new user info type
 				uid: userInfo?.id,
 				displayName: userInfo?.displayName,
 				email: userInfo?.email,
@@ -283,9 +281,9 @@ export class AuthService {
 			Logger.info(`Signing out from provider: ${providerName}`)
 			const provider = this._providers.get(providerName)
 			if (provider) {
-				// Provider specific cleanup if implemented
-				if ("signOut" in provider && typeof provider.signOut === "function") {
-					await (provider as any).signOut(this._controller)
+				// Use the optional signOut() contract from IAuthProvider
+				if (provider.signOut) {
+					await provider.signOut(this._controller)
 				}
 			}
 
@@ -296,7 +294,7 @@ export class AuthService {
 
 			// Force clear the specific token from storage
 			const key = providerName === "google" ? "dietcode:googleAuthInfo" : "dietcode:dietcodeAccountId"
-			this._controller.stateManager.setSecret(key as any, undefined)
+			this._controller.stateManager.setSecret(key, undefined)
 
 			if (this._activeProviderName === providerName) {
 				this._dietcodeAuthInfo = null
@@ -332,15 +330,6 @@ export class AuthService {
 		} finally {
 			await this.sendAuthStatusUpdate()
 		}
-	}
-
-	/**
-	 * @deprecated Use handleDeauth() instead. Storage clearing is now handled consistently within the auth domain.
-	 * Clear the authentication token from the extension's storage.
-	 * This is typically called when the user logs out.
-	 */
-	async clearAuthToken(): Promise<void> {
-		this.destroyTokens()
 	}
 
 	/**

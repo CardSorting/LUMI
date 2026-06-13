@@ -406,6 +406,45 @@
   {
     "type": "function",
     "function": {
+      "name": "project_map",
+      "description": "Build a Project Map for planning. Use this before broad grep/read exploration in Plan Mode to identify starting files, connected files, risk areas with mitigations, targeted fact-check searches/reads, confidence, and safe/recommended/refactor choices. Internally this uses structural and cognitive project context when available.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Plain-language task or feature description to map when no exact file or symbol is known."
+          },
+          "path": {
+            "type": "string",
+            "description": "Known file path to use as the starting point for structural context."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Known function, class, type, or exported symbol to locate and map."
+          },
+          "maxFiles": {
+            "type": "integer",
+            "description": "Maximum number of files to return in each section. Defaults to 12 and is capped at 30."
+          },
+          "includeEvidence": {
+            "type": "boolean",
+            "description": "Whether to include a concise evidence list explaining which context sources informed the map. Defaults to true."
+          },
+          "task_progress": {
+            "type": "string",
+            "description": "A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "use_subagents",
       "description": "Run up to five focused in-process subagents in parallel. Each subagent gets its own prompt and returns a comprehensive research result with tool and token stats. Use this for broad exploration when reading many files would consume the main agent's context window. You do not need to launch multiple subagents every time; using one subagent is valid when it avoids unnecessary context usage for light discovery work.",
       "strict": false,

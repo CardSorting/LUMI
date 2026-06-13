@@ -38,6 +38,10 @@ interface QueueData {
 	items: Record<string, SyncQueueItem>
 }
 
+type QueueLoadResult =
+	| { ok: true; data: QueueData; discardedItems: number; normalizedItems: number }
+	| { ok: false; reason: string }
+
 /**
  * A JSON file-backed queue for syncing task data to remote storage.
  *
@@ -98,12 +102,85 @@ export class SyncQueue {
 		try {
 			if (fs.existsSync(this.queuePath)) {
 				const content = fs.readFileSync(this.queuePath, "utf-8")
-				this.data = JSON.parse(content)
+				const parsed = JSON.parse(content)
+				const result = SyncQueue.sanitizeQueueData(parsed)
+				if (!result.ok) {
+					Logger.warn(`[SyncQueue] Queue file has unexpected shape (${result.reason}), resetting to empty`)
+					this.data = { items: {} }
+					this.isDirty = true
+					this.flush()
+					return
+				}
+
+				this.data = result.data
+				if (result.discardedItems > 0 || result.normalizedItems > 0) {
+					Logger.warn(
+						`[SyncQueue] Repaired queue data: discarded ${result.discardedItems} invalid item(s), normalized ${result.normalizedItems} item id(s)`,
+					)
+					this.isDirty = true
+					this.flush()
+				}
 			}
 		} catch (error) {
 			Logger.error("[SyncQueue] Failed to load queue data:", error)
 			this.data = { items: {} }
 		}
+	}
+
+	private static sanitizeQueueData(value: unknown): QueueLoadResult {
+		if (!value || typeof value !== "object" || Array.isArray(value)) {
+			return { ok: false, reason: "root is not an object" }
+		}
+
+		const items = (value as { items?: unknown }).items
+		if (!items || typeof items !== "object" || Array.isArray(items)) {
+			return { ok: false, reason: "items is not an object" }
+		}
+
+		const data: QueueData = { items: {} }
+		let discardedItems = 0
+		let normalizedItems = 0
+
+		for (const [storedId, item] of Object.entries(items)) {
+			if (!SyncQueue.isQueueItem(item)) {
+				discardedItems++
+				continue
+			}
+
+			const canonicalId = `${item.taskId}/${item.key}`
+			if (storedId !== canonicalId || item.id !== canonicalId) {
+				normalizedItems++
+			}
+
+			data.items[canonicalId] = {
+				...item,
+				id: canonicalId,
+				retryCount: Math.max(0, Math.trunc(item.retryCount)),
+				lastError: item.lastError ?? null,
+			}
+		}
+
+		return { ok: true, data, discardedItems, normalizedItems }
+	}
+
+	private static isQueueItem(item: unknown): item is SyncQueueItem {
+		if (!item || typeof item !== "object" || Array.isArray(item)) {
+			return false
+		}
+
+		const candidate = item as Partial<SyncQueueItem>
+		return (
+			typeof candidate.id === "string" &&
+			typeof candidate.taskId === "string" &&
+			typeof candidate.key === "string" &&
+			typeof candidate.data === "string" &&
+			typeof candidate.timestamp === "number" &&
+			Number.isFinite(candidate.timestamp) &&
+			(candidate.status === "pending" || candidate.status === "synced" || candidate.status === "failed") &&
+			typeof candidate.retryCount === "number" &&
+			Number.isFinite(candidate.retryCount) &&
+			(candidate.lastError === null || typeof candidate.lastError === "string")
+		)
 	}
 
 	/**
@@ -176,7 +253,7 @@ export class SyncQueue {
 	getPending(): SyncQueueItem[] {
 		return Object.values(this.data.items)
 			.filter((item) => item.status === "pending")
-			.sort((a, b) => b.timestamp - a.timestamp)
+			.sort((a, b) => a.timestamp - b.timestamp) // Oldest first for FIFO processing
 	}
 
 	/**

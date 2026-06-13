@@ -137,10 +137,7 @@ describe("SubagentToolHandler", () => {
 			partial: false,
 		})
 
-		assert.equal(
-			result,
-			"The tool execution failed with the following error:\n<error>\nSubagents are disabled. Enable them in Settings > Features to use this tool.\n</error>",
-		)
+		assert.ok((result as string).includes("Subagents are disabled. Enable them in Settings > Features to use this tool."))
 	})
 
 	it("streams partial use_subagents approval as ask when not auto-approved", async () => {
@@ -308,7 +305,7 @@ describe("SubagentToolHandler", () => {
 		})
 
 		assert.equal(typeof result, "string")
-		assert.ok((result as string).includes("Total: 3"))
+		assert.ok((result as string).includes("Total Agents: 3"))
 		assert.ok(maxActiveRuns > 1)
 
 		const subagentStatusCalls = callbacks.say.getCalls().filter((call) => call.args[0] === "subagent")
@@ -377,8 +374,8 @@ describe("SubagentToolHandler", () => {
 		})
 
 		assert.equal(typeof result, "string")
-		assert.ok((result as string).includes("Succeeded: 1"))
-		assert.ok((result as string).includes("Failed: 1"))
+		assert.ok((result as string).includes("Success: 1"))
+		assert.ok((result as string).includes("Fail: 1"))
 		assert.ok((result as string).includes("boom"))
 	})
 

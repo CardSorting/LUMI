@@ -24,6 +24,7 @@ export class DietCodeBlobStorage extends DietCodeStorage {
 	private adapter: StorageAdapter | undefined
 	private settings: BlobStoreSettings | undefined
 	private initialized = false
+	private _initializing = false
 
 	/**
 	 * Initialize the storage adapter with the given settings.
@@ -31,6 +32,13 @@ export class DietCodeBlobStorage extends DietCodeStorage {
 	 */
 	public init(settings?: BlobStoreSettings) {
 		if (!settings) {
+			return
+		}
+
+		// Guard against concurrent initialization races — two callers passing
+		// the settingsChanged check simultaneously would create two adapters,
+		// with the second silently overwriting the first.
+		if (this._initializing) {
 			return
 		}
 
@@ -48,6 +56,7 @@ export class DietCodeBlobStorage extends DietCodeStorage {
 			return
 		}
 
+		this._initializing = true
 		try {
 			if (!DietCodeBlobStorage.isConfigured(settings)) {
 				// Not configured - this is expected and not an error
@@ -64,6 +73,8 @@ export class DietCodeBlobStorage extends DietCodeStorage {
 		} catch (error) {
 			// Log but don't throw - allow startup to continue
 			Logger.error("[DietCodeBlobStorage] initialization failed:", error)
+		} finally {
+			this._initializing = false
 		}
 	}
 

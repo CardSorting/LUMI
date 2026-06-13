@@ -38,7 +38,15 @@ describe("AuthService Multi-Session", () => {
 		const googleProvider = providers.get("google")
 
 		sandbox.stub(dietcodeProvider, "getAccessToken").resolves("dietcode-token")
-		sandbox.stub(googleProvider, "getAccessToken").resolves("google-token")
+		sandbox.stub(googleProvider, "getAccessToken").resolves("google-token")(
+			// Initialize session state so active provider token retrieval succeeds without network refresh
+			service as any,
+		)._dietcodeAuthInfo = {
+			idToken: "dietcode-token",
+			provider: "dietcode",
+			expiresAt: Date.now() / 1000 + 3600,
+		}
+		;(service as any)._authenticated = true
 
 		const dietcodeToken = await service.getAuthToken("dietcode")
 		const googleToken = await service.getAuthToken("google")

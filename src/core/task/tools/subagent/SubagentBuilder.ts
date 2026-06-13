@@ -129,7 +129,7 @@ export class SubagentBuilder {
 		const systemPrompt = configuredSystemPrompt || generatedSystemPrompt
 
 		// Nesting depth awareness for the subagent
-		const currentDepth = this.baseConfig.taskState.recursionDepth || 0
+		const currentDepth = this.baseConfig.taskState?.recursionDepth || 0
 		const depthBlock = `\n\n# SWARM NESTING CONTEXT\nYou are operating at nesting depth ${currentDepth} (Max: 3). ${currentDepth >= 2 ? "You are at a deep structural layer; avoid spawning further subagents unless absolutely critical." : ""}`
 
 		// 1. Fetch current structural health signal
@@ -141,7 +141,7 @@ export class SubagentBuilder {
 			: ""
 
 		// Cross-Agent Intelligence (Blackboard)
-		const blackboard = this.baseConfig.taskState.swarmBlackboard || []
+		const blackboard = this.baseConfig.taskState?.swarmBlackboard || []
 		const blackboardBlock =
 			blackboard.length > 0
 				? `\n\n# SWARM BLACKBOARD (Shared Intelligence)\n${blackboard.map((f) => `- ${f}`).join("\n")}\nCONSIDER the findings above. If your research contradicts or supports these findings, signal it explicitly.`

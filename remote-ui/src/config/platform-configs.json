@@ -1,9 +1,0 @@
-{
-	"remote": {
-		"messageEncoding": "json",
-		"showNavbar": true,
-		"postMessageHandler": "remote",
-		"togglePlanActKeys": "Meta+Shift+p",
-		"supportsTerminalMentions": false
-	}
-}

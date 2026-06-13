@@ -109,7 +109,8 @@ async function showVersionUpdateAnnouncement(stateManager: StateManager) {
 		}
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
-		Logger.error(`Error during post-update actions: ${errorMessage}, Stack trace: ${error.stack}`)
+		const stackTrace = error instanceof Error ? error.stack : undefined
+		Logger.error(`Error during post-update actions: ${errorMessage}${stackTrace ? `, Stack trace: ${stackTrace}` : ""}`)
 	}
 }
 

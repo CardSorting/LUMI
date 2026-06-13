@@ -84,14 +84,14 @@
     "type": "function",
     "function": {
       "name": "write_to_file",
-      "description": "[IMPORTANT: Always output the absolutePath first] Request to write content to a file at the specified path. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.",
+      "description": "[IMPORTANT: Always output the path first] Request to write content to a file at the specified path. If the file exists, it will be overwritten with the provided content. If the file doesn't exist, it will be created. This tool will automatically create any directories needed to write the file.",
       "strict": false,
       "parameters": {
         "type": "object",
         "properties": {
-          "absolutePath": {
+          "path": {
             "type": "string",
-            "description": "The absolute path to the file to write to."
+            "description": "The path to the file to write to. Can be relative to the current working directory or an absolute path."
           },
           "content": {
             "type": "string",
@@ -103,7 +103,7 @@
           }
         },
         "required": [
-          "absolutePath",
+          "path",
           "content"
         ],
         "additionalProperties": false
@@ -114,14 +114,14 @@
     "type": "function",
     "function": {
       "name": "replace_in_file",
-      "description": "[IMPORTANT: Always output the absolutePath first] Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.",
+      "description": "[IMPORTANT: Always output the path first] Request to replace sections of content in an existing file using SEARCH/REPLACE blocks that define exact changes to specific parts of the file. This tool should be used when you need to make targeted changes to specific parts of a file.",
       "strict": false,
       "parameters": {
         "type": "object",
         "properties": {
-          "absolutePath": {
+          "path": {
             "type": "string",
-            "description": "The absolute path to the file to write to."
+            "description": "The path of the file to modify (relative to the current working directory {{CWD}})"
           },
           "diff": {
             "type": "string",
@@ -133,7 +133,7 @@
           }
         },
         "required": [
-          "absolutePath",
+          "path",
           "diff"
         ],
         "additionalProperties": false
@@ -448,6 +448,45 @@
           "title",
           "from_ref"
         ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "project_map",
+      "description": "Build a Project Map for planning. Use this before broad grep/read exploration in Plan Mode to identify starting files, connected files, risk areas with mitigations, targeted fact-check searches/reads, confidence, and safe/recommended/refactor choices. Internally this uses structural and cognitive project context when available.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Plain-language task or feature description to map when no exact file or symbol is known."
+          },
+          "path": {
+            "type": "string",
+            "description": "Known file path to use as the starting point for structural context."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Known function, class, type, or exported symbol to locate and map."
+          },
+          "maxFiles": {
+            "type": "integer",
+            "description": "Maximum number of files to return in each section. Defaults to 12 and is capped at 30."
+          },
+          "includeEvidence": {
+            "type": "boolean",
+            "description": "Whether to include a concise evidence list explaining which context sources informed the map. Defaults to true."
+          },
+          "task_progress": {
+            "type": "string",
+            "description": "A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)"
+          }
+        },
+        "required": [],
         "additionalProperties": false
       }
     }
