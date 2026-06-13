@@ -1,5 +1,6 @@
 import { shouldShowAuditHistoryStrip } from "@shared/audit/auditHistoryUtils"
 import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessages"
+import type { PreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
@@ -10,6 +11,7 @@ import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/s
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { getEnvironmentColor } from "@/utils/environmentColors"
+import { AuditHealthChip } from "./AuditHealthChip"
 import { AuditHistoryStrip } from "./AuditHistoryStrip"
 import CopyTaskButton from "./buttons/CopyTaskButton"
 import DeleteTaskButton from "./buttons/DeleteTaskButton"
@@ -19,8 +21,12 @@ import { CheckpointError } from "./CheckpointError"
 import ContextWindow from "./ContextWindow"
 import { FocusChain } from "./FocusChain"
 import { highlightText } from "./Highlights"
+import { OrchestratorGateStrip } from "./OrchestratorGateStrip"
+import { PreCompletionGateStrip } from "./PreCompletionGateStrip"
 import { SubagentAuditBadge } from "./SubagentAuditBadge"
+import { SubagentHandoffStrip } from "./SubagentHandoffStrip"
 import { TaskAuditBadge } from "./TaskAuditBadge"
+import { ViolationSessionLedgerStrip } from "./ViolationSessionLedgerStrip"
 
 const IS_DEV = process.env.IS_DEV === '"true"'
 interface TaskHeaderProps {
@@ -38,8 +44,11 @@ interface TaskHeaderProps {
 	auditSnapshots?: AuditMessageSnapshot[]
 	auditHealth?: AuditHealthSummary
 	subagentAuditSummary?: SubagentAuditSummary
+	checklistSummary?: PreCompletionChecklistSummary
 	showFocusChainPlaceholder?: boolean
 	onScrollToAuditMessage?: (ts: number) => void
+	onScrollToLatestGateBlock?: () => void
+	onScrollToLatestAdvisory?: () => void
 	onClose: () => void
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
 }
@@ -60,8 +69,11 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	auditSnapshots,
 	auditHealth,
 	subagentAuditSummary,
+	checklistSummary,
 	showFocusChainPlaceholder,
 	onScrollToAuditMessage,
+	onScrollToLatestGateBlock,
+	onScrollToLatestAdvisory,
 	onClose,
 	onSendMessage,
 }) => {
@@ -76,6 +88,10 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		setExpandTaskHeader: setIsTaskExpanded,
 		environment,
 	} = useExtensionState()
+
+	const handleExpandTaskAudit = useCallback(() => {
+		setIsTaskExpanded(true)
+	}, [setIsTaskExpanded])
 
 	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
 	const [isTextOverflowing, setIsTextOverflowing] = useState(false)
@@ -187,8 +203,17 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						)}
 					</div>
 					<div className="inline-flex items-center justify-end select-none shrink-0 gap-1">
-						<SubagentAuditBadge summary={subagentAuditSummary} />
-						<TaskAuditBadge auditHealth={auditHealth} auditMetadata={latestAuditMetadata} auditTrend={auditTrend} />
+						{!isTaskExpanded && (
+							<AuditHealthChip auditHealth={auditHealth} onExpandTaskHeader={handleExpandTaskAudit} />
+						)}
+						<SubagentAuditBadge onExpandTaskHeader={handleExpandTaskAudit} summary={subagentAuditSummary} />
+						<TaskAuditBadge
+							auditHealth={auditHealth}
+							auditMetadata={latestAuditMetadata}
+							auditTrend={auditTrend}
+							onExpandTaskHeader={handleExpandTaskAudit}
+							onJumpToGateBlock={onScrollToLatestGateBlock}
+						/>
 						{isCostAvailable && (
 							<div
 								className="mx-1 px-1 py-0.25 rounded-full inline-flex shrink-0 text-badge-background bg-badge-foreground/80 items-center"
@@ -256,9 +281,33 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 				<div className="px-2 pb-1">
 					<AuditHistoryStrip
 						auditHealth={auditHealth}
+						checklistSummary={checklistSummary}
 						onScrollToAuditMessage={onScrollToAuditMessage}
+						onScrollToLatestGateBlock={onScrollToLatestGateBlock}
 						snapshots={auditSnapshots}
+						subagentAuditSummary={subagentAuditSummary}
 					/>
+				</div>
+			)}
+
+			<div className="px-2 pb-1">
+				<PreCompletionGateStrip
+					auditMetadata={latestAuditMetadata}
+					onScrollToLatestAdvisory={onScrollToLatestAdvisory}
+					onScrollToLatestGateBlock={onScrollToLatestGateBlock}
+				/>
+			</div>
+
+			{auditSnapshots && auditSnapshots.length > 0 && (
+				<div className="px-2 pb-1">
+					<OrchestratorGateStrip auditMetadata={latestAuditMetadata} />
+					<ViolationSessionLedgerStrip onScrollToAuditMessage={onScrollToAuditMessage} snapshots={auditSnapshots} />
+				</div>
+			)}
+
+			{subagentAuditSummary && subagentAuditSummary.parentGateSignals.length > 0 && (
+				<div className="px-2 pb-1">
+					<SubagentHandoffStrip summary={subagentAuditSummary} />
 				</div>
 			)}
 		</div>

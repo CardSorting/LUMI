@@ -185,8 +185,11 @@ export function shouldEmitAdvisoryAuditEvent(metadata: TaskAuditMetadata): boole
 }
 
 /** Human-readable summary for act-mode advisory chat events — SonarQube issue annotation pattern. */
-export function buildAdvisoryAuditEventSummary(metadata: TaskAuditMetadata): string {
+export function buildAdvisoryAuditEventSummary(metadata: TaskAuditMetadata, previousMetadata?: TaskAuditMetadata): string {
 	const assessment = computeHardeningAssessment(metadata)
+	const newViolations = previousMetadata
+		? (metadata.violations ?? []).filter((v) => !(previousMetadata.violations ?? []).includes(v))
+		: (metadata.violations ?? [])
 	const topViolations = (metadata.violations ?? []).slice(0, 4).map(formatViolationLabel)
 	const remediation = (metadata.violations ?? [])
 		.slice(0, 2)
@@ -194,6 +197,9 @@ export function buildAdvisoryAuditEventSummary(metadata: TaskAuditMetadata): str
 		.filter(Boolean)
 	return [
 		`Act-mode audit advisory: Grade ${metadata.hardening_grade ?? assessment.grade} (${metadata.hardening_score ?? assessment.score}/100).`,
+		newViolations.length > 0 && previousMetadata
+			? `New since last advisory: ${newViolations.slice(0, 4).map(formatViolationLabel).join(", ")}.`
+			: undefined,
 		topViolations.length > 0 ? `Flagged: ${topViolations.join(", ")}.` : undefined,
 		remediation.length > 0 ? `Remediation: ${remediation.join(" ")}` : undefined,
 		"Address before calling attempt_completion.",

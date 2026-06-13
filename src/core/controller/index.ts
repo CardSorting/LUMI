@@ -992,6 +992,7 @@ export class Controller implements IController {
 		const auditCompletionGateCriticalOnly = this.stateManager.getGlobalSettingsKey("auditCompletionGateCriticalOnly")
 		const auditActModeAdvisoryEnabled = this.stateManager.getGlobalSettingsKey("auditActModeAdvisoryEnabled")
 		const auditAdvisoryEscalationEnabled = this.stateManager.getGlobalSettingsKey("auditAdvisoryEscalationEnabled")
+		const auditAdvisoryAutoScrollMode = this.stateManager.getGlobalSettingsKey("auditAdvisoryAutoScrollMode")
 		const auditPlanRegressionGateEnabled = this.stateManager.getGlobalSettingsKey("auditPlanRegressionGateEnabled")
 		const auditToolOutputAdvisoryEnabled = this.stateManager.getGlobalSettingsKey("auditToolOutputAdvisoryEnabled")
 		const auditFileWriteAdvisoryEnabled = this.stateManager.getGlobalSettingsKey("auditFileWriteAdvisoryEnabled")
@@ -1115,6 +1116,7 @@ export class Controller implements IController {
 			auditCompletionGateCriticalOnly,
 			auditActModeAdvisoryEnabled,
 			auditAdvisoryEscalationEnabled,
+			auditAdvisoryAutoScrollMode,
 			auditPlanRegressionGateEnabled,
 			auditToolOutputAdvisoryEnabled,
 			auditFileWriteAdvisoryEnabled,

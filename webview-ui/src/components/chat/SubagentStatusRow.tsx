@@ -1,3 +1,4 @@
+import { formatSubagentParentSignal, isParentGateSignal } from "@shared/audit/auditSubagentRollup"
 import {
 	DietCodeAskUseSubagents,
 	DietCodeMessage,
@@ -255,13 +256,22 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 									<span className="opacity-70 whitespace-pre-wrap break-words">{statsText}</span>
 									{entry.criticalSignals && entry.criticalSignals.length > 0 && (
 										<div className="flex flex-wrap gap-1">
-											{entry.criticalSignals.map((signal) => (
-												<span
-													className="px-1 py-0 rounded-[2px] bg-foreground/10 text-foreground/80 font-mono text-[9px]"
-													key={signal}>
-													{signal}
-												</span>
-											))}
+											{entry.criticalSignals.map((signal) => {
+												const isParent = isParentGateSignal(signal)
+												const label = isParent ? formatSubagentParentSignal(signal) : signal
+												return (
+													<span
+														className={
+															isParent
+																? "px-1 py-0 rounded-[2px] bg-amber-500/15 text-amber-700 dark:text-amber-400 font-mono text-[9px] border border-amber-500/25"
+																: "px-1 py-0 rounded-[2px] bg-foreground/10 text-foreground/80 font-mono text-[9px]"
+														}
+														key={signal}
+														title={isParent ? "Parent audit handoff signal" : undefined}>
+														{label}
+													</span>
+												)
+											})}
 										</div>
 									)}
 								</div>

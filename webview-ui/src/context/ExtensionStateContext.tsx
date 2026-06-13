@@ -296,6 +296,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		auditCompletionGateCriticalOnly: false,
 		auditActModeAdvisoryEnabled: true,
 		auditAdvisoryEscalationEnabled: true,
+		auditAdvisoryAutoScrollMode: "critical",
 		auditPlanRegressionGateEnabled: true,
 		auditToolOutputAdvisoryEnabled: true,
 		auditFileWriteAdvisoryEnabled: true,

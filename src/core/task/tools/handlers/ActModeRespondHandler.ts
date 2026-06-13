@@ -94,7 +94,7 @@ export class ActModeRespondHandler implements IToolHandler, IPartialBlockHandler
 						try {
 							await config.callbacks.say(
 								"info",
-								buildAdvisoryAuditEventSummary(advisoryMetadata),
+								buildAdvisoryAuditEventSummary(advisoryMetadata, previousAdvisory),
 								undefined,
 								undefined,
 								false,

@@ -1,4 +1,5 @@
 import type { DietCodeMessage, TaskAuditMetadata } from "@shared/ExtensionMessage"
+import { dedupeConsecutiveAdvisorySnapshots } from "./auditAdvisoryDedup"
 import { computeHardeningAssessment } from "./taskAuditUtils"
 
 export type AuditSnapshotSource = "completion" | "plan" | "gate_block" | "advisory"
@@ -40,14 +41,64 @@ export function messageCarriesAuditMetadata(message: DietCodeMessage): boolean {
 	return false
 }
 
-/**
- * Returns the most recent audit metadata from task chat history.
+/** Returns the most recent audit metadata from task chat history.
  * Scans newest-first — industry pattern for "latest quality gate result".
  */
 export function getLatestAuditFromMessages(messages: DietCodeMessage[]): TaskAuditMetadata | undefined {
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const message = messages[i]
 		if (messageCarriesAuditMetadata(message) && message.auditMetadata) {
+			return message.auditMetadata
+		}
+	}
+	return undefined
+}
+
+/**
+ * Returns audit metadata for completion gate UI — excludes act-mode advisories so
+ * header badge/checklist reflect completion readiness (GitHub Checks head commit pattern).
+ */
+export function getLatestGateAuditFromMessages(messages: DietCodeMessage[]): TaskAuditMetadata | undefined {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i]
+		if (!message.auditMetadata || !messageCarriesAuditMetadata(message)) {
+			continue
+		}
+		if (resolveAuditSource(message) === "advisory") {
+			continue
+		}
+		return message.auditMetadata
+	}
+	return undefined
+}
+
+/** Previous gate-relevant audit snapshot — pairs with getLatestGateAuditFromMessages for trend. */
+export function getPreviousGateAuditFromMessages(messages: DietCodeMessage[]): TaskAuditMetadata | undefined {
+	let foundLatest = false
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i]
+		if (!message.auditMetadata || !messageCarriesAuditMetadata(message)) {
+			continue
+		}
+		if (resolveAuditSource(message) === "advisory") {
+			continue
+		}
+		if (foundLatest) {
+			return message.auditMetadata
+		}
+		foundLatest = true
+	}
+	return undefined
+}
+
+/** Prior act-mode advisory before a message timestamp — SonarQube issue diff baseline. */
+export function getPreviousAdvisoryAuditBeforeTs(messages: DietCodeMessage[], beforeTs: number): TaskAuditMetadata | undefined {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i]
+		if (message.ts >= beforeTs) {
+			continue
+		}
+		if (isAdvisoryAuditInfoMessage(message) && message.auditMetadata) {
 			return message.auditMetadata
 		}
 	}
@@ -98,6 +149,11 @@ export function getAuditSnapshotsFromMessages(messages: DietCodeMessage[]): Audi
 		snapshots.push({ ts: message.ts, source, auditMetadata: message.auditMetadata })
 	}
 	return snapshots
+}
+
+/** Returns deduplicated audit snapshots for UI — suppresses repeated act-mode advisories. */
+export function getDisplayAuditSnapshotsFromMessages(messages: DietCodeMessage[]): AuditMessageSnapshot[] {
+	return dedupeConsecutiveAdvisorySnapshots(getAuditSnapshotsFromMessages(messages))
 }
 
 /** Returns all audit snapshots in chronological order (oldest first). */

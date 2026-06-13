@@ -5,6 +5,7 @@ import {
 	countTrailingGateBlocks,
 	extractAuditScoreTimeline,
 	getAuditSnapshotKey,
+	getAutoScrollAuditEventTs,
 	reconcileAuditHistoryState,
 	shouldAutoExpandAuditHistory,
 	shouldShowAuditHistoryStrip,
@@ -76,6 +77,14 @@ describe("auditHistoryUtils", () => {
 		const advisory = snapshot(3, "advisory")
 		advisory.auditMetadata.violations = ["missing_validation_evidence"]
 		expect(shouldAutoExpandAuditHistory([passing, advisory], 1)).to.equal(true)
+	})
+
+	it("returns ts for auto-scroll when a new gate block arrives", () => {
+		const passing = snapshot(1)
+		const blocked = snapshot(2, "gate_block")
+		blocked.auditMetadata.gate_blocked = true
+		expect(getAutoScrollAuditEventTs([passing, blocked], 1)).to.equal(2)
+		expect(getAutoScrollAuditEventTs([passing, blocked], 2)).to.equal(undefined)
 	})
 
 	it("controls strip visibility and exports markdown timeline", () => {

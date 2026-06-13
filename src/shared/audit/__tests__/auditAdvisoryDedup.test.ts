@@ -1,4 +1,5 @@
 import {
+	dedupeConsecutiveAdvisorySnapshots,
 	getNewAdvisoryViolations,
 	isDuplicateAdvisoryAudit,
 	shouldEmitAdvisoryAuditChatEvent,
@@ -33,5 +34,19 @@ describe("auditAdvisoryDedup", () => {
 		const previous = enrichAuditMetadata({ violations: ["missing_validation_evidence"], divergence_detected: false })
 		const current = enrichAuditMetadata({ violations: ["missing_validation_evidence"], divergence_detected: true })
 		expect(shouldEmitAdvisoryAuditChatEvent(current, previous)).to.equal(true)
+	})
+
+	it("dedupes consecutive duplicate advisory snapshots for UI history", () => {
+		const advisory = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
+		const snapshots = [
+			{ ts: 1, source: "advisory" as const, auditMetadata: advisory },
+			{
+				ts: 2,
+				source: "advisory" as const,
+				auditMetadata: enrichAuditMetadata({ violations: ["missing_validation_evidence"] }),
+			},
+			{ ts: 3, source: "completion" as const, auditMetadata: enrichAuditMetadata({ violations: [] }) },
+		]
+		expect(dedupeConsecutiveAdvisorySnapshots(snapshots)).to.have.length(2)
 	})
 })

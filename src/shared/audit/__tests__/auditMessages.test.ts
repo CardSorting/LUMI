@@ -3,6 +3,7 @@ import {
 	getAuditSnapshotsFromMessages,
 	getAuditSummaryLabel,
 	getAuditTrend,
+	getDisplayAuditSnapshotsFromMessages,
 	getLatestAdvisoryAuditFromMessages,
 	getLatestAuditFromMessages,
 	getLatestPlanAuditFromMessages,
@@ -142,5 +143,15 @@ describe("auditMessages", () => {
 		expect(snapshots).to.have.length(1)
 		expect(snapshots[0].source).to.equal("advisory")
 		expect(getLatestAdvisoryAuditFromMessages(messages)?.violations).to.deep.equal(["missing_validation_evidence"])
+	})
+
+	it("dedupes repeated advisory snapshots for display history", () => {
+		const advisory = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
+		const messages = [
+			{ ts: 1000, type: "say", say: "info", auditMetadata: advisory },
+			{ ts: 2000, type: "say", say: "info", auditMetadata: advisory },
+		] as DietCodeMessage[]
+		expect(getAuditSnapshotsFromMessages(messages)).to.have.length(2)
+		expect(getDisplayAuditSnapshotsFromMessages(messages)).to.have.length(1)
 	})
 })

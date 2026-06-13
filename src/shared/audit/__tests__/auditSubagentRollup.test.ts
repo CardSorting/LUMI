@@ -1,4 +1,8 @@
-import { buildSubagentAuditSummary, formatSubagentParentSignal } from "@shared/audit/auditSubagentRollup"
+import {
+	buildSubagentAuditSummary,
+	buildSubagentHandoffMarkdown,
+	formatSubagentParentSignal,
+} from "@shared/audit/auditSubagentRollup"
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { expect } from "chai"
 
@@ -68,5 +72,49 @@ describe("auditSubagentRollup", () => {
 	it("formats parent gate signals for UI labels", () => {
 		expect(formatSubagentParentSignal("GATE: PARENT_BLOCKED (2)")).to.contain("Parent gate blocked")
 		expect(formatSubagentParentSignal("SIGNAL: PARENT_ADVISORY_FINDINGS")).to.contain("advisory")
+	})
+
+	it("builds markdown handoff section for audit export", () => {
+		const summary = buildSubagentAuditSummary([
+			{
+				ts: 1,
+				type: "say",
+				say: "subagent",
+				text: JSON.stringify({
+					status: "running",
+					total: 1,
+					completed: 0,
+					successes: 0,
+					failures: 0,
+					toolCalls: 0,
+					inputTokens: 0,
+					outputTokens: 0,
+					contextWindow: 0,
+					maxContextTokens: 0,
+					maxContextUsagePercentage: 0,
+					items: [
+						{
+							id: "a",
+							name: "Agent 1",
+							index: 1,
+							prompt: "fix",
+							status: "running",
+							toolCalls: 0,
+							inputTokens: 0,
+							outputTokens: 0,
+							totalCost: 0,
+							contextTokens: 0,
+							contextWindow: 0,
+							contextUsagePercentage: 0,
+							criticalSignals: ["SIGNAL: PARENT_GATE_BLOCKED"],
+						},
+					],
+				}),
+			},
+		] as DietCodeMessage[])
+		expect(summary).to.not.equal(undefined)
+		const markdown = buildSubagentHandoffMarkdown(summary!)
+		expect(markdown).to.contain("Subagent Audit Handoff")
+		expect(markdown).to.contain("Parent gate blocked")
 	})
 })

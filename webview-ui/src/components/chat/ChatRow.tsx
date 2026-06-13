@@ -857,7 +857,13 @@ export const ChatRowContent = memo(
 							return <AuditGateBlockRow auditMetadata={message.auditMetadata} text={message.text} />
 						}
 						if (isAdvisoryAuditInfoMessage(message) && message.auditMetadata) {
-							return <AuditAdvisoryRow auditMetadata={message.auditMetadata} text={message.text} />
+							return (
+								<AuditAdvisoryRow
+									auditMetadata={message.auditMetadata}
+									messageTs={message.ts}
+									text={message.text}
+								/>
+							)
 						}
 						if (message.text?.trim()) {
 							return (

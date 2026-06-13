@@ -179,6 +179,7 @@ const USER_SETTINGS_FIELDS = {
 	auditCompletionGateCriticalOnly: { default: false as boolean },
 	auditActModeAdvisoryEnabled: { default: true as boolean },
 	auditAdvisoryEscalationEnabled: { default: true as boolean },
+	auditAdvisoryAutoScrollMode: { default: "critical" as "never" | "critical" | "all" },
 	auditPlanRegressionGateEnabled: { default: true as boolean },
 	auditToolOutputAdvisoryEnabled: { default: true as boolean },
 	auditFileWriteAdvisoryEnabled: { default: true as boolean },

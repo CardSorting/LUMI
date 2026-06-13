@@ -46,11 +46,23 @@ export function describeGateReadiness(
 	}
 
 	if ((metadata.violations?.length ?? 0) > 0 || decision.score < decision.effectiveThreshold + 15) {
+		const advisoryCount = options?.advisoryMetadata?.violations?.length ?? 0
+		const advisoryNote = advisoryCount > 0 ? ` · ${advisoryCount} unresolved act-mode advisory finding(s)` : ""
 		return {
 			level: "warning",
 			label: "Gate marginal",
 			shortLabel: "Marginal",
-			tooltip: `Grade ${metadata.hardening_grade} (${decision.score}/100) — resolve warnings before completing`,
+			tooltip: `Grade ${metadata.hardening_grade} (${decision.score}/100) — resolve warnings before completing${advisoryNote}`,
+		}
+	}
+
+	const pendingAdvisoryCount = options?.advisoryMetadata?.violations?.length ?? 0
+	if (pendingAdvisoryCount > 0) {
+		return {
+			level: "warning",
+			label: "Gate marginal",
+			shortLabel: "Advisory",
+			tooltip: `${pendingAdvisoryCount} act-mode advisory finding(s) — resolve before completing`,
 		}
 	}
 

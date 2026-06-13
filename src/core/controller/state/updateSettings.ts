@@ -358,6 +358,13 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("auditAdvisoryEscalationEnabled", request.auditAdvisoryEscalationEnabled)
 		}
 
+		if (request.auditAdvisoryAutoScrollMode !== undefined) {
+			const mode = request.auditAdvisoryAutoScrollMode
+			if (mode === "never" || mode === "critical" || mode === "all") {
+				controller.stateManager.setGlobalState("auditAdvisoryAutoScrollMode", mode)
+			}
+		}
+
 		if (request.auditPlanRegressionGateEnabled !== undefined) {
 			controller.stateManager.setGlobalState("auditPlanRegressionGateEnabled", request.auditPlanRegressionGateEnabled)
 		}

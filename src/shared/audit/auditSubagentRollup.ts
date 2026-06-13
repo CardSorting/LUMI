@@ -47,6 +47,10 @@ export function formatSubagentParentSignal(signal: string): string {
 	return SUBAGENT_PARENT_SIGNAL_LABELS[signal] ?? signal.replace(/^SIGNAL: /, "")
 }
 
+export function isParentGateSignal(signal: string): boolean {
+	return signal.startsWith("GATE:") || signal.startsWith("SIGNAL: PARENT_") || signal.includes("PARENT_")
+}
+
 function parseSubagentStatusPayload(message: DietCodeMessage): DietCodeSaySubagentStatus | undefined {
 	if (message.say !== "subagent" || !message.text) {
 		return undefined
@@ -126,4 +130,21 @@ export function shouldShowSubagentAuditSummary(summary: SubagentAuditSummary | u
 		return true
 	}
 	return summary.parentGateSignals.length > 0
+}
+
+/** Markdown section for subagent parent-audit handoff — mirrors CI downstream job context. */
+export function buildSubagentHandoffMarkdown(summary: SubagentAuditSummary): string {
+	const lines = ["## Subagent Audit Handoff", ""]
+	lines.push(`- Swarm status: ${summary.swarmStatus ?? "unknown"}`)
+	lines.push(
+		`- Agents: ${summary.totalAgents} (${summary.runningCount} running, ${summary.completedCount} done, ${summary.failedCount} failed)`,
+	)
+	if (summary.parentGateSignals.length > 0) {
+		lines.push("- Parent gate signals propagated to subagents:")
+		for (const signal of summary.parentGateSignals) {
+			lines.push(`  - ${formatSubagentParentSignal(signal)}`)
+		}
+	}
+	lines.push("")
+	return lines.join("\n")
 }

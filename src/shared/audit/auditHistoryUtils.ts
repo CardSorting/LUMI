@@ -1,7 +1,13 @@
+import { type AuditAutoScrollPolicy, DEFAULT_AUDIT_AUTO_SCROLL_POLICY, shouldAutoScrollAuditEvent } from "./auditAutoScrollPolicy"
 import type { AuditMessageSnapshot } from "./auditMessages"
+import type { PreCompletionChecklistSummary } from "./auditPreCompletionChecklist"
+import { buildPreCompletionChecklistMarkdown } from "./auditPreCompletionChecklist"
 import type { AuditHealthSummary } from "./auditRollup"
+import { buildViolationSessionLedger, buildViolationSessionLedgerMarkdown } from "./auditSessionLedger"
 import { computeAuditSnapshotDiff } from "./auditSnapshotDiff"
 import { AUDIT_HEALTH_TREND_LABELS, AUDIT_SNAPSHOT_SOURCE_LABELS } from "./auditSnapshotLabels"
+import type { SubagentAuditSummary } from "./auditSubagentRollup"
+import { buildSubagentHandoffMarkdown } from "./auditSubagentRollup"
 import { formatAuditTime, formatViolationLabel } from "./taskAuditUtils"
 
 /** Stable key for audit snapshot selection — mirrors React list key best practice. */
@@ -65,6 +71,42 @@ export function shouldAutoExpandAuditHistory(snapshots: AuditMessageSnapshot[], 
 	return false
 }
 
+/** Returns ts of latest audit event worth auto-scrolling to — GitHub Checks failure notification pattern. */
+export function getAutoScrollAuditEventTs(
+	snapshots: AuditMessageSnapshot[],
+	previousSnapshotCount: number,
+	policy: AuditAutoScrollPolicy = DEFAULT_AUDIT_AUTO_SCROLL_POLICY,
+): number | undefined {
+	if (snapshots.length <= previousSnapshotCount) {
+		return undefined
+	}
+	const latest = snapshots[snapshots.length - 1]
+	if (!latest) {
+		return undefined
+	}
+	return shouldAutoScrollAuditEvent(latest, policy) ? latest.ts : undefined
+}
+
+/** Latest gate-block snapshot — used for jump-to-block navigation. */
+export function getLatestGateBlockSnapshot(snapshots: AuditMessageSnapshot[]): AuditMessageSnapshot | undefined {
+	for (let i = snapshots.length - 1; i >= 0; i--) {
+		if (snapshots[i].auditMetadata.gate_blocked) {
+			return snapshots[i]
+		}
+	}
+	return undefined
+}
+
+/** Latest act-mode advisory snapshot — SonarQube issue navigation target. */
+export function getLatestAdvisorySnapshot(snapshots: AuditMessageSnapshot[]): AuditMessageSnapshot | undefined {
+	for (let i = snapshots.length - 1; i >= 0; i--) {
+		if (snapshots[i].source === "advisory") {
+			return snapshots[i]
+		}
+	}
+	return undefined
+}
+
 /** Shows audit history when multiple snapshots exist or a single gate block needs visibility. */
 export function shouldShowAuditHistoryStrip(snapshots: AuditMessageSnapshot[], health?: AuditHealthSummary): boolean {
 	if (snapshots.length > 1) return true
@@ -75,7 +117,11 @@ export function shouldShowAuditHistoryStrip(snapshots: AuditMessageSnapshot[], h
 }
 
 /** Markdown export for audit timeline — mirrors SonarQube project activity export. */
-export function buildAuditHistoryMarkdown(snapshots: AuditMessageSnapshot[], health?: AuditHealthSummary): string {
+export function buildAuditHistoryMarkdown(
+	snapshots: AuditMessageSnapshot[],
+	health?: AuditHealthSummary,
+	subagentSummary?: SubagentAuditSummary,
+): string {
 	const lines = ["## Task Audit History", ""]
 	if (health) {
 		lines.push(
@@ -89,6 +135,10 @@ export function buildAuditHistoryMarkdown(snapshots: AuditMessageSnapshot[], hea
 		if (health.planRegressionDetected) lines.push("- Plan regression detected")
 		if (health.persistentViolationCount > 0) lines.push(`- Persistent violations: ${health.persistentViolationCount}`)
 		lines.push("")
+	}
+
+	if (subagentSummary && subagentSummary.parentGateSignals.length > 0) {
+		lines.push(buildSubagentHandoffMarkdown(subagentSummary))
 	}
 
 	for (let index = 0; index < snapshots.length; index++) {
@@ -118,4 +168,23 @@ export function buildAuditHistoryMarkdown(snapshots: AuditMessageSnapshot[], hea
 		lines.push("")
 	}
 	return lines.join("\n")
+}
+
+/** Unified audit export — timeline, quality gate checklist, and subagent handoff. */
+export function buildUnifiedAuditExportMarkdown(options: {
+	snapshots: AuditMessageSnapshot[]
+	health?: AuditHealthSummary
+	subagentSummary?: SubagentAuditSummary
+	checklistSummary?: PreCompletionChecklistSummary
+}): string {
+	const sections: string[] = []
+	if (options.checklistSummary) {
+		sections.push(buildPreCompletionChecklistMarkdown(options.checklistSummary))
+	}
+	const ledgerMarkdown = buildViolationSessionLedgerMarkdown(buildViolationSessionLedger(options.snapshots))
+	if (ledgerMarkdown) {
+		sections.push(ledgerMarkdown)
+	}
+	sections.push(buildAuditHistoryMarkdown(options.snapshots, options.health, options.subagentSummary))
+	return sections.join("\n")
 }

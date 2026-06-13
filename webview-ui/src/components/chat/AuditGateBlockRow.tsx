@@ -1,5 +1,6 @@
 import { buildGateReasonLinesFromMetadata } from "@shared/audit/auditGateCatalog"
 import { buildQualityGateStatus } from "@shared/audit/auditGateStatus"
+import { buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { HARDENING_GRADE_STYLES, type HardeningGrade } from "@shared/audit/taskAuditUtils"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { ShieldOffIcon } from "lucide-react"
@@ -8,6 +9,9 @@ import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
 import { AuditReportPanel } from "./AuditReportPanel"
 import { MarkdownRow } from "./MarkdownRow"
+import { AuditArtifactQuickLinks } from "./task-header/AuditArtifactQuickLinks"
+import { AuditChecklistItems } from "./task-header/AuditChecklistItems"
+import { AuditHeaderJumpLink } from "./task-header/AuditHeaderJumpLink"
 
 interface AuditGateBlockRowProps {
 	text?: string
@@ -26,6 +30,15 @@ export const AuditGateBlockRow = memo(({ text, auditMetadata }: AuditGateBlockRo
 		() => buildGateReasonLinesFromMetadata(auditMetadata, qualityGate?.reasonCodes),
 		[auditMetadata, qualityGate?.reasonCodes],
 	)
+
+	const checklistSummary = useMemo(
+		() => buildPreCompletionChecklistSummary(auditMetadata, gateOptions),
+		[auditMetadata, gateOptions],
+	)
+	const failedChecklistItems =
+		checklistSummary && "items" in checklistSummary
+			? checklistSummary.items.filter((item) => item.status === "fail" || item.status === "warn")
+			: []
 
 	return (
 		<div className="my-2 rounded-sm border border-red-500/30 bg-red-500/5 overflow-hidden">
@@ -72,6 +85,14 @@ export const AuditGateBlockRow = memo(({ text, auditMetadata }: AuditGateBlockRo
 								))}
 							</ul>
 						)}
+
+						{failedChecklistItems.length > 0 && (
+							<AuditChecklistItems className="pt-0.5" items={failedChecklistItems} />
+						)}
+
+						<AuditArtifactQuickLinks auditMetadata={auditMetadata} className="pt-0.5" />
+
+						<AuditHeaderJumpLink className="pt-0.5" label="Open quality gate in header" />
 
 						{text && (
 							<div className="text-[10px] text-description/80 prose prose-sm max-w-none">

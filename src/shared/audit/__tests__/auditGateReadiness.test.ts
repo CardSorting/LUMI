@@ -23,4 +23,15 @@ describe("auditGateReadiness", () => {
 	it("serializes intent threshold overrides omitting zero values", () => {
 		expect(serializeIntentThresholdOverrides({ FIX: 15, TEST: 0 })).to.equal('{"FIX":15}')
 	})
+
+	it("surfaces pending act-mode advisories as marginal readiness", () => {
+		const metadata = enrichAuditMetadata({ violations: [] })
+		const advisory = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
+		const summary = describeGateReadiness(metadata, {
+			scoreThreshold: 50,
+			advisoryMetadata: advisory,
+		})
+		expect(summary.level).to.equal("warning")
+		expect(summary.shortLabel).to.equal("Advisory")
+	})
 })

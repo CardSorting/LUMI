@@ -1,3 +1,4 @@
+import { ADVISORY_AUTO_SCROLL_MODE_LABELS } from "@shared/audit/auditAutoScrollPolicy"
 import { UpdateSettingsRequest } from "@shared/proto/dietcode/state"
 import { memo, type ReactNode, useCallback } from "react"
 import { Label } from "@/components/ui/label"
@@ -285,6 +286,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		auditCompletionGateCriticalOnly,
 		auditActModeAdvisoryEnabled,
 		auditAdvisoryEscalationEnabled,
+		auditAdvisoryAutoScrollMode,
 		auditPlanRegressionGateEnabled,
 		auditToolOutputAdvisoryEnabled,
 		auditFileWriteAdvisoryEnabled,
@@ -387,6 +389,29 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 											value={auditCompletionGateThreshold ?? 50}
 											valueWidth="w-8"
 										/>
+									)}
+									{feature.id === "audit-act-mode-advisory" && featureState[feature.stateKey] && (
+										<div className="ml-6 mb-2 space-y-1">
+											<Label className="text-[10px] text-description/80">Advisory chat auto-scroll</Label>
+											<Select
+												onValueChange={(value) => updateSetting("auditAdvisoryAutoScrollMode", value)}
+												value={auditAdvisoryAutoScrollMode ?? "critical"}>
+												<SelectTrigger className="h-7 text-xs">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{(
+														Object.keys(ADVISORY_AUTO_SCROLL_MODE_LABELS) as Array<
+															keyof typeof ADVISORY_AUTO_SCROLL_MODE_LABELS
+														>
+													).map((mode) => (
+														<SelectItem key={mode} value={mode}>
+															{ADVISORY_AUTO_SCROLL_MODE_LABELS[mode]}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
 									)}
 									{feature.id === "audit-intent-threshold-adjustments" && featureState[feature.stateKey] && (
 										<AuditIntentThresholdPanel

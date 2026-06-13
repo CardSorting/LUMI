@@ -1,11 +1,15 @@
+import { buildAuditEventLiveAnnouncement } from "@shared/audit/auditEventAnnouncements"
+import { buildUIGateEvaluationOptions } from "@shared/audit/auditGateUiOptions"
+import { getAutoScrollAuditEventTs, getLatestAdvisorySnapshot, getLatestGateBlockSnapshot } from "@shared/audit/auditHistoryUtils"
 import {
-	getAuditSnapshotsFromMessages,
 	getAuditTrend,
-	getLatestAuditFromMessages,
+	getDisplayAuditSnapshotsFromMessages,
+	getLatestGateAuditFromMessages,
 	getLatestPlanAuditFromMessages,
-	getPreviousAuditFromMessages,
+	getPreviousGateAuditFromMessages,
 } from "@shared/audit/auditMessages"
 import { findAuditMessageIndex, findMessageIndexForAuditTs } from "@shared/audit/auditNavigation"
+import { buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { computeAuditHealthSummaryWithBaseline } from "@shared/audit/auditRollup"
 import { buildSubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
 import { combineApiRequests } from "@shared/combineApiRequests"
@@ -14,11 +18,13 @@ import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
 import { combineHookSequences } from "@shared/combineHookSequences"
 import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/dietcode/common"
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
+import { useAuditAutoScrollPolicy } from "@/hooks/useAuditAutoScrollPolicy"
+import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
 import AutoApproveBar from "./auto-approve-menu/AutoApproveBar"
@@ -77,18 +83,28 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 
 	const lastApiReqTotalTokens = useMemo(() => getLastApiReqTotalTokens(modifiedMessages) || undefined, [modifiedMessages])
 
-	const latestAuditMetadata = useMemo(() => getLatestAuditFromMessages(messages), [messages])
+	const latestAuditMetadata = useMemo(() => getLatestGateAuditFromMessages(messages), [messages])
 	const auditTrend = useMemo(() => {
-		const previous = getPreviousAuditFromMessages(messages)
+		const previous = getPreviousGateAuditFromMessages(messages)
 		return getAuditTrend(previous, latestAuditMetadata)
 	}, [messages, latestAuditMetadata])
-	const auditSnapshots = useMemo(() => getAuditSnapshotsFromMessages(messages), [messages])
+	const auditSnapshots = useMemo(() => getDisplayAuditSnapshotsFromMessages(messages), [messages])
 	const planAuditBaseline = useMemo(() => getLatestPlanAuditFromMessages(messages), [messages])
 	const auditHealth = useMemo(
 		() => computeAuditHealthSummaryWithBaseline(auditSnapshots, planAuditBaseline),
 		[auditSnapshots, planAuditBaseline],
 	)
 	const subagentAuditSummary = useMemo(() => buildSubagentAuditSummary(messages), [messages])
+	const gateConfig = useAuditGateConfig()
+	const auditAutoScrollPolicy = useAuditAutoScrollPolicy()
+	const checklistSummary = useMemo(
+		() =>
+			buildPreCompletionChecklistSummary(
+				latestAuditMetadata,
+				buildUIGateEvaluationOptions(gateConfig, messages, latestAuditMetadata),
+			),
+		[latestAuditMetadata, gateConfig, messages],
+	)
 
 	// Use custom hooks for state management
 	const chatState = useChatState(messages)
@@ -349,6 +365,34 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		[messages, auditSnapshots, scrollBehavior.scrollToMessage],
 	)
 
+	const previousAuditSnapshotCountRef = useRef(auditSnapshots.length)
+	const [auditLiveAnnouncement, setAuditLiveAnnouncement] = useState("")
+	useEffect(() => {
+		const scrollTs = getAutoScrollAuditEventTs(auditSnapshots, previousAuditSnapshotCountRef.current, auditAutoScrollPolicy)
+		if (scrollTs !== undefined) {
+			const snapshot = auditSnapshots.find((entry) => entry.ts === scrollTs)
+			if (snapshot) {
+				setAuditLiveAnnouncement(buildAuditEventLiveAnnouncement(snapshot))
+			}
+			handleScrollToAuditMessage(scrollTs)
+		}
+		previousAuditSnapshotCountRef.current = auditSnapshots.length
+	}, [auditSnapshots, auditAutoScrollPolicy, handleScrollToAuditMessage])
+
+	const handleScrollToLatestGateBlock = useCallback(() => {
+		const latest = getLatestGateBlockSnapshot(auditSnapshots)
+		if (latest) {
+			handleScrollToAuditMessage(latest.ts)
+		}
+	}, [auditSnapshots, handleScrollToAuditMessage])
+
+	const handleScrollToLatestAdvisory = useCallback(() => {
+		const latest = getLatestAdvisorySnapshot(auditSnapshots)
+		if (latest) {
+			handleScrollToAuditMessage(latest.ts)
+		}
+	}, [auditSnapshots, handleScrollToAuditMessage])
+
 	const placeholderText = useMemo(() => {
 		const text = task ? "Type a message..." : "Type your task here..."
 		return text
@@ -356,6 +400,9 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 
 	return (
 		<ChatLayout isHidden={isHidden}>
+			<div aria-atomic="true" aria-live="polite" className="sr-only">
+				{auditLiveAnnouncement}
+			</div>
 			<div className="flex flex-col flex-1 overflow-hidden">
 				{showNavbar && <Navbar />}
 				{task ? (
@@ -364,11 +411,14 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 						auditHealth={auditHealth}
 						auditSnapshots={auditSnapshots}
 						auditTrend={auditTrend}
+						checklistSummary={checklistSummary}
 						lastApiReqTotalTokens={lastApiReqTotalTokens}
 						lastProgressMessageText={lastProgressMessageText}
 						latestAuditMetadata={latestAuditMetadata}
 						messageHandlers={messageHandlers}
 						onScrollToAuditMessage={handleScrollToAuditMessage}
+						onScrollToLatestAdvisory={handleScrollToLatestAdvisory}
+						onScrollToLatestGateBlock={handleScrollToLatestGateBlock}
 						selectedModelInfo={{
 							supportsPromptCache: selectedModelInfo.supportsPromptCache,
 							supportsImages: selectedModelInfo.supportsImages || false,

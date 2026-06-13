@@ -1,3 +1,4 @@
+import type { AuditMessageSnapshot } from "./auditMessages"
 import { shouldEmitAdvisoryAuditEvent } from "./completionAudit"
 import type { TaskAuditMetadata } from "./types"
 
@@ -33,4 +34,24 @@ export function shouldEmitAdvisoryAuditChatEvent(current: TaskAuditMetadata, pre
 		return false
 	}
 	return !isDuplicateAdvisoryAudit(current, previous)
+}
+
+/** Collapses consecutive duplicate advisory snapshots — SonarQube won't re-list unchanged issues. */
+export function dedupeConsecutiveAdvisorySnapshots(snapshots: AuditMessageSnapshot[]): AuditMessageSnapshot[] {
+	const result: AuditMessageSnapshot[] = []
+	let lastKeptAdvisory: TaskAuditMetadata | undefined
+
+	for (const snapshot of snapshots) {
+		if (snapshot.source !== "advisory") {
+			result.push(snapshot)
+			continue
+		}
+		if (isDuplicateAdvisoryAudit(snapshot.auditMetadata, lastKeptAdvisory)) {
+			continue
+		}
+		result.push(snapshot)
+		lastKeptAdvisory = snapshot.auditMetadata
+	}
+
+	return result
 }

@@ -113,6 +113,7 @@ export interface ExtensionState {
 	auditCompletionGateCriticalOnly?: boolean
 	auditActModeAdvisoryEnabled?: boolean
 	auditAdvisoryEscalationEnabled?: boolean
+	auditAdvisoryAutoScrollMode?: "never" | "critical" | "all"
 	auditPlanRegressionGateEnabled?: boolean
 	auditToolOutputAdvisoryEnabled?: boolean
 	auditFileWriteAdvisoryEnabled?: boolean

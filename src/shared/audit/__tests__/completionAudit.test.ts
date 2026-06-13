@@ -83,6 +83,16 @@ describe("completionAudit", () => {
 		expect(summary).to.contain("attempt_completion")
 	})
 
+	it("highlights new violations since prior advisory in event summary", () => {
+		const previous = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
+		const current = enrichAuditMetadata({
+			violations: ["missing_validation_evidence", "unresolved_work_marker:todo"],
+		})
+		const summary = buildAdvisoryAuditEventSummary(current, previous)
+		expect(summary).to.contain("New since last advisory")
+		expect(summary).to.contain("Unresolved Marker")
+	})
+
 	it("includes advisory rollup in completion gate message when drift persists", () => {
 		const advisory = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
 		const completion = enrichAuditMetadata({

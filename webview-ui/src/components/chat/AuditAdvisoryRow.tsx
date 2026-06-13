@@ -1,20 +1,33 @@
+import { getNewAdvisoryViolations } from "@shared/audit/auditAdvisoryDedup"
+import { getPreviousAdvisoryAuditBeforeTs } from "@shared/audit/auditMessages"
 import { hasCriticalViolations } from "@shared/audit/auditSeverity"
 import { getViolationRemediation } from "@shared/audit/completionAudit"
 import { formatViolationLabel, HARDENING_GRADE_STYLES, type HardeningGrade } from "@shared/audit/taskAuditUtils"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { AlertTriangleIcon } from "lucide-react"
-import { memo, useState } from "react"
+import { memo, useMemo, useState } from "react"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { AuditReportPanel } from "./AuditReportPanel"
+import { AuditHeaderJumpLink } from "./task-header/AuditHeaderJumpLink"
 
 interface AuditAdvisoryRowProps {
 	text?: string
 	auditMetadata: TaskAuditMetadata
+	messageTs?: number
 }
 
 /** SonarQube-style act-mode advisory annotation — surfaces progress audit findings in chat. */
-export const AuditAdvisoryRow = memo(({ text, auditMetadata }: AuditAdvisoryRowProps) => {
+export const AuditAdvisoryRow = memo(({ text, auditMetadata, messageTs }: AuditAdvisoryRowProps) => {
 	const [expanded, setExpanded] = useState(false)
+	const { dietcodeMessages } = useExtensionState()
+	const newViolations = useMemo(() => {
+		if (!messageTs) {
+			return []
+		}
+		const previous = getPreviousAdvisoryAuditBeforeTs(dietcodeMessages, messageTs)
+		return getNewAdvisoryViolations(auditMetadata, previous)
+	}, [auditMetadata, dietcodeMessages, messageTs])
 	const grade = auditMetadata.hardening_grade as HardeningGrade | undefined
 	const topViolations = auditMetadata.violations?.slice(0, 4) ?? []
 	const hasCritical = hasCriticalViolations(auditMetadata.violations)
@@ -57,6 +70,12 @@ export const AuditAdvisoryRow = memo(({ text, auditMetadata }: AuditAdvisoryRowP
 							)}
 						</div>
 
+						{newViolations.length > 0 && (
+							<p className="text-[9px] font-bold text-amber-700 dark:text-amber-300">
+								New since last advisory: {newViolations.slice(0, 4).map(formatViolationLabel).join(", ")}
+							</p>
+						)}
+
 						{topViolations.length > 0 && (
 							<ul className="list-disc list-inside text-[9px] text-amber-700/90 dark:text-amber-400/90 space-y-0.5">
 								{topViolations.map((violation) => {
@@ -82,6 +101,8 @@ export const AuditAdvisoryRow = memo(({ text, auditMetadata }: AuditAdvisoryRowP
 							type="button">
 							{expanded ? "Hide audit report" : "Show audit report"}
 						</button>
+
+						<AuditHeaderJumpLink label="Open audit panel in header" />
 					</div>
 				</div>
 			</div>
