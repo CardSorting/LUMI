@@ -1,10 +1,9 @@
-import { auditGateConfigToOptions } from "@shared/audit/auditGateConfig"
 import { describeGateReadiness } from "@shared/audit/auditGateReadiness"
 import { getLatestAuditFromMessages } from "@shared/audit/auditMessages"
 import { ShieldAlertIcon, ShieldCheckIcon, ShieldOffIcon } from "lucide-react"
 import { memo, useMemo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
+import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
 
 const LEVEL_STYLES = {
@@ -16,12 +15,10 @@ const LEVEL_STYLES = {
 
 export const ParentAuditGateBadge = memo(() => {
 	const { dietcodeMessages } = useExtensionState()
-	const gateConfig = useAuditGateConfig()
+	const metadata = useMemo(() => getLatestAuditFromMessages(dietcodeMessages), [dietcodeMessages])
+	const gateOptions = useAuditGateEvaluation(metadata)
 
-	const readiness = useMemo(() => {
-		const metadata = getLatestAuditFromMessages(dietcodeMessages)
-		return describeGateReadiness(metadata, auditGateConfigToOptions(gateConfig))
-	}, [dietcodeMessages, gateConfig])
+	const readiness = useMemo(() => describeGateReadiness(metadata, gateOptions), [metadata, gateOptions])
 
 	if (readiness.level === "disabled") {
 		return null

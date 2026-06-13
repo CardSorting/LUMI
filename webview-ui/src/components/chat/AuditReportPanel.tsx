@@ -1,6 +1,5 @@
 import { buildCiGateStatusJson } from "@shared/audit/auditCiSummary"
 import { formatGateReasonLabel } from "@shared/audit/auditGateCatalog"
-import { auditGateConfigToOptions } from "@shared/audit/auditGateConfig"
 import { buildQualityGateStatus } from "@shared/audit/auditGateStatus"
 import { buildAuditSarifJson } from "@shared/audit/auditSarifExport"
 import { partitionViolationsBySeverity } from "@shared/audit/auditSeverity"
@@ -28,7 +27,7 @@ import {
 	ShieldCheckIcon,
 } from "lucide-react"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
-import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
+import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
 
@@ -104,7 +103,7 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 		sarif?: ReturnType<typeof setTimeout>
 		gateStatus?: ReturnType<typeof setTimeout>
 	}>({})
-	const gateConfig = useAuditGateConfig()
+	const gateOptions = useAuditGateEvaluation(auditMetadata)
 
 	useEffect(() => {
 		return () => {
@@ -165,7 +164,7 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 
 	const handleCopyGateStatus = async (e: React.MouseEvent) => {
 		e.stopPropagation()
-		const status = buildQualityGateStatus(auditMetadata, auditGateConfigToOptions(gateConfig))
+		const status = buildQualityGateStatus(auditMetadata, gateOptions)
 		if (!status) return
 		const payload = buildCiGateStatusJson(auditMetadata, status, "task-audit", "completion")
 		if (await copyTextToClipboard(JSON.stringify(payload, null, 2))) showCopyFeedback("gateStatus")

@@ -54,7 +54,7 @@ export function getLatestPlanAuditFromMessages(messages: DietCodeMessage[]): Tas
 	return undefined
 }
 
-function resolveAuditSource(message: DietCodeMessage): AuditSnapshotSource | undefined {
+export function resolveAuditSource(message: DietCodeMessage): AuditSnapshotSource | undefined {
 	if (message.type === "say" && message.say === "info" && message.auditMetadata?.gate_blocked) return "gate_block"
 	if (message.type === "say" && message.say === "completion_result") return "completion"
 	if (message.type === "ask" && message.ask === "plan_mode_respond") return "plan"

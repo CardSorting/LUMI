@@ -1,3 +1,4 @@
+import { shouldShowAuditHistoryStrip } from "@shared/audit/auditHistoryUtils"
 import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessages"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
@@ -6,7 +7,6 @@ import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
 import { cn } from "@/lib/utils"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import { AuditHistoryStrip } from "./AuditHistoryStrip"
@@ -72,8 +72,6 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		setExpandTaskHeader: setIsTaskExpanded,
 		environment,
 	} = useExtensionState()
-
-	const auditGateConfig = useAuditGateConfig()
 
 	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
 	const [isTextOverflowing, setIsTextOverflowing] = useState(false)
@@ -185,12 +183,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						)}
 					</div>
 					<div className="inline-flex items-center justify-end select-none shrink-0 gap-1">
-						<TaskAuditBadge
-							auditHealth={auditHealth}
-							auditMetadata={latestAuditMetadata}
-							auditTrend={auditTrend}
-							gateConfig={auditGateConfig}
-						/>
+						<TaskAuditBadge auditHealth={auditHealth} auditMetadata={latestAuditMetadata} auditTrend={auditTrend} />
 						{isCostAvailable && (
 							<div
 								className="mx-1 px-1 py-0.25 rounded-full inline-flex shrink-0 text-badge-background bg-badge-foreground/80 items-center"
@@ -254,9 +247,13 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 				/>
 			)}
 
-			{auditSnapshots && auditSnapshots.length > 1 && (
+			{auditSnapshots && shouldShowAuditHistoryStrip(auditSnapshots, auditHealth) && (
 				<div className="px-2 pb-1">
-					<AuditHistoryStrip onScrollToAuditMessage={onScrollToAuditMessage} snapshots={auditSnapshots} />
+					<AuditHistoryStrip
+						auditHealth={auditHealth}
+						onScrollToAuditMessage={onScrollToAuditMessage}
+						snapshots={auditSnapshots}
+					/>
 				</div>
 			)}
 		</div>

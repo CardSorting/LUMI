@@ -1,47 +1,82 @@
 import { formatGateReasonLabel } from "@shared/audit/auditGateCatalog"
+import {
+	buildAuditHistoryAnnouncement,
+	buildAuditHistoryMarkdown,
+	clampAuditFocusIndex,
+	extractAuditScoreTimeline,
+	getAuditSnapshotKey,
+	reconcileAuditHistoryState,
+	shouldAutoExpandAuditHistory,
+	shouldShowAuditHistoryStrip,
+} from "@shared/audit/auditHistoryUtils"
 import { AUDIT_TREND_LABELS, type AuditMessageSnapshot, getAuditTrend } from "@shared/audit/auditMessages"
-import { computeAuditHealthSummary } from "@shared/audit/auditRollup"
+import { type AuditHealthSummary, computeAuditHealthSummary } from "@shared/audit/auditRollup"
 import { partitionViolationsBySeverity } from "@shared/audit/auditSeverity"
 import { computeAuditSnapshotDiff } from "@shared/audit/auditSnapshotDiff"
+import { AUDIT_HEALTH_TREND_LABELS, AUDIT_SNAPSHOT_SOURCE_LABELS } from "@shared/audit/auditSnapshotLabels"
 import { formatAuditTime, formatViolationLabel, HARDENING_GRADE_STYLES } from "@shared/audit/taskAuditUtils"
 import type { HardeningGrade } from "@shared/audit/types"
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { ChevronDownIcon, ChevronRightIcon, CopyIcon } from "lucide-react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { AuditReportPanel } from "../AuditReportPanel"
+import { AuditScoreSparkline } from "./AuditScoreSparkline"
 
 interface AuditHistoryStripProps {
 	snapshots: AuditMessageSnapshot[]
+	auditHealth?: AuditHealthSummary
 	onScrollToAuditMessage?: (ts: number) => void
 	className?: string
 }
 
-const SOURCE_LABELS: Record<AuditMessageSnapshot["source"], string> = {
-	completion: "Completion",
-	plan: "Plan",
-	gate_block: "Gate Block",
-}
+const SOURCE_LABELS = AUDIT_SNAPSHOT_SOURCE_LABELS
+
+const HEALTH_TREND_LABELS = AUDIT_HEALTH_TREND_LABELS
 
 const SOURCE_CHIP_STYLES: Partial<Record<AuditMessageSnapshot["source"], string>> = {
 	gate_block: "border-red-500/50 text-red-600 dark:text-red-400",
 }
 
-const HEALTH_TREND_LABELS = {
-	improving: "Improving",
-	degrading: "Degrading",
-	stable: "Stable",
-	unknown: "",
-} as const
-
-export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, className }: AuditHistoryStripProps) => {
+export const AuditHistoryStrip = memo(({ snapshots, auditHealth, onScrollToAuditMessage, className }: AuditHistoryStripProps) => {
 	const [expanded, setExpanded] = useState(false)
 	const [selectedKey, setSelectedKey] = useState<string | null>(null)
 	const [focusedIndex, setFocusedIndex] = useState(0)
+	const [copied, setCopied] = useState(false)
 	const stripRef = useRef<HTMLDivElement>(null)
 	const detailPanelRef = useRef<HTMLDivElement>(null)
 	const toggleButtonRef = useRef<HTMLButtonElement>(null)
+	const previousSnapshotCountRef = useRef(snapshots.length)
 
-	const snapshotKeys = snapshots.map((s) => `${s.ts}-${s.source}`)
+	const snapshotKeys = useMemo(() => snapshots.map(getAuditSnapshotKey), [snapshots])
+	const scoreTimeline = useMemo(() => extractAuditScoreTimeline(snapshots), [snapshots])
+	const health = auditHealth ?? computeAuditHealthSummary(snapshots)
+
+	const handleCopyHistory = useCallback(
+		async (event: React.MouseEvent) => {
+			event.stopPropagation()
+			const markdown = buildAuditHistoryMarkdown(snapshots, health)
+			try {
+				await navigator.clipboard.writeText(markdown)
+				setCopied(true)
+				window.setTimeout(() => setCopied(false), 2000)
+			} catch (error) {
+				console.error("Failed to copy audit history:", error)
+			}
+		},
+		[snapshots, health],
+	)
+
+	useEffect(() => {
+		if (shouldAutoExpandAuditHistory(snapshots, previousSnapshotCountRef.current)) {
+			setExpanded(true)
+		}
+		previousSnapshotCountRef.current = snapshots.length
+	}, [snapshots])
+
+	useEffect(() => {
+		setSelectedKey((selected) => reconcileAuditHistoryState(snapshots, 0, selected).selectedKey)
+		setFocusedIndex((focused) => reconcileAuditHistoryState(snapshots, focused, null).focusedIndex)
+	}, [snapshots])
 
 	const selectSnapshot = useCallback(
 		(index: number) => {
@@ -66,10 +101,16 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 			}
 			if (event.key === "ArrowRight" || event.key === "ArrowDown") {
 				event.preventDefault()
-				setFocusedIndex((i) => Math.min(snapshotKeys.length - 1, i + 1))
+				setFocusedIndex((i) => clampAuditFocusIndex(i + 1, snapshotKeys.length))
 			} else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
 				event.preventDefault()
-				setFocusedIndex((i) => Math.max(0, i - 1))
+				setFocusedIndex((i) => clampAuditFocusIndex(i - 1, snapshotKeys.length))
+			} else if (event.key === "Home") {
+				event.preventDefault()
+				setFocusedIndex(0)
+			} else if (event.key === "End") {
+				event.preventDefault()
+				setFocusedIndex(clampAuditFocusIndex(snapshotKeys.length - 1, snapshotKeys.length))
 			} else if (event.key === "Enter" || event.key === " ") {
 				event.preventDefault()
 				selectSnapshot(focusedIndex)
@@ -101,16 +142,18 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 		return () => document.removeEventListener("keydown", handleKeyDown)
 	}, [expanded, focusedIndex, selectSnapshot, selectedKey, snapshotKeys.length])
 
-	if (snapshots.length <= 1) {
+	if (!shouldShowAuditHistoryStrip(snapshots, health)) {
 		return null
 	}
 
-	const health = computeAuditHealthSummary(snapshots)
-	const selectedSnapshot = selectedKey ? snapshots.find((s) => `${s.ts}-${s.source}` === selectedKey) : undefined
+	const selectedSnapshot = selectedKey ? snapshots.find((snapshot) => getAuditSnapshotKey(snapshot) === selectedKey) : undefined
 
 	const liveAnnouncement = selectedSnapshot
-		? `Selected ${SOURCE_LABELS[selectedSnapshot.source]} audit grade ${selectedSnapshot.auditMetadata.hardening_grade ?? "unknown"}`
+		? buildAuditHistoryAnnouncement(selectedSnapshot, SOURCE_LABELS[selectedSnapshot.source])
 		: ""
+
+	const latestSnapshot = snapshots[snapshots.length - 1]
+	const latestGrade = latestSnapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
 
 	return (
 		<div
@@ -123,7 +166,7 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 				{liveAnnouncement}
 			</div>
 			<button
-				aria-controls="audit-history-panel"
+				aria-controls="audit-history-details"
 				aria-expanded={expanded}
 				className="flex w-full items-center justify-between cursor-pointer select-none bg-transparent border-0 p-0 text-left font-sans"
 				onClick={() => setExpanded(!expanded)}
@@ -133,14 +176,45 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 					<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
 						Audit History ({snapshots.length})
 					</span>
+					{latestGrade && (
+						<span
+							className={cn(
+								"inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider border",
+								HARDENING_GRADE_STYLES[latestGrade],
+							)}>
+							Latest {latestGrade}
+							{Number.isFinite(latestSnapshot.auditMetadata.hardening_score) && (
+								<span className="font-mono opacity-80 ml-0.5">
+									{latestSnapshot.auditMetadata.hardening_score}
+								</span>
+							)}
+						</span>
+					)}
 					{health && health.trend !== "unknown" && (
 						<span className="text-[8px] uppercase tracking-wider text-description/60 font-bold">
-							{HEALTH_TREND_LABELS[health.trend]} · avg {health.averageScore}
+							{HEALTH_TREND_LABELS[health.trend]}
+							{health.averageScore > 0 ? ` · avg ${health.averageScore}` : ""}
+							{health.latestScoreDelta !== undefined && health.latestScoreDelta !== 0
+								? ` · ${health.latestScoreDelta >= 0 ? "+" : ""}${health.latestScoreDelta} last`
+								: ""}
 						</span>
 					)}
 					{health && health.gateBlockCount > 0 && (
 						<span className="text-[8px] uppercase tracking-wider text-red-500 font-bold">
 							{health.gateBlockCount} gate block{health.gateBlockCount === 1 ? "" : "s"}
+						</span>
+					)}
+					{health && health.trailingGateBlockStreak > 1 && (
+						<span className="text-[8px] uppercase tracking-wider text-red-500 font-bold">
+							{health.trailingGateBlockStreak}× blocked
+						</span>
+					)}
+					{health && health.planRegressionDetected && (
+						<span className="text-[8px] uppercase tracking-wider text-amber-500 font-bold">plan regression</span>
+					)}
+					{health && health.persistentViolationCount > 0 && (
+						<span className="text-[8px] uppercase tracking-wider text-amber-500/90 font-bold">
+							{health.persistentViolationCount} persistent
 						</span>
 					)}
 					{health && health.suppressedViolationCount > 0 && (
@@ -149,179 +223,197 @@ export const AuditHistoryStrip = memo(({ snapshots, onScrollToAuditMessage, clas
 						</span>
 					)}
 				</div>
-				{expanded ? (
-					<ChevronDownIcon className="size-3 text-description/60" />
-				) : (
-					<ChevronRightIcon className="size-3 text-description/60" />
-				)}
+				<div className="flex items-center gap-2 shrink-0">
+					<AuditScoreSparkline scores={scoreTimeline} />
+					<button
+						aria-label="Copy audit history as markdown"
+						className="inline-flex items-center cursor-pointer bg-transparent border-0 p-0 text-description/60 hover:text-foreground"
+						onClick={handleCopyHistory}
+						title={copied ? "Copied" : "Copy audit timeline"}
+						type="button">
+						<CopyIcon className="size-3" />
+					</button>
+					{expanded ? (
+						<ChevronDownIcon className="size-3 text-description/60" />
+					) : (
+						<ChevronRightIcon className="size-3 text-description/60" />
+					)}
+				</div>
 			</button>
 
-			<div
-				aria-label="Audit snapshot grades"
-				className="flex flex-wrap gap-1.5 mt-1.5"
-				id="audit-history-panel"
-				role="listbox">
-				{snapshots.map((snapshot, index) => {
-					const grade = snapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
-					const previous = index > 0 ? snapshots[index - 1].auditMetadata : undefined
-					const trend = getAuditTrend(previous, snapshot.auditMetadata)
-					const trendLabel = trend !== "unknown" ? AUDIT_TREND_LABELS[trend] : undefined
-					const key = `${snapshot.ts}-${snapshot.source}`
-					const isSelected = selectedKey === key
-					const isFocused = expanded && focusedIndex === index
-
-					return (
-						<button
-							aria-selected={isSelected}
-							className={cn(
-								"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider border cursor-pointer transition-opacity",
-								grade ? HARDENING_GRADE_STYLES[grade] : "border-description/30 text-description/70",
-								SOURCE_CHIP_STYLES[snapshot.source],
-								isSelected && "ring-1 ring-foreground/40 opacity-100",
-								isFocused && !isSelected && "ring-1 ring-foreground/20",
-								!isSelected && "opacity-85 hover:opacity-100",
-							)}
-							key={key}
-							onClick={() => selectSnapshot(index)}
-							onFocus={() => setFocusedIndex(index)}
-							role="option"
-							title={
-								trendLabel ? `${SOURCE_LABELS[snapshot.source]} · ${trendLabel}` : SOURCE_LABELS[snapshot.source]
-							}
-							type="button">
-							<span className="opacity-70">{SOURCE_LABELS[snapshot.source].slice(0, 1)}</span>
-							{grade ?? "?"}
-							{Number.isFinite(snapshot.auditMetadata.hardening_score) && (
-								<span className="font-mono opacity-80">{snapshot.auditMetadata.hardening_score}</span>
-							)}
-						</button>
-					)
-				})}
-			</div>
-
 			{expanded && (
-				<div className="mt-2 space-y-1.5 animate-fadeIn">
-					{[...snapshots].reverse().map((snapshot) => {
-						const grade = snapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
-						const { critical, warning, info } = partitionViolationsBySeverity(snapshot.auditMetadata.violations)
-						const key = `${snapshot.ts}-${snapshot.source}`
-						const origIndex = snapshots.findIndex((s) => s.ts === snapshot.ts && s.source === snapshot.source)
-						const previousMetadata = origIndex > 0 ? snapshots[origIndex - 1].auditMetadata : undefined
-						const diff = computeAuditSnapshotDiff(previousMetadata, snapshot.auditMetadata)
-						return (
-							<div
-								className={cn(
-									"rounded-xs border border-description/15 bg-black/5 dark:bg-white/5 p-2 text-[9px] cursor-pointer transition-colors",
-									selectedKey === key && "border-foreground/30 bg-black/10 dark:bg-white/10",
-								)}
-								key={`detail-${key}`}
-								onClick={() => setSelectedKey(selectedKey === key ? null : key)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault()
-										setSelectedKey(selectedKey === key ? null : key)
+				<div className="mt-2 space-y-2 animate-fadeIn" id="audit-history-details">
+					<div aria-label="Audit snapshot grades" className="flex flex-wrap gap-1.5" role="listbox">
+						{snapshots.map((snapshot, index) => {
+							const grade = snapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
+							const previous = index > 0 ? snapshots[index - 1].auditMetadata : undefined
+							const trend = getAuditTrend(previous, snapshot.auditMetadata)
+							const trendLabel = trend !== "unknown" ? AUDIT_TREND_LABELS[trend] : undefined
+							const key = getAuditSnapshotKey(snapshot)
+							const isSelected = selectedKey === key
+							const isFocused = focusedIndex === index
+
+							return (
+								<button
+									aria-selected={isSelected}
+									className={cn(
+										"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider border cursor-pointer transition-opacity",
+										grade ? HARDENING_GRADE_STYLES[grade] : "border-description/30 text-description/70",
+										SOURCE_CHIP_STYLES[snapshot.source],
+										isSelected && "ring-1 ring-foreground/40 opacity-100",
+										isFocused && !isSelected && "ring-1 ring-foreground/20",
+										!isSelected && "opacity-85 hover:opacity-100",
+									)}
+									key={key}
+									onClick={() => selectSnapshot(index)}
+									onFocus={() => setFocusedIndex(index)}
+									role="option"
+									title={
+										trendLabel
+											? `${SOURCE_LABELS[snapshot.source]} · ${trendLabel}`
+											: SOURCE_LABELS[snapshot.source]
 									}
-								}}
-								role="button"
-								tabIndex={0}>
-								<div className="flex items-center justify-between gap-2 mb-1">
-									<span className="font-bold uppercase tracking-wider text-description/80">
-										{SOURCE_LABELS[snapshot.source]}
-									</span>
-									<div className="flex items-center gap-2">
-										{onScrollToAuditMessage && (
-											<button
-												className="text-[8px] uppercase tracking-wider font-bold text-foreground/70 hover:text-foreground cursor-pointer bg-transparent border-0 p-0"
-												onClick={(e) => {
-													e.stopPropagation()
-													onScrollToAuditMessage(snapshot.ts)
-												}}
-												type="button">
-												View in chat
-											</button>
-										)}
-										<span className="font-mono text-description/60">
-											{formatAuditTime(snapshot.auditMetadata.audited_at ?? snapshot.ts)}
-										</span>
-									</div>
-								</div>
-								<div className="flex items-center gap-2 flex-wrap">
-									{grade && (
-										<span
-											className={cn(
-												"px-1.5 py-0.5 rounded-full font-extrabold border",
-												HARDENING_GRADE_STYLES[grade],
-											)}>
-											{grade}
-										</span>
-									)}
+									type="button">
+									<span className="opacity-70">{SOURCE_LABELS[snapshot.source].slice(0, 1)}</span>
+									{grade ?? "?"}
 									{Number.isFinite(snapshot.auditMetadata.hardening_score) && (
-										<span className="font-mono font-bold">{snapshot.auditMetadata.hardening_score}/100</span>
+										<span className="font-mono opacity-80">{snapshot.auditMetadata.hardening_score}</span>
 									)}
-									{critical.length > 0 && (
-										<span className="text-red-500 font-bold">{critical.length} critical</span>
+								</button>
+							)
+						})}
+					</div>
+
+					<div className="space-y-1.5">
+						{[...snapshots].reverse().map((snapshot) => {
+							const grade = snapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
+							const { critical, warning, info } = partitionViolationsBySeverity(snapshot.auditMetadata.violations)
+							const key = getAuditSnapshotKey(snapshot)
+							const origIndex = snapshots.findIndex((s) => getAuditSnapshotKey(s) === key)
+							const previousMetadata = origIndex > 0 ? snapshots[origIndex - 1].auditMetadata : undefined
+							const diff = computeAuditSnapshotDiff(previousMetadata, snapshot.auditMetadata)
+							return (
+								<div
+									className={cn(
+										"rounded-xs border border-description/15 bg-black/5 dark:bg-white/5 p-2 text-[9px] cursor-pointer transition-colors",
+										selectedKey === key && "border-foreground/30 bg-black/10 dark:bg-white/10",
 									)}
-									{warning.length > 0 && (
-										<span className="text-amber-500 font-bold">{warning.length} warning</span>
-									)}
-									{info.length > 0 && <span className="text-description/60">{info.length} info</span>}
-									{(snapshot.auditMetadata.suppressed_violations?.length ?? 0) > 0 && (
-										<span className="text-blue-500/80 font-bold">
-											{snapshot.auditMetadata.suppressed_violations?.length} waived
+									key={`detail-${key}`}
+									onClick={() => setSelectedKey(selectedKey === key ? null : key)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault()
+											setSelectedKey(selectedKey === key ? null : key)
+										}
+									}}
+									role="button"
+									tabIndex={0}>
+									<div className="flex items-center justify-between gap-2 mb-1">
+										<span className="font-bold uppercase tracking-wider text-description/80">
+											{SOURCE_LABELS[snapshot.source]}
 										</span>
-									)}
-									{snapshot.auditMetadata.workspace_gate_policy_applied && (
-										<span className="text-blue-600 dark:text-blue-400 font-bold">workspace policy</span>
-									)}
-								</div>
-								{snapshot.auditMetadata.gate_reason_codes &&
-									snapshot.auditMetadata.gate_reason_codes.length > 0 && (
-										<ul className="mt-1 list-disc list-inside text-[8.5px] text-red-500/90 space-y-0.5">
-											{snapshot.auditMetadata.gate_reason_codes
-												.filter((code) => code !== "gate_disabled")
-												.map((code) => (
-													<li className="truncate" key={code}>
-														{formatGateReasonLabel(code)}
-													</li>
-												))}
+										<div className="flex items-center gap-2">
+											{onScrollToAuditMessage && (
+												<button
+													className="text-[8px] uppercase tracking-wider font-bold text-foreground/70 hover:text-foreground cursor-pointer bg-transparent border-0 p-0"
+													onClick={(e) => {
+														e.stopPropagation()
+														onScrollToAuditMessage(snapshot.ts)
+													}}
+													type="button">
+													View in chat
+												</button>
+											)}
+											<span className="font-mono text-description/60">
+												{formatAuditTime(snapshot.auditMetadata.audited_at ?? snapshot.ts)}
+											</span>
+										</div>
+									</div>
+									<div className="flex items-center gap-2 flex-wrap">
+										{grade && (
+											<span
+												className={cn(
+													"px-1.5 py-0.5 rounded-full font-extrabold border",
+													HARDENING_GRADE_STYLES[grade],
+												)}>
+												{grade}
+											</span>
+										)}
+										{Number.isFinite(snapshot.auditMetadata.hardening_score) && (
+											<span className="font-mono font-bold">
+												{snapshot.auditMetadata.hardening_score}/100
+											</span>
+										)}
+										{critical.length > 0 && (
+											<span className="text-red-500 font-bold">{critical.length} critical</span>
+										)}
+										{warning.length > 0 && (
+											<span className="text-amber-500 font-bold">{warning.length} warning</span>
+										)}
+										{info.length > 0 && <span className="text-description/60">{info.length} info</span>}
+										{(snapshot.auditMetadata.suppressed_violations?.length ?? 0) > 0 && (
+											<span className="text-blue-500/80 font-bold">
+												{snapshot.auditMetadata.suppressed_violations?.length} waived
+											</span>
+										)}
+										{snapshot.auditMetadata.workspace_gate_policy_applied && (
+											<span className="text-blue-600 dark:text-blue-400 font-bold">workspace policy</span>
+										)}
+									</div>
+									{snapshot.auditMetadata.gate_reason_codes &&
+										snapshot.auditMetadata.gate_reason_codes.length > 0 && (
+											<ul className="mt-1 list-disc list-inside text-[8.5px] text-red-500/90 space-y-0.5">
+												{snapshot.auditMetadata.gate_reason_codes
+													.filter((code) => code !== "gate_disabled")
+													.map((code) => (
+														<li className="truncate" key={code}>
+															{formatGateReasonLabel(code)}
+														</li>
+													))}
+											</ul>
+										)}
+									{(snapshot.auditMetadata.violations?.length ?? 0) > 0 && (
+										<ul className="mt-1 list-disc list-inside text-[8.5px] text-description/80 space-y-0.5">
+											{snapshot.auditMetadata.violations?.slice(0, 4).map((v) => (
+												<li className="truncate font-mono" key={v}>
+													{formatViolationLabel(v)}
+												</li>
+											))}
 										</ul>
 									)}
-								{(snapshot.auditMetadata.violations?.length ?? 0) > 0 && (
-									<ul className="mt-1 list-disc list-inside text-[8.5px] text-description/80 space-y-0.5">
-										{snapshot.auditMetadata.violations?.slice(0, 4).map((v) => (
-											<li className="truncate font-mono" key={v}>
-												{formatViolationLabel(v)}
-											</li>
-										))}
-									</ul>
-								)}
-								{diff && (diff.newViolations.length > 0 || diff.resolvedViolations.length > 0) && (
-									<div className="mt-1 text-[8px] text-description/70 space-y-0.5">
-										{diff.scoreDelta !== undefined && (
-											<span className="font-mono">
-												Score {diff.scoreDelta >= 0 ? "+" : ""}
-												{diff.scoreDelta}
-											</span>
-										)}
-										{diff.newViolations.length > 0 && (
-											<span className="block text-red-500/90">+{diff.newViolations.length} new</span>
-										)}
-										{diff.resolvedViolations.length > 0 && (
-											<span className="block text-emerald-600 dark:text-emerald-400">
-												−{diff.resolvedViolations.length} resolved
-											</span>
-										)}
-									</div>
-								)}
-							</div>
-						)
-					})}
-				</div>
-			)}
+									{diff && (diff.newViolations.length > 0 || diff.resolvedViolations.length > 0) && (
+										<div className="mt-1 text-[8px] text-description/70 space-y-0.5">
+											{diff.scoreDelta !== undefined && (
+												<span className="font-mono">
+													Score {diff.scoreDelta >= 0 ? "+" : ""}
+													{diff.scoreDelta}
+												</span>
+											)}
+											{diff.newViolations.length > 0 && (
+												<span className="block text-red-500/90">+{diff.newViolations.length} new</span>
+											)}
+											{diff.resolvedViolations.length > 0 && (
+												<span className="block text-emerald-600 dark:text-emerald-400">
+													−{diff.resolvedViolations.length} resolved
+												</span>
+											)}
+											{diff.persistentViolations.length > 0 && (
+												<span className="block text-amber-500/90">
+													{diff.persistentViolations.length} persistent
+												</span>
+											)}
+										</div>
+									)}
+								</div>
+							)
+						})}
+					</div>
 
-			{selectedSnapshot && (
-				<div className="mt-2 rounded-sm border border-description/20 p-1 animate-fadeIn" ref={detailPanelRef}>
-					<AuditReportPanel auditMetadata={selectedSnapshot.auditMetadata} variant="neutral" />
+					{selectedSnapshot && (
+						<div className="rounded-sm border border-description/20 p-1 animate-fadeIn" ref={detailPanelRef}>
+							<AuditReportPanel auditMetadata={selectedSnapshot.auditMetadata} variant="neutral" />
+						</div>
+					)}
 				</div>
 			)}
 		</div>

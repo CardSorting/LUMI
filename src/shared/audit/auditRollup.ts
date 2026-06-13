@@ -1,3 +1,4 @@
+import { hasAuditScoreRegression } from "./auditRegression"
 import { hasCriticalViolations, partitionViolationsBySeverity } from "./auditSeverity"
 import { formatViolationLabel } from "./taskAuditUtils"
 import type { TaskAuditMetadata } from "./types"
@@ -43,6 +44,14 @@ export interface AuditHealthSummary {
 	warningViolationCount: number
 	gateBlockCount: number
 	suppressedViolationCount: number
+	/** Violations present in both earliest and latest snapshots — technical debt signal. */
+	persistentViolationCount: number
+	/** Score delta from previous snapshot to latest — mirrors SonarQube period-over-period. */
+	latestScoreDelta: number | undefined
+	/** Consecutive gate-block snapshots at tail — GitHub Checks failure streak. */
+	trailingGateBlockStreak: number
+	/** Latest completion regressed vs. plan audit baseline. */
+	planRegressionDetected: boolean
 	trend: "improving" | "degrading" | "stable" | "unknown"
 }
 
@@ -78,6 +87,15 @@ export function computeAuditHealthSummary(
 	const earliest = snapshots[0].auditMetadata
 	const latestScore = latest.hardening_score
 	const earliestScore = earliest.hardening_score
+	const persistentViolationCount = getPersistentViolations(earliest, latest).length
+
+	let latestScoreDelta: number | undefined
+	if (snapshots.length > 1) {
+		const previous = snapshots[snapshots.length - 2].auditMetadata
+		if (Number.isFinite(latestScore) && Number.isFinite(previous.hardening_score)) {
+			latestScoreDelta = latestScore! - previous.hardening_score!
+		}
+	}
 
 	let trend: AuditHealthSummary["trend"] = "unknown"
 	if (Number.isFinite(latestScore) && Number.isFinite(earliestScore) && snapshots.length > 1) {
@@ -85,6 +103,12 @@ export function computeAuditHealthSummary(
 		if (delta >= 5) trend = "improving"
 		else if (delta <= -5) trend = "degrading"
 		else trend = "stable"
+	}
+
+	let trailingGateBlockStreak = 0
+	for (let i = snapshots.length - 1; i >= 0; i--) {
+		if (!snapshots[i].auditMetadata.gate_blocked) break
+		trailingGateBlockStreak += 1
 	}
 
 	return {
@@ -95,7 +119,27 @@ export function computeAuditHealthSummary(
 		warningViolationCount,
 		gateBlockCount,
 		suppressedViolationCount,
+		persistentViolationCount,
+		latestScoreDelta,
+		trailingGateBlockStreak,
+		planRegressionDetected: false,
 		trend,
+	}
+}
+
+/** Computes health summary with optional plan baseline for regression detection. */
+export function computeAuditHealthSummaryWithBaseline(
+	snapshots: Array<{ auditMetadata: TaskAuditMetadata }>,
+	planBaselineMetadata?: TaskAuditMetadata,
+): AuditHealthSummary | undefined {
+	const summary = computeAuditHealthSummary(snapshots)
+	if (!summary || !planBaselineMetadata || snapshots.length === 0) {
+		return summary
+	}
+	const latest = snapshots[snapshots.length - 1].auditMetadata
+	return {
+		...summary,
+		planRegressionDetected: hasAuditScoreRegression(planBaselineMetadata, latest),
 	}
 }
 

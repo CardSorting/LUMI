@@ -135,12 +135,26 @@ export function buildGateDecisionSummary(decision: CompletionGateDecision): stri
 
 export function buildPreCompletionChecklist(metadata: TaskAuditMetadata, options?: CompletionGateOptions): string {
 	const decision = evaluateCompletionGate(metadata, options)
-	const { critical, warning } = partitionViolationsBySeverity(metadata.violations)
+	const gateViolations =
+		options?.newViolationsOnly && options.baselineMetadata
+			? filterNewViolationsSinceBaseline(metadata.violations, options.baselineMetadata)
+			: (metadata.violations ?? [])
+	const { critical, warning } = partitionViolationsBySeverity(gateViolations)
+	const allViolations = metadata.violations ?? []
+	const grandfatheredCount =
+		options?.newViolationsOnly && options.baselineMetadata ? Math.max(0, allViolations.length - gateViolations.length) : 0
 	const lines = [
 		"<pre_completion_checklist>",
 		`Hardening: ${decision.grade ?? "?"} (${decision.score}/100) · Threshold ${decision.effectiveThreshold}`,
 		decision.blocked ? "Status: BLOCKED — resolve before completing" : "Status: Gate ready",
 	]
+
+	if (options?.newViolationsOnly) {
+		lines.push(`New-code gate: ${gateViolations.length} blocking violation(s) since baseline`)
+		if (grandfatheredCount > 0) {
+			lines.push(`Grandfathered (${grandfatheredCount}): legacy debt excluded from gate _(baseline policy)_`)
+		}
+	}
 
 	if (critical.length > 0) {
 		lines.push(`Critical (${critical.length}): ${critical.slice(0, 3).map(formatViolationLabel).join(", ")}`)

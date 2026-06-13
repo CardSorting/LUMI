@@ -1,6 +1,7 @@
 import {
 	buildAdvisoryRollupSection,
 	computeAuditHealthSummary,
+	computeAuditHealthSummaryWithBaseline,
 	getPersistentViolations,
 	hasUnresolvedAdvisoryFindings,
 	shouldEscalateFromAdvisory,
@@ -53,5 +54,42 @@ describe("auditRollup", () => {
 		})
 		const summary = computeAuditHealthSummary([{ auditMetadata: withSuppressed }])
 		expect(summary?.suppressedViolationCount).to.equal(2)
+	})
+
+	it("tracks persistent violations and latest score delta", () => {
+		const older = enrichAuditMetadata({
+			violations: ["missing_validation_evidence", "result_empty"],
+		})
+		const middle = enrichAuditMetadata({
+			violations: ["missing_validation_evidence"],
+		})
+		const latest = enrichAuditMetadata({ violations: [] })
+		const snapshots = [{ auditMetadata: older }, { auditMetadata: middle }, { auditMetadata: latest }]
+		const summary = computeAuditHealthSummary(snapshots)
+		expect(summary?.persistentViolationCount).to.equal(0)
+		expect(summary?.latestScoreDelta).to.equal((latest.hardening_score ?? 0) - (middle.hardening_score ?? 0))
+		expect(summary?.trend).to.equal("improving")
+	})
+
+	it("counts persistent violations present in first and last snapshots", () => {
+		const older = enrichAuditMetadata({
+			violations: ["missing_validation_evidence", "result_empty"],
+		})
+		const latest = enrichAuditMetadata({
+			violations: ["missing_validation_evidence"],
+		})
+		const summary = computeAuditHealthSummary([{ auditMetadata: older }, { auditMetadata: latest }])
+		expect(summary?.persistentViolationCount).to.equal(1)
+	})
+
+	it("tracks trailing gate block streak and plan regression", () => {
+		const blocked = enrichAuditMetadata({ violations: ["result_empty"], gate_blocked: true })
+		const summary = computeAuditHealthSummary([{ auditMetadata: blocked }, { auditMetadata: blocked }])
+		expect(summary?.trailingGateBlockStreak).to.equal(2)
+
+		const planBaseline = { violations: [], hardening_score: 95, hardening_grade: "A" as const }
+		const regressed = { violations: ["result_empty"], hardening_score: 50, hardening_grade: "F" as const }
+		const withBaseline = computeAuditHealthSummaryWithBaseline([{ auditMetadata: regressed }], planBaseline)
+		expect(withBaseline?.planRegressionDetected).to.equal(true)
 	})
 })

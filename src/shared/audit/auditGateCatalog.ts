@@ -14,6 +14,7 @@ export const GATE_REASON_LABELS: Record<CompletionGateReasonCode, string> = {
 export const GATE_REASON_REMEDIATION: Partial<Record<CompletionGateReasonCode, string>> = {
 	score_below_threshold: "Improve hardening score by resolving violations and adding verification evidence.",
 	critical_violations: "Resolve all critical-severity violations before completing.",
+	policy_violations: "Resolve new violations introduced since the workspace baseline.",
 	advisory_escalation: "Address act-mode advisory findings flagged during progress updates.",
 	plan_regression: "Restore hardening score to at least the plan audit baseline level.",
 }

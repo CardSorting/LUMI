@@ -28,6 +28,7 @@ import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { AlignmentGuard } from "./AlignmentGuard"
+import { AuditGateBlockRow } from "./AuditGateBlockRow"
 import { ClarificationHub } from "./ClarificationHub"
 import { CommandOutputContent, CommandOutputRow } from "./CommandOutputRow"
 import { CompletionOutputRow } from "./CompletionOutputRow"
@@ -849,6 +850,21 @@ export const ChatRowContent = memo(
 						return <InvisibleSpacer /> // we should never see this message type
 					case "mcp_server_response":
 						return <McpResponseDisplay responseText={message.text || ""} />
+					case "info":
+						if (message.auditMetadata?.gate_blocked) {
+							return <AuditGateBlockRow auditMetadata={message.auditMetadata} text={message.text} />
+						}
+						if (message.text?.trim()) {
+							return (
+								<div className="flex items-start gap-2 py-2 px-3 my-2 bg-quote/60 rounded-sm border border-description/15 text-[11px] text-description/90">
+									<Icon className="mt-0.5 size-2 shrink-0" name="InfoIcon" />
+									<div className="break-words flex-1 ph-no-capture">
+										<MarkdownRow markdown={message.text} showCursor={false} />
+									</div>
+								</div>
+							)
+						}
+						return <InvisibleSpacer />
 					case "mcp_notification":
 						return (
 							<div className="flex items-start gap-2 py-2.5 px-3 bg-quote rounded-sm text-base text-foreground opacity-90 mb-2">

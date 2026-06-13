@@ -50,6 +50,18 @@ describe("auditGateReport", () => {
 		expect(checklist).to.contain("BLOCKED")
 	})
 
+	it("includes new-code gate context in pre-completion checklist", () => {
+		const baseline = enrichAuditMetadata({ violations: ["result_empty"] })
+		const metadata = enrichAuditMetadata({ violations: ["result_empty", "missing_validation_evidence"] })
+		const checklist = buildPreCompletionChecklist(metadata, {
+			newViolationsOnly: true,
+			baselineMetadata: baseline,
+		})
+		expect(checklist).to.contain("New-code gate")
+		expect(checklist).to.contain("Grandfathered")
+		expect(checklist).to.contain("missing validation evidence")
+	})
+
 	it("builds gate ready summary when passing", () => {
 		const metadata = enrichAuditMetadata({ violations: [], intent_coverage: 0.9, entropy_score: 0.1 })
 		const decision = evaluateCompletionGate(metadata)

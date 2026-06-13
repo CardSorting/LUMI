@@ -533,6 +533,8 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		try {
 			const { executeHook } = await import("@core/hooks/hook-executor")
 
+			const gateOptions = config.taskState.lastCompletionAudit ? await buildAuditGateOptions(config) : undefined
+
 			await executeHook({
 				hookName: "TaskComplete",
 				hookInput: {
@@ -545,7 +547,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 							...(config.taskState.lastCompletionAudit
 								? buildAuditHookMetadata(config.taskState.lastCompletionAudit, {
 										includeSarif: config.auditSarifHookExportEnabled,
-										gateOptions: buildAuditGateOptions(config),
+										gateOptions,
 										taskUri: `task://${config.taskId}`,
 									})
 								: {}),

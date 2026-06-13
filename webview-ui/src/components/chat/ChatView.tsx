@@ -2,10 +2,11 @@ import {
 	getAuditSnapshotsFromMessages,
 	getAuditTrend,
 	getLatestAuditFromMessages,
+	getLatestPlanAuditFromMessages,
 	getPreviousAuditFromMessages,
 } from "@shared/audit/auditMessages"
-import { findMessageIndexForAuditTs } from "@shared/audit/auditNavigation"
-import { computeAuditHealthSummary } from "@shared/audit/auditRollup"
+import { findAuditMessageIndex, findMessageIndexForAuditTs } from "@shared/audit/auditNavigation"
+import { computeAuditHealthSummaryWithBaseline } from "@shared/audit/auditRollup"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
@@ -81,7 +82,11 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		return getAuditTrend(previous, latestAuditMetadata)
 	}, [messages, latestAuditMetadata])
 	const auditSnapshots = useMemo(() => getAuditSnapshotsFromMessages(messages), [messages])
-	const auditHealth = useMemo(() => computeAuditHealthSummary(auditSnapshots), [auditSnapshots])
+	const planAuditBaseline = useMemo(() => getLatestPlanAuditFromMessages(messages), [messages])
+	const auditHealth = useMemo(
+		() => computeAuditHealthSummaryWithBaseline(auditSnapshots, planAuditBaseline),
+		[auditSnapshots, planAuditBaseline],
+	)
 
 	// Use custom hooks for state management
 	const chatState = useChatState(messages)
@@ -333,12 +338,13 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 
 	const handleScrollToAuditMessage = useCallback(
 		(ts: number) => {
-			const index = findMessageIndexForAuditTs(messages, ts)
+			const snapshot = auditSnapshots.find((entry) => entry.ts === ts)
+			const index = snapshot ? findAuditMessageIndex(messages, snapshot) : findMessageIndexForAuditTs(messages, ts)
 			if (index >= 0) {
 				scrollBehavior.scrollToMessage(index)
 			}
 		},
-		[messages, scrollBehavior.scrollToMessage],
+		[messages, auditSnapshots, scrollBehavior.scrollToMessage],
 	)
 
 	const placeholderText = useMemo(() => {
