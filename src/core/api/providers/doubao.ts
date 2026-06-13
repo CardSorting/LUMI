@@ -2,10 +2,10 @@ import { DoubaoModelId, doubaoDefaultModelId, doubaoModels, ModelInfo } from "@s
 import OpenAI from "openai"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
-import { ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface DoubaoHandlerOptions extends CommonApiHandlerOptions {
 	doubaoApiKey?: string

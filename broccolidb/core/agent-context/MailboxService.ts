@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import type { ServiceContext } from './types.js';
 
 export interface MailboxMessage {

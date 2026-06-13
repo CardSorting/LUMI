@@ -1,3 +1,4 @@
+// [LAYER: UI]
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { dbPool } from '../infrastructure/db/BufferedDbPool.js';

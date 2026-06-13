@@ -14,10 +14,10 @@ import { GeminiModelId, geminiDefaultModelId, geminiModels, ModelInfo, VertexMod
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
-import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { RetriableError, withRetry } from "../retry"
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import { ApiStream } from "../transform/stream"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 const rateLimitPatterns = [/got status: 429/i, /429 Too Many Requests/i, /rate limit exceeded/i, /too many requests/i]
 

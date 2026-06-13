@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import type { BufferedDbPool } from '../../infrastructure/db/BufferedDbPool.js';
 import type { LRUCache } from '../lru-cache.js';
 import type { Workspace } from '../workspace.js';

@@ -5,11 +5,11 @@ import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/com
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch } from "@/shared/net"
-import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { ToolCallProcessor } from "../transform/tool-call-processor"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface BasetenHandlerOptions extends CommonApiHandlerOptions {
 	basetenApiKey?: string

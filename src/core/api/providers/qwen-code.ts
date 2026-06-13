@@ -8,11 +8,11 @@ import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 // --- Constants for Qwen OAuth2 ---
 const QWEN_OAUTH_BASE_URL = "https://chat.qwen.ai"

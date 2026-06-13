@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import { dbPool } from '../infrastructure/db/BufferedDbPool.js';
 import { setDbPath } from '../infrastructure/db/Config.js';
 

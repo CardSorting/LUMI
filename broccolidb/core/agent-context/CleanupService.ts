@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import { join } from 'node:path';
 import { unlink, readdir, stat } from 'node:fs/promises';
 import type { TaskService } from './TaskService.js';

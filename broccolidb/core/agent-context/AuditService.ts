@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import * as crypto from 'node:crypto';
 import { Logger } from '../../shared/services/Logger.js';
 import type { GraphService } from './GraphService.js';

@@ -1,8 +1,6 @@
-import { ApiConfiguration, ModelInfo, QwenApiRegions } from "@shared/api"
+import { ApiConfiguration, QwenApiRegions } from "@shared/api"
 import { Mode } from "@shared/storage/types"
-import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
-import { DietCodeTool } from "@/shared/tools"
 import { AIhubmixHandler } from "./providers/aihubmix"
 import { AnthropicHandler } from "./providers/anthropic"
 import { AskSageHandler } from "./providers/asksage"
@@ -46,40 +44,11 @@ import { VertexHandler } from "./providers/vertex"
 import { VsCodeLmHandler } from "./providers/vscode-lm"
 import { XAIHandler } from "./providers/xai"
 import { ZAiHandler } from "./providers/zai"
-import { ApiStream, ApiStreamUsageChunk } from "./transform/stream"
+import { ApiHandler, ApiHandlerModel, ApiProviderInfo, CommonApiHandlerOptions, SingleCompletionHandler } from "./types"
 
-export type CommonApiHandlerOptions = {
-	onRetryAttempt?: ApiConfiguration["onRetryAttempt"]
-}
-export interface ApiHandler {
-	createMessage(
-		systemPrompt: string,
-		messages: DietCodeStorageMessage[],
-		tools?: DietCodeTool[],
-		useResponseApi?: boolean,
-	): ApiStream
-	getModel(): ApiHandlerModel
-	getApiStreamUsage?(): Promise<ApiStreamUsageChunk | undefined>
-	abort?(): void
-	embedText?(text: string): Promise<number[] | null>
-	embedBatch?(texts: string[]): Promise<(number[] | null)[]>
-}
-
-export interface ApiHandlerModel {
-	id: string
-	info: ModelInfo
-}
-
-export interface ApiProviderInfo {
-	providerId: string
-	model: ApiHandlerModel
-	mode: Mode
-	customPrompt?: string // "compact"
-}
-
-export interface SingleCompletionHandler {
-	completePrompt(prompt: string): Promise<string>
-}
+// Re-export the API handler contract for backward compatibility.
+// The canonical definitions live in ./types to break the provider↔index cycle.
+export type { ApiHandler, ApiHandlerModel, ApiProviderInfo, CommonApiHandlerOptions, SingleCompletionHandler }
 
 function createHandlerForProvider(
 	apiProvider: string | undefined,

@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import type { SpiderNode } from './types.js';
 
 export interface SymbolProvider {

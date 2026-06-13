@@ -50,6 +50,56 @@ type LogicalSoundnessContext = {
 	getLogicalSoundness(knowledgeIds: string[]): Promise<number>
 }
 
+export interface TaskTrace {
+	id: string
+	description: string
+	subagentType?: "worker" | "verifier" | "researcher"
+	status: AgentTask["status"]
+	result: string | null
+	intent?: IntentName
+	violations?: string[]
+	entropyScore?: number
+	intentCoverage?: number
+	createdAt: number
+}
+
+export interface StreamTrace {
+	id: string
+	externalId: string | null
+	parentId: string | null
+	focus: string
+	status: AgentStream["status"]
+	createdAt: number
+	tasks: TaskTrace[]
+	children: StreamTrace[]
+	summary?: string
+	failureReason?: string
+	soundnessScore?: number
+	avgEntropy?: number
+}
+
+export interface AuditHookContext {
+	taskId: string
+	taskDescription: string
+	taskResult: string
+	streamFocus: string
+	intent: IntentName
+	intentCoverage: number
+	entropyScore: number
+}
+
+export interface AuditHook {
+	name: string
+	validate: (context: AuditHookContext) => string[] | Promise<string[]>
+}
+
+export interface SwarmSignal {
+	type: "vibe" | "audit" | "error"
+	value: string
+	timestamp: number
+	streamId: string
+}
+
 const INTENT_TAXONOMY: Record<Exclude<IntentName, "GENERAL">, { keywords: string[]; weight: number }[]> = {
 	REFACTOR: [
 		{ keywords: ["refactor", "restructure", "reorganize", "decompose", "extract", "split"], weight: 3 },
@@ -165,6 +215,86 @@ const ARCHITECTURE_SIGNAL_PATTERNS: Array<{ label: string; pattern: RegExp }> = 
 const REFERENCED_PATH_PATTERN = /\b(?:src|cli|webview-ui|packages|plugins|scripts|test|tests)\/[^\s'"`()<>[\]{}]+/g
 
 export class AgentOrchestrator {
+	private auditHooks: AuditHook[] = []
+
+	constructor() {
+		this.registerDefaultHooks()
+	}
+
+	private registerDefaultHooks(): void {
+		this.registerAuditHook({
+			name: "ResultLengthValidator",
+			validate: (ctx) => {
+				if (ctx.taskDescription.length > 80 && ctx.taskResult.length < 40) {
+					return ["result_too_short"]
+				}
+				return []
+			},
+		})
+
+		this.registerAuditHook({
+			name: "UnresolvedWorkMarkersValidator",
+			validate: (ctx) => {
+				const found: string[] = []
+				for (const marker of UNRESOLVED_MARKERS) {
+					if (this.hasUnresolvedMarker(ctx.taskResult, marker)) {
+						found.push(`unresolved_work_marker:${marker.replace(/\s+/g, "_")}`)
+					}
+				}
+				return found
+			},
+		})
+
+		this.registerAuditHook({
+			name: "ReportedBlockerValidator",
+			validate: (ctx) => {
+				if (BLOCKER_PATTERN.test(ctx.taskResult) && !RESOLVED_MARKER_CONTEXT.test(ctx.taskResult)) {
+					return ["reported_blocker"]
+				}
+				return []
+			},
+		})
+
+		this.registerAuditHook({
+			name: "ValidationEvidenceValidator",
+			validate: (ctx) => {
+				const intentText = `${ctx.streamFocus}\n${ctx.taskDescription}`
+				if (VALIDATION_REQUEST_PATTERN.test(intentText) && !VALIDATION_EVIDENCE_PATTERN.test(ctx.taskResult)) {
+					return ["missing_validation_evidence"]
+				}
+				return []
+			},
+		})
+
+		this.registerAuditHook({
+			name: "LowIntentCoverageValidator",
+			validate: (ctx) => {
+				if (ctx.intentCoverage < 0.2 && ctx.taskDescription.length > 40) {
+					return [`low_intent_coverage:${ctx.intentCoverage.toFixed(2)}`]
+				}
+				return []
+			},
+		})
+
+		this.registerAuditHook({
+			name: "HighEntropyLowCoverageValidator",
+			validate: (ctx) => {
+				if (ctx.entropyScore >= 0.86 && ctx.intentCoverage < 0.25) {
+					return [`high_entropy_low_coverage:${ctx.entropyScore.toFixed(2)}`]
+				}
+				return []
+			},
+		})
+	}
+
+	public registerAuditHook(hook: AuditHook): void {
+		this.auditHooks.push(hook)
+	}
+
+	public unregisterAuditHook(hookName: string): void {
+		this.auditHooks = this.auditHooks.filter((h) => h.name !== hookName)
+	}
+
 	public async createStream(
 		focus: string,
 		parentId: string | null = null,
@@ -246,10 +376,12 @@ export class AgentOrchestrator {
 			normalizedResult,
 		)
 		const intentCoverage = this.calculateIntentCoverage(`${normalizedFocus}\n${normalizedDescription}`, normalizedResult)
-		const violations = this.detectAuditViolations({
+		const violations = await this.detectAuditViolations({
+			taskId,
 			taskDescription: normalizedDescription,
 			taskResult: normalizedResult,
 			streamFocus: normalizedFocus,
+			intent: intent.intent,
 			intentCoverage,
 			entropyScore,
 		})
@@ -271,6 +403,282 @@ export class AgentOrchestrator {
 		)
 
 		return metadata
+	}
+
+	public async getExecutionTrace(streamId: string): Promise<StreamTrace> {
+		const stream = await dbPool.selectOne("agent_streams", { column: "id", value: streamId })
+		if (!stream) {
+			throw new Error(`Stream ${streamId} not found`)
+		}
+
+		const tasks = await this.getStreamTasks(streamId)
+		const summary = await this.recallMemory(streamId, "stream_summary")
+		const failureReason = await this.recallMemory(streamId, "failure_reason")
+
+		const soundness = 1.0
+		const knowledgeIds = tasks.flatMap((t) => t.linkedKnowledgeIds || [])
+		if (knowledgeIds.length > 0) {
+			// Compute soundness score if needed, default to 1.0
+		}
+
+		const avgEntropy =
+			tasks
+				.filter((t) => t.metadata?.entropy_score !== undefined)
+				.reduce((acc, t) => acc + (t.metadata?.entropy_score || 0), 0) /
+			(tasks.filter((t) => t.metadata?.entropy_score !== undefined).length || 1)
+
+		const childStreams = await dbPool.selectWhere("agent_streams", { column: "parentId", value: streamId })
+		const childrenTraces = await Promise.all(childStreams.map((child: any) => this.getExecutionTrace(child.id)))
+
+		const taskTraces: TaskTrace[] = tasks.map((t) => ({
+			id: t.id,
+			description: t.description,
+			subagentType: t.subagent_type,
+			status: t.status,
+			result: t.result,
+			intent: t.metadata?.intent_classification,
+			violations: t.metadata?.violations,
+			entropyScore: t.metadata?.entropy_score,
+			intentCoverage: t.metadata?.intent_coverage,
+			createdAt: t.createdAt,
+		}))
+
+		return {
+			id: stream.id,
+			externalId: stream.externalId,
+			parentId: stream.parentId,
+			focus: stream.focus,
+			status: stream.status,
+			createdAt: stream.createdAt,
+			tasks: taskTraces,
+			children: childrenTraces,
+			summary: summary || undefined,
+			failureReason: failureReason || undefined,
+			soundnessScore: Number(soundness.toFixed(2)),
+			avgEntropy: Number(avgEntropy.toFixed(2)),
+		}
+	}
+
+	public async recordHeartbeat(taskId: string): Promise<void> {
+		const task = await dbPool.selectOne("agent_tasks", { column: "id", value: taskId })
+		if (!task) {
+			throw new Error(`Task ${taskId} not found`)
+		}
+		await this.storeMemory(task.streamId, `task_heartbeat:${taskId}`, String(Date.now()))
+	}
+
+	public async detectStalledTasks(timeoutMs: number): Promise<AgentTask[]> {
+		const allTasks = await dbPool.selectAllFrom("agent_tasks")
+		const runningTasks = allTasks.filter((t: any) => t.status === "running")
+		const stalledTasks: AgentTask[] = []
+
+		for (const t of runningTasks) {
+			const heartbeatVal = await this.recallMemory(t.streamId, `task_heartbeat:${t.id}`)
+			const lastUpdated = heartbeatVal ? Number(heartbeatVal) : t.createdAt
+			if (Date.now() - lastUpdated > timeoutMs) {
+				stalledTasks.push({
+					...t,
+					linkedKnowledgeIds: t.linkedKnowledgeIds ? JSON.parse(t.linkedKnowledgeIds) : [],
+					metadata: t.metadata ? JSON.parse(t.metadata) : undefined,
+				} as AgentTask)
+			}
+		}
+
+		return stalledTasks
+	}
+
+	public async failStalledTasks(timeoutMs: number, reason: string): Promise<void> {
+		const stalled = await this.detectStalledTasks(timeoutMs)
+		for (const task of stalled) {
+			const metadata = task.metadata || {}
+			const updatedMetadata: TaskAuditMetadata = {
+				...metadata,
+				violations: this.dedupe([...(metadata.violations || []), "stalled_task_timeout"]),
+				audited_at: Date.now(),
+			}
+
+			await this.updateTaskStatus(task.id, "failed", `Stalled task failed: ${reason}`, updatedMetadata)
+			await this.emitSwarmSignal(task.streamId, {
+				type: "error",
+				value: `Task ${task.id.slice(0, 8)} stalled and was failed automatically.`,
+			})
+		}
+	}
+
+	public async getSwarmSignals(
+		streamId: string,
+		filter?: { type?: "vibe" | "audit" | "error"; since?: number },
+	): Promise<SwarmSignal[]> {
+		const items = await dbPool.selectWhere("agent_memory", { column: "streamId", value: streamId })
+		const signals: SwarmSignal[] = []
+
+		for (const item of items) {
+			if (item.key.startsWith("swarm_signal_")) {
+				try {
+					const parsed = JSON.parse(item.value)
+					const timestamp = parsed.timestamp || 0
+					const type = parsed.type
+					const value = parsed.value
+
+					if (filter?.type && type !== filter.type) continue
+					if (filter?.since && timestamp < filter.since) continue
+
+					signals.push({
+						type,
+						value,
+						timestamp,
+						streamId,
+					})
+				} catch (_e) {
+					// Ignore malformed JSON
+				}
+			}
+		}
+
+		return signals.sort((a, b) => a.timestamp - b.timestamp)
+	}
+
+	public async reserveFiles(streamId: string, files: string[]): Promise<{ reserved: boolean; reason?: string }> {
+		const activeStreams = await this.getActiveStreams()
+		const activeStreamIds = new Set(activeStreams.map((s) => s.id))
+
+		for (const file of files) {
+			const normalizedPath = path.resolve(file)
+			const found = await dbPool.selectOne("agent_memory", { column: "key", value: `file_res:${normalizedPath}` })
+			if (found) {
+				const ownerStreamId = found.streamId
+				if (ownerStreamId !== streamId && activeStreamIds.has(ownerStreamId)) {
+					return {
+						reserved: false,
+						reason: `File '${path.basename(file)}' is already reserved by active Stream ${ownerStreamId.slice(0, 8)}.`,
+					}
+				}
+			}
+		}
+
+		for (const file of files) {
+			const normalizedPath = path.resolve(file)
+			await this.storeMemory(streamId, `file_res:${normalizedPath}`, String(Date.now()))
+		}
+
+		return { reserved: true }
+	}
+
+	public async releaseFiles(streamId: string, files: string[]): Promise<void> {
+		for (const file of files) {
+			const normalizedPath = path.resolve(file)
+			await dbPool.push(
+				{
+					type: "delete",
+					table: "agent_memory",
+					where: [
+						{ column: "streamId", value: streamId },
+						{ column: "key", value: `file_res:${normalizedPath}` },
+					],
+					layer: "domain",
+				},
+				streamId,
+			)
+		}
+	}
+
+	private async releaseAllReservations(streamId: string): Promise<void> {
+		const items = await dbPool.selectWhere("agent_memory", { column: "streamId", value: streamId })
+		for (const item of items) {
+			if (item.key.startsWith("file_res:")) {
+				await dbPool.push(
+					{
+						type: "delete",
+						table: "agent_memory",
+						where: [
+							{ column: "streamId", value: streamId },
+							{ column: "key", value: item.key },
+						],
+						layer: "domain",
+					},
+					streamId,
+				)
+			}
+		}
+	}
+
+	public async failStreamCascading(streamId: string, reason: string): Promise<void> {
+		await this.failStream(streamId, reason)
+
+		const children = await dbPool.selectWhere("agent_streams", { column: "parentId", value: streamId })
+		const activeChildren = children.filter((s: any) => s.status === "active")
+
+		for (const child of activeChildren) {
+			await this.failStreamCascading(child.id, `Cancelled by parent stream failure: ${reason}`)
+		}
+	}
+
+	public async getFormattedPromptContext(
+		streamId: string,
+		options?: { maxTasks?: number; format?: "markdown" | "json"; agentContext?: LogicalSoundnessContext },
+	): Promise<string> {
+		const format = options?.format || "markdown"
+		if (format === "json") {
+			return this.getCompressedContext(streamId, options?.agentContext)
+		}
+
+		const tasks = await this.getStreamTasks(streamId)
+		const summary = await this.recallMemory(streamId, "stream_summary")
+		const failureReason = await this.recallMemory(streamId, "failure_reason")
+
+		let soundness = 1.0
+		const knowledgeIds = tasks.flatMap((t) => t.linkedKnowledgeIds || [])
+		if (options?.agentContext && knowledgeIds.length > 0) {
+			soundness = await options.agentContext.getLogicalSoundness(knowledgeIds)
+		}
+
+		const completedTasks = tasks.filter((t) => t.status === "completed")
+		const failedTasks = tasks.filter((t) => t.status === "failed")
+		const violations = tasks
+			.filter((t) => t.metadata?.joy_zoning_violations)
+			.flatMap((t) => t.metadata?.joy_zoning_violations as string[])
+
+		const avgEntropy =
+			tasks
+				.filter((t) => t.metadata?.entropy_score !== undefined)
+				.reduce((acc, t) => acc + (t.metadata?.entropy_score || 0), 0) /
+			(tasks.filter((t) => t.metadata?.entropy_score !== undefined).length || 1)
+
+		const maxTasks = options?.maxTasks || 10
+		const recentTasks = tasks.slice(-maxTasks)
+
+		const lines: string[] = []
+		lines.push(`### Agent Swarm Context (Stream ID: ${streamId.slice(0, 8)})`)
+		const streamDetails = await dbPool.selectOne("agent_streams", { column: "id", value: streamId })
+		lines.push(`- **Goal/Focus**: ${streamDetails?.focus || "Unknown"}`)
+		lines.push(`- **Overall Summary**: ${summary || "No summary available."}`)
+		if (failureReason) {
+			lines.push(`- **Failure Reason**: ${failureReason}`)
+		}
+		lines.push(`- **Soundness Score**: ${soundness.toFixed(2)}`)
+		lines.push(`- **Average Entropy**: ${avgEntropy.toFixed(2)}`)
+		lines.push(`- **Total Tasks**: ${tasks.length} (Completed: ${completedTasks.length}, Failed: ${failedTasks.length})`)
+		if (violations.length > 0) {
+			lines.push(`- **Violations Detected**: ${[...new Set(violations)].join(", ")}`)
+		}
+
+		lines.push("")
+		lines.push("#### Recent Tasks:")
+		if (recentTasks.length === 0) {
+			lines.push("- No tasks recorded yet.")
+		} else {
+			for (const t of recentTasks) {
+				const intentStr = t.metadata?.intent_classification ? ` [${t.metadata.intent_classification}]` : ""
+				const statusIcon = t.status === "completed" ? "✔" : t.status === "failed" ? "❌" : "⏳"
+				lines.push(`- ${statusIcon} **${t.description}**${intentStr}`)
+				if (t.result) {
+					const resultPreview = t.result.length > 120 ? `${t.result.slice(0, 120)}...` : t.result
+					lines.push(`  *Result*: ${resultPreview.replace(/\n/g, " ")}`)
+				}
+			}
+		}
+
+		return lines.join("\n")
 	}
 
 	public async updateTaskStatus(
@@ -373,6 +781,9 @@ export class AgentOrchestrator {
 		// Commit any pending shadow work before storing the completion summary
 		await dbPool.commitWork(streamId)
 
+		// Auto-release all file reservations for this stream
+		await this.releaseAllReservations(streamId)
+
 		const summaryPreview = this.escapeXml(summary.slice(0, 100))
 		const escapedSummary = this.escapeXml(summary)
 		const taskNotification = `
@@ -417,6 +828,9 @@ export class AgentOrchestrator {
 			layer: "infrastructure",
 		})
 		await this.storeMemory(streamId, "failure_reason", reason)
+
+		// Auto-release all file reservations for this stream
+		await this.releaseAllReservations(streamId)
 	}
 
 	// ── Context-Window Compression ──────────────────────────────────
@@ -486,11 +900,26 @@ export class AgentOrchestrator {
 	public async checkCollision(requestingStreamId: string, files: string[]): Promise<string | null> {
 		const activeFiles = await dbPool.getActiveAffectedFiles()
 		for (const file of files) {
-			const agentId = activeFiles.get(file)
+			const normalizedPath = path.resolve(file)
+			const agentId = activeFiles.get(normalizedPath) || activeFiles.get(file)
 			if (agentId && agentId !== requestingStreamId) {
 				return `Collision detected: File '${path.basename(file)}' is currently being modified by Stream ${agentId.slice(0, 8)}.`
 			}
 		}
+
+		const activeStreams = await this.getActiveStreams()
+		const activeStreamIds = new Set(activeStreams.map((s) => s.id))
+		for (const file of files) {
+			const normalizedPath = path.resolve(file)
+			const found = await dbPool.selectOne("agent_memory", { column: "key", value: `file_res:${normalizedPath}` })
+			if (found) {
+				const ownerStreamId = found.streamId
+				if (ownerStreamId !== requestingStreamId && activeStreamIds.has(ownerStreamId)) {
+					return `Collision detected: File '${path.basename(file)}' is reserved by active Stream ${ownerStreamId.slice(0, 8)}.`
+				}
+			}
+		}
+
 		return null
 	}
 
@@ -687,7 +1116,7 @@ export class AgentOrchestrator {
 	}
 
 	private classifyIntent(userInput: string): IntentScore & { runnerUp?: IntentScore } {
-		const normalized = userInput.toLowerCase()
+		const normalized = (userInput || "").toLowerCase()
 		const scores = new Map<IntentName, number>()
 
 		for (const [intent, groups] of Object.entries(INTENT_TAXONOMY) as Array<
@@ -731,45 +1160,29 @@ export class AgentOrchestrator {
 		return this.auditTask(taskId, task?.description ?? "", result, stream?.focus ?? "")
 	}
 
-	private detectAuditViolations(input: {
+	private async detectAuditViolations(input: {
+		taskId: string
 		taskDescription: string
 		taskResult: string
 		streamFocus: string
+		intent: IntentName
 		intentCoverage: number
 		entropyScore: number
-	}): string[] {
+	}): Promise<string[]> {
 		const violations: string[] = []
-		const intentText = `${input.streamFocus}\n${input.taskDescription}`
-
 		if (!input.taskResult) {
-			violations.push("result_empty")
-			return violations
+			return ["result_empty"]
 		}
 
-		if (input.taskDescription.length > 80 && input.taskResult.length < 40) {
-			violations.push("result_too_short")
-		}
-
-		for (const marker of UNRESOLVED_MARKERS) {
-			if (this.hasUnresolvedMarker(input.taskResult, marker)) {
-				violations.push(`unresolved_work_marker:${marker.replace(/\s+/g, "_")}`)
+		for (const hook of this.auditHooks) {
+			try {
+				const results = await hook.validate(input)
+				violations.push(...results)
+			} catch (error) {
+				Logger.error(
+					`[Orchestrator] Audit hook ${hook.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+				)
 			}
-		}
-
-		if (BLOCKER_PATTERN.test(input.taskResult) && !RESOLVED_MARKER_CONTEXT.test(input.taskResult)) {
-			violations.push("reported_blocker")
-		}
-
-		if (VALIDATION_REQUEST_PATTERN.test(intentText) && !VALIDATION_EVIDENCE_PATTERN.test(input.taskResult)) {
-			violations.push("missing_validation_evidence")
-		}
-
-		if (input.intentCoverage < 0.2 && input.taskDescription.length > 40) {
-			violations.push(`low_intent_coverage:${input.intentCoverage.toFixed(2)}`)
-		}
-
-		if (input.entropyScore >= 0.86 && input.intentCoverage < 0.25) {
-			violations.push(`high_entropy_low_coverage:${input.entropyScore.toFixed(2)}`)
 		}
 
 		return this.dedupe(violations)

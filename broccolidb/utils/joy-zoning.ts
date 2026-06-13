@@ -1,3 +1,4 @@
+// [LAYER: PLUMBING]
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { type CallExpression, type ImportDeclaration, Project, SyntaxKind } from 'ts-morph';

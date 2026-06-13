@@ -13,9 +13,9 @@ import {
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { DietCodeTool } from "@/shared/tools"
-import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { sanitizeAnthropicMessages } from "../transform/anthropic-format"
 import { ApiStream } from "../transform/stream"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 import { GeminiHandler } from "./gemini"
 
 interface VertexHandlerOptions extends CommonApiHandlerOptions {

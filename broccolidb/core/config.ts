@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 export interface AppConfig {
   GEMINI_API_KEY: string;
   PORT: number;

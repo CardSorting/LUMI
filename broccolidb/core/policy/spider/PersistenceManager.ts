@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import * as crypto from "crypto"
 import * as v8 from "v8"
 import { MetricsEngine } from "./MetricsEngine.js"

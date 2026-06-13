@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import { type SimpleGit, simpleGit } from 'simple-git';
 import type { Repository } from './repository.js';
 

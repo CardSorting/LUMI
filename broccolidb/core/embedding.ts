@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 const STOPWORDS = new Set([
   'a',
   'about',

@@ -389,9 +389,6 @@ export class SpiderEngine {
 			this.resolver.clearFileFromCache(normalizedPath)
 			this.scheduleReachability()
 		}
-		;(sourceFile as any) = null
-		;(exportedSymbols as any) = null
-		;(metrics as any) = null
 	}
 
 	private analyzeStructuralData(sourceFile: ts.SourceFile): { 

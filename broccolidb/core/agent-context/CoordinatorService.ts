@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import type { ServiceContext, TaskItem } from './types.js';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';

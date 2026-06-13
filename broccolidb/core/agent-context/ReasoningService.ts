@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import { Logger } from '../../shared/services/Logger.js';
 import type { GraphService } from './GraphService.js';
 import type { ContradictionReport, KnowledgeBaseItem, Pedigree, ServiceContext } from './types.js';

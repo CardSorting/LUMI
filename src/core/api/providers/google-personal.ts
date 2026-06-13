@@ -7,9 +7,9 @@ import { telemetryService } from "@/services/telemetry"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeTool } from "@/shared/tools"
-import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import { ApiStream } from "../transform/stream"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 /**
  * Cloud Code Private API endpoint — same endpoint used by Gemini CLI.

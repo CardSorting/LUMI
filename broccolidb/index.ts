@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 export * from './core/agent-context.js';
 export * from './core/connection.js';
 export * from './core/embedding.js';

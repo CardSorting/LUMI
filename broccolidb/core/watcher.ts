@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as chokidar from 'chokidar';

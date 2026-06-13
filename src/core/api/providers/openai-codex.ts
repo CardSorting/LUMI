@@ -13,9 +13,9 @@ import { fetch } from "@/shared/net"
 import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { FeatureFlag } from "@/shared/services/feature-flags/feature-flags"
 import { Logger } from "@/shared/services/Logger"
-import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { convertToOpenAIResponsesInput } from "../transform/openai-response-format"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 /**
  * OpenAI Codex base URL for API requests

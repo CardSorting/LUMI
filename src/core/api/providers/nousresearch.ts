@@ -3,11 +3,11 @@ import OpenAI from "openai"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import { DietCodeTool } from "@/shared/tools"
-import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface NousResearchHandlerOptions extends CommonApiHandlerOptions {
 	nousResearchApiKey?: string

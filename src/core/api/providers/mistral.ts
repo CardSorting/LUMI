@@ -6,10 +6,10 @@ import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/com
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch } from "@/shared/net"
-import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToMistralMessages } from "../transform/mistral-format"
 import { ApiStream } from "../transform/stream"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface MistralHandlerOptions extends CommonApiHandlerOptions {
 	mistralApiKey?: string

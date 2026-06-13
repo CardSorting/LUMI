@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 export class LRUCache<K, V> {
   private capacity: number;
   private cache: Map<K, V>;

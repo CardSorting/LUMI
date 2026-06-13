@@ -1,3 +1,4 @@
+// [LAYER: INFRASTRUCTURE]
 import * as crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { BufferedDbPool, dbPool } from '../db/BufferedDbPool.js';

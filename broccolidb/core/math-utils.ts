@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 /**
  * Vector Math Utilities
  * Consolidates all geometric and vector operations used for semantic search and graph analytics.

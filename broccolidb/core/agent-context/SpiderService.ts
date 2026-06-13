@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import { Logger } from '../../shared/services/Logger.js';
 import { SpiderEngine, type SpiderViolation, type SpiderEntropyReport } from '../policy/SpiderEngine.js';
 import { Repository } from '../repository.js';
@@ -327,6 +328,9 @@ export class SpiderService {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       Logger.error(`[SpiderService] Bootstrap failed: ${msg}`);
+      if (process.env.SPIDER_DEBUG && e instanceof Error) {
+        Logger.error(`[SpiderService] Bootstrap stack: ${e.stack}`);
+      }
       this.bootstrapped = true; // Fail-closed to prevent hot loops
     }
   }

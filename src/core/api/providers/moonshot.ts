@@ -3,11 +3,11 @@ import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/com
 import { ModelInfo, MoonshotModelId, moonshotDefaultModelId, moonshotModels } from "@/shared/api"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
-import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface MoonshotHandlerOptions extends CommonApiHandlerOptions {
 	moonshotApiKey?: string

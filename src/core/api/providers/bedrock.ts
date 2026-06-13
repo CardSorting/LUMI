@@ -16,10 +16,10 @@ import { ExtensionRegistryInfo } from "@/registry"
 import type { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
 import type { DietCodeTool } from "@/shared/tools"
-import type { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToR1Format } from "../transform/r1-format"
 import type { ApiStream } from "../transform/stream"
+import type { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 export interface AwsBedrockHandlerOptions extends CommonApiHandlerOptions {
 	apiModelId?: string

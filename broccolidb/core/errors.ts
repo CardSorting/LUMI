@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 export type AgentGitErrorCode =
   | 'INVALID_USER_ID'
   | 'INVALID_PROJECT_ID'

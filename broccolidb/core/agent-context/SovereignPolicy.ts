@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 /**
  * SovereignPolicy codifies the fundamental principles of the BroccoliDB Sovereign Swarm.
  * These principles guide agent behavior, coordination, and memory management.

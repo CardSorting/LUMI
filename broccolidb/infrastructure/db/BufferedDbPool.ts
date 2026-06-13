@@ -1,3 +1,4 @@
+// [LAYER: INFRASTRUCTURE]
 import * as crypto from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { type Kysely, sql, type Transaction } from 'kysely';

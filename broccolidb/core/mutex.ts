@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 export class TaskMutex {
   private static locks = new Map<string, Promise<void>>();
 

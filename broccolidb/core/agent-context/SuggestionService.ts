@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import * as crypto from 'node:crypto';
 import type { BlastRadius } from './StructuralDiscoveryService.js';
 import type {

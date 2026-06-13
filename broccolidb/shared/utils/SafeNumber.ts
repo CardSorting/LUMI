@@ -1,3 +1,4 @@
+// [LAYER: PLUMBING]
 /**
  * SafeNumber: Industrial-grade numeric formatting for substrate telemetry.
  * Prevents crashes by providing deterministic fallbacks for null, undefined, or NaN values.

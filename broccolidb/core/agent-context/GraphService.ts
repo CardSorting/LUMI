@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import type { WriteOp } from '../../infrastructure/db/BufferedDbPool.js';
 import { AgentGitError } from '../errors.js';
 import type { GraphEdge, KnowledgeBaseItem, ServiceContext, TraversalFilter } from './types.js';

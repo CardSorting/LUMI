@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import * as path from 'node:path';
 import type { SpiderEngine } from '../policy/SpiderEngine.js';
 

@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import { AuditService } from './agent-context/AuditService.js';
 import { CleanupService } from './agent-context/CleanupService.js';
 import { DiagnosisService } from './agent-context/DiagnosisService.js';

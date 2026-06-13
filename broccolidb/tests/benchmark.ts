@@ -1,3 +1,4 @@
+// [LAYER: UI]
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { dbPool } from '../infrastructure/db/BufferedDbPool.js';

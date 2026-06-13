@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import { spawn, ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { Logger } from '../../shared/services/Logger.js';

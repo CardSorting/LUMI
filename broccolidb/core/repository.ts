@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import * as crypto from 'node:crypto';
 import type { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';
 import { Connection } from './connection.js';

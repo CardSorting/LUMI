@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import type { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';
 import type { Schema } from '../infrastructure/db/Config.js';
 import { Connection } from './connection.js';

@@ -2,9 +2,9 @@ import { filterMessagesForClaudeCode } from "@/integrations/claude-code/message-
 import { runClaudeCode } from "@/integrations/claude-code/run"
 import { ClaudeCodeModelId, claudeCodeDefaultModelId, claudeCodeModels } from "@/shared/api"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
-import { type ApiHandler, CommonApiHandlerOptions } from ".."
 import { withRetry } from "../retry"
 import { type ApiStream, ApiStreamUsageChunk } from "../transform/stream"
+import { type ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface ClaudeCodeHandlerOptions extends CommonApiHandlerOptions {
 	claudeCodePath?: string

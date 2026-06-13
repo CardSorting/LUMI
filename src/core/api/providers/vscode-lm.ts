@@ -4,10 +4,10 @@ import { calculateApiCostAnthropic } from "@utils/cost"
 import * as vscode from "vscode"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
-import { ApiHandler, CommonApiHandlerOptions, SingleCompletionHandler } from "../"
 import { withRetry } from "../retry"
 import { ApiStream } from "../transform/stream"
 import { convertToVsCodeLmMessages } from "../transform/vscode-lm-format"
+import { ApiHandler, CommonApiHandlerOptions, SingleCompletionHandler } from "../types"
 import type { LanguageModelChatSelector as LanguageModelChatSelectorFromTypes } from "./types"
 
 interface VsCodeLmHandlerOptions extends CommonApiHandlerOptions {

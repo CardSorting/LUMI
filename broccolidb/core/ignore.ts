@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import ignore, { type Ignore } from 'ignore';
 import type { FileTree } from './file-tree.js';
 

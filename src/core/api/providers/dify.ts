@@ -3,8 +3,8 @@ import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
 import { ModelInfo } from "../../../shared/api"
-import { ApiHandler } from "../index"
 import { ApiStream } from "../transform/stream"
+import { ApiHandler } from "../types"
 
 interface DifyHandlerOptions {
 	difyApiKey?: string

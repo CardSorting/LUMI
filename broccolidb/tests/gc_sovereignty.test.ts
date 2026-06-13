@@ -1,3 +1,4 @@
+// [LAYER: UI]
 import { AgentContext } from '../core/agent-context.js';
 import { Workspace } from '../core/workspace.js';
 import { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';

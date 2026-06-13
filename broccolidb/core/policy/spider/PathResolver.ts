@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import * as fs from "fs"
 import * as path from "path"
 import { Logger } from "../../../shared/services/Logger.js"

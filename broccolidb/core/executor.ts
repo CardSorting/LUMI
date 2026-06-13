@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 /**
  * ExecuteOptions defines the reliability parameters for an agent action.
  */

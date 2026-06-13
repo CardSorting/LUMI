@@ -5,11 +5,11 @@ import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import type { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { convertToOllamaMessages } from "../transform/ollama-format"
 import type { ApiStream } from "../transform/stream"
 import { ToolCallProcessor } from "../transform/tool-call-processor"
+import type { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface OllamaHandlerOptions extends CommonApiHandlerOptions {
 	ollamaBaseUrl?: string

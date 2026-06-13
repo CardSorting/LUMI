@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import type { ServiceContext, MemoryMessage } from './types.js';
 import { TokenService } from './TokenService.js';
 import { CompactService } from './CompactService.js';

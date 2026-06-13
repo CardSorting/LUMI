@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import type { MemoryMessage } from './types.js';
 
 /**

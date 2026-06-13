@@ -5,10 +5,10 @@ import { AnthropicModelId, anthropicDefaultModelId, anthropicModels, CLAUDE_SONN
 import { buildExternalBasicHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch } from "@/shared/net"
-import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { withRetry } from "../retry"
 import { sanitizeAnthropicMessages } from "../transform/anthropic-format"
 import { ApiStream } from "../transform/stream"
+import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface AnthropicHandlerOptions extends CommonApiHandlerOptions {
 	apiKey?: string

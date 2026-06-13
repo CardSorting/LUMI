@@ -11,11 +11,11 @@ import { DIETCODE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@/shared/DietCodeAccount"
 import type { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch, getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
-import type { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
 import { createOpenRouterStream } from "../transform/openrouter-stream"
 import type { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { ToolCallProcessor } from "../transform/tool-call-processor"
+import type { ApiHandler, CommonApiHandlerOptions } from "../types"
 import type { OpenRouterErrorResponse } from "./types"
 
 interface DietCodeHandlerOptions extends CommonApiHandlerOptions {

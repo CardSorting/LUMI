@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import * as path from "path"
 import * as ts from "typescript"
 import { Logger } from "../../../shared/services/Logger.js"

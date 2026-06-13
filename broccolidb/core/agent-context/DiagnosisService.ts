@@ -1,3 +1,4 @@
+// [LAYER: CORE]
 import type { GraphService } from './GraphService.js';
 import type { ReasoningService } from './ReasoningService.js';
 import type { KnowledgeBaseItem, ServiceContext } from './types.js';
