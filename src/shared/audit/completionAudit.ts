@@ -159,7 +159,7 @@ export async function runAdvisoryAudit(
 }
 
 export function buildActModeAuditAdvisory(metadata: TaskAuditMetadata): string {
-	if (!metadata.divergence_detected && (metadata.violations?.length ?? 0) === 0) {
+	if (!shouldEmitAdvisoryAuditEvent(metadata)) {
 		return ""
 	}
 	const assessment = computeHardeningAssessment(metadata)
@@ -178,6 +178,28 @@ export function buildActModeAuditAdvisory(metadata: TaskAuditMetadata): string {
 		`\nAddress before calling attempt_completion.` +
 		`\n</audit_advisory>`
 	)
+}
+
+export function shouldEmitAdvisoryAuditEvent(metadata: TaskAuditMetadata): boolean {
+	return (metadata.violations?.length ?? 0) > 0 || metadata.divergence_detected === true
+}
+
+/** Human-readable summary for act-mode advisory chat events — SonarQube issue annotation pattern. */
+export function buildAdvisoryAuditEventSummary(metadata: TaskAuditMetadata): string {
+	const assessment = computeHardeningAssessment(metadata)
+	const topViolations = (metadata.violations ?? []).slice(0, 4).map(formatViolationLabel)
+	const remediation = (metadata.violations ?? [])
+		.slice(0, 2)
+		.map((v) => getViolationRemediation(v))
+		.filter(Boolean)
+	return [
+		`Act-mode audit advisory: Grade ${metadata.hardening_grade ?? assessment.grade} (${metadata.hardening_score ?? assessment.score}/100).`,
+		topViolations.length > 0 ? `Flagged: ${topViolations.join(", ")}.` : undefined,
+		remediation.length > 0 ? `Remediation: ${remediation.join(" ")}` : undefined,
+		"Address before calling attempt_completion.",
+	]
+		.filter(Boolean)
+		.join("\n")
 }
 
 export { buildAuditReportMarkdown }

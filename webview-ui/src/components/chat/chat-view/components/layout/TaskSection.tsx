@@ -1,5 +1,6 @@
 import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessages"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
+import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import React from "react"
 import TaskHeader from "@/components/chat/task-header/TaskHeader"
@@ -19,6 +20,7 @@ interface TaskSectionProps {
 	auditTrend?: AuditTrend
 	auditSnapshots?: AuditMessageSnapshot[]
 	auditHealth?: AuditHealthSummary
+	subagentAuditSummary?: SubagentAuditSummary
 	selectedModelInfo: {
 		supportsPromptCache: boolean
 		supportsImages: boolean
@@ -41,6 +43,7 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 	auditTrend,
 	auditSnapshots,
 	auditHealth,
+	subagentAuditSummary,
 	selectedModelInfo,
 	messageHandlers,
 	lastProgressMessageText,
@@ -62,6 +65,7 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 			onScrollToAuditMessage={onScrollToAuditMessage}
 			onSendMessage={messageHandlers.handleSendMessage}
 			showFocusChainPlaceholder={showFocusChainPlaceholder}
+			subagentAuditSummary={subagentAuditSummary}
 			task={task}
 			tokensIn={apiMetrics.totalTokensIn}
 			tokensOut={apiMetrics.totalTokensOut}

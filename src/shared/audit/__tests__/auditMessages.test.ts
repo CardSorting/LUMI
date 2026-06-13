@@ -3,9 +3,11 @@ import {
 	getAuditSnapshotsFromMessages,
 	getAuditSummaryLabel,
 	getAuditTrend,
+	getLatestAdvisoryAuditFromMessages,
 	getLatestAuditFromMessages,
 	getLatestPlanAuditFromMessages,
 	getPreviousAuditFromMessages,
+	isAdvisoryAuditInfoMessage,
 	messageCarriesAuditMetadata,
 } from "@shared/audit/auditMessages"
 import { enrichAuditMetadata } from "@shared/audit/taskAuditUtils"
@@ -122,11 +124,23 @@ describe("auditMessages", () => {
 		expect(snapshots[0].source).to.equal("gate_block")
 	})
 
-	it("ignores info messages without gate_blocked audit metadata", () => {
+	it("ignores info messages without gate_blocked or advisory audit metadata", () => {
 		const messages = [
 			{ ts: 3000, type: "say", say: "info", auditMetadata: enrichAuditMetadata({ violations: [] }) },
 		] as DietCodeMessage[]
 
 		expect(messageCarriesAuditMetadata(messages[0])).to.equal(false)
+	})
+
+	it("includes act-mode advisory snapshots from info messages with violations", () => {
+		const advisory = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
+		const messages = [{ ts: 4000, type: "say", say: "info", auditMetadata: advisory }] as DietCodeMessage[]
+
+		expect(messageCarriesAuditMetadata(messages[0])).to.equal(true)
+		expect(isAdvisoryAuditInfoMessage(messages[0])).to.equal(true)
+		const snapshots = getAuditSnapshotsFromMessages(messages)
+		expect(snapshots).to.have.length(1)
+		expect(snapshots[0].source).to.equal("advisory")
+		expect(getLatestAdvisoryAuditFromMessages(messages)?.violations).to.deep.equal(["missing_validation_evidence"])
 	})
 })

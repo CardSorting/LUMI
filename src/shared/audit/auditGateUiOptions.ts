@@ -1,7 +1,11 @@
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { type AuditGateConfig, auditGateConfigToOptions } from "./auditGateConfig"
 import type { CompletionGateOptions } from "./auditGateReport"
-import { getAuditSnapshotsFromMessages, getLatestPlanAuditFromMessages } from "./auditMessages"
+import {
+	getAuditSnapshotsFromMessages,
+	getLatestAdvisoryAuditFromMessages,
+	getLatestPlanAuditFromMessages,
+} from "./auditMessages"
 import type { TaskAuditMetadata } from "./types"
 
 /** Infers whether the server evaluated a SonarQube-style new-code gate for this metadata. */
@@ -43,6 +47,11 @@ export function buildUIGateEvaluationOptions(
 	const planBaseline = getLatestPlanAuditFromMessages(messages)
 	if (planBaseline) {
 		options.planBaselineMetadata = planBaseline
+	}
+
+	const advisoryMetadata = getLatestAdvisoryAuditFromMessages(messages)
+	if (advisoryMetadata) {
+		options.advisoryMetadata = advisoryMetadata
 	}
 
 	const snapshots = getAuditSnapshotsFromMessages(messages)

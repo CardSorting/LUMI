@@ -7,6 +7,7 @@ import {
 } from "@shared/audit/auditMessages"
 import { findAuditMessageIndex, findMessageIndexForAuditTs } from "@shared/audit/auditNavigation"
 import { computeAuditHealthSummaryWithBaseline } from "@shared/audit/auditRollup"
+import { buildSubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
@@ -87,6 +88,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		() => computeAuditHealthSummaryWithBaseline(auditSnapshots, planAuditBaseline),
 		[auditSnapshots, planAuditBaseline],
 	)
+	const subagentAuditSummary = useMemo(() => buildSubagentAuditSummary(messages), [messages])
 
 	// Use custom hooks for state management
 	const chatState = useChatState(messages)
@@ -372,6 +374,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 							supportsImages: selectedModelInfo.supportsImages || false,
 						}}
 						showFocusChainPlaceholder={showFocusChainPlaceholder}
+						subagentAuditSummary={subagentAuditSummary}
 						task={task}
 					/>
 				) : !isNewUser ? (

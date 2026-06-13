@@ -33,6 +33,22 @@ export function formatGateReasonsForDisplay(reasons: CompletionGateReason[]): st
 		})
 }
 
+/** Builds display-ready gate reason lines from persisted audit metadata — DRY for chat UI. */
+export function buildGateReasonLinesFromMetadata(
+	metadata: TaskAuditMetadata,
+	reasonCodes?: CompletionGateReasonCode[],
+): string[] {
+	const codes = reasonCodes ?? metadata.gate_reason_codes ?? []
+	return formatGateReasonsForDisplay(
+		codes
+			.filter((code) => code !== "gate_disabled")
+			.map((code) => ({
+				code,
+				message: formatGateReasonLabel(code),
+			})),
+	)
+}
+
 export function enrichAuditMetadataWithGateDecision(
 	metadata: TaskAuditMetadata,
 	decision: CompletionGateDecision,

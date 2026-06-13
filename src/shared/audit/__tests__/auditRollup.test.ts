@@ -92,4 +92,14 @@ describe("auditRollup", () => {
 		const withBaseline = computeAuditHealthSummaryWithBaseline([{ auditMetadata: regressed }], planBaseline)
 		expect(withBaseline?.planRegressionDetected).to.equal(true)
 	})
+
+	it("counts advisory snapshots in health summary", () => {
+		const advisory = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
+		const completion = enrichAuditMetadata({ violations: [] })
+		const summary = computeAuditHealthSummary([
+			{ auditMetadata: advisory, source: "advisory" },
+			{ auditMetadata: completion, source: "completion" },
+		])
+		expect(summary?.advisorySnapshotCount).to.equal(1)
+	})
 })

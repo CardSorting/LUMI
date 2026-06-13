@@ -1,10 +1,12 @@
 import {
 	buildActModeAuditAdvisory,
+	buildAdvisoryAuditEventSummary,
 	buildAuditHookMetadata,
 	buildCompletionGateMessage,
 	buildDoubleCheckAuditSection,
 	getViolationRemediation,
 	isCompletionBlockedByAudit,
+	shouldEmitAdvisoryAuditEvent,
 } from "@shared/audit/completionAudit"
 import { enrichAuditMetadata } from "@shared/audit/taskAuditUtils"
 import { expect } from "chai"
@@ -71,6 +73,14 @@ describe("completionAudit", () => {
 		const advisory = buildActModeAuditAdvisory(metadata)
 		expect(advisory).to.contain("<audit_advisory")
 		expect(advisory).to.contain("attempt_completion")
+	})
+
+	it("builds advisory event summary for chat UI", () => {
+		const metadata = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
+		expect(shouldEmitAdvisoryAuditEvent(metadata)).to.equal(true)
+		const summary = buildAdvisoryAuditEventSummary(metadata)
+		expect(summary).to.contain("Act-mode audit advisory")
+		expect(summary).to.contain("attempt_completion")
 	})
 
 	it("includes advisory rollup in completion gate message when drift persists", () => {

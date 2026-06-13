@@ -31,7 +31,11 @@ export function buildAuditHistoryAnnouncement(snapshot: AuditMessageSnapshot, so
 	const score = Number.isFinite(snapshot.auditMetadata.hardening_score)
 		? ` score ${snapshot.auditMetadata.hardening_score}`
 		: ""
-	const gateNote = snapshot.auditMetadata.gate_blocked ? " gate blocked" : ""
+	const gateNote = snapshot.auditMetadata.gate_blocked
+		? " gate blocked"
+		: snapshot.source === "advisory"
+			? " act-mode advisory"
+			: ""
 	return `Selected ${sourceLabel} audit grade ${grade}${score}${gateNote}`
 }
 
@@ -52,17 +56,20 @@ export function countTrailingGateBlocks(snapshots: AuditMessageSnapshot[]): numb
 	return streak
 }
 
-/** Auto-expand audit history when a new gate block arrives — reduces missed failure signals. */
+/** Auto-expand audit history when a new gate block or advisory arrives — reduces missed failure signals. */
 export function shouldAutoExpandAuditHistory(snapshots: AuditMessageSnapshot[], previousSnapshotCount: number): boolean {
 	if (snapshots.length <= previousSnapshotCount) return false
 	const latest = snapshots[snapshots.length - 1]
-	return latest?.auditMetadata.gate_blocked === true
+	if (latest?.auditMetadata.gate_blocked === true) return true
+	if (latest?.source === "advisory" && (latest.auditMetadata.violations?.length ?? 0) > 0) return true
+	return false
 }
 
 /** Shows audit history when multiple snapshots exist or a single gate block needs visibility. */
 export function shouldShowAuditHistoryStrip(snapshots: AuditMessageSnapshot[], health?: AuditHealthSummary): boolean {
 	if (snapshots.length > 1) return true
 	if (snapshots.length === 1 && snapshots[0].auditMetadata.gate_blocked) return true
+	if (snapshots.length === 1 && snapshots[0].source === "advisory") return true
 	if (health?.planRegressionDetected) return true
 	return false
 }
@@ -77,6 +84,7 @@ export function buildAuditHistoryMarkdown(snapshots: AuditMessageSnapshot[], hea
 			`- Trend: ${AUDIT_HEALTH_TREND_LABELS[health.trend] || "unknown"}`,
 		)
 		if (health.gateBlockCount > 0) lines.push(`- Gate blocks: ${health.gateBlockCount}`)
+		if (health.advisorySnapshotCount > 0) lines.push(`- Act-mode advisories: ${health.advisorySnapshotCount}`)
 		if (health.trailingGateBlockStreak > 0) lines.push(`- Consecutive blocks: ${health.trailingGateBlockStreak}`)
 		if (health.planRegressionDetected) lines.push("- Plan regression detected")
 		if (health.persistentViolationCount > 0) lines.push(`- Persistent violations: ${health.persistentViolationCount}`)
@@ -93,8 +101,10 @@ export function buildAuditHistoryMarkdown(snapshots: AuditMessageSnapshot[], hea
 		lines.push(`### ${source} · ${time}`)
 		lines.push(`- Grade: ${grade} (${score})`)
 		if (meta.gate_blocked) lines.push("- Status: **Gate blocked**")
+		if (snapshot.source === "advisory") lines.push("- Status: Act-mode advisory")
 		if ((meta.violations?.length ?? 0) > 0) {
-			lines.push(`- Violations: ${meta.violations!.map(formatViolationLabel).join(", ")}`)
+			const violations = meta.violations ?? []
+			lines.push(`- Violations: ${violations.map(formatViolationLabel).join(", ")}`)
 		}
 		const previous = index > 0 ? snapshots[index - 1].auditMetadata : undefined
 		const diff = computeAuditSnapshotDiff(previous, meta)

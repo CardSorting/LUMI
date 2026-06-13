@@ -1,5 +1,6 @@
 import { buildCiGateStatusJson } from "@shared/audit/auditCiSummary"
 import { formatGateReasonLabel } from "@shared/audit/auditGateCatalog"
+import { describeGateReadiness } from "@shared/audit/auditGateReadiness"
 import { buildQualityGateStatus } from "@shared/audit/auditGateStatus"
 import { buildAuditSarifJson } from "@shared/audit/auditSarifExport"
 import { partitionViolationsBySeverity } from "@shared/audit/auditSeverity"
@@ -26,7 +27,7 @@ import {
 	ExternalLinkIcon,
 	ShieldCheckIcon,
 } from "lucide-react"
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
@@ -104,6 +105,11 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 		gateStatus?: ReturnType<typeof setTimeout>
 	}>({})
 	const gateOptions = useAuditGateEvaluation(auditMetadata)
+	const qualityGate = useMemo(() => buildQualityGateStatus(auditMetadata, gateOptions), [auditMetadata, gateOptions])
+	const gateReadiness = useMemo(
+		() => (gateOptions.gateEnabled ? describeGateReadiness(auditMetadata, gateOptions) : undefined),
+		[auditMetadata, gateOptions],
+	)
 
 	useEffect(() => {
 		return () => {
@@ -315,6 +321,30 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 							</span>
 						)}
 					</div>
+
+					{gateReadiness && gateReadiness.level !== "disabled" && (
+						<div className="col-span-2 flex flex-col gap-1 border-t border-description/10 pt-2">
+							<span className="text-[9px] uppercase tracking-wider text-description/70 font-semibold">
+								Quality Gate
+							</span>
+							<span
+								className={cn(
+									"mt-0.5 w-fit px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-widest border",
+									gateReadiness.level === "ready" &&
+										"bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+									gateReadiness.level === "warning" &&
+										"bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30",
+									gateReadiness.level === "blocked" &&
+										"bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30",
+								)}>
+								{gateReadiness.label}
+								{qualityGate ? ` · ${qualityGate.score}/${qualityGate.effectiveThreshold}` : ""}
+							</span>
+							{gateReadiness.tooltip && (
+								<span className="text-[8.5px] text-description/70">{gateReadiness.tooltip}</span>
+							)}
+						</div>
+					)}
 
 					{auditMetadata.gate_blocked && (
 						<div className="col-span-2 flex flex-col gap-1 border-t border-description/10 pt-2">

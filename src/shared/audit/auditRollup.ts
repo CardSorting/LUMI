@@ -1,3 +1,4 @@
+import type { AuditSnapshotSource } from "./auditMessages"
 import { hasAuditScoreRegression } from "./auditRegression"
 import { hasCriticalViolations, partitionViolationsBySeverity } from "./auditSeverity"
 import { formatViolationLabel } from "./taskAuditUtils"
@@ -43,6 +44,8 @@ export interface AuditHealthSummary {
 	criticalViolationCount: number
 	warningViolationCount: number
 	gateBlockCount: number
+	/** Act-mode advisory snapshots — SonarQube-style issue annotations during progress. */
+	advisorySnapshotCount: number
 	suppressedViolationCount: number
 	/** Violations present in both earliest and latest snapshots — technical debt signal. */
 	persistentViolationCount: number
@@ -56,7 +59,7 @@ export interface AuditHealthSummary {
 }
 
 export function computeAuditHealthSummary(
-	snapshots: Array<{ auditMetadata: TaskAuditMetadata }>,
+	snapshots: Array<{ auditMetadata: TaskAuditMetadata; source?: AuditSnapshotSource }>,
 ): AuditHealthSummary | undefined {
 	if (snapshots.length === 0) {
 		return undefined
@@ -67,15 +70,20 @@ export function computeAuditHealthSummary(
 	let criticalViolationCount = 0
 	let warningViolationCount = 0
 	let gateBlockCount = 0
+	let advisorySnapshotCount = 0
 	let suppressedViolationCount = 0
 
-	for (const { auditMetadata } of snapshots) {
+	for (const { auditMetadata, source } of snapshots) {
 		if (auditMetadata.gate_blocked) {
 			gateBlockCount += 1
 		}
+		if (source === "advisory") {
+			advisorySnapshotCount += 1
+		}
 		suppressedViolationCount += auditMetadata.suppressed_violations?.length ?? 0
-		if (Number.isFinite(auditMetadata.hardening_score)) {
-			scoreSum += auditMetadata.hardening_score!
+		const hardeningScore = auditMetadata.hardening_score
+		if (Number.isFinite(hardeningScore)) {
+			scoreSum += hardeningScore
 			scoredCount += 1
 		}
 		const partitioned = partitionViolationsBySeverity(auditMetadata.violations)
@@ -92,14 +100,15 @@ export function computeAuditHealthSummary(
 	let latestScoreDelta: number | undefined
 	if (snapshots.length > 1) {
 		const previous = snapshots[snapshots.length - 2].auditMetadata
-		if (Number.isFinite(latestScore) && Number.isFinite(previous.hardening_score)) {
-			latestScoreDelta = latestScore! - previous.hardening_score!
+		const previousScore = previous.hardening_score
+		if (Number.isFinite(latestScore) && Number.isFinite(previousScore)) {
+			latestScoreDelta = latestScore - previousScore
 		}
 	}
 
 	let trend: AuditHealthSummary["trend"] = "unknown"
 	if (Number.isFinite(latestScore) && Number.isFinite(earliestScore) && snapshots.length > 1) {
-		const delta = latestScore! - earliestScore!
+		const delta = latestScore - earliestScore
 		if (delta >= 5) trend = "improving"
 		else if (delta <= -5) trend = "degrading"
 		else trend = "stable"
@@ -118,6 +127,7 @@ export function computeAuditHealthSummary(
 		criticalViolationCount,
 		warningViolationCount,
 		gateBlockCount,
+		advisorySnapshotCount,
 		suppressedViolationCount,
 		persistentViolationCount,
 		latestScoreDelta,
@@ -129,7 +139,7 @@ export function computeAuditHealthSummary(
 
 /** Computes health summary with optional plan baseline for regression detection. */
 export function computeAuditHealthSummaryWithBaseline(
-	snapshots: Array<{ auditMetadata: TaskAuditMetadata }>,
+	snapshots: Array<{ auditMetadata: TaskAuditMetadata; source?: AuditSnapshotSource }>,
 	planBaselineMetadata?: TaskAuditMetadata,
 ): AuditHealthSummary | undefined {
 	const summary = computeAuditHealthSummary(snapshots)

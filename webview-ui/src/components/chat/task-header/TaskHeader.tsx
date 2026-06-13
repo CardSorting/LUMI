@@ -1,6 +1,7 @@
 import { shouldShowAuditHistoryStrip } from "@shared/audit/auditHistoryUtils"
 import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessages"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
+import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
@@ -18,6 +19,7 @@ import { CheckpointError } from "./CheckpointError"
 import ContextWindow from "./ContextWindow"
 import { FocusChain } from "./FocusChain"
 import { highlightText } from "./Highlights"
+import { SubagentAuditBadge } from "./SubagentAuditBadge"
 import { TaskAuditBadge } from "./TaskAuditBadge"
 
 const IS_DEV = process.env.IS_DEV === '"true"'
@@ -35,6 +37,7 @@ interface TaskHeaderProps {
 	auditTrend?: AuditTrend
 	auditSnapshots?: AuditMessageSnapshot[]
 	auditHealth?: AuditHealthSummary
+	subagentAuditSummary?: SubagentAuditSummary
 	showFocusChainPlaceholder?: boolean
 	onScrollToAuditMessage?: (ts: number) => void
 	onClose: () => void
@@ -56,6 +59,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	auditTrend,
 	auditSnapshots,
 	auditHealth,
+	subagentAuditSummary,
 	showFocusChainPlaceholder,
 	onScrollToAuditMessage,
 	onClose,
@@ -183,6 +187,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						)}
 					</div>
 					<div className="inline-flex items-center justify-end select-none shrink-0 gap-1">
+						<SubagentAuditBadge summary={subagentAuditSummary} />
 						<TaskAuditBadge auditHealth={auditHealth} auditMetadata={latestAuditMetadata} auditTrend={auditTrend} />
 						{isCostAvailable && (
 							<div

@@ -54,4 +54,12 @@ describe("auditGateUiOptions", () => {
 		expect(decision.blocked).to.equal(true)
 		expect(decision.reasons.some((reason) => reason.code === "policy_violations")).to.equal(true)
 	})
+
+	it("includes advisory metadata from act-mode info messages", () => {
+		const advisory = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
+		const messages = [{ ts: 1, type: "say", say: "info", auditMetadata: advisory }] as DietCodeMessage[]
+
+		const options = buildUIGateEvaluationOptions(settings, messages)
+		expect(options.advisoryMetadata?.violations).to.deep.equal(["missing_validation_evidence"])
+	})
 })

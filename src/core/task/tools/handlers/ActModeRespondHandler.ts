@@ -1,7 +1,8 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
+import { shouldEmitAdvisoryAuditChatEvent } from "@shared/audit/auditAdvisoryDedup"
 import { applyWorkspaceAuditPolicy } from "@shared/audit/auditGatePolicyLoader"
-import { buildActModeAuditAdvisory, runAdvisoryAudit } from "@shared/audit/completionAudit"
+import { buildActModeAuditAdvisory, buildAdvisoryAuditEventSummary, runAdvisoryAudit } from "@shared/audit/completionAudit"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -84,8 +85,25 @@ export class ActModeRespondHandler implements IToolHandler, IPartialBlockHandler
 					const taskPreview = getInitialTaskPreview(config) || ""
 					let advisoryMetadata = await runAdvisoryAudit(config.taskId, taskPreview, response, taskPreview)
 					advisoryMetadata = await applyWorkspaceAuditPolicy(config.cwd, advisoryMetadata, config)
+					const previousAdvisory = config.taskState.lastAdvisoryAudit
 					config.taskState.lastAdvisoryAudit = advisoryMetadata
-					auditAdvisory = buildActModeAuditAdvisory(advisoryMetadata)
+					const shouldSurfaceAdvisory = shouldEmitAdvisoryAuditChatEvent(advisoryMetadata, previousAdvisory)
+					auditAdvisory = shouldSurfaceAdvisory ? buildActModeAuditAdvisory(advisoryMetadata) : ""
+
+					if (shouldSurfaceAdvisory) {
+						try {
+							await config.callbacks.say(
+								"info",
+								buildAdvisoryAuditEventSummary(advisoryMetadata),
+								undefined,
+								undefined,
+								false,
+								advisoryMetadata,
+							)
+						} catch (error) {
+							Logger.warn("[ActModeRespondHandler] Failed to emit advisory audit event:", error)
+						}
+					}
 				} catch (error) {
 					Logger.warn("[ActModeRespondHandler] Advisory audit failed:", error)
 				}

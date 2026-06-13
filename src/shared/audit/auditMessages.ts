@@ -1,7 +1,7 @@
 import type { DietCodeMessage, TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { computeHardeningAssessment } from "./taskAuditUtils"
 
-export type AuditSnapshotSource = "completion" | "plan" | "gate_block"
+export type AuditSnapshotSource = "completion" | "plan" | "gate_block" | "advisory"
 
 /** Message types that carry architectural audit metadata. */
 const AUDIT_BEARING_ASKS = new Set<DietCodeMessage["ask"]>(["plan_mode_respond", "completion_result"])
@@ -13,12 +13,23 @@ export interface AuditMessageSnapshot {
 	auditMetadata: TaskAuditMetadata
 }
 
+/** Info messages carrying act-mode advisory audit metadata (non-blocking). */
+export function isAdvisoryAuditInfoMessage(message: DietCodeMessage): boolean {
+	if (message.type !== "say" || message.say !== "info" || !message.auditMetadata) {
+		return false
+	}
+	if (message.auditMetadata.gate_blocked) {
+		return false
+	}
+	return (message.auditMetadata.violations?.length ?? 0) > 0 || message.auditMetadata.divergence_detected === true
+}
+
 export function messageCarriesAuditMetadata(message: DietCodeMessage): boolean {
 	if (!message.auditMetadata) {
 		return false
 	}
-	if (message.type === "say" && message.say === "info" && !message.auditMetadata.gate_blocked) {
-		return false
+	if (message.type === "say" && message.say === "info") {
+		return message.auditMetadata.gate_blocked === true || isAdvisoryAuditInfoMessage(message)
 	}
 	if (message.type === "say" && message.say && AUDIT_BEARING_SAYS.has(message.say)) {
 		return true
@@ -54,8 +65,23 @@ export function getLatestPlanAuditFromMessages(messages: DietCodeMessage[]): Tas
 	return undefined
 }
 
+/** Returns the most recent act-mode advisory audit from chat history. */
+export function getLatestAdvisoryAuditFromMessages(messages: DietCodeMessage[]): TaskAuditMetadata | undefined {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i]
+		if (isAdvisoryAuditInfoMessage(message) && message.auditMetadata) {
+			return message.auditMetadata
+		}
+	}
+	return undefined
+}
+
 export function resolveAuditSource(message: DietCodeMessage): AuditSnapshotSource | undefined {
-	if (message.type === "say" && message.say === "info" && message.auditMetadata?.gate_blocked) return "gate_block"
+	if (message.type === "say" && message.say === "info") {
+		if (message.auditMetadata?.gate_blocked) return "gate_block"
+		if (isAdvisoryAuditInfoMessage(message)) return "advisory"
+		return undefined
+	}
 	if (message.type === "say" && message.say === "completion_result") return "completion"
 	if (message.type === "ask" && message.ask === "plan_mode_respond") return "plan"
 	if (message.type === "ask" && message.ask === "completion_result") return "completion"
@@ -105,8 +131,9 @@ export type AuditTrend = "improved" | "degraded" | "stable" | "unknown"
 const AUDIT_TREND_DELTA = 5
 
 function resolveAuditScore(metadata: TaskAuditMetadata): number {
-	if (Number.isFinite(metadata.hardening_score)) {
-		return metadata.hardening_score!
+	const score = metadata.hardening_score
+	if (Number.isFinite(score)) {
+		return score
 	}
 	return computeHardeningAssessment(metadata).score
 }

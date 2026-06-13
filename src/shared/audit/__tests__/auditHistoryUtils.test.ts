@@ -55,6 +55,13 @@ describe("auditHistoryUtils", () => {
 		expect(announcement).to.contain("gate blocked")
 	})
 
+	it("builds screen reader announcements for act-mode advisories", () => {
+		const advisory = snapshot(4, "advisory")
+		advisory.auditMetadata.violations = ["missing_validation_evidence"]
+		const announcement = buildAuditHistoryAnnouncement(advisory, "Advisory")
+		expect(announcement).to.contain("act-mode advisory")
+	})
+
 	it("extracts score timeline and gate block streak metrics", () => {
 		const blocked = snapshot(2, "gate_block")
 		blocked.auditMetadata.gate_blocked = true
@@ -65,6 +72,10 @@ describe("auditHistoryUtils", () => {
 		expect(countTrailingGateBlocks([passing, blocked])).to.equal(1)
 		expect(shouldAutoExpandAuditHistory([passing, blocked], 1)).to.equal(true)
 		expect(shouldAutoExpandAuditHistory([passing, blocked], 2)).to.equal(false)
+
+		const advisory = snapshot(3, "advisory")
+		advisory.auditMetadata.violations = ["missing_validation_evidence"]
+		expect(shouldAutoExpandAuditHistory([passing, advisory], 1)).to.equal(true)
 	})
 
 	it("controls strip visibility and exports markdown timeline", () => {
@@ -74,6 +85,10 @@ describe("auditHistoryUtils", () => {
 		const blocked = snapshot(2, "gate_block")
 		blocked.auditMetadata.gate_blocked = true
 		expect(shouldShowAuditHistoryStrip([blocked])).to.equal(true)
+
+		const advisory = snapshot(3, "advisory")
+		advisory.auditMetadata.violations = ["missing_validation_evidence"]
+		expect(shouldShowAuditHistoryStrip([advisory])).to.equal(true)
 
 		const markdown = buildAuditHistoryMarkdown([passing, blocked])
 		expect(markdown).to.contain("## Task Audit History")

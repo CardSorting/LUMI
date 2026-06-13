@@ -4,6 +4,7 @@ export const AUDIT_SNAPSHOT_SOURCE_LABELS: Record<AuditMessageSnapshot["source"]
 	completion: "Completion",
 	plan: "Plan",
 	gate_block: "Gate Block",
+	advisory: "Advisory",
 }
 
 export const AUDIT_HEALTH_TREND_LABELS = {

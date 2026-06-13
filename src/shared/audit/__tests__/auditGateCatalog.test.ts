@@ -1,5 +1,6 @@
 import {
 	buildGateBlockEventSummary,
+	buildGateReasonLinesFromMetadata,
 	enrichAuditMetadataWithGateDecision,
 	formatGateReasonLabel,
 	formatGateReasonsForDisplay,
@@ -40,5 +41,15 @@ describe("auditGateCatalog", () => {
 		const summary = buildGateBlockEventSummary(decision, 1)
 		expect(summary).to.contain("blocked")
 		expect(summary).to.contain("attempt 1")
+	})
+
+	it("builds gate reason lines from persisted audit metadata", () => {
+		const metadata = enrichAuditMetadata({
+			violations: ["result_empty"],
+			gate_reason_codes: ["score_below_threshold", "policy_violations"],
+		})
+		const lines = buildGateReasonLinesFromMetadata(metadata)
+		expect(lines.length).to.equal(2)
+		expect(lines[0]).to.contain("quality threshold")
 	})
 })

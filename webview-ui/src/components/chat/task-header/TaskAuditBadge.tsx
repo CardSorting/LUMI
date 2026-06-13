@@ -73,13 +73,16 @@ export const TaskAuditBadge = memo(({ auditMetadata, auditTrend, auditHealth, cl
 							divergent ? "Divergent" : undefined,
 							trendLabel,
 							auditHealth ? `Avg ${auditHealth.averageScore} · ${auditHealth.snapshotCount} audits` : undefined,
+							auditHealth && auditHealth.advisorySnapshotCount > 0
+								? `${auditHealth.advisorySnapshotCount} act-mode advisory snapshot(s)`
+								: undefined,
 							auditHealth && auditHealth.persistentViolationCount > 0
 								? `${auditHealth.persistentViolationCount} persistent violation(s)`
 								: undefined,
 							auditHealth && auditHealth.trailingGateBlockStreak > 0
 								? `${auditHealth.trailingGateBlockStreak} consecutive gate block(s)`
 								: undefined,
-							auditHealth && auditHealth.planRegressionDetected ? "Plan regression detected" : undefined,
+							auditHealth?.planRegressionDetected ? "Plan regression detected" : undefined,
 							auditHealth && auditHealth.gateBlockCount > 0
 								? `${auditHealth.gateBlockCount} gate block(s) total`
 								: undefined,

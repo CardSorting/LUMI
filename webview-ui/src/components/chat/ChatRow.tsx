@@ -1,3 +1,4 @@
+import { isAdvisoryAuditInfoMessage } from "@shared/audit/auditMessages"
 import { COMMAND_OUTPUT_STRING } from "@shared/combineCommandSequences"
 import {
 	COMPLETION_RESULT_CHANGES_FLAG,
@@ -28,6 +29,7 @@ import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { AlignmentGuard } from "./AlignmentGuard"
+import { AuditAdvisoryRow } from "./AuditAdvisoryRow"
 import { AuditGateBlockRow } from "./AuditGateBlockRow"
 import { ClarificationHub } from "./ClarificationHub"
 import { CommandOutputContent, CommandOutputRow } from "./CommandOutputRow"
@@ -853,6 +855,9 @@ export const ChatRowContent = memo(
 					case "info":
 						if (message.auditMetadata?.gate_blocked) {
 							return <AuditGateBlockRow auditMetadata={message.auditMetadata} text={message.text} />
+						}
+						if (isAdvisoryAuditInfoMessage(message) && message.auditMetadata) {
+							return <AuditAdvisoryRow auditMetadata={message.auditMetadata} text={message.text} />
 						}
 						if (message.text?.trim()) {
 							return (

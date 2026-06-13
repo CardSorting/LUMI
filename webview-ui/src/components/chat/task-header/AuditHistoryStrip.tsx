@@ -14,6 +14,7 @@ import { type AuditHealthSummary, computeAuditHealthSummary } from "@shared/audi
 import { partitionViolationsBySeverity } from "@shared/audit/auditSeverity"
 import { computeAuditSnapshotDiff } from "@shared/audit/auditSnapshotDiff"
 import { AUDIT_HEALTH_TREND_LABELS, AUDIT_SNAPSHOT_SOURCE_LABELS } from "@shared/audit/auditSnapshotLabels"
+import { getViolationRemediation } from "@shared/audit/completionAudit"
 import { formatAuditTime, formatViolationLabel, HARDENING_GRADE_STYLES } from "@shared/audit/taskAuditUtils"
 import type { HardeningGrade } from "@shared/audit/types"
 import { ChevronDownIcon, ChevronRightIcon, CopyIcon } from "lucide-react"
@@ -35,6 +36,7 @@ const HEALTH_TREND_LABELS = AUDIT_HEALTH_TREND_LABELS
 
 const SOURCE_CHIP_STYLES: Partial<Record<AuditMessageSnapshot["source"], string>> = {
 	gate_block: "border-red-500/50 text-red-600 dark:text-red-400",
+	advisory: "border-amber-500/50 text-amber-600 dark:text-amber-400",
 }
 
 export const AuditHistoryStrip = memo(({ snapshots, auditHealth, onScrollToAuditMessage, className }: AuditHistoryStripProps) => {
@@ -42,7 +44,7 @@ export const AuditHistoryStrip = memo(({ snapshots, auditHealth, onScrollToAudit
 	const [selectedKey, setSelectedKey] = useState<string | null>(null)
 	const [focusedIndex, setFocusedIndex] = useState(0)
 	const [copied, setCopied] = useState(false)
-	const stripRef = useRef<HTMLDivElement>(null)
+	const stripRef = useRef<HTMLElement>(null)
 	const detailPanelRef = useRef<HTMLDivElement>(null)
 	const toggleButtonRef = useRef<HTMLButtonElement>(null)
 	const previousSnapshotCountRef = useRef(snapshots.length)
@@ -156,11 +158,10 @@ export const AuditHistoryStrip = memo(({ snapshots, auditHealth, onScrollToAudit
 	const latestGrade = latestSnapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
 
 	return (
-		<div
+		<section
 			aria-label="Task audit history"
 			className={cn("mt-2 border-t border-description/15 pt-2", className)}
 			ref={stripRef}
-			role="region"
 			tabIndex={expanded ? 0 : -1}>
 			<div aria-atomic="true" aria-live="polite" className="sr-only">
 				{liveAnnouncement}
@@ -199,6 +200,11 @@ export const AuditHistoryStrip = memo(({ snapshots, auditHealth, onScrollToAudit
 								: ""}
 						</span>
 					)}
+					{health && health.advisorySnapshotCount > 0 && (
+						<span className="text-[8px] uppercase tracking-wider text-amber-500 font-bold">
+							{health.advisorySnapshotCount} advisory{health.advisorySnapshotCount === 1 ? "" : "ies"}
+						</span>
+					)}
 					{health && health.gateBlockCount > 0 && (
 						<span className="text-[8px] uppercase tracking-wider text-red-500 font-bold">
 							{health.gateBlockCount} gate block{health.gateBlockCount === 1 ? "" : "s"}
@@ -209,7 +215,7 @@ export const AuditHistoryStrip = memo(({ snapshots, auditHealth, onScrollToAudit
 							{health.trailingGateBlockStreak}× blocked
 						</span>
 					)}
-					{health && health.planRegressionDetected && (
+					{health?.planRegressionDetected && (
 						<span className="text-[8px] uppercase tracking-wider text-amber-500 font-bold">plan regression</span>
 					)}
 					{health && health.persistentViolationCount > 0 && (
@@ -295,31 +301,25 @@ export const AuditHistoryStrip = memo(({ snapshots, auditHealth, onScrollToAudit
 							return (
 								<div
 									className={cn(
-										"rounded-xs border border-description/15 bg-black/5 dark:bg-white/5 p-2 text-[9px] cursor-pointer transition-colors",
+										"rounded-xs border border-description/15 bg-black/5 dark:bg-white/5 p-2 text-[9px] transition-colors",
 										selectedKey === key && "border-foreground/30 bg-black/10 dark:bg-white/10",
 									)}
-									key={`detail-${key}`}
-									onClick={() => setSelectedKey(selectedKey === key ? null : key)}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault()
-											setSelectedKey(selectedKey === key ? null : key)
-										}
-									}}
-									role="button"
-									tabIndex={0}>
+									key={`detail-${key}`}>
 									<div className="flex items-center justify-between gap-2 mb-1">
-										<span className="font-bold uppercase tracking-wider text-description/80">
+										<button
+											className={cn(
+												"font-bold uppercase tracking-wider text-description/80 cursor-pointer bg-transparent border-0 p-0 text-left font-sans text-[9px]",
+												selectedKey === key && "text-foreground",
+											)}
+											onClick={() => setSelectedKey(selectedKey === key ? null : key)}
+											type="button">
 											{SOURCE_LABELS[snapshot.source]}
-										</span>
+										</button>
 										<div className="flex items-center gap-2">
 											{onScrollToAuditMessage && (
 												<button
 													className="text-[8px] uppercase tracking-wider font-bold text-foreground/70 hover:text-foreground cursor-pointer bg-transparent border-0 p-0"
-													onClick={(e) => {
-														e.stopPropagation()
-														onScrollToAuditMessage(snapshot.ts)
-													}}
+													onClick={() => onScrollToAuditMessage(snapshot.ts)}
 													type="button">
 													View in chat
 												</button>
@@ -329,81 +329,98 @@ export const AuditHistoryStrip = memo(({ snapshots, auditHealth, onScrollToAudit
 											</span>
 										</div>
 									</div>
-									<div className="flex items-center gap-2 flex-wrap">
-										{grade && (
-											<span
-												className={cn(
-													"px-1.5 py-0.5 rounded-full font-extrabold border",
-													HARDENING_GRADE_STYLES[grade],
-												)}>
-												{grade}
-											</span>
-										)}
-										{Number.isFinite(snapshot.auditMetadata.hardening_score) && (
-											<span className="font-mono font-bold">
-												{snapshot.auditMetadata.hardening_score}/100
-											</span>
-										)}
-										{critical.length > 0 && (
-											<span className="text-red-500 font-bold">{critical.length} critical</span>
-										)}
-										{warning.length > 0 && (
-											<span className="text-amber-500 font-bold">{warning.length} warning</span>
-										)}
-										{info.length > 0 && <span className="text-description/60">{info.length} info</span>}
-										{(snapshot.auditMetadata.suppressed_violations?.length ?? 0) > 0 && (
-											<span className="text-blue-500/80 font-bold">
-												{snapshot.auditMetadata.suppressed_violations?.length} waived
-											</span>
-										)}
-										{snapshot.auditMetadata.workspace_gate_policy_applied && (
-											<span className="text-blue-600 dark:text-blue-400 font-bold">workspace policy</span>
-										)}
-									</div>
-									{snapshot.auditMetadata.gate_reason_codes &&
-										snapshot.auditMetadata.gate_reason_codes.length > 0 && (
-											<ul className="mt-1 list-disc list-inside text-[8.5px] text-red-500/90 space-y-0.5">
-												{snapshot.auditMetadata.gate_reason_codes
-													.filter((code) => code !== "gate_disabled")
-													.map((code) => (
-														<li className="truncate" key={code}>
-															{formatGateReasonLabel(code)}
-														</li>
-													))}
-											</ul>
-										)}
-									{(snapshot.auditMetadata.violations?.length ?? 0) > 0 && (
-										<ul className="mt-1 list-disc list-inside text-[8.5px] text-description/80 space-y-0.5">
-											{snapshot.auditMetadata.violations?.slice(0, 4).map((v) => (
-												<li className="truncate font-mono" key={v}>
-													{formatViolationLabel(v)}
-												</li>
-											))}
-										</ul>
-									)}
-									{diff && (diff.newViolations.length > 0 || diff.resolvedViolations.length > 0) && (
-										<div className="mt-1 text-[8px] text-description/70 space-y-0.5">
-											{diff.scoreDelta !== undefined && (
-												<span className="font-mono">
-													Score {diff.scoreDelta >= 0 ? "+" : ""}
-													{diff.scoreDelta}
+									<button
+										className="w-full text-left bg-transparent border-0 p-0 cursor-pointer font-sans"
+										onClick={() => setSelectedKey(selectedKey === key ? null : key)}
+										type="button">
+										<div className="flex items-center gap-2 flex-wrap">
+											{grade && (
+												<span
+													className={cn(
+														"px-1.5 py-0.5 rounded-full font-extrabold border",
+														HARDENING_GRADE_STYLES[grade],
+													)}>
+													{grade}
 												</span>
 											)}
-											{diff.newViolations.length > 0 && (
-												<span className="block text-red-500/90">+{diff.newViolations.length} new</span>
-											)}
-											{diff.resolvedViolations.length > 0 && (
-												<span className="block text-emerald-600 dark:text-emerald-400">
-													−{diff.resolvedViolations.length} resolved
+											{Number.isFinite(snapshot.auditMetadata.hardening_score) && (
+												<span className="font-mono font-bold">
+													{snapshot.auditMetadata.hardening_score}/100
 												</span>
 											)}
-											{diff.persistentViolations.length > 0 && (
-												<span className="block text-amber-500/90">
-													{diff.persistentViolations.length} persistent
+											{critical.length > 0 && (
+												<span className="text-red-500 font-bold">{critical.length} critical</span>
+											)}
+											{warning.length > 0 && (
+												<span className="text-amber-500 font-bold">{warning.length} warning</span>
+											)}
+											{info.length > 0 && <span className="text-description/60">{info.length} info</span>}
+											{(snapshot.auditMetadata.suppressed_violations?.length ?? 0) > 0 && (
+												<span className="text-blue-500/80 font-bold">
+													{snapshot.auditMetadata.suppressed_violations?.length} waived
+												</span>
+											)}
+											{snapshot.auditMetadata.workspace_gate_policy_applied && (
+												<span className="text-blue-600 dark:text-blue-400 font-bold">
+													workspace policy
 												</span>
 											)}
 										</div>
-									)}
+										{snapshot.auditMetadata.gate_reason_codes &&
+											snapshot.auditMetadata.gate_reason_codes.length > 0 && (
+												<ul className="mt-1 list-disc list-inside text-[8.5px] text-red-500/90 space-y-0.5">
+													{snapshot.auditMetadata.gate_reason_codes
+														.filter((code) => code !== "gate_disabled")
+														.map((code) => (
+															<li className="truncate" key={code}>
+																{formatGateReasonLabel(code)}
+															</li>
+														))}
+												</ul>
+											)}
+										{(snapshot.auditMetadata.violations?.length ?? 0) > 0 && (
+											<ul className="mt-1 list-disc list-inside text-[8.5px] text-description/80 space-y-0.5">
+												{snapshot.auditMetadata.violations?.slice(0, 4).map((v) => {
+													const hint = getViolationRemediation(v)
+													return (
+														<li className="truncate font-mono" key={v} title={hint}>
+															{formatViolationLabel(v)}
+															{hint && (
+																<span className="block font-sans font-normal text-description/70 truncate">
+																	{hint}
+																</span>
+															)}
+														</li>
+													)
+												})}
+											</ul>
+										)}
+										{diff && (diff.newViolations.length > 0 || diff.resolvedViolations.length > 0) && (
+											<div className="mt-1 text-[8px] text-description/70 space-y-0.5">
+												{diff.scoreDelta !== undefined && (
+													<span className="font-mono">
+														Score {diff.scoreDelta >= 0 ? "+" : ""}
+														{diff.scoreDelta}
+													</span>
+												)}
+												{diff.newViolations.length > 0 && (
+													<span className="block text-red-500/90">
+														+{diff.newViolations.length} new
+													</span>
+												)}
+												{diff.resolvedViolations.length > 0 && (
+													<span className="block text-emerald-600 dark:text-emerald-400">
+														−{diff.resolvedViolations.length} resolved
+													</span>
+												)}
+												{diff.persistentViolations.length > 0 && (
+													<span className="block text-amber-500/90">
+														{diff.persistentViolations.length} persistent
+													</span>
+												)}
+											</div>
+										)}
+									</button>
 								</div>
 							)
 						})}
@@ -416,7 +433,7 @@ export const AuditHistoryStrip = memo(({ snapshots, auditHealth, onScrollToAudit
 					)}
 				</div>
 			)}
-		</div>
+		</section>
 	)
 })
 

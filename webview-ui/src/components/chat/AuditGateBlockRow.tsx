@@ -1,4 +1,4 @@
-import { formatGateReasonsForDisplay } from "@shared/audit/auditGateCatalog"
+import { buildGateReasonLinesFromMetadata } from "@shared/audit/auditGateCatalog"
 import { buildQualityGateStatus } from "@shared/audit/auditGateStatus"
 import { HARDENING_GRADE_STYLES, type HardeningGrade } from "@shared/audit/taskAuditUtils"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
@@ -22,17 +22,10 @@ export const AuditGateBlockRow = memo(({ text, auditMetadata }: AuditGateBlockRo
 	const qualityGate = useMemo(() => buildQualityGateStatus(auditMetadata, gateOptions), [auditMetadata, gateOptions])
 
 	const grade = auditMetadata.hardening_grade as HardeningGrade | undefined
-	const reasonLines = useMemo(() => {
-		const codes = auditMetadata.gate_reason_codes ?? qualityGate?.reasonCodes ?? []
-		return formatGateReasonsForDisplay(
-			codes
-				.filter((code) => code !== "gate_disabled")
-				.map((code) => ({
-					code,
-					message: code,
-				})),
-		)
-	}, [auditMetadata.gate_reason_codes, qualityGate?.reasonCodes])
+	const reasonLines = useMemo(
+		() => buildGateReasonLinesFromMetadata(auditMetadata, qualityGate?.reasonCodes),
+		[auditMetadata, qualityGate?.reasonCodes],
+	)
 
 	return (
 		<div className="my-2 rounded-sm border border-red-500/30 bg-red-500/5 overflow-hidden">
