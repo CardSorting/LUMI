@@ -9,14 +9,9 @@ import { writeFile } from "../../../utils/fs"
 import { ensureTaskDirectoryExists } from "../../storage/disk"
 import { StateManager } from "../../storage/StateManager"
 import { TaskState } from "../TaskState"
-import {
-	createFocusChainMarkdownContent,
-	extractFocusChainItemsFromText,
-	extractFocusChainListFromText,
-	getFocusChainFilePath,
-} from "./file-utils"
+import { createFocusChainMarkdownContent, extractFocusChainListFromText, getFocusChainFilePath } from "./file-utils"
 import { FocusChainPrompts } from "./prompts"
-import { parseFocusChainListCounts } from "./utils"
+import { createFocusChainProgressGuidance, parseFocusChainListCounts } from "./utils"
 
 export interface FocusChainDependencies {
 	taskId: string
@@ -148,7 +143,7 @@ export class FocusChainManager {
 			const percentComplete = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
 
 			const introUpdateRequired =
-				"# TODO LIST UPDATE REQUIRED - You MUST include the task_progress parameter in your NEXT tool call."
+				"# TASK_PROGRESS UPDATE REQUIRED - You MUST include the task_progress parameter in your NEXT tool call."
 			const listCurrentProgress = `**Current Progress: ${completedItems}/${totalItems} items completed (${percentComplete}%)**`
 			const userHasUpdatedList =
 				"**CRITICAL INFORMATION:** The user has modified this todo list - review ALL changes carefully"
@@ -163,36 +158,20 @@ export class FocusChainManager {
 				${userHasUpdatedList}\n
 				${FocusChainPrompts.reminder}\n
 			`
+			}
+			const progressGuidance = createFocusChainProgressGuidance({
+				totalItems,
+				completedItems,
+				currentFocusChainChecklist: this.taskState.currentFocusChainChecklist,
+			})
 
-				// If there are no user changes, proceed with reminders based on list progress
-			}
-			let progressBasedMessageStub = ""
-			// If there are items on the list, but none have been completed yet, remind the model to update the list when appropriate
-			if (completedItems === 0 && totalItems > 0) {
-				progressBasedMessageStub =
-					"\n\n**Note:** No items are marked complete yet. As you work through the task, remember to mark items as complete when finished."
-			} else if (percentComplete >= 25 && percentComplete < 50) {
-				progressBasedMessageStub = `\n\n**Note:** ${percentComplete}% of items are complete.`
-			} else if (percentComplete >= 50 && percentComplete < 75) {
-				progressBasedMessageStub = `\n\n**Note:** ${percentComplete}% of items are complete. Proceed with the task.`
-			} else if (percentComplete >= 75) {
-				progressBasedMessageStub = `\n\n**Note:** ${percentComplete}% of items are complete! Focus on finishing the remaining items.`
-			}
-			// Every item on the list has been completed. Hooray!
-			else if (completedItems === totalItems && totalItems > 0) {
-				progressBasedMessageStub = FocusChainPrompts.completed
-					.replace("{{totalItems}}", totalItems.toString())
-					.replace("{{currentFocusChainChecklist}}", this.taskState.currentFocusChainChecklist)
-			}
-
-			// Return with progress-based stub
 			return `\n
 				${introUpdateRequired}\n
 				${listCurrentProgress}\n
 				${this.taskState.currentFocusChainChecklist}\n
 				\n
 				${FocusChainPrompts.reminder}\n
-				${progressBasedMessageStub}\n
+				${progressGuidance}\n
 				`
 		}
 		// When switching from Plan to Act, request that a new list be generated
@@ -200,7 +179,7 @@ export class FocusChainManager {
 			return `${FocusChainPrompts.initial}`
 		}
 
-		// When in plan mode, lists are optional. TODO - May want to improve this soft prompt approach in a future version
+		// Plan mode uses a soft reminder so exploration can continue while still preserving a checklist when useful.
 		if (this.stateManager.getGlobalSettingsKey("mode") === "plan") {
 			return FocusChainPrompts.planModeReminder
 		}
@@ -227,7 +206,6 @@ export class FocusChainManager {
 			const todoList = extractFocusChainListFromText(markdownContent)
 
 			if (todoList) {
-				const _todoLines = extractFocusChainItemsFromText(markdownContent)
 				return todoList
 			}
 

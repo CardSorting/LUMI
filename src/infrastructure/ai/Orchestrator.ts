@@ -1,7 +1,11 @@
+import { createHash } from "node:crypto"
 import * as path from "path"
 import { v4 as uuidv4 } from "uuid"
 import { Logger } from "@/shared/services/Logger"
 import { dbPool } from "../db/BufferedDbPool"
+
+type IntentName = "REFACTOR" | "CREATE" | "FIX" | "INVESTIGATE" | "CONFIGURE" | "DELETE" | "TEST" | "GENERAL"
+type IntentScore = { intent: IntentName; score: number }
 
 export interface AgentStream {
 	id: string
@@ -19,6 +23,9 @@ export interface TaskAuditMetadata {
 	divergence_detected?: boolean
 	entropy_score?: number
 	violations?: string[]
+	intent_classification?: IntentName
+	intent_coverage?: number
+	audited_at?: number
 }
 
 export interface AgentTask {
@@ -42,6 +49,120 @@ type ConversationMessage = {
 type LogicalSoundnessContext = {
 	getLogicalSoundness(knowledgeIds: string[]): Promise<number>
 }
+
+const INTENT_TAXONOMY: Record<Exclude<IntentName, "GENERAL">, { keywords: string[]; weight: number }[]> = {
+	REFACTOR: [
+		{ keywords: ["refactor", "restructure", "reorganize", "decompose", "extract", "split"], weight: 3 },
+		{ keywords: ["move", "rename", "migrate", "consolidate", "merge"], weight: 2 },
+		{ keywords: ["clean", "simplify", "reduce", "decouple"], weight: 1.5 },
+	],
+	CREATE: [
+		{ keywords: ["create", "new", "add", "implement", "build", "scaffold"], weight: 3 },
+		{ keywords: ["generate", "initialize", "setup", "introduce", "write"], weight: 2 },
+		{ keywords: ["feature", "component", "service", "module", "class"], weight: 1 },
+	],
+	FIX: [
+		{ keywords: ["fix", "bug", "broken", "crash", "error", "fail"], weight: 3 },
+		{ keywords: ["repair", "resolve", "patch", "heal", "correct", "harden"], weight: 2.5 },
+		{ keywords: ["issue", "problem", "wrong", "incorrect", "regression"], weight: 1.5 },
+	],
+	INVESTIGATE: [
+		{ keywords: ["investigate", "analyze", "audit", "review", "inspect"], weight: 3 },
+		{ keywords: ["understand", "explain", "why", "how", "what", "where"], weight: 2 },
+		{ keywords: ["look", "check", "find", "search", "explore", "trace"], weight: 1.5 },
+	],
+	CONFIGURE: [
+		{ keywords: ["configure", "config", "setting", "environment", "setup"], weight: 3 },
+		{ keywords: ["update", "change", "modify", "adjust", "tune"], weight: 1.5 },
+		{ keywords: ["enable", "disable", "toggle", "switch", "option"], weight: 2 },
+	],
+	DELETE: [
+		{ keywords: ["delete", "remove", "prune", "drop", "eliminate"], weight: 3 },
+		{ keywords: ["clean up", "deprecate", "retire", "decommission"], weight: 2 },
+		{ keywords: ["unused", "dead", "orphan", "stale"], weight: 1.5 },
+	],
+	TEST: [
+		{ keywords: ["test", "verify", "validate", "assert", "coverage"], weight: 3 },
+		{ keywords: ["lint", "typecheck", "compile", "build", "smoke"], weight: 2 },
+		{ keywords: ["regression", "fixture", "spec", "suite"], weight: 1.5 },
+	],
+}
+
+const AUDIT_STOP_WORDS = new Set([
+	"a",
+	"about",
+	"again",
+	"all",
+	"also",
+	"an",
+	"and",
+	"are",
+	"as",
+	"at",
+	"be",
+	"by",
+	"can",
+	"continue",
+	"deep",
+	"deeply",
+	"do",
+	"done",
+	"for",
+	"from",
+	"further",
+	"had",
+	"has",
+	"have",
+	"if",
+	"in",
+	"into",
+	"is",
+	"it",
+	"its",
+	"more",
+	"of",
+	"on",
+	"or",
+	"pass",
+	"please",
+	"that",
+	"the",
+	"this",
+	"through",
+	"to",
+	"up",
+	"using",
+	"was",
+	"with",
+])
+
+const UNRESOLVED_MARKERS = [
+	"todo",
+	"fixme",
+	"placeholder",
+	"not implemented",
+	"mock",
+	"stub",
+	"dummy",
+	"fake",
+	"simulated",
+	"simulation",
+]
+
+const RESOLVED_MARKER_CONTEXT =
+	/\b(no|none|not found|removed|replaced|resolved|eliminated|cleared|without|no longer|implemented|production)\b/i
+const BLOCKER_PATTERN = /\b(blocked|could not|couldn't|unable to|failed to|not possible|cannot complete)\b/i
+const VALIDATION_REQUEST_PATTERN =
+	/\b(test|verify|validate|audit|check|lint|typecheck|compile|build|review|fix|resolve|harden)\b/i
+const VALIDATION_EVIDENCE_PATTERN =
+	/\b(test(?:ed|s)?|passing|passed|verified|validated|checked|lint(?:ed)?|typecheck(?:ed)?|compiled|build(?:s|ing)?|ran|executed|result|evidence)\b/i
+const ARCHITECTURE_SIGNAL_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+	{ label: "forbidden_import", pattern: /\b(forbidden import|restricted import|illegal import)\b/i },
+	{ label: "layer_violation", pattern: /\b(layer violation|wrong layer|layer mismatch|joy[-\s]?zoning violation)\b/i },
+	{ label: "circular_dependency", pattern: /\b(circular dependency|dependency cycle|cycle detected)\b/i },
+	{ label: "architecture_boundary", pattern: /\b(architecture boundary|boundary violation|cross-layer coupling)\b/i },
+]
+const REFERENCED_PATH_PATTERN = /\b(?:src|cli|webview-ui|packages|plugins|scripts|test|tests)\/[^\s'"`()<>[\]{}]+/g
 
 export class AgentOrchestrator {
 	public async createStream(
@@ -111,12 +232,45 @@ export class AgentOrchestrator {
 	}
 
 	public async auditTask(
-		_taskId: string,
-		_taskDescription: string,
-		_taskResult: string,
-		_streamFocus: string,
+		taskId: string,
+		taskDescription: string,
+		taskResult: string,
+		streamFocus: string,
 	): Promise<TaskAuditMetadata> {
-		return {}
+		const normalizedDescription = taskDescription.trim()
+		const normalizedResult = taskResult.trim()
+		const normalizedFocus = streamFocus.trim()
+		const intent = this.classifyIntent(`${normalizedFocus}\n${normalizedDescription}`)
+		const entropyScore = this.calculateEntropy(
+			normalizedFocus ? `${normalizedFocus}\n${normalizedDescription}` : normalizedDescription,
+			normalizedResult,
+		)
+		const intentCoverage = this.calculateIntentCoverage(`${normalizedFocus}\n${normalizedDescription}`, normalizedResult)
+		const violations = this.detectAuditViolations({
+			taskDescription: normalizedDescription,
+			taskResult: normalizedResult,
+			streamFocus: normalizedFocus,
+			intentCoverage,
+			entropyScore,
+		})
+		const joyZoningViolations = this.extractJoyZoningSignals(normalizedResult)
+
+		const metadata: TaskAuditMetadata = {
+			joy_zoning_violations: joyZoningViolations,
+			result_checksum: this.createResultChecksum(normalizedResult),
+			divergence_detected: violations.length > 0 || joyZoningViolations.length > 0,
+			entropy_score: entropyScore,
+			violations: this.dedupe(violations),
+			intent_classification: intent.intent,
+			intent_coverage: Number(intentCoverage.toFixed(2)),
+			audited_at: Date.now(),
+		}
+
+		Logger.info(
+			`[Orchestrator] Audited task ${taskId.slice(0, 8)} (${intent.intent}, coverage=${metadata.intent_coverage}, violations=${metadata.violations?.length ?? 0})`,
+		)
+
+		return metadata
 	}
 
 	public async updateTaskStatus(
@@ -127,7 +281,15 @@ export class AgentOrchestrator {
 	): Promise<void> {
 		const values: Record<string, unknown> = { status }
 		if (result !== null) values.result = result
-		if (metadata) values.metadata = JSON.stringify(metadata)
+		const resolvedMetadata =
+			metadata ??
+			(await this.createLifecycleAuditMetadata(taskId, status, result).catch((error) => {
+				Logger.warn(
+					`[Orchestrator] Task audit metadata generation failed for ${taskId.slice(0, 8)}: ${error instanceof Error ? error.message : String(error)}`,
+				)
+				return undefined
+			}))
+		if (resolvedMetadata) values.metadata = JSON.stringify(resolvedMetadata)
 
 		await dbPool.push({
 			type: "update",
@@ -211,12 +373,14 @@ export class AgentOrchestrator {
 		// Commit any pending shadow work before storing the completion summary
 		await dbPool.commitWork(streamId)
 
+		const summaryPreview = this.escapeXml(summary.slice(0, 100))
+		const escapedSummary = this.escapeXml(summary)
 		const taskNotification = `
 <task-notification>
 <task-id>${streamId}</task-id>
 <status>completed</status>
-<summary>${summary.slice(0, 100)}...</summary>
-<result>${summary}</result>
+<summary>${summaryPreview}...</summary>
+<result>${escapedSummary}</result>
 </task-notification>`.trim()
 
 		await dbPool.pushBatch(
@@ -331,10 +495,6 @@ export class AgentOrchestrator {
 	}
 
 	/**
-	 * Calculate result entropy (divergence severity).
-	 * Simple length-based delta for now, but provides a 0-1 score.
-	 */
-	/**
 	 * Calculates a physical entropy score (0.0-1.0) based on content divergence.
 	 * Uses Jaccard Similarity on 3-gram sets for structural comparison.
 	 */
@@ -390,83 +550,16 @@ export class AgentOrchestrator {
 	 * enabling proactive policy enforcement and workflow routing.
 	 */
 	public async preAuditIntent(userInput: string): Promise<string> {
-		Logger.info(`[Orchestrator] 🌓 Pre-Auditing User Intent...`)
+		Logger.info("[Orchestrator] Pre-auditing user intent...")
 
-		const normalized = userInput.toLowerCase()
-
-		// Weighted intent classification via keyword frequency scoring
-		const intentScores: Record<string, number> = {
-			REFACTOR: 0,
-			CREATE: 0,
-			FIX: 0,
-			INVESTIGATE: 0,
-			CONFIGURE: 0,
-			DELETE: 0,
-		}
-
-		const intentKeywords: Record<string, { keywords: string[]; weight: number }[]> = {
-			REFACTOR: [
-				{ keywords: ["refactor", "restructure", "reorganize", "decompose", "extract", "split"], weight: 3 },
-				{ keywords: ["move", "rename", "migrate", "consolidate", "merge"], weight: 2 },
-				{ keywords: ["clean", "simplify", "reduce", "decouple"], weight: 1.5 },
-			],
-			CREATE: [
-				{ keywords: ["create", "new", "add", "implement", "build", "scaffold"], weight: 3 },
-				{ keywords: ["generate", "initialize", "setup", "introduce", "write"], weight: 2 },
-				{ keywords: ["feature", "component", "service", "module", "class"], weight: 1 },
-			],
-			FIX: [
-				{ keywords: ["fix", "bug", "broken", "crash", "error", "fail"], weight: 3 },
-				{ keywords: ["repair", "resolve", "patch", "heal", "correct"], weight: 2.5 },
-				{ keywords: ["issue", "problem", "wrong", "incorrect", "regression"], weight: 1.5 },
-			],
-			INVESTIGATE: [
-				{ keywords: ["investigate", "analyze", "audit", "review", "inspect"], weight: 3 },
-				{ keywords: ["understand", "explain", "why", "how", "what", "where"], weight: 2 },
-				{ keywords: ["look", "check", "find", "search", "explore", "trace"], weight: 1.5 },
-			],
-			CONFIGURE: [
-				{ keywords: ["configure", "config", "setting", "environment", "setup"], weight: 3 },
-				{ keywords: ["update", "change", "modify", "adjust", "tune"], weight: 1.5 },
-				{ keywords: ["enable", "disable", "toggle", "switch", "option"], weight: 2 },
-			],
-			DELETE: [
-				{ keywords: ["delete", "remove", "prune", "drop", "eliminate"], weight: 3 },
-				{ keywords: ["clean up", "deprecate", "retire", "decommission"], weight: 2 },
-				{ keywords: ["unused", "dead", "orphan", "stale"], weight: 1.5 },
-			],
-		}
-
-		for (const [intent, groups] of Object.entries(intentKeywords)) {
-			for (const group of groups) {
-				for (const keyword of group.keywords) {
-					// Count occurrences and weight them
-					const regex = new RegExp(`\\b${keyword}\\b`, "gi")
-					const matches = normalized.match(regex)
-					if (matches) {
-						intentScores[intent] += matches.length * group.weight
-					}
-				}
-			}
-		}
-
-		// Find the highest-scoring intent
-		let bestIntent = "GENERAL"
-		let bestScore = 0
-		for (const [intent, score] of Object.entries(intentScores)) {
-			if (score > bestScore) {
-				bestScore = score
-				bestIntent = intent
-			}
-		}
-
-		// Require a minimum confidence threshold to avoid false classification
-		if (bestScore < 1.5) {
-			bestIntent = "GENERAL"
-		}
-
-		Logger.info(`[Orchestrator] Intent classified as ${bestIntent} (confidence: ${bestScore.toFixed(1)})`)
-		return bestIntent
+		const classification = this.classifyIntent(userInput)
+		const runnerUp = classification.runnerUp
+			? `, runner-up=${classification.runnerUp.intent}:${classification.runnerUp.score.toFixed(1)}`
+			: ""
+		Logger.info(
+			`[Orchestrator] Intent classified as ${classification.intent} (score=${classification.score.toFixed(1)}${runnerUp})`,
+		)
+		return classification.intent
 	}
 
 	/**
@@ -591,6 +684,191 @@ export class AgentOrchestrator {
 	public getLayerForPath(filePath: string): string {
 		const { getLayer } = require("@/utils/joy-zoning")
 		return getLayer(filePath)
+	}
+
+	private classifyIntent(userInput: string): IntentScore & { runnerUp?: IntentScore } {
+		const normalized = userInput.toLowerCase()
+		const scores = new Map<IntentName, number>()
+
+		for (const [intent, groups] of Object.entries(INTENT_TAXONOMY) as Array<
+			[Exclude<IntentName, "GENERAL">, { keywords: string[]; weight: number }[]]
+		>) {
+			let score = 0
+			for (const group of groups) {
+				for (const keyword of group.keywords) {
+					score += this.countKeywordMatches(normalized, keyword) * group.weight
+				}
+			}
+			scores.set(intent, score)
+		}
+
+		const ranked = [...scores.entries()]
+			.map(([intent, score]) => ({ intent, score }))
+			.sort((left, right) => right.score - left.score)
+		const best = ranked[0]
+		if (!best || best.score < 1.5) {
+			return { intent: "GENERAL", score: 0, runnerUp: best }
+		}
+
+		return {
+			intent: best.intent,
+			score: best.score,
+			runnerUp: ranked.find((entry) => entry.intent !== best.intent && entry.score > 0),
+		}
+	}
+
+	private async createLifecycleAuditMetadata(
+		taskId: string,
+		status: AgentTask["status"],
+		result: string | null,
+	): Promise<TaskAuditMetadata | undefined> {
+		if (result === null || (status !== "completed" && status !== "failed")) {
+			return undefined
+		}
+
+		const task = await dbPool.selectOne("agent_tasks", { column: "id", value: taskId })
+		const stream = task ? await dbPool.selectOne("agent_streams", { column: "id", value: task.streamId }) : null
+		return this.auditTask(taskId, task?.description ?? "", result, stream?.focus ?? "")
+	}
+
+	private detectAuditViolations(input: {
+		taskDescription: string
+		taskResult: string
+		streamFocus: string
+		intentCoverage: number
+		entropyScore: number
+	}): string[] {
+		const violations: string[] = []
+		const intentText = `${input.streamFocus}\n${input.taskDescription}`
+
+		if (!input.taskResult) {
+			violations.push("result_empty")
+			return violations
+		}
+
+		if (input.taskDescription.length > 80 && input.taskResult.length < 40) {
+			violations.push("result_too_short")
+		}
+
+		for (const marker of UNRESOLVED_MARKERS) {
+			if (this.hasUnresolvedMarker(input.taskResult, marker)) {
+				violations.push(`unresolved_work_marker:${marker.replace(/\s+/g, "_")}`)
+			}
+		}
+
+		if (BLOCKER_PATTERN.test(input.taskResult) && !RESOLVED_MARKER_CONTEXT.test(input.taskResult)) {
+			violations.push("reported_blocker")
+		}
+
+		if (VALIDATION_REQUEST_PATTERN.test(intentText) && !VALIDATION_EVIDENCE_PATTERN.test(input.taskResult)) {
+			violations.push("missing_validation_evidence")
+		}
+
+		if (input.intentCoverage < 0.2 && input.taskDescription.length > 40) {
+			violations.push(`low_intent_coverage:${input.intentCoverage.toFixed(2)}`)
+		}
+
+		if (input.entropyScore >= 0.86 && input.intentCoverage < 0.25) {
+			violations.push(`high_entropy_low_coverage:${input.entropyScore.toFixed(2)}`)
+		}
+
+		return this.dedupe(violations)
+	}
+
+	private extractJoyZoningSignals(result: string): string[] {
+		const signals: string[] = []
+		for (const architectureSignal of ARCHITECTURE_SIGNAL_PATTERNS) {
+			if (architectureSignal.pattern.test(result)) {
+				signals.push(architectureSignal.label)
+			}
+		}
+
+		const layers = new Set(
+			this.extractReferencedPaths(result)
+				.map((referencedPath) => this.getLayerForPath(referencedPath))
+				.filter(Boolean),
+		)
+		if (layers.size >= 4) {
+			signals.push(`broad_layer_surface:${[...layers].sort().join(",")}`)
+		}
+
+		return this.dedupe(signals)
+	}
+
+	private extractReferencedPaths(value: string): string[] {
+		return this.dedupe(
+			Array.from(value.matchAll(REFERENCED_PATH_PATTERN), (match) => match[0].replace(/[),.;:]+$/, "").replace(/\\/g, "/")),
+		)
+	}
+
+	private calculateIntentCoverage(intentText: string, result: string): number {
+		const intentTerms = this.extractSignificantTerms(intentText)
+		if (intentTerms.size === 0) return result.trim() ? 1 : 0
+
+		const resultTerms = this.extractSignificantTerms(result)
+		if (resultTerms.size === 0) return 0
+
+		let matches = 0
+		for (const term of intentTerms) {
+			if (resultTerms.has(term)) {
+				matches += 1
+			}
+		}
+
+		return matches / intentTerms.size
+	}
+
+	private extractSignificantTerms(value: string): Set<string> {
+		const terms = new Set<string>()
+		for (const match of value.toLowerCase().matchAll(/[a-z][a-z0-9_-]{2,}/g)) {
+			const term = match[0].replace(/[_-]+/g, " ")
+			if (!AUDIT_STOP_WORDS.has(term)) {
+				terms.add(term)
+			}
+		}
+		return terms
+	}
+
+	private hasUnresolvedMarker(value: string, marker: string): boolean {
+		const markerPattern = this.buildKeywordPattern(marker)
+		for (const match of value.matchAll(markerPattern)) {
+			const context = value.slice(Math.max(0, match.index - 45), Math.min(value.length, match.index + marker.length + 45))
+			const resolvedContext = context.replace(/\bnot\s+implemented\b/gi, "")
+			if (marker === "not implemented" || !RESOLVED_MARKER_CONTEXT.test(resolvedContext)) {
+				return true
+			}
+		}
+		return false
+	}
+
+	private countKeywordMatches(value: string, keyword: string): number {
+		return Array.from(value.matchAll(this.buildKeywordPattern(keyword))).length
+	}
+
+	private buildKeywordPattern(keyword: string): RegExp {
+		const escaped = this.escapeRegExp(keyword).replace(/\\ /g, "\\s+")
+		return new RegExp(`(?:^|\\W)${escaped}(?=$|\\W)`, "gi")
+	}
+
+	private escapeRegExp(value: string): string {
+		return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+	}
+
+	private createResultChecksum(value: string): string {
+		return createHash("sha256").update(value, "utf8").digest("hex")
+	}
+
+	private escapeXml(value: string): string {
+		return value
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&apos;")
+	}
+
+	private dedupe(values: string[]): string[] {
+		return [...new Set(values)]
 	}
 }
 

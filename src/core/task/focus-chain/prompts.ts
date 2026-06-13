@@ -97,7 +97,7 @@ ${listInstructionsRecommended}
 const apiRequestCount = `
 # task_progress
 
-You've made {{apiRequestCount}} API requests without a task_progress parameter. It is strongly recomended that you create one to track remaining work.
+You've made {{apiRequestCount}} API requests without a task_progress parameter. It is strongly recommended that you create one to track remaining work.
 
 ${reminder}
 `

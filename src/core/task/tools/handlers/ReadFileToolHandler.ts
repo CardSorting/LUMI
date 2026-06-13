@@ -174,24 +174,6 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		let fileContent: import("@integrations/misc/extract-file-content").FileContentResult
 		try {
 			fileContent = await extractFileContent(absolutePath, supportsImages)
-
-			// V26: Neural Forensic Hardening - Record observations
-			try {
-				const { StabilityMonitor } = await import("../../../integrity/StabilityMonitor")
-				const monitor = new StabilityMonitor() // managed singleton in real env
-				monitor.recordRead(absolutePath)
-
-				if (fileContent.text) {
-					// Extract symbols from the content (simple regex for classes/functions/interfaces)
-					const symbolRegex = /\b(?:export\s+)?(?:class|function|interface|const)\s+([a-zA-Z0-9_]+)\b/g
-					const matches = fileContent.text.matchAll(symbolRegex)
-					for (const match of matches) {
-						monitor.recordSymbolObservation(absolutePath, match[1])
-					}
-				}
-			} catch (_e) {
-				// Ignore telemetry errors
-			}
 		} catch (error) {
 			if (error instanceof Error && error.message.includes("File not found") && absolutePath.endsWith("scratchpad.md")) {
 				// V19: Proactive diagnostic injection on auto-creation
@@ -218,12 +200,9 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 				}
 
 				const { IntegrityProtocol } = await import("../../../policy/IntegrityProtocol")
-				const { StabilityForensics } = await import("../../../policy/StabilityForensics")
-				const { StabilityMonitor } = await import("../../../integrity/StabilityMonitor")
-
-				const monitor = new StabilityMonitor() // In real app, this would be the managed singleton
-				const forensics = new StabilityForensics(config.cwd, monitor)
-				const forensicTrace = forensics.generateInvestigationTrace()
+				const forensicTrace =
+					config.universalGuard?.getForensics().generateInvestigationTrace() ??
+					"No prior read observations are available for this task yet."
 
 				const template = IntegrityProtocol.generateAuditTemplate(
 					"Initial Architectural Audit",
