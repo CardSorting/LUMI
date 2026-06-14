@@ -119,6 +119,18 @@ export class TaskState {
 	lastAdvisoryAudit?: TaskAuditMetadata
 	actModeAuditCounter?: number
 	completionGateBlockCount?: number
+	/** Fingerprint of the last gate-blocked completion result — detects no-op retries. */
+	lastBlockedCompletionResultFingerprint?: string
+	/** Timestamp of last attempt_completion invocation — used for retry cooldown. */
+	lastCompletionAttemptAt?: number
+	/** Monotonic attempt counter — observability + idempotency context in gate status. */
+	completionAttemptCount?: number
+	/** Checkpoint hash at last gate block — invalidates duplicate guard when workspace changed. */
+	lastGateBlockCheckpointHash?: string
+	/** Last preflight/gate block reason — agent-parseable observability in status brief. */
+	lastCompletionBlockReason?: string
+	/** Block count when proactive gate advisory was last emitted — debounces info spam. */
+	lastProactiveGuidanceBlockCount?: number
 }
 
 export enum PolicyHealth {

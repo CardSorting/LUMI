@@ -11,35 +11,33 @@ import { buildGateBlockEventSummary, enrichAuditMetadataWithGateDecision } from 
 import {
 	applyWorkspaceAuditPolicy,
 	type GatePolicyProvenance,
-	resolveCompletionGateContext,
 	resolveCompletionGateOptions,
 } from "@shared/audit/auditGatePolicyLoader"
-import { buildPreCompletionChecklist, evaluateCompletionGate } from "@shared/audit/auditGateReport"
+import { buildPreCompletionChecklist } from "@shared/audit/auditGateReport"
 import { getLatestPlanAuditFromMessages } from "@shared/audit/auditMessages"
 import { enrichAuditMetadataWithArtifactPaths, persistAuditWorkspaceArtifacts } from "@shared/audit/auditWorkspaceArtifacts"
-import {
-	buildAuditHookMetadata,
-	buildCompletionGateMessage,
-	buildDoubleCheckAuditSection,
-	runAdvisoryAudit,
-	runCompletionAudit,
-} from "@shared/audit/completionAudit"
-import { parseIntentThresholdOverrides } from "@shared/audit/gatePolicy"
+import { buildAuditHookMetadata, buildDoubleCheckAuditSection, runAdvisoryAudit } from "@shared/audit/completionAudit"
 import { detectReplanIntent } from "@shared/detectReplanIntent"
 import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
-import { evaluateRoadmapCompletionBlock, failClosedCompletionMessage } from "@/services/roadmap/RoadmapCompletionGate"
 import { finalizeRoadmapSession } from "@/services/roadmap/RoadmapLifecycle"
-import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
 import {
-	checkCompletionGateCircuitBreaker,
+	buildDoubleCheckReverifyMessage,
+	buildProactiveCompletionGuidance,
+	formatCompletionToolError,
 	markCompletionAttemptFinished,
-	markCompletionGatesPassed,
+	markProactiveCompletionGuidanceEmitted,
+	recordCompletionBlockReason,
+	recordCompletionPreflightFailure,
+	shouldEmitProactiveCompletionGuidance,
 	shouldRejectDoubleCheckCompletion,
+	validateCompletionResultQuality,
+	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
+import { evaluateCompletionAuditGate, runCompletionPreflightChecks } from "../completionGatePipeline"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -122,27 +120,26 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "result")
 		}
 
-		const circuitBreakerResult = checkCompletionGateCircuitBreaker(config)
-		if (circuitBreakerResult) {
-			return circuitBreakerResult
+		if (shouldEmitProactiveCompletionGuidance(config)) {
+			try {
+				await config.callbacks.say("info", buildProactiveCompletionGuidance(config))
+				markProactiveCompletionGuidanceEmitted(config)
+			} catch (error) {
+				Logger.warn("[AttemptCompletionHandler] Failed to emit proactive completion guidance:", error)
+			}
 		}
 
-		// Roadmap Governance: Kanban Completion Gates
-		const roadmapService = RoadmapService.getInstance()
-		if (roadmapService.isEnabled()) {
-			try {
-				const block = await evaluateRoadmapCompletionBlock(config.cwd)
-				if (block.blocked) {
-					config.taskState.consecutiveMistakeCount++
-					return formatResponse.toolError(block.message || failClosedCompletionMessage())
-				}
-			} catch (error) {
-				Logger.error("[AttemptCompletionHandler] Failed to evaluate Roadmap Governance Gates:", error)
-				if (roadmapService.getConfig().fail_closed_completion_gates) {
-					config.taskState.consecutiveMistakeCount++
-					return formatResponse.toolError(failClosedCompletionMessage())
-				}
-			}
+		const preflightError = await runCompletionPreflightChecks(
+			config,
+			{ result, taskProgress: block.params.task_progress, command },
+			"AttemptCompletionHandler",
+			{
+				validateQuality: validateCompletionResultQuality,
+				onFailure: recordCompletionPreflightFailure,
+			},
+		)
+		if (preflightError) {
+			return wrapFormattedCompletionError(preflightError)
 		}
 
 		// Double-check completion: reject attempt_completion calls that haven't been re-verified
@@ -171,17 +168,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				Logger.warn("[AttemptCompletionHandler] Pre-completion audit preview failed:", error)
 			}
 
-			return formatResponse.toolError(
-				"Before completing, re-verify your work against the original task requirements. Check that:\n" +
-					"1. All requested changes have been made\n" +
-					"2. No steps were skipped or partially completed\n" +
-					"3. Edge cases and error handling are addressed\n" +
-					"4. The solution matches what was asked for, not just what was convenient\n" +
-					"5. Output files contain exactly what was specified--no extra columns, fields, debug output, or commentary\n" +
-					"6. If the task specifies numerical thresholds or accuracy targets, verify your result meets the criteria. If close but not passing, iterate rather than declaring completion" +
-					taskSection +
-					auditPreviewSection +
-					"\n\nIf everything checks out, call attempt_completion again with your final result.",
+			recordCompletionBlockReason(config, "double_check")
+			return formatCompletionToolError(
+				buildDoubleCheckReverifyMessage({
+					taskSection,
+					auditPreviewSection,
+				}),
+				config,
 			)
 		}
 
@@ -195,7 +188,95 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			}
 		}
 
-		// Show notification if enabled
+		// Run task audit to capture hardening & safety metrics (before emitting completion_result)
+		let auditMetadata: TaskAuditMetadata | undefined
+		let planBaseline: TaskAuditMetadata | undefined
+		const taskDescription = getInitialTaskPreview(config) || ""
+		const auditGateResult = await evaluateCompletionAuditGate(config, {
+			result,
+			taskDescription,
+			logPrefix: "AttemptCompletionHandler",
+		})
+
+		if (auditGateResult.status === "blocked") {
+			let enrichedAudit = enrichAuditMetadataWithGateDecision(
+				auditGateResult.auditMetadata,
+				auditGateResult.gateDecision,
+				auditGateResult.blockCount,
+			)
+			enrichedAudit = await persistAuditArtifactsIfEnabled(
+				config,
+				enrichedAudit,
+				"gate_block",
+				auditGateResult.gateOptions,
+				auditGateResult.policyProvenance,
+			)
+			config.taskState.lastCompletionAudit = enrichedAudit
+			planBaseline = auditGateResult.auditMetadata
+
+			telemetryService.captureAuditGateEvaluation(config.ulid, {
+				taskId: config.taskId,
+				blocked: true,
+				score: auditGateResult.gateDecision.score,
+				effectiveThreshold: auditGateResult.gateDecision.effectiveThreshold,
+				grade: auditGateResult.gateDecision.grade,
+				reasonCodes: auditGateResult.gateDecision.reasons.map((reason) => reason.code),
+				suppressedViolationCount: auditGateResult.auditMetadata.suppressed_violations?.length ?? 0,
+				workspacePolicyApplied: auditGateResult.policyProvenance.workspacePolicyApplied,
+			})
+
+			if (config.autoApprovalSettings.enableNotifications) {
+				showSystemNotification({
+					subtitle: "Completion Gate Blocked",
+					message: `Hardening audit failed (${auditGateResult.gateDecision.score}/100, threshold ${auditGateResult.gateDecision.effectiveThreshold})`,
+				})
+			}
+
+			try {
+				await config.callbacks.say(
+					"info",
+					buildGateBlockEventSummary(auditGateResult.gateDecision, auditGateResult.blockCount),
+					undefined,
+					undefined,
+					false,
+					enrichedAudit,
+				)
+			} catch (error) {
+				Logger.warn("[AttemptCompletionHandler] Failed to emit gate block audit event:", error)
+			}
+
+			return wrapFormattedCompletionError(auditGateResult.message)
+		}
+
+		if (auditGateResult.status === "error") {
+			return wrapFormattedCompletionError(auditGateResult.message)
+		}
+
+		if (auditGateResult.status === "passed") {
+			auditMetadata = auditGateResult.auditMetadata
+			planBaseline = auditGateResult.planBaseline
+
+			telemetryService.captureAuditGateEvaluation(config.ulid, {
+				taskId: config.taskId,
+				blocked: false,
+				score: auditGateResult.gateDecision.score,
+				effectiveThreshold: auditGateResult.gateDecision.effectiveThreshold,
+				grade: auditGateResult.gateDecision.grade,
+				reasonCodes: auditGateResult.gateDecision.reasons.map((reason) => reason.code),
+				suppressedViolationCount: auditMetadata.suppressed_violations?.length ?? 0,
+				workspacePolicyApplied: auditGateResult.policyProvenance.workspacePolicyApplied,
+			})
+
+			auditMetadata = await persistAuditArtifactsIfEnabled(
+				config,
+				auditMetadata,
+				"completion",
+				auditGateResult.gateOptions,
+				auditGateResult.policyProvenance,
+			)
+			config.taskState.lastCompletionAudit = auditMetadata
+		}
+
 		if (config.autoApprovalSettings.enableNotifications) {
 			showSystemNotification({
 				subtitle: "Task Completed",
@@ -240,105 +321,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			]
 			config.messageState.setDietCodeMessages(updatedMessages)
 			await config.messageState.saveDietCodeMessagesAndUpdateHistory()
-		}
-
-		// Run task audit to capture hardening & safety metrics (before emitting completion_result)
-		let auditMetadata: TaskAuditMetadata | undefined
-		let planBaseline: TaskAuditMetadata | undefined
-		try {
-			const taskDescription = getInitialTaskPreview(config) || ""
-			planBaseline = getLatestPlanAuditFromMessages(config.messageState.getDietCodeMessages())
-			auditMetadata = await runCompletionAudit(config.taskId, taskDescription, result, taskDescription)
-			auditMetadata = await applyWorkspaceAuditPolicyForTask(config, auditMetadata)
-
-			const gateContext = await resolveCompletionGateContext(config, config.cwd, {
-				planBaselineMetadata: planBaseline,
-				lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
-			})
-			const gateOptions = gateContext.options
-			const gateDecision = evaluateCompletionGate(auditMetadata, gateOptions)
-
-			telemetryService.captureAuditGateEvaluation(config.ulid, {
-				taskId: config.taskId,
-				blocked: gateDecision.blocked,
-				score: gateDecision.score,
-				effectiveThreshold: gateDecision.effectiveThreshold,
-				grade: gateDecision.grade,
-				reasonCodes: gateDecision.reasons.map((reason) => reason.code),
-				suppressedViolationCount: auditMetadata.suppressed_violations?.length ?? 0,
-				workspacePolicyApplied: gateContext.policyProvenance.workspacePolicyApplied,
-			})
-
-			if (gateDecision.blocked) {
-				config.taskState.consecutiveMistakeCount++
-				config.taskState.completionGateBlockCount = (config.taskState.completionGateBlockCount ?? 0) + 1
-				let enrichedAudit = enrichAuditMetadataWithGateDecision(
-					auditMetadata,
-					gateDecision,
-					config.taskState.completionGateBlockCount,
-				)
-				enrichedAudit = await persistAuditArtifactsIfEnabled(
-					config,
-					enrichedAudit,
-					"gate_block",
-					gateOptions,
-					gateContext.policyProvenance,
-				)
-				config.taskState.lastCompletionAudit = enrichedAudit
-
-				if (config.autoApprovalSettings.enableNotifications) {
-					showSystemNotification({
-						subtitle: "Completion Gate Blocked",
-						message: `Hardening audit failed (${gateDecision.score}/100, threshold ${gateDecision.effectiveThreshold})`,
-					})
-				}
-
-				try {
-					await config.callbacks.say(
-						"info",
-						buildGateBlockEventSummary(gateDecision, config.taskState.completionGateBlockCount),
-						undefined,
-						undefined,
-						false,
-						enrichedAudit,
-					)
-				} catch (error) {
-					Logger.warn("[AttemptCompletionHandler] Failed to emit gate block audit event:", error)
-				}
-				return formatResponse.toolError(
-					buildCompletionGateMessage(auditMetadata, {
-						scoreThreshold: config.auditCompletionGateThreshold,
-						criticalOnly: config.auditCompletionGateCriticalOnly,
-						intentAdjustedThreshold: config.auditIntentThresholdAdjustmentsEnabled,
-						intentThresholdOverrides: parseIntentThresholdOverrides(config.auditIntentThresholdOverrides),
-						advisoryMetadata: config.taskState.lastAdvisoryAudit,
-						planBaselineMetadata: planBaseline,
-						gateDecision,
-					}),
-				)
-			}
-
-			if (auditMetadata) {
-				auditMetadata = await persistAuditArtifactsIfEnabled(
-					config,
-					auditMetadata,
-					"completion",
-					gateOptions,
-					gateContext.policyProvenance,
-				)
-				config.taskState.lastCompletionAudit = auditMetadata
-			}
-
-			markCompletionGatesPassed(config)
-		} catch (error) {
-			Logger.error("[AttemptCompletionHandler] Failed to run task audit:", error)
-			if (config.auditCompletionGateEnabled) {
-				config.taskState.consecutiveMistakeCount++
-				return formatResponse.toolError(
-					"Task completion blocked: hardening audit evaluation failed. " +
-						"Fix the underlying issue or retry after audit services recover.",
-				)
-			}
 		}
 
 		let commandResult: ToolResponse | undefined

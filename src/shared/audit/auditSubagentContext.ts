@@ -2,6 +2,7 @@ import { formatGateReasonLabel } from "./auditGateCatalog"
 import { describeGateReadiness } from "./auditGateReadiness"
 import type { CompletionGateOptions } from "./auditGateReport"
 import { partitionViolationsBySeverity } from "./auditSeverity"
+import { MAX_COMPLETION_GATE_BLOCK_COUNT } from "./gatePolicy"
 import { formatViolationLabel } from "./taskAuditUtils"
 import type { CompletionGateReasonCode, TaskAuditMetadata } from "./types"
 
@@ -9,6 +10,8 @@ export interface SubagentAuditContextInput {
 	lastCompletionAudit?: TaskAuditMetadata
 	lastAdvisoryAudit?: TaskAuditMetadata
 	completionGateBlockCount?: number
+	lastCompletionBlockReason?: string
+	completionAttemptCount?: number
 	gateOptions?: CompletionGateOptions
 }
 
@@ -22,6 +25,10 @@ export function buildSubagentGateSignals(input: SubagentAuditContextInput): stri
 
 	if (input.completionGateBlockCount && input.completionGateBlockCount > 0) {
 		signals.push(`GATE: PARENT_BLOCKED (${input.completionGateBlockCount})`)
+	}
+
+	if (input.lastCompletionBlockReason) {
+		signals.push(`GATE: PARENT_LAST_REASON (${input.lastCompletionBlockReason})`)
 	}
 
 	if (input.lastCompletionAudit?.gate_blocked) {
@@ -57,8 +64,14 @@ export function buildSubagentGateSignals(input: SubagentAuditContextInput): stri
 
 /** Compact audit brief for subagent system context — mirrors parent CI gate status handoff. */
 export function buildSubagentAuditContext(input: SubagentAuditContextInput): string {
-	const { lastCompletionAudit, lastAdvisoryAudit, completionGateBlockCount } = input
-	if (!lastCompletionAudit && !lastAdvisoryAudit && !completionGateBlockCount) {
+	const {
+		lastCompletionAudit,
+		lastAdvisoryAudit,
+		completionGateBlockCount,
+		lastCompletionBlockReason,
+		completionAttemptCount,
+	} = input
+	if (!lastCompletionAudit && !lastAdvisoryAudit && !completionGateBlockCount && !lastCompletionBlockReason) {
 		return ""
 	}
 
@@ -101,6 +114,18 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 
 	if (completionGateBlockCount && completionGateBlockCount > 0) {
 		lines.push(`- Completion gate blocks this task: ${completionGateBlockCount}`)
+		const remaining = MAX_COMPLETION_GATE_BLOCK_COUNT - completionGateBlockCount
+		if (remaining > 0 && remaining <= 5) {
+			lines.push(`- Parent gate pressure: ${remaining} attempt(s) before hard stop`)
+		}
+	}
+
+	if (lastCompletionBlockReason) {
+		lines.push(`- Last parent gate block reason: ${lastCompletionBlockReason}`)
+	}
+
+	if (completionAttemptCount && completionAttemptCount > 0) {
+		lines.push(`- Parent completion attempts this task: ${completionAttemptCount}`)
 	}
 
 	lines.push("Align subagent work with parent hardening requirements.", "</parent_audit_context>")

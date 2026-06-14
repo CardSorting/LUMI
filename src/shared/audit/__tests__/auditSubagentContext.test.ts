@@ -46,6 +46,23 @@ describe("auditSubagentContext", () => {
 		expect(signals).to.deep.equal([])
 	})
 
+	it("includes parent gate block reason and attempt count in context and signals", () => {
+		const context = buildSubagentAuditContext({
+			completionGateBlockCount: 3,
+			lastCompletionBlockReason: "audit_gate",
+			completionAttemptCount: 5,
+		})
+		expect(context).to.contain("Last parent gate block reason: audit_gate")
+		expect(context).to.contain("Parent completion attempts this task: 5")
+
+		const signals = buildSubagentGateSignals({
+			completionGateBlockCount: 3,
+			lastCompletionBlockReason: "audit_gate",
+			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
+		})
+		expect(signals).to.include("GATE: PARENT_LAST_REASON (audit_gate)")
+	})
+
 	it("emits workspace policy and suppression signals", () => {
 		const lastCompletionAudit = enrichAuditMetadata({
 			violations: [],

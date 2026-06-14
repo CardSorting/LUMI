@@ -201,6 +201,8 @@ export class TelemetryService {
 			COMPLETED: "task.completed",
 			// Tracks completion gate evaluation (pass/block)
 			AUDIT_GATE_EVALUATED: "task.audit_gate_evaluated",
+			COMPLETION_PREFLIGHT_BLOCKED: "task.completion_preflight_blocked",
+			COMPLETION_GATES_PASSED: "task.completion_gates_passed",
 			// Tracks user feedback on completed tasks
 			FEEDBACK: "task.feedback",
 			// Tracks when a message is sent in a conversation
@@ -804,6 +806,54 @@ export class TelemetryService {
 		if (Number.isFinite(args.score)) {
 			this.recordHistogram(TelemetryService.METRICS.AUDIT.HARDENING_SCORE, args.score, gateAttributes)
 		}
+	}
+
+	/** Records completion preflight blocks — quality, duplicate, cooldown, focus chain, etc. */
+	public captureCompletionPreflightBlocked(
+		ulid: string,
+		args: {
+			taskId: string
+			reason: string
+			blockCount: number
+			consecutiveMistakes: number
+			attemptCount?: number
+			lastReason?: string
+		},
+	) {
+		this.capture({
+			event: TelemetryService.EVENTS.TASK.COMPLETION_PREFLIGHT_BLOCKED,
+			properties: {
+				ulid,
+				taskId: args.taskId,
+				reason: args.reason,
+				blockCount: args.blockCount,
+				consecutiveMistakes: args.consecutiveMistakes,
+				attemptCount: args.attemptCount ?? 0,
+				lastReason: args.lastReason ?? args.reason,
+			},
+		})
+	}
+
+	/** Records successful completion gate passage after prior blocks or on clean pass. */
+	public captureCompletionGatesPassed(
+		ulid: string,
+		args: {
+			taskId: string
+			blockCount: number
+			attemptCount: number
+			score?: number
+		},
+	) {
+		this.capture({
+			event: TelemetryService.EVENTS.TASK.COMPLETION_GATES_PASSED,
+			properties: {
+				ulid,
+				taskId: args.taskId,
+				blockCount: args.blockCount,
+				attemptCount: args.attemptCount,
+				score: args.score,
+			},
+		})
 	}
 
 	/**

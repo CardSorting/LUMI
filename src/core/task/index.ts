@@ -2597,6 +2597,27 @@ export class Task {
 			let breatherText =
 				"You seem to be hitting some friction. Let's take a breather. Please take a moment to review your `scratchpad.md` or journal notes to re-orient yourself against the macro plan."
 
+			const completionGateBlocks = this.taskState.completionGateBlockCount ?? 0
+			if (completionGateBlocks > 0) {
+				breatherText += `\n\n⛔ **Completion gate pressure:** attempt_completion was blocked ${completionGateBlocks} time(s) this task. Do not retry with the same summary — fix audit/roadmap violations in the workspace first, verify with tests or commands, then call attempt_completion with an updated result.`
+				const { buildCompletionBreatherHint, buildCompletionGateEscalationBrief, buildCompletionGateStatusBrief } =
+					await import("./tools/attemptCompletionUtils")
+				const gateConfig = {
+					taskState: this.taskState,
+					focusChainSettings: this.focusChainSettings,
+				} as import("./tools/types/TaskConfig").TaskConfig
+				const statusBrief = buildCompletionGateStatusBrief(gateConfig)
+				const breatherHint = buildCompletionBreatherHint(gateConfig)
+				const escalationBrief = buildCompletionGateEscalationBrief(gateConfig)
+				breatherText += `\n\n${statusBrief}`
+				if (escalationBrief) {
+					breatherText += `\n\n${escalationBrief}`
+				}
+				if (breatherHint) {
+					breatherText += `\n\n${breatherHint}`
+				}
+			}
+
 			// 1. Memory Context Injection
 			let scratchpadExists = false
 			try {

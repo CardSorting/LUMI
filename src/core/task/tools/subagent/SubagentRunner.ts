@@ -28,7 +28,7 @@ import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@/utils/cost"
 import { isNextGenModelFamily } from "@/utils/model-utils"
 import { TaskState } from "../../TaskState"
-import { canonicalizeAttemptCompletionResultParams } from "../attemptCompletionUtils"
+import { canonicalizeAttemptCompletionResultParams, wrapFormattedCompletionError } from "../attemptCompletionUtils"
 import { validateSubagentCompletionGates } from "../subagentCompletionGates"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -390,6 +390,8 @@ export class SubagentRunner {
 			lastCompletionAudit: this.baseConfig.taskState.lastCompletionAudit,
 			lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
 			completionGateBlockCount: this.baseConfig.taskState.completionGateBlockCount,
+			lastCompletionBlockReason: this.baseConfig.taskState.lastCompletionBlockReason,
+			completionAttemptCount: this.baseConfig.taskState.completionAttemptCount,
 			gateOptions,
 		})
 		if (parentGateSignals.length > 0) {
@@ -460,6 +462,8 @@ export class SubagentRunner {
 						lastCompletionAudit: this.baseConfig.taskState.lastCompletionAudit,
 						lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
 						completionGateBlockCount: this.baseConfig.taskState.completionGateBlockCount,
+						lastCompletionBlockReason: this.baseConfig.taskState.lastCompletionBlockReason,
+						completionAttemptCount: this.baseConfig.taskState.completionAttemptCount,
 						gateOptions,
 					})
 					const compressed = await orchestrator.getCompressedContext(parentStreamId)
@@ -732,9 +736,14 @@ export class SubagentRunner {
 							continue
 						}
 
-						const gateError = await validateSubagentCompletionGates(this.baseConfig, completionResult)
+						const gateError = await validateSubagentCompletionGates(
+							this.baseConfig,
+							completionResult,
+							typeof toolCallParams?.task_progress === "string" ? toolCallParams.task_progress : undefined,
+							typeof toolCallParams?.command === "string" ? toolCallParams.command : undefined,
+						)
 						if (gateError) {
-							pushSubagentToolResultBlock(toolResultBlocks, call, toolName, formatResponse.toolError(gateError))
+							pushSubagentToolResultBlock(toolResultBlocks, call, toolName, wrapFormattedCompletionError(gateError))
 							continue
 						}
 
