@@ -6,6 +6,7 @@ import {
 } from "@shared/audit/auditGatePolicyLoader"
 import { type CompletionGateDecision, evaluateCompletionGate } from "@shared/audit/auditGateReport"
 import { getLatestPlanAuditFromMessages } from "@shared/audit/auditMessages"
+import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { buildCompletionGateMessage, runCompletionAudit } from "@shared/audit/completionAudit"
 import { parseIntentThresholdOverrides } from "@shared/audit/gatePolicy"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
@@ -15,9 +16,11 @@ import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import {
 	appendCompletionGateRetryGuidance,
 	buildCompletionAgentErrorMessage,
+	type CompletionPreflightStage,
 	classifyCompletionPreflightReason,
 	detectDuplicateCompletionSubmission,
 	getCompletionGateCircuitBreakerError,
+	getCompletionGateTelemetryContext,
 	getLatestCheckpointHashFromMessages,
 	mapCompletionReasonToPreflightStage,
 	markCompletionGatesPassed,
@@ -58,11 +61,12 @@ export type CompletionAuditGateResult =
 	| { status: "skipped" }
 	| { status: "error"; message: string }
 
-function emitCompletionPreflightTelemetry(
+function emitCompletionGateBlockTelemetry(
 	config: TaskConfig,
 	reason: ReturnType<typeof classifyCompletionPreflightReason>,
 	blockCount: number,
 ): void {
+	const telemetryContext = getCompletionGateTelemetryContext(config)
 	telemetryService.captureCompletionPreflightBlocked(config.ulid, {
 		taskId: config.taskId,
 		reason,
@@ -71,8 +75,12 @@ function emitCompletionPreflightTelemetry(
 		attemptCount: config.taskState.completionAttemptCount ?? 0,
 		lastReason: config.taskState.lastCompletionBlockReason,
 		failedStage: mapCompletionReasonToPreflightStage(reason),
+		pressureLevel: telemetryContext.pressureLevel,
+		retryStatus: telemetryContext.retryStatus,
 	})
 }
+
+export { emitCompletionGateBlockTelemetry }
 
 function finalizePreflightError(
 	rawMessage: string,
@@ -81,9 +89,89 @@ function finalizePreflightError(
 ): string {
 	const reason = classifyCompletionPreflightReason(rawMessage)
 	const blockCount = recordCompletionGateBlockEvent(config, reason, context)
-	emitCompletionPreflightTelemetry(config, reason, blockCount)
-	return buildCompletionAgentErrorMessage(rawMessage, config)
+	emitCompletionGateBlockTelemetry(config, reason, blockCount)
+	return buildCompletionAgentErrorMessage(rawMessage, config, { result: context?.result })
 }
+
+function rejectPreflightStage(
+	config: TaskConfig,
+	error: string,
+	context: { result: string; checkpointHash?: string },
+	checks: { onFailure: (config: TaskConfig) => void },
+	options?: { soft?: boolean },
+): string {
+	if (!options?.soft) {
+		checks.onFailure(config)
+	}
+	return finalizePreflightError(error, config, context)
+}
+
+type PreflightCheckContext = {
+	config: TaskConfig
+	params: {
+		result: string
+		taskProgress?: string
+		command?: string
+	}
+	checkpointHash?: string
+	validateQuality: (result: string) => string | null
+}
+
+/** Declarative preflight stage registry — order mirrors COMPLETION_PREFLIGHT_STAGES. */
+export const PREFLIGHT_STAGE_RUNNERS: ReadonlyArray<{
+	stage: CompletionPreflightStage
+	validate: (ctx: PreflightCheckContext) => string | null
+	soft?: boolean
+}> = [
+	{
+		stage: "quality",
+		validate: (ctx) => ctx.validateQuality(ctx.params.result),
+	},
+	{
+		stage: "checklist_in_result",
+		validate: (ctx) => validateCompletionResultExcludesChecklist(ctx.params.result),
+	},
+	{
+		stage: "min_length",
+		validate: (ctx) => validateCompletionResultMinLength(ctx.params.result),
+	},
+	{
+		stage: "max_length",
+		validate: (ctx) => validateCompletionResultMaxLength(ctx.params.result),
+	},
+	{
+		stage: "task_progress_required",
+		validate: (ctx) => validateCompletionTaskProgressRequired(ctx.config, ctx.params.taskProgress),
+	},
+	{
+		stage: "task_progress_complete",
+		validate: (ctx) => validateCompletionTaskProgress(ctx.params.taskProgress),
+	},
+	{
+		stage: "task_progress_align",
+		validate: (ctx) => validateTaskProgressAlignsWithFocusChain(ctx.config, ctx.params.taskProgress),
+	},
+	{
+		stage: "focus_chain",
+		validate: (ctx) => validateFocusChainComplete(ctx.config),
+	},
+	{
+		stage: "cooldown",
+		validate: (ctx) => validateCompletionAttemptCooldown(ctx.config),
+		soft: true,
+	},
+	{
+		stage: "duplicate",
+		validate: (ctx) =>
+			detectDuplicateCompletionSubmission(ctx.config, ctx.params.result, {
+				currentCheckpointHash: ctx.checkpointHash,
+			}),
+	},
+	{
+		stage: "demo_command",
+		validate: (ctx) => validateCompletionDemoCommand(ctx.params.command),
+	},
+]
 
 export async function runCompletionPreflightChecks(
 	config: TaskConfig,
@@ -108,73 +196,18 @@ export async function runCompletionPreflightChecks(
 	recordCompletionAttemptTime(config)
 
 	const gateContext = { result: params.result, checkpointHash }
-
-	const qualityError = checks.validateQuality(params.result)
-	if (qualityError) {
-		checks.onFailure(config)
-		return finalizePreflightError(qualityError, config, gateContext)
+	const preflightContext: PreflightCheckContext = {
+		config,
+		params,
+		checkpointHash,
+		validateQuality: checks.validateQuality,
 	}
 
-	const checklistInResultError = validateCompletionResultExcludesChecklist(params.result)
-	if (checklistInResultError) {
-		checks.onFailure(config)
-		return finalizePreflightError(checklistInResultError, config, gateContext)
-	}
-
-	const minLengthError = validateCompletionResultMinLength(params.result)
-	if (minLengthError) {
-		checks.onFailure(config)
-		return finalizePreflightError(minLengthError, config, gateContext)
-	}
-
-	const maxLengthError = validateCompletionResultMaxLength(params.result)
-	if (maxLengthError) {
-		checks.onFailure(config)
-		return finalizePreflightError(maxLengthError, config, gateContext)
-	}
-
-	const taskProgressRequiredError = validateCompletionTaskProgressRequired(config, params.taskProgress)
-	if (taskProgressRequiredError) {
-		checks.onFailure(config)
-		return finalizePreflightError(taskProgressRequiredError, config, gateContext)
-	}
-
-	const taskProgressError = validateCompletionTaskProgress(params.taskProgress)
-	if (taskProgressError) {
-		checks.onFailure(config)
-		return finalizePreflightError(taskProgressError, config, gateContext)
-	}
-
-	const taskProgressAlignError = validateTaskProgressAlignsWithFocusChain(config, params.taskProgress)
-	if (taskProgressAlignError) {
-		checks.onFailure(config)
-		return finalizePreflightError(taskProgressAlignError, config, gateContext)
-	}
-
-	const focusChainError = validateFocusChainComplete(config)
-	if (focusChainError) {
-		checks.onFailure(config)
-		return finalizePreflightError(focusChainError, config, gateContext)
-	}
-
-	const cooldownError = validateCompletionAttemptCooldown(config)
-	if (cooldownError) {
-		checks.onFailure(config)
-		return finalizePreflightError(cooldownError, config, gateContext)
-	}
-
-	const duplicateError = detectDuplicateCompletionSubmission(config, params.result, {
-		currentCheckpointHash: checkpointHash,
-	})
-	if (duplicateError) {
-		checks.onFailure(config)
-		return finalizePreflightError(duplicateError, config, gateContext)
-	}
-
-	const demoCommandError = validateCompletionDemoCommand(params.command)
-	if (demoCommandError) {
-		checks.onFailure(config)
-		return finalizePreflightError(demoCommandError, config, gateContext)
+	for (const runner of PREFLIGHT_STAGE_RUNNERS) {
+		const stageError = runner.validate(preflightContext)
+		if (stageError) {
+			return rejectPreflightStage(config, stageError, gateContext, checks, { soft: runner.soft })
+		}
 	}
 
 	const roadmapError = await evaluateRoadmapCompletionGateError(config, logPrefix)
@@ -245,30 +278,25 @@ export async function evaluateCompletionAuditGate(
 				result: params.result,
 				checkpointHash,
 			})
-			telemetryService.captureCompletionPreflightBlocked(config.ulid, {
-				taskId: config.taskId,
-				reason: "audit_gate",
+			emitCompletionGateBlockTelemetry(config, "audit_gate", blockCount)
+			const auditHumanMessage = appendCompletionGateRetryGuidance(
+				buildCompletionGateMessage(auditMetadata, {
+					scoreThreshold: config.auditCompletionGateThreshold,
+					criticalOnly: config.auditCompletionGateCriticalOnly,
+					intentAdjustedThreshold: config.auditIntentThresholdAdjustmentsEnabled,
+					intentThresholdOverrides: parseIntentThresholdOverrides(config.auditIntentThresholdOverrides),
+					advisoryMetadata: config.taskState.lastAdvisoryAudit,
+					planBaselineMetadata: planBaseline,
+					gateDecision,
+				}),
 				blockCount,
-				consecutiveMistakes: config.taskState.consecutiveMistakeCount,
-				attemptCount: config.taskState.completionAttemptCount ?? 0,
-				lastReason: "audit_gate",
-				failedStage: "audit",
-			})
-			const message = buildCompletionAgentErrorMessage(
-				appendCompletionGateRetryGuidance(
-					buildCompletionGateMessage(auditMetadata, {
-						scoreThreshold: config.auditCompletionGateThreshold,
-						criticalOnly: config.auditCompletionGateCriticalOnly,
-						intentAdjustedThreshold: config.auditIntentThresholdAdjustmentsEnabled,
-						intentThresholdOverrides: parseIntentThresholdOverrides(config.auditIntentThresholdOverrides),
-						advisoryMetadata: config.taskState.lastAdvisoryAudit,
-						planBaselineMetadata: planBaseline,
-						gateDecision,
-					}),
-					blockCount,
-				),
-				config,
 			)
+			const checklistSummary = buildPreCompletionChecklistSummary(auditMetadata, gateContext.options)
+			const checklistBlock = checklistSummary ? buildPreCompletionChecklistBlock(checklistSummary) : ""
+			const message = buildCompletionAgentErrorMessage(auditHumanMessage, config, {
+				result: params.result,
+				extraBlocks: checklistBlock ? [checklistBlock] : undefined,
+			})
 
 			return {
 				status: "blocked",
@@ -300,21 +328,14 @@ export async function evaluateCompletionAuditGate(
 		Logger.error(`[${params.logPrefix}] Failed to run completion audit gate:`, error)
 		config.taskState.consecutiveMistakeCount++
 		recordCompletionGateBlockEvent(config, "audit_error")
-		telemetryService.captureCompletionPreflightBlocked(config.ulid, {
-			taskId: config.taskId,
-			reason: "audit_error",
-			blockCount: config.taskState.completionGateBlockCount ?? 0,
-			consecutiveMistakes: config.taskState.consecutiveMistakeCount,
-			attemptCount: config.taskState.completionAttemptCount ?? 0,
-			lastReason: "audit_error",
-			failedStage: "audit",
-		})
+		emitCompletionGateBlockTelemetry(config, "audit_error", config.taskState.completionGateBlockCount ?? 0)
 		return {
 			status: "error",
 			message: buildCompletionAgentErrorMessage(
 				"Task completion blocked: hardening audit evaluation failed. " +
 					"Fix the underlying issue or retry after audit services recover.",
 				config,
+				{ result: params.result },
 			),
 		}
 	}

@@ -129,8 +129,16 @@ export class TaskState {
 	lastGateBlockCheckpointHash?: string
 	/** Last preflight/gate block reason — agent-parseable observability in status brief. */
 	lastCompletionBlockReason?: string
+	/** Last failed pipeline stage — cached for subagent handoff and status blocks. */
+	lastCompletionFailedStage?: string
+	/** Gate pressure tier at last block — stable | elevated | critical | tripped. */
+	completionGatePressureLevel?: string
+	/** Cached machine-parseable envelope — synced on each gate block for subagent handoff. */
+	completionGateObservabilityEnvelope?: string
 	/** Block count when proactive gate advisory was last emitted — debounces info spam. */
 	lastProactiveGuidanceBlockCount?: number
+	/** Whether the first-attempt preflight readiness hint was emitted. */
+	preflightReadinessHintEmitted?: boolean
 }
 
 export enum PolicyHealth {

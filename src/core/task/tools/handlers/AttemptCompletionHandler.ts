@@ -15,6 +15,7 @@ import {
 } from "@shared/audit/auditGatePolicyLoader"
 import { buildPreCompletionChecklist } from "@shared/audit/auditGateReport"
 import { getLatestPlanAuditFromMessages } from "@shared/audit/auditMessages"
+import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { enrichAuditMetadataWithArtifactPaths, persistAuditWorkspaceArtifacts } from "@shared/audit/auditWorkspaceArtifacts"
 import { buildAuditHookMetadata, buildDoubleCheckAuditSection, runAdvisoryAudit } from "@shared/audit/completionAudit"
 import { detectReplanIntent } from "@shared/detectReplanIntent"
@@ -25,19 +26,27 @@ import { finalizeRoadmapSession } from "@/services/roadmap/RoadmapLifecycle"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
 import {
+	buildCompletionGatePassedEnvelope,
+	buildCompletionPreflightReadinessBrief,
 	buildDoubleCheckReverifyMessage,
 	buildProactiveCompletionGuidance,
 	formatCompletionToolError,
 	markCompletionAttemptFinished,
+	markPreflightReadinessHintEmitted,
 	markProactiveCompletionGuidanceEmitted,
 	recordCompletionGateBlockEvent,
 	recordCompletionPreflightFailure,
+	shouldEmitPreflightReadinessHint,
 	shouldEmitProactiveCompletionGuidance,
 	shouldRejectDoubleCheckCompletion,
 	validateCompletionResultQuality,
 	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
-import { evaluateCompletionAuditGate, runCompletionPreflightChecks } from "../completionGatePipeline"
+import {
+	emitCompletionGateBlockTelemetry,
+	evaluateCompletionAuditGate,
+	runCompletionPreflightChecks,
+} from "../completionGatePipeline"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -129,6 +138,27 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			}
 		}
 
+		if (shouldEmitPreflightReadinessHint(config)) {
+			try {
+				const readinessParts = [buildCompletionPreflightReadinessBrief(config)]
+				if (config.auditCompletionGateEnabled && config.taskState.lastAdvisoryAudit) {
+					const checklistSummary = buildPreCompletionChecklistSummary(
+						config.taskState.lastAdvisoryAudit,
+						await buildAuditGateOptions(config, {
+							planBaselineMetadata: getLatestPlanAuditFromMessages(config.messageState.getDietCodeMessages()),
+						}),
+					)
+					if (checklistSummary) {
+						readinessParts.push(buildPreCompletionChecklistBlock(checklistSummary))
+					}
+				}
+				await config.callbacks.say("info", readinessParts.join("\n\n"))
+				markPreflightReadinessHintEmitted(config)
+			} catch (error) {
+				Logger.warn("[AttemptCompletionHandler] Failed to emit preflight readiness hint:", error)
+			}
+		}
+
 		const preflightError = await runCompletionPreflightChecks(
 			config,
 			{ result, taskProgress: block.params.task_progress, command },
@@ -168,13 +198,15 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				Logger.warn("[AttemptCompletionHandler] Pre-completion audit preview failed:", error)
 			}
 
-			recordCompletionGateBlockEvent(config, "double_check", { result })
+			const blockCount = recordCompletionGateBlockEvent(config, "double_check", { result })
+			emitCompletionGateBlockTelemetry(config, "double_check", blockCount)
 			return formatCompletionToolError(
 				buildDoubleCheckReverifyMessage({
 					taskSection,
 					auditPreviewSection,
 				}),
 				config,
+				{ result },
 			)
 		}
 
@@ -275,6 +307,20 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				auditGateResult.policyProvenance,
 			)
 			config.taskState.lastCompletionAudit = auditMetadata
+		}
+
+		const priorGateBlocks = config.taskState.completionGateBlockCount ?? 0
+		const auditScore =
+			auditGateResult.status === "passed" ? auditGateResult.gateDecision.score : auditMetadata?.hardening_score
+		if (priorGateBlocks > 0 || auditScore !== undefined) {
+			try {
+				await config.callbacks.say(
+					"info",
+					buildCompletionGatePassedEnvelope(config, typeof auditScore === "number" ? auditScore : undefined),
+				)
+			} catch (error) {
+				Logger.warn("[AttemptCompletionHandler] Failed to emit completion gate passed brief:", error)
+			}
 		}
 
 		if (config.autoApprovalSettings.enableNotifications) {

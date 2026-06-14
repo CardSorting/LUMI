@@ -28,7 +28,13 @@ import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@/utils/cost"
 import { isNextGenModelFamily } from "@/utils/model-utils"
 import { TaskState } from "../../TaskState"
-import { canonicalizeAttemptCompletionResultParams, wrapFormattedCompletionError } from "../attemptCompletionUtils"
+import {
+	buildCompletionGateObservabilityEnvelope,
+	canonicalizeAttemptCompletionResultParams,
+	getCompletionGatePressureLevel,
+	getCompletionGateRetryPolicy,
+	wrapFormattedCompletionError,
+} from "../attemptCompletionUtils"
 import { validateSubagentCompletionGates } from "../subagentCompletionGates"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -40,6 +46,22 @@ const MAX_INITIAL_STREAM_ATTEMPTS = 3
 const INITIAL_STREAM_RETRY_BASE_DELAY_MS = 250
 const MAX_TOTAL_TOOL_CALLS = 50
 const MAX_TASK_ITERATIONS = 25
+
+function getParentCompletionFailedStage(taskState: TaskState): string | undefined {
+	return taskState.lastCompletionFailedStage
+}
+
+function getParentGatePressureLevel(taskState: TaskState): string | undefined {
+	return taskState.completionGatePressureLevel
+}
+
+function getSubagentGateConfig(baseConfig: TaskConfig): TaskConfig {
+	return {
+		taskState: baseConfig.taskState,
+		focusChainSettings: baseConfig.focusChainSettings,
+		messageState: baseConfig.messageState,
+	} as TaskConfig
+}
 
 export type SubagentRunStatus = "completed" | "failed"
 
@@ -386,12 +408,29 @@ export class SubagentRunner {
 		const gateOptions = await resolveCompletionGateOptions(this.baseConfig, this.baseConfig.cwd, {
 			lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
 		})
+		const parentCompletionFailedStage = getParentCompletionFailedStage(this.baseConfig.taskState)
+		const parentGateConfig = getSubagentGateConfig(this.baseConfig)
+		const parentGateObservability =
+			this.baseConfig.taskState.completionGateObservabilityEnvelope ??
+			buildCompletionGateObservabilityEnvelope(parentGateConfig)
+		const parentGatePressureLevel =
+			getParentGatePressureLevel(this.baseConfig.taskState) ?? getCompletionGatePressureLevel(parentGateConfig)
+		const parentGateRetryStatus = this.baseConfig.taskState.lastCompletionBlockReason
+			? getCompletionGateRetryPolicy(
+					this.baseConfig.taskState
+						.lastCompletionBlockReason as import("../attemptCompletionUtils").CompletionPreflightReason,
+					parentGateConfig,
+				).retryStatus
+			: undefined
 		const parentGateSignals = buildSubagentGateSignals({
 			lastCompletionAudit: this.baseConfig.taskState.lastCompletionAudit,
 			lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
 			completionGateBlockCount: this.baseConfig.taskState.completionGateBlockCount,
 			lastCompletionBlockReason: this.baseConfig.taskState.lastCompletionBlockReason,
+			lastCompletionFailedStage: parentCompletionFailedStage,
 			completionAttemptCount: this.baseConfig.taskState.completionAttemptCount,
+			completionGatePressureLevel: parentGatePressureLevel,
+			completionGateRetryStatus: parentGateRetryStatus,
 			gateOptions,
 		})
 		if (parentGateSignals.length > 0) {
@@ -463,7 +502,11 @@ export class SubagentRunner {
 						lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
 						completionGateBlockCount: this.baseConfig.taskState.completionGateBlockCount,
 						lastCompletionBlockReason: this.baseConfig.taskState.lastCompletionBlockReason,
+						lastCompletionFailedStage: parentCompletionFailedStage,
 						completionAttemptCount: this.baseConfig.taskState.completionAttemptCount,
+						completionGatePressureLevel: parentGatePressureLevel,
+						completionGateObservabilityEnvelope: parentGateObservability,
+						completionGateRetryStatus: parentGateRetryStatus,
 						gateOptions,
 					})
 					const compressed = await orchestrator.getCompressedContext(parentStreamId)

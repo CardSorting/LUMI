@@ -44,6 +44,26 @@ export function formatSubagentParentSignal(signal: string): string {
 		const match = signal.match(/GATE: PARENT_BLOCKED \((\d+)\)/)
 		return match ? `Parent gate blocked (${match[1]}×)` : "Parent gate blocked"
 	}
+	if (signal.startsWith("GATE: PARENT_LAST_REASON")) {
+		const match = signal.match(/GATE: PARENT_LAST_REASON \((.+)\)/)
+		return match ? `Parent last gate reason: ${match[1]}` : "Parent last gate reason"
+	}
+	if (signal.startsWith("GATE: PARENT_FAILED_STAGE")) {
+		const match = signal.match(/GATE: PARENT_FAILED_STAGE \((.+)\)/)
+		return match ? `Parent failed gate stage: ${match[1]}` : "Parent failed gate stage"
+	}
+	if (signal.startsWith("GATE: PARENT_PRESSURE")) {
+		const match = signal.match(/GATE: PARENT_PRESSURE \((.+)\)/)
+		return match ? `Parent gate pressure: ${match[1]}` : "Parent gate pressure"
+	}
+	if (signal.startsWith("GATE: PARENT_ATTEMPTS")) {
+		const match = signal.match(/GATE: PARENT_ATTEMPTS \((\d+)\)/)
+		return match ? `Parent completion attempts: ${match[1]}` : "Parent completion attempts"
+	}
+	if (signal.startsWith("GATE: PARENT_RETRY_STATUS")) {
+		const match = signal.match(/GATE: PARENT_RETRY_STATUS \((.+)\)/)
+		return match ? `Parent gate retry status: ${match[1]}` : "Parent gate retry status"
+	}
 	return SUBAGENT_PARENT_SIGNAL_LABELS[signal] ?? signal.replace(/^SIGNAL: /, "")
 }
 

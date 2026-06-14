@@ -3,8 +3,12 @@ import "should"
 import { COMPLETION_RESULT_MAX_LENGTH, MAX_COMPLETION_GATE_BLOCK_COUNT } from "@shared/audit/gatePolicy"
 import { setRoadmapConfigOverride } from "@/services/roadmap/RoadmapConfig"
 import { TaskState } from "../../TaskState"
-import { recordCompletionPreflightFailure, validateCompletionResultQuality } from "../attemptCompletionUtils"
-import { runCompletionGateFlow, runCompletionPreflightChecks } from "../completionGatePipeline"
+import {
+	COMPLETION_PREFLIGHT_STAGES,
+	recordCompletionPreflightFailure,
+	validateCompletionResultQuality,
+} from "../attemptCompletionUtils"
+import { PREFLIGHT_STAGE_RUNNERS, runCompletionGateFlow, runCompletionPreflightChecks } from "../completionGatePipeline"
 import type { TaskConfig } from "../types/TaskConfig"
 
 const VALID_RESULT =
@@ -92,10 +96,20 @@ describe("completionGatePipeline", () => {
 		taskState.completionGateBlockCount.should.equal(1)
 		taskState.lastCompletionBlockReason.should.equal("empty_result")
 		;(taskState.completionAttemptCount ?? 0).should.equal(1)
+		error!.should.containEql("<completion_gate_envelope")
 	})
 
 	it("runCompletionGateFlow passes when audit gate is disabled", async () => {
 		const flow = await runCompletionGateFlow(configWithState(taskState), { result: VALID_RESULT }, "Test")
 		flow.status.should.equal("passed")
+	})
+
+	it("preflight registry stages align with COMPLETION_PREFLIGHT_STAGES order", () => {
+		const registryStages = PREFLIGHT_STAGE_RUNNERS.map((runner) => runner.stage)
+		const expectedSlice = COMPLETION_PREFLIGHT_STAGES.slice(
+			COMPLETION_PREFLIGHT_STAGES.indexOf("quality"),
+			COMPLETION_PREFLIGHT_STAGES.indexOf("roadmap"),
+		)
+		registryStages.should.deepEqual(Array.from(expectedSlice))
 	})
 })

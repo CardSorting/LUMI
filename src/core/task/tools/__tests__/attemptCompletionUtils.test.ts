@@ -2,6 +2,7 @@ import type { ToolUse } from "@core/assistant-message"
 import { beforeEach, describe, it } from "mocha"
 import "should"
 import {
+	COMPLETION_GATE_STATUS_SCHEMA_VERSION,
 	COMPLETION_GATE_WARN_THRESHOLD,
 	COMPLETION_RESULT_MAX_LENGTH,
 	MAX_COMPLETION_GATE_BLOCK_COUNT,
@@ -11,12 +12,21 @@ import { TaskState } from "../../TaskState"
 import {
 	appendCompletionGateRetryGuidance,
 	buildCompletionAgentErrorMessage,
+	buildCompletionGateActionBlock,
+	buildCompletionGateAgentEnvelope,
 	buildCompletionGateEscalationBrief,
+	buildCompletionGateHealthBlock,
+	buildCompletionGatePassedBrief,
+	buildCompletionGatePassedEnvelope,
 	buildCompletionGatePipelineBrief,
 	buildCompletionGatePlaybook,
 	buildCompletionGatePlaybookBlock,
+	buildCompletionGateProblemBlock,
 	buildCompletionGateRecoveryBlock,
 	buildCompletionGateRetryGuidance,
+	buildCompletionGateStageProgressBlock,
+	buildCompletionGateStructuredContext,
+	buildCompletionPreflightReadinessBrief,
 	buildCompletionPreflightRecoveryHint,
 	buildDoubleCheckReverifyMessage,
 	buildProactiveCompletionGuidance,
@@ -28,19 +38,27 @@ import {
 	extractFocusChainItemLabels,
 	formatCompletionToolError,
 	getCompletionGateCircuitBreakerError,
+	getCompletionGatePressureLevel,
+	getCompletionGateRetryPolicy,
+	getCompletionGateTelemetryContext,
 	getCompletionRetryCooldownMs,
 	getLatestCheckpointHashFromMessages,
+	getRemainingCompletionGateStages,
 	hashCompletionResult,
 	mapCompletionReasonToPreflightStage,
 	markCompletionAttemptFinished,
 	markCompletionGatesPassed,
+	markPreflightReadinessHintEmitted,
 	markProactiveCompletionGuidanceEmitted,
 	recordCompletionAttemptTime,
 	recordCompletionBlockReason,
 	recordCompletionGateBlock,
 	recordCompletionGateBlockEvent,
+	resolveCompletionBlockReason,
+	shouldEmitPreflightReadinessHint,
 	shouldEmitProactiveCompletionGuidance,
 	shouldRejectDoubleCheckCompletion,
+	syncCompletionGateObservabilityCache,
 	validateCompletionAttemptCooldown,
 	validateCompletionDemoCommand,
 	validateCompletionPreflightQualityBundle,
@@ -132,6 +150,9 @@ describe("attemptCompletionUtils", () => {
 			}
 			message.should.containEql(String(MAX_COMPLETION_GATE_BLOCK_COUNT))
 			taskState.consecutiveMistakeCount.should.equal(1)
+			taskState.lastCompletionBlockReason.should.equal("circuit_breaker")
+			taskState.lastCompletionFailedStage.should.equal("circuit_breaker")
+			taskState.completionGatePressureLevel.should.equal("tripped")
 
 			const toolError = checkCompletionGateCircuitBreaker(config)
 			should.exist(toolError)
@@ -195,7 +216,7 @@ describe("attemptCompletionUtils", () => {
 			playbook.should.containEql("Recovery playbook")
 			playbook.should.containEql("1.")
 			playbook.should.containEql("task_progress")
-			buildCompletionGatePlaybook("circuit_breaker").should.equal("")
+			buildCompletionGatePlaybook("circuit_breaker").should.containEql("Stop calling attempt_completion")
 		})
 	})
 
@@ -214,6 +235,165 @@ describe("attemptCompletionUtils", () => {
 		})
 	})
 
+	describe("getCompletionGateRetryPolicy", () => {
+		it("marks circuit breaker as non-retryable", () => {
+			const policy = getCompletionGateRetryPolicy("circuit_breaker", configWithState(taskState))
+			policy.retryable.should.be.false()
+			policy.retryStatus.should.equal("blocked")
+		})
+
+		it("returns wait status while cooldown is active", () => {
+			taskState.completionGateBlockCount = 2
+			taskState.lastCompletionAttemptAt = Date.now()
+			const policy = getCompletionGateRetryPolicy("retry_cooldown", configWithState(taskState))
+			policy.retryable.should.be.false()
+			policy.retryStatus.should.equal("wait")
+			policy.retryAfterMs.should.be.greaterThan(0)
+		})
+	})
+
+	describe("resolveCompletionBlockReason", () => {
+		it("prefers recorded reason over message classification", () => {
+			recordCompletionBlockReason(configWithState(taskState), "audit_gate")
+			resolveCompletionBlockReason("Completion rejected: result is empty", configWithState(taskState)).should.equal(
+				"audit_gate",
+			)
+		})
+	})
+
+	describe("getRemainingCompletionGateStages", () => {
+		it("returns downstream stages after a failure", () => {
+			const remaining = getRemainingCompletionGateStages("quality")
+			remaining.should.containEql("checklist_in_result")
+			remaining.should.containEql("audit")
+		})
+	})
+
+	describe("buildCompletionGatePassedBrief", () => {
+		it("emits passed status with score", () => {
+			buildCompletionGatePassedBrief(configWithState(taskState), 82).should.containEql('passed="true"')
+			buildCompletionGatePassedBrief(configWithState(taskState), 82).should.containEql('score="82"')
+		})
+	})
+
+	describe("buildCompletionGateProblemBlock", () => {
+		it("emits RFC 7807-style problem XML", () => {
+			const block = buildCompletionGateProblemBlock(
+				"result_too_brief",
+				"Completion rejected: result is too brief",
+				configWithState(taskState),
+			)
+			block.should.containEql("<completion_gate_problem")
+			block.should.containEql(`schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}"`)
+			block.should.containEql('type="result_too_brief"')
+			block.should.containEql('stage="min_length"')
+			block.should.containEql('soft="false"')
+		})
+	})
+
+	describe("buildCompletionGateAgentEnvelope", () => {
+		it("wraps structured blocks in a single envelope", () => {
+			const envelope = buildCompletionGateAgentEnvelope([
+				buildCompletionGateHealthBlock(configWithState(taskState)),
+				'<stage name="quality" status="failed" />',
+			])
+			envelope.should.containEql("<completion_gate_envelope")
+			envelope.should.containEql("<completion_gate_health")
+		})
+	})
+
+	describe("buildCompletionGateStageProgressBlock", () => {
+		it("marks failed stage and downstream skipped stages", () => {
+			const block = buildCompletionGateStageProgressBlock("quality")
+			block.should.containEql('<stage name="quality" status="failed"')
+			block.should.containEql('<stage name="checklist_in_result" status="skipped"')
+		})
+	})
+
+	describe("getCompletionGatePressureLevel", () => {
+		it("escalates pressure as block count increases", () => {
+			getCompletionGatePressureLevel(configWithState(taskState)).should.equal("stable")
+			taskState.completionGateBlockCount = 3
+			getCompletionGatePressureLevel(configWithState(taskState)).should.equal("elevated")
+			taskState.completionGateBlockCount = COMPLETION_GATE_WARN_THRESHOLD
+			getCompletionGatePressureLevel(configWithState(taskState)).should.equal("critical")
+		})
+	})
+
+	describe("buildCompletionGateStructuredContext", () => {
+		it("returns a unified envelope for gate errors", () => {
+			recordCompletionBlockReason(configWithState(taskState), "result_too_long")
+			const context = buildCompletionGateStructuredContext(
+				"Completion rejected: result exceeds maximum length",
+				configWithState(taskState),
+			)
+			context.should.containEql("<completion_gate_envelope")
+			context.should.containEql("<completion_gate_stages")
+			context.should.containEql("<completion_gate_problem")
+			context.should.containEql("<completion_gate_action")
+		})
+	})
+
+	describe("buildCompletionGateActionBlock", () => {
+		it("emits a dedicated next-action block with retry policy", () => {
+			const block = buildCompletionGateActionBlock("result_too_long", configWithState(taskState))
+			block.should.containEql("<completion_gate_action")
+			block.should.containEql('reason="result_too_long"')
+			block.should.containEql('retry_status="ready"')
+		})
+	})
+
+	describe("buildCompletionGatePassedEnvelope", () => {
+		it("wraps passed status with all-green stage progress", () => {
+			const envelope = buildCompletionGatePassedEnvelope(configWithState(taskState), 91)
+			envelope.should.containEql("<completion_gate_envelope")
+			envelope.should.containEql('outcome="passed"')
+			envelope.should.containEql('passed="true"')
+			envelope.should.containEql('score="91"')
+		})
+	})
+
+	describe("syncCompletionGateObservabilityCache", () => {
+		it("persists envelope on task state after block reason is recorded", () => {
+			recordCompletionBlockReason(configWithState(taskState), "audit_gate")
+			should.exist(taskState.completionGateObservabilityEnvelope)
+			taskState.completionGateObservabilityEnvelope?.should.containEql("<completion_gate_envelope")
+			syncCompletionGateObservabilityCache(configWithState(taskState))
+			taskState.completionGateObservabilityEnvelope?.should.containEql('reason="audit_gate"')
+		})
+	})
+
+	describe("getCompletionGateTelemetryContext", () => {
+		it("returns pressure, retry status, and failed stage", () => {
+			recordCompletionBlockReason(configWithState(taskState), "retry_cooldown")
+			const ctx = getCompletionGateTelemetryContext(configWithState(taskState))
+			ctx.pressureLevel.should.equal("stable")
+			should.exist(ctx.failedStage)
+			ctx.failedStage?.should.equal("cooldown")
+		})
+	})
+
+	describe("preflight readiness hint", () => {
+		it("emits once when audit preview exists and no prior blocks", () => {
+			const config = {
+				...configWithState(taskState),
+				auditCompletionGateEnabled: true,
+				taskState,
+			} as TaskConfig
+			taskState.lastAdvisoryAudit = { hardening_score: 70, violations: [] }
+			shouldEmitPreflightReadinessHint(config).should.be.true()
+			markPreflightReadinessHintEmitted(config)
+			shouldEmitPreflightReadinessHint(config).should.be.false()
+		})
+
+		it("includes pipeline stages in readiness brief", () => {
+			const brief = buildCompletionPreflightReadinessBrief(configWithState(taskState))
+			brief.should.containEql("Gate pipeline")
+			brief.should.containEql("<completion_gate_envelope")
+			brief.should.containEql("<completion_gate_health")
+		})
+	})
+
 	describe("recordCompletionGateBlockEvent", () => {
 		it("increments block count, records reason, fingerprint, and block timestamp", () => {
 			recordCompletionGateBlockEvent(configWithState(taskState), "result_too_brief", {
@@ -222,6 +402,8 @@ describe("attemptCompletionUtils", () => {
 			})
 			taskState.completionGateBlockCount.should.equal(1)
 			taskState.lastCompletionBlockReason.should.equal("result_too_brief")
+			taskState.lastCompletionFailedStage.should.equal("min_length")
+			taskState.completionGatePressureLevel.should.equal("stable")
 			should.exist(taskState.lastCompletionAttemptAt)
 			should.exist(taskState.lastBlockedCompletionResultFingerprint)
 			taskState.lastGateBlockCheckpointHash.should.equal("abc")
@@ -232,6 +414,12 @@ describe("attemptCompletionUtils", () => {
 			recordCompletionGateBlockEvent(configWithState(taskState), "circuit_breaker")
 			taskState.completionGateBlockCount.should.equal(MAX_COMPLETION_GATE_BLOCK_COUNT)
 			taskState.lastCompletionBlockReason.should.equal("circuit_breaker")
+		})
+
+		it("does not increment block count for soft throttle blocks", () => {
+			recordCompletionGateBlockEvent(configWithState(taskState), "retry_cooldown")
+			;(taskState.completionGateBlockCount ?? 0).should.equal(0)
+			taskState.lastCompletionBlockReason.should.equal("retry_cooldown")
 		})
 	})
 
@@ -280,12 +468,16 @@ describe("attemptCompletionUtils", () => {
 		it("emits advisory when approaching the gate circuit breaker", () => {
 			taskState.completionGateBlockCount = COMPLETION_GATE_WARN_THRESHOLD - 1
 			shouldEmitProactiveCompletionGuidance(configWithState(taskState)).should.be.true()
-			buildProactiveCompletionGuidance(configWithState(taskState)).should.containEql("Completion gate advisory")
+			const guidance = buildProactiveCompletionGuidance(configWithState(taskState))
+			guidance.should.containEql("Completion gate advisory")
+			guidance.should.containEql("<completion_gate_envelope")
 		})
 
-		it("records block reason on the task state", () => {
+		it("records block reason, failed stage, and pressure on the task state", () => {
 			recordCompletionBlockReason(configWithState(taskState), "retry_cooldown")
 			taskState.lastCompletionBlockReason.should.equal("retry_cooldown")
+			taskState.lastCompletionFailedStage.should.equal("cooldown")
+			taskState.completionGatePressureLevel.should.equal("stable")
 		})
 	})
 
@@ -413,7 +605,13 @@ describe("attemptCompletionUtils", () => {
 				configWithState(taskState),
 			)
 			message.should.containEql('failed_stage="max_length"')
+			message.should.containEql("<completion_gate_envelope")
+			message.should.containEql("<completion_gate_problem")
 			message.should.containEql("<completion_gate_playbook")
+			message.should.containEql('retry_status="ready"')
+			message.should.containEql('retryable="true"')
+			message.should.containEql('retry_after_ms="')
+			message.should.containEql('remaining_stages="')
 			message.should.containEql("Recovery playbook")
 			message.should.containEql('next_action="')
 		})

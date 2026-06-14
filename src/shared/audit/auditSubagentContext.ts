@@ -11,7 +11,11 @@ export interface SubagentAuditContextInput {
 	lastAdvisoryAudit?: TaskAuditMetadata
 	completionGateBlockCount?: number
 	lastCompletionBlockReason?: string
+	lastCompletionFailedStage?: string
 	completionAttemptCount?: number
+	completionGatePressureLevel?: string
+	completionGateObservabilityEnvelope?: string
+	completionGateRetryStatus?: string
 	gateOptions?: CompletionGateOptions
 }
 
@@ -29,6 +33,23 @@ export function buildSubagentGateSignals(input: SubagentAuditContextInput): stri
 
 	if (input.lastCompletionBlockReason) {
 		signals.push(`GATE: PARENT_LAST_REASON (${input.lastCompletionBlockReason})`)
+	}
+
+	if (input.lastCompletionFailedStage) {
+		signals.push(`GATE: PARENT_FAILED_STAGE (${input.lastCompletionFailedStage})`)
+	}
+
+	if (input.completionGatePressureLevel && input.completionGatePressureLevel !== "stable") {
+		signals.push(`GATE: PARENT_PRESSURE (${input.completionGatePressureLevel})`)
+	}
+
+	if (input.completionAttemptCount && input.completionAttemptCount > 0) {
+		signals.push(`GATE: PARENT_ATTEMPTS (${input.completionAttemptCount})`)
+	}
+
+	const retryStatus = input.completionGateRetryStatus
+	if (retryStatus && retryStatus !== "ready") {
+		signals.push(`GATE: PARENT_RETRY_STATUS (${retryStatus})`)
 	}
 
 	if (input.lastCompletionAudit?.gate_blocked) {
@@ -69,13 +90,27 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 		lastAdvisoryAudit,
 		completionGateBlockCount,
 		lastCompletionBlockReason,
+		lastCompletionFailedStage,
 		completionAttemptCount,
+		completionGatePressureLevel,
+		completionGateObservabilityEnvelope,
+		completionGateRetryStatus,
 	} = input
-	if (!lastCompletionAudit && !lastAdvisoryAudit && !completionGateBlockCount && !lastCompletionBlockReason) {
+	if (
+		!lastCompletionAudit &&
+		!lastAdvisoryAudit &&
+		!completionGateBlockCount &&
+		!lastCompletionBlockReason &&
+		!completionGateObservabilityEnvelope
+	) {
 		return ""
 	}
 
 	const lines = ["<parent_audit_context>", "Parent task hardening status:"]
+
+	if (completionGateObservabilityEnvelope) {
+		lines.push(completionGateObservabilityEnvelope)
+	}
 
 	if (lastCompletionAudit) {
 		lines.push(
@@ -122,6 +157,18 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 
 	if (lastCompletionBlockReason) {
 		lines.push(`- Last parent gate block reason: ${lastCompletionBlockReason}`)
+	}
+
+	if (lastCompletionFailedStage) {
+		lines.push(`- Last parent gate failed stage: ${lastCompletionFailedStage}`)
+	}
+
+	if (completionGatePressureLevel) {
+		lines.push(`- Parent gate pressure level: ${completionGatePressureLevel}`)
+	}
+
+	if (completionGateRetryStatus) {
+		lines.push(`- Parent gate retry status: ${completionGateRetryStatus}`)
 	}
 
 	if (completionAttemptCount && completionAttemptCount > 0) {

@@ -46,21 +46,36 @@ describe("auditSubagentContext", () => {
 		expect(signals).to.deep.equal([])
 	})
 
-	it("includes parent gate block reason and attempt count in context and signals", () => {
+	it("includes parent gate block reason, failed stage, and attempt count in context and signals", () => {
+		const envelope =
+			'<completion_gate_envelope schema_version="1"><completion_gate_health level="elevated" /></completion_gate_envelope>'
 		const context = buildSubagentAuditContext({
 			completionGateBlockCount: 3,
 			lastCompletionBlockReason: "audit_gate",
+			lastCompletionFailedStage: "audit",
 			completionAttemptCount: 5,
+			completionGatePressureLevel: "elevated",
+			completionGateObservabilityEnvelope: envelope,
 		})
 		expect(context).to.contain("Last parent gate block reason: audit_gate")
-		expect(context).to.contain("Parent completion attempts this task: 5")
+		expect(context).to.contain("Last parent gate failed stage: audit")
+		expect(context).to.contain("Parent gate pressure level: elevated")
+		expect(context).to.contain("<completion_gate_envelope")
 
 		const signals = buildSubagentGateSignals({
 			completionGateBlockCount: 3,
 			lastCompletionBlockReason: "audit_gate",
+			lastCompletionFailedStage: "audit",
+			completionAttemptCount: 5,
+			completionGatePressureLevel: "elevated",
+			completionGateRetryStatus: "wait",
 			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
 		})
 		expect(signals).to.include("GATE: PARENT_LAST_REASON (audit_gate)")
+		expect(signals).to.include("GATE: PARENT_FAILED_STAGE (audit)")
+		expect(signals).to.include("GATE: PARENT_PRESSURE (elevated)")
+		expect(signals).to.include("GATE: PARENT_ATTEMPTS (5)")
+		expect(signals).to.include("GATE: PARENT_RETRY_STATUS (wait)")
 	})
 
 	it("emits workspace policy and suppression signals", () => {

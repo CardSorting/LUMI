@@ -26,6 +26,9 @@ export const COMPLETION_RESULT_MAX_LENGTH = 6000
 /** Remaining attempts at which gate errors escalate to critical urgency (PagerDuty-style). */
 export const COMPLETION_GATE_ESCALATION_REMAINING = 3
 
+/** Schema version for machine-parseable completion_gate_* XML blocks. */
+export const COMPLETION_GATE_STATUS_SCHEMA_VERSION = 1
+
 /** Stricter gates for high-risk intent classes (mirrors CI branch protection tiers). */
 export const DEFAULT_INTENT_THRESHOLD_ADJUSTMENTS: Partial<Record<IntentClassification, number>> = {
 	FIX: 10,

@@ -143,3 +143,23 @@ export function buildPreCompletionChecklistMarkdown(summary: PreCompletionCheckl
 	lines.push("")
 	return lines.join("\n")
 }
+
+/** Machine-parseable pre-completion checklist — mirrors GitHub Checks annotations. */
+export function buildPreCompletionChecklistBlock(summary: PreCompletionChecklistSummary): string {
+	const itemElements = summary.items
+		.map(
+			(item) =>
+				`<check key="${item.key}" status="${item.status}">${escapePreCompletionXmlText(item.label)}` +
+				`${item.detail ? ` — ${escapePreCompletionXmlText(item.detail)}` : ""}</check>`,
+		)
+		.join("")
+	return (
+		`<pre_completion_checklist blocked="${summary.blocked ? "true" : "false"}" ` +
+		`score="${summary.score}" threshold="${summary.effectiveThreshold}"` +
+		`${summary.grade ? ` grade="${summary.grade}"` : ""}>${itemElements}</pre_completion_checklist>`
+	)
+}
+
+function escapePreCompletionXmlText(value: string): string {
+	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}

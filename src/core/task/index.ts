@@ -2600,16 +2600,26 @@ export class Task {
 			const completionGateBlocks = this.taskState.completionGateBlockCount ?? 0
 			if (completionGateBlocks > 0) {
 				breatherText += `\n\n⛔ **Completion gate pressure:** attempt_completion was blocked ${completionGateBlocks} time(s) this task. Do not retry with the same summary — fix audit/roadmap violations in the workspace first, verify with tests or commands, then call attempt_completion with an updated result.`
-				const { buildCompletionBreatherHint, buildCompletionGateEscalationBrief, buildCompletionGateStatusBrief } =
-					await import("./tools/attemptCompletionUtils")
+				const {
+					buildCompletionBreatherHint,
+					buildCompletionGateEscalationBrief,
+					buildCompletionGateObservabilityEnvelope,
+					buildCompletionGatePipelineBrief,
+					mapCompletionReasonToPreflightStage,
+				} = await import("./tools/attemptCompletionUtils")
 				const gateConfig = {
 					taskState: this.taskState,
 					focusChainSettings: this.focusChainSettings,
 				} as import("./tools/types/TaskConfig").TaskConfig
-				const statusBrief = buildCompletionGateStatusBrief(gateConfig)
+				const lastReason = this.taskState.lastCompletionBlockReason as
+					| import("./tools/attemptCompletionUtils").CompletionPreflightReason
+					| undefined
+				const failedStage = lastReason ? mapCompletionReasonToPreflightStage(lastReason) : undefined
+				const observabilityEnvelope = buildCompletionGateObservabilityEnvelope(gateConfig)
+				const pipelineBrief = buildCompletionGatePipelineBrief(failedStage)
 				const breatherHint = buildCompletionBreatherHint(gateConfig)
 				const escalationBrief = buildCompletionGateEscalationBrief(gateConfig)
-				breatherText += `\n\n${statusBrief}`
+				breatherText += `\n\n${observabilityEnvelope}\n\n${pipelineBrief}`
 				if (escalationBrief) {
 					breatherText += `\n\n${escalationBrief}`
 				}
