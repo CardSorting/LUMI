@@ -2,11 +2,11 @@
  * Terminal command execution shared by the VS Code extension runtime.
  */
 
+// Export command orchestrator (shared logic)
+export { findLastIndex } from "@shared/array"
 // Export unified command executor
 export { CommandExecutor } from "./CommandExecutor"
-
-// Export command orchestrator (shared logic)
-export { findLastIndex, orchestrateCommandExecution } from "./CommandOrchestrator"
+export { orchestrateCommandExecution } from "./CommandOrchestrator"
 
 // Export all types from types.ts
 export type {

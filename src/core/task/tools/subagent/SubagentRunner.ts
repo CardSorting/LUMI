@@ -28,6 +28,8 @@ import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@/utils/cost"
 import { isNextGenModelFamily } from "@/utils/model-utils"
 import { TaskState } from "../../TaskState"
+import { canonicalizeAttemptCompletionResultParams } from "../attemptCompletionUtils"
+import { validateSubagentCompletionGates } from "../subagentCompletionGates"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import { SubagentBuilder } from "./SubagentBuilder"
@@ -719,13 +721,20 @@ export class SubagentRunner {
 					const toolCallParams = toToolUseParams(call.input)
 
 					if (toolName === DietCodeDefaultTool.ATTEMPT) {
+						canonicalizeAttemptCompletionResultParams(toolCallParams)
 						if (toolCallParams?.result) {
-							await this.signalCriticalFindingsToSwarm(toolCallParams.result)
+							await this.signalCriticalFindingsToSwarm(toolCallParams.result as string)
 						}
-						const completionResult = toolCallParams.result?.trim()
+						const completionResult = typeof toolCallParams?.result === "string" ? toolCallParams.result.trim() : ""
 						if (!completionResult) {
 							const missingResultError = formatResponse.missingToolParameterError("result")
 							pushSubagentToolResultBlock(toolResultBlocks, call, toolName, missingResultError)
+							continue
+						}
+
+						const gateError = await validateSubagentCompletionGates(this.baseConfig, completionResult)
+						if (gateError) {
+							pushSubagentToolResultBlock(toolResultBlocks, call, toolName, formatResponse.toolError(gateError))
 							continue
 						}
 

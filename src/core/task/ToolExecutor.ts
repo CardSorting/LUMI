@@ -32,14 +32,7 @@ import { createUIHelpers } from "./tools/types/UIHelpers"
 import { ToolDisplayUtils } from "./tools/utils/ToolDisplayUtils"
 import { ToolResultUtils } from "./tools/utils/ToolResultUtils"
 
-export function canonicalizeAttemptCompletionParams(block: ToolUse): boolean {
-	if (block.name === DietCodeDefaultTool.ATTEMPT && !block.params?.result && typeof block.params?.response === "string") {
-		block.params.result = block.params.response
-		return true
-	}
-
-	return false
-}
+export { canonicalizeAttemptCompletionParams } from "./tools/attemptCompletionUtils"
 
 import { ReactivePolicyObserver } from "../policy/ReactivePolicyObserver"
 import { UniversalGuard } from "../policy/UniversalGuard"

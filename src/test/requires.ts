@@ -35,5 +35,19 @@ Module.prototype.require = function (path: string) {
 	return originalRequire.call(this, path)
 }
 
-// Required to have access to String.prototype.toPosix
-import "../utils/path"
+// Required to have access to String.prototype.toPosix (inline to avoid heavy imports in unit tests)
+declare global {
+	interface String {
+		toPosix(): string
+	}
+}
+
+function toPosixPath(p: string): string {
+	return p.replace(/\\/g, "/")
+}
+
+if (!String.prototype.toPosix) {
+	String.prototype.toPosix = function (this: string): string {
+		return toPosixPath(this)
+	}
+}

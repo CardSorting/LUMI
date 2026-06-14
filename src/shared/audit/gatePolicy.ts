@@ -2,6 +2,9 @@ import type { IntentClassification } from "./types"
 
 export const COMPLETION_GATE_SCORE_THRESHOLD = 50
 
+/** Hard stop after this many consecutive completion-gate blocks (prevents unbounded retry loops). */
+export const MAX_COMPLETION_GATE_BLOCK_COUNT = 10
+
 /** Stricter gates for high-risk intent classes (mirrors CI branch protection tiers). */
 export const DEFAULT_INTENT_THRESHOLD_ADJUSTMENTS: Partial<Record<IntentClassification, number>> = {
 	FIX: 10,

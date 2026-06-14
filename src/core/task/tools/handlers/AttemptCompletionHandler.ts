@@ -6,6 +6,7 @@ import { maybeTransitionToReplanMode } from "@core/task/utils/replanModeTransiti
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { telemetryService } from "@services/telemetry"
+import { findLastIndex } from "@shared/array"
 import { buildGateBlockEventSummary, enrichAuditMetadataWithGateDecision } from "@shared/audit/auditGateCatalog"
 import {
 	applyWorkspaceAuditPolicy,
@@ -33,6 +34,12 @@ import { finalizeRoadmapSession } from "@/services/roadmap/RoadmapLifecycle"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
+import {
+	checkCompletionGateCircuitBreaker,
+	markCompletionAttemptFinished,
+	markCompletionGatesPassed,
+	shouldRejectDoubleCheckCompletion,
+} from "../attemptCompletionUtils"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -115,7 +122,10 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "result")
 		}
 
-		config.taskState.consecutiveMistakeCount = 0
+		const circuitBreakerResult = checkCompletionGateCircuitBreaker(config)
+		if (circuitBreakerResult) {
+			return circuitBreakerResult
+		}
 
 		// Roadmap Governance: Kanban Completion Gates
 		const roadmapService = RoadmapService.getInstance()
@@ -136,7 +146,9 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 
 		// Double-check completion: reject attempt_completion calls that haven't been re-verified
-		if (config.doubleCheckCompletionEnabled && !config.taskState.doubleCheckCompletionPending) {
+		if (
+			shouldRejectDoubleCheckCompletion(config.doubleCheckCompletionEnabled, config.taskState.doubleCheckCompletionPending)
+		) {
 			config.taskState.doubleCheckCompletionPending = true
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "completion_result")
 
@@ -172,8 +184,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 					"\n\nIf everything checks out, call attempt_completion again with your final result.",
 			)
 		}
-		// Reset so the next attempt_completion pair triggers double-check again
-		config.taskState.doubleCheckCompletionPending = false
 
 		// V225: Sovereign Forensic Gate (Passive)
 		// We perform a non-blocking check for Knowledge Ledger compliance.
@@ -183,18 +193,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			if (!compliance.compliant && compliance.advisory) {
 				await config.callbacks.say("info", compliance.advisory)
 			}
-		}
-
-		// Show notification if enabled
-		try {
-			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-		} catch (error) {
-			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-			if (error instanceof PreToolUseHookCancellationError) {
-				return formatResponse.toolDenied()
-			}
-			throw error
 		}
 
 		// Show notification if enabled
@@ -330,8 +328,17 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				)
 				config.taskState.lastCompletionAudit = auditMetadata
 			}
+
+			markCompletionGatesPassed(config)
 		} catch (error) {
 			Logger.error("[AttemptCompletionHandler] Failed to run task audit:", error)
+			if (config.auditCompletionGateEnabled) {
+				config.taskState.consecutiveMistakeCount++
+				return formatResponse.toolError(
+					"Task completion blocked: hardening audit evaluation failed. " +
+						"Fix the underlying issue or retry after audit services recover.",
+				)
+			}
 		}
 
 		let commandResult: ToolResponse | undefined
@@ -350,13 +357,6 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				)
 				await config.callbacks.saveCheckpoint(true, completionMessageTs)
 				await addNewChangesFlagToLastCompletionResultMessage()
-				telemetryService.captureTaskCompleted(
-					config.ulid,
-					getTaskCompletionTelemetry(config, auditMetadata, {
-						advisoryMetadata: config.taskState.lastAdvisoryAudit,
-						planBaseline,
-					}),
-				)
 			} else {
 				// we already sent a command message, meaning the complete completion message has also been sent
 				await config.callbacks.saveCheckpoint(true)
@@ -398,6 +398,19 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			}
 			// user didn't reject, but the command may have output
 			commandResult = execCommandResult
+
+			telemetryService.captureTaskCompleted(
+				config.ulid,
+				getTaskCompletionTelemetry(config, auditMetadata, {
+					advisoryMetadata: config.taskState.lastAdvisoryAudit,
+					planBaseline,
+				}),
+			)
+			try {
+				await finalizeRoadmapSession(config.cwd, config.taskId)
+			} catch (error) {
+				Logger.warn("[AttemptCompletionHandler] Roadmap session finalize skipped:", error)
+			}
 		} else {
 			// Send the complete completion_result message (partial was already removed above)
 			const completionMessageTs = await config.callbacks.say(
@@ -436,6 +449,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 		// Run TaskComplete hook BEFORE presenting the "Start New Task" button
 		// At this point we know: task is complete, checkpoint saved, result shown to user
+		markCompletionAttemptFinished(config)
 		await this.runTaskCompleteHook(config, block)
 
 		const { response, text, images, files: completionFiles } = await config.callbacks.ask("completion_result", "", false)

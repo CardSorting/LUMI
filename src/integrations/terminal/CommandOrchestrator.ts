@@ -17,6 +17,7 @@ import { formatResponse } from "@core/prompts/responses"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { TerminalHangStage, TerminalUserInterventionAction, telemetryService } from "@services/telemetry"
 import { DietCodeTempManager } from "@services/temp"
+import { findLastIndex } from "@shared/array"
 import { COMMAND_CANCEL_TOKEN } from "@shared/ExtensionMessage"
 import * as fs from "fs"
 import { Logger } from "@/shared/services/Logger"
@@ -510,16 +511,4 @@ export async function orchestrateCommandExecution(
 		exitCode: completionDetails?.exitCode,
 		signal: completionDetails?.signal,
 	}
-}
-
-/**
- * Helper to find last index matching a predicate
- */
-export function findLastIndex<T>(array: T[], predicate: (item: T) => boolean): number {
-	for (let i = array.length - 1; i >= 0; i--) {
-		if (predicate(array[i])) {
-			return i
-		}
-	}
-	return -1
 }
