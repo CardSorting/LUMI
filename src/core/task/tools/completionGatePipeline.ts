@@ -19,11 +19,10 @@ import {
 	detectDuplicateCompletionSubmission,
 	getCompletionGateCircuitBreakerError,
 	getLatestCheckpointHashFromMessages,
+	mapCompletionReasonToPreflightStage,
 	markCompletionGatesPassed,
-	recordBlockedCompletionResultFingerprint,
 	recordCompletionAttemptTime,
-	recordCompletionBlockReason,
-	recordCompletionGateBlock,
+	recordCompletionGateBlockEvent,
 	recordCompletionPreflightFailure,
 	validateCompletionAttemptCooldown,
 	validateCompletionDemoCommand,
@@ -59,21 +58,30 @@ export type CompletionAuditGateResult =
 	| { status: "skipped" }
 	| { status: "error"; message: string }
 
-function emitCompletionPreflightTelemetry(config: TaskConfig, rawMessage: string): void {
+function emitCompletionPreflightTelemetry(
+	config: TaskConfig,
+	reason: ReturnType<typeof classifyCompletionPreflightReason>,
+	blockCount: number,
+): void {
 	telemetryService.captureCompletionPreflightBlocked(config.ulid, {
 		taskId: config.taskId,
-		reason: classifyCompletionPreflightReason(rawMessage),
-		blockCount: config.taskState.completionGateBlockCount ?? 0,
+		reason,
+		blockCount,
 		consecutiveMistakes: config.taskState.consecutiveMistakeCount,
 		attemptCount: config.taskState.completionAttemptCount ?? 0,
 		lastReason: config.taskState.lastCompletionBlockReason,
+		failedStage: mapCompletionReasonToPreflightStage(reason),
 	})
 }
 
-function finalizePreflightError(rawMessage: string, config: TaskConfig): string {
+function finalizePreflightError(
+	rawMessage: string,
+	config: TaskConfig,
+	context?: { result?: string; checkpointHash?: string },
+): string {
 	const reason = classifyCompletionPreflightReason(rawMessage)
-	recordCompletionBlockReason(config, reason)
-	emitCompletionPreflightTelemetry(config, rawMessage)
+	const blockCount = recordCompletionGateBlockEvent(config, reason, context)
+	emitCompletionPreflightTelemetry(config, reason, blockCount)
 	return buildCompletionAgentErrorMessage(rawMessage, config)
 }
 
@@ -97,59 +105,62 @@ export async function runCompletionPreflightChecks(
 	}
 
 	const checkpointHash = getLatestCheckpointHashFromMessages(config)
+	recordCompletionAttemptTime(config)
+
+	const gateContext = { result: params.result, checkpointHash }
 
 	const qualityError = checks.validateQuality(params.result)
 	if (qualityError) {
 		checks.onFailure(config)
-		return finalizePreflightError(qualityError, config)
+		return finalizePreflightError(qualityError, config, gateContext)
 	}
 
 	const checklistInResultError = validateCompletionResultExcludesChecklist(params.result)
 	if (checklistInResultError) {
 		checks.onFailure(config)
-		return finalizePreflightError(checklistInResultError, config)
+		return finalizePreflightError(checklistInResultError, config, gateContext)
 	}
 
 	const minLengthError = validateCompletionResultMinLength(params.result)
 	if (minLengthError) {
 		checks.onFailure(config)
-		return finalizePreflightError(minLengthError, config)
+		return finalizePreflightError(minLengthError, config, gateContext)
 	}
 
 	const maxLengthError = validateCompletionResultMaxLength(params.result)
 	if (maxLengthError) {
 		checks.onFailure(config)
-		return finalizePreflightError(maxLengthError, config)
+		return finalizePreflightError(maxLengthError, config, gateContext)
 	}
 
 	const taskProgressRequiredError = validateCompletionTaskProgressRequired(config, params.taskProgress)
 	if (taskProgressRequiredError) {
 		checks.onFailure(config)
-		return finalizePreflightError(taskProgressRequiredError, config)
+		return finalizePreflightError(taskProgressRequiredError, config, gateContext)
 	}
 
 	const taskProgressError = validateCompletionTaskProgress(params.taskProgress)
 	if (taskProgressError) {
 		checks.onFailure(config)
-		return finalizePreflightError(taskProgressError, config)
+		return finalizePreflightError(taskProgressError, config, gateContext)
 	}
 
 	const taskProgressAlignError = validateTaskProgressAlignsWithFocusChain(config, params.taskProgress)
 	if (taskProgressAlignError) {
 		checks.onFailure(config)
-		return finalizePreflightError(taskProgressAlignError, config)
+		return finalizePreflightError(taskProgressAlignError, config, gateContext)
 	}
 
 	const focusChainError = validateFocusChainComplete(config)
 	if (focusChainError) {
 		checks.onFailure(config)
-		return finalizePreflightError(focusChainError, config)
+		return finalizePreflightError(focusChainError, config, gateContext)
 	}
 
 	const cooldownError = validateCompletionAttemptCooldown(config)
 	if (cooldownError) {
 		checks.onFailure(config)
-		return finalizePreflightError(cooldownError, config)
+		return finalizePreflightError(cooldownError, config, gateContext)
 	}
 
 	const duplicateError = detectDuplicateCompletionSubmission(config, params.result, {
@@ -157,31 +168,24 @@ export async function runCompletionPreflightChecks(
 	})
 	if (duplicateError) {
 		checks.onFailure(config)
-		return finalizePreflightError(duplicateError, config)
+		return finalizePreflightError(duplicateError, config, gateContext)
 	}
-
-	recordCompletionAttemptTime(config)
 
 	const demoCommandError = validateCompletionDemoCommand(params.command)
 	if (demoCommandError) {
 		checks.onFailure(config)
-		return finalizePreflightError(demoCommandError, config)
+		return finalizePreflightError(demoCommandError, config, gateContext)
 	}
 
-	const roadmapError = await evaluateRoadmapCompletionGateError(config, logPrefix, params.result, checkpointHash)
+	const roadmapError = await evaluateRoadmapCompletionGateError(config, logPrefix)
 	if (roadmapError) {
-		return finalizePreflightError(roadmapError, config)
+		return finalizePreflightError(roadmapError, config, gateContext)
 	}
 
 	return null
 }
 
-export async function evaluateRoadmapCompletionGateError(
-	config: TaskConfig,
-	logPrefix: string,
-	result?: string,
-	checkpointHash?: string,
-): Promise<string | null> {
+export async function evaluateRoadmapCompletionGateError(config: TaskConfig, logPrefix: string): Promise<string | null> {
 	const circuitBreakerMessage = getCompletionGateCircuitBreakerError(config)
 	if (circuitBreakerMessage) {
 		return circuitBreakerMessage
@@ -196,20 +200,12 @@ export async function evaluateRoadmapCompletionGateError(
 		const block = await evaluateRoadmapCompletionBlock(config.cwd)
 		if (block.blocked) {
 			config.taskState.consecutiveMistakeCount++
-			recordCompletionGateBlock(config)
-			if (result) {
-				recordBlockedCompletionResultFingerprint(config, result, checkpointHash)
-			}
 			return block.message || failClosedCompletionMessage()
 		}
 	} catch (error) {
 		Logger.error(`[${logPrefix}] Failed to evaluate Roadmap Governance Gates:`, error)
 		if (roadmapService.getConfig().fail_closed_completion_gates) {
 			config.taskState.consecutiveMistakeCount++
-			recordCompletionGateBlock(config)
-			if (result) {
-				recordBlockedCompletionResultFingerprint(config, result, checkpointHash)
-			}
 			return failClosedCompletionMessage()
 		}
 	}
@@ -245,9 +241,10 @@ export async function evaluateCompletionAuditGate(
 
 		if (gateDecision.blocked) {
 			config.taskState.consecutiveMistakeCount++
-			const blockCount = recordCompletionGateBlock(config)
-			recordCompletionBlockReason(config, "audit_gate")
-			recordBlockedCompletionResultFingerprint(config, params.result, checkpointHash)
+			const blockCount = recordCompletionGateBlockEvent(config, "audit_gate", {
+				result: params.result,
+				checkpointHash,
+			})
 			telemetryService.captureCompletionPreflightBlocked(config.ulid, {
 				taskId: config.taskId,
 				reason: "audit_gate",
@@ -255,6 +252,7 @@ export async function evaluateCompletionAuditGate(
 				consecutiveMistakes: config.taskState.consecutiveMistakeCount,
 				attemptCount: config.taskState.completionAttemptCount ?? 0,
 				lastReason: "audit_gate",
+				failedStage: "audit",
 			})
 			const message = buildCompletionAgentErrorMessage(
 				appendCompletionGateRetryGuidance(
@@ -301,7 +299,7 @@ export async function evaluateCompletionAuditGate(
 	} catch (error) {
 		Logger.error(`[${params.logPrefix}] Failed to run completion audit gate:`, error)
 		config.taskState.consecutiveMistakeCount++
-		recordCompletionBlockReason(config, "audit_error")
+		recordCompletionGateBlockEvent(config, "audit_error")
 		telemetryService.captureCompletionPreflightBlocked(config.ulid, {
 			taskId: config.taskId,
 			reason: "audit_error",
@@ -309,6 +307,7 @@ export async function evaluateCompletionAuditGate(
 			consecutiveMistakes: config.taskState.consecutiveMistakeCount,
 			attemptCount: config.taskState.completionAttemptCount ?? 0,
 			lastReason: "audit_error",
+			failedStage: "audit",
 		})
 		return {
 			status: "error",

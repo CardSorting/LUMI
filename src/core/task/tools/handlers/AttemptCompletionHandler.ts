@@ -30,7 +30,7 @@ import {
 	formatCompletionToolError,
 	markCompletionAttemptFinished,
 	markProactiveCompletionGuidanceEmitted,
-	recordCompletionBlockReason,
+	recordCompletionGateBlockEvent,
 	recordCompletionPreflightFailure,
 	shouldEmitProactiveCompletionGuidance,
 	shouldRejectDoubleCheckCompletion,
@@ -168,7 +168,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				Logger.warn("[AttemptCompletionHandler] Pre-completion audit preview failed:", error)
 			}
 
-			recordCompletionBlockReason(config, "double_check")
+			recordCompletionGateBlockEvent(config, "double_check", { result })
 			return formatCompletionToolError(
 				buildDoubleCheckReverifyMessage({
 					taskSection,

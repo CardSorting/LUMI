@@ -25,7 +25,9 @@ export type CompletionPreflightReason =
 	| "duplicate_submission"
 	| "retry_cooldown"
 	| "focus_chain_incomplete"
+	| "task_progress_required"
 	| "task_progress_incomplete"
+	| "task_progress_align"
 	| "circuit_breaker"
 	| "roadmap_gate"
 	| "audit_gate"
@@ -51,7 +53,11 @@ export const COMPLETION_PREFLIGHT_STAGES = [
 	"duplicate",
 	"demo_command",
 	"roadmap",
+	"audit",
+	"double_check",
 ] as const
+
+export type CompletionPreflightStage = (typeof COMPLETION_PREFLIGHT_STAGES)[number] | "audit" | "double_check"
 
 /** Exponential backoff delay — base * 2^(blocks-1), capped (mirrors AWS/Azure retry policies). */
 export function getCompletionRetryCooldownMs(blockCount: number): number {
@@ -257,7 +263,7 @@ export function validateCompletionResultMaxLength(result: string): string | null
 }
 
 /** Maps block reason to pipeline stage for structured status (mirrors CI job stage names). */
-export function mapCompletionReasonToPreflightStage(reason: CompletionPreflightReason): string {
+export function mapCompletionReasonToPreflightStage(reason: CompletionPreflightReason): CompletionPreflightStage {
 	switch (reason) {
 		case "circuit_breaker":
 			return "circuit_breaker"
@@ -271,8 +277,12 @@ export function mapCompletionReasonToPreflightStage(reason: CompletionPreflightR
 			return "max_length"
 		case "checklist_in_result":
 			return "checklist_in_result"
+		case "task_progress_required":
+			return "task_progress_required"
 		case "task_progress_incomplete":
 			return "task_progress_complete"
+		case "task_progress_align":
+			return "task_progress_align"
 		case "focus_chain_incomplete":
 			return "focus_chain"
 		case "retry_cooldown":
@@ -291,92 +301,125 @@ export function mapCompletionReasonToPreflightStage(reason: CompletionPreflightR
 	}
 }
 
-/** Numbered runbook steps per block reason — mirrors SRE incident playbooks. */
-export function buildCompletionGatePlaybook(reason: CompletionPreflightReason): string {
-	const stepsByReason: Partial<Record<CompletionPreflightReason, string[]>> = {
-		empty_result: [
-			"Write a 1–2 paragraph summary of completed work and outcomes.",
-			"Keep checklists in task_progress, not in result.",
-			"Retry attempt_completion with the updated result.",
-		],
-		result_too_brief: [
-			"Expand result to cover what changed, why, and verification outcomes.",
-			"Aim for at least 40 characters — typically 1–2 paragraphs.",
-			"Retry attempt_completion without re-submitting an unchanged summary.",
-		],
-		result_too_long: [
-			"Trim result to a concise 1–2 paragraph executive summary.",
-			"Move detailed checklists and file lists to task_progress.",
-			"Retry attempt_completion with the shortened result.",
-		],
-		checklist_in_result: [
-			"Remove markdown checklist lines (- [ ] / - [x]) from result.",
-			"Pass the full completed checklist in task_progress instead.",
-			"Keep result as a prose summary only.",
-		],
-		unfinished_markers: [
-			"Search the workspace for TODO/FIXME/placeholder markers and resolve them.",
-			"Run tests or verification commands to confirm work is finished.",
-			"Retry with a summary that reflects completed — not pending — work.",
-		],
-		invalid_tone: [
-			"Rewrite the result as a definitive completion statement.",
-			"Remove questions, hedging, or 'let me know if' phrasing.",
-			"Retry attempt_completion with the revised tone.",
-		],
-		duplicate_submission: [
-			"Make substantive fixes in the workspace — do not retry the same summary.",
-			"Verify changes with git status or tests before retrying.",
-			"Wait for cooldown to expire if no workspace changes are possible yet.",
-		],
-		retry_cooldown: [
-			"Use the cooldown window to fix violations listed above.",
-			"Run verification commands and update scratchpad.md with fixes.",
-			"Retry attempt_completion after cooldown_remaining_ms reaches 0.",
-		],
-		focus_chain_incomplete: [
-			"Open the focus chain checklist and mark every item [x].",
-			"Use update_todo_list if items need status updates.",
-			"Retry attempt_completion with matching task_progress.",
-		],
-		task_progress_incomplete: [
-			"Pass task_progress with every focus chain item marked [x].",
-			"Ensure task_progress item count matches the focus chain.",
-			"Keep result as a summary only — no checklist lines.",
-		],
-		invalid_demo_command: [
-			"Replace echo/cat/printf/type with a command that demonstrates real behavior.",
-			"Examples: start a dev server, run tests with output, or open a UI.",
-			"Retry attempt_completion with the live demo command.",
-		],
-		roadmap_gate: [
-			"Run the roadmap governance command suggested in the block message.",
-			"Confirm gates pass locally before retrying completion.",
-			"Update result to reflect governance clearance.",
-		],
-		audit_gate: [
-			"Read critical audit violations and fix root causes in code.",
-			"Run tests and re-verify behavior changed.",
-			"Retry with an updated result summary reflecting fixes.",
-		],
-		audit_error: [
-			"Verify workspace state manually (git status, tests).",
-			"Wait for audit services to recover if infrastructure failed.",
-			"Retry attempt_completion after confirming stability.",
-		],
-		double_check: [
-			"Re-read the verification checklist in the block message.",
-			"Confirm each item against the actual workspace state.",
-			"Call attempt_completion again after verification.",
-		],
+const COMPLETION_GATE_PLAYBOOK_STEPS: Partial<Record<CompletionPreflightReason, readonly string[]>> = {
+	empty_result: [
+		"Write a 1–2 paragraph summary of completed work and outcomes.",
+		"Keep checklists in task_progress, not in result.",
+		"Retry attempt_completion with the updated result.",
+	],
+	result_too_brief: [
+		"Expand result to cover what changed, why, and verification outcomes.",
+		"Aim for at least 40 characters — typically 1–2 paragraphs.",
+		"Retry attempt_completion without re-submitting an unchanged summary.",
+	],
+	result_too_long: [
+		"Trim result to a concise 1–2 paragraph executive summary.",
+		"Move detailed checklists and file lists to task_progress.",
+		"Retry attempt_completion with the shortened result.",
+	],
+	checklist_in_result: [
+		"Remove markdown checklist lines (- [ ] / - [x]) from result.",
+		"Pass the full completed checklist in task_progress instead.",
+		"Keep result as a prose summary only.",
+	],
+	unfinished_markers: [
+		"Search the workspace for TODO/FIXME/placeholder markers and resolve them.",
+		"Run tests or verification commands to confirm work is finished.",
+		"Retry with a summary that reflects completed — not pending — work.",
+	],
+	invalid_tone: [
+		"Rewrite the result as a definitive completion statement.",
+		"Remove questions, hedging, or 'let me know if' phrasing.",
+		"Retry attempt_completion with the revised tone.",
+	],
+	duplicate_submission: [
+		"Make substantive fixes in the workspace — do not retry the same summary.",
+		"Verify changes with git status or tests before retrying.",
+		"Wait for cooldown to expire if no workspace changes are possible yet.",
+	],
+	retry_cooldown: [
+		"Use the cooldown window to fix violations listed above.",
+		"Run verification commands and update scratchpad.md with fixes.",
+		"Retry attempt_completion after cooldown_remaining_ms reaches 0.",
+	],
+	focus_chain_incomplete: [
+		"Open the focus chain checklist and mark every item [x].",
+		"Use update_todo_list if items need status updates.",
+		"Retry attempt_completion with matching task_progress.",
+	],
+	task_progress_required: [
+		"Pass task_progress with the full focus chain checklist.",
+		"Mark every item [x] before completing.",
+		"Retry attempt_completion with both result and task_progress.",
+	],
+	task_progress_incomplete: [
+		"Pass task_progress with every focus chain item marked [x].",
+		"Ensure task_progress item count matches the focus chain.",
+		"Keep result as a summary only — no checklist lines.",
+	],
+	task_progress_align: [
+		"Include every focus chain item in task_progress, in the same order.",
+		"Mark all items [x] in task_progress.",
+		"Retry attempt_completion with aligned task_progress.",
+	],
+	invalid_demo_command: [
+		"Replace echo/cat/printf/type with a command that demonstrates real behavior.",
+		"Examples: start a dev server, run tests with output, or open a UI.",
+		"Retry attempt_completion with the live demo command.",
+	],
+	roadmap_gate: [
+		"Run the roadmap governance command suggested in the block message.",
+		"Confirm gates pass locally before retrying completion.",
+		"Update result to reflect governance clearance.",
+	],
+	audit_gate: [
+		"Read critical audit violations and fix root causes in code.",
+		"Run tests and re-verify behavior changed.",
+		"Retry with an updated result summary reflecting fixes.",
+	],
+	audit_error: [
+		"Verify workspace state manually (git status, tests).",
+		"Wait for audit services to recover if infrastructure failed.",
+		"Retry attempt_completion after confirming stability.",
+	],
+	double_check: [
+		"Re-read the verification checklist in the block message.",
+		"Confirm each item against the actual workspace state.",
+		"Call attempt_completion again after verification.",
+	],
+}
+
+export function getCompletionGatePlaybookSteps(reason: CompletionPreflightReason): readonly string[] {
+	return COMPLETION_GATE_PLAYBOOK_STEPS[reason] ?? []
+}
+
+/** Machine-parseable playbook — mirrors structured CI remediation blocks. */
+export function buildCompletionGatePlaybookBlock(reason: CompletionPreflightReason): string {
+	const steps = getCompletionGatePlaybookSteps(reason)
+	if (steps.length === 0) {
+		return ""
 	}
 
-	const steps = stepsByReason[reason]
-	if (!steps?.length) {
+	const stepElements = steps.map((step, index) => `<step order="${index + 1}">${step}</step>`).join("")
+	return `<completion_gate_playbook reason="${reason}">${stepElements}</completion_gate_playbook>`
+}
+
+/** Numbered runbook steps per block reason — mirrors SRE incident playbooks. */
+export function buildCompletionGatePlaybook(reason: CompletionPreflightReason): string {
+	const steps = getCompletionGatePlaybookSteps(reason)
+	if (steps.length === 0) {
 		return ""
 	}
 
 	return `**Recovery playbook:**\n${steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}`
+}
+
+/** Pipeline stage reference for proactive agent guidance. */
+export function buildCompletionGatePipelineBrief(failedStage?: CompletionPreflightStage): string {
+	const stages = [...COMPLETION_PREFLIGHT_STAGES, "audit"] as const
+	const stageList = stages.join(" → ")
+	const failedHint = failedStage ? ` Failed at: \`${failedStage}\`.` : ""
+	return `**Gate pipeline:** ${stageList}.${failedHint}`
 }
 
 export function shouldEmitProactiveCompletionGuidance(config: TaskConfig): boolean {
@@ -394,13 +437,26 @@ export function markProactiveCompletionGuidanceEmitted(config: TaskConfig): void
 export function buildProactiveCompletionGuidance(config: TaskConfig): string {
 	const blockCount = config.taskState.completionGateBlockCount ?? 0
 	const remaining = MAX_COMPLETION_GATE_BLOCK_COUNT - blockCount
+	const lastReason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
+	const failedStage = lastReason ? mapCompletionReasonToPreflightStage(lastReason) : undefined
 	const breatherHint = buildCompletionBreatherHint(config)
+	const escalationBrief = buildCompletionGateEscalationBrief(config)
 	const parts = [
 		`⚠️ **Completion gate advisory (${blockCount}/${MAX_COMPLETION_GATE_BLOCK_COUNT})** — ${remaining} attempt(s) before hard stop.`,
 		buildCompletionGateStatusBrief(config),
+		buildCompletionGatePipelineBrief(failedStage),
 	]
+	if (lastReason) {
+		const playbookBlock = buildCompletionGatePlaybookBlock(lastReason)
+		if (playbookBlock) {
+			parts.push(playbookBlock)
+		}
+	}
 	if (breatherHint) {
 		parts.push(breatherHint)
+	}
+	if (escalationBrief) {
+		parts.push(escalationBrief)
 	}
 	return parts.join("\n\n")
 }
@@ -415,8 +471,10 @@ export function classifyCompletionPreflightReason(message: string): CompletionPr
 	if (message.includes("ends with a question") || message.includes("solicits further conversation")) return "invalid_tone"
 	if (message.includes("Duplicate completion submission")) return "duplicate_submission"
 	if (message.includes("Completion throttled")) return "retry_cooldown"
+	if (message.includes("but focus chain has")) return "task_progress_align"
 	if (message.includes("focus chain has")) return "focus_chain_incomplete"
-	if (message.includes("task_progress is required") || message.includes("task_progress has")) return "task_progress_incomplete"
+	if (message.includes("task_progress is required")) return "task_progress_required"
+	if (message.includes("task_progress has")) return "task_progress_incomplete"
 	if (message.includes("maximum completion gate retries")) return "circuit_breaker"
 	if (message.includes("re-verify your work")) return "double_check"
 	if (message.includes("Roadmap") || message.includes("roadmap")) return "roadmap_gate"
@@ -428,7 +486,6 @@ export function classifyCompletionPreflightReason(message: string): CompletionPr
 }
 
 export function recordCompletionAttemptTime(config: TaskConfig): void {
-	config.taskState.lastCompletionAttemptAt = Date.now()
 	config.taskState.completionAttemptCount = (config.taskState.completionAttemptCount ?? 0) + 1
 }
 
@@ -548,6 +605,8 @@ export function buildCompletionGateStatusBrief(config: TaskConfig): string {
 	const lastReason = config.taskState.lastCompletionBlockReason ?? "none"
 	const failedStage =
 		lastReason === "none" ? "none" : mapCompletionReasonToPreflightStage(lastReason as CompletionPreflightReason)
+	const nextAction =
+		lastReason === "none" ? "none" : (buildCompletionPreflightRecoveryHint(lastReason as CompletionPreflightReason) ?? "none")
 	const currentHash = getLatestCheckpointHashFromMessages(config)
 	const workspaceChanged = hasWorkspaceChangedSinceGateBlock(config, currentHash)
 
@@ -555,8 +614,13 @@ export function buildCompletionGateStatusBrief(config: TaskConfig): string {
 		`<completion_gate_status blocks="${blockCount}" remaining="${remaining}" ` +
 		`double_check="${doubleCheck}" consecutive_mistakes="${mistakes}" attempt="${attempt}" ` +
 		`cooldown_remaining_ms="${cooldownRemaining}" backoff_ms="${backoffMs}" last_reason="${lastReason}" ` +
-		`failed_stage="${failedStage}" workspace_changed="${workspaceChanged ? "true" : "false"}" />`
+		`failed_stage="${failedStage}" workspace_changed="${workspaceChanged ? "true" : "false"}" ` +
+		`next_action="${escapeCompletionGateXmlAttribute(nextAction)}" />`
 	)
+}
+
+function escapeCompletionGateXmlAttribute(value: string): string {
+	return value.replace(/"/g, "&quot;")
 }
 
 /** Critical urgency banner when approaching hard stop (mirrors PagerDuty escalation tiers). */
@@ -615,8 +679,12 @@ export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflight
 			return "Use the cooldown window to fix violations and run verification commands."
 		case "focus_chain_incomplete":
 			return "Mark all focus chain items [x] via update_todo_list before completing."
+		case "task_progress_required":
+			return "Pass task_progress with the full focus chain checklist, all items [x]."
 		case "task_progress_incomplete":
 			return "Pass task_progress with every checklist item marked [x]."
+		case "task_progress_align":
+			return "Include every focus chain item in task_progress with matching labels, all [x]."
 		case "circuit_breaker":
 			return "Stop calling attempt_completion — start a new task after fixing root causes."
 		case "roadmap_gate":
@@ -642,6 +710,10 @@ export function buildCompletionGateRecoveryBlock(reason: CompletionPreflightReas
 export function buildCompletionAgentErrorMessage(message: string, config: TaskConfig): string {
 	const reason = classifyCompletionPreflightReason(message)
 	const parts = [message, buildCompletionGateStatusBrief(config), buildCompletionGateRecoveryBlock(reason)]
+	const playbookBlock = reason !== "circuit_breaker" ? buildCompletionGatePlaybookBlock(reason) : ""
+	if (playbookBlock) {
+		parts.push(playbookBlock)
+	}
 	const playbook = reason !== "circuit_breaker" ? buildCompletionGatePlaybook(reason) : ""
 	if (playbook && !message.includes("Recovery playbook")) {
 		parts.push(playbook)
@@ -774,6 +846,29 @@ export function checkCompletionGateCircuitBreaker(config: TaskConfig): ToolRespo
 export function recordCompletionGateBlock(config: TaskConfig): number {
 	config.taskState.completionGateBlockCount = (config.taskState.completionGateBlockCount ?? 0) + 1
 	return config.taskState.completionGateBlockCount ?? 0
+}
+
+/**
+ * Unified gate block event — increments counter, records fingerprint, and reason.
+ * Mirrors idempotent event-sourced gate transitions in production CI systems.
+ */
+export function recordCompletionGateBlockEvent(
+	config: TaskConfig,
+	reason: CompletionPreflightReason,
+	options?: { result?: string; checkpointHash?: string },
+): number {
+	if (reason === "circuit_breaker") {
+		recordCompletionBlockReason(config, reason)
+		return config.taskState.completionGateBlockCount ?? 0
+	}
+
+	const blockCount = recordCompletionGateBlock(config)
+	config.taskState.lastCompletionAttemptAt = Date.now()
+	if (options?.result) {
+		recordBlockedCompletionResultFingerprint(config, options.result, options.checkpointHash)
+	}
+	recordCompletionBlockReason(config, reason)
+	return blockCount
 }
 
 export function markCompletionGatesPassed(config: TaskConfig): void {

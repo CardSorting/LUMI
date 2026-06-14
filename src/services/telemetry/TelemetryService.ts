@@ -818,6 +818,7 @@ export class TelemetryService {
 			consecutiveMistakes: number
 			attemptCount?: number
 			lastReason?: string
+			failedStage?: string
 		},
 	) {
 		this.capture({
@@ -830,6 +831,7 @@ export class TelemetryService {
 				consecutiveMistakes: args.consecutiveMistakes,
 				attemptCount: args.attemptCount ?? 0,
 				lastReason: args.lastReason ?? args.reason,
+				failedStage: args.failedStage,
 			},
 		})
 	}

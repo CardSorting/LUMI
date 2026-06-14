@@ -83,6 +83,17 @@ describe("completionGatePipeline", () => {
 		error.should.containEql('reason="result_too_long"')
 	})
 
+	it("increments block count on preflight quality failure", async () => {
+		const error = await runCompletionPreflightChecks(configWithState(taskState), { result: "   " }, "Test", {
+			validateQuality: validateCompletionResultQuality,
+			onFailure: recordCompletionPreflightFailure,
+		})
+		should.exist(error)
+		taskState.completionGateBlockCount.should.equal(1)
+		taskState.lastCompletionBlockReason.should.equal("empty_result")
+		;(taskState.completionAttemptCount ?? 0).should.equal(1)
+	})
+
 	it("runCompletionGateFlow passes when audit gate is disabled", async () => {
 		const flow = await runCompletionGateFlow(configWithState(taskState), { result: VALID_RESULT }, "Test")
 		flow.status.should.equal("passed")

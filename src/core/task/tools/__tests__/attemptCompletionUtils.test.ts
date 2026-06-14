@@ -12,7 +12,9 @@ import {
 	appendCompletionGateRetryGuidance,
 	buildCompletionAgentErrorMessage,
 	buildCompletionGateEscalationBrief,
+	buildCompletionGatePipelineBrief,
 	buildCompletionGatePlaybook,
+	buildCompletionGatePlaybookBlock,
 	buildCompletionGateRecoveryBlock,
 	buildCompletionGateRetryGuidance,
 	buildCompletionPreflightRecoveryHint,
@@ -36,6 +38,7 @@ import {
 	recordCompletionAttemptTime,
 	recordCompletionBlockReason,
 	recordCompletionGateBlock,
+	recordCompletionGateBlockEvent,
 	shouldEmitProactiveCompletionGuidance,
 	shouldRejectDoubleCheckCompletion,
 	validateCompletionAttemptCooldown,
@@ -179,6 +182,8 @@ describe("attemptCompletionUtils", () => {
 		it("maps block reasons to pipeline stage names", () => {
 			mapCompletionReasonToPreflightStage("result_too_long").should.equal("max_length")
 			mapCompletionReasonToPreflightStage("checklist_in_result").should.equal("checklist_in_result")
+			mapCompletionReasonToPreflightStage("task_progress_required").should.equal("task_progress_required")
+			mapCompletionReasonToPreflightStage("task_progress_align").should.equal("task_progress_align")
 			mapCompletionReasonToPreflightStage("audit_gate").should.equal("audit")
 			mapCompletionReasonToPreflightStage("double_check").should.equal("double_check")
 		})
@@ -191,6 +196,42 @@ describe("attemptCompletionUtils", () => {
 			playbook.should.containEql("1.")
 			playbook.should.containEql("task_progress")
 			buildCompletionGatePlaybook("circuit_breaker").should.equal("")
+		})
+	})
+
+	describe("buildCompletionGatePlaybookBlock", () => {
+		it("emits machine-parseable playbook XML", () => {
+			const block = buildCompletionGatePlaybookBlock("retry_cooldown")
+			block.should.containEql('<completion_gate_playbook reason="retry_cooldown"')
+			block.should.containEql('<step order="1">')
+		})
+	})
+
+	describe("buildCompletionGatePipelineBrief", () => {
+		it("lists pipeline stages and highlights failed stage", () => {
+			buildCompletionGatePipelineBrief("quality").should.containEql("Gate pipeline")
+			buildCompletionGatePipelineBrief("quality").should.containEql("Failed at: `quality`")
+		})
+	})
+
+	describe("recordCompletionGateBlockEvent", () => {
+		it("increments block count, records reason, fingerprint, and block timestamp", () => {
+			recordCompletionGateBlockEvent(configWithState(taskState), "result_too_brief", {
+				result: "too short",
+				checkpointHash: "abc",
+			})
+			taskState.completionGateBlockCount.should.equal(1)
+			taskState.lastCompletionBlockReason.should.equal("result_too_brief")
+			should.exist(taskState.lastCompletionAttemptAt)
+			should.exist(taskState.lastBlockedCompletionResultFingerprint)
+			taskState.lastGateBlockCheckpointHash.should.equal("abc")
+		})
+
+		it("does not increment block count for circuit breaker", () => {
+			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
+			recordCompletionGateBlockEvent(configWithState(taskState), "circuit_breaker")
+			taskState.completionGateBlockCount.should.equal(MAX_COMPLETION_GATE_BLOCK_COUNT)
+			taskState.lastCompletionBlockReason.should.equal("circuit_breaker")
 		})
 	})
 
@@ -332,6 +373,10 @@ describe("attemptCompletionUtils", () => {
 			classifyCompletionPreflightReason("Duplicate completion submission").should.equal("duplicate_submission")
 			classifyCompletionPreflightReason("Completion throttled").should.equal("retry_cooldown")
 			classifyCompletionPreflightReason("must not contain checklist").should.equal("checklist_in_result")
+			classifyCompletionPreflightReason("task_progress is required when").should.equal("task_progress_required")
+			classifyCompletionPreflightReason("task_progress has 1 item(s) but focus chain has 3").should.equal(
+				"task_progress_align",
+			)
 		})
 	})
 
@@ -368,7 +413,9 @@ describe("attemptCompletionUtils", () => {
 				configWithState(taskState),
 			)
 			message.should.containEql('failed_stage="max_length"')
+			message.should.containEql("<completion_gate_playbook")
 			message.should.containEql("Recovery playbook")
+			message.should.containEql('next_action="')
 		})
 	})
 
