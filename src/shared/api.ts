@@ -4875,4 +4875,46 @@ export const nousResearchModels = {
 		description:
 			"DeepSeek-V4-Flash is an efficiency-optimized Mixture-of-Experts (MoE) model designed for fast, cost-effective inference with a 1M token context window.",
 	},
+	"deepseek/deepseek-v4-pro": {
+		maxTokens: 65_536,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 0.435,
+		outputPrice: 0.87,
+		description:
+			"DeepSeek-V4-Pro is a flagship MoE model with 1M context, designed for advanced reasoning, coding, and long-horizon agent workflows.",
+	},
+	"qwen/qwen3.7-max": {
+		maxTokens: 65_536,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		inputPrice: 1.25,
+		outputPrice: 3.75,
+		description:
+			"Qwen3.7-Max is Alibaba's flagship model for agent-centric workloads, with strengths in coding, productivity tasks, and long-horizon autonomous execution.",
+	},
+	"minimax/minimax-m3": {
+		maxTokens: 524_288,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: false,
+		inputPrice: 0.3,
+		outputPrice: 1.2,
+		description:
+			"MiniMax-M3 is a multimodal foundation model with a 1M context window, built for long-horizon agentic work, coding, and tool use.",
+	},
+	"moonshotai/kimi-k2.7-code": {
+		maxTokens: 32_768,
+		contextWindow: 262_144,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 0.75,
+		outputPrice: 3.5,
+		description:
+			"Kimi K2.7 Code is a coding-focused model with 262K context, multimodal inputs, and always-on thinking mode for long-horizon agentic programming tasks.",
+	},
 } as const satisfies Record<string, ModelInfo>
