@@ -8,7 +8,12 @@ import {
 	recordCompletionPreflightFailure,
 	validateCompletionResultQuality,
 } from "../attemptCompletionUtils"
-import { PREFLIGHT_STAGE_RUNNERS, runCompletionGateFlow, runCompletionPreflightChecks } from "../completionGatePipeline"
+import {
+	evaluateCompletionGateReadiness,
+	PREFLIGHT_STAGE_RUNNERS,
+	runCompletionGateFlow,
+	runCompletionPreflightChecks,
+} from "../completionGatePipeline"
 import type { TaskConfig } from "../types/TaskConfig"
 
 const VALID_RESULT =
@@ -18,15 +23,11 @@ const VALID_RESULT =
 function configWithState(taskState: TaskState): TaskConfig {
 	return {
 		taskState,
-		ulid: "test-ulid",
-		taskId: "test-task",
-		cwd: "/tmp",
-		auditCompletionGateEnabled: false,
 		focusChainSettings: { enabled: false },
 		messageState: {
 			getDietCodeMessages: () => [],
 		},
-	} as TaskConfig
+	} as unknown as TaskConfig
 }
 
 describe("completionGatePipeline", () => {
@@ -93,10 +94,13 @@ describe("completionGatePipeline", () => {
 			onFailure: recordCompletionPreflightFailure,
 		})
 		should.exist(error)
-		taskState.completionGateBlockCount.should.equal(1)
-		taskState.lastCompletionBlockReason.should.equal("empty_result")
+		if (error === null) {
+			throw new Error("expected preflight quality failure")
+		}
+		;(taskState.completionGateBlockCount ?? 0).should.equal(1)
+		taskState.lastCompletionBlockReason?.should.equal("empty_result")
 		;(taskState.completionAttemptCount ?? 0).should.equal(1)
-		error!.should.containEql("<completion_gate_envelope")
+		error.should.containEql("<completion_gate_envelope")
 	})
 
 	it("runCompletionGateFlow passes when audit gate is disabled", async () => {
@@ -111,5 +115,12 @@ describe("completionGatePipeline", () => {
 			COMPLETION_PREFLIGHT_STAGES.indexOf("roadmap"),
 		)
 		registryStages.should.deepEqual(Array.from(expectedSlice))
+	})
+
+	it("evaluateCompletionGateReadiness returns dry-run issues without mutating state", () => {
+		const issues = evaluateCompletionGateReadiness(configWithState(taskState), { result: "   " })
+		issues.length.should.be.greaterThan(0)
+		issues[0].stage.should.equal("quality")
+		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 	})
 })

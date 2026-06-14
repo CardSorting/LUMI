@@ -852,6 +852,9 @@ export class TelemetryService {
 			blockCount: number
 			attemptCount: number
 			score?: number
+			sessionId?: string
+			historyLength?: number
+			pressureLevel?: string
 		},
 	) {
 		this.capture({
@@ -862,6 +865,9 @@ export class TelemetryService {
 				blockCount: args.blockCount,
 				attemptCount: args.attemptCount,
 				score: args.score,
+				sessionId: args.sessionId,
+				historyLength: args.historyLength ?? 0,
+				pressureLevel: args.pressureLevel,
 			},
 		})
 	}

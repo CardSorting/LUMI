@@ -18,9 +18,11 @@ import {
 	buildCompletionGateAgentEnvelope,
 	buildCompletionGateDigestBlock,
 	buildCompletionGateEscalationBrief,
+	buildCompletionGateFocusBlock,
 	buildCompletionGateHealthBlock,
 	buildCompletionGateHistoryBlock,
 	buildCompletionGateHumanBrief,
+	buildCompletionGateNextStagesBlock,
 	buildCompletionGatePassedBrief,
 	buildCompletionGatePassedEnvelope,
 	buildCompletionGatePipelineBrief,
@@ -28,9 +30,11 @@ import {
 	buildCompletionGatePlaybookBlock,
 	buildCompletionGateProblemBlock,
 	buildCompletionGateRateLimitBlock,
+	buildCompletionGateReadinessBlock,
 	buildCompletionGateRecoveryBlock,
 	buildCompletionGateRetryGuidance,
 	buildCompletionGateStageProgressBlock,
+	buildCompletionGateStateBlock,
 	buildCompletionGateStructuredContext,
 	buildCompletionGateWorkspaceBlock,
 	buildCompletionPreflightReadinessBrief,
@@ -45,6 +49,7 @@ import {
 	extractFocusChainItemLabels,
 	formatCompletionToolError,
 	getCompletionGateCircuitBreakerError,
+	getCompletionGateOperationalState,
 	getCompletionGatePressureLevel,
 	getCompletionGateRetryPolicy,
 	getCompletionGateTelemetryContext,
@@ -53,6 +58,7 @@ import {
 	getOrCreateCompletionGateSessionId,
 	getRemainingCompletionGateStages,
 	hashCompletionResult,
+	isCompletionGateCircuitBreakerTripped,
 	mapCompletionReasonToHttpStatus,
 	mapCompletionReasonToPreflightStage,
 	markCompletionAttemptFinished,
@@ -158,10 +164,7 @@ describe("attemptCompletionUtils", () => {
 				throw new Error("expected circuit breaker message")
 			}
 			message.should.containEql(String(MAX_COMPLETION_GATE_BLOCK_COUNT))
-			taskState.consecutiveMistakeCount.should.equal(1)
-			taskState.lastCompletionBlockReason.should.equal("circuit_breaker")
-			taskState.lastCompletionFailedStage.should.equal("circuit_breaker")
-			taskState.completionGatePressureLevel.should.equal("tripped")
+			taskState.consecutiveMistakeCount.should.equal(0)
 
 			const toolError = checkCompletionGateCircuitBreaker(config)
 			should.exist(toolError)
@@ -169,6 +172,10 @@ describe("attemptCompletionUtils", () => {
 				throw new Error("expected circuit breaker tool error")
 			}
 			toolError.should.containEql("Task completion blocked")
+			taskState.consecutiveMistakeCount.should.equal(1)
+			taskState.lastCompletionBlockReason.should.equal("circuit_breaker")
+			taskState.lastCompletionFailedStage.should.equal("circuit_breaker")
+			taskState.completionGatePressureLevel.should.equal("tripped")
 		})
 	})
 
@@ -331,6 +338,75 @@ describe("attemptCompletionUtils", () => {
 		})
 	})
 
+	describe("getCompletionGateOperationalState", () => {
+		it("returns tripped when block budget is exhausted", () => {
+			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
+			getCompletionGateOperationalState(configWithState(taskState)).should.equal("tripped")
+		})
+
+		it("returns wait while cooldown is active", () => {
+			taskState.completionGateBlockCount = 1
+			taskState.lastCompletionAttemptAt = Date.now()
+			getCompletionGateOperationalState(configWithState(taskState)).should.equal("wait")
+		})
+	})
+
+	describe("buildCompletionGateStateBlock", () => {
+		it("emits operational state with session id", () => {
+			recordCompletionBlockReason(configWithState(taskState), "audit_gate")
+			const block = buildCompletionGateStateBlock(configWithState(taskState))
+			block.should.containEql("<completion_gate_state")
+			block.should.containEql('state="ready"')
+		})
+	})
+
+	describe("buildCompletionGateNextStagesBlock", () => {
+		it("lists downstream stages with hints", () => {
+			recordCompletionBlockReason(configWithState(taskState), "result_too_long")
+			const block = buildCompletionGateNextStagesBlock(configWithState(taskState))
+			block.should.containEql("<completion_gate_next_stages")
+			block.should.containEql('failed_at="max_length"')
+		})
+	})
+
+	describe("buildCompletionGateFocusBlock", () => {
+		it("reports focus chain completion progress", () => {
+			const config = {
+				...configWithState(taskState),
+				focusChainSettings: { enabled: true },
+				taskState,
+			} as TaskConfig
+			taskState.currentFocusChainChecklist = "- [x] one\n- [ ] two"
+			const block = buildCompletionGateFocusBlock(config)
+			block.should.containEql("<completion_gate_focus")
+			block.should.containEql('total="2"')
+			block.should.containEql('complete="false"')
+		})
+	})
+
+	describe("buildCompletionGateReadinessBlock", () => {
+		it("marks ready when no issues are present", () => {
+			buildCompletionGateReadinessBlock([]).should.containEql('ready="true"')
+		})
+
+		it("lists dry-run issues with stage and http status", () => {
+			const block = buildCompletionGateReadinessBlock([
+				{ stage: "min_length", message: "Completion rejected: result is too brief" },
+			])
+			block.should.containEql('ready="false"')
+			block.should.containEql('stage="min_length"')
+			block.should.containEql('http_status="422"')
+		})
+	})
+
+	describe("isCompletionGateCircuitBreakerTripped", () => {
+		it("detects tripped breaker without mutating state", () => {
+			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
+			isCompletionGateCircuitBreakerTripped(configWithState(taskState)).should.be.true()
+			should.not.exist(taskState.lastCompletionBlockReason)
+		})
+	})
+
 	describe("mapCompletionReasonToHttpStatus", () => {
 		it("maps block reasons to HTTP status analogues", () => {
 			mapCompletionReasonToHttpStatus("retry_cooldown").should.equal(429)
@@ -406,6 +482,8 @@ describe("attemptCompletionUtils", () => {
 			context.should.containEql("<completion_gate_problem")
 			context.should.containEql("<completion_gate_digest")
 			context.should.containEql("<completion_gate_history")
+			context.should.containEql("<completion_gate_state")
+			context.should.containEql("<completion_gate_next_stages")
 			context.should.containEql("<completion_gate_rate_limit")
 			context.should.containEql("<completion_gate_workspace")
 			context.should.containEql("<completion_gate_action")

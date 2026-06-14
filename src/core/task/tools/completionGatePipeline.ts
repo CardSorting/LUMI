@@ -22,6 +22,7 @@ import {
 	getCompletionGateCircuitBreakerError,
 	getCompletionGateTelemetryContext,
 	getLatestCheckpointHashFromMessages,
+	isCompletionGateCircuitBreakerTripped,
 	mapCompletionReasonToPreflightStage,
 	markCompletionGatesPassed,
 	recordCompletionAttemptTime,
@@ -175,6 +176,43 @@ export const PREFLIGHT_STAGE_RUNNERS: ReadonlyArray<{
 	},
 ]
 
+export type CompletionGateReadinessIssue = {
+	stage: CompletionPreflightStage
+	message: string
+}
+
+/** Non-mutating preflight dry-run — surfaces blockers before attempt_completion (mirrors CI dry-run). */
+export function evaluateCompletionGateReadiness(
+	config: TaskConfig,
+	params: {
+		result: string
+		taskProgress?: string
+		command?: string
+	},
+	validateQuality: (result: string) => string | null = validateCompletionResultQuality,
+): CompletionGateReadinessIssue[] {
+	if (isCompletionGateCircuitBreakerTripped(config)) {
+		const message = getCompletionGateCircuitBreakerError(config)
+		return message ? [{ stage: "circuit_breaker", message }] : []
+	}
+
+	const preflightContext: PreflightCheckContext = {
+		config,
+		params,
+		checkpointHash: getLatestCheckpointHashFromMessages(config),
+		validateQuality,
+	}
+
+	const issues: CompletionGateReadinessIssue[] = []
+	for (const runner of PREFLIGHT_STAGE_RUNNERS) {
+		const stageError = runner.validate(preflightContext)
+		if (stageError) {
+			issues.push({ stage: runner.stage, message: stageError })
+		}
+	}
+	return issues
+}
+
 export async function runCompletionPreflightChecks(
 	config: TaskConfig,
 	params: {
@@ -312,11 +350,15 @@ export async function evaluateCompletionAuditGate(
 		}
 
 		markCompletionGatesPassed(config)
+		const passContext = getCompletionGateTelemetryContext(config)
 		telemetryService.captureCompletionGatesPassed(config.ulid, {
 			taskId: config.taskId,
 			blockCount: config.taskState.completionGateBlockCount ?? 0,
 			attemptCount: config.taskState.completionAttemptCount ?? 0,
 			score: gateDecision.score,
+			sessionId: passContext.sessionId,
+			historyLength: passContext.historyLength,
+			pressureLevel: passContext.pressureLevel,
 		})
 		return {
 			status: "passed",

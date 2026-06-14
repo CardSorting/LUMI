@@ -517,7 +517,9 @@ export function buildCompletionGatePlaybook(reason: CompletionPreflightReason): 
 export function buildCompletionGatePipelineBrief(failedStage?: CompletionPreflightStage): string {
 	const stageList = COMPLETION_PREFLIGHT_STAGES.join(" → ")
 	const failedHint = failedStage ? ` Failed at: \`${failedStage}\`.` : ""
-	return `**Gate pipeline:** ${stageList}.${failedHint}`
+	const stageGuide = failedStage ? COMPLETION_PREFLIGHT_STAGE_HINTS[failedStage] : undefined
+	const guideHint = stageGuide ? ` Hint: ${stageGuide}.` : ""
+	return `**Gate pipeline:** ${stageList}.${failedHint}${guideHint}`
 }
 
 /** Returns stages that run after a failure — helps agents prioritize remaining work. */
@@ -527,6 +529,53 @@ export function getRemainingCompletionGateStages(failedStage: CompletionPrefligh
 		return []
 	}
 	return COMPLETION_PREFLIGHT_STAGES.slice(index + 1)
+}
+
+/** Short agent hints per pipeline stage — mirrors CI job descriptions. */
+export const COMPLETION_PREFLIGHT_STAGE_HINTS: Partial<Record<CompletionPreflightStage, string>> = {
+	circuit_breaker: "Hard stop — do not call attempt_completion until a new task",
+	quality: "Substantive prose summary; no TODOs, placeholders, or engagement bait",
+	checklist_in_result: "Keep checklists in task_progress, not in result",
+	min_length: "Result must be at least 40 characters (1–2 paragraphs)",
+	max_length: "Trim result to 6000 chars; move detail to task_progress",
+	task_progress_required: "Pass task_progress when focus chain exists",
+	task_progress_complete: "Every task_progress item must be [x]",
+	task_progress_align: "task_progress must mirror every focus chain item",
+	focus_chain: "Mark all focus chain items [x] via update_todo_list",
+	cooldown: "Wait for backoff before retrying after a gate block",
+	duplicate: "Change result or workspace before re-submitting",
+	demo_command: "Demo must run real behavior — not echo/cat",
+	roadmap: "Clear roadmap governance gates locally",
+	audit: "Fix critical audit violations and re-verify",
+	double_check: "Re-verify checklist, then call attempt_completion again",
+}
+
+export type CompletionGateOperationalState = "ready" | "wait" | "blocked" | "tripped"
+
+/** Unified operational state — mirrors API gateway routing (ready/wait/blocked/tripped). */
+export function getCompletionGateOperationalState(config: TaskConfig): CompletionGateOperationalState {
+	const blocks = config.taskState.completionGateBlockCount ?? 0
+	if (blocks >= MAX_COMPLETION_GATE_BLOCK_COUNT) {
+		return "tripped"
+	}
+	if (getCompletionCooldownRemainingMs(config) > 0) {
+		return "wait"
+	}
+	const reason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
+	if (reason) {
+		const policy = getCompletionGateRetryPolicy(reason, config)
+		if (policy.retryStatus === "wait") {
+			return "wait"
+		}
+		if (policy.retryStatus === "blocked") {
+			return "blocked"
+		}
+	}
+	return "ready"
+}
+
+export function isCompletionGateCircuitBreakerTripped(config: TaskConfig): boolean {
+	return (config.taskState.completionGateBlockCount ?? 0) >= MAX_COMPLETION_GATE_BLOCK_COUNT
 }
 
 export type CompletionGatePressureLevel = "stable" | "elevated" | "critical" | "tripped"
@@ -597,6 +646,78 @@ export function buildCompletionGateHealthBlock(config: TaskConfig): string {
 		`blocks="${blocks}" remaining="${remaining}" attempt="${attempt}" last_reason="${lastReason}" ` +
 		`failed_stage="${failedStage}" retry_status="${retryPolicy.retryStatus}" ` +
 		`soft_last="${softLast ? "true" : "false"}" />`
+	)
+}
+
+/** Explicit operational state block — primary routing target for agent state machines. */
+export function buildCompletionGateStateBlock(config: TaskConfig): string {
+	const state = getCompletionGateOperationalState(config)
+	const reason = config.taskState.lastCompletionBlockReason ?? "none"
+	const sessionId = config.taskState.completionGateSessionId ?? getOrCreateCompletionGateSessionId(config)
+	return (
+		`<completion_gate_state schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" state="${state}" ` +
+		`reason="${reason}" session_id="${sessionId}" />`
+	)
+}
+
+/** Structured remaining stages — machine-parseable alternative to comma-separated status. */
+export function buildCompletionGateNextStagesBlock(config: TaskConfig, failedStage?: CompletionPreflightStage): string {
+	const stage = failedStage ?? (config.taskState.lastCompletionFailedStage as CompletionPreflightStage | undefined)
+	if (!stage) {
+		return ""
+	}
+	const remaining = getRemainingCompletionGateStages(stage)
+	if (remaining.length === 0) {
+		return ""
+	}
+	const stageElements = remaining
+		.map(
+			(name, index) =>
+				`<stage name="${name}" order="${index + 1}" hint="${escapeCompletionGateXmlAttribute(COMPLETION_PREFLIGHT_STAGE_HINTS[name] ?? "")}" />`,
+		)
+		.join("")
+	return (
+		`<completion_gate_next_stages schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" failed_at="${stage}">` +
+		`${stageElements}</completion_gate_next_stages>`
+	)
+}
+
+/** Focus chain completion snapshot — surfaces todo alignment before completion. */
+export function buildCompletionGateFocusBlock(config: TaskConfig): string {
+	if (!config.focusChainSettings?.enabled) {
+		return ""
+	}
+	const checklist = config.taskState.currentFocusChainChecklist
+	if (!checklist?.trim()) {
+		return ""
+	}
+	const { totalItems, completedItems } = parseFocusChainListCounts(checklist)
+	if (totalItems === 0) {
+		return ""
+	}
+	return (
+		`<completion_gate_focus schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" total="${totalItems}" ` +
+		`completed="${completedItems}" complete="${completedItems >= totalItems ? "true" : "false"}" />`
+	)
+}
+
+/** Dry-run readiness issues — non-mutating preflight report for proactive hints. */
+export function buildCompletionGateReadinessBlock(
+	issues: ReadonlyArray<{ stage: CompletionPreflightStage; message: string }>,
+): string {
+	if (issues.length === 0) {
+		return `<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ready="true" count="0" />`
+	}
+	const issueElements = issues
+		.map(
+			(issue) =>
+				`<issue stage="${issue.stage}" http_status="${mapCompletionReasonToHttpStatus(classifyCompletionPreflightReason(issue.message))}">` +
+				`${escapeCompletionGateXmlText(issue.message)}</issue>`,
+		)
+		.join("")
+	return (
+		`<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ready="false" count="${issues.length}">` +
+		`${issueElements}</completion_gate_readiness>`
 	)
 }
 
@@ -714,11 +835,14 @@ export function buildCompletionGateStructuredContext(
 	const failedStage = mapCompletionReasonToPreflightStage(reason)
 	return buildCompletionGateAgentEnvelope([
 		buildCompletionGateDigestBlock(config, reason),
+		buildCompletionGateStateBlock(config),
 		buildCompletionGateHealthBlock(config),
 		buildCompletionGateHistoryBlock(config),
 		buildCompletionGateRateLimitBlock(config),
 		buildCompletionGateWorkspaceBlock(config),
+		buildCompletionGateFocusBlock(config),
 		buildCompletionGateStageProgressBlock(failedStage),
+		buildCompletionGateNextStagesBlock(config, failedStage),
 		buildCompletionGateProblemBlock(reason, message, config),
 		buildCompletionGateStatusBrief(config, options),
 		buildCompletionGateActionBlock(reason, config),
@@ -734,7 +858,9 @@ export function buildCompletionGateObservabilityEnvelope(config: TaskConfig): st
 	if (!lastReason) {
 		return buildCompletionGateAgentEnvelope([
 			buildCompletionGateDigestBlock(config),
+			buildCompletionGateStateBlock(config),
 			buildCompletionGateHealthBlock(config),
+			buildCompletionGateFocusBlock(config),
 			buildCompletionGateStatusBrief(config),
 		])
 	}
@@ -815,7 +941,9 @@ export function buildCompletionPreflightReadinessBrief(config: TaskConfig): stri
 	parts.push(
 		buildCompletionGateAgentEnvelope([
 			buildCompletionGateDigestBlock(config),
+			buildCompletionGateStateBlock(config),
 			buildCompletionGateHealthBlock(config),
+			buildCompletionGateFocusBlock(config),
 			buildCompletionGateStageProgressBlock(),
 		]),
 	)
@@ -1040,6 +1168,7 @@ export function buildCompletionGatePassedBrief(config: TaskConfig, score?: numbe
 export function buildCompletionGatePassedEnvelope(config: TaskConfig, score?: number): string {
 	return buildCompletionGateAgentEnvelope([
 		buildCompletionGateDigestBlock(config),
+		buildCompletionGateStateBlock(config),
 		buildCompletionGateHealthBlock(config),
 		buildCompletionGateStageProgressPassedBlock(),
 		buildCompletionGatePassedBrief(config, score),
@@ -1285,21 +1414,16 @@ export function appendCompletionGateRetryGuidance(message: string, blockCount: n
 }
 
 function getCompletionGateCircuitBreakerMessage(config: TaskConfig): string | null {
-	const blockCount = config.taskState.completionGateBlockCount ?? 0
-	if (blockCount >= MAX_COMPLETION_GATE_BLOCK_COUNT) {
-		config.taskState.consecutiveMistakeCount++
-		getOrCreateCompletionGateSessionId(config)
-		recordCompletionBlockReason(config, "circuit_breaker")
-		return (
-			`Task completion blocked: maximum completion gate retries (${MAX_COMPLETION_GATE_BLOCK_COUNT}) exceeded.\n\n` +
-			"**Recovery playbook:**\n" +
-			"1. Stop calling attempt_completion — further calls will fail until you start a new task.\n" +
-			"2. Review audit artifacts and fix the underlying violations in the workspace.\n" +
-			"3. Use act_mode_respond or scratchpad.md to document what changed before starting fresh."
-		)
+	if (!isCompletionGateCircuitBreakerTripped(config)) {
+		return null
 	}
-
-	return null
+	return (
+		`Task completion blocked: maximum completion gate retries (${MAX_COMPLETION_GATE_BLOCK_COUNT}) exceeded.\n\n` +
+		"**Recovery playbook:**\n" +
+		"1. Stop calling attempt_completion — further calls will fail until you start a new task.\n" +
+		"2. Review audit artifacts and fix the underlying violations in the workspace.\n" +
+		"3. Use act_mode_respond or scratchpad.md to document what changed before starting fresh."
+	)
 }
 
 export function getCompletionGateCircuitBreakerError(config: TaskConfig): string | null {
@@ -1308,23 +1432,25 @@ export function getCompletionGateCircuitBreakerError(config: TaskConfig): string
 
 export function checkCompletionGateCircuitBreaker(config: TaskConfig): ToolResponse | null {
 	const message = getCompletionGateCircuitBreakerMessage(config)
-	if (message) {
-		const telemetryContext = getCompletionGateTelemetryContext(config)
-		telemetryService.captureCompletionPreflightBlocked(config.ulid, {
-			taskId: config.taskId,
-			reason: "circuit_breaker",
-			blockCount: config.taskState.completionGateBlockCount ?? 0,
-			consecutiveMistakes: config.taskState.consecutiveMistakeCount,
-			attemptCount: config.taskState.completionAttemptCount ?? 0,
-			lastReason: config.taskState.lastCompletionBlockReason,
-			failedStage: "circuit_breaker",
-			pressureLevel: telemetryContext.pressureLevel,
-			retryStatus: telemetryContext.retryStatus,
-			historyLength: telemetryContext.historyLength,
-			sessionId: telemetryContext.sessionId,
-		})
+	if (!message) {
+		return null
 	}
-	return message ? formatCompletionToolError(message, config) : null
+	recordCompletionGateBlockEvent(config, "circuit_breaker")
+	const telemetryContext = getCompletionGateTelemetryContext(config)
+	telemetryService.captureCompletionPreflightBlocked(config.ulid, {
+		taskId: config.taskId,
+		reason: "circuit_breaker",
+		blockCount: config.taskState.completionGateBlockCount ?? 0,
+		consecutiveMistakes: config.taskState.consecutiveMistakeCount,
+		attemptCount: config.taskState.completionAttemptCount ?? 0,
+		lastReason: config.taskState.lastCompletionBlockReason,
+		failedStage: "circuit_breaker",
+		pressureLevel: telemetryContext.pressureLevel,
+		retryStatus: telemetryContext.retryStatus,
+		historyLength: telemetryContext.historyLength,
+		sessionId: telemetryContext.sessionId,
+	})
+	return formatCompletionToolError(message, config)
 }
 
 export function recordCompletionGateBlock(config: TaskConfig): number {
@@ -1342,6 +1468,8 @@ export function recordCompletionGateBlockEvent(
 	options?: { result?: string; checkpointHash?: string },
 ): number {
 	if (reason === "circuit_breaker") {
+		config.taskState.consecutiveMistakeCount++
+		getOrCreateCompletionGateSessionId(config)
 		recordCompletionBlockReason(config, reason)
 		return config.taskState.completionGateBlockCount ?? 0
 	}

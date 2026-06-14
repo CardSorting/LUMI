@@ -27,6 +27,7 @@ import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
 import {
 	buildCompletionGatePassedEnvelope,
+	buildCompletionGateReadinessBlock,
 	buildCompletionPreflightReadinessBrief,
 	buildDoubleCheckReverifyMessage,
 	buildProactiveCompletionGuidance,
@@ -45,6 +46,7 @@ import {
 import {
 	emitCompletionGateBlockTelemetry,
 	evaluateCompletionAuditGate,
+	evaluateCompletionGateReadiness,
 	runCompletionPreflightChecks,
 } from "../completionGatePipeline"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -140,7 +142,15 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 		if (shouldEmitPreflightReadinessHint(config)) {
 			try {
-				const readinessParts = [buildCompletionPreflightReadinessBrief(config)]
+				const readinessIssues = evaluateCompletionGateReadiness(
+					config,
+					{ result, taskProgress: block.params.task_progress, command },
+					validateCompletionResultQuality,
+				)
+				const readinessParts = [
+					buildCompletionPreflightReadinessBrief(config),
+					buildCompletionGateReadinessBlock(readinessIssues),
+				]
 				if (config.auditCompletionGateEnabled && config.taskState.lastAdvisoryAudit) {
 					const checklistSummary = buildPreCompletionChecklistSummary(
 						config.taskState.lastAdvisoryAudit,
