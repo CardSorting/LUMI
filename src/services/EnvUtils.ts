@@ -21,6 +21,15 @@ export function buildExternalBasicHeaders(): Record<string, string> {
 	}
 }
 
+/** OpenRouter app attribution headers for rankings and analytics. */
+export function buildOpenRouterAttributionHeaders(): Record<string, string> {
+	return {
+		"HTTP-Referer": "https://mariecoder.com",
+		"X-OpenRouter-Title": "LUMI",
+		"X-OpenRouter-Categories": "ide-extension",
+	}
+}
+
 export async function buildBasicDietCodeHeaders(): Promise<Record<string, string>> {
 	const headers: Record<string, string> = buildExternalBasicHeaders()
 	try {

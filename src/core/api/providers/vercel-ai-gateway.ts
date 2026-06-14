@@ -2,6 +2,7 @@ import { ModelInfo, openRouterDefaultModelId, openRouterDefaultModelInfo } from 
 import { shouldSkipReasoningForModel } from "@utils/model-utils"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
+import { buildOpenRouterAttributionHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
@@ -36,10 +37,7 @@ export class VercelAIGatewayHandler implements ApiHandler {
 				this.client = createOpenAIClient({
 					baseURL: "https://ai-gateway.vercel.sh/v1",
 					apiKey: this.options.vercelAiGatewayApiKey,
-					defaultHeaders: {
-						"http-referer": "https://dietcode.bot",
-						"x-title": "DietCode",
-					},
+					defaultHeaders: buildOpenRouterAttributionHeaders(),
 				})
 			} catch (error: any) {
 				throw new Error(`Error creating Vercel AI Gateway client: ${error.message}`)

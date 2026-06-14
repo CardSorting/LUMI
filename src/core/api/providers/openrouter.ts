@@ -5,6 +5,7 @@ import { shouldSkipReasoningForModel } from "@utils/model-utils"
 import axios from "axios"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
+import { buildOpenRouterAttributionHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient, getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
@@ -42,10 +43,7 @@ export class OpenRouterHandler implements ApiHandler {
 				this.client = createOpenAIClient({
 					baseURL: "https://openrouter.ai/api/v1",
 					apiKey: this.options.openRouterApiKey,
-					defaultHeaders: {
-						"HTTP-Referer": "https://dietcode.bot", // Optional, for including your app on openrouter.ai rankings.
-						"X-Title": "DietCode", // Optional. Shows in rankings on openrouter.ai.
-					},
+					defaultHeaders: buildOpenRouterAttributionHeaders(),
 				})
 			} catch (error: any) {
 				throw new Error(`Error creating OpenRouter client: ${error.message}`)

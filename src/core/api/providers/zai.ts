@@ -9,6 +9,7 @@ import {
 } from "@shared/api"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
+import { buildOpenRouterAttributionHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import { version as extensionVersion } from "../../../../package.json"
@@ -51,8 +52,7 @@ export class ZAiHandler implements ApiHandler {
 					baseURL,
 					apiKey: this.options.zaiApiKey,
 					defaultHeaders: {
-						"HTTP-Referer": "https://dietcode.bot",
-						"X-Title": "DietCode",
+						...buildOpenRouterAttributionHeaders(),
 						"X-DietCode-Version": extensionVersion,
 					},
 				})

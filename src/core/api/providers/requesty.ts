@@ -1,6 +1,7 @@
 import { ModelInfo, requestyDefaultModelId, requestyDefaultModelInfo } from "@shared/api"
 import { calculateApiCostOpenAI } from "@utils/cost"
 import OpenAI from "openai"
+import { buildOpenRouterAttributionHeaders } from "@/services/EnvUtils"
 import { toRequestyServiceStringUrl } from "@/shared/clients/requesty"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
@@ -45,10 +46,7 @@ export class RequestyHandler implements ApiHandler {
 				this.client = createOpenAIClient({
 					baseURL: toRequestyServiceStringUrl(this.options.requestyBaseUrl),
 					apiKey: this.options.requestyApiKey,
-					defaultHeaders: {
-						"HTTP-Referer": "https://dietcode.bot",
-						"X-Title": "DietCode",
-					},
+					defaultHeaders: buildOpenRouterAttributionHeaders(),
 				})
 			} catch (error: any) {
 				throw new Error(`Error creating Requesty client: ${error.message}`)

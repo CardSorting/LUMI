@@ -6,7 +6,7 @@ import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/com
 import { DietCodeEnv } from "@/config"
 import { DietCodeAccountService } from "@/services/account/DietCodeAccountService"
 import { AuthService } from "@/services/auth/AuthService"
-import { buildDietCodeExtraHeaders } from "@/services/EnvUtils"
+import { buildDietCodeExtraHeaders, buildOpenRouterAttributionHeaders } from "@/services/EnvUtils"
 import { DIETCODE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@/shared/DietCodeAccount"
 import type { DietCodeStorageMessage } from "@/shared/messages/content"
 import { fetch, getAxiosSettings } from "@/shared/net"
@@ -57,8 +57,7 @@ export class DietCodeHandler implements ApiHandler {
 		if (!this.client) {
 			try {
 				const defaultHeaders: Record<string, string> = {
-					"HTTP-Referer": "https://dietcode.bot",
-					"X-Title": "DietCode",
+					...buildOpenRouterAttributionHeaders(),
 					"X-Task-ID": this.options.ulid || "",
 				}
 				Object.assign(defaultHeaders, await buildDietCodeExtraHeaders())
