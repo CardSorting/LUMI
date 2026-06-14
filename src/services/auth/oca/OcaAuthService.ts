@@ -135,7 +135,8 @@ export class OcaAuthService {
 			this.sendAuthStatusUpdate()
 			return ProtoString.create({ value: "Already authenticated" })
 		}
-		const ocaMode = this.requireController().stateManager.getGlobalSettingsKey("ocaMode") || "internal"
+		const apiConfig = this.requireController().stateManager.getApiConfiguration() as { ocaMode?: string }
+		const ocaMode = apiConfig.ocaMode || "internal"
 		const idcsUrl = ocaMode === "external" ? this._config.external.idcs_url : this._config.internal.idcs_url
 		if (!idcsUrl) {
 			throw new Error("IDCS URI is not configured")

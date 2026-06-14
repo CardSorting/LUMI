@@ -39,6 +39,7 @@ export const config = createVariant(ModelFamily.NATIVE_GPT_5_1)
 	.template(GPT_5_1_TEMPLATE_OVERRIDES.BASE)
 	.components(
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.ROADMAP_STEERING,
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TASK_PROGRESS,
@@ -73,6 +74,8 @@ export const config = createVariant(ModelFamily.NATIVE_GPT_5_1)
 		DietCodeDefaultTool.GENERATE_EXPLANATION,
 		DietCodeDefaultTool.USE_SKILL,
 		DietCodeDefaultTool.PROJECT_MAP,
+		DietCodeDefaultTool.ROADMAP,
+		DietCodeDefaultTool.ROADMAP_CHECKPOINT,
 		DietCodeDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({

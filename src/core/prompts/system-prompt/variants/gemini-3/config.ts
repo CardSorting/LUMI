@@ -32,6 +32,7 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 	.template(baseTemplate)
 	.components(
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.ROADMAP_STEERING,
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.RULES,
@@ -61,6 +62,8 @@ export const config = createVariant(ModelFamily.GEMINI_3)
 		DietCodeDefaultTool.MCP_ACCESS,
 		DietCodeDefaultTool.ASK,
 		DietCodeDefaultTool.ATTEMPT,
+		DietCodeDefaultTool.ROADMAP,
+		DietCodeDefaultTool.ROADMAP_CHECKPOINT,
 		DietCodeDefaultTool.NEW_TASK,
 		DietCodeDefaultTool.PLAN_MODE,
 		DietCodeDefaultTool.ACT_MODE,

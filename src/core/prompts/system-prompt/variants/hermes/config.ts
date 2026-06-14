@@ -24,6 +24,7 @@ export const config = createVariant(ModelFamily.HERMES)
 	.components(
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.ROADMAP_STEERING,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.RULES,
 		SystemPromptSection.ACT_VS_PLAN,
@@ -50,6 +51,8 @@ export const config = createVariant(ModelFamily.HERMES)
 		DietCodeDefaultTool.MCP_ACCESS,
 		DietCodeDefaultTool.ASK,
 		DietCodeDefaultTool.ATTEMPT,
+		DietCodeDefaultTool.ROADMAP,
+		DietCodeDefaultTool.ROADMAP_CHECKPOINT,
 		DietCodeDefaultTool.NEW_TASK,
 		DietCodeDefaultTool.PLAN_MODE,
 		DietCodeDefaultTool.MCP_DOCS,

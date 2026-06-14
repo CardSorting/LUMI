@@ -35,6 +35,7 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 	.components(
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.ROADMAP_STEERING,
 		SystemPromptSection.INTEGRITY_WIKI,
 		SystemPromptSection.FORENSIC_TOOLS,
 		SystemPromptSection.TOOL_USE,
@@ -65,6 +66,8 @@ export const config = createVariant(ModelFamily.NEXT_GEN)
 		DietCodeDefaultTool.MCP_ACCESS,
 		DietCodeDefaultTool.ASK,
 		DietCodeDefaultTool.ATTEMPT,
+		DietCodeDefaultTool.ROADMAP,
+		DietCodeDefaultTool.ROADMAP_CHECKPOINT,
 		DietCodeDefaultTool.PLAN_MODE,
 		DietCodeDefaultTool.MCP_DOCS,
 		DietCodeDefaultTool.TODO,

@@ -24,6 +24,7 @@ export const config = createVariant(ModelFamily.TRINITY)
 	.template(baseTemplate)
 	.components(
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.ROADMAP_STEERING,
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TASK_PROGRESS,
@@ -50,6 +51,8 @@ export const config = createVariant(ModelFamily.TRINITY)
 		DietCodeDefaultTool.MCP_ACCESS,
 		DietCodeDefaultTool.ASK,
 		DietCodeDefaultTool.ATTEMPT,
+		DietCodeDefaultTool.ROADMAP,
+		DietCodeDefaultTool.ROADMAP_CHECKPOINT,
 		DietCodeDefaultTool.PLAN_MODE,
 		DietCodeDefaultTool.MCP_DOCS,
 		DietCodeDefaultTool.TODO,

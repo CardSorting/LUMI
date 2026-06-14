@@ -33,6 +33,7 @@ export const config = createVariant(ModelFamily.NATIVE_NEXT_GEN)
 	.components(
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.ROADMAP_STEERING,
 		SystemPromptSection.INTEGRITY_WIKI,
 		SystemPromptSection.FORENSIC_TOOLS,
 		SystemPromptSection.TOOL_USE,
@@ -67,6 +68,8 @@ export const config = createVariant(ModelFamily.NATIVE_NEXT_GEN)
 		DietCodeDefaultTool.GENERATE_EXPLANATION,
 		DietCodeDefaultTool.USE_SKILL,
 		DietCodeDefaultTool.PROJECT_MAP,
+		DietCodeDefaultTool.ROADMAP,
+		DietCodeDefaultTool.ROADMAP_CHECKPOINT,
 		DietCodeDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({

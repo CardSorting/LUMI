@@ -648,25 +648,36 @@ export class ToolExecutor {
 			block.layer = getLayer(path.resolve(this.cwd, block.params.path))
 		}
 
-		// Raw Writes Warn/Block: Block standard file edits if governed mutation is active
-		if ((block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) && block.params.path) {
-			const resolvedPath = path.resolve(this.cwd, block.params.path)
-			const isRoadmapFile =
-				resolvedPath === path.resolve(this.cwd, "ROADMAP.md") || resolvedPath.includes(path.sep + ".dietcode" + path.sep)
-			if (!isRoadmapFile) {
-				try {
-					const { RoadmapService } = require("@/services/roadmap/RoadmapService")
-					const roadmapService = RoadmapService.getInstance()
-					const status = await roadmapService.getOperationalStatus(this.cwd)
-					if (status.enabled) {
-						const blockMsg = "Use dietcode_kernel(action='patch') for coherent mutation."
-						await this.say("error_retry" as any, blockMsg)
+		// Roadmap write guard + mutation tracking
+		if (
+			(block.name === DietCodeDefaultTool.FILE_NEW ||
+				block.name === DietCodeDefaultTool.FILE_EDIT ||
+				block.name === DietCodeDefaultTool.APPLY_PATCH ||
+				block.name === DietCodeDefaultTool.DIETCODE_KERNEL) &&
+			block.params.path
+		) {
+			try {
+				const { preflightRoadmapWrite, targetsRoadmapFile } = require("@/services/roadmap/RoadmapNativeBridge")
+				const { getRoadmapConfig } = require("@/services/roadmap/RoadmapConfig")
+				if (targetsRoadmapFile(block.name, block.params)) {
+					const preflight = await preflightRoadmapWrite(block.name, block.params, this.cwd)
+					if (preflight.block) {
+						await this.say("error_retry" as any, preflight.message!)
 						this.taskState.consecutiveMistakeCount++
-						this.pushToolResult((formatResponse as any).architecturalCorrection(blockMsg), block)
+						this.pushToolResult(formatResponse.toolError(preflight.message!), block)
 						return
 					}
-				} catch (error) {
-					// Fallback
+				}
+			} catch {
+				const { getRoadmapConfig } = require("@/services/roadmap/RoadmapConfig")
+				const cfg = getRoadmapConfig()
+				if (cfg.enabled && cfg.fail_closed_completion_gates) {
+					const message =
+						"ROADMAP write guard failed — cannot verify write target safely. Run roadmap(action='doctor')."
+					await this.say("error_retry" as any, message)
+					this.taskState.consecutiveMistakeCount++
+					this.pushToolResult(formatResponse.toolError(message), block)
+					return
 				}
 			}
 		}
@@ -694,6 +705,26 @@ export class ToolExecutor {
 			// Execute the actual tool
 			toolResult = await this.coordinator.execute(config, block)
 			toolWasExecuted = true
+
+			// Roadmap post-write: record mutation and attach validate nudge
+			if (
+				(block.name === DietCodeDefaultTool.FILE_NEW ||
+					block.name === DietCodeDefaultTool.FILE_EDIT ||
+					block.name === DietCodeDefaultTool.APPLY_PATCH ||
+					block.name === DietCodeDefaultTool.DIETCODE_KERNEL) &&
+				block.params.path
+			) {
+				try {
+					const { afterRoadmapWrite, appendRoadmapWriteHint, targetsRoadmapFile } =
+						require("@/services/roadmap/RoadmapNativeBridge")
+					if (targetsRoadmapFile(block.name, block.params)) {
+						await afterRoadmapWrite(block.name, block.params, this.cwd)
+						toolResult = await appendRoadmapWriteHint(block.name, block.params, this.cwd, toolResult)
+					}
+				} catch {
+					// Non-fatal
+				}
+			}
 
 			// Autonomous Self-Healing: Align tags and resolve imports
 			if (

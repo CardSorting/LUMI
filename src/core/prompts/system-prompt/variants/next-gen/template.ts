@@ -3,6 +3,7 @@ import type { SystemPromptContext } from "../../types"
 
 export const baseTemplate = `{{${SystemPromptSection.AGENT_ROLE}}}
 {{${SystemPromptSection.JOY_ZONING}}}
+{{${SystemPromptSection.ROADMAP_STEERING}}}
 {{${SystemPromptSection.INTEGRITY_WIKI}}}
 {{${SystemPromptSection.FORENSIC_TOOLS}}}
 

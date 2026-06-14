@@ -5,6 +5,7 @@ import { SystemPromptSection } from "../../templates/placeholders"
  */
 export const BASE = `{{${SystemPromptSection.AGENT_ROLE}}}
 {{${SystemPromptSection.JOY_ZONING}}}
+{{${SystemPromptSection.ROADMAP_STEERING}}}
 
 {{${SystemPromptSection.TOOL_USE}}}
 

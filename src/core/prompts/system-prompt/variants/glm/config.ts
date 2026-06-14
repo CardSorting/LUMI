@@ -23,6 +23,7 @@ export const config = createVariant(ModelFamily.GLM)
 	.components(
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.ROADMAP_STEERING,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.RULES,
@@ -49,6 +50,8 @@ export const config = createVariant(ModelFamily.GLM)
 		DietCodeDefaultTool.MCP_ACCESS,
 		DietCodeDefaultTool.ASK,
 		DietCodeDefaultTool.ATTEMPT,
+		DietCodeDefaultTool.ROADMAP,
+		DietCodeDefaultTool.ROADMAP_CHECKPOINT,
 		DietCodeDefaultTool.PLAN_MODE,
 		DietCodeDefaultTool.MCP_DOCS,
 		DietCodeDefaultTool.TODO,

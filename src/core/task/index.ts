@@ -1154,6 +1154,20 @@ export class Task {
 
 		this.taskState.isInitialized = true
 
+		// Auto-bootstrap ROADMAP.md when missing (evidence-driven, non-blocking)
+		try {
+			const { initRoadmapSession } = await import("@/services/roadmap/RoadmapLifecycle")
+			const initResult = await initRoadmapSession(this.cwd, this.taskId)
+			if (initResult?.bootstrap && (initResult.bootstrap as Record<string, unknown>).written) {
+				Logger.info("[Roadmap] Auto-bootstrapped ROADMAP.md from workspace evidence")
+			}
+			if (Array.isArray(initResult?.skills_installed) && (initResult.skills_installed as string[]).length > 0) {
+				Logger.info("[Roadmap] Installed workspace skill:", (initResult.skills_installed as string[]).join(", "))
+			}
+		} catch (error) {
+			Logger.warn("[Roadmap] Session roadmap init skipped:", error)
+		}
+
 		const imageBlocks: DietCodeImageContentBlock[] = formatResponse.imageBlocks(images)
 
 		const userContent: DietCodeUserContent[] = [
@@ -1797,6 +1811,13 @@ export class Task {
 				this.FocusChainManager.dispose()
 			}
 		} finally {
+			try {
+				const { finalizeRoadmapSession } = await import("@/services/roadmap/RoadmapLifecycle")
+				await finalizeRoadmapSession(this.cwd, this.taskId)
+			} catch (error) {
+				Logger.warn("[Roadmap] Session finalize skipped:", error)
+			}
+
 			// Release task folder lock
 			if (this.taskLockAcquired) {
 				try {
@@ -3587,6 +3608,7 @@ export class Task {
 				useNativeToolCalls,
 				providerInfo,
 				mcpPromptFetcher,
+				cwd,
 			)
 
 			if (needsCheck) {
@@ -3982,6 +4004,16 @@ export class Task {
 
 		details +=
 			"\n\n# Phase Transitions\nPlan and Act phases are managed automatically. Do not ask the user to switch modes. Finalized plans via plan_mode_respond auto-transition to ACT MODE; user steering may return you to PLAN MODE for scope pivots."
+
+		try {
+			const { getRoadmapEnvironmentSection } = await import("@/services/roadmap/RoadmapSession")
+			const roadmapSection = await getRoadmapEnvironmentSection(this.cwd)
+			if (roadmapSection) {
+				details += roadmapSection
+			}
+		} catch {
+			// Roadmap steering is optional
+		}
 
 		return `<environment_details>\n${details.trim()}\n</environment_details>`
 	}

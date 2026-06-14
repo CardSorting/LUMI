@@ -1,0 +1,62 @@
+import { ModelFamily } from "@/shared/prompts"
+import { DietCodeDefaultTool } from "@/shared/tools"
+import type { DietCodeToolSpec } from "../spec"
+import { TASK_PROGRESS_PARAMETER } from "../types"
+
+const ROADMAP_ACTIONS =
+	"guide | status | cockpit | checkpoint | validate | doctor | template | apply_bootstrap_fill | explain_gate | explain_stale | evidence | progress | watch | last_error"
+
+const GENERIC: DietCodeToolSpec = {
+	variant: ModelFamily.GENERIC,
+	id: DietCodeDefaultTool.ROADMAP,
+	name: "roadmap",
+	description:
+		"Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Responses include project_identity_line, _roadmap_operator_hints, agent_playbook, and recommended_next_action.",
+	parameters: [
+		{
+			name: "action",
+			required: true,
+			type: "string",
+			instruction: `Roadmap action. One of: ${ROADMAP_ACTIONS}.`,
+		},
+		{
+			name: "context",
+			required: false,
+			type: "string",
+			instruction:
+				"Optional context — e.g. 'write' for apply_bootstrap_fill, 'digest' or 'compact' for slim checkpoint, 'stale refresh' for checkpoint, '--current' or '--tail' for progress.",
+		},
+		{
+			name: "user_request",
+			required: false,
+			type: "string",
+			instruction: "Optional user request text to include in checkpoint briefing.",
+		},
+		TASK_PROGRESS_PARAMETER,
+	],
+}
+
+const CHECKPOINT: DietCodeToolSpec = {
+	...GENERIC,
+	id: DietCodeDefaultTool.ROADMAP_CHECKPOINT,
+	name: "roadmap_checkpoint",
+	description:
+		"Alias for roadmap(action='checkpoint') — full evidence bundle and checkpoint algorithm before editing ROADMAP.md.",
+	parameters: [
+		{
+			name: "context",
+			required: false,
+			type: "string",
+			instruction: "Optional checkpoint context (e.g. 'stale refresh', 'coherence recovery', 'apply autofill write').",
+		},
+		{
+			name: "user_request",
+			required: false,
+			type: "string",
+			instruction: "Optional user request text for the checkpoint pass.",
+		},
+		TASK_PROGRESS_PARAMETER,
+	],
+}
+
+export const roadmap_variants = [GENERIC, CHECKPOINT]

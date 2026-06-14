@@ -11,6 +11,7 @@ import { getIntegrityWikiSection } from "./integrity_wiki"
 import { getJoyZoningSection } from "./joy_zoning"
 import { getMcp } from "./mcp"
 import { getObjectiveSection } from "./objective"
+import { getRoadmapSteeringSection } from "./roadmap_steering"
 import { getRulesSection } from "./rules"
 import { getSkillsSection } from "./skills"
 import { getSystemInfo } from "./system_info"
@@ -32,6 +33,7 @@ export function getSystemPromptComponents() {
 		{ id: SystemPromptSection.ENVIRONMENT_STATE, fn: getEnvironmentStateSection },
 		{ id: SystemPromptSection.FEEDBACK, fn: getFeedbackSection },
 		{ id: SystemPromptSection.JOY_ZONING, fn: getJoyZoningSection },
+		{ id: SystemPromptSection.ROADMAP_STEERING, fn: getRoadmapSteeringSection },
 		{ id: SystemPromptSection.MCP, fn: getMcp },
 		{ id: SystemPromptSection.OBJECTIVE, fn: getObjectiveSection },
 		{ id: SystemPromptSection.RULES, fn: getRulesSection },

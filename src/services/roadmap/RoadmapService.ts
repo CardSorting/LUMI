@@ -1,6 +1,28 @@
 import { execa } from "execa"
 import * as fs from "fs/promises"
 import * as path from "path"
+import { invalidateRoadmapWorkspaceCache } from "./RoadmapCache"
+import { isDigestContext, slimCheckpointPayload } from "./RoadmapCheckpointDigest"
+import { buildCockpitPayload } from "./RoadmapCockpit"
+import { getRoadmapConfig, type RoadmapConfig } from "./RoadmapConfig"
+import { runDoctorChecks } from "./RoadmapDoctor"
+import { formatExplainStaleReport } from "./RoadmapFreshness"
+import { buildGateStateFromInputs, collectGateInputs } from "./RoadmapGateCatalog"
+import {
+	determinePhase,
+	formatExplainGateReport,
+	isBootstrapIncomplete,
+	wrapClarityEnvelope as operatorWrapClarityEnvelope,
+	recommendNextAction,
+} from "./RoadmapOperator"
+import {
+	clearLastError,
+	formatWatchReport,
+	readCurrentProgress,
+	readLastError,
+	readProgressTail,
+	recordLastError,
+} from "./RoadmapProgress"
 import {
 	bootstrapSkeleton,
 	findBootstrapPlaceholders,
@@ -10,27 +32,8 @@ import {
 	SOUP_RISK_LEVELS,
 	validateRoadmapContent,
 } from "./RoadmapSchema"
-
-// Types
-export interface RoadmapConfig {
-	enabled: boolean
-	stale_checkpoint_days: number
-	git_timeout_seconds: number
-	block_kanban_on_invalid_schema: boolean
-	block_kanban_on_validation_pending: boolean
-	block_kanban_on_bootstrap_incomplete: boolean
-	warn_on_stale_before_complete: boolean
-}
-
-const DEFAULT_CONFIG: RoadmapConfig = {
-	enabled: true,
-	stale_checkpoint_days: 7,
-	git_timeout_seconds: 5,
-	block_kanban_on_invalid_schema: true,
-	block_kanban_on_validation_pending: true,
-	block_kanban_on_bootstrap_incomplete: true,
-	warn_on_stale_before_complete: true,
-}
+import { WORKSPACE_SKILL_REL } from "./RoadmapSkillInstall"
+import { buildSnapshotKey, type EvidenceTier, getSnapshotFromCache, setSnapshotCache } from "./RoadmapSnapshot"
 
 interface HeavyScanResult {
 	workspace: string
@@ -270,8 +273,9 @@ const PACKAGE_MANAGER_MARKERS: [string, string][] = [
 ]
 
 async function runGit(cwd: string, args: string[]): Promise<string | null> {
+	const timeoutMs = getRoadmapConfig().git_timeout_seconds * 1000
 	try {
-		const { stdout } = await execa("git", args, { cwd, timeout: 5000 })
+		const { stdout } = await execa("git", args, { cwd, timeout: timeoutMs })
 		return stdout.trim()
 	} catch {
 		return null
@@ -1338,6 +1342,201 @@ export class RoadmapService {
 		return RoadmapService.instance
 	}
 
+	public isEnabled(): boolean {
+		return getRoadmapConfig().enabled
+	}
+
+	public getConfig(): RoadmapConfig {
+		return getRoadmapConfig()
+	}
+
+	public wrapClarityEnvelope(payload: Record<string, unknown>, phaseInfo?: Record<string, unknown>): Record<string, unknown> {
+		return operatorWrapClarityEnvelope({ ...payload, enabled: this.isEnabled() }, phaseInfo)
+	}
+
+	public async runDoctor(workspace: string): Promise<Record<string, unknown>> {
+		return runDoctorChecks(this, workspace)
+	}
+
+	public async buildCockpit(workspace: string): Promise<Record<string, unknown>> {
+		return buildCockpitPayload(this, workspace)
+	}
+
+	public async getProgressSnapshot(workspace: string, context = ""): Promise<Record<string, unknown>> {
+		const ctx = (context || "").trim().toLowerCase()
+		if (ctx === "--tail") {
+			return this.wrapClarityEnvelope({
+				action: "progress",
+				success: true,
+				ok: true,
+				workspace,
+				events: await readProgressTail(20),
+			})
+		}
+		const status = await this.getOperationalStatus(workspace, "", "light")
+		return this.wrapClarityEnvelope({
+			action: "progress",
+			success: true,
+			ok: true,
+			workspace,
+			current: await readCurrentProgress(),
+			last_error: await readLastError(),
+			roadmap_gate: status.roadmap_gate,
+			project_identity_line: status.project_identity_line,
+			phase: status.phase,
+		})
+	}
+
+	public async getWatchReport(workspace: string): Promise<Record<string, unknown>> {
+		const current = await readCurrentProgress()
+		const lastError = await readLastError()
+		const status = await this.getOperationalStatus(workspace, "", "light")
+		return this.wrapClarityEnvelope({
+			action: "watch",
+			success: true,
+			ok: true,
+			workspace,
+			report: formatWatchReport(current, lastError, status),
+			current,
+			last_error: lastError,
+			project_identity_line: status.project_identity_line,
+			phase: status.phase,
+		})
+	}
+
+	public async getLastErrorBrief(workspace: string): Promise<Record<string, unknown>> {
+		const lastError = await readLastError()
+		if (!lastError) {
+			return this.wrapClarityEnvelope({
+				action: "last_error",
+				success: true,
+				ok: true,
+				workspace,
+				last_error: null,
+				operator_summary: "No recorded roadmap errors.",
+				agent_next_call: "roadmap(action='guide')",
+			})
+		}
+		return this.wrapClarityEnvelope({
+			action: "last_error",
+			success: false,
+			ok: false,
+			workspace,
+			last_error: lastError,
+			operator_summary: String(lastError.message || lastError.error),
+			agent_next_call: String(lastError.retry_command || "roadmap(action='guide')"),
+		})
+	}
+
+	public async explainGate(workspace: string): Promise<Record<string, unknown>> {
+		const status = await this.getOperationalStatus(workspace, "", "standard")
+		const gate = (status.roadmap_gate || {}) as Record<string, unknown>
+		const report = formatExplainGateReport({
+			workspace,
+			closed_gates: (gate.closed_gates as Array<Record<string, unknown>>) || [],
+			open_gates: (gate.open_gates as string[]) || [],
+			blocking_gates: (gate.blocking_gates as Array<Record<string, unknown>>) || [],
+			kanban_complete_allowed: gate.kanban_complete_allowed as boolean,
+		})
+		return this.wrapClarityEnvelope({
+			action: "explain_gate",
+			success: true,
+			ok: true,
+			workspace,
+			roadmap_gate: gate,
+			closed_gates: gate.closed_gates || [],
+			open_gates: gate.open_gates || [],
+			blocking_gates: gate.blocking_gates || [],
+			kanban_complete_allowed: gate.kanban_complete_allowed,
+			preferred_command: gate.preferred_command,
+			report,
+			operator_summary: report.split("\n")[0] || "Roadmap gate explanation",
+			recommended_next_action: status.recommended_next_action,
+			project_steering_digest: status.project_steering_digest,
+			project_identity_line: status.project_identity_line,
+			steering_brief: status.steering_brief,
+			agent_next_call: status.agent_next_call,
+			phase: status.phase,
+		})
+	}
+
+	public async explainStale(workspace: string): Promise<Record<string, unknown>> {
+		const status = await this.getOperationalStatus(workspace, "", "standard")
+		const gate = (status.roadmap_gate || {}) as Record<string, unknown>
+		const freshness = (status.checkpoint_freshness || {
+			stale: gate.checkpoint_stale,
+			reason: gate.stale_reason,
+			summary: gate.stale_summary,
+			recommended_action: gate.checkpoint_stale
+				? "roadmap(action='checkpoint', context='stale refresh')"
+				: "roadmap(action='guide')",
+		}) as Record<string, unknown>
+
+		const report = formatExplainStaleReport(freshness, String(status.steering_brief || status.project_identity_line || ""))
+
+		return this.wrapClarityEnvelope({
+			action: "explain_stale",
+			success: true,
+			ok: true,
+			workspace,
+			checkpoint_freshness: freshness,
+			checkpoint_stale: freshness.stale ?? gate.checkpoint_stale,
+			report,
+			operator_summary: String(freshness.summary || report.split("\n")[0]),
+			agent_next_call: String(freshness.recommended_action || "roadmap(action='checkpoint', context='stale refresh')"),
+			project_steering_digest: status.project_steering_digest,
+			project_identity_line: status.project_identity_line,
+			steering_brief: status.steering_brief,
+			phase: status.phase,
+			roadmap_gate: gate,
+		})
+	}
+
+	public async autoBootstrapIfNeeded(workspace: string): Promise<Record<string, unknown> | null> {
+		const cfg = getRoadmapConfig()
+		if (!cfg.enabled || !cfg.auto_bootstrap) {
+			return null
+		}
+
+		const roadmapPath = path.join(workspace, "ROADMAP.md")
+		if (await fileExists(roadmapPath)) {
+			if (cfg.auto_bootstrap_fill) {
+				const status = await this.getOperationalStatus(workspace, "", "light")
+				if (status.bootstrap_complete === false) {
+					return this.applyBootstrapFillBrief(workspace, "write")
+				}
+			}
+			return null
+		}
+
+		const evidence = await this.gatherEvidence(workspace, null, "full")
+		const skeleton = bootstrapSkeletonFromEvidenceAutofilled(evidence)
+		await fs.writeFile(roadmapPath, skeleton, "utf8")
+		await this.recordFileMutation(workspace, "roadmap", "ROADMAP.md")
+
+		let result: Record<string, unknown> = {
+			action: "auto_bootstrap",
+			success: true,
+			ok: true,
+			workspace,
+			roadmap_path: roadmapPath,
+			written: true,
+			operator_summary: "Created ROADMAP.md from workspace evidence.",
+			agent_next_call: "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')",
+		}
+
+		if (cfg.auto_bootstrap_fill) {
+			const filled = await this.applyBootstrapFillBrief(workspace, "write")
+			result = { ...result, bootstrap_autofill_applied: filled }
+			if ((filled as Record<string, unknown>).written) {
+				result.operator_summary = filled.operator_summary
+				result.agent_next_call = "roadmap(action='validate')"
+			}
+		}
+
+		return this.wrapClarityEnvelope(result)
+	}
+
 	// State Operations
 	public getStatePath(workspace: string): string {
 		return path.join(workspace, ".dietcode", "roadmap-state.json")
@@ -1367,11 +1566,21 @@ export class RoadmapService {
 		try {
 			await fs.mkdir(path.dirname(stateFile), { recursive: true })
 			await fs.writeFile(stateFile, JSON.stringify(merged, null, 2), "utf8")
-		} catch {}
+		} catch (error) {
+			await recordLastError({
+				string_code: "roadmap_state_write_failed",
+				message: error instanceof Error ? error.message : String(error),
+				retry_command: "roadmap(action='validate')",
+				safe_to_retry: true,
+			})
+			return { ...merged, _write_failed: true }
+		}
+		invalidateRoadmapWorkspaceCache(workspace)
 		return merged
 	}
 
 	public async recordFileMutation(workspace: string, tool: string, filePath: string): Promise<any> {
+		invalidateRoadmapWorkspaceCache(workspace)
 		return this.writeState(workspace, {
 			validation_pending: true,
 			schema_valid: null,
@@ -1574,7 +1783,6 @@ export class RoadmapService {
 
 	// Gate State
 	public async buildRoadmapGateState(workspace: string, evidence: any, validation: RoadmapValidation | null): Promise<any> {
-		const cfg = DEFAULT_CONFIG
 		const pathStr = path.join(workspace, "ROADMAP.md")
 		const present = await fileExists(pathStr)
 		const wsState = await this.readState(workspace)
@@ -1585,7 +1793,6 @@ export class RoadmapService {
 
 		let since_commits: string[] = []
 		if (checkpoint_date && present) {
-			// git commits since YYYY-MM-DD
 			const resCommits = await runGit(workspace, ["log", "--oneline", `--since=${checkpoint_date.trim()}`])
 			since_commits = resCommits ? resCommits.split(/\r?\n/).filter(Boolean) : []
 		}
@@ -1594,186 +1801,20 @@ export class RoadmapService {
 			checkpoint_date,
 			git_commits,
 			validation ? validation.valid : (wsState.schema_valid ?? null),
-			cfg.stale_checkpoint_days,
+			getRoadmapConfig().stale_checkpoint_days,
 			since_commits,
 		)
 
-		const text = evidence._roadmap_text || ""
-		const placeholders = findBootstrapPlaceholders(text)
-		const bootstrap_placeholder_count = placeholders.length
-		const bootstrap_complete = bootstrap_placeholder_count === 0
-
-		const closed: any[] = []
-		const open_ids: string[] = []
-
-		const fp = evidence.project_fingerprint || {}
-		const brief = fp.steering_brief || fp.steering_identity || ""
-
-		// roadmap_enabled
-		if (cfg.enabled) {
-			open_ids.push("roadmap_enabled")
-		} else {
-			closed.push({
-				id: "roadmap_enabled",
-				label: "Roadmap feature enabled",
-				why: "dietcode.roadmap.enabled is false",
-				fix: "Set dietcode.roadmap.enabled: true in config",
-				safe_to_apply: true,
-				blocks_kanban_complete: false,
-			})
-		}
-
-		// workspace_safe
-		open_ids.push("workspace_safe")
-
-		// roadmap_present
-		if (present) {
-			open_ids.push("roadmap_present")
-		} else {
-			closed.push({
-				id: "roadmap_present",
-				label: "ROADMAP.md exists",
-				why: "No steering surface at workspace root",
-				fix: "roadmap(action='checkpoint') to bootstrap ROADMAP.md",
-				safe_to_apply: true,
-				blocks_kanban_complete: false,
-			})
-		}
-
-		// workspace_skill_installed
-		open_ids.push("workspace_skill_installed")
-
-		// schema_valid
-		const isValid = validation ? validation.valid : wsState.schema_valid !== false
-		if (isValid) {
-			open_ids.push("schema_valid")
-		} else {
-			let why = "Schema validation failed — checkpoint pass incomplete"
-			let fix = "roadmap(action='validate') — fix reported schema validation errors"
-			if (bootstrap_complete === false) {
-				fix = "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')"
-				if (brief) {
-					why = `${brief}: schema validation failed — bootstrap placeholders may still remain`
-				}
-			} else if (brief) {
-				fix = `Repair ROADMAP.md schema for ${brief}, then roadmap(action='validate')`
-			}
-			closed.push({
-				id: "schema_valid",
-				label: "ROADMAP.md schema valid",
-				why,
-				fix,
-				safe_to_apply: true,
-				blocks_kanban_complete: false,
-			})
-		}
-
-		// validation_current
-		const validationPending = !!wsState.validation_pending
-		if (!validationPending || !present) {
-			open_ids.push("validation_current")
-		} else {
-			closed.push({
-				id: "validation_current",
-				label: "ROADMAP.md validated after last edit",
-				why: "ROADMAP.md changed since last schema validation",
-				fix: "roadmap(action='validate') before kanban_complete",
-				safe_to_apply: true,
-				blocks_kanban_complete: true,
-			})
-		}
-
-		// checkpoint_fresh
-		if (!freshness.stale || !present) {
-			open_ids.push("checkpoint_fresh")
-		} else {
-			closed.push({
-				id: "checkpoint_fresh",
-				label: "Recent checkpoint fresh",
-				why: "Checkpoint stale vs project activity or missing date",
-				fix: "roadmap(action='checkpoint', context='stale refresh')",
-				safe_to_apply: true,
-				blocks_kanban_complete: true,
-			})
-		}
-
-		// bootstrap_complete
-		if (bootstrap_complete || !present) {
-			open_ids.push("bootstrap_complete")
-		} else {
-			closed.push({
-				id: "bootstrap_complete",
-				label: "Bootstrap placeholders filled",
-				why: brief
-					? `${brief}: ${bootstrap_placeholder_count} unfilled bootstrap template phrase(s) remain`
-					: "ROADMAP.md still contains unfilled bootstrap/template guidance phrases",
-				fix: "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')",
-				safe_to_apply: true,
-				blocks_kanban_complete: false,
-			})
-		}
-
-		// Evaluate blocking gates
-		const blocking: any[] = []
-		for (const gate of closed) {
-			const gate_id = gate.id
-			if (gate_id === "schema_valid" && cfg.block_kanban_on_invalid_schema) {
-				blocking.push(gate)
-				continue
-			}
-			if (!gate.blocks_kanban_complete) {
-				continue
-			}
-			if (gate_id === "checkpoint_fresh" && !cfg.warn_on_stale_before_complete) {
-				continue
-			}
-			if (gate_id === "validation_current" && !cfg.block_kanban_on_validation_pending) {
-				blocking.push(gate)
-				continue
-			}
-			if (gate_id === "bootstrap_complete" && !cfg.block_kanban_on_bootstrap_incomplete) {
-				blocking.push(gate)
-				continue
-			}
-			blocking.push(gate)
-		}
-
-		const kanban_complete_allowed = !cfg.enabled || blocking.length === 0
-
-		let preferred = "roadmap(action='guide')"
-		if (validationPending) {
-			preferred = "roadmap(action='validate')"
-		} else if (bootstrap_complete === false) {
-			preferred = "roadmap(action='apply_bootstrap_fill', context='write')"
-		} else if (freshness.stale) {
-			preferred = "roadmap(action='checkpoint')"
-		} else if (isValid === false) {
-			preferred = "roadmap(action='validate')"
-		}
-
-		return {
-			enabled: cfg.enabled,
+		const inputs = await collectGateInputs({
 			workspace,
-			roadmap_present: present,
-			schema_valid: isValid,
-			schema_complete: roadmap.sections_missing?.length === 0,
-			checkpoint_fresh: !freshness.stale,
-			checkpoint_stale: freshness.stale,
-			stale_reason: freshness.reason,
-			stale_summary: freshness.summary,
-			kanban_complete_allowed,
-			closed_gates: closed,
-			open_gates: open_ids,
-			closed_gate_count: closed.length,
-			blocking_gate_count: blocking.length,
-			blocking_gates: blocking,
-			checkpoint_allowed: kanban_complete_allowed,
-			preferred_command: preferred,
-			validation_pending: validationPending,
-			bootstrap_complete,
-			bootstrap_placeholder_count,
-			workspace_state: wsState,
-		}
+			evidence,
+			validation,
+			freshness,
+			workspaceState: wsState,
+			roadmapPresent: present,
+		})
+
+		return buildGateStateFromInputs(inputs)
 	}
 
 	// Bootstrap Fill Planning & Writing
@@ -1880,53 +1921,98 @@ export class RoadmapService {
 		return result
 	}
 
-	// Tool actions implementations
-	public async getOperationalStatus(
+	// Cached workspace context for gate/evidence operations
+	private async resolveWorkspaceContext(
 		workspace: string,
-		contextHint = "",
-		tier: "light" | "standard" | "full" = "standard",
-	): Promise<any> {
+		tier: EvidenceTier = "standard",
+		roadmapText?: string | null,
+	): Promise<{
+		workspace: string
+		text: string
+		roadmapPath: string
+		evidence: any
+		validation: RoadmapValidation
+		gateState: any
+		state: any
+	}> {
+		const { key, roadmapPath } = await buildSnapshotKey(workspace, tier)
+		const cached = getSnapshotFromCache(key)
 		const state = await this.readState(workspace)
-		const roadmapPath = path.join(workspace, "ROADMAP.md")
-		let text = ""
-		if (await fileExists(roadmapPath)) {
-			text = await readText(roadmapPath, 500000)
+
+		if (cached) {
+			return {
+				workspace,
+				text: String((cached.evidence as any)._roadmap_text || ""),
+				roadmapPath,
+				evidence: cached.evidence,
+				validation: cached.validation as RoadmapValidation,
+				gateState: cached.gateState,
+				state,
+			}
+		}
+
+		let text = roadmapText
+		if (text === undefined) {
+			text = (await fileExists(roadmapPath)) ? await readText(roadmapPath, 500000) : ""
+		} else if (text === null) {
+			text = ""
 		}
 
 		const evidence = await this.gatherEvidence(workspace, text, tier)
 		const validation = validateRoadmapContent(text)
 		const gateState = await this.buildRoadmapGateState(workspace, evidence, validation)
 
-		const bootstrap_inc = isBootstrapIncomplete(
-			gateState.roadmap_present,
-			gateState.bootstrap_complete,
-			gateState.bootstrap_placeholder_count,
-		)
+		setSnapshotCache(key, {
+			workspace,
+			roadmapPath,
+			roadmapMtimeMs: null,
+			tier,
+			evidence,
+			validation,
+			gateState,
+			cachedAt: Date.now(),
+		})
 
-		const phase = determinePhase(
-			gateState.roadmap_present,
-			evidence.roadmap.sections_missing || [],
-			evidence.roadmap.health_status,
-			validation.valid,
-			bootstrap_inc,
-		)
+		return { workspace, text, roadmapPath, evidence, validation, gateState, state }
+	}
 
-		const next_rec = recommendNextAction(
-			phase.phase,
-			gateState.roadmap_present,
-			validation.valid,
-			gateState.checkpoint_stale,
-			!!state.validation_pending,
-			bootstrap_inc,
-		)
+	private buildOperationalPayload(
+		action: string,
+		ctx: Awaited<ReturnType<RoadmapService["resolveWorkspaceContext"]>>,
+		userRequest = "",
+	): any {
+		const { workspace, text, evidence, validation, gateState, state } = ctx
+		const bootstrap_inc = isBootstrapIncomplete({
+			roadmap_exists: gateState.roadmap_present,
+			bootstrap_complete: gateState.bootstrap_complete,
+			bootstrap_placeholder_count: gateState.bootstrap_placeholder_count,
+		})
+		const phase = determinePhase({
+			roadmap_exists: gateState.roadmap_present,
+			sections_missing: evidence.roadmap.sections_missing || [],
+			health_status: evidence.roadmap.health_status,
+			validation_valid: validation.valid,
+			bootstrap_incomplete: bootstrap_inc,
+		})
+		const next_rec = recommendNextAction({
+			phase: phase.phase,
+			roadmap_exists: gateState.roadmap_present,
+			schema_valid: validation.valid,
+			stale: gateState.checkpoint_stale,
+			validation_pending: !!state.validation_pending,
+			bootstrap_incomplete: bootstrap_inc,
+		})
 
 		const payload: any = {
-			action: "guide",
+			action,
 			success: true,
 			ok: true,
+			enabled: getRoadmapConfig().enabled,
 			phase: phase.phase,
 			skill: "auto-rolling-roadmap",
+			skill_path: WORKSPACE_SKILL_REL,
 			workspace,
+			roadmap_path: ctx.roadmapPath,
 			roadmap_exists: gateState.roadmap_present,
 			health_status: evidence.roadmap.health_status,
 			code_soup_risk: evidence.roadmap.code_soup_risk || (evidence.code_soup_audit || {}).overall_risk || "Low",
@@ -1952,51 +2038,46 @@ export class RoadmapService {
 			steering_brief: (evidence.project_fingerprint || {}).steering_brief,
 			stack_summary: (evidence.project_fingerprint || {}).stack_summary,
 			project_archetype: (evidence.project_fingerprint || {}).project_archetype,
+			bootstrap_complete: gateState.bootstrap_complete,
+			bootstrap_placeholder_count: gateState.bootstrap_placeholder_count,
 		}
 
+		if (userRequest.trim()) {
+			payload.user_request = userRequest.trim()
+		}
 		if (state.validation_pending) {
 			payload.validation_pending = true
 		}
 
 		enrichWithBootstrapFill(payload, text, evidence, bootstrap_inc)
-		return payload
+		payload.steering_line = formatAgentSteeringLine(payload.project_steering_digest || {})
+		return this.wrapClarityEnvelope(payload, phase)
+	}
+
+	// Tool actions implementations
+	public async getOperationalStatus(workspace: string, contextHint = "", tier: EvidenceTier = "standard"): Promise<any> {
+		const ctx = await this.resolveWorkspaceContext(workspace, tier)
+		const action = contextHint.trim().toLowerCase() === "status" ? "status" : "guide"
+		return this.buildOperationalPayload(action, ctx)
 	}
 
 	public async checkpointBrief(workspace: string, context = "", userRequest = ""): Promise<any> {
-		const roadmapPath = path.join(workspace, "ROADMAP.md")
-		let text = ""
-		if (await fileExists(roadmapPath)) {
-			text = await readText(roadmapPath, 500000)
-		}
-
-		const evidence = await this.gatherEvidence(workspace, text, "full")
-		const validation = validateRoadmapContent(text)
-		const gateState = await this.buildRoadmapGateState(workspace, evidence, validation)
-		const status = await this.getOperationalStatus(workspace, context, "full")
+		const ctx = await this.resolveWorkspaceContext(workspace, "full")
+		const status = this.buildOperationalPayload("checkpoint", ctx, userRequest)
+		const { evidence, gateState } = ctx
+		const text = ctx.text
 
 		const payload: any = {
+			...status,
 			action: "checkpoint",
-			success: true,
-			ok: true,
-			skill: "auto-rolling-roadmap",
-			workspace,
-			roadmap_path: roadmapPath,
-			phase: status.phase,
-			prime_directive: status.prime_directive,
 			algorithm_steps: algorithmSteps(),
 			required_sections: [...REQUIRED_SECTIONS],
 			evidence,
-			project_fingerprint: evidence.project_fingerprint,
 			existing_roadmap_summary: evidence.roadmap,
 			code_soup_pre_audit: evidence.code_soup_audit,
 			agent_instructions: agentInstructions(status.phase, evidence),
 			response_format: responseFormatTemplate(),
 			bootstrap_template_available: !evidence.roadmap.exists,
-			operator_summary: status.operator_summary,
-			recommended_next_action: status.recommended_next_action,
-			steering_brief: (evidence.project_fingerprint || {}).steering_brief,
-			agent_next_call: status.agent_next_call,
-			steering_line: formatAgentSteeringLine(evidence.project_steering_digest || {}),
 			open_todo_marker_count: (evidence.todo_markers || []).length,
 		}
 
@@ -2005,11 +2086,11 @@ export class RoadmapService {
 			payload.bootstrap_evidence_driven = true
 		}
 
-		const bootstrap_inc = isBootstrapIncomplete(
-			gateState.roadmap_present,
-			gateState.bootstrap_complete,
-			gateState.bootstrap_placeholder_count,
-		)
+		const bootstrap_inc = isBootstrapIncomplete({
+			roadmap_exists: gateState.roadmap_present,
+			bootstrap_complete: gateState.bootstrap_complete,
+			bootstrap_placeholder_count: gateState.bootstrap_placeholder_count,
+		})
 		if (status.phase === "bootstrap_fill" || bootstrap_inc) {
 			enrichWithBootstrapFill(payload, text, evidence, true)
 		}
@@ -2031,9 +2112,14 @@ export class RoadmapService {
 			if (applied.written) {
 				payload.operator_summary = applied.operator_summary
 				payload.agent_next_call = "roadmap(action='validate')"
-				const updatedStatus = await this.getOperationalStatus(workspace, "", "full")
-				payload.phase = updatedStatus.phase
+				invalidateRoadmapWorkspaceCache(workspace)
+				const refreshed = await this.resolveWorkspaceContext(workspace, "full")
+				payload.phase = this.buildOperationalPayload("checkpoint", refreshed).phase
 			}
+		}
+
+		if (isDigestContext(context)) {
+			return slimCheckpointPayload(payload)
 		}
 
 		return payload
@@ -2081,37 +2167,43 @@ export class RoadmapService {
 			validation.issues.length,
 			bootstrap_placeholder_count,
 		)
+		if (validation.valid) {
+			await clearLastError()
+		}
+		invalidateRoadmapWorkspaceCache(workspace)
 
-		const evidence = await this.gatherEvidence(workspace, text, "standard")
-		const gateState = await this.buildRoadmapGateState(workspace, evidence, validation)
+		const ctx = await this.resolveWorkspaceContext(workspace, "standard", text)
+		const evidence = ctx.evidence
+		const gateState = ctx.gateState
 
-		const bootstrap_inc = isBootstrapIncomplete(
-			gateState.roadmap_present,
-			gateState.bootstrap_complete,
-			gateState.bootstrap_placeholder_count,
-		)
+		const bootstrap_inc = isBootstrapIncomplete({
+			roadmap_exists: gateState.roadmap_present,
+			bootstrap_complete: gateState.bootstrap_complete,
+			bootstrap_placeholder_count: gateState.bootstrap_placeholder_count,
+		})
 
-		const phaseInfo = determinePhase(
-			!!text.trim(),
-			evidence.roadmap.sections_missing || [],
-			validation.health_status || null,
-			validation.valid,
-			bootstrap_inc,
-		)
+		const phaseInfo = determinePhase({
+			roadmap_exists: !!text.trim(),
+			sections_missing: evidence.roadmap.sections_missing || [],
+			health_status: validation.health_status || null,
+			validation_valid: validation.valid,
+			bootstrap_incomplete: bootstrap_inc,
+		})
 
-		const next_rec = recommendNextAction(
-			phaseInfo.phase,
-			!!text.trim(),
-			validation.valid,
-			gateState.checkpoint_stale,
-			false,
-			bootstrap_inc,
-		)
+		const next_rec = recommendNextAction({
+			phase: phaseInfo.phase,
+			roadmap_exists: !!text.trim(),
+			schema_valid: validation.valid,
+			stale: gateState.checkpoint_stale,
+			validation_pending: false,
+			bootstrap_incomplete: bootstrap_inc,
+		})
 
 		const payload: any = {
 			action: "validate",
 			success: validation.valid,
 			ok: validation.valid,
+			phase: phaseInfo.phase,
 			workspace,
 			roadmap_path: roadmapPath,
 			validation: validation_dict,
@@ -2138,7 +2230,7 @@ export class RoadmapService {
 			payload.project_identity_line = payload.project_steering_digest.identity_line
 		}
 
-		return payload
+		return this.wrapClarityEnvelope(payload)
 	}
 
 	public async getTemplateBrief(workspace: string): Promise<any> {
@@ -2174,7 +2266,7 @@ export class RoadmapService {
 			payload.agent_next_call = fill_plan.agent_next_call
 		}
 
-		return payload
+		return this.wrapClarityEnvelope(payload)
 	}
 
 	public async applyBootstrapFillBrief(workspace: string, context = ""): Promise<any> {
@@ -2208,7 +2300,7 @@ export class RoadmapService {
 		const evidence = await this.gatherEvidence(workspace, null, "light")
 		payload.steering_brief = (evidence.project_fingerprint || {}).steering_brief
 		payload.project_archetype = (evidence.project_fingerprint || {}).project_archetype
-		return payload
+		return this.wrapClarityEnvelope(payload)
 	}
 }
 
@@ -2220,151 +2312,6 @@ function phraseFromIssue(message: string): string {
 
 function lenPlaceholders(text: string): number {
 	return findBootstrapPlaceholders(text).length
-}
-
-function isBootstrapIncomplete(
-	roadmap_exists: boolean,
-	bootstrap_complete: boolean | undefined,
-	bootstrap_placeholder_count: number | undefined,
-): boolean {
-	if (!roadmap_exists) return false
-	if (bootstrap_complete === false) return true
-	if (bootstrap_complete === true) return false
-	return !!(bootstrap_placeholder_count && bootstrap_placeholder_count > 0)
-}
-
-function determinePhase(
-	roadmap_exists: boolean,
-	sections_missing: string[],
-	health_status: string | null,
-	validation_valid: boolean | undefined,
-	bootstrap_incomplete: boolean,
-): { phase: string; operator_summary: string; agent_next_call: string; agent_blocked: boolean } {
-	if (validation_valid === false) {
-		return {
-			phase: "validate_pending",
-			operator_summary: "ROADMAP.md failed schema validation — repair before next checkpoint.",
-			agent_next_call: "roadmap(action='validate') then fix reported issues",
-			agent_blocked: false,
-		}
-	}
-	if (!roadmap_exists) {
-		return {
-			phase: "bootstrap",
-			operator_summary: "No ROADMAP.md — run a checkpoint pass to create the steering surface.",
-			agent_next_call: "roadmap(action='checkpoint') then roadmap(action='template') if needed",
-			agent_blocked: false,
-		}
-	}
-	if (bootstrap_incomplete) {
-		return {
-			phase: "bootstrap_fill",
-			operator_summary:
-				"Bootstrap template phrases remain — preview roadmap(action='apply_bootstrap_fill'), apply with context='write', then validate.",
-			agent_next_call: "roadmap(action='apply_bootstrap_fill', context='write')",
-			agent_blocked: false,
-		}
-	}
-	if (sections_missing.length > 6) {
-		return {
-			phase: "structure_repair",
-			operator_summary: `ROADMAP.md missing ${sections_missing.length} sections — repair schema without losing history.`,
-			agent_next_call: "roadmap(action='checkpoint', context='repair schema')",
-			agent_blocked: false,
-		}
-	}
-	if (health_status && ["Fragmenting", "Overloaded", "Blocked", "Drifting"].includes(health_status)) {
-		return {
-			phase: "coherence_recovery",
-			operator_summary: `Roadmap health is ${health_status} — run coherence recovery and demote overloaded Now items.`,
-			agent_next_call: "roadmap(action='checkpoint', context='coherence recovery')",
-			agent_blocked: false,
-		}
-	}
-	return {
-		phase: "checkpoint",
-		operator_summary: "Roadmap present — checkpoint after meaningful direction or risk changes.",
-		agent_next_call: "roadmap(action='checkpoint')",
-		agent_blocked: false,
-	}
-}
-
-function recommendNextAction(
-	phase: string,
-	roadmap_exists: boolean,
-	schema_valid: boolean | null | undefined,
-	stale: boolean,
-	validation_pending: boolean,
-	bootstrap_incomplete: boolean,
-): { action: string; command: string; detail: string } {
-	if (validation_pending) {
-		return {
-			action: "run_validate",
-			command: "roadmap(action='validate')",
-			detail: "ROADMAP.md mutated since last validate — confirm schema before closing pass.",
-		}
-	}
-	if (bootstrap_incomplete || phase === "bootstrap_fill") {
-		return {
-			action: "apply_bootstrap_fill",
-			command: "roadmap(action='apply_bootstrap_fill', context='write')",
-			detail: "Apply per-project evidence replacements to resolve bootstrap placeholders, then validate. Preview first: roadmap(action='apply_bootstrap_fill').",
-		}
-	}
-	if (!roadmap_exists) {
-		return {
-			action: "bootstrap_roadmap",
-			command: "roadmap(action='checkpoint')",
-			detail: "ROADMAP.md missing — run a checkpoint pass to create the steering surface.",
-		}
-	}
-	if (schema_valid === false) {
-		return {
-			action: "run explain-gate",
-			command: "/roadmap explain-gate",
-			detail: "Schema gate closed — review closed gates, fix ROADMAP.md, then validate.",
-		}
-	}
-	if (stale) {
-		return {
-			action: "run explain-gate",
-			command: "/roadmap explain-gate",
-			detail: "Freshness gate closed — checkpoint outdated vs project activity.",
-		}
-	}
-	if (phase === "structure_repair") {
-		return {
-			action: "repair_schema",
-			command: "roadmap(action='checkpoint', context='repair schema')",
-			detail: "ROADMAP.md schema incomplete — repair missing sections without losing history.",
-		}
-	}
-	if (phase === "coherence_recovery") {
-		return {
-			action: "coherence_recovery",
-			command: "roadmap(action='checkpoint', context='coherence recovery')",
-			detail: "Roadmap health degraded — demote overloaded Now items and strengthen section 9 audit.",
-		}
-	}
-	if (phase === "validate_pending") {
-		return {
-			action: "run_validate",
-			command: "roadmap(action='validate')",
-			detail: "Validation pending — confirm schema before closing the checkpoint pass.",
-		}
-	}
-	if (phase === "bootstrap") {
-		return {
-			action: "run_checkpoint",
-			command: "roadmap(action='checkpoint')",
-			detail: "Bootstrap ROADMAP.md from gathered evidence.",
-		}
-	}
-	return {
-		action: "wait",
-		command: "/roadmap cockpit",
-		detail: "Roadmap steering surface current — checkpoint after meaningful direction shifts.",
-	}
 }
 
 function buildProjectSteeringDigest(fp: any, fillPlan?: any): any {

@@ -46,6 +46,7 @@ export const config = createVariant(ModelFamily.NATIVE_GPT_5)
 	.components(
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.ROADMAP_STEERING,
 		SystemPromptSection.TOOL_USE,
 		SystemPromptSection.TASK_PROGRESS,
 		SystemPromptSection.ACT_VS_PLAN,
@@ -79,6 +80,8 @@ export const config = createVariant(ModelFamily.NATIVE_GPT_5)
 		DietCodeDefaultTool.GENERATE_EXPLANATION,
 		DietCodeDefaultTool.USE_SKILL,
 		DietCodeDefaultTool.PROJECT_MAP,
+		DietCodeDefaultTool.ROADMAP,
+		DietCodeDefaultTool.ROADMAP_CHECKPOINT,
 		DietCodeDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({

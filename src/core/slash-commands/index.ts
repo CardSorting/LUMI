@@ -2,6 +2,7 @@ import type { ApiProviderInfo } from "@core/api"
 import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { McpPromptResponse } from "@shared/mcp"
 import fs from "fs/promises"
+import { executeRoadmapSlashCommand, roadmapSlashCommandResponse } from "@/services/roadmap/RoadmapSlashCommand"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { isNativeToolCallingConfig } from "@/utils/model-utils"
@@ -50,6 +51,7 @@ export async function parseSlashCommands(
 	enableNativeToolCalls?: boolean,
 	providerInfo?: ApiProviderInfo,
 	mcpPromptFetcher?: McpPromptFetcher,
+	workspace?: string,
 ): Promise<{ processedText: string; needsDietCoderulesFileCheck: boolean }> {
 	const SUPPORTED_DEFAULT_COMMANDS = [
 		"newtask",
@@ -61,6 +63,7 @@ export async function parseSlashCommands(
 		"replan",
 		"explain-changes",
 		"document",
+		"roadmap",
 	]
 
 	// Determine if the current provider/model/setting actually uses native tool calling
@@ -122,6 +125,19 @@ export async function parseSlashCommands(
 		return fullText.substring(0, slashPositionInFullText) + fullText.substring(commandEndPosition)
 	}
 
+	const removeRoadmapSlashCommand = (
+		fullText: string,
+		contentStartIndex: number,
+		slashMatch: RegExpExecArray,
+		rawArgs: string,
+	): string => {
+		const slashPositionInContent = slashMatch.index! + slashMatch[1].length
+		const slashPositionInFullText = contentStartIndex + slashPositionInContent
+		const commandText = rawArgs ? `/roadmap ${rawArgs}` : "/roadmap"
+		const commandEndPosition = slashPositionInFullText + commandText.length
+		return fullText.substring(0, slashPositionInFullText) + fullText.substring(commandEndPosition)
+	}
+
 	// if we find a valid match, we will return inside that block
 	for (const { regex } of tagPatterns) {
 		const regexObj = new RegExp(regex.source, regex.flags)
@@ -144,6 +160,22 @@ export async function parseSlashCommands(
 			const commandName = slashMatch[2] // casing matters
 
 			// we give preference to the default commands if the user has a file with the same name
+			if (commandName === "roadmap") {
+				const slashPositionInContent = slashMatch.index! + slashMatch[1].length
+				const rawArgs = tagContent.slice(slashPositionInContent + "/roadmap".length).trim()
+				const textWithoutSlashCommand = removeRoadmapSlashCommand(text, contentStartIndex, slashMatch, rawArgs)
+				const report = await executeRoadmapSlashCommand(rawArgs, workspace)
+				const processedText = roadmapSlashCommandResponse(report) + textWithoutSlashCommand
+
+				telemetryService.captureSlashCommandUsed(
+					ulid,
+					rawArgs ? `roadmap ${rawArgs.split(/\s+/)[0]}` : "roadmap",
+					"builtin",
+				)
+
+				return { processedText, needsDietCoderulesFileCheck: false }
+			}
+
 			if (SUPPORTED_DEFAULT_COMMANDS.includes(commandName)) {
 				// remove the slash command and add custom instructions at the top of this message
 				const textWithoutSlashCommand = removeSlashCommand(text, tagContent, contentStartIndex, slashMatch)

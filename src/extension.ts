@@ -53,10 +53,29 @@ import { exportVSCodeStorageToSharedFiles } from "./hosts/vscode/vscode-to-file-
 import { ExtensionRegistryInfo } from "./registry"
 import { AuthService } from "./services/auth/AuthService"
 import { LogoutReason } from "./services/auth/types"
+import { disposeRoadmapFileWatcher, registerRoadmapFileWatcher } from "./services/roadmap/RoadmapFileWatcher"
+import { setRoadmapExtensionRoot } from "./services/roadmap/RoadmapSkillInstall"
 import { telemetryService } from "./services/telemetry"
 import { SharedUriHandler, TASK_URI_PATH } from "./services/uri/SharedUriHandler"
 import { ShowMessageType } from "./shared/proto/host/window"
 import { fileExistsAtPath } from "./utils/fs"
+
+function setupRoadmapFileWatcher(context: vscode.ExtensionContext): void {
+	registerRoadmapFileWatcher({
+		getWorkspaceFolders: () => vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) || [],
+		watchRoadmapFile: (workspace, onChange) => {
+			try {
+				const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(workspace, "ROADMAP.md"))
+				watcher.onDidChange(onChange)
+				watcher.onDidCreate(onChange)
+				context.subscriptions.push(watcher)
+				return { dispose: () => watcher.dispose() }
+			} catch {
+				return null
+			}
+		},
+	})
+}
 
 // This method is called when the VS Code extension is activated.
 // NOTE: This is VS Code specific - services that should be registered
@@ -67,6 +86,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	// 1. Set up HostProvider for VSCode
 	// IMPORTANT: This must be done before any service can be registered
 	setupHostProvider(context)
+	setRoadmapExtensionRoot(context.extensionPath)
+	setupRoadmapFileWatcher(context)
+	context.subscriptions.push({
+		dispose: () => disposeRoadmapFileWatcher(),
+	})
+	vscode.workspace.onDidChangeWorkspaceFolders(() => setupRoadmapFileWatcher(context))
 
 	// 2. Clean up legacy data patterns within VSCode's native storage.
 	// Moves workspace→global keys, task history→file, custom instructions→rules, etc.
@@ -700,6 +725,7 @@ async function getBinaryLocation(name: string): Promise<string> {
 
 // This method is called when your extension is deactivated
 export async function deactivate() {
+	disposeRoadmapFileWatcher()
 	// Dispose Non-VSCode-specific services
 	tearDown()
 

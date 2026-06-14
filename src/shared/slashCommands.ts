@@ -43,6 +43,12 @@ export const BASE_SLASH_COMMANDS: SlashCommand[] = [
 		cliCompatible: true,
 	},
 	{
+		name: "roadmap",
+		description: "Auto-rolling roadmap operator console (cockpit, doctor, validate, explain-gate, …)",
+		section: "default",
+		cliCompatible: true,
+	},
+	{
 		name: "document",
 		description: "Triggers the forensic documentation phase to align Knowledge Ledger",
 		section: "default",

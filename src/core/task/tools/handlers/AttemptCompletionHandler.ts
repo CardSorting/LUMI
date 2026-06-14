@@ -28,6 +28,8 @@ import { detectReplanIntent } from "@shared/detectReplanIntent"
 import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
+import { evaluateRoadmapCompletionBlock, failClosedCompletionMessage } from "@/services/roadmap/RoadmapCompletionGate"
+import { finalizeRoadmapSession } from "@/services/roadmap/RoadmapLifecycle"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
@@ -116,32 +118,21 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Roadmap Governance: Kanban Completion Gates
-		try {
-			const roadmapService = RoadmapService.getInstance()
-			const status = await roadmapService.getOperationalStatus(config.cwd)
-			if (status.enabled) {
-				if (status.validation_pending) {
+		const roadmapService = RoadmapService.getInstance()
+		if (roadmapService.isEnabled()) {
+			try {
+				const block = await evaluateRoadmapCompletionBlock(config.cwd)
+				if (block.blocked) {
 					config.taskState.consecutiveMistakeCount++
-					return formatResponse.toolError(
-						"Task completion blocked: ROADMAP.md has pending modifications that must be validated first.\n" +
-							"Please run: roadmap(action='validate')",
-					)
+					return formatResponse.toolError(block.message || failClosedCompletionMessage())
 				}
-				if (!status.kanban_complete_allowed) {
+			} catch (error) {
+				Logger.error("[AttemptCompletionHandler] Failed to evaluate Roadmap Governance Gates:", error)
+				if (roadmapService.getConfig().fail_closed_completion_gates) {
 					config.taskState.consecutiveMistakeCount++
-					const blockingGates = status.roadmap_gate?.blocking_gates || []
-					const closedGatesMsg = blockingGates
-						.map((g: { label: string; why: string; fix: string }) => `- ${g.label}: ${g.why}. Fix: ${g.fix}`)
-						.join("\n")
-					return formatResponse.toolError(
-						"Task completion blocked by Roadmap Governance Gates:\n" +
-							closedGatesMsg +
-							"\n\nPlease resolve these gates before calling attempt_completion.",
-					)
+					return formatResponse.toolError(failClosedCompletionMessage())
 				}
 			}
-		} catch (error) {
-			Logger.error("[AttemptCompletionHandler] Failed to evaluate Roadmap Governance Gates:", error)
 		}
 
 		// Double-check completion: reject attempt_completion calls that haven't been re-verified
@@ -426,6 +417,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 					planBaseline,
 				}),
 			)
+			try {
+				await finalizeRoadmapSession(config.cwd, config.taskId)
+			} catch (error) {
+				Logger.warn("[AttemptCompletionHandler] Roadmap session finalize skipped:", error)
+			}
 		}
 
 		// we already sent completion_result says, an empty string asks relinquishes control over button and field

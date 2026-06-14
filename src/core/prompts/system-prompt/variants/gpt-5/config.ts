@@ -31,6 +31,7 @@ export const config = createVariant(ModelFamily.GPT_5)
 	.template(GPT_5_TEMPLATE_OVERRIDES.BASE)
 	.components(
 		SystemPromptSection.JOY_ZONING,
+		SystemPromptSection.ROADMAP_STEERING,
 		SystemPromptSection.AGENT_ROLE,
 		SystemPromptSection.INTEGRITY_WIKI,
 		SystemPromptSection.FORENSIC_TOOLS,
@@ -68,6 +69,8 @@ export const config = createVariant(ModelFamily.GPT_5)
 		DietCodeDefaultTool.GENERATE_EXPLANATION,
 		DietCodeDefaultTool.USE_SKILL,
 		DietCodeDefaultTool.PROJECT_MAP,
+		DietCodeDefaultTool.ROADMAP,
+		DietCodeDefaultTool.ROADMAP_CHECKPOINT,
 		DietCodeDefaultTool.USE_SUBAGENTS,
 	)
 	.placeholders({
