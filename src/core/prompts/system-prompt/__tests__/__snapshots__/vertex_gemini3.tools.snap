@@ -259,6 +259,49 @@
     }
   },
   {
+    "name": "roadmap",
+    "description": "Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Responses include project_identity_line, _roadmap_operator_hints, agent_playbook, and recommended_next_action.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING"
+        },
+        "context": {
+          "type": "STRING"
+        },
+        "user_request": {
+          "type": "STRING"
+        },
+        "task_progress": {
+          "type": "STRING"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  {
+    "name": "roadmap_checkpoint",
+    "description": "Alias for roadmap(action='checkpoint') — full evidence bundle and checkpoint algorithm before editing ROADMAP.md.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "context": {
+          "type": "STRING"
+        },
+        "user_request": {
+          "type": "STRING"
+        },
+        "task_progress": {
+          "type": "STRING"
+        }
+      },
+      "required": []
+    }
+  },
+  {
     "name": "new_task",
     "description": "Request to create a new task with preloaded context covering the conversation with the user up to this point and key information for continuing with the new task. With this tool, you will create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions, with a focus on the most relevant information required for the new task.\nAmong other important areas of focus, this summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing with the new task. The user will be presented with a preview of your generated context and can choose to create a new task or keep chatting in the current conversation. The user may choose to start a new task at any point.",
     "parameters": {
@@ -275,7 +318,7 @@
   },
   {
     "name": "plan_mode_respond",
-    "description": "Respond with a plan that outlines a solution to the user's request. This tool should ONLY be used when you have already explored the relevant files and are ready to present a concrete plan. Only use this tool after you have explored relevant files and collected sufficient context to create a detailed, accurate plan. This tool is only available in PLAN MODE, as indicated by the environment_details.\nIf it becomes apparent that additional exploration is required while the plan_mode_respond response is being generated, the optional needs_more_exploration parameter can be toggled to enable further research. This allows you to acknowledge that more exploration is required before the final plan_mode_respond is generated, and signals that your next message will use exploration tools instead.",
+    "description": "Respond with a plan that outlines a solution to the user's request. This tool should ONLY be used when you have already explored the relevant files and are ready to present a concrete plan. Only use this tool after you have explored relevant files and collected sufficient context to create a detailed, accurate plan. This tool is only available in PLAN MODE, as indicated by the environment_details.\nAfter presenting a finalized plan, the system automatically transitions to ACT MODE so you can implement it.\nIf it becomes apparent that additional exploration is required while the plan_mode_respond response is being generated, the optional needs_more_exploration parameter can be toggled to enable further research. This allows you to acknowledge that more exploration is required before the final plan_mode_respond is generated, and signals that your next message will use exploration tools instead.",
     "parameters": {
       "type": "OBJECT",
       "properties": {

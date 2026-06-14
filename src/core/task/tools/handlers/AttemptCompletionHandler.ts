@@ -46,7 +46,7 @@ import {
 import {
 	emitCompletionGateBlockTelemetry,
 	evaluateCompletionAuditGate,
-	evaluateCompletionGateReadiness,
+	evaluateCompletionGateReadinessAsync,
 	runCompletionPreflightChecks,
 } from "../completionGatePipeline"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -142,10 +142,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 		if (shouldEmitPreflightReadinessHint(config)) {
 			try {
-				const readinessIssues = evaluateCompletionGateReadiness(
+				const readinessIssues = await evaluateCompletionGateReadinessAsync(
 					config,
 					{ result, taskProgress: block.params.task_progress, command },
 					validateCompletionResultQuality,
+					"AttemptCompletionHandler",
 				)
 				const readinessParts = [
 					buildCompletionPreflightReadinessBrief(config),

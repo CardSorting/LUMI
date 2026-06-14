@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, it } from "mocha"
 import "should"
 import { COMPLETION_RESULT_MAX_LENGTH, MAX_COMPLETION_GATE_BLOCK_COUNT } from "@shared/audit/gatePolicy"
+import * as fs from "fs/promises"
+import * as os from "os"
+import * as path from "path"
 import { setRoadmapConfigOverride } from "@/services/roadmap/RoadmapConfig"
 import { TaskState } from "../../TaskState"
 import {
@@ -10,6 +13,7 @@ import {
 } from "../attemptCompletionUtils"
 import {
 	evaluateCompletionGateReadiness,
+	evaluateCompletionGateReadinessAsync,
 	PREFLIGHT_STAGE_RUNNERS,
 	runCompletionGateFlow,
 	runCompletionPreflightChecks,
@@ -32,14 +36,19 @@ function configWithState(taskState: TaskState): TaskConfig {
 
 describe("completionGatePipeline", () => {
 	let taskState: TaskState
+	let tmpDir = ""
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		taskState = new TaskState()
 		setRoadmapConfigOverride({ enabled: false })
+		tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "completion-gate-"))
 	})
 
-	afterEach(() => {
+	afterEach(async () => {
 		setRoadmapConfigOverride(null)
+		if (tmpDir) {
+			await fs.rm(tmpDir, { recursive: true, force: true })
+		}
 	})
 
 	it("fail-fast circuit breaker before quality checks", async () => {
@@ -122,5 +131,30 @@ describe("completionGatePipeline", () => {
 		issues.length.should.be.greaterThan(0)
 		issues[0].stage.should.equal("quality")
 		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
+	})
+
+	it("evaluateCompletionGateReadinessAsync includes roadmap stage when governance blocks", async () => {
+		setRoadmapConfigOverride({ enabled: true })
+		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
+		await fs.writeFile(
+			path.join(tmpDir, ".dietcode", "roadmap-state.json"),
+			JSON.stringify({ validation_pending: true }),
+			"utf8",
+		)
+		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), "# Roadmap\n", "utf8")
+
+		const issues = await evaluateCompletionGateReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
+			result: VALID_RESULT,
+		})
+		issues.some((issue) => issue.stage === "roadmap").should.be.true()
+		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
+		taskState.consecutiveMistakeCount.should.equal(0)
+	})
+
+	it("evaluateCompletionGateReadinessAsync skips roadmap when disabled", async () => {
+		const issues = await evaluateCompletionGateReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
+			result: VALID_RESULT,
+		})
+		issues.some((issue) => issue.stage === "roadmap").should.be.false()
 	})
 })

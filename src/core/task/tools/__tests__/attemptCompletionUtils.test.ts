@@ -23,6 +23,7 @@ import {
 	buildCompletionGateHistoryBlock,
 	buildCompletionGateHumanBrief,
 	buildCompletionGateNextStagesBlock,
+	buildCompletionGateObservabilityEnvelope,
 	buildCompletionGatePassedBrief,
 	buildCompletionGatePassedEnvelope,
 	buildCompletionGatePipelineBrief,
@@ -497,6 +498,25 @@ describe("attemptCompletionUtils", () => {
 			digest.should.containEql("<completion_gate_digest")
 			digest.should.containEql('reason="result_too_long"')
 			digest.should.containEql('stage="max_length"')
+			digest.should.containEql('operational_state="ready"')
+		})
+
+		it("includes operational_state when circuit breaker is tripped", () => {
+			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
+			const digest = buildCompletionGateDigestBlock(configWithState(taskState))
+			digest.should.containEql('operational_state="tripped"')
+		})
+	})
+
+	describe("buildCompletionGateObservabilityEnvelope", () => {
+		it("includes playbook and problem detail when a block reason exists", () => {
+			recordCompletionBlockReason(configWithState(taskState), "result_too_long")
+			const envelope = buildCompletionGateObservabilityEnvelope(configWithState(taskState))
+			envelope.should.containEql("<completion_gate_envelope")
+			envelope.should.containEql("<completion_gate_playbook")
+			envelope.should.containEql("<completion_gate_problem")
+			envelope.should.containEql('reason="result_too_long"')
+			envelope.should.containEql("Shorten the result")
 		})
 	})
 
@@ -553,12 +573,14 @@ describe("attemptCompletionUtils", () => {
 	})
 
 	describe("getCompletionGateTelemetryContext", () => {
-		it("returns pressure, retry status, and failed stage", () => {
+		it("returns pressure, retry status, failed stage, and session id", () => {
 			recordCompletionBlockReason(configWithState(taskState), "retry_cooldown")
+			recordCompletionAttemptTime(configWithState(taskState))
 			const ctx = getCompletionGateTelemetryContext(configWithState(taskState))
 			ctx.pressureLevel.should.equal("stable")
 			should.exist(ctx.failedStage)
 			ctx.failedStage?.should.equal("cooldown")
+			should.exist(ctx.sessionId)
 		})
 	})
 

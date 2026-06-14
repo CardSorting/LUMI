@@ -87,6 +87,23 @@ describe("auditSubagentContext", () => {
 		expect(signals).to.include("GATE: PARENT_BLOCK_HISTORY (4)")
 	})
 
+	it("emits parent operational state signal when not ready", () => {
+		const signals = buildSubagentGateSignals({
+			completionGateBlockCount: 3,
+			completionGateOperationalState: "wait",
+			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
+		})
+		expect(signals).to.include("GATE: PARENT_STATE (wait)")
+	})
+
+	it("includes operational state in parent audit context", () => {
+		const context = buildSubagentAuditContext({
+			completionGateBlockCount: 2,
+			completionGateOperationalState: "blocked",
+		})
+		expect(context).to.contain("Parent gate operational state: blocked")
+	})
+
 	it("emits workspace policy and suppression signals", () => {
 		const lastCompletionAudit = enrichAuditMetadata({
 			violations: [],

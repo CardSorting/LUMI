@@ -78,7 +78,17 @@ describe("SubagentBuilder", () => {
 
 		assert.deepEqual(builder.getAllowedTools(), SUBAGENT_DEFAULT_ALLOWED_TOOLS)
 		const prompt = builder.buildSystemPrompt("generated prompt")
-		assert.equal(prompt, `generated prompt${SUBAGENT_SYSTEM_SUFFIX}`)
+		assert.match(prompt, /^generated prompt/)
+		assert.match(prompt, /SWARM NESTING CONTEXT/)
+		assert.match(prompt, /SUBSTRATE HEALTH SIGNAL/)
+		assert.match(
+			prompt,
+			new RegExp(
+				SUBAGENT_SYSTEM_SUFFIX.trim()
+					.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+					.slice(0, 40),
+			),
+		)
 	})
 
 	it("applies plan-mode openrouter model override fields", () => {

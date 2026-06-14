@@ -2606,11 +2606,12 @@ export class Task {
 					buildCompletionGateHumanBrief,
 					buildCompletionGateObservabilityEnvelope,
 					buildCompletionGatePipelineBrief,
+					buildCompletionGatePlaybook,
 					mapCompletionReasonToPreflightStage,
 				} = await import("./tools/attemptCompletionUtils")
 				const gateConfig = {
 					taskState: this.taskState,
-					focusChainSettings: this.focusChainSettings,
+					focusChainSettings: this.stateManager.getGlobalSettingsKey("focusChainSettings"),
 				} as import("./tools/types/TaskConfig").TaskConfig
 				const lastReason = this.taskState.lastCompletionBlockReason as
 					| import("./tools/attemptCompletionUtils").CompletionPreflightReason
@@ -2631,6 +2632,12 @@ export class Task {
 				}
 				if (breatherHint) {
 					breatherText += `\n\n${breatherHint}`
+				}
+				if (lastReason) {
+					const playbook = buildCompletionGatePlaybook(lastReason)
+					if (playbook) {
+						breatherText += `\n\n${playbook}`
+					}
 				}
 			}
 

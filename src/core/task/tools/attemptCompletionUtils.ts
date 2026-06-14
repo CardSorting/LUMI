@@ -267,6 +267,7 @@ export function getCompletionGateTelemetryContext(config: TaskConfig): {
 	retryStatus: CompletionGateRetryStatus
 	failedStage?: CompletionPreflightStage
 	historyLength: number
+	sessionId?: string
 } {
 	const reason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
 	const retryStatus = reason ? getCompletionGateRetryPolicy(reason, config).retryStatus : "ready"
@@ -727,12 +728,14 @@ export function buildCompletionGateDigestBlock(config: TaskConfig, reason?: Comp
 		reason ??
 		(config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined) ??
 		(undefined as CompletionPreflightReason | undefined)
+	const operationalState = getCompletionGateOperationalState(config)
 	if (!resolvedReason) {
 		const blocks = config.taskState.completionGateBlockCount ?? 0
 		const remaining = Math.max(0, MAX_COMPLETION_GATE_BLOCK_COUNT - blocks)
 		return (
 			`<completion_gate_digest schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ` +
-			`blocks="${blocks}" remaining="${remaining}" pressure="${getCompletionGatePressureLevel(config)}" retry_status="ready" />`
+			`blocks="${blocks}" remaining="${remaining}" pressure="${getCompletionGatePressureLevel(config)}" ` +
+			`operational_state="${operationalState}" retry_status="ready" />`
 		)
 	}
 	const stage = mapCompletionReasonToPreflightStage(resolvedReason)
@@ -742,6 +745,7 @@ export function buildCompletionGateDigestBlock(config: TaskConfig, reason?: Comp
 	return (
 		`<completion_gate_digest schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" reason="${resolvedReason}" ` +
 		`stage="${stage}" blocks="${blocks}" remaining="${remaining}" pressure="${getCompletionGatePressureLevel(config)}" ` +
+		`operational_state="${operationalState}" ` +
 		`http_status="${mapCompletionReasonToHttpStatus(resolvedReason)}" session_id="${getOrCreateCompletionGateSessionId(config)}" ` +
 		`retry_status="${policy.retryStatus}" soft="${isCompletionSoftBlockReason(resolvedReason) ? "true" : "false"}" />`
 	)
@@ -864,7 +868,24 @@ export function buildCompletionGateObservabilityEnvelope(config: TaskConfig): st
 			buildCompletionGateStatusBrief(config),
 		])
 	}
-	return buildCompletionGateStructuredContext("", config)
+	const failedStage = mapCompletionReasonToPreflightStage(lastReason)
+	const detail = buildCompletionPreflightRecoveryHint(lastReason) ?? "Completion gate blocked"
+	return buildCompletionGateAgentEnvelope([
+		buildCompletionGateDigestBlock(config, lastReason),
+		buildCompletionGateStateBlock(config),
+		buildCompletionGateHealthBlock(config),
+		buildCompletionGateHistoryBlock(config),
+		buildCompletionGateRateLimitBlock(config),
+		buildCompletionGateWorkspaceBlock(config),
+		buildCompletionGateFocusBlock(config),
+		buildCompletionGateStageProgressBlock(failedStage),
+		buildCompletionGateNextStagesBlock(config, failedStage),
+		buildCompletionGateProblemBlock(lastReason, detail, config),
+		buildCompletionGateStatusBrief(config),
+		buildCompletionGateActionBlock(lastReason, config),
+		buildCompletionGateRecoveryBlock(lastReason),
+		buildCompletionGatePlaybookBlock(lastReason),
+	])
 }
 
 /** Retry policy — mirrors Retry-After / Stripe idempotency semantics. */
@@ -903,6 +924,7 @@ export function shouldEmitProactiveCompletionGuidance(config: TaskConfig): boole
 
 export function markProactiveCompletionGuidanceEmitted(config: TaskConfig): void {
 	config.taskState.lastProactiveGuidanceBlockCount = config.taskState.completionGateBlockCount ?? 0
+	syncCompletionGateObservabilityCache(config)
 }
 
 export function shouldEmitPreflightReadinessHint(config: TaskConfig): boolean {
@@ -920,6 +942,7 @@ export function shouldEmitPreflightReadinessHint(config: TaskConfig): boolean {
 
 export function markPreflightReadinessHintEmitted(config: TaskConfig): void {
 	config.taskState.preflightReadinessHintEmitted = true
+	syncCompletionGateObservabilityCache(config)
 }
 
 /** First-attempt readiness — proactive checklist before the first completion try. */
@@ -991,6 +1014,9 @@ export function classifyCompletionPreflightReason(message: string): CompletionPr
 	if (message.includes("hardening audit evaluation failed")) return "audit_error"
 	if (message.includes("hardening audit") || message.includes("Completion Gate") || message.includes("violations")) {
 		return "audit_gate"
+	}
+	if (message.includes("Completion rejected:")) {
+		return "empty_result"
 	}
 	return "audit_gate"
 }
@@ -1141,11 +1167,12 @@ export function buildCompletionGateStatusBrief(config: TaskConfig, options?: { r
 	const workspaceChanged = hasWorkspaceChangedSinceGateBlock(config, currentHash)
 	const attemptKey = `${attempt}:${blockCount}:${failedStage}`
 	const sessionId = getOrCreateCompletionGateSessionId(config)
+	const operationalState = getCompletionGateOperationalState(config)
 
 	return (
 		`<completion_gate_status schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" blocks="${blockCount}" remaining="${remaining}" ` +
 		`double_check="${doubleCheck}" consecutive_mistakes="${mistakes}" attempt="${attempt}" attempt_key="${attemptKey}" session_id="${sessionId}" ` +
-		`cooldown_remaining_ms="${cooldownRemaining}" backoff_ms="${backoffMs}" last_reason="${lastReason}" ` +
+		`operational_state="${operationalState}" cooldown_remaining_ms="${cooldownRemaining}" backoff_ms="${backoffMs}" last_reason="${lastReason}" ` +
 		`failed_stage="${failedStage}" pressure_level="${pressureLevel}" workspace_changed="${workspaceChanged ? "true" : "false"}" ` +
 		`retryable="${retryPolicy.retryable ? "true" : "false"}" retry_after_ms="${retryPolicy.retryAfterMs}" ` +
 		`retry_status="${retryPolicy.retryStatus}" remaining_stages="${remainingStages}" result_fingerprint="${resultFingerprint}" ` +

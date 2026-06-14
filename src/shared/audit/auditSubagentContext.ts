@@ -18,6 +18,7 @@ export interface SubagentAuditContextInput {
 	completionGateRetryStatus?: string
 	completionGateBlockHistoryCount?: number
 	completionGateSessionId?: string
+	completionGateOperationalState?: string
 	gateOptions?: CompletionGateOptions
 }
 
@@ -60,6 +61,10 @@ export function buildSubagentGateSignals(input: SubagentAuditContextInput): stri
 
 	if (input.completionGateSessionId) {
 		signals.push(`GATE: PARENT_SESSION (${input.completionGateSessionId})`)
+	}
+
+	if (input.completionGateOperationalState && input.completionGateOperationalState !== "ready") {
+		signals.push(`GATE: PARENT_STATE (${input.completionGateOperationalState})`)
 	}
 
 	if (input.lastCompletionAudit?.gate_blocked) {
@@ -188,6 +193,10 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 
 	if (input.completionGateSessionId) {
 		lines.push(`- Parent gate session: ${input.completionGateSessionId}`)
+	}
+
+	if (input.completionGateOperationalState) {
+		lines.push(`- Parent gate operational state: ${input.completionGateOperationalState}`)
 	}
 
 	if (completionAttemptCount && completionAttemptCount > 0) {

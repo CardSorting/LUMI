@@ -213,6 +213,30 @@ export function evaluateCompletionGateReadiness(
 	return issues
 }
 
+/** Async dry-run — includes roadmap governance stage (mirrors full preflight minus audit). */
+export async function evaluateCompletionGateReadinessAsync(
+	config: TaskConfig,
+	params: {
+		result: string
+		taskProgress?: string
+		command?: string
+	},
+	validateQuality: (result: string) => string | null = validateCompletionResultQuality,
+	logPrefix = "CompletionGateReadiness",
+): Promise<CompletionGateReadinessIssue[]> {
+	const issues = evaluateCompletionGateReadiness(config, params, validateQuality)
+	if (issues.some((issue) => issue.stage === "circuit_breaker")) {
+		return issues
+	}
+
+	const roadmapError = await evaluateRoadmapCompletionGateError(config, logPrefix, { dryRun: true })
+	if (roadmapError) {
+		issues.push({ stage: "roadmap", message: roadmapError })
+	}
+
+	return issues
+}
+
 export async function runCompletionPreflightChecks(
 	config: TaskConfig,
 	params: {
@@ -258,7 +282,11 @@ export async function runCompletionPreflightChecks(
 	return null
 }
 
-export async function evaluateRoadmapCompletionGateError(config: TaskConfig, logPrefix: string): Promise<string | null> {
+export async function evaluateRoadmapCompletionGateError(
+	config: TaskConfig,
+	logPrefix: string,
+	options?: { dryRun?: boolean },
+): Promise<string | null> {
 	const circuitBreakerMessage = getCompletionGateCircuitBreakerError(config)
 	if (circuitBreakerMessage) {
 		return circuitBreakerMessage
@@ -272,13 +300,17 @@ export async function evaluateRoadmapCompletionGateError(config: TaskConfig, log
 	try {
 		const block = await evaluateRoadmapCompletionBlock(config.cwd)
 		if (block.blocked) {
-			config.taskState.consecutiveMistakeCount++
+			if (!options?.dryRun) {
+				config.taskState.consecutiveMistakeCount++
+			}
 			return block.message || failClosedCompletionMessage()
 		}
 	} catch (error) {
 		Logger.error(`[${logPrefix}] Failed to evaluate Roadmap Governance Gates:`, error)
 		if (roadmapService.getConfig().fail_closed_completion_gates) {
-			config.taskState.consecutiveMistakeCount++
+			if (!options?.dryRun) {
+				config.taskState.consecutiveMistakeCount++
+			}
 			return failClosedCompletionMessage()
 		}
 	}

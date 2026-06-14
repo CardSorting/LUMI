@@ -5,7 +5,7 @@ import { AuthService } from "../AuthService"
 
 describe("AuthService Multi-Session", () => {
 	let sandbox: sinon.SinonSandbox
-	let mockController: Record<string, any>
+	let mockController: Record<string, unknown>
 
 	beforeEach(() => {
 		sandbox = sinon.createSandbox()
@@ -17,11 +17,6 @@ describe("AuthService Multi-Session", () => {
 			},
 			postStateToWebview: sandbox.stub().resolves(),
 		}
-
-		// We need to inject mocks into the providers map
-		// AuthService constructor creates new instances, so we might need proxyquire
-		// to mock the provider classes OR use setter if available.
-		// Looking at AuthService.ts, providers are private.
 	})
 
 	afterEach(() => {
@@ -29,24 +24,26 @@ describe("AuthService Multi-Session", () => {
 	})
 
 	it("should manage simultaneous logins for different providers", async () => {
-		// Since AuthService is a singleton, we should be careful with isolation
-		// For testing we will create a fresh instance if possible.
-		const service = new (AuthService as any)(mockController)
+		const service = new (AuthService as unknown as new (controller: unknown) => AuthService)(mockController)
 
-		const providers = (service as any)._providers
+		const providers = (service as unknown as { _providers: Map<string, { getAccessToken: () => Promise<string> }> })
+			._providers
 		const dietcodeProvider = providers.get("dietcode")
 		const googleProvider = providers.get("google")
 
-		sandbox.stub(dietcodeProvider, "getAccessToken").resolves("dietcode-token")
-		sandbox.stub(googleProvider, "getAccessToken").resolves("google-token")(
-			// Initialize session state so active provider token retrieval succeeds without network refresh
-			service as any,
-		)._dietcodeAuthInfo = {
+		sandbox.stub(dietcodeProvider!, "getAccessToken").resolves("dietcode-token")
+		sandbox.stub(googleProvider!, "getAccessToken").resolves("google-token")
+
+		const serviceState = service as unknown as {
+			_dietcodeAuthInfo: { idToken: string; provider: string; expiresAt: number }
+			_authenticated: boolean
+		}
+		serviceState._dietcodeAuthInfo = {
 			idToken: "dietcode-token",
 			provider: "dietcode",
 			expiresAt: Date.now() / 1000 + 3600,
 		}
-		;(service as any)._authenticated = true
+		serviceState._authenticated = true
 
 		const dietcodeToken = await service.getAuthToken("dietcode")
 		const googleToken = await service.getAuthToken("google")

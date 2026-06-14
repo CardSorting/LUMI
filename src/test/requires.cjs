@@ -5,7 +5,7 @@ const originalRequire = Module.prototype.require
  * VSCode is not available during unit tests
  * @see {@link file://./vscode-mock.ts}
  */
-Module.prototype.require = function (path: string) {
+Module.prototype.require = function (path) {
 	if (path === "vscode") {
 		return require("./vscode-mock")
 	}
@@ -35,19 +35,12 @@ Module.prototype.require = function (path: string) {
 	return originalRequire.call(this, path)
 }
 
-// Required to have access to String.prototype.toPosix (inline to avoid heavy imports in unit tests)
-declare global {
-	interface String {
-		toPosix(): string
-	}
-}
-
-function toPosixPath(p: string): string {
+function toPosixPath(p) {
 	return p.replace(/\\/g, "/")
 }
 
 if (!String.prototype.toPosix) {
-	String.prototype.toPosix = function (this: string): string {
+	String.prototype.toPosix = function () {
 		return toPosixPath(this)
 	}
 }

@@ -31,6 +31,7 @@ import { TaskState } from "../../TaskState"
 import {
 	buildCompletionGateObservabilityEnvelope,
 	canonicalizeAttemptCompletionResultParams,
+	getCompletionGateOperationalState,
 	getCompletionGatePressureLevel,
 	getCompletionGateRetryPolicy,
 	wrapFormattedCompletionError,
@@ -422,6 +423,7 @@ export class SubagentRunner {
 					parentGateConfig,
 				).retryStatus
 			: undefined
+		const parentGateOperationalState = getCompletionGateOperationalState(parentGateConfig)
 		const parentGateBlockHistoryCount = this.baseConfig.taskState.completionGateBlockHistory?.length
 		const parentGateSessionId = this.baseConfig.taskState.completionGateSessionId
 		const parentGateSignals = buildSubagentGateSignals({
@@ -435,6 +437,7 @@ export class SubagentRunner {
 			completionGateRetryStatus: parentGateRetryStatus,
 			completionGateBlockHistoryCount: parentGateBlockHistoryCount,
 			completionGateSessionId: parentGateSessionId,
+			completionGateOperationalState: parentGateOperationalState,
 			gateOptions,
 		})
 		if (parentGateSignals.length > 0) {
@@ -513,6 +516,7 @@ export class SubagentRunner {
 						completionGateRetryStatus: parentGateRetryStatus,
 						completionGateBlockHistoryCount: parentGateBlockHistoryCount,
 						completionGateSessionId: parentGateSessionId,
+						completionGateOperationalState: parentGateOperationalState,
 						gateOptions,
 					})
 					const compressed = await orchestrator.getCompressedContext(parentStreamId)

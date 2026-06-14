@@ -16,7 +16,8 @@
 	},
 	"include": [
 		"src/**/*.ts",
-		"test/**/*.ts"
+		"test/**/*.ts",
+		"src/test/requires-global.d.ts"
 	],
 	"exclude": [
 		"node_modules"

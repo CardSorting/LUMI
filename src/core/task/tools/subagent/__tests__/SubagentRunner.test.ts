@@ -6,12 +6,16 @@ import type { TaskConfig } from "@core/task/tools/types/TaskConfig"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { HostProvider } from "@/hosts/host-provider"
+import { setRoadmapConfigOverride } from "@/services/roadmap/RoadmapConfig"
 import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { TaskState } from "../../../TaskState"
 import { SubagentBuilder } from "../SubagentBuilder"
 import { SubagentRunner } from "../SubagentRunner"
+
+const VALID_SUBAGENT_COMPLETION_RESULT =
+	"Subagent completed the assigned scope successfully. All verification steps passed and the deliverable is ready for review."
 
 function initializeHostProvider() {
 	HostProvider.reset()
@@ -45,7 +49,7 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 		strictPlanModeEnabled: false,
 		yoloModeToggled: false,
 		doubleCheckCompletionEnabled: false,
-		auditCompletionGateEnabled: true,
+		auditCompletionGateEnabled: false,
 		auditCompletionGateThreshold: 50,
 		auditCompletionGateCriticalOnly: false,
 		auditActModeAdvisoryEnabled: true,
@@ -154,9 +158,14 @@ function stubApiHandler(createMessage: sinon.SinonStub) {
 }
 
 describe("SubagentRunner", () => {
+	beforeEach(() => {
+		setRoadmapConfigOverride({ enabled: false })
+	})
+
 	afterEach(() => {
 		sinon.restore()
 		HostProvider.reset()
+		setRoadmapConfigOverride(null)
 	})
 
 	it("emits native tool_use blocks with matching tool_result tool_use_id across turns", async () => {
@@ -197,7 +206,7 @@ describe("SubagentRunner", () => {
 					function: {
 						id: "toolu_subagent_complete_1",
 						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "done" }),
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
 					},
 				},
 			}
@@ -220,7 +229,7 @@ describe("SubagentRunner", () => {
 		const result = await runner.run("List files", () => {})
 
 		assert.equal(result.status, "completed")
-		assert.equal(result.result, "done")
+		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 	})
 
@@ -252,7 +261,7 @@ describe("SubagentRunner", () => {
 					function: {
 						id: "toolu_subagent_previous_tokens_complete_1",
 						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "done" }),
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
 					},
 				},
 			}
@@ -281,7 +290,7 @@ describe("SubagentRunner", () => {
 		const result = await runner.run("List files", () => {})
 
 		assert.equal(result.status, "completed")
-		assert.equal(result.result, "done")
+		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 		assert.equal(shouldCompactStub.callCount, 1)
 	})
@@ -319,7 +328,7 @@ describe("SubagentRunner", () => {
 					function: {
 						id: "toolu_subagent_complete_2",
 						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "done" }),
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
 					},
 				},
 			}
@@ -341,7 +350,7 @@ describe("SubagentRunner", () => {
 		const result = await runner.run("List files", () => {})
 
 		assert.equal(result.status, "completed")
-		assert.equal(result.result, "done")
+		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 	})
 
@@ -371,7 +380,7 @@ describe("SubagentRunner", () => {
 					function: {
 						id: "toolu_subagent_complete_3",
 						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "done" }),
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
 					},
 				},
 			}
@@ -393,7 +402,7 @@ describe("SubagentRunner", () => {
 		const result = await runner.run("List files", () => {})
 
 		assert.equal(result.status, "completed")
-		assert.equal(result.result, "done")
+		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 	})
 
@@ -473,7 +482,7 @@ describe("SubagentRunner", () => {
 					function: {
 						id: "toolu_subagent_complete_4",
 						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "done" }),
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
 					},
 				},
 			}
@@ -507,7 +516,7 @@ describe("SubagentRunner", () => {
 					function: {
 						id: "toolu_subagent_skills_filtered_1",
 						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "done" }),
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
 					},
 				},
 			}
@@ -549,7 +558,7 @@ describe("SubagentRunner", () => {
 					function: {
 						id: "toolu_subagent_skills_unconfigured_1",
 						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "done" }),
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
 					},
 				},
 			}
@@ -591,7 +600,7 @@ describe("SubagentRunner", () => {
 					function: {
 						id: "toolu_subagent_skills_missing_1",
 						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "done" }),
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
 					},
 				},
 			}
@@ -669,7 +678,7 @@ describe("SubagentRunner", () => {
 					function: {
 						id: "toolu_subagent_workspace_complete_1",
 						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "done" }),
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
 					},
 				},
 			}
@@ -692,7 +701,7 @@ describe("SubagentRunner", () => {
 		const result = await runner.run("List files", () => {})
 
 		assert.equal(result.status, "completed")
-		assert.equal(result.result, "done")
+		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 	})
 })
