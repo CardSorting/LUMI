@@ -14,10 +14,7 @@ import { Logger } from "@/shared/services/Logger"
  */
 export async function openWalkthrough(_controller: Controller, _request: EmptyRequest): Promise<Empty> {
 	try {
-		await vscode.commands.executeCommand(
-			"workbench.action.openWalkthrough",
-			`saoudrizwan.${ExtensionRegistryInfo.name}#DietCodeWalkthrough`,
-		)
+		await vscode.commands.executeCommand("workbench.action.openWalkthrough", `${ExtensionRegistryInfo.id}#LUMIWalkthrough`)
 		telemetryService.captureButtonClick("webview_openWalkthrough")
 		return Empty.create({})
 	} catch (error) {

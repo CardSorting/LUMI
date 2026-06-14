@@ -4,7 +4,7 @@ import { CheckIcon } from "lucide-react"
 import { memo } from "react"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
-import { pickCompletionPresentation } from "@/copy/miraVoice"
+import { pickCompletionPresentation } from "@/copy/lumiVoice"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { CopyButton } from "../common/CopyButton"
@@ -46,12 +46,12 @@ export const CompletionOutputRow = memo(
 
 		return (
 			<div>
-				<div className="group/completion relative rounded-lg border border-success/10 overflow-visible bg-success/[0.04] p-4 pt-4 animate-mira-settle">
+				<div className="group/completion relative rounded-lg border border-success/10 overflow-visible bg-success/[0.04] p-4 pt-4 animate-lumi-settle">
 					{presentation.showHeader ? (
 						<div className={cn(headClassNames, "justify-between px-1 mb-1")}>
 							<div className="flex flex-col gap-0.5">
 								<div className="flex gap-2 items-center">
-									<CheckIcon className="size-3 text-success/70 animate-mira-reveal [animation-duration:0.75s]" />
+									<CheckIcon className="size-3 text-success/70 animate-lumi-reveal [animation-duration:0.75s]" />
 									{presentation.header && (
 										<span className="text-success/80 font-medium">{presentation.header}</span>
 									)}

@@ -1,7 +1,7 @@
 import type { SVGProps } from "react"
 
 /** Soft floating companion orb — observatory spirit, not reactor core. */
-export const MiraOrbPaths = ({
+export const LumiOrbPaths = ({
 	accentColor = "#b8b5d6",
 	coreColor = "currentColor",
 	className,
@@ -29,11 +29,11 @@ export const MiraOrbPaths = ({
 			strokeLinecap="round"
 			strokeWidth="1.25"
 		/>
-		<circle className="animate-mira-breathe" cx="50" cy="50" fill={coreColor} opacity="0.14" r="24" />
-		<circle className="animate-mira-breathe" cx="50" cy="50" fill={coreColor} opacity="0.55" r="17" />
-		<circle className="animate-mira-breathe" cx="50" cy="51" fill={accentColor} opacity="0.35" r="10" />
+		<circle className="animate-lumi-breathe" cx="50" cy="50" fill={coreColor} opacity="0.14" r="24" />
+		<circle className="animate-lumi-breathe" cx="50" cy="50" fill={coreColor} opacity="0.55" r="17" />
+		<circle className="animate-lumi-breathe" cx="50" cy="51" fill={accentColor} opacity="0.35" r="10" />
 		<path
-			className="animate-mira-blink"
+			className="animate-lumi-blink"
 			d="M 42 47 Q 44 45.5 46 47"
 			fill="none"
 			opacity="0.75"
@@ -42,7 +42,7 @@ export const MiraOrbPaths = ({
 			strokeWidth="1.6"
 		/>
 		<path
-			className="animate-mira-blink"
+			className="animate-lumi-blink"
 			d="M 54 47 Q 56 45.5 58 47"
 			fill="none"
 			opacity="0.75"
@@ -62,10 +62,10 @@ export const MiraOrbPaths = ({
 	</g>
 )
 
-const MiraOrbIcon = (props: SVGProps<SVGSVGElement>) => (
+const LumiOrbIcon = (props: SVGProps<SVGSVGElement>) => (
 	<svg fill="none" height="50" viewBox="0 0 100 100" width="50" xmlns="http://www.w3.org/2000/svg" {...props}>
-		<MiraOrbPaths />
+		<LumiOrbPaths />
 	</svg>
 )
 
-export default MiraOrbIcon
+export default LumiOrbIcon

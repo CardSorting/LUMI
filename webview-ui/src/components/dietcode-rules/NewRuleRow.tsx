@@ -166,7 +166,7 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 							Select hook type to create
 						</label>
 						<span className="sr-only" id="hook-select-description">
-							Choose a hook type to create. Hooks execute at specific points in MIRA's lifecycle. Available:{" "}
+							Choose a hook type to create. Hooks execute at specific points in LUMI's lifecycle. Available:{" "}
 							{availableHookTypes.map((h) => h.name).join(", ")}
 						</span>
 						<select

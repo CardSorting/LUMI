@@ -15,7 +15,7 @@ interface ChatLayoutProps {
 export const ChatLayout: React.FC<ChatLayoutProps> = ({ isHidden, isNightDesk = false, serenityLevel = 0, children }) => {
 	return (
 		<ChatLayoutContainer
-			className="mira-chat-readable mira-serenity-fade"
+			className="lumi-chat-readable lumi-serenity-fade"
 			data-night-desk={isNightDesk ? "true" : undefined}
 			data-serenity-level={serenityLevel > 0 ? String(serenityLevel) : undefined}
 			isHidden={isHidden}>

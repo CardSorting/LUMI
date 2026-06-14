@@ -74,7 +74,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
 	{
 		id: "features",
 		name: "Preferences",
-		tooltipText: "How MIRA behaves",
+		tooltipText: "How LUMI behaves",
 		headerText: "Preferences",
 		icon: CheckCheck,
 	},
@@ -111,7 +111,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
 	{
 		id: "about",
 		name: "About",
-		tooltipText: "About MIRA",
+		tooltipText: "About LUMI",
 		headerText: "About",
 		icon: Info,
 	},

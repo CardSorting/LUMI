@@ -41,7 +41,7 @@ const PreferredLanguageSetting: React.FC = () => {
 				<VSCodeOption value="Traditional Chinese - 繁體中文">Traditional Chinese - 繁體中文</VSCodeOption>
 				<VSCodeOption value="Turkish - Türkçe">Turkish - Türkçe</VSCodeOption>
 			</VSCodeDropdown>
-			<p className="text-sm text-description mt-1">The language MIRA uses when chatting with you.</p>
+			<p className="text-sm text-description mt-1">The language LUMI uses when chatting with you.</p>
 		</div>
 	)
 }

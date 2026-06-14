@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { MiraOrbMood } from "@/components/common/MiraAmbientOrb"
+import type { LumiOrbMood } from "@/components/common/LumiAmbientOrb"
 
-const SESSION_START_KEY = "mira-session-start"
+const SESSION_START_KEY = "lumi-session-start"
 const STILL_AFTER_MS = 2 * 60 * 1000
 const STILL_AFTER_LONG_MS = 3 * 60 * 1000
 const LONG_SESSION_MINUTES = 90
@@ -32,7 +32,7 @@ function computeSerenityLevel(sessionMinutes: number, isNightDesk: boolean, isLo
 }
 
 /** Long-session comfort: stillness, calmer pacing, progressive visual cooling. */
-export function useMiraSessionComfort() {
+export function useLumiSessionComfort() {
 	const sessionStart = useMemo(() => getSessionStart(), [])
 	const [lastActivity, setLastActivity] = useState(Date.now())
 	const [now, setNow] = useState(Date.now())
@@ -75,7 +75,7 @@ export function useMiraSessionComfort() {
 	}
 }
 
-export function resolveOrbMood(companionMood: MiraOrbMood, isStill: boolean): MiraOrbMood {
+export function resolveOrbMood(companionMood: LumiOrbMood, isStill: boolean): LumiOrbMood {
 	if (companionMood === "held" || companionMood === "waiting" || companionMood === "success") {
 		return companionMood
 	}

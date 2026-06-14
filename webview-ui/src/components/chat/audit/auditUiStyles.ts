@@ -14,7 +14,7 @@ export const auditInset = "rounded-md bg-black/[0.02] dark:bg-white/[0.02] p-2.5
 
 /** Vertical reading surface — research notebook, not monitoring grid. */
 export const auditReadingSurface = cn(
-	"mt-2.5 animate-mira-reading-reveal rounded-lg p-4 space-y-5 opacity-[0.96]",
+	"mt-2.5 animate-lumi-reading-reveal rounded-lg p-4 space-y-5 opacity-[0.96]",
 	"bg-gradient-to-b from-black/[0.025] via-black/[0.01] to-transparent",
 	"dark:from-white/[0.025] dark:via-white/[0.01]",
 )

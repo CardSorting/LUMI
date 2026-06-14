@@ -78,7 +78,7 @@ function payloadReport(payload: Record<string, unknown>): string | null {
 export async function executeRoadmapSlashCommand(rawArgs: string, workspace?: string): Promise<string> {
 	const cfg = getRoadmapConfig()
 	if (!cfg.enabled) {
-		return "🗺️ Roadmap is disabled — enable mira.roadmap.enabled in settings."
+		return "🗺️ Roadmap is disabled — enable lumi.roadmap.enabled in settings."
 	}
 
 	const ws = resolveSlashWorkspace(workspace)

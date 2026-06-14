@@ -60,7 +60,7 @@ const agentFeatures: FeatureToggle[] = [
 	{
 		id: "strict-plan-mode",
 		label: "Planning stays read-only",
-		description: "During the automatic planning phase, MIRA won't edit files until it begins implementation.",
+		description: "During the automatic planning phase, LUMI won't edit files until it begins implementation.",
 		stateKey: "strictPlanModeEnabled",
 		settingKey: "strictPlanModeEnabled",
 	},
@@ -99,14 +99,14 @@ const editorFeatures: FeatureToggle[] = [
 	{
 		id: "dietcode-web-tools",
 		label: "Browse the web",
-		description: "Let MIRA search the web and open pages when you need outside info.",
+		description: "Let LUMI search the web and open pages when you need outside info.",
 		stateKey: "dietcodeWebToolsEnabled",
 		settingKey: "dietcodeWebToolsEnabled",
 	},
 	{
 		id: "worktrees",
 		label: "Worktrees",
-		description: "Run a few MIRA tasks side by side with git worktrees.",
+		description: "Run a few LUMI tasks side by side with git worktrees.",
 		stateKey: "worktreesEnabled",
 		settingKey: "worktreesEnabled",
 	},
@@ -116,14 +116,14 @@ const experimentalFeatures: FeatureToggle[] = [
 	{
 		id: "yolo",
 		label: "Skip confirmations",
-		description: "Let MIRA move ahead without asking each time. Only turn this on if you really trust the workflow.",
+		description: "Let LUMI move ahead without asking each time. Only turn this on if you really trust the workflow.",
 		stateKey: "yoloModeToggled",
 		settingKey: "yoloModeToggled",
 	},
 	{
 		id: "double-check-completion",
 		label: "Double-check my work",
-		description: "Before saying we're done, MIRA takes a second look at what you originally asked for.",
+		description: "Before saying we're done, LUMI takes a second look at what you originally asked for.",
 		stateKey: "doubleCheckCompletionEnabled",
 		settingKey: "doubleCheckCompletionEnabled",
 	},

@@ -253,7 +253,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 				}
 			})
 			.catch((error) => {
-				console.error("Error toggling MIRA rule:", error)
+				console.error("Error toggling LUMI rule:", error)
 			})
 	}
 
@@ -437,11 +437,11 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		<div className="inline-flex min-w-0 max-w-full items-center" ref={modalRef}>
 			<div className="inline-flex w-full items-center" ref={buttonRef}>
 				<Tooltip>
-					{!isVisible && <TooltipContent>Manage MIRA Rules & Workflows</TooltipContent>}
+					{!isVisible && <TooltipContent>Manage LUMI Rules & Workflows</TooltipContent>}
 					<TooltipTrigger>
 						<VSCodeButton
 							appearance="icon"
-							aria-label={isVisible ? "Hide MIRA Rules & Workflows" : "Show MIRA Rules & Workflows"}
+							aria-label={isVisible ? "Hide LUMI Rules & Workflows" : "Show LUMI Rules & Workflows"}
 							className="p-0 m-0 flex items-center"
 							onClick={() => setIsVisible(!isVisible)}>
 							<VscIcon className="" name="law" style={{ fontSize: "12.5px" }} />
@@ -500,7 +500,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 						<div className="text-xs text-description mb-4">
 							{currentView === "rules" ? (
 								<p>
-									Rules are gentle nudges for how you'd like MIRA to work — project notes, preferences, or
+									Rules are gentle nudges for how you'd like LUMI to work — project notes, preferences, or
 									habits you want to keep across chats.{" "}
 									<VSCodeLink
 										className="text-xs"
@@ -521,12 +521,12 @@ const DietCodeRulesToggleModal: React.FC = () => {
 								</p>
 							) : currentView === "skills" ? (
 								<p>
-									Skills are little playbooks MIRA can pull in when a task fits. When something matches, MIRA
+									Skills are little playbooks LUMI can pull in when a task fits. When something matches, LUMI
 									loads the full instructions automatically.{" "}
 								</p>
 							) : (
 								<p>
-									Hooks run little scripts at certain moments — useful if you want to wire MIRA into your own
+									Hooks run little scripts at certain moments — useful if you want to wire LUMI into your own
 									tools.
 								</p>
 							)}

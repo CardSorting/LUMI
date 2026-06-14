@@ -198,7 +198,7 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 	return (
 		<div
 			className={cn(
-				"mt-3 border-t pt-3 text-[11px] font-sans mira-audit-exhale transition-opacity duration-[2s]",
+				"mt-3 border-t pt-3 text-[11px] font-sans lumi-audit-exhale transition-opacity duration-[2s]",
 				borderClass,
 			)}>
 			<button
@@ -222,7 +222,7 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 			</button>
 
 			{isAuditExpanded && (
-				<div className={cn(auditReadingSurface, "mira-workshop-haze")}>
+				<div className={cn(auditReadingSurface, "lumi-workshop-haze")}>
 					<div className={auditReadingRow}>
 						<AuditReadingField label="Intent">
 							<span

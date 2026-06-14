@@ -19,8 +19,8 @@ const buttonVariants = cva(
 				link: "text-link underline-offset-4 hover:underline p-0 m-0 cursor-text select-text hover:text-link-hover",
 				text: "text-foreground cursor-text select-text p-0 m-0",
 				icon: "hover:opacity-80 p-0 m-0 border-0 cursor-pointer hover:shadow-none focus:ring-0 focus:ring-offset-0",
-				dietcode: "bg-mira border-foreground/20 text-mira-foreground",
-				mira: "bg-mira border-foreground/20 text-mira-foreground",
+				dietcode: "bg-lumi border-foreground/20 text-lumi-foreground",
+				lumi: "bg-lumi border-foreground/20 text-lumi-foreground",
 				success:
 					"bg-success/10 text-success border-[#176f2c] text-white hover:bg-[#197f31] hover:border-[#197f31] active:bg-[#156528] active:border-[#156528] hover:text-white",
 				danger: "bg-[#c42b2b] border-[#c42b2b]! text-white! hover:bg-[#a82424]! hover:border-[#a82424]! active:bg-[#8f1f1f]! active:border-[#8f1f1f]!",

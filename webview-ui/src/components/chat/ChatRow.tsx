@@ -19,13 +19,13 @@ import { ActionCheckboxes } from "@/components/chat/ActionCheckboxes"
 import { OptionsButtons } from "@/components/chat/OptionsButtons"
 import { CheckmarkControl } from "@/components/common/CheckmarkControl"
 import { WithCopyButton } from "@/components/common/CopyButton"
-import { MiraProgressIndicator } from "@/components/common/MiraProgressIndicator"
+import { LumiProgressIndicator } from "@/components/common/LumiProgressIndicator"
 import McpResponseDisplay from "@/components/mcp/chat-display/McpResponseDisplay"
 import McpResourceRow from "@/components/mcp/configuration/tabs/installed/server-row/McpResourceRow"
 import McpToolRow from "@/components/mcp/configuration/tabs/installed/server-row/McpToolRow"
 import { Icon } from "@/components/ui/icons"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { APPROVAL, pickRecoveryLine, pickStuckLine } from "@/copy/miraVoice"
+import { APPROVAL, pickRecoveryLine, pickStuckLine } from "@/copy/lumiVoice"
 import { cn } from "@/lib/utils"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils/mcp"
@@ -82,7 +82,7 @@ import type { QuoteButtonState } from "./chat-types"
 
 interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
 
-export const ProgressIndicator = MiraProgressIndicator
+export const ProgressIndicator = LumiProgressIndicator
 const InvisibleSpacer = () => <div aria-hidden className="h-px" />
 
 const ChatRow = memo(
@@ -1114,7 +1114,7 @@ export const ChatRowContent = memo(
 							const isFailed = failed === true
 
 							return (
-								<div className="flex flex-col gap-3 rounded-lg border border-description/10 bg-black/[0.02] dark:bg-white/[0.02] p-3.5 animate-mira-reveal [animation-duration:1.2s]">
+								<div className="flex flex-col gap-3 rounded-lg border border-description/10 bg-black/[0.02] dark:bg-white/[0.02] p-3.5 animate-lumi-reveal [animation-duration:1.2s]">
 									{errorMessage && (
 										<p className="m-0 whitespace-pre-wrap text-description/90 wrap-anywhere text-xs leading-relaxed">
 											{errorMessage}

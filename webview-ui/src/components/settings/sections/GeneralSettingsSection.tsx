@@ -43,7 +43,7 @@ const GeneralSettingsSection = ({ renderSectionHeader }: GeneralSettingsSectionP
 					</Tooltip>
 
 					<p className="text-sm mt-[5px] text-description">
-						Optionally share anonymous usage data to help MIRA improve. No code, prompts, or personal information is
+						Optionally share anonymous usage data to help LUMI improve. No code, prompts, or personal information is
 						sent. See our{" "}
 						<VSCodeLink
 							className="text-inherit"

@@ -188,7 +188,7 @@ export const AuditHistoryStrip = memo(
 			<section
 				aria-label="Task audit history"
 				className={cn(
-					"mt-2 border-t border-description/8 pt-2 mira-audit-exhale transition-opacity duration-[2s]",
+					"mt-2 border-t border-description/8 pt-2 lumi-audit-exhale transition-opacity duration-[2s]",
 					className,
 				)}
 				ref={stripRef}
@@ -295,7 +295,7 @@ export const AuditHistoryStrip = memo(
 				)}
 
 				{expanded && (
-					<div className="mt-2 space-y-2 animate-mira-reading-reveal" id="audit-history-details">
+					<div className="mt-2 space-y-2 animate-lumi-reading-reveal" id="audit-history-details">
 						<div aria-label="Audit snapshot grades" className="flex flex-wrap gap-1.5" role="listbox">
 							{snapshots.map((snapshot, index) => {
 								const grade = snapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
@@ -488,7 +488,7 @@ export const AuditHistoryStrip = memo(
 
 						{selectedSnapshot && (
 							<div
-								className="rounded-md border border-description/10 p-1 animate-mira-reading-reveal opacity-[0.96]"
+								className="rounded-md border border-description/10 p-1 animate-lumi-reading-reveal opacity-[0.96]"
 								ref={detailPanelRef}>
 								<AuditReportPanel auditMetadata={selectedSnapshot.auditMetadata} variant="neutral" />
 							</div>

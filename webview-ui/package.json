@@ -1,6 +1,7 @@
 {
-	"name": "webview-ui",
+	"name": "lumi-webview-ui",
 	"version": "0.3.0",
+	"description": "LUMI sidebar webview — React UI for the VS Code extension",
 	"private": true,
 	"type": "module",
 	"scripts": {

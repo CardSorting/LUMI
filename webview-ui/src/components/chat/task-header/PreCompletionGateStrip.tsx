@@ -51,7 +51,7 @@ export const PreCompletionGateStrip = memo(
 			<section
 				aria-label="Before we wrap up"
 				className={cn(
-					"mt-2 px-3 py-2.5 text-[10px] mira-audit-exhale transition-opacity duration-[2s]",
+					"mt-2 px-3 py-2.5 text-[10px] lumi-audit-exhale transition-opacity duration-[2s]",
 					auditStrip,
 					className,
 				)}

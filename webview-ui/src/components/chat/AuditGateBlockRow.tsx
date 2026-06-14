@@ -42,7 +42,7 @@ export const AuditGateBlockRow = memo(({ text, auditMetadata }: AuditGateBlockRo
 			: []
 
 	return (
-		<div className={cn("my-2 mira-audit-exhale transition-opacity duration-[2s]", auditStrip)}>
+		<div className={cn("my-2 lumi-audit-exhale transition-opacity duration-[2s]", auditStrip)}>
 			<div className={auditSideAccent}>
 				<div className="flex items-start gap-2">
 					<ShieldOffIcon className="size-4 text-amber-600/70 dark:text-amber-400/70 shrink-0 mt-0.5" />

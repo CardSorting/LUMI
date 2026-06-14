@@ -51,7 +51,7 @@ const meta: Meta<typeof ErrorRow> = {
 		docs: {
 			description: {
 				component:
-					"Displays different types of error messages in the chat interface, including API errors, credit limit errors, diff errors, and dietcodeignore errors. Handles special error parsing for MIRA provider errors and provides appropriate user actions.",
+					"Displays different types of error messages in the chat interface, including API errors, credit limit errors, diff errors, and dietcodeignore errors. Handles special error parsing for LUMI provider errors and provides appropriate user actions.",
 			},
 		},
 	},
@@ -120,7 +120,7 @@ export const ApiStreamingFailed: Story = {
 	},
 }
 
-// MIRA-specific errors
+// LUMI-specific errors
 export const DietCodeBalanceError: Story = {
 	args: {
 		message: createMockMessage(),
@@ -206,7 +206,7 @@ export const InteractiveSignIn: Story = {
 		message: createMockMessage(),
 		errorType: "error",
 		apiRequestFailedMessage: JSON.stringify({
-			message: "Please sign in to access MIRA services.",
+			message: "Please sign in to access LUMI services.",
 			code: "ERR_BAD_REQUEST",
 			request_id: "req_signin_test",
 			providerId: "dietcode",

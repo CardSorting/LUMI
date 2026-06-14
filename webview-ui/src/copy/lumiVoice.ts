@@ -1,5 +1,5 @@
 /**
- * MIRA voice helpers — warm, collaborative microcopy.
+ * LUMI voice helpers — warm, collaborative microcopy.
  *
  * Design principles:
  * - Can someone keep this open all day without feeling managed by it?
@@ -93,7 +93,7 @@ export function pickRecoveryLine(seed: number): string {
 	return RECOVERY_LINES[Math.abs(seed) % RECOVERY_LINES.length]
 }
 
-/** Calm copy when MIRA is uncertain or stuck. */
+/** Calm copy when LUMI is uncertain or stuck. */
 export const STUCK_LINES = [
 	"This one's a little tricky.",
 	"I'm not fully sure yet.",

@@ -91,7 +91,7 @@ export const ViolationSessionLedgerStrip = memo(
 			<section
 				aria-label="Open notes"
 				className={cn(
-					"mt-2 px-2.5 py-2 text-[9px] mira-audit-exhale transition-opacity duration-[2s]",
+					"mt-2 px-2.5 py-2 text-[9px] lumi-audit-exhale transition-opacity duration-[2s]",
 					auditStrip,
 					className,
 				)}>

@@ -102,7 +102,7 @@ function loadFromVSCodeSettings(): Partial<RoadmapConfig> {
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const vscode = require("vscode") as typeof import("vscode")
-		const cfg = vscode.workspace.getConfiguration("mira.roadmap")
+		const cfg = vscode.workspace.getConfiguration("lumi.roadmap")
 		const patch: Partial<RoadmapConfig> = {}
 		const mapping: Array<[keyof RoadmapConfig, string]> = [
 			["enabled", "enabled"],

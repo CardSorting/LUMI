@@ -28,7 +28,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, ver
 
 	const navigateToModelPicker = useCallback(
 		(initialModelTab: "recommended" | "free", modelId?: string) => {
-			// Switch to MIRA provider first so the model picker tab works
+			// Switch to LUMI provider first so the model picker tab works
 			// Optionally also set the model if provided
 			const updates: Record<string, any> = {
 				planModeApiProvider: "dietcode",
@@ -134,7 +134,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ open, onClose, ver
 
 						{/* GitHub Star CTA */}
 						<p className="text-sm text-center" style={{ color: "var(--vscode-descriptionForeground)" }}>
-							Please support MIRA by{" "}
+							Please support LUMI by{" "}
 							<a
 								href="https://github.com/dietcode/dietcode"
 								rel="noopener noreferrer"

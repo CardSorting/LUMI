@@ -32,7 +32,7 @@ export const OrchestratorGateStrip = memo(({ auditMetadata, className }: Orchest
 		<section
 			aria-label="A quick look"
 			className={cn(
-				"mt-2 px-3 py-2.5 text-[10px] mira-audit-exhale transition-opacity duration-[2s]",
+				"mt-2 px-3 py-2.5 text-[10px] lumi-audit-exhale transition-opacity duration-[2s]",
 				auditStrip,
 				className,
 			)}>

@@ -133,7 +133,7 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 							Click the memory bar to choose when chats get shortened.
 						</p>
 						<p className="text-xs leading-relaxed mt-0 mb-0">
-							When the chat gets long, MIRA tidies it up so things stay comfortable.
+							When the chat gets long, LUMI tidies it up so things stay comfortable.
 						</p>
 					</div>
 				</AccordionItem>

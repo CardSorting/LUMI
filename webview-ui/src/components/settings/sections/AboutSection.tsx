@@ -11,9 +11,9 @@ const AboutSection = ({ version, renderSectionHeader }: AboutSectionProps) => {
 			{renderSectionHeader("about")}
 			<Section>
 				<div className="flex px-4 flex-col gap-2">
-					<h2 className="text-lg font-semibold">MIRA v{version}</h2>
+					<h2 className="text-lg font-semibold">LUMI v{version}</h2>
 					<p>
-						A friendly AI companion for coding. MIRA helps with edits, terminal commands, browser tasks, and more —
+						A friendly AI companion for coding. LUMI helps with edits, terminal commands, browser tasks, and more —
 						always when you're ready.
 					</p>
 

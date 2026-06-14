@@ -265,7 +265,7 @@ const GroqModelPicker: React.FC<GroqModelPickerProps> = ({ isPopup, currentMode 
 					<VSCodeLink className="inline text-inherit" href="https://console.groq.com/docs/models">
 						Groq.
 					</VSCodeLink>
-					If you're unsure which model to choose, MIRA works best with{" "}
+					If you're unsure which model to choose, LUMI works best with{" "}
 					<VSCodeLink className="inline text-inherit" onClick={() => handleModelChange("llama-3.3-70b-versatile")}>
 						llama-3.3-70b-versatile.
 					</VSCodeLink>

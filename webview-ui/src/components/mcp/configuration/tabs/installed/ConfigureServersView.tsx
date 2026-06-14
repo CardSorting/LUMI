@@ -20,7 +20,7 @@ const ConfigureServersView = () => {
 					marginBottom: "16px",
 					marginTop: "5px",
 				}}>
-				Connect MIRA to extra tools in your workspace — pick from the community, or describe what you need in chat (like
+				Connect LUMI to extra tools in your workspace — pick from the community, or describe what you need in chat (like
 				"add a tool that fetches npm docs").{" "}
 				<VSCodeLink href="https://x.com/sdrzn/status/1867271665086074969" style={{ display: "inline" }}>
 					See a demo here.

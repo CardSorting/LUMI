@@ -20,7 +20,7 @@ interface PlanCompletionOutputProps {
  */
 const PlanCompletionOutputRow = memo(({ text, headClassNames, auditMetadata, isStreaming }: PlanCompletionOutputProps) => {
 	return (
-		<div className="rounded-lg border border-description/40 overflow-visible bg-code/80 p-4 pt-4 animate-mira-reveal">
+		<div className="rounded-lg border border-description/40 overflow-visible bg-code/80 p-4 pt-4 animate-lumi-reveal">
 			<div className={cn(headClassNames, "justify-between px-1")}>
 				<div className="flex gap-2 items-center">
 					<NotepadTextIcon className="size-2" />

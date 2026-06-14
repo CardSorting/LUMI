@@ -1,9 +1,9 @@
-# MIRA UX — Webview Developer Reference
+# LUMI UX — Webview Developer Reference
 
-The sidebar presents as **MIRA** to users. This file is a quick reference for engineers working in `webview-ui/`. Full documentation lives in the repo docs site:
+The sidebar presents as **LUMI** to users. This file is a quick reference for engineers working in `webview-ui/`. Full documentation lives in the repo docs site:
 
 - **[User Interface Design](../../docs/USER_INTERFACE_DESIGN.md)** — product philosophy, terminology, contributor guidelines
-- **[MIRA UX Implementation](../../docs/MIRA_UX_IMPLEMENTATION.md)** — APIs, file map, wiring checklist
+- **[LUMI UX Implementation](../../docs/MIRA_UX_IMPLEMENTATION.md)** — APIs, file map, wiring checklist
 
 ---
 
@@ -27,10 +27,10 @@ Secondary filter: **Does this interface reduce tension?**
 
 | Task | File |
 | :--- | :--- |
-| Add conversational copy | `src/copy/miraVoice.ts` |
+| Add conversational copy | `src/copy/lumiVoice.ts` |
 | Placeholders / completion silence | `pickChatPlaceholder`, `pickCompletionPresentation` |
-| Long-session behavior | `src/hooks/useMiraSessionComfort.ts` |
-| Orb presence | `src/components/common/MiraAmbientOrb.tsx` |
+| Long-session behavior | `src/hooks/useLumiSessionComfort.ts` |
+| Orb presence | `src/components/common/LumiAmbientOrb.tsx` |
 | Audit styling | `src/components/chat/audit/auditUiStyles.ts` |
 | Theme / motion | `src/theme.css`, `src/index.css` |
 
@@ -49,12 +49,12 @@ Secondary filter: **Does this interface reduce tension?**
 ## Session signals
 
 ```typescript
-const { sessionMinutes, isNightDesk, isStill, serenityLevel, calmTier } = useMiraSessionComfort()
+const { sessionMinutes, isNightDesk, isStill, serenityLevel, calmTier } = useLumiSessionComfort()
 ```
 
 - **90 min** → long session, placeholder "Still here."
 - **15 min idle** → night desk, placeholder "…", orb dims
-- **Serenity 0–3** → progressive `.mira-serenity-fade` cooling
+- **Serenity 0–3** → progressive `.lumi-serenity-fade` cooling
 
 Layout attributes: `data-night-desk`, `data-serenity-level`.
 
@@ -75,4 +75,4 @@ npx tsc --noEmit
 npm run storybook
 ```
 
-See [Storybook README](../.storybook/README.md#mira-design-principles) for component development guidelines.
+See [Storybook README](../.storybook/README.md#lumi-design-principles) for component development guidelines.

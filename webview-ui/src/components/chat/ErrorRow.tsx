@@ -4,7 +4,7 @@ import CreditLimitError from "@/components/chat/CreditLimitError"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
 import { useDietCodeAuth, useDietCodeSignIn } from "@/context/DietCodeAuthContext"
-import { pickRecoveryLine } from "@/copy/miraVoice"
+import { pickRecoveryLine } from "@/copy/lumiVoice"
 import { DietCodeError, DietCodeErrorType } from "../../../../src/services/error/DietCodeError"
 
 const _errorColor = "var(--vscode-errorForeground)"
@@ -92,12 +92,12 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 							{/* Display raw API error if different from parsed error message */}
 							{errorMessage !== rawApiError && <div>{rawApiError}</div>}
 
-							{/* Display Login button for non-logged in users using the MIRA provider */}
+							{/* Display Login button for non-logged in users using the LUMI provider */}
 							<div>
 								{/* The user is signed in or not using dietcode provider */}
 								{isDietCodeProvider && !dietcodeUser ? (
 									<Button className="w-full mb-4" disabled={isLoginLoading} onClick={handleSignIn}>
-										Sign in to MIRA
+										Sign in to LUMI
 										{isLoginLoading && (
 											<span className="ml-1 animate-spin">
 												<Icon className="" name="refresh" />

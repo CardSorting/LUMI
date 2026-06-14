@@ -19,7 +19,7 @@ export interface RoadmapErrorEnvelope {
 }
 
 const RECOVERY_BY_CODE: Record<string, string> = {
-	roadmap_disabled: "Enable mira.roadmap.enabled in VS Code settings",
+	roadmap_disabled: "Enable lumi.roadmap.enabled in VS Code settings",
 	workspace_unresolved: "Open a workspace folder before using roadmap steering",
 	roadmap_missing: "roadmap(action='checkpoint') to bootstrap ROADMAP.md",
 	schema_invalid: "roadmap(action='validate') then repair reported issues",

@@ -176,7 +176,7 @@ export const ToolGroupRenderer = memo(({ messages, allMessages, isLastGroup }: T
 			</button>
 
 			{showDetails && (
-				<div className="min-w-0 mt-1 animate-mira-reveal">
+				<div className="min-w-0 mt-1 animate-lumi-reveal">
 					{allTools.map(({ tool, parsedTool, isActive, activityText }) => {
 						const info = getToolDisplayInfo(parsedTool)
 						if (!info) {

@@ -822,17 +822,17 @@ export const ExtensionStateContextProvider: React.FC<{
 		vercelAiGatewayModels,
 	])
 
-	// Refresh MIRA models function
+	// Refresh LUMI models function
 	const refreshDietCodeModels = useCallback(() => {
 		ModelsServiceClient.refreshDietCodeModelsRpc(EmptyRequest.create({}))
 			.then((response: OpenRouterCompatibleModelInfo) => {
 				const models = fromProtobufModels(response.models)
 				setDietCodeModels((prev) => (Object.keys(models).length > 0 ? models : (prev ?? null)))
 			})
-			.catch((error: Error) => console.error("Failed to refresh MIRA models:", error))
+			.catch((error: Error) => console.error("Failed to refresh LUMI models:", error))
 	}, [])
 
-	// Auto-refresh MIRA models when provider is dietcode
+	// Auto-refresh LUMI models when provider is dietcode
 	useEffect(() => {
 		const hasDietCodeProvider =
 			state.apiConfiguration?.actModeApiProvider === "dietcode" ||

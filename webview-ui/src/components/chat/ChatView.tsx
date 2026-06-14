@@ -24,10 +24,10 @@ import { isChatInputEnabled } from "@/components/chat/chat-view/shared/chatInput
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
-import { pickChatPlaceholder } from "@/copy/miraVoice"
+import { pickChatPlaceholder } from "@/copy/lumiVoice"
 import { useAuditAutoScrollPolicy } from "@/hooks/useAuditAutoScrollPolicy"
 import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
-import { useMiraSessionComfort } from "@/hooks/useMiraSessionComfort"
+import { useLumiSessionComfort } from "@/hooks/useLumiSessionComfort"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
 import AutoApproveBar from "./auto-approve-menu/AutoApproveBar"
@@ -75,7 +75,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		currentTaskItem,
 	} = useExtensionState()
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
-	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see MIRA.abort)
+	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see LUMI.abort)
 	const modifiedMessages = useMemo(() => {
 		const slicedMessages = messages.slice(1)
 		// Only combine hook sequences if hooks are enabled
@@ -125,7 +125,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		textAreaRef,
 	} = chatState
 
-	const { sessionMinutes, isNightDesk, serenityLevel } = useMiraSessionComfort()
+	const { sessionMinutes, isNightDesk, serenityLevel } = useLumiSessionComfort()
 
 	useEffect(() => {
 		const handleCopy = async (e: ClipboardEvent) => {

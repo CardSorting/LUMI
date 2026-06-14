@@ -71,7 +71,7 @@ export const ThinkingRow = memo(
 						variant="icon">
 						<span
 							className={cn("text-[13px] leading-[1.2]", {
-								"animate-shimmer bg-linear-90 from-(--color-mira) to-foreground bg-[length:200%_100%] bg-clip-text text-transparent":
+								"animate-shimmer bg-linear-90 from-(--color-lumi) to-foreground bg-[length:200%_100%] bg-clip-text text-transparent":
 									isStreaming,
 								"select-none": isStreaming,
 							})}>

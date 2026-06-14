@@ -1,41 +1,41 @@
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
-export type MiraOrbMood = "idle" | "waiting" | "success" | "still" | "held"
-export type MiraCalmTier = "normal" | "long" | "night"
+export type LumiOrbMood = "idle" | "waiting" | "success" | "still" | "held"
+export type LumiCalmTier = "normal" | "long" | "night"
 
-interface MiraAmbientOrbProps {
+interface LumiAmbientOrbProps {
 	children: ReactNode
 	className?: string
-	mood?: MiraOrbMood
-	calmTier?: MiraCalmTier
+	mood?: LumiOrbMood
+	calmTier?: LumiCalmTier
 }
 
-const GLOW_BY_MOOD: Record<MiraOrbMood, string> = {
-	idle: "opacity-[0.06] animate-mira-glow-pulse",
-	waiting: "opacity-[0.05] animate-mira-glow-pulse [animation-duration:11s]",
-	success: "opacity-[0.09] animate-mira-settle",
+const GLOW_BY_MOOD: Record<LumiOrbMood, string> = {
+	idle: "opacity-[0.06] animate-lumi-glow-pulse",
+	waiting: "opacity-[0.05] animate-lumi-glow-pulse [animation-duration:11s]",
+	success: "opacity-[0.09] animate-lumi-settle",
 	still: "opacity-[0.03]",
-	held: "opacity-[0.025] animate-mira-glow-pulse [animation-duration:14s]",
+	held: "opacity-[0.025] animate-lumi-glow-pulse [animation-duration:14s]",
 }
 
-const DRIFT_BY_MOOD: Record<MiraOrbMood, string> = {
-	idle: "animate-mira-drift",
-	waiting: "animate-mira-drift [animation-duration:14s]",
+const DRIFT_BY_MOOD: Record<LumiOrbMood, string> = {
+	idle: "animate-lumi-drift",
+	waiting: "animate-lumi-drift [animation-duration:14s]",
 	success: "",
 	still: "",
 	held: "",
 }
 
-const BREATHE_BY_MOOD: Record<MiraOrbMood, string> = {
-	idle: "animate-mira-breathe",
-	waiting: "animate-mira-breathe-rest",
+const BREATHE_BY_MOOD: Record<LumiOrbMood, string> = {
+	idle: "animate-lumi-breathe",
+	waiting: "animate-lumi-breathe-rest",
 	success: "",
 	still: "",
 	held: "",
 }
 
-const WRAPPER_BY_MOOD: Record<MiraOrbMood, string> = {
+const WRAPPER_BY_MOOD: Record<LumiOrbMood, string> = {
 	idle: "",
 	waiting: "",
 	success: "",
@@ -44,7 +44,7 @@ const WRAPPER_BY_MOOD: Record<MiraOrbMood, string> = {
 }
 
 /** Quiet ambient presence — grounded, not reactive; rests when still or held. */
-export const MiraAmbientOrb = ({ children, className, mood = "idle", calmTier = "normal" }: MiraAmbientOrbProps) => (
+export const LumiAmbientOrb = ({ children, className, mood = "idle", calmTier = "normal" }: LumiAmbientOrbProps) => (
 	<div
 		className={cn(
 			"group relative transition-opacity duration-[2s] ease-[cubic-bezier(0.16,1,0.3,1)]",
@@ -58,7 +58,7 @@ export const MiraAmbientOrb = ({ children, className, mood = "idle", calmTier = 
 		data-mood={mood}>
 		<div
 			className={cn(
-				"pointer-events-none absolute inset-0 rounded-full blur-3xl transition-opacity duration-[1.6s] bg-premium-mira-glow",
+				"pointer-events-none absolute inset-0 rounded-full blur-3xl transition-opacity duration-[1.6s] bg-premium-lumi-glow",
 				GLOW_BY_MOOD[mood],
 				mood === "idle" && "group-hover:opacity-[0.09]",
 				mood === "still" && "opacity-[0.03]",

@@ -78,11 +78,11 @@
 	padding-bottom: env(safe-area-inset-bottom);
 }
 
-.mira-chat-readable {
+.lumi-chat-readable {
 	line-height: 1.65;
 }
 
-.mira-chat-readable p {
+.lumi-chat-readable p {
 	line-height: 1.65;
 }
 
@@ -94,27 +94,27 @@
 	opacity: 0.9;
 }
 
-[data-night-desk="true"] .mira-audit-exhale {
+[data-night-desk="true"] .lumi-audit-exhale {
 	opacity: 0.88;
 }
 
-[data-serenity-level="1"] .mira-serenity-fade {
+[data-serenity-level="1"] .lumi-serenity-fade {
 	opacity: 0.97;
 }
 
-[data-serenity-level="2"] .mira-serenity-fade {
+[data-serenity-level="2"] .lumi-serenity-fade {
 	opacity: 0.94;
 }
 
-[data-serenity-level="3"] .mira-serenity-fade {
+[data-serenity-level="3"] .lumi-serenity-fade {
 	opacity: 0.9;
 }
 
-.mira-serenity-fade {
+.lumi-serenity-fade {
 	transition: opacity 3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.mira-workshop-haze {
+.lumi-workshop-haze {
 	background-image: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(122, 126, 184, 0.04), transparent 55%);
 }
 
@@ -158,64 +158,64 @@ body {
 		background: linear-gradient(135deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.1) 100%);
 	}
 
-	.btn-premium-mira,
+	.btn-premium-lumi,
 	.btn-premium-cola {
 		@apply rounded-xl font-medium transition-all duration-300;
-		background: var(--gradient-mira);
+		background: var(--gradient-lumi);
 		box-shadow: var(--shadow-premium);
-		color: var(--color-mira-warm);
+		color: var(--color-lumi-warm);
 	}
 
-	.btn-premium-mira:hover:not(:disabled),
+	.btn-premium-lumi:hover:not(:disabled),
 	.btn-premium-cola:hover:not(:disabled) {
 		@apply -translate-y-0.5;
-		box-shadow: var(--glow-mira);
+		box-shadow: var(--glow-lumi);
 		filter: brightness(1.05);
 	}
 
-	.btn-premium-mira:active:not(:disabled),
+	.btn-premium-lumi:active:not(:disabled),
 	.btn-premium-cola:active:not(:disabled) {
 		@apply translate-y-0 scale-98;
 		box-shadow: none;
 	}
 
-	.bg-premium-mira-glow {
+	.bg-premium-lumi-glow {
 		background: radial-gradient(circle, rgba(122, 126, 184, 0.22) 0%, transparent 72%);
 	}
 
-	.animate-mira-breathe {
-		animation: var(--animate-mira-breathe);
+	.animate-lumi-breathe {
+		animation: var(--animate-lumi-breathe);
 	}
 
-	.animate-mira-breathe-slow {
-		animation: var(--animate-mira-breathe-slow);
+	.animate-lumi-breathe-slow {
+		animation: var(--animate-lumi-breathe-slow);
 	}
 
-	.animate-mira-reading-reveal {
-		animation: var(--animate-mira-reading-reveal);
+	.animate-lumi-reading-reveal {
+		animation: var(--animate-lumi-reading-reveal);
 	}
 
-	.animate-mira-drift {
-		animation: var(--animate-mira-drift);
+	.animate-lumi-drift {
+		animation: var(--animate-lumi-drift);
 	}
 
-	.animate-mira-glow-pulse {
-		animation: var(--animate-mira-glow-pulse);
+	.animate-lumi-glow-pulse {
+		animation: var(--animate-lumi-glow-pulse);
 	}
 
-	.animate-mira-settle {
-		animation: var(--animate-mira-settle);
+	.animate-lumi-settle {
+		animation: var(--animate-lumi-settle);
 	}
 
-	.animate-mira-reveal {
-		animation: var(--animate-mira-reveal);
+	.animate-lumi-reveal {
+		animation: var(--animate-lumi-reveal);
 	}
 
-	.animate-mira-dot-pulse-slow {
-		animation: var(--animate-mira-dot-pulse-slow);
+	.animate-lumi-dot-pulse-slow {
+		animation: var(--animate-lumi-dot-pulse-slow);
 	}
 
-	.mira-panel-reveal {
+	.lumi-panel-reveal {
 		@apply transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)];
 	}
 

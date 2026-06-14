@@ -1371,7 +1371,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 										onSend("/document ")
 									}}>
 									<ButtonContainer>
-										<Icon name="book" size={13} style={{ color: "var(--color-mira)" }} />
+										<Icon name="book" size={13} style={{ color: "var(--color-lumi)" }} />
 									</ButtonContainer>
 								</VSCodeButton>
 							</TooltipTrigger>

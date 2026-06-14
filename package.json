@@ -1,7 +1,7 @@
 {
-	"name": "mira",
-	"displayName": "MIRA",
-	"description": "MIRA is your calm coding companion \u2014 comfort-first developer tooling for long sessions.",
+	"name": "lumi",
+	"displayName": "LUMI",
+	"description": "LUMI is your calm coding companion \u2014 comfort-first developer tooling for long sessions.",
 	"version": "1.0.1",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
@@ -30,7 +30,7 @@
 		"Testing"
 	],
 	"keywords": [
-		"mira",
+		"lumi",
 		"dietcode",
 		"claude",
 		"dev",
@@ -53,8 +53,8 @@
 	"main": "./dist/extension.js",
 	"contributes": {
 		"icons": {
-			"mira-icon": {
-				"description": "MIRA",
+			"lumi-icon": {
+				"description": "LUMI",
 				"default": {
 					"fontPath": "assets/icons/mira-bot.woff",
 					"fontCharacter": "\\e900"
@@ -63,22 +63,22 @@
 		},
 		"walkthroughs": [
 			{
-				"id": "MIRAWalkthrough",
-				"title": "Meet MIRA, your calm coding companion",
-				"description": "MIRA codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
+				"id": "LUMIWalkthrough",
+				"title": "Meet LUMI, your calm coding companion",
+				"description": "LUMI codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
 				"steps": [
 					{
 						"id": "welcome",
 						"title": "Start with a Goal, Not Just a Prompt",
-						"description": "Tell MIRA what you want to achieve. It plans, asks, and then codes, like a true partner.",
+						"description": "Tell LUMI what you want to achieve. It plans, asks, and then codes, like a true partner.",
 						"media": {
 							"markdown": "walkthrough/step1.md"
 						}
 					},
 					{
 						"id": "learn",
-						"title": "Let MIRA learn your codebase",
-						"description": "Point MIRA to your project. It builds understanding to make smart, context-aware changes.",
+						"title": "Let LUMI learn your codebase",
+						"description": "Point LUMI to your project. It builds understanding to make smart, context-aware changes.",
 						"media": {
 							"markdown": "walkthrough/step2.md"
 						}
@@ -86,7 +86,7 @@
 					{
 						"id": "advanced-features",
 						"title": "Always Use the Best AI Models",
-						"description": "MIRA connects you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
+						"description": "LUMI connects you with State-of-the-Art AI, connecting to top models (Anthropic, Gemini, OpenAI & more).",
 						"media": {
 							"markdown": "walkthrough/step3.md"
 						}
@@ -102,7 +102,7 @@
 					{
 						"id": "getting-started",
 						"title": "You're Always in Control",
-						"description": "Review MIRA's plans and diffs. Approve changes before they happen. No surprises.",
+						"description": "Review LUMI's plans and diffs. Approve changes before they happen. No surprises.",
 						"media": {
 							"markdown": "walkthrough/step5.md"
 						},
@@ -116,146 +116,146 @@
 		"viewsContainers": {
 			"activitybar": [
 				{
-					"id": "mira-ActivityBar",
-					"title": "MIRA",
+					"id": "lumi-ActivityBar",
+					"title": "LUMI",
 					"icon": "assets/icons/icon.svg"
 				}
 			]
 		},
 		"views": {
-			"mira-ActivityBar": [
+			"lumi-ActivityBar": [
 				{
 					"type": "webview",
-					"id": "mira.SidebarProvider",
-					"name": "MIRA",
+					"id": "lumi.SidebarProvider",
+					"name": "LUMI",
 					"icon": "assets/icons/icon.svg"
 				}
 			]
 		},
 		"commands": [
 			{
-				"command": "mira.plusButtonClicked",
+				"command": "lumi.plusButtonClicked",
 				"title": "New Task",
 				"icon": "$(add)"
 			},
 			{
-				"command": "mira.mcpButtonClicked",
+				"command": "lumi.mcpButtonClicked",
 				"title": "MCP Servers",
 				"icon": "$(server)"
 			},
 			{
-				"command": "mira.historyButtonClicked",
+				"command": "lumi.historyButtonClicked",
 				"title": "History",
 				"icon": "$(history)"
 			},
 			{
-				"command": "mira.accountButtonClicked",
+				"command": "lumi.accountButtonClicked",
 				"title": "Account",
 				"icon": "$(account)"
 			},
 			{
-				"command": "mira.settingsButtonClicked",
+				"command": "lumi.settingsButtonClicked",
 				"title": "Settings",
 				"icon": "$(settings-gear)"
 			},
 			{
-				"command": "mira.joyZoningButtonClicked",
+				"command": "lumi.joyZoningButtonClicked",
 				"title": "JoyZoning Audit",
 				"icon": "$(shield)"
 			},
 			{
-				"command": "mira.joyZoningAudit",
+				"command": "lumi.joyZoningAudit",
 				"title": "Run JoyZoning Audit",
-				"category": "MIRA",
+				"category": "LUMI",
 				"icon": "$(shield)"
 			},
 			{
-				"command": "mira.dev.createTestTasks",
+				"command": "lumi.dev.createTestTasks",
 				"title": "Create Test Tasks",
-				"category": "MIRA",
+				"category": "LUMI",
 				"when": "dietcode.isDevMode"
 			},
 			{
-				"command": "mira.dev.expireMcpOAuthTokens",
+				"command": "lumi.dev.expireMcpOAuthTokens",
 				"title": "Expire MCP OAuth Tokens (for testing)",
-				"category": "MIRA",
+				"category": "LUMI",
 				"when": "dietcode.isDevMode"
 			},
 			{
-				"command": "mira.addToChat",
-				"title": "Add to MIRA",
-				"category": "MIRA"
+				"command": "lumi.addToChat",
+				"title": "Add to LUMI",
+				"category": "LUMI"
 			},
 			{
-				"command": "mira.addTerminalOutputToChat",
-				"title": "Add to MIRA",
-				"category": "MIRA"
+				"command": "lumi.addTerminalOutputToChat",
+				"title": "Add to LUMI",
+				"category": "LUMI"
 			},
 			{
-				"command": "mira.focusChatInput",
+				"command": "lumi.focusChatInput",
 				"title": "Jump to Chat Input",
-				"category": "MIRA"
+				"category": "LUMI"
 			},
 			{
-				"command": "mira.generateGitCommitMessage",
-				"title": "Generate Commit Message with MIRA",
-				"category": "MIRA",
-				"icon": "$(mira-icon)"
+				"command": "lumi.generateGitCommitMessage",
+				"title": "Generate Commit Message with LUMI",
+				"category": "LUMI",
+				"icon": "$(lumi-icon)"
 			},
 			{
-				"command": "mira.abortGitCommitMessage",
-				"title": "Generate Commit Message with MIRA - Stop",
-				"category": "MIRA",
+				"command": "lumi.abortGitCommitMessage",
+				"title": "Generate Commit Message with LUMI - Stop",
+				"category": "LUMI",
 				"icon": "$(debug-stop)"
 			},
 			{
-				"command": "mira.explainCode",
-				"title": "Explain with MIRA",
-				"category": "MIRA"
+				"command": "lumi.explainCode",
+				"title": "Explain with LUMI",
+				"category": "LUMI"
 			},
 			{
-				"command": "mira.improveCode",
-				"title": "Improve with MIRA",
-				"category": "MIRA"
+				"command": "lumi.improveCode",
+				"title": "Improve with LUMI",
+				"category": "LUMI"
 			},
 			{
-				"command": "mira.jupyterGenerateCell",
-				"title": "Generate Jupyter Cell with MIRA",
-				"category": "MIRA",
+				"command": "lumi.jupyterGenerateCell",
+				"title": "Generate Jupyter Cell with LUMI",
+				"category": "LUMI",
 				"icon": "$(sparkle)"
 			},
 			{
-				"command": "mira.jupyterExplainCell",
-				"title": "Explain Jupyter Cell with MIRA",
-				"category": "MIRA",
+				"command": "lumi.jupyterExplainCell",
+				"title": "Explain Jupyter Cell with LUMI",
+				"category": "LUMI",
 				"icon": "$(question)"
 			},
 			{
-				"command": "mira.jupyterImproveCell",
-				"title": "Improve Jupyter Cell with MIRA",
-				"category": "MIRA",
+				"command": "lumi.jupyterImproveCell",
+				"title": "Improve Jupyter Cell with LUMI",
+				"category": "LUMI",
 				"icon": "$(lightbulb)"
 			},
 			{
-				"command": "mira.openWalkthrough",
+				"command": "lumi.openWalkthrough",
 				"title": "Open Walkthrough",
-				"category": "MIRA"
+				"category": "LUMI"
 			},
 			{
-				"command": "mira.reconstructTaskHistory",
+				"command": "lumi.reconstructTaskHistory",
 				"title": "Reconstruct Task History",
-				"category": "MIRA"
+				"category": "LUMI"
 			},
 			{
-				"command": "mira.reviewComment.reply",
+				"command": "lumi.reviewComment.reply",
 				"title": "Reply",
-				"category": "MIRA",
+				"category": "LUMI",
 				"enablement": "!commentIsEmpty"
 			},
 			{
-				"command": "mira.reviewComment.addToChat",
-				"title": "Add to MIRA Chat",
-				"category": "MIRA",
+				"command": "lumi.reviewComment.addToChat",
+				"title": "Add to LUMI Chat",
+				"category": "LUMI",
 				"icon": "$(link-external)"
 			},
 			{
@@ -281,7 +281,7 @@
 				"when": "commentEditorFocused && commentController == dietcode-review && !commentIsEmpty"
 			},
 			{
-				"command": "mira.addToChat",
+				"command": "lumi.addToChat",
 				"key": "cmd+'",
 				"mac": "cmd+'",
 				"win": "ctrl+'",
@@ -289,7 +289,7 @@
 				"when": "editorHasSelection"
 			},
 			{
-				"command": "mira.focusChatInput",
+				"command": "lumi.focusChatInput",
 				"key": "cmd+'",
 				"mac": "cmd+'",
 				"win": "ctrl+'",
@@ -300,133 +300,133 @@
 		"menus": {
 			"view/title": [
 				{
-					"command": "mira.plusButtonClicked",
+					"command": "lumi.plusButtonClicked",
 					"group": "navigation@1",
-					"when": "view == mira.SidebarProvider"
+					"when": "view == lumi.SidebarProvider"
 				},
 				{
-					"command": "mira.mcpButtonClicked",
+					"command": "lumi.mcpButtonClicked",
 					"group": "navigation@2",
-					"when": "view == mira.SidebarProvider"
+					"when": "view == lumi.SidebarProvider"
 				},
 				{
-					"command": "mira.historyButtonClicked",
+					"command": "lumi.historyButtonClicked",
 					"group": "navigation@3",
-					"when": "view == mira.SidebarProvider"
+					"when": "view == lumi.SidebarProvider"
 				},
 				{
-					"command": "mira.accountButtonClicked",
+					"command": "lumi.accountButtonClicked",
 					"group": "navigation@5",
-					"when": "view == mira.SidebarProvider"
+					"when": "view == lumi.SidebarProvider"
 				},
 				{
-					"command": "mira.settingsButtonClicked",
+					"command": "lumi.settingsButtonClicked",
 					"group": "navigation@6",
-					"when": "view == mira.SidebarProvider"
+					"when": "view == lumi.SidebarProvider"
 				},
 				{
-					"command": "mira.joyZoningButtonClicked",
+					"command": "lumi.joyZoningButtonClicked",
 					"group": "navigation@4",
-					"when": "view == mira.SidebarProvider"
+					"when": "view == lumi.SidebarProvider"
 				}
 			],
 			"editor/context": [
 				{
-					"command": "mira.addToChat",
+					"command": "lumi.addToChat",
 					"group": "navigation",
 					"when": "editorHasSelection"
 				}
 			],
 			"terminal/context": [
 				{
-					"command": "mira.addTerminalOutputToChat",
+					"command": "lumi.addTerminalOutputToChat",
 					"group": "navigation"
 				}
 			],
 			"scm/title": [
 				{
-					"command": "mira.generateGitCommitMessage",
+					"command": "lumi.generateGitCommitMessage",
 					"group": "navigation",
 					"when": "config.git.enabled && scmProvider == git && !dietcode.isGeneratingCommit"
 				},
 				{
-					"command": "mira.abortGitCommitMessage",
+					"command": "lumi.abortGitCommitMessage",
 					"group": "navigation",
 					"when": "config.git.enabled && scmProvider == git && dietcode.isGeneratingCommit"
 				}
 			],
 			"notebook/toolbar": [
 				{
-					"command": "mira.jupyterGenerateCell",
+					"command": "lumi.jupyterGenerateCell",
 					"group": "navigation/add@1",
 					"when": "notebookType == 'jupyter-notebook'"
 				}
 			],
 			"notebook/cell/title": [
 				{
-					"command": "mira.jupyterExplainCell",
+					"command": "lumi.jupyterExplainCell",
 					"group": "inline@1",
 					"when": "notebookType == 'jupyter-notebook'"
 				},
 				{
-					"command": "mira.jupyterImproveCell",
+					"command": "lumi.jupyterImproveCell",
 					"group": "inline@2",
 					"when": "notebookType == 'jupyter-notebook'"
 				}
 			],
 			"commandPalette": [
 				{
-					"command": "mira.generateGitCommitMessage",
+					"command": "lumi.generateGitCommitMessage",
 					"when": "config.git.enabled && !dietcode.isGeneratingCommit"
 				},
 				{
-					"command": "mira.abortGitCommitMessage",
+					"command": "lumi.abortGitCommitMessage",
 					"when": "config.git.enabled && dietcode.isGeneratingCommit"
 				},
 				{
-					"command": "mira.reviewComment.reply",
+					"command": "lumi.reviewComment.reply",
 					"when": "false"
 				}
 			],
 			"comments/commentThread/context": [
 				{
-					"command": "mira.reviewComment.reply",
+					"command": "lumi.reviewComment.reply",
 					"group": "inline",
 					"when": "commentController == dietcode-review"
 				}
 			],
 			"comments/commentThread/title": [
 				{
-					"command": "mira.reviewComment.addToChat",
+					"command": "lumi.reviewComment.addToChat",
 					"group": "inline",
 					"when": "commentController == dietcode-review"
 				}
 			]
 		},
 		"configuration": {
-			"title": "MIRA",
+			"title": "LUMI",
 			"properties": {
-				"mira.roadmap.enabled": {
+				"lumi.roadmap.enabled": {
 					"type": "boolean",
 					"default": true,
 					"description": "Enable auto-rolling ROADMAP.md steering, gates, and checkpoint tools."
 				},
-				"mira.roadmap.autoBootstrap": {
+				"lumi.roadmap.autoBootstrap": {
 					"type": "boolean",
 					"default": true,
 					"description": "Auto-create ROADMAP.md from workspace evidence when missing."
 				},
-				"mira.roadmap.autoBootstrapFill": {
+				"lumi.roadmap.autoBootstrapFill": {
 					"type": "boolean",
 					"default": true,
 					"description": "Apply evidence autofill after bootstrap."
 				},
-				"mira.roadmap.blockKanbanOnValidationPending": {
+				"lumi.roadmap.blockKanbanOnValidationPending": {
 					"type": "boolean",
 					"default": true,
 					"description": "Block attempt_completion when ROADMAP.md changed since last validate."
 				},
-				"mira.roadmap.failClosedCompletionGates": {
+				"lumi.roadmap.failClosedCompletionGates": {
 					"type": "boolean",
 					"default": true,
 					"description": "Block attempt_completion when roadmap gate evaluation fails."

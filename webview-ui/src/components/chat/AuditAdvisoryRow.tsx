@@ -34,7 +34,7 @@ export const AuditAdvisoryRow = memo(({ text, auditMetadata, messageTs }: AuditA
 	const hasCritical = hasCriticalViolations(auditMetadata.violations)
 
 	return (
-		<div className={cn("my-2 mira-audit-exhale transition-opacity duration-[2s]", auditStrip)}>
+		<div className={cn("my-2 lumi-audit-exhale transition-opacity duration-[2s]", auditStrip)}>
 			<div className={auditSideAccent}>
 				<div className="flex items-start gap-2">
 					<AlertTriangleIcon className="size-4 text-amber-500/70 shrink-0 mt-0.5" />
