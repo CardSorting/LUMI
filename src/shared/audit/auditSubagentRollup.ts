@@ -64,6 +64,14 @@ export function formatSubagentParentSignal(signal: string): string {
 		const match = signal.match(/GATE: PARENT_RETRY_STATUS \((.+)\)/)
 		return match ? `Parent gate retry status: ${match[1]}` : "Parent gate retry status"
 	}
+	if (signal.startsWith("GATE: PARENT_BLOCK_HISTORY")) {
+		const match = signal.match(/GATE: PARENT_BLOCK_HISTORY \((\d+)\)/)
+		return match ? `Parent gate block history: ${match[1]} events` : "Parent gate block history"
+	}
+	if (signal.startsWith("GATE: PARENT_SESSION")) {
+		const match = signal.match(/GATE: PARENT_SESSION \((.+)\)/)
+		return match ? `Parent gate session: ${match[1]}` : "Parent gate session"
+	}
 	return SUBAGENT_PARENT_SIGNAL_LABELS[signal] ?? signal.replace(/^SIGNAL: /, "")
 }
 

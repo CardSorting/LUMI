@@ -821,6 +821,8 @@ export class TelemetryService {
 			failedStage?: string
 			pressureLevel?: string
 			retryStatus?: string
+			historyLength?: number
+			sessionId?: string
 		},
 	) {
 		this.capture({
@@ -836,6 +838,8 @@ export class TelemetryService {
 				failedStage: args.failedStage,
 				pressureLevel: args.pressureLevel,
 				retryStatus: args.retryStatus,
+				historyLength: args.historyLength ?? 0,
+				sessionId: args.sessionId,
 			},
 		})
 	}

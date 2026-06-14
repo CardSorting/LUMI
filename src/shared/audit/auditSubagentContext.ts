@@ -16,6 +16,8 @@ export interface SubagentAuditContextInput {
 	completionGatePressureLevel?: string
 	completionGateObservabilityEnvelope?: string
 	completionGateRetryStatus?: string
+	completionGateBlockHistoryCount?: number
+	completionGateSessionId?: string
 	gateOptions?: CompletionGateOptions
 }
 
@@ -50,6 +52,14 @@ export function buildSubagentGateSignals(input: SubagentAuditContextInput): stri
 	const retryStatus = input.completionGateRetryStatus
 	if (retryStatus && retryStatus !== "ready") {
 		signals.push(`GATE: PARENT_RETRY_STATUS (${retryStatus})`)
+	}
+
+	if (input.completionGateBlockHistoryCount && input.completionGateBlockHistoryCount > 1) {
+		signals.push(`GATE: PARENT_BLOCK_HISTORY (${input.completionGateBlockHistoryCount})`)
+	}
+
+	if (input.completionGateSessionId) {
+		signals.push(`GATE: PARENT_SESSION (${input.completionGateSessionId})`)
 	}
 
 	if (input.lastCompletionAudit?.gate_blocked) {
@@ -169,6 +179,15 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 
 	if (completionGateRetryStatus) {
 		lines.push(`- Parent gate retry status: ${completionGateRetryStatus}`)
+	}
+
+	const historyCount = input.completionGateBlockHistoryCount
+	if (historyCount && historyCount > 0) {
+		lines.push(`- Parent gate block history: ${historyCount} recent event(s)`)
+	}
+
+	if (input.completionGateSessionId) {
+		lines.push(`- Parent gate session: ${input.completionGateSessionId}`)
 	}
 
 	if (completionAttemptCount && completionAttemptCount > 0) {

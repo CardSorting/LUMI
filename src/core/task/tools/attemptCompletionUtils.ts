@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto"
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
+import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
 import {
+	COMPLETION_GATE_BLOCK_HISTORY_MAX,
 	COMPLETION_GATE_ESCALATION_REMAINING,
 	COMPLETION_GATE_STATUS_SCHEMA_VERSION,
 	COMPLETION_GATE_WARN_THRESHOLD,
@@ -68,6 +70,14 @@ export function isCompletionSoftBlockReason(reason: CompletionPreflightReason): 
 }
 
 export type CompletionGateRetryStatus = "blocked" | "wait" | "ready"
+
+export type CompletionGateBlockHistoryEntry = {
+	reason: CompletionPreflightReason
+	stage: CompletionPreflightStage
+	at: number
+	soft: boolean
+	blockCount: number
+}
 
 /** Exponential backoff delay — base * 2^(blocks-1), capped (mirrors AWS/Azure retry policies). */
 export function getCompletionRetryCooldownMs(blockCount: number): number {
@@ -214,7 +224,25 @@ export function recordCompletionBlockReason(config: TaskConfig, reason: Completi
 	config.taskState.lastCompletionBlockReason = reason
 	config.taskState.lastCompletionFailedStage = mapCompletionReasonToPreflightStage(reason)
 	config.taskState.completionGatePressureLevel = getCompletionGatePressureLevel(config)
+	appendCompletionGateBlockHistory(config, reason)
 	syncCompletionGateObservabilityCache(config)
+}
+
+/** Ring-buffer gate block events — mirrors CI run attempt history / event sourcing. */
+export function appendCompletionGateBlockHistory(config: TaskConfig, reason: CompletionPreflightReason): void {
+	const entry: CompletionGateBlockHistoryEntry = {
+		reason,
+		stage: mapCompletionReasonToPreflightStage(reason),
+		at: Date.now(),
+		soft: isCompletionSoftBlockReason(reason),
+		blockCount: config.taskState.completionGateBlockCount ?? 0,
+	}
+	const history = config.taskState.completionGateBlockHistory ?? []
+	history.push(entry)
+	if (history.length > COMPLETION_GATE_BLOCK_HISTORY_MAX) {
+		history.splice(0, history.length - COMPLETION_GATE_BLOCK_HISTORY_MAX)
+	}
+	config.taskState.completionGateBlockHistory = history
 }
 
 /** Persists the latest envelope on task state — avoids recomputation at subagent spawn. */
@@ -229,11 +257,16 @@ export function clearCompletionGateObservabilityState(config: TaskConfig): void 
 	config.taskState.completionGateObservabilityEnvelope = undefined
 }
 
+export function clearCompletionGateBlockHistory(config: TaskConfig): void {
+	config.taskState.completionGateBlockHistory = undefined
+}
+
 /** OpenTelemetry-style dimensions for gate block telemetry. */
 export function getCompletionGateTelemetryContext(config: TaskConfig): {
 	pressureLevel: CompletionGatePressureLevel
 	retryStatus: CompletionGateRetryStatus
 	failedStage?: CompletionPreflightStage
+	historyLength: number
 } {
 	const reason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
 	const retryStatus = reason ? getCompletionGateRetryPolicy(reason, config).retryStatus : "ready"
@@ -241,6 +274,8 @@ export function getCompletionGateTelemetryContext(config: TaskConfig): {
 		pressureLevel: getCompletionGatePressureLevel(config),
 		retryStatus,
 		failedStage: config.taskState.lastCompletionFailedStage as CompletionPreflightStage | undefined,
+		historyLength: config.taskState.completionGateBlockHistory?.length ?? 0,
+		sessionId: config.taskState.completionGateSessionId,
 	}
 }
 
@@ -302,7 +337,6 @@ export function validateCompletionResultMaxLength(result: string): string | null
 	return null
 }
 
-/** Maps block reason to pipeline stage for structured status (mirrors CI job stage names). */
 export function mapCompletionReasonToPreflightStage(reason: CompletionPreflightReason): CompletionPreflightStage {
 	switch (reason) {
 		case "circuit_breaker":
@@ -338,6 +372,24 @@ export function mapCompletionReasonToPreflightStage(reason: CompletionPreflightR
 			return "audit"
 		case "double_check":
 			return "double_check"
+	}
+}
+
+/** HTTP status analogue — mirrors API gateway error classification for agents. */
+export function mapCompletionReasonToHttpStatus(reason: CompletionPreflightReason): number {
+	switch (reason) {
+		case "retry_cooldown":
+			return 429
+		case "duplicate_submission":
+			return 409
+		case "circuit_breaker":
+			return 403
+		case "audit_error":
+			return 503
+		case "double_check":
+			return 428
+		default:
+			return 422
 	}
 }
 
@@ -548,6 +600,101 @@ export function buildCompletionGateHealthBlock(config: TaskConfig): string {
 	)
 }
 
+/** Compact routing digest — single attribute-heavy block for agent decision trees. */
+export function buildCompletionGateDigestBlock(config: TaskConfig, reason?: CompletionPreflightReason): string {
+	const resolvedReason =
+		reason ??
+		(config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined) ??
+		(undefined as CompletionPreflightReason | undefined)
+	if (!resolvedReason) {
+		const blocks = config.taskState.completionGateBlockCount ?? 0
+		const remaining = Math.max(0, MAX_COMPLETION_GATE_BLOCK_COUNT - blocks)
+		return (
+			`<completion_gate_digest schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ` +
+			`blocks="${blocks}" remaining="${remaining}" pressure="${getCompletionGatePressureLevel(config)}" retry_status="ready" />`
+		)
+	}
+	const stage = mapCompletionReasonToPreflightStage(resolvedReason)
+	const policy = getCompletionGateRetryPolicy(resolvedReason, config)
+	const blocks = config.taskState.completionGateBlockCount ?? 0
+	const remaining = Math.max(0, MAX_COMPLETION_GATE_BLOCK_COUNT - blocks)
+	return (
+		`<completion_gate_digest schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" reason="${resolvedReason}" ` +
+		`stage="${stage}" blocks="${blocks}" remaining="${remaining}" pressure="${getCompletionGatePressureLevel(config)}" ` +
+		`http_status="${mapCompletionReasonToHttpStatus(resolvedReason)}" session_id="${getOrCreateCompletionGateSessionId(config)}" ` +
+		`retry_status="${policy.retryStatus}" soft="${isCompletionSoftBlockReason(resolvedReason) ? "true" : "false"}" />`
+	)
+}
+
+/** Recent gate block events — mirrors CI run attempt history for agent forensics. */
+export function buildCompletionGateHistoryBlock(config: TaskConfig): string {
+	const history = config.taskState.completionGateBlockHistory ?? []
+	if (history.length === 0) {
+		return ""
+	}
+	const events = history
+		.map(
+			(entry, index) =>
+				`<event index="${index + 1}" reason="${entry.reason}" stage="${entry.stage}" soft="${entry.soft ? "true" : "false"}" ` +
+				`blocks="${entry.blockCount}" at="${entry.at}" />`,
+		)
+		.join("")
+	return (
+		`<completion_gate_history schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" count="${history.length}">` +
+		`${events}</completion_gate_history>`
+	)
+}
+
+/** Rate-limit snapshot — mirrors X-RateLimit-* / Retry-After response headers. */
+export function buildCompletionGateRateLimitBlock(config: TaskConfig): string {
+	const blocks = config.taskState.completionGateBlockCount ?? 0
+	if (blocks === 0) {
+		return ""
+	}
+	const limit = MAX_COMPLETION_GATE_BLOCK_COUNT
+	const remaining = Math.max(0, limit - blocks)
+	const resetMs = getCompletionCooldownRemainingMs(config)
+	return (
+		`<completion_gate_rate_limit schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" limit="${limit}" ` +
+		`remaining="${remaining}" reset_ms="${resetMs}" backoff_ms="${getCompletionRetryCooldownMs(blocks)}" />`
+	)
+}
+
+/** Workspace checkpoint delta — invalidates duplicate guards when disk state changed. */
+export function buildCompletionGateWorkspaceBlock(config: TaskConfig): string {
+	const currentHash = getLatestCheckpointHashFromMessages(config)
+	const priorHash = config.taskState.lastGateBlockCheckpointHash
+	if (!currentHash && !priorHash) {
+		return ""
+	}
+	const changed = hasWorkspaceChangedSinceGateBlock(config, currentHash)
+	return (
+		`<completion_gate_workspace schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ` +
+		`prior_hash="${priorHash ?? ""}" current_hash="${currentHash ?? ""}" changed="${changed ? "true" : "false"}" />`
+	)
+}
+
+/** One-line human summary — scannable routing hint above the machine envelope. */
+export function buildCompletionGateHumanBrief(config: TaskConfig, reason?: CompletionPreflightReason): string {
+	const resolvedReason =
+		reason ??
+		(config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined) ??
+		(undefined as CompletionPreflightReason | undefined)
+	if (!resolvedReason) {
+		return ""
+	}
+	const stage = mapCompletionReasonToPreflightStage(resolvedReason)
+	const blocks = config.taskState.completionGateBlockCount ?? 0
+	const remaining = Math.max(0, MAX_COMPLETION_GATE_BLOCK_COUNT - blocks)
+	const policy = getCompletionGateRetryPolicy(resolvedReason, config)
+	const action = buildCompletionPreflightRecoveryHint(resolvedReason) ?? "Fix violations before retrying."
+	const httpStatus = mapCompletionReasonToHttpStatus(resolvedReason)
+	return (
+		`**Gate block** \`${resolvedReason}\` at \`${stage}\` ` +
+		`(${blocks}/${MAX_COMPLETION_GATE_BLOCK_COUNT}, ${remaining} left, HTTP ${httpStatus}, retry: ${policy.retryStatus}) — ${action}`
+	)
+}
+
 /** Wraps machine-parseable gate blocks — mirrors nested API error envelopes. */
 export function buildCompletionGateAgentEnvelope(blocks: string[]): string {
 	const inner = blocks.filter(Boolean).join("")
@@ -566,7 +713,11 @@ export function buildCompletionGateStructuredContext(
 	const reason = resolveCompletionBlockReason(message, config)
 	const failedStage = mapCompletionReasonToPreflightStage(reason)
 	return buildCompletionGateAgentEnvelope([
+		buildCompletionGateDigestBlock(config, reason),
 		buildCompletionGateHealthBlock(config),
+		buildCompletionGateHistoryBlock(config),
+		buildCompletionGateRateLimitBlock(config),
+		buildCompletionGateWorkspaceBlock(config),
 		buildCompletionGateStageProgressBlock(failedStage),
 		buildCompletionGateProblemBlock(reason, message, config),
 		buildCompletionGateStatusBrief(config, options),
@@ -581,7 +732,11 @@ export function buildCompletionGateStructuredContext(
 export function buildCompletionGateObservabilityEnvelope(config: TaskConfig): string {
 	const lastReason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
 	if (!lastReason) {
-		return buildCompletionGateAgentEnvelope([buildCompletionGateHealthBlock(config), buildCompletionGateStatusBrief(config)])
+		return buildCompletionGateAgentEnvelope([
+			buildCompletionGateDigestBlock(config),
+			buildCompletionGateHealthBlock(config),
+			buildCompletionGateStatusBrief(config),
+		])
 	}
 	return buildCompletionGateStructuredContext("", config)
 }
@@ -658,7 +813,11 @@ export function buildCompletionPreflightReadinessBrief(config: TaskConfig): stri
 
 	parts.push("- Result: 1–2 paragraph summary in result; checklist only in task_progress")
 	parts.push(
-		buildCompletionGateAgentEnvelope([buildCompletionGateHealthBlock(config), buildCompletionGateStageProgressBlock()]),
+		buildCompletionGateAgentEnvelope([
+			buildCompletionGateDigestBlock(config),
+			buildCompletionGateHealthBlock(config),
+			buildCompletionGateStageProgressBlock(),
+		]),
 	)
 	return parts.join("\n\n")
 }
@@ -708,7 +867,19 @@ export function classifyCompletionPreflightReason(message: string): CompletionPr
 	return "audit_gate"
 }
 
+/** Correlation ID for the current completion cycle — spans all gate blocks until finish. */
+export function getOrCreateCompletionGateSessionId(config: TaskConfig): string {
+	if (!config.taskState.completionGateSessionId) {
+		config.taskState.completionGateSessionId = createHash("sha256")
+			.update(`${config.taskId}:${Date.now()}:${Math.random()}`)
+			.digest("hex")
+			.slice(0, 12)
+	}
+	return config.taskState.completionGateSessionId
+}
+
 export function recordCompletionAttemptTime(config: TaskConfig): void {
+	getOrCreateCompletionGateSessionId(config)
 	config.taskState.completionAttemptCount = (config.taskState.completionAttemptCount ?? 0) + 1
 }
 
@@ -840,10 +1011,12 @@ export function buildCompletionGateStatusBrief(config: TaskConfig, options?: { r
 	const resultFingerprint = options?.result ? hashCompletionResult(options.result) : ""
 	const currentHash = getLatestCheckpointHashFromMessages(config)
 	const workspaceChanged = hasWorkspaceChangedSinceGateBlock(config, currentHash)
+	const attemptKey = `${attempt}:${blockCount}:${failedStage}`
+	const sessionId = getOrCreateCompletionGateSessionId(config)
 
 	return (
 		`<completion_gate_status schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" blocks="${blockCount}" remaining="${remaining}" ` +
-		`double_check="${doubleCheck}" consecutive_mistakes="${mistakes}" attempt="${attempt}" ` +
+		`double_check="${doubleCheck}" consecutive_mistakes="${mistakes}" attempt="${attempt}" attempt_key="${attemptKey}" session_id="${sessionId}" ` +
 		`cooldown_remaining_ms="${cooldownRemaining}" backoff_ms="${backoffMs}" last_reason="${lastReason}" ` +
 		`failed_stage="${failedStage}" pressure_level="${pressureLevel}" workspace_changed="${workspaceChanged ? "true" : "false"}" ` +
 		`retryable="${retryPolicy.retryable ? "true" : "false"}" retry_after_ms="${retryPolicy.retryAfterMs}" ` +
@@ -866,6 +1039,7 @@ export function buildCompletionGatePassedBrief(config: TaskConfig, score?: numbe
 /** Success envelope — all stages passed with health snapshot (mirrors green CI run). */
 export function buildCompletionGatePassedEnvelope(config: TaskConfig, score?: number): string {
 	return buildCompletionGateAgentEnvelope([
+		buildCompletionGateDigestBlock(config),
 		buildCompletionGateHealthBlock(config),
 		buildCompletionGateStageProgressPassedBlock(),
 		buildCompletionGatePassedBrief(config, score),
@@ -893,10 +1067,12 @@ export function buildCompletionGateProblemBlock(reason: CompletionPreflightReaso
 	const trimmedDetail = detail.trim().slice(0, 500)
 	const retryPolicy = config ? getCompletionGateRetryPolicy(reason, config) : { retryStatus: "ready" as const }
 	const soft = isCompletionSoftBlockReason(reason)
+	const httpStatus = mapCompletionReasonToHttpStatus(reason)
 	return (
 		`<completion_gate_problem schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" type="${reason}" stage="${stage}" ` +
-		`soft="${soft ? "true" : "false"}" retry_status="${retryPolicy.retryStatus}" ` +
-		`title="${escapeCompletionGateXmlAttribute(title)}">${escapeCompletionGateXmlText(trimmedDetail)}</completion_gate_problem>`
+		`instance="completion-gate/${stage}" http_status="${httpStatus}" soft="${soft ? "true" : "false"}" ` +
+		`retry_status="${retryPolicy.retryStatus}" title="${escapeCompletionGateXmlAttribute(title)}">` +
+		`${escapeCompletionGateXmlText(trimmedDetail)}</completion_gate_problem>`
 	)
 }
 
@@ -998,7 +1174,12 @@ export function buildCompletionAgentErrorMessage(
 	options?: { result?: string; extraBlocks?: string[] },
 ): string {
 	const reason = resolveCompletionBlockReason(message, config)
-	const parts = [message, buildCompletionGateStructuredContext(message, config, options)]
+	const parts = [message]
+	const humanBrief = buildCompletionGateHumanBrief(config, reason)
+	if (humanBrief && !message.includes("Gate block")) {
+		parts.push(humanBrief)
+	}
+	parts.push(buildCompletionGateStructuredContext(message, config, options))
 	const playbook = buildCompletionGatePlaybook(reason)
 	if (playbook && !message.includes("Recovery playbook")) {
 		parts.push(playbook)
@@ -1107,6 +1288,7 @@ function getCompletionGateCircuitBreakerMessage(config: TaskConfig): string | nu
 	const blockCount = config.taskState.completionGateBlockCount ?? 0
 	if (blockCount >= MAX_COMPLETION_GATE_BLOCK_COUNT) {
 		config.taskState.consecutiveMistakeCount++
+		getOrCreateCompletionGateSessionId(config)
 		recordCompletionBlockReason(config, "circuit_breaker")
 		return (
 			`Task completion blocked: maximum completion gate retries (${MAX_COMPLETION_GATE_BLOCK_COUNT}) exceeded.\n\n` +
@@ -1126,6 +1308,22 @@ export function getCompletionGateCircuitBreakerError(config: TaskConfig): string
 
 export function checkCompletionGateCircuitBreaker(config: TaskConfig): ToolResponse | null {
 	const message = getCompletionGateCircuitBreakerMessage(config)
+	if (message) {
+		const telemetryContext = getCompletionGateTelemetryContext(config)
+		telemetryService.captureCompletionPreflightBlocked(config.ulid, {
+			taskId: config.taskId,
+			reason: "circuit_breaker",
+			blockCount: config.taskState.completionGateBlockCount ?? 0,
+			consecutiveMistakes: config.taskState.consecutiveMistakeCount,
+			attemptCount: config.taskState.completionAttemptCount ?? 0,
+			lastReason: config.taskState.lastCompletionBlockReason,
+			failedStage: "circuit_breaker",
+			pressureLevel: telemetryContext.pressureLevel,
+			retryStatus: telemetryContext.retryStatus,
+			historyLength: telemetryContext.historyLength,
+			sessionId: telemetryContext.sessionId,
+		})
+	}
 	return message ? formatCompletionToolError(message, config) : null
 }
 
@@ -1178,6 +1376,8 @@ export function markCompletionAttemptFinished(config: TaskConfig): void {
 	clearCompletionGateObservabilityState(config)
 	config.taskState.lastProactiveGuidanceBlockCount = undefined
 	config.taskState.preflightReadinessHintEmitted = undefined
+	clearCompletionGateBlockHistory(config)
+	config.taskState.completionGateSessionId = undefined
 	clearBlockedCompletionResultFingerprint(config)
 }
 

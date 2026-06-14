@@ -74,6 +74,7 @@ describe("auditSubagentRollup", () => {
 		expect(formatSubagentParentSignal("SIGNAL: PARENT_ADVISORY_FINDINGS")).to.contain("advisory")
 		expect(formatSubagentParentSignal("GATE: PARENT_ATTEMPTS (5)")).to.contain("Parent completion attempts")
 		expect(formatSubagentParentSignal("GATE: PARENT_RETRY_STATUS (wait)")).to.contain("retry status")
+		expect(formatSubagentParentSignal("GATE: PARENT_BLOCK_HISTORY (4)")).to.contain("block history")
 	})
 
 	it("builds markdown handoff section for audit export", () => {

@@ -422,6 +422,8 @@ export class SubagentRunner {
 					parentGateConfig,
 				).retryStatus
 			: undefined
+		const parentGateBlockHistoryCount = this.baseConfig.taskState.completionGateBlockHistory?.length
+		const parentGateSessionId = this.baseConfig.taskState.completionGateSessionId
 		const parentGateSignals = buildSubagentGateSignals({
 			lastCompletionAudit: this.baseConfig.taskState.lastCompletionAudit,
 			lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
@@ -431,6 +433,8 @@ export class SubagentRunner {
 			completionAttemptCount: this.baseConfig.taskState.completionAttemptCount,
 			completionGatePressureLevel: parentGatePressureLevel,
 			completionGateRetryStatus: parentGateRetryStatus,
+			completionGateBlockHistoryCount: parentGateBlockHistoryCount,
+			completionGateSessionId: parentGateSessionId,
 			gateOptions,
 		})
 		if (parentGateSignals.length > 0) {
@@ -507,6 +511,8 @@ export class SubagentRunner {
 						completionGatePressureLevel: parentGatePressureLevel,
 						completionGateObservabilityEnvelope: parentGateObservability,
 						completionGateRetryStatus: parentGateRetryStatus,
+						completionGateBlockHistoryCount: parentGateBlockHistoryCount,
+						completionGateSessionId: parentGateSessionId,
 						gateOptions,
 					})
 					const compressed = await orchestrator.getCompressedContext(parentStreamId)

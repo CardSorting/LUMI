@@ -77,6 +77,8 @@ function emitCompletionGateBlockTelemetry(
 		failedStage: mapCompletionReasonToPreflightStage(reason),
 		pressureLevel: telemetryContext.pressureLevel,
 		retryStatus: telemetryContext.retryStatus,
+		historyLength: telemetryContext.historyLength,
+		sessionId: telemetryContext.sessionId,
 	})
 }
 

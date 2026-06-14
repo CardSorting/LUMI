@@ -135,10 +135,20 @@ export class TaskState {
 	completionGatePressureLevel?: string
 	/** Cached machine-parseable envelope — synced on each gate block for subagent handoff. */
 	completionGateObservabilityEnvelope?: string
+	/** Ring buffer of recent gate block events — event-sourced agent context. */
+	completionGateBlockHistory?: Array<{
+		reason: string
+		stage: string
+		at: number
+		soft: boolean
+		blockCount: number
+	}>
 	/** Block count when proactive gate advisory was last emitted — debounces info spam. */
 	lastProactiveGuidanceBlockCount?: number
 	/** Whether the first-attempt preflight readiness hint was emitted. */
 	preflightReadinessHintEmitted?: boolean
+	/** Correlation ID for the current completion attempt cycle — tracing across gate blocks. */
+	completionGateSessionId?: string
 }
 
 export enum PolicyHealth {

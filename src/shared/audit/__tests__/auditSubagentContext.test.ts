@@ -78,6 +78,15 @@ describe("auditSubagentContext", () => {
 		expect(signals).to.include("GATE: PARENT_RETRY_STATUS (wait)")
 	})
 
+	it("emits block history signal when parent has multiple gate events", () => {
+		const signals = buildSubagentGateSignals({
+			completionGateBlockCount: 3,
+			completionGateBlockHistoryCount: 4,
+			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
+		})
+		expect(signals).to.include("GATE: PARENT_BLOCK_HISTORY (4)")
+	})
+
 	it("emits workspace policy and suppression signals", () => {
 		const lastCompletionAudit = enrichAuditMetadata({
 			violations: [],

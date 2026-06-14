@@ -2603,6 +2603,7 @@ export class Task {
 				const {
 					buildCompletionBreatherHint,
 					buildCompletionGateEscalationBrief,
+					buildCompletionGateHumanBrief,
 					buildCompletionGateObservabilityEnvelope,
 					buildCompletionGatePipelineBrief,
 					mapCompletionReasonToPreflightStage,
@@ -2615,11 +2616,16 @@ export class Task {
 					| import("./tools/attemptCompletionUtils").CompletionPreflightReason
 					| undefined
 				const failedStage = lastReason ? mapCompletionReasonToPreflightStage(lastReason) : undefined
-				const observabilityEnvelope = buildCompletionGateObservabilityEnvelope(gateConfig)
+				const observabilityEnvelope =
+					this.taskState.completionGateObservabilityEnvelope ?? buildCompletionGateObservabilityEnvelope(gateConfig)
 				const pipelineBrief = buildCompletionGatePipelineBrief(failedStage)
+				const humanBrief = lastReason ? buildCompletionGateHumanBrief(gateConfig, lastReason) : ""
 				const breatherHint = buildCompletionBreatherHint(gateConfig)
 				const escalationBrief = buildCompletionGateEscalationBrief(gateConfig)
 				breatherText += `\n\n${observabilityEnvelope}\n\n${pipelineBrief}`
+				if (humanBrief) {
+					breatherText += `\n\n${humanBrief}`
+				}
 				if (escalationBrief) {
 					breatherText += `\n\n${escalationBrief}`
 				}

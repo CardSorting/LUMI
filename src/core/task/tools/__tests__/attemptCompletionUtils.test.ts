@@ -2,6 +2,7 @@ import type { ToolUse } from "@core/assistant-message"
 import { beforeEach, describe, it } from "mocha"
 import "should"
 import {
+	COMPLETION_GATE_BLOCK_HISTORY_MAX,
 	COMPLETION_GATE_STATUS_SCHEMA_VERSION,
 	COMPLETION_GATE_WARN_THRESHOLD,
 	COMPLETION_RESULT_MAX_LENGTH,
@@ -10,22 +11,28 @@ import {
 import { DietCodeDefaultTool } from "@shared/tools"
 import { TaskState } from "../../TaskState"
 import {
+	appendCompletionGateBlockHistory,
 	appendCompletionGateRetryGuidance,
 	buildCompletionAgentErrorMessage,
 	buildCompletionGateActionBlock,
 	buildCompletionGateAgentEnvelope,
+	buildCompletionGateDigestBlock,
 	buildCompletionGateEscalationBrief,
 	buildCompletionGateHealthBlock,
+	buildCompletionGateHistoryBlock,
+	buildCompletionGateHumanBrief,
 	buildCompletionGatePassedBrief,
 	buildCompletionGatePassedEnvelope,
 	buildCompletionGatePipelineBrief,
 	buildCompletionGatePlaybook,
 	buildCompletionGatePlaybookBlock,
 	buildCompletionGateProblemBlock,
+	buildCompletionGateRateLimitBlock,
 	buildCompletionGateRecoveryBlock,
 	buildCompletionGateRetryGuidance,
 	buildCompletionGateStageProgressBlock,
 	buildCompletionGateStructuredContext,
+	buildCompletionGateWorkspaceBlock,
 	buildCompletionPreflightReadinessBrief,
 	buildCompletionPreflightRecoveryHint,
 	buildDoubleCheckReverifyMessage,
@@ -43,8 +50,10 @@ import {
 	getCompletionGateTelemetryContext,
 	getCompletionRetryCooldownMs,
 	getLatestCheckpointHashFromMessages,
+	getOrCreateCompletionGateSessionId,
 	getRemainingCompletionGateStages,
 	hashCompletionResult,
+	mapCompletionReasonToHttpStatus,
 	mapCompletionReasonToPreflightStage,
 	markCompletionAttemptFinished,
 	markCompletionGatesPassed,
@@ -287,6 +296,8 @@ describe("attemptCompletionUtils", () => {
 			block.should.containEql(`schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}"`)
 			block.should.containEql('type="result_too_brief"')
 			block.should.containEql('stage="min_length"')
+			block.should.containEql('instance="completion-gate/min_length"')
+			block.should.containEql('http_status="422"')
 			block.should.containEql('soft="false"')
 		})
 	})
@@ -320,17 +331,117 @@ describe("attemptCompletionUtils", () => {
 		})
 	})
 
+	describe("mapCompletionReasonToHttpStatus", () => {
+		it("maps block reasons to HTTP status analogues", () => {
+			mapCompletionReasonToHttpStatus("retry_cooldown").should.equal(429)
+			mapCompletionReasonToHttpStatus("duplicate_submission").should.equal(409)
+			mapCompletionReasonToHttpStatus("circuit_breaker").should.equal(403)
+			mapCompletionReasonToHttpStatus("audit_error").should.equal(503)
+			mapCompletionReasonToHttpStatus("double_check").should.equal(428)
+			mapCompletionReasonToHttpStatus("result_too_long").should.equal(422)
+		})
+	})
+
+	describe("buildCompletionGateRateLimitBlock", () => {
+		it("emits limit/remaining/reset when blocks exist", () => {
+			taskState.completionGateBlockCount = 2
+			taskState.lastCompletionAttemptAt = Date.now()
+			const block = buildCompletionGateRateLimitBlock(configWithState(taskState))
+			block.should.containEql("<completion_gate_rate_limit")
+			block.should.containEql(`limit="${MAX_COMPLETION_GATE_BLOCK_COUNT}"`)
+			block.should.containEql('remaining="8"')
+		})
+	})
+
+	describe("buildCompletionGateWorkspaceBlock", () => {
+		it("reports checkpoint delta since last gate block", () => {
+			taskState.lastGateBlockCheckpointHash = "abc"
+			const config = {
+				...configWithState(taskState),
+				messageState: {
+					getDietCodeMessages: () => [{ lastCheckpointHash: "def" }],
+				},
+			} as TaskConfig
+			const block = buildCompletionGateWorkspaceBlock(config)
+			block.should.containEql("<completion_gate_workspace")
+			block.should.containEql('changed="true"')
+		})
+	})
+
+	describe("buildCompletionGateHumanBrief", () => {
+		it("returns a scannable one-line routing summary", () => {
+			recordCompletionBlockReason(configWithState(taskState), "audit_gate")
+			taskState.completionGateBlockCount = 2
+			const brief = buildCompletionGateHumanBrief(configWithState(taskState))
+			brief.should.containEql("Gate block")
+			brief.should.containEql("`audit_gate`")
+			brief.should.containEql("HTTP 422")
+		})
+	})
+
+	describe("getOrCreateCompletionGateSessionId", () => {
+		it("creates a stable session id for the completion cycle", () => {
+			const config = configWithState(taskState)
+			const first = getOrCreateCompletionGateSessionId(config)
+			const second = getOrCreateCompletionGateSessionId(config)
+			first.should.equal(second)
+			first.length.should.equal(12)
+		})
+	})
+
 	describe("buildCompletionGateStructuredContext", () => {
 		it("returns a unified envelope for gate errors", () => {
+			taskState.completionGateBlockCount = 1
+			taskState.lastGateBlockCheckpointHash = "prior"
 			recordCompletionBlockReason(configWithState(taskState), "result_too_long")
-			const context = buildCompletionGateStructuredContext(
-				"Completion rejected: result exceeds maximum length",
-				configWithState(taskState),
-			)
+			const config = {
+				...configWithState(taskState),
+				messageState: {
+					getDietCodeMessages: () => [{ lastCheckpointHash: "current" }],
+				},
+			} as TaskConfig
+			const context = buildCompletionGateStructuredContext("Completion rejected: result exceeds maximum length", config)
 			context.should.containEql("<completion_gate_envelope")
 			context.should.containEql("<completion_gate_stages")
 			context.should.containEql("<completion_gate_problem")
+			context.should.containEql("<completion_gate_digest")
+			context.should.containEql("<completion_gate_history")
+			context.should.containEql("<completion_gate_rate_limit")
+			context.should.containEql("<completion_gate_workspace")
 			context.should.containEql("<completion_gate_action")
+		})
+	})
+
+	describe("buildCompletionGateDigestBlock", () => {
+		it("summarizes routing attributes for the latest block reason", () => {
+			recordCompletionBlockReason(configWithState(taskState), "result_too_long")
+			const digest = buildCompletionGateDigestBlock(configWithState(taskState))
+			digest.should.containEql("<completion_gate_digest")
+			digest.should.containEql('reason="result_too_long"')
+			digest.should.containEql('stage="max_length"')
+		})
+	})
+
+	describe("buildCompletionGateHistoryBlock", () => {
+		it("retains a ring buffer of recent gate block events", () => {
+			const config = configWithState(taskState)
+			recordCompletionBlockReason(config, "empty_result")
+			recordCompletionBlockReason(config, "audit_gate")
+			const block = buildCompletionGateHistoryBlock(config)
+			block.should.containEql("<completion_gate_history")
+			block.should.containEql('count="2"')
+			block.should.containEql('reason="audit_gate"')
+		})
+	})
+
+	describe("appendCompletionGateBlockHistory", () => {
+		it("caps history at COMPLETION_GATE_BLOCK_HISTORY_MAX entries", () => {
+			const config = configWithState(taskState)
+			for (let i = 0; i < COMPLETION_GATE_BLOCK_HISTORY_MAX + 2; i++) {
+				appendCompletionGateBlockHistory(config, "retry_cooldown")
+			}
+			should.exist(config.taskState.completionGateBlockHistory)
+			config.taskState.completionGateBlockHistory?.length.should.equal(COMPLETION_GATE_BLOCK_HISTORY_MAX)
 		})
 	})
 
@@ -511,14 +622,18 @@ describe("attemptCompletionUtils", () => {
 			should.not.exist(taskState.lastGateBlockCheckpointHash)
 		})
 
-		it("clears doubleCheckCompletionPending, gate block count, and fingerprint after a finished attempt", () => {
+		it("clears doubleCheckCompletionPending, gate block count, history, session, and fingerprint after a finished attempt", () => {
 			taskState.doubleCheckCompletionPending = true
 			taskState.completionGateBlockCount = 4
 			taskState.lastBlockedCompletionResultFingerprint = "abc123"
+			taskState.completionGateSessionId = "session123456"
+			taskState.completionGateBlockHistory = [{ reason: "audit_gate", stage: "audit", at: 1, soft: false, blockCount: 4 }]
 			markCompletionAttemptFinished(configWithState(taskState))
 			taskState.doubleCheckCompletionPending.should.be.false()
 			taskState.completionGateBlockCount.should.equal(0)
 			should.not.exist(taskState.lastBlockedCompletionResultFingerprint)
+			should.not.exist(taskState.completionGateBlockHistory)
+			should.not.exist(taskState.completionGateSessionId)
 		})
 	})
 
@@ -605,6 +720,7 @@ describe("attemptCompletionUtils", () => {
 				configWithState(taskState),
 			)
 			message.should.containEql('failed_stage="max_length"')
+			message.should.containEql("Gate block")
 			message.should.containEql("<completion_gate_envelope")
 			message.should.containEql("<completion_gate_problem")
 			message.should.containEql("<completion_gate_playbook")
