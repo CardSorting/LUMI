@@ -15,14 +15,7 @@ import {
 	wrapClarityEnvelope as operatorWrapClarityEnvelope,
 	recommendNextAction,
 } from "./RoadmapOperator"
-import {
-	clearLastError,
-	formatWatchReport,
-	readCurrentProgress,
-	readLastError,
-	readProgressTail,
-	recordLastError,
-} from "./RoadmapProgress"
+import { clearLastError, formatWatchReport, readCurrentProgress, readLastError, recordLastError } from "./RoadmapProgress"
 import {
 	bootstrapSkeleton,
 	findBootstrapPlaceholders,
@@ -1365,6 +1358,7 @@ export class RoadmapService {
 	public async getProgressSnapshot(workspace: string, context = ""): Promise<Record<string, unknown>> {
 		const ctx = (context || "").trim().toLowerCase()
 		if (ctx === "--tail") {
+			const { readProgressTail } = await import("./RoadmapProgress")
 			return this.wrapClarityEnvelope({
 				action: "progress",
 				success: true,
@@ -1373,17 +1367,25 @@ export class RoadmapService {
 				events: await readProgressTail(20),
 			})
 		}
-		const status = await this.getOperationalStatus(workspace, "", "light")
+
+		const { buildProgressSnapshot, formatProgressReport } = await import("./RoadmapProgress")
+		const snapshot = await buildProgressSnapshot(workspace)
+		const report = await formatProgressReport({
+			workspace,
+			timeline: ctx.includes("--timeline"),
+			currentSnapshot: ctx === "--current",
+			last: 5,
+			snapshot,
+		})
+
 		return this.wrapClarityEnvelope({
 			action: "progress",
 			success: true,
 			ok: true,
 			workspace,
-			current: await readCurrentProgress(),
-			last_error: await readLastError(),
-			roadmap_gate: status.roadmap_gate,
-			project_identity_line: status.project_identity_line,
-			phase: status.phase,
+			...snapshot,
+			report,
+			context_mode: ctx || "default",
 		})
 	}
 
@@ -2423,7 +2425,6 @@ function suggestReplacement(phrase: string, fp: any, evidence: any): [string, st
 	const tests = fp.test_frameworks || []
 	const ci = fp.ci_systems || []
 	const scripts = fp.entry_points || []
-	const make_targets = fp.makefile_targets || []
 
 	const mapping: Record<string, [string, string]> = {
 		"Describe from README and project evidence": [
@@ -2678,7 +2679,7 @@ function primaryRisk(evidence: any, fp: any): string {
 	return "Limited cross-session steering until Now/Next items connect to center of gravity."
 }
 
-function narrativeHint(fp: any, evidence: any, commits: string[]): string {
+function narrativeHint(fp: any, _evidence: any, commits: string[]): string {
 	const brief = fp.steering_brief || fp.steering_identity || ""
 	if (brief) {
 		return `Architecting ${brief} with clear separation of concerns, stable domain interfaces, and automated mutation validation.`

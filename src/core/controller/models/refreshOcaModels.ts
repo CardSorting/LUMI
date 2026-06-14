@@ -41,7 +41,8 @@ export async function refreshOcaModels(controller: Controller, request: StringRe
 		})
 		return OcaCompatibleModelInfo.create({ error: "Not authenticated with OCA" })
 	}
-	const ocaMode = controller.stateManager.getGlobalSettingsKey("ocaMode") || "internal"
+	const apiConfig = controller.stateManager.getApiConfiguration() as { ocaMode?: string }
+	const ocaMode = apiConfig.ocaMode || "internal"
 	const baseUrl = request.value || (ocaMode === "internal" ? DEFAULT_INTERNAL_OCA_BASE_URL : DEFAULT_EXTERNAL_OCA_BASE_URL)
 	const modelsUrl = `${baseUrl}/v1/model/info`
 	const headers = await createOcaHeaders(ocaAccessToken, "models-refresh")

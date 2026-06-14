@@ -33,6 +33,9 @@ The system auto-bootstraps ROADMAP.md from workspace evidence when missing. Afte
 **Recommended next call:** ${nextCall}
 
 Tool actions (all return _roadmap_operator_hints + project_identity_line):
+- \`/roadmap cockpit\` — operator one-screen summary (runs synchronously in chat)
+- \`/roadmap doctor\` — production health checks
+- \`/roadmap explain-gate\` / \`/roadmap explain-stale\` — gate and freshness diagnostics
 - \`roadmap(action='guide')\` — phase, gates, steering digest
 - \`roadmap(action='cockpit')\` — one-screen operator summary with gate report
 - \`roadmap(action='checkpoint')\` — full evidence before major direction changes

@@ -14,6 +14,11 @@ type PkceState = {
 	redirect_uri: string
 }
 
+function resolveOcaMode(controller: Controller): string {
+	const apiConfig = controller.stateManager.getApiConfiguration() as { ocaMode?: string }
+	return apiConfig.ocaMode || "internal"
+}
+
 export class OcaRefreshError extends Error {
 	status?: number
 	code?: string
@@ -98,7 +103,7 @@ export class OcaAuthProvider {
 			return null
 		}
 		try {
-			const ocaMode = controller.stateManager.getGlobalSettingsKey("ocaMode") || "internal"
+			const ocaMode = resolveOcaMode(controller)
 			const { idcs_url, client_id } = ocaMode === "internal" ? this._config.internal : this._config.external
 			if (!idcs_url || !client_id) {
 				throw new Error("IDCS URL or Client ID are not configured")
@@ -173,7 +178,7 @@ export class OcaAuthProvider {
 	// signIn expects code and state from the callback!
 	async signIn(controller: Controller, code: string, state: string): Promise<OcaAuthState | null> {
 		try {
-			const ocaMode = controller.stateManager.getGlobalSettingsKey("ocaMode") || "internal"
+			const ocaMode = resolveOcaMode(controller)
 			const { idcs_url, client_id } = ocaMode === "internal" ? this._config.internal : this._config.external
 			if (!idcs_url || !client_id) {
 				throw new Error("IDCS URL or Client ID are not configured")

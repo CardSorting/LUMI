@@ -10,6 +10,7 @@ import { buildProjectContextLines } from "../src/services/roadmap/RoadmapAgentSt
 import { isDigestContext, slimCheckpointPayload } from "../src/services/roadmap/RoadmapCheckpointDigest"
 import { requireFreshCheckpointBeforeComplete } from "../src/services/roadmap/RoadmapCompletionGate"
 import { getRoadmapConfig, invalidateRoadmapConfigCache } from "../src/services/roadmap/RoadmapConfig"
+import { gateClosedEnvelope, validationPendingEnvelope } from "../src/services/roadmap/RoadmapErrors"
 import { blockingClosedGates, evaluateGateChecks } from "../src/services/roadmap/RoadmapGateCatalog"
 import { finalizeRoadmapSession, initRoadmapSession } from "../src/services/roadmap/RoadmapLifecycle"
 import {
@@ -25,10 +26,12 @@ import {
 	recommendNextAction,
 	roadmapToolCommandToSlash,
 } from "../src/services/roadmap/RoadmapOperator"
+import { formatProgressReport } from "../src/services/roadmap/RoadmapProgress"
 import { validateRoadmapContent } from "../src/services/roadmap/RoadmapSchema"
 import { RoadmapService } from "../src/services/roadmap/RoadmapService"
 import { sessionBrief } from "../src/services/roadmap/RoadmapSession"
 import { executeRoadmapSlashCommand } from "../src/services/roadmap/RoadmapSlashCommand"
+import { buildSteeringContext } from "../src/services/roadmap/RoadmapSteeringContext"
 import { DietCodeDefaultTool } from "../src/shared/tools"
 
 const ROOT = path.resolve(__dirname, "..")
@@ -54,6 +57,7 @@ const REQUIRED_FILES = [
 	"src/services/roadmap/RoadmapSkillInstall.ts",
 	"src/services/roadmap/RoadmapSlashCommand.ts",
 	"src/services/roadmap/RoadmapFileWatcher.ts",
+	"src/services/roadmap/RoadmapSteeringContext.ts",
 	"src/services/roadmap/RoadmapSchema.ts",
 	"src/core/task/tools/handlers/RoadmapToolHandler.ts",
 	"src/core/prompts/system-prompt/components/roadmap_steering.ts",
@@ -184,6 +188,21 @@ async function runIntegrationChecks(failures: string[]): Promise<void> {
 		if (roadmapToolCommandToSlash("roadmap(action='explain_stale')") !== "/roadmap explain-stale") {
 			failures.push("roadmapToolCommandToSlash should map explain_stale")
 		}
+
+		const steering = await buildSteeringContext(tmp)
+		if (!steering.roadmap_path) failures.push("buildSteeringContext missing roadmap_path")
+
+		const pendingEnv = validationPendingEnvelope(tmp)
+		if (!pendingEnv.suggested_slash_command.includes("validate")) {
+			failures.push("validationPendingEnvelope should suggest /roadmap validate")
+		}
+		const gateEnv = gateClosedEnvelope("test")
+		if (!gateEnv.diagnostic_command.includes("explain-gate")) {
+			failures.push("gateClosedEnvelope should use /roadmap explain-gate diagnostic")
+		}
+
+		const progressReport = await formatProgressReport({ workspace: tmp, timeline: true, snapshot: steering })
+		if (!progressReport.includes("explain-gate")) failures.push("formatProgressReport missing live footer")
 
 		const digestPayload = slimCheckpointPayload({
 			action: "checkpoint",

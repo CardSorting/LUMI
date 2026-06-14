@@ -8,14 +8,14 @@ The roadmap is the project's steering surface — not a backlog or wishlist.
 
 | Your job | Command |
 |----------|---------|
-| See one-screen status | roadmap(action='cockpit') |
-| Check production health | roadmap(action='doctor') |
+| See one-screen status | /roadmap cockpit or roadmap(action='cockpit') |
+| Check production health | /roadmap doctor or roadmap(action='doctor') |
 | Before major direction changes | roadmap(action='checkpoint') |
-| After agent edits ROADMAP.md | roadmap(action='validate') |
+| After agent edits ROADMAP.md | /roadmap validate or roadmap(action='validate') |
 | Bootstrap placeholders remain | roadmap(action='apply_bootstrap_fill', context='write') |
-| Closed gates / completion blocked | roadmap(action='explain_gate') |
-| Checkpoint outdated vs git activity | roadmap(action='explain_stale') |
-| Activity timeline | roadmap(action='progress', context='--current') |
+| Closed gates / completion blocked | /roadmap explain-gate or roadmap(action='explain_gate') |
+| Checkpoint outdated vs git activity | /roadmap explain-stale or roadmap(action='explain_stale') |
+| Activity timeline | /roadmap progress --timeline |
 
 Write guard: ROADMAP.md only at workspace root — out-of-tree writes blocked at pre_tool_call.
 `.trim()

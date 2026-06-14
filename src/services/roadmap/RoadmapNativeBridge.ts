@@ -2,6 +2,7 @@ import { DietCodeDefaultTool } from "@shared/tools"
 import * as path from "path"
 import { buildProjectContextLines } from "./RoadmapAgentSteering"
 import { getRoadmapConfig } from "./RoadmapConfig"
+import { roadmapToolCommandToSlash } from "./RoadmapOperator"
 import { emitProgress } from "./RoadmapProgress"
 import { RoadmapService } from "./RoadmapService"
 import { journalRoadmapFileMutation } from "./RoadmapToolJournal"
@@ -139,7 +140,7 @@ export async function roadmapWriteHint(
 			preferred_tool: "roadmap",
 			preferred_command: "roadmap(action='guide')",
 			recovery_suggestion: (check.error || "Write ROADMAP.md only in the project workspace root.") + briefBit,
-			suggested_slash_command: "roadmap(action='cockpit')",
+			suggested_slash_command: "/roadmap cockpit",
 			next_action: "roadmap(action='guide')",
 			source_tool: toolName,
 			path: writePath,
@@ -165,7 +166,7 @@ export async function roadmapWriteHint(
 		preferred_tool: "roadmap",
 		preferred_command: preferred,
 		recovery_suggestion: followup,
-		suggested_slash_command: "roadmap(action='validate')",
+		suggested_slash_command: roadmapToolCommandToSlash(preferred),
 		next_action: nextAction,
 		source_tool: toolName,
 		path: writePath,

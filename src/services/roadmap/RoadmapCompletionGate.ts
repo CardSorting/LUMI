@@ -25,7 +25,8 @@ export async function evaluateRoadmapCompletionBlock(
 			blocked: true,
 			message:
 				"Task completion blocked: ROADMAP.md has pending modifications that must be validated first.\n" +
-				"Please run: roadmap(action='validate')",
+				"Run: roadmap(action='validate') or /roadmap validate\n" +
+				"Diagnostic: /roadmap explain-gate",
 			retryCommand: "roadmap(action='validate')",
 		}
 	}
@@ -60,17 +61,17 @@ export async function requireFreshCheckpointBeforeComplete(workspace: string): P
 		const first = block.blockingGates[0]
 		return (
 			`ROADMAP steering gate closed (${first.label}) — ${first.why}. ` +
-			`Fix: ${first.fix}. Diagnostic: roadmap(action='explain_gate')`
+			`Fix: ${first.fix}. Diagnostic: /roadmap explain-gate`
 		)
 	}
 
-	return block.message || "ROADMAP steering gate closed — roadmap(action='explain_gate')"
+	return block.message || "ROADMAP steering gate closed — /roadmap explain-gate"
 }
 
 export function failClosedCompletionMessage(): string {
 	return (
 		"Task completion blocked: roadmap gate evaluation failed.\n" +
-		"Run roadmap(action='doctor') to diagnose, then roadmap(action='explain_gate') if gates remain closed."
+		"Run /roadmap doctor to diagnose, then /roadmap explain-gate if gates remain closed."
 	)
 }
 

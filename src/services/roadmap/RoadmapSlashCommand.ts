@@ -188,13 +188,14 @@ export async function executeRoadmapSlashCommand(rawArgs: string, workspace?: st
 			case "progress": {
 				if (argv.includes("--current")) {
 					const payload = await service.getProgressSnapshot(ws, "--current")
-					return JSON.stringify(payload, null, 2)
+					return payloadReport(payload) || JSON.stringify(payload, null, 2)
 				}
 				if (argv.includes("--tail")) {
 					return JSON.stringify(await readProgressTail(20), null, 2)
 				}
-				const payload = await service.getProgressSnapshot(ws, context)
-				return payloadReport(payload) || JSON.stringify(payload, null, 2)
+				const timeline = argv.includes("--timeline")
+				const payload = await service.getProgressSnapshot(ws, timeline ? "--timeline" : context)
+				return payloadReport(payload) || String(payload.report || JSON.stringify(payload, null, 2))
 			}
 			case "watch": {
 				const payload = await service.getWatchReport(ws)
