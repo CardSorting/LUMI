@@ -1,6 +1,6 @@
 import { buildUserFeedbackContent } from "@core/task/utils/buildUserFeedbackContent"
 import { maybeTransitionToReplanMode } from "@core/task/utils/replanModeTransition"
-import type { DietCodeMessageModelInfo } from "@shared/ExtensionMessage"
+import type { DietCodeMessageModelInfo } from "@shared/messages"
 import type { DietCodeContent } from "@shared/messages/content"
 import type { Mode } from "@shared/storage/types"
 import type { MessageStateHandler } from "../message-state"
@@ -15,6 +15,19 @@ export type PendingSteeringFeedback = {
 export function hasSteeringFeedback(feedback?: PendingSteeringFeedback): boolean {
 	if (!feedback) return false
 	return Boolean(feedback.text?.trim() || feedback.images?.length || feedback.files?.length)
+}
+
+/** Coalesce rapid follow-ups into one API turn while keeping each message visible in chat. */
+export function mergeSteeringFeedback(
+	existing: PendingSteeringFeedback,
+	incoming: PendingSteeringFeedback,
+): PendingSteeringFeedback {
+	const texts = [existing.text?.trim(), incoming.text?.trim()].filter(Boolean)
+	return {
+		text: texts.length > 0 ? texts.join("\n\n") : undefined,
+		images: [...(existing.images ?? []), ...(incoming.images ?? [])],
+		files: [...(existing.files ?? []), ...(incoming.files ?? [])],
+	}
 }
 
 export function shouldAcceptSteeringInterrupt(params: {

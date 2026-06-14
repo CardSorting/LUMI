@@ -1,4 +1,4 @@
-import { isAgentActiveForPlaceholder } from "@shared/agentActivity"
+import { isAgentActiveForPlaceholder, isTaskInIdleGap } from "@shared/agentActivity"
 import { buildUIGateEvaluationOptions } from "@shared/audit/auditGateUiOptions"
 import { getAutoScrollAuditEventTs, getLatestAdvisorySnapshot, getLatestGateBlockSnapshot } from "@shared/audit/auditHistoryUtils"
 import {
@@ -20,6 +20,7 @@ import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
+import { isChatInputEnabled } from "@/components/chat/chat-view/shared/chatInputPolicy"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
@@ -71,6 +72,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		focusChainSettings,
 		hooksEnabled,
 		isNewUser,
+		currentTaskItem,
 	} = useExtensionState()
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see MIRA.abort)
@@ -316,17 +318,6 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		textAreaRef.current?.focus()
 	})
 
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			if (!isHidden && !sendingDisabled && !enableButtons) {
-				textAreaRef.current?.focus()
-			}
-		}, 50)
-		return () => {
-			clearTimeout(timer)
-		}
-	}, [isHidden, sendingDisabled, enableButtons, textAreaRef.current])
-
 	const visibleMessages = useMemo(() => {
 		return filterVisibleMessages(modifiedMessages)
 	}, [modifiedMessages])
@@ -397,10 +388,29 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		}
 	}, [auditSnapshots, handleScrollToAuditMessage])
 
+	const taskSessionActive = Boolean(currentTaskItem?.id)
+
+	const chatInputEnabled = useMemo(
+		() => isChatInputEnabled(messages, chatState.dietcodeAsk, { sendingDisabled }, { taskSessionActive }),
+		[messages, chatState.dietcodeAsk, sendingDisabled, taskSessionActive],
+	)
+
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			if (!isHidden && chatInputEnabled && !enableButtons) {
+				textAreaRef.current?.focus()
+			}
+		}, 50)
+		return () => {
+			clearTimeout(timer)
+		}
+	}, [isHidden, chatInputEnabled, enableButtons, textAreaRef.current])
+
 	const placeholderText = useMemo(() => {
 		const seed = task?.ts ?? 0
 		const agentActive = isAgentActiveForPlaceholder(messages, chatState.dietcodeAsk)
-		return pickChatPlaceholder(Boolean(task), seed, sessionMinutes, isNightDesk, agentActive)
+		const idleGap = isTaskInIdleGap(messages, chatState.dietcodeAsk)
+		return pickChatPlaceholder(Boolean(task), seed, sessionMinutes, isNightDesk, agentActive, idleGap)
 	}, [task, sessionMinutes, isNightDesk, messages, chatState.dietcodeAsk])
 
 	return (
@@ -471,10 +481,12 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				<InputSection
 					chatState={chatState}
 					messageHandlers={messageHandlers}
+					messages={messages}
 					placeholderText={placeholderText}
 					scrollBehavior={scrollBehavior}
 					selectFilesAndImages={selectFilesAndImages}
 					shouldDisableFilesAndImages={shouldDisableFilesAndImages}
+					taskSessionActive={taskSessionActive}
 				/>
 			</footer>
 		</ChatLayout>

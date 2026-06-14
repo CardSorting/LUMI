@@ -50,6 +50,7 @@ export class TaskState {
 
 	// Between-turn user feedback (after a response completes, before the next API request)
 	idleGapFeedbackRequested = false
+	idleGapFeedbackAcknowledged = false
 	pendingIdleGapFeedback?: {
 		text?: string
 		images?: string[]

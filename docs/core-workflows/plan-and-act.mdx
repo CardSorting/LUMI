@@ -39,7 +39,17 @@ This constraint keeps the conversation focused on understanding before changes. 
 
 After the plan is delivered, DietCode retains full context from planning and implements the solution. File edits and commands still require your approval (unless auto-approve is configured).
 
-During Act Mode, send follow-up messages at any time to steer direction — even while the agent is working. DietCode incorporates feedback immediately and may automatically return to planning when you request a scope pivot (e.g., "let's replan with a different approach").
+During Act Mode, send follow-up messages at any time to steer direction — even while the agent is working, and **between turns** after a response completes (before the next API request starts). Your message appears immediately in chat; DietCode queues it and continues automatically. Use `/replan` or natural language like "let's rethink this" to pivot back to planning.
+
+## Between-Turn Follow-Ups
+
+After the agent finishes a visible response but before the next API call begins, you can still send messages. This is the idle gap between turns:
+
+1. Type your follow-up in the chat input (placeholder: "Add a follow-up or type /replan…")
+2. Your message appears instantly as user feedback
+3. DietCode injects it at the next safe checkpoint and continues — no mode toggle required
+
+This mirrors Cursor-style "message while the agent works" ergonomics: mid-stream messages interrupt the current response; between-turn messages queue for the next loop iteration.
 
 ## Typical Workflow
 

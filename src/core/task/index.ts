@@ -132,7 +132,7 @@ import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
 import { detectAvailableCliTools, extractProviderDomainFromUrl, updateApiReqMsg } from "./utils"
 import { buildUserFeedbackContent } from "./utils/buildUserFeedbackContent"
-import { consumeIdleGapFeedback, shouldAcceptIdleGapFeedback } from "./utils/idleGapFeedback"
+import { consumeIdleGapFeedback, queueIdleGapFeedback, shouldAcceptIdleGapFeedback } from "./utils/idleGapFeedback"
 import { maybeTransitionToReplanMode } from "./utils/replanModeTransition"
 import {
 	appendInterruptedAssistantTurn,
@@ -174,6 +174,10 @@ export class Task {
 	private taskInitializationStartTime: number
 
 	taskState: TaskState
+
+	/** True while initiateTaskLoop is running (prevents parallel agent loops). */
+	private taskLoopActive = false
+	private idleGapContinuationInProgress = false
 
 	// ONE mutex for ALL state modifications to prevent race conditions
 	private stateMutex = new Mutex()
@@ -760,12 +764,13 @@ export class Task {
 				isStreaming: this.taskState.isStreaming,
 				isWaitingForFirstChunk: this.taskState.isWaitingForFirstChunk,
 				hasUnansweredAsk: this.hasUnansweredAsk(),
-				isTaskInitialized: this.taskState.isInitialized,
+				taskHasMessages: this.messageStateHandler.getDietCodeMessages().length > 0,
 				abort: this.taskState.abort,
 			})
 		) {
-			this.taskState.pendingIdleGapFeedback = feedback
-			this.taskState.idleGapFeedbackRequested = true
+			await this.queueIdleGapFeedback(feedback)
+			await this.postStateToWebview()
+			this.scheduleIdleGapContinuation()
 			return
 		}
 
@@ -788,6 +793,56 @@ export class Task {
 			switchToPlanMode: this.switchToPlanModeCallback.bind(this),
 			say: this.say.bind(this),
 		})
+	}
+
+	private async queueIdleGapFeedback(feedback: { text?: string; images?: string[]; files?: string[] }): Promise<void> {
+		await queueIdleGapFeedback({
+			taskState: this.taskState,
+			feedback,
+			mode: this.stateManager.getGlobalSettingsKey("mode"),
+			yoloModeToggled: this.stateManager.getGlobalSettingsKey("yoloModeToggled"),
+			switchToPlanMode: this.switchToPlanModeCallback.bind(this),
+			say: this.say.bind(this),
+		})
+	}
+
+	private async rollbackStagedApiUserTurn(apiReqMessageIndex: number): Promise<void> {
+		if (apiReqMessageIndex >= 0) {
+			await this.messageStateHandler.deleteDietCodeMessage(apiReqMessageIndex)
+		}
+
+		const history = this.messageStateHandler.getApiConversationHistory()
+		if (history.length > 0 && history[history.length - 1].role === "user") {
+			await this.messageStateHandler.overwriteApiConversationHistory(history.slice(0, -1))
+		}
+	}
+
+	/**
+	 * When feedback arrives while the task loop is idle, restart the agent loop to process it.
+	 * When the loop is active, injection checkpoints inside recursivelyMakeDietCodeRequests handle it.
+	 */
+	private scheduleIdleGapContinuation(): void {
+		// Defer so continuation runs after the current handler returns and taskLoopActive settles.
+		setTimeout(() => {
+			void this.resumeTaskLoopForQueuedIdleGapFeedback()
+		}, 0)
+	}
+
+	private async resumeTaskLoopForQueuedIdleGapFeedback(): Promise<void> {
+		if (this.idleGapContinuationInProgress || this.taskLoopActive) {
+			return
+		}
+		if (!this.taskState.idleGapFeedbackRequested || this.taskState.abort) {
+			return
+		}
+
+		this.idleGapContinuationInProgress = true
+		try {
+			// Loop start consumes queued feedback; empty content avoids leaking a synthetic placeholder to the API.
+			await this.initiateTaskLoop([])
+		} finally {
+			this.idleGapContinuationInProgress = false
+		}
 	}
 
 	private async continueFromSteeringInterrupt(params: {
@@ -1507,41 +1562,63 @@ export class Task {
 	}
 
 	private async initiateTaskLoop(userContent: DietCodeContent[]): Promise<void> {
+		if (this.taskLoopActive) {
+			return
+		}
+
+		this.taskLoopActive = true
 		let nextUserContent = userContent
 		let includeFileDetails = true
 
-		while (!this.taskState.abort) {
-			const idleGapAtLoopStart = await this.consumeIdleGapFeedbackIfPending()
-			if (idleGapAtLoopStart) {
-				nextUserContent = idleGapAtLoopStart
+		try {
+			while (!this.taskState.abort) {
+				const idleGapAtLoopStart = await this.consumeIdleGapFeedbackIfPending()
+				if (idleGapAtLoopStart) {
+					nextUserContent = idleGapAtLoopStart
+				}
+
+				if (nextUserContent.length === 0) {
+					break
+				}
+
+				this.taskState.currentTurnReadHistory.clear() // Reset read history for the new turn
+				this.taskState.currentTurnTotalReadCount = 0 // Reset total read counter for the new turn
+				this.taskState.currentTurnUniqueReadCount = 0 // Reset unique read counter for the new turn
+				this.taskState.currentTurnExplorationCount = 0 // Reset exploration counter for the new turn
+				const didEndLoop = await this.recursivelyMakeDietCodeRequests(nextUserContent, includeFileDetails)
+				includeFileDetails = false // we only need file details the first time
+
+				//  The way this agentic loop works is that dietcode will be given a task that he then calls tools to complete. unless there's an attempt_completion call, we keep responding back to him with his tool's responses until he either attempt_completion or does not use anymore tools. If he does not use anymore tools, we ask him to consider if he's completed the task and then call attempt_completion, otherwise proceed with completing the task.
+
+				//const totalCost = this.calculateApiCost(totalInputTokens, totalOutputTokens)
+				if (didEndLoop) {
+					const idleGapOnEnd = await this.consumeIdleGapFeedbackIfPending()
+					if (idleGapOnEnd) {
+						nextUserContent = idleGapOnEnd
+						includeFileDetails = false
+						continue
+					}
+					// For now a task never 'completes'. This will only happen if the user hits max requests and denies resetting the count.
+					//this.say("task_completed", `Task completed. Total API usage cost: ${totalCost}`)
+					break
+				}
+				// this.say(
+				// 	"tool",
+				// 	"DietCode responded with only text blocks but has not called attempt_completion yet. Forcing him to continue with task..."
+				// )
+				nextUserContent = [
+					{
+						type: "text",
+						text: formatResponse.noToolsUsed(this.useNativeToolCalls),
+					},
+				]
+				this.taskState.consecutiveMistakeCount++
 			}
-
-			this.taskState.currentTurnReadHistory.clear() // Reset read history for the new turn
-			this.taskState.currentTurnTotalReadCount = 0 // Reset total read counter for the new turn
-			this.taskState.currentTurnUniqueReadCount = 0 // Reset unique read counter for the new turn
-			this.taskState.currentTurnExplorationCount = 0 // Reset exploration counter for the new turn
-			const didEndLoop = await this.recursivelyMakeDietCodeRequests(nextUserContent, includeFileDetails)
-			includeFileDetails = false // we only need file details the first time
-
-			//  The way this agentic loop works is that dietcode will be given a task that he then calls tools to complete. unless there's an attempt_completion call, we keep responding back to him with his tool's responses until he either attempt_completion or does not use anymore tools. If he does not use anymore tools, we ask him to consider if he's completed the task and then call attempt_completion, otherwise proceed with completing the task.
-
-			//const totalCost = this.calculateApiCost(totalInputTokens, totalOutputTokens)
-			if (didEndLoop) {
-				// For now a task never 'completes'. This will only happen if the user hits max requests and denies resetting the count.
-				//this.say("task_completed", `Task completed. Total API usage cost: ${totalCost}`)
-				break
+		} finally {
+			this.taskLoopActive = false
+			if (this.taskState.idleGapFeedbackRequested && !this.taskState.abort) {
+				this.scheduleIdleGapContinuation()
 			}
-			// this.say(
-			// 	"tool",
-			// 	"DietCode responded with only text blocks but has not called attempt_completion yet. Forcing him to continue with task..."
-			// )
-			nextUserContent = [
-				{
-					type: "text",
-					text: formatResponse.noToolsUsed(this.useNativeToolCalls),
-				},
-			]
-			this.taskState.consecutiveMistakeCount++
 		}
 	}
 
@@ -2731,6 +2808,11 @@ export class Task {
 			this.taskState.lastAutoCompactTriggerIndex = previousApiReqIndex
 		} else {
 			// When NOT compacting, load full context with mentions parsing and slash commands
+			const idleGapBeforeLoadContext = await this.consumeIdleGapFeedbackIfPending()
+			if (idleGapBeforeLoadContext) {
+				return await this.recursivelyMakeDietCodeRequests(idleGapBeforeLoadContext, includeFileDetails)
+			}
+
 			;[parsedUserContent, environmentDetails, dietcoderulesError] = await this.loadContext(
 				userContent,
 				includeFileDetails,
@@ -2769,6 +2851,11 @@ export class Task {
 					isMultiRootEnabled(this.stateManager),
 				),
 			})
+		}
+
+		const idleGapBeforeApiReq = await this.consumeIdleGapFeedbackIfPending()
+		if (idleGapBeforeApiReq) {
+			return await this.recursivelyMakeDietCodeRequests(idleGapBeforeApiReq, false)
 		}
 
 		// getting verbose details is an expensive operation, it uses globby to top-down build file structure of project which for large projects can take a few seconds
@@ -2909,6 +2996,12 @@ export class Task {
 			await this.diffViewProvider.reset()
 			this.streamHandler.reset()
 			this.taskState.toolUseIdMap.clear()
+
+			const idleGapBeforeStream = await this.consumeIdleGapFeedbackIfPending()
+			if (idleGapBeforeStream) {
+				await this.rollbackStagedApiUserTurn(lastApiReqIndex)
+				return await this.recursivelyMakeDietCodeRequests(idleGapBeforeStream, false)
+			}
 
 			const { toolUseHandler, reasonsHandler } = this.streamHandler.getHandlers()
 			const stream = this.attemptApiRequest(previousApiReqIndex) // yields only if the first chunk is successful, otherwise will allow the user to retry the request (most likely due to rate limit error, which gets thrown on the first chunk)

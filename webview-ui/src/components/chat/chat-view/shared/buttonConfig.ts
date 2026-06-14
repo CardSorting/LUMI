@@ -133,6 +133,14 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		primaryAction: undefined,
 		secondaryAction: undefined,
 	},
+	user_feedback: {
+		sendingDisabled: false,
+		enableButtons: false,
+		primaryText: undefined,
+		secondaryText: undefined,
+		primaryAction: undefined,
+		secondaryAction: undefined,
+	},
 
 	// Task lifecycle states
 	completion_result: {
@@ -316,6 +324,10 @@ export function getButtonConfig(message: DietCodeMessage | undefined, _mode: Mod
 
 	if (message.type === "say" && message.say === "plan_summary") {
 		return BUTTON_CONFIGS.plan_summary
+	}
+
+	if (message.type === "say" && (message.say === "user_feedback" || message.say === "user_feedback_diff")) {
+		return BUTTON_CONFIGS.user_feedback
 	}
 
 	return BUTTON_CONFIGS.default

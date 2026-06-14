@@ -1,5 +1,5 @@
 import { expect } from "chai"
-import { canSendSteeringMessage, canSendTaskFeedback, isApiRequestInProgress } from "../agentActivity"
+import { canSendSteeringMessage, canSendTaskFeedback, isApiRequestInProgress, isTaskInIdleGap } from "../agentActivity"
 import type { DietCodeMessage } from "../ExtensionMessage"
 
 describe("agentActivity", () => {
@@ -70,6 +70,11 @@ describe("agentActivity", () => {
 			expect(canSendTaskFeedback(messages)).to.equal(true)
 		})
 
+		it("returns false when an unanswered ask is the last message", () => {
+			const messages: DietCodeMessage[] = [{ type: "ask", ask: "followup", ts: 1 }]
+			expect(canSendTaskFeedback(messages)).to.equal(false)
+		})
+
 		it("returns false when completion ask is active", () => {
 			const messages: DietCodeMessage[] = [{ type: "ask", ask: "completion_result", ts: 1 }]
 			expect(canSendTaskFeedback(messages, "completion_result")).to.equal(false)
@@ -78,6 +83,18 @@ describe("agentActivity", () => {
 		it("returns false when another blocking ask requires the ask path", () => {
 			const messages: DietCodeMessage[] = [{ type: "ask", ask: "tool", ts: 1 }]
 			expect(canSendTaskFeedback(messages, "tool")).to.equal(false)
+		})
+	})
+
+	describe("isTaskInIdleGap", () => {
+		it("returns true between completed turns", () => {
+			const messages: DietCodeMessage[] = [{ type: "say", say: "text", text: "Done", ts: 1 }]
+			expect(isTaskInIdleGap(messages)).to.equal(true)
+		})
+
+		it("returns false during streaming", () => {
+			const messages: DietCodeMessage[] = [{ type: "say", say: "text", partial: true, ts: 1 }]
+			expect(isTaskInIdleGap(messages)).to.equal(false)
 		})
 	})
 })

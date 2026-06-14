@@ -51,6 +51,15 @@ export function canSendSteeringMessage(messages: DietCodeMessage[], dietcodeAsk?
 }
 
 /**
+ * True when the last message is a blocking ask awaiting user response.
+ * Mirrors backend Task.hasUnansweredAsk().
+ */
+export function hasUnansweredAsk(messages: DietCodeMessage[]): boolean {
+	const lastMessage = messages.at(-1)
+	return lastMessage?.type === "ask" && lastMessage.partial !== true
+}
+
+/**
  * True when the user can send follow-up feedback on an active task (including idle gaps between turns).
  * Blocking asks (tool approval, completion, resume) still route through the ask path.
  */
@@ -61,7 +70,15 @@ export function canSendTaskFeedback(messages: DietCodeMessage[], dietcodeAsk?: D
 	if (dietcodeAsk) {
 		return false
 	}
+	if (hasUnansweredAsk(messages)) {
+		return false
+	}
 	return messages.length > 0
+}
+
+/** True when the user can send follow-up between completed turns (not mid-stream). */
+export function isTaskInIdleGap(messages: DietCodeMessage[], dietcodeAsk?: DietCodeMessage["ask"] | null): boolean {
+	return canSendTaskFeedback(messages, dietcodeAsk) && !canSendSteeringMessage(messages, dietcodeAsk)
 }
 
 /** True when the input should show steering/follow-up placeholder copy. */

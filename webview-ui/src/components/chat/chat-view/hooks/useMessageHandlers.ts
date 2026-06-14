@@ -1,11 +1,11 @@
-import { canSendTaskFeedback } from "@shared/agentActivity"
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { EmptyRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { AskResponseRequest, NewTaskRequest } from "@shared/proto/dietcode/task"
-import { useCallback, useRef } from "react"
+import { useCallback, useMemo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { SlashServiceClient, TaskServiceClient } from "@/services/grpc-client"
 import type { ButtonActionType } from "../shared/buttonConfig"
+import { resolveChatSendRoute } from "../shared/chatInputPolicy"
 import type { ChatState, MessageHandlers } from "../types/chatTypes"
 
 /**
@@ -13,7 +13,7 @@ import type { ChatState, MessageHandlers } from "../types/chatTypes"
  * Handles sending messages, button clicks, and task management
  */
 export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatState): MessageHandlers {
-	const { backgroundCommandRunning } = useExtensionState()
+	const { backgroundCommandRunning, currentTaskItem } = useExtensionState()
 	const {
 		setInputValue,
 		activeQuote,
@@ -25,7 +25,7 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 		dietcodeAsk,
 		lastMessage,
 	} = chatState
-	const cancelInFlightRef = useRef(false)
+	const sendRouteOptions = useMemo(() => ({ taskSessionActive: Boolean(currentTaskItem?.id) }), [currentTaskItem?.id])
 
 	// Handle sending a message
 	const handleSendMessage = useCallback(
@@ -42,10 +42,11 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 			}
 
 			if (hasContent) {
-				console.log("[ChatView] handleSendMessage - Sending message:", messageToSend)
+				const sendRoute = resolveChatSendRoute(messages, dietcodeAsk, sendRouteOptions)
+				console.log("[ChatView] handleSendMessage - route:", sendRoute, messageToSend)
 				let messageSent = false
 
-				if (messages.length === 0) {
+				if (sendRoute === "new_task") {
 					await TaskServiceClient.newTask(
 						NewTaskRequest.create({
 							text: messageToSend,
@@ -54,7 +55,7 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 						}),
 					)
 					messageSent = true
-				} else if (dietcodeAsk) {
+				} else if (sendRoute === "ask") {
 					// For resume_task and resume_completed_task, use yesButtonClicked to match Resume button behavior
 					// This ensures Enter key and Resume button work identically
 					if (dietcodeAsk === "resume_task" || dietcodeAsk === "resume_completed_task") {
@@ -96,8 +97,7 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 								break
 						}
 					}
-				} else if (canSendTaskFeedback(messages, dietcodeAsk)) {
-					// Active task with no blocking ask — mid-stream steering or between-turn follow-up
+				} else if (sendRoute === "follow_up") {
 					await TaskServiceClient.askResponse(
 						AskResponseRequest.create({
 							responseType: "messageResponse",
@@ -107,11 +107,16 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 						}),
 					)
 					messageSent = true
+				} else {
+					console.warn("[ChatView] Message not sent — no active send route", {
+						dietcodeAsk,
+						messageCount: messages.length,
+					})
 				}
 
 				// Only clear input and disable UI if message was actually sent
 				if (messageSent) {
-					const isFollowUpMessage = canSendTaskFeedback(messages, dietcodeAsk)
+					const isFollowUpMessage = sendRoute === "follow_up"
 					setInputValue("")
 					setActiveQuote(null)
 					if (!isFollowUpMessage) {
@@ -140,6 +145,7 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 			setEnableButtons,
 			chatState,
 			messages,
+			sendRouteOptions,
 		],
 	)
 
