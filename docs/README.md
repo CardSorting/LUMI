@@ -115,6 +115,7 @@ flowchart TB
 | **Team lead** | [Companion brief](papers/companion-brief.md) → [Security](SECURITY_BEST_PRACTICES.md) → [Roadmap steering](features/roadmap-steering.mdx) | ~20 min |
 | **Designer / PM** | [Philosophy](papers/philosophy.md) → [User interface design](USER_INTERFACE_DESIGN.md) | ~25 min |
 | **Engineer (agent)** | [Whitepaper](papers/whitepaper.md) → [Architecture (current)](architecture/current.md) → [Project map](PROJECT_MAP.md) | ~60 min |
+| **Privacy / security review** | [SECURITY_BEST_PRACTICES](SECURITY_BEST_PRACTICES.md) → root [README § Local-first](../README.md#local-first--data) | ~15 min |
 | **Engineer (substrate)** | [BroccoliDB docs](../broccolidb/docs/README.md) → [Runtime API index](api/README.md) | varies |
 | **Doc contributor** | [MAINTAINER](MAINTAINER.md) → [DOCS_GUIDE](DOCS_GUIDE.md) → [REWRITE_PLAN](REWRITE_PLAN.md) | ~15 min |
 
@@ -244,7 +245,8 @@ npm run docs:check-agent-links      # 24 required docs + link resolution
 npm run docs:check-agent-branding   # no stale user-facing DietCode in core dirs
 npm run docs:check-root-readme      # README.md parity + live metrics
 npm run docs:check-docs-readme      # docs/README.md structure guardrails
-npm run docs:check-links            # Mintlify broken-link pass (included in docs:check-all)
+npm run docs:check-readme-metrics   # README + companion-brief vs live codebase counts
+npm run docs:check-links              # Mintlify broken-link pass (included in docs:check-all)
 npm run docs:tag-legacy-providers   # after adding unwired provider pages
 ```
 

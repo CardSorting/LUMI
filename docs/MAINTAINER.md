@@ -22,11 +22,12 @@ npm run docs:check-agent-links      # required files + relative links
 npm run docs:check-agent-branding   # no stale user-facing "DietCode" in core dirs
 npm run docs:check-root-readme      # README.md / readme.md parity + live metrics
 npm run docs:check-docs-readme      # docs/README.md structure guardrails
+npm run docs:check-readme-metrics   # README + companion-brief vs live codebase
 npm run docs:tag-legacy-providers   # prepend legacy notice to unwired provider pages
 npm run docs:check-links            # Mintlify broken-links (needs docs deps)
 ```
 
-`docs:check-agent-links`, `docs:check-agent-branding`, `docs:check-root-readme`, and `docs:check-docs-readme` run in `ci:check-all`.
+`docs:check-agent-links`, `docs:check-agent-branding`, `docs:check-root-readme`, and `docs:check-docs-readme` run in `ci:check-all`. Run **`npm run docs:check-all`** (includes metrics + Mintlify) before publishing docs.
 
 ## Branding rules
 

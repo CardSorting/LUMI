@@ -52,7 +52,8 @@ assert.ok(upper.includes(".dietcoderules/hooks"), "root README must cite correct
 assert.ok(!upper.includes(".dietcode/hooks"), "root README must not cite stale .dietcode/hooks path")
 assert.ok(upper.includes("plan_mode_respond"), "root README must document Plan mode")
 assert.ok(upper.includes("act_mode_respond"), "root README must document Act mode")
-assert.ok(upper.includes("docs:check-all"), "root README must document docs:check-all")
+assert.ok(upper.includes("~/.dietcode/data"), "root README must document local data path")
+assert.ok(upper.includes("docs/papers/philosophy.md"), "root README must link philosophy paper")
 
 const requiredSections = [
 	"## Table of contents",
@@ -61,6 +62,7 @@ const requiredSections = [
 	"## Why LUMI",
 	"## Who LUMI is for",
 	"## How LUMI differs",
+	"## Local-first & data",
 	"## Compatibility",
 	"## Install",
 	"## Quick start",
@@ -79,9 +81,13 @@ const requiredSections = [
 	"## Monorepo packages",
 	"## Tech stack",
 	"## Architecture at a glance",
+	"## Documentation",
+	"## Papers",
+	"## Repository layout",
 	"## Development",
 	"### Quality gates",
 	"## Troubleshooting",
+	"## Getting help",
 	"## Security & trust",
 	"## FAQ",
 	"## Contributing",
@@ -120,6 +126,11 @@ assert.ok(upper.includes("CardSorting.lumi"), "root README must cite extension I
 assert.ok(/openrouter|OpenRouter/.test(upper), "root README must mention OpenRouter")
 assert.ok(upper.includes("```mermaid"), "root README must include mermaid diagrams")
 assert.ok(upper.includes("PreToolUse"), "root README must document lifecycle hooks")
+assert.ok(upper.includes("plan_mode_respond"), "root README must document Plan mode")
+assert.ok(upper.includes("act_mode_respond"), "root README must document Act mode")
+assert.ok(upper.includes("docs:check-all"), "root README must document docs:check-all")
+assert.ok(upper.includes("~/.dietcode/data"), "root README must document local data path")
+assert.ok(upper.includes("docs/papers/philosophy.md"), "root README must link philosophy paper")
 assert.ok(upper.includes("lumi.roadmap.enabled"), "root README must document roadmap settings")
 
 console.log(

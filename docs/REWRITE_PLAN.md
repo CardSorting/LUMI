@@ -94,6 +94,15 @@ Agent workspace docs (`docs/` excluding `broccolidb/`) rewritten to match the LU
 - [x] `check-root-readme.mjs` — validates slash/hook/read-only counts from source files
 - [x] Fixed companion-brief read-only tools: 13 → **12** (matches `READ_ONLY_TOOLS`)
 
+## Reinforcement (round 10 — local-first, papers, metrics CI)
+
+- [x] Doctrine one-liner (session chain)
+- [x] **Local-first & data** — `~/.dietcode/data/`, secrets, `dietcode.db`, checkpoints, provider egress
+- [x] Starter `.dietcodeignore` example in README
+- [x] **Papers** reading-order table in root README
+- [x] **Getting help** channel table; uninstall/reset troubleshooting rows
+- [x] `scripts/check-readme-metrics.mjs` — README + companion-brief synced to live codebase; in `docs:check-all`
+
 ## Maintenance
 
 Re-run after large code changes:

@@ -32,6 +32,8 @@
 
 > **Human-in-the-loop by default:** diff before write, checkpoint after tool use, completion gates before “done.” Auto-approve and YOLO mode exist — pair them with [checkpoints](docs/core-workflows/checkpoints.mdx).
 
+> **Doctrine:** User expresses intent → Controller holds session → Task runs the loop → Tools execute with approval → Checkpoints preserve rollback → Completion is earned through gates.
+
 ---
 
 ## Table of contents
@@ -40,6 +42,7 @@
 - [Why LUMI](#why-lumi)
 - [Who LUMI is for](#who-lumi-is-for)
 - [How LUMI differs](#how-lumi-differs)
+- [Local-first & data](#local-first--data)
 - [Compatibility](#compatibility)
 - [Install](#install)
 - [Quick start](#quick-start)
@@ -59,9 +62,11 @@
 - [Monorepo packages](#monorepo-packages)
 - [Tech stack](#tech-stack)
 - [Documentation](#documentation)
+- [Papers](#papers)
 - [Repository layout](#repository-layout)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
+- [Getting help](#getting-help)
 - [Security & trust](#security--trust)
 - [FAQ](#faq)
 - [Contributing](#contributing)
@@ -142,6 +147,20 @@ Not a fit: fully autonomous unattended agents (LUMI assumes a human approver in 
 
 ---
 
+## Local-first & data
+
+| Data | Location | Notes |
+|------|----------|-------|
+| **Settings & task refs** | `~/.dietcode/data/` | `globalState.json`, per-workspace state (`createStorageContext`) |
+| **API keys / secrets** | `~/.dietcode/data/secrets.json` | Mode `0600` — owner read/write only |
+| **BroccoliDB SQLite** | `./dietcode.db` (workspace cwd) | Local cognitive memory / runtime graph |
+| **Checkpoints** | VS Code `globalStorage/checkpoints/` | Shadow Git — not your project `.git/` |
+| **LLM requests** | Your chosen provider | Code context sent to OpenRouter, OpenAI, NousResearch, or Cloudflare when you run a task |
+
+Override storage root: `DIETCODE_DIR` or `CLINE_DIR` env var. Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md).
+
+---
+
 ## Compatibility
 
 | Environment | Support | Notes |
@@ -204,6 +223,20 @@ Per-project files LUMI reads from your workspace (primary root in multi-root set
 | `ROADMAP.md` | Roadmap steering + completion gates ([settings](#key-vs-code-settings)) |
 
 **First setup:** add `.dietcodeignore` early — largest impact on speed and focus. Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx).
+
+**Starter `.dietcodeignore`** (adjust for your stack):
+
+```gitignore
+node_modules/
+dist/
+build/
+.next/
+coverage/
+.env
+.env.*
+*.log
+.git/
+```
 
 ---
 
@@ -524,6 +557,20 @@ npm workspaces in root `package.json`: `"."` and `"broccolidb"`. Install Broccol
 
 ---
 
+## Papers
+
+Read in order for depth on **why** and **how** LUMI is built ([full index](docs/papers/README.md)):
+
+| # | Doc | Audience | Time |
+|---|-----|----------|------|
+| 1 | [Companion brief](docs/papers/companion-brief.md) | Leads, evaluators | ~5 min |
+| 2 | [Philosophy](docs/papers/philosophy.md) | Designers, tech leads | ~15 min |
+| 3 | [Whitepaper](docs/papers/whitepaper.md) | Engineers | ~45 min |
+
+Substrate papers: [broccolidb/docs/papers/](broccolidb/docs/papers/) — separate narrative.
+
+---
+
 ## Repository layout
 
 | Path | Role |
@@ -574,7 +621,7 @@ Package VSIX: `npm run package` → install `dist/*.vsix`.
 | `npm run docs:check-agent-branding` | No stale user-facing DietCode in core dirs |
 | `npm run docs:check-all` | All doc guardrails + Mintlify links |
 | `npm run docs:check-root-readme` | README parity + live metrics from codebase |
-| `npm run docs:check-docs-readme` | docs/README.md structure guardrails |
+| `npm run docs:check-readme-metrics` | README + companion-brief vs live codebase |
 | `npm run docs:check-links` | Mintlify broken-link pass |
 | `npm run e2e` | Playwright end-to-end tests |
 
@@ -614,8 +661,22 @@ Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
 | MCP server won't connect | Check [MCP config](docs/mcp/adding-and-configuring-servers.mdx); verify server logs in Output panel |
 | Completion blocked unexpectedly | Run `/roadmap validate`; check `lumi.roadmap.*` settings |
 | Build fails from source | Run `npm run protos` before first `npm run dev`; use Node **20+** |
+| Reset extension state | Close VS Code; remove `~/.dietcode/data/` (backs up secrets/settings); reload window |
+| Uninstall cleanly | Uninstall extension; optionally delete `~/.dietcode/data/` and workspace `dietcode.db` |
 
-Still stuck? [Open an issue](https://github.com/CardSorting/DietCodeMarie/issues) with VS Code version, LUMI version, and provider used.
+---
+
+## Getting help
+
+| Channel | Link |
+|---------|------|
+| **Documentation hub** | [docs/README.md](docs/README.md) |
+| **Glossary** | [docs/getting-started/glossary.mdx](docs/getting-started/glossary.mdx) |
+| **Bug reports** | [GitHub Issues](https://github.com/CardSorting/DietCodeMarie/issues) |
+| **Security (private)** | [SECURITY.md](SECURITY.md) → security@dietcode.bot |
+| **Walkthrough** | Command palette → `LUMI: Open Walkthrough` (`lumi.openWalkthrough`) |
+
+Include VS Code version, LUMI **1.0.3**, provider used, and steps to reproduce.
 
 ---
 
