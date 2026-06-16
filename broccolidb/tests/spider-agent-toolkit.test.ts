@@ -326,6 +326,14 @@ async function runTest() {
   assert.strictEqual(scenario.kind, 'check');
   assert.ok(scenario.digest.includes('Spider'));
 
+  const scenarioResponse = await ctx.graph.spider.runAgentScenarioAndRespond('ci-gate');
+  assert.strictEqual(scenarioResponse.$schema, 'broccolidb.spider.scenario-response/v1');
+  assert.strictEqual(scenarioResponse.scenario, 'ci-gate');
+
+  const schemaDir = path.join(root, 'schemas');
+  const schemaFiles = await ctx.graph.spider.writeSchemaRegistry(schemaDir);
+  assert.ok(schemaFiles.length >= 6);
+
   const artifacts = ctx.graph.spider.buildCiArtifacts(scenario.check!);
   assert.ok(artifacts.files.some((f) => f.name === 'schema-registry'));
 

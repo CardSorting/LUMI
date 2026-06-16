@@ -82,6 +82,10 @@ async function runTest() {
   assert.strictEqual(handoff.checkResponse?.$schema, 'broccolidb.spider.check-response/v1');
   assert.ok(context.audit.spider.formatCatalogPrompt().includes('Spider Forensic Agent Runbook'));
 
+  const scenarioRun = await context.audit.spider.runAgentScenario('before-edit', { filePath: 'src/a.ts' });
+  const scenarioJson = context.graph.spider.toScenarioResponse(scenarioRun);
+  assert.strictEqual(scenarioJson.$schema, 'broccolidb.spider.scenario-response/v1');
+
   await context.stop();
   fs.rmSync(root, { recursive: true, force: true });
 }

@@ -496,6 +496,21 @@ export interface SpiderScenarioRunResult {
   pipeline?: SpiderCheckPipelineResult;
 }
 
+/** Machine-parseable scenario run envelope — MCP/CI transport when responseFormat=json. */
+export interface SpiderScenarioResponse {
+  $schema: 'broccolidb.spider.scenario-response/v1';
+  scenario: SpiderScenarioRunResult['scenario'];
+  kind: 'check' | 'pipeline';
+  proceed: boolean;
+  exitCode: 0 | 1;
+  digest: string;
+  recommendedRequest: SpiderCheckRequest | SpiderCheckPipelineRequest;
+  checkResponse?: SpiderCheckResponse;
+  pipelinePhases?: SpiderCheckPhase[];
+  failedPhase?: SpiderCheckPhase;
+  telemetry?: Record<string, unknown>;
+}
+
 export interface SpiderBaselineBundleResult extends SpiderBaselineComparison {
   bundle: SpiderAgentBundle;
   agentContext: string;

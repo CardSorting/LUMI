@@ -86,8 +86,8 @@ ForensicSpider.audit()
         ├── AgentSchemaRegistry (central $id registry)
         ├── AgentDecisionGuide (scenario router, recommendCheckRequest)
         ├── AgentScenarioRunner (runAgentScenario — recommend + execute)
-        ├── AgentCatalog (bootstrap catalog, runbook, gate presets)
-        ├── MCP: spider_get_catalog / spider_validate_check_request / spider_run_scenario / spider_forensic_check / …
+        ├── AgentScenarioResponse (scenario JSON envelope, assertScenarioPassed)
+        ├── AgentSchemaRegistry (writeSchemaRegistry, spider_export_schemas)
         └── StreamingToolExecutor pre/post mutation gates (correlationId = toolUseId)
 ```
 

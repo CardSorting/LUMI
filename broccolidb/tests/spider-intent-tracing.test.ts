@@ -56,6 +56,17 @@ async function runTest() {
   );
   assert.ok(advisoryTrace, 'expected gatePreset in intent input summary');
 
+  await context.graph.spider.runAgentScenario('before-edit', {
+    filePath: 'src/a.ts',
+    correlationId,
+  });
+
+  const scenarioTrace = (await context.audit.traces({ limit: 30, correlationId })).traces.find(
+    (t) => t.operation === 'spider.runAgentScenario' && t.status === 'succeeded'
+  );
+  assert.ok(scenarioTrace, 'expected runAgentScenario intent trace');
+  assert.strictEqual((scenarioTrace?.inputSummary as { scenario?: string })?.scenario, 'before-edit');
+
   await context.stop();
   fs.rmSync(root, { recursive: true, force: true });
 }

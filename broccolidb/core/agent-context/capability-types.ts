@@ -299,6 +299,9 @@ export interface QueryErgonomicsSnapshotResult {
     maxParallelReads: number;
     mirrorFileChanges: boolean;
     failOnUnsafeMutationPath: boolean;
+    forensicPreEditGate: boolean;
+    failOnPreEditBlockers: boolean;
+    failOnPostEditBlockers: boolean;
     recordAuditEvents: boolean;
   };
 }

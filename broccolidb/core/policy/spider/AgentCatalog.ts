@@ -59,6 +59,7 @@ export const SPIDER_PREFERRED_ENTRYPOINTS = {
   sessionRestore: 'restoreFromWire | spider_restore_wire',
   catalog: 'getAgentToolkitCatalog()',
   scenarioRun: 'runAgentScenario(scenario, { filePath })',
+  schemaExport: 'writeSchemaRegistry | spider_export_schemas',
 } as const;
 
 export const SPIDER_GATE_POLICY_PRESETS: Record<'ci' | 'strict' | 'advisory', SpiderGatePolicy> = {
@@ -122,6 +123,7 @@ export function formatCatalogPrompt(catalog: {
     `Bootstrap: ${catalog.preferredEntrypoints.mcpBootstrap}`,
     `Validate: spider_validate_check_request`,
     `Run scenario: spider_run_scenario`,
+    `Export schemas: spider_export_schemas`,
   ].join('\n');
 }
 

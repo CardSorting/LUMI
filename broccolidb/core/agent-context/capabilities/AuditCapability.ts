@@ -7,7 +7,7 @@ import { CapabilityBase } from '../CapabilityBase.js';
 import { buildSpiderInputSummary, summarizeSpiderIntentResult } from '../../policy/spider/AgentSpiderIntent.js';
 import type { SpiderAgentScenario } from '../../policy/spider/AgentDecisionGuide.js';
 import type { IntentTracer } from '../IntentTracer.js';
-import type { SpiderAuditOptions, SpiderReport, SpiderResyncOptions, SpiderGateResult, SpiderAgentBundle, SpiderBundleBudget, SpiderCheckRequest, SpiderCheckResult, SpiderBundleWireFormat, SpiderCheckPipelineRequest, SpiderReportDiff } from '../../policy/spider/report-types.js';
+import type { SpiderAuditOptions, SpiderReport, SpiderResyncOptions, SpiderGateResult, SpiderAgentBundle, SpiderBundleBudget, SpiderCheckRequest, SpiderCheckResult, SpiderBundleWireFormat, SpiderCheckPipelineRequest, SpiderReportDiff, SpiderScenarioRunResult } from '../../policy/spider/report-types.js';
 import {
   requireNonEmptyString,
   type AuditConstitutionalCheckInput,
@@ -216,6 +216,21 @@ export class AuditCapability extends CapabilityBase {
           () => this.spiderService.runAgentScenario(scenario, params, options),
           spiderTrace('runAgentScenario', { scenario, ...params })
         ),
+      runAgentScenarioAndRespond: (
+        scenario: SpiderAgentScenario,
+        params?: {
+          filePath?: string;
+          filePaths?: string[];
+          scope?: SpiderCheckRequest['scope'];
+          correlationId?: string;
+        },
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) =>
+        this.execute(
+          'spider.runAgentScenarioAndRespond',
+          () => this.spiderService.runAgentScenarioAndRespond(scenario, params, options),
+          spiderTrace('runAgentScenarioAndRespond', { scenario, ...params })
+        ),
       handoff: (bundle: SpiderAgentBundle, budget?: SpiderBundleBudget, options?: { phase?: SpiderCheckResult['phase'] }) =>
         this.run('spider.handoff', () => this.spiderService.handoff(bundle, budget, options)),
       handoffFromCheck: (result: SpiderCheckResult, budget?: SpiderBundleBudget) =>
@@ -246,8 +261,18 @@ export class AuditCapability extends CapabilityBase {
         result: SpiderCheckResult,
         options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
       ) => this.run('spider.toCheckResponse', () => this.spiderService.toCheckResponse(result, options)),
+      toScenarioResponse: (
+        result: SpiderScenarioRunResult,
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) => this.run('spider.toScenarioResponse', () => this.spiderService.toScenarioResponse(result, options)),
+      getScenarioOutputSchema: () => this.run('spider.getScenarioOutputSchema', () => this.spiderService.getScenarioOutputSchema()),
       assertCheckPassed: (result: SpiderCheckResult, message?: string) =>
         this.run('spider.assertCheckPassed', () => this.spiderService.assertCheckPassed(result, message)),
+      assertScenarioPassed: (result: SpiderScenarioRunResult, message?: string) =>
+        this.run('spider.assertScenarioPassed', () => this.spiderService.assertScenarioPassed(result, message)),
+      validateScenario: (result: unknown) => this.run('spider.validateScenario', () => this.spiderService.validateScenario(result)),
+      writeSchemaRegistry: (outputDir: string) =>
+        this.execute('spider.writeSchemaRegistry', () => this.spiderService.writeSchemaRegistry(outputDir)),
       getCheckOutputSchema: () => this.run('spider.getCheckOutputSchema', () => this.spiderService.getCheckOutputSchema()),
       getCheckInputSchema: () => this.run('spider.getCheckInputSchema', () => this.spiderService.getCheckInputSchema()),
       getPipelineInputSchema: () => this.run('spider.getPipelineInputSchema', () => this.spiderService.getPipelineInputSchema()),

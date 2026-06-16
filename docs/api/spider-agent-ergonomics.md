@@ -31,7 +31,9 @@ await ctx.graph.spider.check(req);
 
 // Or one-shot scenario run (recommend + execute):
 const run = await ctx.graph.spider.runAgentScenario('before-edit', { filePath: 'src/foo.ts' });
-// MCP: spider_run_scenario({ scenario: 'before-edit', filePath: 'src/foo.ts' })
+const json = await ctx.graph.spider.runAgentScenarioAndRespond('before-edit', { filePath: 'src/foo.ts' });
+// MCP: spider_run_scenario({ scenario: 'before-edit', filePath: 'src/foo.ts', responseFormat: 'json' })
+// MCP: spider_export_schemas({ outputDir: './spider-schemas' })
 
 // Normalize defaults before check:
 const normalized = ctx.graph.spider.normalizeCheckRequest({ phase: 'ci' });

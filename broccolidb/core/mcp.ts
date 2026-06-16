@@ -1457,7 +1457,16 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             return `SPIDER_SCENARIO_FAILED\n\n${result.digest}\n\nscenario=${result.scenario} exitCode=${result.exitCode}`;
           }
           if (args.responseFormat === 'json') {
-            return JSON.stringify(result, null, 2);
+            const response = await spider.runAgentScenarioAndRespond(
+              args.scenario,
+              {
+                filePath: args.filePath,
+                filePaths: args.filePaths,
+                correlationId: args.correlationId,
+              },
+              { maxCompactLines: args.maxCompactLines }
+            );
+            return JSON.stringify(response, null, 2);
           }
           return [
             `## Spider scenario: ${result.scenario}`,
@@ -1465,6 +1474,21 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             '',
             `exitCode=${result.exitCode} proceed=${result.proceed} kind=${result.kind}`,
           ].join('\n');
+        });
+      }
+    );
+
+    this.server.tool(
+      'spider_export_schemas',
+      'Export Spider JSON Schema registry to a directory (CI bootstrap — no audit run).',
+      {
+        outputDir: z.string().describe('Directory to write schema registry and per-schema files'),
+      },
+      async (args) => {
+        return this.executeTool('spider_export_schemas', async () => {
+          if (!this.agentContext) return 'AgentContext not available.';
+          const written = await this.agentContext.graph.spider.writeSchemaRegistry(args.outputDir);
+          return `Wrote ${written.length} schema file(s) to ${args.outputDir}\n${written.join('\n')}`;
         });
       }
     );

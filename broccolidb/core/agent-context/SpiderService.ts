@@ -43,6 +43,12 @@ import {
   toCheckNdjsonStream,
   toGithubCheckRun,
 } from '../policy/spider/AgentResponse.js';
+import {
+  SPIDER_SCENARIO_OUTPUT_SCHEMA,
+  toScenarioResponse,
+  assertScenarioPassed,
+  validateScenarioResult,
+} from '../policy/spider/AgentScenarioResponse.js';
 import { buildCiArtifacts, writeCiArtifactsToDir } from '../policy/spider/AgentCiArtifacts.js';
 import {
   getAgentToolkitCatalog,
@@ -60,7 +66,7 @@ import {
   getWorkflowPresets,
   normalizeCheckRequest,
 } from '../policy/spider/AgentCheckInput.js';
-import { getSpiderSchemaRegistry } from '../policy/spider/AgentSchemaRegistry.js';
+import { getSpiderSchemaRegistry, writeSchemaRegistryToDir } from '../policy/spider/AgentSchemaRegistry.js';
 import { runAgentScenario } from '../policy/spider/AgentScenarioRunner.js';
 import {
   SPIDER_AGENT_SCENARIOS,
@@ -99,6 +105,7 @@ import type {
   SpiderCheckPipelineRequest,
   SpiderCheckPipelineResult,
   SpiderScenarioRunResult,
+  SpiderScenarioResponse,
   SpiderHandoffResult,
   SpiderBaselineBundleResult,
   SpiderGatePolicy,
@@ -332,6 +339,49 @@ export class SpiderService {
       params,
       options
     );
+  }
+
+  /** runAgentScenario + toScenarioResponse() — preferred MCP/CI JSON transport. */
+  async runAgentScenarioAndRespond(
+    scenario: SpiderAgentScenario,
+    params?: {
+      filePath?: string;
+      filePaths?: string[];
+      scope?: SpiderCheckRequest['scope'];
+      correlationId?: string;
+    },
+    options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+  ): Promise<SpiderScenarioResponse> {
+    const result = await this.runAgentScenario(scenario, params, options);
+    return this.toScenarioResponse(result, options);
+  }
+
+  toScenarioResponse(
+    result: SpiderScenarioRunResult,
+    options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+  ) {
+    return toScenarioResponse(result, {
+      ...options,
+      workspaceRoot: this.ctx.workspace.workspacePath,
+    });
+  }
+
+  assertScenarioPassed(result: SpiderScenarioRunResult, message?: string) {
+    assertScenarioPassed(result, message);
+    return { ok: true };
+  }
+
+  getScenarioOutputSchema() {
+    return SPIDER_SCENARIO_OUTPUT_SCHEMA;
+  }
+
+  async writeSchemaRegistry(outputDir: string) {
+    return writeSchemaRegistryToDir(outputDir);
+  }
+
+  validateScenario(result: unknown) {
+    validateScenarioResult(result);
+    return { valid: true };
   }
 
   toCheckNdjsonStream(result: SpiderCheckResult, options?: { maxCompactLines?: number; includeSarifMeta?: boolean }) {

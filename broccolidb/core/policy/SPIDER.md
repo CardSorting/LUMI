@@ -72,6 +72,8 @@ const delta = ctx.graph.spider.compareBaseline();
 
 - **Preflight** / **batchPreflight** before editing
 - **Pre-edit gate** — tool mirror runs `check({ phase: 'pre-edit' })` before mutations (`forensicPreEditGate`, default on)
+- **Post-edit gate** — after mirror, `check({ phase: 'post-edit' })` with optional `failOnPostEditBlockers`
+- **Scenario JSON** — `runAgentScenarioAndRespond()` → `broccolidb.spider.scenario-response/v1`
 - **Gate** for CI-style pass/fail (`conclusion`, `exitCode`)
 - **Bundle** for one-shot agent context (narrative + compact + clusters + SARIF/LSP)
 - **Compact** for token-efficient `file:line:col` lines

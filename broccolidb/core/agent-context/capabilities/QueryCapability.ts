@@ -271,6 +271,9 @@ export class QueryCapability extends CapabilityBase {
         maxParallelReads: 8,
         mirrorFileChanges: true,
         failOnUnsafeMutationPath: true,
+        forensicPreEditGate: true,
+        failOnPreEditBlockers: false,
+        failOnPostEditBlockers: false,
         recordAuditEvents: true,
       },
     }));
