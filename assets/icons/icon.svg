@@ -1,10 +1,9 @@
-<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MIRA">
-  <title>MIRA</title>
-  <circle cx="50" cy="50" r="40" fill="#b8b5d6" opacity="0.14"/>
-  <circle cx="50" cy="50" r="36" fill="none" stroke="#6366a0" stroke-width="1.5" opacity="0.28"/>
-  <circle cx="50" cy="50" r="24" fill="#6366a0" opacity="0.2"/>
-  <circle cx="50" cy="50" r="17" fill="#6366a0"/>
-  <circle cx="50" cy="51" r="10" fill="#6bb5c9" opacity="0.5"/>
-  <path d="M42 47Q44 45.5 46 47" stroke="#faf9f7" stroke-width="1.75" stroke-linecap="round"/>
-  <path d="M54 47Q56 45.5 58 47" stroke="#faf9f7" stroke-width="1.75" stroke-linecap="round"/>
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LUMI">
+  <title>LUMI</title>
+  <circle cx="50" cy="50" r="40" fill="currentColor" opacity="0.18"/>
+  <circle cx="50" cy="50" r="32" fill="currentColor" opacity="0.28"/>
+  <circle cx="50" cy="50" r="22" fill="currentColor" opacity="0.72"/>
+  <circle cx="50" cy="51" r="12" fill="currentColor" opacity="0.45"/>
+  <path d="M41 46Q43.5 44 46 46" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+  <path d="M54 46Q56.5 44 59 46" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
 </svg>

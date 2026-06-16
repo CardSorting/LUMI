@@ -9,12 +9,12 @@
 		"dark": "#000000"
 	},
 	"logo": {
-		"light": "/assets/Cline_Logo-complete_black.png",
-		"dark": "/assets/Cline_Logo-complete_white.png"
+		"light": "/assets/lumi-logo.png",
+		"dark": "/assets/lumi-logo.png"
 	},
 	"favicon": {
-		"light": "/assets/robot_panel_light.png",
-		"dark": "/assets/robot_panel_dark.png"
+		"light": "/assets/lumi-favicon.png",
+		"dark": "/assets/lumi-favicon.png"
 	},
 	"background": {
 		"color": {

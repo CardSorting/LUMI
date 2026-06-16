@@ -2,7 +2,7 @@
 	"name": "lumi",
 	"displayName": "LUMI",
 	"description": "LUMI is your calm coding companion — comfort-first developer tooling for long sessions.",
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",
