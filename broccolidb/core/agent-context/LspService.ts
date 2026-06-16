@@ -1,8 +1,9 @@
 // [LAYER: CORE]
+// @classification OWNED
 import { spawn, ChildProcess } from 'node:child_process';
-import { createInterface } from 'node:readline';
 import { Logger } from '../../shared/services/Logger.js';
 import type { ServiceContext } from './types.js';
+import { LifecycleStateError } from '../errors.js';
 
 /**
  * LspService provides Language Server Protocol (LSP) awareness.
@@ -10,6 +11,7 @@ import type { ServiceContext } from './types.js';
  * Synchronizes child language servers to resolve code symbols with 100% accuracy.
  */
 export class LspService {
+  private lifecycleState: 'new' | 'started' | 'stopped' = 'new';
   private servers: Map<string, ChildProcess> = new Map();
   private requestId: number = 0;
   private pendingRequests: Map<number, { resolve: (res: any) => void, reject: (err: any) => void }> = new Map();
@@ -17,6 +19,7 @@ export class LspService {
   private _buffer: Buffer = Buffer.alloc(0);
   private _diagnostics: Map<string, any[]> = new Map();
   private _retryCount: Map<string, number> = new Map();
+  private _restartTimers: Map<string, NodeJS.Timeout> = new Map();
 
   // Production Server Registry: Maps languages to discovery logic and commands.
   private readonly SERVER_REGISTRY: Record<string, { command: string; args: string[] }> = {
@@ -27,10 +30,55 @@ export class LspService {
 
   constructor(private ctx: ServiceContext) {}
 
+  async start(): Promise<void> {
+    if (this.lifecycleState === 'started') return;
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError('LspService cannot be restarted after stop().');
+    }
+    this.lifecycleState = 'started';
+  }
+
+  async stop(): Promise<void> {
+    for (const timer of this._restartTimers.values()) {
+      clearTimeout(timer);
+    }
+    this._restartTimers.clear();
+    for (const server of this.servers.values()) {
+        server.kill();
+    }
+    this.servers.clear();
+    this._rejectAll(new LifecycleStateError('LspService stopped.'));
+    this.lifecycleState = 'stopped';
+  }
+
+  async flush(): Promise<void> {
+    this.assertOperational('flush');
+  }
+
+  async health(): Promise<Record<string, unknown>> {
+    return {
+      component: 'LspService',
+      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
+      servers: Array.from(this.servers.keys()),
+      pendingRequests: this.pendingRequests.size,
+      restartTimers: this._restartTimers.size,
+    };
+  }
+
+  private assertOperational(operation: string): void {
+    if (this.lifecycleState === 'new') {
+      throw new LifecycleStateError(`LspService.${operation}() called before start().`);
+    }
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError(`LspService.${operation}() called after stop().`);
+    }
+  }
+
   /**
    * Automatically starts a server for the given language using the registry.
    */
   async ensureServer(language: string): Promise<boolean> {
+    this.assertOperational('ensureServer');
     if (this.servers.has(language)) return true;
     
     const config = this.SERVER_REGISTRY[language];
@@ -46,6 +94,7 @@ export class LspService {
    * Starts a language server for a specific language with full handshake and lifecycle management.
    */
   async startServer(language: string, command: string, args: string[]): Promise<boolean> {
+    this.assertOperational('startServer');
     if (this.servers.has(language)) return true;
 
     try {
@@ -92,14 +141,22 @@ export class LspService {
   }
 
   private _handleServerError(language: string, error: any) {
-      this._rejectAll(language, error);
+      this._rejectAll(error);
       this.servers.delete(language);
   }
 
   private _handleServerExit(language: string, code: number | null) {
-      this._rejectAll(language, new Error(`Server exited with code ${code}`));
+      this._rejectAll(new Error(`Server exited with code ${code}`));
       this.servers.delete(language);
+      const existingTimer = this._restartTimers.get(language);
+      if (existingTimer) {
+          clearTimeout(existingTimer);
+          this._restartTimers.delete(language);
+      }
       
+      if (this.lifecycleState !== 'started') {
+          return;
+      }
       if (code === 127) {
           Logger.error(`[LspService] ❌ ${language} server command not found. Disabling retries.`);
           return;
@@ -110,7 +167,13 @@ export class LspService {
           const delay = Math.pow(2, retries) * 1000;
           Logger.info(`[LspService] 🔄 Attempting to restart ${language} server in ${delay}ms (retry ${retries + 1}/3)...`);
           this._retryCount.set(language, retries + 1);
-          setTimeout(() => this.ensureServer(language), delay);
+          const timer = setTimeout(() => {
+              this._restartTimers.delete(language);
+              this.ensureServer(language).catch((error) => {
+                  Logger.error(`[LspService] Restart failed for ${language}:`, error);
+              });
+          }, delay);
+          this._restartTimers.set(language, timer);
       }
   }
 
@@ -118,6 +181,7 @@ export class LspService {
    * Passive Feedback: Notify servers that a file has been updated.
    */
   async notifyFileUpdate(file: string, content: string): Promise<void> {
+      this.assertOperational('notifyFileUpdate');
       const language = this._getLanguageFromFile(file);
       if (!language) return;
 
@@ -134,6 +198,7 @@ export class LspService {
    * Returns current diagnostics for a file.
    */
   getDiagnostics(file: string): any[] {
+      this.assertOperational('getDiagnostics');
       return this._diagnostics.get(`file://${file}`) || [];
   }
 
@@ -141,6 +206,7 @@ export class LspService {
    * Resolves the definition of a symbol at a specific location.
    */
   async getDefinitions(language: string, file: string, line: number, character: number): Promise<any[]> {
+    this.assertOperational('getDefinitions');
     await this.ensureServer(language);
     return this._sendRequest(language, 'textDocument/definition', {
       textDocument: { uri: `file://${file}` },
@@ -152,6 +218,7 @@ export class LspService {
    * Resolves the references of a symbol at a specific location.
    */
   async getReferences(language: string, file: string, line: number, character: number): Promise<any[]> {
+      this.assertOperational('getReferences');
       await this.ensureServer(language);
       return this._sendRequest(language, 'textDocument/references', {
         textDocument: { uri: `file://${file}` },
@@ -182,6 +249,7 @@ export class LspService {
   }
 
   private _writeToStream(language: string, msg: any): void {
+      this.assertOperational('_writeToStream');
       const server = this.servers.get(language);
       if (!server) throw new Error(`[LSP] Server for ${language} not started.`);
       
@@ -225,17 +293,17 @@ export class LspService {
       }
   }
 
-  private _rejectAll(language: string, error: Error): void {
+  private _rejectAll(error: Error): void {
       for (const [id, { reject }] of this.pendingRequests.entries()) {
           this.pendingRequests.delete(id);
           reject(error);
       }
   }
 
-  public shutdown() {
-    for (const server of this.servers.values()) {
-        server.kill();
-    }
-    this.servers.clear();
+  /**
+   * @deprecated Use stop(). Kept only as a transitional alias and scheduled for deletion.
+   */
+  public async shutdown(): Promise<void> {
+    await this.stop();
   }
 }

@@ -1,4 +1,5 @@
 // [LAYER: INFRASTRUCTURE]
+// @classification MODERN
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import Database from 'better-sqlite3';
@@ -288,7 +289,7 @@ export function registerDbPathChangeListener(listener: () => void) {
 
 export function setDbPath(dbPath: string) {
   if (_dbPath === dbPath) return;
-  _dbPath = dbPath;
+  _dbPath = path.resolve(dbPath);
   _dbPromise = null;
 
   _lifecyclePromise = _lifecyclePromise.then(async () => {
@@ -301,6 +302,13 @@ export function setDbPath(dbPath: string) {
   });
 }
 
+export function getDbPath(): string {
+  if (!_dbPath) {
+    _dbPath = path.resolve(process.cwd(), 'broccolidb.db');
+  }
+  return _dbPath;
+}
+
 export async function getDb(): Promise<Kysely<Schema>> {
   await _lifecyclePromise;
   if (_db) return _db;
@@ -308,12 +316,9 @@ export async function getDb(): Promise<Kysely<Schema>> {
 
   _dbPromise = (async () => {
     try {
-      if (!_dbPath) {
-        // Default path if not set
-        _dbPath = path.resolve(process.cwd(), 'broccolidb.db');
-      }
+      const configuredDbPath = getDbPath();
 
-      const dbDir = path.dirname(_dbPath);
+      const dbDir = path.dirname(configuredDbPath);
       try {
         if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
       } catch (dirError: any) {
@@ -322,21 +327,21 @@ export async function getDb(): Promise<Kysely<Schema>> {
 
       let rawDb: Database.Database;
       try {
-        rawDb = new Database(_dbPath);
+        rawDb = new Database(configuredDbPath);
       } catch (error: any) {
-        Logger.error(`[Config] Failed to open database file at ${_dbPath}: ${error.message}`);
+        Logger.error(`[Config] Failed to open database file at ${configuredDbPath}: ${error.message}`);
 
         // Auto-recovery for corrupt SQLite database
         if (error.code === 'SQLITE_CORRUPT' || error.message?.includes('corrupt') || error.message?.includes('malformed')) {
-          const corruptBackupPath = `${_dbPath}.corrupt.${Date.now()}`;
+          const corruptBackupPath = `${configuredDbPath}.corrupt.${Date.now()}`;
           Logger.warn(`[Config] Database appears corrupt. Renaming malformed DB to ${corruptBackupPath} and initializing fresh DB.`);
           try {
-            if (fs.existsSync(_dbPath)) {
-              fs.renameSync(_dbPath, corruptBackupPath);
-              if (fs.existsSync(`${_dbPath}-wal`)) fs.renameSync(`${_dbPath}-wal`, `${corruptBackupPath}-wal`);
-              if (fs.existsSync(`${_dbPath}-shm`)) fs.renameSync(`${_dbPath}-shm`, `${corruptBackupPath}-shm`);
+            if (fs.existsSync(configuredDbPath)) {
+              fs.renameSync(configuredDbPath, corruptBackupPath);
+              if (fs.existsSync(`${configuredDbPath}-wal`)) fs.renameSync(`${configuredDbPath}-wal`, `${corruptBackupPath}-wal`);
+              if (fs.existsSync(`${configuredDbPath}-shm`)) fs.renameSync(`${configuredDbPath}-shm`, `${corruptBackupPath}-shm`);
             }
-            rawDb = new Database(_dbPath);
+            rawDb = new Database(configuredDbPath);
           } catch (recoveryError: any) {
             Logger.error(`[Config] Database recovery failed: ${recoveryError.message}. Falling back to in-memory database.`);
             rawDb = new Database(':memory:');
@@ -750,18 +755,18 @@ export async function getRawDb(): Promise<Database.Database> {
 
 export async function destroyDb(): Promise<void> {
   _dbPromise = null;
-  if (_rawDb) {
-    try {
-      _rawDb.close();
-    } finally {
-      _rawDb = null;
-    }
-  }
   if (_db) {
     try {
       await _db.destroy();
     } finally {
       _db = null;
+    }
+  }
+  if (_rawDb) {
+    try {
+      _rawDb.close();
+    } finally {
+      _rawDb = null;
     }
   }
 }

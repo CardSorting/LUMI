@@ -31,7 +31,14 @@ export type AgentGitErrorCode =
   | 'WATCHER_ALREADY_RUNNING'
   | 'INVALID_ARGUMENT'
   | 'BUDGET_EXCEEDED'
-  | 'REASONING_CONFLICT';
+  | 'REASONING_CONFLICT'
+  | 'BACKPRESSURE_REJECT'
+  | 'FLUSH_TIMEOUT'
+  | 'STORAGE_CORRUPT'
+  | 'INVARIANT_VIOLATION'
+  | 'RECOVERY_FAILED'
+  | 'LIFECYCLE_STATE_ERROR'
+  | 'DATABASE_LOCK_ERROR';
 
 export class AgentGitError extends Error {
   constructor(
@@ -41,6 +48,55 @@ export class AgentGitError extends Error {
   ) {
     super(message);
     this.name = 'AgentGitError';
+  }
+}
+
+export class BackpressureError extends AgentGitError {
+  constructor(message: string) {
+    super(message, 'BACKPRESSURE_REJECT');
+    this.name = 'BackpressureError';
+  }
+}
+
+export class FlushTimeoutError extends AgentGitError {
+  constructor(message: string) {
+    super(message, 'FLUSH_TIMEOUT');
+    this.name = 'FlushTimeoutError';
+  }
+}
+
+export class StorageIntegrityError extends AgentGitError {
+  constructor(message: string) {
+    super(message, 'STORAGE_CORRUPT');
+    this.name = 'StorageIntegrityError';
+  }
+}
+
+export class InvariantViolationError extends AgentGitError {
+  constructor(message: string) {
+    super(message, 'INVARIANT_VIOLATION');
+    this.name = 'InvariantViolationError';
+  }
+}
+
+export class RecoveryError extends AgentGitError {
+  constructor(message: string) {
+    super(message, 'RECOVERY_FAILED');
+    this.name = 'RecoveryError';
+  }
+}
+
+export class LifecycleStateError extends AgentGitError {
+  constructor(message: string) {
+    super(message, 'LIFECYCLE_STATE_ERROR');
+    this.name = 'LifecycleStateError';
+  }
+}
+
+export class DatabaseLockError extends AgentGitError {
+  constructor(message: string) {
+    super(message, 'DATABASE_LOCK_ERROR');
+    this.name = 'DatabaseLockError';
   }
 }
 

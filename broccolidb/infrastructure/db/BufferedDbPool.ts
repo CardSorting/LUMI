@@ -1,9 +1,24 @@
 // [LAYER: INFRASTRUCTURE]
+// @classification MODERN
 import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
 import type Database from 'better-sqlite3';
 import { type Kysely, sql, type Transaction } from 'kysely';
-import { getDb, getRawDb, registerDbPathChangeListener, type Schema } from './Config.js';
+import {
+  destroyDb,
+  getDb,
+  getDbPath,
+  getRawDb,
+  registerDbPathChangeListener,
+  type Schema,
+} from './Config.js';
 import { Logger } from '../../shared/services/Logger.js';
+import {
+  BackpressureError,
+  DatabaseLockError,
+  FlushTimeoutError,
+  LifecycleStateError,
+} from '../../core/errors.js';
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
@@ -137,6 +152,11 @@ const INDEXED_COLUMNS: Record<string, string[]> = {
   agent_knowledge: ['type'],
 };
 
+const BACKPRESSURE_SOFT_LIMIT = 5000;
+const BACKPRESSURE_HARD_LIMIT = 20000;
+const BACKPRESSURE_FLUSH_TIMEOUT_MS = 10000;
+const WAL_TRUNCATE_THRESHOLD_BYTES = 10 * 1024 * 1024;
+
 const PRIMARY_KEYS: Record<string, string[]> = {
   users: ['id'],
   workspaces: ['id'],
@@ -181,6 +201,8 @@ function normalizeWhere(where: WhereCondition | WhereCondition[] | undefined): W
  * and ensures data consistency between in-memory buffers and on-disk storage.
  */
 export class BufferedDbPool {
+  private lifecycleState: 'new' | 'starting' | 'started' | 'stopping' | 'stopped' = 'new';
+  private startPromise: Promise<void> | null = null;
   private bufferA = new Map<keyof Schema, WriteOp[]>();
   private bufferB = new Map<keyof Schema, WriteOp[]>();
   private activeBuffer: Map<keyof Schema, WriteOp[]> = this.bufferA;
@@ -190,7 +212,6 @@ export class BufferedDbPool {
     { ops: WriteOp[]; affectedFiles: Set<string>; lastUpdated: number }
   >();
   private stateMutex = new Mutex('DbStateMutex');
-  private flushMutex = new Mutex('DbFlushMutex');
   private initMutex = new Mutex('DbInitMutex');
   private flushInterval: NodeJS.Timeout | null = null;
   private db: Kysely<Schema> | null = null;
@@ -208,6 +229,12 @@ export class BufferedDbPool {
   private SCHEMA_VERSION = 2; // Pass 4 hardening baseline
   private schemaVerified = false;
   private deadLetterQueue: { op: WriteOp; error: string; timestamp: number }[] = [];
+  private activeFlushPromise: Promise<void> | null = null;
+  private pendingFlushPromise: Promise<void> | null = null;
+  private lastSuccessfulFlush: number | null = null;
+  private lastFlushLatency = 0;
+  private failedWriteCount = 0;
+  private lockContentionCount = 0;
 
   public getDeadLetterQueue() {
     return this.deadLetterQueue;
@@ -217,13 +244,71 @@ export class BufferedDbPool {
     this.deadLetterQueue = [];
   }
 
-  constructor() {
-    this.startFlushLoop();
-    registerDbPathChangeListener(() => {
-      this.db = null;
-      this.rawDb = null;
-      this.stmtCache.clear();
-    });
+  constructor() {}
+
+  public async start(): Promise<void> {
+    if (this.lifecycleState === 'started') return;
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError('BufferedDbPool cannot be restarted after stop().');
+    }
+    if (this.startPromise) return this.startPromise;
+
+    this.lifecycleState = 'starting';
+    this.startPromise = (async () => {
+      this.db = await getDb();
+      this.rawDb = await getRawDb();
+
+      await sql`PRAGMA cache_size = -128000;`.execute(this.db);
+      await sql`PRAGMA temp_store = MEMORY;`.execute(this.db);
+      await sql`PRAGMA journal_mode = WAL;`.execute(this.db);
+      await sql`PRAGMA synchronous = NORMAL;`.execute(this.db);
+      await sql`PRAGMA mmap_size = 2147483648;`.execute(this.db);
+      await sql`PRAGMA threads = 4;`.execute(this.db);
+      await sql`PRAGMA auto_vacuum = NONE;`.execute(this.db);
+      await this.verifySchemaVersion();
+
+      registerDbPathChangeListener(() => {
+        this.db = null;
+        this.rawDb = null;
+        this.stmtCache.clear();
+        this.schemaVerified = false;
+        if (this.lifecycleState === 'started') {
+          this.lifecycleState = 'stopped';
+        }
+      });
+
+      this.lifecycleState = 'started';
+      this.startFlushLoop();
+    })()
+      .catch((error) => {
+        this.lifecycleState = 'new';
+        throw error;
+      })
+      .finally(() => {
+        this.startPromise = null;
+      });
+
+    return this.startPromise;
+  }
+
+  private assertOperational(operation: string, allowStopping = false): void {
+    if (this.lifecycleState === 'new' || this.lifecycleState === 'starting') {
+      throw new LifecycleStateError(`BufferedDbPool.${operation}() called before start().`);
+    }
+    if (this.lifecycleState === 'stopping' && !allowStopping) {
+      throw new LifecycleStateError(`BufferedDbPool.${operation}() called while stop() is in progress.`);
+    }
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError(`BufferedDbPool.${operation}() called after stop().`);
+    }
+  }
+
+  private requireDb(operation: string, allowStopping = false): Kysely<Schema> {
+    this.assertOperational(operation, allowStopping);
+    if (!this.db) {
+      throw new LifecycleStateError(`BufferedDbPool.${operation}() has no active Kysely handle.`);
+    }
+    return this.db;
   }
 
   private async verifySchemaVersion() {
@@ -268,6 +353,7 @@ export class BufferedDbPool {
    * Adaptive flush scheduling.
    */
   private scheduleFlush(delay = 10) {
+    if (this.lifecycleState !== 'started') return;
     if (this.flushTimeout) {
       if (this.currentFlushDelay !== null && this.currentFlushDelay <= delay) {
         return;
@@ -277,6 +363,7 @@ export class BufferedDbPool {
 
     this.currentFlushDelay = delay;
     this.flushTimeout = setTimeout(async () => {
+      if (this.lifecycleState !== 'started') return;
       this.currentFlushDelay = null;
       this.flushTimeout = null;
       try {
@@ -301,30 +388,32 @@ export class BufferedDbPool {
     }, delay);
   }
 
-  private cleanupInterval: NodeJS.Timeout | null = null;
-
   private startFlushLoop() {
+    if (this.flushInterval) return;
     this.scheduleFlush(1000);
     this.flushInterval = setInterval(() => this.scheduleFlush(1000), 1000);
-    this.cleanupInterval = setInterval(() => this.cleanupShadows(), 30000);
   }
 
-  private async cleanupShadows() {
+  public async pruneExpiredShadows(maxAgeMs = 5 * 60 * 1000): Promise<number> {
+    this.assertOperational('pruneExpiredShadows');
     const release = await this.stateMutex.acquire();
+    let pruned = 0;
     try {
       const now = Date.now();
-      const SHADOW_EXPIRATION = 5 * 60 * 1000;
       for (const [agentId, shadow] of Array.from(this.agentShadows.entries())) {
-        if (now - shadow.lastUpdated > SHADOW_EXPIRATION) {
+        if (now - shadow.lastUpdated > maxAgeMs) {
           this.agentShadows.delete(agentId);
+          pruned++;
         }
       }
     } finally {
       release();
     }
+    return pruned;
   }
 
   public async beginWork(agentId: string) {
+    this.assertOperational('beginWork');
     const release = await this.stateMutex.acquire();
     try {
       if (!this.agentShadows.has(agentId)) {
@@ -343,25 +432,65 @@ export class BufferedDbPool {
     return this.pushBatch([op], agentId, affectedFile);
   }
 
+  private getShadowWriteCount(): number {
+    let count = 0;
+    for (const shadow of this.agentShadows.values()) {
+      count += shadow.ops.length;
+    }
+    return count;
+  }
+
+  private getPendingWriteCount(): number {
+    return this.activeBufferSize + this.inFlightSize + this.getShadowWriteCount();
+  }
+
+  private getDurableFlushableWriteCount(): number {
+    return this.activeBufferSize + this.inFlightSize;
+  }
+
+  private async enforceBackpressure(incomingWriteCount: number): Promise<void> {
+    const pendingWriteCount = this.getPendingWriteCount() + incomingWriteCount;
+    if (pendingWriteCount > BACKPRESSURE_HARD_LIMIT) {
+      throw new BackpressureError(
+        `BufferedDbPool rejected ${incomingWriteCount} writes with ${pendingWriteCount} pending writes. Hard limit is ${BACKPRESSURE_HARD_LIMIT}.`
+      );
+    }
+
+    if (pendingWriteCount > BACKPRESSURE_SOFT_LIMIT) {
+      await this.flushWithTimeout(BACKPRESSURE_FLUSH_TIMEOUT_MS);
+      const postFlushPending = this.getPendingWriteCount() + incomingWriteCount;
+      if (postFlushPending > BACKPRESSURE_HARD_LIMIT) {
+        throw new BackpressureError(
+          `BufferedDbPool rejected ${incomingWriteCount} writes after flush; ${postFlushPending} writes remain pending. Hard limit is ${BACKPRESSURE_HARD_LIMIT}.`
+        );
+      }
+    }
+  }
+
+  private async flushWithTimeout(timeoutMs: number): Promise<void> {
+    let timeout: NodeJS.Timeout | null = null;
+    try {
+      await Promise.race([
+        this.requestFlush(),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () =>
+              reject(
+                new FlushTimeoutError(
+                  `BufferedDbPool flush exceeded ${timeoutMs}ms while under backpressure.`
+                )
+              ),
+            timeoutMs
+          );
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+
   private async ensureDb(): Promise<Kysely<Schema>> {
-    if (this.db) return this.db;
-    
-    return await this.initMutex.runLocked(async () => {
-      if (this.db) return this.db;
-      
-      const db = await getDb();
-      await sql`PRAGMA cache_size = -128000;`.execute(db);
-      await sql`PRAGMA temp_store = MEMORY;`.execute(db);
-      await sql`PRAGMA journal_mode = WAL;`.execute(db);
-      await sql`PRAGMA synchronous = NORMAL;`.execute(db);
-      await sql`PRAGMA mmap_size = 2147483648;`.execute(db);
-      await sql`PRAGMA threads = 4;`.execute(db);
-      await sql`PRAGMA auto_vacuum = NONE;`.execute(db);
-      this.db = db;
-      this.rawDb = await getRawDb();
-      await this.verifySchemaVersion();
-      return this.db;
-    });
+    return this.requireDb('ensureDb');
   }
 
   private getStatement(sqlStr: string): Database.Statement {
@@ -392,6 +521,10 @@ export class BufferedDbPool {
   }
 
   public async pushBatch(ops: WriteOp[], agentId?: string, affectedFile?: string) {
+    this.assertOperational('pushBatch');
+    if (ops.length === 0) return;
+    await this.enforceBackpressure(ops.length);
+
     const enqueueStart = performance.now();
     let currentBufferLength = 0;
 
@@ -466,13 +599,6 @@ export class BufferedDbPool {
       currentBufferLength = this.activeBufferSize;
     }
 
-    if (currentBufferLength > 500000) {
-      console.warn(`[DbPool] 🚨 CRITICAL backpressure safety valve triggered: activeBuffer length is ${currentBufferLength}. Performing blocking flush.`);
-      await this.flush();
-    } else if (currentBufferLength > 100000) {
-      console.warn(`[DbPool] ⚠️ WARNING backpressure: activeBuffer length is ${currentBufferLength}`);
-    }
-
     const shouldFlush = currentBufferLength >= 10000;
 
     this.recordLatency(this.enqueueLatencies, performance.now() - enqueueStart);
@@ -484,6 +610,7 @@ export class BufferedDbPool {
   }
 
   public async commitWork(agentId: string) {
+    this.assertOperational('commitWork');
     let shadowOpsCount = 0;
     const release = await this.stateMutex.acquire();
     try {
@@ -514,6 +641,7 @@ export class BufferedDbPool {
   }
 
   public async rollbackWork(agentId: string) {
+    this.assertOperational('rollbackWork');
     const release = await this.stateMutex.acquire();
     try {
       this.agentShadows.delete(agentId);
@@ -523,6 +651,7 @@ export class BufferedDbPool {
   }
 
   public async runTransaction<T>(callback: (agentId: string) => Promise<T>): Promise<T> {
+    this.assertOperational('runTransaction');
     const agentId = `trx-${crypto.randomUUID()}`;
     await this.beginWork(agentId);
     try {
@@ -535,8 +664,39 @@ export class BufferedDbPool {
     }
   }
 
-  public async flush(retryCount: number = 0): Promise<void> {
-    const releaseFlush = await this.flushMutex.acquire();
+  public async flush(): Promise<void> {
+    this.assertOperational('flush');
+    return this.requestFlush();
+  }
+
+  private requestFlush(allowStopping = false): Promise<void> {
+    this.assertOperational('flush', allowStopping);
+    if (this.activeFlushPromise) {
+      if (!this.pendingFlushPromise) {
+        const pendingFlush = this.activeFlushPromise.then(() => this.runFlushCycle());
+        const trackedPendingFlush = pendingFlush.finally(() => {
+          if (this.activeFlushPromise === trackedPendingFlush) {
+            this.activeFlushPromise = null;
+          }
+          this.pendingFlushPromise = null;
+        });
+        this.pendingFlushPromise = trackedPendingFlush;
+        this.activeFlushPromise = trackedPendingFlush;
+      }
+      return this.pendingFlushPromise;
+    }
+
+    const activeFlush = this.runFlushCycle();
+    const trackedActiveFlush = activeFlush.finally(() => {
+      if (this.activeFlushPromise === trackedActiveFlush) {
+        this.activeFlushPromise = null;
+      }
+    });
+    this.activeFlushPromise = trackedActiveFlush;
+    return trackedActiveFlush;
+  }
+
+  private async runFlushCycle(retryCount: number = 0): Promise<void> {
     let opsToFlush: WriteOp[] = [];
     const startTime = Date.now();
 
@@ -585,7 +745,7 @@ export class BufferedDbPool {
 
       if (opsToFlush.length === 0) return;
 
-      const db = await this.ensureDb();
+      const db = this.requireDb('flush', true);
       let totalFlushed = 0;
       this.totalTransactions++;
 
@@ -614,6 +774,8 @@ export class BufferedDbPool {
       });
 
       const duration = Date.now() - startTime;
+      this.lastSuccessfulFlush = Date.now();
+      this.lastFlushLatency = duration;
       this.recordLatency(this.processingLatencies, duration);
 
       const throughput = Math.round(totalFlushed / (duration / 1000 || 0.001));
@@ -634,6 +796,7 @@ export class BufferedDbPool {
       } finally {
         releaseStateClear();
       }
+      await this.checkpointWalIfNeeded();
     } catch (e: unknown) {
       const err = e as { code?: string; message?: string };
       const isRetryable =
@@ -647,16 +810,17 @@ export class BufferedDbPool {
         err.message?.includes('Library used incorrectly');
 
       if (isRetryable && retryCount < 3) {
+          this.lockContentionCount++;
           const delay = Math.pow(2, retryCount) * 100;
           console.warn(`[DbPool] ⚠️ Flush conflict (SQLITE_BUSY). Retrying in ${delay}ms... (Attempt ${retryCount + 1})`);
           await new Promise(r => setTimeout(r, delay));
-          releaseFlush(); // Must release before recursive call to prevent own-deadlock
-          return this.flush(retryCount + 1);
+          return this.runFlushCycle(retryCount + 1);
       }
 
       const releaseStateFail = await this.stateMutex.acquire();
       try {
       if (isRetryable) {
+        this.lockContentionCount++;
         for (const op of opsToFlush) {
           let tableBuffer = this.activeBuffer.get(op.table);
           if (!tableBuffer) {
@@ -672,6 +836,7 @@ export class BufferedDbPool {
       } else {
         Logger.error(`[DbPool] ❌ Flush failed (FATAL):`, e);
         const errMsg = err.message || String(e);
+        this.failedWriteCount += opsToFlush.length;
         for (const op of opsToFlush) {
           this.deadLetterQueue.push({ op, error: errMsg, timestamp: Date.now() });
           if (this.deadLetterQueue.length > 1000) {
@@ -685,9 +850,11 @@ export class BufferedDbPool {
       } finally {
         releaseStateFail();
       }
-      if (isRetryable) throw e;
-    } finally {
-      releaseFlush();
+      if (isRetryable) {
+        throw new DatabaseLockError(
+          `SQLite lock contention exhausted retries while flushing ${opsToFlush.length} writes: ${err.message || String(e)}`
+        );
+      }
     }
   }
 
@@ -1287,13 +1454,34 @@ export class BufferedDbPool {
     }
   }
 
+  private async checkpointWalIfNeeded(): Promise<void> {
+    const db = this.requireDb('checkpointWalIfNeeded', true);
+    const walPath = `${getDbPath()}-wal`;
+    try {
+      const stats = fs.statSync(walPath);
+      if (stats.size > WAL_TRUNCATE_THRESHOLD_BYTES) {
+        await sql`PRAGMA wal_checkpoint(TRUNCATE);`.execute(db);
+      }
+    } catch (error: any) {
+      if (error?.code !== 'ENOENT') {
+        Logger.warn(`[DbPool] WAL checkpoint inspection failed: ${error.message || error}`);
+      }
+    }
+  }
+
   public getMetrics() {
     return {
+      lifecycleState: this.lifecycleState,
       activeBuffer: this.activeBuffer === this.bufferA ? 'A' : 'B',
       activeBufferSize: this.activeBufferSize,
       inFlightOpsSize: this.inFlightSize,
+      pendingWriteCount: this.getPendingWriteCount(),
       activeShadows: this.agentShadows.size,
       totalTransactions: this.totalTransactions,
+      lastSuccessfulFlush: this.lastSuccessfulFlush,
+      lastFlushLatency: this.lastFlushLatency,
+      failedWriteCount: this.failedWriteCount,
+      lockContentionCount: this.lockContentionCount,
       latencies: {
         enqueue: {
           p95: this.calculatePercentile(this.enqueueLatencies, 95),
@@ -1305,6 +1493,15 @@ export class BufferedDbPool {
         },
       },
       integrity: { ...this.integrityMetrics },
+    };
+  }
+
+  public async health(): Promise<Record<string, unknown>> {
+    return {
+      component: 'BufferedDbPool',
+      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
+      dbPath: getDbPath(),
+      ...this.getMetrics(),
     };
   }
 
@@ -1405,23 +1602,50 @@ export class BufferedDbPool {
     return rows.length;
   }
 
-  public async stop() {
-    if (this.flushInterval) clearInterval(this.flushInterval);
-    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
-    if (this.flushTimeout) clearTimeout(this.flushTimeout);
-    
-    // Level 9: Final Sovereign Flush
-    // We do multiple passes to ensure any side-effects of flushes (e.g. queue status updates) are also persisted.
-    await this.flush();
-    await this.flush(); 
-    
-    if (this.db) {
-        await this.db.destroy();
-        this.db = null;
+  private async drainBufferedWrites(): Promise<void> {
+    for (let pass = 0; pass < 5; pass++) {
+      if (this.getDurableFlushableWriteCount() === 0 && !this.activeFlushPromise) return;
+      await this.requestFlush(true);
     }
-    if (this.rawDb) {
-        this.rawDb.close();
-        this.rawDb = null;
+    if (this.getDurableFlushableWriteCount() > 0) {
+      throw new FlushTimeoutError(
+        `BufferedDbPool.stop() could not drain ${this.getDurableFlushableWriteCount()} writes.`
+      );
+    }
+  }
+
+  public async stop(): Promise<void> {
+    if (this.lifecycleState === 'stopped') return;
+    if (this.lifecycleState === 'new') {
+      this.lifecycleState = 'stopped';
+      return;
+    }
+    if (this.lifecycleState === 'starting' && this.startPromise) {
+      await this.startPromise;
+    }
+
+    this.lifecycleState = 'stopping';
+
+    if (this.flushInterval) {
+      clearInterval(this.flushInterval);
+      this.flushInterval = null;
+    }
+    if (this.flushTimeout) {
+      clearTimeout(this.flushTimeout);
+      this.flushTimeout = null;
+    }
+    this.currentFlushDelay = null;
+
+    try {
+      await this.drainBufferedWrites();
+    } finally {
+      this.stmtCache.clear();
+      this.db = null;
+      this.rawDb = null;
+      this.activeFlushPromise = null;
+      this.pendingFlushPromise = null;
+      await destroyDb();
+      this.lifecycleState = 'stopped';
     }
   }
 

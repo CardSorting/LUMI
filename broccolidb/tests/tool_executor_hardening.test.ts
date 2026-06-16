@@ -16,6 +16,7 @@ async function runTests() {
   const workspace = new Workspace(pool, 'tool-user', 'tool-workspace');
   workspace.setPhysicalPath(workspaceRoot);
   const ctx = new AgentContext(workspace, pool, 'tool-user');
+  await ctx.start();
 
   try {
     let strictToolRan = false;
@@ -172,8 +173,7 @@ async function runTests() {
 
     console.info('All tool executor ergonomics and hardening checks passed.');
   } finally {
-    ctx.shutdown();
-    await Promise.race([pool.stop(), sleep(1000)]);
+    await Promise.race([ctx.stop(), sleep(1000)]);
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
 }

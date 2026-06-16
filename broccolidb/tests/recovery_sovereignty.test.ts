@@ -8,8 +8,10 @@ async function runTest() {
   const dbPath = './test-warmup.db';
   setDbPath(dbPath);
   if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  await dbPool.start();
 
-  console.info('--- PHASE 1: FILLING THE NOTEBOOK ---');
+  try {
+    console.info('--- PHASE 1: FILLING THE NOTEBOOK ---');
   // 1. Initial State
   for (let i = 0; i < 100; i++) {
     await dbPool.push({
@@ -66,10 +68,11 @@ async function runTest() {
   console.info(`Fast Query (from RAM): ${results.length} items in ${queryDuration.toFixed(4)}ms`);
 
   assert.strictEqual(results.length, 100, 'Final query failed');
-  console.info('✅ TEST PASSED: Sovereign Recovery (Level 9) verified.');
-
-  if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-  await dbPool.stop();
+    console.info('✅ TEST PASSED: Sovereign Recovery (Level 9) verified.');
+  } finally {
+    await dbPool.stop();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  }
 }
 
 runTest().catch((err) => {

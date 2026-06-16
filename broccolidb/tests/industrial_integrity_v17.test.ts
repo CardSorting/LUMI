@@ -12,6 +12,7 @@ async function testIndustrialIntegrity() {
   
   const workspace = new Workspace(pool, userId, workspaceId);
   const ctx = new AgentContext(workspace, pool, userId);
+  await ctx.start();
 
   try {
     // 1. Multi-Hop Cycle Detection (Tarjan's)
@@ -91,8 +92,7 @@ async function testIndustrialIntegrity() {
     console.error('\n❌ TEST FAILED:', err);
     process.exit(1);
   } finally {
-    ctx.mutex.shutdown();
-    ctx.lsp.shutdown();
+    await ctx.stop();
     process.exit(0);
   }
 }

@@ -23,14 +23,14 @@ async function testLevel15() {
   
   // Workspace constructor: dbOrConnection, userId, workspaceId
   const workspace = new Workspace(pool, userId, workspaceId);
-  await workspace.init();
   const ctx = new AgentContext(workspace, pool, userId);
+  await ctx.start();
 
   try {
     // 1. Test Sharded CAS
     console.log('Testing CAS Sharding...');
     const largeContent = 'A'.repeat(2000);
-    const result = await ctx.pasteStore.handleScaling(largeContent);
+    const result = await ctx.store(largeContent).then((hash) => ({ content: `CAS:${hash}` }));
     const hash = result.content.split(':')[1];
     
     if (hash) {
@@ -86,9 +86,7 @@ async function testLevel15() {
     console.error('❌ TEST FAILED:', err);
     process.exit(1);
   } finally {
-    ctx.mutex.shutdown();
-    ctx.lsp.shutdown();
-    await pool.stop();
+    await ctx.stop();
     
     const TEST_DB = path.resolve(process.cwd(), 'test-production.db');
     try {

@@ -1,5 +1,7 @@
 // [LAYER: CORE]
+// @classification OWNED
 import type { ServiceContext } from './types.js';
+import { LifecycleStateError } from '../errors.js';
 
 /**
  * MutexService provides fault-tolerant distributed locking.
@@ -7,10 +9,49 @@ import type { ServiceContext } from './types.js';
  * Uses a 'Sovereign Fencing Token' to prevent split-brain graph corruption.
  */
 export class MutexService {
+  private lifecycleState: 'new' | 'started' | 'stopped' = 'new';
   private _fencingToken: number = Date.now();
   private _heartbeats: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(private ctx: ServiceContext) {}
+
+  async start(): Promise<void> {
+    if (this.lifecycleState === 'started') return;
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError('MutexService cannot be restarted after stop().');
+    }
+    this.lifecycleState = 'started';
+  }
+
+  async stop(): Promise<void> {
+      for (const hb of this._heartbeats.values()) {
+          clearInterval(hb);
+      }
+      this._heartbeats.clear();
+      this.lifecycleState = 'stopped';
+  }
+
+  async flush(): Promise<void> {
+    this.assertOperational('flush');
+  }
+
+  async health(): Promise<Record<string, unknown>> {
+    return {
+      component: 'MutexService',
+      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
+      activeHeartbeats: this._heartbeats.size,
+      fencingToken: this._fencingToken,
+    };
+  }
+
+  private assertOperational(operation: string): void {
+    if (this.lifecycleState === 'new') {
+      throw new LifecycleStateError(`MutexService.${operation}() called before start().`);
+    }
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError(`MutexService.${operation}() called after stop().`);
+    }
+  }
 
   /**
    * Acquires a lock on a shared resource with active heartbeats.
@@ -18,6 +59,7 @@ export class MutexService {
    * Returns a fencing token if successful, or null otherwise.
    */
   async acquireLock(resource: string): Promise<number | null> {
+    this.assertOperational('acquireLock');
     console.log(`[Mutex] 🛡️ Attempting to acquire lock: ${resource}...`);
     
     const existingResults = await this.ctx.db.selectWhere('swarm_locks' as any, { column: 'resource', value: resource }) as any[];
@@ -70,6 +112,7 @@ export class MutexService {
    * Releases a lock and stops heartbeats.
    */
   async releaseLock(resource: string): Promise<void> {
+      this.assertOperational('releaseLock');
       console.log(`[Mutex] 🔓 Releasing lock: ${resource}`);
       const hb = this._heartbeats.get(resource);
       if (hb) {
@@ -85,6 +128,7 @@ export class MutexService {
   }
 
   private _startHeartbeat(resource: string) {
+      this.assertOperational('_startHeartbeat');
       if (this._heartbeats.has(resource)) return;
 
       const interval = setInterval(async () => {
@@ -138,10 +182,10 @@ export class MutexService {
     return this._fencingToken;
   }
 
-  public shutdown() {
-      for (const hb of this._heartbeats.values()) {
-          clearInterval(hb);
-      }
-      this._heartbeats.clear();
+  /**
+   * @deprecated Use stop(). Kept only as a transitional alias and scheduled for deletion.
+   */
+  public async shutdown(): Promise<void> {
+      await this.stop();
   }
 }

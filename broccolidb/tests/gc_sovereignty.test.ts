@@ -13,6 +13,7 @@ async function testGC() {
   const workspaceId = 'test-workspace-gc';
   const workspace = new Workspace(pool, userId, workspaceId);
   const ctx = new AgentContext(workspace, pool, userId);
+  await ctx.start();
 
   try {
     // 1. Test Task Output Pruning
@@ -62,6 +63,7 @@ async function testGC() {
     console.error('❌ TEST FAILED:', err);
     process.exit(1);
   } finally {
+    await ctx.stop();
     process.exit(0);
   }
 }

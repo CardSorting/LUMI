@@ -16,6 +16,7 @@ async function runStress() {
 
   if (fs.existsSync(BENCH_DB)) fs.unlinkSync(BENCH_DB);
   setDbPath(BENCH_DB);
+  await dbPool.start();
 
   // Insert default user to satisfy foreign key constraints
   await dbPool.insertInto('users').values({ id: 'stress-user', createdAt: Date.now() }).execute();

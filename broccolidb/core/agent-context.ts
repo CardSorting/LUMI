@@ -1,4 +1,6 @@
 // [LAYER: CORE]
+// @classification MODERN
+import { randomUUID } from 'node:crypto';
 import { AuditService } from './agent-context/AuditService.js';
 import { CleanupService } from './agent-context/CleanupService.js';
 import { DiagnosisService } from './agent-context/DiagnosisService.js';
@@ -15,6 +17,8 @@ import { CompactService } from './agent-context/CompactService.js';
 import { TokenService } from './agent-context/TokenService.js';
 import { CoordinatorService } from './agent-context/CoordinatorService.js';
 import { ScratchpadService } from './agent-context/ScratchpadService.js';
+import { InvariantEngine } from './agent-context/InvariantEngine.js';
+import { LifecycleRegistry } from './agent-context/LifecycleRegistry.js';
 import {
   StreamingToolExecutor,
   type ToolCall,
@@ -23,7 +27,7 @@ import {
 } from './agent-context/StreamingToolExecutor.js';
 import { StorageService } from '../infrastructure/storage/StorageService.js';
 import { BufferedDbPool, type WriteOp } from '../infrastructure/db/BufferedDbPool.js';
-import { AgentGitError } from './errors.js';
+import { AgentGitError, LifecycleStateError, RecoveryError } from './errors.js';
 
 export { StreamingToolExecutor } from './agent-context/StreamingToolExecutor.js';
 export type {
@@ -62,12 +66,33 @@ import type {
 import { LRUCache } from './lru-cache.js';
 import type { Workspace } from './workspace.js';
 
+export interface BroccoliDbCacheStats {
+  hits: number;
+  misses: number;
+  size: number;
+}
+
+export interface BroccoliDbHealth {
+  status: 'healthy' | 'stopped' | 'unhealthy';
+  lifecycle: 'new' | 'starting' | 'started' | 'stopping' | 'stopped';
+  registry: Record<string, unknown>;
+  cache: BroccoliDbCacheStats;
+  invariantViolations?: string[];
+}
+
+export interface BroccoliDbRecoveryReport {
+  recovered: boolean;
+  warmedTables: Record<string, number>;
+  errors: string[];
+}
+
 /**
  * AgentContext provides a unified entry point for BroccoliDB's epistemic
  * and task-related operations. It coordinates specialized services for
  * graph management, reasoning, auditing, and structural discovery.
  */
 export class AgentContext {
+  private lifecycleState: 'new' | 'starting' | 'started' | 'stopping' | 'stopped' = 'new';
   private readonly _db: BufferedDbPool;
   private readonly _kbCache: LRUCache<string, KnowledgeBaseItem>;
   private readonly _serviceContext: ServiceContext;
@@ -88,6 +113,8 @@ export class AgentContext {
   private readonly _coordinatorService: CoordinatorService;
   private readonly _scratchpadService: ScratchpadService;
   private readonly _storageService: StorageService;
+  private readonly _lifecycleRegistry: LifecycleRegistry;
+  private readonly _invariantEngine: InvariantEngine;
   private readonly _teammates: Set<string> = new Set();
 
   public readonly userId: string;
@@ -148,6 +175,8 @@ export class AgentContext {
     this._storageService = new StorageService(this._serviceContext);
     this._cleanupService = new CleanupService(this._serviceContext, this._taskService, this._reasoningService);
     this._lspService = new LspService(this._serviceContext);
+    this._lifecycleRegistry = new LifecycleRegistry();
+    this._invariantEngine = new InvariantEngine(process.cwd());
 
     // Final bootstrap
     const ctx = this._serviceContext as any;
@@ -160,6 +189,13 @@ export class AgentContext {
     ctx.scratchpad = this._scratchpadService;
     ctx.mailbox = this._mailboxService;
     ctx.spider = this._spiderService;
+
+    this._lifecycleRegistry.register('db', this._db);
+    this._lifecycleRegistry.register('storage', this._storageService);
+    this._lifecycleRegistry.register('cleanup', this._cleanupService);
+    this._lifecycleRegistry.register('mutex', this._mutexService);
+    this._lifecycleRegistry.register('lsp', this._lspService);
+    this._lifecycleRegistry.register('coordinator', this._coordinatorService);
   }
 
   /**
@@ -170,7 +206,155 @@ export class AgentContext {
     this._serviceContext.mailbox = mailbox;
   }
 
+  public async start(): Promise<void> {
+    if (this.lifecycleState === 'started') return;
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError('AgentContext cannot be restarted after stop().');
+    }
+    this.lifecycleState = 'starting';
+    try {
+      await this._lifecycleRegistry.startAll();
+      await this._serviceContext.workspace.init();
+      this.lifecycleState = 'started';
+    } catch (error) {
+      this.lifecycleState = 'new';
+      throw error;
+    }
+  }
+
+  public async stop(): Promise<void> {
+    if (this.lifecycleState === 'stopped') return;
+    if (this.lifecycleState === 'new') {
+      this.lifecycleState = 'stopped';
+      return;
+    }
+    this.lifecycleState = 'stopping';
+    this._mailboxService.clear();
+    await this._lifecycleRegistry.stopAll();
+    this.lifecycleState = 'stopped';
+  }
+
+  private assertOperational(operation: string): void {
+    if (this.lifecycleState === 'new' || this.lifecycleState === 'starting') {
+      throw new LifecycleStateError(`AgentContext.${operation}() called before start().`);
+    }
+    if (this.lifecycleState === 'stopping') {
+      throw new LifecycleStateError(`AgentContext.${operation}() called while stop() is in progress.`);
+    }
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError(`AgentContext.${operation}() called after stop().`);
+    }
+  }
+
+  public async store(content: string): Promise<string> {
+    this.assertOperational('store');
+    return this._storageService.storeContent(content);
+  }
+
+  public async hydrate(hash: string): Promise<string | null> {
+    this.assertOperational('hydrate');
+    return this._storageService.hydrateContent(hash);
+  }
+
+  public async recordTelemetry(event: {
+    usage: { promptTokens: number; completionTokens: number; modelId?: string };
+    agentId?: string;
+    taskId?: string | null;
+    repoPath?: string;
+  }): Promise<void> {
+    this.assertOperational('recordTelemetry');
+    const promptTokens = event.usage.promptTokens;
+    const completionTokens = event.usage.completionTokens;
+    await this._push({
+      type: 'insert',
+      table: 'telemetry',
+      values: {
+        id: randomUUID(),
+        repoPath: event.repoPath ?? this._serviceContext.workspace.workspacePath,
+        agentId: event.agentId ?? this.userId,
+        taskId: event.taskId ?? null,
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
+        modelId: event.usage.modelId ?? 'unknown',
+        cost: 0,
+        timestamp: Date.now(),
+        environment: JSON.stringify({ source: 'AgentContext.recordTelemetry' }),
+      },
+      layer: 'infrastructure',
+    });
+  }
+
+  async flush(): Promise<void> {
+    this.assertOperational('flush');
+    return this._lifecycleRegistry.flushAll();
+  }
+
+  public async health(options: { deep?: boolean } = {}): Promise<BroccoliDbHealth> {
+    const registry = await this._lifecycleRegistry.healthAll(options);
+    const invariantViolations = options.deep ? await this.auditInvariants() : undefined;
+    const status =
+      this.lifecycleState === 'stopped' || this.lifecycleState === 'new'
+        ? 'stopped'
+        : invariantViolations && invariantViolations.length > 0
+          ? 'unhealthy'
+          : 'healthy';
+
+    return {
+      status,
+      lifecycle: this.lifecycleState,
+      registry,
+      cache: this.getCacheStats(),
+      invariantViolations,
+    };
+  }
+
+  public async snapshot(metadata: Record<string, unknown> = {}): Promise<string> {
+    this.assertOperational('snapshot');
+    const payload = {
+      metadata,
+      createdAt: new Date().toISOString(),
+      health: await this.health(),
+    };
+    return this.store(JSON.stringify(payload));
+  }
+
+  public async recover(): Promise<BroccoliDbRecoveryReport> {
+    this.assertOperational('recover');
+    const warmedTables: Record<string, number> = {};
+    const errors: string[] = [];
+    const warmups: Array<[any, string, string]> = [
+      ['queue_jobs', 'status', 'pending'],
+      ['agent_streams', 'status', 'active'],
+      ['agent_tasks', 'status', 'pending'],
+      ['agent_tasks', 'status', 'running'],
+    ];
+
+    for (const [table, column, value] of warmups) {
+      try {
+        warmedTables[`${String(table)}:${column}:${value}`] = await this._db.warmupTable(
+          table as any,
+          column,
+          value
+        );
+      } catch (error: any) {
+        errors.push(`${String(table)}:${column}:${value}: ${error?.message || error}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new RecoveryError(`BroccoliDB recovery failed: ${errors.join('; ')}`);
+    }
+
+    return { recovered: true, warmedTables, errors };
+  }
+
+  public async auditInvariants(): Promise<string[]> {
+    return this._invariantEngine.auditInvariants();
+  }
+
   public get db() {
+    console.warn('[AgentContext] db getter is deprecated. Use typed AgentContext methods instead.');
     return this._db;
   }
   public get graphService() {
@@ -211,6 +395,7 @@ export class AgentContext {
    * Deletion Condition: Safe to remove once all downstream tests and packages migrate to calling StorageService.
    */
   public get pasteStore() {
+    console.warn('[AgentContext] pasteStore getter is deprecated. Use storage/store/hydrate APIs instead.');
     return this._storageService;
   }
   public get compact() {
@@ -259,6 +444,7 @@ export class AgentContext {
   }
 
   public createToolExecutor(tools: ToolDef[], options: ToolExecutorOptions = {}) {
+    this.assertOperational('createToolExecutor');
     return new StreamingToolExecutor(tools, this._serviceContext, options);
   }
 
@@ -267,6 +453,7 @@ export class AgentContext {
     tools: ToolDef[],
     options: ToolExecutorOptions = {}
   ): Promise<ToolResult[]> {
+    this.assertOperational('executeTools');
     const executor = this.createToolExecutor(tools, options);
     const results: ToolResult[] = [];
     for await (const result of executor.executeBatch(calls)) {
@@ -276,6 +463,7 @@ export class AgentContext {
   }
 
   public getErgonomicsSnapshot() {
+    this.assertOperational('getErgonomicsSnapshot');
     return {
       userId: this.userId,
       workspaceId: this._serviceContext.workspace.workspaceId,
@@ -302,27 +490,25 @@ export class AgentContext {
     };
   }
 
-  public shutdown(): void {
-    this._mutexService.shutdown();
-    this._lspService.shutdown();
-    this._mailboxService.clear();
+  /**
+   * @deprecated Use stop(). Kept only as a transitional alias and scheduled for deletion.
+   */
+  public async shutdown(): Promise<void> {
+    await this.stop();
   }
 
   public async dispose(): Promise<void> {
-    this.shutdown();
-    await this.flush();
+    await this.stop();
   }
 
   private async _push(op: WriteOp, agentId?: string) {
+    this.assertOperational('_push');
     await this._db.push(op, agentId);
   }
 
   private async _pushBatch(ops: WriteOp[], agentId?: string) {
+    this.assertOperational('_pushBatch');
     await this._db.pushBatch(ops, agentId);
-  }
-
-  async flush(): Promise<void> {
-    return this._db.flush();
   }
 
   // ─── AGENT MANAGEMENT BRIDGES ───
@@ -346,7 +532,7 @@ export class AgentContext {
     const edges = [...(targetNode.edges || [])];
 
     const annotationId = await this.addKnowledge(
-      `note-${crypto.randomUUID()}`,
+      `note-${randomUUID()}`,
       'fact',
       annotation,
       {

@@ -17,6 +17,7 @@ async function runTests() {
   const workspace = new Workspace(pool, 'query-tool-user', 'query-tool-workspace');
   workspace.setPhysicalPath(workspaceRoot);
   const ctx = new AgentContext(workspace, pool, 'query-tool-user');
+  await ctx.start();
   const serviceCtx = (ctx as any)._serviceContext;
 
   try {
@@ -89,8 +90,7 @@ async function runTests() {
 
     console.info('QueryLoop tool execution ergonomics checks passed.');
   } finally {
-    ctx.shutdown();
-    await Promise.race([pool.stop(), sleep(1000)]);
+    await Promise.race([ctx.stop(), sleep(1000)]);
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
   }
 }

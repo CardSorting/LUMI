@@ -7,8 +7,10 @@ async function runTest() {
   const dbPath = './test-builder.db';
   setDbPath(dbPath);
   if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  await dbPool.start();
 
-  console.info('--- TEST: Fluent Query Builder Ergonomics ---');
+  try {
+    console.info('--- TEST: Fluent Query Builder Ergonomics ---');
 
   // 1. Test InsertBuilder
   console.info('Testing insertInto().values().execute()...');
@@ -115,9 +117,11 @@ async function runTest() {
   assert.ok(dlq[0]?.error.includes('FOREIGN KEY constraint failed'), 'DLQ captured wrong error: ' + dlq[0]?.error);
   dbPool.clearDeadLetterQueue();
 
-  console.info('✅ ALL QUERY BUILDER TESTS PASSED.');
-  if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-  await dbPool.stop();
+    console.info('✅ ALL QUERY BUILDER TESTS PASSED.');
+  } finally {
+    await dbPool.stop();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  }
 }
 
 runTest().catch((err) => {

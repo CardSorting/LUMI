@@ -1,4 +1,5 @@
 // [LAYER: CORE]
+// @classification OWNED
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -7,11 +8,15 @@ import type { AgentContext, TraversalFilter } from './agent-context.js';
 import { executor } from './executor.js';
 import type { Repository } from './repository.js';
 import { EnvironmentTracker } from './tracker.js';
+import { LifecycleStateError } from './errors.js';
 
 export class BroccoliDBMCP {
   private server: McpServer;
   private repo: Repository;
   private agentContext?: AgentContext | undefined;
+  private lifecycleState: 'new' | 'started' | 'stopped' = 'new';
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private toolsRegistered = false;
 
   constructor(repo: Repository, agentContext?: AgentContext) {
     this.repo = repo;
@@ -20,13 +25,54 @@ export class BroccoliDBMCP {
       name: 'BroccoliDB',
       version: '1.0.0',
     });
-    this.registerTools();
-    this.startBackgroundCleanup();
   }
 
-  private startBackgroundCleanup() {
+  public async start(): Promise<void> {
+    if (this.lifecycleState === 'started') return;
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError('BroccoliDBMCP cannot be restarted after stop().');
+    }
+    if (!this.toolsRegistered) {
+      this.registerTools();
+      this.toolsRegistered = true;
+    }
+    this.lifecycleState = 'started';
+    await this.startBackgroundCleanup();
+  }
+
+  public async stop(): Promise<void> {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.lifecycleState = 'stopped';
+  }
+
+  public async flush(): Promise<void> {
+    this.assertOperational('flush');
+    await this.repo.getDb().flush();
+  }
+
+  public async health(): Promise<Record<string, unknown>> {
+    return {
+      component: 'BroccoliDBMCP',
+      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
+      cleanupInterval: Boolean(this.cleanupInterval),
+    };
+  }
+
+  private assertOperational(operation: string): void {
+    if (this.lifecycleState === 'new') {
+      throw new LifecycleStateError(`BroccoliDBMCP.${operation}() called before start().`);
+    }
+    if (this.lifecycleState === 'stopped') {
+      throw new LifecycleStateError(`BroccoliDBMCP.${operation}() called after stop().`);
+    }
+  }
+
+  private async startBackgroundCleanup() {
     // Run cleanup every 15 minutes
-    setInterval(
+    this.cleanupInterval = setInterval(
       () => {
         this.cleanupExpiredBranches().catch((err) =>
           console.error(`[AgentGit][Lifecycle] Cleanup failed: ${err}`)
@@ -35,10 +81,11 @@ export class BroccoliDBMCP {
       15 * 60 * 1000
     );
     // Also run once on startup
-    this.cleanupExpiredBranches().catch(() => {});
+    await this.cleanupExpiredBranches().catch(() => {});
   }
 
   private async cleanupExpiredBranches() {
+    this.assertOperational('cleanupExpiredBranches');
     const db = this.repo.getDb();
     const now = Date.now();
     const expired = await db.selectWhere('branches', [
@@ -1333,7 +1380,8 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
    * Starts the MCP server via standard I/O streams.
    * This is how agent clients like Cursor or Claude Desktop connect natively.
    */
-  async start() {
+  async connectStdio() {
+    this.assertOperational('connectStdio');
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
   }

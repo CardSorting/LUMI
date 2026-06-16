@@ -6,7 +6,7 @@ import { setDbPath } from '../infrastructure/db/Config.js';
 
 const BENCH_DB = path.resolve(process.cwd(), 'benchmark.db');
 const NUM_OPS = 1000000;
-const BATCH_SIZE = 50000;
+const BATCH_SIZE = 4000;
 
 async function runBenchmark() {
   console.log('🚀 Starting BroccoliDB High-Performance Benchmark');
@@ -20,6 +20,7 @@ async function runBenchmark() {
   if (fs.existsSync(`${BENCH_DB}-shm`)) fs.unlinkSync(`${BENCH_DB}-shm`);
 
   setDbPath(BENCH_DB);
+  await dbPool.start();
   console.log(`📂 Database: ${BENCH_DB}`);
 
   // Insert users to satisfy foreign key constraints
@@ -95,6 +96,7 @@ async function runBenchmark() {
             });
           }
           await dbPool.pushBatch(ops, agentId); // Use agentId to test shadow/state locking
+          await dbPool.commitWork(agentId);
         }
       })()
     );

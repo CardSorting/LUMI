@@ -82,6 +82,7 @@ async function status() {
   const spinner = ora('Analyzing Context Graph...').start();
   const conn = new Connection({ dbPath });
   const pool = conn.getPool();
+  await pool.start();
 
   try {
     const userId = 'local-user';
@@ -440,8 +441,6 @@ async function serve() {
   const repoName = path.basename(process.cwd());
 
   const ws = new Workspace(pool, userId, workspaceId);
-  await ws.init();
-  const repo = await ws.getRepo(repoName);
 
   // Initialize AiService if key is present
   let _aiService: AiService | undefined;
@@ -450,8 +449,11 @@ async function serve() {
   }
 
   const agentContext = new AgentContext(ws, pool, userId, { agentId: 'cli', name: 'CLI' });
+  await agentContext.start();
+  const repo = await ws.getRepo(repoName);
 
   const server = new BroccoliDBMCP(repo, agentContext);
+  await server.start();
   const transport = new StdioServerTransport();
 
   // Logs to stderr
