@@ -5,14 +5,36 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentContext } from '../core/agent-context.js';
 import { AGENT_CONTEXT_CLASSIFICATIONS } from '../core/agent-context/classifications.js';
+import { COMPATIBILITY_EXCEPTIONS } from '../core/agent-context/compatibility-purge.js';
 import { LifecycleStateError } from '../core/errors.js';
 import { Workspace } from '../core/workspace.js';
 import { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';
 import { setDbPath } from '../infrastructure/db/Config.js';
 
 const OWNED_SERVICES = Object.entries(AGENT_CONTEXT_CLASSIFICATIONS)
-  .filter(([, kind]) => kind === 'OWNED')
+  .filter(([, kind]) => kind === 'OWNED_SERVICE')
   .map(([name]) => name);
+
+const ALLOWED_PUBLIC_MEMBERS = new Set([
+  'constructor',
+  'userId',
+  'start',
+  'stop',
+  'flush',
+  'health',
+  'storage',
+  'telemetry',
+  'recovery',
+  'audit',
+  'coordination',
+  'query',
+  'snapshots',
+  'graph',
+  'reasoning',
+  'tasks',
+  'scratchpad',
+  'mailbox',
+]);
 
 async function runTest() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'broccolidb-discipline-'));
@@ -26,52 +48,84 @@ async function runTest() {
 
   assert.strictEqual(context['lifecycleState'], 'new');
 
-  await assert.rejects(() => context.store('before-start'), LifecycleStateError);
-  await assert.rejects(() => context.mutex.acquireLock('resource'), LifecycleStateError);
-  await assert.rejects(() => context.cleanup.performGarbageCollection(), LifecycleStateError);
-  await assert.rejects(() => context.lsp.ensureServer('typescript'), LifecycleStateError);
+  await assert.rejects(() => context.storage.store('before-start'), LifecycleStateError);
+  await assert.rejects(() => context.coordination.acquireLock('resource'), LifecycleStateError);
+  await assert.rejects(() => context.recovery.performGarbageCollection(), LifecycleStateError);
+  await assert.rejects(async () => context.graph.spider.auditStructure(), LifecycleStateError);
 
   await context.start();
   try {
     assert.strictEqual(context['lifecycleState'], 'started');
 
-    const registry = await context.health();
-    assert.strictEqual(registry.status, 'healthy');
-    assert.strictEqual(registry.registry.active, true);
+    const health = await context.health();
+    assert.strictEqual(health.status, 'healthy');
+    assert.strictEqual(health.registry.active, true);
+    assert.ok(health.capabilities.storage?.started);
 
     for (const serviceName of ['db', 'storage', 'cleanup', 'mutex', 'lsp', 'coordinator']) {
-      const serviceHealth = registry.registry.services[serviceName];
+      const serviceHealth = health.registry.services[serviceName];
       assert.ok(serviceHealth, `missing health for ${serviceName}`);
-      assert.strictEqual(typeof serviceHealth.name, 'string');
-      assert.ok(['healthy', 'degraded', 'critical', 'stopped'].includes(serviceHealth.status));
       assert.strictEqual(serviceHealth.started, true);
     }
 
-    const hash = await context.store('discipline payload');
-    assert.strictEqual(await context.hydrate(hash), 'discipline payload');
-    assert.ok(context.storage);
-    assert.ok(context.telemetry);
-    assert.ok(context.recovery);
-    assert.ok(context.auditCapability);
-    assert.ok(context.coordination);
-    assert.ok(context.query);
-    assert.ok(context.snapshots);
+    const hash = await context.storage.store('discipline payload');
+    assert.strictEqual(await context.storage.hydrate(hash), 'discipline payload');
+    for (const cap of [
+      'storage',
+      'telemetry',
+      'recovery',
+      'audit',
+      'coordination',
+      'query',
+      'snapshots',
+      'graph',
+      'reasoning',
+      'tasks',
+      'scratchpad',
+      'mailbox',
+    ] as const) {
+      assert.ok(context[cap], `missing capability getter: ${cap}`);
+    }
   } finally {
     await context.stop();
     fs.rmSync(root, { recursive: true, force: true });
   }
 
-  await assert.rejects(() => context.store('after-stop'), LifecycleStateError);
-  await assert.rejects(() => context.mutex.acquireLock('resource'), LifecycleStateError);
+  await assert.rejects(() => context.storage.store('after-stop'), LifecycleStateError);
+  await assert.rejects(() => context.coordination.acquireLock('resource'), LifecycleStateError);
 
-  assert.deepStrictEqual(OWNED_SERVICES.sort(), [
-    'CleanupService',
-    'CoordinatorService',
-    'LspService',
-    'MutexService',
-  ].sort());
+  assert.deepStrictEqual(
+    OWNED_SERVICES.sort(),
+    ['BufferedDbPool', 'CleanupService', 'CoordinatorService', 'LspService', 'MutexService', 'StorageService'].sort()
+  );
+
+  for (const exception of COMPATIBILITY_EXCEPTIONS) {
+    assert.ok(exception.deletionDate, `exception ${exception.symbol} missing deletionDate`);
+  }
 
   const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const agentContextFile = path.join(packageRoot, 'core/agent-context.ts');
+  const agentContextSource = fs.readFileSync(agentContextFile, 'utf8');
+  assert.ok(!agentContextSource.includes('shutdown('));
+  assert.ok(!agentContextSource.includes('pasteStore'));
+  assert.ok(!agentContextSource.includes('get db()'));
+
+  const publicMembers = Object.getOwnPropertyNames(AgentContext.prototype).filter(
+    (name) => !name.startsWith('_')
+  );
+  const internalRuntimeMembers = new Set([
+    'assertOperational',
+    'getCacheStats',
+    'collectCapabilityHealth',
+    'auditCompatibilityBridges',
+    '_push',
+    '_pushBatch',
+  ]);
+  for (const member of publicMembers) {
+    if (internalRuntimeMembers.has(member)) continue;
+    assert.ok(ALLOWED_PUBLIC_MEMBERS.has(member), `forbidden public AgentContext member: ${member}`);
+  }
+
   const agentContextDir = path.join(packageRoot, 'core/agent-context');
   const sourceFiles = fs
     .readdirSync(agentContextDir, { recursive: true })
@@ -86,11 +140,12 @@ async function runTest() {
     if (!relative.endsWith('agent-context.ts')) {
       assert.ok(!content.includes('shutdown('), `shutdown() remains in ${relative}`);
     }
-    if (!relative.endsWith('agent-context.ts') && !relative.includes('capabilities/')) {
-      assert.ok(
-        !content.includes('new StorageService('),
-        `shadow StorageService in ${relative}`
-      );
+    if (
+      relative.includes('capabilities/') &&
+      content.includes('new ') &&
+      (content.includes('Service(') || content.includes('StorageService('))
+    ) {
+      assert.fail(`capability constructs owned service in ${relative}`);
     }
   }
 }

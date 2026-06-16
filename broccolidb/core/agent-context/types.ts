@@ -1,5 +1,6 @@
 // [LAYER: CORE]
 import type { LifecycleRegistryHealth } from './LifecycleRegistry.js';
+import type { CapabilityHealth } from './capability-health.js';
 import type { BufferedDbPool } from '../../infrastructure/db/BufferedDbPool.js';
 import type { LRUCache } from '../lru-cache.js';
 import type { Workspace } from '../workspace.js';
@@ -197,32 +198,36 @@ export interface ServiceContext {
 }
 
 export interface IAgentContext {
-  getStructuralImpact(filePath: string): { 
-    summary: string; 
-    blastRadius: BlastRadius; 
-    deficiencies: { 
-        depId: string, 
-        symbols: string[], 
-        displacements: { symbol: string, newPath: string }[],
-        directives: RepairDirective[],
-        line: number, 
-        character: number 
-    }[] 
+  graph: {
+    getStructuralImpact(filePath: string): {
+      summary: string;
+      blastRadius: BlastRadius;
+      deficiencies: {
+        depId: string;
+        symbols: string[];
+        displacements: { symbol: string; newPath: string }[];
+        directives: RepairDirective[];
+        line: number;
+        character: number;
+      }[];
+    };
+    annotateKnowledge(
+      targetId: string,
+      annotation: string,
+      agentId?: string,
+      metadata?: Record<string, unknown>
+    ): Promise<void>;
   };
-  searchKnowledge(
-    query: string,
-    tags?: string[],
-    limit?: number,
-    queryEmbedding?: number[],
-    options?: any
-  ): Promise<KnowledgeBaseItem[]>;
+  query: {
+    search(
+      query: string,
+      tags?: string[],
+      limit?: number,
+      queryEmbedding?: number[],
+      options?: { augmentWithGraph?: boolean; skipVerification?: boolean }
+    ): Promise<KnowledgeBaseItem[]>;
+  };
   flush(): Promise<void>;
-  annotateKnowledge(
-    targetId: string,
-    annotation: string,
-    agentId?: string,
-    metadata?: Record<string, any>
-  ): Promise<void>;
 }
 
 export type SuggestionType = 'fix' | 'design' | 'learn' | 'feature';
@@ -249,8 +254,10 @@ export interface BroccoliDbHealth {
   status: 'healthy' | 'degraded' | 'critical' | 'stopped';
   lifecycle: 'new' | 'starting' | 'started' | 'stopping' | 'stopped';
   registry: LifecycleRegistryHealth;
+  capabilities: Record<string, CapabilityHealth>;
   cache: BroccoliDbCacheStats;
   invariantViolations?: string[];
+  compatibilityBridgeViolations?: string[];
 }
 
 export interface BroccoliDbRecoveryReport {

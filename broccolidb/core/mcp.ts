@@ -428,7 +428,7 @@ export class BroccoliDBMCP {
       async (args) => {
         return this.executeTool('audit_reasoning', async () => {
           if (!this.agentContext) return 'AgentContext not available for auditing.';
-          const reports = await this.agentContext.detectContradictions(args.startId, args.depth);
+          const reports = await this.agentContext.reasoning.detectContradictions(args.startId, args.depth);
           if (reports.length === 0) return 'No logical contradictions detected.';
 
           let output = `[Audit Report] Found ${reports.length} potential contradictions:\n`;
@@ -449,7 +449,7 @@ export class BroccoliDBMCP {
       async (args) => {
         return this.executeTool('get_lineage', async () => {
           if (!this.agentContext) return 'AgentContext not available for lineage tracing.';
-          const pedigree = await this.agentContext.getReasoningPedigree(args.nodeId);
+          const pedigree = await this.agentContext.reasoning.getReasoningPedigree(args.nodeId);
           let output = `[Lineage Trace] ${args.nodeId}\n`;
           output += `Evidence Path:\n`;
           for (const step of pedigree.lineage) {
@@ -469,7 +469,7 @@ export class BroccoliDBMCP {
       async (args) => {
         return this.executeTool('visualize_pedigree', async () => {
           if (!this.agentContext) return 'AgentContext not available.';
-          const pedigree = await this.agentContext.getReasoningPedigree(args.nodeId);
+          const pedigree = await this.agentContext.reasoning.getReasoningPedigree(args.nodeId);
 
           let mermaid = 'graph TD\n';
           for (const step of pedigree.lineage) {
@@ -480,7 +480,7 @@ export class BroccoliDBMCP {
 
           // Add edges
           for (const step of pedigree.lineage) {
-            const node = await this.agentContext.getKnowledge(step.nodeId);
+            const node = await this.agentContext.graph.getKnowledge(step.nodeId);
             for (const edge of node.edges) {
               if (edge.type === 'supports' || edge.type === 'depends_on') {
                 mermaid += `  ${step.nodeId.substring(0, 7)} -- ${edge.type} --> ${edge.targetId.substring(0, 7)}\n`;
@@ -748,7 +748,7 @@ export class BroccoliDBMCP {
             if (args.edgesJson) {
               edgesArray = JSON.parse(args.edgesJson);
             }
-            const newId = await context.addKnowledge(args.kbId, args.type, args.content, {
+            const newId = await context.graph.addKnowledge(args.kbId, args.type, args.content, {
               tags: tagsArray,
               edges: edgesArray,
             });
@@ -780,7 +780,7 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           return this.executeTool('kb_search', async () => {
-            const results = await context.searchKnowledge(
+            const results = await context.query.search(
               args.query,
               args.tags
                 ? args.tags
@@ -843,7 +843,7 @@ export class BroccoliDBMCP {
             if (args.minWeight !== undefined) {
               filter.minWeight = args.minWeight;
             }
-            const results = await context.traverseGraph(args.kbId, args.maxDepth, filter);
+            const results = await context.graph.traverseGraph(args.kbId, args.maxDepth, filter);
             return JSON.stringify(results, null, 2);
           });
         }
@@ -857,7 +857,7 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           return this.executeTool('get_agent_bundle', async () => {
-            const bundle = await context.getAgentBundle(args.agentId);
+            const bundle = await context.query.getAgentBundle(args.agentId);
             return JSON.stringify(bundle, null, 2);
           });
         }
@@ -872,7 +872,7 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           return this.executeTool('append_memory_layer', async () => {
-            await context.appendMemoryLayer(args.agentId, args.memory);
+            await context.tasks.appendMemoryLayer(args.agentId, args.memory);
             return `Successfully appended memory to ${args.agentId}'s memory layer.`;
           });
         }
@@ -888,7 +888,7 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           return this.executeTool('append_shared_memory', async () => {
-            await context.appendSharedMemory(args.memory);
+            await context.query.appendSharedMemory(args.memory);
             return `Successfully appended memory to the swarm-wide shared rulebook.`;
           });
         }
@@ -911,7 +911,7 @@ export class BroccoliDBMCP {
             const kbIds = args.linkedKnowledgeIds
               ? args.linkedKnowledgeIds.split(',').map((id) => id.trim())
               : [];
-            await context.spawnTask(args.taskId, args.agentId, args.description, kbIds);
+            await context.tasks.spawn(args.taskId, args.agentId, args.description, kbIds);
             return `Task '${args.taskId}' spawned successfully.`;
           });
         }
@@ -925,7 +925,7 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           return this.executeTool('get_task_context', async () => {
-            const taskContext = await context.getTaskContext(args.taskId);
+            const taskContext = await context.tasks.getContext(args.taskId);
             return JSON.stringify(taskContext, null, 2);
           });
         }
@@ -957,7 +957,7 @@ export class BroccoliDBMCP {
                 .filter(Boolean);
             if (args.edgesJson !== undefined) patch.edges = JSON.parse(args.edgesJson);
             if (args.confidence !== undefined) patch.confidence = args.confidence;
-            await context.updateKnowledge(args.kbId, patch);
+            await context.graph.updateKnowledge(args.kbId, patch);
             return `Successfully updated knowledge node: ${args.kbId}`;
           });
         }
@@ -971,7 +971,7 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           return this.executeTool('kb_register', async () => {
-            await context.deleteKnowledge(args.kbId);
+            await context.graph.deleteKnowledge(args.kbId);
             return `Successfully deleted knowledge node: ${args.kbId}`;
           });
         }
@@ -988,7 +988,7 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           return this.executeTool('kb_link', async () => {
-            await context.mergeKnowledge(args.sourceId, args.targetId);
+            await context.graph.mergeKnowledge(args.sourceId, args.targetId);
             return `Successfully merged ${args.sourceId} into ${args.targetId}. Source deleted.`;
           });
         }
@@ -1004,7 +1004,7 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           return this.executeTool('node_centrality', async () => {
-            const result = await context.getNodeCentrality(args.kbId);
+            const result = await context.graph.getNodeCentrality(args.kbId);
             return `Node: ${result.kbId}\nInbound Edges: ${result.inbound}\nOutbound Edges: ${result.outbound}\nTotal Degree Centrality: ${result.totalDegree}`;
           });
         }
@@ -1031,7 +1031,7 @@ export class BroccoliDBMCP {
                 .split(',')
                 .map((t) => t.trim()) as GraphEdge['type'][];
             }
-            const subgraph = await context.extractSubgraph(args.rootId, args.maxDepth, filter);
+            const subgraph = await context.graph.extractSubgraph(args.rootId, args.maxDepth, filter);
             return JSON.stringify(subgraph, null, 2);
           });
         }
@@ -1054,7 +1054,7 @@ export class BroccoliDBMCP {
           return this.executeTool('decay_confidence', async () => {
             const olderThan = new Date(args.olderThanIso);
             if (Number.isNaN(olderThan.getTime())) throw new Error('Invalid ISO timestamp');
-            const result = await context.decayConfidence(args.factor, olderThan);
+            const result = await context.query.decayConfidence(args.factor, olderThan);
             return `Confidence decay applied. ${result.decayedCount} nodes affected.`;
           });
         }
@@ -1070,9 +1070,9 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           try {
-            const node = await context.getKnowledge(args.kbId);
-            await context.updateKnowledge(args.kbId, { content: node.content });
-            const updated = await context.getKnowledge(args.kbId);
+            const node = await context.graph.getKnowledge(args.kbId);
+            await context.graph.updateKnowledge(args.kbId, { content: node.content });
+            const updated = await context.graph.getKnowledge(args.kbId);
             const dims = updated.embedding ? updated.embedding.length : 0;
             return {
               content: [
@@ -1112,7 +1112,7 @@ export class BroccoliDBMCP {
                   .map((t) => t.trim())
                   .filter(Boolean)
               : undefined;
-            const results = await context.searchKnowledge(
+            const results = await context.query.search(
               args.query,
               tagsArray,
               args.limit,
@@ -1139,7 +1139,7 @@ export class BroccoliDBMCP {
         {},
         async () => {
           try {
-            const result = await context.reembedAll();
+            const result = await context.query.reembedAll();
             return {
               content: [
                 {
@@ -1185,7 +1185,7 @@ export class BroccoliDBMCP {
         {},
         async () => {
           try {
-            const stats = context.getCacheStats();
+            const stats = (await context.health()).cache;
             return { content: [{ type: 'text', text: JSON.stringify(stats, null, 2) }] };
           } catch (e: unknown) {
             const message = e instanceof Error ? e.message : String(e);
@@ -1202,7 +1202,7 @@ export class BroccoliDBMCP {
         },
         async (args) => {
           try {
-            const hubs = await context.getGlobalCentrality(args.limit);
+            const hubs = await context.query.getGlobalCentrality(args.limit);
             const formatted = hubs
               .map(
                 (h: { kbId: string; score: number }) =>
@@ -1282,7 +1282,7 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
       async (args) => {
         return this.executeTool('proactive_audit', async () => {
           if (!this.agentContext) return 'AgentContext not available.';
-          const result = await this.agentContext.autoDiscoverRelationships(args.nodeId);
+          const result = await this.agentContext.reasoning.autoDiscoverRelationships(args.nodeId);
           return `Proactive Audit Complete.\nNodes discovered: ${result.discovered}\nSuggestions:\n${result.suggestions.join('\n')}`;
         });
       }
@@ -1297,7 +1297,7 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
       async (args) => {
         return this.executeTool('describe_pedigree', async () => {
           if (!this.agentContext) return 'AgentContext not available.';
-          return await this.agentContext.getNarrativePedigree(args.nodeId);
+          return await this.agentContext.reasoning.getNarrativePedigree(args.nodeId);
         });
       }
     );
@@ -1315,7 +1315,7 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
       async (args) => {
         return this.executeTool('speculate_fact', async () => {
           if (!this.agentContext) return 'AgentContext not available.';
-          const report = await this.agentContext.speculateImpact(args.content, args.startId);
+          const report = await this.agentContext.audit.speculateImpact(args.startId ?? args.content, args.startId);
           let output = `[Speculative Impact Report]\nValid: ${report.isValid}\nSoundness Delta: ${report.soundnessDelta}\n\n`;
           if (report.contradictions.length > 0) {
             output += `Contradictions Identified:\n`;
@@ -1346,7 +1346,7 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
       async (args) => {
         return this.executeTool('bind_rule', async () => {
           if (!this.agentContext) return 'AgentContext not available.';
-          await this.agentContext.addLogicalConstraint(
+          await this.agentContext.audit.addLogicalConstraint(
             args.pathPattern,
             args.knowledgeId,
             args.severity
@@ -1363,7 +1363,7 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
       async () => {
         return this.executeTool('get_constitution', async () => {
           if (!this.agentContext) return 'AgentContext not available.';
-          const constraints = await this.agentContext.getLogicalConstraints();
+          const constraints = await this.agentContext.audit.getLogicalConstraints();
           if (constraints.length === 0) return 'No constitutional constraints defined.';
           return (
             `[Repository Constitution]\n` +

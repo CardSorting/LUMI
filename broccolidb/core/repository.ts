@@ -483,7 +483,7 @@ export class Repository {
             if (data.factId) kbIds.push(data.factId);
 
             if (kbIds.length > 0) {
-              const reports = await this.agentContext.detectContradictions(kbIds);
+              const reports = await this.agentContext.reasoning.detectContradictions(kbIds);
               if (reports.length > 0) {
                 throw new AgentGitError(
                   `Reasoning commit blocked: High-confidence logical contradiction detected.`,
@@ -607,7 +607,7 @@ export class Repository {
       }
 
       // 2. Constitutional Audit (Path-bound rules)
-      const constraints = await this.agentContext.getLogicalConstraints();
+      const constraints = await this.agentContext.audit.getLogicalConstraints();
       if (constraints.length > 0) {
         const changedPaths =
           options.type === 'diff' ? Object.keys(data.changes || {}) : Object.keys(data.tree || {});
@@ -618,12 +618,12 @@ export class Repository {
           });
 
           for (const constraint of matchingConstraints) {
-            const rule = await this.agentContext.getKnowledge(constraint.knowledgeId);
+            const rule = await this.agentContext.graph.getKnowledge(constraint.knowledgeId);
             const casHash = options.type === 'diff' ? data.changes[path] : data.tree[path];
             const fileItem = await this.db.selectOne('files', [{ column: 'id', value: casHash }]);
 
             if (fileItem && rule) {
-              const audit = await this.agentContext.checkConstitutionalViolation(
+              const audit = await this.agentContext.audit.checkConstitutionalViolation(
                 path,
                 fileItem.content,
                 rule.content
@@ -1116,7 +1116,7 @@ export class Repository {
           if (sourceNode.data.factBId) kbIds.push(sourceNode.data.factBId);
 
           if (kbIds.length > 0) {
-            const pedigree = await this.agentContext.getReasoningPedigree(kbIds[0]);
+            const pedigree = await this.agentContext.reasoning.getReasoningPedigree(kbIds[0]);
             let proof = `# Reasoning Proof: ${message || sourceNode.message}\n\n`;
             proof += `**Conclusion ID:** ${resId}\n`;
             proof += `**Effective Confidence:** ${(pedigree.effectiveConfidence * 100).toFixed(1)}%\n\n`;
@@ -1422,7 +1422,7 @@ export class Repository {
         if (sourceNode.data.factBId) kbIds.push(sourceNode.data.factBId);
 
         if (kbIds.length > 0) {
-          const auditRes = await this.agentContext.detectContradictions(kbIds, 2);
+          const auditRes = await this.agentContext.reasoning.detectContradictions(kbIds, 2);
           reasoningConflicts = auditRes.map((r: any) => ({
             nodeId: r.nodeId,
             conflictingNodeId: r.conflictingNodeId,

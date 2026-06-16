@@ -78,8 +78,8 @@ export class SuggestionService {
       let semanticContext: string[] = [];
 
       if (activeFilePath) {
-        structuralImpact = agentContext.getStructuralImpact(activeFilePath);
-        const searchResults = await agentContext.searchKnowledge(
+        structuralImpact = agentContext.graph.getStructuralImpact(activeFilePath);
+        const searchResults = await agentContext.query.search(
           `context for ${activeFilePath}: ${fileContent?.substring(0, 100)}`,
           undefined,
           2

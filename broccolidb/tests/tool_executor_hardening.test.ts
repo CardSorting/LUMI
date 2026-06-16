@@ -68,7 +68,7 @@ async function runTests() {
     );
     assert.strictEqual(ignoredPlainJson.length, 0);
 
-    const strictExecutor = ctx.createToolExecutor([strictTool], {
+    const strictExecutor = ctx.query.createToolExecutor([strictTool], {
       mirrorFileChanges: false,
       recordAuditEvents: false,
     });
@@ -111,7 +111,7 @@ async function runTests() {
       },
     };
 
-    const timeoutExecutor = ctx.createToolExecutor([slowTool], {
+    const timeoutExecutor = ctx.query.createToolExecutor([slowTool], {
       mirrorFileChanges: false,
       recordAuditEvents: false,
     });
@@ -155,7 +155,7 @@ async function runTests() {
       },
     };
 
-    const batchResults = await ctx.executeTools(
+    const batchResults = await ctx.query.executeTools(
       Array.from({ length: 5 }, (_, index) => ({ name: 'read_file', input: {}, id: `read-${index}` })),
       [readTool],
       {
@@ -167,7 +167,7 @@ async function runTests() {
     assert.strictEqual(batchResults.length, 5);
     assert.ok(maxActiveReads <= 2, `Expected max 2 concurrent reads, saw ${maxActiveReads}`);
 
-    const snapshot = ctx.getErgonomicsSnapshot();
+    const snapshot = ctx.query.getErgonomicsSnapshot();
     assert.strictEqual(snapshot.toolExecutionDefaults.failOnUnsafeMutationPath, true);
     assert.strictEqual(snapshot.services.spider, true);
 

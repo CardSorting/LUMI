@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import type { WriteOp } from '../../../infrastructure/db/BufferedDbPool.js';
 import type { Workspace } from '../../workspace.js';
+import { capabilityHealth, type CapabilityHealth } from '../capability-health.js';
 
 export interface TelemetryEvent {
   usage: { promptTokens: number; completionTokens: number; modelId?: string };
@@ -16,11 +17,16 @@ export class TelemetryCapability {
     private readonly push: (op: WriteOp, agentId?: string) => Promise<void>,
     private readonly workspace: Workspace,
     private readonly userId: string,
-    private readonly assertOperational: (operation: string) => void
+    private readonly assertOperational: (operation: string) => void,
+    private readonly isStarted: () => boolean
   ) {}
 
+  health(): CapabilityHealth {
+    return capabilityHealth('telemetry', this.isStarted(), ['BufferedDbPool']);
+  }
+
   async record(event: TelemetryEvent): Promise<void> {
-    this.assertOperational('recordTelemetry');
+    this.assertOperational('telemetry.record');
     const promptTokens = event.usage.promptTokens;
     const completionTokens = event.usage.completionTokens;
     await this.push({

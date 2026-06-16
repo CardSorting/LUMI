@@ -44,12 +44,12 @@ async function testSwarmOrchestration() {
 		console.log("Testing Skeptical Verification Audit...")
 		// Add some "risky" knowledge
 		const node1 = "verify-test-1"
-		await ctx.addKnowledge(node1, "fact", "Implementing unsafe direct memory access for performance.", {
+		await ctx.graph.addKnowledge(node1, "fact", "Implementing unsafe direct memory access for performance.", {
 			confidence: 0.9,
 			metadata: { path: "src/unsafe.ts" },
 		})
 
-		const audit = await ctx.reasoningService.performSkepticalAudit([node1])
+		const audit = await ctx.reasoning.performSkepticalAudit([node1])
 		console.log("Audit Result - Pass:", audit.pass)
 		console.log("Audit Risks:", audit.risks)
 

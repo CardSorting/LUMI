@@ -26,10 +26,10 @@ async function testLevel17() {
         content: `import { RealitySymbol } from './provider';\nconsole.log(RealitySymbol);`
     };
 
-    await ctx.spider.bootstrapGraph(); // Ensure initialized
-    await ctx.spider.applyChanges([fileB, fileA]);
+    await ctx.graph.spider.bootstrapGraph(); // Ensure initialized
+    await ctx.graph.spider.applyChanges([fileB, fileA]);
 
-    const impact = ctx.getStructuralImpact('src/provider.ts');
+    const impact = ctx.graph.getStructuralImpact('src/provider.ts');
     console.log(`- Discovery: ${impact.summary}`);
     console.log(`- Base Blast Radius: ${impact.blastRadius.affectedNodes.length} nodes`);
 
@@ -40,7 +40,7 @@ async function testLevel17() {
         content: `export const NewSymbol = "UNSTABLE";` // Missing RealitySymbol
     };
 
-    const auditResult = await ctx.spider.applyChanges([brokenFileB]);
+    const auditResult = await ctx.graph.spider.applyChanges([brokenFileB]);
     
     if (auditResult.deficiencies.length > 0) {
         const def = auditResult.deficiencies[0];
@@ -62,7 +62,7 @@ async function testLevel17() {
         content: `const x: number = "THIS IS NOT A NUMBER";`
     };
 
-    const typeResult = await ctx.spider.applyChanges([typeErrorFile]);
+    const typeResult = await ctx.graph.spider.applyChanges([typeErrorFile]);
     if (typeResult.diagnostics.length > 0) {
         console.log(`✅ SUCCESS: Real Compiler Error detected!`);
         console.log(`- Message: ${typeResult.diagnostics[0].message}`);
@@ -76,10 +76,10 @@ async function testLevel17() {
     console.log('\nStep 4: Testing Vitality Tracking...');
     const hubPath = 'src/hub.ts';
     for (let i = 0; i < 5; i++) {
-        await ctx.spider.applyChanges([{ filePath: hubPath, content: `// Churn ${i}\nexport const C = ${i};` }]);
+        await ctx.graph.spider.applyChanges([{ filePath: hubPath, content: `// Churn ${i}\nexport const C = ${i};` }]);
     }
     
-    const node = ctx.spider.getEngine().nodes.get(hubPath);
+    const node = ctx.graph.spider.getEngine().nodes.get(hubPath);
     console.log(`- Hub Vitality: ${node?.vitality ?? '0'}`);
 
     console.log('\n✅ TEST PASSED: Level 17 Deep Forensics are OPERATIONAL.');

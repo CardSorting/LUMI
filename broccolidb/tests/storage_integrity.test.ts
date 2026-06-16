@@ -19,13 +19,13 @@ async function runTest() {
 
   await context.start();
   try {
-    const hash = await context.store('trusted payload');
-    assert.strictEqual(await context.hydrate(hash), 'trusted payload');
+    const hash = await context.storage.store('trusted payload');
+    assert.strictEqual(await context.storage.hydrate(hash), 'trusted payload');
 
     const blobPath = path.join(root, '.broccolidb', 'storage', 'blobs', hash.slice(0, 2), hash);
     fs.writeFileSync(blobPath, 'compromised payload');
 
-    await assert.rejects(() => context.hydrate(hash), StorageIntegrityError);
+    await assert.rejects(() => context.storage.hydrate(hash), StorageIntegrityError);
 
     const corruptDir = path.join(root, '.broccolidb', 'storage', 'corrupt');
     const corruptFiles = fs.readdirSync(corruptDir).filter((name) => name.endsWith('.corrupt'));

@@ -30,7 +30,8 @@ async function testLevel15() {
     // 1. Test Sharded CAS
     console.log('Testing CAS Sharding...');
     const largeContent = 'A'.repeat(2000);
-    const result = await ctx.store(largeContent).then((hash) => ({ content: `CAS:${hash}` }));
+    const hash = await ctx.storage.store(largeContent);
+    const result = { content: `CAS:${hash}` };
     const hash = result.content.split(':')[1];
     
     if (hash) {
@@ -41,7 +42,7 @@ async function testLevel15() {
 
     // 2. Test Mutex Heartbeats
     console.log('Testing Mutex Heartbeats...');
-    const acquired = await ctx.mutex.acquireLock('production_resource');
+    const acquired = await ctx.coordination.acquireLock('production_resource');
     if (acquired) {
         console.log('✅ SUCCESS: Lock acquired with heartbeats.');
     } else {
@@ -52,7 +53,7 @@ async function testLevel15() {
     console.log('Testing Spider Scanning...');
     const files = [{ filePath: 'test.ts', content: 'export function testLevel15() {}' }];
     try {
-        await ctx.spider.auditWithLsp(files);
+        await ctx.graph.spider.auditWithLsp(files);
         console.log('✅ SUCCESS: Spider audit completed.');
     } catch (e) {
         console.log('ℹ️ INFO: Spider audit finished (skipped LSP spawn).');

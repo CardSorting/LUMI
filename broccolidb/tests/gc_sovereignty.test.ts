@@ -28,7 +28,7 @@ async function testGC() {
     tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
     fs.utimesSync(oldFile, tenDaysAgo, tenDaysAgo);
 
-    const result = await ctx.cleanup.performGarbageCollection();
+    const result = await ctx.recovery.performGarbageCollection();
     console.log(`Pruned tasks count: ${result.prunedTaskOutputs}`);
     
     if (!fs.existsSync(oldFile)) {
@@ -45,7 +45,7 @@ async function testGC() {
     const initialCount = (await pool.selectWhere('knowledge', [{ column: 'userId', value: userId }])).length;
     console.log(`Initial node count: ${initialCount}`);
     
-    const prunedCount = await ctx.cleanup.performEpistemicSunsetting(0.2);
+    const prunedCount = await ctx.recovery.performEpistemicSunsetting(0.2);
     console.log(`Pruned nodes count: ${prunedCount}`);
     
     const finalNodes = await pool.selectWhere('knowledge', [{ column: 'userId', value: userId }]);

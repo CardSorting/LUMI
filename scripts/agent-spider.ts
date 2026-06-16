@@ -148,9 +148,9 @@ async function main() {
 		}
 
 		console.log("🕸️  Bootstrapping Spider graph...")
-		await ctx.spider.bootstrapGraph()
+		await ctx.graph.spider.bootstrapGraph()
 
-		const engine = ctx.spider.getEngine()
+		const engine = ctx.graph.spider.getEngine()
 		console.log(`✅ Graph Bootstrapped: ${engine.nodes.size} nodes.`)
 
 		await pool.flush()
@@ -163,8 +163,8 @@ async function main() {
 		process.exit(1)
 	}
 
-	await ctx.spider.bootstrapGraph()
-	const engine = ctx.spider.getEngine()
+	await ctx.graph.spider.bootstrapGraph()
+	const engine = ctx.graph.spider.getEngine()
 
 	if (command === "status") {
 		const entropy = engine.computeEntropy()
@@ -251,7 +251,7 @@ async function main() {
 
 	if (command === "verify-graph") {
 		console.log("🧐 Verifying graph integrity (Ghost Node Guard)...")
-		const report = await ctx.spider.verifyGraphIntegrity(false)
+		const report = await ctx.graph.spider.verifyGraphIntegrity(false)
 		if (report.pruned > 0) {
 			console.log(`✅ Pruned ${report.pruned} ghost nodes.`)
 		} else {
@@ -266,7 +266,7 @@ async function main() {
 			console.error("Usage: blast-radius <file>")
 			process.exit(1)
 		}
-		const discovery = ctx.spider.getDiscovery()
+		const discovery = ctx.graph.spider.getDiscovery()
 		const report = discovery.getBlastRadius(filePath)
 		console.log(`🔥 Blast Radius for ${filePath}:`)
 		console.log(`  Centrality Score: ${(report.centralityScore * 100).toFixed(2)}%`)
@@ -286,7 +286,7 @@ async function main() {
 			console.error("Usage: pre-heat <file>")
 			process.exit(1)
 		}
-		const pack = ctx.spider.getStudyPack(filePath)
+		const pack = ctx.graph.spider.getStudyPack(filePath)
 		console.log(`📖  Sovereign Study Pack for ${filePath}:`)
 		console.log(`   (Read these files to master the structural context)`)
 		for (const item of pack.studyItems) {
