@@ -30,7 +30,7 @@ async function runTest() {
   await ctx.start();
 
   try {
-    const session = ctx.runtime.beginSession({ taskId: 'repair-auth-flow' });
+    const session = await ctx.runtime.beginSession({ taskId: 'repair-auth-flow' });
     const beforeProvider = fs.readFileSync(provider, 'utf8');
 
     const audit = await ctx.graph.spider.audit({

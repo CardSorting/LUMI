@@ -33,6 +33,7 @@ import { OrchestrationRuntime } from './orchestration/OrchestrationRuntime.js';
 import { StorageService } from '../infrastructure/storage/StorageService.js';
 import { BufferedDbPool, type WriteOp } from '../infrastructure/db/BufferedDbPool.js';
 import { AgentGitError, LifecycleStateError } from './errors.js';
+import { GuidedError, lifecycleNotStartedError, lifecycleStoppingError, lifecycleStoppedError } from './error-guidance.js';
 
 export { StreamingToolExecutor } from './agent-context/StreamingToolExecutor.js';
 export type {
@@ -65,18 +66,6 @@ export type { CapabilityHealth } from './agent-context/capability-health.js';
 export { CapabilityBase } from './agent-context/CapabilityBase.js';
 export type * from './agent-context/intent-types.js';
 export { IntentTracer } from './agent-context/IntentTracer.js';
-export type * from './orchestration/types.js';
-export {
-  OrchestrationRuntime,
-  MutationPlanner,
-  RepairExecutor,
-  VerificationPipeline,
-  ApprovalPolicyEngine,
-  RollbackCoordinator,
-  ExecutionTrace,
-  PolicyBlockedError,
-} from './orchestration/index.js';
-
 import type { BroccoliDbHealth, KnowledgeBaseItem, ServiceContext } from './agent-context/types.js';
 import type { CapabilityHealth } from './agent-context/capability-health.js';
 import { LRUCache } from './lru-cache.js';
@@ -196,6 +185,9 @@ export class AgentContext {
         resync: (opts) => this._spiderService.resync(opts),
       },
       invariants: this._invariantEngine,
+      db: this._db,
+      storage: this._storageService,
+      userId: this.userId,
     });
 
     this._storageCapability = new StorageCapability(
@@ -443,14 +435,15 @@ export class AgentContext {
   }
 
   private assertOperational(operation: string): void {
+    const label = `ctx.${operation}`;
     if (this.lifecycleState === 'new' || this.lifecycleState === 'starting') {
-      throw new LifecycleStateError(`AgentContext.${operation} called before start().`);
+      throw new GuidedError(lifecycleNotStartedError(label));
     }
     if (this.lifecycleState === 'stopping') {
-      throw new LifecycleStateError(`AgentContext.${operation} called while stop() is in progress.`);
+      throw new GuidedError(lifecycleStoppingError(label));
     }
     if (this.lifecycleState === 'stopped') {
-      throw new LifecycleStateError(`AgentContext.${operation} called after stop().`);
+      throw new GuidedError(lifecycleStoppedError(label));
     }
   }
 

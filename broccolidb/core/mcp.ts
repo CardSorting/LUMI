@@ -1770,7 +1770,7 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
       {
         phase: z.enum(['pre-edit', 'post-edit', 'ci', 'delta']).optional(),
         scenario: z
-          .enum(['before-edit', 'after-edit', 'ci-gate', 'pr-review', 'advisory-scan', 'delta-regression'])
+          .enum(['before-edit', 'after-edit', 'ci-gate', 'pr-review', 'advisory-scan', 'local-edit-loop'])
           .optional()
           .describe('When set, run scenario and export scenario CI artifacts instead of a single check'),
         filePath: z.string().optional(),
@@ -1788,7 +1788,6 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             const scenarioResponse = await spider.runAgentScenarioAndRespond(args.scenario, {
               filePath: args.filePath,
               scope: args.scope,
-              gatePreset: args.gatePreset,
               correlationId: args.correlationId,
             });
             const written = await spider.writeScenarioCiArtifacts(args.outputDir, scenarioResponse);

@@ -1,5 +1,6 @@
 // [LAYER: CORE]
-import type { CapabilityIntent } from '../agent-context/intent-types.js';
+import type { CapabilityIntent, IntentPriority } from '../agent-context/intent-types.js';
+import type { ExecutionBudget, PartialExecutionBudget, RuntimeEvent, RuntimeMode } from './runtime/types.js';
 import type {
   RepairDirective,
   RepairRiskLevel,
@@ -93,6 +94,9 @@ export interface ExecutionSession {
   agentId?: string;
   taskId?: string;
   correlationId?: string;
+  priority?: IntentPriority;
+  budget?: PartialExecutionBudget;
+  runtimeMode?: RuntimeMode;
 
   intents: CapabilityIntent[];
   audits: SpiderReport[];
@@ -132,24 +136,35 @@ export interface ExecutionTraceEvent {
 }
 
 export interface RuntimeHealth {
+  status: 'healthy' | 'degraded' | 'critical';
   activeSessions: number;
+  queuedSessions: number;
   failedSessions: number;
   rollbackCount: number;
   verificationFailures: number;
   averageExecutionLatencyMs: number;
   averageVerificationLatencyMs: number;
   pendingApprovals: number;
+  concurrencyUtilization: number;
+  budgetViolations: number;
+  policyViolations: number;
+  runtimeMode: RuntimeMode;
+  recentCriticalEvents: RuntimeEvent[];
 }
+
+export type { ExecutionBudget, PartialExecutionBudget, RuntimeMode, RuntimeEvent, ReplayResult } from './runtime/types.js';
 
 export interface BeginSessionInput {
   taskId?: string;
   agentId?: string;
   correlationId?: string;
+  priority?: IntentPriority;
+  budget?: PartialExecutionBudget;
 }
 
 export interface PlanRepairsInput {
   audit: SpiderReport;
-  policy: ApprovalPolicy;
+  policy?: ApprovalPolicy;
   sessionId: string;
   correlationId?: string;
 }
@@ -169,8 +184,10 @@ export interface PolicyDecision {
 
 export interface ExecutePlanInput {
   plan: MutationPlan;
-  policy: ApprovalPolicy;
+  sessionId?: string;
+  policy?: ApprovalPolicy;
   approvedBy?: string;
+  priority?: IntentPriority;
 }
 
 export interface ExecutePlanResult {

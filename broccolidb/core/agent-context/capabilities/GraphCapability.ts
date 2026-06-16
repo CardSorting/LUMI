@@ -184,7 +184,10 @@ export class GraphCapability extends CapabilityBase {
       inputSummary: buildSpiderInputSummary(operation, input),
       expectedEffects: [`SpiderService.${operation}`],
       durability: 'ephemeral' as const,
-      summarizeResult: (result: SpiderReport | SpiderGateResult | SpiderGateBundleResult | SpiderAgentBundle | SpiderBatchPreflightResult | SpiderCheckResult | SpiderCheckPipelineResult | { resynced?: string[]; passed?: boolean; audit?: SpiderReport; digest?: string; telemetry?: Record<string, unknown> }) => {
+      summarizeResult: (result: SpiderReport | SpiderGateResult | SpiderGateBundleResult | SpiderAgentBundle | SpiderBatchPreflightResult | SpiderCheckResult | SpiderCheckPipelineResult | string[] | { resynced?: string[]; passed?: boolean; audit?: SpiderReport; digest?: string; telemetry?: Record<string, unknown> }) => {
+        if (Array.isArray(result) && result.every((x) => typeof x === 'string')) {
+          return { filesWritten: result.length };
+        }
         const intentSummary = summarizeSpiderIntentResult(operation, result);
         if ('phases' in result && Array.isArray(result.phases)) {
           return {

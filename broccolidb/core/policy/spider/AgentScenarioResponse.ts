@@ -2,7 +2,7 @@
 /**
  * Structured scenario-run responses — mirrors check JSON envelope and GitHub Actions job outputs.
  */
-import type { SpiderScenarioResponse, SpiderScenarioRunResult } from './report-types.js';
+import type { SpiderScenarioResponse, SpiderScenarioRunResult, SpiderAgentFailureEnvelope } from './report-types.js';
 import { toCheckResponse, toCheckNdjsonStream, type ToCheckResponseOptions } from './AgentResponse.js';
 import { formatScenarioFailure } from './AgentFailure.js';
 export { formatScenarioFailure } from './AgentFailure.js';

@@ -341,7 +341,7 @@ export function toDiagnosticJson(report: SpiderReport): SpiderDiagnosticJson[] {
         ? {
             fix: {
               description: directive.rationale,
-              verificationCommand: directive.verificationCommand,
+              verificationCommand: directive.verificationCommand ?? '',
             },
           }
         : {}),
@@ -394,7 +394,7 @@ export function toCodeActions(report: SpiderReport): SpiderCodeAction[] {
       findingId: finding ? (finding.findingId ?? stableFindingId(finding)) : undefined,
       directiveId: directive.directiveId,
       rationale: directive.rationale,
-      verificationCommand: directive.verificationCommand,
+      verificationCommand: directive.verificationCommand ?? '',
       riskLevel: directive.riskLevel,
     });
   }
@@ -409,7 +409,7 @@ export function scopeReportView(report: SpiderReport, filePaths: Iterable<string
     scope: [...scope].join(','),
     findings: report.findings.filter((f) => scope.has(f.filePath)),
     diskParity: report.diskParity.filter((p) => scope.has(p.filePath)),
-    footprints: report.footprints.filter((f) => scope.has(f.filePath)),
+    footprints: report.footprints.filter((f) => scope.has(f.currentLocation)),
     repairDirectives: report.repairDirectives.filter((d) => scope.has(d.targetFile)),
   };
 }

@@ -6,4 +6,6 @@ export { VerificationPipeline, type SpiderVerificationPort, type InvariantPort }
 export { ApprovalPolicyEngine, PolicyBlockedError } from './ApprovalPolicyEngine.js';
 export { RollbackCoordinator } from './RollbackCoordinator.js';
 export { ExecutionTrace } from './ExecutionTrace.js';
+export * from './state/index.js';
+export * from './runtime/index.js';
 export type * from './types.js';

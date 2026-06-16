@@ -25,6 +25,9 @@ async function runTest() {
     'VerificationPipeline.ts',
     'RollbackCoordinator.ts',
     'ApprovalPolicyEngine.ts',
+    'runtime/RuntimeScheduler.ts',
+    'runtime/RuntimePolicyEngine.ts',
+    'runtime/ExecutionBudgetManager.ts',
   ];
   for (const file of orchestrationFiles) {
     const src = fs.readFileSync(path.join(packageRoot, 'core/orchestration', file), 'utf8');
@@ -42,12 +45,26 @@ async function runTest() {
   const agentContextSource = fs.readFileSync(path.join(packageRoot, 'core/agent-context.ts'), 'utf8');
   assert.ok(agentContextSource.includes('orchestration'), 'AgentContext must register orchestration runtime');
   assert.ok(agentContextSource.includes('get runtime'), 'AgentContext must expose runtime getter');
+  assert.ok(agentContextSource.includes('RuntimeStateGraph'), 'AgentContext must export RuntimeStateGraph');
+
+  const stateGraphSource = fs.readFileSync(
+    path.join(packageRoot, 'core/orchestration/state/RuntimeStateGraph.ts'),
+    'utf8'
+  );
+  assert.ok(stateGraphSource.includes('belongs_to_session'));
+  assert.ok(stateGraphSource.includes('executed_by'));
 
   const lifecycleSource = fs.readFileSync(
     path.join(packageRoot, 'core/agent-context/LifecycleRegistry.ts'),
     'utf8'
   );
   assert.ok(lifecycleSource.includes("'orchestration'"), 'LifecycleRegistry must include orchestration');
+
+  const runtimeSchedulerSource = fs.readFileSync(
+    path.join(packageRoot, 'core/orchestration/runtime/RuntimeScheduler.ts'),
+    'utf8'
+  );
+  assert.ok(runtimeSchedulerSource.includes('no bypass'), 'RuntimeScheduler must document no bypass');
 }
 
 runTest()

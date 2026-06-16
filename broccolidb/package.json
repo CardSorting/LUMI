@@ -22,7 +22,10 @@
     "format": "biome format --write .",
     "lint": "biome lint . && eslint .",
     "check": "biome check --write . && eslint .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --import tsx/esm --test tests/*.test.ts 2>/dev/null || for f in tests/*.test.ts; do npx tsx \"$f\" || exit 1; done",
+    "test:guardrails": "npx tsx tests/public-api-snapshot.test.ts && npx tsx tests/error-message.test.ts && npx tsx tests/no-experimental-public-names.test.ts && npx tsx tests/cli-smoke.test.ts && npx tsx tests/docs-link-check.test.ts",
+    "test:examples": "npx tsx tests/examples-smoke.test.ts",
+    "test:smoke": "npx tsx tests/runtime-recovery-smoke.test.ts"
   },
   "repository": {
     "type": "git",

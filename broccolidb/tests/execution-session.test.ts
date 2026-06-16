@@ -16,11 +16,11 @@ async function runTest() {
   workspace.setPhysicalPath(root);
   const ctx = new AgentContext(workspace, pool, 'session-user');
 
-  assert.throws(() => ctx.runtime.beginSession(), LifecycleStateError);
+  await assert.rejects(() => ctx.runtime.beginSession(), LifecycleStateError);
 
   await ctx.start();
   try {
-    const session = ctx.runtime.beginSession({ taskId: 'repair-auth', agentId: 'agent-1' });
+    const session = await ctx.runtime.beginSession({ taskId: 'repair-auth', agentId: 'agent-1' });
     assert.ok(session.sessionId);
     assert.strictEqual(session.status, 'running');
     assert.strictEqual(session.taskId, 'repair-auth');

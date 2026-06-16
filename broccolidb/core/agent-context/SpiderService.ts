@@ -143,6 +143,7 @@ import type {
   SpiderHealth,
   SpiderPreflightResult,
   SpiderReportDiff,
+  SpiderBundleWireFormat,
 } from '../policy/spider/report-types.js';
 import { SpiderAuditError } from '../policy/spider/spider-errors.js';
 import { Repository } from '../repository.js';

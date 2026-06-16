@@ -9,6 +9,9 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { simpleGit } from 'simple-git';
 import { AgentContext } from '../core/agent-context.js';
+import { healthCommand } from './commands/health.js';
+import { spiderGateCommand, spiderCompactCommand } from './commands/spider.js';
+import { runtimeCommand } from './commands/runtime.js';
 import { Connection } from '../core/connection.js';
 import { AiService } from '../core/embedding.js';
 import { BroccoliDBMCP } from '../core/mcp.js';
@@ -41,6 +44,23 @@ async function main() {
     await config();
   } else if (command === 'status') {
     await status();
+  } else if (command === 'health') {
+    await healthCommand(args.slice(1));
+  } else if (command === 'spider') {
+    const sub = args[1];
+    if (sub === 'gate') await spiderGateCommand(args.slice(2));
+    else if (sub === 'compact') await spiderCompactCommand(args.slice(2));
+    else {
+      console.warn(chalk.red('Usage: broccolidb spider <gate|compact>'));
+      process.exit(1);
+    }
+  } else if (command === 'runtime') {
+    const sub = args[1];
+    if (!sub || !['state', 'replay', 'story', 'snapshot'].includes(sub)) {
+      console.warn(chalk.red('Usage: broccolidb runtime <state|replay|story|snapshot> <sessionId>'));
+      process.exit(1);
+    }
+    await runtimeCommand(sub, args.slice(2));
   } else if (command === '--help' || !command) {
     showHelp();
   } else {
@@ -60,6 +80,15 @@ function showHelp() {
   );
   console.info(
     `  ${chalk.green('status')}  ${chalk.dim('→')}  View the health and stats of your Context Graph`
+  );
+  console.info(
+    `  ${chalk.green('health')}  ${chalk.dim('→')}  AgentContext + runtime memory health (--format json)`
+  );
+  console.info(
+    `  ${chalk.green('spider')}  ${chalk.dim('→')}  gate | compact structural checks`
+  );
+  console.info(
+    `  ${chalk.green('runtime')} ${chalk.dim('→')}  state | replay | story | snapshot <sessionId>`
   );
   console.info(`  ${chalk.green('serve')}   ${chalk.dim('→')}  Start the BroccoliDB MCP server`);
   console.info(`  ${chalk.green('config')}  ${chalk.dim('→')}  Manage local settings and secrets\n`);
