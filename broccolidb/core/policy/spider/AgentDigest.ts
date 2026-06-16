@@ -179,8 +179,18 @@ export function buildPlaybook(
       step: n++,
       phase: 'investigate',
       instruction: `Investigate ${blocker.diagnosticId} at ${blocker.location ?? blocker.filePath}: ${blocker.message}`,
-      command: `await ctx.graph.spider.explain('${blocker.findingId}', report)`,
+      command: `await ctx.graph.spider.explain(report, '${blocker.findingId}')`,
       findingIds: [blocker.findingId],
+    });
+  }
+
+  if (steps.length === 0 && blockers.length > 0) {
+    steps.push({
+      step: n++,
+      phase: 'verify',
+      instruction: 'Re-run gate to confirm structural blockers.',
+      command: 'await ctx.graph.spider.gate({ scope: "changed-files" })',
+      findingIds: blockers.slice(0, 5).map((b) => b.findingId),
     });
   }
 

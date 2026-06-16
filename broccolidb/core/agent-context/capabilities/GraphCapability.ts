@@ -9,6 +9,16 @@ import type {
   SpiderReport,
   SpiderGateResult,
   SpiderReportDiff,
+  SpiderAgentBundle,
+  SpiderBatchPreflightResult,
+  SpiderBaselineComparison,
+  SpiderGateBundleResult,
+  SpiderPreflightBundleResult,
+  SpiderCheckRequest,
+  SpiderCheckResult,
+  SpiderBaselineBundleResult,
+  SpiderBundleBudget,
+  SpiderBundleWireFormat,
 } from '../../policy/spider/report-types.js';
 import { CapabilityBase } from '../CapabilityBase.js';
 import type { IntentTracer } from '../IntentTracer.js';
@@ -166,7 +176,25 @@ export class GraphCapability extends CapabilityBase {
       inputSummary: (input && typeof input === 'object' ? input : { operation }) as Record<string, unknown>,
       expectedEffects: [`SpiderService.${operation}`],
       durability: 'ephemeral' as const,
-      summarizeResult: (result: SpiderReport | SpiderGateResult | { resynced?: string[]; passed?: boolean; audit?: SpiderReport }) => {
+      summarizeResult: (result: SpiderReport | SpiderGateResult | SpiderGateBundleResult | SpiderAgentBundle | SpiderBatchPreflightResult | SpiderCheckResult | { resynced?: string[]; passed?: boolean; audit?: SpiderReport }) => {
+        if ('phase' in result && 'exitCode' in result) {
+          return {
+            phase: result.phase,
+            proceed: result.proceed,
+            exitCode: result.exitCode,
+            workflowSteps: result.workflow?.length ?? 0,
+            hasWire: Boolean(result.wire),
+          };
+        }
+        if ('bundle' in result && 'gate' in result && result.gate) {
+          return { proceed: result.bundle.proceed, verdict: result.bundle.verdict, exitCode: result.gate.exitCode };
+        }
+        if ('bundle' in result && result.bundle && 'proceed' in result) {
+          return { proceed: result.proceed, verdict: result.bundle.verdict, clusters: result.bundle.clusters.length };
+        }
+        if ('proceed' in result && 'nextAction' in result) {
+          return { proceed: result.proceed, verdict: result.verdict, clusters: result.clusters.length };
+        }
         if ('conclusion' in result && 'blocked' in result) {
           return { conclusion: result.conclusion, blocked: result.blocked, exitCode: result.exitCode };
         }
@@ -193,6 +221,65 @@ export class GraphCapability extends CapabilityBase {
         this.execute('spider.audit', () => this.spiderService.audit(options), spiderTracing('audit', options)),
       gate: (options?: SpiderAuditOptions) =>
         this.execute('spider.gate', () => this.spiderService.gate(options), spiderTracing('gate', options)),
+      gateBundle: (options?: SpiderAuditOptions) =>
+        this.execute('spider.gateBundle', () => this.spiderService.gateBundle(options), spiderTracing('gateBundle', options)),
+      check: (request: SpiderCheckRequest) =>
+        this.execute('spider.check', () => this.spiderService.check(request), spiderTracing('check', request)),
+      bundle: (report: SpiderReport) =>
+        this.run('spider.bundle', () => this.spiderService.toAgentBundle(report)),
+      validateBundle: (bundle: SpiderAgentBundle) =>
+        this.run('spider.validateBundle', () => {
+          this.spiderService.validateBundle(bundle);
+          return { valid: true, reportId: bundle.reportId };
+        }),
+      agentContext: (bundle: SpiderAgentBundle, budget?: SpiderBundleBudget) =>
+        this.run('spider.agentContext', () => this.spiderService.toAgentContext(bundle, budget)),
+      applyBundleBudget: (bundle: SpiderAgentBundle, budget?: SpiderBundleBudget) =>
+        this.run('spider.applyBundleBudget', () => this.spiderService.applyBundleBudget(bundle, budget)),
+      batchPreflight: (filePaths: string[], options?: Omit<SpiderAuditOptions, 'scope'>) =>
+        this.execute(
+          'spider.batchPreflight',
+          () => this.spiderService.batchPreflight(filePaths, options),
+          spiderTracing('batchPreflight', { filePaths, ...options })
+        ),
+      setBaseline: (report?: SpiderReport) =>
+        this.run('spider.setBaseline', () => ({ reportId: this.spiderService.setBaseline(report) })),
+      compareBaseline: (report?: SpiderReport) =>
+        this.run('spider.compareBaseline', () => this.spiderService.compareToBaseline(report)),
+      compareBaselineBundle: (report?: SpiderReport) =>
+        this.run('spider.compareBaselineBundle', () => this.spiderService.compareBaselineBundle(report)),
+      sessionDelta: (report?: SpiderReport) =>
+        this.run('spider.sessionDelta', () => this.spiderService.getSessionDelta(report)),
+      shouldProceed: (report: SpiderReport) =>
+        this.run('spider.shouldProceed', () => this.spiderService.shouldProceed(report)),
+      toolSchema: () => this.run('spider.toolSchema', () => this.spiderService.getAgentToolSchema()),
+      outputSchema: () => this.run('spider.outputSchema', () => this.spiderService.getOutputSchema()),
+      handoff: (bundle: SpiderAgentBundle, budget?: SpiderBundleBudget) =>
+        this.run('spider.handoff', () => this.spiderService.handoff(bundle, budget)),
+      serializeBundle: (bundle: SpiderAgentBundle, agentContext?: string, workflowSummary?: string) =>
+        this.run('spider.serializeBundle', () =>
+          this.spiderService.serializeBundle(bundle, agentContext, workflowSummary)
+        ),
+      parseBundleWire: (data: unknown) => this.run('spider.parseBundleWire', () => this.spiderService.parseBundleWire(data)),
+      validateWire: (wire: unknown) => this.run('spider.validateWire', () => this.spiderService.validateWire(wire)),
+      formatWireDigest: (wire: SpiderBundleWireFormat, maxCompactLines?: number) =>
+        this.run('spider.formatWireDigest', () => this.spiderService.formatWireDigest(wire, maxCompactLines)),
+      formatCheckDigest: (result: SpiderCheckResult, maxCompactLines?: number) =>
+        this.run('spider.formatCheckDigest', () => this.spiderService.formatCheckDigest(result, maxCompactLines)),
+      toCheckResponse: (
+        result: SpiderCheckResult,
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) => this.run('spider.toCheckResponse', () => this.spiderService.toCheckResponse(result, options)),
+      assertCheckPassed: (result: SpiderCheckResult, message?: string) =>
+        this.run('spider.assertCheckPassed', () => this.spiderService.assertCheckPassed(result, message)),
+      getCheckOutputSchema: () => this.run('spider.getCheckOutputSchema', () => this.spiderService.getCheckOutputSchema()),
+      prepareSarifUpload: (report: SpiderReport) =>
+        this.run('spider.prepareSarifUpload', () => this.spiderService.prepareSarifUpload(report)),
+      buildDiagnosticSummary: (report: SpiderReport) =>
+        this.run('spider.buildDiagnosticSummary', () => this.spiderService.buildDiagnosticSummary(report)),
+      validateCheck: (result: unknown) => this.run('spider.validateCheck', () => this.spiderService.validateCheck(result)),
+      toStructuredTelemetry: (wire: SpiderBundleWireFormat) =>
+        this.run('spider.toStructuredTelemetry', () => this.spiderService.toStructuredTelemetry(wire)),
       resync: (options: SpiderResyncOptions) =>
         this.execute('spider.resync', () => this.spiderService.resync(options), spiderTracing('resync', options)),
       preflight: (filePath: string, options?: Omit<SpiderAuditOptions, 'scope'>) =>
@@ -201,16 +288,34 @@ export class GraphCapability extends CapabilityBase {
           () => this.spiderService.preflight(requireNonEmptyString(filePath, 'filePath'), options),
           spiderTracing('preflight', { filePath, ...options })
         ),
+      preflightBundle: (filePath: string, options?: Omit<SpiderAuditOptions, 'scope'>) =>
+        this.execute(
+          'spider.preflightBundle',
+          () => this.spiderService.preflightBundle(requireNonEmptyString(filePath, 'filePath'), options),
+          spiderTracing('preflightBundle', { filePath, ...options })
+        ),
       compact: (report: SpiderReport) => this.run('spider.compact', () => this.spiderService.toCompact(report)),
       toSarif: (report: SpiderReport) => this.run('spider.toSarif', () => this.spiderService.toSarif(report)),
       toLspDiagnostics: (report: SpiderReport) =>
         this.run('spider.toLspDiagnostics', () => this.spiderService.toLspDiagnostics(report)),
+      toDiagnosticJson: (report: SpiderReport) =>
+        this.run('spider.toDiagnosticJson', () => this.spiderService.toDiagnosticJson(report)),
+      toGithubAnnotations: (report: SpiderReport) =>
+        this.run('spider.toGithubAnnotations', () => this.spiderService.toGithubAnnotations(report)),
+      toTap: (report: SpiderReport) => this.run('spider.toTap', () => this.spiderService.toTap(report)),
+      toJUnitXml: (report: SpiderReport, suiteName?: string) =>
+        this.run('spider.toJUnitXml', () => this.spiderService.toJUnitXml(report, suiteName)),
+      toNdjson: (report: SpiderReport) => this.run('spider.toNdjson', () => this.spiderService.toNdjson(report)),
+      formatDiffNarrative: (diff: SpiderReportDiff) =>
+        this.run('spider.formatDiffNarrative', () => this.spiderService.formatDiffNarrative(diff)),
       diffSinceLast: (report?: SpiderReport) =>
         this.run('spider.diffSinceLast', () => this.spiderService.diffSinceLast(report)),
       diff: (before: SpiderReport, after: SpiderReport) =>
         this.run('spider.diff', () => this.spiderService.diffReports(before, after)),
       explain: (report: SpiderReport, findingId: string) =>
         this.run('spider.explain', () => this.spiderService.explainFinding(report, findingId)),
+      explainForAgent: (report: SpiderReport, findingId: string) =>
+        this.run('spider.explainForAgent', () => this.spiderService.explainFindingForAgent(report, findingId)),
       formatNarrative: (report: SpiderReport) =>
         this.run('spider.formatNarrative', () => this.spiderService.formatAgentNarrative(report)),
       bootstrapGraph: () =>

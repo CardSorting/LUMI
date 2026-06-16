@@ -61,11 +61,41 @@ Every finding includes `diagnosticId`, `severity`, `filePath`, optional `symbolN
 | SPI-009 | CompilerUnavailable |
 | SPI-010 | GraphStaleness |
 
+## Agent ergonomics layer
+
+Industry-aligned exports sit above the forensic pipeline — agents should prefer **`check({ phase })`** as the single entry:
+
+```
+ForensicSpider.audit()
+        │
+        ▼
+  SpiderReport ──► AgentDigest (verdict, playbook, narrative)
+        │
+        ├── AgentFormats (SARIF, LSP, TAP, JUnit, NDJSON, GitHub annotations)
+        ├── AgentToolkit (bundle, budget, priority queue, formatCheckDigest)
+        ├── AgentWorkflow (CI steps, handoff)
+        ├── AgentResponse (check JSON envelope, diagnostic summary, assertCheckPassed)
+        ├── AgentSerialization (wire format, validateWire, OTel telemetry)
+        │
+        ▼
+  GraphCapability.spider / AuditCapability.spider
+        │
+        ├── check({ phase: pre-edit | post-edit | ci | delta })
+        ├── MCP: spider_forensic_check
+        └── StreamingToolExecutor post-mutation append (formatCheckDigest)
+```
+
+Phases map to common CI patterns: **pre-edit** ≈ rust-analyzer flycheck before edit; **post-edit/ci** ≈ `cargo check` gate; **delta** ≈ PR introduced-finding regression.
+
 ## Agent API
 
 Spider is exposed through `GraphCapability` and `AuditCapability`:
 
 ```typescript
+// Unified check — preferred agent entry
+const result = await ctx.graph.spider.check({ phase: 'ci', scope: 'changed-files' });
+if (result.exitCode === 1) process.exit(1);
+
 // Pre-edit gate (impact + study pack + neighborhood audit)
 const gate = await ctx.graph.spider.preflight('core/foo.ts');
 

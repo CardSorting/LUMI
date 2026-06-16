@@ -394,6 +394,21 @@ export type {
   SpiderGateResult,
   SpiderGatePolicy,
   SpiderReportDiff,
+  SpiderAgentBundle,
+  SpiderBatchPreflightResult,
+  SpiderBaselineComparison,
+  SpiderCauseCluster,
+  SpiderGateBundleResult,
+  SpiderPreflightBundleResult,
+  SpiderSessionDelta,
+  SpiderBundleBudget,
+  SpiderCodeAction,
+  SpiderCheckRequest,
+  SpiderCheckResult,
+  SpiderBaselineBundleResult,
+  SpiderPriorityItem,
+  SpiderWorkflowStep,
+  SpiderBundleWireFormat,
 } from '../policy/spider/report-types.js';
 
 export interface GraphAnnotateKnowledgeInput {

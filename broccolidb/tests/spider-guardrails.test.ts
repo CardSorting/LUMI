@@ -35,6 +35,43 @@ async function runTest() {
   assert.ok(!graphCapabilitySource.includes('getEngine:'), 'GraphCapability must not expose spider.getEngine');
   assert.ok(!graphCapabilitySource.includes('getDiscovery:'), 'GraphCapability must not expose spider.getDiscovery');
 
+  const requiredSpiderMethods = [
+    'audit',
+    'gate',
+    'gateBundle',
+    'check',
+    'bundle',
+    'batchPreflight',
+    'setBaseline',
+    'compareBaseline',
+    'compareBaselineBundle',
+    'shouldProceed',
+    'toolSchema',
+    'preflight',
+    'preflightBundle',
+    'compact',
+    'resync',
+    'explain',
+    'explainForAgent',
+    'sessionDelta',
+    'agentContext',
+    'validateBundle',
+    'handoff',
+    'outputSchema',
+    'serializeBundle',
+    'parseBundleWire',
+    'validateWire',
+    'formatWireDigest',
+    'formatCheckDigest',
+    'toStructuredTelemetry',
+    'toCheckResponse',
+    'getCheckOutputSchema',
+    'prepareSarifUpload',
+    'buildDiagnosticSummary',
+    'validateCheck',
+    'assertCheckPassed',
+  ] as const;
+
   const forensicSpiderSource = fs.readFileSync(
     path.join(packageRoot, 'core/policy/spider/ForensicSpider.ts'),
     'utf8'
@@ -50,6 +87,14 @@ async function runTest() {
   workspace.setPhysicalPath(root);
   const context = new AgentContext(workspace, pool, 'spider-user');
   await context.start();
+
+  for (const method of requiredSpiderMethods) {
+    assert.strictEqual(
+      typeof (context.graph.spider as Record<string, unknown>)[method],
+      'function',
+      `GraphCapability.spider.${method} must be exposed`
+    );
+  }
 
   const srcDir = path.join(root, 'src');
   fs.mkdirSync(srcDir, { recursive: true });

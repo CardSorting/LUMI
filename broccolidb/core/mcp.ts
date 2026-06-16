@@ -1396,6 +1396,87 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
         });
       }
     );
+
+    this.server.tool(
+      'spider_forensic_check',
+      'Run Spider structural forensic check (pre-edit, post-edit, CI, or delta). Returns compact agent digest with exit code.',
+      {
+        phase: z
+          .enum(['pre-edit', 'post-edit', 'ci', 'delta'])
+          .describe('Workflow phase: pre-edit (preflight), post-edit/ci (gate), delta (baseline/session regression)'),
+        filePath: z.string().optional().describe('Single file for pre-edit phase'),
+        filePaths: z
+          .array(z.string())
+          .optional()
+          .describe('Multiple files for batch pre-edit'),
+        scope: z
+          .union([z.literal('changed-files'), z.array(z.string())])
+          .optional()
+          .describe('Audit scope for post-edit/ci — default changed-files'),
+        neighborhoodDepth: z
+          .number()
+          .int()
+          .min(0)
+          .max(3)
+          .optional()
+          .describe('Import neighborhood depth for scoped audits (post-edit)'),
+        maxCompactLines: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .optional()
+          .default(8)
+          .describe('Max compact diagnostic lines in digest output'),
+        responseFormat: z
+          .enum(['markdown', 'json'])
+          .optional()
+          .default('markdown')
+          .describe('markdown=human digest; json=SpiderCheckResponse envelope'),
+        includeSarifMeta: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Include SARIF upload metadata in json response'),
+      },
+      async (args) => {
+        return this.executeTool('spider_forensic_check', async () => {
+          if (!this.agentContext) return 'AgentContext not available.';
+          const spider = this.agentContext.graph.spider;
+          const result = await spider.check({
+            phase: args.phase,
+            filePath: args.filePath,
+            filePaths: args.filePaths,
+            scope: args.scope,
+            neighborhoodDepth: args.neighborhoodDepth,
+            includeTypes: false,
+            includeRepairDirectives: true,
+          });
+          if (args.responseFormat === 'json') {
+            const response = spider.toCheckResponse(result, {
+              maxCompactLines: args.maxCompactLines,
+              includeSarifMeta: args.includeSarifMeta,
+            });
+            return JSON.stringify(response, null, 2);
+          }
+          const digest = spider.formatCheckDigest(result, args.maxCompactLines);
+          const telemetry = result.wire ? spider.toStructuredTelemetry(result.wire) : null;
+          const lines = [
+            digest,
+            '',
+            `exitCode=${result.exitCode} proceed=${result.proceed}`,
+            `workflow: ${result.workflowSummary}`,
+          ];
+          if (telemetry) {
+            lines.push(`telemetry: ${JSON.stringify(telemetry)}`);
+          }
+          if (result.exitCode !== 0 && result.suggestedCommands[0]) {
+            lines.push(`suggested: ${result.suggestedCommands[0]}`);
+          }
+          return lines.join('\n');
+        });
+      }
+    );
   }
 
   /**

@@ -5,7 +5,7 @@ import type { InvariantEngine } from '../InvariantEngine.js';
 import type { SpiderService } from '../SpiderService.js';
 import { CapabilityBase } from '../CapabilityBase.js';
 import type { IntentTracer } from '../IntentTracer.js';
-import type { SpiderAuditOptions, SpiderReport, SpiderResyncOptions, SpiderGateResult } from '../../policy/spider/report-types.js';
+import type { SpiderAuditOptions, SpiderReport, SpiderResyncOptions, SpiderGateResult, SpiderAgentBundle, SpiderBundleBudget, SpiderCheckRequest, SpiderCheckResult, SpiderBundleWireFormat } from '../../policy/spider/report-types.js';
 import {
   requireNonEmptyString,
   type AuditConstitutionalCheckInput,
@@ -175,6 +175,74 @@ export class AuditCapability extends CapabilityBase {
             exitCode: r.exitCode,
           }),
         }),
+      gateBundle: (options?: SpiderAuditOptions) =>
+        this.execute('spider.gateBundle', () => this.spiderService.gateBundle(options), {
+          input: options,
+          expectedEffects: ['SpiderService.gateBundle'],
+          durability: 'ephemeral',
+          summarizeResult: (r) => ({
+            proceed: r.bundle.proceed,
+            exitCode: r.gate.exitCode,
+            brief: r.bundle.brief,
+          }),
+        }),
+      check: (request: SpiderCheckRequest) =>
+        this.execute('spider.check', () => this.spiderService.check(request), {
+          input: request,
+          expectedEffects: ['SpiderService.check'],
+          durability: 'ephemeral',
+          summarizeResult: (r: SpiderCheckResult) => ({
+            phase: r.phase,
+            proceed: r.proceed,
+            exitCode: r.exitCode,
+            workflowSteps: r.workflow?.length ?? 0,
+          }),
+        }),
+      handoff: (bundle: SpiderAgentBundle, budget?: SpiderBundleBudget) =>
+        this.run('spider.handoff', () => this.spiderService.handoff(bundle, budget)),
+      outputSchema: () => this.run('spider.outputSchema', () => this.spiderService.getOutputSchema()),
+      serializeBundle: (bundle: SpiderAgentBundle, agentContext?: string, workflowSummary?: string) =>
+        this.run('spider.serializeBundle', () =>
+          this.spiderService.serializeBundle(bundle, agentContext, workflowSummary)
+        ),
+      parseBundleWire: (data: unknown) => this.run('spider.parseBundleWire', () => this.spiderService.parseBundleWire(data)),
+      validateWire: (wire: unknown) => this.run('spider.validateWire', () => this.spiderService.validateWire(wire)),
+      formatWireDigest: (wire: SpiderBundleWireFormat, maxCompactLines?: number) =>
+        this.run('spider.formatWireDigest', () => this.spiderService.formatWireDigest(wire, maxCompactLines)),
+      formatCheckDigest: (result: SpiderCheckResult, maxCompactLines?: number) =>
+        this.run('spider.formatCheckDigest', () => this.spiderService.formatCheckDigest(result, maxCompactLines)),
+      toCheckResponse: (
+        result: SpiderCheckResult,
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) => this.run('spider.toCheckResponse', () => this.spiderService.toCheckResponse(result, options)),
+      assertCheckPassed: (result: SpiderCheckResult, message?: string) =>
+        this.run('spider.assertCheckPassed', () => this.spiderService.assertCheckPassed(result, message)),
+      getCheckOutputSchema: () => this.run('spider.getCheckOutputSchema', () => this.spiderService.getCheckOutputSchema()),
+      prepareSarifUpload: (report: SpiderReport) =>
+        this.run('spider.prepareSarifUpload', () => this.spiderService.prepareSarifUpload(report)),
+      buildDiagnosticSummary: (report: SpiderReport) =>
+        this.run('spider.buildDiagnosticSummary', () => this.spiderService.buildDiagnosticSummary(report)),
+      validateCheck: (result: unknown) => this.run('spider.validateCheck', () => this.spiderService.validateCheck(result)),
+      toStructuredTelemetry: (wire: SpiderBundleWireFormat) =>
+        this.run('spider.toStructuredTelemetry', () => this.spiderService.toStructuredTelemetry(wire)),
+      bundle: (report: SpiderReport) =>
+        this.run('spider.bundle', () => this.spiderService.toAgentBundle(report)),
+      batchPreflight: (filePaths: string[], options?: Omit<SpiderAuditOptions, 'scope'>) =>
+        this.execute('spider.batchPreflight', () => this.spiderService.batchPreflight(filePaths, options), {
+          input: { filePaths, ...options },
+          expectedEffects: ['SpiderService.batchPreflight'],
+          durability: 'ephemeral',
+          summarizeResult: (r) => ({ proceed: r.proceed, files: r.files.length }),
+        }),
+      setBaseline: (report?: SpiderReport) =>
+        this.run('spider.setBaseline', () => ({ reportId: this.spiderService.setBaseline(report) })),
+      compareBaseline: (report?: SpiderReport) =>
+        this.run('spider.compareBaseline', () => this.spiderService.compareToBaseline(report)),
+      compareBaselineBundle: (report?: SpiderReport) =>
+        this.run('spider.compareBaselineBundle', () => this.spiderService.compareBaselineBundle(report)),
+      shouldProceed: (report: SpiderReport) =>
+        this.run('spider.shouldProceed', () => this.spiderService.shouldProceed(report)),
+      toolSchema: () => this.run('spider.toolSchema', () => this.spiderService.getAgentToolSchema()),
       resync: (options: SpiderResyncOptions) =>
         this.execute('spider.resync', () => this.spiderService.resync(options), {
           input: options,
@@ -188,11 +256,24 @@ export class AuditCapability extends CapabilityBase {
           durability: 'ephemeral',
           summarizeResult: (r) => summarize(r.audit),
         }),
+      preflightBundle: (filePath: string, options?: Omit<SpiderAuditOptions, 'scope'>) =>
+        this.execute('spider.preflightBundle', () => this.spiderService.preflightBundle(filePath, options), {
+          input: { filePath, ...options },
+          expectedEffects: ['SpiderService.preflightBundle'],
+          durability: 'ephemeral',
+          summarizeResult: (r) => ({ proceed: r.proceed, brief: r.bundle.brief }),
+        }),
+      sessionDelta: (report?: SpiderReport) =>
+        this.run('spider.sessionDelta', () => this.spiderService.getSessionDelta(report)),
+      agentContext: (bundle: SpiderAgentBundle, budget?: SpiderBundleBudget) =>
+        this.run('spider.agentContext', () => this.spiderService.toAgentContext(bundle, budget)),
       compact: (report: SpiderReport) => this.run('spider.compact', () => this.spiderService.toCompact(report)),
       formatNarrative: (report: SpiderReport) =>
         this.run('spider.formatNarrative', () => this.spiderService.formatAgentNarrative(report)),
       explain: (report: SpiderReport, findingId: string) =>
         this.run('spider.explain', () => this.spiderService.explainFinding(report, findingId)),
+      explainForAgent: (report: SpiderReport, findingId: string) =>
+        this.run('spider.explainForAgent', () => this.spiderService.explainFindingForAgent(report, findingId)),
     };
   }
 }

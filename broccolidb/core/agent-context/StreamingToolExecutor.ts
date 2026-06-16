@@ -2,6 +2,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { formatCheckDigest } from '../policy/spider/AgentToolkit.js';
 import type { ServiceContext, ToolDef, ToolUseContext } from './types.js';
 
 export interface ToolResult {
@@ -249,14 +250,15 @@ export class StreamingToolExecutor {
           }
 
           try {
-            const forensic = await this.ctx.spider.audit({
+            const check = await this.ctx.spider.check({
+              phase: 'post-edit',
               scope: [mutationPath.relativePath],
+              neighborhoodDepth: 1,
               includeTypes: false,
               includeRepairDirectives: true,
-              neighborhoodDepth: 1,
             });
-            if (forensic.agentDigest && forensic.verdict !== 'pass') {
-              finalContent += `\n\n${forensic.agentDigest.agentNarrative}`;
+            if (check.exitCode !== 0) {
+              finalContent += `\n\n${formatCheckDigest(check)}`;
             }
           } catch {
             // Forensic append is best-effort; mutation result already captured.

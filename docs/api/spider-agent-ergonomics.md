@@ -4,6 +4,33 @@ Spider reports are designed for **agents first** — structured like SARIF runs,
 
 ## Quick start
 
+### Unified check (single MCP entry)
+
+```typescript
+// Pre-edit
+const pre = await ctx.graph.spider.check({
+  phase: 'pre-edit',
+  filePath: 'src/foo.ts',
+  bundleBudget: { maxCompactLines: 5 },
+});
+
+// Post-edit / CI
+const post = await ctx.graph.spider.check({ phase: 'ci', scope: 'changed-files' });
+if (post.exitCode === 1) console.log(post.agentContext, post.workflowSummary);
+
+// Regression delta
+const delta = await ctx.graph.spider.check({ phase: 'delta' });
+```
+
+### Pre-edit gate (preflightBundle — preferred)
+
+```typescript
+const pre = await ctx.graph.spider.preflightBundle('src/core/provider.ts');
+if (!pre.proceed) {
+  console.log(ctx.graph.spider.agentContext(pre.bundle, { maxCompactLines: 5 }));
+}
+```
+
 ### Pre-edit gate (preflight)
 
 ```typescript
@@ -16,18 +43,14 @@ if (!gate.audit.passed) {
 }
 ```
 
-### CI gate (audit + block decision)
+### CI gate + bundle (preferred)
 
 ```typescript
-const result = await ctx.graph.spider.gate({
-  scope: 'changed-files',
-  includeRepairDirectives: true,
-  gatePolicy: { blockOnErrors: true, blockOnDrift: true },
-});
-
-if (result.blocked) {
-  console.log(result.conclusion); // 'failure' | 'neutral'
-  process.exit(result.exitCode);  // 0 | 1
+const { gate, bundle } = await ctx.graph.spider.gateBundle({ scope: 'changed-files' });
+if (gate.blocked) {
+  console.log(bundle.brief);       // one-line cargo-check style
+  console.log(bundle.nextAction); // first playbook step
+  process.exit(gate.exitCode);
 }
 ```
 
@@ -41,17 +64,155 @@ const compact = ctx.graph.spider.compact(report);
 // compact.gate — blocked, conclusion, exitCode
 ```
 
+## Agent bundle (single payload)
+
+```typescript
+const gate = await ctx.graph.spider.gate({ scope: 'changed-files' });
+const bundle = ctx.graph.spider.bundle(gate.report);
+
+// bundle.proceed — should agent continue?
+// bundle.brief — one-line summary
+// bundle.nextAction — one-line what to do first
+// bundle.clusters — root-cause groups (import-contract, type-soundness, disk-drift, …)
+// bundle.compactLines — ESLint-style lines
+// bundle.narrative — full markdown
+// bundle.formats.sarif / .lsp — CI + editor shapes
+// bundle.problemMatchers — GitHub Actions log parsing
+```
+
+Or use **`batchPreflight`** for multi-file edits:
+
+```typescript
+const batch = await ctx.graph.spider.batchPreflight(['src/a.ts', 'src/b.ts']);
+if (!batch.proceed) console.log(batch.bundle.nextAction);
+```
+
+## Baseline comparison (PR delta)
+
+```typescript
+const before = await ctx.graph.spider.audit({ scope: 'changed-files' });
+ctx.graph.spider.setBaseline(before);
+
+// ... agent makes changes ...
+
+const after = await ctx.graph.spider.audit({ scope: 'changed-files' });
+const delta = ctx.graph.spider.compareBaseline(after);
+console.log(delta!.narrative);
+
+const session = ctx.graph.spider.sessionDelta();
+if (session) console.log(session.narrative);
+```
+
+## MCP / function-calling schema
+
+```typescript
+const schema = ctx.graph.spider.toolSchema();
+// Register schema with MCP tool: spider_forensic_audit
+
+// Native MCP server tool (stdio):
+// spider_forensic_check({ phase: 'pre-edit' | 'post-edit' | 'ci' | 'delta', filePath?, scope? })
+```
+
+### Check-first digest (post-mutation)
+
+Tool mirror and MCP use `check({ phase })` + `formatCheckDigest()` — not raw gate output:
+
+```typescript
+const post = await ctx.graph.spider.check({
+  phase: 'post-edit',
+  scope: ['src/foo.ts'],
+  neighborhoodDepth: 1,
+});
+if (post.exitCode !== 0) console.log(ctx.graph.spider.formatCheckDigest(post));
+```
+
+### JSON check response (MCP / CI)
+
+```typescript
+const result = await ctx.graph.spider.check({ phase: 'ci', scope: 'changed-files' });
+const json = ctx.graph.spider.toCheckResponse(result, { includeSarifMeta: true });
+// json.$schema === 'broccolidb.spider.check-response/v1'
+// json.summary — errors/warnings/byCause rollup
+// json.ci.githubAnnotations — ::error file=… workflow commands
+// json.ci.githubStepSummary — write to $GITHUB_STEP_SUMMARY
+// json.ci.sarif — artifact metadata for Code Scanning upload
+// json.problemMatchers — VS Code / GitHub Actions log parsers
+
+ctx.graph.spider.assertCheckPassed(result); // throws SpiderAuditError on exitCode !== 0
+```
+
+MCP tool `spider_forensic_check` accepts `responseFormat: 'json'` for the full envelope.
+
+### SARIF upload helper
+
+```typescript
+const report = await ctx.graph.spider.audit({ scope: 'changed-files' });
+const { artifactName, sarif, exitCode } = ctx.graph.spider.prepareSarifUpload(report);
+// Upload sarif to GitHub Code Scanning; exit with exitCode in CI
+```
+
+### Wire-only session restore
+
+When persisting only the wire payload (token budget):
+
+```typescript
+const wire = ctx.graph.spider.serializeBundle(bundle).wire;
+ctx.graph.spider.validateWire(wire);
+console.log(ctx.graph.spider.formatWireDigest(wire));
+console.log(ctx.graph.spider.toStructuredTelemetry(wire)); // OTel-style log event
+```
+
+## Root-cause clusters
+
+Findings are grouped by `cause`:
+
+| Cause | SPI |
+| --- | --- |
+| `import-contract` | SPI-001 |
+| `type-soundness` | SPI-002 |
+| `structural-cycle` | SPI-004 |
+| `layer-violation` | SPI-005 |
+| `disk-drift` | SPI-006 |
+| `compiler-unavailable` | SPI-009 |
+
 ## Export formats
 
 | Method | Industry analog | Use |
 | --- | --- | --- |
+| `toCheckResponse(result)` | ESLint JSON / Checks API envelope | MCP `responseFormat=json`, CI agents |
+| `getCheckOutputSchema()` | JSON Schema for check response | MCP output validation |
+| `prepareSarifUpload(report)` | SARIF artifact + exit code | GitHub Code Scanning upload |
+| `buildDiagnosticSummary(report)` | Severity/SPI rollup | Dashboards, step summaries |
+| `assertCheckPassed(result)` | Fail-closed CI guard | `process.exit` replacement |
+| `formatCheckDigest(result)` | Unified check markdown | Post-mutation + MCP responses |
+| `formatWireDigest(wire)` | Wire-only restore digest | Session persistence without full bundle |
+| `validateWire(wire)` | Fail-closed wire validation | MCP/session restore hardening |
+| `toStructuredTelemetry(wire)` | OTel-style JSON event | Observability pipelines |
+| `check({ phase }).wire` | MCP-safe JSON payload | Session persistence without SARIF/LSP |
+| `handoff(bundle)` | Context + workflow + wire | Agent-to-agent handoff |
+| `outputSchema()` | JSON Schema for wire format | MCP output validation |
+| `bundle.suggestedCommands` | Runnable verify/resync cmds | Copy-paste agent actions |
+| `toNdjson(report)` | NDJSON diagnostic stream | Streaming CI parsers |
+| `compareBaselineBundle()` | Baseline delta + bundle | PR review handoff |
+| `bundle.priorityQueue` | Ranked actions | blockers → repairs → warnings |
+| `bundle.workflow` | CI pipeline steps | Blocking vs advisory phases |
+| `toTap(report)` / `toJUnitXml(report)` | TAP / JUnit XML | Jenkins, GitLab CI |
+| `applyBundleBudget(bundle, budget)` | Clippy-style diagnostic caps | Token-limited payloads |
+| `preflightBundle(file)` | Preflight + bundle | Pre-edit single round-trip |
+| `sessionDelta()` | Diff + narrative since last audit | In-session regression check |
+| `validateBundle(bundle)` | Fail-closed shape check | Production hardening |
+| `formats.codeActions` | LSP CodeAction quick fixes | Editor/agent repair hints |
 | `compact(report)` | ESLint compact / `cargo check` summary | Low-token agent context |
+| `toGithubAnnotations(report)` | `::error file=…` workflow commands | GitHub Actions annotations |
+| `formatDiffNarrative(diff)` | PR delta markdown | Session/baseline review |
+| `gateBundle(options)` | Gate + bundle round-trip | Preferred agent entry |
 | `toSarif(report)` | SARIF 2.1.0 | GitHub Code Scanning, CI upload |
 | `toLspDiagnostics(report)` | LSP PublishDiagnostics | Editor overlays, relatedInformation → repairs |
 | `formatNarrative(report)` | Human + LLM markdown | Tool output |
 | `diff(before, after)` | Code scanning delta | PR review — introduced vs resolved |
 | `diffSinceLast()` | Session baseline | Before/after mutation in one session |
 | `explain(report, findingId)` | Rule doc + directives | Follow-up on a specific finding |
+| `explainForAgent(report, findingId)` | Explain + root-cause cluster | Agent follow-up with remediation context |
 
 ## Agent digest fields
 
@@ -102,4 +263,4 @@ await ctx.audit.spider.gate({ scope: 'changed-files' });
 - `validateSpiderReport()` on every audit
 - SARIF fingerprints use stable `findingId`
 - LSP diagnostics attach repair `relatedInformation`
-- Post-mutation tool mirror appends narrative when verdict ≠ pass
+- Post-mutation tool mirror appends **check digest** (`formatCheckDigest` via `check({ phase: 'post-edit' })`) when `exitCode !== 0` — compact lines + priority queue + suggested command

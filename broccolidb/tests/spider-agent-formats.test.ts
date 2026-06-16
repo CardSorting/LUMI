@@ -8,8 +8,12 @@ import {
   diffReports,
   evaluateGate,
   explainFinding,
+  formatDiffNarrative,
   toAgentCompact,
   toCompactLines,
+  toDiagnosticJson,
+  toGithubAnnotations,
+  toCodeActions,
   toLspDiagnostics,
   toSarifLog,
 } from '../core/policy/spider/AgentFormats.js';
@@ -124,6 +128,19 @@ async function runTest() {
   assert.strictEqual(compact.gate.exitCode, 1);
   assert.ok(compact.lines.length > 0);
 
+  const json = toDiagnosticJson(report);
+  assert.strictEqual(json[0].code, 'SPI-001');
+  assert.ok(json[0].fix?.verificationCommand);
+
+  const annotations = toGithubAnnotations(report);
+  assert.ok(annotations[0].startsWith('::error file=a.ts'));
+
+  const codeActions = toCodeActions(report);
+  assert.strictEqual(codeActions[0].directiveId, 'dir-1');
+
+  const deltaText = formatDiffNarrative(diff);
+  assert.ok(deltaText.includes('Resolved: 1'));
+
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spider-fmt-'));
   setDbPath(path.join(root, 'fmt.db'));
   const pool = new BufferedDbPool();
@@ -137,6 +154,10 @@ async function runTest() {
 
   const gateResult = await ctx.graph.spider.gate({ scope: ['src/x.ts'], includeTypes: false });
   assert.ok('conclusion' in gateResult);
+
+  const gateBundle = await ctx.graph.spider.gateBundle({ scope: ['src/x.ts'], includeTypes: false });
+  assert.ok(gateBundle.bundle.brief.includes('[spider:'));
+  assert.ok(Array.isArray(gateBundle.bundle.formats.json));
 
   const audit = await ctx.graph.spider.audit({ scope: ['src/x.ts'], includeTypes: false });
   const sarif2 = ctx.graph.spider.toSarif(audit);

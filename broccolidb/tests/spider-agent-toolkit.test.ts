@@ -1,0 +1,240 @@
+import assert from 'node:assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { AgentContext } from '../core/agent-context.js';
+import { enrichSpiderReport } from '../core/policy/spider/AgentDigest.js';
+import {
+  buildAgentBundle,
+  buildAgentContext,
+  applyBundleBudget,
+  clusterFindingsByCause,
+  formatMutationDigest,
+  formatCheckDigest,
+  shouldProceedFromPreflight,
+  toProblemMatchers,
+  validateGateResult,
+} from '../core/policy/spider/AgentToolkit.js';
+import { buildPriorityQueue } from '../core/policy/spider/AgentToolkit.js';
+import { buildWorkflowPlan } from '../core/policy/spider/AgentWorkflow.js';
+import { toCodeActions, toTap, toJUnitXml, toNdjsonDiagnostics } from '../core/policy/spider/AgentFormats.js';
+import { serializeAgentBundle, parseAgentBundleWire, formatWireDigest, toStructuredTelemetry, validateWireFormat } from '../core/policy/spider/AgentSerialization.js';
+import { toCheckResponse, validateCheckResult, SPIDER_CHECK_OUTPUT_SCHEMA } from '../core/policy/spider/AgentResponse.js';
+import { prepareSarifUpload, toGithubStepSummary } from '../core/policy/spider/AgentFormats.js';
+import { evaluateGate } from '../core/policy/spider/AgentFormats.js';
+import { Workspace } from '../core/workspace.js';
+import { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';
+import { setDbPath } from '../infrastructure/db/Config.js';
+
+async function runTest() {
+  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const report = enrichSpiderReport({
+    reportId: 'tk-1',
+    generatedAt: new Date().toISOString(),
+    scope: 'test',
+    health: { pure: true, graphNodeCount: 2, compilerDelegatedToLsp: true },
+    typeMirror: { compilerAvailable: false, diagnosticsComplete: false, diagnosticCount: 0, diagnostics: [] },
+    footprints: [],
+    diskParity: [],
+    findings: [
+      {
+        diagnosticId: 'SPI-001',
+        severity: 'ERROR',
+        label: 'SPI-001',
+        filePath: 'a.ts',
+        evidence: [{ diagnosticId: 'SPI-001', severity: 'ERROR', filePath: 'a.ts', evidenceKind: 'import-resolution', observed: 'x', expected: 'y', rationale: 'import broken' }],
+        message: 'missing',
+      },
+      {
+        diagnosticId: 'SPI-004',
+        severity: 'ERROR',
+        label: 'SPI-004',
+        filePath: 'b.ts',
+        evidence: [{ diagnosticId: 'SPI-004', severity: 'ERROR', filePath: 'b.ts', evidenceKind: 'cycle-detection', observed: 'loop', expected: 'acyclic', rationale: 'cycle' }],
+        message: 'cycle',
+      },
+    ],
+    structuralViolations: [],
+    layerViolations: [],
+    cycles: [],
+    repairDirectives: [
+      {
+        directiveId: 'd1',
+        type: 'ADD_MISSING_EXPORT',
+        targetFile: 'a.ts',
+        suggestedValue: 'export X',
+        rationale: 'fix',
+        preconditions: ['ok'],
+        verificationCommand: 'npx tsc --noEmit',
+        riskLevel: 'low',
+        supportingEvidenceIds: ['SPI-001'],
+      },
+    ],
+    entropy: 0.3,
+    degraded: false,
+    degradedReasons: [],
+  });
+
+  const clusters = clusterFindingsByCause(report);
+  assert.strictEqual(clusters.length, 2);
+  assert.ok(clusters.every((c) => c.remediationHint.length > 0));
+
+  const matchers = toProblemMatchers();
+  assert.ok(matchers[0].pattern.length >= 2);
+
+  const gate = evaluateGate(report);
+  validateGateResult(gate);
+
+  const bundle = buildAgentBundle(report, '/ws', gate);
+  assert.strictEqual(bundle.proceed, false);
+  assert.ok(bundle.brief.includes('[spider:fail]'));
+  assert.ok(bundle.formats.githubAnnotations.length > 0);
+  assert.ok(bundle.workflow.length > 0);
+  assert.ok(bundle.priorityQueue.length > 0);
+
+  const queue = buildPriorityQueue(report);
+  assert.strictEqual(queue[0].kind, 'blocker');
+
+  const plan = buildWorkflowPlan(bundle);
+  assert.ok(plan.length > 0);
+
+  const tap = toTap(report);
+  assert.ok(tap.includes('TAP version'));
+
+  const junit = toJUnitXml(report);
+  assert.ok(junit.includes('<testsuite'));
+
+  const ndjson = toNdjsonDiagnostics(report);
+  assert.ok(ndjson.split('\n').length >= 1);
+
+  const wire = serializeAgentBundle(bundle, 'ctx', 'summary');
+  assert.strictEqual(wire.reportId, bundle.reportId);
+  assert.ok(parseAgentBundleWire(wire));
+
+  const budgeted = applyBundleBudget(bundle, { maxCompactLines: 1, maxDiagnostics: 1 });
+  assert.ok(budgeted.truncation);
+  assert.strictEqual(budgeted.compactLines.length, 1);
+
+  const agentCtxText = buildAgentContext(budgeted);
+  assert.ok(agentCtxText.includes('Next:'));
+
+  const actions = toCodeActions(report);
+  assert.ok(actions[0].verificationCommand);
+  assert.ok(bundle.nextAction.length > 0);
+  assert.ok(bundle.clusters.length === 2);
+  assert.ok(bundle.compactLines.length === 2);
+
+  const digest = formatMutationDigest(bundle, 4);
+  assert.ok(digest.includes('Spider Gate'));
+  assert.ok(digest.includes('Next:'));
+
+  const proceed = shouldProceedFromPreflight(report);
+  assert.strictEqual(proceed.proceed, false);
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spider-toolkit-'));
+  setDbPath(path.join(root, 'tk.db'));
+  const pool = new BufferedDbPool();
+  const workspace = new Workspace(pool, 'tk-user', 'tk-ws');
+  workspace.setPhysicalPath(root);
+  const ctx = new AgentContext(workspace, pool, 'tk-user');
+  await ctx.start();
+
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'src/a.ts'), 'export const A = 1;\n');
+  fs.writeFileSync(path.join(root, 'src/b.ts'), 'import { A } from "./a";\nexport const B = A;\n');
+
+  await ctx.graph.spider.applyChanges([
+    { filePath: 'src/a.ts', content: 'export const A = 1;\n' },
+    { filePath: 'src/b.ts', content: 'import { A } from "./a";\nexport const B = A;\n' },
+  ]);
+
+  const audit1 = await ctx.graph.spider.audit({ scope: ['src/a.ts'], includeTypes: false });
+  const baselineId = ctx.graph.spider.setBaseline(audit1).reportId;
+  assert.ok(baselineId);
+
+  const audit2 = await ctx.graph.spider.audit({ scope: ['src/a.ts'], includeTypes: false });
+  const comparison = ctx.graph.spider.compareBaseline(audit2);
+  assert.ok(comparison);
+
+  const diff = ctx.graph.spider.diffSinceLast();
+  assert.ok(diff);
+
+  const batch = await ctx.graph.spider.batchPreflight(['src/a.ts', 'src/b.ts'], { includeTypes: false });
+  assert.ok(batch.mergedScope.length >= 2);
+  assert.ok(batch.bundle.narrative.length >= 0);
+
+  const preBundle = await ctx.graph.spider.preflightBundle('src/a.ts', { includeTypes: false });
+  assert.ok(preBundle.bundle.brief);
+
+  const session = ctx.graph.spider.sessionDelta();
+  assert.ok(session === null || session.narrative.includes('Spider Delta'));
+
+  const schema = ctx.graph.spider.toolSchema();
+  assert.strictEqual(schema.name, 'spider_forensic_audit');
+
+  const fullBundle = ctx.graph.spider.bundle(audit2);
+  assert.ok(fullBundle.formats.sarif);
+  assert.ok(fullBundle.suggestedCommands.length >= 0);
+
+  const handoff = ctx.graph.spider.handoff(fullBundle);
+  assert.ok(handoff.wire?.suggestedCommands);
+
+  const outputSchema = ctx.graph.spider.outputSchema();
+  assert.ok(outputSchema.title);
+
+  const checkPre = await ctx.graph.spider.check({ phase: 'pre-edit', filePath: 'src/a.ts', includeTypes: false });
+  assert.ok(checkPre.agentContext.includes('Next:'));
+  assert.ok(Array.isArray(checkPre.workflow));
+  assert.ok(checkPre.wire?.reportId);
+
+  const checkCi = await ctx.graph.spider.check({ phase: 'ci', scope: ['src/a.ts'], includeTypes: false });
+  assert.ok(checkCi.workflowSummary.length > 0);
+
+  const checkDigest = formatCheckDigest(checkCi);
+  assert.ok(checkDigest.includes('Spider ci'));
+  assert.ok(checkDigest.includes('exit'));
+
+  assert.throws(() => validateWireFormat({}), /wire\.reportId/);
+  const handoffWire = handoff.wire!;
+  validateWireFormat(handoffWire);
+  const wireDigest = formatWireDigest(handoffWire, 3);
+  assert.ok(wireDigest.includes('Spider Wire'));
+  const telemetry = toStructuredTelemetry(handoffWire);
+  assert.strictEqual(telemetry.event, 'spider.forensic');
+  assert.ok(typeof telemetry.blockerCount === 'number');
+
+  const mcpSource = fs.readFileSync(path.join(packageRoot, 'core/mcp.ts'), 'utf8');
+  assert.ok(mcpSource.includes('spider_forensic_check'), 'MCP must expose spider_forensic_check tool');
+  assert.ok(mcpSource.includes('responseFormat'), 'MCP spider_forensic_check must support responseFormat');
+
+  const checkSchema = ctx.graph.spider.getCheckOutputSchema();
+  assert.strictEqual(checkSchema.properties.$schema.const, 'broccolidb.spider.check-response/v1');
+
+  const checkResponse = ctx.graph.spider.toCheckResponse(checkCi, { includeSarifMeta: true });
+  assert.strictEqual(checkResponse.$schema, 'broccolidb.spider.check-response/v1');
+  assert.ok(checkResponse.digest.includes('Spider ci'));
+  assert.ok(checkResponse.ci.githubStepSummary.includes('Spider Forensic Check'));
+  assert.ok(Array.isArray(checkResponse.problemMatchers));
+  validateCheckResult(checkCi);
+
+  const sarifUpload = ctx.graph.spider.prepareSarifUpload(audit2);
+  assert.ok(sarifUpload.artifactName.endsWith('.sarif.json'));
+  assert.strictEqual(sarifUpload.reportId, audit2.reportId);
+  assert.ok(sarifUpload.sarif.version === '2.1.0');
+
+  const diagSummary = ctx.graph.spider.buildDiagnosticSummary(audit2);
+  assert.ok(typeof diagSummary.errors === 'number');
+  const stepSummary = toGithubStepSummary(fullBundle, diagSummary);
+  assert.ok(stepSummary.includes('| Verdict |'));
+
+  await ctx.stop();
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
+runTest()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error('spider-agent-toolkit.test failed:', error);
+    process.exit(1);
+  });

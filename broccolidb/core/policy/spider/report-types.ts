@@ -171,6 +171,8 @@ export interface SpiderAuditOptions {
   includeAgentDigest?: boolean;
   /** CI gate policy when using gate() — defaults to block on errors + drift. */
   gatePolicy?: SpiderGatePolicy;
+  /** Token/diagnostic caps applied to agent bundles from gateBundle / check. */
+  bundleBudget?: SpiderBundleBudget;
 }
 
 export interface SpiderGatePolicy {
@@ -188,6 +190,12 @@ export interface SpiderGateResult {
   policy: Required<SpiderGatePolicy>;
   /** Process exit semantics (0 = proceed, 1 = hard block). */
   exitCode: 0 | 1;
+}
+
+/** Gate + agent bundle in one round-trip (CI + LLM context). */
+export interface SpiderGateBundleResult {
+  gate: SpiderGateResult;
+  bundle: SpiderAgentBundle;
 }
 
 export interface SpiderPlaybookStep {
@@ -209,6 +217,267 @@ export interface SpiderReportDiff {
   verdictChanged: boolean;
   beforeVerdict: SpiderVerdict;
   afterVerdict: SpiderVerdict;
+}
+
+export type SpiderCauseKind =
+  | 'import-contract'
+  | 'type-soundness'
+  | 'architectural-risk'
+  | 'structural-cycle'
+  | 'layer-violation'
+  | 'disk-drift'
+  | 'semantic-identity'
+  | 'unsafe-repair'
+  | 'compiler-unavailable'
+  | 'graph-staleness';
+
+export interface SpiderCauseCluster {
+  cause: SpiderCauseKind;
+  label: string;
+  diagnosticIds: SpiderDiagnosticId[];
+  count: number;
+  hasBlockers: boolean;
+  findingIds: string[];
+  files: string[];
+  remediationHint: string;
+}
+
+/** GitHub Actions / VS Code problem matcher — capture group indices are numbers. */
+export interface SpiderProblemMatcherPattern {
+  regexp: string;
+  file?: number;
+  line?: number;
+  column?: number;
+  severity?: number;
+  code?: number;
+  message?: number;
+}
+
+export interface SpiderProblemMatcher {
+  owner: string;
+  pattern: SpiderProblemMatcherPattern[];
+}
+
+/** ESLint JSON / rustc --message-format=json style diagnostic record. */
+export interface SpiderDiagnosticJson {
+  filePath: string;
+  line: number;
+  column: number;
+  endLine?: number;
+  endColumn?: number;
+  severity: 'error' | 'warning' | 'info';
+  code: SpiderDiagnosticId;
+  message: string;
+  findingId: string;
+  ruleDoc: string;
+  fix?: { description: string; verificationCommand: string };
+}
+
+export interface SpiderAgentBundle {
+  reportId: string;
+  verdict: SpiderVerdict;
+  proceed: boolean;
+  gate: Pick<SpiderGateResult, 'blocked' | 'conclusion' | 'exitCode' | 'reasons'>;
+  summary: string;
+  /** One-line token budget summary (cargo-check style). */
+  brief: string;
+  nextAction: string;
+  narrative: string;
+  compactLines: string[];
+  clusters: SpiderCauseCluster[];
+  playbook: SpiderPlaybookStep[];
+  problemMatchers: SpiderProblemMatcher[];
+  formats: {
+    sarif: unknown;
+    lsp: Record<string, unknown[]>;
+    json: SpiderDiagnosticJson[];
+    githubAnnotations: string[];
+    codeActions: SpiderCodeAction[];
+  };
+  /** Present when applyBundleBudget truncated payload for token limits. */
+  truncation?: SpiderBundleTruncation;
+  /** Severity-ranked actionable queue for agents (blockers → repairs → warnings). */
+  priorityQueue: SpiderPriorityItem[];
+  /** CI pipeline-style steps derived from playbook + gate state. */
+  workflow: SpiderWorkflowStep[];
+  /** Runnable verification/resync commands derived from priority queue + workflow. */
+  suggestedCommands: string[];
+}
+
+export interface SpiderPriorityItem {
+  rank: number;
+  kind: 'blocker' | 'warning' | 'drift' | 'repair';
+  findingId?: string;
+  directiveId?: string;
+  diagnosticId?: SpiderDiagnosticId;
+  filePath: string;
+  action: string;
+  verificationCommand?: string;
+}
+
+export interface SpiderWorkflowStep {
+  id: string;
+  phase: SpiderPlaybookStep['phase'];
+  title: string;
+  blocking: boolean;
+  command?: string;
+  findingIds?: string[];
+  directiveIds?: string[];
+}
+
+export type SpiderCheckPhase = 'pre-edit' | 'post-edit' | 'ci' | 'delta';
+
+/** Agent-portable JSON payload — omits heavy SARIF/LSP for MCP/session transport. */
+export interface SpiderBundleWireFormat {
+  reportId: string;
+  verdict: SpiderVerdict;
+  proceed: boolean;
+  brief: string;
+  nextAction: string;
+  summary: string;
+  exitCode: 0 | 1;
+  agentContext: string;
+  workflowSummary: string;
+  priorityQueue: SpiderPriorityItem[];
+  workflow: SpiderWorkflowStep[];
+  suggestedCommands: string[];
+  compactLines: string[];
+  clusters: SpiderCauseCluster[];
+  truncation?: SpiderBundleTruncation;
+  gate: Pick<SpiderGateResult, 'blocked' | 'conclusion' | 'exitCode' | 'reasons'>;
+}
+
+export interface SpiderCheckRequest {
+  phase: SpiderCheckPhase;
+  filePath?: string;
+  filePaths?: string[];
+  scope?: SpiderAuditOptions['scope'];
+  bundleBudget?: SpiderBundleBudget;
+  gatePolicy?: SpiderGatePolicy;
+  includeTypes?: boolean;
+  includeRepairDirectives?: boolean;
+  neighborhoodDepth?: number;
+}
+
+export interface SpiderCheckResult {
+  phase: SpiderCheckPhase;
+  proceed: boolean;
+  exitCode: 0 | 1;
+  bundle?: SpiderAgentBundle;
+  gate?: SpiderGateResult;
+  sessionDelta?: SpiderSessionDelta;
+  baselineComparison?: SpiderBaselineComparison;
+  agentContext: string;
+  workflowSummary: string;
+  workflow: SpiderWorkflowStep[];
+  suggestedCommands: string[];
+  wire?: SpiderBundleWireFormat;
+}
+
+/** Severity/SPI rollup — mirrors SonarQube issue summary and ESLint stats. */
+export interface SpiderDiagnosticSummary {
+  totalFindings: number;
+  errors: number;
+  warnings: number;
+  info: number;
+  driftedFiles: number;
+  byDiagnosticId: Partial<Record<SpiderDiagnosticId, number>>;
+  byCause: Record<string, number>;
+}
+
+/**
+ * Unified check() JSON envelope for MCP, CI, and agent session restore.
+ * Schema version: broccolidb.spider.check-response/v1
+ */
+export interface SpiderCheckResponse {
+  $schema: 'broccolidb.spider.check-response/v1';
+  phase: SpiderCheckPhase;
+  proceed: boolean;
+  exitCode: 0 | 1;
+  conclusion: SpiderGateResult['conclusion'];
+  digest: string;
+  agentContext: string;
+  workflowSummary: string;
+  suggestedCommands: string[];
+  wire?: SpiderBundleWireFormat;
+  telemetry?: Record<string, unknown>;
+  summary: SpiderDiagnosticSummary;
+  problemMatchers: SpiderProblemMatcher[];
+  ci: {
+    githubAnnotations: string[];
+    githubStepSummary: string;
+    sarif?: {
+      artifactName: string;
+      reportId: string;
+      exitCode: 0 | 1;
+    };
+  };
+}
+
+export interface SpiderBaselineBundleResult extends SpiderBaselineComparison {
+  bundle: SpiderAgentBundle;
+  agentContext: string;
+  workflowSummary: string;
+  workflow: SpiderWorkflowStep[];
+  suggestedCommands: string[];
+}
+
+/** Token budget controls — mirrors clippy/rust-analyzer diagnostic caps. */
+export interface SpiderBundleBudget {
+  maxCompactLines?: number;
+  maxDiagnostics?: number;
+  maxClusters?: number;
+  maxPlaybookSteps?: number;
+}
+
+export interface SpiderBundleTruncation {
+  compactLinesOmitted: number;
+  diagnosticsOmitted: number;
+  clustersOmitted: number;
+  playbookStepsOmitted: number;
+}
+
+/** LSP CodeAction-shaped quick fixes from repair directives. */
+export interface SpiderCodeAction {
+  title: string;
+  kind: 'quickfix' | 'refactor';
+  filePath: string;
+  findingId?: string;
+  directiveId: string;
+  rationale: string;
+  verificationCommand: string;
+  riskLevel: RepairDirective['riskLevel'];
+}
+
+/** Preflight + agent bundle in one payload. */
+export interface SpiderPreflightBundleResult extends SpiderPreflightResult {
+  bundle: SpiderAgentBundle;
+  proceed: boolean;
+}
+
+/** Session diff with human-readable narrative. */
+export interface SpiderSessionDelta {
+  diff: SpiderReportDiff;
+  narrative: string;
+}
+
+export interface SpiderBatchPreflightResult {
+  files: string[];
+  mergedScope: string[];
+  results: SpiderPreflightResult[];
+  audit: SpiderReport;
+  bundle: SpiderAgentBundle;
+  proceed: boolean;
+}
+
+export interface SpiderBaselineComparison {
+  baselineReportId: string;
+  currentReportId: string;
+  diff: SpiderReportDiff;
+  entropyDelta: number;
+  introducedCount: number;
+  resolvedCount: number;
+  narrative: string;
 }
 
 export interface SpiderPreflightOptions {

@@ -27,18 +27,39 @@ Spider proves structural truth. It does not guess.
 ## Agent Workflow
 
 ```typescript
-const gate = await ctx.graph.spider.preflight('src/core/provider.ts');
+// 0. Unified check (recommended)
+const pre = await ctx.graph.spider.check({ phase: 'pre-edit', filePath: 'src/core/provider.ts' });
+const post = await ctx.graph.spider.check({ phase: 'ci', scope: 'changed-files' });
+if (post.exitCode === 1) process.exit(1);
 
-const ci = await ctx.graph.spider.gate({ scope: 'changed-files' });
+// JSON envelope for MCP/CI (ESLint JSON / GitHub Checks style)
+const json = ctx.graph.spider.toCheckResponse(post, { includeSarifMeta: true });
+// MCP: spider_forensic_check({ phase: 'ci', responseFormat: 'json' })
+
+// 1. Pre-edit (preferred)
+const pre = await ctx.graph.spider.preflightBundle('src/core/provider.ts');
+if (!pre.proceed) console.log(ctx.graph.spider.agentContext(pre.bundle, { maxCompactLines: 5 }));
+
+// 2. Multi-file pre-edit
+const batch = await ctx.graph.spider.batchPreflight(['src/a.ts', 'src/b.ts']);
+
+// 3. CI gate (preferred: gateBundle)
+const { gate: ci, bundle } = await ctx.graph.spider.gateBundle({ scope: 'changed-files' });
 if (ci.blocked) process.exit(ci.exitCode);
+console.log(bundle.brief, bundle.nextAction);
 
-const compact = ctx.graph.spider.compact(ci.report);
+// 5. PR baseline delta
+ctx.graph.spider.setBaseline(ci.report);
+// ... after changes ...
+const delta = ctx.graph.spider.compareBaseline();
 ```
 
-- **Preflight** before editing high-impact files
+- **Preflight** / **batchPreflight** before editing
 - **Gate** for CI-style pass/fail (`conclusion`, `exitCode`)
+- **Bundle** for one-shot agent context (narrative + compact + clusters + SARIF/LSP)
 - **Compact** for token-efficient `file:line:col` lines
+- **Baseline** / **diffSinceLast** for introduced vs resolved findings
 - Respect SPI-006 drift — `resync` before mutations
-- Follow `agentDigest.playbook` in order
+- Follow `agentDigest.playbook` or `bundle.playbook` in order
 
 See [spider-agent-ergonomics.md](../../../docs/api/spider-agent-ergonomics.md) and [spider-v20-forensic-engine.md](../../../docs/architecture/spider-v20-forensic-engine.md).

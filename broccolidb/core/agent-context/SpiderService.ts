@@ -6,13 +6,59 @@ import { formatAgentNarrative, buildAgentDigest } from '../policy/spider/AgentDi
 import {
   diffReports,
   evaluateGate,
-  explainFinding,
+  explainFinding as formatExplainFinding,
+  formatDiffNarrative,
   toAgentCompact,
+  toDiagnosticJson,
+  toGithubAnnotations,
+  toTap,
+  toJUnitXml,
+  toNdjsonDiagnostics,
   toLspDiagnostics,
   toSarifLog,
+  scopeReportView,
+  prepareSarifUpload,
 } from '../policy/spider/AgentFormats.js';
+import {
+  buildAgentBundle,
+  buildAgentContext,
+  applyBundleBudget,
+  toSuggestedCommands,
+  explainFindingForAgent as formatExplainFindingForAgent,
+  shouldProceedFromPreflight,
+  SPIDER_AGENT_TOOL_SCHEMA,
+  validateAgentBundleShape,
+  validateGateResult,
+  formatCheckDigest,
+} from '../policy/spider/AgentToolkit.js';
+import { buildAgentHandoff } from '../policy/spider/AgentWorkflow.js';
+import {
+  SPIDER_BUNDLE_OUTPUT_SCHEMA,
+  serializeAgentBundle,
+  parseAgentBundleWire,
+  formatWireDigest,
+  toStructuredTelemetry,
+  validateWireFormat,
+} from '../policy/spider/AgentSerialization.js';
+import {
+  SPIDER_CHECK_OUTPUT_SCHEMA,
+  toCheckResponse,
+  assertCheckPassed,
+  validateCheckResult,
+  buildDiagnosticSummaryFromReport,
+} from '../policy/spider/AgentResponse.js';
 import type {
+  SpiderAgentBundle,
   SpiderAuditOptions,
+  SpiderBaselineComparison,
+  SpiderBatchPreflightResult,
+  SpiderGateBundleResult,
+  SpiderPreflightBundleResult,
+  SpiderSessionDelta,
+  SpiderBundleBudget,
+  SpiderCheckRequest,
+  SpiderCheckResult,
+  SpiderBaselineBundleResult,
   SpiderGatePolicy,
   SpiderGateResult,
   SpiderReport,
@@ -22,6 +68,7 @@ import type {
   SpiderPreflightResult,
   SpiderReportDiff,
 } from '../policy/spider/report-types.js';
+import { SpiderAuditError } from '../policy/spider/spider-errors.js';
 import { Repository } from '../repository.js';
 import { StructuralDiscoveryService } from './StructuralDiscoveryService.js';
 import { TaskMutex } from '../mutex.js';
@@ -39,6 +86,17 @@ export type {
   SpiderGateResult,
   SpiderGatePolicy,
   SpiderReportDiff,
+  SpiderAgentBundle,
+  SpiderBatchPreflightResult,
+  SpiderBaselineComparison,
+  SpiderGateBundleResult,
+  SpiderPreflightBundleResult,
+  SpiderSessionDelta,
+  SpiderBaselineBundleResult,
+  SpiderBundleWireFormat,
+  SpiderCheckRequest,
+  SpiderCheckResult,
+  SpiderBundleBudget,
 };
 
 export class SpiderService {
@@ -47,6 +105,8 @@ export class SpiderService {
   private forensicSpider: ForensicSpider | null = null;
   private bootstrapped = false;
   private lastReport: SpiderReport | null = null;
+  private previousReport: SpiderReport | null = null;
+  private baselineReport: SpiderReport | null = null;
 
   constructor(private ctx: ServiceContext) {
     this.engine = new SpiderEngine(ctx.workspace.workspacePath);
@@ -69,20 +129,267 @@ export class SpiderService {
       await this.bootstrapGraph();
     }
     const report = await this.getForensic().audit(options);
+    this.previousReport = this.lastReport;
     this.lastReport = report;
     return report;
   }
 
-  /**
-   * CI gate: audit + GitHub Checks-style conclusion (success | failure | neutral).
-   */
   async gate(options: SpiderAuditOptions = {}): Promise<SpiderGateResult> {
     const { gatePolicy, ...auditOptions } = options;
     const report = await this.audit({
       ...auditOptions,
       includeRepairDirectives: auditOptions.includeRepairDirectives ?? true,
     });
-    return evaluateGate(report, gatePolicy);
+    const result = evaluateGate(report, gatePolicy);
+    validateGateResult(result);
+    return result;
+  }
+
+  /** Gate + agent bundle in one call — preferred CI + LLM entry point. */
+  async gateBundle(options: SpiderAuditOptions = {}): Promise<SpiderGateBundleResult> {
+    const { bundleBudget, ...rest } = options;
+    const gate = await this.gate(rest);
+    let bundle = this.toAgentBundle(gate.report, gate);
+    if (bundleBudget) bundle = applyBundleBudget(bundle, bundleBudget);
+    return { gate, bundle };
+  }
+
+  /**
+   * Unified phase router — single MCP/agent entry for pre-edit, CI, and delta checks.
+   */
+  async check(request: SpiderCheckRequest): Promise<SpiderCheckResult> {
+    const budget = request.bundleBudget;
+    const auditOpts = {
+      includeTypes: request.includeTypes,
+      includeRepairDirectives: request.includeRepairDirectives,
+      gatePolicy: request.gatePolicy,
+      bundleBudget: budget,
+      neighborhoodDepth: request.neighborhoodDepth,
+    };
+
+    if (request.phase === 'pre-edit') {
+      if (request.filePaths && request.filePaths.length > 0) {
+        const batch = await this.batchPreflight(request.filePaths, auditOpts);
+        return this.finalizeCheckResult('pre-edit', batch.proceed, batch.proceed ? 0 : 1, batch.bundle);
+      }
+      if (!request.filePath) {
+        throw new SpiderAuditError('check pre-edit requires filePath or filePaths');
+      }
+      const pre = await this.preflightBundle(request.filePath, auditOpts);
+      if (budget) pre.bundle = applyBundleBudget(pre.bundle, budget);
+      return this.finalizeCheckResult('pre-edit', pre.proceed, pre.proceed ? 0 : 1, pre.bundle);
+    }
+
+    if (request.phase === 'post-edit' || request.phase === 'ci') {
+      const result = await this.gateBundle({
+        scope: request.scope ?? 'changed-files',
+        ...auditOpts,
+      });
+      return this.finalizeCheckResult(
+        request.phase,
+        result.bundle.proceed,
+        result.gate.exitCode,
+        result.bundle,
+        result.gate
+      );
+    }
+
+    const session = this.getSessionDelta();
+    const baseline = this.compareBaselineBundle();
+    const sessionIntro = session?.diff.introduced.length ?? 0;
+    const baselineIntro = baseline?.introducedCount ?? 0;
+    const introduced = Math.max(sessionIntro, baselineIntro);
+    const proceed = introduced === 0 && Boolean(session || baseline);
+    const bundle = baseline?.bundle;
+    const handoff = bundle
+      ? buildAgentHandoff(bundle)
+      : {
+          agentContext: session?.narrative ?? 'No session or baseline delta — run audit and setBaseline first',
+          workflow: [] as SpiderCheckResult['workflow'],
+          workflowSummary: proceed ? 'No regressions detected' : `Review ${introduced} introduced finding(s)`,
+        };
+    return {
+      phase: 'delta',
+      proceed,
+      exitCode: proceed ? 0 : 1,
+      sessionDelta: session ?? undefined,
+      baselineComparison: baseline ?? undefined,
+      bundle,
+      agentContext: handoff.agentContext,
+      workflowSummary: handoff.workflowSummary,
+      workflow: handoff.workflow,
+      suggestedCommands: bundle ? toSuggestedCommands(bundle) : [],
+      wire: bundle ? serializeAgentBundle(bundle, handoff.agentContext, handoff.workflowSummary) : undefined,
+    };
+  }
+
+  private finalizeCheckResult(
+    phase: SpiderCheckResult['phase'],
+    proceed: boolean,
+    exitCode: 0 | 1,
+    bundle: SpiderAgentBundle,
+    gate?: SpiderGateResult
+  ): SpiderCheckResult {
+    const handoff = buildAgentHandoff(bundle, undefined, gate);
+    return {
+      phase,
+      proceed,
+      exitCode,
+      bundle,
+      gate,
+      agentContext: handoff.agentContext,
+      workflowSummary: handoff.workflowSummary,
+      workflow: handoff.workflow,
+      suggestedCommands: toSuggestedCommands(bundle),
+      wire: serializeAgentBundle(bundle, handoff.agentContext, handoff.workflowSummary),
+    };
+  }
+
+  handoff(bundle: SpiderAgentBundle, budget?: SpiderBundleBudget) {
+    const b = budget ? applyBundleBudget(bundle, budget) : bundle;
+    const result = buildAgentHandoff(b);
+    return {
+      ...result,
+      suggestedCommands: toSuggestedCommands(b),
+      wire: serializeAgentBundle(b, result.agentContext, result.workflowSummary),
+    };
+  }
+
+  getOutputSchema() {
+    return SPIDER_BUNDLE_OUTPUT_SCHEMA;
+  }
+
+  serializeBundle(bundle: SpiderAgentBundle, agentContext?: string, workflowSummary?: string) {
+    const handoff = buildAgentHandoff(bundle);
+    return serializeAgentBundle(
+      bundle,
+      agentContext ?? handoff.agentContext,
+      workflowSummary ?? handoff.workflowSummary
+    );
+  }
+
+  parseBundleWire(data: unknown): SpiderBundleWireFormat {
+    return parseAgentBundleWire(data);
+  }
+
+  formatWireDigest(wire: SpiderBundleWireFormat, maxCompactLines?: number) {
+    return formatWireDigest(wire, maxCompactLines);
+  }
+
+  toStructuredTelemetry(wire: SpiderBundleWireFormat) {
+    return toStructuredTelemetry(wire);
+  }
+
+  validateWire(wire: unknown) {
+    validateWireFormat(wire);
+    return { valid: true };
+  }
+
+  formatCheckDigest(result: SpiderCheckResult, maxCompactLines?: number) {
+    return formatCheckDigest(result, maxCompactLines);
+  }
+
+  toCheckResponse(result: SpiderCheckResult, options?: { maxCompactLines?: number; includeSarifMeta?: boolean }) {
+    return toCheckResponse(result, {
+      ...options,
+      workspaceRoot: this.ctx.workspace.workspacePath,
+    });
+  }
+
+  assertCheckPassed(result: SpiderCheckResult, message?: string) {
+    assertCheckPassed(result, message);
+    return { ok: true };
+  }
+
+  getCheckOutputSchema() {
+    return SPIDER_CHECK_OUTPUT_SCHEMA;
+  }
+
+  prepareSarifUpload(report: SpiderReport) {
+    return prepareSarifUpload(report, this.ctx.workspace.workspacePath);
+  }
+
+  buildDiagnosticSummary(report: SpiderReport) {
+    return buildDiagnosticSummaryFromReport(report);
+  }
+
+  validateCheck(result: unknown) {
+    validateCheckResult(result);
+    return { valid: true };
+  }
+
+  compareBaselineBundle(report?: SpiderReport): SpiderBaselineBundleResult | null {
+    const comparison = this.compareToBaseline(report);
+    if (!comparison) return null;
+    const current = report ?? this.lastReport;
+    if (!current) return null;
+    const gate = evaluateGate(current);
+    const bundle = buildAgentBundle(current, this.ctx.workspace.workspacePath, gate);
+    const handoff = buildAgentHandoff(bundle);
+    return {
+      ...comparison,
+      bundle,
+      agentContext: handoff.agentContext,
+      workflowSummary: handoff.workflowSummary,
+      workflow: handoff.workflow,
+      suggestedCommands: toSuggestedCommands(bundle),
+    };
+  }
+
+  /** Single agent payload: narrative + compact + clusters + SARIF/LSP + playbook. */
+  toAgentBundle(report: SpiderReport, gate?: SpiderGateResult): SpiderAgentBundle {
+    return buildAgentBundle(report, this.ctx.workspace.workspacePath, gate);
+  }
+
+  getAgentToolSchema() {
+    return SPIDER_AGENT_TOOL_SCHEMA;
+  }
+
+  setBaseline(report?: SpiderReport): string {
+    const baseline = report ?? this.lastReport;
+    if (!baseline) {
+      throw new SpiderAuditError('No report available to set as baseline');
+    }
+    this.baselineReport = baseline;
+    return baseline.reportId;
+  }
+
+  compareToBaseline(report?: SpiderReport): SpiderBaselineComparison | null {
+    if (!this.baselineReport) return null;
+    const current = report ?? this.lastReport;
+    if (!current) return null;
+    const diff = diffReports(this.baselineReport, current);
+    return {
+      baselineReportId: this.baselineReport.reportId,
+      currentReportId: current.reportId,
+      diff,
+      entropyDelta: diff.entropyDelta,
+      introducedCount: diff.introduced.length,
+      resolvedCount: diff.resolved.length,
+      narrative: formatDiffNarrative(diff),
+    };
+  }
+
+  getSessionDelta(report?: SpiderReport): SpiderSessionDelta | null {
+    const diff = this.diffSinceLast(report);
+    if (!diff) return null;
+    return { diff, narrative: formatDiffNarrative(diff) };
+  }
+
+  validateBundle(bundle: SpiderAgentBundle): void {
+    validateAgentBundleShape(bundle);
+  }
+
+  toAgentContext(bundle: SpiderAgentBundle, budget?: SpiderBundleBudget): string {
+    return buildAgentContext(bundle, budget);
+  }
+
+  applyBundleBudget(bundle: SpiderAgentBundle, budget?: SpiderBundleBudget): SpiderAgentBundle {
+    return applyBundleBudget(bundle, budget);
+  }
+
+  shouldProceed(audit: SpiderReport) {
+    return shouldProceedFromPreflight(audit);
   }
 
   /** ESLint-compact lines for token-efficient agent context. */
@@ -100,10 +407,36 @@ export class SpiderService {
     return toLspDiagnostics(report, this.ctx.workspace.workspacePath);
   }
 
+  toDiagnosticJson(report: SpiderReport) {
+    return toDiagnosticJson(report);
+  }
+
+  toGithubAnnotations(report: SpiderReport) {
+    return toGithubAnnotations(report);
+  }
+
+  toTap(report: SpiderReport) {
+    return toTap(report);
+  }
+
+  toJUnitXml(report: SpiderReport, suiteName?: string) {
+    return toJUnitXml(report, suiteName);
+  }
+
+  toNdjson(report: SpiderReport) {
+    return toNdjsonDiagnostics(report);
+  }
+
+  formatDiffNarrative(diff: SpiderReportDiff) {
+    return formatDiffNarrative(diff);
+  }
+
   /** Diff against the previous audit in this session. */
   diffSinceLast(report?: SpiderReport): SpiderReportDiff | null {
-    if (!this.lastReport) return null;
-    return diffReports(this.lastReport, report ?? this.lastReport);
+    if (!this.previousReport) return null;
+    const current = report ?? this.lastReport;
+    if (!current) return null;
+    return diffReports(this.previousReport, current);
   }
 
   diffReports(before: SpiderReport, after: SpiderReport): SpiderReportDiff {
@@ -111,7 +444,11 @@ export class SpiderService {
   }
 
   explainFinding(report: SpiderReport, findingId: string) {
-    return explainFinding(report, findingId);
+    return formatExplainFinding(report, findingId);
+  }
+
+  explainFindingForAgent(report: SpiderReport, findingId: string) {
+    return formatExplainFindingForAgent(report, findingId);
   }
 
   /**
@@ -145,6 +482,72 @@ export class SpiderService {
       },
       studyPack: this.getStudyPack(norm),
       audit,
+    };
+  }
+
+  /** Preflight + agent bundle — preferred pre-edit entry for agents. */
+  async preflightBundle(
+    filePath: string,
+    options: Omit<SpiderAuditOptions, 'scope'> = {}
+  ): Promise<SpiderPreflightBundleResult> {
+    const preflight = await this.preflight(filePath, options);
+    const gate = evaluateGate(preflight.audit);
+    validateGateResult(gate);
+    const bundle = this.toAgentBundle(preflight.audit, gate);
+    return { ...preflight, bundle, proceed: bundle.proceed };
+  }
+
+  /**
+   * Batch preflight for multi-file edits — merges neighborhood scope, single merged audit.
+   */
+  async batchPreflight(
+    filePaths: string[],
+    options: Omit<SpiderAuditOptions, 'scope'> = {}
+  ): Promise<SpiderBatchPreflightResult> {
+    if (!this.bootstrapped) {
+      await this.bootstrapGraph();
+    }
+    const normalized = filePaths.map((f) => this.engine.normalizePath(f));
+    const mergedScope = new Set<string>();
+    const depth = options.neighborhoodDepth ?? 1;
+    for (const file of normalized) {
+      for (const id of this.engine.getNeighborhood(file, depth)) {
+        mergedScope.add(id);
+      }
+    }
+
+    const audit = await this.audit({
+      ...options,
+      scope: Array.from(mergedScope),
+      includeRepairDirectives: options.includeRepairDirectives ?? true,
+    });
+    const gate = evaluateGate(audit);
+    validateGateResult(gate);
+    const bundle = this.toAgentBundle(audit, gate);
+
+    const results: SpiderPreflightResult[] = [];
+    for (const file of normalized) {
+      const fileScope = this.engine.getNeighborhood(file, depth);
+      results.push({
+        filePath: file,
+        scope: Array.from(mergedScope),
+        structuralImpact: {
+          summary: this.discovery.getImportanceSummary(file),
+          blastRadius: this.discovery.getBlastRadius(file),
+          deficiencies: this.discovery.getDeficiencyReport(file),
+        },
+        studyPack: this.getStudyPack(file),
+        audit: scopeReportView(audit, fileScope),
+      });
+    }
+
+    return {
+      files: normalized,
+      mergedScope: Array.from(mergedScope),
+      results,
+      audit,
+      bundle,
+      proceed: bundle.proceed,
     };
   }
 
