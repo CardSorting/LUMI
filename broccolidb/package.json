@@ -1,7 +1,7 @@
 {
   "name": "@noorm/broccolidb",
   "version": "1.1.0",
-  "description": "**The High-Performance, Asynchronous, and Hardened SQLite Infrastructure for Node.js.**",
+  "description": "Stable operational substrate for agent-driven code work — capabilities, runtime, Spider, and durable snapshots.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

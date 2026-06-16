@@ -12,7 +12,7 @@ export interface ErrorGuidance {
   docsPath: string;
 }
 
-const DOCS_BASE = 'docs/errors.md';
+const DOCS_BASE = 'broccolidb/docs/errors.md';
 
 export function lifecycleNotStartedError(operation: string): ErrorGuidance {
   return {

@@ -10,10 +10,7 @@
 - Actionable `GuidedError` for lifecycle misuse
 - CLI: `health`, `spider gate|compact`, `runtime state|replay|story|snapshot`
 - Golden-path examples under `broccolidb/examples/`
-- Guardrail tests: public API snapshot, examples smoke, docs links, CLI smoke, error messages, experimental naming
-- Runtime recovery smoke test (snapshot survives restart)
-- Consolidated docs: getting-started, public-api, errors, cli, examples, architecture/current
-- `API_STABILITY.md`, `MIGRATION.md`
+- Package documentation under `broccolidb/docs/` (canonical); repo `docs/` indexes and extended API reference
 
 ### Changed
 

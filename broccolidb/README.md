@@ -1,42 +1,113 @@
-# BroccoliDB: The Agentic Core Substrate
+# BroccoliDB
 
-BroccoliDB is a high-fidelity agentic repository ecosystem built on **Forensic-Grade Architectural Integrity** and **Deterministic Reality Anchoring**. It is designed to provide autonomous agents with a zero-ambiguity execution environment.
+**A stable operational substrate for agent-driven code work.**
 
-## 🚀 Key Features
+BroccoliDB gives agents a typed, lifecycle-governed environment: capabilities validate intent, the runtime governs execution, Spider proves structure, and durable snapshots preserve continuity across restarts.
 
-### 🕷️ Spider Engine (Sovereign Level 19)
-A hyper-deterministic, remedial architectural guardian that enforces structural integrity and **Physical Parity** via:
-- **Semantic Footprinting**: Tracks symbol identity via SHA-256 AST hashing (Identity v2).
-- **Drift Guard**: Enforces SHA-256 disk parity to detect external modifications.
-- **Actionable Success Maps**: Projects surgical repair plans (directives) for all breakages.
-- **Sovereignty**: Enforces strict Joy-Zoning rules (SPI-005).
-- [Read the SPIDER Policy](core/policy/SPIDER.md)
+> v30 freeze: no new architecture layers. The public API is frozen, documented, and tested. A complete system is boring to operate.
 
-### 🏥 Forensic Reasoning & Audit
-A clinical environment gatekeeper that validates code mutations against high-level logical constraints and constitutional rules.
-- **ReasoningService**: Multi-hop contradiction and soundness detection.
-- **AuditService**: Surgical blast-radius and symbolic deficiency gates.
+## Install
 
-### 🏗️ Sovereign Infrastructure
-- **BufferedDbPool**: High-concurrency SQLite shadowing with transactional consistency.
-- **TaskMutex**: Global serialized locking with workspace-scoped mutex heartbeats.
-- **LSP Integration**: High-performance symbol resolution via Typescript Language Server.
-- **CoordinatorService**: Industrial-grade worker spawn and result synthesis.
+```bash
+npm install @noorm/broccolidb
+npx broccolidb init
+```
 
-## 📁 Repository Structure
+## Quick start
 
-- `core/`: Sovereign reasoning, policy, and structural engines.
-- `infrastructure/`: Database, storage (CAS), and environment substrates.
-- `cli/`: High-velocity toolchain for autonomous agents.
-- `shared/`: Unified logging and service utilities.
+```typescript
+import { AgentContext, Workspace, Connection } from '@noorm/broccolidb';
 
-## 🛠️ Development
+const conn = new Connection({ dbPath: './broccolidb.db' });
+const pool = conn.getPool();
+await pool.start();
+
+const workspace = new Workspace(pool, 'user-id', 'workspace-id');
+workspace.setPhysicalPath(process.cwd());
+await workspace.init();
+
+const ctx = new AgentContext(workspace, pool, 'user-id');
+await ctx.start();
+
+try {
+  const health = await ctx.health();
+  const session = await ctx.runtime.beginSession({ taskId: 'my-task' });
+  const audit = await ctx.graph.spider.audit({ scope: 'all' });
+  ctx.runtime.recordAudit(session.sessionId, audit);
+} finally {
+  await ctx.stop();
+}
+```
+
+**Required:** `await ctx.start()` before any capability. `await ctx.stop()` in `finally`. See [docs/getting-started.md](docs/getting-started.md).
+
+## CLI
+
+```bash
+npx broccolidb health --format json
+npx broccolidb spider gate
+npx broccolidb spider compact
+npx broccolidb runtime story <sessionId>
+```
+
+Full reference: [docs/cli.md](docs/cli.md).
+
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| [docs/README.md](docs/README.md) | Documentation index |
+| [docs/getting-started.md](docs/getting-started.md) | Lifecycle, capabilities, first calls |
+| [docs/public-api.md](docs/public-api.md) | Frozen stable API |
+| [docs/errors.md](docs/errors.md) | Typed errors with fixes |
+| [docs/cli.md](docs/cli.md) | CLI commands and output formats |
+| [docs/examples.md](docs/examples.md) | Golden-path scripts |
+| [docs/architecture/current.md](docs/architecture/current.md) | How the system fits together |
+| [API_STABILITY.md](API_STABILITY.md) | Stable vs internal APIs |
+| [MIGRATION.md](MIGRATION.md) | Upgrading to v30 |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+
+## Examples
+
+```bash
+cd broccolidb
+npx tsx examples/basic-context.ts
+npx tsx examples/spider-gate.ts
+npm run test:examples
+```
+
+## Development
 
 ```bash
 npm install
 npm run build
-npx tsx tests/sovereign_production.test.ts
+npm run test:guardrails   # public API, docs links, CLI smoke
+npm run test:smoke        # runtime recovery across restart
+npm run test:examples     # golden-path scripts
 ```
 
----
-*Built for Advanced Agentic Coding by the Google Deepmind team.*
+Run the full test suite:
+
+```bash
+npm test
+```
+
+## Package layout
+
+| Path | Role |
+|------|------|
+| `core/public-api.ts` | Frozen npm exports |
+| `core/agent-context.ts` | `AgentContext` and capabilities |
+| `core/orchestration/` | Runtime, state graph, durable store |
+| `core/policy/spider/` | Spider engine (internal; access via `ctx.graph.spider`) |
+| `cli/` | `broccolidb` command-line tool |
+| `examples/` | Runnable golden paths |
+| `tests/` | Unit, integration, and guardrail tests |
+
+## Doctrine
+
+Agents express intent. Capabilities validate intent. Runtime governs execution. Spider proves structure. StateGraph preserves truth. Snapshots preserve continuity. Replay reconstructs causality.
+
+## License
+
+MIT

@@ -1,30 +1,32 @@
-# BroccoliDB Documentation
+# BroccoliDB documentation
 
-BroccoliDB v30 is a **stable operational substrate** for agent-driven code work.
+Canonical documentation lives in the **broccolidb package**:
 
-## Start here
+**[broccolidb/docs/README.md](../broccolidb/docs/README.md)**
 
-| Doc | Purpose |
-|-----|---------|
-| [Getting started](getting-started.md) | Install, lifecycle pattern, first capability calls |
-| [Public API](public-api.md) | Frozen stable surface |
-| [CLI](cli.md) | `broccolidb health`, `spider`, `runtime` commands |
-| [Examples](examples.md) | Golden-path scripts under `broccolidb/examples/` |
-| [Errors](errors.md) | Typed errors with fixes |
-| [Architecture (current)](architecture/current.md) | How the system fits together today |
+## Quick links
 
-## Release
+| Doc | Path |
+|-----|------|
+| Getting started | [broccolidb/docs/getting-started.md](../broccolidb/docs/getting-started.md) |
+| Public API | [broccolidb/docs/public-api.md](../broccolidb/docs/public-api.md) |
+| CLI | [broccolidb/docs/cli.md](../broccolidb/docs/cli.md) |
+| Examples | [broccolidb/docs/examples.md](../broccolidb/docs/examples.md) |
+| Errors | [broccolidb/docs/errors.md](../broccolidb/docs/errors.md) |
+| Architecture | [broccolidb/docs/architecture/current.md](../broccolidb/docs/architecture/current.md) |
+| API stability | [broccolidb/API_STABILITY.md](../broccolidb/API_STABILITY.md) |
+| Migration | [broccolidb/MIGRATION.md](../broccolidb/MIGRATION.md) |
+| Changelog | [broccolidb/CHANGELOG.md](../broccolidb/CHANGELOG.md) |
 
-| Doc | Purpose |
-|-----|---------|
-| [API stability](../broccolidb/API_STABILITY.md) | Stable vs internal APIs |
-| [Migration](../broccolidb/MIGRATION.md) | Upgrading from pre-v30 patterns |
-| [Changelog](../broccolidb/CHANGELOG.md) | Version history |
+## Extended API reference
+
+Capability and runtime detail docs remain here under `docs/api/`:
+
+- [Spider agent ergonomics](api/spider-agent-ergonomics.md)
+- [Runtime snapshots](api/runtime-snapshots.md)
+- [Runtime replay](api/runtime-replay.md)
+- [Execution budgets](api/execution-budgets.md)
 
 ## History
 
-Milestone excavation docs live under [history/](history/) — useful for archaeology, not day-to-day operation.
-
-## Doctrine
-
-Agents express intent. Capabilities validate intent. Runtime governs execution. Spider proves structure. StateGraph preserves truth. Snapshots preserve continuity. Replay reconstructs causality.
+Milestone docs: [history/architecture/](history/architecture/)

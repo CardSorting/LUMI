@@ -1,15 +1,19 @@
-# SPIDER: Sovereign Structural Forensic Engine (V20)
+# SPIDER: Structural Forensic Engine
 
-Spider proves structural truth. It does not guess.
+Spider proves structural truth. It does not guess. Agents access Spider **only** via `ctx.graph.spider`.
 
-## Forensic Contracts
+Public docs: [../../docs/getting-started.md](../../docs/getting-started.md) · [Spider ergonomics](../../../docs/api/spider-agent-ergonomics.md)
+
+## Forensic contracts
 
 1. **Evidence** — typed `SpiderEvidence` on every finding
-2. **Identity** — `SemanticFootprint` with AST-normalized SHA-256
+2. **Identity** — `SemanticFootprint` with AST-normalized hashing
 3. **Reality** — `DiskParityResult` with explicit `driftStatus`
 4. **Repair** — JSON-serializable `RepairDirective` with verification commands
 
-## SPI Diagnostics
+Audit and gate are **read-only**. File mutations go through `ctx.runtime.execute`.
+
+## SPI diagnostics
 
 | ID | Name |
 | --- | --- |
@@ -24,12 +28,11 @@ Spider proves structural truth. It does not guess.
 | SPI-009 | CompilerUnavailable |
 | SPI-010 | GraphStaleness |
 
-## Agent Workflow
+## Agent workflow
 
 ```typescript
-// 0. Bootstrap (MCP or capability — no disk audit)
+// 0. Discover toolkit surface
 const catalog = ctx.graph.spider.getAgentToolkitCatalog();
-// MCP: spider_get_catalog({ responseFormat: 'markdown' })
 
 // 1. Unified check (recommended)
 const pre = await ctx.graph.spider.check({ phase: 'pre-edit', filePath: 'src/core/provider.ts' });
@@ -40,21 +43,12 @@ const post = await ctx.graph.spider.check({
 });
 if (post.exitCode === 1) process.exit(1);
 
-// JSON envelope for MCP/CI (ESLint JSON / GitHub Checks style)
+// JSON envelope for MCP/CI
 const json = ctx.graph.spider.toCheckResponse(post, { includeSarifMeta: true });
-// MCP: spider_forensic_check({ phase: 'ci', responseFormat: 'json', gatePreset: 'strict' })
-// MCP: spider_forensic_pipeline({ phases: ['pre-edit', 'ci'] })
-// MCP: spider_forensic_pipeline({ workflowPreset: 'local-edit', filePath: '...' })
-// MCP: spider_run_scenario({ scenario: 'before-edit', filePath: '...' })
-// MCP: spider_validate_check_request({ requestJson, kind: 'check' | 'pipeline' })
-
-// NDJSON stream + GitHub Checks API
-const ndjson = ctx.graph.spider.toCheckNdjsonStream(post);
-const checkRun = ctx.graph.spider.toGithubCheckRun(post);
 
 // 2. Pre-edit bundle (alternate)
 const preBundle = await ctx.graph.spider.preflightBundle('src/core/provider.ts');
-if (!preBundle.proceed) console.log(ctx.graph.spider.agentContext(preBundle.bundle, { maxCompactLines: 5 }));
+if (!preBundle.proceed) console.log(ctx.graph.spider.agentContext(preBundle.bundle));
 
 // 3. Multi-file pre-edit
 const batch = await ctx.graph.spider.batchPreflight(['src/a.ts', 'src/b.ts']);
@@ -62,23 +56,49 @@ const batch = await ctx.graph.spider.batchPreflight(['src/a.ts', 'src/b.ts']);
 // 4. CI gate (preferred: gateBundle)
 const { gate: ci, bundle } = await ctx.graph.spider.gateBundle({ scope: 'changed-files' });
 if (ci.blocked) process.exit(ci.exitCode);
-console.log(bundle.brief, bundle.nextAction);
 
 // 5. PR baseline delta
 ctx.graph.spider.setBaseline(ci.report);
-// ... after changes ...
 const delta = ctx.graph.spider.compareBaseline();
 ```
 
-- **Preflight** / **batchPreflight** before editing
-- **Pre-edit gate** — tool mirror runs `check({ phase: 'pre-edit' })` before mutations (`forensicPreEditGate`, default on)
-- **Post-edit gate** — after mirror, `check({ phase: 'post-edit' })` with optional `failOnPostEditBlockers`
-- **Scenario JSON** — `runAgentScenarioAndRespond()` → `broccolidb.spider.scenario-response/v1`
-- **Gate** for CI-style pass/fail (`conclusion`, `exitCode`)
-- **Bundle** for one-shot agent context (narrative + compact + clusters + SARIF/LSP)
-- **Compact** for token-efficient `file:line:col` lines
-- **Baseline** / **diffSinceLast** for introduced vs resolved findings
-- Respect SPI-006 drift — `resync` before mutations
-- Follow `agentDigest.playbook` or `bundle.playbook` in order
+## Runtime integration
 
-See [spider-agent-ergonomics.md](../../../docs/api/spider-agent-ergonomics.md) and [spider-v20-forensic-engine.md](../../../docs/architecture/spider-v20-forensic-engine.md).
+Spider findings feed the repair pipeline through runtime sessions:
+
+```typescript
+const session = await ctx.runtime.beginSession({ taskId: 'structural-fix' });
+const audit = await ctx.graph.spider.audit({ scope: 'all', includeRepairDirectives: true });
+ctx.runtime.recordAudit(session.sessionId, audit);
+const gate = await ctx.graph.spider.gate({ scope: 'all' });
+ctx.runtime.recordGate(session.sessionId, gate.exitCode, audit.reportId);
+
+if (gate.blocked) {
+  const plan = ctx.runtime.planRepairs({ audit, sessionId: session.sessionId });
+  // preview → approve → ctx.runtime.execute({ plan })
+}
+```
+
+## Phase reference
+
+| Phase | Use |
+|-------|-----|
+| `pre-edit` | Before local edits |
+| `post-edit` | After edits, before commit |
+| `ci` | Pipeline gate |
+| `pr-review` | PR review scope |
+
+## Output formats
+
+- **Compact** — `formatCheckDigest` for token-efficient CI logs
+- **JSON** — `toCheckResponse` for MCP and automation
+- **SARIF** — `toSarifLog` / `buildCiArtifacts` for tool interchange
+- **Scenario** — `runAgentScenarioAndRespond` for preset workflows
+
+## Rules
+
+- Respect SPI-006 drift — call `resync` before mutations when disk parity fails
+- Follow `agentDigest.playbook` or `bundle.playbook` in order
+- Never bypass capabilities to call `SpiderService` directly
+
+Internal implementation: `core/policy/spider/`. Architecture history: [../../../docs/architecture/spider-v20-forensic-engine.md](../../../docs/architecture/spider-v20-forensic-engine.md).
