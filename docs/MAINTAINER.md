@@ -27,7 +27,7 @@ npm run docs:tag-legacy-providers   # prepend legacy notice to unwired provider 
 npm run docs:check-links            # Mintlify broken-links (needs docs deps)
 ```
 
-`docs:check-agent-links`, `docs:check-agent-branding`, `docs:check-root-readme`, and `docs:check-docs-readme` run in `ci:check-all`. Run **`npm run docs:check-all`** (includes metrics + Mintlify) before publishing docs.
+`docs:check-agent-links`, `docs:check-agent-branding`, `docs:check-root-readme`, `docs:check-root-readme-links`, `docs:check-readme-metrics`, and `docs:check-docs-readme` run in `ci:check-all`. Run **`npm run docs:check-all`** (includes metrics + Mintlify) before publishing docs.
 
 ## Branding rules
 

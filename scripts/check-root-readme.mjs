@@ -69,6 +69,7 @@ const requiredSections = [
 	"## Project configuration",
 	"## @ mentions",
 	"## Recommended workflows",
+	"## Performance & context",
 	"## Keyboard shortcuts",
 	"## Active providers",
 	"## Capabilities",
@@ -115,6 +116,9 @@ const requiredLinks = [
 	"docs/features/roadmap-steering.mdx",
 	"docs/core-workflows/working-with-files.mdx",
 	"docs/core-workflows/plan-and-act.mdx",
+	"docs/ENTERPRISE_DEPLOYMENT.md",
+	"docs/architecture/spider-v20-forensic-engine.md",
+	"docs/MEMORY_AND_REASONING.md",
 	"docs/customization/dietcodeignore.mdx",
 ]
 

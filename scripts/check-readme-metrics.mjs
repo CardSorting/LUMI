@@ -56,6 +56,11 @@ const checks = [
 	[`${metrics.hooks} hooks`, readme.includes(`${metrics.hooks}`) && brief.includes(`**${metrics.hooks}**`)],
 ]
 
+assert.ok(
+	readme.includes(`version-${metrics.version}`) || readme.includes(`v${metrics.version}`),
+	`README badge must match version ${metrics.version}`,
+)
+
 const failed = checks.filter(([, ok]) => !ok).map(([label]) => label)
 assert.strictEqual(failed.length, 0, `README/companion-brief metrics out of sync with codebase: ${failed.join(", ")}`)
 

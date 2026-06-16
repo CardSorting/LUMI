@@ -245,7 +245,8 @@ npm run docs:check-agent-links      # 24 required docs + link resolution
 npm run docs:check-agent-branding   # no stale user-facing DietCode in core dirs
 npm run docs:check-root-readme      # README.md parity + live metrics
 npm run docs:check-docs-readme      # docs/README.md structure guardrails
-npm run docs:check-readme-metrics   # README + companion-brief vs live codebase counts
+npm run docs:check-root-readme-links  # root README relative links
+npm run docs:check-readme-metrics     # README + companion-brief vs live codebase
 npm run docs:check-links              # Mintlify broken-link pass (included in docs:check-all)
 npm run docs:tag-legacy-providers   # after adding unwired provider pages
 ```

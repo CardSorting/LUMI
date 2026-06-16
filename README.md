@@ -34,6 +34,21 @@
 
 > **Doctrine:** User expresses intent → Controller holds session → Task runs the loop → Tools execute with approval → Checkpoints preserve rollback → Completion is earned through gates.
 
+<p align="center">
+  <a href="#install"><strong>Install</strong></a> ·
+  <a href="#quick-start"><strong>Quick start</strong></a> ·
+  <a href="#documentation"><strong>Docs</strong></a> ·
+  <a href="#development"><strong>Develop</strong></a> ·
+  <a href="#getting-help"><strong>Help</strong></a>
+</p>
+
+```bash
+# Fastest path — VS Code Extensions (search "LUMI" / CardSorting.lumi)
+code --install-extension CardSorting.lumi
+# Or from a VSIX build:
+npm run package && code --install-extension dist/*.vsix
+```
+
 ---
 
 ## Table of contents
@@ -49,6 +64,7 @@
 - [Project configuration](#project-configuration)
 - [@ mentions](#-mentions)
 - [Recommended workflows](#recommended-workflows)
+- [Performance & context](#performance--context)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Active providers](#active-providers)
 - [Capabilities](#capabilities)
@@ -89,6 +105,8 @@ Task history and cognitive memory use **BroccoliDB** (`@noorm/broccolidb`) local
 | **Homepage** | [dietcode.io](https://dietcode.io) |
 | **Changelog** | [changelogv3.md](changelogv3.md) |
 | **Monorepo** | npm workspaces: root extension + `broccolidb/` package |
+| **Marketplace** | Search **LUMI** → publisher **CardSorting** (`CardSorting.lumi`) |
+| **Enterprise** | [docs/ENTERPRISE_DEPLOYMENT.md](docs/ENTERPRISE_DEPLOYMENT.md) — on-prem / self-hosted |
 
 Workspace-verified metrics: [docs/papers/companion-brief.md](docs/papers/companion-brief.md).
 
@@ -271,6 +289,23 @@ Multi-root: `@workspace-name:/path/to/file`
 
 ---
 
+## Performance & context
+
+Keep sessions fast and within model context windows:
+
+| Lever | Effect |
+|-------|--------|
+| [`.dietcodeignore`](docs/customization/dietcodeignore.mdx) | Exclude `node_modules/`, build output — largest token savings |
+| **Plan mode first** | Read-only exploration before mutating writes |
+| **`/compact`** | Condense history when context grows |
+| **Smaller models for reads** | Different Plan vs Act providers in settings |
+| **Scoped @ mentions** | Attach files/folders you need — not the whole repo |
+| **Checkpoints off** | On huge repos if shadow Git is slow (trade rollback for speed) |
+
+Guide: [model selection](docs/core-features/model-selection-guide.mdx) · [memory & reasoning](docs/MEMORY_AND_REASONING.md)
+
+---
+
 ## Keyboard shortcuts
 
 From `package.json` `contributes.keybindings`:
@@ -327,6 +362,7 @@ Model selection guide: [docs/core-features/model-selection-guide.mdx](docs/core-
 | **Project rules** | `.dietcoderules/` loaded into every request |
 | **Roadmap steering** | `ROADMAP.md` + five `lumi.roadmap.*` VS Code settings |
 | **BroccoliDB memory** | Cognitive memory tools + Spider structural audit |
+| **Spider policy layer** | Forensic audit via `src/core/policy/spider/` — [architecture doc](docs/architecture/spider-v20-forensic-engine.md) |
 
 Tool reference: [docs/tools-reference/all-dietcode-tools.mdx](docs/tools-reference/all-dietcode-tools.mdx).
 
@@ -621,6 +657,7 @@ Package VSIX: `npm run package` → install `dist/*.vsix`.
 | `npm run docs:check-agent-branding` | No stale user-facing DietCode in core dirs |
 | `npm run docs:check-all` | All doc guardrails + Mintlify links |
 | `npm run docs:check-root-readme` | README parity + live metrics from codebase |
+| `npm run docs:check-root-readme-links` | Root README relative link resolution |
 | `npm run docs:check-readme-metrics` | README + companion-brief vs live codebase |
 | `npm run docs:check-links` | Mintlify broken-link pass |
 | `npm run e2e` | Playwright end-to-end tests |
@@ -638,6 +675,8 @@ Package VSIX: `npm run package` → install `dist/*.vsix`.
 | Doc links | `docs:check-agent-links` | 24 required docs + link resolution |
 | Doc branding | `docs:check-agent-branding` | No stale user-facing DietCode |
 | Root README | `docs:check-root-readme` | Parity + live metrics from codebase |
+| README links | `docs:check-root-readme-links` | All relative links in README resolve |
+| README metrics | `docs:check-readme-metrics` | README + companion-brief vs codebase |
 | Docs hub | `docs:check-docs-readme` | `docs/README.md` structure |
 
 Run all doc checks: **`npm run docs:check-all`** (includes Mintlify link pass).

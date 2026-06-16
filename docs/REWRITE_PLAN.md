@@ -103,6 +103,14 @@ Agent workspace docs (`docs/` excluding `broccolidb/`) rewritten to match the LU
 - [x] **Getting help** channel table; uninstall/reset troubleshooting rows
 - [x] `scripts/check-readme-metrics.mjs` — README + companion-brief synced to live codebase; in `docs:check-all`
 
+## Reinforcement (round 11 — link CI + performance)
+
+- [x] `scripts/check-root-readme-links.mjs` — validates all relative README links resolve
+- [x] `docs:check-readme-metrics` + `docs:check-root-readme-links` wired into `ci:check-all`
+- [x] Quick-install block + jump anchors (Install · Quick start · Docs · Develop · Help)
+- [x] **Performance & context** section; Spider policy + enterprise rows in overview
+- [x] Version badge validated against `package.json` in metrics check
+
 ## Maintenance
 
 Re-run after large code changes:
