@@ -101,6 +101,75 @@ export const SPIDER_WORKFLOW_PRESETS = {
 
 export type SpiderWorkflowPreset = keyof typeof SPIDER_WORKFLOW_PRESETS;
 
+export interface SpiderValidationIssue {
+  code: string;
+  message: string;
+  field?: string;
+}
+
+function toValidationIssue(error: unknown): SpiderValidationIssue {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('must be a non-null object')) {
+    return { code: 'SPI-VAL-001', message, field: 'request' };
+  }
+  if (message.includes('check.phase invalid') || message.includes('pipeline phase invalid')) {
+    return { code: 'SPI-VAL-002', message, field: 'phase' };
+  }
+  if (message.includes('pre-edit requires')) {
+    return { code: 'SPI-VAL-003', message, field: 'filePath' };
+  }
+  if (message.includes('neighborhoodDepth')) {
+    return { code: 'SPI-VAL-004', message, field: 'neighborhoodDepth' };
+  }
+  if (message.includes('gatePreset')) {
+    return { code: 'SPI-VAL-005', message, field: 'gatePreset' };
+  }
+  if (message.includes('scope')) {
+    return { code: 'SPI-VAL-006', message, field: 'scope' };
+  }
+  if (message.includes('correlationId')) {
+    return { code: 'SPI-VAL-007', message, field: 'correlationId' };
+  }
+  if (message.includes('filePaths')) {
+    return { code: 'SPI-VAL-008', message, field: 'filePaths' };
+  }
+  if (message.includes('requires phases or workflowPreset')) {
+    return { code: 'SPI-VAL-009', message, field: 'phases' };
+  }
+  if (message.includes('workflowPreset invalid')) {
+    return { code: 'SPI-VAL-010', message, field: 'workflowPreset' };
+  }
+  return { code: 'SPI-VAL-000', message };
+}
+
+/** Apply production defaults after validation — mirrors ESLint default option resolution. */
+export function normalizeCheckRequest(request: SpiderCheckRequest): SpiderCheckRequest {
+  const r = { ...request };
+  if ((r.phase === 'ci' || r.phase === 'post-edit') && r.scope === undefined) {
+    r.scope = 'changed-files';
+  }
+  if (r.phase === 'ci' && r.gatePreset === undefined && r.gatePolicy === undefined) {
+    r.gatePreset = 'ci';
+  }
+  if (r.includeRepairDirectives === undefined) {
+    r.includeRepairDirectives = true;
+  }
+  if (r.includeTypes === undefined) {
+    r.includeTypes = r.phase !== 'pre-edit';
+  }
+  return r;
+}
+
+export function normalizeCheckPipelineRequest(request: SpiderCheckPipelineRequest): SpiderCheckPipelineRequest {
+  const resolved = applyWorkflowPreset(request);
+  return {
+    ...resolved,
+    includeRepairDirectives: resolved.includeRepairDirectives ?? true,
+    includeTypes: resolved.includeTypes ?? false,
+    scope: resolved.scope ?? 'changed-files',
+  };
+}
+
 function validateSharedCheckFields(r: Partial<SpiderCheckRequest>): void {
   if (r.neighborhoodDepth !== undefined && (!Number.isInteger(r.neighborhoodDepth) || r.neighborhoodDepth < 0)) {
     throw new SpiderAuditError('check.neighborhoodDepth must be a non-negative integer');
@@ -183,24 +252,32 @@ export function applyWorkflowPreset(request: SpiderCheckPipelineRequest): Spider
 
 export function safeValidateCheckRequest(
   request: unknown
-): { valid: true; request: SpiderCheckRequest } | { valid: false; errors: string[] } {
+):
+  | { valid: true; request: SpiderCheckRequest; normalized: SpiderCheckRequest }
+  | { valid: false; errors: string[]; issues: SpiderValidationIssue[] } {
   try {
     validateCheckRequest(request);
-    return { valid: true, request: request as SpiderCheckRequest };
+    const validated = request as SpiderCheckRequest;
+    return { valid: true, request: validated, normalized: normalizeCheckRequest(validated) };
   } catch (error) {
-    return { valid: false, errors: [error instanceof Error ? error.message : String(error)] };
+    const issue = toValidationIssue(error);
+    return { valid: false, errors: [issue.message], issues: [issue] };
   }
 }
 
 export function safeValidateCheckPipelineRequest(
   request: unknown
-): { valid: true; request: SpiderCheckPipelineRequest; normalized: SpiderCheckPipelineRequest } | { valid: false; errors: string[] } {
+):
+  | { valid: true; request: SpiderCheckPipelineRequest; normalized: SpiderCheckPipelineRequest }
+  | { valid: false; errors: string[]; issues: SpiderValidationIssue[] } {
   try {
     validateCheckPipelineRequest(request);
-    const normalized = applyWorkflowPreset(request as SpiderCheckPipelineRequest);
-    return { valid: true, request: request as SpiderCheckPipelineRequest, normalized };
+    const validated = request as SpiderCheckPipelineRequest;
+    const normalized = normalizeCheckPipelineRequest(validated);
+    return { valid: true, request: validated, normalized };
   } catch (error) {
-    return { valid: false, errors: [error instanceof Error ? error.message : String(error)] };
+    const issue = toValidationIssue(error);
+    return { valid: false, errors: [issue.message], issues: [issue] };
   }
 }
 

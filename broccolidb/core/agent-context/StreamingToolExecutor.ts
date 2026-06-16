@@ -50,6 +50,8 @@ export interface ToolExecutorOptions {
   forensicPreEditGate?: boolean;
   /** Hard-stop mutation when pre-edit gate fails (default false — warn only). */
   failOnPreEditBlockers?: boolean;
+  /** Hard-stop when post-edit forensic gate fails after mutation (default false). */
+  failOnPostEditBlockers?: boolean;
   recordAuditEvents?: boolean;
   onProgress?: (progress: ToolExecutionProgress) => void;
 }
@@ -110,6 +112,7 @@ export class StreamingToolExecutor {
       failOnUnsafeMutationPath: options.failOnUnsafeMutationPath ?? true,
       forensicPreEditGate: options.forensicPreEditGate ?? true,
       failOnPreEditBlockers: options.failOnPreEditBlockers ?? false,
+      failOnPostEditBlockers: options.failOnPostEditBlockers ?? false,
       recordAuditEvents: options.recordAuditEvents ?? true,
       onProgress: options.onProgress,
     };
@@ -289,11 +292,18 @@ export class StreamingToolExecutor {
               phase: 'post-edit',
               scope: [mutationPath.relativePath],
               neighborhoodDepth: 1,
+              correlationId: toolUseId,
               includeTypes: false,
               includeRepairDirectives: true,
             });
             if (check.exitCode !== 0) {
-              finalContent += `\n\n${formatCheckDigest(check)}`;
+              const postDigest = formatCheckDigest(check);
+              finalContent += `\n\n${postDigest}`;
+              warnings.push('spider_post_edit_gate_failed');
+              if (this.options.failOnPostEditBlockers) {
+                await this.recordAuditEvent(name, toolUseId, startedAt, false, warnings, postDigest);
+                return this.makeResult(name, toolUseId, postDigest, true, startedAt, false, mirrored, warnings);
+              }
             }
           } catch {
             // Forensic append is best-effort; mutation result already captured.

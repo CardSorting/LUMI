@@ -43,6 +43,16 @@ export function buildSpiderInputSummary(operation: string, input?: unknown): Rec
     };
   }
 
+  if (obj.scenario) {
+    return {
+      ...base,
+      intentKind: 'forensic-check' satisfies SpiderIntentKind,
+      scenario: obj.scenario,
+      filePath: obj.filePath,
+      correlationId: obj.correlationId,
+    };
+  }
+
   if (obj.phase) {
     return {
       ...base,
@@ -98,6 +108,16 @@ export function summarizeSpiderIntentResult(
     return { spiderOperation: operation };
   }
   const r = result as Record<string, unknown>;
+
+  if ('scenario' in r && 'kind' in r && 'digest' in r) {
+    return {
+      spiderOperation: operation,
+      scenario: r.scenario,
+      kind: r.kind,
+      exitCode: r.exitCode,
+      proceed: r.proceed,
+    };
+  }
 
   if ('phases' in r && Array.isArray(r.phases)) {
     return {

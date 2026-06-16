@@ -56,8 +56,18 @@ import {
 } from '../policy/spider/AgentCatalog.js';
 import {
   SPIDER_CHECK_INPUT_SCHEMA,
+  SPIDER_PIPELINE_INPUT_SCHEMA,
   getWorkflowPresets,
+  normalizeCheckRequest,
 } from '../policy/spider/AgentCheckInput.js';
+import { getSpiderSchemaRegistry } from '../policy/spider/AgentSchemaRegistry.js';
+import { runAgentScenario } from '../policy/spider/AgentScenarioRunner.js';
+import {
+  SPIDER_AGENT_SCENARIOS,
+  recommendCheckRequest,
+  formatAgentDecisionGuide,
+  type SpiderAgentScenario,
+} from '../policy/spider/AgentDecisionGuide.js';
 import { SPIDER_MCP_TOOL_NAMES } from '../policy/spider/spider-mcp-tools.js';
 import { buildAgentHandoff } from '../policy/spider/AgentWorkflow.js';
 import {
@@ -88,6 +98,7 @@ import type {
   SpiderCheckResult,
   SpiderCheckPipelineRequest,
   SpiderCheckPipelineResult,
+  SpiderScenarioRunResult,
   SpiderHandoffResult,
   SpiderBaselineBundleResult,
   SpiderGatePolicy,
@@ -192,39 +203,40 @@ export class SpiderService {
    */
   async check(request: SpiderCheckRequest): Promise<SpiderCheckResult> {
     validateCheckRequest(request);
+    const resolved = normalizeCheckRequest(request);
     const gatePolicy = {
-      ...(request.gatePreset ? SPIDER_GATE_POLICY_PRESETS[request.gatePreset] : {}),
-      ...request.gatePolicy,
+      ...(resolved.gatePreset ? SPIDER_GATE_POLICY_PRESETS[resolved.gatePreset] : {}),
+      ...resolved.gatePolicy,
     };
-    const budget = request.bundleBudget;
+    const budget = resolved.bundleBudget;
     const auditOpts = {
-      includeTypes: request.includeTypes,
-      includeRepairDirectives: request.includeRepairDirectives,
+      includeTypes: resolved.includeTypes,
+      includeRepairDirectives: resolved.includeRepairDirectives,
       gatePolicy: Object.keys(gatePolicy).length > 0 ? gatePolicy : undefined,
       bundleBudget: budget,
-      neighborhoodDepth: request.neighborhoodDepth,
+      neighborhoodDepth: resolved.neighborhoodDepth,
     };
 
-    if (request.phase === 'pre-edit') {
-      if (request.filePaths && request.filePaths.length > 0) {
-        const batch = await this.batchPreflight(request.filePaths, auditOpts);
+    if (resolved.phase === 'pre-edit') {
+      if (resolved.filePaths && resolved.filePaths.length > 0) {
+        const batch = await this.batchPreflight(resolved.filePaths, auditOpts);
         return this.finalizeCheckResult('pre-edit', batch.proceed, batch.proceed ? 0 : 1, batch.bundle);
       }
-      if (!request.filePath) {
+      if (!resolved.filePath) {
         throw new SpiderAuditError('check pre-edit requires filePath or filePaths');
       }
-      const pre = await this.preflightBundle(request.filePath, auditOpts);
+      const pre = await this.preflightBundle(resolved.filePath, auditOpts);
       if (budget) pre.bundle = applyBundleBudget(pre.bundle, budget);
       return this.finalizeCheckResult('pre-edit', pre.proceed, pre.proceed ? 0 : 1, pre.bundle);
     }
 
-    if (request.phase === 'post-edit' || request.phase === 'ci') {
+    if (resolved.phase === 'post-edit' || resolved.phase === 'ci') {
       const result = await this.gateBundle({
-        scope: request.scope ?? 'changed-files',
+        scope: resolved.scope ?? 'changed-files',
         ...auditOpts,
       });
       return this.finalizeCheckResult(
-        request.phase,
+        resolved.phase,
         result.bundle.proceed,
         result.gate.exitCode,
         result.bundle,
@@ -299,6 +311,26 @@ export class SpiderService {
       (req) => this.check(req),
       request,
       { ...responseOptions, workspaceRoot: this.ctx.workspace.workspacePath }
+    );
+  }
+
+  /** Recommend + execute agent scenario in one round-trip. */
+  async runAgentScenario(
+    scenario: SpiderAgentScenario,
+    params?: {
+      filePath?: string;
+      filePaths?: string[];
+      scope?: SpiderCheckRequest['scope'];
+      correlationId?: string;
+    },
+    options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+  ): Promise<SpiderScenarioRunResult> {
+    return runAgentScenario(
+      (req) => this.check(req),
+      (req, opts) => this.runCheckPipeline(req, opts),
+      scenario,
+      params,
+      options
     );
   }
 
@@ -386,16 +418,24 @@ export class SpiderService {
     return this.handoff(result.bundle, budget, { phase: result.phase });
   }
 
-  buildCiArtifacts(result: SpiderCheckResult, options?: { includeSarifMeta?: boolean }) {
+  buildCiArtifacts(result: SpiderCheckResult, options?: { includeSarifMeta?: boolean; includeSchemaRegistry?: boolean }) {
     const response = this.toCheckResponse(result, options);
     const sarif =
       options?.includeSarifMeta && result.gate?.report
         ? this.prepareSarifUpload(result.gate.report).sarif
         : undefined;
-    return buildCiArtifacts(result, response, sarif);
+    const schemaRegistryJson =
+      options?.includeSchemaRegistry !== false
+        ? JSON.stringify(getSpiderSchemaRegistry(), null, 2)
+        : undefined;
+    return buildCiArtifacts(result, response, sarif, { schemaRegistryJson });
   }
 
-  async writeCiArtifacts(outputDir: string, result: SpiderCheckResult, options?: { includeSarifMeta?: boolean }) {
+  async writeCiArtifacts(
+    outputDir: string,
+    result: SpiderCheckResult,
+    options?: { includeSarifMeta?: boolean; includeSchemaRegistry?: boolean }
+  ) {
     const artifacts = this.buildCiArtifacts(result, options);
     return writeCiArtifactsToDir(outputDir, artifacts);
   }
@@ -468,6 +508,34 @@ export class SpiderService {
 
   getCheckInputSchema() {
     return SPIDER_CHECK_INPUT_SCHEMA;
+  }
+
+  getPipelineInputSchema() {
+    return SPIDER_PIPELINE_INPUT_SCHEMA;
+  }
+
+  getSchemaRegistry() {
+    return getSpiderSchemaRegistry();
+  }
+
+  normalizeCheckRequest(request: SpiderCheckRequest) {
+    validateCheckRequest(request);
+    return normalizeCheckRequest(request);
+  }
+
+  getAgentScenarios() {
+    return SPIDER_AGENT_SCENARIOS;
+  }
+
+  recommendCheckRequest(
+    scenario: keyof typeof SPIDER_AGENT_SCENARIOS,
+    params?: { filePath?: string; filePaths?: string[]; scope?: SpiderCheckRequest['scope']; correlationId?: string }
+  ) {
+    return recommendCheckRequest(scenario, params);
+  }
+
+  formatAgentDecisionGuide() {
+    return formatAgentDecisionGuide();
   }
 
   getWorkflowPresets() {

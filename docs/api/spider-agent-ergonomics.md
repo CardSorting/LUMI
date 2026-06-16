@@ -21,9 +21,21 @@ const catalog = ctx.graph.spider.getAgentToolkitCatalog();
 // catalog.checkInputSchema / pipelineInputSchema — JSON Schema for requests
 // catalog.workflowPresets — local-edit | ci-gate | pr-review | advisory-scan
 
-// Dry-run validation (no audit):
-ctx.graph.spider.safeValidateCheckRequest({ phase: 'ci', scope: 'changed-files' });
-// MCP: spider_validate_check_request({ requestJson: '...', kind: 'check' | 'pipeline' })
+// catalog.schemaRegistry — all JSON Schemas with stable $id URIs
+// catalog.agentScenarios — before-edit | after-edit | ci-gate | pr-review | …
+// catalog.decisionGuide — markdown scenario picker for LLM system prompts
+
+// Scenario router (no guessing):
+const req = ctx.graph.spider.recommendCheckRequest('before-edit', { filePath: 'src/foo.ts' });
+await ctx.graph.spider.check(req);
+
+// Or one-shot scenario run (recommend + execute):
+const run = await ctx.graph.spider.runAgentScenario('before-edit', { filePath: 'src/foo.ts' });
+// MCP: spider_run_scenario({ scenario: 'before-edit', filePath: 'src/foo.ts' })
+
+// Normalize defaults before check:
+const normalized = ctx.graph.spider.normalizeCheckRequest({ phase: 'ci' });
+// → { phase: 'ci', scope: 'changed-files', gatePreset: 'ci', includeRepairDirectives: true, … }
 
 // Workflow preset pipeline:
 await ctx.graph.spider.runCheckPipeline({

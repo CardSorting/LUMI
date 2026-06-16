@@ -24,6 +24,7 @@ import type {
 } from '../../policy/spider/report-types.js';
 import { CapabilityBase } from '../CapabilityBase.js';
 import { buildSpiderInputSummary, summarizeSpiderIntentResult } from '../../policy/spider/AgentSpiderIntent.js';
+import type { SpiderAgentScenario } from '../../policy/spider/AgentDecisionGuide.js';
 import type { IntentTracer } from '../IntentTracer.js';
 import {
   requireNonEmptyString,
@@ -252,6 +253,21 @@ export class GraphCapability extends CapabilityBase {
         options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
       ) =>
         this.execute('spider.runCheckPipeline', () => this.spiderService.runCheckPipeline(request, options), spiderTracing('runCheckPipeline', request)),
+      runAgentScenario: (
+        scenario: SpiderAgentScenario,
+        params?: {
+          filePath?: string;
+          filePaths?: string[];
+          scope?: SpiderCheckRequest['scope'];
+          correlationId?: string;
+        },
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) =>
+        this.execute(
+          'spider.runAgentScenario',
+          () => this.spiderService.runAgentScenario(scenario, params, options),
+          spiderTracing('runAgentScenario', { scenario, ...params })
+        ),
       bundle: (report: SpiderReport) =>
         this.run('spider.bundle', () => this.spiderService.toAgentBundle(report)),
       validateBundle: (bundle: SpiderAgentBundle) =>
@@ -323,6 +339,16 @@ export class GraphCapability extends CapabilityBase {
         this.run('spider.assertCheckPassed', () => this.spiderService.assertCheckPassed(result, message)),
       getCheckOutputSchema: () => this.run('spider.getCheckOutputSchema', () => this.spiderService.getCheckOutputSchema()),
       getCheckInputSchema: () => this.run('spider.getCheckInputSchema', () => this.spiderService.getCheckInputSchema()),
+      getPipelineInputSchema: () => this.run('spider.getPipelineInputSchema', () => this.spiderService.getPipelineInputSchema()),
+      getSchemaRegistry: () => this.run('spider.getSchemaRegistry', () => this.spiderService.getSchemaRegistry()),
+      normalizeCheckRequest: (request: SpiderCheckRequest) =>
+        this.run('spider.normalizeCheckRequest', () => this.spiderService.normalizeCheckRequest(request)),
+      getAgentScenarios: () => this.run('spider.getAgentScenarios', () => this.spiderService.getAgentScenarios()),
+      recommendCheckRequest: (
+        scenario: 'before-edit' | 'after-edit' | 'ci-gate' | 'pr-review' | 'advisory-scan' | 'local-edit-loop',
+        params?: { filePath?: string; filePaths?: string[]; scope?: SpiderCheckRequest['scope']; correlationId?: string }
+      ) => this.run('spider.recommendCheckRequest', () => this.spiderService.recommendCheckRequest(scenario, params)),
+      formatAgentDecisionGuide: () => this.run('spider.formatAgentDecisionGuide', () => this.spiderService.formatAgentDecisionGuide()),
       getWorkflowPresets: () => this.run('spider.getWorkflowPresets', () => this.spiderService.getWorkflowPresets()),
       safeValidateCheckRequest: (request: unknown) =>
         this.run('spider.safeValidateCheckRequest', () => this.spiderService.safeValidateCheckRequest(request)),

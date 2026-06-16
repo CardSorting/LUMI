@@ -26,7 +26,8 @@ export interface SpiderCiArtifacts {
 export function buildCiArtifacts(
   result: SpiderCheckResult,
   response: SpiderCheckResponse,
-  sarif?: SarifLog
+  sarif?: SarifLog,
+  extras?: { schemaRegistryJson?: string }
 ): SpiderCiArtifacts {
   const reportId = result.wire?.reportId ?? response.wire?.reportId ?? `spider-${Date.now()}`;
   const files: SpiderCiArtifactFile[] = [
@@ -89,6 +90,15 @@ export function buildCiArtifacts(
       name: 'github-check-run',
       relativePath: 'spider-github-check-run.json',
       content: JSON.stringify(response.ci.githubCheckRun, null, 2),
+      mimeType: 'application/json',
+    });
+  }
+
+  if (extras?.schemaRegistryJson) {
+    files.push({
+      name: 'schema-registry',
+      relativePath: 'spider-schema-registry.json',
+      content: extras.schemaRegistryJson,
       mimeType: 'application/json',
     });
   }

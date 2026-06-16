@@ -13,6 +13,8 @@ import {
   SPIDER_PIPELINE_INPUT_SCHEMA,
   SPIDER_WORKFLOW_PRESETS,
 } from './AgentCheckInput.js';
+import { getSpiderSchemaRegistry } from './AgentSchemaRegistry.js';
+import { SPIDER_AGENT_SCENARIOS, formatAgentDecisionGuide } from './AgentDecisionGuide.js';
 
 export { validateCheckRequest, validateCheckPipelineRequest, safeValidateCheckRequest, safeValidateCheckPipelineRequest } from './AgentCheckInput.js';
 
@@ -56,6 +58,7 @@ export const SPIDER_PREFERRED_ENTRYPOINTS = {
   ciArtifacts: 'writeCiArtifacts | spider_export_ci_artifacts',
   sessionRestore: 'restoreFromWire | spider_restore_wire',
   catalog: 'getAgentToolkitCatalog()',
+  scenarioRun: 'runAgentScenario(scenario, { filePath })',
 } as const;
 
 export const SPIDER_GATE_POLICY_PRESETS: Record<'ci' | 'strict' | 'advisory', SpiderGatePolicy> = {
@@ -118,6 +121,7 @@ export function formatCatalogPrompt(catalog: {
     `Workflow presets: ${'workflowPresets' in catalog ? Object.keys(catalog.workflowPresets as object).join(', ') : 'local-edit, ci-gate, pr-review, advisory-scan'}`,
     `Bootstrap: ${catalog.preferredEntrypoints.mcpBootstrap}`,
     `Validate: spider_validate_check_request`,
+    `Run scenario: spider_run_scenario`,
   ].join('\n');
 }
 
@@ -134,11 +138,14 @@ export function getAgentToolkitCatalog() {
     problemMatchers: exportProblemMatcherConfig(),
     gatePresets: SPIDER_GATE_POLICY_PRESETS,
     workflowPresets: SPIDER_WORKFLOW_PRESETS,
+    agentScenarios: SPIDER_AGENT_SCENARIOS,
+    schemaRegistry: getSpiderSchemaRegistry(),
     phaseWorkflow: [...SPIDER_PHASE_WORKFLOW],
     preferredEntrypoints: { ...SPIDER_PREFERRED_ENTRYPOINTS },
   };
   return {
     ...base,
     promptDigest: formatCatalogPrompt(base),
+    decisionGuide: formatAgentDecisionGuide(),
   };
 }

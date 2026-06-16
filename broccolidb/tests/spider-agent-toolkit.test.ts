@@ -301,6 +301,18 @@ async function runTest() {
   assert.strictEqual(safe.valid, true);
   const bad = ctx.graph.spider.safeValidateCheckRequest({ phase: 'bogus' as 'ci' });
   assert.strictEqual(bad.valid, false);
+  assert.ok(bad.issues[0]?.code.startsWith('SPI-VAL-'));
+
+  const normalized = ctx.graph.spider.normalizeCheckRequest({ phase: 'ci' });
+  assert.strictEqual(normalized.scope, 'changed-files');
+  assert.strictEqual(normalized.gatePreset, 'ci');
+
+  const recommended = ctx.graph.spider.recommendCheckRequest('before-edit', { filePath: 'src/a.ts' });
+  assert.strictEqual(recommended.phase, 'pre-edit');
+
+  const registry = ctx.graph.spider.getSchemaRegistry();
+  assert.ok(registry.schemas['broccolidb.spider.check-request/v1']);
+  assert.ok(ctx.graph.spider.formatAgentDecisionGuide().includes('before-edit'));
 
   const pipelineSafe = ctx.graph.spider.safeValidateCheckPipelineRequest({
     workflowPreset: 'local-edit',
@@ -308,6 +320,14 @@ async function runTest() {
   });
   assert.strictEqual(pipelineSafe.valid, true);
   assert.deepStrictEqual(pipelineSafe.normalized.phases, ['pre-edit', 'post-edit']);
+
+  const scenario = await ctx.graph.spider.runAgentScenario('before-edit', { filePath: 'src/a.ts' });
+  assert.strictEqual(scenario.scenario, 'before-edit');
+  assert.strictEqual(scenario.kind, 'check');
+  assert.ok(scenario.digest.includes('Spider'));
+
+  const artifacts = ctx.graph.spider.buildCiArtifacts(scenario.check!);
+  assert.ok(artifacts.files.some((f) => f.name === 'schema-registry'));
 
   await ctx.stop();
   fs.rmSync(root, { recursive: true, force: true });

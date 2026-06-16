@@ -45,6 +45,7 @@ const json = ctx.graph.spider.toCheckResponse(post, { includeSarifMeta: true });
 // MCP: spider_forensic_check({ phase: 'ci', responseFormat: 'json', gatePreset: 'strict' })
 // MCP: spider_forensic_pipeline({ phases: ['pre-edit', 'ci'] })
 // MCP: spider_forensic_pipeline({ workflowPreset: 'local-edit', filePath: '...' })
+// MCP: spider_run_scenario({ scenario: 'before-edit', filePath: '...' })
 // MCP: spider_validate_check_request({ requestJson, kind: 'check' | 'pipeline' })
 
 // NDJSON stream + GitHub Checks API

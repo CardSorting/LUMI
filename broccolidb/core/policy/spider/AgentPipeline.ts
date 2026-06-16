@@ -9,7 +9,7 @@ import type {
   SpiderCheckRequest,
   SpiderCheckResult,
 } from './report-types.js';
-import { applyWorkflowPreset } from './AgentCheckInput.js';
+import { normalizeCheckPipelineRequest } from './AgentCheckInput.js';
 import { toCheckResponse, type ToCheckResponseOptions } from './AgentResponse.js';
 
 export function aggregatePipelineResults(
@@ -49,7 +49,7 @@ export async function runCheckPipeline(
   responseOptions?: ToCheckResponseOptions
 ): Promise<SpiderCheckPipelineResult> {
   const stopOnFailure = request.stopOnFailure !== false;
-  const resolved = applyWorkflowPreset(request);
+  const resolved = normalizeCheckPipelineRequest(request);
   const phaseList = resolved.phases ?? [];
   const phases: SpiderCheckResult[] = [];
 

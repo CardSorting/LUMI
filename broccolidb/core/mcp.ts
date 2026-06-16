@@ -1406,6 +1406,11 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
           .optional()
           .default('markdown')
           .describe('markdown=promptDigest for system prompts; json=full SpiderAgentCatalog'),
+        includeDecisionGuide: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Append scenario decision guide to markdown output'),
       },
       async (args) => {
         return this.executeTool('spider_get_catalog', async () => {
@@ -1414,7 +1419,52 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
           if (args.responseFormat === 'json') {
             return JSON.stringify(catalog, null, 2);
           }
-          return catalog.promptDigest;
+          const lines = [catalog.promptDigest];
+          if (args.includeDecisionGuide) {
+            lines.push('', catalog.decisionGuide);
+          }
+          return lines.join('\n');
+        });
+      }
+    );
+
+    this.server.tool(
+      'spider_run_scenario',
+      'Run a named Spider agent scenario (before-edit, after-edit, ci-gate, pr-review, advisory-scan, local-edit-loop) — recommend + execute in one call.',
+      {
+        scenario: z.enum(['before-edit', 'after-edit', 'ci-gate', 'pr-review', 'advisory-scan', 'local-edit-loop']),
+        filePath: z.string().optional(),
+        filePaths: z.array(z.string()).optional(),
+        correlationId: z.string().optional(),
+        maxCompactLines: z.number().int().min(1).max(50).optional().default(8),
+        responseFormat: z.enum(['markdown', 'json']).optional().default('markdown'),
+        blockOnFailure: z.boolean().optional().default(false),
+      },
+      async (args) => {
+        return this.executeTool('spider_run_scenario', async () => {
+          if (!this.agentContext) return 'AgentContext not available.';
+          const spider = this.agentContext.graph.spider;
+          const result = await spider.runAgentScenario(
+            args.scenario,
+            {
+              filePath: args.filePath,
+              filePaths: args.filePaths,
+              correlationId: args.correlationId,
+            },
+            { maxCompactLines: args.maxCompactLines }
+          );
+          if (args.blockOnFailure && result.exitCode !== 0) {
+            return `SPIDER_SCENARIO_FAILED\n\n${result.digest}\n\nscenario=${result.scenario} exitCode=${result.exitCode}`;
+          }
+          if (args.responseFormat === 'json') {
+            return JSON.stringify(result, null, 2);
+          }
+          return [
+            `## Spider scenario: ${result.scenario}`,
+            result.digest,
+            '',
+            `exitCode=${result.exitCode} proceed=${result.proceed} kind=${result.kind}`,
+          ].join('\n');
         });
       }
     );

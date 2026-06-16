@@ -478,6 +478,24 @@ export interface SpiderCheckPipelineResult {
   response?: SpiderCheckResponse;
 }
 
+/** Result of runAgentScenario — recommend + execute in one round-trip. */
+export interface SpiderScenarioRunResult {
+  scenario:
+    | 'before-edit'
+    | 'after-edit'
+    | 'ci-gate'
+    | 'pr-review'
+    | 'advisory-scan'
+    | 'local-edit-loop';
+  recommendedRequest: SpiderCheckRequest | SpiderCheckPipelineRequest;
+  kind: 'check' | 'pipeline';
+  exitCode: 0 | 1;
+  proceed: boolean;
+  digest: string;
+  check?: SpiderCheckResult;
+  pipeline?: SpiderCheckPipelineResult;
+}
+
 export interface SpiderBaselineBundleResult extends SpiderBaselineComparison {
   bundle: SpiderAgentBundle;
   agentContext: string;
