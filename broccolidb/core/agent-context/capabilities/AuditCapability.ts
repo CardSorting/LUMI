@@ -7,7 +7,7 @@ import { CapabilityBase } from '../CapabilityBase.js';
 import { buildSpiderInputSummary, summarizeSpiderIntentResult } from '../../policy/spider/AgentSpiderIntent.js';
 import type { SpiderAgentScenario } from '../../policy/spider/AgentDecisionGuide.js';
 import type { IntentTracer } from '../IntentTracer.js';
-import type { SpiderAuditOptions, SpiderReport, SpiderResyncOptions, SpiderGateResult, SpiderAgentBundle, SpiderBundleBudget, SpiderCheckRequest, SpiderCheckResult, SpiderBundleWireFormat, SpiderCheckPipelineRequest, SpiderReportDiff, SpiderScenarioRunResult } from '../../policy/spider/report-types.js';
+import type { SpiderAuditOptions, SpiderReport, SpiderResyncOptions, SpiderGateResult, SpiderAgentBundle, SpiderBundleBudget, SpiderCheckRequest, SpiderCheckResult, SpiderBundleWireFormat, SpiderCheckPipelineRequest, SpiderCheckPipelineResult, SpiderReportDiff, SpiderScenarioRunResult, SpiderScenarioResponse, SpiderCheckResponse, SpiderAgentFailureEnvelope } from '../../policy/spider/report-types.js';
 import {
   requireNonEmptyString,
   type AuditConstitutionalCheckInput,
@@ -237,8 +237,16 @@ export class AuditCapability extends CapabilityBase {
         this.run('spider.handoffFromCheck', () => this.spiderService.handoffFromCheck(result, budget)),
       buildCiArtifacts: (result: SpiderCheckResult, options?: { includeSarifMeta?: boolean }) =>
         this.run('spider.buildCiArtifacts', () => this.spiderService.buildCiArtifacts(result, options)),
+      buildScenarioCiArtifacts: (response: SpiderScenarioResponse, options?: { includeSchemaRegistry?: boolean }) =>
+        this.run('spider.buildScenarioCiArtifacts', () => this.spiderService.buildScenarioCiArtifacts(response, options)),
       writeCiArtifacts: (outputDir: string, result: SpiderCheckResult, options?: { includeSarifMeta?: boolean }) =>
         this.execute('spider.writeCiArtifacts', () => this.spiderService.writeCiArtifacts(outputDir, result, options), spiderTrace('writeCiArtifacts', { outputDir })),
+      writeScenarioCiArtifacts: (outputDir: string, response: SpiderScenarioResponse, options?: { includeSchemaRegistry?: boolean }) =>
+        this.execute(
+          'spider.writeScenarioCiArtifacts',
+          () => this.spiderService.writeScenarioCiArtifacts(outputDir, response, options),
+          spiderTrace('writeScenarioCiArtifacts', { outputDir, scenario: response.scenario })
+        ),
       outputSchema: () => this.run('spider.outputSchema', () => this.spiderService.getOutputSchema()),
       serializeBundle: (bundle: SpiderAgentBundle, agentContext?: string, workflowSummary?: string) =>
         this.run('spider.serializeBundle', () =>
@@ -271,6 +279,51 @@ export class AuditCapability extends CapabilityBase {
       assertScenarioPassed: (result: SpiderScenarioRunResult, message?: string) =>
         this.run('spider.assertScenarioPassed', () => this.spiderService.assertScenarioPassed(result, message)),
       validateScenario: (result: unknown) => this.run('spider.validateScenario', () => this.spiderService.validateScenario(result)),
+      validateScenarioResponse: (response: unknown) =>
+        this.run('spider.validateScenarioResponse', () => this.spiderService.validateScenarioResponse(response)),
+      toScenarioNdjsonStream: (response: SpiderScenarioResponse) =>
+        this.run('spider.toScenarioNdjsonStream', () => this.spiderService.toScenarioNdjsonStream(response)),
+      parseScenarioNdjsonStream: (stream: string) =>
+        this.run('spider.parseScenarioNdjsonStream', () => this.spiderService.parseScenarioNdjsonStream(stream)),
+      formatScenarioFailure: (response: SpiderScenarioResponse) =>
+        this.run('spider.formatScenarioFailure', () => this.spiderService.formatScenarioFailure(response)),
+      formatCheckFailure: (response: SpiderCheckResponse) =>
+        this.run('spider.formatCheckFailure', () => this.spiderService.formatCheckFailure(response)),
+      formatPipelineFailure: (pipeline: SpiderCheckPipelineResult) =>
+        this.run('spider.formatPipelineFailure', () => this.spiderService.formatPipelineFailure(pipeline)),
+      getFailureOutputSchema: () => this.run('spider.getFailureOutputSchema', () => this.spiderService.getFailureOutputSchema()),
+      formatFailureFromCheck: (
+        result: SpiderCheckResult,
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) => this.run('spider.formatFailureFromCheck', () => this.spiderService.formatFailureFromCheck(result, options)),
+      formatFailureFromScenario: (
+        result: SpiderScenarioRunResult,
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) => this.run('spider.formatFailureFromScenario', () => this.spiderService.formatFailureFromScenario(result, options)),
+      validateFailureEnvelope: (envelope: unknown) =>
+        this.run('spider.validateFailureEnvelope', () => this.spiderService.validateFailureEnvelope(envelope)),
+      safeValidateFailureEnvelope: (envelope: unknown) =>
+        this.run('spider.safeValidateFailureEnvelope', () => this.spiderService.safeValidateFailureEnvelope(envelope)),
+      isFailureEnvelope: (value: unknown) => this.run('spider.isFailureEnvelope', () => this.spiderService.isFailureEnvelope(value)),
+      parseFailureJson: (json: string) => this.run('spider.parseFailureJson', () => this.spiderService.parseFailureJson(json)),
+      assertCheckFailed: (result: SpiderCheckResult, message?: string) =>
+        this.run('spider.assertCheckFailed', () => this.spiderService.assertCheckFailed(result, message)),
+      assertScenarioFailed: (result: SpiderScenarioRunResult, message?: string) =>
+        this.run('spider.assertScenarioFailed', () => this.spiderService.assertScenarioFailed(result, message)),
+      validateCheckResponse: (response: unknown) =>
+        this.run('spider.validateCheckResponse', () => this.spiderService.validateCheckResponse(response)),
+      safeValidateCheckResponse: (response: unknown) =>
+        this.run('spider.safeValidateCheckResponse', () => this.spiderService.safeValidateCheckResponse(response)),
+      isCheckResponse: (value: unknown) => this.run('spider.isCheckResponse', () => this.spiderService.isCheckResponse(value)),
+      parseCheckResponseJson: (json: string) =>
+        this.run('spider.parseCheckResponseJson', () => this.spiderService.parseCheckResponseJson(json)),
+      toFailureNdjsonStream: (envelope: SpiderAgentFailureEnvelope) =>
+        this.run('spider.toFailureNdjsonStream', () => this.spiderService.toFailureNdjsonStream(envelope)),
+      parseFailureNdjsonStream: (stream: string) =>
+        this.run('spider.parseFailureNdjsonStream', () => this.spiderService.parseFailureNdjsonStream(stream)),
+      toGithubCheckRunFromFailure: (envelope: SpiderAgentFailureEnvelope) =>
+        this.run('spider.toGithubCheckRunFromFailure', () => this.spiderService.toGithubCheckRunFromFailure(envelope)),
+      getAgentMethodGroups: () => this.run('spider.getAgentMethodGroups', () => this.spiderService.getAgentMethodGroups()),
       writeSchemaRegistry: (outputDir: string) =>
         this.execute('spider.writeSchemaRegistry', () => this.spiderService.writeSchemaRegistry(outputDir)),
       getCheckOutputSchema: () => this.run('spider.getCheckOutputSchema', () => this.spiderService.getCheckOutputSchema()),

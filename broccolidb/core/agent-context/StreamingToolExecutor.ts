@@ -3,6 +3,8 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { formatCheckDigest, formatPreflightDigest } from '../policy/spider/AgentToolkit.js';
+import { formatFailureFromCheck } from '../policy/spider/AgentFailure.js';
+import type { SpiderAgentFailureEnvelope } from '../policy/spider/report-types.js';
 import type { ServiceContext, ToolDef, ToolUseContext } from './types.js';
 
 export interface ToolResult {
@@ -15,6 +17,7 @@ export interface ToolResult {
     truncated: boolean;
     mirrored: boolean;
     warnings: string[];
+    spiderFailure?: SpiderAgentFailureEnvelope;
   };
 }
 
@@ -234,8 +237,9 @@ export class StreamingToolExecutor {
             warnings.push('spider_pre_edit_gate_failed');
             preEditNote = formatPreflightDigest(preEdit);
             if (this.options.failOnPreEditBlockers) {
+              const failure = formatFailureFromCheck(preEdit);
               await this.recordAuditEvent(name, toolUseId, startedAt, false, warnings, preEditNote);
-              return this.makeResult(name, toolUseId, preEditNote, true, startedAt, false, false, warnings);
+              return this.makeResult(name, toolUseId, preEditNote!, true, startedAt, false, false, warnings, failure);
             }
           }
         } catch {
@@ -301,8 +305,9 @@ export class StreamingToolExecutor {
               finalContent += `\n\n${postDigest}`;
               warnings.push('spider_post_edit_gate_failed');
               if (this.options.failOnPostEditBlockers) {
+                const failure = formatFailureFromCheck(check);
                 await this.recordAuditEvent(name, toolUseId, startedAt, false, warnings, postDigest);
-                return this.makeResult(name, toolUseId, postDigest, true, startedAt, false, mirrored, warnings);
+                return this.makeResult(name, toolUseId, postDigest, true, startedAt, false, mirrored, warnings, failure);
               }
             }
           } catch {
@@ -564,7 +569,8 @@ export class StreamingToolExecutor {
     startedAt: number,
     truncated: boolean,
     mirrored: boolean,
-    warnings: string[]
+    warnings: string[],
+    spiderFailure?: SpiderAgentFailureEnvelope
   ): ToolResult {
     return {
       toolUseId,
@@ -576,6 +582,7 @@ export class StreamingToolExecutor {
         truncated,
         mirrored,
         warnings,
+        ...(spiderFailure ? { spiderFailure } : {}),
       },
     };
   }

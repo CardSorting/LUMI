@@ -8,6 +8,7 @@ import { SPIDER_AGENT_TOOL_SCHEMA } from './AgentToolkit.js';
 import { SPIDER_CHECK_INPUT_SCHEMA, SPIDER_PIPELINE_INPUT_SCHEMA } from './AgentCheckInput.js';
 import { SPIDER_CHECK_OUTPUT_SCHEMA } from './AgentResponse.js';
 import { SPIDER_SCENARIO_OUTPUT_SCHEMA } from './AgentScenarioResponse.js';
+import { SPIDER_FAILURE_OUTPUT_SCHEMA } from './AgentFailure.js';
 import { SPIDER_WIRE_OUTPUT_SCHEMA } from './AgentWireRestore.js';
 
 export const SPIDER_SCHEMA_IDS = {
@@ -17,6 +18,7 @@ export const SPIDER_SCHEMA_IDS = {
   checkOutput: 'broccolidb.spider.check-response/v1',
   pipelineInput: 'broccolidb.spider.check-pipeline-request/v1',
   scenarioOutput: 'broccolidb.spider.scenario-response/v1',
+  failureOutput: 'broccolidb.spider.failure/v1',
   wireOutput: 'broccolidb.spider.wire/v2',
   toolSchema: 'broccolidb.spider.tool-schema/v1',
 } as const;
@@ -41,6 +43,10 @@ export function getSpiderSchemaRegistry() {
       [SPIDER_SCHEMA_IDS.scenarioOutput]: {
         ...SPIDER_SCENARIO_OUTPUT_SCHEMA,
         $id: SPIDER_SCHEMA_IDS.scenarioOutput,
+      },
+      [SPIDER_SCHEMA_IDS.failureOutput]: {
+        ...SPIDER_FAILURE_OUTPUT_SCHEMA,
+        $id: SPIDER_SCHEMA_IDS.failureOutput,
       },
       [SPIDER_SCHEMA_IDS.wireOutput]: {
         ...SPIDER_WIRE_OUTPUT_SCHEMA,

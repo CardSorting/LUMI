@@ -3,6 +3,7 @@
 export const SPIDER_MCP_TOOL_NAMES = [
   'spider_get_catalog',
   'spider_validate_check_request',
+  'spider_validate_failure',
   'spider_run_scenario',
   'spider_export_schemas',
   'spider_forensic_check',

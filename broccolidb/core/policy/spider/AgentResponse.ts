@@ -169,6 +169,20 @@ export function toCheckNdjsonStream(response: SpiderCheckResponse): string {
       conclusion: response.conclusion,
     })
   );
+  if (response.exitCode !== 0) {
+    lines.push(
+      JSON.stringify({
+        type: 'spider.check.failure',
+        phase: response.phase,
+        schema: 'broccolidb.spider.failure/v1',
+        source: 'check',
+        exitCode: 1,
+        proceed: false,
+        digest: response.digest,
+        conclusion: response.conclusion,
+      })
+    );
+  }
   return lines.join('\n');
 }
 
@@ -186,6 +200,86 @@ export function validateCheckResult(result: unknown): asserts result is SpiderCh
   if (!r.workflowSummary) throw new SpiderAuditError('check.workflowSummary required');
   if (!Array.isArray(r.workflow)) throw new SpiderAuditError('check.workflow required');
   if (!Array.isArray(r.suggestedCommands)) throw new SpiderAuditError('check.suggestedCommands required');
+}
+
+export interface SpiderCheckResponseValidationIssue {
+  code: string;
+  message: string;
+  field?: string;
+}
+
+function toCheckResponseValidationIssue(error: unknown): SpiderCheckResponseValidationIssue {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('$schema')) return { code: 'SPI-RESP-001', message, field: '$schema' };
+  if (message.includes('phase')) return { code: 'SPI-RESP-002', message, field: 'phase' };
+  if (message.includes('exitCode')) return { code: 'SPI-RESP-003', message, field: 'exitCode' };
+  if (message.includes('conclusion')) return { code: 'SPI-RESP-004', message, field: 'conclusion' };
+  if (message.includes('digest')) return { code: 'SPI-RESP-005', message, field: 'digest' };
+  return { code: 'SPI-RESP-000', message };
+}
+
+export function isCheckResponse(value: unknown): value is SpiderCheckResponse {
+  try {
+    validateCheckResponse(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function validateCheckResponse(response: unknown): asserts response is SpiderCheckResponse {
+  if (!response || typeof response !== 'object') {
+    throw new SpiderAuditError('SpiderCheckResponse must be a non-null object');
+  }
+  const r = response as SpiderCheckResponse;
+  if (r.$schema !== 'broccolidb.spider.check-response/v1') {
+    throw new SpiderAuditError('check-response.$schema must be broccolidb.spider.check-response/v1');
+  }
+  if (!['pre-edit', 'post-edit', 'ci', 'delta'].includes(r.phase)) {
+    throw new SpiderAuditError('check-response.phase invalid');
+  }
+  if (typeof r.proceed !== 'boolean') throw new SpiderAuditError('check-response.proceed required');
+  if (r.exitCode !== 0 && r.exitCode !== 1) {
+    throw new SpiderAuditError('check-response.exitCode must be 0 or 1');
+  }
+  if (!['success', 'failure', 'neutral'].includes(r.conclusion)) {
+    throw new SpiderAuditError('check-response.conclusion invalid');
+  }
+  if (!r.digest) throw new SpiderAuditError('check-response.digest required');
+  if (!r.agentContext) throw new SpiderAuditError('check-response.agentContext required');
+  if (!r.workflowSummary) throw new SpiderAuditError('check-response.workflowSummary required');
+  if (!Array.isArray(r.suggestedCommands)) {
+    throw new SpiderAuditError('check-response.suggestedCommands required');
+  }
+  if (!r.summary || typeof r.summary !== 'object') {
+    throw new SpiderAuditError('check-response.summary required');
+  }
+  if (!r.ci || typeof r.ci !== 'object') throw new SpiderAuditError('check-response.ci required');
+}
+
+export function safeValidateCheckResponse(
+  response: unknown
+):
+  | { valid: true; response: SpiderCheckResponse }
+  | { valid: false; errors: string[]; issues: SpiderCheckResponseValidationIssue[] } {
+  try {
+    validateCheckResponse(response);
+    return { valid: true, response: response as SpiderCheckResponse };
+  } catch (error) {
+    const issue = toCheckResponseValidationIssue(error);
+    return { valid: false, errors: [issue.message], issues: [issue] };
+  }
+}
+
+export function parseCheckResponseJson(json: string): SpiderCheckResponse {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new SpiderAuditError('check-response JSON must be valid JSON');
+  }
+  validateCheckResponse(parsed);
+  return parsed;
 }
 
 export interface ToCheckResponseOptions {

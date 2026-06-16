@@ -337,6 +337,54 @@ async function runTest() {
   const artifacts = ctx.graph.spider.buildCiArtifacts(scenario.check!);
   assert.ok(artifacts.files.some((f) => f.name === 'schema-registry'));
 
+  const groups = ctx.graph.spider.getAgentMethodGroups();
+  assert.ok(groups.unified.includes('runAgentScenario'));
+
+  assert.ok(scenarioResponse.ndjsonStream?.includes('spider.scenario.start'));
+  const events = ctx.graph.spider.parseScenarioNdjsonStream(scenarioResponse.ndjsonStream!);
+  assert.ok(events.some((e) => e.type === 'spider.scenario.end'));
+
+  const failure = ctx.graph.spider.formatScenarioFailure({
+    ...scenarioResponse,
+    exitCode: 1,
+    proceed: false,
+  });
+  assert.strictEqual(failure.$schema, 'broccolidb.spider.failure/v1');
+  assert.strictEqual(failure.source, 'scenario');
+
+  const checkFailure = ctx.graph.spider.formatCheckFailure(scenarioResponse.checkResponse!);
+  assert.strictEqual(checkFailure.source, 'check');
+  assert.strictEqual(checkFailure.$schema, 'broccolidb.spider.failure/v1');
+
+  const advisoryPipeline = await ctx.graph.spider.runCheckPipeline({ workflowPreset: 'advisory-scan', filePath: 'src/a.ts' });
+  const pipelineFailure = ctx.graph.spider.formatPipelineFailure(advisoryPipeline);
+  assert.strictEqual(pipelineFailure.source, 'pipeline');
+  assert.ok(ctx.graph.spider.getFailureOutputSchema().properties.source);
+
+  const failureJson = JSON.stringify(checkFailure);
+  const parsedFailure = ctx.graph.spider.parseFailureJson(failureJson);
+  assert.strictEqual(parsedFailure.source, 'check');
+  assert.strictEqual(ctx.graph.spider.isFailureEnvelope(parsedFailure), true);
+  assert.strictEqual(ctx.graph.spider.safeValidateFailureEnvelope({ bogus: true }).valid, false);
+  ctx.graph.spider.validateFailureEnvelope(checkFailure);
+
+  const failureNdjson = ctx.graph.spider.toFailureNdjsonStream(checkFailure);
+  const failureEvents = ctx.graph.spider.parseFailureNdjsonStream(failureNdjson);
+  assert.ok(failureEvents.some((e) => e.type === 'spider.failure.envelope'));
+
+  const githubFromFailure = ctx.graph.spider.toGithubCheckRunFromFailure(checkFailure);
+  assert.strictEqual(githubFromFailure.conclusion, 'failure');
+
+  const nestedCheckResponse = scenarioResponse.checkResponse!;
+  ctx.graph.spider.validateCheckResponse(nestedCheckResponse);
+  assert.strictEqual(ctx.graph.spider.isCheckResponse(nestedCheckResponse), true);
+  assert.strictEqual(ctx.graph.spider.safeValidateCheckResponse({ bad: true }).valid, false);
+
+  const scenarioArtifacts = ctx.graph.spider.buildScenarioCiArtifacts(scenarioResponse);
+  assert.ok(scenarioArtifacts.files.some((f) => f.name === 'scenario-response'));
+  assert.ok(scenarioArtifacts.files.some((f) => f.name === 'scenario-ndjson'));
+  assert.ok(scenarioArtifacts.manifest.includes('"kind": "scenario"'));
+
   await ctx.stop();
   fs.rmSync(root, { recursive: true, force: true });
 }

@@ -31,9 +31,13 @@ await ctx.graph.spider.check(req);
 
 // Or one-shot scenario run (recommend + execute):
 const run = await ctx.graph.spider.runAgentScenario('before-edit', { filePath: 'src/foo.ts' });
+// catalog.methodGroups — OpenAPI-style surface categories
+// catalog.quickStart — 4-step agent bootstrap
+
+// Scenario NDJSON (CI streaming restore):
 const json = await ctx.graph.spider.runAgentScenarioAndRespond('before-edit', { filePath: 'src/foo.ts' });
-// MCP: spider_run_scenario({ scenario: 'before-edit', filePath: 'src/foo.ts', responseFormat: 'json' })
-// MCP: spider_export_schemas({ outputDir: './spider-schemas' })
+const events = ctx.graph.spider.parseScenarioNdjsonStream(json.ndjsonStream!);
+// blockOnFailure + json → broccolidb.spider.failure/v1 envelope
 
 // Normalize defaults before check:
 const normalized = ctx.graph.spider.normalizeCheckRequest({ phase: 'ci' });
@@ -247,6 +251,51 @@ const result = await ctx.graph.spider.check({ phase: 'ci', scope: 'changed-files
 const artifacts = ctx.graph.spider.buildCiArtifacts(result, { includeSarifMeta: true });
 await ctx.graph.spider.writeCiArtifacts('./spider-out', result);
 // MCP: spider_export_ci_artifacts({ phase: 'ci', outputDir: './spider-out' })
+
+// Scenario bundle (includes scenario JSON + NDJSON + nested check artifacts):
+const scenario = await ctx.graph.spider.runAgentScenarioAndRespond('ci-gate');
+const scenarioArtifacts = ctx.graph.spider.buildScenarioCiArtifacts(scenario);
+await ctx.graph.spider.writeScenarioCiArtifacts('./spider-out', scenario);
+// MCP: spider_export_ci_artifacts({ scenario: 'ci-gate', outputDir: './spider-out' })
+```
+
+### Unified failure envelopes (`broccolidb.spider.failure/v1`)
+
+When a check, pipeline, or scenario hard-stops, format a typed failure envelope instead of ad-hoc strings:
+
+```typescript
+const response = ctx.graph.spider.toCheckResponse(result);
+const failure = ctx.graph.spider.formatCheckFailure(response);
+// failure.source === 'check' | 'pipeline' | 'scenario'
+
+// One-shot from raw check result:
+const envelope = ctx.graph.spider.formatFailureFromCheck(result);
+
+// Validate MCP/CI payloads (fail-closed, SPI-FAIL codes):
+ctx.graph.spider.validateFailureEnvelope(failure);
+const safe = ctx.graph.spider.safeValidateFailureEnvelope(json);
+const parsed = ctx.graph.spider.parseFailureJson(failureJson);
+
+const pipeline = await ctx.graph.spider.runCheckPipeline({ workflowPreset: 'ci-gate' });
+if (pipeline.exitCode !== 0) {
+  const envelope = ctx.graph.spider.formatPipelineFailure(pipeline);
+}
+
+// MCP: spider_forensic_check({ blockOnFailure: true, responseFormat: 'json' })
+// MCP: spider_validate_failure({ failureJson: JSON.stringify(envelope) })
+// → returns broccolidb.spider.failure/v1 (not plain SPIDER_*_FAILED text)
+
+ctx.graph.spider.getFailureOutputSchema(); // JSON Schema for CI validators
+```
+
+CI artifacts automatically include `spider-failure.json` and `spider-failure.ndjson` when `exitCode !== 0`.
+
+Validate any Spider JSON envelope without running an audit:
+
+```typescript
+ctx.graph.spider.safeValidateCheckResponse(response);
+ctx.graph.spider.safeValidateFailureEnvelope(failure);
+// MCP: spider_validate_check_request({ kind: 'check-response' | 'failure', requestJson })
 ```
 
 ### Handoff v2
@@ -276,7 +325,7 @@ const restored = ctx.graph.spider.restoreFromWire(result.wire!);
 // MCP: spider_restore_wire({ wireJson: JSON.stringify(result.wire) })
 ```
 
-MCP `spider_forensic_check` and `spider_forensic_pipeline` accept `blockOnFailure: true` for CI hard-stop semantics.
+MCP `spider_forensic_check` and `spider_forensic_pipeline` accept `blockOnFailure: true` for CI hard-stop semantics. With `responseFormat: 'json'`, failures return `broccolidb.spider.failure/v1` envelopes via `formatCheckFailure` / `formatPipelineFailure`.
 
 ### Intent routing (v25)
 

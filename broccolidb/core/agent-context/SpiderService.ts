@@ -39,6 +39,10 @@ import {
   toCheckResponse,
   assertCheckPassed,
   validateCheckResult,
+  validateCheckResponse,
+  safeValidateCheckResponse,
+  isCheckResponse,
+  parseCheckResponseJson,
   buildDiagnosticSummaryFromReport,
   toCheckNdjsonStream,
   toGithubCheckRun,
@@ -47,9 +51,30 @@ import {
   SPIDER_SCENARIO_OUTPUT_SCHEMA,
   toScenarioResponse,
   assertScenarioPassed,
+  assertScenarioFailed,
   validateScenarioResult,
+  validateScenarioResponse,
+  toScenarioNdjsonStream,
+  parseScenarioNdjsonStream,
+  formatFailureFromScenario,
 } from '../policy/spider/AgentScenarioResponse.js';
-import { buildCiArtifacts, writeCiArtifactsToDir } from '../policy/spider/AgentCiArtifacts.js';
+import {
+  formatCheckFailure,
+  formatPipelineFailure,
+  formatScenarioFailure,
+  formatFailureFromCheck,
+  assertCheckFailed,
+  validateFailureEnvelope,
+  safeValidateFailureEnvelope,
+  isFailureEnvelope,
+  parseFailureJson,
+  toFailureNdjsonStream,
+  parseFailureNdjsonStream,
+  toGithubCheckRunFromFailure,
+  SPIDER_FAILURE_OUTPUT_SCHEMA,
+} from '../policy/spider/AgentFailure.js';
+import { buildCiArtifacts, buildScenarioCiArtifacts, writeCiArtifactsToDir } from '../policy/spider/AgentCiArtifacts.js';
+import { getAgentMethodGroups } from '../policy/spider/spider-agent-methods.js';
 import {
   getAgentToolkitCatalog,
   validateCheckRequest,
@@ -106,6 +131,8 @@ import type {
   SpiderCheckPipelineResult,
   SpiderScenarioRunResult,
   SpiderScenarioResponse,
+  SpiderAgentFailureEnvelope,
+  SpiderCheckResponse,
   SpiderHandoffResult,
   SpiderBaselineBundleResult,
   SpiderGatePolicy,
@@ -384,6 +411,104 @@ export class SpiderService {
     return { valid: true };
   }
 
+  validateScenarioResponse(response: unknown) {
+    validateScenarioResponse(response);
+    return { valid: true };
+  }
+
+  toScenarioNdjsonStream(response: SpiderScenarioResponse) {
+    return toScenarioNdjsonStream(response);
+  }
+
+  parseScenarioNdjsonStream(stream: string) {
+    return parseScenarioNdjsonStream(stream);
+  }
+
+  formatScenarioFailure(response: SpiderScenarioResponse): SpiderAgentFailureEnvelope {
+    return formatScenarioFailure(response);
+  }
+
+  formatCheckFailure(response: SpiderCheckResponse) {
+    return formatCheckFailure(response);
+  }
+
+  formatPipelineFailure(pipeline: SpiderCheckPipelineResult) {
+    return formatPipelineFailure(pipeline);
+  }
+
+  getFailureOutputSchema() {
+    return SPIDER_FAILURE_OUTPUT_SCHEMA;
+  }
+
+  formatFailureFromCheck(result: SpiderCheckResult, options?: { maxCompactLines?: number; includeSarifMeta?: boolean }) {
+    return formatFailureFromCheck(result, options);
+  }
+
+  formatFailureFromScenario(
+    result: SpiderScenarioRunResult,
+    options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+  ) {
+    return formatFailureFromScenario(result, options);
+  }
+
+  validateFailureEnvelope(envelope: unknown) {
+    validateFailureEnvelope(envelope);
+    return { valid: true };
+  }
+
+  safeValidateFailureEnvelope(envelope: unknown) {
+    return safeValidateFailureEnvelope(envelope);
+  }
+
+  isFailureEnvelope(value: unknown): value is SpiderAgentFailureEnvelope {
+    return isFailureEnvelope(value);
+  }
+
+  parseFailureJson(json: string) {
+    return parseFailureJson(json);
+  }
+
+  assertCheckFailed(result: SpiderCheckResult, message?: string) {
+    return assertCheckFailed(result, message);
+  }
+
+  assertScenarioFailed(result: SpiderScenarioRunResult, message?: string) {
+    return assertScenarioFailed(result, message);
+  }
+
+  validateCheckResponse(response: unknown) {
+    validateCheckResponse(response);
+    return { valid: true };
+  }
+
+  safeValidateCheckResponse(response: unknown) {
+    return safeValidateCheckResponse(response);
+  }
+
+  isCheckResponse(value: unknown): value is SpiderCheckResponse {
+    return isCheckResponse(value);
+  }
+
+  parseCheckResponseJson(json: string) {
+    return parseCheckResponseJson(json);
+  }
+
+  toFailureNdjsonStream(envelope: SpiderAgentFailureEnvelope) {
+    return toFailureNdjsonStream(envelope);
+  }
+
+  parseFailureNdjsonStream(stream: string) {
+    return parseFailureNdjsonStream(stream);
+  }
+
+  toGithubCheckRunFromFailure(envelope: SpiderAgentFailureEnvelope) {
+    return toGithubCheckRunFromFailure(envelope);
+  }
+
+  getAgentMethodGroups() {
+    return getAgentMethodGroups();
+  }
+
   toCheckNdjsonStream(result: SpiderCheckResult, options?: { maxCompactLines?: number; includeSarifMeta?: boolean }) {
     return toCheckNdjsonStream(this.toCheckResponse(result, options));
   }
@@ -487,6 +612,26 @@ export class SpiderService {
     options?: { includeSarifMeta?: boolean; includeSchemaRegistry?: boolean }
   ) {
     const artifacts = this.buildCiArtifacts(result, options);
+    return writeCiArtifactsToDir(outputDir, artifacts);
+  }
+
+  buildScenarioCiArtifacts(
+    response: SpiderScenarioResponse,
+    options?: { includeSchemaRegistry?: boolean }
+  ) {
+    const schemaRegistryJson =
+      options?.includeSchemaRegistry !== false
+        ? JSON.stringify(getSpiderSchemaRegistry(), null, 2)
+        : undefined;
+    return buildScenarioCiArtifacts(response, { schemaRegistryJson });
+  }
+
+  async writeScenarioCiArtifacts(
+    outputDir: string,
+    response: SpiderScenarioResponse,
+    options?: { includeSchemaRegistry?: boolean }
+  ) {
+    const artifacts = this.buildScenarioCiArtifacts(response, options);
     return writeCiArtifactsToDir(outputDir, artifacts);
   }
 

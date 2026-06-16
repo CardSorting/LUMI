@@ -14,7 +14,9 @@ import {
   SPIDER_WORKFLOW_PRESETS,
 } from './AgentCheckInput.js';
 import { getSpiderSchemaRegistry } from './AgentSchemaRegistry.js';
-import { SPIDER_AGENT_SCENARIOS, formatAgentDecisionGuide } from './AgentDecisionGuide.js';
+import { SPIDER_AGENT_SCENARIOS, formatAgentDecisionGuide, formatAgentQuickStart } from './AgentDecisionGuide.js';
+import { getAgentMethodGroups } from './spider-agent-methods.js';
+import { SPIDER_FAILURE_OUTPUT_SCHEMA } from './AgentFailure.js';
 
 export { validateCheckRequest, validateCheckPipelineRequest, safeValidateCheckRequest, safeValidateCheckPipelineRequest } from './AgentCheckInput.js';
 
@@ -99,9 +101,10 @@ Phase map:
 - post-edit/ci: cargo check gate
 - delta: PR introduced-finding regression
 
-On failure: use formatCheckDigest or toCheckResponse(json). Cite findingId in explain(report, findingId).
+On failure: formatCheckFailure / formatPipelineFailure / formatScenarioFailure → broccolidb.spider.failure/v1.
+Or formatCheckDigest / toCheckResponse(json). Cite findingId in explain(report, findingId).
 Persist wire v2 for session restore: handoff(bundle) or restoreFromWire(wire).
-CI: buildCiArtifacts + writeCiArtifacts, or MCP spider_export_ci_artifacts.`;
+CI: buildCiArtifacts / buildScenarioCiArtifacts + write*CiArtifacts, or MCP spider_export_ci_artifacts.`;
 
 export function formatCatalogPrompt(catalog: {
   runbook: string;
@@ -122,6 +125,7 @@ export function formatCatalogPrompt(catalog: {
     `Workflow presets: ${'workflowPresets' in catalog ? Object.keys(catalog.workflowPresets as object).join(', ') : 'local-edit, ci-gate, pr-review, advisory-scan'}`,
     `Bootstrap: ${catalog.preferredEntrypoints.mcpBootstrap}`,
     `Validate: spider_validate_check_request`,
+    `Validate failure: spider_validate_failure`,
     `Run scenario: spider_run_scenario`,
     `Export schemas: spider_export_schemas`,
   ].join('\n');
@@ -137,6 +141,7 @@ export function getAgentToolkitCatalog() {
     checkInputSchema: SPIDER_CHECK_INPUT_SCHEMA,
     pipelineInputSchema: SPIDER_PIPELINE_INPUT_SCHEMA,
     wireOutputSchema: SPIDER_WIRE_OUTPUT_SCHEMA,
+    failureOutputSchema: SPIDER_FAILURE_OUTPUT_SCHEMA,
     problemMatchers: exportProblemMatcherConfig(),
     gatePresets: SPIDER_GATE_POLICY_PRESETS,
     workflowPresets: SPIDER_WORKFLOW_PRESETS,
@@ -144,10 +149,12 @@ export function getAgentToolkitCatalog() {
     schemaRegistry: getSpiderSchemaRegistry(),
     phaseWorkflow: [...SPIDER_PHASE_WORKFLOW],
     preferredEntrypoints: { ...SPIDER_PREFERRED_ENTRYPOINTS },
+    methodGroups: getAgentMethodGroups(),
   };
   return {
     ...base,
     promptDigest: formatCatalogPrompt(base),
     decisionGuide: formatAgentDecisionGuide(),
+    quickStart: formatAgentQuickStart(),
   };
 }

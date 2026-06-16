@@ -1453,19 +1453,15 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             },
             { maxCompactLines: args.maxCompactLines }
           );
+          const response = spider.toScenarioResponse(result, { maxCompactLines: args.maxCompactLines });
           if (args.blockOnFailure && result.exitCode !== 0) {
-            return `SPIDER_SCENARIO_FAILED\n\n${result.digest}\n\nscenario=${result.scenario} exitCode=${result.exitCode}`;
+            const failure = spider.formatScenarioFailure(response);
+            if (args.responseFormat === 'json') {
+              return JSON.stringify(failure, null, 2);
+            }
+            return `SPIDER_SCENARIO_FAILED\n\n${failure.digest}\n\nscenario=${failure.scenario} exitCode=1`;
           }
           if (args.responseFormat === 'json') {
-            const response = await spider.runAgentScenarioAndRespond(
-              args.scenario,
-              {
-                filePath: args.filePath,
-                filePaths: args.filePaths,
-                correlationId: args.correlationId,
-              },
-              { maxCompactLines: args.maxCompactLines }
-            );
             return JSON.stringify(response, null, 2);
           }
           return [
@@ -1495,14 +1491,14 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
 
     this.server.tool(
       'spider_validate_check_request',
-      'Dry-run validate Spider check or pipeline request JSON without running an audit (fail-closed JSON Schema style).',
+      'Dry-run validate Spider JSON payloads without running an audit (requests, responses, failure envelopes).',
       {
-        requestJson: z.string().describe('JSON SpiderCheckRequest or SpiderCheckPipelineRequest'),
+        requestJson: z.string().describe('JSON payload to validate'),
         kind: z
-          .enum(['check', 'pipeline'])
+          .enum(['check', 'pipeline', 'check-response', 'scenario-response', 'failure'])
           .optional()
           .default('check')
-          .describe('check=single phase; pipeline=multi-phase or workflowPreset'),
+          .describe('check|pipeline=request; check-response|scenario-response|failure=output envelopes'),
       },
       async (args) => {
         return this.executeTool('spider_validate_check_request', async () => {
@@ -1514,10 +1510,50 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
           } catch {
             return JSON.stringify({ valid: false, errors: ['requestJson must be valid JSON'] }, null, 2);
           }
-          const result =
-            args.kind === 'pipeline'
-              ? spider.safeValidateCheckPipelineRequest(parsed)
-              : spider.safeValidateCheckRequest(parsed);
+          let result: unknown;
+          switch (args.kind) {
+            case 'pipeline':
+              result = spider.safeValidateCheckPipelineRequest(parsed);
+              break;
+            case 'check-response':
+              result = spider.safeValidateCheckResponse(parsed);
+              break;
+            case 'scenario-response':
+              try {
+                spider.validateScenarioResponse(parsed);
+                result = { valid: true };
+              } catch (error) {
+                result = { valid: false, errors: [error instanceof Error ? error.message : String(error)] };
+              }
+              break;
+            case 'failure':
+              result = spider.safeValidateFailureEnvelope(parsed);
+              break;
+            default:
+              result = spider.safeValidateCheckRequest(parsed);
+          }
+          return JSON.stringify(result, null, 2);
+        });
+      }
+    );
+
+    this.server.tool(
+      'spider_validate_failure',
+      'Dry-run validate Spider failure envelope JSON (broccolidb.spider.failure/v1) without running an audit.',
+      {
+        failureJson: z.string().describe('JSON SpiderAgentFailureEnvelope from blockOnFailure or format*Failure'),
+      },
+      async (args) => {
+        return this.executeTool('spider_validate_failure', async () => {
+          if (!this.agentContext) return 'AgentContext not available.';
+          const spider = this.agentContext.graph.spider;
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(args.failureJson);
+          } catch {
+            return JSON.stringify({ valid: false, errors: ['failureJson must be valid JSON'] }, null, 2);
+          }
+          const result = spider.safeValidateFailureEnvelope(parsed);
           return JSON.stringify(result, null, 2);
         });
       }
@@ -1593,15 +1629,18 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             includeTypes: false,
             includeRepairDirectives: true,
           });
+          const response = spider.toCheckResponse(result, {
+            maxCompactLines: args.maxCompactLines,
+            includeSarifMeta: args.includeSarifMeta,
+          });
           if (args.blockOnFailure && result.exitCode !== 0) {
+            if (args.responseFormat === 'json') {
+              return JSON.stringify(spider.formatCheckFailure(response), null, 2);
+            }
             const digest = spider.formatCheckDigest(result, args.maxCompactLines);
             return `SPIDER_CHECK_FAILED\n\n${digest}\n\nexitCode=${result.exitCode}`;
           }
           if (args.responseFormat === 'json') {
-            const response = spider.toCheckResponse(result, {
-              maxCompactLines: args.maxCompactLines,
-              includeSarifMeta: args.includeSarifMeta,
-            });
             return JSON.stringify(response, null, 2);
           }
           const digest = spider.formatCheckDigest(result, args.maxCompactLines);
@@ -1665,6 +1704,9 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             { includeSarifMeta: args.includeSarifMeta }
           );
           if (args.blockOnFailure && pipeline.exitCode !== 0) {
+            if (args.responseFormat === 'json') {
+              return JSON.stringify(spider.formatPipelineFailure(pipeline), null, 2);
+            }
             const digest = pipeline.response?.digest ?? 'Pipeline failed';
             return `SPIDER_PIPELINE_FAILED\n\n${digest}\n\nexitCode=${pipeline.exitCode}`;
           }
@@ -1726,7 +1768,11 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
       'spider_export_ci_artifacts',
       'Export Spider CI artifacts (step summary, annotations, SARIF, wire, NDJSON) to a directory.',
       {
-        phase: z.enum(['pre-edit', 'post-edit', 'ci', 'delta']).default('ci'),
+        phase: z.enum(['pre-edit', 'post-edit', 'ci', 'delta']).optional(),
+        scenario: z
+          .enum(['before-edit', 'after-edit', 'ci-gate', 'pr-review', 'advisory-scan', 'delta-regression'])
+          .optional()
+          .describe('When set, run scenario and export scenario CI artifacts instead of a single check'),
         filePath: z.string().optional(),
         scope: z.union([z.literal('changed-files'), z.array(z.string())]).optional(),
         outputDir: z.string().describe('Directory to write artifact files'),
@@ -1738,8 +1784,19 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
         return this.executeTool('spider_export_ci_artifacts', async () => {
           if (!this.agentContext) return 'AgentContext not available.';
           const spider = this.agentContext.graph.spider;
+          if (args.scenario) {
+            const scenarioResponse = await spider.runAgentScenarioAndRespond(args.scenario, {
+              filePath: args.filePath,
+              scope: args.scope,
+              gatePreset: args.gatePreset,
+              correlationId: args.correlationId,
+            });
+            const written = await spider.writeScenarioCiArtifacts(args.outputDir, scenarioResponse);
+            return `Wrote ${written.length} scenario artifact file(s) to ${args.outputDir}\n${written.join('\n')}`;
+          }
+          const phase = args.phase ?? 'ci';
           const result = await spider.check({
-            phase: args.phase,
+            phase,
             filePath: args.filePath,
             scope: args.scope,
             gatePreset: args.gatePreset,

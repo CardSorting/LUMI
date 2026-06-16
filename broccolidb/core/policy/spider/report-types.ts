@@ -509,6 +509,21 @@ export interface SpiderScenarioResponse {
   pipelinePhases?: SpiderCheckPhase[];
   failedPhase?: SpiderCheckPhase;
   telemetry?: Record<string, unknown>;
+  /** Embedded NDJSON event stream for CI restore (scenario runs). */
+  ndjsonStream?: string;
+}
+
+/** Structured failure envelope for MCP blockOnFailure and CI hard-stops. */
+export interface SpiderAgentFailureEnvelope {
+  $schema: 'broccolidb.spider.failure/v1';
+  source: 'check' | 'scenario' | 'pipeline';
+  exitCode: 1;
+  proceed: false;
+  digest: string;
+  scenario?: SpiderScenarioRunResult['scenario'];
+  phase?: SpiderCheckPhase;
+  failedPhase?: SpiderCheckPhase;
+  response?: SpiderScenarioResponse | SpiderCheckResponse;
 }
 
 export interface SpiderBaselineBundleResult extends SpiderBaselineComparison {

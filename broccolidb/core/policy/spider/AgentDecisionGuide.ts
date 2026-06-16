@@ -125,6 +125,18 @@ export function formatAgentDecisionGuide(): string {
     }
     lines.push('');
   }
-  lines.push('Bootstrap: spider_get_catalog | validate: spider_validate_check_request');
+  lines.push('Bootstrap: spider_get_catalog | validate: spider_validate_check_request (kind: check|pipeline|check-response|scenario-response|failure)');
+  lines.push('');
+  lines.push(formatAgentQuickStart());
   return lines.join('\n');
+}
+
+export function formatAgentQuickStart(): string {
+  return [
+    'Quick start:',
+    '1. spider_get_catalog({ includeDecisionGuide: true })',
+    '2. spider_run_scenario({ scenario: "before-edit", filePath: "src/foo.ts" })',
+    '3. After edit: spider_run_scenario({ scenario: "after-edit", filePath: "src/foo.ts" })',
+    '4. CI gate: spider_run_scenario({ scenario: "ci-gate", responseFormat: "json", blockOnFailure: true })',
+  ].join('\n');
 }
