@@ -1,19 +1,55 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-We actively patch only the most recent minor release of Cline. Older versions receive fixes at our discretion.
+| Version | Supported |
+|---------|-----------|
+| **1.0.x** (current) | Yes — active patches for the latest release |
+| Older / fork builds | At maintainer discretion |
 
-## Reporting a Vulnerability
+Extension ID: **CardSorting.lumi** · Repository: [CardSorting/DietCodeMarie](https://github.com/CardSorting/DietCodeMarie)
 
-If you discover a potential security vulnerability in DietCode, please contact us by sending an email to security@dietcode.bot.
+---
 
-Please provide a detailed description of the vulnerability and the steps required to reproduce it. We will acknowledge receipt of your report and work to address the vulnerability as quickly as possible.
+## Reporting a vulnerability
 
-We ask that you do not disclose the vulnerability publicly until we have had a chance to investigate and address it.
+If you discover a security vulnerability in **LUMI** or this monorepo:
 
-## Escalation
+1. **Email:** security@dietcode.bot
+2. **Include:** description, impact, reproduction steps, and affected version
+3. **Do not** disclose publicly until we acknowledge and coordinate a fix
 
-If you do not receive an acknowledgement of your report within 5 business days, you may send an email to security@dietcode.bot.
+We aim to acknowledge reports within **5 business days**. If you receive no response, follow up at the same address.
 
-Thank you for helping us keep DietCode users safe.
+Preferred for GitHub users: [Private security advisory](https://github.com/CardSorting/DietCodeMarie/security/advisories/new) when available.
+
+---
+
+## Scope
+
+In scope:
+
+- LUMI VS Code extension (`src/`, `webview-ui/`)
+- Tool approval bypass or silent file write paths
+- Credential handling for LLM providers and MCP servers
+- BroccoliDB integration surfaces that could leak workspace data
+
+Out of scope (report to the upstream vendor):
+
+- Vulnerabilities in third-party LLM APIs (OpenRouter, OpenAI, etc.)
+- VS Code core bugs unrelated to LUMI code paths
+
+---
+
+## Safe use
+
+LUMI is designed **human-in-the-loop**. For high-risk workflows:
+
+- Keep **checkpoints** enabled
+- Avoid **YOLO mode** on production codebases
+- Scope context with [`.dietcodeignore`](docs/customization/dietcodeignore.mdx)
+- Review MCP server permissions before auto-approve
+
+Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md)
+
+Thank you for helping keep LUMI users safe.

@@ -17,13 +17,16 @@ Use [CODE_TO_DOC_MAP.md](CODE_TO_DOC_MAP.md) to find the matching page. Minimum 
 ## CI checks
 
 ```bash
-npm run docs:check-agent-links      # required files + relative links (100+ files)
+npm run docs:check-all              # all doc guardrails + Mintlify links
+npm run docs:check-agent-links      # required files + relative links
 npm run docs:check-agent-branding   # no stale user-facing "DietCode" in core dirs
+npm run docs:check-root-readme      # README.md / readme.md parity + live metrics
+npm run docs:check-docs-readme      # docs/README.md structure guardrails
 npm run docs:tag-legacy-providers   # prepend legacy notice to unwired provider pages
 npm run docs:check-links            # Mintlify broken-links (needs docs deps)
 ```
 
-`docs:check-agent-links` and `docs:check-agent-branding` run in `ci:check-all`.
+`docs:check-agent-links`, `docs:check-agent-branding`, `docs:check-root-readme`, and `docs:check-docs-readme` run in `ci:check-all`.
 
 ## Branding rules
 

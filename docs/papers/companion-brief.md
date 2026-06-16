@@ -21,7 +21,7 @@
 | Registered VS Code commands | **~25** `lumi.*` | `package.json` `contributes.commands` |
 | Static tool enum values | **62** | `DietCodeDefaultTool` in `src/shared/tools.ts` |
 | Tool handler files | **55** | `src/core/task/tools/handlers/` |
-| Read-only tools (checkpoint-safe) | **13** | `READ_ONLY_TOOLS` in `src/shared/tools.ts` |
+| Read-only tools (checkpoint-safe) | **12** | `READ_ONLY_TOOLS` in `src/shared/tools.ts` |
 | Wired LLM providers | **4** | `src/shared/providers/providers.json` |
 | Provider handler files (total) | **45** | `src/core/api/providers/` |
 | Built-in slash commands | **10** | `SUPPORTED_DEFAULT_COMMANDS` in `src/core/slash-commands/index.ts` |

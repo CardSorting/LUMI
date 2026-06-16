@@ -62,6 +62,38 @@ Agent workspace docs (`docs/` excluding `broccolidb/`) rewritten to match the LU
 - [x] Code-path sections: checkpoints, auto-approve, MCP overview
 - [x] `tools-reference/README.mdx` — tools index for maintainers
 
+## Reinforcement (round 5 — README hardening)
+
+- [x] Root `README.md` / `readme.md` — BroccoliDB-style structure: badges, prerequisites, capabilities table, architecture diagram, repo layout, CI guardrails, security, contributing, license
+- [x] `docs/README.md` — audience reading paths, release/policy section, expanded features table, runtime API index, local dev + quality checks, principles
+
+## Reinforcement (round 6 — world-class README)
+
+- [x] Root README — centered hero, demo GIF, nav links, TOC, design pillars, compatibility matrix, provider table, mermaid task flow, slash command reference, FAQ (collapsible), scripts table, security boundary table
+- [x] `scripts/check-root-readme.mjs` — README/readme parity + required sections/links; wired to `ci:check-all`
+- [x] `docs/README.md` — at-a-glance metrics, mermaid doc map, "where to document what" decision table, time estimates on reading paths
+
+## Reinforcement (round 7 — README + contributor hardening)
+
+- [x] Root README — comparison table, keyboard shortcuts, lifecycle hooks, roadmap settings, trust-model mermaid, tech stack, changelog link, 6th FAQ
+- [x] `CONTRIBUTING.md` — LUMI-branded, correct GitHub URLs, PR checklist, doc guardrails
+- [x] `SECURITY.md` — LUMI scope, supported versions, safe-use guidance
+- [x] `scripts/check-docs-readme.mjs` — docs hub structure CI; expanded `check-root-readme.mjs`
+
+## Reinforcement (round 8 — audit + metrics CI)
+
+- [x] Fixed hooks path: `.dietcoderules/hooks/` (was incorrect `.dietcode/hooks`)
+- [x] Root README — project config table, @ mentions, recommended workflows, troubleshooting matrix, by-the-numbers metrics
+- [x] `check-root-readme.mjs` — validates version/tools/providers against live `package.json` + `tools.ts`
+- [x] `docs/README.md` — project configuration section, expanded metrics (12 read-only tools)
+
+## Reinforcement (round 9 — personas, Plan/Act, quality gates)
+
+- [x] Root README — Who LUMI is for, Plan & Act modes, VS Code commands, module mermaid, monorepo packages table, Quality gates (ci:check-all breakdown)
+- [x] `npm run docs:check-all` — unified doc guardrail script
+- [x] `check-root-readme.mjs` — validates slash/hook/read-only counts from source files
+- [x] Fixed companion-brief read-only tools: 13 → **12** (matches `READ_ONLY_TOOLS`)
+
 ## Maintenance
 
 Re-run after large code changes:
