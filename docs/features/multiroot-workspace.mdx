@@ -111,7 +111,7 @@ For each workspace folder, LUMI detects:
 This means LUMI understands that your frontend and backend might be at different commits, on different branches, or even use different version control systems.
 
 <Note>
-While DietCode detects VCS information for all workspace folders, certain features only use the **primary workspace** (the first folder): [DietCode rules](/customization/dietcode-rules), [workflows](/customization/workflows), and [Git-related features](/core-workflows/working-with-files) like `@git` mentions.
+While LUMI detects VCS information for all workspace folders, certain features only use the **primary workspace** (the first folder): [project rules](/customization/dietcode-rules), [workflows](/customization/workflows), and [Git-related features](/core-workflows/working-with-files) like `@git` mentions.
 </Note>
 
 ## Referencing Files Across Workspaces
@@ -217,7 +217,7 @@ Two features have limitations in multi-root workspace mode:
 
 ### LUMI Rules
 
-[DietCode rules](/customization/dietcode-rules) (`.dietcoderules/` directory) only work in the **primary workspace** (the first folder in your workspace). Rules in other workspace folders are ignored.
+[Project rules](/customization/dietcode-rules) (`.dietcoderules/` directory) only work in the **primary workspace** (the first folder in your workspace). Rules in other workspace folders are ignored.
 
 **Workaround:** Place shared rules in the primary workspace, or use global rules (`~/Documents/LUMI/Rules/`) which apply everywhere.
 
@@ -251,7 +251,7 @@ Both limitations are restored when you return to a single-folder workspace.
 
 - Break large tasks into workspace-specific operations when possible
 - Use [Plan mode](/core-workflows/plan-and-act) to let LUMI understand structure first
-- Add a `.dietcodeignore` file to reduce noise, speed up scanning, and keep DietCode focused on source code:
+- Add a `.dietcodeignore` file to reduce noise, speed up scanning, and keep LUMI focused on source code:
 
 ```text
 # Dependencies

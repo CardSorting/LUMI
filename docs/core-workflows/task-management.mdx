@@ -4,7 +4,7 @@ sidebarTitle: "Tasks"
 description: "Organize your work with tasks - self-contained sessions that capture your conversations, code changes, and decisions."
 ---
 
-Every interaction with LUMI happens within a task. Tasks are self-contained work sessions that capture your entire conversation, code changes, command executions, and decisions.
+Every interaction with LUMI happens within a **task** — an instance of `Task` in `src/core/task/index.ts`, managed by `Controller` in `src/core/controller/index.ts`.
 
 ## What are Tasks?
 
@@ -43,13 +43,13 @@ As you work, the context window fills up with:
 - Your prompts and LUMI's responses
 - File contents LUMI reads or edits
 - Command outputs and tool results
-- System instructions that guide LUMI's behavior (including [DietCode Rules](/customization/dietcode-rules))
+- System instructions that guide LUMI's behavior (including [project rules](/customization/dietcode-rules))
 
-When the context window approaches its limit, LUMI automatically compresses older parts of the conversation to make room. This means very long tasks may lose some earlier details, though LUMI preserves the most important context.
+When the context window approaches its limit, use `/compact` or `/smol` to condense history, or `/newtask` to hand off to a fresh task. See [Using commands](/core-workflows/using-commands) and [Memory & reasoning](/MEMORY_AND_REASONING).
 
 This is why task scoping matters: a focused task keeps relevant information in the context window. A sprawling task fills the window with noise, pushing out useful context.
 
-If your starting context seems high even for simple prompts, add a [`.dietcodeignore`](/customization/dietcodeignore) file to exclude dependencies, build artifacts, and other files DietCode doesn't need. This can dramatically reduce your baseline token usage.
+If your starting context seems high even for simple prompts, add a [`.dietcodeignore`](/customization/dietcodeignore) file to exclude dependencies, build artifacts, and other files LUMI doesn't need.
 
 <Tip>
 For long-running tasks, enable [Auto-Compact](/features/auto-compact) to intelligently manage context as you work.

@@ -97,6 +97,19 @@ When working with MCP servers, it's important to follow security best practices:
 -   **Data Validation:** Validate all inputs to prevent injection attacks
 -   **Logging:** Implement secure logging practices without exposing sensitive data
 
+## Implementation in LUMI
+
+| Component | Path | Role |
+|-----------|------|------|
+| Connection hub | `src/services/mcp/McpHub.ts` | Spawns servers, lists tools/resources, routes calls |
+| Tool handler | `src/core/task/tools/handlers/UseMcpToolHandler.ts` | Executes MCP tools with approval/auto-approve |
+| Resource handler | `src/core/task/tools/handlers/AccessMcpResourceHandler.ts` | Reads MCP resources into context |
+| Remote add | `src/core/controller/mcp/addRemoteMcpServer.ts` | Adds SSE/HTTP servers from UI |
+
+MCP server configs live in user/workspace settings and sync via `src/core/storage/remote-config/syncRemoteMcpServers.ts`. LUMI ships with **no pre-installed servers** — you add them via [Adding and Configuring Servers](/mcp/adding-and-configuring-servers) or the MCP Marketplace.
+
+See [SECURITY_BEST_PRACTICES](/SECURITY_BEST_PRACTICES) for approval gates on MCP tool calls.
+
 ## Resources
 
 There are various resources available for finding and learning about MCP servers.

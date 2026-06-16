@@ -1,0 +1,53 @@
+---
+title: "ROADMAP.md Steering"
+sidebarTitle: "Roadmap Steering"
+description: "Auto-rolling ROADMAP.md gates, tools, and VS Code settings in LUMI."
+---
+
+LUMI can steer long-running work through a project **`ROADMAP.md`** file — with validation gates that block task completion when the roadmap is out of sync.
+
+Implementation: `src/services/roadmap/` (26 files). Completion integration: `RoadmapCompletionGate.ts` + `completionGatePipeline.ts`.
+
+## VS Code settings
+
+All settings use the `lumi.roadmap.*` prefix in root `package.json`:
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `lumi.roadmap.enabled` | `true` | Master switch for roadmap steering |
+| `lumi.roadmap.autoBootstrap` | `true` | Create `ROADMAP.md` from workspace evidence when missing |
+| `lumi.roadmap.autoBootstrapFill` | `true` | Apply evidence autofill after bootstrap |
+| `lumi.roadmap.blockKanbanOnValidationPending` | `true` | Block `attempt_completion` when ROADMAP changed since last validate |
+| `lumi.roadmap.failClosedCompletionGates` | `true` | Block completion when roadmap gate evaluation fails |
+
+## Agent tools
+
+| Tool | Role |
+|------|------|
+| `roadmap` | Read/update/validate roadmap state |
+| `roadmap_checkpoint` | Record validation checkpoint |
+
+Handlers: `RoadmapToolHandler` in `src/core/task/tools/handlers/`.
+
+## Slash command
+
+`/roadmap` with optional args — parsed in `src/core/slash-commands/index.ts`, executed by `RoadmapSlashCommand`.
+
+Examples:
+
+```text
+/roadmap validate
+/roadmap explain-gate
+```
+
+When completion is blocked, the agent receives guidance to run `roadmap(action='validate')` or `/roadmap validate`.
+
+## File watcher
+
+`extension.ts` registers `RoadmapFileWatcher` so changes to `ROADMAP.md` update operational status without restarting the extension.
+
+## Related
+
+- [Security — roadmap gates](../SECURITY_BEST_PRACTICES.md)
+- [All tools — roadmap](../tools-reference/all-dietcode-tools.mdx)
+- [Using commands — /roadmap](../core-workflows/using-commands.mdx)

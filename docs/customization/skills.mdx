@@ -6,7 +6,7 @@ description: "Modular instruction sets that extend LUMI's capabilities for speci
 
 Skills are modular instruction sets that extend LUMI's capabilities for specific tasks. Each skill packages detailed guidance, workflows, and optional resources that LUMI loads only when relevant to your request.
 
-Install multiple skills and DietCode only loads what it needs. A deployment skill stays dormant until you ask about deploying. Unlike [rules](/customization/dietcode-rules) (which are always active), skills load on-demand so they don't consume context when you're working on something unrelated.
+Install multiple skills and LUMI only loads what it needs. A deployment skill stays dormant until you ask about deploying. Unlike [rules](/customization/dietcode-rules) (which are always active), skills load on-demand so they don't consume context when you're working on something unrelated.
 
 <Note>
 Skills is an experimental feature. Enable it in **Settings → Features → Enable Skills**.
@@ -52,7 +52,7 @@ Detailed instructions for LUMI to follow when this skill is activated.
 ## Steps
 1. First, do this
 2. Then do that
-3. For advanced usage, see [advanced.md](docs/advanced.md)
+3. For advanced usage, see `docs/advanced.md` inside your skill folder
 ```
 
 Required fields:
@@ -203,7 +203,7 @@ Scripts are token-efficient because only their output enters context, not the co
 Reference these files in your SKILL.md instructions:
 
 ```markdown title="SKILL.md (referencing bundled files)"
-For initial setup, follow [setup.md](docs/setup.md).
+For initial setup, follow `docs/setup.md` in the skill package.
 Use the config template at `templates/config.yaml` as a starting point.
 Run the validation script to check your configuration:
 

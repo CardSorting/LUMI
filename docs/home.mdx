@@ -4,11 +4,11 @@ sidebarTitle: "Home"
 description: "Your calm coding companion for VS Code. Read files, write code, run commands — with your approval."
 ---
 
-Welcome to the LUMI documentation. LUMI is a VS Code extension that helps you build software through conversation, terminal access, and file edits — always with explicit approval.
+Welcome to the LUMI documentation. LUMI is a VS Code extension (`CardSorting.lumi`) that helps you build software through conversation, terminal access, and file edits — always with explicit approval.
 
 ## What is LUMI?
 
-LUMI runs inside VS Code as `CardSorting.lumi`. It can read and write files, run shell commands, browse the web, connect MCP servers, and delegate work to subagents. Your codebase stays local; you approve every mutating action.
+LUMI runs inside VS Code. It can read and write files, run shell commands, browse the web, connect MCP servers, and delegate work to subagents. Task history and cognitive memory use **BroccoliDB** locally; your approval gates every mutating action.
 
 <CardGroup cols={2}>
   <Card title="Quick Start" icon="rocket" href="/getting-started/quick-start">
@@ -25,23 +25,52 @@ LUMI runs inside VS Code as `CardSorting.lumi`. It can read and write files, run
   </Card>
 </CardGroup>
 
+## Papers (agent layer)
+
+Read these for depth on **why** and **how** LUMI is built — separate from [BroccoliDB substrate papers](../broccolidb/docs/papers/philosophy.md).
+
+<CardGroup cols={3}>
+  <Card title="Companion Brief" icon="file-lines" href="/papers/companion-brief">
+    Executive summary · 5 min · workspace-verified metrics.
+  </Card>
+  <Card title="Philosophy" icon="heart" href="/papers/philosophy">
+    Calm agency · approval · Plan/Act · completion gates.
+  </Card>
+  <Card title="Whitepaper" icon="book" href="/papers/whitepaper">
+    Full technical architecture · task loop · tools · providers.
+  </Card>
+  <Card title="Agent Stack" icon="layer-group" href="/AGENT_STACK">
+    LUMI session layer + BroccoliDB substrate — canonical two-layer map.
+  </Card>
+  <Card title="Code ↔ Docs" icon="code" href="/CODE_TO_DOC_MAP">
+    Source path → documentation lookup for contributors.
+  </Card>
+</CardGroup>
+
 ## Explore the docs
 
 <CardGroup cols={2}>
   <Card title="User Guide" icon="book-open-reader" href="/core-workflows/task-management">
     Tasks, Plan & Act modes, files, checkpoints, and slash commands.
   </Card>
-  <Card title="Integrations" icon="plug" href="/mcp/mcp-overview">
-    MCP servers and the four supported LLM providers.
+  <Card title="Architecture" icon="compass-drafting" href="/architecture/current">
+    Module map, request flow, and BroccoliDB integration.
   </Card>
   <Card title="All Tools" icon="wrench" href="/tools-reference/all-dietcode-tools">
-    Complete reference for built-in agent tools.
+    62 built-in tools from `src/shared/tools.ts`.
   </Card>
-  <Card title="Project Map" icon="compass-drafting" href="/PROJECT_MAP">
-    Literal map of the `src/` codebase.
+  <Card title="Security" icon="shield" href="/SECURITY_BEST_PRACTICES">
+    Approval, hooks, ignore files, and completion gates.
   </Card>
 </CardGroup>
 
+## Two layers in this monorepo
+
+| Layer | Docs | Code |
+|-------|------|------|
+| **LUMI** (agent session) | `docs/papers/*`, this site | `src/`, `webview-ui/` |
+| **BroccoliDB** (substrate) | `broccolidb/docs/papers/*` | `broccolidb/` |
+
 ## Naming note
 
-The user-facing product is **LUMI**. Internal types and storage keys still use the `DietCode` prefix from the upstream codebase (for example `DietCodeMessage`, `.dietcoderules/`). Documentation uses **LUMI** for product behavior and **DietCode** only when referring to those internal identifiers.
+User-facing product: **LUMI**. Internal types retain the `DietCode` prefix (`DietCodeMessage`, `.dietcoderules/`). Docs use **LUMI** for product behavior and **DietCode** only for those identifiers.

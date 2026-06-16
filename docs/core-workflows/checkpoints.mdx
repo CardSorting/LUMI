@@ -41,6 +41,23 @@ For very large repositories, checkpoints may use significant storage and slow do
 
 After each tool use, a checkpoint indicator appears in your conversation. Look for a bookmark icon labeled "Checkpoint" with a dotted line connecting to **Compare** and **Restore** buttons.
 
+## Implementation (code paths)
+
+Checkpoints are implemented under `src/integrations/checkpoints/`:
+
+| Component | Role |
+|-----------|------|
+| `CheckpointTracker.ts` | Creates commits after tool use, diff/restore operations |
+| `CheckpointGitOperations.ts` | Shadow Git init, staging, nested-repo handling |
+| `CheckpointUtils.ts` | Storage path under VS Code `globalStorage/checkpoints/{cwdHash}/.git` |
+| `factory.ts` | Wires tracker into tasks; multi-root via `MultiRootCheckpointManager` |
+
+**Settings:** `enableCheckpointsSetting` (global state, default on). Toggle in LUMI Settings → Feature Settings → **Enable Checkpoints**, or via `updateSettings` in `src/core/controller/state/updateSettings.ts`.
+
+**Safety:** Checkpoints refuse protected directories (home, Desktop, Documents, Downloads). Git must be installed on the machine.
+
+**Restore modes** map to task message handlers that call `CheckpointTracker` reset/diff APIs and trim conversation history after the selected checkpoint.
+
 Click **Compare** to open a diff view showing exactly what changed at that checkpoint. This opens in your editor's diff viewer, letting you see additions, deletions, and modifications across all affected files.
 
 This is useful when LUMI makes changes you want to understand before deciding whether to keep them. You can review the diff, then either continue or restore to undo.
@@ -93,3 +110,9 @@ This approach is faster than reviewing every change individually, and checkpoint
 The message editing feature integrates with checkpoints. When you edit a previous message and select "Restore All," LUMI restores your files to the checkpoint at that point before resubmitting your edited message.
 
 This lets you fix a poorly worded prompt and undo all the changes that resulted from it in one action.
+
+## Related docs
+
+- [Auto Approve](/features/auto-approve) — pair with checkpoints for faster iteration
+- [Security best practices](/SECURITY_BEST_PRACTICES) — approval gates when checkpoints are off
+- [PROJECT_MAP](/PROJECT_MAP) — `src/integrations/checkpoints/` layout

@@ -111,3 +111,40 @@ Details: [System communication](../SYSTEM_COMMUNICATION.md).
 
 - **`@noorm/broccolidb`** — Workspace dependency; powers cognitive memory, Spider audit, and local SQLite storage.
 - **`evals/`** — Benchmark and E2E evaluation harness (not part of the shipped extension).
+
+---
+
+## Two layers in the monorepo
+
+| Layer | Question | Documentation |
+|-------|----------|---------------|
+| **LUMI** (this doc) | How does the sidebar session work? | [Papers](../papers/README.md) · [Project map](../PROJECT_MAP.md) |
+| **BroccoliDB** | What happened to the repository structurally? | [Substrate architecture](../../broccolidb/docs/architecture/current.md) · [Substrate papers](../../broccolidb/docs/papers/philosophy.md) |
+
+LUMI owns approval, LLM loop, webview, and VS Code I/O. BroccoliDB owns proof, repair executor, runtime graph, and snapshots. Integration is via tool handlers and `@noorm/broccolidb` — not by merging the codebases.
+
+---
+
+## Safety pipeline (summary)
+
+```
+Tool proposed → PreToolUse hook (optional)
+            → User approve / auto-approve rule
+            → Execute via HostProvider or MCP
+            → PostToolUse hook (optional)
+attempt_completion → completionGatePipeline (audit, roadmap, focus chain)
+```
+
+Details: [Security best practices](../SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](../papers/whitepaper.md#7-approval-hooks-and-completion).
+
+---
+
+## Deep dives
+
+| Topic | Doc |
+|-------|-----|
+| Executive metrics | [Companion brief](../papers/companion-brief.md) |
+| Design values | [Philosophy](../papers/philosophy.md) |
+| Full technical spec | [Whitepaper](../papers/whitepaper.md) |
+| Runtime API (substrate) | [api/README.md](../api/README.md) |
+| IPC & host bridge | [System communication](../SYSTEM_COMMUNICATION.md) |

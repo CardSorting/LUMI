@@ -1,0 +1,30 @@
+---
+title: "Provider Configuration"
+sidebarTitle: "Providers Overview"
+description: "Which LLM providers are wired in this LUMI build vs legacy reference pages."
+---
+
+## Active in this build (4)
+
+These providers appear in `src/shared/providers/providers.json` and are registered in `buildApiHandler` (`src/core/api/index.ts`):
+
+| Provider | Doc | Handler |
+|----------|-----|---------|
+| OpenRouter | [openrouter](openrouter) | `OpenRouterHandler` (default fallback) |
+| ChatGPT Subscription | [openai-codex](openai-codex) | `OpenAiCodexHandler` |
+| NousResearch | [nousresearch](nousresearch) | `NousResearchHandler` |
+| Cloudflare Workers AI | [cloudflare](cloudflare) | `CloudflareHandler` |
+
+Start with [Model selection guide](../core-features/model-selection-guide.mdx) and [Authorizing](../getting-started/authorizing-with-dietcode.mdx).
+
+<Warning>
+**Legacy pages:** Other files in this folder (Anthropic, Ollama, Bedrock, Gemini, …) describe provider handlers that **exist in the repo** under `src/core/api/providers/` but are **not wired** in `buildApiHandler` for this build. They are kept as reference for forks and future enablement.
+</Warning>
+
+## Plan vs Act
+
+Configure **separate providers** for Plan and Act modes in LUMI Settings → API Configuration. See [Plan & Act](../core-workflows/plan-and-act.mdx).
+
+## Local models
+
+Ollama and LM Studio handlers exist but are not active. See [Running models locally — overview](../running-models-locally/overview.mdx).

@@ -100,11 +100,11 @@ Together, they let you experiment freely. Checkpoints protect your code, and Mem
 
 Memory Bank works best when your starting context is lean. If LUMI loads your entire project into context, including dependencies, build artifacts, and generated files, you burn through tokens before the real work starts.
 
-**Add a [`.dietcodeignore`](/customization/dietcodeignore) file.** This is the single biggest improvement most users can make. It tells DietCode which files to skip when scanning your project. Adding one can drop your starting context from 200k+ tokens to under 50k, which means faster responses, lower costs, and the ability to use smaller models effectively.
+**Add a [`.dietcodeignore`](/customization/dietcodeignore) file.** This is the single biggest improvement most users can make. It tells LUMI which files to skip when scanning your project. Adding one can drop your starting context from 200k+ tokens to under 50k, which means faster responses, lower costs, and the ability to use smaller models effectively.
 
 **Keep Memory Bank files concise.** Each file adds to your context when LUMI reads it at the start of a session. Keep `projectbrief.md` to one page, `activeContext.md` to current state only (not a running log), and `progress.md` to a summary rather than a detailed changelog. If a file grows beyond a page or two, split the detail into a separate doc and link to it. LUMI can read linked files on demand.
 
-**Use [DietCode Rules](/customization/dietcode-rules) strategically.** Rules load into every request. Use [conditional rules](/customization/dietcode-rules#conditional-rules) to activate rules only when working with matching files, so frontend rules don't load when you're editing backend code.
+**Use [project rules](/customization/dietcode-rules) strategically.** Rules load into every request. Use [conditional rules](/customization/dietcode-rules#conditional-rules) to activate rules only when working with matching files, so frontend rules don't load when you're editing backend code.
 
 ## Best Practices
 
@@ -113,7 +113,7 @@ Memory Bank works best when your starting context is lean. If LUMI loads your en
 - `activeContext.md` changes most frequently; update it after each session
 - `progress.md` tracks milestones; review it when resuming work
 - Update after significant milestones or direction changes
-- Use [DietCode Rules](/customization/dietcode-rules) to store the Memory Bank instructions per-project
+- Use [project rules](/customization/dietcode-rules) to store the Memory Bank instructions per-project
 - Add a [`.dietcodeignore`](/customization/dietcodeignore) early to keep your starting context small
 
 ## Production Performance (BroccoliDB)
@@ -227,5 +227,5 @@ For more information, see the [Memory Bank blog post](https://dietcode.bot/blog/
 
 - [Plan & Act Mode](/core-workflows/plan-and-act) - Separate thinking from doing with structured planning sessions
 - [Checkpoints](/core-workflows/checkpoints) - Roll back code changes while keeping your conversation context
-- [DietCode Rules](/customization/dietcode-rules) - Define persistent instructions including Memory Bank setup
+- [Project rules](/customization/dietcode-rules) - Define persistent instructions including Memory Bank setup
 - [Task Management](/core-workflows/task-management) - Understand tasks, context windows, and when to start fresh

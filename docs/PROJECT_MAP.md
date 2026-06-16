@@ -104,4 +104,5 @@ Separate API providers and prompts per mode (`planModeApiProvider` / `actModeApi
 
 - [Architecture (current)](architecture/current.md)
 - [System communication](SYSTEM_COMMUNICATION.md)
+- [Agent papers](papers/README.md)
 - [BroccoliDB docs](../broccolidb/docs/README.md)

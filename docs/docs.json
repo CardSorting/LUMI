@@ -96,6 +96,7 @@
 							"features/auto-compact",
 							"features/multiroot-workspace",
 							"features/subagents",
+							"features/roadmap-steering",
 							"features/background-edit",
 							"features/jupyter-notebooks",
 							"features/deep-planning",
@@ -117,6 +118,7 @@
 					{
 						"group": "Tools Reference",
 						"pages": [
+							"tools-reference/README",
 							"tools-reference/all-dietcode-tools",
 							"tools-reference/browser-automation"
 						]
@@ -169,17 +171,32 @@
 					{
 						"group": "System Architecture",
 						"pages": [
+							"AGENT_STACK",
+							"architecture/current",
 							"PROJECT_MAP",
+							"CODE_TO_DOC_MAP",
 							"SYSTEM_COMMUNICATION",
-							"ENTERPRISE_DEPLOYMENT",
+							"MEMORY_AND_REASONING",
+							"WORKING_WITH_SUBAGENTS",
+							"SECURITY_BEST_PRACTICES",
+							"CODEBASE_STANDARDS",
 							"USER_INTERFACE_DESIGN",
 							"MIRA_UX_IMPLEMENTATION"
 						]
 					},
 					{
+						"group": "Papers (Agent Layer)",
+						"pages": [
+							"papers/companion-brief",
+							"papers/philosophy",
+							"papers/whitepaper"
+						]
+					},
+					{
 						"group": "Documentation Guide",
 						"pages": [
-							"DOCS_GUIDE"
+							"DOCS_GUIDE",
+							"MAINTAINER"
 						]
 					},
 					{
@@ -216,7 +233,8 @@
 							{
 								"group": "Cloud Providers",
 								"pages": [
-									"provider-config/qwen",
+									"provider-config/README",
+									"provider-config/openrouter",
 									"provider-config/anthropic",
 									"provider-config/asksage",
 									"provider-config/baseten",
@@ -349,6 +367,10 @@
 		{
 			"source": "/getting-started/installing-dietcode-jetbrains",
 			"destination": "/getting-started/installing-dietcode"
+		},
+		{
+			"source": "/papers",
+			"destination": "/papers/companion-brief"
 		},
 		{
 			"source": "/getting-started/overview",

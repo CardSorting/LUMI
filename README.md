@@ -26,7 +26,10 @@ Search for **LUMI** in Extensions (`CardSorting.lumi`).
 |------|----------|
 | User & developer docs | [docs/README.md](docs/README.md) |
 | Architecture | [docs/architecture/current.md](docs/architecture/current.md) |
+| Agent stack | [docs/AGENT_STACK.md](docs/AGENT_STACK.md) |
+| Code ↔ docs | [docs/CODE_TO_DOC_MAP.md](docs/CODE_TO_DOC_MAP.md) |
 | Project map | [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) |
+| Agent papers | [docs/papers/README.md](docs/papers/README.md) |
 | BroccoliDB (context store) | [broccolidb/docs/README.md](broccolidb/docs/README.md) |
 
 ## Development

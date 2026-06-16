@@ -115,3 +115,19 @@ LUMI could:
 ### Enabling YOLO Mode
 
 Navigate to LUMI Settings, then Features, and check "YOLO Mode." No confirmation dialogs. Once enabled, LUMI auto-approves all actions immediately. Uncheck to disable.
+
+## Implementation (code paths)
+
+| Setting | Storage key | Effect |
+|---------|-------------|--------|
+| Per-category auto-approve | Various toggles in webview settings | Skips approval UI for matching tool categories |
+| YOLO Mode | `yoloModeToggled` (global state) | Auto-approves all tool calls; system prompt omits follow-up-question requirements |
+
+**Code:**
+
+- Settings persistence: `src/core/controller/state/updateSettings.ts`
+- YOLO prompt behavior: `src/core/prompts/system-prompt/` variants (e.g. `next-gen/template.ts`)
+- Tool approval gate: `src/core/task/tools/utils/ToolResultUtils.ts` and `ToolConstants.ts`
+- MCP per-tool auto-approve: `UseMcpToolHandler.ts` checks `mcpHub.connections` auto-approve lists
+
+YOLO Mode is the highest-risk setting. Use [checkpoints](/core-workflows/checkpoints) as your rollback layer when experimenting.

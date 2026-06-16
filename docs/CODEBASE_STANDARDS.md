@@ -1,44 +1,67 @@
 ---
 title: "Codebase Standards & Rules"
 sidebarTitle: "Codebase Standards"
-description: "Guidelines for maintaining a clean, consistent, and AI-friendly codebase."
+description: "How LUMI maps to the agent workspace layout and how to keep projects AI-friendly."
 ---
 
 # Codebase Standards & Rules
 
-LUMI works best when your project follows consistent patterns. This guide outlines the standards we use to ensure that the AI agent can navigate and modify your code safely and effectively.
+This guide covers (1) how **this repository** is structured for the LUMI agent, and (2) how **your project** can stay easy for LUMI to work in.
 
-## 📐 Project Layering
+## Agent workspace layout (this repo)
 
-We follow a modular architecture to prevent complexity from spiraling out of control. Every file should have a clear home:
+Verified map — full detail in [Project map](PROJECT_MAP.md):
 
-1.  **Core (`src/core`)**: Orchestration logic and the main agent loop.
-2.  **Domain (`src/domain`)**: Pure interfaces and models. No external dependencies.
-3.  **Services (`src/services`)**: Business logic and capabilities (AI, Analysis).
-4.  **Infrastructure (`src/infrastructure`)**: Concrete adapters for files, terminal, and browser.
-5.  **Interface (`webview-ui`)**: User-facing React components. The sidebar presents as **MIRA** — comfort-first emotional UX documented in [User Interface Design](USER_INTERFACE_DESIGN.md). Conversational copy belongs in `webview-ui/src/copy/miraVoice.ts`.
+| Directory | Role |
+|-----------|------|
+| `src/core/controller/` | Session controller, MCP, gRPC handlers |
+| `src/core/task/` | Agent loop (~4k lines) |
+| `src/core/task/tools/` | Tool coordinator + handlers |
+| `src/core/api/` | LLM providers (4 wired) |
+| `src/core/context/` | Context window, rules, file tracking |
+| `src/core/hooks/` | Lifecycle hooks |
+| `src/core/storage/` | StateManager, disk persistence |
+| `src/hosts/vscode/` | VS Code host bridge (only full host) |
+| `src/integrations/` | Checkpoints, terminal, diff |
+| `src/services/` | MCP, browser, roadmap, tree-sitter |
+| `src/infrastructure/` | DB pool, orchestrator |
+| `webview-ui/` | React sidebar — **LUMI** user-facing copy |
+| `broccolidb/` | Substrate package (separate docs) |
 
-### 🚫 Dependency Rules
-- **Outside-In only**: Infrastructure can import from Domain, but Domain cannot import from Infrastructure.
-- **No Circular Imports**: Files should not depend on each other in a loop.
-- **Single Responsibility**: Each module should do one thing well.
+### Dependency discipline
 
-## 🤖 AI-Friendly Patterns
+- **Core** must not import `vscode` directly — use `HostProvider`.
+- **Host-specific** code stays under `src/hosts/vscode/`.
+- **BroccoliDB** is consumed via `@noorm/broccolidb` and tool handlers, not by duplicating substrate logic in the extension.
 
-To help LUMI understand your intent, follow these best practices:
+### UI copy
 
-- **Type Safety**: Use TypeScript interfaces for everything. Avoid `any`.
-- **Descriptive Names**: Variable and function names should explain what they do without needing comments.
-- **Module Size**: Keep files under 1500 lines. If a file gets larger, refactor it into smaller sub-modules.
-- **Documentation**: Use JSDoc comments for complex business logic.
+| User-facing strings live in `webview-ui/src/copy/lumiVoice.ts`. North star: [LUMI UX](../../webview-ui/docs/LUMI_UX.md) — *keep it open all day without feeling managed*.
 
-## 🛡️ Enforcing Standards
+## Your project: AI-friendly patterns
 
-LUMI automatically checks your code against these standards during every task:
+- **Type safety** — Prefer explicit types; avoid `any` in code LUMI will edit.
+- **Clear module boundaries** — One primary responsibility per file; refactor before files exceed ~1,500 lines.
+- **Descriptive names** — Functions and types should read without comments.
+- **Lint config** — LUMI respects existing Biome/ESLint setups in the workspace.
 
-- **`.dietcoderules`**: You can define custom project rules in this file. LUMI will read them and ensure all suggestions comply.
-- **Linter Integration**: LUMI respects your existing `eslint` or `biome` configurations.
-- **Review Loop**: If the agent proposes a change that violates a standard, it will flag it during the review step.
+## Enforcing standards in your repo
 
----
-*Consistency is the key to collaboration. Build a project that both humans and AI love to work in.*
+| Mechanism | Purpose |
+|-----------|---------|
+| [`.dietcoderules/`](customization/dietcode-rules.mdx) | Always-on project rules |
+| [Workflows](customization/workflows.mdx) | Slash-invoked playbooks |
+| [Hooks](customization/hooks.mdx) | Cancel or steer tools at runtime |
+| [`.dietcodeignore`](customization/dietcodeignore.mdx) | Hide secrets and deps from context |
+| **JoyZoning audit** | Architecture/layer compliance (`lumi.joyZoningAudit`) |
+| **Spider / stability tools** | Structural checks via BroccoliDB integration |
+
+## JoyZoning
+
+The sidebar includes **JoyZoning Audit** (`lumi.joyZoningButtonClicked`) for architecture compliance review. This is separate from everyday lint — it targets layering and structural discipline.
+
+## Related
+
+- [Philosophy — extension without chaos](papers/philosophy.md#vii-extension-without-chaos)
+- [Security best practices](SECURITY_BEST_PRACTICES.md)
+- [BroccoliDB codebase standards](../broccolidb/docs/papers/philosophy.md) — substrate layering

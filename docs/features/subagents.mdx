@@ -30,7 +30,7 @@ Subagents are disabled by default. To turn them on:
 2. Go to **Features**
 3. Under the **Agent** section, toggle **Subagents** on
 
-This setting applies across all editors (VS Code, JetBrains, CLI).
+This setting applies in VS Code via extension state (`StateManager`).
 
 ## Using Subagents
 
@@ -44,6 +44,8 @@ Example prompts:
 
 Each subagent prompt should describe a focused research question. LUMI will run them in parallel and synthesize the results.
 You can also run only one subagent when the task is small enough that parallel discovery would be unnecessary overhead.
+
+Deep dive: [Working with subagents](/WORKING_WITH_SUBAGENTS) · Code map in [companion brief](/papers/companion-brief.md).
 
 ## Auto-Approve Behavior
 

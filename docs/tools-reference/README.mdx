@@ -1,0 +1,32 @@
+---
+title: "Tools Reference"
+sidebarTitle: "Overview"
+description: "Index of LUMI agent tools — static enum, handlers, and specialized references."
+---
+
+LUMI tools are defined in `DietCodeDefaultTool` (`src/shared/tools.ts`) and executed by handlers registered in `ToolExecutorCoordinator` (`src/core/task/tools/ToolExecutorCoordinator.ts`).
+
+## Primary reference
+
+| Doc | Contents |
+|-----|----------|
+| [All LUMI tools](/tools-reference/all-dietcode-tools) | Full enum list with descriptions and approval behavior |
+
+## Specialized references
+
+| Doc | Contents |
+|-----|----------|
+| [Browser automation](/tools-reference/browser-automation) | Browser tool and web fetch patterns |
+| [Subagents](/features/subagents) | Dynamic subagent tool handlers |
+| [MCP tools](/mcp/mcp-overview) | External MCP server tools via `McpHub` |
+
+## Maintainer notes
+
+When adding a tool:
+
+1. Add enum value in `src/shared/tools.ts`
+2. Implement handler under `src/core/task/tools/handlers/`
+3. Register in `ToolExecutorCoordinator.toolHandlersMap`
+4. Update [all-dietcode-tools](/tools-reference/all-dietcode-tools) and [CODE_TO_DOC_MAP](/CODE_TO_DOC_MAP)
+
+See [MAINTAINER](/MAINTAINER) for CI checks and branding rules.

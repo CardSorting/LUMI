@@ -5,7 +5,7 @@ Map of LUMI agent workspace documentation. BroccoliDB docs are maintained separa
 ## Principles
 
 1. **1-to-1 with code** — Architecture pages mirror real paths under `src/` and `webview-ui/`.
-2. **LUMI user-facing** — Product name is LUMI; `LUMI` appears only for internal types and legacy filenames.
+2. **LUMI user-facing** — Product name is LUMI; `DietCode` appears only for internal types and legacy filenames.
 3. **Accurate scope** — This build ships a VS Code extension with four wired LLM providers (see `src/shared/providers/providers.json`).
 4. **BroccoliDB boundary** — Runtime/store docs live in `broccolidb/docs/`; `docs/api/` covers agent-facing BroccoliDB capabilities.
 
@@ -32,6 +32,7 @@ Map of LUMI agent workspace documentation. BroccoliDB docs are maintained separa
 | [core-workflows/working-with-files.mdx](core-workflows/working-with-files.mdx) | @ mentions |
 | [core-workflows/using-commands.mdx](core-workflows/using-commands.mdx) | Slash commands |
 | [core-workflows/checkpoints.mdx](core-workflows/checkpoints.mdx) | Checkpoints |
+| [tools-reference/README.mdx](tools-reference/README.mdx) | Tools index |
 | [tools-reference/all-dietcode-tools.mdx](tools-reference/all-dietcode-tools.mdx) | Tool enum reference |
 | [core-features/model-selection-guide.mdx](core-features/model-selection-guide.mdx) | Providers |
 
@@ -44,7 +45,9 @@ Map of LUMI agent workspace documentation. BroccoliDB docs are maintained separa
 | [customization/workflows.mdx](customization/workflows.mdx) | Slash workflows |
 | [customization/dietcode-rules.mdx](customization/dietcode-rules.mdx) | Project rules |
 | [features/subagents.mdx](features/subagents.mdx) | Background agents |
+| [features/roadmap-steering.mdx](features/roadmap-steering.mdx) | ROADMAP.md gates |
 | [features/auto-approve.mdx](features/auto-approve.mdx) | Auto-approval |
+| [provider-config/README.mdx](provider-config/README.mdx) | Active vs legacy providers |
 | [mcp/mcp-overview.mdx](mcp/mcp-overview.mdx) | MCP integration |
 
 ### Architecture
@@ -53,10 +56,18 @@ Map of LUMI agent workspace documentation. BroccoliDB docs are maintained separa
 |-----|---------|
 | [PROJECT_MAP.md](PROJECT_MAP.md) | Directory map |
 | [architecture/current.md](architecture/current.md) | System architecture |
+| [papers/philosophy.md](papers/philosophy.md) | Calm agency — design values |
+| [papers/companion-brief.md](papers/companion-brief.md) | Executive metrics |
+| [papers/whitepaper.md](papers/whitepaper.md) | Technical depth |
+| [api/README.md](api/README.md) | BroccoliDB runtime API index |
+| [AGENT_STACK.md](AGENT_STACK.md) | Two-layer hub |
+| [CODE_TO_DOC_MAP.md](CODE_TO_DOC_MAP.md) | Source → doc lookup |
+| [papers/README.md](papers/README.md) | Papers reading order |
 | [SYSTEM_COMMUNICATION.md](SYSTEM_COMMUNICATION.md) | IPC and host bridge |
 | [MEMORY_AND_REASONING.md](MEMORY_AND_REASONING.md) | Context and memory tools |
 | [WORKING_WITH_SUBAGENTS.md](WORKING_WITH_SUBAGENTS.md) | Subagent protocol |
 | [SECURITY_BEST_PRACTICES.md](SECURITY_BEST_PRACTICES.md) | Safety model |
+| [MAINTAINER.md](MAINTAINER.md) | Doc CI, branding, update checklist |
 
 ### BroccoliDB (external to this guide)
 
@@ -73,4 +84,4 @@ npm run docs:check-links  # from repo root
 
 ## File naming note
 
-Several paths retain `dietcode` in the filename (historical Mintlify routes). Content describes **LUMI** unless explicitly discussing internal `LUMI*` types.
+Several paths retain `dietcode` in the filename (historical Mintlify routes). Content describes **LUMI** unless explicitly discussing internal `DietCode*` types.
