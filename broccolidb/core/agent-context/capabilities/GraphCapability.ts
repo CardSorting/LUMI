@@ -3,6 +3,10 @@
 import { randomUUID } from 'node:crypto';
 import type { GraphService } from '../GraphService.js';
 import type { SpiderService } from '../SpiderService.js';
+import type {
+  SpiderAuditOptions,
+  SpiderResyncOptions,
+} from '../../policy/spider/report-types.js';
 import { CapabilityBase } from '../CapabilityBase.js';
 import type { IntentTracer } from '../IntentTracer.js';
 import {
@@ -155,18 +159,18 @@ export class GraphCapability extends CapabilityBase {
 
   get spider() {
     return {
+      audit: (options?: SpiderAuditOptions) =>
+        this.execute('spider.audit', () => this.spiderService.audit(options)),
+      resync: (options: SpiderResyncOptions) =>
+        this.execute('spider.resync', () => this.spiderService.resync(options)),
       bootstrapGraph: () =>
         this.execute('spider.bootstrapGraph', () => this.spiderService.bootstrapGraph()),
       applyChanges: (files: Parameters<SpiderService['applyChanges']>[0]) =>
         this.execute('spider.applyChanges', () => this.spiderService.applyChanges(files)),
       auditStructure: (files?: Parameters<SpiderService['auditStructure']>[0]) =>
         this.execute('spider.auditStructure', () => this.spiderService.auditStructure(files)),
-      auditWithLsp: (files: Parameters<SpiderService['auditWithLsp']>[0]) =>
-        this.execute('spider.auditWithLsp', () => this.spiderService.auditWithLsp(files)),
-      getEngine: () => this.run('spider.getEngine', () => this.spiderService.getEngine()),
       verifyGraphIntegrity: (deep?: boolean) =>
         this.execute('spider.verifyGraphIntegrity', () => this.spiderService.verifyGraphIntegrity(deep)),
-      getDiscovery: () => this.run('spider.getDiscovery', () => this.spiderService.getDiscovery()),
       getStudyPack: (filePath: string) =>
         this.run('spider.getStudyPack', () =>
           this.spiderService.getStudyPack(requireNonEmptyString(filePath, 'filePath'))

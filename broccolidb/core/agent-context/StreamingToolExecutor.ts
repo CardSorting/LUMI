@@ -235,7 +235,7 @@ export class StreamingToolExecutor {
                 finalContent += `\n- SUGGESTION: Symbol '${disp.symbol}' found in '${disp.newPath}'.`;
               }
               for (const dir of def.directives) {
-                finalContent += `\n- REPAIR PLAN: [${dir.action}] ${dir.rationale}`;
+                finalContent += `\n- REPAIR PLAN: [${dir.type ?? dir.action}] ${dir.rationale}`;
               }
             }
           }

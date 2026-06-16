@@ -1,50 +1,41 @@
-# SPIDER: Sovereign Structural Forensic Engine (V19)
+# SPIDER: Sovereign Structural Forensic Engine (V20)
 
-The Spider Engine is a hyper-deterministic, remedial architectural guardian designed to enforce structural integrity, physical parity, and symbolic continuity in the BroccoliDB ecosystem.
+Spider proves structural truth. It does not guess.
 
-## 🏗️ Architectural Pillars (Level 19)
+## Forensic Contracts
 
-### 1. 🧬 Semantic Footprinting (Identity v2)
-The substrate tracks the **Persistent Identity** of symbols via SHA-256 AST hashing.
-- **The Anchor**: Footprints ignore whitespace/comments, focusing purely on the logic and signature.
-- **The Result**: 100% confidence in "Perfect Moves". The engine knows a function hasn't changed its identity just because it changed its address.
+1. **Evidence** — typed `SpiderEvidence` on every finding
+2. **Identity** — `SemanticFootprint` with AST-normalized SHA-256
+3. **Reality** — `DiskParityResult` with explicit `driftStatus`
+4. **Repair** — JSON-serializable `RepairDirective` with verification commands
 
-### 2. 🛡️ Sovereign Drift Guard (Disk Parity)
-Every node in the graph is anchored to its **Physical Reality** via disk hashing.
-- **The Anchor**: SHA-256 parity checks between the memory-resident graph and actual bytes-on-disk.
-- **The Result**: Automatic detection of "Reality Drift" (external file modifications), ensuring the agent always operates on the physical truth.
+## SPI Diagnostics
 
-### 3. 🛠️ Surgical Repair Maps (ARM)
-Audits now provide **Actionable Success Paths**. 
-- **The Anchor**: JSON-serializable `RepairDirectives` (e.g., `UPDATE_IMPORT_PATH`).
-- **The Result**: Tool outputs provide a specific **REPAIR PLAN** with suggested values and rationales, enabling self-healing recovery from structural breakages.
+| ID | Name |
+| --- | --- |
+| SPI-001 | SymbolicContractBreakage |
+| SPI-002 | TypeSoundnessFailure |
+| SPI-003 | ArchitecturalVolcano |
+| SPI-004 | StructuralLoop |
+| SPI-005 | LayerViolation |
+| SPI-006 | RealityDrift |
+| SPI-007 | SemanticIdentityMismatch |
+| SPI-008 | RepairDirectiveUnsafe |
+| SPI-009 | CompilerUnavailable |
+| SPI-010 | GraphStaleness |
 
-### 4. 🪚 T-Mirror (Type-Soundness Anchoring)
-Integrates the TypeScript compiler to project REAL compiler diagnostics onto every mutation.
+## Agent Workflow
 
-## 📊 Structural Integrity Protocols
+```typescript
+await ctx.graph.spider.audit({
+  scope: 'changed-files',
+  includeTypes: true,
+  includeRepairDirectives: true,
+});
+```
 
-| Metric | Anchor | Reality Check | Target |
-| :--- | :--- | :--- | :--- |
-| **Entropy** | Complexity | Tarjan's SCC & Multi-Hop Cycles | < 0.3 |
-| **Deficiency** | Contract | Symbolic Repair & Actionable Map | 0 |
-| **Drift** | Physical | SHA-256 Disk Parity Guard | 0 |
-| **Sovereignty** | Layers | Joy-Zoning Violation (SPI-005) | 0 |
+- Respect SPI-006 drift before continuing mutations
+- Address SPI-002 compiler findings when `typeMirror.diagnosticsComplete`
+- Follow repair directives; never invent fixes without evidence
 
-## 🚨 Diagnostic Identifiers
-
-| ID | Severity | Violation Name | Description |
-| :--- | :--- | :--- | :--- |
-| **SPI-001** | ERROR | Symbolic Contract Breakage | Missing named export consumed by dependents |
-| **SPI-002** | ERROR | Type-Soundness Failure | REALITY CHECK: Compiler diagnostic (Type Error) |
-| **SPI-003** | WARN | Architectural Volcano | High-churn hub targeting for extraction/decoupling |
-| **SPI-004** | ERROR | Structural Loop | Circular dependency detected via Tarjan's SCC |
-| **SPI-005** | ERROR | Layer Violation | Forbidden Joy-Zoning dependency (e.g. Domain -> UI) |
-
-## 🛠️ Operational Workflow for Agents
-- **Anchor on Repair Maps**: Never guess. Follow the **Surgical Repair Plans** and displacement instructions in tool outputs.
-- **Respect Drift Alarms**: If the engine reports Reality Drift, resync the graph before continuing mutations.
-- **Verify Compiled Truth**: All T-Mirror diagnostics must be addressed before task completion.
-
----
-*Sovereign Level 19 Industrial State*
+See [spider-v20-forensic-engine.md](../../../docs/architecture/spider-v20-forensic-engine.md) for full architecture.

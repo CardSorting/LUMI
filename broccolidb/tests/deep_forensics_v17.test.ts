@@ -79,8 +79,8 @@ async function testLevel17() {
         await ctx.graph.spider.applyChanges([{ filePath: hubPath, content: `// Churn ${i}\nexport const C = ${i};` }]);
     }
     
-    const node = ctx.graph.spider.getEngine().nodes.get(hubPath);
-    console.log(`- Hub Vitality: ${node?.vitality ?? '0'}`);
+    const hubImpact = ctx.graph.getStructuralImpact({ filePath: hubPath });
+    console.log(`- Hub structural impact: ${hubImpact.summary}`);
 
     console.log('\n✅ TEST PASSED: Level 17 Deep Forensics are OPERATIONAL.');
   } catch (err) {

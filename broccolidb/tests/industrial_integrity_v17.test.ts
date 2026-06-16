@@ -84,8 +84,8 @@ async function testIndustrialIntegrity() {
     const mutation2 = ctx.graph.spider.applyChanges([{ filePath: 'src/concurrent.ts', content: '// Mutation 2' }]);
     
     await Promise.all([mutation1, mutation2]);
-    const finalNode = ctx.graph.spider.getEngine().nodes.get('src/concurrent.ts');
-    console.log(`✅ SUCCESS: Concurrent mutations completed. Final state: ${finalNode?.vitality} updates.`);
+    const concurrentImpact = ctx.graph.getStructuralImpact({ filePath: 'src/concurrent.ts' });
+    console.log(`✅ SUCCESS: Concurrent mutations completed. Impact: ${concurrentImpact.summary}`);
 
     console.log('\n✅ TEST PASSED: Industrial Integrity V17 is ROCK SOLID.');
   } catch (err) {

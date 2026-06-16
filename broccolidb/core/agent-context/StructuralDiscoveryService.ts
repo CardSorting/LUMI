@@ -148,17 +148,27 @@ export class StructuralDiscoveryService {
                         const newPath = providers[0];
                         displacementSuggestions.push({ symbol: s, newPath });
                         directives.push({
+                            type: 'UPDATE_IMPORT_PATH',
                             action: 'UPDATE_IMPORT_PATH',
                             symbol: s,
                             suggestedValue: newPath,
-                            rationale: `Symbol '${s}' was moved to '${newPath}'. Update import specifier to restore link.`
+                            rationale: `Symbol '${s}' was moved to '${newPath}'. Update import specifier to restore link.`,
+                            preconditions: ['Provider exports symbol'],
+                            verificationCommand: `grep -n "${s}" ${depId}`,
+                            riskLevel: 'low',
+                            supportingEvidenceIds: ['SPI-001'],
                         });
                     } else {
                         realMissing.push(s);
                         directives.push({
-                            action: 'EXPORT_SYMBOL',
+                            type: 'ADD_MISSING_EXPORT',
+                            action: 'ADD_MISSING_EXPORT',
                             symbol: s,
-                            rationale: `Symbol '${s}' is no longer exported by '${normalizedTarget}'. Ensure it is exported or update references.`
+                            rationale: `Symbol '${s}' is no longer exported by '${normalizedTarget}'. Ensure it is exported or update references.`,
+                            preconditions: ['Symbol still defined in module'],
+                            verificationCommand: `grep -n "export.*${s}" ${normalizedTarget}`,
+                            riskLevel: 'medium',
+                            supportingEvidenceIds: ['SPI-001'],
                         });
                     }
                 }

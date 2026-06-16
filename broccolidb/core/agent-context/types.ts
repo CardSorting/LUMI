@@ -148,14 +148,33 @@ export interface AiService {
   explainReasoningChain: (content: string, lineage: { content: string; type: string }[]) => Promise<string>;
 }
 
-export type RepairAction = 'UPDATE_IMPORT_PATH' | 'EXPORT_SYMBOL' | 'DECOUPLE_INTERFACE' | 'FIX_LAYER_VIOLATION';
+export type RepairAction =
+  | 'UPDATE_IMPORT_PATH'
+  | 'ADD_MISSING_EXPORT'
+  | 'REMOVE_STALE_IMPORT'
+  | 'RENAME_SYMBOL_REFERENCE'
+  | 'MOVE_SYMBOL_REFERENCE'
+  | 'BREAK_CYCLE_BY_INTERFACE'
+  | 'FIX_LAYER_VIOLATION'
+  | 'REFRESH_GRAPH_NODE'
+  | 'RESYNC_DISK_PARITY'
+  | 'EXPORT_SYMBOL'
+  | 'DECOUPLE_INTERFACE';
 
 export interface RepairDirective {
-  action: RepairAction;
+  directiveId?: string;
+  action?: RepairAction;
+  type?: RepairAction;
   symbol?: string;
   filePath?: string;
+  targetFile?: string;
+  targetRange?: import('../policy/spider/report-types.js').SourceRange;
   suggestedValue?: string;
   rationale: string;
+  preconditions?: string[];
+  verificationCommand?: string;
+  riskLevel?: 'low' | 'medium' | 'high';
+  supportingEvidenceIds?: string[];
 }
 
 export interface ServiceContext {

@@ -1,21 +1,62 @@
 // [LAYER: CORE]
 import { Logger } from '../../shared/services/Logger.js';
-import { SpiderEngine, type SpiderViolation, type SpiderEntropyReport } from '../policy/SpiderEngine.js';
+import { SpiderEngine, type SpiderViolation } from '../policy/SpiderEngine.js';
+import { ForensicSpider } from '../policy/spider/ForensicSpider.js';
+import type {
+  SpiderAuditOptions,
+  SpiderReport,
+  SpiderResyncOptions,
+  SpiderResyncResult,
+  SpiderHealth,
+} from '../policy/spider/report-types.js';
 import { Repository } from '../repository.js';
 import { StructuralDiscoveryService } from './StructuralDiscoveryService.js';
 import { TaskMutex } from '../mutex.js';
 import type { ServiceContext } from './types.js';
+import type { RepairDirective } from './types.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+export type { SpiderReport, SpiderAuditOptions, SpiderResyncOptions, SpiderResyncResult };
 
 export class SpiderService {
   private engine: SpiderEngine;
   private discovery: StructuralDiscoveryService;
+  private forensicSpider: ForensicSpider | null = null;
   private bootstrapped = false;
 
   constructor(private ctx: ServiceContext) {
     this.engine = new SpiderEngine(ctx.workspace.workspacePath);
     this.discovery = new StructuralDiscoveryService(() => this.engine);
+  }
+
+  private getForensic(): ForensicSpider {
+    if (!this.forensicSpider) {
+      this.forensicSpider = new ForensicSpider(this.engine, this.ctx.workspace.workspacePath);
+    }
+    return this.forensicSpider;
+  }
+
+  /**
+   * V20 forensic audit — typed evidence, disk parity, optional type mirror and repair directives.
+   * Read-only on disk; does not mutate files.
+   */
+  async audit(options: SpiderAuditOptions = {}): Promise<SpiderReport> {
+    if (!this.bootstrapped) {
+      await this.bootstrapGraph();
+    }
+    return this.getForensic().audit(options);
+  }
+
+  /**
+   * Resync graph nodes from physical disk for the given files.
+   */
+  async resync(options: SpiderResyncOptions): Promise<SpiderResyncResult> {
+    return this.getForensic().resync(options);
+  }
+
+  forensicHealth(): SpiderHealth {
+    return this.getForensic().health();
   }
 
   /**
@@ -368,7 +409,8 @@ export class SpiderService {
   }
 
   /**
-   * Returns the internal engine instance for advanced analysis.
+   * Returns the internal engine instance for service-layer analysis only.
+   * @internal Not exposed through AgentContext capabilities.
    */
   getEngine(): SpiderEngine {
     return this.engine;

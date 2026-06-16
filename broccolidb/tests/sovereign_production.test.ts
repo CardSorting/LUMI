@@ -50,10 +50,10 @@ async function testLevel15() {
     console.log('Testing Spider Scanning...');
     const files = [{ filePath: 'test.ts', content: 'export function testLevel15() {}' }];
     try {
-        await ctx.graph.spider.auditWithLsp(files);
+        await ctx.graph.spider.audit({ scope: files.map((f) => f.filePath), includeTypes: false });
         console.log('✅ SUCCESS: Spider audit completed.');
     } catch (e) {
-        console.log('ℹ️ INFO: Spider audit finished (skipped LSP spawn).');
+        console.log('ℹ️ INFO: Spider audit finished (skipped type mirror).');
     }
 
     // 4. Test central telemetry direct-path and no telemetry_queue.db creation
