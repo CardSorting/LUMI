@@ -1,8 +1,8 @@
 {
 	"$schema": "https://mintlify.com/docs.json",
 	"theme": "mint",
-	"name": "DietCode",
-	"description": "The AI coding agent that understands your codebase.",
+	"name": "LUMI",
+	"description": "Calm coding companion — agentic pair programming for VS Code.",
 	"colors": {
 		"primary": "#9D4EDD",
 		"light": "#F0E6FF",
@@ -39,18 +39,13 @@
 			{
 				"label": "GitHub",
 				"icon": "github",
-				"href": "https://github.com/dietcode/dietcode"
-			},
-			{
-				"label": "Discord",
-				"icon": "discord",
-				"href": "https://discord.gg/cline"
+				"href": "https://github.com/CardSorting/DietCodeMarie"
 			}
 		],
 		"primary": {
 			"type": "button",
-			"label": "Install DietCode",
-			"href": "https://cline.bot/install?utm_source=website&utm_medium=header"
+			"label": "Install LUMI",
+			"href": "/getting-started/installing-dietcode"
 		}
 	},
 	"navigation": {
@@ -340,9 +335,7 @@
 	},
 	"footer": {
 		"socials": {
-			"x": "https://x.com/cline",
-			"github": "https://github.com/dietcode/dietcode",
-			"discord": "https://discord.gg/cline"
+			"github": "https://github.com/CardSorting/DietCodeMarie"
 		}
 	},
 	"anchors": [
@@ -631,6 +624,6 @@
 		}
 	],
 	"search": {
-		"prompt": "Search DietCode documentation..."
+		"prompt": "Search LUMI documentation..."
 	}
 }

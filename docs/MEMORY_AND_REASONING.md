@@ -1,36 +1,63 @@
 ---
 title: "AI Memory & Reasoning"
 sidebarTitle: "Memory & Reasoning"
-description: "How DietCode processes information, remembers context, and solves complex problems."
+description: "How LUMI manages context, BroccoliDB memory, and the agent reasoning loop."
 ---
 
 # AI Memory & Reasoning
 
-DietCode is more than just a code generator; it's a reasoning engine that understands your project's history and intent. This guide explains how the agent processes information and maintains context over long tasks.
+LUMI maintains context across long tasks through a combination of conversation management, BroccoliDB graph memory, and static analysis.
 
-## 🧠 The Reasoning Engine
+## Agent loop
 
-DietCode follows a deterministic **Observe → Plan → Act** cycle to ensure that every decision is grounded in the current state of your code.
+The active `Task` in `src/core/task/index.ts` repeats:
 
-- **Observation**: The agent reads files, checks terminal logs, and analyzes your workspace to gather facts.
-- **Planning**: It breaks down your request into a sequence of logical steps, considering edge cases and dependencies.
-- **Execution**: It uses its toolbelt (Shell, Browser, File Editor) to implement the plan, one step at a time.
+1. **Assemble context** — User message, rules, @ mentions, environment snapshot (`src/core/context/`).
+2. **Call LLM** — `buildApiHandler` streams assistant output.
+3. **Parse tools** — Tool uses extracted from the stream (`src/core/assistant-message/`).
+4. **Execute tools** — `ToolExecutorCoordinator` runs handlers; hooks may modify or cancel (`src/core/hooks/`).
+5. **Append results** — Tool output returns to conversation history on disk.
 
-## 💾 Local Memory (BroccoliDB)
+Plan mode restricts mutating tools via `plan_mode_respond`; Act mode uses `act_mode_respond` and full toolbelt.
 
-To stay smart over time, DietCode uses a local **Context Store** (powered by SQLite) to remember:
+## Conversation memory
 
-- **Task History**: Every conversation and decision made during a session is recorded.
-- **Project Knowledge**: Lessons learned about your project's specific architecture and patterns.
-- **Checkpoints**: Periodic snapshots of your files that allow you to "undo" any task instantly.
+| Mechanism | Location | Purpose |
+|-----------|----------|---------|
+| API conversation history | `src/core/storage/disk.ts` | Persisted messages per task ULID |
+| Context window tracking | `src/core/context/context-management/` | Token limits, overflow errors |
+| Condense / summarize | `condense`, `summarize_task` tools; `/compact` slash | Shrink history |
+| File context tracker | `src/core/context/context-tracking/FileContextTracker.ts` | Files read during task |
 
-## 🔍 Context Management
+## BroccoliDB cognitive memory
 
-Processing a large project requires focus. DietCode uses several techniques to manage context:
+Graph-backed tools (prefix `mem_`, `query_cognitive_memory`) delegate to `@noorm/broccolidb` through handlers in `src/core/task/tools/handlers/CognitiveMemory*.ts`.
 
-- **Relevance Ranking**: It prioritizes files that are most likely to be affected by your current request.
-- **Dynamic Pruning**: It removes old or irrelevant information from its "short-term memory" to keep model performance high.
-- **Symbol Mapping**: It uses static analysis to track how functions and variables are used across your entire project.
+Capabilities include:
 
----
-*Context is the differentiator between a code snippet and a software solution. DietCode keeps you focused on the big picture.*
+- Query and snapshot the knowledge graph
+- Link, merge, and refresh nodes from workspace changes
+- Blast-radius and centrality analysis for impact reasoning
+- Shared memory layers for subagent/swarm coordination (`mem_claim`, `mem_release`, `mem_hubs`)
+
+BroccoliDB storage details: [broccolidb/docs/architecture/current.md](../broccolidb/docs/architecture/current.md).
+
+## Static analysis
+
+- **Tree-sitter** — `src/services/tree-sitter/` for definitions and structure (`list_code_definition_names`).
+- **Spider** — Forensic audit via `src/core/policy/spider/` and BroccoliDB Spider capabilities.
+- **Project map tool** — `project_map` handler summarizes repository layout.
+
+## Orchestrator
+
+`src/infrastructure/ai/Orchestrator.ts` tracks agent streams, subagent tasks, intent classification, and audit metadata for multi-step/swarm workflows. It persists through `src/infrastructure/db/BufferedDbPool`.
+
+## Checkpoints
+
+File-level snapshots during tasks use `src/integrations/checkpoints/` — separate from cognitive memory but part of “what happened” recovery.
+
+## Related
+
+- [All tools](tools-reference/all-dietcode-tools.mdx) — memory tool names
+- [Working with subagents](WORKING_WITH_SUBAGENTS.md)
+- [Checkpoints](core-workflows/checkpoints.mdx)

@@ -5,11 +5,11 @@ sidebarTitle: "Enterprise"
 
 # Enterprise Deployment & Self-Hosting
 
-DietCode is architected for maximum data sovereignty. For enterprise environments with strict security requirements, the substrate supports **Self-Hosted (On-Premise)** mode, allowing you to bypass external cloud dependencies and manage your own industrial endpoints.
+LUMI is architected for maximum data sovereignty. For enterprise environments with strict security requirements, the substrate supports **Self-Hosted (On-Premise)** mode, allowing you to bypass external cloud dependencies and manage your own industrial endpoints.
 
 ## 🏢 On-Premise Architecture
 
-In On-Premise mode, DietCode redirects all API, App, and MCP traffic to your internal infrastructure. This is enabled by the `selfHosted` environment flag and a local configuration file.
+In On-Premise mode, LUMI redirects all API, App, and MCP traffic to your internal infrastructure. This is enabled by the `selfHosted` environment flag and a local configuration file.
 
 ### 🛡️ Configuration via `endpoints.json`
 The substrate looks for a sovereign configuration file at the following path:
@@ -52,7 +52,7 @@ The system proactively detects "Binary Shadowing"—where unauthorized binaries 
 ---
 
 ## 📈 Enterprise Monitoring
-Enterprise deployments should monitor the **DietCode Vitality Stream** for:
+Enterprise deployments should monitor the **LUMI Vitality Stream** for:
 - **Lease Revocations**: High frequency indicates unstable network artifacts or machine drifts.
 - **Config Errors**: `DietCodeConfigurationError` prevents startup to avoid accidental data leakage to external URLs.
 - **Metabolic Pressure**: Watch for memory saturation in large monorepos via the standard [Metabolic Monitor](JOYZONING_SOVEREIGNTY_3_0).

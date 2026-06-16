@@ -6,11 +6,11 @@ description: "Monitoring system health, identifying technical debt, and ensuring
 
 # Stability & Technical Debt Report
 
-The DietCode system includes built-in monitors to track project health and identify areas of "technical debt" that could impact stability or performance. This report provides a literal overview of how these metrics are tracked and managed.
+The LUMI system includes built-in monitors to track project health and identify areas of "technical debt" that could impact stability or performance. This report provides a literal overview of how these metrics are tracked and managed.
 
 ## 📊 System Stability Metrics
 
-DietCode monitors several key indicators to ensure that your codebase remains healthy as the agent suggests changes:
+LUMI monitors several key indicators to ensure that your codebase remains healthy as the agent suggests changes:
 
 - **Structural Integrity**: Tracks circular dependencies, broken imports, and invalid symbol references.
 - **Code Standards Compliance**: Measures how well the codebase follows the rules defined in `.dietcoderules`.
@@ -19,7 +19,7 @@ DietCode monitors several key indicators to ensure that your codebase remains he
 
 ## 🛠️ Managing Technical Debt
 
-When DietCode identifies a stability issue (formerly referred to as a "pathogen"), it categorizes it by severity:
+When LUMI identifies a stability issue (formerly referred to as a "pathogen"), it categorizes it by severity:
 
 | Severity | Type | Action Required |
 | :--- | :--- | :--- |
@@ -29,8 +29,8 @@ When DietCode identifies a stability issue (formerly referred to as a "pathogen"
 
 ## 🔍 How to Monitor Health
 
-1. **The Stability Panel**: Open the "Stability" tab in the DietCode interface to see real-time health metrics.
-2. **Auto-Diagnostics**: DietCode runs background checks after every task to ensure no regressions were introduced.
+1. **The Stability Panel**: Open the "Stability" tab in the LUMI interface to see real-time health metrics.
+2. **Auto-Diagnostics**: LUMI runs background checks after every task to ensure no regressions were introduced.
 3. **Audit Logs**: Detailed reports are saved in `broccolidb` and can be exported for team reviews.
 
 ---

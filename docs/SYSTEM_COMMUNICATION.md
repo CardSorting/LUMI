@@ -1,37 +1,80 @@
 ---
-title: "System Communication & API"
+title: "System Communication"
 sidebarTitle: "Communication"
-description: "How DietCode connects to your editor, tools, and local environment."
+description: "How LUMI connects the webview, VS Code host, LLM providers, and MCP."
 ---
 
-# System Communication & API
+# System Communication
 
-DietCode uses a robust, high-performance communication layer to ensure that the AI agent stays perfectly synchronized with your editor. This guide explains the underlying protocols and how they enable fast, reliable interaction.
+LUMI separates the **React webview**, **extension host**, and **VS Code APIs** so the agent loop stays responsive and type-safe.
 
-## 🛰️ The Communication Protocol
+## Layers
 
-DietCode communicates between its core reasoning engine and your IDE (VS Code, JetBrains) using a specialized **IPC (Inter-Process Communication)** protocol.
+```
+webview-ui/  (React)
+    ↕ protobuf messages / gRPC-style handlers
+src/core/controller/  (Controller, subscribeTo* handlers)
+    ↕ HostProvider.hostBridge (nice-grpc)
+src/hosts/vscode/hostbridge/  (VS Code adapter)
+    ↕ vscode API
+VS Code (files, terminal, window, diff)
+```
 
-- **Fast & Responsive**: By running the AI logic in a separate process, we ensure that your editor never freezes, even during intensive code analysis.
-- **Bi-directional Sync**: Changes in your editor (like saving a file or running a test) are instantly reported to the agent, while the agent's suggestions are pushed back to your UI in real-time.
-- **Type-Safe Messaging**: All communication is strictly typed using **Protocol Buffers (Protobuf)**, ensuring data integrity and preventing errors between the agent and the host.
+Parallel paths:
 
-## 🌉 The Host Bridge
+- **LLM** — `src/core/task/` → `buildApiHandler` → provider HTTP/SSE (`src/core/api/providers/`)
+- **MCP** — `src/services/mcp/McpHub.ts` → MCP SDK transports
+- **BroccoliDB** — `@noorm/broccolidb` via kernel/memory tool handlers
 
-The "Host Bridge" is the layer that translates high-level agent requests into physical actions on your machine:
+## Webview ↔ extension
 
-- **File System Operations**: Reading, writing, and listing files.
-- **Terminal Execution**: Spawning shells, running commands, and capturing output.
-- **Browser Control**: Launching and interacting with a web browser for UI testing.
-- **Editor UI**: Displaying the sidebar, opening diff views, and showing notifications.
+The sidebar webview does not call Node APIs directly. Instead:
 
-## 🛠️ Extending with MCP
+1. UI sends messages through the VS Code webview API.
+2. `src/core/controller/grpc-handler.ts` and related `subscribeTo*` modules deserialize **protobuf** payloads.
+3. `Controller` updates state or forwards to the active `Task`.
+4. State and partial streams push back through the same channel (`sendStateUpdate`, `sendPartialMessageEvent`, etc.).
 
-DietCode can also communicate with external tools via the **Model Context Protocol (MCP)**. This allows you to connect the agent to:
+Generated types live in `src/generated/` and `src/shared/proto/`.
 
-- **Databases**: Directly query or modify your local or remote DBs.
-- **External APIs**: Integrate with services like GitHub, Slack, or Linear.
-- **Custom Tools**: Write your own MCP servers to give DietCode unique capabilities.
+## Host bridge
 
----
-*Built for performance, designed for scale. DietCode's communication layer is the backbone of your AI workflow.*
+`HostProvider` (`src/hosts/host-provider.ts`) is initialized in `src/extension.ts` with:
+
+| Factory | VS Code implementation |
+|---------|------------------------|
+| `createWebviewProvider` | `VscodeWebviewProvider` |
+| `createDiffViewProvider` | `VscodeDiffViewProvider` |
+| `createTerminalManager` | `VscodeTerminalManager` |
+| `createCommentReviewController` | `VscodeCommentReviewController` |
+| `hostBridge` | `vscodeHostBridgeClient` |
+
+The gRPC client in `src/hosts/vscode/hostbridge/client/host-grpc-client.ts` calls generated services for window, workspace, env, diff, and watch operations. This keeps `src/core/` free of direct `vscode` imports.
+
+## Task loop messaging
+
+Inside `Task` (`src/core/task/index.ts`):
+
+1. User input is parsed for @ mentions (`src/core/mentions/`) and slash commands (`src/core/slash-commands/`).
+2. Context managers attach file, model, and environment metadata (`src/core/context/`).
+3. The API handler streams assistant content; tool uses are parsed from the stream.
+4. `ToolExecutorCoordinator` executes tools; hooks may intercept (`src/core/hooks/`).
+5. Results append to conversation history on disk (`src/core/storage/disk.ts`).
+
+## MCP
+
+`McpHub` manages server lifecycle, OAuth, and tool/resource routing. MCP tools surface to the agent as `use_mcp_tool` and `access_mcp_resource`. User configuration is stored under the extension global storage MCP directory (see `ensureMcpServersDirectoryExists` in `src/core/storage/disk.ts`).
+
+## Protobuf & code generation
+
+```bash
+npm run protos   # node scripts/build-proto.mjs
+```
+
+Schemas: `proto/dietcode/`. Output: `src/generated/`, formatted by `postprotos` script.
+
+## Related docs
+
+- [Project map](PROJECT_MAP.md)
+- [Architecture (current)](architecture/current.md)
+- [MCP overview](mcp/mcp-overview.mdx)

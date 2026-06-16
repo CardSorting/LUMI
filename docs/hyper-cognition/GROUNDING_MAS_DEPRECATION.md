@@ -1,6 +1,6 @@
 # Archival & Deprecation: Grounding & Multi-Agent System (MAS)
 
-This document formally records the architectural findings that led to the full removal of the **Intent Grounding** pipeline and the **Multi-Agent System (MAS)** infrastructure from DietCode in v3.85.0.
+This document formally records the architectural findings that led to the full removal of the **Intent Grounding** pipeline and the **Multi-Agent System (MAS)** infrastructure from LUMI in v3.85.0.
 
 ## 🧐 The Findings
 
@@ -30,11 +30,11 @@ The Multi-Agent System (MAS) was tightly coupled with this grounding logic. Beca
 A refactor (e.g., adding timeouts or confidence thresholds) was considered but rejected for the following reasons:
 - **Heuristic Fragility**: Thresholds are difficult to tune across diverse repository structures.
 - **Architectural Debt**: The grounding code paths were deeply intertwined with the core task loop, making partial fixes risky.
-- **Goal Alignment**: DietCode's primary objective is **autonomous execution with reliability**. A system that can halt indefinitely is fundamentally incompatible with this goal.
+- **Goal Alignment**: LUMI's primary objective is **autonomous execution with reliability**. A system that can halt indefinitely is fundamentally incompatible with this goal.
 
 ## 🏗️ New Architectural Direction: Observe-Act-Adjust
 
-Following the removal of these layers, DietCode has moved to a simplified, high-throughput execution model:
+Following the removal of these layers, LUMI has moved to a simplified, high-throughput execution model:
 
 1. **Observe**: Gather immediate context from BroccoliDB, Spider Engine, and Diagnostics.
 2. **Act**: Propose a plan and execute tool calls with built-in policy guards (`UniversalGuard`).

@@ -40,9 +40,9 @@ A context window is the maximum amount of text an AI model can process at once. 
 ### What Counts Toward Context
 
 1. **Your current conversation** - All messages in the chat
-2. **File contents** - Any files you've shared or DietCode has read
+2. **File contents** - Any files you've shared or LUMI has read
 3. **Tool outputs** - Results from executed commands
-4. **System prompts** - DietCode's instructions (minimal impact)
+4. **System prompts** - LUMI's instructions (minimal impact)
 
 ### Optimization Strategies
 
@@ -62,7 +62,7 @@ Instead of including entire files:
 - Reference specific functions rather than whole files
 
 #### 3. Enable Auto-compact
-DietCode can automatically summarize long conversations:
+LUMI can automatically summarize long conversations:
 - Settings → Features → Auto-compact
 - Preserves important context
 - Reduces token usage
@@ -100,7 +100,7 @@ DietCode can automatically summarize long conversations:
 
 ### Plan/Act Phase Optimization
 
-Configure separate models for the planning and implementation phases (Settings → "Use different models for Plan and Act modes"). DietCode automatically selects the right model when transitioning between phases:
+Configure separate models for the planning and implementation phases (Settings → "Use different models for Plan and Act modes"). LUMI automatically selects the right model when transitioning between phases:
 
 - **Plan phase**: Use a cost-efficient or reasoning-focused model for exploration
 - **Act phase**: Use a coding-optimized model with larger context for implementation
@@ -141,10 +141,10 @@ Act Mode: Claude Sonnet (1M) - Maximum context for coding
 **A:** Not always. Larger contexts increase cost and can reduce response quality. Match the context to your task size.
 
 ### Q: How can I tell how much context I'm using?
-**A:** DietCode shows token usage in the interface. Watch for the context meter approaching limits.
+**A:** LUMI shows token usage in the interface. Watch for the context meter approaching limits.
 
 ### Q: What happens when I exceed the context limit?
-**A:** DietCode will either:
+**A:** LUMI will either:
 - Automatically compact the conversation (if enabled)
 - Show an error and suggest starting a new task
 - Truncate older messages (with warning)

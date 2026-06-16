@@ -4,7 +4,7 @@ sidebarTitle: "Adding Context"
 description: "Use @ mentions and drag & drop to bring files, terminal output, errors, git changes, and web content into your conversations."
 ---
 
-DietCode works best when it has the right context, not just more context. @ mentions let you pull in exactly the files, errors, terminal output, or documentation that matter for your task. No copying, no pasting, no context switching.
+LUMI works best when it has the right context, not just more context. @ mentions let you pull in exactly the files, errors, terminal output, or documentation that matter for your task. No copying, no pasting, no context switching.
 
 You can add context two ways:
 - Type `@` in the chat input and select what you want
@@ -28,7 +28,7 @@ You can add context two ways:
 
 ## File Mentions
 
-Reference any file with `@/path/to/file`. DietCode sees the complete file content, including imports, related functions, and surrounding context.
+Reference any file with `@/path/to/file`. LUMI sees the complete file content, including imports, related functions, and surrounding context.
 
 ```text
 Can you refactor the error handling in @/src/api/users.ts?
@@ -36,7 +36,7 @@ Can you refactor the error handling in @/src/api/users.ts?
 
 ## Folder Mentions
 
-Reference entire directories with `@/path/to/folder/` (note the trailing slash). DietCode sees the folder structure and all file contents.
+Reference entire directories with `@/path/to/folder/` (note the trailing slash). LUMI sees the folder structure and all file contents.
 
 ```text
 Explain how the components in @/src/components/auth/ work together.
@@ -78,7 +78,7 @@ What did @a1b2c3d change?
 
 ## URL Mentions
 
-Reference web content with `@https://example.com`. DietCode fetches the page content.
+Reference web content with `@https://example.com`. LUMI fetches the page content.
 
 ```text
 Implement the pattern described in @https://react.dev/learn/scaling-up-with-reducer-and-context
@@ -107,11 +107,11 @@ Drag files directly into the chat input to add them to your conversation.
 In VS Code, hold **Shift** while dragging files into the chat input.
 </Note>
 
-Dragging workspace files automatically creates file mentions. You can also drag files from Finder or File Explorer directly into DietCode.
+Dragging workspace files automatically creates file mentions. You can also drag files from Finder or File Explorer directly into LUMI.
 
 ### Supported File Types
 
-DietCode supports text files from your workspace, plus images, PDFs, CSVs, and Excel files from your file system.
+LUMI supports text files from your workspace, plus images, PDFs, CSVs, and Excel files from your file system.
 
 <Note>
 Images require a multimodal model. Check the model selector to see which models support image inputs.
@@ -119,22 +119,22 @@ Images require a multimodal model. Check the model selector to see which models 
 
 ## Context Menu Commands
 
-Right-click on selected code to access DietCode without typing. This is the fastest way to get help with specific code since it automatically includes the selected text and its file location as context.
+Right-click on selected code to access LUMI without typing. This is the fastest way to get help with specific code since it automatically includes the selected text and its file location as context.
 
 ### Code Editor Commands
 
 | Command | When to Use |
 |---------|-------------|
-| **Add to DietCode** | Ask questions about code, get suggestions, or start a conversation with specific code as context |
-| **Fix with DietCode** | Quick fixes for errors, bugs, or issues in the selected code |
-| **Explain with DietCode** | Understand unfamiliar code, complex logic, or code you're reviewing |
-| **Improve with DietCode** | Get refactoring suggestions, performance improvements, or cleaner implementations |
+| **Add to LUMI** | Ask questions about code, get suggestions, or start a conversation with specific code as context |
+| **Fix with LUMI** | Quick fixes for errors, bugs, or issues in the selected code |
+| **Explain with LUMI** | Understand unfamiliar code, complex logic, or code you're reviewing |
+| **Improve with LUMI** | Get refactoring suggestions, performance improvements, or cleaner implementations |
 
-**Fix with DietCode** also appears in the lightbulb menu (Quick Fix) when your cursor is on an error or warning, making it easy to fix issues inline.
+**Fix with LUMI** also appears in the lightbulb menu (Quick Fix) when your cursor is on an error or warning, making it easy to fix issues inline.
 
 ### Terminal Commands
 
-Right-click in the terminal to "Add to DietCode" and get help with:
+Right-click in the terminal to "Add to LUMI" and get help with:
 - Build errors and failed commands
 - Test failures and stack traces
 - Configuration issues
@@ -142,4 +142,4 @@ Right-click in the terminal to "Add to DietCode" and get help with:
 
 ### Source Control Commands
 
-In the Source Control panel, use "Generate Commit Message" to create AI-powered commit messages from your staged changes. DietCode analyzes the diff and writes a descriptive commit message following conventional commit patterns.
+In the Source Control panel, use "Generate Commit Message" to create AI-powered commit messages from your staged changes. LUMI analyzes the diff and writes a descriptive commit message following conventional commit patterns.

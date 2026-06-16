@@ -4,7 +4,7 @@ sidebarTitle: "Using Commands"
 description: "Built-in slash commands to manage context, plan implementations, and create reusable workflows."
 ---
 
-DietCode provides slash commands in chat that help you manage your conversation and plan complex implementations.
+LUMI provides slash commands in chat that help you manage your conversation and plan complex implementations.
 
 <Tip>
 **New to slash commands?** Watch our [quick video walkthrough](https://youtu.be/MxS5Jerpf-o) to see these commands in action.
@@ -14,14 +14,21 @@ DietCode provides slash commands in chat that help you manage your conversation 
 
 Type `/` in the chat input to see available slash commands:
 
-| Command | What It Does |
+Built-in commands are defined in `src/core/slash-commands/index.ts` (`SUPPORTED_DEFAULT_COMMANDS`):
+
+| Command | What it does |
 |---------|--------------|
-| `/newtask` | Start fresh task with distilled context from current conversation |
-| `/smol` | Compress conversation history while preserving essential context |
-| `/newrule` | Create a rule file to teach DietCode your preferences |
-| `/deep-planning` | Investigate codebase, plan thoroughly, then create implementation task |
-| `/explain-changes` | Generate AI explanations for any git diff (VS Code only) |
-| `/reportbug` | Report a bug with diagnostic info |
+| `/newtask` | Start a fresh task with distilled context |
+| `/smol` or `/compact` | Condense conversation history (`condenseToolResponse`) |
+| `/newrule` | Create a rule file under `.dietcoderules/` |
+| `/reportbug` | Structured bug report with diagnostics |
+| `/deep-planning` | Multi-phase planning workflow |
+| `/replan` | Pivot back to planning |
+| `/explain-changes` | Explain git diffs (VS Code) |
+| `/document` | Documentation generation prompt |
+| `/roadmap` | Run ROADMAP.md slash handler (`RoadmapSlashCommand`) |
+
+Custom workflow files (when enabled) match by filename: `/my-workflow` loads markdown from `.dietcoderules/workflows/`. MCP prompts use `/mcp:server:promptname`.
 
 ### /newtask
 
@@ -37,18 +44,18 @@ Use `/smol` when you're deep into a debugging session or brainstorming and need 
 
 ### /newrule
 
-`/newrule` creates a rule file that teaches DietCode your preferences. DietCode will guide you through setting up guidelines for communication style, coding standards, project context, and workflows. The rule is saved to your `.dietcoderules` directory and automatically loaded for future conversations.
+`/newrule` creates a rule file that teaches LUMI your preferences. LUMI will guide you through setting up guidelines for communication style, coding standards, project context, and workflows. The rule is saved to your `.dietcoderules` directory and automatically loaded for future conversations.
 
-Use `/newrule` when you find yourself repeating the same instructions across tasks. For more about rules, see [DietCode Rules](/customization/dietcode-rules).
+Use `/newrule` when you find yourself repeating the same instructions across tasks. For more about rules, see [LUMI rules](/customization/dietcode-rules).
 
 ### /deep-planning
 
-Transform DietCode into a meticulous architect who investigates your codebase, asks clarifying questions, and creates a comprehensive implementation plan before writing any code. Deep planning follows a four-step process:
+Transform LUMI into a meticulous architect who investigates your codebase, asks clarifying questions, and creates a comprehensive implementation plan before writing any code. Deep planning follows a four-step process:
 
-1. **Silent Investigation** - DietCode explores your codebase structure and patterns
-2. **Discussion** - Targeted questions about requirements and approach
-3. **Plan Creation** - Generates `implementation_plan.md` with detailed specifications
-4. **Task Creation** - Creates a new task with trackable implementation steps
+1. **Silent Investigation** — LUMI explores your codebase structure and patterns
+2. **Discussion** — Targeted questions about requirements and approach
+3. **Plan Creation** — Generates `implementation_plan.md` with detailed specifications
+4. **Task Creation** — Creates a new task with trackable implementation steps
 
 Use `/deep-planning` for features touching multiple parts of your codebase, architectural changes, or complex integrations. For detailed documentation, see [Deep Planning](/features/deep-planning).
 
@@ -64,7 +71,7 @@ Use `/explain-changes` when reviewing code, onboarding to a new codebase, or und
 
 ### /reportbug
 
-`/reportbug` collects diagnostic information and helps you report issues with DietCode. It gathers relevant context like your configuration, recent errors, and system details to make bug reports more useful for the development team.
+`/reportbug` collects diagnostic information and helps you report issues with LUMI. It gathers relevant context like your configuration, recent errors, and system details to make bug reports more useful for the development team.
 
 Use `/reportbug` when you encounter unexpected behavior, crashes, or bugs you want to report.
 

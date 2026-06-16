@@ -4,11 +4,11 @@ sidebarTitle: "Jupyter Notebooks"
 description: "AI-assisted editing of Jupyter notebooks with cell-level context awareness"
 ---
 
-DietCode provides comprehensive support for Jupyter notebooks (`.ipynb` files), enabling AI-assisted editing with full cell-level context awareness. This feature was developed in collaboration with Amazon to bring AI coding assistance to data science workflows.
+LUMI provides comprehensive support for Jupyter notebooks (`.ipynb` files), enabling AI-assisted editing with full cell-level context awareness. This feature was developed in collaboration with Amazon to bring AI coding assistance to data science workflows.
 
 ## Getting Started
 
-Jupyter notebook support is a built-in feature of DietCode. To use it, you just need to have the Jupyter notebook extension enabled in VS Code. Once you open any `.ipynb` file, you'll see AI-assisted buttons in your notebook interface.
+Jupyter notebook support is built into LUMI. With the Jupyter extension enabled in VS Code, open any `.ipynb` file to use AI-assisted cell commands (`lumi.jupyterGenerateCell`, `lumi.jupyterExplainCell`, `lumi.jupyterImproveCell` in `package.json`).
 
 ## How to Use
 
@@ -36,7 +36,7 @@ This is useful for:
 - Onboarding to a teammate's analysis
 - Understanding complex transformations
 
-DietCode extracts the full cell context, including outputs, so explanations can reference actual results like column names, row counts, and computed values.
+LUMI extracts the full cell context, including outputs, so explanations can reference actual results like column names, row counts, and computed values.
 
 ### Improve Cell
 
@@ -53,13 +53,13 @@ Use this to:
 - Refactor for clarity
 - Convert loops to vectorized operations
 
-DietCode suggests improvements while preserving the cell's position and metadata in the notebook structure. The AI explains what was changed and why.
+LUMI suggests improvements while preserving the cell's position and metadata in the notebook structure. The AI explains what was changed and why.
 
 ## How Cell Context Works
 
 Unlike traditional file editing, Jupyter notebooks are JSON documents containing arrays of cells. Each cell has its own type, source content, metadata, execution count, and outputs.
 
-When you use a Jupyter command, DietCode extracts structured context that includes:
+When you use a Jupyter command, LUMI extracts structured context that includes:
 
 - **Cell type** (code, markdown, or raw)
 - **Source content** as an array of lines
@@ -71,7 +71,7 @@ This structured representation allows the AI to understand not just the code, bu
 
 ### JSON Structure Preservation
 
-DietCode is designed to work carefully with the cell JSON structure, aiming to:
+LUMI is designed to work carefully with the cell JSON structure, aiming to:
 
 - Keep cell boundaries intact
 - Preserve execution counts
@@ -111,5 +111,5 @@ You can bind any of these commands to keyboard shortcuts for faster access:
 
 ## Related
 
-- [All DietCode Tools](/tools-reference/all-dietcode-tools) - Overview of all DietCode tools
+- [All LUMI Tools](/tools-reference/all-dietcode-tools) - Overview of all LUMI tools
 - [Model Selection Guide](/core-features/model-selection-guide) - Choosing the right model for your workflow

@@ -1,22 +1,22 @@
 ---
 title: "Configure AWS Bedrock Provider (Admin)"
 sidebarTitle: "Configure AWS Bedrock (Admin)"
-description: "This guide explains how administrators configure AWS Bedrock as the organization-wide LLM provider for DietCode."
+description: "This guide explains how administrators configure AWS Bedrock as the organization-wide LLM provider for LUMI."
 ---
 
 
-As an administrator, you can add AWS Bedrock as the organization-wide LLM provider for all DietCode users through the hosted admin console. This centralized approach ensures consistent access to Amazon's AI models while maintaining your organization's security and compliance requirements through region controls and basic configuration options.
+As an administrator, you can add AWS Bedrock as the organization-wide LLM provider for all LUMI users through the hosted admin console. This centralized approach ensures consistent access to Amazon's AI models while maintaining your organization's security and compliance requirements through region controls and basic configuration options.
 
 ## Before You Begin
 
 To get started with setting up AWS Bedrock as your organization's LLM provider, you'll need a few items in place. 
 
-**Administrator access to the DietCode Admin console**  
-You need admin privileges to enforce provider settings across your organization. If you can navigate to **Settings → DietCode Settings** in the admin console at [app.dietcode.bot](https://app.dietcode.bot), you have the right access level.
+**Administrator access to the LUMI Admin console**  
+You need admin privileges to enforce provider settings across your organization. If you can navigate to **Settings → LUMI Settings** in the admin console at [app.dietcode.bot](https://app.dietcode.bot), you have the right access level.
 
 
 **AWS Bedrock account with the right permissions**  
-Your AWS account needs specific Bedrock permissions to work with DietCode. 
+Your AWS account needs specific Bedrock permissions to work with LUMI. 
 
 <Note>
 If you don't have direct AWS access, coordinate with your cloud team to get these permissions set up before proceeding.
@@ -38,8 +38,8 @@ Check which models are available in your region first. Some newer models might n
 ## Configuration Steps
 
 <Steps>
-<Step title="Access DietCode Settings">
-Navigate to [app.dietcode.bot](https://app.dietcode.bot) and sign in with your administrator account. Go to **Settings → DietCode Settings**.
+<Step title="Access LUMI Settings">
+Navigate to [app.dietcode.bot](https://app.dietcode.bot) and sign in with your administrator account. Go to **Settings → LUMI Settings**.
 
 <Info>
 You should see the provider configuration options if you have the correct admin access level.
@@ -95,10 +95,10 @@ Enable prompt caching to reduce costs and latency. Bedrock caches portions of pr
 <Step title="Save Configuration">
 After configuring your settings, close the provider configuration panel and click **Save** on the settings page to persist your changes.
 
-Once saved, all organization members signed into the DietCode extension will automatically use AWS Bedrock with your configured settings. They won't be able to select other providers or switch to their personal DietCode accounts.
+Once saved, all organization members signed into the LUMI extension will automatically use AWS Bedrock with your configured settings. They won't be able to select other providers or switch to their personal LUMI accounts.
 
 <Warning>
-Members can't switch to personal DietCode accounts or join other organizations once remote configuration is enabled. This ensures consistent provider usage across your team.
+Members can't switch to personal LUMI accounts or join other organizations once remote configuration is enabled. This ensures consistent provider usage across your team.
 </Warning>
 </Step>
 </Steps>

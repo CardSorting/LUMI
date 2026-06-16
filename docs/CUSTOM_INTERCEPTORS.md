@@ -1,12 +1,12 @@
 ---
 title: "Custom Interceptors (Hooks)"
 sidebarTitle: "Custom Interceptors"
-description: "Extend DietCode's intelligence with custom scripts that run at every stage of the agentic lifecycle."
+description: "Extend LUMI's intelligence with custom scripts that run at every stage of the agentic lifecycle."
 ---
 
 # Custom Interceptors (Hooks)
 
-DietCode is designed to be **Extensible by Default**. The built-in Hooks system allows you to write custom "Interceptors" in any language (Node, Python, Bash, etc.) to monitor, modify, or block the agent's actions.
+LUMI is designed to be **Extensible by Default**. The built-in Hooks system allows you to write custom "Interceptors" in any language (Node, Python, Bash, etc.) to monitor, modify, or block the agent's actions.
 
 ## 🔄 The Agentic Lifecycle
 
@@ -22,8 +22,8 @@ You can hook into the following lifecycle stages to enforce policies or inject c
 
 ## 🛠️ How it Works
 
-DietCode looks for executable scripts in two locations:
-1. **Global Hooks**: `~/Documents/DietCode/Hooks/`
+LUMI looks for executable scripts in two locations:
+1. **Global Hooks**: `~/Documents/LUMI/Hooks/`
 2. **Workspace Hooks**: `.dietcoderules/hooks/` within your project root.
 
 ### Example: A PreToolUse Interceptor (Bash)
@@ -34,7 +34,7 @@ This hook blocks the agent from running `bash` commands if they contain `rm -rf`
 #!/bin/bash
 # .dietcoderules/hooks/PreToolUse.sh
 
-# Read the JSON input from DietCode
+# Read the JSON input from LUMI
 read -r INPUT
 
 # Check if the tool is 'bash' and the command is dangerous
@@ -61,4 +61,4 @@ Use the `UserPromptSubmit` hook to analyze the current workspace state and injec
 Have a `PostToolUse` hook run your local test suite after the agent edits a file. If the tests fail, the hook can provide the test output back to the agent for immediate self-correction.
 
 ---
-*DietCode isn't just a tool; it's a platform. Build your own guardrails and supercharge your agentic workflow.*
+*LUMI isn't just a tool; it's a platform. Build your own guardrails and supercharge your agentic workflow.*

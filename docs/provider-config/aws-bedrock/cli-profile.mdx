@@ -1,12 +1,12 @@
 ---
 title: "CLI Profile (SSO)"
 sidebarTitle: "CLI Profile (SSO)"
-description: "Configure AWS Bedrock to use AWS CLI profiles for authentication with DietCode. Best for SSO/federated roles and secure enterprise access."
+description: "Configure AWS Bedrock to use AWS CLI profiles for authentication with LUMI. Best for SSO/federated roles and secure enterprise access."
 ---
 
 ### Overview
 
-DietCode offers the option of utilizing AWS credentials or AWS profiles to access AWS Bedrock services. SSO/Federated roles are suggested over Legacy IAM configuration; this guide describes how to configure your environment so that DietCode uses SSO roles for authentication.
+LUMI offers the option of utilizing AWS credentials or AWS profiles to access AWS Bedrock services. SSO/Federated roles are suggested over Legacy IAM configuration; this guide describes how to configure your environment so that LUMI uses SSO roles for authentication.
 
 ---
 
@@ -25,11 +25,11 @@ DietCode offers the option of utilizing AWS credentials or AWS profiles to acces
 3. Continue configuring your profile using [the `aws configure sso` CLI wizard](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html#cli-configure-sso-configure)
 
     - Once configured, use the following command to authenticate the AWS CLI: `aws sso login --profile <AWS-profile-name>`
-    - Note which profile name you attach to your AWS account, this is needed to configure DietCode in the following steps
+    - Note which profile name you attach to your AWS account, this is needed to configure LUMI in the following steps
 
-4. If you haven't already done so, install VSCode and the DietCode extension. Consult the [Getting Started](/getting-started/installing-dietcode) page for guidance.
+4. If you haven't already done so, install VSCode and the LUMI extension. Consult the [Getting Started](/getting-started/installing-dietcode) page for guidance.
 
-5. Open the DietCode extension, then click on the settings button ⚙️ to select your API Provider.
+5. Open the LUMI extension, then click on the settings button ⚙️ to select your API Provider.
     - From the API Provider dropdown, select AWS Bedrock
     - Select the AWS Profile radio button, then enter the AWS Profile Name from step 3
     - Select your AWS Region from the dropdown menu
@@ -38,6 +38,6 @@ DietCode offers the option of utilizing AWS credentials or AWS profiles to acces
 <Frame>
 	<img
 		src="https://storage.googleapis.com/dietcode_public_images/docs/assets/dietcode-aws-setup-markup%20(1).png"
-		alt="AWS Bedrock configuration in DietCode settings showing profile authentication setup"
+		alt="AWS Bedrock configuration in LUMI settings showing profile authentication setup"
 	/>
 </Frame>

@@ -1,18 +1,18 @@
 ---
 title: "Configure Google Vertex AI Provider (Admin)"
 sidebarTitle: "Configure Google Vertex (Admin)"
-description: "This guide explains how administrators configure Google Vertex AI as the organization-wide LLM provider for DietCode."
+description: "This guide explains how administrators configure Google Vertex AI as the organization-wide LLM provider for LUMI."
 ---
 
 
-As an administrator, you can add Google Vertex AI as the organization-wide LLM provider for all DietCode users through the hosted admin console. This centralized approach ensures consistent access to Google's Gemini models while maintaining your organization's project boundaries and regional settings.
+As an administrator, you can add Google Vertex AI as the organization-wide LLM provider for all LUMI users through the hosted admin console. This centralized approach ensures consistent access to Google's Gemini models while maintaining your organization's project boundaries and regional settings.
 
 ## Before You Begin
 
 To get started with setting up Google Vertex AI as your organization's LLM provider, you'll need a few items in place.
 
-**Administrator access to the DietCode Admin console**  
-You need admin privileges to enforce provider settings across your organization. If you can navigate to **Settings → DietCode Settings** in the admin console at [app.dietcode.bot](https://app.dietcode.bot), you have the right access level.
+**Administrator access to the LUMI Admin console**  
+You need admin privileges to enforce provider settings across your organization. If you can navigate to **Settings → LUMI Settings** in the admin console at [app.dietcode.bot](https://app.dietcode.bot), you have the right access level.
 
 
 **Google Cloud Project with Vertex AI enabled**  
@@ -32,8 +32,8 @@ Service accounts should have the minimum IAM permissions needed for Vertex AI ac
 ## Configuration Steps
 
 <Steps>
-<Step title="Access DietCode Settings">
-Navigate to [app.dietcode.bot](https://app.dietcode.bot) and sign in with your administrator account. Go to **Settings → DietCode Settings**.
+<Step title="Access LUMI Settings">
+Navigate to [app.dietcode.bot](https://app.dietcode.bot) and sign in with your administrator account. Go to **Settings → LUMI Settings**.
 
 <Info>
 You should see the provider configuration options if you have the correct admin access level.
@@ -75,10 +75,10 @@ Choose a region close to your team's location for optimal performance. Some mode
 <Step title="Save Configuration">
 After configuring your settings, close the provider configuration panel and click **Save** on the settings page to persist your changes.
 
-Once saved, all organization members signed into the DietCode extension will automatically use Google Vertex AI with your configured settings. They won't be able to select other providers or switch to their personal DietCode accounts.
+Once saved, all organization members signed into the LUMI extension will automatically use Google Vertex AI with your configured settings. They won't be able to select other providers or switch to their personal LUMI accounts.
 
 <Warning>
-Members can't switch to personal DietCode accounts or join other organizations once remote configuration is enabled. This ensures consistent provider usage across your team.
+Members can't switch to personal LUMI accounts or join other organizations once remote configuration is enabled. This ensures consistent provider usage across your team.
 </Warning>
 </Step>
 </Steps>

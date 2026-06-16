@@ -1,197 +1,82 @@
 ---
-title: "Installing DietCode"
-description: "Get DietCode up and running in your favorite IDE or terminal with these simple installation steps"
+title: "Installing LUMI"
+description: "Install the LUMI VS Code extension from the marketplace or a VSIX."
 ---
 
-## Before You Begin
+## Before you begin
 
-1. **Create your account** at [app.dietcode.bot](https://app.dietcode.bot/login) for access to multiple AI models, seamless setup without managing API keys, and occasional free inferencing.
+1. Use **VS Code 1.84+** or a compatible fork (Cursor, Windsurf, etc.).
+2. Have an API key ready for at least one [supported provider](/core-features/model-selection-guide).
+3. Optionally disable other LUMI forks to avoid activity bar conflicts.
 
-2. **Choose your platform**: VS Code, Cursor, Antigravity, JetBrains IDEs, CLI (macOS/Linux preview), Zed, Neovim, VSCodium, or Windsurf.
+## Install from Extensions
 
-## Installation Instructions
+<Steps>
+  <Step title="Open Extensions">
+    Press `Ctrl/Cmd + Shift + X` or click the Extensions icon.
+  </Step>
+  <Step title="Search for LUMI">
+    Look for **LUMI** published by **CardSorting** (`CardSorting.lumi`).
+  </Step>
+  <Step title="Install and open">
+    Click **Install**, then click the LUMI icon in the Activity Bar.
+  </Step>
+</Steps>
 
-<Tabs>
-  <Tab title="VS Code/Cursor/Antigravity">
-    <Steps>
-      <Step title="Open VS Code, Cursor, or Antigravity">
-        Launch the editor on your computer.
-      </Step>
-      <Step title="Open Extensions">
-        Press `Ctrl/Cmd + Shift + X` or click the Extensions icon in the Activity Bar.
-      </Step>
-      <Step title="Search for DietCode">
-        Type "DietCode" in the search bar.
-      </Step>
-      <Step title="Install">
-        Click the **Install** button on the DietCode extension.
-      </Step>
-      <Step title="Access DietCode">
-        Click the DietCode icon in the Activity Bar, or open Command Palette (`Ctrl/Cmd + Shift + P`) and type "DietCode: Open In New Tab".
-      </Step>
-    </Steps>
+## Install from VSIX
 
-    <Tip>
-    If VS Code shows "Running extensions might..." dialog, click **Allow**. If you don't see the DietCode icon, restart VS Code.
-    </Tip>
-  </Tab>
-  <Tab title="JetBrains IDEs">
-    <Note>
-    DietCode for JetBrains works almost identically to VS Code, with all core features: diff editing, tools, multiple API providers, MCP servers, DietCode rules/workflows, and more.
-    </Note>
+```bash
+code --install-extension lumi-1.0.3.vsix
+# or
+cursor --install-extension lumi-1.0.3.vsix
+```
 
-    <Steps>
-      <Step title="Open your JetBrains IDE">
-        Launch IntelliJ IDEA, PyCharm, WebStorm, or any JetBrains IDE.
-      </Step>
-      <Step title="Open Settings">
-        Press `Ctrl+Alt+S` (Windows/Linux) or `Cmd+,` (macOS).
-      </Step>
-      <Step title="Navigate to Plugins">
-        Go to **Plugins** → **Marketplace** tab.
-      </Step>
-      <Step title="Install DietCode">
-        Search for "DietCode" and click **Install**.
-      </Step>
-      <Step title="Restart IDE">
-        Restart your IDE to complete the installation.
-      </Step>
-    </Steps>
+Build a VSIX from source:
 
-    Find DietCode in **View** → **Tool Windows** → **DietCode** (usually on the right side).
+```bash
+npm run install:all
+npm run package
+# Output: dist/*.vsix
+```
 
-    <AccordionGroup>
-      <Accordion title="Alternative Installation Methods">
-        **Browser Install:**
-        1. Go to the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/28247-dietcode)
-        2. Click **Install to IDE**
-        3. Confirm in your IDE and restart
+## Verify installation
 
-        **Manual Install:**
-        1. Download from the [marketplace page](https://plugins.jetbrains.com/plugin/28247-dietcode)
-        2. Go to **Settings** → **Plugins** → gear icon → **Install Plugin from Disk**
-        3. Select the downloaded `.zip` file and restart
-      </Accordion>
+After install you should see:
 
-      <Accordion title="Terminal Integration Difference">
-        JetBrains shows terminal output differently than VS Code. In VS Code, output streams directly to chat. In JetBrains, output appears in collapsible "Command Output" sections.
-        
-        Commands execute successfully in both. Expand the section to see results in JetBrains.
-      </Accordion>
-    </AccordionGroup>
-  </Tab>
-  <Tab title="VSCodium/Windsurf">
-    <Note>
-    These editors use the **Open VSX Registry** instead of the VS Code Marketplace, but the installation process is nearly identical.
-    </Note>
+- Activity bar entry **LUMI** with icon from `assets/icons/`
+- Commands prefixed `lumi.*` (for example `lumi.focusChatInput`, `lumi.generateGitCommitMessage`)
+- Sidebar webview id `lumi.SidebarProvider`
 
-    <Steps>
-      <Step title="Open your editor">
-        Launch VSCodium, Windsurf, or another Open VSX-compatible editor.
-      </Step>
-      <Step title="Open Extensions">
-        Press `Ctrl/Cmd + Shift + X`.
-      </Step>
-      <Step title="Search for DietCode">
-        Type "DietCode" in the search bar.
-      </Step>
-      <Step title="Install">
-        Select "DietCode" by saoudrizwan and click **Install**.
-      </Step>
-      <Step title="Reload">
-        Reload your editor if prompted.
-      </Step>
-    </Steps>
+Open Command Palette (`Ctrl/Cmd + Shift + P`) → **LUMI: Jump to Chat Input**.
 
-    Look for the DietCode icon in your Activity Bar or use the Command Palette.
-  </Tab>
-</Tabs>
+## Development install
 
-## Sign In & Start Building
+```bash
+npm run install:all
+npm run dev          # extension watch
+npm run dev:webview  # webview Vite dev server (separate terminal)
+```
 
-<Note>
-**CLI users:** If you installed via CLI, you already authenticated during setup with `dietcode auth`. You're ready to go!
-</Note>
+Press **F5** in VS Code to launch an Extension Development Host.
 
-1. **Open DietCode** in your editor:
-   - **VS Code/Cursor/Antigravity/VSCodium/Windsurf:** Click the DietCode icon in the Activity Bar
-   - **JetBrains:** Go to **View** → **Tool Windows** → **DietCode**
+## Platform notes
 
-2. **Sign in** by clicking the **Sign Up** button in the DietCode interface. You'll be redirected to [app.dietcode.bot](https://app.dietcode.bot) to authenticate.
+| Platform | Notes |
+|----------|-------|
+| macOS / Linux / Windows | Fully supported via VS Code host bridge |
+| Multi-root workspaces | Supported via `src/core/workspace/` |
+| Jupyter notebooks | Toolbar commands: Generate / Explain / Improve cell |
 
-   <Tip>
-     Learn more about [authorizing with DietCode](/getting-started/authorizing-with-dietcode), including how OAuth authentication works, using API keys with other providers, and troubleshooting auth issues.
-   </Tip>
-
-3. **Start building!** After signing in, you'll automatically return to your editor-DietCode is ready to help.
-
-## Setting Up DietCode in the Right Sidebar
-
-For the best coding experience, we recommend moving DietCode to the right sidebar. This keeps your project files visible on the left while you chat with DietCode on the right, giving you full visibility of your codebase as DietCode works.
-
-<Tabs>
-  <Tab title="VS Code">
-    <Steps>
-      <Step title="Align Extension View">
-        Make sure your extension view is aligned vertically to the left.
-      </Step>
-      <Step title="Open Right Side View">
-        Click the button that opens the right side panel (typically used for GitHub Copilot chat), or use `Option + Cmd/Ctrl + B`.
-      </Step>
-      <Step title="Drag DietCode Icon">
-        Drag the DietCode icon over to the nav panel at the top of that right view.
-      </Step>
-    </Steps>
-
-    <Frame>
-      <img
-        src="https://storage.googleapis.com/dietcode_public_images/vscode_right_view.gif"
-        alt="VS Code Right Sidebar Setup"
-      />
-    </Frame>
-  </Tab>
-  <Tab title="Cursor">
-    <Steps>
-      <Step title="Set Vertical Activity Bar">
-        Cursor uses a horizontal activity bar by default. To switch to vertical:
-        1. Open Command Palette (`Cmd/Ctrl + Shift + P`)
-        2. Search for "Preferences: Open Settings (UI)"
-        3. Search for `workbench.activityBar.orientation`
-        4. Set the value to `vertical`
-        5. Restart Cursor
-      </Step>
-      <Step title="Open the AI Pane">
-        Click the Cursor cube icon (AI Pane) to open the right side view panel.
-      </Step>
-      <Step title="Drag DietCode to the AI Pane">
-        Drag the DietCode icon directly into the AI Pane sidebar.
-      </Step>
-    </Steps>
-
-    <Frame>
-      <img
-        src="https://storage.googleapis.com/dietcode_public_images/Cursor-sidebar.gif"
-        alt="Cursor Right Sidebar Setup"
-      />
-    </Frame>
-  </Tab>
-</Tabs>
+This repository ships a **VS Code extension only**. JetBrains, CLI, and Zed flows described in upstream LUMI docs are not part of this workspace build unless you add separate packages.
 
 ## Troubleshooting
 
-### Can't Find DietCode in the Marketplace
+| Issue | Fix |
+|-------|-----|
+| No LUMI icon | Reload window; check for conflicting LUMI extensions |
+| Webview blank | Run `npm run build:webview` when developing from source |
+| Provider errors | Confirm API key in Settings; see [authorizing](/getting-started/authorizing-with-dietcode) |
 
-Sometimes DietCode doesn't show up in search results if you're looking in the wrong tab or using an incompatible IDE version. Make sure you're searching in the **Marketplace** tab (not Installed), try searching for "DietCode AI" instead, and verify your IDE is up to date. If installation fails, restart your IDE and check your internet connection.
+## Next step
 
-### DietCode Icon Not Appearing After Install
-
-The most common fix is a full restart-close your IDE completely (File → Exit) and reopen it. In VS Code/Cursor/VSCodium, you can also open the Command Palette (`Ctrl/Cmd + Shift + P`) and type "DietCode: Open In New Tab". In JetBrains, check **View** → **Tool Windows** → **DietCode**. If it's still missing, verify the plugin is enabled in your Extensions/Plugins settings.
-
-### Plugin Installed But Not Working
-
-If DietCode appears installed but doesn't respond, try disabling and re-enabling the extension in your IDE's settings. Check the Developer Console (VS Code: Help → Toggle Developer Tools) or Event Log (JetBrains) for error messages. Also ensure you're using a supported IDE version and close any resource-intensive extensions that might interfere.
-
-## Need Help?
-
-- Join our [Discord community](https://discord.gg/dietcode) for support, tips, and discussions.
-- [Read the docs](/getting-started/authorizing-with-dietcode) to explore model selection guides and advanced features.
+[Configure a model provider →](/getting-started/authorizing-with-dietcode)

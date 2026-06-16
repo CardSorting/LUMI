@@ -6,7 +6,7 @@ description: "MIRA emotional UX strategy — comfort-first developer tooling in 
 
 # User Interface Design
 
-The DietCode sidebar presents itself to users as **MIRA**: a calm desk companion developers can keep open all day. The interface is not a productivity cockpit, an analytics dashboard, or enterprise AI infrastructure. It is **lamplight beside difficult creative work**.
+The LUMI sidebar presents itself to users as **MIRA**: a calm desk companion developers can keep open all day. The interface is not a productivity cockpit, an analytics dashboard, or enterprise AI infrastructure. It is **lamplight beside difficult creative work**.
 
 This document is the canonical product and design reference for that experience. For file-level implementation details, see [MIRA UX Implementation](MIRA_UX_IMPLEMENTATION.md).
 

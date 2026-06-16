@@ -1,220 +1,81 @@
 ---
 title: "Model Selection Guide"
-description: "Choose the right AI model for your workflow based on reliability, speed, cost, and context window size."
+description: "Choose an AI provider and model for Plan and Act modes in LUMI."
 ---
 
-New models drop constantly, so this guide focuses on what's working well with DietCode right now. We'll keep it updated as the landscape shifts.
+This guide reflects the **providers wired in this build**. The settings dropdown reads `src/shared/providers/providers.json`; routing is implemented in `src/core/api/index.ts`.
 
-<Callout type="tip">
-**New to model selection?** Start with [Module 2 of DietCode's Learning Path](https://dietcode.bot/learn) for a comprehensive guide to choosing and configuring models.
-</Callout>
+## Supported providers
 
-## What is an AI Model?
+| Provider key | UI label | Handler |
+|--------------|----------|---------|
+| `openrouter` | OpenRouter | `OpenRouterHandler` (default fallback) |
+| `openai-codex` | ChatGPT Subscription | `OpenAiCodexHandler` |
+| `nousResearch` | NousResearch | `NousResearchHandler` |
+| `cloudflare` | Cloudflare Workers AI | `CloudflareHandler` |
 
-Think of an AI model as the "brain" that powers DietCode. When you ask DietCode to write code, fix bugs, or refactor your project, it's the model that actually understands your request and generates the response.
+If an unknown provider is selected, `buildApiHandler` falls back to OpenRouter.
 
-**Key points:**
-- **Models are trained AI systems** that understand natural language and code
-- **Different models have different strengths** some excel at complex reasoning, others prioritize speed or cost
-- **You choose which model DietCode uses** like picking between different experts for different tasks
-- **Models are accessed via API providers** - companies like Anthropic, OpenAI, and OpenRouter host these models
+## Plan vs Act
 
-**Why it matters:** The model you choose directly impacts DietCode's capabilities, response quality, speed, and cost. A premium model might handle complex refactoring beautifully but cost more, while a budget model works great for routine tasks at a fraction of the price.
+LUMI can use **different providers per mode**:
 
-## How to Select a Model in DietCode
+- **Plan mode** — `planModeApiProvider` + plan model IDs
+- **Act mode** — `actModeApiProvider` + act model IDs
 
-Follow these 5 simple steps to get DietCode up and running with your preferred AI model:
+Configure both in the LUMI sidebar **Settings** panel.
 
-### Step 1: Open DietCode Settings
+## How to select a model
 
-First, you need to access DietCode's configuration panel.
+<Steps>
+  <Step title="Open LUMI Settings">
+    Click the gear icon in the LUMI sidebar, or run **LUMI: Settings** from the Command Palette.
+  </Step>
+  <Step title="Choose provider">
+    Select one of the four providers for Plan and/or Act mode.
+  </Step>
+  <Step title="Add credentials">
+    Enter the API key or complete OAuth for that provider (see [authorizing](/getting-started/authorizing-with-dietcode)).
+  </Step>
+  <Step title="Pick a model">
+    Choose model ID from the provider's picker. OpenRouter exposes the widest catalog.
+  </Step>
+</Steps>
 
-**Two ways to open settings:**
-- **Quick method**: Click the **gear icon (⚙️)** in the top-right corner of DietCode's chat interface
-- **Command palette**: Press **Cmd/Ctrl + Shift + P** → type "DietCode: Open Settings"
+## Provider notes
 
-<Frame>
-  <img src="https://storage.googleapis.com/dietcode_public_images/step1-config.png" alt="DietCode Settings Panel" />
-</Frame>
+### OpenRouter (recommended default)
 
-The settings panel will open, showing configuration options with "API Provider" at the top.
+- Access to many frontier and open models through one API key.
+- Supports reasoning/thinking budget settings when the model allows.
+- Used as fallback when provider routing fails.
 
-<Note>
-The settings panel remembers your last configuration, so you'll only need to set this up once.
-</Note>
+### ChatGPT Subscription (`openai-codex`)
 
-### Step 2: Select an API Provider
+- For users with an OpenAI Codex / ChatGPT subscription flow.
+- No separate OpenAI API key billing path.
 
-Choose your preferred AI provider from the dropdown menu.
+### NousResearch
 
+- Direct access to NousResearch-hosted models.
+- Requires a NousResearch API key.
 
-<Frame>
-  <img src="https://storage.googleapis.com/dietcode_public_images/step2-provider.png" alt="DietCode Settings Panel" />
-</Frame>
+### Cloudflare Workers AI
 
-**Popular providers at a glance:**
+- Requires Cloudflare account ID and API token.
+- Runs inference on Cloudflare's platform.
 
-| Provider | Best For | Notes |
-|----------|----------|-------|
-| **DietCode** | Easiest setup | No API keys needed, access to multiple models including stealth models |
-| **OpenRouter** | Value seekers | Multiple models, competitive pricing |
-| **Anthropic** | Reliability | Claude models, most dependable tool usage |
-| **OpenAI** | Latest tech | GPT-5, o3, o4-mini models |
-| **OpenAI Codex** | ChatGPT subscribers | Use your ChatGPT subscription — no API key needed |
-| **Google Gemini** | Large context | Gemini 3/2.5 with up to 2M context |
-| **DeepSeek** | Budget reasoning | V3.2, R1 models at low cost |
-| **Alibaba Qwen** | Open source coding | Qwen3 Coder with 1M context |
-| **Moonshot** | Agentic coding | Kimi K2.5 with 262K context |
-| **Cerebras** | Speed | Up to 2,600 tokens/sec |
-| **AWS Bedrock** | Enterprise | Advanced features |
-| **Ollama** | Privacy | Run models locally |
+## Additional provider files
 
-See the [full provider list](/getting-started/authorizing-with-dietcode) for all 30+ supported providers including xAI Grok, Mistral, Groq, Fireworks, Together, Baseten, SambaNova, Nebius, Hugging Face, and more.
+The repository contains handler implementations for other backends under `src/core/api/providers/` (Anthropic, Ollama, Bedrock, etc.) and matching settings components under `webview-ui/src/components/settings/providers/`. Those handlers are **not registered** in `buildApiHandler` in this build — only the four providers above are active.
 
-<Info>
-**Recommended for beginners:** Start with **DietCode** as your provider - no API key management needed, instant access to multiple models, and occasional free inferencing through partner providers.
-</Info>
+## Context window
 
-### Step 3: Add Your API Key (or Sign In)
+Large tasks may require models with bigger context windows. LUMI tracks usage in `src/core/context/` and offers `/compact` and `/smol` slash commands to reduce history size.
 
-The next step depends on which provider you selected.
+See [context windows](/model-config/context-windows) for general guidance.
 
-#### If you selected **DietCode** as your provider:
+## Related
 
-- **No API key needed!** Simply sign in with your DietCode account
-- Click the **Sign In** button when prompted
-- You'll be redirected to [app.dietcode.bot](https://app.dietcode.bot) to authenticate
-- After signing in, return to your IDE
-
-<Note>
-  For detailed information about the DietCode authentication flow, OAuth tokens, and troubleshooting, see [Authorizing with DietCode](/getting-started/authorizing-with-dietcode).
-</Note>
-
-#### If you selected **OpenAI Codex** as your provider:
-
-- **No API key needed!** If you have a ChatGPT subscription (Plus, Pro, or Team), you can use it directly in DietCode
-- Click **"Sign in with OpenAI"** to authenticate via your browser
-- Once authorized, all models available on your OpenAI plan will appear automatically
-- Usage is governed by your ChatGPT subscription — no separate API billing
-
-See the full [OpenAI Codex setup guide](/provider-config/openai-codex) for details.
-
-#### If you selected any other provider:
-
-You'll need to get an API key from your chosen provider:
-
-1. **Visit your provider's website to get an API key:**
-   - **Anthropic**: [console.anthropic.com](https://console.anthropic.com/)
-   - **OpenRouter**: [openrouter.ai/keys](https://openrouter.ai/keys)
-   - **OpenAI**: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-   - **Google**: [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-   - **Others**: See [Provider Setup Guide](/getting-started/authorizing-with-dietcode)
-
-2. **Generate a new API key** on the provider's website
-
-3. **Copy the API key** to your clipboard
-
-4. **Paste your key** in the **"API Key"** field in DietCode settings
-
-5. **Save automatically** - Your key is stored securely in your editor's secrets storage
-
-<Frame>
-  <img src="https://storage.googleapis.com/dietcode_public_images/step3-API.png" alt="DietCode API Selection" />
-</Frame>
-
-<Warning>
-**Payment required for most providers**: Most providers need payment information before generating keys. You only pay for what you use (typically $0.01-$0.10 per coding task).
-</Warning>
-
-### Step 4: Choose Your Model
-
-Once your API key is added (or you've signed in), the **"Model"** dropdown becomes available.
-
-<Frame>
-  <img src="https://storage.googleapis.com/dietcode_public_images/step4-model.png" alt="DietCode Model Selection" />
-</Frame>
-
-**Quick model selection guide:**
-
-| Your Priority | Choose This Model | Why |
-|---------------|-------------------|-----|
-| **Maximum reliability** | Claude Sonnet 4.5 | Most reliable tool usage, excellent at complex tasks |
-| **Best value** | DeepSeek V3 or Qwen3 Coder | Great performance at budget prices |
-| **Fastest speed** | Qwen3 Coder on Cerebras | Lightning-fast responses |
-| **Run locally** | Any Ollama model | Complete privacy, no internet needed |
-| **Latest features** | GPT-5 | OpenAI's newest capabilities |
-
-Not sure which to pick? Start with **Claude Sonnet 4.5** for reliability or **DeepSeek V3** for value.
-
-<Tip>
-You can switch models at any time without losing your conversation. Try different models to find what works best for your specific tasks.
-</Tip>
-
-See the [model comparison tables](#current-top-models) below for detailed specifications and pricing.
-
-### Step 5: Start Using DietCode
-
-**Congratulations! You're all set up.** Here's how to start coding with DietCode:
-
-1. **Type your request** in the DietCode chat box
-   - Example: "Create a React component for a login form"
-   - Example: "Debug this TypeScript error"
-   - Example: "Refactor this function to be more efficient"
-
-2. **Press Enter** or click the send icon to submit
-
-## Choosing the Right Model
-
-Selecting the right model involves balancing several factors. Use this framework to find your ideal match:
-
-<Note>
-**Pro tips**: Configure separate models for Plan Mode and Act Mode. Make the most out the each model's strengths. For example, use a budget model for planning discussions and a premium model for implementation.
-</Note>
-
-### Key Selection Factors
-
-| Factor | What to Consider | Recommendation |
-|--------|------------------|----------------|
-| **Task Complexity** | Simple fixes vs complex refactoring | Budget models for routine tasks; Premium models for complex work |
-| **Budget** | Monthly spending capacity | \$10-\$30: Budget,  \$30-\$100: Mid-tier, \$100+: Premium |
-| **Context Window** | Project size and file count | Small: 32K-128K, Medium: 128K-200K, Large: 400K+ |
-| **Speed** | Response time requirements | Interactive: Fast models, Background: Reasoning models OK |
-| **Tool Reliability** | Complex operations | Claude excels at tool usage; Test others with your workflow |
-| **Provider** | Access and pricing needs | OpenRouter: Many options, Direct: Faster/reliable, Local: Privacy |
-
-
-
-## Model Comparison Resources
-
-For detailed model comparisons and performance metrics, see:
-- [**Context Window Guide**](/model-config/context-windows) - Understanding and optimizing context usage
-
-## Open Source vs Closed Source
-
-### Open Source Advantages
-- **Multiple providers** compete to host them
-- **Cheaper pricing** due to competition  
-- **Provider choice** - switch if one goes down
-- **Faster innovation** cycles
-
-### Open Source Models Available
-- **Qwen3 Coder** (Apache 2.0)
-- **Z AI GLM 4.5** (MIT)
-- **Kimi K2** (Open source)
-- **DeepSeek series** (Various licenses)
-
-## Quick Decision Matrix
-
-| If you want... | Use this |
-|----------------|----------|
-| Something that just works | Claude Sonnet 4.5 |
-| To save money | DeepSeek V3 or Qwen3 variants |
-| Huge context windows | Gemini 2.5 Pro or Claude Sonnet 4.5 |
-| Open source | Qwen3 Coder, Z AI GLM 4.5, or Kimi K2 |
-| Latest tech | GPT-5 |
-| To use your ChatGPT subscription | [OpenAI Codex](/provider-config/openai-codex) — sign in with your OpenAI account, no API key needed |
-| Speed | Qwen3 Coder on Cerebras (fastest available) |
-
-## What Others Are Using
-
-Check [Vercel's leaderboard](https://vercel.com/ai-gateway/leaderboards) to see real usage patterns from the community.
+- [Authorizing with LUMI](/getting-started/authorizing-with-dietcode)
+- [Plan & Act modes](/core-workflows/plan-and-act)

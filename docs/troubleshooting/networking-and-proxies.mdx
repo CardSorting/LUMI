@@ -1,18 +1,18 @@
 ---
 title: "Networking and Proxies"
 sidebarTitle: "Networking & Proxies"
-description: "Configure DietCode to work behind firewalls and proxies"
+description: "Configure LUMI to work behind firewalls and proxies"
 ---
 
 If you're working behind a corporate proxy or firewall, you'll need to configure
-proxy settings for DietCode to connect to AI providers.
+proxy settings for LUMI to connect to AI providers.
 
 ## VSCode Extension
 
 The VSCode extension automatically uses VSCode's built-in proxy settings. See
 [Network Connections in Visual Studio Code, Proxy server support](https://code.visualstudio.com/docs/setup/network#_proxy-server-support)
 for instructions on how to set up proxies in VSCode. No additional configuration
-is needed for DietCode itself.
+is needed for LUMI itself.
 
 ## JetBrains IDEs
 
@@ -47,9 +47,9 @@ The JetBrains plugin uses the IDE's HTTP proxy settings.
 
 ### Test Connection
 
-After configuring the proxy, test that DietCode can connect to your AI provider:
+After configuring the proxy, test that LUMI can connect to your AI provider:
 
-1. Open the DietCode panel
+1. Open the LUMI panel
 2. Try sending a simple message
 3. If connection fails, check the IDE's Event Log for error messages
 
@@ -64,12 +64,12 @@ If your proxy uses a custom CA:
 
 ### Known Limitations
 
-DietCode in JetBrains only supports HTTP proxies. It does not support SOCKS
+LUMI in JetBrains only supports HTTP proxies. It does not support SOCKS
 proxies, proxy autoconfiguration (PAC) scripts, or HTTP proxies which require
 authentication beyond a basic username and password.
 
-DietCode does not pick up changed proxy settings dynamically. After changing proxy
-settings, restart the IDE for DietCode to use the new settings.
+LUMI does not pick up changed proxy settings dynamically. After changing proxy
+settings, restart the IDE for LUMI to use the new settings.
 
 ## Troubleshooting
 
@@ -92,7 +92,7 @@ If you see certificate-related errors:
 
 ### Testing Proxy Configuration
 
-If you encounter problems with DietCode networking, first verify your proxy
+If you encounter problems with LUMI networking, first verify your proxy
 configuration works using curl:
 
 ```bash

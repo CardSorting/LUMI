@@ -1,101 +1,77 @@
 ---
 title: "Quick Start"
 sidebarTitle: "Quick Start"
-description: "Get DietCode running in under 2 minutes."
+description: "Get LUMI running in under 2 minutes."
 ---
 
-DietCode is an AI-powered coding assistant that works directly inside your editor. You describe what you want in plain text, and DietCode writes code, creates files, runs terminal commands, and even tests web apps in a browser, all while asking for your permission before making any changes.
-
-Think of it as pair programming with an AI that can actually touch your files and run your tools, but only when you say so.
-
-This guide gets you from zero to working code in under 2 minutes.
+LUMI is an AI coding assistant inside VS Code. You describe work in plain language; LUMI plans, proposes file edits and commands, and waits for your approval before changing anything.
 
 <Info>
-  **What You'll Need:**
-  - One of: **VS Code**, **Cursor**, **Windsurf**, **Antigravity**, a **JetBrains IDE**, or **Node.js 20+** (for CLI)
-  - An internet connection (DietCode connects to AI models in the cloud)
+  **What you'll need:**
+  - **VS Code** or **Cursor** (VS Code–compatible)
+  - An API key for one supported provider, or a LUMI account token if using hosted routing
   - ~2 minutes
 </Info>
 
 ## 1. Install
 
 <Tabs>
-  <Tab title="VS Code / Cursor / Windsurf / Antigravity">
-    Open Extensions (`Cmd+Shift+X` on Mac, `Ctrl+Shift+X` on Windows/Linux), search **DietCode**, click **Install**.
-  </Tab>
-  <Tab title="JetBrains">
-    Go to **Settings > Plugins > Marketplace**, search **DietCode**, click **Install**, then restart your IDE.
-  </Tab>
-  <Tab title="CLI">
+  <Tab title="VS Code / Cursor">
+    Open Extensions (`Cmd+Shift+X` / `Ctrl+Shift+X`), search **LUMI**, install `CardSorting.lumi`.
+
+    Or install from a VSIX:
+
     ```bash
-    npm install -g dietcode
+    code --install-extension lumi-1.0.3.vsix
+    ```
+  </Tab>
+  <Tab title="From source">
+    ```bash
+    npm run install:all
+    npm run package
+    code --install-extension dist/*.vsix
     ```
   </Tab>
 </Tabs>
 
 <Tip>
-For detailed installation instructions including troubleshooting, see the [full installation guide](/getting-started/installing-dietcode).
+See [Installing LUMI](/getting-started/installing-dietcode) for VSIX paths, dev mode, and troubleshooting.
 </Tip>
 
-## 2. Authenticate
+## 2. Configure a provider
 
-Click the DietCode icon in your editor's sidebar, then click **Sign Up**. You'll authenticate at [app.dietcode.bot](https://app.dietcode.bot) and return to your editor ready to go.
+Open the LUMI sidebar → **Settings** → pick a provider for Plan and/or Act mode:
 
-Authenticating gives you access to multiple AI models without managing separate API keys. Your account includes both free and paid models. Free models are labeled **FREE** in the model selector. For paid models, you can add credits in your [account dashboard](https://app.dietcode.bot/dashboard). You're always in control of which model you use.
+| Provider | What you need |
+|----------|---------------|
+| OpenRouter | OpenRouter API key |
+| ChatGPT Subscription | OpenAI Codex auth |
+| NousResearch | NousResearch API key |
+| Cloudflare Workers AI | Account ID + API token |
 
-Send any message to confirm you're connected, then move on to building something.
+[Full authorization guide →](/getting-started/authorizing-with-dietcode)
 
-<Note>
-**CLI users:** Run `dietcode auth` to authenticate from your terminal.
-</Note>
+## 3. Run a task
 
-## 3. Build Something
-
-Now let's have DietCode write some code. Open any folder in your editor, then paste this:
+Open a project folder, focus the LUMI chat input (`Cmd+'` / `Ctrl+'` when nothing is selected), and send:
 
 ```text
 Create a Python function that checks if a string is a palindrome. Include tests.
 ```
 
-DietCode will analyze your request, create a new file, and ask for your approval before writing anything to disk. Click **Approve** to create the file.
+LUMI will propose a plan, create files, and ask you to **Approve** each write or command.
 
-That's it. You have working code with tests.
+## 4. Useful shortcuts
 
-<Note>
-**Not seeing file changes yet?** DietCode starts in a read-only planning phase for new tasks — it explores your codebase and presents a plan before making edits. Implementation begins automatically after the plan is delivered. For immediate implementation without planning, enable **YOLO mode** in Settings. [Learn more about Plan & Act →](/core-workflows/plan-and-act)
-</Note>
+| Action | Shortcut |
+|--------|----------|
+| Add selection to chat | `Cmd+'` / `Ctrl+'` (with editor selection) |
+| Focus chat input | `Cmd+'` / `Ctrl+'` (no selection) |
+| New task | Sidebar **+** button or `/newtask` |
+| Compact context | `/compact` or `/smol` |
 
-## 4. You're All Set
+## Next steps
 
-Let's recap what you just did:
-
-1. **Installed DietCode** in your editor
-2. **Authenticated** to connect to AI models
-3. **Built working code**: DietCode wrote it, you approved it
-
-Every step of the way, DietCode showed you exactly what it planned to do and waited for your approval. This is DietCode's **human-in-the-loop** model: every file edit, terminal command, and browser action is shown to you first and only happens after you click Approve. You can review exactly what's changing, reject anything you don't want, and stay fully in control of your codebase. Nothing happens behind your back.
-
-## What Else Can DietCode Do?
-
-The palindrome example is just the beginning. Here are some prompts to explore DietCode's full capabilities:
-
-- `Read my project and explain the architecture`: DietCode navigates and analyzes your codebase
-- `Find and fix the bug in src/utils.ts`: DietCode reads files, proposes edits, and can run tests
-- `Run my test suite and fix any failures`: DietCode executes terminal commands and iterates on problems
-- `Open a browser and test my app at localhost:3000`: DietCode launches a browser and interacts with pages
-- `Set up an MCP server for my database`: DietCode can connect to external tools and APIs
-
-DietCode works best when you give it clear, specific instructions. The more context you provide about what you want, the better the results.
-
-<AccordionGroup>
-  <Accordion title="How does DietCode work under the hood?">
-    DietCode runs entirely in your editor (or terminal). When you send a message, it goes to the AI model you've selected (like Claude, GPT-4, or Gemini). The model's response is parsed into actions (file edits, terminal commands, browser interactions) which DietCode presents to you for approval. Your code never passes through DietCode's servers. It goes directly from your machine to your chosen AI provider.
-  </Accordion>
-</AccordionGroup>
-
-## Next Steps
-
-- [What is DietCode?](/getting-started/what-is-dietcode): Understand DietCode's full capabilities and how it works
-- [Build Your First Project](/getting-started/your-first-project): Hands-on tutorial building a complete todo app
-- [Select Your Model](/getting-started/authorizing-with-dietcode): Connect Claude, GPT-4, Gemini, DeepSeek, or local models
-- [Core Workflows](/core-workflows/task-management): Learn the patterns you'll use daily with DietCode
+- [Your first project](/getting-started/your-first-project)
+- [Plan & Act modes](/core-workflows/plan-and-act)
+- [All tools reference](/tools-reference/all-dietcode-tools)

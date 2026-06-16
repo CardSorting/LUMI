@@ -1,6 +1,6 @@
 # Technical Guide: The Hyper-Cognition Layer
 
-The Hyper-Cognition layer in DietCode is built on three core infrastructure services:
+The Hyper-Cognition layer in LUMI is built on three core infrastructure services:
 
 ## 1. KnowledgeGraphService
 Responsible for managing the `agent_knowledge` and `agent_knowledge_edges` tables. It handles:

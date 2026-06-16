@@ -1,11 +1,11 @@
 ---
 title: "MCP Made Easy"
-description: "Learn how to use the MCP Marketplace to discover, install, and configure MCP servers that enhance DietCode's capabilities with additional tools and resources."
+description: "Learn how to use the MCP Marketplace to discover, install, and configure MCP servers that enhance LUMI's capabilities with additional tools and resources."
 ---
 
 ## What's an MCP Server?
 
-MCP servers are specialized extensions that enhance DietCode's capabilities. They enable DietCode to perform additional tasks like fetching web pages, processing images, accessing APIs, and much more.
+MCP servers are specialized extensions that enhance LUMI's capabilities. They enable LUMI to perform additional tasks like fetching web pages, processing images, accessing APIs, and much more.
 
 ## MCP Marketplace Walkthrough
 
@@ -13,7 +13,7 @@ The MCP Marketplace provides a one-click installation experience for hundreds of
 
 ### 1. Access the Marketplace
 
--   In DietCode, click the "Extensions" button (square icon) in the top toolbar
+-   In LUMI, click the "Extensions" button (square icon) in the top toolbar
 -   The MCP marketplace will open, showing available servers by category
 
 ### 2. Browse and Select a Server
@@ -24,24 +24,24 @@ The MCP Marketplace provides a one-click installation experience for hundreds of
 ### 3. Install and Configure
 
 -   Click the install button for your chosen server
--   If the server requires an API key (most do), DietCode will guide you through:
+-   If the server requires an API key (most do), LUMI will guide you through:
     -   Where to get the API key
     -   How to enter it securely
 -   The server will be added to your MCP settings automatically
 
 ### 4. Verify Installation
 
--   DietCode will show confirmation when installation is complete
--   Check the server status in DietCode's MCP settings UI
+-   LUMI will show confirmation when installation is complete
+-   Check the server status in LUMI's MCP settings UI
 
 ### 5. Using Your New Server
 
--   After successful installation, DietCode will automatically integrate the server's capabilities
--   You'll see new tools and resources available in DietCode's system prompt
--   Simply ask DietCode to use the capabilities of your new server
+-   After successful installation, LUMI will automatically integrate the server's capabilities
+-   You'll see new tools and resources available in LUMI's system prompt
+-   Simply ask LUMI to use the capabilities of your new server
 -   Example: "Search the web for recent React updates using Perplexity"
 
-**Corporate Users:** If you're using DietCode in a corporate environment, ensure you have permission to install third-party MCP servers according to your organization's security policies.
+**Corporate Users:** If you're using LUMI in a corporate environment, ensure you have permission to install third-party MCP servers according to your organization's security policies.
 
 ## What Happens Behind the Scenes
 
@@ -49,7 +49,7 @@ When you install an MCP server, several things happen automatically:
 
 ### 1. Installation Process
 
--   The server code is cloned/installed to `/Users/<username>/Documents/DietCode/MCP/`
+-   The server code is cloned/installed to `/Users/<username>/Documents/LUMI/MCP/`
 -   Dependencies are installed
 -   The server is built (TypeScript/JavaScript compilation or Python package installation)
 
@@ -62,16 +62,16 @@ When you install an MCP server, several things happen automatically:
 
 ### 3. Server Launch
 
--   DietCode detects the configuration change
--   DietCode launches your server as a separate process
+-   LUMI detects the configuration change
+-   LUMI launches your server as a separate process
 -   Communication is established via stdio or HTTP
 
-### 4. Integration with DietCode
+### 4. Integration with LUMI
 
--   Your server's capabilities are added to DietCode's system prompt
+-   Your server's capabilities are added to LUMI's system prompt
 -   Tools become available via `use_mcp_tool` commands
 -   Resources become available via `access_mcp_resource` commands
--   DietCode can now use these capabilities when prompted by the user
+-   LUMI can now use these capabilities when prompted by the user
 
 ## Troubleshooting
 
@@ -112,7 +112,7 @@ To completely remove a faulty MCP server:
 1. Open the MCP settings file: `/Users/<username>/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/dietcode_mcp_settings.json`
 2. Delete the entire entry for your server from the `mcpServers` object
 3. Save the file
-4. Restart DietCode
+4. Restart LUMI
 
 ### I'm Still Getting an Error
 
@@ -123,18 +123,18 @@ If you're getting an error when using an MCP server, you can try the following:
 -   Verify that paths to your server's files are correct
 -   Ensure all required environment variables are set
 -   Check if another process is using the same port (for HTTP-based servers)
--   Try removing and reinstalling the server (remove from both the `dietcode_mcp_settings.json` file and the `/Users/<username>/Documents/DietCode/MCP/` directory)
--   Use a terminal and run the command with its arguments directly. This will allow you to see the same errors that DietCode is seeing
+-   Try removing and reinstalling the server (remove from both the `dietcode_mcp_settings.json` file and the `/Users/<username>/Documents/LUMI/MCP/` directory)
+-   Use a terminal and run the command with its arguments directly. This will allow you to see the same errors that LUMI is seeing
 
 ## MCP Server Rules
 
-DietCode is already aware of your active MCP servers and what they are for, but when you have a lot of MCP servers enabled, it can be useful to define when to use each server.
+LUMI is already aware of your active MCP servers and what they are for, but when you have a lot of MCP servers enabled, it can be useful to define when to use each server.
 
-Utilize a `.dietcoderules` file or custom instructions to support intelligent MCP server activation through keyword-based triggers, making DietCode's tool selection more intuitive and context-aware.
+Utilize a `.dietcoderules` file or custom instructions to support intelligent MCP server activation through keyword-based triggers, making LUMI's tool selection more intuitive and context-aware.
 
 ### How MCP Rules Work
 
-MCP Rules group your connected MCP servers into functional categories and define trigger keywords that activate them automatically when detected in your conversations with DietCode.
+MCP Rules group your connected MCP servers into functional categories and define trigger keywords that activate them automatically when detected in your conversations with LUMI.
 
 ```json
 {
@@ -157,14 +157,14 @@ MCP Rules group your connected MCP servers into functional categories and define
 
 ### Benefits of MCP Rules
 
--   **Contextual Tool Selection**: DietCode selects appropriate tools based on conversation context
+-   **Contextual Tool Selection**: LUMI selects appropriate tools based on conversation context
 -   **Reduced Friction**: No need to manually specify which tool to use
 -   **Organized Capabilities**: Logically group related tools and servers
 -   **Prioritization**: Handle ambiguous cases with explicit priority ordering
 
 ### Example Usage
 
-When you write "Can you scrape this website?", DietCode detects "scrape" and "website" as triggers, automatically selecting web-related MCP servers.
+When you write "Can you scrape this website?", LUMI detects "scrape" and "website" as triggers, automatically selecting web-related MCP servers.
 
 For finance tasks like "What's Apple's stock price?", keywords like "stock" and "price" trigger finance-related servers.
 
@@ -196,4 +196,4 @@ For finance tasks like "What's Apple's stock price?", keywords like "stock" and 
 }
 ```
 
-Add this to your `.dietcoderules` file or to your custom instructions to make DietCode's MCP server selection more intuitive and context-aware.
+Add this to your `.dietcoderules` file or to your custom instructions to make LUMI's MCP server selection more intuitive and context-aware.

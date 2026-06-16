@@ -1,6 +1,6 @@
-# Vision: Hyper-Cognitive DietCode
+# Vision: Hyper-Cognitive LUMI
 
-This integration transforms DietCode from an episodic code assistant into a stateful architectural partner by merging BroccoliDB's graph-based cognitive memory and AgentGit's speculative execution primitives.
+This integration transforms LUMI from an episodic code assistant into a stateful architectural partner by merging BroccoliDB's graph-based cognitive memory and AgentGit's speculative execution primitives.
 
 ## 1. Contextual Persistence (BroccoliDB)
 The Knowledge Graph (`agent_knowledge`) creates a permanent record of architectural patterns and semantic relationships. This eliminates "context drift"—the agent no longer forgets a critical design decision made 50 messages ago. By semantically compressing the codebase into high-value landmarks, the agent maintains an "infinite" context window relative to the project's complexity.

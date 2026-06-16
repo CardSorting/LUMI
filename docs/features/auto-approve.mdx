@@ -1,10 +1,10 @@
 ---
 title: "Auto Approve & YOLO Mode"
 sidebarTitle: "Auto Approve"
-description: "Control which actions DietCode can take without asking for approval."
+description: "Control which actions LUMI can take without asking for approval."
 ---
 
-Auto Approve lets you decide which actions DietCode can take without prompting you each time. It keeps you out of approval popups during routine work while letting you keep tight control over high-risk actions.
+Auto Approve lets you decide which actions LUMI can take without prompting you each time. It keeps you out of approval popups during routine work while letting you keep tight control over high-risk actions.
 
 If you find yourself repeatedly clicking approve for the same safe operations, Auto Approve fixes that.
 
@@ -20,13 +20,13 @@ If you find yourself repeatedly clicking approve for the same safe operations, A
 
 ## How It Works
 
-Auto Approve is evaluated per tool call. When DietCode is about to read a file, edit a file, run a command, or use the browser, it checks your Auto Approve settings for that category.
+Auto Approve is evaluated per tool call. When LUMI is about to read a file, edit a file, run a command, or use the browser, it checks your Auto Approve settings for that category.
 
 A few details matter:
 
 - **Workspace vs outside workspace**: "Read all files" and "Edit all files" only extend the base toggle. If the base toggle is off, the "all files" option does nothing.
-- **Terminal commands**: DietCode treats commands as either safe or requiring approval. "Execute safe commands" covers safe commands. "Execute all commands" extends to commands flagged as requiring approval.
-- **Notifications**: If enabled, DietCode sends OS-level notifications when approval is required, and when an auto-approved terminal command has been running for 30 seconds.
+- **Terminal commands**: LUMI treats commands as either safe or requiring approval. "Execute safe commands" covers safe commands. "Execute all commands" extends to commands flagged as requiring approval.
+- **Notifications**: If enabled, LUMI sends OS-level notifications when approval is required, and when an auto-approved terminal command has been running for 30 seconds.
 
 ## Permissions
 
@@ -48,7 +48,7 @@ A few details matter:
 
 ## Safe vs Approval-Required Commands
 
-DietCode does not use a fixed allowlist. The model marks each command with a `requires_approval` flag based on the command and arguments. These are examples, not guarantees.
+LUMI does not use a fixed allowlist. The model marks each command with a `requires_approval` flag based on the command and arguments. These are examples, not guarantees.
 
 **Commonly treated as safe:**
 - `npm run build`, `npm test` - Build/test output
@@ -72,10 +72,10 @@ If you enable edits, use [Checkpoints](/core-workflows/checkpoints) so you can r
 
 ## YOLO Mode
 
-YOLO mode is Auto Approve on steroids. Check the box and DietCode auto-approves everything: file changes, terminal commands, browser actions, MCP tools, and mode transitions.
+YOLO mode is Auto Approve on steroids. Check the box and LUMI auto-approves everything: file changes, terminal commands, browser actions, MCP tools, and mode transitions.
 
 <Note>
-**Warning: This is dangerous.** YOLO mode disables all safety checks. DietCode executes whatever it decides without asking permission.
+**Warning: This is dangerous.** YOLO mode disables all safety checks. LUMI executes whatever it decides without asking permission.
 </Note>
 
 ### What Gets Auto-Approved
@@ -91,13 +91,13 @@ When YOLO mode is enabled:
 
 **Rapid prototyping** where you want zero friction and don't care about potential mistakes. Perfect for throwaway experiments.
 
-**Trusted, repetitive tasks** where you've validated DietCode's approach and want to eliminate approval overhead.
+**Trusted, repetitive tasks** where you've validated LUMI's approach and want to eliminate approval overhead.
 
-**Demonstration purposes** where you want to show DietCode's capabilities without interruptions.
+**Demonstration purposes** where you want to show LUMI's capabilities without interruptions.
 
 ### What Could Go Wrong
 
-DietCode could:
+LUMI could:
 - Delete important files without warning
 - Execute commands that modify system settings
 - Make network requests to external services
@@ -109,9 +109,9 @@ DietCode could:
 
 - **Start with isolated environments.** Use throwaway projects or sandboxed environments first.
 - **Be specific with requests.** Vague instructions + unlimited permissions = unpredictable results.
-- **Monitor the output.** DietCode still shows what it's doing. Watch the terminal and file changes.
+- **Monitor the output.** LUMI still shows what it's doing. Watch the terminal and file changes.
 - **Keep version control handy.** Git becomes your safety net.
 
 ### Enabling YOLO Mode
 
-Navigate to DietCode Settings, then Features, and check "YOLO Mode." No confirmation dialogs. Once enabled, DietCode auto-approves all actions immediately. Uncheck to disable.
+Navigate to LUMI Settings, then Features, and check "YOLO Mode." No confirmation dialogs. Once enabled, LUMI auto-approves all actions immediately. Uncheck to disable.

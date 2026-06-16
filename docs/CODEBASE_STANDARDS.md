@@ -6,7 +6,7 @@ description: "Guidelines for maintaining a clean, consistent, and AI-friendly co
 
 # Codebase Standards & Rules
 
-DietCode works best when your project follows consistent patterns. This guide outlines the standards we use to ensure that the AI agent can navigate and modify your code safely and effectively.
+LUMI works best when your project follows consistent patterns. This guide outlines the standards we use to ensure that the AI agent can navigate and modify your code safely and effectively.
 
 ## 📐 Project Layering
 
@@ -25,7 +25,7 @@ We follow a modular architecture to prevent complexity from spiraling out of con
 
 ## 🤖 AI-Friendly Patterns
 
-To help DietCode understand your intent, follow these best practices:
+To help LUMI understand your intent, follow these best practices:
 
 - **Type Safety**: Use TypeScript interfaces for everything. Avoid `any`.
 - **Descriptive Names**: Variable and function names should explain what they do without needing comments.
@@ -34,10 +34,10 @@ To help DietCode understand your intent, follow these best practices:
 
 ## 🛡️ Enforcing Standards
 
-DietCode automatically checks your code against these standards during every task:
+LUMI automatically checks your code against these standards during every task:
 
-- **`.dietcoderules`**: You can define custom project rules in this file. DietCode will read them and ensure all suggestions comply.
-- **Linter Integration**: DietCode respects your existing `eslint` or `biome` configurations.
+- **`.dietcoderules`**: You can define custom project rules in this file. LUMI will read them and ensure all suggestions comply.
+- **Linter Integration**: LUMI respects your existing `eslint` or `biome` configurations.
 - **Review Loop**: If the agent proposes a change that violates a standard, it will flag it during the review step.
 
 ---

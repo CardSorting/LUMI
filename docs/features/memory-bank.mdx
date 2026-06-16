@@ -1,20 +1,20 @@
 ---
 title: "Memory Bank"
 sidebarTitle: "Memory Bank"
-description: "A structured documentation system that helps DietCode maintain context across sessions."
+description: "A structured documentation system that helps LUMI maintain context across sessions."
 ---
 
-Memory Bank is a documentation methodology that transforms DietCode from a stateless assistant into a persistent development partner. Through structured markdown files, DietCode can "remember" your project details across sessions.
+Memory Bank is a documentation methodology that transforms LUMI from a stateless assistant into a persistent development partner. Through structured markdown files, LUMI can "remember" your project details across sessions.
 
 ## Quick Setup
 
 1. Copy the [custom instructions below](#memory-bank-custom-instructions)
 2. Add to custom instructions or a [`.dietcoderules` file](/customization/dietcode-rules)
-3. Ask DietCode to "initialize memory bank"
+3. Ask LUMI to "initialize memory bank"
 
 ## How It Works
 
-Memory Bank files are regular markdown files in your project that both you and DietCode can access. They're organized hierarchically to build a complete picture of your project:
+Memory Bank files are regular markdown files in your project that both you and LUMI can access. They're organized hierarchically to build a complete picture of your project:
 
 ```text
 memory-bank/
@@ -43,20 +43,20 @@ memory-bank/
 
 ## Key Commands
 
-- **"follow your custom instructions"** - Tells DietCode to read Memory Bank and continue where you left off
+- **"follow your custom instructions"** - Tells LUMI to read Memory Bank and continue where you left off
 - **"initialize memory bank"** - Creates the initial structure for a new project
 - **"update memory bank"** - Triggers a full documentation review and update
 
-These work alongside DietCode's built-in [slash commands](/core-workflows/using-commands). In particular, [`/newtask`](/core-workflows/using-commands#newtask) and [`/smol`](/core-workflows/using-commands#smol) help you manage context windows without losing progress.
+These work alongside LUMI's built-in [slash commands](/core-workflows/using-commands). In particular, [`/newtask`](/core-workflows/using-commands#newtask) and [`/smol`](/core-workflows/using-commands#smol) help you manage context windows without losing progress.
 
 ## Working with Plan & Act Modes
 
 Memory Bank pairs naturally with [Plan & Act mode](/core-workflows/plan-and-act):
 
-- **Plan mode**: Start here when resuming a project. Ask DietCode to read the Memory Bank, review the current state, and discuss strategy before making changes.
-- **Act mode**: Switch to Act mode once you have a plan. DietCode retains everything from the planning session and can implement changes.
+- **Plan mode**: Start here when resuming a project. Ask LUMI to read the Memory Bank, review the current state, and discuss strategy before making changes.
+- **Act mode**: Switch to Act mode once you have a plan. LUMI retains everything from the planning session and can implement changes.
 
-For complex features, use [`/deep-planning`](/core-workflows/using-commands#deep-planning) to have DietCode investigate your codebase and create a detailed implementation plan. The Memory Bank gives DietCode the project context it needs to plan effectively.
+For complex features, use [`/deep-planning`](/core-workflows/using-commands#deep-planning) to have LUMI investigate your codebase and create a detailed implementation plan. The Memory Bank gives LUMI the project context it needs to plan effectively.
 
 ## Managing Context Windows
 
@@ -66,22 +66,22 @@ Every AI model has a [context window](/core-workflows/task-management#context-wi
 
 When your context window fills up:
 
-1. Ask DietCode to "update memory bank" to document the current state
+1. Ask LUMI to "update memory bank" to document the current state
 2. Start a new conversation
-3. Ask DietCode to "follow your custom instructions"
+3. Ask LUMI to "follow your custom instructions"
 
 This preserves important context in your Memory Bank files before the window clears, letting you continue seamlessly in a fresh conversation.
 
 ### Using slash commands
 
-DietCode's built-in commands offer more targeted options:
+LUMI's built-in commands offer more targeted options:
 
 - **[`/smol`](/core-workflows/using-commands#smol)** compresses your conversation history while keeping you in the same task. Use this when you want to free up space without starting over.
 - **[`/newtask`](/core-workflows/using-commands#newtask)** distills key decisions, file changes, and progress into a fresh task with a clean context window. This is like a developer handoff that preserves what matters.
 
 ### Automatic context management
 
-Enable [Auto-Compact](/features/auto-compact) to let DietCode automatically compress context as you work. This reduces how often you need to manually manage the context window, though you should still update the Memory Bank after significant milestones.
+Enable [Auto-Compact](/features/auto-compact) to let LUMI automatically compress context as you work. This reduces how often you need to manually manage the context window, though you should still update the Memory Bank after significant milestones.
 
 <Frame>
 	<img src="https://storage.googleapis.com/dietcode_public_images/docs/assets/image%20(18).png" alt="Context window progress bar showing usage approaching the limit" />
@@ -98,18 +98,18 @@ Together, they let you experiment freely. Checkpoints protect your code, and Mem
 
 ## Reducing Your Context Footprint
 
-Memory Bank works best when your starting context is lean. If DietCode loads your entire project into context, including dependencies, build artifacts, and generated files, you burn through tokens before the real work starts.
+Memory Bank works best when your starting context is lean. If LUMI loads your entire project into context, including dependencies, build artifacts, and generated files, you burn through tokens before the real work starts.
 
 **Add a [`.dietcodeignore`](/customization/dietcodeignore) file.** This is the single biggest improvement most users can make. It tells DietCode which files to skip when scanning your project. Adding one can drop your starting context from 200k+ tokens to under 50k, which means faster responses, lower costs, and the ability to use smaller models effectively.
 
-**Keep Memory Bank files concise.** Each file adds to your context when DietCode reads it at the start of a session. Keep `projectbrief.md` to one page, `activeContext.md` to current state only (not a running log), and `progress.md` to a summary rather than a detailed changelog. If a file grows beyond a page or two, split the detail into a separate doc and link to it. DietCode can read linked files on demand.
+**Keep Memory Bank files concise.** Each file adds to your context when LUMI reads it at the start of a session. Keep `projectbrief.md` to one page, `activeContext.md` to current state only (not a running log), and `progress.md` to a summary rather than a detailed changelog. If a file grows beyond a page or two, split the detail into a separate doc and link to it. LUMI can read linked files on demand.
 
 **Use [DietCode Rules](/customization/dietcode-rules) strategically.** Rules load into every request. Use [conditional rules](/customization/dietcode-rules#conditional-rules) to activate rules only when working with matching files, so frontend rules don't load when you're editing backend code.
 
 ## Best Practices
 
 - Start with a basic project brief and let structure evolve
-- Let DietCode help create the initial structure
+- Let LUMI help create the initial structure
 - `activeContext.md` changes most frequently; update it after each session
 - `progress.md` tracks milestones; review it when resuming work
 - Update after significant milestones or direction changes
@@ -132,9 +132,9 @@ While the Memory Bank methodology relies on markdown files, the underlying **Bro
 Copy this into custom instructions or a `.dietcoderules` file:
 
 ```markdown
-# DietCode's Memory Bank
+# LUMI's Memory Bank
 
-I am DietCode, an expert software engineer with a unique characteristic: my memory resets completely between sessions. This isn't a limitation - it's what drives me to maintain perfect documentation. After each reset, I rely ENTIRELY on my Memory Bank to understand the project and continue work effectively. I MUST read ALL memory bank files at the start of EVERY task - this is not optional.
+I am LUMI, an expert software engineer with a unique characteristic: my memory resets completely between sessions. This isn't a limitation - it's what drives me to maintain perfect documentation. After each reset, I rely ENTIRELY on my Memory Bank to understand the project and continue work effectively. I MUST read ALL memory bank files at the start of EVERY task - this is not optional.
 
 ## Memory Bank Structure
 
@@ -213,7 +213,7 @@ After significant milestones or direction changes. For active development, every
 [Checkpoints](/core-workflows/checkpoints) save your code state (file snapshots). Memory Bank saves your project knowledge (context, decisions, progress). They complement each other: checkpoints let you roll back code, Memory Bank lets you pick up where you left off intellectually.
 
 **How does Memory Bank relate to context window limitations?**
-Memory Bank stores important information in structured files that DietCode can load efficiently at the start of each session. This prevents context bloat while keeping critical information available. For more on how context windows work, see [Task Management](/core-workflows/task-management#context-window).
+Memory Bank stores important information in structured files that LUMI can load efficiently at the start of each session. This prevents context bloat while keeping critical information available. For more on how context windows work, see [Task Management](/core-workflows/task-management#context-window).
 
 **Does this work with other AI tools?**
 Yes. Memory Bank is a documentation methodology that works with any AI that can read docs. Commands may differ but the approach works across tools.

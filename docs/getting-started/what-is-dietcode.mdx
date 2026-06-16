@@ -1,78 +1,83 @@
 ---
-title: "What is DietCode?"
-sidebarTitle: "What is DietCode?"
-description: "An AI coding agent that lives in your editor. Read files, run commands, and build features through natural language."
+title: "What is LUMI?"
+sidebarTitle: "What is LUMI?"
+description: "An AI coding agent in VS Code. Read files, run commands, and build features through natural language."
 ---
 
-DietCode is an open-source AI coding agent that runs in your editor. It gives you direct, transparent access to frontier AI with no limits, no surprises, and no model ecosystem lock-in. See every decision. Choose any model. Control your costs.
+LUMI is an AI coding agent that runs as a VS Code extension (`CardSorting.lumi`). It gives you direct access to frontier models through supported providers, with approval gates on every file change and shell command.
 
-<Tip>
-  **New to coding agents?** Watch [What is a Coding Agent?](https://youtu.be/CYIteJeNcuw) to see how DietCode works in action.
-</Tip>
-
-## Get Started
+## Get started
 
 <Steps>
-  <Step title="Install DietCode">
-    Add DietCode to VS Code, Cursor, or JetBrains from the extension marketplace.
-    
-    [Install Guide →](/getting-started/installing-dietcode)
+  <Step title="Install LUMI">
+    Install from the VSIX or Extensions panel. See the [install guide](/getting-started/installing-dietcode).
   </Step>
-  <Step title="Pick Your Model">
-    Connect your API key from Anthropic, OpenRouter, or any supported provider.
+  <Step title="Configure a provider">
+    Choose OpenRouter, ChatGPT Subscription, NousResearch, or Cloudflare Workers AI in Settings.
     
-    [Model Setup →](/getting-started/authorizing-with-dietcode)
+    [Model setup →](/getting-started/authorizing-with-dietcode)
   </Step>
-  <Step title="Start Building">
-    Open DietCode from the sidebar and describe what you want to build.
+  <Step title="Start a task">
+    Open the LUMI sidebar and describe what you want to build.
     
-    [Your First Project →](/getting-started/your-first-project)
+    [Your first project →](/getting-started/your-first-project)
   </Step>
 </Steps>
 
-## What DietCode Can Do
+## What LUMI can do
 
-DietCode operates directly in your codebase with your permission:
+With your permission, LUMI can:
 
-- **Read and write files** - Navigate your codebase, create new files, and make targeted edits. You approve every change before it happens.
-- **Run terminal commands** - Execute shell commands, run tests, install packages, and debug errors in real-time.
-- **Use a browser** - Launch a browser to test web apps, capture screenshots, and interact with pages.
-- **Connect external tools** - Extend capabilities with [MCP servers](/mcp/mcp-overview) for databases, APIs, and documentation.
+- **Read and write files** — Navigate the workspace, create files, and apply targeted edits. Changes appear in the diff view before you approve.
+- **Run terminal commands** — Execute tests, install packages, and debug with live output.
+- **Use a browser** — Launch Puppeteer to test web apps and capture screenshots.
+- **Connect external tools** — Extend capabilities with [MCP servers](/mcp/mcp-overview).
+- **Delegate to subagents** — Spawn background agents for parallel research or verification ([subagents](/features/subagents)).
+- **Steer with ROADMAP.md** — Optional auto-rolling roadmap gates (`lumi.roadmap.*` settings).
 
-## Core Workflows
+## Core workflows
 
-These are the patterns you'll use daily with DietCode:
-
-| Workflow | What It Does |
+| Workflow | What it does |
 |----------|--------------|
-| [Plan & Act](/core-workflows/plan-and-act) | Think first, then build. Plan mode explores your codebase without making changes. Act mode implements the solution. |
-| [Task Management](/core-workflows/task-management) | Start tasks, resume previous work, and manage long-running sessions. |
-| [Working with Files](/core-workflows/working-with-files) | Use @ mentions to reference files, folders, URLs, and terminal output in your prompts. |
-| [Commands](/core-workflows/using-commands) | Keyboard shortcuts, slash commands, and terminal integration. |
-| [Checkpoints](/core-workflows/checkpoints) | Automatic snapshots of your project. Restore to any previous state instantly. |
+| [Plan & Act](/core-workflows/plan-and-act) | Plan mode explores without mutating; Act mode implements. |
+| [Task management](/core-workflows/task-management) | Start, resume, and organize long-running sessions. |
+| [Working with files](/core-workflows/working-with-files) | @ mentions for files, folders, URLs, terminal output, and git. |
+| [Commands](/core-workflows/using-commands) | Slash commands (`/newtask`, `/compact`, `/roadmap`, workflows). |
+| [Checkpoints](/core-workflows/checkpoints) | Snapshot and restore workspace state during a task. |
 
-## Workspace Integration
+## Workspace integration
 
-DietCode isn't a separate app; it's a part of your local development environment. It has a direct, 1-to-1 parity with your project structure:
+LUMI operates directly on your local project:
 
-- **Local File Access**: DietCode reads and writes files directly in your workspace. It sees what you see—your `.env` files, your `node_modules`, and your local Git history.
-- **Local Tool Execution**: When you approve a command, DietCode runs it in your local terminal. It has access to your `npm`, `python`, `go`, and any other tools you have installed.
-- **Local Persistence**: All project context, task history, and AI "memory" are stored on your machine in a local **SQLite database** (`broccolidb.db`). Nothing about your codebase is stored on our servers.
-- **Human-in-the-Loop**: DietCode acts as an extension of your own actions. It proposes a change, you review it in your editor's diff view, and only when you click **Approve** does it modify your files.
+- **Local files** — Reads and writes in your workspace; respects `.dietcodeignore`.
+- **Local terminal** — Commands run in your environment with your installed tools.
+- **Local persistence** — Task history and cognitive memory use BroccoliDB (SQLite) on your machine via `@noorm/broccolidb`.
+- **Human-in-the-loop** — Mutating tools require approval unless auto-approve rules allow them.
+
+## Supported model providers
+
+This build wires four providers in `src/core/api/index.ts` (see `src/shared/providers/providers.json`):
+
+| Provider | Use case |
+|----------|----------|
+| **OpenRouter** | Default; broad model catalog with your API key |
+| **ChatGPT Subscription** | OpenAI Codex subscription flow |
+| **NousResearch** | NousResearch-hosted models |
+| **Cloudflare Workers AI** | Cloudflare account + API token |
+
+Plan and Act modes can each use a different provider.
+
+## Internal naming
+
+User-facing copy says **LUMI**. Code and config may still reference **LUMI** (message types, `.dietcoderules/`, storage keys). That is expected — it is the internal module prefix, not a separate product.
 
 ---
 
-## The DietCode Edge
+## Why LUMI
 
-DietCode offers a unique "wedge" over traditional AI assistants:
+- **Agency with control** — Terminal, browser, and file tools with explicit approval.
+- **Local-first context** — BroccoliDB stores task history and memory on disk.
+- **Provider choice** — Switch models without leaving the sidebar.
+- **Extensibility** — MCP, hooks, skills, workflows, and subagents.
 
-- **True Agency**: It doesn't just suggest code; it performs tasks using its own terminal and browser.
-- **Privacy First**: Your code never touches our servers. Everything is local and transparent.
-- **Model Freedom**: Switch between any AI provider (Anthropic, OpenAI, Google) or run models locally.
-- **Total Control**: You approve every action. It’s a partnership, not an automated script.
-
-[Learn more about how DietCode compares to other tools →](/THE_DIETCODE_EDGE)
-
----
-
-## Why DietCode
+[Project map →](/PROJECT_MAP)

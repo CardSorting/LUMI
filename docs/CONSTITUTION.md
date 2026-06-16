@@ -1,6 +1,6 @@
-# The Sovereign Constitution of the DietCode Substrate
+# The Sovereign Constitution of the LUMI Substrate
 
-This document defines the immutable laws of structural integrity and autonomous reasoning for the DietCode environment. It serves as the final arbiter of architectural truth.
+This document defines the immutable laws of structural integrity and autonomous reasoning for the LUMI environment. It serves as the final arbiter of architectural truth.
 
 ## I. The Law of Purity (Domain Sovereignty)
 The **DOMAIN** layer is the holy of holies. It shall contain only pure logic and business-facing interfaces.

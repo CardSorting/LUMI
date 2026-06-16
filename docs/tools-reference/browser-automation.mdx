@@ -1,10 +1,10 @@
 ---
 title: "Browser Automation"
 sidebarTitle: "Browser Automation"
-description: "Interact with websites through DietCode's controlled browser instance."
+description: "Interact with websites through LUMI's controlled browser instance."
 ---
 
-Browser automation allows DietCode to interact with web content directly through a controlled Chrome instance. It can view websites, test applications, fill forms, and capture screenshots.
+Browser automation allows LUMI to interact with web content directly through a controlled Chrome instance. It can view websites, test applications, fill forms, and capture screenshots.
 
 ## Capabilities
 
@@ -17,7 +17,7 @@ Browser automation allows DietCode to interact with web content directly through
 
 ## Basic Commands
 
-Ask DietCode to use the browser with simple instructions:
+Ask LUMI to use the browser with simple instructions:
 
 ```text
 Use the browser to check https://example.com
@@ -63,7 +63,7 @@ Go to https://example.com/contact, fill out the form with test data, and submit
 
 ### One Browser at a Time
 
-DietCode can only run one browser at a time. To visit a different site:
+LUMI can only run one browser at a time. To visit a different site:
 - Navigate to a new URL in the same session
 - Or close the browser and open a new one
 
@@ -77,11 +77,11 @@ Close the browser and update the CSS to fix the alignment issue we saw
 
 ### Fixed Viewport
 
-The browser has a fixed 900x600 pixel viewport. DietCode shares screenshots after each action so you see exactly what it sees.
+The browser has a fixed 900x600 pixel viewport. LUMI shares screenshots after each action so you see exactly what it sees.
 
 ### Console Logs
 
-DietCode captures browser console logs, which is helpful for debugging. These are included with each screenshot.
+LUMI captures browser console logs, which is helpful for debugging. These are included with each screenshot.
 
 ## Common Use Cases
 
@@ -109,8 +109,8 @@ When running VS Code in WSL, configure Windows to allow WSL to connect to Chrome
 New-NetFirewallRule -DisplayName "WSL Chrome Debug" -Direction Inbound -LocalPort 9222 -Protocol TCP -Action Allow
 ```
 
-### Configure DietCode
+### Configure LUMI
 
 1. Open VS Code settings
-2. Search for "DietCode: Chrome Executable Path"
+2. Search for "LUMI: Chrome Executable Path"
 3. Set to your Chrome path (e.g., `C:\Program Files\Google\Chrome\Application\chrome.exe`)

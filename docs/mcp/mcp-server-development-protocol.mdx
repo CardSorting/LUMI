@@ -1,13 +1,13 @@
 ---
 title: "MCP Server Development Protocol"
-description: "This protocol is designed to streamline the development process of building MCP servers with DietCode."
+description: "This protocol is designed to streamline the development process of building MCP servers with LUMI."
 ---
 
-> **Build and share your MCP servers with the world.** Once you've created a great MCP server, submit it to the [DietCode MCP Marketplace](https://github.com/dietcode/mcp-marketplace) to make it discoverable and one-click installable by thousands of developers.
+> **Build and share your MCP servers with the world.** Once you've created a great MCP server, submit it to the [LUMI MCP Marketplace](https://github.com/dietcode/mcp-marketplace) to make it discoverable and one-click installable by thousands of developers.
 
 ## What Are MCP Servers?
 
-Model Context Protocol (MCP) servers extend AI assistants like DietCode by giving them the ability to:
+Model Context Protocol (MCP) servers extend AI assistants like LUMI by giving them the ability to:
 
 -   Access external APIs and services
 -   Retrieve real-time data
@@ -18,14 +18,14 @@ Without MCP, AI assistants are powerful but isolated. With MCP, they gain the ab
 
 ## The Development Protocol
 
-The heart of effective MCP server development is following a structured protocol. This protocol is implemented through a `.dietcoderules` file that lives at the **root** of your MCP working directory (/Users/your-name/Documents/DietCode/MCP).
+The heart of effective MCP server development is following a structured protocol. This protocol is implemented through a `.dietcoderules` file that lives at the **root** of your MCP working directory (/Users/your-name/Documents/LUMI/MCP).
 
 ### Using `.dietcoderules` Files
 
-A `.dietcoderules` file is a special configuration that DietCode reads automatically when working in the directory where it's placed. These files:
+A `.dietcoderules` file is a special configuration that LUMI reads automatically when working in the directory where it's placed. These files:
 
--   Configure DietCode's behavior and enforce best practices
--   Switch DietCode into a specialized MCP development mode
+-   Configure LUMI's behavior and enforce best practices
+-   Switch LUMI into a specialized MCP development mode
 -   Provide a step-by-step protocol for building servers
 -   Implement safety measures like preventing premature completion
 -   Guide you through planning, implementation, and testing phases
@@ -160,7 +160,7 @@ Only after ALL tools have been tested can attempt_completion be used.
 -   NEVER skip testing before completion
 ````
 
-When this `.dietcoderules` file is present in your working directory, DietCode will:
+When this `.dietcoderules` file is present in your working directory, LUMI will:
 
 1. Start in **PLAN MODE** to design your server before implementation
 2. Enforce proper implementation patterns in **ACT MODE**
@@ -173,11 +173,11 @@ Creating an MCP server requires just a few simple steps to get started:
 
 ### 1. Create a `.dietcoderules` file (IMPORTANT)
 
-First, add a `.dietcoderules` file to the root of your MCP working directory using the protocol above. This file configures DietCode to use the MCP development protocol when working in this folder.
+First, add a `.dietcoderules` file to the root of your MCP working directory using the protocol above. This file configures LUMI to use the MCP development protocol when working in this folder.
 
 ### 2. Start a Chat with a Clear Description
 
-Begin your DietCode chat by clearly describing what you want to build. Be specific about:
+Begin your LUMI chat by clearly describing what you want to build. Be specific about:
 
 -   The purpose of your MCP server
 -   Which API or service you want to integrate with
@@ -193,31 +193,31 @@ analysis, and retrieve company financial information.
 
 ### 3. Work Through the Protocol
 
-DietCode will automatically start in PLAN MODE, guiding you through the planning process:
+LUMI will automatically start in PLAN MODE, guiding you through the planning process:
 
 -   Discussing the problem scope
 -   Reviewing API documentation
 -   Planning authentication methods
 -   Designing tool interfaces
 
-When planning is complete, DietCode presents the plan in chat and **automatically** transitions to implementation — no manual mode switch required.
+When planning is complete, LUMI presents the plan in chat and **automatically** transitions to implementation — no manual mode switch required.
 
 ### 4. Provide API Documentation Early
 
-One of the most effective ways to help DietCode build your MCP server is to share official API documentation right at the start:
+One of the most effective ways to help LUMI build your MCP server is to share official API documentation right at the start:
 
 ```plaintext
 Here's the API documentation for the service:
 [Paste API documentation here]
 ```
 
-Providing comprehensive API details (endpoints, authentication, data structures) significantly improves DietCode's ability to implement an effective MCP server.
+Providing comprehensive API details (endpoints, authentication, data structures) significantly improves LUMI's ability to implement an effective MCP server.
 
 ## Understanding the Two Modes
 
 ### PLAN MODE
 
-In this collaborative phase, you work with DietCode to design your MCP server:
+In this collaborative phase, you work with LUMI to design your MCP server:
 
 -   Define the problem scope
 -   Choose appropriate APIs
@@ -227,7 +227,7 @@ In this collaborative phase, you work with DietCode to design your MCP server:
 
 ### ACT MODE
 
-Once planning is complete, DietCode helps implement the server:
+Once planning is complete, LUMI helps implement the server:
 
 -   Set up the project structure
 -   Write the implementation code
@@ -598,7 +598,7 @@ try {
 
 ## MCP Resources
 
-Resources let your MCP servers expose data to DietCode without executing code. They're perfect for providing context like files, API responses, or database records that DietCode can reference during conversations.
+Resources let your MCP servers expose data to LUMI without executing code. They're perfect for providing context like files, API responses, or database records that LUMI can reference during conversations.
 
 ### Adding Resources to Your MCP Server
 
@@ -639,7 +639,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 })
 ```
 
-Resources make your MCP servers more context-aware, allowing DietCode to access specific information without requiring you to copy/paste. For more information, refer to the [official documentation](https://modelcontextprotocol.io/docs/concepts/resources).
+Resources make your MCP servers more context-aware, allowing LUMI to access specific information without requiring you to copy/paste. For more information, refer to the [official documentation](https://modelcontextprotocol.io/docs/concepts/resources).
 
 ## Common Challenges and Solutions
 

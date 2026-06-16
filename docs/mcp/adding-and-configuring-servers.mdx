@@ -1,42 +1,42 @@
 ---
 title: "Adding & Configuring Servers"
 sidebarTitle: "Adding & Configuring"
-description: "Find MCP servers, add them to DietCode, and configure settings."
+description: "Find MCP servers, add them to LUMI, and configure settings."
 ---
 
-This guide covers finding MCP servers, adding them to DietCode, and configuring their settings.
+This guide covers finding MCP servers, adding them to LUMI, and configuring their settings.
 
 ## Finding MCP Servers
 
 Several places to find MCP servers:
 
-- **[DietCode MCP Marketplace](/mcp/mcp-marketplace)**: Browse and install directly from DietCode
+- **[LUMI MCP Marketplace](/mcp/mcp-marketplace)**: Browse and install directly from LUMI
 - **[Official MCP servers](https://github.com/modelcontextprotocol/servers)**: GitHub repository
 - **[Awesome-MCP servers](https://github.com/punkpeye/awesome-mcp-servers)**: Community collection
 - **Online directories**: [mcpservers.org](https://mcpservers.org/), [mcp.so](https://mcp.so/), [glama.ai/mcp/servers](https://glama.ai/mcp/servers)
 
-## Adding Servers with DietCode
+## Adding Servers with LUMI
 
-The easiest way to add an MCP server is to have DietCode build it for you:
+The easiest way to add an MCP server is to have LUMI build it for you:
 
-1. Provide DietCode with the GitHub repository URL
+1. Provide LUMI with the GitHub repository URL
 2. Optionally include the README contents for context
-3. DietCode clones the repo, builds it, and adds the configuration
+3. LUMI clones the repo, builds it, and adds the configuration
 
 Example conversation:
 ```text
 User: "Add the MCP server from https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search"
 
-DietCode: "Cloning the repository. It needs to be built. Should I run 'npm run build'?"
+LUMI: "Cloning the repository. It needs to be built. Should I run 'npm run build'?"
 
 User: "Yes"
 
-DietCode: "Build complete. This server needs an API key. Where should I find it?"
+LUMI: "Build complete. This server needs an API key. Where should I find it?"
 ```
 
 ## Managing Servers
 
-Access server settings through the MCP Servers icon in DietCode's top navigation bar.
+Access server settings through the MCP Servers icon in LUMI's top navigation bar.
 
 ### Enable/Disable
 
@@ -104,7 +104,7 @@ Control how MCP servers affect token usage:
 1. Click MCP Servers icon
 2. Select "Configure" tab
 3. Click "Advanced MCP Settings"
-4. Find `DietCode>Mcp:Mode` and select your preference
+4. Find `LUMI>Mcp:Mode` and select your preference
 
 <Frame>
 	<img
@@ -115,10 +115,10 @@ Control how MCP servers affect token usage:
 
 ## Using MCP Tools
 
-After configuring a server, DietCode automatically detects available tools:
+After configuring a server, LUMI automatically detects available tools:
 
 1. Type your request in chat
-2. DietCode identifies when an MCP tool can help
+2. LUMI identifies when an MCP tool can help
 3. Approve the tool use (or use [auto-approval](/features/auto-approve))
 
 ## Troubleshooting

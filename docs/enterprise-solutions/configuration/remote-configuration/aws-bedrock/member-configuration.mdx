@@ -10,11 +10,11 @@ As a team member, you can connect your local development environment to your org
 
 To successfully connect to your organization's AWS Bedrock setup, you'll need a few things ready.
 
-**DietCode extension installed and configured**  
-The DietCode extension must be installed in VS Code and you need to be signed into your organization account. If you haven't installed DietCode yet, follow our [installation guide](/getting-started/installing-dietcode).
+**LUMI extension installed and configured**  
+The LUMI extension must be installed in VS Code and you need to be signed into your organization account. If you haven't installed LUMI yet, follow our [installation guide](/getting-started/installing-dietcode).
 
 <Info>
-**Quick Check**: Open the DietCode panel in VS Code. If you see your organization name in the bottom left, you're signed in correctly.
+**Quick Check**: Open the LUMI panel in VS Code. If you see your organization name in the bottom left, you're signed in correctly.
 </Info>
 
 **AWS credentials with Bedrock access**  
@@ -34,10 +34,10 @@ If you don't have AWS credentials yet, reach out to your IT or cloud team to get
 ## Configuration Steps
 
 <Steps>
-<Step title="Open DietCode Settings">
-Open VS Code and access the DietCode settings panel using either of these methods:
+<Step title="Open LUMI Settings">
+Open VS Code and access the LUMI settings panel using either of these methods:
 
-- Click the settings icon (⚙️) in the DietCode panel
+- Click the settings icon (⚙️) in the LUMI panel
 - Click on the API Provider dropdown located directly below the chat area (it will display as `bedrock.anthropic.claude-sonnet-4-20250514-v1:0` or similar)
 
 </Step>
@@ -63,14 +63,14 @@ Use an existing AWS CLI profile configured on your machine.
 
 1. Select the **AWS Profile** radio button
 2. Choose or enter the profile name from your `~/.aws/credentials` file
-3. DietCode will use the credentials associated with that profile
+3. LUMI will use the credentials associated with that profile
 </Accordion>
 
 <Accordion title="AWS Credentials">
 Use your default AWS credential chain (environment variables, EC2 instance roles, etc.).
 
 1. Select the **AWS Credentials** radio button
-2. DietCode will automatically detect credentials from your environment using the standard AWS credential provider chain
+2. LUMI will automatically detect credentials from your environment using the standard AWS credential provider chain
 </Accordion>
 </AccordionGroup>
 
@@ -90,7 +90,7 @@ Additional settings like cross-region inference and global inference profile wil
 </Step>
 
 <Step title="Test the Connection">
-Send a test message in DietCode to verify your credentials work correctly with the configured Bedrock region.
+Send a test message in LUMI to verify your credentials work correctly with the configured Bedrock region.
 
 <Tip>
 **Testing Recommendation**
@@ -110,7 +110,7 @@ Verify your chosen credential method has the necessary IAM permissions to call B
 Ask your administrator to confirm which region is configured for your organization. Ensure your AWS credentials have access to Bedrock in that specific region. [View AWS Global Infrastructure](https://aws.amazon.com/about-aws/global-infrastructure/regions_az/)
 
 **Don't see AWS Bedrock as an option**  
-Confirm you're signed into the correct DietCode organization. Verify your administrator has saved the Bedrock configuration. Try signing out and back into the extension.
+Confirm you're signed into the correct LUMI organization. Verify your administrator has saved the Bedrock configuration. Try signing out and back into the extension.
 
 **AWS Credentials option not finding credentials**  
 Verify AWS CLI is installed and configured with `aws configure` ([AWS CLI Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)). Check that credentials are present in `~/.aws/credentials`. For EC2/ECS environments, ensure IAM roles are properly attached. If using environment variables, set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.

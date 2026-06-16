@@ -4,11 +4,11 @@ sidebarTitle: "Tasks"
 description: "Organize your work with tasks - self-contained sessions that capture your conversations, code changes, and decisions."
 ---
 
-Every interaction with DietCode happens within a task. Tasks are self-contained work sessions that capture your entire conversation, code changes, command executions, and decisions.
+Every interaction with LUMI happens within a task. Tasks are self-contained work sessions that capture your entire conversation, code changes, command executions, and decisions.
 
 ## What are Tasks?
 
-A task begins when you submit a prompt to DietCode. Your prompt defines the goal, and DietCode works toward it through conversation, code changes, and tool use. The quality of your initial prompt directly affects how well DietCode performs - clear, specific prompts lead to better results.
+A task begins when you submit a prompt to LUMI. Your prompt defines the goal, and LUMI works toward it through conversation, code changes, and tool use. The quality of your initial prompt directly affects how well LUMI performs - clear, specific prompts lead to better results.
 
 Each task:
 
@@ -20,12 +20,12 @@ Each task:
 - Creates [checkpoints](/core-workflows/checkpoints) for file changes through Git-based snapshots
 
 <Tip>
-Want to get better results from DietCode? Learn how to write effective prompts in our [Prompt Module](https://dietcode.bot/learn).
+Want to get better results from LUMI? Learn how to write effective prompts in our [Prompt Module](https://dietcode.bot/learn).
 </Tip>
 
 ## Scoping Your Tasks
 
-Each task carries its own context: the conversation history, decisions made, and understanding built up over the session. How you scope your tasks directly affects how well DietCode can help you.
+Each task carries its own context: the conversation history, decisions made, and understanding built up over the session. How you scope your tasks directly affects how well LUMI can help you.
 
 Think of it this way: **one task = one goal**. "Implement user authentication" is one task. "Fix an unrelated CSS bug" is a separate task, even if you notice it while working on auth.
 
@@ -37,15 +37,15 @@ If you're unsure, err on the side of starting fresh. You can always find previou
 
 ### Context Window
 
-Every AI model has a context window - a limit on how much information it can process at once. Think of it as DietCode's working memory for the current task.
+Every AI model has a context window - a limit on how much information it can process at once. Think of it as LUMI's working memory for the current task.
 
 As you work, the context window fills up with:
-- Your prompts and DietCode's responses
-- File contents DietCode reads or edits
+- Your prompts and LUMI's responses
+- File contents LUMI reads or edits
 - Command outputs and tool results
-- System instructions that guide DietCode's behavior (including [DietCode Rules](/customization/dietcode-rules))
+- System instructions that guide LUMI's behavior (including [DietCode Rules](/customization/dietcode-rules))
 
-When the context window approaches its limit, DietCode automatically compresses older parts of the conversation to make room. This means very long tasks may lose some earlier details, though DietCode preserves the most important context.
+When the context window approaches its limit, LUMI automatically compresses older parts of the conversation to make room. This means very long tasks may lose some earlier details, though LUMI preserves the most important context.
 
 This is why task scoping matters: a focused task keeps relevant information in the context window. A sprawling task fills the window with noise, pushing out useful context.
 
@@ -57,31 +57,31 @@ For long-running tasks, enable [Auto-Compact](/features/auto-compact) to intelli
 
 ### New Task vs. Continue
 
-Knowing when to start fresh versus continue can feel unclear at first. As you work with DietCode more, you'll develop an intuition for it. Use this table as a starting point:
+Knowing when to start fresh versus continue can feel unclear at first. As you work with LUMI more, you'll develop an intuition for it. Use this table as a starting point:
 
 | Scenario | Action | Why |
 |----------|--------|-----|
 | Switching to a different feature | **New task** | Clean context, focused responses |
-| Building on work DietCode just completed | **Continue** | Shared understanding preserved |
-| DietCode keeps going off-track | **New task** | Fighting context wastes time |
+| Building on work LUMI just completed | **Continue** | Shared understanding preserved |
+| LUMI keeps going off-track | **New task** | Fighting context wastes time |
 | Iterating on the same files | **Continue** | Conversation history helps |
 | Explaining what to ignore | **New task** | Cluttered context hurts quality |
-| Refining DietCode's last output | **Continue** | Momentum and decisions preserved |
+| Refining LUMI's last output | **Continue** | Momentum and decisions preserved |
 
-To start a new task, click the **+** button in the DietCode sidebar or use the `/newtask` command. Your file changes are preserved through [checkpoints](/core-workflows/checkpoints), and you can reference previous tasks from history anytime.
+To start a new task, click the **+** button in the LUMI sidebar or use the `/newtask` command. Your file changes are preserved through [checkpoints](/core-workflows/checkpoints), and you can reference previous tasks from history anytime.
 
 ## Understanding Task Costs
 
-Every cloud-based AI model charges for usage based on tokens, the units of text the model processes. DietCode tracks these costs automatically and displays them in the task header so you can monitor spending as you work.
+Every cloud-based AI model charges for usage based on tokens, the units of text the model processes. LUMI tracks these costs automatically and displays them in the task header so you can monitor spending as you work.
 
 ### How Costs Are Calculated
 
-When you interact with DietCode, the model processes:
+When you interact with LUMI, the model processes:
 
 - **Input tokens**: Your prompts, file contents, conversation history, and system instructions
 - **Output tokens**: The model's responses, code suggestions, and tool calls
 
-Cloud providers charge per million tokens, with output tokens typically costing more than input. Some providers also support **prompt caching**, which reduces costs when the same context (like your dietcode rules or large files) appears in multiple requests. DietCode automatically tracks cache savings when available.
+Cloud providers charge per million tokens, with output tokens typically costing more than input. Some providers also support **prompt caching**, which reduces costs when the same context (like your dietcode rules or large files) appears in multiple requests. LUMI automatically tracks cache savings when available.
 
 The estimated cost shown in the task header updates after each API request. This estimate uses the pricing information from your selected provider and may vary slightly from your final bill depending on how your provider rounds or bills usage.
 
@@ -91,7 +91,7 @@ You pay for AI usage when using cloud providers like Anthropic, OpenAI, OpenRout
 
 | Provider Type | Billing Model |
 |--------------|---------------|
-| **DietCode Provider** | Pay-per-use with credits you purchase |
+| **LUMI Provider** | Pay-per-use with credits you purchase |
 | **Direct API keys** | Billed by your provider (Anthropic, OpenAI, etc.) |
 | **OpenRouter/Requesty** | Aggregated billing across multiple models |
 | **Local models** | Free (you provide the hardware) |
@@ -100,9 +100,9 @@ If you're using your own API keys, check your provider's pricing page for curren
 
 ### Free Options
 
-Not ready to pay? DietCode offers several free paths:
+Not ready to pay? LUMI offers several free paths:
 
-- **Free models**: Search "free" in the model selector when using the DietCode provider. These models display a **FREE** tag and work well for learning and experimentation.
+- **Free models**: Search "free" in the model selector when using the LUMI provider. These models display a **FREE** tag and work well for learning and experimentation.
 - **Free tiers**: Some providers offer limited free usage when you use your own API key.
 - **Local models**: Run models on your own hardware with zero per-request costs.
 
@@ -131,11 +131,11 @@ Every task you work on is saved automatically to your local machine. You can rev
 
 ### Finding Your History
 
-Click the **History** button in the DietCode sidebar (clock icon at the top-right) to open the history view. You'll see all your past tasks with their initial prompt, timestamp, and token usage. Each task card expands to show a preview of the conversation.
+Click the **History** button in the LUMI sidebar (clock icon at the top-right) to open the history view. You'll see all your past tasks with their initial prompt, timestamp, and token usage. Each task card expands to show a preview of the conversation.
 
 ### Searching Tasks
 
-Use the search bar at the top of the history view to find specific tasks. The fuzzy search looks across everything: your prompts, DietCode's responses, code snippets, and file names. 
+Use the search bar at the top of the history view to find specific tasks. The fuzzy search looks across everything: your prompts, LUMI's responses, code snippets, and file names. 
 
 Sort results by:
 - **Newest/Oldest** for chronological browsing
@@ -149,12 +149,12 @@ Use favorites strategically. Star tasks that represent successful patterns, good
 
 ## Resuming Tasks
 
-DietCode can resume interrupted tasks with full context:
+LUMI can resume interrupted tasks with full context:
 
 1. Open the task from history
-2. DietCode loads the complete conversation
+2. LUMI loads the complete conversation
 3. File states are checked against [checkpoints](/core-workflows/checkpoints)
 4. The task continues with awareness of the interruption
 5. Provide additional context if needed
 
-This works across sessions. Even if you close the editor and return days later, DietCode can pick up where you left off.
+This works across sessions. Even if you close the editor and return days later, LUMI can pick up where you left off.

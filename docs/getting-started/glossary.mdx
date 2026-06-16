@@ -1,24 +1,64 @@
 ---
 title: "Glossary"
 sidebarTitle: "Glossary"
-description: "A guide to the terms and concepts used in DietCode documentation."
+description: "Terms used in LUMI documentation and the agent workspace."
 ---
 
-DietCode uses some specialized terms to describe its internal systems. This guide translates those technical concepts into plain English.
+## Product & UI
 
-## System Components
+| Term | Meaning |
+|------|---------|
+| **LUMI** | User-facing name of the VS Code extension (`CardSorting.lumi`). |
+| **DietCode (internal)** | Legacy prefix for types, storage keys, and rules (for example `DietCodeMessage`, `.dietcoderules/`). Not a separate product in this repo. |
+| **Webview** | React sidebar UI in `webview-ui/`. |
+| **Controller** | `src/core/controller/index.ts` — manages tasks, state, MCP, and webview messages. |
+| **Task** | A single agent session with conversation history and tool loop (`src/core/task/`). |
 
-| Current Term | Former Term (Deprecated) | Description |
-| :--- | :--- | :--- |
-| **Code Analysis Engine** | Spider Engine | The system that allows DietCode to "see" and understand the structure of your files. |
-| **Context Memory** | BroccoliDB | A local SQLite database that stores what DietCode has learned about your project during a task. |
-| **Connection Layer** | HostBridge | Connects the AI "brain" to your editor (VS Code, JetBrains, etc.). |
-| **Communication Protocol** | Protobus | The high-performance way different parts of DietCode talk to each other. |
-| **Sub-agents** | Subagents | Specialized assistants that DietCode can create to help with specific sub-tasks. |
-| **Technical Debt** | Pathogen | A file or module that is too complex, messy, or has too many bugs. |
-| **Architecture Standards** | JoyZoning | Rules that ensure code is placed in the right directory and follows best practices. |
-| **Resource Usage** | Metabolic Pressure | How much memory (RAM) or processing power the system is using. |
-| **Automated Diagnostics** | Forensic Healing | When DietCode detects a structural error and fixes it automatically. |
-| **Core Rule** | Axiom | A fundamental rule about how your project's code should be organized. |
-| **Impact Analysis** | Blast Radius | Figuring out which other files might break if you change a piece of code. |
-| **Context Grounding** | Grounding | Ensuring the AI bases its decisions on real code it has actually read. |
+## Modes & workflows
+
+| Term | Meaning |
+|------|---------|
+| **Plan mode** | Read-only exploration; agent uses `plan_mode_respond`. |
+| **Act mode** | Implementation mode; mutating tools allowed via `act_mode_respond`. |
+| **Checkpoint** | Snapshot of workspace state during a task (`src/integrations/checkpoints/`). |
+| **Auto-approve** | Rules that skip manual approval for matching tools (`src/core/task/tools/autoApprove.ts`). |
+| **Focus chain** | Todo tracking tool (`focus_chain` in `DietCodeDefaultTool`). |
+| **Slash command** | `/newtask`, `/compact`, `/roadmap`, etc. — parsed in `src/core/slash-commands/`. |
+| **Workflow** | Custom markdown instruction file invoked as `/filename` when enabled. |
+
+## Tools & integration
+
+| Term | Meaning |
+|------|---------|
+| **Tool** | Agent capability (for example `read_file`, `execute_command`) defined in `src/shared/tools.ts`. |
+| **MCP** | Model Context Protocol — external tool servers via `src/services/mcp/`. |
+| **Subagent** | Background agent spawned through `use_subagents` and config in `src/core/task/tools/subagent/`. |
+| **Hook** | Lifecycle script intercepting tool/task events (`src/core/hooks/`). |
+| **Skill** | Reusable agent instruction package invoked with `use_skill`. |
+
+## Storage & memory
+
+| Term | Meaning |
+|------|---------|
+| **BroccoliDB** | Workspace package `@noorm/broccolidb` — SQLite context store and runtime. Documented in `broccolidb/docs/`. |
+| **Cognitive memory** | Graph-backed project memory tools (`mem_*`, `query_cognitive_memory`). |
+| **StateManager** | Extension settings and global state (`src/core/storage/StateManager.ts`). |
+| **`.dietcodeignore`** | Files excluded from agent context (`src/core/ignore/`). |
+
+## Architecture
+
+| Term | Meaning |
+|------|---------|
+| **HostProvider** | Injects VS Code–specific services into core logic (`src/hosts/host-provider.ts`). |
+| **Host bridge** | gRPC layer between core and VS Code (`src/hosts/vscode/hostbridge/`). |
+| **Spider** | Forensic structural audit engine in BroccoliDB / `src/core/policy/spider/`. |
+| **JoyZoning** | Architecture/layer compliance auditing (JoyZoning audit command in sidebar). |
+| **ROADMAP.md** | Optional project steering file with validation gates (`lumi.roadmap.*` settings). |
+
+## Providers
+
+| Term | Meaning |
+|------|---------|
+| **OpenRouter** | Default API provider; routes to many third-party models. |
+| **ChatGPT Subscription** | Provider key `openai-codex`. |
+| **buildApiHandler** | Factory in `src/core/api/index.ts` that instantiates the active provider handler. |

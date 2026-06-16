@@ -5,7 +5,7 @@ sidebarTitle: "Enforcement"
 
 # Code Standard Enforcement
 
-This document summarizes the changes made to the DietCode architectural policy engine to resolve agent crashing on strikes and implement production-grade hardening.
+This document summarizes the changes made to the LUMI architectural policy engine to resolve agent crashing on strikes and implement production-grade hardening.
 
 ## 1. The "Fix-It" Flow: Progressive Enforcement
 

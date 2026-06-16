@@ -4,7 +4,7 @@ sidebarTitle: "YOLO Mode"
 description: "Enterprise controls for YOLO Mode autonomous operation"
 ---
 
-YOLO Mode enables DietCode to operate with complete autonomy, auto-approving all actions without user confirmation. For Enterprise administrators, this page covers how to control access to YOLO Mode across your organization.
+YOLO Mode enables LUMI to operate with complete autonomy, auto-approving all actions without user confirmation. For Enterprise administrators, this page covers how to control access to YOLO Mode across your organization.
 
 <Note>
 For complete details about YOLO Mode functionality, risks, and best practices, see [YOLO Mode in Features](/features/yolo-mode).
@@ -12,7 +12,7 @@ For complete details about YOLO Mode functionality, risks, and best practices, s
 
 ## Overview
 
-When YOLO Mode is enabled, DietCode automatically approves all operations including file changes, terminal commands, browser actions, and mode transitions. This provides maximum automation speed but removes all safety guardrails.
+When YOLO Mode is enabled, LUMI automatically approves all operations including file changes, terminal commands, browser actions, and mode transitions. This provides maximum automation speed but removes all safety guardrails.
 
 <Warning>
 YOLO Mode is powerful but potentially dangerous. Administrators should carefully consider which teams or users should have access to this feature.
@@ -47,7 +47,7 @@ When `yoloModeAllowed` is set to `false`:
 ```
 
 When `yoloModeAllowed` is set to `true` or omitted:
-- Users can enable or disable YOLO Mode in their local DietCode settings
+- Users can enable or disable YOLO Mode in their local LUMI settings
 - Individual users make their own decisions about using YOLO Mode
 - No organizational restrictions apply
 
@@ -193,7 +193,7 @@ When YOLO Mode is enabled (by policy), track usage through:
 This setting:
 - Applies instantly to all connected clients
 - Cannot be overridden by individual users
-- Persists across DietCode restarts
+- Persists across LUMI restarts
 - Is synchronized across all team members
 
 ### Policy Enforcement

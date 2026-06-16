@@ -1,49 +1,107 @@
 ---
 title: "Project Map & Architecture"
 sidebarTitle: "Project Map"
-description: "A literal guide to the DietCode codebase structure and how it works."
+description: "A literal guide to the LUMI codebase structure and how modules connect."
 ---
 
 # Project Map & Architecture
 
-DietCode is a modular system designed for transparency and stability. This guide provides a literal map of where the core logic lives and how the different parts of the codebase work together.
+This map reflects the **actual** layout of the LUMI agent workspace. Paths are relative to the repository root.
 
-## 🗺️ Workspace Overview
+## Workspace overview
 
-The project is organized into several key modules, each with a clear responsibility:
+| Directory | Role |
+|-----------|------|
+| **`src/extension.ts`** | VS Code activation: commands, webview, migrations, roadmap watcher |
+| **`src/core/controller/`** | `Controller` class — task lifecycle, state, MCP, auth, gRPC handlers |
+| **`src/core/task/`** | Agent loop (`Task`), message state, tool orchestration |
+| **`src/core/task/tools/`** | `ToolExecutorCoordinator` + per-tool handlers |
+| **`src/core/api/`** | `buildApiHandler`, provider handlers, stream transforms |
+| **`src/core/context/`** | Context window management, file/env tracking, user rules |
+| **`src/core/prompts/`** | System prompt variants and slash-command response templates |
+| **`src/core/hooks/`** | Hook discovery, factory, and execution |
+| **`src/core/storage/`** | `StateManager`, disk I/O, remote config fetch |
+| **`src/core/workspace/`** | Multi-root detection, `WorkspaceRootManager` |
+| **`src/core/policy/spider/`** | Spider forensic engine integration |
+| **`src/core/webview/`** | Webview provider abstraction |
+| **`src/hosts/vscode/`** | VS Code host bridge, diff view, terminal, review comments |
+| **`src/hosts/host-provider.ts`** | Singleton injecting host-specific factories |
+| **`src/integrations/`** | Checkpoints, terminal interface, editor diff, notifications |
+| **`src/services/`** | MCP hub, browser session, telemetry, tree-sitter, roadmap, auth |
+| **`src/infrastructure/`** | DB pool, orchestrator, plumbing |
+| **`src/shared/`** | Shared types, proto conversions, `DietCodeDefaultTool` enum |
+| **`src/integrity/`** | Stability monitor, audit recorder, handover |
+| **`src/domain/`** | Import resolution (`import-resolution/`) |
+| **`webview-ui/`** | React sidebar — chat, settings, MCP configuration |
+| **`broccolidb/`** | Context store package (documented separately) |
+| **`proto/`** | Protobuf schemas for state, host bridge, hooks |
 
-| Directory | Name | Role |
-| :--- | :--- | :--- |
-| **`src/core/`** | **Orchestration** | The main reasoning engine. It manages the agent's "thinking" loop, executes plans, and monitors task progress. |
-| **`src/domain/`** | **Business Logic** | Defines the core rules, standards, and data models that govern how DietCode behaves across all platforms. |
-| **`src/services/`** | **Capabilities** | Shared services including AI model communication (LLM providers), prompt generation, and context management. |
-| **`src/infrastructure/`** | **Tools & I/O** | The "hands" of the agent. Handles file system access, terminal command execution, and browser automation. |
-| **`src/integrations/`** | **Editor Adapters** | Connects the core logic to specific IDEs (VS Code, JetBrains) and handles UI event synchronization. |
-| **`src/integrity/`** | **Stability & Policy** | Monitors the system for errors, enforces security policies, and ensures that code changes follow project standards. |
-| **`src/types/`** | **Type System** | Central repository for TypeScript definitions used across the entire project. |
-| **`webview-ui/`** | **Interface (MIRA)** | The React-based frontend for the sidebar. User-facing copy and visuals present as **MIRA** — see [User Interface Design](USER_INTERFACE_DESIGN.md) and [MIRA UX Implementation](MIRA_UX_IMPLEMENTATION.md). Voice helpers live in `webview-ui/src/copy/miraVoice.ts`. |
-| **`broccolidb/`** | **Context Store** | A local SQLite database that persists your task history and project-specific knowledge. |
+## Core flow
 
----
+```
+extension.ts
+  └─ HostProvider.initialize(...)
+  └─ WebviewProvider (VscodeWebviewProvider)
+       └─ Controller (src/core/controller/index.ts)
+            └─ Task (src/core/task/index.ts)
+                 ├─ buildApiHandler() → LLM
+                 ├─ parseSlashCommands() / parseMentions()
+                 └─ ToolExecutorCoordinator.execute()
+                      └─ handlers/*ToolHandler.ts
+```
 
-## 🏗️ Core Architectural Patterns
+There is **no** `DietCodeController.ts`. The main controller is **`Controller`** in `src/core/controller/index.ts`.
 
-### 1. VS Code Extension Core
-DietCode's reasoning engine runs inside the VS Code extension and communicates with the webview through the extension host.
+There is **no** `src/infrastructure/tools/` registry. Tools live in **`src/core/task/tools/`**.
 
-### 2. Forensic Code Analysis
-To provide accurate suggestions, DietCode uses deep static analysis (powered by Tree-Sitter in `src/services/`). It maps your project's symbols and dependencies in real-time, allowing it to understand the "blast radius" of any suggested change.
+Provider handlers are in **`src/core/api/providers/`**, not `src/services/providers/`.
 
-### 3. Human-in-the-Loop Safety
-Safety is built into the architecture. The **Stability & Policy** layer (`src/integrity/`) intercepts all proposed actions (file edits, shell commands, etc.) and presents them for your approval. No physical change is made to your workspace without your explicit consent.
+## Key files
 
----
+| Concern | File |
+|---------|------|
+| Extension entry | `src/extension.ts` |
+| Command ID prefix | `src/registry.ts` (`lumi.*` when `package.json` name is `lumi`) |
+| Tool enum | `src/shared/tools.ts` |
+| Tool routing | `src/core/task/tools/ToolExecutorCoordinator.ts` |
+| Provider routing | `src/core/api/index.ts` → `createHandlerForProvider` |
+| Provider list (UI) | `src/shared/providers/providers.json` |
+| State keys | `src/shared/storage/state-keys.ts` |
+| Slash commands | `src/core/slash-commands/index.ts` |
+| System prompts | `src/core/prompts/system-prompt/` |
+| Package metadata | `package.json` (name: `lumi`, publisher: `CardSorting`) |
 
-## 🛠️ Key Components
+## Architectural patterns
 
-- **The Main Loop**: Located in `src/core/DietCodeController.ts`, this manages the "Observe → Plan → Act" cycle.
-- **Tool Registry**: Found in `src/infrastructure/tools/`, this defines the capabilities available to the agent.
-- **Provider Adapters**: Managed in `src/services/providers/`, these connect to external AI services like Anthropic, OpenAI, and Google Gemini.
+### Host abstraction
 
----
-*Understanding the codebase is the first step to mastering DietCode. Focus on clarity, build with confidence.*
+`HostProvider` decouples core logic from VS Code. The extension initializes it with VS Code–specific webview, diff, terminal, and gRPC bridge implementations. Core code calls `HostProvider.get()` instead of importing `vscode` directly.
+
+### Human-in-the-loop
+
+Tools that mutate the workspace (`write_to_file`, `execute_command`, etc.) flow through approval UI in the webview. Read-only tools (`READ_ONLY_TOOLS` in `src/shared/tools.ts`) can run without blocking on checkpoint commits.
+
+### BroccoliDB integration
+
+The agent uses `@noorm/broccolidb` for cognitive memory tools, Spider audit, and SQLite persistence. Agent-side wiring is in tool handlers (`CognitiveMemory*Handler`, `DietcodeKernelToolHandler`) and `src/infrastructure/db/`.
+
+### Plan vs Act
+
+Separate API providers and prompts per mode (`planModeApiProvider` / `actModeApiProvider`). Plan mode uses `plan_mode_respond`; Act mode uses `act_mode_respond` and mutating tools.
+
+## What lives outside `src/`
+
+| Path | Role |
+|------|------|
+| `walkthrough/` | VS Code walkthrough markdown steps |
+| `assets/icons/` | Extension icons and orb mark font |
+| `.dietcoderules/` | Default workflows and agent rules for this repo |
+| `.agents/skills/` | Cursor agent skills |
+| `evals/` | Evaluation benchmarks and analysis |
+| `docs/` | This documentation site (Mintlify) |
+
+## Further reading
+
+- [Architecture (current)](architecture/current.md)
+- [System communication](SYSTEM_COMMUNICATION.md)
+- [BroccoliDB docs](../broccolidb/docs/README.md)

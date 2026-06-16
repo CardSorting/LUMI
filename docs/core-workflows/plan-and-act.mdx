@@ -1,131 +1,46 @@
 ---
 title: "Plan & Act Mode"
-sidebarTitle: "Plan & Act Mode"
-description: "Think first, then build. DietCode automatically plans before implementing."
+sidebarTitle: "Plan & Act"
+description: "Separate Plan and Act API configurations and response tools in LUMI."
 ---
 
-Plan and Act are internal phases that separate thinking from doing. You do not switch modes manually — DietCode manages the transition for you.
+LUMI uses two **modes** — `plan` and `act` — defined in `src/shared/storage/types.ts`. Each mode can use a different provider and model (`planModeApiProvider`, `actModeApiProvider` in extension state).
 
-<Tip>
-	**New to Plan & Act?** Watch [Plan & Act Deep Dive](https://youtu.be/b7o6URFPp64) for the concepts. The product now automates the handoff between phases.
-</Tip>
+## Tools per mode
 
-## How It Works
+| Mode | Response tool | Typical behavior |
+|------|---------------|------------------|
+| **Plan** | `plan_mode_respond` | Exploration, architecture discussion, read-only tools |
+| **Act** | `act_mode_respond` | Implementation; mutating tools (`write_to_file`, `execute_command`, etc.) |
 
-Every new task follows this flow automatically:
+Handlers: `PlanModeRespondHandler`, `ActModeRespondHandler` in `src/core/task/tools/handlers/`.
 
-1. **Plan phase** — DietCode explores your codebase (read-only), asks clarifying questions if needed, and architects an approach
-2. **Plan delivery** — The finalized plan appears in chat as a structured summary (non-blocking — you can keep typing)
-3. **Act phase** — DietCode automatically transitions to implementation and begins making changes (with your approval on each tool use)
+Mode can be inferred from message history via `inferAgentModeFromMessages` (`src/shared/inferAgentModeFromMessages.ts`). `/replan` injects a replan prompt (`src/core/slash-commands/index.ts`).
 
-There is no Plan/Act toggle in the chat UI. Mode transitions are invisible by design — similar to how Cursor, Devin, and other agents handle plan-then-execute workflows.
+## Settings
 
-<Note>
-	**YOLO mode** skips the planning phase and starts directly in Act mode for maximum autonomy. Enable it in Settings when you want immediate implementation without a planning step.
-</Note>
+In **LUMI Settings → API Configuration**, use the **Plan** and **Act** tabs (`ApiConfigurationSection.tsx`) to set provider, model, and thinking budget independently.
 
-## Plan Phase
+## Typical flow
 
-During planning, DietCode can read your codebase, run searches, and discuss strategy, but cannot modify files or execute commands.
+1. User describes a goal.
+2. Agent gathers context with read-only tools (search, read files, project map).
+3. In Plan mode, agent responds with `plan_mode_respond` — strategy without writes.
+4. User approves direction or sends follow-ups; agent transitions to Act mode.
+5. In Act mode, agent uses mutating tools; each requires approval unless auto-approve matches.
+6. Agent finishes with `attempt_completion` (subject to roadmap and audit gates when enabled).
 
-This constraint keeps the conversation focused on understanding before changes. Use this phase to:
+## Replanning
 
-- Explore unfamiliar codebases before making changes
-- Discuss architecture decisions and tradeoffs
-- Identify edge cases and potential issues upfront
-- Create a clear implementation strategy
+- Slash **`/replan`** — injects replan instructions (`replanToolResponse`).
+- Natural language — "let's rethink this" during idle gaps between turns (`idleGapFeedback` utilities in task loop).
 
-## Act Phase
+## Auto-approve / YOLO
 
-After the plan is delivered, DietCode retains full context from planning and implements the solution. File edits and commands still require your approval (unless auto-approve is configured).
+Auto-approve rules (`src/core/task/tools/autoApprove.ts`) can skip approval prompts for trusted tool patterns. Enterprise docs may refer to this as "YOLO mode" — see [auto-approve](/features/auto-approve).
 
-During Act Mode, send follow-up messages at any time to steer direction — even while the agent is working, and **between turns** after a response completes (before the next API request starts). Your message appears immediately in chat; DietCode queues it and continues automatically. Use `/replan` or natural language like "let's rethink this" to pivot back to planning.
+## Related
 
-## Between-Turn Follow-Ups
-
-After the agent finishes a visible response but before the next API call begins, you can still send messages. This is the idle gap between turns:
-
-1. Type your follow-up in the chat input (placeholder: "Add a follow-up or type /replan…")
-2. Your message appears instantly as user feedback
-3. DietCode injects it at the next safe checkpoint and continues — no mode toggle required
-
-This mirrors Cursor-style "message while the agent works" ergonomics: mid-stream messages interrupt the current response; between-turn messages queue for the next loop iteration.
-
-## Typical Workflow
-
-1. Describe what you want to build
-2. DietCode explores relevant files and understands the codebase
-3. DietCode presents a plan in chat
-4. Implementation begins automatically — approve tool uses as they appear
-5. DietCode completes the task with `attempt_completion`
-
-For complex projects, you may iterate: send feedback mid-task, ask for scope changes, or start a new task with `/newtask` context.
-
-## When Planning Helps Most
-
-| Scenario | Why plan first |
-|----------|----------------|
-| Starting new features where the approach isn't obvious | Reduces rework |
-| Debugging tricky issues | Investigation before edits |
-| Architectural decisions affecting multiple files | Coherent design |
-| Understanding complex workflows before modifying | Safer changes |
-| Learning a new codebase | Read-only exploration |
-
-For obvious quick fixes (typos, missing imports), enable **YOLO mode** to skip planning and implement immediately.
-
-## Using Different Models for Each Phase
-
-You can configure separate models for Plan and Act phases in Settings. This is useful when you want a stronger reasoning model for planning and a faster model for implementation.
-
-1. Open DietCode Settings
-2. Enable "Use different models for Plan and Act modes"
-3. Select your preferred model for each phase
-
-The agent automatically uses the correct model when transitioning between phases.
-
-**Example configurations:**
-
-| Use Case | Plan Phase | Act Phase |
-|----------|------------|-----------|
-| Cost optimization | GLM 4.6 | Grok Code Fast |
-| Maximum quality | Claude Opus | Claude Sonnet |
-| Speed-focused | Gemini 3 Flash | Cerebras |
-
-## Using `/deep-planning`
-
-For complex tasks that need thorough analysis, use the `/deep-planning` slash command. This triggers an extended planning session where DietCode:
-
-1. Explores the codebase systematically
-2. Identifies all affected files and dependencies
-3. Creates a detailed implementation plan document
-4. Presents the plan and automatically transitions to implementation
-
-See the [Deep Planning docs](/features/deep-planning) for more details.
-
-## Choosing the Right Approach by Task Size
-
-### Small tasks: YOLO / Act only
-
-For quick fixes like typos, simple bug fixes, or following established patterns, enable YOLO mode or expect a brief planning pass before rapid implementation.
-
-**Examples:** Fix a typo, add a missing import, update a config value, rename a variable.
-
-### Medium tasks: Automatic Plan → Act
-
-For most development work, DietCode plans first, then implements. This is the default for features that touch a few files and have some complexity.
-
-**Examples:** Add a new API endpoint, implement a UI component, fix a bug that requires investigation, refactor a single module.
-
-### Large tasks: Use `/deep-planning`
-
-For complex features spanning multiple files, requiring architectural decisions, or taking multiple sessions, use `/deep-planning` for a documented implementation spec.
-
-**Examples:** Add a new feature across frontend and backend, major refactoring, implementing a new system or integration, multi-step migrations.
-
-## Tips
-
-- Plans appear as structured chat messages — scroll up to review anytime during implementation
-- Use [file mentions](/core-workflows/working-with-files) to point DietCode at relevant files
-- Enable [Checkpoints](/core-workflows/checkpoints) before large implementations so you can roll back
-- [Focus Chain](/features/focus-chain) tracks implementation progress after the plan phase
-- Send follow-up messages to steer direction — no mode switching required
+- [Model selection](/core-features/model-selection-guide)
+- [Using commands — /replan](/core-workflows/using-commands)
+- [All tools](/tools-reference/all-dietcode-tools)

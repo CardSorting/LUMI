@@ -1,46 +1,47 @@
 ---
-title: "DietCode Documentation"
+title: "LUMI Documentation"
 sidebarTitle: "Home"
-description: "Your AI-powered coding agent for complex work. Read files, write code, run commands, all with your approval."
+description: "Your calm coding companion for VS Code. Read files, write code, run commands — with your approval."
 ---
 
-Welcome to the DietCode documentation. Whether you're just getting started or looking to unlock advanced workflows, you'll find everything you need here.
+Welcome to the LUMI documentation. LUMI is a VS Code extension that helps you build software through conversation, terminal access, and file edits — always with explicit approval.
 
-## What is DietCode?
+## What is LUMI?
 
-DietCode is an AI coding agent that lives in your editor and your terminal. It can read and write files, run terminal commands, use a browser, and help you build features through natural conversation. Every action requires your explicit approval. You're always in control.
-
-> [!IMPORTANT]
-> **Performance Optimized (v3.84.0)**: DietCode is now faster and more efficient, with significantly reduced startup times and improved history analysis.
+LUMI runs inside VS Code as `CardSorting.lumi`. It can read and write files, run shell commands, browse the web, connect MCP servers, and delegate work to subagents. Your codebase stays local; you approve every mutating action.
 
 <CardGroup cols={2}>
   <Card title="Quick Start" icon="rocket" href="/getting-started/quick-start">
-    Get DietCode running in under 2 minutes. Install, authenticate, and start building.
+    Install LUMI, pick a model provider, and run your first task.
   </Card>
-  <Card title="What is DietCode?" icon="circle-info" href="/getting-started/what-is-dietcode">
-    Learn about DietCode's core features and how it helps you code faster.
+  <Card title="What is LUMI?" icon="circle-info" href="/getting-started/what-is-dietcode">
+    Core capabilities and how LUMI fits in your workspace.
   </Card>
   <Card title="Your First Project" icon="hammer" href="/getting-started/your-first-project">
-    A step-by-step guide to building your first application with DietCode.
+    Step-by-step tutorial for a first coding task.
   </Card>
-  <Card title="Install DietCode" icon="download" href="/getting-started/installing-dietcode">
-    Setup instructions for VS Code, Cursor, Windsurf, and JetBrains.
+  <Card title="Install LUMI" icon="download" href="/getting-started/installing-dietcode">
+    VSIX install, marketplace, and VS Code setup.
   </Card>
 </CardGroup>
 
-## Explore the Docs
+## Explore the docs
 
 <CardGroup cols={2}>
   <Card title="User Guide" icon="book-open-reader" href="/core-workflows/task-management">
-    Master the core workflows: task management, file editing, terminal commands, and using checkpoints.
+    Tasks, Plan & Act modes, files, checkpoints, and slash commands.
   </Card>
   <Card title="Integrations" icon="plug" href="/mcp/mcp-overview">
-    Connect DietCode to your favorite AI models and extend it with MCP servers.
+    MCP servers and the four supported LLM providers.
   </Card>
-  <Card title="Advanced Features" icon="bolt" href="/features/intent-grounding">
-    Deep dive into subagents, multi-agent systems, and intelligent project grounding.
+  <Card title="All Tools" icon="wrench" href="/tools-reference/all-dietcode-tools">
+    Complete reference for built-in agent tools.
   </Card>
-  <Card title="Architecture & Design" icon="compass-drafting" href="/SYSTEM_ARCHITECTURE">
-    Learn how DietCode is built, from its core orchestration loop to its local SQLite memory.
+  <Card title="Project Map" icon="compass-drafting" href="/PROJECT_MAP">
+    Literal map of the `src/` codebase.
   </Card>
 </CardGroup>
+
+## Naming note
+
+The user-facing product is **LUMI**. Internal types and storage keys still use the `DietCode` prefix from the upstream codebase (for example `DietCodeMessage`, `.dietcoderules/`). Documentation uses **LUMI** for product behavior and **DietCode** only when referring to those internal identifiers.

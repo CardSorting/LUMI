@@ -1,16 +1,16 @@
 ---
 title: "LM Studio"
-description: "A quick guide to setting up LM Studio for local AI model execution with DietCode."
+description: "A quick guide to setting up LM Studio for local AI model execution with LUMI."
 ---
 
-## Setting Up LM Studio with DietCode
+## Setting Up LM Studio with LUMI
 
-Run AI models locally using LM Studio with DietCode.
+Run AI models locally using LM Studio with LUMI.
 
 ### Prerequisites
 
 -   Windows, macOS, or Linux computer with AVX2 support
--   DietCode installed in VS Code
+-   LUMI installed in VS Code
 
 ### Setup Steps
 
@@ -61,23 +61,23 @@ Run AI models locally using LM Studio with DietCode.
 	/>
 </Frame>
 
-#### 5. Configure DietCode
+#### 5. Configure LUMI
 
 1. Open VS Code
-2. Click DietCode settings icon
+2. Click LUMI settings icon
 3. Select "LM Studio" as API provider
 4. Select your model from the available options
 
 <Frame>
 	<img
 		src="https://storage.googleapis.com/dietcode_public_images/docs/assets/lm-studio-select-model-dietcode.gif"
-		alt="Configuring DietCode with LM Studio"
+		alt="Configuring LUMI with LM Studio"
 	/>
 </Frame>
 
 ### Recommended Model and Settings
 
-For the best experience with DietCode, use **Qwen3 Coder 30B A3B Instruct**. This model delivers strong coding performance and reliable tool use.
+For the best experience with LUMI, use **Qwen3 Coder 30B A3B Instruct**. This model delivers strong coding performance and reliable tool use.
 
 #### Critical Settings
 
@@ -102,20 +102,20 @@ Choose quantization based on your RAM:
 
 ### Enable Compact Prompts
 
-For optimal performance with local models, enable compact prompts in DietCode settings. This reduces the prompt size by 90% while maintaining core functionality.
+For optimal performance with local models, enable compact prompts in LUMI settings. This reduces the prompt size by 90% while maintaining core functionality.
 
-Navigate to DietCode Settings → Features → Use Compact Prompt and toggle it on.
+Navigate to LUMI Settings → Features → Use Compact Prompt and toggle it on.
 
 ### Important Notes
 
--   Start LM Studio before using with DietCode
+-   Start LM Studio before using with LUMI
 -   Keep LM Studio running in background
 -   First model download may take several minutes depending on size
 -   Models are stored locally after download
 
 ### Troubleshooting
 
-1. If DietCode can't connect to LM Studio:
+1. If LUMI can't connect to LM Studio:
 2. Verify LM Studio server is running (check Developer tab)
 3. Ensure a model is loaded
 4. Check your system meets hardware requirements

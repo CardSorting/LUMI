@@ -1,10 +1,10 @@
 ---
 title: "Hooks"
 sidebarTitle: "Hooks"
-description: "Inject custom logic into DietCode's workflow to validate operations and shape DietCode's decisions."
+description: "Inject custom logic into LUMI's workflow to validate operations and shape LUMI's decisions."
 ---
 
-Hooks are scripts that run at key moments in DietCode's workflow. Because they execute at known points with consistent inputs and outputs, hooks bring determinism to the non-deterministic nature of AI models by enforcing guardrails, validations, and context injection. You can validate operations before they execute, monitor tool usage, and shape how DietCode makes decisions.
+Hooks are scripts that run at key moments in LUMI's workflow. Because they execute at known points with consistent inputs and outputs, hooks bring determinism to the non-deterministic nature of AI models by enforcing guardrails, validations, and context injection. You can validate operations before they execute, monitor tool usage, and shape how LUMI makes decisions.
 
 ## What You Can Build
 
@@ -13,11 +13,11 @@ Hooks are scripts that run at key moments in DietCode's workflow. Because they e
 - Prevent operations that violate security policies
 - Track everything for analytics or compliance
 - Trigger external tools or services at the right moments
-- Add context to the conversation based on what DietCode is doing
+- Add context to the conversation based on what LUMI is doing
 
 ## Hook Types
 
-DietCode supports 8 hook types that run at different points in the task lifecycle:
+LUMI supports 8 hook types that run at different points in the task lifecycle:
 
 | Hook Type | When It Runs | 
 |-----------|--------------|
@@ -25,10 +25,10 @@ DietCode supports 8 hook types that run at different points in the task lifecycl
 | TaskResume | When you resume an interrupted task |
 | TaskCancel | When you cancel a running task |
 | TaskComplete | When a task finishes successfully |
-| PreToolUse | Before DietCode executes a tool (read_file, write_to_file, etc.) |
+| PreToolUse | Before LUMI executes a tool (read_file, write_to_file, etc.) |
 | PostToolUse | After a tool execution completes |
-| UserPromptSubmit | When you submit a message to DietCode |
-| PreCompact | Before DietCode truncates conversation history to free up context |
+| UserPromptSubmit | When you submit a message to LUMI |
+| PreCompact | Before LUMI truncates conversation history to free up context |
 
 ## Hook Lifecycle
 
@@ -53,7 +53,7 @@ flowchart TD
     subgraph Conversation Cycle
         direction TB
         Loop -- User sends message --> H_Submit[UserPromptSubmit]:::hook
-        H_Submit --> Thinking[DietCode Processes Context]:::state
+        H_Submit --> Thinking[LUMI Processes Context]:::state
         
         %% Context Compaction Path
         Thinking -. Context Limit Reached .-> H_Compact[PreCompact]:::hook
@@ -79,8 +79,8 @@ flowchart TD
 The diagram shows the complete hook lifecycle:
 
 1. **Entry**: When you start a task, either **TaskStart** (new task) or **TaskResume** (interrupted task) runs first
-2. **Conversation Cycle**: Each time you send a message, **UserPromptSubmit** runs, then DietCode processes your request
-3. **Tool Execution**: When DietCode decides to use a tool, **PreToolUse** runs first-if allowed, the tool executes, then **PostToolUse** runs
+2. **Conversation Cycle**: Each time you send a message, **UserPromptSubmit** runs, then LUMI processes your request
+3. **Tool Execution**: When LUMI decides to use a tool, **PreToolUse** runs first-if allowed, the tool executes, then **PostToolUse** runs
 4. **Context Management**: If the conversation approaches context limits, **PreCompact** runs before truncation
 5. **Exit**: The task ends with either **TaskComplete** (success) or **TaskCancel** (user cancellation)
 
@@ -90,7 +90,7 @@ Orange nodes represent hooks where you can inject custom logic. The cycle repeat
 
 Hooks can be stored globally or in a project workspace. See [Storage Locations](/customization/overview#storage-locations) for guidance on when to use each.
 
-- **Global hooks**: `~/Documents/DietCode/Hooks/`
+- **Global hooks**: `~/Documents/LUMI/Hooks/`
 - **Project hooks**: `.dietcoderules/hooks/` in your repo (can be committed to version control)
 
 When both global and workspace hooks exist for the same hook type, both run. Global hooks execute first, then workspace hooks. If either returns `cancel: true`, the operation stops.
@@ -99,13 +99,13 @@ When both global and workspace hooks exist for the same hook type, both run. Glo
 
 <Steps>
   <Step title="Open the Hooks tab">
-    Click the scale icon at the bottom of the DietCode panel, to the left of the model selector. Switch to the Hooks tab.
+    Click the scale icon at the bottom of the LUMI panel, to the left of the model selector. Switch to the Hooks tab.
   </Step>
   <Step title="Create a new hook">
     Click **"New hook..."** dropdown and select a hook type (e.g., PreToolUse, TaskStart).
   </Step>
   <Step title="Review the hook's code">
-    Click the pencil icon to open and edit the hook script. DietCode generates a template with examples.
+    Click the pencil icon to open and edit the hook script. LUMI generates a template with examples.
   </Step>
   <Step title="Enable the hook">
     Toggle the switch to activate the hook once you understand what it does.
@@ -118,7 +118,7 @@ Always review a hook's code before enabling it. Hooks execute automatically duri
 
 ## Quick Start: Your First Hook
 
-Let's create a simple hook that logs every file DietCode reads or writes. You'll see results in seconds.
+Let's create a simple hook that logs every file LUMI reads or writes. You'll see results in seconds.
 
 ### The Hook
 
@@ -143,13 +143,13 @@ echo '{"cancel":false}'
 
 <Steps>
   <Step title="Create the hook file">
-    Save the script above as `~/Documents/DietCode/Hooks/file-logger` or create it through the Hooks UI.
+    Save the script above as `~/Documents/LUMI/Hooks/file-logger` or create it through the Hooks UI.
   </Step>
   <Step title="Make it executable">
-    On macOS/Linux, run `chmod +x ~/Documents/DietCode/Hooks/file-logger`.
+    On macOS/Linux, run `chmod +x ~/Documents/LUMI/Hooks/file-logger`.
   </Step>
   <Step title="Enable it (macOS/Linux only)">
-    In DietCode's Hooks tab, find "file-logger" under PreToolUse hooks and toggle it on.
+    In LUMI's Hooks tab, find "file-logger" under PreToolUse hooks and toggle it on.
   </Step>
 </Steps>
 
@@ -174,7 +174,7 @@ Wrong-platform naming is ignored by hook discovery.
 
 ### Test It
 
-Ask DietCode to read any file in your project: "What's in package.json?"
+Ask LUMI to read any file in your project: "What's in package.json?"
 
 Then check the log:
 
@@ -242,7 +242,7 @@ Hooks return a JSON object to stdout:
 | Field | Type | Description |
 |-------|------|-------------|
 | `cancel` | boolean | If `true`, stops the operation (blocks the tool, cancels the task start, etc.) |
-| `contextModification` | string | Optional text that gets injected into the conversation as context for DietCode |
+| `contextModification` | string | Optional text that gets injected into the conversation as context for LUMI |
 | `errorMessage` | string | Shown to the user if `cancel` is `true` |
 
 ### Context Modification
@@ -250,7 +250,7 @@ Hooks return a JSON object to stdout:
 The `contextModification` field lets hooks inject information into the conversation. This is useful for:
 
 - Adding project-specific context when a task starts
-- Providing validation results that DietCode should consider
+- Providing validation results that LUMI should consider
 - Injecting environment information before tool execution
 
 For example, a PreToolUse hook could add: `"Note: This file is auto-generated. Edits may be overwritten."`
@@ -367,14 +367,14 @@ PostToolUse hooks can return `cancel: true` to stop the task, but they cannot un
 
 #### UserPromptSubmit
 
-Runs when you send a message to DietCode. Use it to:
+Runs when you send a message to LUMI. Use it to:
 - Log prompts for analytics
 - Add context based on prompt content
 - Validate or sanitize prompts
 
 #### PreCompact
 
-Runs before DietCode truncates conversation history to stay within context limits. Use it to:
+Runs before LUMI truncates conversation history to stay within context limits. Use it to:
 - Archive important conversation parts before they're removed
 - Log compaction events
 - Add a summary of what's being removed

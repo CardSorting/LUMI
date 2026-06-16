@@ -1,20 +1,44 @@
-# MIRA
+# LUMI
 
-**MIRA** is your calm coding companion — comfort-first developer tooling for long sessions.
+**LUMI** is a calm coding companion — comfort-first developer tooling for long sessions.
 
-MIRA is a professional-grade agentic pair programmer that observes your codebase, creates implementation plans, and executes changes across your terminal, browser, and file system.
+LUMI is a VS Code extension that acts as an agentic pair programmer: it reads your workspace, plans changes, runs terminal commands, uses a browser, and edits files — with your approval at every step.
 
 ## Install
 
-Install from the VSIX:
+Install from a VSIX or the Extensions panel:
 
 ```bash
-cursor --install-extension mira-1.0.1.vsix
+cursor --install-extension lumi-1.0.3.vsix
 ```
 
-Search for **MIRA** in the Extensions panel (`CardSorting.mira`).
+Search for **LUMI** in Extensions (`CardSorting.lumi`).
+
+## Quick start
+
+1. Open the **LUMI** activity bar panel.
+2. Sign in or configure an API provider (OpenRouter, ChatGPT Subscription, NousResearch, or Cloudflare Workers AI).
+3. Describe a task in natural language and approve each proposed action.
+
+## Documentation
+
+| Area | Location |
+|------|----------|
+| User & developer docs | [docs/README.md](docs/README.md) |
+| Architecture | [docs/architecture/current.md](docs/architecture/current.md) |
+| Project map | [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) |
+| BroccoliDB (context store) | [broccolidb/docs/README.md](broccolidb/docs/README.md) |
+
+## Development
+
+```bash
+npm run install:all
+npm run dev          # watch extension + protos
+npm run dev:webview  # webview hot reload
+npm test             # unit + integration tests
+```
 
 ## Notes
 
-- Disable or uninstall other DietCode forks (`dreambeesai.dietcode`, `dietcode.dietcode`) to avoid activity bar conflicts.
-- The MIRA activity bar icon uses the companion orb mark in `assets/icons/`.
+- Disable other DietCode forks (`dreambeesai.dietcode`, `dietcode.dietcode`) to avoid activity bar conflicts.
+- Internal code still uses `DietCode` prefixes for types and storage keys; the user-facing product name is **LUMI**.
