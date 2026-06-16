@@ -3,9 +3,27 @@
 import type { MailboxService } from '../MailboxService.js';
 import type { MutexService } from '../MutexService.js';
 import type { CoordinatorService } from '../CoordinatorService.js';
-import { capabilityHealth, type CapabilityHealth } from '../capability-health.js';
+import { AgentGitError } from '../../errors.js';
+import { CapabilityBase } from '../CapabilityBase.js';
+import {
+  requireNonEmptyString,
+  type CoordinationAcquireLockInput,
+  type CoordinationAcquireLockResult,
+  type CoordinationRegisterTeammateInput,
+  type CoordinationRegisterTeammateResult,
+  type CoordinationReleaseLockInput,
+  type CoordinationReleaseLockResult,
+  type CoordinationSpawnWorkerInput,
+  type CoordinationSpawnWorkerResult,
+  type CoordinationSynthesizeWorkersInput,
+  type CoordinationSynthesizeWorkersResult,
+  type CoordinationTeammatesResult,
+} from '../capability-types.js';
 
-export class CoordinationCapability {
+export class CoordinationCapability extends CapabilityBase {
+  readonly name = 'coordination';
+  readonly dependencies = ['MutexService', 'CoordinatorService'] as const;
+
   private readonly teammates = new Set<string>();
 
   constructor(
@@ -13,50 +31,67 @@ export class CoordinationCapability {
     private readonly coordinatorService: CoordinatorService,
     private readonly setMailbox: (mailbox: MailboxService) => void,
     private readonly updateMailboxContext: (mailbox: MailboxService) => void,
-    private readonly assertOperational: (operation: string) => void,
-    private readonly isStarted: () => boolean
-  ) {}
-
-  health(): CapabilityHealth {
-    return capabilityHealth('coordination', this.isStarted(), [
-      'MutexService',
-      'CoordinatorService',
-    ]);
+    assertStarted: (operation: string) => void,
+    isStarted: () => boolean
+  ) {
+    super(assertStarted, isStarted);
   }
 
-  registerTeammate(agentId: string): void {
-    this.assertOperational('coordination.registerTeammate');
-    this.teammates.add(agentId);
+  registerTeammate(input: CoordinationRegisterTeammateInput): CoordinationRegisterTeammateResult {
+    return this.run('registerTeammate', () => {
+      const agentId = requireNonEmptyString(input.agentId, 'agentId');
+      this.teammates.add(agentId);
+      return { registered: true, agentId };
+    });
   }
 
-  getTeammates(): string[] {
-    this.assertOperational('coordination.getTeammates');
-    return Array.from(this.teammates);
+  getTeammates(): CoordinationTeammatesResult {
+    return this.run('getTeammates', () => ({ teammates: Array.from(this.teammates) }));
   }
 
-  setSharedMailbox(mailbox: MailboxService): void {
-    this.assertOperational('coordination.setSharedMailbox');
-    this.setMailbox(mailbox);
-    this.updateMailboxContext(mailbox);
+  setSharedMailbox(mailbox: MailboxService): { shared: true } {
+    return this.run('setSharedMailbox', () => {
+      this.setMailbox(mailbox);
+      this.updateMailboxContext(mailbox);
+      return { shared: true };
+    });
   }
 
-  async acquireLock(resource: string): Promise<number | null> {
-    this.assertOperational('coordination.acquireLock');
-    return this.mutexService.acquireLock(resource);
+  async acquireLock(input: CoordinationAcquireLockInput): Promise<CoordinationAcquireLockResult> {
+    return this.execute('acquireLock', async () => {
+      const token = await this.mutexService.acquireLock(requireNonEmptyString(input.resource, 'resource'));
+      return { acquired: token !== null, token };
+    });
   }
 
-  async releaseLock(resource: string): Promise<void> {
-    this.assertOperational('coordination.releaseLock');
-    return this.mutexService.releaseLock(resource);
+  async releaseLock(input: CoordinationReleaseLockInput): Promise<CoordinationReleaseLockResult> {
+    return this.execute('releaseLock', async () => {
+      await this.mutexService.releaseLock(requireNonEmptyString(input.resource, 'resource'));
+      return { released: true };
+    });
   }
 
-  async spawnWorker(params: Parameters<CoordinatorService['spawnWorker']>[0]) {
-    this.assertOperational('coordination.spawnWorker');
-    return this.coordinatorService.spawnWorker(params);
+  async spawnWorker(input: CoordinationSpawnWorkerInput): Promise<CoordinationSpawnWorkerResult> {
+    return this.execute('spawnWorker', async () => {
+      const workerId = await this.coordinatorService.spawnWorker({
+        description: requireNonEmptyString(input.description, 'description'),
+        prompt: requireNonEmptyString(input.prompt, 'prompt'),
+        subagentType: input.subagentType,
+        parentTaskId: input.parentTaskId,
+      });
+      return { workerId };
+    });
   }
 
-  async synthesizeWorkers(workerIds: string[]) {
-    this.assertOperational('coordination.synthesizeWorkers');
-    return this.coordinatorService.synthesizeWorkers(workerIds);
+  async synthesizeWorkers(
+    input: CoordinationSynthesizeWorkersInput
+  ): Promise<CoordinationSynthesizeWorkersResult> {
+    return this.execute('synthesizeWorkers', async () => {
+      if (!Array.isArray(input.workerIds) || input.workerIds.length === 0) {
+        throw new AgentGitError('workerIds must be a non-empty array', 'INVALID_ARGUMENT');
+      }
+      const synthesis = await this.coordinatorService.synthesizeWorkers(input.workerIds);
+      return { synthesis };
+    });
   }
 }

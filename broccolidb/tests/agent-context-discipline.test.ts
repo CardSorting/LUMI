@@ -48,8 +48,11 @@ async function runTest() {
 
   assert.strictEqual(context['lifecycleState'], 'new');
 
-  await assert.rejects(() => context.storage.store('before-start'), LifecycleStateError);
-  await assert.rejects(() => context.coordination.acquireLock('resource'), LifecycleStateError);
+  await assert.rejects(() => context.storage.store({ content: 'before-start' }), LifecycleStateError);
+  await assert.rejects(
+    () => context.coordination.acquireLock({ resource: 'resource' }),
+    LifecycleStateError
+  );
   await assert.rejects(() => context.recovery.performGarbageCollection(), LifecycleStateError);
   await assert.rejects(async () => context.graph.spider.auditStructure(), LifecycleStateError);
 
@@ -68,8 +71,14 @@ async function runTest() {
       assert.strictEqual(serviceHealth.started, true);
     }
 
-    const hash = await context.storage.store('discipline payload');
-    assert.strictEqual(await context.storage.hydrate(hash), 'discipline payload');
+    const { hash } = await context.storage.store({ content: 'discipline payload' });
+    const hydrated = await context.storage.hydrate({ hash });
+    assert.strictEqual(hydrated.content, 'discipline payload');
+
+    const storageHealth = await context.storage.health();
+    assert.strictEqual(storageHealth.name, 'storage');
+    assert.strictEqual(storageHealth.started, true);
+    assert.ok(storageHealth.dependencies.includes('StorageService'));
     for (const cap of [
       'storage',
       'telemetry',
@@ -91,8 +100,11 @@ async function runTest() {
     fs.rmSync(root, { recursive: true, force: true });
   }
 
-  await assert.rejects(() => context.storage.store('after-stop'), LifecycleStateError);
-  await assert.rejects(() => context.coordination.acquireLock('resource'), LifecycleStateError);
+  await assert.rejects(() => context.storage.store({ content: 'after-stop' }), LifecycleStateError);
+  await assert.rejects(
+    () => context.coordination.acquireLock({ resource: 'resource' }),
+    LifecycleStateError
+  );
 
   assert.deepStrictEqual(
     OWNED_SERVICES.sort(),

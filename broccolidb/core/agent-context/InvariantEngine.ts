@@ -65,6 +65,47 @@ export class InvariantEngine {
     scanDir(path.resolve(broccolidbRoot, 'infrastructure'));
     scanDir(path.resolve(broccolidbRoot, 'cli'));
 
+    const capabilityDir = path.resolve(broccolidbRoot, 'core/agent-context/capabilities');
+    if (fs.existsSync(capabilityDir)) {
+      const capabilityForbidden = [
+        { regex: /Promise\s*<\s*any\s*>/g, label: 'Promise<any>' },
+        { regex: /\bwriteFileSync\b/g, label: 'direct filesystem write' },
+        { regex: /\bwriteFile\s*\(/g, label: 'direct filesystem write' },
+        { regex: /\bnew Database\s*\(/g, label: 'direct Database construction' },
+        { regex: /\bnew StorageService\s*\(/g, label: 'direct StorageService construction' },
+        { regex: /\bshutdown\s*\(/g, label: 'shutdown()' },
+        { regex: /\bpasteStore\b/g, label: 'pasteStore' },
+        { regex: /\bget db\s*\(/g, label: 'db getter' },
+        { regex: /\bdispose\s*\(/g, label: 'dispose()' },
+      ];
+
+      for (const file of fs.readdirSync(capabilityDir)) {
+        if (!file.endsWith('.ts')) continue;
+        const full = path.join(capabilityDir, file);
+        const content = fs.readFileSync(full, 'utf8');
+        const relative = path.relative(this.workspacePath, full);
+
+        if (!content.includes('extends CapabilityBase')) {
+          violations.push(`Capability must extend CapabilityBase: ${relative}`);
+        }
+        if (!content.includes('readonly dependencies')) {
+          violations.push(`Capability must declare dependencies: ${relative}`);
+        }
+
+        for (const pattern of capabilityForbidden) {
+          pattern.regex.lastIndex = 0;
+          if (pattern.regex.test(content)) {
+            violations.push(`Capability contract violation (${pattern.label}) in ${relative}`);
+          }
+        }
+
+        const publicAnyReturn = content.match(/^\s+(?:async\s+)?\w+\([^)]*\):\s*any\b/gm);
+        if (publicAnyReturn && publicAnyReturn.length > 0) {
+          violations.push(`Capability public method returns any in ${relative}`);
+        }
+      }
+    }
+
     const bannedPatterns = [
       { regex: /SqliteQueue/g, name: 'SqliteQueue' },
       { regex: /AsyncTelemetryQueue/g, name: 'AsyncTelemetryQueue' },

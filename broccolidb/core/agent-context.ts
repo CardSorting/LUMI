@@ -58,6 +58,9 @@ export type {
   ToolExecutorOptions,
   ToolResult,
 } from './agent-context/StreamingToolExecutor.js';
+export type * from './agent-context/capability-types.js';
+export type { CapabilityHealth } from './agent-context/capability-health.js';
+export { CapabilityBase } from './agent-context/CapabilityBase.js';
 
 import type { BroccoliDbHealth, KnowledgeBaseItem, ServiceContext } from './agent-context/types.js';
 import type { CapabilityHealth } from './agent-context/capability-health.js';
@@ -235,21 +238,31 @@ export class AgentContext {
       this._push.bind(this),
       this._serviceContext,
       () => this.getCacheStats(),
-      () => this._coordinationCapability.getTeammates(),
+      () => this._coordinationCapability.getTeammates().teammates,
       assertOperational,
       isStarted
     );
     this._snapshotCapability = new SnapshotCapability(
-      this._storageCapability,
+      (input) => this._storageCapability.store(input),
       this.health.bind(this),
       assertOperational,
       isStarted
     );
 
-    this._serviceContext.searchKnowledge = (...args) => this._queryCapability.search(...args);
-    this._serviceContext.updateTaskStatus = (taskId, status, result) =>
-      this._taskCapability.updateStatus(taskId, status, result);
-    this._serviceContext.getStructuralImpact = (path) => this._graphCapability.getStructuralImpact(path);
+    this._serviceContext.searchKnowledge = async (query, tags, limit, _emb, options) => {
+      const result = await this._queryCapability.search({
+        text: query,
+        tags,
+        limit,
+        skipVerification: options?.skipVerification,
+      });
+      return result.items;
+    };
+    this._serviceContext.updateTaskStatus = async (taskId, status, result) => {
+      await this._taskCapability.updateStatus({ taskId, status, result });
+    };
+    this._serviceContext.getStructuralImpact = (filePath) =>
+      this._graphCapability.getStructuralImpact({ filePath });
 
     const ctx = this._serviceContext as any;
     ctx.compact = this._compactService;
@@ -304,9 +317,11 @@ export class AgentContext {
 
   public async health(options: { deep?: boolean } = {}): Promise<BroccoliDbHealth> {
     const registry = await this._lifecycleRegistry.healthAll(options);
-    const capabilities = this.collectCapabilityHealth();
+    const capabilities = await this.collectCapabilityHealth();
     const compatibilityBridgeViolations = this.auditCompatibilityBridges();
-    const invariantViolations = options.deep ? await this._auditCapability.invariants() : undefined;
+    const invariantViolations = options.deep
+      ? (await this._auditCapability.invariants()).violations
+      : undefined;
     const status =
       this.lifecycleState === 'stopped' || this.lifecycleState === 'new'
         ? 'stopped'
@@ -395,21 +410,22 @@ export class AgentContext {
     };
   }
 
-  private collectCapabilityHealth(): Record<string, CapabilityHealth> {
-    return {
-      storage: this._storageCapability.health(),
-      telemetry: this._telemetryCapability.health(),
-      recovery: this._recoveryCapability.health(),
-      audit: this._auditCapability.health(),
-      coordination: this._coordinationCapability.health(),
-      query: this._queryCapability.health(),
-      snapshots: this._snapshotCapability.health(),
-      graph: this._graphCapability.health(),
-      reasoning: this._reasoningCapability.health(),
-      tasks: this._taskCapability.health(),
-      scratchpad: this._scratchpadCapability.health(),
-      mailbox: this._mailboxCapability.health(),
-    };
+  private async collectCapabilityHealth(): Promise<Record<string, CapabilityHealth>> {
+    const entries = await Promise.all([
+      ['storage', await this._storageCapability.health()],
+      ['telemetry', await this._telemetryCapability.health()],
+      ['recovery', await this._recoveryCapability.health()],
+      ['audit', await this._auditCapability.health()],
+      ['coordination', await this._coordinationCapability.health()],
+      ['query', await this._queryCapability.health()],
+      ['snapshots', await this._snapshotCapability.health()],
+      ['graph', await this._graphCapability.health()],
+      ['reasoning', await this._reasoningCapability.health()],
+      ['tasks', await this._taskCapability.health()],
+      ['scratchpad', await this._scratchpadCapability.health()],
+      ['mailbox', await this._mailboxCapability.health()],
+    ] as const);
+    return Object.fromEntries(entries);
   }
 
   private auditCompatibilityBridges(): string[] {

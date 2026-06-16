@@ -78,13 +78,12 @@ export class SuggestionService {
       let semanticContext: string[] = [];
 
       if (activeFilePath) {
-        structuralImpact = agentContext.graph.getStructuralImpact(activeFilePath);
-        const searchResults = await agentContext.query.search(
-          `context for ${activeFilePath}: ${fileContent?.substring(0, 100)}`,
-          undefined,
-          2
-        );
-        semanticContext = searchResults.map((res: KnowledgeBaseItem) => res.content);
+        structuralImpact = agentContext.graph.getStructuralImpact({ filePath: activeFilePath });
+        const searchResults = await agentContext.query.search({
+          text: `context for ${activeFilePath}: ${fileContent?.substring(0, 100)}`,
+          limit: 2,
+        });
+        semanticContext = searchResults.items.map((res: KnowledgeBaseItem) => res.content);
       }
 
       const systemPrompt = `You are a strict, hyper-aware AI Oracle embedded in the user's IDE.

@@ -2,95 +2,123 @@
 // @classification CAPABILITY
 import type { BufferedDbPool } from '../../../infrastructure/db/BufferedDbPool.js';
 import type { LRUCache } from '../../lru-cache.js';
-import { RecoveryError } from '../../errors.js';
-import type { BroccoliDbRecoveryReport, KnowledgeBaseItem } from '../types.js';
+import { AgentGitError, RecoveryError } from '../../errors.js';
+import type { KnowledgeBaseItem } from '../types.js';
 import type { GraphService } from '../GraphService.js';
 import type { CleanupService } from '../CleanupService.js';
-import { capabilityHealth, type CapabilityHealth } from '../capability-health.js';
+import { CapabilityBase } from '../CapabilityBase.js';
+import {
+  requireNonEmptyString,
+  requireRecoveryMode,
+  type RecoveryEpistemicSunsettingInput,
+  type RecoveryEpistemicSunsettingResult,
+  type RecoveryGarbageCollectionResult,
+  type RecoveryMemorySynthesisResult,
+  type RecoveryRecoverInput,
+  type RecoveryRecoverResult,
+  type RecoveryReconstituteInput,
+  type RecoveryReconstituteResult,
+  type RecoveryRetractResult,
+} from '../capability-types.js';
 
-export interface RecoveryOptions {
-  mode: 'standard';
-}
+export class RecoveryCapability extends CapabilityBase {
+  readonly name = 'recovery';
+  readonly dependencies = ['BufferedDbPool', 'CleanupService', 'GraphService'] as const;
 
-export class RecoveryCapability {
   constructor(
     private readonly db: BufferedDbPool,
     private readonly kbCache: LRUCache<string, KnowledgeBaseItem>,
     private readonly graphService: GraphService,
     private readonly cleanupService: CleanupService,
     private readonly userId: string,
-    private readonly assertOperational: (operation: string) => void,
-    private readonly isStarted: () => boolean
-  ) {}
-
-  health(): CapabilityHealth {
-    return capabilityHealth('recovery', this.isStarted(), ['BufferedDbPool', 'CleanupService']);
+    assertStarted: (operation: string) => void,
+    isStarted: () => boolean
+  ) {
+    super(assertStarted, isStarted);
   }
 
-  async recover(options: RecoveryOptions = { mode: 'standard' }): Promise<BroccoliDbRecoveryReport> {
-    this.assertOperational('recovery.recover');
-    if (options.mode !== 'standard') {
-      throw new RecoveryError(`Unsupported recovery mode: ${options.mode}`);
-    }
+  async recover(input: RecoveryRecoverInput): Promise<RecoveryRecoverResult> {
+    return this.execute('recover', async () => {
+      requireRecoveryMode(input.mode);
+      const warmedTables: Record<string, number> = {};
+      const errors: string[] = [];
+      const warmups: Array<[string, string, string]> = [
+        ['queue_jobs', 'status', 'pending'],
+        ['agent_streams', 'status', 'active'],
+        ['agent_tasks', 'status', 'pending'],
+        ['agent_tasks', 'status', 'running'],
+      ];
 
-    const warmedTables: Record<string, number> = {};
-    const errors: string[] = [];
-    const warmups: Array<[string, string, string]> = [
-      ['queue_jobs', 'status', 'pending'],
-      ['agent_streams', 'status', 'active'],
-      ['agent_tasks', 'status', 'pending'],
-      ['agent_tasks', 'status', 'running'],
-    ];
-
-    for (const [table, column, value] of warmups) {
-      try {
-        warmedTables[`${table}:${column}:${value}`] = await this.db.warmupTable(
-          table as any,
-          column,
-          value
-        );
-      } catch (error: any) {
-        errors.push(`${table}:${column}:${value}: ${error?.message || error}`);
+      for (const [table, column, value] of warmups) {
+        try {
+          warmedTables[`${table}:${column}:${value}`] = await this.db.warmupTable(
+            table as 'queue_jobs',
+            column,
+            value
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          errors.push(`${table}:${column}:${value}: ${message}`);
+        }
       }
-    }
 
-    if (errors.length > 0) {
-      throw new RecoveryError(`BroccoliDB recovery failed: ${errors.join('; ')}`);
-    }
+      if (errors.length > 0) {
+        throw new RecoveryError(`BroccoliDB recovery failed: ${errors.join('; ')}`);
+      }
 
-    return { recovered: true, warmedTables, errors };
+      return { recovered: true, warmedTables, errors };
+    });
   }
 
-  async retractLastOperation(): Promise<void> {
-    this.assertOperational('recovery.retractLastOperation');
-    await this.db.rollbackWork(this.userId);
-    this.kbCache.clear();
+  async retractLastOperation(): Promise<RecoveryRetractResult> {
+    return this.execute('retractLastOperation', async () => {
+      await this.db.rollbackWork(this.userId);
+      this.kbCache.clear();
+      return { retracted: true };
+    });
   }
 
-  async reconstituteFromDigest(digest: string): Promise<void> {
-    this.assertOperational('recovery.reconstituteFromDigest');
-    const data = JSON.parse(digest);
-    if (!data.knowledgeIds || !Array.isArray(data.knowledgeIds)) {
-      return;
-    }
+  async reconstituteFromDigest(input: RecoveryReconstituteInput): Promise<RecoveryReconstituteResult> {
+    return this.execute('reconstituteFromDigest', async () => {
+      const digest = requireNonEmptyString(input.digest, 'digest');
+      let data: { knowledgeIds?: unknown };
+      try {
+        data = JSON.parse(digest);
+      } catch {
+        throw new AgentGitError('digest must be valid JSON', 'INVALID_ARGUMENT');
+      }
+      if (!Array.isArray(data.knowledgeIds)) {
+        return { hydratedCount: 0 };
+      }
 
-    for (const id of data.knowledgeIds) {
-      await this.graphService.getKnowledge(id).catch(() => null);
-    }
+      let hydratedCount = 0;
+      for (const id of data.knowledgeIds) {
+        if (typeof id !== 'string') continue;
+        const item = await this.graphService.getKnowledge(id).catch(() => null);
+        if (item) hydratedCount++;
+      }
+      return { hydratedCount };
+    });
   }
 
-  async performGarbageCollection() {
-    this.assertOperational('recovery.performGarbageCollection');
-    return this.cleanupService.performGarbageCollection();
+  async performGarbageCollection(): Promise<RecoveryGarbageCollectionResult> {
+    return this.execute('performGarbageCollection', () => this.cleanupService.performGarbageCollection());
   }
 
-  async performEpistemicSunsetting(confidenceThreshold = 0.2) {
-    this.assertOperational('recovery.performEpistemicSunsetting');
-    return this.cleanupService.performEpistemicSunsetting(confidenceThreshold);
+  async performEpistemicSunsetting(
+    input: RecoveryEpistemicSunsettingInput = {}
+  ): Promise<RecoveryEpistemicSunsettingResult> {
+    return this.execute('performEpistemicSunsetting', async () => {
+      const threshold = input.confidenceThreshold ?? 0.2;
+      const prunedCount = await this.cleanupService.performEpistemicSunsetting(threshold);
+      return { prunedCount };
+    });
   }
 
-  async performMemorySynthesis() {
-    this.assertOperational('recovery.performMemorySynthesis');
-    return this.cleanupService.performMemorySynthesis();
+  async performMemorySynthesis(): Promise<RecoveryMemorySynthesisResult> {
+    return this.execute('performMemorySynthesis', async () => {
+      await this.cleanupService.performMemorySynthesis();
+      return { synthesized: true };
+    });
   }
 }

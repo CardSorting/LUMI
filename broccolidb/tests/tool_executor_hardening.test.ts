@@ -87,7 +87,7 @@ async function runTests() {
     assert.match(escape.content, /escapes workspace/);
     assert.strictEqual(strictToolRan, false, 'Unsafe mutation paths should fail closed');
 
-    const permissive = await ctx
+    const permissive = await ctx.query
       .createToolExecutor([strictTool], {
         failOnUnsafeMutationPath: false,
         mirrorFileChanges: false,
@@ -128,7 +128,7 @@ async function runTests() {
       maxResultSizeChars: 64,
       execute: async () => 'token=supersecret password=hunter2 Bearer abc.def.ghi visible-tail',
     };
-    const redacted = await ctx
+    const redacted = await ctx.query
       .createToolExecutor([redactionTool], {
         mirrorFileChanges: false,
         recordAuditEvents: false,
@@ -155,21 +155,21 @@ async function runTests() {
       },
     };
 
-    const batchResults = await ctx.query.executeTools(
-      Array.from({ length: 5 }, (_, index) => ({ name: 'read_file', input: {}, id: `read-${index}` })),
-      [readTool],
-      {
+    const { results: batchResults } = await ctx.query.executeTools({
+      calls: Array.from({ length: 5 }, (_, index) => ({ name: 'read_file', input: {}, id: `read-${index}` })),
+      tools: [readTool],
+      options: {
         maxParallelReads: 2,
         mirrorFileChanges: false,
         recordAuditEvents: false,
-      }
-    );
+      },
+    });
     assert.strictEqual(batchResults.length, 5);
     assert.ok(maxActiveReads <= 2, `Expected max 2 concurrent reads, saw ${maxActiveReads}`);
 
     const snapshot = ctx.query.getErgonomicsSnapshot();
     assert.strictEqual(snapshot.toolExecutionDefaults.failOnUnsafeMutationPath, true);
-    assert.strictEqual(snapshot.services.spider, true);
+    assert.ok(snapshot.capabilities.includes('graph'));
 
     console.info('All tool executor ergonomics and hardening checks passed.');
   } finally {

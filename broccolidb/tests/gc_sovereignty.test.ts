@@ -39,13 +39,23 @@ async function testGC() {
 
     // 2. Test Epistemic Sunsetting
     console.log('Testing Epistemic Sunsetting...');
-    await ctx.graph.addKnowledge('low-conf-node', 'fact', 'stale info', { confidence: 0.1 });
-    await ctx.graph.addKnowledge('high-conf-node', 'fact', 'fresh info', { confidence: 0.9 });
+    await ctx.graph.addKnowledge({
+      kbId: 'low-conf-node',
+      type: 'fact',
+      content: 'stale info',
+      confidence: 0.1,
+    });
+    await ctx.graph.addKnowledge({
+      kbId: 'high-conf-node',
+      type: 'fact',
+      content: 'fresh info',
+      confidence: 0.9,
+    });
     
     const initialCount = (await pool.selectWhere('knowledge', [{ column: 'userId', value: userId }])).length;
     console.log(`Initial node count: ${initialCount}`);
     
-    const prunedCount = await ctx.recovery.performEpistemicSunsetting(0.2);
+    const { prunedCount } = await ctx.recovery.performEpistemicSunsetting({ confidenceThreshold: 0.2 });
     console.log(`Pruned nodes count: ${prunedCount}`);
     
     const finalNodes = await pool.selectWhere('knowledge', [{ column: 'userId', value: userId }]);

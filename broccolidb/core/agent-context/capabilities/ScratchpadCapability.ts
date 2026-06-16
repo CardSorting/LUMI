@@ -1,36 +1,53 @@
 // [LAYER: CORE]
 // @classification CAPABILITY
 import type { ScratchpadService } from '../ScratchpadService.js';
-import { capabilityHealth, type CapabilityHealth } from '../capability-health.js';
+import { CapabilityBase } from '../CapabilityBase.js';
+import {
+  requireNonEmptyString,
+  type ScratchpadClearResult,
+  type ScratchpadListResult,
+  type ScratchpadReadInput,
+  type ScratchpadReadResult,
+  type ScratchpadWriteInput,
+  type ScratchpadWriteResult,
+} from '../capability-types.js';
 
-export class ScratchpadCapability {
+export class ScratchpadCapability extends CapabilityBase {
+  readonly name = 'scratchpad';
+  readonly dependencies = ['ScratchpadService', 'StorageService'] as const;
+
   constructor(
     private readonly scratchpadService: ScratchpadService,
-    private readonly assertOperational: (operation: string) => void,
-    private readonly isStarted: () => boolean
-  ) {}
-
-  health(): CapabilityHealth {
-    return capabilityHealth('scratchpad', this.isStarted(), ['ScratchpadService', 'StorageService']);
+    assertStarted: (operation: string) => void,
+    isStarted: () => boolean
+  ) {
+    super(assertStarted, isStarted);
   }
 
-  async write(filename: string, content: string): Promise<string> {
-    this.assertOperational('scratchpad.write');
-    return this.scratchpadService.write(filename, content);
+  async write(input: ScratchpadWriteInput): Promise<ScratchpadWriteResult> {
+    return this.execute('write', async () => {
+      const path = await this.scratchpadService.write(
+        requireNonEmptyString(input.filename, 'filename'),
+        requireNonEmptyString(input.content, 'content')
+      );
+      return { path };
+    });
   }
 
-  async read(filename: string): Promise<string | null> {
-    this.assertOperational('scratchpad.read');
-    return this.scratchpadService.read(filename);
+  async read(input: ScratchpadReadInput): Promise<ScratchpadReadResult> {
+    return this.execute('read', async () => ({
+      content: await this.scratchpadService.read(requireNonEmptyString(input.filename, 'filename')),
+    }));
   }
 
-  async list(): Promise<string[]> {
-    this.assertOperational('scratchpad.list');
-    return this.scratchpadService.list();
+  async list(): Promise<ScratchpadListResult> {
+    return this.execute('list', async () => ({ files: await this.scratchpadService.list() }));
   }
 
-  async clear(): Promise<void> {
-    this.assertOperational('scratchpad.clear');
-    return this.scratchpadService.clear();
+  async clear(): Promise<ScratchpadClearResult> {
+    return this.execute('clear', async () => {
+      await this.scratchpadService.clear();
+      return { cleared: true };
+    });
   }
 }

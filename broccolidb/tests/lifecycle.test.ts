@@ -19,12 +19,13 @@ async function runTest() {
   const context = new AgentContext(workspace, pool, 'lifecycle-user');
 
   await assert.rejects(() => pool.selectOne('users', []), LifecycleStateError);
-  await assert.rejects(() => context.storage.store('before-start'), LifecycleStateError);
+  await assert.rejects(() => context.storage.store({ content: 'before-start' }), LifecycleStateError);
 
   await context.start();
   try {
-    const hash = await context.storage.store('durable order');
-    assert.strictEqual(await context.storage.hydrate(hash), 'durable order');
+    const { hash } = await context.storage.store({ content: 'durable order' });
+    const hydrated = await context.storage.hydrate({ hash });
+    assert.strictEqual(hydrated.content, 'durable order');
 
     const health = await context.health();
     assert.strictEqual(health.lifecycle, 'started');
@@ -36,7 +37,7 @@ async function runTest() {
   }
 
   await assert.rejects(() => pool.selectOne('users', []), LifecycleStateError);
-  await assert.rejects(() => context.storage.store('after-stop'), LifecycleStateError);
+  await assert.rejects(() => context.storage.store({ content: 'after-stop' }), LifecycleStateError);
 }
 
 runTest()

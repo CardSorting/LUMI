@@ -23,7 +23,7 @@ async function testSovereignProofV18() {
     await ctx.graph.spider.applyChanges([fileA, fileB]);
 
     // Verify initial state
-    const impact = ctx.graph.getStructuralImpact('src/legacy.ts');
+    const impact = ctx.graph.getStructuralImpact({ filePath: 'src/legacy.ts' });
     console.log(`- Initial Blast Radius: ${impact.blastRadius.affectedNodes.length} nodes`);
 
     console.log('\nStep 2: Simulating Symbolic Displacement (Refactoring)...');

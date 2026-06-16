@@ -1,41 +1,62 @@
 // [LAYER: CORE]
 // @classification CAPABILITY
 import type { MailboxService, MailboxMessage } from '../MailboxService.js';
-import { capabilityHealth, type CapabilityHealth } from '../capability-health.js';
+import { CapabilityBase } from '../CapabilityBase.js';
+import {
+  requireNonEmptyString,
+  type MailboxClearResult,
+  type MailboxPollInboxInput,
+  type MailboxPollInboxResult,
+  type MailboxPostMessageInput,
+  type MailboxPostMessageResult,
+  type MailboxPostStatusInput,
+  type MailboxPostStatusResult,
+} from '../capability-types.js';
 
-export class MailboxCapability {
+export class MailboxCapability extends CapabilityBase {
+  readonly name = 'mailbox';
+  readonly dependencies = ['MailboxService'] as const;
+
   constructor(
     private readonly mailboxService: MailboxService,
-    private readonly assertOperational: (operation: string) => void,
-    private readonly isStarted: () => boolean
-  ) {}
-
-  health(): CapabilityHealth {
-    return capabilityHealth('mailbox', this.isStarted(), ['MailboxService']);
+    assertStarted: (operation: string) => void,
+    isStarted: () => boolean
+  ) {
+    super(assertStarted, isStarted);
   }
 
-  async postMessage(
-    to: string,
-    from: string,
-    type: MailboxMessage['type'],
-    payload: unknown
-  ): Promise<void> {
-    this.assertOperational('mailbox.postMessage');
-    return this.mailboxService.postMessage(to, from, type, payload);
+  async postMessage(input: MailboxPostMessageInput): Promise<MailboxPostMessageResult> {
+    return this.execute('postMessage', async () => {
+      await this.mailboxService.postMessage(
+        requireNonEmptyString(input.to, 'to'),
+        requireNonEmptyString(input.from, 'from'),
+        input.type,
+        input.payload
+      );
+      return { posted: true };
+    });
   }
 
-  async postStatus(agentId: string, status: string): Promise<void> {
-    this.assertOperational('mailbox.postStatus');
-    return this.mailboxService.postStatus(agentId, status);
+  async postStatus(input: MailboxPostStatusInput): Promise<MailboxPostStatusResult> {
+    return this.execute('postStatus', async () => {
+      await this.mailboxService.postStatus(
+        requireNonEmptyString(input.agentId, 'agentId'),
+        requireNonEmptyString(input.status, 'status')
+      );
+      return { posted: true };
+    });
   }
 
-  async pollInbox(agentId: string): Promise<MailboxMessage[]> {
-    this.assertOperational('mailbox.pollInbox');
-    return this.mailboxService.pollInbox(agentId);
+  async pollInbox(input: MailboxPollInboxInput): Promise<MailboxPollInboxResult> {
+    return this.execute('pollInbox', async () => ({
+      messages: await this.mailboxService.pollInbox(requireNonEmptyString(input.agentId, 'agentId')),
+    }));
   }
 
-  clear(): void {
-    this.assertOperational('mailbox.clear');
-    this.mailboxService.clear();
+  clear(): MailboxClearResult {
+    return this.run('clear', () => {
+      this.mailboxService.clear();
+      return { cleared: true };
+    });
   }
 }

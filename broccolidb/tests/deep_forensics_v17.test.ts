@@ -29,7 +29,7 @@ async function testLevel17() {
     await ctx.graph.spider.bootstrapGraph(); // Ensure initialized
     await ctx.graph.spider.applyChanges([fileB, fileA]);
 
-    const impact = ctx.graph.getStructuralImpact('src/provider.ts');
+    const impact = ctx.graph.getStructuralImpact({ filePath: 'src/provider.ts' });
     console.log(`- Discovery: ${impact.summary}`);
     console.log(`- Base Blast Radius: ${impact.blastRadius.affectedNodes.length} nodes`);
 

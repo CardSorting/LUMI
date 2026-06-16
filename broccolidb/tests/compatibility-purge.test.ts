@@ -33,10 +33,17 @@ async function runTest() {
   for (const file of fs.readdirSync(capabilityDir)) {
     if (!file.endsWith('.ts')) continue;
     const content = fs.readFileSync(path.join(capabilityDir, file), 'utf8');
-    assert.ok(!content.includes('startAll('), `${file} must not start lifecycle directly`);
-    assert.ok(!content.includes('stopAll('), `${file} must not stop lifecycle directly`);
+    assert.ok(content.includes('extends CapabilityBase'), `${file} must extend CapabilityBase`);
+    assert.ok(!content.includes('Promise<any>'), `${file} must not return Promise<any>`);
     assert.ok(!content.includes('new StorageService('), `${file} must not construct StorageService`);
     assert.ok(!content.includes('new BufferedDbPool('), `${file} must not construct BufferedDbPool`);
+    assert.ok(!content.includes('new Database('), `${file} must not construct Database`);
+    assert.ok(!content.includes('writeFileSync'), `${file} must not write files directly`);
+    assert.ok(!content.includes('shutdown('), `${file} must not expose shutdown()`);
+    assert.ok(!content.includes('pasteStore'), `${file} must not reference pasteStore`);
+    assert.ok(!content.includes('dispose('), `${file} must not expose dispose()`);
+    assert.ok(!content.includes('startAll('), `${file} must not start lifecycle directly`);
+    assert.ok(!content.includes('stopAll('), `${file} must not stop lifecycle directly`);
   }
 
   const allowed = new Set([

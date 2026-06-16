@@ -15,10 +15,10 @@ async function testSwarmOrchestration() {
 	try {
 		// 1. Test Scratchpad Lifecycle
 		console.log("Testing Sovereign Scratchpad...")
-		scratchpadPath = ctx.tasks.getScratchpadPath()
-		await ctx.tasks.updateScratchpad("# Test State\n- Task 1: Pending")
+		scratchpadPath = ctx.tasks.getScratchpadPath().path
+		await ctx.tasks.updateScratchpad({ content: "# Test State\n- Task 1: Pending" })
 
-		const loaded = await ctx.tasks.loadScratchpad()
+		const { content: loaded } = await ctx.tasks.loadScratchpad()
 		if (loaded.includes("Task 1: Pending")) {
 			console.log("✅ SUCCESS: Scratchpad loaded correctly.")
 		} else {
@@ -44,12 +44,15 @@ async function testSwarmOrchestration() {
 		console.log("Testing Skeptical Verification Audit...")
 		// Add some "risky" knowledge
 		const node1 = "verify-test-1"
-		await ctx.graph.addKnowledge(node1, "fact", "Implementing unsafe direct memory access for performance.", {
+		await ctx.graph.addKnowledge({
+			kbId: node1,
+			type: "fact",
+			content: "Implementing unsafe direct memory access for performance.",
 			confidence: 0.9,
 			metadata: { path: "src/unsafe.ts" },
 		})
 
-		const audit = await ctx.reasoning.performSkepticalAudit([node1])
+		const audit = await ctx.reasoning.performSkepticalAudit({ nodeIds: [node1] })
 		console.log("Audit Result - Pass:", audit.pass)
 		console.log("Audit Risks:", audit.risks)
 
@@ -63,8 +66,8 @@ async function testSwarmOrchestration() {
 
 		// 4. Test Background Memory Synthesis
 		console.log("Testing Background Memory Synthesis...")
-		await ctx.performMemorySynthesis()
-		const syncedScratchpad = await ctx.tasks.loadScratchpad()
+		await ctx.recovery.performMemorySynthesis()
+		const { content: syncedScratchpad } = await ctx.tasks.loadScratchpad()
 
 		if (syncedScratchpad.includes("Sovereign Executive Summary")) {
 			console.log("✅ SUCCESS: Background synthesis updated the Scratchpad.")

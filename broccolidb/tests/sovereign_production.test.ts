@@ -30,10 +30,7 @@ async function testLevel15() {
     // 1. Test Sharded CAS
     console.log('Testing CAS Sharding...');
     const largeContent = 'A'.repeat(2000);
-    const hash = await ctx.storage.store(largeContent);
-    const result = { content: `CAS:${hash}` };
-    const hash = result.content.split(':')[1];
-    
+    const { hash } = await ctx.storage.store({ content: largeContent });
     if (hash) {
         console.log(`✅ SUCCESS: CAS result returned: ${hash}`);
     } else {
@@ -42,7 +39,7 @@ async function testLevel15() {
 
     // 2. Test Mutex Heartbeats
     console.log('Testing Mutex Heartbeats...');
-    const acquired = await ctx.coordination.acquireLock('production_resource');
+    const { acquired } = await ctx.coordination.acquireLock({ resource: 'production_resource' });
     if (acquired) {
         console.log('✅ SUCCESS: Lock acquired with heartbeats.');
     } else {

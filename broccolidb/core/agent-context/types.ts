@@ -197,36 +197,12 @@ export interface ServiceContext {
   toolUseContext?: ToolUseContext;
 }
 
+import type { GraphCapability } from './capabilities/GraphCapability.js';
+import type { QueryCapability } from './capabilities/QueryCapability.js';
+
 export interface IAgentContext {
-  graph: {
-    getStructuralImpact(filePath: string): {
-      summary: string;
-      blastRadius: BlastRadius;
-      deficiencies: {
-        depId: string;
-        symbols: string[];
-        displacements: { symbol: string; newPath: string }[];
-        directives: RepairDirective[];
-        line: number;
-        character: number;
-      }[];
-    };
-    annotateKnowledge(
-      targetId: string,
-      annotation: string,
-      agentId?: string,
-      metadata?: Record<string, unknown>
-    ): Promise<void>;
-  };
-  query: {
-    search(
-      query: string,
-      tags?: string[],
-      limit?: number,
-      queryEmbedding?: number[],
-      options?: { augmentWithGraph?: boolean; skipVerification?: boolean }
-    ): Promise<KnowledgeBaseItem[]>;
-  };
+  graph: Pick<GraphCapability, 'getStructuralImpact' | 'annotateKnowledge'>;
+  query: Pick<QueryCapability, 'search'>;
   flush(): Promise<void>;
 }
 

@@ -1,28 +1,41 @@
 // [LAYER: CORE]
 // @classification CAPABILITY
 import type { BroccoliDbHealth } from '../types.js';
-import type { StorageCapability } from './StorageCapability.js';
-import { capabilityHealth, type CapabilityHealth } from '../capability-health.js';
+import { CapabilityBase } from '../CapabilityBase.js';
+import {
+  type SnapshotCreateInput,
+  type SnapshotCreateResult,
+  type StorageStoreInput,
+  type StorageStoreResult,
+} from '../capability-types.js';
 
-export class SnapshotCapability {
+export type SnapshotStorePort = (input: StorageStoreInput) => Promise<StorageStoreResult>;
+
+export class SnapshotCapability extends CapabilityBase {
+  readonly name = 'snapshots';
+  readonly dependencies = ['StorageService'] as const;
+
   constructor(
-    private readonly storage: StorageCapability,
+    private readonly storeContent: SnapshotStorePort,
     private readonly healthFn: (options?: { deep?: boolean }) => Promise<BroccoliDbHealth>,
-    private readonly assertOperational: (operation: string) => void,
-    private readonly isStarted: () => boolean
-  ) {}
-
-  health(): CapabilityHealth {
-    return capabilityHealth('snapshots', this.isStarted(), ['StorageCapability']);
+    assertStarted: (operation: string) => void,
+    isStarted: () => boolean
+  ) {
+    super(assertStarted, isStarted);
   }
 
-  async create(metadata: Record<string, unknown> = {}): Promise<string> {
-    this.assertOperational('snapshots.create');
-    const payload = {
-      metadata,
-      createdAt: new Date().toISOString(),
-      health: await this.healthFn(),
-    };
-    return this.storage.store(JSON.stringify(payload));
+  async create(input: SnapshotCreateInput = {}): Promise<SnapshotCreateResult> {
+    return this.execute('create', async () => {
+      const payload = {
+        metadata: input.metadata ?? {},
+        createdAt: new Date().toISOString(),
+        health: await this.healthFn(),
+      };
+      const stored = await this.storeContent({
+        content: JSON.stringify(payload),
+        namespace: 'snapshot',
+      });
+      return { hash: stored.hash };
+    });
   }
 }
