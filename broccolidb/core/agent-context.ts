@@ -8,7 +8,6 @@ import { GraphService } from './agent-context/GraphService.js';
 import { LspService } from './agent-context/LspService.js';
 import { MailboxService } from './agent-context/MailboxService.js';
 import { MutexService } from './agent-context/MutexService.js';
-
 import { ReasoningService } from './agent-context/ReasoningService.js';
 import { SideQueryService } from './agent-context/SideQueryService.js';
 import { SpiderService } from './agent-context/SpiderService.js';
@@ -19,6 +18,13 @@ import { CoordinatorService } from './agent-context/CoordinatorService.js';
 import { ScratchpadService } from './agent-context/ScratchpadService.js';
 import { InvariantEngine } from './agent-context/InvariantEngine.js';
 import { LifecycleRegistry } from './agent-context/LifecycleRegistry.js';
+import { StorageCapability } from './agent-context/capabilities/StorageCapability.js';
+import { TelemetryCapability } from './agent-context/capabilities/TelemetryCapability.js';
+import { RecoveryCapability } from './agent-context/capabilities/RecoveryCapability.js';
+import { AuditCapability } from './agent-context/capabilities/AuditCapability.js';
+import { CoordinationCapability } from './agent-context/capabilities/CoordinationCapability.js';
+import { QueryCapability } from './agent-context/capabilities/QueryCapability.js';
+import { SnapshotCapability } from './agent-context/capabilities/SnapshotCapability.js';
 import {
   StreamingToolExecutor,
   type ToolCall,
@@ -27,12 +33,15 @@ import {
 } from './agent-context/StreamingToolExecutor.js';
 import { StorageService } from '../infrastructure/storage/StorageService.js';
 import { BufferedDbPool, type WriteOp } from '../infrastructure/db/BufferedDbPool.js';
-import { AgentGitError, LifecycleStateError, RecoveryError } from './errors.js';
+import { AgentGitError, LifecycleStateError } from './errors.js';
 
 export { StreamingToolExecutor } from './agent-context/StreamingToolExecutor.js';
 export type {
   AgentBundle,
   AgentProfile,
+  BroccoliDbCacheStats,
+  BroccoliDbHealth,
+  BroccoliDbRecoveryReport,
   GraphEdge,
   ImpactReport,
   KnowledgeBaseItem,
@@ -54,9 +63,9 @@ export type {
 } from './agent-context/StreamingToolExecutor.js';
 
 import type {
-  AgentBundle,
   AgentProfile,
-  ImpactReport,
+  BroccoliDbHealth,
+  BroccoliDbRecoveryReport,
   KnowledgeBaseItem,
   Pedigree,
   ServiceContext,
@@ -66,30 +75,9 @@ import type {
 import { LRUCache } from './lru-cache.js';
 import type { Workspace } from './workspace.js';
 
-export interface BroccoliDbCacheStats {
-  hits: number;
-  misses: number;
-  size: number;
-}
-
-export interface BroccoliDbHealth {
-  status: 'healthy' | 'stopped' | 'unhealthy';
-  lifecycle: 'new' | 'starting' | 'started' | 'stopping' | 'stopped';
-  registry: Record<string, unknown>;
-  cache: BroccoliDbCacheStats;
-  invariantViolations?: string[];
-}
-
-export interface BroccoliDbRecoveryReport {
-  recovered: boolean;
-  warmedTables: Record<string, number>;
-  errors: string[];
-}
-
 /**
- * AgentContext provides a unified entry point for BroccoliDB's epistemic
- * and task-related operations. It coordinates specialized services for
- * graph management, reasoning, auditing, and structural discovery.
+ * AgentContext is a capability façade over owned services — not a god object.
+ * Domain logic lives in services and narrow capability modules.
  */
 export class AgentContext {
   private lifecycleState: 'new' | 'starting' | 'started' | 'stopping' | 'stopped' = 'new';
@@ -115,7 +103,14 @@ export class AgentContext {
   private readonly _storageService: StorageService;
   private readonly _lifecycleRegistry: LifecycleRegistry;
   private readonly _invariantEngine: InvariantEngine;
-  private readonly _teammates: Set<string> = new Set();
+
+  private readonly _storageCapability: StorageCapability;
+  private readonly _telemetryCapability: TelemetryCapability;
+  private readonly _recoveryCapability: RecoveryCapability;
+  private readonly _auditCapability: AuditCapability;
+  private readonly _coordinationCapability: CoordinationCapability;
+  private readonly _queryCapability: QueryCapability;
+  private readonly _snapshotCapability: SnapshotCapability;
 
   public readonly userId: string;
 
@@ -144,7 +139,6 @@ export class AgentContext {
       searchKnowledge: this.searchKnowledge.bind(this),
       updateTaskStatus: this.updateTaskStatus.bind(this),
       getStructuralImpact: (p: string) => this.getStructuralImpact(p) as any,
-      pasteStore: undefined as any,
       compact: undefined as any,
       storage: undefined as any,
       token: undefined as any,
@@ -178,9 +172,44 @@ export class AgentContext {
     this._lifecycleRegistry = new LifecycleRegistry();
     this._invariantEngine = new InvariantEngine(process.cwd());
 
-    // Final bootstrap
+    const assertOperational = this.assertOperational.bind(this);
+    this._storageCapability = new StorageCapability(this._storageService, assertOperational);
+    this._telemetryCapability = new TelemetryCapability(
+      this._push.bind(this),
+      workspace,
+      this.userId,
+      assertOperational
+    );
+    this._recoveryCapability = new RecoveryCapability(
+      this._db,
+      this._kbCache,
+      this._graphService,
+      this.userId,
+      assertOperational
+    );
+    this._auditCapability = new AuditCapability(this._invariantEngine, assertOperational);
+    this._coordinationCapability = new CoordinationCapability(
+      this._serviceContext,
+      (mailbox) => {
+        this._mailboxService = mailbox;
+      }
+    );
+    this._queryCapability = new QueryCapability(
+      this._db,
+      this._graphService,
+      this._reasoningService,
+      workspace,
+      this.userId,
+      this._push.bind(this),
+      assertOperational
+    );
+    this._snapshotCapability = new SnapshotCapability(
+      this._storageCapability,
+      this.health.bind(this),
+      assertOperational
+    );
+
     const ctx = this._serviceContext as any;
-    ctx.pasteStore = this._storageService;
     ctx.compact = this._compactService;
     ctx.storage = this._storageService;
     ctx.token = this._tokenService;
@@ -198,12 +227,8 @@ export class AgentContext {
     this._lifecycleRegistry.register('coordinator', this._coordinatorService);
   }
 
-  /**
-   * Overrides the mailbox with a shared instance for swarm coordination.
-   */
   public setSharedMailbox(mailbox: MailboxService) {
-    this._mailboxService = mailbox;
-    this._serviceContext.mailbox = mailbox;
+    this._coordinationCapability.setSharedMailbox(mailbox);
   }
 
   public async start(): Promise<void> {
@@ -247,13 +272,11 @@ export class AgentContext {
   }
 
   public async store(content: string): Promise<string> {
-    this.assertOperational('store');
-    return this._storageService.storeContent(content);
+    return this._storageCapability.store(content);
   }
 
   public async hydrate(hash: string): Promise<string | null> {
-    this.assertOperational('hydrate');
-    return this._storageService.hydrateContent(hash);
+    return this._storageCapability.hydrate(hash);
   }
 
   public async recordTelemetry(event: {
@@ -262,27 +285,7 @@ export class AgentContext {
     taskId?: string | null;
     repoPath?: string;
   }): Promise<void> {
-    this.assertOperational('recordTelemetry');
-    const promptTokens = event.usage.promptTokens;
-    const completionTokens = event.usage.completionTokens;
-    await this._push({
-      type: 'insert',
-      table: 'telemetry',
-      values: {
-        id: randomUUID(),
-        repoPath: event.repoPath ?? this._serviceContext.workspace.workspacePath,
-        agentId: event.agentId ?? this.userId,
-        taskId: event.taskId ?? null,
-        promptTokens,
-        completionTokens,
-        totalTokens: promptTokens + completionTokens,
-        modelId: event.usage.modelId ?? 'unknown',
-        cost: 0,
-        timestamp: Date.now(),
-        environment: JSON.stringify({ source: 'AgentContext.recordTelemetry' }),
-      },
-      layer: 'infrastructure',
-    });
+    return this._telemetryCapability.record(event);
   }
 
   async flush(): Promise<void> {
@@ -297,7 +300,7 @@ export class AgentContext {
       this.lifecycleState === 'stopped' || this.lifecycleState === 'new'
         ? 'stopped'
         : invariantViolations && invariantViolations.length > 0
-          ? 'unhealthy'
+          ? 'critical'
           : 'healthy';
 
     return {
@@ -310,47 +313,15 @@ export class AgentContext {
   }
 
   public async snapshot(metadata: Record<string, unknown> = {}): Promise<string> {
-    this.assertOperational('snapshot');
-    const payload = {
-      metadata,
-      createdAt: new Date().toISOString(),
-      health: await this.health(),
-    };
-    return this.store(JSON.stringify(payload));
+    return this._snapshotCapability.snapshot(metadata);
   }
 
   public async recover(): Promise<BroccoliDbRecoveryReport> {
-    this.assertOperational('recover');
-    const warmedTables: Record<string, number> = {};
-    const errors: string[] = [];
-    const warmups: Array<[any, string, string]> = [
-      ['queue_jobs', 'status', 'pending'],
-      ['agent_streams', 'status', 'active'],
-      ['agent_tasks', 'status', 'pending'],
-      ['agent_tasks', 'status', 'running'],
-    ];
-
-    for (const [table, column, value] of warmups) {
-      try {
-        warmedTables[`${String(table)}:${column}:${value}`] = await this._db.warmupTable(
-          table as any,
-          column,
-          value
-        );
-      } catch (error: any) {
-        errors.push(`${String(table)}:${column}:${value}: ${error?.message || error}`);
-      }
-    }
-
-    if (errors.length > 0) {
-      throw new RecoveryError(`BroccoliDB recovery failed: ${errors.join('; ')}`);
-    }
-
-    return { recovered: true, warmedTables, errors };
+    return this._recoveryCapability.recover();
   }
 
   public async auditInvariants(): Promise<string[]> {
-    return this._invariantEngine.auditInvariants();
+    return this._auditCapability.auditInvariants();
   }
 
   public get db() {
@@ -390,12 +361,7 @@ export class AgentContext {
   public get mutex() {
     return this._mutexService;
   }
-  /**
-   * @deprecated TRANSITIONAL alias. Use storageService directly.
-   * Deletion Condition: Safe to remove once all downstream tests and packages migrate to calling StorageService.
-   */
-  public get pasteStore() {
-    console.warn('[AgentContext] pasteStore getter is deprecated. Use storage/store/hydrate APIs instead.');
+  public get storageService() {
     return this._storageService;
   }
   public get compact() {
@@ -417,30 +383,38 @@ export class AgentContext {
     return this._taskService;
   }
 
-  /**
-   * Registers a sibling agent that shares the same workspace and memory space.
-   * Absorbed from src/utils/swarm/inProcessRunner.ts.
-   */
-  public registerTeammate(agentId: string) {
-    this._teammates.add(agentId);
-    console.log(`[AgentContext] Teammate registered: ${agentId}`);
+  public get storage() {
+    return this._storageCapability;
+  }
+  public get telemetry() {
+    return this._telemetryCapability;
+  }
+  public get recovery() {
+    return this._recoveryCapability;
+  }
+  public get auditCapability() {
+    return this._auditCapability;
+  }
+  public get coordination() {
+    return this._coordinationCapability;
+  }
+  public get query() {
+    return this._queryCapability;
+  }
+  public get snapshots() {
+    return this._snapshotCapability;
   }
 
-  /**
-   * Epistemic Retraction (Sovereign Undo).
-   * Absorbed from src/history.ts (removeLastFromHistory).
-   */
+  public registerTeammate(agentId: string) {
+    this._coordinationCapability.registerTeammate(agentId);
+  }
+
   public async retractLastOperation() {
-      console.log(`[AgentContext] ↩️ Retracting last operation for user ${this.userId}...`);
-      // Rolls back the most recent uncommitted shadow write for this agent.
-      await this._db.rollbackWork(this.userId);
-      
-      // Also invalidate the last added KB item in cache
-      this._kbCache.clear(); // Safe but expensive; in practice we'd target the last ID.
+    return this._recoveryCapability.retractLastOperation();
   }
 
   public getTeammates(): string[] {
-    return Array.from(this._teammates);
+    return this._coordinationCapability.getTeammates();
   }
 
   public createToolExecutor(tools: ToolDef[], options: ToolExecutorOptions = {}) {
@@ -605,7 +579,7 @@ export class AgentContext {
   }
 
   // ─── AUDIT BRIDGES ───
-  async speculateImpact(content: string, _startId?: string): Promise<ImpactReport> {
+  async speculateImpact(content: string, _startId?: string) {
     return this._auditService.predictEffect(content);
   }
   async addLogicalConstraint(
@@ -632,23 +606,8 @@ export class AgentContext {
     };
   }
 
-  /**
-   * CCR (Cross-Conversation Resume).
-   * Fast-forwards graph state from history snapshots. 
-   * Captured from src/utils/ultraplan/ccrSession.ts.
-   */
   async reconstituteFromDigest(digest: string): Promise<void> {
-    const data = JSON.parse(digest);
-    if (!data.knowledgeIds || !Array.isArray(data.knowledgeIds)) {
-        return;
-    }
-
-    console.log(`[AgentContext] CCR: Reconstituting ${data.knowledgeIds.length} items from historic digest.`);
-
-    for (const id of data.knowledgeIds) {
-        // Hydrate from disk to RAM hot-layer
-        await this._graphService.getKnowledge(id).catch(() => null);
-    }
+    return this._recoveryCapability.reconstituteFromDigest(digest);
   }
 
   // ─── TASK & MEMORY BRIDGES ───
@@ -664,18 +623,7 @@ export class AgentContext {
     return this._taskService.getTaskContext(taskId);
   }
   async appendSharedMemory(memory: string) {
-    const ws = await this._db.selectOne('workspaces', [
-      { column: 'id', value: this._serviceContext.workspace.workspaceId },
-    ]);
-    const current = JSON.parse(ws?.sharedMemoryLayer || '[]');
-    current.push(memory);
-    await this._push({
-      type: 'update',
-      table: 'workspaces',
-      where: [{ column: 'id', value: this._serviceContext.workspace.workspaceId }],
-      values: { sharedMemoryLayer: JSON.stringify(current) },
-      layer: 'domain',
-    });
+    return this._queryCapability.appendSharedMemory(memory);
   }
 
   // ─── ANALYTICS BRIDGES ───
@@ -683,16 +631,7 @@ export class AgentContext {
     return this._graphService.getNodeCentrality(kbId);
   }
   async getGlobalCentrality(limit?: number) {
-    const rows = await this._db.selectWhere(
-      'knowledge',
-      [{ column: 'userId', value: this.userId }],
-      undefined,
-      {
-        orderBy: { column: 'hubScore', direction: 'desc' },
-        limit: limit ?? 10,
-      }
-    );
-    return rows.map((r) => ({ kbId: r.id as string, score: (r.hubScore as number) || 0 }));
+    return this._queryCapability.getGlobalCentrality(limit);
   }
   async extractSubgraph(rootId: string, maxDepth = 2, filter?: TraversalFilter) {
     return this._graphService.extractSubgraph(rootId, maxDepth, filter);
@@ -702,15 +641,7 @@ export class AgentContext {
   public async verifyKnowledgeBatch(
     itemIds: string[]
   ): Promise<Map<string, { isValid: boolean; confidence: number }>> {
-    const results = new Map<string, { isValid: boolean; confidence: number }>();
-    for (const id of itemIds) {
-      const { isValid, metrics } = await this.reasoningService.verifySovereignty(id);
-      results.set(id, {
-        isValid,
-        confidence: (metrics?.finalProb as number) ?? 0.5,
-      });
-    }
-    return results;
+    return this._queryCapability.verifyKnowledgeBatch(itemIds);
   }
 
   async searchKnowledge(
@@ -720,28 +651,7 @@ export class AgentContext {
     _queryEmbedding?: number[],
     options: { augmentWithGraph?: boolean; skipVerification?: boolean } = {}
   ): Promise<KnowledgeBaseItem[]> {
-    const results = await this._graphService.traverseGraph('HEAD', limit, {
-      direction: 'both',
-      minWeight: 0.1,
-    });
-
-    let filtered = results.filter((r) =>
-      (r.content || '').toLowerCase().includes(query.toLowerCase())
-    );
-    if (tags && tags.length > 0) {
-      filtered = filtered.filter((r) => tags.every((t) => (r.tags || []).includes(t)));
-    }
-
-    if (!options.skipVerification) {
-      const verification = await this.verifyKnowledgeBatch(filtered.map((f) => f.itemId));
-      filtered = filtered.sort((a, b) => {
-        const confA = verification.get(a.itemId)?.confidence ?? 0;
-        const confB = verification.get(b.itemId)?.confidence ?? 0;
-        return confB - confA;
-      });
-    }
-
-    return filtered.slice(0, limit);
+    return this._queryCapability.searchKnowledge(query, tags, limit, _queryEmbedding, options);
   }
 
   // ─── SYSTEM BRIDGES ───
@@ -759,29 +669,14 @@ export class AgentContext {
   }
 
   async performMemorySynthesis() {
-      return this._cleanupService.performMemorySynthesis();
+    return this._cleanupService.performMemorySynthesis();
   }
 
   async decayConfidence(factor: number, olderThan: number | Date) {
-    const threshold = olderThan instanceof Date ? olderThan.getTime() : olderThan;
-    const rows = await this._db.selectWhere('agent_knowledge' as any, [
-      { column: 'userId', value: this.userId },
-      { column: 'createdAt', value: threshold, operator: '<' },
-    ]);
-    for (const row of rows) {
-      const current = (row.confidence as number) ?? 1.0;
-      await this._push({
-        type: 'update',
-        table: 'agent_knowledge' as any,
-        where: [{ column: 'id', value: row.id }],
-        values: { confidence: Math.max(0, current * factor) },
-        layer: 'infrastructure',
-      });
-    }
-    return { decayedCount: rows.length };
+    return this._queryCapability.decayConfidence(factor, olderThan);
   }
   async reembedAll() {
-    return { embeddedCount: 0, skippedCount: 0 }; // Placeholder for migration
+    return { embeddedCount: 0, skippedCount: 0 };
   }
   getCacheStats() {
     return {
@@ -790,47 +685,11 @@ export class AgentContext {
       size: this._kbCache.size,
     };
   }
-  async getAgentBundle(agentId: string): Promise<AgentBundle> {
-    const profile = await this.getAgentProfile(agentId);
-    const tasks = await this._db.selectWhere('agent_tasks' as any, [
-      { column: 'agentId', value: agentId },
-      { column: 'status', value: ['pending', 'active'], operator: 'IN' },
-    ]);
-    
-    const results = await this._db.selectWhere('agent_knowledge' as any, [
-      { column: 'userId', value: this.userId },
-    ]);
-    const recentKnowledge = results.map((r: any) => ({
-      ...r,
-      metadata: r.metadata ? JSON.parse(r.metadata) : {},
-    })) as KnowledgeBaseItem[];
-
-    return {
-      profile,
-      activeTasks: tasks.map((t) => ({ ...t, taskId: t.id }) as any),
-      recentKnowledge,
-    };
+  async getAgentBundle(agentId: string): Promise<import('./agent-context/types.js').AgentBundle> {
+    return this._queryCapability.getAgentBundle(agentId);
   }
 
   public async getTaskById(taskId: string): Promise<any> {
-    const tResults = await this._db.selectWhere('agent_tasks' as any, [
-      { column: 'id', value: taskId },
-    ]);
-    return tResults.length > 0 ? tResults[0] : null;
-  }
-
-  // Helper for bundle
-  private async getAgentProfile(agentId: string): Promise<AgentProfile> {
-    const results = await this._db.selectWhere('agent_streams' as any, [{ column: 'id', value: agentId }]);
-    const row = results.length > 0 ? results[0] : { id: agentId, status: 'active' } as any;
-    return {
-      agentId: row.id,
-      name: row.externalId || row.id,
-      role: 'swarm-agent',
-      status: row.status as any,
-      permissions: [],
-      createdAt: row.createdAt || Date.now(),
-      lastActive: Date.now()
-    };
+    return this._queryCapability.getTaskById(taskId);
   }
 }

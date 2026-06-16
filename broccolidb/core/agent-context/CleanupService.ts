@@ -6,6 +6,7 @@ import type { TaskService } from './TaskService.js';
 import type { ReasoningService } from './ReasoningService.js';
 import type { ServiceContext } from './types.js';
 import { LifecycleStateError } from '../errors.js';
+import { lifecycleHealth, type ServiceHealth } from './service-health.js';
 
 /**
  * CleanupService provides memory retention and garbage collection.
@@ -51,14 +52,15 @@ export class CleanupService {
     this.assertOperational('flush');
   }
 
-  async health(): Promise<Record<string, unknown>> {
-    return {
-      component: 'CleanupService',
-      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
-      lastRunAt: this.lastRunAt,
-      lastPrunedShadows: this.lastPrunedShadows,
+  async health(): Promise<ServiceHealth> {
+    return lifecycleHealth('cleanup', this.lifecycleState, {
       lastError: this.lastError,
-    };
+      metrics: {
+        lastRunAt: this.lastRunAt,
+        lastPrunedShadows: this.lastPrunedShadows,
+        intervalActive: this.cleanupInterval !== null,
+      },
+    });
   }
 
   private assertOperational(operation: string): void {
@@ -168,35 +170,12 @@ export class CleanupService {
   }
 
   private async _reapUnreferencedCASBlobs(): Promise<number> {
-    const blobsDir = join(this.ctx.workspace.workspacePath, '.broccolidb', 'storage', 'blobs');
-    let pruned = 0;
+    const knowledgeRows = await this.ctx.db.selectWhere('knowledge', [
+      { column: 'content', value: 'CAS:%', operator: 'LIKE' },
+    ]);
 
-    try {
-        const knowledgeRows = await this.ctx.db.selectWhere('knowledge', [
-            { column: 'content', value: 'CAS:%', operator: 'LIKE' }
-        ]);
-        
-        const referencedHashes = new Set(knowledgeRows.map(r => (r.content as string).substring(4)));
-        
-        const shards = await readdir(blobsDir);
-        for (const shard of shards) {
-            const shardDir = join(blobsDir, shard);
-            const stats = await stat(shardDir);
-            if (!stats.isDirectory()) continue;
-
-            const files = await readdir(shardDir);
-            for (const file of files) {
-                if (!referencedHashes.has(file)) {
-                    await unlink(join(shardDir, file));
-                    pruned++;
-                }
-            }
-        }
-    } catch (err) {
-        // blobs directory might not exist yet
-    }
-
-    return pruned;
+    const referencedHashes = new Set(knowledgeRows.map((r) => (r.content as string).substring(4)));
+    return this.ctx.storage.pruneUnreferencedBlobs(referencedHashes);
   }
 
   private async _reapExpiredTaskOutputs(maxAgeDays = 7): Promise<number> {

@@ -4,6 +4,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import { Logger } from '../../shared/services/Logger.js';
 import type { ServiceContext } from './types.js';
 import { LifecycleStateError } from '../errors.js';
+import { lifecycleHealth, type ServiceHealth } from './service-health.js';
 
 /**
  * LspService provides Language Server Protocol (LSP) awareness.
@@ -55,14 +56,14 @@ export class LspService {
     this.assertOperational('flush');
   }
 
-  async health(): Promise<Record<string, unknown>> {
-    return {
-      component: 'LspService',
-      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
-      servers: Array.from(this.servers.keys()),
-      pendingRequests: this.pendingRequests.size,
-      restartTimers: this._restartTimers.size,
-    };
+  async health(): Promise<ServiceHealth> {
+    return lifecycleHealth('lsp', this.lifecycleState, {
+      metrics: {
+        servers: this.servers.size,
+        pendingRequests: this.pendingRequests.size,
+        restartTimers: this._restartTimers.size,
+      },
+    });
   }
 
   private assertOperational(operation: string): void {
@@ -298,12 +299,5 @@ export class LspService {
           this.pendingRequests.delete(id);
           reject(error);
       }
-  }
-
-  /**
-   * @deprecated Use stop(). Kept only as a transitional alias and scheduled for deletion.
-   */
-  public async shutdown(): Promise<void> {
-    await this.stop();
   }
 }

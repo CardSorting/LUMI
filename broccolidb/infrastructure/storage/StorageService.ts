@@ -5,6 +5,7 @@ import { basename, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { ServiceContext } from '../../core/agent-context/types.js';
 import { LifecycleStateError, StorageIntegrityError } from '../../core/errors.js';
+import { lifecycleHealth, type ServiceHealth } from '../../core/agent-context/service-health.js';
 
 /**
  * StorageService provides Content-Addressable Storage (CAS) for sovereign swarm memory scaling.
@@ -39,14 +40,14 @@ export class StorageService {
     this.assertOperational('flush');
   }
 
-  async health(): Promise<Record<string, unknown>> {
-    return {
-      component: 'StorageService',
-      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
-      baseDir: this.baseDir,
-      corruptCount: this.corruptCount,
-      migratedPasteCount: this.migratedPasteCount,
-    };
+  async health(): Promise<ServiceHealth> {
+    return lifecycleHealth('storage', this.lifecycleState, {
+      metrics: {
+        corruptCount: this.corruptCount,
+        migratedPasteCount: this.migratedPasteCount,
+        baseDir: this.baseDir,
+      },
+    });
   }
 
   private assertOperational(operation: string): void {
@@ -198,6 +199,38 @@ export class StorageService {
     throw new StorageIntegrityError(
       `CAS blob integrity check failed for ${params.expectedHash}; quarantined corrupt payload.`
     );
+  }
+
+  /**
+   * Removes CAS blobs not present in the referenced hash set.
+   */
+  async pruneUnreferencedBlobs(referencedHashes: Set<string>): Promise<number> {
+    this.assertOperational('pruneUnreferencedBlobs');
+    const blobsDir = join(this.baseDir, 'blobs');
+    let pruned = 0;
+
+    let shards: string[];
+    try {
+      shards = await fs.readdir(blobsDir);
+    } catch {
+      return 0;
+    }
+
+    for (const shard of shards) {
+      const shardDir = join(blobsDir, shard);
+      const stats = await fs.stat(shardDir);
+      if (!stats.isDirectory()) continue;
+
+      const files = await fs.readdir(shardDir);
+      for (const file of files) {
+        if (!referencedHashes.has(file)) {
+          await this.deleteBlob(file);
+          pruned++;
+        }
+      }
+    }
+
+    return pruned;
   }
 
   private async migrateLegacyPastes(): Promise<number> {

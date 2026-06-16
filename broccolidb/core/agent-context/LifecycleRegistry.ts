@@ -1,12 +1,18 @@
 // [LAYER: CORE]
-// @classification MODERN
+// @classification PURE
 import { LifecycleStateError } from '../errors.js';
+import type { ServiceHealth } from './service-health.js';
 
 export interface OwnedComponent {
   start(): Promise<void>;
   stop(): Promise<void>;
   flush(): Promise<void>;
-  health(options?: { deep?: boolean }): Promise<Record<string, unknown>>;
+  health(options?: { deep?: boolean }): Promise<ServiceHealth>;
+}
+
+export interface LifecycleRegistryHealth {
+  active: boolean;
+  services: Record<string, ServiceHealth>;
 }
 
 export class LifecycleRegistry {
@@ -29,9 +35,8 @@ export class LifecycleRegistry {
     if (this.active) return;
     const started: string[] = [];
 
-    // Ordered startup: storage and db first, then services
     const startOrder = ['db', 'storage', 'cleanup', 'mutex', 'lsp', 'coordinator'];
-    
+
     for (const name of startOrder) {
       const component = this.registry.get(name);
       if (component) {
@@ -58,9 +63,8 @@ export class LifecycleRegistry {
     if (!this.active) return;
     this.active = false;
 
-    // Shutdown in reverse order
     const stopOrder = ['coordinator', 'lsp', 'mutex', 'cleanup', 'storage', 'db'];
-    
+
     for (const name of stopOrder) {
       const component = this.registry.get(name);
       if (component) {
@@ -86,15 +90,17 @@ export class LifecycleRegistry {
     }
   }
 
-  public async healthAll(options?: { deep?: boolean }): Promise<Record<string, unknown>> {
-    const services: Record<string, unknown> = {};
+  public async healthAll(options?: { deep?: boolean }): Promise<LifecycleRegistryHealth> {
+    const services: Record<string, ServiceHealth> = {};
     for (const [name, component] of this.registry.entries()) {
       try {
         services[name] = await component.health(options);
       } catch (error: any) {
         services[name] = {
-          status: 'unhealthy',
-          error: error?.message || String(error),
+          name,
+          status: 'critical',
+          started: false,
+          lastError: error?.message || String(error),
         };
       }
     }

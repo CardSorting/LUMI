@@ -1,8 +1,9 @@
 // [LAYER: CORE]
+// @classification PURE
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import type { ServiceContext } from './types.js';
-import { StorageService } from '../../infrastructure/storage/StorageService.js';
+import { LifecycleStateError } from '../errors.js';
 
 /**
  * ScratchpadService provides a durable, cross-worker file-based scratchpad.
@@ -11,12 +12,17 @@ import { StorageService } from '../../infrastructure/storage/StorageService.js';
 export class ScratchpadService {
   private scratchDir: string;
   private lockDir: string;
-  private storage: StorageService;
 
   constructor(private ctx: ServiceContext) {
     this.scratchDir = join(this.ctx.workspace.workspacePath, '.broccolidb', 'scratchpad');
     this.lockDir = join(this.ctx.workspace.workspacePath, '.broccolidb', 'locks');
-    this.storage = new StorageService(this.ctx);
+  }
+
+  private get storage() {
+    if (!this.ctx.storage) {
+      throw new LifecycleStateError('ScratchpadService requires StorageService on ServiceContext.');
+    }
+    return this.ctx.storage;
   }
 
   /**

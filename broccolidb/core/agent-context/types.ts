@@ -1,4 +1,5 @@
 // [LAYER: CORE]
+import type { LifecycleRegistryHealth } from './LifecycleRegistry.js';
 import type { BufferedDbPool } from '../../infrastructure/db/BufferedDbPool.js';
 import type { LRUCache } from '../lru-cache.js';
 import type { Workspace } from '../workspace.js';
@@ -184,7 +185,6 @@ export interface ServiceContext {
         character: number 
     }[] 
   };
-  pasteStore: import('../../infrastructure/storage/StorageService.js').StorageService;
   compact: import('./CompactService.js').CompactService;
   storage: import('../../infrastructure/storage/StorageService.js').StorageService;
   token: import('./TokenService.js').TokenService;
@@ -237,4 +237,24 @@ export interface AgentBundle {
   profile: AgentProfile;
   activeTasks: TaskItem[];
   recentKnowledge: KnowledgeBaseItem[];
+}
+
+export interface BroccoliDbCacheStats {
+  hits: number;
+  misses: number;
+  size: number;
+}
+
+export interface BroccoliDbHealth {
+  status: 'healthy' | 'degraded' | 'critical' | 'stopped';
+  lifecycle: 'new' | 'starting' | 'started' | 'stopping' | 'stopped';
+  registry: LifecycleRegistryHealth;
+  cache: BroccoliDbCacheStats;
+  invariantViolations?: string[];
+}
+
+export interface BroccoliDbRecoveryReport {
+  recovered: boolean;
+  warmedTables: Record<string, number>;
+  errors: string[];
 }

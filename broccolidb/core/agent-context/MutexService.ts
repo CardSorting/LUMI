@@ -2,6 +2,7 @@
 // @classification OWNED
 import type { ServiceContext } from './types.js';
 import { LifecycleStateError } from '../errors.js';
+import { lifecycleHealth, type ServiceHealth } from './service-health.js';
 
 /**
  * MutexService provides fault-tolerant distributed locking.
@@ -35,13 +36,13 @@ export class MutexService {
     this.assertOperational('flush');
   }
 
-  async health(): Promise<Record<string, unknown>> {
-    return {
-      component: 'MutexService',
-      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
-      activeHeartbeats: this._heartbeats.size,
-      fencingToken: this._fencingToken,
-    };
+  async health(): Promise<ServiceHealth> {
+    return lifecycleHealth('mutex', this.lifecycleState, {
+      metrics: {
+        activeHeartbeats: this._heartbeats.size,
+        fencingToken: this._fencingToken,
+      },
+    });
   }
 
   private assertOperational(operation: string): void {
@@ -180,12 +181,5 @@ export class MutexService {
 
   public get fencingToken(): number {
     return this._fencingToken;
-  }
-
-  /**
-   * @deprecated Use stop(). Kept only as a transitional alias and scheduled for deletion.
-   */
-  public async shutdown(): Promise<void> {
-      await this.stop();
   }
 }

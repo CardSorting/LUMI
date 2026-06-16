@@ -110,8 +110,26 @@ export class InvariantEngine {
         violations.push(`Defunct PasteStore referenced in: ${relative}`);
       }
 
-      if (content.includes('pasteStore') && !relative.includes('agent-context.ts') && !relative.includes('types.ts') && !isInvariantEngine) {
-        violations.push(`Transitional pasteStore API referenced in production file: ${relative}`);
+      if (content.includes('pasteStore') && !isInvariantEngine) {
+        violations.push(`Legacy pasteStore API referenced in: ${relative}`);
+      }
+
+      if (
+        relative.includes('core/agent-context/') &&
+        content.includes('shutdown(') &&
+        !relative.includes('agent-context.ts') &&
+        !isInvariantEngine
+      ) {
+        violations.push(`Legacy shutdown() in agent-context service: ${relative}`);
+      }
+
+      if (
+        relative.includes('core/agent-context/') &&
+        content.includes('new StorageService(') &&
+        !relative.includes('agent-context.ts') &&
+        !isInvariantEngine
+      ) {
+        violations.push(`Shadow StorageService lifecycle in agent-context: ${relative}`);
       }
     }
 

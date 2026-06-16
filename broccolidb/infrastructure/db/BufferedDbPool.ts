@@ -12,13 +12,14 @@ import {
   registerDbPathChangeListener,
   type Schema,
 } from './Config.js';
-import { Logger } from '../../shared/services/Logger.js';
 import {
   BackpressureError,
   DatabaseLockError,
   FlushTimeoutError,
   LifecycleStateError,
 } from '../../core/errors.js';
+import { lifecycleHealth, type ServiceHealth } from '../../core/agent-context/service-health.js';
+import { Logger } from '../../shared/services/Logger.js';
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
@@ -1496,13 +1497,23 @@ export class BufferedDbPool {
     };
   }
 
-  public async health(): Promise<Record<string, unknown>> {
-    return {
-      component: 'BufferedDbPool',
-      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
-      dbPath: getDbPath(),
-      ...this.getMetrics(),
-    };
+  public async health(): Promise<ServiceHealth> {
+    const metrics = this.getMetrics();
+    const lifecycle =
+      this.lifecycleState === 'started'
+        ? 'started'
+        : this.lifecycleState === 'stopped'
+          ? 'stopped'
+          : 'new';
+
+    return lifecycleHealth('db', lifecycle, {
+      metrics: {
+        dbPath: getDbPath(),
+        pendingWriteCount: metrics.pendingWriteCount,
+        activeBufferSize: metrics.activeBufferSize,
+        inFlightOpsSize: metrics.inFlightOpsSize,
+      },
+    });
   }
 
   public reportIntegrityIssue(type: 'brokenImport' | 'orphanedNode', count: number = 1) {

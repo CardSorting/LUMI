@@ -4,6 +4,7 @@ import type { ServiceContext, TaskItem } from './types.js';
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { LifecycleStateError } from '../errors.js';
+import { lifecycleHealth, type ServiceHealth } from './service-health.js';
 
 /**
  * CoordinatorService orchestrates software engineering tasks across multiple workers.
@@ -44,13 +45,14 @@ export class CoordinatorService {
     this.assertOperational('flush');
   }
 
-  async health(): Promise<Record<string, unknown>> {
-    return {
-      component: 'CoordinatorService',
-      status: this.lifecycleState === 'started' ? 'healthy' : this.lifecycleState,
-      activeWorkers: this.activeWorkers.size,
-      workerProcesses: this.workerProcesses.size,
-    };
+  async health(): Promise<ServiceHealth> {
+    return lifecycleHealth('coordinator', this.lifecycleState, {
+      metrics: {
+        activeWorkers: this.activeWorkers.size,
+        workerProcesses: this.workerProcesses.size,
+        heartbeatIntervalActive: this.heartbeatInterval !== null,
+      },
+    });
   }
 
   private assertOperational(operation: string): void {
