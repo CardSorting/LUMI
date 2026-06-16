@@ -5,13 +5,14 @@ import type { WriteOp } from '../../../infrastructure/db/BufferedDbPool.js';
 import type { Workspace } from '../../workspace.js';
 import { AgentGitError } from '../../errors.js';
 import { CapabilityBase } from '../CapabilityBase.js';
+import type { IntentTracer } from '../IntentTracer.js';
 import {
   type TelemetryRecordInput,
   type TelemetryRecordResult,
 } from '../capability-types.js';
 
 export class TelemetryCapability extends CapabilityBase {
-  readonly name = 'telemetry';
+  readonly name = 'telemetry' as const;
   readonly dependencies = ['BufferedDbPool'] as const;
 
   constructor(
@@ -19,13 +20,16 @@ export class TelemetryCapability extends CapabilityBase {
     private readonly workspace: Workspace,
     private readonly userId: string,
     assertStarted: (operation: string) => void,
-    isStarted: () => boolean
+    isStarted: () => boolean,
+    intentTracer: IntentTracer
   ) {
-    super(assertStarted, isStarted);
+    super(assertStarted, isStarted, intentTracer);
   }
 
   async record(input: TelemetryRecordInput): Promise<TelemetryRecordResult> {
-    return this.execute('record', async () => {
+    return this.execute(
+      'record',
+      async () => {
       const promptTokens = input.usage?.promptTokens;
       const completionTokens = input.usage?.completionTokens;
       if (!Number.isFinite(promptTokens) || promptTokens < 0) {
@@ -55,6 +59,18 @@ export class TelemetryCapability extends CapabilityBase {
         layer: 'infrastructure',
       });
       return { recorded: true, telemetryId };
-    });
+      },
+      {
+        input,
+        inputSummary: {
+          agentId: input.agentId,
+          promptTokens: input.usage.promptTokens,
+          completionTokens: input.usage.completionTokens,
+        },
+        expectedEffects: ['BufferedDbPool.telemetry'],
+        durability: 'durable',
+        summarizeResult: (result) => ({ telemetryId: result.telemetryId }),
+      }
+    );
   }
 }

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { GraphService } from '../GraphService.js';
 import type { SpiderService } from '../SpiderService.js';
 import { CapabilityBase } from '../CapabilityBase.js';
+import type { IntentTracer } from '../IntentTracer.js';
 import {
   requireNonEmptyString,
   type GraphAddKnowledgeInput,
@@ -25,16 +26,17 @@ import {
 } from '../capability-types.js';
 
 export class GraphCapability extends CapabilityBase {
-  readonly name = 'graph';
+  readonly name = 'graph' as const;
   readonly dependencies = ['GraphService', 'SpiderService'] as const;
 
   constructor(
     private readonly graphService: GraphService,
     private readonly spiderService: SpiderService,
     assertStarted: (operation: string) => void,
-    isStarted: () => boolean
+    isStarted: () => boolean,
+    intentTracer: IntentTracer
   ) {
-    super(assertStarted, isStarted);
+    super(assertStarted, isStarted, intentTracer);
   }
 
   async addKnowledge(input: GraphAddKnowledgeInput): Promise<GraphAddKnowledgeResult> {

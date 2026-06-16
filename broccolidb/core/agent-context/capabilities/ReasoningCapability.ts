@@ -4,6 +4,7 @@ import type { BufferedDbPool } from '../../../infrastructure/db/BufferedDbPool.j
 import type { ReasoningService } from '../ReasoningService.js';
 import type { KnowledgeBaseItem } from '../types.js';
 import { CapabilityBase } from '../CapabilityBase.js';
+import type { IntentTracer } from '../IntentTracer.js';
 import {
   requireNonEmptyString,
   type ReasoningAutoDiscoverInput,
@@ -28,7 +29,7 @@ type AgentKnowledgeRow = {
 };
 
 export class ReasoningCapability extends CapabilityBase {
-  readonly name = 'reasoning';
+  readonly name = 'reasoning' as const;
   readonly dependencies = ['ReasoningService', 'BufferedDbPool'] as const;
 
   constructor(
@@ -36,9 +37,10 @@ export class ReasoningCapability extends CapabilityBase {
     private readonly db: BufferedDbPool,
     private readonly userId: string,
     assertStarted: (operation: string) => void,
-    isStarted: () => boolean
+    isStarted: () => boolean,
+    intentTracer: IntentTracer
   ) {
-    super(assertStarted, isStarted);
+    super(assertStarted, isStarted, intentTracer);
   }
 
   async detectContradictions(input: ReasoningContradictionsInput): Promise<ReasoningContradictionsResult> {

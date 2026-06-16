@@ -41,7 +41,8 @@ async function runTest() {
     assert.ok(!content.includes('writeFileSync'), `${file} must not write files directly`);
     assert.ok(!content.includes('shutdown('), `${file} must not expose shutdown()`);
     assert.ok(!content.includes('pasteStore'), `${file} must not reference pasteStore`);
-    assert.ok(!content.includes('dispose('), `${file} must not expose dispose()`);
+    assert.ok(!content.includes('trace_queue'), `${file} must not reference trace_queue`);
+    assert.ok(!content.includes('intent_queue'), `${file} must not reference intent_queue`);
     assert.ok(!content.includes('startAll('), `${file} must not start lifecycle directly`);
     assert.ok(!content.includes('stopAll('), `${file} must not stop lifecycle directly`);
   }
@@ -53,6 +54,7 @@ async function runTest() {
     'stop',
     'flush',
     'health',
+    'enableDurableIntentTraces',
     'storage',
     'telemetry',
     'recovery',

@@ -2,6 +2,7 @@
 // @classification CAPABILITY
 import type { BroccoliDbHealth } from '../types.js';
 import { CapabilityBase } from '../CapabilityBase.js';
+import type { IntentTracer } from '../IntentTracer.js';
 import {
   type SnapshotCreateInput,
   type SnapshotCreateResult,
@@ -12,20 +13,23 @@ import {
 export type SnapshotStorePort = (input: StorageStoreInput) => Promise<StorageStoreResult>;
 
 export class SnapshotCapability extends CapabilityBase {
-  readonly name = 'snapshots';
+  readonly name = 'snapshots' as const;
   readonly dependencies = ['StorageService'] as const;
 
   constructor(
     private readonly storeContent: SnapshotStorePort,
     private readonly healthFn: (options?: { deep?: boolean }) => Promise<BroccoliDbHealth>,
     assertStarted: (operation: string) => void,
-    isStarted: () => boolean
+    isStarted: () => boolean,
+    intentTracer: IntentTracer
   ) {
-    super(assertStarted, isStarted);
+    super(assertStarted, isStarted, intentTracer);
   }
 
   async create(input: SnapshotCreateInput = {}): Promise<SnapshotCreateResult> {
-    return this.execute('create', async () => {
+    return this.execute(
+      'create',
+      async () => {
       const payload = {
         metadata: input.metadata ?? {},
         createdAt: new Date().toISOString(),
@@ -36,6 +40,14 @@ export class SnapshotCapability extends CapabilityBase {
         namespace: 'snapshot',
       });
       return { hash: stored.hash };
-    });
+      },
+      {
+        input,
+        inputSummary: { hasMetadata: Boolean(input.metadata) },
+        expectedEffects: ['StorageService.storeContent'],
+        durability: 'durable',
+        summarizeResult: (result) => ({ hash: result.hash }),
+      }
+    );
   }
 }

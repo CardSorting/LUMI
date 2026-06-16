@@ -5,6 +5,7 @@ import type { MutexService } from '../MutexService.js';
 import type { CoordinatorService } from '../CoordinatorService.js';
 import { AgentGitError } from '../../errors.js';
 import { CapabilityBase } from '../CapabilityBase.js';
+import type { IntentTracer } from '../IntentTracer.js';
 import {
   requireNonEmptyString,
   type CoordinationAcquireLockInput,
@@ -21,7 +22,7 @@ import {
 } from '../capability-types.js';
 
 export class CoordinationCapability extends CapabilityBase {
-  readonly name = 'coordination';
+  readonly name = 'coordination' as const;
   readonly dependencies = ['MutexService', 'CoordinatorService'] as const;
 
   private readonly teammates = new Set<string>();
@@ -32,9 +33,10 @@ export class CoordinationCapability extends CapabilityBase {
     private readonly setMailbox: (mailbox: MailboxService) => void,
     private readonly updateMailboxContext: (mailbox: MailboxService) => void,
     assertStarted: (operation: string) => void,
-    isStarted: () => boolean
+    isStarted: () => boolean,
+    intentTracer: IntentTracer
   ) {
-    super(assertStarted, isStarted);
+    super(assertStarted, isStarted, intentTracer);
   }
 
   registerTeammate(input: CoordinationRegisterTeammateInput): CoordinationRegisterTeammateResult {

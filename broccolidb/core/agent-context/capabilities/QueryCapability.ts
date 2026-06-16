@@ -13,6 +13,7 @@ import {
 } from '../StreamingToolExecutor.js';
 import { AgentGitError } from '../../errors.js';
 import { CapabilityBase } from '../CapabilityBase.js';
+import type { IntentTracer } from '../IntentTracer.js';
 import {
   requireNonEmptyString,
   requirePositiveInt,
@@ -45,7 +46,7 @@ type AgentKnowledgeRow = {
 };
 
 export class QueryCapability extends CapabilityBase {
-  readonly name = 'query';
+  readonly name = 'query' as const;
   readonly dependencies = ['GraphService', 'ReasoningService', 'BufferedDbPool'] as const;
 
   constructor(
@@ -59,13 +60,16 @@ export class QueryCapability extends CapabilityBase {
     private readonly getCacheStats: () => { hits: number; misses: number; size: number },
     private readonly getTeammates: () => string[],
     assertStarted: (operation: string) => void,
-    isStarted: () => boolean
+    isStarted: () => boolean,
+    intentTracer: IntentTracer
   ) {
-    super(assertStarted, isStarted);
+    super(assertStarted, isStarted, intentTracer);
   }
 
   async search(input: QuerySearchInput): Promise<QuerySearchResult> {
-    return this.execute('search', async () => {
+    return this.execute(
+      'search',
+      async () => {
       const text = requireNonEmptyString(input.text, 'text');
       const limit = requirePositiveInt(input.limit, 'limit', 20);
       const results = await this.graphService.traverseGraph('HEAD', limit, {
@@ -91,7 +95,14 @@ export class QueryCapability extends CapabilityBase {
 
       const items = filtered.slice(0, limit);
       return { items, total: items.length };
-    });
+      },
+      {
+        input,
+        inputSummary: { textLength: input.text.length, limit: input.limit ?? 20, tagCount: input.tags?.length ?? 0 },
+        expectedEffects: ['GraphService.traverseGraph', 'ReasoningService.verifySovereignty'],
+        summarizeResult: (result) => ({ total: result.total }),
+      }
+    );
   }
 
   async verifyBatch(input: QueryVerifyBatchInput): Promise<QueryVerifyBatchResult> {

@@ -77,7 +77,13 @@ export class InvariantEngine {
         { regex: /\bpasteStore\b/g, label: 'pasteStore' },
         { regex: /\bget db\s*\(/g, label: 'db getter' },
         { regex: /\bdispose\s*\(/g, label: 'dispose()' },
+        { regex: /trace_queue/g, label: 'trace_queue' },
+        { regex: /intent_queue/g, label: 'intent_queue' },
       ];
+
+      if (!fs.readFileSync(path.resolve(broccolidbRoot, 'core/agent-context/CapabilityBase.ts'), 'utf8').includes('IntentTracer')) {
+        violations.push('CapabilityBase must route execution through IntentTracer');
+      }
 
       for (const file of fs.readdirSync(capabilityDir)) {
         if (!file.endsWith('.ts')) continue;
@@ -110,7 +116,9 @@ export class InvariantEngine {
       { regex: /SqliteQueue/g, name: 'SqliteQueue' },
       { regex: /AsyncTelemetryQueue/g, name: 'AsyncTelemetryQueue' },
       { regex: /telemetryQueue/g, name: 'telemetryQueue' },
-      { regex: /telemetry_queue\.db/g, name: 'telemetry_queue.db' }
+      { regex: /telemetry_queue\.db/g, name: 'telemetry_queue.db' },
+      { regex: /trace_queue/g, name: 'trace_queue' },
+      { regex: /intent_queue/g, name: 'intent_queue' },
     ];
 
     for (const file of filesToScan) {

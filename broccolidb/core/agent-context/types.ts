@@ -226,12 +226,15 @@ export interface BroccoliDbCacheStats {
   size: number;
 }
 
+import type { IntentTracerHealth } from './intent-types.js';
+
 export interface BroccoliDbHealth {
   status: 'healthy' | 'degraded' | 'critical' | 'stopped';
   lifecycle: 'new' | 'starting' | 'started' | 'stopping' | 'stopped';
   registry: LifecycleRegistryHealth;
   capabilities: Record<string, CapabilityHealth>;
   cache: BroccoliDbCacheStats;
+  intent: IntentTracerHealth;
   invariantViolations?: string[];
   compatibilityBridgeViolations?: string[];
 }

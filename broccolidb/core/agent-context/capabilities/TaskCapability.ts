@@ -2,6 +2,7 @@
 // @classification CAPABILITY
 import type { TaskService } from '../TaskService.js';
 import { CapabilityBase } from '../CapabilityBase.js';
+import type { IntentTracer } from '../IntentTracer.js';
 import {
   requireNonEmptyString,
   type TaskAgentInput,
@@ -22,15 +23,16 @@ import {
 } from '../capability-types.js';
 
 export class TaskCapability extends CapabilityBase {
-  readonly name = 'tasks';
+  readonly name = 'tasks' as const;
   readonly dependencies = ['TaskService'] as const;
 
   constructor(
     private readonly taskService: TaskService,
     assertStarted: (operation: string) => void,
-    isStarted: () => boolean
+    isStarted: () => boolean,
+    intentTracer: IntentTracer
   ) {
-    super(assertStarted, isStarted);
+    super(assertStarted, isStarted, intentTracer);
   }
 
   async registerAgent(input: TaskRegisterAgentInput): Promise<TaskRegisterAgentResult> {

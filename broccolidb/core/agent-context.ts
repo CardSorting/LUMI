@@ -28,6 +28,7 @@ import { ReasoningCapability } from './agent-context/capabilities/ReasoningCapab
 import { TaskCapability } from './agent-context/capabilities/TaskCapability.js';
 import { ScratchpadCapability } from './agent-context/capabilities/ScratchpadCapability.js';
 import { MailboxCapability } from './agent-context/capabilities/MailboxCapability.js';
+import { IntentTracer } from './agent-context/IntentTracer.js';
 import { StorageService } from '../infrastructure/storage/StorageService.js';
 import { BufferedDbPool, type WriteOp } from '../infrastructure/db/BufferedDbPool.js';
 import { AgentGitError, LifecycleStateError } from './errors.js';
@@ -61,6 +62,8 @@ export type {
 export type * from './agent-context/capability-types.js';
 export type { CapabilityHealth } from './agent-context/capability-health.js';
 export { CapabilityBase } from './agent-context/CapabilityBase.js';
+export type * from './agent-context/intent-types.js';
+export { IntentTracer } from './agent-context/IntentTracer.js';
 
 import type { BroccoliDbHealth, KnowledgeBaseItem, ServiceContext } from './agent-context/types.js';
 import type { CapabilityHealth } from './agent-context/capability-health.js';
@@ -106,6 +109,7 @@ export class AgentContext {
   private readonly _taskCapability: TaskCapability;
   private readonly _scratchpadCapability: ScratchpadCapability;
   private readonly _mailboxCapability: MailboxCapability;
+  private readonly _intentTracer: IntentTracer;
 
   public readonly userId: string;
 
@@ -169,38 +173,54 @@ export class AgentContext {
 
     const assertOperational = this.assertOperational.bind(this);
     const isStarted = () => this.lifecycleState === 'started';
+    this._intentTracer = new IntentTracer(this.userId, this._db);
 
-    this._storageCapability = new StorageCapability(this._storageService, assertOperational, isStarted);
+    this._storageCapability = new StorageCapability(
+      this._storageService,
+      assertOperational,
+      isStarted,
+      this._intentTracer
+    );
     this._telemetryCapability = new TelemetryCapability(
       this._push.bind(this),
       workspace,
       this.userId,
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
     this._graphCapability = new GraphCapability(
       this._graphService,
       this._spiderService,
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
     this._reasoningCapability = new ReasoningCapability(
       this._reasoningService,
       this._db,
       this.userId,
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
-    this._taskCapability = new TaskCapability(this._taskService, assertOperational, isStarted);
+    this._taskCapability = new TaskCapability(
+      this._taskService,
+      assertOperational,
+      isStarted,
+      this._intentTracer
+    );
     this._scratchpadCapability = new ScratchpadCapability(
       this._scratchpadService,
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
     this._mailboxCapability = new MailboxCapability(
       this._mailboxService,
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
     this._recoveryCapability = new RecoveryCapability(
       this._db,
@@ -209,13 +229,15 @@ export class AgentContext {
       this._cleanupService,
       this.userId,
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
     this._auditCapability = new AuditCapability(
       this._invariantEngine,
       this._auditService,
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
     this._coordinationCapability = new CoordinationCapability(
       this._mutexService,
@@ -227,7 +249,8 @@ export class AgentContext {
         this._serviceContext.mailbox = mailbox;
       },
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
     this._queryCapability = new QueryCapability(
       this._db,
@@ -240,13 +263,15 @@ export class AgentContext {
       () => this.getCacheStats(),
       () => this._coordinationCapability.getTeammates().teammates,
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
     this._snapshotCapability = new SnapshotCapability(
       (input) => this._storageCapability.store(input),
       this.health.bind(this),
       assertOperational,
-      isStarted
+      isStarted,
+      this._intentTracer
     );
 
     this._serviceContext.searchKnowledge = async (query, tags, limit, _emb, options) => {
@@ -312,7 +337,10 @@ export class AgentContext {
 
   public async flush(): Promise<void> {
     this.assertOperational('flush');
-    return this._lifecycleRegistry.flushAll();
+    await this._lifecycleRegistry.flushAll();
+    if (this._intentTracer.isDurableModeEnabled()) {
+      await this._intentTracer.flush();
+    }
   }
 
   public async health(options: { deep?: boolean } = {}): Promise<BroccoliDbHealth> {
@@ -337,10 +365,15 @@ export class AgentContext {
       registry,
       capabilities,
       cache: this.getCacheStats(),
+      intent: this._intentTracer.health(),
       invariantViolations,
       compatibilityBridgeViolations:
         compatibilityBridgeViolations.length > 0 ? compatibilityBridgeViolations : undefined,
     };
+  }
+
+  public enableDurableIntentTraces(): void {
+    this._intentTracer.enableDurableMode();
   }
 
   public get storage() {

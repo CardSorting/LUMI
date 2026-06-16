@@ -17,6 +17,10 @@ import type { ToolCall, ToolExecutorOptions, ToolResult } from './StreamingToolE
 import type { ToolDef } from './types.js';
 import type { BroccoliDbRecoveryReport } from './types.js';
 import type { MailboxMessage } from './MailboxService.js';
+import type { CapabilityIntentFields } from './intent-types.js';
+
+export type { CapabilityIntentFields } from './intent-types.js';
+export type { AuditTracesInput, AuditTracesResult, IntentTrace, IntentTracerHealth } from './intent-types.js';
 
 export function requireNonEmptyString(value: string, field: string): string {
   const trimmed = value?.trim();
@@ -50,7 +54,7 @@ export function requireRecoveryMode(mode: string): 'standard' {
 }
 
 // ─── Storage ───
-export interface StorageStoreInput {
+export interface StorageStoreInput extends CapabilityIntentFields {
   content: string;
   namespace?: string;
 }
@@ -60,7 +64,7 @@ export interface StorageStoreResult {
   namespace: string;
 }
 
-export interface StorageHydrateInput {
+export interface StorageHydrateInput extends CapabilityIntentFields {
   hash: string;
 }
 
@@ -207,7 +211,7 @@ export interface CoordinationSynthesizeWorkersResult {
 }
 
 // ─── Query ───
-export interface QuerySearchInput {
+export interface QuerySearchInput extends CapabilityIntentFields {
   text: string;
   tags?: string[];
   limit?: number;

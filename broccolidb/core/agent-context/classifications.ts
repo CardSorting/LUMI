@@ -41,6 +41,7 @@ export const AGENT_CONTEXT_CLASSIFICATIONS = {
   ScratchpadCapability: 'CAPABILITY',
   MailboxCapability: 'CAPABILITY',
   AgentContext: 'INTERNAL',
+  IntentTracer: 'INTERNAL',
   compatibilityPurge: 'INTERNAL',
 } as const;
 

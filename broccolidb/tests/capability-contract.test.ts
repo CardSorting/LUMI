@@ -160,11 +160,19 @@ async function runContractTests(): Promise<void> {
     { regex: /\bdispose\s*\(/, label: 'dispose()' },
   ];
 
+  const capabilityBaseSource = fs.readFileSync(
+    path.join(packageRoot, 'core/agent-context/CapabilityBase.ts'),
+    'utf8'
+  );
+  assert.ok(capabilityBaseSource.includes('IntentTracer'), 'CapabilityBase must route through IntentTracer');
+
   for (const file of fs.readdirSync(capabilityDir)) {
     if (!file.endsWith('.ts')) continue;
     const content = fs.readFileSync(path.join(capabilityDir, file), 'utf8');
     assert.ok(content.includes('extends CapabilityBase'), `${file} must extend CapabilityBase`);
     assert.ok(content.includes('readonly dependencies'), `${file} must declare dependencies`);
+    assert.ok(!content.includes('trace_queue'), `${file} must not reference trace_queue`);
+    assert.ok(!content.includes('intent_queue'), `${file} must not reference intent_queue`);
     for (const pattern of forbiddenPatterns) {
       assert.ok(!pattern.regex.test(content), `${file} violates guardrail: ${pattern.label}`);
     }
@@ -175,6 +183,11 @@ async function runContractTests(): Promise<void> {
     const docPath = path.join(docsDir, `${name}.md`);
     assert.ok(fs.existsSync(docPath), `missing capability doc: docs/api/capabilities/${name}.md`);
   }
+
+  assert.ok(
+    fs.existsSync(path.resolve(packageRoot, '..', 'docs/architecture/broccolidb-v25-intent-routing.md'))
+  );
+  assert.ok(fs.existsSync(path.resolve(packageRoot, '..', 'docs/api/intent-tracing.md')));
 }
 
 runContractTests()
