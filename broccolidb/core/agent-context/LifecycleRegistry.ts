@@ -35,7 +35,7 @@ export class LifecycleRegistry {
     if (this.active) return;
     const started: string[] = [];
 
-    const startOrder = ['db', 'storage', 'cleanup', 'mutex', 'lsp', 'coordinator'];
+    const startOrder = ['db', 'storage', 'cleanup', 'mutex', 'lsp', 'coordinator', 'orchestration'];
 
     for (const name of startOrder) {
       const component = this.registry.get(name);
@@ -63,7 +63,7 @@ export class LifecycleRegistry {
     if (!this.active) return;
     this.active = false;
 
-    const stopOrder = ['coordinator', 'lsp', 'mutex', 'cleanup', 'storage', 'db'];
+    const stopOrder = ['orchestration', 'coordinator', 'lsp', 'mutex', 'cleanup', 'storage', 'db'];
 
     for (const name of stopOrder) {
       const component = this.registry.get(name);

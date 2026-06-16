@@ -29,6 +29,7 @@ import { TaskCapability } from './agent-context/capabilities/TaskCapability.js';
 import { ScratchpadCapability } from './agent-context/capabilities/ScratchpadCapability.js';
 import { MailboxCapability } from './agent-context/capabilities/MailboxCapability.js';
 import { IntentTracer } from './agent-context/IntentTracer.js';
+import { OrchestrationRuntime } from './orchestration/OrchestrationRuntime.js';
 import { StorageService } from '../infrastructure/storage/StorageService.js';
 import { BufferedDbPool, type WriteOp } from '../infrastructure/db/BufferedDbPool.js';
 import { AgentGitError, LifecycleStateError } from './errors.js';
@@ -64,6 +65,17 @@ export type { CapabilityHealth } from './agent-context/capability-health.js';
 export { CapabilityBase } from './agent-context/CapabilityBase.js';
 export type * from './agent-context/intent-types.js';
 export { IntentTracer } from './agent-context/IntentTracer.js';
+export type * from './orchestration/types.js';
+export {
+  OrchestrationRuntime,
+  MutationPlanner,
+  RepairExecutor,
+  VerificationPipeline,
+  ApprovalPolicyEngine,
+  RollbackCoordinator,
+  ExecutionTrace,
+  PolicyBlockedError,
+} from './orchestration/index.js';
 
 import type { BroccoliDbHealth, KnowledgeBaseItem, ServiceContext } from './agent-context/types.js';
 import type { CapabilityHealth } from './agent-context/capability-health.js';
@@ -110,6 +122,7 @@ export class AgentContext {
   private readonly _scratchpadCapability: ScratchpadCapability;
   private readonly _mailboxCapability: MailboxCapability;
   private readonly _intentTracer: IntentTracer;
+  private readonly _orchestrationRuntime: OrchestrationRuntime;
 
   public readonly userId: string;
 
@@ -174,6 +187,16 @@ export class AgentContext {
     const assertOperational = this.assertOperational.bind(this);
     const isStarted = () => this.lifecycleState === 'started';
     this._intentTracer = new IntentTracer(this.userId, this._db);
+    this._orchestrationRuntime = new OrchestrationRuntime({
+      workspaceRoot: process.cwd(),
+      spider: {
+        audit: (opts) => this._spiderService.audit(opts),
+        gate: (opts) => this._spiderService.gate(opts),
+        diffSinceLast: (report) => this._spiderService.diffSinceLast(report),
+        resync: (opts) => this._spiderService.resync(opts),
+      },
+      invariants: this._invariantEngine,
+    });
 
     this._storageCapability = new StorageCapability(
       this._storageService,
@@ -306,6 +329,7 @@ export class AgentContext {
     this._lifecycleRegistry.register('mutex', this._mutexService);
     this._lifecycleRegistry.register('lsp', ctx.lsp);
     this._lifecycleRegistry.register('coordinator', this._coordinatorService);
+    this._lifecycleRegistry.register('orchestration', this._orchestrationRuntime);
   }
 
   public async start(): Promise<void> {
@@ -412,6 +436,10 @@ export class AgentContext {
   }
   public get mailbox() {
     return this._mailboxCapability;
+  }
+
+  public get runtime() {
+    return this._orchestrationRuntime;
   }
 
   private assertOperational(operation: string): void {
