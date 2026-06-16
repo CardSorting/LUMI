@@ -74,6 +74,7 @@ ForensicSpider.audit()
         ├── AgentFormats (SARIF, LSP, TAP, JUnit, NDJSON, GitHub annotations)
         ├── AgentToolkit (bundle, budget, priority queue, formatCheckDigest)
         ├── AgentWorkflow (CI steps, handoff)
+        ├── AgentPipeline (multi-phase runCheckPipeline)
         ├── AgentResponse (check JSON envelope, diagnostic summary, assertCheckPassed)
         ├── AgentSerialization (wire format, validateWire, OTel telemetry)
         │
@@ -81,9 +82,14 @@ ForensicSpider.audit()
   GraphCapability.spider / AuditCapability.spider
         │
         ├── check({ phase: pre-edit | post-edit | ci | delta })
-        ├── MCP: spider_forensic_check
-        └── StreamingToolExecutor post-mutation append (formatCheckDigest)
+        ├── AgentWireRestore (restoreFromWire, parseNdjsonStream)
+        ├── AgentSpiderIntent (v25 intentKind inputSummary)
+        ├── AgentCiArtifacts (buildCiArtifacts, writeCiArtifactsToDir)
+        ├── MCP: spider_forensic_check / spider_forensic_pipeline / spider_restore_wire / spider_export_ci_artifacts
+        └── StreamingToolExecutor pre/post mutation gates (formatPreflightDigest / formatCheckDigest)
 ```
+
+Wire payloads use **v2** schema with embedded `ndjsonStream` for session restore without full SARIF/LSP round-trips.
 
 Phases map to common CI patterns: **pre-edit** ≈ rust-analyzer flycheck before edit; **post-edit/ci** ≈ `cargo check` gate; **delta** ≈ PR introduced-finding regression.
 

@@ -345,6 +345,12 @@ export interface SpiderBundleWireFormat {
   clusters: SpiderCauseCluster[];
   truncation?: SpiderBundleTruncation;
   gate: Pick<SpiderGateResult, 'blocked' | 'conclusion' | 'exitCode' | 'reasons'>;
+  /** Wire schema version — v2 embeds NDJSON stream for session restore. */
+  wireSchema?: 'broccolidb.spider.wire/v1' | 'broccolidb.spider.wire/v2';
+  /** Check phase that produced this wire (v2). */
+  phase?: SpiderCheckPhase;
+  /** Embedded NDJSON event stream for streaming CI restore (v2). */
+  ndjsonStream?: string;
 }
 
 export interface SpiderCheckRequest {
@@ -357,6 +363,10 @@ export interface SpiderCheckRequest {
   includeTypes?: boolean;
   includeRepairDirectives?: boolean;
   neighborhoodDepth?: number;
+  /** Intent routing (BroccoliDB v25) — propagated to IntentTracer via capability input. */
+  correlationId?: string;
+  agentId?: string;
+  taskId?: string;
 }
 
 export interface SpiderCheckResult {
@@ -372,6 +382,16 @@ export interface SpiderCheckResult {
   workflow: SpiderWorkflowStep[];
   suggestedCommands: string[];
   wire?: SpiderBundleWireFormat;
+}
+
+/** Agent handoff payload — context + workflow + v2 wire with optional check envelope. */
+export interface SpiderHandoffResult {
+  agentContext: string;
+  workflowSummary: string;
+  workflow: SpiderWorkflowStep[];
+  suggestedCommands: string[];
+  wire: SpiderBundleWireFormat;
+  checkResponse?: SpiderCheckResponse;
 }
 
 /** Severity/SPI rollup — mirrors SonarQube issue summary and ESLint stats. */
@@ -406,12 +426,51 @@ export interface SpiderCheckResponse {
   ci: {
     githubAnnotations: string[];
     githubStepSummary: string;
+    githubCheckRun?: SpiderGithubCheckRun;
     sarif?: {
       artifactName: string;
       reportId: string;
       exitCode: 0 | 1;
     };
   };
+}
+
+/** GitHub REST Checks API — create check run payload shape. */
+export interface SpiderGithubCheckRun {
+  name: string;
+  status: 'completed';
+  conclusion: 'success' | 'failure' | 'neutral' | 'cancelled';
+  output: {
+    title: string;
+    summary: string;
+    text?: string;
+    annotations?: SpiderGithubCheckAnnotation[];
+  };
+}
+
+export interface SpiderGithubCheckAnnotation {
+  path: string;
+  start_line: number;
+  end_line: number;
+  annotation_level: 'failure' | 'warning' | 'notice';
+  message: string;
+  title?: string;
+  raw_details?: string;
+}
+
+/** Multi-phase agent/CI pipeline — pre-edit → ci → delta in one round-trip. */
+export interface SpiderCheckPipelineRequest extends Omit<SpiderCheckRequest, 'phase'> {
+  phases: SpiderCheckPhase[];
+  /** Stop after first failing phase (default true). */
+  stopOnFailure?: boolean;
+}
+
+export interface SpiderCheckPipelineResult {
+  exitCode: 0 | 1;
+  proceed: boolean;
+  phases: SpiderCheckResult[];
+  failedPhase?: SpiderCheckPhase;
+  response?: SpiderCheckResponse;
 }
 
 export interface SpiderBaselineBundleResult extends SpiderBaselineComparison {

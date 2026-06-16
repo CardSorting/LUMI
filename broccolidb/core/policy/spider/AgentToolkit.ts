@@ -58,6 +58,11 @@ export function toProblemMatchers(): SpiderProblemMatcher[] {
   ];
 }
 
+/** VS Code / GitHub Actions problem matcher config export. */
+export function exportProblemMatcherConfig(): { version: 2; problemMatchers: SpiderProblemMatcher[] } {
+  return { version: 2, problemMatchers: toProblemMatchers() };
+}
+
 export function shouldProceedFromPreflight(audit: SpiderReport): {
   proceed: boolean;
   reason?: string;
@@ -416,6 +421,25 @@ export function formatCheckDigest(result: SpiderCheckResult, maxCompactLines = 8
   }
   if (result.suggestedCommands[0]) {
     lines.push('', `**Run:** \`${result.suggestedCommands[0]}\``);
+  }
+  return lines.join('\n');
+}
+
+/** Pre-edit gate digest — rust-analyzer flycheck before mutation. */
+export function formatPreflightDigest(result: SpiderCheckResult, maxCompactLines = 6): string {
+  const lines = [
+    `## Spider Pre-edit — ${result.proceed ? 'PROCEED' : 'BLOCKED'} (exit ${result.exitCode})`,
+    result.wire?.brief ?? result.agentContext.split('\n')[0] ?? '',
+  ];
+  if (!result.proceed) {
+    lines.push(`**Blocked:** ${result.workflowSummary}`);
+    if (result.suggestedCommands[0]) {
+      lines.push(`**Resolve:** \`${result.suggestedCommands[0]}\``);
+    }
+  }
+  const compact = result.bundle?.compactLines ?? result.wire?.compactLines ?? [];
+  if (compact.length > 0) {
+    lines.push('', ...compact.slice(0, maxCompactLines));
   }
   return lines.join('\n');
 }

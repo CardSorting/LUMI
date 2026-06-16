@@ -14,6 +14,7 @@ import type {
   SpiderGateResult,
   SpiderReport,
   SpiderReportDiff,
+  SpiderGithubCheckAnnotation,
   SpiderSeverity,
 } from './report-types.js';
 import { SPI_LABELS } from './report-types.js';
@@ -356,6 +357,24 @@ export function toGithubAnnotations(report: SpiderReport): string[] {
     const loc = `file=${ref.filePath},line=${ref.line ?? 1},col=${ref.column ?? 1}`;
     const title = SPI_LABELS[finding.diagnosticId];
     return `::${level} ${loc},title=${title}::[${finding.diagnosticId}] ${finding.message} (${ref.findingId})`;
+  });
+}
+
+/** GitHub REST Checks API annotation objects — for createCheckRun payloads. */
+export function toGithubCheckAnnotations(report: SpiderReport): SpiderGithubCheckAnnotation[] {
+  return report.findings.map((finding) => {
+    const ref = toFindingRef(finding);
+    const level =
+      finding.severity === 'ERROR' ? 'failure' : finding.severity === 'WARN' ? 'warning' : 'notice';
+    return {
+      path: ref.filePath,
+      start_line: ref.line ?? 1,
+      end_line: ref.line ?? 1,
+      annotation_level: level,
+      message: `[${finding.diagnosticId}] ${finding.message}`,
+      title: SPI_LABELS[finding.diagnosticId],
+      raw_details: ref.findingId,
+    };
   });
 }
 

@@ -143,6 +143,32 @@ ctx.graph.spider.assertCheckPassed(result); // throws SpiderAuditError on exitCo
 
 MCP tool `spider_forensic_check` accepts `responseFormat: 'json'` for the full envelope.
 
+### Multi-phase pipeline
+
+```typescript
+const pipeline = await ctx.graph.spider.runCheckPipeline({
+  phases: ['pre-edit', 'ci', 'delta'],
+  filePath: 'src/foo.ts',
+  scope: 'changed-files',
+});
+if (pipeline.exitCode !== 0) console.log(pipeline.response?.digest);
+// MCP: spider_forensic_pipeline({ phases: ['pre-edit', 'ci'] })
+```
+
+### NDJSON streaming + GitHub Checks API
+
+```typescript
+const result = await ctx.graph.spider.check({ phase: 'ci', scope: 'changed-files' });
+const ndjson = ctx.graph.spider.toCheckNdjsonStream(result);
+// Events: spider.check.start | .annotation | .compact | .summary | .end
+
+const checkRun = ctx.graph.spider.toGithubCheckRun(result);
+// GitHub REST createCheckRun payload
+
+const matchers = ctx.graph.spider.getProblemMatcherConfig();
+// VS Code / GitHub Actions problem matcher JSON (version 2)
+```
+
 ### SARIF upload helper
 
 ```typescript
@@ -150,6 +176,61 @@ const report = await ctx.graph.spider.audit({ scope: 'changed-files' });
 const { artifactName, sarif, exitCode } = ctx.graph.spider.prepareSarifUpload(report);
 // Upload sarif to GitHub Code Scanning; exit with exitCode in CI
 ```
+
+### Pre-edit gate (tool mirror)
+
+Before file mutations, `StreamingToolExecutor` runs `check({ phase: 'pre-edit' })` when `forensicPreEditGate` is enabled (default). Set `failOnPreEditBlockers: true` to hard-stop.
+
+```typescript
+const pre = await ctx.graph.spider.check({ phase: 'pre-edit', filePath: 'src/foo.ts' });
+console.log(ctx.graph.spider.formatPreflightDigest(pre));
+```
+
+### CI artifact export
+
+```typescript
+const result = await ctx.graph.spider.check({ phase: 'ci', scope: 'changed-files' });
+const artifacts = ctx.graph.spider.buildCiArtifacts(result, { includeSarifMeta: true });
+await ctx.graph.spider.writeCiArtifacts('./spider-out', result);
+// MCP: spider_export_ci_artifacts({ phase: 'ci', outputDir: './spider-out' })
+```
+
+### Handoff v2
+
+```typescript
+const handoff = ctx.graph.spider.handoff(bundle, undefined, { phase: 'ci' });
+// handoff.wire.wireSchema === v2, handoff.checkResponse, ndjsonStream embedded
+
+const fromCheck = ctx.graph.spider.handoffFromCheck(checkResult);
+```
+
+Pass `correlationId` on `check()` for intent traces: `ctx.audit.traces({ correlationId })`.
+
+### Wire format v2 + session restore
+
+Check results embed NDJSON streams in wire payloads for session restore:
+
+```typescript
+const result = await ctx.graph.spider.check({ phase: 'ci', scope: ['src/foo.ts'] });
+// result.wire.wireSchema === 'broccolidb.spider.wire/v2'
+// result.wire.ndjsonStream — replayable CI event log
+
+// Restore without re-auditing disk
+const restored = ctx.graph.spider.restoreFromWire(result.wire!);
+// restored.agentContext, restored.digest, restored.ndjsonEvents
+
+// MCP: spider_restore_wire({ wireJson: JSON.stringify(result.wire) })
+```
+
+MCP `spider_forensic_check` and `spider_forensic_pipeline` accept `blockOnFailure: true` for CI hard-stop semantics.
+
+### Intent routing (v25)
+
+Spider capability operations emit typed `inputSummary.intentKind` traces (`forensic-check`, `check-pipeline`, `preflight`, `wire-restore`, …) for `ctx.audit.traces({ correlationId })`.
+
+### Alternate entry parity
+
+`ctx.audit.spider` exposes the same agent-ergonomics methods as `ctx.graph.spider` (structural ops like `applyChanges` remain graph-only).
 
 ### Wire-only session restore
 
@@ -179,12 +260,23 @@ Findings are grouped by `cause`:
 
 | Method | Industry analog | Use |
 | --- | --- | --- |
+| `checkAndRespond(request)` | check + JSON envelope | Single round-trip agents |
+| `runCheckPipeline({ phases })` | Multi-phase CI chain | pre-edit → ci → delta |
+| `toCheckNdjsonStream(result)` | NDJSON event stream | Streaming CI parsers |
+| `toGithubCheckRun(result)` | GitHub Checks API payload | createCheckRun integration |
+| `getProblemMatcherConfig()` | VS Code problem matchers v2 | CI log → editor navigation |
 | `toCheckResponse(result)` | ESLint JSON / Checks API envelope | MCP `responseFormat=json`, CI agents |
 | `getCheckOutputSchema()` | JSON Schema for check response | MCP output validation |
 | `prepareSarifUpload(report)` | SARIF artifact + exit code | GitHub Code Scanning upload |
 | `buildDiagnosticSummary(report)` | Severity/SPI rollup | Dashboards, step summaries |
 | `assertCheckPassed(result)` | Fail-closed CI guard | `process.exit` replacement |
-| `formatCheckDigest(result)` | Unified check markdown | Post-mutation + MCP responses |
+| `handoffFromCheck(result)` | Handoff from check result | Agent-to-agent with v2 wire |
+| `buildCiArtifacts(result)` | CI file bundle manifest | GitHub Actions upload |
+| `writeCiArtifacts(dir, result)` | Write artifacts to disk | CI pipeline integration |
+| `restoreFromWire(wire)` | Session checkpoint restore | Agent handoff without re-audit |
+| `parseNdjsonStream(stream)` | Parse embedded NDJSON events | Wire v2 replay |
+| `getWireOutputSchema()` | JSON Schema for wire v2 | MCP validation |
+| `formatPreflightDigest(result)` | Pre-edit blocked digest | Tool mirror pre-mutation |
 | `formatWireDigest(wire)` | Wire-only restore digest | Session persistence without full bundle |
 | `validateWire(wire)` | Fail-closed wire validation | MCP/session restore hardening |
 | `toStructuredTelemetry(wire)` | OTel-style JSON event | Observability pipelines |

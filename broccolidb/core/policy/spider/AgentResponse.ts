@@ -8,10 +8,16 @@ import type {
   SpiderCheckResponse,
   SpiderCheckResult,
   SpiderDiagnosticSummary,
+  SpiderGithubCheckRun,
   SpiderReport,
 } from './report-types.js';
 import { clusterFindingsByCause } from './AgentClusters.js';
-import { toGithubAnnotations, toGithubStepSummary, prepareSarifUpload } from './AgentFormats.js';
+import {
+  toGithubAnnotations,
+  toGithubCheckAnnotations,
+  toGithubStepSummary,
+  prepareSarifUpload,
+} from './AgentFormats.js';
 import { formatCheckDigest } from './AgentToolkit.js';
 import { toStructuredTelemetry } from './AgentSerialization.js';
 import { SpiderAuditError } from './spider-errors.js';
@@ -104,6 +110,68 @@ export function resolveCheckConclusion(result: SpiderCheckResult): SpiderCheckRe
   return result.proceed ? 'success' : 'failure';
 }
 
+/** GitHub REST Checks API createCheckRun payload from check response. */
+export function toGithubCheckRun(response: SpiderCheckResponse, report?: SpiderReport): SpiderGithubCheckRun {
+  const conclusion =
+    response.conclusion === 'success'
+      ? 'success'
+      : response.conclusion === 'neutral'
+        ? 'neutral'
+        : 'failure';
+  const annotations = report ? toGithubCheckAnnotations(report).slice(0, 50) : undefined;
+  return {
+    name: 'Spider Forensic',
+    status: 'completed',
+    conclusion,
+    output: {
+      title: `Spider ${response.phase} — ${response.conclusion}`,
+      summary: response.ci.githubStepSummary,
+      text: response.digest,
+      ...(annotations && annotations.length > 0 ? { annotations } : {}),
+    },
+  };
+}
+
+/** NDJSON event stream for check results — rustc/ESLint streaming CI parsers. */
+export function toCheckNdjsonStream(response: SpiderCheckResponse): string {
+  const lines: string[] = [];
+  lines.push(
+    JSON.stringify({
+      type: 'spider.check.start',
+      schema: response.$schema,
+      phase: response.phase,
+      conclusion: response.conclusion,
+    })
+  );
+  for (const annotation of response.ci.githubAnnotations.slice(0, 100)) {
+    lines.push(JSON.stringify({ type: 'spider.check.annotation', phase: response.phase, line: annotation }));
+  }
+  for (const compact of response.wire?.compactLines ?? []) {
+    lines.push(JSON.stringify({ type: 'spider.check.compact', phase: response.phase, line: compact }));
+  }
+  for (const cmd of response.suggestedCommands.slice(0, 5)) {
+    lines.push(JSON.stringify({ type: 'spider.check.command', phase: response.phase, command: cmd }));
+  }
+  lines.push(
+    JSON.stringify({
+      type: 'spider.check.summary',
+      phase: response.phase,
+      summary: response.summary,
+      telemetry: response.telemetry,
+    })
+  );
+  lines.push(
+    JSON.stringify({
+      type: 'spider.check.end',
+      phase: response.phase,
+      exitCode: response.exitCode,
+      proceed: response.proceed,
+      conclusion: response.conclusion,
+    })
+  );
+  return lines.join('\n');
+}
+
 export function validateCheckResult(result: unknown): asserts result is SpiderCheckResult {
   if (!result || typeof result !== 'object') {
     throw new SpiderAuditError('SpiderCheckResult must be a non-null object');
@@ -168,12 +236,19 @@ export function toCheckResponse(
         })()
       : undefined;
 
-  return {
+  const conclusion = resolveCheckConclusion(result);
+  const ciBase = {
+    githubAnnotations,
+    githubStepSummary,
+    ...(sarifMeta ? { sarif: sarifMeta } : {}),
+  };
+
+  const response: SpiderCheckResponse = {
     $schema: 'broccolidb.spider.check-response/v1',
     phase: result.phase,
     proceed: result.proceed,
     exitCode: result.exitCode,
-    conclusion: resolveCheckConclusion(result),
+    conclusion,
     digest,
     agentContext: result.agentContext,
     workflowSummary: result.workflowSummary,
@@ -183,11 +258,30 @@ export function toCheckResponse(
     summary,
     problemMatchers: bundle?.problemMatchers ?? [],
     ci: {
-      githubAnnotations,
-      githubStepSummary,
-      ...(sarifMeta ? { sarif: sarifMeta } : {}),
+      ...ciBase,
+      githubCheckRun: toGithubCheckRun(
+        {
+          $schema: 'broccolidb.spider.check-response/v1',
+          phase: result.phase,
+          proceed: result.proceed,
+          exitCode: result.exitCode,
+          conclusion,
+          digest,
+          agentContext: result.agentContext,
+          workflowSummary: result.workflowSummary,
+          suggestedCommands: result.suggestedCommands,
+          wire: result.wire,
+          telemetry: result.wire ? toStructuredTelemetry(result.wire) : undefined,
+          summary,
+          problemMatchers: bundle?.problemMatchers ?? [],
+          ci: ciBase,
+        },
+        report
+      ),
     },
   };
+
+  return response;
 }
 
 /** CI hard-stop helper — mirrors `process.exit(gate.exitCode)` patterns. */

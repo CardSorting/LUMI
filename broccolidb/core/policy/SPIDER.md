@@ -35,6 +35,11 @@ if (post.exitCode === 1) process.exit(1);
 // JSON envelope for MCP/CI (ESLint JSON / GitHub Checks style)
 const json = ctx.graph.spider.toCheckResponse(post, { includeSarifMeta: true });
 // MCP: spider_forensic_check({ phase: 'ci', responseFormat: 'json' })
+// MCP: spider_forensic_pipeline({ phases: ['pre-edit', 'ci'] })
+
+// NDJSON stream + GitHub Checks API
+const ndjson = ctx.graph.spider.toCheckNdjsonStream(post);
+const checkRun = ctx.graph.spider.toGithubCheckRun(post);
 
 // 1. Pre-edit (preferred)
 const pre = await ctx.graph.spider.preflightBundle('src/core/provider.ts');
@@ -55,6 +60,7 @@ const delta = ctx.graph.spider.compareBaseline();
 ```
 
 - **Preflight** / **batchPreflight** before editing
+- **Pre-edit gate** — tool mirror runs `check({ phase: 'pre-edit' })` before mutations (`forensicPreEditGate`, default on)
 - **Gate** for CI-style pass/fail (`conclusion`, `exitCode`)
 - **Bundle** for one-shot agent context (narrative + compact + clusters + SARIF/LSP)
 - **Compact** for token-efficient `file:line:col` lines

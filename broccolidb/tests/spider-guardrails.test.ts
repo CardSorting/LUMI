@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentContext } from '../core/agent-context.js';
 import { ForensicSpider } from '../core/policy/spider/ForensicSpider.js';
+import { SPIDER_AGENT_ERGONOMICS_METHODS } from '../core/policy/spider/spider-agent-methods.js';
 import { SpiderEngine } from '../core/policy/SpiderEngine.js';
 import { Workspace } from '../core/workspace.js';
 import { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';
@@ -35,42 +36,7 @@ async function runTest() {
   assert.ok(!graphCapabilitySource.includes('getEngine:'), 'GraphCapability must not expose spider.getEngine');
   assert.ok(!graphCapabilitySource.includes('getDiscovery:'), 'GraphCapability must not expose spider.getDiscovery');
 
-  const requiredSpiderMethods = [
-    'audit',
-    'gate',
-    'gateBundle',
-    'check',
-    'bundle',
-    'batchPreflight',
-    'setBaseline',
-    'compareBaseline',
-    'compareBaselineBundle',
-    'shouldProceed',
-    'toolSchema',
-    'preflight',
-    'preflightBundle',
-    'compact',
-    'resync',
-    'explain',
-    'explainForAgent',
-    'sessionDelta',
-    'agentContext',
-    'validateBundle',
-    'handoff',
-    'outputSchema',
-    'serializeBundle',
-    'parseBundleWire',
-    'validateWire',
-    'formatWireDigest',
-    'formatCheckDigest',
-    'toStructuredTelemetry',
-    'toCheckResponse',
-    'getCheckOutputSchema',
-    'prepareSarifUpload',
-    'buildDiagnosticSummary',
-    'validateCheck',
-    'assertCheckPassed',
-  ] as const;
+  const requiredSpiderMethods = SPIDER_AGENT_ERGONOMICS_METHODS;
 
   const forensicSpiderSource = fs.readFileSync(
     path.join(packageRoot, 'core/policy/spider/ForensicSpider.ts'),

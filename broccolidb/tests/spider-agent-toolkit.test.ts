@@ -19,8 +19,9 @@ import {
 import { buildPriorityQueue } from '../core/policy/spider/AgentToolkit.js';
 import { buildWorkflowPlan } from '../core/policy/spider/AgentWorkflow.js';
 import { toCodeActions, toTap, toJUnitXml, toNdjsonDiagnostics } from '../core/policy/spider/AgentFormats.js';
-import { serializeAgentBundle, parseAgentBundleWire, formatWireDigest, toStructuredTelemetry, validateWireFormat } from '../core/policy/spider/AgentSerialization.js';
-import { toCheckResponse, validateCheckResult, SPIDER_CHECK_OUTPUT_SCHEMA } from '../core/policy/spider/AgentResponse.js';
+import { serializeAgentBundle, parseAgentBundleWire, formatWireDigest, toStructuredTelemetry, validateWireFormat, SPIDER_WIRE_SCHEMA_V2 } from '../core/policy/spider/AgentSerialization.js';
+import { toCheckResponse, validateCheckResult, SPIDER_CHECK_OUTPUT_SCHEMA, toCheckNdjsonStream } from '../core/policy/spider/AgentResponse.js';
+import { exportProblemMatcherConfig } from '../core/policy/spider/AgentToolkit.js';
 import { prepareSarifUpload, toGithubStepSummary } from '../core/policy/spider/AgentFormats.js';
 import { evaluateGate } from '../core/policy/spider/AgentFormats.js';
 import { Workspace } from '../core/workspace.js';
@@ -177,8 +178,10 @@ async function runTest() {
   assert.ok(fullBundle.formats.sarif);
   assert.ok(fullBundle.suggestedCommands.length >= 0);
 
-  const handoff = ctx.graph.spider.handoff(fullBundle);
+  const handoff = ctx.graph.spider.handoff(fullBundle, undefined, { phase: 'ci' });
   assert.ok(handoff.wire?.suggestedCommands);
+  assert.strictEqual(handoff.wire?.wireSchema, SPIDER_WIRE_SCHEMA_V2);
+  assert.ok(handoff.checkResponse?.$schema === 'broccolidb.spider.check-response/v1');
 
   const outputSchema = ctx.graph.spider.outputSchema();
   assert.ok(outputSchema.title);
@@ -190,6 +193,18 @@ async function runTest() {
 
   const checkCi = await ctx.graph.spider.check({ phase: 'ci', scope: ['src/a.ts'], includeTypes: false });
   assert.ok(checkCi.workflowSummary.length > 0);
+
+  const handoffFromCheck = ctx.graph.spider.handoffFromCheck(checkCi);
+  assert.ok(handoffFromCheck.wire.ndjsonStream?.includes('spider.check.start'));
+
+  const ciArtifacts = ctx.graph.spider.buildCiArtifacts(checkCi, { includeSarifMeta: true });
+  assert.ok(ciArtifacts.files.length >= 4);
+  assert.ok(ciArtifacts.manifest.includes('broccolidb.spider.ci-artifacts/v1'));
+
+  const artifactDir = path.join(root, 'ci-artifacts');
+  const written = await ctx.graph.spider.writeCiArtifacts(artifactDir, checkCi);
+  assert.ok(written.length >= ciArtifacts.files.length);
+  assert.ok(fs.existsSync(path.join(artifactDir, 'spider-step-summary.md')));
 
   const checkDigest = formatCheckDigest(checkCi);
   assert.ok(checkDigest.includes('Spider ci'));
@@ -227,6 +242,36 @@ async function runTest() {
   assert.ok(typeof diagSummary.errors === 'number');
   const stepSummary = toGithubStepSummary(fullBundle, diagSummary);
   assert.ok(stepSummary.includes('| Verdict |'));
+
+  const ndjsonStream = toCheckNdjsonStream(checkResponse);
+  assert.ok(ndjsonStream.includes('spider.check.start'));
+  assert.ok(ndjsonStream.includes('spider.check.end'));
+
+  const problemMatchers = exportProblemMatcherConfig();
+  assert.strictEqual(problemMatchers.version, 2);
+  assert.ok(problemMatchers.problemMatchers[0].owner === 'spider');
+
+  const githubCheck = ctx.graph.spider.toGithubCheckRun(checkCi);
+  assert.strictEqual(githubCheck.status, 'completed');
+  assert.ok(githubCheck.output.title.includes('Spider'));
+
+  const pipeline = await ctx.graph.spider.runCheckPipeline({
+    phases: ['pre-edit', 'ci'],
+    filePath: 'src/a.ts',
+    scope: ['src/a.ts'],
+    includeTypes: false,
+  });
+  assert.ok(pipeline.phases.length >= 2);
+  assert.strictEqual(pipeline.exitCode, 0);
+
+  const responded = await ctx.graph.spider.checkAndRespond({
+    phase: 'ci',
+    scope: ['src/a.ts'],
+    includeTypes: false,
+  });
+  assert.strictEqual(responded.$schema, 'broccolidb.spider.check-response/v1');
+
+  assert.ok(mcpSource.includes('spider_forensic_pipeline'), 'MCP must expose spider_forensic_pipeline');
 
   await ctx.stop();
   fs.rmSync(root, { recursive: true, force: true });

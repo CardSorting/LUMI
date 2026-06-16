@@ -1438,6 +1438,11 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
           .optional()
           .default(false)
           .describe('Include SARIF upload metadata in json response'),
+        blockOnFailure: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Throw-equivalent: return error text when exitCode !== 0'),
       },
       async (args) => {
         return this.executeTool('spider_forensic_check', async () => {
@@ -1452,6 +1457,10 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             includeTypes: false,
             includeRepairDirectives: true,
           });
+          if (args.blockOnFailure && result.exitCode !== 0) {
+            const digest = spider.formatCheckDigest(result, args.maxCompactLines);
+            return `SPIDER_CHECK_FAILED\n\n${digest}\n\nexitCode=${result.exitCode}`;
+          }
           if (args.responseFormat === 'json') {
             const response = spider.toCheckResponse(result, {
               maxCompactLines: args.maxCompactLines,
@@ -1474,6 +1483,125 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             lines.push(`suggested: ${result.suggestedCommands[0]}`);
           }
           return lines.join('\n');
+        });
+      }
+    );
+
+    this.server.tool(
+      'spider_forensic_pipeline',
+      'Run multi-phase Spider check pipeline (e.g. pre-edit → ci → delta). Stops on first failure by default.',
+      {
+        phases: z
+          .array(z.enum(['pre-edit', 'post-edit', 'ci', 'delta']))
+          .min(1)
+          .describe('Ordered phases to run'),
+        filePath: z.string().optional(),
+        filePaths: z.array(z.string()).optional(),
+        scope: z.union([z.literal('changed-files'), z.array(z.string())]).optional(),
+        stopOnFailure: z.boolean().optional().default(true),
+        responseFormat: z.enum(['markdown', 'json']).optional().default('markdown'),
+        includeSarifMeta: z.boolean().optional().default(false),
+        blockOnFailure: z.boolean().optional().default(false),
+      },
+      async (args) => {
+        return this.executeTool('spider_forensic_pipeline', async () => {
+          if (!this.agentContext) return 'AgentContext not available.';
+          const spider = this.agentContext.graph.spider;
+          const pipeline = await spider.runCheckPipeline(
+            {
+              phases: args.phases,
+              filePath: args.filePath,
+              filePaths: args.filePaths,
+              scope: args.scope,
+              stopOnFailure: args.stopOnFailure,
+              includeTypes: false,
+              includeRepairDirectives: true,
+            },
+            { includeSarifMeta: args.includeSarifMeta }
+          );
+          if (args.blockOnFailure && pipeline.exitCode !== 0) {
+            const digest = pipeline.response?.digest ?? 'Pipeline failed';
+            return `SPIDER_PIPELINE_FAILED\n\n${digest}\n\nexitCode=${pipeline.exitCode}`;
+          }
+          if (args.responseFormat === 'json') {
+            return JSON.stringify(pipeline, null, 2);
+          }
+          const lines = [
+            `## Spider Pipeline — exit ${pipeline.exitCode}`,
+            `Phases run: ${pipeline.phases.map((p) => p.phase).join(' → ')}`,
+            pipeline.failedPhase ? `Failed at: ${pipeline.failedPhase}` : 'All phases passed',
+            '',
+          ];
+          if (pipeline.response) {
+            lines.push(spider.formatCheckDigest(pipeline.phases[pipeline.phases.length - 1]!));
+          }
+          return lines.join('\n');
+        });
+      }
+    );
+
+    this.server.tool(
+      'spider_restore_wire',
+      'Restore Spider agent context from a wire v2 JSON payload (session checkpoint) without re-auditing disk.',
+      {
+        wireJson: z.string().describe('JSON string of SpiderBundleWireFormat (v2 with ndjsonStream)'),
+        maxCompactLines: z.number().int().min(1).max(50).optional().default(8),
+        responseFormat: z.enum(['markdown', 'json']).optional().default('markdown'),
+      },
+      async (args) => {
+        return this.executeTool('spider_restore_wire', async () => {
+          if (!this.agentContext) return 'AgentContext not available.';
+          const spider = this.agentContext.graph.spider;
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(args.wireJson);
+          } catch {
+            return 'Invalid wireJson: must be valid JSON';
+          }
+          const restored = spider.restoreFromWire(parsed, args.maxCompactLines);
+          if (args.responseFormat === 'json') {
+            return JSON.stringify(restored, null, 2);
+          }
+          const lines = [
+            restored.digest,
+            '',
+            `exitCode=${restored.exitCode} proceed=${restored.proceed}`,
+            `phase=${restored.phase ?? 'unknown'}`,
+            `telemetry: ${JSON.stringify(restored.telemetry)}`,
+          ];
+          if (restored.ndjsonEvents?.length) {
+            lines.push(`ndjsonEvents=${restored.ndjsonEvents.length}`);
+          }
+          return lines.join('\n');
+        });
+      }
+    );
+
+    this.server.tool(
+      'spider_export_ci_artifacts',
+      'Export Spider CI artifacts (step summary, annotations, SARIF, wire, NDJSON) to a directory.',
+      {
+        phase: z.enum(['pre-edit', 'post-edit', 'ci', 'delta']).default('ci'),
+        filePath: z.string().optional(),
+        scope: z.union([z.literal('changed-files'), z.array(z.string())]).optional(),
+        outputDir: z.string().describe('Directory to write artifact files'),
+        includeSarifMeta: z.boolean().optional().default(true),
+      },
+      async (args) => {
+        return this.executeTool('spider_export_ci_artifacts', async () => {
+          if (!this.agentContext) return 'AgentContext not available.';
+          const spider = this.agentContext.graph.spider;
+          const result = await spider.check({
+            phase: args.phase,
+            filePath: args.filePath,
+            scope: args.scope,
+            includeTypes: false,
+            includeRepairDirectives: true,
+          });
+          const written = await spider.writeCiArtifacts(args.outputDir, result, {
+            includeSarifMeta: args.includeSarifMeta,
+          });
+          return `Wrote ${written.length} file(s) to ${args.outputDir}\n${written.join('\n')}`;
         });
       }
     );

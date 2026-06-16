@@ -19,8 +19,11 @@ import type {
   SpiderBaselineBundleResult,
   SpiderBundleBudget,
   SpiderBundleWireFormat,
+  SpiderCheckPipelineRequest,
+  SpiderCheckPipelineResult,
 } from '../../policy/spider/report-types.js';
 import { CapabilityBase } from '../CapabilityBase.js';
+import { buildSpiderInputSummary, summarizeSpiderIntentResult } from '../../policy/spider/AgentSpiderIntent.js';
 import type { IntentTracer } from '../IntentTracer.js';
 import {
   requireNonEmptyString,
@@ -173,17 +176,32 @@ export class GraphCapability extends CapabilityBase {
   get spider() {
     const spiderTracing = (operation: string, input?: unknown) => ({
       input,
-      inputSummary: (input && typeof input === 'object' ? input : { operation }) as Record<string, unknown>,
+      inputSummary: buildSpiderInputSummary(operation, input),
       expectedEffects: [`SpiderService.${operation}`],
       durability: 'ephemeral' as const,
-      summarizeResult: (result: SpiderReport | SpiderGateResult | SpiderGateBundleResult | SpiderAgentBundle | SpiderBatchPreflightResult | SpiderCheckResult | { resynced?: string[]; passed?: boolean; audit?: SpiderReport }) => {
+      summarizeResult: (result: SpiderReport | SpiderGateResult | SpiderGateBundleResult | SpiderAgentBundle | SpiderBatchPreflightResult | SpiderCheckResult | SpiderCheckPipelineResult | { resynced?: string[]; passed?: boolean; audit?: SpiderReport; digest?: string; telemetry?: Record<string, unknown> }) => {
+        const intentSummary = summarizeSpiderIntentResult(operation, result);
+        if ('phases' in result && Array.isArray(result.phases)) {
+          return {
+            ...intentSummary,
+            pipelineExitCode: result.exitCode,
+            phaseCount: result.phases.length,
+            failedPhase: result.failedPhase ?? null,
+            errors: result.response?.summary.errors ?? 0,
+          };
+        }
+        if ('digest' in result && 'telemetry' in result) {
+          return intentSummary;
+        }
         if ('phase' in result && 'exitCode' in result) {
           return {
+            ...intentSummary,
             phase: result.phase,
             proceed: result.proceed,
             exitCode: result.exitCode,
             workflowSteps: result.workflow?.length ?? 0,
             hasWire: Boolean(result.wire),
+            errors: result.wire?.priorityQueue.filter((q) => q.kind === 'blocker').length ?? 0,
           };
         }
         if ('bundle' in result && 'gate' in result && result.gate) {
@@ -225,6 +243,15 @@ export class GraphCapability extends CapabilityBase {
         this.execute('spider.gateBundle', () => this.spiderService.gateBundle(options), spiderTracing('gateBundle', options)),
       check: (request: SpiderCheckRequest) =>
         this.execute('spider.check', () => this.spiderService.check(request), spiderTracing('check', request)),
+      checkAndRespond: (
+        request: SpiderCheckRequest,
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) => this.execute('spider.checkAndRespond', () => this.spiderService.checkAndRespond(request, options), spiderTracing('checkAndRespond', request)),
+      runCheckPipeline: (
+        request: SpiderCheckPipelineRequest,
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) =>
+        this.execute('spider.runCheckPipeline', () => this.spiderService.runCheckPipeline(request, options), spiderTracing('runCheckPipeline', request)),
       bundle: (report: SpiderReport) =>
         this.run('spider.bundle', () => this.spiderService.toAgentBundle(report)),
       validateBundle: (bundle: SpiderAgentBundle) =>
@@ -254,18 +281,33 @@ export class GraphCapability extends CapabilityBase {
         this.run('spider.shouldProceed', () => this.spiderService.shouldProceed(report)),
       toolSchema: () => this.run('spider.toolSchema', () => this.spiderService.getAgentToolSchema()),
       outputSchema: () => this.run('spider.outputSchema', () => this.spiderService.getOutputSchema()),
-      handoff: (bundle: SpiderAgentBundle, budget?: SpiderBundleBudget) =>
-        this.run('spider.handoff', () => this.spiderService.handoff(bundle, budget)),
+      handoff: (bundle: SpiderAgentBundle, budget?: SpiderBundleBudget, options?: { phase?: SpiderCheckResult['phase'] }) =>
+        this.run('spider.handoff', () => this.spiderService.handoff(bundle, budget, options)),
+      handoffFromCheck: (result: SpiderCheckResult, budget?: SpiderBundleBudget) =>
+        this.run('spider.handoffFromCheck', () => this.spiderService.handoffFromCheck(result, budget)),
+      buildCiArtifacts: (result: SpiderCheckResult, options?: { includeSarifMeta?: boolean }) =>
+        this.run('spider.buildCiArtifacts', () => this.spiderService.buildCiArtifacts(result, options)),
+      writeCiArtifacts: (outputDir: string, result: SpiderCheckResult, options?: { includeSarifMeta?: boolean }) =>
+        this.execute('spider.writeCiArtifacts', () => this.spiderService.writeCiArtifacts(outputDir, result, options), spiderTracing('writeCiArtifacts', { outputDir })),
       serializeBundle: (bundle: SpiderAgentBundle, agentContext?: string, workflowSummary?: string) =>
         this.run('spider.serializeBundle', () =>
           this.spiderService.serializeBundle(bundle, agentContext, workflowSummary)
         ),
       parseBundleWire: (data: unknown) => this.run('spider.parseBundleWire', () => this.spiderService.parseBundleWire(data)),
       validateWire: (wire: unknown) => this.run('spider.validateWire', () => this.spiderService.validateWire(wire)),
+      restoreFromWire: (wire: unknown, maxCompactLines?: number) =>
+        this.run('spider.restoreFromWire', () => this.spiderService.restoreFromWire(wire, maxCompactLines), spiderTracing('restoreFromWire', { reportId: (wire as { reportId?: string })?.reportId })),
+      validateWireRestore: (wire: unknown) =>
+        this.run('spider.validateWireRestore', () => this.spiderService.validateWireRestore(wire)),
+      getWireOutputSchema: () => this.run('spider.getWireOutputSchema', () => this.spiderService.getWireOutputSchema()),
+      parseNdjsonStream: (stream: string) =>
+        this.run('spider.parseNdjsonStream', () => this.spiderService.parseNdjsonStream(stream)),
       formatWireDigest: (wire: SpiderBundleWireFormat, maxCompactLines?: number) =>
         this.run('spider.formatWireDigest', () => this.spiderService.formatWireDigest(wire, maxCompactLines)),
       formatCheckDigest: (result: SpiderCheckResult, maxCompactLines?: number) =>
         this.run('spider.formatCheckDigest', () => this.spiderService.formatCheckDigest(result, maxCompactLines)),
+      formatPreflightDigest: (result: SpiderCheckResult, maxCompactLines?: number) =>
+        this.run('spider.formatPreflightDigest', () => this.spiderService.formatPreflightDigest(result, maxCompactLines)),
       toCheckResponse: (
         result: SpiderCheckResult,
         options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
@@ -278,6 +320,14 @@ export class GraphCapability extends CapabilityBase {
       buildDiagnosticSummary: (report: SpiderReport) =>
         this.run('spider.buildDiagnosticSummary', () => this.spiderService.buildDiagnosticSummary(report)),
       validateCheck: (result: unknown) => this.run('spider.validateCheck', () => this.spiderService.validateCheck(result)),
+      toCheckNdjsonStream: (
+        result: SpiderCheckResult,
+        options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+      ) => this.run('spider.toCheckNdjsonStream', () => this.spiderService.toCheckNdjsonStream(result, options)),
+      toGithubCheckRun: (result: SpiderCheckResult, options?: { maxCompactLines?: number }) =>
+        this.run('spider.toGithubCheckRun', () => this.spiderService.toGithubCheckRun(result, options)),
+      getProblemMatcherConfig: () =>
+        this.run('spider.getProblemMatcherConfig', () => this.spiderService.getProblemMatcherConfig()),
       toStructuredTelemetry: (wire: SpiderBundleWireFormat) =>
         this.run('spider.toStructuredTelemetry', () => this.spiderService.toStructuredTelemetry(wire)),
       resync: (options: SpiderResyncOptions) =>

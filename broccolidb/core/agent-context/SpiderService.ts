@@ -30,23 +30,36 @@ import {
   validateAgentBundleShape,
   validateGateResult,
   formatCheckDigest,
+  exportProblemMatcherConfig,
+  formatPreflightDigest,
 } from '../policy/spider/AgentToolkit.js';
-import { buildAgentHandoff } from '../policy/spider/AgentWorkflow.js';
-import {
-  SPIDER_BUNDLE_OUTPUT_SCHEMA,
-  serializeAgentBundle,
-  parseAgentBundleWire,
-  formatWireDigest,
-  toStructuredTelemetry,
-  validateWireFormat,
-} from '../policy/spider/AgentSerialization.js';
+import { runCheckPipeline } from '../policy/spider/AgentPipeline.js';
 import {
   SPIDER_CHECK_OUTPUT_SCHEMA,
   toCheckResponse,
   assertCheckPassed,
   validateCheckResult,
   buildDiagnosticSummaryFromReport,
+  toCheckNdjsonStream,
+  toGithubCheckRun,
 } from '../policy/spider/AgentResponse.js';
+import { buildCiArtifacts, writeCiArtifactsToDir } from '../policy/spider/AgentCiArtifacts.js';
+import { buildAgentHandoff } from '../policy/spider/AgentWorkflow.js';
+import {
+  SPIDER_BUNDLE_OUTPUT_SCHEMA,
+  serializeAgentBundle,
+  serializeAgentBundleV2,
+  parseAgentBundleWire,
+  formatWireDigest,
+  toStructuredTelemetry,
+  validateWireFormat,
+} from '../policy/spider/AgentSerialization.js';
+import {
+  SPIDER_WIRE_OUTPUT_SCHEMA,
+  restoreFromWire as buildWireRestore,
+  parseNdjsonStream as parseSpiderNdjsonStream,
+  validateWireRestore,
+} from '../policy/spider/AgentWireRestore.js';
 import type {
   SpiderAgentBundle,
   SpiderAuditOptions,
@@ -58,6 +71,9 @@ import type {
   SpiderBundleBudget,
   SpiderCheckRequest,
   SpiderCheckResult,
+  SpiderCheckPipelineRequest,
+  SpiderCheckPipelineResult,
+  SpiderHandoffResult,
   SpiderBaselineBundleResult,
   SpiderGatePolicy,
   SpiderGateResult,
@@ -96,6 +112,8 @@ export type {
   SpiderBundleWireFormat,
   SpiderCheckRequest,
   SpiderCheckResult,
+  SpiderCheckPipelineRequest,
+  SpiderCheckPipelineResult,
   SpiderBundleBudget,
 };
 
@@ -219,8 +237,62 @@ export class SpiderService {
       workflowSummary: handoff.workflowSummary,
       workflow: handoff.workflow,
       suggestedCommands: bundle ? toSuggestedCommands(bundle) : [],
-      wire: bundle ? serializeAgentBundle(bundle, handoff.agentContext, handoff.workflowSummary) : undefined,
+      wire: bundle
+        ? serializeAgentBundleV2(bundle, handoff.agentContext, handoff.workflowSummary, {
+            phase: 'delta',
+            ndjsonStream: toCheckNdjsonStream(
+              toCheckResponse(
+                {
+                  phase: 'delta',
+                  proceed,
+                  exitCode: proceed ? 0 : 1,
+                  bundle,
+                  agentContext: handoff.agentContext,
+                  workflowSummary: handoff.workflowSummary,
+                  workflow: handoff.workflow,
+                  suggestedCommands: toSuggestedCommands(bundle),
+                },
+                { workspaceRoot: this.ctx.workspace.workspacePath }
+              )
+            ),
+          })
+        : undefined,
     };
+  }
+
+  /** check() + toCheckResponse() — single agent/CI round-trip. */
+  async checkAndRespond(
+    request: SpiderCheckRequest,
+    options?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+  ) {
+    const result = await this.check(request);
+    return this.toCheckResponse(result, options);
+  }
+
+  /** Multi-phase pipeline — pre-edit → ci → delta with stop-on-failure. */
+  async runCheckPipeline(
+    request: SpiderCheckPipelineRequest,
+    responseOptions?: { maxCompactLines?: number; includeSarifMeta?: boolean }
+  ): Promise<SpiderCheckPipelineResult> {
+    return runCheckPipeline(
+      (req) => this.check(req),
+      request,
+      { ...responseOptions, workspaceRoot: this.ctx.workspace.workspacePath }
+    );
+  }
+
+  toCheckNdjsonStream(result: SpiderCheckResult, options?: { maxCompactLines?: number; includeSarifMeta?: boolean }) {
+    return toCheckNdjsonStream(this.toCheckResponse(result, options));
+  }
+
+  toGithubCheckRun(result: SpiderCheckResult, options?: { maxCompactLines?: number }) {
+    const response = this.toCheckResponse(result, options);
+    const report = result.gate?.report;
+    return toGithubCheckRun(response, report);
+  }
+
+  getProblemMatcherConfig() {
+    return exportProblemMatcherConfig();
   }
 
   private finalizeCheckResult(
@@ -231,7 +303,7 @@ export class SpiderService {
     gate?: SpiderGateResult
   ): SpiderCheckResult {
     const handoff = buildAgentHandoff(bundle, undefined, gate);
-    return {
+    const partial: SpiderCheckResult = {
       phase,
       proceed,
       exitCode,
@@ -241,18 +313,70 @@ export class SpiderService {
       workflowSummary: handoff.workflowSummary,
       workflow: handoff.workflow,
       suggestedCommands: toSuggestedCommands(bundle),
-      wire: serializeAgentBundle(bundle, handoff.agentContext, handoff.workflowSummary),
+    };
+    const response = toCheckResponse(partial, { workspaceRoot: this.ctx.workspace.workspacePath });
+    return {
+      ...partial,
+      wire: serializeAgentBundleV2(bundle, handoff.agentContext, handoff.workflowSummary, {
+        phase,
+        ndjsonStream: toCheckNdjsonStream(response),
+      }),
     };
   }
 
-  handoff(bundle: SpiderAgentBundle, budget?: SpiderBundleBudget) {
+  formatPreflightDigest(result: SpiderCheckResult, maxCompactLines?: number) {
+    return formatPreflightDigest(result, maxCompactLines);
+  }
+
+  handoff(
+    bundle: SpiderAgentBundle,
+    budget?: SpiderBundleBudget,
+    options?: { phase?: SpiderCheckResult['phase'] }
+  ): SpiderHandoffResult {
     const b = budget ? applyBundleBudget(bundle, budget) : bundle;
     const result = buildAgentHandoff(b);
+    const phase = options?.phase ?? 'ci';
+    const partial: SpiderCheckResult = {
+      phase,
+      proceed: b.proceed,
+      exitCode: b.gate.exitCode,
+      bundle: b,
+      agentContext: result.agentContext,
+      workflowSummary: result.workflowSummary,
+      workflow: result.workflow,
+      suggestedCommands: toSuggestedCommands(b),
+    };
+    const checkResponse = toCheckResponse(partial, { workspaceRoot: this.ctx.workspace.workspacePath });
     return {
       ...result,
       suggestedCommands: toSuggestedCommands(b),
-      wire: serializeAgentBundle(b, result.agentContext, result.workflowSummary),
+      wire: serializeAgentBundleV2(b, result.agentContext, result.workflowSummary, {
+        phase,
+        ndjsonStream: toCheckNdjsonStream(checkResponse),
+      }),
+      checkResponse,
     };
+  }
+
+  handoffFromCheck(result: SpiderCheckResult, budget?: SpiderBundleBudget): SpiderHandoffResult {
+    if (!result.bundle) {
+      throw new SpiderAuditError('handoffFromCheck requires check result bundle');
+    }
+    return this.handoff(result.bundle, budget, { phase: result.phase });
+  }
+
+  buildCiArtifacts(result: SpiderCheckResult, options?: { includeSarifMeta?: boolean }) {
+    const response = this.toCheckResponse(result, options);
+    const sarif =
+      options?.includeSarifMeta && result.gate?.report
+        ? this.prepareSarifUpload(result.gate.report).sarif
+        : undefined;
+    return buildCiArtifacts(result, response, sarif);
+  }
+
+  async writeCiArtifacts(outputDir: string, result: SpiderCheckResult, options?: { includeSarifMeta?: boolean }) {
+    const artifacts = this.buildCiArtifacts(result, options);
+    return writeCiArtifactsToDir(outputDir, artifacts);
   }
 
   getOutputSchema() {
@@ -283,6 +407,22 @@ export class SpiderService {
   validateWire(wire: unknown) {
     validateWireFormat(wire);
     return { valid: true };
+  }
+
+  restoreFromWire(wire: unknown, maxCompactLines?: number) {
+    return buildWireRestore(wire, maxCompactLines);
+  }
+
+  validateWireRestore(wire: unknown) {
+    return validateWireRestore(wire);
+  }
+
+  getWireOutputSchema() {
+    return SPIDER_WIRE_OUTPUT_SCHEMA;
+  }
+
+  parseNdjsonStream(stream: string) {
+    return parseSpiderNdjsonStream(stream);
   }
 
   formatCheckDigest(result: SpiderCheckResult, maxCompactLines?: number) {

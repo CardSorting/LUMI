@@ -2,9 +2,11 @@
 /**
  * JSON-safe bundle serialization for MCP transport and agent session persistence.
  */
-import type { SpiderAgentBundle, SpiderBundleWireFormat } from './report-types.js';
+import type { SpiderAgentBundle, SpiderBundleWireFormat, SpiderCheckPhase } from './report-types.js';
 import { validateAgentBundleShape, toSuggestedCommands } from './AgentToolkit.js';
 import { SpiderAuditError } from './spider-errors.js';
+
+export const SPIDER_WIRE_SCHEMA_V2 = 'broccolidb.spider.wire/v2' as const;
 
 export const SPIDER_BUNDLE_OUTPUT_SCHEMA = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -89,6 +91,32 @@ export function validateWireFormat(wire: unknown): asserts wire is SpiderBundleW
   if (!Array.isArray(w.workflow)) throw new SpiderAuditError('wire.workflow required');
   if (!Array.isArray(w.suggestedCommands)) throw new SpiderAuditError('wire.suggestedCommands required');
   if (!w.gate || typeof w.gate.blocked !== 'boolean') throw new SpiderAuditError('wire.gate required');
+  if (w.wireSchema === SPIDER_WIRE_SCHEMA_V2 && w.ndjsonStream !== undefined && typeof w.ndjsonStream !== 'string') {
+    throw new SpiderAuditError('wire.ndjsonStream must be string when wireSchema is v2');
+  }
+}
+
+/** Upgrade wire payload to v2 with optional NDJSON stream embed. */
+export function enrichWireV2(
+  wire: SpiderBundleWireFormat,
+  extras: { phase?: SpiderCheckPhase; ndjsonStream?: string }
+): SpiderBundleWireFormat {
+  validateWireFormat(wire);
+  return {
+    ...wire,
+    wireSchema: SPIDER_WIRE_SCHEMA_V2,
+    ...(extras.phase ? { phase: extras.phase } : {}),
+    ...(extras.ndjsonStream ? { ndjsonStream: extras.ndjsonStream } : {}),
+  };
+}
+
+export function serializeAgentBundleV2(
+  bundle: SpiderAgentBundle,
+  agentContext: string,
+  workflowSummary: string,
+  extras: { phase?: SpiderCheckPhase; ndjsonStream?: string }
+): SpiderBundleWireFormat {
+  return enrichWireV2(serializeAgentBundle(bundle, agentContext, workflowSummary), extras);
 }
 
 /** Agent context from wire-only session restore (no full bundle on disk). */

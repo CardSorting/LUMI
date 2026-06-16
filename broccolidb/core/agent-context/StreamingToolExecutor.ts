@@ -2,7 +2,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { formatCheckDigest } from '../policy/spider/AgentToolkit.js';
+import { formatCheckDigest, formatPreflightDigest } from '../policy/spider/AgentToolkit.js';
 import type { ServiceContext, ToolDef, ToolUseContext } from './types.js';
 
 export interface ToolResult {
@@ -46,6 +46,10 @@ export interface ToolExecutorOptions {
   maxParallelReads?: number;
   mirrorFileChanges?: boolean;
   failOnUnsafeMutationPath?: boolean;
+  /** Run spider.check pre-edit before file mutations (default true). */
+  forensicPreEditGate?: boolean;
+  /** Hard-stop mutation when pre-edit gate fails (default false — warn only). */
+  failOnPreEditBlockers?: boolean;
   recordAuditEvents?: boolean;
   onProgress?: (progress: ToolExecutionProgress) => void;
 }
@@ -104,6 +108,8 @@ export class StreamingToolExecutor {
       maxParallelReads: Math.max(1, options.maxParallelReads ?? 8),
       mirrorFileChanges: options.mirrorFileChanges ?? true,
       failOnUnsafeMutationPath: options.failOnUnsafeMutationPath ?? true,
+      forensicPreEditGate: options.forensicPreEditGate ?? true,
+      failOnPreEditBlockers: options.failOnPreEditBlockers ?? false,
       recordAuditEvents: options.recordAuditEvents ?? true,
       onProgress: options.onProgress,
     };
@@ -205,6 +211,34 @@ export class StreamingToolExecutor {
         warnings.push('destructive_tool');
       }
 
+      let preEditNote: string | undefined;
+
+      if (
+        this.options.forensicPreEditGate &&
+        mutationPath &&
+        !tool.isSearchOrReadCommand
+      ) {
+        try {
+          const preEdit = await this.ctx.spider.check({
+            phase: 'pre-edit',
+            filePath: mutationPath.relativePath,
+            neighborhoodDepth: 1,
+            includeTypes: false,
+            includeRepairDirectives: true,
+          });
+          if (preEdit.exitCode !== 0) {
+            warnings.push('spider_pre_edit_gate_failed');
+            preEditNote = formatPreflightDigest(preEdit);
+            if (this.options.failOnPreEditBlockers) {
+              await this.recordAuditEvent(name, toolUseId, startedAt, false, warnings, preEditNote);
+              return this.makeResult(name, toolUseId, preEditNote, true, startedAt, false, false, warnings);
+            }
+          }
+        } catch {
+          // Pre-edit gate is best-effort when forensic stack unavailable.
+        }
+      }
+
       this.emitProgress(toolUseId, name, 'running', startedAt);
       const result = await this.executeWithTimeout(tool, normalizedInput, toolUseId, startedAt);
 
@@ -269,6 +303,10 @@ export class StreamingToolExecutor {
             mirrored = true;
           }
         }
+      }
+
+      if (preEditNote) {
+        finalContent += `\n\n${preEditNote}`;
       }
 
       this.emitProgress(toolUseId, name, 'completed', startedAt);
