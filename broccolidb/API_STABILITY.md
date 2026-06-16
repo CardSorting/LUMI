@@ -52,7 +52,9 @@ try { /* work */ } finally { await ctx.stop(); }
 
 ## Supported runtime modes
 
-`readonly` | `interactive` | `autonomous_safe` | `ci`
+`development` | `ci` | `production` | `readonly` | `recovery` | `forensic`
+
+Approval policies (separate from mode): `readonly` | `autonomous_safe` | `human_approval_required` | `ci_gate_only` | `recovery_mode` | `production_locked`
 
 ## Verification
 

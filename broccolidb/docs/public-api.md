@@ -84,7 +84,7 @@ const session = await ctx.runtime.beginSession({
 | `await replay(sessionId, { mode?, snapshotId? })` | Forensic replay (readonly) |
 | `getMemoryHealth()` | Graph integrity, snapshot count |
 | `getRuntimeHealth()` | Active sessions, budgets, policy state |
-| `setMode(mode)` | `readonly` \| `interactive` \| `autonomous_safe` \| `ci` |
+| `setMode(mode)` | `development` \| `ci` \| `production` \| `readonly` \| `recovery` \| `forensic` |
 
 Persisted snapshots reload automatically when a new `AgentContext` starts against the same database.
 

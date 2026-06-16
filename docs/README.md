@@ -18,6 +18,14 @@ Canonical documentation lives in the **broccolidb package**:
 | Migration | [broccolidb/MIGRATION.md](../broccolidb/MIGRATION.md) |
 | Changelog | [broccolidb/CHANGELOG.md](../broccolidb/CHANGELOG.md) |
 
+## Papers
+
+| Doc | Path |
+|-----|------|
+| Technical whitepaper | [broccolidb/docs/papers/whitepaper.md](../broccolidb/docs/papers/whitepaper.md) |
+| Companion brief | [broccolidb/docs/papers/companion-brief.md](../broccolidb/docs/papers/companion-brief.md) |
+| Philosophy | [broccolidb/docs/papers/philosophy.md](../broccolidb/docs/papers/philosophy.md) |
+
 ## Extended API reference
 
 Capability and runtime detail docs remain here under `docs/api/`:

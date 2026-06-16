@@ -55,7 +55,7 @@ See [execution budgets](../../docs/api/execution-budgets.md).
 
 **When:** Operation violates the current runtime mode (e.g. `execute` in `readonly` mode).
 
-**Fix:** `ctx.runtime.setMode('interactive')` or choose a mode that matches your workflow.
+**Fix:** Use `human_approval_required` policy on `planRepairs` / `execute`, or switch to `development` / `recovery` mode if appropriate.
 
 ## InvariantViolationError (`INVARIANT_VIOLATION`)
 

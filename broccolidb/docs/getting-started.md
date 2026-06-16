@@ -104,11 +104,15 @@ try {
 Set before or during a session:
 
 ```typescript
-ctx.runtime.setMode('ci');        // pipeline gates, compact output
-ctx.runtime.setMode('readonly');  // audit only
-ctx.runtime.setMode('interactive'); // human-in-the-loop repairs
-ctx.runtime.setMode('autonomous_safe'); // low-risk autonomous fixes
+ctx.runtime.setMode('development'); // local work; default policy autonomous_safe
+ctx.runtime.setMode('ci');          // pipeline gates
+ctx.runtime.setMode('production');  // human_approval_required
+ctx.runtime.setMode('readonly');    // audit only
+ctx.runtime.setMode('recovery');    // recovery_mode repairs
+ctx.runtime.setMode('forensic');    // read-only investigation
 ```
+
+Policies (`human_approval_required`, `autonomous_safe`, …) are passed to `planRepairs` / `execute` separately from mode.
 
 ## CLI smoke check
 

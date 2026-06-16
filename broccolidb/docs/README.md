@@ -21,6 +21,14 @@ BroccoliDB v30 is a **stable operational substrate**. These docs describe the fi
 | [Migration](../MIGRATION.md) | Upgrading from pre-v30 |
 | [Changelog](../CHANGELOG.md) | Version history |
 
+## Papers
+
+| Doc | Audience | Purpose |
+|-----|----------|---------|
+| [Technical whitepaper](papers/whitepaper.md) | Engineers, architects | Full system treatment — workspace-verified metrics |
+| [Companion brief](papers/companion-brief.md) | Leads, evaluators | Executive summary with measured counts |
+| [Philosophy](papers/philosophy.md) | Builders, policy | Values tied to code and tests |
+
 ## Extended API reference (repo)
 
 Detailed capability and runtime API notes live in the repository root:

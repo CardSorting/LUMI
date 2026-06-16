@@ -44,12 +44,14 @@ flowchart TB
 
 ## Runtime modes
 
-| Mode | Typical use |
-|------|-------------|
-| `readonly` | Audit and inspect only |
-| `interactive` | Human-in-the-loop repairs |
-| `autonomous_safe` | Low-risk autonomous fixes |
-| `ci` | Pipeline gates, compact output |
+| Mode | Default policy | Typical use |
+|------|----------------|-------------|
+| `development` | `autonomous_safe` | Local agent work |
+| `ci` | `ci_gate_only` | Pipeline gates, compact output |
+| `production` | `human_approval_required` | Human-in-the-loop, tight budgets |
+| `readonly` | `readonly` | Audit and inspect only |
+| `recovery` | `recovery_mode` | Restore / recovery workflows |
+| `forensic` | `readonly` | Read-only investigation |
 
 ```typescript
 ctx.runtime.setMode('ci');

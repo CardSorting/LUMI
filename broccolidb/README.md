@@ -63,6 +63,9 @@ Full reference: [docs/cli.md](docs/cli.md).
 | [docs/cli.md](docs/cli.md) | CLI commands and output formats |
 | [docs/examples.md](docs/examples.md) | Golden-path scripts |
 | [docs/architecture/current.md](docs/architecture/current.md) | How the system fits together |
+| [docs/papers/whitepaper.md](docs/papers/whitepaper.md) | Technical whitepaper |
+| [docs/papers/companion-brief.md](docs/papers/companion-brief.md) | Executive companion brief |
+| [docs/papers/philosophy.md](docs/papers/philosophy.md) | Philosophy & doctrine |
 | [API_STABILITY.md](API_STABILITY.md) | Stable vs internal APIs |
 | [MIGRATION.md](MIGRATION.md) | Upgrading to v30 |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
