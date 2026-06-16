@@ -63,19 +63,26 @@ Every finding includes `diagnosticId`, `severity`, `filePath`, optional `symbolN
 
 ## Agent API
 
-Spider is exposed only through `GraphCapability`:
+Spider is exposed through `GraphCapability` and `AuditCapability`:
 
 ```typescript
+// Pre-edit gate (impact + study pack + neighborhood audit)
+const gate = await ctx.graph.spider.preflight('core/foo.ts');
+
+// Post-change audit
 await ctx.graph.spider.audit({
   scope: 'changed-files',
   includeTypes: true,
   includeRepairDirectives: true,
 });
 
-await ctx.graph.spider.resync({
-  files: ['core/foo.ts'],
-});
+await ctx.graph.spider.resync({ files: ['core/foo.ts'] });
+
+// Alternate entry during audit workflows
+await ctx.audit.spider.audit({ scope: ['core/foo.ts'] });
 ```
+
+See [spider-agent-ergonomics.md](../../docs/api/spider-agent-ergonomics.md) for digest, verdict, and preflight patterns.
 
 ## Lifecycle
 

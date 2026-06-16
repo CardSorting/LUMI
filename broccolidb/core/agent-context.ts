@@ -235,6 +235,7 @@ export class AgentContext {
     this._auditCapability = new AuditCapability(
       this._invariantEngine,
       this._auditService,
+      this._spiderService,
       assertOperational,
       isStarted,
       this._intentTracer

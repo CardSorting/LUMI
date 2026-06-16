@@ -2,8 +2,10 @@
 // @classification CAPABILITY
 import type { AuditService } from '../AuditService.js';
 import type { InvariantEngine } from '../InvariantEngine.js';
+import type { SpiderService } from '../SpiderService.js';
 import { CapabilityBase } from '../CapabilityBase.js';
 import type { IntentTracer } from '../IntentTracer.js';
+import type { SpiderAuditOptions, SpiderReport, SpiderResyncOptions, SpiderGateResult } from '../../policy/spider/report-types.js';
 import {
   requireNonEmptyString,
   type AuditConstitutionalCheckInput,
@@ -21,11 +23,12 @@ import {
 
 export class AuditCapability extends CapabilityBase {
   readonly name = 'audit' as const;
-  readonly dependencies = ['InvariantEngine', 'AuditService', 'IntentTracer'] as const;
+  readonly dependencies = ['InvariantEngine', 'AuditService', 'SpiderService', 'IntentTracer'] as const;
 
   constructor(
     private readonly invariantEngine: InvariantEngine,
     private readonly auditService: AuditService,
+    private readonly spiderService: SpiderService,
     assertStarted: (operation: string) => void,
     isStarted: () => boolean,
     intentTracer: IntentTracer
@@ -141,5 +144,55 @@ export class AuditCapability extends CapabilityBase {
         summarizeResult: (result) => ({ violated: result.violated }),
       }
     );
+  }
+
+  /**
+   * Structural forensic audit — alternate entry aligned with GraphCapability.spider.
+   * Use when the agent is already in an audit workflow.
+   */
+  get spider() {
+    const summarize = (result: SpiderReport) => ({
+      verdict: result.verdict,
+      passed: result.passed,
+      blockers: result.agentDigest?.blockers.length ?? 0,
+    });
+    return {
+      audit: (options?: SpiderAuditOptions) =>
+        this.execute('spider.audit', () => this.spiderService.audit(options), {
+          input: options,
+          expectedEffects: ['SpiderService.audit'],
+          durability: 'ephemeral',
+          summarizeResult: summarize,
+        }),
+      gate: (options?: SpiderAuditOptions) =>
+        this.execute('spider.gate', () => this.spiderService.gate(options), {
+          input: options,
+          expectedEffects: ['SpiderService.gate'],
+          durability: 'ephemeral',
+          summarizeResult: (r: SpiderGateResult) => ({
+            conclusion: r.conclusion,
+            blocked: r.blocked,
+            exitCode: r.exitCode,
+          }),
+        }),
+      resync: (options: SpiderResyncOptions) =>
+        this.execute('spider.resync', () => this.spiderService.resync(options), {
+          input: options,
+          expectedEffects: ['SpiderService.resync'],
+          durability: 'ephemeral',
+        }),
+      preflight: (filePath: string, options?: Omit<SpiderAuditOptions, 'scope'>) =>
+        this.execute('spider.preflight', () => this.spiderService.preflight(filePath, options), {
+          input: { filePath, ...options },
+          expectedEffects: ['SpiderService.preflight'],
+          durability: 'ephemeral',
+          summarizeResult: (r) => summarize(r.audit),
+        }),
+      compact: (report: SpiderReport) => this.run('spider.compact', () => this.spiderService.toCompact(report)),
+      formatNarrative: (report: SpiderReport) =>
+        this.run('spider.formatNarrative', () => this.spiderService.formatAgentNarrative(report)),
+      explain: (report: SpiderReport, findingId: string) =>
+        this.run('spider.explain', () => this.spiderService.explainFinding(report, findingId)),
+    };
   }
 }

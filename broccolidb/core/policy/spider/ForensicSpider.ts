@@ -25,6 +25,11 @@ import type {
 } from './report-types.js';
 import { SPI_LABELS } from './report-types.js';
 import { TypeMirrorEngine } from './TypeMirrorEngine.js';
+import {
+  enrichSpiderReport,
+  sortFindingsBySeverity,
+  validateSpiderReport,
+} from './AgentDigest.js';
 
 export interface PhysicalFile {
   filePath: string;
@@ -64,11 +69,14 @@ export class ForensicSpider {
 
   scanPhysicalFiles(scope?: Set<string>): PhysicalFile[] {
     const files: PhysicalFile[] = [];
+    const seen = new Set<string>();
     const candidates = scope
       ? Array.from(scope)
       : Array.from(this.engine.nodes.keys());
 
     for (const filePath of candidates) {
+      if (seen.has(filePath)) continue;
+      seen.add(filePath);
       const absolutePath = path.resolve(this.cwd, filePath);
       if (!fs.existsSync(absolutePath)) continue;
       const stats = fs.statSync(absolutePath);
@@ -204,7 +212,9 @@ export class ForensicSpider {
     };
   }
 
-  resolveScope(options: SpiderAuditOptions = {}): { scopeLabel: string; scopeSet?: Set<string> } {
+  resolveScope(
+    options: SpiderAuditOptions = {}
+  ): { scopeLabel: string; scopeSet?: Set<string> } {
     if (!options.scope || options.scope === 'all') {
       return { scopeLabel: 'all' };
     }
@@ -224,7 +234,18 @@ export class ForensicSpider {
       return { scopeLabel: 'changed-files', scopeSet: changed };
     }
     if (Array.isArray(options.scope)) {
-      return { scopeLabel: options.scope.join(','), scopeSet: new Set(options.scope) };
+      const depth = options.neighborhoodDepth ?? 1;
+      const expanded = new Set<string>();
+      for (const file of options.scope) {
+        const norm = this.engine.normalizePath(file);
+        expanded.add(norm);
+        if (depth > 0) {
+          for (const id of this.engine.getNeighborhood(norm, depth)) {
+            expanded.add(id);
+          }
+        }
+      }
+      return { scopeLabel: options.scope.join(','), scopeSet: expanded };
     }
     return { scopeLabel: String(options.scope) };
   }
@@ -333,13 +354,13 @@ export class ForensicSpider {
     const entropyReport = this.engine.computeEntropy();
     this.lastAuditAt = new Date().toISOString();
 
-    return this.emitForensicReport({
+    const baseReport = this.emitForensicReport({
       scope: scopeLabel,
       health: this.health(),
       typeMirror,
       footprints,
       diskParity,
-      findings,
+      findings: sortFindingsBySeverity(findings),
       structuralViolations,
       layerViolations,
       cycles,
@@ -348,6 +369,28 @@ export class ForensicSpider {
       degraded: degradedReasons.length > 0,
       degradedReasons,
     });
+
+    const includeDigest = options.includeAgentDigest !== false;
+    const report = includeDigest ? enrichSpiderReport(baseReport) : baseReport;
+    validateSpiderReport(report);
+    return report;
+  }
+
+  async preflight(
+    filePath: string,
+    options: Omit<SpiderAuditOptions, 'scope'> = {}
+  ): Promise<{ scope: string[]; audit: SpiderReport }> {
+    const norm = this.engine.normalizePath(filePath);
+    const depth = options.neighborhoodDepth ?? 1;
+    const scope = Array.from(this.engine.getNeighborhood(norm, depth));
+    if (!scope.includes(norm)) scope.unshift(norm);
+    const audit = await this.audit({
+      ...options,
+      scope,
+      includeRepairDirectives: options.includeRepairDirectives ?? true,
+      includeAgentDigest: options.includeAgentDigest ?? true,
+    });
+    return { scope, audit };
   }
 
   async resync(options: SpiderResyncOptions): Promise<SpiderResyncResult> {

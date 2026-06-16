@@ -21,8 +21,30 @@ interface SpiderReport {
   entropy: number;
   degraded: boolean;
   degradedReasons: string[];
+  /** Gate for agents — false when ERROR findings exist. */
+  passed?: boolean;
+  verdict?: 'pass' | 'warn' | 'fail';
+  /** SARIF-style digest for agents (default on). */
+  agentDigest?: SpiderAgentDigest;
 }
 ```
+
+## Agent digest
+
+When `includeAgentDigest !== false` (default), the report includes:
+
+```typescript
+interface SpiderAgentDigest {
+  verdict: 'pass' | 'warn' | 'fail';
+  passed: boolean;
+  summary: string;
+  blockers: SpiderFindingRef[];
+  recommendedActions: SpiderRecommendedAction[];
+  agentNarrative: string; // markdown for tool output
+}
+```
+
+See [spider-agent-ergonomics.md](./spider-agent-ergonomics.md) for preflight and workflow patterns.
 
 ## Finding
 

@@ -247,6 +247,20 @@ export class StreamingToolExecutor {
             }
             finalContent += '\n\nAction: Anchor on these real breakages before continuing.';
           }
+
+          try {
+            const forensic = await this.ctx.spider.audit({
+              scope: [mutationPath.relativePath],
+              includeTypes: false,
+              includeRepairDirectives: true,
+              neighborhoodDepth: 1,
+            });
+            if (forensic.agentDigest && forensic.verdict !== 'pass') {
+              finalContent += `\n\n${forensic.agentDigest.agentNarrative}`;
+            }
+          } catch {
+            // Forensic append is best-effort; mutation result already captured.
+          }
         } catch {
           if (!this.hasInlineReplacement(normalizedInput)) {
             await this.ctx.spider.applyChanges([{ filePath: mutationPath.relativePath }]);

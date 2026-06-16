@@ -27,15 +27,18 @@ Spider proves structural truth. It does not guess.
 ## Agent Workflow
 
 ```typescript
-await ctx.graph.spider.audit({
-  scope: 'changed-files',
-  includeTypes: true,
-  includeRepairDirectives: true,
-});
+const gate = await ctx.graph.spider.preflight('src/core/provider.ts');
+
+const ci = await ctx.graph.spider.gate({ scope: 'changed-files' });
+if (ci.blocked) process.exit(ci.exitCode);
+
+const compact = ctx.graph.spider.compact(ci.report);
 ```
 
-- Respect SPI-006 drift before continuing mutations
-- Address SPI-002 compiler findings when `typeMirror.diagnosticsComplete`
-- Follow repair directives; never invent fixes without evidence
+- **Preflight** before editing high-impact files
+- **Gate** for CI-style pass/fail (`conclusion`, `exitCode`)
+- **Compact** for token-efficient `file:line:col` lines
+- Respect SPI-006 drift — `resync` before mutations
+- Follow `agentDigest.playbook` in order
 
-See [spider-v20-forensic-engine.md](../../../docs/architecture/spider-v20-forensic-engine.md) for full architecture.
+See [spider-agent-ergonomics.md](../../../docs/api/spider-agent-ergonomics.md) and [spider-v20-forensic-engine.md](../../../docs/architecture/spider-v20-forensic-engine.md).

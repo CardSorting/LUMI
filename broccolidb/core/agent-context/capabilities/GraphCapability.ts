@@ -6,6 +6,9 @@ import type { SpiderService } from '../SpiderService.js';
 import type {
   SpiderAuditOptions,
   SpiderResyncOptions,
+  SpiderReport,
+  SpiderGateResult,
+  SpiderReportDiff,
 } from '../../policy/spider/report-types.js';
 import { CapabilityBase } from '../CapabilityBase.js';
 import type { IntentTracer } from '../IntentTracer.js';
@@ -158,11 +161,58 @@ export class GraphCapability extends CapabilityBase {
   }
 
   get spider() {
+    const spiderTracing = (operation: string, input?: unknown) => ({
+      input,
+      inputSummary: (input && typeof input === 'object' ? input : { operation }) as Record<string, unknown>,
+      expectedEffects: [`SpiderService.${operation}`],
+      durability: 'ephemeral' as const,
+      summarizeResult: (result: SpiderReport | SpiderGateResult | { resynced?: string[]; passed?: boolean; audit?: SpiderReport }) => {
+        if ('conclusion' in result && 'blocked' in result) {
+          return { conclusion: result.conclusion, blocked: result.blocked, exitCode: result.exitCode };
+        }
+        if ('audit' in result && result.audit) {
+          return {
+            verdict: result.audit.verdict,
+            passed: result.audit.passed,
+            blockers: result.audit.agentDigest?.blockers.length ?? 0,
+          };
+        }
+        if ('verdict' in result) {
+          return {
+            verdict: result.verdict,
+            passed: result.passed,
+            blockers: result.agentDigest?.blockers.length ?? 0,
+          };
+        }
+        return { resynced: (result as { resynced?: string[] }).resynced?.length ?? 0 };
+      },
+    });
+
     return {
       audit: (options?: SpiderAuditOptions) =>
-        this.execute('spider.audit', () => this.spiderService.audit(options)),
+        this.execute('spider.audit', () => this.spiderService.audit(options), spiderTracing('audit', options)),
+      gate: (options?: SpiderAuditOptions) =>
+        this.execute('spider.gate', () => this.spiderService.gate(options), spiderTracing('gate', options)),
       resync: (options: SpiderResyncOptions) =>
-        this.execute('spider.resync', () => this.spiderService.resync(options)),
+        this.execute('spider.resync', () => this.spiderService.resync(options), spiderTracing('resync', options)),
+      preflight: (filePath: string, options?: Omit<SpiderAuditOptions, 'scope'>) =>
+        this.execute(
+          'spider.preflight',
+          () => this.spiderService.preflight(requireNonEmptyString(filePath, 'filePath'), options),
+          spiderTracing('preflight', { filePath, ...options })
+        ),
+      compact: (report: SpiderReport) => this.run('spider.compact', () => this.spiderService.toCompact(report)),
+      toSarif: (report: SpiderReport) => this.run('spider.toSarif', () => this.spiderService.toSarif(report)),
+      toLspDiagnostics: (report: SpiderReport) =>
+        this.run('spider.toLspDiagnostics', () => this.spiderService.toLspDiagnostics(report)),
+      diffSinceLast: (report?: SpiderReport) =>
+        this.run('spider.diffSinceLast', () => this.spiderService.diffSinceLast(report)),
+      diff: (before: SpiderReport, after: SpiderReport) =>
+        this.run('spider.diff', () => this.spiderService.diffReports(before, after)),
+      explain: (report: SpiderReport, findingId: string) =>
+        this.run('spider.explain', () => this.spiderService.explainFinding(report, findingId)),
+      formatNarrative: (report: SpiderReport) =>
+        this.run('spider.formatNarrative', () => this.spiderService.formatAgentNarrative(report)),
       bootstrapGraph: () =>
         this.execute('spider.bootstrapGraph', () => this.spiderService.bootstrapGraph()),
       applyChanges: (files: Parameters<SpiderService['applyChanges']>[0]) =>

@@ -386,6 +386,16 @@ export interface GraphStructuralImpactResult {
   deficiencies: ReturnType<import('./StructuralDiscoveryService.js').StructuralDiscoveryService['getDeficiencyReport']>;
 }
 
+export type {
+  SpiderAuditOptions,
+  SpiderReport,
+  SpiderResyncOptions,
+  SpiderPreflightResult,
+  SpiderGateResult,
+  SpiderGatePolicy,
+  SpiderReportDiff,
+} from '../policy/spider/report-types.js';
+
 export interface GraphAnnotateKnowledgeInput {
   targetId: string;
   annotation: string;

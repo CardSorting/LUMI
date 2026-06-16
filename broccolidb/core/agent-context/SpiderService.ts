@@ -2,12 +2,25 @@
 import { Logger } from '../../shared/services/Logger.js';
 import { SpiderEngine, type SpiderViolation } from '../policy/SpiderEngine.js';
 import { ForensicSpider } from '../policy/spider/ForensicSpider.js';
+import { formatAgentNarrative, buildAgentDigest } from '../policy/spider/AgentDigest.js';
+import {
+  diffReports,
+  evaluateGate,
+  explainFinding,
+  toAgentCompact,
+  toLspDiagnostics,
+  toSarifLog,
+} from '../policy/spider/AgentFormats.js';
 import type {
   SpiderAuditOptions,
+  SpiderGatePolicy,
+  SpiderGateResult,
   SpiderReport,
   SpiderResyncOptions,
   SpiderResyncResult,
   SpiderHealth,
+  SpiderPreflightResult,
+  SpiderReportDiff,
 } from '../policy/spider/report-types.js';
 import { Repository } from '../repository.js';
 import { StructuralDiscoveryService } from './StructuralDiscoveryService.js';
@@ -17,13 +30,23 @@ import type { RepairDirective } from './types.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-export type { SpiderReport, SpiderAuditOptions, SpiderResyncOptions, SpiderResyncResult };
+export type {
+  SpiderReport,
+  SpiderAuditOptions,
+  SpiderResyncOptions,
+  SpiderResyncResult,
+  SpiderPreflightResult,
+  SpiderGateResult,
+  SpiderGatePolicy,
+  SpiderReportDiff,
+};
 
 export class SpiderService {
   private engine: SpiderEngine;
   private discovery: StructuralDiscoveryService;
   private forensicSpider: ForensicSpider | null = null;
   private bootstrapped = false;
+  private lastReport: SpiderReport | null = null;
 
   constructor(private ctx: ServiceContext) {
     this.engine = new SpiderEngine(ctx.workspace.workspacePath);
@@ -45,7 +68,50 @@ export class SpiderService {
     if (!this.bootstrapped) {
       await this.bootstrapGraph();
     }
-    return this.getForensic().audit(options);
+    const report = await this.getForensic().audit(options);
+    this.lastReport = report;
+    return report;
+  }
+
+  /**
+   * CI gate: audit + GitHub Checks-style conclusion (success | failure | neutral).
+   */
+  async gate(options: SpiderAuditOptions = {}): Promise<SpiderGateResult> {
+    const { gatePolicy, ...auditOptions } = options;
+    const report = await this.audit({
+      ...auditOptions,
+      includeRepairDirectives: auditOptions.includeRepairDirectives ?? true,
+    });
+    return evaluateGate(report, gatePolicy);
+  }
+
+  /** ESLint-compact lines for token-efficient agent context. */
+  toCompact(report: SpiderReport) {
+    return toAgentCompact(report);
+  }
+
+  /** SARIF 2.1.0 for CI / GitHub Code Scanning integration. */
+  toSarif(report: SpiderReport) {
+    return toSarifLog(report, this.ctx.workspace.workspacePath);
+  }
+
+  /** LSP PublishDiagnostics-shaped map keyed by file URI. */
+  toLspDiagnostics(report: SpiderReport) {
+    return toLspDiagnostics(report, this.ctx.workspace.workspacePath);
+  }
+
+  /** Diff against the previous audit in this session. */
+  diffSinceLast(report?: SpiderReport): SpiderReportDiff | null {
+    if (!this.lastReport) return null;
+    return diffReports(this.lastReport, report ?? this.lastReport);
+  }
+
+  diffReports(before: SpiderReport, after: SpiderReport): SpiderReportDiff {
+    return diffReports(before, after);
+  }
+
+  explainFinding(report: SpiderReport, findingId: string) {
+    return explainFinding(report, findingId);
   }
 
   /**
@@ -53,6 +119,41 @@ export class SpiderService {
    */
   async resync(options: SpiderResyncOptions): Promise<SpiderResyncResult> {
     return this.getForensic().resync(options);
+  }
+
+  /**
+   * Pre-edit gate: neighborhood audit + structural impact + study pack.
+   * Industry pattern: "preflight check" before mutation (like rust-analyzer / ESLint --fix dry-run).
+   */
+  async preflight(
+    filePath: string,
+    options: Omit<SpiderAuditOptions, 'scope'> = {}
+  ): Promise<SpiderPreflightResult> {
+    if (!this.bootstrapped) {
+      await this.bootstrapGraph();
+    }
+    const norm = this.engine.normalizePath(filePath);
+    const { scope, audit } = await this.getForensic().preflight(norm, options);
+    const discovery = this.discovery;
+    return {
+      filePath: norm,
+      scope,
+      structuralImpact: {
+        summary: discovery.getImportanceSummary(norm),
+        blastRadius: discovery.getBlastRadius(norm),
+        deficiencies: discovery.getDeficiencyReport(norm),
+      },
+      studyPack: this.getStudyPack(norm),
+      audit,
+    };
+  }
+
+  /** Format an existing report as agent-ready markdown (idempotent). */
+  formatAgentNarrative(report: SpiderReport): string {
+    if (report.agentDigest?.agentNarrative) {
+      return report.agentDigest.agentNarrative;
+    }
+    return buildAgentDigest(report).agentNarrative;
   }
 
   forensicHealth(): SpiderHealth {

@@ -46,6 +46,7 @@ export interface SourceRange {
 }
 
 export interface SpiderEvidence {
+  evidenceId?: string;
   diagnosticId: SpiderDiagnosticId;
   severity: SpiderSeverity;
   filePath: string;
@@ -59,6 +60,7 @@ export interface SpiderEvidence {
 }
 
 export interface SpiderFinding {
+  findingId?: string;
   diagnosticId: SpiderDiagnosticId;
   severity: SpiderSeverity;
   label: string;
@@ -161,8 +163,131 @@ export interface CycleFinding {
 
 export interface SpiderAuditOptions {
   scope?: 'all' | 'changed-files' | string[];
+  /** Include files within N import hops of scoped files (default 1 for explicit file scopes). */
+  neighborhoodDepth?: number;
   includeTypes?: boolean;
   includeRepairDirectives?: boolean;
+  /** Attach SARIF-style agent digest with verdict, blockers, and narrative (default true). */
+  includeAgentDigest?: boolean;
+  /** CI gate policy when using gate() — defaults to block on errors + drift. */
+  gatePolicy?: SpiderGatePolicy;
+}
+
+export interface SpiderGatePolicy {
+  blockOnErrors?: boolean;
+  blockOnWarnings?: boolean;
+  blockOnDegraded?: boolean;
+  blockOnDrift?: boolean;
+}
+
+export interface SpiderGateResult {
+  blocked: boolean;
+  conclusion: 'success' | 'failure' | 'neutral';
+  reasons: string[];
+  report: SpiderReport;
+  policy: Required<SpiderGatePolicy>;
+  /** Process exit semantics (0 = proceed, 1 = hard block). */
+  exitCode: 0 | 1;
+}
+
+export interface SpiderPlaybookStep {
+  step: number;
+  phase: 'resync' | 'repair' | 'verify' | 'investigate';
+  instruction: string;
+  command?: string;
+  findingIds?: string[];
+  directiveIds?: string[];
+}
+
+export interface SpiderReportDiff {
+  beforeReportId: string;
+  afterReportId: string;
+  resolved: Array<{ findingId: string; diagnosticId: SpiderDiagnosticId; filePath: string; message: string }>;
+  introduced: Array<{ findingId: string; diagnosticId: SpiderDiagnosticId; filePath: string; message: string }>;
+  persistent: Array<{ findingId: string; diagnosticId: SpiderDiagnosticId; filePath: string; message: string }>;
+  entropyDelta: number;
+  verdictChanged: boolean;
+  beforeVerdict: SpiderVerdict;
+  afterVerdict: SpiderVerdict;
+}
+
+export interface SpiderPreflightOptions {
+  filePath: string;
+  neighborhoodDepth?: number;
+  includeTypes?: boolean;
+  includeRepairDirectives?: boolean;
+}
+
+export interface SpiderPreflightResult {
+  filePath: string;
+  scope: string[];
+  structuralImpact: {
+    summary: string;
+    blastRadius: {
+      affectedNodes: string[];
+      centralityScore: number;
+      criticalDependents: string[];
+    };
+    deficiencies: Array<{
+      depId: string;
+      symbols: string[];
+      displacements: { symbol: string; newPath: string }[];
+      directives: RepairDirective[];
+      line: number;
+      character: number;
+    }>;
+  };
+  studyPack: {
+    path: string;
+    studyItems: { path: string; reason: string }[];
+  };
+  audit: SpiderReport;
+}
+
+export type SpiderVerdict = 'pass' | 'warn' | 'fail';
+
+export interface SpiderAgentDigest {
+  verdict: SpiderVerdict;
+  passed: boolean;
+  summary: string;
+  counts: { errors: number; warnings: number; info: number; total: number };
+  byDiagnosticId: Partial<Record<SpiderDiagnosticId, number>>;
+  byFile: Record<string, { errors: number; warnings: number; info: number }>;
+  blockers: Array<{
+    findingId: string;
+    diagnosticId: SpiderDiagnosticId;
+    label: string;
+    severity: SpiderSeverity;
+    filePath: string;
+    symbolName?: string;
+    message: string;
+    line?: number;
+    column?: number;
+    location?: string;
+    ruleDoc?: string;
+  }>;
+  warnings: Array<{
+    findingId: string;
+    diagnosticId: SpiderDiagnosticId;
+    label: string;
+    severity: SpiderSeverity;
+    filePath: string;
+    message: string;
+    location?: string;
+  }>;
+  driftedFiles: string[];
+  recommendedActions: Array<{
+    priority: number;
+    action: string;
+    directiveId?: string;
+    diagnosticId: SpiderDiagnosticId;
+    filePath: string;
+    verificationCommand?: string;
+    riskLevel?: RepairRiskLevel;
+  }>;
+  /** Ordered agent checklist (resync → repair → verify). */
+  playbook: SpiderPlaybookStep[];
+  agentNarrative: string;
 }
 
 export interface SpiderResyncOptions {
@@ -198,4 +323,9 @@ export interface SpiderReport {
   entropy: number;
   degraded: boolean;
   degradedReasons: string[];
+  /** Gate for agents — false when ERROR findings or hard drift block progress. */
+  passed?: boolean;
+  verdict?: SpiderVerdict;
+  /** Machine + LLM-friendly summary (present when includeAgentDigest !== false). */
+  agentDigest?: SpiderAgentDigest;
 }
