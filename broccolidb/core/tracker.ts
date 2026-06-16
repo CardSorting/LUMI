@@ -2,7 +2,6 @@
 import * as crypto from 'node:crypto';
 import * as os from 'node:os';
 import { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';
-import { SqliteQueue } from '../infrastructure/queue/SqliteQueue.js';
 import { LRUCache } from './lru-cache.js';
 
 export interface EnvironmentMetadata {
@@ -228,82 +227,4 @@ Avg Tokens/Commit: ${efficiency}
   },
 };
 
-export interface TelemetryPayload {
-  agentId: string;
-  usage: { promptTokens: number; completionTokens: number; modelId?: string };
-  taskId?: string | null;
-}
 
-/**
- * Background queue for async telemetry offloading to ensure commit hot-path remains unblocked.
- *
- * Hardened to use SqliteQueue for zero-loss persistence across process crashes.
- */
-export class AsyncTelemetryQueue {
-  private queue: SqliteQueue<{ payload: TelemetryPayload; db: BufferedDbPool; basePath: string }>;
-  private isProcessing = false;
-
-  constructor() {
-    this.queue = new SqliteQueue({
-      dbPath: 'telemetry_queue.db', // Use a separate file for telemetry to avoid main DB lock contention
-      tableName: 'telemetry_jobs',
-      visibilityTimeoutMs: 60000, // 1 minute
-    });
-
-    this.startProcessor();
-  }
-
-  private startProcessor() {
-    if (this.isProcessing) return;
-    this.isProcessing = true;
-
-    // Process jobs as they come
-    this.queue.process(
-      async (job) => {
-        const { payload, db, basePath } = job.payload;
-        await EnvironmentTracker.recordUsage(
-          db,
-          basePath,
-          payload.agentId,
-          payload.usage,
-          payload.taskId
-        );
-      },
-      { concurrency: 2, pollIntervalMs: 100 }
-    );
-  }
-
-  enqueue(db: BufferedDbPool, basePath: string, payload: TelemetryPayload) {
-    this.queue.enqueue({ payload, db, basePath });
-  }
-
-  /**
-   * Immediately drains all items in the queue.
-   */
-  async drain(): Promise<void> {
-    // Wait for the queue to be empty
-    while ((await this.queue.size()) > 0) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-  }
-
-  async getStats() {
-    const metrics = await this.queue.getMetrics();
-    return {
-      pending: metrics.pending,
-      processing: metrics.processing,
-      isFlushing: this.isProcessing,
-    };
-  }
-
-  get stats() {
-    // For legacy/synchronous access if needed, though getStats is preferred
-    return {
-      pending: 0, // Cannot get actual metrics synchronously anymore
-      processing: 0,
-      isFlushing: this.isProcessing,
-    };
-  }
-}
-
-export const telemetryQueue = new AsyncTelemetryQueue();

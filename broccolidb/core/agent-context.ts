@@ -6,7 +6,7 @@ import { GraphService } from './agent-context/GraphService.js';
 import { LspService } from './agent-context/LspService.js';
 import { MailboxService } from './agent-context/MailboxService.js';
 import { MutexService } from './agent-context/MutexService.js';
-import { PasteStore } from './agent-context/PasteStore.js';
+
 import { ReasoningService } from './agent-context/ReasoningService.js';
 import { SideQueryService } from './agent-context/SideQueryService.js';
 import { SpiderService } from './agent-context/SpiderService.js';
@@ -15,18 +15,39 @@ import { CompactService } from './agent-context/CompactService.js';
 import { TokenService } from './agent-context/TokenService.js';
 import { CoordinatorService } from './agent-context/CoordinatorService.js';
 import { ScratchpadService } from './agent-context/ScratchpadService.js';
+import {
+  StreamingToolExecutor,
+  type ToolCall,
+  type ToolExecutorOptions,
+  type ToolResult,
+} from './agent-context/StreamingToolExecutor.js';
 import { StorageService } from '../infrastructure/storage/StorageService.js';
 import { BufferedDbPool, type WriteOp } from '../infrastructure/db/BufferedDbPool.js';
+import { AgentGitError } from './errors.js';
 
+export { StreamingToolExecutor } from './agent-context/StreamingToolExecutor.js';
 export type {
   AgentBundle,
   AgentProfile,
+  GraphEdge,
   ImpactReport,
   KnowledgeBaseItem,
+  MemoryMessage,
   Pedigree,
+  PromptSuggestion,
   ServiceContext,
+  TaskContext,
+  TaskItem,
+  ToolDef,
+  ToolUseContext,
   TraversalFilter,
 } from './agent-context/types.js';
+export type {
+  ToolCall,
+  ToolExecutionProgress,
+  ToolExecutorOptions,
+  ToolResult,
+} from './agent-context/StreamingToolExecutor.js';
 
 import type {
   AgentBundle,
@@ -35,6 +56,7 @@ import type {
   KnowledgeBaseItem,
   Pedigree,
   ServiceContext,
+  ToolDef,
   TraversalFilter,
 } from './agent-context/types.js';
 import { LRUCache } from './lru-cache.js';
@@ -56,8 +78,7 @@ export class AgentContext {
   private readonly _auditService: AuditService;
   private readonly _spiderService: SpiderService;
   private readonly _diagnosisService: DiagnosisService;
-  private readonly _mailboxService: MailboxService;
-  private readonly _pasteStore: PasteStore;
+  private _mailboxService: MailboxService;
   private readonly _sideQueryService: SideQueryService;
   private readonly _mutexService: MutexService;
   private readonly _cleanupService: CleanupService;
@@ -78,7 +99,11 @@ export class AgentContext {
     _profile?: { agentId: string; name: string }
   ) {
     this._db = db || workspace.getDb();
-    this.userId = (userId || workspace.userId).trim();
+    const resolvedUserId = userId?.trim() || workspace.userId.trim();
+    if (!resolvedUserId) {
+      throw new AgentGitError('userId is required', 'INVALID_USER_ID');
+    }
+    this.userId = resolvedUserId;
     this._kbCache = new LRUCache<string, KnowledgeBaseItem>(2000);
 
     this._serviceContext = {
@@ -114,7 +139,6 @@ export class AgentContext {
     this._spiderService = new SpiderService(this._serviceContext);
     this._diagnosisService = new DiagnosisService(this._serviceContext, this._graphService, this._reasoningService);
     this._mailboxService = new MailboxService(this._serviceContext);
-    this._pasteStore = new PasteStore(this._serviceContext);
     this._sideQueryService = new SideQueryService(this._serviceContext);
     this._mutexService = new MutexService(this._serviceContext);
     this._compactService = new CompactService(this._serviceContext);
@@ -127,7 +151,7 @@ export class AgentContext {
 
     // Final bootstrap
     const ctx = this._serviceContext as any;
-    ctx.pasteStore = this._pasteStore;
+    ctx.pasteStore = this._storageService;
     ctx.compact = this._compactService;
     ctx.storage = this._storageService;
     ctx.token = this._tokenService;
@@ -142,7 +166,8 @@ export class AgentContext {
    * Overrides the mailbox with a shared instance for swarm coordination.
    */
   public setSharedMailbox(mailbox: MailboxService) {
-    (this as any)._mailboxService = mailbox;
+    this._mailboxService = mailbox;
+    this._serviceContext.mailbox = mailbox;
   }
 
   public get db() {
@@ -181,8 +206,24 @@ export class AgentContext {
   public get mutex() {
     return this._mutexService;
   }
+  /**
+   * @deprecated TRANSITIONAL alias. Use storageService directly.
+   * Deletion Condition: Safe to remove once all downstream tests and packages migrate to calling StorageService.
+   */
   public get pasteStore() {
-    return this._pasteStore;
+    return this._storageService;
+  }
+  public get compact() {
+    return this._compactService;
+  }
+  public get token() {
+    return this._tokenService;
+  }
+  public get coordinator() {
+    return this._coordinatorService;
+  }
+  public get scratchpad() {
+    return this._scratchpadService;
   }
   public get graph() {
     return this._graphService;
@@ -215,6 +256,61 @@ export class AgentContext {
 
   public getTeammates(): string[] {
     return Array.from(this._teammates);
+  }
+
+  public createToolExecutor(tools: ToolDef[], options: ToolExecutorOptions = {}) {
+    return new StreamingToolExecutor(tools, this._serviceContext, options);
+  }
+
+  public async executeTools(
+    calls: ToolCall[],
+    tools: ToolDef[],
+    options: ToolExecutorOptions = {}
+  ): Promise<ToolResult[]> {
+    const executor = this.createToolExecutor(tools, options);
+    const results: ToolResult[] = [];
+    for await (const result of executor.executeBatch(calls)) {
+      results.push(result);
+    }
+    return results;
+  }
+
+  public getErgonomicsSnapshot() {
+    return {
+      userId: this.userId,
+      workspaceId: this._serviceContext.workspace.workspaceId,
+      workspacePath: this._serviceContext.workspace.workspacePath,
+      teammates: this.getTeammates(),
+      cache: this.getCacheStats(),
+      services: {
+        graph: true,
+        reasoning: true,
+        audit: true,
+        spider: true,
+        mailbox: true,
+        lsp: true,
+        coordinator: true,
+        scratchpad: true,
+      },
+      toolExecutionDefaults: {
+        timeoutMs: 60000,
+        maxParallelReads: 8,
+        mirrorFileChanges: true,
+        failOnUnsafeMutationPath: true,
+        recordAuditEvents: true,
+      },
+    };
+  }
+
+  public shutdown(): void {
+    this._mutexService.shutdown();
+    this._lspService.shutdown();
+    this._mailboxService.clear();
+  }
+
+  public async dispose(): Promise<void> {
+    this.shutdown();
+    await this.flush();
   }
 
   private async _push(op: WriteOp, agentId?: string) {

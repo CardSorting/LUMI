@@ -77,4 +77,32 @@ export class StorageService {
       // Ignored
     }
   }
+
+  /**
+   * Hashes content and stores it if it doesn't exist.
+   * Returns the content hash (SHA-256).
+   */
+  async storeContent(content: string): Promise<string> {
+    return this.writeBlob(content);
+  }
+
+  /**
+   * Hydrates content from a hash reference.
+   */
+  async hydrateContent(hash: string): Promise<string | null> {
+    const content = await this.readBlob(hash);
+    return content ? content.toString('utf8') : null;
+  }
+
+  /**
+   * Detaches content if it's large and returns a hash reference.
+   */
+  async handleScaling(content: string): Promise<{ content: string; isReference: boolean }> {
+    // Scale if content > 1024 chars (threshold from Level 12 plan)
+    if (content.length > 1024) {
+      const hash = await this.storeContent(content);
+      return { content: `CAS:${hash}`, isReference: true };
+    }
+    return { content, isReference: false };
+  }
 }

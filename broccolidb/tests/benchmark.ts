@@ -3,7 +3,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { dbPool } from '../infrastructure/db/BufferedDbPool.js';
 import { setDbPath } from '../infrastructure/db/Config.js';
-import { SqliteQueue } from '../infrastructure/queue/SqliteQueue.js';
 
 const BENCH_DB = path.resolve(process.cwd(), 'benchmark.db');
 const NUM_OPS = 1000000;
@@ -62,60 +61,7 @@ async function runBenchmark() {
   console.log(`✅ Phase 1 Complete: ${NUM_OPS.toLocaleString()} ops in ${duration1.toFixed(2)}s`);
   console.log(`📈 BufferedDbPool Throughput: ${throughput1.toLocaleString()} ops/sec`);
 
-  // --- TEST 2: SqliteQueue Enqueue Speed ---
-  console.log('\n--- PHASE 2: SqliteQueue Enqueue Speed ---');
-  const queue = new SqliteQueue<any>({ memoryFirst: true });
-  const start2 = performance.now();
 
-  for (let i = 0; i < NUM_OPS; i += BATCH_SIZE) {
-    const items = [];
-    for (let j = 0; j < BATCH_SIZE; j++) {
-      items.push({
-        payload: { task: i + j, timestamp: Date.now() },
-        id: `job-${i + j}`,
-      });
-    }
-    await queue.enqueueBatch(items);
-  }
-
-  await dbPool.flush();
-  const end2 = performance.now();
-  const duration2 = (end2 - start2) / 1000;
-  const throughput2 = Math.round(NUM_OPS / duration2);
-
-  console.log(
-    `✅ Phase 2 Complete: ${NUM_OPS.toLocaleString()} jobs enqueued in ${duration2.toFixed(2)}s`
-  );
-  console.log(`📈 SqliteQueue Enqueue Throughput: ${throughput2.toLocaleString()} jobs/sec`);
-
-  // --- TEST 3: SqliteQueue Processing Speed ---
-  console.log('\n--- PHASE 3: SqliteQueue Processing Speed ---');
-  let processedCount = 0;
-  const start3 = performance.now();
-
-  const processPromise = new Promise<void>((resolve) => {
-    queue.processBatch(
-      async (jobs) => {
-        processedCount += jobs.length;
-        if (processedCount >= NUM_OPS) {
-          resolve();
-        }
-      },
-      { batchSize: 5000, maxInFlightBatches: 20 }
-    );
-  });
-
-  await processPromise;
-  const end3 = performance.now();
-  const duration3 = (end3 - start3) / 1000;
-  const throughput3 = Math.round(NUM_OPS / duration3);
-
-  queue.stop();
-
-  console.log(
-    `✅ Phase 3 Complete: ${NUM_OPS.toLocaleString()} jobs processed in ${duration3.toFixed(2)}s`
-  );
-  console.log(`📈 SqliteQueue Processing Throughput: ${throughput3.toLocaleString()} jobs/sec`);
 
   // --- TEST 4: Multi-Agent Concurrency Stress (Level 3) ---
   console.log('\n--- PHASE 4: Multi-Agent Concurrency Stress (Level 3) ---');
@@ -168,13 +114,11 @@ async function runBenchmark() {
   // --- REPORT ---
   const metrics = dbPool.getMetrics();
   const physicalTrans = (metrics as any).totalTransactions || 1;
-  const logicalTotals = NUM_OPS * 4; // 4 phases now
+  const logicalTotals = NUM_OPS * 2; // 2 phases now (raw and concurrent)
   const logicalPerPhysical = Math.round(logicalTotals / physicalTrans);
 
   console.log('\n--- FINAL PERFORMANCE REPORT (v2) ---');
   console.log(`Avg Logical DB Throughput: ${throughput1.toLocaleString()} ops/sec`);
-  console.log(`Avg Queue Enqueue:        ${throughput2.toLocaleString()} jobs/sec`);
-  console.log(`Avg Queue Processing:     ${throughput3.toLocaleString()} jobs/sec`);
   console.log(`Multi-Agent Throughput:   ${agentThroughput.toLocaleString()} ops/sec`);
   console.log(`Physical Transactions:    ${physicalTrans}`);
   console.log(`Logical/Physical Ratio:   ${logicalPerPhysical}:1`);

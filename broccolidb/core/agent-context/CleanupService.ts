@@ -105,25 +105,32 @@ export class CleanupService {
   }
 
   private async _reapUnreferencedCASBlobs(): Promise<number> {
-    const pasteStorePath = join(process.cwd(), '.broccolidb', 'paste_store');
+    const blobsDir = join(this.ctx.workspace.workspacePath, '.broccolidb', 'storage', 'blobs');
     let pruned = 0;
 
     try {
-        const files = await readdir(pasteStorePath);
         const knowledgeRows = await this.ctx.db.selectWhere('knowledge', [
             { column: 'content', value: 'CAS:%', operator: 'LIKE' }
         ]);
         
         const referencedHashes = new Set(knowledgeRows.map(r => (r.content as string).substring(4)));
         
-        for (const file of files) {
-            if (!referencedHashes.has(file)) {
-                await unlink(join(pasteStorePath, file));
-                pruned++;
+        const shards = await readdir(blobsDir);
+        for (const shard of shards) {
+            const shardDir = join(blobsDir, shard);
+            const stats = await stat(shardDir);
+            if (!stats.isDirectory()) continue;
+
+            const files = await readdir(shardDir);
+            for (const file of files) {
+                if (!referencedHashes.has(file)) {
+                    await unlink(join(shardDir, file));
+                    pruned++;
+                }
             }
         }
     } catch (err) {
-        // paste_store might not exist yet
+        // blobs directory might not exist yet
     }
 
     return pruned;

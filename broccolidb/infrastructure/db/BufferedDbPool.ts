@@ -1142,23 +1142,41 @@ export class BufferedDbPool {
         .values(op.values as any)
         .execute();
     } else if (op.type === 'upsert' && op.values) {
-      let query = trx.insertInto(op.table).values(op.values as any);
+      const insertValues: Record<string, any> = {};
+      for (const [k, v] of Object.entries(op.values)) {
+        if (this.isIncrement(v)) {
+          insertValues[k] = v.value;
+        } else {
+          insertValues[k] = v;
+        }
+      }
+
+      const updateValues: Record<string, any> = {};
+      for (const [k, v] of Object.entries(op.values)) {
+        if (this.isIncrement(v)) {
+          updateValues[k] = sql`${sql.ref(k)} + ${v.value}`;
+        } else {
+          updateValues[k] = v;
+        }
+      }
+
+      let query = trx.insertInto(op.table).values(insertValues as any);
       if (op.conflictTarget) {
         query = (query as any).onConflict((oc: any) =>
           oc
             .columns(Array.isArray(op.conflictTarget) ? op.conflictTarget : [op.conflictTarget])
-            .doUpdateSet(op.values)
+            .doUpdateSet(updateValues)
         );
       } else if (op.where && !Array.isArray(op.where)) {
         query = (query as any).onConflict((oc: any) =>
-          oc.column((op.where as WhereCondition).column).doUpdateSet(op.values)
+          oc.column((op.where as WhereCondition).column).doUpdateSet(updateValues)
         );
       } else if (op.where && Array.isArray(op.where)) {
         const cols = op.where.map((c) => c.column);
-        query = (query as any).onConflict((oc: any) => oc.columns(cols).doUpdateSet(op.values));
+        query = (query as any).onConflict((oc: any) => oc.columns(cols).doUpdateSet(updateValues));
       } else {
         const pks = PRIMARY_KEYS[op.table as string] || ['id'];
-        query = (query as any).onConflict((oc: any) => oc.columns(pks).doUpdateSet(op.values));
+        query = (query as any).onConflict((oc: any) => oc.columns(pks).doUpdateSet(updateValues));
       }
       await query.execute();
     } else if (op.type === 'update' && op.values) {

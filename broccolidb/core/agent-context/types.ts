@@ -6,7 +6,6 @@ import type { LspService } from './LspService.js';
 import type { CoordinatorService } from './CoordinatorService.js';
 import type { ScratchpadService } from './ScratchpadService.js';
 import type { BlastRadius } from './StructuralDiscoveryService.js';
-import type { CompactService } from './CompactService.js';
 import type { MailboxService } from './MailboxService.js';
 
 export interface MemoryMessage {
@@ -26,12 +25,16 @@ export interface ToolDef {
   isSearchOrReadCommand?: boolean;
   isDestructive?: boolean;
   maxResultSizeChars?: number;
+  timeoutMs?: number;
   execute: (args: any, context: ServiceContext) => Promise<any>;
 }
 
 export interface ToolUseContext {
   agentId?: string;
   sessionId?: string;
+  toolUseId?: string;
+  startedAt?: number;
+  signal?: AbortSignal;
   options: {
     tools: ToolDef[];
   };
@@ -181,7 +184,7 @@ export interface ServiceContext {
         character: number 
     }[] 
   };
-  pasteStore: import('./PasteStore.js').PasteStore;
+  pasteStore: import('../../infrastructure/storage/StorageService.js').StorageService;
   compact: import('./CompactService.js').CompactService;
   storage: import('../../infrastructure/storage/StorageService.js').StorageService;
   token: import('./TokenService.js').TokenService;

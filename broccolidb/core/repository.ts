@@ -8,7 +8,7 @@ import type { FileEntry } from './file-tree.js';
 import { FileTree } from './file-tree.js';
 import { LRUCache } from './lru-cache.js';
 import { TaskMutex } from './mutex.js';
-import { EnvironmentTracker, telemetryQueue } from './tracker.js';
+import { EnvironmentTracker } from './tracker.js';
 
 // ─── Interfaces ───
 
@@ -527,12 +527,10 @@ export class Repository {
     data: Record<string, any>,
     options: { usage?: Usage } = {}
   ) {
-    // 1. Offload Telemetry to memory queue (batched flush later)
+    // 1. Offload Telemetry directly to BufferedDbPool (batched flush later)
     if (options.usage) {
-      telemetryQueue.enqueue(this.db, this.basePath, {
-        agentId: author,
-        usage: options.usage,
-        taskId: this.taskId || null,
+      EnvironmentTracker.recordUsage(this.db, this.basePath, author, options.usage, this.taskId || null).catch((err) => {
+        console.error(`[AgentGit] Background telemetry recording failed for ${nodeId}:`, err);
       });
     }
 

@@ -6,7 +6,7 @@ import type { GraphEdge, KnowledgeBaseItem } from './agent-context/types.js';
 import type { AgentContext, TraversalFilter } from './agent-context.js';
 import { executor } from './executor.js';
 import type { Repository } from './repository.js';
-import { EnvironmentTracker, telemetryQueue } from './tracker.js';
+import { EnvironmentTracker } from './tracker.js';
 
 export class BroccoliDBMCP {
   private server: McpServer;
@@ -1213,13 +1213,13 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
       'Force flush the async telemetry queue. Useful before shutting down the Agent context.',
       {},
       async () => {
-        const statsBefore = await telemetryQueue.getStats();
-        await telemetryQueue.drain();
+        const db = this.repo.getDb();
+        await db.flush();
         return {
           content: [
             {
               type: 'text',
-              text: `Telemetry queue drained. Processed ${statsBefore.pending} pending items.`,
+              text: `Telemetry flushed to primary database.`,
             },
           ],
         };
