@@ -34,6 +34,7 @@ export interface SpiderNode {
 	hazardScore: number // V450: Probability of catastrophic failure (0-1.0)
 	vitality?: number // Added for SpiderService compatibility
 	resolvedImports: Map<string, string> // V500: specifier -> resolved Node ID
+	rawImports?: { specifier: string; symbols: string[] }[]
 }
 
 export interface SpiderSnapshot {
@@ -69,6 +70,7 @@ export interface SpiderViolation {
 	message: string
 	path: string
 	remediation?: string
+	cycle?: string[]
 }
 
 export interface SpiderRegistryPayload {

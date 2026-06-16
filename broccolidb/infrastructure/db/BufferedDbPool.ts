@@ -2,7 +2,7 @@
 import * as crypto from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { type Kysely, sql, type Transaction } from 'kysely';
-import { getDb, getRawDb, type Schema } from './Config.js';
+import { getDb, getRawDb, registerDbPathChangeListener, type Schema } from './Config.js';
 import { Logger } from '../../shared/services/Logger.js';
 
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -130,6 +130,46 @@ const TYPE_PRIORITY: Record<string, number> = {
   delete: 3,
 };
 
+const INDEXED_COLUMNS: Record<string, string[]> = {
+  queue_jobs: ['status'],
+  agent_tasks: ['status'],
+  knowledge: ['type'],
+  agent_knowledge: ['type'],
+};
+
+const PRIMARY_KEYS: Record<string, string[]> = {
+  users: ['id'],
+  workspaces: ['id'],
+  repositories: ['id'],
+  branches: ['repoPath', 'name'],
+  tags: ['repoPath', 'name'],
+  nodes: ['id'],
+  trees: ['repoPath', 'id'],
+  files: ['id'],
+  reflog: ['id'],
+  stashes: ['id'],
+  claims: ['repoPath', 'branch', 'path'],
+  telemetry: ['id'],
+  telemetry_aggregates: ['repoPath', 'id'],
+  agents: ['id'],
+  knowledge: ['id'],
+  tasks: ['id'],
+  audit_events: ['id'],
+  settings: ['key'],
+  logical_constraints: ['id'],
+  knowledge_edges: ['sourceId', 'targetId', 'type'],
+  decisions: ['id'],
+  queue_jobs: ['id'],
+  queue_settings: ['key'],
+  agent_streams: ['id'],
+  agent_tasks: ['id'],
+  agent_memory: ['streamId', 'key'],
+  agent_cognitive_snapshots: ['id'],
+  agent_knowledge: ['id'],
+  agent_knowledge_edges: ['sourceId', 'targetId', 'type'],
+  swarm_locks: ['resource'],
+};
+
 function normalizeWhere(where: WhereCondition | WhereCondition[] | undefined): WhereCondition[] {
   if (!where) return [];
   return Array.isArray(where) ? where : [where];
@@ -167,9 +207,23 @@ export class BufferedDbPool {
   private integrityMetrics = { brokenImports: 0, orphanedNodes: 0 };
   private SCHEMA_VERSION = 2; // Pass 4 hardening baseline
   private schemaVerified = false;
+  private deadLetterQueue: { op: WriteOp; error: string; timestamp: number }[] = [];
+
+  public getDeadLetterQueue() {
+    return this.deadLetterQueue;
+  }
+
+  public clearDeadLetterQueue() {
+    this.deadLetterQueue = [];
+  }
 
   constructor() {
     this.startFlushLoop();
+    registerDbPathChangeListener(() => {
+      this.db = null;
+      this.rawDb = null;
+      this.stmtCache.clear();
+    });
   }
 
   private async verifySchemaVersion() {
@@ -355,31 +409,25 @@ export class BufferedDbPool {
         }
       }
 
-      if (
-        op.type === 'update' &&
-        op.where &&
-        !Array.isArray(op.where) &&
-        op.where.column === 'id' &&
-        (op.where.operator === '=' || op.where.operator === undefined)
-      ) {
-        op.dedupKey = `${op.table}:${op.where.value}`;
+      if (op.type === 'update' && op.where) {
+        const tablePks = PRIMARY_KEYS[op.table as string] || ['id'];
+        const conditions = normalizeWhere(op.where);
+        const allPksMatched = tablePks.every(pk => {
+          const cond = conditions.find(c => c.column === pk && (c.operator === '=' || c.operator === undefined));
+          return cond !== undefined && !Array.isArray(cond.value);
+        });
+
+        if (allPksMatched && conditions.length === tablePks.length) {
+          const pkVals = tablePks.map(pk => {
+            const cond = conditions.find(c => c.column === pk)!;
+            return String(cond.value);
+          });
+          op.dedupKey = `${op.table as string}:${pkVals.join('::')}`;
+        }
       }
 
       // Level 7: Index maintenance (O(1))
-      if (op.table === 'queue_jobs' && op.values && (op.values as any).status) {
-        let tableIndex = this.activeIndex.get(op.table);
-        if (!tableIndex) {
-          tableIndex = new Map();
-          this.activeIndex.set(op.table, tableIndex);
-        }
-        const key = `status:${(op.values as any).status}`;
-        let set = tableIndex.get(key);
-        if (!set) {
-          set = new Set();
-          tableIndex.set(key, set);
-        }
-        set.add(op);
-      }
+      this.addStatusIndex(op, this.activeIndex);
     }
 
     if (agentId) {
@@ -453,20 +501,7 @@ export class BufferedDbPool {
           this.activeBufferSize++;
 
           // Level 7: Index maintenance (O(1))
-          if (op.table === 'queue_jobs' && op.values && (op.values as any).status) {
-            let tableIndex = this.activeIndex.get(op.table);
-            if (!tableIndex) {
-              tableIndex = new Map();
-              this.activeIndex.set(op.table, tableIndex);
-            }
-            const key = `status:${(op.values as any).status}`;
-            let set = tableIndex.get(key);
-            if (!set) {
-              set = new Set();
-              tableIndex.set(key, set);
-            }
-            set.add(op);
-          }
+          this.addStatusIndex(op, this.activeIndex);
         }
       }
     } finally {
@@ -604,7 +639,12 @@ export class BufferedDbPool {
       const isRetryable =
         err.code === 'SQLITE_BUSY' ||
         err.code === 'SQLITE_LOCKED' ||
-        err.message?.includes('deadlock');
+        err.code === 'SQLITE_MISUSE' ||
+        err.message?.includes('deadlock') ||
+        err.message?.includes('closed') ||
+        err.message?.includes('destroyed') ||
+        err.message?.includes('interrupted') ||
+        err.message?.includes('Library used incorrectly');
 
       if (isRetryable && retryCount < 3) {
           const delay = Math.pow(2, retryCount) * 100;
@@ -618,12 +658,26 @@ export class BufferedDbPool {
       try {
       if (isRetryable) {
         for (const op of opsToFlush) {
-          // ...
-          // Re-inserting into buffer logic would go here if needed, but usually we just retry the batch
+          let tableBuffer = this.activeBuffer.get(op.table);
+          if (!tableBuffer) {
+            tableBuffer = [];
+            this.activeBuffer.set(op.table, tableBuffer);
+          }
+          tableBuffer.unshift(op);
+          this.activeBufferSize++;
+
+          // Level 7: Restore index
+          this.addStatusIndex(op, this.activeIndex);
         }
       } else {
-        // Fatal errors should still be logged for forensic analysis
         Logger.error(`[DbPool] ❌ Flush failed (FATAL):`, e);
+        const errMsg = err.message || String(e);
+        for (const op of opsToFlush) {
+          this.deadLetterQueue.push({ op, error: errMsg, timestamp: Date.now() });
+          if (this.deadLetterQueue.length > 1000) {
+            this.deadLetterQueue.shift();
+          }
+        }
       }
       this.inFlightOps.clear();
         this.inFlightSize = 0;
@@ -750,8 +804,9 @@ export class BufferedDbPool {
 
         if (statusCond && sourceIndex) {
           const key = `${statusCond.column}:${statusCond.value}`;
-          const set = sourceIndex.get(key);
-          tableOps = set || [];
+          const set = sourceIndex.get(key) || new Set();
+          const extraOps = ops.filter(op => op.type === 'update' || op.type === 'delete' || op.type === 'upsert');
+          tableOps = [...set, ...extraOps];
         } else {
           tableOps = ops;
         }
@@ -819,17 +874,31 @@ export class BufferedDbPool {
           };
 
           if (op.type === 'insert' && op.values) {
-            const newRow = { ...op.values } as unknown as Schema[T];
-            if (matches(newRow, conditions)) target.push(newRow);
+            const pkMatch = (r: unknown) => {
+              const row = r as Record<string, unknown>;
+              const opVals = op.values as Record<string, unknown>;
+              const cols = PRIMARY_KEYS[table as string] || ['id'];
+              return cols.every(col => row[col] !== undefined && opVals[col] !== undefined && row[col] === opVals[col]);
+            };
+            const existingIdx = target.findIndex(pkMatch);
+            if (existingIdx >= 0) {
+              const newRow = { ...op.values } as unknown as Schema[T];
+              if (matches(newRow, conditions)) {
+                target[existingIdx] = newRow;
+              } else {
+                target.splice(existingIdx, 1);
+              }
+            } else {
+              const newRow = { ...op.values } as unknown as Schema[T];
+              if (matches(newRow, conditions)) target.push(newRow);
+            }
           } else if (op.type === 'upsert' && op.values) {
             const pkMatch = (r: unknown) => {
               const row = r as Record<string, unknown>;
               if (opWhere.length > 0) return matches(row, opWhere);
-              return (
-                row.id !== undefined &&
-                (op.values as Record<string, unknown>).id !== undefined &&
-                row.id === (op.values as Record<string, unknown>).id
-              );
+              const opVals = op.values as Record<string, unknown>;
+              const cols = PRIMARY_KEYS[table as string] || ['id'];
+              return cols.every(col => row[col] !== undefined && opVals[col] !== undefined && row[col] === opVals[col]);
             };
             const existingIdx = target.findIndex(pkMatch);
             if (existingIdx >= 0) {
@@ -908,7 +977,7 @@ export class BufferedDbPool {
     agentId?: string
   ): Promise<Schema[T] | null> {
     const results = await this.selectWhere(table, where, agentId);
-    return results.length > 0 ? (results[results.length - 1] as Schema[T]) : null;
+    return results.length > 0 ? (results[0] as Schema[T]) : null;
   }
 
   public static increment(value: number): Increment {
@@ -918,6 +987,7 @@ export class BufferedDbPool {
   private groupOps(ops: WriteOp[]): WriteOp[][] {
     const coalescedOps: WriteOp[] = [];
     const updateCache = new Map<string, number>();
+    const insertCache = new Map<string, number>();
 
     for (const op of ops) {
       if (op.type === 'update' && op.dedupKey) {
@@ -950,6 +1020,23 @@ export class BufferedDbPool {
           }
         } else {
           updateCache.set(op.dedupKey, coalescedOps.length);
+        }
+      } else if (op.type === 'insert') {
+        const tablePks = PRIMARY_KEYS[op.table as string] || ['id'];
+        const opVals = op.values as Record<string, unknown> | undefined;
+        if (opVals) {
+          const hasAllPks = tablePks.every(pk => opVals[pk] !== undefined);
+          if (hasAllPks) {
+            const pkVals = tablePks.map(pk => String(opVals[pk]));
+            const insertKey = `${op.table as string}:${pkVals.join('::')}`;
+            const existingIdx = insertCache.get(insertKey);
+            if (existingIdx !== undefined) {
+              coalescedOps[existingIdx] = op;
+              continue;
+            } else {
+              insertCache.set(insertKey, coalescedOps.length);
+            }
+          }
         }
       }
       coalescedOps.push(op);
@@ -1070,7 +1157,8 @@ export class BufferedDbPool {
         const cols = op.where.map((c) => c.column);
         query = (query as any).onConflict((oc: any) => oc.columns(cols).doUpdateSet(op.values));
       } else {
-        query = (query as any).onConflict((oc: any) => oc.column('id').doUpdateSet(op.values));
+        const pks = PRIMARY_KEYS[op.table as string] || ['id'];
+        query = (query as any).onConflict((oc: any) => oc.columns(pks).doUpdateSet(op.values));
       }
       await query.execute();
     } else if (op.type === 'update' && op.values) {
@@ -1083,36 +1171,100 @@ export class BufferedDbPool {
         }
       }
 
-      let query = trx.updateTable(op.table as any).set(sets);
-      for (const cond of conditions) {
-        const opStr = cond.operator || '=';
-        if (Array.isArray(cond.value)) {
-          query = (query as any).where(cond.column, 'in', cond.value);
-        } else {
-          query = (query as any).where(cond.column, opStr, cond.value);
+      const arrayCondIdx = conditions.findIndex(c => Array.isArray(c.value) && c.value.length > 500);
+      if (arrayCondIdx >= 0) {
+        const cond = conditions[arrayCondIdx];
+        const arrayVal = cond.value as unknown[];
+        const CHUNK_SIZE = 500;
+        let totalUpdated = 0;
+        for (let i = 0; i < arrayVal.length; i += CHUNK_SIZE) {
+          const chunk = arrayVal.slice(i, i + CHUNK_SIZE);
+          let query = trx.updateTable(op.table as any).set(sets);
+          for (let j = 0; j < conditions.length; j++) {
+            const c = conditions[j];
+            if (j === arrayCondIdx) {
+              query = (query as any).where(c.column, 'in', chunk);
+            } else {
+              const opStr = c.operator || '=';
+              if (Array.isArray(c.value)) {
+                query = (query as any).where(c.column, 'in', c.value);
+              } else {
+                query = (query as any).where(c.column, opStr, c.value);
+              }
+            }
+          }
+          const result = await query.executeTakeFirst();
+          totalUpdated += Number(result.numUpdatedRows || 0);
         }
-      }
-      const result = await query.executeTakeFirst();
-      if (Number(result.numUpdatedRows) === 0) {
-        console.warn(
-          `[DbPool] ⚠️ Update on ${op.table} matched 0 rows. Where: ${JSON.stringify(op.where)}`
-        );
+        if (totalUpdated === 0) {
+          console.warn(
+            `[DbPool] ⚠️ Update on ${op.table} matched 0 rows. Where: ${JSON.stringify(op.where)}`
+          );
+        }
+      } else {
+        let query = trx.updateTable(op.table as any).set(sets);
+        for (const cond of conditions) {
+          const opStr = cond.operator || '=';
+          if (Array.isArray(cond.value)) {
+            query = (query as any).where(cond.column, 'in', cond.value);
+          } else {
+            query = (query as any).where(cond.column, opStr, cond.value);
+          }
+        }
+        const result = await query.executeTakeFirst();
+        if (Number(result.numUpdatedRows) === 0) {
+          console.warn(
+            `[DbPool] ⚠️ Update on ${op.table} matched 0 rows. Where: ${JSON.stringify(op.where)}`
+          );
+        }
       }
     } else if (op.type === 'delete') {
-      let query = trx.deleteFrom(op.table);
-      for (const cond of conditions) {
-        const opStr = cond.operator || '=';
-        if (Array.isArray(cond.value)) {
-          query = (query as any).where(cond.column, 'in', cond.value);
-        } else {
-          query = (query as any).where(cond.column, opStr, cond.value);
+      const arrayCondIdx = conditions.findIndex(c => Array.isArray(c.value) && c.value.length > 500);
+      if (arrayCondIdx >= 0) {
+        const cond = conditions[arrayCondIdx];
+        const arrayVal = cond.value as unknown[];
+        const CHUNK_SIZE = 500;
+        let totalDeleted = 0;
+        for (let i = 0; i < arrayVal.length; i += CHUNK_SIZE) {
+          const chunk = arrayVal.slice(i, i + CHUNK_SIZE);
+          let query = trx.deleteFrom(op.table);
+          for (let j = 0; j < conditions.length; j++) {
+            const c = conditions[j];
+            if (j === arrayCondIdx) {
+              query = (query as any).where(c.column, 'in', chunk);
+            } else {
+              const opStr = c.operator || '=';
+              if (Array.isArray(c.value)) {
+                query = (query as any).where(c.column, 'in', c.value);
+              } else {
+                query = (query as any).where(c.column, opStr, c.value);
+              }
+            }
+          }
+          const result = await query.executeTakeFirst();
+          totalDeleted += Number(result.numDeletedRows || 0);
         }
-      }
-      const result = await query.executeTakeFirst();
-      if (Number(result.numDeletedRows) === 0) {
-        console.warn(
-          `[DbPool] ⚠️ Delete on ${op.table} matched 0 rows. Where: ${JSON.stringify(op.where)}`
-        );
+        if (totalDeleted === 0) {
+          console.warn(
+            `[DbPool] ⚠️ Delete on ${op.table} matched 0 rows. Where: ${JSON.stringify(op.where)}`
+          );
+        }
+      } else {
+        let query = trx.deleteFrom(op.table);
+        for (const cond of conditions) {
+          const opStr = cond.operator || '=';
+          if (Array.isArray(cond.value)) {
+            query = (query as any).where(cond.column, 'in', cond.value);
+          } else {
+            query = (query as any).where(cond.column, opStr, cond.value);
+          }
+        }
+        const result = await query.executeTakeFirst();
+        if (Number(result.numDeletedRows) === 0) {
+          console.warn(
+            `[DbPool] ⚠️ Delete on ${op.table} matched 0 rows. Where: ${JSON.stringify(op.where)}`
+          );
+        }
       }
     }
   }
@@ -1141,6 +1293,29 @@ export class BufferedDbPool {
   public reportIntegrityIssue(type: 'brokenImport' | 'orphanedNode', count: number = 1) {
     if (type === 'brokenImport') this.integrityMetrics.brokenImports += count;
     if (type === 'orphanedNode') this.integrityMetrics.orphanedNodes += count;
+  }
+
+  private addStatusIndex(op: WriteOp, indexMap: Map<keyof Schema, Map<string, Set<WriteOp>>>) {
+    const cols = INDEXED_COLUMNS[op.table as string];
+    if (!cols || !op.values) return;
+
+    for (const col of cols) {
+      const val = (op.values as any)[col];
+      if (val !== undefined && val !== null) {
+        let tableIndex = indexMap.get(op.table);
+        if (!tableIndex) {
+          tableIndex = new Map();
+          indexMap.set(op.table, tableIndex);
+        }
+        const key = `${col}:${val}`;
+        let set = tableIndex.get(key);
+        if (!set) {
+          set = new Set();
+          tableIndex.set(key, set);
+        }
+        set.add(op);
+      }
+    }
   }
 
   private isSameValues(a: Record<string, any>, b: Record<string, any>): boolean {
@@ -1231,6 +1406,165 @@ export class BufferedDbPool {
         this.rawDb = null;
     }
   }
+
+  public selectFrom<T extends keyof Schema>(table: T): QueryBuilder<T> {
+    return new QueryBuilder(this, table);
+  }
+
+  public insertInto<T extends keyof Schema>(table: T): InsertBuilder<T> {
+    return new InsertBuilder(this, table);
+  }
+
+  public updateTable<T extends keyof Schema>(table: T): UpdateBuilder<T> {
+    return new UpdateBuilder(this, table);
+  }
+
+  public deleteFrom<T extends keyof Schema>(table: T): DeleteBuilder<T> {
+    return new DeleteBuilder(this, table);
+  }
 }
 
 export const dbPool = new BufferedDbPool();
+
+export class QueryBuilder<T extends keyof Schema> {
+  private conditions: WhereCondition[] = [];
+  private order?: { column: keyof Schema[T]; direction: 'asc' | 'desc' };
+  private lim?: number;
+
+  constructor(private pool: BufferedDbPool, private table: T) {}
+
+  where(column: keyof Schema[T] & string, value: any): this;
+  where(column: keyof Schema[T] & string, operator: WhereCondition['operator'], value: any): this;
+  where(column: keyof Schema[T] & string, operatorOrValue: any, value?: any): this {
+    if (value === undefined) {
+      this.conditions.push({ column, value: operatorOrValue });
+    } else {
+      this.conditions.push({ column, operator: operatorOrValue, value });
+    }
+    return this;
+  }
+
+  orderBy(column: keyof Schema[T], direction: 'asc' | 'desc' = 'asc'): this {
+    this.order = { column, direction };
+    return this;
+  }
+
+  limit(limit: number): this {
+    this.lim = limit;
+    return this;
+  }
+
+  async execute(agentId?: string): Promise<Schema[T][]> {
+    return this.pool.selectWhere(this.table, this.conditions, agentId, {
+      orderBy: this.order as any,
+      limit: this.lim,
+    });
+  }
+
+  async executeTakeFirst(agentId?: string): Promise<Schema[T] | null> {
+    const results = await this.execute(agentId);
+    return results.length > 0 ? (results[0] as Schema[T]) : null;
+  }
+}
+
+export class InsertBuilder<T extends keyof Schema> {
+  private valuesToInsert?: Record<string, unknown> | Record<string, unknown>[];
+  private conflictTargetCol?: string | string[];
+
+  constructor(private pool: BufferedDbPool, private table: T) {}
+
+  values(val: Partial<Schema[T]> | Partial<Schema[T]>[]): this {
+    this.valuesToInsert = val as any;
+    return this;
+  }
+
+  onConflict(target: string | string[]): this {
+    this.conflictTargetCol = target;
+    return this;
+  }
+
+  async execute(agentId?: string, affectedFile?: string): Promise<void> {
+    if (!this.valuesToInsert) return;
+
+    if (Array.isArray(this.valuesToInsert)) {
+      const ops = this.valuesToInsert.map(v => ({
+        type: 'insert' as const,
+        table: this.table,
+        values: v,
+        agentId,
+      }));
+      await this.pool.pushBatch(ops, agentId, affectedFile);
+    } else {
+      const op: WriteOp = {
+        type: this.conflictTargetCol ? 'upsert' : 'insert',
+        table: this.table,
+        values: this.valuesToInsert,
+        conflictTarget: this.conflictTargetCol,
+        agentId,
+      };
+      await this.pool.push(op, agentId, affectedFile);
+    }
+  }
+}
+
+export class UpdateBuilder<T extends keyof Schema> {
+  private setValues?: Record<string, unknown>;
+  private conditions: WhereCondition[] = [];
+
+  constructor(private pool: BufferedDbPool, private table: T) {}
+
+  set(val: Partial<Schema[T]> | Record<string, unknown>): this {
+    this.setValues = val as any;
+    return this;
+  }
+
+  where(column: keyof Schema[T] & string, value: any): this;
+  where(column: keyof Schema[T] & string, operator: WhereCondition['operator'], value: any): this;
+  where(column: keyof Schema[T] & string, operatorOrValue: any, value?: any): this {
+    if (value === undefined) {
+      this.conditions.push({ column, value: operatorOrValue });
+    } else {
+      this.conditions.push({ column, operator: operatorOrValue, value });
+    }
+    return this;
+  }
+
+  async execute(agentId?: string, affectedFile?: string): Promise<void> {
+    if (!this.setValues) return;
+    const op: WriteOp = {
+      type: 'update',
+      table: this.table,
+      values: this.setValues,
+      where: this.conditions,
+      agentId,
+    };
+    await this.pool.push(op, agentId, affectedFile);
+  }
+}
+
+export class DeleteBuilder<T extends keyof Schema> {
+  private conditions: WhereCondition[] = [];
+
+  constructor(private pool: BufferedDbPool, private table: T) {}
+
+  where(column: keyof Schema[T] & string, value: any): this;
+  where(column: keyof Schema[T] & string, operator: WhereCondition['operator'], value: any): this;
+  where(column: keyof Schema[T] & string, operatorOrValue: any, value?: any): this {
+    if (value === undefined) {
+      this.conditions.push({ column, value: operatorOrValue });
+    } else {
+      this.conditions.push({ column, operator: operatorOrValue, value });
+    }
+    return this;
+  }
+
+  async execute(agentId?: string, affectedFile?: string): Promise<void> {
+    const op: WriteOp = {
+      type: 'delete',
+      table: this.table,
+      where: this.conditions,
+      agentId,
+    };
+    await this.pool.push(op, agentId, affectedFile);
+  }
+}

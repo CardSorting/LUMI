@@ -198,7 +198,9 @@ export class Controller implements IController {
 		})
 
 		// Initialize Joy-Zoning Persistence Layer
-		const dbPath = path.join(this.context.globalStorageUri.fsPath, "joyzoning.sqlite")
+		const dbPath = this.context.storageUri
+			? path.join(this.context.storageUri.fsPath, "joyzoning.sqlite")
+			: path.join(this.context.globalStorageUri.fsPath, "joyzoning.sqlite")
 		setDbPath(dbPath)
 		getDb()
 			.then(() => {

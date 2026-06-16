@@ -2,7 +2,7 @@ import * as crypto from "node:crypto"
 import type Database from "better-sqlite3"
 import { type Kysely, sql, type Transaction } from "kysely"
 import { Logger } from "@/shared/services/Logger"
-import { destroyDb, getDb, getRawDb, type Schema } from "./Config"
+import { destroyDb, getDb, getRawDb, registerDbPathChangeListener, type Schema } from "./Config"
 
 // Production-grade Mutex implementation
 class Mutex {
@@ -111,6 +111,11 @@ export class BufferedDbPool {
 	constructor() {
 		// Timers are started lazily on first use so importing this singleton cannot
 		// leak intervals before the extension has configured the database path.
+		registerDbPathChangeListener(() => {
+			this.db = null
+			this.rawDb = null
+			this.stmtCache.clear()
+		})
 	}
 
 	private flushTimeout: NodeJS.Timeout | null = null
@@ -503,7 +508,15 @@ export class BufferedDbPool {
 			}
 		} catch (e: unknown) {
 			const err = e as { code?: string; message?: string }
-			const isRetryable = err.code === "SQLITE_BUSY" || err.code === "SQLITE_LOCKED" || err.message?.includes("deadlock")
+			const isRetryable =
+				err.code === "SQLITE_BUSY" ||
+				err.code === "SQLITE_LOCKED" ||
+				err.code === "SQLITE_MISUSE" ||
+				err.message?.includes("deadlock") ||
+				err.message?.includes("closed") ||
+				err.message?.includes("destroyed") ||
+				err.message?.includes("interrupted") ||
+				err.message?.includes("Library used incorrectly")
 
 			const releaseStateFail = await this.stateMutex.acquire()
 			try {

@@ -2,9 +2,11 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { dbPool } from '../infrastructure/db/BufferedDbPool.js';
+import { setDbPath } from '../infrastructure/db/Config.js';
 
 async function runTest() {
   const dbPath = './test-warmup.db';
+  setDbPath(dbPath);
   if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
 
   console.info('--- PHASE 1: FILLING THE NOTEBOOK ---');
@@ -37,13 +39,10 @@ async function runTest() {
 
   console.info('--- PHASE 2: REBOOTING (CLEARING BRAIN) ---');
   // 2. Simulate Reboot (Clean the in-memory indexes)
-  // @ts-expect-error - Accessing private member for testing purposes
   (dbPool as any).activeIndex.clear();
-  // @ts-expect-error - Accessing private member for testing purposes
   (dbPool as any).activeBuffer.clear();
 
   // 3. Verify Brain is empty (Cold Start)
-  // @ts-expect-error - Accessing private member for testing purposes
   const coldIndex = (dbPool as any).activeIndex.get('queue_jobs')?.get('status:pending');
   assert.strictEqual(coldIndex?.size || 0, 0, 'Brain was not successfully cleared');
 
@@ -56,7 +55,6 @@ async function runTest() {
   console.info(`Warmup complete: ${warmedCount} items hydrated in ${duration.toFixed(2)}ms`);
 
   // 5. Verify Brain is Warmed
-  // @ts-expect-error - Accessing private member for testing purposes
   const warmIndex = (dbPool as any).activeIndex.get('queue_jobs')?.get('status:pending');
   assert.strictEqual(warmIndex?.size, 100, 'Brain failed to hydrate from Notebook');
 
@@ -71,6 +69,7 @@ async function runTest() {
   console.info('✅ TEST PASSED: Sovereign Recovery (Level 9) verified.');
 
   if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  await dbPool.stop();
 }
 
 runTest().catch((err) => {

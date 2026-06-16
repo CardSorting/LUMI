@@ -23,6 +23,13 @@ async function runBenchmark() {
   setDbPath(BENCH_DB);
   console.log(`📂 Database: ${BENCH_DB}`);
 
+  // Insert users to satisfy foreign key constraints
+  await dbPool.insertInto('users').values([
+    { id: 'bench-user', createdAt: Date.now() },
+    { id: 'stress-user', createdAt: Date.now() }
+  ]).execute();
+  await dbPool.flush();
+
   // --- TEST 1: BufferedDbPool Raw Throughput ---
   console.log('\n--- PHASE 1: BufferedDbPool Raw Throughput ---');
   const start1 = performance.now();
@@ -57,7 +64,7 @@ async function runBenchmark() {
 
   // --- TEST 2: SqliteQueue Enqueue Speed ---
   console.log('\n--- PHASE 2: SqliteQueue Enqueue Speed ---');
-  const queue = new SqliteQueue<any>();
+  const queue = new SqliteQueue<any>({ memoryFirst: true });
   const start2 = performance.now();
 
   for (let i = 0; i < NUM_OPS; i += BATCH_SIZE) {

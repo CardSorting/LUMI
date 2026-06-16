@@ -133,16 +133,14 @@ export class StructuralDiscoveryService {
         const depNode = engine.nodes.get(depId);
         if (!depNode) continue;
 
-        for (const imp of depNode.imports) {
-            const resolved = depNode.resolvedImports.get(imp.specifier);
-            if (resolved === normalizedTarget) {
-                // Determine WHICH symbols are missing
-                const missing = imp.symbols.filter(s => !remainingSymbols.has(s));
-                
-                // For each missing symbol, check if it has "Displaced" elsewhere in the project reality
+        const importedSymbols = depNode.consumptions[normalizedTarget] || [];
+        if (importedSymbols.length > 0) {
+            const missing = importedSymbols.filter(s => s !== '*' && !remainingSymbols.has(s));
+            
+            if (missing.length > 0) {
                 const realMissing: string[] = [];
                 const displacementSuggestions: { symbol: string, newPath: string }[] = [];
-                const directives: any[] = []; // RepairDirective[]
+                const directives: any[] = [];
 
                 for (const s of missing) {
                     const providers = registry.findProviders(s);
@@ -165,15 +163,14 @@ export class StructuralDiscoveryService {
                     }
                 }
 
-                // If the import was a wildcard or specific symbols are REAL missing
-                if (realMissing.length > 0 || displacementSuggestions.length > 0 || (imp.symbols.length === 0 && remainingSymbols.size === 0)) {
+                if (realMissing.length > 0 || displacementSuggestions.length > 0) {
                     report.push({
                         depId,
                         symbols: realMissing.length > 0 ? realMissing : [],
                         displacements: displacementSuggestions,
                         directives,
-                        line: imp.line,
-                        character: imp.character
+                        line: 0,
+                        character: 0
                     });
                 }
             }
