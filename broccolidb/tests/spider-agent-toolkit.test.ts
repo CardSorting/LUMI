@@ -24,6 +24,7 @@ import { toCheckResponse, validateCheckResult, SPIDER_CHECK_OUTPUT_SCHEMA, toChe
 import { exportProblemMatcherConfig } from '../core/policy/spider/AgentToolkit.js';
 import { prepareSarifUpload, toGithubStepSummary } from '../core/policy/spider/AgentFormats.js';
 import { evaluateGate } from '../core/policy/spider/AgentFormats.js';
+import { SPIDER_MCP_TOOL_NAMES } from '../core/policy/spider/spider-mcp-tools.js';
 import { Workspace } from '../core/workspace.js';
 import { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';
 import { setDbPath } from '../infrastructure/db/Config.js';
@@ -219,10 +220,6 @@ async function runTest() {
   assert.strictEqual(telemetry.event, 'spider.forensic');
   assert.ok(typeof telemetry.blockerCount === 'number');
 
-  const mcpSource = fs.readFileSync(path.join(packageRoot, 'core/mcp.ts'), 'utf8');
-  assert.ok(mcpSource.includes('spider_forensic_check'), 'MCP must expose spider_forensic_check tool');
-  assert.ok(mcpSource.includes('responseFormat'), 'MCP spider_forensic_check must support responseFormat');
-
   const checkSchema = ctx.graph.spider.getCheckOutputSchema();
   assert.strictEqual(checkSchema.properties.$schema.const, 'broccolidb.spider.check-response/v1');
 
@@ -271,7 +268,46 @@ async function runTest() {
   });
   assert.strictEqual(responded.$schema, 'broccolidb.spider.check-response/v1');
 
-  assert.ok(mcpSource.includes('spider_forensic_pipeline'), 'MCP must expose spider_forensic_pipeline');
+  const mcpSource = fs.readFileSync(path.join(packageRoot, 'core/mcp.ts'), 'utf8');
+  for (const toolName of SPIDER_MCP_TOOL_NAMES) {
+    assert.ok(mcpSource.includes(`'${toolName}'`), `MCP must register ${toolName}`);
+  }
+  assert.ok(mcpSource.includes('responseFormat'), 'MCP spider_forensic_check must support responseFormat');
+
+  const catalog = ctx.graph.spider.getAgentToolkitCatalog();
+  assert.strictEqual(catalog.schema, 'broccolidb.spider.agent-catalog/v1');
+  assert.ok(catalog.runbook.includes('Spider Forensic Agent Runbook'));
+  assert.ok(catalog.mcpTools.length === SPIDER_MCP_TOOL_NAMES.length);
+  assert.ok(catalog.phaseWorkflow.length === 4);
+  assert.ok(catalog.promptDigest.includes('spider_get_catalog'));
+  assert.ok(ctx.graph.spider.formatCatalogPrompt().includes('Phases:'));
+
+  ctx.graph.spider.validateCheckRequest({ phase: 'ci', scope: ['src/a.ts'] });
+  assert.throws(() => ctx.graph.spider.validateCheckRequest({ phase: 'pre-edit' }), /filePath/);
+  assert.throws(() => ctx.graph.spider.validateCheckRequest({ phase: 'ci', gatePreset: 'bogus' as 'ci' }), /gatePreset/);
+  assert.throws(() => ctx.graph.spider.validateCheckRequest({ phase: 'ci', correlationId: '  ' }), /correlationId/);
+
+  const presets = ctx.graph.spider.getGatePolicyPresets();
+  assert.ok(presets.ci.blockOnErrors);
+  assert.ok(!presets.advisory.blockOnErrors);
+
+  const inputSchema = ctx.graph.spider.getCheckInputSchema();
+  assert.strictEqual(inputSchema.title, 'SpiderCheckRequest');
+
+  const workflowPresets = ctx.graph.spider.getWorkflowPresets();
+  assert.ok(workflowPresets['pr-review'].phases.includes('delta'));
+
+  const safe = ctx.graph.spider.safeValidateCheckRequest({ phase: 'ci', scope: ['src/a.ts'] });
+  assert.strictEqual(safe.valid, true);
+  const bad = ctx.graph.spider.safeValidateCheckRequest({ phase: 'bogus' as 'ci' });
+  assert.strictEqual(bad.valid, false);
+
+  const pipelineSafe = ctx.graph.spider.safeValidateCheckPipelineRequest({
+    workflowPreset: 'local-edit',
+    filePath: 'src/a.ts',
+  });
+  assert.strictEqual(pipelineSafe.valid, true);
+  assert.deepStrictEqual(pipelineSafe.normalized.phases, ['pre-edit', 'post-edit']);
 
   await ctx.stop();
   fs.rmSync(root, { recursive: true, force: true });

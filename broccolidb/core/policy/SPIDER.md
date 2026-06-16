@@ -27,28 +27,38 @@ Spider proves structural truth. It does not guess.
 ## Agent Workflow
 
 ```typescript
-// 0. Unified check (recommended)
+// 0. Bootstrap (MCP or capability — no disk audit)
+const catalog = ctx.graph.spider.getAgentToolkitCatalog();
+// MCP: spider_get_catalog({ responseFormat: 'markdown' })
+
+// 1. Unified check (recommended)
 const pre = await ctx.graph.spider.check({ phase: 'pre-edit', filePath: 'src/core/provider.ts' });
-const post = await ctx.graph.spider.check({ phase: 'ci', scope: 'changed-files' });
+const post = await ctx.graph.spider.check({
+  phase: 'ci',
+  scope: 'changed-files',
+  gatePreset: 'strict',
+});
 if (post.exitCode === 1) process.exit(1);
 
 // JSON envelope for MCP/CI (ESLint JSON / GitHub Checks style)
 const json = ctx.graph.spider.toCheckResponse(post, { includeSarifMeta: true });
-// MCP: spider_forensic_check({ phase: 'ci', responseFormat: 'json' })
+// MCP: spider_forensic_check({ phase: 'ci', responseFormat: 'json', gatePreset: 'strict' })
 // MCP: spider_forensic_pipeline({ phases: ['pre-edit', 'ci'] })
+// MCP: spider_forensic_pipeline({ workflowPreset: 'local-edit', filePath: '...' })
+// MCP: spider_validate_check_request({ requestJson, kind: 'check' | 'pipeline' })
 
 // NDJSON stream + GitHub Checks API
 const ndjson = ctx.graph.spider.toCheckNdjsonStream(post);
 const checkRun = ctx.graph.spider.toGithubCheckRun(post);
 
-// 1. Pre-edit (preferred)
-const pre = await ctx.graph.spider.preflightBundle('src/core/provider.ts');
-if (!pre.proceed) console.log(ctx.graph.spider.agentContext(pre.bundle, { maxCompactLines: 5 }));
+// 2. Pre-edit bundle (alternate)
+const preBundle = await ctx.graph.spider.preflightBundle('src/core/provider.ts');
+if (!preBundle.proceed) console.log(ctx.graph.spider.agentContext(preBundle.bundle, { maxCompactLines: 5 }));
 
-// 2. Multi-file pre-edit
+// 3. Multi-file pre-edit
 const batch = await ctx.graph.spider.batchPreflight(['src/a.ts', 'src/b.ts']);
 
-// 3. CI gate (preferred: gateBundle)
+// 4. CI gate (preferred: gateBundle)
 const { gate: ci, bundle } = await ctx.graph.spider.gateBundle({ scope: 'changed-files' });
 if (ci.blocked) process.exit(ci.exitCode);
 console.log(bundle.brief, bundle.nextAction);

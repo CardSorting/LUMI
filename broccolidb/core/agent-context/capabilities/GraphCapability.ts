@@ -280,6 +280,13 @@ export class GraphCapability extends CapabilityBase {
       shouldProceed: (report: SpiderReport) =>
         this.run('spider.shouldProceed', () => this.spiderService.shouldProceed(report)),
       toolSchema: () => this.run('spider.toolSchema', () => this.spiderService.getAgentToolSchema()),
+      getAgentToolkitCatalog: () => this.run('spider.getAgentToolkitCatalog', () => this.spiderService.getAgentToolkitCatalog()),
+      formatCatalogPrompt: () => this.run('spider.formatCatalogPrompt', () => this.spiderService.formatCatalogPrompt()),
+      getAgentRunbook: () => this.run('spider.getAgentRunbook', () => this.spiderService.getAgentRunbook()),
+      getMcpToolNames: () => this.run('spider.getMcpToolNames', () => this.spiderService.getMcpToolNames()),
+      getGatePolicyPresets: () => this.run('spider.getGatePolicyPresets', () => this.spiderService.getGatePolicyPresets()),
+      validateCheckRequest: (request: unknown) =>
+        this.run('spider.validateCheckRequest', () => this.spiderService.validateCheckRequest(request)),
       outputSchema: () => this.run('spider.outputSchema', () => this.spiderService.getOutputSchema()),
       handoff: (bundle: SpiderAgentBundle, budget?: SpiderBundleBudget, options?: { phase?: SpiderCheckResult['phase'] }) =>
         this.run('spider.handoff', () => this.spiderService.handoff(bundle, budget, options)),
@@ -315,6 +322,14 @@ export class GraphCapability extends CapabilityBase {
       assertCheckPassed: (result: SpiderCheckResult, message?: string) =>
         this.run('spider.assertCheckPassed', () => this.spiderService.assertCheckPassed(result, message)),
       getCheckOutputSchema: () => this.run('spider.getCheckOutputSchema', () => this.spiderService.getCheckOutputSchema()),
+      getCheckInputSchema: () => this.run('spider.getCheckInputSchema', () => this.spiderService.getCheckInputSchema()),
+      getWorkflowPresets: () => this.run('spider.getWorkflowPresets', () => this.spiderService.getWorkflowPresets()),
+      safeValidateCheckRequest: (request: unknown) =>
+        this.run('spider.safeValidateCheckRequest', () => this.spiderService.safeValidateCheckRequest(request)),
+      validateCheckPipelineRequest: (request: unknown) =>
+        this.run('spider.validateCheckPipelineRequest', () => this.spiderService.validateCheckPipelineRequest(request)),
+      safeValidateCheckPipelineRequest: (request: unknown) =>
+        this.run('spider.safeValidateCheckPipelineRequest', () => this.spiderService.safeValidateCheckPipelineRequest(request)),
       prepareSarifUpload: (report: SpiderReport) =>
         this.run('spider.prepareSarifUpload', () => this.spiderService.prepareSarifUpload(report)),
       buildDiagnosticSummary: (report: SpiderReport) =>

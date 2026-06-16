@@ -29,6 +29,16 @@ export function buildSpiderInputSummary(operation: string, input?: unknown): Rec
       ...base,
       intentKind: 'check-pipeline' satisfies SpiderIntentKind,
       phases: obj.phases,
+      workflowPreset: obj.workflowPreset,
+      stopOnFailure: obj.stopOnFailure ?? true,
+    };
+  }
+
+  if (obj.workflowPreset) {
+    return {
+      ...base,
+      intentKind: 'check-pipeline' satisfies SpiderIntentKind,
+      workflowPreset: obj.workflowPreset,
       stopOnFailure: obj.stopOnFailure ?? true,
     };
   }
@@ -41,6 +51,7 @@ export function buildSpiderInputSummary(operation: string, input?: unknown): Rec
       filePath: obj.filePath,
       scope: obj.scope,
       correlationId: obj.correlationId,
+      gatePreset: obj.gatePreset,
     };
   }
 

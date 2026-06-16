@@ -44,6 +44,21 @@ import {
   toGithubCheckRun,
 } from '../policy/spider/AgentResponse.js';
 import { buildCiArtifacts, writeCiArtifactsToDir } from '../policy/spider/AgentCiArtifacts.js';
+import {
+  getAgentToolkitCatalog,
+  validateCheckRequest,
+  validateCheckPipelineRequest,
+  safeValidateCheckRequest,
+  safeValidateCheckPipelineRequest,
+  SPIDER_GATE_POLICY_PRESETS,
+  SPIDER_AGENT_RUNBOOK,
+  formatCatalogPrompt,
+} from '../policy/spider/AgentCatalog.js';
+import {
+  SPIDER_CHECK_INPUT_SCHEMA,
+  getWorkflowPresets,
+} from '../policy/spider/AgentCheckInput.js';
+import { SPIDER_MCP_TOOL_NAMES } from '../policy/spider/spider-mcp-tools.js';
 import { buildAgentHandoff } from '../policy/spider/AgentWorkflow.js';
 import {
   SPIDER_BUNDLE_OUTPUT_SCHEMA,
@@ -176,11 +191,16 @@ export class SpiderService {
    * Unified phase router — single MCP/agent entry for pre-edit, CI, and delta checks.
    */
   async check(request: SpiderCheckRequest): Promise<SpiderCheckResult> {
+    validateCheckRequest(request);
+    const gatePolicy = {
+      ...(request.gatePreset ? SPIDER_GATE_POLICY_PRESETS[request.gatePreset] : {}),
+      ...request.gatePolicy,
+    };
     const budget = request.bundleBudget;
     const auditOpts = {
       includeTypes: request.includeTypes,
       includeRepairDirectives: request.includeRepairDirectives,
-      gatePolicy: request.gatePolicy,
+      gatePolicy: Object.keys(gatePolicy).length > 0 ? gatePolicy : undefined,
       bundleBudget: budget,
       neighborhoodDepth: request.neighborhoodDepth,
     };
@@ -274,6 +294,7 @@ export class SpiderService {
     request: SpiderCheckPipelineRequest,
     responseOptions?: { maxCompactLines?: number; includeSarifMeta?: boolean }
   ): Promise<SpiderCheckPipelineResult> {
+    validateCheckPipelineRequest(request);
     return runCheckPipeline(
       (req) => this.check(req),
       request,
@@ -445,6 +466,27 @@ export class SpiderService {
     return SPIDER_CHECK_OUTPUT_SCHEMA;
   }
 
+  getCheckInputSchema() {
+    return SPIDER_CHECK_INPUT_SCHEMA;
+  }
+
+  getWorkflowPresets() {
+    return getWorkflowPresets();
+  }
+
+  safeValidateCheckRequest(request: unknown) {
+    return safeValidateCheckRequest(request);
+  }
+
+  validateCheckPipelineRequest(request: unknown) {
+    validateCheckPipelineRequest(request);
+    return { valid: true };
+  }
+
+  safeValidateCheckPipelineRequest(request: unknown) {
+    return safeValidateCheckPipelineRequest(request);
+  }
+
   prepareSarifUpload(report: SpiderReport) {
     return prepareSarifUpload(report, this.ctx.workspace.workspacePath);
   }
@@ -483,6 +525,31 @@ export class SpiderService {
 
   getAgentToolSchema() {
     return SPIDER_AGENT_TOOL_SCHEMA;
+  }
+
+  getAgentToolkitCatalog() {
+    return getAgentToolkitCatalog();
+  }
+
+  formatCatalogPrompt() {
+    return formatCatalogPrompt(getAgentToolkitCatalog());
+  }
+
+  getAgentRunbook() {
+    return SPIDER_AGENT_RUNBOOK;
+  }
+
+  getMcpToolNames() {
+    return [...SPIDER_MCP_TOOL_NAMES];
+  }
+
+  getGatePolicyPresets() {
+    return SPIDER_GATE_POLICY_PRESETS;
+  }
+
+  validateCheckRequest(request: unknown) {
+    validateCheckRequest(request);
+    return { valid: true };
   }
 
   setBaseline(report?: SpiderReport): string {

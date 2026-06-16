@@ -135,6 +135,7 @@ export class IntentTracer {
       startedAt,
       finishedAt,
       latencyMs: finishedAt - startedAt,
+      inputSummary: intent?.inputSummary,
       resultSummary,
       substrateEffects: substrateEffects ?? intent?.expectedEffects,
     };
@@ -160,6 +161,7 @@ export class IntentTracer {
       startedAt,
       finishedAt,
       latencyMs: finishedAt - startedAt,
+      inputSummary: intent?.inputSummary,
       errorCode,
       errorMessage,
       substrateEffects: intent?.expectedEffects,

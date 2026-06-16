@@ -1398,6 +1398,58 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
     );
 
     this.server.tool(
+      'spider_get_catalog',
+      'Bootstrap Spider agent ergonomics: runbook, tool schema, MCP tool names, gate presets, phase workflow, and LLM prompt digest.',
+      {
+        responseFormat: z
+          .enum(['markdown', 'json'])
+          .optional()
+          .default('markdown')
+          .describe('markdown=promptDigest for system prompts; json=full SpiderAgentCatalog'),
+      },
+      async (args) => {
+        return this.executeTool('spider_get_catalog', async () => {
+          if (!this.agentContext) return 'AgentContext not available.';
+          const catalog = this.agentContext.graph.spider.getAgentToolkitCatalog();
+          if (args.responseFormat === 'json') {
+            return JSON.stringify(catalog, null, 2);
+          }
+          return catalog.promptDigest;
+        });
+      }
+    );
+
+    this.server.tool(
+      'spider_validate_check_request',
+      'Dry-run validate Spider check or pipeline request JSON without running an audit (fail-closed JSON Schema style).',
+      {
+        requestJson: z.string().describe('JSON SpiderCheckRequest or SpiderCheckPipelineRequest'),
+        kind: z
+          .enum(['check', 'pipeline'])
+          .optional()
+          .default('check')
+          .describe('check=single phase; pipeline=multi-phase or workflowPreset'),
+      },
+      async (args) => {
+        return this.executeTool('spider_validate_check_request', async () => {
+          if (!this.agentContext) return 'AgentContext not available.';
+          const spider = this.agentContext.graph.spider;
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(args.requestJson);
+          } catch {
+            return JSON.stringify({ valid: false, errors: ['requestJson must be valid JSON'] }, null, 2);
+          }
+          const result =
+            args.kind === 'pipeline'
+              ? spider.safeValidateCheckPipelineRequest(parsed)
+              : spider.safeValidateCheckRequest(parsed);
+          return JSON.stringify(result, null, 2);
+        });
+      }
+    );
+
+    this.server.tool(
       'spider_forensic_check',
       'Run Spider structural forensic check (pre-edit, post-edit, CI, or delta). Returns compact agent digest with exit code.',
       {
@@ -1443,6 +1495,14 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
           .optional()
           .default(false)
           .describe('Throw-equivalent: return error text when exitCode !== 0'),
+        gatePreset: z
+          .enum(['ci', 'strict', 'advisory'])
+          .optional()
+          .describe('Named gate policy preset (ci=errors+drift, strict=all blockers, advisory=report only)'),
+        correlationId: z
+          .string()
+          .optional()
+          .describe('Intent trace correlation id (BroccoliDB v25)'),
       },
       async (args) => {
         return this.executeTool('spider_forensic_check', async () => {
@@ -1454,6 +1514,8 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             filePaths: args.filePaths,
             scope: args.scope,
             neighborhoodDepth: args.neighborhoodDepth,
+            gatePreset: args.gatePreset,
+            correlationId: args.correlationId,
             includeTypes: false,
             includeRepairDirectives: true,
           });
@@ -1493,8 +1555,12 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
       {
         phases: z
           .array(z.enum(['pre-edit', 'post-edit', 'ci', 'delta']))
-          .min(1)
-          .describe('Ordered phases to run'),
+          .optional()
+          .describe('Ordered phases — optional when workflowPreset is set'),
+        workflowPreset: z
+          .enum(['local-edit', 'ci-gate', 'pr-review', 'advisory-scan'])
+          .optional()
+          .describe('Named pipeline template (local-edit, ci-gate, pr-review, advisory-scan)'),
         filePath: z.string().optional(),
         filePaths: z.array(z.string()).optional(),
         scope: z.union([z.literal('changed-files'), z.array(z.string())]).optional(),
@@ -1502,6 +1568,8 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
         responseFormat: z.enum(['markdown', 'json']).optional().default('markdown'),
         includeSarifMeta: z.boolean().optional().default(false),
         blockOnFailure: z.boolean().optional().default(false),
+        gatePreset: z.enum(['ci', 'strict', 'advisory']).optional(),
+        correlationId: z.string().optional(),
       },
       async (args) => {
         return this.executeTool('spider_forensic_pipeline', async () => {
@@ -1510,10 +1578,13 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
           const pipeline = await spider.runCheckPipeline(
             {
               phases: args.phases,
+              workflowPreset: args.workflowPreset,
               filePath: args.filePath,
               filePaths: args.filePaths,
               scope: args.scope,
               stopOnFailure: args.stopOnFailure,
+              gatePreset: args.gatePreset,
+              correlationId: args.correlationId,
               includeTypes: false,
               includeRepairDirectives: true,
             },
@@ -1586,6 +1657,8 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
         scope: z.union([z.literal('changed-files'), z.array(z.string())]).optional(),
         outputDir: z.string().describe('Directory to write artifact files'),
         includeSarifMeta: z.boolean().optional().default(true),
+        gatePreset: z.enum(['ci', 'strict', 'advisory']).optional(),
+        correlationId: z.string().optional(),
       },
       async (args) => {
         return this.executeTool('spider_export_ci_artifacts', async () => {
@@ -1595,6 +1668,8 @@ Affected Paths: ${result.affectedPaths.join(', ') || 'None'}
             phase: args.phase,
             filePath: args.filePath,
             scope: args.scope,
+            gatePreset: args.gatePreset,
+            correlationId: args.correlationId,
             includeTypes: false,
             includeRepairDirectives: true,
           });

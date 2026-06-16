@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { AgentContext } from '../core/agent-context.js';
 import { ForensicSpider } from '../core/policy/spider/ForensicSpider.js';
 import { SPIDER_AGENT_ERGONOMICS_METHODS } from '../core/policy/spider/spider-agent-methods.js';
+import { SPIDER_MCP_TOOL_NAMES } from '../core/policy/spider/spider-mcp-tools.js';
 import { SpiderEngine } from '../core/policy/SpiderEngine.js';
 import { Workspace } from '../core/workspace.js';
 import { BufferedDbPool } from '../infrastructure/db/BufferedDbPool.js';
@@ -60,6 +61,11 @@ async function runTest() {
       'function',
       `GraphCapability.spider.${method} must be exposed`
     );
+  }
+
+  const mcpSource = fs.readFileSync(path.join(packageRoot, 'core/mcp.ts'), 'utf8');
+  for (const toolName of SPIDER_MCP_TOOL_NAMES) {
+    assert.ok(mcpSource.includes(`'${toolName}'`), `MCP must register ${toolName}`);
   }
 
   const srcDir = path.join(root, 'src');

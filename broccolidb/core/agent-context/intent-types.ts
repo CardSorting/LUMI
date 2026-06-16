@@ -84,6 +84,7 @@ export interface IntentTrace {
   latencyMs?: number;
   errorCode?: string;
   errorMessage?: string;
+  inputSummary?: Record<string, unknown>;
   resultSummary?: Record<string, unknown>;
   substrateEffects?: string[];
   persisted?: boolean;

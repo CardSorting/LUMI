@@ -2,6 +2,46 @@
 
 Spider reports are designed for **agents first** — structured like SARIF runs, ESLint JSON output, LSP `PublishDiagnostics`, and GitHub Checks conclusions.
 
+## Agent toolkit catalog
+
+Bootstrap MCP/LLM clients with one call:
+
+```typescript
+const catalog = ctx.graph.spider.getAgentToolkitCatalog();
+// catalog.runbook — agent system prompt doctrine
+// catalog.promptDigest — token-efficient bootstrap for LLM system prompts
+// catalog.toolSchema — function-calling schema
+// catalog.mcpTools — native MCP tool names (includes spider_get_catalog)
+// catalog.phaseWorkflow — structured pre-edit → ci → delta map
+// catalog.preferredEntrypoints — canonical entry points
+// catalog.checkOutputSchema / wireOutputSchema
+// catalog.gatePresets — ci | strict | advisory
+// catalog.problemMatchers — VS Code / GitHub Actions parsers
+
+// catalog.checkInputSchema / pipelineInputSchema — JSON Schema for requests
+// catalog.workflowPresets — local-edit | ci-gate | pr-review | advisory-scan
+
+// Dry-run validation (no audit):
+ctx.graph.spider.safeValidateCheckRequest({ phase: 'ci', scope: 'changed-files' });
+// MCP: spider_validate_check_request({ requestJson: '...', kind: 'check' | 'pipeline' })
+
+// Workflow preset pipeline:
+await ctx.graph.spider.runCheckPipeline({
+  workflowPreset: 'local-edit',
+  filePath: 'src/foo.ts',
+});
+
+// Or MCP bootstrap (no audit run):
+// spider_get_catalog({ responseFormat: 'markdown' | 'json' })
+```
+
+Gate presets on check:
+
+```typescript
+await ctx.graph.spider.check({ phase: 'ci', scope: 'changed-files', gatePreset: 'strict' });
+ctx.graph.spider.validateCheckRequest({ phase: 'pre-edit', filePath: 'src/foo.ts' });
+```
+
 ## Quick start
 
 ### Unified check (single MCP entry)

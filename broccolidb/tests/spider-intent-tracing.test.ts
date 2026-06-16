@@ -34,6 +34,7 @@ async function runTest() {
     scope: ['src/a.ts'],
     includeTypes: false,
     correlationId,
+    gatePreset: 'advisory',
   });
 
   const { traces } = await context.audit.traces({ limit: 20, correlationId });
@@ -50,6 +51,10 @@ async function runTest() {
   assert.ok(graphTraces.length >= 2);
   const checkTrace = graphTraces.find((t) => t.operation === 'spider.check');
   assert.ok(checkTrace?.resultSummary && 'phase' in checkTrace.resultSummary);
+  const advisoryTrace = graphTraces.find(
+    (t) => (t.inputSummary as { gatePreset?: string })?.gatePreset === 'advisory'
+  );
+  assert.ok(advisoryTrace, 'expected gatePreset in intent input summary');
 
   await context.stop();
   fs.rmSync(root, { recursive: true, force: true });

@@ -77,6 +77,11 @@ async function runTest() {
   });
   assert.strictEqual(auditCheck.$schema, 'broccolidb.spider.check-response/v1');
 
+  const handoff = context.graph.spider.handoffFromCheck(check);
+  assert.strictEqual(handoff.wire?.wireSchema, SPIDER_WIRE_SCHEMA_V2);
+  assert.strictEqual(handoff.checkResponse?.$schema, 'broccolidb.spider.check-response/v1');
+  assert.ok(context.audit.spider.formatCatalogPrompt().includes('Spider Forensic Agent Runbook'));
+
   await context.stop();
   fs.rmSync(root, { recursive: true, force: true });
 }

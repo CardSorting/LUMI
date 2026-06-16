@@ -223,6 +223,7 @@ export class StreamingToolExecutor {
             phase: 'pre-edit',
             filePath: mutationPath.relativePath,
             neighborhoodDepth: 1,
+            correlationId: toolUseId,
             includeTypes: false,
             includeRepairDirectives: true,
           });

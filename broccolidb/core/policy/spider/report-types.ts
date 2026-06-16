@@ -367,6 +367,8 @@ export interface SpiderCheckRequest {
   correlationId?: string;
   agentId?: string;
   taskId?: string;
+  /** Named gate policy — merged with gatePolicy when set. */
+  gatePreset?: 'ci' | 'strict' | 'advisory';
 }
 
 export interface SpiderCheckResult {
@@ -460,7 +462,10 @@ export interface SpiderGithubCheckAnnotation {
 
 /** Multi-phase agent/CI pipeline — pre-edit → ci → delta in one round-trip. */
 export interface SpiderCheckPipelineRequest extends Omit<SpiderCheckRequest, 'phase'> {
-  phases: SpiderCheckPhase[];
+  /** Explicit phase sequence — optional when workflowPreset is set. */
+  phases?: SpiderCheckPhase[];
+  /** Named multi-phase template (local-edit, ci-gate, pr-review, advisory-scan). */
+  workflowPreset?: 'local-edit' | 'ci-gate' | 'pr-review' | 'advisory-scan';
   /** Stop after first failing phase (default true). */
   stopOnFailure?: boolean;
 }
