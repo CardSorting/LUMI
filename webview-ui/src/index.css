@@ -131,15 +131,7 @@
 	content: "";
 }
 
-/* Toolbar overflow — inline push panel, hidden when closed */
-.lumi-toolbar-shell > .lumi-toolbar-overflow-panel {
-	display: none;
-}
-.lumi-toolbar-shell[open] > .lumi-toolbar-overflow-panel {
-	display: flex;
-}
-
-/* Inline disclosure rows (auto-approve, etc.) */
+/* Native <details> menus — no portal overlays */
 .lumi-inline-disclosure > summary::-webkit-details-marker {
 	display: none;
 }

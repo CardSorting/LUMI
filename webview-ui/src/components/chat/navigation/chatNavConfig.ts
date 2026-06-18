@@ -8,11 +8,9 @@ export interface ChatNavItem {
 	icon: string
 	/** Pinned in the compact toolbar (narrow sidebar). */
 	showInToolbar: boolean
-	/** Grouped in the ⋮ overflow menu to save horizontal space. */
-	showInOverflowMenu: boolean
 }
 
-/** Shared navigation — plain labels; overflow keeps the toolbar uncluttered in narrow panels. */
+/** Shared navigation — plain labels; all destinations are toolbar icon buttons. */
 export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 	{
 		id: "newChat",
@@ -21,7 +19,6 @@ export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 		tooltip: "Start a fresh conversation",
 		icon: "PlusIcon",
 		showInToolbar: true,
-		showInOverflowMenu: false,
 	},
 	{
 		id: "history",
@@ -30,7 +27,6 @@ export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 		tooltip: "Browse past conversations",
 		icon: "HistoryIcon",
 		showInToolbar: true,
-		showInOverflowMenu: false,
 	},
 	{
 		id: "tools",
@@ -38,8 +34,7 @@ export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 		shortLabel: "Tools",
 		tooltip: "Manage connected tools",
 		icon: "server",
-		showInToolbar: false,
-		showInOverflowMenu: true,
+		showInToolbar: true,
 	},
 	{
 		id: "account",
@@ -47,8 +42,7 @@ export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 		shortLabel: "Account",
 		tooltip: "Your account and usage",
 		icon: "UserCircleIcon",
-		showInToolbar: false,
-		showInOverflowMenu: true,
+		showInToolbar: true,
 	},
 	{
 		id: "settings",
@@ -56,8 +50,7 @@ export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 		shortLabel: "Settings",
 		tooltip: "Model and preferences",
 		icon: "SettingsIcon",
-		showInToolbar: false,
-		showInOverflowMenu: true,
+		showInToolbar: true,
 	},
 ]
 
@@ -67,4 +60,3 @@ export const CHAT_NAV_BY_ID = Object.fromEntries(CHAT_NAV_ITEMS.map((item) => [i
 >
 
 export const CHAT_TOOLBAR_ITEMS = CHAT_NAV_ITEMS.filter((item) => item.showInToolbar && item.id !== "newChat")
-export const CHAT_OVERFLOW_ITEMS = CHAT_NAV_ITEMS.filter((item) => item.showInOverflowMenu)

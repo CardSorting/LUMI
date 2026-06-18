@@ -1,34 +1,22 @@
-import type { AuditHealthSummary } from "@shared/audit/auditRollup"
-import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
-import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
-import { ArrowLeft, ChevronDown, MoreHorizontal } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef } from "react"
-import { TaskStatusChip } from "@/components/chat/task-header/TaskStatusChip"
+import { ArrowLeft, ChevronDown } from "lucide-react"
+import { useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
-import { CHAT_NAV_BY_ID, CHAT_OVERFLOW_ITEMS, CHAT_TOOLBAR_ITEMS, type ChatNavItemId } from "./chatNavConfig"
-
-export interface TaskToolbarStatus {
-	auditHealth?: AuditHealthSummary
-	auditMetadata?: TaskAuditMetadata
-	subagentAuditSummary?: SubagentAuditSummary
-}
+import { CHAT_NAV_BY_ID, CHAT_TOOLBAR_ITEMS, type ChatNavItemId } from "./chatNavConfig"
 
 interface ChatToolbarProps {
 	hasActiveConversation?: boolean
 	/** Truncated task prompt — tap to expand/collapse task details. */
 	conversationTitle?: string
-	taskStatus?: TaskToolbarStatus
 }
 
 /**
- * Compact toolbar for narrow VS Code sidebars.
- * Overflow menu pushes content down (inline) — no floating overlays.
+ * Compact toolbar for narrow VS Code sidebars — icon buttons only, no overflow menu.
  */
-export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, taskStatus }: ChatToolbarProps) => {
+export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }: ChatToolbarProps) => {
 	const {
 		navigateToHistory,
 		navigateToSettings,
@@ -43,8 +31,6 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 		expandTaskHeader,
 		setExpandTaskHeader,
 	} = useExtensionState()
-
-	const overflowRef = useRef<HTMLDetailsElement>(null)
 
 	const toggleTaskDetails = useCallback(() => {
 		setExpandTaskHeader(!expandTaskHeader)
@@ -109,40 +95,11 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 		],
 	)
 
-	const handleOverflowSelect = useCallback(
-		(id: ChatNavItemId) => {
-			if (id !== "history") hideHistory()
-			handleNavigate(id)
-			if (overflowRef.current) {
-				overflowRef.current.open = false
-			}
-		},
-		[handleNavigate, hideHistory],
-	)
-
-	useEffect(() => {
-		if (expandTaskHeader && overflowRef.current?.open) {
-			overflowRef.current.open = false
-		}
-	}, [expandTaskHeader])
-
-	useEffect(() => {
-		const closeOnOutside = (e: MouseEvent) => {
-			if (overflowRef.current?.open && !overflowRef.current.contains(e.target as Node)) {
-				overflowRef.current.open = false
-			}
-		}
-		document.addEventListener("mousedown", closeOnOutside)
-		return () => document.removeEventListener("mousedown", closeOnOutside)
-	}, [])
-
 	const newChatItem = CHAT_NAV_BY_ID.newChat
 	const centerLabel = showHistory ? "Past chats" : conversationTitle?.trim() || "Chat"
 
-	const overflowActive = CHAT_OVERFLOW_ITEMS.some((item) => item.id === activePanel)
-
 	return (
-		<details className="lumi-toolbar-shell flex-none border-b border-border/30 bg-background z-10" ref={overflowRef}>
+		<div className="flex-none border-b border-border/30 bg-background z-10">
 			<div className="flex items-center gap-1 px-2 h-9" id="lumi-chat-toolbar">
 				{showHistory ? (
 					<Button
@@ -174,7 +131,8 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 							aria-expanded={expandTaskHeader}
 							className={cn(
 								"flex-1 min-w-0 flex items-center gap-0.5 text-left",
-								"bg-transparent border-0 cursor-pointer p-0 group",
+								"bg-transparent border-0 cursor-pointer p-0",
+								"hover:[&>span]:underline",
 								"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm",
 							)}
 							onClick={toggleTaskDetails}
@@ -183,7 +141,7 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 							{expandTaskHeader ? (
 								<ChevronDown aria-hidden className="size-3 shrink-0 text-muted-foreground" strokeWidth={2} />
 							) : null}
-							<span className="text-[11px] truncate m-0 leading-none font-medium text-foreground group-hover:underline">
+							<span className="text-[11px] truncate m-0 leading-none font-medium text-foreground">
 								{centerLabel}
 							</span>
 						</button>
@@ -197,14 +155,6 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 							{centerLabel}
 						</p>
 					)}
-					{hasActiveConversation && !showHistory && !expandTaskHeader && taskStatus ? (
-						<TaskStatusChip
-							auditHealth={taskStatus.auditHealth}
-							auditMetadata={taskStatus.auditMetadata}
-							onExpand={() => setExpandTaskHeader(true)}
-							subagentAuditSummary={taskStatus.subagentAuditSummary}
-						/>
-					) : null}
 				</div>
 
 				<nav aria-label="Chat navigation" className="flex items-center gap-0.5 shrink-0">
@@ -228,41 +178,8 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 							</Button>
 						)
 					})}
-					<summary
-						aria-label="More options"
-						className={cn(
-							"lumi-details-trigger flex items-center justify-center h-7 w-7 rounded-md cursor-pointer list-none",
-							"hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-							overflowActive && "bg-accent/20 text-foreground ring-1 ring-border/50",
-						)}
-						title="Preferences, tools, and account">
-						<MoreHorizontal aria-hidden className="size-4" strokeWidth={2} />
-					</summary>
 				</nav>
 			</div>
-
-			<nav
-				aria-label="More navigation"
-				className="lumi-toolbar-overflow-panel flex flex-col border-t border-border/20 px-2 py-1.5 gap-0.5">
-				{CHAT_OVERFLOW_ITEMS.map((item) => {
-					const isActive = activePanel === item.id
-					return (
-						<button
-							aria-current={isActive ? "page" : undefined}
-							className={cn(
-								"flex w-full items-center gap-2 rounded-sm px-2.5 py-1.5 text-xs text-left",
-								"hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-								isActive && "bg-accent/20 font-medium",
-							)}
-							key={item.id}
-							onClick={() => handleOverflowSelect(item.id)}
-							type="button">
-							<Icon className="stroke-[1.5] [svg]:size-3.5 shrink-0 opacity-80" name={item.icon} size={14} />
-							<span>{item.label}</span>
-						</button>
-					)
-				})}
-			</nav>
-		</details>
+		</div>
 	)
 }

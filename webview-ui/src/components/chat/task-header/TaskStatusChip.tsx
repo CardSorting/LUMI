@@ -16,7 +16,7 @@ export interface TaskStatusChipProps {
  * replaces a row of audit badges in narrow sidebars.
  */
 export const TaskStatusChip = memo(({ auditHealth, auditMetadata, subagentAuditSummary, onExpand }: TaskStatusChipProps) => {
-	const hasGateBlock = auditMetadata?.gateBlocked === true
+	const hasGateBlock = auditMetadata?.gate_blocked === true
 	const hasWarnings = (auditHealth?.warningViolationCount ?? 0) + (auditHealth?.criticalViolationCount ?? 0) > 0
 	const hasSubagent = (subagentAuditSummary?.parentGateSignals.length ?? 0) > 0
 	const hasNotes = hasGateBlock || hasWarnings || hasSubagent || Boolean(auditHealth?.latestGrade)

@@ -1,7 +1,7 @@
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { EmptyRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { AskResponseRequest, NewTaskRequest } from "@shared/proto/dietcode/task"
-import { useCallback, useMemo } from "react"
+import { useCallback, useMemo, useRef } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { SlashServiceClient, TaskServiceClient } from "@/services/grpc-client"
 import type { ButtonActionType } from "../shared/buttonConfig"
@@ -27,6 +27,7 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 		lastMessage,
 	} = chatState
 	const sendRouteOptions = useMemo(() => ({ taskSessionActive: Boolean(currentTaskItem?.id) }), [currentTaskItem?.id])
+	const cancelInFlightRef = useRef(false)
 
 	// Handle sending a message
 	const handleSendMessage = useCallback(

@@ -53,7 +53,7 @@ export const TaskNotesSection = memo(
 			[latestAuditMetadata, gateOptions],
 		)
 
-		const hasGateBlock = latestAuditMetadata?.gateBlocked === true
+		const hasGateBlock = latestAuditMetadata?.gate_blocked === true
 		const showAuditHistory = Boolean(auditSnapshots && shouldShowAuditHistoryStrip(auditSnapshots, auditHealth))
 		const showPreCompletion = shouldShowPreCompletionChecklist(preCompletionSummary)
 		const showOrchestrator =

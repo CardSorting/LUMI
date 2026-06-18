@@ -1,4 +1,5 @@
 import { isAgentActiveForPlaceholder, isTaskInIdleGap } from "@shared/agentActivity"
+import { buildAuditEventLiveAnnouncement } from "@shared/audit/auditEventAnnouncements"
 import { buildUIGateEvaluationOptions } from "@shared/audit/auditGateUiOptions"
 import { getAutoScrollAuditEventTs, getLatestAdvisorySnapshot, getLatestGateBlockSnapshot } from "@shared/audit/auditHistoryUtils"
 import {
@@ -430,19 +431,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				{auditLiveAnnouncement}
 			</div>
 			<div className="flex flex-col flex-1 overflow-hidden">
-				<ChatToolbar
-					conversationTitle={conversationTitle}
-					hasActiveConversation={Boolean(task)}
-					taskStatus={
-						task
-							? {
-									auditHealth,
-									auditMetadata: latestAuditMetadata,
-									subagentAuditSummary,
-								}
-							: undefined
-					}
-				/>
+				<ChatToolbar conversationTitle={conversationTitle} hasActiveConversation={Boolean(task)} />
 				{showHistory ? (
 					<InlineHistoryPanel onClose={hideHistory} />
 				) : task ? (
