@@ -1,6 +1,6 @@
 # LUMI Companion Brief
 
-**Executive summary · v1.0.3 · workspace-verified**
+**Executive summary · v1.0.5 · workspace-verified**
 
 *Companion to the [Technical Whitepaper](whitepaper.md). All figures below are measured from the agent workspace (`src/`, `webview-ui/`, root `package.json`).*
 
@@ -8,7 +8,7 @@
 
 ## One sentence
 
-**LUMI** (`CardSorting.lumi`) is a VS Code agent extension in the codemarie-new monorepo: Plan/Act modes, 62 typed tools, human-in-the-loop approval, MCP and subagent extension, and BroccoliDB-backed memory — designed as a calm coding companion you can keep open all day.
+**LUMI** (`CardSorting.lumi-vscode` on VS Marketplace, `CardSorting.lumi` on Open VSX) is a VS Code agent extension in the codemarie-new monorepo: Plan/Act modes, 62 typed tools, human-in-the-loop approval, MCP and subagent extension, and BroccoliDB-backed memory — designed as a calm coding companion you can keep open all day.
 
 ---
 
@@ -16,8 +16,8 @@
 
 | Metric | Value | Where |
 |--------|-------|-------|
-| Extension version | **1.0.3** | `package.json` |
-| Publisher / ID | **CardSorting.lumi** | `package.json` |
+| Extension version | **1.0.5** | `package.json` |
+| Publisher / ID | **CardSorting.lumi-vscode** (VS Marketplace) · **CardSorting.lumi** (Open VSX) | `package.json` |
 | Registered VS Code commands | **~25** `lumi.*` | `package.json` `contributes.commands` |
 | Static tool enum values | **62** | `DietCodeDefaultTool` in `src/shared/tools.ts` |
 | Tool handler files | **55** | `src/core/task/tools/handlers/` |
@@ -113,7 +113,7 @@ Full list: [All tools](../tools-reference/all-dietcode-tools.mdx).
 
 ## Integration checklist (extension user)
 
-- [ ] Install `CardSorting.lumi` (VSIX or marketplace)
+- [ ] Install `CardSorting.lumi-vscode` or `CardSorting.lumi` (VSIX or marketplace)
 - [ ] Configure Plan and/or Act provider + API key
 - [ ] Add `.dietcodeignore` for deps and secrets
 - [ ] Optional: `.dietcoderules/` for project rules
@@ -169,4 +169,4 @@ npm run roadmap:audit    # ROADMAP consistency
 | [Project map](../PROJECT_MAP.md) | 1-to-1 paths |
 | [BroccoliDB Companion Brief](../../broccolidb/docs/papers/companion-brief.md) | Substrate layer |
 
-**Extension:** `CardSorting.lumi` · **License:** Apache-2.0 · **Internal prefix:** `DietCode*` types
+**Extension:** `CardSorting.lumi-vscode` / `CardSorting.lumi` · **License:** Apache-2.0 · **Internal prefix:** `DietCode*` types

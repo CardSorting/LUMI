@@ -4917,4 +4917,16 @@ export const nousResearchModels = {
 		description:
 			"Kimi K2.7 Code is a coding-focused model with 262K context, multimodal inputs, and always-on thinking mode for long-horizon agentic programming tasks.",
 	},
+	"z-ai/glm-5.2": {
+		maxTokens: 131_072,
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 1.4,
+		outputPrice: 4.4,
+		cacheReadsPrice: 0.26,
+		description:
+			"GLM-5.2 is Z.ai's flagship model for long-horizon tasks with a 1M-token context window, configurable reasoning effort, and strong agentic coding capabilities.",
+	},
 } as const satisfies Record<string, ModelInfo>

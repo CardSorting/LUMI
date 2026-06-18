@@ -60,3 +60,55 @@ node scripts/rewrite-agent-docs.mjs   # DietCode→LUMI patterns in docs/
 ```
 
 Review the diff — do not blind-merge enterprise/hosted-service pages that legitimately reference `dietcode.bot`.
+
+## Extension publish (dual marketplace IDs)
+
+| Registry | Extension ID | `package.json` `name` used at publish |
+|----------|--------------|--------------------------------------|
+| **VS Code Marketplace** | `CardSorting.lumi-vscode` | `lumi-vscode` (default) |
+| **Open VSX** | `CardSorting.lumi` | `lumi` (patched by script) |
+
+Set tokens: `VSCE_PAT` ([Azure DevOps](https://dev.azure.com)) · `OVSX_PAT` ([open-vsx.org](https://open-vsx.org/user-settings/tokens))
+
+```bash
+npm run package:vsix              # dist/lumi-vscode-<version>.vsix
+npm run package:vsix:openvsx        # dist/lumi-<version>.vsix (CardSorting.lumi)
+npm run package:vsix:all            # both VSIX variants
+
+# Publish to both registries (recommended release)
+VSCE_PAT=... OVSX_PAT=... npm run publish:all
+
+# Or one at a time
+VSCE_PAT=... npm run publish:vscode
+OVSX_PAT=... npm run publish:openvsx
+
+# Pre-release builds
+VSCE_PAT=... OVSX_PAT=... npm run publish:all:prerelease
+```
+
+Open VSX publish runs `scripts/publish-openvsx.mjs`, which packages via `scripts/package-openvsx-vsix.mjs` and uploads `dist/lumi-<version>.vsix`.
+
+### Open VSX namespace verification
+
+Open VSX shows a **warning** when the publishing GitHub user is not a verified owner of the `CardSorting` namespace. This is **not** fixed by republishing alone — Eclipse must grant namespace ownership.
+
+**One-time setup (CardSorting GitHub account):**
+
+1. Log in at [open-vsx.org](https://open-vsx.org) with the **CardSorting** GitHub account.
+2. Link your Eclipse account and sign the **Publisher Agreement** (Profile → Log in with Eclipse → Show Publisher Agreement).
+3. Create `OVSX_PAT` at [Access Tokens](https://open-vsx.org/user-settings/tokens).
+4. Run `OVSX_PAT=... npm run setup:openvsx` (creates namespace + verifies token).
+
+**Claim ownership (required to remove the warning):**
+
+File an issue at [EclipseFdn/open-vsx.org](https://github.com/EclipseFdn/open-vsx.org/issues) requesting ownership of namespace `CardSorting`. Include links to `https://github.com/CardSorting`, `https://github.com/CardSorting/DietCodeMarie`, and `https://open-vsx.org/extension/CardSorting/lumi`.
+
+Pending claim: [Issue #11189](https://github.com/EclipseFdn/open-vsx.org/issues/11189)
+
+After Eclipse grants ownership (issue labeled `granted`), republish:
+
+```bash
+OVSX_PAT=... npm run publish:openvsx
+```
+
+New versions will show the verified shield icon. Existing unverified versions remain marked until republished under the verified namespace.

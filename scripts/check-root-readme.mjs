@@ -126,7 +126,8 @@ for (const link of requiredLinks) {
 	assert.ok(upper.includes(link), `root README missing link/path: ${link}`)
 }
 
-assert.ok(upper.includes("CardSorting.lumi"), "root README must cite extension ID")
+assert.ok(upper.includes("CardSorting.lumi-vscode"), "root README must cite VS Marketplace extension ID")
+assert.ok(upper.includes("CardSorting.lumi"), "root README must cite Open VSX extension ID")
 assert.ok(/openrouter|OpenRouter/.test(upper), "root README must mention OpenRouter")
 assert.ok(upper.includes("```mermaid"), "root README must include mermaid diagrams")
 assert.ok(upper.includes("PreToolUse"), "root README must document lifecycle hooks")

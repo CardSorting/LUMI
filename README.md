@@ -18,9 +18,10 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-1.0.3-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-1.0.5-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
-  <img src="https://img.shields.io/badge/extension-CardSorting.lumi-purple" alt="Extension ID" />
+  <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
+  <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
   <img src="https://img.shields.io/badge/tools-62-orange" alt="Tools" />
   <img src="https://img.shields.io/badge/providers-4-blue" alt="Providers" />
   <a href="https://github.com/CardSorting/DietCodeMarie"><img src="https://img.shields.io/github/stars/CardSorting/DietCodeMarie?style=social" alt="GitHub" /></a>
@@ -43,10 +44,12 @@
 </p>
 
 ```bash
-# Fastest path — VS Code Extensions (search "LUMI" / CardSorting.lumi)
+# VS Code Marketplace (CardSorting.lumi-vscode)
+code --install-extension CardSorting.lumi-vscode
+# Open VSX / Cursor registry (CardSorting.lumi)
 code --install-extension CardSorting.lumi
 # Or from a VSIX build:
-npm run package && code --install-extension dist/*.vsix
+npm run package:vsix && code --install-extension dist/*.vsix
 ```
 
 ---
@@ -92,20 +95,21 @@ npm run package && code --install-extension dist/*.vsix
 
 ## Overview
 
-**LUMI** (`CardSorting.lumi`, v1.0.3) is a VS Code extension that acts as an agentic pair programmer: it reads your workspace, plans changes, runs terminal commands, uses a browser, connects MCP servers, and edits files — with **explicit approval at every mutating step**.
+**LUMI** (VS Marketplace: `CardSorting.lumi-vscode`, Open VSX: `CardSorting.lumi`) is a VS Code extension that acts as an agentic pair programmer: it reads your workspace, plans changes, runs terminal commands, uses a browser, connects MCP servers, and edits files — with **explicit approval at every mutating step**.
 
 Task history and cognitive memory use **BroccoliDB** (`@noorm/broccolidb`) locally. The sidebar UX is designed for **long sessions** without alert fatigue.
 
 | | |
 |---|---|
 | **Publisher** | CardSorting |
-| **Extension ID** | `CardSorting.lumi` |
+| **Extension ID (VS Marketplace)** | `CardSorting.lumi-vscode` |
+| **Extension ID (Open VSX)** | `CardSorting.lumi` |
 | **License** | [Apache-2.0](LICENSE) |
 | **Repository** | [github.com/CardSorting/DietCodeMarie](https://github.com/CardSorting/DietCodeMarie) |
 | **Homepage** | [dietcode.io](https://dietcode.io) |
 | **Changelog** | [changelogv3.md](changelogv3.md) |
 | **Monorepo** | npm workspaces: root extension + `broccolidb/` package |
-| **Marketplace** | Search **LUMI** → publisher **CardSorting** (`CardSorting.lumi`) |
+| **Marketplace** | VS Marketplace: **CardSorting.lumi-vscode** · Open VSX: **CardSorting.lumi** (search **LUMI**) |
 | **Enterprise** | [docs/ENTERPRISE_DEPLOYMENT.md](docs/ENTERPRISE_DEPLOYMENT.md) — on-prem / self-hosted |
 
 Workspace-verified metrics: [docs/papers/companion-brief.md](docs/papers/companion-brief.md).
@@ -184,7 +188,7 @@ Override storage root: `DIETCODE_DIR` or `CLINE_DIR` env var. Details: [docs/SEC
 | Environment | Support | Notes |
 |-------------|---------|-------|
 | **VS Code 1.84+** | Full | Primary target (`package.json` `engines.vscode`) |
-| **Cursor** | VSIX / marketplace | VS Code–compatible; install `CardSorting.lumi` |
+| **Cursor** | VSIX / marketplace | VS Code–compatible; install `CardSorting.lumi` (Open VSX) or `CardSorting.lumi-vscode` (VS Marketplace) |
 | **Git** | Required for checkpoints | Shadow Git repo in extension global storage |
 | **Node.js 20+** | Development only | Not required for end users installing from marketplace |
 | **git-lfs** | Clone only | Required when cloning this repository |
@@ -205,8 +209,8 @@ Override storage root: `DIETCODE_DIR` or `CLINE_DIR` env var. Details: [docs/SEC
 
 | Method | Command / action |
 |--------|------------------|
-| **Marketplace** | Extensions → search **LUMI** → install **CardSorting.lumi** |
-| **VSIX** | `code --install-extension lumi-1.0.3.vsix` or `cursor --install-extension lumi-1.0.3.vsix` |
+| **Marketplace** | Extensions → search **LUMI** → **CardSorting.lumi-vscode** (VS Code) or **CardSorting.lumi** (Open VSX) |
+| **VSIX** | `npm run package:vsix` → `code --install-extension dist/lumi-vscode-<version>.vsix` |
 | **From source** | See [Development](#development) → press **F5** in VS Code |
 
 Provider setup: [docs/provider-config/README.mdx](docs/provider-config/README.mdx) · Full walkthrough: [docs/getting-started/quick-start.mdx](docs/getting-started/quick-start.mdx).
@@ -547,7 +551,7 @@ flowchart TB
 
 | Package | Path | npm | Role |
 |---------|------|-----|------|
-| **LUMI extension** | repo root | `lumi` (private) | VS Code agent — `CardSorting.lumi` |
+| **LUMI extension** | repo root | `lumi-vscode` | VS Code agent — `CardSorting.lumi-vscode` / `CardSorting.lumi` |
 | **BroccoliDB** | `broccolidb/` | `@noorm/broccolidb` | Context store, runtime, Spider |
 
 npm workspaces in root `package.json`: `"."` and `"broccolidb"`. Install BroccoliDB standalone: [broccolidb/README.md](broccolidb/README.md).
@@ -693,7 +697,7 @@ Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Symptom | Fix |
 |---------|-----|
-| Extension missing from sidebar | Install **CardSorting.lumi**; disable DietCode forks; `Developer: Reload Window` |
+| Extension missing from sidebar | Install **CardSorting.lumi-vscode** or **CardSorting.lumi**; disable DietCode forks; `Developer: Reload Window` |
 | Checkpoints fail / “Git must be installed” | Install Git; ensure `git` is on `PATH` |
 | Slow on large repos | Add [`.dietcodeignore`](docs/customization/dietcodeignore.mdx); disable checkpoints temporarily |
 | Provider auth errors | Re-open LUMI Settings → re-enter API key or re-auth OAuth provider |
@@ -715,7 +719,7 @@ Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
 | **Security (private)** | [SECURITY.md](SECURITY.md) → security@dietcode.bot |
 | **Walkthrough** | Command palette → `LUMI: Open Walkthrough` (`lumi.openWalkthrough`) |
 
-Include VS Code version, LUMI **1.0.3**, provider used, and steps to reproduce.
+Include VS Code version, LUMI **1.0.5**, provider used, and steps to reproduce.
 
 ---
 
@@ -772,7 +776,7 @@ Not in this build's wired provider list. Use **OpenRouter** as a gateway, or see
 <details>
 <summary><strong>Extension doesn't appear after install?</strong></summary>
 
-Search for **CardSorting.lumi** (not "DietCode"). Disable conflicting forks (`dreambeesai.dietcode`, `dietcode.dietcode`). Reload the window (`Developer: Reload Window`).
+Search for **CardSorting.lumi-vscode** (VS Marketplace) or **CardSorting.lumi** (Open VSX) — not "DietCode". Disable conflicting forks (`dreambeesai.dietcode`, `dietcode.dietcode`). Reload the window (`Developer: Reload Window`).
 </details>
 
 ---
