@@ -1,32 +1,23 @@
-import { shouldShowAuditHistoryStrip } from "@shared/audit/auditHistoryUtils"
 import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessages"
 import type { PreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
+import { StringArrayRequest } from "@shared/proto/dietcode/common"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
+import { TaskServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
-import { AuditHealthChip } from "./AuditHealthChip"
-import { AuditHistoryStrip } from "./AuditHistoryStrip"
-import CopyTaskButton from "./buttons/CopyTaskButton"
-import DeleteTaskButton from "./buttons/DeleteTaskButton"
-import NewTaskButton from "./buttons/NewTaskButton"
+import ExpandHandle from "../ExpandHandle"
 import OpenDiskConversationHistoryButton from "./buttons/OpenDiskConversationHistoryButton"
 import { CheckpointError } from "./CheckpointError"
 import ContextWindow from "./ContextWindow"
 import { FocusChain } from "./FocusChain"
 import { highlightText } from "./Highlights"
-import { OrchestratorGateStrip } from "./OrchestratorGateStrip"
-import { PreCompletionGateStrip } from "./PreCompletionGateStrip"
-import { SubagentAuditBadge } from "./SubagentAuditBadge"
-import { SubagentHandoffStrip } from "./SubagentHandoffStrip"
-import { TaskAuditBadge } from "./TaskAuditBadge"
-import { ViolationSessionLedgerStrip } from "./ViolationSessionLedgerStrip"
+import { TaskNotesSection } from "./TaskNotesSection"
 
 const IS_DEV = process.env.IS_DEV === '"true"'
 interface TaskHeaderProps {
@@ -65,7 +56,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	lastApiReqTotalTokens,
 	lastProgressMessageText,
 	latestAuditMetadata,
-	auditTrend,
+	auditTrend: _auditTrend,
 	auditSnapshots,
 	auditHealth,
 	subagentAuditSummary,
@@ -74,7 +65,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	onScrollToAuditMessage,
 	onScrollToLatestGateBlock,
 	onScrollToLatestAdvisory,
-	onClose,
+	onClose: _onClose,
 	onSendMessage,
 }) => {
 	const {
@@ -85,19 +76,20 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		navigateToSettings,
 		mode,
 		expandTaskHeader: isTaskExpanded,
-		setExpandTaskHeader: setIsTaskExpanded,
 		environment,
 	} = useExtensionState()
-
-	const handleExpandTaskAudit = useCallback(() => {
-		setIsTaskExpanded(true)
-	}, [setIsTaskExpanded])
 
 	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
 	const [isTextOverflowing, setIsTextOverflowing] = useState(false)
 	const highlightedTextRef = React.useRef<HTMLDivElement>(null)
 
 	const highlightedText = useMemo(() => highlightText(task.text, false), [task.text])
+
+	const handleCheckpointSettingsClick = useCallback(() => {
+		navigateToSettings("features")
+	}, [navigateToSettings])
+
+	const environmentBorderColor = getEnvironmentColor(environment, "border")
 
 	// Check if text overflows the container (i.e., needs clamping)
 	useLayoutEffect(() => {
@@ -138,120 +130,61 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 			modeFields.apiProvider !== "lmstudio" &&
 			modeFields.apiProvider !== "openai-codex") // Subscription-based, no per-token costs
 
-	// Event handlers
-	const toggleTaskExpanded = useCallback(() => setIsTaskExpanded(!isTaskExpanded), [setIsTaskExpanded, isTaskExpanded])
+	const handleCopyTask = useCallback(() => {
+		if (task.text) {
+			void navigator.clipboard.writeText(task.text)
+		}
+	}, [task.text])
 
-	const handleCheckpointSettingsClick = useCallback(() => {
-		navigateToSettings("features")
-	}, [navigateToSettings])
-
-	const environmentBorderColor = getEnvironmentColor(environment, "border")
+	const handleDeleteTask = useCallback(() => {
+		if (currentTaskItem?.id) {
+			void TaskServiceClient.deleteTasksWithIds(StringArrayRequest.create({ value: [currentTaskItem.id] }))
+		}
+	}, [currentTaskItem?.id])
 
 	return (
-		<div className="py-2 px-4 flex flex-col gap-2">
-			{/* Display Checkpoint Error */}
+		<div className="flex flex-col min-h-0">
 			<CheckpointError
 				checkpointManagerErrorMessage={checkpointManagerErrorMessage}
 				handleCheckpointSettingsClick={handleCheckpointSettingsClick}
 			/>
-			{/* Task Header */}
-			<div
-				className={cn(
-					"relative overflow-hidden cursor-pointer rounded-sm flex flex-col gap-1.5 z-10 pt-2 pb-2 px-2 hover:opacity-100 bg-(--vscode-toolbar-hoverBackground)/65",
-					{
-						"opacity-100 border-1": isTaskExpanded, // No hover effects when expanded, add border
-						"hover:bg-toolbar-hover border-1": !isTaskExpanded, // Hover effects only when collapsed
-					},
-				)}
-				style={{
-					borderColor: environmentBorderColor,
-				}}>
-				{/* Task Title */}
-				<div
-					aria-label={isTaskExpanded ? "Collapse task header" : "Expand task header"}
-					className="flex justify-between items-center cursor-pointer"
-					onClick={toggleTaskExpanded}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault()
-							e.stopPropagation()
-							toggleTaskExpanded()
-						}
-					}}>
-					<div className="flex justify-between items-center">
-						{isTaskExpanded ? <ChevronDownIcon size="16" /> : <ChevronRightIcon size="16" />}
-						{isTaskExpanded && (
-							<div className="mt-1 flex justify-end cursor-pointer opacity-80 gap-2 mx-2">
-								<CopyTaskButton className={BUTTON_CLASS} taskText={task.text} />
-								<DeleteTaskButton
-									className={BUTTON_CLASS}
-									taskId={currentTaskItem?.id}
-									taskSize={currentTaskItem?.size}
-								/>
-								{/* Only visible in development mode */}
-								{IS_DEV && (
-									<OpenDiskConversationHistoryButton className={BUTTON_CLASS} taskId={currentTaskItem?.id} />
-								)}
-							</div>
-						)}
-					</div>
-					<div className="flex items-center select-none grow min-w-0 gap-1 justify-between">
-						{!isTaskExpanded && (
-							<div className="whitespace-nowrap overflow-hidden text-ellipsis grow min-w-0">
-								<span className="ph-no-capture text-base">{highlightedText}</span>
-							</div>
-						)}
-					</div>
-					<div className="inline-flex items-center justify-end select-none shrink-0 gap-1">
-						{!isTaskExpanded && (
-							<AuditHealthChip auditHealth={auditHealth} onExpandTaskHeader={handleExpandTaskAudit} />
-						)}
-						<SubagentAuditBadge onExpandTaskHeader={handleExpandTaskAudit} summary={subagentAuditSummary} />
-						<TaskAuditBadge
-							auditHealth={auditHealth}
-							auditMetadata={latestAuditMetadata}
-							auditTrend={auditTrend}
-							onExpandTaskHeader={handleExpandTaskAudit}
-							onJumpToGateBlock={onScrollToLatestGateBlock}
-						/>
-						{isCostAvailable && (
-							<div
-								className="mx-1 px-1 py-0.25 rounded-full inline-flex shrink-0 text-badge-background bg-badge-foreground/80 items-center"
-								id="price-tag">
-								<span className="text-xs sm:text-sm">${totalCost?.toFixed(4)}</span>
-							</div>
-						)}
-						<NewTaskButton className={BUTTON_CLASS} onClick={onClose} />
-					</div>
-				</div>
 
-				{/* Expand/Collapse Task Details */}
-				{isTaskExpanded && (
-					<div className="flex flex-col break-words" key={`task-details-${currentTaskItem?.id}`}>
-						<div
-							className={cn(
-								"ph-no-capture whitespace-pre-wrap break-words px-0.5 text-sm mt-1 relative",
-								"max-h-[4.5rem] overflow-hidden",
-								{
-									"max-h-[25vh] overflow-y-auto scroll-smooth": isHighlightedTextExpanded,
-									"cursor-pointer": isTextOverflowing,
-								},
+			{isTaskExpanded && (
+				<div
+					className="mx-1.5 mb-1 rounded-sm border border-border/30 bg-(--vscode-toolbar-hoverBackground)/50 overflow-hidden flex flex-col max-h-[32vh]"
+					style={{ borderColor: environmentBorderColor }}>
+					<div className="overflow-y-auto flex flex-col gap-1 p-2 min-h-0">
+						<div>
+							<p className="text-[10px] font-medium text-muted-foreground m-0 mb-1">You asked</p>
+							<div
+								className={cn(
+									"ph-no-capture whitespace-pre-wrap break-words text-sm relative",
+									"max-h-[4.5rem] overflow-hidden",
+									{
+										"max-h-[12rem] overflow-y-auto": isHighlightedTextExpanded,
+									},
+								)}
+								ref={highlightedTextRef}>
+								{highlightedText}
+							</div>
+							{isTextOverflowing && !isHighlightedTextExpanded && (
+								<ExpandHandle isExpanded={false} onToggle={() => setIsHighlightedTextExpanded(true)} />
 							)}
-							onClick={() => isTextOverflowing && setIsHighlightedTextExpanded(true)}
-							ref={highlightedTextRef}
-							style={
-								!isHighlightedTextExpanded && isTextOverflowing
-									? {
-											WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)",
-											maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)",
-										}
-									: undefined
-							}>
-							{highlightedText}
+							{isHighlightedTextExpanded && isTextOverflowing && (
+								<ExpandHandle isExpanded={true} onToggle={() => setIsHighlightedTextExpanded(false)} />
+							)}
 						</div>
 
 						{((task.images && task.images.length > 0) || (task.files && task.files.length > 0)) && (
 							<Thumbnails files={task.files ?? []} images={task.images ?? []} />
+						)}
+
+						{focusChainSettings.enabled && (
+							<FocusChain
+								currentTaskItemId={currentTaskItem?.id}
+								lastProgressMessageText={lastProgressMessageText}
+								showPlaceholderWhenEmpty={showFocusChainPlaceholder}
+							/>
 						)}
 
 						<ContextWindow
@@ -262,52 +195,45 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							onSendMessage={onSendMessage}
 							tokensIn={tokensIn}
 							tokensOut={tokensOut}
-							useAutoCondense={false} // Disable auto-condense configuration in UI for now
+							useAutoCondense={false}
 						/>
+
+						<TaskNotesSection
+							auditHealth={auditHealth}
+							auditSnapshots={auditSnapshots}
+							auditTrend={_auditTrend}
+							checklistSummary={checklistSummary}
+							latestAuditMetadata={latestAuditMetadata}
+							onScrollToAuditMessage={onScrollToAuditMessage}
+							onScrollToLatestAdvisory={onScrollToLatestAdvisory}
+							onScrollToLatestGateBlock={onScrollToLatestGateBlock}
+							subagentAuditSummary={subagentAuditSummary}
+						/>
+
+						<div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 mt-1 border-t border-border/20">
+							<button
+								className="text-[10px] text-muted-foreground hover:text-foreground bg-transparent border-0 p-0 cursor-pointer"
+								onClick={handleCopyTask}
+								type="button">
+								Copy prompt
+							</button>
+							<button
+								className="text-[10px] text-muted-foreground hover:text-destructive bg-transparent border-0 p-0 cursor-pointer disabled:opacity-40"
+								disabled={!currentTaskItem?.id}
+								onClick={handleDeleteTask}
+								type="button">
+								Delete chat
+							</button>
+							{IS_DEV && (
+								<OpenDiskConversationHistoryButton className={BUTTON_CLASS} taskId={currentTaskItem?.id} />
+							)}
+							{isCostAvailable && (
+								<span className="text-[10px] text-muted-foreground ml-auto tabular-nums">
+									${totalCost?.toFixed(4)}
+								</span>
+							)}
+						</div>
 					</div>
-				)}
-			</div>
-
-			{/* Display Focus Chain To-Do List */}
-			{focusChainSettings.enabled && (
-				<FocusChain
-					currentTaskItemId={currentTaskItem?.id}
-					lastProgressMessageText={lastProgressMessageText}
-					showPlaceholderWhenEmpty={showFocusChainPlaceholder}
-				/>
-			)}
-
-			{auditSnapshots && shouldShowAuditHistoryStrip(auditSnapshots, auditHealth) && (
-				<div className="px-2 pb-1">
-					<AuditHistoryStrip
-						auditHealth={auditHealth}
-						checklistSummary={checklistSummary}
-						onScrollToAuditMessage={onScrollToAuditMessage}
-						onScrollToLatestGateBlock={onScrollToLatestGateBlock}
-						snapshots={auditSnapshots}
-						subagentAuditSummary={subagentAuditSummary}
-					/>
-				</div>
-			)}
-
-			<div className="px-2 pb-1">
-				<PreCompletionGateStrip
-					auditMetadata={latestAuditMetadata}
-					onScrollToLatestAdvisory={onScrollToLatestAdvisory}
-					onScrollToLatestGateBlock={onScrollToLatestGateBlock}
-				/>
-			</div>
-
-			{auditSnapshots && auditSnapshots.length > 0 && (
-				<div className="px-2 pb-1">
-					<OrchestratorGateStrip auditMetadata={latestAuditMetadata} />
-					<ViolationSessionLedgerStrip onScrollToAuditMessage={onScrollToAuditMessage} snapshots={auditSnapshots} />
-				</div>
-			)}
-
-			{subagentAuditSummary && subagentAuditSummary.parentGateSignals.length > 0 && (
-				<div className="px-2 pb-1">
-					<SubagentHandoffStrip summary={subagentAuditSummary} />
 				</div>
 			)}
 		</div>

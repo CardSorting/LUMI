@@ -1,111 +1,27 @@
 import { useMemo, useState } from "react"
-import styled from "styled-components"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { cn } from "@/lib/utils"
 
-const ActionList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 16px;
-  margin-bottom: 16px;
-  padding: 16px;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--vscode-editorGroup-border);
-  border-radius: 6px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-`
+const priorityLabel = {
+	critical: "Important",
+	recommended: "Suggested",
+	optional: "Optional",
+} as const
 
-const ActionItem = styled.div<{ disabled?: boolean }>`
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 8px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  opacity: ${(props) => (props.disabled ? 0.5 : 1)};
-  pointer-events: ${(props) => (props.disabled ? "none" : "auto")};
-  &:hover {
-    background: var(--vscode-list-hoverBackground);
-  }
-`
+const priorityVariant = {
+	critical: "danger",
+	recommended: "default",
+	optional: "outline",
+} as const
 
-const ActionDetails = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  cursor: pointer;
-  flex: 1;
-`
-
-const ActionHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-`
-
-const ActionLabel = styled(Label)`
-  font-weight: 600;
-  cursor: pointer;
-  line-height: 1.4;
-  font-size: 13px;
-`
-
-const ActionRationale = styled.span`
-  font-size: 11px;
-  color: var(--vscode-textLink-foreground);
-  font-style: italic;
-  opacity: 0.9;
-`
-
-const ActionDescription = styled.span`
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
-  line-height: 1.5;
-`
-
-const DependencyInfo = styled.span`
-  font-size: 10px;
-  color: var(--vscode-errorForeground);
-  font-weight: 500;
-  margin-top: 2px;
-`
-
-const BadgeContainer = styled.div`
-  display: flex;
-  gap: 4px;
-  align-items: center;
-`
-
-const PriorityBadge = ({ priority }: { priority: "critical" | "recommended" | "optional" }) => {
-	const variants = {
-		critical: "danger",
-		recommended: "default",
-		optional: "outline",
-	} as const
-	return (
-		<Badge className="text-[9px] uppercase px-1.5 py-0 h-4" variant={variants[priority]}>
-			{priority}
-		</Badge>
-	)
-}
-
-const ImpactBadge = ({ impact }: { impact: "high" | "medium" | "low" }) => {
-	const variants = {
-		high: "danger",
-		medium: "warning",
-		low: "success",
-	} as const
-	return (
-		<Badge className="text-[8px] uppercase px-1 py-0 h-3.5 opacity-80" variant={variants[impact]}>
-			{impact} Impact
-		</Badge>
-	)
-}
+const PriorityBadge = ({ priority }: { priority: "critical" | "recommended" | "optional" }) => (
+	<Badge className="text-[9px] px-1.5 py-0 h-4 font-normal" variant={priorityVariant[priority]}>
+		{priorityLabel[priority]}
+	</Badge>
+)
 
 interface Action {
 	id: string
@@ -136,21 +52,6 @@ export const ActionCheckboxes = ({ actions, onActionsChange }: ActionCheckboxesP
 		return action.dependsOn.every((depId) => localActions.find((a) => a.id === depId)?.isChecked)
 	}
 
-	const handleToggle = (id: string) => {
-		let updated = localActions.map((a) => (a.id === id ? { ...a, isChecked: !a.isChecked } : a))
-
-		updated = cascade(updated)
-		setLocalActions(updated)
-		onActionsChange(updated)
-	}
-
-	const handleToggleAll = () => {
-		const allChecked = localActions.every((a) => a.isChecked)
-		const updated = localActions.map((a) => ({ ...a, isChecked: !allChecked }))
-		setLocalActions(cascade(updated))
-		onActionsChange(updated)
-	}
-
 	const cascade = (currentActions: Action[]): Action[] => {
 		let changed = false
 		const next = currentActions.map((a) => {
@@ -163,35 +64,53 @@ export const ActionCheckboxes = ({ actions, onActionsChange }: ActionCheckboxesP
 		return changed ? cascade(next) : next
 	}
 
+	const handleToggle = (id: string) => {
+		const updated = cascade(localActions.map((a) => (a.id === id ? { ...a, isChecked: !a.isChecked } : a)))
+		setLocalActions(updated)
+		onActionsChange(updated)
+	}
+
+	const handleToggleAll = () => {
+		const allChecked = localActions.every((a) => a.isChecked)
+		const updated = cascade(localActions.map((a) => ({ ...a, isChecked: !allChecked })))
+		setLocalActions(updated)
+		onActionsChange(updated)
+	}
+
 	const allChecked = localActions.every((a) => a.isChecked)
+	const selectedCount = localActions.filter((a) => a.isChecked).length
 
 	return (
-		<ActionList>
-			<div className="flex items-center justify-between mb-2">
-				<div className="text-[11px] font-bold text-description uppercase tracking-wider">Proposed Actions</div>
-				<div className="flex items-center gap-3">
-					<div className="text-[11px] text-description italic">
-						{localActions.filter((a) => a.isChecked).length} of {localActions.length} selected
-					</div>
+		<div className="mt-3 flex flex-col gap-2 rounded-md border border-editor-group-border bg-code p-2.5">
+			<div className="flex items-center justify-between gap-2">
+				<p className="text-[11px] font-medium text-muted-foreground m-0">Pick the steps you want</p>
+				<div className="flex items-center gap-2 shrink-0">
+					<span className="text-[10px] text-muted-foreground tabular-nums">
+						{selectedCount}/{localActions.length}
+					</span>
 					<button
-						className="text-[10px] uppercase font-bold text-button-foreground bg-button-background px-2 py-0.5 rounded-xs hover:bg-button-hover cursor-pointer border-none"
+						className="text-[10px] text-link bg-transparent border-0 p-0 cursor-pointer hover:underline"
 						onClick={handleToggleAll}
 						type="button">
-						{allChecked ? "Deselect All" : "Select All"}
+						{allChecked ? "Clear all" : "Select all"}
 					</button>
 				</div>
 			</div>
+
 			{sortedActions.map((action) => {
 				const depMet = isDependencyMet(action)
 				const missingDeps =
 					action.dependsOn?.filter((depId) => !localActions.find((a) => a.id === depId)?.isChecked) || []
 
 				return (
-					<ActionItem
-						className={cn({ "opacity-75": !action.isChecked && depMet })}
-						disabled={!depMet && !action.isChecked}
+					<div
+						className={cn(
+							"flex items-start gap-2 rounded-sm px-1 py-1.5",
+							!depMet && !action.isChecked && "opacity-50 pointer-events-none",
+							!action.isChecked && depMet && "opacity-80",
+						)}
 						key={action.id}>
-						<div className="pt-0.5">
+						<div className="pt-0.5 shrink-0">
 							<Switch
 								checked={action.isChecked}
 								disabled={!depMet}
@@ -199,27 +118,32 @@ export const ActionCheckboxes = ({ actions, onActionsChange }: ActionCheckboxesP
 								onCheckedChange={() => handleToggle(action.id)}
 							/>
 						</div>
-						<ActionDetails onClick={() => depMet && handleToggle(action.id)}>
-							<ActionHeader>
-								<ActionLabel htmlFor={`action-${action.id}`}>{action.label}</ActionLabel>
-								<BadgeContainer>
-									<ImpactBadge impact={action.impact} />
-									<PriorityBadge priority={action.priority} />
-								</BadgeContainer>
-							</ActionHeader>
-							{action.rationale && <ActionRationale>Rationale: {action.rationale}</ActionRationale>}
-							{action.description && <ActionDescription>{action.description}</ActionDescription>}
-							{!depMet && missingDeps.length > 0 && (
-								<DependencyInfo>
-									<VscIcon className="mr-1" name="lock" />
-									Requires:{" "}
-									{missingDeps.map((id) => localActions.find((a) => a.id === id)?.label || id).join(", ")}
-								</DependencyInfo>
+						<div className="flex-1 min-w-0">
+							<div className="flex items-start justify-between gap-2">
+								<Label
+									className="text-xs font-medium leading-snug cursor-pointer"
+									htmlFor={`action-${action.id}`}>
+									{action.label}
+								</Label>
+								<PriorityBadge priority={action.priority} />
+							</div>
+							{action.description && (
+								<p className="text-[11px] text-muted-foreground m-0 mt-0.5 leading-snug">{action.description}</p>
 							)}
-						</ActionDetails>
-					</ActionItem>
+							{action.rationale && (
+								<p className="text-[10px] text-link/80 m-0 mt-0.5 italic leading-snug">{action.rationale}</p>
+							)}
+							{!depMet && missingDeps.length > 0 && (
+								<p className="text-[10px] text-error m-0 mt-1 flex items-center gap-1">
+									<VscIcon name="lock" />
+									First do:{" "}
+									{missingDeps.map((id) => localActions.find((a) => a.id === id)?.label || id).join(", ")}
+								</p>
+							)}
+						</div>
+					</div>
 				)
 			})}
-		</ActionList>
+		</div>
 	)
 }

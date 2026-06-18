@@ -114,6 +114,39 @@
 	transition: opacity 3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Horizontal chip row — hide scrollbar in narrow sidebars */
+.lumi-scroll-chips {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+.lumi-scroll-chips::-webkit-scrollbar {
+	display: none;
+}
+
+/* Native <details> menus — no portal overlays */
+.lumi-details-menu > summary::-webkit-details-marker {
+	display: none;
+}
+.lumi-details-menu > summary::marker {
+	content: "";
+}
+
+/* Toolbar overflow — inline push panel, hidden when closed */
+.lumi-toolbar-shell > .lumi-toolbar-overflow-panel {
+	display: none;
+}
+.lumi-toolbar-shell[open] > .lumi-toolbar-overflow-panel {
+	display: flex;
+}
+
+/* Inline disclosure rows (auto-approve, etc.) */
+.lumi-inline-disclosure > summary::-webkit-details-marker {
+	display: none;
+}
+.lumi-inline-disclosure > summary::marker {
+	content: "";
+}
+
 .lumi-workshop-haze {
 	background-image: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(122, 126, 184, 0.04), transparent 55%);
 }

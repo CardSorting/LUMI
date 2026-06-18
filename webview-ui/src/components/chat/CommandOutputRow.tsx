@@ -85,10 +85,7 @@ export const CommandOutputContent = memo(
 		}
 
 		return (
-			<div
-				className={cn("w-full relative pb-0 overflow-visible border-t border-editor-group-border bg-code rounded-sm", {
-					"rounded-b-none": lineCount > 5,
-				})}>
+			<div className={cn("w-full overflow-visible border-t border-editor-group-border bg-code rounded-sm")}>
 				<div
 					className={cn("text-white scroll-smooth bg-code overflow-y-auto", {
 						"max-h-[75px]": !shouldAutoShow && !isOutputFullyExpanded,
@@ -98,8 +95,7 @@ export const CommandOutputContent = memo(
 					ref={outputRef}>
 					<div className="bg-code">{renderOutput()}</div>
 				</div>
-				{/* Show notch only if there's more than 5 lines */}
-				{lineCount > 5 && <ExpandHandle isExpanded={isOutputFullyExpanded} onToggle={onToggle} />}
+				{lineCount > 5 ? <ExpandHandle isExpanded={isOutputFullyExpanded} onToggle={onToggle} /> : null}
 			</div>
 		)
 	},

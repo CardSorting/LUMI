@@ -21,33 +21,31 @@ import { BooleanRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
 import { isChatInputEnabled } from "@/components/chat/chat-view/shared/chatInputPolicy"
+import { InlineHistoryPanel } from "@/components/history/InlineHistoryPanel"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { useShowNavbar } from "@/context/PlatformContext"
 import { pickChatPlaceholder } from "@/copy/lumiVoice"
 import { useAuditAutoScrollPolicy } from "@/hooks/useAuditAutoScrollPolicy"
 import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
 import { useLumiSessionComfort } from "@/hooks/useLumiSessionComfort"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
-import { Navbar } from "../menu/Navbar"
-import AutoApproveBar from "./auto-approve-menu/AutoApproveBar"
 // Import utilities and hooks from the new structure
 import {
-	ActionButtons,
 	CHAT_CONSTANTS,
 	ChatLayout,
 	convertHtmlToMarkdown,
 	filterVisibleMessages,
 	groupLowStakesTools,
 	groupMessages,
-	InputSection,
-	MessagesArea,
 	TaskSection,
 	useChatState,
 	useMessageHandlers,
 	useScrollBehavior,
 	WelcomeSection,
 } from "./chat-view"
+import { ChatFooter } from "./chat-view/components/layout/ChatFooter"
+import { MessagesArea } from "./chat-view/components/layout/MessagesArea"
+import { ChatToolbar } from "./navigation/ChatToolbar"
 
 interface ChatViewProps {
 	isHidden: boolean
@@ -60,7 +58,6 @@ interface ChatViewProps {
 const MAX_IMAGES_AND_FILES_PER_MESSAGE = CHAT_CONSTANTS.MAX_IMAGES_AND_FILES_PER_MESSAGE
 
 const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryView }: ChatViewProps) => {
-	const showNavbar = useShowNavbar()
 	const {
 		version,
 		dietcodeMessages: messages,
@@ -73,6 +70,10 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		hooksEnabled,
 		isNewUser,
 		currentTaskItem,
+		showHistory,
+		hideHistory,
+		expandTaskHeader,
+		checkpointManagerErrorMessage,
 	} = useExtensionState()
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see LUMI.abort)
@@ -413,35 +414,73 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		return pickChatPlaceholder(Boolean(task), seed, sessionMinutes, isNightDesk, agentActive, idleGap)
 	}, [task, sessionMinutes, isNightDesk, messages, chatState.dietcodeAsk])
 
+	const conversationTitle = useMemo(() => {
+		if (!task?.text) {
+			return undefined
+		}
+		const singleLine = task.text.replace(/\s+/g, " ").trim()
+		return singleLine.length > 36 ? `${singleLine.slice(0, 36)}…` : singleLine
+	}, [task?.text])
+
+	const showTaskSection = expandTaskHeader || Boolean(checkpointManagerErrorMessage)
+
 	return (
 		<ChatLayout isHidden={isHidden} isNightDesk={isNightDesk} serenityLevel={serenityLevel}>
 			<div aria-atomic="true" aria-live="polite" className="sr-only">
 				{auditLiveAnnouncement}
 			</div>
 			<div className="flex flex-col flex-1 overflow-hidden">
-				{showNavbar && <Navbar />}
-				{task ? (
-					<TaskSection
-						apiMetrics={apiMetrics}
-						auditHealth={auditHealth}
-						auditSnapshots={auditSnapshots}
-						auditTrend={auditTrend}
-						checklistSummary={checklistSummary}
-						lastApiReqTotalTokens={lastApiReqTotalTokens}
-						lastProgressMessageText={lastProgressMessageText}
-						latestAuditMetadata={latestAuditMetadata}
-						messageHandlers={messageHandlers}
-						onScrollToAuditMessage={handleScrollToAuditMessage}
-						onScrollToLatestAdvisory={handleScrollToLatestAdvisory}
-						onScrollToLatestGateBlock={handleScrollToLatestGateBlock}
-						selectedModelInfo={{
-							supportsPromptCache: selectedModelInfo.supportsPromptCache,
-							supportsImages: selectedModelInfo.supportsImages || false,
-						}}
-						showFocusChainPlaceholder={showFocusChainPlaceholder}
-						subagentAuditSummary={subagentAuditSummary}
-						task={task}
-					/>
+				<ChatToolbar
+					conversationTitle={conversationTitle}
+					hasActiveConversation={Boolean(task)}
+					taskStatus={
+						task
+							? {
+									auditHealth,
+									auditMetadata: latestAuditMetadata,
+									subagentAuditSummary,
+								}
+							: undefined
+					}
+				/>
+				{showHistory ? (
+					<InlineHistoryPanel onClose={hideHistory} />
+				) : task ? (
+					<div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+						{showTaskSection ? (
+							<div className={expandTaskHeader ? "shrink-0 sticky top-0 z-[5] bg-background" : "shrink-0"}>
+								<TaskSection
+									apiMetrics={apiMetrics}
+									auditHealth={auditHealth}
+									auditSnapshots={auditSnapshots}
+									auditTrend={auditTrend}
+									checklistSummary={checklistSummary}
+									lastApiReqTotalTokens={lastApiReqTotalTokens}
+									lastProgressMessageText={lastProgressMessageText}
+									latestAuditMetadata={latestAuditMetadata}
+									messageHandlers={messageHandlers}
+									onScrollToAuditMessage={handleScrollToAuditMessage}
+									onScrollToLatestAdvisory={handleScrollToLatestAdvisory}
+									onScrollToLatestGateBlock={handleScrollToLatestGateBlock}
+									selectedModelInfo={{
+										supportsPromptCache: selectedModelInfo.supportsPromptCache,
+										supportsImages: selectedModelInfo.supportsImages || false,
+									}}
+									showFocusChainPlaceholder={showFocusChainPlaceholder}
+									subagentAuditSummary={subagentAuditSummary}
+									task={task}
+								/>
+							</div>
+						) : null}
+						<MessagesArea
+							chatState={chatState}
+							groupedMessages={groupedMessages}
+							messageHandlers={messageHandlers}
+							modifiedMessages={modifiedMessages}
+							scrollBehavior={scrollBehavior}
+							task={task}
+						/>
+					</div>
 				) : !isNewUser ? (
 					<WelcomeSection
 						hideAnnouncement={hideAnnouncement}
@@ -452,43 +491,21 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 						version={version}
 					/>
 				) : null}
-				{task && (
-					<MessagesArea
-						chatState={chatState}
-						groupedMessages={groupedMessages}
-						messageHandlers={messageHandlers}
-						modifiedMessages={modifiedMessages}
-						scrollBehavior={scrollBehavior}
-						task={task}
-					/>
-				)}
 			</div>
-			<footer className="bg-background" style={{ gridRow: "2" }}>
-				<AutoApproveBar />
-				<ActionButtons
-					chatState={chatState}
-					messageHandlers={messageHandlers}
-					messages={messages}
-					mode={mode}
-					scrollBehavior={{
-						scrollToBottomSmooth: scrollBehavior.scrollToBottomSmooth,
-						disableAutoScrollRef: scrollBehavior.disableAutoScrollRef,
-						showScrollToBottom: scrollBehavior.showScrollToBottom,
-						virtuosoRef: scrollBehavior.virtuosoRef,
-					}}
-					task={task}
-				/>
-				<InputSection
-					chatState={chatState}
-					messageHandlers={messageHandlers}
-					messages={messages}
-					placeholderText={placeholderText}
-					scrollBehavior={scrollBehavior}
-					selectFilesAndImages={selectFilesAndImages}
-					shouldDisableFilesAndImages={shouldDisableFilesAndImages}
-					taskSessionActive={taskSessionActive}
-				/>
-			</footer>
+			<ChatFooter
+				chatState={chatState}
+				isNewUser={isNewUser}
+				messageHandlers={messageHandlers}
+				messages={messages}
+				mode={mode}
+				placeholderText={placeholderText}
+				scrollBehavior={scrollBehavior}
+				selectFilesAndImages={selectFilesAndImages}
+				shouldDisableFilesAndImages={shouldDisableFilesAndImages}
+				showHistory={showHistory}
+				task={task}
+				taskSessionActive={taskSessionActive}
+			/>
 		</ChatLayout>
 	)
 }

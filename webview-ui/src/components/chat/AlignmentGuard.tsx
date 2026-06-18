@@ -1,89 +1,7 @@
-import styled from "styled-components"
+import { ChevronRightIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { VscIcon } from "@/components/ui/vsc-icon"
-
-const GuardContainer = styled.div<{ isAligned: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 16px;
-  padding: 16px;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--vscode-editorGroup-border);
-  border-radius: 8px;
-  border-right: 4px solid ${(props) => (props.isAligned ? "var(--vscode-testing-iconPassed)" : "var(--vscode-testing-iconFailed)")};
-`
-
-const AlignmentTitle = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-`
-
-const LabelText = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--vscode-descriptionForeground);
-  letter-spacing: 0.5px;
-`
-
-const StatusBadge = styled(Badge)`
-  font-size: 10px;
-  text-transform: uppercase;
-`
-
-const ReasoningText = styled.p`
-  margin: 0;
-  font-size: 13px;
-  color: var(--vscode-foreground);
-  line-height: 1.5;
-`
-
-const ViolationList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 10px;
-  background: var(--vscode-inputValidation-errorBackground);
-  border: 1px solid var(--vscode-inputValidation-errorBorder);
-  border-radius: 4px;
-`
-
-const ViolationItem = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--vscode-errorForeground);
-`
-
-const LayerMap = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--vscode-editorGroup-border);
-`
-
-const LayerBadge = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  padding: 2px 8px;
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
-  border-radius: 12px;
-  border: 1px solid var(--vscode-editorGroup-border);
-`
-
-const LayerIcon = styled.span`
-  font-size: 10px;
-`
+import { cn } from "@/lib/utils"
 
 interface AlignmentGuardProps {
 	policyCompliance?: {
@@ -94,61 +12,68 @@ interface AlignmentGuardProps {
 	architecturalLayers?: Record<string, "domain" | "core" | "infrastructure" | "ui" | "plumbing">
 }
 
+const layerLabel: Record<string, string> = {
+	domain: "Domain",
+	core: "Core",
+	infrastructure: "Infra",
+	ui: "UI",
+	plumbing: "Utils",
+}
+
 export const AlignmentGuard = ({ policyCompliance, architecturalLayers }: AlignmentGuardProps) => {
 	if (!policyCompliance && !architecturalLayers) return null
 
-	const getLayerIcon = (layer: string) => {
-		switch (layer) {
-			case "domain":
-				return "🎯"
-			case "core":
-				return "🏗️"
-			case "infrastructure":
-				return "🔌"
-			case "ui":
-				return "🖼️"
-			case "plumbing":
-				return "🔧"
-			default:
-				return "📄"
-		}
-	}
+	const isAligned = policyCompliance?.isAligned ?? true
 
 	return (
-		<GuardContainer isAligned={policyCompliance?.isAligned ?? true}>
-			<AlignmentTitle>
-				<LabelText>Architectural Alignment Guard</LabelText>
-				{policyCompliance && (
-					<StatusBadge variant={policyCompliance.isAligned ? "success" : "danger"}>
-						{policyCompliance.isAligned ? "Aligned" : "Violation Detected"}
-					</StatusBadge>
-				)}
-			</AlignmentTitle>
+		<details className="lumi-inline-disclosure group mt-3 rounded-md border border-editor-group-border bg-code">
+			<summary
+				className={cn(
+					"lumi-details-trigger list-none cursor-pointer flex items-center gap-2 px-2.5 py-2",
+					"hover:bg-accent/10",
+				)}>
+				<span className="text-[11px] font-medium text-foreground flex-1 min-w-0">Fits your project?</span>
+				{policyCompliance ? (
+					<Badge className="text-[9px] font-normal shrink-0" variant={isAligned ? "success" : "danger"}>
+						{isAligned ? "Looks good" : "Needs review"}
+					</Badge>
+				) : null}
+				<ChevronRightIcon
+					aria-hidden
+					className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+				/>
+			</summary>
 
-			{policyCompliance && <ReasoningText>{policyCompliance.reasoning}</ReasoningText>}
+			<div className="px-2.5 pb-2.5 flex flex-col gap-2 border-t border-editor-group-border/50 pt-2">
+				{policyCompliance ? (
+					<p className="text-xs text-foreground m-0 leading-snug">{policyCompliance.reasoning}</p>
+				) : null}
 
-			{policyCompliance?.violations && policyCompliance.violations.length > 0 && (
-				<ViolationList>
-					{policyCompliance.violations.map((v) => (
-						<ViolationItem key={v}>
-							<VscIcon className="pt-0.5" name="warning" />
-							<span>{v}</span>
-						</ViolationItem>
-					))}
-				</ViolationList>
-			)}
+				{policyCompliance?.violations && policyCompliance.violations.length > 0 ? (
+					<ul className="m-0 p-2 rounded-md border border-[var(--vscode-inputValidation-errorBorder)] bg-[var(--vscode-inputValidation-errorBackground)] list-none flex flex-col gap-1.5">
+						{policyCompliance.violations.map((violation) => (
+							<li className="flex items-start gap-1.5 text-xs text-error" key={violation}>
+								<VscIcon className="shrink-0 pt-0.5" name="warning" />
+								<span>{violation}</span>
+							</li>
+						))}
+					</ul>
+				) : null}
 
-			{architecturalLayers && Object.keys(architecturalLayers).length > 0 && (
-				<LayerMap>
-					{Object.entries(architecturalLayers).map(([file, layer]) => (
-						<LayerBadge key={file} title={file}>
-							<LayerIcon>{getLayerIcon(layer)}</LayerIcon>
-							<span className="font-bold uppercase text-[9px]">{layer}:</span>
-							{file.split("/").pop()}
-						</LayerBadge>
-					))}
-				</LayerMap>
-			)}
-		</GuardContainer>
+				{architecturalLayers && Object.keys(architecturalLayers).length > 0 ? (
+					<div className="flex flex-wrap gap-1 pt-1 border-t border-editor-group-border/40">
+						{Object.entries(architecturalLayers).map(([file, layer]) => (
+							<span
+								className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border border-editor-group-border text-muted-foreground max-w-full"
+								key={file}
+								title={file}>
+								<span className="font-medium text-foreground/80">{layerLabel[layer] ?? layer}</span>
+								<span className="truncate">{file.split("/").pop()}</span>
+							</span>
+						))}
+					</div>
+				) : null}
+			</div>
+		</details>
 	)
 }

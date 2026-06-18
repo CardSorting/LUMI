@@ -10,6 +10,7 @@ export function useChatState(messages: DietCodeMessage[]): ChatState {
 	// Input and selection state
 	const [inputValue, setInputValue] = useState("")
 	const [activeQuote, setActiveQuote] = useState<string | null>(null)
+	const [pendingQuote, setPendingQuote] = useState<string | null>(null)
 	const [isTextAreaFocused, setIsTextAreaFocused] = useState(false)
 	const [selectedImages, setSelectedImages] = useState<string[]>([])
 	const [selectedFiles, setSelectedFiles] = useState<string[]>([])
@@ -39,6 +40,7 @@ export function useChatState(messages: DietCodeMessage[]): ChatState {
 	const resetState = useCallback(() => {
 		setInputValue("")
 		setActiveQuote(null)
+		setPendingQuote(null)
 		setSelectedImages([])
 		setSelectedFiles([])
 	}, [])
@@ -59,6 +61,8 @@ export function useChatState(messages: DietCodeMessage[]): ChatState {
 		setInputValue,
 		activeQuote,
 		setActiveQuote,
+		pendingQuote,
+		setPendingQuote,
 		isTextAreaFocused,
 		setIsTextAreaFocused,
 		selectedImages,

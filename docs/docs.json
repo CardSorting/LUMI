@@ -126,6 +126,7 @@
 					{
 						"group": "Troubleshooting",
 						"pages": [
+							"troubleshooting/extension-wont-start",
 							"troubleshooting/terminal-quick-fixes",
 							"troubleshooting/networking-and-proxies",
 							"troubleshooting/task-history-recovery"

@@ -1,6 +1,7 @@
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
-import styled from "styled-components"
+import type React from "react"
 import { VscIcon } from "@/components/ui/vsc-icon"
+import { cn } from "@/lib/utils"
 import { ActionMetadata } from "./types"
 
 interface AutoApproveMenuItemProps {
@@ -11,54 +12,32 @@ interface AutoApproveMenuItemProps {
 	disabled?: boolean
 }
 
-const SubOptionAnimateIn = styled.div<{ show: boolean; inert?: string }>`
-  position: relative;
-  transform: ${(props) => (props.show ? "scaleY(1)" : "scaleY(0)")};
-  transform-origin: top;
-  padding-left: 24px;
-  opacity: ${(props) => (props.show ? "1" : "0")};
-  height: ${(props) => (props.show ? "auto" : "0")}; /* Manage height for layout */
-  overflow: visible; /* Allow tooltips to escape */
-  transition: transform 0.2s ease-in-out;
-`
-
-const CheckboxWrapper = styled.div<{ $disabled: boolean }>`
-  padding: 2px 0.125rem;
-  margin: 0;
-  width: 100%;
-  cursor: ${(props) => (props.$disabled ? "not-allowed" : "pointer")};
-`
-
 const AutoApproveMenuItem = ({ action, isChecked, onToggle, showIcon = true, disabled = false }: AutoApproveMenuItemProps) => {
 	const checked = isChecked(action)
 
 	const onChange = async (e: React.MouseEvent) => {
-		if (disabled) {
-			return
-		}
+		if (disabled) return
 		e.stopPropagation()
 		await onToggle(action, !checked)
 	}
 
-	const content = (
-		<div className="w-full" style={{ opacity: disabled ? 0.5 : 1 }}>
-			<CheckboxWrapper $disabled={disabled} className="w-full" onClick={onChange}>
+	return (
+		<div className={cn("w-full", disabled && "opacity-50")}>
+			<div className={cn("py-0.5 px-0.5 w-full", disabled ? "cursor-not-allowed" : "cursor-pointer")} onClick={onChange}>
 				<VSCodeCheckbox checked={checked} disabled={disabled}>
 					<div className="w-full flex text-sm items-center justify-start text-foreground gap-2">
 						{showIcon && <VscIcon className="icon" name={action.icon} />}
 						<span className="label">{action.label}</span>
 					</div>
 				</VSCodeCheckbox>
-			</CheckboxWrapper>
-			{action.subAction && (
-				<SubOptionAnimateIn inert={!checked ? "" : undefined} show={checked}>
-					<AutoApproveMenuItem action={action.subAction} isChecked={isChecked} onToggle={onToggle} />
-				</SubOptionAnimateIn>
-			)}
+			</div>
+			{action.subAction && checked ? (
+				<div className="pl-6">
+					<AutoApproveMenuItem action={action.subAction} isChecked={isChecked} onToggle={onToggle} showIcon={false} />
+				</div>
+			) : null}
 		</div>
 	)
-
-	return content
 }
 
 export default AutoApproveMenuItem

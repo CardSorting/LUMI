@@ -242,6 +242,12 @@
 				"category": "LUMI"
 			},
 			{
+				"command": "lumi.runHealthCheck",
+				"title": "Check LUMI Installation",
+				"category": "LUMI",
+				"icon": "$(heart)"
+			},
+			{
 				"command": "lumi.reconstructTaskHistory",
 				"title": "Reconstruct Task History",
 				"category": "LUMI"
@@ -376,6 +382,10 @@
 			],
 			"commandPalette": [
 				{
+					"command": "lumi.runHealthCheck",
+					"title": "LUMI: Check Installation (Health Check)"
+				},
+				{
 					"command": "lumi.generateGitCommitMessage",
 					"when": "config.git.enabled && !dietcode.isGeneratingCommit"
 				},
@@ -456,7 +466,7 @@
 		"format": "biome format --changed --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error",
 		"format:fix": "biome check --changed --no-errors-on-unmatched --files-ignore-unknown=true --write",
 		"fix:all": "biome check --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe",
-		"ci:check-all": "npx npm-run-all -p check-types lint format roadmap:audit docs:check-agent-links docs:check-agent-branding docs:check-root-readme docs:check-root-readme-links docs:check-docs-readme docs:check-readme-metrics",
+		"ci:check-all": "npx npm-run-all -p check-types lint format roadmap:audit docs:check-agent-links docs:check-agent-branding docs:check-root-readme docs:check-root-readme-links docs:check-docs-readme docs:check-readme-metrics doctor:ci test:doctor",
 		"ci:build": "npm run protos && npm run build:webview && node esbuild.mjs && npm run compile-tests",
 		"pretest": "npm run compile && npm run compile-tests && npm run lint",
 		"test": "npx npm-run-all test:unit test:integration",
@@ -474,9 +484,15 @@
 		"dev:webview": "cd webview-ui && npm run dev",
 		"build:webview": "cd webview-ui && npm run build",
 		"test:webview": "cd webview-ui && npm run test",
-		"package:vsix": "vsce package --allow-package-secrets sendgrid --out dist/lumi-vscode-$npm_package_version.vsix",
+		"package:vsix": "node scripts/package-vscode-vsix.mjs",
 		"package:vsix:openvsx": "node scripts/package-openvsx-vsix.mjs",
 		"package:vsix:all": "npm run package:vsix && npm run package:vsix:openvsx",
+		"doctor": "node scripts/lumi-doctor.mjs",
+		"doctor:fix": "node scripts/lumi-doctor.mjs --fix",
+		"doctor:ci": "node scripts/lumi-doctor.mjs --ci",
+		"doctor:install": "node scripts/lumi-doctor.mjs --install-only",
+		"test:doctor": "node --test scripts/vsix-native-deps.test.mjs",
+		"audit:native-deps": "node scripts/lumi-doctor.mjs",
 		"setup:openvsx": "node scripts/setup-openvsx-namespace.mjs",
 		"publish:vscode": "vsce publish --allow-package-secrets sendgrid",
 		"publish:vscode:prerelease": "vsce publish --allow-package-secrets sendgrid --pre-release",

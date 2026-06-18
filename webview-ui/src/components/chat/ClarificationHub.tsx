@@ -1,122 +1,20 @@
-import { AlertTriangleIcon, CheckCircle2Icon, FingerprintIcon, HelpCircleIcon, SearchIcon, UsersIcon } from "lucide-react"
-import styled from "styled-components"
+import {
+	AlertTriangleIcon,
+	CheckCircle2Icon,
+	ChevronRightIcon,
+	FingerprintIcon,
+	HelpCircleIcon,
+	SearchIcon,
+	UsersIcon,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-
-const HubContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 16px;
-  padding: 16px;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--vscode-editorGroup-border);
-  border-radius: 8px;
-  border-left: 4px solid var(--vscode-symbolIcon-interfaceForeground);
-`
-
-const HubHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-`
-
-const Title = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`
-
-const LabelText = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--vscode-descriptionForeground);
-  letter-spacing: 0.5px;
-`
-
-const ConsensusSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  background: var(--vscode-editor-inactiveSelectionBackground);
-  border-radius: 6px;
-`
-
-const ConsensusBar = styled.div`
-  width: 100%;
-  height: 6px;
-  background: var(--vscode-editorGroup-border);
-  border-radius: 3px;
-  overflow: hidden;
-`
-
-const ConsensusFill = styled.div<{ $percent: number }>`
-  height: 100%;
-  width: ${(props) => props.$percent}%;
-  background: var(--vscode-symbolIcon-interfaceForeground);
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-`
-
-const ConsensusText = styled.p`
-  margin: 0;
-  font-size: 12px;
-  color: var(--vscode-foreground);
-  line-height: 1.4;
-`
-
-const FeedbackList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-`
-
-const FeedbackBadge = styled.div`
-  font-size: 10px;
-  padding: 2px 8px;
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-editorGroup-border);
-  border-radius: 10px;
-  color: var(--vscode-descriptionForeground);
-`
-
-const ClarificationList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const ActionButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-  border: 1px solid var(--vscode-button-border);
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
-
-  &:hover {
-    background: var(--vscode-button-secondaryHoverBackground);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-`
+import { cn } from "@/lib/utils"
 
 interface ClarificationHubProps {
 	interactiveClarifications?: Array<{
 		label: string
 		type: "provide_path" | "clarify_intent" | "select_variant" | "confirm_risk"
-		data?: Record<string, any>
+		data?: Record<string, unknown>
 	}>
 	swarmConsensus?: {
 		agreementScore: number
@@ -125,59 +23,100 @@ interface ClarificationHubProps {
 	}
 }
 
+type ClarificationType = "provide_path" | "clarify_intent" | "select_variant" | "confirm_risk"
+
+const clarificationIcon = (type: ClarificationType) => {
+	switch (type) {
+		case "provide_path":
+			return <FingerprintIcon aria-hidden className="size-3.5 shrink-0 text-link" />
+		case "clarify_intent":
+			return <SearchIcon aria-hidden className="size-3.5 shrink-0 text-amber-500" />
+		case "select_variant":
+			return <CheckCircle2Icon aria-hidden className="size-3.5 shrink-0 text-success" />
+		case "confirm_risk":
+			return <AlertTriangleIcon aria-hidden className="size-3.5 shrink-0 text-error" />
+		default:
+			return <HelpCircleIcon aria-hidden className="size-3.5 shrink-0" />
+	}
+}
+
 export const ClarificationHub = ({ interactiveClarifications, swarmConsensus }: ClarificationHubProps) => {
-	if (!interactiveClarifications && !swarmConsensus) return null
+	if (!interactiveClarifications?.length && !swarmConsensus) return null
+
+	const hasClarifications = Boolean(interactiveClarifications?.length)
 
 	return (
-		<HubContainer>
-			<HubHeader>
-				<Title>
-					<HelpCircleIcon className="text-purple-400" size={14} />
-					<LabelText>Let's figure this out together</LabelText>
-				</Title>
-				{swarmConsensus && (
-					<Badge className="text-[10px] font-bold" variant="dietcode">
+		<details className="lumi-inline-disclosure group mt-3 rounded-md border border-editor-group-border bg-code">
+			<summary
+				className={cn(
+					"lumi-details-trigger list-none cursor-pointer flex items-center gap-2 px-2.5 py-2",
+					"hover:bg-accent/10",
+				)}>
+				<HelpCircleIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+				<span className="text-[11px] font-medium text-foreground flex-1 min-w-0">
+					{hasClarifications ? "A few things to clear up" : "Team check-in"}
+				</span>
+				{swarmConsensus ? (
+					<Badge className="text-[9px] font-normal shrink-0" variant="outline">
 						{Math.round(swarmConsensus.agreementScore * 100)}% aligned
 					</Badge>
-				)}
-			</HubHeader>
+				) : null}
+				<ChevronRightIcon
+					aria-hidden
+					className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+				/>
+			</summary>
 
-			{swarmConsensus && (
-				<ConsensusSection>
-					<ConsensusBar>
-						<ConsensusFill $percent={swarmConsensus.agreementScore * 100} />
-					</ConsensusBar>
-					<ConsensusText>{swarmConsensus.consensusNarrative}</ConsensusText>
-					<FeedbackList>
-						{swarmConsensus.agentFeedback.map((f, i) => (
-							<FeedbackBadge key={i}>
-								<UsersIcon className="inline mr-1" size={8} />
-								{f}
-							</FeedbackBadge>
-						))}
-					</FeedbackList>
-				</ConsensusSection>
-			)}
-
-			{interactiveClarifications && interactiveClarifications.length > 0 && (
-				<ClarificationList>
-					<LabelText style={{ fontSize: "10px", marginBottom: "4px" }}>
-						Suggested Actions to Resolve Ambiguity
-					</LabelText>
-					{interactiveClarifications.map((c, i) => (
-						<ActionButton key={i} onClick={() => console.log("Action triggered:", c)}>
-							{c.type === "provide_path" && <FingerprintIcon className="text-blue-400" size={16} />}
-							{c.type === "clarify_intent" && <SearchIcon className="text-orange-400" size={16} />}
-							{c.type === "select_variant" && <CheckCircle2Icon className="text-green-400" size={16} />}
-							{c.type === "confirm_risk" && <AlertTriangleIcon className="text-red-400" size={16} />}
-							<div className="flex flex-col">
-								<span className="font-semibold">{c.label}</span>
-								<span className="text-[11px] opacity-70">Requires your input to proceed optimally</span>
+			<div className="px-2.5 pb-2.5 pt-0 flex flex-col gap-2.5 border-t border-editor-group-border/50">
+				{swarmConsensus ? (
+					<div className="flex flex-col gap-1.5 pt-2">
+						<div className="h-1 w-full rounded-full overflow-hidden bg-editor-group-border">
+							<div
+								className="h-full bg-foreground/40 transition-[width] duration-500"
+								style={{ width: `${swarmConsensus.agreementScore * 100}%` }}
+							/>
+						</div>
+						<p className="text-xs text-foreground m-0 leading-snug">{swarmConsensus.consensusNarrative}</p>
+						{swarmConsensus.agentFeedback.length > 0 ? (
+							<div className="flex flex-wrap gap-1">
+								{swarmConsensus.agentFeedback.map((feedback, i) => (
+									<span
+										className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border border-editor-group-border text-muted-foreground"
+										key={i}>
+										<UsersIcon aria-hidden className="size-2.5" />
+										{feedback}
+									</span>
+								))}
 							</div>
-						</ActionButton>
-					))}
-				</ClarificationList>
-			)}
-		</HubContainer>
+						) : null}
+					</div>
+				) : null}
+
+				{hasClarifications ? (
+					<div className="flex flex-col gap-1.5">
+						<p className="text-[10px] font-medium text-muted-foreground m-0">Suggested next steps</p>
+						{interactiveClarifications!.map((item, i) => (
+							<button
+								className={cn(
+									"w-full flex items-start gap-2 text-left px-2.5 py-2 rounded-md",
+									"border border-editor-group-border bg-[var(--vscode-button-secondaryBackground)]",
+									"text-[var(--vscode-button-secondaryForeground)] text-xs",
+									"hover:bg-[var(--vscode-button-secondaryHoverBackground)]",
+									"cursor-pointer",
+								)}
+								key={i}
+								onClick={() => console.log("Action triggered:", item)}
+								type="button">
+								{clarificationIcon(item.type)}
+								<span className="min-w-0">
+									<span className="font-medium block leading-snug">{item.label}</span>
+									<span className="text-[10px] opacity-70">Tap to answer</span>
+								</span>
+							</button>
+						))}
+					</div>
+				) : null}
+			</div>
+		</details>
 	)
 }

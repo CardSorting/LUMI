@@ -1,10 +1,8 @@
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import type React from "react"
-import { useCallback, useMemo } from "react"
+import { useMemo } from "react"
 import { Virtuoso } from "react-virtuoso"
-import { StickyUserMessage } from "@/components/chat/task-header/StickyUserMessage"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { cn } from "@/lib/utils"
 import type { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 import { isToolGroup } from "../../utils/messageUtils"
 import { createMessageRenderer } from "../messages/MessageRenderer"
@@ -42,26 +40,9 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		setShowScrollToBottom,
 		disableAutoScrollRef,
 		handleRangeChanged,
-		scrolledPastUserMessage,
-		scrollToMessage,
 	} = scrollBehavior
 
-	// Find the index of the scrolled past user message for scrolling
-	const scrolledPastUserMessageIndex = useMemo(() => {
-		if (!scrolledPastUserMessage) {
-			return -1
-		}
-		return dietcodeMessages.findIndex((msg) => msg.ts === scrolledPastUserMessage.ts)
-	}, [dietcodeMessages, scrolledPastUserMessage])
-
-	// Handler to scroll to the scrolled past user message
-	const handleScrollToUserMessage = useCallback(() => {
-		if (scrollToMessage && scrolledPastUserMessageIndex >= 0) {
-			scrollToMessage(scrolledPastUserMessageIndex)
-		}
-	}, [scrollToMessage, scrolledPastUserMessageIndex])
-
-	const { expandedRows, inputValue, setActiveQuote } = chatState
+	const { expandedRows, inputValue, setPendingQuote } = chatState
 	const lastVisibleRow = useMemo(() => groupedMessages.at(-1), [groupedMessages])
 	const lastVisibleMessage = useMemo(() => {
 		const lastRow = lastVisibleRow
@@ -175,7 +156,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 				expandedRows,
 				toggleRowExpansion,
 				handleRowHeightChange,
-				setActiveQuote,
+				setPendingQuote,
 				inputValue,
 				messageHandlers,
 				false,
@@ -186,7 +167,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 			expandedRows,
 			toggleRowExpansion,
 			handleRowHeightChange,
-			setActiveQuote,
+			setPendingQuote,
 			inputValue,
 			messageHandlers,
 		],
@@ -201,20 +182,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	)
 
 	return (
-		<div className="overflow-hidden flex flex-col h-full relative">
-			{/* Sticky User Message - positioned absolutely to avoid layout shifts */}
-			<div
-				className={cn(
-					"absolute top-0 left-0 right-0 z-10 pl-[15px] pr-[14px] bg-background",
-					scrolledPastUserMessage && "pb-2",
-				)}>
-				<StickyUserMessage
-					isVisible={!!scrolledPastUserMessage}
-					lastUserMessage={scrolledPastUserMessage}
-					onScrollToMessage={handleScrollToUserMessage}
-				/>
-			</div>
-
+		<div className="overflow-hidden flex flex-col h-full">
 			<div className="grow flex" ref={scrollContainerRef}>
 				<Virtuoso
 					atBottomStateChange={(isAtBottom) => {

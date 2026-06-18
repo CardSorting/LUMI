@@ -25,6 +25,9 @@ export interface ChatState {
 	setInputValue: React.Dispatch<React.SetStateAction<string>>
 	activeQuote: string | null
 	setActiveQuote: React.Dispatch<React.SetStateAction<string | null>>
+	/** Text highlighted in a message — confirm via footer bar before quoting. */
+	pendingQuote: string | null
+	setPendingQuote: React.Dispatch<React.SetStateAction<string | null>>
 	isTextAreaFocused: boolean
 	setIsTextAreaFocused: React.Dispatch<React.SetStateAction<boolean>>
 	selectedImages: string[]

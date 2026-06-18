@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import MarkdownBlock from "../common/MarkdownBlock"
+import ExpandHandle from "./ExpandHandle"
 import { ParentAuditGateBadge } from "./ParentAuditGateBadge"
 
 interface SubagentStatusRowProps {
@@ -37,7 +38,7 @@ interface SubagentRowData {
 interface SubagentPromptTextProps {
 	prompt: string
 	isExpanded: boolean
-	onShowMore: () => void
+	onToggle: () => void
 }
 
 const statusIcon = (status: DisplayStatus) => {
@@ -123,7 +124,7 @@ function parseSubagentRowData(message: DietCodeMessage): SubagentRowData | null 
 	}
 }
 
-function SubagentPromptText({ prompt, isExpanded, onShowMore }: SubagentPromptTextProps) {
+function SubagentPromptText({ prompt, isExpanded, onToggle }: SubagentPromptTextProps) {
 	const promptRef = useRef<HTMLDivElement | null>(null)
 	const [showMoreVisible, setShowMoreVisible] = useState(false)
 
@@ -156,27 +157,13 @@ function SubagentPromptText({ prompt, isExpanded, onShowMore }: SubagentPromptTe
 	}, [isExpanded])
 
 	return (
-		<div className="relative">
+		<div>
 			<div
 				className={`text-xs font-medium text-foreground whitespace-pre-wrap break-words ${!isExpanded ? "overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]" : ""}`}
 				ref={promptRef}>
 				"{prompt}"
 			</div>
-			{!isExpanded && showMoreVisible && (
-				<button
-					aria-label="Show full subagent prompt"
-					className="absolute right-0 bottom-0 z-10 text-[11px] text-link border-0 px-1 py-[1px] cursor-pointer leading-none rounded-[2px]"
-					onClick={onShowMore}
-					style={{ backgroundColor: "var(--vscode-editor-background)" }}
-					type="button">
-					<span
-						aria-hidden="true"
-						className="pointer-events-none absolute inset-y-0 -left-[6px] w-[6px]"
-						style={{ background: "linear-gradient(to left, var(--vscode-editor-background), transparent)" }}
-					/>
-					Show more
-				</button>
-			)}
+			{((!isExpanded && showMoreVisible) || isExpanded) && <ExpandHandle isExpanded={isExpanded} onToggle={onToggle} />}
 		</div>
 	)
 }
@@ -209,10 +196,10 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 			[index]: !prev[index],
 		}))
 	}
-	const expandPrompt = (index: number) => {
+	const togglePrompt = (index: number) => {
 		setExpandedPrompts((prev) => ({
 			...prev,
-			[index]: true,
+			[index]: !prev[index],
 		}))
 	}
 
@@ -246,7 +233,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 								<div className="min-w-0 flex-1">
 									<SubagentPromptText
 										isExpanded={expandedPrompts[entry.index] === true}
-										onShowMore={() => expandPrompt(entry.index)}
+										onToggle={() => togglePrompt(entry.index)}
 										prompt={entry.prompt}
 									/>
 								</div>

@@ -2,6 +2,7 @@ import type { McpServer } from "@shared/mcp"
 import React, { useCallback, useEffect, useRef } from "react"
 import ScreenReaderAnnounce from "@/components/common/ScreenReaderAnnounce"
 import { useMenuAnnouncement } from "@/hooks/useMenuAnnouncement"
+import { cn } from "@/lib/utils"
 import type { SlashCommand } from "@/utils/slash-commands"
 import { getMatchingSlashCommands } from "@/utils/slash-commands"
 
@@ -89,26 +90,28 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 		return (
 			<>
 				<div
-					className="text-xs text-(--vscode-descriptionForeground) px-3 py-1 font-bold border-b border-(--vscode-editorGroup-border)"
+					className="text-[10px] text-muted-foreground px-3 py-1 font-medium border-b border-editor-group-border"
 					role="presentation">
 					{title}
 				</div>
 				{commands.map((command, index) => {
 					const itemIndex = index + indexOffset
+					const isSelected = itemIndex === selectedIndex
 					return (
 						<div
-							aria-selected={itemIndex === selectedIndex}
-							className={`slash-command-menu-item py-2 px-3 cursor-pointer flex flex-col border-b border-(--vscode-editorGroup-border) ${
-								itemIndex === selectedIndex
-									? "bg-(--vscode-quickInputList-focusBackground) text-(--vscode-quickInputList-focusForeground)"
-									: ""
-							} hover:bg-(--vscode-list-hoverBackground)`}
+							aria-selected={isSelected}
+							className={cn(
+								"slash-command-menu-item py-2 px-3 cursor-pointer flex flex-col border-b border-editor-group-border",
+								isSelected
+									? "bg-[var(--vscode-quickInputList-focusBackground)] text-[var(--vscode-quickInputList-focusForeground)]"
+									: "hover:bg-[var(--vscode-list-hoverBackground)]",
+							)}
 							id={`slash-command-menu-item-${itemIndex}`}
 							key={command.name}
 							onClick={() => handleClick(command)}
 							onMouseEnter={() => setSelectedIndex(itemIndex)}
 							role="option">
-							<div className="font-bold whitespace-nowrap overflow-hidden text-ellipsis">
+							<div className="font-medium whitespace-nowrap overflow-hidden text-ellipsis text-sm">
 								<span className="ph-no-capture">/{command.name}</span>
 							</div>
 							{showDescriptions && command.description && (
@@ -125,32 +128,32 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 
 	return (
 		<div
-			className="absolute bottom-[calc(100%-10px)] left-[15px] right-[15px] overflow-x-hidden z-1000"
+			className="border-b border-[var(--vscode-editorGroup-border)] overflow-x-hidden shrink-0"
 			data-testid="slash-commands-menu"
 			onMouseDown={onMouseDown}>
 			<ScreenReaderAnnounce message={announcement} />
+			<p className="m-0 px-3 pt-1.5 pb-0.5 text-[10px] text-muted-foreground">Quick commands</p>
 			<div
 				aria-activedescendant={filteredCommands.length > 0 ? `slash-command-menu-item-${selectedIndex}` : undefined}
 				aria-label="Slash commands"
-				className="bg-(--vscode-dropdown-background) border border-(--vscode-editorGroup-border) rounded-[3px] shadow-[0_4px_10px_rgba(0,0,0,0.25)] flex flex-col overflow-y-auto"
+				className="bg-[var(--vscode-dropdown-background)] flex flex-col overflow-y-auto max-h-[min(160px,28vh)] overscroll-contain"
 				ref={menuRef}
 				role="listbox"
-				style={{ maxHeight: "min(200px, calc(50vh))", overscrollBehavior: "contain" }}
 				tabIndex={0}>
 				{filteredCommands.length > 0 ? (
 					<>
-						{renderCommandSection(defaultCommands, "Default Commands", 0, true)}
-						{renderCommandSection(workflowCommands, "Workflow Commands", defaultCommands.length, false)}
+						{renderCommandSection(defaultCommands, "Common", 0, true)}
+						{renderCommandSection(workflowCommands, "Your workflows", defaultCommands.length, false)}
 						{renderCommandSection(
 							mcpCommands,
-							"Tool shortcuts",
+							"Connected tools",
 							defaultCommands.length + workflowCommands.length,
 							true,
 						)}
 					</>
 				) : (
 					<div aria-selected="false" className="py-2 px-3 cursor-default flex flex-col" role="option">
-						<div className="text-[0.85em] text-(--vscode-descriptionForeground)">No matching commands found</div>
+						<div className="text-[0.85em] text-(--vscode-descriptionForeground)">No matching commands</div>
 					</div>
 				)}
 			</div>

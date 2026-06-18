@@ -38,9 +38,7 @@ const PlanCompletionOutputRow = memo(({ text, headClassNames, auditMetadata, isS
 				</div>
 			</div>
 			{!isStreaming && auditMetadata && <AuditReportPanel auditMetadata={auditMetadata} variant="neutral" />}
-			{!isStreaming && (
-				<p className="text-description/70 text-[11px] px-1 pt-2 pb-0.5">Implementation continues automatically.</p>
-			)}
+			{!isStreaming && <p className="text-description/70 text-[11px] px-1 pt-2 pb-0.5">I'll keep going from here.</p>}
 		</div>
 	)
 })

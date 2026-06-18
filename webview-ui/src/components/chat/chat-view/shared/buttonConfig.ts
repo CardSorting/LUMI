@@ -35,15 +35,15 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		sendingDisabled: true,
 		enableButtons: true,
 		primaryText: "Try again",
-		secondaryText: "Start fresh",
+		secondaryText: "New chat",
 		primaryAction: "retry",
 		secondaryAction: "new_task",
 	},
 	mistake_limit_reached: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Continue anyway",
-		secondaryText: "Start fresh",
+		primaryText: "Keep going",
+		secondaryText: "New chat",
 		primaryAction: "proceed",
 		secondaryAction: "new_task",
 	},
@@ -78,7 +78,7 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	command_output: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Continue while it runs",
+		primaryText: "Let it keep running",
 		secondaryText: undefined,
 		primaryAction: "proceed",
 		secondaryAction: undefined,
@@ -146,7 +146,7 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	completion_result: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Start New Task",
+		primaryText: "New chat",
 		secondaryText: undefined,
 		primaryAction: "new_task",
 		secondaryAction: undefined,
@@ -154,7 +154,7 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	resume_task: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Resume Task",
+		primaryText: "Continue",
 		secondaryText: undefined,
 		primaryAction: "proceed",
 		secondaryAction: undefined,
@@ -162,7 +162,7 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	resume_completed_task: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Start New Task",
+		primaryText: "New chat",
 		secondaryText: undefined,
 		primaryAction: "new_task",
 		secondaryAction: undefined,
@@ -170,7 +170,7 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	new_task: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Start New Task with Context",
+		primaryText: "New chat with context",
 		secondaryText: undefined,
 		primaryAction: "new_task",
 		secondaryAction: undefined,
@@ -180,7 +180,7 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	condense: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Condense Conversation",
+		primaryText: "Shorten chat",
 		secondaryText: undefined,
 		primaryAction: "utility",
 		secondaryAction: undefined,
@@ -331,4 +331,62 @@ export function getButtonConfig(message: DietCodeMessage | undefined, _mode: Mod
 	}
 
 	return BUTTON_CONFIGS.default
+}
+
+/** Plain-language footer label above approval buttons (narrow sidebar). */
+export function getApprovalPromptLabel(message: DietCodeMessage | undefined, config: ButtonConfig): string | null {
+	if (!config.primaryText && !config.secondaryText) {
+		return null
+	}
+
+	if (config.secondaryAction === "cancel" && !config.primaryAction) {
+		return "Working…"
+	}
+
+	if (message?.type === "ask") {
+		switch (message.ask) {
+			case "api_req_failed":
+				return "Something went wrong"
+			case "mistake_limit_reached":
+				return "Hit a snag"
+			case "completion_result":
+			case "resume_completed_task":
+				return "All done"
+			case "resume_task":
+				return "Pick up where you left off?"
+			case "new_task":
+				return "Start something new?"
+			case "condense":
+				return "Shorten this chat?"
+			case "report_bug":
+				return "Report a problem?"
+			case "command_output":
+				return "Command is running"
+			case "command":
+				return "Run this command?"
+			case "tool": {
+				try {
+					const tool = JSON.parse(message.text || "{}") as DietCodeSayTool
+					if (tool.tool === "editedExistingFile" || tool.tool === "newFileCreated" || tool.tool === "fileDeleted") {
+						return "Save these changes?"
+					}
+				} catch {
+					// fall through
+				}
+				return "Make this change?"
+			}
+			default:
+				return "Needs your OK"
+		}
+	}
+
+	if (message?.type === "say" && message.say === "api_req_started") {
+		return "Working…"
+	}
+
+	if (message?.type === "say" && message.say === "command_output") {
+		return "Command is running"
+	}
+
+	return "Needs your OK"
 }

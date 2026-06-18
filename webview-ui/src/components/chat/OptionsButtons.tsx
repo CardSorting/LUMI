@@ -1,27 +1,6 @@
 import { AskResponseRequest } from "@shared/proto/dietcode/task"
-import styled from "styled-components"
-import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
+import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
-
-const OptionButton = styled.button<{ isSelected?: boolean; isNotSelectable?: boolean }>`
-	padding: 8px 12px;
-	background: ${(props) => (props.isSelected ? "var(--vscode-focusBorder)" : CODE_BLOCK_BG_COLOR)};
-	color: ${(props) => (props.isSelected ? "white" : "var(--vscode-input-foreground)")};
-	border: 1px solid var(--vscode-editorGroup-border);
-	border-radius: 2px;
-	cursor: ${(props) => (props.isNotSelectable ? "default" : "pointer")};
-	text-align: left;
-	font-size: 12px;
-
-	${(props) =>
-		!props.isNotSelectable &&
-		`
-		&:hover {
-			background: var(--vscode-focusBorder);
-			color: white;
-		}
-	`}
-`
 
 export const OptionsButtons = ({
 	options,
@@ -43,21 +22,21 @@ export const OptionsButtons = ({
 	const hasSelected = selected !== undefined && options.includes(selected)
 
 	return (
-		<div
-			style={{
-				display: "flex",
-				flexDirection: "column",
-				gap: "8px",
-			}}>
-			{/* <div style={{ color: "var(--vscode-descriptionForeground)", fontSize: "11px", textTransform: "uppercase" }}>
-				SELECT ONE:
-			</div> */}
+		<div className="flex flex-col gap-1.5 mt-2">
+			<p className="text-[10px] font-medium text-muted-foreground m-0">Pick one</p>
 			{options.map((option, index) => (
-				<OptionButton
-					className="options-button"
+				<button
+					className={cn(
+						"w-full text-left px-2.5 py-2 text-xs rounded-md border",
+						"border-editor-group-border",
+						option === selected
+							? "bg-[var(--vscode-focusBorder)] text-white border-transparent"
+							: "bg-code text-foreground",
+						hasSelected || !isActive
+							? "cursor-default opacity-70"
+							: "cursor-pointer hover:bg-[var(--vscode-focusBorder)] hover:text-white hover:border-transparent",
+					)}
 					id={`options-button-${index}`}
-					isNotSelectable={hasSelected || !isActive}
-					isSelected={option === selected}
 					key={index}
 					onClick={async () => {
 						if (hasSelected || !isActive) {
@@ -78,9 +57,10 @@ export const OptionsButtons = ({
 						} catch (error) {
 							console.error("Error sending option response:", error)
 						}
-					}}>
+					}}
+					type="button">
 					<span className="ph-no-capture">{option}</span>
-				</OptionButton>
+				</button>
 			))}
 		</div>
 	)

@@ -3,10 +3,7 @@ import type { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { VirtuosoHandle } from "react-virtuoso"
-import { VscIcon } from "@/components/ui/vsc-icon"
-import { cn } from "@/lib/utils"
-import { ButtonActionType, getButtonConfig } from "../../shared/buttonConfig"
+import { ButtonActionType, getApprovalPromptLabel, getButtonConfig } from "../../shared/buttonConfig"
 import type { ChatState, MessageHandlers } from "../../types/chatTypes"
 
 interface ActionButtonsProps {
@@ -15,25 +12,12 @@ interface ActionButtonsProps {
 	chatState: ChatState
 	messageHandlers: MessageHandlers
 	mode: Mode
-	scrollBehavior: {
-		scrollToBottomSmooth: () => void
-		disableAutoScrollRef: React.MutableRefObject<boolean>
-		showScrollToBottom: boolean
-		virtuosoRef: React.RefObject<VirtuosoHandle>
-	}
 }
 
 /**
- * Action buttons area including scroll-to-bottom and approve/reject buttons
+ * Approval / action buttons when the agent needs user confirmation.
  */
-export const ActionButtons: React.FC<ActionButtonsProps> = ({
-	task,
-	messages,
-	chatState,
-	mode,
-	messageHandlers,
-	scrollBehavior,
-}) => {
+export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, chatState, mode, messageHandlers }) => {
 	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
 	const [isProcessing, setIsProcessing] = useState(false)
 
@@ -100,71 +84,25 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 		return null
 	}
 
-	const { showScrollToBottom, scrollToBottomSmooth, disableAutoScrollRef } = scrollBehavior
-
 	const { primaryText, secondaryText, primaryAction, secondaryAction, enableButtons } = buttonConfig
-	const hasButtons = primaryText || secondaryText
+	const hasButtons = Boolean(primaryText || secondaryText)
 	const isStreaming = task.partial === true
 	const canInteract = enableButtons && !isProcessing
+	const promptLabel = getApprovalPromptLabel(lastMessage, buttonConfig)
 
-	// Early return for scroll button to avoid unnecessary computation
-	if (showScrollToBottom || !hasButtons) {
-		const handleScrollToBottom = () => {
-			scrollToBottomSmooth()
-			disableAutoScrollRef.current = false
-		}
-		// Show scroll to top button when there are no action buttons
-		const handleScrollToTop = () => {
-			scrollBehavior.virtuosoRef.current?.scrollTo({
-				top: 0,
-				behavior: "smooth",
-			})
-			disableAutoScrollRef.current = true
-			// Virtual rendering may not have all items rendered when at bottom,
-			// so scroll again after a delay to ensure we reach the true top
-			setTimeout(() => {
-				scrollBehavior.virtuosoRef.current?.scrollTo({
-					top: 0,
-					behavior: "smooth",
-				})
-			}, 300)
-		}
-
-		return (
-			<div className="flex px-3.5">
-				<VSCodeButton
-					appearance="icon"
-					aria-label={showScrollToBottom ? "Scroll to bottom" : "Scroll to top"}
-					className="text-lg text-(--vscode-primaryButton-foreground) bg-[color-mix(in_srgb,var(--vscode-toolbar-hoverBackground)_55%,transparent)] rounded-[3px] overflow-hidden cursor-pointer flex justify-center items-center flex-1 h-[25px] hover:bg-[color-mix(in_srgb,var(--vscode-toolbar-hoverBackground)_90%,transparent)] active:bg-[color-mix(in_srgb,var(--vscode-toolbar-hoverBackground)_70%,transparent)] border-0"
-					onClick={showScrollToBottom ? handleScrollToBottom : handleScrollToTop}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault()
-							if (showScrollToBottom) {
-								handleScrollToBottom()
-							} else {
-								handleScrollToTop()
-							}
-						}
-					}}>
-					{showScrollToBottom ? (
-						<VscIcon className="" name="chevron-down" />
-					) : (
-						<VscIcon className="" name="chevron-up" />
-					)}
-				</VSCodeButton>
-			</div>
-		)
+	if (!hasButtons) {
+		return null
 	}
 
 	const opacity = canInteract || isStreaming ? 1 : 0.5
 
 	return (
-		<div className="flex px-3.5 gap-2" style={{ opacity }}>
+		<div className="flex flex-col px-3 gap-1.5 pb-1" style={{ opacity }}>
+			{promptLabel ? <p className="text-[11px] text-muted-foreground m-0 pt-1.5">{promptLabel}</p> : null}
 			{primaryText && primaryAction && (
 				<VSCodeButton
 					appearance="primary"
-					className={cn("rounded-lg", secondaryText ? "flex-1 mr-[6px]" : "flex-2")}
+					className="rounded-lg w-full"
 					disabled={!canInteract}
 					onClick={() => handleActionClick(primaryAction, inputValue, selectedImages, selectedFiles)}>
 					{primaryText}
@@ -173,7 +111,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 			{secondaryText && secondaryAction && (
 				<VSCodeButton
 					appearance="secondary"
-					className={cn("rounded-lg", primaryText ? "flex-1" : "flex-2")}
+					className="rounded-lg w-full"
 					disabled={!canInteract}
 					onClick={() => handleActionClick(secondaryAction, inputValue, selectedImages, selectedFiles)}>
 					{secondaryText}

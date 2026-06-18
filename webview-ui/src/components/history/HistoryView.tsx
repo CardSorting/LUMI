@@ -26,13 +26,13 @@ const isToday = (timestamp: number): boolean => {
 }
 
 const HISTORY_FILTERS = {
-	newest: "Newest",
-	oldest: "Oldest",
-	mostExpensive: "Most Expensive",
-	mostTokens: "Most Tokens",
-	mostRelevant: "Most Relevant",
-	workspaceOnly: "Workspace Only",
-	favoritesOnly: "Favorites Only",
+	newest: "Newest first",
+	oldest: "Oldest first",
+	mostExpensive: "Highest cost",
+	mostTokens: "Most tokens used",
+	mostRelevant: "Best match",
+	workspaceOnly: "This workspace only",
+	favoritesOnly: "Saved only",
 }
 
 const HistoryView = ({ onDone }: HistoryViewProps) => {
@@ -257,7 +257,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 			groups.push({ tasks: todayTasks, label: "Today" })
 		}
 		if (olderTasks.length > 0) {
-			groups.push({ tasks: olderTasks, label: "Older" })
+			groups.push({ tasks: olderTasks, label: "Earlier" })
 		}
 
 		return {
@@ -290,10 +290,10 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 	return (
 		<div className="fixed overflow-hidden inset-0 flex flex-col w-full">
 			{/* HEADER */}
-			<ViewHeader environment={environment} onDone={onDone} title="History" />
+			<ViewHeader environment={environment} onDone={onDone} title="Past conversations" />
 
 			{/* FILTERS */}
-			<div className="flex flex-col gap-3 px-3">
+			<div className="flex flex-col gap-2 px-2 shrink-0">
 				{/* REPLACE VSCODE RADIO GROUP */}
 				<div className="flex justify-between items-center">
 					{/* SEARCH BOX */}
@@ -307,7 +307,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 								setSortOption("mostRelevant")
 							}
 						}}
-						placeholder="Fuzzy search history..."
+						placeholder="Search conversations…"
 						value={searchQuery}>
 						<Icon className="opacity-80 mt-0.5 !text-sm" name="search" slot="start" />
 						{searchQuery && (

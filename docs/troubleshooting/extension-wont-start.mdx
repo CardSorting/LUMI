@@ -1,0 +1,92 @@
+---
+title: "LUMI Won't Start"
+sidebarTitle: "Extension Won't Start"
+description: "Fix missing database component errors when LUMI fails to activate"
+---
+
+## What you might see
+
+If LUMI cannot start, your editor may show an error like:
+
+- `Cannot find module 'better-sqlite3'`
+- `Activating extension 'CardSorting.lumi' failed`
+- A LUMI popup: **"required component is missing"**
+
+This means the extension install is **incomplete** — the local database driver did not ship with the download. It is **not** your project code or settings.
+
+---
+
+## Try this first (in your editor)
+
+<Steps>
+  <Step title="Open the health check">
+    1. Open the **Command Palette** (`Cmd+Shift+P` on Mac, `Ctrl+Shift+P` on Windows/Linux)
+    2. Type **LUMI: Check Installation**
+    3. Press Enter
+  </Step>
+  <Step title="Read the LUMI Health panel">
+    A panel named **LUMI Health** opens with a simple checklist (`OK` / `FAIL`).
+    Follow the numbered steps at the bottom if anything failed.
+  </Step>
+  <Step title="Reload">
+    Command Palette → **Developer: Reload Window**
+  </Step>
+</Steps>
+
+---
+
+## Reinstall from a VSIX file
+
+If the health check shows missing components:
+
+1. Get a fresh `.vsix` from [GitHub Releases](https://github.com/CardSorting/DietCodeMarie/releases)
+2. Open **Extensions**
+3. Click the **`⋯` menu** at the top of the Extensions panel
+4. Choose **Install from VSIX…**
+5. Select the file (e.g. `lumi-1.0.6.vsix` or `lumi-vscode-1.0.6.vsix`)
+6. **Reload** the window
+
+---
+
+## Terminal repair (if you have the source repo)
+
+```bash
+npm run doctor:fix
+```
+
+Then reload your editor window.
+
+---
+
+## If you installed from Open VSX
+
+Some older Open VSX builds of `CardSorting.lumi` were packaged without the SQLite native module. If you use **Antigravity**, **VSCodium**, or another Open VSX client:
+
+1. Uninstall LUMI
+2. Reinstall using **Install from VSIX…** above, **or** update once a fixed version is published
+3. Run **LUMI: Check Installation** to confirm everything is `OK`
+
+---
+
+## Command reference
+
+| Who | What to run |
+|-----|-------------|
+| **Everyone** | Command Palette → **LUMI: Check Installation** |
+| **Terminal users** | `npm run doctor` or `npm run doctor:install` |
+| **Maintainers** | `npm run doctor:fix` · `npm run package:vsix:all` |
+
+---
+
+## For maintainers
+
+| Task | Command |
+|------|---------|
+| Full health check | `npm run doctor` |
+| Installs only | `npm run doctor:install` |
+| Auto-repair local installs | `npm run doctor:fix` |
+| Package both registries | `npm run package:vsix:all` |
+| CI gate | `npm run doctor -- --ci` |
+| Unit tests | `npm run test:doctor` |
+
+See [MAINTAINER.md](https://github.com/CardSorting/DietCodeMarie/blob/main/docs/MAINTAINER.md) for publishing.

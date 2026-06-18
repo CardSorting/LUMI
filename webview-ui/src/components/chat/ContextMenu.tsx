@@ -3,6 +3,7 @@ import { cleanPathPrefix } from "@/components/common/CodeAccordian"
 import ScreenReaderAnnounce from "@/components/common/ScreenReaderAnnounce"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { useMenuAnnouncement } from "@/hooks/useMenuAnnouncement"
+import { cn } from "@/lib/utils"
 import { ContextMenuOptionType, ContextMenuQueryItem, getContextMenuOptions, SearchResult } from "@/utils/context-mentions"
 
 interface ContextMenuProps {
@@ -225,16 +226,11 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 	)
 
 	return (
-		<div
-			onMouseDown={onMouseDown}
-			style={{
-				position: "absolute",
-				bottom: "calc(100% - 10px)",
-				left: 15,
-				right: 15,
-				overflowX: "hidden",
-			}}>
+		<div className="border-b border-[var(--vscode-editorGroup-border)] overflow-x-hidden shrink-0" onMouseDown={onMouseDown}>
 			<ScreenReaderAnnounce message={announcement} />
+			<p className="m-0 px-3 pt-1.5 pb-0.5 text-[10px] text-muted-foreground">
+				{searchQuery ? "Search results" : "Add context"}
+			</p>
 			<div
 				aria-activedescendant={
 					filteredOptions.length > selectedIndex &&
@@ -244,33 +240,16 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 						: undefined
 				}
 				aria-label="Context mentions"
+				className="bg-[var(--vscode-dropdown-background)] flex flex-col max-h-[min(160px,28vh)] overflow-y-auto overscroll-contain"
 				ref={menuRef}
 				role="listbox"
-				style={{
-					backgroundColor: "var(--vscode-dropdown-background)",
-					border: "1px solid var(--vscode-editorGroup-border)",
-					borderRadius: "3px",
-					boxShadow: "0 4px 10px rgba(0, 0, 0, 0.25)",
-					zIndex: 1000,
-					display: "flex",
-					flexDirection: "column",
-					maxHeight: "200px",
-					overflowY: "auto",
-				}}
 				tabIndex={0}>
 				{" "}
 				{/* Can't use virtuoso since it requires fixed height and menu height is dynamic based on # of items */}
 				{showDelayedLoading && searchQuery && (
-					<div
-						style={{
-							padding: "8px 12px",
-							display: "flex",
-							alignItems: "center",
-							gap: "8px",
-							opacity: 0.7,
-						}}>
-						<VscIcon className="animate-spin" name="loading" style={{ fontSize: "14px" }} />
-						<span>Searching...</span>
+					<div className="py-2 px-3 flex items-center gap-2 opacity-70 text-xs">
+						<VscIcon className="animate-spin text-sm" name="loading" />
+						<span>Searching…</span>
 					</div>
 				)}
 				{filteredOptions.map((option, index) => {
@@ -278,79 +257,39 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 					const workspacePrefix = option.workspaceName ? `${option.workspaceName}:` : ""
 					const generatedKey = `${option.type}-${workspacePrefix}${option.value || index}`
 
+					const isSelected = index === selectedIndex && isOptionSelectable(option)
+
 					return (
 						<div
 							aria-label={getOptionLabel(option)}
-							aria-selected={index === selectedIndex && isOptionSelectable(option)}
+							aria-selected={isSelected}
+							className={cn(
+								"py-2 px-3 flex items-center justify-between border-b border-editor-group-border",
+								isOptionSelectable(option)
+									? "cursor-pointer hover:bg-[var(--vscode-list-hoverBackground)]"
+									: "cursor-default",
+								isSelected &&
+									"bg-[var(--vscode-quickInputList-focusBackground)] text-[var(--vscode-quickInputList-focusForeground)]",
+							)}
 							id={`context-menu-item-${index}`}
 							key={generatedKey}
 							onClick={() => handleSelect(option)}
 							onMouseEnter={() => isOptionSelectable(option) && setSelectedIndex(index)}
-							role="option"
-							style={{
-								padding: "8px 12px",
-								cursor: isOptionSelectable(option) ? "pointer" : "default",
-								color:
-									index === selectedIndex && isOptionSelectable(option)
-										? "var(--vscode-quickInputList-focusForeground)"
-										: "",
-								borderBottom: "1px solid var(--vscode-editorGroup-border)",
-								display: "flex",
-								alignItems: "center",
-								justifyContent: "space-between",
-								backgroundColor:
-									index === selectedIndex && isOptionSelectable(option)
-										? "var(--vscode-quickInputList-focusBackground)"
-										: "",
-							}}>
-							<div
-								style={{
-									display: "flex",
-									alignItems: "center",
-									flex: 1,
-									minWidth: 0,
-									overflow: "hidden",
-								}}>
-								<VscIcon
-									name={getIconForOption(option)}
-									style={{
-										marginRight: "8px",
-										flexShrink: 0,
-										fontSize: "14px",
-									}}
-								/>
+							role="option">
+							<div className="flex items-center flex-1 min-w-0 overflow-hidden">
+								<VscIcon className="mr-2 shrink-0 text-sm" name={getIconForOption(option)} />
 								{renderOptionContent(option)}
 							</div>
 							{(option.type === ContextMenuOptionType.File ||
 								option.type === ContextMenuOptionType.Folder ||
 								option.type === ContextMenuOptionType.Git) &&
-								!option.value && (
-									<VscIcon
-										className=""
-										name="chevron-right"
-										style={{
-											fontSize: "14px",
-											flexShrink: 0,
-											marginLeft: 8,
-										}}
-									/>
-								)}
+								!option.value && <VscIcon className="text-sm shrink-0 ml-2" name="chevron-right" />}
 							{(option.type === ContextMenuOptionType.Problems ||
 								option.type === ContextMenuOptionType.Terminal ||
 								((option.type === ContextMenuOptionType.File ||
 									option.type === ContextMenuOptionType.Folder ||
 									option.type === ContextMenuOptionType.Git) &&
-									option.value)) && (
-								<VscIcon
-									className=""
-									name="add"
-									style={{
-										fontSize: "14px",
-										flexShrink: 0,
-										marginLeft: 8,
-									}}
-								/>
-							)}
+									option.value)) && <VscIcon className="text-sm shrink-0 ml-2" name="add" />}
 						</div>
 					)
 				})}

@@ -1,5 +1,6 @@
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
-import React, { memo, useCallback, useMemo, useState } from "react"
+import { ChevronRight } from "lucide-react"
+import type React from "react"
+import { memo } from "react"
 import { formatLargeNumber as formatTokenNumber } from "@/utils/format"
 
 interface TokenUsageInfoProps {
@@ -7,12 +8,6 @@ interface TokenUsageInfoProps {
 	tokensOut?: number
 	cacheWrites?: number
 	cacheReads?: number
-}
-
-interface TokenDetail {
-	title: string
-	value?: number
-	icon: string
 }
 
 interface TaskContextWindowButtonsProps extends TokenUsageInfoProps {
@@ -24,62 +19,41 @@ interface TaskContextWindowButtonsProps extends TokenUsageInfoProps {
 	isThresholdFadingOut?: boolean
 }
 
-// New accordion item component
-const AccordionItem = memo<{
+const DetailsSection = memo<{
 	title: string
 	value: React.ReactNode
-	isExpanded: boolean
-	onToggle: (event?: React.MouseEvent) => void
 	children?: React.ReactNode
-}>(({ title, value, isExpanded, onToggle, children }) => {
-	const handleClick = useCallback(
-		(event: React.MouseEvent) => {
-			event.preventDefault()
-			event.stopPropagation()
-			onToggle(event)
-		},
-		[onToggle],
-	)
+}>(({ title, value, children }) => (
+	<details className="lumi-inline-disclosure group">
+		<summary className="lumi-details-trigger flex items-center justify-between gap-2 py-1 cursor-pointer list-none text-xs">
+			<span className="flex items-center gap-1 font-medium min-w-0">
+				<ChevronRight
+					aria-hidden
+					className="size-3 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+				/>
+				{title}
+			</span>
+			<span className="text-muted-foreground shrink-0 tabular-nums">{value}</span>
+		</summary>
+		{children ? <div className="pl-4 pb-1 pt-0.5 text-xs text-muted-foreground">{children}</div> : null}
+	</details>
+))
+DetailsSection.displayName = "DetailsSection"
 
-	return (
-		<div className="flex flex-col w-full">
-			<div
-				className="flex justify-between items-center gap-1 cursor-pointer hover:bg-foreground/5 rounded p-0.5 transition-colors w-full"
-				onClick={handleClick}>
-				<div className="flex items-center gap-1">
-					{isExpanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
-					<div className="font-semibold">{title}</div>
-				</div>
-				<div className="text-muted-foreground">{value}</div>
-			</div>
-			{isExpanded && children && <div className="ml-5 my-1 text-xs text-muted-foreground">{children}</div>}
-		</div>
-	)
-})
-AccordionItem.displayName = "AccordionItem"
-
-// Constants
-const TOKEN_DETAILS_CONFIG: Omit<TokenDetail, "icon" | "value">[] = [
-	{ title: "Input" },
-	{ title: "Output" },
-	{ title: "Cached writes" },
-	{ title: "Cached reads" },
-]
+const TOKEN_DETAILS_CONFIG = [{ title: "Input" }, { title: "Output" }, { title: "Cached writes" }, { title: "Cached reads" }]
 
 const TokenUsageDetails = memo<TokenUsageInfoProps>(({ tokensIn, tokensOut, cacheWrites, cacheReads }) => {
-	const contextTokenDetails = useMemo(() => {
-		const values = [tokensIn, tokensOut, cacheWrites || 0, cacheReads || 0]
-		return TOKEN_DETAILS_CONFIG.map((config, index) => ({ ...config, value: values[index] })).filter((item) => item.value)
-	}, [tokensIn, tokensOut, cacheWrites, cacheReads])
-
 	if (!tokensIn) {
-		return <div>No token usage data available</div>
+		return <p className="m-0">No usage data yet.</p>
 	}
+
+	const values = [tokensIn, tokensOut, cacheWrites || 0, cacheReads || 0]
+	const items = TOKEN_DETAILS_CONFIG.map((config, index) => ({ ...config, value: values[index] })).filter((item) => item.value)
 
 	return (
 		<div className="space-y-1">
-			{contextTokenDetails.map((item) => (
-				<div className="flex justify-between">
+			{items.map((item) => (
+				<div className="flex justify-between gap-2" key={item.title}>
 					<span>{item.title}</span>
 					<span className="font-mono">{formatTokenNumber(item.value || 0)}</span>
 				</div>
@@ -99,81 +73,45 @@ export const ContextWindowSummary: React.FC<TaskContextWindowButtonsProps> = ({
 	percentage,
 	autoCompactThreshold = 0,
 }) => {
-	// Accordion state
-	const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
-
-	const toggleSection = useCallback((section: string, event?: React.MouseEvent) => {
-		if (event) {
-			event.preventDefault()
-			event.stopPropagation()
-		}
-		setExpandedSections((prev) => {
-			const newSet = new Set(prev)
-			if (newSet.has(section)) {
-				newSet.delete(section)
-			} else {
-				newSet.add(section)
-			}
-			return newSet
-		})
-	}, [])
-
 	const totalTokens = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 
 	return (
-		<div className="context-window-tooltip-content flex flex-col gap-2 bg-menu rounded shadow-sm z-100 w-60 p-1">
-			{autoCompactThreshold > 0 && (
-				<AccordionItem
-					isExpanded={expandedSections.has("threshold")}
-					onToggle={(event) => toggleSection("threshold", event)}
-					title="Auto shorten chats"
-					value={<span className="text-muted-foreground">{`${(autoCompactThreshold * 100).toFixed(0)}%`}</span>}>
-					<div className="space-y-1">
-						<p className="text-xs leading-relaxed text-white">
-							Click the memory bar to choose when chats get shortened.
-						</p>
-						<p className="text-xs leading-relaxed mt-0 mb-0">
-							When the chat gets long, LUMI tidies it up so things stay comfortable.
-						</p>
-					</div>
-				</AccordionItem>
-			)}
+		<div className="flex flex-col gap-1 w-full">
+			{autoCompactThreshold > 0 ? (
+				<DetailsSection title="Auto shorten chats" value={`${(autoCompactThreshold * 100).toFixed(0)}%`}>
+					<p className="m-0 leading-snug">When the chat gets long, LUMI tidies it up so things stay comfortable.</p>
+				</DetailsSection>
+			) : null}
 
-			<AccordionItem
-				isExpanded={expandedSections.has("context")}
-				onToggle={(event) => toggleSection("context", event)}
-				title="Chat memory"
-				value={percentage ? `${percentage.toFixed(1)}%` : formatTokenNumber(contextWindow)}>
+			<DetailsSection
+				title="Memory used"
+				value={percentage ? `${percentage.toFixed(0)}%` : formatTokenNumber(contextWindow)}>
 				<div className="space-y-1">
-					<div className="flex justify-between">
-						<span>Used:</span>
+					<div className="flex justify-between gap-2">
+						<span>Used</span>
 						<span className="font-mono">{formatTokenNumber(tokenUsed)}</span>
 					</div>
-					<div className="flex justify-between">
-						<span>Total:</span>
+					<div className="flex justify-between gap-2">
+						<span>Total</span>
 						<span className="font-mono">{formatTokenNumber(contextWindow)}</span>
 					</div>
-					<div className="flex justify-between">
-						<span>Remaining:</span>
+					<div className="flex justify-between gap-2">
+						<span>Remaining</span>
 						<span className="font-mono">{formatTokenNumber(contextWindow - tokenUsed)}</span>
 					</div>
 				</div>
-			</AccordionItem>
+			</DetailsSection>
 
-			{totalTokens > 0 && (
-				<AccordionItem
-					isExpanded={expandedSections.has("tokens")}
-					onToggle={(event) => toggleSection("tokens", event)}
-					title="Usage details"
-					value={`${formatTokenNumber(totalTokens)}`}>
+			{totalTokens > 0 ? (
+				<DetailsSection title="Token breakdown" value={formatTokenNumber(totalTokens)}>
 					<TokenUsageDetails
 						cacheReads={cacheReads}
 						cacheWrites={cacheWrites}
 						tokensIn={tokensIn}
 						tokensOut={tokensOut}
 					/>
-				</AccordionItem>
-			)}
+				</DetailsSection>
+			) : null}
 		</div>
 	)
 }

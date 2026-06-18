@@ -1,7 +1,6 @@
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { ArrowDownToLineIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
 
@@ -20,22 +19,20 @@ const OpenDiskConversationHistoryButton: React.FC<{
 	}
 
 	return (
-		<Tooltip>
-			<TooltipContent>Open Conversation History File</TooltipContent>
-			<TooltipTrigger className={cn("flex items-center", className)}>
-				<Button
-					aria-label="Open Disk Conversation History"
-					onClick={(e) => {
-						e.preventDefault()
-						e.stopPropagation()
-						handleOpenDiskConversationHistory()
-					}}
-					size="icon"
-					variant="icon">
-					<ArrowDownToLineIcon />
-				</Button>
-			</TooltipTrigger>
-		</Tooltip>
+		<Button
+			aria-label="Open conversation log file"
+			className={cn("flex items-center", className)}
+			disabled={!taskId}
+			onClick={(e) => {
+				e.preventDefault()
+				e.stopPropagation()
+				handleOpenDiskConversationHistory()
+			}}
+			size="icon"
+			title="Open conversation log file"
+			variant="icon">
+			<ArrowDownToLineIcon />
+		</Button>
 	)
 }
 

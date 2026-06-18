@@ -89,8 +89,8 @@ jobs:
                   OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
                   OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
               run: |
-                  # Required to generate the .vsix
-                  vsce package  --allow-package-secrets sendgrid --out "dietcode-${{ steps.get_version.outputs.version }}.vsix"
+                  npm run package:vsix:all
+                  npm run doctor -- --ci
 
                   if [ "${{ github.event.inputs.release-type }}" = "pre-release" ]; then
                     npm run publish:marketplace:prerelease
@@ -120,7 +120,9 @@ jobs:
               uses: softprops/action-gh-release@v1
               with:
                   tag_name: ${{ steps.validate_tag.outputs.tag }}
-                  files: "*.vsix"
+                  files: |
+                      dist/lumi-vscode-*.vsix
+                      dist/lumi-[0-9]*.vsix
                   body: |
                       ${{ steps.changelog.outputs.content }}
 

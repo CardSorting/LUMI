@@ -160,13 +160,17 @@ vscode-dropdown::part(listbox) {
 /* Chat input */
 .chat-input-textarea {
 	box-sizing: border-box;
-	background-color: var(--vscode-input-background);
+	background-color: transparent;
 	color: var(--vscode-input-foreground);
-	border: 1px solid var(--vscode-input-border);
+	border: none;
 	font-family: var(--vscode-font-family);
 	font-size: var(--vscode-editor-font-size);
-	line-height: var(--vscode-editor-line-height);
-	padding: 8px;
+	line-height: 1.5;
+	padding: 0;
+}
+
+.chat-input-shell:focus-within {
+	outline: none;
 }
 
 /* Context mentions */

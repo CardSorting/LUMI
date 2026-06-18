@@ -43,7 +43,6 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 					const requestId = dietcodeError?._error?.request_id
 					const providerId = dietcodeError?.providerId || dietcodeError?._error?.providerId
 					const isDietCodeProvider = providerId === "dietcode"
-					const errorCode = dietcodeError?._error?.code
 
 					if (dietcodeError?.isErrorType(DietCodeErrorType.Balance)) {
 						const errorDetails = dietcodeError._error?.details
@@ -97,7 +96,7 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 								{/* The user is signed in or not using dietcode provider */}
 								{isDietCodeProvider && !dietcodeUser ? (
 									<Button className="w-full mb-4" disabled={isLoginLoading} onClick={handleSignIn}>
-										Sign in to LUMI
+										Sign in
 										{isLoginLoading && (
 											<span className="ml-1 animate-spin">
 												<Icon className="" name="refresh" />

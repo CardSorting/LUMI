@@ -14,7 +14,9 @@ interface WithCopyButtonProps {
 	children: React.ReactNode
 	textToCopy?: string
 	onCopy?: () => string | undefined | null
+	/** @deprecated Use variant="overlay" for code blocks only. Chat messages default to inline copy. */
 	position?: "top-right" | "bottom-right"
+	variant?: "inline" | "overlay"
 	style?: React.CSSProperties
 	className?: string
 	copyButtonClassname?: string
@@ -63,7 +65,7 @@ export const CopyButton: React.FC<CopyButtonProps> = ({ textToCopy, onCopy, clas
 }
 
 /**
- * Container component that wraps content with a copy button
+ * Wraps content with copy — inline footer by default (no hover overlay in narrow sidebars).
  */
 export const WithCopyButton = forwardRef<HTMLDivElement, WithCopyButtonProps>(
 	(
@@ -72,6 +74,7 @@ export const WithCopyButton = forwardRef<HTMLDivElement, WithCopyButtonProps>(
 			textToCopy,
 			onCopy,
 			position = "top-right",
+			variant = "inline",
 			style,
 			className,
 			copyButtonClassname,
@@ -83,19 +86,34 @@ export const WithCopyButton = forwardRef<HTMLDivElement, WithCopyButtonProps>(
 	) => {
 		const hasCopyFunctionality = !!(textToCopy || onCopy)
 
+		if (variant === "overlay") {
+			return (
+				<div className={cn("relative w-full", className)} onMouseUp={onMouseUp} ref={ref} style={style} {...props}>
+					{children}
+					{hasCopyFunctionality && (
+						<div className={cn("absolute", POSITION_CLASSES[position], copyButtonClassname)}>
+							<CopyButton ariaLabel={ariaLabel} onCopy={onCopy} textToCopy={textToCopy} />
+						</div>
+					)}
+				</div>
+			)
+		}
+
 		return (
-			<div className={cn("group relative w-full", className)} onMouseUp={onMouseUp} ref={ref} style={style} {...props}>
+			<div className={cn("flex flex-col w-full", className)} ref={ref} style={style} {...props}>
+				<div className="relative min-w-0" onMouseUp={onMouseUp}>
+					{children}
+				</div>
 				{hasCopyFunctionality && (
-					<div
-						className={cn(
-							"absolute opacity-0 group-hover:opacity-100 transition-opacity",
-							POSITION_CLASSES[position],
-							copyButtonClassname,
-						)}>
-						<CopyButton ariaLabel={ariaLabel} onCopy={onCopy} textToCopy={textToCopy} />
+					<div className="flex justify-end pt-0.5">
+						<CopyButton
+							ariaLabel={ariaLabel || "Copy message"}
+							className={cn("scale-75 opacity-70 hover:opacity-100", copyButtonClassname)}
+							onCopy={onCopy}
+							textToCopy={textToCopy}
+						/>
 					</div>
 				)}
-				{children}
 			</div>
 		)
 	},

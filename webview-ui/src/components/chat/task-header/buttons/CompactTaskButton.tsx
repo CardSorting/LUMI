@@ -1,6 +1,5 @@
 import { FoldVerticalIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 const CompactTaskButton: React.FC<{
@@ -8,23 +7,19 @@ const CompactTaskButton: React.FC<{
 	onClick: (e: React.MouseEvent<HTMLButtonElement>) => void
 }> = ({ onClick, className }) => {
 	return (
-		<Tooltip>
-			<TooltipContent side="left">Compact Task</TooltipContent>
-			<TooltipTrigger className={cn("flex items-center", className)}>
-				<Button
-					aria-label="Compact Task"
-					className="[&_svg]:size-3"
-					onClick={(e) => {
-						e.preventDefault()
-						e.stopPropagation()
-						onClick(e)
-					}}
-					size="icon"
-					variant="icon">
-					<FoldVerticalIcon />
-				</Button>
-			</TooltipTrigger>
-		</Tooltip>
+		<Button
+			aria-label="Free up conversation space"
+			className={cn("flex items-center [&_svg]:size-3 shrink-0", className)}
+			onClick={(e) => {
+				e.preventDefault()
+				e.stopPropagation()
+				onClick(e)
+			}}
+			size="icon"
+			title="Free up conversation space"
+			variant="icon">
+			<FoldVerticalIcon />
+		</Button>
 	)
 }
 

@@ -45,7 +45,6 @@ import { MarkdownRow } from "./MarkdownRow"
 import NewTaskPreview from "./NewTaskPreview"
 import { OutcomeMapper } from "./OutcomeMapper"
 import PlanCompletionOutputRow from "./PlanCompletionOutputRow"
-import QuoteButton from "./QuoteButton"
 import { RedTeamAlerts } from "./RedTeamAlerts"
 import ReportBugPreview from "./ReportBugPreview"
 import { RequestStartRow } from "./RequestStartRow"
@@ -66,19 +65,13 @@ interface ChatRowProps {
 	onHeightChange: (isTaller: boolean) => void
 	inputValue?: string
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
-	onSetQuote: (text: string) => void
+	onPendingQuoteChange: (text: string | null) => void
 	onCancelCommand?: () => void
 	mode?: Mode
 	reasoningContent?: string
 	responseStarted?: boolean
 	isRequestInProgress?: boolean
 }
-
-// QuoteButtonState lives in the ./chat-types leaf to break the
-// ChatRow ↔ CompletionOutputRow cycle. Re-exported for backward compatibility.
-export type { QuoteButtonState } from "./chat-types"
-
-import type { QuoteButtonState } from "./chat-types"
 
 interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
 
@@ -129,7 +122,7 @@ export const ChatRowContent = memo(
 		isLast,
 		inputValue,
 		sendMessageFromChatRow,
-		onSetQuote,
+		onPendingQuoteChange,
 		onCancelCommand,
 		mode,
 		isRequestInProgress,
@@ -140,12 +133,6 @@ export const ChatRowContent = memo(
 			useExtensionState()
 		const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 		const [explainChangesDisabled, setExplainChangesDisabled] = useState(false)
-		const [quoteButtonState, setQuoteButtonState] = useState<QuoteButtonState>({
-			visible: false,
-			top: 0,
-			left: 0,
-			selectedText: "",
-		})
 		const contentRef = useRef<HTMLDivElement>(null)
 
 		const initialActions = useMemo(() => {
@@ -234,76 +221,42 @@ export const ChatRowContent = memo(
 			})
 		}, [onRelinquishControl])
 
-		// --- Quote Button Logic ---
-		// MOVE handleQuoteClick INSIDE ChatRowContent
-		const handleQuoteClick = useCallback(() => {
-			onSetQuote(quoteButtonState.selectedText)
-			window.getSelection()?.removeAllRanges() // Clear the browser selection
-			setQuoteButtonState({ visible: false, top: 0, left: 0, selectedText: "" })
-		}, [onSetQuote, quoteButtonState.selectedText]) // <-- Use onSetQuote from props
+		const handleMouseUp = useCallback(
+			(event: MouseEvent<HTMLDivElement>) => {
+				const targetElement = event.target as Element
+				const isClickOnQuoteBar = !!targetElement.closest(".quote-selection-bar")
 
-		const handleMouseUp = useCallback((event: MouseEvent<HTMLDivElement>) => {
-			// Get the target element immediately, before the timeout
-			const targetElement = event.target as Element
-			const isClickOnButton = !!targetElement.closest(".quote-button-class")
+				setTimeout(() => {
+					const selection = window.getSelection()
+					const selectedText = selection?.toString().trim() ?? ""
 
-			// Delay the selection check slightly
-			setTimeout(() => {
-				// Now, check the selection state *after* the browser has likely updated it
-				const selection = window.getSelection()
-				const selectedText = selection?.toString().trim() ?? ""
+					if (selectedText && contentRef.current && selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+						const range = selection.getRangeAt(0)
+						const rangeRect = range.getBoundingClientRect()
+						const containerRect = contentRef.current?.getBoundingClientRect()
 
-				let shouldShowButton = false
-				let buttonTop = 0
-				let buttonLeft = 0
-				let textToQuote = ""
+						if (containerRect) {
+							const tolerance = 5
+							const isSelectionWithin =
+								rangeRect.top >= containerRect.top &&
+								rangeRect.left >= containerRect.left &&
+								rangeRect.bottom <= containerRect.bottom + tolerance &&
+								rangeRect.right <= containerRect.right
 
-				// Condition 1: Check if there's a valid, non-collapsed selection within bounds
-				// Ensure contentRef.current still exists in case component unmounted during timeout
-				if (selectedText && contentRef.current && selection && selection.rangeCount > 0 && !selection.isCollapsed) {
-					const range = selection.getRangeAt(0)
-					const rangeRect = range.getBoundingClientRect()
-					// Re-check ref inside timeout and ensure containerRect is valid
-					const containerRect = contentRef.current?.getBoundingClientRect()
-
-					if (containerRect) {
-						// Check if containerRect was successfully obtained
-						const tolerance = 5 // Allow for a small pixel overflow (e.g., for margins)
-						const isSelectionWithin =
-							rangeRect.top >= containerRect.top &&
-							rangeRect.left >= containerRect.left &&
-							rangeRect.bottom <= containerRect.bottom + tolerance && // Added tolerance
-							rangeRect.right <= containerRect.right
-
-						if (isSelectionWithin) {
-							shouldShowButton = true // Mark that we should show the button
-							const buttonHeight = 30
-							// Calculate the raw top position relative to the container, placing it above the selection
-							const calculatedTop = rangeRect.top - containerRect.top - buttonHeight - 5 // Subtract button height and a small margin
-							// Allow the button to potentially have a negative top value
-							buttonTop = calculatedTop
-							buttonLeft = Math.max(0, rangeRect.left - containerRect.left) // Still prevent going left of container
-							textToQuote = selectedText
+							if (isSelectionWithin) {
+								onPendingQuoteChange(selectedText)
+								return
+							}
 						}
 					}
-				}
 
-				// Decision: Set the state based on whether we should show or hide
-				if (shouldShowButton) {
-					// Scenario A: Valid selection exists -> Show button
-					setQuoteButtonState({
-						visible: true,
-						top: buttonTop,
-						left: buttonLeft,
-						selectedText: textToQuote,
-					})
-				} else if (!isClickOnButton) {
-					// Scenario B: No valid selection AND click was NOT on button -> Hide button
-					setQuoteButtonState({ visible: false, top: 0, left: 0, selectedText: "" })
-				}
-				// Scenario C (Click WAS on button): Do nothing here, handleQuoteClick takes over.
-			}, 0) // Delay of 0ms pushes execution after current event cycle
-		}, []) // Dependencies remain empty
+					if (!isClickOnQuoteBar) {
+						onPendingQuoteChange(null)
+					}
+				}, 0)
+			},
+			[onPendingQuoteChange],
+		)
 
 		const [icon, title] = useMemo(() => {
 			switch (type) {
@@ -836,7 +789,7 @@ export const ChatRowContent = memo(
 								</div>
 								{useMcpServer.arguments && useMcpServer.arguments !== "{}" && (
 									<div className="mt-2">
-										<div className="mb-1 opacity-80 uppercase">Arguments</div>
+										<div className="mb-1 text-[10px] font-medium text-muted-foreground">Details</div>
 										<CodeAccordian
 											code={useMcpServer.arguments}
 											isExpanded={true}
@@ -910,23 +863,10 @@ export const ChatRowContent = memo(
 						)
 					case "text": {
 						return (
-							<WithCopyButton
-								onMouseUp={handleMouseUp}
-								position="bottom-right"
-								ref={contentRef}
-								textToCopy={message.text}>
-								<div className="flex items-center my-2">
-									<div className={cn("flex-1 min-w-0 p-3 rounded-lg glass-panel shadow-premium")}>
-										<MarkdownRow markdown={message.text} showCursor={false} />
-									</div>
+							<WithCopyButton onMouseUp={handleMouseUp} ref={contentRef} textToCopy={message.text}>
+								<div className="my-2 px-3 py-2.5 rounded-lg border border-border/30 bg-code">
+									<MarkdownRow markdown={message.text} showCursor={false} />
 								</div>
-								{quoteButtonState.visible && (
-									<QuoteButton
-										left={quoteButtonState.left}
-										onClick={handleQuoteClick}
-										top={quoteButtonState.top}
-									/>
-								)}
 							</WithCopyButton>
 						)
 					}
@@ -1073,19 +1013,19 @@ export const ChatRowContent = memo(
 						const text = hasChanges ? message.text?.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
 
 						return (
-							<CompletionOutputRow
-								auditMetadata={message.auditMetadata}
-								explainChangesDisabled={explainChangesDisabled}
-								handleQuoteClick={handleQuoteClick}
-								headClassNames={HEADER_CLASSNAMES}
-								messageTs={message.ts}
-								quoteButtonState={quoteButtonState}
-								seeNewChangesDisabled={seeNewChangesDisabled}
-								setExplainChangesDisabled={setExplainChangesDisabled}
-								setSeeNewChangesDisabled={setSeeNewChangesDisabled}
-								showActionRow={message.partial !== true && hasChanges}
-								text={text || ""}
-							/>
+							<WithCopyButton onMouseUp={handleMouseUp} ref={contentRef} textToCopy={text}>
+								<CompletionOutputRow
+									auditMetadata={message.auditMetadata}
+									explainChangesDisabled={explainChangesDisabled}
+									headClassNames={HEADER_CLASSNAMES}
+									messageTs={message.ts}
+									seeNewChangesDisabled={seeNewChangesDisabled}
+									setExplainChangesDisabled={setExplainChangesDisabled}
+									setSeeNewChangesDisabled={setSeeNewChangesDisabled}
+									showActionRow={message.partial !== true && hasChanges}
+									text={text || ""}
+								/>
+							</WithCopyButton>
 						)
 					case "shell_integration_warning":
 						return (
@@ -1200,19 +1140,19 @@ export const ChatRowContent = memo(
 							const hasChanges = message.text.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
 							const text = hasChanges ? message.text.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
 							return (
-								<CompletionOutputRow
-									auditMetadata={message.auditMetadata}
-									explainChangesDisabled={explainChangesDisabled}
-									handleQuoteClick={handleQuoteClick}
-									headClassNames={HEADER_CLASSNAMES}
-									messageTs={message.ts}
-									quoteButtonState={quoteButtonState}
-									seeNewChangesDisabled={seeNewChangesDisabled}
-									setExplainChangesDisabled={setExplainChangesDisabled}
-									setSeeNewChangesDisabled={setSeeNewChangesDisabled}
-									showActionRow={message.partial !== true && hasChanges}
-									text={text || ""}
-								/>
+								<WithCopyButton onMouseUp={handleMouseUp} ref={contentRef} textToCopy={text}>
+									<CompletionOutputRow
+										auditMetadata={message.auditMetadata}
+										explainChangesDisabled={explainChangesDisabled}
+										headClassNames={HEADER_CLASSNAMES}
+										messageTs={message.ts}
+										seeNewChangesDisabled={seeNewChangesDisabled}
+										setExplainChangesDisabled={setExplainChangesDisabled}
+										setSeeNewChangesDisabled={setSeeNewChangesDisabled}
+										showActionRow={message.partial !== true && hasChanges}
+										text={text || ""}
+									/>
+								</WithCopyButton>
 							)
 						}
 						// Virtuoso cannot handle zero-height items; render a spacer instead of null
@@ -1267,22 +1207,8 @@ export const ChatRowContent = memo(
 										{title}
 									</div>
 								)}
-								<WithCopyButton
-									className="pt-1"
-									onMouseUp={handleMouseUp}
-									position="bottom-right"
-									ref={contentRef}
-									textToCopy={question}>
+								<WithCopyButton className="pt-1" onMouseUp={handleMouseUp} ref={contentRef} textToCopy={question}>
 									<MarkdownRow markdown={question} />
-									{quoteButtonState.visible && (
-										<QuoteButton
-											left={quoteButtonState.left}
-											onClick={() => {
-												handleQuoteClick()
-											}}
-											top={quoteButtonState.top}
-										/>
-									)}
 								</WithCopyButton>
 								{confidenceScore !== undefined && (
 									<GroundingHeader

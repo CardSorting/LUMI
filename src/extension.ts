@@ -43,6 +43,13 @@ import { findMatchingNotebookCell, getContextForCommand, showWebview } from "./h
 import { abortCommitGeneration, generateCommitMsg } from "./hosts/vscode/commit-message-generator"
 import { registerDietCodeOutputChannel } from "./hosts/vscode/hostbridge/env/debugLog"
 import {
+	checkExtensionNativeDeps,
+	nativeDepsFailureMessage,
+	registerHealthOutputChannel,
+	runInstallationHealthCheck,
+	showNativeDepsFailure,
+} from "./hosts/vscode/nativeDepsHealth"
+import {
 	disposeVscodeCommentReviewController,
 	getVscodeCommentReviewController,
 } from "./hosts/vscode/review/VscodeCommentReviewController"
@@ -83,9 +90,16 @@ function setupRoadmapFileWatcher(context: vscode.ExtensionContext): void {
 export async function activate(context: vscode.ExtensionContext) {
 	const activationStartTime = performance.now()
 
+	const nativeDeps = checkExtensionNativeDeps(context.extensionPath)
+	if (!nativeDeps.ok) {
+		await showNativeDepsFailure(nativeDeps)
+		throw new Error(nativeDepsFailureMessage(nativeDeps))
+	}
+
 	// 1. Set up HostProvider for VSCode
 	// IMPORTANT: This must be done before any service can be registered
 	setupHostProvider(context)
+	registerHealthOutputChannel(context)
 	setRoadmapExtensionRoot(context.extensionPath)
 	setupRoadmapFileWatcher(context)
 	context.subscriptions.push({
@@ -538,6 +552,13 @@ ${ctx.cellJson || "{}"}
 		vscode.commands.registerCommand(commands.Walkthrough, async () => {
 			await vscode.commands.executeCommand("workbench.action.openWalkthrough", `${context.extension.id}#LUMIWalkthrough`)
 			telemetryService.captureButtonClick("command_openWalkthrough")
+		}),
+	)
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(commands.RunHealthCheck, async () => {
+			await runInstallationHealthCheck(context)
+			telemetryService.captureButtonClick("command_runHealthCheck")
 		}),
 	)
 

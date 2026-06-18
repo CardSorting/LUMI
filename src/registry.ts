@@ -1,7 +1,8 @@
 import { name, publisher, version } from "../package.json"
 import { HostProvider } from "./hosts/host-provider"
 
-const prefix = name === "claude-dev" || name === "marie-coder" || name === "dietcode" ? "dietcode" : name
+const prefix =
+	name === "claude-dev" || name === "marie-coder" || name === "dietcode" ? "dietcode" : name === "lumi-vscode" ? "lumi" : name
 
 /**
  * List of commands with the name of the extension they are registered under.
@@ -24,6 +25,7 @@ const DietCodeCommands = {
 	ExplainCode: `${prefix}.explainCode`,
 	ImproveCode: `${prefix}.improveCode`,
 	FocusChatInput: `${prefix}.focusChatInput`,
+	RunHealthCheck: `${prefix}.runHealthCheck`,
 	Walkthrough: `${prefix}.openWalkthrough`,
 	GenerateCommit: `${prefix}.generateGitCommitMessage`,
 	AbortCommit: `${prefix}.abortGitCommitMessage`,

@@ -10,14 +10,10 @@ import { TaskServiceClient } from "@/services/grpc-client"
 import { CopyButton } from "../common/CopyButton"
 import SuccessButton from "../common/SuccessButton"
 import { AuditReportPanel } from "./AuditReportPanel"
-import { QuoteButtonState } from "./chat-types"
 import { MarkdownRow } from "./MarkdownRow"
-import QuoteButton from "./QuoteButton"
 
 interface CompletionOutputRowProps {
 	text: string
-	quoteButtonState: QuoteButtonState
-	handleQuoteClick: () => void
 	headClassNames?: string
 	showActionRow?: boolean
 	seeNewChangesDisabled: boolean
@@ -32,51 +28,42 @@ export const CompletionOutputRow = memo(
 	({
 		headClassNames,
 		text,
-		quoteButtonState,
 		showActionRow,
 		seeNewChangesDisabled,
 		setSeeNewChangesDisabled,
 		explainChangesDisabled,
 		setExplainChangesDisabled,
 		messageTs,
-		handleQuoteClick,
 		auditMetadata,
 	}: CompletionOutputRowProps) => {
 		const presentation = pickCompletionPresentation(messageTs)
 
 		return (
 			<div>
-				<div className="group/completion relative rounded-lg border border-success/10 overflow-visible bg-success/[0.04] p-4 pt-4 animate-lumi-settle">
-					{presentation.showHeader ? (
-						<div className={cn(headClassNames, "justify-between px-1 mb-1")}>
-							<div className="flex flex-col gap-0.5">
-								<div className="flex gap-2 items-center">
-									<CheckIcon className="size-3 text-success/70 animate-lumi-reveal [animation-duration:0.75s]" />
-									{presentation.header && (
-										<span className="text-success/80 font-medium">{presentation.header}</span>
+				<div className="rounded-lg border border-success/10 overflow-visible bg-success/[0.04] p-4 pt-4 animate-lumi-settle">
+					<div className={cn(headClassNames, "justify-between px-1 mb-1")}>
+						<div className="flex flex-col gap-0.5 min-w-0 flex-1">
+							{presentation.showHeader ? (
+								<>
+									<div className="flex gap-2 items-center">
+										<CheckIcon className="size-3 text-success/70 animate-lumi-reveal [animation-duration:0.75s]" />
+										{presentation.header && (
+											<span className="text-success/80 font-medium">{presentation.header}</span>
+										)}
+									</div>
+									{presentation.closer && (
+										<span className="text-success/60 text-xs pl-5">{presentation.closer}</span>
 									)}
-								</div>
-								{presentation.closer && (
-									<span className="text-success/60 text-xs pl-5">{presentation.closer}</span>
-								)}
-							</div>
-							<CopyButton className="text-success/80" textToCopy={text} />
+								</>
+							) : (
+								<span className="text-success/80 text-xs font-medium">Done</span>
+							)}
 						</div>
-					) : (
-						<div className="absolute top-3 right-3 z-10 opacity-0 transition-opacity duration-500 group-hover/completion:opacity-60 hover:opacity-100">
-							<CopyButton className="text-success/70" textToCopy={text} />
-						</div>
-					)}
-					<div
-						className={cn(
-							"w-full relative rounded-b-sm",
-							presentation.showHeader ? "border-t-1 border-description/15" : "",
-						)}>
+						<CopyButton className="text-success/80 shrink-0" textToCopy={text} />
+					</div>
+					<div className={cn("w-full relative rounded-b-sm", "border-t-1 border-description/15")}>
 						<div className="completion-output-content p-2 pt-3 w-full [&_hr]:opacity-20 [&_p:last-child]:mb-0 rounded-sm">
 							<MarkdownRow markdown={text} />
-							{quoteButtonState.visible && (
-								<QuoteButton left={quoteButtonState.left} onClick={handleQuoteClick} top={quoteButtonState.top} />
-							)}
 						</div>
 					</div>
 					{auditMetadata && <AuditReportPanel auditMetadata={auditMetadata} variant="success" />}
@@ -123,7 +110,7 @@ const CompletionOutputActionRow = memo(
 						)
 					}}>
 					<VscIcon className="mr-1.5" name="new-file" />
-					View Changes
+					See what changed
 				</SuccessButton>
 				{PLATFORM_CONFIG.type === PlatformType.VSCODE && (
 					<SuccessButton
@@ -137,7 +124,7 @@ const CompletionOutputActionRow = memo(
 							})
 						}}>
 						<VscIcon className="mr-1.5" name="comment-discussion" />
-						{explainChangesDisabled ? "Explaining..." : "Explain Changes"}
+						{explainChangesDisabled ? "Explaining…" : "Explain changes"}
 					</SuccessButton>
 				)}
 			</div>

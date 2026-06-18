@@ -1,18 +1,15 @@
 import { mentionRegex } from "@shared/context-mentions"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { FileSearchRequest, FileSearchType, RelativePathsRequest } from "@shared/proto/dietcode/file"
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
-import styled from "styled-components"
 import ContextMenu from "@/components/chat/ContextMenu"
 import { CHAT_CONSTANTS } from "@/components/chat/chat-view/constants"
 import SlashCommandMenu from "@/components/chat/SlashCommandMenu"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { Icon } from "@/components/ui/icons"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
@@ -34,8 +31,7 @@ import {
 	shouldShowSlashCommandsMenu,
 	slashCommandDeleteRegex,
 } from "@/utils/slash-commands"
-import DietCodeRulesToggleModal from "../dietcode-rules/DietCodeRulesToggleModal"
-import ServersToggleModal from "./ServersToggleModal"
+import { ChatInputActions } from "./ChatInputActions"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
 
@@ -84,79 +80,6 @@ interface GitCommit {
 	description: string
 }
 
-const ButtonGroup = styled.div`
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	flex: 1;
-	min-width: 0;
-`
-
-const ButtonContainer = styled.div`
-	display: flex;
-	align-items: center;
-	gap: 3px;
-	font-size: 10px;
-	white-space: nowrap;
-	min-width: 0;
-	width: 100%;
-`
-
-const ModelContainer = styled.div`
-	position: relative;
-	display: flex;
-	flex: 1;
-	min-width: 0;
-`
-
-const ModelButtonWrapper = styled.div`
-	display: inline-flex; // Make it shrink to content
-	min-width: 0; // Allow shrinking
-	max-width: 100%; // Don't overflow parent
-`
-
-const ModelDisplayButton = styled.a<{ isActive?: boolean; disabled?: boolean }>`
-	padding: 0px 0px;
-	height: 20px;
-	width: 100%;
-	min-width: 0;
-	cursor: ${(props) => (props.disabled ? "not-allowed" : "pointer")};
-	text-decoration: ${(props) => (props.isActive ? "underline" : "none")};
-	color: ${(props) => (props.isActive ? "var(--vscode-foreground)" : "var(--vscode-descriptionForeground)")};
-	display: flex;
-	align-items: center;
-	font-size: 10px;
-	outline: none;
-	user-select: none;
-	opacity: ${(props) => (props.disabled ? 0.5 : 1)};
-	pointer-events: ${(props) => (props.disabled ? "none" : "auto")};
-
-	&:hover,
-	&:focus {
-		color: ${(props) => (props.disabled ? "var(--vscode-descriptionForeground)" : "var(--vscode-foreground)")};
-		text-decoration: ${(props) => (props.disabled ? "none" : "underline")};
-		outline: none;
-	}
-
-	&:active {
-		color: ${(props) => (props.disabled ? "var(--vscode-descriptionForeground)" : "var(--vscode-foreground)")};
-		text-decoration: ${(props) => (props.disabled ? "none" : "underline")};
-		outline: none;
-	}
-
-	&:focus-visible {
-		outline: none;
-	}
-`
-
-const ModelButtonContent = styled.div`
-	width: 100%;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-`
-
 const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 	(
 		{
@@ -187,6 +110,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			mcpServers,
 		} = useExtensionState()
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
+		const [isInputFocused, setIsInputFocused] = useState(false)
 		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
 		const [showSlashCommandsMenu, setShowSlashCommandsMenu] = useState(false)
 		const [selectedSlashCommandsIndex, setSelectedSlashCommandsIndex] = useState(0)
@@ -545,6 +469,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				setShowSlashCommandsMenu(false)
 			}
 			onFocusChange?.(false)
+			setIsInputFocused(false)
 		}, [isMouseDownOnMenu, onFocusChange])
 
 		const showDimensionErrorMessage = useCallback(() => {
@@ -1212,25 +1137,33 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		return (
 			<div>
 				<div
-					className="px-3 pt-3 pb-2 flex flex-col gap-2"
+					className="px-2.5 pt-1.5 pb-1.5 flex flex-col gap-1.5"
 					onDragEnter={handleDragEnter}
 					onDragLeave={handleDragLeave}
 					onDragOver={onDragOver}
 					onDrop={onDrop}
 					role="presentation">
-					<div className="relative">
+					<div
+						className={cn(
+							"chat-input-shell relative rounded-xl border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] transition-shadow",
+							isDraggingOver &&
+								!showUnsupportedFileError &&
+								"ring-2 ring-[var(--vscode-focusBorder)] border-transparent",
+							isInputFocused &&
+								"border-[color-mix(in_srgb,var(--vscode-focusBorder)_45%,var(--vscode-input-border))]",
+						)}>
 						{showDimensionError && (
-							<div className="mb-2 px-2 py-1 text-error text-xs border border-error rounded">
+							<div className="mx-3 mt-2 px-2 py-1 text-error text-xs border border-error rounded-md">
 								Image dimensions exceed 7500px
 							</div>
 						)}
 						{showUnsupportedFileError && (
-							<div className="mb-2 px-2 py-1 text-error text-xs border border-error rounded">
+							<div className="mx-3 mt-2 px-2 py-1 text-error text-xs border border-error rounded-md">
 								Files other than images are currently disabled
 							</div>
 						)}
 						{showSlashCommandsMenu && (
-							<div ref={slashCommandsMenuContainerRef}>
+							<div className="px-1" ref={slashCommandsMenuContainerRef}>
 								<SlashCommandMenu
 									globalWorkflowToggles={globalWorkflowToggles}
 									localWorkflowToggles={localWorkflowToggles}
@@ -1247,7 +1180,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						)}
 
 						{showContextMenu && (
-							<div ref={contextMenuContainerRef}>
+							<div className="px-1" ref={contextMenuContainerRef}>
 								<ContextMenu
 									dynamicSearchResults={fileSearchResults}
 									isLoading={searchLoading}
@@ -1261,37 +1194,60 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								/>
 							</div>
 						)}
-						<DynamicTextArea
-							autoFocus={true}
-							className={cn(
-								"chat-input-textarea w-full resize-none rounded-sm",
-								isDraggingOver &&
-									!showUnsupportedFileError &&
-									"outline-2 outline-dashed outline-[var(--vscode-focusBorder)]",
-							)}
-							data-testid="chat-input"
-							maxRows={10}
-							minRows={3}
-							onBlur={handleBlur}
-							onChange={handleInputChange}
-							onFocus={() => onFocusChange?.(true)}
-							onHeightChange={onHeightChange}
-							onKeyDown={handleKeyDown}
-							onKeyUp={handleKeyUp}
-							onMouseUp={updateCursorPosition}
-							onPaste={handlePaste}
-							onSelect={updateCursorPosition}
-							placeholder={showUnsupportedFileError || showDimensionError ? "" : placeholderText}
-							ref={(el) => {
-								if (typeof ref === "function") {
-									ref(el)
-								} else if (ref) {
-									ref.current = el
-								}
-								textAreaRef.current = el
-							}}
-							value={inputValue}
-						/>
+						<div className="flex items-end gap-1.5 px-2 py-1.5 min-w-0">
+							<DynamicTextArea
+								autoFocus={true}
+								className={cn(
+									"chat-input-textarea flex-1 min-w-0 resize-none border-0 bg-transparent shadow-none focus:outline-none focus:ring-0",
+									showContextMenu || showSlashCommandsMenu ? "min-h-[40px]" : "min-h-[48px]",
+									"px-1 py-0.5",
+								)}
+								data-testid="chat-input"
+								maxRows={8}
+								minRows={1}
+								onBlur={handleBlur}
+								onChange={handleInputChange}
+								onFocus={() => {
+									setIsInputFocused(true)
+									onFocusChange?.(true)
+								}}
+								onHeightChange={onHeightChange}
+								onKeyDown={handleKeyDown}
+								onKeyUp={handleKeyUp}
+								onMouseUp={updateCursorPosition}
+								onPaste={handlePaste}
+								onSelect={updateCursorPosition}
+								placeholder={showUnsupportedFileError || showDimensionError ? "" : placeholderText}
+								ref={(el) => {
+									if (typeof ref === "function") {
+										ref(el)
+									} else if (ref) {
+										ref.current = el
+									}
+									textAreaRef.current = el
+								}}
+								value={inputValue}
+							/>
+							<button
+								aria-label="Send message"
+								className={cn(
+									"flex items-center justify-center size-8 shrink-0 rounded-full transition-colors mb-0.5",
+									sendingDisabled
+										? "opacity-40 cursor-not-allowed text-muted-foreground"
+										: "bg-lumi text-lumi-foreground hover:opacity-90 cursor-pointer",
+								)}
+								data-testid="send-button"
+								disabled={sendingDisabled}
+								onClick={() => {
+									if (!sendingDisabled) {
+										onSend()
+									}
+								}}
+								title="Send (Enter)"
+								type="button">
+								<Icon className="[svg]:size-4" name="send" size={16} />
+							</button>
+						</div>
 					</div>
 					{(selectedImages.length > 0 || selectedFiles.length > 0) && (
 						<Thumbnails
@@ -1301,95 +1257,19 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							setImages={setSelectedImages}
 						/>
 					)}
-					<div className="flex justify-end">
-						<Icon
-							className={cn("input-icon-button cursor-pointer text-sm", {
-								"opacity-50 pointer-events-none": sendingDisabled,
-							})}
-							data-testid="send-button"
-							name="send"
-							onClick={() => {
-								if (!sendingDisabled) {
-									onSend()
-								}
-							}}
-						/>
-					</div>
 				</div>
-				<div className="px-3 pb-2">
-					<ButtonGroup className="flex items-center w-full h-5">
-						<Tooltip>
-							<TooltipContent>Add Context</TooltipContent>
-							<TooltipTrigger>
-								<VSCodeButton
-									appearance="icon"
-									aria-label="Add Context"
-									className="p-0 m-0 flex items-center"
-									data-testid="context-button"
-									onClick={handleContextButtonClick}>
-									<ButtonContainer>
-										<Icon name="AtSignIcon" size={12} />
-									</ButtonContainer>
-								</VSCodeButton>
-							</TooltipTrigger>
-						</Tooltip>
-
-						<Tooltip>
-							<TooltipContent>Add Files & Images</TooltipContent>
-							<TooltipTrigger>
-								<VSCodeButton
-									appearance="icon"
-									aria-label="Add Files & Images"
-									className="p-0 m-0 flex items-center"
-									data-testid="files-button"
-									disabled={shouldDisableFilesAndImages}
-									onClick={() => {
-										if (!shouldDisableFilesAndImages) {
-											onSelectFilesAndImages()
-										}
-									}}>
-									<ButtonContainer>
-										<Icon name="PlusIcon" size={13} />
-									</ButtonContainer>
-								</VSCodeButton>
-							</TooltipTrigger>
-						</Tooltip>
-
-						<ServersToggleModal />
-						<DietCodeRulesToggleModal />
-
-						<Tooltip>
-							<TooltipContent>Document Phase</TooltipContent>
-							<TooltipTrigger>
-								<VSCodeButton
-									appearance="icon"
-									aria-label="Document Phase"
-									className="p-0 m-0 flex items-center"
-									data-testid="document-button"
-									onClick={() => {
-										setInputValue("")
-										onSend("/document ")
-									}}>
-									<ButtonContainer>
-										<Icon name="book" size={13} style={{ color: "var(--color-lumi)" }} />
-									</ButtonContainer>
-								</VSCodeButton>
-							</TooltipTrigger>
-						</Tooltip>
-
-						<ModelContainer>
-							<ModelButtonWrapper>
-								<ModelDisplayButton
-									disabled={false}
-									onClick={handleModelButtonClick}
-									role="button"
-									tabIndex={0}
-									title="Open API Settings">
-									<ModelButtonContent className="text-xs">{modelDisplayName}</ModelButtonContent>
-								</ModelDisplayButton>
-							</ModelButtonWrapper>
-						</ModelContainer>
-					</ButtonGroup>
+				<div className="px-2.5 pb-1.5">
+					<ChatInputActions
+						attachDisabled={shouldDisableFilesAndImages}
+						modelDisplayName={modelDisplayName}
+						onAttachClick={() => {
+							if (!shouldDisableFilesAndImages) {
+								onSelectFilesAndImages()
+							}
+						}}
+						onContextClick={handleContextButtonClick}
+						onModelClick={handleModelButtonClick}
+					/>
 				</div>
 			</div>
 		)

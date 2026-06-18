@@ -74,6 +74,10 @@ Set tokens: `VSCE_PAT` ([Azure DevOps](https://dev.azure.com)) · `OVSX_PAT` ([o
 npm run package:vsix              # dist/lumi-vscode-<version>.vsix
 npm run package:vsix:openvsx        # dist/lumi-<version>.vsix (CardSorting.lumi)
 npm run package:vsix:all            # both VSIX variants
+npm run doctor                      # health check (packaging + installs)
+npm run doctor:install              # check installed extensions only (end users)
+npm run doctor:fix                  # repair broken local installs from dist/*.vsix
+npm run doctor -- --ci              # fail on errors (used in CI / release)
 
 # Publish to both registries (recommended release)
 VSCE_PAT=... OVSX_PAT=... npm run publish:all

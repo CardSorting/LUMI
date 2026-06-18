@@ -2,12 +2,6 @@
 /**
  * Package Open VSX VSIX as CardSorting.lumi (legacy extension ID).
  *
- * VS Code Marketplace uses package name "lumi-vscode" → CardSorting.lumi-vscode.
- * Open VSX listing was created as CardSorting.lumi — this script temporarily
- * patches package.json name to "lumi" and runs vsce with --no-dependencies
- * (avoids npm workspace errors). Repacking with zip adds extra fields that
- * Open VSX rejects, so vsce must be used directly.
- *
  * Usage:
  *   npm run package:vsix:openvsx
  */
@@ -15,40 +9,74 @@ import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { assertVsixHasNativeModule, rebuildBetterSqlite3 } from "./vsix-native-deps.mjs"
+import { createWorkspaceLinkManager } from "./workspace-link.mjs"
 
 const OPENVSX_EXTENSION_NAME = "lumi"
+const MARKETPLACE_EXTENSION_NAME = "lumi-vscode"
+
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const packageJsonPath = path.join(repoRoot, "package.json")
+const nodeModulesPath = path.join(repoRoot, "node_modules")
+const workspaceLinks = createWorkspaceLinkManager({ repoRoot, nodeModulesPath })
 
-function restore(original) {
+function restorePackageJson(original) {
 	fs.writeFileSync(packageJsonPath, original)
 	console.log("[openvsx] restored package.json")
 }
 
 function main() {
-	const original = fs.readFileSync(packageJsonPath, "utf8")
-	const pkg = JSON.parse(original)
+	const originalPackageJson = fs.readFileSync(packageJsonPath, "utf8")
+	const pkg = JSON.parse(originalPackageJson)
 	const version = pkg.version
 	const outPath = path.join(repoRoot, "dist", `lumi-${version}.vsix`)
+	let didPatchName = false
+	let didReconcileWorkspaceLink = false
 
 	fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
-	if (pkg.name !== OPENVSX_EXTENSION_NAME) {
-		pkg.name = OPENVSX_EXTENSION_NAME
-		fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, "\t")}\n`)
-		console.log(`[openvsx] patched name → "${OPENVSX_EXTENSION_NAME}" (CardSorting.${OPENVSX_EXTENSION_NAME})`)
-	}
-
 	try {
-		execFileSync("vsce", ["package", "--no-dependencies", "--allow-package-secrets", "sendgrid", "--out", outPath], {
+		rebuildBetterSqlite3(repoRoot)
+
+		if (pkg.name !== OPENVSX_EXTENSION_NAME) {
+			pkg.name = OPENVSX_EXTENSION_NAME
+			fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, "\t")}\n`)
+			didPatchName = true
+			console.log(`[openvsx] patched name → "${OPENVSX_EXTENSION_NAME}" (CardSorting.${OPENVSX_EXTENSION_NAME})`)
+		}
+
+		didReconcileWorkspaceLink = workspaceLinks.reconcile({
+			fromName: MARKETPLACE_EXTENSION_NAME,
+			toName: OPENVSX_EXTENSION_NAME,
+		})
+		if (didReconcileWorkspaceLink) {
+			console.log(`[openvsx] renamed workspace self-link: ${MARKETPLACE_EXTENSION_NAME} → ${OPENVSX_EXTENSION_NAME}`)
+		}
+
+		execFileSync("vsce", ["package", "--allow-package-secrets", "sendgrid", "--out", outPath], {
 			stdio: "inherit",
 			cwd: repoRoot,
 		})
+
+		assertVsixHasNativeModule(outPath)
 		console.log(`[openvsx] packaged ${outPath}`)
-	} catch {
+	} catch (error) {
 		process.exitCode = 1
+		if (error instanceof Error) {
+			console.error(`[openvsx] ${error.message}`)
+		}
 	} finally {
-		restore(original)
+		workspaceLinks.restore({
+			fromName: MARKETPLACE_EXTENSION_NAME,
+			toName: OPENVSX_EXTENSION_NAME,
+			didReconcile: didReconcileWorkspaceLink,
+		})
+		if (didReconcileWorkspaceLink) {
+			console.log(`[openvsx] restored workspace self-link: ${OPENVSX_EXTENSION_NAME} → ${MARKETPLACE_EXTENSION_NAME}`)
+		}
+		if (didPatchName) {
+			restorePackageJson(originalPackageJson)
+		}
 	}
 }
 

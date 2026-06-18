@@ -16,6 +16,7 @@ interface ViolationSessionLedgerStripProps {
 	snapshots: AuditMessageSnapshot[]
 	onScrollToAuditMessage?: (ts: number) => void
 	className?: string
+	embedded?: boolean
 }
 
 function LedgerEntryRow({ entry, onSelect }: { entry: ViolationLedgerEntry; onSelect?: (entry: ViolationLedgerEntry) => void }) {
@@ -62,8 +63,8 @@ function LedgerEntryRow({ entry, onSelect }: { entry: ViolationLedgerEntry; onSe
 
 /** SonarQube-style session issue ledger — open vs resolved violations across the task. */
 export const ViolationSessionLedgerStrip = memo(
-	({ snapshots, onScrollToAuditMessage, className }: ViolationSessionLedgerStripProps) => {
-		const [expanded, setExpanded] = useState(false)
+	({ snapshots, onScrollToAuditMessage, className, embedded = false }: ViolationSessionLedgerStripProps) => {
+		const [expanded, setExpanded] = useState(embedded)
 		const previousOpenCountRef = useRef(0)
 		const ledger = useMemo(() => buildViolationSessionLedger(snapshots), [snapshots])
 		const openCount = useMemo(() => countOpenViolationLedgerEntries(ledger), [ledger])
@@ -87,34 +88,43 @@ export const ViolationSessionLedgerStrip = memo(
 			return null
 		}
 
+		const showDetails = embedded || expanded
+
 		return (
 			<section
-				aria-label="Open notes"
+				aria-label="Items to review"
 				className={cn(
-					"mt-2 px-2.5 py-2 text-[9px] lumi-audit-exhale transition-opacity duration-[2s]",
-					auditStrip,
+					embedded ? "mt-1 px-1 py-1" : "mt-2 px-2.5 py-2",
+					"text-[9px] lumi-audit-exhale transition-opacity duration-[2s]",
+					!embedded && auditStrip,
 					className,
 				)}>
-				<button
-					aria-expanded={expanded}
-					className="flex w-full items-center justify-between cursor-pointer bg-transparent border-0 p-0 text-left font-sans"
-					onClick={() => setExpanded(!expanded)}
-					type="button">
-					<div className="flex items-center gap-2 flex-wrap">
-						<span className="font-medium text-description/85">Open notes</span>
-						{openCount > 0 && (
-							<span className="text-amber-600/80 dark:text-amber-400/80 font-normal">{openCount} open</span>
+				{embedded ? (
+					<p className="m-0 text-[10px] font-medium text-description/85">Items to review</p>
+				) : (
+					<button
+						aria-expanded={expanded}
+						className="flex w-full items-center justify-between cursor-pointer bg-transparent border-0 p-0 text-left font-sans"
+						onClick={() => setExpanded(!expanded)}
+						type="button">
+						<div className="flex items-center gap-2 flex-wrap">
+							<span className="font-medium text-description/85">Items to review</span>
+							{openCount > 0 && (
+								<span className="text-amber-600/80 dark:text-amber-400/80 font-normal">{openCount} open</span>
+							)}
+							{resolvedCount > 0 && (
+								<span className="text-description/55 font-normal">{resolvedCount} settled</span>
+							)}
+						</div>
+						{expanded ? (
+							<ChevronDownIcon className="size-3 text-description/60" />
+						) : (
+							<ChevronRightIcon className="size-3 text-description/60" />
 						)}
-						{resolvedCount > 0 && <span className="text-description/55 font-normal">{resolvedCount} settled</span>}
-					</div>
-					{expanded ? (
-						<ChevronDownIcon className="size-3 text-description/60" />
-					) : (
-						<ChevronRightIcon className="size-3 text-description/60" />
-					)}
-				</button>
+					</button>
+				)}
 
-				{expanded && (
+				{showDetails && (
 					<div className="mt-2 space-y-2">
 						{openCount > 0 && (
 							<ul className="list-none space-y-1 pl-0">

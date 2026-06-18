@@ -2,6 +2,7 @@ import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import React, { useMemo } from "react"
 import ChatTextArea from "@/components/chat/ChatTextArea"
 import QuotedMessagePreview from "@/components/chat/QuotedMessagePreview"
+import { QuoteSelectionBar } from "@/components/chat/QuoteSelectionBar"
 import { isChatInputEnabled } from "../../shared/chatInputPolicy"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 
@@ -32,6 +33,8 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	const {
 		activeQuote,
 		setActiveQuote,
+		pendingQuote,
+		setPendingQuote,
 		isTextAreaFocused,
 		inputValue,
 		setInputValue,
@@ -56,14 +59,19 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
 	return (
 		<>
-			{activeQuote && (
-				<div style={{ marginBottom: "-12px", marginTop: "10px" }}>
-					<QuotedMessagePreview
-						isFocused={isTextAreaFocused}
-						onDismiss={() => setActiveQuote(null)}
-						text={activeQuote}
+			{pendingQuote && !activeQuote && (
+				<div className="mx-2.5 mb-1">
+					<QuoteSelectionBar
+						onQuote={() => {
+							setActiveQuote(pendingQuote)
+							setPendingQuote(null)
+							window.getSelection()?.removeAllRanges()
+						}}
 					/>
 				</div>
+			)}
+			{activeQuote && (
+				<QuotedMessagePreview isFocused={isTextAreaFocused} onDismiss={() => setActiveQuote(null)} text={activeQuote} />
 			)}
 
 			<ChatTextArea

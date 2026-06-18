@@ -7,10 +7,11 @@ import { auditStrip } from "../audit/auditUiStyles"
 interface SubagentHandoffStripProps {
 	summary?: SubagentAuditSummary
 	className?: string
+	embedded?: boolean
 }
 
 /** GitHub Actions downstream-context strip — surfaces parent gate signals handed to subagent swarm. */
-export const SubagentHandoffStrip = memo(({ summary, className }: SubagentHandoffStripProps) => {
+export const SubagentHandoffStrip = memo(({ summary, className, embedded = false }: SubagentHandoffStripProps) => {
 	const labels = useMemo(() => summary?.parentGateSignals.map(formatSubagentParentSignal) ?? [], [summary?.parentGateSignals])
 
 	if (!summary || labels.length === 0) {
@@ -21,15 +22,16 @@ export const SubagentHandoffStrip = memo(({ summary, className }: SubagentHandof
 
 	return (
 		<section
-			aria-label="A few notes"
+			aria-label="Helper notes"
 			className={cn(
-				"mt-2 px-3 py-2.5 text-[10px] lumi-audit-exhale transition-opacity duration-[2s]",
-				auditStrip,
+				embedded ? "mt-1 px-1 py-1" : "mt-2 px-3 py-2.5",
+				"text-[10px] lumi-audit-exhale transition-opacity duration-[2s]",
+				!embedded && auditStrip,
 				className,
 			)}>
 			<div className="flex items-center gap-2 flex-wrap mb-1.5">
 				<NetworkIcon className="size-3 shrink-0 text-blue-600 dark:text-blue-400" />
-				<span className="font-medium text-description/85">A few notes</span>
+				<span className="font-medium text-description/85">Helper notes</span>
 				{isActive && (
 					<span className="text-[8px] font-medium text-blue-600 dark:text-blue-400">
 						{summary.runningCount + summary.pendingCount} helping

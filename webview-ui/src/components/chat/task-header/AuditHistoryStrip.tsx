@@ -37,6 +37,8 @@ interface AuditHistoryStripProps {
 	onScrollToAuditMessage?: (ts: number) => void
 	onScrollToLatestGateBlock?: () => void
 	className?: string
+	/** Flat layout inside TaskNotesSection — no nested collapse toggle. */
+	embedded?: boolean
 }
 
 const SOURCE_LABELS = AUDIT_SNAPSHOT_SOURCE_LABELS
@@ -57,8 +59,9 @@ export const AuditHistoryStrip = memo(
 		onScrollToAuditMessage,
 		onScrollToLatestGateBlock,
 		className,
+		embedded = false,
 	}: AuditHistoryStripProps) => {
-		const [expanded, setExpanded] = useState(false)
+		const [expanded, setExpanded] = useState(embedded)
 		const [selectedKey, setSelectedKey] = useState<string | null>(null)
 		const [focusedIndex, setFocusedIndex] = useState(0)
 		const [copied, setCopied] = useState(false)
@@ -184,88 +187,28 @@ export const AuditHistoryStrip = memo(
 		const latestSnapshot = snapshots[snapshots.length - 1]
 		const latestGrade = latestSnapshot.auditMetadata.hardening_grade as HardeningGrade | undefined
 
+		const showDetails = embedded || expanded
+
 		return (
 			<section
-				aria-label="Task audit history"
+				aria-label="What we checked"
 				className={cn(
-					"mt-2 border-t border-description/8 pt-2 lumi-audit-exhale transition-opacity duration-[2s]",
+					embedded ? "mt-1 pt-1" : "mt-2 border-t border-description/8 pt-2",
+					"lumi-audit-exhale transition-opacity duration-[2s]",
 					className,
 				)}
 				ref={stripRef}
-				tabIndex={expanded ? 0 : -1}>
+				tabIndex={showDetails ? 0 : -1}>
 				<div aria-atomic="true" aria-live="polite" className="sr-only">
 					{liveAnnouncement}
 				</div>
-				<button
-					aria-controls="audit-history-details"
-					aria-expanded={expanded}
-					className="flex w-full items-center justify-between cursor-pointer select-none bg-transparent border-0 p-0 text-left font-sans"
-					onClick={() => setExpanded(!expanded)}
-					ref={toggleButtonRef}
-					type="button">
-					<div className="flex items-center gap-2 flex-wrap">
-						<span className="text-[10px] text-description/70 font-medium">
-							What we've checked ({snapshots.length})
-						</span>
-						{latestGrade && (
-							<span
-								className={cn(
-									"inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-medium border",
-									HARDENING_GRADE_STYLES[latestGrade],
-								)}>
-								Latest {latestGrade}
-								{Number.isFinite(latestSnapshot.auditMetadata.hardening_score) && (
-									<span className="font-mono opacity-80 ml-0.5">
-										{latestSnapshot.auditMetadata.hardening_score}
-									</span>
-								)}
+				{embedded ? (
+					<div className="flex w-full items-center justify-between text-left font-sans">
+						<div className="flex items-center gap-2 flex-wrap">
+							<span className="text-[10px] text-description/70 font-medium">
+								What we checked ({snapshots.length})
 							</span>
-						)}
-						{health && health.trend !== "unknown" && (
-							<span className="text-[8px] text-description/60 font-medium">
-								{HEALTH_TREND_LABELS[health.trend]}
-								{health.averageScore > 0 ? ` · avg ${health.averageScore}` : ""}
-								{health.latestScoreDelta !== undefined && health.latestScoreDelta !== 0
-									? ` · ${health.latestScoreDelta >= 0 ? "+" : ""}${health.latestScoreDelta} last`
-									: ""}
-							</span>
-						)}
-						{health && health.advisorySnapshotCount > 0 && (
-							<span className="text-[8px] text-amber-600 dark:text-amber-400 font-medium">
-								{health.advisorySnapshotCount} note{health.advisorySnapshotCount === 1 ? "" : "s"}
-							</span>
-						)}
-						{health && health.gateBlockCount > 0 && (
-							<span className="text-[8px] text-amber-700 dark:text-amber-400 font-medium">
-								{health.gateBlockCount} to revisit
-							</span>
-						)}
-						{health && health.trailingGateBlockStreak > 1 && (
-							<span className="text-[8px] text-amber-700 dark:text-amber-400 font-medium">
-								{health.trailingGateBlockStreak} in a row
-							</span>
-						)}
-						{health?.planRegressionDetected && (
-							<span className="text-[8px] text-amber-600 dark:text-amber-400 font-medium">Plan shifted</span>
-						)}
-						{health && health.persistentViolationCount > 0 && (
-							<span className="text-[8px] text-amber-600/90 font-medium">
-								{health.persistentViolationCount} still open
-							</span>
-						)}
-						{trailingViolationAges.size > 0 && Math.max(...trailingViolationAges.values()) > 1 && (
-							<span className="text-[8px] text-amber-600/90 font-medium">
-								oldest open ×{Math.max(...trailingViolationAges.values())}
-							</span>
-						)}
-						{health && health.suppressedViolationCount > 0 && (
-							<span className="text-[8px] text-blue-600/80 font-medium">
-								{health.suppressedViolationCount} waived
-							</span>
-						)}
-					</div>
-					<div className="flex items-center gap-2 shrink-0">
-						<AuditScoreSparkline scores={scoreTimeline} />
+						</div>
 						<button
 							aria-label="Copy project notes"
 							className="inline-flex items-center cursor-pointer bg-transparent border-0 p-0 text-description/60 hover:text-foreground"
@@ -274,13 +217,94 @@ export const AuditHistoryStrip = memo(
 							type="button">
 							<CopyIcon className="size-3" />
 						</button>
-						{expanded ? (
-							<ChevronDownIcon className="size-3 text-description/60" />
-						) : (
-							<ChevronRightIcon className="size-3 text-description/60" />
-						)}
 					</div>
-				</button>
+				) : (
+					<button
+						aria-controls="audit-history-details"
+						aria-expanded={expanded}
+						className="flex w-full items-center justify-between cursor-pointer select-none bg-transparent border-0 p-0 text-left font-sans"
+						onClick={() => setExpanded(!expanded)}
+						ref={toggleButtonRef}
+						type="button">
+						<div className="flex items-center gap-2 flex-wrap">
+							<span className="text-[10px] text-description/70 font-medium">
+								What we checked ({snapshots.length})
+							</span>
+							{latestGrade && (
+								<span
+									className={cn(
+										"inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-medium border",
+										HARDENING_GRADE_STYLES[latestGrade],
+									)}>
+									Latest {latestGrade}
+									{Number.isFinite(latestSnapshot.auditMetadata.hardening_score) && (
+										<span className="font-mono opacity-80 ml-0.5">
+											{latestSnapshot.auditMetadata.hardening_score}
+										</span>
+									)}
+								</span>
+							)}
+							{health && health.trend !== "unknown" && (
+								<span className="text-[8px] text-description/60 font-medium">
+									{HEALTH_TREND_LABELS[health.trend]}
+									{health.averageScore > 0 ? ` · avg ${health.averageScore}` : ""}
+									{health.latestScoreDelta !== undefined && health.latestScoreDelta !== 0
+										? ` · ${health.latestScoreDelta >= 0 ? "+" : ""}${health.latestScoreDelta} last`
+										: ""}
+								</span>
+							)}
+							{health && health.advisorySnapshotCount > 0 && (
+								<span className="text-[8px] text-amber-600 dark:text-amber-400 font-medium">
+									{health.advisorySnapshotCount} note{health.advisorySnapshotCount === 1 ? "" : "s"}
+								</span>
+							)}
+							{health && health.gateBlockCount > 0 && (
+								<span className="text-[8px] text-amber-700 dark:text-amber-400 font-medium">
+									{health.gateBlockCount} to revisit
+								</span>
+							)}
+							{health && health.trailingGateBlockStreak > 1 && (
+								<span className="text-[8px] text-amber-700 dark:text-amber-400 font-medium">
+									{health.trailingGateBlockStreak} in a row
+								</span>
+							)}
+							{health?.planRegressionDetected && (
+								<span className="text-[8px] text-amber-600 dark:text-amber-400 font-medium">Plan shifted</span>
+							)}
+							{health && health.persistentViolationCount > 0 && (
+								<span className="text-[8px] text-amber-600/90 font-medium">
+									{health.persistentViolationCount} still open
+								</span>
+							)}
+							{trailingViolationAges.size > 0 && Math.max(...trailingViolationAges.values()) > 1 && (
+								<span className="text-[8px] text-amber-600/90 font-medium">
+									oldest open ×{Math.max(...trailingViolationAges.values())}
+								</span>
+							)}
+							{health && health.suppressedViolationCount > 0 && (
+								<span className="text-[8px] text-blue-600/80 font-medium">
+									{health.suppressedViolationCount} waived
+								</span>
+							)}
+						</div>
+						<div className="flex items-center gap-2 shrink-0">
+							<AuditScoreSparkline scores={scoreTimeline} />
+							<button
+								aria-label="Copy project notes"
+								className="inline-flex items-center cursor-pointer bg-transparent border-0 p-0 text-description/60 hover:text-foreground"
+								onClick={handleCopyHistory}
+								title={copied ? "Copied" : "Copy timeline notes"}
+								type="button">
+								<CopyIcon className="size-3" />
+							</button>
+							{expanded ? (
+								<ChevronDownIcon className="size-3 text-description/60" />
+							) : (
+								<ChevronRightIcon className="size-3 text-description/60" />
+							)}
+						</div>
+					</button>
+				)}
 
 				{latestGateBlock && onScrollToLatestGateBlock && (
 					<button
@@ -294,7 +318,7 @@ export const AuditHistoryStrip = memo(
 					</button>
 				)}
 
-				{expanded && (
+				{showDetails && (
 					<div className="mt-2 space-y-2 animate-lumi-reading-reveal" id="audit-history-details">
 						<div aria-label="Audit snapshot grades" className="flex flex-wrap gap-1.5" role="listbox">
 							{snapshots.map((snapshot, index) => {

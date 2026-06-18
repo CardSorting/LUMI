@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import type { Environment } from "../../../../src/shared/config-types"
@@ -16,27 +17,32 @@ type ViewHeaderProps = {
 	environment?: Environment
 }
 
+/**
+ * Standard back-navigation header for overlay views (History, Settings, etc.).
+ * Uses a back arrow — a pattern users recognize from mobile and web apps.
+ */
 const ViewHeader = ({ title, onDone, showEnvironmentSuffix, environment }: ViewHeaderProps) => {
 	const showSubtext = showEnvironmentSuffix && environment && environment !== "production"
 	const capitalizedEnv = environment ? ENV_DISPLAY_NAMES[environment] : ""
 	const titleColor = getEnvironmentColor(environment)
 
 	return (
-		<div className="flex justify-between items-center py-2.5 px-5 mb-[17px]">
-			<div className="relative">
-				<h3 className="m-0 text-lg font-normal" style={{ color: titleColor }}>
-					{title}
-				</h3>
-				{showSubtext && (
-					<span className="absolute left-0 top-8 -translate-y-1 text-xs text-description whitespace-nowrap">
-						{capitalizedEnv} environment
-					</span>
-				)}
-			</div>
-			<Button onClick={onDone} size="header">
-				Done
+		<header className="flex items-center gap-1.5 py-1.5 px-2 mb-2 border-b border-border/30 shrink-0">
+			<Button
+				aria-label="Back to chat"
+				className="h-7 w-7 shrink-0 rounded-md"
+				onClick={onDone}
+				size="icon"
+				variant="ghost">
+				<ArrowLeft aria-hidden className="size-4" />
 			</Button>
-		</div>
+			<div className="flex-1 min-w-0">
+				<h1 className="m-0 text-sm font-medium truncate" style={{ color: titleColor }}>
+					{title}
+				</h1>
+				{showSubtext && <p className="m-0 text-xs text-muted-foreground truncate">{capitalizedEnv} environment</p>}
+			</div>
+		</header>
 	)
 }
 

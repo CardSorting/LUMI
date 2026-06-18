@@ -2,7 +2,6 @@ import { StringRequest } from "@shared/proto/dietcode/common"
 import { TaskFeedbackType } from "@shared/WebviewMessage"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import React, { useEffect, useState } from "react"
-import styled from "styled-components"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
@@ -13,24 +12,14 @@ interface TaskFeedbackButtonsProps {
 	classNames?: string
 }
 
-const IconWrapper = styled.span`
-	color: var(--vscode-descriptionForeground);
-`
-
-const ButtonWrapper = styled.div`
-	transform: scale(0.85);
-`
-
 const TaskFeedbackButtons: React.FC<TaskFeedbackButtonsProps> = ({ messageTs, isFromHistory = false, classNames }) => {
 	const [feedback, setFeedback] = useState<TaskFeedbackType | null>(null)
 	const [shouldShow, setShouldShow] = useState<boolean>(true)
 
-	// Check localStorage on mount to see if feedback was already given for this message
 	useEffect(() => {
 		try {
 			const feedbackHistory = localStorage.getItem("taskFeedbackHistory") || "{}"
 			const history = JSON.parse(feedbackHistory)
-			// Check if this specific message timestamp has received feedback
 			if (history[messageTs]) {
 				setShouldShow(false)
 			}
@@ -39,14 +28,13 @@ const TaskFeedbackButtons: React.FC<TaskFeedbackButtonsProps> = ({ messageTs, is
 		}
 	}, [messageTs])
 
-	// Don't show buttons if this is from history or feedback was already given
 	if (isFromHistory || !shouldShow) {
 		return null
 	}
 
 	const handleFeedback = async (type: TaskFeedbackType) => {
 		if (feedback !== null) {
-			return // Already provided feedback
+			return
 		}
 
 		setFeedback(type)
@@ -58,7 +46,6 @@ const TaskFeedbackButtons: React.FC<TaskFeedbackButtonsProps> = ({ messageTs, is
 				}),
 			)
 
-			// Store in localStorage that feedback was provided for this message
 			try {
 				const feedbackHistory = localStorage.getItem("taskFeedbackHistory") || "{}"
 				const history = JSON.parse(feedbackHistory)
@@ -73,52 +60,28 @@ const TaskFeedbackButtons: React.FC<TaskFeedbackButtonsProps> = ({ messageTs, is
 	}
 
 	return (
-		<div className={cn("flex items-center justify-end shrink-0", classNames)}>
-			<ButtonsContainer>
-				<ButtonWrapper>
-					<VSCodeButton
-						appearance="icon"
-						aria-label="This was helpful"
-						disabled={feedback !== null}
-						onClick={() => handleFeedback("thumbs_up")}
-						title="This was helpful">
-						<IconWrapper>
-							<VscIcon name={feedback === "thumbs_up" ? "thumbsup-filled" : "thumbsup"} />
-						</IconWrapper>
-					</VSCodeButton>
-				</ButtonWrapper>
-				<ButtonWrapper>
-					<VSCodeButton
-						appearance="icon"
-						aria-label="This wasn't helpful"
-						disabled={feedback !== null && feedback !== "thumbs_down"}
-						onClick={() => handleFeedback("thumbs_down")}
-						title="This wasn't helpful">
-						<IconWrapper>
-							<VscIcon name={feedback === "thumbs_down" ? "thumbsdown-filled" : "thumbsdown"} />
-						</IconWrapper>
-					</VSCodeButton>
-				</ButtonWrapper>
-				{/* <VSCodeButtonLink
-					href="https://github.com/dietcode/dietcode/issues/new?template=bug_report.yml"
-					appearance="icon"
-					title="Report a bug"
-					aria-label="Report a bug">
-					<VscIcon name="bug" className=""  />
-				</VSCodeButtonLink> */}
-			</ButtonsContainer>
+		<div className={cn("flex items-center justify-end gap-0.5 shrink-0", classNames)}>
+			<VSCodeButton
+				appearance="icon"
+				aria-label="This was helpful"
+				disabled={feedback !== null}
+				onClick={() => handleFeedback("thumbs_up")}
+				title="This was helpful">
+				<VscIcon className="text-muted-foreground" name={feedback === "thumbs_up" ? "thumbsup-filled" : "thumbsup"} />
+			</VSCodeButton>
+			<VSCodeButton
+				appearance="icon"
+				aria-label="This wasn't helpful"
+				disabled={feedback !== null && feedback !== "thumbs_down"}
+				onClick={() => handleFeedback("thumbs_down")}
+				title="This wasn't helpful">
+				<VscIcon
+					className="text-muted-foreground"
+					name={feedback === "thumbs_down" ? "thumbsdown-filled" : "thumbsdown"}
+				/>
+			</VSCodeButton>
 		</div>
 	)
 }
-
-const ButtonsContainer = styled.div`
-	display: flex;
-	gap: 0px;
-	opacity: 0.5;
-
-	&:hover {
-		opacity: 1;
-	}
-`
 
 export default TaskFeedbackButtons

@@ -34,7 +34,7 @@ describe("ThinkingRow", () => {
 			/>,
 		)
 
-		fireEvent.click(screen.getByRole("button", { name: /Thinking/i }))
+		fireEvent.click(screen.getByText("Working…"))
 		expect(onToggle).toHaveBeenCalledTimes(1)
 	})
 })

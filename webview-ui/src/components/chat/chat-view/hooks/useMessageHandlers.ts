@@ -18,6 +18,7 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 		setInputValue,
 		activeQuote,
 		setActiveQuote,
+		setPendingQuote,
 		setSelectedImages,
 		setSelectedFiles,
 		setSendingDisabled,
@@ -119,6 +120,7 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 					const isFollowUpMessage = sendRoute === "follow_up"
 					setInputValue("")
 					setActiveQuote(null)
+					setPendingQuote(null)
 					if (!isFollowUpMessage) {
 						setSendingDisabled(true)
 						setEnableButtons(false)
@@ -139,6 +141,7 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 			activeQuote,
 			setInputValue,
 			setActiveQuote,
+			setPendingQuote,
 			setSendingDisabled,
 			setSelectedImages,
 			setSelectedFiles,
@@ -152,16 +155,18 @@ export function useMessageHandlers(messages: DietCodeMessage[], chatState: ChatS
 	// Start a new task
 	const startNewTask = useCallback(async () => {
 		setActiveQuote(null)
+		setPendingQuote(null)
 		await TaskServiceClient.clearTask(EmptyRequest.create({}))
-	}, [setActiveQuote])
+	}, [setActiveQuote, setPendingQuote])
 
 	// Clear input state helper
 	const clearInputState = useCallback(() => {
 		setInputValue("")
 		setActiveQuote(null)
+		setPendingQuote(null)
 		setSelectedImages([])
 		setSelectedFiles([])
-	}, [setInputValue, setActiveQuote, setSelectedImages, setSelectedFiles])
+	}, [setInputValue, setActiveQuote, setPendingQuote, setSelectedImages, setSelectedFiles])
 
 	// Execute button action based on type
 	const executeButtonAction = useCallback(

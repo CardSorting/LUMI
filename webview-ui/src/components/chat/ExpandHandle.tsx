@@ -1,4 +1,3 @@
-import { TriangleIcon } from "lucide-react"
 import { memo } from "react"
 import { cn } from "@/lib/utils"
 
@@ -8,20 +7,20 @@ interface ExpandHandleProps {
 	className?: string
 }
 
-/**
- * Reusable expand/collapse handle component
- * Used by CompletionOutput, PlanCompletionOutput, CommandOutput, etc.
- */
-const ExpandHandle = memo(({ isExpanded, onToggle, className = "bg-accent" }: ExpandHandleProps) => {
+/** Inline show more/less — no floating notch overlay. */
+const ExpandHandle = memo(({ isExpanded, onToggle, className }: ExpandHandleProps) => {
 	return (
-		<div
+		<button
 			className={cn(
-				"absolute -bottom-2 left-1/2 z-10 transform -translate-x-1/2 flex justify-center items-center px-5 py-0.5 cursor-pointer bg-description transition-opacity border border-none rounded-b-sm shrink-0 pointer-events-auto",
+				"w-full py-1 text-[10px] text-center text-muted-foreground",
+				"hover:text-foreground border-t border-editor-group-border/50 bg-code",
+				"cursor-pointer bg-transparent",
 				className,
 			)}
-			onClick={onToggle}>
-			<TriangleIcon className={cn("text-black fill-black", isExpanded ? "rotate-0" : "rotate-180")} size={8} />
-		</div>
+			onClick={onToggle}
+			type="button">
+			{isExpanded ? "Show less" : "Show more"}
+		</button>
 	)
 })
 

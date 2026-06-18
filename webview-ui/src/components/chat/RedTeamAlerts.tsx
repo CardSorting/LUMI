@@ -1,95 +1,6 @@
-import { CheckCircleIcon, ShieldAlertIcon, ZapOffIcon } from "lucide-react"
-import styled from "styled-components"
+import { CheckCircleIcon, ChevronRightIcon, ShieldAlertIcon, ZapOffIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-
-const RedTeamContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 16px;
-  padding: 16px;
-  background: var(--vscode-inputValidation-errorBackground);
-  border: 1px solid var(--vscode-inputValidation-errorBorder);
-  border-radius: 8px;
-  border-left: 4px solid var(--vscode-errorForeground);
-`
-
-const Header = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-`
-
-const Title = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`
-
-const LabelText = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--vscode-errorForeground);
-  letter-spacing: 0.5px;
-`
-
-const CritiqueText = styled.p`
-  margin: 0;
-  font-size: 13px;
-  color: var(--vscode-foreground);
-  line-height: 1.5;
-  font-weight: 500;
-`
-
-const Section = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const List = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const ListItem = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 4px;
-`
-
-const PitfallItem = styled(ListItem)`
-  background: rgba(255, 0, 0, 0.1);
-  color: var(--vscode-errorForeground);
-  border: 1px solid rgba(255, 0, 0, 0.2);
-`
-
-const MitigationItem = styled(ListItem)`
-  background: rgba(0, 255, 0, 0.05);
-  color: var(--vscode-testing-iconPassed);
-  border: 1px solid rgba(0, 255, 0, 0.1);
-`
-
-const RiskBarContainer = styled.div`
-  width: 100%;
-  height: 4px;
-  background: var(--vscode-editorGroup-border);
-  border-radius: 2px;
-  margin-top: 4px;
-  overflow: hidden;
-`
-
-const RiskBarFill = styled.div<{ $percent: number }>`
-  height: 100%;
-  width: ${(props) => props.$percent}%;
-  background: ${(props) => (props.$percent > 70 ? "var(--vscode-errorForeground)" : props.$percent > 40 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)")};
-  transition: width 0.3s ease;
-`
+import { cn } from "@/lib/utils"
 
 interface RedTeamAlertsProps {
 	adversarialCritique?: {
@@ -107,52 +18,64 @@ export const RedTeamAlerts = ({ adversarialCritique }: RedTeamAlertsProps) => {
 	const riskPercent = Math.min(100, Math.max(0, redTeamScore * 100))
 
 	return (
-		<RedTeamContainer>
-			<Header>
-				<Title>
-					<ShieldAlertIcon className="text-red-500" size={14} />
-					<LabelText>Adversarial Red-Team Audit</LabelText>
-				</Title>
-				<Badge className="text-[10px] uppercase opacity-70" variant="outline">
-					Risk Score: {(redTeamScore * 10).toFixed(1)}/10
+		<details className="lumi-inline-disclosure group mt-3 rounded-md border border-[var(--vscode-inputValidation-errorBorder)] bg-[var(--vscode-inputValidation-errorBackground)]">
+			<summary
+				className={cn(
+					"lumi-details-trigger list-none cursor-pointer flex items-center gap-2 px-2.5 py-2",
+					"hover:bg-black/[0.03] dark:hover:bg-white/[0.03]",
+				)}>
+				<ShieldAlertIcon aria-hidden className="size-3.5 shrink-0 text-error" />
+				<span className="text-[11px] font-medium text-foreground flex-1 min-w-0">Things to watch for</span>
+				<Badge className="text-[9px] font-normal shrink-0" variant="outline">
+					Risk {(redTeamScore * 10).toFixed(1)}/10
 				</Badge>
-			</Header>
+				<ChevronRightIcon
+					aria-hidden
+					className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+				/>
+			</summary>
 
-			<Section>
-				<RiskBarContainer>
-					<RiskBarFill $percent={riskPercent} />
-				</RiskBarContainer>
-			</Section>
+			<div className="px-2.5 pb-2.5 flex flex-col gap-2 border-t border-[var(--vscode-inputValidation-errorBorder)]/50 pt-2">
+				<div className="h-1 w-full rounded-full overflow-hidden bg-editor-group-border">
+					<div
+						className={cn(
+							"h-full transition-[width] duration-300",
+							riskPercent > 70 ? "bg-error" : riskPercent > 40 ? "bg-amber-500" : "bg-success",
+						)}
+						style={{ width: `${riskPercent}%` }}
+					/>
+				</div>
 
-			<CritiqueText>"{critique}"</CritiqueText>
+				<p className="text-xs text-foreground m-0 leading-snug font-medium">"{critique}"</p>
 
-			{pitfalls.length > 0 && (
-				<Section>
-					<LabelText style={{ fontSize: "10px", opacity: 0.8 }}>Potential Pitfalls</LabelText>
-					<List>
-						{pitfalls.map((p, i) => (
-							<PitfallItem key={i}>
-								<ZapOffIcon className="mt-0.5 shrink-0" size={12} />
-								<span>{p}</span>
-							</PitfallItem>
+				{pitfalls.length > 0 ? (
+					<div className="flex flex-col gap-1">
+						<p className="text-[10px] font-medium text-muted-foreground m-0">Possible issues</p>
+						{pitfalls.map((pitfall, i) => (
+							<div
+								className="flex items-start gap-1.5 text-xs p-2 rounded-md border border-error/20 text-error"
+								key={i}>
+								<ZapOffIcon aria-hidden className="size-3 shrink-0 mt-0.5" />
+								<span>{pitfall}</span>
+							</div>
 						))}
-					</List>
-				</Section>
-			)}
+					</div>
+				) : null}
 
-			{mitigations.length > 0 && (
-				<Section>
-					<LabelText style={{ fontSize: "10px", opacity: 0.8 }}>Recommended Mitigations</LabelText>
-					<List>
-						{mitigations.map((m, i) => (
-							<MitigationItem key={i}>
-								<CheckCircleIcon className="mt-0.5 shrink-0" size={12} />
-								<span>{m}</span>
-							</MitigationItem>
+				{mitigations.length > 0 ? (
+					<div className="flex flex-col gap-1">
+						<p className="text-[10px] font-medium text-muted-foreground m-0">Ways to reduce risk</p>
+						{mitigations.map((mitigation, i) => (
+							<div
+								className="flex items-start gap-1.5 text-xs p-2 rounded-md border border-success/20 text-success"
+								key={i}>
+								<CheckCircleIcon aria-hidden className="size-3 shrink-0 mt-0.5" />
+								<span>{mitigation}</span>
+							</div>
 						))}
-					</List>
-				</Section>
-			)}
-		</RedTeamContainer>
+					</div>
+				) : null}
+			</div>
+		</details>
 	)
 }

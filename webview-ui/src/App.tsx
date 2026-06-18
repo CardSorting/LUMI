@@ -2,7 +2,6 @@ import type { Boolean, EmptyRequest } from "@shared/proto/dietcode/common"
 import { useEffect } from "react"
 import AccountView from "./components/account/AccountView"
 import ChatView from "./components/chat/ChatView"
-import HistoryView from "./components/history/HistoryView"
 import JoyZoningView from "./components/joyzoning/JoyZoningView"
 import McpView from "./components/mcp/configuration/McpConfigurationView"
 import SettingsView from "./components/settings/SettingsView"
@@ -20,7 +19,6 @@ const AppContent = () => {
 		mcpTab,
 		showSettings,
 		settingsTargetSection,
-		showHistory,
 		showAccount,
 		showWorktrees,
 		showJoyZoning,
@@ -30,7 +28,6 @@ const AppContent = () => {
 		closeMcpView,
 		navigateToHistory,
 		hideSettings,
-		hideHistory,
 		hideAccount,
 		hideWorktrees,
 		hideJoyZoning,
@@ -43,7 +40,6 @@ const AppContent = () => {
 		if (shouldShowAnnouncement) {
 			setShowAnnouncement(true)
 
-			// Use the gRPC client instead of direct WebviewMessage
 			UiServiceClient.onDidShowAnnouncement({} as EmptyRequest)
 				.then((response: Boolean) => {
 					setShouldShowAnnouncement(response.value)
@@ -61,7 +57,6 @@ const AppContent = () => {
 	return (
 		<div className="flex h-screen w-full flex-col">
 			{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
-			{showHistory && <HistoryView onDone={hideHistory} />}
 			{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
 			{showAccount && (
 				<AccountView
@@ -73,10 +68,10 @@ const AppContent = () => {
 			)}
 			{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
 			{showJoyZoning && <JoyZoningView onDone={hideJoyZoning} />}
-			{/* Do not conditionally load ChatView, it's expensive and there's state we don't want to lose (user input, disableInput, askResponse promise, etc.) */}
+			{/* History is inline inside ChatView — keeps toolbar visible, no extra overlay pane */}
 			<ChatView
 				hideAnnouncement={hideAnnouncement}
-				isHidden={showSettings || showHistory || showMcp || showAccount || showWorktrees || showJoyZoning}
+				isHidden={showSettings || showMcp || showAccount || showWorktrees || showJoyZoning}
 				showAnnouncement={showAnnouncement}
 				showHistoryView={navigateToHistory}
 			/>

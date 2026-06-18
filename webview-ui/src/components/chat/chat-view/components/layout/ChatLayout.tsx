@@ -1,5 +1,5 @@
 import type React from "react"
-import styled from "styled-components"
+import { cn } from "@/lib/utils"
 
 interface ChatLayoutProps {
 	isHidden: boolean
@@ -9,41 +9,18 @@ interface ChatLayoutProps {
 }
 
 /**
- * Main layout container for the chat view
- * Provides the fixed positioning and flex layout structure
+ * Main layout container for the chat view — grid: messages (1fr) + footer (auto).
  */
 export const ChatLayout: React.FC<ChatLayoutProps> = ({ isHidden, isNightDesk = false, serenityLevel = 0, children }) => {
 	return (
-		<ChatLayoutContainer
-			className="lumi-chat-readable lumi-serenity-fade"
+		<div
+			className={cn(
+				"lumi-chat-readable lumi-serenity-fade w-full h-full relative overflow-hidden p-0 m-0",
+				isHidden ? "hidden" : "grid grid-rows-[1fr_auto]",
+			)}
 			data-night-desk={isNightDesk ? "true" : undefined}
-			data-serenity-level={serenityLevel > 0 ? String(serenityLevel) : undefined}
-			isHidden={isHidden}>
-			<MainContent>{children}</MainContent>
-		</ChatLayoutContainer>
+			data-serenity-level={serenityLevel > 0 ? String(serenityLevel) : undefined}>
+			<div className="flex flex-col overflow-hidden row-start-1 flex-1 min-h-0">{children}</div>
+		</div>
 	)
 }
-
-const ChatLayoutContainer = styled.div.withConfig({
-	shouldForwardProp: (prop) => !["isHidden"].includes(prop),
-})<{ isHidden: boolean }>`
-	display: ${(props) => (props.isHidden ? "none" : "grid")};
-	grid-template-rows: 1fr auto;
-	overflow: hidden;
-	padding: 0;
-	margin: 0;
-	width: 100%;
-	height: 100%;
-	position: relative;
-`
-
-const MainContent = styled.div`
-	display: flex;
-	flex-direction: column;
-	overflow: hidden;
-	grid-row: 1;
-	flex: 1;
-	min-height: 0;
-`
-
-// Note: serenity fade applied via className on wrapper in ChatLayout if needed

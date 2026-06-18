@@ -1,6 +1,5 @@
-import { XIcon } from "lucide-react"
+import { SquarePen } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 const NewTaskButton: React.FC<{
@@ -8,22 +7,19 @@ const NewTaskButton: React.FC<{
 	className?: string
 }> = ({ className, onClick }) => {
 	return (
-		<Tooltip>
-			<TooltipContent side="left">Start a New Task</TooltipContent>
-			<TooltipTrigger className={cn("flex items-center", className)}>
-				<Button
-					aria-label="New Task"
-					onClick={(e) => {
-						e.preventDefault()
-						e.stopPropagation()
-						onClick()
-					}}
-					size="icon"
-					variant="icon">
-					<XIcon />
-				</Button>
-			</TooltipTrigger>
-		</Tooltip>
+		<Button
+			aria-label="Start a new chat"
+			className={cn("flex items-center", className)}
+			onClick={(e) => {
+				e.preventDefault()
+				e.stopPropagation()
+				onClick()
+			}}
+			size="icon"
+			title="Start a new chat"
+			variant="icon">
+			<SquarePen className="size-3.5" strokeWidth={2} />
+		</Button>
 	)
 }
 

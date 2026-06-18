@@ -98,8 +98,8 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 	return (
 		<div
 			className={cn(
-				"p-3 my-2 text-white rounded-lg shadow-premium break-words",
-				isEditing ? "bg-transparent shadow-none" : "btn-premium-cola",
+				"px-3 py-2.5 my-2 rounded-lg border border-border/40 break-words",
+				isEditing ? "bg-input-background" : "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]",
 			)}
 			onClick={handleClick}
 			onKeyDown={handleKeyDownContainer}
@@ -139,19 +139,19 @@ const UserMessage: React.FC<UserMessageProps> = ({ text, images, files, messageT
 						{!checkpointManagerErrorMessage && (
 							<RestoreButton
 								isPrimary={false}
-								label="Restore All"
+								label="Undo files & resend"
 								onClick={handleRestoreWorkspace}
 								ref={restoreAllButtonRef}
-								title="Restore both the chat and workspace files to this checkpoint and send your edited message"
+								title="Undo file changes and resend your edited message"
 								type="taskAndWorkspace"
 							/>
 						)}
 						<RestoreButton
 							isPrimary={true}
-							label="Restore Chat"
+							label="Resend"
 							onClick={handleRestoreWorkspace}
 							ref={restoreChatButtonRef}
-							title="Restore just the chat to this checkpoint and send your edited message"
+							title="Resend your edited message from this point"
 							type="task"
 						/>
 					</div>

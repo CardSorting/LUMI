@@ -2,7 +2,6 @@ import { cn } from "@heroui/react"
 import { CheckIcon, CopyIcon } from "lucide-react"
 import { useCallback, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 const CopyTaskButton: React.FC<{
 	taskText?: string
@@ -22,22 +21,19 @@ const CopyTaskButton: React.FC<{
 	}, [taskText])
 
 	return (
-		<Tooltip>
-			<TooltipContent side="bottom">Copy Text</TooltipContent>
-			<TooltipTrigger className={cn("flex items-center", className)}>
-				<Button
-					aria-label="Copy"
-					onClick={(e) => {
-						e.preventDefault()
-						e.stopPropagation()
-						handleCopy()
-					}}
-					size="icon"
-					variant="icon">
-					{copied ? <CheckIcon /> : <CopyIcon />}
-				</Button>
-			</TooltipTrigger>
-		</Tooltip>
+		<Button
+			aria-label="Copy task text"
+			className={cn("flex items-center", className)}
+			onClick={(e) => {
+				e.preventDefault()
+				e.stopPropagation()
+				handleCopy()
+			}}
+			size="icon"
+			title="Copy task text"
+			variant="icon">
+			{copied ? <CheckIcon /> : <CopyIcon />}
+		</Button>
 	)
 }
 
