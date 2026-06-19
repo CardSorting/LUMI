@@ -114,6 +114,43 @@ flowchart TD
   H --> C
 ```
 
+## Pass 2 — production hardening (preflight + copy audit)
+
+### Preflight must not mutate
+
+Readiness checks called `evaluateRoadmapCompletionBlock()` which always ran live remediation — preflight could validate ROADMAP before the real completion attempt. Fixed with:
+
+- `dryRun: true` on `remediateRoadmapGatesInternally()` / `evaluateRoadmapCompletionBlock()`
+- `skipAutoValidate` on `getOperationalStatus()` / `resolveWorkspaceContext()` so status reads during dry-run do not persist validation
+- Auto-clearable-only blocks (`validation_current`, `bootstrap_complete`) suppressed in dry-run readiness
+
+### Copy audit (remaining validate-first strings)
+
+Unified mid-task guidance via `AUTO_GOVERNANCE.previewBootstrapAutofill` and `continueTaskMidPass` across:
+
+- `RoadmapService.ts` — template, validate, autofill, auto-bootstrap payloads
+- `RoadmapOperator.ts` — `explain_gate` detail
+- `RoadmapDoctor.ts` — state file check message
+- `ToolExecutor.ts` — write guard error (file path, not `doctor` tool)
+- `attemptCompletionUtils.ts` — preflight brief includes auto-governance policy
+- `docs/tools-reference/all-dietcode-tools.mdx` — completion note
+
+## Pass 3 — validation_pending persistence (industry gate pattern)
+
+### Problem
+
+`resolveWorkspaceContext()` auto-validated on every `getOperationalStatus()` read. That cleared `validation_pending` mid-task whenever an agent called `guide` or `cockpit`, undermining the completion gate and contradicting “governance at `attempt_completion`.”
+
+### Fix
+
+- **Opt-in only:** `validatePendingOnRead` — status reads no longer mutate state by default
+- **`validation_pending` persists** after ROADMAP edits until live completion remediation or explicit `roadmap(action='validate')`
+- **`recommendNextAction`** returns `continueTaskMidPass` instead of `cockpit` for pending validation
+- **`validationPendingEnvelope`** aligned to auto-governance copy (no `action='validate'` mandate)
+- Tests: status read preserves pending; dry-run preflight skips auto-clearable-only gates
+
+This mirrors CI/CD merge gates: checks run at the gate, not on every status poll.
+
 ## Files touched (reference)
 
 | Area | Key files |

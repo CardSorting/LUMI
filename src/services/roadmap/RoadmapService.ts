@@ -1525,7 +1525,7 @@ export class RoadmapService {
 			roadmap_path: roadmapPath,
 			written: true,
 			operator_summary: "Created ROADMAP.md from workspace evidence.",
-			agent_next_call: "roadmap(action='apply_bootstrap_fill', context='write')",
+			agent_next_call: AUTO_GOVERNANCE.continueTaskMidPass,
 		}
 
 		if (cfg.auto_bootstrap_fill) {
@@ -1533,7 +1533,7 @@ export class RoadmapService {
 			result = { ...result, bootstrap_autofill_applied: filled }
 			if ((filled as Record<string, unknown>).written) {
 				result.operator_summary = filled.operator_summary
-				result.agent_next_call = "roadmap(action='cockpit')"
+				result.agent_next_call = AUTO_GOVERNANCE.continueTaskMidPass
 			}
 		}
 
@@ -1847,8 +1847,7 @@ export class RoadmapService {
 				tasks.length > 0
 					? `${tasks.length} template phrase(s) remain — use tasks[].suggested_replacement from project evidence.`
 					: "Bootstrap fill complete — no template phrases detected.",
-			agent_next_call:
-				tasks.length > 0 ? "roadmap(action='apply_bootstrap_fill', context='write')." : "roadmap(action='cockpit')",
+			agent_next_call: tasks.length > 0 ? AUTO_GOVERNANCE.previewBootstrapAutofill : "roadmap(action='cockpit')",
 		}
 	}
 
@@ -1876,7 +1875,7 @@ export class RoadmapService {
 			operator_summary:
 				applied.length > 0
 					? `Applied ${applied.length} evidence-backed replacement(s); ${remaining.length} template phrase(s) remain.`
-					: `No autofill applied — ${remaining.length} template phrase(s) remain — roadmap(action='apply_bootstrap_fill') or bootstrap_fill_plan.tasks.`,
+					: `No autofill applied — ${remaining.length} template phrase(s) remain — ${AUTO_GOVERNANCE.previewBootstrapAutofill}`,
 		}
 	}
 
@@ -1906,7 +1905,7 @@ export class RoadmapService {
 			project_steering_digest: buildProjectSteeringDigest(evidence.project_fingerprint || {}, fill_plan),
 			bootstrap_autofill_preview: draft,
 			operator_summary: draft.operator_summary,
-			agent_next_call: "roadmap(action='cockpit') after reviewing autofill changes.",
+			agent_next_call: AUTO_GOVERNANCE.continueTaskMidPass,
 		}
 
 		if (dryRun || draft.applied_count === 0) {
@@ -1927,6 +1926,7 @@ export class RoadmapService {
 		workspace: string,
 		tier: EvidenceTier = "standard",
 		roadmapText?: string | null,
+		options?: { validatePendingOnRead?: boolean },
 	): Promise<{
 		workspace: string
 		text: string
@@ -1939,7 +1939,7 @@ export class RoadmapService {
 		const { key, roadmapPath } = await buildSnapshotKey(workspace, tier)
 		let state = await this.readState(workspace)
 
-		if (state.validation_pending && roadmapText === undefined) {
+		if (state.validation_pending && roadmapText === undefined && options?.validatePendingOnRead) {
 			await this.validateRoadmap(workspace)
 			state = await this.readState(workspace)
 		}
@@ -2027,7 +2027,7 @@ export class RoadmapService {
 			now_item_count: evidence.roadmap.now_item_count || 0,
 			recent_checkpoint_date: evidence.roadmap.recent_checkpoint_date,
 			operator_summary: state.validation_pending
-				? "ROADMAP.md changed since last validate — confirm schema before closing checkpoint."
+				? AUTO_GOVERNANCE.continueTaskMidPass
 				: gateState.checkpoint_stale
 					? gateState.stale_summary
 					: phase.operator_summary,
@@ -2061,8 +2061,13 @@ export class RoadmapService {
 	}
 
 	// Tool actions implementations
-	public async getOperationalStatus(workspace: string, contextHint = "", tier: EvidenceTier = "standard"): Promise<any> {
-		const ctx = await this.resolveWorkspaceContext(workspace, tier)
+	public async getOperationalStatus(
+		workspace: string,
+		contextHint = "",
+		tier: EvidenceTier = "standard",
+		options?: { validatePendingOnRead?: boolean },
+	): Promise<any> {
+		const ctx = await this.resolveWorkspaceContext(workspace, tier, undefined, options)
 		const action = contextHint.trim().toLowerCase() === "status" ? "status" : "guide"
 		return this.buildOperationalPayload(action, ctx)
 	}
@@ -2277,7 +2282,7 @@ export class RoadmapService {
 				validation.valid && bootstrap_complete
 					? "Return Required Final Assistant Response summary."
 					: validation.valid
-						? "roadmap(action='apply_bootstrap_fill', context='write')."
+						? AUTO_GOVERNANCE.previewBootstrapAutofill
 						: "Fix validation issues in ROADMAP.md.",
 		}
 
@@ -2309,9 +2314,9 @@ export class RoadmapService {
 				steering_brief: (evidence.project_fingerprint || {}).steering_brief,
 			},
 			operator_summary:
-				"Evidence-driven skeleton — write to ROADMAP.md, apply remaining autofill if needed, then validate.",
+				"Evidence-driven skeleton — write to ROADMAP.md; autofill and validation run at attempt_completion.",
 			agent_next_call:
-				"Write skeleton to ROADMAP.md, then roadmap(action='apply_bootstrap_fill', context='write') if placeholders remain.",
+				"Write skeleton to ROADMAP.md, then continue the task — preview autofill with roadmap(action='apply_bootstrap_fill') if needed.",
 		}
 
 		const fill_plan = this.buildBootstrapFillPlan(skeleton, evidence)
@@ -2349,10 +2354,10 @@ export class RoadmapService {
 			payload.operator_summary =
 				`Applied ${result.applied_count} evidence replacement(s); schema ${valid ? "valid" : "invalid"}.` +
 				(remaining ? ` ${remaining} bootstrap phrase(s) remain.` : " Bootstrap fill complete.")
-			payload.agent_next_call = (validated.recommended_next_action || {}).command || "roadmap(action='cockpit')"
+			payload.agent_next_call = (validated.recommended_next_action || {}).command || AUTO_GOVERNANCE.continueTaskMidPass
 		} else if (dryRun) {
-			payload.operator_summary = result.operator_summary || "Autofill preview — pass context='write' to apply."
-			payload.agent_next_call = "roadmap(action='apply_bootstrap_fill', context='write') to write preview_text"
+			payload.operator_summary = result.operator_summary || "Autofill preview — writes run at attempt_completion."
+			payload.agent_next_call = AUTO_GOVERNANCE.previewBootstrapAutofill
 		}
 
 		const evidence = await this.gatherEvidence(workspace, null, "light")

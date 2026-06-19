@@ -30,7 +30,32 @@ describe("RoadmapCompletionGate", () => {
 		assert.strictEqual(block.blocked, false)
 	})
 
-	it("auto-validates and allows completion when validation_pending with valid ROADMAP.md", async () => {
+	it("dry-run preview does not mutate roadmap-state.json", async () => {
+		setRoadmapConfigOverride({
+			...DEFAULT_ROADMAP_CONFIG,
+			enabled: true,
+			block_kanban_on_bootstrap_incomplete: false,
+		})
+		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
+		const statePath = path.join(tmpDir, ".dietcode", "roadmap-state.json")
+		await fs.writeFile(statePath, JSON.stringify({ validation_pending: true }), "utf8")
+		await fs.writeFile(path.join(tmpDir, "README.md"), "# Dry run test\n", "utf8")
+		const skeleton = bootstrapSkeleton({
+			project_hint: "Dry run gate test",
+			anti_goals: "What This Project Must Not Become: ungoverned sprawl.",
+		})
+		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), skeleton, "utf8")
+
+		const block = await evaluateRoadmapCompletionBlock(tmpDir, { dryRun: true })
+		assert.strictEqual(block.blocked, false)
+		assert.ok(block.dryRunAdvisory)
+		assert.ok(block.remediationSteps?.some((s) => s.startsWith("will-")))
+
+		const stateAfter = JSON.parse(await fs.readFile(statePath, "utf8"))
+		assert.strictEqual(stateAfter.validation_pending, true)
+	})
+
+	it("live remediation clears validation_pending", async () => {
 		setRoadmapConfigOverride({
 			...DEFAULT_ROADMAP_CONFIG,
 			enabled: true,

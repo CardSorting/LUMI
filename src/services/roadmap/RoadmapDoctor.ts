@@ -73,7 +73,7 @@ export async function runDoctorChecks(roadmapService: RoadmapService, workspace:
 		await fs.access(statePath)
 		addCheck("workspace_state_available", true, statePath)
 	} catch {
-		addCheck("workspace_state_available", !roadmapExists, "run validate to persist roadmap-state.json")
+		addCheck("workspace_state_available", !roadmapExists, "state file created at attempt_completion validation")
 	}
 
 	const lastError = await readLastError()

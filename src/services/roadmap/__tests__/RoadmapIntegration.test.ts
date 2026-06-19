@@ -94,12 +94,38 @@ describe("RoadmapIntegration", () => {
 	it("returns normalized error envelopes with slash diagnostics", () => {
 		const pending = validationPendingEnvelope("/tmp/project")
 		assert.strictEqual(pending.string_code, "validation_pending")
-		assert.match(pending.diagnostic_command, /^\/roadmap/)
-		assert.match(pending.suggested_slash_command, /explain-gate|cockpit/)
+		assert.match(pending.message, /attempt_completion/)
+		assert.match(pending.retry_command, /attempt_completion/)
 
 		const gate = gateClosedEnvelope("Schema gate closed")
 		assert.strictEqual(gate.string_code, "gate_closed")
 		assert.match(gate.diagnostic_command, /explain-gate/)
+	})
+
+	it("operational status read preserves validation_pending until completion remediation", async () => {
+		const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "roadmap-int-"))
+		try {
+			setRoadmapConfigOverride({ enabled: true, block_kanban_on_bootstrap_incomplete: false })
+			await fs.mkdir(path.join(tmp, ".dietcode"), { recursive: true })
+			const statePath = path.join(tmp, ".dietcode", "roadmap-state.json")
+			await fs.writeFile(statePath, JSON.stringify({ validation_pending: true }), "utf8")
+			await fs.writeFile(path.join(tmp, "README.md"), "# Status read test\n", "utf8")
+			const skeleton = bootstrapSkeleton({
+				project_hint: "Status read test",
+				anti_goals: "What This Project Must Not Become: drift.",
+			})
+			await fs.writeFile(path.join(tmp, "ROADMAP.md"), skeleton, "utf8")
+
+			const service = RoadmapService.getInstance()
+			const status = await service.getOperationalStatus(tmp, "guide", "light")
+			assert.strictEqual(status.validation_pending, true)
+
+			const stateAfter = JSON.parse(await fs.readFile(statePath, "utf8"))
+			assert.strictEqual(stateAfter.validation_pending, true)
+		} finally {
+			await fs.rm(tmp, { recursive: true, force: true })
+			setRoadmapConfigOverride(null)
+		}
 	})
 })
 

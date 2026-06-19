@@ -312,7 +312,7 @@ export async function evaluateRoadmapCompletionGateError(
 	}
 
 	try {
-		const block = await evaluateRoadmapCompletionBlock(config.cwd)
+		const block = await evaluateRoadmapCompletionBlock(config.cwd, { dryRun: options?.dryRun })
 		if (block.blocked) {
 			if (!options?.dryRun) {
 				config.taskState.consecutiveMistakeCount++
@@ -324,6 +324,9 @@ export async function evaluateRoadmapCompletionGateError(
 			const remediated = formatAutoRemediationSummary(block.remediationSteps || [])
 			const base = block.message || failClosedCompletionMessage()
 			return remediated ? `${base}\n\n${remediated}` : base
+		}
+		if (options?.dryRun && block.dryRunAdvisory) {
+			return null
 		}
 	} catch (error) {
 		Logger.error(`[${logPrefix}] Failed to evaluate Roadmap Governance Gates:`, error)

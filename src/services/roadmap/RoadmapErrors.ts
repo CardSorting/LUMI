@@ -1,3 +1,4 @@
+import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
 import { buildAgentOperatorHints, roadmapToolCommandToSlash } from "./RoadmapOperator"
 
 export interface RoadmapErrorEnvelope {
@@ -109,17 +110,13 @@ export function gateClosedEnvelope(message: string, action = "explain_gate"): Ro
 }
 
 export function validationPendingEnvelope(workspace = ""): RoadmapErrorEnvelope {
-	return {
-		...errorEnvelope({
-			code: "validation_pending",
-			message: "ROADMAP.md mutated — schema re-validation required",
-			action: "validate",
-			workspace,
-		}),
-		diagnostic_command: "/roadmap explain-gate",
-		retry_command: "roadmap(action='cockpit')",
-		suggested_slash_command: "/roadmap explain-gate",
-	}
+	return errorEnvelope({
+		code: "validation_pending",
+		message: AUTO_GOVERNANCE.continueTaskMidPass,
+		action: "guide",
+		workspace,
+		retryCommand: AUTO_GOVERNANCE.continueTaskMidPass,
+	})
 }
 
 export function fromException(error: unknown, action = ""): RoadmapErrorEnvelope {

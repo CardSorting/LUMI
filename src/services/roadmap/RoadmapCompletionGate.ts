@@ -17,16 +17,23 @@ export interface RoadmapCompletionBlock {
 	message?: string
 	blockingGates?: Array<{ id?: string; label: string; why: string; fix: string }>
 	remediationSteps?: string[]
+	dryRunAdvisory?: boolean
 }
 
-/** Internal pre-completion remediation — no agent tool or MCP calls. */
-export async function remediateRoadmapGatesInternally(
-	workspace: string,
-): Promise<{ steps: string[]; status: Record<string, unknown> }> {
+export interface RoadmapCompletionEvaluateOptions {
+	/** Non-mutating preview for preflight readiness — no ROADMAP.md writes. */
+	dryRun?: boolean
+}
+
+interface RemediationPlan {
+	validationWasPending: boolean
+	bootstrapNeeded: boolean
+	mechanicalStaleTouch: boolean
+}
+
+async function buildRemediationPlan(workspace: string, options?: RoadmapCompletionEvaluateOptions): Promise<RemediationPlan> {
 	const svc = RoadmapService.getInstance()
 	const cfg = getRoadmapConfig()
-	const steps: string[] = []
-
 	const rawState = await svc.readState(workspace)
 	const validationWasPending = !!rawState.validation_pending
 
@@ -39,7 +46,68 @@ export async function remediateRoadmapGatesInternally(
 		bootstrapNeeded = false
 	}
 
-	if (bootstrapNeeded) {
+	let mechanicalStaleTouch = false
+	if (cfg.warn_on_stale_before_complete) {
+		try {
+			const liveStatus = await svc.getOperationalStatus(workspace, "", "light")
+			const gate = (liveStatus.roadmap_gate || {}) as Record<string, unknown>
+			const staleReason = String(gate.stale_reason || "")
+			mechanicalStaleTouch = !!gate.checkpoint_stale && STALE_AUTO_TOUCH_REASONS.has(staleReason)
+		} catch {
+			mechanicalStaleTouch = false
+		}
+	}
+
+	return { validationWasPending, bootstrapNeeded, mechanicalStaleTouch }
+}
+
+function plannedStepsFromPlan(plan: RemediationPlan, executed?: Partial<RemediationPlan>): string[] {
+	const steps: string[] = []
+	const prefix = executed ? "auto" : "will"
+	if (plan.bootstrapNeeded) {
+		steps.push(`${prefix}-fill bootstrap placeholders in ROADMAP.md at attempt_completion`)
+	}
+	if (plan.validationWasPending || plan.bootstrapNeeded) {
+		steps.push(`${prefix}-validate ROADMAP.md schema at attempt_completion`)
+	}
+	if (plan.mechanicalStaleTouch) {
+		steps.push(`${prefix}-stamp Recent Checkpoint date in ROADMAP.md at attempt_completion`)
+	}
+	return steps
+}
+
+function isAutoClearableOnlyBlock(liveStatus: Record<string, unknown>): boolean {
+	if (liveStatus.kanban_complete_allowed !== false) return false
+	const gate = (liveStatus.roadmap_gate || {}) as Record<string, unknown>
+	const blocking = (gate.blocking_gates || []) as Array<{ id?: string }>
+	if (blocking.length === 0) return false
+	const autoClearable = new Set(["validation_current", "bootstrap_complete"])
+	if (liveStatus.validation_pending && blocking.every((g) => g.id === "validation_current")) {
+		return true
+	}
+	if (blocking.every((g) => g.id && autoClearable.has(g.id))) {
+		return blocking.length <= 2
+	}
+	return false
+}
+
+/** Internal pre-completion remediation — no agent tool or MCP calls. */
+export async function remediateRoadmapGatesInternally(
+	workspace: string,
+	options?: RoadmapCompletionEvaluateOptions,
+): Promise<{ steps: string[]; status: Record<string, unknown> }> {
+	const svc = RoadmapService.getInstance()
+	const cfg = getRoadmapConfig()
+	const plan = await buildRemediationPlan(workspace, options)
+
+	if (options?.dryRun) {
+		const liveStatus = await svc.getOperationalStatus(workspace, "", "light")
+		return { steps: plannedStepsFromPlan(plan), status: liveStatus }
+	}
+
+	const steps: string[] = []
+
+	if (plan.bootstrapNeeded) {
 		try {
 			const filled = await svc.writeBootstrapAutofill(workspace, false)
 			if (filled?.written && (filled.applied_count ?? 0) > 0) {
@@ -50,7 +118,7 @@ export async function remediateRoadmapGatesInternally(
 		}
 	}
 
-	if (validationWasPending || steps.length > 0) {
+	if (plan.validationWasPending || steps.length > 0) {
 		try {
 			await svc.validateRoadmap(workspace)
 			steps.push("auto-validated ROADMAP.md schema")
@@ -61,33 +129,44 @@ export async function remediateRoadmapGatesInternally(
 
 	let liveStatus = await svc.getOperationalStatus(workspace, "", "light")
 
-	if (cfg.warn_on_stale_before_complete) {
-		const gate = (liveStatus.roadmap_gate || {}) as Record<string, unknown>
-		const staleReason = String(gate.stale_reason || "")
-		if (gate.checkpoint_stale && STALE_AUTO_TOUCH_REASONS.has(staleReason)) {
-			try {
-				const touched = await svc.touchRecentCheckpointDate(workspace)
-				if (touched.written) {
-					steps.push("auto-stamped Recent Checkpoint date in ROADMAP.md")
-					await svc.validateRoadmap(workspace)
-					liveStatus = await svc.getOperationalStatus(workspace, "", "light")
-				}
-			} catch {
-				// non-fatal
+	if (plan.mechanicalStaleTouch) {
+		try {
+			const touched = await svc.touchRecentCheckpointDate(workspace)
+			if (touched.written) {
+				steps.push("auto-stamped Recent Checkpoint date in ROADMAP.md")
+				await svc.validateRoadmap(workspace)
+				liveStatus = await svc.getOperationalStatus(workspace, "", "light")
 			}
+		} catch {
+			// non-fatal
 		}
 	}
 
 	return { steps, status: liveStatus }
 }
 
-export async function evaluateRoadmapCompletionBlock(workspace: string): Promise<RoadmapCompletionBlock> {
+export async function evaluateRoadmapCompletionBlock(
+	workspace: string,
+	options?: RoadmapCompletionEvaluateOptions,
+): Promise<RoadmapCompletionBlock> {
 	const cfg = getRoadmapConfig()
 	if (!cfg.enabled) {
 		return { blocked: false }
 	}
 
-	const { steps, status: liveStatus } = await remediateRoadmapGatesInternally(workspace)
+	const { steps, status: liveStatus } = await remediateRoadmapGatesInternally(workspace, options)
+
+	if (options?.dryRun) {
+		if (liveStatus.kanban_complete_allowed === false && isAutoClearableOnlyBlock(liveStatus)) {
+			return {
+				blocked: false,
+				remediationSteps: steps,
+				dryRunAdvisory: true,
+				message: `${AUTO_GOVERNANCE.continueTaskMidPass} Planned: ${steps.join("; ")}.`,
+			}
+		}
+	}
+
 	const remediationNote = formatRemediationNote(steps)
 
 	if (liveStatus.validation_pending) {
@@ -114,7 +193,7 @@ export async function evaluateRoadmapCompletionBlock(workspace: string): Promise
 		}
 	}
 
-	return { blocked: false, remediationSteps: steps.length > 0 ? steps : undefined }
+	return { blocked: false, remediationSteps: steps.length > 0 ? steps : undefined, dryRunAdvisory: options?.dryRun }
 }
 
 /** Kernel-style pre-completion gate — mirrors dietcode require_fresh_checkpoint_before_complete. */

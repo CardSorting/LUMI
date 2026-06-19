@@ -17,6 +17,8 @@ import {
 } from "@shared/audit/gatePolicy"
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@shared/tools"
+import { AUTO_GOVERNANCE } from "@/services/roadmap/RoadmapAutoGovernance"
+import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
 import { parseFocusChainListCounts } from "../focus-chain/utils"
 import type { TaskConfig } from "./types/TaskConfig"
 import type { ToolResponse } from "./types/ToolContracts"
@@ -958,6 +960,10 @@ export function buildCompletionPreflightReadinessBrief(config: TaskConfig): stri
 
 	if (config.auditCompletionGateEnabled) {
 		parts.push("- Audit gate: address critical violations; run tests before completing")
+	}
+
+	if (getRoadmapConfig().enabled) {
+		parts.push(`- Roadmap: ${AUTO_GOVERNANCE.continueTaskMidPass} ${AUTO_GOVERNANCE.noManualValidate}`)
 	}
 
 	parts.push("- Result: 1–2 paragraph summary in result; checklist only in task_progress")

@@ -108,8 +108,10 @@ See [Browser automation](/tools-reference/browser-automation).
 
 | Tool | Description |
 |------|-------------|
-| `roadmap` | Read/update `ROADMAP.md` steering |
+| `roadmap` | Read/update `ROADMAP.md` steering (diagnostics: `cockpit`, `doctor`, `explain_gate`) |
 | `roadmap_checkpoint` | Roadmap validation checkpoint |
+
+Governance remediation (bootstrap autofill, schema validation, checkpoint date stamp) runs **automatically at `attempt_completion`** — agents do not need `roadmap(action='validate')` before completing. See [Roadmap steering](/features/roadmap-steering).
 
 Controlled by VS Code settings `lumi.roadmap.*` in `package.json`.
 

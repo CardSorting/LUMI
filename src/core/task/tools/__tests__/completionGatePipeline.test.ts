@@ -133,6 +133,29 @@ describe("completionGatePipeline", () => {
 		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 	})
 
+	it("evaluateCompletionGateReadinessAsync skips auto-clearable roadmap gates in dry-run", async () => {
+		setRoadmapConfigOverride({ enabled: true, block_kanban_on_bootstrap_incomplete: false })
+		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
+		await fs.writeFile(
+			path.join(tmpDir, ".dietcode", "roadmap-state.json"),
+			JSON.stringify({ validation_pending: true }),
+			"utf8",
+		)
+		await fs.writeFile(path.join(tmpDir, "README.md"), "# Preflight dry-run\n", "utf8")
+		const { bootstrapSkeleton } = await import("@/services/roadmap/RoadmapSchema")
+		const skeleton = bootstrapSkeleton({
+			project_hint: "Preflight dry-run test",
+			anti_goals: "What This Project Must Not Become: drift.",
+		})
+		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), skeleton, "utf8")
+
+		const issues = await evaluateCompletionGateReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
+			result: VALID_RESULT,
+		})
+		issues.some((issue) => issue.stage === "roadmap").should.be.false()
+		setRoadmapConfigOverride(null)
+	})
+
 	it("evaluateCompletionGateReadinessAsync includes roadmap stage when governance blocks", async () => {
 		setRoadmapConfigOverride({ enabled: true })
 		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })

@@ -677,7 +677,7 @@ export class ToolExecutor {
 				const cfg = getRoadmapConfig()
 				if (cfg.enabled && cfg.fail_closed_completion_gates) {
 					const message =
-						"ROADMAP write guard failed — cannot verify write target safely. Run roadmap(action='doctor')."
+						"ROADMAP write guard failed — cannot verify write target safely. Verify workspace root and ROADMAP.md path, then retry the edit."
 					await this.say("error_retry" as any, message)
 					this.taskState.consecutiveMistakeCount++
 					this.pushToolResult(formatResponse.toolError(message), block)

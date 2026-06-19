@@ -14,6 +14,7 @@ export const AUTO_GOVERNANCE = {
 		"Task completion blocked: roadmap gate evaluation failed internally. Verify ROADMAP.md exists and is readable, then retry attempt_completion.",
 	noManualValidate:
 		"Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.",
+	previewBootstrapAutofill: "roadmap(action='apply_bootstrap_fill') — preview only; autofill writes run at attempt_completion.",
 } as const
 
 /** Stale reasons safe to auto-remediate with a checkpoint date stamp (mechanical only). */

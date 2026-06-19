@@ -1,4 +1,5 @@
 import * as path from "path"
+import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
 import { REQUIRED_SECTIONS } from "./RoadmapSchema"
 
 export const OPERATOR_PLAYBOOK = `
@@ -25,9 +26,9 @@ Roadmap autonomous loop (agents)
 
 1. roadmap(action='guide')       — phase, health, steering_line, project_steering_digest, _roadmap_operator_hints
 2. roadmap(action='checkpoint')  — evidence bundle + bootstrap_fill_plan when placeholders remain
-3. roadmap(action='apply_bootstrap_fill') — preview/write per-project evidence autofill
+3. roadmap(action='apply_bootstrap_fill') — preview evidence autofill (writes run at attempt_completion)
 4. Edit ROADMAP.md at workspace root only
-5. Validation is automatic       — schema is checked automatically at attempt_completion and on roadmap actions
+5. Governance at attempt_completion — bootstrap autofill, schema validation, and checkpoint date stamp run internally
 6. roadmap(action='explain_gate') — optional diagnostic when schema issues are unclear
 7. roadmap(action='explain_stale') — optional diagnostic when checkpoint freshness vs git activity is unclear
 8. Return Required Final Assistant Response summary (not the full file)
@@ -82,8 +83,8 @@ export function determinePhase(params: {
 	if (params.validation_valid === false) {
 		return {
 			phase: "validate_pending",
-			operator_summary: "ROADMAP.md failed schema validation — repair before next checkpoint.",
-			agent_next_call: "roadmap(action='explain_gate') then fix reported issues",
+			operator_summary: "ROADMAP.md failed schema validation — repair sections; validation runs at attempt_completion.",
+			agent_next_call: "roadmap(action='explain_gate') then fix reported issues in ROADMAP.md",
 			agent_blocked: false,
 		}
 	}
@@ -100,7 +101,7 @@ export function determinePhase(params: {
 			phase: "bootstrap_fill",
 			operator_summary:
 				"Bootstrap template phrases remain — autofill runs at attempt_completion; preview with roadmap(action='apply_bootstrap_fill').",
-			agent_next_call: "roadmap(action='apply_bootstrap_fill')",
+			agent_next_call: AUTO_GOVERNANCE.previewBootstrapAutofill,
 			agent_blocked: false,
 		}
 	}
@@ -161,14 +162,14 @@ export function recommendNextAction(params: {
 	if (params.validation_pending) {
 		return {
 			action: "auto_validate",
-			command: "roadmap(action='cockpit')",
-			detail: "ROADMAP.md mutated — validation runs automatically at attempt_completion.",
+			command: AUTO_GOVERNANCE.continueTaskMidPass,
+			detail: AUTO_GOVERNANCE.continueTaskMidPass,
 		}
 	}
 	if (params.bootstrap_incomplete || params.phase === "bootstrap_fill") {
 		return {
 			action: "auto_bootstrap_fill",
-			command: "roadmap(action='apply_bootstrap_fill')",
+			command: AUTO_GOVERNANCE.previewBootstrapAutofill,
 			detail: "Bootstrap autofill runs automatically at attempt_completion; preview replacements if needed.",
 		}
 	}
@@ -183,7 +184,7 @@ export function recommendNextAction(params: {
 		return {
 			action: "explain_gate",
 			command: "roadmap(action='explain_gate')",
-			detail: "Schema gate closed — review closed gates, fix ROADMAP.md, then validate.",
+			detail: "Schema gate closed — review closed gates and fix ROADMAP.md; validation runs at attempt_completion.",
 		}
 	}
 	if (params.stale) {
@@ -210,7 +211,7 @@ export function recommendNextAction(params: {
 	if (params.phase === "validate_pending") {
 		return {
 			action: "auto_validate",
-			command: "roadmap(action='cockpit')",
+			command: AUTO_GOVERNANCE.continueTaskMidPass,
 			detail: "Schema validation runs automatically at attempt_completion — repair ROADMAP.md if issues remain.",
 		}
 	}
