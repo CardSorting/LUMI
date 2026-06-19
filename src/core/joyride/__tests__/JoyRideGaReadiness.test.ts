@@ -40,6 +40,31 @@ describe("JoyRide GA readiness", () => {
 		assert.include(doc, "do not import JoyRide internals")
 	})
 
+	it("should include package documentation suite", () => {
+		const docsDir = path.join(__dirname, "../docs")
+		const required = [
+			"README.md",
+			"BRIEF.md",
+			"PHILOSOPHY.md",
+			"WHITEPAPER.md",
+			"CACHING.md",
+			"API.md",
+			"GLOSSARY.md",
+			"TROUBLESHOOTING.md",
+		]
+		for (const file of required) {
+			assert.isTrue(fs.existsSync(path.join(docsDir, file)), `missing docs/${file}`)
+		}
+		assert.isTrue(fs.existsSync(path.join(__dirname, "../README.md")), "missing package README.md")
+	})
+
+	it("should cross-link documentation hub from package README", () => {
+		const readme = fs.readFileSync(path.join(__dirname, "../README.md"), "utf8")
+		assert.include(readme, "docs/README.md")
+		assert.include(readme, "docs/CACHING.md")
+		assert.include(readme, "docs/TROUBLESHOOTING.md")
+	})
+
 	it("should include release notes", () => {
 		const notes = path.join(__dirname, "../../../../docs/features/joyride-release-notes.mdx")
 		assert.isTrue(fs.existsSync(notes), "missing joyride-release-notes.mdx")
