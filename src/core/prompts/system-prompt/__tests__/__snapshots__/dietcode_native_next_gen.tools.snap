@@ -495,18 +495,18 @@
     "type": "function",
     "function": {
       "name": "roadmap",
-      "description": "Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — no manual validate step. Responses include project_identity_line, _roadmap_operator_hints, agent_playbook, and recommended_next_action.",
+      "description": "Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — roadmap(action='validate') is diagnostic only. Responses include project_identity_line, governance_policy, _roadmap_operator_hints, agent_playbook, and recommended_next_action.",
       "strict": false,
       "parameters": {
         "type": "object",
         "properties": {
           "action": {
             "type": "string",
-            "description": "Roadmap action. One of: guide | status | cockpit | checkpoint | validate | doctor | template | apply_bootstrap_fill | explain_gate | explain_stale | evidence | progress | watch | last_error."
+            "description": "Roadmap action. One of: guide | status | explain_gate | explain_stale | progress | watch | checkpoint | doctor | template | apply_bootstrap_fill | validate (diagnostic) | cockpit | evidence | last_error."
           },
           "context": {
             "type": "string",
-            "description": "Optional context — e.g. 'write' for apply_bootstrap_fill, 'digest' or 'compact' for slim checkpoint, 'stale refresh' for checkpoint, '--current' or '--tail' for progress."
+            "description": "Optional context — preview-only for apply_bootstrap_fill (writes run at attempt_completion); 'digest' or 'compact' for slim checkpoint; 'stale refresh' for checkpoint; '--current' or '--tail' for progress."
           },
           "user_request": {
             "type": "string",
@@ -535,7 +535,7 @@
         "properties": {
           "context": {
             "type": "string",
-            "description": "Optional checkpoint context (e.g. 'stale refresh', 'coherence recovery', 'apply autofill write')."
+            "description": "Optional checkpoint context (e.g. 'stale refresh', 'coherence recovery', 'repair schema')."
           },
           "user_request": {
             "type": "string",

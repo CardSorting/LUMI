@@ -79,20 +79,22 @@ ROADMAP.md at the workspace root is the long-horizon steering surface — not a 
 **Health:** unknown
 **Prime directive:** Did the latest work strengthen or weaken the project's center of gravity?
 
-**Auto-governance at completion:** Bootstrap autofill runs automatically at attempt_completion. Schema validation runs automatically at attempt_completion. Missing Recent Checkpoint dates are auto-stamped at attempt_completion. Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.
+**Governance policy:** Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.
+
+**Auto-governance at completion:** Bootstrap autofill runs automatically at attempt_completion. Schema validation runs automatically at attempt_completion. Missing Recent Checkpoint dates are auto-stamped at attempt_completion.
 
 **Mid-task guidance:** Schema validation runs automatically at attempt_completion.
 
-**Recommended next call:** roadmap(action='explain_gate') then fix reported issues
+**Recommended next call:** roadmap(action='explain_gate') then fix reported issues in ROADMAP.md
 
 Tool actions (optional — governance is internal at `attempt_completion`):
-- `/roadmap cockpit` — operator one-screen summary
-- `/roadmap doctor` — production health checks
-- `/roadmap explain-gate` / `/roadmap explain-stale` — diagnostics when blocked
-- `roadmap(action='guide')` — phase, gates, steering digest
+- `/roadmap guide`
+- `/roadmap explain-gate`
+- `/roadmap explain-stale`
+- `/roadmap progress --current`
+- `/roadmap cockpit`
 - `roadmap(action='checkpoint')` — full evidence before major direction changes
 - `roadmap(action='apply_bootstrap_fill')` — preview evidence autofill (write runs automatically at completion)
-- `roadmap(action='progress', context='--current')` — gate snapshot + recent activity
 
 If `attempt_completion` is blocked by roadmap gates, edit ROADMAP.md per the gate message — do not call validate or MCP for governance.
 

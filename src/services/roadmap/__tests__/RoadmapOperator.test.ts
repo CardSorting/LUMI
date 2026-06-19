@@ -77,6 +77,7 @@ describe("RoadmapOperator", () => {
 				schema_valid: false,
 			})
 			assert.match(report, /attempt_completion blocked/)
+			assert.match(report, /edit:/)
 			assert.doesNotMatch(report, /roadmap\(action='validate'\)/)
 		})
 

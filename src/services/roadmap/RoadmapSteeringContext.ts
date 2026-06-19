@@ -3,7 +3,7 @@
  * One bundle for agents, operators, and progress snapshots.
  */
 import * as path from "path"
-import { midTaskAgentNextCall } from "./RoadmapAutoGovernance"
+import { governanceFieldsFromStatus, midTaskAgentNextCall } from "./RoadmapAutoGovernance"
 import { recommendNextAction } from "./RoadmapOperator"
 import { RoadmapService } from "./RoadmapService"
 
@@ -102,6 +102,10 @@ export async function buildSteeringContext(workspace: string): Promise<Record<st
 		phase: status.phase,
 		agent_next_call: agentNextCall,
 		recommended_next_action: status.recommended_next_action,
+		...governanceFieldsFromStatus({
+			auto_clearable_governance_only: !!status.auto_clearable_governance_only,
+			validation_pending: !!status.validation_pending,
+		}),
 		...fp,
 	}
 }

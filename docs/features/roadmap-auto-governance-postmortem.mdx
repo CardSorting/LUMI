@@ -230,6 +230,41 @@ Governance copy still drifted across completion playbooks, session brief, operat
 - Bootstrap-fill `agent_next_call` / `recommendNextAction` → `continueTaskMidPass` (preview optional in detail)
 - `roadmapToolCommandToSlash` defaults to `/roadmap guide` not cockpit
 
+## Pass 9 — deduplicated steering signals + validate as diagnostic-only
+
+### Problem
+
+Steering block, watch line, and validate/bootstrap responses still duplicated warnings (validation_pending + bootstrap + gate line) when governance was auto-clearable — agents saw triple ⚠️ signals. `roadmap(action='validate')` and bootstrap fill plan still returned `apply_bootstrap_fill` as primary `agent_next_call`. Doctor always dumped full explain-gate report for auto-clearable states.
+
+### Fix
+
+- `isAutoClearableBrief()` — brief-level helper; steering block suppresses redundant warnings when auto-clearable
+- `formatWatchSteeringLine` — `ℹ️gov` instead of `⚠️pending` / `⛔gates` when auto-clearable
+- System prompt uses `ROADMAP_DIAGNOSTIC_SLASH_COMMANDS` (guide-first) + explicit `governance_policy` line
+- `validateRoadmap` payload: `governance_diagnostic: true`, `validateDiagnosticOnly` copy, `continueTaskMidPass` as next call
+- `buildBootstrapFillPlan`, template brief, autofill dry-run preview → `continueTaskMidPass` (preview as optional `preview_command`)
+- `buildOperationalPayload` includes `governance_policy` on every status response
+- Error envelopes include `governance_policy`
+- Doctor uses `formatKanbanGateStatusLine` before heavy explain-gate dump
+- Task breather uses `AUTO_GOVERNANCE.roadmapGateRecoveryHint`
+
+## Pass 10 — governance on every surface + unified gate edit copy
+
+### Problem
+
+`governance_policy` was missing from progress snapshots and steering context. Gate explain reports used raw `fix:` strings that could drift from `GATE_EDIT_INSTRUCTIONS`. Checkpoint agent instructions and autofill draft copy still elevated preview commands. Tool spec listed `validate` and `cockpit` before `guide`.
+
+### Fix
+
+- `mergeGovernanceFields()` — spreads policy/mid-task fields onto progress snapshots and steering context
+- `formatExplainGateReport` + `RoadmapGateCatalog` closed gates use `gateEditInstruction()` (`edit:` not ad-hoc `fix:`)
+- `AGENT_PLAYBOOK` reordered — continue task at step 2; checkpoint/preview optional
+- Checkpoint `agent_instructions` bootstrap_fill aligned with `continueTaskMidPass`
+- `applyBootstrapFillDraft` no-autofill summary avoids mandating preview command
+- `/roadmap validate` slash output includes `validateDiagnosticOnly`
+- Tool spec: guide-first action list; `validate` labeled diagnostic; description mentions `governance_policy`
+- Pre-completion brief uses single `governancePolicy` line
+
 ## Files touched (reference)
 
 | Area | Key files |

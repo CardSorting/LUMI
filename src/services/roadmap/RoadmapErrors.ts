@@ -17,6 +17,7 @@ export interface RoadmapErrorEnvelope {
 	suggested_slash_command: string
 	_roadmap_error_envelope?: boolean
 	_roadmap_operator_hints: Record<string, unknown>
+	governance_policy?: string
 }
 
 const RECOVERY_BY_CODE: Record<string, string> = {
@@ -90,6 +91,7 @@ export function errorEnvelope(params: {
 		diagnostic_command: diagnostic,
 		operator_action: operatorAction,
 		suggested_slash_command: slash.startsWith("/roadmap") ? slash : "/roadmap guide",
+		governance_policy: AUTO_GOVERNANCE.governancePolicy,
 		_roadmap_error_envelope: true,
 		_roadmap_operator_hints: {
 			...hints,

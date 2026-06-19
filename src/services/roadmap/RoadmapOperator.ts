@@ -2,6 +2,7 @@ import * as path from "path"
 import {
 	AUTO_GOVERNANCE,
 	formatKanbanGateStatusLine,
+	gateEditInstruction,
 	isAutoClearableGovernanceOnly,
 	ROADMAP_DIAGNOSTIC_SLASH_COMMANDS,
 } from "./RoadmapAutoGovernance"
@@ -31,10 +32,10 @@ export const AGENT_PLAYBOOK = `
 Roadmap autonomous loop (agents)
 
 1. roadmap(action='guide')       — phase, health, steering_line, project_steering_digest, _roadmap_operator_hints
-2. roadmap(action='checkpoint')  — evidence bundle + bootstrap_fill_plan when placeholders remain
-3. roadmap(action='apply_bootstrap_fill') — preview evidence autofill (writes run at attempt_completion)
-4. Edit ROADMAP.md at workspace root only
-5. Governance at attempt_completion — bootstrap autofill, schema validation, and checkpoint date stamp run internally
+2. Continue the task — governance (validate, bootstrap autofill, checkpoint date) runs at attempt_completion
+3. Edit ROADMAP.md at workspace root only when steering content needs updates
+4. roadmap(action='checkpoint')  — optional: evidence bundle before major direction changes
+5. roadmap(action='apply_bootstrap_fill') — optional preview only (writes run at attempt_completion)
 6. roadmap(action='explain_gate') — optional diagnostic when schema issues are unclear
 7. roadmap(action='explain_stale') — optional diagnostic when checkpoint freshness vs git activity is unclear
 8. Return Required Final Assistant Response summary (not the full file)
@@ -279,8 +280,10 @@ export function formatExplainGateReport(params: {
 			lines.push("")
 			for (const item of closed) {
 				const mark = item.blocks_kanban_complete ? "⚠️ " : "• "
+				const gateId = String(item.id || "")
+				const edit = gateEditInstruction(gateId, String(item.fix || ""))
 				lines.push(`${mark}${item.label}: ${item.why}`)
-				lines.push(`   fix: ${item.fix}`)
+				lines.push(`   edit: ${edit}`)
 			}
 		} else {
 			lines.push("✅ All roadmap steering gates open")

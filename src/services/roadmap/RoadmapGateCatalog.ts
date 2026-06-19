@@ -1,3 +1,4 @@
+import { gateEditInstruction } from "./RoadmapAutoGovernance"
 import type { RoadmapConfig } from "./RoadmapConfig"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import type { RoadmapValidation } from "./RoadmapSchema"
@@ -178,7 +179,7 @@ export function evaluateGateChecks(inputs: GateInputs): { closed: GateClosedEntr
 			id: check.id,
 			label: check.label,
 			why,
-			fix,
+			fix: gateEditInstruction(check.id, fix),
 			safe_to_apply: check.safe,
 			blocks_kanban_complete: check.blocksKanbanComplete,
 		})

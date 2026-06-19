@@ -79,20 +79,22 @@ ROADMAP.md at the workspace root is the long-horizon steering surface — not a 
 **Health:** unknown
 **Prime directive:** Did the latest work strengthen or weaken the project's center of gravity?
 
-**Auto-governance at completion:** Bootstrap autofill runs automatically at attempt_completion. Schema validation runs automatically at attempt_completion. Missing Recent Checkpoint dates are auto-stamped at attempt_completion. Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.
+**Governance policy:** Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.
+
+**Auto-governance at completion:** Bootstrap autofill runs automatically at attempt_completion. Schema validation runs automatically at attempt_completion. Missing Recent Checkpoint dates are auto-stamped at attempt_completion.
 
 **Mid-task guidance:** Schema validation runs automatically at attempt_completion.
 
-**Recommended next call:** roadmap(action='explain_gate') then fix reported issues
+**Recommended next call:** roadmap(action='explain_gate') then fix reported issues in ROADMAP.md
 
 Tool actions (optional — governance is internal at `attempt_completion`):
-- `/roadmap cockpit` — operator one-screen summary
-- `/roadmap doctor` — production health checks
-- `/roadmap explain-gate` / `/roadmap explain-stale` — diagnostics when blocked
-- `roadmap(action='guide')` — phase, gates, steering digest
+- `/roadmap guide`
+- `/roadmap explain-gate`
+- `/roadmap explain-stale`
+- `/roadmap progress --current`
+- `/roadmap cockpit`
 - `roadmap(action='checkpoint')` — full evidence before major direction changes
 - `roadmap(action='apply_bootstrap_fill')` — preview evidence autofill (write runs automatically at completion)
-- `roadmap(action='progress', context='--current')` — gate snapshot + recent activity
 
 If `attempt_completion` is blocked by roadmap gates, edit ROADMAP.md per the gate message — do not call validate or MCP for governance.
 
@@ -329,10 +331,10 @@ Usage:
 </attempt_completion>
 
 ## roadmap
-Description: Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — no manual validate step. Responses include project_identity_line, _roadmap_operator_hints, agent_playbook, and recommended_next_action.
+Description: Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — roadmap(action='validate') is diagnostic only. Responses include project_identity_line, governance_policy, _roadmap_operator_hints, agent_playbook, and recommended_next_action.
 Parameters:
-- action: (required) Roadmap action. One of: guide | status | cockpit | checkpoint | validate | doctor | template | apply_bootstrap_fill | explain_gate | explain_stale | evidence | progress | watch | last_error.
-- context: (optional) Optional context — e.g. 'write' for apply_bootstrap_fill, 'digest' or 'compact' for slim checkpoint, 'stale refresh' for checkpoint, '--current' or '--tail' for progress.
+- action: (required) Roadmap action. One of: guide | status | explain_gate | explain_stale | progress | watch | checkpoint | doctor | template | apply_bootstrap_fill | validate (diagnostic) | cockpit | evidence | last_error.
+- context: (optional) Optional context — preview-only for apply_bootstrap_fill (writes run at attempt_completion); 'digest' or 'compact' for slim checkpoint; 'stale refresh' for checkpoint; '--current' or '--tail' for progress.
 - user_request: (optional) Optional user request text to include in checkpoint briefing.
 - task_progress: (optional) A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)
 Usage:
@@ -346,7 +348,7 @@ Usage:
 ## roadmap_checkpoint
 Description: Alias for roadmap(action='checkpoint') — full evidence bundle and checkpoint algorithm before editing ROADMAP.md.
 Parameters:
-- context: (optional) Optional checkpoint context (e.g. 'stale refresh', 'coherence recovery', 'apply autofill write').
+- context: (optional) Optional checkpoint context (e.g. 'stale refresh', 'coherence recovery', 'repair schema').
 - user_request: (optional) Optional user request text for the checkpoint pass.
 - task_progress: (optional) A checklist showing task progress after this tool use is completed. The task_progress parameter must be included as a separate parameter inside of the parent tool call, it must be separate from other parameters such as content, arguments, etc. (See 'UPDATING TASK PROGRESS' section for more details)
 Usage:

@@ -548,7 +548,7 @@ export const COMPLETION_PREFLIGHT_STAGE_HINTS: Partial<Record<CompletionPrefligh
 	cooldown: "Wait for backoff before retrying after a gate block",
 	duplicate: "Change result or workspace before re-submitting",
 	demo_command: "Demo must run real behavior — not echo/cat",
-	roadmap: "Edit ROADMAP.md for real blockers — validation/bootstrap/checkpoint auto-run at attempt_completion",
+	roadmap: AUTO_GOVERNANCE.roadmapGateRecoveryHint,
 	audit: "Fix critical audit violations and re-verify",
 	double_check: "Re-verify checklist, then call attempt_completion again",
 }
@@ -976,7 +976,7 @@ export function buildCompletionPreflightReadinessBrief(config: TaskConfig): stri
 	}
 
 	if (getRoadmapConfig().enabled) {
-		parts.push(`- Roadmap: ${AUTO_GOVERNANCE.continueTaskMidPass} ${AUTO_GOVERNANCE.noManualValidate}`)
+		parts.push(`- Roadmap: ${AUTO_GOVERNANCE.governancePolicy}`)
 	}
 
 	parts.push("- Result: 1–2 paragraph summary in result; checklist only in task_progress")

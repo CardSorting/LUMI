@@ -39,7 +39,11 @@ Mid-task (before completion), agents should **continue working**. The system pro
 
 **Mid-task `validation_pending`:** After ROADMAP.md edits, workspace state marks `validation_pending: true`. Status reads (`guide`, `cockpit`, write hints) **do not** auto-validate — agents continue working until `attempt_completion` runs internal remediation.
 
-**Mid-task gate display:** When only auto-clearable gates are closed (`validation_pending`, bootstrap placeholders), steering surfaces show an informational note — not **⛔ attempt_completion blocked** — so agents are not pushed into validate/cockpit loops.
+**Mid-task gate display:** When only auto-clearable gates are closed (`validation_pending`, bootstrap placeholders), steering surfaces show a single informational note — not **⛔ attempt_completion blocked** and not stacked ⚠️ warnings — so agents are not pushed into validate/cockpit loops. The environment block includes an explicit **governance policy** line.
+
+**Validate / bootstrap preview:** `roadmap(action='validate')` and `apply_bootstrap_fill` (preview mode) are **diagnostics only** — responses use `continueTaskMidPass` as the primary next call; autofill writes run at `attempt_completion`.
+
+**Gate recovery copy:** Closed gates use per-gate `edit:` instructions from `GATE_EDIT_INSTRUCTIONS` (explain-gate, completion recovery XML, gate catalog) — file-action-first, not tool loops.
 
 <Note>
   Optional diagnostics remain available: `/roadmap cockpit`, `/roadmap explain-gate`, `/roadmap explain-stale`, `roadmap(action='doctor')`. Use these for visibility — not as a required validate loop before every completion attempt.

@@ -7,8 +7,10 @@ import {
 	formatRemediationNote,
 	gateEditInstruction,
 	governanceFieldsFromStatus,
+	isAutoClearableBrief,
 	isAutoClearableGovernanceOnly,
 	journalFollowupForMutation,
+	mergeGovernanceFields,
 	midTaskAgentNextCall,
 	STALE_AUTO_TOUCH_REASONS,
 } from "../RoadmapAutoGovernance"
@@ -53,6 +55,13 @@ describe("RoadmapAutoGovernance", () => {
 		const bootstrap = journalFollowupForMutation(true)
 		assert.match(bootstrap, /bootstrap/i)
 		assert.doesNotMatch(bootstrap, /roadmap\(action=/)
+	})
+
+	it("mergeGovernanceFields spreads policy onto payloads", () => {
+		const merged = mergeGovernanceFields({ workspace: "/tmp" }, { validation_pending: true })
+		assert.strictEqual(merged.workspace, "/tmp")
+		assert.strictEqual(merged.governance_policy, AUTO_GOVERNANCE.governancePolicy)
+		assert.ok(merged.governance_mid_task)
 	})
 
 	it("midTaskAgentNextCall avoids validate loops when pending", () => {
@@ -126,6 +135,19 @@ describe("RoadmapAutoGovernance", () => {
 		}
 		assert.match(AUTO_GOVERNANCE.noManualValidate, /Do not call roadmap\(action='validate'\)/)
 		assert.strictEqual(AUTO_GOVERNANCE.governancePolicy, AUTO_GOVERNANCE.noManualValidate)
+	})
+
+	it("isAutoClearableBrief reads brief flag or derives from gates", () => {
+		assert.strictEqual(isAutoClearableBrief({ auto_clearable_governance_only: true }), true)
+		assert.strictEqual(
+			isAutoClearableBrief({
+				kanban_complete_allowed: false,
+				validation_pending: true,
+				schema_valid: true,
+				roadmap_gate: { blocking_gates: [{ id: "validation_current" }] },
+			}),
+			true,
+		)
 	})
 
 	it("governanceFieldsFromStatus exposes policy and mid-task note", () => {

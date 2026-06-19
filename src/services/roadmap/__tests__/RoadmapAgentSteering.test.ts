@@ -43,15 +43,19 @@ describe("RoadmapAgentSteering", () => {
 		assert.match(block, /automatically/)
 	})
 
-	it("formats compact watch line", () => {
+	it("formats compact watch line for auto-clearable governance", () => {
 		const line = formatWatchSteeringLine({
 			project_identity_line: "My App",
 			phase: "checkpoint",
 			validation_pending: true,
 			kanban_complete_allowed: false,
-			agent_next_call: "roadmap(action='cockpit')",
+			schema_valid: true,
+			auto_clearable_governance_only: true,
+			agent_next_call: AUTO_GOVERNANCE.continueTaskMidPass,
 		})
 		assert.match(line, /\[roadmap\]/)
-		assert.match(line, /pending/)
+		assert.match(line, /ℹ️gov/)
+		assert.doesNotMatch(line, /⛔gates/)
+		assert.doesNotMatch(line, /⚠️pending/)
 	})
 })

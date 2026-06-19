@@ -1844,9 +1844,9 @@ export class RoadmapService {
 			project_brief: fp.steering_brief || fp.steering_identity || "",
 			operator_summary:
 				tasks.length > 0
-					? `${tasks.length} template phrase(s) remain — use tasks[].suggested_replacement from project evidence.`
+					? `${tasks.length} template phrase(s) remain — autofill runs at attempt_completion. Optional preview: ${AUTO_GOVERNANCE.previewBootstrapAutofill}`
 					: "Bootstrap fill complete — no template phrases detected.",
-			agent_next_call: tasks.length > 0 ? AUTO_GOVERNANCE.previewBootstrapAutofill : AUTO_GOVERNANCE.continueTaskMidPass,
+			agent_next_call: AUTO_GOVERNANCE.continueTaskMidPass,
 		}
 	}
 
@@ -1874,7 +1874,7 @@ export class RoadmapService {
 			operator_summary:
 				applied.length > 0
 					? `Applied ${applied.length} evidence-backed replacement(s); ${remaining.length} template phrase(s) remain.`
-					: `No autofill applied — ${remaining.length} template phrase(s) remain — ${AUTO_GOVERNANCE.previewBootstrapAutofill}`,
+					: `${remaining.length} template phrase(s) remain — ${AUTO_GOVERNANCE.bootstrapAtCompletion}`,
 		}
 	}
 
@@ -2056,6 +2056,7 @@ export class RoadmapService {
 				schemaValid: validation.valid,
 				blockingGates: (gateState.blocking_gates || []) as Array<{ id?: string }>,
 			}),
+			governance_policy: AUTO_GOVERNANCE.governancePolicy,
 		}
 
 		if (userRequest.trim()) {
@@ -2131,7 +2132,7 @@ export class RoadmapService {
 			const applied = await this.writeBootstrapAutofill(workspace, false)
 			payload.bootstrap_autofill_applied = applied
 			if (applied.written) {
-				payload.operator_summary = applied.operator_summary
+				payload.operator_summary = `${applied.operator_summary || "Bootstrap autofill applied."} ${AUTO_GOVERNANCE.validationAtCompletion}`
 				payload.agent_next_call = AUTO_GOVERNANCE.continueTaskMidPass
 				invalidateRoadmapWorkspaceCache(workspace)
 				const refreshed = await this.resolveWorkspaceContext(workspace, "full")
@@ -2286,14 +2287,16 @@ export class RoadmapService {
 				validation.valid && bootstrap_complete
 					? "ROADMAP.md passes schema validation."
 					: validation.valid
-						? "ROADMAP.md passes schema but unfilled bootstrap template text remains — apply evidence autofill."
+						? `ROADMAP.md passes schema but unfilled bootstrap template text remains — ${AUTO_GOVERNANCE.bootstrapAtCompletion} Optional preview: ${AUTO_GOVERNANCE.previewBootstrapAutofill}`
 						: "ROADMAP.md has schema errors — fix before treating checkpoint as complete.",
 			agent_next_call:
 				validation.valid && bootstrap_complete
-					? "Return Required Final Assistant Response summary."
+					? AUTO_GOVERNANCE.continueTaskMidPass
 					: validation.valid
-						? AUTO_GOVERNANCE.previewBootstrapAutofill
+						? AUTO_GOVERNANCE.continueTaskMidPass
 						: "Fix validation issues in ROADMAP.md.",
+			governance_diagnostic: true,
+			diagnostic_note: AUTO_GOVERNANCE.validateDiagnosticOnly,
 		}
 
 		if (bootstrap_inc && validation.valid) {
@@ -2325,8 +2328,7 @@ export class RoadmapService {
 			},
 			operator_summary:
 				"Evidence-driven skeleton — write to ROADMAP.md; autofill and validation run at attempt_completion.",
-			agent_next_call:
-				"Write skeleton to ROADMAP.md, then continue the task — preview autofill with roadmap(action='apply_bootstrap_fill') if needed.",
+			agent_next_call: AUTO_GOVERNANCE.continueTaskMidPass,
 		}
 
 		const fill_plan = this.buildBootstrapFillPlan(skeleton, evidence)
@@ -2367,7 +2369,8 @@ export class RoadmapService {
 			payload.agent_next_call = (validated.recommended_next_action || {}).command || AUTO_GOVERNANCE.continueTaskMidPass
 		} else if (dryRun) {
 			payload.operator_summary = result.operator_summary || "Autofill preview — writes run at attempt_completion."
-			payload.agent_next_call = AUTO_GOVERNANCE.previewBootstrapAutofill
+			payload.agent_next_call = AUTO_GOVERNANCE.continueTaskMidPass
+			payload.preview_command = AUTO_GOVERNANCE.previewBootstrapAutofill
 		}
 
 		const evidence = await this.gatherEvidence(workspace, null, "light")
@@ -2945,11 +2948,9 @@ function agentInstructions(phase: string, evidence: any): string[] {
 	} else if (phase === "validate_pending") {
 		instructions.push("Repair ROADMAP.md schema issues — validation runs automatically at attempt_completion.")
 	} else if (phase === "bootstrap_fill") {
+		instructions.push(AUTO_GOVERNANCE.bootstrapAtCompletion)
 		instructions.push(
-			"Bootstrap autofill runs automatically at attempt_completion; preview replacements with roadmap(action='apply_bootstrap_fill').",
-		)
-		instructions.push(
-			"Use bootstrap_fill_plan.tasks — each template_phrase maps to suggested_replacement from project_fingerprint and evidence.",
+			`Optional preview: ${AUTO_GOVERNANCE.previewBootstrapAutofill}. Use bootstrap_fill_plan.tasks for evidence-backed replacements.`,
 		)
 	} else {
 		instructions.push("Update Recent Checkpoint (section 11) — replace the previous checkpoint with today's pass only.")

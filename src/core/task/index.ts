@@ -2667,9 +2667,10 @@ export class Task {
 				const lastReason = this.taskState.lastCompletionBlockReason as
 					| import("./tools/attemptCompletionUtils").CompletionPreflightReason
 					| undefined
+				const { AUTO_GOVERNANCE } = await import("@/services/roadmap/RoadmapAutoGovernance")
 				const roadmapNote =
 					lastReason === "roadmap_gate"
-						? " Edit ROADMAP.md per gate guidance — governance auto-remediates at attempt_completion."
+						? ` ${AUTO_GOVERNANCE.roadmapGateRecoveryHint}`
 						: " Fix audit/roadmap violations in the workspace first,"
 				breatherText += `\n\n⛔ **Completion gate pressure:** attempt_completion was blocked ${completionGateBlocks} time(s) this task. Do not retry with the same summary —${roadmapNote} verify with tests or commands, then call attempt_completion with an updated result.`
 				const {

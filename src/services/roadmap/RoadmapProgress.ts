@@ -2,7 +2,12 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import { formatWatchSteeringLine } from "./RoadmapAgentSteering"
-import { AUTO_GOVERNANCE, formatKanbanGateStatusLine, isAutoClearableGovernanceOnly } from "./RoadmapAutoGovernance"
+import {
+	AUTO_GOVERNANCE,
+	formatKanbanGateStatusLine,
+	isAutoClearableGovernanceOnly,
+	mergeGovernanceFields,
+} from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { recommendNextAction } from "./RoadmapOperator"
 
@@ -254,7 +259,7 @@ export async function formatProgressReport(params: {
 	}
 
 	lines.push("")
-	lines.push("Live: /roadmap watch | progress --current | progress --timeline | explain-gate")
+	lines.push(`Live: /roadmap guide | watch | progress --current | explain-gate`)
 	return lines.join("\n")
 }
 
@@ -287,39 +292,45 @@ export async function buildProgressSnapshot(workspace: string): Promise<Record<s
 			last_error: lastErr,
 		})
 
-	return {
-		success: true,
-		ok: true,
-		workspace,
-		roadmap_path: steering.roadmap_path || path.join(workspace, "ROADMAP.md"),
-		bootstrap_complete: steering.bootstrap_complete ?? status.bootstrap_complete,
-		bootstrap_placeholder_count: steering.bootstrap_placeholder_count ?? status.bootstrap_placeholder_count,
-		current: current || null,
-		current_path: progressCurrentPath(),
-		jsonl_path: progressJsonlPath(),
-		current_exists: current != null,
-		workspace_state: wsState || null,
-		roadmap_gate: gate,
-		kanban_complete_allowed: status.kanban_complete_allowed,
-		validation_pending: status.validation_pending,
-		schema_valid: status.schema_valid,
-		auto_clearable_governance_only: isAutoClearableGovernanceOnly({
-			kanbanCompleteAllowed: status.kanban_complete_allowed as boolean | undefined,
-			validationPending: !!status.validation_pending,
-			schemaValid: status.schema_valid as boolean | null | undefined,
-			blockingGates: (gate.blocking_gates || []) as Array<{ id?: string }>,
-		}),
-		recommended_next_action: nextRec,
-		steering_identity: steering.steering_identity,
-		steering_brief: steering.steering_brief || status.steering_brief,
-		project_archetype: steering.project_archetype || status.project_archetype,
-		stack_summary: steering.stack_summary || status.stack_summary,
-		project_identity_line: status.project_identity_line,
-		project_steering_digest: status.project_steering_digest,
-		last_error: lastErr,
-		recent_events: summarizeRecentEvents(await readProgressTail(5)),
-		phase: status.phase,
-	}
+	return mergeGovernanceFields(
+		{
+			success: true,
+			ok: true,
+			workspace,
+			roadmap_path: steering.roadmap_path || path.join(workspace, "ROADMAP.md"),
+			bootstrap_complete: steering.bootstrap_complete ?? status.bootstrap_complete,
+			bootstrap_placeholder_count: steering.bootstrap_placeholder_count ?? status.bootstrap_placeholder_count,
+			current: current || null,
+			current_path: progressCurrentPath(),
+			jsonl_path: progressJsonlPath(),
+			current_exists: current != null,
+			workspace_state: wsState || null,
+			roadmap_gate: gate,
+			kanban_complete_allowed: status.kanban_complete_allowed,
+			validation_pending: status.validation_pending,
+			schema_valid: status.schema_valid,
+			auto_clearable_governance_only: isAutoClearableGovernanceOnly({
+				kanbanCompleteAllowed: status.kanban_complete_allowed as boolean | undefined,
+				validationPending: !!status.validation_pending,
+				schemaValid: status.schema_valid as boolean | null | undefined,
+				blockingGates: (gate.blocking_gates || []) as Array<{ id?: string }>,
+			}),
+			recommended_next_action: nextRec,
+			steering_identity: steering.steering_identity,
+			steering_brief: steering.steering_brief || status.steering_brief,
+			project_archetype: steering.project_archetype || status.project_archetype,
+			stack_summary: steering.stack_summary || status.stack_summary,
+			project_identity_line: status.project_identity_line,
+			project_steering_digest: status.project_steering_digest,
+			last_error: lastErr,
+			recent_events: summarizeRecentEvents(await readProgressTail(5)),
+			phase: status.phase,
+		},
+		{
+			auto_clearable_governance_only: !!status.auto_clearable_governance_only,
+			validation_pending: !!status.validation_pending,
+		},
+	)
 }
 
 export async function clearLastError(): Promise<void> {

@@ -169,6 +169,7 @@ export async function executeRoadmapSlashCommand(rawArgs: string, workspace?: st
 				for (const issue of ((validation.issues as Array<Record<string, unknown>>) || []).slice(0, 8)) {
 					lines.push(`  • [${issue.severity}] ${issue.message}`)
 				}
+				lines.push("", AUTO_GOVERNANCE.validateDiagnosticOnly)
 				lines.push(`Next: ${data.agent_next_call || "roadmap(action='guide')"}`)
 				return lines.join("\n")
 			}

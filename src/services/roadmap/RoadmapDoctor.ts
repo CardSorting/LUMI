@@ -1,6 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
-import { AUTO_GOVERNANCE, midTaskAgentNextCall } from "./RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, formatKanbanGateStatusLine, midTaskAgentNextCall } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { formatExplainGateReport, gateExplainParamsFromStatus, recommendNextAction, wrapClarityEnvelope } from "./RoadmapOperator"
 import { progressJsonlPath, readLastError } from "./RoadmapProgress"
@@ -148,7 +148,16 @@ export function formatDoctorReport(
 		lines.push("", `Bootstrap: ${status.bootstrap_placeholder_count ?? "?"} template phrase(s) remain`)
 	}
 	const gate = (status.roadmap_gate || {}) as Record<string, unknown>
-	if (gate.kanban_complete_allowed === false) {
+	const blocking = (gate.blocking_gates as Array<Record<string, unknown>>) || []
+	const gateLine = formatKanbanGateStatusLine({
+		kanbanCompleteAllowed: gate.kanban_complete_allowed as boolean | undefined,
+		validationPending: !!status.validation_pending,
+		schemaValid: status.schema_valid as boolean | null | undefined,
+		blockingGates: blocking as Array<{ id?: string }>,
+	})
+	if (gateLine) {
+		lines.push("", gateLine)
+	} else if (gate.kanban_complete_allowed === false) {
 		lines.push("", formatExplainGateReport(gateExplainParamsFromStatus(String(status.workspace || ""), gate, status)))
 	}
 	lines.push(

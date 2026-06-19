@@ -1,6 +1,6 @@
 /** Live agent steering — compact entity-card lines for prompts and environment_details (Backstage-style). */
 
-import { AUTO_GOVERNANCE, formatKanbanGateStatusLine, isAutoClearableGovernanceOnly } from "./RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, formatKanbanGateStatusLine, isAutoClearableBrief } from "./RoadmapAutoGovernance"
 
 function truncate(text: string, limit = 120): string {
 	const stripped = text.split(/\s+/).filter(Boolean).join(" ")
@@ -75,7 +75,7 @@ export function buildProjectContextLines(brief: Record<string, unknown>): string
 
 export function formatRoadmapSteeringBlock(brief: Record<string, unknown>): string {
 	const lines = ["# Roadmap Steering", ...buildProjectContextLines(brief)]
-	const blockingGates = gateBlockingList(brief)
+	const autoClearable = isAutoClearableBrief(brief)
 
 	if (brief.phase) lines.push(`Phase: ${brief.phase}`)
 	const gateLine = formatKanbanGateStatusLine({
@@ -85,14 +85,17 @@ export function formatRoadmapSteeringBlock(brief: Record<string, unknown>): stri
 		blockingGates: gateBlockingList(brief),
 	})
 	if (gateLine) lines.push(gateLine)
-	if (brief.validation_pending) {
-		lines.push(`⚠️ ROADMAP.md pending validation — ${AUTO_GOVERNANCE.validationAtCompletion}`)
+	if (!autoClearable) {
+		if (brief.validation_pending) {
+			lines.push(`⚠️ ROADMAP.md pending validation — ${AUTO_GOVERNANCE.validationAtCompletion}`)
+		}
+		if (brief.bootstrap_complete === false) {
+			lines.push(
+				`⚠️ Bootstrap incomplete (${brief.bootstrap_placeholder_count ?? "?"} template phrase(s)) — ${AUTO_GOVERNANCE.bootstrapAtCompletion}`,
+			)
+		}
 	}
-	if (brief.bootstrap_complete === false) {
-		lines.push(
-			`⚠️ Bootstrap incomplete (${brief.bootstrap_placeholder_count ?? "?"} template phrase(s)) — ${AUTO_GOVERNANCE.bootstrapAtCompletion}`,
-		)
-	}
+	if (brief.governance_policy) lines.push(`Policy: ${brief.governance_policy}`)
 	if (brief.operator_summary) lines.push(`Summary: ${brief.operator_summary}`)
 	if (brief.agent_next_call) lines.push(`Next: ${brief.agent_next_call}`)
 
@@ -108,13 +111,8 @@ export function formatWatchSteeringLine(brief: Record<string, unknown>): string 
 	const identity = brief.project_identity_line || brief.steering_brief || "project"
 	const phase = brief.phase || "unknown"
 	const next = brief.agent_next_call || "roadmap(action='guide')"
-	const autoClearableOnly = isAutoClearableGovernanceOnly({
-		kanbanCompleteAllowed: brief.kanban_complete_allowed as boolean | undefined,
-		validationPending: !!brief.validation_pending,
-		schemaValid: brief.schema_valid as boolean | null | undefined,
-		blockingGates: gateBlockingList(brief),
-	})
+	const autoClearableOnly = isAutoClearableBrief(brief)
 	const gate = brief.kanban_complete_allowed === false && !autoClearableOnly ? " ⛔gates" : ""
-	const pending = brief.validation_pending ? " ⚠️pending" : ""
+	const pending = brief.validation_pending && !autoClearableOnly ? " ⚠️pending" : autoClearableOnly ? " ℹ️gov" : ""
 	return `[roadmap] ${identity} · phase=${phase}${gate}${pending} → ${next}`
 }

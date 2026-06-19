@@ -22,6 +22,8 @@ export const AUTO_GOVERNANCE = {
 		"Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.",
 	roadmapGateRecoveryHint:
 		"Edit ROADMAP.md to resolve governance gates — bootstrap fill, validation, and checkpoint date stamp run automatically at attempt_completion.",
+	validateDiagnosticOnly:
+		"Diagnostic only — governance runs automatically at attempt_completion; continue the task unless ROADMAP.md schema errors need repair.",
 } as const
 
 /** Slash commands for optional diagnostics — guide first; never required for governance. */
@@ -53,7 +55,30 @@ export function governanceFieldsFromStatus(status: {
 	}
 }
 
-/** Stale reasons safe to auto-remediate with a checkpoint date stamp (mechanical only). */
+/** Merge governance fields onto any roadmap payload (progress, watch, steering context). */
+export function mergeGovernanceFields<T extends Record<string, unknown>>(
+	payload: T,
+	source: {
+		auto_clearable_governance_only?: boolean
+		validation_pending?: boolean
+		governance_mid_task?: string
+	},
+): T & ReturnType<typeof governanceFieldsFromStatus> {
+	return { ...payload, ...governanceFieldsFromStatus(source) }
+}
+
+/** Brief-level auto-clearable detection for steering surfaces. */
+export function isAutoClearableBrief(brief: Record<string, unknown>): boolean {
+	if (brief.auto_clearable_governance_only === true) return true
+	const gate = (brief.roadmap_gate || {}) as Record<string, unknown>
+	const blocking = ((gate.blocking_gates || []) as Array<{ id?: string }>) || []
+	return isAutoClearableGovernanceOnly({
+		kanbanCompleteAllowed: brief.kanban_complete_allowed as boolean | undefined,
+		validationPending: !!brief.validation_pending,
+		schemaValid: brief.schema_valid as boolean | null | undefined,
+		blockingGates: blocking,
+	})
+}
 export const STALE_AUTO_TOUCH_REASONS = new Set(["no_recent_checkpoint_date", "invalid_date"])
 
 /** Per-gate ROADMAP.md edit instructions for agent recovery (RFC 7807-style extensions). */

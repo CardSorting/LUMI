@@ -4,14 +4,14 @@ import type { DietCodeToolSpec } from "../spec"
 import { TASK_PROGRESS_PARAMETER } from "../types"
 
 const ROADMAP_ACTIONS =
-	"guide | status | cockpit | checkpoint | validate | doctor | template | apply_bootstrap_fill | explain_gate | explain_stale | evidence | progress | watch | last_error"
+	"guide | status | explain_gate | explain_stale | progress | watch | checkpoint | doctor | template | apply_bootstrap_fill | validate (diagnostic) | cockpit | evidence | last_error"
 
 const GENERIC: DietCodeToolSpec = {
 	variant: ModelFamily.GENERIC,
 	id: DietCodeDefaultTool.ROADMAP,
 	name: "roadmap",
 	description:
-		"Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — no manual validate step. Responses include project_identity_line, _roadmap_operator_hints, agent_playbook, and recommended_next_action.",
+		"Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — roadmap(action='validate') is diagnostic only. Responses include project_identity_line, governance_policy, _roadmap_operator_hints, agent_playbook, and recommended_next_action.",
 	parameters: [
 		{
 			name: "action",
