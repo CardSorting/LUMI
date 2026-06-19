@@ -151,6 +151,69 @@ Unified mid-task guidance via `AUTO_GOVERNANCE.previewBootstrapAutofill` and `co
 
 This mirrors CI/CD merge gates: checks run at the gate, not on every status poll.
 
+## Pass 4 — mid-task messaging (no false “blocked” alarms)
+
+### Problem
+
+Steering surfaces (`formatRoadmapSteeringBlock`, cockpit) showed **⛔ attempt_completion blocked** whenever `kanban_complete_allowed === false`, including when the only blockers were `validation_pending` or bootstrap placeholders — states that **auto-clear at completion**. Agents were nudged into unnecessary validate/cockpit loops.
+
+### Fix
+
+- Shared `isAutoClearableGovernanceOnly()` in `RoadmapAutoGovernance.ts`
+- Mid-task copy uses `midTaskGovernanceNote` instead of hard block when auto-clearable only
+- `buildOperationalPayload` uses `midTaskAgentNextCall()` for consistent `agent_next_call`
+- Tool spec: `apply_bootstrap_fill` context documented as preview-only
+- Validate failure recovery → `explain_gate` (diagnostic), not `cockpit` loop
+- Completion breather hints include roadmap auto-governance when `lastReason === roadmap_gate`
+
+## Pass 5 — unified surfaces + structured auto-clearable signal
+
+### Problem
+
+Progress reports, explain-gate, doctor, and `_roadmap_operator_hints` still emitted **attempt_completion blocked** for auto-clearable states. Agents saw contradictory signals across cockpit vs progress vs environment block.
+
+### Fix
+
+- `gateExplainParamsFromStatus()` — single helper for gate report context
+- `formatExplainGateReport`, progress timeline, doctor, operator hints use `isAutoClearableGovernanceOnly()`
+- Payloads expose `auto_clearable_governance_only` for machine consumers
+- `<roadmap_governance_recovery>` adds `<auto_clearable_only>` + `<mid_task_note>` when applicable
+- `isAutoClearableGovernanceOnly` requires `schemaValid !== false` for validation-only blocks
+- System prompt steering section shows gate status line (info vs hard block)
+- `/roadmap` slash description de-emphasizes manual validate
+
+## Pass 6 — `formatKanbanGateStatusLine` + machine `governance_policy`
+
+### Problem
+
+Gate status copy was duplicated across six files with slight wording drift. Tool payloads lacked a stable machine-readable governance policy field.
+
+### Fix
+
+- `formatKanbanGateStatusLine()` — single human line for kanban gate state (info vs hard block)
+- All steering surfaces refactored to use it (agent steering, cockpit, progress, explain-gate)
+- Every `wrapClarityEnvelope` payload includes `governance_policy` + `auto_clearable_governance_only`
+- `sessionBrief` / `RoadmapSteeringContext` / `watch` expose auto-clearable flag
+- Completion recovery caches `autoClearableOnly: false` on real blocks; XML envelope explicit
+- Bootstrap fill plan uses `continueTaskMidPass` instead of `cockpit` when complete
+
+## Pass 7 — proactive preflight advisories + residual cockpit mandates
+
+### Problem
+
+Preflight readiness was silent when only auto-clearable governance was pending — agents got no positive signal that completion would self-heal. A few recovery paths still mandated `roadmap(action='cockpit')` after checkpoint autofill, state write failures, and idle “wait” phase recommendations. Write hints lacked machine-readable governance fields.
+
+### Fix
+
+- `CompletionGateReadinessIssue` supports `severity: "info" | "block"`
+- `evaluateCompletionGateReadinessAsync` emits a non-blocking roadmap `<advisory>` when `auto_clearable_governance_only` (preflight `ready="true"` with `advisory_count`)
+- `buildCompletionGateReadinessBlock` separates blockers from advisories
+- Checkpoint autofill, state-write retry, and `recommendNextAction` wait phase → `guide` / `continueTaskMidPass` instead of `cockpit`
+- `roadmapWriteHint` + `mergeRoadmapHintIntoResult` propagate `governance_policy` and `auto_clearable_governance_only`
+- `/roadmap guide` shows mid-task governance note when auto-clearable
+- Progress error recovery defaults to `/roadmap guide` (diagnostic, not mandatory loop)
+- Progress gate fallback uses `midTaskGovernanceNote` instead of hard “blocked” text
+
 ## Files touched (reference)
 
 | Area | Key files |

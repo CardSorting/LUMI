@@ -5,6 +5,7 @@ import {
 	buildRoadmapGateStructuredEnvelope,
 	formatBlockingGatesList,
 	formatRemediationNote,
+	isAutoClearableGovernanceOnly,
 	STALE_AUTO_TOUCH_REASONS,
 } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
@@ -18,6 +19,7 @@ export interface RoadmapCompletionBlock {
 	blockingGates?: Array<{ id?: string; label: string; why: string; fix: string }>
 	remediationSteps?: string[]
 	dryRunAdvisory?: boolean
+	autoClearableOnly?: boolean
 }
 
 export interface RoadmapCompletionEvaluateOptions {
@@ -77,18 +79,14 @@ function plannedStepsFromPlan(plan: RemediationPlan, executed?: Partial<Remediat
 }
 
 function isAutoClearableOnlyBlock(liveStatus: Record<string, unknown>): boolean {
-	if (liveStatus.kanban_complete_allowed !== false) return false
 	const gate = (liveStatus.roadmap_gate || {}) as Record<string, unknown>
 	const blocking = (gate.blocking_gates || []) as Array<{ id?: string }>
-	if (blocking.length === 0) return false
-	const autoClearable = new Set(["validation_current", "bootstrap_complete"])
-	if (liveStatus.validation_pending && blocking.every((g) => g.id === "validation_current")) {
-		return true
-	}
-	if (blocking.every((g) => g.id && autoClearable.has(g.id))) {
-		return blocking.length <= 2
-	}
-	return false
+	return isAutoClearableGovernanceOnly({
+		kanbanCompleteAllowed: liveStatus.kanban_complete_allowed as boolean | undefined,
+		validationPending: !!liveStatus.validation_pending,
+		schemaValid: liveStatus.schema_valid as boolean | null | undefined,
+		blockingGates: blocking,
+	})
 }
 
 /** Internal pre-completion remediation — no agent tool or MCP calls. */
@@ -162,6 +160,7 @@ export async function evaluateRoadmapCompletionBlock(
 				blocked: false,
 				remediationSteps: steps,
 				dryRunAdvisory: true,
+				autoClearableOnly: true,
 				message: `${AUTO_GOVERNANCE.continueTaskMidPass} Planned: ${steps.join("; ")}.`,
 			}
 		}
@@ -174,6 +173,7 @@ export async function evaluateRoadmapCompletionBlock(
 			blocked: true,
 			message: AUTO_GOVERNANCE.autoValidateFailed + remediationNote + `\n\n${AUTO_GOVERNANCE.editRoadmapResolve}`,
 			remediationSteps: steps,
+			autoClearableOnly: false,
 		}
 	}
 
@@ -190,6 +190,7 @@ export async function evaluateRoadmapCompletionBlock(
 				`\n\n${AUTO_GOVERNANCE.editRoadmapResolve}`,
 			blockingGates,
 			remediationSteps: steps,
+			autoClearableOnly: false,
 		}
 	}
 
@@ -228,5 +229,11 @@ export function isGateBlockingSchema(closedGates: Array<{ id?: string }>, cfg = 
 
 /** Structured recovery blocks for completion gate agent envelope. */
 export function buildRoadmapCompletionExtraBlocks(block: RoadmapCompletionBlock): string[] {
-	return [buildRoadmapGateStructuredEnvelope(block)]
+	return [
+		buildRoadmapGateStructuredEnvelope({
+			remediationSteps: block.remediationSteps,
+			blockingGates: block.blockingGates,
+			autoClearableOnly: block.autoClearableOnly ?? block.dryRunAdvisory ?? false,
+		}),
+	]
 }

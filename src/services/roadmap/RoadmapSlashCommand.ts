@@ -2,11 +2,12 @@
  * /roadmap slash command — operator console mirroring dietcode slash_commands._handle_roadmap.
  */
 import * as path from "path"
+import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
 import { formatCockpitReport } from "./RoadmapCockpit"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { formatDoctorReport } from "./RoadmapDoctor"
 import { formatExplainStaleReport } from "./RoadmapFreshness"
-import { formatExplainGateReport } from "./RoadmapOperator"
+import { formatExplainGateReport, gateExplainParamsFromStatus } from "./RoadmapOperator"
 import { formatWatchReport, readProgressTail } from "./RoadmapProgress"
 import { RoadmapService } from "./RoadmapService"
 
@@ -220,15 +221,9 @@ export async function executeRoadmapSlashCommand(rawArgs: string, workspace?: st
 				const payload = await service.explainGate(ws)
 				return (
 					payloadReport(payload) ||
-					formatExplainGateReport({
-						workspace: ws,
-						closed_gates: (payload.closed_gates as Array<Record<string, unknown>>) || [],
-						open_gates: (payload.open_gates as string[]) || [],
-						blocking_gates: (payload.blocking_gates as Array<Record<string, unknown>>) || [],
-						kanban_complete_allowed: payload.kanban_complete_allowed as boolean,
-						validation: payload.validation as Record<string, unknown>,
-						freshness: payload.freshness as Record<string, unknown>,
-					})
+					formatExplainGateReport(
+						gateExplainParamsFromStatus(ws, (payload.roadmap_gate || {}) as Record<string, unknown>, payload),
+					)
 				)
 			}
 			case "explain-stale":
@@ -251,6 +246,9 @@ export async function executeRoadmapSlashCommand(rawArgs: string, workspace?: st
 				]
 				if (data.health_status) lines.push(`Health: ${data.health_status}`)
 				if (data.code_soup_risk) lines.push(`Code soup risk: ${data.code_soup_risk}`)
+				if (data.auto_clearable_governance_only) {
+					lines.push(AUTO_GOVERNANCE.midTaskGovernanceNote)
+				}
 				lines.push(String(data.operator_summary || ""))
 				lines.push(`Next call: ${data.agent_next_call || ""}`)
 				const hints = (data._roadmap_operator_hints || {}) as Record<string, unknown>

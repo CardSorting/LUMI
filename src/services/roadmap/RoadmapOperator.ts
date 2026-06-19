@@ -1,5 +1,5 @@
 import * as path from "path"
-import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, formatKanbanGateStatusLine, isAutoClearableGovernanceOnly } from "./RoadmapAutoGovernance"
 import { REQUIRED_SECTIONS } from "./RoadmapSchema"
 
 export const OPERATOR_PLAYBOOK = `
@@ -224,8 +224,32 @@ export function recommendNextAction(params: {
 	}
 	return {
 		action: "wait",
-		command: "roadmap(action='cockpit')",
+		command: "roadmap(action='guide')",
 		detail: "Roadmap steering surface current — checkpoint after meaningful direction shifts.",
+	}
+}
+
+export function gateExplainParamsFromStatus(
+	workspace: string,
+	gate: Record<string, unknown>,
+	status?: Record<string, unknown>,
+): {
+	workspace: string
+	closed_gates: Array<Record<string, unknown>>
+	open_gates: string[]
+	blocking_gates: Array<Record<string, unknown>>
+	kanban_complete_allowed?: boolean
+	validation_pending?: boolean
+	schema_valid?: boolean | null
+} {
+	return {
+		workspace,
+		closed_gates: (gate.closed_gates as Array<Record<string, unknown>>) || [],
+		open_gates: (gate.open_gates as string[]) || [],
+		blocking_gates: (gate.blocking_gates as Array<Record<string, unknown>>) || [],
+		kanban_complete_allowed: gate.kanban_complete_allowed as boolean | undefined,
+		validation_pending: !!status?.validation_pending,
+		schema_valid: status?.schema_valid as boolean | null | undefined,
 	}
 }
 
@@ -237,6 +261,8 @@ export function formatExplainGateReport(params: {
 	kanban_complete_allowed?: boolean
 	validation?: Record<string, unknown>
 	freshness?: Record<string, unknown>
+	validation_pending?: boolean
+	schema_valid?: boolean | null
 }): string {
 	const lines = ["🗺️ Roadmap gate explanation", `Workspace: ${params.workspace || "(auto)"}`, ""]
 
@@ -254,8 +280,15 @@ export function formatExplainGateReport(params: {
 			lines.push("✅ All roadmap steering gates open")
 		}
 		lines.push("")
-		if (params.kanban_complete_allowed === false) {
-			lines.push("⛔ attempt_completion blocked — resolve blocking gates above")
+		const blocking = (params.blocking_gates || params.closed_gates || []) as Array<{ id?: string }>
+		const gateLine = formatKanbanGateStatusLine({
+			kanbanCompleteAllowed: false,
+			validationPending: !!params.validation_pending,
+			schemaValid: params.schema_valid,
+			blockingGates: blocking,
+		})
+		if (gateLine) {
+			lines.push(gateLine)
 		} else if (params.kanban_complete_allowed === true) {
 			lines.push("✅ attempt_completion allowed")
 		}
@@ -345,7 +378,17 @@ export function buildAgentOperatorHints(params: {
 
 	if (snap.kanban_complete_allowed === false) {
 		const blocking = snap.blocking_gates || []
-		if (blocking.length > 0) {
+		const autoClearable = isAutoClearableGovernanceOnly({
+			kanbanCompleteAllowed: false,
+			validationPending: !!(snap.validation_pending || wsState.validation_pending),
+			schemaValid: snap.schema_valid,
+			blockingGates: blocking as Array<{ id?: string }>,
+		})
+		hints.auto_clearable_governance_only = autoClearable
+		if (autoClearable) {
+			hints.governance_mid_task = AUTO_GOVERNANCE.midTaskGovernanceNote
+			hints.recovery_suggestion = AUTO_GOVERNANCE.midTaskGovernanceNote
+		} else if (blocking.length > 0) {
 			hints.missing_gate = blocking[0].id
 			hints.recovery_suggestion = blocking[0].fix || hints.recovery_suggestion
 		}
@@ -388,6 +431,9 @@ export function wrapClarityEnvelope(
 		success: payload.success ?? payload.ok ?? true,
 		ok: payload.ok ?? payload.success ?? true,
 		execution_path: "roadmap_checkpoint",
+		governance_policy: AUTO_GOVERNANCE.noManualValidate,
+		auto_clearable_governance_only:
+			payload.auto_clearable_governance_only ?? operatorHints.auto_clearable_governance_only ?? false,
 		agent_playbook: AGENT_PLAYBOOK,
 		operator_playbook: OPERATOR_PLAYBOOK,
 		required_section_count: REQUIRED_SECTIONS.length,

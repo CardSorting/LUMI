@@ -66,16 +66,39 @@ describe("RoadmapOperator", () => {
 				workspace: "/tmp/project",
 				closed_gates: [
 					{
-						label: "ROADMAP.md validated after last edit",
+						id: "schema_valid",
+						label: "ROADMAP.md schema valid",
 						why: "changed since validate",
 						fix: "repair ROADMAP.md schema",
 						blocks_kanban_complete: true,
 					},
 				],
 				kanban_complete_allowed: false,
+				schema_valid: false,
 			})
 			assert.match(report, /attempt_completion blocked/)
-			assert.match(report, /validate/)
+			assert.doesNotMatch(report, /roadmap\(action='validate'\)/)
+		})
+
+		it("formats auto-clearable validation_pending without hard block", () => {
+			const report = formatExplainGateReport({
+				workspace: "/tmp/project",
+				closed_gates: [
+					{
+						id: "validation_current",
+						label: "ROADMAP.md validated after last edit",
+						why: "pending",
+						fix: "wait",
+						blocks_kanban_complete: true,
+					},
+				],
+				blocking_gates: [{ id: "validation_current" }],
+				kanban_complete_allowed: false,
+				validation_pending: true,
+				schema_valid: true,
+			})
+			assert.doesNotMatch(report, /attempt_completion blocked/)
+			assert.match(report, /attempt_completion/)
 		})
 	})
 

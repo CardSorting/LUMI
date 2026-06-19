@@ -1,5 +1,6 @@
 import * as assert from "assert"
 import { buildProjectContextLines, formatRoadmapSteeringBlock, formatWatchSteeringLine } from "../RoadmapAgentSteering"
+import { AUTO_GOVERNANCE } from "../RoadmapAutoGovernance"
 
 describe("RoadmapAgentSteering", () => {
 	it("builds rich project context lines", () => {
@@ -31,10 +32,14 @@ describe("RoadmapAgentSteering", () => {
 			phase: "bootstrap_fill",
 			validation_pending: true,
 			kanban_complete_allowed: false,
-			agent_next_call: "roadmap(action='cockpit')",
+			schema_valid: true,
+			roadmap_gate: {
+				blocking_gates: [{ id: "validation_current", label: "Validated", why: "pending", fix: "wait" }],
+			},
+			agent_next_call: AUTO_GOVERNANCE.continueTaskMidPass,
 		})
 		assert.match(block, /# Roadmap Steering/)
-		assert.match(block, /attempt_completion blocked/)
+		assert.doesNotMatch(block, /attempt_completion blocked/)
 		assert.match(block, /automatically/)
 	})
 

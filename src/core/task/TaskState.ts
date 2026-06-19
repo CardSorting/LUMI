@@ -153,6 +153,7 @@ export class TaskState {
 	lastRoadmapGateRecovery?: {
 		remediationSteps?: string[]
 		blockingGates?: Array<{ id?: string; label: string; why: string; fix?: string }>
+		autoClearableOnly?: boolean
 	}
 }
 

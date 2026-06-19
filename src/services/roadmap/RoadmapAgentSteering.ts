@@ -1,11 +1,16 @@
 /** Live agent steering — compact entity-card lines for prompts and environment_details (Backstage-style). */
 
-import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, formatKanbanGateStatusLine, isAutoClearableGovernanceOnly } from "./RoadmapAutoGovernance"
 
 function truncate(text: string, limit = 120): string {
 	const stripped = text.split(/\s+/).filter(Boolean).join(" ")
 	if (stripped.length <= limit) return stripped
 	return `${stripped.slice(0, limit - 1)}…`
+}
+
+function gateBlockingList(brief: Record<string, unknown>): Array<{ id?: string }> {
+	const gate = (brief.roadmap_gate || {}) as Record<string, unknown>
+	return ((gate.blocking_gates || []) as Array<{ id?: string }>) || []
 }
 
 export function buildProjectContextLines(brief: Record<string, unknown>): string[] {
@@ -70,13 +75,18 @@ export function buildProjectContextLines(brief: Record<string, unknown>): string
 
 export function formatRoadmapSteeringBlock(brief: Record<string, unknown>): string {
 	const lines = ["# Roadmap Steering", ...buildProjectContextLines(brief)]
+	const blockingGates = gateBlockingList(brief)
 
 	if (brief.phase) lines.push(`Phase: ${brief.phase}`)
-	if (brief.kanban_complete_allowed === false) {
-		lines.push(`⛔ attempt_completion blocked — ${AUTO_GOVERNANCE.editRoadmapResolve}`)
-	}
+	const gateLine = formatKanbanGateStatusLine({
+		kanbanCompleteAllowed: brief.kanban_complete_allowed as boolean | undefined,
+		validationPending: !!brief.validation_pending,
+		schemaValid: brief.schema_valid as boolean | null | undefined,
+		blockingGates: gateBlockingList(brief),
+	})
+	if (gateLine) lines.push(gateLine)
 	if (brief.validation_pending) {
-		lines.push(`⚠️ ROADMAP.md changed since last validate — ${AUTO_GOVERNANCE.validationAtCompletion}`)
+		lines.push(`⚠️ ROADMAP.md pending validation — ${AUTO_GOVERNANCE.validationAtCompletion}`)
 	}
 	if (brief.bootstrap_complete === false) {
 		lines.push(
@@ -98,7 +108,13 @@ export function formatWatchSteeringLine(brief: Record<string, unknown>): string 
 	const identity = brief.project_identity_line || brief.steering_brief || "project"
 	const phase = brief.phase || "unknown"
 	const next = brief.agent_next_call || "roadmap(action='guide')"
-	const gate = brief.kanban_complete_allowed === false ? " ⛔gates" : ""
+	const autoClearableOnly = isAutoClearableGovernanceOnly({
+		kanbanCompleteAllowed: brief.kanban_complete_allowed as boolean | undefined,
+		validationPending: !!brief.validation_pending,
+		schemaValid: brief.schema_valid as boolean | null | undefined,
+		blockingGates: gateBlockingList(brief),
+	})
+	const gate = brief.kanban_complete_allowed === false && !autoClearableOnly ? " ⛔gates" : ""
 	const pending = brief.validation_pending ? " ⚠️pending" : ""
 	return `[roadmap] ${identity} · phase=${phase}${gate}${pending} → ${next}`
 }

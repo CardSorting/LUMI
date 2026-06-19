@@ -11,12 +11,13 @@ import { buildCompletionGateMessage, runCompletionAudit } from "@shared/audit/co
 import { parseIntentThresholdOverrides } from "@shared/audit/gatePolicy"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
-import { formatAutoRemediationSummary } from "@/services/roadmap/RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, formatAutoRemediationSummary } from "@/services/roadmap/RoadmapAutoGovernance"
 import {
 	buildRoadmapCompletionExtraBlocks,
 	evaluateRoadmapCompletionBlock,
 	failClosedCompletionMessage,
 } from "@/services/roadmap/RoadmapCompletionGate"
+import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import {
 	appendCompletionGateRetryGuidance,
@@ -101,7 +102,14 @@ function finalizePreflightError(
 
 	const recovery = config.taskState.lastRoadmapGateRecovery
 	const extraBlocks =
-		recovery && reason === "roadmap_gate" ? buildRoadmapCompletionExtraBlocks({ blocked: true, ...recovery }) : undefined
+		recovery && reason === "roadmap_gate"
+			? buildRoadmapCompletionExtraBlocks({
+					blocked: true,
+					remediationSteps: recovery.remediationSteps,
+					blockingGates: recovery.blockingGates,
+					autoClearableOnly: recovery.autoClearableOnly ?? false,
+				})
+			: undefined
 	config.taskState.lastRoadmapGateRecovery = undefined
 
 	return buildCompletionAgentErrorMessage(rawMessage, config, {
@@ -193,6 +201,8 @@ export const PREFLIGHT_STAGE_RUNNERS: ReadonlyArray<{
 export type CompletionGateReadinessIssue = {
 	stage: CompletionPreflightStage
 	message: string
+	/** info = non-blocking advisory (e.g. auto-clearable roadmap governance) */
+	severity?: "block" | "info"
 }
 
 /** Non-mutating preflight dry-run — surfaces blockers before attempt_completion (mirrors CI dry-run). */
@@ -245,7 +255,20 @@ export async function evaluateCompletionGateReadinessAsync(
 
 	const roadmapError = await evaluateRoadmapCompletionGateError(config, logPrefix, { dryRun: true })
 	if (roadmapError) {
-		issues.push({ stage: "roadmap", message: roadmapError })
+		issues.push({ stage: "roadmap", message: roadmapError, severity: "block" })
+	} else if (getRoadmapConfig().enabled) {
+		try {
+			const status = await RoadmapService.getInstance().getOperationalStatus(config.cwd, "", "light")
+			if (status.auto_clearable_governance_only) {
+				issues.push({
+					stage: "roadmap",
+					message: AUTO_GOVERNANCE.midTaskGovernanceNote,
+					severity: "info",
+				})
+			}
+		} catch {
+			// non-fatal — readiness hint must not block completion attempt
+		}
 	}
 
 	return issues
@@ -319,6 +342,7 @@ export async function evaluateRoadmapCompletionGateError(
 				config.taskState.lastRoadmapGateRecovery = {
 					remediationSteps: block.remediationSteps,
 					blockingGates: block.blockingGates,
+					autoClearableOnly: block.autoClearableOnly ?? false,
 				}
 			}
 			const remediated = formatAutoRemediationSummary(block.remediationSteps || [])

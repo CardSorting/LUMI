@@ -1,8 +1,8 @@
 import * as fs from "fs/promises"
 import * as path from "path"
-import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, midTaskAgentNextCall } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
-import { formatExplainGateReport, recommendNextAction, wrapClarityEnvelope } from "./RoadmapOperator"
+import { formatExplainGateReport, gateExplainParamsFromStatus, recommendNextAction, wrapClarityEnvelope } from "./RoadmapOperator"
 import { progressJsonlPath, readLastError } from "./RoadmapProgress"
 import type { RoadmapService } from "./RoadmapService"
 import { bundledSkillPath, workspaceSkillPath } from "./RoadmapSkillInstall"
@@ -59,8 +59,8 @@ export async function runDoctorChecks(roadmapService: RoadmapService, workspace:
 			recommendations.push("Update Recent Checkpoint (section 11) in ROADMAP.md")
 		}
 		if (status.validation_pending) {
-			addCheck("validation_current", false, "ROADMAP.md changed since last validate")
-			recommendations.push(AUTO_GOVERNANCE.validationAtCompletion)
+			addCheck("validation_current", false, AUTO_GOVERNANCE.validationAtCompletion)
+			recommendations.push(AUTO_GOVERNANCE.continueTaskMidPass)
 		} else {
 			addCheck("validation_current", true, "validated after last edit")
 		}
@@ -118,7 +118,12 @@ export async function runDoctorChecks(roadmapService: RoadmapService, workspace:
 		project_identity_line: status.project_identity_line,
 		steering_brief: status.steering_brief,
 		phase: status.phase,
-		agent_next_call: nextRec.command,
+		agent_next_call: midTaskAgentNextCall({
+			validationPending: !!status.validation_pending,
+			bootstrapIncomplete: status.bootstrap_complete === false,
+			roadmapMissing: !roadmapExists,
+			fallback: nextRec.command,
+		}),
 	})
 }
 
@@ -144,16 +149,16 @@ export function formatDoctorReport(
 	}
 	const gate = (status.roadmap_gate || {}) as Record<string, unknown>
 	if (gate.kanban_complete_allowed === false) {
-		lines.push(
-			"",
-			formatExplainGateReport({
-				workspace: String(status.workspace || ""),
-				closed_gates: (gate.closed_gates as Array<Record<string, unknown>>) || [],
-				open_gates: (gate.open_gates as string[]) || [],
-				kanban_complete_allowed: false,
-			}),
-		)
+		lines.push("", formatExplainGateReport(gateExplainParamsFromStatus(String(status.workspace || ""), gate, status)))
 	}
-	lines.push("", `→ ${nextRec.command}`)
+	lines.push(
+		"",
+		`→ ${midTaskAgentNextCall({
+			validationPending: !!status.validation_pending,
+			bootstrapIncomplete: status.bootstrap_complete === false,
+			roadmapMissing: !status.roadmap_exists,
+			fallback: nextRec.command,
+		})}`,
+	)
 	return lines.join("\n")
 }

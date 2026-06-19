@@ -1,7 +1,7 @@
 import * as path from "path"
-import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, formatKanbanGateStatusLine } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
-import { formatExplainGateReport, recommendNextAction, wrapClarityEnvelope } from "./RoadmapOperator"
+import { formatExplainGateReport, gateExplainParamsFromStatus, recommendNextAction, wrapClarityEnvelope } from "./RoadmapOperator"
 import { readCurrentProgress, readLastError } from "./RoadmapProgress"
 import type { RoadmapService } from "./RoadmapService"
 import { WORKSPACE_SKILL_REL } from "./RoadmapSkillInstall"
@@ -25,11 +25,19 @@ export function formatCockpitReport(payload: Record<string, unknown>): string {
 	}
 
 	const gate = (payload.roadmap_gate || {}) as Record<string, unknown>
-	if (gate.kanban_complete_allowed === false) {
-		lines.push("", "⛔ attempt_completion blocked")
-		const blocking = (gate.blocking_gates as Array<Record<string, unknown>>) || []
-		for (const g of blocking.slice(0, 3)) {
-			lines.push(`  • ${g.label}: ${g.fix}`)
+	const blocking = (gate.blocking_gates as Array<Record<string, unknown>>) || []
+	const gateLine = formatKanbanGateStatusLine({
+		kanbanCompleteAllowed: gate.kanban_complete_allowed as boolean | undefined,
+		validationPending: !!payload.validation_pending,
+		schemaValid: payload.schema_valid as boolean | null | undefined,
+		blockingGates: blocking as Array<{ id?: string }>,
+	})
+	if (gateLine) {
+		lines.push("", gateLine)
+		if (!gateLine.startsWith("ℹ️")) {
+			for (const g of blocking.slice(0, 3)) {
+				lines.push(`  • ${g.label}: ${g.fix}`)
+			}
 		}
 	}
 
@@ -91,18 +99,12 @@ export async function buildCockpitPayload(roadmapService: RoadmapService, worksp
 		kanban_complete_allowed: status.kanban_complete_allowed,
 		checkpoint_freshness: status.checkpoint_freshness,
 		recommended_next_action: nextRec,
-		agent_next_call: nextRec.command,
+		agent_next_call: status.agent_next_call || nextRec.command,
 		operator_summary: status.operator_summary,
 		last_progress: currentProgress,
 		last_error: lastError,
 		report: "",
-		gates_report: formatExplainGateReport({
-			workspace,
-			closed_gates: (gate.closed_gates as Array<Record<string, unknown>>) || [],
-			open_gates: (gate.open_gates as string[]) || [],
-			blocking_gates: (gate.blocking_gates as Array<Record<string, unknown>>) || [],
-			kanban_complete_allowed: gate.kanban_complete_allowed as boolean,
-		}),
+		gates_report: formatExplainGateReport(gateExplainParamsFromStatus(workspace, gate, status)),
 	})
 
 	payload.report = formatCockpitReport(payload)

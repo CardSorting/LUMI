@@ -24,7 +24,7 @@ const GENERIC: DietCodeToolSpec = {
 			required: false,
 			type: "string",
 			instruction:
-				"Optional context — e.g. 'write' for apply_bootstrap_fill, 'digest' or 'compact' for slim checkpoint, 'stale refresh' for checkpoint, '--current' or '--tail' for progress.",
+				"Optional context — preview-only for apply_bootstrap_fill (writes run at attempt_completion); 'digest' or 'compact' for slim checkpoint; 'stale refresh' for checkpoint; '--current' or '--tail' for progress.",
 		},
 		{
 			name: "user_request",
@@ -47,7 +47,7 @@ const CHECKPOINT: DietCodeToolSpec = {
 			name: "context",
 			required: false,
 			type: "string",
-			instruction: "Optional checkpoint context (e.g. 'stale refresh', 'coherence recovery', 'apply autofill write').",
+			instruction: "Optional checkpoint context (e.g. 'stale refresh', 'coherence recovery', 'repair schema').",
 		},
 		{
 			name: "user_request",

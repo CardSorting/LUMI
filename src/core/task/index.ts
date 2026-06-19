@@ -2664,7 +2664,14 @@ export class Task {
 
 			const completionGateBlocks = this.taskState.completionGateBlockCount ?? 0
 			if (completionGateBlocks > 0) {
-				breatherText += `\n\n⛔ **Completion gate pressure:** attempt_completion was blocked ${completionGateBlocks} time(s) this task. Do not retry with the same summary — fix audit/roadmap violations in the workspace first, verify with tests or commands, then call attempt_completion with an updated result.`
+				const lastReason = this.taskState.lastCompletionBlockReason as
+					| import("./tools/attemptCompletionUtils").CompletionPreflightReason
+					| undefined
+				const roadmapNote =
+					lastReason === "roadmap_gate"
+						? " Edit ROADMAP.md per gate guidance — governance auto-remediates at attempt_completion."
+						: " Fix audit/roadmap violations in the workspace first,"
+				breatherText += `\n\n⛔ **Completion gate pressure:** attempt_completion was blocked ${completionGateBlocks} time(s) this task. Do not retry with the same summary —${roadmapNote} verify with tests or commands, then call attempt_completion with an updated result.`
 				const {
 					buildCompletionBreatherHint,
 					buildCompletionGateEscalationBrief,
@@ -2678,9 +2685,6 @@ export class Task {
 					taskState: this.taskState,
 					focusChainSettings: this.stateManager.getGlobalSettingsKey("focusChainSettings"),
 				} as import("./tools/types/TaskConfig").TaskConfig
-				const lastReason = this.taskState.lastCompletionBlockReason as
-					| import("./tools/attemptCompletionUtils").CompletionPreflightReason
-					| undefined
 				const failedStage = lastReason ? mapCompletionReasonToPreflightStage(lastReason) : undefined
 				const observabilityEnvelope =
 					this.taskState.completionGateObservabilityEnvelope ?? buildCompletionGateObservabilityEnvelope(gateConfig)

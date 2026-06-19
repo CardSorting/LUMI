@@ -35,9 +35,11 @@ If gates still fail after auto-remediation, the agent receives:
 
 Mid-task (before completion), agents should **continue working**. The system prompt and write hints say governance runs at `attempt_completion`, not on every ROADMAP edit.
 
-**Preflight readiness** uses a **non-mutating dry-run** (`dryRun: true`): it previews planned remediation steps without writing `ROADMAP.md` or `roadmap-state.json`. Auto-clearable gates (e.g. `validation_pending` only) do not surface as blockers in the preflight brief — real remediation runs on the actual `attempt_completion` call.
+**Preflight readiness** uses a **non-mutating dry-run** (`dryRun: true`): it previews planned remediation steps without writing `ROADMAP.md` or `roadmap-state.json`. Auto-clearable gates (e.g. `validation_pending` only) do not surface as **blockers** in the preflight brief — instead, a non-blocking `<advisory>` in `<completion_gate_readiness>` confirms governance will run at `attempt_completion`. Hard gates (schema errors, missing ROADMAP.md) still appear as blocking issues.
 
 **Mid-task `validation_pending`:** After ROADMAP.md edits, workspace state marks `validation_pending: true`. Status reads (`guide`, `cockpit`, write hints) **do not** auto-validate — agents continue working until `attempt_completion` runs internal remediation.
+
+**Mid-task gate display:** When only auto-clearable gates are closed (`validation_pending`, bootstrap placeholders), steering surfaces show an informational note — not **⛔ attempt_completion blocked** — so agents are not pushed into validate/cockpit loops.
 
 <Note>
   Optional diagnostics remain available: `/roadmap cockpit`, `/roadmap explain-gate`, `/roadmap explain-stale`, `roadmap(action='doctor')`. Use these for visibility — not as a required validate loop before every completion attempt.

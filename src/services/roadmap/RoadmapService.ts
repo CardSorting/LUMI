@@ -1,7 +1,7 @@
 import { execa } from "execa"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, isAutoClearableGovernanceOnly, midTaskAgentNextCall } from "./RoadmapAutoGovernance"
 import { invalidateRoadmapWorkspaceCache } from "./RoadmapCache"
 import { isDigestContext, slimCheckpointPayload } from "./RoadmapCheckpointDigest"
 import { buildCockpitPayload } from "./RoadmapCockpit"
@@ -12,6 +12,7 @@ import { buildGateStateFromInputs, collectGateInputs } from "./RoadmapGateCatalo
 import {
 	determinePhase,
 	formatExplainGateReport,
+	gateExplainParamsFromStatus,
 	isBootstrapIncomplete,
 	wrapClarityEnvelope as operatorWrapClarityEnvelope,
 	recommendNextAction,
@@ -1404,6 +1405,10 @@ export class RoadmapService {
 			last_error: lastError,
 			project_identity_line: status.project_identity_line,
 			phase: status.phase,
+			agent_next_call: status.agent_next_call,
+			auto_clearable_governance_only: status.auto_clearable_governance_only,
+			validation_pending: status.validation_pending,
+			kanban_complete_allowed: status.kanban_complete_allowed,
 		})
 	}
 
@@ -1434,13 +1439,7 @@ export class RoadmapService {
 	public async explainGate(workspace: string): Promise<Record<string, unknown>> {
 		const status = await this.getOperationalStatus(workspace, "", "standard")
 		const gate = (status.roadmap_gate || {}) as Record<string, unknown>
-		const report = formatExplainGateReport({
-			workspace,
-			closed_gates: (gate.closed_gates as Array<Record<string, unknown>>) || [],
-			open_gates: (gate.open_gates as string[]) || [],
-			blocking_gates: (gate.blocking_gates as Array<Record<string, unknown>>) || [],
-			kanban_complete_allowed: gate.kanban_complete_allowed as boolean,
-		})
+		const report = formatExplainGateReport(gateExplainParamsFromStatus(workspace, gate, status))
 		return this.wrapClarityEnvelope({
 			action: "explain_gate",
 			success: true,
@@ -1573,7 +1572,7 @@ export class RoadmapService {
 			await recordLastError({
 				string_code: "roadmap_state_write_failed",
 				message: error instanceof Error ? error.message : String(error),
-				retry_command: "roadmap(action='cockpit')",
+				retry_command: "roadmap(action='guide')",
 				safe_to_retry: true,
 			})
 			return { ...merged, _write_failed: true }
@@ -1847,7 +1846,7 @@ export class RoadmapService {
 				tasks.length > 0
 					? `${tasks.length} template phrase(s) remain — use tasks[].suggested_replacement from project evidence.`
 					: "Bootstrap fill complete — no template phrases detected.",
-			agent_next_call: tasks.length > 0 ? AUTO_GOVERNANCE.previewBootstrapAutofill : "roadmap(action='cockpit')",
+			agent_next_call: tasks.length > 0 ? AUTO_GOVERNANCE.previewBootstrapAutofill : AUTO_GOVERNANCE.continueTaskMidPass,
 		}
 	}
 
@@ -2031,7 +2030,12 @@ export class RoadmapService {
 				: gateState.checkpoint_stale
 					? gateState.stale_summary
 					: phase.operator_summary,
-			agent_next_call: state.validation_pending ? AUTO_GOVERNANCE.continueTaskMidPass : next_rec.command,
+			agent_next_call: midTaskAgentNextCall({
+				validationPending: !!state.validation_pending,
+				bootstrapIncomplete: bootstrap_inc,
+				roadmapMissing: !gateState.roadmap_present,
+				fallback: next_rec.command,
+			}),
 			recommended_next_action: next_rec,
 			schema_valid: validation.valid,
 			prime_directive: "Did the latest work strengthen or weaken the project's center of gravity?",
@@ -2046,6 +2050,12 @@ export class RoadmapService {
 			project_archetype: (evidence.project_fingerprint || {}).project_archetype,
 			bootstrap_complete: gateState.bootstrap_complete,
 			bootstrap_placeholder_count: gateState.bootstrap_placeholder_count,
+			auto_clearable_governance_only: isAutoClearableGovernanceOnly({
+				kanbanCompleteAllowed: gateState.kanban_complete_allowed,
+				validationPending: !!state.validation_pending,
+				schemaValid: validation.valid,
+				blockingGates: (gateState.blocking_gates || []) as Array<{ id?: string }>,
+			}),
 		}
 
 		if (userRequest.trim()) {
@@ -2122,7 +2132,7 @@ export class RoadmapService {
 			payload.bootstrap_autofill_applied = applied
 			if (applied.written) {
 				payload.operator_summary = applied.operator_summary
-				payload.agent_next_call = "roadmap(action='cockpit')"
+				payload.agent_next_call = AUTO_GOVERNANCE.continueTaskMidPass
 				invalidateRoadmapWorkspaceCache(workspace)
 				const refreshed = await this.resolveWorkspaceContext(workspace, "full")
 				payload.phase = this.buildOperationalPayload("checkpoint", refreshed).phase

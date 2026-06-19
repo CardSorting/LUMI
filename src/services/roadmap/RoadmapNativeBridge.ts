@@ -140,7 +140,7 @@ export async function roadmapWriteHint(
 			preferred_tool: "roadmap",
 			preferred_command: "roadmap(action='guide')",
 			recovery_suggestion: (check.error || "Write ROADMAP.md only in the project workspace root.") + briefBit,
-			suggested_slash_command: "/roadmap cockpit",
+			suggested_slash_command: "/roadmap guide",
 			next_action: "roadmap(action='guide')",
 			source_tool: toolName,
 			path: writePath,
@@ -162,7 +162,10 @@ export async function roadmapWriteHint(
 		preferred_command: null,
 		recovery_suggestion: followup,
 		suggested_slash_command: null,
-		next_action: "continue task — governance runs automatically at attempt_completion",
+		next_action: AUTO_GOVERNANCE.continueTaskMidPass,
+		governance_policy: AUTO_GOVERNANCE.noManualValidate,
+		auto_clearable_governance_only: status.auto_clearable_governance_only ?? false,
+		validation_pending: !!status.validation_pending,
 		source_tool: toolName,
 		path: writePath,
 		workspace: check.workspace,
@@ -191,6 +194,12 @@ export function mergeRoadmapHintIntoResult(result: unknown, hint: Record<string,
 	}
 
 	parsed._roadmap_write_hint = hint
+	if (hint.governance_policy) {
+		parsed.governance_policy = hint.governance_policy
+	}
+	if (hint.auto_clearable_governance_only != null) {
+		parsed.auto_clearable_governance_only = hint.auto_clearable_governance_only
+	}
 	const digest = hint.project_steering_digest
 	if (typeof digest === "object" && digest !== null) {
 		parsed.project_steering_digest = digest

@@ -15,6 +15,8 @@ export const AUTO_GOVERNANCE = {
 	noManualValidate:
 		"Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.",
 	previewBootstrapAutofill: "roadmap(action='apply_bootstrap_fill') — preview only; autofill writes run at attempt_completion.",
+	midTaskGovernanceNote:
+		"Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — continue the task.",
 } as const
 
 /** Stale reasons safe to auto-remediate with a checkpoint date stamp (mechanical only). */
@@ -64,6 +66,43 @@ export function formatAutoRemediationSummary(steps: string[]): string {
 	return `Auto-remediation attempted: ${steps.join("; ")}.`
 }
 
+/** True when completion is blocked only by gates cleared at attempt_completion (not schema/content). */
+export function isAutoClearableGovernanceOnly(params: {
+	kanbanCompleteAllowed?: boolean
+	validationPending?: boolean
+	schemaValid?: boolean | null
+	blockingGates?: Array<{ id?: string }>
+}): boolean {
+	if (params.kanbanCompleteAllowed !== false) return false
+	const blocking = params.blockingGates || []
+	const autoClearable = new Set(["validation_current", "bootstrap_complete"])
+	if (params.validationPending && blocking.length === 0) {
+		return params.schemaValid !== false
+	}
+	if (blocking.length === 0) return false
+	if (params.validationPending && blocking.every((g) => g.id === "validation_current")) {
+		return params.schemaValid !== false
+	}
+	if (blocking.every((g) => g.id && autoClearable.has(g.id))) {
+		return blocking.length <= 2
+	}
+	return false
+}
+
+/** Human-readable kanban gate line — info for auto-clearable, hard block otherwise. */
+export function formatKanbanGateStatusLine(params: {
+	kanbanCompleteAllowed?: boolean
+	validationPending?: boolean
+	schemaValid?: boolean | null
+	blockingGates?: Array<{ id?: string }>
+}): string | null {
+	if (params.kanbanCompleteAllowed !== false) return null
+	if (isAutoClearableGovernanceOnly(params)) {
+		return `ℹ️ ${AUTO_GOVERNANCE.midTaskGovernanceNote}`
+	}
+	return `⛔ attempt_completion blocked — ${AUTO_GOVERNANCE.editRoadmapResolve}`
+}
+
 export function journalFollowupForMutation(bootstrapIncomplete?: boolean): string {
 	if (bootstrapIncomplete) {
 		return `${AUTO_GOVERNANCE.bootstrapAtCompletion} ${AUTO_GOVERNANCE.validationAtCompletion}`
@@ -74,6 +113,7 @@ export function journalFollowupForMutation(bootstrapIncomplete?: boolean): strin
 export interface RoadmapGateStructuredInput {
 	remediationSteps?: string[]
 	blockingGates?: Array<{ id?: string; label: string; why: string; fix?: string }>
+	autoClearableOnly?: boolean
 }
 
 /** Machine-parseable recovery envelope — mirrors Stripe/GitHub Actions error extensions. */
@@ -90,6 +130,11 @@ export function buildRoadmapGateStructuredEnvelope(input: RoadmapGateStructuredI
 			].join(" "),
 		)}</auto_steps>`,
 	)
+
+	if (input.autoClearableOnly) {
+		parts.push(`<auto_clearable_only>true</auto_clearable_only>`)
+		parts.push(`<mid_task_note>${escapeXmlText(AUTO_GOVERNANCE.midTaskGovernanceNote)}</mid_task_note>`)
+	}
 
 	if (input.remediationSteps && input.remediationSteps.length > 0) {
 		parts.push(`<remediation_attempted>${escapeXmlText(input.remediationSteps.join("; "))}</remediation_attempted>`)

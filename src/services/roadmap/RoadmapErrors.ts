@@ -56,7 +56,7 @@ export function errorEnvelope(params: {
 	const retry =
 		params.retryCommand ||
 		(action === "validate"
-			? "roadmap(action='cockpit')"
+			? "roadmap(action='explain_gate')"
 			: action === "checkpoint"
 				? "roadmap(action='checkpoint')"
 				: recoveryForCode(params.code, action))
@@ -89,11 +89,11 @@ export function errorEnvelope(params: {
 		retry_command: retry,
 		diagnostic_command: diagnostic,
 		operator_action: operatorAction,
-		suggested_slash_command: slash.startsWith("/roadmap") ? slash : "/roadmap cockpit",
+		suggested_slash_command: slash.startsWith("/roadmap") ? slash : "/roadmap guide",
 		_roadmap_error_envelope: true,
 		_roadmap_operator_hints: {
 			...hints,
-			suggested_slash_command: slash.startsWith("/roadmap") ? slash : "/roadmap cockpit",
+			suggested_slash_command: slash.startsWith("/roadmap") ? slash : "/roadmap guide",
 			recovery_suggestion: params.message,
 			next_action: retry,
 		},

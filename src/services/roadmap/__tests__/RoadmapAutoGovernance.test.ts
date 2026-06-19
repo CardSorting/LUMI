@@ -3,8 +3,10 @@ import {
 	AUTO_GOVERNANCE,
 	buildRoadmapGateStructuredEnvelope,
 	formatBlockingGatesList,
+	formatKanbanGateStatusLine,
 	formatRemediationNote,
 	gateEditInstruction,
+	isAutoClearableGovernanceOnly,
 	journalFollowupForMutation,
 	midTaskAgentNextCall,
 	STALE_AUTO_TOUCH_REASONS,
@@ -32,8 +34,11 @@ describe("RoadmapAutoGovernance", () => {
 		const xml = buildRoadmapGateStructuredEnvelope({
 			remediationSteps: ["auto-validated ROADMAP.md schema"],
 			blockingGates: [{ id: "checkpoint_fresh", label: "Stale", why: "old checkpoint", fix: "" }],
+			autoClearableOnly: true,
 		})
 		assert.match(xml, /<roadmap_governance_recovery/)
+		assert.match(xml, /<auto_clearable_only>true<\/auto_clearable_only>/)
+		assert.match(xml, /<mid_task_note>/)
 		assert.match(xml, /<gate id="checkpoint_fresh">/)
 		assert.match(xml, /<remediation_attempted>/)
 		assert.doesNotMatch(xml, /use_mcp/i)
@@ -63,6 +68,53 @@ describe("RoadmapAutoGovernance", () => {
 		assert.ok(STALE_AUTO_TOUCH_REASONS.has("no_recent_checkpoint_date"))
 		assert.ok(STALE_AUTO_TOUCH_REASONS.has("invalid_date"))
 		assert.ok(!STALE_AUTO_TOUCH_REASONS.has("checkpoint_expired"))
+	})
+
+	it("isAutoClearableGovernanceOnly detects validation_pending-only blocks", () => {
+		assert.strictEqual(
+			isAutoClearableGovernanceOnly({
+				kanbanCompleteAllowed: false,
+				validationPending: true,
+				schemaValid: true,
+				blockingGates: [{ id: "validation_current" }],
+			}),
+			true,
+		)
+		assert.strictEqual(
+			isAutoClearableGovernanceOnly({
+				kanbanCompleteAllowed: false,
+				validationPending: false,
+				schemaValid: false,
+				blockingGates: [{ id: "schema_valid" }],
+			}),
+			false,
+		)
+		assert.strictEqual(
+			isAutoClearableGovernanceOnly({
+				kanbanCompleteAllowed: false,
+				validationPending: true,
+				schemaValid: false,
+				blockingGates: [{ id: "validation_current" }],
+			}),
+			false,
+		)
+	})
+
+	it("formatKanbanGateStatusLine distinguishes auto-clearable vs hard block", () => {
+		const soft = formatKanbanGateStatusLine({
+			kanbanCompleteAllowed: false,
+			validationPending: true,
+			schemaValid: true,
+			blockingGates: [{ id: "validation_current" }],
+		})
+		assert.ok(soft?.startsWith("ℹ️"))
+
+		const hard = formatKanbanGateStatusLine({
+			kanbanCompleteAllowed: false,
+			schemaValid: false,
+			blockingGates: [{ id: "schema_valid" }],
+		})
+		assert.ok(hard?.includes("attempt_completion blocked"))
 	})
 
 	it("AUTO_GOVERNANCE copy avoids mandating validate at completion", () => {

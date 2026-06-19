@@ -102,6 +102,33 @@ describe("RoadmapIntegration", () => {
 		assert.match(gate.diagnostic_command, /explain-gate/)
 	})
 
+	it("session brief exposes auto_clearable_governance_only for pending validation", async () => {
+		const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "roadmap-int-"))
+		try {
+			setRoadmapConfigOverride({ enabled: true, block_kanban_on_bootstrap_incomplete: false })
+			await fs.mkdir(path.join(tmp, ".dietcode"), { recursive: true })
+			await fs.writeFile(
+				path.join(tmp, ".dietcode", "roadmap-state.json"),
+				JSON.stringify({ validation_pending: true }),
+				"utf8",
+			)
+			await fs.writeFile(path.join(tmp, "README.md"), "# Session brief test\n", "utf8")
+			const skeleton = bootstrapSkeleton({
+				project_hint: "Session brief test",
+				anti_goals: "What This Project Must Not Become: drift.",
+			})
+			await fs.writeFile(path.join(tmp, "ROADMAP.md"), skeleton, "utf8")
+
+			const { sessionBrief } = await import("../RoadmapSession")
+			const brief = await sessionBrief(tmp, true)
+			assert.strictEqual(brief?.validation_pending, true)
+			assert.strictEqual(brief?.auto_clearable_governance_only, true)
+		} finally {
+			await fs.rm(tmp, { recursive: true, force: true })
+			setRoadmapConfigOverride(null)
+		}
+	})
+
 	it("operational status read preserves validation_pending until completion remediation", async () => {
 		const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "roadmap-int-"))
 		try {

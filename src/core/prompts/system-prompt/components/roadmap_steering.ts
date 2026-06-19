@@ -1,4 +1,4 @@
-import { AUTO_GOVERNANCE } from "@/services/roadmap/RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, formatKanbanGateStatusLine } from "@/services/roadmap/RoadmapAutoGovernance"
 import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
 import { sessionBrief } from "@/services/roadmap/RoadmapSession"
 import { SystemPromptSection } from "../templates/placeholders"
@@ -17,8 +17,17 @@ export const getRoadmapSteeringSection: ComponentFunction = async (_variant, con
 
 	const identity = brief.project_identity_line || brief.steering_brief || "this project"
 	const nextCall = brief.agent_next_call || brief.first_call || "roadmap(action='guide')"
+	const gate = (brief.roadmap_gate || {}) as Record<string, unknown>
+	const blocking = (gate.blocking_gates || []) as Array<{ id?: string }>
+	const gateStatus =
+		formatKanbanGateStatusLine({
+			kanbanCompleteAllowed: brief.kanban_complete_allowed as boolean | undefined,
+			validationPending: !!brief.validation_pending,
+			schemaValid: brief.schema_valid as boolean | null | undefined,
+			blockingGates: blocking,
+		}) || ""
 	const governanceNote =
-		brief.validation_pending || brief.bootstrap_complete === false
+		brief.auto_clearable_governance_only || brief.validation_pending || brief.bootstrap_complete === false
 			? AUTO_GOVERNANCE.continueTaskMidPass
 			: AUTO_GOVERNANCE.validationAtCompletion
 
@@ -36,6 +45,7 @@ ROADMAP.md at the workspace root is the long-horizon steering surface — not a 
 **Auto-governance at completion:** ${AUTO_GOVERNANCE.bootstrapAtCompletion} ${AUTO_GOVERNANCE.validationAtCompletion} ${AUTO_GOVERNANCE.checkpointTouchAtCompletion} ${AUTO_GOVERNANCE.noManualValidate}
 
 **Mid-task guidance:** ${governanceNote}
+${gateStatus ? `\n**Gate status:** ${gateStatus}` : ""}
 
 **Recommended next call:** ${nextCall}
 

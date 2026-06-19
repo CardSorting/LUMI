@@ -2,7 +2,7 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import { formatWatchSteeringLine } from "./RoadmapAgentSteering"
-import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
+import { AUTO_GOVERNANCE, formatKanbanGateStatusLine, isAutoClearableGovernanceOnly } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { recommendNextAction } from "./RoadmapOperator"
 
@@ -114,21 +114,21 @@ export async function readLastError(): Promise<Record<string, unknown> | null> {
 const ERROR_RECOVERY: Record<string, Record<string, string>> = {
 	"validate.failed": {
 		operator_action: "Repair ROADMAP.md schema — validation runs automatically at attempt_completion",
-		retry_command: "roadmap(action='cockpit')",
+		retry_command: "roadmap(action='explain_gate')",
 		diagnostic_command: "/roadmap explain-gate",
 		suggested_slash_command: "/roadmap explain-gate",
 	},
 	"roadmap.file_mutated": {
 		operator_action: AUTO_GOVERNANCE.writeMutationFollowup,
-		retry_command: "continue task",
-		diagnostic_command: "/roadmap explain-gate",
-		suggested_slash_command: "/roadmap cockpit",
+		retry_command: AUTO_GOVERNANCE.continueTaskMidPass,
+		diagnostic_command: "/roadmap guide",
+		suggested_slash_command: "/roadmap guide",
 	},
 	"tool.error": {
 		operator_action: "roadmap(action='guide') or /roadmap doctor",
 		retry_command: "roadmap(action='guide')",
 		diagnostic_command: "/roadmap doctor",
-		suggested_slash_command: "/roadmap cockpit",
+		suggested_slash_command: "/roadmap guide",
 	},
 }
 
@@ -234,7 +234,17 @@ export async function formatProgressReport(params: {
 	if (remaining && Number(remaining) > 0) {
 		lines.push(`Bootstrap fill: ${remaining} phrase(s) — ${AUTO_GOVERNANCE.bootstrapAtCompletion}`)
 	}
-	if (snap.kanban_complete_allowed === false) lines.push("⚠️  attempt_completion blocked")
+	if (snap.kanban_complete_allowed === false) {
+		const gate = (snap.roadmap_gate || {}) as Record<string, unknown>
+		const gateLine =
+			formatKanbanGateStatusLine({
+				kanbanCompleteAllowed: false,
+				validationPending: !!snap.validation_pending,
+				schemaValid: snap.schema_valid as boolean | null | undefined,
+				blockingGates: (gate.blocking_gates || []) as Array<{ id?: string }>,
+			}) || AUTO_GOVERNANCE.midTaskGovernanceNote
+		lines.push(gateLine)
+	}
 
 	if (params.timeline) {
 		lines.push("", "Timeline:")
@@ -291,6 +301,14 @@ export async function buildProgressSnapshot(workspace: string): Promise<Record<s
 		workspace_state: wsState || null,
 		roadmap_gate: gate,
 		kanban_complete_allowed: status.kanban_complete_allowed,
+		validation_pending: status.validation_pending,
+		schema_valid: status.schema_valid,
+		auto_clearable_governance_only: isAutoClearableGovernanceOnly({
+			kanbanCompleteAllowed: status.kanban_complete_allowed as boolean | undefined,
+			validationPending: !!status.validation_pending,
+			schemaValid: status.schema_valid as boolean | null | undefined,
+			blockingGates: (gate.blocking_gates || []) as Array<{ id?: string }>,
+		}),
 		recommended_next_action: nextRec,
 		steering_identity: steering.steering_identity,
 		steering_brief: steering.steering_brief || status.steering_brief,

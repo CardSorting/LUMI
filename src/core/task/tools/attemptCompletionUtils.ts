@@ -548,7 +548,7 @@ export const COMPLETION_PREFLIGHT_STAGE_HINTS: Partial<Record<CompletionPrefligh
 	cooldown: "Wait for backoff before retrying after a gate block",
 	duplicate: "Change result or workspace before re-submitting",
 	demo_command: "Demo must run real behavior — not echo/cat",
-	roadmap: "Edit ROADMAP.md — validate/bootstrap/checkpoint auto-run at attempt_completion",
+	roadmap: "Edit ROADMAP.md for real blockers — validation/bootstrap/checkpoint auto-run at attempt_completion",
 	audit: "Fix critical audit violations and re-verify",
 	double_check: "Re-verify checklist, then call attempt_completion again",
 }
@@ -706,21 +706,32 @@ export function buildCompletionGateFocusBlock(config: TaskConfig): string {
 
 /** Dry-run readiness issues — non-mutating preflight report for proactive hints. */
 export function buildCompletionGateReadinessBlock(
-	issues: ReadonlyArray<{ stage: CompletionPreflightStage; message: string }>,
+	issues: ReadonlyArray<{ stage: CompletionPreflightStage; message: string; severity?: "block" | "info" }>,
 ): string {
-	if (issues.length === 0) {
+	const blockers = issues.filter((issue) => issue.severity !== "info")
+	const advisories = issues.filter((issue) => issue.severity === "info")
+
+	if (blockers.length === 0 && advisories.length === 0) {
 		return `<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ready="true" count="0" />`
 	}
-	const issueElements = issues
+
+	const issueElements = blockers
 		.map(
 			(issue) =>
 				`<issue stage="${issue.stage}" http_status="${mapCompletionReasonToHttpStatus(classifyCompletionPreflightReason(issue.message))}">` +
 				`${escapeCompletionGateXmlText(issue.message)}</issue>`,
 		)
 		.join("")
+
+	const advisoryElements = advisories
+		.map((issue) => `<advisory stage="${issue.stage}">` + `${escapeCompletionGateXmlText(issue.message)}</advisory>`)
+		.join("")
+
+	const ready = blockers.length === 0 ? "true" : "false"
 	return (
-		`<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ready="false" count="${issues.length}">` +
-		`${issueElements}</completion_gate_readiness>`
+		`<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ready="${ready}" ` +
+		`count="${blockers.length}" advisory_count="${advisories.length}">` +
+		`${issueElements}${advisoryElements}</completion_gate_readiness>`
 	)
 }
 
@@ -1263,7 +1274,14 @@ export function buildCompletionGateEscalationBrief(config: TaskConfig): string {
 export function buildCompletionBreatherHint(config: TaskConfig): string {
 	const blockCount = config.taskState.completionGateBlockCount ?? 0
 	const mistakes = config.taskState.consecutiveMistakeCount
+	const lastReason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
 	const hints: string[] = []
+
+	if (lastReason === "roadmap_gate") {
+		hints.push(
+			"For roadmap blocks: edit ROADMAP.md per gate guidance — bootstrap fill, validate, and checkpoint date stamp run automatically at attempt_completion.",
+		)
+	}
 
 	if (blockCount >= COMPLETION_GATE_WARN_THRESHOLD) {
 		hints.push(

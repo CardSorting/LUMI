@@ -398,6 +398,19 @@ describe("attemptCompletionUtils", () => {
 			block.should.containEql('stage="min_length"')
 			block.should.containEql('http_status="422"')
 		})
+
+		it("keeps ready true when only info advisories are present", () => {
+			const block = buildCompletionGateReadinessBlock([
+				{
+					stage: "roadmap",
+					message: "Governance runs automatically at attempt_completion — continue the task.",
+					severity: "info",
+				},
+			])
+			block.should.containEql('ready="true"')
+			block.should.containEql('advisory_count="1"')
+			block.should.containEql("<advisory")
+		})
 	})
 
 	describe("isCompletionGateCircuitBreakerTripped", () => {

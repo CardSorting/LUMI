@@ -133,7 +133,7 @@ describe("completionGatePipeline", () => {
 		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 	})
 
-	it("evaluateCompletionGateReadinessAsync skips auto-clearable roadmap gates in dry-run", async () => {
+	it("evaluateCompletionGateReadinessAsync emits info advisory for auto-clearable roadmap governance", async () => {
 		setRoadmapConfigOverride({ enabled: true, block_kanban_on_bootstrap_incomplete: false })
 		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
 		await fs.writeFile(
@@ -152,7 +152,9 @@ describe("completionGatePipeline", () => {
 		const issues = await evaluateCompletionGateReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
 			result: VALID_RESULT,
 		})
-		issues.some((issue) => issue.stage === "roadmap").should.be.false()
+		const roadmap = issues.find((issue) => issue.stage === "roadmap")
+		should.exist(roadmap)
+		roadmap!.severity!.should.equal("info")
 		setRoadmapConfigOverride(null)
 	})
 

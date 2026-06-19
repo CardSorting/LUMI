@@ -44,7 +44,7 @@ export const BASE_SLASH_COMMANDS: SlashCommand[] = [
 	},
 	{
 		name: "roadmap",
-		description: "Auto-rolling roadmap operator console (cockpit, doctor, validate, explain-gate, …)",
+		description: "Auto-rolling roadmap operator console (cockpit, doctor, explain-gate, explain-stale, …)",
 		section: "default",
 		cliCompatible: true,
 	},
