@@ -31,11 +31,11 @@ describe("RoadmapAgentSteering", () => {
 			phase: "bootstrap_fill",
 			validation_pending: true,
 			kanban_complete_allowed: false,
-			agent_next_call: "roadmap(action='validate')",
+			agent_next_call: "roadmap(action='cockpit')",
 		})
 		assert.match(block, /# Roadmap Steering/)
 		assert.match(block, /attempt_completion blocked/)
-		assert.match(block, /validate/)
+		assert.match(block, /automatically/)
 	})
 
 	it("formats compact watch line", () => {
@@ -44,9 +44,9 @@ describe("RoadmapAgentSteering", () => {
 			phase: "checkpoint",
 			validation_pending: true,
 			kanban_complete_allowed: false,
-			agent_next_call: "roadmap(action='validate')",
+			agent_next_call: "roadmap(action='cockpit')",
 		})
 		assert.match(line, /\[roadmap\]/)
-		assert.match(line, /validate/)
+		assert.match(line, /pending/)
 	})
 })

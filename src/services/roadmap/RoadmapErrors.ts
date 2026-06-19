@@ -22,10 +22,10 @@ const RECOVERY_BY_CODE: Record<string, string> = {
 	roadmap_disabled: "Enable lumi.roadmap.enabled in VS Code settings",
 	workspace_unresolved: "Open a workspace folder before using roadmap steering",
 	roadmap_missing: "roadmap(action='checkpoint') to bootstrap ROADMAP.md",
-	schema_invalid: "roadmap(action='validate') then repair reported issues",
-	checkpoint_stale: "roadmap(action='checkpoint', context='stale refresh')",
-	gate_closed: "/roadmap explain-gate — review closed steering gates",
-	validation_pending: "roadmap(action='validate') — ROADMAP.md mutated since last validate",
+	schema_invalid: "Repair ROADMAP.md schema issues — validation runs automatically at completion",
+	checkpoint_stale: "Update the Recent Checkpoint section in ROADMAP.md",
+	gate_closed: "Edit ROADMAP.md to resolve closed steering gates",
+	validation_pending: "Validation runs automatically at completion — repair ROADMAP.md if still blocked",
 	unknown_action: "roadmap(action='guide') for phase and next call",
 }
 
@@ -55,7 +55,7 @@ export function errorEnvelope(params: {
 	const retry =
 		params.retryCommand ||
 		(action === "validate"
-			? "roadmap(action='validate')"
+			? "roadmap(action='cockpit')"
 			: action === "checkpoint"
 				? "roadmap(action='checkpoint')"
 				: recoveryForCode(params.code, action))
@@ -117,8 +117,8 @@ export function validationPendingEnvelope(workspace = ""): RoadmapErrorEnvelope 
 			workspace,
 		}),
 		diagnostic_command: "/roadmap explain-gate",
-		retry_command: "roadmap(action='validate')",
-		suggested_slash_command: "/roadmap validate",
+		retry_command: "roadmap(action='cockpit')",
+		suggested_slash_command: "/roadmap explain-gate",
 	}
 }
 

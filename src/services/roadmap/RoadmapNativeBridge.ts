@@ -1,8 +1,8 @@
 import { DietCodeDefaultTool } from "@shared/tools"
 import * as path from "path"
 import { buildProjectContextLines } from "./RoadmapAgentSteering"
+import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
-import { roadmapToolCommandToSlash } from "./RoadmapOperator"
 import { emitProgress } from "./RoadmapProgress"
 import { RoadmapService } from "./RoadmapService"
 import { journalRoadmapFileMutation } from "./RoadmapToolJournal"
@@ -151,23 +151,18 @@ export async function roadmapWriteHint(
 		}
 	}
 
-	let followup = `ROADMAP.md was mutated — run schema validation before closing the checkpoint pass.${briefBit}`
+	let followup = `${AUTO_GOVERNANCE.writeMutationFollowup}${briefBit}`
 	if (bootstrapInc) {
-		followup += ` Bootstrap incomplete (${check.bootstrap_placeholder_count ?? "?"} phrase(s)) — preview roadmap(action='apply_bootstrap_fill') or apply with context='write'.`
+		followup += ` Bootstrap incomplete (${check.bootstrap_placeholder_count ?? "?"} phrase(s)) — ${AUTO_GOVERNANCE.bootstrapAtCompletion}`
 	}
-
-	const nextAction = bootstrapInc
-		? "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')"
-		: "roadmap(action='validate') then return checkpoint summary if pass complete"
-	const preferred = bootstrapInc ? "roadmap(action='apply_bootstrap_fill', context='write')" : "roadmap(action='validate')"
 
 	return {
 		string_code: "roadmap_write_followup",
 		preferred_tool: "roadmap",
-		preferred_command: preferred,
+		preferred_command: null,
 		recovery_suggestion: followup,
-		suggested_slash_command: roadmapToolCommandToSlash(preferred),
-		next_action: nextAction,
+		suggested_slash_command: null,
+		next_action: "continue task — governance runs automatically at attempt_completion",
 		source_tool: toolName,
 		path: writePath,
 		workspace: check.workspace,

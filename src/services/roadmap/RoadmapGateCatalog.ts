@@ -109,7 +109,7 @@ const GATE_CHECKS: GateCheckDef[] = [
 			return i.validation ? i.validation.valid : i.workspace_state.schema_valid !== false
 		},
 		whyClosed: "Schema validation failed — checkpoint pass incomplete",
-		fix: "roadmap(action='validate') — use roadmap(action='explain_gate') for schema fixes",
+		fix: "Repair ROADMAP.md schema — validation runs automatically at attempt_completion",
 		safe: true,
 		blocksKanbanComplete: false,
 	},
@@ -118,7 +118,7 @@ const GATE_CHECKS: GateCheckDef[] = [
 		label: "ROADMAP.md validated after last edit",
 		isOpen: (i) => !i.roadmap_present || !i.workspace_state.validation_pending,
 		whyClosed: "ROADMAP.md changed since last schema validation",
-		fix: "roadmap(action='validate') before attempt_completion",
+		fix: "Validation runs automatically at attempt_completion — repair ROADMAP.md if still blocked",
 		safe: true,
 		blocksKanbanComplete: true,
 	},
@@ -127,7 +127,7 @@ const GATE_CHECKS: GateCheckDef[] = [
 		label: "Recent checkpoint fresh",
 		isOpen: (i) => !i.roadmap_present || !i.freshness.stale,
 		whyClosed: "Checkpoint stale vs project activity or missing date",
-		fix: "roadmap(action='checkpoint', context='stale refresh')",
+		fix: "Update the Recent Checkpoint section in ROADMAP.md to reflect current work",
 		safe: true,
 		blocksKanbanComplete: true,
 	},
@@ -136,7 +136,7 @@ const GATE_CHECKS: GateCheckDef[] = [
 		label: "Bootstrap placeholders filled",
 		isOpen: (i) => !i.roadmap_present || i.bootstrap_complete !== false,
 		whyClosed: "ROADMAP.md still contains unfilled bootstrap/template guidance phrases",
-		fix: "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')",
+		fix: "Bootstrap autofill runs automatically at attempt_completion — edit remaining placeholders in ROADMAP.md",
 		safe: true,
 		blocksKanbanComplete: false,
 	},
@@ -166,12 +166,12 @@ export function evaluateGateChecks(inputs: GateInputs): { closed: GateClosedEntr
 		if (check.id === "bootstrap_complete" && brief) {
 			why = `${brief}: ${inputs.bootstrap_placeholder_count ?? "some"} unfilled bootstrap template phrase(s) remain`
 		} else if (check.id === "schema_valid" && inputs.bootstrap_complete === false) {
-			fix = "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')"
+			fix = "Bootstrap autofill runs automatically at attempt_completion — edit remaining placeholders in ROADMAP.md"
 			if (brief) {
 				why = `${brief}: schema validation failed — bootstrap placeholders may still remain`
 			}
 		} else if (check.id === "schema_valid" && brief) {
-			fix = `Repair ROADMAP.md schema for ${brief}, then roadmap(action='validate')`
+			fix = `Repair ROADMAP.md schema for ${brief}`
 		}
 
 		closed.push({
@@ -205,10 +205,10 @@ export function blockingClosedGates(closed: GateClosedEntry[], cfg: RoadmapConfi
 }
 
 export function preferredGateCommand(inputs: GateInputs, isValid: boolean): string {
-	if (inputs.workspace_state.validation_pending) return "roadmap(action='validate')"
-	if (inputs.bootstrap_complete === false) return "roadmap(action='apply_bootstrap_fill', context='write')"
-	if (inputs.freshness.stale) return "roadmap(action='checkpoint')"
-	if (!isValid) return "roadmap(action='validate')"
+	if (inputs.workspace_state.validation_pending) return "validates automatically at attempt_completion"
+	if (inputs.bootstrap_complete === false) return "bootstrap autofill runs automatically at attempt_completion"
+	if (inputs.freshness.stale) return "update Recent Checkpoint (section 11) in ROADMAP.md"
+	if (!isValid) return "repair ROADMAP.md schema — roadmap(action='explain_gate') for diagnostics"
 	return "roadmap(action='guide')"
 }
 

@@ -461,9 +461,9 @@ const COMPLETION_GATE_PLAYBOOK_STEPS: Partial<Record<CompletionPreflightReason, 
 		"Retry attempt_completion with the live demo command.",
 	],
 	roadmap_gate: [
-		"Run the roadmap governance command suggested in the block message.",
-		"Confirm gates pass locally before retrying completion.",
-		"Update result to reflect governance clearance.",
+		"Roadmap gates auto-remediate at attempt_completion (bootstrap fill, validate, checkpoint date stamp).",
+		"Do not call roadmap(action='validate') or MCP — edit ROADMAP.md per the <roadmap_governance_recovery> block.",
+		"Retry attempt_completion after ROADMAP.md issues are resolved.",
 	],
 	audit_gate: [
 		"Read critical audit violations and fix root causes in code.",
@@ -546,7 +546,7 @@ export const COMPLETION_PREFLIGHT_STAGE_HINTS: Partial<Record<CompletionPrefligh
 	cooldown: "Wait for backoff before retrying after a gate block",
 	duplicate: "Change result or workspace before re-submitting",
 	demo_command: "Demo must run real behavior — not echo/cat",
-	roadmap: "Clear roadmap governance gates locally",
+	roadmap: "Edit ROADMAP.md — validate/bootstrap/checkpoint auto-run at attempt_completion",
 	audit: "Fix critical audit violations and re-verify",
 	double_check: "Re-verify checklist, then call attempt_completion again",
 }
@@ -1305,7 +1305,7 @@ export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflight
 		case "circuit_breaker":
 			return "Stop calling attempt_completion — start a new task after fixing root causes."
 		case "roadmap_gate":
-			return "Run the suggested roadmap command to clear governance gates."
+			return "Edit ROADMAP.md to resolve governance gates — validation and bootstrap fill run automatically at completion."
 		case "audit_gate":
 			return "Address critical audit violations in the workspace, run verification, then retry with an updated result."
 		case "double_check":

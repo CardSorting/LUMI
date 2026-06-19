@@ -2,6 +2,7 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import { formatWatchSteeringLine } from "./RoadmapAgentSteering"
+import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { recommendNextAction } from "./RoadmapOperator"
 
@@ -112,16 +113,16 @@ export async function readLastError(): Promise<Record<string, unknown> | null> {
 
 const ERROR_RECOVERY: Record<string, Record<string, string>> = {
 	"validate.failed": {
-		operator_action: "roadmap(action='validate') — fix schema issues",
-		retry_command: "roadmap(action='validate')",
+		operator_action: "Repair ROADMAP.md schema — validation runs automatically at attempt_completion",
+		retry_command: "roadmap(action='cockpit')",
 		diagnostic_command: "/roadmap explain-gate",
-		suggested_slash_command: "/roadmap validate",
+		suggested_slash_command: "/roadmap explain-gate",
 	},
 	"roadmap.file_mutated": {
-		operator_action: "ROADMAP.md mutated — validate before closing checkpoint pass",
-		retry_command: "roadmap(action='validate')",
+		operator_action: AUTO_GOVERNANCE.writeMutationFollowup,
+		retry_command: "continue task",
 		diagnostic_command: "/roadmap explain-gate",
-		suggested_slash_command: "/roadmap validate",
+		suggested_slash_command: "/roadmap cockpit",
 	},
 	"tool.error": {
 		operator_action: "roadmap(action='guide') or /roadmap doctor",
@@ -208,7 +209,7 @@ export async function formatProgressReport(params: {
 		const digest = (snap.project_steering_digest || {}) as Record<string, unknown>
 		const remaining = digest.bootstrap_remaining
 		if (remaining && Number(remaining) > 0) {
-			lines.push(`Bootstrap fill: ${remaining} phrase(s) — roadmap(action='apply_bootstrap_fill', context='write')`)
+			lines.push(`Bootstrap fill: ${remaining} phrase(s) — ${AUTO_GOVERNANCE.bootstrapAtCompletion}`)
 		}
 		return lines.join("\n")
 	}
@@ -231,7 +232,7 @@ export async function formatProgressReport(params: {
 	if (digest.identity_line) lines.push(`Project: ${digest.identity_line}`)
 	const remaining = digest.bootstrap_remaining
 	if (remaining && Number(remaining) > 0) {
-		lines.push(`Bootstrap fill: ${remaining} phrase(s) — roadmap(action='apply_bootstrap_fill', context='write')`)
+		lines.push(`Bootstrap fill: ${remaining} phrase(s) — ${AUTO_GOVERNANCE.bootstrapAtCompletion}`)
 	}
 	if (snap.kanban_complete_allowed === false) lines.push("⚠️  attempt_completion blocked")
 

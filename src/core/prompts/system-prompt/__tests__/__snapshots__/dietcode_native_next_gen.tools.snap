@@ -495,7 +495,7 @@
     "type": "function",
     "function": {
       "name": "roadmap",
-      "description": "Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Responses include project_identity_line, _roadmap_operator_hints, agent_playbook, and recommended_next_action.",
+      "description": "Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — no manual validate step. Responses include project_identity_line, _roadmap_operator_hints, agent_playbook, and recommended_next_action.",
       "strict": false,
       "parameters": {
         "type": "object",

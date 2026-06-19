@@ -3,9 +3,11 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import { evaluateRoadmapCompletionBlock, requireFreshCheckpointBeforeComplete } from "../RoadmapCompletionGate"
+import { setRoadmapConfigOverride } from "../RoadmapConfig"
 import { gateClosedEnvelope, validationPendingEnvelope } from "../RoadmapErrors"
 import { preflightRoadmapWrite, validateRoadmapWriteTarget } from "../RoadmapNativeBridge"
 import { formatProgressReport } from "../RoadmapProgress"
+import { bootstrapSkeleton } from "../RoadmapSchema"
 import { RoadmapService } from "../RoadmapService"
 import { buildSteeringContext, enrichPayloadWithSteering } from "../RoadmapSteeringContext"
 
@@ -22,26 +24,42 @@ describe("RoadmapIntegration", () => {
 		}
 	})
 
-	it("blocks completion when validation_pending", async () => {
+	it("auto-validates validation_pending instead of blocking on tool calls", async () => {
 		const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "roadmap-int-"))
 		try {
+			setRoadmapConfigOverride({
+				enabled: true,
+				block_kanban_on_bootstrap_incomplete: false,
+			})
 			await fs.mkdir(path.join(tmp, ".dietcode"), { recursive: true })
 			await fs.writeFile(
 				path.join(tmp, ".dietcode", "roadmap-state.json"),
 				JSON.stringify({ validation_pending: true }),
 				"utf8",
 			)
-			await fs.writeFile(path.join(tmp, "ROADMAP.md"), "# Test\n", "utf8")
+			await fs.writeFile(path.join(tmp, "README.md"), "# Integration test\n", "utf8")
+			const skeleton = bootstrapSkeleton({
+				project_hint: "Integration test project",
+				anti_goals: "What This Project Must Not Become: drift.",
+				strategic_narrative: "Integration test steering.",
+				operators_hint: "Developers.",
+				canonical_architecture: "Standard layout.",
+				canonical_workflows: "Build and test.",
+				runtime_center: "Workspace root.",
+				health_summary: "Healthy test project.",
+				now_section: "### 1. Test\n- Integration pass",
+				checkpoint_next_move: "Complete integration test.",
+			})
+			await fs.writeFile(path.join(tmp, "ROADMAP.md"), skeleton, "utf8")
 
 			const block = await evaluateRoadmapCompletionBlock(tmp)
-			assert.strictEqual(block.blocked, true)
-			assert.match(block.message || "", /validate/i)
+			assert.strictEqual(block.blocked, false)
 
 			const kernelBlock = await requireFreshCheckpointBeforeComplete(tmp)
-			assert.ok(kernelBlock)
-			assert.match(kernelBlock, /validate|explain-gate/i)
+			assert.strictEqual(kernelBlock, null)
 		} finally {
 			await fs.rm(tmp, { recursive: true, force: true })
+			setRoadmapConfigOverride(null)
 		}
 	})
 
@@ -77,7 +95,7 @@ describe("RoadmapIntegration", () => {
 		const pending = validationPendingEnvelope("/tmp/project")
 		assert.strictEqual(pending.string_code, "validation_pending")
 		assert.match(pending.diagnostic_command, /^\/roadmap/)
-		assert.match(pending.suggested_slash_command, /validate/)
+		assert.match(pending.suggested_slash_command, /explain-gate|cockpit/)
 
 		const gate = gateClosedEnvelope("Schema gate closed")
 		assert.strictEqual(gate.string_code, "gate_closed")

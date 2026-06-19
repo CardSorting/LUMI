@@ -1,5 +1,7 @@
 /** Live agent steering — compact entity-card lines for prompts and environment_details (Backstage-style). */
 
+import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
+
 function truncate(text: string, limit = 120): string {
 	const stripped = text.split(/\s+/).filter(Boolean).join(" ")
 	if (stripped.length <= limit) return stripped
@@ -60,7 +62,7 @@ export function buildProjectContextLines(brief: Record<string, unknown>): string
 	if (brief.recent_checkpoint_date) {
 		lines.push(`Last checkpoint: ${brief.recent_checkpoint_date}`)
 	} else if (brief.roadmap_exists) {
-		lines.push("Last checkpoint: unparsed — refresh section 11")
+		lines.push("Last checkpoint: unparsed — auto-stamped at attempt_completion if section 11 exists")
 	}
 
 	return lines
@@ -71,14 +73,14 @@ export function formatRoadmapSteeringBlock(brief: Record<string, unknown>): stri
 
 	if (brief.phase) lines.push(`Phase: ${brief.phase}`)
 	if (brief.kanban_complete_allowed === false) {
-		lines.push("⛔ attempt_completion blocked — roadmap(action='explain_gate')")
+		lines.push(`⛔ attempt_completion blocked — ${AUTO_GOVERNANCE.editRoadmapResolve}`)
 	}
 	if (brief.validation_pending) {
-		lines.push("⚠️ ROADMAP.md changed since last validate — run roadmap(action='validate') before attempt_completion.")
+		lines.push(`⚠️ ROADMAP.md changed since last validate — ${AUTO_GOVERNANCE.validationAtCompletion}`)
 	}
 	if (brief.bootstrap_complete === false) {
 		lines.push(
-			`⚠️ Bootstrap incomplete (${brief.bootstrap_placeholder_count ?? "?"} template phrase(s)) — roadmap(action='apply_bootstrap_fill', context='write').`,
+			`⚠️ Bootstrap incomplete (${brief.bootstrap_placeholder_count ?? "?"} template phrase(s)) — ${AUTO_GOVERNANCE.bootstrapAtCompletion}`,
 		)
 	}
 	if (brief.operator_summary) lines.push(`Summary: ${brief.operator_summary}`)
@@ -97,6 +99,6 @@ export function formatWatchSteeringLine(brief: Record<string, unknown>): string 
 	const phase = brief.phase || "unknown"
 	const next = brief.agent_next_call || "roadmap(action='guide')"
 	const gate = brief.kanban_complete_allowed === false ? " ⛔gates" : ""
-	const pending = brief.validation_pending ? " ⚠️validate" : ""
+	const pending = brief.validation_pending ? " ⚠️pending" : ""
 	return `[roadmap] ${identity} · phase=${phase}${gate}${pending} → ${next}`
 }

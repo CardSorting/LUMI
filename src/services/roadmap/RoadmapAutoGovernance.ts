@@ -1,0 +1,132 @@
+/** Shared copy and helpers for internal roadmap governance at attempt_completion. */
+
+export const AUTO_GOVERNANCE = {
+	validationAtCompletion: "Schema validation runs automatically at attempt_completion.",
+	bootstrapAtCompletion: "Bootstrap autofill runs automatically at attempt_completion.",
+	checkpointTouchAtCompletion: "Missing Recent Checkpoint dates are auto-stamped at attempt_completion.",
+	writeMutationFollowup: "ROADMAP.md was mutated — validation runs automatically before task completion.",
+	editRoadmapResolve: "Edit ROADMAP.md directly to resolve remaining gates, then retry attempt_completion.",
+	continueTaskMidPass:
+		"Continue the task — roadmap governance (validate, bootstrap autofill, checkpoint date stamp) runs automatically at attempt_completion.",
+	autoValidateFailed: "Task completion blocked: ROADMAP.md could not be auto-validated after internal remediation.",
+	gatesBlockedPrefix: "Task completion blocked by Roadmap Governance Gates:",
+	gateEvaluationFailed:
+		"Task completion blocked: roadmap gate evaluation failed internally. Verify ROADMAP.md exists and is readable, then retry attempt_completion.",
+	noManualValidate:
+		"Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.",
+} as const
+
+/** Stale reasons safe to auto-remediate with a checkpoint date stamp (mechanical only). */
+export const STALE_AUTO_TOUCH_REASONS = new Set(["no_recent_checkpoint_date", "invalid_date"])
+
+/** Per-gate ROADMAP.md edit instructions for agent recovery (RFC 7807-style extensions). */
+export const GATE_EDIT_INSTRUCTIONS: Record<string, string> = {
+	roadmap_enabled: "Enable lumi.roadmap.enabled in VS Code settings.",
+	workspace_safe: "Open the project workspace root in the editor — not the extension/plugin install tree.",
+	roadmap_present: "Create ROADMAP.md at the workspace root (auto-bootstrap may run on session start).",
+	workspace_skill_installed: "Optional — install auto-rolling-roadmap skill via session start or roadmap(action='doctor').",
+	schema_valid:
+		"Repair ROADMAP.md — ensure all 12 required sections exist, health status is valid, and section 9 audit is present.",
+	validation_current: "Usually auto-clears at attempt_completion; if still blocked, fix schema errors in ROADMAP.md.",
+	checkpoint_fresh: "Update section 11 (Recent Checkpoint) with today's date and a summary of work completed this pass.",
+	bootstrap_complete:
+		"Replace remaining bootstrap template phrases with project-specific evidence, or let autofill run at attempt_completion.",
+}
+
+export function gateEditInstruction(gateId?: string, fallbackFix?: string): string {
+	if (gateId && GATE_EDIT_INSTRUCTIONS[gateId]) {
+		return GATE_EDIT_INSTRUCTIONS[gateId]
+	}
+	return fallbackFix || AUTO_GOVERNANCE.editRoadmapResolve
+}
+
+function escapeXmlText(value: string): string {
+	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+}
+
+export function formatRemediationNote(steps: string[]): string {
+	if (steps.length === 0) return ""
+	return `\n\nInternal remediation already attempted: ${steps.join("; ")}.`
+}
+
+export function formatBlockingGatesList(gates: Array<{ label: string; why: string; fix?: string; id?: string }>): string {
+	return gates
+		.map((g) => {
+			const edit = gateEditInstruction(g.id, g.fix)
+			return `- ${g.label}: ${g.why}\n  → Edit: ${edit}`
+		})
+		.join("\n")
+}
+
+export function formatAutoRemediationSummary(steps: string[]): string {
+	if (steps.length === 0) return ""
+	return `Auto-remediation attempted: ${steps.join("; ")}.`
+}
+
+export function journalFollowupForMutation(bootstrapIncomplete?: boolean): string {
+	if (bootstrapIncomplete) {
+		return `${AUTO_GOVERNANCE.bootstrapAtCompletion} ${AUTO_GOVERNANCE.validationAtCompletion}`
+	}
+	return AUTO_GOVERNANCE.validationAtCompletion
+}
+
+export interface RoadmapGateStructuredInput {
+	remediationSteps?: string[]
+	blockingGates?: Array<{ id?: string; label: string; why: string; fix?: string }>
+}
+
+/** Machine-parseable recovery envelope — mirrors Stripe/GitHub Actions error extensions. */
+export function buildRoadmapGateStructuredEnvelope(input: RoadmapGateStructuredInput): string {
+	const parts: string[] = ['<roadmap_governance_recovery schema_version="1">']
+
+	parts.push(`<policy>${escapeXmlText(AUTO_GOVERNANCE.noManualValidate)}</policy>`)
+	parts.push(
+		`<auto_steps>${escapeXmlText(
+			[
+				AUTO_GOVERNANCE.bootstrapAtCompletion,
+				AUTO_GOVERNANCE.validationAtCompletion,
+				AUTO_GOVERNANCE.checkpointTouchAtCompletion,
+			].join(" "),
+		)}</auto_steps>`,
+	)
+
+	if (input.remediationSteps && input.remediationSteps.length > 0) {
+		parts.push(`<remediation_attempted>${escapeXmlText(input.remediationSteps.join("; "))}</remediation_attempted>`)
+	}
+
+	if (input.blockingGates && input.blockingGates.length > 0) {
+		const gateBlocks = input.blockingGates
+			.map((g) => {
+				const edit = gateEditInstruction(g.id, g.fix)
+				return (
+					`<gate id="${escapeXmlText(g.id || "unknown")}">` +
+					`<label>${escapeXmlText(g.label)}</label>` +
+					`<why>${escapeXmlText(g.why)}</why>` +
+					`<edit>${escapeXmlText(edit)}</edit>` +
+					`</gate>`
+				)
+			})
+			.join("")
+		parts.push(`<blocking_gates>${gateBlocks}</blocking_gates>`)
+	}
+
+	parts.push(`<resolution>${escapeXmlText(AUTO_GOVERNANCE.editRoadmapResolve)}</resolution>`)
+	parts.push("</roadmap_governance_recovery>")
+	return parts.join("")
+}
+
+/** Mid-task agent_next_call when governance is pending — avoids validate tool loops. */
+export function midTaskAgentNextCall(params: {
+	validationPending?: boolean
+	bootstrapIncomplete?: boolean
+	roadmapMissing?: boolean
+	fallback?: string
+}): string {
+	if (params.roadmapMissing) {
+		return "roadmap(action='checkpoint') to bootstrap ROADMAP.md"
+	}
+	if (params.validationPending || params.bootstrapIncomplete) {
+		return AUTO_GOVERNANCE.continueTaskMidPass
+	}
+	return params.fallback || "roadmap(action='guide')"
+}

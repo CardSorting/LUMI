@@ -1,3 +1,4 @@
+import { AUTO_GOVERNANCE } from "@/services/roadmap/RoadmapAutoGovernance"
 import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
 import { sessionBrief } from "@/services/roadmap/RoadmapSession"
 import { SystemPromptSection } from "../templates/placeholders"
@@ -16,6 +17,10 @@ export const getRoadmapSteeringSection: ComponentFunction = async (_variant, con
 
 	const identity = brief.project_identity_line || brief.steering_brief || "this project"
 	const nextCall = brief.agent_next_call || brief.first_call || "roadmap(action='guide')"
+	const governanceNote =
+		brief.validation_pending || brief.bootstrap_complete === false
+			? AUTO_GOVERNANCE.continueTaskMidPass
+			: AUTO_GOVERNANCE.validationAtCompletion
 
 	return `=== ${SystemPromptSection.ROADMAP_STEERING} ===
 
@@ -28,23 +33,20 @@ ROADMAP.md at the workspace root is the long-horizon steering surface — not a 
 **Health:** ${brief.health_status || "unknown"}
 **Prime directive:** Did the latest work strengthen or weaken the project's center of gravity?
 
-The system auto-bootstraps ROADMAP.md from workspace evidence when missing. After editing ROADMAP.md, run \`roadmap(action='validate')\` before \`attempt_completion\`.
+**Auto-governance at completion:** ${AUTO_GOVERNANCE.bootstrapAtCompletion} ${AUTO_GOVERNANCE.validationAtCompletion} ${AUTO_GOVERNANCE.checkpointTouchAtCompletion} ${AUTO_GOVERNANCE.noManualValidate}
+
+**Mid-task guidance:** ${governanceNote}
 
 **Recommended next call:** ${nextCall}
 
-Tool actions (all return _roadmap_operator_hints + project_identity_line):
-- \`/roadmap cockpit\` — operator one-screen summary (runs synchronously in chat)
+Tool actions (optional — governance is internal at \`attempt_completion\`):
+- \`/roadmap cockpit\` — operator one-screen summary
 - \`/roadmap doctor\` — production health checks
-- \`/roadmap explain-gate\` / \`/roadmap explain-stale\` — gate and freshness diagnostics
+- \`/roadmap explain-gate\` / \`/roadmap explain-stale\` — diagnostics when blocked
 - \`roadmap(action='guide')\` — phase, gates, steering digest
-- \`roadmap(action='cockpit')\` — one-screen operator summary with gate report
 - \`roadmap(action='checkpoint')\` — full evidence before major direction changes
-- \`roadmap(action='validate')\` — schema gate after ROADMAP.md edits
-- \`roadmap(action='doctor')\` — production health checks + recommendations
-- \`roadmap(action='apply_bootstrap_fill', context='write')\` — evidence autofill for template phrases
-- \`roadmap(action='explain_gate')\` — why attempt_completion may be blocked
-- \`roadmap(action='explain_stale')\` — why checkpoint may be outdated vs git activity
+- \`roadmap(action='apply_bootstrap_fill')\` — preview evidence autofill (write runs automatically at completion)
 - \`roadmap(action='progress', context='--current')\` — gate snapshot + recent activity
-- \`roadmap(action='watch')\` — compact last-action line
-- \`roadmap(action='last_error')\` — recovery from last failure`
+
+If \`attempt_completion\` is blocked by roadmap gates, edit ROADMAP.md per the gate message — do not call validate or MCP for governance.`
 }

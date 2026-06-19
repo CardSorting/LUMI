@@ -11,9 +11,9 @@ The roadmap is the project's steering surface — not a backlog or wishlist.
 | See one-screen status | /roadmap cockpit or roadmap(action='cockpit') |
 | Check production health | /roadmap doctor or roadmap(action='doctor') |
 | Before major direction changes | roadmap(action='checkpoint') |
-| After agent edits ROADMAP.md | /roadmap validate or roadmap(action='validate') |
-| Bootstrap placeholders remain | roadmap(action='apply_bootstrap_fill', context='write') |
-| Closed gates / completion blocked | /roadmap explain-gate or roadmap(action='explain_gate') |
+| After agent edits ROADMAP.md | validated automatically internally |
+| Bootstrap placeholders remain | autofill runs automatically at attempt_completion; preview with roadmap(action='apply_bootstrap_fill') |
+| Closed gates / completion blocked | edit ROADMAP.md — gates auto-remediate at attempt_completion |
 | Checkpoint outdated vs git activity | /roadmap explain-stale or roadmap(action='explain_stale') |
 | Activity timeline | /roadmap progress --timeline |
 
@@ -27,9 +27,9 @@ Roadmap autonomous loop (agents)
 2. roadmap(action='checkpoint')  — evidence bundle + bootstrap_fill_plan when placeholders remain
 3. roadmap(action='apply_bootstrap_fill') — preview/write per-project evidence autofill
 4. Edit ROADMAP.md at workspace root only
-5. roadmap(action='validate')    — confirm schema + bootstrap completeness before finishing
-6. roadmap(action='explain_gate') — when gates block attempt_completion or schema is unclear
-7. roadmap(action='explain_stale') — when checkpoint freshness vs git activity is unclear
+5. Validation is automatic       — schema is checked automatically at attempt_completion and on roadmap actions
+6. roadmap(action='explain_gate') — optional diagnostic when schema issues are unclear
+7. roadmap(action='explain_stale') — optional diagnostic when checkpoint freshness vs git activity is unclear
 8. Return Required Final Assistant Response summary (not the full file)
 
 Every roadmap tool response includes steering_line and write_guard hints.
@@ -83,7 +83,7 @@ export function determinePhase(params: {
 		return {
 			phase: "validate_pending",
 			operator_summary: "ROADMAP.md failed schema validation — repair before next checkpoint.",
-			agent_next_call: "roadmap(action='validate') then fix reported issues",
+			agent_next_call: "roadmap(action='explain_gate') then fix reported issues",
 			agent_blocked: false,
 		}
 	}
@@ -99,8 +99,8 @@ export function determinePhase(params: {
 		return {
 			phase: "bootstrap_fill",
 			operator_summary:
-				"Bootstrap template phrases remain — preview roadmap(action='apply_bootstrap_fill'), apply with context='write', then validate.",
-			agent_next_call: "roadmap(action='apply_bootstrap_fill', context='write')",
+				"Bootstrap template phrases remain — autofill runs at attempt_completion; preview with roadmap(action='apply_bootstrap_fill').",
+			agent_next_call: "roadmap(action='apply_bootstrap_fill')",
 			agent_blocked: false,
 		}
 	}
@@ -160,16 +160,16 @@ export function recommendNextAction(params: {
 	}
 	if (params.validation_pending) {
 		return {
-			action: "run_validate",
-			command: "roadmap(action='validate')",
-			detail: "ROADMAP.md mutated since last validate — confirm schema before closing pass.",
+			action: "auto_validate",
+			command: "roadmap(action='cockpit')",
+			detail: "ROADMAP.md mutated — validation runs automatically at attempt_completion.",
 		}
 	}
 	if (params.bootstrap_incomplete || params.phase === "bootstrap_fill") {
 		return {
-			action: "apply_bootstrap_fill",
-			command: "roadmap(action='apply_bootstrap_fill', context='write')",
-			detail: "Apply evidence replacements for bootstrap placeholders, then validate. Preview: roadmap(action='apply_bootstrap_fill').",
+			action: "auto_bootstrap_fill",
+			command: "roadmap(action='apply_bootstrap_fill')",
+			detail: "Bootstrap autofill runs automatically at attempt_completion; preview replacements if needed.",
 		}
 	}
 	if (!params.roadmap_exists) {
@@ -209,9 +209,9 @@ export function recommendNextAction(params: {
 	}
 	if (params.phase === "validate_pending") {
 		return {
-			action: "run_validate",
-			command: "roadmap(action='validate')",
-			detail: "Validation pending — confirm schema before closing the checkpoint pass.",
+			action: "auto_validate",
+			command: "roadmap(action='cockpit')",
+			detail: "Schema validation runs automatically at attempt_completion — repair ROADMAP.md if issues remain.",
 		}
 	}
 	if (params.phase === "bootstrap") {
@@ -271,7 +271,7 @@ export function formatExplainGateReport(params: {
 				lines.push(`  • [${i.severity}] ${i.message}`)
 			}
 		}
-		lines.push("", "Fix: edit ROADMAP.md, then roadmap(action='validate')")
+		lines.push("", "Fix: edit ROADMAP.md — validation runs automatically at attempt_completion")
 	}
 
 	if (params.freshness) {
@@ -328,13 +328,7 @@ export function buildAgentOperatorHints(params: {
 		kanban_complete_allowed: snap.kanban_complete_allowed,
 		validation_pending: !!snap.validation_pending,
 		preferred_command: nextRec.command,
-		slash_commands: [
-			"/roadmap cockpit",
-			"/roadmap explain-gate",
-			"/roadmap explain-stale",
-			"/roadmap progress --current",
-			...(bootstrapInc ? ["/roadmap validate", "roadmap(action='apply_bootstrap_fill', context='write')"] : []),
-		],
+		slash_commands: ["/roadmap cockpit", "/roadmap explain-gate", "/roadmap explain-stale", "/roadmap progress --current"],
 		next_action: params.agent_next_call || nextRec.command,
 		recovery_suggestion: params.operator_summary || nextRec.detail,
 		suggested_slash_command: roadmapToolCommandToSlash(nextRec.command),
@@ -380,7 +374,7 @@ export function wrapClarityEnvelope(
 		recommended_next_action: payload.recommended_next_action as { command?: string; detail?: string },
 		project_steering_digest: digest,
 		bootstrap_fill_hint: payload.bootstrap_fill_plan
-			? `${(payload.bootstrap_fill_plan as Record<string, unknown>).remaining_count || 0} bootstrap phrase(s) — roadmap(action='apply_bootstrap_fill', context='write')`
+			? `${(payload.bootstrap_fill_plan as Record<string, unknown>).remaining_count || 0} bootstrap phrase(s) — autofill runs at attempt_completion`
 			: undefined,
 	})
 

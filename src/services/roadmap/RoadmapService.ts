@@ -1,6 +1,7 @@
 import { execa } from "execa"
 import * as fs from "fs/promises"
 import * as path from "path"
+import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
 import { invalidateRoadmapWorkspaceCache } from "./RoadmapCache"
 import { isDigestContext, slimCheckpointPayload } from "./RoadmapCheckpointDigest"
 import { buildCockpitPayload } from "./RoadmapCockpit"
@@ -1470,7 +1471,7 @@ export class RoadmapService {
 			reason: gate.stale_reason,
 			summary: gate.stale_summary,
 			recommended_action: gate.checkpoint_stale
-				? "roadmap(action='checkpoint', context='stale refresh')"
+				? "Update Recent Checkpoint (section 11) in ROADMAP.md"
 				: "roadmap(action='guide')",
 		}) as Record<string, unknown>
 
@@ -1485,7 +1486,7 @@ export class RoadmapService {
 			checkpoint_stale: freshness.stale ?? gate.checkpoint_stale,
 			report,
 			operator_summary: String(freshness.summary || report.split("\n")[0]),
-			agent_next_call: String(freshness.recommended_action || "roadmap(action='checkpoint', context='stale refresh')"),
+			agent_next_call: String(freshness.recommended_action || "Update Recent Checkpoint (section 11) in ROADMAP.md"),
 			project_steering_digest: status.project_steering_digest,
 			project_identity_line: status.project_identity_line,
 			steering_brief: status.steering_brief,
@@ -1524,7 +1525,7 @@ export class RoadmapService {
 			roadmap_path: roadmapPath,
 			written: true,
 			operator_summary: "Created ROADMAP.md from workspace evidence.",
-			agent_next_call: "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')",
+			agent_next_call: "roadmap(action='apply_bootstrap_fill', context='write')",
 		}
 
 		if (cfg.auto_bootstrap_fill) {
@@ -1532,7 +1533,7 @@ export class RoadmapService {
 			result = { ...result, bootstrap_autofill_applied: filled }
 			if ((filled as Record<string, unknown>).written) {
 				result.operator_summary = filled.operator_summary
-				result.agent_next_call = "roadmap(action='validate')"
+				result.agent_next_call = "roadmap(action='cockpit')"
 			}
 		}
 
@@ -1572,7 +1573,7 @@ export class RoadmapService {
 			await recordLastError({
 				string_code: "roadmap_state_write_failed",
 				message: error instanceof Error ? error.message : String(error),
-				retry_command: "roadmap(action='validate')",
+				retry_command: "roadmap(action='cockpit')",
 				safe_to_retry: true,
 			})
 			return { ...merged, _write_failed: true }
@@ -1737,7 +1738,7 @@ export class RoadmapService {
 				days_since_checkpoint: null,
 				git_commits_since_checkpoint: gitCommitsSinceCheckpoint.length,
 				git_commits_in_window: gitCommits.length,
-				recommended_action: "roadmap(action='checkpoint', context='refresh checkpoint')",
+				recommended_action: "Update Recent Checkpoint (section 11) in ROADMAP.md",
 			}
 		}
 
@@ -1778,7 +1779,7 @@ export class RoadmapService {
 			days_since_checkpoint: daysSince,
 			git_commits_since_checkpoint: gitCommitsSinceCheckpoint.length,
 			git_commits_in_window: gitCommits.length,
-			recommended_action: stale ? "roadmap(action='checkpoint', context='stale refresh')" : "roadmap(action='guide')",
+			recommended_action: stale ? "Update Recent Checkpoint (section 11) in ROADMAP.md" : "roadmap(action='guide')",
 			checkpoint_date: recentCheckpointDate,
 		}
 	}
@@ -1847,9 +1848,7 @@ export class RoadmapService {
 					? `${tasks.length} template phrase(s) remain — use tasks[].suggested_replacement from project evidence.`
 					: "Bootstrap fill complete — no template phrases detected.",
 			agent_next_call:
-				tasks.length > 0
-					? "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')."
-					: "roadmap(action='validate')",
+				tasks.length > 0 ? "roadmap(action='apply_bootstrap_fill', context='write')." : "roadmap(action='cockpit')",
 		}
 	}
 
@@ -1907,7 +1906,7 @@ export class RoadmapService {
 			project_steering_digest: buildProjectSteeringDigest(evidence.project_fingerprint || {}, fill_plan),
 			bootstrap_autofill_preview: draft,
 			operator_summary: draft.operator_summary,
-			agent_next_call: "roadmap(action='validate') after reviewing autofill changes.",
+			agent_next_call: "roadmap(action='cockpit') after reviewing autofill changes.",
 		}
 
 		if (dryRun || draft.applied_count === 0) {
@@ -2032,7 +2031,7 @@ export class RoadmapService {
 				: gateState.checkpoint_stale
 					? gateState.stale_summary
 					: phase.operator_summary,
-			agent_next_call: state.validation_pending ? "roadmap(action='validate')" : next_rec.command,
+			agent_next_call: state.validation_pending ? AUTO_GOVERNANCE.continueTaskMidPass : next_rec.command,
 			recommended_next_action: next_rec,
 			schema_valid: validation.valid,
 			prime_directive: "Did the latest work strengthen or weaken the project's center of gravity?",
@@ -2118,7 +2117,7 @@ export class RoadmapService {
 			payload.bootstrap_autofill_applied = applied
 			if (applied.written) {
 				payload.operator_summary = applied.operator_summary
-				payload.agent_next_call = "roadmap(action='validate')"
+				payload.agent_next_call = "roadmap(action='cockpit')"
 				invalidateRoadmapWorkspaceCache(workspace)
 				const refreshed = await this.resolveWorkspaceContext(workspace, "full")
 				payload.phase = this.buildOperationalPayload("checkpoint", refreshed).phase
@@ -2132,11 +2131,63 @@ export class RoadmapService {
 		return payload
 	}
 
+	/**
+	 * Mechanical checkpoint date repair — stamps **Date:** in section 11 when missing or unparsable.
+	 * Used by completion-gate auto-remediation only; does not rewrite checkpoint narrative.
+	 */
+	public async touchRecentCheckpointDate(workspace: string): Promise<{ written: boolean; reason?: string }> {
+		const roadmapPath = path.join(workspace, "ROADMAP.md")
+		if (!(await fileExists(roadmapPath))) {
+			return { written: false, reason: "missing_file" }
+		}
+
+		let text = await fs.readFile(roadmapPath, "utf8")
+		const sectionMatch = /##\s+11\.\s+Recent Checkpoint/i.exec(text)
+		if (!sectionMatch || sectionMatch.index === undefined) {
+			return { written: false, reason: "no_section" }
+		}
+
+		const today = new Date().toISOString().slice(0, 10)
+		const afterHeader = text.slice(sectionMatch.index)
+		const dateLineMatch = /\*\*Date:\*\*\s*(\S*)/i.exec(afterHeader)
+
+		if (dateLineMatch) {
+			const current = dateLineMatch[1].trim()
+			if (/^\d{4}-\d{2}-\d{2}$/.test(current)) {
+				return { written: false, reason: "date_already_valid" }
+			}
+			text = text.replace(/(##\s+11\.\s+Recent Checkpoint[\s\S]*?\*\*Date:\*\*\s*)(\S*)/i, `$1${today}`)
+		} else {
+			const insertAt = sectionMatch.index + sectionMatch[0].length
+			text = `${text.slice(0, insertAt)}\n\n**Date:** ${today}\n${text.slice(insertAt)}`
+		}
+
+		await fs.writeFile(roadmapPath, text, "utf8")
+		await this.recordFileMutation(workspace, "roadmap_auto_touch", roadmapPath)
+		invalidateRoadmapWorkspaceCache(workspace)
+		return { written: true }
+	}
+
 	public async validateRoadmap(workspace: string): Promise<any> {
 		const roadmapPath = path.join(workspace, "ROADMAP.md")
 		let text = ""
 		if (await fileExists(roadmapPath)) {
 			text = await fs.readFile(roadmapPath, "utf8")
+		}
+
+		const cfg = getRoadmapConfig()
+		if (cfg.auto_bootstrap_fill && text) {
+			const placeholders = findBootstrapPlaceholders(text)
+			if (placeholders.length > 0) {
+				try {
+					const filled = await this.writeBootstrapAutofill(workspace, false)
+					if (filled && filled.written && filled.applied_count > 0) {
+						text = await fs.readFile(roadmapPath, "utf8")
+					}
+				} catch (err) {
+					// non-fatal
+				}
+			}
 		}
 
 		const validation = validateRoadmapContent(text)
@@ -2226,8 +2277,8 @@ export class RoadmapService {
 				validation.valid && bootstrap_complete
 					? "Return Required Final Assistant Response summary."
 					: validation.valid
-						? "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')."
-						: "Fix validation issues and rerun roadmap(action='validate').",
+						? "roadmap(action='apply_bootstrap_fill', context='write')."
+						: "Fix validation issues in ROADMAP.md.",
 		}
 
 		if (bootstrap_inc && validation.valid) {
@@ -2298,7 +2349,7 @@ export class RoadmapService {
 			payload.operator_summary =
 				`Applied ${result.applied_count} evidence replacement(s); schema ${valid ? "valid" : "invalid"}.` +
 				(remaining ? ` ${remaining} bootstrap phrase(s) remain.` : " Bootstrap fill complete.")
-			payload.agent_next_call = (validated.recommended_next_action || {}).command || "roadmap(action='validate')"
+			payload.agent_next_call = (validated.recommended_next_action || {}).command || "roadmap(action='cockpit')"
 		} else if (dryRun) {
 			payload.operator_summary = result.operator_summary || "Autofill preview — pass context='write' to apply."
 			payload.agent_next_call = "roadmap(action='apply_bootstrap_fill', context='write') to write preview_text"
@@ -2820,7 +2871,7 @@ function bootstrapSkeletonFromEvidenceAutofilled(evidence: any): string {
 		anti_goals: must_not,
 		health_summary: health,
 		now_section: nowSection,
-		checkpoint_next_move: "Complete ROADMAP.md bootstrap fill, resolve placeholders, then validate schema.",
+		checkpoint_next_move: "Complete ROADMAP.md bootstrap fill; governance runs automatically at attempt_completion.",
 		code_soup_risk: risk,
 		centralization_recommendation: centralize,
 		recent_git_summary: git_summary,
@@ -2850,7 +2901,7 @@ function agentInstructions(phase: string, evidence: any): string[] {
 		"Section 9 (Centralization & Code Soup Audit) is mandatory on every pass.",
 		"Use code_soup_pre_audit signals when writing section 9.",
 		"Mark uncertainty explicitly when evidence is missing.",
-		"Finish with roadmap(action='validate') before returning the checkpoint summary.",
+		"Schema validation and bootstrap autofill run automatically at attempt_completion.",
 	]
 	if (fp.steering_brief) {
 		instructions.push(`Project identity: ${fp.steering_brief}`)
@@ -2877,10 +2928,10 @@ function agentInstructions(phase: string, evidence: any): string[] {
 	} else if (phase === "coherence_recovery") {
 		instructions.push("Demote overloaded Now items, strengthen Maintenance Gravity, and recommend convergence.")
 	} else if (phase === "validate_pending") {
-		instructions.push("Fix schema validation errors reported by roadmap(action='validate').")
+		instructions.push("Repair ROADMAP.md schema issues — validation runs automatically at attempt_completion.")
 	} else if (phase === "bootstrap_fill") {
 		instructions.push(
-			"Preview evidence autofill: roadmap(action='apply_bootstrap_fill'); apply with context='write', then validate.",
+			"Bootstrap autofill runs automatically at attempt_completion; preview replacements with roadmap(action='apply_bootstrap_fill').",
 		)
 		instructions.push(
 			"Use bootstrap_fill_plan.tasks — each template_phrase maps to suggested_replacement from project_fingerprint and evidence.",

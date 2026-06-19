@@ -1,4 +1,5 @@
 import * as path from "path"
+import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { formatExplainGateReport, recommendNextAction, wrapClarityEnvelope } from "./RoadmapOperator"
 import { readCurrentProgress, readLastError } from "./RoadmapProgress"
@@ -18,7 +19,7 @@ export function formatCockpitReport(payload: Record<string, unknown>): string {
 	if (payload.recent_checkpoint_date) lines.push(`Last checkpoint: ${payload.recent_checkpoint_date}`)
 	if (payload.code_soup_risk) lines.push(`Code soup risk: ${payload.code_soup_risk}`)
 	if (payload.now_item_count !== undefined) lines.push(`Now items: ${payload.now_item_count}`)
-	if (payload.validation_pending) lines.push("⚠️ validation_pending — roadmap(action='validate')")
+	if (payload.validation_pending) lines.push(`⚠️ validation_pending — ${AUTO_GOVERNANCE.validationAtCompletion}`)
 	if (payload.bootstrap_complete === false) {
 		lines.push(`⚠️ bootstrap incomplete (${payload.bootstrap_placeholder_count ?? "?"} phrases)`)
 	}

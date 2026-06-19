@@ -1,3 +1,4 @@
+import { journalFollowupForMutation } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { emitProgress } from "./RoadmapProgress"
 
@@ -91,9 +92,7 @@ export async function journalRoadmapFileMutation(params: {
 	const cfg = getRoadmapConfig()
 	if (!cfg.enabled || !cfg.progress_enabled) return
 
-	const followup = params.bootstrapIncomplete
-		? "roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')"
-		: "roadmap(action='validate')"
+	const followup = journalFollowupForMutation(params.bootstrapIncomplete)
 
 	await emitProgress(params.allowed ? "roadmap.file_mutated" : "roadmap.write_rejected", {
 		action: "file_mutated",

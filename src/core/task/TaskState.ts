@@ -149,6 +149,11 @@ export class TaskState {
 	preflightReadinessHintEmitted?: boolean
 	/** Correlation ID for the current completion attempt cycle — tracing across gate blocks. */
 	completionGateSessionId?: string
+	/** Cached roadmap gate recovery payload for structured agent envelope on next error format. */
+	lastRoadmapGateRecovery?: {
+		remediationSteps?: string[]
+		blockingGates?: Array<{ id?: string; label: string; why: string; fix?: string }>
+	}
 }
 
 export enum PolicyHealth {

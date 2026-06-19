@@ -79,25 +79,22 @@ ROADMAP.md at the workspace root is the long-horizon steering surface — not a 
 **Health:** unknown
 **Prime directive:** Did the latest work strengthen or weaken the project's center of gravity?
 
-The system auto-bootstraps ROADMAP.md from workspace evidence when missing. After editing ROADMAP.md, run `roadmap(action='validate')` before `attempt_completion`.
+**Auto-governance at completion:** Bootstrap autofill runs automatically at attempt_completion. Schema validation runs automatically at attempt_completion. Missing Recent Checkpoint dates are auto-stamped at attempt_completion. Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.
 
-**Recommended next call:** roadmap(action='validate') then fix reported issues
+**Mid-task guidance:** Schema validation runs automatically at attempt_completion.
 
-Tool actions (all return _roadmap_operator_hints + project_identity_line):
-- `/roadmap cockpit` — operator one-screen summary (runs synchronously in chat)
+**Recommended next call:** roadmap(action='explain_gate') then fix reported issues
+
+Tool actions (optional — governance is internal at `attempt_completion`):
+- `/roadmap cockpit` — operator one-screen summary
 - `/roadmap doctor` — production health checks
-- `/roadmap explain-gate` / `/roadmap explain-stale` — gate and freshness diagnostics
+- `/roadmap explain-gate` / `/roadmap explain-stale` — diagnostics when blocked
 - `roadmap(action='guide')` — phase, gates, steering digest
-- `roadmap(action='cockpit')` — one-screen operator summary with gate report
 - `roadmap(action='checkpoint')` — full evidence before major direction changes
-- `roadmap(action='validate')` — schema gate after ROADMAP.md edits
-- `roadmap(action='doctor')` — production health checks + recommendations
-- `roadmap(action='apply_bootstrap_fill', context='write')` — evidence autofill for template phrases
-- `roadmap(action='explain_gate')` — why attempt_completion may be blocked
-- `roadmap(action='explain_stale')` — why checkpoint may be outdated vs git activity
+- `roadmap(action='apply_bootstrap_fill')` — preview evidence autofill (write runs automatically at completion)
 - `roadmap(action='progress', context='--current')` — gate snapshot + recent activity
-- `roadmap(action='watch')` — compact last-action line
-- `roadmap(action='last_error')` — recovery from last failure
+
+If `attempt_completion` is blocked by roadmap gates, edit ROADMAP.md per the gate message — do not call validate or MCP for governance.
 
 TOOL USE
 
@@ -358,7 +355,7 @@ Usage:
 </project_map>
 
 ## roadmap
-Description: Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Responses include project_identity_line, _roadmap_operator_hints, agent_playbook, and recommended_next_action.
+Description: Per-project ROADMAP.md steering — living checkpoint for center of gravity, Now/Next/Later, code soup audit, and completion gates. Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — no manual validate step. Responses include project_identity_line, _roadmap_operator_hints, agent_playbook, and recommended_next_action.
 Parameters:
 - action: (required) Roadmap action. One of: guide | status | cockpit | checkpoint | validate | doctor | template | apply_bootstrap_fill | explain_gate | explain_stale | evidence | progress | watch | last_error.
 - context: (optional) Optional context — e.g. 'write' for apply_bootstrap_fill, 'digest' or 'compact' for slim checkpoint, 'stale refresh' for checkpoint, '--current' or '--tail' for progress.

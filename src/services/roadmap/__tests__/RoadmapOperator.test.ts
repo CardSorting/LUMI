@@ -25,13 +25,14 @@ describe("RoadmapOperator", () => {
 	describe("recommendNextAction", () => {
 		it("prioritizes validation_pending", () => {
 			const rec = recommendNextAction({ validation_pending: true, roadmap_exists: true })
-			assert.strictEqual(rec.action, "run_validate")
-			assert.match(rec.command, /validate/)
+			assert.strictEqual(rec.action, "auto_validate")
+			assert.match(rec.command, /cockpit/)
+			assert.match(rec.detail, /automatically/)
 		})
 
 		it("prioritizes bootstrap fill", () => {
 			const rec = recommendNextAction({ bootstrap_incomplete: true, roadmap_exists: true })
-			assert.strictEqual(rec.action, "apply_bootstrap_fill")
+			assert.strictEqual(rec.action, "auto_bootstrap_fill")
 		})
 
 		it("routes stale checkpoints to explain_stale", () => {
@@ -67,7 +68,7 @@ describe("RoadmapOperator", () => {
 					{
 						label: "ROADMAP.md validated after last edit",
 						why: "changed since validate",
-						fix: "roadmap(action='validate')",
+						fix: "repair ROADMAP.md schema",
 						blocks_kanban_complete: true,
 					},
 				],

@@ -1,5 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
+import { AUTO_GOVERNANCE } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { formatExplainGateReport, recommendNextAction, wrapClarityEnvelope } from "./RoadmapOperator"
 import { progressJsonlPath, readLastError } from "./RoadmapProgress"
@@ -55,11 +56,11 @@ export async function runDoctorChecks(roadmapService: RoadmapService, workspace:
 		addCheck("schema_valid", status.schema_valid !== false, status.schema_valid ? "valid" : "invalid")
 		addCheck("checkpoint_fresh", !gate.checkpoint_stale, String(gate.stale_summary || "fresh"))
 		if (gate.checkpoint_stale) {
-			recommendations.push("roadmap(action='checkpoint', context='stale refresh')")
+			recommendations.push("Update Recent Checkpoint (section 11) in ROADMAP.md")
 		}
 		if (status.validation_pending) {
 			addCheck("validation_current", false, "ROADMAP.md changed since last validate")
-			recommendations.push("roadmap(action='validate')")
+			recommendations.push(AUTO_GOVERNANCE.validationAtCompletion)
 		} else {
 			addCheck("validation_current", true, "validated after last edit")
 		}
@@ -84,7 +85,7 @@ export async function runDoctorChecks(roadmapService: RoadmapService, workspace:
 	}
 
 	if (status.bootstrap_complete === false) {
-		recommendations.push("roadmap(action='apply_bootstrap_fill', context='write') then roadmap(action='validate')")
+		recommendations.push(AUTO_GOVERNANCE.bootstrapAtCompletion)
 	}
 
 	const okCount = checks.filter((c) => c.ok).length

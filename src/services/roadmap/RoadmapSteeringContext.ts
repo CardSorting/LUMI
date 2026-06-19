@@ -3,6 +3,7 @@
  * One bundle for agents, operators, and progress snapshots.
  */
 import * as path from "path"
+import { midTaskAgentNextCall } from "./RoadmapAutoGovernance"
 import { recommendNextAction } from "./RoadmapOperator"
 import { RoadmapService } from "./RoadmapService"
 
@@ -67,15 +68,13 @@ export async function buildSteeringContext(workspace: string): Promise<Record<st
 	const digest = (status.project_steering_digest || {}) as Record<string, unknown>
 	const gate = (status.roadmap_gate || {}) as Record<string, unknown>
 
-	let agentNextCall = String(status.agent_next_call || "roadmap(action='guide')")
-	if (status.bootstrap_complete === false && status.roadmap_exists) {
-		const nextRec = recommendNextAction({
-			phase: "bootstrap_fill",
-			roadmap_exists: true,
-			bootstrap_incomplete: true,
-		})
-		agentNextCall = nextRec.command
-	} else if (!status.roadmap_exists) {
+	let agentNextCall = midTaskAgentNextCall({
+		validationPending: !!status.validation_pending,
+		bootstrapIncomplete: status.bootstrap_complete === false && !!status.roadmap_exists,
+		roadmapMissing: !status.roadmap_exists,
+		fallback: String(status.agent_next_call || "roadmap(action='guide')"),
+	})
+	if (!status.roadmap_exists) {
 		agentNextCall = recommendNextAction({ roadmap_exists: false }).command
 	}
 

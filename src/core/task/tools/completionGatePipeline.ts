@@ -11,7 +11,12 @@ import { buildCompletionGateMessage, runCompletionAudit } from "@shared/audit/co
 import { parseIntentThresholdOverrides } from "@shared/audit/gatePolicy"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
-import { evaluateRoadmapCompletionBlock, failClosedCompletionMessage } from "@/services/roadmap/RoadmapCompletionGate"
+import { formatAutoRemediationSummary } from "@/services/roadmap/RoadmapAutoGovernance"
+import {
+	buildRoadmapCompletionExtraBlocks,
+	evaluateRoadmapCompletionBlock,
+	failClosedCompletionMessage,
+} from "@/services/roadmap/RoadmapCompletionGate"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import {
 	appendCompletionGateRetryGuidance,
@@ -93,7 +98,16 @@ function finalizePreflightError(
 	const reason = classifyCompletionPreflightReason(rawMessage)
 	const blockCount = recordCompletionGateBlockEvent(config, reason, context)
 	emitCompletionGateBlockTelemetry(config, reason, blockCount)
-	return buildCompletionAgentErrorMessage(rawMessage, config, { result: context?.result })
+
+	const recovery = config.taskState.lastRoadmapGateRecovery
+	const extraBlocks =
+		recovery && reason === "roadmap_gate" ? buildRoadmapCompletionExtraBlocks({ blocked: true, ...recovery }) : undefined
+	config.taskState.lastRoadmapGateRecovery = undefined
+
+	return buildCompletionAgentErrorMessage(rawMessage, config, {
+		result: context?.result,
+		extraBlocks,
+	})
 }
 
 function rejectPreflightStage(
@@ -302,8 +316,14 @@ export async function evaluateRoadmapCompletionGateError(
 		if (block.blocked) {
 			if (!options?.dryRun) {
 				config.taskState.consecutiveMistakeCount++
+				config.taskState.lastRoadmapGateRecovery = {
+					remediationSteps: block.remediationSteps,
+					blockingGates: block.blockingGates,
+				}
 			}
-			return block.message || failClosedCompletionMessage()
+			const remediated = formatAutoRemediationSummary(block.remediationSteps || [])
+			const base = block.message || failClosedCompletionMessage()
+			return remediated ? `${base}\n\n${remediated}` : base
 		}
 	} catch (error) {
 		Logger.error(`[${logPrefix}] Failed to evaluate Roadmap Governance Gates:`, error)

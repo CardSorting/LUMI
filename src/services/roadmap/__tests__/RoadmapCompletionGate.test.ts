@@ -8,6 +8,8 @@ import {
 	requireFreshCheckpointBeforeComplete,
 } from "../RoadmapCompletionGate"
 import { DEFAULT_ROADMAP_CONFIG, setRoadmapConfigOverride } from "../RoadmapConfig"
+import { bootstrapSkeleton } from "../RoadmapSchema"
+import { RoadmapService } from "../RoadmapService"
 
 describe("RoadmapCompletionGate", () => {
 	let tmpDir = ""
@@ -28,36 +30,89 @@ describe("RoadmapCompletionGate", () => {
 		assert.strictEqual(block.blocked, false)
 	})
 
-	it("blocks completion when validation_pending in workspace state", async () => {
+	it("auto-validates and allows completion when validation_pending with valid ROADMAP.md", async () => {
+		setRoadmapConfigOverride({
+			...DEFAULT_ROADMAP_CONFIG,
+			enabled: true,
+			block_kanban_on_bootstrap_incomplete: false,
+		})
 		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
 		await fs.writeFile(
 			path.join(tmpDir, ".dietcode", "roadmap-state.json"),
 			JSON.stringify({ validation_pending: true }),
 			"utf8",
 		)
-		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), "# Roadmap\n", "utf8")
+		await fs.writeFile(path.join(tmpDir, "README.md"), "# Completion gate test\n\nSteering surface.\n", "utf8")
+		const skeleton = bootstrapSkeleton({
+			project_hint: "Completion gate test project",
+			anti_goals: "What This Project Must Not Become: ungoverned sprawl.",
+			strategic_narrative: "A governed TypeScript project with ROADMAP steering.",
+			operators_hint: "Developers and coding agents.",
+			canonical_architecture: "Monorepo with src/ services layer.",
+			canonical_workflows: "Edit, test, ship via PR.",
+			runtime_center: "Workspace root beside package.json.",
+			health_summary: "Coherent bootstrap for gate test.",
+			now_section: "### 1. Gate test\n- Verify auto-validation at completion",
+			checkpoint_next_move: "Retry attempt_completion after auto-validation.",
+		})
+		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), skeleton, "utf8")
+
+		const block = await evaluateRoadmapCompletionBlock(tmpDir)
+		assert.strictEqual(block.blocked, false)
+		assert.ok(block.remediationSteps?.some((s) => s.includes("auto-validated")))
+	})
+
+	it("blocks completion when ROADMAP.md cannot be auto-validated", async () => {
+		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
+		await fs.writeFile(
+			path.join(tmpDir, ".dietcode", "roadmap-state.json"),
+			JSON.stringify({ validation_pending: true }),
+			"utf8",
+		)
+		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), "# Test\n", "utf8")
 
 		const block = await evaluateRoadmapCompletionBlock(tmpDir)
 		assert.strictEqual(block.blocked, true)
-		assert.match(block.message || "", /validate/)
+		assert.match(block.message || "", /ROADMAP\.md/)
+		assert.doesNotMatch(block.message || "", /roadmap\(action=/)
 	})
 
-	it("requireFreshCheckpointBeforeComplete returns diagnostic message", async () => {
+	it("requireFreshCheckpointBeforeComplete returns diagnostic message without tool commands", async () => {
 		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
 		await fs.writeFile(
 			path.join(tmpDir, ".dietcode", "roadmap-state.json"),
 			JSON.stringify({ validation_pending: true }),
 			"utf8",
 		)
-		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), "# Roadmap\n", "utf8")
+		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), "# Test\n", "utf8")
 
 		const msg = await requireFreshCheckpointBeforeComplete(tmpDir)
 		assert.ok(msg)
-		assert.match(msg, /explain_gate|validate/)
+		assert.match(msg, /ROADMAP\.md/)
+		assert.doesNotMatch(msg, /roadmap\(action=/)
 	})
 
-	it("failClosedCompletionMessage includes doctor recovery", () => {
-		assert.match(failClosedCompletionMessage(), /doctor/)
+	it("auto-stamps missing checkpoint date during completion remediation", async () => {
+		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
+		const skeleton = bootstrapSkeleton({
+			project_hint: "Checkpoint touch test",
+			anti_goals: "What This Project Must Not Become: drift.",
+		})
+		// Remove valid date to trigger no_recent_checkpoint_date stale reason
+		const withoutDate = skeleton.replace(/\*\*Date:\*\*\s*\d{4}-\d{2}-\d{2}/, "**Date:** TBD")
+		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), withoutDate, "utf8")
+
+		const touched = await RoadmapService.getInstance().touchRecentCheckpointDate(tmpDir)
+		assert.strictEqual(touched.written, true)
+
+		const text = await fs.readFile(path.join(tmpDir, "ROADMAP.md"), "utf8")
+		assert.match(text, /\*\*Date:\*\*\s*\d{4}-\d{2}-\d{2}/)
+	})
+
+	it("failClosedCompletionMessage avoids external tool commands", () => {
+		const msg = failClosedCompletionMessage()
+		assert.match(msg, /ROADMAP\.md/)
+		assert.doesNotMatch(msg, /doctor|explain-gate/)
 	})
 })
 
