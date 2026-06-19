@@ -58,8 +58,26 @@ describe("JoyRide GA readiness", () => {
 		assert.isTrue(fs.existsSync(path.join(__dirname, "../README.md")), "missing package README.md")
 	})
 
-	it("should cross-link documentation hub from package README", () => {
+	it("should include MIT license crediting CardSorting", () => {
+		const license = fs.readFileSync(path.join(__dirname, "../LICENSE"), "utf8")
+		assert.include(license, "MIT License")
+		assert.include(license, "CardSorting")
+	})
+
+	it("should include contributor guide", () => {
+		const contributing = path.join(__dirname, "../CONTRIBUTING.md")
+		assert.isTrue(fs.existsSync(contributing), "missing CONTRIBUTING.md")
+		const content = fs.readFileSync(contributing, "utf8")
+		assert.include(content, "Pull request checklist")
+		assert.include(content, "isJoyRideHitDecision")
+		assert.include(content, "CardSorting")
+	})
+
+	it("should reference MIT license in package README", () => {
 		const readme = fs.readFileSync(path.join(__dirname, "../README.md"), "utf8")
+		assert.include(readme, "MIT")
+		assert.include(readme, "CardSorting")
+		assert.include(readme, "CONTRIBUTING.md")
 		assert.include(readme, "docs/README.md")
 		assert.include(readme, "docs/CACHING.md")
 		assert.include(readme, "docs/TROUBLESHOOTING.md")

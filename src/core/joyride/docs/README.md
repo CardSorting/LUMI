@@ -10,9 +10,9 @@ JoyRide docs follow the layered structure used by mature cache systems (Turbo ta
 
 | Role | Start here | Then read |
 |---|---|---|
-| **Executive / PM** | [Brief](./BRIEF.md) | [Philosophy §1–3](./PHILOSOPHY.md) |
+| **Executive / PM** | [Brief](./BRIEF.md) | [Philosophy §P1–P3](./PHILOSOPHY.md) |
 | **Architect / reviewer** | [Philosophy](./PHILOSOPHY.md) | [Whitepaper](./WHITEPAPER.md) · [Caching model](./CACHING.md) |
-| **Integrator / contributor** | [Package README](../README.md) | [API reference](./API.md) · [Caching model](./CACHING.md) |
+| **Contributor** | [CONTRIBUTING.md](../CONTRIBUTING.md) | [Caching model](./CACHING.md) · [API](./API.md) |
 | **Operator / support** | [Operator guide](../../../docs/features/joyride.mdx) | [Troubleshooting](./TROUBLESHOOTING.md) |
 | **Auditor / security** | [Whitepaper §13](./WHITEPAPER.md#13-security-model) | [Philosophy §9](./PHILOSOPHY.md) · [Contract](../JoyRideContract.ts) |
 
@@ -40,7 +40,9 @@ JoyRide docs follow the layered structure used by mature cache systems (Turbo ta
 | Document | Description |
 |---|---|
 | [API reference](./API.md) | Frozen public surface, lookup/store matrix |
-| [Package README](../README.md) | Quick start, module map, contributor checklist |
+| [Contributing guide](../CONTRIBUTING.md) | Hot path workflow, tests, PR checklist |
+| [Package README](../README.md) | Quick start, module map |
+| [LICENSE](../LICENSE) | MIT — Copyright CardSorting |
 | `JoyRideReasonCodes.ts` | Stable `JOYRIDE_REASON` vocabulary (source of truth) |
 | `JoyRideContract.ts` | Export/import contract (source of truth) |
 
@@ -75,6 +77,7 @@ Following patterns from Turbo, Nx, and Redis docs:
 | Test suites | 179+ unit tests (`npm run test:unit -- --grep "JoyRide"`) |
 | Public entrypoint | `@core/joyride` |
 | Implementation | `src/core/joyride/` |
+| License | MIT — [CardSorting](../LICENSE) |
 
 ---
 

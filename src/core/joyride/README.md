@@ -3,6 +3,7 @@
 [![Status](https://img.shields.io/badge/status-GA-modern--only-blue)](#status)
 [![Tests](https://img.shields.io/badge/tests-179%2B%20passing-green)](#testing)
 [![API](https://img.shields.io/badge/API-frozen%20contract-orange)](#public-api)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 **Bounded typed execution cache for LUMI agent hot paths.**
 
@@ -10,7 +11,27 @@ JoyRide accelerates repeated safe work during active coding sessions — read-on
 
 > **JoyRide is cache, not memory.** Locality and speed with explicit invalidation — not identity, narrative continuity, or long-term recall.
 
+**Contributing:** [CONTRIBUTING.md](./CONTRIBUTING.md) · **License:** [MIT — CardSorting](./LICENSE)
+
 ---
+
+## Table of contents
+
+- [Documentation](#documentation)
+- [Status](#status)
+- [Architecture](#architecture)
+- [How it works](#how-it-works-30-seconds)
+- [Core guarantees](#core-guarantees)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Cache kinds](#cache-kinds)
+- [Typed decisions](#typed-decisions)
+- [Runtime integrations](#runtime-integrations)
+- [Diagnostics](#diagnostics)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [Comparison](#comparison)
+- [License](#license)
 
 ## Documentation
 
@@ -24,6 +45,8 @@ JoyRide accelerates repeated safe work during active coding sessions — read-on
 | **API reference** | [docs/API.md](./docs/API.md) | Contributors — frozen surface |
 | **Glossary** | [docs/GLOSSARY.md](./docs/GLOSSARY.md) | Everyone — canonical terms |
 | **Troubleshooting** | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Operators — runbook |
+| **Contributing** | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contributors — hot path guide, PR checklist |
+| **License** | [LICENSE](./LICENSE) | MIT — Copyright CardSorting |
 | **Operator guide](../../docs/features/joyride.mdx) | LUMI users — config, disable |
 | **Release notes** | [../../docs/features/joyride-release-notes.mdx](../../docs/features/joyride-release-notes.mdx) | Release managers |
 
@@ -32,8 +55,9 @@ JoyRide accelerates repeated safe work during active coding sessions — read-on
 | You are… | Read in order |
 |---|---|
 | New to JoyRide | Brief → Caching model → README quick start |
-| Adding a hot path | Caching model → API → Contributor checklist |
+| Adding a hot path | [CONTRIBUTING.md](./CONTRIBUTING.md) → Caching model → API |
 | Reviewing design | Philosophy → Whitepaper |
+| Opening a PR | [CONTRIBUTING.md §PR checklist](./CONTRIBUTING.md#pull-request-checklist) |
 | Debugging reuse | Troubleshooting → Decision log |
 
 ---
@@ -269,18 +293,22 @@ Helpers: `__tests__/JoyRideTestHelpers.ts`
 
 ---
 
-## Contributor checklist
+## Contributing
+
+Full guide: **[CONTRIBUTING.md](./CONTRIBUTING.md)**
+
+Quick checklist:
 
 - [ ] Import only from `@core/joyride`
-- [ ] Typed lookup/store helpers only
-- [ ] Handle `fallbackBehavior`
-- [ ] Precise `JOYRIDE_REASON` codes
+- [ ] Typed lookup/store helpers — no raw cache access
+- [ ] `isJoyRideHitDecision()` before skipping work
+- [ ] Handle `fallbackBehavior`; precise `JOYRIDE_REASON` codes
 - [ ] Test enabled / disabled / diagnostics-only / degraded
 - [ ] Test stale invalidation + unsafe refusal
-- [ ] Add dogfood or contract test
-- [ ] Update `JoyRideContract.ts` if public contract changes
+- [ ] `npm run test:unit -- --grep "JoyRide"` passes
+- [ ] Update docs + `JoyRideContract.ts` if contract changes
 
-Details: [Operator guide §Contributor checklist](../../docs/features/joyride.mdx#contributor-checklist)
+Also see [Operator guide §Contributor checklist](../../docs/features/joyride.mdx#contributor-checklist).
 
 ---
 
@@ -316,4 +344,6 @@ Details: [Operator guide §Contributor checklist](../../docs/features/joyride.md
 
 ## License
 
-Part of LUMI (DietCode). See repository root `LICENSE`.
+JoyRide (`src/core/joyride/`) is licensed under the **[MIT License](./LICENSE)** — Copyright (c) CardSorting.
+
+The broader LUMI repository may use a different license. See repository root `LICENSE` for the full project terms.

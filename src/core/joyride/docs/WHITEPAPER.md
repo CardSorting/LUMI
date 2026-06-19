@@ -40,6 +40,7 @@
 24. [Appendix B — Safe-readonly allowlist](#appendix-b--safe-readonly-command-allowlist)
 25. [Appendix C — Decision state machine](#appendix-c--decision-state-machine)
 26. [Appendix D — Trust model comparison](#appendix-d--trust-model-comparison)
+27. [Appendix E — Document revision history](#appendix-e--document-revision-history)
 
 ---
 
@@ -938,6 +939,23 @@ Only `Hit` with `isJoyRideHitDecision()` may skip work.
 | Audit | optional logs | decision log + hit audit |
 | API stability | informal | frozen + drift tests |
 | Scratch | hope GC | cleanup handler required |
+
+---
+
+## Appendix E — Document revision history
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 GA | 2026-06 | Modern-only API, frozen exports, 179+ contract tests |
+| 1.1 docs | 2026-06 | CACHING, API, GLOSSARY, TROUBLESHOOTING, CONTRIBUTING, MIT license |
+
+Documentation: `src/core/joyride/docs/` · Implementation: `src/core/joyride/*.ts` · Contract: `JoyRideContract.ts`
+
+---
+
+## License
+
+JoyRide source and documentation in `src/core/joyride/` are [MIT licensed](../LICENSE) — Copyright (c) CardSorting.
 
 ---
 

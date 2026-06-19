@@ -206,4 +206,5 @@ Do **not** include raw terminal output that may contain secrets.
 
 - [Caching model](./CACHING.md) — when hit/miss is expected
 - [API reference](./API.md) — diagnostic functions
+- [Contributing guide](../CONTRIBUTING.md) — if filing a code fix
 - [Operator guide](../../../docs/features/joyride.mdx) — configuration reference

@@ -2,7 +2,10 @@
  * [LAYER: CORE]
  * Modern JoyRide execution cache API — typed decisions only (frozen contract).
  *
+ * @license MIT
+ * Copyright (c) CardSorting
  * @see JoyRideContract.ts for export/import boundary rules.
+ * @see CONTRIBUTING.md for contributor workflow.
  * Legacy APIs were removed. Use typed decision APIs only.
  */
 

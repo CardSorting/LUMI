@@ -208,3 +208,15 @@ Before adding JoyRide capability, answer:
 JoyRide should feel like better momentum during coding sessions — not like the agent has a mind.
 
 **Fast when safe. Silent when irrelevant. Explicit when questioned. Disabled when needed. Degraded when suspicious. Fail-closed always.**
+
+---
+
+## Contributing
+
+Implementation changes must follow [CONTRIBUTING.md](../CONTRIBUTING.md): typed decisions, contract tests, documentation updates, no legacy APIs, no memory vocabulary.
+
+---
+
+## License
+
+[MIT License](../LICENSE) — Copyright (c) CardSorting.

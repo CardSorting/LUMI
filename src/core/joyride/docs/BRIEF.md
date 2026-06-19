@@ -8,8 +8,9 @@
 | **Why** | Repeated safe work should not re-execute; unsafe reuse must not happen silently |
 | **Status** | GA — 179+ contract tests, frozen API, no UI |
 | **Kill switch** | `JOYRIDE_MODE=disabled` |
+| **License** | MIT — Copyright CardSorting |
 
-Full documentation: [docs/README.md](./README.md)
+Full documentation: [docs/README.md](./README.md) · Contributing: [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ---
 
@@ -148,5 +149,12 @@ Single import: `@core/joyride`. Legacy APIs removed.
 | How caching works | [CACHING.md](./CACHING.md) |
 | Technical whitepaper | [WHITEPAPER.md](./WHITEPAPER.md) |
 | Package README | [../README.md](../README.md) |
+| Contributing | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
+
+---
+
+## License
+
+JoyRide is [MIT licensed](../LICENSE) — Copyright (c) CardSorting.
 
 **Tagline:** Fast when safe. Silent when irrelevant. Explicit when questioned. Disabled when needed. Degraded when suspicious. Fail-closed always.

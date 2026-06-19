@@ -165,3 +165,5 @@ if (isJoyRideHitDecision(decision)) {
 | `getJoyRideCache().get/set/trySet` | Bypasses typed API |
 
 Enforced by `JoyRideImportBoundary.test.ts` and `JoyRideContractDrift.test.ts`.
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for contributor workflow.
