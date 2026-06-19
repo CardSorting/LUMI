@@ -1938,9 +1938,14 @@ export class RoadmapService {
 		state: any
 	}> {
 		const { key, roadmapPath } = await buildSnapshotKey(workspace, tier)
-		const cached = getSnapshotFromCache(key)
-		const state = await this.readState(workspace)
+		let state = await this.readState(workspace)
 
+		if (state.validation_pending && roadmapText === undefined) {
+			await this.validateRoadmap(workspace)
+			state = await this.readState(workspace)
+		}
+
+		const cached = getSnapshotFromCache(key)
 		if (cached) {
 			return {
 				workspace,

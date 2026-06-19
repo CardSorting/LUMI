@@ -1,0 +1,18 @@
+{
+	"workspaceRevision": 1,
+	"verifyRevision": 0,
+	"contextRefreshId": 1,
+	"trackedFileHashes": {
+		"JoyRide/spec.md": "a96fb86e384f49425c63fa3ae28809f32c3a41ec72a17439f28a6e8d8d6908c8",
+		"package.json": "9277bfc486051c21e3d3e9c5439f611b22bf8639f43bb9d762101cd66e4281a6",
+		"tsconfig.json": "967852b9ebd6ef79c77abeb073736e72dcd3df48d3049d429aad6cd230f62bac",
+		".mocharc.json": "3068878e1d5d6e690e9d5f9374e58e63d2b06641e00d620e13d572606527b86c",
+		"src/core/task/tools/types/TaskConfig.ts": "40bf313af6becde2f3bb01473a797677138bf0f9ce9ba3217d84dcaef20c0d26",
+		"src/core/task/tools/handlers/ExecuteCommandToolHandler.ts": "87f8c2f58c31dacd071e670f990af510c20a311e49135418bd19bc56cf690ee9",
+		"src/shared/utils/SensitiveDataMasker.ts": "cf2b021836d6935eba648646b77c5339fd2e50d0067adaf6f77da8f8f0684961",
+		"src/core/task/ToolExecutor.ts": "2ca298831556bdacee12e7c048c62f1fbdf41730a87fe80bc78e8b22cd62c412",
+		"src/core/task/tools/utils/ToolConstants.ts": "896d41c79f25db415423a14e779e926c9399b5bde5efdd9a241e2060f432c1ab",
+		"ROADMAP.md": "78a954908502aacc4535dbfee9ad4abcaf6e676b457eb8caee70b7017ed8f563"
+	},
+	"coherenceTokens": {}
+}

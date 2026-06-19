@@ -24,6 +24,8 @@ Uncontrolled scope changes to LUMI — code --install-extension CardSorting.lumi
 
 **Status:** Coherent
 
+**Phase:** checkpoint
+
 **Summary:**  
 Bootstrap steering surface for LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions.
 

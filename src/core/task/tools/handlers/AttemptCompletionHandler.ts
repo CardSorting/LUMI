@@ -446,6 +446,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				}),
 			)
 			try {
+				config.services.joyRideCache.flushTask(config.taskId, "task_completed")
 				await finalizeRoadmapSession(config.cwd, config.taskId)
 			} catch (error) {
 				Logger.warn("[AttemptCompletionHandler] Roadmap session finalize skipped:", error)
@@ -470,6 +471,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				}),
 			)
 			try {
+				config.services.joyRideCache.flushTask(config.taskId, "task_completed")
 				await finalizeRoadmapSession(config.cwd, config.taskId)
 			} catch (error) {
 				Logger.warn("[AttemptCompletionHandler] Roadmap session finalize skipped:", error)

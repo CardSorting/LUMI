@@ -2,7 +2,7 @@
 	"name": "lumi-vscode",
 	"displayName": "LUMI",
 	"description": "LUMI is your calm coding companion — comfort-first developer tooling for long sessions.",
-	"version": "1.0.7",
+	"version": "1.0.8",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",

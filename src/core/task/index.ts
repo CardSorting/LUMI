@@ -26,6 +26,12 @@ import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialM
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { executePreCompactHookWithCleanup, HookCancellationError, HookExecution } from "@core/hooks/precompact-executor"
 import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
+import {
+	createCommandResultCacheKey,
+	createJoyRideFingerprint,
+	getJoyRideCache,
+	summarizeJoyRideCommandOutput,
+} from "@core/joyride"
 import { parseMentions } from "@core/mentions"
 import { CommandPermissionController } from "@core/permissions"
 import { summarizeTask } from "@core/prompts/contextManagement"
@@ -1797,6 +1803,12 @@ export class Task {
 			}
 
 			// PHASE 7: Clean up resources
+			// Flush JoyRide cache entries for this cancelled task
+			try {
+				getJoyRideCache().flushTask(this.taskId, "task_cancelled")
+			} catch (error) {
+				Logger.warn("[JoyRide] Task cancellation cache flush skipped:", error)
+			}
 			await this.terminalManager.disposeAll()
 			this.urlContentFetcher.closeBrowser()
 			await this.browserSession.dispose()
@@ -1845,6 +1857,7 @@ export class Task {
 		options?: CommandExecutionOptions,
 	): Promise<[boolean, DietCodeToolResponseContent]> {
 		const result = await this.commandExecutor.execute(command, timeoutSeconds, options)
+		this.recordCommandResultInJoyRide(command, result)
 
 		// V191 Hardening: Auto-Revoke environmental lease for sensitive commands
 		// If command contains tools that likely alter the environment, revoke the lease for fresh probing.
@@ -1859,6 +1872,58 @@ export class Task {
 		}
 
 		return result
+	}
+
+	private recordCommandResultInJoyRide(command: string, result: [boolean, DietCodeToolResponseContent]): void {
+		try {
+			const [userRejected, toolResponse] = result
+			const outputText = typeof toolResponse === "string" ? toolResponse : JSON.stringify(toolResponse)
+			const summary = summarizeJoyRideCommandOutput(outputText)
+			const environmentFingerprint = createJoyRideFingerprint({ cwd: this.cwd, terminalMode: this.terminalExecutionMode })
+			const key = createCommandResultCacheKey({
+				command,
+				cwd: this.cwd,
+				environmentFingerprint,
+				runtimeVersion: process.version,
+			})
+
+			getJoyRideCache().set(
+				key.key,
+				{
+					command,
+					cwd: this.cwd,
+					userRejected,
+					outputSummary: summary,
+					capturedAt: Date.now(),
+				},
+				{
+					cacheKind: "hotExecution",
+					scope: { type: "task", id: this.taskId },
+					ownerTaskId: this.taskId,
+					ttlMs: 5 * 60 * 1000,
+					estimatedBytes: summary.summaryBytes + 512,
+					fingerprint: key.fingerprint,
+					workspaceFingerprint: createJoyRideFingerprint({ cwd: this.cwd }),
+					approvalBoundaryId: `task:${this.taskId}:command:${this.taskState.apiRequestCount}`,
+					durability: "memoryOnly",
+					invalidationReason: [
+						"ttl_expired",
+						"task_completed",
+						"task_cancelled",
+						"workspace_drift",
+						"approval_boundary_changed",
+						"command_environment_changed",
+					],
+					admissionReason: "recent command output summary for active task execution lookup",
+					safetyClassification: "taskLocal",
+					generation: this.taskState.apiRequestCount,
+					environmentFingerprint,
+					runtimeVersion: process.version,
+				},
+			)
+		} catch (error) {
+			Logger.warn("[JoyRide] Command result cache admission skipped:", error)
+		}
 	}
 
 	/**
