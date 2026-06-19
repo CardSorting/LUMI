@@ -1,5 +1,6 @@
 import * as path from "path"
 import { formatRoadmapSteeringBlock } from "./RoadmapAgentSteering"
+import { governanceFieldsFromStatus } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { RoadmapService } from "./RoadmapService"
 import { WORKSPACE_SKILL_REL } from "./RoadmapSkillInstall"
@@ -73,8 +74,11 @@ export async function sessionBrief(workspace: string, forceRefresh = false): Pro
 			recommended_next_action: status.recommended_next_action,
 			roadmap_gate: gate,
 			kanban_complete_allowed: status.kanban_complete_allowed,
-			auto_clearable_governance_only: status.auto_clearable_governance_only,
-			governance_mid_task: hints.governance_mid_task,
+			...governanceFieldsFromStatus({
+				auto_clearable_governance_only: !!status.auto_clearable_governance_only,
+				validation_pending: !!status.validation_pending,
+				governance_mid_task: hints.governance_mid_task as string | undefined,
+			}),
 			first_call: nextRec.command || status.agent_next_call || "roadmap(action='guide')",
 			prime_directive: status.prime_directive,
 			agent_playbook: status.agent_playbook,

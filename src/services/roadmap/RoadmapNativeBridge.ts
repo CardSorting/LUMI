@@ -163,7 +163,7 @@ export async function roadmapWriteHint(
 		recovery_suggestion: followup,
 		suggested_slash_command: null,
 		next_action: AUTO_GOVERNANCE.continueTaskMidPass,
-		governance_policy: AUTO_GOVERNANCE.noManualValidate,
+		governance_policy: AUTO_GOVERNANCE.governancePolicy,
 		auto_clearable_governance_only: status.auto_clearable_governance_only ?? false,
 		validation_pending: !!status.validation_pending,
 		source_tool: toolName,

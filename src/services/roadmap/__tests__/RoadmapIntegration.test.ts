@@ -123,6 +123,8 @@ describe("RoadmapIntegration", () => {
 			const brief = await sessionBrief(tmp, true)
 			assert.strictEqual(brief?.validation_pending, true)
 			assert.strictEqual(brief?.auto_clearable_governance_only, true)
+			assert.ok(brief?.governance_policy)
+			assert.match(String(brief?.governance_policy), /Do not call roadmap\(action='validate'\)/)
 		} finally {
 			await fs.rm(tmp, { recursive: true, force: true })
 			setRoadmapConfigOverride(null)

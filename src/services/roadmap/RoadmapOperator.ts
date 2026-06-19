@@ -1,5 +1,10 @@
 import * as path from "path"
-import { AUTO_GOVERNANCE, formatKanbanGateStatusLine, isAutoClearableGovernanceOnly } from "./RoadmapAutoGovernance"
+import {
+	AUTO_GOVERNANCE,
+	formatKanbanGateStatusLine,
+	isAutoClearableGovernanceOnly,
+	ROADMAP_DIAGNOSTIC_SLASH_COMMANDS,
+} from "./RoadmapAutoGovernance"
 import { REQUIRED_SECTIONS } from "./RoadmapSchema"
 
 export const OPERATOR_PLAYBOOK = `
@@ -9,7 +14,8 @@ The roadmap is the project's steering surface — not a backlog or wishlist.
 
 | Your job | Command |
 |----------|---------|
-| See one-screen status | /roadmap cockpit or roadmap(action='cockpit') |
+| See phase and next step | /roadmap guide or roadmap(action='guide') |
+| One-screen operator summary | /roadmap cockpit or roadmap(action='cockpit') (optional diagnostic) |
 | Check production health | /roadmap doctor or roadmap(action='doctor') |
 | Before major direction changes | roadmap(action='checkpoint') |
 | After agent edits ROADMAP.md | validated automatically internally |
@@ -101,7 +107,7 @@ export function determinePhase(params: {
 			phase: "bootstrap_fill",
 			operator_summary:
 				"Bootstrap template phrases remain — autofill runs at attempt_completion; preview with roadmap(action='apply_bootstrap_fill').",
-			agent_next_call: AUTO_GOVERNANCE.previewBootstrapAutofill,
+			agent_next_call: AUTO_GOVERNANCE.continueTaskMidPass,
 			agent_blocked: false,
 		}
 	}
@@ -131,11 +137,11 @@ export function determinePhase(params: {
 
 export function roadmapToolCommandToSlash(command?: string): string {
 	const raw = String(command || "").trim()
-	if (!raw) return "/roadmap cockpit"
+	if (!raw) return "/roadmap guide"
 	if (raw.startsWith("/roadmap")) return raw
 
 	const actionMatch = /roadmap\(action='([^']+)'(?:,\s*context='([^']*)')?\)/.exec(raw)
-	if (!actionMatch) return "/roadmap cockpit"
+	if (!actionMatch) return "/roadmap guide"
 
 	const action = actionMatch[1].replace(/_/g, "-")
 	const context = actionMatch[2]?.trim()
@@ -169,8 +175,8 @@ export function recommendNextAction(params: {
 	if (params.bootstrap_incomplete || params.phase === "bootstrap_fill") {
 		return {
 			action: "auto_bootstrap_fill",
-			command: AUTO_GOVERNANCE.previewBootstrapAutofill,
-			detail: "Bootstrap autofill runs automatically at attempt_completion; preview replacements if needed.",
+			command: AUTO_GOVERNANCE.continueTaskMidPass,
+			detail: `${AUTO_GOVERNANCE.bootstrapAtCompletion} Optional preview: ${AUTO_GOVERNANCE.previewBootstrapAutofill}`,
 		}
 	}
 	if (!params.roadmap_exists) {
@@ -362,7 +368,8 @@ export function buildAgentOperatorHints(params: {
 		kanban_complete_allowed: snap.kanban_complete_allowed,
 		validation_pending: !!snap.validation_pending,
 		preferred_command: nextRec.command,
-		slash_commands: ["/roadmap cockpit", "/roadmap explain-gate", "/roadmap explain-stale", "/roadmap progress --current"],
+		slash_commands: [...ROADMAP_DIAGNOSTIC_SLASH_COMMANDS],
+		governance_policy: AUTO_GOVERNANCE.governancePolicy,
 		next_action: params.agent_next_call || nextRec.command,
 		recovery_suggestion: params.operator_summary || nextRec.detail,
 		suggested_slash_command: roadmapToolCommandToSlash(nextRec.command),
@@ -431,7 +438,7 @@ export function wrapClarityEnvelope(
 		success: payload.success ?? payload.ok ?? true,
 		ok: payload.ok ?? payload.success ?? true,
 		execution_path: "roadmap_checkpoint",
-		governance_policy: AUTO_GOVERNANCE.noManualValidate,
+		governance_policy: AUTO_GOVERNANCE.governancePolicy,
 		auto_clearable_governance_only:
 			payload.auto_clearable_governance_only ?? operatorHints.auto_clearable_governance_only ?? false,
 		agent_playbook: AGENT_PLAYBOOK,

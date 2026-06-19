@@ -410,6 +410,7 @@ describe("attemptCompletionUtils", () => {
 			block.should.containEql('ready="true"')
 			block.should.containEql('advisory_count="1"')
 			block.should.containEql("<advisory")
+			block.should.containEql('governance_policy="')
 		})
 	})
 

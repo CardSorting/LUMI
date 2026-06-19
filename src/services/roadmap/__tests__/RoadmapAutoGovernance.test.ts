@@ -6,6 +6,7 @@ import {
 	formatKanbanGateStatusLine,
 	formatRemediationNote,
 	gateEditInstruction,
+	governanceFieldsFromStatus,
 	isAutoClearableGovernanceOnly,
 	journalFollowupForMutation,
 	midTaskAgentNextCall,
@@ -119,10 +120,21 @@ describe("RoadmapAutoGovernance", () => {
 
 	it("AUTO_GOVERNANCE copy avoids mandating validate at completion", () => {
 		for (const [key, value] of Object.entries(AUTO_GOVERNANCE)) {
-			if (key === "noManualValidate") continue
+			if (key === "noManualValidate" || key === "governancePolicy") continue
 			assert.doesNotMatch(value, /roadmap\(action='validate'\)/)
 			assert.doesNotMatch(value, /use_mcp/i)
 		}
 		assert.match(AUTO_GOVERNANCE.noManualValidate, /Do not call roadmap\(action='validate'\)/)
+		assert.strictEqual(AUTO_GOVERNANCE.governancePolicy, AUTO_GOVERNANCE.noManualValidate)
+	})
+
+	it("governanceFieldsFromStatus exposes policy and mid-task note", () => {
+		const fields = governanceFieldsFromStatus({
+			auto_clearable_governance_only: true,
+			validation_pending: true,
+		})
+		assert.strictEqual(fields.governance_policy, AUTO_GOVERNANCE.governancePolicy)
+		assert.strictEqual(fields.auto_clearable_governance_only, true)
+		assert.ok(fields.governance_mid_task)
 	})
 })

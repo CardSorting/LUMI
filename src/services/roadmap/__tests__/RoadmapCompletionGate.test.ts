@@ -6,6 +6,7 @@ import {
 	evaluateRoadmapCompletionBlock,
 	failClosedCompletionMessage,
 	requireFreshCheckpointBeforeComplete,
+	roadmapPreflightReadinessFromDryRun,
 } from "../RoadmapCompletionGate"
 import { DEFAULT_ROADMAP_CONFIG, setRoadmapConfigOverride } from "../RoadmapConfig"
 import { bootstrapSkeleton } from "../RoadmapSchema"
@@ -132,6 +133,27 @@ describe("RoadmapCompletionGate", () => {
 
 		const text = await fs.readFile(path.join(tmpDir, "ROADMAP.md"), "utf8")
 		assert.match(text, /\*\*Date:\*\*\s*\d{4}-\d{2}-\d{2}/)
+	})
+
+	it("roadmapPreflightReadinessFromDryRun maps auto-clearable dry-run to info severity", async () => {
+		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
+		await fs.writeFile(
+			path.join(tmpDir, ".dietcode", "roadmap-state.json"),
+			JSON.stringify({ validation_pending: true }),
+			"utf8",
+		)
+		await fs.writeFile(path.join(tmpDir, "README.md"), "# Gate test\n", "utf8")
+		const skeleton = bootstrapSkeleton({
+			project_hint: "Gate test",
+			anti_goals: "What This Project Must Not Become: drift.",
+		})
+		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), skeleton, "utf8")
+
+		const block = await evaluateRoadmapCompletionBlock(tmpDir, { dryRun: true })
+		const issue = roadmapPreflightReadinessFromDryRun(block)
+		assert.ok(issue)
+		assert.strictEqual(issue!.severity, "info")
+		assert.match(issue!.message, /attempt_completion/)
 	})
 
 	it("failClosedCompletionMessage avoids external tool commands", () => {

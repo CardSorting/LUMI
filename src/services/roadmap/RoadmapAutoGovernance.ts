@@ -17,7 +17,41 @@ export const AUTO_GOVERNANCE = {
 	previewBootstrapAutofill: "roadmap(action='apply_bootstrap_fill') — preview only; autofill writes run at attempt_completion.",
 	midTaskGovernanceNote:
 		"Governance (validate, bootstrap autofill, checkpoint date) runs automatically at attempt_completion — continue the task.",
+	/** Machine-readable policy string for all roadmap payloads and preflight XML. */
+	governancePolicy:
+		"Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.",
+	roadmapGateRecoveryHint:
+		"Edit ROADMAP.md to resolve governance gates — bootstrap fill, validation, and checkpoint date stamp run automatically at attempt_completion.",
 } as const
+
+/** Slash commands for optional diagnostics — guide first; never required for governance. */
+export const ROADMAP_DIAGNOSTIC_SLASH_COMMANDS = [
+	"/roadmap guide",
+	"/roadmap explain-gate",
+	"/roadmap explain-stale",
+	"/roadmap progress --current",
+	"/roadmap cockpit",
+] as const
+
+/** Stable governance fields for session brief, write hints, and tool envelopes. */
+export function governanceFieldsFromStatus(status: {
+	auto_clearable_governance_only?: boolean
+	validation_pending?: boolean
+	governance_mid_task?: string
+}): {
+	governance_policy: string
+	auto_clearable_governance_only: boolean
+	governance_mid_task?: string
+} {
+	const autoClearable = !!status.auto_clearable_governance_only
+	return {
+		governance_policy: AUTO_GOVERNANCE.governancePolicy,
+		auto_clearable_governance_only: autoClearable,
+		governance_mid_task:
+			status.governance_mid_task ||
+			(autoClearable || status.validation_pending ? AUTO_GOVERNANCE.midTaskGovernanceNote : undefined),
+	}
+}
 
 /** Stale reasons safe to auto-remediate with a checkpoint date stamp (mechanical only). */
 export const STALE_AUTO_TOUCH_REASONS = new Set(["no_recent_checkpoint_date", "invalid_date"])
@@ -120,7 +154,7 @@ export interface RoadmapGateStructuredInput {
 export function buildRoadmapGateStructuredEnvelope(input: RoadmapGateStructuredInput): string {
 	const parts: string[] = ['<roadmap_governance_recovery schema_version="1">']
 
-	parts.push(`<policy>${escapeXmlText(AUTO_GOVERNANCE.noManualValidate)}</policy>`)
+	parts.push(`<policy>${escapeXmlText(AUTO_GOVERNANCE.governancePolicy)}</policy>`)
 	parts.push(
 		`<auto_steps>${escapeXmlText(
 			[

@@ -463,9 +463,9 @@ const COMPLETION_GATE_PLAYBOOK_STEPS: Partial<Record<CompletionPreflightReason, 
 		"Retry attempt_completion with the live demo command.",
 	],
 	roadmap_gate: [
-		"Roadmap gates auto-remediate at attempt_completion (bootstrap fill, validate, checkpoint date stamp).",
-		"Do not call roadmap(action='validate') or MCP — edit ROADMAP.md per the <roadmap_governance_recovery> block.",
-		"Retry attempt_completion after ROADMAP.md issues are resolved.",
+		`${AUTO_GOVERNANCE.bootstrapAtCompletion} ${AUTO_GOVERNANCE.validationAtCompletion} ${AUTO_GOVERNANCE.checkpointTouchAtCompletion}`,
+		AUTO_GOVERNANCE.governancePolicy,
+		`${AUTO_GOVERNANCE.editRoadmapResolve} See <roadmap_governance_recovery> when present.`,
 	],
 	audit_gate: [
 		"Read critical audit violations and fix root causes in code.",
@@ -728,9 +728,11 @@ export function buildCompletionGateReadinessBlock(
 		.join("")
 
 	const ready = blockers.length === 0 ? "true" : "false"
+	const hasRoadmap = issues.some((issue) => issue.stage === "roadmap")
+	const policyAttr = hasRoadmap ? ` governance_policy="${escapeCompletionGateXmlText(AUTO_GOVERNANCE.governancePolicy)}"` : ""
 	return (
 		`<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ready="${ready}" ` +
-		`count="${blockers.length}" advisory_count="${advisories.length}">` +
+		`count="${blockers.length}" advisory_count="${advisories.length}"${policyAttr}>` +
 		`${issueElements}${advisoryElements}</completion_gate_readiness>`
 	)
 }
@@ -1278,9 +1280,7 @@ export function buildCompletionBreatherHint(config: TaskConfig): string {
 	const hints: string[] = []
 
 	if (lastReason === "roadmap_gate") {
-		hints.push(
-			"For roadmap blocks: edit ROADMAP.md per gate guidance — bootstrap fill, validate, and checkpoint date stamp run automatically at attempt_completion.",
-		)
+		hints.push(AUTO_GOVERNANCE.roadmapGateRecoveryHint)
 	}
 
 	if (blockCount >= COMPLETION_GATE_WARN_THRESHOLD) {
@@ -1329,7 +1329,7 @@ export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflight
 		case "circuit_breaker":
 			return "Stop calling attempt_completion — start a new task after fixing root causes."
 		case "roadmap_gate":
-			return "Edit ROADMAP.md to resolve governance gates — validation and bootstrap fill run automatically at completion."
+			return AUTO_GOVERNANCE.roadmapGateRecoveryHint
 		case "audit_gate":
 			return "Address critical audit violations in the workspace, run verification, then retry with an updated result."
 		case "double_check":

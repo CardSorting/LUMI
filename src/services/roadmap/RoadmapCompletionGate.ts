@@ -197,6 +197,29 @@ export async function evaluateRoadmapCompletionBlock(
 	return { blocked: false, remediationSteps: steps.length > 0 ? steps : undefined, dryRunAdvisory: options?.dryRun }
 }
 
+/** Maps dry-run completion evaluation to preflight readiness issues (CI merge-preview style). */
+export function roadmapPreflightReadinessFromDryRun(block: RoadmapCompletionBlock): {
+	stage: "roadmap"
+	message: string
+	severity: "block" | "info"
+} | null {
+	if (block.blocked) {
+		return {
+			stage: "roadmap",
+			message: block.message || AUTO_GOVERNANCE.gateEvaluationFailed,
+			severity: "block",
+		}
+	}
+	if (block.dryRunAdvisory || block.autoClearableOnly) {
+		return {
+			stage: "roadmap",
+			message: block.message || AUTO_GOVERNANCE.midTaskGovernanceNote,
+			severity: "info",
+		}
+	}
+	return null
+}
+
 /** Kernel-style pre-completion gate — mirrors dietcode require_fresh_checkpoint_before_complete. */
 export async function requireFreshCheckpointBeforeComplete(workspace: string): Promise<string | null> {
 	const cfg = getRoadmapConfig()

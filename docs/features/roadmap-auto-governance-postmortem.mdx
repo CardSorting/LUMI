@@ -214,6 +214,22 @@ Preflight readiness was silent when only auto-clearable governance was pending �
 - Progress error recovery defaults to `/roadmap guide` (diagnostic, not mandatory loop)
 - Progress gate fallback uses `midTaskGovernanceNote` instead of hard “blocked” text
 
+## Pass 8 — unified governance fields + consolidated preflight dry-run
+
+### Problem
+
+Governance copy still drifted across completion playbooks, session brief, operator hints, and preflight XML. Bootstrap-fill phase nudged agents toward `apply_bootstrap_fill` instead of continuing work. Preflight advisories used a separate status read instead of the same dry-run block evaluator as live completion.
+
+### Fix
+
+- `AUTO_GOVERNANCE.governancePolicy` + `roadmapGateRecoveryHint` — single strings for machine and human consumers
+- `governanceFieldsFromStatus()` — stable `governance_policy` / `auto_clearable_governance_only` / `governance_mid_task` on session brief
+- `ROADMAP_DIAGNOSTIC_SLASH_COMMANDS` — guide-first diagnostic list on all operator hints
+- `roadmapPreflightReadinessFromDryRun()` — one mapper from `evaluateRoadmapCompletionBlock({ dryRun: true })` to preflight issues (includes planned remediation steps in advisory message)
+- `<completion_gate_readiness>` adds `governance_policy` when roadmap stage is present
+- Bootstrap-fill `agent_next_call` / `recommendNextAction` → `continueTaskMidPass` (preview optional in detail)
+- `roadmapToolCommandToSlash` defaults to `/roadmap guide` not cockpit
+
 ## Files touched (reference)
 
 | Area | Key files |

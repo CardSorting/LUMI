@@ -11,11 +11,12 @@ import { buildCompletionGateMessage, runCompletionAudit } from "@shared/audit/co
 import { parseIntentThresholdOverrides } from "@shared/audit/gatePolicy"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
-import { AUTO_GOVERNANCE, formatAutoRemediationSummary } from "@/services/roadmap/RoadmapAutoGovernance"
+import { formatAutoRemediationSummary } from "@/services/roadmap/RoadmapAutoGovernance"
 import {
 	buildRoadmapCompletionExtraBlocks,
 	evaluateRoadmapCompletionBlock,
 	failClosedCompletionMessage,
+	roadmapPreflightReadinessFromDryRun,
 } from "@/services/roadmap/RoadmapCompletionGate"
 import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
@@ -258,13 +259,10 @@ export async function evaluateCompletionGateReadinessAsync(
 		issues.push({ stage: "roadmap", message: roadmapError, severity: "block" })
 	} else if (getRoadmapConfig().enabled) {
 		try {
-			const status = await RoadmapService.getInstance().getOperationalStatus(config.cwd, "", "light")
-			if (status.auto_clearable_governance_only) {
-				issues.push({
-					stage: "roadmap",
-					message: AUTO_GOVERNANCE.midTaskGovernanceNote,
-					severity: "info",
-				})
+			const block = await evaluateRoadmapCompletionBlock(config.cwd, { dryRun: true })
+			const advisory = roadmapPreflightReadinessFromDryRun(block)
+			if (advisory?.severity === "info") {
+				issues.push(advisory)
 			}
 		} catch {
 			// non-fatal — readiness hint must not block completion attempt
