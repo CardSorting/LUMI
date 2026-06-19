@@ -4,6 +4,8 @@
  */
 
 import { Buffer } from "node:buffer"
+import { getJoyRideCacheHitAuditCount } from "./JoyRideAudit"
+import { canJoyRideRetainScratch, getJoyRideConfig } from "./JoyRideConfig"
 import {
 	JOYRIDE_CACHE_KINDS,
 	type JoyRideBudgetConfig,
@@ -11,6 +13,7 @@ import {
 	type JoyRideCacheKind,
 	type JoyRideCacheStats,
 	type JoyRideCleanupHandler,
+	type JoyRideCleanupStatus,
 	type JoyRideExplainResult,
 	type JoyRideInvalidateTarget,
 	type JoyRideInvalidationReason,
@@ -42,6 +45,15 @@ const DEFAULT_BUDGET: JoyRideBudgetConfig = {
 
 const NOOP_CLEANUP: JoyRideCleanupHandler = () => {}
 
+/** Conservative overhead multiplier applied to all size estimates. */
+const SIZE_ESTIMATE_OVERHEAD = 1.25
+
+/** Max stale entries retained for diagnostics via explain(). */
+const MAX_STALE_DIAGNOSTIC_ENTRIES = 256
+
+/** Max entries removed per flush call to avoid latency spikes. */
+const FLUSH_CHUNK_SIZE = 64
+
 const SECRET_VALUE_PATTERNS: RegExp[] = [
 	/sk-ant-api03-[a-zA-Z0-9\-_]{80,}/,
 	/sk-[a-zA-Z0-9]{32,}/,
@@ -51,6 +63,8 @@ const SECRET_VALUE_PATTERNS: RegExp[] = [
 	/\bAKIA[0-9A-Z]{16}\b/,
 	/\bBearer\s+[a-zA-Z0-9_\-.]{20,}\b/i,
 	/\b(api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|npm[_-]?token)\s*[:=]\s*['"]?[a-zA-Z0-9_\-./+=]{8,}/i,
+	/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+	/\.env(?:\.[a-z]+)?\s*[:=]\s*['"]?[a-zA-Z0-9_\-./+=]{8,}/i,
 ]
 
 const SECRET_KEY_PATTERN = /\b(apiKey|api_key|secret|token|authorization|password|privateKey|sshKey|clientSecret)\b/i
@@ -79,6 +93,19 @@ export class JoyRideCache {
 	private spillCount = 0
 	private cacheValidationFailureCount = 0
 	private duplicateArtifactDeduplicationCount = 0
+	private ttlEvictionCount = 0
+	private lruEvictionCount = 0
+	private lateWriteRejectionCount = 0
+	private cleanupFailureCount = 0
+	private lastFlushDurationMs = 0
+	private lastShutdownDurationMs = 0
+
+	/** Active task generation per taskId; late writes from obsolete generations are rejected. */
+	private readonly taskGenerations = new Map<string, number>()
+	/** Tracks cleanup invocation to prevent duplicate cleanup. */
+	private readonly cleanupInvokedKeys = new Set<string>()
+	/** Cleanup status per entry key. */
+	private readonly cleanupStatusByKey = new Map<string, JoyRideCleanupStatus>()
 
 	constructor(config: Partial<JoyRideBudgetConfig> = {}) {
 		this.budget = {
@@ -127,6 +154,14 @@ export class JoyRideCache {
 			return undefined
 		}
 
+		if (entry.cacheKind === "verification" && validation && !this.isVerificationValidationComplete(entry, validation)) {
+			this.markStale(key, "validation_failed")
+			this.missCount++
+			this.staleReusePreventionCount++
+			this.cacheValidationFailureCount++
+			return undefined
+		}
+
 		this.hitCount++
 		if (entry.cacheKind === "verification") {
 			this.verificationCacheReuseCount++
@@ -144,7 +179,16 @@ export class JoyRideCache {
 	}
 
 	set(key: string, value: unknown, metadata: JoyRideSetMetadata): JoyRideSetResult {
-		const estimatedBytes = metadata.estimatedBytes ?? this.estimateValueBytes(value)
+		return this.trySet(key, value, metadata)
+	}
+
+	trySet(key: string, value: unknown, metadata: JoyRideSetMetadata): JoyRideSetResult {
+		if (!this.isTaskGenerationValid(metadata.ownerTaskId, metadata.generation)) {
+			this.lateWriteRejectionCount++
+			return this.reject(key, "late_write_task_generation_mismatch")
+		}
+
+		const estimatedBytes = Math.ceil((metadata.estimatedBytes ?? this.estimateValueBytes(value)) * SIZE_ESTIMATE_OVERHEAD)
 		const admission = this.admit(key, value, metadata, estimatedBytes)
 		if (!admission.accepted) {
 			this.rejectedAdmissionCount++
@@ -236,23 +280,58 @@ export class JoyRideCache {
 				}
 			}
 		}
+		if (count > 0) {
+			this.pruneStaleDiagnostics()
+		}
 		return count
 	}
 
 	flush(target: JoyRideInvalidateTarget = { reason: "manual_flush" }): number {
+		const start = performance.now()
 		const keys = [...this.entries.values()].filter((entry) => this.matchesTarget(entry, target)).map((entry) => entry.key)
-		for (const key of keys) {
-			this.deleteEntry(key, target.reason ?? "manual_flush", false)
+		let removed = 0
+		for (let i = 0; i < keys.length; i += FLUSH_CHUNK_SIZE) {
+			const chunk = keys.slice(i, i + FLUSH_CHUNK_SIZE)
+			for (const key of chunk) {
+				if (this.deleteEntry(key, target.reason ?? "manual_flush", false)) {
+					removed++
+				}
+			}
 		}
-		return keys.length
+		this.lastFlushDurationMs = performance.now() - start
+		return removed
 	}
 
 	flushTask(taskId: string, reason: JoyRideInvalidationReason = "task_completed"): number {
+		this.bumpTaskGeneration(taskId)
 		const count = this.flush({ ownerTaskId: taskId, reason })
 		if (count > 0) {
 			this.taskCleanupCount++
 		}
 		return count
+	}
+
+	registerTask(taskId: string, generation = 0): void {
+		this.taskGenerations.set(taskId, generation)
+	}
+
+	bumpTaskGeneration(taskId: string): number {
+		const next = (this.taskGenerations.get(taskId) ?? 0) + 1
+		this.taskGenerations.set(taskId, next)
+		return next
+	}
+
+	isTaskGenerationValid(taskId: string, generation: number): boolean {
+		const active = this.taskGenerations.get(taskId)
+		if (active === undefined) {
+			this.registerTask(taskId, generation)
+			return true
+		}
+		return generation >= active
+	}
+
+	invalidateWorkspace(workspaceFingerprint: string, reason: JoyRideInvalidationReason = "workspace_drift"): number {
+		return this.invalidate({ workspaceFingerprint, reason })
 	}
 
 	flushWorkspace(workspaceId: string, reason: JoyRideInvalidationReason = "workspace_closed"): number {
@@ -269,7 +348,7 @@ export class JoyRideCache {
 
 		for (const entry of [...this.entries.values()]) {
 			if (this.isExpired(entry)) {
-				this.deleteEntry(entry.key, "ttl_expired", true)
+				this.deleteEntry(entry.key, "ttl_expired", true, "ttl")
 				trimmedEntries++
 			}
 		}
@@ -279,7 +358,7 @@ export class JoyRideCache {
 			if (!candidate) {
 				break
 			}
-			this.deleteEntry(candidate.key, "memory_pressure", true)
+			this.deleteEntry(candidate.key, "memory_pressure", true, "lru")
 			trimmedEntries++
 		}
 
@@ -304,7 +383,7 @@ export class JoyRideCache {
 			if (this.totalBytes <= targetBytes) {
 				break
 			}
-			this.deleteEntry(entry.key, reason, true)
+			this.deleteEntry(entry.key, reason, true, "lru")
 			trimmedEntries++
 		}
 
@@ -334,7 +413,10 @@ export class JoyRideCache {
 			hitRate: requestCount ? this.hitCount / requestCount : 0,
 			missRate: requestCount ? this.missCount / requestCount : 0,
 			evictionCount: this.evictionCount,
+			ttlEvictionCount: this.ttlEvictionCount,
+			lruEvictionCount: this.lruEvictionCount,
 			staleInvalidationCount: this.staleInvalidationCount,
+			staleDiagnosticCount: this.countStaleDiagnostics(),
 			memoryUsageEstimate: this.totalBytes,
 			perCacheMemoryEstimate: { ...this.bytesByKind },
 			perTaskMemoryEstimate: Object.fromEntries(this.bytesByTask.entries()),
@@ -345,6 +427,8 @@ export class JoyRideCache {
 			rejectedAdmissionCount: this.rejectedAdmissionCount,
 			rejectedUnsafeEntryCount: this.rejectedUnsafeEntryCount,
 			rejectedOversizedEntryCount: this.rejectedOversizedEntryCount,
+			lateWriteRejectionCount: this.lateWriteRejectionCount,
+			cleanupFailureCount: this.cleanupFailureCount,
 			averageEntryAgeMs,
 			largestEntries: [...summaries].sort((a, b) => b.estimatedBytes - a.estimatedBytes).slice(0, 5),
 			hottestKeys: [...summaries].sort((a, b) => b.accessCount - a.accessCount).slice(0, 5),
@@ -355,6 +439,11 @@ export class JoyRideCache {
 			cacheValidationFailureCount: this.cacheValidationFailureCount,
 			duplicateArtifactDeduplicationCount: this.duplicateArtifactDeduplicationCount,
 			entryCount: this.entries.size,
+			cacheHitAuditCount: getJoyRideCacheHitAuditCount(),
+			lastFlushDurationMs: this.lastFlushDurationMs,
+			lastShutdownDurationMs: this.lastShutdownDurationMs,
+			operationalMode: getJoyRideConfig().mode,
+			isHelping: this.hitCount > this.missCount && this.hitCount > 0,
 		}
 	}
 
@@ -403,6 +492,9 @@ export class JoyRideCache {
 		const now = Date.now()
 		const expired = this.isExpired(entry)
 		const validity = expired ? "expired" : entry.staleReason ? "stale" : "valid"
+		const diagnosticOnly = this.isDiagnosticOnlyEntry(entry)
+		const canReuse = validity === "valid" && entry.cacheKind !== "verification" && !diagnosticOnly
+		const reuseBlockReason = this.explainReuseBlock(entry, expired, diagnosticOnly)
 		return {
 			exists: true,
 			key,
@@ -419,6 +511,10 @@ export class JoyRideCache {
 			ageMs: now - entry.createdAt,
 			estimatedBytes: entry.estimatedBytes,
 			canEvict: true,
+			canReuse,
+			reuseBlockReason,
+			diagnosticOnly,
+			invalidationTriggers: [...entry.invalidationReason],
 			durability: entry.durability,
 			safetyClassification: entry.safetyClassification,
 			invalidationReason: [...entry.invalidationReason],
@@ -427,11 +523,20 @@ export class JoyRideCache {
 			generation: entry.generation,
 			fingerprint: entry.fingerprint,
 			accessCount: entry.accessCount,
+			cleanupStatus: this.cleanupStatusByKey.get(key) ?? "none",
 		}
 	}
 
 	runPeriodicMaintenance(): JoyRideTrimResult {
+		this.pruneStaleDiagnostics()
 		return this.trimToBudget()
+	}
+
+	shutdown(reason: JoyRideInvalidationReason = "workspace_closed"): number {
+		const start = performance.now()
+		const count = this.flush({ reason })
+		this.lastShutdownDurationMs = performance.now() - start
+		return count
 	}
 
 	private admit(key: string, value: unknown, metadata: JoyRideSetMetadata, estimatedBytes: number): JoyRideSetResult {
@@ -463,6 +568,9 @@ export class JoyRideCache {
 			return this.reject(key, "per_task_budget_exceeded")
 		}
 		if (metadata.cacheKind === "scratchArtifact") {
+			if (!canJoyRideRetainScratch()) {
+				return this.reject(key, "scratch_cache_disabled")
+			}
 			if (!metadata.cleanupHandler) {
 				return this.reject(key, "scratch_artifact_missing_cleanup_handler")
 			}
@@ -732,7 +840,12 @@ export class JoyRideCache {
 		}
 	}
 
-	private deleteEntry(key: string, reason: JoyRideInvalidationReason, countAsEviction: boolean): boolean {
+	private deleteEntry(
+		key: string,
+		reason: JoyRideInvalidationReason,
+		countAsEviction: boolean,
+		evictionKind: "ttl" | "lru" | "none" = "none",
+	): boolean {
 		const entry = this.entries.get(key)
 		if (!entry) {
 			return false
@@ -743,20 +856,122 @@ export class JoyRideCache {
 		this.accountRemove(entry)
 		if (countAsEviction) {
 			this.evictionCount++
+			if (evictionKind === "ttl") {
+				this.ttlEvictionCount++
+			} else if (evictionKind === "lru") {
+				this.lruEvictionCount++
+			}
 		}
 		this.invokeCleanup(entry)
+		this.pruneStaleDiagnostics()
 		return true
 	}
 
 	private invokeCleanup(entry: JoyRideCacheEntry<unknown>): void {
+		if (entry.cleanupHandler === NOOP_CLEANUP) {
+			return
+		}
+		if (this.cleanupInvokedKeys.has(entry.key)) {
+			return
+		}
+		this.cleanupInvokedKeys.add(entry.key)
+		this.cleanupStatusByKey.set(entry.key, "pending")
 		try {
 			const result = entry.cleanupHandler(entry)
 			if (result && typeof (result as Promise<void>).catch === "function") {
-				void (result as Promise<void>).catch(() => {})
+				void (result as Promise<void>)
+					.then(() => {
+						this.cleanupStatusByKey.set(entry.key, "completed")
+					})
+					.catch(() => {
+						this.cleanupFailureCount++
+						this.cleanupStatusByKey.set(entry.key, "failed")
+					})
+			} else {
+				this.cleanupStatusByKey.set(entry.key, "completed")
 			}
 		} catch {
-			// Cleanup must never threaten the active session.
+			this.cleanupFailureCount++
+			this.cleanupStatusByKey.set(entry.key, "failed")
 		}
+	}
+
+	private countStaleDiagnostics(): number {
+		let count = 0
+		for (const entry of this.entries.values()) {
+			if (entry.staleReason || this.isExpired(entry)) {
+				count++
+			}
+		}
+		return count
+	}
+
+	private pruneStaleDiagnostics(): void {
+		const staleEntries = [...this.entries.entries()].filter(([, entry]) => entry.staleReason || this.isExpired(entry))
+		if (staleEntries.length <= MAX_STALE_DIAGNOSTIC_ENTRIES) {
+			return
+		}
+		staleEntries
+			.sort(([, a], [, b]) => a.createdAt - b.createdAt)
+			.slice(0, staleEntries.length - MAX_STALE_DIAGNOSTIC_ENTRIES)
+			.forEach(([key, entry]) => {
+				this.entries.delete(key)
+				this.accountRemove(entry)
+				this.cleanupInvokedKeys.delete(key)
+				this.cleanupStatusByKey.delete(key)
+			})
+	}
+
+	private isVerificationValidationComplete(
+		entry: JoyRideCacheEntry<unknown>,
+		validation: JoyRideValidationFingerprint,
+	): boolean {
+		const requiredEntryFields: (keyof JoyRideValidationFingerprint)[] = [
+			"fingerprint",
+			"workspaceFingerprint",
+			"approvalBoundaryId",
+			"dependencyFingerprint",
+			"lockfileFingerprint",
+			"gitHead",
+			"environmentFingerprint",
+			"runtimeVersion",
+		]
+		const requiredValidationFields: (keyof JoyRideValidationFingerprint)[] = [...requiredEntryFields, "relevantFileHashes"]
+		for (const field of requiredEntryFields) {
+			if (!entry[field as keyof JoyRideCacheEntry<unknown>]) {
+				return false
+			}
+		}
+		for (const field of requiredValidationFields) {
+			if (validation[field] === undefined) {
+				return false
+			}
+		}
+		return true
+	}
+
+	private isDiagnosticOnlyEntry(entry: JoyRideCacheEntry<unknown>): boolean {
+		const value = entry.value as { diagnosticOnly?: boolean } | undefined
+		return value?.diagnosticOnly === true
+	}
+
+	private explainReuseBlock(entry: JoyRideCacheEntry<unknown>, expired: boolean, diagnosticOnly: boolean): string | undefined {
+		if (expired) {
+			return "entry_expired"
+		}
+		if (entry.staleReason) {
+			return String(entry.staleReason)
+		}
+		if (diagnosticOnly) {
+			return "diagnostic_only_not_authoritative"
+		}
+		if (entry.cacheKind === "verification") {
+			return "verification_requires_full_validation_fingerprint"
+		}
+		if (!this.isTaskGenerationValid(entry.ownerTaskId, entry.generation)) {
+			return "task_generation_mismatch"
+		}
+		return undefined
 	}
 
 	private appendReason(

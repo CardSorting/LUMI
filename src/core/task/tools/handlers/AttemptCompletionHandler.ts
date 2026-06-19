@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { ToolUse } from "@core/assistant-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
+import { flushTaskGeneration, getJoyRideCache } from "@core/joyride"
 import { formatResponse } from "@core/prompts/responses"
 import { maybeTransitionToReplanMode } from "@core/task/utils/replanModeTransition"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
@@ -446,7 +447,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				}),
 			)
 			try {
-				config.services.joyRideCache.flushTask(config.taskId, "task_completed")
+				flushTaskGeneration(getJoyRideCache(), config.taskId, "task_completed")
 				await finalizeRoadmapSession(config.cwd, config.taskId)
 			} catch (error) {
 				Logger.warn("[AttemptCompletionHandler] Roadmap session finalize skipped:", error)
@@ -471,7 +472,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				}),
 			)
 			try {
-				config.services.joyRideCache.flushTask(config.taskId, "task_completed")
+				flushTaskGeneration(getJoyRideCache(), config.taskId, "task_completed")
 				await finalizeRoadmapSession(config.cwd, config.taskId)
 			} catch (error) {
 				Logger.warn("[AttemptCompletionHandler] Roadmap session finalize skipped:", error)

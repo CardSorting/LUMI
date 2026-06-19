@@ -27,10 +27,17 @@ import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { executePreCompactHookWithCleanup, HookCancellationError, HookExecution } from "@core/hooks/precompact-executor"
 import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import {
-	createCommandResultCacheKey,
-	createJoyRideFingerprint,
+	buildJoyRideWorkspaceSnapshot,
+	bumpTaskGeneration,
+	createJoyRideTaskScope,
+	flushTaskGeneration,
+	flushWorkspace,
 	getJoyRideCache,
-	summarizeJoyRideCommandOutput,
+	isEnvAlteringCommand,
+	isJoyRideHitDecision,
+	lookupSafeCommandResult,
+	registerTaskLifecycle,
+	storeReusableCommandResult,
 } from "@core/joyride"
 import { parseMentions } from "@core/mentions"
 import { CommandPermissionController } from "@core/permissions"
@@ -356,6 +363,7 @@ export class Task {
 		})
 
 		this.taskId = taskId
+		getJoyRideCache().registerTask(taskId, 0)
 
 		// Initialize taskId first
 		if (historyItem) {
@@ -1805,7 +1813,8 @@ export class Task {
 			// PHASE 7: Clean up resources
 			// Flush JoyRide cache entries for this cancelled task
 			try {
-				getJoyRideCache().flushTask(this.taskId, "task_cancelled")
+				bumpTaskGeneration(getJoyRideCache(), this.taskId)
+				flushTaskGeneration(getJoyRideCache(), this.taskId, "task_cancelled")
 			} catch (error) {
 				Logger.warn("[JoyRide] Task cancellation cache flush skipped:", error)
 			}
@@ -1856,74 +1865,33 @@ export class Task {
 		timeoutSeconds: number | undefined,
 		options?: CommandExecutionOptions,
 	): Promise<[boolean, DietCodeToolResponseContent]> {
+		const scope = createJoyRideTaskScope(this.taskId, this.cwd, this.terminalExecutionMode, this.taskState.apiRequestCount)
+		registerTaskLifecycle(getJoyRideCache(), this.taskId, scope.generation)
+
+		const decision = await lookupSafeCommandResult(getJoyRideCache(), command, scope)
+		if (isJoyRideHitDecision(decision)) {
+			return decision.value
+		}
+
 		const result = await this.commandExecutor.execute(command, timeoutSeconds, options)
-		this.recordCommandResultInJoyRide(command, result)
+		await storeReusableCommandResult(getJoyRideCache(), command, result, scope)
 
 		// V191 Hardening: Auto-Revoke environmental lease for sensitive commands
 		// If command contains tools that likely alter the environment, revoke the lease for fresh probing.
-		const envAlteringTerms = ["npm ", "yarn ", "pnpm ", "nvm ", "brew ", "fvm ", "bun ", "git config"]
-		const isEnvAltering = envAlteringTerms.some((term) => command.includes(term))
-
-		if (isEnvAltering && result[0]) {
+		if (isEnvAlteringCommand(command) && result[0]) {
 			Logger.info(
 				`[Task ${this.taskId}] Env-altering command detected (\`${command}\`). Revoking environmental lease for re-probe.`,
 			)
 			this.toolExecutor.getGuard().engine.revokeLease()
+			try {
+				const snapshot = await buildJoyRideWorkspaceSnapshot(this.cwd, this.terminalExecutionMode)
+				flushWorkspace(getJoyRideCache(), snapshot.workspaceFingerprint, "command_environment_changed")
+			} catch (error) {
+				Logger.warn("[JoyRide] Workspace invalidation after env-altering command skipped:", error)
+			}
 		}
 
 		return result
-	}
-
-	private recordCommandResultInJoyRide(command: string, result: [boolean, DietCodeToolResponseContent]): void {
-		try {
-			const [userRejected, toolResponse] = result
-			const outputText = typeof toolResponse === "string" ? toolResponse : JSON.stringify(toolResponse)
-			const summary = summarizeJoyRideCommandOutput(outputText)
-			const environmentFingerprint = createJoyRideFingerprint({ cwd: this.cwd, terminalMode: this.terminalExecutionMode })
-			const key = createCommandResultCacheKey({
-				command,
-				cwd: this.cwd,
-				environmentFingerprint,
-				runtimeVersion: process.version,
-			})
-
-			getJoyRideCache().set(
-				key.key,
-				{
-					command,
-					cwd: this.cwd,
-					userRejected,
-					outputSummary: summary,
-					capturedAt: Date.now(),
-				},
-				{
-					cacheKind: "hotExecution",
-					scope: { type: "task", id: this.taskId },
-					ownerTaskId: this.taskId,
-					ttlMs: 5 * 60 * 1000,
-					estimatedBytes: summary.summaryBytes + 512,
-					fingerprint: key.fingerprint,
-					workspaceFingerprint: createJoyRideFingerprint({ cwd: this.cwd }),
-					approvalBoundaryId: `task:${this.taskId}:command:${this.taskState.apiRequestCount}`,
-					durability: "memoryOnly",
-					invalidationReason: [
-						"ttl_expired",
-						"task_completed",
-						"task_cancelled",
-						"workspace_drift",
-						"approval_boundary_changed",
-						"command_environment_changed",
-					],
-					admissionReason: "recent command output summary for active task execution lookup",
-					safetyClassification: "taskLocal",
-					generation: this.taskState.apiRequestCount,
-					environmentFingerprint,
-					runtimeVersion: process.version,
-				},
-			)
-		} catch (error) {
-			Logger.warn("[JoyRide] Command result cache admission skipped:", error)
-		}
 	}
 
 	/**

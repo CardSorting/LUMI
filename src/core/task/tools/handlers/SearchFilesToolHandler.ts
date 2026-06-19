@@ -1,4 +1,11 @@
 import type { ToolUse } from "@core/assistant-message"
+import {
+	createJoyRideTaskScope,
+	getJoyRideCache,
+	isJoyRideHitDecision,
+	lookupSearchResult,
+	storeSearchResult,
+} from "@core/joyride"
 import { regexSearchFiles } from "@services/ripgrep"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import * as path from "path"
@@ -235,6 +242,24 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		// Determine which paths to search
 		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath!)
 
+		const joyRideScope = createJoyRideTaskScope(
+			config.taskId,
+			config.cwd,
+			config.vscodeTerminalExecutionMode,
+			config.taskState.apiRequestCount,
+		)
+		const grepCacheKey = `${regex}:${filePattern ?? ""}:${searchPaths.map((p) => p.absolutePath).join("|")}`
+		const grepOptions = {
+			cwd: config.cwd,
+			includeGlobs: filePattern ? [filePattern] : undefined,
+			excludeGlobs: undefined as string[] | undefined,
+			caseSensitive: true,
+		}
+		const searchDecision = await lookupSearchResult(getJoyRideCache(), grepCacheKey, grepOptions, joyRideScope)
+		if (isJoyRideHitDecision(searchDecision)) {
+			return searchDecision.value
+		}
+
 		// Determine workspace context for telemetry
 		const primaryWorkspaceRoot = searchPaths[0]?.workspaceRoot
 		const resolvedToNonPrimary =
@@ -289,6 +314,9 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 		// Format and combine results
 		const results = this.formatSearchResults(config, searchResults, searchPaths)
+
+		const totalResultCount = searchResults.reduce((sum, r) => sum + (r.success ? r.resultCount : 0), 0)
+		void storeSearchResult(getJoyRideCache(), grepCacheKey, grepOptions, results, totalResultCount, joyRideScope)
 
 		// Capture workspace search pattern telemetry
 		if (config.isMultiRootEnabled && config.workspaceManager) {

@@ -78,10 +78,13 @@ export function createCommandResultCacheKey(input: {
 
 export function createGrepResultCacheKey(input: {
 	query: string
+	cwd: string
 	includeGlobs?: string[]
 	excludeGlobs?: string[]
 	workspaceFingerprint: string
 	changedFileGeneration: number
+	caseSensitive?: boolean
+	searchImplementationVersion?: string
 }): JoyRideKeyMaterial {
 	return createJoyRideKey("grep-result", input)
 }

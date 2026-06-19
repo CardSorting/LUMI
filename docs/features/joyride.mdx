@@ -1,0 +1,206 @@
+---
+title: "JoyRide Execution Cache"
+sidebarTitle: "JoyRide Cache"
+description: "Bounded hot-path execution cache for LUMI agent sessions — typed decisions, trust model, configuration, and diagnostics."
+---
+
+**JoyRide** is LUMI's bounded in-process **execution cache** for agent hot paths. It accelerates repeated safe work (read-only commands, search) without storing secrets, without pretending to be durable, and without bypassing approval or verification boundaries.
+
+**JoyRide is cache, not agent memory.** It does not provide identity, narrative continuity, or long-term recall.
+
+Implementation: `src/core/joyride/` · Hot-path wiring: `src/core/task/index.ts`, `SearchFilesToolHandler.ts`
+
+## Legacy APIs removed
+
+Legacy boolean/undefined cache helpers (`lookupCommandResult`, `lookupGrepResult`, `storeCommandResult`, `storeGrepResult`) have been **removed**. All integrations must use typed decision APIs.
+
+## Typed decision model
+
+Every lookup returns a `JoyRideCacheDecision` discriminated union:
+
+| Field | Purpose |
+|---|---|
+| `type` | `hit` \| `miss` \| `stale` \| `rejected` \| `disabled` \| `diagnosticOnly` \| `degraded` |
+| `canReuse` | Whether work may be skipped |
+| `reasonCode` | Stable vocabulary (`JOYRIDE_REASON`) |
+| `fallbackBehavior` | What the caller should do next |
+| `proofSummary`, `keySummary` | Bounded fingerprint summaries |
+| `degraded`, `configExplanation` | Runtime mode context |
+
+### Fallback behaviors
+
+| Behavior | Meaning |
+|---|---|
+| `reuseCachedValue` | Use `decision.value` |
+| `executeNormally` | Run work, no skip |
+| `executeAndStoreDiagnosticOnly` | Run work; store diagnostic if safe |
+| `executeAndStoreReusableIfSafe` | Run work; store if classifier allows |
+| `rejectArtifact` | Do not admit artifact |
+| `doNotStore` | JoyRide disabled — no storage |
+| `markStaleAndExecute` | Stale entry exists — rerun |
+| `disableActiveReuse` | Degraded — no skips |
+
+### Integration pattern
+
+```typescript
+import {
+  getJoyRideCache,
+  isJoyRideHitDecision,
+  lookupSafeCommandResult,
+  registerTaskLifecycle,
+  storeReusableCommandResult,
+} from "@core/joyride"
+
+const cache = getJoyRideCache()
+const scope = createJoyRideTaskScope(taskId, cwd, terminalMode, generation)
+registerTaskLifecycle(cache, taskId, scope.generation)
+
+const decision = await lookupSafeCommandResult(cache, command, scope)
+if (isJoyRideHitDecision(decision)) {
+  return decision.value
+}
+
+const result = await execute(command)
+await storeReusableCommandResult(cache, command, result, scope)
+return result
+```
+
+Call sites must **not** hand-roll cache policy, keys, safety classification, or diagnostic-only status.
+
+## What JoyRide accelerates
+
+| Cache kind | Reuse policy |
+|---|---|
+| **Command (hotExecution)** | Only explicit safe-readonly allowlist (`pwd`, `git status`, `git rev-parse HEAD`, etc.) |
+| **Verification** | Fail-closed: requires complete file-hash proof + all workspace fingerprints |
+| **Search (workspaceIndex)** | Strict workspace fingerprint + cwd + globs + changed-file generation |
+| **Scratch** | Requires cleanup handler; rejected when scratch cache disabled |
+
+## What JoyRide refuses
+
+- Unknown commands (diagnostic storage only, **never skip execution**)
+- Unsafe shell syntax: redirects, pipes, `;`, `&&`, `\|\|`, subshells, backticks, env assignment
+- Relative/absolute binary paths (`./git`, `/usr/local/bin/...`)
+- Failed command output (stored as **diagnostic-only**, never reused as truth)
+- Env-altering commands (`npm install`, `git config`, etc.)
+- Secret-bearing output (rejected at admission)
+- Verification without complete proof
+
+## Reason codes
+
+Stable codes in `JOYRIDE_REASON` (`JoyRideReasonCodes.ts`):
+
+| Code | Meaning |
+|---|---|
+| `hit.command.safeAllowlisted` | Safe readonly command reused |
+| `hit.verification.completeProofMatched` | Verification proof complete |
+| `miss.command.unknown` | Unknown command — never skip |
+| `miss.verification.missingFileHashes` | Proof incomplete |
+| `miss.config.disabled` | JoyRide disabled |
+| `miss.cacheDegraded` | Degraded — reuse suspended |
+| `degraded.internalFailure` | Internal error — execute normally |
+
+## Operational modes
+
+Set via environment variables before LUMI starts:
+
+| Variable | Values | Effect |
+|---|---|---|
+| `JOYRIDE_MODE` | `enabled` (default), `diagnostics-only`, `disabled` | Global mode |
+| `JOYRIDE_COMMAND_REUSE` | `0` / `false` | Never skip command execution |
+| `JOYRIDE_VERIFICATION_CACHE` | `0` / `false` | Never reuse verification as proof |
+| `JOYRIDE_SEARCH_CACHE` | `0` / `false` | Never reuse search results |
+| `JOYRIDE_SCRATCH_CACHE` | `0` / `false` | Reject scratch artifact retention |
+
+**Disabled** — no storage, no reuse. **Diagnostics-only** — stores entries and stats but never skips work.
+
+## Diagnostics (no UI)
+
+On extension deactivate, LUMI logs a structured JoyRide report.
+
+```typescript
+import {
+  getJoyRideCache,
+  buildJoyRideDiagnosticReport,
+  formatJoyRideDiagnosticReport,
+  getJoyRideDecisionLog,
+  explainJoyRideDecision,
+  createJoyRideBugReportSnapshot,
+  summarizeJoyRideHealth,
+  explainJoyRideConfig,
+  logJoyRideDiagnostics,
+} from "@core/joyride"
+
+logJoyRideDiagnostics(getJoyRideCache())
+createJoyRideBugReportSnapshot(getJoyRideCache())
+```
+
+Decision log is bounded (128 entries). Every lookup records a typed decision.
+
+## Test helpers
+
+`src/core/joyride/__tests__/JoyRideTestHelpers.ts` — `createJoyRideTestCache`, `expectCacheHit`, `expectCacheMiss`, `expectDecisionReason`, etc.
+
+Dogfood scenario: `JoyRideDogfood.test.ts`. Modern API regression: `JoyRideModernApi.test.ts`.
+
+## Contract and regression prevention
+
+The modern JoyRide API is **frozen**. Contract rules live in `JoyRideContract.ts` and are enforced by tests:
+
+| Guard | Test suite |
+|---|---|
+| Forbidden legacy exports | `JoyRideModernApi.test.ts` |
+| Runtime import boundaries | `JoyRideImportBoundary.test.ts` |
+| Decision field invariants | `JoyRideDecisionInvariants.test.ts` |
+| Config mode bypass prevention | `JoyRideConfigContract.test.ts` |
+| Degraded mode contract | `JoyRideDegradedContract.test.ts` |
+| Reason-code stability | `JoyRideReasonCodes.test.ts` |
+| End-to-end scenarios | `JoyRideContractScenarios.test.ts` |
+| Performance regression gates | `JoyRideBenchmark.test.ts` |
+
+### Import boundary rules
+
+Runtime integrations (`task/index.ts`, `SearchFilesToolHandler.ts`, `AttemptCompletionHandler.ts`, `extension.ts`) must:
+
+- Import only from `@core/joyride` (modern entrypoint)
+- Never import `JoyRideCache`, `JoyRideHotPath`, `keys`, or other internals directly
+- Never call `getJoyRideCache().get()`, `.set()`, `.trySet()`, or `.flushTask()` directly
+- Use typed lookup/store helpers and lifecycle helpers instead
+
+### Adding a new hot path
+
+1. Call a modern lookup helper — receive a typed decision
+2. Check `isJoyRideHitDecision(decision)` before skipping work
+3. Follow `decision.fallbackBehavior` — do not invent policy at the call site
+4. Store through modern store helpers only
+5. Add contract tests asserting decision invariants
+
+### Filing a useful bug report
+
+```typescript
+import { createJoyRideBugReportSnapshot, getJoyRideCache } from "@core/joyride"
+createJoyRideBugReportSnapshot(getJoyRideCache())
+```
+
+Snapshot includes: operational mode, feature flags, degraded state, decision log, recent skips/refusals, stats, trim counts.
+
+## Running tests
+
+```bash
+npm run test:unit -- --grep "JoyRide"
+```
+
+## If JoyRide looks suspicious
+
+1. Set `JOYRIDE_MODE=disabled` and restart
+2. Check decision log: `getJoyRideDecisionLog()`
+3. Check audit trail: `getJoyRideCacheHitAuditTrail()`
+4. Attach bug snapshot: `createJoyRideBugReportSnapshot(getJoyRideCache())`
+
+## Guarantees JoyRide does **not** make
+
+- JoyRide does not replace running tests when proof is incomplete
+- JoyRide does not bypass user approval
+- JoyRide does not persist across sessions (default: `memoryOnly` durability)
+- JoyRide does not cache secrets
+- JoyRide does not guarantee correctness of unknown commands

@@ -5,7 +5,6 @@ import type { ApiHandler } from "@core/api"
 import type { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import type { KnowledgeGraphService } from "@core/context/KnowledgeGraphService"
 import type { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
-import type { JoyRideCache } from "@core/joyride"
 import type { CommandPermissionController } from "@core/permissions"
 import type { UniversalGuard } from "@core/policy/UniversalGuard"
 import type { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
@@ -102,7 +101,6 @@ export interface TaskServices {
 	contextManager: ContextManager
 	stateManager: StateManager
 	knowledgeGraphService: KnowledgeGraphService
-	joyRideCache: JoyRideCache
 }
 
 /**

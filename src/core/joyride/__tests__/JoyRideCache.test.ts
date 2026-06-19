@@ -378,6 +378,7 @@ describe("JoyRideCache", () => {
 				environmentFingerprint: "env-fp",
 				approvalBoundaryId: "boundary-1",
 				gitHead: "abc123",
+				runtimeVersion: process.version,
 			})
 			const metadata = createBaseMetadata({
 				cacheKind: "verification",
@@ -387,10 +388,11 @@ describe("JoyRideCache", () => {
 				gitHead: "abc123",
 				relevantFileHashes: { "src/index.ts": "hash1" },
 				environmentFingerprint: "env-fp",
+				runtimeVersion: process.version,
+				fingerprint: key.fingerprint,
 			})
 			cache.set(key.key, { exitCode: 0 }, metadata)
 
-			// With correct validation on first access, should hit
 			const result = cache.get<{ exitCode: number }>(key.key, {
 				fingerprint: metadata.fingerprint,
 				workspaceFingerprint: metadata.workspaceFingerprint,
@@ -400,6 +402,7 @@ describe("JoyRideCache", () => {
 				gitHead: "abc123",
 				relevantFileHashes: { "src/index.ts": "hash1" },
 				environmentFingerprint: "env-fp",
+				runtimeVersion: process.version,
 			})
 			assert.deepEqual(result, { exitCode: 0 })
 			assert.isAbove(cache.getStats().verificationCacheReuseCount, 0)
@@ -603,9 +606,13 @@ describe("JoyRideCache", () => {
 				"b".repeat(150),
 				metadata,
 			)
-
-			const result = { trimmedEntries: 0, freedBytes: 0, reason: "memory_pressure" as const }
-			// emergency trim does not increment pressureTrimEvents
+			// Third insert forces pressure trim during admission
+			smallCache.set(
+				createCommandResultCacheKey({ command: "c3", cwd: "/w", environmentFingerprint: "e" }).key,
+				"c".repeat(150),
+				metadata,
+			)
+			assert.isAbove(smallCache.getStats().pressureTrimEvents, 0)
 		})
 
 		it("should emergency trim to target ratio", () => {
@@ -626,7 +633,7 @@ describe("JoyRideCache", () => {
 				)
 			}
 
-			const result = smallCache.emergencyTrim("emergency_pressure")
+			smallCache.emergencyTrim("emergency_pressure")
 			// emergency trim does not increment pressureTrimEvents
 			assert.isAbove(smallCache.getStats().emergencyTrimEvents, 0)
 		})

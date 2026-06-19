@@ -60,7 +60,6 @@ export const TASK_SERVICES_KEYS = [
 	"contextManager",
 	"stateManager",
 	"knowledgeGraphService",
-	"joyRideCache",
 ] as const
 
 /**

@@ -2,7 +2,6 @@ import { ApiHandler } from "@core/api"
 import { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
-import { getJoyRideCache } from "@core/joyride"
 import { CommandPermissionController } from "@core/permissions"
 import { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
 import type { CommandExecutionOptions } from "@integrations/terminal"
@@ -195,7 +194,6 @@ export class ToolExecutor {
 				contextManager: this.contextManager,
 				stateManager: this.stateManager,
 				knowledgeGraphService: kgService,
-				joyRideCache: getJoyRideCache(),
 			},
 			callbacks: {
 				say: this.say,

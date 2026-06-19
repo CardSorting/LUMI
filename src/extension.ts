@@ -30,6 +30,7 @@ import { improveWithDietCode } from "./core/controller/commands/improveWithDietC
 import { sendAddToInputEvent } from "./core/controller/ui/subscribeToAddToInput"
 import { sendShowWebviewEvent } from "./core/controller/ui/subscribeToShowWebview"
 import { HookDiscoveryCache } from "./core/hooks/HookDiscoveryCache"
+import { getJoyRideCache, logJoyRideDiagnostics, shutdownJoyRideCache } from "./core/joyride"
 import {
 	cleanupMcpMarketplaceCatalogFromGlobalState,
 	cleanupOldApiKey,
@@ -744,6 +745,12 @@ async function getBinaryLocation(name: string): Promise<string> {
 // This method is called when your extension is deactivated
 export async function deactivate() {
 	disposeRoadmapFileWatcher()
+	try {
+		logJoyRideDiagnostics(getJoyRideCache())
+		shutdownJoyRideCache()
+	} catch (error) {
+		Logger.warn("[JoyRide] Extension shutdown cache flush skipped:", error)
+	}
 	// Dispose Non-VSCode-specific services
 	tearDown()
 

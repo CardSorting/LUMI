@@ -156,7 +156,10 @@ export interface JoyRideCacheStats {
 	hitRate: number
 	missRate: number
 	evictionCount: number
+	ttlEvictionCount: number
+	lruEvictionCount: number
 	staleInvalidationCount: number
+	staleDiagnosticCount: number
 	memoryUsageEstimate: number
 	perCacheMemoryEstimate: Record<JoyRideCacheKind, number>
 	perTaskMemoryEstimate: Record<string, number>
@@ -167,6 +170,8 @@ export interface JoyRideCacheStats {
 	rejectedAdmissionCount: number
 	rejectedUnsafeEntryCount: number
 	rejectedOversizedEntryCount: number
+	lateWriteRejectionCount: number
+	cleanupFailureCount: number
 	averageEntryAgeMs: number
 	largestEntries: JoyRideEntrySummary[]
 	hottestKeys: JoyRideEntrySummary[]
@@ -177,7 +182,14 @@ export interface JoyRideCacheStats {
 	cacheValidationFailureCount: number
 	duplicateArtifactDeduplicationCount: number
 	entryCount: number
+	cacheHitAuditCount: number
+	lastFlushDurationMs: number
+	lastShutdownDurationMs: number
+	operationalMode: string
+	isHelping: boolean
 }
+
+export type JoyRideCleanupStatus = "none" | "pending" | "completed" | "failed"
 
 export interface JoyRideExplainResult {
 	exists: boolean
@@ -195,6 +207,10 @@ export interface JoyRideExplainResult {
 	ageMs?: number
 	estimatedBytes?: number
 	canEvict?: boolean
+	canReuse?: boolean
+	reuseBlockReason?: string
+	diagnosticOnly?: boolean
+	invalidationTriggers?: JoyRideInvalidationReason[]
 	durability?: JoyRideDurability
 	safetyClassification?: JoyRideSafetyClassification
 	invalidationReason?: JoyRideInvalidationReason[]
@@ -203,4 +219,5 @@ export interface JoyRideExplainResult {
 	generation?: number
 	fingerprint?: string
 	accessCount?: number
+	cleanupStatus?: JoyRideCleanupStatus
 }
