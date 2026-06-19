@@ -28,7 +28,9 @@ Use this when you change code and need to update the matching doc.
 | `src/core/task/tools/completionGatePipeline.ts` | [Security](SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](papers/whitepaper.md#7-approval-hooks-and-completion) |
 | `src/core/hooks/hook-factory.ts` | [Hooks](customization/hooks.mdx) |
 | `src/core/ignore/DietCodeIgnoreController.ts` | [dietcodeignore](customization/dietcodeignore.mdx) |
-| `src/services/roadmap/` | [Roadmap steering](features/roadmap-steering.mdx) |
+| `src/services/roadmap/` | [Roadmap steering](features/roadmap-steering.mdx) · [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
+| `src/services/roadmap/RoadmapAutoGovernance.ts` | [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
+| `src/services/roadmap/RoadmapCompletionGate.ts` | [Roadmap steering](features/roadmap-steering.mdx) · [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
 
 ## UI & host
 

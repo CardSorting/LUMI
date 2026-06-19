@@ -1,0 +1,146 @@
+---
+title: "Post-mortem: Roadmap Auto-Governance"
+sidebarTitle: "Auto-Governance Post-mortem"
+description: "What went wrong with manual roadmap validate loops, what we changed, and how completion governance works now."
+---
+
+**Date:** June 2026  
+**Scope:** Roadmap completion gates, agent ergonomics, system prompt alignment  
+**Status:** Resolved — internal auto-governance at `attempt_completion`
+
+## Summary
+
+Roadmap steering gates were **correct in intent** (block completion when `ROADMAP.md` is out of sync) but **wrong in ergonomics**: agents were told to call `roadmap(action='validate')`, `/roadmap validate`, or MCP tools after every ROADMAP edit. That caused validate loops, wasted tool turns, and confusion when governance could have run inside the extension.
+
+We moved governance to a **closed-loop internal pipeline** at `attempt_completion` and aligned prompts, error messages, progress logs, and tool descriptions to match.
+
+## Symptoms (before)
+
+| Symptom | Impact |
+|---------|--------|
+| System prompt required `roadmap(action='validate')` before `attempt_completion` | Agents burned turns on redundant validate calls |
+| Completion block messages said "Run roadmap(action='cockpit')" or "validate" | Agents invoked tools instead of editing ROADMAP.md |
+| `validation_pending` after file writes | Manual validate expected even though service could validate internally |
+| Inconsistent copy across Doctor, Progress, Cockpit, NativeBridge | Mixed signals — some paths auto, some manual |
+| No structured recovery payload | Agents parsed prose; hard to recover from gate blocks |
+
+Users experienced: **completion blocked → agent calls validate/cockpit → still blocked → repeat**.
+
+## Root causes
+
+### 1. Gate evaluated, but not remediated
+
+`evaluateRoadmapCompletionBlock()` checked gates but did not consistently **auto-heal** fixable states (`validation_pending`, bootstrap placeholders, missing checkpoint dates) before blocking.
+
+### 2. Agent-facing docs contradicted implementation
+
+`roadmap_steering.ts` (system prompt) and `roadmap-steering.mdx` (user docs) documented a **manual validate step** that fought the product goal of automatic steering.
+
+### 3. Tool-first recovery language
+
+`RoadmapGateCatalog` fix strings, error envelopes, and completion playbooks pointed at **tool commands** (`roadmap(action='validate')`) rather than **file edits** (repair section 11, fill placeholders).
+
+### 4. Fragmented copy
+
+A dozen files each had slightly different "what to do next" strings. No single source of truth for auto-governance messaging.
+
+## What we changed
+
+### Internal remediation pipeline
+
+`remediateRoadmapGatesInternally()` in `RoadmapCompletionGate.ts` runs **before** any block decision:
+
+```text
+1. readState → validation_pending?
+2. bootstrap placeholders? → writeBootstrapAutofill (if autoBootstrapFill)
+3. validateRoadmap (if pending or autofill wrote)
+4. stale + mechanical reason? → touchRecentCheckpointDate → re-validate
+5. getOperationalStatus → evaluate blocking gates
+```
+
+Mechanical stale reasons only: `no_recent_checkpoint_date`, `invalid_date`. Narrative staleness (git activity, age) still requires human/agent edits to section 11.
+
+### Single copy source: `RoadmapAutoGovernance.ts`
+
+Central constants (`AUTO_GOVERNANCE`), per-gate edit map (`GATE_EDIT_INSTRUCTIONS`), and structured recovery XML (`buildRoadmapGateStructuredEnvelope`). Used by completion gate, steering blocks, progress journal, doctor, and native bridge.
+
+### System prompt rewrite
+
+`src/core/prompts/system-prompt/components/roadmap_steering.ts` now states:
+
+- Auto-governance runs at `attempt_completion`
+- Do **not** call `validate` or MCP for governance
+- If blocked, edit `ROADMAP.md` per gate message
+
+All model snapshots updated.
+
+### Structured agent recovery
+
+On roadmap gate block, `completionGatePipeline.ts` attaches `<roadmap_governance_recovery>` with:
+
+- Policy and auto-steps attempted
+- Per-gate `<edit>` instructions
+- Resolution: edit ROADMAP.md, retry `attempt_completion`
+
+Cached on `TaskState.lastRoadmapGateRecovery` for the error formatter.
+
+### Mid-task messaging
+
+`midTaskAgentNextCall()` returns **"continue task"** when `validation_pending` or bootstrap incomplete — not "run validate". Write hints after ROADMAP mutations say validation runs at completion.
+
+## What did NOT change
+
+| Unchanged | Notes |
+|-----------|-------|
+| Gate **definitions** | Same gates in `RoadmapGateCatalog.ts`; still enforce schema, freshness, bootstrap |
+| `roadmap` tool | Still available for checkpoint, cockpit, doctor, diagnostics |
+| `/roadmap` slash command | Operator console for humans and agents |
+| `failClosedCompletionGates` | Still blocks if gate evaluation throws |
+| Settings defaults | `blockKanbanOnValidationPending` remains `true` — validation still **enforced**, just **automatic** |
+
+`roadmap(action='validate')` is a **diagnostic**, not a **completion prerequisite**.
+
+## New agent flow
+
+```mermaid
+flowchart TD
+  A[Agent edits ROADMAP.md] --> B[Continue task work]
+  B --> C[attempt_completion]
+  C --> D[remediateRoadmapGatesInternally]
+  D --> E{Gates open?}
+  E -->|Yes| F[Completion proceeds]
+  E -->|No| G[Block with edit instructions + recovery XML]
+  G --> H[Agent edits ROADMAP.md]
+  H --> C
+```
+
+## Files touched (reference)
+
+| Area | Key files |
+|------|-----------|
+| Remediation | `RoadmapCompletionGate.ts`, `RoadmapService.ts` (`touchRecentCheckpointDate`) |
+| Copy / recovery | `RoadmapAutoGovernance.ts` |
+| Completion pipeline | `completionGatePipeline.ts`, `attemptCompletionUtils.ts`, `TaskState.ts` |
+| Agent prompts | `roadmap_steering.ts`, `tools/roadmap.ts` |
+| Steering UX | `RoadmapAgentSteering.ts`, `RoadmapNativeBridge.ts`, `RoadmapSteeringContext.ts` |
+| Operator surfaces | `RoadmapOperator.ts`, `RoadmapDoctor.ts`, `RoadmapProgress.ts`, `RoadmapCockpit.ts` |
+| Tests | `RoadmapCompletionGate.test.ts`, `RoadmapAutoGovernance.test.ts`, `RoadmapIntegration.test.ts`, system prompt snapshots |
+
+## Lessons learned
+
+1. **Enforcement ≠ manual steps.** Blocking completion is valid; requiring an agent tool call to clear routine state is not.
+2. **One copy source for agent-facing strings.** Divergent "fix" messages across 12 files guaranteed drift.
+3. **Recovery should be file-action-first.** Industry pattern (CI, API gateways): tell the agent *what to change*, not *what tool to invoke*.
+4. **System prompt is part of the gate.** If the prompt says "run validate," agents will — even when the runtime auto-validates.
+
+## Verification
+
+- **1512+** unit tests passing, including roadmap gate, auto-governance, and system prompt snapshot suites
+- Gate block messages do not mandate `roadmap(action='validate')` for routine recovery
+- `AUTO_GOVERNANCE` constants used across steering, progress, and completion paths
+
+## Related
+
+- [Roadmap steering (current behavior)](roadmap-steering.mdx)
+- [Security — completion gates](../SECURITY_BEST_PRACTICES.md)
+- Source: `src/services/roadmap/RoadmapAutoGovernance.ts`

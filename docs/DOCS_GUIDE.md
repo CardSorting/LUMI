@@ -45,7 +45,8 @@ Map of LUMI agent workspace documentation. BroccoliDB docs are maintained separa
 | [customization/workflows.mdx](customization/workflows.mdx) | Slash workflows |
 | [customization/dietcode-rules.mdx](customization/dietcode-rules.mdx) | Project rules |
 | [features/subagents.mdx](features/subagents.mdx) | Background agents |
-| [features/roadmap-steering.mdx](features/roadmap-steering.mdx) | ROADMAP.md gates |
+| [features/roadmap-steering.mdx](features/roadmap-steering.mdx) | ROADMAP.md gates + auto-governance at completion |
+| [features/roadmap-auto-governance-postmortem.mdx](features/roadmap-auto-governance-postmortem.mdx) | Post-mortem: manual validate loops → internal remediation |
 | [features/auto-approve.mdx](features/auto-approve.mdx) | Auto-approval |
 | [provider-config/README.mdx](provider-config/README.mdx) | Active vs legacy providers |
 | [mcp/mcp-overview.mdx](mcp/mcp-overview.mdx) | MCP integration |

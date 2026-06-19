@@ -97,6 +97,7 @@
 							"features/multiroot-workspace",
 							"features/subagents",
 							"features/roadmap-steering",
+							"features/roadmap-auto-governance-postmortem",
 							"features/background-edit",
 							"features/jupyter-notebooks",
 							"features/deep-planning",

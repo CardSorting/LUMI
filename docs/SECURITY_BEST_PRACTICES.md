@@ -75,7 +75,7 @@ Auto-approve is for trusted workflows (e.g. read-only research), not blanket YOL
 
 ### 5. Enable roadmap gates for team projects
 
-When using `ROADMAP.md` steering, keep `lumi.roadmap.blockKanbanOnValidationPending` enabled so completion cannot skip validation.
+When using `ROADMAP.md` steering, keep `lumi.roadmap.blockKanbanOnValidationPending` enabled. Validation is **enforced automatically** at `attempt_completion` — agents do not need a manual `roadmap(action='validate')` step. If completion is blocked, agents should edit `ROADMAP.md` per the gate message. See [Roadmap steering](features/roadmap-steering.mdx) and the [auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx).
 
 ### 6. Set provider spending limits
 

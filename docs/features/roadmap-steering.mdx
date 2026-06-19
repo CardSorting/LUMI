@@ -1,12 +1,43 @@
 ---
 title: "ROADMAP.md Steering"
 sidebarTitle: "Roadmap Steering"
-description: "Auto-rolling ROADMAP.md gates, tools, and VS Code settings in LUMI."
+description: "Auto-rolling ROADMAP.md gates, internal auto-governance at completion, tools, and VS Code settings in LUMI."
 ---
 
-LUMI can steer long-running work through a project **`ROADMAP.md`** file — with validation gates that block task completion when the roadmap is out of sync.
+LUMI steers long-running work through a project **`ROADMAP.md`** at the workspace root. Roadmap **governance gates** integrate with the completion pipeline — they can block `attempt_completion` when steering is out of sync.
 
-Implementation: `src/services/roadmap/` (26 files). Completion integration: `RoadmapCompletionGate.ts` + `completionGatePipeline.ts`.
+**Key behavior (2026):** Governance remediation is **internal and automatic** at `attempt_completion`. Agents do **not** need to call `roadmap(action='validate')`, MCP tools, or slash commands to clear routine gates.
+
+Implementation: `src/services/roadmap/` · Completion integration: `RoadmapCompletionGate.ts` + `completionGatePipeline.ts` · Shared copy: `RoadmapAutoGovernance.ts`
+
+## Auto-governance at completion
+
+When the agent calls `attempt_completion`, LUMI runs **`remediateRoadmapGatesInternally()`** before deciding whether to block:
+
+1. **Bootstrap autofill** — if template placeholder phrases remain and `lumi.roadmap.autoBootstrapFill` is enabled
+2. **Schema validation** — if `validation_pending` or after autofill wrote changes
+3. **Checkpoint date stamp** — if section 11 `**Date:**` is missing or unparsable (mechanical fix only)
+
+All steps use `RoadmapService` directly — no agent tool round-trips.
+
+```text
+attempt_completion
+  → remediateRoadmapGatesInternally (autofill → validate → optional date stamp)
+  → re-evaluate gates
+  → pass OR block with ROADMAP.md edit guidance
+```
+
+If gates still fail after auto-remediation, the agent receives:
+
+- A human-readable gate list with **per-gate edit instructions**
+- A machine-parseable `<roadmap_governance_recovery>` block (RFC 7807-style extension)
+- Explicit guidance: **edit ROADMAP.md** — do not call `validate` or MCP for governance
+
+Mid-task (before completion), agents should **continue working**. The system prompt and write hints say governance runs at `attempt_completion`, not on every ROADMAP edit.
+
+<Note>
+  Optional diagnostics remain available: `/roadmap cockpit`, `/roadmap explain-gate`, `/roadmap explain-stale`, `roadmap(action='doctor')`. Use these for visibility — not as a required validate loop before every completion attempt.
+</Note>
 
 ## VS Code settings
 
@@ -16,38 +47,70 @@ All settings use the `lumi.roadmap.*` prefix in root `package.json`:
 |---------|---------|---------|
 | `lumi.roadmap.enabled` | `true` | Master switch for roadmap steering |
 | `lumi.roadmap.autoBootstrap` | `true` | Create `ROADMAP.md` from workspace evidence when missing |
-| `lumi.roadmap.autoBootstrapFill` | `true` | Apply evidence autofill after bootstrap |
-| `lumi.roadmap.blockKanbanOnValidationPending` | `true` | Block `attempt_completion` when ROADMAP changed since last validate |
-| `lumi.roadmap.failClosedCompletionGates` | `true` | Block completion when roadmap gate evaluation fails |
+| `lumi.roadmap.autoBootstrapFill` | `true` | Apply evidence autofill (also runs at completion) |
+| `lumi.roadmap.blockKanbanOnValidationPending` | `true` | Block completion when ROADMAP changed since last validate (auto-cleared at completion) |
+| `lumi.roadmap.blockKanbanOnBootstrapIncomplete` | `true` | Block when bootstrap template phrases remain (autofill runs first) |
+| `lumi.roadmap.warnOnStaleBeforeComplete` | `true` | Block when checkpoint is stale vs git activity |
+| `lumi.roadmap.failClosedCompletionGates` | `true` | Block completion when roadmap gate evaluation throws |
+
+Environment overrides: `MIRA_ROADMAP_*` / `DIETCODE_ROADMAP_*` (see `RoadmapConfig.ts`).
+
+## Gate catalog
+
+Gates are defined in `RoadmapGateCatalog.ts`. Blocking gates depend on settings above.
+
+| Gate | Typical auto-fix at completion | If still blocked |
+|------|-------------------------------|------------------|
+| `validation_current` | Auto-validate | Repair schema in ROADMAP.md |
+| `bootstrap_complete` | Auto-autofill | Edit remaining template phrases |
+| `checkpoint_fresh` | Date stamp (missing/invalid date only) | Update section 11 narrative + date |
+| `schema_valid` | — | Repair all 12 required sections |
+| `roadmap_present` | Session auto-bootstrap | Create ROADMAP.md at workspace root |
+
+Stale checkpoint due to **git activity** or **expired age** is not auto-rewritten — the agent must update section 11 content.
 
 ## Agent tools
 
 | Tool | Role |
 |------|------|
-| `roadmap` | Read/update/validate roadmap state |
-| `roadmap_checkpoint` | Record validation checkpoint |
+| `roadmap` | Operator console: guide, checkpoint, cockpit, doctor, diagnostics |
+| `roadmap_checkpoint` | Alias for `roadmap(action='checkpoint')` — evidence before major edits |
+
+`roadmap(action='validate')` still exists for **manual diagnostics** but is **not required** before `attempt_completion`.
 
 Handlers: `RoadmapToolHandler` in `src/core/task/tools/handlers/`.
 
 ## Slash command
 
-`/roadmap` with optional args — parsed in `src/core/slash-commands/index.ts`, executed by `RoadmapSlashCommand`.
+`/roadmap` — parsed in `src/core/slash-commands/index.ts`, executed by `RoadmapSlashCommand`.
 
 Examples:
 
 ```text
-/roadmap validate
+/roadmap cockpit
 /roadmap explain-gate
+/roadmap explain-stale
+/roadmap doctor
 ```
-
-When completion is blocked, the agent receives guidance to run `roadmap(action='validate')` or `/roadmap validate`.
 
 ## File watcher
 
-`extension.ts` registers `RoadmapFileWatcher` so changes to `ROADMAP.md` update operational status without restarting the extension.
+`extension.ts` registers `RoadmapFileWatcher` so external edits to `ROADMAP.md` set `validation_pending` in workspace state. Auto-validation clears this at completion — agents do not need a manual validate step.
+
+## Architecture map
+
+| Component | Responsibility |
+|-----------|----------------|
+| `RoadmapCompletionGate.ts` | Pre-completion remediation + block evaluation |
+| `RoadmapAutoGovernance.ts` | Shared copy, gate edit instructions, structured recovery XML |
+| `RoadmapGateCatalog.ts` | Gate definitions and blocking rules |
+| `completionGatePipeline.ts` | Preflight stage `roadmap` + structured error envelope |
+| `roadmap_steering.ts` | System prompt section (auto-governance policy) |
+| `RoadmapNativeBridge.ts` | Post-write hints after ROADMAP.md mutations |
 
 ## Related
 
+- [Post-mortem: auto-governance rollout](roadmap-auto-governance-postmortem.mdx) — what changed and why
 - [Security — roadmap gates](../SECURITY_BEST_PRACTICES.md)
 - [All tools — roadmap](../tools-reference/all-dietcode-tools.mdx)
 - [Using commands — /roadmap](../core-workflows/using-commands.mdx)

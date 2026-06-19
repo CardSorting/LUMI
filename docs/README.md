@@ -86,7 +86,7 @@ flowchart TB
 | `.dietcoderules/hooks/` | [Hooks](customization/hooks.mdx) |
 | `.dietcodeignore` | [Ignore file](customization/dietcodeignore.mdx) |
 | `.dietcodeworkflows/` | [Workflows](customization/workflows.mdx) |
-| `ROADMAP.md` | [Roadmap steering](features/roadmap-steering.mdx) |
+| `ROADMAP.md` | [Roadmap steering](features/roadmap-steering.mdx) · [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
 
 @ mentions: [working-with-files](core-workflows/working-with-files.mdx)
 
@@ -172,7 +172,7 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | Auto-approve & YOLO | [features/auto-approve.mdx](features/auto-approve.mdx) |
 | Focus chain | [features/focus-chain.mdx](features/focus-chain.mdx) |
 | Subagents | [features/subagents.mdx](features/subagents.mdx) |
-| Roadmap steering | [features/roadmap-steering.mdx](features/roadmap-steering.mdx) |
+| Roadmap steering | [features/roadmap-steering.mdx](features/roadmap-steering.mdx) · [Post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
 | Memory bank | [features/memory-bank.mdx](features/memory-bank.mdx) |
 | Multi-root workspace | [features/multiroot-workspace.mdx](features/multiroot-workspace.mdx) |
 | Hooks | [customization/hooks.mdx](customization/hooks.mdx) |
