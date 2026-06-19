@@ -88,17 +88,38 @@ Call sites must **not** hand-roll cache policy, keys, safety classification, or 
 
 ## Reason codes
 
-Stable codes in `JOYRIDE_REASON` (`JoyRideReasonCodes.ts`):
+Stable codes in `JOYRIDE_REASON` (`JoyRideReasonCodes.ts`). Categories:
+
+| Category | Prefix | Purpose |
+|---|---|---|
+| **hit** | `hit.` | Active reuse occurred — audited skip |
+| **miss** | `miss.` | No reuse — execute normally |
+| **stale** | `stale.` | Entry stale — rerun, retain bounded diagnostic |
+| **reject** | `reject.` | Admission refused fail-closed |
+| **degraded** | `degraded.` | Internal failure — active reuse suspended |
+| **trim** | `trim.` | Budget pressure trimming |
+| **cleanup** | `cleanup.` | Scratch or lifecycle cleanup |
+| **lifecycle** | `lifecycle.` | Task/workspace flush or shutdown |
+
+Representative codes:
 
 | Code | Meaning |
 |---|---|
 | `hit.command.safeAllowlisted` | Safe readonly command reused |
 | `hit.verification.completeProofMatched` | Verification proof complete |
 | `miss.command.unknown` | Unknown command — never skip |
+| `miss.command.unsafeSyntax` | Unsafe shell syntax — never skip |
 | `miss.verification.missingFileHashes` | Proof incomplete |
+| `miss.verification.incompleteProof` | Proof fingerprint incomplete |
+| `stale.lockfileChanged` | Lockfile fingerprint changed |
+| `stale.workspaceGenerationChanged` | Workspace generation changed |
 | `miss.config.disabled` | JoyRide disabled |
-| `miss.cacheDegraded` | Degraded — reuse suspended |
+| `reject.secretDetected` | Secret-bearing output rejected |
+| `reject.lateWrite` | Late write after task generation bump |
+| `stale.approvalBoundaryChanged` | Approval boundary changed |
 | `degraded.internalFailure` | Internal error — execute normally |
+
+Avoid vague standalone codes (`unknown`, `invalid`, `failed`, `skipped`). Every code should explain a real operational cause.
 
 ## Operational modes
 
@@ -141,7 +162,22 @@ Decision log is bounded (128 entries). Every lookup records a typed decision.
 
 `src/core/joyride/__tests__/JoyRideTestHelpers.ts` — `createJoyRideTestCache`, `expectCacheHit`, `expectCacheMiss`, `expectDecisionReason`, etc.
 
-Dogfood scenario: `JoyRideDogfood.test.ts`. Modern API regression: `JoyRideModernApi.test.ts`.
+Dogfood scenarios: `JoyRideRealSession.test.ts`, `JoyRideDogfood.test.ts`. Modern API regression: `JoyRideModernApi.test.ts`.
+
+## Contributor checklist
+
+Before adding a JoyRide-backed hot path:
+
+- Import only from `@core/joyride` — do not import JoyRide internals
+- Use modern typed lookup/store helpers — do not call raw cache `.get()`, `.set()`, `.trySet()`, or flush methods
+- Return and handle typed decisions only — check `isJoyRideHitDecision(decision)` before skipping work
+- Include `fallbackBehavior` handling at the call site — do not invent policy
+- Use precise `JOYRIDE_REASON` codes — avoid vague fallback language
+- Build complete verification proof metadata when reusing verification output
+- Test **enabled**, **disabled**, **diagnostics-only**, and **degraded** behavior
+- Test stale invalidation and unsafe refusal for your hot path
+- Add dogfood coverage in `JoyRideRealSession.test.ts` or a focused contract test
+- Update docs and `JoyRideContract.ts` if the public contract changes
 
 ## Contract and regression prevention
 
@@ -150,13 +186,20 @@ The modern JoyRide API is **frozen**. Contract rules live in `JoyRideContract.ts
 | Guard | Test suite |
 |---|---|
 | Forbidden legacy exports | `JoyRideModernApi.test.ts` |
+| Export surface freeze | `JoyRideContractDrift.test.ts` |
 | Runtime import boundaries | `JoyRideImportBoundary.test.ts` |
 | Decision field invariants | `JoyRideDecisionInvariants.test.ts` |
 | Config mode bypass prevention | `JoyRideConfigContract.test.ts` |
 | Degraded mode contract | `JoyRideDegradedContract.test.ts` |
 | Reason-code stability | `JoyRideReasonCodes.test.ts` |
 | End-to-end scenarios | `JoyRideContractScenarios.test.ts` |
+| Real-session dogfood | `JoyRideRealSession.test.ts` |
+| Failure-mode maturity | `JoyRideFailureModes.test.ts` |
+| Verification strictness GA | `JoyRideVerificationGa.test.ts` |
+| Search invalidation GA | `JoyRideSearchGa.test.ts` |
+| Scratch lifecycle GA | `JoyRideScratchGa.test.ts` |
 | Performance regression gates | `JoyRideBenchmark.test.ts` |
+| GA readiness meta | `JoyRideGaReadiness.test.ts` |
 
 ### Import boundary rules
 

@@ -1,0 +1,32 @@
+---
+title: "JoyRide Release Notes"
+sidebarTitle: "JoyRide Release"
+description: "Operational release note for JoyRide typed execution cache infrastructure."
+---
+
+## JoyRide GA — typed execution cache
+
+JoyRide is LUMI's modern typed execution cache for safe agent hot-path acceleration.
+
+It improves repeated command, search, and verification loops by reusing only validated, bounded, invalidation-aware cache entries. It is fail-closed, configurable, diagnostics-only capable, disabled instantly through config, and protected by contract tests.
+
+**JoyRide is cache, not memory.** It does not provide identity, narrative continuity, or long-term recall.
+
+### What shipped
+
+- Modern-only typed decision API (`JoyRideCacheDecision`)
+- Fail-closed command classifier (allowlist-only reuse)
+- Strict verification proof model (complete fingerprint required)
+- Fully keyed search reuse with workspace generation invalidation
+- Scratch artifact retention with cleanup-owned lifecycle
+- Disabled, diagnostics-only, and degraded operational modes
+- Bounded diagnostics, decision log, audit trail, and bug report snapshots
+- Contract drift prevention tests and frozen export surface
+
+### How to disable
+
+Set `JOYRIDE_MODE=disabled` before starting LUMI, or use per-feature env flags documented in [JoyRide Execution Cache](/features/joyride).
+
+### How to investigate
+
+Use `createJoyRideBugReportSnapshot(getJoyRideCache())`, `getJoyRideDecisionLog()`, and `getJoyRideCacheHitAuditTrail()`. No UI is required.
