@@ -1,5 +1,5 @@
-import { getRequestRegistry } from "./grpc-handler"
 import type { StreamingResponseHandler } from "./grpc-handler-types"
+import { getRequestRegistry } from "./grpc-request-registry"
 
 export { type FanoutResult, PersistentSubscriptionHub } from "./persistent-subscription-hub"
 

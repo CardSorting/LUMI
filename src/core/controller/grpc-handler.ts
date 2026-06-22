@@ -1,12 +1,14 @@
 import type { IController as Controller } from "@core/controller/types"
 import { serviceHandlers } from "@generated/hosts/vscode/protobus-services"
 import { GrpcRecorderBuilder } from "@/core/controller/grpc-recorder/grpc-recorder.builder"
-import { GrpcRequestRegistry } from "@/core/controller/grpc-request-registry"
+import { getRequestRegistry } from "@/core/controller/grpc-request-registry"
 import { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { isPersistentStreamingMethod } from "@/shared/grpc/persistent-stream"
 import { Logger } from "@/shared/services/Logger"
 import { GrpcCancel, GrpcRequest } from "@/shared/WebviewMessage"
 import type { PostMessageToWebview, StreamingResponseHandler } from "./grpc-handler-types"
+
+const requestRegistry = getRequestRegistry()
 
 // Re-export the gRPC handler type contracts for backward compatibility.
 // Canonical definitions live in ./grpc-handler-types (a leaf) to break the
@@ -210,23 +212,10 @@ export async function handleGrpcRequestCancel(postMessageToWebview: PostMessageT
 	}
 }
 
-// Registry to track active gRPC requests and their cleanup functions
-const requestRegistry = new GrpcRequestRegistry()
-
-/**
- * Get the request registry instance
- */
-export function getRequestRegistry(): GrpcRequestRegistry {
-	requestRegistry.startStalePurge(60000)
-	return requestRegistry
-}
+export { disposeRequestRegistry, getRequestRegistry } from "@/core/controller/grpc-request-registry"
 
 function isPersistentStreamingRequest(request: GrpcRequest): boolean {
 	return isPersistentStreamingMethod(request.method)
-}
-
-export function disposeRequestRegistry(): void {
-	requestRegistry.dispose()
 }
 
 function getHandler(

@@ -1,6 +1,6 @@
 import { Logger } from "@/shared/services/Logger"
-import { getRequestRegistry } from "./grpc-handler"
 import type { StreamingResponseHandler } from "./grpc-handler-types"
+import { getRequestRegistry } from "./grpc-request-registry"
 
 export interface FanoutResult {
 	delivered: number

@@ -10,9 +10,16 @@ If LUMI cannot start, your editor may show an error like:
 
 - `Cannot find module 'better-sqlite3'`
 - `Activating extension 'CardSorting.lumi' failed`
+- `Activating extension 'CardSorting.lumi' failed: E1 is not a constructor` (2.0.4 only — fixed in 2.0.5+)
 - A LUMI popup: **"required component is missing"**
 
 This means the extension install is **incomplete** — the local database driver did not ship with the download. It is **not** your project code or settings.
+
+### `E1 is not a constructor` (2.0.4)
+
+This is a **startup bug in LUMI 2.0.4**, not a Cursor or VS Code platform issue. A circular import prevented `PersistentSubscriptionHub` from loading during activation.
+
+**Fix:** Install **2.0.5 or newer** (VSIX from [GitHub Releases](https://github.com/CardSorting/DietCodeMarie/releases) or wait for marketplace publish), then **Developer: Reload Window**.
 
 ---
 

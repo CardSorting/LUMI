@@ -189,3 +189,15 @@ export class GrpcRequestRegistry {
 		}
 	}
 }
+
+const requestRegistry = new GrpcRequestRegistry()
+
+/** Shared registry for active gRPC request lifecycles (leaf module — safe for subscription hubs). */
+export function getRequestRegistry(): GrpcRequestRegistry {
+	requestRegistry.startStalePurge(60000)
+	return requestRegistry
+}
+
+export function disposeRequestRegistry(): void {
+	requestRegistry.dispose()
+}
