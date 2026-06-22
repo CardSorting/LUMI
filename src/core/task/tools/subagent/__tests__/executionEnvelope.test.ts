@@ -90,7 +90,7 @@ describe("subagent execution envelope", () => {
 		assert.ok(overlay.includes("excerpted for context window"))
 		assert.ok(parentResult.includes(agent.verbatimOutput!.slice(0, 20)))
 		assert.ok(agent.verbatimOutput!.length > 300)
-		assert.ok(!overlay.includes(agent.verbatimOutput))
+		assert.ok(agent.verbatimOutput && !overlay.includes(agent.verbatimOutput))
 		assert.equal(agent.evidenceRefs.length > 0, true)
 	})
 

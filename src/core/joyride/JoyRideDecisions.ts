@@ -108,10 +108,7 @@ export function isJoyRideHitDecision<T>(decision: JoyRideCacheDecision<T>): deci
 }
 
 type DecisionExtra<T> = Partial<
-	Omit<
-		JoyRideDecisionContext,
-		"reasonCode" | "reasonMessage" | "diagnosticOnly" | "fallbackBehavior" | "degraded" | "auditEventId"
-	>
+	Omit<JoyRideDecisionContext, "reasonCode" | "reasonMessage" | "diagnosticOnly" | "fallbackBehavior">
 > & {
 	value?: T
 }
@@ -215,10 +212,10 @@ export function diagnosticOnlyDecision(
 	extra?: DecisionExtra<unknown>,
 ): JoyRideDiagnosticOnlyDecision {
 	return {
+		...baseContext(reasonCode, reasonMessage, "executeAndStoreDiagnosticOnly", true, extra?.degraded ?? false, extra),
 		type: "diagnosticOnly",
 		canReuse: false,
 		diagnosticOnly: true,
-		...baseContext(reasonCode, reasonMessage, "executeAndStoreDiagnosticOnly", true, extra?.degraded ?? false, extra),
 	}
 }
 
@@ -228,10 +225,10 @@ export function degradedDecision(
 	extra?: DecisionExtra<unknown>,
 ): JoyRideDegradedDecision {
 	return {
+		...baseContext(reasonCode, reasonMessage, "executeNormally", false, true, extra),
 		type: "degraded",
 		canReuse: false,
 		degraded: true,
-		...baseContext(reasonCode, reasonMessage, "executeNormally", false, true, extra),
 	}
 }
 

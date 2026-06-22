@@ -1,43 +1,19 @@
-import { IController } from "@core/controller/types"
-import { Empty } from "@shared/proto/dietcode/common"
-import { getRequestRegistry, StreamingResponseHandler } from "@/core/controller/grpc-handler"
-import { Logger } from "@/shared/services/Logger"
+import type { IController as Controller } from "@core/controller/types"
+import { Empty, EmptyRequest } from "@shared/proto/dietcode/common"
+import { StreamingResponseHandler } from "../grpc-handler"
+import { PersistentSubscriptionHub } from "../persistent-subscription-hub"
 
-let joyZoningButtonClickedCallback: ((response: Empty) => void) | null = null
+const hub = new PersistentSubscriptionHub<Empty>("joyZoningButtonClicked")
 
 export async function subscribeToJoyZoningButtonClicked(
-	_controller: IController,
-	_request: any,
+	_controller: Controller,
+	_request: EmptyRequest,
 	responseStream: StreamingResponseHandler<Empty>,
 	requestId?: string,
 ): Promise<void> {
-	joyZoningButtonClickedCallback = (response) => {
-		responseStream(response).catch((error) => {
-			Logger.warn("[JoyZoning] Failed to stream button click event:", error)
-			joyZoningButtonClickedCallback = null
-		})
-	}
-
-	if (requestId) {
-		const registry = getRequestRegistry()
-		const info = registry.getRequestInfo(requestId)
-		if (info) {
-			const originalCleanup = info.cleanup
-			registry.registerRequest(
-				requestId,
-				() => {
-					originalCleanup()
-					joyZoningButtonClickedCallback = null
-				},
-				info.metadata,
-				info.responseStream,
-			)
-		}
-	}
+	hub.register(responseStream, requestId, { type: "joy_zoning_button_clicked_subscription" })
 }
 
-export async function sendJoyZoningButtonClickedEvent() {
-	if (joyZoningButtonClickedCallback) {
-		joyZoningButtonClickedCallback(Empty.create({}))
-	}
+export async function sendJoyZoningButtonClickedEvent(): Promise<void> {
+	await hub.broadcast(Empty.create({}))
 }

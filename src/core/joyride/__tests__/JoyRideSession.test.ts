@@ -49,7 +49,10 @@ describe("JoyRide session simulation", () => {
 		const searchOpts = { cwd, includeGlobs: ["*.ts"] as string[] }
 		await storeSearchResult(cache, "export function", searchOpts, "Found 5 results", 5, scope, fileGeneration)
 		const searchHit1 = await lookupSearchResult(cache, "export function", searchOpts, scope, fileGeneration)
-		assert.isTrue(isJoyRideHitDecision(searchHit1))
+		if (!isJoyRideHitDecision(searchHit1)) {
+			assert.fail("expected cache hit decision")
+			return
+		}
 		assert.equal(searchHit1.value, "Found 5 results")
 
 		await storeReusableCommandResult(cache, "npm test", [false, "all passed\n"], scope, fileGeneration)

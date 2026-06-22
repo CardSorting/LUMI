@@ -1,3 +1,4 @@
+import type { DietCodeToolResponseContent } from "@shared/messages/content"
 import { detectVerificationOutputFailures } from "./auditFileWrite"
 import type { AuditGateSettingsSource } from "./auditGateOptions"
 import { applyWorkspaceAuditPolicy } from "./auditGatePolicyLoader"
@@ -32,9 +33,9 @@ export function extractTextFromToolResponse(result: unknown): string {
 	return ""
 }
 
-export function appendTextToToolResponse(result: unknown, suffix: string): unknown {
+export function appendTextToToolResponse(result: unknown, suffix: string): DietCodeToolResponseContent {
 	if (!suffix) {
-		return result
+		return result as DietCodeToolResponseContent
 	}
 	if (typeof result === "string") {
 		return result + suffix
@@ -49,9 +50,9 @@ export function appendTextToToolResponse(result: unknown, suffix: string): unkno
 			}
 		}
 		copy.push({ type: "text", text: suffix.trimStart() })
-		return copy
+		return copy as DietCodeToolResponseContent
 	}
-	return result
+	return result as DietCodeToolResponseContent
 }
 
 export async function buildCommandOutputAuditAdvisory(

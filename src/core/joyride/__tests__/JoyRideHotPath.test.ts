@@ -51,7 +51,10 @@ describe("JoyRideHotPath", () => {
 
 			await storeReusableCommandResult(cache, command, [false, "/cached\n"], scope)
 			const decision = await lookupSafeCommandResult(cache, command, scope)
-			assert.isTrue(isJoyRideHitDecision(decision))
+			if (!isJoyRideHitDecision(decision)) {
+				assert.fail("expected cache hit decision")
+				return
+			}
 			assert.isFalse(decision.value[0])
 			assert.include(String(decision.value[1]), "cached")
 			assert.isDefined(decision.fallbackBehavior)

@@ -322,7 +322,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			)
 			config.taskState.lastCompletionAudit = auditMetadata
 			const { getLatestCheckpointHashFromMessages } = await import("../attemptCompletionUtils")
-			latchEngineeringFromAuditPass(config, getLatestCheckpointHashFromMessages(config.messageState.getDietCodeMessages()))
+			latchEngineeringFromAuditPass(config, getLatestCheckpointHashFromMessages(config))
 			await publishGateLifecycleStatus(config, evaluateGateLifecycle(config))
 		}
 

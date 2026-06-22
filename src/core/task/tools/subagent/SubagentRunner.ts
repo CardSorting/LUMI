@@ -907,7 +907,7 @@ export class SubagentRunner {
 								toolResultBlocks,
 								call,
 								toolName,
-								wrapFormattedCompletionError(gateResult.error),
+								serializeToolResult(wrapFormattedCompletionError(gateResult.error)),
 							)
 							continue
 						}
@@ -1027,7 +1027,12 @@ export class SubagentRunner {
 
 					const serializedToolResult = serializeToolResult(toolResult)
 					const toolDescription = handler?.getDescription(toolCallBlock) || `[${toolName}]`
-					this.recordToolStepInEnvelope(toolName, latestToolCall, serializedToolResult, toolCallParams)
+					this.recordToolStepInEnvelope(
+						toolName,
+						latestToolCall,
+						serializedToolResult,
+						toolCallParams as Record<string, string>,
+					)
 					await this.recordTranscript(
 						"tool_response",
 						{ toolName, preview: latestToolCall, resultExcerpt: serializedToolResult.slice(0, 500) },
@@ -1209,7 +1214,7 @@ export class SubagentRunner {
 			contentKind: "summary",
 		}
 
-		await this.recordTranscript("compaction", compactionEvent, "summary")
+		await this.recordTranscript("compaction", compactionEvent as unknown as Record<string, unknown>, "summary")
 		this.envelopeBuilder?.recordCompaction(compactionEvent)
 
 		const truncated = contextManager

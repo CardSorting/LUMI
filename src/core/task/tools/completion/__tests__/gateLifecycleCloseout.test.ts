@@ -83,7 +83,7 @@ describe("gate lifecycle closeout — legacy trap reproduction", () => {
 				checkForensicCompliance: async () => ({ compliant: true }),
 			},
 			callbacks: { say: async () => undefined },
-		} as TaskConfig
+		} as unknown as TaskConfig
 
 		try {
 			const runner = new FinalizationRunner(finalizeConfig)

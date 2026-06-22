@@ -61,7 +61,7 @@ export function expectDecisionReason(decision: JoyRideCacheDecision, reasonCode:
 }
 
 export function expectDiagnosticOnly(decision: JoyRideCacheDecision): void {
-	assert.isTrue(decision.diagnosticOnly || decision.type === "diagnosticOnly", "expected diagnostic-only")
+	assert.isTrue(decision.type === "diagnosticOnly" || decision.diagnosticOnly, "expected diagnostic-only")
 	assert.isFalse(decision.canReuse)
 }
 
@@ -97,7 +97,7 @@ export function expectNoUnsafeReuse(decisions: readonly JoyRideCacheDecision[]):
 
 export function assertDecisionInvariants(decision: JoyRideCacheDecision): void {
 	for (const field of JOYRIDE_DECISION_REQUIRED_FIELDS) {
-		assert.isDefined((decision as Record<string, unknown>)[field], `decision missing required field: ${field}`)
+		assert.isDefined((decision as unknown as Record<string, unknown>)[field], `decision missing required field: ${field}`)
 	}
 	assert.isString(decision.reasonCode)
 	assert.isNotEmpty(decision.reasonCode)

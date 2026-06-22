@@ -56,6 +56,31 @@ export class GrpcRequestRegistry {
 		// biome-ignore lint/suspicious/noExplicitAny: The registry stores streams of arbitrary type, so any is required.
 		responseStream?: StreamingResponseHandler<any>,
 	): void {
+		const existing = this.activeRequests.get(requestId)
+		if (existing) {
+			const previousCleanup = existing.cleanup
+			existing.cleanup = () => {
+				try {
+					previousCleanup()
+				} catch (error) {
+					Logger.error(`Error in chained cleanup for request ${requestId}:`, error)
+				}
+				try {
+					cleanup()
+				} catch (error) {
+					Logger.error(`Error cleaning up request ${requestId}:`, error)
+				}
+			}
+			if (metadata !== undefined) {
+				existing.metadata = metadata
+			}
+			if (responseStream !== undefined) {
+				existing.responseStream = responseStream
+			}
+			existing.timestamp = new Date()
+			return
+		}
+
 		this.activeRequests.set(requestId, {
 			cleanup,
 			metadata,

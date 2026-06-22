@@ -19,7 +19,8 @@ import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
 import { combineHookSequences } from "@shared/combineHookSequences"
 import { resolveGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
 import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
-import { BooleanRequest, StringRequest } from "@shared/proto/dietcode/common"
+import { BooleanRequest, type String as ProtoString, StringRequest } from "@shared/proto/dietcode/common"
+import type { ShowWebviewEvent } from "@shared/proto/dietcode/ui"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMount } from "react-use"
 import { isChatInputEnabled } from "@/components/chat/chat-view/shared/chatInputPolicy"
@@ -29,6 +30,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { pickChatPlaceholder } from "@/copy/lumiVoice"
 import { useAuditAutoScrollPolicy } from "@/hooks/useAuditAutoScrollPolicy"
 import { useAuditGateConfig } from "@/hooks/useAuditGateConfig"
+import { useGrpcSubscription } from "@/hooks/useGrpcSubscription"
 import { useLumiSessionComfort } from "@/hooks/useLumiSessionComfort"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 // Import utilities and hooks from the new structure
@@ -260,62 +262,45 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 
 	const shouldDisableFilesAndImages = selectedImages.length + selectedFiles.length >= MAX_IMAGES_AND_FILES_PER_MESSAGE
 
-	// Subscribe to show webview events from the backend
-	useEffect(() => {
-		const cleanup = UiServiceClient.subscribeToShowWebview(
-			{},
-			{
-				onResponse: (event) => {
-					// Only focus if not hidden and preserveEditorFocus is false
-					if (!isHidden && !event.preserveEditorFocus) {
-						textAreaRef.current?.focus()
-					}
-				},
-				onError: (error) => {
-					console.error("Error in showWebview subscription:", error)
-				},
-				onComplete: () => {
-					console.log("showWebview subscription completed")
-				},
-			},
-		)
+	const isHiddenRef = useRef(isHidden)
+	isHiddenRef.current = isHidden
 
-		return cleanup
-	}, [isHidden, textAreaRef.current])
+	useGrpcSubscription<Record<string, never>, ShowWebviewEvent>({
+		key: "showWebview",
+		debugLabel: "Show Webview Focus",
+		subscribe: UiServiceClient.subscribeToShowWebview.bind(UiServiceClient),
+		request: {},
+		staleAfterMs: null,
+		onMessage: (event) => {
+			if (!isHiddenRef.current && !event.preserveEditorFocus) {
+				textAreaRef.current?.focus()
+			}
+		},
+	})
 
-	// Set up addToInput subscription
-	useEffect(() => {
-		const cleanup = UiServiceClient.subscribeToAddToInput(
-			{},
-			{
-				onResponse: (event) => {
-					if (event.value) {
-						setInputValue((prevValue) => {
-							const newText = event.value
-							const newTextWithNewline = `${newText}\n`
-							return prevValue ? `${prevValue}\n${newTextWithNewline}` : newTextWithNewline
-						})
-						// Add scroll to bottom after state update
-						// Auto focus the input and start the cursor on a new line for easy typing
-						setTimeout(() => {
-							if (textAreaRef.current) {
-								textAreaRef.current.scrollTop = textAreaRef.current.scrollHeight
-								textAreaRef.current.focus()
-							}
-						}, 0)
-					}
-				},
-				onError: (error) => {
-					console.error("Error in addToInput subscription:", error)
-				},
-				onComplete: () => {
-					console.log("addToInput subscription completed")
-				},
-			},
-		)
-
-		return cleanup
-	}, [setInputValue, textAreaRef.current])
+	useGrpcSubscription<Record<string, never>, ProtoString>({
+		key: "addToInput",
+		debugLabel: "Add To Input",
+		subscribe: UiServiceClient.subscribeToAddToInput.bind(UiServiceClient),
+		request: {},
+		staleAfterMs: null,
+		onMessage: (event) => {
+			if (!event.value) {
+				return
+			}
+			setInputValue((prevValue) => {
+				const newText = event.value
+				const newTextWithNewline = `${newText}\n`
+				return prevValue ? `${prevValue}\n${newTextWithNewline}` : newTextWithNewline
+			})
+			setTimeout(() => {
+				if (textAreaRef.current) {
+					textAreaRef.current.scrollTop = textAreaRef.current.scrollHeight
+					textAreaRef.current.focus()
+				}
+			}, 0)
+		},
+	})
 
 	useMount(() => {
 		// NOTE: the vscode window needs to be focused for this to work

@@ -147,7 +147,10 @@ describe("JoyRide production readiness", () => {
 			const opts = { cwd: process.cwd(), includeGlobs: ["*.ts"] as string[] }
 			await storeSearchResult(cache, "baz", opts, "Found 3 results", 3, scope)
 			const decision = await lookupSearchResult(cache, "baz", opts, scope)
-			assert.isTrue(isJoyRideHitDecision(decision))
+			if (!isJoyRideHitDecision(decision)) {
+				assert.fail("expected cache hit decision")
+				return
+			}
 			assert.equal(decision.value, "Found 3 results")
 		})
 	})

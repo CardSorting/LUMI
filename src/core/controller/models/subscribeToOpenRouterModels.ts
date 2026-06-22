@@ -2,10 +2,10 @@ import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
 import { Logger } from "@/shared/services/Logger"
-import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
+import { StreamingResponseHandler } from "../grpc-handler"
+import { PersistentSubscriptionHub } from "../persistent-subscription-hub"
 
-// Keep track of active OpenRouter models subscriptions
-const activeOpenRouterModelsSubscriptions = new Set<StreamingResponseHandler<OpenRouterCompatibleModelInfo>>()
+const hub = new PersistentSubscriptionHub<OpenRouterCompatibleModelInfo>("openRouterModels")
 
 /**
  * Subscribe to OpenRouter models events
@@ -20,18 +20,7 @@ export async function subscribeToOpenRouterModels(
 	responseStream: StreamingResponseHandler<OpenRouterCompatibleModelInfo>,
 	requestId?: string,
 ): Promise<void> {
-	// Add this subscription to the active subscriptions
-	activeOpenRouterModelsSubscriptions.add(responseStream)
-
-	// Register cleanup when the connection is closed
-	const cleanup = () => {
-		activeOpenRouterModelsSubscriptions.delete(responseStream)
-	}
-
-	// Register the cleanup function with the request registry if we have a requestId
-	if (requestId) {
-		getRequestRegistry().registerRequest(requestId, cleanup, { type: "openRouterModels_subscription" }, responseStream)
-	}
+	hub.register(responseStream, requestId, { type: "openRouterModels_subscription" })
 }
 
 /**
@@ -39,20 +28,6 @@ export async function subscribeToOpenRouterModels(
  * @param models The OpenRouter models to send
  */
 export async function sendOpenRouterModelsEvent(models: OpenRouterCompatibleModelInfo): Promise<void> {
-	// Send the event to all active subscribers
-	const promises = Array.from(activeOpenRouterModelsSubscriptions).map(async (responseStream) => {
-		try {
-			await responseStream(
-				models,
-				false, // Not the last message
-			)
-			Logger.log("[DEBUG] sending OpenRouter models event")
-		} catch (error) {
-			Logger.error("Error sending OpenRouter models event:", error)
-			// Remove the subscription if there was an error
-			activeOpenRouterModelsSubscriptions.delete(responseStream)
-		}
-	})
-
-	await Promise.all(promises)
+	Logger.log("[DEBUG] sending OpenRouter models event")
+	await hub.broadcast(models)
 }

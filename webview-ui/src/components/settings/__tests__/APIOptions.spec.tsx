@@ -17,6 +17,9 @@ vi.mock("../../../context/ExtensionStateContext", async (importOriginal) => {
 			setApiConfiguration: vi.fn(),
 			openRouterModels: {},
 			planActSeparateModelsSetting: false,
+			favoritedModelIds: [],
+			refreshOpenRouterModels: vi.fn(),
+			navigateToSettingsModelPicker: vi.fn(),
 		})),
 	}
 })
@@ -27,6 +30,9 @@ const mockExtensionState = (apiConfiguration: Partial<ApiConfiguration>) => {
 		setApiConfiguration: vi.fn(),
 		openRouterModels: {},
 		planActSeparateModelsSetting: false,
+		favoritedModelIds: [],
+		refreshOpenRouterModels: vi.fn(),
+		navigateToSettingsModelPicker: vi.fn(),
 	} as any)
 }
 

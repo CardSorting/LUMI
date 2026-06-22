@@ -8,7 +8,7 @@ import type { JoyRideCache } from "./JoyRideCache"
 import { canJoyRideRetainScratch } from "./JoyRideConfig"
 import { buildJoyRideWorkspaceSnapshot, type JoyRideTaskScope } from "./JoyRideContext"
 import { recordJoyRideDecision } from "./JoyRideDecisionLog"
-import { type JoyRideCacheDecision, rejectedDecision } from "./JoyRideDecisions"
+import { diagnosticOnlyDecision, type JoyRideCacheDecision, rejectedDecision } from "./JoyRideDecisions"
 import { JOYRIDE_REASON } from "./JoyRideReasonCodes"
 import { createScratchArtifactCacheKey } from "./keys"
 import type { JoyRideCleanupHandler, JoyRideDurability, JoyRideSetMetadata } from "./types"
@@ -107,17 +107,9 @@ export async function storeScratchArtifactWithCleanup(
 		if (!result.accepted) {
 			return rejectUnsafeArtifact(JOYRIDE_REASON.REJECT_UNSCOPED_ENTRY, result.reason ?? "scratch admission rejected")
 		}
-		const decision: JoyRideCacheDecision = {
-			type: "hit",
-			canReuse: false,
-			reasonCode: JOYRIDE_REASON.CLEANUP_SUCCESS,
-			reasonMessage: "scratch stored",
-			diagnosticOnly: spec.diagnosticOnly ?? false,
-			fallbackBehavior: "executeNormally",
-			degraded: false,
-			auditEventId: `joyride-scratch-${Date.now()}`,
+		const decision = diagnosticOnlyDecision(JOYRIDE_REASON.CLEANUP_SUCCESS, "scratch stored", {
 			keySummary: key.key.slice(0, 48),
-		}
+		})
 		recordJoyRideDecision(decision)
 		return decision
 	} catch (error) {

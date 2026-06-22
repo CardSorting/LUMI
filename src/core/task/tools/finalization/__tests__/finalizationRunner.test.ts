@@ -30,7 +30,7 @@ describe("FinalizationRunner", () => {
 			callbacks: {
 				say: async () => undefined,
 			},
-		} as TaskConfig
+		} as unknown as TaskConfig
 	})
 
 	afterEach(async () => {

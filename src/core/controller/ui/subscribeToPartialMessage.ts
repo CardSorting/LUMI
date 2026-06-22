@@ -2,12 +2,12 @@ import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { DietCodeMessage } from "@shared/proto/dietcode/ui"
 import { Logger } from "@/shared/services/Logger"
-import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
+import { StreamingResponseHandler } from "../grpc-handler"
+import { PersistentSubscriptionHub } from "../persistent-subscription-hub"
 
-// Keep track of active partial message subscriptions (gRPC streams)
-const activePartialMessageSubscriptions = new Set<StreamingResponseHandler<DietCodeMessage>>()
+const hub = new PersistentSubscriptionHub<DietCodeMessage>("partialMessage")
 
-// Keep track of callback-based subscriptions (for CLI and other non-gRPC consumers)
+// Callback-based subscriptions (CLI and other non-gRPC consumers)
 export type PartialMessageCallback = (message: DietCodeMessage) => void
 const callbackSubscriptions = new Set<PartialMessageCallback>()
 
@@ -24,23 +24,7 @@ export async function subscribeToPartialMessage(
 	responseStream: StreamingResponseHandler<DietCodeMessage>,
 	requestId?: string,
 ): Promise<void> {
-	// Add this subscription to the active subscriptions
-	activePartialMessageSubscriptions.add(responseStream)
-
-	// Register cleanup when the connection is closed
-	const cleanup = () => {
-		activePartialMessageSubscriptions.delete(responseStream)
-	}
-
-	// Register the cleanup function with the request registry if we have a requestId
-	if (requestId) {
-		getRequestRegistry().registerRequest(
-			requestId,
-			cleanup,
-			{ type: "partial_message_subscription" },
-			responseStream as unknown as StreamingResponseHandler,
-		)
-	}
+	hub.register(responseStream, requestId, { type: "partial_message_subscription" })
 }
 
 /**
@@ -60,21 +44,8 @@ export function registerPartialMessageCallback(callback: PartialMessageCallback)
  * @param partialMessage The DietCodeMessage to send
  */
 export async function sendPartialMessageEvent(partialMessage: DietCodeMessage): Promise<void> {
-	// Send to gRPC stream subscribers
-	const streamPromises = Array.from(activePartialMessageSubscriptions).map(async (responseStream) => {
-		try {
-			await responseStream(
-				partialMessage,
-				false, // Not the last message
-			)
-		} catch (error) {
-			Logger.error("Error sending partial message event:", error)
-			// Remove the subscription if there was an error
-			activePartialMessageSubscriptions.delete(responseStream)
-		}
-	})
+	await hub.broadcast(partialMessage)
 
-	// Send to callback subscribers (synchronous)
 	for (const callback of callbackSubscriptions) {
 		try {
 			callback(partialMessage)
@@ -82,6 +53,4 @@ export async function sendPartialMessageEvent(partialMessage: DietCodeMessage): 
 			Logger.error("Error in partial message callback:", error)
 		}
 	}
-
-	await Promise.all(streamPromises)
 }

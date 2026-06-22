@@ -115,7 +115,7 @@ export function createStorageContext(opts: StorageContextOptions = {}): StorageC
 	const globalState = new DietCodeFileStorage(path.join(dataDir, "globalState.json"), "GlobalState")
 
 	return {
-		globalState,
+		globalState: globalState as unknown as DietCodeMemento,
 		globalStateBackingStore: globalState,
 		secrets: new DietCodeFileStorage<string>(path.join(dataDir, "secrets.json"), "Secrets", {
 			fileMode: 0o600, // Owner read/write only — protects API keys

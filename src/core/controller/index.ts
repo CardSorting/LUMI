@@ -62,6 +62,7 @@ import { TaskState } from "../task/TaskState"
 import { disposeRequestRegistry } from "./grpc-handler"
 import { sendMcpMarketplaceCatalogEvent } from "./mcp/subscribeToMcpMarketplaceCatalog"
 import { appendDietCodeStealthModels } from "./models/refreshOpenRouterModels"
+import { disposeAllPersistentSubscriptionHubs } from "./persistent-subscription-hub"
 import { sendStateUpdate } from "./state/subscribeToState"
 import { sendChatButtonClickedEvent } from "./ui/subscribeToChatButtonClicked"
 
@@ -234,6 +235,7 @@ export class Controller implements IController {
 		this.spider?.dispose()
 		this.spider = undefined
 		this.spiderInitPromise = undefined
+		disposeAllPersistentSubscriptionHubs()
 		disposeRequestRegistry()
 		await dbPool.stop()
 

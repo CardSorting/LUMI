@@ -5,6 +5,11 @@
  * including non-React code. The configuration is compile-time constant, so direct
  * import is safe and ensures the methods work consistently regardless of React context.
  */
+import {
+	DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+	DEFAULT_UNARY_TIMEOUT_MS,
+	shouldApplyStreamIdleTimeout,
+} from "@shared/grpc/persistent-stream"
 import { v4 as uuidv4 } from "uuid"
 import { PLATFORM_CONFIG } from "../config/platform.config"
 
@@ -13,9 +18,6 @@ export interface Callbacks<TResponse> {
 	onError?: (error: Error) => void
 	onComplete?: () => void
 }
-
-const DEFAULT_UNARY_TIMEOUT_MS = 60_000
-const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 10 * 60_000
 
 function toError(error: unknown, fallback: string): Error {
 	if (error instanceof Error) {
@@ -181,7 +183,7 @@ export abstract class ProtoBusClient {
 		}
 
 		const resetIdleTimeout = () => {
-			if (closed) {
+			if (closed || !shouldApplyStreamIdleTimeout(methodName)) {
 				return
 			}
 			if (idleTimeout) {

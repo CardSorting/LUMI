@@ -16,7 +16,7 @@ import { RoadmapService } from "./RoadmapService"
 export interface RoadmapCompletionBlock {
 	blocked: boolean
 	message?: string
-	blockingGates?: Array<{ id?: string; label: string; why: string; fix: string }>
+	blockingGates?: Array<{ id?: string; label: string; why: string; fix?: string }>
 	remediationSteps?: string[]
 	dryRunAdvisory?: boolean
 	autoClearableOnly?: boolean

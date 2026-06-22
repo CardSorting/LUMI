@@ -72,6 +72,7 @@ export function agentEnvelopeFromEntry(
 ): SubagentExecutionEnvelope {
 	return {
 		agentId: entry.id,
+		executionId: agentEnvelope.executionId || entry.id,
 		role: entry.name,
 		parentSwarmId: agentEnvelope.parentSwarmId || "",
 		parentTaskId: agentEnvelope.parentTaskId || "",
@@ -86,6 +87,7 @@ export function agentEnvelopeFromEntry(
 		evidenceRefs: agentEnvelope.evidenceRefs || [],
 		touchedFiles: agentEnvelope.touchedFiles || entry.touchedFiles || [],
 		toolSteps: agentEnvelope.toolSteps || [],
+		compactionEvents: agentEnvelope.compactionEvents || [],
 		blockers: agentEnvelope.blockers || entry.blockers || [],
 		warnings: agentEnvelope.warnings || entry.warnings || [],
 		confidence: agentEnvelope.confidence || entry.confidence || "unknown",

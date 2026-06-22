@@ -7,6 +7,7 @@ export type GateAction =
 	| "abort_corrupt_gate"
 	| "run_verification"
 	| "act_mode_respond"
+	| "ask_followup_question"
 
 export interface GateRecoveryStep {
 	order: number

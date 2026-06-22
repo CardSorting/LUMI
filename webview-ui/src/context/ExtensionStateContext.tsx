@@ -1,5 +1,4 @@
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
-import { findLastIndex } from "@shared/array"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS } from "@shared/FocusChainSettings"
@@ -8,8 +7,6 @@ import type { UserInfo } from "@shared/proto/dietcode/account"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import type { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
 import { type TerminalProfile } from "@shared/proto/dietcode/state"
-import { convertProtoToDietCodeMessage } from "@shared/proto-conversions/dietcode-message"
-import { convertProtoMcpServersToMcpServers } from "@shared/proto-conversions/mcp/mcp-server-conversion"
 import { fromProtobufModels } from "@shared/proto-conversions/models/typeConversion"
 import type React from "react"
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
@@ -26,7 +23,8 @@ import {
 } from "../../../src/shared/api"
 import { Environment } from "../../../src/shared/config-types"
 import type { McpMarketplaceCatalog, McpServer, McpViewTab } from "../../../src/shared/mcp"
-import { McpServiceClient, ModelsServiceClient, StateServiceClient, UiServiceClient } from "../services/grpc-client"
+import { ModelsServiceClient } from "../services/grpc-client"
+import { useExtensionGrpcSubscriptions } from "./useExtensionGrpcSubscriptions"
 
 export interface ExtensionStateContextType extends ExtensionState {
 	didHydrateState: boolean
@@ -346,404 +344,33 @@ export const ExtensionStateContextProvider: React.FC<{
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
 	const [mcpMarketplaceCatalog, setMcpMarketplaceCatalog] = useState<McpMarketplaceCatalog>({ items: [] })
 
-	// References to store subscription cancellation functions
-	const stateSubscriptionRef = useRef<(() => void) | null>(null)
-
-	const mcpButtonUnsubscribeRef = useRef<(() => void) | null>(null)
-	const historyButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
-	const chatButtonUnsubscribeRef = useRef<(() => void) | null>(null)
-	const accountButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
-	const settingsButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
-	const worktreesButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
-	const joyZoningButtonClickedSubscriptionRef = useRef<(() => void) | null>(null)
-	const partialMessageUnsubscribeRef = useRef<(() => void) | null>(null)
-	const mcpMarketplaceUnsubscribeRef = useRef<(() => void) | null>(null)
-	const openRouterModelsUnsubscribeRef = useRef<(() => void) | null>(null)
-	const liteLlmModelsUnsubscribeRef = useRef<(() => void) | null>(null)
-	const workspaceUpdatesUnsubscribeRef = useRef<(() => void) | null>(null)
-	const relinquishControlUnsubscribeRef = useRef<(() => void) | null>(null)
-
-	// Add ref for callbacks
 	const relinquishControlCallbacks = useRef<Set<() => void>>(new Set())
 
-	// Create hook function
 	const onRelinquishControl = useCallback((callback: () => void) => {
 		relinquishControlCallbacks.current.add(callback)
 		return () => {
 			relinquishControlCallbacks.current.delete(callback)
 		}
 	}, [])
-	const mcpServersSubscriptionRef = useRef<(() => void) | null>(null)
 
-	// Subscribe to state updates and UI events using the gRPC streaming API
-	useEffect(() => {
-		// Set up state subscription
-		stateSubscriptionRef.current = StateServiceClient.subscribeToState(EmptyRequest.create({}), {
-			onResponse: (response) => {
-				if (response.stateJson) {
-					try {
-						const stateData = JSON.parse(response.stateJson) as ExtensionState
-						setState((prevState) => {
-							// Versioning logic for autoApprovalSettings
-							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
-							const currentVersion = prevState.autoApprovalSettings?.version ?? 1
-							const shouldUpdateAutoApproval = incomingVersion > currentVersion
-							// HACK: Preserve dietcodeMessages if currentTaskItem is the same
-							if (stateData.currentTaskItem?.id === prevState.currentTaskItem?.id) {
-								stateData.dietcodeMessages = stateData.dietcodeMessages?.length
-									? stateData.dietcodeMessages
-									: prevState.dietcodeMessages
-							}
-
-							const newState = {
-								...stateData,
-								autoApprovalSettings: shouldUpdateAutoApproval
-									? stateData.autoApprovalSettings
-									: prevState.autoApprovalSettings,
-							}
-
-							// Handle host actions (e.g. notifications) sent via state updates for now
-							// if they are embedded or sent separately.
-							// But actually we added a separate message handler in the webview.
-
-							// Skip welcome screen entirely
-							// if (!newState.welcomeViewCompleted && !showWelcome && !newState.isNewUser) {
-							// 	setShowWelcome(true)
-							// } else if (newState.welcomeViewCompleted) {
-							// 	setShowWelcome(false)
-							// }
-							setShowWelcome(false) // Force false always
-
-							setDidHydrateState(true)
-
-							return newState
-						})
-					} catch (error) {
-						console.error("Error parsing state JSON:", error)
-						console.log("[DEBUG] ERR getting state", error)
-					}
-				}
-				console.log('[DEBUG] ended "got subscribed state"')
-			},
-			onError: (error) => {
-				console.error("Error in state subscription:", error)
-			},
-			onComplete: () => {
-				console.log("State subscription completed")
-			},
-		})
-
-		// Subscribe to MCP button clicked events with webview type
-		mcpButtonUnsubscribeRef.current = UiServiceClient.subscribeToMcpButtonClicked(
-			{},
-			{
-				onResponse: () => {
-					console.log("[DEBUG] Received mcpButtonClicked event from gRPC stream")
-					navigateToMcp()
-				},
-				onError: (error) => {
-					console.error("Error in mcpButtonClicked subscription:", error)
-				},
-				onComplete: () => {
-					console.log("mcpButtonClicked subscription completed")
-				},
-			},
-		)
-
-		// Set up history button clicked subscription with webview type
-		historyButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToHistoryButtonClicked(
-			{},
-			{
-				onResponse: () => {
-					// When history button is clicked, navigate to history view
-					console.log("[DEBUG] Received history button clicked event from gRPC stream")
-					navigateToHistory()
-				},
-				onError: (error) => {
-					console.error("Error in history button clicked subscription:", error)
-				},
-				onComplete: () => {
-					console.log("History button clicked subscription completed")
-				},
-			},
-		)
-
-		// Subscribe to chat button clicked events with webview type
-		chatButtonUnsubscribeRef.current = UiServiceClient.subscribeToChatButtonClicked(
-			{},
-			{
-				onResponse: () => {
-					// When chat button is clicked, navigate to chat
-					console.log("[DEBUG] Received chat button clicked event from gRPC stream")
-					navigateToChat()
-				},
-				onError: (error) => {
-					console.error("Error in chat button subscription:", error)
-				},
-				onComplete: () => {},
-			},
-		)
-
-		// Subscribe to MCP servers updates
-		mcpServersSubscriptionRef.current = McpServiceClient.subscribeToMcpServers(EmptyRequest.create(), {
-			onResponse: (response) => {
-				console.log("[DEBUG] Received MCP servers update from gRPC stream")
-				if (response.mcpServers) {
-					setMcpServers(convertProtoMcpServersToMcpServers(response.mcpServers))
-				}
-			},
-			onError: (error) => {
-				console.error("Error in MCP servers subscription:", error)
-			},
-			onComplete: () => {
-				console.log("MCP servers subscription completed")
-			},
-		})
-
-		// Set up settings button clicked subscription
-		settingsButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToSettingsButtonClicked(EmptyRequest.create({}), {
-			onResponse: () => {
-				// When settings button is clicked, navigate to settings
-				navigateToSettings()
-			},
-			onError: (error) => {
-				console.error("Error in settings button clicked subscription:", error)
-			},
-			onComplete: () => {
-				console.log("Settings button clicked subscription completed")
-			},
-		})
-
-		// Set up worktrees button clicked subscription
-		worktreesButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToWorktreesButtonClicked(
-			EmptyRequest.create({}),
-			{
-				onResponse: () => {
-					// When worktrees button is clicked, navigate to worktrees
-					navigateToWorktrees()
-				},
-				onError: (error) => {
-					console.error("Error in worktrees button clicked subscription:", error)
-				},
-				onComplete: () => {
-					console.log("Worktrees button clicked subscription completed")
-				},
-			},
-		)
-
-		// Set up JoyZoning button clicked subscription
-		joyZoningButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToJoyZoningButtonClicked(
-			EmptyRequest.create({}),
-			{
-				onResponse: () => {
-					navigateToJoyZoning()
-				},
-				onError: (error) => {
-					console.error("Error in JoyZoning button clicked subscription:", error)
-				},
-				onComplete: () => {
-					console.log("JoyZoning button clicked subscription completed")
-				},
-			},
-		)
-
-		// Subscribe to partial message events
-		partialMessageUnsubscribeRef.current = UiServiceClient.subscribeToPartialMessage(EmptyRequest.create({}), {
-			onResponse: (protoMessage) => {
-				try {
-					// Validate critical fields
-					if (!protoMessage.ts || protoMessage.ts <= 0) {
-						console.error("Invalid timestamp in partial message:", protoMessage)
-						return
-					}
-
-					const partialMessage = convertProtoToDietCodeMessage(protoMessage)
-					setState((prevState) => {
-						// worth noting it will never be possible for a more up-to-date message to be sent here or in normal messages post since the presentAssistantContent function uses lock
-						const lastIndex = findLastIndex(prevState.dietcodeMessages, (msg) => msg.ts === partialMessage.ts)
-						if (lastIndex !== -1) {
-							const newDietCodeMessages = [...prevState.dietcodeMessages]
-							newDietCodeMessages[lastIndex] = partialMessage
-							return { ...prevState, dietcodeMessages: newDietCodeMessages }
-						}
-						return prevState
-					})
-				} catch (error) {
-					console.error("Failed to process partial message:", error, protoMessage)
-				}
-			},
-			onError: (error) => {
-				console.error("Error in partialMessage subscription:", error)
-			},
-			onComplete: () => {
-				console.log("[DEBUG] partialMessage subscription completed")
-			},
-		})
-
-		// Subscribe to MCP marketplace catalog updates
-		mcpMarketplaceUnsubscribeRef.current = McpServiceClient.subscribeToMcpMarketplaceCatalog(EmptyRequest.create({}), {
-			onResponse: (catalog) => {
-				console.log("[DEBUG] Received MCP marketplace catalog update from gRPC stream")
-				setMcpMarketplaceCatalog(catalog)
-			},
-			onError: (error) => {
-				console.error("Error in MCP marketplace catalog subscription:", error)
-			},
-			onComplete: () => {
-				console.log("MCP marketplace catalog subscription completed")
-			},
-		})
-
-		// Subscribe to OpenRouter models updates
-		openRouterModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToOpenRouterModels(EmptyRequest.create({}), {
-			onResponse: (response: OpenRouterCompatibleModelInfo) => {
-				const models = fromProtobufModels(response.models)
-				setOpenRouterModels({
-					[openRouterDefaultModelId]: openRouterDefaultModelInfo, // in case the extension sent a model list without the default model
-					...models,
-				})
-			},
-			onError: (error) => {
-				console.error("Error in OpenRouter models subscription:", error)
-			},
-			onComplete: () => {
-				console.log("OpenRouter models subscription completed")
-			},
-		})
-
-		// Subscribe to LiteLLM models updates
-		liteLlmModelsUnsubscribeRef.current = ModelsServiceClient.subscribeToLiteLlmModels(EmptyRequest.create({}), {
-			onResponse: (response: OpenRouterCompatibleModelInfo) => {
-				const models = fromProtobufModels(response.models)
-				setLiteLlmModels(models)
-			},
-			onError: (error) => {
-				console.error("Error in LiteLLM models subscription:", error)
-			},
-			onComplete: () => {
-				console.log("LiteLLM models subscription completed")
-			},
-		})
-
-		// Initialize webview using gRPC
-		UiServiceClient.initializeWebview(EmptyRequest.create({}))
-			.then(() => {
-				console.log("[DEBUG] Webview initialization completed via gRPC")
-			})
-			.catch((error) => {
-				console.error("Failed to initialize webview via gRPC:", error)
-			})
-
-		// Set up account button clicked subscription
-		accountButtonClickedSubscriptionRef.current = UiServiceClient.subscribeToAccountButtonClicked(EmptyRequest.create(), {
-			onResponse: () => {
-				// When account button is clicked, navigate to account view
-				console.log("[DEBUG] Received account button clicked event from gRPC stream")
-				navigateToAccount()
-			},
-			onError: (error) => {
-				console.error("Error in account button clicked subscription:", error)
-			},
-			onComplete: () => {
-				console.log("Account button clicked subscription completed")
-			},
-		})
-
-		// Fetch available terminal profiles on launch
-		StateServiceClient.getAvailableTerminalProfiles(EmptyRequest.create({}))
-			.then((response) => {
-				setAvailableTerminalProfiles(response.profiles)
-			})
-			.catch((error) => {
-				console.error("Failed to fetch available terminal profiles:", error)
-			})
-
-		// Subscribe to relinquish control events
-		relinquishControlUnsubscribeRef.current = UiServiceClient.subscribeToRelinquishControl(EmptyRequest.create({}), {
-			onResponse: () => {
-				// Call all registered callbacks
-				relinquishControlCallbacks.current.forEach((callback) => {
-					callback()
-				})
-			},
-			onError: (error) => {
-				console.error("Error in relinquishControl subscription:", error)
-			},
-			onComplete: () => {},
-		})
-
-		// Clean up subscriptions when component unmounts
-		return () => {
-			if (stateSubscriptionRef.current) {
-				stateSubscriptionRef.current()
-				stateSubscriptionRef.current = null
-			}
-			if (mcpButtonUnsubscribeRef.current) {
-				mcpButtonUnsubscribeRef.current()
-				mcpButtonUnsubscribeRef.current = null
-			}
-			if (historyButtonClickedSubscriptionRef.current) {
-				historyButtonClickedSubscriptionRef.current()
-				historyButtonClickedSubscriptionRef.current = null
-			}
-			if (chatButtonUnsubscribeRef.current) {
-				chatButtonUnsubscribeRef.current()
-				chatButtonUnsubscribeRef.current = null
-			}
-			if (accountButtonClickedSubscriptionRef.current) {
-				accountButtonClickedSubscriptionRef.current()
-				accountButtonClickedSubscriptionRef.current = null
-			}
-			if (settingsButtonClickedSubscriptionRef.current) {
-				settingsButtonClickedSubscriptionRef.current()
-				settingsButtonClickedSubscriptionRef.current = null
-			}
-			if (worktreesButtonClickedSubscriptionRef.current) {
-				worktreesButtonClickedSubscriptionRef.current()
-				worktreesButtonClickedSubscriptionRef.current = null
-			}
-			if (joyZoningButtonClickedSubscriptionRef.current) {
-				joyZoningButtonClickedSubscriptionRef.current()
-				joyZoningButtonClickedSubscriptionRef.current = null
-			}
-			if (partialMessageUnsubscribeRef.current) {
-				partialMessageUnsubscribeRef.current()
-				partialMessageUnsubscribeRef.current = null
-			}
-			if (mcpMarketplaceUnsubscribeRef.current) {
-				mcpMarketplaceUnsubscribeRef.current()
-				mcpMarketplaceUnsubscribeRef.current = null
-			}
-			if (openRouterModelsUnsubscribeRef.current) {
-				openRouterModelsUnsubscribeRef.current()
-				openRouterModelsUnsubscribeRef.current = null
-			}
-			if (liteLlmModelsUnsubscribeRef.current) {
-				liteLlmModelsUnsubscribeRef.current()
-				liteLlmModelsUnsubscribeRef.current = null
-			}
-			if (workspaceUpdatesUnsubscribeRef.current) {
-				workspaceUpdatesUnsubscribeRef.current()
-				workspaceUpdatesUnsubscribeRef.current = null
-			}
-			if (relinquishControlUnsubscribeRef.current) {
-				relinquishControlUnsubscribeRef.current()
-				relinquishControlUnsubscribeRef.current = null
-			}
-			if (mcpServersSubscriptionRef.current) {
-				mcpServersSubscriptionRef.current()
-				mcpServersSubscriptionRef.current = null
-			}
-		}
-	}, [
-		navigateToAccount,
-		navigateToChat,
+	useExtensionGrpcSubscriptions({
+		setState,
+		setDidHydrateState,
+		setShowWelcome,
+		setMcpServers,
+		setMcpMarketplaceCatalog,
+		setOpenRouterModels,
+		setLiteLlmModels,
+		setAvailableTerminalProfiles,
+		relinquishControlCallbacks,
+		navigateToMcp,
 		navigateToHistory,
-		navigateToMcp, // When settings button is clicked, navigate to settings
-		navigateToSettings, // When worktrees button is clicked, navigate to worktrees
+		navigateToChat,
+		navigateToSettings,
 		navigateToWorktrees,
 		navigateToJoyZoning,
-	])
+		navigateToAccount,
+	})
 
 	const refreshOpenRouterModels = useCallback(() => {
 		ModelsServiceClient.refreshOpenRouterModelsRpc(EmptyRequest.create({}))

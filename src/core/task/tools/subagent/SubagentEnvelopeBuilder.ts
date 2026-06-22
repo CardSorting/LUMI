@@ -1,7 +1,6 @@
 import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
 import type { SubagentExecutionStatus } from "@shared/ExtensionMessage"
 import type {
-	CompactionEventRecord,
 	EvidenceReference,
 	ExecutionConfidence,
 	StructuredFinding,
@@ -9,6 +8,7 @@ import type {
 	SubagentExecutionPhase,
 	SubagentToolStepRecord,
 } from "@shared/subagent/executionEnvelope"
+import type { CompactionEventRecord } from "@shared/subagent/transcript"
 
 const FILE_TOOL_PARAMS = new Set(["path", "file_path", "target_file"])
 
@@ -67,7 +67,7 @@ export class SubagentEnvelopeBuilder {
 		private readonly parentSwarmId: string,
 		private readonly parentTaskId: string,
 		private readonly prompt: string,
-		private readonly lineage: { swarmId: string; index: number; depth: number },
+		private readonly lineage: { swarmId: string; index: number; depth: number; resumeAttemptId?: string },
 		private readonly parentStreamId?: string,
 		private readonly childStreamId?: string,
 	) {

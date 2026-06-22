@@ -1,11 +1,10 @@
 import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { McpMarketplaceCatalog } from "@shared/proto/dietcode/mcp"
-import { Logger } from "@/shared/services/Logger"
-import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
+import { StreamingResponseHandler } from "../grpc-handler"
+import { PersistentSubscriptionHub } from "../persistent-subscription-hub"
 
-// Keep track of active subscriptions
-const activeMcpMarketplaceSubscriptions = new Set<StreamingResponseHandler<McpMarketplaceCatalog>>()
+const hub = new PersistentSubscriptionHub<McpMarketplaceCatalog>("mcpMarketplaceCatalog")
 
 /**
  * Subscribe to MCP marketplace catalog updates
@@ -20,37 +19,12 @@ export async function subscribeToMcpMarketplaceCatalog(
 	responseStream: StreamingResponseHandler<McpMarketplaceCatalog>,
 	requestId?: string,
 ): Promise<void> {
-	// Add this subscription to the active subscriptions
-	activeMcpMarketplaceSubscriptions.add(responseStream)
-
-	// Register cleanup when the connection is closed
-	const cleanup = () => {
-		activeMcpMarketplaceSubscriptions.delete(responseStream)
-	}
-
-	// Register the cleanup function with the request registry if we have a requestId
-	if (requestId) {
-		getRequestRegistry().registerRequest(requestId, cleanup, { type: "mcp_marketplace_subscription" }, responseStream)
-	}
+	hub.register(responseStream, requestId, { type: "mcp_marketplace_subscription" })
 }
 
 /**
  * Send an MCP marketplace catalog event to all active subscribers
  */
 export async function sendMcpMarketplaceCatalogEvent(catalog: McpMarketplaceCatalog): Promise<void> {
-	// Send the event to all active subscribers
-	const promises = Array.from(activeMcpMarketplaceSubscriptions).map(async (responseStream) => {
-		try {
-			await responseStream(
-				catalog,
-				false, // Not the last message
-			)
-		} catch (error) {
-			Logger.error("Error sending MCP marketplace catalog event:", error)
-			// Remove the subscription if there was an error
-			activeMcpMarketplaceSubscriptions.delete(responseStream)
-		}
-	})
-
-	await Promise.all(promises)
+	await hub.broadcast(catalog)
 }

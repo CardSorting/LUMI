@@ -3,10 +3,10 @@ import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { State } from "@shared/proto/dietcode/state"
 import { ExtensionState } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
-import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
+import { StreamingResponseHandler } from "../grpc-handler"
+import { PersistentSubscriptionHub } from "../persistent-subscription-hub"
 
-// Keep track of active state subscriptions
-const activeStateSubscriptions = new Set<StreamingResponseHandler<State>>()
+const hub = new PersistentSubscriptionHub<State>("state")
 
 /**
  * Subscribe to state updates
@@ -21,33 +21,15 @@ export async function subscribeToState(
 	responseStream: StreamingResponseHandler<State>,
 	requestId?: string,
 ): Promise<void> {
-	// Add this subscription to the active subscriptions
-	activeStateSubscriptions.add(responseStream)
+	hub.register(responseStream, requestId, { type: "state_subscription" })
 
-	// Register cleanup when the connection is closed
-	const cleanup = () => {
-		activeStateSubscriptions.delete(responseStream)
-	}
-
-	// Register the cleanup function with the request registry if we have a requestId
-	if (requestId) {
-		getRequestRegistry().registerRequest(requestId, cleanup, { type: "state_subscription" }, responseStream)
-	}
-
-	// Send the initial state
 	const initialState = await controller.getStateToPostToWebview()
 	const initialStateJson = JSON.stringify(initialState)
 
 	try {
-		await responseStream(
-			{
-				stateJson: initialStateJson,
-			},
-			false, // Not the last message
-		)
+		await responseStream({ stateJson: initialStateJson }, false)
 	} catch (error) {
 		Logger.error("Error sending initial state:", error)
-		activeStateSubscriptions.delete(responseStream)
 	}
 }
 
@@ -56,22 +38,6 @@ export async function subscribeToState(
  * @param state The state to send
  */
 export async function sendStateUpdate(state: ExtensionState): Promise<void> {
-	// Send the state to all active subscribers
-	const promises = Array.from(activeStateSubscriptions).map(async (responseStream) => {
-		try {
-			const stateJson = JSON.stringify(state)
-			await responseStream(
-				{
-					stateJson,
-				},
-				false, // Not the last message
-			)
-		} catch (error) {
-			Logger.error("Error sending state update:", error)
-			// Remove the subscription if there was an error
-			activeStateSubscriptions.delete(responseStream)
-		}
-	})
-
-	await Promise.all(promises)
+	const stateJson = JSON.stringify(state)
+	await hub.broadcast({ stateJson })
 }

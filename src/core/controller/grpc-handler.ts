@@ -3,6 +3,7 @@ import { serviceHandlers } from "@generated/hosts/vscode/protobus-services"
 import { GrpcRecorderBuilder } from "@/core/controller/grpc-recorder/grpc-recorder.builder"
 import { GrpcRequestRegistry } from "@/core/controller/grpc-request-registry"
 import { ExtensionMessage } from "@/shared/ExtensionMessage"
+import { isPersistentStreamingMethod } from "@/shared/grpc/persistent-stream"
 import { Logger } from "@/shared/services/Logger"
 import { GrpcCancel, GrpcRequest } from "@/shared/WebviewMessage"
 import type { PostMessageToWebview, StreamingResponseHandler } from "./grpc-handler-types"
@@ -221,8 +222,7 @@ export function getRequestRegistry(): GrpcRequestRegistry {
 }
 
 function isPersistentStreamingRequest(request: GrpcRequest): boolean {
-	const method = request.method.toLowerCase()
-	return method.startsWith("subscribe") || method.includes("subscription")
+	return isPersistentStreamingMethod(request.method)
 }
 
 export function disposeRequestRegistry(): void {

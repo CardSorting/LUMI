@@ -1,9 +1,13 @@
-import type { UserOrganization } from "@shared/proto/dietcode/account"
+import { DEFAULT_STALE_AFTER_MS } from "@shared/grpc/persistent-stream"
+import type { AuthState, UserOrganization } from "@shared/proto/dietcode/account"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import deepEqual from "fast-deep-equal"
 import type React from "react"
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
+import { useGrpcSubscription } from "@/hooks/useGrpcSubscription"
 import { AccountServiceClient } from "@/services/grpc-client"
+
+const EMPTY_REQUEST = EmptyRequest.create({})
 
 // Define User type (you may need to adjust this based on your actual User type)
 export interface DietCodeUser {
@@ -49,39 +53,28 @@ export const DietCodeAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 		console.log("Extension: DietCodeAuthContext: user updated:", user?.uid)
 	}, [user?.uid])
 
-	// Handle auth status update events
-	useEffect(() => {
-		const cancelSubscription = AccountServiceClient.subscribeToAuthStatusUpdate(EmptyRequest.create(), {
-			onResponse: async (response) => {
-				setUser((oldUser) => {
-					if (!response?.user?.uid) {
-						return null
-					}
+	// Handle auth status update events with auto-reconnect
+	useGrpcSubscription<typeof EMPTY_REQUEST, AuthState>({
+		key: "authStatus",
+		debugLabel: "Auth Status",
+		subscribe: AccountServiceClient.subscribeToAuthStatusUpdate.bind(AccountServiceClient),
+		request: EMPTY_REQUEST,
+		staleAfterMs: DEFAULT_STALE_AFTER_MS,
+		onMessage: (response) => {
+			setUser((oldUser) => {
+				if (!response?.user?.uid) {
+					return null
+				}
 
-					if (response?.user && oldUser?.uid !== response.user.uid) {
-						// Once we have a new user, fetch organizations that
-						// allow us to display the active account in account view UI
-						// and fetch the correct credit balance to display on mount
-						getUserOrganizations()
-						return response.user
-					}
+				if (response?.user && oldUser?.uid !== response.user.uid) {
+					getUserOrganizations()
+					return response.user
+				}
 
-					return oldUser
-				})
-			},
-			onError: (error: Error) => {
-				console.error("Error in auth callback subscription:", error)
-			},
-			onComplete: () => {
-				console.log("Auth callback subscription completed")
-			},
-		})
-
-		// Cleanup function to cancel subscription when component unmounts
-		return () => {
-			cancelSubscription()
-		}
-	}, [getUserOrganizations])
+				return oldUser
+			})
+		},
+	})
 
 	return (
 		<DietCodeAuthContext.Provider

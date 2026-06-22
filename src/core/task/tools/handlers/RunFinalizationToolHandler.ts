@@ -14,7 +14,7 @@ export class RunFinalizationToolHandler implements IToolHandler {
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
-		const seal = block.params.seal === "true" || block.params.seal === true
+		const seal = block.params.seal === "true"
 
 		if (!canRunFinalization(config) && !seal) {
 			return formatResponse.toolError(

@@ -1,11 +1,10 @@
 import type { IController as Controller } from "@core/controller/types"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
 import { OpenRouterCompatibleModelInfo } from "@shared/proto/dietcode/models"
-import { Logger } from "@/shared/services/Logger"
-import { getRequestRegistry, StreamingResponseHandler } from "../grpc-handler"
+import { StreamingResponseHandler } from "../grpc-handler"
+import { PersistentSubscriptionHub } from "../persistent-subscription-hub"
 
-// Keep track of active LiteLLM models subscriptions
-const activeLiteLlmModelsSubscriptions = new Set<StreamingResponseHandler<OpenRouterCompatibleModelInfo>>()
+const hub = new PersistentSubscriptionHub<OpenRouterCompatibleModelInfo>("liteLlmModels")
 
 /**
  * Subscribe to LiteLLM models events
@@ -20,18 +19,7 @@ export async function subscribeToLiteLlmModels(
 	responseStream: StreamingResponseHandler<OpenRouterCompatibleModelInfo>,
 	requestId?: string,
 ): Promise<void> {
-	// Add this subscription to the active subscriptions
-	activeLiteLlmModelsSubscriptions.add(responseStream)
-
-	// Register cleanup when the connection is closed
-	const cleanup = () => {
-		activeLiteLlmModelsSubscriptions.delete(responseStream)
-	}
-
-	// Register the cleanup function with the request registry if we have a requestId
-	if (requestId) {
-		getRequestRegistry().registerRequest(requestId, cleanup, { type: "liteLlmModels_subscription" }, responseStream)
-	}
+	hub.register(responseStream, requestId, { type: "liteLlmModels_subscription" })
 }
 
 /**
@@ -39,19 +27,5 @@ export async function subscribeToLiteLlmModels(
  * @param models The LiteLLM models to send
  */
 export async function sendLiteLlmModelsEvent(models: OpenRouterCompatibleModelInfo): Promise<void> {
-	// Send the event to all active subscribers
-	const promises = Array.from(activeLiteLlmModelsSubscriptions).map(async (responseStream) => {
-		try {
-			await responseStream(
-				models,
-				false, // Not the last message
-			)
-		} catch (error) {
-			Logger.error("Error sending LiteLLM models event:", error)
-			// Remove the subscription if there was an error
-			activeLiteLlmModelsSubscriptions.delete(responseStream)
-		}
-	})
-
-	await Promise.all(promises)
+	await hub.broadcast(models)
 }
