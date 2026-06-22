@@ -1,5 +1,5 @@
 import { type AuditGateConfig } from "@shared/audit/auditGateConfig"
-import { evaluateCompletionGate } from "@shared/audit/auditGateReport"
+import { evaluateAuditGate } from "@shared/audit/auditGateReport"
 import { buildUIGateEvaluationOptions, metadataUsesNewViolationsGate } from "@shared/audit/auditGateUiOptions"
 import { enrichAuditMetadata } from "@shared/audit/taskAuditUtils"
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
@@ -50,7 +50,7 @@ describe("auditGateUiOptions", () => {
 		] as DietCodeMessage[]
 
 		const options = buildUIGateEvaluationOptions(settings, messages, current)
-		const decision = evaluateCompletionGate(current, options)
+		const decision = evaluateAuditGate(current, options)
 		expect(decision.blocked).to.equal(true)
 		expect(decision.reasons.some((reason) => reason.code === "policy_violations")).to.equal(true)
 	})

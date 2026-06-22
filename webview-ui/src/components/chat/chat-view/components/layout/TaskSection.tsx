@@ -2,6 +2,7 @@ import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessag
 import type { PreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
+import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import React from "react"
 import TaskHeader from "@/components/chat/task-header/TaskHeader"
@@ -33,6 +34,7 @@ interface TaskSectionProps {
 	onScrollToAuditMessage?: (ts: number) => void
 	onScrollToLatestGateBlock?: () => void
 	onScrollToLatestAdvisory?: () => void
+	gateLifecycleSnapshot?: ResolvedGateLifecycleSnapshot
 }
 
 /**
@@ -56,6 +58,7 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 	onScrollToAuditMessage,
 	onScrollToLatestGateBlock,
 	onScrollToLatestAdvisory,
+	gateLifecycleSnapshot,
 }) => {
 	return (
 		<TaskHeader
@@ -66,6 +69,7 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 			cacheWrites={apiMetrics.totalCacheWrites}
 			checklistSummary={checklistSummary}
 			doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
+			gateLifecycleSnapshot={gateLifecycleSnapshot}
 			lastApiReqTotalTokens={lastApiReqTotalTokens}
 			lastProgressMessageText={lastProgressMessageText}
 			latestAuditMetadata={latestAuditMetadata}

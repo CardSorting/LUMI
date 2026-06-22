@@ -52,7 +52,7 @@ export async function getRulesSection(variant: PromptVariant, context: SystemPro
 		CLI_RULES: cliRules,
 	})
 
-	const WIKI_RULES = `\n- SOVEREIGN KNOWLEDGE LEDGER: You are STRICTLY MANDATED to maintain the project's Knowledge Ledger (SKL) in the \`.wiki/\` directory. This is NOT a singular file, but a granular, multi-file breakdown of the system state (index.md, changelog.md, etc.). Before calling attempt_completion, you MUST audit the codebase and document every verified change with 1:1 factual precision in the \`.wiki/\` directory. Refer to the SOVEREIGN KNOWLEDGE LEDGER (SKL) section for mandatory structural and evidence-based standards. Failure to produce this technical writing is a violation of the Sovereign Protocol.`
+	const WIKI_RULES = `\n- SOVEREIGN KNOWLEDGE LEDGER: Maintain the project's Knowledge Ledger (SKL) in the \`.wiki/\` directory as a granular, multi-file breakdown (index.md, changelog.md, etc.). Direct \`.wiki/\` writes are authorized only during \`run_finalization\` (same-session finalization lane) or subagent execution — not via ordinary file tools. After engineering verification, call \`run_finalization\` to update documentation and stamp the ledger, then \`run_finalization seal=true\` to seal the receipt.`
 
 	return resolved + WIKI_RULES
 }

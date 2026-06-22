@@ -6,15 +6,21 @@ import {
 	DietCodeSubagentUsageInfo,
 	SubagentStatusItem,
 } from "@shared/ExtensionMessage"
+import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
+import { createContinuityMarker, SWARM_ENVELOPE_SCHEMA_VERSION } from "@shared/subagent/executionEnvelope"
 import pTimeout from "p-timeout"
+import { v4 as uuidv4 } from "uuid"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
+import { computeSwarmArtifactChecksum, planResumeFromArtifact, type SwarmResumePlan } from "../subagent/ResumeSwarmFromArtifact"
 import { SUBAGENT_DEFAULT_ALLOWED_TOOLS, SubagentBuilder } from "../subagent/SubagentBuilder"
+import { loadSwarmEnvelope, persistSwarmEnvelope } from "../subagent/SubagentExecutionStore"
 import { SubagentRunner, type SubagentRunResult } from "../subagent/SubagentRunner"
+import { buildParentToolResult, buildSwarmSummaryOverlay } from "../subagent/SwarmReportBuilder"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -50,6 +56,80 @@ function excerpt(text: string | undefined, maxChars = 1200): string {
 	}
 
 	return `${trimmed.slice(0, maxChars)}...`
+}
+
+function enrichEntryFromEnvelope(entry: SubagentStatusItem, envelope?: SubagentExecutionEnvelope): void {
+	if (!envelope) {
+		return
+	}
+	entry.envelopeId = envelope.agentId
+	entry.blockers = envelope.blockers
+	entry.warnings = envelope.warnings
+	entry.touchedFiles = envelope.touchedFiles
+	entry.confidence = envelope.confidence
+	entry.evidenceCount = envelope.evidenceRefs.length
+	entry.transcriptEventCount = envelope.transcriptEventCount
+	entry.compactionEventCount = envelope.compactionEvents?.length || 0
+	entry.compactionWarnings = (envelope.compactionEvents || []).map(
+		(event) =>
+			`Compaction ${event.reason}: dropped ${event.droppedRange[0]}-${event.droppedRange[1]} (risk ${event.continuityRiskLevel})`,
+	)
+	entry.toolSteps = envelope.toolSteps.map((step) => ({
+		index: step.index,
+		toolName: step.toolName,
+		preview: step.preview,
+		timestamp: step.timestamp,
+		touchedPaths: step.touchedPaths,
+	}))
+}
+
+function buildSwarmEnvelopeDraft(options: {
+	swarmId: string
+	executionId?: string
+	taskId: string
+	parentStreamId?: string
+	parentExecutionId?: string
+	resumeAttemptId?: string
+	recoveryReceipt?: SwarmExecutionEnvelope["recoveryReceipt"]
+	entries: SubagentStatusItem[]
+	agentEnvelopes: Map<string, SubagentExecutionEnvelope>
+	blackboard: string[]
+	startedAt: number
+	status: SwarmExecutionEnvelope["status"]
+	summaryOverlay?: string
+	artifactPath?: string
+}): SwarmExecutionEnvelope {
+	const completedAgents = options.entries.filter((entry) => entry.status === "completed" || entry.status === "failed").length
+
+	return {
+		swarmId: options.swarmId,
+		executionId: options.executionId || options.swarmId,
+		taskId: options.taskId,
+		parentStreamId: options.parentStreamId,
+		parentExecutionId: options.parentExecutionId,
+		resumeAttemptId: options.resumeAttemptId,
+		recoveryReceipt: options.recoveryReceipt,
+		continuity: createContinuityMarker(
+			options.swarmId,
+			options.taskId,
+			options.entries.length,
+			completedAgents,
+			options.status,
+		),
+		agents: options.entries
+			.map((entry) => options.agentEnvelopes.get(entry.id))
+			.filter((envelope): envelope is SubagentExecutionEnvelope => Boolean(envelope)),
+		blackboardSnapshot: [...options.blackboard],
+		summaryOverlay: options.summaryOverlay,
+		timestamps: {
+			started: options.startedAt,
+			completed: options.status !== "running" ? Date.now() : undefined,
+		},
+		status: options.status,
+		invariants: { validated: false, violations: [] },
+		artifactPath: options.artifactPath || "",
+		schemaVersion: SWARM_ENVELOPE_SCHEMA_VERSION,
+	}
 }
 
 export class UseSubagentsToolHandler implements IFullyManagedTool {
@@ -172,6 +252,32 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 
 		config.taskState.consecutiveMistakeCount = 0
 
+		const resumeSwarmId = block.params.resume_swarm_id?.trim()
+		let resumePlan: SwarmResumePlan | undefined
+		if (resumeSwarmId) {
+			try {
+				resumePlan = await planResumeFromArtifact(config.taskId, resumeSwarmId, {
+					newSwarmId: uuidv4(),
+				})
+				await config.callbacks.say(
+					"subagent",
+					JSON.stringify({
+						status: "running",
+						resumePlan: resumePlan.recoveryReceipt,
+						sourceSwarmId: resumeSwarmId,
+						operatorVisible: true,
+					}),
+				)
+			} catch (error) {
+				return formatResponse.toolError(`Resume-from-artifact rejected: ${(error as Error).message}`)
+			}
+		}
+
+		const swarmId = resumePlan?.newSwarmId || uuidv4()
+		const swarmExecutionId = uuidv4()
+		const swarmStartedAt = Date.now()
+		const agentEnvelopes = new Map<string, SubagentExecutionEnvelope>()
+
 		const entries: SubagentStatusItem[] = prompts.map((prompt, index) => ({
 			id: Math.random().toString(36).substring(2, 9),
 			name: configuredSubagentName || `Subagent ${index + 1}`,
@@ -189,6 +295,8 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			latestToolCall: undefined,
 		}))
 
+		const parentStreamId = (config as ConfigWithExtensions).getSessionStreamId?.()
+
 		const emitStatus = async (status: DietCodeSaySubagentStatus["status"], partial: boolean) => {
 			const completed = entries.filter((entry) => entry.status === "completed" || entry.status === "failed").length
 			const successes = entries.filter((entry) => entry.status === "completed").length
@@ -199,6 +307,31 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			const contextWindow = entries.reduce((acc, entry) => Math.max(acc, entry.contextWindow || 0), 0)
 			const maxContextTokens = entries.reduce((acc, entry) => Math.max(acc, entry.contextTokens || 0), 0)
 			const maxContextUsagePercentage = entries.reduce((acc, entry) => Math.max(acc, entry.contextUsagePercentage || 0), 0)
+
+			const swarmStatus: SwarmExecutionEnvelope["status"] =
+				status === "running" ? "running" : failures > 0 ? "failed" : "completed"
+			const draft = buildSwarmEnvelopeDraft({
+				swarmId,
+				executionId: swarmExecutionId,
+				taskId: config.taskId,
+				parentStreamId,
+				parentExecutionId: resumePlan?.parentExecutionId,
+				resumeAttemptId: resumePlan?.resumeAttemptId,
+				recoveryReceipt: resumePlan?.recoveryReceipt,
+				entries,
+				agentEnvelopes,
+				blackboard: config.taskState.swarmBlackboard || [],
+				startedAt: swarmStartedAt,
+				status: swarmStatus,
+			})
+
+			let artifactPath = draft.artifactPath
+			try {
+				const persistedPath = await persistSwarmEnvelope(config.taskId, draft)
+				artifactPath = persistedPath
+			} catch (error) {
+				Logger.warn("[SubagentToolHandler] Failed to persist swarm execution artifact:", error)
+			}
 
 			const payload: DietCodeSaySubagentStatus = {
 				status,
@@ -213,6 +346,13 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				maxContextTokens,
 				maxContextUsagePercentage,
 				items: entries,
+				swarmId,
+				continuityMarker: {
+					...draft.continuity,
+					lastPersistedAt: Date.now(),
+				},
+				artifactPath,
+				invariantViolations: draft.invariants.violations,
 			}
 
 			await config.callbacks.say("subagent", JSON.stringify(payload), undefined, undefined, partial)
@@ -266,8 +406,6 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		}, 100)
 
 		// Wire each subagent prompt to an orchestrator child stream
-		// getSessionStreamId may not be available on all config shapes
-		const parentStreamId = (config as ConfigWithExtensions).getSessionStreamId?.()
 		const childStreamIds: (string | null)[] = await Promise.all(
 			prompts.map(async (prompt) => {
 				if (!parentStreamId) return null
@@ -288,6 +426,42 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		const MAX_PARENT_COST = config.taskState.maxCost
 
 		const runSubagent = async (index: number) => {
+			if (resumePlan) {
+				const entry = entries[index]
+				const reused = resumePlan.reuseAgents.find((agent) => agent.index === entry.index)
+				if (reused) {
+					entry.status = "completed"
+					entry.result = reused.result
+					const sourceEnvelope = (await loadSwarmEnvelope(config.taskId, resumePlan.sourceSwarmId))?.agents.find(
+						(agent) => agent.agentId === reused.envelopeId,
+					)
+					if (sourceEnvelope) {
+						agentEnvelopes.set(entry.id, sourceEnvelope)
+						enrichEntryFromEnvelope(entry, sourceEnvelope)
+					}
+					await queueStatusUpdate("running", true)
+					results[index] = {
+						status: "fulfilled",
+						value: {
+							status: "completed",
+							result: reused.result,
+							stats: {
+								toolCalls: 0,
+								inputTokens: 0,
+								outputTokens: 0,
+								cacheWriteTokens: 0,
+								cacheReadTokens: 0,
+								totalCost: 0,
+								contextTokens: 0,
+								contextWindow: 0,
+								contextUsagePercentage: 0,
+							},
+						},
+					}
+					return
+				}
+			}
+
 			// Production Hardening: Staggered spawn to prevent simultaneous rate-limit bursts
 			if (index > 0) {
 				await new Promise((resolve) => setTimeout(resolve, 500))
@@ -295,7 +469,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 
 			const current = entries[index]
 			try {
-				const result = await runners[index].run(
+				const result = await runners[index].runWithEnvelope(
 					prompts[index],
 					async (update) => {
 						// Real-time Swarm Cost Monitoring
@@ -318,7 +492,14 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						if (update.status === "completed") {
 							current.status = "completed"
 							const childId = childStreamIds[index]
-							if (childId) orchestrator.completeStream(childId, excerpt(update.result, 200)).catch(() => {})
+							if (childId) {
+								const streamSummary = [
+									excerpt(update.result, 200),
+									`artifact:${swarmId}`,
+									`agent:${current.id}`,
+								].join(" | ")
+								orchestrator.completeStream(childId, streamSummary).catch(() => {})
+							}
 						}
 						if (update.status === "failed") {
 							current.status = "failed"
@@ -348,8 +529,26 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						}
 						await queueStatusUpdate("running", true)
 					},
+					{
+						agentId: current.id,
+						role: current.name,
+						swarmId,
+						taskId: config.taskId,
+						index: current.index,
+						depth: currentDepth + 1,
+						parentStreamId,
+						parentExecutionId: resumePlan?.parentExecutionId,
+						resumeAttemptId: resumePlan?.resumeAttemptId,
+						onTranscriptFlush: async () => {
+							await queueStatusUpdate("running", true)
+						},
+					},
 					childStreamIds[index] || undefined,
 				)
+				if (result.envelope) {
+					agentEnvelopes.set(current.id, result.envelope)
+					enrichEntryFromEnvelope(current, result.envelope)
+				}
 				results[index] = { status: "fulfilled", value: result }
 			} catch (error) {
 				Logger.error(`[SubagentToolHandler] Subagent ${index} crashed:`, error)
@@ -414,6 +613,10 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			entries[index].contextTokens = result.value.stats.contextTokens || 0
 			entries[index].contextWindow = result.value.stats.contextWindow || 0
 			entries[index].contextUsagePercentage = result.value.stats.contextUsagePercentage || 0
+			if (result.value.envelope) {
+				agentEnvelopes.set(entries[index].id, result.value.envelope)
+				enrichEntryFromEnvelope(entries[index], result.value.envelope)
+			}
 
 			usageTokensIn += result.value.stats.inputTokens || 0
 			usageTokensOut += result.value.stats.outputTokens || 0
@@ -435,30 +638,50 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		}
 		await config.callbacks.say("subagent_usage", JSON.stringify(subagentUsagePayload))
 
-		const successCount = entries.length - failures
-		const totalToolCalls = entries.reduce((acc, entry) => acc + (entry.toolCalls || 0), 0)
-		const maxContextUsagePercentage = entries.reduce((acc, entry) => Math.max(acc, entry.contextUsagePercentage || 0), 0)
-		const maxContextTokens = entries.reduce((acc, entry) => Math.max(acc, entry.contextTokens || 0), 0)
-		const contextWindow = entries.reduce((acc, entry) => Math.max(acc, entry.contextWindow || 0), 0)
-
 		const blackboard = config.taskState.swarmBlackboard || []
-		const summary = [
-			"### SWARM EXECUTION SUMMARY",
-			`Total Agents: ${entries.length} (Success: ${successCount}, Fail: ${failures})`,
-			`Total Tool Calls: ${totalToolCalls}`,
-			`Peak Context Usage: ${maxContextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} (${maxContextUsagePercentage.toFixed(1)}%)`,
-			"",
-			"### AGENT DETAILS",
-			...entries.map((entry) => {
-				const header = `[${entry.index}] ${entry.name} - ${entry.status.toUpperCase()}`
-				const subPrompt = `Prompt: ${excerpt(entry.prompt, 100)}`
-				const detail =
-					entry.status === "completed" ? `Result: ${excerpt(entry.result, 300)}` : `Error: ${excerpt(entry.error, 300)}`
-				return `${header}\n${subPrompt}\n${detail}\n`
+		const finalSwarmStatus: SwarmExecutionEnvelope["status"] =
+			failures > 0
+				? "failed"
+				: failures === 0 && entries.some((entry) => entry.status === "failed")
+					? "failed"
+					: "completed"
+		const summaryOverlay = buildSwarmSummaryOverlay(
+			buildSwarmEnvelopeDraft({
+				swarmId,
+				taskId: config.taskId,
+				parentStreamId,
+				entries,
+				agentEnvelopes,
+				blackboard,
+				startedAt: swarmStartedAt,
+				status: finalSwarmStatus,
 			}),
-			...(blackboard.length > 0 ? ["", "### SHARED SWARM FINDINGS (Blackboard)", ...blackboard.map((f) => `- ${f}`)] : []),
-		].join("\n")
+			entries,
+		)
+		const finalEnvelope = buildSwarmEnvelopeDraft({
+			swarmId,
+			executionId: swarmExecutionId,
+			taskId: config.taskId,
+			parentStreamId,
+			parentExecutionId: resumePlan?.parentExecutionId,
+			resumeAttemptId: resumePlan?.resumeAttemptId,
+			recoveryReceipt: resumePlan?.recoveryReceipt,
+			entries,
+			agentEnvelopes,
+			blackboard,
+			startedAt: swarmStartedAt,
+			status: finalSwarmStatus,
+			summaryOverlay,
+		})
+		finalEnvelope.checksum = computeSwarmArtifactChecksum(finalEnvelope)
 
-		return formatResponse.toolResult(summary)
+		try {
+			const artifactPath = await persistSwarmEnvelope(config.taskId, finalEnvelope)
+			finalEnvelope.artifactPath = artifactPath
+		} catch (error) {
+			Logger.warn("[SubagentToolHandler] Failed to persist final swarm execution artifact:", error)
+		}
+
+		return formatResponse.toolResult(buildParentToolResult(finalEnvelope, summaryOverlay))
 	}
 }

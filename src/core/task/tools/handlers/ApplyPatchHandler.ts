@@ -2,13 +2,13 @@ import { readFile } from "node:fs/promises"
 import type { ToolUse } from "@core/assistant-message"
 import { resolveWorkspacePath } from "@core/workspace"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
+import { isWikiPath, isWikiWriteAuthorized } from "@shared/completion/wikiWritePolicy"
 import type { DietCodeSayTool } from "@shared/ExtensionMessage"
 import { fileExistsAtPath } from "@utils/fs"
 import { getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
 import { BASH_WRAPPERS, DiffError, PATCH_MARKERS, type Patch, PatchActionType, type PatchChunk } from "@/shared/Patch"
 import { preserveEscaping } from "@/shared/string"
-import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -254,6 +254,12 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 
 			// Generate summary
 			const changedFiles = Object.keys(commit.changes)
+			const blockedWikiPaths = changedFiles.filter((filePath) => isWikiPath(filePath) && !isWikiWriteAuthorized(config))
+			if (blockedWikiPaths.length > 0) {
+				await provider.reset()
+				return `🛑 **ACCESS DENIED**: Patch targets Knowledge Ledger paths (${blockedWikiPaths.join(", ")}). Call \`run_finalization\` to update documentation in this session.`
+			}
+
 			const messages = await this.generateChangeSummary(commit.changes)
 
 			const finalResponses = []

@@ -36,6 +36,7 @@ export enum DietCodeDefaultTool {
 	GENERATE_EXPLANATION = "generate_explanation",
 	USE_SKILL = "use_skill",
 	USE_SUBAGENTS = "use_subagents",
+	RUN_FINALIZATION = "run_finalization",
 	PROJECT_MAP = "project_map",
 	MEM_QUERY = "query_cognitive_memory",
 	MEM_SNAPSHOT = "create_cognitive_snapshot",

@@ -149,6 +149,21 @@ export class TaskState {
 	preflightReadinessHintEmitted?: boolean
 	/** Correlation ID for the current completion attempt cycle — tracing across gate blocks. */
 	completionGateSessionId?: string
+	/** Engineering verification latched — finalization lane may proceed without re-audit. */
+	engineeringVerifiedAt?: number
+	engineeringVerifiedCheckpointHash?: string
+	/** Current completion lifecycle state for operator surfaces. */
+	completionLifecycleState?: string
+	/** Last unified gate lifecycle decision snapshot. */
+	lastGateLifecycleDecision?: string
+	/** Finalization lane state. */
+	finalizationPhase?: "ready" | "running" | "completed" | "failed"
+	finalizationRunId?: string
+	finalizationEvidenceJson?: string
+	/** Sealed completion receipt (operator-visible). */
+	completionReceiptJson?: string
+	/** Append-only lifecycle transition log for receipt continuity. */
+	lifecycleTransitionLogJson?: string
 	/** Cached roadmap gate recovery payload for structured agent envelope on next error format. */
 	lastRoadmapGateRecovery?: {
 		remediationSteps?: string[]

@@ -12,8 +12,8 @@ import {
 	validateCompletionResultQuality,
 } from "../attemptCompletionUtils"
 import {
-	evaluateCompletionGateReadiness,
-	evaluateCompletionGateReadinessAsync,
+	evaluateGatePreflightReadiness,
+	evaluateGatePreflightReadinessAsync,
 	PREFLIGHT_STAGE_RUNNERS,
 	runCompletionGateFlow,
 	runCompletionPreflightChecks,
@@ -126,14 +126,14 @@ describe("completionGatePipeline", () => {
 		registryStages.should.deepEqual(Array.from(expectedSlice))
 	})
 
-	it("evaluateCompletionGateReadiness returns dry-run issues without mutating state", () => {
-		const issues = evaluateCompletionGateReadiness(configWithState(taskState), { result: "   " })
+	it("evaluateGatePreflightReadiness returns dry-run issues without mutating state", () => {
+		const issues = evaluateGatePreflightReadiness(configWithState(taskState), { result: "   " })
 		issues.length.should.be.greaterThan(0)
 		issues[0].stage.should.equal("quality")
 		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 	})
 
-	it("evaluateCompletionGateReadinessAsync emits info advisory for auto-clearable roadmap governance", async () => {
+	it("evaluateGatePreflightReadinessAsync emits info advisory for auto-clearable roadmap governance", async () => {
 		setRoadmapConfigOverride({ enabled: true, block_kanban_on_bootstrap_incomplete: false })
 		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
 		await fs.writeFile(
@@ -149,7 +149,7 @@ describe("completionGatePipeline", () => {
 		})
 		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), skeleton, "utf8")
 
-		const issues = await evaluateCompletionGateReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
+		const issues = await evaluateGatePreflightReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
 			result: VALID_RESULT,
 		})
 		const roadmap = issues.find((issue) => issue.stage === "roadmap")
@@ -158,7 +158,7 @@ describe("completionGatePipeline", () => {
 		setRoadmapConfigOverride(null)
 	})
 
-	it("evaluateCompletionGateReadinessAsync includes roadmap stage when governance blocks", async () => {
+	it("evaluateGatePreflightReadinessAsync includes roadmap stage when governance blocks", async () => {
 		setRoadmapConfigOverride({ enabled: true })
 		await fs.mkdir(path.join(tmpDir, ".dietcode"), { recursive: true })
 		await fs.writeFile(
@@ -168,7 +168,7 @@ describe("completionGatePipeline", () => {
 		)
 		await fs.writeFile(path.join(tmpDir, "ROADMAP.md"), "# Roadmap\n", "utf8")
 
-		const issues = await evaluateCompletionGateReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
+		const issues = await evaluateGatePreflightReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
 			result: VALID_RESULT,
 		})
 		issues.some((issue) => issue.stage === "roadmap").should.be.true()
@@ -176,8 +176,8 @@ describe("completionGatePipeline", () => {
 		taskState.consecutiveMistakeCount.should.equal(0)
 	})
 
-	it("evaluateCompletionGateReadinessAsync skips roadmap when disabled", async () => {
-		const issues = await evaluateCompletionGateReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
+	it("evaluateGatePreflightReadinessAsync skips roadmap when disabled", async () => {
+		const issues = await evaluateGatePreflightReadinessAsync({ ...configWithState(taskState), cwd: tmpDir } as TaskConfig, {
 			result: VALID_RESULT,
 		})
 		issues.some((issue) => issue.stage === "roadmap").should.be.false()

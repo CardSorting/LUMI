@@ -900,6 +900,7 @@ export class Task {
 		files?: string[],
 		partial?: boolean,
 		auditMetadata?: TaskAuditMetadata,
+		gateLifecycleStatus?: import("@shared/completion/gateLifecycleDecision").GateLifecycleDecision,
 	): Promise<number | undefined> {
 		// Allow hook messages even when aborted to enable proper cleanup
 		if (this.taskState.abort && type !== "hook_status" && type !== "hook_output_stream") {
@@ -926,6 +927,7 @@ export class Task {
 						files,
 						partial,
 						auditMetadata,
+						gateLifecycleStatus,
 					})
 
 					const protoMessage = convertDietCodeMessageToProto(lastMessage)
@@ -945,6 +947,7 @@ export class Task {
 					partial,
 					modelInfo,
 					auditMetadata,
+					gateLifecycleStatus,
 				})
 				await this.postStateToWebview()
 				return sayTs
@@ -961,6 +964,7 @@ export class Task {
 					files,
 					partial: false,
 					auditMetadata,
+					gateLifecycleStatus,
 				})
 
 				// await this.postStateToWebview()
@@ -980,6 +984,7 @@ export class Task {
 				files,
 				modelInfo,
 				auditMetadata,
+				gateLifecycleStatus,
 			})
 			await this.postStateToWebview()
 			return sayTs
@@ -996,6 +1001,7 @@ export class Task {
 			files,
 			modelInfo,
 			auditMetadata,
+			gateLifecycleStatus,
 		})
 		await this.postStateToWebview()
 		return sayTs
@@ -1943,6 +1949,25 @@ export class Task {
 			Logger.error("Failed to cancel hook execution", error)
 			return false
 		}
+	}
+
+	private isHarnessTerminalForNoToolsNudge(): boolean {
+		const { isTaskHarnessTerminal } =
+			require("./tools/completion/GateLifecycleEvaluator") as typeof import("./tools/completion/GateLifecycleEvaluator")
+		return isTaskHarnessTerminal(this.taskState)
+	}
+
+	private buildNoToolsUsedNudge(): string {
+		if (this.taskState.engineeringVerifiedAt) {
+			const retryLocked = (this.taskState.completionGateBlockCount ?? 0) >= 10
+			if (retryLocked || this.taskState.completionLifecycleState === "finalization_ready") {
+				return (
+					"[Response required] Completion retry is locked but engineering is verified. " +
+					"Use the run_finalization tool to finish documentation in this session, then seal with seal=true."
+				)
+			}
+		}
+		return formatResponse.noToolsUsed(this.useNativeToolCalls)
 	}
 
 	private getCurrentProviderInfo(): ApiProviderInfo {
@@ -3506,11 +3531,12 @@ export class Task {
 				// if the model did not tool use, then we need to tell it to either use a tool or attempt_completion
 				const didToolUse = this.taskState.assistantMessageContent.some((block) => block.type === "tool_use")
 
-				if (!didToolUse) {
+				if (!didToolUse && !this.isHarnessTerminalForNoToolsNudge()) {
 					// normal request where tool use is required
+					const nudgeText = this.buildNoToolsUsedNudge()
 					this.taskState.userMessageContent.push({
 						type: "text",
-						text: formatResponse.noToolsUsed(this.useNativeToolCalls),
+						text: nudgeText,
 					})
 					this.taskState.consecutiveMistakeCount++
 				}

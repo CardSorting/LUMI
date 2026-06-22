@@ -10,6 +10,7 @@ import { telemetryService } from "@/services/telemetry"
 import { ToolUse } from "../../../assistant-message"
 import { formatResponse } from "../../../prompts/responses"
 import { maybeTransitionToReplanMode } from "../../utils/replanModeTransition"
+import { shouldRejectFakeFollowupQuestion } from "../completion/fakeFollowupGuard"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -33,6 +34,11 @@ export class AskFollowupQuestionToolHandler implements IToolHandler, IPartialBlo
 	}
 
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
+		const fakeFollowup = shouldRejectFakeFollowupQuestion(config)
+		if (fakeFollowup) {
+			return formatResponse.toolError(fakeFollowup)
+		}
+
 		const question: string | undefined = block.params.question
 		const optionsRaw: string | undefined = block.params.options
 

@@ -2,6 +2,7 @@ import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessag
 import type { PreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
+import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { StringArrayRequest } from "@shared/proto/dietcode/common"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
@@ -31,6 +32,7 @@ interface TaskHeaderProps {
 	lastApiReqTotalTokens?: number
 	lastProgressMessageText?: string
 	latestAuditMetadata?: DietCodeMessage["auditMetadata"]
+	gateLifecycleSnapshot?: ResolvedGateLifecycleSnapshot
 	auditTrend?: AuditTrend
 	auditSnapshots?: AuditMessageSnapshot[]
 	auditHealth?: AuditHealthSummary
@@ -56,6 +58,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	lastApiReqTotalTokens,
 	lastProgressMessageText,
 	latestAuditMetadata,
+	gateLifecycleSnapshot,
 	auditTrend: _auditTrend,
 	auditSnapshots,
 	auditHealth,
@@ -203,6 +206,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							auditSnapshots={auditSnapshots}
 							auditTrend={_auditTrend}
 							checklistSummary={checklistSummary}
+							gateLifecycleSnapshot={gateLifecycleSnapshot}
 							latestAuditMetadata={latestAuditMetadata}
 							onScrollToAuditMessage={onScrollToAuditMessage}
 							onScrollToLatestAdvisory={onScrollToLatestAdvisory}

@@ -115,7 +115,7 @@ You can track and communicate your progress on the overall task using the task_p
 - If you are creating this checklist for the first time, and the tool use completes the first step in the checklist, make sure to mark it as completed in your task_progress parameter.
 - Provide the whole checklist of steps you intend to complete in the task, and keep the checkboxes updated as you make progress. It's okay to rewrite this checklist as needed if it becomes invalid due to scope changes or new information.
 - Be sure to update the list any time a step has been completed.
-- The final item in every todo list MUST be "- [ ] Update Sovereign Knowledge Ledger (.wiki/) [Structural Audit Required]"
+- The final item in every todo list MUST be "- [ ] Finalize Knowledge Ledger via run_finalization [Same-session]"
 - The system may include todo list context in your prompts when appropriate - these reminders are important, and serve as a validation of your successful task execution.
 
 **How to use task_progress:**
@@ -173,7 +173,7 @@ RULES
 - Your current working directory is: /test/project - this is where you will be using tools from.
 - Do not use the ~ character or $HOME to refer to the home directory. Use absolute paths instead.
 - MCP operations should be used one at a time, similar to other tool usage. Wait for confirmation of success before proceeding with additional operations.
-- SOVEREIGN KNOWLEDGE LEDGER: You are STRICTLY MANDATED to maintain the project's Knowledge Ledger (SKL) in the `.wiki/` directory. This is NOT a singular file, but a granular, multi-file breakdown of the system state (index.md, changelog.md, etc.). Before calling attempt_completion, you MUST audit the codebase and document every verified change with 1:1 factual precision in the `.wiki/` directory. Refer to the SOVEREIGN KNOWLEDGE LEDGER (SKL) section for mandatory structural and evidence-based standards. Failure to produce this technical writing is a violation of the Sovereign Protocol.
+- SOVEREIGN KNOWLEDGE LEDGER: Maintain the project's Knowledge Ledger (SKL) in the `.wiki/` directory as a granular, multi-file breakdown (index.md, changelog.md, etc.). Direct `.wiki/` writes are authorized only during `run_finalization` (same-session finalization lane) or subagent execution — not via ordinary file tools. After engineering verification, call `run_finalization` to update documentation and stamp the ledger, then `run_finalization seal=true` to seal the receipt.
 
 ====
 

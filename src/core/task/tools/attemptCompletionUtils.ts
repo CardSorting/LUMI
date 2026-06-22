@@ -483,9 +483,9 @@ const COMPLETION_GATE_PLAYBOOK_STEPS: Partial<Record<CompletionPreflightReason, 
 		"Call attempt_completion again after verification.",
 	],
 	circuit_breaker: [
-		"Stop calling attempt_completion — further calls fail until you start a new task.",
-		"Review audit artifacts and fix underlying violations in the workspace.",
-		"Document changes in scratchpad.md before starting fresh.",
+		"Stop calling attempt_completion in this session.",
+		"If engineering is verified, call run_finalization to finish documentation in this session.",
+		"Seal the receipt with run_finalization seal=true when finalization completes.",
 	],
 }
 
@@ -536,7 +536,8 @@ export function getRemainingCompletionGateStages(failedStage: CompletionPrefligh
 
 /** Short agent hints per pipeline stage — mirrors CI job descriptions. */
 export const COMPLETION_PREFLIGHT_STAGE_HINTS: Partial<Record<CompletionPreflightStage, string>> = {
-	circuit_breaker: "Hard stop — do not call attempt_completion until a new task",
+	circuit_breaker:
+		"Hard stop — attempt_completion forbidden; use run_finalization in this session when engineering is verified",
 	quality: "Substantive prose summary; no TODOs, placeholders, or engagement bait",
 	checklist_in_result: "Keep checklists in task_progress, not in result",
 	min_length: "Result must be at least 40 characters (1–2 paragraphs)",
@@ -1327,7 +1328,7 @@ export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflight
 		case "task_progress_align":
 			return "Include every focus chain item in task_progress with matching labels, all [x]."
 		case "circuit_breaker":
-			return "Stop calling attempt_completion — start a new task after fixing root causes."
+			return "Stop calling attempt_completion. If engineering is verified, use run_finalization in this session."
 		case "roadmap_gate":
 			return AUTO_GOVERNANCE.roadmapGateRecoveryHint
 		case "audit_gate":
@@ -1468,12 +1469,21 @@ function getCompletionGateCircuitBreakerMessage(config: TaskConfig): string | nu
 	if (!isCompletionGateCircuitBreakerTripped(config)) {
 		return null
 	}
+	if (config.taskState.engineeringVerifiedAt) {
+		return (
+			`Completion retry locked: maximum completion gate retries (${MAX_COMPLETION_GATE_BLOCK_COUNT}) exceeded.\n\n` +
+			"**Same-session finalization lane active:**\n" +
+			"1. Do not call attempt_completion again in this session.\n" +
+			"2. Call `run_finalization` to update documentation and stamp the ledger.\n" +
+			"3. Call `run_finalization` with `seal=true` to emit the sealed receipt and end the session."
+		)
+	}
 	return (
 		`Task completion blocked: maximum completion gate retries (${MAX_COMPLETION_GATE_BLOCK_COUNT}) exceeded.\n\n` +
 		"**Recovery playbook:**\n" +
-		"1. Stop calling attempt_completion — further calls will fail until you start a new task.\n" +
+		"1. Stop calling attempt_completion — further calls will fail in this session.\n" +
 		"2. Review audit artifacts and fix the underlying violations in the workspace.\n" +
-		"3. Use act_mode_respond or scratchpad.md to document what changed before starting fresh."
+		"3. After engineering is verified, use `run_finalization` to finish documentation in this session."
 	)
 }
 
@@ -1486,7 +1496,9 @@ export function checkCompletionGateCircuitBreaker(config: TaskConfig): ToolRespo
 	if (!message) {
 		return null
 	}
-	recordCompletionGateBlockEvent(config, "circuit_breaker")
+	if (config.taskState.lastCompletionBlockReason !== "circuit_breaker") {
+		recordCompletionGateBlockEvent(config, "circuit_breaker")
+	}
 	const telemetryContext = getCompletionGateTelemetryContext(config)
 	telemetryService.captureCompletionPreflightBlocked(config.ulid, {
 		taskId: config.taskId,

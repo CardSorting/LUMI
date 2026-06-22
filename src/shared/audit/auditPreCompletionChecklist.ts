@@ -1,6 +1,6 @@
 import { filterNewViolationsSinceBaseline } from "./auditBaseline"
 import { formatGateReasonLabel } from "./auditGateCatalog"
-import { type CompletionGateOptions, evaluateCompletionGate } from "./auditGateReport"
+import { type CompletionGateOptions, evaluateAuditGate } from "./auditGateReport"
 import { partitionViolationsBySeverity } from "./auditSeverity"
 import { formatViolationLabel } from "./taskAuditUtils"
 import type { TaskAuditMetadata } from "./types"
@@ -31,7 +31,7 @@ export function buildPreCompletionChecklistSummary(
 		return undefined
 	}
 
-	const decision = evaluateCompletionGate(metadata, options)
+	const decision = evaluateAuditGate(metadata, options)
 	const gateViolations =
 		options?.newViolationsOnly && options.baselineMetadata
 			? filterNewViolationsSinceBaseline(metadata.violations, options.baselineMetadata)

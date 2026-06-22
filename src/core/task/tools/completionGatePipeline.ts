@@ -4,7 +4,7 @@ import {
 	type GatePolicyProvenance,
 	resolveCompletionGateContext,
 } from "@shared/audit/auditGatePolicyLoader"
-import { type CompletionGateDecision, evaluateCompletionGate } from "@shared/audit/auditGateReport"
+import { type AuditGateDecision } from "@shared/audit/auditGateReport"
 import { getLatestPlanAuditFromMessages } from "@shared/audit/auditMessages"
 import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { buildCompletionGateMessage, runCompletionAudit } from "@shared/audit/completionAudit"
@@ -46,6 +46,7 @@ import {
 	validateFocusChainComplete,
 	validateTaskProgressAlignsWithFocusChain,
 } from "./attemptCompletionUtils"
+import { mapPreflightReasonToLifecycleState, publishGateLifecycleStatus } from "./completion/GateLifecycleEvaluator"
 import type { TaskConfig } from "./types/TaskConfig"
 
 export type CompletionAuditGateResult =
@@ -53,7 +54,7 @@ export type CompletionAuditGateResult =
 			status: "passed"
 			auditMetadata: TaskAuditMetadata
 			planBaseline?: TaskAuditMetadata
-			gateDecision: CompletionGateDecision
+			gateDecision: AuditGateDecision
 			gateOptions: Awaited<ReturnType<typeof resolveCompletionGateContext>>["options"]
 			policyProvenance: GatePolicyProvenance
 	  }
@@ -61,7 +62,7 @@ export type CompletionAuditGateResult =
 			status: "blocked"
 			message: string
 			auditMetadata: TaskAuditMetadata
-			gateDecision: CompletionGateDecision
+			gateDecision: AuditGateDecision
 			blockCount: number
 			gateOptions: Awaited<ReturnType<typeof resolveCompletionGateContext>>["options"]
 			policyProvenance: GatePolicyProvenance
@@ -112,6 +113,8 @@ function finalizePreflightError(
 				})
 			: undefined
 	config.taskState.lastRoadmapGateRecovery = undefined
+
+	void publishGateLifecycleStatus(config, mapPreflightReasonToLifecycleState(config, reason))
 
 	return buildCompletionAgentErrorMessage(rawMessage, config, {
 		result: context?.result,
@@ -199,7 +202,7 @@ export const PREFLIGHT_STAGE_RUNNERS: ReadonlyArray<{
 	},
 ]
 
-export type CompletionGateReadinessIssue = {
+export type GatePreflightReadinessIssue = {
 	stage: CompletionPreflightStage
 	message: string
 	/** info = non-blocking advisory (e.g. auto-clearable roadmap governance) */
@@ -207,7 +210,7 @@ export type CompletionGateReadinessIssue = {
 }
 
 /** Non-mutating preflight dry-run — surfaces blockers before attempt_completion (mirrors CI dry-run). */
-export function evaluateCompletionGateReadiness(
+export function evaluateGatePreflightReadiness(
 	config: TaskConfig,
 	params: {
 		result: string
@@ -215,7 +218,7 @@ export function evaluateCompletionGateReadiness(
 		command?: string
 	},
 	validateQuality: (result: string) => string | null = validateCompletionResultQuality,
-): CompletionGateReadinessIssue[] {
+): GatePreflightReadinessIssue[] {
 	if (isCompletionGateCircuitBreakerTripped(config)) {
 		const message = getCompletionGateCircuitBreakerError(config)
 		return message ? [{ stage: "circuit_breaker", message }] : []
@@ -228,7 +231,7 @@ export function evaluateCompletionGateReadiness(
 		validateQuality,
 	}
 
-	const issues: CompletionGateReadinessIssue[] = []
+	const issues: GatePreflightReadinessIssue[] = []
 	for (const runner of PREFLIGHT_STAGE_RUNNERS) {
 		const stageError = runner.validate(preflightContext)
 		if (stageError) {
@@ -239,7 +242,7 @@ export function evaluateCompletionGateReadiness(
 }
 
 /** Async dry-run — includes roadmap governance stage (mirrors full preflight minus audit). */
-export async function evaluateCompletionGateReadinessAsync(
+export async function evaluateGatePreflightReadinessAsync(
 	config: TaskConfig,
 	params: {
 		result: string
@@ -247,9 +250,9 @@ export async function evaluateCompletionGateReadinessAsync(
 		command?: string
 	},
 	validateQuality: (result: string) => string | null = validateCompletionResultQuality,
-	logPrefix = "CompletionGateReadiness",
-): Promise<CompletionGateReadinessIssue[]> {
-	const issues = evaluateCompletionGateReadiness(config, params, validateQuality)
+	logPrefix = "GatePreflightReadiness",
+): Promise<GatePreflightReadinessIssue[]> {
+	const issues = evaluateGatePreflightReadiness(config, params, validateQuality)
 	if (issues.some((issue) => issue.stage === "circuit_breaker")) {
 		return issues
 	}
@@ -387,7 +390,7 @@ export async function evaluateCompletionAuditGate(
 			planBaselineMetadata: planBaseline,
 			lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
 		})
-		const gateDecision = evaluateCompletionGate(auditMetadata, gateContext.options)
+		const gateDecision = evaluateAuditGate(auditMetadata, gateContext.options)
 
 		if (gateDecision.blocked) {
 			config.taskState.consecutiveMistakeCount++

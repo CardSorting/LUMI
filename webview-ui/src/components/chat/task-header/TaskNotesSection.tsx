@@ -5,11 +5,13 @@ import type { PreCompletionChecklistSummary } from "@shared/audit/auditPreComple
 import { buildPreCompletionChecklistSummary, shouldShowPreCompletionChecklist } from "@shared/audit/auditPreCompletionChecklist"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
+import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { ChevronRight } from "lucide-react"
 import { memo, useEffect, useMemo, useState } from "react"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
+import { GateLifecycleStatusPanel } from "../completion/GateLifecycleStatusPanel"
 import { AuditHistoryStrip } from "./AuditHistoryStrip"
 import { OrchestratorGateStrip } from "./OrchestratorGateStrip"
 import { PreCompletionGateStrip } from "./PreCompletionGateStrip"
@@ -22,6 +24,7 @@ interface TaskNotesSectionProps {
 	auditTrend?: AuditTrend
 	checklistSummary?: PreCompletionChecklistSummary
 	latestAuditMetadata?: TaskAuditMetadata
+	gateLifecycleSnapshot?: ResolvedGateLifecycleSnapshot
 	subagentAuditSummary?: SubagentAuditSummary
 	onScrollToAuditMessage?: (ts: number) => void
 	onScrollToLatestGateBlock?: () => void
@@ -38,6 +41,7 @@ export const TaskNotesSection = memo(
 		auditHealth,
 		checklistSummary,
 		latestAuditMetadata,
+		gateLifecycleSnapshot,
 		subagentAuditSummary,
 		onScrollToAuditMessage,
 		onScrollToLatestGateBlock,
@@ -68,8 +72,10 @@ export const TaskNotesSection = memo(
 			)
 		const showViolations = Boolean(auditSnapshots && auditSnapshots.length > 0)
 		const showSubagent = Boolean(subagentAuditSummary && subagentAuditSummary.parentGateSignals.length > 0)
+		const showGateLifecycle = Boolean(gateLifecycleSnapshot?.decision)
 
-		const hasContent = showAuditHistory || showPreCompletion || showOrchestrator || showViolations || showSubagent
+		const hasContent =
+			showGateLifecycle || showAuditHistory || showPreCompletion || showOrchestrator || showViolations || showSubagent
 
 		const summaryLabel = useMemo(() => {
 			if (hasGateBlock) return "Needs your review"
@@ -114,6 +120,15 @@ export const TaskNotesSection = memo(
 				</summary>
 
 				<div className="flex flex-col gap-1 px-1 pb-1.5 min-h-0 divide-y divide-border/15">
+					{showGateLifecycle && gateLifecycleSnapshot?.decision ? (
+						<GateLifecycleStatusPanel
+							className="mx-1 my-1"
+							continuityMarker={gateLifecycleSnapshot.continuityMarker}
+							decision={gateLifecycleSnapshot.decision}
+							freshness={gateLifecycleSnapshot.freshness}
+						/>
+					) : null}
+
 					{showAuditHistory && auditSnapshots ? (
 						<AuditHistoryStrip
 							auditHealth={auditHealth}

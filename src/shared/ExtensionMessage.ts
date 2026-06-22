@@ -7,6 +7,7 @@ import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import { ApiConfiguration } from "./api"
 import type { TaskAuditMetadata } from "./audit/types"
 import { BrowserSettings } from "./BrowserSettings"
+import type { GateLifecycleDecision } from "./completion/gateLifecycleDecision"
 import { DietCodeFeatureSetting } from "./DietCodeFeatureSetting"
 import { BannerCardData } from "./dietcode/banner"
 import { DietCodeRulesToggles } from "./dietcode-rules"
@@ -148,6 +149,7 @@ export interface DietCodeMessage {
 	conversationHistoryDeletedRange?: [number, number] // for when conversation history is truncated for API requests
 	modelInfo?: DietCodeMessageModelInfo
 	auditMetadata?: TaskAuditMetadata
+	gateLifecycleStatus?: GateLifecycleDecision
 }
 
 export type DietCodeAsk =
@@ -290,6 +292,26 @@ export interface DietCodeSayGenerateExplanation {
 
 export type SubagentExecutionStatus = "pending" | "running" | "completed" | "failed"
 
+export type SubagentExecutionConfidence = "high" | "medium" | "low" | "unknown"
+
+export interface SubagentToolStepSummary {
+	index: number
+	toolName: string
+	preview: string
+	timestamp: number
+	touchedPaths?: string[]
+}
+
+export interface SubagentContinuityMarker {
+	swarmId: string
+	taskId: string
+	resumeToken: string
+	lastPersistedAt: number
+	completedAgents: number
+	totalAgents: number
+	status: "running" | "completed" | "failed" | "interrupted"
+}
+
 export interface SubagentStatusItem {
 	id: string
 	name: string
@@ -307,6 +329,16 @@ export interface SubagentStatusItem {
 	result?: string
 	error?: string
 	criticalSignals?: string[]
+	envelopeId?: string
+	blockers?: string[]
+	warnings?: string[]
+	toolSteps?: SubagentToolStepSummary[]
+	touchedFiles?: string[]
+	confidence?: SubagentExecutionConfidence
+	evidenceCount?: number
+	transcriptEventCount?: number
+	compactionEventCount?: number
+	compactionWarnings?: string[]
 }
 
 export interface DietCodeSaySubagentStatus {
@@ -322,6 +354,23 @@ export interface DietCodeSaySubagentStatus {
 	maxContextTokens: number
 	maxContextUsagePercentage: number
 	items: SubagentStatusItem[]
+	swarmId?: string
+	continuityMarker?: SubagentContinuityMarker
+	artifactPath?: string
+	summaryOverlay?: string
+	invariantViolations?: string[]
+	resumeAttemptId?: string
+	recoveryReceipt?: {
+		resumeAttemptId: string
+		parentExecutionId: string
+		sourceSwarmId: string
+		reusedAgentCount: number
+		retriedAgentCount: number
+		restartedAgentCount: number
+		recoveredAt: number
+		operatorVisible: true
+	}
+	availableSwarmIds?: string[]
 }
 
 export type BrowserActionResult = {

@@ -6,11 +6,11 @@ import { formatResponse } from "@core/prompts/responses"
 import { getWorkspaceBasename, resolveWorkspacePath } from "@core/workspace"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { buildFileWriteContentAdvisory } from "@shared/audit/auditFileWrite"
+import { isWikiPath, isWikiWriteAuthorized } from "@shared/completion/wikiWritePolicy"
 import { DietCodeSayTool } from "@shared/ExtensionMessage"
 import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { fileExistsAtPath } from "@utils/fs"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
-import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { AnomalyRegistry } from "../../../integrity/AnomalyRegistry"
@@ -484,9 +484,9 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 
 		// V226: Knowledge Ledger (Wiki) Protection Gate
 		// Prevents main agents from manual wiki documentation to avoid context-poor updates.
-		if ((resolvedPath.startsWith(".wiki/") || resolvedPath.includes("/.wiki/")) && !config.isSubagentExecution) {
+		if (isWikiPath(resolvedPath) && !isWikiWriteAuthorized(config)) {
 			const wikiError =
-				"🛑 **ACCESS DENIED**: Direct modifications to the Knowledge Ledger (.wiki/) are reserved for specialized Forensic Sub-Agents. Please use 'attempt_completion' to trigger the autonomous documentation phase."
+				"🛑 **ACCESS DENIED**: Direct modifications to the Knowledge Ledger (.wiki/) are reserved for the authorized finalization lane. Call `run_finalization` to update documentation in this session."
 			const errorResponse = formatResponse.toolError(wikiError)
 
 			ToolResultUtils.pushToolResult(

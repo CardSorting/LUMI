@@ -173,6 +173,7 @@ export class ToolExecutor {
 			vscodeTerminalExecutionMode: this.vscodeTerminalExecutionMode,
 			enableParallelToolCalling: this.isParallelToolCallingEnabled(),
 			isSubagentExecution: false,
+			finalizationMode: false,
 			cwd: this.cwd,
 			workspaceManager: this.workspaceManager,
 			isMultiRootEnabled: this.isMultiRootEnabled,
@@ -225,7 +226,11 @@ export class ToolExecutor {
 
 		// Validate the config at runtime to catch any missing properties
 		validateTaskConfig(config)
-		return config
+
+		const configWithSession = config as TaskConfig & { getSessionStreamId?: () => string }
+		configWithSession.getSessionStreamId = () => this.taskId
+
+		return configWithSession
 	}
 
 	/**

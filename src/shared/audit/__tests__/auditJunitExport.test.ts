@@ -1,4 +1,4 @@
-import { evaluateCompletionGate } from "@shared/audit/auditGateReport"
+import { evaluateAuditGate } from "@shared/audit/auditGateReport"
 import { buildAuditJunitXml } from "@shared/audit/auditJunitExport"
 import { enrichAuditMetadata } from "@shared/audit/taskAuditUtils"
 import { expect } from "chai"
@@ -16,7 +16,7 @@ describe("auditJunitExport", () => {
 		const metadata = enrichAuditMetadata({
 			violations: ["missing_validation_evidence"],
 		})
-		const decision = evaluateCompletionGate(metadata, { gateEnabled: true, scoreThreshold: 95 })
+		const decision = evaluateAuditGate(metadata, { gateEnabled: true, scoreThreshold: 95 })
 		const xml = buildAuditJunitXml(metadata, { taskId: "task-2", gateDecision: decision })
 		expect(xml).to.contain('failures="2"')
 		expect(xml).to.contain("missing_validation_evidence")

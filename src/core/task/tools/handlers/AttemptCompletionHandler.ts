@@ -44,12 +44,14 @@ import {
 	validateCompletionResultQuality,
 	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
+import { evaluateGateLifecycle, publishGateLifecycleStatus } from "../completion/GateLifecycleEvaluator"
 import {
 	emitCompletionGateBlockTelemetry,
 	evaluateCompletionAuditGate,
-	evaluateCompletionGateReadinessAsync,
+	evaluateGatePreflightReadinessAsync,
 	runCompletionPreflightChecks,
 } from "../completionGatePipeline"
+import { latchEngineeringFromAuditPass } from "../finalization/FinalizationRunner"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -143,7 +145,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 		if (shouldEmitPreflightReadinessHint(config)) {
 			try {
-				const readinessIssues = await evaluateCompletionGateReadinessAsync(
+				const readinessIssues = await evaluateGatePreflightReadinessAsync(
 					config,
 					{ result, taskProgress: block.params.task_progress, command },
 					validateCompletionResultQuality,
@@ -319,6 +321,9 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				auditGateResult.policyProvenance,
 			)
 			config.taskState.lastCompletionAudit = auditMetadata
+			const { getLatestCheckpointHashFromMessages } = await import("../attemptCompletionUtils")
+			latchEngineeringFromAuditPass(config, getLatestCheckpointHashFromMessages(config.messageState.getDietCodeMessages()))
+			await publishGateLifecycleStatus(config, evaluateGateLifecycle(config))
 		}
 
 		const priorGateBlocks = config.taskState.completionGateBlockCount ?? 0

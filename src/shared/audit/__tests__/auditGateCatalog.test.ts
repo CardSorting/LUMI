@@ -5,7 +5,7 @@ import {
 	formatGateReasonLabel,
 	formatGateReasonsForDisplay,
 } from "@shared/audit/auditGateCatalog"
-import { evaluateCompletionGate } from "@shared/audit/auditGateReport"
+import { evaluateAuditGate } from "@shared/audit/auditGateReport"
 import { enrichAuditMetadata } from "@shared/audit/taskAuditUtils"
 import { expect } from "chai"
 
@@ -21,14 +21,14 @@ describe("auditGateCatalog", () => {
 			intent_coverage: 0.1,
 			entropy_score: 0.9,
 		})
-		const decision = evaluateCompletionGate(metadata, { scoreThreshold: 95 })
+		const decision = evaluateAuditGate(metadata, { scoreThreshold: 95 })
 		const lines = formatGateReasonsForDisplay(decision.reasons)
 		expect(lines.length).to.be.greaterThan(0)
 	})
 
 	it("enriches audit metadata with gate decision fields", () => {
 		const metadata = enrichAuditMetadata({ violations: ["result_empty"] })
-		const decision = evaluateCompletionGate(metadata, { scoreThreshold: 95 })
+		const decision = evaluateAuditGate(metadata, { scoreThreshold: 95 })
 		const enriched = enrichAuditMetadataWithGateDecision(metadata, decision, 2)
 		expect(enriched.gate_blocked).to.equal(true)
 		expect(enriched.gate_block_count).to.equal(2)
@@ -37,7 +37,7 @@ describe("auditGateCatalog", () => {
 
 	it("builds gate block event summary for audit trail messages", () => {
 		const metadata = enrichAuditMetadata({ violations: ["result_empty"] })
-		const decision = evaluateCompletionGate(metadata, { scoreThreshold: 95 })
+		const decision = evaluateAuditGate(metadata, { scoreThreshold: 95 })
 		const summary = buildGateBlockEventSummary(decision, 1)
 		expect(summary).to.contain("blocked")
 		expect(summary).to.contain("attempt 1")

@@ -1,5 +1,5 @@
 import { formatGateReasonLabel } from "./auditGateCatalog"
-import type { CompletionGateDecision } from "./auditGateReport"
+import type { AuditGateDecision } from "./auditGateReport"
 import { formatViolationLabel } from "./taskAuditUtils"
 import type { TaskAuditMetadata } from "./types"
 
@@ -15,7 +15,7 @@ function escapeXml(value: string): string {
 /** JUnit XML export — compatible with Jenkins, Azure DevOps, GitLab test reports. */
 export function buildAuditJunitXml(
 	metadata: TaskAuditMetadata,
-	options?: { taskId?: string; gateDecision?: CompletionGateDecision },
+	options?: { taskId?: string; gateDecision?: AuditGateDecision },
 ): string {
 	const taskId = options?.taskId ?? "task-audit"
 	const violations = metadata.violations ?? []

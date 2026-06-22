@@ -6,7 +6,7 @@ import type { AuditGateSettingsSource } from "./auditGateOptions"
 import type { GatePolicyProvenance } from "./auditGatePolicyLoader"
 import { serializeWorkspaceGatePolicy, WORKSPACE_GATE_POLICY_FILE, WORKSPACE_SUPPRESSIONS_FILE } from "./auditGatePolicyLoader"
 import type { CompletionGateOptions } from "./auditGateReport"
-import { evaluateCompletionGate } from "./auditGateReport"
+import { evaluateAuditGate } from "./auditGateReport"
 import { buildQualityGateStatus } from "./auditGateStatus"
 import { buildGitHubCheckRunJson } from "./auditGitHubCheck"
 import { buildAuditJunitXml } from "./auditJunitExport"
@@ -263,7 +263,7 @@ export async function persistAuditWorkspaceArtifacts(
 	await ensureWorkspacePolicyTemplate(rootDir, gatePolicySettings)
 	await ensureWorkspaceSuppressionsTemplate(rootDir)
 
-	const gateDecision = gateOptions ? evaluateCompletionGate(metadata, gateOptions) : undefined
+	const gateDecision = gateOptions ? evaluateAuditGate(metadata, gateOptions) : undefined
 
 	const baseName = buildArtifactBaseName(taskId, event, metadata.audited_at ?? Date.now())
 	const taskUri = `task://${taskId}/${event}`

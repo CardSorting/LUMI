@@ -1,5 +1,5 @@
 import { describeGateReadiness } from "@shared/audit/auditGateReadiness"
-import { evaluateCompletionGate } from "@shared/audit/auditGateReport"
+import { evaluateAuditGate } from "@shared/audit/auditGateReport"
 import { buildAuditHealthChipLabel } from "@shared/audit/auditHealthDigest"
 import { AUDIT_TREND_LABELS, type AuditTrend } from "@shared/audit/auditMessages"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
@@ -41,7 +41,7 @@ export const TaskAuditBadge = memo(
 			if (!gateOptions.gateEnabled || !auditMetadata) {
 				return undefined
 			}
-			return evaluateCompletionGate(auditMetadata, gateOptions)
+			return evaluateAuditGate(auditMetadata, gateOptions)
 		}, [auditMetadata, gateOptions])
 
 		const gateReadiness = useMemo(() => {

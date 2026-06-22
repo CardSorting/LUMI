@@ -13,7 +13,7 @@ export interface CompletionGateReason {
 	message: string
 }
 
-export interface CompletionGateDecision {
+export interface AuditGateDecision {
 	blocked: boolean
 	score: number
 	effectiveThreshold: number
@@ -37,7 +37,7 @@ export interface CompletionGateOptions {
 }
 
 /** Unified quality-gate evaluator — mirrors CI/SonarQube gate decision APIs. */
-export function evaluateCompletionGate(metadata: TaskAuditMetadata, options?: CompletionGateOptions): CompletionGateDecision {
+export function evaluateAuditGate(metadata: TaskAuditMetadata, options?: CompletionGateOptions): AuditGateDecision {
 	const gateViolations =
 		options?.newViolationsOnly && options.baselineMetadata
 			? filterNewViolationsSinceBaseline(metadata.violations, options.baselineMetadata)
@@ -122,11 +122,11 @@ export function evaluateCompletionGate(metadata: TaskAuditMetadata, options?: Co
 	}
 }
 
-export function isCompletionBlockedByDecision(decision: CompletionGateDecision): boolean {
+export function isCompletionBlockedByDecision(decision: AuditGateDecision): boolean {
 	return decision.blocked
 }
 
-export function buildGateDecisionSummary(decision: CompletionGateDecision): string {
+export function buildGateDecisionSummary(decision: AuditGateDecision): string {
 	if (!decision.blocked) {
 		return `Gate ready: Grade ${decision.grade ?? "?"} (${decision.score}/100, threshold ${decision.effectiveThreshold})`
 	}
@@ -134,7 +134,7 @@ export function buildGateDecisionSummary(decision: CompletionGateDecision): stri
 }
 
 export function buildPreCompletionChecklist(metadata: TaskAuditMetadata, options?: CompletionGateOptions): string {
-	const decision = evaluateCompletionGate(metadata, options)
+	const decision = evaluateAuditGate(metadata, options)
 	const gateViolations =
 		options?.newViolationsOnly && options.baselineMetadata
 			? filterNewViolationsSinceBaseline(metadata.violations, options.baselineMetadata)

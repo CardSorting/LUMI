@@ -2,7 +2,7 @@ import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { shouldEmitAdvisoryAuditEvent } from "./auditAdvisoryDedup"
 import { formatGateReasonsForDisplay } from "./auditGateCatalog"
-import { type CompletionGateDecision, type CompletionGateOptions, evaluateCompletionGate } from "./auditGateReport"
+import { type AuditGateDecision, type CompletionGateOptions, evaluateAuditGate } from "./auditGateReport"
 import { buildAdvisoryEscalationSection } from "./auditPostTool"
 import { buildRegressionGateSection, hasAuditScoreRegression } from "./auditRegression"
 import { buildAdvisoryRollupSection, shouldEscalateFromAdvisory } from "./auditRollup"
@@ -25,7 +25,7 @@ export async function persistCompletionAudit(streamId: string, metadata: TaskAud
 export { getViolationRemediation } from "./auditViolationRemediation"
 
 export function isCompletionBlockedByAudit(metadata: TaskAuditMetadata, options?: CompletionGateOptions): boolean {
-	return evaluateCompletionGate(metadata, options).blocked
+	return evaluateAuditGate(metadata, options).blocked
 }
 
 export function buildCompletionGateMessage(
@@ -37,12 +37,12 @@ export function buildCompletionGateMessage(
 		intentThresholdOverrides?: Partial<Record<import("./types").IntentClassification, number>>
 		advisoryMetadata?: TaskAuditMetadata
 		planBaselineMetadata?: TaskAuditMetadata
-		gateDecision?: CompletionGateDecision
+		gateDecision?: AuditGateDecision
 	},
 ): string {
 	const gateDecision =
 		options?.gateDecision ??
-		evaluateCompletionGate(metadata, {
+		evaluateAuditGate(metadata, {
 			scoreThreshold: options?.scoreThreshold,
 			criticalOnly: options?.criticalOnly,
 			intentAdjustedThreshold: options?.intentAdjustedThreshold,

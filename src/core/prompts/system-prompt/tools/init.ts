@@ -25,6 +25,7 @@ import { read_file_variants } from "./read_file"
 import { recalibrate_stability_variants } from "./recalibrate_stability"
 import { replace_in_file_variants } from "./replace_in_file"
 import { roadmap_variants } from "./roadmap"
+import { run_finalization_variants } from "./run_finalization"
 import { scaffold_module_variants } from "./scaffold_module"
 import { search_files_variants } from "./search_files"
 import { stability_integrity_sweep_variants } from "./stability_integrity_sweep"
@@ -62,6 +63,7 @@ export function registerDietCodeToolSets(): void {
 		...roadmap_variants,
 		...read_file_variants,
 		...replace_in_file_variants,
+		...run_finalization_variants,
 		...search_files_variants,
 		...ast_repair_variants,
 		...stability_integrity_sweep_variants,

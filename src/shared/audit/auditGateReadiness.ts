@@ -1,4 +1,4 @@
-import { type CompletionGateOptions, evaluateCompletionGate } from "./auditGateReport"
+import { type CompletionGateOptions, evaluateAuditGate } from "./auditGateReport"
 import type { TaskAuditMetadata } from "./types"
 
 export type GateReadinessLevel = "ready" | "warning" | "blocked" | "disabled"
@@ -31,7 +31,7 @@ export function describeGateReadiness(
 		}
 	}
 
-	const decision = evaluateCompletionGate(metadata, options)
+	const decision = evaluateAuditGate(metadata, options)
 	if (decision.blocked || metadata.gate_blocked) {
 		const reasons = decision.reasons
 			.filter((r) => r.code !== "gate_disabled")

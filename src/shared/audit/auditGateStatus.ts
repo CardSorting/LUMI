@@ -1,6 +1,6 @@
 import { describeGateReadiness, type GateReadinessLevel } from "./auditGateReadiness"
 import type { CompletionGateOptions } from "./auditGateReport"
-import { evaluateCompletionGate } from "./auditGateReport"
+import { evaluateAuditGate } from "./auditGateReport"
 import { partitionViolationsBySeverity } from "./auditSeverity"
 import type { CompletionGateReasonCode, TaskAuditMetadata } from "./types"
 
@@ -32,7 +32,7 @@ export function buildQualityGateStatus(
 		return undefined
 	}
 
-	const decision = evaluateCompletionGate(metadata, options)
+	const decision = evaluateAuditGate(metadata, options)
 	const readiness = describeGateReadiness(metadata, options)
 	const violations = metadata.violations ?? []
 

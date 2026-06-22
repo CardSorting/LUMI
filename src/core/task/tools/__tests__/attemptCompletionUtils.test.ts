@@ -814,6 +814,13 @@ describe("attemptCompletionUtils", () => {
 			buildCompletionPreflightRecoveryHint("retry_cooldown").should.containEql("cooldown")
 			buildCompletionPreflightRecoveryHint("focus_chain_incomplete").should.containEql("focus chain")
 		})
+
+		it("routes circuit breaker recovery to same-session finalization", () => {
+			const hint = buildCompletionPreflightRecoveryHint("circuit_breaker")
+			hint.should.containEql("run_finalization")
+			hint.should.not.match(/new task/i)
+			hint.should.not.match(/new session/i)
+		})
 	})
 
 	describe("buildCompletionAgentErrorMessage", () => {

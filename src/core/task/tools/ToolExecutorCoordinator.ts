@@ -42,7 +42,7 @@ import { PlanModeRespondHandler } from "./handlers/PlanModeRespondHandler"
 import { ProjectMapHandler } from "./handlers/ProjectMapHandler"
 import { ReadFileToolHandler } from "./handlers/ReadFileToolHandler"
 import { ReportBugHandler } from "./handlers/ReportBugHandler"
-import { RoadmapToolHandler } from "./handlers/RoadmapToolHandler"
+import { RunFinalizationToolHandler } from "./handlers/RunFinalizationToolHandler"
 import { SearchFilesToolHandler } from "./handlers/SearchFilesToolHandler"
 import { StabilityDoctorHandler } from "./handlers/StabilityDoctorHandler"
 import { StabilityHealHandler } from "./handlers/StabilityHealHandler"
@@ -112,6 +112,7 @@ export class ToolExecutorCoordinator {
 		[DietCodeDefaultTool.USE_SKILL]: (_v: ToolValidator) => new UseSkillToolHandler(),
 		[DietCodeDefaultTool.PROJECT_MAP]: (_v: ToolValidator) => new ProjectMapHandler(),
 		[DietCodeDefaultTool.USE_SUBAGENTS]: (_v: ToolValidator) => new UseSubagentsToolHandler(),
+		[DietCodeDefaultTool.RUN_FINALIZATION]: (_v: ToolValidator) => new RunFinalizationToolHandler(),
 		[DietCodeDefaultTool.MEM_QUERY]: (_v: ToolValidator) => new CognitiveMemoryQueryHandler(),
 		[DietCodeDefaultTool.MEM_SNAPSHOT]: (_v: ToolValidator) => new CognitiveMemorySnapshotHandler(),
 		[DietCodeDefaultTool.MEM_LINK]: (_v: ToolValidator) => new CognitiveMemoryLinkHandler(),

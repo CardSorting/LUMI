@@ -14,6 +14,7 @@ import type { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import type { McpHub } from "@services/mcp/McpHub"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { BrowserSettings } from "@shared/BrowserSettings"
+import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
 import type { DietCodeAsk, DietCodeSay, TaskAuditMetadata } from "@shared/ExtensionMessage"
 import type { FocusChainSettings } from "@shared/FocusChainSettings"
 import type { DietCodeContent, DietCodeToolResponseContent } from "@shared/messages/content"
@@ -57,6 +58,8 @@ export interface TaskConfig {
 	vscodeTerminalExecutionMode: "vscodeTerminal"
 	enableParallelToolCalling: boolean
 	isSubagentExecution: boolean
+	/** True while same-session finalization lane is active — authorizes .wiki writes. */
+	finalizationMode?: boolean
 	recursionDepth?: number
 
 	// Multi-workspace support (optional for backward compatibility)
@@ -114,6 +117,7 @@ export interface TaskCallbacks {
 		files?: string[],
 		partial?: boolean,
 		auditMetadata?: TaskAuditMetadata,
+		gateLifecycleStatus?: GateLifecycleDecision,
 	) => Promise<number | undefined>
 
 	ask: (

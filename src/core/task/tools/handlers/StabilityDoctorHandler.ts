@@ -21,7 +21,7 @@ export class StabilityDoctorHandler implements IToolHandler {
 	async execute(config: TaskConfig, _block: ToolUse): Promise<ToolResponse> {
 		if (!config.isSubagentExecution) {
 			return formatResponse.toolError(
-				"🛑 **ACCESS DENIED**: Specialized diagnostic tools are reserved for Stability Sub-Agents. Please use 'attempt_completion' to trigger an autonomous documentation phase.",
+				"🛑 **ACCESS DENIED**: Specialized diagnostic tools are reserved for Stability Sub-Agents. Call `run_finalization` for authorized documentation in this session.",
 			)
 		}
 		try {

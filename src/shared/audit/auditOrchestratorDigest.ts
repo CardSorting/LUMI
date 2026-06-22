@@ -1,5 +1,5 @@
 import { formatGateReasonLabel } from "./auditGateCatalog"
-import { type CompletionGateOptions, evaluateCompletionGate } from "./auditGateReport"
+import { type CompletionGateOptions, evaluateAuditGate } from "./auditGateReport"
 import { partitionViolationsBySeverity } from "./auditSeverity"
 import type { TaskAuditMetadata } from "./types"
 
@@ -27,7 +27,7 @@ export function buildOrchestratorGateStatus(
 		return undefined
 	}
 
-	const decision = evaluateCompletionGate(metadata, options)
+	const decision = evaluateAuditGate(metadata, options)
 	const { critical, warning } = partitionViolationsBySeverity(metadata.violations)
 
 	return {

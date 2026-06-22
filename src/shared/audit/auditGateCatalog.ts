@@ -1,4 +1,4 @@
-import type { CompletionGateDecision, CompletionGateReason } from "./auditGateReport"
+import type { AuditGateDecision, CompletionGateReason } from "./auditGateReport"
 import type { CompletionGateReasonCode, TaskAuditMetadata } from "./types"
 
 /** Human-readable gate reason labels — mirrors SARIF rule short descriptions. */
@@ -51,7 +51,7 @@ export function buildGateReasonLinesFromMetadata(
 
 export function enrichAuditMetadataWithGateDecision(
 	metadata: TaskAuditMetadata,
-	decision: CompletionGateDecision,
+	decision: AuditGateDecision,
 	blockCount?: number,
 ): TaskAuditMetadata {
 	return {
@@ -63,7 +63,7 @@ export function enrichAuditMetadataWithGateDecision(
 	}
 }
 
-export function buildGateBlockEventSummary(decision: CompletionGateDecision, blockCount?: number): string {
+export function buildGateBlockEventSummary(decision: AuditGateDecision, blockCount?: number): string {
 	const attempt = blockCount && blockCount > 0 ? ` (attempt ${blockCount})` : ""
 	const status = decision.blocked ? "blocked" : "passed"
 	const reasonLines = formatGateReasonsForDisplay(decision.reasons)

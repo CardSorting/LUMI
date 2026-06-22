@@ -13,10 +13,10 @@ import { findAuditMessageIndex, findMessageIndexForAuditTs } from "@shared/audit
 import { buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { computeAuditHealthSummaryWithBaseline } from "@shared/audit/auditRollup"
 import { buildSubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
-import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
 import { combineHookSequences } from "@shared/combineHookSequences"
+import { resolveGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
 import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/dietcode/common"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -90,6 +90,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	const lastApiReqTotalTokens = useMemo(() => getLastApiReqTotalTokens(modifiedMessages) || undefined, [modifiedMessages])
 
 	const latestAuditMetadata = useMemo(() => getLatestGateAuditFromMessages(messages), [messages])
+	const gateLifecycleSnapshot = useMemo(() => resolveGateLifecycleSnapshot(messages), [messages])
 	const auditTrend = useMemo(() => {
 		const previous = getPreviousGateAuditFromMessages(messages)
 		return getAuditTrend(previous, latestAuditMetadata)
@@ -444,6 +445,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 									auditSnapshots={auditSnapshots}
 									auditTrend={auditTrend}
 									checklistSummary={checklistSummary}
+									gateLifecycleSnapshot={gateLifecycleSnapshot}
 									lastApiReqTotalTokens={lastApiReqTotalTokens}
 									lastProgressMessageText={lastProgressMessageText}
 									latestAuditMetadata={latestAuditMetadata}

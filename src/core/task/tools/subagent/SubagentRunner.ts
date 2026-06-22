@@ -17,7 +17,10 @@ import {
 	DietCodeUserContent,
 } from "@shared/messages"
 import { Logger } from "@shared/services/Logger"
+import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
+import type { CompactionEventRecord } from "@shared/subagent/transcript"
 import { DietCodeDefaultTool, DietCodeTool } from "@shared/tools"
+import { v4 as uuidv4 } from "uuid"
 import { ContextManager } from "@/core/context/context-management/ContextManager"
 import { checkContextWindowExceededError } from "@/core/context/context-management/context-error-handling"
 import { getContextWindowInfo } from "@/core/context/context-management/context-window-utils"
@@ -40,6 +43,8 @@ import { validateSubagentCompletionGates } from "../subagentCompletionGates"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import { SubagentBuilder } from "./SubagentBuilder"
+import { SubagentEnvelopeBuilder } from "./SubagentEnvelopeBuilder"
+import { SubagentTranscriptRecorder } from "./SubagentTranscriptRecorder"
 import { SwarmConsensusHandler } from "./SwarmConsensusHandler"
 
 const MAX_EMPTY_ASSISTANT_RETRIES = 3
@@ -71,6 +76,7 @@ export interface SubagentRunResult {
 	result?: string
 	error?: string
 	stats: SubagentRunStats
+	envelope?: SubagentExecutionEnvelope
 }
 
 interface ConfigWithExtensions extends TaskConfig {
@@ -315,6 +321,10 @@ export class SubagentRunner {
 	private activeSignals: string[] = []
 	private onProgress?: (update: SubagentProgressUpdate) => void
 	private toolCallHistory: string[] = []
+	private envelopeBuilder?: SubagentEnvelopeBuilder
+	private transcriptRecorder?: SubagentTranscriptRecorder
+	private onTranscriptFlush?: () => Promise<void>
+	private transcriptArtifactPath?: string
 
 	constructor(baseConfig: TaskConfig, agent: SubagentBuilder) {
 		this.baseConfig = baseConfig
@@ -375,6 +385,54 @@ export class SubagentRunner {
 		}
 	}
 
+	runWithEnvelope(
+		prompt: string,
+		onProgress: (update: SubagentProgressUpdate) => void,
+		envelopeContext: {
+			agentId: string
+			role: string
+			swarmId: string
+			taskId: string
+			index: number
+			depth: number
+			parentStreamId?: string
+			parentExecutionId?: string
+			resumeAttemptId?: string
+			executionId?: string
+			onTranscriptFlush?: () => Promise<void>
+		},
+		streamId?: string,
+	): Promise<SubagentRunResult> {
+		const executionId = envelopeContext.executionId || uuidv4()
+		this.onTranscriptFlush = envelopeContext.onTranscriptFlush
+		this.transcriptRecorder = new SubagentTranscriptRecorder({
+			swarmId: envelopeContext.swarmId,
+			agentId: envelopeContext.agentId,
+			taskId: envelopeContext.taskId,
+			executionId,
+		})
+		this.envelopeBuilder = new SubagentEnvelopeBuilder(
+			envelopeContext.agentId,
+			executionId,
+			envelopeContext.role,
+			envelopeContext.swarmId,
+			envelopeContext.taskId,
+			prompt,
+			{
+				swarmId: envelopeContext.swarmId,
+				index: envelopeContext.index,
+				depth: envelopeContext.depth,
+				resumeAttemptId: envelopeContext.resumeAttemptId,
+			},
+			envelopeContext.parentStreamId,
+			streamId,
+		)
+		if (envelopeContext.parentExecutionId) {
+			this.envelopeBuilder.setParentExecutionId(envelopeContext.parentExecutionId)
+		}
+		return this.run(prompt, onProgress, streamId)
+	}
+
 	async run(
 		prompt: string,
 		onProgress: (update: SubagentProgressUpdate) => void,
@@ -382,6 +440,20 @@ export class SubagentRunner {
 	): Promise<SubagentRunResult> {
 		this.streamId = streamId
 		this.abortRequested = false
+		this.envelopeBuilder?.setStatus("running")
+
+		if (this.transcriptRecorder) {
+			this.transcriptArtifactPath = await this.transcriptRecorder.init()
+			this.transcriptRecorder.append("system_event", { phase: "spawned", prompt }, "raw")
+			await this.transcriptRecorder.flush()
+			this.envelopeBuilder?.setTranscriptMeta(
+				this.transcriptArtifactPath,
+				this.transcriptRecorder.getEvents().length,
+				this.transcriptRecorder.getMeta(this.transcriptArtifactPath).byteSize,
+			)
+			await this.onTranscriptFlush?.()
+		}
+
 		const state = new TaskState()
 		let emptyAssistantResponseRetries = 0
 		const usageState: SubagentUsageState = {
@@ -532,15 +604,17 @@ export class SubagentRunner {
 
 			if (useNativeToolCalls && (!nativeTools || nativeTools.length === 0)) {
 				const error = "Subagent tool requires native tool calling support."
+				this.envelopeBuilder?.fail(error)
 				onProgress({ status: "failed", error, stats })
-				return { status: "failed", error, stats }
+				return this.finalizeResult({ status: "failed", error, stats })
 			}
 
 			if (this.shouldAbort()) {
 				await this.abort()
 				const error = "Subagent run cancelled."
+				this.envelopeBuilder?.abort()
 				onProgress({ status: "failed", error, stats: { ...stats } })
-				return { status: "failed", error, stats }
+				return this.finalizeResult({ status: "failed", error, stats })
 			}
 
 			const workspaceMetadataEnvironmentBlock = await this.getWorkspaceMetadataEnvironmentBlock()
@@ -572,13 +646,23 @@ export class SubagentRunner {
 					usageState.lastRequest &&
 					this.shouldCompactBeforeNextRequest(usageState.lastRequest.totalTokens, api, providerInfo.model.id)
 				) {
-					const didCompact = this.compactConversationForContextWindow(conversation)
+					const didCompact = await this.compactConversationForContextWindow(
+						conversation,
+						usageState.lastRequest.totalTokens,
+						"proactive_threshold",
+					)
 					if (didCompact) {
 						Logger.warn("[SubagentRunner] Proactively compacted context before next subagent request.")
 					}
-					// Prevent repeated compaction attempts off the same token sample.
 					usageState.lastRequest = undefined
 				}
+
+				await this.recordTranscript("llm_request", {
+					iteration: iterationCount,
+					modelId: providerInfo.model.id,
+					providerId: providerInfo.providerId,
+					messageCount: conversation.length,
+				})
 
 				const streamHandler = new StreamResponseHandler()
 				const { toolUseHandler } = streamHandler.getHandlers()
@@ -625,21 +709,29 @@ export class SubagentRunner {
 							if (stats.maxTokens && stats.inputTokens + stats.outputTokens > stats.maxTokens) {
 								const error = `Swarm Token Budget Exceeded (${stats.maxTokens} tokens). Terminating subagent to prevent runaway costs.`
 								Logger.warn(`[SubagentRunner] ${error}`)
+								this.envelopeBuilder?.fail(error)
+								this.envelopeBuilder?.recordRetryHint("Reduce context usage or raise token budget before retry.")
 								onProgress({ status: "failed", error, stats: { ...stats } })
-								return { status: "failed", error, stats }
+								return this.finalizeResult({ status: "failed", error, stats })
 							}
 							if (stats.maxCost && stats.totalCost > stats.maxCost) {
 								const error = `Swarm Cost Budget Exceeded ($${stats.maxCost}). Terminating subagent to prevent runaway costs.`
 								Logger.warn(`[SubagentRunner] ${error}`)
+								this.envelopeBuilder?.fail(error)
+								this.envelopeBuilder?.recordRetryHint("Lower tool usage or raise cost budget before retry.")
 								onProgress({ status: "failed", error, stats: { ...stats } })
-								return { status: "failed", error, stats }
+								return this.finalizeResult({ status: "failed", error, stats })
 							}
 
 							if (stats.toolCalls >= MAX_TOTAL_TOOL_CALLS) {
 								const error = `Swarm Tool Call Limit Exceeded (${MAX_TOTAL_TOOL_CALLS}). Terminating subagent to prevent infinite tool loops.`
 								Logger.warn(`[SubagentRunner] ${error}`)
+								this.envelopeBuilder?.fail(error)
+								this.envelopeBuilder?.recordRetryHint(
+									"Simplify the objective or decompose into smaller subtasks.",
+								)
 								onProgress({ status: "failed", error, stats: { ...stats } })
-								return { status: "failed", error, stats }
+								return this.finalizeResult({ status: "failed", error, stats })
 							}
 							break
 						case "text":
@@ -667,8 +759,9 @@ export class SubagentRunner {
 					if (this.shouldAbort()) {
 						await this.abort()
 						const error = "Subagent run cancelled."
+						this.envelopeBuilder?.abort()
 						onProgress({ status: "failed", error, stats: { ...stats } })
-						return { status: "failed", error, stats }
+						return this.finalizeResult({ status: "failed", error, stats })
 					}
 				}
 
@@ -734,14 +827,25 @@ export class SubagentRunner {
 						content: assistantContent,
 						id: requestId,
 					})
+					await this.recordTranscript(
+						"assistant_turn",
+						{
+							requestId,
+							text: assistantText,
+							toolCallCount: finalizedToolCalls.length,
+						},
+						"raw",
+					)
 				}
 
 				if (finalizedToolCalls.length === 0) {
 					emptyAssistantResponseRetries += 1
 					if (emptyAssistantResponseRetries > MAX_EMPTY_ASSISTANT_RETRIES) {
 						const error = "Subagent did not call attempt_completion."
+						this.envelopeBuilder?.fail(error)
+						this.envelopeBuilder?.recordRetryHint("Ensure the subagent calls attempt_completion with a result.")
 						onProgress({ status: "failed", error, stats: { ...stats } })
-						return { status: "failed", error, stats }
+						return this.finalizeResult({ status: "failed", error, stats })
 					}
 
 					// Mirror the main loop's no-tools-used nudge so empty/blank model turns
@@ -789,23 +893,34 @@ export class SubagentRunner {
 							continue
 						}
 
-						const gateError = await validateSubagentCompletionGates(
+						const gateResult = await validateSubagentCompletionGates(
 							this.baseConfig,
 							completionResult,
 							typeof toolCallParams?.task_progress === "string" ? toolCallParams.task_progress : undefined,
 							typeof toolCallParams?.command === "string" ? toolCallParams.command : undefined,
 						)
-						if (gateError) {
-							pushSubagentToolResultBlock(toolResultBlocks, call, toolName, wrapFormattedCompletionError(gateError))
+						this.envelopeBuilder?.recordGateLifecycle(gateResult.lifecycle)
+						if (gateResult.error) {
+							this.envelopeBuilder?.setPhase("completion_gate")
+							this.envelopeBuilder?.recordBlocker(gateResult.error)
+							pushSubagentToolResultBlock(
+								toolResultBlocks,
+								call,
+								toolName,
+								wrapFormattedCompletionError(gateResult.error),
+							)
 							continue
 						}
 
 						stats.toolCalls += 1
 						onProgress({ stats: { ...stats } })
+						this.envelopeBuilder?.setPhase("completion_gate")
+						this.envelopeBuilder?.complete(completionResult)
+						await this.recordTranscript("completion", { result: completionResult }, "raw")
 						onProgress({ status: "completed", result: completionResult, stats: { ...stats } })
 						await this.signalCriticalFindingsToSwarm(completionResult)
 						await SwarmConsensusHandler.handleSignal(this.baseConfig, completionResult)
-						return { status: "completed", result: completionResult, stats }
+						return this.finalizeResult({ status: "completed", result: completionResult, stats })
 					}
 
 					if (!this.allowedTools.includes(toolName)) {
@@ -829,6 +944,7 @@ export class SubagentRunner {
 
 					const latestToolCall = formatToolCallPreview(toolName, toolCallParams)
 					onProgress({ latestToolCall })
+					await this.recordTranscript("tool_call", { toolName, preview: latestToolCall, params: toolCallParams }, "raw")
 
 					const subagentConfig = this.createSubagentTaskConfig()
 					const handler = this.baseConfig.coordinator.getHandler(toolName)
@@ -911,6 +1027,12 @@ export class SubagentRunner {
 
 					const serializedToolResult = serializeToolResult(toolResult)
 					const toolDescription = handler?.getDescription(toolCallBlock) || `[${toolName}]`
+					this.recordToolStepInEnvelope(toolName, latestToolCall, serializedToolResult, toolCallParams)
+					await this.recordTranscript(
+						"tool_response",
+						{ toolName, preview: latestToolCall, resultExcerpt: serializedToolResult.slice(0, 500) },
+						"raw",
+					)
 					pushSubagentToolResultBlock(toolResultBlocks, call, toolDescription, serializedToolResult)
 
 					// Phase 5: Cross-Swarm Memory Signalling
@@ -958,19 +1080,23 @@ export class SubagentRunner {
 			}
 
 			const loopError = `Swarm Iteration Limit Exceeded (${MAX_TASK_ITERATIONS}). Subagent failed to complete the task within allowed turns.`
+			this.envelopeBuilder?.fail(loopError)
+			this.envelopeBuilder?.recordRetryHint("Decompose the task or increase iteration budget.")
 			onProgress({ status: "failed", error: loopError, stats: { ...stats } })
-			return { status: "failed", error: loopError, stats }
+			return this.finalizeResult({ status: "failed", error: loopError, stats })
 		} catch (error) {
 			if (this.shouldAbort()) {
 				const cancelledError = "Subagent run cancelled."
+				this.envelopeBuilder?.abort()
 				onProgress({ status: "failed", error: cancelledError, stats: { ...stats } })
-				return { status: "failed", error: cancelledError, stats }
+				return this.finalizeResult({ status: "failed", error: cancelledError, stats })
 			}
 
 			const errorText = (error as Error).message || "Subagent execution failed."
 			Logger.error("[SubagentRunner] run failed", error)
+			this.envelopeBuilder?.fail(errorText)
 			onProgress({ status: "failed", error: errorText, stats: { ...stats } })
-			return { status: "failed", error: errorText, stats }
+			return this.finalizeResult({ status: "failed", error: errorText, stats })
 		} finally {
 			this.activeApiAbort = undefined
 		}
@@ -1034,7 +1160,26 @@ export class SubagentRunner {
 		return true
 	}
 
-	private compactConversationForContextWindow(conversation: DietCodeStorageMessage[]): boolean {
+	private async recordTranscript(
+		kind: import("@shared/subagent/transcript").SubagentTranscriptEventKind,
+		payload: Record<string, unknown>,
+		contentKind: import("@shared/subagent/transcript").TranscriptContentKind = "raw",
+	): Promise<void> {
+		if (!this.transcriptRecorder || !this.transcriptArtifactPath) {
+			return
+		}
+		this.transcriptRecorder.append(kind, payload, contentKind)
+		await this.transcriptRecorder.flush()
+		const meta = this.transcriptRecorder.getMeta(this.transcriptArtifactPath)
+		this.envelopeBuilder?.setTranscriptMeta(meta.artifactPath, meta.eventCount, meta.byteSize)
+		await this.onTranscriptFlush?.()
+	}
+
+	private async compactConversationForContextWindow(
+		conversation: DietCodeStorageMessage[],
+		preTokenEstimate: number,
+		reason: string,
+	): Promise<boolean> {
 		const contextManager = new ContextManager()
 		const optimizationResult = this.optimizeConversationForContextWindow(contextManager, conversation)
 		if (optimizationResult.didOptimize && !optimizationResult.needToTruncate) {
@@ -1046,9 +1191,30 @@ export class SubagentRunner {
 			return optimizationResult.didOptimize
 		}
 
+		const transcriptSequence = this.transcriptRecorder?.getLastSequence() ?? -1
+		const artifactPointer = this.transcriptArtifactPath || `pending:${this.transcriptRecorder?.getEvents().length || 0}`
+		const compactionEvent: CompactionEventRecord = {
+			id: `compaction_${Date.now()}`,
+			timestamp: Date.now(),
+			executionId: this.envelopeBuilder?.build().executionId || "unknown",
+			agentId: this.envelopeBuilder?.build().agentId || "unknown",
+			transcriptSequence,
+			reason,
+			preTokenEstimate,
+			postTokenEstimate: Math.floor(preTokenEstimate * 0.75),
+			droppedRange: deletedRange,
+			preservedSummaryRef: `compaction_summary_${deletedRange[0]}_${deletedRange[1]}`,
+			continuityRiskLevel: deletedRange[1] - deletedRange[0] > 4 ? "high" : "medium",
+			artifactPointer,
+			contentKind: "summary",
+		}
+
+		await this.recordTranscript("compaction", compactionEvent, "summary")
+		this.envelopeBuilder?.recordCompaction(compactionEvent)
+
 		const truncated = contextManager
 			.getTruncatedMessages(conversation, deletedRange)
-			.map((message: any) => message as DietCodeStorageMessage)
+			.map((message: DietCodeStorageMessage) => message as DietCodeStorageMessage)
 		if (truncated.length >= conversation.length) {
 			return optimizationResult.didOptimize
 		}
@@ -1116,7 +1282,11 @@ export class SubagentRunner {
 				return
 			} catch (error) {
 				if (checkContextWindowExceededError(error)) {
-					const didCompact = this.compactConversationForContextWindow(conversation)
+					const didCompact = await this.compactConversationForContextWindow(
+						conversation,
+						this.stats.contextTokens,
+						"context_window_exceeded",
+					)
 					if (!didCompact || this.shouldAbort() || attempt >= MAX_INITIAL_STREAM_ATTEMPTS) {
 						throw error
 					}
@@ -1139,6 +1309,22 @@ export class SubagentRunner {
 				await delay(delayMs)
 			}
 		}
+	}
+
+	private finalizeResult(result: Omit<SubagentRunResult, "envelope">): SubagentRunResult {
+		if (this.transcriptRecorder && this.envelopeBuilder) {
+			const built = this.envelopeBuilder.build()
+			if (built.transcriptArtifactPath) {
+				const meta = this.transcriptRecorder.getMeta(built.transcriptArtifactPath)
+				this.envelopeBuilder.setTranscriptMeta(meta.artifactPath, meta.eventCount, meta.byteSize)
+			}
+		}
+		const envelope = this.envelopeBuilder?.build()
+		return { ...result, envelope }
+	}
+
+	private recordToolStepInEnvelope(toolName: string, preview: string, result: string, params: Record<string, string>): void {
+		this.envelopeBuilder?.recordToolStep(toolName, preview, result, params)
 	}
 
 	private hashString(value: string): string {
