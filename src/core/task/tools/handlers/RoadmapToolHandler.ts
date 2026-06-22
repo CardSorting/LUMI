@@ -3,7 +3,7 @@ import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { errorEnvelope } from "@/services/roadmap/RoadmapErrors"
 import { emitProgress, recordLastError } from "@/services/roadmap/RoadmapProgress"
-import { RoadmapService } from "@/services/roadmap/RoadmapService"
+import { RoadmapService, slimEvidence } from "@/services/roadmap/RoadmapService"
 import { journalRoadmapToolCall } from "@/services/roadmap/RoadmapToolJournal"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
@@ -121,15 +121,18 @@ export class RoadmapToolHandler implements IToolHandler {
 					break
 				case "evidence": {
 					const evidence = await roadmapService.gatherEvidence(workspace, null, "full")
+					const isVerbose = (params.context || "").toLowerCase().includes("verbose")
+					const evidencePayload = isVerbose ? evidence : slimEvidence(evidence)
 					result = roadmapService.wrapClarityEnvelope({
 						action: "evidence",
 						success: true,
 						ok: true,
 						workspace,
-						evidence,
-						project_fingerprint: evidence.project_fingerprint,
+						evidence: evidencePayload,
+						project_fingerprint: evidencePayload.project_fingerprint || evidence.project_fingerprint,
 						project_steering_digest: evidence.project_steering_digest,
 						project_identity_line: evidence.project_identity_line,
+						semantic_snapshot: !isVerbose,
 					})
 					break
 				}
@@ -171,7 +174,7 @@ export class RoadmapToolHandler implements IToolHandler {
 				workspace,
 				retryCommand: action === "validate" ? "roadmap(action='explain_gate')" : "roadmap(action='guide')",
 			})
-			await recordLastError(envelope)
+			await recordLastError(envelope as any)
 			await journalRoadmapToolCall(action, workspace, envelope, config.taskId)
 			return JSON.stringify(envelope, null, 2)
 		}

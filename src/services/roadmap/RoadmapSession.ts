@@ -84,6 +84,9 @@ export async function sessionBrief(workspace: string, forceRefresh = false): Pro
 			agent_playbook: status.agent_playbook,
 			operator_playbook: status.operator_playbook,
 			_roadmap_operator_hints: hints,
+			runtime_state: status.runtime_state,
+			workspace_state: status.workspace_state,
+			orchestration_pressure_score: status.orchestration_pressure_score,
 		}
 
 		briefCache.set(key, { brief, cachedAt: Date.now() })

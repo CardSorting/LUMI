@@ -51,6 +51,7 @@ export interface GateState {
 	bootstrap_complete: boolean
 	bootstrap_placeholder_count: number
 	workspace_state: Record<string, unknown>
+	temporal_validity?: Record<string, any>
 }
 
 type GateCheckFn = (inputs: GateInputs) => boolean
@@ -244,6 +245,7 @@ export async function buildGateStateFromInputs(inputs: GateInputs): Promise<Gate
 		bootstrap_complete: bootstrapComplete,
 		bootstrap_placeholder_count: bootstrapCount,
 		workspace_state: inputs.workspace_state,
+		temporal_validity: inputs.freshness.temporal_validity as any,
 	}
 }
 

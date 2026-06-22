@@ -98,9 +98,17 @@ export function findBootstrapPlaceholders(content: string): ValidationIssue[] {
 
 export function getSectionBody(content: string, sectionTitle: string): string {
 	const escaped = sectionTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-	const regex = new RegExp(`^##\\s+${escaped}\\s*$[\\r\\n]([\\s\\S]*?)(?=^##\\s+|\\Z)`, "m")
+	const regex = new RegExp(`^##\\s+${escaped}\\s*$`, "m")
 	const match = regex.exec(content)
-	return match ? match[1] : ""
+	if (!match || match.index === undefined) {
+		return ""
+	}
+	const start = match.index + match[0].length
+	const nextHeaderRegex = /\r?\n##\s+/g
+	nextHeaderRegex.lastIndex = start
+	const nextHeaderMatch = nextHeaderRegex.exec(content)
+	const end = nextHeaderMatch ? nextHeaderMatch.index : content.length
+	return content.slice(start, end)
 }
 
 function countSubsections(sectionBody: string): number {

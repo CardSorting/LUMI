@@ -317,7 +317,9 @@ export function convertProtoToDietCodeMessage(protoMessage: ProtoDietCodeMessage
 			divergence_detected: protoMessage.auditMetadata.divergenceDetected,
 			entropy_score: protoMessage.auditMetadata.entropyScore,
 			violations: protoMessage.auditMetadata.violations,
-			intent_classification: protoMessage.auditMetadata.intentClassification || undefined,
+			intent_classification: (protoMessage.auditMetadata.intentClassification || undefined) as
+				| TaskAuditMetadata["intent_classification"]
+				| undefined,
 			intent_coverage: protoMessage.auditMetadata.intentCoverage,
 			audited_at: protoMessage.auditMetadata.auditedAt,
 			hardening_score: protoMessage.auditMetadata.hardeningScore || undefined,

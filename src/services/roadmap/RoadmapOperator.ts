@@ -435,6 +435,12 @@ export function wrapClarityEnvelope(
 	const identity =
 		payload.project_identity_line || operatorHints.project_identity_line || digest.identity_line || payload.steering_brief
 
+	const includePlaybook = ["guide", "doctor"].includes(
+		String(payload.action || "")
+			.trim()
+			.toLowerCase(),
+	)
+
 	return {
 		...payload,
 		...(phaseInfo || {}),
@@ -444,8 +450,12 @@ export function wrapClarityEnvelope(
 		governance_policy: AUTO_GOVERNANCE.governancePolicy,
 		auto_clearable_governance_only:
 			payload.auto_clearable_governance_only ?? operatorHints.auto_clearable_governance_only ?? false,
-		agent_playbook: AGENT_PLAYBOOK,
-		operator_playbook: OPERATOR_PLAYBOOK,
+		agent_playbook: includePlaybook
+			? AGENT_PLAYBOOK
+			: "Omitted for clarity — call roadmap(action='guide') or /roadmap guide to view playbooks.",
+		operator_playbook: includePlaybook
+			? OPERATOR_PLAYBOOK
+			: "Omitted for clarity — call roadmap(action='guide') or /roadmap guide to view playbooks.",
 		required_section_count: REQUIRED_SECTIONS.length,
 		steering_line: payload.steering_line || identity,
 		project_identity_line: identity,

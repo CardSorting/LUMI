@@ -1,14 +1,16 @@
 ---
 title: "ROADMAP.md Steering"
 sidebarTitle: "Roadmap Steering"
-description: "Auto-rolling ROADMAP.md gates, internal auto-governance at completion, tools, and VS Code settings in LUMI."
+description: "Auto-rolling ROADMAP.md gates, internal auto-governance at completion, multi-agent coordination leases, pressure-aware scheduling, version vectors, cognitive partitioning, and VS Code settings in LUMI."
 ---
 
 LUMI steers long-running work through a project **`ROADMAP.md`** at the workspace root. Roadmap **governance gates** integrate with the completion pipeline — they can block `attempt_completion` when steering is out of sync.
 
-**Key behavior (2026):** Governance remediation is **internal and automatic** at `attempt_completion`. Agents do **not** need to call `roadmap(action='validate')`, MCP tools, or slash commands to clear routine gates.
+**Key behavior (2026):** Governance remediation is **internal and automatic** at `attempt_completion`. Agents do **not** need to call `roadmap(action='validate')`, MCP tools, or slash commands to clear routine gates. Under multi-agent environments, the roadmap graduates into a pressure-aware coordination substrate ensuring stable, contention-free concurrent execution.
 
 Implementation: `src/services/roadmap/` · Completion integration: `RoadmapCompletionGate.ts` + `completionGatePipeline.ts` · Shared copy: `RoadmapAutoGovernance.ts`
+
+---
 
 ## Auto-governance at completion
 
@@ -49,6 +51,47 @@ Mid-task (before completion), agents should **continue working**. The system pro
   Optional diagnostics remain available: `/roadmap cockpit`, `/roadmap explain-gate`, `/roadmap explain-stale`, `roadmap(action='doctor')`. Use these for visibility — not as a required validate loop before every completion attempt.
 </Note>
 
+---
+
+## Multi-Agent Coordination & Leases
+
+To support concurrent execution across multiple collaborative agents without write contention, planning overlap, or state corruption, the runtime implements **Execution Ownership Leases**:
+
+- **Mutation Lock Envelopes:** Agents must acquire a temporary exclusive lease for a specific task node or checkpoint before executing writes or modifying states.
+- **Expiration Policies:** Leases are acquired via `acquireOrchestrationLease(workspace, agentId, taskId, durationSeconds)` and expire automatically (default: 5 minutes) to avoid execution starvation. Same-agent lease renewals are permitted.
+- **Handoff Semantics:** Active leases are cleanly released using `releaseOrchestrationLease(workspace, agentId, taskId)` upon task completion or execution continuation.
+
+---
+
+## Pressure-Aware Scheduling & Cooldowns
+
+Under production pressure, the runtime actively prevents planning storms, excessive validation cycles, and scheduler congestion by calculating an **Orchestration Pressure Score** (0.0 to 1.0) and running an **Admission Control Queue**:
+
+- **Pressure Score Factors:** Dynamically calculated based on the count of active unexpired leases (0.2 per lock), the size of the active task queue (Now list) (0.05 per task), and the mutation rate (lineage edits in the last 5 minutes, 0.1 per mutation).
+- **Admission Queue Backoffs:** The `scheduleAdmission(workspace, agentId, operation)` wrapper paces agent requests. If the pressure score is high (>= 0.8) or if a cooldown window is active, it blocks immediate execution (`admitted: false`) and returns exponential backoff parameters (up to 10 seconds), preventing runaway planning chains.
+- **Lazy Validation Caching:** To minimize context over-hydrations and redundant CPU/IO execution cost, `validateRoadmap` caches validation results. If a request arrives within 5 seconds of a previous validation and the `ROADMAP.md` hash is unchanged, the heavy parsing pipeline is bypassed.
+
+---
+
+## Concurrent Continuation & Version Vectors
+
+When agents run recovery cycles, asynchronous tasks, or retry loops, the runtime prevents split-brain recovery races and fork divergence through **Freshness Validation**:
+
+- **Monotonic Version Vectors:** Every task node mutation, lease modification, and continuation anchor registration increment a sequence counter inside the state's `version_vectors` dictionary.
+- **Divergence Detection:** Before resuming from a continuation anchor, the executor verifies version vector freshness using `verifyAnchorFreshness(workspace, key, expectedVersion)`. If the current sequence counter diverges from the expected version, the runtime rejects resumption and requires coordination.
+
+---
+
+## Scoped Cognitive Partitioning
+
+As orchestration scales, the roadmap runtime shape-shifts agent views into local operational contexts, preventing cognitive overload and prompt bloat:
+
+- **Local Reasoning Corridors:** Cockpit snapshots (`buildCockpitPayload`) and steering blocks (`formatRoadmapSteeringBlock`) automatically filter out locks held by other agents and tasks locked by others, localizing the focus-scoped execution graph to this agent's immediate task neighborhood.
+- **Steering Lineage Filtering:** Lineage ledger histories filter out entries generated by other agents.
+- **Verbose Escape Hatch:** Agents can request unfiltered context views by supplying the `--verbose` flag.
+
+---
+
 ## VS Code settings
 
 All settings use the `lumi.roadmap.*` prefix in root `package.json`:
@@ -65,19 +108,23 @@ All settings use the `lumi.roadmap.*` prefix in root `package.json`:
 
 Environment overrides: `MIRA_ROADMAP_*` / `DIETCODE_ROADMAP_*` (see `RoadmapConfig.ts`).
 
+---
+
 ## Gate catalog
 
 Gates are defined in `RoadmapGateCatalog.ts`. Blocking gates depend on settings above.
 
 | Gate | Typical auto-fix at completion | If still blocked |
 |------|-------------------------------|------------------|
-| `validation_current` | Auto-validate | Repair schema in ROADMAP.md |
+| `roadmap_present` | Session auto-bootstrap | Create ROADMAP.md at workspace root |
 | `bootstrap_complete` | Auto-autofill | Edit remaining template phrases |
+| `validation_current` | Auto-validate | Repair schema in ROADMAP.md |
 | `checkpoint_fresh` | Date stamp (missing/invalid date only) | Update section 11 narrative + date |
 | `schema_valid` | — | Repair all 12 required sections |
-| `roadmap_present` | Session auto-bootstrap | Create ROADMAP.md at workspace root |
 
 Stale checkpoint due to **git activity** or **expired age** is not auto-rewritten — the agent must update section 11 content.
+
+---
 
 ## Agent tools
 
@@ -89,6 +136,8 @@ Stale checkpoint due to **git activity** or **expired age** is not auto-rewritte
 `roadmap(action='validate')` still exists for **manual diagnostics** but is **not required** before `attempt_completion`.
 
 Handlers: `RoadmapToolHandler` in `src/core/task/tools/handlers/`.
+
+---
 
 ## Slash command
 
@@ -103,9 +152,13 @@ Examples:
 /roadmap doctor
 ```
 
+---
+
 ## File watcher
 
 `extension.ts` registers `RoadmapFileWatcher` so external edits to `ROADMAP.md` set `validation_pending` in workspace state. Auto-validation clears this at completion — agents do not need a manual validate step.
+
+---
 
 ## Architecture map
 
@@ -117,6 +170,8 @@ Examples:
 | `completionGatePipeline.ts` | Preflight stage `roadmap` + structured error envelope |
 | `roadmap_steering.ts` | System prompt section (auto-governance policy) |
 | `RoadmapNativeBridge.ts` | Post-write hints after ROADMAP.md mutations |
+
+---
 
 ## Related
 

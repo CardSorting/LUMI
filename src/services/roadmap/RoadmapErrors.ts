@@ -77,6 +77,20 @@ export function errorEnvelope(params: {
 		},
 	})
 
+	const cleanHints: Record<string, any> = {
+		preferred_tool: hints.preferred_tool,
+		skill: hints.skill,
+		governance_policy: hints.governance_policy,
+		next_action: hints.next_action || retry,
+		recovery_suggestion: hints.recovery_suggestion || params.message,
+		suggested_slash_command: slash.startsWith("/roadmap") ? slash : "/roadmap guide",
+	}
+	if (hints.workspace) cleanHints.workspace = hints.workspace
+	if (hints.roadmap_path) cleanHints.roadmap_path = hints.roadmap_path
+	if (hints.write_guard) cleanHints.write_guard = hints.write_guard
+	if (hints.retry_command) cleanHints.retry_command = hints.retry_command
+	if (hints.safe_to_retry !== undefined) cleanHints.safe_to_retry = hints.safe_to_retry
+
 	return {
 		ok: false,
 		success: false,
@@ -93,12 +107,7 @@ export function errorEnvelope(params: {
 		suggested_slash_command: slash.startsWith("/roadmap") ? slash : "/roadmap guide",
 		governance_policy: AUTO_GOVERNANCE.governancePolicy,
 		_roadmap_error_envelope: true,
-		_roadmap_operator_hints: {
-			...hints,
-			suggested_slash_command: slash.startsWith("/roadmap") ? slash : "/roadmap guide",
-			recovery_suggestion: params.message,
-			next_action: retry,
-		},
+		_roadmap_operator_hints: cleanHints,
 	}
 }
 

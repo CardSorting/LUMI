@@ -97,7 +97,6 @@ export async function buildSteeringContext(workspace: string): Promise<Record<st
 		project_fingerprint: fp,
 		roadmap_gate: gate,
 		kanban_complete_allowed: status.kanban_complete_allowed,
-		auto_clearable_governance_only: status.auto_clearable_governance_only,
 		validation_pending: status.validation_pending,
 		phase: status.phase,
 		agent_next_call: agentNextCall,

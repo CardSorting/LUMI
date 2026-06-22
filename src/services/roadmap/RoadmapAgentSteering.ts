@@ -21,6 +21,17 @@ export function buildProjectContextLines(brief: Record<string, unknown>): string
 	const identity = brief.project_identity_line || brief.steering_line || brief.steering_brief || fp.steering_brief
 	if (identity) lines.push(`Project: ${identity}`)
 
+	const tv = (brief.temporal_validity || (brief.checkpoint_freshness as any)?.temporal_validity) as any
+	if (brief.execution_confidence_score !== undefined) {
+		lines.push(`Confidence: ${brief.execution_confidence_score}`)
+	}
+	if (tv) {
+		lines.push(`Freshness score: ${tv.freshness_score}/100`)
+		if (tv.dependency_drift_detected) {
+			lines.push(`⚠️ Dependency drift detected`)
+		}
+	}
+
 	const stack = brief.stack_summary || fp.stack_summary
 	const archetype = brief.project_archetype || fp.project_archetype
 	if (stack && !String(identity || "").includes(String(stack))) {
@@ -73,11 +84,22 @@ export function buildProjectContextLines(brief: Record<string, unknown>): string
 	return lines
 }
 
-export function formatRoadmapSteeringBlock(brief: Record<string, unknown>): string {
+export function formatRoadmapSteeringBlock(
+	brief: Record<string, unknown>,
+	options?: { agentId?: string; verbose?: boolean },
+): string {
+	const verbose = options?.verbose || process.argv.includes("--verbose")
+	const agentId = options?.agentId
+
 	const lines = ["# Roadmap Steering", ...buildProjectContextLines(brief)]
 	const autoClearable = isAutoClearableBrief(brief)
 
 	if (brief.phase) lines.push(`Phase: ${brief.phase}`)
+
+	if (brief.orchestration_pressure_score !== undefined) {
+		lines.push(`Pressure score: ${brief.orchestration_pressure_score}`)
+	}
+
 	const gateLine = formatKanbanGateStatusLine({
 		kanbanCompleteAllowed: brief.kanban_complete_allowed as boolean | undefined,
 		validationPending: !!brief.validation_pending,
@@ -103,6 +125,60 @@ export function formatRoadmapSteeringBlock(brief: Record<string, unknown>): stri
 	const verifyCmds = (hints?.verification_commands as string[]) || []
 	if (verifyCmds.length > 0) lines.push(`Verify: ${verifyCmds[0]}`)
 
+	const runtimeState = (brief.runtime_state ||
+		(brief.workspace_state as Record<string, unknown> | undefined)?.runtime_state) as any
+	if (runtimeState) {
+		lines.push("", "## Focus-Scoped Execution (Now):")
+		let nowItems = runtimeState.tasks?.now?.items || []
+
+		if (agentId && !verbose) {
+			const locks = runtimeState.locks || {}
+			nowItems = nowItems.filter((item: any) => {
+				const lock = locks[item.id]
+				if (lock) {
+					const isExpired = new Date(lock.expires_at).getTime() <= Date.now()
+					if (!isExpired && lock.owner_agent !== agentId) {
+						return false
+					}
+				}
+				return true
+			})
+		}
+
+		if (nowItems.length > 0) {
+			nowItems.forEach((item: any, idx: number) => {
+				lines.push(`  [${idx + 1}] ${item.title} (id: ${item.id})`)
+			})
+		} else {
+			lines.push("  • (No active tasks in Now)")
+		}
+
+		const locks = runtimeState.locks || {}
+		const activeAlerts: string[] = []
+		const nowMs = Date.now()
+		for (const [taskId, lock] of Object.entries(locks)) {
+			const expiresAt = new Date((lock as any).expires_at).getTime()
+			if (expiresAt > nowMs) {
+				activeAlerts.push(
+					`Task ${taskId} is leased by ${(lock as any).owner_agent} (expires: ${(lock as any).expires_at})`,
+				)
+			}
+		}
+		if (activeAlerts.length > 0) {
+			lines.push("", "## Active Lock Alerts:")
+			activeAlerts.forEach((alert) => lines.push(`  ⚠️ ${alert}`))
+		}
+
+		const anchors = runtimeState.memory?.continuation_anchors || {}
+		const anchorKeys = Object.keys(anchors)
+		if (anchorKeys.length > 0) {
+			lines.push("", "## Orchestration Continuation Anchors:")
+			anchorKeys.forEach((k) => {
+				lines.push(`  • ${k}: ${anchors[k]}`)
+			})
+		}
+	}
+
 	lines.push("Prime directive: Did the latest work strengthen or weaken the project's center of gravity?")
 	return lines.join("\n")
 }
@@ -114,5 +190,6 @@ export function formatWatchSteeringLine(brief: Record<string, unknown>): string 
 	const autoClearableOnly = isAutoClearableBrief(brief)
 	const gate = brief.kanban_complete_allowed === false && !autoClearableOnly ? " ⛔gates" : ""
 	const pending = brief.validation_pending && !autoClearableOnly ? " ⚠️pending" : autoClearableOnly ? " ℹ️gov" : ""
-	return `[roadmap] ${identity} · phase=${phase}${gate}${pending} → ${next}`
+	const scoreStr = brief.execution_confidence_score !== undefined ? ` conf=${brief.execution_confidence_score}` : ""
+	return `[roadmap] ${identity} · phase=${phase}${gate}${pending}${scoreStr} → ${next}`
 }

@@ -1,3 +1,4 @@
+import * as crypto from "crypto"
 import { execa } from "execa"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -21,6 +22,7 @@ import { clearLastError, formatWatchReport, readCurrentProgress, readLastError, 
 import {
 	bootstrapSkeleton,
 	findBootstrapPlaceholders,
+	getSectionBody,
 	HEALTH_STATUSES,
 	REQUIRED_SECTIONS,
 	RoadmapValidation,
@@ -84,6 +86,325 @@ async function readText(filePath: string, limit = 8000): Promise<string> {
 	} catch {
 		return ""
 	}
+}
+
+interface LineageEntry {
+	operation_id: string
+	timestamp: string
+	tool: string
+	action: string
+	schema_valid: boolean | null
+	health_status: string | null
+	hash: string
+	diff_summary: string
+	causality_token: string
+}
+
+export interface TaskItem {
+	id: string
+	title: string
+	body: string
+}
+
+export interface TaskList {
+	intro: string
+	items: TaskItem[]
+}
+
+export interface RoadmapRuntimeState {
+	version: number
+	project_identity: {
+		core_purpose: string
+		anti_goals: string
+		raw_body: string
+	}
+	health: {
+		status: string
+		summary: string
+		raw_body: string
+	}
+	strategic_narrative: string
+	tasks: {
+		now: TaskList
+		next: TaskList
+		later: TaskList
+	}
+	discovery: string
+	maintenance_gravity: string
+	code_soup_audit: {
+		risk_level: string
+		raw_body: string
+	}
+	decision_log: string
+	checkpoint: {
+		date: string
+		summary: string
+		raw_body: string
+	}
+	archive: string
+	active_window?: {
+		current_focus_ids: string[]
+		locality_scope: string[]
+	}
+	memory?: {
+		continuation_anchors: Record<string, string>
+		last_completed_step?: string
+	}
+	locks?: Record<
+		string,
+		{
+			owner_agent: string
+			leased_at: string
+			expires_at: string
+		}
+	>
+	scheduler_state?: {
+		pressure_score?: number
+		queue_size?: number
+		last_cooldown_timestamp?: string
+	}
+	version_vectors?: Record<string, number>
+}
+
+export function hydrateRuntimeState(content: string): RoadmapRuntimeState {
+	const sec1 = getSectionBody(content, "1. Project Center of Gravity")
+	const sec2 = getSectionBody(content, "2. Roadmap Health")
+	const sec3 = getSectionBody(content, "3. Strategic Narrative")
+	const sec4 = getSectionBody(content, "4. Now")
+	const sec5 = getSectionBody(content, "5. Next")
+	const sec6 = getSectionBody(content, "6. Later")
+	const sec7 = getSectionBody(content, "7. Discovery")
+	const sec8 = getSectionBody(content, "8. Maintenance Gravity")
+	const sec9 = getSectionBody(content, "9. Centralization & Code Soup Audit")
+	const sec10 = getSectionBody(content, "10. Decision Log")
+	const sec11 = getSectionBody(content, "11. Recent Checkpoint")
+	const sec12 = getSectionBody(content, "12. Archive")
+
+	const extractField = (body: string, prefix: string): string => {
+		const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+		const regex = new RegExp(`\\*\\*${escapedPrefix}:\\*\\*\\s*([\\s\\S]*?)(?=\\*\\*|##|$)`, "i")
+		const match = regex.exec(body)
+		return match ? match[1].trim() : ""
+	}
+
+	const parseTasks = (body: string): TaskList => {
+		const items: TaskItem[] = []
+		const regex = /^###\s+\d+\.\s+(.*?)\s*$/gm
+		const headerMatches: Array<{ title: string; index: number; text: string }> = []
+		let m
+		while ((m = regex.exec(body)) !== null) {
+			headerMatches.push({ title: m[1].trim(), index: m.index, text: m[0] })
+		}
+		let intro = ""
+		if (headerMatches.length > 0) {
+			intro = body.slice(0, headerMatches[0].index).trim()
+			for (let i = 0; i < headerMatches.length; i++) {
+				const current = headerMatches[i]
+				const nextIndex = i + 1 < headerMatches.length ? headerMatches[i + 1].index : body.length
+				const taskBody = body.slice(current.index + current.text.length, nextIndex).trim()
+				const id = crypto.createHash("sha256").update(current.title).digest("hex").slice(0, 8)
+				items.push({ id, title: current.title, body: taskBody })
+			}
+		} else {
+			intro = body.trim()
+		}
+		return { intro, items }
+	}
+
+	const core_purpose = extractField(sec1, "Core Purpose")
+	const anti_goals = extractField(sec1, "What This Project Must Not Become")
+	const status = extractField(sec2, "Status") || "Coherent"
+	const summary = extractField(sec2, "Summary")
+	const risk_level = extractField(sec9, "Overall Code Soup Risk") || "Low"
+	const date = extractField(sec11, "Date")
+	const checkpoint_summary = extractField(sec11, "Checkpoint Summary")
+
+	return {
+		version: 1,
+		project_identity: {
+			core_purpose,
+			anti_goals,
+			raw_body: sec1,
+		},
+		health: {
+			status,
+			summary,
+			raw_body: sec2,
+		},
+		strategic_narrative: sec3,
+		tasks: {
+			now: parseTasks(sec4),
+			next: parseTasks(sec5),
+			later: parseTasks(sec6),
+		},
+		discovery: sec7,
+		maintenance_gravity: sec8,
+		code_soup_audit: {
+			risk_level,
+			raw_body: sec9,
+		},
+		decision_log: sec10,
+		checkpoint: {
+			date,
+			summary: checkpoint_summary,
+			raw_body: sec11,
+		},
+		archive: sec12,
+	}
+}
+
+export function projectRuntimeStateToMarkdown(state: RoadmapRuntimeState): string {
+	let md = `# ROADMAP.md\n\n`
+	md += `## 1. Project Center of Gravity\n\n${state.project_identity.raw_body.trim()}\n\n`
+	md += `## 2. Roadmap Health\n\n${state.health.raw_body.trim()}\n\n`
+	md += `## 3. Strategic Narrative\n\n${state.strategic_narrative.trim()}\n\n`
+
+	const renderTaskList = (list: TaskList): string => {
+		let res = ""
+		if (list.intro) {
+			res += `${list.intro.trim()}\n\n`
+		}
+		if (list.items.length > 0) {
+			list.items.forEach((task, idx) => {
+				res += `### ${idx + 1}. ${task.title.trim()}\n\n${task.body.trim()}\n\n`
+			})
+		}
+		return res
+	}
+
+	md += `## 4. Now\n\n${renderTaskList(state.tasks.now)}`
+	md += `## 5. Next\n\n${renderTaskList(state.tasks.next)}`
+	md += `## 6. Later\n\n${renderTaskList(state.tasks.later)}`
+
+	md += `## 7. Discovery\n\n${state.discovery.trim()}\n\n`
+	md += `## 8. Maintenance Gravity\n\n${state.maintenance_gravity.trim()}\n\n`
+	md += `## 9. Centralization & Code Soup Audit\n\n${state.code_soup_audit.raw_body.trim()}\n\n`
+	md += `## 10. Decision Log\n\n${state.decision_log.trim()}\n\n`
+	md += `## 11. Recent Checkpoint\n\n${state.checkpoint.raw_body.trim()}\n\n`
+	md += `## 12. Archive\n\n${state.archive.trim()}\n`
+	return md
+}
+
+async function writeRoadmapAtomically(workspace: string, content: string): Promise<void> {
+	const roadmapPath = path.join(workspace, "ROADMAP.md")
+	const tempPath = path.join(workspace, "ROADMAP.md.tmp")
+	await fs.mkdir(path.dirname(tempPath), { recursive: true })
+	await fs.writeFile(tempPath, content, "utf8")
+	try {
+		const verifiedContent = await fs.readFile(tempPath, "utf8")
+		if (!verifiedContent || verifiedContent.trim().length === 0) {
+			throw new Error("Written content is empty")
+		}
+		if (verifiedContent.length < 10) {
+			throw new Error("Written content too short to be a valid ROADMAP.md")
+		}
+	} catch (err) {
+		try {
+			await fs.unlink(tempPath)
+		} catch {}
+		throw new Error(`Roadmap atomic write verification failed: ${err instanceof Error ? err.message : String(err)}`)
+	}
+	await fs.rename(tempPath, roadmapPath)
+}
+
+export async function computeDependencyManifestsHash(workspace: string): Promise<string> {
+	const manifests = ["package.json", "Cargo.toml", "go.mod", "pyproject.toml"]
+	let combined = ""
+	for (const file of manifests) {
+		const fullPath = path.join(workspace, file)
+		if (await fileExists(fullPath)) {
+			try {
+				const content = await fs.readFile(fullPath, "utf8")
+				combined += `${file}:${content}\n`
+			} catch {}
+		}
+	}
+	if (!combined) return "no_manifests"
+	return crypto.createHash("sha256").update(combined).digest("hex").slice(0, 16)
+}
+
+export function slimEvidence(evidence: any): any {
+	if (!evidence) return evidence
+	return {
+		workspace: evidence.workspace,
+		gathered_at: evidence.gathered_at,
+		evidence_tier: evidence.evidence_tier,
+		roadmap: evidence.roadmap,
+		readmes: (evidence.readmes || []).map((r: any) => ({ path: r.path, excerpt_length: r.excerpt ? r.excerpt.length : 0 })),
+		architecture_docs: (evidence.architecture_docs || []).map((d: any) => ({
+			path: d.path,
+			excerpt_length: d.excerpt ? d.excerpt.length : 0,
+		})),
+		configs: (evidence.configs || []).map((c: any) => ({ path: c.path, excerpt_length: c.excerpt ? c.excerpt.length : 0 })),
+		git: {
+			available: evidence.git?.available,
+			recent_commits: (evidence.git?.recent_commits || []).slice(0, 3),
+			status_short: evidence.git?.status_short || [],
+			diff_stat_recent: (evidence.git?.diff_stat_recent || []).slice(0, 5),
+			changed_files_recent: (evidence.git?.changed_files_recent || []).slice(0, 5),
+		},
+		todo_markers: (evidence.todo_markers || []).map((t: any) => ({ file: t.file, line: t.line, marker: t.marker })),
+		todo_markers_count: (evidence.todo_markers || []).length,
+		test_file_count: evidence.test_file_count,
+		uncertainty: evidence.uncertainty || [],
+		project_fingerprint: {
+			project_name: evidence.project_fingerprint?.project_name,
+			package_name: evidence.project_fingerprint?.package_name,
+			stack_summary: evidence.project_fingerprint?.stack_summary,
+			project_archetype: evidence.project_fingerprint?.project_archetype,
+			has_tests: evidence.project_fingerprint?.has_tests,
+			has_ci: evidence.project_fingerprint?.has_ci,
+			verification_commands: evidence.project_fingerprint?.verification_commands,
+			entry_points: evidence.project_fingerprint?.entry_points,
+		},
+	}
+}
+
+async function recordMutationLineage(workspace: string, entry: Partial<LineageEntry>): Promise<void> {
+	const roadmapPath = path.join(workspace, "ROADMAP.md")
+	let fileHash = ""
+	const diffSummary = entry.diff_summary || ""
+	try {
+		if (await fileExists(roadmapPath)) {
+			const content = await fs.readFile(roadmapPath, "utf8")
+			fileHash = crypto.createHash("sha256").update(content).digest("hex").slice(0, 16)
+		}
+	} catch {}
+
+	const current = await RoadmapService.getInstance().readState(workspace)
+	const lineage: LineageEntry[] = current.lineage || []
+
+	const opId = crypto.randomUUID()
+	const timestamp = new Date().toISOString()
+
+	const newEntry: LineageEntry = {
+		operation_id: opId,
+		timestamp,
+		tool: entry.tool || current.last_mutation_tool || "manual",
+		action: entry.action || "mutate",
+		schema_valid: entry.schema_valid ?? current.schema_valid ?? null,
+		health_status: entry.health_status ?? current.health_status ?? null,
+		hash: fileHash || "",
+		diff_summary: diffSummary || "",
+		causality_token: "",
+	}
+
+	const lastEntry = lineage.length > 0 ? lineage[lineage.length - 1] : null
+	const prevToken = lastEntry?.causality_token || "genesis_root_token"
+	const valStr = String(newEntry.schema_valid)
+	const actionStr = String(newEntry.action)
+	newEntry.causality_token = crypto
+		.createHash("sha256")
+		.update(prevToken + timestamp + actionStr + valStr + fileHash)
+		.digest("hex")
+		.slice(0, 16)
+
+	lineage.push(newEntry)
+	const trimmedLineage = lineage.slice(-5)
+
+	await RoadmapService.getInstance().writeState(workspace, {
+		lineage: trimmedLineage,
+	})
 }
 
 async function scanWorkspace(root: string): Promise<HeavyScanResult> {
@@ -1101,6 +1422,26 @@ export async function buildProjectFingerprint(workspace: string): Promise<any> {
 	}
 }
 
+function stripComments(text: string): string {
+	let clean = text.replace(/#.*$/gm, "")
+	clean = clean.replace(/\/\/.*$/gm, "")
+	clean = clean.replace(/\/\*[\s\S]*?\*\//g, "")
+	return clean
+}
+
+function isTestPath(relPath: string): boolean {
+	const lower = relPath.toLowerCase()
+	return (
+		lower.includes("/tests/") ||
+		lower.includes("/__tests__/") ||
+		lower.includes("/test/") ||
+		lower.endsWith(".test.ts") ||
+		lower.endsWith(".test.js") ||
+		lower.endsWith(".spec.ts") ||
+		lower.endsWith(".spec.js")
+	)
+}
+
 async function assessCodeSoup(workspace: string, heavy: HeavyScanResult): Promise<any> {
 	const files = heavy.sourceFiles
 	const counts: Record<string, number> = {}
@@ -1128,8 +1469,10 @@ async function assessCodeSoup(workspace: string, heavy: HeavyScanResult): Promis
 
 	const entry_surfaces: any[] = []
 	for (const [rel, text] of files.slice(0, 250)) {
+		if (isTestPath(rel)) continue
+		const cleanText = stripComments(text)
 		for (const pattern of ENTRY_PATTERNS) {
-			if (pattern.test(text)) {
+			if (pattern.test(cleanText)) {
 				entry_surfaces.push({ path: rel, signal: pattern.source.slice(0, 40) })
 				break
 			}
@@ -1139,7 +1482,9 @@ async function assessCodeSoup(workspace: string, heavy: HeavyScanResult): Promis
 
 	const hook_surfaces: string[] = []
 	for (const [rel, text] of files.slice(0, 200)) {
-		if (HOOK_MARKERS.some((m) => text.includes(m))) {
+		if (isTestPath(rel)) continue
+		const cleanText = stripComments(text)
+		if (HOOK_MARKERS.some((m) => cleanText.includes(m))) {
 			hook_surfaces.push(rel)
 			if (hook_surfaces.length >= 12) break
 		}
@@ -1153,14 +1498,16 @@ async function assessCodeSoup(workspace: string, heavy: HeavyScanResult): Promis
 	}
 
 	const commands: string[] = []
-	for (const [_, text] of files.slice(0, 150)) {
+	for (const [rel, text] of files.slice(0, 150)) {
+		if (isTestPath(rel)) continue
+		const cleanText = stripComments(text)
 		const reg1 = /register_command\s*\(\s*["']([^"']+)["']/g
 		let m
-		while ((m = reg1.exec(text)) !== null) {
+		while ((m = reg1.exec(cleanText)) !== null) {
 			commands.push(m[1])
 		}
 		const reg2 = /ctx\.register_command\s*\(\s*["']([^"']+)["']/g
-		while ((m = reg2.exec(text)) !== null) {
+		while ((m = reg2.exec(cleanText)) !== null) {
 			commands.push(m[1])
 		}
 	}
@@ -1329,6 +1676,7 @@ function parseRoadmapText(content: string, pathStr: string): any {
 
 export class RoadmapService {
 	private static instance: RoadmapService | null = null
+	private lastValidationResult: Record<string, { timestamp: number; hash: string; result: any }> = {}
 
 	public static getInstance(): RoadmapService {
 		if (!RoadmapService.instance) {
@@ -1513,7 +1861,7 @@ export class RoadmapService {
 
 		const evidence = await this.gatherEvidence(workspace, null, "full")
 		const skeleton = bootstrapSkeletonFromEvidenceAutofilled(evidence)
-		await fs.writeFile(roadmapPath, skeleton, "utf8")
+		await writeRoadmapAtomically(workspace, skeleton)
 		await this.recordFileMutation(workspace, "roadmap", "ROADMAP.md")
 
 		let result: Record<string, unknown> = {
@@ -1544,6 +1892,218 @@ export class RoadmapService {
 		return path.join(workspace, ".dietcode", "roadmap-state.json")
 	}
 
+	public async recordMutationLineage(workspace: string, entry: any): Promise<void> {
+		await recordMutationLineage(workspace, entry)
+	}
+
+	public async getOrHydrateRuntimeState(workspace: string, text?: string): Promise<RoadmapRuntimeState> {
+		const state = await this.readState(workspace)
+		const roadmapPath = path.join(workspace, "ROADMAP.md")
+
+		let mdText = text
+		if (mdText === undefined) {
+			mdText = (await fileExists(roadmapPath)) ? await fs.readFile(roadmapPath, "utf8") : ""
+		}
+
+		const currentHash = crypto.createHash("sha256").update(mdText).digest("hex").slice(0, 16)
+
+		if (state.runtime_state && state.roadmap_md_hash === currentHash) {
+			return state.runtime_state as RoadmapRuntimeState
+		}
+
+		const runtimeState = hydrateRuntimeState(mdText)
+
+		if (state.runtime_state) {
+			if (state.runtime_state.memory) runtimeState.memory = state.runtime_state.memory
+			if (state.runtime_state.active_window) runtimeState.active_window = state.runtime_state.active_window
+			if (state.runtime_state.locks) runtimeState.locks = state.runtime_state.locks
+			if (state.runtime_state.scheduler_state) runtimeState.scheduler_state = state.runtime_state.scheduler_state
+			if (state.runtime_state.version_vectors) runtimeState.version_vectors = state.runtime_state.version_vectors
+		}
+
+		await this.writeState(workspace, {
+			runtime_state: runtimeState,
+			roadmap_md_hash: currentHash,
+		})
+
+		return runtimeState
+	}
+
+	public async recordContinuationAnchor(workspace: string, key: string, value: string): Promise<void> {
+		const runtimeState = await this.getOrHydrateRuntimeState(workspace)
+
+		if (!runtimeState.memory) {
+			runtimeState.memory = { continuation_anchors: {} }
+		}
+		if (!runtimeState.memory.continuation_anchors) {
+			runtimeState.memory.continuation_anchors = {}
+		}
+
+		runtimeState.memory.continuation_anchors[key] = value
+
+		if (!runtimeState.version_vectors) {
+			runtimeState.version_vectors = {}
+		}
+		const currentVer = runtimeState.version_vectors[key] || 0
+		runtimeState.version_vectors[key] = currentVer + 1
+
+		await this.writeState(workspace, {
+			runtime_state: runtimeState,
+		})
+	}
+
+	public async getContinuationAnchors(workspace: string): Promise<Record<string, string>> {
+		const runtimeState = await this.getOrHydrateRuntimeState(workspace)
+		return runtimeState.memory?.continuation_anchors || {}
+	}
+
+	public async acquireOrchestrationLease(
+		workspace: string,
+		agentId: string,
+		taskId: string,
+		durationSeconds = 300,
+	): Promise<{ success: boolean; expires_at?: string }> {
+		const runtimeState = await this.getOrHydrateRuntimeState(workspace)
+		if (!runtimeState.locks) {
+			runtimeState.locks = {}
+		}
+
+		const existing = runtimeState.locks[taskId]
+		const now = new Date()
+
+		if (existing) {
+			const expiresAt = new Date(existing.expires_at)
+			if (expiresAt.getTime() > now.getTime() && existing.owner_agent !== agentId) {
+				return { success: false }
+			}
+		}
+
+		const expires = new Date(now.getTime() + durationSeconds * 1000)
+		runtimeState.locks[taskId] = {
+			owner_agent: agentId,
+			leased_at: now.toISOString(),
+			expires_at: expires.toISOString(),
+		}
+
+		if (!runtimeState.version_vectors) {
+			runtimeState.version_vectors = {}
+		}
+		const currentVer = runtimeState.version_vectors[taskId] || 0
+		runtimeState.version_vectors[taskId] = currentVer + 1
+
+		await this.writeState(workspace, {
+			runtime_state: runtimeState,
+		})
+
+		return { success: true, expires_at: expires.toISOString() }
+	}
+
+	public async releaseOrchestrationLease(workspace: string, agentId: string, taskId: string): Promise<void> {
+		const runtimeState = await this.getOrHydrateRuntimeState(workspace)
+		if (!runtimeState.locks || !runtimeState.locks[taskId]) {
+			return
+		}
+
+		if (runtimeState.locks[taskId].owner_agent === agentId) {
+			delete runtimeState.locks[taskId]
+			await this.writeState(workspace, {
+				runtime_state: runtimeState,
+			})
+		}
+	}
+
+	public async verifyAnchorFreshness(
+		workspace: string,
+		key: string,
+		expectedVersion: number,
+	): Promise<{ fresh: boolean; current_version: number }> {
+		const runtimeState = await this.getOrHydrateRuntimeState(workspace)
+		const current_version = runtimeState.version_vectors?.[key] || 0
+		return {
+			fresh: current_version === expectedVersion,
+			current_version,
+		}
+	}
+
+	public async getVersionVector(workspace: string, key: string): Promise<number> {
+		const runtimeState = await this.getOrHydrateRuntimeState(workspace)
+		return runtimeState.version_vectors?.[key] || 0
+	}
+
+	public async scheduleAdmission(
+		workspace: string,
+		agentId: string,
+		operation: string,
+	): Promise<{ admitted: boolean; backoff_ms: number }> {
+		const runtimeState = await this.getOrHydrateRuntimeState(workspace)
+		const now = Date.now()
+
+		let activeLocksCount = 0
+		if (runtimeState.locks) {
+			for (const lock of Object.values(runtimeState.locks)) {
+				if (new Date(lock.expires_at).getTime() > now) {
+					activeLocksCount++
+				}
+			}
+		}
+
+		const nowTaskCount = runtimeState.tasks?.now?.items?.length || 0
+
+		const state = await this.readState(workspace)
+		let recentMutationsCount = 0
+		if (state.lineage && Array.isArray(state.lineage)) {
+			for (const entry of state.lineage) {
+				const entryTime = new Date(entry.timestamp).getTime()
+				if (now - entryTime < 5 * 60 * 1000) {
+					recentMutationsCount++
+				}
+			}
+		}
+
+		const locksScore = Math.min(0.6, activeLocksCount * 0.2)
+		const tasksScore = Math.min(0.2, nowTaskCount * 0.05)
+		const mutationsScore = Math.min(0.4, recentMutationsCount * 0.1)
+		const pressureScore = Math.min(1.0, locksScore + tasksScore + mutationsScore)
+
+		if (runtimeState.scheduler_state?.last_cooldown_timestamp) {
+			const cooldownExpires = new Date(runtimeState.scheduler_state.last_cooldown_timestamp).getTime()
+			if (cooldownExpires > now) {
+				const remaining = cooldownExpires - now
+				return { admitted: false, backoff_ms: Math.max(1000, remaining) }
+			}
+		}
+
+		if (pressureScore >= 0.8) {
+			const backoff_ms = Math.round(1000 * 2 ** ((runtimeState.scheduler_state?.queue_size || 1) * pressureScore))
+			const finalBackoff = Math.min(10000, Math.max(1000, backoff_ms))
+
+			if (!runtimeState.scheduler_state) {
+				runtimeState.scheduler_state = {}
+			}
+			runtimeState.scheduler_state.last_cooldown_timestamp = new Date(now + finalBackoff).toISOString()
+			runtimeState.scheduler_state.pressure_score = pressureScore
+			runtimeState.scheduler_state.queue_size = nowTaskCount
+
+			await this.writeState(workspace, {
+				runtime_state: runtimeState,
+			})
+
+			return { admitted: false, backoff_ms: finalBackoff }
+		}
+
+		if (!runtimeState.scheduler_state) {
+			runtimeState.scheduler_state = {}
+		}
+		runtimeState.scheduler_state.pressure_score = pressureScore
+		runtimeState.scheduler_state.queue_size = nowTaskCount
+
+		await this.writeState(workspace, {
+			runtime_state: runtimeState,
+		})
+
+		return { admitted: true, backoff_ms: 0 }
+	}
+
 	public async readState(workspace: string): Promise<any> {
 		const stateFile = this.getStatePath(workspace)
 		if (!(await fileExists(stateFile))) {
@@ -1559,6 +2119,7 @@ export class RoadmapService {
 
 	public async writeState(workspace: string, patch: any): Promise<any> {
 		const stateFile = this.getStatePath(workspace)
+		const tempStateFile = `${stateFile}.tmp`
 		const current = await this.readState(workspace)
 		const merged = {
 			...current,
@@ -1567,8 +2128,12 @@ export class RoadmapService {
 		}
 		try {
 			await fs.mkdir(path.dirname(stateFile), { recursive: true })
-			await fs.writeFile(stateFile, JSON.stringify(merged, null, 2), "utf8")
+			await fs.writeFile(tempStateFile, JSON.stringify(merged, null, 2), "utf8")
+			await fs.rename(tempStateFile, stateFile)
 		} catch (error) {
+			try {
+				await fs.unlink(tempStateFile)
+			} catch {}
 			await recordLastError({
 				string_code: "roadmap_state_write_failed",
 				message: error instanceof Error ? error.message : String(error),
@@ -1583,13 +2148,17 @@ export class RoadmapService {
 
 	public async recordFileMutation(workspace: string, tool: string, filePath: string): Promise<any> {
 		invalidateRoadmapWorkspaceCache(workspace)
-		return this.writeState(workspace, {
+		const res = await this.writeState(workspace, {
 			validation_pending: true,
 			schema_valid: null,
 			last_mutated_at: new Date().toISOString(),
 			last_mutation_tool: tool,
 			last_mutation_path: filePath,
 		})
+		try {
+			await recordMutationLineage(workspace, { tool, action: "file_mutated" })
+		} catch {}
+		return res
 	}
 
 	public async recordValidation(
@@ -1601,7 +2170,8 @@ export class RoadmapService {
 		issue_count: number,
 		bootstrap_placeholder_count: number,
 	): Promise<any> {
-		return this.writeState(workspace, {
+		const currentManifestHash = await computeDependencyManifestsHash(workspace)
+		const patch: any = {
 			last_validated_at: new Date().toISOString(),
 			schema_valid: valid,
 			health_status,
@@ -1611,7 +2181,20 @@ export class RoadmapService {
 			bootstrap_placeholder_count,
 			bootstrap_complete: bootstrap_placeholder_count === 0,
 			validation_pending: false,
-		})
+		}
+		if (valid) {
+			patch.dependency_manifests_hash = currentManifestHash
+		}
+		const res = await this.writeState(workspace, patch)
+		try {
+			await recordMutationLineage(workspace, {
+				action: "validated",
+				schema_valid: valid,
+				health_status,
+				diff_summary: `Validation issues: ${issue_count}, Bootstrap placeholders: ${bootstrap_placeholder_count}`,
+			})
+		} catch {}
+		return res
 	}
 
 	// Evidence Gathering
@@ -1728,6 +2311,7 @@ export class RoadmapService {
 		schemaValid: boolean | null,
 		staleDays = 7,
 		gitCommitsSinceCheckpoint: string[],
+		driftDetected = false,
 	): any {
 		if (!recentCheckpointDate) {
 			return {
@@ -1761,6 +2345,11 @@ export class RoadmapService {
 			stale = true
 			reason = "schema_invalid"
 			summary = "ROADMAP.md failed schema validation — checkpoint pass incomplete."
+		} else if (driftDetected) {
+			stale = true
+			reason = "dependency_drift"
+			summary =
+				"Dependency drift detected: workspace package manifests modified since last checkpoint — update Recent Checkpoint."
 		} else if (daysSince > staleDays && gitCommitsSinceCheckpoint.length >= 3) {
 			stale = true
 			reason = "checkpoint_older_than_git_activity"
@@ -1769,6 +2358,38 @@ export class RoadmapService {
 			stale = true
 			reason = "checkpoint_expired"
 			summary = `Checkpoint is ${daysSince}d old — schedule a roadmap refresh.`
+		}
+
+		const staleDaysLimit = staleDays
+		const daysRemaining = Math.max(0, staleDaysLimit - daysSince)
+		let checkpointDateObj = checkpointDate
+		if (Number.isNaN(checkpointDateObj.getTime())) {
+			checkpointDateObj = new Date()
+		}
+		const windowEnds = new Date(checkpointDateObj.getTime() + staleDaysLimit * 24 * 60 * 60 * 1000)
+
+		let score = 100
+		if (recentCheckpointDate) {
+			score -= Math.min(50, daysSince * 10)
+			score -= Math.min(45, gitCommitsSinceCheckpoint.length * 15)
+		} else {
+			score = 0
+		}
+		if (driftDetected) {
+			score -= 40
+		}
+		if (schemaValid === false) {
+			score -= 50
+		}
+		score = Math.max(0, score)
+
+		const temporalValidity = {
+			freshness_score: score,
+			window_start: checkpointDateObj.toISOString().slice(0, 10),
+			window_ends: windowEnds.toISOString().slice(0, 10),
+			expired: daysSince > staleDaysLimit,
+			days_remaining: daysRemaining,
+			dependency_drift_detected: driftDetected,
 		}
 
 		return {
@@ -1780,6 +2401,7 @@ export class RoadmapService {
 			git_commits_in_window: gitCommits.length,
 			recommended_action: stale ? "Update Recent Checkpoint (section 11) in ROADMAP.md" : "roadmap(action='guide')",
 			checkpoint_date: recentCheckpointDate,
+			temporal_validity: temporalValidity,
 		}
 	}
 
@@ -1799,12 +2421,21 @@ export class RoadmapService {
 			since_commits = resCommits ? resCommits.split(/\r?\n/).filter(Boolean) : []
 		}
 
+		const currentManifestHash = await computeDependencyManifestsHash(workspace)
+		const cachedHash = wsState.dependency_manifests_hash || ""
+		const driftDetected =
+			cachedHash &&
+			cachedHash !== "no_manifests" &&
+			currentManifestHash !== "no_manifests" &&
+			cachedHash !== currentManifestHash
+
 		const freshness = this.assessFreshness(
 			checkpoint_date,
 			git_commits,
 			validation ? validation.valid : (wsState.schema_valid ?? null),
 			getRoadmapConfig().stale_checkpoint_days,
 			since_commits,
+			!!driftDetected,
 		)
 
 		const inputs = await collectGateInputs({
@@ -1911,7 +2542,15 @@ export class RoadmapService {
 			return result
 		}
 
-		await fs.writeFile(roadmapPath, draft.preview_text, "utf8")
+		await writeRoadmapAtomically(workspace, draft.preview_text)
+
+		const newRuntimeState = hydrateRuntimeState(draft.preview_text)
+		const newHash = crypto.createHash("sha256").update(draft.preview_text).digest("hex").slice(0, 16)
+		await this.writeState(workspace, {
+			runtime_state: newRuntimeState,
+			roadmap_md_hash: newHash,
+		})
+
 		await this.recordFileMutation(workspace, "roadmap", "ROADMAP.md")
 
 		result.written = true
@@ -1963,6 +2602,24 @@ export class RoadmapService {
 			text = ""
 		}
 
+		if (text) {
+			const currentHash = crypto.createHash("sha256").update(text).digest("hex").slice(0, 16)
+			if (!state.runtime_state || state.roadmap_md_hash !== currentHash) {
+				const runtimeState = hydrateRuntimeState(text)
+				if (state.runtime_state) {
+					if (state.runtime_state.memory) runtimeState.memory = state.runtime_state.memory
+					if (state.runtime_state.active_window) runtimeState.active_window = state.runtime_state.active_window
+					if (state.runtime_state.locks) runtimeState.locks = state.runtime_state.locks
+					if (state.runtime_state.scheduler_state) runtimeState.scheduler_state = state.runtime_state.scheduler_state
+					if (state.runtime_state.version_vectors) runtimeState.version_vectors = state.runtime_state.version_vectors
+				}
+				state = await this.writeState(workspace, {
+					runtime_state: runtimeState,
+					roadmap_md_hash: currentHash,
+				})
+			}
+		}
+
 		const evidence = await this.gatherEvidence(workspace, text, tier)
 		const validation = validateRoadmapContent(text)
 		const gateState = await this.buildRoadmapGateState(workspace, evidence, validation)
@@ -1987,6 +2644,31 @@ export class RoadmapService {
 		userRequest = "",
 	): any {
 		const { workspace, text, evidence, validation, gateState, state } = ctx
+
+		const nowMs = Date.now()
+		let activeLocksCount = 0
+		if (state.runtime_state?.locks) {
+			for (const lock of Object.values(state.runtime_state.locks)) {
+				if (new Date((lock as any).expires_at).getTime() > nowMs) {
+					activeLocksCount++
+				}
+			}
+		}
+		const nowTaskCount = state.runtime_state?.tasks?.now?.items?.length || 0
+		let recentMutationsCount = 0
+		if (state.lineage && Array.isArray(state.lineage)) {
+			for (const entry of state.lineage) {
+				const entryTime = new Date((entry as any).timestamp).getTime()
+				if (nowMs - entryTime < 5 * 60 * 1000) {
+					recentMutationsCount++
+				}
+			}
+		}
+		const locksScore = Math.min(0.6, activeLocksCount * 0.2)
+		const tasksScore = Math.min(0.2, nowTaskCount * 0.05)
+		const mutationsScore = Math.min(0.4, recentMutationsCount * 0.1)
+		const pressureScore = Math.min(1.0, locksScore + tasksScore + mutationsScore)
+
 		const bootstrap_inc = isBootstrapIncomplete({
 			roadmap_exists: gateState.roadmap_present,
 			bootstrap_complete: gateState.bootstrap_complete,
@@ -2007,6 +2689,55 @@ export class RoadmapService {
 			validation_pending: !!state.validation_pending,
 			bootstrap_incomplete: bootstrap_inc,
 		})
+
+		const tv = gateState.temporal_validity || (gateState.checkpoint_freshness as any)?.temporal_validity
+
+		let confidence = 1.0
+		if (!gateState.roadmap_present) {
+			confidence = 0.0
+		} else {
+			if (validation.valid === false) {
+				confidence -= 0.5
+			}
+			if (state.validation_pending) {
+				confidence -= 0.2
+			}
+			if (gateState.checkpoint_stale) {
+				confidence -= 0.3
+			}
+			const remainingCount = gateState.bootstrap_placeholder_count || 0
+			if (remainingCount > 0) {
+				confidence -= Math.min(0.4, remainingCount * 0.1)
+			}
+			const risk = evidence.roadmap?.code_soup_risk || (evidence.code_soup_audit || {}).overall_risk || "Low"
+			if (risk === "High") {
+				confidence -= 0.3
+			} else if (risk === "Medium") {
+				confidence -= 0.1
+			}
+		}
+		confidence = Math.max(0.0, Math.min(1.0, confidence))
+
+		let intentClass = "CONTINUE_NORMAL"
+		if (!gateState.roadmap_present) {
+			intentClass = "BOOTSTRAP_PROJECT"
+		} else if (validation.valid === false) {
+			intentClass = "REMEDIATE_SCHEMA"
+		} else if (gateState.checkpoint_stale) {
+			intentClass = "STAMP_CHECKPOINT"
+		} else if (bootstrap_inc) {
+			intentClass = "BOOTSTRAP_FILL"
+		}
+
+		const continuationSemantics = {
+			intent_class: intentClass,
+			can_continue: confidence >= 0.5,
+			confidence_score: Number(confidence.toFixed(2)),
+			validation_token: state.updated_at
+				? crypto.createHash("sha256").update(state.updated_at).digest("hex").slice(0, 16)
+				: "none",
+			gates_to_clear: (gateState.blocking_gates || []).map((g: any) => g.id),
+		}
 
 		const payload: any = {
 			action,
@@ -2057,6 +2788,11 @@ export class RoadmapService {
 				blockingGates: (gateState.blocking_gates || []) as Array<{ id?: string }>,
 			}),
 			governance_policy: AUTO_GOVERNANCE.governancePolicy,
+			execution_confidence_score: Number(confidence.toFixed(2)),
+			continuation_semantics: continuationSemantics,
+			temporal_validity: tv,
+			runtime_state: state.runtime_state,
+			orchestration_pressure_score: Number(pressureScore.toFixed(2)),
 		}
 
 		if (userRequest.trim()) {
@@ -2089,18 +2825,22 @@ export class RoadmapService {
 		const { evidence, gateState } = ctx
 		const text = ctx.text
 
+		const isVerbose = (context || "").toLowerCase().includes("verbose")
+		const evidencePayload = isVerbose ? evidence : slimEvidence(evidence)
+
 		const payload: any = {
 			...status,
 			action: "checkpoint",
 			algorithm_steps: algorithmSteps(),
 			required_sections: [...REQUIRED_SECTIONS],
-			evidence,
+			evidence: evidencePayload,
 			existing_roadmap_summary: evidence.roadmap,
 			code_soup_pre_audit: evidence.code_soup_audit,
 			agent_instructions: agentInstructions(status.phase, evidence),
 			response_format: responseFormatTemplate(),
 			bootstrap_template_available: !evidence.roadmap.exists,
 			open_todo_marker_count: (evidence.todo_markers || []).length,
+			semantic_snapshot: !isVerbose,
 		}
 
 		if (!evidence.roadmap.exists) {
@@ -2157,28 +2897,40 @@ export class RoadmapService {
 			return { written: false, reason: "missing_file" }
 		}
 
-		let text = await fs.readFile(roadmapPath, "utf8")
-		const sectionMatch = /##\s+11\.\s+Recent Checkpoint/i.exec(text)
-		if (!sectionMatch || sectionMatch.index === undefined) {
-			return { written: false, reason: "no_section" }
-		}
+		const runtimeState = await this.getOrHydrateRuntimeState(workspace)
 
 		const today = new Date().toISOString().slice(0, 10)
-		const afterHeader = text.slice(sectionMatch.index)
-		const dateLineMatch = /\*\*Date:\*\*\s*(\S*)/i.exec(afterHeader)
-
-		if (dateLineMatch) {
-			const current = dateLineMatch[1].trim()
-			if (/^\d{4}-\d{2}-\d{2}$/.test(current)) {
-				return { written: false, reason: "date_already_valid" }
-			}
-			text = text.replace(/(##\s+11\.\s+Recent Checkpoint[\s\S]*?\*\*Date:\*\*\s*)(\S*)/i, `$1${today}`)
-		} else {
-			const insertAt = sectionMatch.index + sectionMatch[0].length
-			text = `${text.slice(0, insertAt)}\n\n**Date:** ${today}\n${text.slice(insertAt)}`
+		const current = runtimeState.checkpoint.date.trim()
+		if (/^\d{4}-\d{2}-\d{2}$/.test(current) && current === today) {
+			return { written: false, reason: "date_already_valid" }
 		}
 
-		await fs.writeFile(roadmapPath, text, "utf8")
+		runtimeState.checkpoint.date = today
+
+		const secBody = runtimeState.checkpoint.raw_body
+		const dateLineMatch = /\*\*Date:\*\*\s*(\S*)/i.exec(secBody)
+		let updatedBody = secBody
+		if (dateLineMatch) {
+			updatedBody = secBody.replace(/(\*\*Date:\*\*\s*)(\S*)/i, `$1${today}`)
+		} else {
+			const firstLineEnd = secBody.indexOf("\n")
+			if (firstLineEnd !== -1) {
+				updatedBody = `${secBody.slice(0, firstLineEnd + 1)}**Date:** ${today}\n${secBody.slice(firstLineEnd + 1)}`
+			} else {
+				updatedBody = `${secBody}\n**Date:** ${today}\n`
+			}
+		}
+		runtimeState.checkpoint.raw_body = updatedBody
+
+		const newText = projectRuntimeStateToMarkdown(runtimeState)
+		await writeRoadmapAtomically(workspace, newText)
+
+		const newHash = crypto.createHash("sha256").update(newText).digest("hex").slice(0, 16)
+		await this.writeState(workspace, {
+			runtime_state: runtimeState,
+			roadmap_md_hash: newHash,
+		})
+
 		await this.recordFileMutation(workspace, "roadmap_auto_touch", roadmapPath)
 		invalidateRoadmapWorkspaceCache(workspace)
 		return { written: true }
@@ -2191,6 +2943,13 @@ export class RoadmapService {
 			text = await fs.readFile(roadmapPath, "utf8")
 		}
 
+		const currentHash = crypto.createHash("sha256").update(text).digest("hex").slice(0, 16)
+		const nowTime = Date.now()
+		const cached = this.lastValidationResult[workspace]
+		if (cached && nowTime - cached.timestamp < 5000 && cached.hash === currentHash) {
+			return cached.result
+		}
+
 		const cfg = getRoadmapConfig()
 		if (cfg.auto_bootstrap_fill && text) {
 			const placeholders = findBootstrapPlaceholders(text)
@@ -2200,7 +2959,7 @@ export class RoadmapService {
 					if (filled && filled.written && filled.applied_count > 0) {
 						text = await fs.readFile(roadmapPath, "utf8")
 					}
-				} catch (err) {
+				} catch (_err) {
 					// non-fatal
 				}
 			}
@@ -2306,7 +3065,13 @@ export class RoadmapService {
 			payload.project_identity_line = payload.project_steering_digest.identity_line
 		}
 
-		return this.wrapClarityEnvelope(payload)
+		const wrappedPayload = this.wrapClarityEnvelope(payload)
+		this.lastValidationResult[workspace] = {
+			timestamp: nowTime,
+			hash: currentHash,
+			result: wrappedPayload,
+		}
+		return wrappedPayload
 	}
 
 	public async getTemplateBrief(workspace: string): Promise<any> {

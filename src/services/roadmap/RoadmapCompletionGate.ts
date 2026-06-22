@@ -33,7 +33,7 @@ interface RemediationPlan {
 	mechanicalStaleTouch: boolean
 }
 
-async function buildRemediationPlan(workspace: string, options?: RoadmapCompletionEvaluateOptions): Promise<RemediationPlan> {
+async function buildRemediationPlan(workspace: string, _options?: RoadmapCompletionEvaluateOptions): Promise<RemediationPlan> {
 	const svc = RoadmapService.getInstance()
 	const cfg = getRoadmapConfig()
 	const rawState = await svc.readState(workspace)
@@ -95,7 +95,6 @@ export async function remediateRoadmapGatesInternally(
 	options?: RoadmapCompletionEvaluateOptions,
 ): Promise<{ steps: string[]; status: Record<string, unknown> }> {
 	const svc = RoadmapService.getInstance()
-	const cfg = getRoadmapConfig()
 	const plan = await buildRemediationPlan(workspace, options)
 
 	if (options?.dryRun) {
@@ -105,42 +104,91 @@ export async function remediateRoadmapGatesInternally(
 
 	const steps: string[] = []
 
-	if (plan.bootstrapNeeded) {
-		try {
+	// Transaction Backups
+	const roadmapPath = path.join(workspace, "ROADMAP.md")
+	const statePath = svc.getStatePath(workspace)
+	let originalRoadmap: string | null = null
+	let originalState: string | null = null
+	try {
+		originalRoadmap = await fs.readFile(roadmapPath, "utf8")
+	} catch {}
+	try {
+		originalState = await fs.readFile(statePath, "utf8")
+	} catch {}
+
+	try {
+		if (plan.bootstrapNeeded) {
 			const filled = await svc.writeBootstrapAutofill(workspace, false)
 			if (filled?.written && (filled.applied_count ?? 0) > 0) {
 				steps.push(`auto-filled ${filled.applied_count} bootstrap placeholder(s) in ROADMAP.md`)
 			}
-		} catch {
-			// non-fatal
 		}
-	}
 
-	if (plan.validationWasPending || steps.length > 0) {
-		try {
+		if (plan.validationWasPending || steps.length > 0) {
 			await svc.validateRoadmap(workspace)
 			steps.push("auto-validated ROADMAP.md schema")
-		} catch {
-			// non-fatal
 		}
-	}
 
-	let liveStatus = await svc.getOperationalStatus(workspace, "", "light")
-
-	if (plan.mechanicalStaleTouch) {
-		try {
+		let touchedDate = false
+		if (plan.mechanicalStaleTouch) {
 			const touched = await svc.touchRecentCheckpointDate(workspace)
 			if (touched.written) {
 				steps.push("auto-stamped Recent Checkpoint date in ROADMAP.md")
-				await svc.validateRoadmap(workspace)
-				liveStatus = await svc.getOperationalStatus(workspace, "", "light")
+				touchedDate = true
 			}
-		} catch {
-			// non-fatal
 		}
-	}
 
-	return { steps, status: liveStatus }
+		if (touchedDate) {
+			await svc.validateRoadmap(workspace)
+		}
+
+		let liveStatus = await svc.getOperationalStatus(workspace, "", "light")
+
+		const isInvalid = liveStatus.schema_valid === false || liveStatus.validation_pending === true
+		if (isInvalid && steps.length > 0) {
+			throw new Error("Validation failed after internal remediation")
+		}
+
+		// Success path: log receipt of successful remediation
+		if (steps.length > 0) {
+			await svc.recordMutationLineage(workspace, {
+				action: "remediation_commit",
+				tool: "completion_remediator",
+				diff_summary: `Remediation completed successfully: ${steps.join("; ")}`,
+			})
+			// reload status to pick up updated lineage
+			liveStatus = await svc.getOperationalStatus(workspace, "", "light")
+		}
+
+		return { steps, status: liveStatus }
+	} catch (err) {
+		// Rollback execution
+		if (originalRoadmap !== null) {
+			await fs.writeFile(roadmapPath, originalRoadmap, "utf8")
+		} else {
+			try {
+				await fs.unlink(roadmapPath)
+			} catch {}
+		}
+		if (originalState !== null) {
+			await fs.writeFile(statePath, originalState, "utf8")
+		} else {
+			try {
+				await fs.unlink(statePath)
+			} catch {}
+		}
+
+		await svc.writeState(workspace, { validation_pending: false, schema_valid: originalRoadmap ? true : null })
+		await svc.recordMutationLineage(workspace, {
+			action: "remediation_rollback",
+			tool: "completion_remediator",
+			diff_summary: `Remediation rolled back: ${err instanceof Error ? err.message : String(err)}`,
+		})
+
+		const liveStatus = await svc.getOperationalStatus(workspace, "", "light")
+		steps.push(`rolled back changes (error: ${err instanceof Error ? err.message : String(err)})`)
+		return { steps, status: liveStatus }
+	}
 }
 
 export async function evaluateRoadmapCompletionBlock(
@@ -171,7 +219,7 @@ export async function evaluateRoadmapCompletionBlock(
 	if (liveStatus.validation_pending) {
 		return {
 			blocked: true,
-			message: AUTO_GOVERNANCE.autoValidateFailed + remediationNote + `\n\n${AUTO_GOVERNANCE.editRoadmapResolve}`,
+			message: `${AUTO_GOVERNANCE.autoValidateFailed}${remediationNote}\n\n${AUTO_GOVERNANCE.editRoadmapResolve}`,
 			remediationSteps: steps,
 			autoClearableOnly: false,
 		}

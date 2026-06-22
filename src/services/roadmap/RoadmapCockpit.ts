@@ -6,7 +6,10 @@ import { readCurrentProgress, readLastError } from "./RoadmapProgress"
 import type { RoadmapService } from "./RoadmapService"
 import { WORKSPACE_SKILL_REL } from "./RoadmapSkillInstall"
 
-export function formatCockpitReport(payload: Record<string, unknown>): string {
+export function formatCockpitReport(payload: Record<string, unknown>, options?: { agentId?: string; verbose?: boolean }): string {
+	const verbose = options?.verbose || process.argv.includes("--verbose")
+	const agentId = options?.agentId
+
 	const lines = [
 		"🗺️ Roadmap cockpit",
 		`Workspace: ${payload.workspace || "(auto)"}`,
@@ -19,6 +22,18 @@ export function formatCockpitReport(payload: Record<string, unknown>): string {
 	if (payload.recent_checkpoint_date) lines.push(`Last checkpoint: ${payload.recent_checkpoint_date}`)
 	if (payload.code_soup_risk) lines.push(`Code soup risk: ${payload.code_soup_risk}`)
 	if (payload.now_item_count !== undefined) lines.push(`Now items: ${payload.now_item_count}`)
+	if (payload.execution_confidence_score !== undefined) lines.push(`Confidence score: ${payload.execution_confidence_score}`)
+	if (payload.orchestration_pressure_score !== undefined) lines.push(`Pressure score: ${payload.orchestration_pressure_score}`)
+
+	const tv = (payload.temporal_validity || (payload.checkpoint_freshness as any)?.temporal_validity) as any
+	if (tv) {
+		lines.push(`Freshness score: ${tv.freshness_score}/100`)
+		lines.push(`Validity window: ${tv.window_start} to ${tv.window_ends} (expired: ${tv.expired})`)
+		if (tv.dependency_drift_detected) {
+			lines.push(`⚠️ Dependency drift detected: package manifests updated since last validation`)
+		}
+	}
+
 	if (payload.validation_pending) lines.push(`⚠️ validation_pending — ${AUTO_GOVERNANCE.validationAtCompletion}`)
 	if (payload.bootstrap_complete === false) {
 		lines.push(`⚠️ bootstrap incomplete (${payload.bootstrap_placeholder_count ?? "?"} phrases)`)
@@ -44,6 +59,63 @@ export function formatCockpitReport(payload: Record<string, unknown>): string {
 	lines.push("", `Write guard: ROADMAP.md at ${payload.roadmap_path || "workspace root"}`)
 	const verify = ((payload.project_steering_digest as Record<string, unknown>)?.verification_commands as string[]) || []
 	if (verify.length > 0) lines.push(`Verify: ${verify[0]}`)
+
+	const runtimeState = (payload.runtime_state ||
+		(payload.workspace_state as Record<string, unknown> | undefined)?.runtime_state) as any
+	if (runtimeState) {
+		lines.push("", "Focus-Scoped Execution Graph (Now):")
+		let nowItems = runtimeState.tasks?.now?.items || []
+		if (agentId && !verbose) {
+			const locks = runtimeState.locks || {}
+			nowItems = nowItems.filter((item: any) => {
+				const lock = locks[item.id]
+				if (lock) {
+					const isExpired = new Date(lock.expires_at).getTime() <= Date.now()
+					if (!isExpired && lock.owner_agent !== agentId) {
+						return false
+					}
+				}
+				return true
+			})
+		}
+
+		if (nowItems.length > 0) {
+			nowItems.forEach((item: any, idx: number) => {
+				lines.push(`  [${idx + 1}] ${item.title} (id: ${item.id})`)
+			})
+		} else {
+			lines.push("  • (No active focus items in Now)")
+		}
+
+		const anchors = runtimeState.memory?.continuation_anchors || {}
+		const anchorKeys = Object.keys(anchors)
+		if (anchorKeys.length > 0) {
+			lines.push("", "Orchestration Continuation Anchors:")
+			anchorKeys.forEach((k) => {
+				lines.push(`  • ${k}: ${anchors[k]}`)
+			})
+		}
+	}
+
+	let lineage = (payload.workspace_state as Record<string, unknown> | undefined)?.lineage as Array<any> | undefined
+	if (lineage && lineage.length > 0) {
+		if (agentId && !verbose) {
+			lineage = lineage.filter((entry: any) => !entry.agent_id || entry.agent_id === agentId)
+		}
+		if (lineage.length > 0) {
+			lines.push("", "Steering Lineage Ledger:")
+			for (const entry of lineage.slice().reverse()) {
+				const time = entry.timestamp.slice(11, 19)
+				const tool = entry.tool ? ` [${entry.tool}]` : ""
+				const action = entry.action || "mutate"
+				const hashStr = entry.hash ? ` (hash: ${entry.hash})` : ""
+				const tokenStr = entry.causality_token ? ` (token: ${entry.causality_token})` : ""
+				const summary = entry.diff_summary ? ` · ${entry.diff_summary}` : ""
+				lines.push(`  • ${time} · ${action}${tool}${hashStr}${tokenStr}${summary}`)
+			}
+		}
+	}
+
 	lines.push(
 		"",
 		`→ ${(payload.recommended_next_action as Record<string, unknown>)?.command || payload.agent_next_call || "roadmap(action='guide')"}`,
@@ -51,7 +123,11 @@ export function formatCockpitReport(payload: Record<string, unknown>): string {
 	return lines.join("\n")
 }
 
-export async function buildCockpitPayload(roadmapService: RoadmapService, workspace: string): Promise<Record<string, unknown>> {
+export async function buildCockpitPayload(
+	roadmapService: RoadmapService,
+	workspace: string,
+	options?: { agentId?: string; verbose?: boolean },
+): Promise<Record<string, unknown>> {
 	const cfg = getRoadmapConfig()
 	const status = await roadmapService.getOperationalStatus(workspace, "", "standard")
 	const gate = (status.roadmap_gate || {}) as Record<string, unknown>
@@ -103,10 +179,12 @@ export async function buildCockpitPayload(roadmapService: RoadmapService, worksp
 		operator_summary: status.operator_summary,
 		last_progress: currentProgress,
 		last_error: lastError,
+		runtime_state: status.runtime_state,
+		workspace_state: status.workspace_state,
 		report: "",
 		gates_report: formatExplainGateReport(gateExplainParamsFromStatus(workspace, gate, status)),
 	})
 
-	payload.report = formatCockpitReport(payload)
+	payload.report = formatCockpitReport(payload, options)
 	return payload
 }
