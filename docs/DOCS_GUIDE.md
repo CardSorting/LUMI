@@ -65,6 +65,7 @@ Map of LUMI agent workspace documentation. BroccoliDB docs are maintained separa
 | [CODE_TO_DOC_MAP.md](CODE_TO_DOC_MAP.md) | Source → doc lookup |
 | [papers/README.md](papers/README.md) | Papers reading order |
 | [SYSTEM_COMMUNICATION.md](SYSTEM_COMMUNICATION.md) | IPC and host bridge |
+| [grpc-subscription-persistence.md](grpc-subscription-persistence.md) | Persistent `subscribeTo*` streams, idle-timeout bug, client/server runtime |
 | [MEMORY_AND_REASONING.md](MEMORY_AND_REASONING.md) | Context and memory tools |
 | [WORKING_WITH_SUBAGENTS.md](WORKING_WITH_SUBAGENTS.md) | Subagent protocol |
 | [SECURITY_BEST_PRACTICES.md](SECURITY_BEST_PRACTICES.md) | Safety model |

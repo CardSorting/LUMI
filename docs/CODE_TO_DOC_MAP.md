@@ -37,6 +37,12 @@ Use this when you change code and need to update the matching doc.
 | Source | Documentation |
 |--------|---------------|
 | `webview-ui/src/copy/lumiVoice.ts` | [USER_INTERFACE_DESIGN.md](USER_INTERFACE_DESIGN.md) · [MIRA_UX_IMPLEMENTATION.md](MIRA_UX_IMPLEMENTATION.md) |
+| `src/shared/grpc/persistent-stream.ts` | [gRPC subscription persistence](grpc-subscription-persistence.md) |
+| `webview-ui/src/services/grpc-subscription-runtime.ts` | [gRPC subscription persistence](grpc-subscription-persistence.md) |
+| `webview-ui/src/services/grpc-client-base.ts` | [gRPC subscription persistence](grpc-subscription-persistence.md) · [System communication](SYSTEM_COMMUNICATION.md) |
+| `webview-ui/src/context/useExtensionGrpcSubscriptions.ts` | [gRPC subscription persistence](grpc-subscription-persistence.md) |
+| `src/core/controller/persistent-subscription-hub.ts` | [gRPC subscription persistence](grpc-subscription-persistence.md) |
+| `src/core/controller/**/subscribeTo*.ts` | [gRPC subscription persistence](grpc-subscription-persistence.md) · [System communication](SYSTEM_COMMUNICATION.md) |
 | `src/hosts/host-provider.ts` | [System communication](SYSTEM_COMMUNICATION.md) |
 | `src/hosts/vscode/hostbridge/` | [System communication](SYSTEM_COMMUNICATION.md) |
 

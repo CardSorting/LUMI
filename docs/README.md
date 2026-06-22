@@ -192,6 +192,7 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Agent stack](AGENT_STACK.md) | Two-layer map (LUMI + BroccoliDB) |
 | [Architecture (current)](architecture/current.md) | Extension module structure |
 | [System communication](SYSTEM_COMMUNICATION.md) | gRPC host bridge, webview messaging |
+| [gRPC subscription persistence](grpc-subscription-persistence.md) | Persistent streams, idle-timeout incident, runtime architecture |
 | [Memory & reasoning](MEMORY_AND_REASONING.md) | Context, cognitive memory tools |
 | [Working with subagents](WORKING_WITH_SUBAGENTS.md) | Background agent delegation |
 | [Security best practices](SECURITY_BEST_PRACTICES.md) | Approval gates, ignore files |

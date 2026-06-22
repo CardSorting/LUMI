@@ -37,6 +37,24 @@ The sidebar webview does not call Node APIs directly. Instead:
 
 Generated types live in `src/generated/` and `src/shared/proto/`.
 
+### Persistent subscriptions (important)
+
+Long-lived `subscribeTo*` RPCs are **event channels**, not job streams. They must stay open while idle and only emit when something happens (button click, state change, partial message, etc.).
+
+A prior bug applied a 10-minute **idle timeout** to all streaming RPCs. Subscriptions that did not send an immediate message (most UI event streams) timed out together and flooded the console with `Timed out waiting for … stream update` errors.
+
+The fix is documented in [gRPC subscription persistence](grpc-subscription-persistence.md). In short:
+
+| Layer | Location | Responsibility |
+|-------|----------|------------------|
+| Contract | `src/shared/grpc/persistent-stream.ts` | Classify persistent vs finite streams; idle timeout applies only to finite streams |
+| Webview transport | `webview-ui/src/services/grpc-client-base.ts` | Skips idle timer when `shouldApplyStreamIdleTimeout(method)` is false |
+| Webview runtime | `webview-ui/src/services/grpc-subscription-runtime.ts` | Deduped transports, ref-count, reconnect, visibility recovery |
+| Webview bindings | `webview-ui/src/context/useExtensionGrpcSubscriptions.ts` | Declarative subscription list |
+| Server fanout | `src/core/controller/persistent-subscription-hub.ts` | One hub per stream type; prune dead subscribers on broadcast failure |
+
+New persistent streams should use `PersistentSubscriptionHub` on the server and `useGrpcSubscription` on the client — not private `Set` fanout or one-off `useEffect` reconnect logic.
+
 ## Host bridge
 
 `HostProvider` (`src/hosts/host-provider.ts`) is initialized in `src/extension.ts` with:
@@ -75,6 +93,7 @@ Schemas: `proto/dietcode/`. Output: `src/generated/`, formatted by `postprotos` 
 
 ## Related docs
 
+- [gRPC subscription persistence](grpc-subscription-persistence.md) — why subscriptions broke, idle-timeout bug, runtime architecture
 - [Project map](PROJECT_MAP.md)
 - [Architecture (current)](architecture/current.md)
 - [MCP overview](mcp/mcp-overview.mdx)

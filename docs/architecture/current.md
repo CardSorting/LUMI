@@ -91,7 +91,7 @@ See [All tools](../tools-reference/all-dietcode-tools.mdx) for the full list.
 
 | Layer | Mechanism | Location |
 |-------|-----------|----------|
-| Webview ↔ extension | Protobuf over webview message passing | `src/core/controller/grpc-*`, `src/shared/proto/` |
+| Webview ↔ extension | Protobuf over webview message passing; persistent `subscribeTo*` streams use [subscription runtime](../grpc-subscription-persistence.md) | `src/core/controller/grpc-*`, `src/shared/grpc/persistent-stream.ts`, `webview-ui/src/services/grpc-subscription-runtime.ts` |
 | Extension ↔ VS Code | Host bridge gRPC client | `src/hosts/vscode/hostbridge/` |
 | Extension ↔ LLM | Provider-specific HTTP/SSE | `src/core/api/providers/` |
 | Extension ↔ MCP | MCP SDK transports | `src/services/mcp/` |

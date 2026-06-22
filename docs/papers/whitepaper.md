@@ -406,6 +406,7 @@ Extension activation: `src/extension.ts` (~788 lines). Registry: `src/registry.t
 | [Companion Brief](companion-brief.md) | Executive metrics |
 | [Architecture (current)](../architecture/current.md) | Module reference |
 | [System communication](../SYSTEM_COMMUNICATION.md) | IPC detail |
+| [gRPC subscription persistence](../grpc-subscription-persistence.md) | Persistent `subscribeTo*` streams and runtime |
 | [BroccoliDB whitepaper](../../broccolidb/docs/papers/whitepaper.md) | Substrate |
 
 ---
