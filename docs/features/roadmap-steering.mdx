@@ -55,40 +55,177 @@ Mid-task (before completion), agents should **continue working**. The system pro
 
 ## Multi-Agent Coordination & Leases
 
-To support concurrent execution across multiple collaborative agents without write contention, planning overlap, or state corruption, the runtime implements **Execution Ownership Leases**:
+To support concurrent execution across multiple collaborative agents without write contention, planning overlap, or state corruption, the runtime implements **Execution Ownership Leases**.
 
-- **Mutation Lock Envelopes:** Agents must acquire a temporary exclusive lease for a specific task node or checkpoint before executing writes or modifying states.
-- **Expiration Policies:** Leases are acquired via `acquireOrchestrationLease(workspace, agentId, taskId, durationSeconds)` and expire automatically (default: 5 minutes) to avoid execution starvation. Same-agent lease renewals are permitted.
-- **Handoff Semantics:** Active leases are cleanly released using `releaseOrchestrationLease(workspace, agentId, taskId)` upon task completion or execution continuation.
+### JSON State Representation
+Lease metadata is serialized within the centralized `.dietcode/roadmap-state.json` file. Each lock identifies the task ID, owning agent, acquisition timestamp, and expire target:
+
+```json
+{
+  "runtime_state": {
+    "locks": {
+      "9f23a104": {
+        "owner_agent": "agent_alpha",
+        "leased_at": "2026-06-22T00:03:00.000Z",
+        "expires_at": "2026-06-22T00:08:00.000Z"
+      }
+    }
+  }
+}
+```
+
+### Trace Scenario: Lock Contention & Expiry
+1. **Agent Alpha** acquires a lease on Task `9f23a104` to modify its subtask requirements:
+   ```typescript
+   await service.acquireOrchestrationLease(workspace, "agent_alpha", "9f23a104");
+   // Returns: { success: true, expires_at: "2026-06-22T00:08:00.000Z" }
+   ```
+2. **Agent Beta** simultaneously attempts to rewrite Task `9f23a104`:
+   ```typescript
+   await service.acquireOrchestrationLease(workspace, "agent_beta", "9f23a104");
+   // Returns: { success: false } -> Beta is blocked from modifying this task node.
+   ```
+3. **Lease Cleanup / Release:** Once Alpha completes its edit, it releases the lock:
+   ```typescript
+   await service.releaseOrchestrationLease(workspace, "agent_alpha", "9f23a104");
+   // Lock is deleted; other agents can now acquire the lease.
+   ```
 
 ---
 
 ## Pressure-Aware Scheduling & Cooldowns
 
-Under production pressure, the runtime actively prevents planning storms, excessive validation cycles, and scheduler congestion by calculating an **Orchestration Pressure Score** (0.0 to 1.0) and running an **Admission Control Queue**:
+Under production pressure, the runtime actively prevents planning storms, excessive validation cycles, and scheduler congestion by calculating an **Orchestration Pressure Score** (0.0 to 1.0) and running an **Admission Control Queue**.
 
-- **Pressure Score Factors:** Dynamically calculated based on the count of active unexpired leases (0.2 per lock), the size of the active task queue (Now list) (0.05 per task), and the mutation rate (lineage edits in the last 5 minutes, 0.1 per mutation).
-- **Admission Queue Backoffs:** The `scheduleAdmission(workspace, agentId, operation)` wrapper paces agent requests. If the pressure score is high (>= 0.8) or if a cooldown window is active, it blocks immediate execution (`admitted: false`) and returns exponential backoff parameters (up to 10 seconds), preventing runaway planning chains.
-- **Lazy Validation Caching:** To minimize context over-hydrations and redundant CPU/IO execution cost, `validateRoadmap` caches validation results. If a request arrives within 5 seconds of a previous validation and the `ROADMAP.md` hash is unchanged, the heavy parsing pipeline is bypassed.
+### Pressure Score Heuristic
+The score is composed of three core stress vectors:
+
+$$\text{Pressure Score} = \min(1.0, \text{locksScore} + \text{tasksScore} + \text{mutationsScore})$$
+
+| Stress Vector | Weight Metric | Cap limit | Example (3 locks, 5 tasks, 1 recent edit) |
+|---|---|---|---|
+| **Active Leases** | 0.20 per active lease | 0.60 max | 3 locks = 0.60 |
+| **Tasks Queue (Now)** | 0.05 per task in Now | 0.20 max | 5 tasks = 0.20 |
+| **Mutation Rate** | 0.10 per mutation in last 5 min | 0.40 max | 1 edit = 0.10 |
+| **Total Pressure Score** | Cumulative sum | **1.00 max** | **0.90** |
+
+### JSON State Representation (`scheduler_state`)
+```json
+{
+  "runtime_state": {
+    "scheduler_state": {
+      "pressure_score": 0.9,
+      "queue_size": 5,
+      "last_cooldown_timestamp": "2026-06-22T00:03:10.000Z"
+    }
+  }
+}
+```
+
+### Trace Scenario: Admission Pacing & Backoff
+1. **Agent Gamma** requests to start a validation cycle (`scheduleAdmission`) when pressure is **0.90**:
+   ```typescript
+   const status = await service.scheduleAdmission(workspace, "agent_gamma", "validate");
+   // Returns: { admitted: false, backoff_ms: 5650 }
+   ```
+2. **Cooldown Enforcement:** The scheduler writes `last_cooldown_timestamp` to state. For the next `5650` milliseconds, any mutation admission from Agent Gamma is deferred.
+3. **Lazy Validation Bypass:** If Agent Gamma triggers a diagnostic validation check within 5 seconds of a previous run, the runtime skips compiling dependencies and parsing files, returning the cached payload:
+   ```typescript
+   // Skips workspace scan if file hash is unchanged:
+   const result = await service.validateRoadmap(workspace); 
+   // Returns cached result instantly in < 2ms (saves ~1.2s IO overhead)
+   ```
 
 ---
 
 ## Concurrent Continuation & Version Vectors
 
-When agents run recovery cycles, asynchronous tasks, or retry loops, the runtime prevents split-brain recovery races and fork divergence through **Freshness Validation**:
+When agents run recovery cycles, asynchronous tasks, or retry loops, the runtime prevents split-brain recovery races and fork divergence through **Freshness Validation**.
 
-- **Monotonic Version Vectors:** Every task node mutation, lease modification, and continuation anchor registration increment a sequence counter inside the state's `version_vectors` dictionary.
-- **Divergence Detection:** Before resuming from a continuation anchor, the executor verifies version vector freshness using `verifyAnchorFreshness(workspace, key, expectedVersion)`. If the current sequence counter diverges from the expected version, the runtime rejects resumption and requires coordination.
+### JSON State Representation
+Monotonic sequence counters track modifications to keys (like continuation anchors):
+
+```json
+{
+  "runtime_state": {
+    "version_vectors": {
+      "recovery_checkpoint_anchor": 4,
+      "9f23a104": 2
+    }
+  }
+}
+```
+
+### Trace Scenario: Divergence Detection during Recovery
+1. **Agent Delta** sets a recovery checkpoint before starting a refactoring cycle:
+   ```typescript
+   await service.recordContinuationAnchor(workspace, "recovery_checkpoint_anchor", "refactor_stage_1");
+   // Version vector for "recovery_checkpoint_anchor" is incremented to 4
+   ```
+2. **Agent Epsilon** (running concurrently) mutates the roadmap or updates the same anchor, incrementing the version vector in the background:
+   ```typescript
+   await service.recordContinuationAnchor(workspace, "recovery_checkpoint_anchor", "refactor_stage_2");
+   // Version vector for "recovery_checkpoint_anchor" is incremented to 5
+   ```
+3. **Divergence Block:** Agent Delta attempts to resume execution assuming the system is still on version `4`:
+   ```typescript
+   const check = await service.verifyAnchorFreshness(workspace, "recovery_checkpoint_anchor", 4);
+   // Returns: { fresh: false, current_version: 5 }
+   // Delta's continuation is rejected to avoid overwriting Epsilon's updates, requiring coordination.
+   ```
 
 ---
 
 ## Scoped Cognitive Partitioning
 
-As orchestration scales, the roadmap runtime shape-shifts agent views into local operational contexts, preventing cognitive overload and prompt bloat:
+As orchestration scales, the roadmap runtime shape-shapes agent views into local operational contexts, preventing cognitive overload and prompt bloat.
 
-- **Local Reasoning Corridors:** Cockpit snapshots (`buildCockpitPayload`) and steering blocks (`formatRoadmapSteeringBlock`) automatically filter out locks held by other agents and tasks locked by others, localizing the focus-scoped execution graph to this agent's immediate task neighborhood.
-- **Steering Lineage Filtering:** Lineage ledger histories filter out entries generated by other agents.
-- **Verbose Escape Hatch:** Agents can request unfiltered context views by supplying the `--verbose` flag.
+### Trace Scenario: Quiet reasoning corridors vs. Verbose views
+Assume Task `9f23a104` is leased by **Agent Alpha**, and Task `77e12f01` is leased by **Agent Beta**.
+
+#### Case A: Agent Alpha requests Cockpit Status (Non-Verbose)
+```typescript
+const cockpit = await buildCockpitPayload(service, workspace, { agentId: "agent_alpha" });
+console.log(cockpit.report);
+```
+**Output Context Block:**
+```text
+🗺️ Roadmap cockpit
+Workspace: /my-project
+Project: E-Commerce Hardening · phase=checkpoint
+
+Focus-Scoped Execution Graph (Now):
+  [1] Optimize Cart Hydration (id: 9f23a104)
+  [2] Unlocked Cleanup Task (id: abc12345)
+  • (Task 77e12f01 owned by Beta is hidden to reduce noise)
+
+Steering Lineage Ledger:
+  • 00:03:00 · file_mutated [agent_alpha] (hash: f12a) · Added hydration test
+```
+
+#### Case B: Agent Alpha requests Cockpit Status with Verbose Escape Hatch (`--verbose`)
+```typescript
+const cockpit = await buildCockpitPayload(service, workspace, { agentId: "agent_alpha", verbose: true });
+console.log(cockpit.report);
+```
+**Output Context Block:**
+```text
+🗺️ Roadmap cockpit
+Workspace: /my-project
+Project: E-Commerce Hardening · phase=checkpoint
+
+Focus-Scoped Execution Graph (Now):
+  [1] Optimize Cart Hydration (id: 9f23a104)
+  [2] Task Locked by Other (id: 77e12f01)
+  [3] Unlocked Cleanup Task (id: abc12345)
+
+Active Lock Alerts:
+  ⚠️ Task 77e12f01 is leased by agent_beta (expires: 2026-06-22T00:08:00.000Z)
+
+Steering Lineage Ledger:
+  • 00:04:12 · file_mutated [agent_beta] (hash: e90b) · Refactored checkouts
+  • 00:03:00 · file_mutated [agent_alpha] (hash: f12a) · Added hydration test
+```
 
 ---
 
