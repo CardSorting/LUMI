@@ -3,7 +3,7 @@
  * Intention-revealing JoyRide hot-path APIs with typed cache decisions.
  */
 
-import type { DietCodeToolResponseContent } from "@shared/ExtensionMessage"
+import type { DietCodeToolResponseContent } from "@shared/messages/content"
 import { Logger } from "@shared/services/Logger"
 import { recordJoyRideCacheHit } from "./JoyRideAudit"
 import type { JoyRideCache } from "./JoyRideCache"

@@ -4,7 +4,7 @@ import {
 	type GatePolicyProvenance,
 	resolveCompletionGateContext,
 } from "@shared/audit/auditGatePolicyLoader"
-import { type AuditGateDecision } from "@shared/audit/auditGateReport"
+import { type AuditGateDecision, evaluateAuditGate } from "@shared/audit/auditGateReport"
 import { getLatestPlanAuditFromMessages } from "@shared/audit/auditMessages"
 import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { buildCompletionGateMessage, runCompletionAudit } from "@shared/audit/completionAudit"

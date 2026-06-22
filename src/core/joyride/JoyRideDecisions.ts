@@ -3,7 +3,7 @@
  * Typed JoyRide cache decisions — discriminated unions, no silent ambiguity.
  */
 
-import type { DietCodeToolResponseContent } from "@shared/ExtensionMessage"
+import type { DietCodeToolResponseContent } from "@shared/messages/content"
 import type { JoyRideReasonCode } from "./JoyRideReasonCodes"
 import type { JoyRideCacheKind } from "./types"
 
