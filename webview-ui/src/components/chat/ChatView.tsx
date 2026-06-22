@@ -13,6 +13,7 @@ import { findAuditMessageIndex, findMessageIndexForAuditTs } from "@shared/audit
 import { buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { computeAuditHealthSummaryWithBaseline } from "@shared/audit/auditRollup"
 import { buildSubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
+import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
 import { combineHookSequences } from "@shared/combineHookSequences"

@@ -22,6 +22,7 @@ interface ApiOptionsProps {
 	modelIdErrorMessage?: string
 	isPopup?: boolean
 	currentMode: Mode
+	initialModelTab?: "recommended" | "free"
 }
 
 // This is necessary to ensure dropdown opens downward, important for when this is used in popup.
@@ -31,15 +32,6 @@ export { DROPDOWN_Z_INDEX }
 // DropdownContainer lives in the ./constants leaf to break the ApiOptions ↔
 // provider-component cycle. Imported above for local use + re-exported for compat.
 export { DropdownContainer }
-
-declare module "vscode" {
-	interface LanguageModelChatSelector {
-		vendor?: string
-		family?: string
-		version?: string
-		id?: string
-	}
-}
 
 const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, isPopup, currentMode }: ApiOptionsProps) => {
 	// Use full context state for immediate save payload

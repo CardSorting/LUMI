@@ -1,6 +1,23 @@
 import { McpDisplayMode, UpdateSettingsRequest } from "@shared/proto/dietcode/state"
 import { StateServiceClient } from "@/services/grpc-client"
 
+/** Settings persisted via updateSettings but not yet on UpdateSettingsRequest proto */
+export type ExtendedSettingsKey =
+	| keyof UpdateSettingsRequest
+	| "auditCompletionGateEnabled"
+	| "auditCompletionGateThreshold"
+	| "auditCompletionGateCriticalOnly"
+	| "auditActModeAdvisoryEnabled"
+	| "auditAdvisoryEscalationEnabled"
+	| "auditPlanRegressionGateEnabled"
+	| "auditToolOutputAdvisoryEnabled"
+	| "auditFileWriteAdvisoryEnabled"
+	| "auditIntentThresholdAdjustmentsEnabled"
+	| "auditIntentThresholdOverrides"
+	| "auditSarifHookExportEnabled"
+	| "auditWorkspaceArtifactsEnabled"
+	| "auditAdvisoryAutoScrollMode"
+
 /**
  * Converts values to their corresponding proto format
  * @param field - The field name
@@ -8,7 +25,7 @@ import { StateServiceClient } from "@/services/grpc-client"
  * @returns The converted value
  * @throws Error if the value is invalid for the field
  */
-const convertToProtoValue = (field: keyof UpdateSettingsRequest, value: any): any => {
+const convertToProtoValue = (field: ExtendedSettingsKey, value: any): any => {
 	if (field === "mcpDisplayMode" && typeof value === "string") {
 		switch (value) {
 			case "rich":
@@ -30,13 +47,14 @@ const convertToProtoValue = (field: keyof UpdateSettingsRequest, value: any): an
  * @param field - The field key to update
  * @param value - The new value for the field
  */
-export const updateSetting = (field: keyof UpdateSettingsRequest, value: any) => {
-	const updateRequest: Partial<UpdateSettingsRequest> = {}
+export const updateSetting = (field: ExtendedSettingsKey, value: any) => {
+	const updateRequest: Record<string, unknown> = {
+		[field]: convertToProtoValue(field, value),
+	}
 
-	const convertedValue = convertToProtoValue(field, value)
-	updateRequest[field] = convertedValue
-
-	StateServiceClient.updateSettings(UpdateSettingsRequest.create(updateRequest)).catch((error) => {
-		console.error(`Failed to update setting ${field}:`, error)
-	})
+	StateServiceClient.updateSettings(UpdateSettingsRequest.create(updateRequest as Partial<UpdateSettingsRequest>)).catch(
+		(error) => {
+			console.error(`Failed to update setting ${field}:`, error)
+		},
+	)
 }

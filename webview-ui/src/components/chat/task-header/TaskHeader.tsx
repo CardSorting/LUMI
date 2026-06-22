@@ -123,15 +123,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	const { selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, mode)
 	const modeFields = getModeSpecificFields(apiConfiguration, mode)
 
-	const isCostAvailable =
-		(totalCost &&
-			modeFields.apiProvider === "openai" &&
-			modeFields.openAiModelInfo?.inputPrice &&
-			modeFields.openAiModelInfo?.outputPrice) ||
-		(modeFields.apiProvider !== "vscode-lm" &&
-			modeFields.apiProvider !== "ollama" &&
-			modeFields.apiProvider !== "lmstudio" &&
-			modeFields.apiProvider !== "openai-codex") // Subscription-based, no per-token costs
+	const isCostAvailable = Boolean(totalCost) && modeFields.apiProvider !== "openai-codex" // Subscription-based, no per-token costs
 
 	const handleCopyTask = useCallback(() => {
 		if (task.text) {

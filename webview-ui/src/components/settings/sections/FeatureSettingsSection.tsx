@@ -1,5 +1,4 @@
 import { ADVISORY_AUTO_SCROLL_MODE_LABELS } from "@shared/audit/auditAutoScrollPolicy"
-import { UpdateSettingsRequest } from "@shared/proto/dietcode/state"
 import { memo, type ReactNode, useCallback } from "react"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -10,7 +9,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { AuditIntentThresholdPanel } from "../AuditIntentThresholdPanel"
 import Section from "../Section"
 import SettingsSlider from "../SettingsSlider"
-import { updateSetting } from "../utils/settingsHandlers"
+import { type ExtendedSettingsKey, updateSetting } from "../utils/settingsHandlers"
 
 // Reusable checkbox component for feature settings
 interface FeatureCheckboxProps {
@@ -29,7 +28,7 @@ interface FeatureToggle {
 	id: string
 	label: string
 	description: ReactNode
-	settingKey: keyof UpdateSettingsRequest
+	settingKey: ExtendedSettingsKey
 	stateKey: string
 	/** If set, the setting value is nested with this key (e.g., "enabled" -> { enabled: checked }) */
 	nestedKey?: string

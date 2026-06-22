@@ -17,13 +17,13 @@ export type StorageEventListener = (event: DietCodeStorageChangeEvent) => Promis
 export interface DietCodeMemento {
 	get<T>(key: string): T | undefined
 	get<T>(key: string, defaultValue: T): T
-	update(key: string, value: any): Thenable<void>
+	update(key: string, value: any): Promise<void>
 	keys(): readonly string[]
 	/**
 	 * Set multiple keys in a single operation.
 	 * More efficient than calling update() for each key individually.
 	 */
-	setBatch(entries: Record<string, any>): Thenable<void>
+	setBatch(entries: Record<string, any>): Promise<void>
 }
 
 /**
@@ -173,7 +173,7 @@ export abstract class DietCodeSyncStorage<T = any> {
 	/**
 	 * Memento-compatible update method. Calls set() internally.
 	 */
-	public update(key: string, value: any): Thenable<void> {
+	public update(key: string, value: any): Promise<void> {
 		this.set(key, value)
 		return Promise.resolve()
 	}

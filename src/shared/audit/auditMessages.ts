@@ -192,7 +192,7 @@ const AUDIT_TREND_DELTA = 5
 
 function resolveAuditScore(metadata: TaskAuditMetadata): number {
 	const score = metadata.hardening_score
-	if (Number.isFinite(score)) {
+	if (typeof score === "number" && Number.isFinite(score)) {
 		return score
 	}
 	return computeHardeningAssessment(metadata).score
