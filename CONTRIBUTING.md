@@ -166,6 +166,8 @@ Guide: [docs/MAINTAINER.md](docs/MAINTAINER.md)
 - User-facing changes: add an entry under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md).
 - Release Drafter groups merged PRs by label for maintainers drafting GitHub releases.
 
+Pull requests are merged with **squash merge** only (linear `main` history). Write PR titles accordingly — they become the squash commit subject on merge.
+
 ---
 
 ## License

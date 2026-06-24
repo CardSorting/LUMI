@@ -46,13 +46,14 @@ Maintainers should enable on GitHub (Settings → Branches):
 |------|-----------|
 | Require PR before merge | No direct pushes to `main` |
 | Require status checks: **Tests**, **E2E Tests**, **CodeQL**, **Dependency Review**, **PR Title**, **Actionlint** | Green CI and workflow hygiene before merge |
+| **Squash merge only** | Enabled — merge commits and rebase merges disabled for linear `main` history |
 | **Delete head branches** after merge | Enabled via repo settings (`deleteBranchOnMerge`) |
 | Require conversation resolution | Review feedback addressed |
 | Dismiss stale approvals on new commits | Re-review after significant changes |
 | Require review from **CODEOWNERS** | Governed-execution and security paths |
 | Restrict force-push / deletion | Protect release history |
 
-Repository rulesets can dry-run branch protection in **evaluate** mode before enforcement (GitHub **Settings → Rules → Rulesets**). Squash merge and auto-merge are enabled on the repository for Dependabot security PRs.
+Repository rulesets can dry-run branch protection in **evaluate** mode before enforcement (GitHub **Settings → Rules → Rulesets**). **Squash-only** merges, auto-merge (Dependabot security/patch PRs), and delete-branch-on-merge are enabled on the repository.
 
 **Workflow token default:** repository Actions settings should use **read-only** `GITHUB_TOKEN` at workflow scope; write permissions are granted per-job (see `publish.yml`, `scorecard.yml`).
 
