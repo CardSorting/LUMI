@@ -4,7 +4,7 @@
 
 *A coding companion is not finished until you can keep it open all day without feeling managed by it.*
 
-**Extension:** `CardSorting.lumi` · **Package name:** `lumi` · **Repository:** agent workspace in the codemarie-new monorepo (`src/`, `webview-ui/`)
+**Extension:** `CardSorting.lumi` · **Package name:** `lumi` · **Repository:** [github.com/CardSorting/LUMI](https://github.com/CardSorting/LUMI) (`src/`, `webview-ui/`)
 
 ---
 

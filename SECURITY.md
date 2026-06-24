@@ -4,10 +4,11 @@
 
 | Version | Supported |
 |---------|-----------|
-| **1.0.x** (current) | Yes — active patches for the latest release |
+| **2.1.x** (current) | Yes — active patches for the latest release |
+| **2.0.x** | Best-effort security fixes |
 | Older / fork builds | At maintainer discretion |
 
-Extension ID: **CardSorting.lumi** · Repository: [CardSorting/DietCodeMarie](https://github.com/CardSorting/DietCodeMarie)
+Extension ID: **CardSorting.lumi** · Repository: [CardSorting/LUMI](https://github.com/CardSorting/LUMI)
 
 ---
 
@@ -21,7 +22,7 @@ If you discover a security vulnerability in **LUMI** or this monorepo:
 
 We aim to acknowledge reports within **5 business days**. If you receive no response, follow up at the same address.
 
-Preferred for GitHub users: [Private security advisory](https://github.com/CardSorting/DietCodeMarie/security/advisories/new) when available.
+Preferred for GitHub users: [Private security advisory](https://github.com/CardSorting/LUMI/security/advisories/new) when available.
 
 ---
 

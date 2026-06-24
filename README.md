@@ -14,18 +14,21 @@
   <a href="docs/governed-subagent-execution.md">Governed swarms</a> ·
   <a href="docs/SECURITY_BEST_PRACTICES.md">Security</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
-  <a href="https://github.com/CardSorting/DietCodeMarie/issues">Issues</a>
+  <a href="https://github.com/CardSorting/LUMI/discussions">Discussions</a> ·
+  <a href="https://github.com/CardSorting/LUMI/issues">Issues</a>
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
+  <a href="https://github.com/CardSorting/LUMI/actions/workflows/test.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/test.yml/badge.svg" alt="Tests" /></a>
+  <a href="https://github.com/CardSorting/LUMI/actions/workflows/e2e.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/e2e.yml/badge.svg" alt="E2E" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/version-2.1.0-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
   <img src="https://img.shields.io/badge/tools-63-orange" alt="Tools" />
   <img src="https://img.shields.io/badge/providers-4-blue" alt="Providers" />
-  <a href="https://github.com/CardSorting/DietCodeMarie"><img src="https://img.shields.io/github/stars/CardSorting/DietCodeMarie?style=social" alt="GitHub" /></a>
+  <a href="https://github.com/CardSorting/LUMI"><img src="https://img.shields.io/github/stars/CardSorting/LUMI?style=social" alt="GitHub" /></a>
 </p>
 
 <p align="center">
@@ -36,7 +39,7 @@
 
 > **Doctrine:** User expresses intent → Controller holds session → Task runs the loop → Tools execute with approval → Checkpoints preserve rollback → Completion is earned through gates.
 
-> **Governed swarms:** Locks protect mutation. Receipts preserve truth. Parallel read/audit lanes skip locks; mutation lanes reconcile through a merge gate before success.
+> **Governed swarms:** Locks protect mutation. Receipts preserve truth. Private projection is cheap — workspace roadmap truth is coordinator-owned.
 
 <p align="center">
   <a href="#install"><strong>Install</strong></a> ·
@@ -112,7 +115,7 @@ The sidebar UX is designed for **long sessions** without alert fatigue.
 | **Extension ID (VS Marketplace)** | `CardSorting.lumi-vscode` |
 | **Extension ID (Open VSX)** | `CardSorting.lumi` |
 | **License** | [Apache-2.0](LICENSE) |
-| **Repository** | [github.com/CardSorting/DietCodeMarie](https://github.com/CardSorting/DietCodeMarie) |
+| **Repository** | [github.com/CardSorting/LUMI](https://github.com/CardSorting/LUMI) |
 | **Homepage** | [dietcode.io](https://dietcode.io) |
 | **Changelog** | [changelogv3.md](changelogv3.md) |
 | **Monorepo** | npm workspaces: root extension + `broccolidb/` package |
@@ -806,8 +809,8 @@ Full map: [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md).
 ### Setup
 
 ```bash
-git clone https://github.com/CardSorting/DietCodeMarie.git
-cd DietCodeMarie
+git clone https://github.com/CardSorting/LUMI.git
+cd LUMI
 npm run install:all          # root + webview-ui
 npm run protos               # required before first build
 npm run dev                  # watch extension + typecheck
@@ -893,9 +896,14 @@ Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
 | Channel | Link |
 |---------|------|
 | **Documentation hub** | [docs/README.md](docs/README.md) |
+| **Support guide** | [.github/SUPPORT.md](.github/SUPPORT.md) |
+| **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
+| **Governance** | [GOVERNANCE.md](GOVERNANCE.md) |
+| **Discussions** | [GitHub Discussions](https://github.com/CardSorting/LUMI/discussions) |
+| **Governed swarm quick ref** | [docs/governed-roadmap-projection-quickref.md](docs/governed-roadmap-projection-quickref.md) |
 | **Governed swarm runbook** | [docs/governed-execution-runbook.md](docs/governed-execution-runbook.md) |
 | **Glossary** | [docs/getting-started/glossary.mdx](docs/getting-started/glossary.mdx) |
-| **Bug reports** | [GitHub Issues](https://github.com/CardSorting/DietCodeMarie/issues) |
+| **Bug reports** | [GitHub Issues](https://github.com/CardSorting/LUMI/issues/new?template=bug_report.yml) |
 | **Security (private)** | [SECURITY.md](SECURITY.md) → security@dietcode.bot |
 | **Walkthrough** | Command palette → `LUMI: Open Walkthrough` (`lumi.openWalkthrough`) |
 
@@ -914,7 +922,7 @@ Include VS Code version, LUMI **2.1.0**, provider used, and steps to reproduce.
 | **MCP isolation** | Per-server credentials; per-tool auto-approve lists |
 | **Roadmap fail-closed** | `lumi.roadmap.failClosedCompletionGates` setting |
 | **Governed mutation locks** | `LockAuthority` — layered lease + fencing token; fail-closed partial acquire |
-| **Swarm merge gate** | Write-set reconciliation before swarm success; non-mutating lanes skip locks |
+| **Swarm merge gate** | Write-set + patch reconciliation before workspace commit; coordinator-only kanban writes |
 
 Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · [governed execution](docs/governed-subagent-execution.md) · Report vulnerabilities: [SECURITY.md](SECURITY.md) → security@dietcode.bot
 
@@ -931,7 +939,7 @@ Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · [
 <details>
 <summary><strong>What are governed swarms and lock-skipped lanes?</strong></summary>
 
-When you run parallel subagents (`use_subagents`), each lane declares an **execution mode**. Read, audit, planning, documentation, and diagnostic lanes **skip mutation locks** by default but still emit durable receipts. Only mutation lanes (or lanes that declare writes) acquire governed ownership. The **merge gate** blocks success if write sets collide in parallel. Full docs: [governed-subagent-execution.md](docs/governed-subagent-execution.md).
+When you run parallel subagents (`use_subagents`), each lane declares an **execution mode**. Read lanes skip file locks; workspace roadmap changes flow through **propose_patch** and coordinator commit — not direct kanban writes. See [quick reference](docs/governed-roadmap-projection-quickref.md) and [governed-subagent-execution.md](docs/governed-subagent-execution.md).
 </details>
 
 <details>
@@ -982,10 +990,12 @@ We welcome bug fixes, features, and documentation improvements.
 | Resource | Link |
 |----------|------|
 | Contributing guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Code of conduct | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+| Governance | [GOVERNANCE.md](GOVERNANCE.md) |
 | Doc maintainer guide | [docs/MAINTAINER.md](docs/MAINTAINER.md) |
 | Documentation map | [docs/DOCS_GUIDE.md](docs/DOCS_GUIDE.md) |
 | Code of conduct | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
-| Issues | [GitHub Issues](https://github.com/CardSorting/DietCodeMarie/issues) |
+| Issues | [GitHub Issues](https://github.com/CardSorting/LUMI/issues) |
 
 Before a feature PR: open an issue or discussion for maintainer approval. Run `npm run ci:check-all` locally.
 

@@ -1,4 +1,6 @@
-name: Trigger Jetbrains Plugin <-> DietCode Tests
+# Legacy cross-repo JetBrains integration — only runs on dietcode/dietcode.
+# Secret CLINE_JETBRAINS_WORKFLOW_KEY must exist in that repository's settings.
+name: Trigger JetBrains Plugin Integration (legacy)
 on:
   pull_request_target:
     types: [opened, reopened]
@@ -15,12 +17,13 @@ jobs:
   trigger-integration-test:
     name: Run Tests
     runs-on: ubuntu-latest
-    # Run on PR open/reopen, or when someone comments /test-jetbrains on a PR
+    # Legacy cross-repo trigger — only for dietcode/dietcode org wiring
     if: |
-      github.event_name == 'pull_request_target' ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       contains(github.event.comment.body, '/test-jetbrains'))
+      github.repository == 'dietcode/dietcode' &&
+      (github.event_name == 'pull_request_target' ||
+       (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '/test-jetbrains')))
     steps:
       - name: Generate GitHub App Token
         id: app-token

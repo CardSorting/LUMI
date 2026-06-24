@@ -17,10 +17,11 @@ jobs:
 
     publish:
         needs: test
-        name: Publish DietCode (Nightly) Extension
-        if: github.repository == 'dietcode/dietcode'
+        name: Publish LUMI (Nightly) Extension
+        if: github.repository == 'CardSorting/LUMI'
         runs-on: ubuntu-latest
-        environment: PublishNightly
+        # Same deployment environment as publish.yml — configure secrets on GitHub → Settings → Environments → publish
+        environment: publish
 
         steps:
             - uses: actions/checkout@v4

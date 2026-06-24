@@ -19,7 +19,7 @@ This means the extension install is **incomplete** — the local database driver
 
 This is a **startup bug in LUMI 2.0.4**, not a Cursor or VS Code platform issue. A circular import prevented `PersistentSubscriptionHub` from loading during activation.
 
-**Fix:** Install **2.0.5 or newer** (VSIX from [GitHub Releases](https://github.com/CardSorting/DietCodeMarie/releases) or wait for marketplace publish), then **Developer: Reload Window**.
+**Fix:** Install **2.0.5 or newer** (VSIX from [GitHub Releases](https://github.com/CardSorting/LUMI/releases) or wait for marketplace publish), then **Developer: Reload Window**.
 
 ---
 
@@ -46,7 +46,7 @@ This is a **startup bug in LUMI 2.0.4**, not a Cursor or VS Code platform issue.
 
 If the health check shows missing components:
 
-1. Get a fresh `.vsix` from [GitHub Releases](https://github.com/CardSorting/DietCodeMarie/releases)
+1. Get a fresh `.vsix` from [GitHub Releases](https://github.com/CardSorting/LUMI/releases)
 2. Open **Extensions**
 3. Click the **`⋯` menu** at the top of the Extensions panel
 4. Choose **Install from VSIX…**
@@ -96,4 +96,4 @@ Some older Open VSX builds of `CardSorting.lumi` were packaged without the SQLit
 | CI gate | `npm run doctor -- --ci` |
 | Unit tests | `npm run test:doctor` |
 
-See [MAINTAINER.md](https://github.com/CardSorting/DietCodeMarie/blob/main/docs/MAINTAINER.md) for publishing.
+See [MAINTAINER.md](https://github.com/CardSorting/LUMI/blob/main/docs/MAINTAINER.md) for publishing.

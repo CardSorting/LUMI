@@ -1,0 +1,38 @@
+# Path-based PR labels (see .github/workflows/labeler.yml)
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - 'docs/**'
+          - '.github/**/*.md'
+
+governed-execution:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/core/task/tools/subagent/**'
+          - 'src/shared/subagent/**'
+          - 'docs/governed-*.md'
+          - 'webview-ui/**/GovernedReceiptPanel*'
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package-lock.json'
+          - 'webview-ui/package-lock.json'
+          - 'broccolidb/package-lock.json'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/workflows/**'
+          - '.github/dependabot.yml'
+
+webview:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'webview-ui/**'
+
+broccolidb:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'broccolidb/**'

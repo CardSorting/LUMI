@@ -14,6 +14,7 @@ Use [CODE_TO_DOC_MAP.md](CODE_TO_DOC_MAP.md) to find the matching page. Minimum 
 | New `lumi.*` setting | [roadmap-steering](features/roadmap-steering.mdx) or relevant feature doc |
 | Roadmap auto-governance / completion gate | [roadmap-steering](features/roadmap-steering.mdx) · [post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
 | Governed swarm / roadmap projection | [governed-subagent-execution.md](governed-subagent-execution.md) · [quickref](governed-roadmap-projection-quickref.md) · [CODE_TO_DOC_MAP](CODE_TO_DOC_MAP.md) |
+| GitHub community files | [.github/ISSUE_TEMPLATE/](../.github/ISSUE_TEMPLATE/) · [SUPPORT.md](../.github/SUPPORT.md) · [GOVERNANCE.md](../GOVERNANCE.md) |
 | Architecture move | [PROJECT_MAP.md](PROJECT_MAP.md), [architecture/current.md](architecture/current.md), [papers/whitepaper.md](papers/whitepaper.md) |
 
 ## CI checks
@@ -107,7 +108,7 @@ Open VSX shows a **warning** when the publishing GitHub user is not a verified o
 
 **Claim ownership (required to remove the warning):**
 
-File an issue at [EclipseFdn/open-vsx.org](https://github.com/EclipseFdn/open-vsx.org/issues) requesting ownership of namespace `CardSorting`. Include links to `https://github.com/CardSorting`, `https://github.com/CardSorting/DietCodeMarie`, and `https://open-vsx.org/extension/CardSorting/lumi`.
+File an issue at [EclipseFdn/open-vsx.org](https://github.com/EclipseFdn/open-vsx.org/issues) requesting ownership of namespace `CardSorting`. Include links to `https://github.com/CardSorting`, `https://github.com/CardSorting/LUMI`, and `https://open-vsx.org/extension/CardSorting/lumi`.
 
 Pending claim: [Issue #11189](https://github.com/EclipseFdn/open-vsx.org/issues/11189)
 

@@ -1,0 +1,58 @@
+name: Feature request
+description: Propose a new capability or UX improvement
+title: "[feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem and proposed solution. For large features, maintainers may ask you to refine scope in a discussion before implementation.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What pain point does this solve? Who is affected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should LUMI behave? Include UX notes if relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you evaluated
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Agent loop / tools
+        - Approval / trust model
+        - Governed subagents
+        - Roadmap / completion gates
+        - MCP / integrations
+        - Webview / UX
+        - BroccoliDB / memory
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to open a PR if the approach is approved
+          required: false

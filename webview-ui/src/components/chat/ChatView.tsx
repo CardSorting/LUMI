@@ -346,7 +346,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				scrollBehavior.scrollToMessage(index)
 			}
 		},
-		[messages, auditSnapshots, scrollBehavior.scrollToMessage],
+		[messages, auditSnapshots, scrollBehavior],
 	)
 
 	const previousAuditSnapshotCountRef = useRef(auditSnapshots.length)

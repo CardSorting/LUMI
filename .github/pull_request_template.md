@@ -1,79 +1,38 @@
-<!--
-Thank you for contributing to Cline!
+## Summary
 
-⚠️ Important: Before submitting this PR, please ensure you have:
-- For feature requests: Created a discussion in our Feature Requests discussions board https://github.com/dietcode/dietcode/discussions/categories/feature-requests and received approval from core maintainers before implementation
-- For all changes: Link the associated issue/discussion in the "Related Issue" section below
+<!-- What changed and why? Link issue: Fixes #123 -->
 
-Limited exceptions:
-Small bug fixes, typo corrections, minor wording improvements, or simple type fixes that don't change functionality may be submitted directly without prior discussion.
+## Type
 
-Why this requirement?
-We deeply appreciate all community contributions - they are essential to Cline's success! To ensure the best use of everyone's time and maintain project direction, we use our Feature Requests discussions board to gauge community interest and validate feature ideas before implementation begins. This helps us focus development efforts on features that will benefit the most users.
--->
+- [ ] Bug fix
+- [ ] Feature
+- [ ] Refactor
+- [ ] Documentation
+- [ ] CI / tooling
+- [ ] Breaking change
 
-### Related Issue
+## Test plan
 
-<!-- Replace XXXX with the issue number that this PR addresses -->
-**Issue:** #XXXX
+<!-- How did you verify? Include commands run. -->
 
-### Description
+- [ ] `npm run ci:check-all` (or relevant subset)
+- [ ] Unit / integration tests updated as needed
+- [ ] UI change — screenshot or recording attached
 
-<!-- 
-Help reviewers understand your changes by making this PR readable and well-organized:
+## Docs
 
-- What problem does this PR solve?
-- Why were these changes introduced and what purpose do they serve?
-- For larger changes, provide context about your approach and reasoning
+- [ ] No doc impact
+- [ ] Updated per [CODE_TO_DOC_MAP.md](docs/CODE_TO_DOC_MAP.md)
+- [ ] User-facing change noted in [CHANGELOG.md](CHANGELOG.md) `[Unreleased]`
 
-Small PRs may need minimal description, but larger changes benefit from explaining where you're coming from. Much of this context can be in the linked issue above, so feel free to reference it rather than repeating everything here.
--->
+## Governed execution (if applicable)
 
-### Test Procedure
+- [ ] N/A
+- [ ] Touched swarm harness — ran `npm run test:unit -- --grep "governed execution"`
+- [ ] Updated [governed docs](docs/governed-subagent-execution.md) or [quick reference](docs/governed-roadmap-projection-quickref.md)
 
-<!-- 
-Please walk us through your testing approach and thought process. This helps reviewers understand that you've thoroughly considered the impact of your changes:
+## Checklist
 
-- How did you test this change?
-- What could potentially break and how did you verify it doesn't?
-- What existing functionality might be affected and how did you check it still works?
-- Why are you confident this is ready for merge?
-
-We're not looking for exhaustive documentation - just evidence that you've thought through the implications of your changes and tested accordingly.
--->
-
-### Type of Change
-
-<!-- Put an 'x' in all boxes that apply -->
-
--   [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
--   [ ] ✨ New feature (non-breaking change which adds functionality)
--   [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
--   [ ] ♻️ Refactor Changes
--   [ ] 💅 Cosmetic Changes
--   [ ] 📚 Documentation update
--   [ ] 🏃 Workflow Changes
-
-### Pre-flight Checklist
-
-<!-- Put an 'x' in all boxes that apply -->
-
--   [ ] Changes are limited to a single feature, bugfix or chore (split larger changes into separate PRs)
--   [ ] Tests are passing (`npm test`) and code is formatted and linted (`npm run format && npm run lint`)
--   [ ] I have reviewed [contributor guidelines](https://github.com/dietcode/dietcode/blob/main/CONTRIBUTING.md)
-
-### Screenshots
-
-<!-- 
-Help reviewers quickly understand your changes:
-
-- **UI Changes**: Please include screenshots showing before/after states
-- **Complex Workflows**: Consider uploading a screen recording (video) if your changes involve multiple steps or state transitions
-- **Backend Changes**: Not required, but feel free to include terminal output or other evidence that demonstrates functionality
-
-This helps reviewers see what you've built without having to pull down and test your branch first.
--->
-
-### Additional Notes
-
-<!-- Add any additional notes for reviewers -->
+- [ ] PR is focused (single concern; split large changes)
+- [ ] Commits use clear messages (`feat:`, `fix:`, `docs:` encouraged)
+- [ ] I have read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)

@@ -1,5 +1,15 @@
 version: 2
 updates:
+    # GitHub Actions (security patches only via grouped weekly PR)
+    - package-ecosystem: "github-actions"
+      directory: "/"
+      schedule:
+          interval: "weekly"
+      groups:
+          github-actions:
+              patterns:
+                  - "*"
+
     # Main extension dependencies
     - package-ecosystem: "npm"
       directory: "/"
@@ -29,6 +39,22 @@ updates:
                   - "*"
       ignore:
           - dependency-name: "@testing-library/*"
+          - dependency-name: "*"
+            update-types:
+                - "version-update:semver-major"
+                - "version-update:semver-minor"
+                - "version-update:semver-patch"
+
+    # BroccoliDB substrate package
+    - package-ecosystem: "npm"
+      directory: "/broccolidb"
+      schedule:
+          interval: "weekly"
+      groups:
+          all-dependencies:
+              patterns:
+                  - "*"
+      ignore:
           - dependency-name: "*"
             update-types:
                 - "version-update:semver-major"

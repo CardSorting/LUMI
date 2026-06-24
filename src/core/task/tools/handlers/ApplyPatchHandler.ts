@@ -533,17 +533,22 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 					}
 					changes[path] = { type: PatchActionType.ADD, newContent: action.newFile }
 					break
-				case PatchActionType.UPDATE:
+				case PatchActionType.UPDATE: {
+					const oldContent = originalFiles[path]
+					if (oldContent === undefined) {
+						throw new DiffError(`UPDATE action for missing file: ${path}`)
+					}
 					// Extract starting line numbers from chunks (convert from 0-indexed to 1-indexed)
 					const startLineNumbers = action.chunks.map((chunk) => chunk.origIndex + 1)
 					changes[path] = {
 						type: PatchActionType.UPDATE,
-						oldContent: originalFiles[path],
-						newContent: this.applyChunks(originalFiles[path]!, action.chunks, path),
+						oldContent,
+						newContent: this.applyChunks(oldContent, action.chunks, path),
 						movePath: action.movePath,
 						startLineNumbers,
 					}
 					break
+				}
 			}
 		}
 
@@ -608,7 +613,10 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 	 * Call saveFileChange() after approval.
 	 */
 	private async prepareFileChange(change: FileChange, path: string): Promise<void> {
-		const ops = this.providerOps!
+		if (!this.providerOps) {
+			throw new DiffError("ApplyPatchHandler file operations not initialized")
+		}
+		const ops = this.providerOps
 
 		switch (change.type) {
 			case PatchActionType.DELETE:
@@ -638,7 +646,10 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 	 * Saves the changes for a single file after approval.
 	 */
 	private async saveFileChange(change: FileChange, path: string): Promise<FileOpsResult | undefined> {
-		const ops = this.providerOps!
+		if (!this.providerOps) {
+			throw new DiffError("ApplyPatchHandler file operations not initialized")
+		}
+		const ops = this.providerOps
 
 		switch (change.type) {
 			case PatchActionType.DELETE:

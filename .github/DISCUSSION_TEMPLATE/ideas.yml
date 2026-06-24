@@ -1,0 +1,33 @@
+title: "Idea: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share a product or architecture idea before opening a feature issue.
+
+        Large features should align with [CONTRIBUTING.md](https://github.com/CardSorting/LUMI/blob/main/CONTRIBUTING.md) — discuss scope here first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What user pain or capability gap does this address?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope signals
+      options:
+        - label: Affects governed execution / swarm harness
+        - label: Requires documentation / ADR update
+        - label: Breaking change for extension users

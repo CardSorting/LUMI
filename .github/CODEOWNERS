@@ -1,2 +1,10 @@
-/.github/   @saoudrizwan @arafatkatze @maxpaulus43 @candieduniverse
-/README.md  @saoudrizwan @juanpflores
+# Default reviewers for pull requests.
+# Update when public maintainer handles are finalized.
+
+* @CardSorting
+
+# High-traffic docs
+/README.md @CardSorting
+/docs/governed-subagent-execution.md @CardSorting
+/docs/governed-roadmap-projection-quickref.md @CardSorting
+/SECURITY.md @CardSorting

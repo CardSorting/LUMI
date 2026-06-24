@@ -10,6 +10,10 @@ on:
             - main
     workflow_call:
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
 # Set default permissions for all jobs
 permissions:
     contents: read # Needed to check out code

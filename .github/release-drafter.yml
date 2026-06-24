@@ -1,0 +1,42 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+categories:
+  - title: '🚀 Features'
+    labels:
+      - enhancement
+      - feature
+  - title: '🐛 Fixes'
+    labels:
+      - bug
+  - title: '📚 Documentation'
+    labels:
+      - documentation
+  - title: '🔒 Security'
+    labels:
+      - security
+  - title: '⚙️ Governed execution'
+    labels:
+      - governed-execution
+  - title: '🧰 Maintenance'
+    labels:
+      - dependencies
+      - chore
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-title-uses: html
+version-resolver:
+  major:
+    labels:
+      - breaking-change
+  minor:
+    labels:
+      - enhancement
+  patch:
+    labels:
+      - bug
+      - documentation
+      - governed-execution
+  default: patch
+template: |
+  ## Summary
+
+  $CHANGES

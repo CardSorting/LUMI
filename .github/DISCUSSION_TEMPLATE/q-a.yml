@@ -1,0 +1,37 @@
+title: "Question: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask the community about setup, providers, governed swarms, or extension behavior.
+
+        - [Documentation index](https://github.com/CardSorting/LUMI/blob/main/docs/README.md)
+        - [Support guide](https://github.com/CardSorting/LUMI/blob/main/.github/SUPPORT.md)
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - Installation / setup
+        - Providers / models
+        - Governed swarms
+        - BroccoliDB / memory
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: OS, VS Code version, LUMI version, relevant settings.
+      placeholder: "VS Code 1.96, LUMI 2.1.0, macOS ..."

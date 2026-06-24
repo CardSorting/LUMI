@@ -6,7 +6,7 @@ description: "How LUMI (agent session) and BroccoliDB (substrate) fit together i
 
 # Agent stack
 
-The codemarie-new monorepo ships **two complementary layers**. This page is the canonical map between them.
+The [LUMI monorepo](https://github.com/CardSorting/LUMI) ships **two complementary layers**. This page is the canonical map between them.
 
 ## Two layers
 

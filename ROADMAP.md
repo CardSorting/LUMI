@@ -6,10 +6,10 @@
 code --install-extension CardSorting.lumi-vscode
 
 **Primary Users / Operators:**  
-Thank you for contributing to **LUMI** (`CardSorting.lumi`) — the calm coding companion VS Code extension in the [DietCodeMarie](https://github.com/CardSorting/DietCodeMarie) monorepo.
+Thank you for contributing to **LUMI** (`CardSorting.lumi`) — the calm coding companion VS Code extension in the [LUMI](https://github.com/CardSorting/LUMI) monorepo.
 
 **Canonical Architecture:**  
-Thank you for contributing to **LUMI** (`CardSorting.lumi`) — the calm coding companion VS Code extension in the [DietCodeMarie](https://github.com/CardSorting/DietCodeMarie) monorepo.
+Thank you for contributing to **LUMI** (`CardSorting.lumi`) — the calm coding companion VS Code extension in the [LUMI](https://github.com/CardSorting/LUMI) monorepo.
 
 **Canonical Workflows:**  
 Preserve flows — verify with Playwright; CI: GitHub Actions.

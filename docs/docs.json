@@ -39,7 +39,7 @@
 			{
 				"label": "GitHub",
 				"icon": "github",
-				"href": "https://github.com/CardSorting/DietCodeMarie"
+				"href": "https://github.com/CardSorting/LUMI"
 			}
 		],
 		"primary": {
@@ -356,7 +356,7 @@
 	},
 	"footer": {
 		"socials": {
-			"github": "https://github.com/CardSorting/DietCodeMarie"
+			"github": "https://github.com/CardSorting/LUMI"
 		}
 	},
 	"anchors": [

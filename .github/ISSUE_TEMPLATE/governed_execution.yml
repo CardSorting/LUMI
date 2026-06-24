@@ -1,0 +1,68 @@
+name: Governed execution / swarm
+description: Bug or regression in governed subagent swarms, roadmap projection, or merge gate
+title: "[governed] "
+labels: ["governed-execution", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For architecture context see [governed-subagent-execution](https://github.com/CardSorting/LUMI/blob/main/docs/governed-subagent-execution.md) and the [quick reference](https://github.com/CardSorting/LUMI/blob/main/docs/governed-roadmap-projection-quickref.md).
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Roadmap projection / workspace commit
+        - Merge gate / reconciliation
+        - Coordinator / lane receipts
+        - Operator console (UI)
+        - Locks / integrity checks
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened under governed execution rules?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include receipt fields if available (commitStatus, acceptedPatches, rejectedPatches).
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Enable governed swarm with N lanes
+        2. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: LUMI version
+      options:
+        - 2.1.0
+        - main / dev build
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Invariant check (for maintainers)
+      options:
+        - label: Issue does NOT involve lanes mutating workspace roadmap directly
+        - label: Issue involves coordinator commit path or projection reconciliation

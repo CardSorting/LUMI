@@ -1,15 +1,50 @@
 {
-	"validation_pending": false,
-	"schema_valid": true,
-	"last_mutated_at": "2026-06-19T13:01:49.045Z",
+	"validation_pending": true,
+	"schema_valid": null,
+	"last_mutated_at": "2026-06-24T05:41:47.070Z",
 	"last_mutation_tool": "external",
 	"last_mutation_path": "ROADMAP.md",
-	"updated_at": "2026-06-19T13:05:25.767Z",
+	"updated_at": "2026-06-24T05:41:47.073Z",
 	"last_validated_at": "2026-06-19T13:05:25.766Z",
 	"health_status": "Coherent",
 	"recent_checkpoint_date": "2026-06-19",
 	"phase": "checkpoint",
 	"validation_issue_count": 0,
 	"bootstrap_placeholder_count": 0,
-	"bootstrap_complete": true
+	"bootstrap_complete": true,
+	"lineage": [
+		{
+			"operation_id": "6f6dfd77-97a7-4d5b-a803-a4d6616eb5f5",
+			"timestamp": "2026-06-24T05:41:22.469Z",
+			"tool": "external",
+			"action": "file_mutated",
+			"schema_valid": null,
+			"health_status": "Coherent",
+			"hash": "439aadf362805401",
+			"diff_summary": "",
+			"causality_token": "1b8e764b28f5f6c5"
+		},
+		{
+			"operation_id": "cc3fca15-eb73-4b2f-bf42-6900bff832ff",
+			"timestamp": "2026-06-24T05:41:31.061Z",
+			"tool": "external",
+			"action": "file_mutated",
+			"schema_valid": null,
+			"health_status": "Coherent",
+			"hash": "4ceab0da68c3d77f",
+			"diff_summary": "",
+			"causality_token": "5a48cdb23436cc0f"
+		},
+		{
+			"operation_id": "53e49495-c4d1-41ea-95eb-3da8734e018f",
+			"timestamp": "2026-06-24T05:41:47.073Z",
+			"tool": "external",
+			"action": "file_mutated",
+			"schema_valid": null,
+			"health_status": "Coherent",
+			"hash": "4ceab0da68c3d77f",
+			"diff_summary": "",
+			"causality_token": "0c2f3236980eec86"
+		}
+	]
 }

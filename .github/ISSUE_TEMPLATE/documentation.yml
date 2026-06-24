@@ -1,0 +1,32 @@
+name: Documentation
+description: Report unclear, missing, or incorrect docs
+title: "[docs]: "
+labels: ["documentation", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Doc hub: [docs/README.md](https://github.com/CardSorting/LUMI/blob/main/docs/README.md) · Maintainer guide: [docs/MAINTAINER.md](https://github.com/CardSorting/LUMI/blob/main/docs/MAINTAINER.md)
+
+  - type: input
+    id: page
+    attributes:
+      label: Page or path
+      placeholder: "e.g. docs/governed-subagent-execution.md"
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      description: Optional — wording, diagram, or section outline
+    validations:
+      required: false

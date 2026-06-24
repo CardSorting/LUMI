@@ -1,69 +1,106 @@
-name: 🐛 Bug Report
-description: File a bug report
-labels: ['bug']
+name: Bug report
+description: Something is broken in LUMI or governed swarm execution
+title: "[bug]: "
+labels: ["bug", "triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        **Important:** All bug reports must be reproducible using Claude Sonnet 4.5. Cline uses complex prompts so less capable models may not work as expected.
+        Thanks for reporting a bug. Search [existing issues](https://github.com/CardSorting/LUMI/issues) first.
+
+        **Security issues:** do not use this form — see [SECURITY.md](https://github.com/CardSorting/LUMI/blob/main/SECURITY.md).
+
   - type: dropdown
-    id: plugin-type
+    id: area
     attributes:
-      label: Plugin Type
-      description: Which plugin are you reporting a bug for?
+      label: Area
+      description: Which part of LUMI is affected?
       options:
-        - VSCode Extension
-        - JetBrains Plugin
-      default: 0
+        - Chat / task loop
+        - Tool approval / diff view
+        - Plan or Act mode
+        - MCP integration
+        - Governed subagents / merge gate
+        - Roadmap projection / patches
+        - BroccoliDB / cognitive memory
+        - Webview UI
+        - Extension activation / performance
+        - Other
     validations:
       required: true
+
   - type: input
-    id: cline-version
+    id: lumi-version
     attributes:
-      label: Cline Version
-      description: What version of Cline are you using? (You can find this at the bottom of the Settings view)
-      placeholder: 'e.g., 1.2.3'
+      label: LUMI version
+      description: Extension version from Settings or `package.json` (current release is 2.1.0)
+      placeholder: "e.g. 2.1.0"
     validations:
       required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code version
+      placeholder: "e.g. 1.96.0"
+    validations:
+      required: true
+
+  - type: input
+    id: provider-model
+    attributes:
+      label: Provider / model
+      description: Plan or Act provider in use when the issue occurred
+      placeholder: "e.g. openrouter / anthropic/claude-sonnet-4"
+    validations:
+      required: false
+
   - type: textarea
     id: what-happened
     attributes:
       label: What happened?
-      description: Also tell us, what did you expect to happen?
-      placeholder: Tell us what you see!
+      description: What did you expect instead?
     validations:
       required: true
+
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
-      description: How do you trigger this bug? Please walk us through it step by step.
       value: |
         1.
         2.
         3.
     validations:
-      required: false
-  - type: input
-    id: provider-model
-    attributes:
-      label: Provider/Model
-      description: What provider and model were you using when the issue occurred?
-      placeholder: 'e.g., cline:anthropic/claude-sonnet-4.5, gemini:gemini-2.5-pro-exp-03-25'
-    validations:
-      required: false
+      required: true
+
   - type: textarea
-    id: system-info
+    id: logs
     attributes:
-      label: System Information
-      description: What operating system and hardware are you using?
-      placeholder: |
-        Operating System: Windows 11, macOS Sonoma, Ubuntu 22.04, etc.
-        Hardware: CPU, GPU, RAM specifications if relevant
-        e.g.,
-        OS: Windows 11
-        CPU: Intel Core i7-11700K
-        GPU: NVIDIA GeForce RTX 3070
-        RAM: 32GB DDR4
+      label: Logs or receipt artifacts
+      description: Output from **LUMI → Output** panel, or path to `subagent_executions/*.governed.*` if swarm-related
+      placeholder: Paste relevant log lines or attach redacted receipt JSON
     validations:
       required: false
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and discussions for duplicates
+          required: true
+        - label: I can reproduce on the latest release (or main branch)
+          required: false

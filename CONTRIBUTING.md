@@ -1,6 +1,6 @@
 # Contributing to LUMI
 
-Thank you for contributing to **LUMI** (`CardSorting.lumi`) — the calm coding companion VS Code extension in the [DietCodeMarie](https://github.com/CardSorting/DietCodeMarie) monorepo.
+Thank you for contributing to **LUMI** (`CardSorting.lumi`) — the calm coding companion VS Code extension in the [LUMI](https://github.com/CardSorting/LUMI) monorepo.
 
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
@@ -25,8 +25,11 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 | Resource | Location |
 |----------|----------|
-| Repository | [github.com/CardSorting/DietCodeMarie](https://github.com/CardSorting/DietCodeMarie) |
-| Issues | [GitHub Issues](https://github.com/CardSorting/DietCodeMarie/issues) |
+| Repository | [github.com/CardSorting/LUMI](https://github.com/CardSorting/LUMI) |
+| Issues | [GitHub Issues](https://github.com/CardSorting/LUMI/issues) |
+| Discussions | [GitHub Discussions](https://github.com/CardSorting/LUMI/discussions) |
+| Support | [.github/SUPPORT.md](.github/SUPPORT.md) |
+| Governance | [GOVERNANCE.md](GOVERNANCE.md) |
 | Root README | [README.md](README.md) |
 | Doc hub | [docs/README.md](docs/README.md) |
 | Doc maintainer guide | [docs/MAINTAINER.md](docs/MAINTAINER.md) |
@@ -37,8 +40,8 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 ## Reporting bugs
 
-1. [Search existing issues](https://github.com/CardSorting/DietCodeMarie/issues) to avoid duplicates.
-2. Open a new issue with reproduction steps, VS Code version, extension version (`1.0.3`), and provider used.
+1. [Search existing issues](https://github.com/CardSorting/LUMI/issues) to avoid duplicates.
+2. Open a new issue with reproduction steps, VS Code version, extension version (`2.1.0`), and provider used.
 3. Include relevant logs from **LUMI → Output** panel when possible.
 
 ---
@@ -49,7 +52,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 Report privately via [SECURITY.md](SECURITY.md) → **security@dietcode.bot**
 
-Or use [GitHub Security Advisories](https://github.com/CardSorting/DietCodeMarie/security/advisories/new) if enabled for the repository.
+Or use [GitHub Security Advisories](https://github.com/CardSorting/LUMI/security/advisories/new) if enabled for the repository.
 
 ---
 
@@ -79,8 +82,8 @@ Good first targets: issues labeled `good first issue` or `help wanted`, or docum
 ### Bootstrap
 
 ```bash
-git clone https://github.com/CardSorting/DietCodeMarie.git
-cd DietCodeMarie
+git clone https://github.com/CardSorting/LUMI.git
+cd LUMI
 npm run install:all
 npm run protos               # required before first build
 npm run dev                  # terminal 1 — extension watch
@@ -152,6 +155,14 @@ npm run docs:check-docs-readme
 ```
 
 Guide: [docs/MAINTAINER.md](docs/MAINTAINER.md)
+
+---
+
+## Commits and changelog
+
+- Use clear, imperative commit subjects (e.g. `fix: reconcile roadmap patches when lane rebase fails`).
+- User-facing changes: add an entry under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md).
+- Release Drafter groups merged PRs by label for maintainers drafting GitHub releases.
 
 ---
 
