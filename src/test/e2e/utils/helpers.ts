@@ -140,6 +140,8 @@ export class E2ETestHelper {
 
 		const apiKeyInput = webview.getByRole("textbox", { name: "OpenRouter API Key" })
 		await apiKeyInput.fill("test-api-key")
+		// DebouncedTextField saves after 100ms — wait before navigating away.
+		await new Promise((resolve) => setTimeout(resolve, 300))
 
 		await webview.getByRole("button", { name: "Back to chat" }).click({ delay: 100 })
 	}

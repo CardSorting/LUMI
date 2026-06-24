@@ -2,6 +2,8 @@ import { expect } from "@playwright/test"
 import { E2E_WORKSPACE_TYPES, e2e } from "./utils/helpers"
 
 e2e.describe("Diff Editor", () => {
+	e2e.describe.configure({ timeout: 120_000 })
+
 	E2E_WORKSPACE_TYPES.forEach(({ title, workspaceType }) => {
 		e2e.extend({
 			workspaceType,
@@ -15,9 +17,10 @@ e2e.describe("Diff Editor", () => {
 			await expect(inputbox).toHaveValue("edit_request")
 			await sidebar.getByTestId("send-button").click({ delay: 50 })
 			await expect(inputbox).toHaveValue("")
+			await helper.waitForUserMessage(sidebar, "edit_request")
 
 			const approvalPrompt = sidebar.getByText(/Want me to apply these changes\?|Save these changes\?|I updated this file:/)
-			await expect(approvalPrompt).toBeVisible({ timeout: 90000 })
+			await expect(approvalPrompt).toBeVisible({ timeout: 90_000 })
 
 			const applyButton = sidebar.getByRole("button", { name: /Apply changes|Go ahead/ })
 			if (await applyButton.isVisible({ timeout: 5000 }).catch(() => false)) {

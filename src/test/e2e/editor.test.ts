@@ -3,6 +3,8 @@ import { addSelectedCodeToDietCodeWebview, openTab, toggleNotifications } from "
 import { E2E_WORKSPACE_TYPES, e2e } from "./utils/helpers"
 
 e2e.describe("Code Actions and Editor Panel", () => {
+	e2e.describe.configure({ timeout: 90_000 })
+
 	E2E_WORKSPACE_TYPES.forEach(({ title, workspaceType }) => {
 		e2e.extend({
 			workspaceType,

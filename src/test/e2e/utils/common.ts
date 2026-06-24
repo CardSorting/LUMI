@@ -8,17 +8,11 @@ export const openTab = async (_page: Page, tabName: string) => {
 }
 
 export const addSelectedCodeToDietCodeWebview = async (_page: Page) => {
-	await _page.locator("div:nth-child(4) > span > span").first().click()
-	await _page.getByRole("textbox", { name: "The editor is not accessible" }).press("ControlOrMeta+a")
-
-	await _page.keyboard.press("ControlOrMeta+Shift+p")
-	const commandPalette = _page.getByRole("textbox").last()
-	await commandPalette.waitFor({ state: "visible", timeout: 15000 })
-	await commandPalette.fill("Add to LUMI")
-	await _page
-		.getByRole("option", { name: /Add to LUMI/i })
-		.first()
-		.click()
+	// Focus the active editor and select all content.
+	await _page.locator(".monaco-editor").first().click()
+	await _page.keyboard.press("ControlOrMeta+a")
+	// lumi.addToChat is bound to ctrl+' / cmd+' when editorHasSelection (not in command palette).
+	await _page.keyboard.press("ControlOrMeta+'")
 }
 
 export const toggleNotifications = async (_page: Page) => {

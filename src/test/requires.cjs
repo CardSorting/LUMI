@@ -6,7 +6,8 @@ const originalRequire = Module.prototype.require
  * @see {@link file://./vscode-mock.ts}
  */
 Module.prototype.require = function (path) {
-	if (path === "vscode") {
+	// Integration tests run inside the VS Code extension host and need the real vscode API.
+	if (path === "vscode" && !process.env.INTEGRATION_TEST) {
 		return require("./vscode-mock")
 	}
 	// Avoid pulling in VSCode-integrated checkpoint/editor code during unit tests
