@@ -1,5 +1,5 @@
 import type { ExecutionReplayIntegrityReport } from "@shared/execution/replayContract"
-import type { LockBackends, LockClaim } from "@/core/governance/LockAuthority"
+import type { LockBackends, LockClaim } from "@shared/governance/lockTypes"
 
 export const GOVERNED_RECEIPT_SCHEMA_VERSION = 3 as const
 
@@ -28,6 +28,8 @@ export interface GovernedAdmissionResult {
 	backoffMs: number
 	pressureScore?: number
 	reason?: string
+	operation?: string
+	roadmapEnabled?: boolean
 }
 
 export interface WorkLaneClaim {
@@ -46,6 +48,7 @@ export interface WorkLaneClaim {
 	reasonLockAcquired?: string
 	readSet?: string[]
 	writeSet?: string[]
+	roadmapItemId?: string
 }
 
 export type LaneExecutionStatus = "completed" | "failed" | "skipped" | "collision_rejected" | "blocked" | "running"
@@ -78,6 +81,9 @@ export interface LaneExecutionReceipt {
 	reasonLockAcquired?: string
 	readSet?: string[]
 	writeSet?: string[]
+	roadmapLeaseTaskId?: string
+	roadmapItemId?: string
+	completionAuditPhase?: string
 }
 
 export type ClaimHistoryEvent = "acquired" | "released" | "rejected" | "stale_detected" | "recovered"
@@ -218,6 +224,41 @@ export interface GovernedReceiptSummary {
 	diagnostics: GovernedReceiptDiagnostics
 }
 
+export interface GovernedRoadmapLinkage {
+	operation?: string
+	roadmapEnabled: boolean
+	pressureScore?: number
+	nowItemCount?: number
+	validationPending?: boolean
+	kanbanCompleteAllowed?: boolean
+	orchestrationLeaseTaskIds: string[]
+	laneRoadmapItems: Array<{
+		index: number
+		laneId: string
+		roadmapItemId?: string
+		roadmapLeaseTaskId: string
+	}>
+	completionAdvisory?: string
+	incompleteIntegration?: string[]
+}
+
+export interface GovernedAuditIntegration {
+	preflightIssues: Array<{ stage: string; message: string; severity?: string }>
+	perLaneCompletionAudit: Array<{
+		index: number
+		agentId: string
+		phase?: string
+		blocked?: boolean
+	}>
+	mergeGateRole: "commit_barrier"
+	workspaceAuditAtPreflight: boolean
+	workspaceAuditAtSeal: boolean
+	receiptIntegrityValidated: boolean
+	falsePositiveLockAudit: { lockSkippedCount: number; missingLockViolations: number }
+	storageBoundary: string
+	roadmapCompletionAdvisory?: string
+}
+
 export interface GovernedSwarmReceipt {
 	schemaVersion: typeof GOVERNED_RECEIPT_SCHEMA_VERSION
 	swarmId: string
@@ -237,6 +278,8 @@ export interface GovernedSwarmReceipt {
 	sealed: boolean
 	retryReason?: string
 	integrity: ExecutionReplayIntegrityReport
+	roadmapLinkage?: GovernedRoadmapLinkage
+	auditIntegration?: GovernedAuditIntegration
 }
 
 export function buildLaneId(swarmId: string, index: number): string {
@@ -294,6 +337,7 @@ export function workLaneClaimWithoutLock(
 		reasonLockSkipped: string
 		readSet?: string[]
 		writeSet?: string[]
+		roadmapItemId?: string
 	},
 ): WorkLaneClaim {
 	const laneId = buildLaneId(swarmId, index)
@@ -310,6 +354,7 @@ export function workLaneClaimWithoutLock(
 		reasonLockSkipped: intent.reasonLockSkipped,
 		readSet: intent.readSet,
 		writeSet: intent.writeSet,
+		roadmapItemId: intent.roadmapItemId,
 	}
 }
 

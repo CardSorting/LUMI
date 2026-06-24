@@ -65,6 +65,7 @@ export class LaneDAG {
 		}
 		node.state = "failed"
 		node.error = error
+		this.recomputeBlocked()
 	}
 
 	snapshot(): LaneDAGNode[] {

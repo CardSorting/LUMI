@@ -390,13 +390,69 @@ Honest integration gaps (as of schema v3):
 
 | Gap | Impact |
 |-----|--------|
-| **Lane DAG deps not wired** | `SubagentToolHandler` passes `dependencies: undefined`; `isLaneReady()` unused; parallel pool ignores `blocked` state |
+| **Orchestration lease** | `acquireOrchestrationLease()` not called; per-lane ownership uses `scheduleAdmission` via lock acquire only |
+| **Roadmap item mutation** | `[roadmap_item:…]` linkage recorded on receipt; roadmap kanban state is not auto-updated on seal |
 | **Crash seal path** | `sealCrashReceipt()` tested but not called on handler timeout/abort; partial state via `sealReceipt` |
-| **Roadmap recoverStale** | Doc previously claimed roadmap lease pruning; `recoverStale` only clears in-process, file, fence |
+| **Roadmap recoverStale** | `recoverStale` only clears in-process, file, fence — not roadmap lease pruning |
 | **Replay checksum scope** | Lock-necessity fields not in canonical hash |
 | **worker_cli parity** | Separate receipt schema and resource key format |
 
 These are tracked for future hardening; operator runbook documents workarounds.
+
+---
+
+## Roadmap and audit integration
+
+Governed swarms coordinate with the **roadmap** (scheduling + linkage) and **workspace audit** (completion gates) through explicit bridges recorded on `GovernedSwarmReceipt`. **MergeGate is the commit barrier only** — not the workspace audit system.
+
+### Expected lifecycle
+
+```
+roadmap plan → audit preflight → admit swarm → classify lane intent → execute lanes
+  → audit evidence (per-lane completion_gate) → merge gate → audit final receipt → roadmap completion advisory
+```
+
+### Definition of done (where things happen)
+
+| Question | Answer |
+|----------|--------|
+| Where does roadmap planning enter? | Parent agent roadmap / Now items; swarm admits via `RoadmapService.scheduleAdmission` in `GovernedSwarmCoordinator.admitSwarm` |
+| Where does roadmap state update? | **Not auto-updated on seal.** Seal captures `roadmapLinkage.completionAdvisory` via dry-run `evaluateRoadmapCompletionBlock`. Kanban updates remain parent/subagent completion flows. |
+| Which roadmap item owns each lane? | `laneReceipts[].roadmapItemId` from `[roadmap_item:ID]` prompt tag or `roadmap_item_N` param; lease id in `roadmapLeaseTaskId` |
+| Which audit runs before execution? | `evaluateGatePreflightReadinessAsync` via `runGovernedSwarmAuditPreflight` in `SubagentToolHandler` — recorded in `auditIntegration.preflightIssues` |
+| Which audit runs after execution? | Per-lane: `runCompletionGateFlow` at `attempt_completion` in `SubagentRunner`. Swarm seal: `buildGovernedAuditIntegration` + replay checksum in `sealReceipt` |
+| Is MergeGate the audit system? | **No.** `mergeGateRole: "commit_barrier"` — reconciles parallel writes, locks, transcripts. Workspace audit is `completionGatePipeline`. |
+| Does BroccoliDB store audit evidence? | **No for governed receipts.** Artifacts under `subagent_executions/`; `auditIntegration.storageBoundary` documents this. BroccoliDB backs lock fencing / substrate replay, not CAS audit_events for swarms. |
+
+### Roadmap surfaces wired today
+
+| Surface | Module | Receipt field |
+|---------|--------|---------------|
+| Swarm pressure admission | `GovernedSwarmCoordinator.admitSwarm` | `admission.pressureScore`, `roadmapLinkage.pressureScore` |
+| Per-lane lease on lock | `LockAuthority.acquire` + `scheduleAdmission` | `laneReceipts[].roadmapLeaseTaskId`, `roadmapLinkage.laneRoadmapItems` |
+| Lane dependency ordering | `buildLaneDependencyMap` + `LaneDAG` + DAG-aware handler pool | `laneDag`, `laneReceipts[].dagState` |
+| Roadmap item linkage | `[roadmap_item:…]` / params | `laneReceipts[].roadmapItemId` |
+| Completion advisory (dry-run) | `captureRoadmapLinkage` at seal | `roadmapLinkage.completionAdvisory` |
+| Partial integration honesty | `ROADMAP_INTEGRATION_PARTIAL` | `roadmapLinkage.incompleteIntegration` |
+
+### Audit surfaces wired today
+
+| Surface | Module | Receipt field |
+|---------|--------|---------------|
+| Preflight dry-run | `GovernedIntegration.runGovernedSwarmAuditPreflight` | `auditIntegration.preflightIssues`, `workspaceAuditAtPreflight` |
+| Per-lane completion audit | `SubagentRunner` → `validateSubagentCompletionGates` | `auditIntegration.perLaneCompletionAudit`, `laneReceipts[].completionAuditPhase` |
+| Merge / commit barrier | `MergeGate.runMergeGate` | `mergeGate`, `auditIntegration.mergeGateRole` |
+| False-positive lock audit | `auditFalsePositiveLocks` | `auditIntegration.falsePositiveLockAudit` |
+| Receipt integrity | `ReplayValidator` in `sealReceipt` | `auditIntegration.receiptIntegrityValidated`, `integrity` |
+
+### Prompt tags for roadmap linkage
+
+```
+[depends_on:0]           — lane waits until lane 0 is sealed
+[roadmap_item:NOW-42]    — links lane to roadmap Now item (receipt only)
+```
+
+Param equivalents: `depends_on_2`, `roadmap_item_1`.
 
 ---
 
@@ -409,7 +465,8 @@ These are tracked for future hardening; operator runbook documents workarounds.
 | Public lock API | `src/core/governance/governLock.ts` | `mem_claim` integration |
 | Fencing | `src/core/governance/BroccoliFencingAdapter.ts` | Durable fence files |
 | Coordinator | `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` | Lifecycle orchestration |
-| Lock necessity | `src/core/task/tools/subagent/LockNecessity.ts` | Classifier + read/write split |
+| Integration bridges | `src/core/task/tools/subagent/GovernedIntegration.ts` | Roadmap linkage + audit preflight/post-seal |
+| Lock necessity | `src/core/task/tools/subagent/LockNecessity.ts` | Classifier + read/write split + prompt tags |
 | Merge gate | `src/core/task/tools/subagent/MergeGate.ts` | Commit barrier |
 | Replay | `src/core/task/tools/subagent/ReplayValidator.ts` | Deterministic checksum |
 | Store | `src/core/task/tools/subagent/GovernedExecutionStore.ts` | Persist + authoritative load |
@@ -425,6 +482,7 @@ These are tracked for future hardening; operator runbook documents workarounds.
 | `governedExecutionLockNecessity.test.ts` | Classifier, acquire skip/acquire, read overlap OK, mutation without lock fails, lock-skipped no orphan |
 | `governedExecutionHardening.test.ts` | LockAuthority, DAG overlap ordering, file lock, worker_cli smoke |
 | `governedExecutionReliability.test.ts` | Crash phases, fence fail-closed, retry lineage, `isRetrySafe`, checksum stability |
+| `governedExecutionIntegration.test.ts` | Roadmap DAG, pressure score, audit boundaries, receipt linkage fields |
 | `GovernedReceiptPanel.test.tsx` | Incident console, execution mode badges |
 
 ---

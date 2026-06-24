@@ -2034,7 +2034,7 @@ export class RoadmapService {
 		workspace: string,
 		agentId: string,
 		operation: string,
-	): Promise<{ admitted: boolean; backoff_ms: number }> {
+	): Promise<{ admitted: boolean; backoff_ms: number; pressure_score?: number }> {
 		const runtimeState = await this.getOrHydrateRuntimeState(workspace)
 		const now = Date.now()
 
@@ -2069,7 +2069,7 @@ export class RoadmapService {
 			const cooldownExpires = new Date(runtimeState.scheduler_state.last_cooldown_timestamp).getTime()
 			if (cooldownExpires > now) {
 				const remaining = cooldownExpires - now
-				return { admitted: false, backoff_ms: Math.max(1000, remaining) }
+				return { admitted: false, backoff_ms: Math.max(1000, remaining), pressure_score: pressureScore }
 			}
 		}
 
@@ -2088,7 +2088,7 @@ export class RoadmapService {
 				runtime_state: runtimeState,
 			})
 
-			return { admitted: false, backoff_ms: finalBackoff }
+			return { admitted: false, backoff_ms: finalBackoff, pressure_score: pressureScore }
 		}
 
 		if (!runtimeState.scheduler_state) {
@@ -2101,7 +2101,7 @@ export class RoadmapService {
 			runtime_state: runtimeState,
 		})
 
-		return { admitted: true, backoff_ms: 0 }
+		return { admitted: true, backoff_ms: 0, pressure_score: pressureScore }
 	}
 
 	public async readState(workspace: string): Promise<any> {

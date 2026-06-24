@@ -18,7 +18,14 @@ import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
+import type { GatePreflightReadinessIssue } from "../completionGatePipeline"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
+import {
+	buildLaneDependencyMap,
+	buildLaneRoadmapItemMap,
+	runGovernedSwarmAuditPreflight,
+	swarmSummaryFromEntries,
+} from "../subagent/GovernedIntegration"
 import { GovernedSwarmCoordinator } from "../subagent/GovernedSwarmCoordinator"
 import { classifyLockNecessity, resolveLaneLockIntent } from "../subagent/LockNecessity"
 import { computeSwarmArtifactChecksum, planResumeFromArtifact, type SwarmResumePlan } from "../subagent/ResumeSwarmFromArtifact"
@@ -302,11 +309,14 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 
 		const parentStreamId = (config as ConfigWithExtensions).getSessionStreamId?.()
 
+		const laneDependencies = buildLaneDependencyMap(prompts, block.params as Record<string, string | undefined>)
+		const laneRoadmapItems = buildLaneRoadmapItemMap(prompts, block.params as Record<string, string | undefined>)
+
 		const governedCoordinator = new GovernedSwarmCoordinator(
 			config.cwd,
 			RoadmapService.getInstance().isEnabled(),
 			prompts.length,
-			undefined,
+			laneDependencies,
 			createLockAuthority({ inMemory: process.env.TS_NODE_PROJECT?.includes("unit-test") ?? false }),
 			undefined,
 			resumePlan?.recoveryReceipt?.resumeAttemptId,
@@ -317,6 +327,15 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				`Swarm admission rejected (roadmap pressure). Retry after ${swarmAdmission.backoffMs}ms.`,
 			)
 		}
+
+		let auditPreflightIssues: GatePreflightReadinessIssue[] = []
+		try {
+			auditPreflightIssues = await runGovernedSwarmAuditPreflight(config, swarmSummaryFromEntries(prompts))
+		} catch (error) {
+			Logger.warn("[SubagentToolHandler] Governed swarm audit preflight failed:", error)
+			auditPreflightIssues = [{ stage: "roadmap_governance", message: "preflight unavailable" }]
+		}
+
 		const laneReceipts: LaneExecutionReceipt[] = []
 		let governedReceiptSummary: GovernedReceiptSummary | undefined
 
@@ -447,7 +466,6 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		// Production Hardening: Concurrency Limit (max 3 subagents in parallel)
 		const MAX_CONCURRENCY = 3
 		const results: PromiseSettledResult<SubagentRunResult>[] = new Array(prompts.length)
-		let nextIndex = 0
 		let totalSwarmCost = 0
 		const MAX_PARENT_COST = config.taskState.maxCost
 
@@ -511,6 +529,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 
 			const current = entries[index]
 			const laneIntent = resolveLaneLockIntent(prompts[index], block.params as Record<string, string | undefined>, index)
+			laneIntent.roadmapItemId = laneRoadmapItems.get(index)
 			const laneNecessity = classifyLockNecessity(laneIntent)
 			const laneClaim = await governedCoordinator.acquireLane(swarmId, current.id, index, laneIntent)
 			if (!laneClaim.success || !laneClaim.claim) {
@@ -670,18 +689,82 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			}
 		}
 
-		const workers = Array.from({ length: Math.min(MAX_CONCURRENCY, prompts.length) }, async () => {
-			while (nextIndex < prompts.length) {
-				const i = nextIndex++
-				await runSubagent(i)
+		const executeSwarmLanes = async (): Promise<void> => {
+			const pending = new Set(prompts.map((_, index) => index))
+			const running = new Map<number, Promise<void>>()
+
+			while (pending.size > 0 || running.size > 0) {
+				for (const index of [...pending]) {
+					if (running.size >= MAX_CONCURRENCY) {
+						break
+					}
+					if (!governedCoordinator.isLaneReady(index)) {
+						continue
+					}
+					pending.delete(index)
+					const job = runSubagent(index).finally(() => {
+						running.delete(index)
+					})
+					running.set(index, job)
+				}
+
+				if (pending.size > 0 && running.size === 0) {
+					for (const index of pending) {
+						entries[index].status = "failed"
+						entries[index].error = "Lane blocked by dependencies (upstream not sealed or deadlock)"
+						laneReceipts.push(
+							governedCoordinator.buildLaneReceipt(
+								{
+									laneId: `swarm-lane:${swarmId}:${index}`,
+									swarmId,
+									agentId: entries[index].id,
+									index,
+									roadmapLeaseTaskId: `swarm-lane-${swarmId}-${index}`,
+									roadmapItemId: laneRoadmapItems.get(index),
+									claimedAt: Date.now(),
+									executionMode: "mutation",
+									lockRequired: true,
+								},
+								undefined,
+								"blocked",
+								false,
+								entries[index].error,
+							),
+						)
+						results[index] = {
+							status: "fulfilled",
+							value: {
+								status: "failed",
+								error: entries[index].error,
+								stats: {
+									toolCalls: 0,
+									inputTokens: 0,
+									outputTokens: 0,
+									cacheWriteTokens: 0,
+									cacheReadTokens: 0,
+									totalCost: 0,
+									contextTokens: 0,
+									contextWindow: 0,
+									contextUsagePercentage: 0,
+								},
+							},
+						}
+					}
+					pending.clear()
+					break
+				}
+
+				if (running.size > 0) {
+					await Promise.race(running.values())
+				}
 			}
-		})
+		}
 
 		// Production Hardening: 20-minute hard timeout for the entire swarm execution
 		const SUBAGENT_EXECUTION_TIMEOUT_MS = 20 * 60 * 1000
 
 		try {
-			await pTimeout(Promise.all(workers), {
+			await pTimeout(executeSwarmLanes(), {
 				milliseconds: SUBAGENT_EXECUTION_TIMEOUT_MS,
 				message: "Subagent swarm execution timed out after 20 minutes.",
 			})
@@ -788,6 +871,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				envelope: finalEnvelope,
 				admission: swarmAdmission,
 				laneReceipts,
+				preflightIssues: auditPreflightIssues,
 			})
 			finalEnvelope.invariants.violations.push(...governedReceipt.mergeGate.violations)
 			finalEnvelope.invariants.validated = governedReceipt.sealed

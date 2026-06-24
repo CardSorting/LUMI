@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { acquireGovernedFileLock, recoverStaleGovernedFileLocks, releaseGovernedFileLock } from "@shared/governance/fileLock"
+import type { LockBackends, LockClaim } from "@shared/governance/lockTypes"
 import { SwarmMutexService } from "@/core/swarm/SwarmMutexService"
 import { getDb } from "@/infrastructure/db/Config"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
@@ -9,6 +10,8 @@ import {
 	releaseBroccoliFence,
 	verifyBroccoliFence,
 } from "./BroccoliFencingAdapter"
+
+export type { LockBackends, LockClaim } from "@shared/governance/lockTypes"
 
 export type LockFailureReason =
 	| "collision"
@@ -21,25 +24,6 @@ export type LockFailureReason =
 	| "durable_backend_unavailable"
 	| "ambiguous_roadmap_admission"
 	| "not_held"
-
-export interface LockBackends {
-	inProcess: boolean
-	swarmMutex: boolean
-	roadmapLease: boolean
-	fileLock: boolean
-	broccoliFence: boolean
-}
-
-export interface LockClaim {
-	claimId: string
-	resourceKey: string
-	ownerId: string
-	fencingToken: number
-	roadmapLeaseTaskId?: string
-	acquiredAt: number
-	releasedAt?: number
-	backends: LockBackends
-}
 
 export type LockAcquireResult = { ok: true; claim: LockClaim } | { ok: false; reason: LockFailureReason; error: string }
 

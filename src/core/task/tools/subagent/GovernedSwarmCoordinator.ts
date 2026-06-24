@@ -26,6 +26,7 @@ import {
 import { v4 as uuidv4 } from "uuid"
 import type { LockAuthority } from "@/core/governance/LockAuthority"
 import { createLockAuthority, releaseGovernedLock } from "@/core/governance/LockAuthority"
+import type { GatePreflightReadinessIssue } from "@/core/task/tools/completionGatePipeline"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import { swarmEnvelopeToReplayArtifact } from "./executionReplayMappers"
 import {
@@ -34,6 +35,7 @@ import {
 	loadGovernedReceipt,
 	persistGovernedReceipt,
 } from "./GovernedExecutionStore"
+import { buildGovernedAuditIntegration, captureRoadmapLinkage } from "./GovernedIntegration"
 import { LaneDAG } from "./LaneDAG"
 import { classifyLockNecessity, type LaneLockIntent, splitReadWriteSets } from "./LockNecessity"
 import { runMergeGate } from "./MergeGate"
@@ -86,7 +88,7 @@ export class GovernedSwarmCoordinator {
 		await this.lockAuthority.recoverStale(this.workspace, "governed-lane:")
 
 		if (!this.roadmapEnabled) {
-			return { admitted: true, backoffMs: 0, reason: "roadmap_disabled" }
+			return { admitted: true, backoffMs: 0, reason: "roadmap_disabled", operation, roadmapEnabled: false }
 		}
 
 		const admission = await RoadmapService.getInstance().scheduleAdmission(this.workspace, parentAgentId, operation)
@@ -94,11 +96,20 @@ export class GovernedSwarmCoordinator {
 			return {
 				admitted: false,
 				backoffMs: admission.backoff_ms,
+				pressureScore: admission.pressure_score,
 				reason: "roadmap_pressure",
+				operation,
+				roadmapEnabled: true,
 			}
 		}
 
-		return { admitted: true, backoffMs: 0 }
+		return {
+			admitted: true,
+			backoffMs: 0,
+			pressureScore: admission.pressure_score,
+			operation,
+			roadmapEnabled: true,
+		}
 	}
 
 	isLaneReady(index: number): boolean {
@@ -140,6 +151,7 @@ export class GovernedSwarmCoordinator {
 					reasonLockSkipped: necessity.reasonLockSkipped || "lock not required",
 					readSet: resolvedIntent.readSet,
 					writeSet: resolvedIntent.writeSet,
+					roadmapItemId: resolvedIntent.roadmapItemId,
 				}),
 			}
 		}
@@ -192,6 +204,7 @@ export class GovernedSwarmCoordinator {
 		claim.reasonLockAcquired = necessity.reasonLockAcquired
 		claim.readSet = resolvedIntent.readSet
 		claim.writeSet = resolvedIntent.writeSet
+		claim.roadmapItemId = resolvedIntent.roadmapItemId
 
 		return {
 			success: true,
@@ -285,6 +298,9 @@ export class GovernedSwarmCoordinator {
 			reasonLockAcquired: claim.reasonLockAcquired,
 			readSet,
 			writeSet,
+			roadmapLeaseTaskId: claim.roadmapLeaseTaskId,
+			roadmapItemId: claim.roadmapItemId,
+			completionAuditPhase: envelope?.phase,
 		}
 
 		return receipt
@@ -298,6 +314,7 @@ export class GovernedSwarmCoordinator {
 		replayArtifact?: ExecutionReplayArtifact
 		forceFail?: boolean
 		retryReason?: string
+		preflightIssues?: GatePreflightReadinessIssue[]
 	}): Promise<GovernedSwarmReceipt> {
 		const replayArtifact = options.replayArtifact || swarmEnvelopeToReplayArtifact(options.envelope)
 		const priorSealedReceipt = await loadGovernedReceipt(options.taskId, options.envelope.swarmId)
@@ -314,6 +331,13 @@ export class GovernedSwarmCoordinator {
 		})
 
 		let sealed = mergeGate.passed && !options.forceFail
+
+		const roadmapLinkage = await captureRoadmapLinkage(
+			this.workspace,
+			options.envelope.swarmId,
+			options.admission,
+			options.laneReceipts,
+		)
 
 		const receipt: GovernedSwarmReceipt = {
 			schemaVersion: GOVERNED_RECEIPT_SCHEMA_VERSION,
@@ -344,6 +368,15 @@ export class GovernedSwarmCoordinator {
 				violations: mergeGate.violations,
 				checksum: mergeGate.replayIntegrity.checksum,
 			},
+			roadmapLinkage,
+			auditIntegration: buildGovernedAuditIntegration({
+				preflightIssues: options.preflightIssues ?? [],
+				laneReceipts: options.laneReceipts,
+				mergeGate,
+				agents: options.envelope.agents,
+				receiptIntegrityValid: sealed && mergeGate.replayIntegrity.valid,
+				roadmapLinkage,
+			}),
 		}
 
 		const replayValidation = validateDeterministicReplay(receipt, replayArtifact)
@@ -353,6 +386,11 @@ export class GovernedSwarmCoordinator {
 			receipt.integrity.violations.push(...explainReplayMismatch(replayValidation.violations))
 			receipt.sealed = false
 			sealed = false
+		}
+
+		if (receipt.auditIntegration) {
+			receipt.auditIntegration.receiptIntegrityValidated = receipt.integrity.valid
+			receipt.auditIntegration.workspaceAuditAtSeal = receipt.integrity.valid && mergeGate.passed
 		}
 
 		receipt.governedArtifactPath = await persistGovernedReceipt(options.taskId, receipt)

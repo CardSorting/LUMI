@@ -53,6 +53,8 @@ Top-level durable record written by `persistGovernedReceipt()`.
 | `sealed` | boolean | yes | `true` only if merge + replay pass |
 | `retryReason` | string | no | Crash/retry annotation |
 | `integrity` | `ExecutionReplayIntegrityReport` | yes | Replay validation result |
+| `roadmapLinkage` | `GovernedRoadmapLinkage` | no | Roadmap pressure, per-lane items, completion advisory |
+| `auditIntegration` | `GovernedAuditIntegration` | no | Preflight, per-lane completion audit, merge gate role, storage boundary |
 
 ### Latest pointer semantics
 
@@ -114,7 +116,41 @@ Not persisted in receipt directly; drives lane receipt fields.
 | `lockClaim` | `LockClaim` | absent |
 | `lockSkipped` | — | `true` |
 | `executionMode` | from intent | from intent |
-| `readSet` / `writeSet` | declared intent | declared intent |
+| `readSet` / `writeSet` | declared paths | declared paths |
+| `roadmapLeaseTaskId` | `swarm-lane-{swarmId}-{index}` | same |
+| `roadmapItemId` | from `[roadmap_item:…]` | same |
+| `completionAuditPhase` | envelope phase at seal (e.g. `completion_gate`) | same |
+
+---
+
+## GovernedRoadmapLinkage
+
+Recorded at seal via `captureRoadmapLinkage()`.
+
+| Field | Semantics |
+|-------|-----------|
+| `roadmapEnabled` | Whether roadmap service was active at admit |
+| `pressureScore` | From `scheduleAdmission` |
+| `laneRoadmapItems[]` | Per-lane `roadmapItemId` + `roadmapLeaseTaskId` |
+| `completionAdvisory` | Dry-run `evaluateRoadmapCompletionBlock` message |
+| `incompleteIntegration[]` | Honest list of gaps (e.g. orchestration lease not acquired) |
+
+---
+
+## GovernedAuditIntegration
+
+Recorded at seal via `buildGovernedAuditIntegration()`.
+
+| Field | Semantics |
+|-------|-----------|
+| `preflightIssues[]` | From `evaluateGatePreflightReadinessAsync` before lanes run |
+| `perLaneCompletionAudit[]` | Agent `phase` / blocked at seal |
+| `mergeGateRole` | Always `"commit_barrier"` — not workspace audit |
+| `workspaceAuditAtPreflight` | No blocking preflight issues |
+| `workspaceAuditAtSeal` | Receipt integrity + merge passed |
+| `falsePositiveLockAudit` | Lock-skipped count vs missing-lock violations |
+| `storageBoundary` | Documents task artifacts vs BroccoliDB CAS |
+| `roadmapCompletionAdvisory` | Copy of roadmap linkage advisory |
 
 ---
 

@@ -11,13 +11,13 @@ import { BrowserSettings, DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettin
 import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS, FocusChainSettings } from "@shared/FocusChainSettings"
 import { HistoryItem } from "@shared/HistoryItem"
+import type { LanguageModelChatSelector } from "@shared/LanguageModelChatSelector"
 import { DEFAULT_MCP_DISPLAY_MODE, McpDisplayMode } from "@shared/McpDisplayMode"
 import { WorkspaceRoot } from "@shared/multi-root/types"
 import { GlobalInstructionsFile } from "@shared/remote-config/schema"
 import { Mode } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
 import { UserInfo } from "@shared/UserInfo"
-import { LanguageModelChatSelector } from "vscode"
 import { BlobStoreSettings } from "./DietCodeBlobStorage"
 
 // ============================================================================

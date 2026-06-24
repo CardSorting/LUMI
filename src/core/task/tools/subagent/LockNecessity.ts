@@ -4,6 +4,7 @@ export interface LaneLockIntent {
 	executionMode: LaneExecutionMode
 	readSet?: string[]
 	writeSet?: string[]
+	roadmapItemId?: string
 	declaresWrites?: boolean
 	mutatesRoadmap?: boolean
 	mutatesBroccoliDurable?: boolean
@@ -66,6 +67,22 @@ export function parseWriteSetFromPrompt(prompt: string): string[] {
 		.split(",")
 		.map((p) => p.trim())
 		.filter(Boolean)
+}
+
+export function parseDependsOnFromPrompt(prompt: string): number[] {
+	const match = prompt.match(/\[depends_on:([^\]]+)\]/i)
+	if (!match) {
+		return []
+	}
+	return match[1]
+		.split(",")
+		.map((part) => Number.parseInt(part.trim(), 10))
+		.filter((n) => Number.isFinite(n) && n >= 0)
+}
+
+export function parseRoadmapItemFromPrompt(prompt: string): string | undefined {
+	const match = prompt.match(/\[roadmap_item:([^\]]+)\]/i)
+	return match?.[1]?.trim() || undefined
 }
 
 export function resolveLaneLockIntent(
