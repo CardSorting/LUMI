@@ -10,10 +10,18 @@ import { fileURLToPath } from "node:url"
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 
-const upper = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8")
-const lower = fs.readFileSync(path.join(repoRoot, "readme.md"), "utf8")
+const readmePath = path.join(repoRoot, "README.md")
+assert.ok(fs.existsSync(readmePath), "README.md is required at repository root")
+const upper = fs.readFileSync(readmePath, "utf8")
 
-assert.strictEqual(upper, lower, "README.md and readme.md must be identical")
+const lowerPath = path.join(repoRoot, "readme.md")
+if (fs.existsSync(lowerPath)) {
+	const sameInode = fs.realpathSync.native(lowerPath) === fs.realpathSync.native(readmePath)
+	if (!sameInode) {
+		const lower = fs.readFileSync(lowerPath, "utf8")
+		assert.strictEqual(upper, lower, "README.md and readme.md must be identical")
+	}
+}
 
 const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"))
 const providers = JSON.parse(fs.readFileSync(path.join(repoRoot, "src/shared/providers/providers.json"), "utf8"))

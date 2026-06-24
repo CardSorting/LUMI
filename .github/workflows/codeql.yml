@@ -30,6 +30,19 @@ jobs:
         language: ["javascript-typescript"]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            webview-ui/package-lock.json
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd webview-ui && npm ci
+      - name: Generate protobuf clients
+        run: npm run protos
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
