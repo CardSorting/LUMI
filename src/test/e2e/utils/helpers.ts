@@ -118,22 +118,26 @@ export class E2ETestHelper {
 		}
 	}
 
-	public async signin(webview: Frame): Promise<void> {
-		const chatInput = webview.getByTestId("chat-input")
-		if (await chatInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-			return
-		}
-
-		await webview.getByRole("button", { name: "Use your own API key" }).click({ delay: 100 })
+	public async configureApiKey(webview: Frame): Promise<void> {
+		await webview.getByRole("button", { name: "Preferences" }).click({ delay: 100 })
 
 		const providerSelectorInput = webview.getByTestId("provider-selector-input")
+		await expect(providerSelectorInput).toBeVisible({ timeout: 15000 })
+
 		await providerSelectorInput.click({ delay: 100 })
 		await webview.getByTestId("provider-option-openrouter").click({ delay: 100 })
 
 		const apiKeyInput = webview.getByRole("textbox", { name: "OpenRouter API Key" })
 		await apiKeyInput.fill("test-api-key")
 
-		await webview.getByRole("button", { name: "Let's go!" }).click({ delay: 100 })
+		await webview.getByRole("button", { name: "Back to chat" }).click({ delay: 100 })
+	}
+
+	public async signin(webview: Frame): Promise<void> {
+		const chatInput = webview.getByTestId("chat-input")
+		await expect(chatInput).toBeVisible({ timeout: 15000 })
+
+		await this.configureApiKey(webview)
 
 		const closeWhatsNew = webview.getByRole("button", { name: "Close" })
 		if (await closeWhatsNew.isVisible({ timeout: 3000 }).catch(() => false)) {

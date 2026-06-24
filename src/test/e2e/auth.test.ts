@@ -1,30 +1,13 @@
 import { expect } from "@playwright/test"
 import { e2e } from "./utils/helpers"
 
-// Test for setting up API keys
-e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ sidebar }) => {
-	await expect(sidebar.getByRole("heading", { name: "Hi, I'm LUMI" })).toBeVisible()
-	await expect(sidebar.getByRole("button", { name: "Use your own API key" })).toBeVisible()
+e2e("Views - can set up API keys via Settings from Chat", async ({ sidebar, helper }) => {
+	await expect(sidebar.getByTestId("chat-input")).toBeVisible({ timeout: 15000 })
 
-	await sidebar.getByRole("button", { name: "Use your own API key" }).click()
+	await helper.configureApiKey(sidebar)
 
-	const providerSelectorInput = sidebar.getByTestId("provider-selector-input")
-	await expect(providerSelectorInput).toBeVisible()
-
-	await providerSelectorInput.click({ delay: 100 })
-	await expect(sidebar.getByTestId("provider-option-openrouter")).toBeVisible()
-	await sidebar.getByTestId("provider-option-openrouter").click({ delay: 100 })
-
-	const apiKeyInput = sidebar.getByRole("textbox", {
-		name: "OpenRouter API Key",
-	})
-	await apiKeyInput.fill("test-api-key")
-	await expect(apiKeyInput).toHaveValue("test-api-key")
-	await sidebar.getByRole("button", { name: "Let's go!" }).click()
-
-	await expect(sidebar.getByRole("heading", { name: "Hi, I'm LUMI" })).not.toBeVisible()
-	await expect(apiKeyInput).not.toBeVisible()
-	await expect(providerSelectorInput).not.toBeVisible()
+	await expect(sidebar.getByTestId("provider-selector-input")).not.toBeVisible()
+	await expect(sidebar.getByTestId("chat-input")).toBeVisible()
 
 	const dialog = sidebar.getByRole("heading", {
 		name: /^🎉 New in v\d/,
@@ -33,9 +16,6 @@ e2e("Views - can set up API keys and navigate to Settings from Chat", async ({ s
 		await sidebar.getByRole("button", { name: "Close" }).click()
 		await expect(dialog).not.toBeVisible()
 	}
-
-	const chatInputBox = sidebar.getByTestId("chat-input")
-	await expect(chatInputBox).toBeVisible()
 
 	const announcementsRegion = sidebar.locator('[aria-label="Announcements"]')
 	if (await announcementsRegion.isVisible({ timeout: 3000 }).catch(() => false)) {

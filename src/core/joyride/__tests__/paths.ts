@@ -1,12 +1,7 @@
-interface JoyrideTestPaths {
-	JOYRIDE_TEST_DIR: string
-	JOYRIDE_PKG_ROOT: string
-	REPO_ROOT: string
-}
+import * as path from "node:path"
 
-// CJS shim so mocha/ts-node can load __dirname-based paths on Linux while tsc type-checks cleanly.
-const paths = require("./paths.cjs") as JoyrideTestPaths
+const REPO_ROOT = process.cwd()
+const JOYRIDE_PKG_ROOT = path.join(REPO_ROOT, "src/core/joyride")
+const JOYRIDE_TEST_DIR = path.join(JOYRIDE_PKG_ROOT, "__tests__")
 
-export const JOYRIDE_TEST_DIR = paths.JOYRIDE_TEST_DIR
-export const JOYRIDE_PKG_ROOT = paths.JOYRIDE_PKG_ROOT
-export const REPO_ROOT = paths.REPO_ROOT
+export { JOYRIDE_TEST_DIR, JOYRIDE_PKG_ROOT, REPO_ROOT }
