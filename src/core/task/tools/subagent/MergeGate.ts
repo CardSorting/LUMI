@@ -2,6 +2,7 @@ import type { ExecutionReplayArtifact } from "@shared/execution/replayContract"
 import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import type {
 	ClaimHistoryEntry,
+	GovernedRoadmapLinkage,
 	GovernedSwarmReceipt,
 	LaneDAGNode,
 	LaneExecutionReceipt,
@@ -11,6 +12,7 @@ import type {
 import { verifyReplayArtifact } from "./executionReplayMappers"
 import { envelopeIndicatesWrites } from "./LockNecessity"
 import { explainReplayMismatch, validateDeterministicReplay } from "./ReplayValidator"
+import { runRoadmapMergeAudit } from "./RoadmapMergeAudit"
 
 export interface MergeGateInput {
 	agents: SubagentExecutionEnvelope[]
@@ -22,6 +24,8 @@ export interface MergeGateInput {
 	attemptId?: string
 	parentAttemptId?: string
 	storedReplayChecksum?: string
+	roadmapLinkage?: GovernedRoadmapLinkage
+	sealed?: boolean
 }
 
 function laneDependsOn(ancestor: number, descendant: number, dag: LaneDAGNode[]): boolean {
@@ -119,7 +123,13 @@ function auditOrphanedClaims(claimHistory: ClaimHistoryEntry[], laneReceipts: La
 
 	for (const entry of acquired.values()) {
 		const lane = laneReceipts.find((l) => l.laneId === entry.laneId)
-		if (lane && !lane.lockRequired) {
+		if (lane && !lane.lockRequired && !lane.roadmapMutationLockRequired) {
+			continue
+		}
+		if (lane?.roadmapMutationLockRequired && lane.roadmapMutationClaimReleased) {
+			continue
+		}
+		if (lane && lane.lockRequired && lane.claimReleased) {
 			continue
 		}
 		orphaned++
@@ -155,15 +165,21 @@ function auditDuplicateClaims(claimHistory: ClaimHistoryEntry[]): string[] {
 }
 
 function auditSplitBrain(claimHistory: ClaimHistoryEntry[]): boolean {
-	const byResource = new Map<string, Set<string>>()
+	const activeByResource = new Map<string, Set<string>>()
+
 	for (const entry of claimHistory) {
+		if (entry.event === "released") {
+			activeByResource.delete(entry.resourceKey)
+			continue
+		}
 		if (entry.event === "acquired" || entry.event === "recovered") {
-			const owners = byResource.get(entry.resourceKey) || new Set()
+			const owners = activeByResource.get(entry.resourceKey) || new Set()
 			owners.add(`${entry.ownerId}:${entry.fencingToken}`)
-			byResource.set(entry.resourceKey, owners)
+			activeByResource.set(entry.resourceKey, owners)
 		}
 	}
-	for (const owners of byResource.values()) {
+
+	for (const owners of activeByResource.values()) {
 		if (owners.size > 1) {
 			return true
 		}
@@ -391,11 +407,26 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 	}
 
 	const unreleased = input.laneReceipts.filter(
-		(lane) => lane.lockRequired && !lane.claimReleased && lane.status !== "collision_rejected",
+		(lane) =>
+			lane.status !== "collision_rejected" &&
+			((lane.lockRequired && !lane.claimReleased) ||
+				(lane.roadmapMutationLockRequired && lane.roadmapMutationClaimReleased === false)),
 	)
 	if (unreleased.length > 0) {
 		violations.push(`unreleased claims: ${unreleased.map((l) => l.laneId).join(", ")}`)
 	}
+
+	const mergePassedProbe = violations.length === 0
+	const roadmapAudit = runRoadmapMergeAudit({
+		laneReceipts: input.laneReceipts,
+		laneDag: input.laneDag,
+		claimHistory: input.claimHistory,
+		agents: input.agents,
+		roadmapLinkage: input.roadmapLinkage,
+		mergePassed: mergePassedProbe,
+		sealed: input.sealed ?? mergePassedProbe,
+	})
+	violations.push(...roadmapAudit.violations)
 
 	const mergeAudit: MergeSafetyAudit = {
 		safe: violations.length === 0,
@@ -408,6 +439,7 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 	return {
 		passed: violations.length === 0,
 		mergeAudit,
+		roadmapAudit,
 		replayIntegrity,
 		violations,
 		failedLaneCount: failedLanes.length,

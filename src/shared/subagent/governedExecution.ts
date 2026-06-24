@@ -1,5 +1,22 @@
 import type { ExecutionReplayIntegrityReport } from "@shared/execution/replayContract"
 import type { LockBackends, LockClaim } from "@shared/governance/lockTypes"
+import type {
+	AgentRoadmapProjection,
+	LocalRoadmapEvent,
+	ProposedWorkspacePatch,
+	RoadmapPatchReconciliation,
+	RoadmapWorkspaceCommitResult,
+	SwarmRoadmapPlan,
+} from "@shared/subagent/roadmapProjection"
+
+export type {
+	AgentRoadmapProjection,
+	LocalRoadmapEvent,
+	ProposedWorkspacePatch,
+	RoadmapPatchReconciliation,
+	RoadmapWorkspaceCommitResult,
+	SwarmRoadmapPlan,
+} from "@shared/subagent/roadmapProjection"
 
 export const GOVERNED_RECEIPT_SCHEMA_VERSION = 3 as const
 
@@ -49,6 +66,13 @@ export interface WorkLaneClaim {
 	readSet?: string[]
 	writeSet?: string[]
 	roadmapItemId?: string
+	roadmapReadSet?: string[]
+	roadmapWriteSet?: string[]
+	roadmapMutationLockRequired?: boolean
+	roadmapResourceKeys?: string[]
+	roadmapLockClaims?: import("@shared/governance/lockTypes").LockClaim[]
+	reasonRoadmapLockAcquired?: string
+	agentRoadmap?: AgentRoadmapProjection
 }
 
 export type LaneExecutionStatus = "completed" | "failed" | "skipped" | "collision_rejected" | "blocked" | "running"
@@ -84,6 +108,20 @@ export interface LaneExecutionReceipt {
 	roadmapLeaseTaskId?: string
 	roadmapItemId?: string
 	completionAuditPhase?: string
+	roadmapReadSet?: string[]
+	roadmapWriteSet?: string[]
+	roadmapMutationLockRequired?: boolean
+	roadmapMutationClaimReleased?: boolean
+	roadmapResourceKeys?: string[]
+	roadmapItemOwner?: string
+	reasonRoadmapLockAcquired?: string
+	agentRoadmapId?: string
+	roadmapSnapshotId?: string
+	projectedItems?: string[]
+	localRoadmapEvents?: LocalRoadmapEvent[]
+	proposedWorkspacePatch?: ProposedWorkspacePatch[]
+	directWorkspaceRoadmapMutation?: boolean
+	localEventContainmentViolations?: string[]
 }
 
 export type ClaimHistoryEvent = "acquired" | "released" | "rejected" | "stale_detected" | "recovered"
@@ -106,6 +144,18 @@ export interface MergePathOverlap {
 	agents: string[]
 }
 
+export interface MergeRoadmapOverlap {
+	resource: string
+	agents: string[]
+}
+
+export interface MergeRoadmapAudit {
+	safe: boolean
+	violations: string[]
+	overlappingResources: MergeRoadmapOverlap[]
+	blockedWriters: string[]
+}
+
 export interface MergeSafetyAudit {
 	safe: boolean
 	violations: string[]
@@ -117,6 +167,7 @@ export interface MergeSafetyAudit {
 export interface MergeGateResult {
 	passed: boolean
 	mergeAudit: MergeSafetyAudit
+	roadmapAudit?: MergeRoadmapAudit
 	replayIntegrity: ExecutionReplayIntegrityReport
 	violations: string[]
 	failedLaneCount: number
@@ -175,6 +226,14 @@ export interface GovernedReceiptDiagnostics {
 	activeResourceOwners: GovernedResourceOwner[]
 	staleResourceOwners: GovernedResourceOwner[]
 	overlappingPaths: MergePathOverlap[]
+	overlappingRoadmapResources?: MergeRoadmapOverlap[]
+	blockedRoadmapWriters?: string[]
+	roadmapCompletionAdvisory?: string
+	workspaceRoadmapSnapshotId?: string
+	staleProjectionWarnings?: string[]
+	rebaseResults?: import("@shared/subagent/roadmapProjection").PatchRebaseResult[]
+	rejectedPatchReasons?: string[]
+	roadmapCommitStatus?: string
 	missingTranscripts: string[]
 	missingToolEvidence: string[]
 	replayMismatchCauses: string[]
@@ -216,12 +275,25 @@ export interface GovernedReceiptSummary {
 		reasonLockAcquired?: string
 		readSet?: string[]
 		writeSet?: string[]
+		roadmapReadSet?: string[]
+		roadmapWriteSet?: string[]
+		roadmapMutationLockRequired?: boolean
+		roadmapMutationClaimReleased?: boolean
+		roadmapResourceKeys?: string[]
+		roadmapItemOwner?: string
+		reasonRoadmapLockAcquired?: string
+		agentRoadmapId?: string
+		roadmapSnapshotId?: string
+		projectedItems?: string[]
+		localRoadmapEvents?: LocalRoadmapEvent[]
+		proposedWorkspacePatch?: ProposedWorkspacePatch[]
 	}>
 	laneDag: LaneDAGNode[]
 	claimTimeline: GovernedClaimTimelineEntry[]
 	resourceOwners: GovernedResourceOwner[]
 	retryHistory: GovernedRetryHistoryEntry[]
 	diagnostics: GovernedReceiptDiagnostics
+	roadmapLinkage?: GovernedRoadmapLinkage
 }
 
 export interface GovernedRoadmapLinkage {
@@ -243,6 +315,16 @@ export interface GovernedRoadmapLinkage {
 	orchestrationLease?: GovernedOrchestrationLease
 	completionPolicy?: RoadmapCompletionUpdatePolicy
 	completionOutcome?: RoadmapCompletionOutcome
+	workspaceRoadmapSnapshotId?: string
+	swarmRoadmapPlan?: SwarmRoadmapPlan
+	agentProjections?: Array<{
+		agentRoadmapId: string
+		laneId: string
+		agentId: string
+		projectedItems: string[]
+	}>
+	patchReconciliation?: RoadmapPatchReconciliation
+	workspaceCommit?: RoadmapWorkspaceCommitResult
 }
 
 export interface GovernedAuditIntegration {
@@ -260,6 +342,9 @@ export interface GovernedAuditIntegration {
 	falsePositiveLockAudit: { lockSkippedCount: number; missingLockViolations: number }
 	storageBoundary: string
 	roadmapCompletionAdvisory?: string
+	workspaceRoadmapSnapshotId?: string
+	staleProjectionWarnings?: string[]
+	roadmapCommitStatus?: string
 }
 
 export type GovernedCrashPhase =
@@ -373,6 +458,10 @@ export function workLaneClaimWithoutLock(
 		readSet?: string[]
 		writeSet?: string[]
 		roadmapItemId?: string
+		roadmapReadSet?: string[]
+		roadmapWriteSet?: string[]
+		roadmapMutationLockRequired?: boolean
+		roadmapResourceKeys?: string[]
 	},
 ): WorkLaneClaim {
 	const laneId = buildLaneId(swarmId, index)
@@ -390,6 +479,10 @@ export function workLaneClaimWithoutLock(
 		readSet: intent.readSet,
 		writeSet: intent.writeSet,
 		roadmapItemId: intent.roadmapItemId,
+		roadmapReadSet: intent.roadmapReadSet,
+		roadmapWriteSet: intent.roadmapWriteSet,
+		roadmapMutationLockRequired: intent.roadmapMutationLockRequired,
+		roadmapResourceKeys: intent.roadmapResourceKeys,
 	}
 }
 
@@ -542,6 +635,19 @@ export function buildReceiptDiagnostics(
 	const activeResourceOwners = resourceOwners.filter((o) => o.status === "active")
 	const staleResourceOwners = resourceOwners.filter((o) => o.status === "stale")
 	const overlappingPaths = receipt.mergeGate.mergeAudit.overlappingPaths
+	const overlappingRoadmapResources = receipt.mergeGate.roadmapAudit?.overlappingResources ?? []
+	const blockedRoadmapWriters = receipt.mergeGate.roadmapAudit?.blockedWriters ?? []
+	const roadmapCompletionAdvisory =
+		receipt.roadmapLinkage?.completionOutcome?.status === "advisory_only"
+			? receipt.roadmapLinkage.completionOutcome.reason || receipt.roadmapLinkage.completionAdvisory
+			: undefined
+	const staleProjectionWarnings = receipt.roadmapLinkage?.patchReconciliation?.staleProjections
+	const rebaseResults = receipt.roadmapLinkage?.patchReconciliation?.rebaseResults
+	const rejectedPatchReasons = receipt.roadmapLinkage?.patchReconciliation?.rejectedPatches.map(
+		(entry) => `${entry.patch.patchId.slice(0, 8)}: ${entry.reason}`,
+	)
+	const roadmapCommitStatus =
+		receipt.roadmapLinkage?.workspaceCommit?.commitStatus ?? receipt.roadmapLinkage?.patchReconciliation?.commitStatus
 	const missingTranscripts = receipt.laneReceipts
 		.filter((lane) => lane.status === "completed" && !lane.transcriptArtifactPath)
 		.map((lane) => lane.laneId)
@@ -588,6 +694,14 @@ export function buildReceiptDiagnostics(
 		activeResourceOwners,
 		staleResourceOwners,
 		overlappingPaths,
+		overlappingRoadmapResources,
+		blockedRoadmapWriters,
+		roadmapCompletionAdvisory,
+		workspaceRoadmapSnapshotId: receipt.roadmapLinkage?.workspaceRoadmapSnapshotId,
+		staleProjectionWarnings,
+		rebaseResults,
+		rejectedPatchReasons,
+		roadmapCommitStatus,
 		missingTranscripts,
 		missingToolEvidence,
 		replayMismatchCauses: options?.replayMismatchCauses ?? receipt.integrity.violations,
@@ -643,6 +757,18 @@ export function buildGovernedReceiptSummary(
 			reasonLockAcquired: lane.reasonLockAcquired,
 			readSet: lane.readSet,
 			writeSet: lane.writeSet,
+			roadmapReadSet: lane.roadmapReadSet,
+			roadmapWriteSet: lane.roadmapWriteSet,
+			roadmapMutationLockRequired: lane.roadmapMutationLockRequired,
+			roadmapMutationClaimReleased: lane.roadmapMutationClaimReleased,
+			roadmapResourceKeys: lane.roadmapResourceKeys,
+			roadmapItemOwner: lane.roadmapItemOwner,
+			reasonRoadmapLockAcquired: lane.reasonRoadmapLockAcquired,
+			agentRoadmapId: lane.agentRoadmapId,
+			roadmapSnapshotId: lane.roadmapSnapshotId,
+			projectedItems: lane.projectedItems,
+			localRoadmapEvents: lane.localRoadmapEvents,
+			proposedWorkspacePatch: lane.proposedWorkspacePatch,
 		})),
 		laneDag: receipt.laneDag,
 		claimTimeline: buildClaimTimeline(receipt.admission, receipt.claimHistory, {
@@ -653,5 +779,6 @@ export function buildGovernedReceiptSummary(
 		resourceOwners: buildResourceOwners(receipt.claimHistory),
 		retryHistory: retryHistory ?? [],
 		diagnostics: buildReceiptDiagnostics(receipt, retryHistory),
+		roadmapLinkage: receipt.roadmapLinkage,
 	}
 }

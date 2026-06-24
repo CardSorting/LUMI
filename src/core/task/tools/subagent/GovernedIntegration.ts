@@ -25,7 +25,6 @@ export const MERGE_GATE_ROLE = "commit_barrier" as const
 export const ROADMAP_INTEGRATION_PARTIAL = [
 	"per_lane_scheduleAdmission_on_lock_acquire",
 	"roadmap_item_linkage_via_prompt_tags_only",
-	"roadmap_kanban_not_auto_mutated_without_policy",
 ] as const
 
 export const AUDIT_STORAGE_BOUNDARY =
@@ -78,6 +77,10 @@ export async function captureRoadmapLinkage(
 		orchestrationLease?: GovernedOrchestrationLease
 		completionPolicy?: RoadmapCompletionUpdatePolicy
 		completionOutcome?: RoadmapCompletionOutcome
+		workspaceRoadmapSnapshotId?: string
+		swarmRoadmapPlan?: import("@shared/subagent/roadmapProjection").SwarmRoadmapPlan
+		patchReconciliation?: import("@shared/subagent/roadmapProjection").RoadmapPatchReconciliation
+		workspaceCommit?: import("@shared/subagent/roadmapProjection").RoadmapWorkspaceCommitResult
 	},
 ): Promise<GovernedRoadmapLinkage> {
 	const roadmapEnabled = admission.roadmapEnabled ?? false
@@ -98,6 +101,18 @@ export async function captureRoadmapLinkage(
 		orchestrationLease: options?.orchestrationLease,
 		completionPolicy: options?.completionPolicy,
 		completionOutcome: options?.completionOutcome,
+		workspaceRoadmapSnapshotId: options?.workspaceRoadmapSnapshotId,
+		swarmRoadmapPlan: options?.swarmRoadmapPlan,
+		agentProjections: laneReceipts
+			.filter((lane) => lane.agentRoadmapId)
+			.map((lane) => ({
+				agentRoadmapId: lane.agentRoadmapId!,
+				laneId: lane.laneId,
+				agentId: lane.agentId,
+				projectedItems: lane.projectedItems ?? [],
+			})),
+		patchReconciliation: options?.patchReconciliation,
+		workspaceCommit: options?.workspaceCommit,
 		incompleteIntegration: roadmapEnabled ? [...ROADMAP_INTEGRATION_PARTIAL] : ["roadmap_disabled"],
 	}
 

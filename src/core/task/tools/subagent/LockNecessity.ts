@@ -1,4 +1,5 @@
 import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
+import { classifyRoadmapWriteIntent, declaresDirectWorkspaceRoadmapMutation, type RoadmapMutationSignal } from "./RoadmapMutation"
 
 export interface LaneLockIntent {
 	executionMode: LaneExecutionMode
@@ -11,12 +12,18 @@ export interface LaneLockIntent {
 	sideEffectTools?: boolean
 	requiresExclusiveResource?: boolean
 	updatesAuthoritativeReceipt?: boolean
+	roadmapReadSet?: string[]
+	roadmapWriteSet?: string[]
+	roadmapMutationSignals?: RoadmapMutationSignal[]
+	roadmapResourceKeys?: string[]
 }
 
 export interface LockNecessityResult {
 	lockRequired: boolean
+	roadmapMutationLockRequired?: boolean
 	reasonLockAcquired?: string
 	reasonLockSkipped?: string
+	reasonRoadmapLockAcquired?: string
 }
 
 const NON_MUTATING_MODES: LaneExecutionMode[] = [
@@ -100,22 +107,36 @@ export function resolveLaneLockIntent(
 	const readSet = parseReadSetFromPrompt(prompt)
 	const writeSet = parseWriteSetFromPrompt(prompt)
 	const declaresWrites = writeSet.length > 0 || /\[declares_writes\]/i.test(prompt)
+	const roadmapIntent = classifyRoadmapWriteIntent(prompt, params, index)
 
 	return {
 		executionMode,
 		readSet: readSet.length ? readSet : undefined,
 		writeSet: writeSet.length ? writeSet : undefined,
 		declaresWrites,
-		mutatesRoadmap: /\[mutates_roadmap\]/i.test(prompt),
+		mutatesRoadmap: roadmapIntent.mutatesRoadmap || /\[mutates_roadmap\]/i.test(prompt),
 		mutatesBroccoliDurable: /\[mutates_broccoli\]/i.test(prompt),
 		sideEffectTools: declaresWrites,
 		requiresExclusiveResource: /\[exclusive_resource:[^\]]+\]/i.test(prompt),
 		updatesAuthoritativeReceipt: /\[updates_authoritative_receipt\]/i.test(prompt),
+		roadmapItemId:
+			parseRoadmapItemFromPrompt(prompt) || params?.[`roadmap_item_${index !== undefined ? index + 1 : 1}`]?.trim(),
+		...roadmapIntent,
 	}
 }
 
 /** Classify whether governed mutation ownership is required before acquireLane(). */
 export function classifyLockNecessity(intent: LaneLockIntent): LockNecessityResult {
+	const directWorkspaceRoadmap = declaresDirectWorkspaceRoadmapMutation(intent)
+
+	if (directWorkspaceRoadmap) {
+		return {
+			lockRequired: false,
+			roadmapMutationLockRequired: false,
+			reasonLockSkipped: "workspace roadmap mutations must use proposedWorkspacePatch — not direct lane writes",
+		}
+	}
+
 	if (intent.executionMode === "mutation") {
 		return {
 			lockRequired: true,
@@ -149,6 +170,7 @@ export function classifyLockNecessity(intent: LaneLockIntent): LockNecessityResu
 
 	return {
 		lockRequired: false,
+		roadmapMutationLockRequired: false,
 		reasonLockSkipped: `${intent.executionMode} lane — read/audit/plan/diagnostic only; no mutation declared`,
 	}
 }

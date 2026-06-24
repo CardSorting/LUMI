@@ -32,6 +32,14 @@ import type { LockAuthority } from "@/core/governance/LockAuthority"
 import { createLockAuthority, releaseGovernedLock } from "@/core/governance/LockAuthority"
 import type { GatePreflightReadinessIssue } from "@/core/task/tools/completionGatePipeline"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
+import {
+	agentAttemptedDirectWorkspaceRoadmapMutation,
+	buildAgentRoadmapProjection,
+	buildSwarmRoadmapPlan,
+	collectKnownRoadmapItemIds,
+	collectRoadmapLaneArtifacts,
+	computeRoadmapSnapshotId,
+} from "./AgentRoadmapProjection"
 import { swarmEnvelopeToReplayArtifact } from "./executionReplayMappers"
 import {
 	buildGovernedArtifactRelativePath,
@@ -44,6 +52,10 @@ import { LaneDAG } from "./LaneDAG"
 import { classifyLockNecessity, type LaneLockIntent, splitReadWriteSets } from "./LockNecessity"
 import { runMergeGate } from "./MergeGate"
 import { explainReplayMismatch, validateDeterministicReplay } from "./ReplayValidator"
+import { auditRoadmapCompletionIntegrity, auditStaleRoadmapOrchestrationLease } from "./RoadmapMergeAudit"
+import { splitRoadmapReadWriteSets } from "./RoadmapMutation"
+import { auditDirectWorkspaceRoadmapMutation, runRoadmapPatchReconciliation } from "./RoadmapPatchReconciler"
+import { commitWorkspaceRoadmapPatches } from "./RoadmapWorkspaceCommit"
 
 export type { GovernedCrashPhase } from "@shared/subagent/governedExecution"
 
@@ -63,6 +75,8 @@ export class GovernedSwarmCoordinator {
 		released: boolean
 		expiresAt?: string
 	}
+	private workspaceRoadmapSnapshotId?: string
+	private swarmRoadmapPlan?: import("@shared/subagent/roadmapProjection").SwarmRoadmapPlan
 
 	constructor(
 		private readonly workspace: string,
@@ -116,6 +130,40 @@ export class GovernedSwarmCoordinator {
 			operation,
 			roadmapEnabled: true,
 		}
+	}
+
+	private async ensureWorkspaceRoadmapSnapshot(swarmId: string): Promise<void> {
+		if (!this.roadmapEnabled || this.workspaceRoadmapSnapshotId) {
+			return
+		}
+		const state = await RoadmapService.getInstance().getOrHydrateRuntimeState(this.workspace)
+		this.workspaceRoadmapSnapshotId = computeRoadmapSnapshotId(state)
+		this.swarmRoadmapPlan = buildSwarmRoadmapPlan(swarmId, this.workspaceRoadmapSnapshotId, [])
+	}
+
+	private async attachAgentRoadmapProjection(
+		swarmId: string,
+		claim: WorkLaneClaim,
+		intent: LaneLockIntent,
+		index: number,
+		agentId: string,
+	): Promise<void> {
+		if (!this.roadmapEnabled || !this.workspaceRoadmapSnapshotId) {
+			return
+		}
+		const state = await RoadmapService.getInstance().getOrHydrateRuntimeState(this.workspace)
+		const node = this.laneDag.getNode(index)
+		claim.agentRoadmap = buildAgentRoadmapProjection({
+			swarmId,
+			laneId: claim.laneId,
+			agentId,
+			index,
+			workspaceSnapshotId: this.workspaceRoadmapSnapshotId,
+			swarmRoadmapId: this.swarmRoadmapPlan?.swarmRoadmapId ?? `swarm-rm:${swarmId}`,
+			intent,
+			workspaceState: state,
+			dependsOn: node?.dependsOn ?? [],
+		})
 	}
 
 	async acquireSwarmOrchestrationLease(
@@ -209,78 +257,102 @@ export class GovernedSwarmCoordinator {
 			}
 		}
 
+		await this.ensureWorkspaceRoadmapSnapshot(swarmId)
+
+		let claim: WorkLaneClaim | undefined
+		let lockSkipped = false
+
 		if (!necessity.lockRequired) {
-			this.laneDag.markRunning(index, agentId, resolvedIntent.executionMode)
-			return {
-				success: true,
-				lockSkipped: true,
-				claim: workLaneClaimWithoutLock(swarmId, index, agentId, {
-					executionMode: resolvedIntent.executionMode,
-					reasonLockSkipped: necessity.reasonLockSkipped || "lock not required",
-					readSet: resolvedIntent.readSet,
-					writeSet: resolvedIntent.writeSet,
-					roadmapItemId: resolvedIntent.roadmapItemId,
-				}),
-			}
-		}
-
-		const resourceKey = buildMutexResourceKey(swarmId, index)
-		const leaseTaskId = buildRoadmapLeaseTaskId(swarmId, index)
-
-		const result = await this.lockAuthority.acquire(resourceKey, agentId, {
-			workspace: this.workspace,
-			roadmapLeaseTaskId: leaseTaskId,
-			timeoutMs: LANE_MUTEX_MS,
-			roadmapEnabled: this.roadmapEnabled,
-			crossProcess: true,
-			requireDurability: true,
-		})
-
-		if (!result.ok) {
-			this.claimHistory.push({
-				laneId,
-				resourceKey,
-				ownerId: agentId,
-				fencingToken: 0,
-				event: "rejected",
-				timestamp: Date.now(),
-				error: result.error,
+			lockSkipped = true
+			claim = workLaneClaimWithoutLock(swarmId, index, agentId, {
+				executionMode: resolvedIntent.executionMode,
+				reasonLockSkipped: necessity.reasonLockSkipped || "lock not required",
+				readSet: resolvedIntent.readSet,
+				writeSet: resolvedIntent.writeSet,
+				roadmapItemId: resolvedIntent.roadmapItemId,
+				roadmapReadSet: resolvedIntent.roadmapReadSet,
+				roadmapWriteSet: resolvedIntent.roadmapWriteSet,
+				roadmapMutationLockRequired: false,
+				roadmapResourceKeys: resolvedIntent.roadmapResourceKeys,
 			})
-			return { success: false, error: result.error }
-		}
+		} else {
+			const resourceKey = buildMutexResourceKey(swarmId, index)
+			const leaseTaskId = buildRoadmapLeaseTaskId(swarmId, index)
 
-		const verify = await this.lockAuthority.verify(result.claim, this.workspace)
-		if (!verify.valid) {
-			await releaseGovernedLock(this.lockAuthority, result.claim, this.workspace)
-			this.claimHistory.push(
-				lockClaimToHistoryEntry(
-					result.claim,
+			const result = await this.lockAuthority.acquire(resourceKey, agentId, {
+				workspace: this.workspace,
+				roadmapLeaseTaskId: leaseTaskId,
+				timeoutMs: LANE_MUTEX_MS,
+				roadmapEnabled: this.roadmapEnabled,
+				crossProcess: true,
+				requireDurability: true,
+			})
+
+			if (!result.ok) {
+				this.claimHistory.push({
 					laneId,
-					verify.reason === "stale_owner" ? "stale_detected" : "rejected",
-					verify.reason,
-				),
-			)
-			return { success: false, error: `Claim verification failed (${verify.reason}).` }
+					resourceKey,
+					ownerId: agentId,
+					fencingToken: 0,
+					event: "rejected",
+					timestamp: Date.now(),
+					error: result.error,
+				})
+				return { success: false, error: result.error }
+			}
+
+			const verify = await this.lockAuthority.verify(result.claim, this.workspace)
+			if (!verify.valid) {
+				await releaseGovernedLock(this.lockAuthority, result.claim, this.workspace)
+				this.claimHistory.push(
+					lockClaimToHistoryEntry(
+						result.claim,
+						laneId,
+						verify.reason === "stale_owner" ? "stale_detected" : "rejected",
+						verify.reason,
+					),
+				)
+				return { success: false, error: `Claim verification failed (${verify.reason}).` }
+			}
+
+			this.claimHistory.push(lockClaimToHistoryEntry(result.claim, laneId, "acquired"))
+			claim = workLaneClaimFromLock(result.claim, swarmId, index, laneId)
+			claim.executionMode = resolvedIntent.executionMode
+			claim.lockRequired = true
+			claim.reasonLockAcquired = necessity.reasonLockAcquired
 		}
 
-		this.claimHistory.push(lockClaimToHistoryEntry(result.claim, laneId, "acquired"))
-		this.laneDag.markRunning(index, agentId, resolvedIntent.executionMode)
-
-		const claim = workLaneClaimFromLock(result.claim, swarmId, index, laneId)
-		claim.executionMode = resolvedIntent.executionMode
-		claim.lockRequired = true
-		claim.reasonLockAcquired = necessity.reasonLockAcquired
+		await this.attachAgentRoadmapProjection(swarmId, claim, resolvedIntent, index, agentId)
+		claim.roadmapMutationLockRequired = false
 		claim.readSet = resolvedIntent.readSet
 		claim.writeSet = resolvedIntent.writeSet
 		claim.roadmapItemId = resolvedIntent.roadmapItemId
+		claim.roadmapReadSet = resolvedIntent.roadmapReadSet
+		claim.roadmapWriteSet = resolvedIntent.roadmapWriteSet
 
-		return {
-			success: true,
-			claim,
+		this.laneDag.markRunning(index, agentId, resolvedIntent.executionMode)
+		if (lockSkipped) {
+			return { success: true, lockSkipped: true, claim }
 		}
+		return { success: true, claim }
 	}
 
 	async releaseLane(claim: WorkLaneClaim, sealed: boolean, failed = false, error?: string): Promise<void> {
+		if (claim.roadmapLockClaims?.length) {
+			for (const roadmapClaim of claim.roadmapLockClaims) {
+				const verify = await this.lockAuthority.verify(roadmapClaim, this.workspace)
+				if (!verify.valid && verify.reason === "stale_owner") {
+					this.claimHistory.push(lockClaimToHistoryEntry(roadmapClaim, claim.laneId, "stale_detected", verify.reason))
+				}
+				const releaseResult = await releaseGovernedLock(this.lockAuthority, roadmapClaim, this.workspace)
+				if (!releaseResult.ok) {
+					this.claimHistory.push(lockClaimToHistoryEntry(roadmapClaim, claim.laneId, "rejected", releaseResult.error))
+				} else {
+					this.claimHistory.push(lockClaimToHistoryEntry(roadmapClaim, claim.laneId, "released"))
+				}
+			}
+		}
+
 		if (claim.lockClaim) {
 			const verify = await this.lockAuthority.verify(claim.lockClaim, this.workspace)
 			if (!verify.valid && verify.reason === "stale_owner") {
@@ -327,6 +399,23 @@ export class GovernedSwarmCoordinator {
 			claim.readSet,
 			claim.writeSet,
 		)
+		const { roadmapReadSet, roadmapWriteSet } = splitRoadmapReadWriteSets({
+			intentReadSet: claim.roadmapReadSet,
+			intentWriteSet: claim.roadmapWriteSet,
+			toolSteps: envelope?.toolSteps,
+		})
+		const { localRoadmapEvents, proposedWorkspacePatch, localEventRejections } = collectRoadmapLaneArtifacts({
+			prompt: envelope?.prompt,
+			projection: claim.agentRoadmap,
+			toolSteps: envelope?.toolSteps,
+			evidencePointer: envelope?.transcriptArtifactPath,
+			evidenceCount: envelope?.evidenceRefs.length ?? 0,
+		})
+		const directWorkspaceRoadmapMutation = agentAttemptedDirectWorkspaceRoadmapMutation({
+			toolSteps: envelope?.toolSteps,
+			proposedPatches: proposedWorkspacePatch,
+		})
+		const roadmapMutationClaimReleased = claim.roadmapMutationLockRequired ? claimReleased : true
 
 		const emptyBackends = {
 			inProcess: false,
@@ -369,6 +458,20 @@ export class GovernedSwarmCoordinator {
 			roadmapLeaseTaskId: claim.roadmapLeaseTaskId,
 			roadmapItemId: claim.roadmapItemId,
 			completionAuditPhase: envelope?.phase,
+			roadmapReadSet: roadmapReadSet.length ? roadmapReadSet : undefined,
+			roadmapWriteSet: roadmapWriteSet.length ? roadmapWriteSet : undefined,
+			roadmapMutationLockRequired: claim.roadmapMutationLockRequired,
+			roadmapMutationClaimReleased,
+			roadmapResourceKeys: claim.roadmapResourceKeys,
+			roadmapItemOwner: claim.roadmapMutationLockRequired && !roadmapMutationClaimReleased ? claim.agentId : undefined,
+			reasonRoadmapLockAcquired: claim.reasonRoadmapLockAcquired,
+			agentRoadmapId: claim.agentRoadmap?.agentRoadmapId,
+			roadmapSnapshotId: claim.agentRoadmap?.roadmapSnapshotId,
+			projectedItems: claim.agentRoadmap?.projectedItems,
+			localRoadmapEvents: localRoadmapEvents.length ? localRoadmapEvents : undefined,
+			proposedWorkspacePatch: proposedWorkspacePatch.length ? proposedWorkspacePatch : undefined,
+			directWorkspaceRoadmapMutation,
+			localEventContainmentViolations: localEventRejections.length ? localEventRejections : undefined,
 		}
 
 		return receipt
@@ -385,6 +488,8 @@ export class GovernedSwarmCoordinator {
 		replayMismatch: boolean
 		unsafeRetry: boolean
 		releaseLease: boolean
+		patchReconciliation?: import("@shared/subagent/roadmapProjection").RoadmapPatchReconciliation
+		workspaceCommit?: import("@shared/subagent/roadmapProjection").RoadmapWorkspaceCommitResult
 	}) {
 		if (options.releaseLease) {
 			await this.releaseSwarmOrchestrationLease()
@@ -400,10 +505,26 @@ export class GovernedSwarmCoordinator {
 			unsafeRetry: options.unsafeRetry,
 		})
 
+		if (this.swarmRoadmapPlan && options.laneReceipts.length) {
+			this.swarmRoadmapPlan = buildSwarmRoadmapPlan(
+				options.swarmId,
+				this.workspaceRoadmapSnapshotId ?? this.swarmRoadmapPlan.roadmapSnapshotId,
+				options.laneReceipts.map((lane) => ({
+					index: lane.index,
+					laneId: lane.laneId,
+					roadmapItemId: lane.roadmapItemId,
+				})),
+			)
+		}
+
 		return captureRoadmapLinkage(this.workspace, options.swarmId, options.admission, options.laneReceipts, {
 			orchestrationLease: this.getOrchestrationLeaseSnapshot(),
 			completionPolicy: options.completionPolicy,
 			completionOutcome,
+			workspaceRoadmapSnapshotId: this.workspaceRoadmapSnapshotId,
+			swarmRoadmapPlan: this.swarmRoadmapPlan,
+			patchReconciliation: options.patchReconciliation,
+			workspaceCommit: options.workspaceCommit,
 		})
 	}
 
@@ -433,6 +554,7 @@ export class GovernedSwarmCoordinator {
 		})
 
 		let sealed = mergeGate.passed && !options.forceFail
+		let mergePassed = mergeGate.passed
 		const completionPolicy = options.completionPolicy ?? "advisory_only"
 		let replayMismatch = false
 
@@ -478,17 +600,80 @@ export class GovernedSwarmCoordinator {
 		}
 
 		const unsafeRetry = mergeGate.sealedSupersessionBlocked
+
+		let currentWorkspaceSnapshotId: string | undefined
+		let knownItemIds: Set<string> | undefined
+		if (this.roadmapEnabled) {
+			try {
+				const state = await RoadmapService.getInstance().getOrHydrateRuntimeState(this.workspace)
+				currentWorkspaceSnapshotId = computeRoadmapSnapshotId(state)
+				knownItemIds = collectKnownRoadmapItemIds(state)
+			} catch {
+				currentWorkspaceSnapshotId = this.workspaceRoadmapSnapshotId
+			}
+		}
+
+		const patchReconciliation = runRoadmapPatchReconciliation({
+			laneReceipts: options.laneReceipts,
+			laneDag: this.laneDag.snapshot(),
+			workspaceSnapshotIdAtAdmit: this.workspaceRoadmapSnapshotId,
+			currentWorkspaceSnapshotId,
+			mergePassed: mergeGate.passed,
+			knownItemIds,
+		})
+
+		const projectionViolations = [
+			...auditDirectWorkspaceRoadmapMutation(options.laneReceipts),
+			...patchReconciliation.violations,
+		]
+		if (projectionViolations.length > 0) {
+			mergePassed = false
+			receipt.mergeGate.passed = false
+			receipt.mergeGate.violations.push(...projectionViolations)
+			receipt.mergeGate.roadmapAudit = {
+				safe: false,
+				violations: [...(receipt.mergeGate.roadmapAudit?.violations ?? []), ...projectionViolations],
+				overlappingResources: receipt.mergeGate.roadmapAudit?.overlappingResources ?? [],
+				blockedWriters: receipt.mergeGate.roadmapAudit?.blockedWriters ?? [],
+			}
+			receipt.sealed = false
+			sealed = false
+			receipt.integrity.valid = false
+			receipt.integrity.violations.push(...projectionViolations)
+		}
+
+		let workspaceCommit: import("@shared/subagent/roadmapProjection").RoadmapWorkspaceCommitResult | undefined
+		if (sealed && patchReconciliation.passed && patchReconciliation.commitStatus === "pending") {
+			workspaceCommit = await commitWorkspaceRoadmapPatches({
+				workspace: this.workspace,
+				coordinatorId: options.envelope.swarmId,
+				reconciliation: patchReconciliation,
+				lockAuthority: this.lockAuthority,
+				roadmapEnabled: this.roadmapEnabled,
+				mergePassed,
+				integrityValid: receipt.integrity.valid,
+				sealed,
+				completionPolicy,
+			})
+			if (!workspaceCommit.committed) {
+				receipt.sealed = false
+				sealed = false
+			}
+		}
+
 		receipt.roadmapLinkage = await this.finalizeRoadmapSealState({
 			swarmId: options.envelope.swarmId,
 			admission: options.admission,
 			laneReceipts: options.laneReceipts,
 			completionPolicy,
 			sealed,
-			mergePassed: mergeGate.passed,
+			mergePassed,
 			integrityValid: receipt.integrity.valid,
 			replayMismatch,
 			unsafeRetry,
 			releaseLease: true,
+			patchReconciliation,
+			workspaceCommit,
 		})
 
 		receipt.auditIntegration = buildGovernedAuditIntegration({
@@ -499,6 +684,24 @@ export class GovernedSwarmCoordinator {
 			receiptIntegrityValid: receipt.integrity.valid,
 			roadmapLinkage: receipt.roadmapLinkage,
 		})
+
+		const lateRoadmapViolations = [
+			...auditRoadmapCompletionIntegrity(receipt.roadmapLinkage, mergeGate.passed, sealed),
+			...auditStaleRoadmapOrchestrationLease(receipt.roadmapLinkage),
+		]
+		if (lateRoadmapViolations.length > 0) {
+			receipt.mergeGate.passed = false
+			receipt.mergeGate.violations.push(...lateRoadmapViolations)
+			receipt.mergeGate.roadmapAudit = {
+				safe: false,
+				violations: [...(receipt.mergeGate.roadmapAudit?.violations ?? []), ...lateRoadmapViolations],
+				overlappingResources: receipt.mergeGate.roadmapAudit?.overlappingResources ?? [],
+				blockedWriters: receipt.mergeGate.roadmapAudit?.blockedWriters ?? [],
+			}
+			receipt.sealed = false
+			receipt.integrity.valid = false
+			receipt.integrity.violations.push(...lateRoadmapViolations)
+		}
 
 		if (receipt.auditIntegration) {
 			receipt.auditIntegration.receiptIntegrityValidated = receipt.integrity.valid
@@ -709,6 +912,13 @@ export class GovernedSwarmCoordinator {
 				reasonLockAcquired: lane.reasonLockAcquired,
 				readSet: lane.readSet,
 				writeSet: lane.writeSet,
+				roadmapReadSet: lane.roadmapReadSet,
+				roadmapWriteSet: lane.roadmapWriteSet,
+				roadmapMutationLockRequired: lane.roadmapMutationLockRequired,
+				roadmapMutationClaimReleased: lane.roadmapMutationClaimReleased,
+				roadmapResourceKeys: lane.roadmapResourceKeys,
+				roadmapItemOwner: lane.roadmapItemOwner,
+				reasonRoadmapLockAcquired: lane.reasonRoadmapLockAcquired,
 			})),
 			laneDag: dagSnapshot,
 			claimTimeline: buildClaimTimeline(admission, this.claimHistory, { admittedAt: startedAt }),

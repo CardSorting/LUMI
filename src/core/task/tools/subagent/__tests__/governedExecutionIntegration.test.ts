@@ -251,7 +251,8 @@ describe("governed execution roadmap and audit integration", () => {
 		})
 
 		it("documents remaining partial roadmap integration when roadmap enabled", () => {
-			assert.ok(ROADMAP_INTEGRATION_PARTIAL.includes("roadmap_kanban_not_auto_mutated_without_policy"))
+			assert.ok(ROADMAP_INTEGRATION_PARTIAL.includes("per_lane_scheduleAdmission_on_lock_acquire"))
+			assert.ok(ROADMAP_INTEGRATION_PARTIAL.includes("roadmap_item_linkage_via_prompt_tags_only"))
 		})
 	})
 })

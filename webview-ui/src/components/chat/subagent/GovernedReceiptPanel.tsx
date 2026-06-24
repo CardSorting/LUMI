@@ -176,6 +176,99 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 				</div>
 			)}
 
+			{(diagnostics?.overlappingRoadmapResources?.length ?? 0) > 0 && (
+				<div className="space-y-0.5">
+					<div className="text-[9px] font-mono uppercase text-foreground/50">Roadmap overlaps</div>
+					{diagnostics!.overlappingRoadmapResources!.map((overlap) => (
+						<div className="text-[10px] font-mono text-foreground/70" key={overlap.resource}>
+							{overlap.resource} → {overlap.agents.join(", ")}
+						</div>
+					))}
+				</div>
+			)}
+
+			{(diagnostics?.blockedRoadmapWriters?.length ?? 0) > 0 && (
+				<div className="space-y-0.5">
+					<div className="text-[9px] font-mono uppercase text-amber-600 dark:text-amber-400">
+						Blocked roadmap writers
+					</div>
+					{diagnostics!.blockedRoadmapWriters!.map((writer) => (
+						<div className="text-[10px] font-mono text-amber-700 dark:text-amber-400" key={writer}>
+							{writer}
+						</div>
+					))}
+				</div>
+			)}
+
+			{(diagnostics?.roadmapCommitStatus || receipt.roadmapLinkage?.patchReconciliation) && (
+				<div className="space-y-0.5">
+					<div className="text-[9px] font-mono uppercase text-foreground/50">Roadmap planes</div>
+					{diagnostics?.workspaceRoadmapSnapshotId && (
+						<div className="text-[10px] font-mono text-foreground/60">
+							workspace snap: {diagnostics.workspaceRoadmapSnapshotId.slice(0, 20)}
+						</div>
+					)}
+					{receipt.roadmapLinkage?.swarmRoadmapPlan && (
+						<div className="text-[10px] font-mono text-foreground/60">
+							swarm plan: {receipt.roadmapLinkage.swarmRoadmapPlan.laneItemIds.length} lanes
+						</div>
+					)}
+					{(receipt.roadmapLinkage?.agentProjections?.length ?? 0) > 0 && (
+						<div className="text-[10px] font-mono text-foreground/60">
+							agent projections: {receipt.roadmapLinkage!.agentProjections!.length}
+						</div>
+					)}
+					{receipt.roadmapLinkage?.patchReconciliation && (
+						<>
+							<div className="text-[10px] font-mono text-foreground/60">
+								accepted patches: {receipt.roadmapLinkage.patchReconciliation.acceptedPatches.length}
+							</div>
+							<div className="text-[10px] font-mono text-foreground/60">
+								rejected patches: {receipt.roadmapLinkage.patchReconciliation.rejectedPatches.length}
+							</div>
+							{receipt.roadmapLinkage.patchReconciliation.rebaseResults.map((rebase) => (
+								<div className="text-[10px] font-mono text-foreground/50" key={rebase.patchId}>
+									rebase {rebase.patchId.slice(0, 8)}: {rebase.outcome}
+									{rebase.reason ? ` — ${rebase.reason}` : ""}
+								</div>
+							))}
+						</>
+					)}
+					{(diagnostics?.rejectedPatchReasons?.length ?? 0) > 0 && (
+						<div className="space-y-0.5">
+							<div className="text-[9px] font-mono uppercase text-error/70">Rejected patch reasons</div>
+							{diagnostics!.rejectedPatchReasons!.map((reason) => (
+								<div className="text-[10px] font-mono text-error/80 break-words" key={reason}>
+									{reason}
+								</div>
+							))}
+						</div>
+					)}
+					{diagnostics?.roadmapCommitStatus && (
+						<div className="text-[10px] font-mono text-link/80">commit: {diagnostics.roadmapCommitStatus}</div>
+					)}
+					{(diagnostics?.staleProjectionWarnings?.length ?? 0) > 0 && (
+						<div className="text-[10px] font-mono text-amber-700 dark:text-amber-400">
+							stale projections: {diagnostics!.staleProjectionWarnings!.join(", ")}
+						</div>
+					)}
+				</div>
+			)}
+
+			{(diagnostics?.roadmapCompletionAdvisory || receipt.roadmapLinkage?.completionOutcome) && (
+				<div className="space-y-0.5">
+					<div className="text-[9px] font-mono uppercase text-foreground/50">Roadmap completion</div>
+					{receipt.roadmapLinkage?.completionOutcome?.status === "updated" ? (
+						<div className="text-[10px] font-mono text-success">committed roadmap update</div>
+					) : (
+						<div className="text-[10px] font-mono text-foreground/60">
+							advisory only
+							{diagnostics?.roadmapCompletionAdvisory ? ` — ${diagnostics.roadmapCompletionAdvisory}` : ""}
+						</div>
+					)}
+				</div>
+			)}
+
 			{((diagnostics?.missingTranscripts.length ?? 0) > 0 || (diagnostics?.missingToolEvidence.length ?? 0) > 0) && (
 				<div className="space-y-0.5">
 					<div className="text-[9px] font-mono uppercase text-foreground/50">Missing evidence</div>
@@ -235,8 +328,12 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 								className={`${owner.status === "active" ? "text-link" : owner.status === "stale" ? "text-error" : "text-foreground/50"}`}>
 								{owner.status}
 							</span>
-							<span className="text-foreground/40 truncate max-w-[120px]" title={owner.resourceKey}>
-								{owner.resourceKey.split(":").pop()}
+							<span
+								className={`text-foreground/40 truncate max-w-[120px] ${owner.resourceKey.startsWith("roadmap:") ? "text-link/80" : ""}`}
+								title={owner.resourceKey}>
+								{owner.resourceKey.startsWith("roadmap:")
+									? owner.resourceKey
+									: owner.resourceKey.split(":").pop()}
 							</span>
 							<span className="text-foreground/50">{owner.ownerId}</span>
 							<span className="text-foreground/30">t{owner.fencingToken}</span>
@@ -299,6 +396,35 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 							)}
 							{lane.writeSet && lane.writeSet.length > 0 && (
 								<span className="text-amber-600 dark:text-amber-400">write:{lane.writeSet.length}</span>
+							)}
+							{lane.roadmapReadSet && lane.roadmapReadSet.length > 0 && (
+								<span className="text-foreground/40" title={lane.roadmapReadSet.join(", ")}>
+									rm-read:{lane.roadmapReadSet.length}
+								</span>
+							)}
+							{lane.roadmapWriteSet && lane.roadmapWriteSet.length > 0 && (
+								<span className="text-amber-600 dark:text-amber-400" title={lane.roadmapWriteSet.join(", ")}>
+									rm-write:{lane.roadmapWriteSet.length}
+								</span>
+							)}
+							{lane.roadmapMutationLockRequired && (
+								<span className="text-link/80" title={lane.reasonRoadmapLockAcquired}>
+									roadmap lock
+								</span>
+							)}
+							{lane.roadmapMutationLockRequired === false && lane.roadmapWriteSet?.length ? (
+								<span className="text-error/80">roadmap lock skipped</span>
+							) : null}
+							{lane.proposedWorkspacePatch && lane.proposedWorkspacePatch.length > 0 && (
+								<span className="text-link/70">patches:{lane.proposedWorkspacePatch.length}</span>
+							)}
+							{lane.localRoadmapEvents && lane.localRoadmapEvents.length > 0 && (
+								<span className="text-foreground/40">local:{lane.localRoadmapEvents.length}</span>
+							)}
+							{lane.agentRoadmapId && (
+								<span className="text-foreground/30 truncate max-w-[80px]" title={lane.agentRoadmapId}>
+									{lane.agentRoadmapId.split(":").pop()}
+								</span>
 							)}
 							{lane.evidenceCount !== undefined && (
 								<span className="text-foreground/40">ev:{lane.evidenceCount}</span>
