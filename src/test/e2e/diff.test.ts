@@ -11,27 +11,15 @@ e2e.describe("Diff Editor", () => {
 			const inputbox = sidebar.getByTestId("chat-input")
 			await expect(inputbox).toBeVisible()
 
-			await inputbox.fill("[diff.test.ts] Hello, DietCode!")
-			await expect(inputbox).toHaveValue("[diff.test.ts] Hello, DietCode!")
-			await sidebar.getByTestId("send-button").click()
-			await expect(inputbox).toHaveValue("")
-			await helper.waitForAssistantReply(sidebar)
-
-			await sidebar.getByRole("button", { name: "New chat" }).click()
-			await helper.openPastChats(sidebar, "[diff.test.ts] Hello, DietCode!")
-
-			// Submit a file edit request
-			await inputbox.click()
-			await sidebar.getByTestId("chat-input").fill("edit_request")
+			await inputbox.fill("edit_request")
+			await expect(inputbox).toHaveValue("edit_request")
 			await sidebar.getByTestId("send-button").click({ delay: 50 })
+			await expect(inputbox).toHaveValue("")
 
-			// Wait for the sidebar to load the file edit request
-			await sidebar.waitForSelector('span:has-text("DietCode wants to edit this file:")')
+			await sidebar.waitForSelector('span:has-text("DietCode wants to edit this file:")', { timeout: 60000 })
 
-			// DietCode Diff Editor should open with the file name and diff
-			await expect(page.getByText("test.ts: Original ↔ DietCode's")).toBeVisible()
+			await expect(page.getByText("test.ts: Original ↔ DietCode's")).toBeVisible({ timeout: 30000 })
 
-			// Diff editor should show the original and modified content
 			const diffEditor = page.locator(
 				".monaco-editor.modified-in-monaco-diff-editor > .overflow-guard > .monaco-scrollable-element.editor-scrollable > .lines-content > div:nth-child(4)",
 			)

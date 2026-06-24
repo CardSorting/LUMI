@@ -16,19 +16,20 @@ Module.prototype.require = function (path) {
 	if (path === "@integrations/checkpoints/MultiRootCheckpointManager") {
 		return { MultiRootCheckpointManager: class {} }
 	}
-	// Mock heavy Protobus service mapping during unit tests to avoid pulling in VSCode-integrated handlers
-	if (path.endsWith("generated/hosts/vscode/protobus-services") || path.endsWith("protobus-services.ts")) {
-		return { serviceHandlers: {} }
-	}
-	// Mock gRPC handler to stop the dependency chain that pulls in VSCode modules
-	if (path.endsWith("core/controller/grpc-handler") || path.endsWith("grpc-handler.ts")) {
-		return {
-			getRequestRegistry: () => ({
-				registerRequest: () => {},
-				cancelRequest: () => true,
-				hasRequest: () => false,
-				getRequestInfo: () => undefined,
-			}),
+	// Unit-test-only mocks — integration tests need real grpc-handler and protobus wiring.
+	if (!process.env.INTEGRATION_TEST) {
+		if (path.endsWith("generated/hosts/vscode/protobus-services") || path.endsWith("protobus-services.ts")) {
+			return { serviceHandlers: {} }
+		}
+		if (path.endsWith("core/controller/grpc-handler") || path.endsWith("grpc-handler.ts")) {
+			return {
+				getRequestRegistry: () => ({
+					registerRequest: () => {},
+					cancelRequest: () => true,
+					hasRequest: () => false,
+					getRequestInfo: () => undefined,
+				}),
+			}
 		}
 	}
 

@@ -432,16 +432,18 @@ describe("governed execution hardening", () => {
 	})
 
 	describe("worker_cli", () => {
+		const workerCliPath = path.join(process.cwd(), "broccolidb", "worker_cli.cjs")
+
 		it("executes governed lane and writes receipt", async () => {
 			tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "worker-"))
 			const { execFile } = await import("node:child_process")
 			const { promisify } = await import("node:util")
 			const execFileAsync = promisify(execFile)
 			await execFileAsync(
-				"npx",
-				["tsx", "broccolidb/worker_cli.ts", "--worker-id", "w-ok", "--prompt", "test", "--workspace", tempDir],
+				process.execPath,
+				[workerCliPath, "--worker-id", "w-ok", "--prompt", "test", "--workspace", tempDir],
 				{
-					cwd: path.join(process.cwd()),
+					cwd: process.cwd(),
 				},
 			)
 			const receipt = JSON.parse(
@@ -458,19 +460,9 @@ describe("governed execution hardening", () => {
 			const execFileAsync = promisify(execFile)
 			try {
 				await execFileAsync(
-					"npx",
-					[
-						"tsx",
-						"broccolidb/worker_cli.ts",
-						"--worker-id",
-						"w-fail",
-						"--prompt",
-						"test",
-						"--workspace",
-						tempDir,
-						"--fail",
-					],
-					{ cwd: path.join(process.cwd()) },
+					process.execPath,
+					[workerCliPath, "--worker-id", "w-fail", "--prompt", "test", "--workspace", tempDir, "--fail"],
+					{ cwd: process.cwd() },
 				)
 			} catch {
 				// expected non-zero exit

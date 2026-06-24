@@ -201,6 +201,16 @@ describe("Subagent Swarm Inheritance", () => {
 		})
 
 		const baseConfig = createTaskConfig(true)
+		// biome-ignore lint/suspicious/noExplicitAny: Override ATTEMPT handler for critical-finding signal path
+		;(baseConfig as any).coordinator.getHandler = sinon.stub().callsFake((toolName: DietCodeDefaultTool) => {
+			if (toolName === DietCodeDefaultTool.ATTEMPT) {
+				return {
+					execute: sinon.stub().resolves("CRITICAL: Found a JoyZoning Violation in security.ts"),
+					getDescription: sinon.stub().returns("attempt"),
+				}
+			}
+			return undefined
+		})
 		// biome-ignore lint/suspicious/noExplicitAny: Accessing internal services for test setup
 		;(baseConfig as any).services.stateManager.getGlobalSettingsKey = (key: string) => {
 			if (key === "subagentsEnabled") return true

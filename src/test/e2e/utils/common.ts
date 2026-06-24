@@ -11,13 +11,12 @@ export const addSelectedCodeToDietCodeWebview = async (_page: Page) => {
 	await _page.locator("div:nth-child(4) > span > span").first().click()
 	await _page.getByRole("textbox", { name: "The editor is not accessible" }).press("ControlOrMeta+a")
 
-	await _page.keyboard.press("ControlOrMeta+Shift+p")
-	const commandPalette = _page.getByRole("textbox", { name: /Search files by name/i })
-	await commandPalette.fill("Add to LUMI")
-	await _page
-		.getByRole("option", { name: /Add to LUMI/i })
-		.first()
-		.click()
+	const editorSearchBar = _page.getByRole("textbox", {
+		name: "Search files by name (append",
+	})
+	await editorSearchBar.click({ delay: 100 })
+	await editorSearchBar.fill(">Add to LUMI")
+	await _page.keyboard.press("Enter")
 }
 
 export const toggleNotifications = async (_page: Page) => {

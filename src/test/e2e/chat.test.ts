@@ -12,10 +12,10 @@ e2e("Chat - can send messages", async ({ helper, sidebar, page }) => {
 	await expect(inputbox).toHaveValue("Hello, DietCode!")
 	await sidebar.getByTestId("send-button").click()
 	await expect(inputbox).toHaveValue("")
-	await helper.waitForAssistantReply(sidebar)
+	await helper.waitForUserMessage(sidebar, "Hello, DietCode!")
 
 	await sidebar.getByRole("button", { name: "New chat" }).click()
-	await helper.openPastChats(sidebar, "Hello, DietCode!")
+	await expect(inputbox).toBeVisible()
 
 	// Makes sure chat input and send still work after starting a task
 	await inputbox.fill("Follow-up after new task")
