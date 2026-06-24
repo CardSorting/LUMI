@@ -120,7 +120,7 @@ export async function remediateRoadmapGatesInternally(
 		if (plan.bootstrapNeeded) {
 			const filled = await svc.writeBootstrapAutofill(workspace, false)
 			if (filled?.written && (filled.applied_count ?? 0) > 0) {
-				steps.push(`auto-filled ${filled.applied_count} bootstrap placeholder(s) in ROADMAP.md`)
+				steps.push(`auto-filled ${filled.applied_count} bootstrap field(s) in ROADMAP.md`)
 			}
 		}
 

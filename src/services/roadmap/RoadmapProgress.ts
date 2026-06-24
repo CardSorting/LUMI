@@ -216,6 +216,8 @@ export async function formatProgressReport(params: {
 		if (remaining && Number(remaining) > 0) {
 			lines.push(`Bootstrap fill: ${remaining} phrase(s) — ${AUTO_GOVERNANCE.bootstrapAtCompletion}`)
 		}
+		lines.push("")
+		lines.push(`Live: /roadmap guide | watch | progress --current | explain-gate`)
 		return lines.join("\n")
 	}
 

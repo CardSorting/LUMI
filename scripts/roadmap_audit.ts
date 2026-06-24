@@ -174,7 +174,7 @@ async function runIntegrationChecks(failures: string[]): Promise<void> {
 		if (phase.phase !== "bootstrap") failures.push(`expected bootstrap phase, got ${phase.phase}`)
 
 		const rec = recommendNextAction({ validation_pending: true, roadmap_exists: true })
-		if (rec.action !== "run_validate") failures.push("recommendNextAction should prioritize validation_pending")
+		if (rec.action !== "auto_validate") failures.push("recommendNextAction should prioritize validation_pending")
 
 		const staleRec = recommendNextAction({ stale: true, roadmap_exists: true, schema_valid: true })
 		if (staleRec.action !== "explain_stale") failures.push("recommendNextAction should route stale to explain_stale")
@@ -193,8 +193,8 @@ async function runIntegrationChecks(failures: string[]): Promise<void> {
 		if (!steering.roadmap_path) failures.push("buildSteeringContext missing roadmap_path")
 
 		const pendingEnv = validationPendingEnvelope(tmp)
-		if (!pendingEnv.suggested_slash_command.includes("validate")) {
-			failures.push("validationPendingEnvelope should suggest /roadmap validate")
+		if (!pendingEnv.diagnostic_command.includes("explain-gate")) {
+			failures.push("validationPendingEnvelope should suggest /roadmap explain-gate diagnostic")
 		}
 		const gateEnv = gateClosedEnvelope("test")
 		if (!gateEnv.diagnostic_command.includes("explain-gate")) {
