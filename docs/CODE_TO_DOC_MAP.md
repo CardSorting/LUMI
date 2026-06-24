@@ -51,6 +51,13 @@ Use this when you change code and need to update the matching doc.
 | Source | Documentation |
 |--------|---------------|
 | `src/core/task/tools/subagent/` | [Subagents feature](features/subagents.mdx) · [WORKING_WITH_SUBAGENTS.md](WORKING_WITH_SUBAGENTS.md) |
+| `src/core/task/tools/subagent/LockNecessity.ts` | [Governed subagent execution](governed-subagent-execution.md) · [Schema](governed-execution-schema.md) · [Runbook](governed-execution-runbook.md) · [Decisions](governed-execution-decisions.md) |
+| `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` | [Governed subagent execution](governed-subagent-execution.md) · [Schema](governed-execution-schema.md) · [Runbook](governed-execution-runbook.md) |
+| `src/core/task/tools/subagent/MergeGate.ts` | [Governed subagent execution](governed-subagent-execution.md) · [Runbook § violation catalog](governed-execution-runbook.md#violation-catalog) |
+| `src/core/task/tools/subagent/GovernedExecutionStore.ts` | [Schema § artifact layout](governed-execution-schema.md#artifact-layout) |
+| `src/core/task/tools/subagent/ReplayValidator.ts` | [Schema § replay checksum](governed-execution-schema.md#replay-checksum-canonical-form) · [Decisions ADR-006](governed-execution-decisions.md#adr-006-replay-checksum-canonicalization) |
+| `src/core/governance/LockAuthority.ts` | [Governed subagent execution § lock stack](governed-subagent-execution.md#lock-authority-stack) · [Decisions ADR-002](governed-execution-decisions.md#adr-002-unified-lock-authority-with-layered-backends) |
+| `webview-ui/src/components/chat/subagent/GovernedReceiptPanel.tsx` | [Runbook § incident console](governed-execution-runbook.md#incident-console-ui-map) |
 | `src/core/task/tools/handlers/CognitiveMemory*.ts` | [Memory & reasoning](MEMORY_AND_REASONING.md) · [api/README.md](api/README.md) |
 | `src/core/policy/spider/` | [Spider forensic engine](architecture/spider-v20-forensic-engine.md) |
 

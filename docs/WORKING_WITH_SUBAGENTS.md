@@ -19,6 +19,9 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 | Dynamic tool names | `src/core/task/tools/subagent/SubagentToolName.ts` |
 | Swarm consensus | `src/core/task/tools/subagent/SwarmConsensusHandler.ts` |
 | Orchestrator metadata | `src/infrastructure/ai/Orchestrator.ts` |
+| Governed coordinator | `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` |
+| Lock necessity | `src/core/task/tools/subagent/LockNecessity.ts` |
+| Merge gate | `src/core/task/tools/subagent/MergeGate.ts` |
 
 `ToolExecutorCoordinator` registers static tools from `DietCodeDefaultTool` and **dynamic subagent handlers** loaded at runtime.
 
@@ -47,8 +50,29 @@ Subagents inherit the same approval and hook pipeline as the parent task:
 - **Auto-approve** rules from `src/core/task/tools/autoApprove.ts` still gate mutating tools.
 - **Completion gates** can block `attempt_completion` until subagent results pass validation.
 
+## Governed swarms
+
+Multi-lane swarms run through `GovernedSwarmCoordinator` with durable receipts and a merge gate (optimistic reconciliation before commit). Each lane declares an **execution mode** that controls whether it acquires a governed mutation lock:
+
+| Mode | Lock by default |
+|------|-----------------|
+| `read_only`, `audit_only`, `planning_only`, `documentation_only`, `diagnostic_only` | Skipped |
+| `mutation` (default when omitted) | Required |
+
+Declare mode in the lane prompt: `[execution_mode:read_only] Review src/api.ts` or via tool param `execution_mode_1`. Read/audit lanes remain durable and replayable without creating ownership pressure.
+
+| Doc | Contents |
+|-----|----------|
+| [Governed subagent execution](governed-subagent-execution.md) | Architecture, industry patterns, lifecycle |
+| [Governed execution runbook](governed-execution-runbook.md) | Operator playbook, violation catalog, retry flow |
+| [Governed execution schema](governed-execution-schema.md) | Receipt schema v3 reference |
+| [Governed execution decisions](governed-execution-decisions.md) | ADR-style design decisions |
+
 ## Related
 
+- [Governed subagent execution](governed-subagent-execution.md)
+- [Governed execution runbook](governed-execution-runbook.md)
+- [Governed execution schema](governed-execution-schema.md)
 - [Subagents feature guide](features/subagents.mdx)
 - [All tools — use_subagents](tools-reference/all-dietcode-tools.mdx)
 - [Memory & reasoning](MEMORY_AND_REASONING.md)

@@ -153,7 +153,7 @@ Artifacts without `schemaVersion: 1`, `executionId`, or `transcriptArtifactPath`
 1. **Transcript redaction** — redactable structure exists (`contentKind`); no automatic secret scrubbing pipeline wired yet.
 2. **Cross-task diff** — diff viewer compares swarms within the current task message history only.
 3. **BroccoliDB live bridge** — unified replay contract exists; automatic cross-plane lineage linking during `dietcode_kernel` sessions requires explicit mapper invocation (not auto-merged session IDs).
-4. **Governed execution** — roadmap admission, lane claims, merge audit, and sealed receipts are wired via `GovernedSwarmCoordinator` (see `docs/governed-subagent-execution.md`). BroccoliDB process workers remain unimplemented.
+4. **Governed execution** — roadmap admission, conditional lane claims (lock-necessity classifier), mutation-scoped merge audit, and sealed receipts are wired via `GovernedSwarmCoordinator`. Non-mutating lanes skip locks by default. Docs: [architecture](governed-subagent-execution.md), [runbook](governed-execution-runbook.md), [schema](governed-execution-schema.md), [decisions](governed-execution-decisions.md). BroccoliDB process workers remain a partial subset (see ADR-007).
 
 ## Operator checklist
 
