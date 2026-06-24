@@ -1,3 +1,6 @@
+import fs from "fs"
+import os from "os"
+import path from "path"
 import {
 	CommentReviewControllerCreator,
 	DiffViewProviderCreator,
@@ -53,6 +56,21 @@ function defaultHostBridgeClient(): HostBridgeClientProvider {
 	return process.env.INTEGRATION_TEST ? integrationTestHostBridge : vscodeHostBridgeClient
 }
 
+function defaultMockPaths(): { extensionFsPath: string; globalStorageFsPath: string } {
+	if (process.env.INTEGRATION_TEST) {
+		const base = path.join(os.tmpdir(), `dietcode-test-host-${process.pid}`)
+		const extensionFsPath = path.join(base, "extension")
+		const globalStorageFsPath = path.join(base, "globalstorage")
+		fs.mkdirSync(extensionFsPath, { recursive: true })
+		fs.mkdirSync(globalStorageFsPath, { recursive: true })
+		return { extensionFsPath, globalStorageFsPath }
+	}
+	return {
+		extensionFsPath: "/mock/path/to/extension",
+		globalStorageFsPath: "/mock/path/to/globalstorage",
+	}
+}
+
 /**
  * Initializes the HostProvider with test defaults.
  * This is a common setup used across multiple test files.
@@ -71,6 +89,7 @@ export function setVscodeHostProviderMock(options?: {
 	extensionFsPath?: string
 	globalStorageFsPath?: string
 }) {
+	const mockPaths = defaultMockPaths()
 	HostProvider.reset()
 	HostProvider.initialize(
 		options?.webviewProviderCreator ?? ((() => {}) as WebviewProviderCreator),
@@ -81,7 +100,7 @@ export function setVscodeHostProviderMock(options?: {
 		options?.logToChannel ?? ((_: string) => {}),
 		options?.getCallbackUri ?? (async (path: string) => `http://example.com:1234${path}`),
 		options?.getBinaryLocation ?? (async (n: string) => `/mock/path/to/binary/${n}`),
-		options?.extensionFsPath ?? "/mock/path/to/extension",
-		options?.globalStorageFsPath ?? "/mock/path/to/globalstorage",
+		options?.extensionFsPath ?? mockPaths.extensionFsPath,
+		options?.globalStorageFsPath ?? mockPaths.globalStorageFsPath,
 	)
 }

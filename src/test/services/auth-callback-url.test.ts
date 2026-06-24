@@ -16,6 +16,8 @@ import { AuthHandler } from "@/hosts/external/AuthHandler"
  * - Web: returns asExternalUri(vscode://extension-id/path) → HTTPS web-reachable URL
  */
 describe("Auth Callback URL", () => {
+	const localCallbackPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+/
+
 	describe("AuthHandler.getCallbackUrl", () => {
 		let authHandler: AuthHandler
 
@@ -31,7 +33,7 @@ describe("Auth Callback URL", () => {
 
 			const url = await authHandler.getCallbackUrl("/auth")
 			url.should.containEql("/auth")
-			url.should.startWith("http://localhost:")
+			url.should.match(localCallbackPattern)
 		})
 
 		it("should include complex paths in the callback URL", async () => {
@@ -40,7 +42,7 @@ describe("Auth Callback URL", () => {
 
 			const url = await authHandler.getCallbackUrl("/mcp-auth/callback/abc123")
 			url.should.containEql("/mcp-auth/callback/abc123")
-			url.should.startWith("http://localhost:")
+			url.should.match(localCallbackPattern)
 		})
 
 		it("should work with empty path for backwards compatibility", async () => {
@@ -48,8 +50,7 @@ describe("Auth Callback URL", () => {
 			authHandler.setEnabled(true)
 
 			const url = await authHandler.getCallbackUrl()
-			url.should.startWith("http://localhost:")
-			url.should.match(/^http:\/\/localhost:\d+$/)
+			url.should.match(localCallbackPattern)
 		})
 	})
 

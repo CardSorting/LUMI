@@ -140,7 +140,7 @@ describe("SharedUriHandler", () => {
 
 				expect(result).to.be.true
 				// URLSearchParams should decode %20 to spaces
-				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt with spaces", "google")
+				sinon.assert.calledOnceWithExactly(handleAuthCallbackStub, "jwt with spaces", "google", null)
 			})
 
 			it("should handle empty query string", async () => {

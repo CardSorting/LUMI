@@ -3,6 +3,7 @@ import { after, describe, it } from "mocha"
 import path from "path"
 import "should"
 import * as vscode from "vscode"
+import { ExtensionRegistryInfo } from "../registry"
 
 const packagePath = path.join(__dirname, "..", "..", "..", "package.json")
 
@@ -21,7 +22,7 @@ describe("DietCode Extension", () => {
 
 	it("should successfully execute the plus button command", async () => {
 		await new Promise((resolve) => setTimeout(resolve, 400))
-		await vscode.commands.executeCommand("dietcode.plusButtonClicked")
+		await vscode.commands.executeCommand(ExtensionRegistryInfo.commands.PlusButton)
 	})
 
 	// New test to verify xvfb and webview functionality

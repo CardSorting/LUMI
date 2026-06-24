@@ -29,12 +29,15 @@ require("ts-node/register/transpile-only")
 require("./src/test/requires.cjs")
 
 const { setVscodeHostProviderMock } = require("./out/src/test/host-provider-test-utils")
+const { HostProvider } = require("./out/src/hosts/host-provider")
 
 setVscodeHostProviderMock()
 
-// Re-init after tests that call HostProvider.reset() or sinon.restore() on host bridge stubs.
+// Re-init only when a prior test called HostProvider.reset().
 exports.mochaHooks = {
 	beforeEach() {
-		setVscodeHostProviderMock()
+		if (!HostProvider.isInitialized()) {
+			setVscodeHostProviderMock()
+		}
 	},
 }

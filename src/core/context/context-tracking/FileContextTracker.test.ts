@@ -6,6 +6,7 @@ import * as path from "path"
 import * as sinon from "sinon"
 import * as vscode from "vscode"
 import { Controller } from "@/core/controller"
+import { HostProvider } from "@/hosts/host-provider"
 import { setVscodeHostProviderMock } from "@/test/host-provider-test-utils"
 import type { FileMetadataEntry, TaskMetadata } from "./ContextTrackerTypes"
 import { FileContextTracker } from "./FileContextTracker"
@@ -52,6 +53,9 @@ describe("FileContextTracker", () => {
 		saveTaskMetadataStub = sandbox.stub(diskModule, "saveTaskMetadata").resolves()
 
 		setVscodeHostProviderMock()
+		sandbox.stub(HostProvider.workspace, "getWorkspacePaths").callsFake(async () => ({
+			paths: ["/mock/workspace"],
+		}))
 
 		// Create tracker instance
 		tracker = new FileContextTracker({} as Controller, taskId)

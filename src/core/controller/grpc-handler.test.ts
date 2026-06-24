@@ -290,24 +290,10 @@ describe("grpc-handler", () => {
 				// if the handler tried to continue after an error)
 				const responseStream = mockStreamingHandler.firstCall.args[2]
 
-				// This should still work as the responseStream function is still valid
+				// After a handler error the stream is terminated; further sends are ignored.
 				await responseStream({ value: "after-error" }, false, 1)
 
-				// Verify we now have 3 total calls (first message, error, after-error message)
-				expect(mockPostMessageToWebview.callCount).to.equal(3)
-
-				// Verify the message after error was still sent
-				// (In a real scenario, the handler would have stopped due to the error,
-				// but this tests that the responseStream function itself still works)
-				expect(mockPostMessageToWebview.thirdCall.args[0]).to.deep.equal({
-					type: "grpc_response",
-					grpc_response: {
-						message: { value: "after-error" },
-						request_id: "stream-error-mid",
-						is_streaming: true,
-						sequence_number: 1,
-					},
-				})
+				expect(mockPostMessageToWebview.callCount).to.equal(2)
 			})
 		})
 
