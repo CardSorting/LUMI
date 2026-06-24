@@ -26,7 +26,7 @@ jobs:
         name: Quality Checks
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup Node monorepo
               uses: ./.github/actions/setup-node-monorepo
@@ -49,7 +49,7 @@ jobs:
                 shell: bash
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup Node monorepo
               uses: ./.github/actions/setup-node-monorepo
@@ -96,7 +96,7 @@ jobs:
                   npm run test:coverage
 
             - name: Save Coverage Reports
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               # Only upload artifacts on Linux - We only need coverage from one OS
               if: runner.os == 'Linux'
               with:
@@ -111,10 +111,10 @@ jobs:
         # Run on PRs to main, pushes to main, and manual dispatches
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Download unit tests coverage reports
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v8
               with:
                   name: pr-coverage-reports
                   path: .

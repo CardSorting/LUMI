@@ -37,14 +37,14 @@ jobs:
         environment: publish
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
               with:
                   ref: ${{ github.event.inputs.tag }}
                   fetch-depth: 0
                   fetch-tags: true
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: 22
 
@@ -121,7 +121,7 @@ jobs:
                   echo "EOF" >> $GITHUB_OUTPUT
 
             - name: Create GitHub Release
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   tag_name: ${{ steps.validate_tag.outputs.tag }}
                   files: |
