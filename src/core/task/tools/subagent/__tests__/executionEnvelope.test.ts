@@ -115,7 +115,7 @@ describe("subagent execution envelope", () => {
 
 		const swarm = createSwarmEnvelope([createAgentEnvelope()])
 		const artifactPath = await persistSwarmEnvelope("task-1", swarm)
-		assert.ok(artifactPath.includes("subagent_executions/swarm-1.json"))
+		assert.ok(artifactPath.replaceAll("\\", "/").includes("subagent_executions/swarm-1.json"))
 
 		const reconstructed = await reconstructSwarmFromArtifact("task-1", "swarm-1")
 		assert.equal(reconstructed.agents[0].verbatimOutput, swarm.agents[0].verbatimOutput)

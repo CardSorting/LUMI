@@ -11,6 +11,8 @@ export const addSelectedCodeToDietCodeWebview = async (_page: Page) => {
 	await _page.locator("div:nth-child(4) > span > span").first().click()
 	await _page.getByRole("textbox", { name: "The editor is not accessible" }).press("ControlOrMeta+a")
 
+	const editorMenu = _page.locator("li").filter({ hasText: "[Extension Development Host]" }).first()
+	await editorMenu.click({ delay: 100 })
 	const editorSearchBar = _page.getByRole("textbox", {
 		name: "Search files by name (append",
 	})

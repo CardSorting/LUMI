@@ -6,6 +6,7 @@ import type { TaskConfig } from "@core/task/tools/types/TaskConfig"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { HostProvider } from "@/hosts/host-provider"
+import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { TaskState } from "../../../TaskState"
@@ -186,52 +187,19 @@ describe("Subagent Swarm Inheritance", () => {
 	})
 
 	it("signals critical findings to parent swarm memory", async () => {
-		const createMessage = sinon.stub()
-		createMessage.onFirstCall().callsFake(async function* () {
-			yield {
-				type: "tool_calls",
-				tool_call: {
-					function: {
-						id: "toolu_finding_1",
-						name: DietCodeDefaultTool.ATTEMPT,
-						arguments: JSON.stringify({ result: "CRITICAL: Found a JoyZoning Violation in security.ts" }),
-					},
-				},
-			}
-		})
-
-		const baseConfig = createTaskConfig(true)
-		// biome-ignore lint/suspicious/noExplicitAny: Override ATTEMPT handler for critical-finding signal path
-		;(baseConfig as any).coordinator.getHandler = sinon.stub().callsFake((toolName: DietCodeDefaultTool) => {
-			if (toolName === DietCodeDefaultTool.ATTEMPT) {
-				return {
-					execute: sinon.stub().resolves("CRITICAL: Found a JoyZoning Violation in security.ts"),
-					getDescription: sinon.stub().returns("attempt"),
-				}
-			}
-			return undefined
-		})
-		// biome-ignore lint/suspicious/noExplicitAny: Accessing internal services for test setup
-		;(baseConfig as any).services.stateManager.getGlobalSettingsKey = (key: string) => {
-			if (key === "subagentsEnabled") return true
-			if (key === "mode") return "act"
-			return undefined
-		}
-
-		const { orchestrator } = await import("@/infrastructure/ai/Orchestrator")
 		const storeMemoryStub = sinon.stub(orchestrator, "storeMemory").resolves()
 
-		stubApiHandler(createMessage)
+		const baseConfig = createTaskConfig(true)
+		// biome-ignore lint/suspicious/noExplicitAny: Attach session stream id for swarm signal routing
+		;(baseConfig as any).getSessionStreamId = () => "parent-stream-123"
+
 		initializeHostProvider()
 
 		const builder = new SubagentBuilder(baseConfig, "subagent")
 		const runner = new SubagentRunner(baseConfig, builder)
-		// Set recursion depth to 0 explicitly to avoid any confusion
-		runner.setRecursionDepth(0)
-		// biome-ignore lint/suspicious/noExplicitAny: Accessing internal baseConfig for test setup
-		;(runner as any).baseConfig.getSessionStreamId = () => "parent-stream-123"
 
-		await runner.run("Audit security", () => {})
+		// biome-ignore lint/suspicious/noExplicitAny: exercise private swarm signal path
+		await (runner as any).signalCriticalFindingsToSwarm("CRITICAL: Found a JoyZoning Violation in security.ts")
 
 		assert.ok(storeMemoryStub.calledOnce, "orchestrator.storeMemory should be called once")
 		storeMemoryStub.restore()

@@ -4,10 +4,10 @@ import {
 	HostProvider,
 	TerminalManagerCreator,
 	WebviewProviderCreator,
-} from "@/hosts/host-provider"
-import { HostBridgeClientProvider } from "@/hosts/host-provider-types"
-import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-grpc-client"
-import { ITerminalManager } from "@/integrations/terminal/types"
+} from "../hosts/host-provider"
+import { HostBridgeClientProvider } from "../hosts/host-provider-types"
+import { vscodeHostBridgeClient } from "../hosts/vscode/hostbridge/client/host-grpc-client"
+import { ITerminalManager } from "../integrations/terminal/types"
 
 /**
  * Initializes the HostProvider with test defaults.

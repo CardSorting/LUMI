@@ -16,7 +16,8 @@ e2e.describe("Diff Editor", () => {
 			await sidebar.getByTestId("send-button").click({ delay: 50 })
 			await expect(inputbox).toHaveValue("")
 
-			await sidebar.waitForSelector('span:has-text("DietCode wants to edit this file:")', { timeout: 60000 })
+			await expect(sidebar.getByText("Want me to apply these changes?")).toBeVisible({ timeout: 60000 })
+			await sidebar.getByRole("button", { name: "Apply changes" }).click()
 
 			await expect(page.getByText("test.ts: Original ↔ DietCode's")).toBeVisible({ timeout: 30000 })
 

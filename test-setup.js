@@ -8,5 +8,5 @@ require("tsconfig-paths/register")
 require("ts-node/register/transpile-only")
 require("./src/test/requires.cjs")
 
-const { setVscodeHostProviderMock } = require("./src/test/host-provider-test-utils")
+const { setVscodeHostProviderMock } = require("./out/src/test/host-provider-test-utils")
 setVscodeHostProviderMock()
