@@ -34,7 +34,6 @@ See [docs/governed-subagent-execution.md](docs/governed-subagent-execution.md).
 - CI: [.github/workflows/test.yml](.github/workflows/test.yml) and [.github/workflows/e2e.yml](.github/workflows/e2e.yml) on `main` and PRs.
 - Dependency review: [.github/workflows/dependency-review.yml](.github/workflows/dependency-review.yml) on PRs (high-severity blocks merge).
 - Publish: [.github/workflows/publish.yml](.github/workflows/publish.yml) (maintainer-triggered, `workflow_dispatch`).
-- Nightly pre-release: [.github/workflows/publish-nightly.yml](.github/workflows/publish-nightly.yml) (`CardSorting/LUMI` only).
 
 ### Recommended branch protection (`main`)
 
@@ -52,7 +51,7 @@ Dependabot and labeler workflows use standard `GITHUB_TOKEN` permissions documen
 
 ### Deployment environment (`publish`)
 
-Create **Settings → Environments → `publish`** on GitHub and add repository secrets used by [.github/workflows/publish.yml](.github/workflows/publish.yml) and [.github/workflows/publish-nightly.yml](.github/workflows/publish-nightly.yml):
+Create **Settings → Environments → `publish`** on GitHub and add repository secrets used by [.github/workflows/publish.yml](.github/workflows/publish.yml):
 
 | Secret | Purpose |
 |--------|---------|
