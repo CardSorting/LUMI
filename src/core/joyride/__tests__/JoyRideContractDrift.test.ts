@@ -15,7 +15,7 @@ import {
 } from "../JoyRideContract"
 import { JOYRIDE_REASON } from "../JoyRideReasonCodes"
 
-import { REPO_ROOT } from "./paths.cjs"
+import { REPO_ROOT } from "./paths"
 
 describe("JoyRide contract drift prevention", () => {
 	it("should export only frozen public symbols", () => {

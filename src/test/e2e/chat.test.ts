@@ -14,8 +14,8 @@ e2e("Chat - can send messages", async ({ helper, sidebar, page }) => {
 	await expect(inputbox).toHaveValue("")
 
 	// Starting a new task should clear the current chat view and show the recent tasks
-	await sidebar.getByRole("button", { name: "New Task", exact: true }).first().click()
-	await expect(sidebar.getByText("Recent")).toBeVisible()
+	await sidebar.getByRole("button", { name: "New chat" }).click()
+	await expect(sidebar.getByText("Recent chats")).toBeVisible()
 	await expect(sidebar.getByText("Hello, DietCode!")).toBeVisible()
 
 	// Makes sure chat input and send still work after starting a task

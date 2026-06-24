@@ -16,12 +16,12 @@ export const addSelectedCodeToDietCodeWebview = async (_page: Page) => {
 
 	// Target the explicit action instead of pressing Enter on the first item.
 	// The first item can vary by platform or diagnostics.
-	const addToDietCode = _page.getByText(/Add to DietCode/i)
-	await addToDietCode.waitFor({ state: "visible" })
+	const addToLumi = _page.getByText(/Add to LUMI/i)
+	await addToLumi.waitFor({ state: "visible" })
 	// For whatever reason, we need to move the mouse to make the context menu item clickable
 	await _page.mouse.move(10, 10)
 	await _page.mouse.move(20, 10)
-	await addToDietCode.click()
+	await addToLumi.click()
 }
 
 export const toggleNotifications = async (_page: Page) => {

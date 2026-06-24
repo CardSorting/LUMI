@@ -6,7 +6,7 @@
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { assert } from "chai"
-import { JOYRIDE_PKG_ROOT, JOYRIDE_TEST_DIR, REPO_ROOT } from "./paths.cjs"
+import { JOYRIDE_PKG_ROOT, JOYRIDE_TEST_DIR, REPO_ROOT } from "./paths"
 
 const TEST_DIR = JOYRIDE_TEST_DIR
 

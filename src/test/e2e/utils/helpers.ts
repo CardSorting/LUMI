@@ -84,7 +84,7 @@ export class E2ETestHelper {
 
 				try {
 					const title = await frame.title()
-					if (title.toLowerCase().startsWith("dietcode")) {
+					if (title.toLowerCase().startsWith("lumi") || title.toLowerCase().startsWith("dietcode")) {
 						this.cachedFrame = frame
 						return frame
 					}
@@ -119,19 +119,32 @@ export class E2ETestHelper {
 	}
 
 	public async signin(webview: Frame): Promise<void> {
-		await webview.getByRole("button", { name: /Login to DietCode/i }).click({ delay: 100 })
+		const chatInput = webview.getByTestId("chat-input")
+		if (await chatInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+			return
+		}
 
-		// Verify start up page is no longer visible
-		await expect(webview.getByRole("button", { name: /Login to DietCode/i })).not.toBeVisible()
+		await webview.getByRole("button", { name: "Use your own API key" }).click({ delay: 100 })
 
-		await webview.getByRole("button", { name: "Close" }).click({ delay: 50 })
+		const providerSelectorInput = webview.getByTestId("provider-selector-input")
+		await providerSelectorInput.click({ delay: 100 })
+		await webview.getByTestId("provider-option-openrouter").click({ delay: 100 })
+
+		const apiKeyInput = webview.getByRole("textbox", { name: "OpenRouter API Key" })
+		await apiKeyInput.fill("test-api-key")
+
+		await webview.getByRole("button", { name: "Let's go!" }).click({ delay: 100 })
+
+		const closeWhatsNew = webview.getByRole("button", { name: "Close" })
+		if (await closeWhatsNew.isVisible({ timeout: 3000 }).catch(() => false)) {
+			await closeWhatsNew.click({ delay: 50 })
+		}
+
+		await expect(chatInput).toBeVisible({ timeout: 15000 })
 	}
 
 	public static async openDietCodeSidebar(page: Page): Promise<void> {
-		await page
-			.getByRole("tab", { name: /DietCode/i })
-			.locator("a")
-			.click()
+		await page.getByRole("tab", { name: /LUMI/i }).locator("a").click({ timeout: 30000 })
 	}
 
 	public static async runCommandPalette(page: Page, command: string): Promise<void> {
