@@ -8,10 +8,10 @@
  * - telemetryService use in handlers without import
  */
 import assert from "node:assert/strict"
-import { execSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { globby } from "globby"
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const coordinatorPath = path.join(repoRoot, "src/core/task/tools/ToolExecutorCoordinator.ts")
@@ -69,10 +69,7 @@ for (const id of toolIds) {
 }
 
 // Repo-wide DietCodeDefaultTool value imports (excluding type-only files is ok if no value use)
-const tsFiles = execSync('rg -l "\\.ts$" src --glob "*.ts"', { cwd: repoRoot, encoding: "utf8" })
-	.trim()
-	.split("\n")
-	.filter(Boolean)
+const tsFiles = await globby("src/**/*.ts", { cwd: repoRoot, gitignore: true })
 
 for (const rel of tsFiles) {
 	if (rel === "src/shared/tools.ts") {
