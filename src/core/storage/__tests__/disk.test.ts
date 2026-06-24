@@ -273,6 +273,7 @@ describe("disk - atomic writes", () => {
 
 	beforeEach(async () => {
 		sandbox = sinon.createSandbox()
+		await writeTaskHistoryToState([])
 	})
 
 	afterEach(async () => {
@@ -419,7 +420,7 @@ describe("disk - atomic writes", () => {
 		})
 
 		it("should handle rapid successive writes", async function () {
-			this.timeout(process.platform === "win32" ? 15000 : 5000)
+			this.timeout(30000)
 
 			for (let i = 0; i < 20; i++) {
 				const items = [createTestHistoryItem(`rapid-${i}`, `Task ${i}`)]

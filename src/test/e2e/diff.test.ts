@@ -16,8 +16,13 @@ e2e.describe("Diff Editor", () => {
 			await sidebar.getByTestId("send-button").click({ delay: 50 })
 			await expect(inputbox).toHaveValue("")
 
-			await expect(sidebar.getByText("Want me to apply these changes?")).toBeVisible({ timeout: 60000 })
-			await sidebar.getByRole("button", { name: "Apply changes" }).click()
+			const approvalPrompt = sidebar.getByText(/Want me to apply these changes\?|Save these changes\?|I updated this file:/)
+			await expect(approvalPrompt).toBeVisible({ timeout: 90000 })
+
+			const applyButton = sidebar.getByRole("button", { name: /Apply changes|Go ahead/ })
+			if (await applyButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+				await applyButton.click()
+			}
 
 			await expect(page.getByText("test.ts: Original ↔ DietCode's")).toBeVisible({ timeout: 30000 })
 

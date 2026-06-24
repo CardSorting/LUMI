@@ -392,6 +392,86 @@ export class DietCodeApiServerMock {
 
 						const generationId = `gen_${++controller.generationCounter}_${Date.now()}`
 
+						if (stream && body.includes("edit_request")) {
+							res.writeHead(200, {
+								"Content-Type": "text/plain",
+								"Cache-Control": "no-cache",
+								Connection: "keep-alive",
+							})
+
+							const toolArgs = JSON.stringify({
+								path: "test.ts",
+								diff: `------- SEARCH
+export const name = "john"
+=======
+export const name = "dietcode"
++++++++ REPLACE`,
+							})
+
+							const toolCallChunks = [
+								{
+									choices: [
+										{
+											index: 0,
+											delta: {
+												tool_calls: [
+													{
+														index: 0,
+														id: "call_e2e_replace_test",
+														type: "function",
+														function: { name: "replace_in_file", arguments: "" },
+													},
+												],
+											},
+											finish_reason: null,
+										},
+									],
+								},
+								{
+									choices: [
+										{
+											index: 0,
+											delta: {
+												tool_calls: [{ index: 0, function: { arguments: toolArgs } }],
+											},
+											finish_reason: null,
+										},
+									],
+								},
+								{
+									choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+									usage: {
+										prompt_tokens: 140,
+										completion_tokens: toolArgs.length,
+										total_tokens: 140 + toolArgs.length,
+									},
+								},
+							]
+
+							let toolChunkIndex = 0
+							const sendToolChunk = () => {
+								if (toolChunkIndex < toolCallChunks.length) {
+									res.write(
+										`data: ${JSON.stringify({
+											id: generationId,
+											object: "chat.completion.chunk",
+											created: Math.floor(Date.now() / 1000),
+											model,
+											...toolCallChunks[toolChunkIndex],
+										})}\n\n`,
+									)
+									toolChunkIndex++
+									setTimeout(sendToolChunk, 10)
+								} else {
+									res.write("data: [DONE]\n\n")
+									res.end()
+								}
+							}
+
+							sendToolChunk()
+							return
+						}
+
 						if (stream) {
 							res.writeHead(200, {
 								"Content-Type": "text/plain",

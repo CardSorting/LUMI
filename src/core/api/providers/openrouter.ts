@@ -5,6 +5,7 @@ import { shouldSkipReasoningForModel } from "@utils/model-utils"
 import axios from "axios"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
+import { DietCodeEnv } from "@/config"
 import { buildOpenRouterAttributionHeaders } from "@/services/EnvUtils"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient, getAxiosSettings } from "@/shared/net"
@@ -40,8 +41,11 @@ export class OpenRouterHandler implements ApiHandler {
 				throw new Error("OpenRouter API key is required")
 			}
 			try {
+				const baseURL = process.env.E2E_TEST
+					? `${DietCodeEnv.config().apiBaseUrl}/api/v1`
+					: "https://openrouter.ai/api/v1"
 				this.client = createOpenAIClient({
-					baseURL: "https://openrouter.ai/api/v1",
+					baseURL,
 					apiKey: this.options.openRouterApiKey,
 					defaultHeaders: buildOpenRouterAttributionHeaders(),
 				})
