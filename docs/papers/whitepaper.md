@@ -332,14 +332,18 @@ The harness uses familiar distributed-systems vocabulary without requiring an ex
 
 | Phase | Module | Output |
 |-------|--------|--------|
-| Admit | `admitSwarm` | Roadmap admission + `recoverStale(governed-lane:*)` |
+| Admit (pressure) | `admitSwarm` → `scheduleAdmission` | `GovernedAdmissionResult.pressureScore` |
+| Admit (ownership) | `acquireSwarmOrchestrationLease` | Fail closed before lanes if denied |
+| Audit preflight | `runGovernedSwarmAuditPreflight` | `auditIntegration.preflightIssues` |
 | Classify | `LockNecessity` | `lockRequired`, execution mode, read/write intent |
+| Schedule | `LaneDAG` + `buildLaneDependencyMap` | Ready/blocked lanes; concurrency ≤ 3 |
 | Acquire | `acquireLane` | `WorkLaneClaim` with or without `lockClaim` |
-| Execute | `SubagentRunner` | `SubagentExecutionEnvelope` per lane |
-| Attribute | `splitReadWriteSets` | `readSet` / `writeSet` on lane receipt |
-| Release | `releaseLane` | Claim cleared (mutation only) |
-| Merge | `MergeGate` | Violations or pass |
-| Seal | `sealReceipt` | `GovernedSwarmReceipt` schema v3 persisted |
+| Execute | `SubagentRunner` | `SubagentExecutionEnvelope` + per-lane `completion_gate` |
+| Attribute | `buildLaneReceipt` + `splitReadWriteSets` | `LaneExecutionReceipt` |
+| Release | `releaseLane` | Claim cleared (mutation only); DAG `sealed` / `failed` |
+| Merge | `MergeGate` | Commit barrier — violations or pass |
+| Seal | `sealReceipt` or `sealCrashReceipt` | Receipt v3 + `roadmapLinkage` + `auditIntegration` |
+| Roadmap completion | `applyGovernedRoadmapCompletionPolicy` | Advisory default; optional update on sealed success |
 
 #### Execution modes
 
@@ -444,14 +448,13 @@ SHA-256 over canonical subset (lane status, sorted `touchedFiles`, admission, me
 
 | Gap | Impact |
 |-----|--------|
-| Lane DAG deps not passed from handler | Parallel pool ignores `blocked`; `isLaneReady()` unused |
-| `sealCrashReceipt` not wired on handler timeout | Partial state via `sealReceipt` |
 | `worker_cli` subset | File lock only; receipt schema v1; different resource key format |
 | Replay hash excludes lock fields | Checksum mismatch ≠ lock-state corruption |
+| BroccoliDB cross-plane audit index | Future thin adapter only — receipts stay under `subagent_executions/` |
 
 #### Tests
 
-`governedExecutionLockNecessity.test.ts`, `governedExecutionHardening.test.ts`, `governedExecutionReliability.test.ts`, `GovernedReceiptPanel.test.tsx`.
+`governedExecutionLockNecessity.test.ts`, `governedExecutionHardening.test.ts`, `governedExecutionReliability.test.ts`, `governedExecutionIntegration.test.ts`, `governedExecutionClosure.test.ts`, `GovernedReceiptPanel.test.tsx` — **70** contracts.
 
 Full reference: [governed-subagent-execution.md](../governed-subagent-execution.md) · [schema](../governed-execution-schema.md) · [runbook](../governed-execution-runbook.md) · [decisions](../governed-execution-decisions.md).
 
@@ -474,8 +477,8 @@ LUMI depends on `@noorm/broccolidb` (workspace package). Integration points:
 
 **Division of responsibility:**
 
-- LUMI: session UX, tool approval, LLM loop, VS Code I/O
-- BroccoliDB: structural proof, governed repair, runtime graph, snapshots, replay
+- LUMI: session UX, tool approval, LLM loop, VS Code I/O, governed receipts under `subagent_executions/`
+- BroccoliDB: structural proof, governed repair, runtime graph, snapshots, replay, lock fencing
 
 Do not duplicate BroccoliDB architecture here — see [broccolidb/docs/papers/whitepaper.md](../../broccolidb/docs/papers/whitepaper.md).
 
@@ -573,9 +576,12 @@ Extension activation: `src/extension.ts` (~788 lines). Registry: `src/registry.t
 | 4 providers wired in `buildApiHandler` | All provider UI components functional |
 | 63 enum tool names; coordinator routing | Every enum has active handler (some reserved) |
 | Completion pipeline on `attempt_completion` | Zero false gate blocks |
-| Governed merge gate before swarm seal | Zero false merge blocks; DAG deps not wired in handler |
-| Lock-skipped lanes for non-mutating modes | worker_cli full harness parity |
+| Governed merge gate before swarm seal | Zero false merge blocks |
+| Roadmap orchestration lease before lane execution | Fail closed when lease denied |
+| Lock-skipped lanes for non-mutating modes | DAG scheduling via `[depends_on:N]` |
+| Crash seal on handler timeout/abort | Authoritative sealed success preserved |
 | Durable governed receipts per attempt | Chat status as authoritative swarm truth |
+| BroccoliDB for substrate only | Governed audit evidence in receipt artifacts |
 | BroccoliDB tools when package present | Spider/kernel without dependency |
 | VS Code as host | JetBrains, CLI, headless agent |
 
@@ -611,6 +617,7 @@ Extension activation: `src/extension.ts` (~788 lines). Registry: `src/registry.t
 | `src/shared/providers/providers.json` | Active provider list |
 | `src/core/task/tools/completionGatePipeline.ts` | Completion gates |
 | `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` | Governed swarm lifecycle |
+| `src/core/task/tools/subagent/GovernedIntegration.ts` | Roadmap/audit bridges, completion policy, crash phase |
 | `src/core/task/tools/subagent/MergeGate.ts` | Swarm merge reconciliation |
 | `src/core/task/tools/subagent/LockNecessity.ts` | Execution mode + lock classifier |
 | `src/core/governance/LockAuthority.ts` | Unified mutation ownership |

@@ -68,7 +68,7 @@ Map of LUMI agent workspace documentation. BroccoliDB docs are maintained separa
 | [grpc-subscription-persistence.md](grpc-subscription-persistence.md) | Persistent `subscribeTo*` streams, idle-timeout bug, client/server runtime |
 | [MEMORY_AND_REASONING.md](MEMORY_AND_REASONING.md) | Context and memory tools |
 | [WORKING_WITH_SUBAGENTS.md](WORKING_WITH_SUBAGENTS.md) | Subagent protocol |
-| [governed-subagent-execution.md](governed-subagent-execution.md) | Governed swarm architecture |
+| [governed-subagent-execution.md](governed-subagent-execution.md) | Governed swarm architecture, roadmap/audit integration, closure invariants |
 | [governed-execution-runbook.md](governed-execution-runbook.md) | Governed swarm operator playbook |
 | [governed-execution-schema.md](governed-execution-schema.md) | Governed receipt schema v3 |
 | [governed-execution-decisions.md](governed-execution-decisions.md) | Governed execution ADRs |

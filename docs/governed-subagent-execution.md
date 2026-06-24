@@ -99,14 +99,18 @@ Formal orchestration flow (production handler):
 
 | # | Phase | Entry point | Output |
 |---|-------|-------------|--------|
-| 1 | **Admit** | `admitSwarm(taskId)` | `GovernedAdmissionResult`; triggers `recoverStale(governed-lane:*)` |
-| 2 | **Classify** | `resolveLaneLockIntent` + `classifyLockNecessity` | `lockRequired`, reason, read/write intent |
-| 3 | **Acquire** | `acquireLane` | `WorkLaneClaim` with or without `lockClaim` |
-| 4 | **Execute** | `SubagentRunner.runWithEnvelope` | `SubagentExecutionEnvelope` |
-| 5 | **Attribute** | `buildLaneReceipt` + `splitReadWriteSets` | `LaneExecutionReceipt` |
-| 6 | **Release** | `releaseLane` | Claim cleared (mutation only); DAG `sealed` / `failed` |
-| 7 | **Merge** | `runMergeGate` | `MergeGateResult` — pass/fail + violations |
-| 8 | **Seal** | `sealReceipt` | `GovernedSwarmReceipt` schema v3 persisted |
+| 1 | **Admit (pressure)** | `admitSwarm` → `scheduleAdmission` | `pressureScore`; `recoverStale(governed-lane:*)` |
+| 2 | **Admit (ownership)** | `acquireSwarmOrchestrationLease` | Fail closed before lanes; `orchestrationLease` on receipt |
+| 3 | **Audit preflight** | `runGovernedSwarmAuditPreflight` | `auditIntegration.preflightIssues` |
+| 4 | **Classify** | `resolveLaneLockIntent` + `classifyLockNecessity` | `lockRequired`, reason, read/write intent |
+| 5 | **Schedule** | `buildLaneDependencyMap` + `LaneDAG` | Ready/blocked lanes; DAG-aware pool (≤ 3) |
+| 6 | **Acquire** | `acquireLane` | `WorkLaneClaim` with or without `lockClaim` |
+| 7 | **Execute** | `SubagentRunner.runWithEnvelope` | `SubagentExecutionEnvelope`; per-lane `completion_gate` |
+| 8 | **Attribute** | `buildLaneReceipt` + `splitReadWriteSets` | `LaneExecutionReceipt` |
+| 9 | **Release** | `releaseLane` | Claim cleared (mutation only); DAG `sealed` / `failed` |
+| 10 | **Merge** | `runMergeGate` | `MergeGateResult` — commit barrier only |
+| 11 | **Seal** | `sealReceipt` or `sealCrashReceipt` | Receipt v3 + `roadmapLinkage` + `auditIntegration` |
+| 12 | **Roadmap completion** | `applyGovernedRoadmapCompletionPolicy` | Advisory default; optional update when policy enabled |
 
 ```mermaid
 sequenceDiagram
@@ -117,9 +121,11 @@ sequenceDiagram
   participant M as MergeGate
 
   H->>C: admitSwarm
+  H->>C: acquireSwarmOrchestrationLease
+  H->>H: audit preflight
   C->>A: recoverStale
 
-  loop Each lane (concurrency ≤ 3)
+  loop Each ready lane (DAG, concurrency ≤ 3)
     H->>N: resolveLaneLockIntent
     H->>N: classifyLockNecessity
     H->>C: acquireLane
@@ -133,13 +139,14 @@ sequenceDiagram
     H->>C: releaseLane
   end
 
-  H->>C: sealReceipt
+  H->>C: sealReceipt or sealCrashReceipt
   C->>M: runMergeGate
+  C->>C: finalizeRoadmapSealState
   C->>C: validateDeterministicReplay
   C->>C: persistGovernedReceipt
 ```
 
-**Seal condition:** `sealed = mergeGate.passed && replay valid && !forceFail`.
+**Seal condition:** `sealed = mergeGate.passed && replay valid && !forceFail`. **Crash condition:** timeout/abort → `sealCrashReceipt` with inferred `crashPhase`; prior sealed success preserved via `shouldUpdateLatestPointer`.
 
 Handler forces `finalSwarmStatus = "failed"` when `!receipt.sealed`.
 

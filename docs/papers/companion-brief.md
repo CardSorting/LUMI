@@ -34,7 +34,7 @@
 | Governed receipt schema | **v3** | `GOVERNED_RECEIPT_SCHEMA_VERSION` in `src/shared/subagent/governedExecution.ts` |
 | Lane execution modes | **6** | `read_only` … `mutation` — `LockNecessity.ts` |
 | Lock authority backends | **5** | in-process, SwarmMutex, roadmap lease, file lock, broccoli fence |
-| Governed execution test suites | **3** | `governedExecution*.test.ts` under `subagent/__tests__/` |
+| Governed execution test suites | **5** (+ UI panel) | `governedExecution*.test.ts` — **70** contracts |
 
 ---
 
@@ -87,13 +87,18 @@ User → webview-ui (React)
        @noorm/broccolidb (memory, Spider, kernel)
 
 Governed swarm branch (use_subagents):
-  SubagentToolHandler → GovernedSwarmCoordinator
-    → LockNecessity (classify) → LockAuthority (mutation only)
-    → SubagentRunner (lanes) → MergeGate → seal receipt v3
+  SubagentToolHandler
+    → scheduleAdmission (pressure) → acquireOrchestrationLease (ownership)
+    → audit preflight → GovernedSwarmCoordinator
+    → LockNecessity (classify) → LaneDAG (depends_on) → LockAuthority (mutation only)
+    → SubagentRunner (lanes) → completion_gate per lane
+    → MergeGate (commit barrier) → sealReceipt v3 / sealCrashReceipt on timeout
     → GovernedReceiptPanel (incident console)
 ```
 
-**Hard rules:** mutating tools require approval (unless auto-approve); `attempt_completion` runs `completionGatePipeline`; hooks can cancel but do not silently write files; swarm success requires merge gate pass — **locks protect mutation, receipts preserve truth**.
+**Hard rules:** mutating tools require approval (unless auto-approve); `attempt_completion` runs `completionGatePipeline`; hooks can cancel but do not silently write files; swarm success requires merge gate pass; roadmap orchestration lease must succeed before lanes run; timeout/abort seals via `sealCrashReceipt` — **locks protect mutation, receipts preserve truth**.
+
+**Coordination planes:** Roadmap owns plan/admission. Audit owns verification. MergeGate owns commit safety. BroccoliDB owns fencing/replay substrate. Receipts own truth under `subagent_executions/`.
 
 ---
 
@@ -143,7 +148,7 @@ Inspect subagent_executions/{swarmId}.governed.{attemptId}.json and summarize me
 Refactor src/handler.ts and update tests.
 ```
 
-Tool param alternative: `execution_mode_1=read_only` for lane index 1.
+Tool param alternatives: `execution_mode_1=read_only`, `depends_on_2=0`, `roadmap_item_1=NOW-42`, `roadmap_completion_update=enabled` (optional kanban touch on sealed success only).
 
 ### Incident console (operator)
 
@@ -227,7 +232,7 @@ Full list: [All tools](../tools-reference/all-dietcode-tools.mdx). Swarm depth: 
 - [ ] Webview copy: `webview-ui/src/copy/lumiVoice.ts` — keep calm tone
 - [ ] Host-specific code only under `src/hosts/vscode/`
 - [ ] Do not import `vscode` from `src/core/task/` — use `HostProvider`
-- [ ] Governed swarms: update `LockNecessity`, `MergeGate`, or receipt types → sync [governed docs](../governed-subagent-execution.md) + `CODE_TO_DOC_MAP.md`
+- [ ] Governed swarms: update coordinator, `GovernedIntegration`, `MergeGate`, or receipt types → sync [governed docs](../governed-subagent-execution.md) + `CODE_TO_DOC_MAP.md`
 
 ---
 
@@ -252,9 +257,12 @@ npm run test:unit -- --grep "governed execution"   # swarm harness contracts
 | 4 providers routed in `buildApiHandler` | All 45 provider files active |
 | Typed tool enum + coordinator routing | Third-party MCP server behavior |
 | Completion gate pipeline on `attempt_completion` | Zero false-positive gate blocks |
-| Governed swarm merge gate before seal | Zero false-positive merge blocks |
-| Lock-skipped lanes for non-mutating execution modes | Lane DAG deps wired in handler (infra present) |
+| Governed swarm merge gate before seal | Zero false merge blocks |
+| Roadmap orchestration lease before lanes | Fail closed when lease denied |
+| Lock-skipped lanes for non-mutating execution modes | DAG deps via `[depends_on:N]` |
+| Crash seal on timeout/abort | Authoritative sealed success preserved in history |
 | Durable governed receipts per swarm attempt | Chat status as authoritative swarm truth |
+| BroccoliDB for fencing/replay substrate only | Governed audit evidence in BroccoliDB CAS |
 | BroccoliDB dependency for memory/kernel tools | BroccoliDB features without `@noorm/broccolidb` |
 | VS Code host implementation | JetBrains/CLI (not shipped here) |
 

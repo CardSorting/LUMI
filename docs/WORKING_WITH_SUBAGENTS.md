@@ -20,6 +20,7 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 | Swarm consensus | `src/core/task/tools/subagent/SwarmConsensusHandler.ts` |
 | Orchestrator metadata | `src/infrastructure/ai/Orchestrator.ts` |
 | Governed coordinator | `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` |
+| Integration bridges | `src/core/task/tools/subagent/GovernedIntegration.ts` |
 | Lock necessity | `src/core/task/tools/subagent/LockNecessity.ts` |
 | Merge gate | `src/core/task/tools/subagent/MergeGate.ts` |
 
@@ -59,7 +60,28 @@ Multi-lane swarms run through `GovernedSwarmCoordinator` with durable receipts a
 | `read_only`, `audit_only`, `planning_only`, `documentation_only`, `diagnostic_only` | Skipped |
 | `mutation` (default when omitted) | Required |
 
-Declare mode in the lane prompt: `[execution_mode:read_only] Review src/api.ts` or via tool param `execution_mode_1`. Read/audit lanes remain durable and replayable without creating ownership pressure.
+### Lifecycle (production handler)
+
+```
+roadmap pressure admit → orchestration lease → audit preflight
+  → classify lane intent → DAG schedule → execute lanes
+  → per-lane completion_gate → merge gate → seal or crash seal
+  → optional roadmap completion (policy-gated)
+```
+
+| Prompt / param tag | Purpose |
+|--------------------|---------|
+| `[execution_mode:read_only]` | Skip mutation lock |
+| `[depends_on:0]` / `depends_on_2` | Lane waits until dependency sealed |
+| `[roadmap_item:NOW-42]` | Link lane to roadmap item on receipt |
+| `roadmap_completion_update=enabled` | Apply roadmap completion only on sealed success |
+
+**Boundaries:** `MergeGate` is the commit barrier, not the workspace audit system. Audit evidence lives on governed receipts under `subagent_executions/` — BroccoliDB provides fencing/replay substrate only.
+
+| Component | Path |
+|-----------|------|
+| Integration bridges | `src/core/task/tools/subagent/GovernedIntegration.ts` |
+| Handler wiring | `src/core/task/tools/handlers/SubagentToolHandler.ts` |
 
 | Doc | Contents |
 |-----|----------|

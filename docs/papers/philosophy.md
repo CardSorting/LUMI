@@ -134,8 +134,9 @@ The governed harness mirrors single-task completion discipline at swarm scale:
 
 | Single task | Governed swarm | Shared philosophy |
 |-------------|----------------|-------------------|
-| `attempt_completion` | `sealReceipt` after `runMergeGate` | Success is requested, then verified |
-| `completionGatePipeline` | `MergeGate` audits | Fail closed — violations block pass |
+| `attempt_completion` | `sealReceipt` / `sealCrashReceipt` after `runMergeGate` | Success is requested, then verified |
+| `completionGatePipeline` | Preflight + per-lane `completion_gate`; `MergeGate` at seal | Fail closed — violations block pass |
+| Roadmap gates at completion | Pressure + orchestration lease at admit; optional completion policy at seal | Roadmap owns plan/admission — not blind mutation |
 | User sees why completion blocked | `GovernedReceiptPanel` violations | Teachability over vibes |
 | Checkpoints preserve rollback | `attemptId` + `history.jsonl` lineage | Truth survives retries |
 
@@ -214,8 +215,9 @@ Observed absences are design choices:
 | Chat as sole memory | BroccoliDB cognitive tools + disk persistence |
 | IDE lock-in at core | `HostProvider` abstracts VS Code; core avoids direct `vscode` imports |
 | Completion on vibes | `completionGatePipeline` + tests in `attemptCompletionUtils.test.ts` |
-| Parallel swarm chaos | `MergeGate` + lock-necessity classifier — read overlap allowed, write overlap blocked |
-| Chat as swarm audit trail | Governed receipt schema v3 + attempt lineage in `history.jsonl` |
+| Parallel swarm chaos | `MergeGate` + lock-necessity + roadmap orchestration lease |
+| Chat as swarm audit trail | Governed receipt v3 + `auditIntegration` + `history.jsonl` |
+| BroccoliDB as swarm audit store | Receipt-local audit under `subagent_executions/`; BroccoliDB = substrate |
 | Companion without substrate | `@noorm/broccolidb` dependency in root `package.json` |
 
 We refuse another headless agent framework because developers already live in an editor. LUMI meets them **in the sidebar they already trust**.
@@ -227,10 +229,12 @@ We refuse another headless agent framework because developers already live in an
 | Layer | Package | Question it answers |
 |-------|---------|-------------------|
 | **LUMI** | Root extension | "What should we do in this session, with my consent?" |
-| **LUMI governed receipts** | `subagent_executions/*.governed.*` | "What did each swarm lane do, and was merge safe?" |
+| **LUMI governed receipts** | `subagent_executions/*.governed.*` | "What did each swarm lane do, was merge safe, and what did audit/roadmap record?" |
 | **BroccoliDB** | `@noorm/broccolidb` | "What happened to the repository, and is structure still true?" |
 
-LUMI calls BroccoliDB through cognitive memory tools, `dietcode_kernel`, and Spider integration in `src/core/policy/spider/`. Governed swarm receipts live in the **session artifact layer** (per-task `subagent_executions/`), not in chat memory. The companion proposes; the substrate proves and persists; **swarm receipts record parallel lane truth without conflating locks with evidence**.
+LUMI calls BroccoliDB through cognitive memory tools, `dietcode_kernel`, and Spider integration in `src/core/policy/spider/`. Governed swarm receipts live in the **session artifact layer** (per-task `subagent_executions/`), not in chat memory and not in BroccoliDB CAS audit events. The companion proposes; the substrate proves and persists; **swarm receipts record parallel lane truth without conflating locks with evidence**.
+
+**Final invariant across planes:** Roadmap owns plan and execution admission. Audit owns verification. MergeGate owns commit safety. BroccoliDB owns fencing/replay substrate. Receipts own truth.
 
 Read BroccoliDB's papers for substrate philosophy. Read LUMI's papers for session philosophy. **Do not merge them.**
 
@@ -255,6 +259,10 @@ Done is `attempt_completion` blocked when roadmap validation pending — and the
 Done is a governed swarm where read-only review lanes show **lock skipped** in the incident console — and the operator does not file a false "missing lock" ticket.
 
 Done is merge blocked on `unsafe mutation overlap` — not on two auditors reading the same file.
+
+Done is a swarm that passes roadmap pressure admission, acquires an orchestration lease, runs DAG-ordered lanes, and seals a receipt where `auditIntegration.mergeGateRole` is `commit_barrier` — not confused with workspace audit.
+
+Done is a timeout that produces `sealCrashReceipt` with a precise crash phase — without overwriting a prior sealed success in history.
 
 When teams stop discussing LUMI's sidebar and return to discussing their product, the companion has succeeded.
 

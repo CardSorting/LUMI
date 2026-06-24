@@ -53,6 +53,8 @@ Use this when you change code and need to update the matching doc.
 | `src/core/task/tools/subagent/` | [Subagents feature](features/subagents.mdx) · [WORKING_WITH_SUBAGENTS.md](WORKING_WITH_SUBAGENTS.md) |
 | `src/core/task/tools/subagent/LockNecessity.ts` | [Governed subagent execution](governed-subagent-execution.md) · [Schema](governed-execution-schema.md) · [Runbook](governed-execution-runbook.md) · [Decisions](governed-execution-decisions.md) |
 | `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` | [Governed subagent execution](governed-subagent-execution.md) · [Schema](governed-execution-schema.md) · [Runbook](governed-execution-runbook.md) |
+| `src/core/task/tools/subagent/GovernedIntegration.ts` | [Governed subagent execution § roadmap/audit](governed-subagent-execution.md#roadmap-and-audit-integration) · [Schema § GovernedRoadmapLinkage](governed-execution-schema.md#governedroadmaplinkage) |
+| `src/core/task/tools/handlers/SubagentToolHandler.ts` | [Working with subagents](WORKING_WITH_SUBAGENTS.md) · [Runbook § crash seal](governed-execution-runbook.md) |
 | `src/core/task/tools/subagent/MergeGate.ts` | [Governed subagent execution](governed-subagent-execution.md) · [Runbook § violation catalog](governed-execution-runbook.md#violation-catalog) |
 | `src/core/task/tools/subagent/GovernedExecutionStore.ts` | [Schema § artifact layout](governed-execution-schema.md#artifact-layout) |
 | `src/core/task/tools/subagent/ReplayValidator.ts` | [Schema § replay checksum](governed-execution-schema.md#replay-checksum-canonical-form) · [Decisions ADR-006](governed-execution-decisions.md#adr-006-replay-checksum-canonicalization) |

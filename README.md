@@ -403,9 +403,15 @@ Multi-lane swarms via `use_subagents` run through a **governed execution harness
 
 ```mermaid
 flowchart LR
+  subgraph coord ["Roadmap & audit"]
+    AD[scheduleAdmission]
+    OL[orchestration lease]
+    PF[audit preflight]
+  end
   subgraph classify ["Intent"]
     M[execution_mode]
     RW[read_set / write_set]
+    DAG[depends_on / roadmap_item]
   end
   subgraph acquire ["Acquire"]
     L{lock required?}
@@ -418,14 +424,15 @@ flowchart LR
   end
   subgraph commit ["Commit"]
     MG[MergeGate]
-    SE[sealReceipt]
+    SE[sealReceipt / sealCrashReceipt]
   end
+  AD --> OL --> PF --> M
   M --> L
   RW --> L
+  DAG --> R
   L -->|no| SK --> R
   L -->|yes| LC --> R
-  R --> RC
-  RC --> MG --> SE
+  R --> RC --> MG --> SE
 ```
 
 ### Execution modes
@@ -455,8 +462,12 @@ Escalation tags (`[write_set:…]`, `[mutates_roadmap]`, `[updates_authoritative
 | Feature | Benefit |
 |---------|---------|
 | **Lock-necessity classifier** | Read/audit lanes skip locks — no false collisions on shared files |
+| **Roadmap coordination** | Pressure admission + orchestration lease; optional completion update on sealed success |
+| **Audit coordination** | Preflight dry-run + per-lane completion gates; `auditIntegration` on receipt (MergeGate = commit barrier only) |
+| **Lane DAG** | `[depends_on:N]` ordering + DAG-aware scheduler (concurrency ≤ 3) |
 | **Merge gate** | Optimistic parallel execution; write-set reconciliation before commit |
-| **Durable receipts** | Schema v3 per-attempt artifacts + append-only history |
+| **Crash sealing** | `sealCrashReceipt` on timeout/abort — authoritative sealed success preserved |
+| **Durable receipts** | Schema v3 per-attempt artifacts + `roadmapLinkage` / `auditIntegration` + append-only history |
 | **Fencing tokens** | Stale-primary protection on durable mutation claims |
 | **Incident console** | `GovernedReceiptPanel` — mode, lock skipped/required, violations, retry safety |
 | **Attempt lineage** | `attemptId` + `parentAttemptId`; authoritative state survives failed retries |
@@ -469,6 +480,19 @@ Escalation tags (`[write_set:…]`, `[mutates_roadmap]`, `[updates_authoritative
 | Where is truth after a failed retry? | Last `sealed && mergePassed` in `.governed.history.jsonl` |
 | Can two lanes read the same file? | Yes — collisions are write-scoped only |
 | When is retry safe? | `diagnostics.retrySafe` in the incident console |
+| Is MergeGate the audit system? | No — commit barrier only; workspace audit is `completionGatePipeline` |
+| Where is swarm audit evidence? | `subagent_executions/` receipts — not BroccoliDB CAS |
+| Optional roadmap update on seal? | `roadmap_completion_update=enabled` when merge + integrity pass |
+
+### Coordination planes
+
+| Plane | Owns |
+|-------|------|
+| Roadmap | Plan + admission (pressure + orchestration lease) |
+| Audit | Verification (preflight + per-lane completion + receipt `auditIntegration`) |
+| MergeGate | Commit safety (parallel write reconciliation) |
+| BroccoliDB | Fencing / replay substrate only |
+| Receipts | Truth under `subagent_executions/` |
 
 ### Documentation
 
@@ -480,7 +504,7 @@ Escalation tags (`[write_set:…]`, `[mutates_roadmap]`, `[updates_authoritative
 | [Governed execution decisions](docs/governed-execution-decisions.md) | ADR-style design decisions |
 | [Working with subagents](docs/WORKING_WITH_SUBAGENTS.md) | Handler integration and code map |
 
-Tests: `governedExecutionLockNecessity.test.ts`, `governedExecutionHardening.test.ts`, `governedExecutionReliability.test.ts`.
+Tests: `governedExecutionLockNecessity.test.ts`, `governedExecutionHardening.test.ts`, `governedExecutionReliability.test.ts`, `governedExecutionIntegration.test.ts`, `governedExecutionClosure.test.ts`, `GovernedReceiptPanel.test.tsx` (**70** contracts via `npm run test:unit -- --grep "governed execution"`).
 
 ---
 
@@ -582,7 +606,7 @@ sequenceDiagram
   T->>L: Next turn until completion gate
 ```
 
-**Governed swarm branch:** `use_subagents` → `GovernedSwarmCoordinator` (classify → acquire → execute → merge gate → seal) → `GovernedReceiptPanel` in subagent status row.
+**Governed swarm branch:** `use_subagents` → pressure admit → orchestration lease → audit preflight → `GovernedSwarmCoordinator` (classify → DAG lanes → acquire → execute → merge gate → seal or crash seal) → `GovernedReceiptPanel` in subagent status row.
 
 Deep dive: [docs/architecture/current.md](docs/architecture/current.md) · [docs/papers/whitepaper.md](docs/papers/whitepaper.md) · [docs/governed-subagent-execution.md](docs/governed-subagent-execution.md).
 
@@ -754,7 +778,7 @@ Substrate papers: [broccolidb/docs/papers/](broccolidb/docs/papers/) — separat
 | `src/core/task/` | Agent loop (~4k lines), message state, tools |
 | `src/core/api/` | `buildApiHandler` + 4 wired provider handlers |
 | `src/core/task/tools/` | `ToolExecutorCoordinator` + handler files |
-| `src/core/task/tools/subagent/` | Subagent runner, `GovernedSwarmCoordinator`, `MergeGate`, `LockNecessity` |
+| `src/core/task/tools/subagent/` | Subagent runner, `GovernedSwarmCoordinator`, `GovernedIntegration`, `MergeGate`, `LockNecessity` |
 | `src/core/governance/` | `LockAuthority`, `governLock`, broccoli fencing adapter |
 | `src/shared/subagent/governedExecution.ts` | Receipt schema v3 types and helpers |
 | `src/integrations/checkpoints/` | Shadow Git checkpoint system |

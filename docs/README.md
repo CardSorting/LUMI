@@ -195,7 +195,7 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [gRPC subscription persistence](grpc-subscription-persistence.md) | Persistent streams, idle-timeout incident, runtime architecture |
 | [Memory & reasoning](MEMORY_AND_REASONING.md) | Context, cognitive memory tools |
 | [Working with subagents](WORKING_WITH_SUBAGENTS.md) | Background agent delegation |
-| [Governed subagent execution](governed-subagent-execution.md) | Lane modes, lock necessity, merge gate, receipts |
+| [Governed subagent execution](governed-subagent-execution.md) | Lane modes, roadmap/audit coordination, merge gate, receipts |
 | [Governed execution runbook](governed-execution-runbook.md) | Operator incident playbook, violation catalog, retry flow |
 | [Governed execution schema](governed-execution-schema.md) | Receipt schema v3 field reference |
 | [Governed execution decisions](governed-execution-decisions.md) | ADR-style design decisions |

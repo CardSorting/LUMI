@@ -171,6 +171,46 @@ Partial acquire rolls back and fails closed. Fencing token assigned before durab
 
 ---
 
+## ADR-009: Roadmap and audit coordination on governed receipts
+
+**Status:** Accepted (integration pass)
+
+**Context:** Governed swarms used roadmap only for pressure admission and MergeGate as implicit audit. Operators could not answer where roadmap planning, audit preflight, or per-lane audit entered the lifecycle.
+
+**Decision:**
+
+- Wire `scheduleAdmission` (pressure) + `acquireOrchestrationLease` (execution ownership) before lanes.
+- Record `roadmapLinkage` and `auditIntegration` on `GovernedSwarmReceipt` schema v3 (additive fields).
+- `MergeGate` documented as **commit barrier only**; workspace audit remains `completionGatePipeline`.
+- Lane DAG deps via `[depends_on:N]`; audit preflight via `evaluateGatePreflightReadinessAsync`.
+
+**Consequences:**
+
+- Receipts prove coordination without new execution architecture.
+- BroccoliDB remains substrate — audit evidence stays under `subagent_executions/`.
+
+---
+
+## ADR-010: Roadmap completion policy and crash sealing
+
+**Status:** Accepted (closure pass)
+
+**Context:** Orchestration lease was not acquired; roadmap kanban could not be updated safely; handler timeout used partial `sealReceipt` instead of `sealCrashReceipt`.
+
+**Decision:**
+
+- Default `advisory_only` roadmap completion; optional `roadmap_completion_update=enabled` only when sealed + merge + integrity pass.
+- Release orchestration lease on seal/crash; record `orchestrationLease` on receipt.
+- `SubagentToolHandler` invokes `sealCrashReceipt` on timeout/abort with `inferSwarmCrashPhase`.
+- `shouldUpdateLatestPointer` preserves authoritative sealed success over failed crash retries.
+
+**Consequences:**
+
+- No blind roadmap mutation on failed/partial/replay-mismatched receipts.
+- Operators get precise crash phases and lease risk in incident console.
+
+---
+
 ## Open decisions (not yet implemented)
 
 | Topic | State | Notes |
