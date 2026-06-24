@@ -133,7 +133,10 @@ Recorded at seal via `captureRoadmapLinkage()`.
 | `pressureScore` | From `scheduleAdmission` |
 | `laneRoadmapItems[]` | Per-lane `roadmapItemId` + `roadmapLeaseTaskId` |
 | `completionAdvisory` | Dry-run `evaluateRoadmapCompletionBlock` message |
-| `incompleteIntegration[]` | Honest list of gaps (e.g. orchestration lease not acquired) |
+| `orchestrationLease` | Swarm-level `acquireOrchestrationLease` status (`acquired`, `released`, `unreleasedRisk`) |
+| `completionPolicy` | `advisory_only` (default) or `update_on_sealed_success` |
+| `completionOutcome` | `advisory_only` \| `blocked` \| `updated` with reason |
+| `incompleteIntegration[]` | Honest list of remaining gaps |
 
 ---
 

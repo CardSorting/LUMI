@@ -240,6 +240,9 @@ export interface GovernedRoadmapLinkage {
 	}>
 	completionAdvisory?: string
 	incompleteIntegration?: string[]
+	orchestrationLease?: GovernedOrchestrationLease
+	completionPolicy?: RoadmapCompletionUpdatePolicy
+	completionOutcome?: RoadmapCompletionOutcome
 }
 
 export interface GovernedAuditIntegration {
@@ -258,6 +261,14 @@ export interface GovernedAuditIntegration {
 	storageBoundary: string
 	roadmapCompletionAdvisory?: string
 }
+
+export type GovernedCrashPhase =
+	| "after_claim_before_execution"
+	| "during_lane_execution"
+	| "after_execution_before_release"
+	| "after_release_before_seal"
+	| "parent_before_merge_gate"
+	| "retry_partial_seal"
 
 export interface GovernedSwarmReceipt {
 	schemaVersion: typeof GOVERNED_RECEIPT_SCHEMA_VERSION
@@ -292,6 +303,30 @@ export function buildMutexResourceKey(swarmId: string, index: number): string {
 
 export function buildRoadmapLeaseTaskId(swarmId: string, index: number): string {
 	return `swarm-lane-${swarmId}-${index}`
+}
+
+export function buildOrchestrationLeaseTaskId(swarmId: string): string {
+	return `governed-swarm-${swarmId}`
+}
+
+export interface GovernedOrchestrationLease {
+	taskId: string
+	acquired: boolean
+	released: boolean
+	expiresAt?: string
+	unreleasedRisk?: boolean
+	skipped?: boolean
+}
+
+export type RoadmapCompletionUpdatePolicy = "advisory_only" | "update_on_sealed_success"
+
+export type RoadmapCompletionOutcomeStatus = "advisory_only" | "skipped" | "blocked" | "updated"
+
+export interface RoadmapCompletionOutcome {
+	policy: RoadmapCompletionUpdatePolicy
+	status: RoadmapCompletionOutcomeStatus
+	reason?: string
+	remediationSteps?: string[]
 }
 
 export function lockClaimToHistoryEntry(

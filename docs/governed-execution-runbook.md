@@ -256,7 +256,7 @@ Partial acquire (file ok, fence fail) → **rejected**, SwarmMutex rolled back.
 | Parent before merge gate | Live `in_progress` summary | — |
 | Failed retry after sealed success | Failed attempt file; pointer unchanged | Prior sealed authoritative |
 
-`sealCrashReceipt()` exists for explicit crash annotation; handler may use `sealReceipt` with partial state on timeout.
+`SubagentToolHandler` invokes `sealCrashReceipt()` on timeout, abort, or parent interruption — crash phase inferred via `inferSwarmCrashPhase`. Authoritative sealed success is preserved by `shouldUpdateLatestPointer` in `GovernedExecutionStore`.
 
 ---
 

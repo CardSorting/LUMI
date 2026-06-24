@@ -3,11 +3,14 @@ import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/
 import type {
 	ClaimHistoryEntry,
 	GovernedAdmissionResult,
+	GovernedCrashPhase,
+	GovernedOrchestrationLease,
 	GovernedReceiptSummary,
 	GovernedSwarmReceipt,
 	LaneExecutionMode,
 	LaneExecutionReceipt,
 	LaneExecutionStatus,
+	RoadmapCompletionUpdatePolicy,
 	WorkLaneClaim,
 } from "@shared/subagent/governedExecution"
 import {
@@ -15,6 +18,7 @@ import {
 	buildGovernedReceiptSummary,
 	buildLaneId,
 	buildMutexResourceKey,
+	buildOrchestrationLeaseTaskId,
 	buildReceiptDiagnostics,
 	buildResourceOwners,
 	buildRoadmapLeaseTaskId,
@@ -35,21 +39,16 @@ import {
 	loadGovernedReceipt,
 	persistGovernedReceipt,
 } from "./GovernedExecutionStore"
-import { buildGovernedAuditIntegration, captureRoadmapLinkage } from "./GovernedIntegration"
+import { applyGovernedRoadmapCompletionPolicy, buildGovernedAuditIntegration, captureRoadmapLinkage } from "./GovernedIntegration"
 import { LaneDAG } from "./LaneDAG"
 import { classifyLockNecessity, type LaneLockIntent, splitReadWriteSets } from "./LockNecessity"
 import { runMergeGate } from "./MergeGate"
 import { explainReplayMismatch, validateDeterministicReplay } from "./ReplayValidator"
 
-export type GovernedCrashPhase =
-	| "after_claim_before_execution"
-	| "during_lane_execution"
-	| "after_execution_before_release"
-	| "after_release_before_seal"
-	| "parent_before_merge_gate"
-	| "retry_partial_seal"
+export type { GovernedCrashPhase } from "@shared/subagent/governedExecution"
 
 const LANE_LEASE_SECONDS = 600
+const ORCHESTRATION_LEASE_SECONDS = 1200
 const LANE_MUTEX_MS = LANE_LEASE_SECONDS * 1000
 
 export class GovernedSwarmCoordinator {
@@ -57,6 +56,13 @@ export class GovernedSwarmCoordinator {
 	private readonly laneDag: LaneDAG
 	private readonly claimHistory: ClaimHistoryEntry[] = []
 	private readonly attemptId: string
+	private orchestrationLease?: {
+		taskId: string
+		ownerId: string
+		acquired: boolean
+		released: boolean
+		expiresAt?: string
+	}
 
 	constructor(
 		private readonly workspace: string,
@@ -109,6 +115,68 @@ export class GovernedSwarmCoordinator {
 			pressureScore: admission.pressure_score,
 			operation,
 			roadmapEnabled: true,
+		}
+	}
+
+	async acquireSwarmOrchestrationLease(
+		swarmId: string,
+		parentAgentId: string,
+	): Promise<{ acquired: boolean; skipped?: boolean; expiresAt?: string; error?: string }> {
+		if (!this.roadmapEnabled) {
+			return { acquired: true, skipped: true }
+		}
+
+		const taskId = buildOrchestrationLeaseTaskId(swarmId)
+		const result = await RoadmapService.getInstance().acquireOrchestrationLease(
+			this.workspace,
+			parentAgentId,
+			taskId,
+			ORCHESTRATION_LEASE_SECONDS,
+		)
+
+		if (!result.success) {
+			return { acquired: false, error: "orchestration lease denied" }
+		}
+
+		this.orchestrationLease = {
+			taskId,
+			ownerId: parentAgentId,
+			acquired: true,
+			released: false,
+			expiresAt: result.expires_at,
+		}
+
+		return { acquired: true, expiresAt: result.expires_at }
+	}
+
+	async releaseSwarmOrchestrationLease(): Promise<{ released: boolean; unreleasedRisk?: boolean }> {
+		if (!this.orchestrationLease?.acquired || this.orchestrationLease.released) {
+			return { released: true }
+		}
+		if (!this.roadmapEnabled) {
+			this.orchestrationLease.released = true
+			return { released: true }
+		}
+
+		await RoadmapService.getInstance().releaseOrchestrationLease(
+			this.workspace,
+			this.orchestrationLease.ownerId,
+			this.orchestrationLease.taskId,
+		)
+		this.orchestrationLease.released = true
+		return { released: true }
+	}
+
+	getOrchestrationLeaseSnapshot(): GovernedOrchestrationLease | undefined {
+		if (!this.orchestrationLease) {
+			return undefined
+		}
+		return {
+			taskId: this.orchestrationLease.taskId,
+			acquired: this.orchestrationLease.acquired,
+			released: this.orchestrationLease.released,
+			expiresAt: this.orchestrationLease.expiresAt,
+			unreleasedRisk: this.orchestrationLease.acquired && !this.orchestrationLease.released,
 		}
 	}
 
@@ -306,6 +374,39 @@ export class GovernedSwarmCoordinator {
 		return receipt
 	}
 
+	private async finalizeRoadmapSealState(options: {
+		swarmId: string
+		admission: GovernedAdmissionResult
+		laneReceipts: LaneExecutionReceipt[]
+		completionPolicy: RoadmapCompletionUpdatePolicy
+		sealed: boolean
+		mergePassed: boolean
+		integrityValid: boolean
+		replayMismatch: boolean
+		unsafeRetry: boolean
+		releaseLease: boolean
+	}) {
+		if (options.releaseLease) {
+			await this.releaseSwarmOrchestrationLease()
+		}
+
+		const completionOutcome = await applyGovernedRoadmapCompletionPolicy({
+			workspace: this.workspace,
+			policy: options.completionPolicy,
+			sealed: options.sealed,
+			mergePassed: options.mergePassed,
+			integrityValid: options.integrityValid,
+			replayMismatch: options.replayMismatch,
+			unsafeRetry: options.unsafeRetry,
+		})
+
+		return captureRoadmapLinkage(this.workspace, options.swarmId, options.admission, options.laneReceipts, {
+			orchestrationLease: this.getOrchestrationLeaseSnapshot(),
+			completionPolicy: options.completionPolicy,
+			completionOutcome,
+		})
+	}
+
 	async sealReceipt(options: {
 		taskId: string
 		envelope: SwarmExecutionEnvelope
@@ -315,6 +416,7 @@ export class GovernedSwarmCoordinator {
 		forceFail?: boolean
 		retryReason?: string
 		preflightIssues?: GatePreflightReadinessIssue[]
+		completionPolicy?: RoadmapCompletionUpdatePolicy
 	}): Promise<GovernedSwarmReceipt> {
 		const replayArtifact = options.replayArtifact || swarmEnvelopeToReplayArtifact(options.envelope)
 		const priorSealedReceipt = await loadGovernedReceipt(options.taskId, options.envelope.swarmId)
@@ -331,13 +433,8 @@ export class GovernedSwarmCoordinator {
 		})
 
 		let sealed = mergeGate.passed && !options.forceFail
-
-		const roadmapLinkage = await captureRoadmapLinkage(
-			this.workspace,
-			options.envelope.swarmId,
-			options.admission,
-			options.laneReceipts,
-		)
+		const completionPolicy = options.completionPolicy ?? "advisory_only"
+		let replayMismatch = false
 
 		const receipt: GovernedSwarmReceipt = {
 			schemaVersion: GOVERNED_RECEIPT_SCHEMA_VERSION,
@@ -368,15 +465,6 @@ export class GovernedSwarmCoordinator {
 				violations: mergeGate.violations,
 				checksum: mergeGate.replayIntegrity.checksum,
 			},
-			roadmapLinkage,
-			auditIntegration: buildGovernedAuditIntegration({
-				preflightIssues: options.preflightIssues ?? [],
-				laneReceipts: options.laneReceipts,
-				mergeGate,
-				agents: options.envelope.agents,
-				receiptIntegrityValid: sealed && mergeGate.replayIntegrity.valid,
-				roadmapLinkage,
-			}),
 		}
 
 		const replayValidation = validateDeterministicReplay(receipt, replayArtifact)
@@ -386,7 +474,31 @@ export class GovernedSwarmCoordinator {
 			receipt.integrity.violations.push(...explainReplayMismatch(replayValidation.violations))
 			receipt.sealed = false
 			sealed = false
+			replayMismatch = true
 		}
+
+		const unsafeRetry = mergeGate.sealedSupersessionBlocked
+		receipt.roadmapLinkage = await this.finalizeRoadmapSealState({
+			swarmId: options.envelope.swarmId,
+			admission: options.admission,
+			laneReceipts: options.laneReceipts,
+			completionPolicy,
+			sealed,
+			mergePassed: mergeGate.passed,
+			integrityValid: receipt.integrity.valid,
+			replayMismatch,
+			unsafeRetry,
+			releaseLease: true,
+		})
+
+		receipt.auditIntegration = buildGovernedAuditIntegration({
+			preflightIssues: options.preflightIssues ?? [],
+			laneReceipts: options.laneReceipts,
+			mergeGate,
+			agents: options.envelope.agents,
+			receiptIntegrityValid: receipt.integrity.valid,
+			roadmapLinkage: receipt.roadmapLinkage,
+		})
 
 		if (receipt.auditIntegration) {
 			receipt.auditIntegration.receiptIntegrityValidated = receipt.integrity.valid
@@ -407,8 +519,11 @@ export class GovernedSwarmCoordinator {
 		laneReceipts?: LaneExecutionReceipt[]
 		artifactPath?: string
 		retryReason?: string
+		preflightIssues?: GatePreflightReadinessIssue[]
+		completionPolicy?: RoadmapCompletionUpdatePolicy
 	}): Promise<GovernedSwarmReceipt> {
 		const laneReceipts = options.laneReceipts ?? []
+		const completionPolicy = options.completionPolicy ?? "advisory_only"
 		const emptyEnvelope: SwarmExecutionEnvelope = {
 			swarmId: options.swarmId,
 			executionId: options.executionId,
@@ -455,6 +570,14 @@ export class GovernedSwarmCoordinator {
 			parentAttemptId: this.parentAttemptId,
 		})
 
+		const mergeViolations = [`crash at ${options.crashPhase}`, ...mergeGate.violations]
+		const leaseSnapshotBeforeRelease = this.getOrchestrationLeaseSnapshot()
+		await this.releaseSwarmOrchestrationLease()
+		const leaseSnapshot = this.getOrchestrationLeaseSnapshot()
+		if (leaseSnapshotBeforeRelease?.acquired && leaseSnapshot?.unreleasedRisk) {
+			mergeViolations.push("orchestration lease unreleased after crash")
+		}
+
 		const receipt: GovernedSwarmReceipt = {
 			schemaVersion: GOVERNED_RECEIPT_SCHEMA_VERSION,
 			swarmId: options.swarmId,
@@ -469,7 +592,7 @@ export class GovernedSwarmCoordinator {
 			mergeGate: {
 				...mergeGate,
 				passed: false,
-				violations: [`crash at ${options.crashPhase}`, ...mergeGate.violations],
+				violations: mergeViolations,
 			},
 			replayArtifactPath: emptyEnvelope.artifactPath,
 			governedArtifactPath: buildGovernedArtifactRelativePath(options.swarmId, this.attemptId),
@@ -478,6 +601,28 @@ export class GovernedSwarmCoordinator {
 			retryReason: options.retryReason || `crash:${options.crashPhase}`,
 			integrity: { valid: false, violations: [`crash:${options.crashPhase}`], checksum: "" },
 		}
+
+		receipt.roadmapLinkage = await this.finalizeRoadmapSealState({
+			swarmId: options.swarmId,
+			admission: options.admission,
+			laneReceipts,
+			completionPolicy,
+			sealed: false,
+			mergePassed: false,
+			integrityValid: false,
+			replayMismatch: false,
+			unsafeRetry: false,
+			releaseLease: false,
+		})
+
+		receipt.auditIntegration = buildGovernedAuditIntegration({
+			preflightIssues: options.preflightIssues ?? [],
+			laneReceipts,
+			mergeGate: receipt.mergeGate,
+			agents: [],
+			receiptIntegrityValid: false,
+			roadmapLinkage: receipt.roadmapLinkage,
+		})
 
 		receipt.governedArtifactPath = await persistGovernedReceipt(options.taskId, receipt)
 		return receipt

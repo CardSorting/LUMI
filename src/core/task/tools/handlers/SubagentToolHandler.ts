@@ -8,7 +8,12 @@ import {
 } from "@shared/ExtensionMessage"
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { createContinuityMarker, SWARM_ENVELOPE_SCHEMA_VERSION } from "@shared/subagent/executionEnvelope"
-import type { GovernedReceiptSummary, GovernedSwarmReceipt, LaneExecutionReceipt } from "@shared/subagent/governedExecution"
+import type {
+	GovernedCrashPhase,
+	GovernedReceiptSummary,
+	GovernedSwarmReceipt,
+	LaneExecutionReceipt,
+} from "@shared/subagent/governedExecution"
 import pTimeout from "p-timeout"
 import { v4 as uuidv4 } from "uuid"
 import { createLockAuthority } from "@/core/governance/LockAuthority"
@@ -23,6 +28,8 @@ import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
 import {
 	buildLaneDependencyMap,
 	buildLaneRoadmapItemMap,
+	inferSwarmCrashPhase,
+	resolveGovernedRoadmapCompletionPolicy,
 	runGovernedSwarmAuditPreflight,
 	swarmSummaryFromEntries,
 } from "../subagent/GovernedIntegration"
@@ -328,6 +335,13 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			)
 		}
 
+		const orchestrationLease = await governedCoordinator.acquireSwarmOrchestrationLease(swarmId, config.taskId)
+		if (!orchestrationLease.acquired) {
+			return formatResponse.toolError(orchestrationLease.error || "Swarm admission rejected (orchestration lease denied).")
+		}
+
+		const roadmapCompletionPolicy = resolveGovernedRoadmapCompletionPolicy(block.params as Record<string, string | undefined>)
+
 		let auditPreflightIssues: GatePreflightReadinessIssue[] = []
 		try {
 			auditPreflightIssues = await runGovernedSwarmAuditPreflight(config, swarmSummaryFromEntries(prompts))
@@ -338,6 +352,9 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 
 		const laneReceipts: LaneExecutionReceipt[] = []
 		let governedReceiptSummary: GovernedReceiptSummary | undefined
+		let swarmInterrupted = false
+		let swarmCrashPhase: GovernedCrashPhase = "parent_before_merge_gate"
+		let swarmArtifactPath = `subagent_executions/${swarmId}.json`
 
 		const emitStatus = async (status: DietCodeSaySubagentStatus["status"], partial: boolean) => {
 			const completed = entries.filter((entry) => entry.status === "completed" || entry.status === "failed").length
@@ -770,10 +787,22 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			})
 		} catch (err: unknown) {
 			Logger.error("[SubagentToolHandler] Swarm execution error or timeout:", err)
-			// Abort all runners on timeout to prevent zombie processes
+			swarmInterrupted = true
 			void Promise.allSettled(runners.map((r) => r.abort()))
 		} finally {
 			clearInterval(abortPollInterval)
+			if (config.taskState.abort) {
+				swarmInterrupted = true
+			}
+		}
+
+		if (swarmInterrupted) {
+			const dagSnapshot = governedCoordinator.getLaneDAG().snapshot()
+			swarmCrashPhase = inferSwarmCrashPhase({
+				laneReceipts,
+				claimHistory: governedCoordinator.getClaimHistory(),
+				dagRunning: dagSnapshot.some((node) => node.state === "running"),
+			})
 		}
 
 		let usageTokensIn = 0
@@ -860,25 +889,45 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		try {
 			const artifactPath = await persistSwarmEnvelope(config.taskId, finalEnvelope)
 			finalEnvelope.artifactPath = artifactPath
+			swarmArtifactPath = artifactPath
 		} catch (error) {
 			Logger.warn("[SubagentToolHandler] Failed to persist final swarm execution artifact:", error)
 		}
 
 		let governedReceipt: GovernedSwarmReceipt | undefined
 		try {
-			governedReceipt = await governedCoordinator.sealReceipt({
-				taskId: config.taskId,
-				envelope: finalEnvelope,
-				admission: swarmAdmission,
-				laneReceipts,
-				preflightIssues: auditPreflightIssues,
-			})
-			finalEnvelope.invariants.violations.push(...governedReceipt.mergeGate.violations)
-			finalEnvelope.invariants.validated = governedReceipt.sealed
-
-			if (!governedReceipt.sealed) {
+			if (swarmInterrupted) {
+				governedReceipt = await governedCoordinator.sealCrashReceipt({
+					taskId: config.taskId,
+					swarmId,
+					executionId: swarmExecutionId,
+					admission: swarmAdmission,
+					crashPhase: swarmCrashPhase,
+					laneReceipts,
+					artifactPath: swarmArtifactPath,
+					preflightIssues: auditPreflightIssues,
+					completionPolicy: roadmapCompletionPolicy,
+					retryReason: config.taskState.abort ? "abort:parent" : "timeout:swarm",
+				})
 				finalSwarmStatus = "failed"
 				finalEnvelope.status = "failed"
+				finalEnvelope.invariants.violations.push(`crash:${swarmCrashPhase}`)
+			} else {
+				governedReceipt = await governedCoordinator.sealReceipt({
+					taskId: config.taskId,
+					envelope: finalEnvelope,
+					admission: swarmAdmission,
+					laneReceipts,
+					preflightIssues: auditPreflightIssues,
+					completionPolicy: roadmapCompletionPolicy,
+				})
+				finalEnvelope.invariants.violations.push(...governedReceipt.mergeGate.violations)
+				finalEnvelope.invariants.validated = governedReceipt.sealed
+
+				if (!governedReceipt.sealed) {
+					finalSwarmStatus = "failed"
+					finalEnvelope.status = "failed"
+				}
 			}
 
 			governedReceiptSummary = await governedCoordinator.buildReceiptSummary(governedReceipt)

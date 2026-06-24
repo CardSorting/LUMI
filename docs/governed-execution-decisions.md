@@ -175,10 +175,9 @@ Partial acquire rolls back and fails closed. Fencing token assigned before durab
 
 | Topic | State | Notes |
 |-------|-------|-------|
-| Lane DAG deps in handler | Planned | `LaneDAG` + merge exemption exist; `SubagentToolHandler` passes `dependencies: undefined` |
-| Auto crash seal | Planned | `sealCrashReceipt()` tested, not wired on timeout/abort |
 | Replay hash includes lock fields | Under discussion | ADR-006 exclusion may change |
 | worker_cli key unification | Under discussion | Align resource key format with coordinator |
+| BroccoliDB cross-plane audit index | Future | Thin index adapter only — receipts stay under `subagent_executions/` |
 
 ---
 

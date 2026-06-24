@@ -250,8 +250,8 @@ describe("governed execution roadmap and audit integration", () => {
 			assert.deepEqual(receipt.roadmapLinkage?.incompleteIntegration, ["roadmap_disabled"])
 		})
 
-		it("documents partial roadmap integration when roadmap enabled", () => {
-			assert.ok(ROADMAP_INTEGRATION_PARTIAL.includes("orchestration_lease_not_acquired"))
+		it("documents remaining partial roadmap integration when roadmap enabled", () => {
+			assert.ok(ROADMAP_INTEGRATION_PARTIAL.includes("roadmap_kanban_not_auto_mutated_without_policy"))
 		})
 	})
 })

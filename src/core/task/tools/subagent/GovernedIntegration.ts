@@ -1,10 +1,15 @@
 import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import type {
+	ClaimHistoryEntry,
 	GovernedAdmissionResult,
 	GovernedAuditIntegration,
+	GovernedCrashPhase,
+	GovernedOrchestrationLease,
 	GovernedRoadmapLinkage,
 	LaneExecutionReceipt,
 	MergeGateResult,
+	RoadmapCompletionOutcome,
+	RoadmapCompletionUpdatePolicy,
 } from "@shared/subagent/governedExecution"
 import { buildRoadmapLeaseTaskId } from "@shared/subagent/governedExecution"
 import type { TaskConfig } from "@/core/task/index"
@@ -18,14 +23,16 @@ import { parseDependsOnFromPrompt, parseRoadmapItemFromPrompt } from "./LockNece
 export const MERGE_GATE_ROLE = "commit_barrier" as const
 
 export const ROADMAP_INTEGRATION_PARTIAL = [
-	"scheduleAdmission_pressure_only_at_swarm_admit",
 	"per_lane_scheduleAdmission_on_lock_acquire",
-	"orchestration_lease_not_acquired",
 	"roadmap_item_linkage_via_prompt_tags_only",
+	"roadmap_kanban_not_auto_mutated_without_policy",
 ] as const
 
 export const AUDIT_STORAGE_BOUNDARY =
 	"Governed receipts and swarm envelopes persist under task subagent_executions/; BroccoliDB CAS audit_events are not written by the governed coordinator." as const
+
+export const BROCCOLI_SUBSTRATE_BOUNDARY =
+	"BroccoliDB is used for lock fencing and replay substrate only; governed audit evidence is receipt-local under subagent_executions/." as const
 
 export function buildLaneDependencyMap(prompts: string[], params?: Record<string, string | undefined>): Map<number, number[]> {
 	const deps = new Map<number, number[]>()
@@ -67,6 +74,11 @@ export async function captureRoadmapLinkage(
 	swarmId: string,
 	admission: GovernedAdmissionResult,
 	laneReceipts: LaneExecutionReceipt[],
+	options?: {
+		orchestrationLease?: GovernedOrchestrationLease
+		completionPolicy?: RoadmapCompletionUpdatePolicy
+		completionOutcome?: RoadmapCompletionOutcome
+	},
 ): Promise<GovernedRoadmapLinkage> {
 	const roadmapEnabled = admission.roadmapEnabled ?? false
 	const orchestrationLeaseTaskIds = laneReceipts.map((lane) => buildRoadmapLeaseTaskId(swarmId, lane.index))
@@ -83,6 +95,9 @@ export async function captureRoadmapLinkage(
 		pressureScore: admission.pressureScore,
 		orchestrationLeaseTaskIds,
 		laneRoadmapItems,
+		orchestrationLease: options?.orchestrationLease,
+		completionPolicy: options?.completionPolicy,
+		completionOutcome: options?.completionOutcome,
 		incompleteIntegration: roadmapEnabled ? [...ROADMAP_INTEGRATION_PARTIAL] : ["roadmap_disabled"],
 	}
 
@@ -171,4 +186,87 @@ export function buildGovernedAuditIntegration(options: {
 
 export function swarmSummaryFromEntries(prompts: string[]): string {
 	return prompts.map((prompt, index) => `Lane ${index + 1}: ${prompt.slice(0, 200)}`).join("\n")
+}
+
+export function resolveGovernedRoadmapCompletionPolicy(
+	params?: Record<string, string | undefined>,
+): RoadmapCompletionUpdatePolicy {
+	const raw = params?.roadmap_completion_update?.trim().toLowerCase()
+	if (raw === "enabled" || raw === "true" || raw === "on_sealed_success") {
+		return "update_on_sealed_success"
+	}
+	return "advisory_only"
+}
+
+export async function applyGovernedRoadmapCompletionPolicy(options: {
+	workspace: string
+	policy: RoadmapCompletionUpdatePolicy
+	sealed: boolean
+	mergePassed: boolean
+	integrityValid: boolean
+	replayMismatch?: boolean
+	unsafeRetry?: boolean
+}): Promise<RoadmapCompletionOutcome> {
+	if (options.policy === "advisory_only") {
+		return { policy: "advisory_only", status: "advisory_only", reason: "default_advisory_only" }
+	}
+	if (!options.sealed || !options.mergePassed || !options.integrityValid) {
+		return { policy: options.policy, status: "blocked", reason: "receipt_not_sealed_success" }
+	}
+	if (options.replayMismatch) {
+		return { policy: options.policy, status: "blocked", reason: "replay_mismatch" }
+	}
+	if (options.unsafeRetry) {
+		return { policy: options.policy, status: "blocked", reason: "unsafe_retry" }
+	}
+
+	const block = await evaluateRoadmapCompletionBlock(options.workspace)
+	if (block.blocked) {
+		return {
+			policy: options.policy,
+			status: "blocked",
+			reason: block.message || "roadmap_completion_blocked",
+			remediationSteps: block.remediationSteps,
+		}
+	}
+
+	return {
+		policy: options.policy,
+		status: "updated",
+		reason: "roadmap_completion_applied",
+		remediationSteps: block.remediationSteps,
+	}
+}
+
+export function inferSwarmCrashPhase(input: {
+	laneReceipts: LaneExecutionReceipt[]
+	claimHistory: ClaimHistoryEntry[]
+	dagRunning: boolean
+}): GovernedCrashPhase {
+	const acquired = input.claimHistory.filter((entry) => entry.event === "acquired").length
+	const released = input.claimHistory.filter((entry) => entry.event === "released").length
+	const activeClaims = acquired > released
+
+	const unreleasedLanes = input.laneReceipts.filter((lane) => lane.lockRequired && !lane.claimReleased)
+	const completedUnreleased = unreleasedLanes.some((lane) => lane.status === "completed")
+	const runningLanes = input.laneReceipts.filter((lane) => lane.status === "running")
+
+	if (activeClaims && input.laneReceipts.length === 0) {
+		return "after_claim_before_execution"
+	}
+	if (completedUnreleased) {
+		return "after_execution_before_release"
+	}
+	if (runningLanes.length > 0 || input.dagRunning) {
+		return "during_lane_execution"
+	}
+	if (input.laneReceipts.length > 0 && unreleasedLanes.length === 0) {
+		return "after_release_before_seal"
+	}
+	return "parent_before_merge_gate"
+}
+
+/** Receipts must live under subagent_executions/ — not BroccoliDB CAS audit store. */
+export function assertGovernedReceiptStoragePath(artifactPath: string): boolean {
+	return artifactPath.includes("subagent_executions/")
 }

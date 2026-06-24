@@ -390,9 +390,9 @@ Honest integration gaps (as of schema v3):
 
 | Gap | Impact |
 |-----|--------|
-| **Orchestration lease** | `acquireOrchestrationLease()` not called; per-lane ownership uses `scheduleAdmission` via lock acquire only |
-| **Roadmap item mutation** | `[roadmap_item:…]` linkage recorded on receipt; roadmap kanban state is not auto-updated on seal |
-| **Crash seal path** | `sealCrashReceipt()` tested but not called on handler timeout/abort; partial state via `sealReceipt` |
+| **Orchestration lease** | Wired via `acquireSwarmOrchestrationLease` after pressure admission; released on seal/crash |
+| **Roadmap completion mutation** | Default `advisory_only`; optional `roadmap_completion_update=enabled` applies only on sealed success |
+| **Crash seal path** | `sealCrashReceipt()` invoked on handler timeout/abort with inferred crash phase |
 | **Roadmap recoverStale** | `recoverStale` only clears in-process, file, fence — not roadmap lease pruning |
 | **Replay checksum scope** | Lock-necessity fields not in canonical hash |
 | **worker_cli parity** | Separate receipt schema and resource key format |
@@ -417,7 +417,7 @@ roadmap plan → audit preflight → admit swarm → classify lane intent → ex
 | Question | Answer |
 |----------|--------|
 | Where does roadmap planning enter? | Parent agent roadmap / Now items; swarm admits via `RoadmapService.scheduleAdmission` in `GovernedSwarmCoordinator.admitSwarm` |
-| Where does roadmap state update? | **Not auto-updated on seal.** Seal captures `roadmapLinkage.completionAdvisory` via dry-run `evaluateRoadmapCompletionBlock`. Kanban updates remain parent/subagent completion flows. |
+| Where does roadmap state update? | Only when `roadmap_completion_update=enabled` **and** receipt is sealed success; otherwise `completionOutcome.status` is `advisory_only` or `blocked` |
 | Which roadmap item owns each lane? | `laneReceipts[].roadmapItemId` from `[roadmap_item:ID]` prompt tag or `roadmap_item_N` param; lease id in `roadmapLeaseTaskId` |
 | Which audit runs before execution? | `evaluateGatePreflightReadinessAsync` via `runGovernedSwarmAuditPreflight` in `SubagentToolHandler` — recorded in `auditIntegration.preflightIssues` |
 | Which audit runs after execution? | Per-lane: `runCompletionGateFlow` at `attempt_completion` in `SubagentRunner`. Swarm seal: `buildGovernedAuditIntegration` + replay checksum in `sealReceipt` |
@@ -429,10 +429,12 @@ roadmap plan → audit preflight → admit swarm → classify lane intent → ex
 | Surface | Module | Receipt field |
 |---------|--------|---------------|
 | Swarm pressure admission | `GovernedSwarmCoordinator.admitSwarm` | `admission.pressureScore`, `roadmapLinkage.pressureScore` |
+| Swarm execution ownership | `acquireSwarmOrchestrationLease` after admit | `roadmapLinkage.orchestrationLease` |
 | Per-lane lease on lock | `LockAuthority.acquire` + `scheduleAdmission` | `laneReceipts[].roadmapLeaseTaskId`, `roadmapLinkage.laneRoadmapItems` |
 | Lane dependency ordering | `buildLaneDependencyMap` + `LaneDAG` + DAG-aware handler pool | `laneDag`, `laneReceipts[].dagState` |
 | Roadmap item linkage | `[roadmap_item:…]` / params | `laneReceipts[].roadmapItemId` |
 | Completion advisory (dry-run) | `captureRoadmapLinkage` at seal | `roadmapLinkage.completionAdvisory` |
+| Completion mutation policy | `applyGovernedRoadmapCompletionPolicy` | `roadmapLinkage.completionPolicy`, `completionOutcome` |
 | Partial integration honesty | `ROADMAP_INTEGRATION_PARTIAL` | `roadmapLinkage.incompleteIntegration` |
 
 ### Audit surfaces wired today
@@ -453,6 +455,18 @@ roadmap plan → audit preflight → admit swarm → classify lane intent → ex
 ```
 
 Param equivalents: `depends_on_2`, `roadmap_item_1`.
+
+Optional completion mutation: `roadmap_completion_update=enabled` (requires sealed success).
+
+### Final invariant
+
+| Plane | Owns |
+|-------|------|
+| Roadmap | Plan and execution admission (pressure + orchestration lease) |
+| Audit | Verification (`completionGatePipeline`, receipt `auditIntegration`) |
+| MergeGate | Commit safety (parallel lane reconciliation) |
+| BroccoliDB | Fencing / replay substrate only |
+| Receipts | Truth (`subagent_executions/` governed artifacts) |
 
 ---
 
@@ -483,6 +497,7 @@ Param equivalents: `depends_on_2`, `roadmap_item_1`.
 | `governedExecutionHardening.test.ts` | LockAuthority, DAG overlap ordering, file lock, worker_cli smoke |
 | `governedExecutionReliability.test.ts` | Crash phases, fence fail-closed, retry lineage, `isRetrySafe`, checksum stability |
 | `governedExecutionIntegration.test.ts` | Roadmap DAG, pressure score, audit boundaries, receipt linkage fields |
+| `governedExecutionClosure.test.ts` | Orchestration lease, completion policy, crash seal, broccoli boundary |
 | `GovernedReceiptPanel.test.tsx` | Incident console, execution mode badges |
 
 ---
