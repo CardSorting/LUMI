@@ -11,6 +11,7 @@
 <p align="center">
   <a href="docs/README.md">Documentation</a> ·
   <a href="docs/papers/companion-brief.md">Papers</a> ·
+  <a href="docs/governed-subagent-execution.md">Governed swarms</a> ·
   <a href="docs/SECURITY_BEST_PRACTICES.md">Security</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
   <a href="https://github.com/CardSorting/DietCodeMarie/issues">Issues</a>
@@ -18,11 +19,11 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-1.0.5-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-2.0.5-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
-  <img src="https://img.shields.io/badge/tools-62-orange" alt="Tools" />
+  <img src="https://img.shields.io/badge/tools-63-orange" alt="Tools" />
   <img src="https://img.shields.io/badge/providers-4-blue" alt="Providers" />
   <a href="https://github.com/CardSorting/DietCodeMarie"><img src="https://img.shields.io/github/stars/CardSorting/DietCodeMarie?style=social" alt="GitHub" /></a>
 </p>
@@ -35,9 +36,12 @@
 
 > **Doctrine:** User expresses intent → Controller holds session → Task runs the loop → Tools execute with approval → Checkpoints preserve rollback → Completion is earned through gates.
 
+> **Governed swarms:** Locks protect mutation. Receipts preserve truth. Parallel read/audit lanes skip locks; mutation lanes reconcile through a merge gate before success.
+
 <p align="center">
   <a href="#install"><strong>Install</strong></a> ·
   <a href="#quick-start"><strong>Quick start</strong></a> ·
+  <a href="#governed-subagent-execution"><strong>Governed swarms</strong></a> ·
   <a href="#documentation"><strong>Docs</strong></a> ·
   <a href="#development"><strong>Develop</strong></a> ·
   <a href="#getting-help"><strong>Help</strong></a>
@@ -71,6 +75,7 @@ npm run package:vsix && code --install-extension dist/*.vsix
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Active providers](#active-providers)
 - [Capabilities](#capabilities)
+- [Governed subagent execution](#governed-subagent-execution)
 - [Plan & Act modes](#plan--act-modes)
 - [Built-in slash commands](#built-in-slash-commands)
 - [Lifecycle hooks](#lifecycle-hooks)
@@ -97,7 +102,9 @@ npm run package:vsix && code --install-extension dist/*.vsix
 
 **LUMI** (VS Marketplace: `CardSorting.lumi-vscode`, Open VSX: `CardSorting.lumi`) is a VS Code extension that acts as an agentic pair programmer: it reads your workspace, plans changes, runs terminal commands, uses a browser, connects MCP servers, and edits files — with **explicit approval at every mutating step**.
 
-Task history and cognitive memory use **BroccoliDB** (`@noorm/broccolidb`) locally. The sidebar UX is designed for **long sessions** without alert fatigue.
+Task history and cognitive memory use **BroccoliDB** (`@noorm/broccolidb`) locally. Multi-lane **governed swarms** (`use_subagents`) produce durable receipts, conditional mutation locks, and a merge gate — so parallel agents do not false-positive collide on reads.
+
+The sidebar UX is designed for **long sessions** without alert fatigue.
 
 | | |
 |---|---|
@@ -118,25 +125,27 @@ Workspace-verified metrics: [docs/papers/companion-brief.md](docs/papers/compani
 
 | Metric | Value |
 |--------|-------|
-| Typed tools | **62** (`src/shared/tools.ts`) |
+| Typed tools | **63** (`src/shared/tools.ts`) |
 | Read-only tools | **12** (`READ_ONLY_TOOLS`) |
 | Wired providers | **4** (`providers.json`) |
 | Slash commands | **10** |
 | Hook kinds | **8** |
 | Agent modes | **plan** · **act** |
+| Governed receipt schema | **v3** |
 
 ---
 
 ## Why LUMI
 
-Four design pillars — each maps to code, not marketing copy. Full treatment: [docs/papers/philosophy.md](docs/papers/philosophy.md).
+Five design pillars — each maps to code, not marketing copy. Full treatment: [docs/papers/philosophy.md](docs/papers/philosophy.md).
 
 | Pillar | What it means in practice |
 |--------|---------------------------|
 | **Calm agency** | Sidebar stays readable; you approve mutating work on your schedule |
-| **Typed tools** | 62 enum values in `src/shared/tools.ts` → dedicated handlers — no ad-hoc shell |
+| **Typed tools** | 63 enum values in `src/shared/tools.ts` → dedicated handlers — no ad-hoc shell |
 | **Plan before mutate** | Plan mode + `plan_mode_respond` before Act mode file changes |
 | **Provable finish** | `attempt_completion` runs through `completionGatePipeline.ts` — “done” is gated |
+| **Governed parallelism** | Subagent lanes declare execution mode; locks protect mutation, receipts preserve truth |
 
 BroccoliDB handles **substrate truth** (structure, snapshots, Spider). LUMI handles **the human session** (chat, diffs, terminal, MCP). Do not confuse the two: [docs/AGENT_STACK.md](docs/AGENT_STACK.md).
 
@@ -148,7 +157,8 @@ BroccoliDB handles **substrate truth** (structure, snapshots, Spider). LUMI hand
 |---------|----------|
 | **Solo developer** | Pair program in-editor with approval gates and checkpoints |
 | **Tech lead** | Roadmap steering, hooks, `.dietcoderules/` for team guardrails |
-| **Agent integrator** | MCP servers, subagents, typed tool surface to extend |
+| **Agent integrator** | MCP servers, governed subagents, typed tool surface to extend |
+| **Platform operator** | Governed receipt incident console, merge gate violations, retry lineage |
 | **Substrate engineer** | BroccoliDB package for durable context — [broccolidb/README.md](broccolidb/README.md) |
 | **Doc contributor** | Measured papers + [docs/MAINTAINER.md](docs/MAINTAINER.md) CI guardrails |
 
@@ -164,8 +174,10 @@ Not a fit: fully autonomous unattended agents (LUMI assumes a human approver in 
 | Opaque file changes | **Diff view** before write lands |
 | Hard to undo | **Checkpoints** — shadow Git after each tool use |
 | “Done” when model says so | **Completion pipeline** + roadmap gates |
-| Generic shell access | **62 typed tools** with dedicated handlers |
+| Generic shell access | **63 typed tools** with dedicated handlers |
 | External memory app | **BroccoliDB** integrated locally |
+| Parallel agents collide on reads | **Lock-necessity classifier** — read/audit lanes skip locks; merge gate scopes collisions to writes |
+| Chat as audit trail | **Durable governed receipts** per swarm attempt |
 
 ---
 
@@ -177,6 +189,11 @@ Not a fit: fully autonomous unattended agents (LUMI assumes a human approver in 
 | **API keys / secrets** | `~/.dietcode/data/secrets.json` | Mode `0600` — owner read/write only |
 | **BroccoliDB SQLite** | `./dietcode.db` (workspace cwd) | Local cognitive memory / runtime graph |
 | **Checkpoints** | VS Code `globalStorage/checkpoints/` | Shadow Git — not your project `.git/` |
+| **Swarm envelopes** | `{taskDir}/subagent_executions/{swarmId}.json` | Per-swarm execution artifact |
+| **Governed receipts** | `{taskDir}/subagent_executions/{swarmId}.governed.{attemptId}.json` | Immutable per-attempt receipt (schema v3) |
+| **Receipt history** | `{taskDir}/subagent_executions/{swarmId}.governed.history.jsonl` | Append-only attempt lineage |
+| **Lane transcripts** | `{taskDir}/subagent_executions/{swarmId}/agents/*.transcript.jsonl` | Append-only lane event logs |
+| **Cross-process locks** | `.broccolidb/governed/locks/` · `fencing/` | File lock + fencing token files |
 | **LLM requests** | Your chosen provider | Code context sent to OpenRouter, OpenAI, NousResearch, or Cloudflare when you run a task |
 
 Override storage root: `DIETCODE_DIR` or `CLINE_DIR` env var. Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md).
@@ -229,6 +246,8 @@ Provider setup: [docs/provider-config/README.mdx](docs/provider-config/README.md
 **First project tutorial:** [docs/getting-started/your-first-project.mdx](docs/getting-started/your-first-project.mdx)
 
 **Power-user path:** Enable [auto-approve](docs/features/auto-approve.mdx) for reads/edits you trust + [checkpoints](docs/core-workflows/checkpoints.mdx) as your safety net.
+
+**Parallel subagents:** Use `[execution_mode:read_only]` on review lanes so they stay durable without acquiring mutation locks — see [Governed subagent execution](#governed-subagent-execution).
 
 ---
 
@@ -290,6 +309,8 @@ Multi-root: `@workspace-name:/path/to/file`
 | **Team guardrails** | `.dietcoderules/` + `PreToolUse` hooks + `.dietcodeignore` |
 | **External tools** | MCP server → approve once → optional per-tool auto-approve |
 | **Long session** | `/compact` when context grows; memory tools for cross-task recall |
+| **Parallel review** | `use_subagents` with `[execution_mode:read_only]` lanes — no lock collisions on shared reads |
+| **Parallel implementation** | Mutation lanes (default) — merge gate reconciles write sets before seal |
 
 ---
 
@@ -304,6 +325,7 @@ Keep sessions fast and within model context windows:
 | **`/compact`** | Condense history when context grows |
 | **Smaller models for reads** | Different Plan vs Act providers in settings |
 | **Scoped @ mentions** | Attach files/folders you need — not the whole repo |
+| **Read-only subagent lanes** | Parallel audit/review without mutation lock overhead |
 | **Checkpoints off** | On huge repos if shadow Git is slow (trade rollback for speed) |
 
 Guide: [model selection](docs/core-features/model-selection-guide.mdx) · [memory & reasoning](docs/MEMORY_AND_REASONING.md)
@@ -356,19 +378,109 @@ Model selection guide: [docs/core-features/model-selection-guide.mdx](docs/core-
 
 | Capability | Detail |
 |------------|--------|
-| **62 typed tools** | `DietCodeDefaultTool` enum → `ToolExecutorCoordinator` handlers |
+| **63 typed tools** | `DietCodeDefaultTool` enum → `ToolExecutorCoordinator` handlers |
 | **Plan & Act modes** | Plan before mutating; Act executes with approval |
 | **Checkpoints** | Shadow Git snapshot after each tool use — compare or restore |
 | **10 slash commands** | `/compact`, `/newtask`, `/roadmap`, … — see below |
 | **MCP** | External tool servers via `McpHub` (`src/services/mcp/`) |
-| **Subagents** | Parallel delegation via dynamic subagent tools |
+| **Governed subagents** | Parallel lanes with execution modes, merge gate, durable receipts — see below |
 | **8 hook kinds** | Lifecycle scripts — see [Lifecycle hooks](#lifecycle-hooks) |
 | **Project rules** | `.dietcoderules/` loaded into every request |
 | **Roadmap steering** | `ROADMAP.md` + five `lumi.roadmap.*` VS Code settings |
 | **BroccoliDB memory** | Cognitive memory tools + Spider structural audit |
 | **Spider policy layer** | Forensic audit via `src/core/policy/spider/` — [architecture doc](docs/architecture/spider-v20-forensic-engine.md) |
+| **Unified lock authority** | Layered mutation ownership — in-process, SwarmMutex, roadmap lease, file lock, broccoli fence |
 
 Tool reference: [docs/tools-reference/all-dietcode-tools.mdx](docs/tools-reference/all-dietcode-tools.mdx).
+
+---
+
+## Governed subagent execution
+
+Multi-lane swarms via `use_subagents` run through a **governed execution harness**: the parent coordinates, lanes execute with declared intent, and a **merge gate** reconciles parallel work before declaring success.
+
+**North-star invariant:** Locks protect mutation. Receipts preserve truth.
+
+```mermaid
+flowchart LR
+  subgraph classify ["Intent"]
+    M[execution_mode]
+    RW[read_set / write_set]
+  end
+  subgraph acquire ["Acquire"]
+    L{lock required?}
+    SK[workLaneClaimWithoutLock]
+    LC[LockAuthority.acquire]
+  end
+  subgraph execute ["Execute"]
+    R[SubagentRunner]
+    RC[Lane receipt]
+  end
+  subgraph commit ["Commit"]
+    MG[MergeGate]
+    SE[sealReceipt]
+  end
+  M --> L
+  RW --> L
+  L -->|no| SK --> R
+  L -->|yes| LC --> R
+  R --> RC
+  RC --> MG --> SE
+```
+
+### Execution modes
+
+Each lane declares how it intends to run. Unmarked lanes default to **`mutation`** (backward compatible).
+
+| Mode | Lock | Typical use |
+|------|------|-------------|
+| `read_only` | skipped | Code review, inspection |
+| `audit_only` | skipped | Receipt / evidence audit |
+| `planning_only` | skipped | Design recommendations |
+| `documentation_only` | skipped | Doc drafts without writes |
+| `diagnostic_only` | skipped | Append-only diagnostic evidence |
+| `mutation` | **required** | File edits, durable state changes |
+
+Declare in the lane prompt or tool params:
+
+```
+[execution_mode:read_only] [read_set:src/api.ts]
+Review the public API without modifying files.
+```
+
+Escalation tags (`[write_set:…]`, `[mutates_roadmap]`, `[updates_authoritative_receipt]`) promote non-mutating lanes to lock-required when they declare side effects.
+
+### What you get
+
+| Feature | Benefit |
+|---------|---------|
+| **Lock-necessity classifier** | Read/audit lanes skip locks — no false collisions on shared files |
+| **Merge gate** | Optimistic parallel execution; write-set reconciliation before commit |
+| **Durable receipts** | Schema v3 per-attempt artifacts + append-only history |
+| **Fencing tokens** | Stale-primary protection on durable mutation claims |
+| **Incident console** | `GovernedReceiptPanel` — mode, lock skipped/required, violations, retry safety |
+| **Attempt lineage** | `attemptId` + `parentAttemptId`; authoritative state survives failed retries |
+
+### Operator essentials
+
+| Question | Answer |
+|----------|--------|
+| Is **lock skipped** a bug? | No — expected for read/audit/plan lanes |
+| Where is truth after a failed retry? | Last `sealed && mergePassed` in `.governed.history.jsonl` |
+| Can two lanes read the same file? | Yes — collisions are write-scoped only |
+| When is retry safe? | `diagnostics.retrySafe` in the incident console |
+
+### Documentation
+
+| Doc | Audience |
+|-----|----------|
+| [Governed subagent execution](docs/governed-subagent-execution.md) | Architecture, industry patterns, lifecycle |
+| [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook, violation catalog, retry flow |
+| [Governed execution schema](docs/governed-execution-schema.md) | Receipt schema v3 field reference |
+| [Governed execution decisions](docs/governed-execution-decisions.md) | ADR-style design decisions |
+| [Working with subagents](docs/WORKING_WITH_SUBAGENTS.md) | Handler integration and code map |
+
+Tests: `governedExecutionLockNecessity.test.ts`, `governedExecutionHardening.test.ts`, `governedExecutionReliability.test.ts`.
 
 ---
 
@@ -470,7 +582,9 @@ sequenceDiagram
   T->>L: Next turn until completion gate
 ```
 
-Deep dive: [docs/architecture/current.md](docs/architecture/current.md) · [docs/papers/whitepaper.md](docs/papers/whitepaper.md).
+**Governed swarm branch:** `use_subagents` → `GovernedSwarmCoordinator` (classify → acquire → execute → merge gate → seal) → `GovernedReceiptPanel` in subagent status row.
+
+Deep dive: [docs/architecture/current.md](docs/architecture/current.md) · [docs/papers/whitepaper.md](docs/papers/whitepaper.md) · [docs/governed-subagent-execution.md](docs/governed-subagent-execution.md).
 
 ---
 
@@ -491,9 +605,13 @@ flowchart LR
   I --> J[completionGatePipeline]
   J -->|Pass| K[Task complete]
   J -->|Fail| B
+  B --> S{use_subagents swarm?}
+  S -->|Yes| M[MergeGate + governed receipt]
+  M -->|Pass| K
+  M -->|Fail| B
 ```
 
-Layers: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · Hooks · `.dietcodeignore` · roadmap gates.
+Layers: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · Hooks · `.dietcodeignore` · roadmap gates · [governed merge gate](docs/governed-subagent-execution.md#3-one-merge-gate-optimistic-reconciliation).
 
 ---
 
@@ -505,7 +623,8 @@ The monorepo ships **two layers**:
 ┌──────────────────────────────────────────────────────────────┐
 │  LUMI  ·  CardSorting.lumi  ·  VS Code extension             │
 │  Webview ↔ Controller ↔ Task loop ↔ Tools · MCP · Subagents  │
-│  Docs: docs/papers/*  ·  docs/architecture/current.md        │
+│  GovernedSwarmCoordinator · LockAuthority · MergeGate          │
+│  Docs: docs/papers/*  ·  docs/governed-subagent-execution.md │
 └────────────────────────────┬─────────────────────────────────┘
                              │ @noorm/broccolidb
 ┌────────────────────────────▼─────────────────────────────────┐
@@ -524,10 +643,17 @@ flowchart TB
     CT[Controller]
     TK[Task loop]
     TL[ToolExecutorCoordinator]
+    GSC[GovernedSwarmCoordinator]
+    LA[LockAuthority]
+    MG[MergeGate]
     EX --> CT
     WP <--> CT
     CT --> TK
     TK --> TL
+    TL --> GSC
+    GSC --> LA
+    GSC --> MG
+    WP --> GRP[GovernedReceiptPanel]
   end
   subgraph host ["VS Code host"]
     HB[hostbridge]
@@ -540,8 +666,10 @@ flowchart TB
   subgraph store ["Local store"]
     BDB["@noorm/broccolidb"]
     CP[checkpoints]
+    GR[governed receipts]
     TK --> BDB
     TK --> CP
+    GSC --> GR
   end
 ```
 
@@ -567,6 +695,7 @@ npm workspaces in root `package.json`: `"."` and `"broccolidb"`. Install Broccol
 | IPC | Protobuf / gRPC host bridge (`proto/`) |
 | LLM routing | `buildApiHandler` — 4 wired providers |
 | Local store | BroccoliDB (`better-sqlite3`), shadow Git checkpoints |
+| Governed execution | LockAuthority, MergeGate, receipt schema v3, ReplayValidator |
 | Lint / format | Biome |
 | Tests | Mocha (unit), `@vscode/test-electron` (integration), Playwright (e2e) |
 | Docs site | Mintlify (`docs/`) |
@@ -582,6 +711,11 @@ npm workspaces in root `package.json`: `"."` and `"broccolidb"`. Install Broccol
 | [What is LUMI?](docs/getting-started/what-is-dietcode.mdx) | Product overview |
 | [All tools](docs/tools-reference/all-dietcode-tools.mdx) | Full tool enum reference |
 | [Agent stack](docs/AGENT_STACK.md) | LUMI session + BroccoliDB substrate |
+| [Governed subagent execution](docs/governed-subagent-execution.md) | Lane modes, lock necessity, merge gate, lifecycle |
+| [Governed execution runbook](docs/governed-execution-runbook.md) | Operator incident playbook, violation catalog |
+| [Governed execution schema](docs/governed-execution-schema.md) | Receipt schema v3 field reference |
+| [Governed execution decisions](docs/governed-execution-decisions.md) | ADR-style design decisions |
+| [Working with subagents](docs/WORKING_WITH_SUBAGENTS.md) | Subagent handler integration |
 | [Architecture (current)](docs/architecture/current.md) | Module map and request flow |
 | [Project map](docs/PROJECT_MAP.md) | 1-to-1 `src/` directory guide |
 | [Code ↔ docs](docs/CODE_TO_DOC_MAP.md) | Source path → documentation lookup |
@@ -619,11 +753,14 @@ Substrate papers: [broccolidb/docs/papers/](broccolidb/docs/papers/) — separat
 | `src/core/controller/` | `Controller` — task lifecycle, state, MCP, auth |
 | `src/core/task/` | Agent loop (~4k lines), message state, tools |
 | `src/core/api/` | `buildApiHandler` + 4 wired provider handlers |
-| `src/core/task/tools/` | `ToolExecutorCoordinator` + 55 handler files |
+| `src/core/task/tools/` | `ToolExecutorCoordinator` + handler files |
+| `src/core/task/tools/subagent/` | Subagent runner, `GovernedSwarmCoordinator`, `MergeGate`, `LockNecessity` |
+| `src/core/governance/` | `LockAuthority`, `governLock`, broccoli fencing adapter |
+| `src/shared/subagent/governedExecution.ts` | Receipt schema v3 types and helpers |
 | `src/integrations/checkpoints/` | Shadow Git checkpoint system |
 | `src/services/mcp/McpHub.ts` | MCP server connections |
-| `src/shared/tools.ts` | `DietCodeDefaultTool` enum (62 values) |
-| `webview-ui/` | React sidebar — chat, settings, diffs |
+| `src/shared/tools.ts` | `DietCodeDefaultTool` enum (63 values) |
+| `webview-ui/` | React sidebar — chat, settings, diffs, `GovernedReceiptPanel` |
 | `broccolidb/` | BroccoliDB package (`@noorm/broccolidb`) |
 | `docs/` | LUMI user and architecture documentation |
 | `proto/` | Protobuf schemas (state, host bridge, hooks) |
@@ -666,6 +803,12 @@ Package VSIX: `npm run package` → install `dist/*.vsix`.
 | `npm run docs:check-links` | Mintlify broken-link pass |
 | `npm run e2e` | Playwright end-to-end tests |
 
+**Governed execution tests:**
+
+```bash
+npm run test:unit -- --grep "governed execution"
+```
+
 ### Quality gates
 
 `npm run ci:check-all` runs these **in parallel**:
@@ -687,7 +830,7 @@ Run all doc checks: **`npm run docs:check-all`** (includes Mintlify link pass).
 
 ### Documentation guardrails
 
-Doc checks run in `ci:check-all`. When you change tools, providers, or architecture, update docs per [docs/MAINTAINER.md](docs/MAINTAINER.md) and [docs/CODE_TO_DOC_MAP.md](docs/CODE_TO_DOC_MAP.md).
+Doc checks run in `ci:check-all`. When you change tools, providers, governed execution, or architecture, update docs per [docs/MAINTAINER.md](docs/MAINTAINER.md) and [docs/CODE_TO_DOC_MAP.md](docs/CODE_TO_DOC_MAP.md).
 
 Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -703,6 +846,9 @@ Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
 | Provider auth errors | Re-open LUMI Settings → re-enter API key or re-auth OAuth provider |
 | MCP server won't connect | Check [MCP config](docs/mcp/adding-and-configuring-servers.mdx); verify server logs in Output panel |
 | Completion blocked unexpectedly | Run `/roadmap validate`; check `lumi.roadmap.*` settings |
+| Subagent merge blocked | Open incident console — check `unsafe mutation overlap` vs read overlap; see [runbook](docs/governed-execution-runbook.md) |
+| “Lock skipped” on read lane | Expected — not a missing lock; see [governed execution](docs/governed-subagent-execution.md) |
+| Retry unsafe after swarm fail | Check `diagnostics.retrySafe`; recover stale claims on mutation lanes |
 | Build fails from source | Run `npm run protos` before first `npm run dev`; use Node **20+** |
 | Reset extension state | Close VS Code; remove `~/.dietcode/data/` (backs up secrets/settings); reload window |
 | Uninstall cleanly | Uninstall extension; optionally delete `~/.dietcode/data/` and workspace `dietcode.db` |
@@ -714,12 +860,13 @@ Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
 | Channel | Link |
 |---------|------|
 | **Documentation hub** | [docs/README.md](docs/README.md) |
+| **Governed swarm runbook** | [docs/governed-execution-runbook.md](docs/governed-execution-runbook.md) |
 | **Glossary** | [docs/getting-started/glossary.mdx](docs/getting-started/glossary.mdx) |
 | **Bug reports** | [GitHub Issues](https://github.com/CardSorting/DietCodeMarie/issues) |
 | **Security (private)** | [SECURITY.md](SECURITY.md) → security@dietcode.bot |
 | **Walkthrough** | Command palette → `LUMI: Open Walkthrough` (`lumi.openWalkthrough`) |
 
-Include VS Code version, LUMI **1.0.5**, provider used, and steps to reproduce.
+Include VS Code version, LUMI **2.0.5**, provider used, and steps to reproduce.
 
 ---
 
@@ -733,8 +880,10 @@ Include VS Code version, LUMI **1.0.5**, provider used, and steps to reproduce.
 | **Hook interception** | 8 lifecycle hook kinds on tool/session events |
 | **MCP isolation** | Per-server credentials; per-tool auto-approve lists |
 | **Roadmap fail-closed** | `lumi.roadmap.failClosedCompletionGates` setting |
+| **Governed mutation locks** | `LockAuthority` — layered lease + fencing token; fail-closed partial acquire |
+| **Swarm merge gate** | Write-set reconciliation before swarm success; non-mutating lanes skip locks |
 
-Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · Report vulnerabilities: [SECURITY.md](SECURITY.md) → security@dietcode.bot
+Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · [governed execution](docs/governed-subagent-execution.md) · Report vulnerabilities: [SECURITY.md](SECURITY.md) → security@dietcode.bot
 
 ---
 
@@ -744,6 +893,12 @@ Details: [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) · R
 <summary><strong>LUMI vs BroccoliDB — what's the difference?</strong></summary>
 
 **LUMI** is the VS Code extension you interact with (chat, approval, tools). **BroccoliDB** is the local substrate package for durable context, runtime graph, and Spider structural proof. They integrate via `@noorm/broccolidb` but have separate docs. See [docs/AGENT_STACK.md](docs/AGENT_STACK.md).
+</details>
+
+<details>
+<summary><strong>What are governed swarms and lock-skipped lanes?</strong></summary>
+
+When you run parallel subagents (`use_subagents`), each lane declares an **execution mode**. Read, audit, planning, documentation, and diagnostic lanes **skip mutation locks** by default but still emit durable receipts. Only mutation lanes (or lanes that declare writes) acquire governed ownership. The **merge gate** blocks success if write sets collide in parallel. Full docs: [governed-subagent-execution.md](docs/governed-subagent-execution.md).
 </details>
 
 <details>
@@ -777,6 +932,12 @@ Not in this build's wired provider list. Use **OpenRouter** as a gateway, or see
 <summary><strong>Extension doesn't appear after install?</strong></summary>
 
 Search for **CardSorting.lumi-vscode** (VS Marketplace) or **CardSorting.lumi** (Open VSX) — not "DietCode". Disable conflicting forks (`dreambeesai.dietcode`, `dietcode.dietcode`). Reload the window (`Developer: Reload Window`).
+</details>
+
+<details>
+<summary><strong>Where is the authoritative swarm receipt after a failed retry?</strong></summary>
+
+Not necessarily `{swarmId}.governed.json` (latest pointer). Walk `{swarmId}.governed.history.jsonl` for the last `sealed && mergePassed` entry, or use `loadAuthoritativeGovernedReceipt()`. See [governed-execution-runbook.md](docs/governed-execution-runbook.md#authoritative-state-procedure).
 </details>
 
 ---

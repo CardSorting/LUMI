@@ -1,6 +1,6 @@
 # LUMI Companion Brief
 
-**Executive summary · v1.0.5 · workspace-verified**
+**Executive summary · v2.0.5 · workspace-verified**
 
 *Companion to the [Technical Whitepaper](whitepaper.md). All figures below are measured from the agent workspace (`src/`, `webview-ui/`, root `package.json`).*
 
@@ -8,7 +8,7 @@
 
 ## One sentence
 
-**LUMI** (`CardSorting.lumi-vscode` on VS Marketplace, `CardSorting.lumi` on Open VSX) is a VS Code agent extension in the codemarie-new monorepo: Plan/Act modes, 62 typed tools, human-in-the-loop approval, MCP and subagent extension, and BroccoliDB-backed memory — designed as a calm coding companion you can keep open all day.
+**LUMI** (`CardSorting.lumi-vscode` on VS Marketplace, `CardSorting.lumi` on Open VSX) is a VS Code agent extension in the codemarie-new monorepo: Plan/Act modes, 63 typed tools, human-in-the-loop approval, MCP and governed subagent execution, and BroccoliDB-backed memory — designed as a calm coding companion you can keep open all day.
 
 ---
 
@@ -16,10 +16,10 @@
 
 | Metric | Value | Where |
 |--------|-------|-------|
-| Extension version | **1.0.5** | `package.json` |
+| Extension version | **2.0.5** | `package.json` |
 | Publisher / ID | **CardSorting.lumi-vscode** (VS Marketplace) · **CardSorting.lumi** (Open VSX) | `package.json` |
 | Registered VS Code commands | **~25** `lumi.*` | `package.json` `contributes.commands` |
-| Static tool enum values | **62** | `DietCodeDefaultTool` in `src/shared/tools.ts` |
+| Static tool enum values | **63** | `DietCodeDefaultTool` in `src/shared/tools.ts` |
 | Tool handler files | **55** | `src/core/task/tools/handlers/` |
 | Read-only tools (checkpoint-safe) | **12** | `READ_ONLY_TOOLS` in `src/shared/tools.ts` |
 | Wired LLM providers | **4** | `src/shared/providers/providers.json` |
