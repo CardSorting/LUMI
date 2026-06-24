@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert"
 import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
+import type { LaneExecutionReceipt } from "@shared/subagent/governedExecution"
 import { describe, it } from "mocha"
 import { InMemoryLockAuthority } from "@/core/governance/LockAuthority"
 import { swarmEnvelopeToReplayArtifact } from "../executionReplayMappers"
@@ -21,9 +22,13 @@ function buildAgent(agentId: string, index: number, overrides?: Partial<Subagent
 	return { ...builder.build(), compactionEvents: [], ...overrides }
 }
 
-function mutationLane(overrides: Record<string, unknown>) {
+function mutationLane(overrides: Partial<LaneExecutionReceipt>): LaneExecutionReceipt {
 	return {
-		executionMode: "mutation" as const,
+		laneId: "l0",
+		agentId: "a",
+		index: 0,
+		status: "completed",
+		executionMode: "mutation",
 		lockRequired: true,
 		claimReleased: true,
 		evidenceCount: 1,
@@ -35,9 +40,13 @@ function mutationLane(overrides: Record<string, unknown>) {
 	}
 }
 
-function readOnlyLane(overrides: Record<string, unknown>) {
+function readOnlyLane(overrides: Partial<LaneExecutionReceipt>): LaneExecutionReceipt {
 	return {
-		executionMode: "read_only" as const,
+		laneId: "l0",
+		agentId: "a",
+		index: 0,
+		status: "completed",
+		executionMode: "read_only",
 		lockRequired: false,
 		claimReleased: true,
 		reasonLockSkipped: "read_only lane",
@@ -233,12 +242,13 @@ describe("governed execution lock necessity", () => {
 			const agent = buildAgent("a", 0, {
 				toolSteps: [
 					{
+						index: 0,
 						toolName: "write_to_file",
-						summary: "write",
-						rawInput: "write_to_file(path=docs/x.md)",
+						preview: "write_to_file(path=docs/x.md)",
 						resultExcerpt: "ok",
-						params: { path: "docs/x.md" },
 						timestamp: Date.now(),
+						touchedPaths: ["docs/x.md"],
+						params: { path: "docs/x.md" },
 					},
 				],
 				touchedFiles: ["docs/x.md"],

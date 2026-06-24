@@ -509,6 +509,8 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 								index,
 								roadmapLeaseTaskId: `swarm-lane-${swarmId}-${index}`,
 								claimedAt: Date.now(),
+								executionMode: "mutation",
+								lockRequired: true,
 							},
 							sourceEnvelope,
 							"skipped",

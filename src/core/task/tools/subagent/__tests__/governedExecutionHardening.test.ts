@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
+import type { LaneExecutionReceipt } from "@shared/subagent/governedExecution"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { InMemoryLockAuthority } from "@/core/governance/LockAuthority"
@@ -27,9 +28,13 @@ function buildAgent(agentId: string, index: number, overrides?: Partial<Subagent
 	return { ...builder.build(), compactionEvents: [], ...overrides }
 }
 
-function mutationLane(overrides: Record<string, unknown>) {
+function mutationLane(overrides: Partial<LaneExecutionReceipt>): LaneExecutionReceipt {
 	return {
-		executionMode: "mutation" as const,
+		laneId: "l0",
+		agentId: "a",
+		index: 0,
+		status: "completed",
+		executionMode: "mutation",
 		lockRequired: true,
 		claimReleased: true,
 		evidenceCount: 1,

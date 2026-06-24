@@ -57,7 +57,7 @@ export function validatePatchQuality(patch: ProposedWorkspacePatch, context: Pat
 		reasons.push("missing expected state transition")
 	}
 
-	if (patch.type !== "advisory_only" && !patch.advisory) {
+	if (!patch.advisory) {
 		if (!patch.rationale?.trim() || patch.rationale.trim().length < 8 || VAGUE_RATIONALE.test(patch.rationale.trim())) {
 			reasons.push("vague or missing rationale")
 		}
@@ -77,7 +77,7 @@ export function validatePatchQuality(patch: ProposedWorkspacePatch, context: Pat
 
 	const known =
 		context.knownItemIds.has(patch.itemId) || context.projectedItemIds?.includes(patch.itemId) || patch.itemId === "workspace"
-	if (!known && patch.type !== "suggest_follow_up" && patch.type !== "advisory_only") {
+	if (!known && patch.type !== "suggest_follow_up") {
 		reasons.push(`unknown roadmap item '${patch.itemId}'`)
 	}
 

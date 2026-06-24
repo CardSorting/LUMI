@@ -12,9 +12,9 @@ import type {
 	RoadmapCompletionUpdatePolicy,
 } from "@shared/subagent/governedExecution"
 import { buildRoadmapLeaseTaskId } from "@shared/subagent/governedExecution"
-import type { TaskConfig } from "@/core/task/index"
 import type { GatePreflightReadinessIssue } from "@/core/task/tools/completionGatePipeline"
 import { evaluateGatePreflightReadinessAsync } from "@/core/task/tools/completionGatePipeline"
+import type { TaskConfig } from "@/core/task/tools/types/TaskConfig"
 import { evaluateRoadmapCompletionBlock } from "@/services/roadmap/RoadmapCompletionGate"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import { parseDependsOnFromPrompt, parseRoadmapItemFromPrompt } from "./LockNecessity"
@@ -164,7 +164,7 @@ export function summarizePerLaneCompletionAudit(
 	agents: SubagentExecutionEnvelope[],
 ): GovernedAuditIntegration["perLaneCompletionAudit"] {
 	return agents.map((agent) => ({
-		index: agent.index,
+		index: agent.lineage.index,
 		agentId: agent.agentId,
 		phase: agent.phase,
 		blocked: agent.phase === "completion_gate" && agent.status === "failed",

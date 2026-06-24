@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto"
+import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
 import type {
 	AgentRoadmapProjection,
 	ExpectedStateTransition,
@@ -131,6 +132,7 @@ export function buildAgentRoadmapProjection(input: {
 	goalSummary?: string
 	workspaceState: RoadmapRuntimeState
 	dependsOn?: number[]
+	executionMode?: LaneExecutionMode
 }): AgentRoadmapProjection {
 	const dependsOn = input.dependsOn ?? []
 	return {
@@ -144,7 +146,7 @@ export function buildAgentRoadmapProjection(input: {
 		projectedItems: findProjectedItemIds(input.workspaceState, input.intent.roadmapItemId, dependsOn),
 		roadmapItemId: input.intent.roadmapItemId,
 		dependsOn,
-		executionMode: input.executionMode,
+		executionMode: input.executionMode ?? input.intent.executionMode,
 		goalSummary: input.goalSummary,
 	}
 }
@@ -223,11 +225,11 @@ export function parseProposedPatchesFromPrompt(prompt: string, projection: Agent
 			type,
 			itemId,
 			advisory: type === "advisory_only",
-			baseWorkspaceSnapshotId: projection.roadmapSnapshotId,
-			baseSnapshotId: projection.roadmapSnapshotId,
 			evidencePointer: meta.evidencePointer,
 			...defaults,
 			...meta,
+			baseWorkspaceSnapshotId: projection.roadmapSnapshotId,
+			baseSnapshotId: projection.roadmapSnapshotId,
 		})
 	}
 	return patches
@@ -299,11 +301,11 @@ export function collectRoadmapLaneArtifacts(options: {
 				type: patchType,
 				itemId,
 				advisory: patchType === "advisory_only",
-				baseWorkspaceSnapshotId: options.projection.roadmapSnapshotId,
-				baseSnapshotId: options.projection.roadmapSnapshotId,
 				evidencePointer: options.evidencePointer,
 				...defaults,
 				payload: step.params?.action ? { action: step.params.action } : undefined,
+				baseWorkspaceSnapshotId: options.projection.roadmapSnapshotId,
+				baseSnapshotId: options.projection.roadmapSnapshotId,
 			})
 		}
 	}

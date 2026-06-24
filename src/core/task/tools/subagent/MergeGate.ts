@@ -374,7 +374,7 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 			{
 				schemaVersion: 3,
 				swarmId: input.replayArtifact.artifactId,
-				executionId: input.replayArtifact.executionId || "",
+				executionId: input.replayArtifact.artifactId,
 				taskId: input.replayArtifact.taskId,
 				attemptId: input.attemptId || "",
 				admission: { admitted: true, backoffMs: 0 },

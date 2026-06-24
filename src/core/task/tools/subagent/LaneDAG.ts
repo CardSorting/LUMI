@@ -1,14 +1,6 @@
-import type { LaneDAGState } from "@shared/subagent/governedExecution"
+import type { LaneDAGNode, LaneExecutionMode } from "@shared/subagent/governedExecution"
 
-export interface LaneDAGNode {
-	index: number
-	laneId: string
-	dependsOn: number[]
-	state: LaneDAGState
-	agentId?: string
-	executionMode?: string
-	error?: string
-}
+export type { LaneDAGNode } from "@shared/subagent/governedExecution"
 
 /**
  * Minimal lane dependency graph with ready / blocked / running / sealed / failed states.
@@ -37,7 +29,7 @@ export class LaneDAG {
 		return [...this.nodes.values()].filter((node) => node.state === "ready").map((node) => node.index)
 	}
 
-	markRunning(index: number, agentId: string, executionMode?: string): void {
+	markRunning(index: number, agentId: string, executionMode?: LaneExecutionMode): void {
 		const node = this.nodes.get(index)
 		if (!node || node.state !== "ready") {
 			throw new Error(`Lane ${index} is not ready (state=${node?.state})`)

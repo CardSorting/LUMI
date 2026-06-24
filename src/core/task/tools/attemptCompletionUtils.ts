@@ -58,6 +58,7 @@ export const COMPLETION_PREFLIGHT_STAGES = [
 	"duplicate",
 	"demo_command",
 	"roadmap",
+	"roadmap_governance",
 	"audit",
 	"double_check",
 ] as const

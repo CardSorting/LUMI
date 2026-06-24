@@ -193,6 +193,7 @@ describe("governed execution roadmap and audit integration", () => {
 					checkpoints: [],
 					artifactPointers: [],
 					integrity: { valid: true, violations: [] },
+					extension: {},
 				},
 				attemptId: "attempt-1",
 			})

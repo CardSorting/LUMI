@@ -98,6 +98,7 @@ export class SubagentEnvelopeBuilder {
 			resultExcerpt: excerpt(result),
 			timestamp: Date.now(),
 			touchedPaths,
+			params,
 		}
 		this.toolSteps.push(step)
 		this.phase = "tool_execution"

@@ -242,7 +242,17 @@ describe("governed execution roadmap serialization", () => {
 			const gate = runMergeGate({
 				agents: [
 					buildAgent("a", 0, {
-						toolSteps: [{ toolName: "roadmap", params: { action: "update" }, rawInput: "", resultSummary: "" }],
+						toolSteps: [
+							{
+								index: 0,
+								toolName: "roadmap",
+								preview: "roadmap(action='update')",
+								resultExcerpt: "ok",
+								timestamp: Date.now(),
+								touchedPaths: [],
+								params: { action: "update" },
+							},
+						],
 					}),
 				],
 				laneReceipts: [
@@ -297,7 +307,7 @@ describe("governed execution roadmap serialization", () => {
 					orchestrationLease: {
 						acquired: true,
 						taskId: "lease-1",
-						ownerId: "parent",
+						released: false,
 						unreleasedRisk: true,
 					},
 				},
@@ -396,7 +406,7 @@ describe("governed execution roadmap serialization", () => {
 				roadmapEnabled: true,
 				orchestrationLeaseTaskIds: ["x"],
 				laneRoadmapItems: [],
-				orchestrationLease: { acquired: true, taskId: "x", ownerId: "p", unreleasedRisk: true },
+				orchestrationLease: { acquired: true, taskId: "x", released: false, unreleasedRisk: true },
 			})
 			assert.equal(violations.length, 1)
 		})

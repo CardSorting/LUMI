@@ -40,6 +40,7 @@ export interface SubagentToolStepRecord {
 	resultExcerpt: string
 	timestamp: number
 	touchedPaths: string[]
+	params?: Record<string, string>
 }
 
 export interface SubagentExecutionEnvelope {

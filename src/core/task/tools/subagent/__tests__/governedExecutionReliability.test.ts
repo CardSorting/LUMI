@@ -4,7 +4,13 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { acquireGovernedFileLock, recoverStaleGovernedFileLocks } from "@shared/governance/fileLock"
 import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
-import { buildGovernedReceiptSummary, deriveReceiptIncident, isRetrySafe } from "@shared/subagent/governedExecution"
+import {
+	buildGovernedReceiptSummary,
+	deriveReceiptIncident,
+	type GovernedSwarmReceipt,
+	isRetrySafe,
+	type LaneExecutionReceipt,
+} from "@shared/subagent/governedExecution"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import * as broccoliFence from "@/core/governance/BroccoliFencingAdapter"
@@ -291,7 +297,7 @@ describe("governed execution reliability", () => {
 						timestamp: 2,
 					},
 				],
-				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" }],
+				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" as const }],
 				replayArtifact: swarmEnvelopeToReplayArtifact(envelope),
 			})
 			assert.equal(gate.passed, false)
@@ -300,16 +306,17 @@ describe("governed execution reliability", () => {
 	})
 
 	describe("merge gate hardening", () => {
-		const baseLane = {
+		const baseLane: LaneExecutionReceipt = {
 			laneId: "l0",
 			agentId: "a",
 			index: 0,
-			executionMode: "mutation" as const,
+			status: "completed",
+			executionMode: "mutation",
 			lockRequired: true,
 			claimId: "c0",
 			claimReleased: true,
 			evidenceCount: 1,
-			touchedFiles: [] as string[],
+			touchedFiles: [],
 			transcriptArtifactPath: "subagent_executions/swarm-1/agents/a.transcript.jsonl",
 			toolStepCount: 1,
 			sealedAt: Date.now(),
@@ -321,7 +328,7 @@ describe("governed execution reliability", () => {
 				agents: [agent],
 				laneReceipts: [{ ...baseLane, status: "completed", transcriptArtifactPath: undefined }],
 				claimHistory: [],
-				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" }],
+				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" as const }],
 				replayArtifact: swarmEnvelopeToReplayArtifact(buildEnvelope([agent])),
 			})
 			assert.ok(gate.violations.some((v) => v.includes("missing transcript pointer")))
@@ -333,7 +340,7 @@ describe("governed execution reliability", () => {
 				agents: [agent],
 				laneReceipts: [{ ...baseLane, status: "failed" }],
 				claimHistory: [],
-				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "failed" }],
+				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "failed" as const }],
 				replayArtifact: swarmEnvelopeToReplayArtifact(buildEnvelope([agent])),
 			})
 			assert.ok(gate.violations.some((v) => v.includes("failed lane marked successful")))
@@ -347,7 +354,7 @@ describe("governed execution reliability", () => {
 				agents: [agent],
 				laneReceipts: [{ ...baseLane, status: "completed" }],
 				claimHistory: [],
-				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" }],
+				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" as const }],
 				replayArtifact: replay,
 				storedReplayChecksum: "deadbeef".repeat(8),
 			})
@@ -357,7 +364,7 @@ describe("governed execution reliability", () => {
 
 		it("blocks unsealed retry superseding sealed receipt", () => {
 			const agent = buildAgent("a", 0)
-			const priorSealed = {
+			const priorSealed: GovernedSwarmReceipt = {
 				schemaVersion: 3 as const,
 				swarmId: "swarm-1",
 				executionId: "exec-1",
@@ -365,7 +372,7 @@ describe("governed execution reliability", () => {
 				attemptId: "attempt-1",
 				admission: { admitted: true, backoffMs: 0 },
 				laneReceipts: [],
-				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" }],
+				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" as const }],
 				claimHistory: [],
 				mergeGate: {
 					passed: true,
@@ -394,7 +401,7 @@ describe("governed execution reliability", () => {
 				agents: [agent],
 				laneReceipts: [{ ...baseLane, status: "completed" }],
 				claimHistory: [],
-				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "running" }],
+				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "running" as const }],
 				replayArtifact: swarmEnvelopeToReplayArtifact(buildEnvelope([agent])),
 				priorSealedReceipt: priorSealed,
 				attemptId: "attempt-2",
@@ -469,7 +476,7 @@ describe("governed execution reliability", () => {
 		})
 
 		it("isRetrySafe blocks when active claims remain", () => {
-			const receipt = {
+			const receipt: GovernedSwarmReceipt = {
 				schemaVersion: 3 as const,
 				swarmId: "s",
 				executionId: "e",
@@ -479,7 +486,7 @@ describe("governed execution reliability", () => {
 				laneReceipts: [],
 				laneDag: [],
 				claimHistory: [
-					{ laneId: "l0", resourceKey: "k", ownerId: "a", fencingToken: 1, event: "acquired", timestamp: 1 },
+					{ laneId: "l0", resourceKey: "k", ownerId: "a", fencingToken: 1, event: "acquired" as const, timestamp: 1 },
 				],
 				mergeGate: {
 					passed: false,
@@ -532,7 +539,7 @@ describe("governed execution reliability", () => {
 
 	describe("operator diagnostics", () => {
 		it("buildGovernedReceiptSummary exposes incident and retry safety", async () => {
-			const receipt = {
+			const receipt: GovernedSwarmReceipt = {
 				schemaVersion: 3 as const,
 				swarmId: "swarm-1",
 				executionId: "exec-1",
@@ -545,6 +552,8 @@ describe("governed execution reliability", () => {
 						agentId: "a",
 						index: 0,
 						status: "completed" as const,
+						executionMode: "mutation" as const,
+						lockRequired: true,
 						claimReleased: true,
 						evidenceCount: 1,
 						touchedFiles: ["src/a.ts"],
