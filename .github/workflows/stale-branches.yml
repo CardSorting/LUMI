@@ -1,0 +1,68 @@
+name: Stale Branches
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      days-old:
+        description: Delete merged branches older than N days
+        required: true
+        default: "30"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stale-branches
+  cancel-in-progress: true
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const daysOld = Number('${{ github.event.inputs.days-old || '30' }}');
+            const cutoff = Date.now() - daysOld * 24 * 60 * 60 * 1000;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const protectedBranches = new Set(['main', 'master', 'develop']);
+
+            const { data: branches } = await github.rest.repos.listBranches({
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            for (const { name } of branches) {
+              if (protectedBranches.has(name) || name.startsWith('release/')) {
+                continue;
+              }
+
+              const { data: prs } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'closed',
+                head: `${owner}:${name}`,
+                per_page: 5,
+              });
+
+              const merged = prs.find((pr) => pr.merged_at);
+              if (!merged) {
+                continue;
+              }
+
+              const mergedAt = new Date(merged.merged_at).getTime();
+              if (mergedAt > cutoff) {
+                continue;
+              }
+
+              core.info(`Deleting stale merged branch ${name} (merged ${merged.merged_at})`);
+              await github.rest.git.deleteRef({
+                owner,
+                repo,
+                ref: `heads/${name}`,
+              });
+            }

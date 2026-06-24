@@ -12,6 +12,8 @@ updates:
       commit-message:
           prefix: "ci"
           include: scope
+      reviewers:
+          - "CardSorting"
       groups:
           github-actions:
               patterns:
@@ -30,6 +32,8 @@ updates:
       open-pull-requests-limit: 5
       labels:
           - dependencies
+      reviewers:
+          - "CardSorting"
       commit-message:
           prefix: "chore"
           include: scope
@@ -53,6 +57,8 @@ updates:
       labels:
           - dependencies
           - webview
+      reviewers:
+          - "CardSorting"
       commit-message:
           prefix: "chore"
           include: scope
@@ -77,6 +83,8 @@ updates:
       labels:
           - dependencies
           - broccolidb
+      reviewers:
+          - "CardSorting"
       commit-message:
           prefix: "chore"
           include: scope

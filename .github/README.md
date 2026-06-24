@@ -42,6 +42,7 @@ How **LUMI** uses GitHub for community, CI, and releases. Maintainer-facing summ
 | [label-sync.yml](workflows/label-sync.yml) | `labels.yml` changes | Sync labels to GitHub |
 | [dependabot-automerge.yml](workflows/dependabot-automerge.yml) | Dependabot PRs | Auto-merge security/patch updates |
 | [merge-conflicts.yml](workflows/merge-conflicts.yml) | PRs | `conflicts` label on merge conflicts |
+| [stale-branches.yml](workflows/stale-branches.yml) | Weekly | Delete merged branches older than 30 days |
 | [publish.yml](workflows/publish.yml) | Manual | Marketplace release |
 | [dependabot.yml](dependabot.yml) | Weekly | npm + GitHub Actions updates (majors ignored for Actions) |
 

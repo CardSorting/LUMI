@@ -3,6 +3,9 @@
 
 * @CardSorting
 
+# GitHub automation and CI
+/.github/ @CardSorting
+
 # Governed execution + high-risk surfaces
 /src/core/task/tools/subagent/ @CardSorting
 /src/shared/subagent/ @CardSorting

@@ -20,11 +20,7 @@ concurrency:
     group: publish-${{ github.event.inputs.tag }}
     cancel-in-progress: false
 
-permissions:
-    contents: write
-    packages: write
-    checks: write
-    pull-requests: write
+permissions: read-all
 
 jobs:
     test:
@@ -35,6 +31,10 @@ jobs:
         name: Publish Extension
         runs-on: ubuntu-latest
         environment: publish
+        permissions:
+            contents: write
+            packages: write
+            id-token: write
 
         steps:
             - uses: actions/checkout@v4

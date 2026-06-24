@@ -54,6 +54,8 @@ Maintainers should enable on GitHub (Settings → Branches):
 
 Repository rulesets can dry-run branch protection in **evaluate** mode before enforcement (GitHub **Settings → Rules → Rulesets**). Squash merge and auto-merge are enabled on the repository for Dependabot security PRs.
 
+**Workflow token default:** repository Actions settings should use **read-only** `GITHUB_TOKEN` at workflow scope; write permissions are granted per-job (see `publish.yml`, `scorecard.yml`).
+
 Dependabot and labeler workflows use standard `GITHUB_TOKEN` permissions documented in each workflow file.
 
 ### Deployment environment (`publish`)
