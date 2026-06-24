@@ -15,7 +15,7 @@ import {
 } from "../JoyRideContract"
 import { JOYRIDE_REASON } from "../JoyRideReasonCodes"
 
-const REPO_ROOT = path.resolve(__dirname, "../../../..")
+import { REPO_ROOT } from "./paths.cjs"
 
 describe("JoyRide contract drift prevention", () => {
 	it("should export only frozen public symbols", () => {

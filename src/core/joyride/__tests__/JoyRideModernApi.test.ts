@@ -9,7 +9,7 @@ import { assert } from "chai"
 import * as joyride from "../index"
 import { JOYRIDE_FORBIDDEN_EXPORTS } from "../JoyRideContract"
 
-const REPO_ROOT = path.resolve(__dirname, "../../../..")
+import { REPO_ROOT } from "./paths.cjs"
 
 describe("JoyRide API freeze", () => {
 	it("should not export forbidden legacy or internal symbols", () => {

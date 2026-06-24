@@ -12,7 +12,7 @@ import {
 	JOYRIDE_RUNTIME_INTEGRATION_FILES,
 } from "../JoyRideContract"
 
-const REPO_ROOT = path.resolve(__dirname, "../../../..")
+import { REPO_ROOT } from "./paths.cjs"
 
 describe("JoyRide import boundary enforcement", () => {
 	for (const relativeFile of JOYRIDE_RUNTIME_INTEGRATION_FILES) {
