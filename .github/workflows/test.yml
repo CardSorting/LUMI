@@ -26,10 +26,10 @@ jobs:
         name: Quality Checks
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup Node.js environment
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: 22
                   cache: 'npm'
@@ -61,10 +61,10 @@ jobs:
                 shell: bash
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup Node.js environment
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
                   node-version: 22
                   cache: 'npm'
@@ -120,7 +120,7 @@ jobs:
                   npm run test:coverage
 
             - name: Save Coverage Reports
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               # Only upload artifacts on Linux - We only need coverage from one OS
               if: runner.os == 'Linux'
               with:
@@ -135,10 +135,10 @@ jobs:
         # Run on PRs to main, pushes to main, and manual dispatches
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Download unit tests coverage reports
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v8
               with:
                   name: pr-coverage-reports
                   path: .
