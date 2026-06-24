@@ -48,6 +48,19 @@ The codemarie-new monorepo ships **two complementary layers**. This page is the 
 | 7 | Physical I/O | `src/hosts/vscode/hostbridge/` |
 | 8 | User approval | `webview-ui/` diff + tool cards |
 | 9 | Completion | `completionGatePipeline.ts` |
+| 10 | Governed swarm | `use_subagents` → projection → reconcile → coordinator commit → seal |
+
+## Governed swarms (when `use_subagents` runs parallel lanes)
+
+Multi-lane swarms use **per-agent roadmap projections** — lanes do not mutate the shared kanban directly.
+
+| Concern | Mechanism |
+|---------|-----------|
+| File mutation | `LockAuthority` when `mutation` mode |
+| Roadmap mutation | `propose_patch` → `runRoadmapPatchReconciliation` → `commitWorkspaceRoadmapPatches` |
+| Operator visibility | `GovernedReceiptPanel` — accepted/rejected patches, commit status |
+
+Quick reference: [governed-roadmap-projection-quickref.md](governed-roadmap-projection-quickref.md) · Architecture: [governed-subagent-execution.md](governed-subagent-execution.md).
 
 ## BroccoliDB touchpoints in LUMI
 
@@ -68,6 +81,8 @@ Runtime API reference: [api/README.md](api/README.md).
 | Executive | [Companion brief](papers/companion-brief.md) |
 | Designer / lead | [Philosophy](papers/philosophy.md) |
 | Engineer | [Whitepaper](papers/whitepaper.md) · [Project map](PROJECT_MAP.md) |
+| Swarm harness author | [Roadmap projection quick reference](governed-roadmap-projection-quickref.md) |
+| Swarm operator | [Governed execution runbook](governed-execution-runbook.md) |
 | Substrate integrator | [BroccoliDB docs](../broccolidb/docs/README.md) |
 
 ## Trust boundaries
@@ -79,6 +94,7 @@ Runtime API reference: [api/README.md](api/README.md).
 | No unscoped context | `.dietcodeignore` |
 | No hook bypass | Hook executor on lifecycle events |
 | No substrate skip | Tools call BroccoliDB capabilities, not raw disk repair |
+| No parallel kanban smuggling | Local events + patch quality gate; coordinator-only workspace commit |
 
 Details: [Security best practices](SECURITY_BEST_PRACTICES.md).
 

@@ -10,7 +10,7 @@ Three documents describe the **agent layer** (`src/`, `webview-ui/`) the same wa
 
 ## One-line summary
 
-**LUMI** is a VS Code extension that runs an approval-gated agent loop (Plan/Act, 63 tools, 4 providers) with **governed subagent swarms** (lock-necessity, roadmap/audit coordination, merge gate, receipt schema v3) on top of **BroccoliDB** memory and structural proof.
+**LUMI** is a VS Code extension that runs an approval-gated agent loop (Plan/Act, 63 tools, 4 providers) with **governed subagent swarms** (lock-necessity, per-agent roadmap projection, patch reconciliation, merge gate, receipt schema v3) on top of **BroccoliDB** memory and structural proof.
 
 ## Two layers in this monorepo
 
@@ -43,12 +43,13 @@ cd broccolidb && npm run test:guardrails
 
 ## Related
 
-| Doc | Scope |
-|-----|-------|
+| Doc | Purpose |
+|-----|---------|
 | [Architecture (current)](../architecture/current.md) | Module map |
 | [Project map](../PROJECT_MAP.md) | 1-to-1 paths |
 | [All tools](../tools-reference/all-dietcode-tools.mdx) | Tool enum |
-| [Governed subagent execution](../governed-subagent-execution.md) | Swarm harness + roadmap/audit integration |
+| [Roadmap projection quick reference](../governed-roadmap-projection-quickref.md) | Patch tags, operator legend |
+| [Governed subagent execution](../governed-subagent-execution.md) | Swarm harness architecture |
 | [Governed execution runbook](../governed-execution-runbook.md) | Operator incidents |
 | [Governed execution decisions](../governed-execution-decisions.md) | ADRs |
 | [BroccoliDB papers](../../broccolidb/docs/papers/philosophy.md) | Substrate philosophy |

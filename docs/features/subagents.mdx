@@ -85,3 +85,25 @@ Subagents work best when you need broad context from multiple areas of a codebas
 - **Large codebases**: When reading many files sequentially would consume too much of the main agent's context, subagents let you explore broadly without that tradeoff.
 
 For small, focused tasks where you already know which files to look at, subagents add unnecessary overhead. Just ask LUMI directly.
+
+## Governed parallel swarms (mutation lanes)
+
+When `use_subagents` runs **multiple lanes that edit files** in parallel, LUMI uses the **governed execution harness** — not just read-only research mode.
+
+| Concern | Behavior |
+|---------|----------|
+| File writes | `LockAuthority` for `mutation` lanes; read lanes skip locks |
+| Workspace kanban | Lanes use `[propose_patch:…]` — **never direct kanban writes** |
+| Private progress | `[local_roadmap:progress_note:…]` on agent projection |
+| Swarm success | `MergeGate` + patch reconciliation before seal |
+| Operator view | Incident console shows accepted/rejected patches, commit status |
+
+**Quick start for roadmap-aware swarms:**
+
+```
+[execution_mode:mutation] [roadmap_item:NOW-42]
+[local_roadmap:progress_note:NOW-42:implementing feature]
+[propose_patch:attach_evidence:NOW-42:evidence=tests/feature.test.ts|rationale=tests pass|confidence=0.9]
+```
+
+Full reference: [Roadmap projection quick reference](/governed-roadmap-projection-quickref) · [Governed subagent execution](/governed-subagent-execution) · [Runbook](/governed-execution-runbook).

@@ -299,6 +299,7 @@ npm run test:unit -- --grep "governed execution"   # swarm harness contracts
 | [Whitepaper](whitepaper.md) | Engineers — full depth |
 | [Philosophy](philosophy.md) | Values — calm agency |
 | [Governed subagent execution](../governed-subagent-execution.md) | Swarm architecture |
+| [Roadmap projection quick reference](../governed-roadmap-projection-quickref.md) | Patch tags — authors & operators |
 | [Governed execution runbook](../governed-execution-runbook.md) | Operators — incidents, retry |
 | [Architecture (current)](../architecture/current.md) | Module map |
 | [Project map](../PROJECT_MAP.md) | 1-to-1 paths |

@@ -317,6 +317,7 @@ That is the philosophy of LUMI — as implemented in this workspace.
 - [Technical Whitepaper](whitepaper.md) — measured claims and tables
 - [Companion Brief](companion-brief.md) — executive numbers
 - [Governed subagent execution](../governed-subagent-execution.md) — lock necessity, merge gate, receipts
+- [Roadmap projection quick reference](../governed-roadmap-projection-quickref.md) — patch tags, operator legend
 - [Governed execution runbook](../governed-execution-runbook.md) — operator playbook
 - [Governed execution decisions](../governed-execution-decisions.md) — ADRs
 - [Architecture (current)](../architecture/current.md)

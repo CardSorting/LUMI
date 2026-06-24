@@ -6,7 +6,7 @@ Roadmap projection fields (`agentRoadmapId`, `proposedWorkspacePatch`, `patchRec
 
 Source: `src/shared/subagent/governedExecution.ts`.
 
-Architecture context: [governed-subagent-execution.md](governed-subagent-execution.md).
+Architecture context: [governed-subagent-execution.md](governed-subagent-execution.md) · Patch quick reference: [governed-roadmap-projection-quickref.md](governed-roadmap-projection-quickref.md).
 
 ---
 

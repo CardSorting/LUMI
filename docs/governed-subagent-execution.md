@@ -6,6 +6,7 @@ The parent task is **coordinator, reviewer, and receipt presenter** — not a me
 
 | Doc | Audience | Purpose |
 |-----|----------|---------|
+| **[Quick reference](governed-roadmap-projection-quickref.md)** | Authors, operators | One-page tags, invariants, rejection reasons |
 | **This page** | Engineers, architects | Architecture, patterns, lifecycle |
 | [governed-execution-runbook.md](governed-execution-runbook.md) | Operators, on-call | Symptom → diagnosis → remediation |
 | [governed-execution-schema.md](governed-execution-schema.md) | Integrators | Receipt field reference (schema v3) |
@@ -774,8 +775,26 @@ Optional completion mutation: `roadmap_completion_update=enabled` (requires seal
 
 ---
 
+## Anti-patterns (do not do this)
+
+| Anti-pattern | Why it fails | Do instead |
+|--------------|--------------|------------|
+| Lane calls `roadmap` tool to mark item complete | `directWorkspaceRoadmapMutation` flags merge violation | `[propose_patch:mark_complete:…:evidence=…]` |
+| `"mark complete"` in `local_roadmap:progress_note` | Smuggled mutation — rejected or converted | Use `propose_patch` |
+| Two lanes `mark_complete` same item in parallel | `conflicting workspace patches` | `[depends_on:N]` or split items |
+| `mark_complete` without `evidence=` | Patch quality gate rejects | Always attach evidence pointer |
+| Assuming kanban updated because lane "finished" | Commit only after reconciliation + `commit: committed` | Check incident console |
+| Per-lane `roadmap:*` lock at acquire | Removed — `requiresRoadmapMutationLock()` is false | Trust projection + coordinator commit |
+| Ignoring `rejected patches: N` in console | Workspace truth unchanged | Read `rejectedPatchReasons` |
+| Retry without checking stale projection | Stale `mark_complete` → `stale_conflict` | Re-admit swarm for fresh snapshot |
+
+Cheatsheet: [governed-roadmap-projection-quickref.md](governed-roadmap-projection-quickref.md).
+
+---
+
 ## Related
 
+- [Quick reference](governed-roadmap-projection-quickref.md) — tags, invariants, operator legend
 - [Operator runbook](governed-execution-runbook.md)
 - [Receipt schema](governed-execution-schema.md)
 - [Design decisions](governed-execution-decisions.md)

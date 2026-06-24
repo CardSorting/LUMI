@@ -505,6 +505,7 @@ Escalation tags (`[write_set:…]`, `[mutates_roadmap]`, `[updates_authoritative
 
 | Doc | Audience |
 |-----|----------|
+| [Roadmap projection quick reference](docs/governed-roadmap-projection-quickref.md) | Authors & operators — patch tags, one page |
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Architecture, industry patterns, lifecycle |
 | [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook, violation catalog, retry flow |
 | [Governed execution schema](docs/governed-execution-schema.md) | Receipt schema v3 field reference |
@@ -877,7 +878,8 @@ Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
 | Provider auth errors | Re-open LUMI Settings → re-enter API key or re-auth OAuth provider |
 | MCP server won't connect | Check [MCP config](docs/mcp/adding-and-configuring-servers.mdx); verify server logs in Output panel |
 | Completion blocked unexpectedly | Run `/roadmap validate`; check `lumi.roadmap.*` settings |
-| Subagent merge blocked | Open incident console — check `unsafe mutation overlap` vs read overlap; see [runbook](docs/governed-execution-runbook.md) |
+| Subagent merge blocked | Open incident console — check patches rejected, `unsafe mutation overlap`, or `commit: blocked`; see [runbook](docs/governed-execution-runbook.md) |
+| Roadmap not updated after swarm | Check `commit: committed` in incident console — lanes must use `[propose_patch:…]`; see [quick reference](docs/governed-roadmap-projection-quickref.md) |
 | “Lock skipped” on read lane | Expected — not a missing lock; see [governed execution](docs/governed-subagent-execution.md) |
 | Retry unsafe after swarm fail | Check `diagnostics.retrySafe`; recover stale claims on mutation lanes |
 | Build fails from source | Run `npm run protos` before first `npm run dev`; use Node **20+** |

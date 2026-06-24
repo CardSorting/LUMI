@@ -4,6 +4,7 @@ SRE-style playbook for governed swarm receipts: triage incidents, interpret viol
 
 | Doc | Purpose |
 |-----|---------|
+| [governed-roadmap-projection-quickref.md](governed-roadmap-projection-quickref.md) | One-page patch tags, rejection reasons, operator legend |
 | [governed-subagent-execution.md](governed-subagent-execution.md) | Architecture and patterns |
 | [governed-execution-schema.md](governed-execution-schema.md) | Receipt field reference |
 | [governed-execution-decisions.md](governed-execution-decisions.md) | Why the system works this way |

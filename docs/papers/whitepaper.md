@@ -647,6 +647,7 @@ Extension activation: `src/extension.ts` (~788 lines). Registry: `src/registry.t
 | [Governed execution runbook](../governed-execution-runbook.md) | Operator incidents, retry |
 | [Governed execution schema](../governed-execution-schema.md) | Receipt v3 fields |
 | [Governed execution decisions](../governed-execution-decisions.md) | ADRs |
+| [Roadmap projection quick reference](../governed-roadmap-projection-quickref.md) | Patch tags cheat sheet |
 | [Architecture (current)](../architecture/current.md) | Module reference |
 | [System communication](../SYSTEM_COMMUNICATION.md) | IPC detail |
 | [gRPC subscription persistence](../grpc-subscription-persistence.md) | Persistent `subscribeTo*` streams and runtime |

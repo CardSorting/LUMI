@@ -13,6 +13,7 @@ Use [CODE_TO_DOC_MAP.md](CODE_TO_DOC_MAP.md) to find the matching page. Minimum 
 | New hook type | [hooks.mdx](customization/hooks.mdx), [CODE_TO_DOC_MAP](CODE_TO_DOC_MAP.md) |
 | New `lumi.*` setting | [roadmap-steering](features/roadmap-steering.mdx) or relevant feature doc |
 | Roadmap auto-governance / completion gate | [roadmap-steering](features/roadmap-steering.mdx) · [post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
+| Governed swarm / roadmap projection | [governed-subagent-execution.md](governed-subagent-execution.md) · [quickref](governed-roadmap-projection-quickref.md) · [CODE_TO_DOC_MAP](CODE_TO_DOC_MAP.md) |
 | Architecture move | [PROJECT_MAP.md](PROJECT_MAP.md), [architecture/current.md](architecture/current.md), [papers/whitepaper.md](papers/whitepaper.md) |
 
 ## CI checks

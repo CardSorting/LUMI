@@ -79,6 +79,19 @@ roadmap pressure admit → orchestration lease → audit preflight
 | `[propose_patch:attach_evidence:ITEM:evidence=…\|rationale=…]` | Propose workspace kanban change |
 | `roadmap_completion_update=enabled` | Legacy completion policy on sealed success |
 
+### Patch types (workspace proposals)
+
+| Type | Use | Evidence required |
+|------|-----|-------------------|
+| `attach_evidence` | Link test/artifact to item | Recommended |
+| `mark_complete` | Close item on kanban | **Yes** |
+| `add_blocked_reason` | Record blocker on workspace | No |
+| `move_lane` | Move item between Now/Next/Later | Rationale required |
+| `reopen_item` | Re-open completed item | Rationale required |
+| `advisory_only` | Suggestion only — not committed | No |
+
+See [quick reference](governed-roadmap-projection-quickref.md) for full tag syntax and rejection reasons.
+
 **Roadmap invariant:** Agents own private `agentRoadmap` projections. Only the coordinator commits workspace roadmap changes via reconciled `proposedWorkspacePatch` under `roadmap:workspace` lock. Do not mutate workspace kanban directly from lanes.
 
 **Boundaries:** `MergeGate` is the commit barrier, not the workspace audit system. Audit evidence lives on governed receipts under `subagent_executions/` — BroccoliDB provides fencing/replay substrate only.
@@ -93,6 +106,7 @@ roadmap pressure admit → orchestration lease → audit preflight
 
 | Doc | Contents |
 |-----|----------|
+| [Roadmap projection quick reference](governed-roadmap-projection-quickref.md) | Tags, invariants, rejection reasons — start here |
 | [Governed subagent execution](governed-subagent-execution.md) | Architecture, industry patterns, lifecycle |
 | [Governed execution runbook](governed-execution-runbook.md) | Operator playbook, violation catalog, retry flow |
 | [Governed execution schema](governed-execution-schema.md) | Receipt schema v3 reference |

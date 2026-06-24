@@ -284,5 +284,6 @@ Partial acquire rolls back and fails closed. Fencing token assigned before durab
 ## Related
 
 - [Architecture](governed-subagent-execution.md)
+- [Quick reference](governed-roadmap-projection-quickref.md)
 - [Schema reference](governed-execution-schema.md)
 - [Operator runbook](governed-execution-runbook.md)

@@ -38,6 +38,8 @@ src/extension.ts
 |-----------|------|
 | `src/core/controller/` | Webview message handling, task lifecycle, MCP, models, account |
 | `src/core/task/` | Agent loop, tool execution, message state |
+| `src/core/task/tools/subagent/` | Subagent runner, governed coordinator, projection, merge gate |
+| `src/core/governance/` | `LockAuthority`, governed locks, broccoli fencing |
 | `src/core/task/tools/` | Tool handlers and coordinator |
 | `src/core/api/` | LLM provider handlers and streaming transforms |
 | `src/core/context/` | Context window, file tracking, user rules |
@@ -133,9 +135,10 @@ Tool proposed → PreToolUse hook (optional)
             → Execute via HostProvider or MCP
             → PostToolUse hook (optional)
 attempt_completion → completionGatePipeline (audit, roadmap, focus chain)
+use_subagents seal   → MergeGate → patch reconciliation → coordinator workspace commit
 ```
 
-Details: [Security best practices](../SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](../papers/whitepaper.md#7-approval-hooks-and-completion).
+Details: [Security best practices](../SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](../papers/whitepaper.md#7-approval-hooks-and-completion) · [Roadmap projection quick reference](../governed-roadmap-projection-quickref.md).
 
 ---
 
@@ -146,5 +149,7 @@ Details: [Security best practices](../SECURITY_BEST_PRACTICES.md) · [Whitepaper
 | Executive metrics | [Companion brief](../papers/companion-brief.md) |
 | Design values | [Philosophy](../papers/philosophy.md) |
 | Full technical spec | [Whitepaper](../papers/whitepaper.md) |
+| Governed swarms | [Governed subagent execution](../governed-subagent-execution.md) |
+| Roadmap projection (quick) | [Quick reference](../governed-roadmap-projection-quickref.md) |
 | Runtime API (substrate) | [api/README.md](../api/README.md) |
 | IPC & host bridge | [System communication](../SYSTEM_COMMUNICATION.md) |
