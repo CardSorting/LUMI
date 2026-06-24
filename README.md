@@ -399,7 +399,7 @@ Tool reference: [docs/tools-reference/all-dietcode-tools.mdx](docs/tools-referen
 
 Multi-lane swarms via `use_subagents` run through a **governed execution harness**: the parent coordinates, lanes execute with declared intent, and a **merge gate** reconciles parallel work before declaring success.
 
-**North-star invariant:** Locks protect mutation. Receipts preserve truth.
+**North-star invariants:** Locks protect mutation. Receipts preserve truth. Private roadmap state is cheap — workspace roadmap truth is expensive; only the coordinator may spend it.
 
 ```mermaid
 flowchart LR
@@ -424,6 +424,8 @@ flowchart LR
   end
   subgraph commit ["Commit"]
     MG[MergeGate]
+    PR[patch reconciliation]
+    WC[coordinator workspace commit]
     SE[sealReceipt / sealCrashReceipt]
   end
   AD --> OL --> PF --> M
@@ -432,7 +434,7 @@ flowchart LR
   DAG --> R
   L -->|no| SK --> R
   L -->|yes| LC --> R
-  R --> RC --> MG --> SE
+  R --> RC --> MG --> PR --> WC --> SE
 ```
 
 ### Execution modes
@@ -462,14 +464,15 @@ Escalation tags (`[write_set:…]`, `[mutates_roadmap]`, `[updates_authoritative
 | Feature | Benefit |
 |---------|---------|
 | **Lock-necessity classifier** | Read/audit lanes skip locks — no false collisions on shared files |
-| **Roadmap coordination** | Pressure admission + orchestration lease; optional completion update on sealed success |
+| **Roadmap projection** | Per-lane `agentRoadmap`; workspace changes via `propose_patch` → coordinator commit |
+| **Roadmap coordination** | Pressure admission + orchestration lease; patch reconciliation at seal |
 | **Audit coordination** | Preflight dry-run + per-lane completion gates; `auditIntegration` on receipt (MergeGate = commit barrier only) |
 | **Lane DAG** | `[depends_on:N]` ordering + DAG-aware scheduler (concurrency ≤ 3) |
 | **Merge gate** | Optimistic parallel execution; write-set reconciliation before commit |
 | **Crash sealing** | `sealCrashReceipt` on timeout/abort — authoritative sealed success preserved |
 | **Durable receipts** | Schema v3 per-attempt artifacts + `roadmapLinkage` / `auditIntegration` + append-only history |
 | **Fencing tokens** | Stale-primary protection on durable mutation claims |
-| **Incident console** | `GovernedReceiptPanel` — mode, lock skipped/required, violations, retry safety |
+| **Incident console** | `GovernedReceiptPanel` — mode, lock skipped/required, violations, projection patches, retry safety |
 | **Attempt lineage** | `attemptId` + `parentAttemptId`; authoritative state survives failed retries |
 
 ### Operator essentials
@@ -482,13 +485,17 @@ Escalation tags (`[write_set:…]`, `[mutates_roadmap]`, `[updates_authoritative
 | When is retry safe? | `diagnostics.retrySafe` in the incident console |
 | Is MergeGate the audit system? | No — commit barrier only; workspace audit is `completionGatePipeline` |
 | Where is swarm audit evidence? | `subagent_executions/` receipts — not BroccoliDB CAS |
-| Optional roadmap update on seal? | `roadmap_completion_update=enabled` when merge + integrity pass |
+| Can lanes mutate workspace roadmap directly? | No — use `[propose_patch:…]`; coordinator commits after reconciliation |
+| Optional roadmap update on seal? | Reconciled patches + `roadmap_completion_update=enabled` when merge + integrity pass |
 
 ### Coordination planes
 
 | Plane | Owns |
 |-------|------|
-| Roadmap | Plan + admission (pressure + orchestration lease) |
+| Agent roadmap | Private projection — local events, patch proposals |
+| Swarm roadmap | Plan linkage — DAG, lane items |
+| Workspace roadmap | Authoritative kanban — coordinator commit only |
+| Roadmap service | Admission (pressure + orchestration lease) |
 | Audit | Verification (preflight + per-lane completion + receipt `auditIntegration`) |
 | MergeGate | Commit safety (parallel write reconciliation) |
 | BroccoliDB | Fencing / replay substrate only |
@@ -504,7 +511,7 @@ Escalation tags (`[write_set:…]`, `[mutates_roadmap]`, `[updates_authoritative
 | [Governed execution decisions](docs/governed-execution-decisions.md) | ADR-style design decisions |
 | [Working with subagents](docs/WORKING_WITH_SUBAGENTS.md) | Handler integration and code map |
 
-Tests: `governedExecutionLockNecessity.test.ts`, `governedExecutionHardening.test.ts`, `governedExecutionReliability.test.ts`, `governedExecutionIntegration.test.ts`, `governedExecutionClosure.test.ts`, `GovernedReceiptPanel.test.tsx` (**70** contracts via `npm run test:unit -- --grep "governed execution"`).
+Tests: `governedExecutionLockNecessity.test.ts`, `governedExecutionHardening.test.ts`, `governedExecutionReliability.test.ts`, `governedExecutionIntegration.test.ts`, `governedExecutionClosure.test.ts`, `governedExecutionRoadmapProjection.test.ts`, `governedExecutionRoadmapProjectionHardening.test.ts`, `GovernedReceiptPanel.test.tsx` (**110** contracts via `npm run test:unit -- --grep "governed execution"`).
 
 ---
 

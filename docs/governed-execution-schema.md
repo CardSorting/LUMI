@@ -2,6 +2,8 @@
 
 Reference for `GovernedSwarmReceipt` and related types. Schema version: **`GOVERNED_RECEIPT_SCHEMA_VERSION = 3`**.
 
+Roadmap projection fields (`agentRoadmapId`, `proposedWorkspacePatch`, `patchReconciliation`, etc.) are **additive v3 fields** — no schema version bump. Types live in `src/shared/subagent/roadmapProjection.ts` and are embedded on lane receipts and `GovernedRoadmapLinkage`.
+
 Source: `src/shared/subagent/governedExecution.ts`.
 
 Architecture context: [governed-subagent-execution.md](governed-subagent-execution.md).
@@ -94,6 +96,15 @@ Use `loadAuthoritativeGovernedReceipt()` or walk `history.jsonl` reverse for tru
 | `dagState` | `LaneDAGState` | DAG node state | optional |
 | `acquiredAt` / `releasedAt` | number | from lock claim | omitted |
 | `error` | string | failure message | optional |
+| `roadmapReadSet` / `roadmapWriteSet` | string[] | optional | Declared roadmap scope (audit) |
+| `roadmapMutationLockRequired` | boolean | optional | Legacy audit flag; always `false` under projection model |
+| `agentRoadmapId` | string | optional | Per-lane projection ID |
+| `roadmapSnapshotId` | string | optional | Workspace snapshot at projection creation |
+| `projectedItems` | string[] | optional | Items in agent projection |
+| `localRoadmapEvents` | `LocalRoadmapEvent[]` | optional | Private agent-plane events |
+| `proposedWorkspacePatch` | `ProposedWorkspacePatch[]` | optional | Workspace change proposals |
+| `directWorkspaceRoadmapMutation` | boolean | optional | Direct workspace write attempted |
+| `localEventContainmentViolations` | string[] | optional | Smuggled local event violations |
 
 ### Lane status values
 
@@ -119,6 +130,7 @@ Not persisted in receipt directly; drives lane receipt fields.
 | `readSet` / `writeSet` | declared paths | declared paths |
 | `roadmapLeaseTaskId` | `swarm-lane-{swarmId}-{index}` | same |
 | `roadmapItemId` | from `[roadmap_item:…]` | same |
+| `agentRoadmap` | `AgentRoadmapProjection` | present when roadmap enabled |
 | `completionAuditPhase` | envelope phase at seal (e.g. `completion_gate`) | same |
 
 ---
@@ -137,6 +149,112 @@ Recorded at seal via `captureRoadmapLinkage()`.
 | `completionPolicy` | `advisory_only` (default) or `update_on_sealed_success` |
 | `completionOutcome` | `advisory_only` \| `blocked` \| `updated` with reason |
 | `incompleteIntegration[]` | Honest list of remaining gaps |
+| `workspaceRoadmapSnapshotId` | Current workspace snapshot at seal (`rm-snap-…`) |
+| `swarmRoadmapPlan` | Swarm-scoped plan linkage (`SwarmRoadmapPlan`) |
+| `agentProjections` | Summary of per-lane projections |
+| `patchReconciliation` | `RoadmapPatchReconciliation` — accepted/rejected patches, rebase |
+| `workspaceCommit` | `RoadmapWorkspaceCommitResult` — coordinator commit outcome |
+
+---
+
+## Roadmap projection types
+
+Source: `src/shared/subagent/roadmapProjection.ts`.
+
+### LocalRoadmapEvent
+
+| Field | Type | Semantics |
+|-------|------|-----------|
+| `type` | `LocalRoadmapEventType` | `todo_state`, `progress_note`, `dependency_observation`, `completion_confidence`, `evidence_checklist`, `blocked_reason` |
+| `itemId` | string | optional | Target item |
+| `payload` | string | optional | Event detail |
+| `timestamp` | number | ms |
+| `containment` | `accepted` \| `rejected` \| `converted_to_patch` | Containment outcome |
+| `rejectionReason` | string | optional | Why rejected or converted |
+
+### ProposedWorkspacePatch
+
+| Field | Type | Required | Semantics |
+|-------|------|----------|-----------|
+| `patchId` | string | yes | Stable patch identifier |
+| `agentRoadmapId` | string | yes | Owning projection |
+| `laneId` | string | yes | Source lane |
+| `agentId` | string | yes | Source agent |
+| `type` | `WorkspacePatchType` | yes | Patch operation |
+| `itemId` | string | yes | Target roadmap item |
+| `advisory` | boolean | no | Advisory-only (not committed) |
+| `baseWorkspaceSnapshotId` | string | yes | Snapshot patch built against |
+| `baseSnapshotId` | string | deprecated | Use `baseWorkspaceSnapshotId` |
+| `evidencePointer` | string | for completion | Evidence path or ref |
+| `confidence` | number | non-advisory | ≥ 0.5 required |
+| `rationale` | string | non-advisory | Min 8 chars; vague rejected |
+| `expectedTransition` | `{ from?, to }` | yes | Expected state change |
+| `conflictPolicy` | `PatchConflictPolicy` | yes | Rebase / conflict behavior |
+| `payload` | object | no | Type-specific metadata |
+
+**WorkspacePatchType:** `mark_complete`, `move_lane`, `update_dependency`, `add_blocked_reason`, `attach_evidence`, `update_ownership`, `suggest_follow_up`, `advisory_only`, `reopen_item`.
+
+**PatchConflictPolicy:** `fail_on_conflict`, `rebase_if_safe`, `require_explicit_reopen`.
+
+### AgentRoadmapProjection
+
+| Field | Semantics |
+|-------|-----------|
+| `agentRoadmapId` | `agent-rm:{swarmId}:{index}` |
+| `roadmapSnapshotId` | Workspace snapshot at creation |
+| `swarmRoadmapId` | Parent swarm plan ID |
+| `laneId`, `agentId`, `index` | Lane identity |
+| `plane` | Always `"agent"` |
+| `projectedItems` | Item IDs lane believes it owns |
+| `roadmapItemId` | Primary linked item |
+| `dependsOn` | Upstream lane indices |
+| `executionMode` | Lane execution mode |
+| `goalSummary` | optional | Lane goal text |
+
+### SwarmRoadmapPlan
+
+| Field | Semantics |
+|-------|-----------|
+| `swarmRoadmapId` | `swarm-rm:{swarmId}` |
+| `roadmapSnapshotId` | Snapshot at swarm admit |
+| `swarmId` | Swarm identifier |
+| `laneItemIds` | Per-lane `{ index, laneId, roadmapItemId? }` |
+
+### RoadmapPatchReconciliation
+
+| Field | Semantics |
+|-------|-----------|
+| `passed` | No violations and no rejected non-advisory patches |
+| `violations` | Conflict strings (e.g. incompatible parallel patches) |
+| `acceptedPatches` | Patches that passed quality + rebase + conflict checks |
+| `rejectedPatches` | `{ patch, reason }` pairs |
+| `staleProjections` | `agentRoadmapId` values out of sync |
+| `rebaseResults` | Per-patch rebase outcome |
+| `commitStatus` | `pending` \| `committed` \| `blocked` \| `advisory_only` \| `skipped` |
+| `workspaceSnapshotId` | Snapshot at admit |
+| `currentWorkspaceSnapshotId` | Snapshot at seal |
+
+### PatchRebaseResult
+
+| Field | Semantics |
+|-------|-----------|
+| `patchId` | Patch identifier |
+| `agentRoadmapId` | optional | Source projection |
+| `outcome` | `not_needed` \| `rebased` \| `stale_conflict` \| `rejected` |
+| `fromSnapshotId` | Base snapshot |
+| `toSnapshotId` | optional | Rebased target |
+| `reason` | optional | Human-readable explanation |
+
+### RoadmapWorkspaceCommitResult
+
+| Field | Semantics |
+|-------|-----------|
+| `committed` | Whether workspace state was written |
+| `commitStatus` | Final commit status |
+| `workspaceLockAcquired` | Whether `roadmap:workspace` lock held |
+| `appliedPatchIds` | Patches applied to runtime state |
+| `error` | optional | Commit error message |
+| `blockReason` | optional | Why commit blocked or skipped |
 
 ---
 
@@ -154,6 +272,11 @@ Recorded at seal via `buildGovernedAuditIntegration()`.
 | `falsePositiveLockAudit` | Lock-skipped count vs missing-lock violations |
 | `storageBoundary` | Documents task artifacts vs BroccoliDB CAS |
 | `roadmapCompletionAdvisory` | Copy of roadmap linkage advisory |
+| `workspaceRoadmapSnapshotId` | Current workspace snapshot |
+| `staleProjectionWarnings` | Stale `agentRoadmapId` list from reconciliation |
+| `rebaseResults` | Per-patch rebase outcomes |
+| `rejectedPatchReasons` | `{patchId}: {reason}` strings |
+| `roadmapCommitStatus` | Workspace commit status |
 
 ---
 
@@ -224,13 +347,27 @@ Aggregated view in `GovernedReceiptPanel`. Not a separate on-disk schema.
 | Field group | Contents |
 |-------------|----------|
 | Counts | `laneCount`, `lanesSealed`, `lanesRunning`, `orphanedClaims`, … |
-| `laneStates[]` | Per-lane: status, `executionMode`, `lockRequired`, reasons, read/write sets |
+| `laneStates[]` | Per-lane: status, `executionMode`, `lockRequired`, reasons, read/write sets, `agentRoadmapId`, `proposedWorkspacePatch`, `localRoadmapEvents` |
 | `laneDag[]` | DAG nodes with state |
 | `claimTimeline[]` | Operator-friendly claim events |
 | `resourceOwners[]` | Active/released/stale ownership |
 | `retryHistory[]` | Attempt lineage |
-| `diagnostics` | `incident`, `retrySafe`, overlap lists, replay causes |
+| `diagnostics` | `incident`, `retrySafe`, overlap lists, replay causes, projection fields |
 | `violations` | Merge gate violations |
+| `roadmapLinkage` | Full roadmap linkage including `patchReconciliation`, `workspaceCommit` |
+
+### GovernedReceiptDiagnostics (projection fields)
+
+| Field | Semantics |
+|-------|-----------|
+| `workspaceRoadmapSnapshotId` | Current workspace snapshot ID |
+| `staleProjectionWarnings` | Projections stale vs workspace |
+| `rebaseResults` | Rebase outcomes from reconciliation |
+| `rejectedPatchReasons` | Human-readable patch rejection reasons |
+| `roadmapCommitStatus` | `committed` \| `blocked` \| `skipped` \| etc. |
+| `overlappingRoadmapResources` | Legacy merge-audit roadmap overlaps |
+| `blockedRoadmapWriters` | Agents blocked from direct roadmap writes |
+| `roadmapCompletionAdvisory` | Completion policy advisory message |
 
 ---
 
@@ -262,7 +399,7 @@ Computed by `validateDeterministicReplay()`:
 
 SHA-256 hex digest. Stored in `replayChecksum`.
 
-**Excluded from hash:** `claimHistory`, lock fields, `executionMode`, `readSet`, `writeSet`, fencing tokens.
+**Excluded from hash:** `claimHistory`, lock fields, `executionMode`, `readSet`, `writeSet`, fencing tokens, projection fields (`agentRoadmapId`, `proposedWorkspacePatch`, `localRoadmapEvents`).
 
 ---
 

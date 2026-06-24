@@ -211,13 +211,73 @@ Partial acquire rolls back and fails closed. Fencing token assigned before durab
 
 ---
 
+## ADR-011: Per-agent roadmap projection (coordinator-owned workspace commits)
+
+**Status:** Accepted (projection pass)
+
+**Context:** Parallel lanes acquiring per-lane `roadmap:*` locks serialized kanban writes but still encouraged agents to treat the shared workspace roadmap as mutable local state. Collisions, stale leases, and smuggled completion signals made operator triage difficult.
+
+**Decision:**
+
+- Split roadmap into three planes: `agentRoadmap` (private), `swarmRoadmap` (read-only plan), `workspaceRoadmap` (authoritative).
+- `acquireLane()` creates `agentRoadmap` projection; `requiresRoadmapMutationLock()` returns `false` — no per-lane workspace roadmap locks.
+- Agents record `localRoadmapEvents` and `proposedWorkspacePatch` on lane receipts.
+- `runRoadmapPatchReconciliation()` at seal merges compatible patches; `commitWorkspaceRoadmapPatches()` is the **only** workspace write path.
+- Coordinator acquires `roadmap:workspace` lock once at seal when committing reconciled patches.
+- `auditDirectWorkspaceRoadmapMutation()` flags `directWorkspaceRoadmapMutation` and containment violations.
+
+**Consequences:**
+
+- Private roadmap state is cheap; workspace truth is expensive.
+- Parallel lanes no longer fight over kanban locks during execution.
+- Merge gate still audits legacy direct-write signals via `RoadmapMergeAudit`.
+- Operator console shows projection planes, accepted/rejected patches, commit status.
+
+**Alternatives considered:**
+
+- Shared roadmap mutation with finer locks → rejected; still exposes parallel mutation surface.
+- Chat-only roadmap updates → rejected; no durable receipt truth.
+
+---
+
+## ADR-012: Projection hardening (quality gate, containment, rebase)
+
+**Status:** Accepted (hardening pass)
+
+**Context:** Projection model alone does not prevent vague patches, smuggled mutations in local events, or stale projections overwriting current workspace state.
+
+**Decision:**
+
+- **Patch quality gate** (`validatePatchQuality`) — every non-advisory patch requires full metadata; `mark_complete` / `reopen_item` require evidence; vague rationale rejected.
+- **Local event containment** (`containLocalRoadmapEvents`) — allowlist private event types; mutation-like payloads rejected or converted to patches.
+- **Projection rebase** (`attemptPatchRebase`) — safe rebase for `attach_evidence`, `add_blocked_reason`, etc.; stale conflicting types (`mark_complete`, `move_lane`) → `stale_conflict`.
+- **Deeper reconciliation** — compatible evidence merges; conflicting lane moves fail; failed lanes cannot complete; completed items require `reopen_item`; advisory patches stay advisory.
+- **Coordinator commit guards** (`canCoordinatorCommitWorkspaceRoadmap`) — merge passed, integrity valid, sealed, reconciliation passed, completion policy, `roadmap:workspace` lock.
+- **Operator UX** — `GovernedReceiptPanel` shows rebase outcomes, rejection reasons, stale projection warnings.
+
+**Consequences:**
+
+- Only valid, evidence-backed, reconciled patches affect workspace roadmap.
+- Reconciliation failures append to `mergeGate.violations` and block seal.
+- Regression tests in `governedExecutionRoadmapProjectionHardening.test.ts` lock behavior.
+
+**Non-goals (explicit):**
+
+- No return to shared per-lane workspace mutation.
+- No additional lock layers for projections.
+- No lane-level workspace commit path.
+
+---
+
 ## Open decisions (not yet implemented)
 
 | Topic | State | Notes |
 |-------|-------|-------|
-| Replay hash includes lock fields | Under discussion | ADR-006 exclusion may change |
+| Replay hash includes lock/projection fields | Under discussion | ADR-006 exclusion may change |
 | worker_cli key unification | Under discussion | Align resource key format with coordinator |
 | BroccoliDB cross-plane audit index | Future | Thin index adapter only — receipts stay under `subagent_executions/` |
+| Full patch-type commit parity | Future | `update_dependency` / `update_ownership` currently log to `decision_log` |
+| Per-agent projection persistence across retries | Future | Retries re-acquire projection from current snapshot |
 
 ---
 

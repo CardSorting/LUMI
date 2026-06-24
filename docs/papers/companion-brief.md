@@ -34,7 +34,7 @@
 | Governed receipt schema | **v3** | `GOVERNED_RECEIPT_SCHEMA_VERSION` in `src/shared/subagent/governedExecution.ts` |
 | Lane execution modes | **6** | `read_only` … `mutation` — `LockNecessity.ts` |
 | Lock authority backends | **5** | in-process, SwarmMutex, roadmap lease, file lock, broccoli fence |
-| Governed execution test suites | **5** (+ UI panel) | `governedExecution*.test.ts` — **70** contracts |
+| Governed execution test suites | **7** (+ UI panel) | `governedExecution*.test.ts` — **110** contracts |
 
 ---
 
@@ -51,7 +51,8 @@ Developers want an AI pair programmer **inside the editor** — not a separate a
 | Delegate parallel work | `use_subagents` + dynamic subagent tools |
 | Parallel review without lock fights | `[execution_mode:read_only]` lanes — lock skipped, receipt durable |
 | Reconcile parallel writes | `MergeGate` — optimistic execution, write-set collision check at seal |
-| Inspect swarm incidents | `GovernedReceiptPanel` — mode, lock skipped/required, violations |
+| Update workspace roadmap safely | Per-lane `agentRoadmap` projection + `propose_patch` → coordinator commit |
+| Inspect swarm incidents | `GovernedReceiptPanel` — mode, patches, rebase, commit status, violations |
 | Steer multi-step projects | `ROADMAP.md` + `roadmap` / `roadmap_checkpoint` tools |
 | Custom guardrails | Hooks (PreToolUse, PostToolUse, …) + `.dietcoderules/` |
 
@@ -67,9 +68,9 @@ LUMI applies **fail-closed verification** at three layers. All three favor teach
 |------|---------|-------------|------------------|
 | **Tool** | Mutating tool call | User rejects (or hook cancels) | Diff view + approval card |
 | **Task** | `attempt_completion` | `completionGatePipeline` fails | Model guidance + roadmap messages |
-| **Swarm** | `use_subagents` seal | `MergeGate` fails | `GovernedReceiptPanel` violations |
+| **Swarm** | `use_subagents` seal | `MergeGate` + patch reconciliation fail | `GovernedReceiptPanel` violations + rejected patch reasons |
 
-Swarm gate is **mutation-scoped**: parallel reads pass; parallel uncoordinated writes fail.
+Swarm gate is **mutation-scoped**: parallel reads pass; parallel uncoordinated writes fail. Workspace roadmap changes require evidence-backed patches reconciled at seal — not direct lane writes.
 
 ---
 
@@ -90,15 +91,17 @@ Governed swarm branch (use_subagents):
   SubagentToolHandler
     → scheduleAdmission (pressure) → acquireOrchestrationLease (ownership)
     → audit preflight → GovernedSwarmCoordinator
-    → LockNecessity (classify) → LaneDAG (depends_on) → LockAuthority (mutation only)
-    → SubagentRunner (lanes) → completion_gate per lane
-    → MergeGate (commit barrier) → sealReceipt v3 / sealCrashReceipt on timeout
+    → LockNecessity (classify) → agentRoadmap projection per lane → LaneDAG (depends_on)
+    → LockAuthority (file mutation only) → SubagentRunner (lanes)
+    → local events + proposedWorkspacePatch → completion_gate per lane
+    → MergeGate (commit barrier) → patch reconciliation → coordinator workspace commit
+    → sealReceipt v3 / sealCrashReceipt on timeout
     → GovernedReceiptPanel (incident console)
 ```
 
-**Hard rules:** mutating tools require approval (unless auto-approve); `attempt_completion` runs `completionGatePipeline`; hooks can cancel but do not silently write files; swarm success requires merge gate pass; roadmap orchestration lease must succeed before lanes run; timeout/abort seals via `sealCrashReceipt` — **locks protect mutation, receipts preserve truth**.
+**Hard rules:** mutating tools require approval (unless auto-approve); `attempt_completion` runs `completionGatePipeline`; hooks can cancel but do not silently write files; swarm success requires merge gate pass + patch reconciliation; workspace roadmap commits are coordinator-only under `roadmap:workspace` lock; roadmap orchestration lease must succeed before lanes run; timeout/abort seals via `sealCrashReceipt` — **locks protect mutation, receipts preserve truth, private projection is cheap**.
 
-**Coordination planes:** Roadmap owns plan/admission. Audit owns verification. MergeGate owns commit safety. BroccoliDB owns fencing/replay substrate. Receipts own truth under `subagent_executions/`.
+**Coordination planes:** Agent roadmap owns private projection. Swarm roadmap owns plan linkage. Workspace roadmap owns authoritative kanban (coordinator commit only). Roadmap service owns admission. Audit owns verification. MergeGate owns commit barrier. BroccoliDB owns fencing/replay substrate. Receipts own truth under `subagent_executions/`.
 
 ---
 
@@ -111,7 +114,7 @@ Multi-lane swarms are not fire-and-forget parallelism. Each lane declares an **e
 | `read_only`, `audit_only`, `planning_only`, `documentation_only`, `diagnostic_only` | skipped | Review, audit, plan — durable receipt, no ownership |
 | `mutation` (default) | required | File edits, durable state changes |
 
-**Invariant:** Locks protect mutation. Receipts preserve truth.
+**Invariant:** Locks protect mutation. Receipts preserve truth. Private roadmap state is cheap — workspace roadmap truth is expensive; only the coordinator may spend it.
 
 | Artifact | Path |
 |----------|------|
@@ -119,7 +122,20 @@ Multi-lane swarms are not fire-and-forget parallelism. Each lane declares an **e
 | Attempt lineage | `subagent_executions/{swarmId}.governed.history.jsonl` |
 | Swarm envelope | `subagent_executions/{swarmId}.json` |
 
+Receipt fields for projection: `agentRoadmapId`, `localRoadmapEvents`, `proposedWorkspacePatch`, `roadmapLinkage.patchReconciliation`, `roadmapLinkage.workspaceCommit`.
+
 Authoritative state after a failed retry: last `sealed && mergePassed` in history — not chat status alone.
+
+### Roadmap projection (lanes do not write kanban directly)
+
+| Action | Mechanism |
+|--------|-----------|
+| Private progress | `[local_roadmap:progress_note:ITEM:…]` → `localRoadmapEvents` |
+| Propose workspace change | `[propose_patch:attach_evidence:ITEM:evidence=…\|rationale=…]` |
+| Reconcile at seal | `runRoadmapPatchReconciliation` — quality gate, rebase, conflict merge |
+| Commit workspace | `commitWorkspaceRoadmapPatches` — coordinator + `roadmap:workspace` lock |
+
+Per-lane `roadmap:*` locks at acquire are **not used** (`requiresRoadmapMutationLock()` returns false). Direct workspace kanban writes are flagged as violations.
 
 ### Scenario matrix
 
@@ -130,6 +146,9 @@ Authoritative state after a failed retry: last `sealed && mergePassed` in histor
 | 1× read + 1× mutation on same file | Read skipped, mutation locked | Pass if only mutation writes |
 | `documentation_only` + `[write_set:docs/x.md]` | Escalated to lock | Pass when claim acquired + released |
 | Audit lane runs `write_to_file` without lock | Skipped at acquire | Fail — `performed writes without lock` |
+| Lane writes workspace kanban directly | No per-lane roadmap lock | Fail — `directWorkspaceRoadmapMutation` or smuggled local event |
+| Two lanes propose compatible `attach_evidence` | Projections independent | Pass — patches merge at reconciliation |
+| Two lanes propose conflicting `move_lane` on same item | Projections independent | Fail — `conflicting workspace patches` |
 
 ### Prompt examples
 
@@ -145,10 +164,13 @@ Inspect subagent_executions/{swarmId}.governed.{attemptId}.json and summarize me
 
 ```
 [execution_mode:mutation]
-Refactor src/handler.ts and update tests.
+[roadmap_item:NOW-42]
+[local_roadmap:progress_note:NOW-42:implementing feature]
+[propose_patch:attach_evidence:NOW-42:evidence=tests/feature.test.ts|rationale=tests pass|confidence=0.9]
+Refactor src/handler.ts and update tests. Do not mutate workspace roadmap directly.
 ```
 
-Tool param alternatives: `execution_mode_1=read_only`, `depends_on_2=0`, `roadmap_item_1=NOW-42`, `roadmap_completion_update=enabled` (optional kanban touch on sealed success only).
+Tool param alternatives: `execution_mode_1=read_only`, `depends_on_2=0`, `roadmap_item_1=NOW-42`, `roadmap_completion_update=enabled` (legacy completion policy on sealed success; patch commit is primary path).
 
 ### Incident console (operator)
 
@@ -205,7 +227,7 @@ Additional provider files exist under `src/core/api/providers/` but are **not re
 | Stability | `diagnose_stability`, `ast_repair`, … | 8 |
 | Roadmap / kernel | `roadmap`, `dietcode_kernel` | 3 |
 | Modes / meta | `plan_mode_respond`, `use_subagents`, … | 8 |
-| Governed harness | `GovernedSwarmCoordinator`, `MergeGate`, `LockNecessity`, `LockAuthority` | — |
+| Governed harness | `GovernedSwarmCoordinator`, `MergeGate`, `LockNecessity`, `AgentRoadmapProjection`, `RoadmapPatchReconciler`, `RoadmapWorkspaceCommit` | — |
 
 Full list: [All tools](../tools-reference/all-dietcode-tools.mdx). Swarm depth: [Governed subagent execution](../governed-subagent-execution.md).
 
@@ -220,7 +242,7 @@ Full list: [All tools](../tools-reference/all-dietcode-tools.mdx). Swarm depth: 
 - [ ] Optional: MCP servers in LUMI settings
 - [ ] Optional: `lumi.roadmap.enabled` for ROADMAP.md steering
 - [ ] Optional: hooks in `.dietcoderules/hooks/`
-- [ ] Parallel subagents: use `[execution_mode:read_only]` on review lanes to avoid false lock collisions
+- [ ] Parallel subagents: use `[execution_mode:read_only]` on review lanes; use `[propose_patch:…]` for roadmap updates, not direct kanban writes
 
 ---
 
@@ -257,7 +279,9 @@ npm run test:unit -- --grep "governed execution"   # swarm harness contracts
 | 4 providers routed in `buildApiHandler` | All 45 provider files active |
 | Typed tool enum + coordinator routing | Third-party MCP server behavior |
 | Completion gate pipeline on `attempt_completion` | Zero false-positive gate blocks |
-| Governed swarm merge gate before seal | Zero false merge blocks |
+| Governed swarm merge gate + patch reconciliation before seal | Zero false merge blocks |
+| Coordinator-only workspace roadmap commit | Lanes cannot directly mutate kanban |
+| Evidence-backed patches for completion | Vague or smuggled patches rejected |
 | Roadmap orchestration lease before lanes | Fail closed when lease denied |
 | Lock-skipped lanes for non-mutating execution modes | DAG deps via `[depends_on:N]` |
 | Crash seal on timeout/abort | Authoritative sealed success preserved in history |

@@ -14,12 +14,16 @@ SRE-style playbook for governed swarm receipts: triage incidents, interpret viol
 
 **North-star:** Locks protect mutation. Receipts preserve truth.
 
+**Roadmap:** Private projection state is cheap. Workspace roadmap truth is expensive. Only the coordinator may spend it.
+
 | Question | Answer |
 |----------|--------|
 | Where is truth? | Last `sealed && mergePassed` in `{swarmId}.governed.history.jsonl`, or `loadAuthoritativeGovernedReceipt()` |
 | Is "lock skipped" a bug? | **No** — expected for read/audit/plan/doc/diagnostic lanes |
 | Is missing `claimId` a bug? | Only if `executionMode: mutation` or lane performed writes |
 | Can two lanes read the same file? | **Yes** — read overlap is not a violation |
+| Can lanes mutate workspace roadmap directly? | **No** — use `propose_patch`; coordinator commits after reconciliation |
+| What changes workspace roadmap? | `commitWorkspaceRoadmapPatches` under `roadmap:workspace` lock after seal |
 | When is retry safe? | `diagnostics.retrySafe === true` in incident console |
 | What blocks merge? | `mergeGate.violations` — see [violation catalog](#violation-catalog) |
 
@@ -67,6 +71,13 @@ Derived by `deriveReceiptIncident()` (priority order). Use **Symptom → Diagnos
 | Resource ownership | `resourceOwners[]` — mutation claims only |
 | Claim timeline | `claimTimeline[]` — no lock-skipped lanes |
 | File overlaps | `diagnostics.overlappingPaths` — **write collisions only** |
+| Roadmap overlaps | `diagnostics.overlappingRoadmapResources` — legacy direct-write audit |
+| Roadmap planes | `roadmapLinkage.patchReconciliation`, `workspaceRoadmapSnapshotId` |
+| Accepted / rejected patches | `roadmapLinkage.patchReconciliation.acceptedPatches` / `rejectedPatches` |
+| Rebase outcomes | `diagnostics.rebaseResults` or `patchReconciliation.rebaseResults` |
+| Rejected patch reasons | `diagnostics.rejectedPatchReasons` |
+| Workspace commit status | `diagnostics.roadmapCommitStatus` |
+| Stale projections | `diagnostics.staleProjectionWarnings` |
 | Merge violations | `violations[]` |
 
 ---
@@ -107,6 +118,71 @@ Derived by `deriveReceiptIncident()` (priority order). Use **Symptom → Diagnos
 | Two `mutation` lanes write `src/a.ts` in parallel | **Yes** — `unsafe mutation overlap` |
 | Non-mutating lane ran write tools without lock | **Yes** — `performed writes without lock` |
 | Dependent lane writes after predecessor (DAG order) | No — allowed when deps wired |
+
+---
+
+## Roadmap projection (operator)
+
+### Three planes at a glance
+
+| Plane | Operator signal | Safe to ignore? |
+|-------|-----------------|-----------------|
+| Agent | `agentRoadmapId`, `local:N`, `patches:N` on lane row | Yes — private state |
+| Swarm | `swarm plan: N lanes` | Yes — linkage only |
+| Workspace | `workspace snap`, `commit:`, accepted/rejected counts | **No** — authoritative |
+
+### Reading the Roadmap planes section
+
+| UI line | Meaning | Action if wrong |
+|---------|---------|-----------------|
+| `workspace snap: rm-snap-…` | Current workspace snapshot at seal | Compare to lane `roadmapSnapshotId` |
+| `accepted patches: N` | Patches passed reconciliation | Expect > 0 for roadmap updates |
+| `rejected patches: N` | Failed quality/rebase/conflict | Read rejection reasons |
+| `rebase {id}: rebased` | Patch safely rebased to current snapshot | Normal when workspace moved during run |
+| `rebase {id}: stale_conflict` | Stale patch cannot apply | Retry lane with fresh projection |
+| `Rejected patch reasons` | Why each patch failed | Fix evidence, rationale, or target item |
+| `commit: blocked` | Workspace not updated | See `workspaceCommit.blockReason` on receipt |
+| `commit: committed` | Coordinator applied patches | Verify kanban state |
+| `commit: skipped` | Roadmap disabled or no actionable patches | Expected for file-only swarms |
+| `stale projections: …` | Projection out of sync | Re-run affected lanes |
+
+### Per-lane projection signals
+
+| Signal | Meaning |
+|--------|---------|
+| `patches:N` | Lane proposed N workspace patches |
+| `local:N` | Lane recorded N private local events |
+| Truncated `agent-rm:…` | Projection ID (hover for full) |
+| `directWorkspaceRoadmapMutation` on receipt | **P1** — agent bypassed patch model |
+
+### Patch rejection reasons (common)
+
+| Reason pattern | Cause | Fix |
+|----------------|-------|-----|
+| `missing evidence pointer` | `mark_complete` without `evidence=` | Add `[propose_patch:…:evidence=path]` |
+| `vague or missing rationale` | Rationale too short or generic | Use specific rationale ≥ 8 chars |
+| `insufficient confidence` | `confidence` < 0.5 | Set `confidence=0.8` or higher |
+| `stale conflicting patch` | `mark_complete` on old snapshot | Re-acquire lane or use `attach_evidence` first |
+| `failed lane cannot mark roadmap complete` | Failed lane proposed completion | Fix lane or use advisory patch |
+| `conflicting workspace patches` | Two lanes incompatible on same item | Add DAG dependency or split items |
+| `smuggled authoritative mutation via local event` | Mutation language in local event | Use `propose_patch` instead |
+
+### Coordinator commit blocked
+
+Check receipt `roadmapLinkage.workspaceCommit.blockReason`:
+
+| blockReason | Meaning |
+|-------------|---------|
+| `merge gate did not pass` | Fix merge violations first |
+| `roadmap patch reconciliation failed` | Fix rejected patches |
+| `receipt not sealed` | Partial/crash receipt |
+| `receipt integrity invalid` | Replay mismatch |
+| `no actionable patches to commit` | Only advisory patches or none proposed |
+| `completion policy advisory_only blocks mark_complete commit` | Enable policy or use advisory |
+| `coordinator failed to acquire roadmap:workspace lock` | Stale lock — recover `roadmap:workspace` |
+| `roadmap disabled` | `commitStatus: skipped` — expected |
+
+**No lane-level workspace commit path exists.** If workspace roadmap changed without `workspaceCommit.committed: true`, investigate out-of-band writes.
 
 ---
 
@@ -192,6 +268,19 @@ Exact strings from `MergeGate.runMergeGate()`. Use for log search and alert rout
 | `swarm id mismatch: …` / `task id mismatch: …` | Align artifact IDs |
 | `lane count mismatch: …` | Lane receipts vs replay lineage |
 | Replay schema violations | `unsupported replay schema`, `missing artifact id`, etc. |
+
+### Roadmap projection
+
+| Violation pattern | Remediation |
+|-------------------|-------------|
+| `agent {id} cannot directly mutate workspace roadmap — emit proposedWorkspacePatch` | Use `[propose_patch:…]`; never write workspace kanban from lane |
+| `agent {id} smuggled authoritative mutation via local event: …` | Move intent to `propose_patch` or remove mutation phrasing from local events |
+| `conflicting workspace patches on '{itemId}': {a}, {b}` | Serialize via DAG dependency or split target items |
+| `unsafe roadmap mutation overlap` | Legacy direct-write audit — use projection model |
+| `roadmap mutation without claim` | Legacy audit — use patch proposals |
+| `lock-skipped lane … mutated roadmap` | Fix execution mode or route through patches |
+
+Patch rejections are recorded in `roadmapLinkage.patchReconciliation.rejectedPatches` and surfaced as `diagnostics.rejectedPatchReasons`. Combined with direct-mutation flags, they block seal.
 
 ---
 
@@ -287,8 +376,9 @@ Use `explainReplayMismatch()` output in incident console.
 4. **Default** — omit tag = mutation = lock required
 5. **Parallel reads** — safe across read_only lanes
 6. **Parallel writes** — require mutation + non-overlapping write sets or DAG order
-
----
+7. **Roadmap updates** — `[propose_patch:…]` with `evidence=`, `rationale=`, `confidence=`; no direct workspace writes
+8. **Local progress** — `[local_roadmap:progress_note:ITEM:…]` for private notes only
+9. **Mark complete** — `[propose_patch:mark_complete:ITEM:evidence=path|rationale=…|confidence=0.9]`
 
 ## Forensic artifact locations
 
@@ -327,6 +417,8 @@ Use `explainReplayMismatch()` output in incident console.
 4. **Non-mutating blocked** — did lane run write tools? Fix mode or add write_set
 5. **Authoritative state** — `history.jsonl` sealed entry, not chat or latest pointer alone
 6. **Retry** — `diagnostics.retrySafe` before re-run
+7. **Roadmap projection** — check accepted vs rejected patches before assuming kanban updated
+8. **Workspace commit** — `diagnostics.roadmapCommitStatus` must be `committed` for patch-driven updates
 
 ---
 

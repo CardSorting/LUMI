@@ -64,8 +64,9 @@ Multi-lane swarms run through `GovernedSwarmCoordinator` with durable receipts a
 
 ```
 roadmap pressure admit → orchestration lease → audit preflight
-  → classify lane intent → DAG schedule → execute lanes
-  → per-lane completion_gate → merge gate → seal or crash seal
+  → classify lane intent → acquire agent roadmap projections → DAG schedule → execute lanes
+  → local events + patch proposals → per-lane completion_gate → merge gate
+  → patch reconciliation → coordinator workspace commit → seal or crash seal
   → optional roadmap completion (policy-gated)
 ```
 
@@ -73,14 +74,21 @@ roadmap pressure admit → orchestration lease → audit preflight
 |--------------------|---------|
 | `[execution_mode:read_only]` | Skip mutation lock |
 | `[depends_on:0]` / `depends_on_2` | Lane waits until dependency sealed |
-| `[roadmap_item:NOW-42]` | Link lane to roadmap item on receipt |
-| `roadmap_completion_update=enabled` | Apply roadmap completion only on sealed success |
+| `[roadmap_item:NOW-42]` | Link lane to roadmap item + projection |
+| `[local_roadmap:progress_note:ITEM:…]` | Private agent-roadmap event (no workspace write) |
+| `[propose_patch:attach_evidence:ITEM:evidence=…\|rationale=…]` | Propose workspace kanban change |
+| `roadmap_completion_update=enabled` | Legacy completion policy on sealed success |
+
+**Roadmap invariant:** Agents own private `agentRoadmap` projections. Only the coordinator commits workspace roadmap changes via reconciled `proposedWorkspacePatch` under `roadmap:workspace` lock. Do not mutate workspace kanban directly from lanes.
 
 **Boundaries:** `MergeGate` is the commit barrier, not the workspace audit system. Audit evidence lives on governed receipts under `subagent_executions/` — BroccoliDB provides fencing/replay substrate only.
 
 | Component | Path |
 |-----------|------|
 | Integration bridges | `src/core/task/tools/subagent/GovernedIntegration.ts` |
+| Projection + patches | `src/core/task/tools/subagent/AgentRoadmapProjection.ts` |
+| Patch reconciliation | `src/core/task/tools/subagent/RoadmapPatchReconciler.ts` |
+| Coordinator commit | `src/core/task/tools/subagent/RoadmapWorkspaceCommit.ts` |
 | Handler wiring | `src/core/task/tools/handlers/SubagentToolHandler.ts` |
 
 | Doc | Contents |

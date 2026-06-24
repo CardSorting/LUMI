@@ -59,7 +59,14 @@ Use this when you change code and need to update the matching doc.
 | `src/core/task/tools/subagent/GovernedExecutionStore.ts` | [Schema § artifact layout](governed-execution-schema.md#artifact-layout) |
 | `src/core/task/tools/subagent/ReplayValidator.ts` | [Schema § replay checksum](governed-execution-schema.md#replay-checksum-canonical-form) · [Decisions ADR-006](governed-execution-decisions.md#adr-006-replay-checksum-canonicalization) |
 | `src/core/governance/LockAuthority.ts` | [Governed subagent execution § lock stack](governed-subagent-execution.md#lock-authority-stack) · [Decisions ADR-002](governed-execution-decisions.md#adr-002-unified-lock-authority-with-layered-backends) |
-| `webview-ui/src/components/chat/subagent/GovernedReceiptPanel.tsx` | [Runbook § incident console](governed-execution-runbook.md#incident-console-ui-map) |
+| `src/shared/subagent/roadmapProjection.ts` | [Schema § Roadmap projection types](governed-execution-schema.md#roadmap-projection-types) · [Architecture § Per-agent roadmap projection](governed-subagent-execution.md#per-agent-roadmap-projection) |
+| `src/core/task/tools/subagent/AgentRoadmapProjection.ts` | [Architecture § Per-agent roadmap projection](governed-subagent-execution.md#per-agent-roadmap-projection) |
+| `src/core/task/tools/subagent/RoadmapPatchQualityGate.ts` | [Architecture § Per-agent roadmap projection](governed-subagent-execution.md#per-agent-roadmap-projection) · [Decisions ADR-012](governed-execution-decisions.md#adr-012-projection-hardening-quality-gate-containment-rebase) |
+| `src/core/task/tools/subagent/RoadmapLocalEventContainment.ts` | [Architecture § Per-agent roadmap projection](governed-subagent-execution.md#per-agent-roadmap-projection) · [Runbook § Roadmap projection](governed-execution-runbook.md#roadmap-projection-operator) |
+| `src/core/task/tools/subagent/RoadmapPatchReconciler.ts` | [Architecture § Per-agent roadmap projection](governed-subagent-execution.md#per-agent-roadmap-projection) · [Schema § RoadmapPatchReconciliation](governed-execution-schema.md#roadmappatchreconciliation) |
+| `src/core/task/tools/subagent/RoadmapWorkspaceCommit.ts` | [Architecture § Per-agent roadmap projection](governed-subagent-execution.md#per-agent-roadmap-projection) · [Decisions ADR-011](governed-execution-decisions.md#adr-011-per-agent-roadmap-projection-coordinator-owned-workspace-commits) |
+| `src/core/task/tools/subagent/RoadmapMutation.ts` | [Architecture § Roadmap three planes](governed-subagent-execution.md#roadmap-three-planes) |
+| `webview-ui/src/components/chat/subagent/GovernedReceiptPanel.tsx` | [Runbook § incident console](governed-execution-runbook.md#incident-console-ui-map) · [Runbook § Roadmap projection](governed-execution-runbook.md#roadmap-projection-operator) |
 | `src/core/task/tools/handlers/CognitiveMemory*.ts` | [Memory & reasoning](MEMORY_AND_REASONING.md) · [api/README.md](api/README.md) |
 | `src/core/policy/spider/` | [Spider forensic engine](architecture/spider-v20-forensic-engine.md) |
 

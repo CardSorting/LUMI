@@ -34,6 +34,7 @@ Each line maps to code you can open:
 | Completion is earned | `completionGatePipeline.ts` + roadmap gates + audit checklist |
 | Parallel lanes are governed | `use_subagents` → `GovernedSwarmCoordinator` + `LockNecessity` + `MergeGate` |
 | Mutation earns ownership | `LockAuthority` — lease + fencing token; read lanes skip locks |
+| Roadmap truth is coordinator-owned | Per-lane `agentRoadmap` projection + `proposedWorkspacePatch` → `commitWorkspaceRoadmapPatches` |
 | Swarm truth is durable | Governed receipt schema v3 + `.governed.history.jsonl` — not chat status |
 | Memory outlives chat | `@noorm/broccolidb` via cognitive memory tools + SQLite |
 | Structure is provable | Spider via `src/core/policy/spider/` + `dietcode_kernel` tool |
@@ -46,7 +47,7 @@ Act        → ToolExecutorCoordinator → handlers/*
 Physical   → HostProvider.hostBridge (gRPC)
 Consent    → Approve / Reject / Auto-approve rules
 Finish     → attempt_completion → completionGatePipeline
-Swarm      → classify intent → acquire (or skip lock) → merge gate → seal receipt
+Swarm      → classify intent → acquire projection → merge gate → reconcile patches → coordinator commit → seal receipt
 Truth      → BroccoliDB graph + governed receipts on disk
 ```
 
@@ -66,7 +67,7 @@ That is not softness about safety. It is **respect for attention**:
 - Long sessions use comfort hooks (`useLumiSessionComfort.ts`) — reduce visual noise, not reduce gates.
 - Audit presentation reads like a notebook (`auditUiStyles.ts`), not a tribunal.
 
-**Calm is not passive.** LUMI still shows every diff. It still asks before `execute_command`. It still runs completion gates before `attempt_completion` succeeds. For governed swarms, the **incident console** (`GovernedReceiptPanel`) shows execution mode and lock skipped/required — so operators are not alarmed by lanes that never needed ownership.
+**Calm is not passive.** LUMI still shows every diff. It still asks before `execute_command`. It still runs completion gates before `attempt_completion` succeeds. For governed swarms, the **incident console** (`GovernedReceiptPanel`) shows execution mode, lock skipped/required, accepted/rejected patches, rebase outcomes, and commit status — so operators see what each agent proposed without false "missing lock" alarms on read lanes.
 
 Teachability is trust. If the UI hides what the agent did, the companion has failed. If the UI cries "missing lock" on a read-only audit lane, the companion has also failed.
 
@@ -136,21 +137,36 @@ The governed harness mirrors single-task completion discipline at swarm scale:
 |-------------|----------------|-------------------|
 | `attempt_completion` | `sealReceipt` / `sealCrashReceipt` after `runMergeGate` | Success is requested, then verified |
 | `completionGatePipeline` | Preflight + per-lane `completion_gate`; `MergeGate` at seal | Fail closed — violations block pass |
-| Roadmap gates at completion | Pressure + orchestration lease at admit; optional completion policy at seal | Roadmap owns plan/admission — not blind mutation |
-| User sees why completion blocked | `GovernedReceiptPanel` violations | Teachability over vibes |
+| Roadmap gates at completion | Pressure + orchestration lease at admit; patch reconciliation + coordinator commit at seal | Roadmap owns plan/admission — workspace truth is expensive |
+| User sees why completion blocked | `GovernedReceiptPanel` violations + rejected patch reasons | Teachability over vibes |
 | Checkpoints preserve rollback | `attemptId` + `history.jsonl` lineage | Truth survives retries |
 
 **Three gates, one posture** — same calm agency at every layer:
 
 1. **Tool gate** — approve mutating tool calls (or explicit auto-approve).
 2. **Task gate** — `completionGatePipeline` before the session ends.
-3. **Swarm gate** — `MergeGate` before parallel lanes merge into success.
+3. **Swarm gate** — `MergeGate` + patch reconciliation before parallel lanes merge into success.
 
 Swarm gate rules encode intent, not suspicion:
 
 - Read-only lanes reading the same file do not collide.
 - Mutation lanes writing the same path in parallel do.
 - Lanes that skip locks still emit receipts — **receipts preserve truth** even when **locks protect mutation**.
+- Lanes may maintain private `agentRoadmap` projections freely — **only the coordinator may spend workspace roadmap truth**.
+
+### Roadmap projection doctrine
+
+Parallel subagents must not fight over the shared kanban. LUMI encodes a CQRS-like split:
+
+| Plane | Cost | Who mutates |
+|-------|------|-------------|
+| `agentRoadmap` | Cheap | Lane agent — local events, private todos, progress notes |
+| `swarmRoadmap` | Cheap | Coordinator — read-only plan linkage |
+| `workspaceRoadmap` | Expensive | Coordinator only — after evidence-backed patch reconciliation |
+
+Agents propose; they do not directly mutate workspace roadmap. `proposedWorkspacePatch` carries evidence, rationale, expected transition, and conflict policy. Vague or smuggled mutations are rejected. Local events that imply authoritative change are converted to patches or blocked.
+
+This is the same philosophy as single-task approval — **propose, verify, then commit** — applied to parallel roadmap state.
 
 The lock-necessity classifier exists because the earlier failure mode was not vague prompts — it was **false-positive ownership**: audit lanes acquiring mutation locks they never needed, creating stale claims, merge failures, and operator noise.
 
@@ -175,14 +191,16 @@ The agent layer refuses to become an ungoverned plugin host. Extensions attach t
 
 ### Governed parallelism (locks protect mutation; receipts preserve truth)
 
-Parallel subagents are not a license to collide. The harness separates **ownership** from **evidence**:
+Parallel subagents are not a license to collide. The harness separates **ownership**, **evidence**, and **roadmap projection**:
 
 | Concern | Mechanism | Philosophy |
 |---------|-----------|------------|
-| Who may mutate? | `LockAuthority` — only when `classifyLockNecessity()` says so | Read/audit lanes should not fight over files they only inspect |
+| Who may mutate files? | `LockAuthority` — only when `classifyLockNecessity()` says so | Read/audit lanes should not fight over files they only inspect |
+| Who may mutate workspace roadmap? | `commitWorkspaceRoadmapPatches` under `roadmap:workspace` lock | Private projection is cheap; workspace truth is coordinator-owned |
 | What happened? | `LaneExecutionReceipt` per lane — with or without `claimId` | Chat is not the audit trail; receipts are |
-| Is merge safe? | `MergeGate` — write-set overlap only | Parallel reads are a feature, not a incident |
-| Can operator trust status? | `GovernedReceiptPanel` incident console | Calm UX still shows mode, lock skipped/required, violations |
+| What did agents propose? | `proposedWorkspacePatch` + `localRoadmapEvents` | Operators see intent before commit |
+| Is merge safe? | `MergeGate` + `runRoadmapPatchReconciliation` | Parallel reads pass; uncoordinated writes and conflicting patches fail |
+| Can operator trust status? | `GovernedReceiptPanel` incident console | Calm UX shows mode, patches, rebase, commit status — not false alarms |
 
 Six **execution modes** (`read_only`, `audit_only`, `planning_only`, `documentation_only`, `diagnostic_only`, `mutation`) let harness authors opt out of mutation locks without opting out of durability. Default unmarked lanes remain `mutation` — backward compatible with edit-heavy swarms.
 
@@ -192,13 +210,14 @@ Six **execution modes** (`read_only`, `audit_only`, `planning_only`, `documentat
 |---------------------|-----------------|
 | Lease | In-process claim TTL + file lock under `.broccolidb/governed/locks/` |
 | Fencing token | `fencingToken` + broccoli fence file — stale primary cannot release blindly |
-| OCC / merge gate | Lanes run in parallel; `MergeGate` reconciles write sets at seal |
+| OCC / merge gate | Lanes run in parallel; `MergeGate` reconciles write sets; patches reconciled at seal |
+| CQRS / projection | Per-lane `agentRoadmap` + `proposedWorkspacePatch` → coordinator commit |
 | Event log | `claimHistory`, `.governed.history.jsonl`, transcript `.jsonl` |
 | Workflow run ID | `attemptId` + `parentAttemptId` retry chain |
 
 Vague escalation prompts are not blocked by default. False-positive locks are. That is the lock-necessity pass in code, not a vibe.
 
-**Harness author rule of thumb:** if a lane only reads, inspects, plans, or appends diagnostic evidence — declare `[execution_mode:read_only]` (or audit/plan/doc/diagnostic). If it edits files — `mutation` or `[write_set:…]`. Do not default to mutation for review lanes.
+**Harness author rule of thumb:** if a lane only reads, inspects, plans, or appends diagnostic evidence — declare `[execution_mode:read_only]` (or audit/plan/doc/diagnostic). If it edits files — `mutation` or `[write_set:…]`. If it updates roadmap state — `[propose_patch:…]` with evidence, never direct kanban writes. Use `[local_roadmap:progress_note:…]` for private progress only.
 
 Full architecture: [Governed subagent execution](../governed-subagent-execution.md) · Operator playbook: [runbook](../governed-execution-runbook.md) · ADRs: [decisions](../governed-execution-decisions.md).
 
@@ -215,7 +234,9 @@ Observed absences are design choices:
 | Chat as sole memory | BroccoliDB cognitive tools + disk persistence |
 | IDE lock-in at core | `HostProvider` abstracts VS Code; core avoids direct `vscode` imports |
 | Completion on vibes | `completionGatePipeline` + tests in `attemptCompletionUtils.test.ts` |
-| Parallel swarm chaos | `MergeGate` + lock-necessity + roadmap orchestration lease |
+| Parallel swarm chaos | `MergeGate` + lock-necessity + patch reconciliation + roadmap orchestration lease |
+| Direct parallel kanban mutation | Per-agent projection + coordinator-only `roadmap:workspace` commit |
+| Smuggled roadmap state in local events | `containLocalRoadmapEvents` — reject or convert to patch |
 | Chat as swarm audit trail | Governed receipt v3 + `auditIntegration` + `history.jsonl` |
 | BroccoliDB as swarm audit store | Receipt-local audit under `subagent_executions/`; BroccoliDB = substrate |
 | Companion without substrate | `@noorm/broccolidb` dependency in root `package.json` |
@@ -229,12 +250,12 @@ We refuse another headless agent framework because developers already live in an
 | Layer | Package | Question it answers |
 |-------|---------|-------------------|
 | **LUMI** | Root extension | "What should we do in this session, with my consent?" |
-| **LUMI governed receipts** | `subagent_executions/*.governed.*` | "What did each swarm lane do, was merge safe, and what did audit/roadmap record?" |
+| **LUMI governed receipts** | `subagent_executions/*.governed.*` | "What did each swarm lane do, what patches were accepted/rejected, was merge safe, and what did audit/roadmap record?" |
 | **BroccoliDB** | `@noorm/broccolidb` | "What happened to the repository, and is structure still true?" |
 
 LUMI calls BroccoliDB through cognitive memory tools, `dietcode_kernel`, and Spider integration in `src/core/policy/spider/`. Governed swarm receipts live in the **session artifact layer** (per-task `subagent_executions/`), not in chat memory and not in BroccoliDB CAS audit events. The companion proposes; the substrate proves and persists; **swarm receipts record parallel lane truth without conflating locks with evidence**.
 
-**Final invariant across planes:** Roadmap owns plan and execution admission. Audit owns verification. MergeGate owns commit safety. BroccoliDB owns fencing/replay substrate. Receipts own truth.
+**Final invariant across planes:** Agent roadmap owns private projection. Swarm roadmap owns plan linkage. Workspace roadmap owns authoritative kanban — coordinator commit only. Audit owns verification. MergeGate owns file + roadmap audit commit barrier. BroccoliDB owns fencing/replay substrate. Receipts own truth.
 
 Read BroccoliDB's papers for substrate philosophy. Read LUMI's papers for session philosophy. **Do not merge them.**
 
@@ -260,7 +281,11 @@ Done is a governed swarm where read-only review lanes show **lock skipped** in t
 
 Done is merge blocked on `unsafe mutation overlap` — not on two auditors reading the same file.
 
-Done is a swarm that passes roadmap pressure admission, acquires an orchestration lease, runs DAG-ordered lanes, and seals a receipt where `auditIntegration.mergeGateRole` is `commit_barrier` — not confused with workspace audit.
+Done is a swarm where lanes propose `[propose_patch:attach_evidence:…]` with evidence pointers — and the incident console shows **accepted patches: 1**, **commit: committed**.
+
+Done is a rejected `mark_complete` patch with a visible reason (`missing evidence pointer`) — not a silent kanban no-op.
+
+Done is a swarm that passes roadmap pressure admission, acquires projections and orchestration lease, runs DAG-ordered lanes, reconciles patches, and seals a receipt where `auditIntegration.mergeGateRole` is `commit_barrier` — not confused with workspace audit.
 
 Done is a timeout that produces `sealCrashReceipt` with a precise crash phase — without overwriting a prior sealed success in history.
 
@@ -278,6 +303,7 @@ Build Plan and Act as **separate postures**, not labels.
 Build completion that **passes gates**, not wishes.  
 Build extensions that **attach to tools**, not bypass them.  
 Build governed swarms where **locks protect mutation** and **receipts preserve truth**.  
+Build roadmap parallelism where **private projection is cheap** and **workspace truth is coordinator-owned**.  
 Build memory on **BroccoliDB**, not chat scrollback.
 
 Then stop adding agent features and start **refining the session**.

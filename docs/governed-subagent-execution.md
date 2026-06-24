@@ -13,15 +13,19 @@ The parent task is **coordinator, reviewer, and receipt presenter** — not a me
 
 ---
 
-## North-star invariant
+## North-star invariants
 
 > **Locks protect mutation. Receipts preserve truth.**
 
+> **Private roadmap state is cheap. Workspace roadmap truth is expensive. Only the coordinator may spend it.**
+
 | Concern | Mechanism | Non-goal |
 |---------|-----------|----------|
-| **Who may mutate?** | Governed lock claim (`LockAuthority`) | Blocking read-only parallelism |
+| **Who may mutate files?** | Governed lock claim (`LockAuthority`) | Blocking read-only parallelism |
+| **Who may mutate workspace roadmap?** | Coordinator `commitWorkspaceRoadmapPatches` after patch reconciliation | Per-lane direct kanban writes |
 | **What happened?** | Durable lane + swarm receipts | Chat transcript as source of truth |
 | **Is it safe to merge?** | `MergeGate` optimistic reconciliation | Silent success on partial evidence |
+| **What may change workspace roadmap?** | Evidence-backed `proposedWorkspacePatch` → `runRoadmapPatchReconciliation` | `localRoadmapEvents` smuggling authoritative state |
 
 Non-mutating lanes (`read_only`, `audit_only`, …) emit full receipts with `lockRequired: false` — replayable and visible without ownership pressure.
 
@@ -42,7 +46,7 @@ The harness composes familiar distributed-systems primitives. Names below match 
 | **Attempt lineage / idempotency** | `attemptId` + `parentAttemptId`; supersession guard | Workflow run IDs |
 | **Read/write set separation** | `readSet` vs `writeSet`; collisions scoped to writes | Transaction isolation (read uncommitted OK across lanes) |
 | **Compare-and-swap (file)** | `fs.open(lockPath, 'wx')` exclusive create | Atomic file create |
-| **Policy gate** | `MergeGate` — deny list of violations before `sealed: true` | OPA / admission webhook |
+| **CQRS / projection** | Per-lane `agentRoadmap` + `proposedWorkspacePatch` → coordinator commit | Read model / write model split |
 
 ---
 
@@ -104,13 +108,15 @@ Formal orchestration flow (production handler):
 | 3 | **Audit preflight** | `runGovernedSwarmAuditPreflight` | `auditIntegration.preflightIssues` |
 | 4 | **Classify** | `resolveLaneLockIntent` + `classifyLockNecessity` | `lockRequired`, reason, read/write intent |
 | 5 | **Schedule** | `buildLaneDependencyMap` + `LaneDAG` | Ready/blocked lanes; DAG-aware pool (≤ 3) |
-| 6 | **Acquire** | `acquireLane` | `WorkLaneClaim` with or without `lockClaim` |
+| 6 | **Acquire** | `acquireLane` | `WorkLaneClaim` with or without `lockClaim`; `agentRoadmap` projection when roadmap enabled |
 | 7 | **Execute** | `SubagentRunner.runWithEnvelope` | `SubagentExecutionEnvelope`; per-lane `completion_gate` |
-| 8 | **Attribute** | `buildLaneReceipt` + `splitReadWriteSets` | `LaneExecutionReceipt` |
+| 8 | **Attribute** | `buildLaneReceipt` + `collectRoadmapLaneArtifacts` | `LaneExecutionReceipt` with projection fields |
 | 9 | **Release** | `releaseLane` | Claim cleared (mutation only); DAG `sealed` / `failed` |
-| 10 | **Merge** | `runMergeGate` | `MergeGateResult` — commit barrier only |
-| 11 | **Seal** | `sealReceipt` or `sealCrashReceipt` | Receipt v3 + `roadmapLinkage` + `auditIntegration` |
-| 12 | **Roadmap completion** | `applyGovernedRoadmapCompletionPolicy` | Advisory default; optional update when policy enabled |
+| 10 | **Merge** | `runMergeGate` | `MergeGateResult` — file + roadmap audit commit barrier |
+| 11 | **Reconcile patches** | `runRoadmapPatchReconciliation` | `patchReconciliation` — quality gate, rebase, conflict merge |
+| 12 | **Commit workspace roadmap** | `commitWorkspaceRoadmapPatches` | Coordinator-only under `roadmap:workspace` lock |
+| 13 | **Seal** | `sealReceipt` or `sealCrashReceipt` | Receipt v3 + `roadmapLinkage` + `auditIntegration` |
+| 14 | **Roadmap completion** | `applyGovernedRoadmapCompletionPolicy` | Advisory default; optional update when policy enabled |
 
 ```mermaid
 sequenceDiagram
@@ -141,6 +147,8 @@ sequenceDiagram
 
   H->>C: sealReceipt or sealCrashReceipt
   C->>M: runMergeGate
+  C->>C: runRoadmapPatchReconciliation
+  C->>C: commitWorkspaceRoadmapPatches (coordinator only)
   C->>C: finalizeRoadmapSealState
   C->>C: validateDeterministicReplay
   C->>C: persistGovernedReceipt
@@ -191,7 +199,7 @@ Full field reference: [governed-execution-schema.md](governed-execution-schema.m
 
 ### 4. One operator surface
 
-`GovernedReceiptPanel` renders incident class, lane execution modes, lock skipped/required, read/write counts, claim timeline, resource ownership, violations.
+`GovernedReceiptPanel` renders incident class, lane execution modes, lock skipped/required, read/write counts, claim timeline, resource ownership, violations, and **roadmap projection state** (workspace snapshot, swarm plan, per-agent projections, accepted/rejected patches, rebase outcomes, commit status, rejection reasons).
 
 Data path: `GovernedSwarmCoordinator.buildReceiptSummary()` → `DietCodeSaySubagentStatus.governedReceipt`.
 
@@ -262,84 +270,221 @@ No `claimHistory` entry. Lane still appears in `laneReceipts` and incident conso
 
 ---
 
-## Roadmap mutation serialization
+## Roadmap: three planes
 
-The shared roadmap kanban is an **authoritative mutation surface** separate from file locks.
+The workspace kanban is no longer mutated in parallel by lanes. Roadmap state is split across three planes:
 
-| Rule | Behavior |
-|------|----------|
-| Reads | Parallel — `roadmap_read_set` / read-only roadmap tool actions |
-| Writes | Serialized — one writer per `roadmap:*` resource at a time |
-| Lock-skipped lanes | **Cannot** mutate roadmap (merge gate fails) |
-| Completion | Default `advisory_only`; committed update only when seal + merge pass |
+```mermaid
+flowchart LR
+  subgraph agent ["Agent plane (cheap)"]
+    AR["agentRoadmap projection"]
+    LE["localRoadmapEvents"]
+    PP["proposedWorkspacePatch"]
+  end
 
-### Canonical resource keys
+  subgraph swarm ["Swarm plane (read-only)"]
+    SP["swarmRoadmapPlan"]
+    DAG["lane DAG + item linkage"]
+  end
+
+  subgraph workspace ["Workspace plane (expensive)"]
+    WR["workspaceRoadmap truth"]
+    LOCK["roadmap:workspace lock"]
+  end
+
+  AR --> LE
+  AR --> PP
+  SP --> AR
+  PP --> RECON["runRoadmapPatchReconciliation"]
+  RECON --> COMMIT["commitWorkspaceRoadmapPatches"]
+  COMMIT --> LOCK
+  LOCK --> WR
+```
+
+| Plane | Owner | May mutate? | Lock at acquire? |
+|-------|-------|-------------|------------------|
+| `agentRoadmap` | Lane agent | Yes — private projection | **No** |
+| `swarmRoadmap` | Coordinator (plan) | No — linkage only | No |
+| `workspaceRoadmap` | Coordinator (commit) | Yes — after reconciliation | `roadmap:workspace` at seal only |
+
+**Do not:** return to shared per-lane workspace roadmap mutation. **Do not:** add extra lock layers for projections. **Do not:** let agents directly mutate `workspaceRoadmap`.
+
+### Legacy merge-audit signals (still enforced)
+
+`RoadmapMergeAudit` and `RoadmapMutation` still classify declared roadmap read/write intent and detect direct tool writes for merge-gate auditing. `requiresRoadmapMutationLock()` always returns `false` — lanes no longer acquire per-lane `roadmap:*` locks at acquire time.
+
+| Signal | Purpose |
+|--------|---------|
+| `roadmapReadSet` / `roadmapWriteSet` | Declared scope on lane receipt |
+| `directWorkspaceRoadmapMutation` | Flag when agent attempted authoritative write without patch |
+| `localEventContainmentViolations` | Smuggled mutation language in local events |
+
+Canonical resource keys (coordinator commit only):
 
 | Key | Scope |
 |-----|--------|
-| `roadmap:workspace` | Global kanban / checkpoint writes |
-| `roadmap:item:{itemId}` | Item claim, release, move |
-| `roadmap:lane:{laneId}` | Lane ownership metadata |
-| `roadmap:now` | Now / Doing claims |
-| `roadmap:completion:{taskId}` | Completion state updates |
+| `roadmap:workspace` | Global kanban commit under coordinator |
+| `roadmap:item:{itemId}` | Item-scoped audit keys (merge audit) |
+| `roadmap:lane:{laneId}` | Lane ownership metadata (audit) |
+| `roadmap:now` | Now / Doing claims (audit) |
+| `roadmap:completion:{taskId}` | Completion state (audit + policy) |
 
 Classifier + tool-step detection: `src/core/task/tools/subagent/RoadmapMutation.ts`.  
 Merge audits: `src/core/task/tools/subagent/RoadmapMergeAudit.ts`.
 
-### Prompt tags
+### Prompt tags (roadmap scope)
 
 | Tag | Effect |
 |-----|--------|
-| `[roadmap_read_set:…]` | Declared roadmap read scope |
-| `[roadmap_write_set:…]` | Declared roadmap write scope → mutation lock |
-| `[mutates_roadmap]` | Escalates roadmap mutation lock |
-| `[claims_roadmap_now]` / `[mutates_roadmap_now]` | Locks `roadmap:now` |
-| `[mutates_roadmap_completion]` | Locks `roadmap:completion:{taskId}` |
-| `[writes_roadmap_advisory]` | Advisory write signal (still requires lock if applied to state) |
+| `[roadmap_read_set:…]` | Declared roadmap read scope (receipt + merge audit) |
+| `[roadmap_write_set:…]` | Declared write intent — audited; does **not** acquire lane lock |
+| `[mutates_roadmap]` | Flags direct-mutation risk — must use `propose_patch` instead |
+| `[claims_roadmap_now]` / `[mutates_roadmap_now]` | Now-claim signal (audit) |
+| `[mutates_roadmap_completion]` | Completion signal — becomes patch proposal |
+| `[writes_roadmap_advisory]` | Advisory-only patch signal |
 
-`acquireLane()` acquires `roadmap:*` claims via `LockAuthority` in addition to lane file mutex when required. Receipt fields: `roadmapReadSet`, `roadmapWriteSet`, `roadmapMutationLockRequired`, `roadmapMutationClaimReleased`, `roadmapItemOwner`.
-
-**Invariant:** The roadmap can coordinate parallel work, but it cannot be mutated in parallel without ownership.
+**Invariant:** Parallel lanes may read roadmap and maintain private projections freely. Workspace truth changes only through reconciled patches committed by the coordinator.
 
 ---
 
 ## Per-agent roadmap projection
 
-Subagents no longer fight over the shared workspace kanban. Each lane receives a **private agentRoadmap projection**; workspace truth is reconciled through proposed patches.
+Each lane receives a private `agentRoadmap` projection at `acquireLane()`. Agents record progress locally and propose workspace changes via structured patches — never by writing the shared kanban directly.
 
-| Plane | Authority | Mutation |
-|-------|-----------|----------|
-| `workspaceRoadmap` | Coordinator commit path | Single-writer after MergeGate + patch reconciliation |
-| `swarmRoadmap` | Swarm-scoped plan | Read-only linkage from DAG + lane items |
-| `agentRoadmap` | Lane owner | Local events without workspace locks |
+### Projection lifecycle
+
+1. **Admit** — coordinator captures `workspaceRoadmapSnapshotId` (`rm-snap-{hash}`)
+2. **Acquire** — `buildAgentRoadmapProjection()` creates `agentRoadmapId`, `projectedItems`, `roadmapSnapshotId`
+3. **Execute** — agent emits `localRoadmapEvents` and/or `proposedWorkspacePatch` via prompt tags or tool attribution
+4. **Attribute** — `collectRoadmapLaneArtifacts()` runs local-event containment + patch parsing
+5. **Seal** — `runRoadmapPatchReconciliation()` then `commitWorkspaceRoadmapPatches()` (coordinator only)
 
 ### Lane receipt fields
 
-`agentRoadmapId`, `roadmapSnapshotId`, `projectedItems`, `localRoadmapEvents`, `proposedWorkspacePatch`, `directWorkspaceRoadmapMutation`.
+| Field | Semantics |
+|-------|-----------|
+| `agentRoadmapId` | Stable projection ID (`agent-rm:{swarmId}:{index}`) |
+| `roadmapSnapshotId` | Workspace snapshot at projection creation |
+| `projectedItems` | Item IDs the lane believes it owns |
+| `localRoadmapEvents` | Private progress (see allowed types below) |
+| `proposedWorkspacePatch` | Structured workspace change proposals |
+| `directWorkspaceRoadmapMutation` | `true` if agent bypassed patch model |
+| `localEventContainmentViolations` | Rejected smuggled local events |
 
-### Prompt tags
+Swarm-level linkage: `roadmapLinkage.swarmRoadmapPlan`, `roadmapLinkage.agentProjections`, `roadmapLinkage.patchReconciliation`, `roadmapLinkage.workspaceCommit`.
 
-| Tag | Effect |
-|-----|--------|
-| `[local_roadmap:progress_note:ITEM:…]` | Private agent-roadmap event |
-| `[propose_patch:mark_complete:ITEM]` | Workspace patch proposal (not direct mutation) |
+### Local events (allowed)
 
-Modules: `AgentRoadmapProjection.ts`, `RoadmapPatchReconciler.ts`, `RoadmapWorkspaceCommit.ts`.
+| Type | Use |
+|------|-----|
+| `progress_note` | Status narrative |
+| `blocked_reason` | Why lane is blocked |
+| `evidence_checklist` | Checklist progress |
+| `todo_state` | Local todo within projection |
+| `completion_confidence` | Confidence score (high values may convert to patch) |
+| `dependency_observation` | Read-only observation (mutation language converts/rejects) |
 
-**Invariant:** Agents own projections. Coordinator owns workspace roadmap commits. Roadmap truth is merged, not directly mutated by parallel lanes.
+**Local events may not:** move workspace items, mark complete, claim Now, change dependency graph, or overwrite ownership metadata. Mutation-like payloads are **rejected** or **converted** to `proposedWorkspacePatch` by `containLocalRoadmapEvents()`.
 
-### Hardening: patch quality and containment
+### Proposed workspace patches (required fields)
 
-| Gate | Rule |
-|------|------|
-| Patch quality | Every `proposedWorkspacePatch` requires `patchId`, `agentRoadmapId`, `baseWorkspaceSnapshotId`, evidence (for completion), rationale, confidence, expected transition, conflict policy |
-| Local events | Progress notes, blocked reasons, evidence checklists allowed; authoritative mutations converted to patches or rejected |
-| Rebase | Safe rebase for `attach_evidence` / `add_blocked_reason` when workspace snapshot advances; conflicting stale patches rejected |
-| Commit | Coordinator-only after MergeGate + reconciliation + integrity + `roadmap:workspace` lock |
+Every non-advisory `proposedWorkspacePatch` must include:
 
-Modules: `RoadmapPatchQualityGate.ts`, `RoadmapLocalEventContainment.ts`.
+| Field | Required | Notes |
+|-------|----------|-------|
+| `patchId` | yes | Stable patch identifier |
+| `agentRoadmapId` | yes | Links patch to projection |
+| `baseWorkspaceSnapshotId` | yes | Snapshot patch was built against |
+| `itemId` | yes | Target roadmap item |
+| `type` | yes | See patch types below |
+| `evidencePointer` | for `mark_complete` / `reopen_item` | Path or evidence ref |
+| `rationale` | yes (non-advisory) | Min 8 chars; vague values rejected |
+| `confidence` | yes (non-advisory) | ≥ 0.5 |
+| `expectedTransition` | yes | `{ from?, to }` state transition |
+| `conflictPolicy` | yes | `fail_on_conflict` \| `rebase_if_safe` \| `require_explicit_reopen` |
 
-**Invariant:** Private roadmap state is cheap. Workspace roadmap truth is expensive. Only the coordinator may spend it.
+Patch types: `mark_complete`, `move_lane`, `update_dependency`, `add_blocked_reason`, `attach_evidence`, `update_ownership`, `suggest_follow_up`, `advisory_only`, `reopen_item`.
+
+Validated by `validatePatchQuality()` in `RoadmapPatchQualityGate.ts`. Rejected when vague, unsupported, missing evidence, or targeting unknown items.
+
+### Prompt tags (projection)
+
+```
+[local_roadmap:progress_note:TASK-1:implementing auth module]
+[local_roadmap:blocked_reason:TASK-1:waiting on API review]
+[local_roadmap:evidence_checklist:TASK-1:unit tests|integration tests]
+[local_roadmap:completion_confidence:TASK-1:0.85]
+
+[propose_patch:attach_evidence:TASK-1:evidence=tests/auth.test.ts|rationale=tests pass|confidence=0.9|policy=rebase_if_safe]
+[propose_patch:mark_complete:TASK-1:evidence=tests/auth.test.ts|rationale=all acceptance criteria met]
+[propose_patch:reopen_item:TASK-1:rationale=regression found in prod]
+```
+
+### Patch reconciliation (`RoadmapPatchReconciler.ts`)
+
+Runs at seal **after** initial `runMergeGate`, before workspace commit.
+
+| Check | Outcome |
+|-------|---------|
+| Patch quality gate | Reject vague / incomplete patches |
+| Stale snapshot rebase | Safe rebase for `attach_evidence`, `add_blocked_reason`, etc. |
+| Stale conflicting patch | `mark_complete` / `move_lane` on stale snapshot → `stale_conflict` |
+| Failed lane | Cannot `mark_complete` (non-advisory) |
+| Completed item | Requires `reopen_item` patch type |
+| Compatible parallel patches | Two `attach_evidence` on same item → merge |
+| Conflicting parallel patches | Two `move_lane` on same item → violation |
+| Advisory patches | Accepted but not committed to workspace |
+| Merge gate failed | Actionable patches rejected |
+
+Output: `patchReconciliation` with `acceptedPatches`, `rejectedPatches`, `rebaseResults`, `staleProjections`, `commitStatus`.
+
+Reconciliation failures are appended to `mergeGate.violations` and block seal.
+
+### Coordinator-only workspace commit (`RoadmapWorkspaceCommit.ts`)
+
+`commitWorkspaceRoadmapPatches()` runs **only** from `GovernedSwarmCoordinator.sealReceipt()`. No lane-level commit path exists.
+
+**Preconditions** (`canCoordinatorCommitWorkspaceRoadmap`):
+
+| Gate | Required |
+|------|----------|
+| `sealed` | Receipt sealed |
+| `mergePassed` | Merge gate passed |
+| `integrityValid` | Replay integrity valid |
+| `reconciliation.passed` | Patch reconciliation passed |
+| Actionable patches | At least one non-advisory patch |
+| Completion policy | `advisory_only` blocks `mark_complete` commit |
+| `roadmap:workspace` lock | Coordinator acquires exclusive lock |
+
+Commit statuses: `pending` → `committed` \| `blocked` \| `advisory_only` \| `skipped` (roadmap disabled).
+
+### Operator console (projection)
+
+`GovernedReceiptPanel` **Roadmap planes** section shows:
+
+- `workspace snap` — current `workspaceRoadmapSnapshotId`
+- `swarm plan` — lane count from `swarmRoadmapPlan`
+- `agent projections` — per-lane projection count
+- `accepted patches` / `rejected patches` — reconciliation counts
+- `rebase {patchId}` — per-patch rebase outcome
+- `Rejected patch reasons` — human-readable rejection list
+- `commit: {status}` — workspace commit result
+- `stale projections` — projections out of sync with workspace
+
+Per-lane row: `patches:N`, `local:N`, truncated `agentRoadmapId`, evidence count.
+
+### Modules
+
+| Module | Role |
+|--------|------|
+| `roadmapProjection.ts` | Shared types (patches, events, reconciliation) |
+| `AgentRoadmapProjection.ts` | Snapshot IDs, projection builder, parsers |
+| `RoadmapPatchQualityGate.ts` | Patch field validation |
+| `RoadmapLocalEventContainment.ts` | Local event allowlist + smuggling detection |
+| `RoadmapPatchReconciler.ts` | Rebase, conflict merge, reconciliation |
+| `RoadmapWorkspaceCommit.ts` | Coordinator commit under `roadmap:workspace` |
+
+**Invariant:** Agents own projections. Coordinator owns commits. Roadmap truth is merged, not directly mutated by parallel lanes.
 
 ---
 
@@ -388,7 +533,7 @@ Summary:
 | **Evidence** | `missing evidence`, `missing transcript pointer`, `missing tool evidence` |
 | **Integrity** | `split-brain lock authority detected`, `duplicate claimId`, `replay checksum mismatch` |
 | **Ownership** | `orphaned claims`, `unreleased claims`, `stale leases` (lock-required lanes only) |
-| **Roadmap** | `unsafe roadmap mutation overlap`, `roadmap mutation without claim`, `lock-skipped lane … mutated roadmap`, `stale roadmap orchestration lease`, completion integrity |
+| **Roadmap** | `unsafe roadmap mutation overlap`, `roadmap mutation without claim`, `lock-skipped lane … mutated roadmap`, `stale roadmap orchestration lease`, completion integrity, `conflicting workspace patches`, `agent … cannot directly mutate workspace roadmap`, `smuggled authoritative mutation via local event` |
 | **Lineage** | `unsealed retry cannot supersede prior sealed receipt` |
 | **Status** | `failed lanes`, `unsealed DAG nodes`, lane/envelope status mismatch |
 
@@ -456,6 +601,21 @@ Update the operator guide.
 Refactor src/core/handler.ts and add tests.
 ```
 
+### Roadmap-aware lane with projection
+
+```
+[roadmap_item:NOW-42] [depends_on:0]
+[local_roadmap:progress_note:NOW-42:refactoring handler]
+[propose_patch:attach_evidence:NOW-42:evidence=src/core/handler.test.ts|rationale=unit tests green|confidence=0.9]
+Implement handler refactor. Do not write workspace roadmap directly.
+```
+
+### Mark complete (requires evidence)
+
+```
+[propose_patch:mark_complete:TASK-1:evidence=tests/e2e/auth.spec.ts|rationale=all acceptance criteria verified|confidence=0.95|policy=fail_on_conflict]
+```
+
 ---
 
 ## Process workers (boundary)
@@ -480,11 +640,12 @@ Honest integration gaps (as of schema v3):
 | Gap | Impact |
 |-----|--------|
 | **Orchestration lease** | Wired via `acquireSwarmOrchestrationLease` after pressure admission; released on seal/crash |
-| **Roadmap completion mutation** | Default `advisory_only`; optional `roadmap_completion_update=enabled` applies only on sealed success |
+| **Roadmap completion mutation** | Default `advisory_only`; patch commit + optional `roadmap_completion_update=enabled` on sealed success |
 | **Crash seal path** | `sealCrashReceipt()` invoked on handler timeout/abort with inferred crash phase |
 | **Roadmap recoverStale** | `recoverStale` only clears in-process, file, fence — not roadmap lease pruning |
-| **Replay checksum scope** | Lock-necessity fields not in canonical hash |
+| **Replay checksum scope** | Lock-necessity and projection fields not in canonical hash |
 | **worker_cli parity** | Separate receipt schema and resource key format |
+| **Patch commit scope** | Coordinator applies subset of patch types to runtime state; complex dependency/ownership graphs logged to `decision_log` |
 
 These are tracked for future hardening; operator runbook documents workarounds.
 
@@ -497,8 +658,9 @@ Governed swarms coordinate with the **roadmap** (scheduling + linkage) and **wor
 ### Expected lifecycle
 
 ```
-roadmap plan → audit preflight → admit swarm → classify lane intent → execute lanes
-  → audit evidence (per-lane completion_gate) → merge gate → audit final receipt → roadmap completion advisory
+roadmap plan → audit preflight → admit swarm → classify lane intent → acquire projections
+  → execute lanes (local events + patch proposals) → audit evidence (per-lane completion_gate)
+  → merge gate → patch reconciliation → coordinator workspace commit → audit final receipt → roadmap completion advisory
 ```
 
 ### Definition of done (where things happen)
@@ -506,7 +668,7 @@ roadmap plan → audit preflight → admit swarm → classify lane intent → ex
 | Question | Answer |
 |----------|--------|
 | Where does roadmap planning enter? | Parent agent roadmap / Now items; swarm admits via `RoadmapService.scheduleAdmission` in `GovernedSwarmCoordinator.admitSwarm` |
-| Where does roadmap state update? | Only when `roadmap_completion_update=enabled` **and** receipt is sealed success; otherwise `completionOutcome.status` is `advisory_only` or `blocked` |
+| Where does roadmap state update? | Via `commitWorkspaceRoadmapPatches` when reconciliation passes + coordinator holds `roadmap:workspace` lock; legacy `roadmap_completion_update=enabled` policy still applies to completion advisory |
 | Which roadmap item owns each lane? | `laneReceipts[].roadmapItemId` from `[roadmap_item:ID]` prompt tag or `roadmap_item_N` param; lease id in `roadmapLeaseTaskId` |
 | Which audit runs before execution? | `evaluateGatePreflightReadinessAsync` via `runGovernedSwarmAuditPreflight` in `SubagentToolHandler` — recorded in `auditIntegration.preflightIssues` |
 | Which audit runs after execution? | Per-lane: `runCompletionGateFlow` at `attempt_completion` in `SubagentRunner`. Swarm seal: `buildGovernedAuditIntegration` + replay checksum in `sealReceipt` |
@@ -524,7 +686,12 @@ roadmap plan → audit preflight → admit swarm → classify lane intent → ex
 | Roadmap item linkage | `[roadmap_item:…]` / params | `laneReceipts[].roadmapItemId` |
 | Completion advisory (dry-run) | `captureRoadmapLinkage` at seal | `roadmapLinkage.completionAdvisory` |
 | Completion mutation policy | `applyGovernedRoadmapCompletionPolicy` | `roadmapLinkage.completionPolicy`, `completionOutcome` |
-| Partial integration honesty | `ROADMAP_INTEGRATION_PARTIAL` | `roadmapLinkage.incompleteIntegration` |
+| Per-lane projection | `buildAgentRoadmapProjection` at acquire | `laneReceipts[].agentRoadmapId`, `roadmapLinkage.agentProjections` |
+| Local events + patches | `collectRoadmapLaneArtifacts` | `laneReceipts[].localRoadmapEvents`, `proposedWorkspacePatch` |
+| Patch reconciliation | `runRoadmapPatchReconciliation` at seal | `roadmapLinkage.patchReconciliation` |
+| Workspace commit | `commitWorkspaceRoadmapPatches` | `roadmapLinkage.workspaceCommit` |
+| Swarm roadmap plan | `buildSwarmRoadmapPlan` | `roadmapLinkage.swarmRoadmapPlan` |
+| Workspace snapshot | `computeRoadmapSnapshotId` | `roadmapLinkage.workspaceRoadmapSnapshotId` |
 
 ### Audit surfaces wired today
 
@@ -540,20 +707,25 @@ roadmap plan → audit preflight → admit swarm → classify lane intent → ex
 
 ```
 [depends_on:0]           — lane waits until lane 0 is sealed
-[roadmap_item:NOW-42]    — links lane to roadmap Now item (receipt only)
+[roadmap_item:NOW-42]    — links lane to roadmap Now item (receipt + projection)
+[local_roadmap:progress_note:NOW-42:…]  — private agent event
+[propose_patch:attach_evidence:NOW-42:evidence=…|rationale=…]  — workspace patch proposal
 ```
 
 Param equivalents: `depends_on_2`, `roadmap_item_1`.
 
-Optional completion mutation: `roadmap_completion_update=enabled` (requires sealed success).
+Optional completion mutation: `roadmap_completion_update=enabled` (requires sealed success + patch commit or policy path).
 
 ### Final invariant
 
 | Plane | Owns |
 |-------|------|
-| Roadmap | Plan and execution admission (pressure + orchestration lease) |
+| Agent roadmap | Private projection — local events, patch proposals |
+| Swarm roadmap | Plan linkage — DAG, lane items, snapshot at admit |
+| Workspace roadmap | Authoritative kanban — coordinator commit only |
+| Roadmap service | Admission (pressure + orchestration lease) |
 | Audit | Verification (`completionGatePipeline`, receipt `auditIntegration`) |
-| MergeGate | Commit safety (parallel lane reconciliation) |
+| MergeGate | File + roadmap audit commit barrier |
 | BroccoliDB | Fencing / replay substrate only |
 | Receipts | Truth (`subagent_executions/` governed artifacts) |
 
@@ -564,14 +736,20 @@ Optional completion mutation: `roadmap_completion_update=enabled` (requires seal
 | Module | Path | Role |
 |--------|------|------|
 | Types + helpers | `src/shared/subagent/governedExecution.ts` | Schema v3, incident derivation, retry safety |
+| Projection types | `src/shared/subagent/roadmapProjection.ts` | Patches, events, reconciliation, commit result |
 | Lock authority | `src/core/governance/LockAuthority.ts` | Unified acquire/release/verify/recover |
 | Public lock API | `src/core/governance/governLock.ts` | `mem_claim` integration |
 | Fencing | `src/core/governance/BroccoliFencingAdapter.ts` | Durable fence files |
 | Coordinator | `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` | Lifecycle orchestration |
 | Integration bridges | `src/core/task/tools/subagent/GovernedIntegration.ts` | Roadmap linkage + audit preflight/post-seal |
 | Lock necessity | `src/core/task/tools/subagent/LockNecessity.ts` | Classifier + read/write split + prompt tags |
-| Roadmap mutation | `src/core/task/tools/subagent/RoadmapMutation.ts` | Resource keys + write classifier |
+| Roadmap mutation | `src/core/task/tools/subagent/RoadmapMutation.ts` | Resource keys + write classifier + direct-mutation detection |
 | Roadmap merge audit | `src/core/task/tools/subagent/RoadmapMergeAudit.ts` | Serialized roadmap overlap + completion integrity |
+| Agent projection | `src/core/task/tools/subagent/AgentRoadmapProjection.ts` | Snapshot IDs, projection builder, parsers |
+| Patch quality gate | `src/core/task/tools/subagent/RoadmapPatchQualityGate.ts` | Required patch field validation |
+| Local event containment | `src/core/task/tools/subagent/RoadmapLocalEventContainment.ts` | Smuggling detection + conversion |
+| Patch reconciler | `src/core/task/tools/subagent/RoadmapPatchReconciler.ts` | Rebase, conflict merge, reconciliation |
+| Workspace commit | `src/core/task/tools/subagent/RoadmapWorkspaceCommit.ts` | Coordinator-only `roadmap:workspace` commit |
 | Merge gate | `src/core/task/tools/subagent/MergeGate.ts` | Commit barrier |
 | Replay | `src/core/task/tools/subagent/ReplayValidator.ts` | Deterministic checksum |
 | Store | `src/core/task/tools/subagent/GovernedExecutionStore.ts` | Persist + authoritative load |
@@ -589,7 +767,10 @@ Optional completion mutation: `roadmap_completion_update=enabled` (requires seal
 | `governedExecutionReliability.test.ts` | Crash phases, fence fail-closed, retry lineage, `isRetrySafe`, checksum stability |
 | `governedExecutionIntegration.test.ts` | Roadmap DAG, pressure score, audit boundaries, receipt linkage fields |
 | `governedExecutionClosure.test.ts` | Orchestration lease, completion policy, crash seal, broccoli boundary |
-| `GovernedReceiptPanel.test.tsx` | Incident console, execution mode badges |
+| `governedExecutionRoadmapProjection.test.ts` | Projection model, reconciliation, coordinator commit |
+| `governedExecutionRoadmapProjectionHardening.test.ts` | Quality gate, containment, rebase, commit guards |
+| `governedExecutionRoadmapSerialization.test.ts` | Legacy merge-audit + projection acquire semantics |
+| `GovernedReceiptPanel.test.tsx` | Incident console, execution mode badges, projection patch state |
 
 ---
 
