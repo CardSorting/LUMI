@@ -272,6 +272,43 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 				</div>
 			)}
 
+			{receipt.laneStates.length > 0 && (
+				<div className="space-y-1">
+					<div className="text-[9px] font-mono uppercase text-foreground/50">Lane receipts</div>
+					{receipt.laneStates.map((lane) => (
+						<div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono" key={lane.laneId}>
+							<span className="text-foreground/60">L{lane.index + 1}</span>
+							<span className={laneStatusClass(lane.status)}>{lane.status}</span>
+							{lane.executionMode && (
+								<span className="text-foreground/50 px-1 border border-foreground/15 rounded-[2px]">
+									{lane.executionMode}
+								</span>
+							)}
+							{lane.lockRequired === false && (
+								<span className="text-success/80" title={lane.reasonLockSkipped}>
+									lock skipped
+								</span>
+							)}
+							{lane.lockRequired && (
+								<span className="text-link/80" title={lane.reasonLockAcquired}>
+									lock required
+								</span>
+							)}
+							{lane.readSet && lane.readSet.length > 0 && (
+								<span className="text-foreground/40">read:{lane.readSet.length}</span>
+							)}
+							{lane.writeSet && lane.writeSet.length > 0 && (
+								<span className="text-amber-600 dark:text-amber-400">write:{lane.writeSet.length}</span>
+							)}
+							{lane.evidenceCount !== undefined && (
+								<span className="text-foreground/40">ev:{lane.evidenceCount}</span>
+							)}
+							{lane.claimId && <span className="text-foreground/30">{lane.claimId.slice(0, 8)}</span>}
+						</div>
+					))}
+				</div>
+			)}
+
 			{receipt.retryHistory.length > 0 && (
 				<div className="space-y-1">
 					<div className="text-[9px] font-mono uppercase text-foreground/50 flex items-center gap-1">

@@ -9,6 +9,7 @@ import type {
 	MergeSafetyAudit,
 } from "@shared/subagent/governedExecution"
 import { verifyReplayArtifact } from "./executionReplayMappers"
+import { envelopeIndicatesWrites } from "./LockNecessity"
 import { explainReplayMismatch, validateDeterministicReplay } from "./ReplayValidator"
 
 export interface MergeGateInput {
@@ -44,21 +45,22 @@ function isOverlapAllowedByDag(indexA: number, indexB: number, laneDag: LaneDAGN
 	return laneDependsOn(indexA, indexB, laneDag) || laneDependsOn(indexB, indexA, laneDag)
 }
 
-function auditOverlappingPaths(agents: SubagentExecutionEnvelope[], laneDag: LaneDAGNode[]): MergeSafetyAudit {
+/** Collision detection scoped to mutation write sets only. */
+function auditMutationWriteOverlaps(laneReceipts: LaneExecutionReceipt[], laneDag: LaneDAGNode[]): MergeSafetyAudit {
 	const violations: string[] = []
 	const overlappingPaths: MergeSafetyAudit["overlappingPaths"] = []
-	const pathToAgents = new Map<string, Array<{ agentId: string; index: number }>>()
+	const pathToLanes = new Map<string, Array<{ agentId: string; index: number }>>()
 
-	for (const agent of agents) {
-		const laneIndex = agent.lineage?.index ?? agents.indexOf(agent)
-		for (const filePath of agent.touchedFiles || []) {
-			const list = pathToAgents.get(filePath) || []
-			list.push({ agentId: agent.agentId, index: laneIndex })
-			pathToAgents.set(filePath, list)
+	for (const lane of laneReceipts) {
+		const writePaths = lane.writeSet?.length ? lane.writeSet : lane.lockRequired ? lane.touchedFiles : []
+		for (const filePath of writePaths) {
+			const list = pathToLanes.get(filePath) || []
+			list.push({ agentId: lane.agentId, index: lane.index })
+			pathToLanes.set(filePath, list)
 		}
 	}
 
-	for (const [filePath, holders] of pathToAgents.entries()) {
+	for (const [filePath, holders] of pathToLanes.entries()) {
 		if (holders.length < 2) {
 			continue
 		}
@@ -79,28 +81,15 @@ function auditOverlappingPaths(agents: SubagentExecutionEnvelope[], laneDag: Lan
 		}
 
 		if (!allowed) {
-			violations.push(`unsafe overlap on '${filePath}': ${uniqueAgents.join(", ")}`)
+			violations.push(`unsafe mutation overlap on '${filePath}': ${uniqueAgents.join(", ")}`)
 		}
 	}
 
 	return { safe: violations.length === 0, violations, overlappingPaths, missingEvidence: [], placeholderWarnings: [] }
 }
 
-function auditMissingTranscripts(laneReceipts: LaneExecutionReceipt[]): string[] {
-	return laneReceipts.filter((lane) => lane.status === "completed" && !lane.transcriptArtifactPath).map((lane) => lane.laneId)
-}
-
-function auditMissingToolEvidence(laneReceipts: LaneExecutionReceipt[]): string[] {
-	return laneReceipts
-		.filter((lane) => lane.status === "completed" && (lane.toolStepCount ?? 0) === 0 && (lane.evidenceCount ?? 0) === 0)
-		.map((lane) => lane.laneId)
-}
-
-function auditMissingEvidence(agents: SubagentExecutionEnvelope[], laneReceipts: LaneExecutionReceipt[]): string[] {
-	const completedAgentIds = new Set(laneReceipts.filter((lane) => lane.status === "completed").map((lane) => lane.agentId))
-	return agents
-		.filter((agent) => completedAgentIds.has(agent.agentId) && (agent.evidenceRefs?.length ?? 0) === 0)
-		.map((agent) => agent.agentId)
+function auditMissingEvidence(agents: SubagentExecutionEnvelope[]): string[] {
+	return agents.filter((agent) => (agent.evidenceRefs?.length ?? 0) === 0).map((agent) => agent.agentId)
 }
 
 function auditPlaceholders(agents: SubagentExecutionEnvelope[]): string[] {
@@ -114,26 +103,34 @@ function auditPlaceholders(agents: SubagentExecutionEnvelope[]): string[] {
 	return warnings
 }
 
-function auditOrphanedClaims(claimHistory: ClaimHistoryEntry[]): number {
-	const acquired = new Map<string, string>()
+function auditOrphanedClaims(claimHistory: ClaimHistoryEntry[], laneReceipts: LaneExecutionReceipt[]): number {
+	const acquired = new Map<string, ClaimHistoryEntry>()
 	let orphaned = 0
 
 	for (const entry of claimHistory) {
 		if (entry.event === "acquired" || entry.event === "recovered") {
-			acquired.set(entry.resourceKey, entry.ownerId)
+			acquired.set(entry.resourceKey, entry)
 		} else if (entry.event === "released") {
 			acquired.delete(entry.resourceKey)
 		} else if (entry.event === "stale_detected") {
-			acquired.delete(entry.resourceKey)
 			orphaned++
 		}
 	}
 
-	return orphaned + acquired.size
+	for (const entry of acquired.values()) {
+		const lane = laneReceipts.find((l) => l.laneId === entry.laneId)
+		if (lane && !lane.lockRequired) {
+			continue
+		}
+		orphaned++
+	}
+
+	return orphaned
 }
 
-function auditStaleLeases(claimHistory: ClaimHistoryEntry[]): number {
-	return claimHistory.filter((entry) => entry.event === "stale_detected").length
+function auditStaleLeases(claimHistory: ClaimHistoryEntry[], laneReceipts: LaneExecutionReceipt[]): number {
+	const lockSkipped = new Set(laneReceipts.filter((l) => !l.lockRequired).map((l) => l.laneId))
+	return claimHistory.filter((entry) => entry.event === "stale_detected" && !lockSkipped.has(entry.laneId)).length
 }
 
 function auditDuplicateClaims(claimHistory: ClaimHistoryEntry[]): string[] {
@@ -172,6 +169,16 @@ function auditSplitBrain(claimHistory: ClaimHistoryEntry[]): boolean {
 		}
 	}
 	return false
+}
+
+function auditMissingTranscripts(laneReceipts: LaneExecutionReceipt[]): string[] {
+	return laneReceipts.filter((lane) => lane.status === "completed" && !lane.transcriptArtifactPath).map((lane) => lane.laneId)
+}
+
+function auditMissingToolEvidence(laneReceipts: LaneExecutionReceipt[]): string[] {
+	return laneReceipts
+		.filter((lane) => lane.status === "completed" && (lane.toolStepCount ?? 0) === 0 && lane.evidenceCount === 0)
+		.map((lane) => lane.laneId)
 }
 
 function auditLaneStatusMismatch(agents: SubagentExecutionEnvelope[], laneReceipts: LaneExecutionReceipt[]): string[] {
@@ -216,6 +223,39 @@ function auditDuplicateClaimIds(claimHistory: ClaimHistoryEntry[]): string[] {
 	return violations
 }
 
+function auditMutationWithoutLock(laneReceipts: LaneExecutionReceipt[], agents: SubagentExecutionEnvelope[]): string[] {
+	const violations: string[] = []
+	for (const lane of laneReceipts) {
+		if (lane.executionMode !== "mutation") {
+			continue
+		}
+		if (!lane.lockRequired || !lane.claimId) {
+			violations.push(`mutation lane ${lane.laneId} missing governed lock`)
+		}
+		const agent = agents.find((a) => a.agentId === lane.agentId)
+		if (lane.lockRequired && !lane.claimId && agent && envelopeIndicatesWrites(agent.toolSteps, agent.touchedFiles)) {
+			violations.push(`mutation lane ${lane.laneId} performed writes without lock`)
+		}
+	}
+	return violations
+}
+
+function auditNonMutatingWithWrites(laneReceipts: LaneExecutionReceipt[], agents: SubagentExecutionEnvelope[]): string[] {
+	const violations: string[] = []
+	for (const lane of laneReceipts) {
+		if (lane.lockRequired || lane.executionMode === "mutation") {
+			continue
+		}
+		const agent = agents.find((a) => a.agentId === lane.agentId)
+		const hasWrites =
+			(lane.writeSet?.length ?? 0) > 0 || (agent && envelopeIndicatesWrites(agent.toolSteps, agent.touchedFiles))
+		if (hasWrites && !lane.claimId) {
+			violations.push(`non-mutating lane ${lane.laneId} (${lane.executionMode}) performed writes without lock`)
+		}
+	}
+	return violations
+}
+
 function auditSealedSupersession(
 	priorSealedReceipt: GovernedSwarmReceipt | null | undefined,
 	attemptId?: string,
@@ -240,10 +280,13 @@ function auditSealedSupersession(
  */
 export function runMergeGate(input: MergeGateInput): MergeGateResult {
 	const violations: string[] = []
-	const overlapAudit = auditOverlappingPaths(input.agents, input.laneDag)
+	const overlapAudit = auditMutationWriteOverlaps(input.laneReceipts, input.laneDag)
 	violations.push(...overlapAudit.violations)
 
-	const missingEvidence = auditMissingEvidence(input.agents, input.laneReceipts)
+	violations.push(...auditMutationWithoutLock(input.laneReceipts, input.agents))
+	violations.push(...auditNonMutatingWithWrites(input.laneReceipts, input.agents))
+
+	const missingEvidence = auditMissingEvidence(input.agents)
 	if (missingEvidence.length > 0) {
 		violations.push(`missing evidence: ${missingEvidence.join(", ")}`)
 	}
@@ -285,12 +328,12 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 		violations.push("split-brain lock authority detected")
 	}
 
-	const orphanedClaimCount = auditOrphanedClaims(input.claimHistory)
+	const orphanedClaimCount = auditOrphanedClaims(input.claimHistory, input.laneReceipts)
 	if (orphanedClaimCount > 0) {
 		violations.push(`orphaned claims: ${orphanedClaimCount}`)
 	}
 
-	const staleLeaseCount = auditStaleLeases(input.claimHistory)
+	const staleLeaseCount = auditStaleLeases(input.claimHistory, input.laneReceipts)
 	if (staleLeaseCount > 0) {
 		violations.push(`stale leases: ${staleLeaseCount}`)
 	}
@@ -348,7 +391,7 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 	}
 
 	const unreleased = input.laneReceipts.filter(
-		(lane) => !lane.claimReleased && lane.status !== "collision_rejected" && lane.status !== "skipped",
+		(lane) => lane.lockRequired && !lane.claimReleased && lane.status !== "collision_rejected",
 	)
 	if (unreleased.length > 0) {
 		violations.push(`unreleased claims: ${unreleased.map((l) => l.laneId).join(", ")}`)

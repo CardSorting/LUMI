@@ -28,8 +28,6 @@ Per-lane artifacts (nothing important in parent chat memory):
 
 Receipt fields: admission, lane DAG, claim history, lane receipts, merge gate, replay checksum, seal status.
 
-**Architecture freeze:** vague improvement prompts route to audit/test/docs only (`GovernedExecutionDirective.ts`). No new layers without a failing test or concrete bug.
-
 ### 3. One merge gate
 
 `MergeGate.runMergeGate()` blocks success until:

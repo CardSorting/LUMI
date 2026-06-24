@@ -6,6 +6,7 @@ export interface LaneDAGNode {
 	dependsOn: number[]
 	state: LaneDAGState
 	agentId?: string
+	executionMode?: string
 	error?: string
 }
 
@@ -36,13 +37,16 @@ export class LaneDAG {
 		return [...this.nodes.values()].filter((node) => node.state === "ready").map((node) => node.index)
 	}
 
-	markRunning(index: number, agentId: string): void {
+	markRunning(index: number, agentId: string, executionMode?: string): void {
 		const node = this.nodes.get(index)
 		if (!node || node.state !== "ready") {
 			throw new Error(`Lane ${index} is not ready (state=${node?.state})`)
 		}
 		node.state = "running"
 		node.agentId = agentId
+		if (executionMode) {
+			node.executionMode = executionMode
+		}
 	}
 
 	markSealed(index: number): void {

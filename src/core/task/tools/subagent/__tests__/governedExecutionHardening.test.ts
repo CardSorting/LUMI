@@ -27,6 +27,20 @@ function buildAgent(agentId: string, index: number, overrides?: Partial<Subagent
 	return { ...builder.build(), compactionEvents: [], ...overrides }
 }
 
+function mutationLane(overrides: Record<string, unknown>) {
+	return {
+		executionMode: "mutation" as const,
+		lockRequired: true,
+		claimReleased: true,
+		evidenceCount: 1,
+		toolStepCount: 1,
+		transcriptArtifactPath: "subagent_executions/swarm-1/agents/a.transcript.jsonl",
+		sealedAt: Date.now(),
+		touchedFiles: [],
+		...overrides,
+	}
+}
+
 describe("governed execution hardening", () => {
 	let tempDir: string
 
@@ -136,26 +150,24 @@ describe("governed execution hardening", () => {
 			const gate = runMergeGate({
 				agents: [agentA, agentB],
 				laneReceipts: [
-					{
+					mutationLane({
 						laneId: "l0",
 						agentId: "a",
 						index: 0,
 						status: "completed",
-						claimReleased: true,
-						evidenceCount: 1,
+						claimId: "c0",
+						writeSet: ["src/shared.ts"],
 						touchedFiles: ["src/shared.ts"],
-						sealedAt: Date.now(),
-					},
-					{
+					}),
+					mutationLane({
 						laneId: "l1",
 						agentId: "b",
 						index: 1,
 						status: "completed",
-						claimReleased: true,
-						evidenceCount: 1,
+						claimId: "c1",
+						writeSet: ["src/shared.ts"],
 						touchedFiles: ["src/shared.ts"],
-						sealedAt: Date.now(),
-					},
+					}),
 				],
 				claimHistory: [],
 				laneDag: [
@@ -165,7 +177,7 @@ describe("governed execution hardening", () => {
 				replayArtifact: replay,
 			})
 			assert.equal(gate.passed, false)
-			assert.ok(gate.violations.some((v) => v.includes("unsafe overlap")))
+			assert.ok(gate.violations.some((v) => v.includes("unsafe mutation overlap")))
 		})
 
 		it("allows overlapping touched files when DAG dependency orders lanes", () => {
@@ -195,26 +207,24 @@ describe("governed execution hardening", () => {
 			const gate = runMergeGate({
 				agents: [agentA, agentB],
 				laneReceipts: [
-					{
+					mutationLane({
 						laneId: "l0",
 						agentId: "a",
 						index: 0,
 						status: "completed",
-						claimReleased: true,
-						evidenceCount: 1,
+						claimId: "c0",
+						writeSet: ["src/shared.ts"],
 						touchedFiles: ["src/shared.ts"],
-						sealedAt: Date.now(),
-					},
-					{
+					}),
+					mutationLane({
 						laneId: "l1",
 						agentId: "b",
 						index: 1,
 						status: "completed",
-						claimReleased: true,
-						evidenceCount: 1,
+						claimId: "c1",
+						writeSet: ["src/shared.ts"],
 						touchedFiles: ["src/shared.ts"],
-						sealedAt: Date.now(),
-					},
+					}),
 				],
 				claimHistory: [],
 				laneDag: [
@@ -224,7 +234,7 @@ describe("governed execution hardening", () => {
 				replayArtifact: swarmEnvelopeToReplayArtifact(envelope),
 			})
 			assert.equal(gate.mergeAudit.overlappingPaths.length, 1)
-			assert.ok(!gate.violations.some((v) => v.includes("unsafe overlap")))
+			assert.ok(!gate.violations.some((v) => v.includes("unsafe mutation overlap")))
 		})
 
 		it("fails on missing evidence and placeholders", () => {
@@ -256,16 +266,18 @@ describe("governed execution hardening", () => {
 			const gate = runMergeGate({
 				agents: [agent],
 				laneReceipts: [
-					{
+					mutationLane({
 						laneId: "l0",
 						agentId: "a",
 						index: 0,
 						status: "completed",
+						claimId: "c0",
 						claimReleased: true,
 						evidenceCount: 0,
+						toolStepCount: 0,
+						transcriptArtifactPath: undefined,
 						touchedFiles: [],
-						sealedAt: Date.now(),
-					},
+					}),
 				],
 				claimHistory: [],
 				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" }],
@@ -300,17 +312,19 @@ describe("governed execution hardening", () => {
 			const gate = runMergeGate({
 				agents: [agent],
 				laneReceipts: [
-					{
+					mutationLane({
 						laneId: "l0",
 						agentId: "a",
 						index: 0,
 						status: "failed",
+						claimId: "c0",
 						claimReleased: false,
 						evidenceCount: 0,
+						toolStepCount: 0,
+						transcriptArtifactPath: undefined,
 						touchedFiles: [],
-						sealedAt: Date.now(),
 						error: "worker crash",
-					},
+					}),
 				],
 				claimHistory: [
 					{
@@ -356,16 +370,14 @@ describe("governed execution hardening", () => {
 			const gate = runMergeGate({
 				agents: [agent],
 				laneReceipts: [
-					{
+					mutationLane({
 						laneId: "l0",
 						agentId: "a",
 						index: 0,
 						status: "completed",
-						claimReleased: true,
-						evidenceCount: 1,
+						claimId: "c0",
 						touchedFiles: [],
-						sealedAt: Date.now(),
-					},
+					}),
 				],
 				claimHistory: [
 					{

@@ -132,22 +132,9 @@ export async function loadAuthoritativeGovernedReceipt(taskId: string, swarmId: 
 	const history = await listGovernedReceiptHistory(taskId, swarmId)
 	const authoritative = [...history].reverse().find((entry) => entry.sealed && entry.mergePassed)
 	if (authoritative) {
-		const receipt = await loadGovernedReceiptAttempt(taskId, swarmId, authoritative.attemptId)
-		if (receipt) {
-			const validation = validateGovernedReceipt(receipt)
-			if (validation.valid) {
-				return receipt
-			}
-		}
+		return loadGovernedReceiptAttempt(taskId, swarmId, authoritative.attemptId)
 	}
-	const latest = await loadGovernedReceipt(taskId, swarmId)
-	if (latest) {
-		const validation = validateGovernedReceipt(latest)
-		if (!validation.valid) {
-			return null
-		}
-	}
-	return latest
+	return loadGovernedReceipt(taskId, swarmId)
 }
 
 export async function loadGovernedReceipt(taskId: string, swarmId: string): Promise<GovernedSwarmReceipt | null> {

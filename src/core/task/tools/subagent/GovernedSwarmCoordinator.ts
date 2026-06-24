@@ -5,6 +5,7 @@ import type {
 	GovernedAdmissionResult,
 	GovernedReceiptSummary,
 	GovernedSwarmReceipt,
+	LaneExecutionMode,
 	LaneExecutionReceipt,
 	LaneExecutionStatus,
 	WorkLaneClaim,
@@ -20,6 +21,7 @@ import {
 	GOVERNED_RECEIPT_SCHEMA_VERSION,
 	lockClaimToHistoryEntry,
 	workLaneClaimFromLock,
+	workLaneClaimWithoutLock,
 } from "@shared/subagent/governedExecution"
 import { v4 as uuidv4 } from "uuid"
 import type { LockAuthority } from "@/core/governance/LockAuthority"
@@ -33,6 +35,7 @@ import {
 	persistGovernedReceipt,
 } from "./GovernedExecutionStore"
 import { LaneDAG } from "./LaneDAG"
+import { classifyLockNecessity, type LaneLockIntent, splitReadWriteSets } from "./LockNecessity"
 import { runMergeGate } from "./MergeGate"
 import { explainReplayMismatch, validateDeterministicReplay } from "./ReplayValidator"
 
@@ -107,9 +110,12 @@ export class GovernedSwarmCoordinator {
 		swarmId: string,
 		agentId: string,
 		index: number,
-	): Promise<{ success: boolean; claim?: WorkLaneClaim; error?: string }> {
+		intent?: LaneLockIntent,
+	): Promise<{ success: boolean; claim?: WorkLaneClaim; error?: string; lockSkipped?: boolean }> {
 		const laneId = buildLaneId(swarmId, index)
 		const node = this.laneDag.getNode(index)
+		const resolvedIntent: LaneLockIntent = intent ?? { executionMode: "mutation" }
+		const necessity = classifyLockNecessity(resolvedIntent)
 
 		if (node?.state === "sealed") {
 			return { success: false, error: `Lane ${index} already sealed.` }
@@ -121,6 +127,20 @@ export class GovernedSwarmCoordinator {
 			return {
 				success: false,
 				error: `Lane '${laneId}' already claimed by agent '${node.agentId}'.`,
+			}
+		}
+
+		if (!necessity.lockRequired) {
+			this.laneDag.markRunning(index, agentId, resolvedIntent.executionMode)
+			return {
+				success: true,
+				lockSkipped: true,
+				claim: workLaneClaimWithoutLock(swarmId, index, agentId, {
+					executionMode: resolvedIntent.executionMode,
+					reasonLockSkipped: necessity.reasonLockSkipped || "lock not required",
+					readSet: resolvedIntent.readSet,
+					writeSet: resolvedIntent.writeSet,
+				}),
 			}
 		}
 
@@ -164,11 +184,18 @@ export class GovernedSwarmCoordinator {
 		}
 
 		this.claimHistory.push(lockClaimToHistoryEntry(result.claim, laneId, "acquired"))
-		this.laneDag.markRunning(index, agentId)
+		this.laneDag.markRunning(index, agentId, resolvedIntent.executionMode)
+
+		const claim = workLaneClaimFromLock(result.claim, swarmId, index, laneId)
+		claim.executionMode = resolvedIntent.executionMode
+		claim.lockRequired = true
+		claim.reasonLockAcquired = necessity.reasonLockAcquired
+		claim.readSet = resolvedIntent.readSet
+		claim.writeSet = resolvedIntent.writeSet
 
 		return {
 			success: true,
-			claim: workLaneClaimFromLock(result.claim, swarmId, index, laneId),
+			claim,
 		}
 	}
 
@@ -211,6 +238,23 @@ export class GovernedSwarmCoordinator {
 			placeholderWarnings.push(envelope.agentId)
 		}
 
+		const { readSet, writeSet } = splitReadWriteSets(
+			claim.executionMode,
+			claim.lockRequired,
+			envelope?.touchedFiles,
+			envelope?.toolSteps,
+			claim.readSet,
+			claim.writeSet,
+		)
+
+		const emptyBackends = {
+			inProcess: false,
+			swarmMutex: false,
+			roadmapLease: false,
+			fileLock: false,
+			broccoliFence: false,
+		}
+
 		const receipt: LaneExecutionReceipt = {
 			laneId: claim.laneId,
 			agentId: claim.agentId,
@@ -218,8 +262,8 @@ export class GovernedSwarmCoordinator {
 			status,
 			dagState: dagNode?.state,
 			attemptId: this.attemptId,
-			claimId: claim.lockClaim?.claimId,
-			claimReleased,
+			claimId: claim.lockRequired ? claim.lockClaim?.claimId : undefined,
+			claimReleased: claim.lockRequired ? claimReleased : true,
 			evidenceCount: envelope?.evidenceRefs.length ?? 0,
 			touchedFiles: envelope?.touchedFiles ?? [],
 			transcriptArtifactPath: envelope?.transcriptArtifactPath,
@@ -227,11 +271,20 @@ export class GovernedSwarmCoordinator {
 			sealedAt: Date.now(),
 			acquiredAt: claim.lockClaim?.acquiredAt,
 			releasedAt: claim.lockClaim?.releasedAt,
-			fencingToken: claim.lockClaim?.fencingToken,
-			lockBackends: claim.lockClaim?.backends,
+			fencingToken: claim.lockRequired ? claim.lockClaim?.fencingToken : undefined,
+			lockBackends: claim.lockRequired ? claim.lockClaim?.backends : emptyBackends,
 			placeholderWarnings: placeholderWarnings.length ? placeholderWarnings : undefined,
-			auditResult: status === "completed" && claimReleased && !placeholderWarnings.length ? "passed" : "failed",
+			auditResult:
+				status === "completed" && (claim.lockRequired ? claimReleased : true) && !placeholderWarnings.length
+					? "passed"
+					: "failed",
 			error,
+			executionMode: claim.executionMode,
+			lockRequired: claim.lockRequired,
+			reasonLockSkipped: claim.reasonLockSkipped,
+			reasonLockAcquired: claim.reasonLockAcquired,
+			readSet,
+			writeSet,
 		}
 
 		return receipt
@@ -277,6 +330,7 @@ export class GovernedSwarmCoordinator {
 				dependsOn: node.dependsOn,
 				state: node.state,
 				agentId: node.agentId,
+				executionMode: node.executionMode as LaneExecutionMode | undefined,
 			})),
 			claimHistory: [...this.claimHistory],
 			mergeGate,
@@ -466,6 +520,12 @@ export class GovernedSwarmCoordinator {
 				dagState: lane.dagState,
 				claimId: lane.claimId,
 				evidenceCount: lane.evidenceCount,
+				executionMode: lane.executionMode,
+				lockRequired: lane.lockRequired,
+				reasonLockSkipped: lane.reasonLockSkipped,
+				reasonLockAcquired: lane.reasonLockAcquired,
+				readSet: lane.readSet,
+				writeSet: lane.writeSet,
 			})),
 			laneDag: dagSnapshot,
 			claimTimeline: buildClaimTimeline(admission, this.claimHistory, { admittedAt: startedAt }),

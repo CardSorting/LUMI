@@ -20,6 +20,7 @@ import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
 import { GovernedSwarmCoordinator } from "../subagent/GovernedSwarmCoordinator"
+import { classifyLockNecessity, resolveLaneLockIntent } from "../subagent/LockNecessity"
 import { computeSwarmArtifactChecksum, planResumeFromArtifact, type SwarmResumePlan } from "../subagent/ResumeSwarmFromArtifact"
 import { SUBAGENT_DEFAULT_ALLOWED_TOOLS, SubagentBuilder } from "../subagent/SubagentBuilder"
 import { loadSwarmEnvelope, persistSwarmEnvelope } from "../subagent/SubagentExecutionStore"
@@ -509,7 +510,9 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			}
 
 			const current = entries[index]
-			const laneClaim = await governedCoordinator.acquireLane(swarmId, current.id, index)
+			const laneIntent = resolveLaneLockIntent(prompts[index], block.params as Record<string, string | undefined>, index)
+			const laneNecessity = classifyLockNecessity(laneIntent)
+			const laneClaim = await governedCoordinator.acquireLane(swarmId, current.id, index, laneIntent)
 			if (!laneClaim.success || !laneClaim.claim) {
 				current.status = "failed"
 				current.error = laneClaim.error || "Work lane claim rejected (ownership ambiguous)."
@@ -522,6 +525,8 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 							index,
 							roadmapLeaseTaskId: `swarm-lane-${swarmId}-${index}`,
 							claimedAt: Date.now(),
+							executionMode: laneIntent.executionMode,
+							lockRequired: laneNecessity.lockRequired,
 						},
 						undefined,
 						"collision_rejected",

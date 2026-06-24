@@ -113,4 +113,67 @@ describe("GovernedReceiptPanel", () => {
 		expect(screen.getByText(/Retry lineage/i)).toBeInTheDocument()
 		expect(screen.getByText(/merge gate blocked/i)).toBeInTheDocument()
 	})
+
+	it("shows execution mode and lock-skipped lanes without missing-lock noise", () => {
+		render(
+			<GovernedReceiptPanel
+				receipt={{
+					swarmId: "swarm-1",
+					attemptId: "attempt-read",
+					admitted: true,
+					mergePassed: true,
+					sealed: true,
+					laneCount: 2,
+					lanesSealed: 2,
+					lanesFailed: 0,
+					lanesBlocked: 0,
+					lanesRunning: 0,
+					collisionRejections: 0,
+					orphanedClaims: 0,
+					integrityValid: true,
+					evidenceComplete: true,
+					replayIntegrityValid: true,
+					splitBrainDetected: false,
+					governedArtifactPath: "subagent_executions/swarm-1.governed.json",
+					replayArtifactPath: "subagent_executions/swarm-1.json",
+					violations: [],
+					claimTimeline: [],
+					laneStates: [
+						{
+							index: 0,
+							laneId: "swarm-lane:swarm-1:0",
+							status: "completed",
+							executionMode: "read_only",
+							lockRequired: false,
+							reasonLockSkipped: "read-only lane; no mutation intent",
+							readSet: ["src/a.ts"],
+							evidenceCount: 1,
+						},
+						{
+							index: 1,
+							laneId: "swarm-lane:swarm-1:1",
+							status: "completed",
+							executionMode: "mutation",
+							lockRequired: true,
+							reasonLockAcquired: "mutation lane with write set",
+							writeSet: ["src/b.ts"],
+							claimId: "claim-mut-1",
+							evidenceCount: 2,
+						},
+					],
+					laneDag: [],
+					resourceOwners: [],
+					retryHistory: [],
+				}}
+			/>,
+		)
+
+		expect(screen.getByText(/read_only/)).toBeInTheDocument()
+		expect(screen.getByText(/lock skipped/i)).toBeInTheDocument()
+		expect(screen.getByText(/read:1/)).toBeInTheDocument()
+		expect(screen.getByText(/mutation/)).toBeInTheDocument()
+		expect(screen.getByText(/lock required/i)).toBeInTheDocument()
+		expect(screen.getByText(/write:1/)).toBeInTheDocument()
+		expect(screen.queryByText(/missing lock/i)).not.toBeInTheDocument()
+	})
 })

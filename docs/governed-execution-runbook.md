@@ -102,22 +102,3 @@ Use `explainReplayMismatch` violations in the incident console for operator-read
 | Retry partial seal | Failed attempt file; authoritative pointer stays on prior sealed |
 
 Every crash path must produce a governed receipt or recoverable stale record — never invisible success.
-
-## Anti-recursion / architecture freeze
-
-Governed execution invariants are **complete**. Vague improvement prompts must not expand architecture.
-
-| Prompt pattern | Routed to |
-|----------------|-----------|
-| "double down", "worldclass UX", "another pass", "industry standards", "make it robust" | **audit_only** |
-| "add regression test" | **test_only** |
-| "update runbook" | **docs_only** |
-| "adapter swap" (approved) | **thin_adapter** |
-| Concrete bug + failing test | **minimal fix** |
-| New lock/schema/gate without failing test | **refused** |
-
-Classification: `classifyGovernedDirective()` in `GovernedExecutionDirective.ts`.
-
-Freeze rule: `assertArchitectureFreeze()` — no new lock authority, receipt schema, merge gate, worker path, or parent-memory layer without a **failing test or concrete bug**.
-
-Gate regression audit: `auditGovernedGateBehavior()` in `GovernedExecutionGateAudit.ts`.

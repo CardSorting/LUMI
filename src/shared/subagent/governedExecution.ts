@@ -3,6 +3,14 @@ import type { LockBackends, LockClaim } from "@/core/governance/LockAuthority"
 
 export const GOVERNED_RECEIPT_SCHEMA_VERSION = 3 as const
 
+export type LaneExecutionMode =
+	| "read_only"
+	| "audit_only"
+	| "planning_only"
+	| "documentation_only"
+	| "diagnostic_only"
+	| "mutation"
+
 export type LaneDAGState = "ready" | "blocked" | "running" | "sealed" | "failed"
 
 export interface LaneDAGNode {
@@ -11,6 +19,7 @@ export interface LaneDAGNode {
 	dependsOn: number[]
 	state: LaneDAGState
 	agentId?: string
+	executionMode?: LaneExecutionMode
 	error?: string
 }
 
@@ -30,6 +39,13 @@ export interface WorkLaneClaim {
 	claimedAt: number
 	expiresAt?: string
 	lockClaim?: LockClaim
+	executionMode: LaneExecutionMode
+	lockRequired: boolean
+	lockSkipped?: boolean
+	reasonLockSkipped?: string
+	reasonLockAcquired?: string
+	readSet?: string[]
+	writeSet?: string[]
 }
 
 export type LaneExecutionStatus = "completed" | "failed" | "skipped" | "collision_rejected" | "blocked" | "running"
@@ -56,6 +72,12 @@ export interface LaneExecutionReceipt {
 	auditResult?: "passed" | "failed"
 	replayChecksum?: string
 	error?: string
+	executionMode: LaneExecutionMode
+	lockRequired: boolean
+	reasonLockSkipped?: string
+	reasonLockAcquired?: string
+	readSet?: string[]
+	writeSet?: string[]
 }
 
 export type ClaimHistoryEvent = "acquired" | "released" | "rejected" | "stale_detected" | "recovered"
@@ -182,6 +204,12 @@ export interface GovernedReceiptSummary {
 		dagState?: LaneDAGState
 		claimId?: string
 		evidenceCount?: number
+		executionMode?: LaneExecutionMode
+		lockRequired?: boolean
+		reasonLockSkipped?: string
+		reasonLockAcquired?: string
+		readSet?: string[]
+		writeSet?: string[]
 	}>
 	laneDag: LaneDAGNode[]
 	claimTimeline: GovernedClaimTimelineEntry[]
@@ -251,6 +279,37 @@ export function workLaneClaimFromLock(claim: LockClaim, swarmId: string, index: 
 		roadmapLeaseTaskId: claim.roadmapLeaseTaskId || buildRoadmapLeaseTaskId(swarmId, index),
 		claimedAt: claim.acquiredAt,
 		lockClaim: claim,
+		executionMode: "mutation",
+		lockRequired: true,
+		reasonLockAcquired: "governed lock acquired",
+	}
+}
+
+export function workLaneClaimWithoutLock(
+	swarmId: string,
+	index: number,
+	agentId: string,
+	intent: {
+		executionMode: LaneExecutionMode
+		reasonLockSkipped: string
+		readSet?: string[]
+		writeSet?: string[]
+	},
+): WorkLaneClaim {
+	const laneId = buildLaneId(swarmId, index)
+	return {
+		laneId,
+		swarmId,
+		agentId,
+		index,
+		roadmapLeaseTaskId: buildRoadmapLeaseTaskId(swarmId, index),
+		claimedAt: Date.now(),
+		executionMode: intent.executionMode,
+		lockRequired: false,
+		lockSkipped: true,
+		reasonLockSkipped: intent.reasonLockSkipped,
+		readSet: intent.readSet,
+		writeSet: intent.writeSet,
 	}
 }
 
@@ -498,6 +557,12 @@ export function buildGovernedReceiptSummary(
 			dagState: lane.dagState,
 			claimId: lane.claimId,
 			evidenceCount: lane.evidenceCount,
+			executionMode: lane.executionMode,
+			lockRequired: lane.lockRequired,
+			reasonLockSkipped: lane.reasonLockSkipped,
+			reasonLockAcquired: lane.reasonLockAcquired,
+			readSet: lane.readSet,
+			writeSet: lane.writeSet,
 		})),
 		laneDag: receipt.laneDag,
 		claimTimeline: buildClaimTimeline(receipt.admission, receipt.claimHistory, {
