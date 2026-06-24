@@ -132,7 +132,15 @@ export class CoordinatorService {
       try {
           console.log(`[Coordinator] 🚀 Launching real worker process for ${workerId}: ${prompt.slice(0, 50)}...`);
 
-          const workerProc = spawn('npx', ['tsx', 'broccolidb/worker_cli.ts', '--worker-id', workerId, '--prompt', prompt], {
+          const workerProc = spawn('npx', [
+              'tsx',
+              'broccolidb/worker_cli.ts',
+              '--worker-id', workerId,
+              '--prompt', prompt,
+              '--swarm-id', params.parentTaskId || 'swarm',
+              '--lane-id', `worker-lane:${workerId}`,
+              '--workspace', process.cwd(),
+          ], {
               stdio: 'pipe',
               detached: true
           });

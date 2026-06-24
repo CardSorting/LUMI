@@ -1,23 +1,41 @@
 import { DietCodeDefaultTool } from "../../../../shared/tools"
 import { ToolUse } from "../../../assistant-message"
-import { SwarmMutexService } from "../../../swarm/SwarmMutexService"
+import {
+	createGovernedLockAuthority,
+	lookupMemClaim,
+	releaseGovernedClaim,
+	unregisterMemClaim,
+} from "../../../governance/governLock"
 import { TaskConfig } from "../types/TaskConfig"
 import { IToolHandler } from "../types/ToolContracts"
 
 export class CognitiveMemoryReleaseHandler implements IToolHandler {
 	readonly name = DietCodeDefaultTool.MEM_RELEASE
+	private readonly lockAuthority = createGovernedLockAuthority({
+		inMemory: process.env.TS_NODE_PROJECT?.includes("unit-test") ?? false,
+	})
 
 	getDescription(_block: ToolUse): string {
 		return "Release a previously claimed resource."
 	}
 
-	async execute(_config: TaskConfig, block: ToolUse): Promise<any> {
+	async execute(config: TaskConfig, block: ToolUse): Promise<any> {
 		const { resource } = block.params as { resource: string }
 		if (!resource) {
 			return `Resource name is required for release.`
 		}
 
-		await SwarmMutexService.release(resource, _config.taskId)
-		return `Resource '${resource}' has been released.`
+		const claim = lookupMemClaim(resource, config.taskId)
+		if (!claim) {
+			return `No active claim found for resource '${resource}'.`
+		}
+
+		const result = await releaseGovernedClaim(this.lockAuthority, claim)
+		if (!result.ok) {
+			return `Failed to release resource '${resource}': ${result.error}`
+		}
+
+		unregisterMemClaim(resource, config.taskId)
+		return `Resource '${resource}' has been released (claim ${claim.claimId}).`
 	}
 }

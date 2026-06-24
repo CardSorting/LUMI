@@ -8,14 +8,18 @@ import {
 } from "@shared/ExtensionMessage"
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { createContinuityMarker, SWARM_ENVELOPE_SCHEMA_VERSION } from "@shared/subagent/executionEnvelope"
+import type { GovernedReceiptSummary, GovernedSwarmReceipt, LaneExecutionReceipt } from "@shared/subagent/governedExecution"
 import pTimeout from "p-timeout"
 import { v4 as uuidv4 } from "uuid"
+import { createLockAuthority } from "@/core/governance/LockAuthority"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
+import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
+import { GovernedSwarmCoordinator } from "../subagent/GovernedSwarmCoordinator"
 import { computeSwarmArtifactChecksum, planResumeFromArtifact, type SwarmResumePlan } from "../subagent/ResumeSwarmFromArtifact"
 import { SUBAGENT_DEFAULT_ALLOWED_TOOLS, SubagentBuilder } from "../subagent/SubagentBuilder"
 import { loadSwarmEnvelope, persistSwarmEnvelope } from "../subagent/SubagentExecutionStore"
@@ -297,6 +301,24 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 
 		const parentStreamId = (config as ConfigWithExtensions).getSessionStreamId?.()
 
+		const governedCoordinator = new GovernedSwarmCoordinator(
+			config.cwd,
+			RoadmapService.getInstance().isEnabled(),
+			prompts.length,
+			undefined,
+			createLockAuthority({ inMemory: process.env.TS_NODE_PROJECT?.includes("unit-test") ?? false }),
+			undefined,
+			resumePlan?.recoveryReceipt?.resumeAttemptId,
+		)
+		const swarmAdmission = await governedCoordinator.admitSwarm(config.taskId)
+		if (!swarmAdmission.admitted) {
+			return formatResponse.toolError(
+				`Swarm admission rejected (roadmap pressure). Retry after ${swarmAdmission.backoffMs}ms.`,
+			)
+		}
+		const laneReceipts: LaneExecutionReceipt[] = []
+		let governedReceiptSummary: GovernedReceiptSummary | undefined
+
 		const emitStatus = async (status: DietCodeSaySubagentStatus["status"], partial: boolean) => {
 			const completed = entries.filter((entry) => entry.status === "completed" || entry.status === "failed").length
 			const successes = entries.filter((entry) => entry.status === "completed").length
@@ -353,6 +375,9 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				},
 				artifactPath,
 				invariantViolations: draft.invariants.violations,
+				governedReceipt:
+					governedReceiptSummary ??
+					governedCoordinator.buildLiveReceiptSummary(swarmId, swarmAdmission, laneReceipts, swarmStartedAt),
 			}
 
 			await config.callbacks.say("subagent", JSON.stringify(payload), undefined, undefined, partial)
@@ -439,6 +464,22 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						agentEnvelopes.set(entry.id, sourceEnvelope)
 						enrichEntryFromEnvelope(entry, sourceEnvelope)
 					}
+					laneReceipts.push(
+						governedCoordinator.buildLaneReceipt(
+							{
+								laneId: `swarm-lane:${swarmId}:${index}`,
+								swarmId,
+								agentId: entry.id,
+								index,
+								roadmapLeaseTaskId: `swarm-lane-${swarmId}-${index}`,
+								claimedAt: Date.now(),
+							},
+							sourceEnvelope,
+							"skipped",
+							true,
+						),
+					)
+					governedCoordinator.markLaneSkipped(index)
 					await queueStatusUpdate("running", true)
 					results[index] = {
 						status: "fulfilled",
@@ -468,6 +509,48 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			}
 
 			const current = entries[index]
+			const laneClaim = await governedCoordinator.acquireLane(swarmId, current.id, index)
+			if (!laneClaim.success || !laneClaim.claim) {
+				current.status = "failed"
+				current.error = laneClaim.error || "Work lane claim rejected (ownership ambiguous)."
+				laneReceipts.push(
+					governedCoordinator.buildLaneReceipt(
+						{
+							laneId: `swarm-lane:${swarmId}:${index}`,
+							swarmId,
+							agentId: current.id,
+							index,
+							roadmapLeaseTaskId: `swarm-lane-${swarmId}-${index}`,
+							claimedAt: Date.now(),
+						},
+						undefined,
+						"collision_rejected",
+						false,
+						current.error,
+					),
+				)
+				await queueStatusUpdate("running", true)
+				results[index] = {
+					status: "fulfilled",
+					value: {
+						status: "failed",
+						error: current.error,
+						stats: {
+							toolCalls: 0,
+							inputTokens: 0,
+							outputTokens: 0,
+							cacheWriteTokens: 0,
+							cacheReadTokens: 0,
+							totalCost: 0,
+							contextTokens: 0,
+							contextWindow: 0,
+							contextUsagePercentage: 0,
+						},
+					},
+				}
+				return
+			}
+
 			try {
 				const result = await runners[index].runWithEnvelope(
 					prompts[index],
@@ -549,6 +632,15 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 					agentEnvelopes.set(current.id, result.envelope)
 					enrichEntryFromEnvelope(current, result.envelope)
 				}
+				laneReceipts.push(
+					governedCoordinator.buildLaneReceipt(
+						laneClaim.claim,
+						result.envelope,
+						result.status === "completed" ? "completed" : "failed",
+						false,
+						result.error,
+					),
+				)
 				results[index] = { status: "fulfilled", value: result }
 			} catch (error) {
 				Logger.error(`[SubagentToolHandler] Subagent ${index} crashed:`, error)
@@ -556,8 +648,20 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				current.error = (error as Error).message || "Internal Runner Crash"
 				const childId = childStreamIds[index]
 				if (childId) orchestrator.failStream(childId, current.error).catch(() => {})
+				laneReceipts.push(
+					governedCoordinator.buildLaneReceipt(laneClaim.claim, undefined, "failed", false, current.error),
+				)
 				await queueStatusUpdate("running", true)
 				results[index] = { status: "rejected", reason: error }
+			} finally {
+				const succeeded = current.status === "completed"
+				const failed = current.status === "failed"
+				await governedCoordinator.releaseLane(laneClaim.claim, succeeded, failed, current.error)
+				const lastReceipt = laneReceipts.find((receipt) => receipt.agentId === current.id && receipt.index === index)
+				if (lastReceipt) {
+					lastReceipt.claimReleased = true
+					lastReceipt.dagState = governedCoordinator.getLaneDAG().getNode(index)?.state
+				}
 			}
 		}
 
@@ -626,25 +730,14 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		})
 
 		const failures = entries.filter((entry) => entry.status === "failed").length
-		await queueStatusUpdate(failures > 0 ? "failed" : "completed", false)
-
-		const subagentUsagePayload: DietCodeSubagentUsageInfo = {
-			source: "subagents",
-			tokensIn: usageTokensIn,
-			tokensOut: usageTokensOut,
-			cacheWrites: usageCacheWrites,
-			cacheReads: usageCacheReads,
-			cost: usageCost,
-		}
-		await config.callbacks.say("subagent_usage", JSON.stringify(subagentUsagePayload))
-
-		const blackboard = config.taskState.swarmBlackboard || []
-		const finalSwarmStatus: SwarmExecutionEnvelope["status"] =
+		let finalSwarmStatus: SwarmExecutionEnvelope["status"] =
 			failures > 0
 				? "failed"
 				: failures === 0 && entries.some((entry) => entry.status === "failed")
 					? "failed"
 					: "completed"
+
+		const blackboard = config.taskState.swarmBlackboard || []
 		const summaryOverlay = buildSwarmSummaryOverlay(
 			buildSwarmEnvelopeDraft({
 				swarmId,
@@ -673,6 +766,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			status: finalSwarmStatus,
 			summaryOverlay,
 		})
+
 		finalEnvelope.checksum = computeSwarmArtifactChecksum(finalEnvelope)
 
 		try {
@@ -682,6 +776,40 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			Logger.warn("[SubagentToolHandler] Failed to persist final swarm execution artifact:", error)
 		}
 
-		return formatResponse.toolResult(buildParentToolResult(finalEnvelope, summaryOverlay))
+		let governedReceipt: GovernedSwarmReceipt | undefined
+		try {
+			governedReceipt = await governedCoordinator.sealReceipt({
+				taskId: config.taskId,
+				envelope: finalEnvelope,
+				admission: swarmAdmission,
+				laneReceipts,
+			})
+			finalEnvelope.invariants.violations.push(...governedReceipt.mergeGate.violations)
+			finalEnvelope.invariants.validated = governedReceipt.sealed
+
+			if (!governedReceipt.sealed) {
+				finalSwarmStatus = "failed"
+				finalEnvelope.status = "failed"
+			}
+
+			governedReceiptSummary = await governedCoordinator.buildReceiptSummary(governedReceipt)
+		} catch (error) {
+			Logger.warn("[SubagentToolHandler] Failed to seal governed swarm receipt:", error)
+			finalSwarmStatus = "failed"
+		}
+
+		await queueStatusUpdate(finalSwarmStatus === "failed" ? "failed" : "completed", false)
+
+		const subagentUsagePayload: DietCodeSubagentUsageInfo = {
+			source: "subagents",
+			tokensIn: usageTokensIn,
+			tokensOut: usageTokensOut,
+			cacheWrites: usageCacheWrites,
+			cacheReads: usageCacheReads,
+			cost: usageCost,
+		}
+		await config.callbacks.say("subagent_usage", JSON.stringify(subagentUsagePayload))
+
+		return formatResponse.toolResult(buildParentToolResult(finalEnvelope, summaryOverlay, governedReceipt))
 	}
 }

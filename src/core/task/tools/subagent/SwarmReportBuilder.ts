@@ -1,5 +1,6 @@
 import type { SubagentStatusItem } from "@shared/ExtensionMessage"
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
+import type { GovernedSwarmReceipt } from "@shared/subagent/governedExecution"
 
 const LLM_EXCERPT_CHARS = 300
 const LLM_PROMPT_EXCERPT_CHARS = 100
@@ -49,11 +50,34 @@ export function buildSwarmSummaryOverlay(envelope: SwarmExecutionEnvelope, entri
 	].join("\n")
 }
 
-export function buildParentToolResult(envelope: SwarmExecutionEnvelope, summaryOverlay: string): string {
+export function buildParentToolResult(
+	envelope: SwarmExecutionEnvelope,
+	summaryOverlay: string,
+	governedReceipt?: GovernedSwarmReceipt,
+): string {
 	const invariantNote =
 		envelope.invariants.violations.length > 0
 			? `\n\n### INVARIANT WARNINGS\n${envelope.invariants.violations.map((v) => `- ${v}`).join("\n")}`
 			: ""
+
+	const governedNote = governedReceipt
+		? [
+				"",
+				"### GOVERNED EXECUTION RECEIPT",
+				`Governed artifact: ${governedReceipt.governedArtifactPath}`,
+				`Merge gate passed: ${governedReceipt.mergeGate.passed}`,
+				`Sealed: ${governedReceipt.sealed}`,
+				`Lanes: ${governedReceipt.laneReceipts.length} (sealed DAG: ${governedReceipt.laneDag.filter((l) => l.state === "sealed").length})`,
+				`Integrity valid: ${governedReceipt.integrity.valid}`,
+				...(governedReceipt.mergeGate.mergeAudit.overlappingPaths.length > 0
+					? [
+							`Overlapping paths: ${governedReceipt.mergeGate.mergeAudit.overlappingPaths
+								.map((overlap) => `${overlap.path} (${overlap.agents.join(", ")})`)
+								.join("; ")}`,
+						]
+					: []),
+			].join("\n")
+		: ""
 
 	return [
 		summaryOverlay,
@@ -63,6 +87,7 @@ export function buildParentToolResult(envelope: SwarmExecutionEnvelope, summaryO
 		`Resume token: ${envelope.continuity.resumeToken}`,
 		`Continuity status: ${envelope.continuity.status}`,
 		invariantNote,
+		governedNote,
 	].join("\n")
 }
 

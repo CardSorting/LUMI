@@ -3,6 +3,7 @@ import {
 	DietCodeAskUseSubagents,
 	DietCodeMessage,
 	DietCodeSaySubagentStatus,
+	GovernedReceiptSummary,
 	SubagentExecutionStatus,
 	SubagentStatusItem,
 } from "@shared/ExtensionMessage"
@@ -21,6 +22,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import MarkdownBlock from "../common/MarkdownBlock"
 import ExpandHandle from "./ExpandHandle"
 import { ParentAuditGateBadge } from "./ParentAuditGateBadge"
+import { GovernedReceiptPanel } from "./subagent/GovernedReceiptPanel"
 import { SubagentCompactionBoundary } from "./subagent/SubagentCompactionBoundary"
 import { SubagentEvidencePanel } from "./subagent/SubagentEvidencePanel"
 import { SubagentExecutionDiffViewer } from "./subagent/SubagentExecutionDiffViewer"
@@ -43,6 +45,7 @@ interface SubagentRowData {
 	continuityMarker?: DietCodeSaySubagentStatus["continuityMarker"]
 	artifactPath?: string
 	invariantViolations?: string[]
+	governedReceipt?: GovernedReceiptSummary
 }
 
 interface SubagentPromptTextProps {
@@ -149,6 +152,7 @@ function parseSubagentRowData(message: DietCodeMessage): SubagentRowData | null 
 			continuityMarker: parsed.continuityMarker,
 			artifactPath: parsed.artifactPath,
 			invariantViolations: parsed.invariantViolations,
+			governedReceipt: parsed.governedReceipt,
 		}
 	} catch {
 		return null
@@ -278,6 +282,7 @@ export default function SubagentStatusRow({ message, isLast, lastModifiedMessage
 				)}
 			</div>
 			{timelineStatus && <SubagentExecutionTimeline status={timelineStatus} />}
+			{data.governedReceipt && <GovernedReceiptPanel receipt={data.governedReceipt} />}
 			{isLast && executionDiff && data.swarmId === executionDiff.diff.rightArtifactId && (
 				<SubagentExecutionDiffViewer
 					diff={executionDiff.diff}
