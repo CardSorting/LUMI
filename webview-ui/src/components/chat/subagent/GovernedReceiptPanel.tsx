@@ -1,8 +1,37 @@
-import type { GovernedReceiptSummary } from "@shared/ExtensionMessage"
+import type { GovernedReceiptIncident, GovernedReceiptSummary } from "@shared/ExtensionMessage"
 import { CheckIcon, CircleXIcon, LockIcon, ShieldAlertIcon, ShieldCheckIcon, TimerIcon } from "lucide-react"
 
 interface GovernedReceiptPanelProps {
 	receipt: GovernedReceiptSummary
+}
+
+const INCIDENT_LABELS: Record<GovernedReceiptIncident, string> = {
+	sealed_success: "Sealed success",
+	partial_receipt: "Partial receipt",
+	failed_receipt: "Failed receipt",
+	stale_claim: "Stale claim",
+	unsafe_retry: "Unsafe retry",
+	corrupted_receipt: "Corrupted receipt",
+	replay_mismatch: "Replay mismatch",
+	backend_unavailable: "Backend unavailable",
+	merge_blocked: "Merge blocked",
+	in_progress: "In progress",
+}
+
+const incidentClass = (incident: GovernedReceiptIncident): string => {
+	switch (incident) {
+		case "sealed_success":
+			return "bg-success/15 text-success border-success/25"
+		case "in_progress":
+		case "partial_receipt":
+			return "bg-link/15 text-link border-link/25"
+		case "stale_claim":
+		case "unsafe_retry":
+		case "merge_blocked":
+			return "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25"
+		default:
+			return "bg-error/15 text-error border-error/25"
+	}
 }
 
 const laneStatusClass = (status: string): string => {
@@ -50,22 +79,22 @@ const backendLabel = (backends?: GovernedReceiptSummary["resourceOwners"][0]["lo
 }
 
 export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
-	const sealIcon = receipt.sealed ? (
-		<ShieldCheckIcon className="size-3 text-success shrink-0" />
-	) : (
-		<ShieldAlertIcon className="size-3 text-error shrink-0" />
-	)
-
-	const blockedReason =
-		receipt.violations[0] ||
-		(!receipt.admitted ? receipt.admissionReason : undefined) ||
-		(receipt.lanesBlocked > 0 ? "DAG dependencies not satisfied" : undefined)
+	const { diagnostics } = receipt
+	const incident = diagnostics?.incident ?? (receipt.sealed ? "sealed_success" : "failed_receipt")
+	const sealIcon =
+		incident === "sealed_success" ? (
+			<ShieldCheckIcon className="size-3 text-success shrink-0" />
+		) : incident === "in_progress" || incident === "partial_receipt" ? (
+			<TimerIcon className="size-3 text-link shrink-0" />
+		) : (
+			<ShieldAlertIcon className="size-3 text-error shrink-0" />
+		)
 
 	return (
 		<div className="mt-2 rounded border border-foreground/15 bg-foreground/[0.03] p-2 space-y-2">
 			<div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wide text-foreground/70">
 				{sealIcon}
-				<span>Governed operator console</span>
+				<span>Incident console</span>
 				<span className="text-foreground/40">·</span>
 				<span>{receipt.attemptId.slice(0, 8)}</span>
 				{receipt.parentAttemptId && (
@@ -76,19 +105,27 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 				)}
 			</div>
 
+			<div className={`text-[10px] font-mono rounded border px-1.5 py-1 ${incidentClass(incident)}`}>
+				<span className="uppercase tracking-wide">{INCIDENT_LABELS[incident]}</span>
+				<span className="text-foreground/50"> — </span>
+				<span>{diagnostics?.incidentSummary || receipt.violations[0] || "Awaiting final seal."}</span>
+			</div>
+
 			<div className="grid grid-cols-2 gap-1 text-[10px] font-mono">
 				<div>
 					Running: <span className="text-link">{receipt.lanesRunning}</span>
 				</div>
 				<div>
-					Blocked:{" "}
-					<span className={receipt.lanesBlocked > 0 ? "text-amber-600" : "text-foreground/60"}>
-						{receipt.lanesBlocked}
+					Retry safe:{" "}
+					<span className={diagnostics?.retrySafe ? "text-success" : "text-error"}>
+						{diagnostics?.retrySafe ? "yes" : "no"}
 					</span>
 				</div>
 				<div>
-					Admitted:{" "}
-					<span className={receipt.admitted ? "text-success" : "text-error"}>{receipt.admitted ? "yes" : "no"}</span>
+					Authoritative:{" "}
+					<span className="text-foreground/70 truncate" title={diagnostics?.authoritativeAttemptId}>
+						{diagnostics?.authoritativeAttemptId?.slice(0, 8) || "—"}
+					</span>
 				</div>
 				<div>
 					Merge gate:{" "}
@@ -97,8 +134,16 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 					</span>
 				</div>
 				<div>
-					Sealed:{" "}
-					<span className={receipt.sealed ? "text-success" : "text-error"}>{receipt.sealed ? "yes" : "no"}</span>
+					Still owned:{" "}
+					<span className={(diagnostics?.activeResourceOwners.length ?? 0) > 0 ? "text-error" : "text-success"}>
+						{diagnostics?.activeResourceOwners.length ?? 0}
+					</span>
+				</div>
+				<div>
+					Stale claims:{" "}
+					<span className={(diagnostics?.staleResourceOwners.length ?? 0) > 0 ? "text-error" : "text-success"}>
+						{diagnostics?.staleResourceOwners.length ?? 0}
+					</span>
 				</div>
 				<div>
 					Evidence:{" "}
@@ -112,17 +157,49 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 						{receipt.replayIntegrityValid ? "valid" : "invalid"}
 					</span>
 				</div>
-				<div>
-					Split-brain:{" "}
-					<span className={receipt.splitBrainDetected ? "text-error" : "text-success"}>
-						{receipt.splitBrainDetected ? "detected" : "none"}
-					</span>
-				</div>
 			</div>
 
-			{blockedReason && !receipt.mergePassed && (
-				<div className="text-[10px] font-mono text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-1">
-					Blocked: {blockedReason}
+			{!diagnostics?.retrySafe && diagnostics?.retryUnsafeReason && (
+				<div className="text-[10px] font-mono text-error/90 bg-error/10 border border-error/20 rounded px-1.5 py-1">
+					Retry unsafe: {diagnostics.retryUnsafeReason}
+				</div>
+			)}
+
+			{(diagnostics?.overlappingPaths.length ?? 0) > 0 && (
+				<div className="space-y-0.5">
+					<div className="text-[9px] font-mono uppercase text-foreground/50">File overlaps</div>
+					{diagnostics!.overlappingPaths.map((overlap) => (
+						<div className="text-[10px] font-mono text-foreground/70" key={overlap.path}>
+							{overlap.path} → {overlap.agents.join(", ")}
+						</div>
+					))}
+				</div>
+			)}
+
+			{((diagnostics?.missingTranscripts.length ?? 0) > 0 || (diagnostics?.missingToolEvidence.length ?? 0) > 0) && (
+				<div className="space-y-0.5">
+					<div className="text-[9px] font-mono uppercase text-foreground/50">Missing evidence</div>
+					{diagnostics!.missingTranscripts.map((laneId) => (
+						<div className="text-[10px] font-mono text-error/80" key={`t-${laneId}`}>
+							transcript: {laneId}
+						</div>
+					))}
+					{diagnostics!.missingToolEvidence.map((laneId) => (
+						<div className="text-[10px] font-mono text-error/80" key={`e-${laneId}`}>
+							tool steps: {laneId}
+						</div>
+					))}
+				</div>
+			)}
+
+			{(diagnostics?.replayMismatchCauses.length ?? 0) > 0 && (
+				<div className="space-y-0.5">
+					<div className="text-[9px] font-mono uppercase text-error/80">Replay mismatch</div>
+					{diagnostics!.replayMismatchCauses.map((cause) => (
+						<div className="text-[10px] font-mono text-error/90 break-words" key={cause}>
+							{cause}
+						</div>
+					))}
 				</div>
 			)}
 
@@ -163,7 +240,9 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 							</span>
 							<span className="text-foreground/50">{owner.ownerId}</span>
 							<span className="text-foreground/30">t{owner.fencingToken}</span>
-							<span className="text-foreground/30">{backendLabel(owner.lockBackends)}</span>
+							<span className="text-foreground/30" title="lock backends">
+								{backendLabel(owner.lockBackends)}
+							</span>
 						</div>
 					))}
 				</div>
@@ -193,27 +272,11 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 				</div>
 			)}
 
-			{receipt.laneStates.length > 0 && (
-				<div className="space-y-1">
-					<div className="text-[9px] font-mono uppercase text-foreground/50">Lane receipts</div>
-					{receipt.laneStates.map((lane) => (
-						<div className="flex items-center gap-1.5 text-[10px] font-mono" key={lane.laneId}>
-							<span className="text-foreground/60">L{lane.index + 1}</span>
-							<span className={laneStatusClass(lane.status)}>{lane.status}</span>
-							{lane.evidenceCount !== undefined && (
-								<span className="text-foreground/40">ev:{lane.evidenceCount}</span>
-							)}
-							{lane.claimId && <span className="text-foreground/30">{lane.claimId.slice(0, 8)}</span>}
-						</div>
-					))}
-				</div>
-			)}
-
 			{receipt.retryHistory.length > 0 && (
 				<div className="space-y-1">
 					<div className="text-[9px] font-mono uppercase text-foreground/50 flex items-center gap-1">
 						<TimerIcon className="size-2" />
-						Retry history
+						Retry lineage
 					</div>
 					{receipt.retryHistory.map((entry) => (
 						<div className="text-[10px] font-mono text-foreground/60" key={entry.attemptId}>
@@ -227,6 +290,7 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 							<span className={entry.mergePassed ? "text-success" : "text-error"}>
 								{entry.mergePassed ? "merge ok" : "merge fail"}
 							</span>
+							{entry.retryReason && <span className="text-foreground/40"> · {entry.retryReason}</span>}
 						</div>
 					))}
 				</div>
@@ -240,9 +304,6 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 							{violation}
 						</div>
 					))}
-					{receipt.violations.length > 5 && (
-						<div className="text-[9px] text-foreground/50">+{receipt.violations.length - 5} more</div>
-					)}
 				</div>
 			)}
 

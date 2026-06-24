@@ -123,6 +123,33 @@ export interface GovernedRetryHistoryEntry {
 	sealed: boolean
 	mergePassed: boolean
 	timestamp: number
+	retryReason?: string
+}
+
+export type GovernedReceiptIncident =
+	| "sealed_success"
+	| "partial_receipt"
+	| "failed_receipt"
+	| "stale_claim"
+	| "unsafe_retry"
+	| "corrupted_receipt"
+	| "replay_mismatch"
+	| "backend_unavailable"
+	| "merge_blocked"
+	| "in_progress"
+
+export interface GovernedReceiptDiagnostics {
+	incident: GovernedReceiptIncident
+	incidentSummary: string
+	retrySafe: boolean
+	retryUnsafeReason?: string
+	authoritativeAttemptId?: string
+	activeResourceOwners: GovernedResourceOwner[]
+	staleResourceOwners: GovernedResourceOwner[]
+	overlappingPaths: MergePathOverlap[]
+	missingTranscripts: string[]
+	missingToolEvidence: string[]
+	replayMismatchCauses: string[]
 }
 
 export interface GovernedReceiptSummary {
@@ -160,6 +187,7 @@ export interface GovernedReceiptSummary {
 	claimTimeline: GovernedClaimTimelineEntry[]
 	resourceOwners: GovernedResourceOwner[]
 	retryHistory: GovernedRetryHistoryEntry[]
+	diagnostics: GovernedReceiptDiagnostics
 }
 
 export interface GovernedSwarmReceipt {
@@ -179,6 +207,7 @@ export interface GovernedSwarmReceipt {
 	replayChecksum?: string
 	sealedAt: number
 	sealed: boolean
+	retryReason?: string
 	integrity: ExecutionReplayIntegrityReport
 }
 
@@ -300,6 +329,132 @@ export function buildClaimTimeline(
 	return timeline
 }
 
+export function deriveReceiptIncident(
+	receipt: GovernedSwarmReceipt,
+	options?: { corrupted?: boolean; inProgress?: boolean },
+): GovernedReceiptIncident {
+	if (options?.inProgress) {
+		return "in_progress"
+	}
+	if (options?.corrupted) {
+		return "corrupted_receipt"
+	}
+	if (!receipt.integrity.valid && receipt.replayChecksum) {
+		return "replay_mismatch"
+	}
+	if (receipt.mergeGate.staleLeaseCount > 0 || receipt.claimHistory.some((e) => e.event === "stale_detected")) {
+		return "stale_claim"
+	}
+	if (receipt.mergeGate.sealedSupersessionBlocked) {
+		return "unsafe_retry"
+	}
+	if (receipt.sealed && receipt.mergeGate.passed) {
+		return "sealed_success"
+	}
+	if (
+		!receipt.sealed &&
+		(receipt.laneReceipts.length === 0 ||
+			receipt.laneDag.some((n) => n.state === "running") ||
+			receipt.retryReason?.startsWith("crash:"))
+	) {
+		return "partial_receipt"
+	}
+	if (!receipt.sealed && receipt.laneReceipts.length > 0) {
+		return "partial_receipt"
+	}
+	if (!receipt.mergeGate.passed) {
+		return "merge_blocked"
+	}
+	if (receipt.mergeGate.violations.some((v) => v.includes("unavailable"))) {
+		return "backend_unavailable"
+	}
+	return "failed_receipt"
+}
+
+export function isRetrySafe(
+	receipt: GovernedSwarmReceipt,
+	retryHistory?: GovernedRetryHistoryEntry[],
+): { safe: boolean; reason?: string } {
+	const resourceOwners = buildResourceOwners(receipt.claimHistory)
+	const active = resourceOwners.filter((o) => o.status === "active")
+	if (active.length > 0) {
+		return { safe: false, reason: `Active claims remain: ${active.map((o) => o.resourceKey).join(", ")}` }
+	}
+	const stale = resourceOwners.filter((o) => o.status === "stale")
+	if (stale.length > 0) {
+		return { safe: false, reason: `Stale claims must be recovered first: ${stale.map((o) => o.resourceKey).join(", ")}` }
+	}
+	if (receipt.mergeGate.sealedSupersessionBlocked) {
+		return { safe: false, reason: "Prior sealed receipt would be superseded unsafely" }
+	}
+	const priorSealed = retryHistory?.find((entry) => entry.sealed && entry.mergePassed && entry.attemptId !== receipt.attemptId)
+	if (priorSealed && receipt.laneDag.some((n) => n.state === "running")) {
+		return { safe: false, reason: "Lanes still running while prior attempt is sealed" }
+	}
+	return { safe: true }
+}
+
+export function buildReceiptDiagnostics(
+	receipt: GovernedSwarmReceipt,
+	retryHistory?: GovernedRetryHistoryEntry[],
+	options?: { corrupted?: boolean; inProgress?: boolean; replayMismatchCauses?: string[] },
+): GovernedReceiptDiagnostics {
+	const resourceOwners = buildResourceOwners(receipt.claimHistory)
+	const activeResourceOwners = resourceOwners.filter((o) => o.status === "active")
+	const staleResourceOwners = resourceOwners.filter((o) => o.status === "stale")
+	const overlappingPaths = receipt.mergeGate.mergeAudit.overlappingPaths
+	const missingTranscripts = receipt.laneReceipts
+		.filter((lane) => lane.status === "completed" && !lane.transcriptArtifactPath)
+		.map((lane) => lane.laneId)
+	const missingToolEvidence = receipt.laneReceipts
+		.filter((lane) => lane.status === "completed" && (lane.toolStepCount ?? 0) === 0 && lane.evidenceCount === 0)
+		.map((lane) => lane.laneId)
+	const incident = deriveReceiptIncident(receipt, options)
+	const retry = isRetrySafe(receipt, retryHistory)
+	const authoritative =
+		retryHistory?.find((entry) => entry.sealed && entry.mergePassed)?.attemptId ||
+		(receipt.sealed && receipt.mergeGate.passed ? receipt.attemptId : undefined)
+
+	const incidentSummary = (() => {
+		switch (incident) {
+			case "sealed_success":
+				return "Swarm sealed successfully — merge gate passed."
+			case "partial_receipt":
+				return "Partial receipt — execution interrupted before seal."
+			case "stale_claim":
+				return "Stale ownership detected — recover before retry."
+			case "unsafe_retry":
+				return "Retry blocked — would supersede a sealed receipt."
+			case "corrupted_receipt":
+				return "Receipt artifact failed schema validation."
+			case "replay_mismatch":
+				return "Replay checksum does not match durable state."
+			case "backend_unavailable":
+				return "Durable lock backend unavailable during claim."
+			case "merge_blocked":
+				return receipt.mergeGate.violations[0] || "Merge gate blocked."
+			case "in_progress":
+				return "Swarm still executing — receipt not final."
+			default:
+				return receipt.mergeGate.violations[0] || "Swarm failed — see violations."
+		}
+	})()
+
+	return {
+		incident,
+		incidentSummary,
+		retrySafe: retry.safe,
+		retryUnsafeReason: retry.reason,
+		authoritativeAttemptId: authoritative,
+		activeResourceOwners,
+		staleResourceOwners,
+		overlappingPaths,
+		missingTranscripts,
+		missingToolEvidence,
+		replayMismatchCauses: options?.replayMismatchCauses ?? receipt.integrity.violations,
+	}
+}
+
 export function buildGovernedReceiptSummary(
 	receipt: GovernedSwarmReceipt,
 	retryHistory?: GovernedRetryHistoryEntry[],
@@ -352,5 +507,6 @@ export function buildGovernedReceiptSummary(
 		}),
 		resourceOwners: buildResourceOwners(receipt.claimHistory),
 		retryHistory: retryHistory ?? [],
+		diagnostics: buildReceiptDiagnostics(receipt, retryHistory),
 	}
 }

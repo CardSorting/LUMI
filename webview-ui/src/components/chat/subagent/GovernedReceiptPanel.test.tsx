@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { GovernedReceiptPanel } from "./GovernedReceiptPanel"
 
 describe("GovernedReceiptPanel", () => {
-	it("renders operator console sections", () => {
+	it("renders incident console with diagnostics", () => {
 		render(
 			<GovernedReceiptPanel
 				receipt={{
@@ -79,18 +79,38 @@ describe("GovernedReceiptPanel", () => {
 							sealed: false,
 							mergePassed: false,
 							timestamp: Date.now(),
+							retryReason: "merge gate blocked",
 						},
 					],
+					diagnostics: {
+						incident: "merge_blocked",
+						incidentSummary: "unsafe overlap on 'src/a.ts': a, b",
+						retrySafe: false,
+						retryUnsafeReason: "Active claims remain: governed-lane:swarm-1:1",
+						authoritativeAttemptId: "attempt-prev",
+						activeResourceOwners: [
+							{
+								resourceKey: "governed-lane:swarm-1:1",
+								ownerId: "b",
+								fencingToken: 2,
+								status: "active",
+							},
+						],
+						staleResourceOwners: [],
+						overlappingPaths: [{ path: "src/a.ts", agents: ["a", "b"] }],
+						missingTranscripts: [],
+						missingToolEvidence: [],
+						replayMismatchCauses: [],
+					},
 				}}
 			/>,
 		)
 
-		expect(screen.getByText(/Governed operator console/i)).toBeInTheDocument()
-		expect(screen.getByText(/Lane DAG/i)).toBeInTheDocument()
-		expect(screen.getByText(/Resource ownership/i)).toBeInTheDocument()
-		expect(screen.getByText(/Claim timeline/i)).toBeInTheDocument()
-		expect(screen.getByText(/Retry history/i)).toBeInTheDocument()
-		expect(screen.getAllByText(/unsafe overlap on/i).length).toBeGreaterThan(0)
-		expect(screen.getByText(/completed/)).toBeInTheDocument()
+		expect(screen.getByText(/Incident console/i)).toBeInTheDocument()
+		expect(screen.getByText(/Merge blocked/i)).toBeInTheDocument()
+		expect(screen.getByText(/Retry unsafe/i)).toBeInTheDocument()
+		expect(screen.getByText(/File overlaps/i)).toBeInTheDocument()
+		expect(screen.getByText(/Retry lineage/i)).toBeInTheDocument()
+		expect(screen.getByText(/merge gate blocked/i)).toBeInTheDocument()
 	})
 })

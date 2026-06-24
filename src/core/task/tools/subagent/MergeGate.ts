@@ -9,6 +9,7 @@ import type {
 	MergeSafetyAudit,
 } from "@shared/subagent/governedExecution"
 import { verifyReplayArtifact } from "./executionReplayMappers"
+import { explainReplayMismatch, validateDeterministicReplay } from "./ReplayValidator"
 
 export interface MergeGateInput {
 	agents: SubagentExecutionEnvelope[]
@@ -19,6 +20,7 @@ export interface MergeGateInput {
 	priorSealedReceipt?: GovernedSwarmReceipt | null
 	attemptId?: string
 	parentAttemptId?: string
+	storedReplayChecksum?: string
 }
 
 function laneDependsOn(ancestor: number, descendant: number, dag: LaneDAGNode[]): boolean {
@@ -84,8 +86,21 @@ function auditOverlappingPaths(agents: SubagentExecutionEnvelope[], laneDag: Lan
 	return { safe: violations.length === 0, violations, overlappingPaths, missingEvidence: [], placeholderWarnings: [] }
 }
 
-function auditMissingEvidence(agents: SubagentExecutionEnvelope[]): string[] {
-	return agents.filter((agent) => (agent.evidenceRefs?.length ?? 0) === 0).map((agent) => agent.agentId)
+function auditMissingTranscripts(laneReceipts: LaneExecutionReceipt[]): string[] {
+	return laneReceipts.filter((lane) => lane.status === "completed" && !lane.transcriptArtifactPath).map((lane) => lane.laneId)
+}
+
+function auditMissingToolEvidence(laneReceipts: LaneExecutionReceipt[]): string[] {
+	return laneReceipts
+		.filter((lane) => lane.status === "completed" && (lane.toolStepCount ?? 0) === 0 && (lane.evidenceCount ?? 0) === 0)
+		.map((lane) => lane.laneId)
+}
+
+function auditMissingEvidence(agents: SubagentExecutionEnvelope[], laneReceipts: LaneExecutionReceipt[]): string[] {
+	const completedAgentIds = new Set(laneReceipts.filter((lane) => lane.status === "completed").map((lane) => lane.agentId))
+	return agents
+		.filter((agent) => completedAgentIds.has(agent.agentId) && (agent.evidenceRefs?.length ?? 0) === 0)
+		.map((agent) => agent.agentId)
 }
 
 function auditPlaceholders(agents: SubagentExecutionEnvelope[]): string[] {
@@ -109,6 +124,7 @@ function auditOrphanedClaims(claimHistory: ClaimHistoryEntry[]): number {
 		} else if (entry.event === "released") {
 			acquired.delete(entry.resourceKey)
 		} else if (entry.event === "stale_detected") {
+			acquired.delete(entry.resourceKey)
 			orphaned++
 		}
 	}
@@ -158,6 +174,48 @@ function auditSplitBrain(claimHistory: ClaimHistoryEntry[]): boolean {
 	return false
 }
 
+function auditLaneStatusMismatch(agents: SubagentExecutionEnvelope[], laneReceipts: LaneExecutionReceipt[]): string[] {
+	const violations: string[] = []
+	for (const lane of laneReceipts) {
+		const agent = agents.find((a) => a.agentId === lane.agentId)
+		if (!agent) {
+			continue
+		}
+		if (lane.status === "completed" && agent.status === "failed") {
+			violations.push(`lane ${lane.laneId} marked completed but agent status is ${agent.status}`)
+		}
+		if (lane.status === "failed" && agent.status === "completed") {
+			violations.push(`failed lane marked successful in envelope: ${lane.laneId}`)
+		}
+	}
+	return violations
+}
+
+function auditDuplicateClaimIds(claimHistory: ClaimHistoryEntry[]): string[] {
+	const activeByClaimId = new Map<string, string>()
+	const violations: string[] = []
+
+	for (const entry of claimHistory) {
+		if (!entry.claimId) {
+			continue
+		}
+		if (entry.event === "released") {
+			activeByClaimId.delete(entry.claimId)
+			continue
+		}
+		if (entry.event === "acquired" || entry.event === "recovered") {
+			if (activeByClaimId.has(entry.claimId)) {
+				violations.push(
+					`duplicate claimId '${entry.claimId}' on resources '${activeByClaimId.get(entry.claimId)}' and '${entry.resourceKey}'`,
+				)
+			}
+			activeByClaimId.set(entry.claimId, entry.resourceKey)
+		}
+	}
+
+	return violations
+}
+
 function auditSealedSupersession(
 	priorSealedReceipt: GovernedSwarmReceipt | null | undefined,
 	attemptId?: string,
@@ -185,7 +243,7 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 	const overlapAudit = auditOverlappingPaths(input.agents, input.laneDag)
 	violations.push(...overlapAudit.violations)
 
-	const missingEvidence = auditMissingEvidence(input.agents)
+	const missingEvidence = auditMissingEvidence(input.agents, input.laneReceipts)
 	if (missingEvidence.length > 0) {
 		violations.push(`missing evidence: ${missingEvidence.join(", ")}`)
 	}
@@ -194,6 +252,19 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 	if (placeholderWarnings.length > 0) {
 		violations.push(`unresolved placeholders: ${placeholderWarnings.join(", ")}`)
 	}
+
+	const missingTranscripts = auditMissingTranscripts(input.laneReceipts)
+	if (missingTranscripts.length > 0) {
+		violations.push(`missing transcript pointer: ${missingTranscripts.join(", ")}`)
+	}
+
+	const missingToolEvidence = auditMissingToolEvidence(input.laneReceipts)
+	if (missingToolEvidence.length > 0) {
+		violations.push(`missing tool evidence: ${missingToolEvidence.join(", ")}`)
+	}
+
+	const laneStatusViolations = auditLaneStatusMismatch(input.agents, input.laneReceipts)
+	violations.push(...laneStatusViolations)
 
 	const failedLanes = input.laneReceipts.filter((lane) => lane.status === "failed")
 	if (failedLanes.length > 0) {
@@ -207,6 +278,7 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 
 	const duplicateViolations = auditDuplicateClaims(input.claimHistory)
 	violations.push(...duplicateViolations)
+	violations.push(...auditDuplicateClaimIds(input.claimHistory))
 
 	const splitBrainDetected = auditSplitBrain(input.claimHistory)
 	if (splitBrainDetected) {
@@ -238,7 +310,46 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 		violations.push("unsealed retry cannot supersede prior sealed receipt")
 	}
 
-	const unreleased = input.laneReceipts.filter((lane) => !lane.claimReleased && lane.status !== "collision_rejected")
+	if (input.storedReplayChecksum) {
+		const replayProbe = validateDeterministicReplay(
+			{
+				schemaVersion: 3,
+				swarmId: input.replayArtifact.artifactId,
+				executionId: input.replayArtifact.executionId || "",
+				taskId: input.replayArtifact.taskId,
+				attemptId: input.attemptId || "",
+				admission: { admitted: true, backoffMs: 0 },
+				laneReceipts: input.laneReceipts,
+				laneDag: input.laneDag,
+				claimHistory: input.claimHistory,
+				mergeGate: {
+					passed: violations.length === 0,
+					mergeAudit: overlapAudit,
+					replayIntegrity,
+					violations: [],
+					failedLaneCount: 0,
+					orphanedClaimCount: 0,
+					staleLeaseCount: 0,
+					splitBrainDetected: false,
+					sealedSupersessionBlocked: false,
+				},
+				replayArtifactPath: "",
+				governedArtifactPath: "",
+				sealedAt: 0,
+				sealed: false,
+				integrity: replayIntegrity,
+				replayChecksum: input.storedReplayChecksum,
+			},
+			input.replayArtifact,
+		)
+		if (!replayProbe.valid) {
+			violations.push(...explainReplayMismatch(replayProbe.violations))
+		}
+	}
+
+	const unreleased = input.laneReceipts.filter(
+		(lane) => !lane.claimReleased && lane.status !== "collision_rejected" && lane.status !== "skipped",
+	)
 	if (unreleased.length > 0) {
 		violations.push(`unreleased claims: ${unreleased.map((l) => l.laneId).join(", ")}`)
 	}

@@ -569,7 +569,7 @@ describe("governed execution hardening", () => {
 			assert.ok(attempts.includes("attempt-2"))
 
 			const loaded = await loadGovernedReceipt("task-1", "swarm-1")
-			assert.equal(loaded?.attemptId, "attempt-2")
+			assert.equal(loaded?.attemptId, "attempt-1")
 
 			const replayValidation = validateDeterministicReplay(receipt, swarmEnvelopeToReplayArtifact(envelope))
 			assert.equal(replayValidation.valid, true)

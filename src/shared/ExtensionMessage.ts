@@ -16,7 +16,10 @@ import { HistoryItem } from "./HistoryItem"
 import { McpDisplayMode } from "./McpDisplayMode"
 import { DietCodeMessageModelInfo } from "./messages"
 import { Mode } from "./storage/types"
-import type { GovernedReceiptSummary } from "./subagent/governedExecution"
+import type { GovernedReceiptDiagnostics, GovernedReceiptIncident, GovernedReceiptSummary } from "./subagent/governedExecution"
+
+export type { GovernedReceiptDiagnostics, GovernedReceiptIncident, GovernedReceiptSummary }
+
 import { TelemetrySetting } from "./TelemetrySetting"
 import { UserInfo } from "./UserInfo"
 // webview will hold state

@@ -14,6 +14,7 @@ import {
 	buildGovernedReceiptSummary,
 	buildLaneId,
 	buildMutexResourceKey,
+	buildReceiptDiagnostics,
 	buildResourceOwners,
 	buildRoadmapLeaseTaskId,
 	GOVERNED_RECEIPT_SCHEMA_VERSION,
@@ -33,7 +34,15 @@ import {
 } from "./GovernedExecutionStore"
 import { LaneDAG } from "./LaneDAG"
 import { runMergeGate } from "./MergeGate"
-import { validateDeterministicReplay } from "./ReplayValidator"
+import { explainReplayMismatch, validateDeterministicReplay } from "./ReplayValidator"
+
+export type GovernedCrashPhase =
+	| "after_claim_before_execution"
+	| "during_lane_execution"
+	| "after_execution_before_release"
+	| "after_release_before_seal"
+	| "parent_before_merge_gate"
+	| "retry_partial_seal"
 
 const LANE_LEASE_SECONDS = 600
 const LANE_MUTEX_MS = LANE_LEASE_SECONDS * 1000
@@ -235,6 +244,7 @@ export class GovernedSwarmCoordinator {
 		laneReceipts: LaneExecutionReceipt[]
 		replayArtifact?: ExecutionReplayArtifact
 		forceFail?: boolean
+		retryReason?: string
 	}): Promise<GovernedSwarmReceipt> {
 		const replayArtifact = options.replayArtifact || swarmEnvelopeToReplayArtifact(options.envelope)
 		const priorSealedReceipt = await loadGovernedReceipt(options.taskId, options.envelope.swarmId)
@@ -274,6 +284,7 @@ export class GovernedSwarmCoordinator {
 			governedArtifactPath: buildGovernedArtifactRelativePath(options.envelope.swarmId, this.attemptId),
 			sealedAt: Date.now(),
 			sealed,
+			retryReason: options.retryReason,
 			integrity: {
 				valid: sealed && mergeGate.replayIntegrity.valid,
 				violations: mergeGate.violations,
@@ -285,9 +296,95 @@ export class GovernedSwarmCoordinator {
 		receipt.replayChecksum = replayValidation.deterministicChecksum
 		if (!replayValidation.valid) {
 			receipt.integrity.valid = false
-			receipt.integrity.violations.push(...replayValidation.violations)
+			receipt.integrity.violations.push(...explainReplayMismatch(replayValidation.violations))
 			receipt.sealed = false
 			sealed = false
+		}
+
+		receipt.governedArtifactPath = await persistGovernedReceipt(options.taskId, receipt)
+		return receipt
+	}
+
+	/** Seal a failed/partial receipt after crash or interruption — never reports success. */
+	async sealCrashReceipt(options: {
+		taskId: string
+		swarmId: string
+		executionId: string
+		admission: GovernedAdmissionResult
+		crashPhase: GovernedCrashPhase
+		laneReceipts?: LaneExecutionReceipt[]
+		artifactPath?: string
+		retryReason?: string
+	}): Promise<GovernedSwarmReceipt> {
+		const laneReceipts = options.laneReceipts ?? []
+		const emptyEnvelope: SwarmExecutionEnvelope = {
+			swarmId: options.swarmId,
+			executionId: options.executionId,
+			taskId: options.taskId,
+			continuity: {
+				swarmId: options.swarmId,
+				taskId: options.taskId,
+				resumeToken: `${options.swarmId}:crash`,
+				lastPersistedAt: Date.now(),
+				completedAgents: laneReceipts.filter((l) => l.status === "completed").length,
+				totalAgents: Math.max(laneReceipts.length, this.laneDag.snapshot().length),
+				status: "failed",
+			},
+			agents: [],
+			blackboardSnapshot: [],
+			timestamps: { started: Date.now(), completed: Date.now() },
+			status: "failed",
+			invariants: { validated: false, violations: [`crash:${options.crashPhase}`] },
+			artifactPath: options.artifactPath || `subagent_executions/${options.swarmId}.json`,
+			schemaVersion: 1,
+		}
+
+		const mergeGate = runMergeGate({
+			agents: [],
+			laneReceipts,
+			claimHistory: this.claimHistory,
+			laneDag: this.laneDag.snapshot(),
+			replayArtifact: {
+				schema: "execution.replay/v1",
+				artifactId: options.swarmId,
+				source: "swarm",
+				taskId: options.taskId,
+				status: "failed",
+				startedAt: Date.now(),
+				completedAt: Date.now(),
+				lineage: [],
+				timeline: [],
+				checkpoints: [],
+				artifactPointers: [],
+				integrity: { valid: false, violations: [`crash:${options.crashPhase}`] },
+				extension: { crashPhase: options.crashPhase },
+			},
+			attemptId: this.attemptId,
+			parentAttemptId: this.parentAttemptId,
+		})
+
+		const receipt: GovernedSwarmReceipt = {
+			schemaVersion: GOVERNED_RECEIPT_SCHEMA_VERSION,
+			swarmId: options.swarmId,
+			executionId: options.executionId,
+			taskId: options.taskId,
+			attemptId: this.attemptId,
+			parentAttemptId: this.parentAttemptId,
+			admission: options.admission,
+			laneReceipts,
+			laneDag: this.laneDag.snapshot(),
+			claimHistory: [...this.claimHistory],
+			mergeGate: {
+				...mergeGate,
+				passed: false,
+				violations: [`crash at ${options.crashPhase}`, ...mergeGate.violations],
+			},
+			replayArtifactPath: emptyEnvelope.artifactPath,
+			governedArtifactPath: buildGovernedArtifactRelativePath(options.swarmId, this.attemptId),
+			sealedAt: Date.now(),
+			sealed: false,
+			retryReason: options.retryReason || `crash:${options.crashPhase}`,
+			integrity: { valid: false, violations: [`crash:${options.crashPhase}`], checksum: "" },
 		}
 
 		receipt.governedArtifactPath = await persistGovernedReceipt(options.taskId, receipt)
@@ -311,6 +408,34 @@ export class GovernedSwarmCoordinator {
 		const lanesSealed = dagSnapshot.filter((lane) => lane.state === "sealed").length
 		const lanesBlocked = dagSnapshot.filter((lane) => lane.state === "blocked").length
 		const lanesRunning = dagSnapshot.filter((lane) => lane.state === "running").length
+		const partialReceipt: GovernedSwarmReceipt = {
+			schemaVersion: GOVERNED_RECEIPT_SCHEMA_VERSION,
+			swarmId,
+			executionId: "",
+			taskId: "",
+			attemptId: this.attemptId,
+			parentAttemptId: this.parentAttemptId,
+			admission,
+			laneReceipts,
+			laneDag: dagSnapshot,
+			claimHistory: [...this.claimHistory],
+			mergeGate: {
+				passed: false,
+				mergeAudit: { safe: false, violations: [], overlappingPaths: [], missingEvidence: [], placeholderWarnings: [] },
+				replayIntegrity: { valid: false, violations: [], checksum: "" },
+				violations: [],
+				failedLaneCount: lanesFailed,
+				orphanedClaimCount: laneReceipts.filter((lane) => !lane.claimReleased).length,
+				staleLeaseCount: 0,
+				splitBrainDetected: false,
+				sealedSupersessionBlocked: false,
+			},
+			replayArtifactPath: "",
+			governedArtifactPath: buildGovernedArtifactRelativePath(swarmId, this.attemptId),
+			sealedAt: 0,
+			sealed: false,
+			integrity: { valid: false, violations: [], checksum: "" },
+		}
 
 		return {
 			swarmId,
@@ -346,6 +471,7 @@ export class GovernedSwarmCoordinator {
 			claimTimeline: buildClaimTimeline(admission, this.claimHistory, { admittedAt: startedAt }),
 			resourceOwners: buildResourceOwners(this.claimHistory),
 			retryHistory: [],
+			diagnostics: buildReceiptDiagnostics(partialReceipt, [], { inProgress: true }),
 		}
 	}
 }

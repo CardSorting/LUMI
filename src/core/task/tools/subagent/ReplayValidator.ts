@@ -67,3 +67,22 @@ export function validateDeterministicReplay(
 		violations,
 	}
 }
+
+/** Human-readable causes for operator console / runbook. */
+export function explainReplayMismatch(violations: string[]): string[] {
+	return violations.map((violation) => {
+		if (violation.includes("replay checksum mismatch")) {
+			return "Stored replay checksum does not match recomputed canonical state — receipt or artifact was mutated."
+		}
+		if (violation.includes("swarm id mismatch")) {
+			return "Swarm receipt and replay artifact reference different swarm IDs."
+		}
+		if (violation.includes("task id mismatch")) {
+			return "Task ID drift between receipt and replay artifact."
+		}
+		if (violation.includes("lane count mismatch")) {
+			return "Lane receipt count does not match replay artifact lineage."
+		}
+		return violation
+	})
+}
