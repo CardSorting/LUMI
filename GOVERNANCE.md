@@ -36,6 +36,7 @@ See [docs/governed-subagent-execution.md](docs/governed-subagent-execution.md).
 - OpenSSF Scorecard: [.github/workflows/scorecard.yml](.github/workflows/scorecard.yml) (weekly supply-chain posture).
 - Publish: [.github/workflows/publish.yml](.github/workflows/publish.yml) (maintainer-triggered — see [.github/RELEASING.md](.github/RELEASING.md)).
 - Dependabot security/patch PRs: auto-merge enabled via [.github/workflows/dependabot-automerge.yml](.github/workflows/dependabot-automerge.yml) when CI passes.
+- **GitHub Actions** Dependabot ignores `semver-major` bumps (review major action upgrades manually in focused PRs).
 
 ### Recommended branch protection (`main`)
 

@@ -16,16 +16,17 @@ jobs:
     steps:
       - uses: actions/first-interaction@v3
         with:
-          issue-message: |
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue_message: |
             Thanks for opening your first issue on **LUMI**!
 
             - Search [existing issues](https://github.com/CardSorting/LUMI/issues) to avoid duplicates
             - Security bugs: see [SECURITY.md](https://github.com/CardSorting/LUMI/blob/main/SECURITY.md) — do not post details publicly
             - Governed swarms: [quick reference](https://github.com/CardSorting/LUMI/blob/main/docs/governed-roadmap-projection-quickref.md)
-          pr-message: |
+          pr_message: |
             Thanks for your first pull request to **LUMI**!
 
             Please read [CONTRIBUTING.md](https://github.com/CardSorting/LUMI/blob/main/CONTRIBUTING.md) and ensure:
-            - PR title uses Conventional Commits (`feat:`, `fix:`, `docs:`, …)
-            - CI is green (`Tests`, `E2E`, `CodeQL`, `PR Title`)
+            - PR title uses Conventional Commits (`feat:`, `fix:`, `docs:`, …) — Dependabot PRs are exempt
+            - CI is green (`Tests`, `E2E`, `CodeQL`)
             - Governed-execution changes preserve projection invariants (see PR template)

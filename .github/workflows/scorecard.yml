@@ -8,10 +8,7 @@ on:
     branches:
       - main
 
-permissions:
-  contents: read
-  id-token: write
-  security-events: write
+permissions: read-all
 
 concurrency:
   group: scorecard-${{ github.ref }}
@@ -21,6 +18,11 @@ jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:

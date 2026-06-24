@@ -1,0 +1,7 @@
+# actionlint policy — https://github.com/rhysd/actionlint/blob/main/docs/config.md
+self-hosted-runner:
+  labels:
+    - ubuntu-latest
+    - windows-latest
+    - macos-latest
+    - ubuntu-24.04

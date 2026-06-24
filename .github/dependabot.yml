@@ -16,6 +16,11 @@ updates:
           github-actions:
               patterns:
                   - "*"
+      ignore:
+          # Major action bumps are reviewed manually — avoids v4→v7 mega-PRs
+          - dependency-name: "*"
+            update-types:
+                - version-update:semver-major
 
     # Main extension dependencies
     - package-ecosystem: "npm"
