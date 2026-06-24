@@ -392,7 +392,7 @@ export class DietCodeApiServerMock {
 
 						const generationId = `gen_${++controller.generationCounter}_${Date.now()}`
 
-						if (stream && body.includes("edit_request")) {
+						if (stream && body.includes("edit_request") && parsed.tools?.length) {
 							res.writeHead(200, {
 								"Content-Type": "text/plain",
 								"Cache-Control": "no-cache",

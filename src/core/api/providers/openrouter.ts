@@ -7,6 +7,7 @@ import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
 import { DietCodeEnv } from "@/config"
 import { buildOpenRouterAttributionHeaders } from "@/services/EnvUtils"
+import { Environment } from "@/shared/config-types"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient, getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
@@ -41,9 +42,9 @@ export class OpenRouterHandler implements ApiHandler {
 				throw new Error("OpenRouter API key is required")
 			}
 			try {
-				const baseURL = process.env.E2E_TEST
-					? `${DietCodeEnv.config().apiBaseUrl}/api/v1`
-					: "https://openrouter.ai/api/v1"
+				const env = DietCodeEnv.config()
+				const useLocalMockApi = process.env.E2E_TEST === "true" || env.environment === Environment.local
+				const baseURL = useLocalMockApi ? `${env.apiBaseUrl}/api/v1` : "https://openrouter.ai/api/v1"
 				this.client = createOpenAIClient({
 					baseURL,
 					apiKey: this.options.openRouterApiKey,
