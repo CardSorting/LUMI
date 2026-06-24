@@ -1,6 +1,6 @@
 # LUMI Technical Whitepaper
 
-**Version 1.0.3 — Calm Agent Extension**
+**Version 2.0.5 — Calm Agent Extension**
 
 *A coding companion is not finished until you can keep it open all day without feeling managed by it.*
 
@@ -10,14 +10,15 @@
 
 ## Abstract
 
-LUMI is a VS Code extension that implements an agentic pair programmer: natural-language tasks, LLM-driven tool use, file and terminal access, browser automation, MCP integration, and optional subagent delegation — with **human-in-the-loop approval** on mutating actions and **gated task completion**.
+LUMI is a VS Code extension that implements an agentic pair programmer: natural-language tasks, LLM-driven tool use, file and terminal access, browser automation, MCP integration, and **governed subagent swarms** — with **human-in-the-loop approval** on mutating actions, **conditional mutation locks** on parallel lanes, and **gated task completion**.
 
-The system composes four major parts:
+The system composes five major parts:
 
 1. **Extension host** (`src/`) — controller, task loop, tools, providers, hooks, storage
-2. **Webview UI** (`webview-ui/`) — React sidebar for chat, settings, diffs, and approval UX
+2. **Webview UI** (`webview-ui/`) — React sidebar for chat, settings, diffs, approval UX, governed receipt incident console
 3. **Host bridge** (`src/hosts/vscode/hostbridge/`) — gRPC/protobuf adapter to VS Code APIs
-4. **BroccoliDB** (`@noorm/broccolidb`) — cognitive memory, Spider structural audit, runtime kernel
+4. **Governed execution harness** (`src/core/task/tools/subagent/`, `src/core/governance/`) — lock necessity, merge gate, durable receipts
+5. **BroccoliDB** (`@noorm/broccolidb`) — cognitive memory, Spider structural audit, runtime kernel
 
 This whitepaper is grounded in the implementation as it exists in the workspace: file paths, enums, provider wiring, and pipeline order cited here are verifiable in the tree.
 
@@ -35,18 +36,21 @@ Coding agents promise speed. They risk **opacity** — changes appear without co
 | Can I stop a bad edit? | Maybe undo in git | Approve/reject before write |
 | Did it actually finish the task? | Model says "done" | `attempt_completion` + gate pipeline |
 | Can I plan before code lands? | Mixed read/write | Plan mode + `plan_mode_respond` |
-| What happened yesterday? | Chat scrollback | Task history + BroccoliDB memory |
+| Can I delegate parallel work safely? | Colliding writes, chat-only audit | `use_subagents` + execution modes + merge gate |
+| What happened in a swarm? | Chat scrollback | Governed receipt v3 + `history.jsonl` lineage |
 
 ### 1.2 What this workspace implements
 
 | Artifact | Count / location |
 |----------|------------------|
-| Extension version | **1.0.3** — `package.json` |
-| Static tool enum values | **62** — `src/shared/tools.ts` |
+| Extension version | **2.0.5** — `package.json` |
+| Static tool enum values | **63** — `src/shared/tools.ts` |
 | Tool handler implementations | **55** files — `src/core/task/tools/handlers/` |
 | Wired LLM providers | **4** — `src/shared/providers/providers.json` + `src/core/api/index.ts` |
 | Lifecycle hook kinds | **8** — `src/core/hooks/hook-factory.ts` |
 | Built-in slash commands | **10** — `src/core/slash-commands/index.ts` |
+| Lane execution modes | **6** — `LockNecessity.ts` |
+| Governed receipt schema | **v3** — `src/shared/subagent/governedExecution.ts` |
 | VS Code commands (`lumi.*`) | **~25** — `package.json` |
 | Test files under `src/` | **~190** |
 
@@ -58,7 +62,7 @@ BroccoliDB substrate metrics (69 test files, 12 capabilities, etc.) are document
 
 These are observable in code, not merely documented:
 
-1. **Human-in-the-loop default** — Mutating tools flow through approval UI; `READ_ONLY_TOOLS` (13 entries) is an explicit allowlist for non-blocking exploration.
+1. **Human-in-the-loop default** — Mutating tools flow through approval UI; `READ_ONLY_TOOLS` (12 entries) is an explicit allowlist for non-blocking exploration.
 
 2. **Typed tool routing** — Every agent capability maps to `DietCodeDefaultTool` and a handler registered in `ToolExecutorCoordinator.toolHandlersMap`.
 
@@ -73,6 +77,20 @@ These are observable in code, not merely documented:
 7. **Substrate separation** — Repository proof and durable graph truth live in BroccoliDB; LUMI integrates via tools and policy, not by reimplementing substrate.
 
 8. **Explicit extension** — MCP, hooks, skills, workflows, and subagents attach to tool contracts; they do not receive raw filesystem access.
+
+9. **Locks protect mutation; receipts preserve truth** — Governed swarms classify lane intent before acquire; non-mutating lanes skip `LockAuthority` claims but still emit durable receipts; `MergeGate` reconciles write sets before seal.
+
+### 2.1 Three verification gates
+
+LUMI repeats the same posture at three scales:
+
+| Scale | Gate | Entry | Fail-closed module |
+|-------|------|-------|-------------------|
+| Tool | Approval | Mutating `DietCodeDefaultTool` | Webview diff + `autoApprove.ts` |
+| Task | Completion | `attempt_completion` | `completionGatePipeline.ts` |
+| Swarm | Merge | `sealReceipt` | `MergeGate.runMergeGate()` |
+
+Swarm gate audits are **mutation-scoped** — read-set overlap between `read_only` lanes is allowed; write-set overlap without DAG ordering is not. Orphaned and unreleased claims count only when `lockRequired: true`.
 
 ---
 
@@ -91,6 +109,15 @@ src/extension.ts
       → parseAssistantMessageV2 → ToolUse[]
       → ToolExecutorCoordinator.executeTool()
       → HostProvider.hostBridge | McpHub | BrowserSession | BroccoliDB handlers
+
+Governed swarm branch (when `use_subagents` runs):
+  SubagentToolHandler
+    → LockNecessity.resolveLaneLockIntent + classifyLockNecessity
+    → GovernedSwarmCoordinator.acquireLane (lock or workLaneClaimWithoutLock)
+    → SubagentRunner.runWithEnvelope
+    → buildLaneReceipt + releaseLane
+    → MergeGate.runMergeGate + sealReceipt → GovernedExecutionStore
+    → GovernedReceiptPanel (via buildReceiptSummary)
 ```
 
 **Controller** holds: active `Task`, `McpHub`, auth services, `StateManager`, optional `WorkspaceRootManager`, remote config timer.
@@ -117,6 +144,9 @@ Generated code: `npm run protos` → `src/generated/`.
 | `src/core/controller/` | gRPC handlers, task lifecycle, MCP UI, models |
 | `src/core/task/` | Agent loop, message state |
 | `src/core/task/tools/` | Coordinator + handlers + completion gates |
+| `src/core/task/tools/subagent/` | Subagent runner, `GovernedSwarmCoordinator`, `MergeGate`, `LockNecessity` |
+| `src/core/governance/` | `LockAuthority`, `governLock`, broccoli fencing adapter |
+| `src/shared/subagent/` | Execution envelope + governed receipt schema v3 |
 | `src/core/api/` | Providers + stream transforms |
 | `src/core/context/` | Context window, file tracking, rules |
 | `src/core/hooks/` | Hook discovery, factory, execution |
@@ -266,19 +296,166 @@ Failure returns structured guidance to the model — completion is **not** accep
 
 ---
 
-## 8. Subagents and orchestration
+## 8. Subagents and governed execution
 
-### 8.1 Subagents
+### 8.1 Subagents (entry)
 
 - Entry: `use_subagents` tool → `SubagentToolHandler`
 - Runtime: `SubagentRunner`, `SubagentBuilder`, `AgentConfigLoader`
 - Dynamic tool registration per subagent config
 - Completion gates: `subagentCompletionGates.ts`
-- Swarm: `SwarmConsensusHandler`, shared memory tools (`mem_claim`, `mem_release`, `mem_hubs`)
+- Swarm consensus: `SwarmConsensusHandler`, shared memory tools (`mem_claim`, `mem_release`, `mem_hubs`)
 
 Subagents inherit parent approval and hook settings.
 
-### 8.2 Orchestrator
+### 8.2 Governed swarm harness
+
+Multi-lane swarms run through `GovernedSwarmCoordinator` — the parent is **coordinator, reviewer, and receipt presenter**, not a memory sink.
+
+**North-star invariant:** Locks protect mutation. Receipts preserve truth.
+
+#### Industry pattern mapping (local implementation)
+
+The harness uses familiar distributed-systems vocabulary without requiring an external consensus service:
+
+| Pattern | Implementation |
+|---------|----------------|
+| Lease / TTL | In-process claim `expiresAt` (600s default); file lock stale recovery |
+| Fencing token | Monotonic `fencingToken` + `.broccolidb/governed/fencing/{hash}.json` |
+| Optimistic concurrency | Parallel lane execution → `MergeGate` at seal |
+| Saga (lite) | acquire → execute → release → seal; unreleased mutation claims block |
+| Append-only log | `claimHistory`, `.governed.history.jsonl`, transcript `.jsonl` |
+| Workflow run ID | `attemptId` + `parentAttemptId` |
+| Policy gate | `MergeGate` violation list before `sealed: true` |
+
+#### Lifecycle
+
+| Phase | Module | Output |
+|-------|--------|--------|
+| Admit | `admitSwarm` | Roadmap admission + `recoverStale(governed-lane:*)` |
+| Classify | `LockNecessity` | `lockRequired`, execution mode, read/write intent |
+| Acquire | `acquireLane` | `WorkLaneClaim` with or without `lockClaim` |
+| Execute | `SubagentRunner` | `SubagentExecutionEnvelope` per lane |
+| Attribute | `splitReadWriteSets` | `readSet` / `writeSet` on lane receipt |
+| Release | `releaseLane` | Claim cleared (mutation only) |
+| Merge | `MergeGate` | Violations or pass |
+| Seal | `sealReceipt` | `GovernedSwarmReceipt` schema v3 persisted |
+
+#### Execution modes
+
+Resolution order: tool param `execution_mode_{N}` → `execution_mode` → prompt `[execution_mode:…]` → default **`mutation`**.
+
+| Mode | Default lock |
+|------|--------------|
+| `read_only`, `audit_only`, `planning_only`, `documentation_only`, `diagnostic_only` | skipped |
+| `mutation` | required |
+
+Escalation tags (`[write_set:…]`, `[declares_writes]`, `[mutates_roadmap]`, `[mutates_broccoli]`, `[updates_authoritative_receipt]`, `[exclusive_resource:…]`) promote non-mutating lanes to lock-required with `reasonLockAcquired` explaining escalation.
+
+Post-execution, `splitReadWriteSets()` and write-tool detection (`write_to_file`, `edit_file`, `apply_patch`, `search_and_replace`, `insert_content`, `mem_claim`) feed merge audits. `envelopeIndicatesWrites()` catches non-mutating lanes that mutated without lock.
+
+#### Lock necessity decision (summary)
+
+```
+execution_mode === mutation     → lockRequired: true
+non-mutating + escalation tag   → lockRequired: true (escalated)
+non-mutating + no signals       → lockRequired: false (workLaneClaimWithoutLock)
+```
+
+Lock-skipped lanes: `claimId: null`, `lockBackends: []`, `reasonLockSkipped` set — still in `laneReceipts`, absent from `claimHistory`.
+
+#### Lock authority (`UnifiedLockAuthority`)
+
+Layered acquire (fail-closed; partial acquire rolls back):
+
+1. In-process registry (TTL lease)
+2. Roadmap lease
+3. SwarmMutex (SQLite)
+4. Cross-process file lock (`.broccolidb/governed/locks/`)
+5. Broccoli fencing token (`.broccolidb/governed/fencing/`)
+
+Resource key per lane: `governed-lane:{swarmId}:{index}`.
+
+Lock-skipped lanes call `workLaneClaimWithoutLock()` — **no `claimHistory` entry**, full `LaneExecutionReceipt` with `lockRequired: false`.
+
+#### Merge gate (optimistic reconciliation)
+
+`runMergeGate()` blocks swarm success until audits pass. Collision detection is **write-set scoped**:
+
+- Parallel read-only lanes reading the same file → allowed
+- Parallel mutation lanes writing the same path without DAG order → `unsafe mutation overlap`
+- Mutation lane without lock → fail
+- Non-mutating lane that ran write tools without lock → fail
+- Orphaned/unreleased claims → counted only for `lockRequired` lanes
+
+DAG-ordered write overlap is allowed when one lane transitively depends on another (`LaneDAG` + `isOverlapAllowedByDag`; handler deps wiring incomplete).
+
+**Representative violations** (full catalog: [runbook](../governed-execution-runbook.md#violation-catalog)):
+
+| Violation | Cause |
+|-----------|-------|
+| `unsafe mutation overlap on '{path}'` | Parallel writes, no DAG order |
+| `mutation lane … missing governed lock` | Mutation mode without claim |
+| `non-mutating lane … performed writes without lock` | Mode/write mismatch |
+| `orphaned claims: N` | Mutation claims not released (lock-required only) |
+| `unreleased claims: …` | `lockRequired && !claimReleased` |
+| `unsealed retry cannot supersede prior sealed receipt` | Unsafe retry lineage |
+| `replay checksum mismatch` | Post-seal drift |
+
+#### Incident taxonomy
+
+`deriveReceiptIncident()` in `governedExecution.ts` — priority order:
+
+`in_progress` → `corrupted_receipt` → `replay_mismatch` → `stale_claim` → `unsafe_retry` → `sealed_success` → `partial_receipt` → `merge_blocked` → `backend_unavailable` → `failed_receipt`
+
+`buildReceiptDiagnostics()` adds `retrySafe`, `authoritativeAttemptId`, overlap lists, and operator-readable `incidentSummary` for `GovernedReceiptPanel`.
+
+#### Retry safety
+
+`isRetrySafe()` blocks retry when active/stale resource owners remain, supersession would overwrite a sealed receipt, or lanes are still running against a prior sealed attempt. Lock-skipped lanes impose no claim cleanup burden.
+
+#### Durable artifacts
+
+| Artifact | Path |
+|----------|------|
+| Swarm envelope | `subagent_executions/{swarmId}.json` |
+| Per-attempt receipt | `subagent_executions/{swarmId}.governed.{attemptId}.json` |
+| Attempt lineage | `subagent_executions/{swarmId}.governed.history.jsonl` |
+| Latest pointer | `subagent_executions/{swarmId}.governed.json` (may lag sealed prior on failed retry) |
+| Lane transcript | `subagent_executions/{swarmId}/agents/{agentId}.transcript.jsonl` |
+
+Authoritative state: `loadAuthoritativeGovernedReceipt()` or last `sealed && mergePassed` in history.
+
+#### Operator surface
+
+`GovernedReceiptPanel` in `SubagentStatusRow` renders incident class, per-lane execution mode, lock skipped/required, read/write set counts, claim timeline (mutation only), merge violations, retry safety.
+
+Data path: `buildReceiptSummary()` → `DietCodeSaySubagentStatus.governedReceipt`.
+
+#### Replay checksum
+
+SHA-256 over canonical subset (lane status, sorted `touchedFiles`, admission, merge result, replay artifact IDs). Lock-necessity fields (`executionMode`, `readSet`, `writeSet`, `claimHistory`) are **not** in the hash — integrity targets execution outcome, not full receipt blob.
+
+#### mem_claim and lane locks
+
+`mem_claim` / `mem_release` use `governLock.ts` → same `LockAuthority` interface. Lane claims use `releaseGovernedLock()` (workspace-aware durable release). `mem_release` uses in-process release only — documented boundary in [decisions ADR-002](../governed-execution-decisions.md#adr-002-unified-lock-authority-with-layered-backends).
+
+#### Known limitations (honest)
+
+| Gap | Impact |
+|-----|--------|
+| Lane DAG deps not passed from handler | Parallel pool ignores `blocked`; `isLaneReady()` unused |
+| `sealCrashReceipt` not wired on handler timeout | Partial state via `sealReceipt` |
+| `worker_cli` subset | File lock only; receipt schema v1; different resource key format |
+| Replay hash excludes lock fields | Checksum mismatch ≠ lock-state corruption |
+
+#### Tests
+
+`governedExecutionLockNecessity.test.ts`, `governedExecutionHardening.test.ts`, `governedExecutionReliability.test.ts`, `GovernedReceiptPanel.test.tsx`.
+
+Full reference: [governed-subagent-execution.md](../governed-subagent-execution.md) · [schema](../governed-execution-schema.md) · [runbook](../governed-execution-runbook.md) · [decisions](../governed-execution-decisions.md).
+
+### 8.3 Orchestrator
 
 `src/infrastructure/ai/Orchestrator.ts` — tracks agent streams, subagent tasks, intent classification (`REFACTOR`, `DEBUG`, …), audit metadata, swarm signals. Persists via `src/infrastructure/db/BufferedDbPool`.
 
@@ -357,6 +534,8 @@ Implementation: `src/services/roadmap/` (26 files).
 | Control | Implementation |
 |---------|----------------|
 | Approval before mutation | Tool UI + auto-approve rules |
+| Governed mutation locks | `LockAuthority` — layered lease + fencing; lock-skipped for non-mutating lanes |
+| Swarm merge gate | Write-set reconciliation before `sealed: true` |
 | Secret exclusion | `.dietcodeignore`, user discipline |
 | Credential storage | VS Code secret storage via `StateManager` |
 | Command permissions | `CommandPermissionController` |
@@ -378,6 +557,7 @@ npm run test:unit
 npm run test:integration
 npm run package          # VSIX
 npm run roadmap:audit
+npm run test:unit -- --grep "governed execution"
 npm run docs:check-links
 ```
 
@@ -391,8 +571,11 @@ Extension activation: `src/extension.ts` (~788 lines). Registry: `src/registry.t
 |------------|----------------|
 | Default approval path for mutating tools | Correct LLM reasoning |
 | 4 providers wired in `buildApiHandler` | All provider UI components functional |
-| 62 enum tool names; coordinator routing | Every enum has active handler (some reserved) |
+| 63 enum tool names; coordinator routing | Every enum has active handler (some reserved) |
 | Completion pipeline on `attempt_completion` | Zero false gate blocks |
+| Governed merge gate before swarm seal | Zero false merge blocks; DAG deps not wired in handler |
+| Lock-skipped lanes for non-mutating modes | worker_cli full harness parity |
+| Durable governed receipts per attempt | Chat status as authoritative swarm truth |
 | BroccoliDB tools when package present | Spider/kernel without dependency |
 | VS Code as host | JetBrains, CLI, headless agent |
 
@@ -404,6 +587,10 @@ Extension activation: `src/extension.ts` (~788 lines). Registry: `src/registry.t
 |----------|-------|
 | [Philosophy](philosophy.md) | Why calm agency |
 | [Companion Brief](companion-brief.md) | Executive metrics |
+| [Governed subagent execution](../governed-subagent-execution.md) | Swarm harness architecture |
+| [Governed execution runbook](../governed-execution-runbook.md) | Operator incidents, retry |
+| [Governed execution schema](../governed-execution-schema.md) | Receipt v3 fields |
+| [Governed execution decisions](../governed-execution-decisions.md) | ADRs |
 | [Architecture (current)](../architecture/current.md) | Module reference |
 | [System communication](../SYSTEM_COMMUNICATION.md) | IPC detail |
 | [gRPC subscription persistence](../grpc-subscription-persistence.md) | Persistent `subscribeTo*` streams and runtime |
@@ -423,6 +610,12 @@ Extension activation: `src/extension.ts` (~788 lines). Registry: `src/registry.t
 | `src/core/api/index.ts` | Provider factory |
 | `src/shared/providers/providers.json` | Active provider list |
 | `src/core/task/tools/completionGatePipeline.ts` | Completion gates |
+| `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` | Governed swarm lifecycle |
+| `src/core/task/tools/subagent/MergeGate.ts` | Swarm merge reconciliation |
+| `src/core/task/tools/subagent/LockNecessity.ts` | Execution mode + lock classifier |
+| `src/core/governance/LockAuthority.ts` | Unified mutation ownership |
+| `src/shared/subagent/governedExecution.ts` | Receipt schema v3 types |
+| `webview-ui/src/components/chat/subagent/GovernedReceiptPanel.tsx` | Incident console UI |
 | `src/core/hooks/hook-factory.ts` | Hook types |
 | `src/hosts/host-provider.ts` | Host abstraction |
 | `package.json` | Extension manifest, `lumi.*` commands |
