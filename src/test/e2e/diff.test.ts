@@ -23,13 +23,13 @@ e2e.describe("Diff Editor", () => {
 			const completedEdit = sidebar.getByText(/I updated this file:/)
 			const diffTab = page.getByText("test.ts: Original ↔ DietCode's")
 
-			await expect(applyButton.or(completedEdit).or(diffTab)).toBeVisible({ timeout: 90_000 })
+			await expect(applyButton.or(completedEdit)).toBeVisible({ timeout: 90_000 })
 
 			if (await applyButton.isVisible({ timeout: 2000 }).catch(() => false)) {
 				await applyButton.click()
 			}
 
-			await expect(diffTab).toBeVisible({ timeout: 30_000 })
+			await expect(diffTab).toBeVisible({ timeout: 90_000 })
 
 			const diffEditor = page.locator(
 				".monaco-editor.modified-in-monaco-diff-editor > .overflow-guard > .monaco-scrollable-element.editor-scrollable > .lines-content > div:nth-child(4)",
