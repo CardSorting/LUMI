@@ -14,6 +14,7 @@ import { HookDiscoveryCache } from "../core/hooks/HookDiscoveryCache"
 import { StateManager } from "../core/storage/StateManager"
 import { HostProvider } from "../hosts/host-provider"
 import { CreateHookRequest, DeleteHookRequest, ToggleHookRequest } from "../shared/proto/dietcode/file"
+import { setVscodeHostProviderMock } from "./host-provider-test-utils"
 
 /**
  * Unit tests for hook management operations
@@ -59,13 +60,12 @@ describe("Hook Management", () => {
 			},
 		} as any)
 
-		// Mock HostProvider.workspace.getWorkspacePaths - need to stub the method directly
+		// Mock HostProvider.workspace.getWorkspacePaths
 		getWorkspacePathsStub = sinon.stub().resolves({
 			paths: [path.join(tempDir, "workspace")],
 		})
-		sinon.stub(HostProvider, "workspace").value({
-			getWorkspacePaths: getWorkspacePathsStub,
-		})
+		setVscodeHostProviderMock()
+		sinon.stub(HostProvider.workspace, "getWorkspacePaths").callsFake(getWorkspacePathsStub)
 	})
 
 	afterEach(async () => {

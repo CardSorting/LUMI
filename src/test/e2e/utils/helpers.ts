@@ -118,6 +118,17 @@ export class E2ETestHelper {
 		}
 	}
 
+	public async waitForAssistantReply(webview: Frame): Promise<void> {
+		await expect(webview.getByText(/Generated UUID:/)).toBeVisible({ timeout: 30000 })
+	}
+
+	public async openPastChats(webview: Frame, taskLabel: string): Promise<void> {
+		await webview.getByRole("button", { name: "Past chats" }).click()
+		await expect(webview.getByText(taskLabel)).toBeVisible({ timeout: 15000 })
+		await webview.getByRole("button", { name: "Back to chat" }).click()
+		await expect(webview.getByTestId("chat-input")).toBeVisible({ timeout: 15000 })
+	}
+
 	public async configureApiKey(webview: Frame): Promise<void> {
 		await webview.getByRole("button", { name: "Preferences" }).click({ delay: 100 })
 

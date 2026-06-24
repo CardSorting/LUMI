@@ -5,9 +5,9 @@
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import {
-    acquireGovernedFileLock,
-    releaseGovernedFileLock,
-} from "../src/shared/governance/fileLock.ts"
+	acquireGovernedFileLock,
+	releaseGovernedFileLock,
+} from "../src/shared/governance/fileLock"
 
 interface WorkerArgs {
 	workerId: string

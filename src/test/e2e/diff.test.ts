@@ -15,14 +15,13 @@ e2e.describe("Diff Editor", () => {
 			await expect(inputbox).toHaveValue("[diff.test.ts] Hello, DietCode!")
 			await sidebar.getByTestId("send-button").click()
 			await expect(inputbox).toHaveValue("")
+			await helper.waitForAssistantReply(sidebar)
 
-			// Back to home page with history
 			await sidebar.getByRole("button", { name: "New chat" }).click()
-			await sidebar.getByRole("button", { name: "Past chats" }).click()
-			await expect(sidebar.getByText("[diff.test.ts] Hello, DietCode!")).toBeVisible({ timeout: 15000 })
+			await helper.openPastChats(sidebar, "[diff.test.ts] Hello, DietCode!")
 
 			// Submit a file edit request
-			await sidebar.getByTestId("chat-input").click()
+			await inputbox.click()
 			await sidebar.getByTestId("chat-input").fill("edit_request")
 			await sidebar.getByTestId("send-button").click({ delay: 50 })
 
