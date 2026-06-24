@@ -5,6 +5,13 @@ updates:
       directory: "/"
       schedule:
           interval: "weekly"
+      open-pull-requests-limit: 5
+      labels:
+          - dependencies
+          - ci
+      commit-message:
+          prefix: "ci"
+          include: scope
       groups:
           github-actions:
               patterns:
@@ -15,13 +22,17 @@ updates:
       directory: "/"
       schedule:
           interval: "weekly"
-      # Group all updates into a single PR
+      open-pull-requests-limit: 5
+      labels:
+          - dependencies
+      commit-message:
+          prefix: "chore"
+          include: scope
       groups:
           all-dependencies:
               patterns:
                   - "*"
       ignore:
-          # Ignore all non-security updates (security vulnerabilities bypass these ignore rules)
           - dependency-name: "*"
             update-types:
                 - "version-update:semver-major"
@@ -33,6 +44,13 @@ updates:
       directory: "/webview-ui"
       schedule:
           interval: "weekly"
+      open-pull-requests-limit: 5
+      labels:
+          - dependencies
+          - webview
+      commit-message:
+          prefix: "chore"
+          include: scope
       groups:
           all-dependencies:
               patterns:
@@ -50,6 +68,13 @@ updates:
       directory: "/broccolidb"
       schedule:
           interval: "weekly"
+      open-pull-requests-limit: 5
+      labels:
+          - dependencies
+          - broccolidb
+      commit-message:
+          prefix: "chore"
+          include: scope
       groups:
           all-dependencies:
               patterns:

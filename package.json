@@ -503,7 +503,6 @@
 		"publish:all:prerelease": "npm run publish:vscode:prerelease && npm run publish:openvsx:prerelease",
 		"publish:marketplace": "npm run publish:all",
 		"publish:marketplace:prerelease": "npm run publish:all:prerelease",
-		"publish:marketplace:nightly": "node ./scripts/publish-nightly.mjs",
 		"prepare": "npx husky",
 		"docs": "cd docs && npm run dev",
 		"docs:check-links": "cd docs && npm run check",

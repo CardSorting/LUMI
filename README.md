@@ -22,6 +22,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/test.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/test.yml/badge.svg" alt="Tests" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/e2e.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/e2e.yml/badge.svg" alt="E2E" /></a>
+  <a href="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI"><img src="https://api.securityscorecards.dev/projects/github.com/CardSorting/LUMI/badge" alt="OpenSSF Scorecard" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/version-2.1.0-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
@@ -899,6 +901,7 @@ Full contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md).
 | **Support guide** | [.github/SUPPORT.md](.github/SUPPORT.md) |
 | **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
 | **Governance** | [GOVERNANCE.md](GOVERNANCE.md) |
+| **OpenSSF Scorecard** | [securityscorecards.dev](https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI) |
 | **Discussions** | [GitHub Discussions](https://github.com/CardSorting/LUMI/discussions) |
 | **Governed swarm quick ref** | [docs/governed-roadmap-projection-quickref.md](docs/governed-roadmap-projection-quickref.md) |
 | **Governed swarm runbook** | [docs/governed-execution-runbook.md](docs/governed-execution-runbook.md) |

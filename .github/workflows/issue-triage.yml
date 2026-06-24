@@ -1,0 +1,43 @@
+name: Issue Triage Labels
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+            const existing = new Set(context.payload.issue.labels.map((label) => label.name));
+            const toAdd = [];
+
+            const rules = [
+              { pattern: /Governed subagents|Roadmap projection|governed execution/i, label: 'governed-execution' },
+              { pattern: /Webview UI/i, label: 'webview' },
+              { pattern: /BroccoliDB|cognitive memory/i, label: 'broccolidb' },
+              { pattern: /MCP integration/i, label: 'mcp' },
+            ];
+
+            for (const { pattern, label } of rules) {
+              if (pattern.test(body) && !existing.has(label)) {
+                toAdd.push(label);
+              }
+            }
+
+            if (toAdd.length === 0) {
+              return;
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: toAdd,
+            });

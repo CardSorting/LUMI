@@ -1,0 +1,30 @@
+name: Setup Node monorepo
+description: Install LUMI root and webview-ui dependencies with npm cache
+inputs:
+  node-version:
+    description: Node.js major version
+    default: "22"
+  github-token:
+    description: Optional token for private registry access during npm ci
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: |
+          package-lock.json
+          webview-ui/package-lock.json
+
+    - name: Install root dependencies
+      shell: bash
+      run: npm ci
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    - name: Install webview-ui dependencies
+      shell: bash
+      run: cd webview-ui && npm ci

@@ -1,0 +1,27 @@
+name: Security advisory
+description: Report a vulnerability privately — do not disclose in public issues
+title: "[security]: "
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Do not submit security details in this form
+
+        Public issues are **not** monitored for coordinated disclosure.
+
+        **Report privately instead:**
+
+        1. Email **security@dietcode.bot**
+        2. Or open a [GitHub Security Advisory](https://github.com/CardSorting/LUMI/security/advisories/new)
+
+        See [SECURITY.md](https://github.com/CardSorting/LUMI/blob/main/SECURITY.md) for scope and response timeline.
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I understand — I will report via the private channels above (close this issue without posting details)
+    validations:
+      required: true

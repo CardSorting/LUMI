@@ -28,22 +28,10 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
 
-            - name: Setup Node.js environment
-              uses: actions/setup-node@v4
+            - name: Setup Node monorepo
+              uses: ./.github/actions/setup-node-monorepo
               with:
-                  node-version: 22
-                  cache: 'npm'
-                  cache-dependency-path: |
-                      package-lock.json
-                      webview-ui/package-lock.json
-
-            - name: Install root dependencies
-              run: npm ci
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install webview-ui dependencies
-              run: cd webview-ui && npm ci
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Run Quality Checks (Parallel)
               run: npm run ci:check-all
@@ -63,22 +51,10 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
 
-            - name: Setup Node.js environment
-              uses: actions/setup-node@v4
+            - name: Setup Node monorepo
+              uses: ./.github/actions/setup-node-monorepo
               with:
-                  node-version: 22
-                  cache: 'npm'
-                  cache-dependency-path: |
-                      package-lock.json
-                      webview-ui/package-lock.json
-
-            - name: Install root dependencies
-              run: npm ci
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install webview-ui dependencies
-              run: cd webview-ui && npm ci
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Set up NPM on Windows
               if: runner.os == 'Windows'

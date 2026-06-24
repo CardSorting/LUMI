@@ -160,7 +160,9 @@ Guide: [docs/MAINTAINER.md](docs/MAINTAINER.md)
 
 ## Commits and changelog
 
-- Use clear, imperative commit subjects (e.g. `fix: reconcile roadmap patches when lane rebase fails`).
+- **PR titles** must follow Conventional Commits (`feat:`, `fix:`, `docs:`, `ci:`, `chore:`, etc.) — enforced by [pr-title.yml](.github/workflows/pr-title.yml).
+- **Commit messages** use the same format locally via Husky (`commit-msg` hook).
+- Use clear, imperative commit subjects matching the PR title when possible.
 - User-facing changes: add an entry under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md).
 - Release Drafter groups merged PRs by label for maintainers drafting GitHub releases.
 

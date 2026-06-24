@@ -1,0 +1,19 @@
+name: Merge Conflicts
+
+on:
+  pull_request_target:
+    types: [synchronize, opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: eps1lon/actions-label-merge-conflict@v3
+        with:
+          dirtyLabel: conflicts
+          removeOnDirty: false
+          afterCleanDelay: 5
+          repoToken: ${{ secrets.GITHUB_TOKEN }}

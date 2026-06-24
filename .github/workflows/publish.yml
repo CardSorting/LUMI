@@ -16,6 +16,10 @@ on:
                 required: true
                 type: string
 
+concurrency:
+    group: publish-${{ github.event.inputs.tag }}
+    cancel-in-progress: false
+
 permissions:
     contents: write
     packages: write

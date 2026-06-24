@@ -203,6 +203,8 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Governance](../GOVERNANCE.md) | Maintainer process, branch protection, release policy |
 | [Changelog](../CHANGELOG.md) | User-facing release notes ([Keep a Changelog](https://keepachangelog.com/)) |
 | [Support](../.github/SUPPORT.md) | Where to get help |
+| [GitHub automation](../.github/README.md) | Workflows, templates, and maintainer CI map |
+| [Releasing](../.github/RELEASING.md) | Maintainer marketplace publish runbook |
 | [Security best practices](SECURITY_BEST_PRACTICES.md) | Approval gates, ignore files |
 | [Spider forensic engine](architecture/spider-v20-forensic-engine.md) | Policy/audit layer (BroccoliDB) |
 | [User interface design](USER_INTERFACE_DESIGN.md) | Webview UX patterns |

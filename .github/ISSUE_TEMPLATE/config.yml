@@ -9,6 +9,12 @@ contact_links:
   - name: Security policy
     url: https://github.com/CardSorting/LUMI/blob/main/SECURITY.md
     about: Report vulnerabilities privately — do not open public issues
+  - name: Security advisory (redirect)
+    url: https://github.com/CardSorting/LUMI/issues/new?template=security_advisory.yml
+    about: Reminder to use private disclosure channels
   - name: Discussions
     url: https://github.com/CardSorting/LUMI/discussions
     about: Questions, ideas, and community Q&A
+  - name: Contributing guide
+    url: https://github.com/CardSorting/LUMI/blob/main/CONTRIBUTING.md
+    about: Development setup, PR checklist, and commit conventions

@@ -3,6 +3,9 @@
 
 * @CardSorting
 
+# Governed execution + high-risk surfaces
+/src/core/task/tools/subagent/ @CardSorting
+/src/shared/subagent/ @CardSorting
 # High-traffic docs
 /README.md @CardSorting
 /docs/governed-subagent-execution.md @CardSorting

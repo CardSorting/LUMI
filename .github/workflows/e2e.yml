@@ -13,7 +13,29 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    changes:
+        runs-on: ubuntu-latest
+        outputs:
+            code: ${{ steps.filter.outputs.code }}
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dorny/paths-filter@v3
+              id: filter
+              with:
+                  filters: |
+                      code:
+                        - '**'
+                        - '!**/*.md'
+                        - '!**/*.mdx'
+                        - '!docs/**'
+                        - '!CHANGELOG.md'
+                        - '!locales/**'
+                        - '!.github/**'
+                        - '!.wiki/**'
+
     matrix_prep:
+        needs: changes
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || needs.changes.outputs.code == 'true'
         runs-on: ubuntu-latest
         outputs:
             matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -23,7 +45,8 @@ jobs:
                   echo 'matrix=[{"runner":"ubuntu"},{"runner":"windows"},{"runner":"macos"}]' >> $GITHUB_OUTPUT
 
     e2e:
-        needs: matrix_prep
+        needs: [changes, matrix_prep]
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || needs.changes.outputs.code == 'true'
         strategy:
             fail-fast: false
             matrix:

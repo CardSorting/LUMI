@@ -35,4 +35,5 @@
 
 - [ ] PR is focused (single concern; split large changes)
 - [ ] Commits use clear messages (`feat:`, `fix:`, `docs:` encouraged)
+- [ ] PR title follows Conventional Commits (e.g. `feat: add governed receipt panel`)
 - [ ] I have read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)

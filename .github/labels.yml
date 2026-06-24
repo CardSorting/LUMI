@@ -1,0 +1,114 @@
+# Canonical label definitions — synced by .github/workflows/label-sync.yml
+# https://github.com/EndBug/label-sync
+
+- name: bug
+  color: d73a4a
+  description: Something isn't working
+
+- name: documentation
+  color: 0075ca
+  description: Docs only
+
+- name: duplicate
+  color: cfd3d7
+  description: This issue or pull request already exists
+
+- name: enhancement
+  color: a2eeef
+  description: New feature or request
+
+- name: feature
+  color: 0e8a16
+  description: User-facing feature
+
+- name: good first issue
+  color: 7057ff
+  description: Good for newcomers
+
+- name: help wanted
+  color: 008672
+  description: Extra attention needed
+
+- name: question
+  color: d876e3
+  description: Question
+
+- name: invalid
+  color: e4e669
+  description: This doesn't seem right
+
+- name: wontfix
+  color: ffffff
+  description: This will not be worked on
+
+- name: triage
+  color: FEF2C0
+  description: Needs maintainer triage
+
+- name: governed-execution
+  color: C5DEF5
+  description: Governed swarms, merge gate, roadmap projection
+
+- name: stale
+  color: d6d6d6
+  description: Inactive issues
+
+- name: breaking-change
+  color: d73a4a
+  description: Breaking change
+
+- name: dependencies
+  color: 0366d6
+  description: Dependency updates
+
+- name: security
+  color: b60205
+  description: Security
+
+- name: chore
+  color: fef2c0
+  description: Maintenance
+
+- name: ci
+  color: 1d76db
+  description: CI/CD
+
+- name: broccolidb
+  color: 2ea043
+  description: BroccoliDB package
+
+- name: webview
+  color: 5319e7
+  description: Webview UI
+
+- name: mcp
+  color: 1B7F79
+  description: Model Context Protocol integration
+
+- name: github_actions
+  color: "000000"
+  description: Pull requests that update GitHub Actions code
+
+- name: conflicts
+  color: e99695
+  description: PR has merge conflicts
+
+- name: size/XS
+  color: C2E0C6
+  description: Fewer than 20 lines changed
+
+- name: size/S
+  color: 0E8A16
+  description: 20-79 lines
+
+- name: size/M
+  color: FBCA04
+  description: 80-199 lines
+
+- name: size/L
+  color: EB6420
+  description: 200-799 lines
+
+- name: size/XL
+  color: D93F0B
+  description: 800+ lines
