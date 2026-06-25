@@ -9,7 +9,12 @@
 </p>
 
 <p align="center">
+  <em>Forked from <a href="https://github.com/cline/cline">Cline</a> · evolved independently by <a href="https://github.com/CardSorting">CardSorting</a></em>
+</p>
+
+<p align="center">
   <a href="docs/README.md">Documentation</a> ·
+  <a href="#origins--acknowledgments">Cline lineage</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
   <a href="SECURITY.md">Security</a> ·
   <a href="https://github.com/CardSorting/LUMI/issues">Issues</a> ·
@@ -48,6 +53,8 @@ code --install-extension CardSorting.lumi
 ## Table of contents
 
 - [About](#about)
+- [Origins & acknowledgments](#origins--acknowledgments)
+- [Product evolution (full history)](docs/EVOLUTION.md)
 - [Features](#features)
 - [Installation](#installation)
 - [Quick start](#quick-start)
@@ -99,6 +106,61 @@ Design philosophy: [docs/papers/philosophy.md](docs/papers/philosophy.md) · Sta
 | Governed receipt schema | **v3** |
 
 Workspace-verified metrics: [docs/papers/companion-brief.md](docs/papers/companion-brief.md)
+
+---
+
+## Origins & acknowledgments
+
+**LUMI** is spiritually and technically descended from **[Cline](https://github.com/cline/cline)** — the open-source VS Code agent that pioneered human-in-the-loop pair programming (diff-before-write, plan/act, MCP, checkpoints). This repository **forked the Cline VS Code extension codebase** and has since evolved independently under **[CardSorting](https://github.com/CardSorting)**.
+
+[Cline](https://cline.bot) today ships several products — VS Code extension, [CLI](https://github.com/cline/cline/tree/main/cli), [TypeScript SDK](https://github.com/cline/cline/tree/main/sdk), and [Kanban](https://github.com/cline/kanban). **LUMI is not those other repos**; it is a governance-focused fork of the **editor extension agent** lineage only.
+
+### Evolution
+
+| Stage | Name | Notes |
+|-------|------|-------|
+| Upstream | **Cline** | Original agent loop, typed tools, and VS Code integration |
+| Intermediate | **DietCode** | CardSorting fork; sovereign substrate, Spider, roadmap gates; legacy IDs remain |
+| Substrate | **BroccoliDB** | Cognitive memory and structural truth recentered into `@noorm/broccolidb` |
+| Governed lanes | **Receipts v3** | Multi-agent merge gate, per-lane roadmap projection, durable operator receipts |
+| Current | **LUMI** | User-facing brand; extension IDs `CardSorting.lumi` / `CardSorting.lumi-vscode` |
+
+**Full timeline, phase narratives, naming migration tables, and changelog map:** [docs/EVOLUTION.md](docs/EVOLUTION.md).
+
+### Inherited from Cline · built by LUMI
+
+| From Cline (kept) | LUMI additions |
+|-------------------|----------------|
+| Diff-before-write approvals · [Cline: working with files](https://docs.cline.bot/core-workflows/working-with-files) | **Governed subagents** — parallel lanes, mutation locks, merge gates, durable receipts |
+| [Plan / Act modes](https://docs.cline.bot/core-workflows/plan-and-act) | **BroccoliDB** — local cognitive memory and workspace substrate (`dietcode.db`) |
+| [MCP](https://docs.cline.bot/features/mcp) tool extension | **Roadmap & completion gates** — `ROADMAP.md` steering and `attempt_completion` audit pipeline |
+| Terminal execution with explicit user consent | **Joy-Zoning & stability policy** — architectural enforcement in the tool path |
+| `@` context mentions, browser tooling, checkpoints | **Product surface** — LUMI branding, [dietcode.io](https://dietcode.io), CardSorting extension IDs |
+
+### Coming from Cline?
+
+If you used Cline’s VS Code extension, approvals, modes, and MCP should feel familiar. Main differences:
+
+| Cline | LUMI |
+|-------|------|
+| `.clinerules/` project rules | [`.dietcoderules/`](docs/customization/dietcode-rules.mdx) |
+| `.clineignore` | [`.dietcodeignore`](docs/customization/dietcodeignore.mdx) |
+| Cline extension IDs (e.g. `saoudrizwan.claude-dev`) | `CardSorting.lumi` / `CardSorting.lumi-vscode` |
+| CLI, SDK, Kanban (separate Cline products) | **Not bundled here** — use [upstream Cline](https://github.com/cline/cline) |
+
+Legacy identifiers (`cline`, `clineMessages`, Cline doc redirects in `docs/docs.json`) still appear in paths and types where refactors are ongoing; the user-facing product name is **LUMI**. See [legacy inventory](docs/EVOLUTION.md#legacy-inventory--refactor-status) for a full grep-backed list.
+
+### Links & license
+
+| | |
+|---|---|
+| **Upstream repo** | [github.com/cline/cline](https://github.com/cline/cline) |
+| **Cline docs** | [docs.cline.bot](https://docs.cline.bot) |
+| **Cline community** | [cline.bot](https://cline.bot) · [Discord](https://discord.gg/cline) |
+| **Upstream license** | [Apache-2.0](https://github.com/cline/cline/blob/main/LICENSE) |
+| **This fork’s attribution** | [NOTICE](NOTICE) · [License](#license) |
+
+Thank you to the Cline maintainers and contributors for the foundation this project builds on. For LUMI’s design goals vs generic autonomous agents, see [How LUMI differs](docs/README.md#how-lumi-differs). For the full fork timeline and migration reference, see [Product evolution](docs/EVOLUTION.md).
 
 ---
 
@@ -162,6 +224,7 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | Doc | Description |
 |-----|-------------|
 | **[docs/README.md](docs/README.md)** | Documentation hub — reading paths by audience |
+| [Product evolution](docs/EVOLUTION.md) | Cline → DietCode → LUMI timeline, migration playbook |
 | [Companion brief](docs/papers/companion-brief.md) | Product summary with live metrics |
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
 | [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook |
@@ -411,4 +474,6 @@ We welcome issues, docs improvements, and pull requests. Please read [CONTRIBUTI
 
 ## License
 
-[Apache-2.0](LICENSE) — Copyright CardSorting
+[Apache-2.0](LICENSE) — Copyright CardSorting and Cline Bot Inc. (see [NOTICE](NOTICE)).
+
+This project is a derivative work of [Cline](https://github.com/cline/cline) (Apache-2.0 © Cline Bot Inc. and contributors). See [Origins & acknowledgments](#origins--acknowledgments) above.

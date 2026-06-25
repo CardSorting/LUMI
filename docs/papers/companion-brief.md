@@ -305,4 +305,4 @@ npm run test:unit -- --grep "governed execution"   # swarm harness contracts
 | [Project map](../PROJECT_MAP.md) | 1-to-1 paths |
 | [BroccoliDB Companion Brief](../../broccolidb/docs/papers/companion-brief.md) | Substrate layer |
 
-**Extension:** `CardSorting.lumi-vscode` / `CardSorting.lumi` · **License:** Apache-2.0 · **Internal prefix:** `DietCode*` types
+**Extension:** `CardSorting.lumi-vscode` / `CardSorting.lumi` · **License:** Apache-2.0 · **Lineage:** [EVOLUTION.md](../EVOLUTION.md) · **Internal prefix:** `DietCode*` types (legacy module name)

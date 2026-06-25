@@ -15,6 +15,8 @@ Documentation for the **LUMI** VS Code extension and agent workspace (`src/`, `w
 ## Table of contents
 
 - [At a glance](#at-a-glance)
+- [How LUMI differs](#how-lumi-differs)
+- [Product evolution](#product-evolution)
 - [Start here](#start-here)
 - [Project configuration](#project-configuration)
 - [Reading paths by audience](#reading-paths-by-audience)
@@ -47,6 +49,8 @@ Workspace-verified figures from [papers/companion-brief.md](papers/companion-bri
 
 ## How LUMI differs
 
+LUMI [forked the Cline VS Code extension](https://github.com/cline/cline) and added governance layers (subagents, BroccoliDB, roadmap gates). For upstream credit, migration notes, and links to Cline docs, see [Origins & acknowledgments](../README.md#origins--acknowledgments) in the repository README. **Full timeline:** [EVOLUTION.md](EVOLUTION.md).
+
 | Typical autonomous agent | LUMI |
 |--------------------------|------|
 | Runs until stopped | Approval gate per mutating tool |
@@ -75,6 +79,12 @@ flowchart TB
   API -.->|link only| BAPI
   PAP -.->|separate narrative| BPAP
 ```
+
+## Product evolution
+
+Cline → DietCode fork → BroccoliDB substrate → governed swarms → **LUMI** (current). Phase-by-phase history, dated milestones, migration playbook, and legacy inventory:
+
+**[EVOLUTION.md](EVOLUTION.md)** · [README origins](../README.md#origins--acknowledgments)
 
 ---
 
@@ -112,8 +122,9 @@ flowchart TB
 |----------|------------------|------|
 | **New user** | [Quick start](getting-started/quick-start.mdx) → [Your first project](getting-started/your-first-project.mdx) → [Task management](core-workflows/task-management.mdx) | ~30 min |
 | **Power user** | [Auto-approve](features/auto-approve.mdx) + [Checkpoints](core-workflows/checkpoints.mdx) → [MCP overview](mcp/mcp-overview.mdx) → [Hooks](customization/hooks.mdx) | ~45 min |
-| **Team lead** | [Companion brief](papers/companion-brief.md) → [Security](SECURITY_BEST_PRACTICES.md) → [Roadmap steering](features/roadmap-steering.mdx) | ~20 min |
+| **Team lead** | [Companion brief](papers/companion-brief.md) → [Evolution](EVOLUTION.md) → [Security](SECURITY_BEST_PRACTICES.md) | ~25 min |
 | **Designer / PM** | [Philosophy](papers/philosophy.md) → [User interface design](USER_INTERFACE_DESIGN.md) | ~25 min |
+| **Cline / DietCode migrator** | [EVOLUTION.md](EVOLUTION.md) → [README origins](../README.md#coming-from-cline) → [Project rules](customization/dietcode-rules.mdx) | ~20 min |
 | **Engineer (agent)** | [Whitepaper](papers/whitepaper.md) → [Architecture (current)](architecture/current.md) → [Project map](PROJECT_MAP.md) | ~60 min |
 | **Privacy / security review** | [SECURITY_BEST_PRACTICES](SECURITY_BEST_PRACTICES.md) → root [README § Local-first](../README.md#local-first--data) | ~15 min |
 | **Engineer (substrate)** | [BroccoliDB docs](../broccolidb/docs/README.md) → [Runtime API index](api/README.md) | varies |

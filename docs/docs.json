@@ -174,6 +174,7 @@
 						"group": "System Architecture",
 						"pages": [
 							"AGENT_STACK",
+							"EVOLUTION",
 							"architecture/current",
 							"PROJECT_MAP",
 							"CODE_TO_DOC_MAP",

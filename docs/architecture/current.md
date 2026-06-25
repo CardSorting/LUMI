@@ -120,7 +120,7 @@ Details: [System communication](../SYSTEM_COMMUNICATION.md).
 
 | Layer | Question | Documentation |
 |-------|----------|---------------|
-| **LUMI** (this doc) | How does the sidebar session work? | [Papers](../papers/README.md) · [Project map](../PROJECT_MAP.md) |
+| **LUMI** (this doc) | How does the sidebar session work? | [Evolution](../EVOLUTION.md) · [Papers](../papers/README.md) · [Project map](../PROJECT_MAP.md) |
 | **BroccoliDB** | What happened to the repository structurally? | [Substrate architecture](../../broccolidb/docs/architecture/current.md) · [Substrate papers](../../broccolidb/docs/papers/philosophy.md) |
 
 LUMI owns approval, LLM loop, webview, and VS Code I/O. BroccoliDB owns proof, repair executor, runtime graph, and snapshots. Integration is via tool handlers and `@noorm/broccolidb` — not by merging the codebases.

@@ -173,3 +173,5 @@ Pull requests are merged with **squash merge** only (linear `main` history). Wri
 ## License
 
 By submitting a pull request, you agree your contributions are licensed under [Apache-2.0](LICENSE).
+
+LUMI is a derivative work of [Cline](https://github.com/cline/cline); see [NOTICE](NOTICE), [Product evolution](docs/EVOLUTION.md), and [README — Origins & acknowledgments](README.md#origins--acknowledgments).

@@ -2,7 +2,7 @@
 
 *Design values grounded in the agent workspace implementation (`src/`, `webview-ui/`).*
 
-> **Related:** [Agent stack](../AGENT_STACK.md) · [Companion brief](companion-brief.md) · [Whitepaper](whitepaper.md) · [Governed swarms](../governed-subagent-execution.md)
+> **Related:** [Agent stack](../AGENT_STACK.md) · [Product evolution](../EVOLUTION.md) · [Companion brief](companion-brief.md) · [Whitepaper](whitepaper.md) · [Governed swarms](../governed-subagent-execution.md)
 
 ---
 

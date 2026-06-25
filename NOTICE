@@ -1,0 +1,15 @@
+LUMI
+Copyright 2026 CardSorting
+
+This product includes software developed by Cline Bot Inc.
+(https://github.com/cline/cline)
+
+The original Cline VS Code extension agent is licensed under the Apache
+License, Version 2.0. See LICENSE for the full license text and upstream
+copyright notice.
+
+Modifications and additional work in this repository are Copyright 2026
+CardSorting and are also licensed under the Apache License, Version 2.0.
+
+For lineage, feature mapping, and community links, see README.md —
+"Origins & acknowledgments" and docs/EVOLUTION.md (full product timeline).
