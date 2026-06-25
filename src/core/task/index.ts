@@ -1140,7 +1140,7 @@ export class Task {
 	// Task lifecycle
 
 	public async startTask(task?: string, images?: string[], files?: string[]): Promise<void> {
-		if (this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
+		if (process.env.E2E_TEST === "true" || this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
 			await this.controller.toggleActModeForYoloMode()
 		} else {
 			await this.controller.switchToPlanModeForAgent()
