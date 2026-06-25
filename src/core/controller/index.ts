@@ -30,6 +30,7 @@ import { HostProvider } from "@/hosts/host-provider"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { dbPool } from "@/infrastructure/db/BufferedDbPool"
 import { getDb, setDbPath } from "@/infrastructure/db/Config"
+import { disableSqlitePersistence, isNativeModuleVersionMismatch } from "@/infrastructure/db/sqlitePersistence"
 import { ExtensionRegistryInfo } from "@/registry"
 import { AuthService } from "@/services/auth/AuthService"
 import { OcaAuthService } from "@/services/auth/oca/OcaAuthService"
@@ -210,6 +211,9 @@ export class Controller implements IController {
 				})
 			})
 			.catch((error) => {
+				if (isNativeModuleVersionMismatch(error)) {
+					disableSqlitePersistence(error instanceof Error ? error.message : String(error))
+				}
 				Logger.error("[Controller] Failed to initialize Joy-Zoning database:", error)
 			})
 

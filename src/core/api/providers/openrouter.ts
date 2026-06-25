@@ -8,6 +8,7 @@ import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/com
 import { DietCodeEnv } from "@/config"
 import { buildOpenRouterAttributionHeaders } from "@/services/EnvUtils"
 import { Environment } from "@/shared/config-types"
+import { isE2ETestMode } from "@/shared/e2e-mode"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient, getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
@@ -43,8 +44,8 @@ export class OpenRouterHandler implements ApiHandler {
 			}
 			try {
 				const env = DietCodeEnv.config()
-				const useLocalMockApi = process.env.E2E_TEST === "true" || env.environment === Environment.local
-				const baseURL = useLocalMockApi ? `${env.apiBaseUrl}/api/v1` : "https://openrouter.ai/api/v1"
+				const useLocalMockApi = isE2ETestMode() || env.environment === Environment.local
+				const baseURL = useLocalMockApi ? "http://127.0.0.1:7777/api/v1" : "https://openrouter.ai/api/v1"
 				this.client = createOpenAIClient({
 					baseURL,
 					apiKey: this.options.openRouterApiKey,
@@ -205,7 +206,10 @@ export class OpenRouterHandler implements ApiHandler {
 	async *fetchGenerationDetails(genId: string) {
 		// Logger.log("Fetching generation details for:", genId)
 		try {
-			const response = await axios.get(`https://openrouter.ai/api/v1/generation?id=${genId}`, {
+			const env = DietCodeEnv.config()
+			const useLocalMockApi = isE2ETestMode() || env.environment === Environment.local
+			const baseURL = useLocalMockApi ? "http://127.0.0.1:7777/api/v1" : "https://openrouter.ai/api/v1"
+			const response = await axios.get(`${baseURL}/generation?id=${genId}`, {
 				headers: {
 					Authorization: `Bearer ${this.options.openRouterApiKey}`,
 				},

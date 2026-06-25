@@ -4,6 +4,7 @@ import { enrichAuditMetadata } from "@shared/audit/taskAuditUtils"
 import type { IntentClassification, TaskAuditMetadata } from "@shared/audit/types"
 import * as path from "path"
 import { v4 as uuidv4 } from "uuid"
+import { isSqlitePersistenceBypassed } from "@/infrastructure/db/sqlitePersistence"
 import { Logger } from "@/shared/services/Logger"
 import { dbPool } from "../db/BufferedDbPool"
 
@@ -1023,6 +1024,7 @@ export class AgentOrchestrator {
 	 * are currently locked/mutated by a sibling stream.
 	 */
 	public async checkCollision(requestingStreamId: string, files: string[]): Promise<string | null> {
+		if (isSqlitePersistenceBypassed()) return null
 		const activeFiles = await dbPool.getActiveAffectedFiles()
 		for (const file of files) {
 			const normalizedPath = path.resolve(file)

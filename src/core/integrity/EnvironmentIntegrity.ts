@@ -97,6 +97,22 @@ export class EnvironmentIntegrity {
 	}
 
 	public async validateEnvironment(): Promise<EnvironmentLease> {
+		if (process.env.E2E_TEST === "true") {
+			const lease: EnvironmentLease = {
+				fingerprint: "e2e-fast-path",
+				timestamp: Date.now(),
+				success: true,
+				details: {
+					hostname: os.hostname(),
+					canWrite: true,
+					diskSpaceGB: "10G",
+					shell: process.env.SHELL || "unknown",
+				},
+			}
+			this.lease = lease
+			return lease
+		}
+
 		if (this.probePromise) {
 			return this.probePromise
 		}

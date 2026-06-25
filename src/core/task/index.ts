@@ -2567,23 +2567,23 @@ export class Task {
 				await this.say("text", content, undefined, undefined, block.partial)
 				break
 			}
-			case "tool_use":
-				// If we have a pending initial commit, we must block unsafe tools until it finishes.
-				// Safe tools (read-only) can run in parallel.
-				if (this.initialCheckpointCommitPromise) {
-					if (!(READ_ONLY_TOOLS as readonly string[]).includes(block.name as string)) {
-						await this.initialCheckpointCommitPromise
-						this.initialCheckpointCommitPromise = undefined
-					}
-				} else {
-					// V190: Interlock - Wait for environment validation before executing any acting tool
-					await this.environmentLeasePromise
-					await this.toolExecutor.executeTool(block)
+			case "tool_use": {
+				// If we have a pending initial commit, non-read-only tools must wait until it finishes.
+				const isReadOnlyTool = (READ_ONLY_TOOLS as readonly string[]).includes(block.name as string)
+				if (this.initialCheckpointCommitPromise && !isReadOnlyTool) {
+					await this.initialCheckpointCommitPromise.catch((error) => {
+						Logger.error(`[Task] Initial checkpoint commit failed for ${this.taskId}:`, error)
+					})
+					this.initialCheckpointCommitPromise = undefined
 				}
+				// V190: Interlock - Wait for environment validation before executing any acting tool
+				await this.environmentLeasePromise
+				await this.toolExecutor.executeTool(block)
 				if (block.call_id) {
 					Session.get().updateToolCall(block.call_id, block.name)
 				}
 				break
+			}
 		}
 
 		/*
@@ -2826,6 +2826,7 @@ export class Task {
 		// then say "checkpoint_created" and perform the commit.
 		if (
 			isFirstRequest &&
+			process.env.E2E_TEST !== "true" &&
 			this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting") &&
 			this.checkpointManager &&
 			!this.taskState.checkpointManagerErrorMessage

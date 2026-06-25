@@ -3,6 +3,7 @@ import type Database from "better-sqlite3"
 import { type Kysely, sql, type Transaction } from "kysely"
 import { Logger } from "@/shared/services/Logger"
 import { destroyDb, getDb, getRawDb, registerDbPathChangeListener, type Schema } from "./Config"
+import { disableSqlitePersistence, isNativeModuleVersionMismatch, isSqlitePersistenceBypassed } from "./sqlitePersistence"
 
 // Production-grade Mutex implementation
 class Mutex {
@@ -409,6 +410,7 @@ export class BufferedDbPool {
 	}
 
 	public async flush() {
+		if (isSqlitePersistenceBypassed()) return
 		if (this.stopped && this.activeBufferSize === 0 && this.inFlightSize === 0) return
 		const releaseFlush = await this.flushMutex.acquire()
 		let opsToFlush: WriteOp[] = []
@@ -608,179 +610,188 @@ export class BufferedDbPool {
 			limit?: number
 		},
 	): Promise<Schema[T][]> {
+		if (isSqlitePersistenceBypassed()) return []
 		this.ensureStarted()
-		const db = await this.ensureDb()
-		const release = await this.stateMutex.acquire()
 		try {
-			const conditions = normalizeWhere(where)
-			const statusCond = conditions.find(
-				(c) => (c.column === "status" || c.column === "type") && (c.operator === "=" || !c.operator),
-			)
-			const indexKey = statusCond ? `${table as string}:${statusCond.column}:${statusCond.value}` : null
-			const isWarmed = indexKey && this.warmedIndices.has(indexKey)
-
-			let diskResults: Schema[T][] = []
-			if (!isWarmed) {
-				let query = db.selectFrom(table as never).selectAll() as unknown as LooseSelectQuery
-				for (const cond of conditions) {
-					const opStr: QueryOperator = cond.operator || "="
-					if (Array.isArray(cond.value)) {
-						query = query.where(cond.column, "in", cond.value)
-					} else {
-						query = query.where(cond.column, opStr, cond.value)
-					}
-				}
-
-				if (options?.orderBy) {
-					query = query.orderBy(options.orderBy.column, options.orderBy.direction)
-				}
-				if (options?.limit) {
-					query = query.limit(options.limit)
-				}
-				diskResults = (await query.execute()) as Schema[T][]
-			}
-
-			const applyOps = (ops: WriteOp[], sourceIndex: Map<string, Set<WriteOp>> | undefined, target: Schema[T][]) => {
-				// Level 7: Fast-Path Status Indexing
+			const db = await this.ensureDb()
+			const release = await this.stateMutex.acquire()
+			try {
+				const conditions = normalizeWhere(where)
 				const statusCond = conditions.find(
 					(c) => (c.column === "status" || c.column === "type") && (c.operator === "=" || !c.operator),
 				)
-				let tableOps: Iterable<WriteOp> = []
+				const indexKey = statusCond ? `${table as string}:${statusCond.column}:${statusCond.value}` : null
+				const isWarmed = indexKey && this.warmedIndices.has(indexKey)
 
-				if (statusCond && sourceIndex) {
-					const key = `${statusCond.column}:${statusCond.value}`
-					const set = sourceIndex.get(key)
-					tableOps = set || []
-				} else {
-					tableOps = ops
+				let diskResults: Schema[T][] = []
+				if (!isWarmed) {
+					let query = db.selectFrom(table as never).selectAll() as unknown as LooseSelectQuery
+					for (const cond of conditions) {
+						const opStr: QueryOperator = cond.operator || "="
+						if (Array.isArray(cond.value)) {
+							query = query.where(cond.column, "in", cond.value)
+						} else {
+							query = query.where(cond.column, opStr, cond.value)
+						}
+					}
+
+					if (options?.orderBy) {
+						query = query.orderBy(options.orderBy.column, options.orderBy.direction)
+					}
+					if (options?.limit) {
+						query = query.limit(options.limit)
+					}
+					diskResults = (await query.execute()) as Schema[T][]
 				}
 
-				for (const op of tableOps) {
-					// Additional safety check if we're using a full buffer instead of an index
-					if (op.table !== table) continue
+				const applyOps = (ops: WriteOp[], sourceIndex: Map<string, Set<WriteOp>> | undefined, target: Schema[T][]) => {
+					// Level 7: Fast-Path Status Indexing
+					const statusCond = conditions.find(
+						(c) => (c.column === "status" || c.column === "type") && (c.operator === "=" || !c.operator),
+					)
+					let tableOps: Iterable<WriteOp> = []
 
-					const applyValues = (existing: unknown, newValues: Record<string, unknown>, hasIncs?: boolean) => {
-						const next = { ...(existing as Record<string, unknown>) }
-						for (const [k, v] of Object.entries(newValues)) {
-							if (hasIncs && this.isIncrement(v)) {
-								next[k] = (Number(next[k]) || 0) + v.value
-							} else {
-								next[k] = v
-							}
-						}
-						return next as Schema[T]
+					if (statusCond && sourceIndex) {
+						const key = `${statusCond.column}:${statusCond.value}`
+						const set = sourceIndex.get(key)
+						tableOps = set || []
+					} else {
+						tableOps = ops
 					}
 
-					const opWhere = normalizeWhere(op.where)
+					for (const op of tableOps) {
+						// Additional safety check if we're using a full buffer instead of an index
+						if (op.table !== table) continue
 
-					// Pre-compute Sets for IN operators to O(1) lookup
-					const inSets = opWhere.map((c) => {
-						if (c.operator?.toUpperCase() === "IN" && Array.isArray(c.value)) {
-							return new Set(c.value as unknown[])
-						}
-						return null
-					})
-
-					const matches = (r: unknown, queryConditions: WhereCondition[]) => {
-						const row = r as Record<string, unknown>
-						if (queryConditions.length === 0) return true
-						return queryConditions.every((c, idx) => {
-							const val = row[c.column]
-							const opStr = (c.operator || "=").toUpperCase()
-
-							if (opStr === "IN") {
-								// If this is matching against the op's where, use the pre-computed set
-								// If this is matching against the SELECT's where, just use the array
-								if (queryConditions === opWhere) {
-									const set = inSets[idx]
-									if (set) return set.has(val as string | number)
-								}
-								if (Array.isArray(c.value)) return (c.value as unknown[]).includes(val)
-								return val === c.value
-							}
-							if (opStr === "=") return val === c.value
-							if (opStr === "!=") return val !== c.value
-							if (opStr === ">") return Number(val) > Number(c.value)
-							if (opStr === "<") return Number(val) < Number(c.value)
-							if (opStr === ">=") return Number(val) >= Number(c.value)
-							if (opStr === "<=") return val !== null && Number(val) <= Number(c.value)
-							return false
-						})
-					}
-
-					if (op.type === "insert" && op.values) {
-						const newRow = { ...op.values } as unknown as Schema[T]
-						if (matches(newRow, conditions)) target.push(newRow)
-					} else if (op.type === "upsert" && op.values) {
-						const pkMatch = (r: unknown) => {
-							const row = r as Record<string, unknown>
-							if (opWhere.length > 0) return matches(row, opWhere)
-							return (
-								row.id !== undefined &&
-								(op.values as Record<string, unknown>).id !== undefined &&
-								row.id === (op.values as Record<string, unknown>).id
-							)
-						}
-						const existingIdx = target.findIndex(pkMatch)
-						if (existingIdx >= 0) {
-							const existing = target[existingIdx]
-							if (existing) {
-								const next = applyValues(existing, op.values as Record<string, unknown>, op.hasIncrements)
-								if (matches(next, conditions)) {
-									target[existingIdx] = next
+						const applyValues = (existing: unknown, newValues: Record<string, unknown>, hasIncs?: boolean) => {
+							const next = { ...(existing as Record<string, unknown>) }
+							for (const [k, v] of Object.entries(newValues)) {
+								if (hasIncs && this.isIncrement(v)) {
+									next[k] = (Number(next[k]) || 0) + v.value
 								} else {
-									target.splice(existingIdx, 1)
+									next[k] = v
 								}
 							}
-						} else {
+							return next as Schema[T]
+						}
+
+						const opWhere = normalizeWhere(op.where)
+
+						// Pre-compute Sets for IN operators to O(1) lookup
+						const inSets = opWhere.map((c) => {
+							if (c.operator?.toUpperCase() === "IN" && Array.isArray(c.value)) {
+								return new Set(c.value as unknown[])
+							}
+							return null
+						})
+
+						const matches = (r: unknown, queryConditions: WhereCondition[]) => {
+							const row = r as Record<string, unknown>
+							if (queryConditions.length === 0) return true
+							return queryConditions.every((c, idx) => {
+								const val = row[c.column]
+								const opStr = (c.operator || "=").toUpperCase()
+
+								if (opStr === "IN") {
+									// If this is matching against the op's where, use the pre-computed set
+									// If this is matching against the SELECT's where, just use the array
+									if (queryConditions === opWhere) {
+										const set = inSets[idx]
+										if (set) return set.has(val as string | number)
+									}
+									if (Array.isArray(c.value)) return (c.value as unknown[]).includes(val)
+									return val === c.value
+								}
+								if (opStr === "=") return val === c.value
+								if (opStr === "!=") return val !== c.value
+								if (opStr === ">") return Number(val) > Number(c.value)
+								if (opStr === "<") return Number(val) < Number(c.value)
+								if (opStr === ">=") return Number(val) >= Number(c.value)
+								if (opStr === "<=") return val !== null && Number(val) <= Number(c.value)
+								return false
+							})
+						}
+
+						if (op.type === "insert" && op.values) {
 							const newRow = { ...op.values } as unknown as Schema[T]
 							if (matches(newRow, conditions)) target.push(newRow)
-						}
-					} else if (op.type === "update" && op.values) {
-						for (let i = target.length - 1; i >= 0; i--) {
-							const existing = target[i]
-							if (existing && matches(existing, opWhere)) {
-								const next = applyValues(existing, op.values as Record<string, unknown>, op.hasIncrements)
-								if (matches(next, conditions)) {
-									target[i] = next
-								} else {
-									target.splice(i, 1)
+						} else if (op.type === "upsert" && op.values) {
+							const pkMatch = (r: unknown) => {
+								const row = r as Record<string, unknown>
+								if (opWhere.length > 0) return matches(row, opWhere)
+								return (
+									row.id !== undefined &&
+									(op.values as Record<string, unknown>).id !== undefined &&
+									row.id === (op.values as Record<string, unknown>).id
+								)
+							}
+							const existingIdx = target.findIndex(pkMatch)
+							if (existingIdx >= 0) {
+								const existing = target[existingIdx]
+								if (existing) {
+									const next = applyValues(existing, op.values as Record<string, unknown>, op.hasIncrements)
+									if (matches(next, conditions)) {
+										target[existingIdx] = next
+									} else {
+										target.splice(existingIdx, 1)
+									}
+								}
+							} else {
+								const newRow = { ...op.values } as unknown as Schema[T]
+								if (matches(newRow, conditions)) target.push(newRow)
+							}
+						} else if (op.type === "update" && op.values) {
+							for (let i = target.length - 1; i >= 0; i--) {
+								const existing = target[i]
+								if (existing && matches(existing, opWhere)) {
+									const next = applyValues(existing, op.values as Record<string, unknown>, op.hasIncrements)
+									if (matches(next, conditions)) {
+										target[i] = next
+									} else {
+										target.splice(i, 1)
+									}
 								}
 							}
-						}
-					} else if (op.type === "delete") {
-						for (let i = target.length - 1; i >= 0; i--) {
-							const existing = target[i]
-							if (existing && matches(existing, opWhere)) target.splice(i, 1)
+						} else if (op.type === "delete") {
+							for (let i = target.length - 1; i >= 0; i--) {
+								const existing = target[i]
+								if (existing && matches(existing, opWhere)) target.splice(i, 1)
+							}
 						}
 					}
 				}
-			}
 
-			let finalResults = [...diskResults]
-			applyOps(this.inFlightOps.get(table) || [], this.inFlightIndex.get(table), finalResults)
-			applyOps(this.activeBuffer.get(table) || [], this.activeIndex.get(table), finalResults)
-			if (agentId) {
-				const shadow = this.agentShadows.get(agentId)
-				if (shadow) applyOps(shadow.ops, undefined, finalResults)
-			}
+				let finalResults = [...diskResults]
+				applyOps(this.inFlightOps.get(table) || [], this.inFlightIndex.get(table), finalResults)
+				applyOps(this.activeBuffer.get(table) || [], this.activeIndex.get(table), finalResults)
+				if (agentId) {
+					const shadow = this.agentShadows.get(agentId)
+					if (shadow) applyOps(shadow.ops, undefined, finalResults)
+				}
 
-			if (options?.orderBy) {
-				const col = options.orderBy.column as string
-				const dir = options.orderBy.direction
-				finalResults.sort((a, b) => {
-					const valA = (a as Record<string, unknown>)[col]
-					const valB = (b as Record<string, unknown>)[col]
-					if (valA === undefined || valB === undefined || valA === null || valB === null) return 0
-					if (valA < valB) return dir === "asc" ? -1 : 1
-					if (valA > valB) return dir === "asc" ? 1 : -1
-					return 0
-				})
+				if (options?.orderBy) {
+					const col = options.orderBy.column as string
+					const dir = options.orderBy.direction
+					finalResults.sort((a, b) => {
+						const valA = (a as Record<string, unknown>)[col]
+						const valB = (b as Record<string, unknown>)[col]
+						if (valA === undefined || valB === undefined || valA === null || valB === null) return 0
+						if (valA < valB) return dir === "asc" ? -1 : 1
+						if (valA > valB) return dir === "asc" ? 1 : -1
+						return 0
+					})
+				}
+				if (options?.limit) finalResults = finalResults.slice(0, options.limit)
+				return finalResults
+			} finally {
+				release()
 			}
-			if (options?.limit) finalResults = finalResults.slice(0, options.limit)
-			return finalResults
-		} finally {
-			release()
+		} catch (error) {
+			if (isNativeModuleVersionMismatch(error)) {
+				disableSqlitePersistence(error instanceof Error ? error.message : String(error))
+				return []
+			}
+			throw error
 		}
 	}
 
@@ -1025,41 +1036,50 @@ export class BufferedDbPool {
 	 * This ensures the "Brain" wakes up at full speed after a reboot.
 	 */
 	public async warmupTable<T extends keyof Schema>(table: T, statusCol: string, statusValue: string): Promise<number> {
+		if (isSqlitePersistenceBypassed()) return 0
 		this.ensureStarted()
-		const db = await this.ensureDb()
-		const rows = (await (db.selectFrom(table as never).selectAll() as unknown as LooseSelectQuery)
-			.where(statusCol, "=", statusValue)
-			.limit(500)
-			.execute()) as Schema[T][]
+		try {
+			const db = await this.ensureDb()
+			const rows = (await (db.selectFrom(table as never).selectAll() as unknown as LooseSelectQuery)
+				.where(statusCol, "=", statusValue)
+				.limit(500)
+				.execute()) as Schema[T][]
 
-		if (rows.length === 0) return 0
+			if (rows.length === 0) return 0
 
-		let tableIndex = this.activeIndex.get(table)
-		if (!tableIndex) {
-			tableIndex = new Map()
-			this.activeIndex.set(table, tableIndex)
-		}
-
-		const key = `${statusCol}:${statusValue}`
-		// Rebuild the warmed set every time; never append duplicate synthetic rows.
-		const set = new Set<WriteOp>()
-		tableIndex.set(key, set)
-
-		// Convert disk rows into a "Virtual WriteOp" to satisfy Level 1 Select logic
-		for (const row of rows) {
-			const op: WriteOp = {
-				type: "insert",
-				table,
-				values: row as Record<string, unknown>,
-				hasIncrements: false,
+			let tableIndex = this.activeIndex.get(table)
+			if (!tableIndex) {
+				tableIndex = new Map()
+				this.activeIndex.set(table, tableIndex)
 			}
-			set.add(op)
+
+			const key = `${statusCol}:${statusValue}`
+			// Rebuild the warmed set every time; never append duplicate synthetic rows.
+			const set = new Set<WriteOp>()
+			tableIndex.set(key, set)
+
+			// Convert disk rows into a "Virtual WriteOp" to satisfy Level 1 Select logic
+			for (const row of rows) {
+				const op: WriteOp = {
+					type: "insert",
+					table,
+					values: row as Record<string, unknown>,
+					hasIncrements: false,
+				}
+				set.add(op)
+			}
+
+			// Level 9: Mark as Authoritative
+			this.warmedIndices.add(`${table as string}:${statusCol}:${statusValue}`)
+
+			return rows.length
+		} catch (error) {
+			if (isNativeModuleVersionMismatch(error)) {
+				disableSqlitePersistence(error instanceof Error ? error.message : String(error))
+				return 0
+			}
+			throw error
 		}
-
-		// Level 9: Mark as Authoritative
-		this.warmedIndices.add(`${table as string}:${statusCol}:${statusValue}`)
-
-		return rows.length
 	}
 
 	public async getActiveAffectedFiles(): Promise<Map<string, string>> {

@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Socket } from "node:net"
 import { parse } from "node:url"
 import { v4 as uuidv4 } from "uuid"
+import { resolveE2EMockResponse } from "@/core/api/e2e-fixtures"
 import type { BalanceResponse, OrganizationBalanceResponse, UserResponse } from "../../../../shared/DietCodeAccount"
 import { E2E_MOCK_API_RESPONSES, E2E_REGISTERED_MOCK_ENDPOINTS } from "./api"
 import { DietCodeDataMock } from "./data"
@@ -375,14 +376,8 @@ export class DietCodeApiServerMock {
 
 						const body = await readBody()
 						const parsed = JSON.parse(body)
-						const { _messages, model = "claude-3-5-sonnet-20241022", stream = true } = parsed
-						let responseText = E2E_MOCK_API_RESPONSES.DEFAULT
-						if (body.includes("[replace_in_file for 'test.ts'] Result:")) {
-							responseText = E2E_MOCK_API_RESPONSES.REPLACE_REQUEST
-						}
-						if (body.includes("edit_request")) {
-							responseText = E2E_MOCK_API_RESPONSES.EDIT_REQUEST
-						}
+						const { messages: requestMessages, model = "claude-3-5-sonnet-20241022", stream = true } = parsed
+						let responseText = resolveE2EMockResponse(requestMessages ?? [])
 						if (body.includes("[diff.test.ts] Hello, DietCode!")) {
 							// The playwright test in diff.test.ts needs the "API Request..." text
 							// to be on the screen long enough to detect it.  This worked at 100ms
@@ -394,7 +389,7 @@ export class DietCodeApiServerMock {
 
 						if (stream) {
 							res.writeHead(200, {
-								"Content-Type": "text/plain",
+								"Content-Type": "text/event-stream",
 								"Cache-Control": "no-cache",
 								Connection: "keep-alive",
 							})
@@ -403,7 +398,12 @@ export class DietCodeApiServerMock {
 
 							responseText += `\n\nGenerated UUID: ${randomUUID}`
 
-							const chunks = responseText.split(" ")
+							// Stream edit_request responses in a few large chunks so E2E does not
+							// spend minutes tokenizing a long XML payload word-by-word.
+							const chunks =
+								responseText === E2E_MOCK_API_RESPONSES.EDIT_REQUEST && responseText.length > 500
+									? [responseText]
+									: responseText.split(" ")
 							let chunkIndex = 0
 
 							const sendChunk = () => {
@@ -417,7 +417,9 @@ export class DietCodeApiServerMock {
 											{
 												index: 0,
 												delta: {
-													content: chunks[chunkIndex] + (chunkIndex < chunks.length - 1 ? " " : ""),
+													content:
+														chunks[chunkIndex] +
+														(chunkIndex < chunks.length - 1 && chunks.length > 1 ? " " : ""),
 												},
 												finish_reason: null,
 											},
@@ -425,7 +427,7 @@ export class DietCodeApiServerMock {
 									}
 									res.write(`data: ${JSON.stringify(chunk)}\n\n`)
 									chunkIndex++
-									setTimeout(sendChunk, 10)
+									setTimeout(sendChunk, chunks.length === 1 ? 0 : 10)
 								} else {
 									const finalChunk = {
 										id: generationId,

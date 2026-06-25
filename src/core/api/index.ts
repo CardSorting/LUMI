@@ -1,7 +1,9 @@
 import { ApiConfiguration } from "@shared/api"
 import { Mode } from "@shared/storage/types"
+import { isE2ETestMode } from "@/shared/e2e-mode"
 import { Logger } from "@/shared/services/Logger"
 import { CloudflareHandler } from "./providers/cloudflare"
+import { E2EMockOpenRouterHandler } from "./providers/e2e-mock-openrouter"
 import { NousResearchHandler } from "./providers/nousresearch"
 import { OpenAiCodexHandler } from "./providers/openai-codex"
 import { OpenRouterHandler } from "./providers/openrouter"
@@ -18,6 +20,14 @@ function createHandlerForProvider(
 ): ApiHandler {
 	switch (apiProvider) {
 		case "openrouter":
+			if (isE2ETestMode()) {
+				return new E2EMockOpenRouterHandler({
+					onRetryAttempt: options.onRetryAttempt,
+					openRouterModelId: mode === "plan" ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId,
+					openRouterModelInfo:
+						mode === "plan" ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo,
+				})
+			}
 			return new OpenRouterHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				openRouterApiKey: options.openRouterApiKey,
@@ -48,6 +58,14 @@ function createHandlerForProvider(
 				apiModelId: mode === "plan" ? options.planModeNousResearchModelId : options.actModeNousResearchModelId,
 			})
 		default:
+			if (isE2ETestMode()) {
+				return new E2EMockOpenRouterHandler({
+					onRetryAttempt: options.onRetryAttempt,
+					openRouterModelId: mode === "plan" ? options.planModeOpenRouterModelId : options.actModeOpenRouterModelId,
+					openRouterModelInfo:
+						mode === "plan" ? options.planModeOpenRouterModelInfo : options.actModeOpenRouterModelInfo,
+				})
+			}
 			return new OpenRouterHandler({
 				onRetryAttempt: options.onRetryAttempt,
 				openRouterApiKey: options.openRouterApiKey,

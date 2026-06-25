@@ -3,6 +3,7 @@ import * as fs from "fs"
 import { CompiledQuery, Kysely, SqliteDialect } from "kysely"
 import * as path from "path"
 import { Logger } from "../../shared/services/Logger"
+import { disableSqlitePersistence, isNativeModuleVersionMismatch } from "./sqlitePersistence"
 
 export interface Schema {
 	users: {
@@ -338,6 +339,9 @@ export async function getDb(): Promise<Kysely<Schema>> {
 						)
 						rawDb = new Database(":memory:")
 					}
+				} else if (isNativeModuleVersionMismatch(error)) {
+					disableSqlitePersistence(error.message)
+					throw error
 				} else {
 					Logger.warn(
 						`[Config] Falling back to in-memory database due to database initialization failure: ${error.message}`,

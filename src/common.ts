@@ -63,8 +63,15 @@ export async function initialize(storageContext: StorageContext): Promise<Webvie
 
 	const stateManager = StateManager.get()
 	if (process.env.E2E_TEST === "true") {
-		// Diff/editor E2E tests drive replace_in_file; plan mode blocks file mutations.
+		// E2E runs packaged VS Code with a fresh DIETCODE_DIR — seed credentials and
+		// permissive settings so Playwright does not depend on debounced webview saves.
 		stateManager.setGlobalState("mode", "act")
+		stateManager.setGlobalState("welcomeViewCompleted", true)
+		stateManager.setGlobalState("yoloModeToggled", true)
+		stateManager.setGlobalState("nativeToolCallEnabled", false)
+		// Fixture workspaces are not git repos; checkpoint commit blocks file tools on first request.
+		stateManager.setGlobalState("enableCheckpointsSetting", false)
+		stateManager.setSecret("openRouterApiKey", "test-api-key")
 	}
 	// Non-blocking announcement check and display
 	showVersionUpdateAnnouncement(stateManager)
