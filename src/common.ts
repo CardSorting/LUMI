@@ -62,6 +62,10 @@ export async function initialize(storageContext: StorageContext): Promise<Webvie
 	const webview = HostProvider.get().createWebviewProvider()
 
 	const stateManager = StateManager.get()
+	if (process.env.E2E_TEST === "true") {
+		// Diff/editor E2E tests drive replace_in_file; plan mode blocks file mutations.
+		stateManager.setGlobalState("mode", "act")
+	}
 	// Non-blocking announcement check and display
 	showVersionUpdateAnnouncement(stateManager)
 	// Check if this workspace was opened from worktree quick launch
