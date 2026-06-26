@@ -58,15 +58,15 @@
     "ts-morph": "^27.0.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.10",
+    "@biomejs/biome": "^2.3.15",
     "@eslint/js": "^9.39.4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/eslint__js": "^8.42.3",
-    "@types/node": "^25.5.0",
+    "@types/node": "^20.19.43",
     "eslint": "^9.39.4",
     "globals": "^17.4.0",
-    "tsx": "^4.21.0",
+    "tsx": "^4.21.1",
     "typescript": "^6.0.2",
-    "typescript-eslint": "^8.58.0"
+    "typescript-eslint": "^8.58.2"
   }
 }
