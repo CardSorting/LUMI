@@ -24,55 +24,67 @@ updates:
             update-types:
                 - version-update:semver-major
 
-    # Main extension dependencies
+    # Main extension dependencies — security + patch updates (no minor/major without review)
     - package-ecosystem: "npm"
       directory: "/"
       schedule:
           interval: "weekly"
-      open-pull-requests-limit: 5
+      open-pull-requests-limit: 10
       labels:
           - dependencies
+          - security
       reviewers:
           - "CardSorting"
       commit-message:
           prefix: "chore"
           include: scope
       groups:
-          all-dependencies:
+          security-updates:
+              applies-to: security-updates
               patterns:
                   - "*"
+          npm-patches:
+              patterns:
+                  - "*"
+              update-types:
+                  - patch
       ignore:
           - dependency-name: "*"
             update-types:
-                - "version-update:semver-major"
-                - "version-update:semver-minor"
-                - "version-update:semver-patch"
+                - version-update:semver-major
+                - version-update:semver-minor
 
-    # Webview UI dependencies
+    # Webview UI dependencies — security + patch updates
     - package-ecosystem: "npm"
       directory: "/webview-ui"
       schedule:
           interval: "weekly"
-      open-pull-requests-limit: 5
+      open-pull-requests-limit: 10
       labels:
           - dependencies
           - webview
+          - security
       reviewers:
           - "CardSorting"
       commit-message:
           prefix: "chore"
           include: scope
       groups:
-          all-dependencies:
+          security-updates:
+              applies-to: security-updates
               patterns:
                   - "*"
+          npm-patches:
+              patterns:
+                  - "*"
+              update-types:
+                  - patch
       ignore:
           - dependency-name: "@testing-library/*"
           - dependency-name: "*"
             update-types:
-                - "version-update:semver-major"
-                - "version-update:semver-minor"
-                - "version-update:semver-patch"
+                - version-update:semver-major
+                - version-update:semver-minor
 
     # BroccoliDB substrate package
     - package-ecosystem: "npm"
