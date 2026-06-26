@@ -1,13 +1,6 @@
 name: "LUMI CodeQL"
 
-paths-ignore:
-  - "**/node_modules"
-  - dist
-  - out
-  - webview-ui/dist
-  - coverage
-  - test-results
-  - .vscode-test
-  - "**/*.vsix"
-  - evals/results
-  - broccolidb
+# Only scan first-party source — avoids walking node_modules and build output.
+paths:
+  - src
+  - webview-ui/src

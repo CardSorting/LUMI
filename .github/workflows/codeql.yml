@@ -20,6 +20,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       actions: read
       contents: read
@@ -35,19 +36,6 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: none
           config-file: ./.github/codeql/codeql-config.yml
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            webview-ui/package-lock.json
-      - name: Install dependencies
-        run: |
-          npm ci
-          cd webview-ui && npm ci
-      - name: Generate protobuf clients
-        run: npm run protos
       - uses: github/codeql-action/analyze@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
         with:
           category: /language:${{ matrix.language }}
