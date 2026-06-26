@@ -23,6 +23,17 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 - E2E workflow skips docs-only pull requests (path filter)
 - Removed legacy JetBrains and nightly publish automation
 
+## [2.1.1] - 2026-06-26
+
+### Fixed
+
+- actionlint CI workflow: run via official download script (`rhysd/actionlint` is not a GitHub Action)
+- CodeQL analysis configuration for JS/TS monorepo
+
+### Changed
+
+- Dependency security updates across monorepo (npm audit fixes)
+
 ## [2.1.0] - 2026-06-23
 
 Current extension release (`package.json`). See [changelogv3.md](changelogv3.md) for detailed substrate and provider history from prior product iterations.

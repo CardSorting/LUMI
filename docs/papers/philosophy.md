@@ -10,7 +10,7 @@
 
 **A coding companion is not finished until you can keep it open all day without feeling managed by it.**
 
-LUMI (`CardSorting.lumi`, `package.json` v2.1.0) is the **agent layer** of the [LUMI monorepo](https://github.com/CardSorting/LUMI): a VS Code extension that plans, proposes, and executes — but never assumes consent. Comfort is UX. **Agency with approval** is architecture.
+LUMI (`CardSorting.lumi`, `package.json` v2.1.1) is the **agent layer** of the [LUMI monorepo](https://github.com/CardSorting/LUMI): a VS Code extension that plans, proposes, and executes — but never assumes consent. Comfort is UX. **Agency with approval** is architecture.
 
 BroccoliDB (`@noorm/broccolidb`) governs repository substrate — proof, repair, durable graph truth. LUMI governs **the human session** — chat, diffs, terminal, browser, MCP, governed swarm receipts, and the moment you click Approve.
 

@@ -1,6 +1,6 @@
 # LUMI Technical Whitepaper
 
-**Version 2.1.0 — Calm Agent Extension**
+**Version 2.1.1 — Calm Agent Extension**
 
 *A coding companion is not finished until you can keep it open all day without feeling managed by it.*
 
@@ -44,7 +44,7 @@ Coding agents promise speed. They risk **opacity** — changes appear without co
 
 | Artifact | Count / location |
 |----------|------------------|
-| Extension version | **2.1.0** — `package.json` |
+| Extension version | **2.1.1** — `package.json` |
 | Static tool enum values | **63** — `src/shared/tools.ts` |
 | Tool handler implementations | **55** files — `src/core/task/tools/handlers/` |
 | Wired LLM providers | **4** — `src/shared/providers/providers.json` + `src/core/api/index.ts` |
