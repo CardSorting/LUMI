@@ -518,7 +518,7 @@
 		"report-issue": "node scripts/report-issue.js",
 		"storybook": "cd webview-ui && npm run storybook",
 		"rebuild:electron": "electron-rebuild -v 39.2.3",
-		"rebuild:electron:better-sqlite3": "electron-rebuild -v 39.2.3 -w better-sqlite3 --build-from-source"
+		"rebuild:electron:better-sqlite3": "node scripts/rebuild-electron-better-sqlite3.mjs"
 	},
 	"lint-staged": {
 		"src/shared/storage/state-keys.ts": [

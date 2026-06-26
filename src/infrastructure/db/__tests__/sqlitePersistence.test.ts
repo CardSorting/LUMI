@@ -5,7 +5,11 @@ describe("sqlitePersistence", () => {
 	const originalE2E = process.env.E2E_TEST
 
 	afterEach(() => {
-		process.env.E2E_TEST = originalE2E
+		if (originalE2E === undefined) {
+			delete process.env.E2E_TEST
+		} else {
+			process.env.E2E_TEST = originalE2E
+		}
 	})
 
 	it("detects NODE_MODULE_VERSION mismatch errors", () => {

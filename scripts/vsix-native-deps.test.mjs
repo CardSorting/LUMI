@@ -3,6 +3,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
+import { getElectronRebuildArgs } from "./rebuild-electron-better-sqlite3.mjs"
 import {
 	auditExtensionHealth,
 	auditVsixHealth,
@@ -18,6 +19,11 @@ const repoRoot = path.join(import.meta.dirname, "..")
 
 test("REQUIRED_RUNTIME_PACKAGES matches esbuild externals chain", () => {
 	assert.deepEqual(REQUIRED_RUNTIME_PACKAGES, ["better-sqlite3", "bindings", "file-uri-to-path"])
+})
+
+test("getElectronRebuildArgs skips --build-from-source on Windows", () => {
+	assert.deepEqual(getElectronRebuildArgs("win32"), ["-v", "39.2.3", "-w", "better-sqlite3"])
+	assert.deepEqual(getElectronRebuildArgs("linux"), ["-v", "39.2.3", "-w", "better-sqlite3", "--build-from-source"])
 })
 
 test("verifyVscodeignoreWhitelist passes on this repo", () => {
