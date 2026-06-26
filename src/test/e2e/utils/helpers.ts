@@ -23,6 +23,9 @@ export class E2ETestHelper {
 	public static readonly CODEBASE_ROOT_DIR = path.resolve(__dirname, "..", "..", "..", "..")
 	public static readonly E2E_TESTS_DIR = path.join(E2ETestHelper.CODEBASE_ROOT_DIR, "src", "test", "e2e")
 
+	/** Set by openVSCode for targeted teardown (workers: 1). */
+	private static lastDietcodeTestDir: string | undefined
+
 	// Instance properties for caching
 	private cachedFrame: Frame | null = null
 
@@ -115,6 +118,18 @@ export class E2ETestHelper {
 				}
 				await new Promise((resolve) => setTimeout(resolve, 50 * attempt)) // Progressive delay
 			}
+		}
+	}
+
+	public static async closeElectronApp(app: ElectronApplication): Promise<void> {
+		await Promise.race([app.close(), new Promise<void>((resolve) => setTimeout(resolve, 20_000))])
+		try {
+			const proc = app.process()
+			if (proc && !proc.killed) {
+				proc.kill("SIGKILL")
+			}
+		} catch {
+			// Best-effort force quit when graceful close hangs (common on Linux CI).
 		}
 	}
 
@@ -273,6 +288,7 @@ export const e2e = test
 			await use(async (workspacePath: string) => {
 				// Create isolated DietCode data directory for this test
 				const dietcodeTestDir = mkdtempSync(path.join(os.tmpdir(), "dietcode-e2e-"))
+				E2ETestHelper.lastDietcodeTestDir = dietcodeTestDir
 
 				const app = await _electron.launch({
 					executablePath,
@@ -322,25 +338,15 @@ export const e2e = test
 			try {
 				await use(app)
 			} finally {
-				await app.close()
-				// Cleanup in parallel - include dietcodeTestDir if it was created
+				await E2ETestHelper.closeElectronApp(app)
 				const cleanupTasks = [
 					E2ETestHelper.rmForRetries(userDataDir, { recursive: true }),
 					E2ETestHelper.rmForRetries(extensionsDir, { recursive: true }),
 				]
 
-				// Clean up the isolated DietCode data directory
-				// Find all temp directories matching our pattern
-				const tmpDir = os.tmpdir()
-				try {
-					const entries = require("node:fs").readdirSync(tmpDir)
-					for (const entry of entries) {
-						if (entry.startsWith("dietcode-e2e-")) {
-							cleanupTasks.push(E2ETestHelper.rmForRetries(path.join(tmpDir, entry), { recursive: true }))
-						}
-					}
-				} catch {
-					// Ignore cleanup errors
+				if (E2ETestHelper.lastDietcodeTestDir) {
+					cleanupTasks.push(E2ETestHelper.rmForRetries(E2ETestHelper.lastDietcodeTestDir, { recursive: true }))
+					E2ETestHelper.lastDietcodeTestDir = undefined
 				}
 
 				await Promise.allSettled(cleanupTasks)

@@ -22,9 +22,17 @@ export function getElectronRebuildArgs(platform = process.platform) {
 	return args
 }
 
-const isMain = process.argv[1] === fileURLToPath(import.meta.url)
-if (isMain) {
+function runElectronRebuild() {
 	const args = getElectronRebuildArgs()
 	console.log(`[rebuild] electron-rebuild ${args.join(" ")}`)
-	execFileSync("electron-rebuild", args, { stdio: "inherit", cwd: repoRoot })
+	// npm exec resolves the local binary on all platforms (Windows PATH lacks .bin).
+	execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["exec", "electron-rebuild", "--", ...args], {
+		stdio: "inherit",
+		cwd: repoRoot,
+	})
+}
+
+const isMain = process.argv[1] === fileURLToPath(import.meta.url)
+if (isMain) {
+	runElectronRebuild()
 }
