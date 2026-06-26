@@ -1,0 +1,13 @@
+name: "LUMI CodeQL"
+
+paths-ignore:
+  - "**/node_modules"
+  - dist
+  - out
+  - webview-ui/dist
+  - coverage
+  - test-results
+  - .vscode-test
+  - "**/*.vsix"
+  - evals/results
+  - broccolidb
