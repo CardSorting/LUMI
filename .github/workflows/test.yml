@@ -16,9 +16,7 @@ concurrency:
 
 # Set default permissions for all jobs
 permissions:
-    contents: read # Needed to check out code
-    checks: write # Needed to report test results
-    pull-requests: write # Needed to add comments/annotations to PRs
+    contents: read
 
 jobs:
     quality-checks:
@@ -27,7 +25,7 @@ jobs:
         name: Quality Checks
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
             - name: Setup Node monorepo
               uses: ./.github/actions/setup-node-monorepo
@@ -51,7 +49,7 @@ jobs:
                 shell: bash
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
             - name: Setup Node monorepo
               uses: ./.github/actions/setup-node-monorepo
@@ -98,7 +96,7 @@ jobs:
                   npm run test:coverage
 
             - name: Save Coverage Reports
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               # Only upload artifacts on Linux - We only need coverage from one OS
               if: runner.os == 'Linux'
               with:
@@ -113,16 +111,16 @@ jobs:
         # Run on PRs to main, pushes to main, and manual dispatches
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
             - name: Download unit tests coverage reports
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:
                   name: pr-coverage-reports
                   path: .
 
             - name: Upload core unit tests coverage to Qlty
-              uses: qltysh/qlty-action/coverage@v2
+              uses: qltysh/qlty-action/coverage@fd52dc852530a708d68c3b7342f8d33d1df4cd55 # v2
               with:
                   token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
                   # we can merge multiple files if necessary
@@ -131,7 +129,7 @@ jobs:
                   tag: unit:core
 
             - name: Upload webview-ui unit tests coverage to Qlty
-              uses: qltysh/qlty-action/coverage@v2
+              uses: qltysh/qlty-action/coverage@fd52dc852530a708d68c3b7342f8d33d1df4cd55 # v2
               with:
                   token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
                   # we can merge multiple files if necessary

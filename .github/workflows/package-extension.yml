@@ -1,0 +1,66 @@
+name: Package Extension
+
+# OpenSSF Scorecard packaging + signed-releases: build VSIX on tag push and attach cosign signatures.
+on:
+    push:
+        tags:
+            - "v*"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: package-extension-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    package:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            id-token: write
+        steps:
+            - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+              with:
+                  fetch-depth: 0
+
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: 22
+                  cache: npm
+                  cache-dependency-path: |
+                      package-lock.json
+                      webview-ui/package-lock.json
+
+            - name: Install dependencies
+              run: |
+                  npm ci
+                  cd webview-ui && npm ci
+
+            - name: Package VSIX
+              run: |
+                  npm run package:vsix
+                  npm pack --dry-run
+
+            - name: Install cosign
+              uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
+
+            - name: Sign release artifacts
+              run: |
+                  for vsix in dist/lumi-vscode-*.vsix dist/lumi-[0-9]*.vsix; do
+                    [ -f "$vsix" ] || continue
+                    cosign sign-blob --yes --output-signature "${vsix}.sig" --output-certificate "${vsix}.pem" "$vsix"
+                  done
+
+            - name: Publish GitHub Release assets
+              uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+              with:
+                  files: |
+                      dist/lumi-vscode-*.vsix
+                      dist/lumi-[0-9]*.vsix
+                      dist/*.sig
+                      dist/*.pem
+                  generate_release_notes: true
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

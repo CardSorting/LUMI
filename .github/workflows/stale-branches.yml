@@ -11,7 +11,7 @@ on:
         default: "30"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: stale-branches
@@ -20,8 +20,10 @@ concurrency:
 jobs:
   prune:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const daysOld = Number('${{ github.event.inputs.days-old || '30' }}');

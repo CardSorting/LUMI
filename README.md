@@ -17,6 +17,7 @@
   <a href="#origins--acknowledgments">Cline lineage</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
   <a href="SECURITY.md">Security</a> ·
+  <a href="docs/OPENSSF_SCORECARD.md">OpenSSF Scorecard</a> ·
   <a href="https://github.com/CardSorting/LUMI/issues">Issues</a> ·
   <a href="https://github.com/CardSorting/LUMI/discussions">Discussions</a>
 </p>

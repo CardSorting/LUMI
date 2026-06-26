@@ -8,6 +8,9 @@ on:
         types: [opened, reopened, synchronize, ready_for_review]
     workflow_dispatch:
 
+permissions:
+    contents: read
+
 concurrency:
     group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
@@ -18,8 +21,8 @@ jobs:
         outputs:
             code: ${{ steps.filter.outputs.code }}
         steps:
-            - uses: actions/checkout@v4
-            - uses: dorny/paths-filter@v3
+            - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+            - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
               id: filter
               with:
                   filters: |
@@ -57,15 +60,15 @@ jobs:
             id-token: write
             contents: read
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
             - name: Setup Node.js environment
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
               with:
                   node-version: 22
 
             # Cache root dependencies - only reuse if package-lock.json exactly matches
             - name: Cache root dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               id: root-cache
               with:
                   path: node_modules
@@ -73,7 +76,7 @@ jobs:
 
             # Cache webview-ui dependencies - only reuse if package-lock.json exactly matches
             - name: Cache webview-ui dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               id: webview-cache
               with:
                   path: webview-ui/node_modules
@@ -81,7 +84,7 @@ jobs:
 
             # Cache VS Code installation
             - name: Cache VS Code
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               id: vscode-cache
               with:
                   path: .vscode-test
@@ -91,7 +94,7 @@ jobs:
 
             # Cache Playwright browsers
             - name: Cache Playwright browsers
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               id: playwright-cache
               with:
                   path: |
@@ -111,7 +114,7 @@ jobs:
               run: cd webview-ui && npm ci
 
             - name: Install vsce
-              run: npm install -g @vscode/vsce
+              run: npm install -g @vscode/vsce@3.2.1
 
             - name: Install xvfb on Linux
               if: matrix.runner == 'ubuntu'
@@ -126,7 +129,7 @@ jobs:
               if: matrix.runner != 'ubuntu'
               run: npm run test:e2e:optimal
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: ${{ failure() }}
               with:
                   name: playwright-recordings-${{ matrix.runner }}

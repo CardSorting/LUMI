@@ -466,6 +466,7 @@
 		"format": "biome format --changed --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error",
 		"format:fix": "biome check --changed --no-errors-on-unmatched --files-ignore-unknown=true --write",
 		"fix:all": "biome check --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe",
+		"pin:actions": "node scripts/pin-github-actions.mjs",
 		"ci:check-all": "npx npm-run-all -p check-types lint format roadmap:audit docs:check-agent-links docs:check-agent-branding docs:check-root-readme docs:check-root-readme-links docs:check-docs-readme docs:check-readme-metrics doctor:ci test:doctor",
 		"ci:build": "npm run protos && npm run build:webview && node esbuild.mjs && npm run compile-tests",
 		"pretest": "npm run compile && npm run compile-tests && npm run lint",

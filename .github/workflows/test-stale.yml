@@ -11,6 +11,9 @@ on:
                 required: true
                 default: "1"
 
+permissions:
+    contents: read
+
 jobs:
     test-stale:
         runs-on: ubuntu-latest
@@ -18,7 +21,7 @@ jobs:
             issues: write
             pull-requests: write
         steps:
-            - uses: actions/stale@28ca103
+            - uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # 28ca103
               with:
                   days-before-issue-stale: ${{ github.event.inputs.days-before-stale }}
                   days-before-issue-close: ${{ github.event.inputs.days-before-close }}
