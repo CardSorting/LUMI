@@ -38,7 +38,6 @@ const PINS = {
 	"amannn/action-semantic-pull-request@v5": "e32d7e603df1aa1ba07e981f2a23455dee596825",
 	"pascalgn/size-label-action@v0.5.7": "56b489b027932ec0cf60438a1a5f1a19c8fc71ff",
 	"qltysh/qlty-action/coverage@v2": "fd52dc852530a708d68c3b7342f8d33d1df4cd55",
-	"rhysd/actionlint@v1.7.7": "03d0035246f3e81f36aed592ffb4bebf33a03106",
 	"sigstore/cosign-installer@v3.7.0": "dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da",
 }
 
