@@ -29,6 +29,25 @@ export const DEFAULT_EXTENSION_ROOTS = [
 
 export const LUMI_EXTENSION_FOLDER_PATTERN = /(?:cardsorting\.lumi|lumi-vscode|dietcode)/i
 
+/** Paths that trigger Open VSX binary/shell scanners — must not ship in VSIX. */
+export const OPENVSX_DENIED_VSIX_MARKERS = [
+	"extension/scripts/",
+	"extension/test_workspace/",
+	"test_extension.node",
+	"/deps/download.sh",
+	"extension/.dietcode/",
+]
+
+/** Required .vscodeignore rules for Open VSX pre-publish hardening. */
+export const OPENVSX_VSCODEIGNORE_MARKERS = [
+	"scripts/**",
+	"test_workspace/**",
+	"**/*.sh",
+	"!node_modules/better-sqlite3/package.json",
+	"!node_modules/better-sqlite3/lib/**",
+	"!node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+]
+
 /**
  * @typedef {"pass" | "warn" | "fail"} CheckStatus
  * @typedef {{ id: string, status: CheckStatus, title: string, detail?: string, fix?: string[] }} HealthCheck
@@ -109,6 +128,73 @@ export function auditVsixHealth(vsixPath) {
 		fix: hasBinary ? undefined : ["Run: npm run package:vsix:openvsx", "Then reinstall the new VSIX"],
 	})
 
+	checks.push(...auditOpenVsxPackaging(listing, name))
+
+	return checks
+}
+
+/**
+ * @param {string} listing
+ * @param {string} vsixName
+ * @returns {HealthCheck[]}
+ */
+export function auditOpenVsxPackaging(listing, vsixName = "vsix") {
+	/** @type {HealthCheck[]} */
+	const checks = []
+
+	for (const marker of OPENVSX_DENIED_VSIX_MARKERS) {
+		const hit = listing.includes(marker)
+		checks.push({
+			id: `${vsixName}:openvsx:${marker}`,
+			status: hit ? "fail" : "pass",
+			title: hit ? `${vsixName} ships forbidden path (${marker})` : `${vsixName} excludes ${marker}`,
+			detail: hit ? "Remove from .vscodeignore allow-list or repackage" : undefined,
+			fix: hit ? ["Update .vscodeignore Open VSX hardening rules", "Run: npm run package:vsix:all"] : undefined,
+		})
+	}
+
+	const shellScripts = (listing.match(/extension\/[^\n]*\.sh/g) ?? []).length
+	checks.push({
+		id: `${vsixName}:openvsx:shell-scripts`,
+		status: shellScripts === 0 ? "pass" : "fail",
+		title:
+			shellScripts === 0 ? `${vsixName} includes no shell scripts` : `${vsixName} includes ${shellScripts} shell script(s)`,
+		fix: shellScripts === 0 ? undefined : ['Ensure "**/*.sh" is in .vscodeignore', "Run: npm run package:vsix:all"],
+	})
+
+	return checks
+}
+
+/**
+ * @returns {HealthCheck[]}
+ */
+export function verifyOpenVsxVscodeignore(repoRoot) {
+	const ignorePath = path.join(repoRoot, ".vscodeignore")
+	if (!fs.existsSync(ignorePath)) {
+		return [
+			{
+				id: "openvsx:vscodeignore:missing",
+				status: "fail",
+				title: ".vscodeignore exists for Open VSX hardening",
+				fix: ["Restore .vscodeignore from the repository"],
+			},
+		]
+	}
+
+	const ignore = fs.readFileSync(ignorePath, "utf8")
+	/** @type {HealthCheck[]} */
+	const checks = []
+
+	for (const marker of OPENVSX_VSCODEIGNORE_MARKERS) {
+		checks.push({
+			id: `openvsx:vscodeignore:${marker}`,
+			status: ignore.includes(marker) ? "pass" : "fail",
+			title: `.vscodeignore includes Open VSX rule: ${marker}`,
+			detail: ignore.includes(marker) ? undefined : `Add "${marker}" to .vscodeignore`,
+			fix: ignore.includes(marker) ? undefined : [`Add "${marker}" to .vscodeignore`],
+		})
+	}
+
 	return checks
 }
 
@@ -178,13 +264,20 @@ export function assertVsixHasNativeModule(vsixPath) {
 	console.log(`[vsix] verified native dependencies in ${path.basename(vsixPath)}`)
 }
 
-export function discoverVsixFiles(distDir) {
+export function discoverVsixFiles(distDir, { version } = {}) {
 	if (!fs.existsSync(distDir)) {
 		return []
 	}
+
+	if (version) {
+		return [`lumi-vscode-${version}.vsix`, `lumi-${version}.vsix`]
+			.map((entry) => path.join(distDir, entry))
+			.filter((entry) => fs.existsSync(entry))
+	}
+
 	return fs
 		.readdirSync(distDir)
-		.filter((entry) => entry.endsWith(".vsix"))
+		.filter((entry) => entry.endsWith(".vsix") && /^lumi(-vscode)?-\d+\.\d+\.\d+\.vsix$/.test(entry))
 		.map((entry) => path.join(distDir, entry))
 		.sort((a, b) => a.localeCompare(b))
 }
@@ -363,7 +456,26 @@ export function verifyVscodeignoreWhitelist(repoRoot) {
 	/** @type {HealthCheck[]} */
 	const checks = []
 
+	const SQLITE_RUNTIME_MARKERS = [
+		"!node_modules/better-sqlite3/package.json",
+		"!node_modules/better-sqlite3/lib/**",
+		"!node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+	]
+
 	for (const pkg of REQUIRED_RUNTIME_PACKAGES) {
+		if (pkg === "better-sqlite3") {
+			for (const marker of SQLITE_RUNTIME_MARKERS) {
+				checks.push({
+					id: `vscodeignore:${marker}`,
+					status: ignore.includes(marker) ? "pass" : "fail",
+					title: `.vscodeignore whitelists better-sqlite3 runtime: ${marker}`,
+					detail: ignore.includes(marker) ? undefined : `Expected line: ${marker}`,
+					fix: ignore.includes(marker) ? undefined : [`Add "${marker}" to .vscodeignore`],
+				})
+			}
+			continue
+		}
+
 		const needle = `!node_modules/${pkg}/**`
 		checks.push({
 			id: `vscodeignore:${pkg}`,
@@ -381,8 +493,10 @@ export function verifyVscodeignoreWhitelist(repoRoot) {
  * Build a structured doctor report (shared by CLI and CI).
  */
 export function buildDoctorReport({ repoRoot, distDir, extensionRoots = DEFAULT_EXTENSION_ROOTS, scope = "full" }) {
-	const configChecks = scope === "install" ? [] : verifyVscodeignoreWhitelist(repoRoot)
-	const vsixPaths = scope === "install" ? [] : discoverVsixFiles(distDir)
+	const pkgVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")).version
+	const configChecks =
+		scope === "install" ? [] : [...verifyVscodeignoreWhitelist(repoRoot), ...verifyOpenVsxVscodeignore(repoRoot)]
+	const vsixPaths = scope === "install" ? [] : discoverVsixFiles(distDir, { version: pkgVersion })
 	const extensions = discoverLumiExtensions(extensionRoots)
 
 	const vsixChecks = vsixPaths.flatMap((vsixPath) => auditVsixHealth(vsixPath))

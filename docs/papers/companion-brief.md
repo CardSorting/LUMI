@@ -1,6 +1,6 @@
 # LUMI Companion Brief
 
-**Executive summary · v2.1.2 · workspace-verified**
+**Executive summary · v2.1.3 · workspace-verified**
 
 *Companion to the [Technical Whitepaper](whitepaper.md). All figures below are measured from the agent workspace (`src/`, `webview-ui/`, root `package.json`).*
 
@@ -16,7 +16,7 @@
 
 | Metric | Value | Where |
 |--------|-------|-------|
-| Extension version | **2.1.2** | `package.json` |
+| Extension version | **2.1.3** | `package.json` |
 | Publisher / ID | **CardSorting.lumi-vscode** (VS Marketplace) · **CardSorting.lumi** (Open VSX) | `package.json` |
 | Registered VS Code commands | **~25** `lumi.*` | `package.json` `contributes.commands` |
 | Static tool enum values | **63** | `DietCodeDefaultTool` in `src/shared/tools.ts` |

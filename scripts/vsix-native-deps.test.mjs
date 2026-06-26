@@ -6,11 +6,13 @@ import test from "node:test"
 import { getElectronRebuildArgs } from "./rebuild-electron-better-sqlite3.mjs"
 import {
 	auditExtensionHealth,
+	auditOpenVsxPackaging,
 	auditVsixHealth,
 	buildDoctorReport,
 	extensionHasNativeModule,
 	REQUIRED_RUNTIME_PACKAGES,
 	summarizeChecks,
+	verifyOpenVsxVscodeignore,
 	verifyVscodeignoreWhitelist,
 	vsixHasNativeModule,
 } from "./vsix-native-deps.mjs"
@@ -29,6 +31,17 @@ test("getElectronRebuildArgs skips --build-from-source on Windows", () => {
 test("verifyVscodeignoreWhitelist passes on this repo", () => {
 	const checks = verifyVscodeignoreWhitelist(repoRoot)
 	assert.equal(summarizeChecks(checks).ok, true)
+})
+
+test("verifyOpenVsxVscodeignore passes on this repo", () => {
+	const checks = verifyOpenVsxVscodeignore(repoRoot)
+	assert.equal(summarizeChecks(checks).ok, true)
+})
+
+test("auditOpenVsxPackaging flags shell scripts in listing", () => {
+	const listing = "extension/scripts/proto-lint.sh\nextension/dist/extension.js\n"
+	const checks = auditOpenVsxPackaging(listing, "sample.vsix")
+	assert.equal(summarizeChecks(checks).ok, false)
 })
 
 test("buildDoctorReport full scope includes config checks", () => {
@@ -59,7 +72,11 @@ test("vsixHasNativeModule on known good dist VSIX when present", () => {
 	if (!fs.existsSync(vsixDir)) {
 		return
 	}
-	const vsix = fs.readdirSync(vsixDir).find((f) => f.endsWith(".vsix") && f.includes("lumi"))
+	const vsix = fs
+		.readdirSync(vsixDir)
+		.filter((f) => f.endsWith(".vsix") && /lumi-(vscode-)?\d+\.\d+\.\d+\.vsix$/.test(f))
+		.sort()
+		.at(-1)
 	if (!vsix) {
 		return
 	}

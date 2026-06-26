@@ -23,6 +23,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 - E2E workflow skips docs-only pull requests (path filter)
 - Removed legacy JetBrains and nightly publish automation
 
+## [2.1.3] - 2026-06-26
+
+### Changed
+
+- Hardened `.vscodeignore` for Open VSX pre-publish scanners (exclude shell scripts, dev tooling, SQLite test binaries)
+- `lumi-doctor` now verifies Open VSX packaging rules on every VSIX build
+
 ## [2.1.2] - 2026-06-26
 
 ### Changed
