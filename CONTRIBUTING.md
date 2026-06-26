@@ -41,7 +41,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 ## Reporting bugs
 
 1. [Search existing issues](https://github.com/CardSorting/LUMI/issues) to avoid duplicates.
-2. Open a new issue with reproduction steps, VS Code version, extension version (`2.1.1`), and provider used.
+2. Open a new issue with reproduction steps, VS Code version, extension version (`2.1.2`), and provider used.
 3. Include relevant logs from **LUMI → Output** panel when possible.
 
 ---

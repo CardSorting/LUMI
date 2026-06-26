@@ -34,4 +34,4 @@ body:
     attributes:
       label: Context
       description: OS, VS Code version, LUMI version, relevant settings.
-      placeholder: "VS Code 1.96, LUMI 2.1.1, macOS ..."
+      placeholder: "VS Code 1.96, LUMI 2.1.2, macOS ..."
