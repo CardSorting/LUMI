@@ -12,14 +12,8 @@ import { getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { fileExistsAtPath } from "@utils/fs"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
-import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { AnomalyRegistry } from "../../../integrity/AnomalyRegistry"
-import { StabilityDoctor } from "../../../policy/StabilityDoctor"
-import { StabilityGuard } from "../../../policy/StabilityGuard"
-import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
 import { executor } from "../../ActionExecutor"
-import { RefactorHealer } from "../../tools/RefactorHealer"
 import { showNotificationForApproval } from "../../utils"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -319,39 +313,6 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			// Mark the file as edited by DietCode
 			config.services.fileContextTracker.markFileAsEditedByDietCode(relPath)
 
-			// --- JoyZoning Sovereign Integration ---
-			try {
-				const engine = new SpiderEngine(config.cwd)
-				await engine.loadRegistry()
-				const guard = new StabilityGuard(config.cwd)
-
-				// Audit the proposed content
-				const anomalies = new AnomalyRegistry(config.cwd)
-				const signal = await guard.scrutinize(relPath, newContent, engine, anomalies)
-
-				if (!signal.approved) {
-					await config.callbacks.say("error", `Stability Blockade: ${signal.reason}`)
-				}
-
-				// Check for drift/optimizations
-				const doctor = new StabilityDoctor(config.cwd)
-				const report = await doctor.diagnose(engine)
-				const optimization = report.optimizations.find((o) => o.file === relPath)
-
-				if (optimization) {
-					// Add to a "Directive" queue to be appended to the return message
-					const state = config.taskState as unknown as { sovereignDirective?: string }
-					state.sovereignDirective = `\n\n[ARCHITECTURAL OPTIMIZATION]: ${optimization.reason}. Recommended Layer: ${optimization.recommendedLayer}.`
-				}
-
-				// Auto-Align Tag
-				const healer = new RefactorHealer(config.cwd)
-				await healer.alignTag(absolutePath)
-			} catch (e) {
-				Logger.error("[JoyZoning] Integration error:", e)
-			}
-			// ----------------------------------------
-
 			// Save the changes and get the result with reliability wrapper
 			const { newProblemsMessage, userEdits, autoFormattingEdits, finalContent } = await executor.execute(
 				config.ulid,
@@ -396,30 +357,31 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				newProblemsMessage,
 			)
 
-			// PROACTIVE STABILITY AUDIT (V12 Double Down)
-			let auditReport = ""
+			// PROACTIVE STABILITY AUDIT — shift-right for scratchpad writes (non-blocking)
 			if (relPath.endsWith("scratchpad.md") && finalContent) {
-				const scribe = new StabilityScribe(config.cwd)
-				const isAgile = finalContent.includes("# AGILE_MODE")
-				const audit = await scribe.validate(finalContent, isAgile)
-
-				if (!audit.success) {
-					auditReport = `\n\n⚠️ STABILITY AUDIT FAILED:\n${audit.errors.map((e) => `- ${e}`).join("\n")}`
-				} else {
-					auditReport = `\n\n✅ STABILITY AUDIT PASSED: Substrate integrity verified.`
-				}
+				void (async () => {
+					try {
+						const scribe = new StabilityScribe(config.cwd)
+						const isAgile = finalContent.includes("# AGILE_MODE")
+						const audit = await scribe.validate(finalContent, isAgile)
+						if (!audit.success) {
+							await config.callbacks.say(
+								"info",
+								`⚠️ STABILITY AUDIT FAILED:\n${audit.errors.map((e) => `- ${e}`).join("\n")}`,
+							)
+						}
+					} catch (error) {
+						Logger.warn("[WriteToFileToolHandler] Deferred scratchpad stability audit failed:", error)
+					}
+				})()
 			}
-
-			const state = config.taskState as unknown as { sovereignDirective?: string }
-			const directive = state.sovereignDirective || ""
-			if (directive) delete state.sovereignDirective
 
 			let fileWriteAdvisory = ""
 			if (config.auditFileWriteAdvisoryEnabled && !config.isSubagentExecution && finalContent) {
 				fileWriteAdvisory = buildFileWriteContentAdvisory(finalContent, relPath)
 			}
 
-			return baseResult + directive + auditReport + fileWriteAdvisory
+			return baseResult + fileWriteAdvisory
 		} catch (error) {
 			// Reset diff view on error
 			await config.services.diffViewProvider.revertChanges()

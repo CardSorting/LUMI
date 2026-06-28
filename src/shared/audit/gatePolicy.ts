@@ -20,6 +20,15 @@ export const COMPLETION_RETRY_MAX_COOLDOWN_MS = 30_000
 /** Minimum result summary length — rejects one-liner non-summaries at completion. */
 export const COMPLETION_RESULT_MIN_LENGTH = 40
 
+/** Relaxed minimum for I/O authority lanes (read/audit/diagnostic) — parent seal retains full bar. */
+export const SUBAGENT_IO_LANE_RESULT_MIN_LENGTH = 20
+
+/** Reuse completion audit metadata when result unchanged (mirrors HTTP cache TTL). */
+export const COMPLETION_AUDIT_CACHE_TTL_MS = 5 * 60 * 1000
+
+/** First N gate blocks use critical-only audit threshold before full hardening bar. */
+export const PARENT_PROGRESSIVE_GATE_BLOCK_LIMIT = 2
+
 /** Maximum result summary length — prevents context-flooding completion payloads. */
 export const COMPLETION_RESULT_MAX_LENGTH = 6000
 

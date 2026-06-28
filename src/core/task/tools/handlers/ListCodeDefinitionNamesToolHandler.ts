@@ -75,14 +75,11 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 		const { absolutePath, displayPath } =
 			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relDirPath! } : pathResult
 
-		// Execute the actual parse source code operation
-		const result = await parseSourceCodeForDefinitionsTopLevel(absolutePath, config.services.dietcodeIgnoreController)
-
-		// Handle approval flow
+		// Approval before I/O — mirrors read_file
 		const sharedMessageProps = {
 			tool: "listCodeDefinitionNames",
 			path: getReadablePath(config.cwd, displayPath),
-			content: result,
+			content: "",
 			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relDirPath!),
 		}
 
@@ -91,13 +88,11 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 		const shouldAutoApprove =
 			config.isSubagentExecution || (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
 		if (shouldAutoApprove) {
-			// Auto-approval flow
 			if (!config.isSubagentExecution) {
 				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
 			}
 
-			// Capture telemetry
 			telemetryService.captureToolUsage(
 				config.ulid,
 				block.name,
@@ -109,10 +104,8 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 				block.isNativeToolCall,
 			)
 		} else {
-			// Manual approval flow
 			const notificationMessage = `DietCode wants to analyze code definitions in ${getWorkspaceBasename(absolutePath, "ListCodeDefinitionNamesToolHandler.notification")}`
 
-			// Show notification
 			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
 
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
@@ -143,7 +136,6 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 			)
 		}
 
-		// Run PreToolUse hook after approval but before execution
 		try {
 			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
 			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
@@ -153,6 +145,13 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 				return formatResponse.toolDenied()
 			}
 			throw error
+		}
+
+		const result = await parseSourceCodeForDefinitionsTopLevel(absolutePath, config.services.dietcodeIgnoreController)
+
+		if (shouldAutoApprove && !config.isSubagentExecution) {
+			const resultMessage = JSON.stringify({ ...sharedMessageProps, content: result })
+			await config.callbacks.say("tool", resultMessage, undefined, undefined, false)
 		}
 
 		return result

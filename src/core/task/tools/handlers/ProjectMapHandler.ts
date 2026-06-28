@@ -4,6 +4,7 @@ import * as fs from "fs"
 import * as nodePath from "path"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
+import { resolveSessionSpiderEngine } from "../executionAuthority"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
 
@@ -141,9 +142,13 @@ export class ProjectMapHandler implements IToolHandler {
 		const includeEvidence = asBoolean(block.params.includeEvidence)
 
 		try {
-			const engine = new SpiderEngine(config.cwd)
-			await engine.loadRegistry()
-			await engine.synchronizeRegistry().catch(() => undefined)
+			let engine = resolveSessionSpiderEngine(config)
+			if (!engine || engine.nodes.size === 0) {
+				engine = new SpiderEngine(config.cwd)
+				await engine.loadRegistry()
+			} else {
+				void engine.synchronizeRegistry().catch(() => undefined)
+			}
 
 			const startingPoint: ProjectMapItem[] = []
 			const connections: ProjectMapItem[] = []

@@ -78,13 +78,21 @@ export class FluidPolicyEngine {
 	private lastEntropyScore = 1.0 // V80: Karma Tracking
 	private restorationTokens: Map<string, number> = new Map() // V100: Recovery Buffers
 	private gracePeriods: Map<string, number> = new Map() // V100: Soft-Lock attempts
+	private scratchpadSnapshot?: {
+		content: string
+		hasAudit: boolean
+		hasBreath: boolean
+		mtimeMs: number
+	}
+	private scratchpadVirtualResolved = false
 	private refactorHealer: RefactorHealer
 	private forensics: StabilityForensics
 	private garbageCollector: IntegrityGarbageCollector
 	private readonly envIntegrity: EnvironmentIntegrity
 	private karma = 1000 // High-Velocity: Initial Karma bonus
 
-	private isChecking = false
+	/** Last logged velocity — avoids per-tool info spam on guarded pre-exec hot path. */
+	private lastLoggedActivityVelocity?: number
 
 	constructor(
 		private cwd: string,
@@ -282,6 +290,76 @@ export class FluidPolicyEngine {
 		Logger.info("💚 [HEALTH ALERT] Health restored. System stability confirmed.")
 	}
 
+	/** Cache-aside scratchpad reads — mtime invalidation avoids per-tool disk I/O on guarded calls. */
+	public invalidateScratchpadCache(): void {
+		this.scratchpadSnapshot = undefined
+		this.scratchpadVirtualResolved = false
+	}
+
+	private async resolveScratchpadContext(options?: {
+		allowVirtualFallback?: boolean
+		allowAutoHeal?: boolean
+	}): Promise<{ content: string; hasAudit: boolean; hasBreath: boolean }> {
+		const allowVirtualFallback = options?.allowVirtualFallback ?? true
+		const allowAutoHeal = options?.allowAutoHeal ?? true
+		const scratchpadPath = path.join(this.cwd, "scratchpad.md")
+
+		try {
+			const stat = await fs.stat(scratchpadPath)
+			if (this.scratchpadSnapshot && this.scratchpadSnapshot.mtimeMs === stat.mtimeMs) {
+				return this.scratchpadSnapshot
+			}
+			const content = await fs.readFile(scratchpadPath, "utf-8")
+			const snapshot = {
+				content,
+				hasAudit: content.includes(IntegrityProtocol.HEADERS.AUDIT),
+				hasBreath: content.includes(IntegrityProtocol.HEADERS.BREATH),
+				mtimeMs: stat.mtimeMs,
+			}
+			this.scratchpadSnapshot = snapshot
+			return snapshot
+		} catch (_e) {
+			if (allowAutoHeal) {
+				const cooldown = this.stabilityMonitor.getCooldownStatus()
+				if (cooldown.active || this.buildAlarmActive) {
+					const healing = await this.ensureScratchpadIntegrity("Activity Stabilization")
+					const content = healing.content
+					const snapshot = {
+						content,
+						hasAudit: content.includes(IntegrityProtocol.HEADERS.AUDIT),
+						hasBreath: content.includes(IntegrityProtocol.HEADERS.BREATH),
+						mtimeMs: Date.now(),
+					}
+					this.scratchpadSnapshot = snapshot
+					return snapshot
+				}
+			}
+
+			if (allowVirtualFallback && !this.scratchpadVirtualResolved && this.streamId) {
+				const history = await orchestrator.getConversationHistory(this.streamId)
+				if (history) {
+					const virtual = StabilityScribe.findVirtualReviewInHistory(history)
+					if (virtual.valid) {
+						this.scratchpadVirtualResolved = true
+						const snapshot = {
+							content: virtual.content,
+							hasAudit: true,
+							hasBreath: false,
+							mtimeMs: 0,
+						}
+						this.scratchpadSnapshot = snapshot
+						Logger.info(
+							"[FluidPolicyEngine] Strategic Interdiction bypassed via Virtual Scratchpad (History Synthesis).",
+						)
+						return snapshot
+					}
+				}
+			}
+
+			return { content: "", hasAudit: false, hasBreath: false }
+		}
+	}
+
 	/**
 	 * Validates a tool block before execution.
 	 * Uses progressive enforcement: first domain violation blocks, subsequent ones degrade to warnings.
@@ -449,10 +527,13 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// V188: Concurrent Substrate Drift Detection
-		const driftAlert = await this.detectConcurrentDrift(block)
-		if (driftAlert) {
-			result.warning = (result.warning ? `${result.warning}\n` : "") + driftAlert
+		// V188: Concurrent Substrate Drift Detection — shift-right (async observability)
+		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
+			void this.detectConcurrentDrift(block).then((driftAlert) => {
+				if (driftAlert) {
+					Logger.warn(`[FluidPolicyEngine] ${driftAlert}`)
+				}
+			})
 		}
 
 		// V189: Substrate Immune Response Check (Fragility Alarm)
@@ -470,49 +551,13 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// Step 0: Read scratchpad context for Sovereign Protocols
-		let scratchpadContent = ""
-		let hasAudit = false
-		let hasBreath = false
-
-		try {
-			const scratchpadPath = path.join(this.cwd, "scratchpad.md")
-			scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
-			hasAudit = scratchpadContent.includes(IntegrityProtocol.HEADERS.AUDIT)
-			hasBreath = scratchpadContent.includes(IntegrityProtocol.HEADERS.BREATH)
-		} catch (_e) {
-			// V27 Agent Success: Auto-heal if we're trending towards a block
-			const cooldown = this.stabilityMonitor.getCooldownStatus()
-			if (cooldown.active || this.buildAlarmActive) {
-				const healing = await this.ensureScratchpadIntegrity("Activity Stabilization")
-				scratchpadContent = healing.content
-				hasAudit = scratchpadContent.includes(IntegrityProtocol.HEADERS.AUDIT)
-			}
-
-			// V28: Virtual Substrate Fallback (Search history if disk is empty)
-			if (!hasAudit && !hasBreath && this.streamId) {
-				const history = await orchestrator.getConversationHistory(this.streamId)
-				if (history) {
-					const virtual = StabilityScribe.findVirtualReviewInHistory(history)
-					if (virtual.valid) {
-						scratchpadContent = virtual.content
-						hasAudit = true
-						Logger.info(
-							"[FluidPolicyEngine] Strategic Interdiction bypassed via Virtual Scratchpad (History Synthesis).",
-						)
-					}
+		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
+			if (this.stabilityMonitor.getCooldownStatus().active || this.buildAlarmActive) {
+				intent = this.verification.detectHealingIntent(block)
+				if (intent) {
+					Logger.info(`[FluidPolicyEngine] Stabilization Intent detected. Resetting activity pressure for ${intent}.`)
+					this.resetSystemPressure()
 				}
-			}
-		}
-
-		if (
-			(block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) &&
-			(this.stabilityMonitor.getCooldownStatus().active || this.buildAlarmActive)
-		) {
-			intent = this.verification.detectHealingIntent(block)
-			if (intent) {
-				Logger.info(`[FluidPolicyEngine] Stabilization Intent detected. Resetting activity pressure for ${intent}.`)
-				this.resetSystemPressure()
 			}
 		}
 
@@ -522,9 +567,9 @@ export class FluidPolicyEngine {
 		const resonance = isHealingMode || this.refactorTurnsRemaining > 0 ? 0.5 : 1.0
 		this.stabilityMonitor.setVelocityDamping(resonance)
 
-		// 0. Rule: Cognitive Drift Sensing (Thrashing Prevention)
 		// 0. Rule: Activity Cooldown Enforcement (Substrate Immune System)
 		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
+			const { content: scratchpadContent, hasAudit, hasBreath } = await this.resolveScratchpadContext()
 			const isRefactoring = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
 			const cooldown = this.stabilityMonitor.getCooldownStatus(isRefactoring)
 			if (cooldown.active && !this.commitSeal) {
@@ -563,6 +608,7 @@ export class FluidPolicyEngine {
 		if (block.name === DietCodeDefaultTool.FILE_READ) {
 			const targetPath = (block.params as { path?: string })?.path
 			if (targetPath) {
+				const { content: scratchpadContent } = await this.resolveScratchpadContext()
 				const absolutePath = path.resolve(this.cwd, targetPath)
 				const violations = this.spiderEngine.getViolations().filter((v) => v.path === absolutePath)
 				const isRefactoring = scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#INFRASTRUCTURE")
@@ -585,6 +631,7 @@ export class FluidPolicyEngine {
 
 		// 0. Rule: Activity Cooldown (Inflammation Control)
 		if (block.name === DietCodeDefaultTool.FILE_EDIT || block.name === DietCodeDefaultTool.APPLY_PATCH) {
+			const { content: scratchpadContent, hasAudit } = await this.resolveScratchpadContext()
 			const targetPath = (block.params as { path?: string })?.path
 			if (targetPath) {
 				const absolutePath = path.resolve(this.cwd, targetPath)
@@ -718,14 +765,8 @@ export class FluidPolicyEngine {
 			const { oldPath, newPath } = block.params as { oldPath: string; newPath: string }
 
 			// V8: Detect agile mode in turn
-			let isAgile = false
-			try {
-				const scratchpadPath = path.join(this.cwd, "scratchpad.md")
-				const scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
-				if (scratchpadContent.includes("# SOVEREIGN_AGILE")) {
-					isAgile = true
-				}
-			} catch (_e) {}
+			const { content: scratchpadContent } = await this.resolveScratchpadContext({ allowVirtualFallback: false })
+			const isAgile = scratchpadContent.includes("# SOVEREIGN_AGILE")
 
 			const sim = await this.simulationEngine.simulateMove(
 				oldPath,
@@ -757,17 +798,29 @@ export class FluidPolicyEngine {
 			}
 		}
 
-		// V40: Pre-flight Sweep (Stability cleanup)
+		// V40: Pre-flight Sweep (Stability cleanup) — shift-right on parent hot path
 		if (this.stabilityMonitor.getCooldownStatus().active && block.params?.path) {
-			Logger.warn(`[FluidPolicyEngine] High Activity Pressure detected. Running Pre-flight Sweep on ${block.params.path}`)
-			await this.garbageCollector.sweep([this.normalize(block.params.path)])
+			const sweepPath = this.normalize(block.params.path as string)
+			Logger.warn(
+				`[FluidPolicyEngine] High Activity Pressure detected. Scheduling deferred Pre-flight Sweep on ${block.params.path}`,
+			)
+			void this.garbageCollector.sweep([sweepPath]).catch((error) => {
+				Logger.error("[FluidPolicyEngine] Deferred pre-flight sweep failed:", error)
+			})
 		}
 
 		// V70: Sovereign Refactor Window Detection
-		if (scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#MIGRATION")) {
-			if (this.refactorTurnsRemaining <= 0) {
-				this.refactorTurnsRemaining = 3 // Standard 3-turn window
-				Logger.info("[FluidPolicyEngine] Sovereign Refactor Window opened (3 turns of architectural leniency).")
+		if (
+			block.name === DietCodeDefaultTool.FILE_NEW ||
+			block.name === DietCodeDefaultTool.FILE_EDIT ||
+			block.name === DietCodeDefaultTool.APPLY_PATCH
+		) {
+			const { content: scratchpadContent } = await this.resolveScratchpadContext()
+			if (scratchpadContent.includes("#REFACTOR") || scratchpadContent.includes("#MIGRATION")) {
+				if (this.refactorTurnsRemaining <= 0) {
+					this.refactorTurnsRemaining = 3 // Standard 3-turn window
+					Logger.info("[FluidPolicyEngine] Sovereign Refactor Window opened (3 turns of architectural leniency).")
+				}
 			}
 		}
 
@@ -779,7 +832,10 @@ export class FluidPolicyEngine {
 
 		const velocity = 1.0 + (this.karma / 1000) * 0.5
 		this.stabilityMonitor.setThresholdMultiplier(Math.max(0.5, Math.min(2.0, velocity)))
-		Logger.info(`[FluidPolicyEngine] Activity Rate calibrated to ${SafeNumber.format(velocity, 2)}x.`)
+		if (this.lastLoggedActivityVelocity !== velocity) {
+			this.lastLoggedActivityVelocity = velocity
+			Logger.info(`[FluidPolicyEngine] Activity Rate calibrated to ${SafeNumber.format(velocity, 2)}x.`)
+		}
 
 		// 0. Rule: Architectural Alarm (Soft-Lock / Healing Mode)
 		const isCriticalHealth = this.lastBuildHealth < 50
@@ -1142,6 +1198,16 @@ export class FluidPolicyEngine {
 		return {}
 	}
 
+	/** I/O authority fast path — minimal substrate tracking, no advisory header bloat. */
+	public onReadIoAuthority(filePath: string, content: string): string {
+		const absolutePath = path.resolve(this.cwd, filePath)
+		this.sessionFiles.set(absolutePath, content)
+		this.spiderEngine.updateNode(absolutePath, content)
+		void this.stalenessTracker.recordRead(absolutePath, content).catch(() => undefined)
+		this.stabilityMonitor.recordRead(absolutePath, content)
+		return content
+	}
+
 	public async onRead(
 		filePath: string,
 		content: string,
@@ -1355,6 +1421,9 @@ export class FluidPolicyEngine {
 			const filePath = params?.path || params?.target_file
 			if (filePath) {
 				const absPath = path.resolve(this.cwd, filePath)
+				if (filePath.endsWith("scratchpad.md")) {
+					this.invalidateScratchpadCache()
+				}
 				try {
 					const normPath = this.normalize(absPath)
 
@@ -1661,6 +1730,11 @@ export class FluidPolicyEngine {
 
 	public getNodes() {
 		return this.spiderEngine.nodes
+	}
+
+	/** Warm session spider graph — reuse instead of loadRegistry on parent I/O-adjacent tools. */
+	public getSpiderEngine(): SpiderEngine {
+		return this.spiderEngine
 	}
 	/**
 	 * V110: Substrate Stability Telemetry Proxy.

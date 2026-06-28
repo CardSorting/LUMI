@@ -41,6 +41,7 @@ import {
 	getCompletionGateRetryPolicy,
 	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
+import { shouldBypassGuardForLaneIoTool, shouldUseIoAuthorityReadFastPath } from "../executionAuthority"
 import { validateSubagentCompletionGates } from "../subagentCompletionGates"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -921,8 +922,14 @@ export class SubagentRunner {
 							completionResult,
 							typeof toolCallParams?.task_progress === "string" ? toolCallParams.task_progress : undefined,
 							typeof toolCallParams?.command === "string" ? toolCallParams.command : undefined,
+							{ laneExecutionMode: this.laneExecutionMode },
 						)
 						this.envelopeBuilder?.recordGateLifecycle(gateResult.lifecycle)
+						if (gateResult.auditDeferredToSeal) {
+							this.envelopeBuilder?.recordWarning(
+								"Lane audit deferred to parent seal barrier — I/O authority fast path.",
+							)
+						}
 						if (gateResult.error) {
 							this.envelopeBuilder?.setPhase("completion_gate")
 							this.envelopeBuilder?.recordBlocker(gateResult.error)
@@ -993,10 +1000,12 @@ export class SubagentRunner {
 							}
 
 							if (!toolResult) {
-								// V227: Sovereign Audit Integration for Swarms
-								// Ensure subagent actions are recorded in the shared StabilityMonitor
 								const guard = this.baseConfig.universalGuard
-								if (guard) {
+								const ioAuthorityFastPath = shouldBypassGuardForLaneIoTool(this.laneExecutionMode, toolName)
+								if (ioAuthorityFastPath) {
+									toolResult = await handler.execute(subagentConfig, toolCallBlock)
+								} else if (guard) {
+									// V227: Sovereign Audit Integration for Swarms (mutation / side-effect tools)
 									const preExecResult = await guard.guardPreExecution(toolCallBlock)
 									if (!preExecResult.success) {
 										toolResult = formatResponse.toolError(
@@ -1026,13 +1035,15 @@ export class SubagentRunner {
 											const globalCount = (state.taskReadHistory.get(pathKey) || 0) + 1
 											state.taskReadHistory.set(pathKey, globalCount)
 
-											toolResult = await guard.onRead(
-												toolCallParams.path,
-												toolResult,
-												state.currentTurnUniqueReadCount,
-												newCount,
-												globalCount,
-											)
+											toolResult = shouldUseIoAuthorityReadFastPath(toolName, this.laneExecutionMode)
+												? guard.onReadIoAuthority(toolCallParams.path, toolResult)
+												: await guard.onRead(
+														toolCallParams.path,
+														toolResult,
+														state.currentTurnUniqueReadCount,
+														newCount,
+														globalCount,
+													)
 										}
 									}
 								} else {

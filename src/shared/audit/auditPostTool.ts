@@ -1,4 +1,6 @@
 import type { DietCodeToolResponseContent } from "@shared/messages/content"
+import { recordAdvisoryAuditCache } from "@/core/task/tools/completionGatePipeline"
+import type { TaskConfig } from "@/core/task/tools/types/TaskConfig"
 import { detectVerificationOutputFailures } from "./auditFileWrite"
 import type { AuditGateSettingsSource } from "./auditGateOptions"
 import { applyWorkspaceAuditPolicy } from "./auditGatePolicyLoader"
@@ -55,6 +57,36 @@ export function appendTextToToolResponse(result: unknown, suffix: string): DietC
 	return result as DietCodeToolResponseContent
 }
 
+export function buildVerificationFailureAdvisory(): string {
+	return (
+		`\n\n<command_audit_advisory grade="F" score="0">` +
+		`\nVerification command reported failures in output.` +
+		`\nFix failing tests/lint/build before attempt_completion.` +
+		`\n</command_audit_advisory>`
+	)
+}
+
+export async function deferCommandOutputAdvisoryAudit(
+	taskId: string,
+	taskDescription: string,
+	output: string,
+	config?: TaskConfig,
+	policyContext?: { cwd: string; settings: AuditGateSettingsSource },
+): Promise<TaskAuditMetadata | undefined> {
+	if (output.trim().length < 20) {
+		return undefined
+	}
+	const excerpt = output.slice(0, 3000)
+	let metadata = await runAdvisoryAudit(taskId, taskDescription, excerpt, taskDescription)
+	if (policyContext) {
+		metadata = await applyWorkspaceAuditPolicy(policyContext.cwd, metadata, policyContext.settings)
+	}
+	if (config) {
+		recordAdvisoryAuditCache(config, excerpt, taskDescription, metadata)
+	}
+	return metadata
+}
+
 export async function buildCommandOutputAuditAdvisory(
 	taskId: string,
 	taskDescription: string,
@@ -68,12 +100,7 @@ export async function buildCommandOutputAuditAdvisory(
 
 	const outputFailures = detectVerificationOutputFailures(output)
 	if (outputFailures.length > 0) {
-		return (
-			`\n\n<command_audit_advisory grade="F" score="0">` +
-			`\nVerification command reported failures in output.` +
-			`\nFix failing tests/lint/build before attempt_completion.` +
-			`\n</command_audit_advisory>`
-		)
+		return buildVerificationFailureAdvisory()
 	}
 
 	const excerpt = output.slice(0, 3000)

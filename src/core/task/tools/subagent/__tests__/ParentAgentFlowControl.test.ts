@@ -232,6 +232,39 @@ describe("ParentAgentFlowControl", () => {
 		assert.equal(pool.getActiveCount(), 0)
 	})
 
+	it("scales fast-I/O bulkhead reservation with waiting read lanes", async () => {
+		const pool = new AuthorityAwareExecutionPool(4, 1)
+		const releaseMut1 = await pool.acquire(1, false)
+		const releaseMut2 = await pool.acquire(1, false)
+		const releaseMut3 = await pool.acquire(1, false)
+		const releaseMut4 = await pool.acquire(1, false)
+		assert.equal(pool.getActiveCount(), 4)
+
+		const order: string[] = []
+		const fastA = pool.acquire(10, true).then((release) => {
+			order.push("fast-a")
+			return release
+		})
+		const fastB = pool.acquire(9, true).then((release) => {
+			order.push("fast-b")
+			return release
+		})
+
+		releaseMut1()
+		const releaseFastA = await fastA
+		assert.deepEqual(order, ["fast-a"])
+
+		releaseMut2()
+		const releaseFastB = await fastB
+		assert.deepEqual(order, ["fast-a", "fast-b"])
+
+		releaseMut3()
+		releaseMut4()
+		releaseFastA()
+		releaseFastB()
+		assert.equal(pool.getActiveCount(), 0)
+	})
+
 	it("computes bounded in-flight lane capacity from pool size", () => {
 		assert.equal(computeMaxInFlightLanes(3), 4)
 	})

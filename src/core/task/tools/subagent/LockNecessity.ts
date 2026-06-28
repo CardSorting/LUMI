@@ -1,5 +1,14 @@
 import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
+import {
+	computeFastIoReservedSlots,
+	IO_AUTHORITY_TOOLS,
+	isNonMutatingLaneMode,
+	shouldBypassGuardForLaneIoTool,
+} from "../executionAuthority"
 import { classifyRoadmapWriteIntent, declaresDirectWorkspaceRoadmapMutation, type RoadmapMutationSignal } from "./RoadmapMutation"
+
+export { computeFastIoReservedSlots, IO_AUTHORITY_TOOLS as LANE_IO_AUTHORITY_TOOLS, shouldBypassGuardForLaneIoTool }
+export { isIoAuthorityTool as isLaneIoAuthorityTool } from "../executionAuthority"
 
 export interface LaneLockIntent {
 	executionMode: LaneExecutionMode
@@ -46,7 +55,7 @@ const WRITE_TOOL_NAMES = new Set([
 ])
 
 export function isNonMutatingMode(mode: LaneExecutionMode): boolean {
-	return NON_MUTATING_MODES.includes(mode)
+	return isNonMutatingLaneMode(mode)
 }
 
 /** Higher weight = scheduled sooner when critical-path scores tie or slots are scarce. */
@@ -64,9 +73,9 @@ export function laneDispatchWeight(mode: LaneExecutionMode): number {
 	}
 }
 
-/** Read-only lanes may parallelize independent tool calls when the parent allows it. */
+/** I/O authority lanes always parallelize independent reads; mutation follows parent setting. */
 export function shouldEnableParallelToolCallingForLane(mode: LaneExecutionMode, parentEnabled: boolean): boolean {
-	return parentEnabled && isNonMutatingMode(mode)
+	return isNonMutatingMode(mode) || parentEnabled
 }
 
 export function parseExecutionModeFromPrompt(prompt: string): LaneExecutionMode | undefined {

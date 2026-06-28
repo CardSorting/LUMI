@@ -10,6 +10,7 @@ import {
 	getPreviousAuditFromMessages,
 	isAdvisoryAuditInfoMessage,
 	messageCarriesAuditMetadata,
+	resolvePlanBaselineMetadata,
 } from "@shared/audit/auditMessages"
 import { enrichAuditMetadata } from "@shared/audit/taskAuditUtils"
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
@@ -92,6 +93,14 @@ describe("auditMessages", () => {
 		] as DietCodeMessage[]
 
 		expect(getLatestPlanAuditFromMessages(messages)?.hardening_grade).to.equal("A")
+	})
+
+	it("resolvePlanBaselineMetadata falls back to task state when messages lack plan audit", () => {
+		const fallback = enrichAuditMetadata({ violations: ["deferred_plan"], hardening_grade: "B" })
+		expect(resolvePlanBaselineMetadata([], fallback)?.hardening_grade).to.equal("B")
+		const planAudit = enrichAuditMetadata({ violations: [], hardening_grade: "A" })
+		const messages = [{ ts: 1, type: "say", say: "plan_summary", auditMetadata: planAudit }] as DietCodeMessage[]
+		expect(resolvePlanBaselineMetadata(messages, fallback)?.hardening_grade).to.equal("A")
 	})
 
 	it("formats audit summary labels for task header display", () => {

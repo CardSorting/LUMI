@@ -9,6 +9,7 @@ import { DietCodeSayTool } from "@/shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { SafeNumber } from "../../../../shared/utils/SafeNumber"
 import { showNotificationForApproval } from "../../utils"
+import { appendSessionStabilityContext } from "../executionAuthority"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
@@ -156,7 +157,6 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			)
 		}
 
-		// Run PreToolUse hook after approval but before execution
 		try {
 			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
 			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
@@ -219,36 +219,14 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 			throw error
 		}
 
-		// Track file read operation
-		await config.services.fileContextTracker.trackFileContext(relPath as string, "read_tool")
+		void config.services.fileContextTracker.trackFileContext(relPath as string, "read_tool").catch(() => undefined)
 
 		// Handle image blocks separately - they need to be pushed to userMessageContent
 		if (fileContent.imageBlock) {
 			config.taskState.userMessageContent.push(fileContent.imageBlock)
 		}
 
-		// --- JoyZoning Sovereign Context Injection ---
-		try {
-			const { SpiderEngine } = await import("../../../policy/spider/SpiderEngine")
-			const engine = new SpiderEngine(config.cwd)
-			await engine.loadRegistry()
-			const node = engine.nodes.get(relPath as string)
-			if (node) {
-				const intentRegex = /\[INTEGRITY_INTENT:\s*(.*?)\]/
-				const intentMatch = fileContent.text.match(intentRegex)
-				const intent = intentMatch ? intentMatch[1] : "Not explicitly documented."
-
-				const contextBlock =
-					`\n\n[STABILITY_CONTEXT]\n` +
-					`Layer: ${node.layer?.toUpperCase() || "UNKNOWN"}\n` +
-					`Architectural Intent: ${intent}\n` +
-					`Metrics: Logic Density: ${SafeNumber.format(node.logicDensity, 2)}, I/O Entropy: ${SafeNumber.format(node.ioEntropy, 2)}\n` +
-					`Status: ${node.orphaned ? "ORPHANED" : "INTEGRATED"}\n`
-				fileContent.text += contextBlock
-			}
-		} catch (_e) {
-			// Fail silent for context injection
-		}
+		fileContent.text = appendSessionStabilityContext(config, relPath as string, fileContent.text)
 
 		return fileContent.text
 	}

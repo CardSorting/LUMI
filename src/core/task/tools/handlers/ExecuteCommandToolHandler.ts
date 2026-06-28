@@ -4,8 +4,10 @@ import { WorkspacePathAdapter } from "@core/workspace/WorkspacePathAdapter"
 import { showSystemNotification } from "@integrations/notifications"
 import {
 	appendTextToToolResponse,
-	buildCommandOutputAuditAdvisory,
+	buildVerificationFailureAdvisory,
+	deferCommandOutputAdvisoryAudit,
 	extractTextFromToolResponse,
+	isVerificationCommand,
 } from "@shared/audit/auditPostTool"
 import { COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
 import { DietCodeAsk } from "@shared/ExtensionMessage"
@@ -326,18 +328,18 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		}
 
 		if (!userRejected && config.auditToolOutputAdvisoryEnabled && !config.isSubagentExecution) {
-			try {
-				const outputText = extractTextFromToolResponse(result)
-				const taskPreview = getInitialTaskPreview(config) || ""
-				const advisory = await buildCommandOutputAuditAdvisory(config.taskId, taskPreview, finalCommand, outputText, {
+			const outputText = extractTextFromToolResponse(result)
+			const taskPreview = getInitialTaskPreview(config) || ""
+			if (isVerificationCommand(finalCommand)) {
+				const { detectVerificationOutputFailures } = require("@shared/audit/auditFileWrite")
+				const outputFailures = detectVerificationOutputFailures(outputText)
+				if (outputFailures.length > 0) {
+					return appendTextToToolResponse(result, buildVerificationFailureAdvisory())
+				}
+				void deferCommandOutputAdvisoryAudit(config.taskId, taskPreview, outputText, config, {
 					cwd: config.cwd,
 					settings: config,
-				})
-				if (advisory) {
-					return appendTextToToolResponse(result, advisory)
-				}
-			} catch (error) {
-				Logger.warn("[ExecuteCommandToolHandler] Command output audit advisory failed:", error)
+				}).catch((error) => Logger.warn("[ExecuteCommandToolHandler] Deferred command audit failed:", error))
 			}
 		}
 

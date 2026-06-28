@@ -353,6 +353,15 @@ export class AuthorityAwareExecutionPool {
 		return this.waiters.some((waiter) => waiter.isFastIo)
 	}
 
+	/** Work-conserving bulkhead: reserve only when fast-I/O lanes are actually waiting. */
+	private effectiveFastIoReservedSlots(): number {
+		const waiting = this.waiters.filter((waiter) => waiter.isFastIo).length
+		if (waiting === 0) {
+			return 0
+		}
+		return Math.min(Math.max(this.fastIoReservedSlots, waiting), this.capacity - 1)
+	}
+
 	private canDispatch(waiter: AuthorityPoolWaiter): boolean {
 		if (this.active >= this.capacity) {
 			return false
@@ -360,7 +369,7 @@ export class AuthorityAwareExecutionPool {
 		if (waiter.isFastIo || !this.fastIoWaitersPending()) {
 			return true
 		}
-		const maxMutationActive = this.capacity - this.fastIoReservedSlots
+		const maxMutationActive = this.capacity - this.effectiveFastIoReservedSlots()
 		return this.activeMutationCount() < maxMutationActive
 	}
 

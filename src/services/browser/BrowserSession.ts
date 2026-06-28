@@ -375,6 +375,10 @@ export class BrowserSession {
 		return {}
 	}
 
+	hasActiveSession(): boolean {
+		return !!(this.browser || this.page)
+	}
+
 	async doAction(action: (page: Page) => Promise<void>): Promise<BrowserActionResult> {
 		if (!this.page) {
 			throw new Error(

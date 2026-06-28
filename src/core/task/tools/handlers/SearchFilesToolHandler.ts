@@ -302,6 +302,80 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			)
 		}
 
+		// Approval before search I/O — cache-aside hits skip this path entirely
+		const pendingMessageProps = {
+			tool: "searchFiles",
+			path: getReadablePath(config.cwd, relDirPath!),
+			content: "",
+			regex: regex,
+			filePattern: filePattern,
+			operationIsLocatedInWorkspace: await isLocatedInWorkspace(parsedPath),
+		} satisfies DietCodeSayTool
+
+		const pendingMessage = JSON.stringify(pendingMessageProps)
+
+		const shouldAutoApprove =
+			config.isSubagentExecution || (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
+		if (shouldAutoApprove) {
+			if (!config.isSubagentExecution) {
+				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
+				await config.callbacks.say("tool", pendingMessage, undefined, undefined, false)
+			}
+
+			telemetryService.captureToolUsage(
+				config.ulid,
+				block.name,
+				config.api.getModel().id,
+				provider,
+				true,
+				true,
+				workspaceContext,
+				block.isNativeToolCall,
+			)
+		} else {
+			const notificationMessage = `DietCode wants to search files for ${regex}`
+
+			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
+
+			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
+
+			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", pendingMessage, config)
+			if (!didApprove) {
+				telemetryService.captureToolUsage(
+					config.ulid,
+					block.name,
+					config.api.getModel().id,
+					provider,
+					false,
+					false,
+					workspaceContext,
+					block.isNativeToolCall,
+				)
+				return formatResponse.toolDenied()
+			}
+			telemetryService.captureToolUsage(
+				config.ulid,
+				block.name,
+				config.api.getModel().id,
+				provider,
+				false,
+				true,
+				workspaceContext,
+				block.isNativeToolCall,
+			)
+		}
+
+		try {
+			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
+			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+		} catch (error) {
+			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
+			if (error instanceof PreToolUseHookCancellationError) {
+				return formatResponse.toolDenied()
+			}
+			throw error
+		}
+
 		// Execute searches in all relevant workspaces in parallel
 		const searchPromises = searchPaths.map(({ absolutePath, workspaceName, workspaceRoot }) =>
 			this.executeSearch(config, absolutePath, workspaceName, workspaceRoot, regex as string, filePattern),
@@ -342,73 +416,8 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			operationIsLocatedInWorkspace: await isLocatedInWorkspace(parsedPath),
 		} satisfies DietCodeSayTool
 
-		const completeMessage = JSON.stringify(sharedMessageProps)
-
-		const shouldAutoApprove =
-			config.isSubagentExecution || (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
-		if (shouldAutoApprove) {
-			// Auto-approval flow
-			if (!config.isSubagentExecution) {
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
-			}
-
-			// Capture telemetry
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				true,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
-		} else {
-			// Manual approval flow
-			const notificationMessage = `DietCode wants to search files for ${regex}`
-
-			// Show notification
-			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
-
-			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
-
-			const didApprove = await ToolResultUtils.askApprovalAndPushFeedback("tool", completeMessage, config)
-			if (!didApprove) {
-				telemetryService.captureToolUsage(
-					config.ulid,
-					block.name,
-					config.api.getModel().id,
-					provider,
-					false,
-					false,
-					workspaceContext,
-					block.isNativeToolCall,
-				)
-				return formatResponse.toolDenied()
-			}
-			telemetryService.captureToolUsage(
-				config.ulid,
-				block.name,
-				config.api.getModel().id,
-				provider,
-				false,
-				true,
-				workspaceContext,
-				block.isNativeToolCall,
-			)
-		}
-
-		// Run PreToolUse hook after approval but before execution
-		try {
-			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-		} catch (error) {
-			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-			if (error instanceof PreToolUseHookCancellationError) {
-				return formatResponse.toolDenied()
-			}
-			throw error
+		if (shouldAutoApprove && !config.isSubagentExecution) {
+			await config.callbacks.say("tool", JSON.stringify(sharedMessageProps), undefined, undefined, false)
 		}
 
 		return results

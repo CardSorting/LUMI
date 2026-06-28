@@ -10,6 +10,7 @@ import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import { McpHub } from "@services/mcp/McpHub"
 import { DietCodeAsk, DietCodeSay } from "@shared/ExtensionMessage"
 import { DietCodeContent } from "@shared/messages/content"
+import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool, toolUseNames } from "@shared/tools"
 import { DietCodeAskResponse } from "@shared/WebviewMessage"
 import * as path from "path"
@@ -25,6 +26,13 @@ import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
 import { canonicalizeAttemptCompletionParams, checkCompletionGateCircuitBreaker } from "./tools/attemptCompletionUtils"
 import { AutoApprove } from "./tools/autoApprove"
+import {
+	shouldBypassGuardForParentIoTool,
+	shouldCloseBrowserBetweenTools,
+	shouldDeferParentGuardPostExecution,
+	shouldSkipLayerInjectionForParentIoTool,
+	shouldUseIoAuthorityReadFastPath,
+} from "./tools/executionAuthority"
 import { RefactorHealer } from "./tools/RefactorHealer"
 import { IPartialBlockHandler, ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator"
 import { ToolValidator } from "./tools/ToolValidator"
@@ -44,6 +52,9 @@ export class ToolExecutor {
 	private policyObserver: ReactivePolicyObserver
 	private guard: UniversalGuard
 	private healer: RefactorHealer
+	private cachedToolConfig?: TaskConfig
+	private cachedToolConfigKey?: string
+	private knowledgeGraphServicePromise?: Promise<KnowledgeGraphService | undefined>
 
 	public resetSystemPressure(): void {
 		if (this.guard) {
@@ -143,8 +154,51 @@ export class ToolExecutor {
 
 	// Create a properly typed TaskConfig object for handlers
 	// NOTE: modifying this object in the tool handlers is okay since these are all references to the singular ToolExecutor instance's variables. However, be careful modifying this object assuming it will update the ToolExecutor instance, e.g. config.browserSession = ... will not update the ToolExecutor.browserSession instance variable. Use applyLatestBrowserSettings() instead.
+	private getToolConfigCacheKey(): string {
+		return `${this.stateManager.getGlobalSettingsKey("mode")}|${this.isParallelToolCallingEnabled()}`
+	}
+
+	/** Refresh volatile TaskConfig fields on cache hit — taskState reference stays live. */
+	private refreshCachedToolConfig(config: TaskConfig): void {
+		config.mode = this.stateManager.getGlobalSettingsKey("mode")
+		config.strictPlanModeEnabled = this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled")
+		config.yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
+		config.doubleCheckCompletionEnabled = this.stateManager.getGlobalSettingsKey("doubleCheckCompletionEnabled")
+		config.auditCompletionGateEnabled = this.stateManager.getGlobalSettingsKey("auditCompletionGateEnabled")
+		config.auditCompletionGateThreshold = this.stateManager.getGlobalSettingsKey("auditCompletionGateThreshold")
+		config.auditCompletionGateCriticalOnly = this.stateManager.getGlobalSettingsKey("auditCompletionGateCriticalOnly")
+		config.auditActModeAdvisoryEnabled = this.stateManager.getGlobalSettingsKey("auditActModeAdvisoryEnabled")
+		config.auditAdvisoryEscalationEnabled = this.stateManager.getGlobalSettingsKey("auditAdvisoryEscalationEnabled")
+		config.auditPlanRegressionGateEnabled = this.stateManager.getGlobalSettingsKey("auditPlanRegressionGateEnabled")
+		config.auditToolOutputAdvisoryEnabled = this.stateManager.getGlobalSettingsKey("auditToolOutputAdvisoryEnabled")
+		config.auditFileWriteAdvisoryEnabled = this.stateManager.getGlobalSettingsKey("auditFileWriteAdvisoryEnabled")
+		config.auditIntentThresholdAdjustmentsEnabled = this.stateManager.getGlobalSettingsKey(
+			"auditIntentThresholdAdjustmentsEnabled",
+		)
+		config.auditIntentThresholdOverrides = this.stateManager.getGlobalSettingsKey("auditIntentThresholdOverrides")
+		config.auditSarifHookExportEnabled = this.stateManager.getGlobalSettingsKey("auditSarifHookExportEnabled")
+		config.auditWorkspaceArtifactsEnabled = this.stateManager.getGlobalSettingsKey("auditWorkspaceArtifactsEnabled")
+		config.enableParallelToolCalling = this.isParallelToolCallingEnabled()
+		config.autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+		config.browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
+		config.focusChainSettings = this.stateManager.getGlobalSettingsKey("focusChainSettings")
+	}
+
+	private async getKnowledgeGraphServiceCached(): Promise<KnowledgeGraphService | undefined> {
+		if (!this.knowledgeGraphServicePromise) {
+			this.knowledgeGraphServicePromise = this.getKnowledgeGraphService()
+		}
+		return this.knowledgeGraphServicePromise
+	}
+
 	private async asToolConfig(): Promise<TaskConfig> {
-		const kgService = await this.getKnowledgeGraphService()
+		const cacheKey = this.getToolConfigCacheKey()
+		if (this.cachedToolConfig && this.cachedToolConfigKey === cacheKey) {
+			this.refreshCachedToolConfig(this.cachedToolConfig)
+			return this.cachedToolConfig
+		}
+
+		const kgService = await this.getKnowledgeGraphServiceCached()
 		if (!kgService) {
 			throw new Error("KnowledgeGraphService not initialized")
 		}
@@ -230,6 +284,8 @@ export class ToolExecutor {
 		const configWithSession = config as TaskConfig & { getSessionStreamId?: () => string }
 		configWithSession.getSessionStreamId = () => this.taskId
 
+		this.cachedToolConfig = configWithSession
+		this.cachedToolConfigKey = cacheKey
 		return configWithSession
 	}
 
@@ -436,9 +492,9 @@ export class ToolExecutor {
 				}
 			}
 
-			// Close browser for non-browser tools
-			if (block.name !== "browser_action") {
-				await this.browserSession.closeBrowser()
+			// Close browser for non-browser tools when a session is active
+			if (shouldCloseBrowserBetweenTools(block.name, this.browserSession.hasActiveSession())) {
+				void this.browserSession.closeBrowser().catch(() => undefined)
 			}
 
 			// Handle partial blocks
@@ -649,8 +705,10 @@ export class ToolExecutor {
 		// Mode Awareness: Synchronize the guard with the current task mode
 		this.guard.setMode(this.stateManager.getGlobalSettingsKey("mode") || "act")
 
-		// Direct Layer Injection: Determine and inject architectural layer context
-		if (block.params.path) {
+		const parentIoFastPath = shouldBypassGuardForParentIoTool(block.name)
+
+		// Direct Layer Injection — skip for I/O authority (joy-zoning not needed on read/list/search)
+		if (!shouldSkipLayerInjectionForParentIoTool(block.name) && block.params.path) {
 			const { getLayer } = require("@/utils/joy-zoning")
 			block.layer = getLayer(path.resolve(this.cwd, block.params.path))
 		}
@@ -665,13 +723,13 @@ export class ToolExecutor {
 		) {
 			try {
 				const { preflightRoadmapWrite, targetsRoadmapFile } = require("@/services/roadmap/RoadmapNativeBridge")
-				const { getRoadmapConfig } = require("@/services/roadmap/RoadmapConfig")
 				if (targetsRoadmapFile(block.name, block.params)) {
 					const preflight = await preflightRoadmapWrite(block.name, block.params, this.cwd)
 					if (preflight.block) {
-						await this.say("error_retry" as any, preflight.message!)
+						const blockMessage = preflight.message ?? "Roadmap write blocked."
+						await this.say("error_retry" as any, blockMessage)
 						this.taskState.consecutiveMistakeCount++
-						this.pushToolResult(formatResponse.toolError(preflight.message!), block)
+						this.pushToolResult(formatResponse.toolError(blockMessage), block)
 						return
 					}
 				}
@@ -690,18 +748,18 @@ export class ToolExecutor {
 		}
 
 		try {
-			// Policy Enforcement: Pre-Execution
-			const preExecResult = await this.guard.guardPreExecution(block)
-			if (!preExecResult.success) {
-				await this.say("error_retry" as any, preExecResult.error!)
-				// Use specialized architectural correction response to encourage repair/retry
-				this.taskState.consecutiveMistakeCount++
-				this.pushToolResult((formatResponse as any).architecturalCorrection(preExecResult.error!), block)
-				return
-			}
-			// Surface pre-execution architectural guidance (e.g. degraded enforcement warnings)
-			if (preExecResult.warning) {
-				this.say("text", preExecResult.warning).catch(() => {})
+			if (!parentIoFastPath) {
+				// Policy Enforcement: Pre-Execution
+				const preExecResult = await this.guard.guardPreExecution(block)
+				if (!preExecResult.success) {
+					await this.say("error_retry" as any, preExecResult.error!)
+					this.taskState.consecutiveMistakeCount++
+					this.pushToolResult((formatResponse as any).architecturalCorrection(preExecResult.error!), block)
+					return
+				}
+				if (preExecResult.warning) {
+					this.say("text", preExecResult.warning).catch(() => {})
+				}
 			}
 
 			// Final abort check immediately before tool execution
@@ -725,7 +783,9 @@ export class ToolExecutor {
 					const { afterRoadmapWrite, appendRoadmapWriteHint, targetsRoadmapFile } =
 						require("@/services/roadmap/RoadmapNativeBridge")
 					if (targetsRoadmapFile(block.name, block.params)) {
-						await afterRoadmapWrite(block.name, block.params, this.cwd)
+						void afterRoadmapWrite(block.name, block.params, this.cwd).catch((error: unknown) => {
+							Logger.warn("[ToolExecutor] Deferred roadmap mutation journal failed:", error)
+						})
 						toolResult = await appendRoadmapWriteHint(block.name, block.params, this.cwd, toolResult)
 					}
 				} catch {
@@ -739,7 +799,7 @@ export class ToolExecutor {
 				block.params.path
 			) {
 				const fullPath = path.resolve(this.cwd, block.params.path)
-				await this.healer.alignTag(fullPath)
+				void this.healer.alignTag(fullPath).catch(() => undefined)
 			}
 
 			// Policy Enforcement: Read-Time
@@ -757,46 +817,61 @@ export class ToolExecutor {
 				this.taskState.currentTurnReadHistory.set(pathKey, newCount)
 				this.taskState.currentTurnTotalReadCount++
 
-				// Track global read history across turns
 				const globalCount = (this.taskState.taskReadHistory.get(pathKey) || 0) + 1
 				this.taskState.taskReadHistory.set(pathKey, globalCount)
 
-				toolResult = await this.guard.onRead(
-					block.params.path,
-					toolResult,
-					this.taskState.currentTurnUniqueReadCount,
-					newCount,
-					globalCount,
-				)
+				if (shouldUseIoAuthorityReadFastPath(block.name)) {
+					toolResult = this.guard.onReadIoAuthority(block.params.path, toolResult)
+				} else {
+					toolResult = await this.guard.onRead(
+						block.params.path,
+						toolResult,
+						this.taskState.currentTurnUniqueReadCount,
+						newCount,
+						globalCount,
+					)
+				}
 
 				if (block.name === DietCodeDefaultTool.FILE_READ && typeof toolResult === "string") {
-					try {
-						const { NativeMutationManager } = require("@/services/mutation/NativeMutationManager")
-						const mutationManager = NativeMutationManager.getInstance()
-						await mutationManager.autoTrackFileRead(this.cwd, block.params.path, config.taskId || config.ulid)
-					} catch (err) {
-						// Silent fallback
-					}
+					const readPath = block.params.path
+					void (async () => {
+						try {
+							const { NativeMutationManager } = require("@/services/mutation/NativeMutationManager")
+							const mutationManager = NativeMutationManager.getInstance()
+							if (readPath) {
+								await mutationManager.autoTrackFileRead(this.cwd, readPath, config.taskId || config.ulid)
+							}
+						} catch {
+							// Silent fallback
+						}
+					})()
 				}
 			}
 
 			this.pushToolResult(toolResult, block)
 
-			// Policy Enforcement: Post-Execution
-			const prevHash = undefined
+			if (!parentIoFastPath) {
+				const runPostExecution = async () => {
+					const postExecResult = await this.guard.guardPostExecution(block, toolResult, undefined)
+					if (
+						(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
+						block.params.path
+					) {
+						const telemetry = this.guard.getStabilityTelemetry(block.params.path)
+						const summary = (formatResponse as any).postExecutionSummary(telemetry, postExecResult.violations)
+						this.say("text", summary).catch(() => undefined)
+					} else if (postExecResult.warning) {
+						this.say("text", postExecResult.warning).catch(() => undefined)
+					}
+				}
 
-			const postExecResult = await this.guard.guardPostExecution(block, toolResult, prevHash)
-
-			// Layer confirmation + architectural feedback for write operations
-			if (
-				(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
-				block.params.path
-			) {
-				const telemetry = this.guard.getStabilityTelemetry(block.params.path)
-				const summary = (formatResponse as any).postExecutionSummary(telemetry, postExecResult.violations)
-				this.say("text", summary).catch(() => {})
-			} else if (postExecResult.warning) {
-				this.say("text", postExecResult.warning).catch(() => {})
+				if (shouldDeferParentGuardPostExecution(block.name, config.isSubagentExecution)) {
+					void runPostExecution().catch((error) => {
+						Logger.warn("[ToolExecutor] Deferred guard post-execution failed:", error)
+					})
+				} else {
+					await runPostExecution()
+				}
 			}
 		} catch (error) {
 			executionSuccess = false
@@ -827,9 +902,13 @@ export class ToolExecutor {
 			return
 		}
 
-		// Handle focus chain updates
-		if (!block.partial && this.stateManager.getGlobalSettingsKey("focusChainSettings").enabled) {
-			await this.updateFCListFromToolResponse(block.params.task_progress)
+		// Handle focus chain updates (shift-right — non-blocking for tool throughput)
+		if (
+			!block.partial &&
+			block.params.task_progress &&
+			this.stateManager.getGlobalSettingsKey("focusChainSettings").enabled
+		) {
+			void this.updateFCListFromToolResponse(block.params.task_progress).catch(() => undefined)
 		}
 	}
 }

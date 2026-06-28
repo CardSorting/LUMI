@@ -117,6 +117,14 @@ export class TaskState {
 	preAuditedIntent?: string
 	lastCompletionAudit?: TaskAuditMetadata
 	lastAdvisoryAudit?: TaskAuditMetadata
+	/** Cache key for advisory audits (act-mode, command output) — reused at completion. */
+	lastAdvisoryAuditCacheKey?: string
+	lastAdvisoryAuditCachedAt?: number
+	/** Deferred plan-mode audit — used as completion gate baseline when message metadata is absent. */
+	lastPlanAuditMetadata?: TaskAuditMetadata
+	/** Cache key for last completion audit — avoids redundant auditTask on unchanged results. */
+	lastCompletionAuditCacheKey?: string
+	lastCompletionAuditCachedAt?: number
 	actModeAuditCounter?: number
 	completionGateBlockCount?: number
 	/** Fingerprint of the last gate-blocked completion result — detects no-op retries. */

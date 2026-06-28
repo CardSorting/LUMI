@@ -5,7 +5,14 @@ import { describe, it } from "mocha"
 import { InMemoryLockAuthority } from "@/core/governance/LockAuthority"
 import { swarmEnvelopeToReplayArtifact } from "../executionReplayMappers"
 import { GovernedSwarmCoordinator } from "../GovernedSwarmCoordinator"
-import { classifyLockNecessity, resolveLaneLockIntent, shouldEnableParallelToolCallingForLane } from "../LockNecessity"
+import {
+	classifyLockNecessity,
+	computeFastIoReservedSlots,
+	isLaneIoAuthorityTool,
+	resolveLaneLockIntent,
+	shouldBypassGuardForLaneIoTool,
+	shouldEnableParallelToolCallingForLane,
+} from "../LockNecessity"
 import { runMergeGate } from "../MergeGate"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
 
@@ -90,10 +97,25 @@ describe("governed execution lock necessity", () => {
 			assert.equal(classifyLockNecessity(intent).lockRequired, true)
 		})
 
-		it("enables parallel tool calling only for non-mutating lanes when parent allows it", () => {
+		it("I/O authority lanes always parallelize reads; mutation follows parent", () => {
 			assert.equal(shouldEnableParallelToolCallingForLane("read_only", true), true)
-			assert.equal(shouldEnableParallelToolCallingForLane("mutation", true), false)
-			assert.equal(shouldEnableParallelToolCallingForLane("read_only", false), false)
+			assert.equal(shouldEnableParallelToolCallingForLane("read_only", false), true)
+			assert.equal(shouldEnableParallelToolCallingForLane("mutation", true), true)
+			assert.equal(shouldEnableParallelToolCallingForLane("mutation", false), false)
+		})
+
+		it("bypasses UniversalGuard for I/O tools on non-mutating lanes only", () => {
+			assert.equal(shouldBypassGuardForLaneIoTool("read_only", "read_file"), true)
+			assert.equal(shouldBypassGuardForLaneIoTool("mutation", "read_file"), false)
+			assert.equal(shouldBypassGuardForLaneIoTool("read_only", "write_to_file"), false)
+			assert.equal(isLaneIoAuthorityTool("read_file"), true)
+			assert.equal(isLaneIoAuthorityTool("bash"), false)
+		})
+
+		it("scales bulkhead reservation with pool capacity", () => {
+			assert.equal(computeFastIoReservedSlots(1), 0)
+			assert.equal(computeFastIoReservedSlots(3), 1)
+			assert.equal(computeFastIoReservedSlots(6), 2)
 		})
 	})
 

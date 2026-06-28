@@ -6,7 +6,7 @@ import { formatResponse } from "@core/prompts/responses"
 import { applyWorkspaceAuditPolicy } from "@shared/audit/auditGatePolicyLoader"
 import { parsePartialArrayString } from "@/shared/array"
 import { runCompletionAudit } from "@/shared/audit/completionAudit"
-import { DietCodePlanModeResponse, type TaskAuditMetadata } from "@/shared/ExtensionMessage"
+import { DietCodePlanModeResponse } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -108,17 +108,21 @@ export class PlanModeRespondHandler implements IToolHandler, IPartialBlockHandle
 		const options = parsePartialArrayString(optionsRaw || "[]")
 		const payload = serializePlanPayload(response, options)
 
-		let planAuditMetadata: TaskAuditMetadata | undefined
-		try {
-			const taskPreview = getInitialTaskPreview(config) || "plan mode response"
-			planAuditMetadata = await runCompletionAudit(config.taskId, taskPreview, response, taskPreview)
-			planAuditMetadata = await applyWorkspaceAuditPolicy(config.cwd, planAuditMetadata, config)
-		} catch (error) {
-			Logger.warn("[PlanModeRespondHandler] Plan audit metadata generation failed:", error)
-		}
-
 		await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "plan_summary")
-		await config.callbacks.say("plan_summary", payload, undefined, undefined, false, planAuditMetadata)
+		await config.callbacks.say("plan_summary", payload, undefined, undefined, false)
+
+		void (async () => {
+			try {
+				const taskPreview = getInitialTaskPreview(config) || "plan mode response"
+				let planAuditMetadata = await runCompletionAudit(config.taskId, taskPreview, response, taskPreview)
+				planAuditMetadata = await applyWorkspaceAuditPolicy(config.cwd, planAuditMetadata, config)
+				config.taskState.lastPlanAuditMetadata = planAuditMetadata
+				const { recordAdvisoryAuditCache } = await import("../completionGatePipeline")
+				recordAdvisoryAuditCache(config, response, taskPreview, planAuditMetadata)
+			} catch (error) {
+				Logger.warn("[PlanModeRespondHandler] Plan audit metadata generation failed:", error)
+			}
+		})()
 
 		if (taskProgress) {
 			await config.callbacks.updateFCListFromToolResponse(taskProgress)

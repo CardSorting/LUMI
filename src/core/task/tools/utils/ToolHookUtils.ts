@@ -1,6 +1,7 @@
 import type { ToolUse } from "@core/assistant-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { PreToolUseHookCancellationError } from "@core/hooks/PreToolUseHookCancellationError"
+import { shouldSkipPreToolUseForParentIoTool } from "../executionAuthority"
 import type { TaskConfig } from "../types/TaskConfig"
 
 /**
@@ -19,6 +20,10 @@ export class ToolHookUtils {
 	 * @throws PreToolUseHookCancellationError if the hook requests cancellation
 	 */
 	static async runPreToolUseIfEnabled(config: TaskConfig, block: ToolUse): Promise<boolean> {
+		if (shouldSkipPreToolUseForParentIoTool(block.name, config.isSubagentExecution)) {
+			return true
+		}
+
 		// Check if hooks are enabled via user setting
 		const hooksEnabled = getHooksEnabledSafe()
 

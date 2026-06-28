@@ -39,6 +39,7 @@ import {
 import { GovernedSwarmCoordinator } from "../subagent/GovernedSwarmCoordinator"
 import {
 	classifyLockNecessity,
+	computeFastIoReservedSlots,
 	declaresMutationIntent,
 	isNonMutatingMode,
 	laneDispatchWeight,
@@ -422,7 +423,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				},
 			).catch((error) => {
 				Logger.warn("[SubagentToolHandler] Governed swarm audit preflight failed:", error)
-				return [{ stage: "roadmap_governance", message: "preflight unavailable" }]
+				return [{ stage: "roadmap_governance", message: "preflight unavailable", severity: "info" as const }]
 			})
 
 			const laneReceipts: LaneExecutionReceipt[] = []
@@ -634,7 +635,10 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			}
 
 			const results: PromiseSettledResult<SubagentRunResult>[] = new Array(prompts.length)
-			const executionSlots = new AuthorityAwareExecutionPool(DEFAULT_SUBAGENT_CONCURRENCY)
+			const executionSlots = new AuthorityAwareExecutionPool(
+				DEFAULT_SUBAGENT_CONCURRENCY,
+				computeFastIoReservedSlots(DEFAULT_SUBAGENT_CONCURRENCY),
+			)
 			const maxInFlightLanes = computeMaxInFlightLanes(DEFAULT_SUBAGENT_CONCURRENCY)
 			const schedulerWake = createSwarmSchedulerWake()
 			let activeLaneExecutions = 0

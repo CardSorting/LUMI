@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { telemetryService } from "@services/telemetry"
 import {
 	applyWorkspaceAuditPolicy,
@@ -5,12 +6,19 @@ import {
 	resolveCompletionGateContext,
 } from "@shared/audit/auditGatePolicyLoader"
 import { type AuditGateDecision, evaluateAuditGate } from "@shared/audit/auditGateReport"
-import { getLatestPlanAuditFromMessages } from "@shared/audit/auditMessages"
+import { resolvePlanBaselineMetadata } from "@shared/audit/auditMessages"
 import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { buildCompletionGateMessage, runCompletionAudit } from "@shared/audit/completionAudit"
-import { parseIntentThresholdOverrides } from "@shared/audit/gatePolicy"
+import {
+	COMPLETION_AUDIT_CACHE_TTL_MS,
+	COMPLETION_GATE_WARN_THRESHOLD,
+	PARENT_PROGRESSIVE_GATE_BLOCK_LIMIT,
+	parseIntentThresholdOverrides,
+	SUBAGENT_IO_LANE_RESULT_MIN_LENGTH,
+} from "@shared/audit/gatePolicy"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
+import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
 import { formatAutoRemediationSummary } from "@/services/roadmap/RoadmapAutoGovernance"
 import {
 	buildRoadmapCompletionExtraBlocks,
@@ -47,6 +55,7 @@ import {
 	validateTaskProgressAlignsWithFocusChain,
 } from "./attemptCompletionUtils"
 import { mapPreflightReasonToLifecycleState, publishGateLifecycleStatus } from "./completion/GateLifecycleEvaluator"
+import { isNonMutatingMode } from "./subagent/LockNecessity"
 import type { TaskConfig } from "./types/TaskConfig"
 
 export type CompletionAuditGateResult =
@@ -195,6 +204,7 @@ export const PREFLIGHT_STAGE_RUNNERS: ReadonlyArray<{
 			detectDuplicateCompletionSubmission(ctx.config, ctx.params.result, {
 				currentCheckpointHash: ctx.checkpointHash,
 			}),
+		soft: true,
 	},
 	{
 		stage: "demo_command",
@@ -208,6 +218,14 @@ export type GatePreflightReadinessIssue = {
 	/** info = non-blocking advisory (e.g. auto-clearable roadmap governance) */
 	severity?: "block" | "info"
 }
+
+/** Lane-local blocking stages only — parent-only checks deferred to seal barrier (ADR-013). */
+export const SUBAGENT_LANE_PREFLIGHT_STAGES = new Set<CompletionPreflightStage>([
+	"quality",
+	"min_length",
+	"max_length",
+	"demo_command",
+])
 
 /** Non-mutating preflight dry-run — surfaces blockers before attempt_completion (mirrors CI dry-run). */
 export function evaluateGatePreflightReadiness(
@@ -235,7 +253,7 @@ export function evaluateGatePreflightReadiness(
 	for (const runner of PREFLIGHT_STAGE_RUNNERS) {
 		const stageError = runner.validate(preflightContext)
 		if (stageError) {
-			issues.push({ stage: runner.stage, message: stageError })
+			issues.push({ stage: runner.stage, message: stageError, severity: "block" })
 		}
 	}
 	return issues
@@ -308,6 +326,10 @@ export async function runCompletionPreflightChecks(
 	for (const runner of PREFLIGHT_STAGE_RUNNERS) {
 		const stageError = runner.validate(preflightContext)
 		if (stageError) {
+			if (runner.soft) {
+				// Non-blocking advisory — mirrors Retry-After without hard stop (ADR parent zen path).
+				continue
+			}
 			return rejectPreflightStage(config, stageError, gateContext, checks, { soft: runner.soft })
 		}
 	}
@@ -318,6 +340,64 @@ export async function runCompletionPreflightChecks(
 	}
 
 	return null
+}
+
+function hashCompletionAuditInput(result: string, taskDescription: string): string {
+	return createHash("sha256").update(result.trim()).update("|").update(taskDescription.slice(0, 500)).digest("hex")
+}
+
+/** Record advisory audit for completion cache reuse (act-mode, deferred command audit). */
+export function recordAdvisoryAuditCache(
+	config: TaskConfig,
+	result: string,
+	taskDescription: string,
+	metadata: TaskAuditMetadata,
+): void {
+	config.taskState.lastAdvisoryAudit = metadata
+	config.taskState.lastAdvisoryAuditCacheKey = hashCompletionAuditInput(result, taskDescription)
+	config.taskState.lastAdvisoryAuditCachedAt = Date.now()
+}
+
+async function resolveCompletionAuditMetadata(
+	config: TaskConfig,
+	params: { result: string; taskDescription: string },
+): Promise<TaskAuditMetadata> {
+	const cacheKey = hashCompletionAuditInput(params.result, params.taskDescription)
+	const cachedAt = config.taskState.lastCompletionAuditCachedAt
+	const cachedKey = config.taskState.lastCompletionAuditCacheKey
+	const cached = config.taskState.lastCompletionAudit
+	if (cached && cachedKey === cacheKey && cachedAt && Date.now() - cachedAt < COMPLETION_AUDIT_CACHE_TTL_MS) {
+		return cached
+	}
+
+	const advisoryKey = config.taskState.lastAdvisoryAuditCacheKey
+	const advisoryAt = config.taskState.lastAdvisoryAuditCachedAt
+	const advisory = config.taskState.lastAdvisoryAudit
+	if (advisory && advisoryKey === cacheKey && advisoryAt && Date.now() - advisoryAt < COMPLETION_AUDIT_CACHE_TTL_MS) {
+		config.taskState.lastCompletionAuditCacheKey = cacheKey
+		config.taskState.lastCompletionAuditCachedAt = Date.now()
+		return advisory
+	}
+
+	let auditMetadata = await runCompletionAudit(config.taskId, params.taskDescription, params.result, params.taskDescription)
+	auditMetadata = await applyWorkspaceAuditPolicy(config.cwd, auditMetadata, config)
+	config.taskState.lastCompletionAuditCacheKey = cacheKey
+	config.taskState.lastCompletionAuditCachedAt = Date.now()
+	return auditMetadata
+}
+
+function resolveProgressiveGateOptions(
+	config: TaskConfig,
+	baseOptions: Awaited<ReturnType<typeof resolveCompletionGateContext>>["options"],
+): Awaited<ReturnType<typeof resolveCompletionGateContext>>["options"] {
+	const blockCount = config.taskState.completionGateBlockCount ?? 0
+	if (blockCount >= PARENT_PROGRESSIVE_GATE_BLOCK_LIMIT) {
+		return baseOptions
+	}
+	return {
+		...baseOptions,
+		criticalOnly: baseOptions.criticalOnly || true,
+	}
 }
 
 export async function evaluateRoadmapCompletionGateError(
@@ -382,15 +462,15 @@ export async function evaluateCompletionAuditGate(
 
 	try {
 		const messages = config.messageState?.getDietCodeMessages?.() ?? []
-		const planBaseline = getLatestPlanAuditFromMessages(messages)
-		let auditMetadata = await runCompletionAudit(config.taskId, params.taskDescription, params.result, params.taskDescription)
-		auditMetadata = await applyWorkspaceAuditPolicy(config.cwd, auditMetadata, config)
+		const planBaseline = resolvePlanBaselineMetadata(messages, config.taskState.lastPlanAuditMetadata)
+		const auditMetadata = await resolveCompletionAuditMetadata(config, params)
 
 		const gateContext = await resolveCompletionGateContext(config, config.cwd, {
 			planBaselineMetadata: planBaseline,
 			lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
 		})
-		const gateDecision = evaluateAuditGate(auditMetadata, gateContext.options)
+		const gateOptions = resolveProgressiveGateOptions(config, gateContext.options)
+		const gateDecision = evaluateAuditGate(auditMetadata, gateOptions)
 
 		if (gateDecision.blocked) {
 			config.taskState.consecutiveMistakeCount++
@@ -402,7 +482,7 @@ export async function evaluateCompletionAuditGate(
 			const auditHumanMessage = appendCompletionGateRetryGuidance(
 				buildCompletionGateMessage(auditMetadata, {
 					scoreThreshold: config.auditCompletionGateThreshold,
-					criticalOnly: config.auditCompletionGateCriticalOnly,
+					criticalOnly: gateOptions.criticalOnly ?? config.auditCompletionGateCriticalOnly,
 					intentAdjustedThreshold: config.auditIntentThresholdAdjustmentsEnabled,
 					intentThresholdOverrides: parseIntentThresholdOverrides(config.auditIntentThresholdOverrides),
 					advisoryMetadata: config.taskState.lastAdvisoryAudit,
@@ -411,7 +491,7 @@ export async function evaluateCompletionAuditGate(
 				}),
 				blockCount,
 			)
-			const checklistSummary = buildPreCompletionChecklistSummary(auditMetadata, gateContext.options)
+			const checklistSummary = buildPreCompletionChecklistSummary(auditMetadata, gateOptions)
 			const checklistBlock = checklistSummary ? buildPreCompletionChecklistBlock(checklistSummary) : ""
 			const message = buildCompletionAgentErrorMessage(auditHumanMessage, config, {
 				result: params.result,
@@ -424,7 +504,7 @@ export async function evaluateCompletionAuditGate(
 				auditMetadata,
 				gateDecision,
 				blockCount,
-				gateOptions: gateContext.options,
+				gateOptions,
 				policyProvenance: gateContext.policyProvenance,
 			}
 		}
@@ -445,11 +525,33 @@ export async function evaluateCompletionAuditGate(
 			auditMetadata,
 			planBaseline,
 			gateDecision,
-			gateOptions: gateContext.options,
+			gateOptions,
 			policyProvenance: gateContext.policyProvenance,
 		}
 	} catch (error) {
 		Logger.error(`[${params.logPrefix}] Failed to run completion audit gate:`, error)
+		const blockCount = config.taskState.completionGateBlockCount ?? 0
+		const fallback =
+			config.taskState.lastCompletionAudit ?? config.taskState.lastAdvisoryAudit ?? config.taskState.lastPlanAuditMetadata
+		if (blockCount < COMPLETION_GATE_WARN_THRESHOLD && fallback) {
+			Logger.warn(`[${params.logPrefix}] Audit infra degraded — using cached audit metadata (non-blocking).`)
+			const gateContext = await resolveCompletionGateContext(config, config.cwd, {
+				lastAdvisoryAudit: fallback,
+				planBaselineMetadata: config.taskState.lastPlanAuditMetadata,
+			})
+			const gateOptions = resolveProgressiveGateOptions(config, gateContext.options)
+			const gateDecision = evaluateAuditGate(fallback, gateOptions)
+			if (!gateDecision.blocked) {
+				markCompletionGatesPassed(config)
+				return {
+					status: "passed",
+					auditMetadata: fallback,
+					gateDecision,
+					gateOptions,
+					policyProvenance: gateContext.policyProvenance,
+				}
+			}
+		}
 		config.taskState.consecutiveMistakeCount++
 		recordCompletionGateBlockEvent(config, "audit_error")
 		emitCompletionGateBlockTelemetry(config, "audit_error", config.taskState.completionGateBlockCount ?? 0)
@@ -469,7 +571,94 @@ export type CompletionGateFlowResult =
 	| { status: "passed"; audit: CompletionAuditGateResult }
 	| { status: "blocked"; message: string }
 
-/** Unified preflight + audit gate flow for main agent and subagents (excludes double-check). */
+export type SubagentCompletionGateResult = {
+	error: string | null
+	advisoryAudit?: TaskAuditMetadata
+	advisoryWouldBlock?: boolean
+}
+
+/** Fast lane preflight — quality/safety only; no parent circuit breaker or gate telemetry. */
+export function runSubagentCompletionLanePreflight(
+	config: TaskConfig,
+	params: {
+		result: string
+		command?: string
+		laneExecutionMode?: LaneExecutionMode
+	},
+	validateQuality: (result: string) => string | null = validateCompletionResultQuality,
+): string | null {
+	const preflightContext: PreflightCheckContext = {
+		config,
+		params,
+		validateQuality,
+	}
+	const ioAuthorityLane = params.laneExecutionMode ? isNonMutatingMode(params.laneExecutionMode) : false
+
+	for (const runner of PREFLIGHT_STAGE_RUNNERS) {
+		if (!SUBAGENT_LANE_PREFLIGHT_STAGES.has(runner.stage)) {
+			continue
+		}
+		if (runner.stage === "min_length" && ioAuthorityLane) {
+			const trimmed = params.result.trim()
+			if (trimmed.length < SUBAGENT_IO_LANE_RESULT_MIN_LENGTH) {
+				config.taskState.consecutiveMistakeCount++
+				return (
+					`Lane completion rejected: result too brief (${trimmed.length} chars, minimum ${SUBAGENT_IO_LANE_RESULT_MIN_LENGTH} for I/O authority lanes). ` +
+					"Provide a concise findings summary."
+				)
+			}
+			continue
+		}
+		const stageError = runner.validate(preflightContext)
+		if (stageError) {
+			config.taskState.consecutiveMistakeCount++
+			return stageError
+		}
+	}
+
+	return null
+}
+
+/**
+ * Shadow audit for subagent lanes — records findings without blocking throughput.
+ * Full enforcement remains at the parent seal barrier and parent attempt_completion.
+ */
+export async function evaluateSubagentAdvisoryAudit(
+	config: TaskConfig,
+	params: {
+		result: string
+		taskDescription: string
+		logPrefix: string
+	},
+): Promise<{ metadata?: TaskAuditMetadata; wouldBlock: boolean }> {
+	if (!config.auditCompletionGateEnabled) {
+		return { wouldBlock: false }
+	}
+
+	try {
+		const messages = config.messageState?.getDietCodeMessages?.() ?? []
+		const planBaseline = resolvePlanBaselineMetadata(messages, config.taskState.lastPlanAuditMetadata)
+		let auditMetadata = await runCompletionAudit(config.taskId, params.taskDescription, params.result, params.taskDescription)
+		auditMetadata = await applyWorkspaceAuditPolicy(config.cwd, auditMetadata, config)
+
+		const gateContext = await resolveCompletionGateContext(config, config.cwd, {
+			planBaselineMetadata: planBaseline,
+			lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
+		})
+		const gateDecision = evaluateAuditGate(auditMetadata, gateContext.options)
+		if (gateDecision.blocked) {
+			config.taskState.lastAdvisoryAudit = auditMetadata
+			return { metadata: auditMetadata, wouldBlock: true }
+		}
+
+		return { metadata: auditMetadata, wouldBlock: false }
+	} catch (error) {
+		Logger.warn(`[${params.logPrefix}] Subagent advisory audit skipped (non-blocking):`, error)
+		return { wouldBlock: false }
+	}
+}
+
+/** Parent attempt_completion — full preflight + blocking audit. */
 export async function runCompletionGateFlow(
 	config: TaskConfig,
 	params: {

@@ -80,39 +80,9 @@ export class ToolValidator {
 
 	/**
 	 * Architectural awareness check for write operations.
-	 * Uses the UniversalGuard's pre-execution validation for real AST analysis
-	 * instead of fragile emoji-prefix string matching.
+	 * Shift-right: full guardPreExecution runs once in ToolExecutor — avoid duplicate pre-exec here.
 	 */
-	public async checkArchitecturalPurity(filePath: string, content: string): Promise<ValidationResult> {
-		// Get layer context for actionable guidance
-		const layerContext = this.guard.getLayerContext(filePath)
-
-		// Build a synthetic tool block for the guard's pre-execution check
-		const syntheticBlock = {
-			type: "tool_use" as const,
-			name: DietCodeDefaultTool.FILE_NEW,
-			params: { path: filePath, content },
-			partial: false,
-		}
-
-		const result = await this.guard.guardPreExecution(syntheticBlock as any)
-
-		if (!result.success) {
-			return {
-				ok: false,
-				error: `🏗️ ARCHITECTURAL CORRECTION REQUIRED\n${layerContext}\n\n${result.error}`,
-				hint: result.correctionHint,
-			}
-		}
-
-		// If there's a warning (degraded enforcement), allow but log the hint for agent awareness
-		// Note: ok: true means the write proceeds; the warning is surfaced separately by ToolExecutor
-		if (result.warning) {
-			// Surface the warning through a structured hint if possible,
-			// though ToolExecutor normally handles the result.warning injection.
-			return { ok: true }
-		}
-
+	public async checkArchitecturalPurity(_filePath: string, _content: string): Promise<ValidationResult> {
 		return { ok: true }
 	}
 }

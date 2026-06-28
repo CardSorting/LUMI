@@ -104,6 +104,11 @@ export class UniversalGuard {
 		return this.engine.onRead(filePath, content, totalReadCount, perFileReadCount, globalFileReadCount)
 	}
 
+	/** Lightweight read path for I/O authority — substrate tracking without advisory header injection. */
+	public onReadIoAuthority(filePath: string, content: string): string {
+		return this.engine.onReadIoAuthority(filePath, content)
+	}
+
 	/**
 	 * Performs the final architectural audit before a database commit.
 	 */
@@ -126,6 +131,11 @@ export class UniversalGuard {
 	/**
 	 * V110: Substrate Stability Telemetry Proxy.
 	 */
+	/** Warm session spider graph — reuse instead of per-handler loadRegistry rebuilds. */
+	public getSpiderEngine() {
+		return this.engine.getSpiderEngine()
+	}
+
 	public getStabilityTelemetry(filePath: string) {
 		return this.engine.getStabilityTelemetry(filePath)
 	}

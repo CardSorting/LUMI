@@ -1,29 +1,47 @@
 import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
-import { evaluateGateLifecycle, publishGateLifecycleStatus } from "./completion/GateLifecycleEvaluator"
-import { runCompletionGateFlow } from "./completionGatePipeline"
+import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
+import { cacheGateLifecycleDecision, evaluateGateLifecycle } from "./completion/GateLifecycleEvaluator"
+import { runSubagentCompletionLanePreflight } from "./completionGatePipeline"
 import type { TaskConfig } from "./types/TaskConfig"
 
+export type SubagentCompletionGateValidation = {
+	error: string | null
+	lifecycle: GateLifecycleDecision
+	/** Hardening audit deferred to parent seal barrier — never blocks lane throughput. */
+	auditDeferredToSeal: boolean
+}
+
+/**
+ * Lane completion gates — zen fast path for throughput (ADR-013).
+ * Sync quality/safety preflight only; expensive auditTask runs at seal barrier.
+ * Parent attempt_completion retains full blocking enforcement.
+ */
 export async function validateSubagentCompletionGates(
 	config: TaskConfig,
 	result: string,
-	taskProgress?: string,
+	_taskProgress?: string,
 	command?: string,
-): Promise<{ error: string | null; lifecycle: GateLifecycleDecision }> {
-	// This entry point is exclusively used by SubagentRunner. The parent config is intentionally
-	// inherited for policy/audit context, but parent-only focus-chain requirements must not block a lane.
+	options?: { laneExecutionMode?: LaneExecutionMode },
+): Promise<SubagentCompletionGateValidation> {
 	const subagentConfig = config.isSubagentExecution ? config : { ...config, isSubagentExecution: true }
-	const flow = await runCompletionGateFlow(
-		subagentConfig,
-		{ result, taskProgress, command, taskDescription: result },
-		"SubagentRunner",
-	)
 
-	const lifecycle = evaluateGateLifecycle(subagentConfig)
-	await publishGateLifecycleStatus(subagentConfig, lifecycle)
-
-	if (flow.status === "blocked") {
-		return { error: flow.message, lifecycle }
+	const preflightError = runSubagentCompletionLanePreflight(subagentConfig, {
+		result,
+		command,
+		laneExecutionMode: options?.laneExecutionMode,
+	})
+	if (preflightError) {
+		const lifecycle = evaluateGateLifecycle(subagentConfig)
+		cacheGateLifecycleDecision(subagentConfig, lifecycle)
+		return { error: preflightError, lifecycle, auditDeferredToSeal: false }
 	}
 
-	return { error: null, lifecycle }
+	const lifecycle = evaluateGateLifecycle(subagentConfig)
+	cacheGateLifecycleDecision(subagentConfig, lifecycle)
+
+	return {
+		error: null,
+		lifecycle,
+		auditDeferredToSeal: true,
+	}
 }

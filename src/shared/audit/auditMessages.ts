@@ -119,6 +119,14 @@ export function getLatestPlanAuditFromMessages(messages: DietCodeMessage[]): Tas
 	return undefined
 }
 
+/** Plan baseline from chat history with task-state fallback when plan audit is deferred. */
+export function resolvePlanBaselineMetadata(
+	messages: DietCodeMessage[],
+	fallback?: TaskAuditMetadata,
+): TaskAuditMetadata | undefined {
+	return getLatestPlanAuditFromMessages(messages) ?? fallback
+}
+
 /** Returns the most recent act-mode advisory audit from chat history. */
 export function getLatestAdvisoryAuditFromMessages(messages: DietCodeMessage[]): TaskAuditMetadata | undefined {
 	for (let i = messages.length - 1; i >= 0; i--) {

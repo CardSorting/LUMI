@@ -94,16 +94,11 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 			resolutionMethod: (typeof pathResult !== "string" ? "hint" : "primary_fallback") as "hint" | "primary_fallback",
 		}
 
-		// Execute the actual list files operation
-		const [files, didHitLimit] = await listFiles(absolutePath, recursive, 200)
-
-		const result = formatResponse.formatFilesList(absolutePath, files, didHitLimit, config.services.dietcodeIgnoreController)
-
-		// Handle approval flow
+		// Handle approval before I/O — mirrors read_file (avoid wasted work on manual deny)
 		const sharedMessageProps = {
 			tool: recursive ? "listFilesRecursive" : "listFilesTopLevel",
 			path: getReadablePath(config.cwd, displayPath),
-			content: result,
+			content: "",
 			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relDirPath!),
 		}
 
@@ -112,13 +107,11 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 		const shouldAutoApprove =
 			config.isSubagentExecution || (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
 		if (shouldAutoApprove) {
-			// Auto-approval flow
 			if (!config.isSubagentExecution) {
 				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
 				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
 			}
 
-			// Capture telemetry
 			telemetryService.captureToolUsage(
 				config.ulid,
 				block.name,
@@ -130,10 +123,8 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 				block.isNativeToolCall,
 			)
 		} else {
-			// Manual approval flow
 			const notificationMessage = `DietCode wants to view directory ${getWorkspaceBasename(absolutePath, "ListFilesToolHandler.notification")}/`
 
-			// Show notification
 			showNotificationForApproval(notificationMessage, config.autoApprovalSettings.enableNotifications)
 
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "tool")
@@ -164,7 +155,6 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 			)
 		}
 
-		// Run PreToolUse hook after approval but before execution
 		try {
 			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
 			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
@@ -174,6 +164,14 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 				return formatResponse.toolDenied()
 			}
 			throw error
+		}
+
+		const [files, didHitLimit] = await listFiles(absolutePath, recursive, 200)
+		const result = formatResponse.formatFilesList(absolutePath, files, didHitLimit, config.services.dietcodeIgnoreController)
+
+		if (shouldAutoApprove && !config.isSubagentExecution) {
+			const resultMessage = JSON.stringify({ ...sharedMessageProps, content: result })
+			await config.callbacks.say("tool", resultMessage, undefined, undefined, false)
 		}
 
 		return result

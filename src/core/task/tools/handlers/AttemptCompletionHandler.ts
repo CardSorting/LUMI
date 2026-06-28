@@ -15,7 +15,7 @@ import {
 	resolveCompletionGateOptions,
 } from "@shared/audit/auditGatePolicyLoader"
 import { buildPreCompletionChecklist } from "@shared/audit/auditGateReport"
-import { getLatestPlanAuditFromMessages } from "@shared/audit/auditMessages"
+import { resolvePlanBaselineMetadata } from "@shared/audit/auditMessages"
 import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { enrichAuditMetadataWithArtifactPaths, persistAuditWorkspaceArtifacts } from "@shared/audit/auditWorkspaceArtifacts"
 import { buildAuditHookMetadata, buildDoubleCheckAuditSection, runAdvisoryAudit } from "@shared/audit/completionAudit"
@@ -135,42 +135,49 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 
 		if (shouldEmitProactiveCompletionGuidance(config)) {
-			try {
-				await config.callbacks.say("info", buildProactiveCompletionGuidance(config))
-				markProactiveCompletionGuidanceEmitted(config)
-			} catch (error) {
-				Logger.warn("[AttemptCompletionHandler] Failed to emit proactive completion guidance:", error)
-			}
+			void (async () => {
+				try {
+					await config.callbacks.say("info", buildProactiveCompletionGuidance(config))
+					markProactiveCompletionGuidanceEmitted(config)
+				} catch (error) {
+					Logger.warn("[AttemptCompletionHandler] Failed to emit proactive completion guidance:", error)
+				}
+			})()
 		}
 
 		if (shouldEmitPreflightReadinessHint(config)) {
-			try {
-				const readinessIssues = await evaluateGatePreflightReadinessAsync(
-					config,
-					{ result, taskProgress: block.params.task_progress, command },
-					validateCompletionResultQuality,
-					"AttemptCompletionHandler",
-				)
-				const readinessParts = [
-					buildCompletionPreflightReadinessBrief(config),
-					buildCompletionGateReadinessBlock(readinessIssues),
-				]
-				if (config.auditCompletionGateEnabled && config.taskState.lastAdvisoryAudit) {
-					const checklistSummary = buildPreCompletionChecklistSummary(
-						config.taskState.lastAdvisoryAudit,
-						await buildAuditGateOptions(config, {
-							planBaselineMetadata: getLatestPlanAuditFromMessages(config.messageState.getDietCodeMessages()),
-						}),
+			void (async () => {
+				try {
+					const readinessIssues = await evaluateGatePreflightReadinessAsync(
+						config,
+						{ result, taskProgress: block.params.task_progress, command },
+						validateCompletionResultQuality,
+						"AttemptCompletionHandler",
 					)
-					if (checklistSummary) {
-						readinessParts.push(buildPreCompletionChecklistBlock(checklistSummary))
+					const readinessParts = [
+						buildCompletionPreflightReadinessBrief(config),
+						buildCompletionGateReadinessBlock(readinessIssues),
+					]
+					if (config.auditCompletionGateEnabled && config.taskState.lastAdvisoryAudit) {
+						const checklistSummary = buildPreCompletionChecklistSummary(
+							config.taskState.lastAdvisoryAudit,
+							await buildAuditGateOptions(config, {
+								planBaselineMetadata: resolvePlanBaselineMetadata(
+									config.messageState.getDietCodeMessages(),
+									config.taskState.lastPlanAuditMetadata,
+								),
+							}),
+						)
+						if (checklistSummary) {
+							readinessParts.push(buildPreCompletionChecklistBlock(checklistSummary))
+						}
 					}
+					await config.callbacks.say("info", readinessParts.join("\n\n"))
+					markPreflightReadinessHintEmitted(config)
+				} catch (error) {
+					Logger.warn("[AttemptCompletionHandler] Failed to emit preflight readiness hint:", error)
 				}
-				await config.callbacks.say("info", readinessParts.join("\n\n"))
-				markPreflightReadinessHintEmitted(config)
-			} catch (error) {
-				Logger.warn("[AttemptCompletionHandler] Failed to emit preflight readiness hint:", error)
-			}
+			})()
 		}
 
 		const preflightError = await runCompletionPreflightChecks(
@@ -193,23 +200,37 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			config.taskState.doubleCheckCompletionPending = true
 			await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "completion_result")
 
-			const taskPreview = getInitialTaskPreview(config)
+			const taskPreview = getInitialTaskPreview(config) || ""
 			const taskSection = taskPreview ? `\n\n<initial_task>\n${taskPreview}\n</initial_task>` : ""
 
 			let auditPreviewSection = ""
-			try {
-				const previewAudit = await runAdvisoryAudit(config.taskId, taskPreview || "", result, taskPreview || "")
-				const policyAppliedAudit = await applyWorkspaceAuditPolicyForTask(config, previewAudit)
-				config.taskState.lastAdvisoryAudit = policyAppliedAudit
-				auditPreviewSection = buildDoubleCheckAuditSection(policyAppliedAudit)
-				auditPreviewSection += buildPreCompletionChecklist(
-					policyAppliedAudit,
-					await buildAuditGateOptions(config, {
-						planBaselineMetadata: getLatestPlanAuditFromMessages(config.messageState.getDietCodeMessages()),
-					}),
-				)
-			} catch (error) {
-				Logger.warn("[AttemptCompletionHandler] Pre-completion audit preview failed:", error)
+			const cachedAdvisory = config.taskState.lastAdvisoryAudit
+			if (cachedAdvisory) {
+				auditPreviewSection = buildDoubleCheckAuditSection(cachedAdvisory)
+				try {
+					auditPreviewSection += buildPreCompletionChecklist(
+						cachedAdvisory,
+						await buildAuditGateOptions(config, {
+							planBaselineMetadata: resolvePlanBaselineMetadata(
+								config.messageState.getDietCodeMessages(),
+								config.taskState.lastPlanAuditMetadata,
+							),
+						}),
+					)
+				} catch {
+					// Non-blocking — double-check flow uses cached advisory when available.
+				}
+			} else {
+				void (async () => {
+					try {
+						const previewAudit = await runAdvisoryAudit(config.taskId, taskPreview, result, taskPreview)
+						const policyAppliedAudit = await applyWorkspaceAuditPolicyForTask(config, previewAudit)
+						const { recordAdvisoryAuditCache } = await import("../completionGatePipeline")
+						recordAdvisoryAuditCache(config, result, taskPreview, policyAppliedAudit)
+					} catch (error) {
+						Logger.warn("[AttemptCompletionHandler] Pre-completion audit preview failed:", error)
+					}
+				})()
 			}
 
 			const blockCount = recordCompletionGateBlockEvent(config, "double_check", { result })
@@ -228,10 +249,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// We perform a non-blocking check for Knowledge Ledger compliance.
 		// If non-compliant, we provide a passive advisory to the agent.
 		if (config.universalGuard) {
-			const compliance = await config.universalGuard.checkForensicCompliance()
-			if (!compliance.compliant && compliance.advisory) {
-				await config.callbacks.say("info", compliance.advisory)
-			}
+			void config.universalGuard.checkForensicCompliance().then((compliance) => {
+				if (!compliance.compliant && compliance.advisory) {
+					config.callbacks.say("info", compliance.advisory).catch((error) => {
+						Logger.warn("[AttemptCompletionHandler] Failed to emit forensic advisory:", error)
+					})
+				}
+			})
 		}
 
 		// Run task audit to capture hardening & safety metrics (before emitting completion_result)

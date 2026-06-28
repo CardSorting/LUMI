@@ -1,20 +1,26 @@
 import { afterEach, beforeEach, describe, it } from "mocha"
 import "should"
+import * as completionAudit from "@shared/audit/completionAudit"
 import { COMPLETION_RESULT_MAX_LENGTH, MAX_COMPLETION_GATE_BLOCK_COUNT } from "@shared/audit/gatePolicy"
+import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import sinon from "sinon"
 import { setRoadmapConfigOverride } from "@/services/roadmap/RoadmapConfig"
 import { TaskState } from "../../TaskState"
 import {
 	COMPLETION_PREFLIGHT_STAGES,
+	hashCompletionResult,
 	recordCompletionPreflightFailure,
 	validateCompletionResultQuality,
 } from "../attemptCompletionUtils"
 import {
+	evaluateCompletionAuditGate,
 	evaluateGatePreflightReadiness,
 	evaluateGatePreflightReadinessAsync,
 	PREFLIGHT_STAGE_RUNNERS,
+	recordAdvisoryAuditCache,
 	runCompletionGateFlow,
 	runCompletionPreflightChecks,
 } from "../completionGatePipeline"
@@ -45,6 +51,7 @@ describe("completionGatePipeline", () => {
 	})
 
 	afterEach(async () => {
+		sinon.restore()
 		setRoadmapConfigOverride(null)
 		if (tmpDir) {
 			await fs.rm(tmpDir, { recursive: true, force: true })
@@ -115,6 +122,64 @@ describe("completionGatePipeline", () => {
 	it("runCompletionGateFlow passes when audit gate is disabled", async () => {
 		const flow = await runCompletionGateFlow(configWithState(taskState), { result: VALID_RESULT }, "Test")
 		flow.status.should.equal("passed")
+	})
+
+	it("does not block preflight on cooldown soft stage", async () => {
+		taskState.completionGateBlockCount = 2
+		taskState.lastCompletionAttemptAt = Date.now()
+		const error = await runCompletionPreflightChecks(configWithState(taskState), { result: VALID_RESULT }, "Test", {
+			validateQuality: validateCompletionResultQuality,
+			onFailure: recordCompletionPreflightFailure,
+		})
+		should.not.exist(error)
+	})
+
+	it("does not block preflight on duplicate soft stage", async () => {
+		taskState.completionGateBlockCount = 1
+		taskState.lastBlockedCompletionResultFingerprint = hashCompletionResult(VALID_RESULT)
+		taskState.lastCompletionAttemptAt = Date.now()
+		const error = await runCompletionPreflightChecks(configWithState(taskState), { result: VALID_RESULT }, "Test", {
+			validateQuality: validateCompletionResultQuality,
+			onFailure: recordCompletionPreflightFailure,
+		})
+		should.not.exist(error)
+	})
+
+	it("recordAdvisoryAuditCache stores metadata for completion reuse", () => {
+		const config = configWithState(taskState)
+		const metadata = { score: 92, violations: [] } as TaskAuditMetadata
+		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", metadata)
+		config.taskState.lastAdvisoryAudit!.score!.should.equal(92)
+		should.exist(config.taskState.lastAdvisoryAuditCacheKey)
+		should.exist(config.taskState.lastAdvisoryAuditCachedAt)
+	})
+
+	it("evaluateCompletionAuditGate reuses advisory cache without runCompletionAudit", async () => {
+		const config = {
+			...configWithState(taskState),
+			auditCompletionGateEnabled: true,
+			auditCompletionGateThreshold: 70,
+			taskId: "cache-reuse-test",
+			cwd: tmpDir,
+			ulid: "ulid-test",
+		} as TaskConfig
+		const advisory = {
+			score: 95,
+			violations: [],
+			blockCount: 0,
+		} as TaskAuditMetadata
+		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
+		const completionStub = sinon.stub(completionAudit, "runCompletionAudit").rejects(new Error("should not run"))
+
+		const result = await evaluateCompletionAuditGate(config, {
+			result: VALID_RESULT,
+			taskDescription: "task preview",
+			logPrefix: "Test",
+		})
+
+		completionStub.called.should.be.false()
+		result.status.should.equal("passed")
+		result.auditMetadata!.score!.should.equal(95)
 	})
 
 	it("preflight registry stages align with COMPLETION_PREFLIGHT_STAGES order", () => {
