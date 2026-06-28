@@ -38,5 +38,19 @@ Every change is measured for its impact on project health:
 - **Stability Scores**: After a successful edit, LUMI calculates a stability score for the affected file based on complexity, churn, and dependency health.
 - **Violation Tracking**: The system tracks how many architectural violations were introduced or resolved during a task, providing a clear "Net Health" impact report.
 
+## ⚡ I/O execution authority (parent throughput)
+
+Parent main-thread reads and searches use a **hot / warm / cold** execution model so tool loops stay fast while `attempt_completion` remains authoritative.
+
+| Tier | Parent behavior |
+|------|-----------------|
+| **Hot** | `read_file`, `list_files`, `search_files`, `list_code_definition_names` skip full UniversalGuard; sync substrate tracking only |
+| **Warm** | Advisory audits, post-guard GC, roadmap journals, and forensic hints run **after** the tool result is pushed |
+| **Cold** | `attempt_completion` audit gate, progressive threshold, circuit breaker |
+
+When a tool or completion is blocked, see **[Failure and block catalog](parent-thread-execution-authority.md#what-blocked-throughput-before-vs-after)** for message → reason → remediation mapping.
+
+Full reference: **[Parent-thread execution authority](parent-thread-execution-authority.md)** — helpers in `src/core/task/tools/executionAuthority.ts`, orchestration in `ToolExecutor.ts`.
+
 ---
 *LUMI isn't just an agent that codes; it's an architect that enforces. Build systems that stand the test of time.*

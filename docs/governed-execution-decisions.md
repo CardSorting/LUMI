@@ -307,6 +307,37 @@ Partial acquire rolls back and fails closed. Fencing token assigned before durab
 
 ---
 
+## ADR-014: Parent I/O execution authority (shift-right gates)
+
+**Status:** Accepted
+
+**Context:** Parent main-thread throughput degraded when every read, list, or search paid full UniversalGuard pre/post execution, blocking advisory audits, per-read Spider registry rebuilds, and duplicate guard calls in validators. Subagent read lanes already had I/O bulkhead fairness (ADR-013) but parent tools did not share a single authority model.
+
+**Decision:**
+
+- Introduce `executionAuthority.ts` with `IO_AUTHORITY_TOOLS` and helpers for guard bypass, PreToolUse skip, session spider reuse, and deferred post-guard work.
+- **Hot path:** Parent I/O tools skip full guard; sync `onReadIoAuthority()` only; approval before PreToolUse before execute on list/search handlers.
+- **Warm path:** Act-mode, plan-mode, and command-output audits run fire-and-forget; post-guard GC, roadmap journal, scratchpad validation, and drift detection run after `pushToolResult`.
+- **Cold path:** `attempt_completion` retains authoritative audit gate with 5-minute cache-aside, progressive critical-only threshold for first blocks, and advisory→plan baseline fallback on infra failure.
+- Eliminate duplicate `guardPreExecution` in `ToolValidator.checkArchitecturalPurity` — `ToolExecutor` owns guard once.
+- Subagent lanes: sync preflight only in `subagentCompletionGates`; expensive `auditTask` deferred to parent seal barrier.
+
+**Consequences:**
+
+- Read-heavy parent loops no longer block on guard, Spider rebuild, or PreToolUse for I/O authority tools.
+- Engineering verification remains fail-closed at completion; inner-loop audits are observability, not gates.
+- Operators distinguish **instant I/O** from **authoritative completion** — see [parent-thread-execution-authority.md](parent-thread-execution-authority.md).
+
+**Non-goals (explicit):**
+
+- No bypass of plan-mode write restrictions or disk blockade.
+- No removal of `attempt_completion` audit gate.
+- No parent parallel-tool I/O bulkhead on main thread (future work).
+
+**Failure documentation:** Block reasons, preflight stages, and throughput-vs-safety distinction — [parent-thread-execution-authority.md § What blocked throughput](parent-thread-execution-authority.md#what-blocked-throughput-before-vs-after).
+
+---
+
 ## Open decisions (not yet implemented)
 
 | Topic | State | Notes |

@@ -217,6 +217,7 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [GitHub automation](github-automation.md) | Workflows, templates, and maintainer CI map |
 | [Releasing](../.github/RELEASING.md) | Maintainer marketplace publish runbook |
 | [Security best practices](SECURITY_BEST_PRACTICES.md) | Approval gates, ignore files |
+| [Parent-thread execution authority](parent-thread-execution-authority.md) | I/O fast path, shift-right gates, completion audit caching |
 | [Spider forensic engine](architecture/spider-v20-forensic-engine.md) | Policy/audit layer (BroccoliDB) |
 | [User interface design](USER_INTERFACE_DESIGN.md) | Webview UX patterns |
 

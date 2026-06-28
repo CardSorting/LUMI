@@ -25,7 +25,11 @@ Use this when you change code and need to update the matching doc.
 | Source | Documentation |
 |--------|---------------|
 | `src/core/task/tools/autoApprove.ts` | [Auto-approve](features/auto-approve.mdx) |
-| `src/core/task/tools/completionGatePipeline.ts` | [Security](SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](papers/whitepaper.md#7-approval-hooks-and-completion) |
+| `src/core/task/tools/completionGatePipeline.ts` | [Security](SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](papers/whitepaper.md#7-approval-hooks-and-completion) · [Parent-thread execution authority](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) |
+| `src/core/task/tools/attemptCompletionUtils.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) |
+| `src/core/task/tools/executionAuthority.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) |
+| `src/core/task/ToolExecutor.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) · [Project map](PROJECT_MAP.md) |
+| `src/core/policy/FluidPolicyEngine.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) · [Architectural enforcement](ARCHITECTURAL_ENFORCEMENT.md) |
 | `src/core/hooks/hook-factory.ts` | [Hooks](customization/hooks.mdx) |
 | `src/core/ignore/DietCodeIgnoreController.ts` | [dietcodeignore](customization/dietcodeignore.mdx) |
 | `src/services/roadmap/` | [Roadmap steering](features/roadmap-steering.mdx) · [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
@@ -52,6 +56,8 @@ Use this when you change code and need to update the matching doc.
 |--------|---------------|
 | `src/core/task/tools/subagent/` | [Subagents feature](features/subagents.mdx) · [WORKING_WITH_SUBAGENTS.md](WORKING_WITH_SUBAGENTS.md) |
 | `src/core/task/tools/subagent/LockNecessity.ts` | [Governed subagent execution](governed-subagent-execution.md) · [Schema](governed-execution-schema.md) · [Runbook](governed-execution-runbook.md) · [Decisions](governed-execution-decisions.md) |
+| `src/core/task/tools/subagent/ParentAgentFlowControl.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) · [Runbook](governed-execution-runbook.md) |
+| `src/core/task/tools/subagentCompletionGates.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) · [Working with subagents](WORKING_WITH_SUBAGENTS.md) |
 | `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` | [Governed subagent execution](governed-subagent-execution.md) · [Schema](governed-execution-schema.md) · [Runbook](governed-execution-runbook.md) |
 | `src/core/task/tools/subagent/GovernedIntegration.ts` | [Governed subagent execution § roadmap/audit](governed-subagent-execution.md#roadmap-and-audit-integration) · [Schema § GovernedRoadmapLinkage](governed-execution-schema.md#governedroadmaplinkage) |
 | `src/core/task/tools/handlers/SubagentToolHandler.ts` | [Working with subagents](WORKING_WITH_SUBAGENTS.md) · [Runbook § crash seal](governed-execution-runbook.md) |

@@ -22,6 +22,8 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 | Governed coordinator | `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` |
 | Integration bridges | `src/core/task/tools/subagent/GovernedIntegration.ts` |
 | Lock necessity | `src/core/task/tools/subagent/LockNecessity.ts` |
+| Parent flow control | `src/core/task/tools/subagent/ParentAgentFlowControl.ts` · [Execution authority](parent-thread-execution-authority.md) |
+| Lane completion gates | `src/core/task/tools/subagentCompletionGates.ts` |
 | Merge gate | `src/core/task/tools/subagent/MergeGate.ts` |
 
 `ToolExecutorCoordinator` registers static tools from `DietCodeDefaultTool` and **dynamic subagent handlers** loaded at runtime.
@@ -52,7 +54,8 @@ The parent launch is the approval boundary:
 - **PreToolUse / PostToolUse hooks** apply per tool invocation.
 - Read-only lanes use read auto-approval and receive a read/diagnostic tool subset; declared mutation lanes use edit auto-approval and otherwise request approval once.
 - Inner tools do not prompt repeatedly after launch, but allowlists, mutation locks, budgets, and merge checks still apply.
-- **Completion gates** can block `attempt_completion` until subagent results pass validation.
+- **Completion gates** on lanes run **sync quality checks only**; hardening audit is deferred to the parent seal barrier. Full blocking enforcement remains on parent `attempt_completion` — see [Parent-thread execution authority](parent-thread-execution-authority.md#subagent-lane-vs-parent-vs-seal).
+- **I/O authority** on non-mutating lanes: read/list/search tools bypass UniversalGuard and may parallelize when the parent pool allows — see [Governed execution runbook § Fast I/O](governed-execution-runbook.md#retry-decision-flow).
 
 ## Governed swarms
 

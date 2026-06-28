@@ -138,6 +138,38 @@ Retry-lock with verified engineering shows amber **Retry Locked — Recoverable*
 
 `validateSubagentCompletionGates()` runs the same preflight pipeline and publishes `GateLifecycleDecision`. The decision is persisted on `SubagentExecutionEnvelope.gateLifecycleStatus`. Envelope validation requires `gateLifecycleStatus` when `phase === "completion_gate"`.
 
+## Parent-thread throughput (shift-right gates)
+
+Completion and finalization gates remain **cold-path authoritative** — they block at `attempt_completion` when engineering verification fails.
+
+Inner-loop tool execution uses a separate **I/O execution authority** model so reads and searches do not pay full guard/audit cost on every call:
+
+| Concern | Cold path (blocks) | Hot path (non-blocking) |
+|---------|-------------------|-------------------------|
+| Engineering audit score | `evaluateCompletionAuditGate` at `attempt_completion` | Deferred act-mode / command advisories |
+| UniversalGuard | Plan-mode writes, disk blockade | I/O tools bypass guard in `ToolExecutor` |
+| Preflight | Quality, roadmap (when enabled), circuit breaker | `cooldown`, `duplicate` soft stages |
+| Audit cache | Fresh `runCompletionAudit` when needed | 5-min TTL on unchanged result + advisory reuse |
+
+See **[parent-thread-execution-authority.md](parent-thread-execution-authority.md)** for helpers, file map, and operator summary.
+
+### Failure messages and why completion blocks
+
+When `attempt_completion` fails, the agent receives a structured error — not a generic denial. Common categories:
+
+| Category | Example message fragment | Meaning |
+|----------|-------------------------|---------|
+| **Preflight quality** | `Completion rejected: result is too brief` | Summary failed shape/tone checks before audit |
+| **Focus chain** | `focus chain has N incomplete item(s)` | Todo list not fully checked off |
+| **Roadmap** | Roadmap service remediation text | Workspace roadmap item blocked completion |
+| **Audit gate** | `Grade F (20/100, threshold 50)` | Hardening score or violations failed cold path |
+| **Circuit breaker** | `maximum completion gate retries (10) exceeded` | Retry budget exhausted — see lifecycle states below |
+| **Double-check** | `re-verify your work` | Two-step completion gate pending |
+
+Full stage order, soft vs hard preflight, audit reason codes (`score_below_threshold`, `critical_violations`, …), and tool-level blocks (plan mode, disk blockade): **[parent-thread execution authority § Failure catalog](parent-thread-execution-authority.md#what-blocked-throughput-before-vs-after)**.
+
+Gate block events append to `completionGateBlockHistory` (ring buffer) and publish `gateLifecycleStatus` to the webview via `GateLifecycleStatusPanel`.
+
 ## Invariants (`gateLifecycleInvariants.ts`)
 
 - Retry-locked verified engineering must allow `run_finalization`
