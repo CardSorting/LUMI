@@ -40,7 +40,7 @@ function diagnosticForCode(code: string): string {
 	if (["gate_closed", "schema_invalid", "validation_pending"].includes(code)) {
 		return "/roadmap explain-gate"
 	}
-	return "/roadmap doctor"
+	return "/roadmap guide"
 }
 
 export function errorEnvelope(params: {

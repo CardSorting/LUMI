@@ -22,7 +22,6 @@ function baseInputs(overrides: Partial<GateInputs> = {}): GateInputs {
 		bootstrap_placeholder_count: 0,
 		project_fingerprint: { steering_brief: "Audit Project — test" },
 		evidence_roadmap: { sections_missing: [] },
-		workspace_skill_installed: true,
 		...overrides,
 	}
 }

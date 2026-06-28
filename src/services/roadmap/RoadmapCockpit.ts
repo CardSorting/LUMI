@@ -4,7 +4,7 @@ import { getRoadmapConfig } from "./RoadmapConfig"
 import { formatExplainGateReport, gateExplainParamsFromStatus, recommendNextAction, wrapClarityEnvelope } from "./RoadmapOperator"
 import { readCurrentProgress, readLastError } from "./RoadmapProgress"
 import type { RoadmapService } from "./RoadmapService"
-import { WORKSPACE_SKILL_REL } from "./RoadmapSkillInstall"
+import { BUNDLED_SKILL_REL } from "./RoadmapSkillInstall"
 
 export function formatCockpitReport(payload: Record<string, unknown>, options?: { agentId?: string; verbose?: boolean }): string {
 	const verbose = options?.verbose || process.argv.includes("--verbose")
@@ -155,7 +155,7 @@ export async function buildCockpitPayload(
 		enabled: cfg.enabled,
 		workspace,
 		roadmap_path: path.join(workspace, "ROADMAP.md"),
-		skill_path: WORKSPACE_SKILL_REL,
+		skill_path: BUNDLED_SKILL_REL,
 		roadmap_exists: status.roadmap_exists,
 		health_status: status.health_status,
 		code_soup_risk: status.code_soup_risk,

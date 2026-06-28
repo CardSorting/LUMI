@@ -2,7 +2,11 @@ import * as path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import type { ApiHandler, buildApiHandler } from "@core/api"
 import { parseAssistantMessageV2, ToolUse } from "@core/assistant-message"
-import { discoverSkills, getAvailableSkills } from "@core/context/instructions/user-instructions/skills"
+import {
+	filterEnabledSkills,
+	filterSubagentPromptSkills,
+	getResolvedSkillsForCwd,
+} from "@core/context/instructions/user-instructions/skills"
 import { formatResponse } from "@core/prompts/responses"
 import { PromptRegistry } from "@core/prompts/system-prompt"
 import type { SystemPromptContext } from "@core/prompts/system-prompt/types"
@@ -573,21 +577,26 @@ export class SubagentRunner {
 				!!this.baseConfig.services.stateManager.getGlobalStateKey("nativeToolCallEnabled")
 
 			const host = HostRegistryInfo.get()
-			const discoveredSkills = await discoverSkills(this.baseConfig.cwd)
-			const availableSkills = getAvailableSkills(discoveredSkills)
+			const discoveredSkills = await getResolvedSkillsForCwd(this.baseConfig.cwd)
+			const globalSkillsToggles = this.baseConfig.services.stateManager.getGlobalSettingsKey("globalSkillsToggles") ?? {}
+			const localSkillsToggles = this.baseConfig.services.stateManager.getWorkspaceStateKey("localSkillsToggles") ?? {}
+			const availableSkills = filterEnabledSkills(discoveredSkills, globalSkillsToggles, localSkillsToggles)
 			const configuredSkillNames = this.agent.getConfiguredSkills()
+			const resolvedForPrompt = filterSubagentPromptSkills(availableSkills)
 			const skills =
 				configuredSkillNames !== undefined
 					? configuredSkillNames
 							.map((skillName) => {
-								const skill = availableSkills.find((candidate) => candidate.name === skillName)
+								const skill = resolvedForPrompt.find((candidate) => candidate.name === skillName)
 								if (!skill) {
-									Logger.warn(`[SubagentRunner] Configured skill '${skillName}' not found for subagent run.`)
+									Logger.warn(
+										`[SubagentRunner] Configured skill '${skillName}' not found or disabled for subagent run.`,
+									)
 								}
 								return skill
 							})
-							.filter((skill): skill is (typeof availableSkills)[number] => Boolean(skill))
-					: availableSkills
+							.filter((skill): skill is (typeof resolvedForPrompt)[number] => Boolean(skill))
+					: resolvedForPrompt
 
 			const context: SystemPromptContext = {
 				providerInfo,

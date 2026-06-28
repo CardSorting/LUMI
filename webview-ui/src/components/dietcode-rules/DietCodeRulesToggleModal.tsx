@@ -185,7 +185,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		refreshSkills()
 
 		// Poll every 1 second to detect filesystem changes
-		const pollInterval = setInterval(refreshSkills, 1000)
+		const pollInterval = setInterval(refreshSkills, 30_000)
 
 		return () => {
 			isCancelled = true

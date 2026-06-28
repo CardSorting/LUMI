@@ -1,3 +1,4 @@
+import { invalidateSkillsCache } from "@core/context/instructions/user-instructions/skills"
 import type { IController as Controller } from "@core/controller/types"
 import { SkillsToggles, ToggleSkillRequest } from "@shared/proto/dietcode/file"
 import { Logger } from "@/shared/services/Logger"
@@ -30,6 +31,8 @@ export async function toggleSkill(controller: Controller, request: ToggleSkillRe
 		localToggles = { ...localToggles, [skillPath]: enabled }
 		controller.stateManager.setWorkspaceState("localSkillsToggles", localToggles)
 	}
+
+	invalidateSkillsCache()
 
 	await controller.postStateToWebview()
 

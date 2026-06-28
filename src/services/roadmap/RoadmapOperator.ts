@@ -161,14 +161,14 @@ export function recommendNextAction(params: {
 }): { action: string; command: string; detail: string } {
 	if (params.last_error) {
 		return {
-			action: "run_doctor",
+			action: "review_last_error",
 			command: "roadmap(action='last_error')",
 			detail: String(params.last_error.operator_action || params.last_error.message || "Review last roadmap error."),
 		}
 	}
 	if (params.validation_pending) {
 		return {
-			action: "auto_validate",
+			action: "continue_task",
 			command: AUTO_GOVERNANCE.continueTaskMidPass,
 			detail: AUTO_GOVERNANCE.continueTaskMidPass,
 		}
@@ -217,7 +217,7 @@ export function recommendNextAction(params: {
 	}
 	if (params.phase === "validate_pending") {
 		return {
-			action: "auto_validate",
+			action: "continue_task",
 			command: AUTO_GOVERNANCE.continueTaskMidPass,
 			detail: "Schema validation runs automatically at attempt_completion — repair ROADMAP.md if issues remain.",
 		}

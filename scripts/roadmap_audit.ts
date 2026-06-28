@@ -135,7 +135,6 @@ async function runIntegrationChecks(failures: string[]): Promise<void> {
 			bootstrap_placeholder_count: 0,
 			project_fingerprint: {},
 			evidence_roadmap: {},
-			workspace_skill_installed: false,
 		}).closed
 		const schemaBlocking = blockingClosedGates(invalidSchemaClosed, getRoadmapConfig())
 		if (!schemaBlocking.some((g) => g.id === "schema_valid")) {
@@ -174,7 +173,8 @@ async function runIntegrationChecks(failures: string[]): Promise<void> {
 		if (phase.phase !== "bootstrap") failures.push(`expected bootstrap phase, got ${phase.phase}`)
 
 		const rec = recommendNextAction({ validation_pending: true, roadmap_exists: true })
-		if (rec.action !== "auto_validate") failures.push("recommendNextAction should prioritize validation_pending")
+		if (rec.action !== "continue_task")
+			failures.push("recommendNextAction should prioritize validation_pending with continue_task")
 
 		const staleRec = recommendNextAction({ stale: true, roadmap_exists: true, schema_valid: true })
 		if (staleRec.action !== "explain_stale") failures.push("recommendNextAction should route stale to explain_stale")

@@ -48,6 +48,8 @@ ROADMAP.md at the workspace root is the long-horizon steering surface — not a 
 **Health:** ${brief.health_status || "unknown"}
 **Prime directive:** Did the latest work strengthen or weaken the project's center of gravity?
 
+**Execution authority:** Continue the user's task — your I/O loop is primary. Roadmap governance clears at \`attempt_completion\`; do not mid-task validate/doctor unless completion is blocked.
+
 **Governance policy:** ${governancePolicy}
 
 **Auto-governance at completion:** ${AUTO_GOVERNANCE.bootstrapAtCompletion} ${AUTO_GOVERNANCE.validationAtCompletion} ${AUTO_GOVERNANCE.checkpointTouchAtCompletion}

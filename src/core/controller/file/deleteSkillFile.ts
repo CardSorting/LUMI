@@ -1,3 +1,4 @@
+import { invalidateSkillsCache } from "@core/context/instructions/user-instructions/skills"
 import type { IController as Controller } from "@core/controller/types"
 import { DeleteSkillRequest, SkillsToggles } from "@shared/proto/dietcode/file"
 import fs from "fs/promises"
@@ -39,6 +40,7 @@ export async function deleteSkillFile(controller: Controller, request: DeleteSki
 
 	// Delete the skill directory
 	await fs.rm(skillDir, { recursive: true, force: true })
+	invalidateSkillsCache()
 
 	// Remove from toggles
 	let globalToggles = controller.stateManager.getGlobalSettingsKey("globalSkillsToggles") || {}

@@ -3,7 +3,7 @@ import { getRoadmapConfig } from "./RoadmapConfig"
 import { emitProgress } from "./RoadmapProgress"
 import { RoadmapService } from "./RoadmapService"
 import { sessionBrief } from "./RoadmapSession"
-import { ensurePrimarySkill } from "./RoadmapSkillInstall"
+import { isBundledSkillAvailable } from "./RoadmapSkillInstall"
 
 export async function initRoadmapSession(workspace: string, taskId?: string): Promise<Record<string, unknown> | null> {
 	const cfg = getRoadmapConfig()
@@ -12,9 +12,7 @@ export async function initRoadmapSession(workspace: string, taskId?: string): Pr
 	const result: Record<string, unknown> = { workspace, taskId: taskId || null }
 
 	try {
-		const skillResult = await ensurePrimarySkill(workspace)
-		result.skills_installed = skillResult.installed
-		result.skills_skipped = skillResult.skipped
+		result.bundled_skill_available = await isBundledSkillAvailable()
 	} catch (error) {
 		result.skill_install_error = error instanceof Error ? error.message : String(error)
 	}

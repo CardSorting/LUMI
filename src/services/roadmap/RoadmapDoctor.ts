@@ -5,7 +5,7 @@ import { getRoadmapConfig } from "./RoadmapConfig"
 import { formatExplainGateReport, gateExplainParamsFromStatus, recommendNextAction, wrapClarityEnvelope } from "./RoadmapOperator"
 import { progressJsonlPath, readLastError } from "./RoadmapProgress"
 import type { RoadmapService } from "./RoadmapService"
-import { bundledSkillPath, workspaceSkillPath } from "./RoadmapSkillInstall"
+import { bundledSkillPath, isBundledSkillAvailable } from "./RoadmapSkillInstall"
 
 export async function runDoctorChecks(roadmapService: RoadmapService, workspace: string): Promise<Record<string, unknown>> {
 	const cfg = getRoadmapConfig()
@@ -20,20 +20,20 @@ export async function runDoctorChecks(roadmapService: RoadmapService, workspace:
 	addCheck("auto_install_skills", true, cfg.auto_install_skills ? "enabled" : "disabled — install skill manually")
 
 	try {
-		await fs.access(await bundledSkillPath())
-		addCheck("bundled_skill_present", true, await bundledSkillPath())
+		const available = await isBundledSkillAvailable()
+		const skillPath = available ? await bundledSkillPath() : ""
+		addCheck("bundled_skill_available", available, available ? skillPath : "bundled SKILL.md missing from extension")
+		if (!available && cfg.auto_install_skills) {
+			recommendations.push(
+				"Ensure SKILL.md is bundled with the extension (optional-skills/dietcode/auto-rolling-roadmap/SKILL.md)",
+			)
+		}
 	} catch {
-		addCheck("bundled_skill_present", false, "bundled SKILL.md missing")
-		recommendations.push("Restore optional-skills/dietcode/auto-rolling-roadmap/SKILL.md in extension bundle")
-	}
-
-	try {
-		await fs.access(workspaceSkillPath(workspace))
-		addCheck("workspace_skill_installed", true, workspaceSkillPath(workspace))
-	} catch {
-		addCheck("workspace_skill_installed", false, "not installed — session start or roadmap(action='doctor')")
+		addCheck("bundled_skill_available", false, "bundled SKILL.md missing from extension")
 		if (cfg.auto_install_skills) {
-			recommendations.push("roadmap(action='doctor') after session start to install workspace skill")
+			recommendations.push(
+				"Ensure SKILL.md is bundled with the extension (optional-skills/dietcode/auto-rolling-roadmap/SKILL.md)",
+			)
 		}
 	}
 

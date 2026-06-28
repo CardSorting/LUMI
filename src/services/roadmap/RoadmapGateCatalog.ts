@@ -3,7 +3,6 @@ import type { RoadmapConfig } from "./RoadmapConfig"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import type { RoadmapValidation } from "./RoadmapSchema"
 import { findBootstrapPlaceholders } from "./RoadmapSchema"
-import { isWorkspaceSkillInstalled } from "./RoadmapSkillInstall"
 
 export interface GateClosedEntry {
 	id: string
@@ -26,7 +25,6 @@ export interface GateInputs {
 	bootstrap_placeholder_count: number | null
 	project_fingerprint: Record<string, unknown>
 	evidence_roadmap: Record<string, unknown>
-	workspace_skill_installed: boolean
 }
 
 export interface GateState {
@@ -91,15 +89,6 @@ const GATE_CHECKS: GateCheckDef[] = [
 		isOpen: (i) => i.roadmap_present,
 		whyClosed: "No steering surface at workspace root",
 		fix: "roadmap(action='checkpoint') to bootstrap ROADMAP.md",
-		safe: true,
-		blocksKanbanComplete: false,
-	},
-	{
-		id: "workspace_skill_installed",
-		label: "Auto-rolling roadmap skill installed",
-		isOpen: (i) => i.workspace_skill_installed,
-		whyClosed: "optional-skills/dietcode/auto-rolling-roadmap/SKILL.md missing",
-		fix: "roadmap(action='doctor') or restart task (auto_install_skills)",
 		safe: true,
 		blocksKanbanComplete: false,
 	},
@@ -274,6 +263,5 @@ export async function collectGateInputs(params: {
 		bootstrap_placeholder_count: params.roadmapPresent ? bootstrapPlaceholderCount : null,
 		project_fingerprint: (params.evidence.project_fingerprint || {}) as Record<string, unknown>,
 		evidence_roadmap: (params.evidence.roadmap || {}) as Record<string, unknown>,
-		workspace_skill_installed: await isWorkspaceSkillInstalled(params.workspace),
 	}
 }

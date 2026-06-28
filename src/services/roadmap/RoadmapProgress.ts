@@ -130,9 +130,9 @@ const ERROR_RECOVERY: Record<string, Record<string, string>> = {
 		suggested_slash_command: "/roadmap guide",
 	},
 	"tool.error": {
-		operator_action: "roadmap(action='guide') or /roadmap doctor",
+		operator_action: "roadmap(action='guide') — continue the task unless completion is blocked",
 		retry_command: "roadmap(action='guide')",
-		diagnostic_command: "/roadmap doctor",
+		diagnostic_command: "/roadmap guide",
 		suggested_slash_command: "/roadmap guide",
 	},
 }

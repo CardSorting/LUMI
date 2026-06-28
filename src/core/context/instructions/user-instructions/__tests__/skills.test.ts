@@ -10,6 +10,7 @@ import * as path from "path"
 import * as sinon from "sinon"
 
 import * as disk from "@/core/storage/disk"
+import * as roadmapSkillInstall from "@/services/roadmap/RoadmapSkillInstall"
 import { Logger } from "@/shared/services/Logger"
 import * as fsUtils from "@/utils/fs"
 import { discoverSkills, getAvailableSkills, getSkillContent } from "../skills"
@@ -46,6 +47,7 @@ describe("Skills Utility Functions", () => {
 			{ path: GLOBAL_SKILLS_DIR, source: "global" },
 			{ path: path.join("/home", "user", ".agents", "skills"), source: "global" },
 		])
+		sandbox.stub(roadmapSkillInstall, "getBundledRoadmapSkillMetadata").resolves(null)
 
 		// Default: no directories exist
 		fileExistsStub.resolves(false)

@@ -3,7 +3,7 @@ import { formatRoadmapSteeringBlock } from "./RoadmapAgentSteering"
 import { governanceFieldsFromStatus } from "./RoadmapAutoGovernance"
 import { getRoadmapConfig } from "./RoadmapConfig"
 import { RoadmapService } from "./RoadmapService"
-import { WORKSPACE_SKILL_REL } from "./RoadmapSkillInstall"
+import { BUNDLED_SKILL_REL } from "./RoadmapSkillInstall"
 
 interface BriefCacheEntry {
 	brief: Record<string, unknown>
@@ -49,7 +49,7 @@ export async function sessionBrief(workspace: string, forceRefresh = false): Pro
 			success: true,
 			workspace,
 			roadmap_path: path.join(workspace, "ROADMAP.md"),
-			skill_path: WORKSPACE_SKILL_REL,
+			skill_path: BUNDLED_SKILL_REL,
 			phase: status.phase,
 			roadmap_exists: status.roadmap_exists,
 			health_status: status.health_status,

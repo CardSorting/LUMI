@@ -132,7 +132,12 @@ import { Logger } from "@/shared/services/Logger"
 import { Session } from "@/shared/services/Session"
 import { RuleContextBuilder } from "../context/instructions/user-instructions/RuleContextBuilder"
 import { ensureLocalDietCodeDirExists } from "../context/instructions/user-instructions/rule-helpers"
-import { discoverSkills, getAvailableSkills } from "../context/instructions/user-instructions/skills"
+import {
+	filterEnabledSkills,
+	filterPromptSkills,
+	getResolvedSkillsForCwd,
+	invalidateSkillsCache,
+} from "../context/instructions/user-instructions/skills"
 import { refreshWorkflowToggles } from "../context/instructions/user-instructions/workflows"
 import { EmbeddingHandler, KnowledgeGraphService } from "../context/KnowledgeGraphService"
 import { IController } from "../controller/types"
@@ -1177,12 +1182,13 @@ export class Task {
 		// Auto-bootstrap ROADMAP.md when missing (evidence-driven, non-blocking)
 		try {
 			const { initRoadmapSession } = await import("@/services/roadmap/RoadmapLifecycle")
+			invalidateSkillsCache(this.cwd)
 			const initResult = await initRoadmapSession(this.cwd, this.taskId)
 			if (initResult?.bootstrap && (initResult.bootstrap as Record<string, unknown>).written) {
 				Logger.info("[Roadmap] Auto-bootstrapped ROADMAP.md from workspace evidence")
 			}
-			if (Array.isArray(initResult?.skills_installed) && (initResult.skills_installed as string[]).length > 0) {
-				Logger.info("[Roadmap] Installed workspace skill:", (initResult.skills_installed as string[]).join(", "))
+			if (initResult?.bundled_skill_available) {
+				Logger.info("[Roadmap] Bundled default skill available: auto-rolling-roadmap")
 			}
 		} catch (error) {
 			Logger.warn("[Roadmap] Session roadmap init skipped:", error)
@@ -2171,18 +2177,12 @@ export class Task {
 			}))
 		}
 
-		// Discover and filter available skills
-		const allSkills = await discoverSkills(this.cwd)
-		const resolvedSkills = getAvailableSkills(allSkills)
-
-		// Filter skills by toggle state (enabled by default)
+		// Discover and filter available skills (cached per cwd — invalidated on skill dir changes)
+		const resolvedSkills = await getResolvedSkillsForCwd(this.cwd)
 		const globalSkillsToggles = this.stateManager.getGlobalSettingsKey("globalSkillsToggles") ?? {}
 		const localSkillsToggles = this.stateManager.getWorkspaceStateKey("localSkillsToggles") ?? {}
-		const availableSkills = resolvedSkills.filter((skill) => {
-			const toggles = skill.source === "global" ? globalSkillsToggles : localSkillsToggles
-			// If toggle exists, use it; otherwise default to enabled (true)
-			return toggles[skill.path] !== false
-		})
+		const availableSkills = filterEnabledSkills(resolvedSkills, globalSkillsToggles, localSkillsToggles)
+		const promptSkills = filterPromptSkills(availableSkills)
 
 		// Snapshot editor tabs so prompt tools can decide whether to include
 		// filetype-specific instructions (e.g. notebooks) without adding bespoke flags.
@@ -2201,7 +2201,7 @@ export class Task {
 			editorTabs,
 			supportsBrowserUse,
 			mcpHub: this.mcpHub,
-			skills: availableSkills,
+			skills: promptSkills,
 			focusChainSettings: this.stateManager.getGlobalSettingsKey("focusChainSettings"),
 			globalDietCodeRulesFileInstructions,
 			localDietCodeRulesFileInstructions,

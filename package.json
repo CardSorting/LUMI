@@ -2,7 +2,7 @@
 	"name": "lumi-vscode",
 	"displayName": "LUMI",
 	"description": "LUMI is your calm coding companion — comfort-first developer tooling for long sessions.",
-	"version": "2.1.6",
+	"version": "2.7.1",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",
@@ -304,38 +304,6 @@
 			}
 		],
 		"menus": {
-			"view/title": [
-				{
-					"command": "lumi.plusButtonClicked",
-					"group": "navigation@1",
-					"when": "view == lumi.SidebarProvider"
-				},
-				{
-					"command": "lumi.mcpButtonClicked",
-					"group": "navigation@2",
-					"when": "view == lumi.SidebarProvider"
-				},
-				{
-					"command": "lumi.historyButtonClicked",
-					"group": "navigation@3",
-					"when": "view == lumi.SidebarProvider"
-				},
-				{
-					"command": "lumi.accountButtonClicked",
-					"group": "navigation@5",
-					"when": "view == lumi.SidebarProvider"
-				},
-				{
-					"command": "lumi.settingsButtonClicked",
-					"group": "navigation@6",
-					"when": "view == lumi.SidebarProvider"
-				},
-				{
-					"command": "lumi.joyZoningButtonClicked",
-					"group": "navigation@4",
-					"when": "view == lumi.SidebarProvider"
-				}
-			],
 			"editor/context": [
 				{
 					"command": "lumi.addToChat",

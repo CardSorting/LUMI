@@ -1,10 +1,25 @@
 import { getSkillsDirectoriesForScan } from "@core/storage/disk"
 import type { SkillContent, SkillMetadata } from "@shared/skills"
+import { BUNDLED_SKILL_URI_PREFIX } from "@shared/skills"
 import { fileExistsAtPath, isDirectory } from "@utils/fs"
 import * as fs from "fs/promises"
 import * as path from "path"
+import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
+import { BUNDLED_SKILL_NAME, bundledSkillPath, getBundledRoadmapSkillMetadata } from "@/services/roadmap/RoadmapSkillInstall"
 import { Logger } from "@/shared/services/Logger"
 import { parseYamlFrontmatter } from "./frontmatter"
+import { ROADMAP_SKILL_EXECUTION_DIGEST } from "./roadmapSkillDigest"
+
+export {
+	filterEnabledSkills,
+	filterPromptSkills,
+	filterSubagentPromptSkills,
+	getResolvedSkillsForCwd,
+	getSkillsCacheMetrics,
+	invalidateSkillsCache,
+	resetSkillsCacheMetrics,
+	wasLastSkillsCacheHit,
+} from "./skillRuntime"
 
 /** Parse YAML frontmatter from markdown content (shared helper). */
 function parseFrontmatter(fileContent: string): { data: Record<string, unknown>; content: string } {
@@ -105,11 +120,16 @@ export async function discoverSkills(cwd: string): Promise<SkillMetadata[]> {
 		skills.push(...dirSkills)
 	}
 
+	const bundledSkill = await getBundledRoadmapSkillMetadata()
+	if (bundledSkill) {
+		skills.push(bundledSkill)
+	}
+
 	return skills
 }
 
 /**
- * Get available skills with override resolution (global > project).
+ * Get available skills with override resolution (bundled > global > project).
  */
 export function getAvailableSkills(skills: SkillMetadata[]): SkillMetadata[] {
 	const seen = new Set<string>()
@@ -127,15 +147,36 @@ export function getAvailableSkills(skills: SkillMetadata[]): SkillMetadata[] {
 	return result
 }
 
+export type SkillLoadMode = "digest" | "full"
+
+export interface SkillLoadOptions {
+	mode?: SkillLoadMode
+}
+
 /**
- * Get full skill content including instructions.
+ * Load skill instructions. Bundled roadmap defaults to digest (never full SKILL.md on hot path).
  */
-export async function getSkillContent(skillName: string, availableSkills: SkillMetadata[]): Promise<SkillContent | null> {
+export async function getSkillContent(
+	skillName: string,
+	availableSkills: SkillMetadata[],
+	options: SkillLoadOptions = {},
+): Promise<SkillContent | null> {
 	const skill = availableSkills.find((s) => s.name === skillName)
 	if (!skill) return null
 
+	const loadMode = options.mode ?? "digest"
+	const isBundledRoadmap = skill.source === "bundled" && skill.name === BUNDLED_SKILL_NAME && getRoadmapConfig().enabled
+
+	if (isBundledRoadmap && loadMode === "digest") {
+		return {
+			...skill,
+			instructions: ROADMAP_SKILL_EXECUTION_DIGEST,
+		}
+	}
+
 	try {
-		const fileContent = await fs.readFile(skill.path, "utf-8")
+		const readPath = skill.path.startsWith(BUNDLED_SKILL_URI_PREFIX) ? await bundledSkillPath() : skill.path
+		const fileContent = await fs.readFile(readPath, "utf-8")
 		const { content: body } = parseFrontmatter(fileContent)
 
 		return {

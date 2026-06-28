@@ -1,3 +1,8 @@
+---
+name: auto-rolling-roadmap
+description: Maintain ROADMAP.md as the project's living product, architecture, and long-horizon development checkpoint. Use when steering project direction, updating roadmap checkpoints, or resolving code soup drift.
+---
+
 # DietCode Skill: Auto-Rolling Roadmap Checkpoint System
 
 ## Skill Purpose
@@ -951,6 +956,13 @@ When the DietCode plugin is active:
 
 Workspace state persists at `.dietcode/roadmap-state.json` after each `validate` pass.
 
-The skill file is installed to `optional-skills/dietcode/auto-rolling-roadmap/SKILL.md` in the workspace when `dietcode.roadmap.auto_install_skills` is enabled (default: true).
+The bundled default skill (`auto-rolling-roadmap`) ships with the extension and is registered automatically when `dietcode.roadmap.auto_install_skills` is enabled (default: true). It is **not** copied into workspaces.
+
+**Throughput model (industry-standard progressive disclosure):**
+- **Metadata** — listed in the SKILLS prompt section for optional user skills only; bundled roadmap is omitted when ROADMAP_STEERING is active (no duplicate surface).
+- **Instructions** — loaded on-demand via `use_skill`; bundled roadmap returns a lean execution digest (~30 lines), not the full 962-line reference.
+- **Reference** — full SKILL.md remains bundled for deep checkpoint algorithm detail when needed.
+
+**Execution authority:** Continue the user's I/O loop. Roadmap governance clears at `attempt_completion` — no mid-task validate/doctor unless completion is blocked.
 
 Operator smoke: `python scripts/roadmap_smoke.py` · `python scripts/roadmap_operator_smoke.py`

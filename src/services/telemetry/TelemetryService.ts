@@ -1116,11 +1116,14 @@ export class TelemetryService {
 	public captureSkillUsed(args: {
 		ulid: string
 		skillName: string
-		skillSource: "global" | "project"
+		skillSource: "global" | "project" | "bundled"
 		skillsAvailableGlobal: number
 		skillsAvailableProject: number
 		provider?: string
 		modelId?: string
+		loadMode?: "digest" | "full"
+		fullSkillLoadReason?: string
+		skillsDiscoveryCacheHit?: boolean
 	}): void {
 		if (!this.isCategoryEnabled("skills")) {
 			return
@@ -1141,6 +1144,9 @@ export class TelemetryService {
 			skillsAvailableProject,
 			provider: args.provider,
 			modelId: args.modelId,
+			loadMode: args.loadMode,
+			fullSkillLoadReason: args.fullSkillLoadReason,
+			skillsDiscoveryCacheHit: args.skillsDiscoveryCacheHit,
 		}
 
 		this.capture({

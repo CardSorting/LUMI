@@ -25,7 +25,7 @@ describe("RoadmapOperator", () => {
 	describe("recommendNextAction", () => {
 		it("prioritizes validation_pending", () => {
 			const rec = recommendNextAction({ validation_pending: true, roadmap_exists: true })
-			assert.strictEqual(rec.action, "auto_validate")
+			assert.strictEqual(rec.action, "continue_task")
 			assert.match(rec.command, /attempt_completion/)
 			assert.match(rec.detail, /automatically/)
 		})

@@ -23,6 +23,26 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 - E2E workflow skips docs-only pull requests (path filter)
 - Removed legacy JetBrains and nightly publish automation
 
+## [2.7.0] - 2026-06-27
+
+### Added
+
+- Bundled default roadmap skill (`auto-rolling-roadmap`) — no per-workspace copy
+- Skill discovery cache (15s TTL) with explicit invalidation on create/delete/toggle
+- Progressive disclosure: execution digest on `use_skill`, full reference via `full_reference`
+- Stable bundled skill toggle key (`bundled://auto-rolling-roadmap`)
+- Skill pipeline acceptance tests and Open VSX path resolution tests
+- Telemetry: `loadMode`, `fullSkillLoadReason`, `skillsDiscoveryCacheHit`
+
+### Changed
+
+- Roadmap skill excluded from SKILLS prompt when ROADMAP_STEERING is active
+- Removed `workspace_skill_installed` completion gate (advisory only)
+- Subagents respect skill toggles and exclude bundled roadmap from prompt catalog
+- Doctor/validate/cockpit defaults to guide/continue-task — no mid-task ritual loops
+- Skills UI refresh poll interval: 30s (invalidation on mutations)
+- Bundled skill metadata reads 2KB frontmatter head only on discovery
+
 ## [2.1.6] - 2026-06-27
 
 ### Added

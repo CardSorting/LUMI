@@ -29,7 +29,7 @@ import {
 	SOUP_RISK_LEVELS,
 	validateRoadmapContent,
 } from "./RoadmapSchema"
-import { WORKSPACE_SKILL_REL } from "./RoadmapSkillInstall"
+import { BUNDLED_SKILL_REL } from "./RoadmapSkillInstall"
 import { buildSnapshotKey, type EvidenceTier, getSnapshotFromCache, setSnapshotCache } from "./RoadmapSnapshot"
 
 interface HeavyScanResult {
@@ -2746,7 +2746,7 @@ export class RoadmapService {
 			enabled: getRoadmapConfig().enabled,
 			phase: phase.phase,
 			skill: "auto-rolling-roadmap",
-			skill_path: WORKSPACE_SKILL_REL,
+			skill_path: BUNDLED_SKILL_REL,
 			workspace,
 			roadmap_path: ctx.roadmapPath,
 			roadmap_exists: gateState.roadmap_present,

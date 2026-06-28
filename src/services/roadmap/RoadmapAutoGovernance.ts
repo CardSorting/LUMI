@@ -86,7 +86,8 @@ export const GATE_EDIT_INSTRUCTIONS: Record<string, string> = {
 	roadmap_enabled: "Enable lumi.roadmap.enabled in VS Code settings.",
 	workspace_safe: "Open the project workspace root in the editor — not the extension/plugin install tree.",
 	roadmap_present: "Create ROADMAP.md at the workspace root (auto-bootstrap may run on session start).",
-	workspace_skill_installed: "Optional — install auto-rolling-roadmap skill via session start or roadmap(action='doctor').",
+	workspace_skill_installed:
+		"Informational only — bundled auto-rolling-roadmap is a default skill when dietcode.roadmap.auto_install_skills is enabled (default: true). Not a completion gate.",
 	schema_valid:
 		"Repair ROADMAP.md — ensure all 12 required sections exist, health status is valid, and section 9 audit is present.",
 	validation_current: "Usually auto-clears at attempt_completion; if still blocked, fix schema errors in ROADMAP.md.",

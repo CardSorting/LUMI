@@ -1,3 +1,4 @@
+import { invalidateSkillsCache } from "@core/context/instructions/user-instructions/skills"
 import type { IController as Controller } from "@core/controller/types"
 import { ensureAgentSkillsDirectoryExists } from "@core/storage/disk"
 import { CreateSkillRequest, SkillsToggles } from "@shared/proto/dietcode/file"
@@ -94,6 +95,8 @@ export async function createSkillFile(controller: Controller, request: CreateSki
 	const skillMdPath = path.join(skillDir, "SKILL.md")
 	const content = SKILL_TEMPLATE.replace(/\{\{SKILL_NAME\}\}/g, sanitizedName)
 	await fs.writeFile(skillMdPath, content, "utf-8")
+
+	invalidateSkillsCache()
 
 	// Open the file for editing
 	await openFile(controller, { value: skillMdPath })

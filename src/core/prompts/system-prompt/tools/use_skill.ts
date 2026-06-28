@@ -17,6 +17,12 @@ const generic: DietCodeToolSpec = {
 			required: true,
 			instruction: "The name of the skill to activate (must match exactly one of the available skill names)",
 		},
+		{
+			name: "full_reference",
+			required: false,
+			instruction:
+				"Set true only when digest instructions are insufficient and you need the complete SKILL.md reference. Default false — prefer digest.",
+		},
 	],
 }
 
