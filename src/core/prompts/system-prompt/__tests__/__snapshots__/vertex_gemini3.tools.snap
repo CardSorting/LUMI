@@ -388,7 +388,7 @@
   },
   {
     "name": "use_subagents",
-    "description": "Run up to five focused in-process subagents in parallel. Each subagent gets its own prompt and returns a comprehensive research result with tool and token stats. Use this for broad exploration when reading many files would consume the main agent's context window. You do not need to launch multiple subagents every time; using one subagent is valid when it avoids unnecessary context usage for light discovery work.",
+    "description": "Run up to five focused in-process subagents through a bounded, work-conserving pool. Keep critical-path I/O and final synthesis in the parent; delegate substantial, preferably disjoint scopes. Prefix a prompt with [execution_mode:read_only|audit_only|planning_only|documentation_only|diagnostic_only|mutation] to declare its authority. Non-mutating lanes receive only local read/diagnostic tools; use mutation or [write_set:path] whenever a lane may write, run commands, use MCP, or otherwise cause side effects. Add [depends_on:0,1] only for true dependencies, using zero-based lane indices. Each lane returns its result and usage stats.",
     "parameters": {
       "type": "OBJECT",
       "properties": {

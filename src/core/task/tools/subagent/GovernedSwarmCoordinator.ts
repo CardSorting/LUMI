@@ -257,6 +257,8 @@ export class GovernedSwarmCoordinator {
 			}
 		}
 
+		const isRetryReentry = node?.state === "running" && node.agentId === agentId
+
 		await this.ensureWorkspaceRoadmapSnapshot(swarmId)
 
 		let claim: WorkLaneClaim | undefined
@@ -330,14 +332,33 @@ export class GovernedSwarmCoordinator {
 		claim.roadmapReadSet = resolvedIntent.roadmapReadSet
 		claim.roadmapWriteSet = resolvedIntent.roadmapWriteSet
 
-		this.laneDag.markRunning(index, agentId, resolvedIntent.executionMode)
+		if (!isRetryReentry) {
+			this.laneDag.markRunning(index, agentId, resolvedIntent.executionMode)
+		}
 		if (lockSkipped) {
 			return { success: true, lockSkipped: true, claim }
 		}
 		return { success: true, claim }
 	}
 
+	/** Release governed locks without changing DAG state — used during retry backoff. */
+	async releaseLaneLocks(claim: WorkLaneClaim): Promise<void> {
+		await this.releaseLockClaims(claim)
+		claim.lockClaim = undefined
+		claim.roadmapLockClaims = undefined
+	}
+
 	async releaseLane(claim: WorkLaneClaim, sealed: boolean, failed = false, error?: string): Promise<void> {
+		await this.releaseLockClaims(claim)
+
+		if (sealed) {
+			this.laneDag.markSealed(claim.index)
+		} else if (failed) {
+			this.laneDag.markFailed(claim.index, error)
+		}
+	}
+
+	private async releaseLockClaims(claim: WorkLaneClaim): Promise<void> {
 		if (claim.roadmapLockClaims?.length) {
 			for (const roadmapClaim of claim.roadmapLockClaims) {
 				const verify = await this.lockAuthority.verify(roadmapClaim, this.workspace)
@@ -364,12 +385,6 @@ export class GovernedSwarmCoordinator {
 			} else {
 				this.claimHistory.push(lockClaimToHistoryEntry(claim.lockClaim, claim.laneId, "released"))
 			}
-		}
-
-		if (sealed) {
-			this.laneDag.markSealed(claim.index)
-		} else if (failed) {
-			this.laneDag.markFailed(claim.index, error)
 		}
 	}
 

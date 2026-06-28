@@ -85,7 +85,7 @@ Partial acquire rolls back and fails closed. Fencing token assigned before durab
 **Decision:** `runMergeGate()` is the commit barrier after execution:
 
 - Collision detection on **write sets** only.
-- DAG dependency allows ordered overlap (infrastructure present; handler wiring incomplete).
+- DAG dependency allows ordered overlap, and the handler prioritizes the longest ready dependency path.
 - Separate audits for mutation-without-lock and non-mutating-with-writes.
 - Orphaned/unreleased claims count only `lockRequired` lanes.
 
@@ -266,6 +266,44 @@ Partial acquire rolls back and fails closed. Fencing token assigned before durab
 - No return to shared per-lane workspace mutation.
 - No additional lock layers for projections.
 - No lane-level workspace commit path.
+
+---
+
+## ADR-013: Bounded, work-conserving parent flow control
+
+**Status:** Accepted
+
+**Context:** A fixed worker pool was necessary but insufficient. Progress events queued an unbounded number of artifact writes, deterministic failures consumed retry slots, timed-out attempts could overlap replacements, concurrent lanes shared a mutable model client, and index-order scheduling could delay the lane that unlocked the longest dependency chain.
+
+**Decision:**
+
+- Keep a three-request concurrency ceiling behind a priority-aware execution pool with a fast-I/O bulkhead (one reserved slot when non-mutating lanes wait). Dispatch ready lanes by weighted longest downstream critical path. Read-only and diagnostic lanes receive a dispatch boost aligned with I/O authority. Retry backoff releases its slot.
+- Coalesce progress to the latest state and cap artifact/UI emission frequency. A parent I/O barrier stops progress writers before terminal sealing. Partial running progress is UI-only; durable artifacts are written at terminal staging/seal barriers.
+- Serialize writes per swarm, replace artifacts atomically, and allow unrelated swarms to persist concurrently. Stage terminal state with an unsealed marker; only the parent post-reconciliation path may publish the resumable final artifact.
+- Treat progress/UI telemetry as best-effort, bound UI waits, and start workers without waiting for it. Start child-stream registrations together without gating any lane.
+- Run advisory audit preflight alongside workers, bound it to ten seconds, and join it at the seal barrier.
+- Retry only transient infrastructure failures, at one parent layer, with capped full-jitter backoff and three total attempts.
+- Acquire execution slots before lane claims; release governed locks during retry backoff so jitter does not hold lane ownership.
+- Prefetch parent stream context and completion-gate options once per swarm; bound active lane executions to pool capacity plus one successor (retry backoff does not consume an active execution slot).
+- Give every attempt a fresh runner, model client, prompt context, and timeout; abort and wait for quiescence before replacement.
+- Give each attempt one lane-local task state and tool coordinator; completion gates never mutate parent or sibling state.
+- Count tokens and cost across all attempts, and stop pending/running work when the aggregate parent budget is crossed.
+- Resolve read versus mutation authority before launch: read auto-approval is valid only for non-mutating lanes and constrains their toolset to local reads/diagnostics; mutation follows edit auto-approval; mixed swarms require both. Any missing permission becomes one parent approval, with no repeated inner prompts.
+- Propagate failed dependencies immediately, diagnose true deadlocks with dependency states, and release the orchestration lease in a final cleanup barrier.
+- Keep peer spawning and shared-ledger synthesis at the parent; workers return structured review/documentation requests unless explicitly assigned ownership.
+
+**Consequences:**
+
+- Bursty token progress no longer becomes an I/O backlog.
+- Delayed progress cannot overwrite a sealed artifact, and readers never observe a partial JSON write.
+- Permanent task failures free a worker slot immediately; retries do not amplify deterministic faults.
+- A throttled lane waiting on jitter does not reduce active capacity for untouched lanes.
+- Slow trace registration never gates execution; advisory preflight and unavailable progress UI have bounded waits.
+- Approval remains explicit at the authority boundary without adding per-tool latency inside an authorized lane.
+- Cancellation and retry are isolated per lane, without a shared-client abort blast radius.
+- Parent receipts include retry spend and cannot report budget-crossing work as successful.
+- Dependency-heavy swarms reduce makespan without raising the concurrency ceiling.
+- Non-mutating lanes retain reserved pool capacity and may parallelize independent read/diagnostic tool calls when the parent enables parallel tool calling.
 
 ---
 

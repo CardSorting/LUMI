@@ -189,6 +189,26 @@ Check receipt `roadmapLinkage.workspaceCommit.blockReason`:
 
 ## Retry decision flow
 
+### Live parent-flow policy
+
+| Control | Runtime behavior | Operator implication |
+|---------|------------------|----------------------|
+| Concurrency | At most 3 active model requests through a priority-aware bulkhead pool (FIFO within equal priority; 1 slot reserved for fast I/O when waiting) | Capacity is bounded; non-mutating lanes cannot be starved by mutation lanes; backoff releases slots |
+| Approval | Read permission and read/diagnostic tools for non-mutating lanes; edit permission or one approval for mutation | Inner lane I/O does not prompt repeatedly after authority is granted |
+| DAG priority | Weighted longest ready downstream path (read-only/diagnostic boost) | Lanes that unblock more work and fast I/O authority lanes may start before lower-index lanes |
+| Status persistence | Latest state coalesced to 250 ms; partial running progress is UI-only | Disk writes at terminal staging/seal only; parent stops progress I/O before sealing |
+| Artifact writes | Invocation-ordered per swarm, atomic temp-file replacement, unsealed staging marker | Different swarms persist concurrently; readers never see torn JSON or resume pre-seal state |
+| Control-plane I/O | Progress/UI best-effort with 2 s UI bounds; preflight overlaps execution with a 10 s bound; child-stream registration gates no lane | Required joins occur at the terminal seal barrier, not worker startup |
+| Attempt timeout | 5 minutes, bounded by the 20-minute swarm deadline | A lane cannot extend the parent deadline through retries |
+| Retry | Transient failures only, 3 total attempts, capped full jitter; locks released during backoff | Auth, budget, iteration, cancellation, and deterministic task failures do not retry |
+| Lane pipeline | Slot → claim → run; active executions capped (capacity + 1); scheduler wakes on slot release | Retry backoff frees slots and active execution capacity for other lanes |
+| Attempt isolation | Fresh runner/model client; 2-second abort grace before replacement | No overlapping replacement if the prior attempt cannot quiesce |
+| Parent budget | Tokens/cost accumulated across attempts | Retry spend is visible and an aggregate cost crossing fails the crossing lane |
+| Fast I/O throughput | Non-mutating lanes may parallelize independent tool calls when parent setting allows | Read/diagnostic lanes batch reads without serial tool latency |
+| Dependency failure | Propagated immediately to downstream pending lanes | Independent lanes continue; blocked descendants fail with upstream IDs |
+
+Worker lanes cannot spawn verifier lanes. A worker emits `SIGNAL: REVIEW_REQUESTED`; the parent schedules review if needed. Shared `.wiki/` writes belong to an explicitly assigned documentation lane or parent finalization.
+
 ```mermaid
 flowchart TD
   A[Need to retry swarm?] --> B{diagnostics.retrySafe?}

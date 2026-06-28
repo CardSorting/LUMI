@@ -294,6 +294,9 @@ export function validateCompletionResultExcludesChecklist(result: string): strin
 }
 
 export function validateTaskProgressAlignsWithFocusChain(config: TaskConfig, taskProgress: string | undefined): string | null {
+	if (config.isSubagentExecution) {
+		return null
+	}
 	if (!config.focusChainSettings?.enabled) {
 		return null
 	}
@@ -1097,6 +1100,9 @@ export function validateCompletionAttemptCooldown(config: TaskConfig): string | 
 }
 
 export function validateCompletionTaskProgressRequired(config: TaskConfig, taskProgress: string | undefined): string | null {
+	if (config.isSubagentExecution) {
+		return null
+	}
 	if (!config.focusChainSettings?.enabled) {
 		return null
 	}
@@ -1122,6 +1128,9 @@ export function validateCompletionTaskProgressRequired(config: TaskConfig, taskP
 }
 
 export function validateFocusChainComplete(config: TaskConfig): string | null {
+	if (config.isSubagentExecution) {
+		return null
+	}
 	if (!config.focusChainSettings?.enabled) {
 		return null
 	}

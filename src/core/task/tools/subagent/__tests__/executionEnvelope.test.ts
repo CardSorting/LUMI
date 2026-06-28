@@ -8,6 +8,7 @@ import { createContinuityMarker } from "@shared/subagent/executionEnvelope"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { assertSwarmEnvelopeOrThrow, validateSwarmEnvelope } from "../executionValidation"
+import { SWARM_TERMINAL_STAGING_VIOLATION, validateArtifactIntegrity } from "../ResumeSwarmFromArtifact"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
 import {
 	listSwarmEnvelopeIds,
@@ -54,7 +55,6 @@ function createSwarmEnvelope(agents: SubagentExecutionEnvelope[]): SwarmExecutio
 
 describe("subagent execution envelope", () => {
 	let tempDir: string
-	let ensureTaskDirectoryExistsStub: sinon.SinonStub
 
 	afterEach(async () => {
 		sinon.restore()
@@ -86,11 +86,13 @@ describe("subagent execution envelope", () => {
 
 		const overlay = buildSwarmSummaryOverlay(swarm, entries)
 		const parentResult = buildParentToolResult(swarm, overlay)
+		const verbatimOutput = agent.verbatimOutput
 
+		assert.ok(verbatimOutput)
 		assert.ok(overlay.includes("excerpted for context window"))
-		assert.ok(parentResult.includes(agent.verbatimOutput!.slice(0, 20)))
-		assert.ok(agent.verbatimOutput!.length > 300)
-		assert.ok(agent.verbatimOutput && !overlay.includes(agent.verbatimOutput))
+		assert.ok(parentResult.includes(verbatimOutput.slice(0, 20)))
+		assert.ok(verbatimOutput.length > 300)
+		assert.ok(!overlay.includes(verbatimOutput))
 		assert.equal(agent.evidenceRefs.length > 0, true)
 	})
 
@@ -111,7 +113,7 @@ describe("subagent execution envelope", () => {
 	it("persists and reconstructs replay artifacts", async () => {
 		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "subagent-exec-"))
 		const disk = await import("@core/storage/disk")
-		ensureTaskDirectoryExistsStub = sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
+		sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
 
 		const swarm = createSwarmEnvelope([createAgentEnvelope()])
 		const artifactPath = await persistSwarmEnvelope("task-1", swarm)
@@ -127,6 +129,46 @@ describe("subagent execution envelope", () => {
 		const loaded = await loadSwarmEnvelope("task-1", "swarm-1")
 		assert.ok(loaded)
 		assert.equal(loaded.invariants.validated, validateSwarmEnvelope(loaded).validated)
+	})
+
+	it("atomically preserves invocation order and caller-declared terminal violations", async () => {
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "subagent-exec-order-"))
+		const disk = await import("@core/storage/disk")
+		sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
+		const swarm = createSwarmEnvelope([createAgentEnvelope()])
+
+		await Promise.all(
+			Array.from({ length: 20 }, (_, revision) =>
+				persistSwarmEnvelope("task-ordered", {
+					...swarm,
+					summaryOverlay: `revision-${revision}`,
+					invariants: {
+						validated: false,
+						violations: revision === 19 ? ["merge blocked at terminal barrier"] : [],
+					},
+				}),
+			),
+		)
+
+		const loaded = await loadSwarmEnvelope("task-ordered", swarm.swarmId)
+		assert.equal(loaded?.summaryOverlay, "revision-19")
+		assert.ok(loaded?.invariants.violations.includes("merge blocked at terminal barrier"))
+		const artifactDir = path.join(tempDir, "subagent_executions")
+		assert.deepEqual(await fs.readdir(artifactDir), [`${swarm.swarmId}.json`])
+	})
+
+	it("rejects a staged terminal artifact before its governed receipt is sealed", async () => {
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "subagent-exec-staging-"))
+		const disk = await import("@core/storage/disk")
+		sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
+		const swarm = createSwarmEnvelope([createAgentEnvelope()])
+		swarm.invariants.violations.push(SWARM_TERMINAL_STAGING_VIOLATION)
+		await persistSwarmEnvelope("task-1", swarm)
+
+		const loaded = await loadSwarmEnvelope("task-1", swarm.swarmId)
+		assert.ok(loaded)
+		const integrity = await validateArtifactIntegrity("task-1", loaded)
+		assert.ok(integrity.violations.includes(SWARM_TERMINAL_STAGING_VIOLATION))
 	})
 
 	it("fails closed on invariant violations when asserted", () => {

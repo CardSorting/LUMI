@@ -124,6 +124,51 @@ describe("governed execution hardening", () => {
 			dag.markSealed(0)
 			assert.deepEqual(dag.getReadyLanes(), [1])
 		})
+
+		it("requires an explicit failed-to-ready transition for worker retries", () => {
+			const dag = new LaneDAG(1)
+			assert.deepEqual(dag.getReadyLanes(), [0])
+			dag.markRunning(0, "agent-a")
+			dag.markFailed(0, "some error")
+			assert.equal(dag.getNode(0)?.state, "failed")
+
+			assert.throws(() => dag.markRunning(0, "agent-a"), /not ready/)
+			dag.markRetryReady(0)
+			dag.markRunning(0, "agent-a")
+			assert.equal(dag.getNode(0)?.state, "running")
+		})
+
+		it("prioritizes the longest ready dependency path", () => {
+			const deps = new Map<number, number[]>([
+				[3, [2]],
+				[4, [3]],
+			])
+			const dag = new LaneDAG(5, deps)
+
+			assert.deepEqual(dag.getReadyLanesByPriority(), [2, 0, 1])
+		})
+
+		it("boosts read-only lanes when critical-path scores tie", () => {
+			const dag = new LaneDAG(2)
+			const weights = new Map<number, number>([
+				[0, 1],
+				[1, 1.5],
+			])
+
+			assert.deepEqual(dag.getReadyLanesByPriority(weights), [1, 0])
+		})
+
+		it("prioritizes lanes that unblock the most blocked dependents", () => {
+			const deps = new Map<number, number[]>([
+				[1, [0]],
+				[2, [0]],
+				[3, [1]],
+			])
+			const dag = new LaneDAG(4, deps)
+
+			assert.equal(dag.blockedDependentCount(0), 2)
+			assert.ok(dag.getLaneScheduleScore(0) > dag.getLaneScheduleScore(1))
+		})
 	})
 
 	describe("MergeGate", () => {

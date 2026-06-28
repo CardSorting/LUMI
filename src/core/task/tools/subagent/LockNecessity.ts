@@ -34,6 +34,8 @@ const NON_MUTATING_MODES: LaneExecutionMode[] = [
 	"diagnostic_only",
 ]
 
+const EXECUTION_MODES = new Set<LaneExecutionMode>([...NON_MUTATING_MODES, "mutation"])
+
 const WRITE_TOOL_NAMES = new Set([
 	"write_to_file",
 	"edit_file",
@@ -45,6 +47,26 @@ const WRITE_TOOL_NAMES = new Set([
 
 export function isNonMutatingMode(mode: LaneExecutionMode): boolean {
 	return NON_MUTATING_MODES.includes(mode)
+}
+
+/** Higher weight = scheduled sooner when critical-path scores tie or slots are scarce. */
+export function laneDispatchWeight(mode: LaneExecutionMode): number {
+	switch (mode) {
+		case "read_only":
+		case "diagnostic_only":
+			return 1.5
+		case "audit_only":
+		case "planning_only":
+		case "documentation_only":
+			return 1.25
+		default:
+			return 1
+	}
+}
+
+/** Read-only lanes may parallelize independent tool calls when the parent allows it. */
+export function shouldEnableParallelToolCallingForLane(mode: LaneExecutionMode, parentEnabled: boolean): boolean {
+	return parentEnabled && isNonMutatingMode(mode)
 }
 
 export function parseExecutionModeFromPrompt(prompt: string): LaneExecutionMode | undefined {
@@ -103,7 +125,9 @@ export function resolveLaneLockIntent(
 		params?.execution_mode?.trim() ||
 		parseExecutionModeFromPrompt(prompt) ||
 		"mutation"
-	const executionMode = modeRaw.toLowerCase() as LaneExecutionMode
+	const normalizedMode = modeRaw.toLowerCase() as LaneExecutionMode
+	// Unknown authority declarations fail closed to mutation ownership.
+	const executionMode: LaneExecutionMode = EXECUTION_MODES.has(normalizedMode) ? normalizedMode : "mutation"
 	const readSet = parseReadSetFromPrompt(prompt)
 	const writeSet = parseWriteSetFromPrompt(prompt)
 	const declaresWrites = writeSet.length > 0 || /\[declares_writes\]/i.test(prompt)
@@ -144,15 +168,7 @@ export function classifyLockNecessity(intent: LaneLockIntent): LockNecessityResu
 		}
 	}
 
-	const mutationSignals = [
-		intent.writeSet?.length,
-		intent.declaresWrites,
-		intent.mutatesRoadmap,
-		intent.mutatesBroccoliDurable,
-		intent.sideEffectTools,
-		intent.requiresExclusiveResource,
-		intent.updatesAuthoritativeReceipt,
-	].some(Boolean)
+	const mutationSignals = declaresMutationIntent(intent)
 
 	if (mutationSignals) {
 		const reasons: string[] = []
@@ -173,6 +189,22 @@ export function classifyLockNecessity(intent: LaneLockIntent): LockNecessityResu
 		roadmapMutationLockRequired: false,
 		reasonLockSkipped: `${intent.executionMode} lane — read/audit/plan/diagnostic only; no mutation declared`,
 	}
+}
+
+/** Whether the parent must grant mutating I/O authority, even when containment later rejects the mutation path. */
+export function declaresMutationIntent(intent: LaneLockIntent): boolean {
+	return (
+		intent.executionMode === "mutation" ||
+		[
+			intent.writeSet?.length,
+			intent.declaresWrites,
+			intent.mutatesRoadmap,
+			intent.mutatesBroccoliDurable,
+			intent.sideEffectTools,
+			intent.requiresExclusiveResource,
+			intent.updatesAuthoritativeReceipt,
+		].some(Boolean)
+	)
 }
 
 export function envelopeIndicatesWrites(toolSteps?: Array<{ toolName: string }>, touchedFiles?: string[]): boolean {

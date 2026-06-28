@@ -7,7 +7,12 @@ import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { AgentConfigLoader } from "../AgentConfigLoader"
-import { SUBAGENT_DEFAULT_ALLOWED_TOOLS, SUBAGENT_SYSTEM_SUFFIX, SubagentBuilder } from "../SubagentBuilder"
+import {
+	constrainSubagentToolsForLane,
+	SUBAGENT_DEFAULT_ALLOWED_TOOLS,
+	SUBAGENT_SYSTEM_SUFFIX,
+	SubagentBuilder,
+} from "../SubagentBuilder"
 
 function createTaskConfig(mode: "act" | "plan", provider: string): TaskConfig {
 	return {
@@ -31,6 +36,23 @@ function createTaskConfig(mode: "act" | "plan", provider: string): TaskConfig {
 describe("SubagentBuilder", () => {
 	afterEach(() => {
 		sinon.restore()
+	})
+
+	it("removes mutation and external-I/O tools from non-mutating lanes", () => {
+		assert.deepEqual(
+			constrainSubagentToolsForLane(
+				[
+					DietCodeDefaultTool.FILE_READ,
+					DietCodeDefaultTool.FILE_EDIT,
+					DietCodeDefaultTool.BASH,
+					DietCodeDefaultTool.MCP_USE,
+					DietCodeDefaultTool.STABILITY_SWEEP,
+					DietCodeDefaultTool.ATTEMPT,
+				],
+				false,
+			),
+			[DietCodeDefaultTool.FILE_READ, DietCodeDefaultTool.ATTEMPT],
+		)
 	})
 
 	it("uses cached config by subagent name and applies act-mode provider model override", () => {
@@ -81,6 +103,8 @@ describe("SubagentBuilder", () => {
 		assert.match(prompt, /^generated prompt/)
 		assert.match(prompt, /SWARM NESTING CONTEXT/)
 		assert.match(prompt, /SUBSTRATE HEALTH SIGNAL/)
+		assert.match(prompt, /SIGNAL: REVIEW_REQUESTED/)
+		assert.doesNotMatch(prompt, /Use the 'use_subagents' tool/)
 		assert.match(
 			prompt,
 			new RegExp(

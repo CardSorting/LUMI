@@ -29,9 +29,11 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 ## How it works
 
 1. The main `Task` calls `use_subagents` with agent type(s) and prompts.
-2. `SubagentBuilder` constructs a child task with inherited or overridden API configuration (`buildApiHandler`).
-3. `SubagentRunner` executes the child loop with scoped tools.
-4. Results return to the parent task as tool output; shared memory tools (`mem_append_shared`, `mem_get_shared`, `mem_claim`, `mem_release`) coordinate cross-agent state.
+2. The parent classifies lane authority and requests one batch approval at the required read/mutation level.
+3. `SubagentBuilder` constructs an isolated model client for each attempt.
+4. A FIFO pool allows three active model requests; queued and retry-backoff lanes consume no active slot.
+5. `SubagentRunner` executes the child loop with lane-scoped tools; non-mutating lanes cannot invoke write, command, MCP, memory-mutation, or repair tools.
+6. The parent stops progress I/O, atomically stages the artifact, reconciles receipts, publishes the sealed terminal artifact, and returns synthesized output.
 
 ## Agent types
 
@@ -45,10 +47,11 @@ Subagent configs can specify types such as `worker`, `verifier`, and `researcher
 
 ## Safety
 
-Subagents inherit the same approval and hook pipeline as the parent task:
+The parent launch is the approval boundary:
 
 - **PreToolUse / PostToolUse hooks** apply per tool invocation.
-- **Auto-approve** rules from `src/core/task/tools/autoApprove.ts` still gate mutating tools.
+- Read-only lanes use read auto-approval and receive a read/diagnostic tool subset; declared mutation lanes use edit auto-approval and otherwise request approval once.
+- Inner tools do not prompt repeatedly after launch, but allowlists, mutation locks, budgets, and merge checks still apply.
 - **Completion gates** can block `attempt_completion` until subagent results pass validation.
 
 ## Governed swarms

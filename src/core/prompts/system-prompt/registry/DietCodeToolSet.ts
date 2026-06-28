@@ -121,13 +121,14 @@ export class DietCodeToolSet {
 			variant: variant.family,
 			id: DietCodeDefaultTool.USE_SUBAGENTS,
 			name: toolName,
-			description: `Use the "${config.name}" subagent: ${config.description}`,
+			description: `Use the "${config.name}" subagent: ${config.description}. Keep final synthesis in the parent and declare lane authority in the prompt; non-mutating lanes are limited to local read/diagnostic tools.`,
 			contextRequirements: (ctx) => ctx.subagentsEnabled === true && !ctx.isSubagentRun,
 			parameters: [
 				{
 					name: "prompt",
 					required: true,
-					instruction: "Helpful instruction for the task that the subagent will perform.",
+					instruction:
+						"Concrete, self-contained task prefixed with an execution_mode header; use mutation or write_set for writes, commands, MCP, or other side effects.",
 				},
 			],
 		}))

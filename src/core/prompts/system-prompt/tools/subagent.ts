@@ -9,33 +9,33 @@ const generic: DietCodeToolSpec = {
 	id,
 	name: "use_subagents",
 	description:
-		"Run up to five focused in-process subagents in parallel. Each subagent gets its own prompt and returns a comprehensive research result with tool and token stats. Use this for broad exploration when reading many files would consume the main agent's context window. You do not need to launch multiple subagents every time; using one subagent is valid when it avoids unnecessary context usage for light discovery work.",
+		"Run up to five focused in-process subagents through a bounded, work-conserving pool. Keep critical-path I/O and final synthesis in the parent; delegate substantial, preferably disjoint scopes. Prefix a prompt with [execution_mode:read_only|audit_only|planning_only|documentation_only|diagnostic_only|mutation] to declare its authority. Non-mutating lanes receive only local read/diagnostic tools; use mutation or [write_set:path] whenever a lane may write, run commands, use MCP, or otherwise cause side effects. Add [depends_on:0,1] only for true dependencies, using zero-based lane indices. Each lane returns its result and usage stats.",
 	contextRequirements: (context) => context.subagentsEnabled === true && !context.isSubagentRun,
 	parameters: [
 		{
 			name: "prompt_1",
 			required: true,
-			instruction: "First subagent prompt.",
+			instruction: "Lane 0 prompt. Give it a concrete, self-contained scope and explicit execution_mode header.",
 		},
 		{
 			name: "prompt_2",
 			required: false,
-			instruction: "Optional second subagent prompt.",
+			instruction: "Optional lane 1 prompt. Keep it independent or declare [depends_on:0].",
 		},
 		{
 			name: "prompt_3",
 			required: false,
-			instruction: "Optional third subagent prompt.",
+			instruction: "Optional lane 2 prompt. Keep it independent or declare zero-based dependencies.",
 		},
 		{
 			name: "prompt_4",
 			required: false,
-			instruction: "Optional fourth subagent prompt.",
+			instruction: "Optional lane 3 prompt. Keep it independent or declare zero-based dependencies.",
 		},
 		{
 			name: "prompt_5",
 			required: false,
-			instruction: "Optional fifth subagent prompt.",
+			instruction: "Optional lane 4 prompt. Keep it independent or declare zero-based dependencies.",
 		},
 	],
 }

@@ -28,14 +28,28 @@ export const SUBAGENT_DEFAULT_ALLOWED_TOOLS: DietCodeDefaultTool[] = [
 	DietCodeDefaultTool.STABILITY_SWEEP,
 ]
 
+export const SUBAGENT_NON_MUTATING_ALLOWED_TOOLS = new Set<DietCodeDefaultTool>([
+	DietCodeDefaultTool.FILE_READ,
+	DietCodeDefaultTool.LIST_FILES,
+	DietCodeDefaultTool.SEARCH,
+	DietCodeDefaultTool.LIST_CODE_DEF,
+	DietCodeDefaultTool.USE_SKILL,
+	DietCodeDefaultTool.STABILITY_DIAGNOSE,
+	DietCodeDefaultTool.ATTEMPT,
+])
+
+export function constrainSubagentToolsForLane(tools: DietCodeDefaultTool[], mutatingAuthority: boolean): DietCodeDefaultTool[] {
+	return mutatingAuthority ? tools : tools.filter((tool) => SUBAGENT_NON_MUTATING_ALLOWED_TOOLS.has(tool))
+}
+
 // Peer-Review & Consensus loops
 const CONSENSUS_PROTO = `
 ### SWARM CONSENSUS PROTOCOL
-If you are performing a critical or complex modification, you SHOULD request a peer review before finalizing:
-1. Use the 'use_subagents' tool with a 'Verifier' profile.
-2. Provide the 'Verifier' with your proposed changes and the original objective.
-3. If the 'Verifier' identifies issues, address them before calling 'attempt_completion'.
-4. Signal consensus by including 'SIGNAL: CONSENSUS_REACHED' in your final report.
+You cannot spawn peer agents from a worker lane. If critical work needs independent review:
+1. Complete the assigned work and its local verification without waiting on another lane.
+2. Include 'SIGNAL: REVIEW_REQUESTED' with the exact review scope in your final report.
+3. The parent orchestrator decides whether to schedule a verifier and owns cross-lane consensus.
+4. Include 'SIGNAL: CONSENSUS_REACHED' only when the parent supplied actual peer-review evidence.
 `
 
 const AUTONOMOUS_NUDGE_PROTO = `
@@ -48,9 +62,9 @@ STRUCTURED SIGNALING: When signaling critical findings or final results, use str
 
 const FORENSIC_AXIOMS = `
 ### FORENSIC HARDENING AXIOMS
-1. DOCUMENTATION IS CODE: Every technical change must be mirrored in the Knowledge Ledger (.wiki/).
+1. DOCUMENTATION IS CODE: Return ledger-ready documentation evidence for every technical change. Write to the shared Knowledge Ledger (.wiki/) only when this lane explicitly owns documentation and has mutation/write-set authority; the parent owns final cross-lane synthesis.
 2. THE OMNI-BRIDGE RULE: Documentation MUST guarantee maximum success for humans and agents by explicitly defining constraints, schemas, and implementation patterns.
-3. HIERARCHICAL TAXONOMY: You MUST organize the wiki into strict subdirectories (\`onboarding/\`, \`architecture/\`, \`agent/\`). Do NOT dump files in the root.
+3. HIERARCHICAL TAXONOMY: Documentation-owner lanes MUST organize the wiki into strict subdirectories (\`onboarding/\`, \`architecture/\`, \`agent/\`). Do NOT dump files in the root.
 4. DECISIONS & RISK MAPPING: You MUST document the "Why" (ADRs) behind architectural choices and map the blast radius/risk of fragile systems.
 5. ENVIRONMENTAL PARITY: Always provide self-verification commands to ensure a contributor's environment is fully configured.
 6. VISUAL CLARITY: Use Mermaid diagrams (\`mermaid\` blocks) to visualize complex structural relationships or state logic.

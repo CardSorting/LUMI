@@ -116,4 +116,16 @@ describe("GovernedSwarmCoordinator", () => {
 		assert.ok(loaded)
 		assert.equal(loaded!.laneReceipts.length, 1)
 	})
+
+	it("re-acquires lane locks after releaseLaneLocks for parent-layer retry", async () => {
+		const coordinator = new GovernedSwarmCoordinator("/tmp", false, 1, undefined, new InMemoryLockAuthority())
+		const first = await coordinator.acquireLane("swarm-retry", "agent-a", 0, { executionMode: "mutation" })
+		assert.ok(first.success && first.claim)
+		await coordinator.releaseLaneLocks(first.claim)
+		const second = await coordinator.acquireLane("swarm-retry", "agent-a", 0, { executionMode: "mutation" })
+		assert.ok(second.success && second.claim)
+		assert.ok(second.claim.lockClaim)
+		await coordinator.releaseLane(second.claim, true, false)
+		assert.equal(coordinator.getLaneDAG().getNode(0)?.state, "sealed")
+	})
 })

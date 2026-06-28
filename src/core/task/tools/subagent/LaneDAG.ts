@@ -29,6 +29,28 @@ export class LaneDAG {
 		return [...this.nodes.values()].filter((node) => node.state === "ready").map((node) => node.index)
 	}
 
+	/** Prefer ready lanes on the longest downstream path so scarce worker slots unblock the DAG sooner. */
+	getReadyLanesByPriority(laneWeights?: Map<number, number>): number[] {
+		const memo = new Map<number, number>()
+		return this.getReadyLanes().sort((left, right) => {
+			const priorityDelta =
+				this.getLaneScheduleScore(right, memo, laneWeights) - this.getLaneScheduleScore(left, memo, laneWeights)
+			return priorityDelta || left - right
+		})
+	}
+
+	/** Weighted critical-path score used by the parent scheduler and priority execution pool. */
+	getLaneScheduleScore(index: number, memo = new Map<number, number>(), laneWeights?: Map<number, number>): number {
+		const pathWeight = this.criticalPathLength(index, memo) * (laneWeights?.get(index) ?? 1)
+		const unblockBoost = 1 + this.blockedDependentCount(index) * 0.25
+		return pathWeight * unblockBoost
+	}
+
+	/** Count blocked lanes waiting on this upstream node — prioritizes lanes that unblock the DAG. */
+	blockedDependentCount(index: number): number {
+		return [...this.nodes.values()].filter((node) => node.state === "blocked" && node.dependsOn.includes(index)).length
+	}
+
 	markRunning(index: number, agentId: string, executionMode?: LaneExecutionMode): void {
 		const node = this.nodes.get(index)
 		if (!node || node.state !== "ready") {
@@ -47,6 +69,17 @@ export class LaneDAG {
 			return
 		}
 		node.state = "sealed"
+		this.recomputeBlocked()
+	}
+
+	markRetryReady(index: number): void {
+		const node = this.nodes.get(index)
+		if (!node || node.state !== "failed") {
+			throw new Error(`Lane ${index} is not failed (state=${node?.state})`)
+		}
+		node.state = "ready"
+		node.agentId = undefined
+		node.error = undefined
 		this.recomputeBlocked()
 	}
 
@@ -77,5 +110,22 @@ export class LaneDAG {
 			const blocked = node.dependsOn.some((dep) => !sealed.has(dep))
 			node.state = blocked ? "blocked" : "ready"
 		}
+	}
+
+	private criticalPathLength(index: number, memo: Map<number, number>, visiting = new Set<number>()): number {
+		const cached = memo.get(index)
+		if (cached !== undefined) {
+			return cached
+		}
+		if (visiting.has(index)) {
+			return 0
+		}
+
+		visiting.add(index)
+		const dependents = [...this.nodes.values()].filter((node) => node.dependsOn.includes(index))
+		const length = 1 + Math.max(0, ...dependents.map((node) => this.criticalPathLength(node.index, memo, visiting)))
+		visiting.delete(index)
+		memo.set(index, length)
+		return length
 	}
 }

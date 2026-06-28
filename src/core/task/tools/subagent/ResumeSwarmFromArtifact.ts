@@ -11,6 +11,8 @@ export interface SwarmArtifactIntegrityReport {
 	checksum: string
 }
 
+export const SWARM_TERMINAL_STAGING_VIOLATION = "terminal receipt not sealed"
+
 export interface SwarmResumeAgentReuse {
 	agentId: string
 	index: number
@@ -77,6 +79,9 @@ export async function validateArtifactIntegrity(
 
 	const invariantReport = validateSwarmEnvelope(envelope)
 	violations.push(...invariantReport.violations)
+	if (envelope.invariants.violations.includes(SWARM_TERMINAL_STAGING_VIOLATION)) {
+		violations.push(SWARM_TERMINAL_STAGING_VIOLATION)
+	}
 
 	for (const agent of envelope.agents) {
 		if (!agent.transcriptArtifactPath) {

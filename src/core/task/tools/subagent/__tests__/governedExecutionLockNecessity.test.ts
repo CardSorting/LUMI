@@ -5,7 +5,7 @@ import { describe, it } from "mocha"
 import { InMemoryLockAuthority } from "@/core/governance/LockAuthority"
 import { swarmEnvelopeToReplayArtifact } from "../executionReplayMappers"
 import { GovernedSwarmCoordinator } from "../GovernedSwarmCoordinator"
-import { classifyLockNecessity, resolveLaneLockIntent } from "../LockNecessity"
+import { classifyLockNecessity, resolveLaneLockIntent, shouldEnableParallelToolCallingForLane } from "../LockNecessity"
 import { runMergeGate } from "../MergeGate"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
 
@@ -82,6 +82,18 @@ describe("governed execution lock necessity", () => {
 
 		it("mutation mode always requires lock", () => {
 			assert.equal(classifyLockNecessity({ executionMode: "mutation" }).lockRequired, true)
+		})
+
+		it("fails closed to mutation ownership for an unknown mode", () => {
+			const intent = resolveLaneLockIntent("Inspect files", { execution_mode: "fast_and_loose" }, 0)
+			assert.equal(intent.executionMode, "mutation")
+			assert.equal(classifyLockNecessity(intent).lockRequired, true)
+		})
+
+		it("enables parallel tool calling only for non-mutating lanes when parent allows it", () => {
+			assert.equal(shouldEnableParallelToolCallingForLane("read_only", true), true)
+			assert.equal(shouldEnableParallelToolCallingForLane("mutation", true), false)
+			assert.equal(shouldEnableParallelToolCallingForLane("read_only", false), false)
 		})
 	})
 

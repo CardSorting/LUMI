@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { ensureTaskDirectoryExists } from "@core/storage/disk"
@@ -7,6 +8,33 @@ import { SUBAGENT_EXECUTIONS_DIR, SWARM_ENVELOPE_SCHEMA_VERSION } from "@shared/
 import { validateSwarmEnvelope } from "./executionValidation"
 import { computeSwarmArtifactChecksum } from "./ResumeSwarmFromArtifact"
 
+const artifactWriteQueues = new Map<string, Promise<void>>()
+
+async function atomicReplace(filePath: string, contents: string): Promise<void> {
+	const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
+	try {
+		await fs.writeFile(tempPath, contents, { encoding: "utf8", flag: "wx" })
+		await fs.rename(tempPath, filePath)
+	} catch (error) {
+		await fs.unlink(tempPath).catch(() => undefined)
+		throw error
+	}
+}
+
+/** Preserve invocation order for one swarm while allowing different swarms to persist concurrently. */
+async function persistInOrder(queueKey: string, operation: () => Promise<void>): Promise<void> {
+	const predecessor = artifactWriteQueues.get(queueKey) ?? Promise.resolve()
+	const write = predecessor.catch(() => undefined).then(operation)
+	artifactWriteQueues.set(queueKey, write)
+	try {
+		await write
+	} finally {
+		if (artifactWriteQueues.get(queueKey) === write) {
+			artifactWriteQueues.delete(queueKey)
+		}
+	}
+}
+
 async function getExecutionsDir(taskId: string): Promise<string> {
 	const taskDir = await ensureTaskDirectoryExists(taskId)
 	const executionsDir = path.join(taskDir, SUBAGENT_EXECUTIONS_DIR)
@@ -15,20 +43,30 @@ async function getExecutionsDir(taskId: string): Promise<string> {
 }
 
 export async function persistSwarmEnvelope(taskId: string, envelope: SwarmExecutionEnvelope): Promise<string> {
-	const executionsDir = await getExecutionsDir(taskId)
-	const filePath = path.join(executionsDir, `${envelope.swarmId}.json`)
-	const invariants = validateSwarmEnvelope(envelope)
+	const queueKey = `${taskId}\0${envelope.swarmId}`
+	const artifactPath = path.join(SUBAGENT_EXECUTIONS_DIR, `${envelope.swarmId}.json`)
+	const validation = validateSwarmEnvelope(envelope)
+	const declaredViolations = envelope.invariants?.violations ?? []
+	const invariants = {
+		validated: validation.validated && declaredViolations.length === 0,
+		violations: [...new Set([...declaredViolations, ...validation.violations])],
+	}
 	const payload: SwarmExecutionEnvelope = {
 		...envelope,
 		schemaVersion: SWARM_ENVELOPE_SCHEMA_VERSION,
 		invariants,
-		artifactPath: path.relative(await ensureTaskDirectoryExists(taskId), filePath),
+		artifactPath,
 	}
 	payload.checksum = computeSwarmArtifactChecksum(payload)
+	const serialized = JSON.stringify(payload, null, 2)
 
 	try {
-		await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8")
-		return payload.artifactPath
+		await persistInOrder(queueKey, async () => {
+			const executionsDir = await getExecutionsDir(taskId)
+			const filePath = path.join(executionsDir, `${envelope.swarmId}.json`)
+			await atomicReplace(filePath, serialized)
+		})
+		return artifactPath
 	} catch (error) {
 		Logger.error("[SubagentExecutionStore] Failed to persist swarm envelope:", error)
 		throw error

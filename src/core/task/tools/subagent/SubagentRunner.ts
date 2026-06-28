@@ -9,6 +9,7 @@ import type { SystemPromptContext } from "@core/prompts/system-prompt/types"
 import { StreamResponseHandler } from "@core/task/StreamResponseHandler"
 import { ModelInfo } from "@shared/api"
 import { resolveCompletionGateOptions } from "@shared/audit/auditGatePolicyLoader"
+import type { CompletionGateOptions } from "@shared/audit/auditGateReport"
 import { buildSubagentAuditContext, buildSubagentGateSignals } from "@shared/audit/auditSubagentContext"
 import {
 	DietCodeAssistantToolUseBlock,
@@ -18,6 +19,7 @@ import {
 } from "@shared/messages"
 import { Logger } from "@shared/services/Logger"
 import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
+import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
 import type { CompactionEventRecord } from "@shared/subagent/transcript"
 import { DietCodeDefaultTool, DietCodeTool } from "@shared/tools"
 import { v4 as uuidv4 } from "uuid"
@@ -42,6 +44,7 @@ import {
 import { validateSubagentCompletionGates } from "../subagentCompletionGates"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
+import { shouldEnableParallelToolCallingForLane } from "./LockNecessity"
 import { SubagentBuilder } from "./SubagentBuilder"
 import { SubagentEnvelopeBuilder } from "./SubagentEnvelopeBuilder"
 import { SubagentTranscriptRecorder } from "./SubagentTranscriptRecorder"
@@ -299,6 +302,9 @@ export class SubagentRunner {
 	private activeApiAbort?: () => void
 	private abortRequested = false
 	private recursionDepth = 0
+	private laneExecutionMode: LaneExecutionMode = "mutation"
+	private prefetchedParentContext?: string
+	private swarmGateOptions?: CompletionGateOptions
 	private activeCommandExecutions = 0
 	private abortingCommands = false
 	private streamId?: string
@@ -335,6 +341,10 @@ export class SubagentRunner {
 
 	setRecursionDepth(depth: number): void {
 		this.recursionDepth = depth
+	}
+
+	setLaneExecutionMode(mode: LaneExecutionMode): void {
+		this.laneExecutionMode = mode
 	}
 
 	async abort(): Promise<void> {
@@ -399,11 +409,15 @@ export class SubagentRunner {
 			parentExecutionId?: string
 			resumeAttemptId?: string
 			executionId?: string
+			prefetchedParentContext?: string
+			swarmGateOptions?: CompletionGateOptions
 			onTranscriptFlush?: () => Promise<void>
 		},
 		streamId?: string,
 	): Promise<SubagentRunResult> {
 		const executionId = envelopeContext.executionId || uuidv4()
+		this.prefetchedParentContext = envelopeContext.prefetchedParentContext
+		this.swarmGateOptions = envelopeContext.swarmGateOptions
 		this.onTranscriptFlush = envelopeContext.onTranscriptFlush
 		this.transcriptRecorder = new SubagentTranscriptRecorder({
 			swarmId: envelopeContext.swarmId,
@@ -455,6 +469,8 @@ export class SubagentRunner {
 		}
 
 		const state = new TaskState()
+		state.recursionDepth = this.recursionDepth
+		const subagentConfig = this.createSubagentTaskConfig(state)
 		let emptyAssistantResponseRetries = 0
 		const usageState: SubagentUsageState = {
 			currentRequest: createEmptyRequestUsageState(),
@@ -478,9 +494,11 @@ export class SubagentRunner {
 		this.onProgress = onProgress
 		onProgress({ status: "running", stats })
 
-		const gateOptions = await resolveCompletionGateOptions(this.baseConfig, this.baseConfig.cwd, {
-			lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
-		})
+		const gateOptions =
+			this.swarmGateOptions ??
+			(await resolveCompletionGateOptions(this.baseConfig, this.baseConfig.cwd, {
+				lastAdvisoryAudit: this.baseConfig.taskState.lastAdvisoryAudit,
+			}))
 		const parentCompletionFailedStage = getParentCompletionFailedStage(this.baseConfig.taskState)
 		const parentGateConfig = getSubagentGateConfig(this.baseConfig)
 		const parentGateObservability =
@@ -563,7 +581,10 @@ export class SubagentRunner {
 				browserSettings: this.baseConfig.browserSettings,
 				yoloModeToggled: false,
 				enableNativeToolCalls: nativeToolCallsRequested,
-				enableParallelToolCalling: false,
+				enableParallelToolCalling: shouldEnableParallelToolCallingForLane(
+					this.laneExecutionMode,
+					!!this.baseConfig.enableParallelToolCalling,
+				),
 				isSubagentRun: true,
 				mode: mode as "plan" | "act", // Subagents inherit the parent's mode context
 				parentMode: mode as "plan" | "act",
@@ -591,7 +612,9 @@ export class SubagentRunner {
 						completionGateOperationalState: parentGateOperationalState,
 						gateOptions,
 					})
-					const compressed = await orchestrator.getCompressedContext(parentStreamId)
+					const compressed =
+						this.prefetchedParentContext ??
+						(await orchestrator.getCompressedContext(parentStreamId).catch(() => undefined))
 					const combined = [auditContext, compressed].filter(Boolean).join("\n\n")
 					this.agent.setParentStreamContext(combined)
 				} catch (err) {
@@ -894,7 +917,7 @@ export class SubagentRunner {
 						}
 
 						const gateResult = await validateSubagentCompletionGates(
-							this.baseConfig,
+							subagentConfig,
 							completionResult,
 							typeof toolCallParams?.task_progress === "string" ? toolCallParams.task_progress : undefined,
 							typeof toolCallParams?.command === "string" ? toolCallParams.command : undefined,
@@ -946,7 +969,6 @@ export class SubagentRunner {
 					onProgress({ latestToolCall })
 					await this.recordTranscript("tool_call", { toolName, preview: latestToolCall, params: toolCallParams }, "raw")
 
-					const subagentConfig = this.createSubagentTaskConfig()
 					const handler = this.baseConfig.coordinator.getHandler(toolName)
 					let toolResult: unknown
 
@@ -1107,7 +1129,7 @@ export class SubagentRunner {
 		}
 	}
 
-	private createSubagentTaskConfig(): TaskConfig {
+	private createSubagentTaskConfig(subagentTaskState = new TaskState()): TaskConfig {
 		const baseCallbacks = this.baseConfig.callbacks
 		const { ToolExecutorCoordinator } = require("../ToolExecutorCoordinator")
 		const coordinator = new ToolExecutorCoordinator()
@@ -1121,7 +1143,6 @@ export class SubagentRunner {
 			coordinator.registerByName(tool, validator)
 		}
 
-		const subagentTaskState = new TaskState()
 		subagentTaskState.recursionDepth = this.recursionDepth
 
 		return {

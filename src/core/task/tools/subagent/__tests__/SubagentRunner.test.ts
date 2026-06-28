@@ -233,6 +233,44 @@ describe("SubagentRunner", () => {
 		assert.equal(createMessage.callCount, 2)
 	})
 
+	it("does not inherit parent focus-chain blockers at lane completion", async () => {
+		const createMessage = sinon.stub().callsFake(async function* () {
+			yield {
+				type: "tool_calls",
+				tool_call: {
+					function: {
+						id: "toolu_subagent_focus_chain_complete",
+						name: DietCodeDefaultTool.ATTEMPT,
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
+					},
+				},
+			}
+		})
+
+		const promptRegistry = PromptRegistry.getInstance()
+		sinon.stub(promptRegistry, "get").callsFake(async () => {
+			promptRegistry.nativeTools = [{ name: "attempt_completion" } as any]
+			return "system prompt"
+		})
+		sinon.stub(SubagentBuilder.prototype, "buildNativeTools").returns([{ name: "attempt_completion" }] as any)
+		sinon.stub(skills, "discoverSkills").resolves([])
+		sinon.stub(skills, "getAvailableSkills").returns([])
+		stubApiHandler(createMessage)
+		initializeHostProvider()
+
+		const config = createTaskConfig(true)
+		config.focusChainSettings = { enabled: true, remindDietcodeInterval: 6 }
+		config.taskState.currentFocusChainChecklist = "- [x] parent setup\n- [ ] parent integration"
+		const result = await new SubagentRunner(config, new SubagentBuilder(config, "subagent")).run(
+			"Complete an independent lane",
+			() => {},
+		)
+
+		assert.equal(result.status, "completed")
+		assert.equal(createMessage.callCount, 1)
+		assert.equal(config.taskState.completionAttemptCount, undefined)
+	})
+
 	it("passes prior request token totals into the next-turn compaction check", async () => {
 		const createMessage = sinon.stub()
 		createMessage.onFirstCall().callsFake(async function* () {
