@@ -29,6 +29,11 @@ const PARENT_SIGNAL_PATTERNS = {
 	suppressedViolations: "SIGNAL: PARENT_SUPPRESSED_VIOLATIONS",
 } as const
 
+/** Strip advisory wrapper so rollup accepts both legacy GATE: and ADVISORY: GATE: signals. */
+function normalizeParentGateSignal(signal: string): string {
+	return signal.replace(/^ADVISORY: (?:SIGNAL: )?/, "")
+}
+
 export const SUBAGENT_PARENT_SIGNAL_LABELS: Record<string, string> = {
 	[PARENT_SIGNAL_PATTERNS.gateBlocked]: "Parent gate blocked",
 	[PARENT_SIGNAL_PATTERNS.completionGateBlocked]: "Parent completion gate blocked",
@@ -40,43 +45,45 @@ export const SUBAGENT_PARENT_SIGNAL_LABELS: Record<string, string> = {
 }
 
 export function formatSubagentParentSignal(signal: string): string {
-	if (signal.startsWith(PARENT_GATE_SIGNAL_PREFIX)) {
-		const match = signal.match(/GATE: PARENT_BLOCKED \((\d+)\)/)
+	const normalized = normalizeParentGateSignal(signal)
+	if (normalized.startsWith(PARENT_GATE_SIGNAL_PREFIX)) {
+		const match = normalized.match(/GATE: PARENT_BLOCKED \((\d+)\)/)
 		return match ? `Parent gate blocked (${match[1]}×)` : "Parent gate blocked"
 	}
-	if (signal.startsWith("GATE: PARENT_LAST_REASON")) {
-		const match = signal.match(/GATE: PARENT_LAST_REASON \((.+)\)/)
+	if (normalized.startsWith("GATE: PARENT_LAST_REASON")) {
+		const match = normalized.match(/GATE: PARENT_LAST_REASON \((.+)\)/)
 		return match ? `Parent last gate reason: ${match[1]}` : "Parent last gate reason"
 	}
-	if (signal.startsWith("GATE: PARENT_FAILED_STAGE")) {
-		const match = signal.match(/GATE: PARENT_FAILED_STAGE \((.+)\)/)
+	if (normalized.startsWith("GATE: PARENT_FAILED_STAGE")) {
+		const match = normalized.match(/GATE: PARENT_FAILED_STAGE \((.+)\)/)
 		return match ? `Parent failed gate stage: ${match[1]}` : "Parent failed gate stage"
 	}
-	if (signal.startsWith("GATE: PARENT_PRESSURE")) {
-		const match = signal.match(/GATE: PARENT_PRESSURE \((.+)\)/)
+	if (normalized.startsWith("GATE: PARENT_PRESSURE")) {
+		const match = normalized.match(/GATE: PARENT_PRESSURE \((.+)\)/)
 		return match ? `Parent gate pressure: ${match[1]}` : "Parent gate pressure"
 	}
-	if (signal.startsWith("GATE: PARENT_ATTEMPTS")) {
-		const match = signal.match(/GATE: PARENT_ATTEMPTS \((\d+)\)/)
+	if (normalized.startsWith("GATE: PARENT_ATTEMPTS")) {
+		const match = normalized.match(/GATE: PARENT_ATTEMPTS \((\d+)\)/)
 		return match ? `Parent completion attempts: ${match[1]}` : "Parent completion attempts"
 	}
-	if (signal.startsWith("GATE: PARENT_RETRY_STATUS")) {
-		const match = signal.match(/GATE: PARENT_RETRY_STATUS \((.+)\)/)
+	if (normalized.startsWith("GATE: PARENT_RETRY_STATUS")) {
+		const match = normalized.match(/GATE: PARENT_RETRY_STATUS \((.+)\)/)
 		return match ? `Parent gate retry status: ${match[1]}` : "Parent gate retry status"
 	}
-	if (signal.startsWith("GATE: PARENT_BLOCK_HISTORY")) {
-		const match = signal.match(/GATE: PARENT_BLOCK_HISTORY \((\d+)\)/)
+	if (normalized.startsWith("GATE: PARENT_BLOCK_HISTORY")) {
+		const match = normalized.match(/GATE: PARENT_BLOCK_HISTORY \((\d+)\)/)
 		return match ? `Parent gate block history: ${match[1]} events` : "Parent gate block history"
 	}
-	if (signal.startsWith("GATE: PARENT_SESSION")) {
-		const match = signal.match(/GATE: PARENT_SESSION \((.+)\)/)
+	if (normalized.startsWith("GATE: PARENT_SESSION")) {
+		const match = normalized.match(/GATE: PARENT_SESSION \((.+)\)/)
 		return match ? `Parent gate session: ${match[1]}` : "Parent gate session"
 	}
-	return SUBAGENT_PARENT_SIGNAL_LABELS[signal] ?? signal.replace(/^SIGNAL: /, "")
+	return SUBAGENT_PARENT_SIGNAL_LABELS[normalized] ?? normalized.replace(/^SIGNAL: /, "")
 }
 
 export function isParentGateSignal(signal: string): boolean {
-	return signal.startsWith("GATE:") || signal.startsWith("SIGNAL: PARENT_") || signal.includes("PARENT_")
+	const normalized = normalizeParentGateSignal(signal)
+	return normalized.startsWith("GATE:") || normalized.startsWith("SIGNAL: PARENT_") || normalized.includes("PARENT_")
 }
 
 function parseSubagentStatusPayload(message: DietCodeMessage): DietCodeSaySubagentStatus | undefined {

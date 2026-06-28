@@ -24,6 +24,8 @@ Full architecture: [governed-subagent-execution.md](governed-subagent-execution.
 - Merge gate distinguishes mutation-without-lock (fail) from non-mutating-without-lock (pass).
 - Operator console shows **lock skipped** — not "missing lock."
 
+**Clarification (ADR-015):** *Receipts preserve truth* means **forensic** truth for merge/replay — not live authority to block continuation. See [governed-execution-authority.md](governed-execution-authority.md).
+
 ---
 
 ## ADR-002: Unified lock authority with layered backends
@@ -335,6 +337,35 @@ Partial acquire rolls back and fails closed. Fencing token assigned before durab
 - No parent parallel-tool I/O bulkhead on main thread (future work).
 
 **Failure documentation:** Block reasons, preflight stages, and throughput-vs-safety distinction — [parent-thread-execution-authority.md § What blocked throughput](parent-thread-execution-authority.md#what-blocked-throughput-before-vs-after).
+
+---
+
+## ADR-015: Coordinator owns live authority; receipts are forensic
+
+**Status:** Accepted
+
+**Context:** Governed swarms produce many observational artifacts — lane receipts, gate envelopes, audit metadata, retry markers, reconciliation traces. Agents and operators sometimes treat these as **live execution authority**, causing receipt-driven paralysis, duplicate audit recursion, and escalation loops without workspace progress. ADR-001 established receipts as durable history but did not explicitly separate forensic truth from canonical **continuation** decisions.
+
+**Decision:**
+
+- **Forensic truth:** Receipts, history JSONL, gate snapshots, and audit entries record what happened — merge, replay, operator console, post-mortems.
+- **Live authority:** Only the coordinator/runtime layer (`GovernedSwarmCoordinator`, parent `attempt_completion` cold path, `MergeGate` seal) decides whether execution may continue, merge, finalize, or invalidate **now**.
+- Subagents may observe, recommend, annotate, and challenge — not freeze siblings or the parent using receipts alone.
+- Before blocking on a receipt-shaped signal, re-evaluate current coordinator state; prefer repair/reconciliation/continuation over recursive escalation.
+- Avoid duplicate audit gates and re-verification of identical invariants across layers (aligns with ADR-014 shift-right).
+
+**Consequences:**
+
+- Operators use authoritative state procedure — not chat status alone — when receipts disagree.
+- Lane `auditDeferredToSeal` is expected observability, not lane failure.
+- Runtime heuristic: repeated validation without state change indicates governance recursion — collapse gates and restore momentum.
+
+**Non-goals:**
+
+- Receipts do not become optional — they remain required for merge and seal.
+- This does not remove intentional cold-path blockers (`attempt_completion` audit, circuit breaker, merge violations).
+
+Full prompt and operator checklist: [governed-execution-authority.md](governed-execution-authority.md).
 
 ---
 

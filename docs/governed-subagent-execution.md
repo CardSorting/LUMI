@@ -11,14 +11,17 @@ The parent task is **coordinator, reviewer, and receipt presenter** — not a me
 | [governed-execution-runbook.md](governed-execution-runbook.md) | Operators, on-call | Symptom → diagnosis → remediation |
 | [governed-execution-schema.md](governed-execution-schema.md) | Integrators | Receipt field reference (schema v3) |
 | [governed-execution-decisions.md](governed-execution-decisions.md) | Maintainers | ADR-style design decisions |
+| [governed-execution-authority.md](governed-execution-authority.md) | Builders, operators | Coordinator vs receipt authority, deadlock prevention |
 
 ---
 
 ## North-star invariants
 
-> **Locks protect mutation. Receipts preserve truth.**
+> **Locks protect mutation. Receipts preserve forensic truth. The coordinator owns live authority.**
 
 > **Private roadmap state is cheap. Workspace roadmap truth is expensive. Only the coordinator may spend it.**
+
+**Receipts vs live state:** Receipts record what happened for merge, replay, and operators ([ADR-001](governed-execution-decisions.md#adr-001-locks-protect-mutation-receipts-preserve-truth)). They are **not** independent authority to block continuation — see [governed execution authority](governed-execution-authority.md).
 
 | Concern | Mechanism | Non-goal |
 |---------|-----------|----------|

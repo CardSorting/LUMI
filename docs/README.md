@@ -211,6 +211,7 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Governed execution runbook](governed-execution-runbook.md) | Operator incident playbook, violation catalog, retry flow |
 | [Governed execution schema](governed-execution-schema.md) | Receipt schema v3 field reference |
 | [Governed execution decisions](governed-execution-decisions.md) | ADR-style design decisions |
+| [Governed execution authority](governed-execution-authority.md) | Coordinator vs receipt authority, deadlock prevention |
 | [Governance](../GOVERNANCE.md) | Maintainer process, branch protection, release policy |
 | [Changelog](../CHANGELOG.md) | User-facing release notes ([Keep a Changelog](https://keepachangelog.com/)) |
 | [Support](../.github/SUPPORT.md) | Where to get help |

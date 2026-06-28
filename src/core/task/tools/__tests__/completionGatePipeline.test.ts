@@ -147,9 +147,9 @@ describe("completionGatePipeline", () => {
 
 	it("recordAdvisoryAuditCache stores metadata for completion reuse", () => {
 		const config = configWithState(taskState)
-		const metadata = { score: 92, violations: [] } as TaskAuditMetadata
+		const metadata = { hardening_score: 92, violations: [] } as TaskAuditMetadata
 		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", metadata)
-		config.taskState.lastAdvisoryAudit!.score!.should.equal(92)
+		config.taskState.lastAdvisoryAudit!.hardening_score!.should.equal(92)
 		should.exist(config.taskState.lastAdvisoryAuditCacheKey)
 		should.exist(config.taskState.lastAdvisoryAuditCachedAt)
 	})
@@ -164,7 +164,7 @@ describe("completionGatePipeline", () => {
 			ulid: "ulid-test",
 		} as TaskConfig
 		const advisory = {
-			score: 95,
+			hardening_score: 95,
 			violations: [],
 			blockCount: 0,
 		} as TaskAuditMetadata
@@ -179,7 +179,9 @@ describe("completionGatePipeline", () => {
 
 		completionStub.called.should.be.false()
 		result.status.should.equal("passed")
-		result.auditMetadata!.score!.should.equal(95)
+		if (result.status === "passed") {
+			result.auditMetadata.hardening_score!.should.equal(95)
+		}
 	})
 
 	it("preflight registry stages align with COMPLETION_PREFLIGHT_STAGES order", () => {

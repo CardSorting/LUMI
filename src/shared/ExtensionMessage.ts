@@ -343,6 +343,8 @@ export interface SubagentStatusItem {
 	transcriptEventCount?: number
 	compactionEventCount?: number
 	compactionWarnings?: string[]
+	/** Explicit lane lifecycle state (pending | running | partial | degraded_complete | ...). */
+	laneRuntimeState?: string
 }
 
 export interface DietCodeSaySubagentStatus {

@@ -178,15 +178,17 @@ export function buildGovernedAuditIntegration(options: {
 	agents: SubagentExecutionEnvelope[]
 	receiptIntegrityValid: boolean
 	roadmapLinkage?: GovernedRoadmapLinkage
+	governanceDiagnostics?: Array<{ code: string; message: string; at: number }>
 }): GovernedAuditIntegration {
 	const { lockSkippedCount, missingLockViolations } = auditFalsePositiveLocks(options.laneReceipts, options.mergeGate)
-	const blockingPreflight = options.preflightIssues.filter((i) => i.severity !== "info")
+	// Seal-time preflight is advisory forensic evidence — never a blocking authority (ADR-015).
+	const blockingPreflight: GatePreflightReadinessIssue[] = []
 
 	return {
 		preflightIssues: options.preflightIssues.map((issue) => ({
 			stage: issue.stage,
 			message: issue.message,
-			severity: issue.severity,
+			severity: issue.severity ?? "info",
 		})),
 		perLaneCompletionAudit: summarizePerLaneCompletionAudit(options.agents),
 		mergeGateRole: MERGE_GATE_ROLE,
@@ -196,6 +198,7 @@ export function buildGovernedAuditIntegration(options: {
 		falsePositiveLockAudit: { lockSkippedCount, missingLockViolations },
 		storageBoundary: AUDIT_STORAGE_BOUNDARY,
 		roadmapCompletionAdvisory: options.roadmapLinkage?.completionAdvisory,
+		governanceDiagnostics: options.governanceDiagnostics,
 	}
 }
 

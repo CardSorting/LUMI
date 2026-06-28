@@ -9,8 +9,10 @@ import {
 	shouldBypassGuardForLaneIoTool,
 	shouldBypassGuardForParentIoTool,
 	shouldCloseBrowserBetweenTools,
+	shouldDeferLaneGuardPostExecution,
 	shouldDeferParentGuardPostExecution,
 	shouldSkipLayerInjectionForParentIoTool,
+	shouldSkipPreToolUseForLaneIoTool,
 	shouldSkipPreToolUseForParentIoTool,
 	shouldUseIoAuthorityReadFastPath,
 } from "../executionAuthority"
@@ -41,6 +43,16 @@ describe("executionAuthority", () => {
 		assert.equal(shouldDeferParentGuardPostExecution(DietCodeDefaultTool.FILE_EDIT, false), true)
 		assert.equal(shouldDeferParentGuardPostExecution(DietCodeDefaultTool.FILE_READ, false), false)
 		assert.equal(shouldDeferParentGuardPostExecution(DietCodeDefaultTool.FILE_EDIT, true), false)
+	})
+
+	it("defers lane guard post-exec for mutating lane tools", () => {
+		assert.equal(shouldDeferLaneGuardPostExecution("mutation", DietCodeDefaultTool.FILE_EDIT), true)
+		assert.equal(shouldDeferLaneGuardPostExecution("read_only", DietCodeDefaultTool.FILE_READ), false)
+	})
+
+	it("skips PreToolUse for lane I/O on non-mutating lanes", () => {
+		assert.equal(shouldSkipPreToolUseForLaneIoTool("read_only", DietCodeDefaultTool.SEARCH), true)
+		assert.equal(shouldSkipPreToolUseForLaneIoTool("mutation", DietCodeDefaultTool.SEARCH), false)
 	})
 
 	it("skips PreToolUse for parent I/O authority tools", () => {

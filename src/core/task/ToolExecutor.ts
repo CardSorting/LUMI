@@ -33,6 +33,8 @@ import {
 	shouldSkipLayerInjectionForParentIoTool,
 	shouldUseIoAuthorityReadFastPath,
 } from "./tools/executionAuthority"
+import { buildIoCoalesceKey, getIoRequestCoalescer } from "./tools/io/IoRequestCoalescer"
+import { acquireParentIoSlot } from "./tools/io/ParentIoBulkhead"
 import { RefactorHealer } from "./tools/RefactorHealer"
 import { IPartialBlockHandler, ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator"
 import { ToolValidator } from "./tools/ToolValidator"
@@ -767,8 +769,21 @@ export class ToolExecutor {
 				return
 			}
 
-			// Execute the actual tool
-			toolResult = await this.coordinator.execute(config, block)
+			// Execute the actual tool (parent I/O bulkhead + coalescing when parallel calling enabled)
+			const executeTool = async (): Promise<unknown> => this.coordinator.execute(config, block)
+			if (parentIoFastPath && config.enableParallelToolCalling) {
+				const release = await acquireParentIoSlot(true, Boolean(this.taskState.swarmRuntime))
+				try {
+					const coalesceKey = buildIoCoalesceKey(block, this.cwd)
+					toolResult = coalesceKey
+						? await getIoRequestCoalescer(this.taskId).coalesce(coalesceKey, executeTool)
+						: await executeTool()
+				} finally {
+					release()
+				}
+			} else {
+				toolResult = await executeTool()
+			}
 			toolWasExecuted = true
 
 			// Roadmap post-write: record mutation and attach validate nudge

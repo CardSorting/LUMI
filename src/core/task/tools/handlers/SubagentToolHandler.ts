@@ -17,6 +17,7 @@ import type {
 	LaneExecutionReceipt,
 	WorkLaneClaim,
 } from "@shared/subagent/governedExecution"
+import { laneStateShouldDegradeOnTimeout, mapEntryStatusToLaneState } from "@shared/subagent/laneStateMachine"
 import pTimeout from "p-timeout"
 import { v4 as uuidv4 } from "uuid"
 import { createLockAuthority } from "@/core/governance/LockAuthority"
@@ -28,6 +29,7 @@ import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import type { GatePreflightReadinessIssue } from "../completionGatePipeline"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
+import { evaluateCoordinatorFastContinuation } from "../subagent/CoordinatorExecutionAuthority"
 import {
 	buildLaneDependencyMap,
 	buildLaneRoadmapItemMap,
@@ -362,6 +364,15 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		const swarmId = resumePlan?.newSwarmId || uuidv4()
 		const swarmExecutionId = uuidv4()
 		const swarmStartedAt = Date.now()
+		config.taskState.swarmRuntime = {
+			swarmId,
+			startedAt: swarmStartedAt,
+			lanesTotal: prompts.length,
+			lanesComplete: 0,
+			lanesDegraded: 0,
+			lanesHardBlocked: 0,
+			advisoryNoiseSuppressed: 0,
+		}
 		const agentEnvelopes = new Map<string, SubagentExecutionEnvelope>()
 
 		const entries: SubagentStatusItem[] = prompts.map((prompt, index) => ({
@@ -503,6 +514,14 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 					governedReceipt:
 						governedReceiptSummary ??
 						governedCoordinator.buildLiveReceiptSummary(swarmId, swarmAdmission, laneReceipts, swarmStartedAt),
+				}
+
+				if (partial && status === "running") {
+					void pTimeout(config.callbacks.say("subagent", JSON.stringify(payload), undefined, undefined, partial), {
+						milliseconds: SUBAGENT_UI_IO_TIMEOUT_MS,
+						message: "Subagent status UI timed out.",
+					}).catch((error) => Logger.warn("[SubagentToolHandler] Non-blocking status emit failed:", error))
+					return
 				}
 
 				await pTimeout(config.callbacks.say("subagent", JSON.stringify(payload), undefined, undefined, partial), {
@@ -815,10 +834,23 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 										}
 										if (update.status === "completed") {
 											current.status = "completed"
+											if (config.taskState.swarmRuntime) {
+												config.taskState.swarmRuntime.lanesComplete++
+											}
 										}
 										if (update.status === "failed") {
 											current.status = "failed"
+											if (config.taskState.swarmRuntime) {
+												config.taskState.swarmRuntime.lanesHardBlocked++
+											}
 										}
+										current.laneRuntimeState = mapEntryStatusToLaneState({
+											entryStatus: current.status,
+											hasPartialResult: Boolean(current.result?.trim()),
+											hasHardError: current.status === "failed",
+											hasAdvisoryWarnings: (current.warnings?.length ?? 0) > 0,
+											degraded: current.warnings?.some((w) => w.startsWith("degraded_complete")),
+										})
 										if (update.result !== undefined) {
 											current.result = update.result
 										}
@@ -828,8 +860,25 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 										if (update.latestToolCall !== undefined) {
 											current.latestToolCall = update.latestToolCall
 										}
+										if (update.advisorySignals !== undefined && update.advisorySignals.length > 0) {
+											current.warnings = Array.from(
+												new Set([...(current.warnings ?? []), ...update.advisorySignals]),
+											)
+										}
+										if (update.hardSignals !== undefined && update.hardSignals.length > 0) {
+											current.criticalSignals = update.hardSignals
+										}
 										if (update.activeSignals !== undefined) {
-											current.criticalSignals = update.activeSignals
+											current.warnings = Array.from(
+												new Set([
+													...(current.warnings ?? []),
+													...update.activeSignals.filter((s) => s.startsWith("ADVISORY:")),
+												]),
+											)
+											const hard = update.activeSignals.filter((s) => !s.startsWith("ADVISORY:"))
+											if (hard.length > 0) {
+												current.criticalSignals = hard
+											}
 										}
 										if (update.stats) {
 											applyEntryStats(current, addSubagentRunStats(accumulatedStats, update.stats))
@@ -860,6 +909,25 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 								})
 							} catch (error) {
 								attemptError = new Error(errorMessage(error))
+								const timedOut = /timed out/i.test(attemptError.message)
+								if (timedOut && laneStateShouldDegradeOnTimeout(laneIntent.executionMode)) {
+									const partialResult =
+										current.result?.trim() ||
+										`[degraded] Advisory lane ${index} timed out — partial evidence preserved.`
+									current.status = "completed"
+									current.result = partialResult
+									current.warnings = [...(current.warnings ?? []), "degraded_complete: advisory lane timeout"]
+									current.laneRuntimeState = "degraded_complete"
+									governedCoordinator.getLaneDAG().markSealed(index)
+									if (config.taskState.swarmRuntime) {
+										config.taskState.swarmRuntime.lanesDegraded++
+										config.taskState.swarmRuntime.lanesComplete++
+									}
+									attemptLatestStats = accumulatedStats
+									finalResult = { status: "completed", result: partialResult, stats: accumulatedStats }
+									finalError = undefined
+									break
+								}
 								Logger.warn(
 									`[SubagentToolHandler] Subagent ${index} attempt ${attempt}/${DEFAULT_SUBAGENT_MAX_ATTEMPTS} failed: ${attemptError.message}`,
 								)
@@ -1189,9 +1257,13 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 					swarmInterrupted = true
 				}
 			}
-			// Parent I/O barrier: no progress snapshot may race or overwrite the terminal artifact.
-			await activeStatusEmitter.stop()
-			const auditPreflightIssues = await auditPreflightIssuesPromise
+			// Drain status coalescer and finish audit preflight in parallel — neither blocks seal prep.
+			const [, auditPreflightIssues] = await Promise.all([
+				activeStatusEmitter.stop().catch((error) => {
+					Logger.warn("[SubagentToolHandler] Status emitter drain failed (non-fatal):", error)
+				}),
+				auditPreflightIssuesPromise,
+			])
 
 			if (swarmInterrupted) {
 				const dagSnapshot = governedCoordinator.getLaneDAG().snapshot()
@@ -1243,13 +1315,24 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				usageCost += result.value.stats.totalCost || 0
 			})
 
-			const failures = entries.filter((entry) => entry.status === "failed").length
-			let finalSwarmStatus: SwarmExecutionEnvelope["status"] =
-				failures > 0
-					? "failed"
-					: failures === 0 && entries.some((entry) => entry.status === "failed")
-						? "failed"
-						: "completed"
+			const continuation = evaluateCoordinatorFastContinuation({
+				taskId: config.taskId,
+				hasRunningLanes: entries.some((entry) => entry.status === "running"),
+				proposedHardBlockers: entries
+					.filter(
+						(entry) => entry.status === "failed" && !entry.warnings?.some((w) => w.startsWith("degraded_complete")),
+					)
+					.map((entry) => entry.error || "lane_hard_blocked"),
+				advisorySignalCount: entries.reduce((acc, entry) => acc + (entry.warnings?.length ?? 0), 0),
+			})
+			if (continuation.diagnostics.length > 0 && config.taskState.swarmRuntime) {
+				config.taskState.swarmRuntime.advisoryNoiseSuppressed += continuation.diagnostics.length
+			}
+
+			const failures = entries.filter(
+				(entry) => entry.status === "failed" && !entry.warnings?.some((w) => w.startsWith("degraded_complete")),
+			).length
+			let finalSwarmStatus: SwarmExecutionEnvelope["status"] = failures > 0 ? "failed" : "completed"
 
 			const blackboard = config.taskState.swarmBlackboard || []
 			const summaryOverlay = buildSwarmSummaryOverlay(
@@ -1398,6 +1481,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 		} finally {
 			stopAbortWatcher?.()
 			stopAbortWatcher = undefined
+			config.taskState.swarmRuntime = undefined
 			await abortActiveRunners?.().catch((error) =>
 				Logger.warn("[SubagentToolHandler] Failed to abort active runners during cleanup:", error),
 			)

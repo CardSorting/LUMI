@@ -33,9 +33,9 @@ describe("auditSubagentContext", () => {
 			completionGateBlockCount: 2,
 			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
 		})
-		expect(signals).to.include("GATE: PARENT_BLOCKED (2)")
-		expect(signals).to.include("SIGNAL: PARENT_COMPLETION_GATE_BLOCKED")
-		expect(signals).to.include("SIGNAL: PARENT_GATE_BLOCKED")
+		expect(signals).to.include("ADVISORY: GATE: PARENT_BLOCKED (2)")
+		expect(signals).to.include("ADVISORY: SIGNAL: PARENT_COMPLETION_GATE_BLOCKED")
+		expect(signals).to.include("ADVISORY: SIGNAL: PARENT_GATE_BLOCKED")
 	})
 
 	it("returns no gate signals when gate is disabled", () => {
@@ -71,11 +71,11 @@ describe("auditSubagentContext", () => {
 			completionGateRetryStatus: "wait",
 			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
 		})
-		expect(signals).to.include("GATE: PARENT_LAST_REASON (audit_gate)")
-		expect(signals).to.include("GATE: PARENT_FAILED_STAGE (audit)")
-		expect(signals).to.include("GATE: PARENT_PRESSURE (elevated)")
-		expect(signals).to.include("GATE: PARENT_ATTEMPTS (5)")
-		expect(signals).to.include("GATE: PARENT_RETRY_STATUS (wait)")
+		expect(signals).to.include("ADVISORY: GATE: PARENT_LAST_REASON (audit_gate)")
+		expect(signals).to.include("ADVISORY: GATE: PARENT_FAILED_STAGE (audit)")
+		expect(signals).to.include("ADVISORY: GATE: PARENT_PRESSURE (elevated)")
+		expect(signals).to.include("ADVISORY: GATE: PARENT_ATTEMPTS (5)")
+		expect(signals).to.include("ADVISORY: GATE: PARENT_RETRY_STATUS (wait)")
 	})
 
 	it("emits block history signal when parent has multiple gate events", () => {
@@ -84,7 +84,7 @@ describe("auditSubagentContext", () => {
 			completionGateBlockHistoryCount: 4,
 			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
 		})
-		expect(signals).to.include("GATE: PARENT_BLOCK_HISTORY (4)")
+		expect(signals).to.include("ADVISORY: GATE: PARENT_BLOCK_HISTORY (4)")
 	})
 
 	it("emits parent operational state signal when not ready", () => {
@@ -93,7 +93,7 @@ describe("auditSubagentContext", () => {
 			completionGateOperationalState: "wait",
 			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
 		})
-		expect(signals).to.include("GATE: PARENT_STATE (wait)")
+		expect(signals).to.include("ADVISORY: GATE: PARENT_STATE (wait)")
 	})
 
 	it("includes operational state in parent audit context", () => {

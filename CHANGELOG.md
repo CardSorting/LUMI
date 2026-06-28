@@ -23,6 +23,36 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 - E2E workflow skips docs-only pull requests (path filter)
 - Removed legacy JetBrains and nightly publish automation
 
+## [2.1.6] - 2026-06-27
+
+### Added
+
+- Receipt authority refactor: coordinator-owned halt decisions, advisory receipts, governance diagnostics (ADR-015)
+- Three-tier blocker policy (hard / soft / advisory) and explicit lane state machine
+- Parent I/O bulkhead and `IoRequestCoalescer` for parallel safe reads with deduplication
+- `CoordinatorExecutionAuthority`, `loadSealReceiptContext`, soft-block retry budgets
+- Documentation: [governed execution authority](docs/governed-execution-authority.md)
+
+### Changed
+
+- Subagent parent gate signals are advisory warnings, not lane-blocking `criticalSignals`
+- Non-blocking running status emission; parallel seal drain and audit preflight
+- Advisory lane timeout degrades to `degraded_complete` instead of failing the swarm
+- Lane mutation tools defer post-guard; batched governed receipt reads at seal
+
+## [2.1.4] - 2026-06-27
+
+### Added
+
+- Parent-thread I/O execution authority (`executionAuthority.ts`) — hot/warm/cold tool path for reads and searches
+- Documentation: [parent-thread execution authority](docs/parent-thread-execution-authority.md), ADR-014, gate failure catalog
+
+### Changed
+
+- Shift-right parent gates: I/O tools skip full UniversalGuard; deferred post-guard and advisory audits
+- Subagent lane completion: sync quality preflight only; hardening audit deferred to seal barrier
+- Completion gate cache-aside (5 min TTL), progressive critical-only threshold, soft cooldown/duplicate preflight
+
 ## [2.1.3] - 2026-06-26
 
 ### Changed

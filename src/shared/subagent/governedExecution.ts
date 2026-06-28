@@ -234,6 +234,7 @@ export interface GovernedReceiptDiagnostics {
 	rebaseResults?: import("@shared/subagent/roadmapProjection").PatchRebaseResult[]
 	rejectedPatchReasons?: string[]
 	roadmapCommitStatus?: string
+	governanceWarnings?: string[]
 	missingTranscripts: string[]
 	missingToolEvidence: string[]
 	replayMismatchCauses: string[]
@@ -345,6 +346,8 @@ export interface GovernedAuditIntegration {
 	workspaceRoadmapSnapshotId?: string
 	staleProjectionWarnings?: string[]
 	roadmapCommitStatus?: string
+	/** Coordinator authority diagnostics — advisory forensic signals (ADR-015). */
+	governanceDiagnostics?: Array<{ code: string; message: string; at: number }>
 }
 
 export type GovernedCrashPhase =
@@ -617,7 +620,12 @@ export function isRetrySafe(
 		return { safe: false, reason: `Stale claims must be recovered first: ${stale.map((o) => o.resourceKey).join(", ")}` }
 	}
 	if (receipt.mergeGate.sealedSupersessionBlocked) {
-		return { safe: false, reason: "Prior sealed receipt would be superseded unsafely" }
+		const lineageLinked =
+			receipt.parentAttemptId &&
+			retryHistory?.some((entry) => entry.sealed && entry.mergePassed && entry.attemptId === receipt.parentAttemptId)
+		if (!lineageLinked) {
+			return { safe: false, reason: "Prior sealed receipt would be superseded unsafely" }
+		}
 	}
 	const priorSealed = retryHistory?.find((entry) => entry.sealed && entry.mergePassed && entry.attemptId !== receipt.attemptId)
 	if (priorSealed && receipt.laneDag.some((n) => n.state === "running")) {
@@ -691,6 +699,7 @@ export function buildReceiptDiagnostics(
 		retrySafe: retry.safe,
 		retryUnsafeReason: retry.reason,
 		authoritativeAttemptId: authoritative,
+		governanceWarnings: receipt.auditIntegration?.governanceDiagnostics?.map((d) => d.code),
 		activeResourceOwners,
 		staleResourceOwners,
 		overlappingPaths,

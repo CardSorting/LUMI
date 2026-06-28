@@ -31,51 +31,51 @@ export function buildSubagentGateSignals(input: SubagentAuditContextInput): stri
 	const signals: string[] = []
 
 	if (input.completionGateBlockCount && input.completionGateBlockCount > 0) {
-		signals.push(`GATE: PARENT_BLOCKED (${input.completionGateBlockCount})`)
+		signals.push(`ADVISORY: GATE: PARENT_BLOCKED (${input.completionGateBlockCount})`)
 	}
 
 	if (input.lastCompletionBlockReason) {
-		signals.push(`GATE: PARENT_LAST_REASON (${input.lastCompletionBlockReason})`)
+		signals.push(`ADVISORY: GATE: PARENT_LAST_REASON (${input.lastCompletionBlockReason})`)
 	}
 
 	if (input.lastCompletionFailedStage) {
-		signals.push(`GATE: PARENT_FAILED_STAGE (${input.lastCompletionFailedStage})`)
+		signals.push(`ADVISORY: GATE: PARENT_FAILED_STAGE (${input.lastCompletionFailedStage})`)
 	}
 
 	if (input.completionGatePressureLevel && input.completionGatePressureLevel !== "stable") {
-		signals.push(`GATE: PARENT_PRESSURE (${input.completionGatePressureLevel})`)
+		signals.push(`ADVISORY: GATE: PARENT_PRESSURE (${input.completionGatePressureLevel})`)
 	}
 
 	if (input.completionAttemptCount && input.completionAttemptCount > 0) {
-		signals.push(`GATE: PARENT_ATTEMPTS (${input.completionAttemptCount})`)
+		signals.push(`ADVISORY: GATE: PARENT_ATTEMPTS (${input.completionAttemptCount})`)
 	}
 
 	const retryStatus = input.completionGateRetryStatus
 	if (retryStatus && retryStatus !== "ready") {
-		signals.push(`GATE: PARENT_RETRY_STATUS (${retryStatus})`)
+		signals.push(`ADVISORY: GATE: PARENT_RETRY_STATUS (${retryStatus})`)
 	}
 
 	if (input.completionGateBlockHistoryCount && input.completionGateBlockHistoryCount > 1) {
-		signals.push(`GATE: PARENT_BLOCK_HISTORY (${input.completionGateBlockHistoryCount})`)
+		signals.push(`ADVISORY: GATE: PARENT_BLOCK_HISTORY (${input.completionGateBlockHistoryCount})`)
 	}
 
 	if (input.completionGateSessionId) {
-		signals.push(`GATE: PARENT_SESSION (${input.completionGateSessionId})`)
+		signals.push(`ADVISORY: GATE: PARENT_SESSION (${input.completionGateSessionId})`)
 	}
 
 	if (input.completionGateOperationalState && input.completionGateOperationalState !== "ready") {
-		signals.push(`GATE: PARENT_STATE (${input.completionGateOperationalState})`)
+		signals.push(`ADVISORY: GATE: PARENT_STATE (${input.completionGateOperationalState})`)
 	}
 
 	if (input.lastCompletionAudit?.gate_blocked) {
-		signals.push("SIGNAL: PARENT_COMPLETION_GATE_BLOCKED")
+		signals.push("ADVISORY: SIGNAL: PARENT_COMPLETION_GATE_BLOCKED")
 	}
 
 	const readiness = describeGateReadiness(input.lastCompletionAudit, input.gateOptions)
 	if (readiness.level === "blocked") {
-		signals.push("SIGNAL: PARENT_GATE_BLOCKED")
+		signals.push("ADVISORY: SIGNAL: PARENT_GATE_BLOCKED")
 	} else if (readiness.level === "warning") {
-		signals.push("SIGNAL: PARENT_GATE_MARGINAL")
+		signals.push("ADVISORY: SIGNAL: PARENT_GATE_MARGINAL")
 	}
 
 	const { critical } = partitionViolationsBySeverity(input.lastCompletionAudit?.violations)

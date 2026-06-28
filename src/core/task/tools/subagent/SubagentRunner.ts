@@ -18,6 +18,7 @@ import {
 	DietCodeUserContent,
 } from "@shared/messages"
 import { Logger } from "@shared/services/Logger"
+import type { LaneAuthorityState } from "@shared/subagent/blockerPolicy"
 import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
 import type { CompactionEventRecord } from "@shared/subagent/transcript"
@@ -41,10 +42,15 @@ import {
 	getCompletionGateRetryPolicy,
 	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
-import { shouldBypassGuardForLaneIoTool, shouldUseIoAuthorityReadFastPath } from "../executionAuthority"
+import {
+	shouldBypassGuardForLaneIoTool,
+	shouldDeferLaneGuardPostExecution,
+	shouldUseIoAuthorityReadFastPath,
+} from "../executionAuthority"
 import { validateSubagentCompletionGates } from "../subagentCompletionGates"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
+import { resolveContinuationFromParentSignals } from "./CoordinatorExecutionAuthority"
 import { shouldEnableParallelToolCallingForLane } from "./LockNecessity"
 import { SubagentBuilder } from "./SubagentBuilder"
 import { SubagentEnvelopeBuilder } from "./SubagentEnvelopeBuilder"
@@ -93,7 +99,11 @@ interface SubagentProgressUpdate {
 	status?: "running" | "completed" | "failed"
 	result?: string
 	error?: string
+	/** @deprecated Use advisorySignals — parent gate context is never lane-blocking authority. */
 	activeSignals?: string[]
+	advisorySignals?: string[]
+	hardSignals?: string[]
+	authorityState?: LaneAuthorityState
 }
 
 interface SubagentRunStats {
@@ -531,9 +541,15 @@ export class SubagentRunner {
 			completionGateOperationalState: parentGateOperationalState,
 			gateOptions,
 		})
-		if (parentGateSignals.length > 0) {
-			this.activeSignals = parentGateSignals
-			onProgress({ activeSignals: parentGateSignals })
+		const hardSignals = parentGateSignals.filter((s) => s.startsWith("SIGNAL: PARENT_CRITICAL"))
+		const { advisorySignals } = resolveContinuationFromParentSignals(parentGateSignals)
+		if (advisorySignals.length > 0 || hardSignals.length > 0) {
+			this.activeSignals = [...advisorySignals, ...hardSignals]
+			onProgress({
+				advisorySignals,
+				hardSignals,
+				authorityState: "executing",
+			})
 		}
 
 		try {
@@ -1013,7 +1029,16 @@ export class SubagentRunner {
 										)
 									} else {
 										toolResult = await handler.execute(subagentConfig, toolCallBlock)
-										await guard.guardPostExecution(toolCallBlock, toolResult)
+										const runLanePostGuard = async () => {
+											await guard.guardPostExecution(toolCallBlock, toolResult)
+										}
+										if (shouldDeferLaneGuardPostExecution(this.laneExecutionMode, toolName)) {
+											void runLanePostGuard().catch((error) => {
+												Logger.warn("[SubagentRunner] Deferred lane guard post-execution failed:", error)
+											})
+										} else {
+											await runLanePostGuard()
+										}
 
 										// V227: Substrate Read Auditing for Swarms
 										if (

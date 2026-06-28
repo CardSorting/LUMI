@@ -57,5 +57,12 @@ export async function getRulesSection(variant: PromptVariant, context: SystemPro
 		? `\n- SOVEREIGN KNOWLEDGE LEDGER: Return ledger-ready evidence for your assigned scope. Write directly to \`.wiki/\` only when your lane explicitly owns documentation and was launched with mutation/write-set authority; otherwise leave shared-ledger synthesis to the parent to avoid cross-lane conflicts. Do NOT attempt to run \`run_finalization\` (it is unavailable to subagents). When done, call \`attempt_completion\` to complete your task.`
 		: `\n- SOVEREIGN KNOWLEDGE LEDGER: Maintain the project's Knowledge Ledger (SKL) in the \`.wiki/\` directory as a granular, multi-file breakdown (index.md, changelog.md, etc.). Direct \`.wiki/\` writes are authorized only during \`run_finalization\` (same-session finalization lane) or subagent execution — not via ordinary file tools. After engineering verification, call \`run_finalization\` to update documentation and stamp the ledger, then \`run_finalization seal=true\` to seal the receipt.`
 
-	return resolved + WIKI_RULES
+	const GOVERNED_AUTHORITY_RULES =
+		context.subagentsEnabled === true
+			? isSubagent
+				? `\n- GOVERNED EXECUTION AUTHORITY: Lane receipts and gate envelopes are forensic history for the parent seal barrier — not permission to freeze sibling lanes or override coordinator decisions.`
+				: `\n- GOVERNED EXECUTION AUTHORITY: Receipts, gate snapshots, and audit traces record history — they do not alone authorize halting the swarm. Only you (parent coordinator) decide merge, seal, and continuation. Do not stop delegated work solely because a lane receipt or stale audit suggests blockage; re-check current state and prefer repair/continuation over recursive escalation. Progress is evidence; repeated validation without state change is failure.`
+			: ""
+
+	return resolved + WIKI_RULES + GOVERNED_AUTHORITY_RULES
 }

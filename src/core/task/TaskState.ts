@@ -112,6 +112,17 @@ export class TaskState {
 	// Cross-Agent Intelligence (Blackboard)
 	public swarmBlackboard: string[] = []
 	public sovereignAuditSynthesis?: string
+	/** Active governed swarm runtime — parent may continue safe I/O while lanes execute. */
+	swarmRuntime?: {
+		swarmId: string
+		startedAt: number
+		lanesTotal: number
+		lanesComplete: number
+		lanesDegraded: number
+		lanesHardBlocked: number
+		parentIdleSince?: number
+		advisoryNoiseSuppressed: number
+	}
 
 	// Agent ergonomics: intent routing + completion audit state
 	preAuditedIntent?: string
@@ -157,6 +168,8 @@ export class TaskState {
 	preflightReadinessHintEmitted?: boolean
 	/** Correlation ID for the current completion attempt cycle — tracing across gate blocks. */
 	completionGateSessionId?: string
+	/** Coordinator authority diagnostics from governance paralysis / stale receipt detection. */
+	governanceDiagnostics?: import("@shared/subagent/coordinatorAuthority").GovernanceDiagnosticEvent[]
 	/** Engineering verification latched — finalization lane may proceed without re-audit. */
 	engineeringVerifiedAt?: number
 	engineeringVerifiedCheckpointHash?: string

@@ -68,6 +68,7 @@ export class FluidPolicyEngine {
 	private optimizer: IntegrityOptimizer
 	private anomalies: AnomalyRegistry
 	private buildAlarmActive = false
+	private isChecking = false
 	private alarmViolations: string[] = []
 	private stateRestored = false // V150: Immortality tracking
 	private lastBuildHealth = 100

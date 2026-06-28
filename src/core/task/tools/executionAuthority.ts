@@ -64,12 +64,22 @@ export function shouldSkipPreToolUseForParentIoTool(toolName: string, isSubagent
 	return !isSubagentExecution && isIoAuthorityTool(toolName)
 }
 
+/** Lane I/O on non-mutating lanes — skip PreToolUse hook latency (mirrors parent hot path). */
+export function shouldSkipPreToolUseForLaneIoTool(mode: LaneExecutionMode, toolName: string): boolean {
+	return shouldBypassGuardForLaneIoTool(mode, toolName)
+}
+
 /**
  * Shift-right guard post-exec on parent act-mode — GC/merkle/snapshot run after tool result is pushed.
  * Mirrors async observability patterns (OpenTelemetry export, CI post-merge checks).
  */
 export function shouldDeferParentGuardPostExecution(toolName: string, isSubagentExecution: boolean): boolean {
 	return !isSubagentExecution && !isIoAuthorityTool(toolName)
+}
+
+/** Lane mutation tools defer post-guard after result push — same shift-right pattern as parent. */
+export function shouldDeferLaneGuardPostExecution(mode: LaneExecutionMode, toolName: string): boolean {
+	return !shouldBypassGuardForLaneIoTool(mode, toolName)
 }
 
 /** Reuse warm UniversalGuard spider substrate — avoids loadRegistry rebuild on planning tools. */

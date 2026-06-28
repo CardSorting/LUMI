@@ -576,5 +576,6 @@ TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha \
 - **Writes still pass UniversalGuard once** in ToolExecutor; post-guard work is shift-right.
 - **Audits during work are advisory and async**; only `attempt_completion` can hard-block on audit score.
 - **Subagent read lanes** share the same I/O authority model with bulkhead fairness when mutation lanes compete for pool slots.
+- **Receipts are forensic, not live authority** — coordinator owns continuation; see [governed execution authority](governed-execution-authority.md).
 - **When completion fails**, read the `Completion rejected:` or gate block message — each maps to a `CompletionPreflightReason` and remediation playbook (`getCompletionGatePlaybookSteps`).
 - **After 10 gate blocks**, `attempt_completion` is forbidden; use `run_finalization` in the same session when engineering is already verified ([completion gate lifecycle](completion-gate-lifecycle-migration.md)).

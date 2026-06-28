@@ -13,7 +13,7 @@ SRE-style playbook for governed swarm receipts: triage incidents, interpret viol
 
 ## On-call quick reference
 
-**North-star:** Locks protect mutation. Receipts preserve truth.
+**North-star:** Locks protect mutation. Receipts preserve forensic truth. The coordinator owns live authority — [governed execution authority](governed-execution-authority.md).
 
 **Roadmap:** Private projection state is cheap. Workspace roadmap truth is expensive. Only the coordinator may spend it.
 

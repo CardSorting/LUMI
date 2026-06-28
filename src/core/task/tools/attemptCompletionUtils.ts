@@ -20,6 +20,11 @@ import { DietCodeDefaultTool } from "@shared/tools"
 import { AUTO_GOVERNANCE } from "@/services/roadmap/RoadmapAutoGovernance"
 import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
 import { parseFocusChainListCounts } from "../focus-chain/utils"
+import {
+	getGovernanceParalysisTracker,
+	hashWorkspaceFingerprint,
+	mergeGovernanceDiagnostics,
+} from "./subagent/CoordinatorExecutionAuthority"
 import type { TaskConfig } from "./types/TaskConfig"
 import type { ToolResponse } from "./types/ToolContracts"
 
@@ -1558,7 +1563,23 @@ export function recordCompletionGateBlockEvent(
 		recordBlockedCompletionResultFingerprint(config, options.result, options.checkpointHash)
 	}
 	recordCompletionBlockReason(config, reason)
+	appendGovernanceParalysisDiagnostics(config, reason, options?.checkpointHash)
 	return blockCount
+}
+
+function appendGovernanceParalysisDiagnostics(
+	config: TaskConfig,
+	reason: CompletionPreflightReason,
+	checkpointHash?: string,
+): void {
+	const tracker = getGovernanceParalysisTracker(config.taskId)
+	const fingerprint = checkpointHash ? hashWorkspaceFingerprint(checkpointHash) : undefined
+	const events = tracker.record(`completion_gate:${reason}`, fingerprint)
+	if (events.length === 0) {
+		return
+	}
+	const existing = config.taskState.governanceDiagnostics ?? []
+	config.taskState.governanceDiagnostics = mergeGovernanceDiagnostics(existing, events)
 }
 
 export function markCompletionGatesPassed(config: TaskConfig): void {
@@ -1566,6 +1587,7 @@ export function markCompletionGatesPassed(config: TaskConfig): void {
 	clearCompletionGateObservabilityState(config)
 	clearBlockedCompletionResultFingerprint(config)
 	config.taskState.lastGateBlockCheckpointHash = undefined
+	config.taskState.governanceDiagnostics = undefined
 }
 
 /** Reset completion attempt state after a successful finish (next completion gets fresh double-check + gate budget). */

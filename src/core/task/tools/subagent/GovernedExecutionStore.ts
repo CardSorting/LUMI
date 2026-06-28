@@ -50,7 +50,11 @@ function shouldUpdateLatestPointer(existing: GovernedSwarmReceipt | null, incomi
 	return true
 }
 
-export async function persistGovernedReceipt(taskId: string, receipt: GovernedSwarmReceipt): Promise<string> {
+export async function persistGovernedReceipt(
+	taskId: string,
+	receipt: GovernedSwarmReceipt,
+	options?: { existingLatest?: GovernedSwarmReceipt | null },
+): Promise<string> {
 	const taskDir = await ensureTaskDirectoryExists(taskId)
 	const executionsDir = path.join(taskDir, SUBAGENT_EXECUTIONS_DIR)
 	await fs.mkdir(executionsDir, { recursive: true })
@@ -71,7 +75,8 @@ export async function persistGovernedReceipt(taskId: string, receipt: GovernedSw
 
 	try {
 		await fs.writeFile(attemptPath, JSON.stringify(payload, null, 2), "utf8")
-		const existingLatest = await loadGovernedReceipt(taskId, receipt.swarmId)
+		const existingLatest =
+			options?.existingLatest !== undefined ? options.existingLatest : await loadGovernedReceipt(taskId, receipt.swarmId)
 		if (shouldUpdateLatestPointer(existingLatest, payload)) {
 			await fs.writeFile(latestPath, JSON.stringify(payload, null, 2), "utf8")
 		}
@@ -129,12 +134,31 @@ export async function listGovernedReceiptHistory(taskId: string, swarmId: string
 }
 
 export async function loadAuthoritativeGovernedReceipt(taskId: string, swarmId: string): Promise<GovernedSwarmReceipt | null> {
+	const ctx = await loadSealReceiptContext(taskId, swarmId)
+	return ctx.authoritative ?? ctx.latestPointer
+}
+
+export interface SealReceiptContext {
+	history: GovernedRetryHistoryEntry[]
+	latestPointer: GovernedSwarmReceipt | null
+	authoritative: GovernedSwarmReceipt | null
+}
+
+/** Single history read + parallel receipt loads — avoids duplicate filesystem scans at seal. */
+export async function loadSealReceiptContext(taskId: string, swarmId: string): Promise<SealReceiptContext> {
 	const history = await listGovernedReceiptHistory(taskId, swarmId)
-	const authoritative = [...history].reverse().find((entry) => entry.sealed && entry.mergePassed)
-	if (authoritative) {
-		return loadGovernedReceiptAttempt(taskId, swarmId, authoritative.attemptId)
-	}
-	return loadGovernedReceipt(taskId, swarmId)
+	const authoritativeEntry = [...history].reverse().find((entry) => entry.sealed && entry.mergePassed)
+
+	const latestPromise = loadGovernedReceipt(taskId, swarmId)
+	const authoritativePromise = authoritativeEntry
+		? loadGovernedReceiptAttempt(taskId, swarmId, authoritativeEntry.attemptId)
+		: Promise.resolve(null)
+
+	const [latestPointer, authoritativeFromHistory] = await Promise.all([latestPromise, authoritativePromise])
+	const authoritative =
+		authoritativeFromHistory ?? (latestPointer?.sealed && latestPointer.mergeGate.passed ? latestPointer : null)
+
+	return { history, latestPointer, authoritative }
 }
 
 export async function loadGovernedReceipt(taskId: string, swarmId: string): Promise<GovernedSwarmReceipt | null> {
