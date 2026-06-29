@@ -1,3 +1,0 @@
-[submodule "evals/cline-bench"]
-	path = evals/cline-bench
-	url = https://github.com/dietcode/dietcode-bench.git
