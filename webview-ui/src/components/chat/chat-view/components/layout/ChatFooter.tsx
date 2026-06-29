@@ -42,7 +42,7 @@ export const ChatFooter = ({
 	}
 
 	return (
-		<footer className="bg-background border-t border-border/20 shrink-0">
+		<footer className="bg-background border-t border-border/40 shadow-[0_-8px_24px_rgba(0,0,0,0.035)] shrink-0">
 			{!task && !isNewUser && <SuggestedTasks compact />}
 			{task && scrollBehavior.showScrollToBottom && (
 				<ScrollToBottomBar
@@ -52,8 +52,8 @@ export const ChatFooter = ({
 					}}
 				/>
 			)}
-			<AutoApproveBar />
 			<ActionButtons chatState={chatState} messageHandlers={messageHandlers} messages={messages} mode={mode} task={task} />
+			<AutoApproveBar />
 			<InputSection
 				chatState={chatState}
 				messageHandlers={messageHandlers}

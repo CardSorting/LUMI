@@ -1,21 +1,17 @@
-import { ArrowLeft, ChevronDown } from "lucide-react"
+import { ArrowLeft, MoreHorizontal } from "lucide-react"
 import { useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { CHAT_NAV_BY_ID, CHAT_TOOLBAR_ITEMS, type ChatNavItemId } from "./chatNavConfig"
 
 interface ChatToolbarProps {
 	hasActiveConversation?: boolean
-	/** Truncated task prompt — tap to expand/collapse task details. */
 	conversationTitle?: string
 }
 
-/**
- * Compact toolbar for narrow VS Code sidebars — icon buttons only, no overflow menu.
- */
+/** Compact workspace navigation. Secondary destinations live in a familiar overflow menu. */
 export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }: ChatToolbarProps) => {
 	const {
 		navigateToHistory,
@@ -28,13 +24,8 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }
 		showMcp,
 		showSettings,
 		showAccount,
-		expandTaskHeader,
 		setExpandTaskHeader,
 	} = useExtensionState()
-
-	const toggleTaskDetails = useCallback(() => {
-		setExpandTaskHeader(!expandTaskHeader)
-	}, [expandTaskHeader, setExpandTaskHeader])
 
 	const activePanel = useMemo((): ChatNavItemId | null => {
 		if (showHistory) return "history"
@@ -60,11 +51,8 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }
 					break
 				case "history":
 					collapseTaskDetails()
-					if (showHistory) {
-						hideHistory()
-					} else {
-						navigateToHistory()
-					}
+					if (showHistory) hideHistory()
+					else navigateToHistory()
 					break
 				case "tools":
 					collapseTaskDetails()
@@ -84,102 +72,99 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }
 			}
 		},
 		[
+			collapseTaskDetails,
 			hideHistory,
 			navigateToAccount,
 			navigateToChat,
 			navigateToHistory,
 			navigateToMcp,
 			navigateToSettings,
-			collapseTaskDetails,
 			showHistory,
 		],
 	)
 
 	const newChatItem = CHAT_NAV_BY_ID.newChat
+	const historyItem = CHAT_NAV_BY_ID.history
 	const centerLabel = showHistory ? "Past chats" : conversationTitle?.trim() || "Chat"
+	const overflowItems = CHAT_TOOLBAR_ITEMS.filter((item) => item.id !== "history")
 
 	return (
-		<div className="flex-none border-b border-border/30 bg-background z-10">
-			<div className="flex items-center gap-1 px-2 h-9" id="lumi-chat-toolbar">
+		<header className="z-10 flex-none border-b border-border/40 bg-background">
+			<div className="flex h-11 items-center gap-2 px-3" id="lumi-chat-toolbar">
 				{showHistory ? (
 					<Button
 						aria-label="Back to chat"
-						className="h-7 w-7 shrink-0 rounded-md"
+						className="h-8 w-8 shrink-0 rounded-md"
 						data-testid="chat-nav-back"
 						onClick={hideHistory}
 						size="icon"
 						title="Back to chat"
 						variant="icon">
-						<ArrowLeft aria-hidden className="size-4" strokeWidth={2} />
+						<ArrowLeft aria-hidden className="size-4" strokeWidth={1.75} />
 					</Button>
 				) : (
 					<Button
 						aria-label={newChatItem.label}
-						className="h-7 w-7 shrink-0 rounded-md"
+						className="h-8 w-8 shrink-0 rounded-md"
 						data-testid="chat-nav-new"
 						onClick={() => handleNavigate("newChat")}
 						size="icon"
 						title={newChatItem.tooltip}
 						variant="icon">
-						<Icon className="stroke-[1.75] [svg]:size-4" name={newChatItem.icon} size={16} />
+						<Icon name={newChatItem.icon} size={16} />
 					</Button>
 				)}
 
-				<div className="flex-1 min-w-0 px-0.5 flex items-center gap-1">
-					{hasActiveConversation && conversationTitle && !showHistory ? (
-						<button
-							aria-expanded={expandTaskHeader}
-							className={cn(
-								"flex-1 min-w-0 flex items-center gap-0.5 text-left",
-								"bg-transparent border-0 cursor-pointer p-0",
-								"hover:[&>span]:underline",
-								"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm",
-							)}
-							onClick={toggleTaskDetails}
-							title={expandTaskHeader ? "Hide task details" : `${centerLabel} — show details`}
-							type="button">
-							{expandTaskHeader ? (
-								<ChevronDown aria-hidden className="size-3 shrink-0 text-muted-foreground" strokeWidth={2} />
-							) : null}
-							<span className="text-[11px] truncate m-0 leading-none font-medium text-foreground">
-								{centerLabel}
-							</span>
-						</button>
-					) : (
-						<p
-							className={cn(
-								"flex-1 text-[11px] truncate m-0 leading-none font-medium",
-								showHistory || conversationTitle ? "text-foreground" : "text-muted-foreground",
-							)}
-							title={centerLabel}>
-							{centerLabel}
-						</p>
-					)}
+				<div className="min-w-0 flex-1">
+					<p className="m-0 truncate text-[11px] font-semibold leading-none text-foreground" title={centerLabel}>
+						{centerLabel}
+					</p>
+					{hasActiveConversation && !showHistory ? (
+						<p className="m-0 mt-1 text-[9px] leading-none text-description/70">Governed execution</p>
+					) : null}
 				</div>
 
-				<nav aria-label="Chat navigation" className="flex items-center gap-0.5 shrink-0">
-					{CHAT_TOOLBAR_ITEMS.map((item) => {
-						const isActive = activePanel === item.id
-						return (
-							<Button
-								aria-current={isActive ? "page" : undefined}
-								aria-label={item.label}
-								className={cn(
-									"h-7 w-7 rounded-md",
-									isActive && "bg-accent/20 text-foreground ring-1 ring-border/50",
-								)}
-								data-testid={`chat-nav-${item.id}`}
-								key={item.id}
-								onClick={() => handleNavigate(item.id)}
-								size="icon"
-								title={item.tooltip}
-								variant="icon">
-								<Icon className="stroke-[1.5] [svg]:size-4" name={item.icon} size={16} />
-							</Button>
-						)
-					})}
+				<nav aria-label="Workspace navigation" className="flex shrink-0 items-center gap-1">
+					{!showHistory ? (
+						<Button
+							aria-current={activePanel === "history" ? "page" : undefined}
+							aria-label={historyItem.label}
+							className="h-8 w-8 rounded-md"
+							data-testid="chat-nav-history"
+							onClick={() => handleNavigate("history")}
+							size="icon"
+							title={historyItem.tooltip}
+							variant="icon">
+							<Icon name={historyItem.icon} size={16} />
+						</Button>
+					) : null}
+
+					<details className="lumi-details-menu group relative">
+						<summary
+							aria-label="More navigation"
+							className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-foreground transition-colors hover:bg-toolbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							title="More navigation">
+							<MoreHorizontal aria-hidden className="size-4" strokeWidth={1.75} />
+						</summary>
+						<div className="absolute right-0 top-9 z-50 min-w-44 rounded-lg border border-menu-border bg-menu p-1.5 text-menu-foreground shadow-lg">
+							{overflowItems.map((item) => (
+								<Button
+									aria-current={activePanel === item.id ? "page" : undefined}
+									aria-label={item.label}
+									className="flex h-8 w-full justify-start gap-2 rounded-md px-2 text-[11px] hover:bg-list-hover"
+									data-testid={`chat-nav-${item.id}`}
+									key={item.id}
+									onClick={() => handleNavigate(item.id)}
+									title={item.tooltip}
+									variant="ghost">
+									<Icon name={item.icon} size={16} />
+									<span>{item.label}</span>
+								</Button>
+							))}
+						</div>
+					</details>
 				</nav>
 			</div>
-		</div>
+		</header>
 	)
 }

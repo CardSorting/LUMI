@@ -1,4 +1,4 @@
-textarea:focus {
+textarea:not(.chat-input-textarea):focus {
 	outline: 1.5px solid var(--vscode-focusBorder, #007fd4);
 }
 
@@ -167,6 +167,23 @@ vscode-dropdown::part(listbox) {
 	font-size: var(--vscode-editor-font-size);
 	line-height: 1.5;
 	padding: 0;
+}
+
+.chat-input-textarea:disabled {
+	cursor: not-allowed;
+	opacity: 0.62;
+}
+
+[data-composer-state="steering"] .chat-input-shell {
+	border-color: color-mix(in srgb, var(--vscode-focusBorder) 28%, var(--vscode-input-border));
+}
+
+[data-composer-state="recovering"] .chat-input-shell {
+	border-color: color-mix(in srgb, var(--vscode-focusBorder) 35%, var(--vscode-input-border));
+}
+
+[data-composer-state="approval"] .chat-input-shell {
+	border-color: color-mix(in srgb, var(--vscode-charts-yellow) 25%, var(--vscode-input-border));
 }
 
 .chat-input-shell:focus-within {

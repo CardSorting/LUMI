@@ -76,8 +76,6 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		currentTaskItem,
 		showHistory,
 		hideHistory,
-		expandTaskHeader,
-		checkpointManagerErrorMessage,
 	} = useExtensionState()
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see LUMI.abort)
@@ -410,8 +408,6 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		return singleLine.length > 36 ? `${singleLine.slice(0, 36)}…` : singleLine
 	}, [task?.text])
 
-	const showTaskSection = expandTaskHeader || Boolean(checkpointManagerErrorMessage)
-
 	return (
 		<ChatLayout isHidden={isHidden} isNightDesk={isNightDesk} serenityLevel={serenityLevel}>
 			<div aria-atomic="true" aria-live="polite" className="sr-only">
@@ -423,32 +419,30 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					<InlineHistoryPanel onClose={hideHistory} />
 				) : task ? (
 					<div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-						{showTaskSection ? (
-							<div className={expandTaskHeader ? "shrink-0 sticky top-0 z-[5] bg-background" : "shrink-0"}>
-								<TaskSection
-									apiMetrics={apiMetrics}
-									auditHealth={auditHealth}
-									auditSnapshots={auditSnapshots}
-									auditTrend={auditTrend}
-									checklistSummary={checklistSummary}
-									gateLifecycleSnapshot={gateLifecycleSnapshot}
-									lastApiReqTotalTokens={lastApiReqTotalTokens}
-									lastProgressMessageText={lastProgressMessageText}
-									latestAuditMetadata={latestAuditMetadata}
-									messageHandlers={messageHandlers}
-									onScrollToAuditMessage={handleScrollToAuditMessage}
-									onScrollToLatestAdvisory={handleScrollToLatestAdvisory}
-									onScrollToLatestGateBlock={handleScrollToLatestGateBlock}
-									selectedModelInfo={{
-										supportsPromptCache: selectedModelInfo.supportsPromptCache,
-										supportsImages: selectedModelInfo.supportsImages || false,
-									}}
-									showFocusChainPlaceholder={showFocusChainPlaceholder}
-									subagentAuditSummary={subagentAuditSummary}
-									task={task}
-								/>
-							</div>
-						) : null}
+						<div className="shrink-0 z-[5] bg-background">
+							<TaskSection
+								apiMetrics={apiMetrics}
+								auditHealth={auditHealth}
+								auditSnapshots={auditSnapshots}
+								auditTrend={auditTrend}
+								checklistSummary={checklistSummary}
+								gateLifecycleSnapshot={gateLifecycleSnapshot}
+								lastApiReqTotalTokens={lastApiReqTotalTokens}
+								lastProgressMessageText={lastProgressMessageText}
+								latestAuditMetadata={latestAuditMetadata}
+								messageHandlers={messageHandlers}
+								onScrollToAuditMessage={handleScrollToAuditMessage}
+								onScrollToLatestAdvisory={handleScrollToLatestAdvisory}
+								onScrollToLatestGateBlock={handleScrollToLatestGateBlock}
+								selectedModelInfo={{
+									supportsPromptCache: selectedModelInfo.supportsPromptCache,
+									supportsImages: selectedModelInfo.supportsImages || false,
+								}}
+								showFocusChainPlaceholder={showFocusChainPlaceholder}
+								subagentAuditSummary={subagentAuditSummary}
+								task={task}
+							/>
+						</div>
 						<MessagesArea
 							chatState={chatState}
 							groupedMessages={groupedMessages}

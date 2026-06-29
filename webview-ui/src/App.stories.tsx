@@ -566,6 +566,53 @@ export const ToolSave: Story = {
 	},
 }
 
+export const FileDeleteApproval: Story = {
+	decorators: [
+		createStoryDecorator({
+			dietcodeMessages: [
+				createMessage(5, "say", "task", "Remove the deprecated authentication adapter"),
+				createMessage(4.7, "say", "text", "The old adapter is no longer referenced. I can remove it."),
+				createAskMessage("tool", JSON.stringify({ tool: "fileDeleted", path: "src/auth/legacy-adapter.ts" })),
+			],
+			enableCheckpointsSetting: true,
+		}),
+	],
+	parameters: {
+		docs: {
+			description: {
+				story: "High-risk file deletion with safe-action-first hierarchy and explicit reversibility language.",
+			},
+		},
+	},
+}
+
+export const CancelledExecution: Story = {
+	decorators: [
+		createStoryDecorator({
+			dietcodeMessages: [
+				createMessage(5, "say", "task", "Refactor the authentication flow"),
+				createMessage(
+					0.2,
+					"say",
+					"api_req_started",
+					JSON.stringify({ request: "Refactor request", cancelReason: "user_cancelled" }),
+				),
+			],
+		}),
+	],
+}
+
+export const RecoveringExecution: Story = {
+	decorators: [
+		createStoryDecorator({
+			dietcodeMessages: [
+				createMessage(5, "say", "task", "Repair the failing build"),
+				createMessage(0.2, "say", "api_req_retried", "Retrying with preserved workspace state"),
+			],
+		}),
+	],
+}
+
 // Quick story generators for common patterns
 const quickStory = (
 	name: string,

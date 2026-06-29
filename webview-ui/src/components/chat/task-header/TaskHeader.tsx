@@ -8,11 +8,13 @@ import { StringArrayRequest } from "@shared/proto/dietcode/common"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
+import { useIsCompact, useIsUltraCompact } from "@/context/DensityContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { TaskServiceClient } from "@/services/grpc-client"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import ExpandHandle from "../ExpandHandle"
+import { ExecutionStatusHeader } from "../execution-status/ExecutionStatusHeader"
 import OpenDiskConversationHistoryButton from "./buttons/OpenDiskConversationHistoryButton"
 import { CheckpointError } from "./CheckpointError"
 import ContextWindow from "./ContextWindow"
@@ -79,11 +81,14 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		navigateToSettings,
 		mode,
 		expandTaskHeader: isTaskExpanded,
+		setExpandTaskHeader,
 		environment,
+		dietcodeMessages,
 	} = useExtensionState()
 
 	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
 	const [isTextOverflowing, setIsTextOverflowing] = useState(false)
+	const [deleteConfirmationVisible, setDeleteConfirmationVisible] = useState(false)
 	const highlightedTextRef = React.useRef<HTMLDivElement>(null)
 
 	const highlightedText = useMemo(() => highlightText(task.text, false), [task.text])
@@ -93,6 +98,8 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	}, [navigateToSettings])
 
 	const environmentBorderColor = getEnvironmentColor(environment, "border")
+	const isCompact = useIsCompact()
+	const isUltraCompact = useIsUltraCompact()
 
 	// Check if text overflows the container (i.e., needs clamping)
 	useLayoutEffect(() => {
@@ -134,27 +141,46 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	const handleDeleteTask = useCallback(() => {
 		if (currentTaskItem?.id) {
 			void TaskServiceClient.deleteTasksWithIds(StringArrayRequest.create({ value: [currentTaskItem.id] }))
+			setDeleteConfirmationVisible(false)
 		}
 	}, [currentTaskItem?.id])
 
 	return (
 		<div className="flex flex-col min-h-0">
-			<CheckpointError
-				checkpointManagerErrorMessage={checkpointManagerErrorMessage}
-				handleCheckpointSettingsClick={handleCheckpointSettingsClick}
-			/>
+			<div className={cn("pt-3 pb-2", isCompact ? "px-2.5" : "px-3")}>
+				<ExecutionStatusHeader
+					auditHealth={auditHealth}
+					auditMetadata={latestAuditMetadata}
+					checkpointError={checkpointManagerErrorMessage}
+					gateLifecycle={gateLifecycleSnapshot}
+					isDetailsOpen={isTaskExpanded}
+					messages={dietcodeMessages}
+					onReviewBlock={onScrollToLatestGateBlock}
+					onToggleDetails={() => setExpandTaskHeader(!isTaskExpanded)}
+				/>
+			</div>
 
 			{isTaskExpanded && (
 				<div
-					className="mx-1.5 mb-1 rounded-sm border border-border/30 bg-(--vscode-toolbar-hoverBackground)/50 overflow-hidden flex flex-col max-h-[32vh]"
+					className={cn(
+						"mx-3 mb-2 rounded-lg border border-border/40 bg-(--vscode-toolbar-hoverBackground)/35 overflow-hidden flex flex-col",
+						isUltraCompact ? "max-h-[25vh]" : isCompact ? "max-h-[30vh]" : "max-h-[38vh]",
+					)}
 					style={{ borderColor: environmentBorderColor }}>
-					<div className="overflow-y-auto flex flex-col gap-1 p-2 min-h-0">
+					<div className={cn("overflow-y-auto flex flex-col gap-2.5 min-h-0", isCompact ? "p-2.5" : "p-3")}>
+						<CheckpointError
+							checkpointManagerErrorMessage={checkpointManagerErrorMessage}
+							handleCheckpointSettingsClick={handleCheckpointSettingsClick}
+						/>
 						<div>
-							<p className="text-[10px] font-medium text-muted-foreground m-0 mb-1">You asked</p>
+							<p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground m-0 mb-1.5">
+								Task brief
+							</p>
 							<div
 								className={cn(
 									"ph-no-capture whitespace-pre-wrap break-words text-sm relative",
-									"max-h-[4.5rem] overflow-hidden",
+									isCompact ? "max-h-[3rem]" : "max-h-[4.5rem]",
+									"overflow-hidden",
 									{
 										"max-h-[12rem] overflow-y-auto": isHighlightedTextExpanded,
 									},
@@ -206,20 +232,40 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							subagentAuditSummary={subagentAuditSummary}
 						/>
 
-						<div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 mt-1 border-t border-border/20">
+						<div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2.5 mt-0.5 border-t border-border/25">
 							<button
 								className="text-[10px] text-muted-foreground hover:text-foreground bg-transparent border-0 p-0 cursor-pointer"
 								onClick={handleCopyTask}
 								type="button">
 								Copy prompt
 							</button>
-							<button
-								className="text-[10px] text-muted-foreground hover:text-destructive bg-transparent border-0 p-0 cursor-pointer disabled:opacity-40"
-								disabled={!currentTaskItem?.id}
-								onClick={handleDeleteTask}
-								type="button">
-								Delete chat
-							</button>
+							{deleteConfirmationVisible ? (
+								<fieldset
+									aria-label="Confirm chat deletion"
+									className="m-0 flex items-center gap-2 rounded-md border border-error/25 bg-error/[0.04] px-2 py-1">
+									<span className="text-[10px] text-error">Delete permanently?</span>
+									<button
+										className="rounded border-0 bg-transparent px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+										onClick={() => setDeleteConfirmationVisible(false)}
+										type="button">
+										Cancel
+									</button>
+									<button
+										className="rounded border border-error/35 bg-error/10 px-1.5 py-1 text-[10px] font-medium text-error hover:bg-error/15"
+										onClick={handleDeleteTask}
+										type="button">
+										Delete
+									</button>
+								</fieldset>
+							) : (
+								<button
+									className="text-[10px] text-muted-foreground hover:text-destructive bg-transparent border-0 p-0 cursor-pointer disabled:opacity-40"
+									disabled={!currentTaskItem?.id}
+									onClick={() => setDeleteConfirmationVisible(true)}
+									type="button">
+									Delete chat…
+								</button>
+							)}
 							{IS_DEV && (
 								<OpenDiskConversationHistoryButton className={BUTTON_CLASS} taskId={currentTaskItem?.id} />
 							)}

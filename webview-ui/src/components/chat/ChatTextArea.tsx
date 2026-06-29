@@ -6,10 +6,12 @@ import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, u
 import DynamicTextArea from "react-textarea-autosize"
 import ContextMenu from "@/components/chat/ContextMenu"
 import { CHAT_CONSTANTS } from "@/components/chat/chat-view/constants"
+import type { ComposerMode } from "@/components/chat/chat-view/shared/composerState"
 import SlashCommandMenu from "@/components/chat/SlashCommandMenu"
 import Thumbnails from "@/components/common/Thumbnails"
 import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { Icon } from "@/components/ui/icons"
+import { useIsCompact, useIsUltraCompact } from "@/context/DensityContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { FileServiceClient } from "@/services/grpc-client"
@@ -72,6 +74,7 @@ interface ChatTextAreaProps {
 	shouldDisableFilesAndImages: boolean
 	onHeightChange?: (height: number) => void
 	onFocusChange?: (isFocused: boolean) => void
+	composerMode: ComposerMode
 }
 
 interface GitCommit {
@@ -97,6 +100,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			shouldDisableFilesAndImages,
 			onHeightChange,
 			onFocusChange,
+			composerMode,
 		},
 		ref,
 	) => {
@@ -110,6 +114,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			navigateToSettingsModelPicker,
 			mcpServers,
 		} = useExtensionState()
+		const isCompact = useIsCompact()
+		const isUltraCompact = useIsUltraCompact()
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
 		const [isInputFocused, setIsInputFocused] = useState(false)
 		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
@@ -1111,144 +1117,199 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			],
 		)
 
-		return (
-			<div>
-				<div
-					className="px-2.5 pt-1.5 pb-1.5 flex flex-col gap-1.5"
-					onDragEnter={handleDragEnter}
-					onDragLeave={handleDragLeave}
-					onDragOver={onDragOver}
-					onDrop={onDrop}
-					role="presentation">
-					<div
-						className={cn(
-							"chat-input-shell relative rounded-xl border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] transition-shadow",
-							isDraggingOver &&
-								!showUnsupportedFileError &&
-								"ring-2 ring-[var(--vscode-focusBorder)] border-transparent",
-							isInputFocused &&
-								"border-[color-mix(in_srgb,var(--vscode-focusBorder)_45%,var(--vscode-input-border))]",
-						)}>
-						{showDimensionError && (
-							<div className="mx-3 mt-2 px-2 py-1 text-error text-xs border border-error rounded-md">
-								Image dimensions exceed 7500px
-							</div>
-						)}
-						{showUnsupportedFileError && (
-							<div className="mx-3 mt-2 px-2 py-1 text-error text-xs border border-error rounded-md">
-								Files other than images are currently disabled
-							</div>
-						)}
-						{showSlashCommandsMenu && (
-							<div className="px-1" ref={slashCommandsMenuContainerRef}>
-								<SlashCommandMenu
-									globalWorkflowToggles={globalWorkflowToggles}
-									localWorkflowToggles={localWorkflowToggles}
-									mcpServers={mcpServers}
-									onMouseDown={handleMenuMouseDown}
-									onSelect={handleSlashCommandsSelect}
-									query={slashCommandsQuery}
-									remoteWorkflows={remoteConfigSettings?.remoteGlobalWorkflows}
-									remoteWorkflowToggles={remoteWorkflowToggles}
-									selectedIndex={selectedSlashCommandsIndex}
-									setSelectedIndex={setSelectedSlashCommandsIndex}
-								/>
-							</div>
-						)}
+		const composerDescription =
+			composerMode === "steering"
+				? "LUMI is working. This message will steer the active execution."
+				: composerMode === "recovering"
+					? "LUMI is recovering. Guidance is optional and will be applied to the next safe step."
+					: composerMode === "resume"
+						? "Execution is stopped. This message will resume the task with updated guidance."
+						: composerMode === "approval"
+							? "Optional guidance can be added before choosing an approval action."
+							: composerMode === "completion"
+								? "The task is complete. Use the composer only for a follow-up."
+								: composerMode === "disabled"
+									? "The composer is unavailable until the current recovery action is resolved."
+									: "The composer is ready. Press Enter to send and Shift Enter for a new line."
+		const sendLabel =
+			composerMode === "steering"
+				? "Send guidance"
+				: composerMode === "recovering"
+					? "Send recovery guidance"
+					: composerMode === "resume"
+						? "Resume with guidance"
+						: composerMode === "approval"
+							? "Add approval note"
+							: composerMode === "completion"
+								? "Send follow-up"
+								: "Send message"
+		const sendIsSecondary = composerMode === "approval" || composerMode === "recovering" || composerMode === "completion"
+		const effectivePlaceholder = composerMode === "resume" ? "Describe what to change before resuming…" : placeholderText
 
-						{showContextMenu && (
-							<div className="px-1" ref={contextMenuContainerRef}>
-								<ContextMenu
-									dynamicSearchResults={fileSearchResults}
-									isLoading={searchLoading}
-									onMouseDown={handleMenuMouseDown}
-									onSelect={handleMentionSelect}
-									queryItems={queryItems}
-									searchQuery={searchQuery}
-									selectedIndex={selectedMenuIndex}
-									selectedType={selectedType}
-									setSelectedIndex={setSelectedMenuIndex}
-								/>
-							</div>
-						)}
-						<div className="flex items-end gap-1.5 px-2 py-1.5 min-w-0">
-							<DynamicTextArea
-								autoFocus={true}
-								className={cn(
-									"chat-input-textarea flex-1 min-w-0 resize-none border-0 bg-transparent shadow-none focus:outline-none focus:ring-0",
-									showContextMenu || showSlashCommandsMenu ? "min-h-[40px]" : "min-h-[48px]",
-									"px-1 py-0.5",
-								)}
-								data-testid="chat-input"
-								maxRows={8}
-								minRows={1}
-								onBlur={handleBlur}
-								onChange={handleInputChange}
-								onFocus={() => {
-									setIsInputFocused(true)
-									onFocusChange?.(true)
-								}}
-								onHeightChange={onHeightChange}
-								onKeyDown={handleKeyDown}
-								onKeyUp={handleKeyUp}
-								onMouseUp={updateCursorPosition}
-								onPaste={handlePaste}
-								onSelect={updateCursorPosition}
-								placeholder={showUnsupportedFileError || showDimensionError ? "" : placeholderText}
-								ref={(el) => {
-									if (typeof ref === "function") {
-										ref(el)
-									} else if (ref) {
-										ref.current = el
-									}
-									textAreaRef.current = el
-								}}
-								value={inputValue}
-							/>
-							<button
-								aria-label="Send message"
-								className={cn(
-									"flex items-center justify-center size-8 shrink-0 rounded-full transition-colors mb-0.5",
-									sendingDisabled
-										? "opacity-40 cursor-not-allowed text-muted-foreground"
-										: "bg-lumi text-lumi-foreground hover:opacity-90 cursor-pointer",
-								)}
-								data-testid="send-button"
-								disabled={sendingDisabled}
-								onClick={() => {
-									if (!sendingDisabled) {
-										onSend()
-									}
-								}}
-								title="Send (Enter)"
-								type="button">
-								<Icon className="[svg]:size-4" name="send" size={16} />
-							</button>
+		return (
+			<section
+				aria-label="Message composer"
+				className="px-3 pt-2 pb-2"
+				data-composer-state={composerMode}
+				onDragEnter={handleDragEnter}
+				onDragLeave={handleDragLeave}
+				onDragOver={onDragOver}
+				onDrop={onDrop}>
+				<p className="sr-only" id="lumi-composer-description">
+					{composerDescription}
+				</p>
+				<div
+					className={cn(
+						"chat-input-shell relative overflow-hidden rounded-xl border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] shadow-sm shadow-black/[0.04] transition-[border-color,box-shadow]",
+						isDraggingOver &&
+							!showUnsupportedFileError &&
+							"ring-2 ring-[var(--vscode-focusBorder)] border-transparent",
+						isInputFocused &&
+							"border-[color-mix(in_srgb,var(--vscode-focusBorder)_55%,var(--vscode-input-border))] shadow-md shadow-black/[0.06]",
+					)}>
+					{showDimensionError && (
+						<div
+							className="mx-3 mt-3 rounded-md border border-error/40 bg-error/[0.06] px-2.5 py-2 text-xs text-error"
+							role="alert">
+							Image dimensions exceed 7500px
 						</div>
-					</div>
-					{(selectedImages.length > 0 || selectedFiles.length > 0) && (
-						<Thumbnails
-							files={selectedFiles}
-							images={selectedImages}
-							setFiles={setSelectedFiles}
-							setImages={setSelectedImages}
-						/>
 					)}
-				</div>
-				<div className="px-2.5 pb-1.5">
-					<ChatInputActions
-						attachDisabled={shouldDisableFilesAndImages}
-						modelDisplayName={modelDisplayName}
-						onAttachClick={() => {
-							if (!shouldDisableFilesAndImages) {
-								onSelectFilesAndImages()
-							}
+					{showUnsupportedFileError && (
+						<div
+							className="mx-3 mt-3 rounded-md border border-error/40 bg-error/[0.06] px-2.5 py-2 text-xs text-error"
+							role="alert">
+							Files other than images are currently disabled
+						</div>
+					)}
+					{showSlashCommandsMenu && (
+						<div className="px-1 pt-1" ref={slashCommandsMenuContainerRef}>
+							<SlashCommandMenu
+								globalWorkflowToggles={globalWorkflowToggles}
+								localWorkflowToggles={localWorkflowToggles}
+								mcpServers={mcpServers}
+								onMouseDown={handleMenuMouseDown}
+								onSelect={handleSlashCommandsSelect}
+								query={slashCommandsQuery}
+								remoteWorkflows={remoteConfigSettings?.remoteGlobalWorkflows}
+								remoteWorkflowToggles={remoteWorkflowToggles}
+								selectedIndex={selectedSlashCommandsIndex}
+								setSelectedIndex={setSelectedSlashCommandsIndex}
+							/>
+						</div>
+					)}
+
+					{showContextMenu && (
+						<div className="px-1 pt-1" ref={contextMenuContainerRef}>
+							<ContextMenu
+								dynamicSearchResults={fileSearchResults}
+								isLoading={searchLoading}
+								onMouseDown={handleMenuMouseDown}
+								onSelect={handleMentionSelect}
+								queryItems={queryItems}
+								searchQuery={searchQuery}
+								selectedIndex={selectedMenuIndex}
+								selectedType={selectedType}
+								setSelectedIndex={setSelectedMenuIndex}
+							/>
+						</div>
+					)}
+
+					<DynamicTextArea
+						aria-describedby="lumi-composer-description"
+						aria-label="Message LUMI"
+						autoFocus={true}
+						className={cn(
+							"chat-input-textarea block w-full resize-none border-0 bg-transparent shadow-none focus:outline-none focus:ring-0",
+							isCompact ? "px-2.5 pt-2.5 pb-1.5" : "px-3 pt-3 pb-2",
+							showContextMenu || showSlashCommandsMenu
+								? "min-h-[36px]"
+								: isUltraCompact
+									? "min-h-[36px]"
+									: isCompact
+										? "min-h-[40px]"
+										: "min-h-[52px]",
+						)}
+						data-testid="chat-input"
+						disabled={sendingDisabled}
+						maxRows={isUltraCompact ? 4 : isCompact ? 5 : 8}
+						minRows={1}
+						onBlur={handleBlur}
+						onChange={handleInputChange}
+						onFocus={() => {
+							setIsInputFocused(true)
+							onFocusChange?.(true)
 						}}
-						onContextClick={handleContextButtonClick}
-						onModelClick={handleModelButtonClick}
+						onHeightChange={onHeightChange}
+						onKeyDown={handleKeyDown}
+						onKeyUp={handleKeyUp}
+						onMouseUp={updateCursorPosition}
+						onPaste={handlePaste}
+						onSelect={updateCursorPosition}
+						placeholder={showUnsupportedFileError || showDimensionError ? "" : effectivePlaceholder}
+						ref={(el) => {
+							if (typeof ref === "function") ref(el)
+							else if (ref) ref.current = el
+							textAreaRef.current = el
+						}}
+						value={inputValue}
 					/>
+
+					{(selectedImages.length > 0 || selectedFiles.length > 0) && (
+						<div className="px-3 pb-2">
+							<Thumbnails
+								files={selectedFiles}
+								images={selectedImages}
+								setFiles={setSelectedFiles}
+								setImages={setSelectedImages}
+							/>
+						</div>
+					)}
+
+					<div className={cn("flex min-w-0 items-center gap-2 pb-2 pt-0.5", isCompact ? "px-1.5" : "px-2")}>
+						<ChatInputActions
+							attachDisabled={shouldDisableFilesAndImages}
+							composerMode={composerMode}
+							modelDisplayName={modelDisplayName}
+							onAttachClick={() => {
+								if (!shouldDisableFilesAndImages) onSelectFilesAndImages()
+							}}
+							onContextClick={handleContextButtonClick}
+							onModelClick={handleModelButtonClick}
+						/>
+						{/* Keyboard hint — hidden at compact density */}
+						{!isCompact && (
+							<kbd
+								aria-hidden
+								className="shrink-0 rounded border border-border/55 bg-foreground/[0.025] px-1 py-0.5 font-sans text-[8px] text-description/70"
+								title="Enter to send · Shift+Enter for a new line">
+								↵
+							</kbd>
+						)}
+						<button
+							aria-describedby="lumi-composer-description"
+							aria-keyshortcuts="Enter"
+							aria-label={sendLabel}
+							className={cn(
+								"flex shrink-0 items-center justify-center rounded-md border-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+								isCompact ? "size-[36px]" : "size-8",
+								sendingDisabled
+									? "cursor-not-allowed bg-foreground/[0.05] text-muted-foreground opacity-50"
+									: sendIsSecondary
+										? "cursor-pointer border border-border/60 bg-foreground/[0.06] text-foreground hover:bg-foreground/[0.1]"
+										: "cursor-pointer bg-lumi text-lumi-foreground hover:brightness-110 active:brightness-95",
+							)}
+							data-testid="send-button"
+							disabled={sendingDisabled}
+							onClick={() => {
+								if (!sendingDisabled) onSend()
+							}}
+							title={sendingDisabled ? "Sending is unavailable" : `${sendLabel} (Enter)`}
+							type="button">
+							<Icon name="send" size={16} />
+						</button>
+					</div>
 				</div>
-			</div>
+			</section>
 		)
 	},
 )

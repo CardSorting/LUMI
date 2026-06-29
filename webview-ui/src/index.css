@@ -13,13 +13,14 @@
  */
 @layer base {
 	* {
-		@apply border-border outline-ring/50 text-base;
+		@apply border-border outline-ring/50;
+		box-sizing: border-box;
 	}
 	body {
-		@apply bg-background text-foreground;
+		@apply bg-background text-foreground text-base;
 	}
 	p {
-		@apply my-0 py-0 text-inherit leading-relaxed block line-clamp-3;
+		@apply my-0 py-0 text-inherit leading-relaxed block;
 		margin-block-start: 1em;
 		margin-block-end: 1em;
 		margin-inline-start: 0px;
@@ -163,6 +164,11 @@
 		transform: scale(0.96);
 		transition: transform 0.1s ease;
 	}
+
+	.lumi-icon-action {
+		width: 36px;
+		height: 36px;
+	}
 }
 
 body {
@@ -170,6 +176,92 @@ body {
 	-webkit-overflow-scrolling: touch;
 	/* Prevent pull-to-refresh on mobile */
 	overscroll-behavior-y: contain;
+}
+
+:root {
+	--lumi-space-1: 4px;
+	--lumi-space-2: 8px;
+	--lumi-space-3: 12px;
+	--lumi-space-4: 16px;
+	--lumi-space-5: 20px;
+	--lumi-space-6: 24px;
+}
+
+/* ─── Density system ─── */
+/* Comfortable: ≥480px — default desktop-like spacing */
+[data-density="comfortable"] {
+	--lumi-row-px: 16px;
+	--lumi-row-pt: 16px;
+	--lumi-gap: 10px;
+	--lumi-panel-px: 12px;
+	--lumi-panel-py: 12px;
+	--lumi-text-xs: 11px;
+	--lumi-text-xxs: 9px;
+	--lumi-min-target: 36px;
+}
+
+/* Compact: 360–479px — tightened for narrow sidebars */
+[data-density="compact"] {
+	--lumi-row-px: 12px;
+	--lumi-row-pt: 12px;
+	--lumi-gap: 8px;
+	--lumi-panel-px: 10px;
+	--lumi-panel-py: 8px;
+	--lumi-text-xs: 10px;
+	--lumi-text-xxs: 8px;
+	--lumi-min-target: 36px;
+}
+
+/* Ultra-compact: <360px — maximum compression */
+[data-density="ultra-compact"] {
+	--lumi-row-px: 8px;
+	--lumi-row-pt: 8px;
+	--lumi-gap: 6px;
+	--lumi-panel-px: 8px;
+	--lumi-panel-py: 6px;
+	--lumi-text-xs: 9px;
+	--lumi-text-xxs: 8px;
+	--lumi-min-target: 36px;
+}
+
+/* Short-height: execution detail hidden, footer capped */
+[data-short-height="true"] .lumi-execution-detail {
+	display: none;
+}
+
+[data-short-height="true"] footer {
+	max-height: 45vh;
+	overflow-y: auto;
+}
+
+[data-short-height="true"] .chat-input-textarea {
+	max-height: 80px;
+}
+
+/* Legacy: keep hiding model button at very narrow widths */
+[data-density="ultra-compact"] .lumi-composer-model {
+	display: none;
+}
+
+/* Ultra-compact: suppress non-essential micro-animations */
+[data-density="ultra-compact"] .lumi-panel-reveal,
+[data-density="ultra-compact"] .animate-lumi-breathe,
+[data-density="ultra-compact"] .animate-lumi-breathe-slow,
+[data-density="ultra-compact"] .animate-lumi-drift,
+[data-density="ultra-compact"] .animate-lumi-glow-pulse {
+	animation: none;
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto;
+		animation-duration: 0.01ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.01ms;
+	}
 }
 
 /* Premium Styling Utilities */

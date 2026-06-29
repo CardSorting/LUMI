@@ -1,8 +1,11 @@
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
+import { Activity } from "lucide-react"
 import type React from "react"
 import { useMemo } from "react"
 import { Virtuoso } from "react-virtuoso"
+import { useIsCompact, useIsUltraCompact } from "@/context/DensityContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { cn } from "@/lib/utils"
 import type { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
 import { isToolGroup } from "../../utils/messageUtils"
 import { createMessageRenderer } from "../messages/MessageRenderer"
@@ -30,6 +33,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 }) => {
 	const { dietcodeMessages } = useExtensionState()
 	const lastRawMessage = useMemo(() => dietcodeMessages.at(-1), [dietcodeMessages])
+	const isCompact = useIsCompact()
+	const isUltraCompact = useIsUltraCompact()
 
 	const {
 		virtuosoRef,
@@ -182,9 +187,24 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	)
 
 	return (
-		<div className="overflow-hidden flex flex-col h-full">
+		<section aria-label="Execution timeline" className="overflow-hidden flex flex-col h-full">
+			<header
+				className={cn(
+					"flex shrink-0 items-center gap-2 border-y border-border/25 bg-foreground/[0.015]",
+					isCompact ? "h-7 px-3" : "h-8 px-4",
+				)}>
+				<Activity aria-hidden className="size-3.5 text-description" strokeWidth={1.75} />
+				<h2 className={cn("m-0 font-semibold text-foreground/90", isCompact ? "text-[9px]" : "text-[10px]")}>
+					Execution timeline
+				</h2>
+				{!isUltraCompact && (
+					<span className="ml-auto text-[8px] uppercase tracking-wide text-description/60">Latest below</span>
+				)}
+			</header>
 			<div className="grow flex" ref={scrollContainerRef}>
 				<Virtuoso
+					aria-busy={showThinkingLoaderRow}
+					aria-label="Chronological execution activity"
 					atBottomStateChange={(isAtBottom) => {
 						setIsAtBottom(isAtBottom)
 						if (isAtBottom) {
@@ -206,6 +226,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 					key={task.ts}
 					rangeChanged={handleRangeChanged}
 					ref={virtuosoRef} // anything lower causes issues with followOutput
+					role="feed"
 					style={{
 						scrollbarWidth: "none", // Firefox
 						msOverflowStyle: "none", // IE/Edge
@@ -213,6 +234,6 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 					}}
 				/>
 			</div>
-		</div>
+		</section>
 	)
 }

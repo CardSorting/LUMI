@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { LUCIDE_ICONS } from "./icons/lucide"
 
 export interface VscIconProps extends React.SVGProps<SVGSVGElement> {
 	name: string
@@ -17,36 +18,36 @@ const ICONS: Record<string, React.ReactNode> = {
 	"arrow-down": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M3.147 9l5 5h.707l5-5-.707-.707L9 12.439V2H8v10.44L3.854 8.292 3.147 9z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"arrow-left": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M7 3.093l-5 5V8.8l5 5 .707-.707-4.146-4.147H14v-1H3.56L7.708 3.8 7 3.093z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"arrow-right": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M9 13.887l5-5V8.18l-5-5-.707.707 4.146 4.147H2v1h10.44L8.292 13.18l.707.707z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"arrow-up": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M13.854 7l-5-5h-.707l-5 5 .707.707L8 3.561V14h1V3.56l4.146 4.147.708-.707z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -58,18 +59,18 @@ const ICONS: Record<string, React.ReactNode> = {
 	book: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M14.5 2H9l-.35.15-.65.64-.65-.64L7 2H1.5l-.5.5v10l.5.5h5.29l.86.85h.7l.86-.85h5.29l.5-.5v-10l-.5-.5zm-7 10.32l-.18-.17L7 12H2V3h4.79l.74.74-.03 8.58zM14 12H9l-.35.15-.14.13V3.7l.7-.7H14v9zM6 5H3v1h3V5zm0 4H3v1h3V9zM3 7h3v1H3V7zm10-2h-3v1h3V5zm-3 2h3v1h-3V7zm0 2h3v1h-3V9z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	bug: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M10.877 4.5v-.582a2.918 2.918 0 1 0-5.836 0V4.5h-.833L2.545 2.829l-.593.59 1.611 1.619-.019.049a8.03 8.03 0 0 0-.503 2.831c0 .196.007.39.02.58l.003.045H1v.836h2.169l.006.034c.172.941.504 1.802.954 2.531l.034.055L2.2 13.962l.592.592 1.871-1.872.058.066c.868.992 2.002 1.589 3.238 1.589 1.218 0 2.336-.579 3.199-1.544l.057-.064 1.91 1.92.593-.591-1.996-2.006.035-.056c.467-.74.81-1.619.986-2.583l.006-.034h2.171v-.836h-2.065l.003-.044a8.43 8.43 0 0 0 .02-.58 8.02 8.02 0 0 0-.517-2.866l-.019-.05 1.57-1.57-.592-.59L11.662 4.5h-.785zm-5 0v-.582a2.082 2.082 0 1 1 4.164 0V4.5H5.878zm5.697.837l.02.053c.283.753.447 1.61.447 2.528 0 1.61-.503 3.034-1.274 4.037-.77 1.001-1.771 1.545-2.808 1.545-1.036 0-2.037-.544-2.807-1.545-.772-1.003-1.275-2.427-1.275-4.037 0-.918.164-1.775.448-2.528l.02-.053h7.229z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -82,45 +83,45 @@ const ICONS: Record<string, React.ReactNode> = {
 	check: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M14.431 3.323l-8.47 10-.79-.036-3.35-4.77.818-.574 2.978 4.24 8.051-9.506.764.646z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"chevron-down": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M7.976 10.072l4.357-4.357.62.618L8.284 11h-.618L3 6.333l.619-.618 4.357 4.357z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"chevron-right": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M10.072 8.024L5.715 3.667l.618-.62L11 7.716v.618L6.333 13l-.618-.619 4.357-4.357z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"chevron-up": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8.024 5.928l-4.357 4.357-.62-.618L7.716 5h.618L13 9.667l-.619.618-4.357-4.357z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	circle: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm2.61-4a2.61 2.61 0 1 1-5.22 0 2.61 2.61 0 0 1 5.22 0zM8 5.246z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -137,9 +138,9 @@ const ICONS: Record<string, React.ReactNode> = {
 	"circle-outline": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm2.61-4a2.61 2.61 0 1 1-5.22 0 2.61 2.61 0 0 1 5.22 0zM8 5.246z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -151,78 +152,78 @@ const ICONS: Record<string, React.ReactNode> = {
 	close: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8 8.707l3.646 3.647.708-.707L8.707 8l3.647-3.646-.707-.708L8 7.293 4.354 3.646l-.707.708L7.293 8l-3.646 3.646.707.708L8 8.707z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"cloud-download": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M11.957 6h.05a2.99 2.99 0 0 1 2.116.879 3.003 3.003 0 0 1 0 4.242 2.99 2.99 0 0 1-2.117.879v-1a2.002 2.002 0 0 0 0-4h-.914l-.123-.857a2.49 2.49 0 0 0-2.126-2.122A2.478 2.478 0 0 0 6.231 5.5l-.333.762-.809-.189A2.49 2.49 0 0 0 4.523 6c-.662 0-1.297.263-1.764.732A2.503 2.503 0 0 0 4.523 11h.498v1h-.498a3.486 3.486 0 0 1-2.628-1.16 3.502 3.502 0 0 1 1.958-5.78 3.462 3.462 0 0 1 1.468.04 3.486 3.486 0 0 1 3.657-2.06A3.479 3.479 0 0 1 11.957 6zm-5.25 5.121l1.314 1.314V7h.994v5.4l1.278-1.279.707.707-2.146 2.147h-.708L6 11.829l.707-.708z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"cloud-upload": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M11.956 6h.05a2.99 2.99 0 0 1 2.117.879 3.003 3.003 0 0 1 0 4.242 2.99 2.99 0 0 1-2.117.879h-1.995v-1h1.995a2.002 2.002 0 0 0 0-4h-.914l-.123-.857a2.49 2.49 0 0 0-2.126-2.122A2.478 2.478 0 0 0 6.23 5.5l-.333.762-.809-.189A2.49 2.49 0 0 0 4.523 6c-.662 0-1.297.263-1.764.732A2.503 2.503 0 0 0 4.523 11h2.494v1H4.523a3.486 3.486 0 0 1-2.628-1.16 3.502 3.502 0 0 1-.4-4.137A3.497 3.497 0 0 1 3.853 5.06c.486-.09.987-.077 1.468.041a3.486 3.486 0 0 1 3.657-2.06A3.479 3.479 0 0 1 11.956 6zm-1.663 3.853L8.979 8.54v5.436h-.994v-5.4L6.707 9.854 6 9.146 8.146 7h.708L11 9.146l-.707.707z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"comment-discussion": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M4 11.29l1-1v1.42l-1.15 1.14L3 12.5V10H1.5L1 9.5v-8l.5-.5h12l.5.5V6h-1V2H2v7h1.5l.5.5v1.79zM10.29 13l1.86 1.85.85-.35V13h1.5l.5-.5v-5l-.5-.5h-8l-.5.5v5l.5.5h3.79zm.21-1H7V8h7v4h-1.5l-.5.5v.79l-1.15-1.14-.35-.15z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	copy: (
 		<>
-			<path clip-rule="evenodd" d="M4 4l1-1h5.414L14 6.586V14l-1 1H5l-1-1V4zm9 3l-3-3H5v10h8V7z" fill-rule="evenodd" />
-			<path clip-rule="evenodd" d="M3 1L2 2v10l1 1V2h6.414l-1-1H3z" fill-rule="evenodd" />
+			<path clipRule="evenodd" d="M4 4l1-1h5.414L14 6.586V14l-1 1H5l-1-1V4zm9 3l-3-3H5v10h8V7z" fillRule="evenodd" />
+			<path clipRule="evenodd" d="M3 1L2 2v10l1 1V2h6.414l-1-1H3z" fillRule="evenodd" />
 		</>
 	),
 	"credit-card": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M14 5v1H2V5h12zM2 7h12v5H2V7zm12-3H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1zm-3 6h2v1h-2v-1z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	dashboard: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M3.889 2.095a6.5 6.5 0 1 1 7.222 10.81A6.5 6.5 0 0 1 3.89 2.094zm.555 9.978A5.5 5.5 0 0 0 7.5 13 5.506 5.506 0 0 0 13 7.5a5.5 5.5 0 1 0-8.556 4.573zM10.294 4l.706.707-2.15 2.15a1.514 1.514 0 1 1-.707-.707L10.293 4zM7.221 7.916a.5.5 0 1 0 .556-.832.5.5 0 0 0-.556.832zm4.286-2.449l-.763.763c.166.403.253.834.255 1.27a3.463 3.463 0 0 1-.5 1.777l.735.735a4.477 4.477 0 0 0 .274-4.545h-.001zM8.733 4.242A3.373 3.373 0 0 0 7.5 4 3.5 3.5 0 0 0 4 7.5a3.46 3.46 0 0 0 .5 1.777l-.734.735A4.5 4.5 0 0 1 9.5 3.473l-.767.769z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"debug-restart": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M12.75 8a4.5 4.5 0 0 1-8.61 1.834l-1.391.565A6.001 6.001 0 0 0 14.25 8 6 6 0 0 0 3.5 4.334V2.5H2v4l.75.75h3.5v-1.5H4.352A4.5 4.5 0 0 1 12.75 8z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"diff-multiple": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M9.70994 1.29L12.7099 4.29L12.9999 5V14L11.9999 15H2.99994L1.99994 14V2L2.99994 1H8.99994L9.70994 1.29ZM2.99994 14H11.9999V5L8.99994 2H2.99994V14ZM7 6H5V7H7V9H8V7H10V6H8V4H7V6ZM5 11H10V12H5V11Z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 			<path d="M12.4199 0.999756L14.7099 3.28976L14.9999 3.99976L15 13.9998L14 14.9998L13.9999 3.99976L10.9999 0.999756H12.4199Z" />
 		</>
@@ -230,18 +231,18 @@ const ICONS: Record<string, React.ReactNode> = {
 	"diff-single": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M10.7099 1.28902L13.7099 4.28902L13.9999 4.99902V13.999L12.9999 14.999H3.99994L2.99994 13.999V1.99902L3.99994 0.999023H9.99994L10.7099 1.28902ZM3.99994 13.999H12.9999V4.99902L9.99994 1.99902H3.99994V13.999ZM8 5.99902H6V6.99902H8V8.99902H9V6.99902H11V5.99902H9V3.99902H8V5.99902ZM6 10.999H11V11.999H6V10.999Z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	discard: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M3.5 2v3.5L4 6h3.5V5H4.979l.941-.941a3.552 3.552 0 1 1 5.023 5.023L5.746 14.28l.72.72 5.198-5.198A4.57 4.57 0 0 0 5.2 3.339l-.7.7V2h-1z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -253,9 +254,9 @@ const ICONS: Record<string, React.ReactNode> = {
 	error: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8.6 1c1.6.1 3.1.9 4.2 2 1.3 1.4 2 3.1 2 5.1 0 1.6-.6 3.1-1.6 4.4-1 1.2-2.4 2.1-4 2.4-1.6.3-3.2.1-4.6-.7-1.4-.8-2.5-2-3.1-3.5C.9 9.2.8 7.5 1.3 6c.5-1.6 1.4-2.9 2.8-3.8C5.4 1.3 7 .9 8.6 1zm.5 12.9c1.3-.3 2.5-1 3.4-2.1.8-1.1 1.3-2.4 1.2-3.8 0-1.6-.6-3.2-1.7-4.3-1-1-2.2-1.6-3.6-1.7-1.3-.1-2.7.2-3.8 1-1.1.8-1.9 1.9-2.3 3.3-.4 1.3-.4 2.7.2 4 .6 1.3 1.5 2.3 2.7 3 1.2.7 2.6.9 3.9.6zM7.9 7.5L10.3 5l.7.7-2.4 2.5 2.4 2.5-.7.7-2.4-2.5-2.4 2.5-.7-.7 2.4-2.5-2.4-2.5.7-.7 2.4 2.5z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -263,27 +264,27 @@ const ICONS: Record<string, React.ReactNode> = {
 		<>
 			<path d="M4.5 1L4 1.5V3.02746C4.16417 3.00932 4.331 3 4.5 3C4.669 3 4.83583 3.00932 5 3.02746V2H14V7H12.2929L11 8.29289V7H8.97254C8.99068 7.16417 9 7.331 9 7.5C9 7.669 8.99068 7.83583 8.97254 8H10V9.5L10.8536 9.85355L12.7071 8H14.5L15 7.5V1.5L14.5 1H4.5Z" />
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M6.41705 10.4288C7.37039 9.80348 8 8.72527 8 7.5C8 5.567 6.433 4 4.5 4C2.567 4 1 5.567 1 7.5C1 8.72527 1.62961 9.80348 2.58295 10.4288C2.11364 10.6498 1.68557 10.9505 1.31802 11.318C0.900156 11.7359 0.568688 12.232 0.342542 12.7779C0.180451 13.1692 0.0747425 13.5807 0.0278638 14C0.00933826 14.1657 0 14.3326 0 14.5V15H1L0.999398 14.5C0.999398 14.4784 0.999599 14.4567 1 14.4351C1.00811 13.9975 1.09823 13.5651 1.26587 13.1604C1.44179 12.7357 1.69964 12.3498 2.0247 12.0247C2.34976 11.6996 2.73566 11.4418 3.16038 11.2659C3.57088 11.0958 4.00986 11.0056 4.45387 10.9997C4.46922 10.9999 4.4846 11 4.5 11C4.5154 11 4.53078 10.9999 4.54613 10.9997C4.99014 11.0056 5.42912 11.0958 5.83962 11.2659C6.26433 11.4418 6.65024 11.6996 6.9753 12.0247C7.30036 12.3498 7.55821 12.7357 7.73413 13.1604C7.90177 13.5651 7.99189 13.9975 8 14.4351C8.0004 14.4567 8.0006 14.4784 8.0006 14.5L8 15H9V14.5C9 14.3326 8.99066 14.1657 8.97214 14C8.92526 13.5807 8.81955 13.1692 8.65746 12.7779C8.43131 12.232 8.09984 11.7359 7.68198 11.318C7.31443 10.9505 6.88636 10.6498 6.41705 10.4288ZM4.5 10C3.11929 10 2 8.88071 2 7.5C2 6.11929 3.11929 5 4.5 5C5.88071 5 7 6.11929 7 7.5C7 8.88071 5.88071 10 4.5 10Z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	file: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M13.71 4.29l-3-3L10 1H4L3 2v12l1 1h9l1-1V5l-.29-.71zM13 14H4V2h5v4h4v8zm-3-9V2l3 3h-3z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"file-symlink-directory": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M7.71 3h6.79l.51.5v10l-.5.5h-13l-.5-.5v-11l.5-.5h5l.35.15.85.85zm6.28 10v-1.51l.01-4v-1.5H7.7l-.86.86-.35.15H2v6h11.99zm-6.5-8h6.5l.01-.99H7.5l-.36-.15-.85-.85H2v3h4.28l.86-.86.35-.15zm2.29 4.07L8.42 7.7l.74-.69 2.22 2.22v.71l-2.29 2.21-.7-.72 1.4-1.35H8.42a2 2 0 0 0-1.35.61A1.8 1.8 0 0 0 6.54 12h-1a2.76 2.76 0 0 1 .81-2 3 3 0 0 1 2-.93h1.43z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -305,9 +306,9 @@ const ICONS: Record<string, React.ReactNode> = {
 	game: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M4 3H12C14.2091 3 16 4.79086 16 7V10C16 12.2091 14.2091 14 12 14H4C1.79086 14 0 12.2091 0 10V7C0 4.79086 1.79086 3 4 3ZM4 4C2.34315 4 1 5.34315 1 7V10C1 11.6569 2.34315 13 4 13H12C13.6569 13 15 11.6569 15 10V7C15 5.34315 13.6569 4 12 4H4Z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 			<path d="M5.5 6C5.22386 6 5 6.22386 5 6.5V8H3.5C3.22386 8 3 8.22386 3 8.5C3 8.77614 3.22386 9 3.5 9H5V10.5C5 10.7761 5.22386 11 5.5 11C5.77614 11 6 10.7761 6 10.5V9H7.5C7.77614 9 8 8.77614 8 8.5C8 8.22386 7.77614 8 7.5 8H6V6.5C6 6.22386 5.77614 6 5.5 6Z" />
 			<path d="M13 7C13 7.55228 12.5523 8 12 8C11.4477 8 11 7.55228 11 7C11 6.44772 11.4477 6 12 6C12.5523 6 13 6.44772 13 7Z" />
@@ -332,45 +333,45 @@ const ICONS: Record<string, React.ReactNode> = {
 	globe: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8.5 1a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zm4.894 4a5.527 5.527 0 0 0-3.053-2.676c.444.84.765 1.74.953 2.676h2.1zm.582 2.995A5.11 5.11 0 0 0 14 7.5a5.464 5.464 0 0 0-.213-1.5h-2.342c.032.331.055.664.055 1a10.114 10.114 0 0 1-.206 2h2.493c.095-.329.158-.665.19-1.005zm-3.535 0l.006-.051A9.04 9.04 0 0 0 10.5 7a8.994 8.994 0 0 0-.076-1H6.576A8.82 8.82 0 0 0 6.5 7a8.98 8.98 0 0 0 .233 2h3.534c.077-.332.135-.667.174-1.005zM10.249 5a8.974 8.974 0 0 0-1.255-2.97C8.83 2.016 8.666 2 8.5 2a3.62 3.62 0 0 0-.312.015l-.182.015L8 2.04A8.97 8.97 0 0 0 6.751 5h3.498zM5.706 5a9.959 9.959 0 0 1 .966-2.681A5.527 5.527 0 0 0 3.606 5h2.1zM3.213 6A5.48 5.48 0 0 0 3 7.5 5.48 5.48 0 0 0 3.213 9h2.493A10.016 10.016 0 0 1 5.5 7c0-.336.023-.669.055-1H3.213zm2.754 4h-2.36a5.515 5.515 0 0 0 3.819 2.893A10.023 10.023 0 0 1 5.967 10zM8.5 12.644A8.942 8.942 0 0 0 9.978 10H7.022A8.943 8.943 0 0 0 8.5 12.644zM11.033 10a10.024 10.024 0 0 1-1.459 2.893A5.517 5.517 0 0 0 13.393 10h-2.36z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	history: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M13.507 12.324a7 7 0 0 0 .065-8.56A7 7 0 0 0 2 4.393V2H1v3.5l.5.5H5V5H2.811a6.008 6.008 0 1 1-.135 5.77l-.887.462a7 7 0 0 0 11.718 1.092zm-3.361-.97l.708-.707L8 7.792V4H7v4l.146.354 3 3z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	info: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8.568 1.031A6.8 6.8 0 0 1 12.76 3.05a7.06 7.06 0 0 1 .46 9.39 6.85 6.85 0 0 1-8.58 1.74 7 7 0 0 1-3.12-3.5 7.12 7.12 0 0 1-.23-4.71 7 7 0 0 1 2.77-3.79 6.8 6.8 0 0 1 4.508-1.149zM9.04 13.88a5.89 5.89 0 0 0 3.41-2.07 6.07 6.07 0 0 0-.4-8.06 5.82 5.82 0 0 0-7.43-.74 6.06 6.06 0 0 0 .5 10.29 5.81 5.81 0 0 0 3.92.58zM7.375 6h1.25V5h-1.25v1zm1.25 1v4h-1.25V7h1.25z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	inspect: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M1 3l1-1h12l1 1v6h-1V3H2v8h5v1H2l-1-1V3zm14.707 9.707L9 6v9.414l2.707-2.707h4zM10 13V8.414l3.293 3.293h-2L10 13z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	key: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M11.351 1.091a4.528 4.528 0 0 1 3.44 3.16c.215.724.247 1.49.093 2.23a4.583 4.583 0 0 1-4.437 3.6c-.438 0-.874-.063-1.293-.19l-.8.938-.379.175H7v1.5l-.5.5H5v1.5l-.5.5h-3l-.5-.5v-2.307l.146-.353L6.12 6.87a4.464 4.464 0 0 1-.2-1.405 4.528 4.528 0 0 1 5.431-4.375zm1.318 7.2a3.568 3.568 0 0 0 1.239-2.005l.004.005A3.543 3.543 0 0 0 9.72 2.08a3.576 3.576 0 0 0-2.8 3.4c-.01.456.07.908.239 1.33l-.11.543L2 12.404v1.6h2v-1.5l.5-.5H6v-1.5l.5-.5h1.245l.876-1.016.561-.14a3.47 3.47 0 0 0 1.269.238 3.568 3.568 0 0 0 2.218-.795zm-.838-2.732a1 1 0 1 0-1.662-1.11 1 1 0 0 0 1.662 1.11z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -382,18 +383,18 @@ const ICONS: Record<string, React.ReactNode> = {
 	link: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M4.4 3h3.085a3.4 3.4 0 0 1 3.4 3.4v.205A3.4 3.4 0 0 1 7.485 10H7V9h.485A2.4 2.4 0 0 0 9.88 6.61V6.4A2.4 2.4 0 0 0 7.49 4H4.4A2.4 2.4 0 0 0 2 6.4v.205A2.394 2.394 0 0 0 4 8.96v1a3.4 3.4 0 0 1-3-3.35V6.4A3.405 3.405 0 0 1 4.4 3zM12 7.04v-1a3.4 3.4 0 0 1 3 3.36v.205A3.405 3.405 0 0 1 11.605 13h-3.09A3.4 3.4 0 0 1 5.12 9.61V9.4A3.4 3.4 0 0 1 8.515 6H9v1h-.485A2.4 2.4 0 0 0 6.12 9.4v.205A2.4 2.4 0 0 0 8.515 12h3.09A2.4 2.4 0 0 0 14 9.61V9.4a2.394 2.394 0 0 0-2-2.36z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	loading: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M13.917 7A6.002 6.002 0 0 0 2.083 7H1.071a7.002 7.002 0 0 1 13.858 0h-1.012z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -405,27 +406,27 @@ const ICONS: Record<string, React.ReactNode> = {
 	"modifier-spin": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M13.917 7A6.002 6.002 0 0 0 2.083 7H1.071a7.002 7.002 0 0 1 13.858 0h-1.012z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"new-file": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M9.5 1.1l3.4 3.5.1.4v2h-1V6H8V2H3v11h4v1H2.5l-.5-.5v-12l.5-.5h6.7l.3.1zM9 2v3h2.9L9 2zm4 14h-1v-3H9v-1h3V9h1v3h3v1h-3v3z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	output: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M19.5 0v1.5L21 3v19.5L19.5 24h-15L3 22.5V3l1.5-1.5V0H6v1.5h3V0h1.5v1.5h3V0H15v1.5h3V0h1.5zm-15 22.5h15V3h-15v19.5zM7.5 6h9v1.5h-9V6zm9 6h-9v1.5h9V12zm-9 6h9v1.5h-9V18z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -433,18 +434,18 @@ const ICONS: Record<string, React.ReactNode> = {
 		<>
 			<path d="M6.27 10.87h.71l4.56-4.56-.71-.71-4.2 4.21-1.92-1.92L4 8.6l2.27 2.27z" />
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8.6 1c1.6.1 3.1.9 4.2 2 1.3 1.4 2 3.1 2 5.1 0 1.6-.6 3.1-1.6 4.4-1 1.2-2.4 2.1-4 2.4-1.6.3-3.2.1-4.6-.7-1.4-.8-2.5-2-3.1-3.5C.9 9.2.8 7.5 1.3 6c.5-1.6 1.4-2.9 2.8-3.8C5.4 1.3 7 .9 8.6 1zm.5 12.9c1.3-.3 2.5-1 3.4-2.1.8-1.1 1.3-2.4 1.2-3.8 0-1.6-.6-3.2-1.7-4.3-1-1-2.2-1.6-3.6-1.7-1.3-.1-2.7.2-3.8 1-1.1.8-1.9 1.9-2.3 3.3-.4 1.3-.4 2.7.2 4 .6 1.3 1.5 2.3 2.7 3 1.2.7 2.6.9 3.9.6z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"pass-filled": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm-1.02-4.13h-.71L4 8.6l.71-.71 1.92 1.92 4.2-4.21.71.71-4.56 4.56z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -461,54 +462,54 @@ const ICONS: Record<string, React.ReactNode> = {
 	question: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M7.5 1a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zm0 12a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zm1.55-8.42a1.84 1.84 0 0 0-.61-.42A2.25 2.25 0 0 0 7.53 4a2.16 2.16 0 0 0-.88.17c-.239.1-.45.254-.62.45a1.89 1.89 0 0 0-.38.62 3 3 0 0 0-.15.72h1.23a.84.84 0 0 1 .506-.741.72.72 0 0 1 .304-.049.86.86 0 0 1 .27 0 .64.64 0 0 1 .22.14.6.6 0 0 1 .16.22.73.73 0 0 1 .06.3c0 .173-.037.343-.11.5a2.4 2.4 0 0 1-.27.46l-.35.42c-.12.13-.24.27-.35.41a2.33 2.33 0 0 0-.27.45 1.18 1.18 0 0 0-.1.5v.66H8v-.49a.94.94 0 0 1 .11-.42 3.09 3.09 0 0 1 .28-.41l.36-.44a4.29 4.29 0 0 0 .36-.48 2.59 2.59 0 0 0 .28-.55 1.91 1.91 0 0 0 .11-.64 2.18 2.18 0 0 0-.1-.67 1.52 1.52 0 0 0-.35-.55zM6.8 9.83h1.17V11H6.8V9.83z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	refresh: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M4.681 3H2V2h3.5l.5.5V6H5V4a5 5 0 1 0 4.53-.761l.302-.954A6 6 0 1 1 4.681 3z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	regex: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M10.012 2h.976v3.113l2.56-1.557.486.885L11.47 6l2.564 1.559-.485.885-2.561-1.557V10h-.976V6.887l-2.56 1.557-.486-.885L9.53 6 6.966 4.441l.485-.885 2.561 1.557V2zM2 10h4v4H2v-4z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	remote: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M12.904 9.57L8.928 5.596l3.976-3.976-.619-.62L8 5.286v.619l4.285 4.285.62-.618zM3 5.62l4.072 4.07L3 13.763l.619.618L8 10v-.619L3.619 5 3 5.619z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	reply: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M6.306 2.146l-4.02 4.02v.708l4.02 4.02.708-.707L3.807 6.98H5.69c2.813 0 4.605.605 5.705 1.729 1.102 1.125 1.615 2.877 1.615 5.421v.35h1v-.35c0-2.646-.527-4.72-1.9-6.121C10.735 6.605 8.617 5.98 5.69 5.98H3.887l3.127-3.126-.708-.708z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	rocket: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M14.491 1c-3.598.004-6.654 1.983-8.835 4H1.5l-.5.5v3l.147.354.991.991.001.009 4 4 .009.001.999.999L7.5 15h3l.5-.5v-4.154c2.019-2.178 3.996-5.233 3.992-8.846l-.501-.5zM2 6h2.643a23.828 23.828 0 0 0-2.225 2.71L2 8.294V6zm5.7 8l-.42-.423a23.59 23.59 0 0 0 2.715-2.216V14H7.7zm-1.143-1.144L3.136 9.437C4.128 8 8.379 2.355 13.978 2.016c-.326 5.612-5.987 9.853-7.421 10.84zM4 15v-1H2v-2H1v3h3zm6.748-7.667a1.5 1.5 0 1 0-2.496-1.666 1.5 1.5 0 0 0 2.495 1.666z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -525,9 +526,9 @@ const ICONS: Record<string, React.ReactNode> = {
 	server: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M2.5 5L2 4.5v-3l.5-.5h11l.5.5v3l-.5.5h-11zM10 2H9v1H8V2H7v1H6V2H5v1H4V2H3v2h10V2h-2v1h-1V2zm-7.5 8L2 9.5v-3l.5-.5h11l.5.5v3l-.5.5h-11zM6 7H5v1H4V7H3v2h10V7h-2v1h-1V7H9v1H8V7H7v1H6V7zm7.5 8l.5-.5v-3l-.5-.5h-11l-.5.5v3l.5.5h11zM3 14v-2h1v1h1v-1h1v1h1v-1h1v1h1v-1h1v1h1v-1h2v2H3z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -539,36 +540,36 @@ const ICONS: Record<string, React.ReactNode> = {
 	"settings-gear": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M19.85 8.75l4.15.83v4.84l-4.15.83 2.35 3.52-3.43 3.43-3.52-2.35-.83 4.15H9.58l-.83-4.15-3.52 2.35-3.43-3.43 2.35-3.52L0 14.42V9.58l4.15-.83L1.8 5.23 5.23 1.8l3.52 2.35L9.58 0h4.84l.83 4.15 3.52-2.35 3.43 3.43-2.35 3.52zm-1.57 5.07l4-.81v-2l-4-.81-.54-1.3 2.29-3.43-1.43-1.43-3.43 2.29-1.3-.54-.81-4h-2l-.81 4-1.3.54-3.43-2.29-1.43 1.43L6.38 8.9l-.54 1.3-4 .81v2l4 .81.54 1.3-2.29 3.43 1.43 1.43 3.43-2.29 1.3.54.81 4h2l.81-4 1.3-.54 3.43 2.29 1.43-1.43-2.29-3.43.54-1.3zm-8.186-4.672A3.43 3.43 0 0 1 12 8.57 3.44 3.44 0 0 1 15.43 12a3.43 3.43 0 1 1-5.336-2.852zm.956 4.274c.281.188.612.288.95.288A1.7 1.7 0 0 0 13.71 12a1.71 1.71 0 1 0-2.66 1.422z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"sign-out": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M11.02 3.77v1.56l1-.99V2.5l-.5-.5h-9l-.5.5v.486L2 3v10.29l.36.46 5 1.72L8 15v-1h3.52l.5-.5v-1.81l-1-1V13H8V4.71l-.33-.46L4.036 3h6.984v.77zM7 14.28l-4-1.34V3.72l4 1.34v9.22zm6.52-5.8H8.55v-1h4.93l-1.6-1.6.71-.7 2.47 2.46v.71l-2.49 2.48-.7-.7 1.65-1.65z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"star-full": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M9.595 6.252L8 1 6.405 6.252H1l4.373 3.4L3.75 15 8 11.695 12.25 15l-1.623-5.348L15 6.252H9.595z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"symbol-event": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M7.414 1.56L8.312 1h3.294l.818 1.575L10.236 6h1.781l.72 1.695L5.618 15l-1.602-1.163L6.119 10H4.898L4 8.56l3.414-7zM7.78 9L4.9 14.305 12.018 7H8.312l3.294-5H8.312L4.898 9H7.78z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
@@ -584,7 +585,7 @@ const ICONS: Record<string, React.ReactNode> = {
 	),
 	terminal: (
 		<>
-			<path clip-rule="evenodd" d="M1.5 3L3 1.5H21L22.5 3V21L21 22.5H3L1.5 21V3ZM3 3V21H21V3H3Z" fill-rule="evenodd" />
+			<path clipRule="evenodd" d="M1.5 3L3 1.5H21L22.5 3V21L21 22.5H3L1.5 21V3ZM3 3V21H21V3H3Z" fillRule="evenodd" />
 			<path d="M7.06078 7.49988L6.00012 8.56054L10.2427 12.8032L6 17.0459L7.06066 18.1066L12 13.1673V12.4391L7.06078 7.49988Z" />
 			<rect height="1.5" width="6" x="12" y="16.5" />
 		</>
@@ -617,9 +618,9 @@ const ICONS: Record<string, React.ReactNode> = {
 	"vm-running": (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M1.5 2h13l.5.5v5.503a5.006 5.006 0 0 0-1-.583V3H2v9h5a5 5 0 0 0 1 3H4v-1h3v-1H1.5l-.5-.5v-10l.5-.5z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 			<path d="M12 8c.367 0 .721.047 1.063.14.34.094.658.23.953.407.294.177.563.385.808.625.245.24.455.509.63.808a4.03 4.03 0 0 1 .405 3.082c-.093.342-.229.66-.406.954a4.382 4.382 0 0 1-.625.808c-.24.245-.509.455-.808.63a4.029 4.029 0 0 1-3.082.405 3.784 3.784 0 0 1-.954-.406 4.382 4.382 0 0 1-.808-.625 3.808 3.808 0 0 1-.63-.808 4.027 4.027 0 0 1-.405-3.082c.093-.342.229-.66.406-.954.177-.294.385-.563.625-.808.24-.245.509-.455.808-.63A4.028 4.028 0 0 1 12 8zm2 3.988L11 10v4l3-2.012z" />
 		</>
@@ -627,15 +628,15 @@ const ICONS: Record<string, React.ReactNode> = {
 	warning: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M7.56 1h.88l6.54 12.26-.44.74H1.44L1 13.26 7.56 1zM8 2.28L2.28 13H13.7L8 2.28zM8.625 12v-1h-1.25v1h1.25zm-1.25-2V6h1.25v4h-1.25z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 	"whole-word": (
 		<>
-			<path clip-rule="evenodd" d="M0 11H1V13H15V11H16V14H15H1H0V11Z" fill-rule="evenodd" />
+			<path clipRule="evenodd" d="M0 11H1V13H15V11H16V14H15H1H0V11Z" fillRule="evenodd" />
 			<path d="M6.84048 11H5.95963V10.1406H5.93814C5.555 10.7995 4.99104 11.1289 4.24625 11.1289C3.69839 11.1289 3.26871 10.9839 2.95718 10.6938C2.64924 10.4038 2.49527 10.0189 2.49527 9.53906C2.49527 8.51139 3.10041 7.91341 4.3107 7.74512L5.95963 7.51416C5.95963 6.57959 5.58186 6.1123 4.82632 6.1123C4.16389 6.1123 3.56591 6.33789 3.03238 6.78906V5.88672C3.57307 5.54297 4.19612 5.37109 4.90152 5.37109C6.19416 5.37109 6.84048 6.05501 6.84048 7.42285V11ZM5.95963 8.21777L4.63297 8.40039C4.22476 8.45768 3.91682 8.55973 3.70914 8.70654C3.50145 8.84977 3.39761 9.10579 3.39761 9.47461C3.39761 9.74316 3.4925 9.96338 3.68228 10.1353C3.87564 10.3035 4.13166 10.3877 4.45035 10.3877C4.8872 10.3877 5.24706 10.2355 5.52994 9.93115C5.8164 9.62321 5.95963 9.2347 5.95963 8.76562V8.21777Z" />
 			<path d="M9.3475 10.2051H9.32601V11H8.44515V2.85742H9.32601V6.4668H9.3475C9.78076 5.73633 10.4146 5.37109 11.2489 5.37109C11.9543 5.37109 12.5057 5.61816 12.9032 6.1123C13.3042 6.60286 13.5047 7.26172 13.5047 8.08887C13.5047 9.00911 13.2809 9.74674 12.8333 10.3018C12.3857 10.8532 11.7734 11.1289 10.9964 11.1289C10.2695 11.1289 9.71989 10.821 9.3475 10.2051ZM9.32601 7.98682V8.75488C9.32601 9.20964 9.47282 9.59635 9.76644 9.91504C10.0636 10.2301 10.4396 10.3877 10.8944 10.3877C11.4279 10.3877 11.8451 10.1836 12.1458 9.77539C12.4502 9.36719 12.6024 8.79964 12.6024 8.07275C12.6024 7.46045 12.4609 6.98063 12.1781 6.6333C11.8952 6.28597 11.512 6.1123 11.0286 6.1123C10.5166 6.1123 10.1048 6.29134 9.7933 6.64941C9.48177 7.00391 9.32601 7.44971 9.32601 7.98682Z" />
 		</>
@@ -643,27 +644,47 @@ const ICONS: Record<string, React.ReactNode> = {
 	x: (
 		<>
 			<path
-				clip-rule="evenodd"
+				clipRule="evenodd"
 				d="M8 8.707l3.646 3.647.708-.707L8.707 8l3.647-3.646-.707-.708L8 7.293 4.354 3.646l-.707.708L7.293 8l-3.646 3.646.707.708L8 8.707z"
-				fill-rule="evenodd"
+				fillRule="evenodd"
 			/>
 		</>
 	),
 }
 
-export const VscIcon = React.forwardRef<SVGSVGElement, VscIconProps>(({ name, className, ...props }, ref) => {
+export const VscIcon = React.forwardRef<SVGSVGElement, VscIconProps>(({ name, className, title, ...props }, ref) => {
+	const LucideIcon = LUCIDE_ICONS[name]
+	if (LucideIcon) {
+		return (
+			<LucideIcon
+				aria-hidden={title ? undefined : true}
+				aria-label={title}
+				className={cn("size-2 shrink-0", className)}
+				ref={ref}
+				role={title ? "img" : undefined}
+				strokeWidth={1.75}
+				{...props}>
+				{title ? <title>{title}</title> : null}
+			</LucideIcon>
+		)
+	}
+
 	const iconContent = ICONS[name] || ICONS.question
 
 	return (
 		<svg
+			aria-hidden={title ? undefined : true}
+			aria-label={title}
 			className={cn("size-2 shrink-0 fill-current", className)}
 			fill="currentColor"
 			height="16"
 			ref={ref}
+			role={title ? "img" : undefined}
 			viewBox="0 0 16 16"
 			width="16"
 			xmlns="http://www.w3.org/2000/svg"
 			{...props}>
+			{title ? <title>{title}</title> : null}
 			{iconContent}
 		</svg>
 	)

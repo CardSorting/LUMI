@@ -59,15 +59,15 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 
 					if (dietcodeError?.isErrorType(DietCodeErrorType.RateLimit)) {
 						return (
-							<p className="m-0 whitespace-pre-wrap text-description/90 wrap-anywhere leading-relaxed">
+							<div className="m-0 whitespace-pre-wrap text-description/90 wrap-anywhere leading-relaxed">
 								{errorMessage}
 								{requestId && <div className="text-description/70 text-xs mt-1">Request ID: {requestId}</div>}
-							</p>
+							</div>
 						)
 					}
 
 					return (
-						<p className="m-0 whitespace-pre-wrap text-description/90 wrap-anywhere flex flex-col gap-3 leading-relaxed">
+						<div className="m-0 whitespace-pre-wrap text-description/90 wrap-anywhere flex flex-col gap-3 leading-relaxed">
 							{/* Display the well-formatted error extracted from the DietCodeError instance */}
 
 							<header>
@@ -107,7 +107,7 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 									<span className="mb-4 text-description">{pickRecoveryLine(message.ts)}</span>
 								)}
 							</div>
-						</p>
+						</div>
 					)
 				}
 
