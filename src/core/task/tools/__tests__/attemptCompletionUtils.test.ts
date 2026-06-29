@@ -708,9 +708,9 @@ describe("attemptCompletionUtils", () => {
 
 	describe("getCompletionRetryCooldownMs", () => {
 		it("applies exponential backoff capped at max", () => {
-			getCompletionRetryCooldownMs(1).should.equal(2000)
-			getCompletionRetryCooldownMs(2).should.equal(4000)
-			getCompletionRetryCooldownMs(5).should.equal(30_000)
+			getCompletionRetryCooldownMs(1).should.equal(1200)
+			getCompletionRetryCooldownMs(2).should.equal(2400)
+			getCompletionRetryCooldownMs(5).should.equal(19200)
 			getCompletionRetryCooldownMs(10).should.equal(30_000)
 		})
 	})
@@ -831,7 +831,7 @@ describe("attemptCompletionUtils", () => {
 			message.should.containEql("<completion_gate_status")
 			message.should.containEql('blocks="5"')
 			message.should.containEql("<completion_gate_recovery")
-			message.should.containEql("Agent ergonomics")
+			message.should.containEql("Reconciliation")
 		})
 
 		it("includes failed_stage and recovery playbook for classified reasons", () => {

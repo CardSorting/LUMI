@@ -11,8 +11,10 @@ export const COMPLETION_GATE_WARN_THRESHOLD = 5
 /** Default consecutive mistake limit — mirrors state-keys default for breather hints. */
 export const DEFAULT_MAX_CONSECUTIVE_MISTAKES = 3
 
-/** Minimum delay between completion retries after a gate block (prevents hammering). */
-export const COMPLETION_RETRY_COOLDOWN_MS = 2000
+/** Minimum delay between completion retries after a gate block (prevents hammering).
+ * Tuned short: suppression should stop spam, not slow down valid completion.
+ * The exponential backoff still scales up for repeated blocks. */
+export const COMPLETION_RETRY_COOLDOWN_MS = 1200
 
 /** Cap for exponential completion retry backoff (mirrors AWS/Azure retry policies). */
 export const COMPLETION_RETRY_MAX_COOLDOWN_MS = 30_000

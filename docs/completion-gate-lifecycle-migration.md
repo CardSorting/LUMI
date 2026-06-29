@@ -170,6 +170,36 @@ Full stage order, soft vs hard preflight, audit reason codes (`score_below_thres
 
 Gate block events append to `completionGateBlockHistory` (ring buffer) and publish `gateLifecycleStatus` to the webview via `GateLifecycleStatusPanel`.
 
+## Fast-Path & Completion Speed Optimizations
+
+To make completion feel immediate when the state is already valid (the "happy path"), the following optimizations are implemented:
+
+### 1. True Fast Path Execution
+In `AttemptCompletionHandler`, the system checks:
+- The canonical snapshot is fresh (`current` freshness).
+- The cached audit is valid (same checkpoint hash and same graph revision).
+- Gate readiness is ready or completing (engineering is passed).
+- No blocker count exists.
+- The graph revision has not changed since the last attempt.
+
+If these conditions are met, the system bypasses all preflight checks, double-checks, forensic compliance, and audit gate pipelines, completing immediately.
+
+### 2. Collapsed Ready & Completed Phases
+Transitional ready states are collapsed to prevent lingering in intermediate steps:
+- `engineering_verified`, `finalization_ready`, and `finalization_running` map to `completing`.
+- `finalization_completed` maps directly to `finalized`.
+
+### 3. Artificial Wait Suppression
+- **Reconciliation Debounce**: Debounce waits are bypassed immediately when readiness is known/verified (the `engineeringVerified` status is passed to `isWithinReconciliationDebounce`).
+- **Retry Cooldowns**: Exponential backoff timers (`getCompletionCooldownRemainingMs`) return 0 if the completion lifecycle is in a ready/completing/finalized phase.
+- **Breather Nudge**: The cognitive reflection breather nudge is skipped in the task runner if completion readiness has been verified.
+
+### 4. UI Chatter & Freshness Suppression
+When the engineering gate status is passed, `resolveGateLifecycleSnapshot` forces snapshot freshness to `"current"`. This prevents the UI from showing transitional `"stale"` or `"synchronizing"` statuses.
+
+### 5. Revision-Aware Caching
+Gate lifecycle decisions and audit gate results are cached and validated against both the workspace checkpoint hash and the active completion graph revision (ignoring the 5-minute TTL when the graph revision matches).
+
 ## Invariants (`gateLifecycleInvariants.ts`)
 
 - Retry-locked verified engineering must allow `run_finalization`

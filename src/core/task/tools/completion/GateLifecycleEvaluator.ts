@@ -5,7 +5,12 @@ import type { GateAction, GateRecoveryStep } from "@shared/completion/gateAction
 import { buildGateLifecycleDecision, type GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
 import type { GateReasonCode } from "@shared/completion/gateReasonCodes"
 import { appendLifecycleTransitionLog } from "@shared/completion/lifecycleTransitionLog"
-import { getCompletionGateCircuitBreakerError, isCompletionGateCircuitBreakerTripped } from "../attemptCompletionUtils"
+import {
+	getCompletionGateCircuitBreakerError,
+	getCompletionGraphRevision,
+	getLatestCheckpointHashFromMessages,
+	isCompletionGateCircuitBreakerTripped,
+} from "../attemptCompletionUtils"
 import type { TaskConfig } from "../types/TaskConfig"
 import { validateGateLifecycleDecision } from "./gateLifecycleInvariants"
 
@@ -58,6 +63,8 @@ export function cacheGateLifecycleDecision(config: TaskConfig, decision: GateLif
 	validateGateLifecycleDecision(decision)
 	config.taskState.lastGateLifecycleDecision = JSON.stringify(decision)
 	config.taskState.completionLifecycleState = decision.lifecycleState
+	config.taskState.lastGateLifecycleDecisionGraphRevision = getCompletionGraphRevision(config)
+	config.taskState.lastGateLifecycleDecisionCheckpointHash = getLatestCheckpointHashFromMessages(config)
 	config.taskState.lifecycleTransitionLogJson = appendLifecycleTransitionLog(config.taskState.lifecycleTransitionLogJson, {
 		state: decision.lifecycleState,
 		reasonCode: decision.reasonCode,
@@ -154,6 +161,16 @@ export function evaluateGateLifecycle(config: TaskConfig): GateLifecycleDecision
 	if (
 		cached &&
 		(cached.lifecycleState === "completed_without_retry_completion" || cached.lifecycleState === "audit_gate_corrupt")
+	) {
+		return cached
+	}
+
+	const currentRevision = getCompletionGraphRevision(config)
+	const currentCheckpointHash = getLatestCheckpointHashFromMessages(config)
+	if (
+		cached &&
+		config.taskState.lastGateLifecycleDecisionGraphRevision === currentRevision &&
+		config.taskState.lastGateLifecycleDecisionCheckpointHash === currentCheckpointHash
 	) {
 		return cached
 	}

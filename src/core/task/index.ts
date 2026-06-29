@@ -2649,7 +2649,21 @@ export class Task {
 			mode: mode,
 		}
 
-		if (this.taskState.consecutiveMistakeCount >= this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes")) {
+		const isReady =
+			this.taskState.engineeringVerifiedAt !== undefined ||
+			(this.taskState.completionLifecycleState &&
+				[
+					"engineering_verified",
+					"finalization_ready",
+					"finalization_running",
+					"finalization_completed",
+					"receipt_sealed",
+				].includes(this.taskState.completionLifecycleState))
+
+		if (
+			this.taskState.consecutiveMistakeCount >= this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes") &&
+			!isReady
+		) {
 			// Cognitive Reflection Nudge ("Taking a Breather")
 			// Instead of a hard halt or stopping the workflow, we inject a psychological save point
 			let breatherText =

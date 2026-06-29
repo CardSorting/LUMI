@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert"
 import * as coreApi from "@core/api"
+import * as skillRuntime from "@core/context/instructions/user-instructions/skillRuntime"
 import * as skills from "@core/context/instructions/user-instructions/skills"
 import { PromptRegistry } from "@core/prompts/system-prompt"
 import type { TaskConfig } from "@core/task/tools/types/TaskConfig"
@@ -90,6 +91,7 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 					return undefined
 				},
 				getGlobalStateKey: (key: string) => (key === "nativeToolCallEnabled" ? nativeToolCallEnabled : undefined),
+				getWorkspaceStateKey: (key: string) => undefined,
 				getApiConfiguration: () => ({
 					actModeApiProvider: "anthropic",
 					planModeApiProvider: "anthropic",
@@ -158,8 +160,13 @@ function stubApiHandler(createMessage: sinon.SinonStub) {
 }
 
 describe("SubagentRunner", () => {
+	let mockedSkills: any[] = []
 	beforeEach(() => {
+		mockedSkills = []
 		setRoadmapConfigOverride({ enabled: false })
+		sinon.stub(skillRuntime, "getResolvedSkillsForCwd").callsFake(async () => mockedSkills)
+		sinon.stub(skillRuntime, "filterEnabledSkills").callsFake((discovered) => discovered)
+		sinon.stub(skillRuntime, "filterSubagentPromptSkills").callsFake((available) => available)
 	})
 
 	afterEach(() => {
@@ -571,11 +578,10 @@ describe("SubagentRunner", () => {
 			return "system prompt"
 		})
 		sinon.stub(SubagentBuilder.prototype, "getConfiguredSkills").returns(["allowed-skill"])
-		sinon.stub(skills, "discoverSkills").resolves([])
-		sinon.stub(skills, "getAvailableSkills").returns([
+		mockedSkills = [
 			{ name: "allowed-skill", description: "Allowed", path: "/skills/allowed/SKILL.md", source: "project" },
 			{ name: "other-skill", description: "Other", path: "/skills/other/SKILL.md", source: "project" },
-		])
+		]
 		stubApiHandler(createMessage)
 		initializeHostProvider()
 
@@ -583,6 +589,7 @@ describe("SubagentRunner", () => {
 		const builder = new SubagentBuilder(config, "subagent")
 		const runner = new SubagentRunner(config, builder)
 		const result = await runner.run("Run task", () => {})
+		console.log("SKILL TEST RESULT:", JSON.stringify(result, null, 2))
 
 		assert.equal(result.status, "completed")
 		assert.equal(createMessage.callCount, 1)
@@ -613,11 +620,10 @@ describe("SubagentRunner", () => {
 			return "system prompt"
 		})
 		sinon.stub(SubagentBuilder.prototype, "getConfiguredSkills").returns(undefined)
-		sinon.stub(skills, "discoverSkills").resolves([])
-		sinon.stub(skills, "getAvailableSkills").returns([
+		mockedSkills = [
 			{ name: "alpha-skill", description: "Alpha", path: "/skills/alpha/SKILL.md", source: "project" },
 			{ name: "beta-skill", description: "Beta", path: "/skills/beta/SKILL.md", source: "project" },
-		])
+		]
 		stubApiHandler(createMessage)
 		initializeHostProvider()
 
@@ -656,10 +662,7 @@ describe("SubagentRunner", () => {
 			return "system prompt"
 		})
 		sinon.stub(SubagentBuilder.prototype, "getConfiguredSkills").returns(["present-skill", "missing-skill"])
-		sinon.stub(skills, "discoverSkills").resolves([])
-		sinon
-			.stub(skills, "getAvailableSkills")
-			.returns([{ name: "present-skill", description: "Present", path: "/skills/present/SKILL.md", source: "project" }])
+		mockedSkills = [{ name: "present-skill", description: "Present", path: "/skills/present/SKILL.md", source: "project" }]
 		stubApiHandler(createMessage)
 		initializeHostProvider()
 
@@ -670,7 +673,10 @@ describe("SubagentRunner", () => {
 
 		assert.equal(result.status, "completed")
 		assert.equal(createMessage.callCount, 1)
-		sinon.assert.calledWith(warnStub, "[SubagentRunner] Configured skill 'missing-skill' not found for subagent run.")
+		sinon.assert.calledWith(
+			warnStub,
+			"[SubagentRunner] Configured skill 'missing-skill' not found or disabled for subagent run.",
+		)
 	})
 
 	it("includes workspace metadata only in the initial user message", async () => {

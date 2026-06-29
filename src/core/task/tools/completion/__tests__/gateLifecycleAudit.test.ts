@@ -83,7 +83,7 @@ describe("gate lifecycle audit guardrails", () => {
 						activeLane: "none",
 						reasonCode: state === "audit_gate_corrupt" ? "invariant.corrupt" : "receipt.sealed",
 						operatorMessage: "terminal",
-						engineering: state === "audit_gate_corrupt" ? "passed" : "passed",
+						engineering: state === "audit_gate_corrupt" ? "failed" : "passed",
 						verification: "passed",
 						documentation: state === "audit_gate_corrupt" ? "failed" : "passed",
 						ledger: state === "audit_gate_corrupt" ? "failed" : "passed",

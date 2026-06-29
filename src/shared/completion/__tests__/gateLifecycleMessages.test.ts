@@ -12,6 +12,7 @@ describe("gateLifecycleMessages freshness", () => {
 		const snapshot = resolveGateLifecycleSnapshot([])
 		snapshot.freshness.should.equal("unknown")
 		should(snapshot.decision).be.undefined()
+		snapshot.reconciliationLabel.should.equal("Validating completion readiness")
 	})
 
 	it("marks stale snapshots by evaluatedAt age", () => {
@@ -21,7 +22,7 @@ describe("gateLifecycleMessages freshness", () => {
 				activeLane: "finalization",
 				reasonCode: "finalization.ready",
 				operatorMessage: "ready",
-				engineering: "passed",
+				engineering: "pending",
 				verification: "passed",
 				documentation: "pending",
 				ledger: "pending",
@@ -40,6 +41,37 @@ describe("gateLifecycleMessages freshness", () => {
 			{ now: 100 + GATE_LIFECYCLE_STALE_MS + 1 },
 		)
 		snapshot.freshness.should.equal("stale")
+		// Operator-facing label must use reconciliation language, not "stale"
+		snapshot.reconciliationLabel.should.containEql("Synchronizing")
+		snapshot.reconciliationLabel.should.not.match(/\bstale\b/i)
 		classifyGateLifecycleFreshness(decision.evaluatedAt, 100 + GATE_LIFECYCLE_STALE_MS + 1).should.equal("stale")
+	})
+
+	it("returns current freshness label for fresh snapshots", () => {
+		const decision = {
+			...buildGateLifecycleDecision({
+				lifecycleState: "engineering_in_progress",
+				activeLane: "completion",
+				reasonCode: "preflight.unknown",
+				operatorMessage: "working",
+				engineering: "pending",
+				verification: "pending",
+				documentation: "pending",
+				ledger: "pending",
+				finalization: "not_applicable",
+				allowedActions: ["attempt_completion"],
+				forbiddenActions: [],
+				recoveryPath: [],
+				receiptEligible: false,
+				moreToolCallsUseful: true,
+				userInputRequired: false,
+			}),
+			evaluatedAt: Date.now(),
+		}
+		const snapshot = resolveGateLifecycleSnapshot([
+			{ ts: Date.now(), type: "say", say: "info", text: "gate", gateLifecycleStatus: decision },
+		])
+		snapshot.freshness.should.equal("current")
+		snapshot.reconciliationLabel.should.equal("Synchronized")
 	})
 })

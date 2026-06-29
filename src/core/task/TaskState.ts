@@ -191,6 +191,22 @@ export class TaskState {
 		blockingGates?: Array<{ id?: string; label: string; why: string; fix?: string }>
 		autoClearableOnly?: boolean
 	}
+	/** Graph revision — incremented on every meaningful state transition for snapshot synchronization. */
+	completionGraphRevision?: number
+	/** Graph revision at last completion attempt — used for no-op retry suppression. */
+	lastCompletionAttemptGraphRevision?: number
+	/** Whether a reconciliation debounce is active (prevents no-op retry thrashing). */
+	reconciliationDebounceActive?: boolean
+	/** Per-task memo for getLatestCheckpointHashFromMessages — avoids redundant message scans. */
+	_cachedCheckpointHash?: string
+	/** Per-task memo: message count at last checkpoint hash scan. */
+	_cachedCheckpointMsgCount?: number
+	/** Graph revision at the time the last completion audit was cached. */
+	lastCompletionAuditGraphRevision?: number
+	/** Checkpoint hash when the last gate lifecycle decision was cached. */
+	lastGateLifecycleDecisionCheckpointHash?: string
+	/** Graph revision when the last gate lifecycle decision was cached. */
+	lastGateLifecycleDecisionGraphRevision?: number
 }
 
 export enum PolicyHealth {

@@ -15,6 +15,11 @@ import {
 	DEFAULT_MAX_CONSECUTIVE_MISTAKES,
 	MAX_COMPLETION_GATE_BLOCK_COUNT,
 } from "@shared/audit/gatePolicy"
+import {
+	type CanonicalCompletionPhase,
+	isWithinReconciliationDebounce,
+	mapLifecycleToCanonicalPhase,
+} from "@shared/completion/canonicalSnapshot"
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { AUTO_GOVERNANCE } from "@/services/roadmap/RoadmapAutoGovernance"
@@ -97,6 +102,19 @@ export function getCompletionRetryCooldownMs(blockCount: number): number {
 }
 
 export function getCompletionCooldownRemainingMs(config: TaskConfig): number {
+	if (config.taskState.engineeringVerifiedAt) {
+		return 0
+	}
+	const raw = config.taskState.lastGateLifecycleDecision
+	if (raw) {
+		try {
+			const decision = JSON.parse(raw)
+			const phase = mapLifecycleToCanonicalPhase(decision.lifecycleState, decision)
+			if (phase === "ready_for_completion" || phase === "completing" || phase === "finalized") {
+				return 0
+			}
+		} catch {}
+	}
 	const blockCount = config.taskState.completionGateBlockCount ?? 0
 	if (blockCount === 0) {
 		return 0
@@ -110,17 +128,32 @@ export function getCompletionCooldownRemainingMs(config: TaskConfig): number {
 	return Math.max(0, cooldownMs - elapsed)
 }
 
-/** Latest workspace checkpoint hash — used to invalidate duplicate guards after edits. */
+/**
+ * Latest workspace checkpoint hash — used to invalidate duplicate guards after edits.
+ *
+ * Memoized per-task on config.taskState: if the message count hasn't changed
+ * since the last call, the cached hash is returned.  This avoids 4-6 redundant
+ * backward scans through the full message array on a single completion attempt.
+ * A new message (length increase) invalidates the cache immediately.
+ */
 export function getLatestCheckpointHashFromMessages(config: TaskConfig): string | undefined {
 	if (!config.messageState?.getDietCodeMessages) {
 		return undefined
 	}
 	const messages = config.messageState.getDietCodeMessages()
+	const msgCount = messages.length
+	// Per-task cache: reuse if message count is unchanged
+	if (msgCount === config.taskState._cachedCheckpointMsgCount) {
+		return config.taskState._cachedCheckpointHash
+	}
 	const index = findLastIndex(messages, (message: DietCodeMessage) => Boolean(message.lastCheckpointHash))
 	if (index === -1) {
-		return undefined
+		config.taskState._cachedCheckpointHash = undefined
+	} else {
+		config.taskState._cachedCheckpointHash = messages[index]?.lastCheckpointHash
 	}
-	return messages[index]?.lastCheckpointHash
+	config.taskState._cachedCheckpointMsgCount = msgCount
+	return config.taskState._cachedCheckpointHash
 }
 
 export function canonicalizeAttemptCompletionParams(block: ToolUse): boolean {
@@ -1064,6 +1097,7 @@ export function getOrCreateCompletionGateSessionId(config: TaskConfig): string {
 export function recordCompletionAttemptTime(config: TaskConfig): void {
 	getOrCreateCompletionGateSessionId(config)
 	config.taskState.completionAttemptCount = (config.taskState.completionAttemptCount ?? 0) + 1
+	recordCompletionAttemptGraphRevision(config)
 }
 
 export function recordGateBlockCheckpointHash(config: TaskConfig, checkpointHash?: string): void {
@@ -1081,6 +1115,19 @@ export function hasWorkspaceChangedSinceGateBlock(config: TaskConfig, currentChe
 }
 
 export function validateCompletionAttemptCooldown(config: TaskConfig): string | null {
+	if (config.taskState.engineeringVerifiedAt) {
+		return null
+	}
+	const raw = config.taskState.lastGateLifecycleDecision
+	if (raw) {
+		try {
+			const decision = JSON.parse(raw)
+			const phase = mapLifecycleToCanonicalPhase(decision.lifecycleState, decision)
+			if (phase === "ready_for_completion" || phase === "completing" || phase === "finalized") {
+				return null
+			}
+		} catch {}
+	}
 	const blockCount = config.taskState.completionGateBlockCount ?? 0
 	if (blockCount === 0) {
 		return null
@@ -1289,31 +1336,54 @@ export function buildCompletionGateEscalationBrief(config: TaskConfig): string {
 	)
 }
 
+/**
+ * Controlled reconciliation lane — replaces the old "breather" escape hatch.
+ *
+ * The breather is now a structured reconciliation window that:
+ *   1. Temporarily pauses completion pressure
+ *   2. Synchronizes canonical execution state
+ *   3. Reconciles evidence drift
+ *   4. Either returns to ready state, emits a blocking diagnostic, or terminates cleanly
+ *
+ * Never: silently restarts the loop, spawns new sessions, or re-enters retry chains.
+ *
+ * Design: the hint only appears when meaningful reconciliation is actually
+ * occurring (cooldown active).  Under fast-path success conditions, no hint
+ * is emitted — the system stays quiet and decisive.
+ */
 export function buildCompletionBreatherHint(config: TaskConfig): string {
 	const blockCount = config.taskState.completionGateBlockCount ?? 0
 	const mistakes = config.taskState.consecutiveMistakeCount
 	const lastReason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
+	const cooldownRemaining = getCompletionCooldownRemainingMs(config)
 	const hints: string[] = []
 
-	if (lastReason === "roadmap_gate") {
+	// Only emit reconciliation hint when cooldown is actively running —
+	// no hint under fast-path or when no blocks exist
+	if (cooldownRemaining > 0 && blockCount > 0) {
+		const seconds = Math.ceil(cooldownRemaining / 1000)
+		hints.push(`Reconciling execution state (${seconds}s) — synchronizing gate evaluation snapshot.`)
+	}
+
+	if (lastReason === "roadmap_gate" && blockCount > 0) {
 		hints.push(AUTO_GOVERNANCE.roadmapGateRecoveryHint)
 	}
 
-	if (blockCount >= COMPLETION_GATE_WARN_THRESHOLD) {
+	if (blockCount >= COMPLETION_GATE_WARN_THRESHOLD && cooldownRemaining > 0) {
 		hints.push(
-			"Pause attempt_completion. Document violation fixes in scratchpad.md, run verification commands, then retry with an updated result.",
+			"Reconciliation window active — document violation fixes in scratchpad.md, run verification commands, then retry with an updated result.",
 		)
 	}
 
-	if (mistakes >= DEFAULT_MAX_CONSECUTIVE_MISTAKES - 1) {
-		hints.push("A cognitive breather is imminent — slow down, review scratchpad.md and git status before the next tool call.")
+	if (mistakes >= DEFAULT_MAX_CONSECUTIVE_MISTAKES - 1 && blockCount > 0) {
+		hints.push("Reconciliation in progress — review scratchpad.md and git status before the next action.")
 	}
 
 	if (hints.length === 0) {
 		return ""
 	}
 
-	return `💡 **Agent ergonomics:** ${hints.join(" ")}`
+	return `🔄 **Reconciliation:** ${hints.join(" ")}`
 }
 
 export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflightReason): string {
@@ -1445,6 +1515,132 @@ export function clearBlockedCompletionResultFingerprint(config: TaskConfig): voi
 	config.taskState.lastBlockedCompletionResultFingerprint = undefined
 }
 
+/**
+ * Increment the canonical graph revision — call on every meaningful state transition.
+ * This is the heartbeat of the canonical snapshot synchronization model.
+ */
+export function incrementCompletionGraphRevision(config: TaskConfig): number {
+	const next = (config.taskState.completionGraphRevision ?? 0) + 1
+	config.taskState.completionGraphRevision = next
+	return next
+}
+
+/**
+ * Get the current graph revision (or 0 if never set).
+ */
+export function getCompletionGraphRevision(config: TaskConfig): number {
+	return config.taskState.completionGraphRevision ?? 0
+}
+
+/**
+ * Record the graph revision at the time of a completion attempt.
+ * Used for no-op retry suppression — if the revision hasn't changed, the retry is a no-op.
+ */
+export function recordCompletionAttemptGraphRevision(config: TaskConfig): void {
+	config.taskState.lastCompletionAttemptGraphRevision = getCompletionGraphRevision(config)
+}
+
+/**
+ * No-op retry suppression — detects attempts where no meaningful state changed.
+ * If the graph revision is the same as the last attempt and we're within the
+ * reconciliation debounce window, suppress the retry and explain why.
+ *
+ * Mirrors idempotency guards in payment APIs — same request ID = same response.
+ *
+ * Fast-path: if the cached gate decision already shows engineering passed
+ * (ready_for_completion or beyond), suppression is lifted immediately.
+ * Suppression should stop spam, not slow down successful completion.
+ *
+ * Messaging is execution-native: explains what's happening and what to do,
+ * rather than denying the attempt punitively.
+ */
+export function shouldSuppressNoOpRetry(config: TaskConfig, now = Date.now()): { suppress: boolean; reason?: string } {
+	const lastAttemptRevision = config.taskState.lastCompletionAttemptGraphRevision
+	const currentRevision = getCompletionGraphRevision(config)
+	const lastAttemptAt = config.taskState.lastCompletionAttemptAt
+
+	// No prior attempt — nothing to suppress
+	if (!lastAttemptAt || lastAttemptRevision === undefined) {
+		return { suppress: false }
+	}
+
+	// Graph revision changed — meaningful state changed, allow retry
+	if (lastAttemptRevision !== currentRevision) {
+		return { suppress: false }
+	}
+
+	// Fast-path: if engineering is already verified, the agent is in a ready
+	// state.  Suppressing a valid retry here would make completion feel blocked
+	// for no reason — the graph revision match is expected because nothing
+	// needs to change between finalization-ready and completion.
+	if (config.taskState.engineeringVerifiedAt) {
+		return { suppress: false }
+	}
+	let isReady = false
+	const raw = config.taskState.lastGateLifecycleDecision
+	if (raw) {
+		try {
+			const decision = JSON.parse(raw)
+			const phase = mapLifecycleToCanonicalPhase(decision.lifecycleState, decision)
+			if (phase === "ready_for_completion" || phase === "completing" || phase === "finalized") {
+				isReady = true
+			}
+		} catch {}
+	}
+	if (isReady) {
+		return { suppress: false }
+	}
+
+	// Same revision within debounce window — suppress with actionable guidance
+	if (isWithinReconciliationDebounce(lastAttemptAt, lastAttemptRevision, currentRevision, now, undefined, isReady)) {
+		return {
+			suppress: true,
+			reason:
+				"Awaiting reconciliation completion — execution state hasn't changed since the last attempt. " +
+				"Address the blocking condition in the workspace, then retry completion.",
+		}
+	}
+
+	return { suppress: false }
+}
+
+/**
+ * Validate that a completion attempt is not within a reconciliation debounce.
+ * Returns an error message if suppressed, null if allowed.
+ */
+export function validateNotInReconciliationDebounce(config: TaskConfig, now = Date.now()): string | null {
+	const { suppress, reason } = shouldSuppressNoOpRetry(config, now)
+	if (suppress) {
+		return reason ?? "Awaiting reconciliation completion — retry after addressing the blocking condition."
+	}
+	return null
+}
+
+/**
+ * Mark a reconciliation debounce as active — prevents rapid-fire retries.
+ */
+export function markReconciliationDebounceActive(config: TaskConfig): void {
+	config.taskState.reconciliationDebounceActive = true
+}
+
+/**
+ * Clear the reconciliation debounce — allows retries after meaningful work.
+ */
+export function clearReconciliationDebounce(config: TaskConfig): void {
+	config.taskState.reconciliationDebounceActive = false
+}
+
+/**
+ * Get the canonical phase for the current task state.
+ * This is the single mapping point from internal lifecycle to operator-facing phase.
+ */
+export function getCanonicalCompletionPhase(config: TaskConfig): CanonicalCompletionPhase {
+	const lifecycleState = (config.taskState.completionLifecycleState ?? "engineering_in_progress") as Parameters<
+		typeof mapLifecycleToCanonicalPhase
+	>[0]
+	return mapLifecycleToCanonicalPhase(lifecycleState)
+}
+
 export function recordCompletionPreflightFailure(config: TaskConfig): void {
 	config.taskState.consecutiveMistakeCount++
 }
@@ -1559,10 +1755,12 @@ export function recordCompletionGateBlockEvent(
 
 	const blockCount = recordCompletionGateBlock(config)
 	config.taskState.lastCompletionAttemptAt = Date.now()
+	recordCompletionAttemptGraphRevision(config)
 	if (options?.result) {
 		recordBlockedCompletionResultFingerprint(config, options.result, options.checkpointHash)
 	}
 	recordCompletionBlockReason(config, reason)
+	incrementCompletionGraphRevision(config)
 	appendGovernanceParalysisDiagnostics(config, reason, options?.checkpointHash)
 	return blockCount
 }
@@ -1588,6 +1786,9 @@ export function markCompletionGatesPassed(config: TaskConfig): void {
 	clearBlockedCompletionResultFingerprint(config)
 	config.taskState.lastGateBlockCheckpointHash = undefined
 	config.taskState.governanceDiagnostics = undefined
+	// Graph revision NOT incremented here — gates passing is a validation result,
+	// not a meaningful execution transition.  The revision was already incremented
+	// when the block occurred (if any).  This prevents cosmetic refresh cycles.
 }
 
 /** Reset completion attempt state after a successful finish (next completion gets fresh double-check + gate budget). */
@@ -1602,6 +1803,9 @@ export function markCompletionAttemptFinished(config: TaskConfig): void {
 	clearCompletionGateBlockHistory(config)
 	config.taskState.completionGateSessionId = undefined
 	clearBlockedCompletionResultFingerprint(config)
+	config.taskState.lastCompletionAttemptGraphRevision = undefined
+	config.taskState.reconciliationDebounceActive = false
+	incrementCompletionGraphRevision(config)
 }
 
 export const DOUBLE_CHECK_REVERIFY_STEPS = [

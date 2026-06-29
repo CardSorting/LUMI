@@ -83,6 +83,7 @@ function createTaskConfig(nativeToolCallEnabled: boolean): TaskConfig {
 					return undefined
 				},
 				getGlobalStateKey: (key: string) => (key === "nativeToolCallEnabled" ? nativeToolCallEnabled : undefined),
+				getWorkspaceStateKey: (key: string) => undefined,
 				getApiConfiguration: () => ({
 					actModeApiProvider: "anthropic",
 					planModeApiProvider: "anthropic",
@@ -146,6 +147,18 @@ function stubApiHandler(createMessage: sinon.SinonStub) {
 }
 
 describe("Subagent Swarm Inheritance", () => {
+	beforeEach(() => {
+		sinon.stub(skills, "getResolvedSkillsForCwd").callsFake(async (cwd) => {
+			return skills.discoverSkills(cwd) as any
+		})
+		sinon.stub(skills, "filterEnabledSkills").callsFake((discovered) => {
+			return skills.getAvailableSkills(discovered)
+		})
+		sinon.stub(skills, "filterSubagentPromptSkills").callsFake((available) => {
+			return available
+		})
+	})
+
 	afterEach(() => {
 		sinon.restore()
 		HostProvider.reset()

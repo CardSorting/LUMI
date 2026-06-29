@@ -3,15 +3,33 @@ import type { GateLifecycleDecision } from "./gateLifecycleDecision"
 
 export type GateLifecycleFreshness = "current" | "stale" | "unknown"
 
+/**
+ * Operator-facing reconciliation label — replaces "stale" in all user-facing UX.
+ * "stale" remains as an internal implementation detail; this function is the
+ * single mapping point from freshness to operator-visible language.
+ */
+export function getFreshnessReconciliationLabel(freshness: GateLifecycleFreshness): string {
+	switch (freshness) {
+		case "current":
+			return "Synchronized"
+		case "stale":
+			return "Synchronizing execution state"
+		case "unknown":
+			return "Validating completion readiness"
+	}
+}
+
 export interface ResolvedGateLifecycleSnapshot {
 	decision?: GateLifecycleDecision
 	freshness: GateLifecycleFreshness
+	/** Operator-visible reconciliation label — never raw "stale". */
+	reconciliationLabel: string
 	evaluatedAt?: number
 	continuityMarker?: string
 	sourceMessageTs?: number
 }
 
-/** Gate snapshots older than this are shown as stale in the operator UI. */
+/** Gate snapshots older than this enter active reconciliation (was: "stale"). */
 export const GATE_LIFECYCLE_STALE_MS = 5 * 60 * 1000
 
 export function getGateLifecycleContinuityMarker(decision: GateLifecycleDecision): string {
@@ -46,17 +64,19 @@ export function resolveGateLifecycleSnapshot(
 			continue
 		}
 
-		const freshness = classifyGateLifecycleFreshness(decision.evaluatedAt, now, staleAfterMs)
+		const isReady = decision.engineering === "passed"
+		const freshness = isReady ? "current" : classifyGateLifecycleFreshness(decision.evaluatedAt, now, staleAfterMs)
 		return {
 			decision,
 			freshness,
+			reconciliationLabel: getFreshnessReconciliationLabel(freshness),
 			evaluatedAt: decision.evaluatedAt,
 			continuityMarker: getGateLifecycleContinuityMarker(decision),
 			sourceMessageTs: message.ts,
 		}
 	}
 
-	return { freshness: "unknown" }
+	return { freshness: "unknown", reconciliationLabel: getFreshnessReconciliationLabel("unknown") }
 }
 
 export function getLatestGateLifecycleFromMessages(messages: readonly DietCodeMessage[]): GateLifecycleDecision | undefined {

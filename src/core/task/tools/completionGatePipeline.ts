@@ -11,7 +11,6 @@ import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } 
 import { buildCompletionGateMessage, runCompletionAudit } from "@shared/audit/completionAudit"
 import {
 	COMPLETION_AUDIT_CACHE_TTL_MS,
-	COMPLETION_GATE_WARN_THRESHOLD,
 	PARENT_PROGRESSIVE_GATE_BLOCK_LIMIT,
 	parseIntentThresholdOverrides,
 	SUBAGENT_IO_LANE_RESULT_MIN_LENGTH,
@@ -36,6 +35,7 @@ import {
 	detectDuplicateCompletionSubmission,
 	getCompletionGateCircuitBreakerError,
 	getCompletionGateTelemetryContext,
+	getCompletionGraphRevision,
 	getLatestCheckpointHashFromMessages,
 	isCompletionGateCircuitBreakerTripped,
 	mapCompletionReasonToPreflightStage,
@@ -342,8 +342,14 @@ export async function runCompletionPreflightChecks(
 	return null
 }
 
-function hashCompletionAuditInput(result: string, taskDescription: string): string {
-	return createHash("sha256").update(result.trim()).update("|").update(taskDescription.slice(0, 500)).digest("hex")
+export function hashCompletionAuditInput(result: string, taskDescription: string, checkpointHash?: string): string {
+	return createHash("sha256")
+		.update(result.trim())
+		.update("|")
+		.update(taskDescription.slice(0, 500))
+		.update("|")
+		.update(checkpointHash ?? "")
+		.digest("hex")
 }
 
 /** Record advisory audit for completion cache reuse (act-mode, deferred command audit). */
@@ -354,7 +360,11 @@ export function recordAdvisoryAuditCache(
 	metadata: TaskAuditMetadata,
 ): void {
 	config.taskState.lastAdvisoryAudit = metadata
-	config.taskState.lastAdvisoryAuditCacheKey = hashCompletionAuditInput(result, taskDescription)
+	config.taskState.lastAdvisoryAuditCacheKey = hashCompletionAuditInput(
+		result,
+		taskDescription,
+		getLatestCheckpointHashFromMessages(config),
+	)
 	config.taskState.lastAdvisoryAuditCachedAt = Date.now()
 }
 
@@ -362,10 +372,16 @@ async function resolveCompletionAuditMetadata(
 	config: TaskConfig,
 	params: { result: string; taskDescription: string },
 ): Promise<TaskAuditMetadata> {
-	const cacheKey = hashCompletionAuditInput(params.result, params.taskDescription)
+	const checkpointHash = getLatestCheckpointHashFromMessages(config)
+	const cacheKey = hashCompletionAuditInput(params.result, params.taskDescription, checkpointHash)
 	const cachedAt = config.taskState.lastCompletionAuditCachedAt
 	const cachedKey = config.taskState.lastCompletionAuditCacheKey
 	const cached = config.taskState.lastCompletionAudit
+	const currentRevision = getCompletionGraphRevision(config)
+
+	if (cached && cachedKey === cacheKey && config.taskState.lastCompletionAuditGraphRevision === currentRevision) {
+		return cached
+	}
 	if (cached && cachedKey === cacheKey && cachedAt && Date.now() - cachedAt < COMPLETION_AUDIT_CACHE_TTL_MS) {
 		return cached
 	}
@@ -376,6 +392,7 @@ async function resolveCompletionAuditMetadata(
 	if (advisory && advisoryKey === cacheKey && advisoryAt && Date.now() - advisoryAt < COMPLETION_AUDIT_CACHE_TTL_MS) {
 		config.taskState.lastCompletionAuditCacheKey = cacheKey
 		config.taskState.lastCompletionAuditCachedAt = Date.now()
+		config.taskState.lastCompletionAuditGraphRevision = currentRevision
 		return advisory
 	}
 
@@ -383,6 +400,7 @@ async function resolveCompletionAuditMetadata(
 	auditMetadata = await applyWorkspaceAuditPolicy(config.cwd, auditMetadata, config)
 	config.taskState.lastCompletionAuditCacheKey = cacheKey
 	config.taskState.lastCompletionAuditCachedAt = Date.now()
+	config.taskState.lastCompletionAuditGraphRevision = currentRevision
 	return auditMetadata
 }
 
@@ -460,6 +478,55 @@ export async function evaluateCompletionAuditGate(
 
 	const checkpointHash = getLatestCheckpointHashFromMessages(config)
 
+	// Fast-path: if the audit cache is still valid (same checkpoint hash, within
+	// TTL or same graph revision) and the last gate decision was "passed", reuse it directly.  This
+	// avoids redundant filesystem reads in resolveCompletionGateContext and
+	// re-evaluation of the audit gate when nothing has changed.
+	const cacheKey = hashCompletionAuditInput(params.result, params.taskDescription, checkpointHash)
+	const cachedAt = config.taskState.lastCompletionAuditCachedAt
+	const cachedKey = config.taskState.lastCompletionAuditCacheKey
+	const cachedAudit = config.taskState.lastCompletionAudit
+	const currentRevision = getCompletionGraphRevision(config)
+	const isCacheValid =
+		cachedAudit &&
+		cachedKey === cacheKey &&
+		((cachedAt && Date.now() - cachedAt < COMPLETION_AUDIT_CACHE_TTL_MS) ||
+			config.taskState.lastCompletionAuditGraphRevision === currentRevision)
+
+	if (isCacheValid && config.taskState.engineeringVerifiedAt) {
+		// Re-evaluate the gate decision with the cached metadata to produce a
+		// fresh result object, but skip the expensive audit run and policy load.
+		try {
+			const gateContext = await resolveCompletionGateContext(config, config.cwd, {
+				lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
+			})
+			const gateOptions = resolveProgressiveGateOptions(config, gateContext.options)
+			const gateDecision = evaluateAuditGate(cachedAudit, gateOptions)
+			if (!gateDecision.blocked) {
+				markCompletionGatesPassed(config)
+				const passContext = getCompletionGateTelemetryContext(config)
+				telemetryService.captureCompletionGatesPassed(config.ulid, {
+					taskId: config.taskId,
+					blockCount: config.taskState.completionGateBlockCount ?? 0,
+					attemptCount: config.taskState.completionAttemptCount ?? 0,
+					score: gateDecision.score,
+					sessionId: passContext.sessionId,
+					historyLength: passContext.historyLength,
+					pressureLevel: passContext.pressureLevel,
+				})
+				return {
+					status: "passed",
+					auditMetadata: cachedAudit,
+					gateDecision,
+					gateOptions,
+					policyProvenance: gateContext.policyProvenance,
+				}
+			}
+		} catch {
+			// Fall through to full evaluation if fast-path fails
+		}
+	}
+
 	try {
 		const messages = config.messageState?.getDietCodeMessages?.() ?? []
 		const planBaseline = resolvePlanBaselineMetadata(messages, config.taskState.lastPlanAuditMetadata)
@@ -530,28 +597,9 @@ export async function evaluateCompletionAuditGate(
 		}
 	} catch (error) {
 		Logger.error(`[${params.logPrefix}] Failed to run completion audit gate:`, error)
-		const blockCount = config.taskState.completionGateBlockCount ?? 0
-		const fallback =
-			config.taskState.lastCompletionAudit ?? config.taskState.lastAdvisoryAudit ?? config.taskState.lastPlanAuditMetadata
-		if (blockCount < COMPLETION_GATE_WARN_THRESHOLD && fallback) {
-			Logger.warn(`[${params.logPrefix}] Audit infra degraded — using cached audit metadata (non-blocking).`)
-			const gateContext = await resolveCompletionGateContext(config, config.cwd, {
-				lastAdvisoryAudit: fallback,
-				planBaselineMetadata: config.taskState.lastPlanAuditMetadata,
-			})
-			const gateOptions = resolveProgressiveGateOptions(config, gateContext.options)
-			const gateDecision = evaluateAuditGate(fallback, gateOptions)
-			if (!gateDecision.blocked) {
-				markCompletionGatesPassed(config)
-				return {
-					status: "passed",
-					auditMetadata: fallback,
-					gateDecision,
-					gateOptions,
-					policyProvenance: gateContext.policyProvenance,
-				}
-			}
-		}
+		// No hidden fallback — a stale cached audit must never produce a "passed" receipt.
+		// The audit layer must be atomically tied to the canonical evaluation snapshot.
+		// If the audit infra fails, emit an explicit terminal diagnostic instead.
 		config.taskState.consecutiveMistakeCount++
 		recordCompletionGateBlockEvent(config, "audit_error")
 		emitCompletionGateBlockTelemetry(config, "audit_error", config.taskState.completionGateBlockCount ?? 0)

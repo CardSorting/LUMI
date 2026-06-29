@@ -80,6 +80,8 @@ ROADMAP.md at the workspace root is the long-horizon steering surface — not a 
 **Health:** unknown
 **Prime directive:** Did the latest work strengthen or weaken the project's center of gravity?
 
+**Execution authority:** Continue the user's task — your I/O loop is primary. Roadmap governance clears at `attempt_completion`; do not mid-task validate/doctor unless completion is blocked.
+
 **Governance policy:** Do not call roadmap(action='validate') or MCP tools for governance — remediation is internal at attempt_completion.
 
 **Auto-governance at completion:** Bootstrap autofill runs automatically at attempt_completion. Schema validation runs automatically at attempt_completion. Missing Recent Checkpoint dates are auto-stamped at attempt_completion.
@@ -162,6 +164,7 @@ RULES
 - When performing regex searches, try to craft search patterns that will not return an excessive amount of results.
 - MCP operations should be used one at a time, similar to other tool usage. Wait for confirmation of success before proceeding with additional operations.
 - SOVEREIGN KNOWLEDGE LEDGER: Maintain the project's Knowledge Ledger (SKL) in the `.wiki/` directory as a granular, multi-file breakdown (index.md, changelog.md, etc.). Direct `.wiki/` writes are authorized only during `run_finalization` (same-session finalization lane) or subagent execution — not via ordinary file tools. After engineering verification, call `run_finalization` to update documentation and stamp the ledger, then `run_finalization seal=true` to seal the receipt.
+- GOVERNED EXECUTION AUTHORITY: Receipts, gate snapshots, and audit traces record history — they do not alone authorize halting the swarm. Only you (parent coordinator) decide merge, seal, and continuation. Do not stop delegated work solely because a lane receipt or stale audit suggests blockage; re-check current state and prefer repair/continuation over recursive escalation. Progress is evidence; repeated validation without state change is failure.
 
 ====
 
