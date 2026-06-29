@@ -1169,20 +1169,28 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					)}>
 					{showDimensionError && (
 						<div
-							className="mx-3 mt-3 rounded-md border border-error/40 bg-error/[0.06] px-2.5 py-2 text-xs text-error"
+							className={cn(
+								"mt-3 rounded-md border border-error/40 bg-error/[0.06] px-2.5 py-2 text-xs text-error",
+								isUltraCompact ? "mx-3" : isCompact ? "mx-3.5" : "mx-4",
+							)}
 							role="alert">
 							Image dimensions exceed 7500px
 						</div>
 					)}
 					{showUnsupportedFileError && (
 						<div
-							className="mx-3 mt-3 rounded-md border border-error/40 bg-error/[0.06] px-2.5 py-2 text-xs text-error"
+							className={cn(
+								"mt-3 rounded-md border border-error/40 bg-error/[0.06] px-2.5 py-2 text-xs text-error",
+								isUltraCompact ? "mx-3" : isCompact ? "mx-3.5" : "mx-4",
+							)}
 							role="alert">
 							Files other than images are currently disabled
 						</div>
 					)}
 					{showSlashCommandsMenu && (
-						<div className="px-1 pt-1" ref={slashCommandsMenuContainerRef}>
+						<div
+							className={cn("pt-1", isUltraCompact ? "px-2" : isCompact ? "px-2.5" : "px-3")}
+							ref={slashCommandsMenuContainerRef}>
 							<SlashCommandMenu
 								globalWorkflowToggles={globalWorkflowToggles}
 								localWorkflowToggles={localWorkflowToggles}
@@ -1199,7 +1207,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					)}
 
 					{showContextMenu && (
-						<div className="px-1 pt-1" ref={contextMenuContainerRef}>
+						<div
+							className={cn("pt-1", isUltraCompact ? "px-2" : isCompact ? "px-2.5" : "px-3")}
+							ref={contextMenuContainerRef}>
 							<ContextMenu
 								dynamicSearchResults={fileSearchResults}
 								isLoading={searchLoading}
@@ -1214,48 +1224,50 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						</div>
 					)}
 
-					<DynamicTextArea
-						aria-describedby="lumi-composer-description"
-						aria-label="Message LUMI"
-						autoFocus={true}
-						className={cn(
-							"chat-input-textarea block w-full resize-none border-0 bg-transparent shadow-none focus:outline-none focus:ring-0",
-							isCompact ? "px-2.5 pt-2.5 pb-1.5" : "px-3 pt-3 pb-2",
-							showContextMenu || showSlashCommandsMenu
-								? "min-h-[36px]"
-								: isUltraCompact
+					<div className="chat-writing-zone">
+						<DynamicTextArea
+							aria-describedby="lumi-composer-description"
+							aria-label="Message LUMI"
+							autoFocus={true}
+							className={cn(
+								"chat-input-textarea block w-full resize-none border-0 bg-transparent shadow-none focus:outline-none focus:ring-0",
+								isUltraCompact ? "px-3 pt-2.5 pb-1" : isCompact ? "px-3.5 pt-3 pb-1.5" : "px-4 pt-3.5 pb-2",
+								showContextMenu || showSlashCommandsMenu
 									? "min-h-[36px]"
-									: isCompact
-										? "min-h-[40px]"
-										: "min-h-[52px]",
-						)}
-						data-testid="chat-input"
-						disabled={sendingDisabled}
-						maxRows={isUltraCompact ? 4 : isCompact ? 5 : 8}
-						minRows={1}
-						onBlur={handleBlur}
-						onChange={handleInputChange}
-						onFocus={() => {
-							setIsInputFocused(true)
-							onFocusChange?.(true)
-						}}
-						onHeightChange={onHeightChange}
-						onKeyDown={handleKeyDown}
-						onKeyUp={handleKeyUp}
-						onMouseUp={updateCursorPosition}
-						onPaste={handlePaste}
-						onSelect={updateCursorPosition}
-						placeholder={showUnsupportedFileError || showDimensionError ? "" : effectivePlaceholder}
-						ref={(el) => {
-							if (typeof ref === "function") ref(el)
-							else if (ref) ref.current = el
-							textAreaRef.current = el
-						}}
-						value={inputValue}
-					/>
+									: isUltraCompact
+										? "min-h-[36px]"
+										: isCompact
+											? "min-h-[40px]"
+											: "min-h-[52px]",
+							)}
+							data-testid="chat-input"
+							disabled={sendingDisabled}
+							maxRows={isUltraCompact ? 4 : isCompact ? 5 : 8}
+							minRows={1}
+							onBlur={handleBlur}
+							onChange={handleInputChange}
+							onFocus={() => {
+								setIsInputFocused(true)
+								onFocusChange?.(true)
+							}}
+							onHeightChange={onHeightChange}
+							onKeyDown={handleKeyDown}
+							onKeyUp={handleKeyUp}
+							onMouseUp={updateCursorPosition}
+							onPaste={handlePaste}
+							onSelect={updateCursorPosition}
+							placeholder={showUnsupportedFileError || showDimensionError ? "" : effectivePlaceholder}
+							ref={(el) => {
+								if (typeof ref === "function") ref(el)
+								else if (ref) ref.current = el
+								textAreaRef.current = el
+							}}
+							value={inputValue}
+						/>
+					</div>
 
 					{(selectedImages.length > 0 || selectedFiles.length > 0) && (
-						<div className="px-3 pb-2">
+						<div className={cn("pb-2", isUltraCompact ? "px-3" : isCompact ? "px-3.5" : "px-4")}>
 							<Thumbnails
 								files={selectedFiles}
 								images={selectedImages}
@@ -1265,7 +1277,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						</div>
 					)}
 
-					<div className={cn("flex min-w-0 items-center gap-2 pb-2 pt-0.5", isCompact ? "px-1.5" : "px-2")}>
+					<div
+						className={cn(
+							"chat-control-rail flex min-w-0 items-center gap-2 border-t border-foreground/[0.06] pb-2 pt-1.5",
+							isUltraCompact ? "px-2" : isCompact ? "px-2.5" : "px-3",
+						)}>
 						<ChatInputActions
 							attachDisabled={shouldDisableFilesAndImages}
 							composerMode={composerMode}

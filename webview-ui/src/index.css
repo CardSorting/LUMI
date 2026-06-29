@@ -235,7 +235,8 @@ body {
 }
 
 [data-short-height="true"] .chat-input-textarea {
-	max-height: 80px;
+	max-height: 96px;
+	overflow-y: auto;
 }
 
 /* Legacy: keep hiding model button at very narrow widths */

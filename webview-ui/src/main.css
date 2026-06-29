@@ -165,8 +165,23 @@ vscode-dropdown::part(listbox) {
 	border: none;
 	font-family: var(--vscode-font-family);
 	font-size: var(--vscode-editor-font-size);
-	line-height: 1.5;
-	padding: 0;
+	line-height: 1.55;
+	caret-color: var(--vscode-input-foreground);
+}
+
+.chat-input-textarea::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+	opacity: 0.8;
+}
+
+/* Composer structural zones — explicit writing surface + control rail */
+.chat-writing-zone {
+	box-sizing: border-box;
+	min-height: 0;
+}
+
+.chat-control-rail {
+	box-sizing: border-box;
 }
 
 .chat-input-textarea:disabled {
