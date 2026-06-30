@@ -207,6 +207,9 @@ export class TaskState {
 	lastGateLifecycleDecisionCheckpointHash?: string
 	/** Graph revision when the last gate lifecycle decision was cached. */
 	lastGateLifecycleDecisionGraphRevision?: number
+	/** Checkpoint hash used for the last half-open circuit breaker probe attempt.
+	 * Prevents multiple probes on the same workspace checkpoint. */
+	lastProbeCheckpointHash?: string
 }
 
 export enum PolicyHealth {

@@ -9,6 +9,7 @@ import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import AdmZip from "adm-zip"
 
 /** Packages required at extension runtime (must match esbuild externals + sqlite chain). */
 export const REQUIRED_RUNTIME_PACKAGES = ["better-sqlite3", "bindings", "file-uri-to-path"]
@@ -20,6 +21,17 @@ export const INSTALLED_NATIVE_MODULE_RELATIVE = "node_modules/better-sqlite3/bui
 export const MIN_NATIVE_BINARY_BYTES = 100_000
 
 export const ELECTRON_VERSION = "39.2.3"
+
+export const NATIVE_VSIX_TARGETS = ["win32-x64", "win32-arm64", "linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]
+
+const HOST_TARGETS = new Map([
+	["win32:x64", "win32-x64"],
+	["win32:arm64", "win32-arm64"],
+	["linux:x64", "linux-x64"],
+	["linux:arm64", "linux-arm64"],
+	["darwin:x64", "darwin-x64"],
+	["darwin:arm64", "darwin-arm64"],
+])
 
 export const DEFAULT_EXTENSION_ROOTS = [
 	{ id: "antigravity", label: "Antigravity IDE", dir: path.join(os.homedir(), ".antigravity-ide", "extensions") },
@@ -55,7 +67,7 @@ export const OPENVSX_VSCODEIGNORE_MARKERS = [
 
 export function rebuildBetterSqlite3(repoRoot) {
 	console.log(`[vsix] rebuilding better-sqlite3 for Electron ${ELECTRON_VERSION}...`)
-	execFileSync("npm", ["run", "rebuild:electron:better-sqlite3"], {
+	execFileSync(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "rebuild:electron:better-sqlite3"], {
 		stdio: "inherit",
 		cwd: repoRoot,
 	})
@@ -65,7 +77,75 @@ function listVsixEntries(vsixPath) {
 	if (!fs.existsSync(vsixPath)) {
 		return ""
 	}
-	return execFileSync("unzip", ["-l", vsixPath], { encoding: "utf8" })
+	return new AdmZip(vsixPath)
+		.getEntries()
+		.map((entry) => entry.entryName)
+		.join("\n")
+}
+
+function readVsixNativeBinary(vsixPath) {
+	if (!fs.existsSync(vsixPath)) {
+		return null
+	}
+	try {
+		return new AdmZip(vsixPath).getEntry(VSIX_NATIVE_MODULE_MARKER)?.getData() ?? null
+	} catch {
+		return null
+	}
+}
+
+export function nativeTargetForHost(platform = process.platform, arch = process.arch) {
+	const target = HOST_TARGETS.get(`${platform}:${arch}`)
+	if (!target) {
+		throw new Error(`Unsupported native extension host: ${platform}-${arch}`)
+	}
+	return target
+}
+
+export function inferVsixTarget(vsixPath) {
+	const name = path.basename(vsixPath, ".vsix")
+	return NATIVE_VSIX_TARGETS.find((target) => name.endsWith(`-${target}`)) ?? null
+}
+
+/**
+ * Identify the operating system and CPU encoded in a native Node module.
+ * This intentionally validates file headers rather than trusting the build host.
+ */
+export function detectNativeBinaryTarget(binary) {
+	if (!Buffer.isBuffer(binary) || binary.length < 64) {
+		return null
+	}
+
+	// Portable Executable (Windows): DOS header -> PE signature -> machine.
+	if (binary[0] === 0x4d && binary[1] === 0x5a) {
+		const peOffset = binary.readUInt32LE(0x3c)
+		if (peOffset + 6 > binary.length || binary.toString("ascii", peOffset, peOffset + 4) !== "PE\0\0") {
+			return null
+		}
+		const machine = binary.readUInt16LE(peOffset + 4)
+		if (machine === 0x8664) return "win32-x64"
+		if (machine === 0xaa64) return "win32-arm64"
+		return null
+	}
+
+	// ELF (Linux): e_machine follows the common 16-byte identification block.
+	if (binary.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) {
+		const machine = binary[5] === 2 ? binary.readUInt16BE(18) : binary.readUInt16LE(18)
+		if (machine === 0x3e) return "linux-x64"
+		if (machine === 0xb7) return "linux-arm64"
+		return null
+	}
+
+	// 64-bit Mach-O (macOS). Native modules are expected to be thin binaries.
+	const magic = binary.readUInt32BE(0)
+	if (magic === 0xcffaedfe || magic === 0xfeedfacf) {
+		const littleEndian = magic === 0xcffaedfe
+		const cpuType = littleEndian ? binary.readUInt32LE(4) : binary.readUInt32BE(4)
+		if (cpuType === 0x01000007) return "darwin-x64"
+		if (cpuType === 0x0100000c) return "darwin-arm64"
+	}
+
+	return null
 }
 
 function packagePathInVsix(packageName) {
@@ -126,6 +206,29 @@ export function auditVsixHealth(vsixPath) {
 		title: `${name} includes SQLite native binary`,
 		detail: hasBinary ? undefined : "better_sqlite3.node is missing",
 		fix: hasBinary ? undefined : ["Run: npm run package:vsix:openvsx", "Then reinstall the new VSIX"],
+	})
+
+	const declaredTarget = inferVsixTarget(vsixPath)
+	const binaryTarget = hasBinary ? detectNativeBinaryTarget(readVsixNativeBinary(vsixPath)) : null
+	checks.push({
+		id: `${name}:binary-target`,
+		status: declaredTarget && binaryTarget === declaredTarget ? "pass" : "fail",
+		title:
+			declaredTarget && binaryTarget === declaredTarget
+				? `${name} native binary matches ${declaredTarget}`
+				: `${name} native binary target is valid`,
+		detail:
+			declaredTarget && binaryTarget === declaredTarget
+				? undefined
+				: !declaredTarget
+					? "A VSIX containing native code cannot be published as universal"
+					: binaryTarget
+						? `VSIX declares ${declaredTarget}, but better_sqlite3.node is ${binaryTarget}`
+						: "Could not identify the better_sqlite3.node platform/architecture",
+		fix:
+			declaredTarget && binaryTarget === declaredTarget
+				? undefined
+				: ["Package on the matching operating system with: npm run package:vsix:all"],
 	})
 
 	checks.push(...auditOpenVsxPackaging(listing, name))
@@ -223,8 +326,16 @@ export function auditExtensionHealth(extensionDir, { ideLabel = "Editor" } = {})
 	if (fs.existsSync(binaryPath)) {
 		const size = fs.statSync(binaryPath).size
 		if (size >= MIN_NATIVE_BINARY_BYTES) {
-			binaryStatus = "pass"
-			binaryDetail = undefined
+			const expectedTarget = nativeTargetForHost()
+			const actualTarget = detectNativeBinaryTarget(fs.readFileSync(binaryPath))
+			if (actualTarget === expectedTarget) {
+				binaryStatus = "pass"
+				binaryDetail = undefined
+			} else {
+				binaryDetail = actualTarget
+					? `Expected ${expectedTarget}, but installed binary is ${actualTarget}`
+					: `Expected ${expectedTarget}, but the binary format is unrecognized`
+			}
 		} else {
 			binaryStatus = "warn"
 			binaryDetail = `Binary exists but is unusually small (${size} bytes)`
@@ -270,14 +381,24 @@ export function discoverVsixFiles(distDir, { version } = {}) {
 	}
 
 	if (version) {
-		return [`lumi-vscode-${version}.vsix`, `lumi-${version}.vsix`]
+		return fs
+			.readdirSync(distDir)
+			.filter((entry) => {
+				const universal = entry === `lumi-vscode-${version}.vsix` || entry === `lumi-${version}.vsix`
+				const targeted = entry.startsWith(`lumi-vscode-${version}-`) || entry.startsWith(`lumi-${version}-`)
+				return entry.endsWith(".vsix") && (universal || (targeted && inferVsixTarget(entry) !== null))
+			})
 			.map((entry) => path.join(distDir, entry))
-			.filter((entry) => fs.existsSync(entry))
+			.sort((a, b) => a.localeCompare(b))
 	}
 
 	return fs
 		.readdirSync(distDir)
-		.filter((entry) => entry.endsWith(".vsix") && /^lumi(-vscode)?-\d+\.\d+\.\d+\.vsix$/.test(entry))
+		.filter(
+			(entry) =>
+				entry.endsWith(".vsix") &&
+				/^lumi(-vscode)?-\d+\.\d+\.\d+(?:-(win32|linux|darwin)-(x64|arm64))?\.vsix$/.test(entry),
+		)
 		.map((entry) => path.join(distDir, entry))
 		.sort((a, b) => a.localeCompare(b))
 }
@@ -310,8 +431,8 @@ export function discoverLumiExtensions(extensionsRoots = DEFAULT_EXTENSION_ROOTS
 	return results.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function pickRepairVsix(distDir, extensionFolderName) {
-	const candidates = discoverVsixFiles(distDir)
+export function pickRepairVsix(distDir, extensionFolderName, target = nativeTargetForHost()) {
+	const candidates = discoverVsixFiles(distDir).filter((file) => inferVsixTarget(file) === target)
 	if (candidates.length === 0) {
 		return null
 	}
@@ -330,10 +451,15 @@ export function repairExtensionFromVsix({ extensionDir, vsixPath }) {
 	if (!vsixPath || !fs.existsSync(vsixPath)) {
 		throw new Error(`No repair VSIX found for ${path.basename(extensionDir)}`)
 	}
+	const expectedTarget = nativeTargetForHost()
+	const actualTarget = inferVsixTarget(vsixPath)
+	if (actualTarget !== expectedTarget) {
+		throw new Error(`Cannot install ${actualTarget ?? "universal"} VSIX on ${expectedTarget}`)
+	}
 
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lumi-repair-"))
 	try {
-		execFileSync("unzip", ["-q", vsixPath, "-d", tmpDir], { stdio: "pipe" })
+		new AdmZip(vsixPath).extractAllTo(tmpDir, true)
 		const extracted = path.join(tmpDir, "extension")
 		if (!fs.existsSync(extracted)) {
 			throw new Error(`VSIX ${path.basename(vsixPath)} has no extension/ folder`)

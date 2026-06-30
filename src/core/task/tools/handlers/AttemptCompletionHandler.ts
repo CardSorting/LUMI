@@ -19,8 +19,6 @@ import { resolvePlanBaselineMetadata } from "@shared/audit/auditMessages"
 import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { enrichAuditMetadataWithArtifactPaths, persistAuditWorkspaceArtifacts } from "@shared/audit/auditWorkspaceArtifacts"
 import { buildAuditHookMetadata, buildDoubleCheckAuditSection, runAdvisoryAudit } from "@shared/audit/completionAudit"
-import { deriveAuditValidity, mapLifecycleToCanonicalPhase } from "@shared/completion/canonicalSnapshot"
-import { classifyGateLifecycleFreshness } from "@shared/completion/gateLifecycleMessages"
 import { detectReplanIntent } from "@shared/detectReplanIntent"
 import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
@@ -35,7 +33,6 @@ import {
 	buildDoubleCheckReverifyMessage,
 	buildProactiveCompletionGuidance,
 	formatCompletionToolError,
-	getCompletionGraphRevision,
 	getLatestCheckpointHashFromMessages,
 	markCompletionAttemptFinished,
 	markPreflightReadinessHintEmitted,
@@ -49,11 +46,7 @@ import {
 	validateNotInReconciliationDebounce,
 	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
-import {
-	evaluateGateLifecycle,
-	getCachedGateLifecycleDecision,
-	publishGateLifecycleStatus,
-} from "../completion/GateLifecycleEvaluator"
+import { evaluateGateLifecycle, publishGateLifecycleStatus } from "../completion/GateLifecycleEvaluator"
 import {
 	type CompletionAuditGateResult,
 	emitCompletionGateBlockTelemetry,
@@ -199,46 +192,53 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 
 		const checkpointHash = getLatestCheckpointHashFromMessages(config)
 		const taskDescription = getInitialTaskPreview(config) || ""
-		const currentRevision = getCompletionGraphRevision(config)
-		const lastAttemptRevision = config.taskState.lastCompletionAttemptGraphRevision
-		const blockCount = config.taskState.completionGateBlockCount ?? 0
 
-		const cachedDecision = getCachedGateLifecycleDecision(config)
-		const snapshotFreshness = cachedDecision ? classifyGateLifecycleFreshness(cachedDecision.evaluatedAt) : "unknown"
+		// Delegate fast-path eligibility to the decision engine.
+		// No local audit-validity or fast-path bypass logic outside the engine.
+		const { evaluateCompletionLifecycle } = await import("../completion/completionSnapshotBuilder")
+		const decision = evaluateCompletionLifecycle(config, {
+			result,
+			taskDescription,
+			auditCacheKey: hashCompletionAuditInput(result, taskDescription, checkpointHash),
+		})
 
-		const cachedAudit = config.taskState.lastCompletionAudit
-		const currentAuditCacheKey = hashCompletionAuditInput(result, taskDescription, checkpointHash)
-		const auditValidity = cachedAudit
-			? deriveAuditValidity(
-					config.taskState.lastCompletionAuditCacheKey,
-					currentAuditCacheKey,
-					config.taskState.lastCompletionAuditCachedAt,
-				)
-			: "not_evaluated"
-
-		const isReady = cachedDecision
-			? mapLifecycleToCanonicalPhase(cachedDecision.lifecycleState, cachedDecision) === "ready_for_completion" ||
-				mapLifecycleToCanonicalPhase(cachedDecision.lifecycleState, cachedDecision) === "completing"
-			: false
-
-		const canTakeFastPath =
-			cachedDecision &&
-			snapshotFreshness === "current" &&
-			auditValidity === "valid" &&
-			isReady &&
-			blockCount === 0 &&
-			(lastAttemptRevision === undefined || lastAttemptRevision === currentRevision)
+		// ── Action Guard: enforce the binding action contract ──
+		// The decision engine determines truth. The action guard enforces truth.
+		// The agent only executes the permitted next action.
+		// Rejected actions do NOT increment counters, create audit state, or
+		// trigger retry loops.
+		const { guardAttemptCompletion } = await import("../completion/CompletionActionGuard")
+		const guardResult = guardAttemptCompletion(config, decision)
+		if (!guardResult.allowed) {
+			return guardResult.rejection
+		}
 
 		let auditMetadata: TaskAuditMetadata | undefined
 		let planBaseline: TaskAuditMetadata | undefined
 		let auditGateResult: CompletionAuditGateResult | undefined
 
+		// Route to finalization if the engine says so — explicit, not emergent
+		if (decision.kind === "route_to_finalization") {
+			// Engineering is verified — take the fast path using cached audit
+			auditMetadata = config.taskState.lastCompletionAudit
+			if (auditMetadata) {
+				const messages = config.messageState?.getDietCodeMessages?.() ?? []
+				planBaseline = resolvePlanBaselineMetadata(messages, config.taskState.lastPlanAuditMetadata)
+				latchEngineeringFromAuditPass(config, checkpointHash)
+			}
+		}
+
+		const canTakeFastPath = decision.kind === "route_to_finalization" && Boolean(auditMetadata)
+
 		if (canTakeFastPath) {
-			auditMetadata = cachedAudit
-			const messages = config.messageState?.getDietCodeMessages?.() ?? []
-			planBaseline = resolvePlanBaselineMetadata(messages, config.taskState.lastPlanAuditMetadata)
-			latchEngineeringFromAuditPass(config, checkpointHash)
+			// Fast path already set auditMetadata above
 		} else {
+			// If the engine allowed a probe, record the checkpoint hash so
+			// a second probe on the same checkpoint is blocked.
+			if (decision.kind === "allow_probe" && checkpointHash) {
+				config.taskState.lastProbeCheckpointHash = checkpointHash
+			}
+
 			// No-op retry suppression — if no meaningful state changed since the last
 			// attempt and we're within the reconciliation debounce window, reject
 			// immediately with a clear explanation. Prevents retry thrashing.

@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { assertVsixHasNativeModule, nativeTargetForHost } from "./vsix-native-deps.mjs"
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const packageJsonPath = path.join(repoRoot, "package.json")
@@ -37,12 +38,14 @@ function main() {
 	})
 
 	const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
-	const vsixPath = path.join(repoRoot, "dist", `lumi-${pkg.version}.vsix`)
+	const target = nativeTargetForHost()
+	const vsixPath = path.join(repoRoot, "dist", `lumi-${pkg.version}-${target}.vsix`)
 
 	if (!fs.existsSync(vsixPath)) {
 		console.log(`[openvsx] building ${vsixPath}...`)
 		execFileSync("node", ["scripts/package-openvsx-vsix.mjs"], { stdio: "inherit", cwd: repoRoot })
 	}
+	assertVsixHasNativeModule(vsixPath)
 
 	const args = ["publish", "-i", vsixPath, "-p", token]
 	if (isPreRelease) {
@@ -50,8 +53,8 @@ function main() {
 	}
 
 	try {
-		execFileSync("ovsx", args, { stdio: "inherit", cwd: repoRoot })
-		console.log("[openvsx] published CardSorting.lumi successfully")
+		execFileSync(process.platform === "win32" ? "ovsx.cmd" : "ovsx", args, { stdio: "inherit", cwd: repoRoot })
+		console.log(`[openvsx] published CardSorting.lumi for ${target}`)
 		console.warn(
 			"[openvsx] If the extension still shows an unverified publisher warning, wait for Eclipse to grant CardSorting namespace ownership, then republish.",
 		)

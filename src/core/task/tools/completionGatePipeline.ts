@@ -53,6 +53,7 @@ import {
 	validateCompletionTaskProgressRequired,
 	validateFocusChainComplete,
 	validateTaskProgressAlignsWithFocusChain,
+	validateWorkspaceProgressSinceGateBlock,
 } from "./attemptCompletionUtils"
 import { mapPreflightReasonToLifecycleState, publishGateLifecycleStatus } from "./completion/GateLifecycleEvaluator"
 import { isNonMutatingMode } from "./subagent/LockNecessity"
@@ -204,6 +205,11 @@ export const PREFLIGHT_STAGE_RUNNERS: ReadonlyArray<{
 			detectDuplicateCompletionSubmission(ctx.config, ctx.params.result, {
 				currentCheckpointHash: ctx.checkpointHash,
 			}),
+		soft: true,
+	},
+	{
+		stage: "workspace_progress",
+		validate: (ctx) => validateWorkspaceProgressSinceGateBlock(ctx.config, ctx.checkpointHash),
 		soft: true,
 	},
 	{
@@ -379,10 +385,28 @@ async function resolveCompletionAuditMetadata(
 	const cached = config.taskState.lastCompletionAudit
 	const currentRevision = getCompletionGraphRevision(config)
 
-	if (cached && cachedKey === cacheKey && config.taskState.lastCompletionAuditGraphRevision === currentRevision) {
+	// Cache reuse requires BOTH cache key match AND graph revision match.
+	// The cache key includes the checkpoint hash (workspace fingerprint), and
+	// the graph revision tracks meaningful state transitions.  Requiring both
+	// prevents false-positive "passed" audits when the workspace changed but
+	// the checkpoint hash didn't (e.g. edits without a checkpoint save).
+	// TTL alone is insufficient — it only prevents redundant audit runs within
+	// the same stable state, not across state transitions.
+	if (
+		cached &&
+		cachedKey === cacheKey &&
+		config.taskState.lastCompletionAuditGraphRevision === currentRevision &&
+		cachedAt &&
+		Date.now() - cachedAt < COMPLETION_AUDIT_CACHE_TTL_MS
+	) {
 		return cached
 	}
-	if (cached && cachedKey === cacheKey && cachedAt && Date.now() - cachedAt < COMPLETION_AUDIT_CACHE_TTL_MS) {
+	// Secondary cache: same graph revision + key match without TTL check.
+	// This handles the edge case where the TTL expired but no meaningful
+	// state changed — the audit is still authoritative for this revision.
+	if (cached && cachedKey === cacheKey && config.taskState.lastCompletionAuditGraphRevision === currentRevision) {
+		// Refresh the timestamp to extend the TTL window — the audit is still valid.
+		config.taskState.lastCompletionAuditCachedAt = Date.now()
 		return cached
 	}
 
@@ -478,10 +502,19 @@ export async function evaluateCompletionAuditGate(
 
 	const checkpointHash = getLatestCheckpointHashFromMessages(config)
 
-	// Fast-path: if the audit cache is still valid (same checkpoint hash, within
-	// TTL or same graph revision) and the last gate decision was "passed", reuse it directly.  This
-	// avoids redundant filesystem reads in resolveCompletionGateContext and
-	// re-evaluation of the audit gate when nothing has changed.
+	// Fast-path: reuse cached audit ONLY when ALL of the following hold:
+	//   1. Cache key matches (includes checkpoint hash — workspace fingerprint)
+	//   2. Graph revision matches (meaningful state hasn't changed since cache)
+	//   3. Engineering is verified (latch active — finalization lane eligible)
+	//
+	// The graph revision check is AND'd, not OR'd with TTL.  A TTL-only match
+	// is insufficient for the fast-path because the agent may have made edits
+	// that didn't trigger a checkpoint save but DID change workspace state.
+	// Graph revision increments on every gate block and attempt finish, so it
+	// catches all meaningful transitions.
+	//
+	// Mirrors CDN cache validation: both ETag (cache key) AND Last-Modified
+	// (graph revision) must match before serving from cache without revalidation.
 	const cacheKey = hashCompletionAuditInput(params.result, params.taskDescription, checkpointHash)
 	const cachedAt = config.taskState.lastCompletionAuditCachedAt
 	const cachedKey = config.taskState.lastCompletionAuditCacheKey
@@ -490,8 +523,9 @@ export async function evaluateCompletionAuditGate(
 	const isCacheValid =
 		cachedAudit &&
 		cachedKey === cacheKey &&
-		((cachedAt && Date.now() - cachedAt < COMPLETION_AUDIT_CACHE_TTL_MS) ||
-			config.taskState.lastCompletionAuditGraphRevision === currentRevision)
+		config.taskState.lastCompletionAuditGraphRevision === currentRevision &&
+		cachedAt !== undefined &&
+		Date.now() - cachedAt < COMPLETION_AUDIT_CACHE_TTL_MS
 
 	if (isCacheValid && config.taskState.engineeringVerifiedAt) {
 		// Re-evaluate the gate decision with the cached metadata to produce a
@@ -607,7 +641,7 @@ export async function evaluateCompletionAuditGate(
 			status: "error",
 			message: buildCompletionAgentErrorMessage(
 				"Task completion blocked: hardening audit evaluation failed. " +
-					"Fix the underlying issue or retry after audit services recover.",
+					"Inspect extension logs for a local audit calculation or policy error, fix that runtime issue, then retry.",
 				config,
 				{ result: params.result },
 			),

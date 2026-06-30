@@ -200,6 +200,61 @@ When the engineering gate status is passed, `resolveGateLifecycleSnapshot` force
 ### 5. Revision-Aware Caching
 Gate lifecycle decisions and audit gate results are cached and validated against both the workspace checkpoint hash and the active completion graph revision (ignoring the 5-minute TTL when the graph revision matches).
 
+## Centralized decision engine (v2.9.0+)
+
+All completion eligibility decisions now flow through a single deterministic authority: `CompletionLifecycleDecisionEngine`. No handler, utility, or pipeline stage may independently decide completion eligibility.
+
+**See:** [Completion lifecycle decision engine](completion-lifecycle-decision-engine.md) for full architecture, action contract, and enforcement model.
+
+### Key changes from the hardening passes
+
+1. **Audit cache validity** changed from OR logic to strict AND: cache key + graph revision + TTL + gate active must ALL match. A stale audit can no longer be reused when only one dimension holds.
+
+2. **Circuit breaker half-open probe** (Hystrix/Envoy pattern): when the circuit breaker trips and engineering is NOT verified, the agent can make workspace changes to earn one probe attempt. Exactly one probe per checkpoint, tracked via `lastProbeCheckpointHash` on `TaskState`.
+
+3. **Workspace-unchanged detection** (`workspace_progress` stage): blocks retries when the workspace hasn't changed since the last gate block, even if the result text was reworded. Soft block — does not consume circuit-breaker budget.
+
+4. **Binding action contract**: every decision carries `nextAllowedAction`, `forbiddenActions`, and `canonicalInstruction`. The `CompletionActionGuard` enforces the contract at the tool boundary — rejected actions never mutate counters, create audit state, or trigger retries.
+
+5. **Gate registry**: unknown or retired gates are non-participating (not blocking). The registry distinguishes "never existed" from "was retired" for trace clarity.
+
+### Decision engine pipeline
+
+```
+evaluate(snapshot)
+  → normalize inputs
+  → validate active registry
+  → evaluate engineering verification
+  → evaluate finalization routing (explicit, not emergent)
+  → evaluate audit validity (strict AND)
+  → evaluate circuit breaker (closed / tripped / half_open)
+  → evaluate workspace progress
+  → evaluate duplicate attempt
+  → return one canonical decision with action contract + full trace
+```
+
+### Action contract
+
+| Decision | nextAllowedAction | forbiddenActions |
+|----------|-------------------|-----------------|
+| `allow_attempt` | `attempt_completion` | `[]` |
+| `allow_probe` | `attempt_completion` | `[]` |
+| `route_to_finalization` | `run_finalization` | `["attempt_completion"]` |
+| `soft_block` | `modify_workspace` | `["attempt_completion", "run_finalization"]` |
+| `hard_block` | `stop_and_report` | `["attempt_completion", "run_finalization"]` |
+
+The agent does not interpret lifecycle state. It receives a command. The decision engine determines truth. The action guard enforces truth. The agent only executes the permitted next action.
+
+### New source files
+
+| File | Role |
+|------|------|
+| `completion/CompletionLifecycleTypes.ts` | Immutable snapshot input, canonical decision output, action contract types |
+| `completion/CompletionLifecycleDecisionEngine.ts` | Single deterministic authority — pure function, no side effects |
+| `completion/CompletionActionGuard.ts` | Enforcement layer — validates tool against action contract, rejects without counter mutation |
+| `completion/gateRegistry.ts` | Active/retired gate registry |
+| `completion/completionSnapshotBuilder.ts` | Adapter — normalizes TaskConfig/TaskState into immutable snapshot |
+
 ## Invariants (`gateLifecycleInvariants.ts`)
 
 - Retry-locked verified engineering must allow `run_finalization`
@@ -212,10 +267,14 @@ Gate lifecycle decisions and audit gate results are cached and validated against
 ## Regression guardrails
 
 Tests in:
+- `src/core/task/tools/completion/__tests__/decisionEngine.test.ts` — decision engine acceptance criteria (28 tests)
+- `src/core/task/tools/completion/__tests__/actionGuard.test.ts` — action guard enforcement, no counter mutation, prose-override prevention (21 tests)
+- `src/core/task/tools/completion/__tests__/falsePositivePrevention.test.ts` — circuit breaker half-open, workspace progress, duplicate detection (21 tests)
 - `src/core/task/tools/completion/__tests__/gateLifecycleAudit.test.ts`
 - `src/core/task/tools/completion/__tests__/gateLifecycleEvaluator.test.ts`
 - `src/core/task/tools/completion/__tests__/fakeFollowupGuard.test.ts`
 - `src/core/task/tools/finalization/__tests__/finalizationRunner.test.ts`
+- `src/shared/audit/__tests__/completionAuditResilience.test.ts` — audit infra resilience
 - `webview-ui/.../GateLifecycleStatusPanel.test.tsx`
 
 ## Removed legacy behavior

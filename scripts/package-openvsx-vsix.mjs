@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { assertVsixHasNativeModule, rebuildBetterSqlite3 } from "./vsix-native-deps.mjs"
+import { assertVsixHasNativeModule, nativeTargetForHost, rebuildBetterSqlite3 } from "./vsix-native-deps.mjs"
 import { createWorkspaceLinkManager } from "./workspace-link.mjs"
 
 const OPENVSX_EXTENSION_NAME = "lumi"
@@ -29,7 +29,8 @@ function main() {
 	const originalPackageJson = fs.readFileSync(packageJsonPath, "utf8")
 	const pkg = JSON.parse(originalPackageJson)
 	const version = pkg.version
-	const outPath = path.join(repoRoot, "dist", `lumi-${version}.vsix`)
+	const target = nativeTargetForHost()
+	const outPath = path.join(repoRoot, "dist", `lumi-${version}-${target}.vsix`)
 	let didPatchName = false
 	let didReconcileWorkspaceLink = false
 
@@ -53,10 +54,14 @@ function main() {
 			console.log(`[openvsx] renamed workspace self-link: ${MARKETPLACE_EXTENSION_NAME} → ${OPENVSX_EXTENSION_NAME}`)
 		}
 
-		execFileSync("vsce", ["package", "--allow-package-secrets", "sendgrid", "--out", outPath], {
-			stdio: "inherit",
-			cwd: repoRoot,
-		})
+		execFileSync(
+			process.platform === "win32" ? "vsce.cmd" : "vsce",
+			["package", "--target", target, "--allow-package-secrets", "sendgrid", "--out", outPath],
+			{
+				stdio: "inherit",
+				cwd: repoRoot,
+			},
+		)
 
 		assertVsixHasNativeModule(outPath)
 		console.log(`[openvsx] packaged ${outPath}`)

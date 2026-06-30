@@ -16,6 +16,18 @@ export class RunFinalizationToolHandler implements IToolHandler {
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const seal = block.params.seal === "true"
 
+		// ── Action Guard: enforce the binding action contract ──
+		// The decision engine determines truth. The action guard enforces truth.
+		// Rejected actions do NOT increment counters, create audit state, or
+		// trigger retry loops.
+		const { evaluateCompletionLifecycle } = await import("../completion/completionSnapshotBuilder")
+		const { guardRunFinalization } = await import("../completion/CompletionActionGuard")
+		const decision = evaluateCompletionLifecycle(config)
+		const guardResult = guardRunFinalization(config, decision)
+		if (!guardResult.allowed) {
+			return guardResult.rejection
+		}
+
 		if (!canRunFinalization(config) && !seal) {
 			return formatResponse.toolError(
 				"Finalization is not available. Engineering must be verified first, or completion retry must be locked with a verified engineering latch.",

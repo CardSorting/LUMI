@@ -26,8 +26,64 @@ jobs:
     test:
         uses: ./.github/workflows/test.yml
 
-    publish:
+    build-targets:
         needs: test
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+        name: Build Extension (${{ matrix.os }})
+        runs-on: ${{ matrix.os }}
+        permissions:
+            contents: read
+
+        steps:
+            - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+              with:
+                  ref: ${{ github.event.inputs.tag }}
+                  fetch-depth: 0
+                  fetch-tags: true
+
+            - name: Setup Node.js
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: 22
+
+            - name: Install root dependencies
+              run: npm install --include=optional
+
+            - name: Install webview-ui dependencies
+              run: cd webview-ui && npm install --include=optional
+
+            - name: Install native protoc on Apple Silicon
+              if: runner.os == 'macOS' && runner.arch == 'ARM64'
+              run: brew install protobuf
+
+            - name: Package targeted VSIX files
+              env:
+                  DIETCODE_ENVIRONMENT: production
+                  TELEMETRY_SERVICE_API_KEY: ${{ secrets.TELEMETRY_SERVICE_API_KEY }}
+                  ERROR_SERVICE_API_KEY: ${{ secrets.ERROR_SERVICE_API_KEY }}
+                  # OpenTelemetry production defaults (can be overridden at runtime)
+                  OTEL_TELEMETRY_ENABLED: ${{ secrets.OTEL_TELEMETRY_ENABLED }}
+                  OTEL_LOGS_EXPORTER: otlp
+                  OTEL_METRICS_EXPORTER: otlp
+                  OTEL_EXPORTER_OTLP_PROTOCOL: ${{ secrets.OTEL_EXPORTER_OTLP_PROTOCOL }}
+                  OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+                  OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+              run: |
+                  npm run package:vsix:all
+                  npm run doctor -- --ci
+
+            - name: Upload targeted VSIX
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: vsix-${{ runner.os }}-${{ runner.arch }}
+                  path: dist/*.vsix
+                  if-no-files-found: error
+
+    publish:
+        needs: build-targets
         name: Publish Extension
         runs-on: ubuntu-latest
         environment: publish
@@ -48,14 +104,15 @@ jobs:
               with:
                   node-version: 22
 
-            - name: Install root dependencies
-              run: npm install --include=optional
-
-            - name: Install webview-ui dependencies
-              run: cd webview-ui && npm install --include=optional
-
             - name: Install Publishing Tools
-              run: npm install -g @vscode/vsce@3.2.1 ovsx@0.10.6
+              run: npm install -g @vscode/vsce@3.7.1 ovsx@0.10.6
+
+            - name: Download targeted VSIX packages
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+              with:
+                  pattern: vsix-*
+                  path: dist
+                  merge-multiple: true
 
             - name: Get Version
               id: get_version
@@ -69,40 +126,34 @@ jobs:
                   TAG="${{ github.event.inputs.tag }}"
                   echo "tag=$TAG" >> $GITHUB_OUTPUT
                   echo "Using existing tag: $TAG"
+                  git rev-parse "$TAG" >/dev/null
 
-                  # Verify the tag exists
-                  if ! git rev-parse "$TAG" >/dev/null 2>&1; then
-                    echo "Error: Tag '$TAG' does not exist in the repository"
-                    exit 1
-                  fi
-
-                  echo "Tag '$TAG' validated successfully"
-
-            - name: Package and Publish Extension
+            - name: Publish all platform targets
               env:
                   VSCE_PAT: ${{ secrets.VSCE_PAT }}
                   OVSX_PAT: ${{ secrets.OVSX_PAT }}
-                  DIETCODE_ENVIRONMENT: production
-                  TELEMETRY_SERVICE_API_KEY: ${{ secrets.TELEMETRY_SERVICE_API_KEY }}
-                  ERROR_SERVICE_API_KEY: ${{ secrets.ERROR_SERVICE_API_KEY }}
-                  # OpenTelemetry production defaults (can be overridden at runtime)
-                  OTEL_TELEMETRY_ENABLED: ${{ secrets.OTEL_TELEMETRY_ENABLED }}
-                  OTEL_LOGS_EXPORTER: otlp
-                  OTEL_METRICS_EXPORTER: otlp
-                  OTEL_EXPORTER_OTLP_PROTOCOL: ${{ secrets.OTEL_EXPORTER_OTLP_PROTOCOL }}
-                  OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-                  OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
               run: |
-                  npm run package:vsix:all
-                  npm run doctor -- --ci
-
-                  if [ "${{ github.event.inputs.release-type }}" = "pre-release" ]; then
-                    npm run publish:marketplace:prerelease
-                    echo "Successfully published pre-release version ${{ steps.get_version.outputs.version }} to VS Code Marketplace and Open VSX Registry"
-                  else
-                    npm run publish:marketplace
-                    echo "Successfully published release version ${{ steps.get_version.outputs.version }} to VS Code Marketplace and Open VSX Registry"
+                  mapfile -t VSCODE_VSIX < <(find dist -maxdepth 1 -name 'lumi-vscode-*.vsix' -print | sort)
+                  if [ "${#VSCODE_VSIX[@]}" -eq 0 ]; then
+                    echo "No VS Code Marketplace VSIX files found"
+                    exit 1
                   fi
+                  VSCE_ARGS=(publish --packagePath "${VSCODE_VSIX[@]}")
+                  if [ "${{ github.event.inputs.release-type }}" = "pre-release" ]; then
+                    VSCE_ARGS+=(--pre-release)
+                  fi
+                  vsce "${VSCE_ARGS[@]}"
+
+                  node scripts/setup-openvsx-namespace.mjs
+                  for vsix in dist/lumi-[0-9]*.vsix; do
+                    OVSX_ARGS=(publish -i "$vsix" -p "$OVSX_PAT")
+                    if [ "${{ github.event.inputs.release-type }}" = "pre-release" ]; then
+                      OVSX_ARGS+=(--pre-release)
+                    fi
+                    ovsx "${OVSX_ARGS[@]}"
+                  done
+
+                  echo "Published ${{ steps.get_version.outputs.version }} for all built platform targets"
 
             - name: Get Previous Tag
               id: prev_tag

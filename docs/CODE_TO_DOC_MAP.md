@@ -25,8 +25,12 @@ Use this when you change code and need to update the matching doc.
 | Source | Documentation |
 |--------|---------------|
 | `src/core/task/tools/autoApprove.ts` | [Auto-approve](features/auto-approve.mdx) |
-| `src/core/task/tools/completionGatePipeline.ts` | [Security](SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](papers/whitepaper.md#7-approval-hooks-and-completion) · [Parent-thread execution authority](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) |
-| `src/core/task/tools/attemptCompletionUtils.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) |
+| `src/core/task/tools/completionGatePipeline.ts` | [Security](SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](papers/whitepaper.md#7-approval-hooks-and-completion) · [Parent-thread execution authority](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) · [Decision engine](completion-lifecycle-decision-engine.md) |
+| `src/core/task/tools/attemptCompletionUtils.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) · [Decision engine](completion-lifecycle-decision-engine.md) |
+| `src/core/task/tools/completion/CompletionLifecycleDecisionEngine.ts` | [Decision engine](completion-lifecycle-decision-engine.md) |
+| `src/core/task/tools/completion/CompletionActionGuard.ts` | [Decision engine](completion-lifecycle-decision-engine.md) |
+| `src/core/task/tools/completion/completionSnapshotBuilder.ts` | [Decision engine](completion-lifecycle-decision-engine.md) |
+| `src/core/task/tools/completion/gateRegistry.ts` | [Decision engine](completion-lifecycle-decision-engine.md) |
 | `src/core/task/tools/executionAuthority.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) |
 | `src/core/task/ToolExecutor.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) · [Project map](PROJECT_MAP.md) |
 | `src/core/policy/FluidPolicyEngine.ts` | [Parent-thread execution authority](parent-thread-execution-authority.md) · [Architectural enforcement](ARCHITECTURAL_ENFORCEMENT.md) |

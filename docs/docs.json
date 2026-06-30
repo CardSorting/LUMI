@@ -189,6 +189,20 @@
 						]
 					},
 					{
+						"group": "Execution & Completion Authority",
+						"pages": [
+							"completion-lifecycle-decision-engine",
+							"completion-gate-lifecycle-migration",
+							"parent-thread-execution-authority",
+							"governed-execution-authority",
+							"governed-execution-runbook",
+							"governed-execution-decisions",
+							"governed-execution-schema",
+							"governed-subagent-execution",
+							"execution-envelope-migration"
+						]
+					},
+					{
 						"group": "Papers (Agent Layer)",
 						"pages": [
 							"papers/companion-brief",

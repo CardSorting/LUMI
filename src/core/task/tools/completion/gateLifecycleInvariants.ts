@@ -1,3 +1,4 @@
+import { MAX_COMPLETION_GATE_BLOCK_COUNT } from "@shared/audit/gatePolicy"
 import type { GateLifecycleState } from "@shared/completion/completionLifecycle"
 import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -99,7 +100,7 @@ export function assertNoContradictoryCompletionState(config: TaskConfig): void {
 	const lifecycleState = config.taskState.completionLifecycleState
 	const engineeringVerified = typeof config.taskState.engineeringVerifiedAt === "number"
 	const blockCount = config.taskState.completionGateBlockCount ?? 0
-	const isRetryLocked = blockCount >= MAX_COMPLETION_GATE_BLOCK_COUNT_VALUE
+	const isRetryLocked = blockCount >= MAX_COMPLETION_GATE_BLOCK_COUNT
 
 	// Rule: verified engineering must not be in "engineering_in_progress"
 	if (engineeringVerified && lifecycleState === "engineering_in_progress") {
@@ -120,6 +121,3 @@ export function assertNoContradictoryCompletionState(config: TaskConfig): void {
 		throw new GateLifecycleInvariantError(`Contradictory state: receipt sealed with non-zero block count (${blockCount})`)
 	}
 }
-
-/** Local constant to avoid circular import — must match MAX_COMPLETION_GATE_BLOCK_COUNT in gatePolicy.ts */
-const MAX_COMPLETION_GATE_BLOCK_COUNT_VALUE = 10

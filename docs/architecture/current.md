@@ -43,6 +43,7 @@ src/extension.ts
 | `src/core/task/tools/subagent/` | Subagent runner, governed coordinator, projection, merge gate |
 | `src/core/governance/` | `LockAuthority`, governed locks, broccoli fencing |
 | `src/core/task/tools/` | Tool handlers and coordinator |
+| `src/core/task/tools/completion/` | **Completion lifecycle decision engine** — single deterministic authority for completion/finalization eligibility, with binding action contracts enforced at the tool boundary |
 | `src/core/api/` | LLM provider handlers and streaming transforms |
 | `src/core/context/` | Context window, file tracking, user rules |
 | `src/core/prompts/` | System prompts, slash-command templates |

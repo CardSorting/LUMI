@@ -139,7 +139,7 @@ export function buildRetryLockedDecision(config: TaskConfig): GateLifecycleDecis
 		reasonCode: "retry.locked",
 		operatorMessage: engineeringVerified
 			? "Engineering verified. Completion retry is locked — finalization lane active in this session."
-			: `Completion retry locked (${config.taskState.completionGateBlockCount ?? MAX_COMPLETION_GATE_BLOCK_COUNT}/${MAX_COMPLETION_GATE_BLOCK_COUNT}). Fix engineering violations, then use the finalization lane.`,
+			: `Completion retry locked (${config.taskState.completionGateBlockCount ?? MAX_COMPLETION_GATE_BLOCK_COUNT}/${MAX_COMPLETION_GATE_BLOCK_COUNT}). Make workspace changes (checkpoint hash must change) for a probe attempt, or use act_mode_respond to present results.`,
 		engineering: engineeringVerified ? "passed" : "failed",
 		verification: engineeringVerified ? "passed" : "pending",
 		documentation: evidence?.docsUpdated.length ? "passed" : "pending",

@@ -12,23 +12,28 @@ import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { assertVsixHasNativeModule, rebuildBetterSqlite3 } from "./vsix-native-deps.mjs"
+import { assertVsixHasNativeModule, nativeTargetForHost, rebuildBetterSqlite3 } from "./vsix-native-deps.mjs"
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const packageJsonPath = path.join(repoRoot, "package.json")
 
 function main() {
 	const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
-	const outPath = path.join(repoRoot, "dist", `lumi-vscode-${pkg.version}.vsix`)
+	const target = nativeTargetForHost()
+	const outPath = path.join(repoRoot, "dist", `lumi-vscode-${pkg.version}-${target}.vsix`)
 
 	fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
 	try {
 		rebuildBetterSqlite3(repoRoot)
-		execFileSync("vsce", ["package", "--allow-package-secrets", "sendgrid", "--out", outPath], {
-			stdio: "inherit",
-			cwd: repoRoot,
-		})
+		execFileSync(
+			process.platform === "win32" ? "vsce.cmd" : "vsce",
+			["package", "--target", target, "--allow-package-secrets", "sendgrid", "--out", outPath],
+			{
+				stdio: "inherit",
+				cwd: repoRoot,
+			},
+		)
 		assertVsixHasNativeModule(outPath)
 		console.log(`[vscode] packaged ${outPath}`)
 	} catch (error) {

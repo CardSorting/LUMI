@@ -74,9 +74,9 @@ Review the diff — do not blind-merge enterprise/hosted-service pages that legi
 Set tokens: `VSCE_PAT` ([Azure DevOps](https://dev.azure.com)) · `OVSX_PAT` ([open-vsx.org](https://open-vsx.org/user-settings/tokens))
 
 ```bash
-npm run package:vsix              # dist/lumi-vscode-<version>.vsix
-npm run package:vsix:openvsx        # dist/lumi-<version>.vsix (CardSorting.lumi)
-npm run package:vsix:all            # both VSIX variants
+npm run package:vsix                # dist/lumi-vscode-<version>-<platform>-<arch>.vsix
+npm run package:vsix:openvsx        # dist/lumi-<version>-<platform>-<arch>.vsix (CardSorting.lumi)
+npm run package:vsix:all            # both registry variants for the current host
 npm run doctor                      # health check (packaging + installs)
 npm run doctor:install              # check installed extensions only (end users)
 npm run doctor:fix                  # repair broken local installs from dist/*.vsix
@@ -93,7 +93,7 @@ OVSX_PAT=... npm run publish:openvsx
 VSCE_PAT=... OVSX_PAT=... npm run publish:all:prerelease
 ```
 
-Open VSX publish runs `scripts/publish-openvsx.mjs`, which packages via `scripts/package-openvsx-vsix.mjs` and uploads `dist/lumi-<version>.vsix`.
+Open VSX publish runs `scripts/publish-openvsx.mjs`, which packages via `scripts/package-openvsx-vsix.mjs` and uploads the current host target from `dist/lumi-<version>-<platform>-<arch>.vsix`. Release CI builds and publishes Windows, Linux, and macOS targets separately; do not publish a universal VSIX containing native modules.
 
 ### Open VSX namespace verification
 

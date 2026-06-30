@@ -15,11 +15,15 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    package:
-        runs-on: ubuntu-latest
+    build-targets:
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+        runs-on: ${{ matrix.os }}
+        name: Package (${{ matrix.os }})
         permissions:
-            contents: write
-            id-token: write
+            contents: read
         steps:
             - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
               with:
@@ -38,10 +42,37 @@ jobs:
                   npm ci
                   cd webview-ui && npm ci
 
+            - name: Install native protoc on Apple Silicon
+              if: runner.os == 'macOS' && runner.arch == 'ARM64'
+              run: brew install protobuf
+
             - name: Package VSIX
-              run: |
-                  npm run package:vsix
-                  npm pack --dry-run
+              run: npm run package:vsix:all
+
+            - name: Upload targeted VSIX
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: vsix-${{ runner.os }}-${{ runner.arch }}
+                  path: dist/*.vsix
+                  if-no-files-found: error
+
+    release:
+        needs: build-targets
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            id-token: write
+        steps:
+            - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+              with:
+                  fetch-depth: 0
+
+            - name: Download targeted VSIX packages
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+              with:
+                  pattern: vsix-*
+                  path: dist
+                  merge-multiple: true
 
             - name: Install cosign
               uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0

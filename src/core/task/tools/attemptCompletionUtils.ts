@@ -39,6 +39,7 @@ export type CompletionPreflightReason =
 	| "invalid_tone"
 	| "duplicate_submission"
 	| "retry_cooldown"
+	| "workspace_unchanged"
 	| "focus_chain_incomplete"
 	| "task_progress_required"
 	| "task_progress_incomplete"
@@ -66,6 +67,7 @@ export const COMPLETION_PREFLIGHT_STAGES = [
 	"focus_chain",
 	"cooldown",
 	"duplicate",
+	"workspace_progress",
 	"demo_command",
 	"roadmap",
 	"roadmap_governance",
@@ -76,7 +78,7 @@ export const COMPLETION_PREFLIGHT_STAGES = [
 export type CompletionPreflightStage = (typeof COMPLETION_PREFLIGHT_STAGES)[number]
 
 /** Throttle-only blocks — do not consume circuit-breaker budget (mirrors HTTP 429 vs 4xx). */
-export const COMPLETION_SOFT_BLOCK_REASONS = new Set<CompletionPreflightReason>(["retry_cooldown"])
+export const COMPLETION_SOFT_BLOCK_REASONS = new Set<CompletionPreflightReason>(["retry_cooldown", "workspace_unchanged"])
 
 export function isCompletionSoftBlockReason(reason: CompletionPreflightReason): boolean {
 	return COMPLETION_SOFT_BLOCK_REASONS.has(reason)
@@ -408,6 +410,8 @@ export function mapCompletionReasonToPreflightStage(reason: CompletionPreflightR
 			return "cooldown"
 		case "duplicate_submission":
 			return "duplicate"
+		case "workspace_unchanged":
+			return "workspace_progress"
 		case "invalid_demo_command":
 			return "demo_command"
 		case "roadmap_gate":
@@ -425,6 +429,8 @@ export function mapCompletionReasonToHttpStatus(reason: CompletionPreflightReaso
 	switch (reason) {
 		case "retry_cooldown":
 			return 429
+		case "workspace_unchanged":
+			return 409
 		case "duplicate_submission":
 			return 409
 		case "circuit_breaker":
@@ -474,6 +480,11 @@ const COMPLETION_GATE_PLAYBOOK_STEPS: Partial<Record<CompletionPreflightReason, 
 		"Verify changes with git status or tests before retrying.",
 		"Wait for cooldown to expire if no workspace changes are possible yet.",
 	],
+	workspace_unchanged: [
+		"Make actual code changes — rewording the result summary won't fix audit violations.",
+		"Verify the checkpoint hash changed (via git status or a test run) before retrying.",
+		"If violations can't be fixed, summarize progress and use run_finalization after engineering verification.",
+	],
 	retry_cooldown: [
 		"Use the cooldown window to fix violations listed above.",
 		"Run verification commands and update scratchpad.md with fixes.",
@@ -516,8 +527,8 @@ const COMPLETION_GATE_PLAYBOOK_STEPS: Partial<Record<CompletionPreflightReason, 
 	],
 	audit_error: [
 		"Verify workspace state manually (git status, tests).",
-		"Wait for audit services to recover if infrastructure failed.",
-		"Retry attempt_completion after confirming stability.",
+		"Inspect extension logs for a local audit calculation or policy error.",
+		"Fix the audit runtime issue, then retry attempt_completion with the same verified evidence.",
 	],
 	double_check: [
 		"Re-read the verification checklist in the block message.",
@@ -527,6 +538,7 @@ const COMPLETION_GATE_PLAYBOOK_STEPS: Partial<Record<CompletionPreflightReason, 
 	circuit_breaker: [
 		"Stop calling attempt_completion in this session.",
 		"If engineering is verified, call run_finalization to finish documentation in this session.",
+		"If not verified, make substantive workspace changes (checkpoint hash must change) — the circuit breaker opens for one probe attempt.",
 		"Seal the receipt with run_finalization seal=true when finalization completes.",
 	],
 }
@@ -579,7 +591,7 @@ export function getRemainingCompletionGateStages(failedStage: CompletionPrefligh
 /** Short agent hints per pipeline stage — mirrors CI job descriptions. */
 export const COMPLETION_PREFLIGHT_STAGE_HINTS: Partial<Record<CompletionPreflightStage, string>> = {
 	circuit_breaker:
-		"Hard stop — attempt_completion forbidden; use run_finalization in this session when engineering is verified",
+		"Hard stop — attempt_completion forbidden; use run_finalization when engineering is verified, or make workspace changes for a probe attempt",
 	quality: "Substantive prose summary; no TODOs, placeholders, or engagement bait",
 	checklist_in_result: "Keep checklists in task_progress, not in result",
 	min_length: "Result must be at least 40 characters (1–2 paragraphs)",
@@ -590,6 +602,7 @@ export const COMPLETION_PREFLIGHT_STAGE_HINTS: Partial<Record<CompletionPrefligh
 	focus_chain: "Mark all focus chain items [x] via update_todo_list",
 	cooldown: "Wait for backoff before retrying after a gate block",
 	duplicate: "Change result or workspace before re-submitting",
+	workspace_progress: "Workspace must change (checkpoint hash) before audit re-evaluates",
 	demo_command: "Demo must run real behavior — not echo/cat",
 	roadmap: AUTO_GOVERNANCE.roadmapGateRecoveryHint,
 	audit: "Fix critical audit violations and re-verify",
@@ -621,7 +634,17 @@ export function getCompletionGateOperationalState(config: TaskConfig): Completio
 }
 
 export function isCompletionGateCircuitBreakerTripped(config: TaskConfig): boolean {
-	return (config.taskState.completionGateBlockCount ?? 0) >= MAX_COMPLETION_GATE_BLOCK_COUNT
+	// Delegate to the decision engine — no local eligibility logic.
+	// The engine uses a pure snapshot with deterministic half-open probe rules.
+	const { evaluateCircuitBreaker } =
+		require("./completion/CompletionLifecycleDecisionEngine") as typeof import("./completion/CompletionLifecycleDecisionEngine")
+	const { buildCompletionSnapshot } =
+		require("./completion/completionSnapshotBuilder") as typeof import("./completion/completionSnapshotBuilder")
+	const snapshot = buildCompletionSnapshot(config)
+	const cbState = evaluateCircuitBreaker(snapshot)
+	// "closed" and "half_open" = not tripped (half-open allows a probe attempt)
+	// "tripped" = hard stop
+	return cbState.state === "tripped"
 }
 
 export type CompletionGatePressureLevel = "stable" | "elevated" | "critical" | "tripped"
@@ -1065,6 +1088,7 @@ export function classifyCompletionPreflightReason(message: string): CompletionPr
 	if (message.includes("unfinished markers")) return "unfinished_markers"
 	if (message.includes("ends with a question") || message.includes("solicits further conversation")) return "invalid_tone"
 	if (message.includes("Duplicate completion submission")) return "duplicate_submission"
+	if (message.includes("workspace hasn't changed")) return "workspace_unchanged"
 	if (message.includes("Completion throttled")) return "retry_cooldown"
 	if (message.includes("but focus chain has")) return "task_progress_align"
 	if (message.includes("focus chain has")) return "focus_chain_incomplete"
@@ -1112,6 +1136,59 @@ export function hasWorkspaceChangedSinceGateBlock(config: TaskConfig, currentChe
 		return false
 	}
 	return priorHash !== currentCheckpointHash
+}
+
+/**
+ * Detect retry-without-progress: the agent changed the result text but the
+ * workspace hasn't changed since the last gate block.  This prevents the
+ * infinite loop where the agent keeps rewording the result summary without
+ * making actual code changes, burning through the block budget.
+ *
+ * Mirrors CI retry guards: a flaky test retry only counts if the code changed.
+ * If the workspace is unchanged, the audit will produce the same result —
+ * rewording the summary doesn't fix violations.
+ *
+ * Escape hatch: if engineering is verified, direct to run_finalization.
+ * Soft block: doesn't consume circuit-breaker budget, just prevents the
+ * audit from running until the workspace actually changes.
+ */
+export function validateWorkspaceProgressSinceGateBlock(config: TaskConfig, _currentCheckpointHash?: string): string | null {
+	// Delegate to the decision engine — no local workspace progress logic.
+	// The engine uses checkpoint hash comparison (workspace fingerprint),
+	// not result text comparison, so rewording can't bypass this check.
+	const { hasWorkspaceProgress } =
+		require("./completion/CompletionLifecycleDecisionEngine") as typeof import("./completion/CompletionLifecycleDecisionEngine")
+	const { buildCompletionSnapshot } =
+		require("./completion/completionSnapshotBuilder") as typeof import("./completion/completionSnapshotBuilder")
+	const snapshot = buildCompletionSnapshot(config)
+
+	// No prior blocks — nothing to check
+	if (snapshot.blockCount === 0) {
+		return null
+	}
+
+	// No prior checkpoint hash — can't determine, allow
+	if (!snapshot.lastGateBlockCheckpointHash) {
+		return null
+	}
+
+	// Engineering verified — don't block, finalization lane handles it
+	if (snapshot.engineeringVerifiedAt) {
+		return null
+	}
+
+	// Workspace changed — allow
+	if (hasWorkspaceProgress(snapshot)) {
+		return null
+	}
+
+	// Workspace unchanged since last block — soft block
+	return (
+		"Completion blocked: the workspace hasn't changed since the last gate block. " +
+		"Rewording the result summary won't change the audit outcome. " +
+		"Make substantive fixes to the code (the checkpoint hash must change), then retry. " +
+		"If the violations can't be fixed, use run_finalization after engineering verification."
+	)
 }
 
 export function validateCompletionAttemptCooldown(config: TaskConfig): string | null {
@@ -1402,6 +1479,8 @@ export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflight
 			return "End with a definitive statement — no questions or 'let me know if' phrasing."
 		case "duplicate_submission":
 			return "Change your result summary to reflect fixes, or wait for the cooldown to expire before retrying."
+		case "workspace_unchanged":
+			return "Make actual code changes — the checkpoint hash must change before the audit will re-evaluate."
 		case "retry_cooldown":
 			return "Use the cooldown window to fix violations and run verification commands."
 		case "focus_chain_incomplete":
@@ -1413,7 +1492,7 @@ export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflight
 		case "task_progress_align":
 			return "Include every focus chain item in task_progress with matching labels, all [x]."
 		case "circuit_breaker":
-			return "Stop calling attempt_completion. If engineering is verified, use run_finalization in this session."
+			return "Stop calling attempt_completion. If engineering is verified, use run_finalization in this session. If not, make workspace changes (checkpoint hash must change) for a probe attempt."
 		case "roadmap_gate":
 			return AUTO_GOVERNANCE.roadmapGateRecoveryHint
 		case "audit_gate":
@@ -1421,7 +1500,7 @@ export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflight
 		case "double_check":
 			return "Re-read the verification checklist, confirm each item, then call attempt_completion again."
 		case "audit_error":
-			return "Audit services failed — verify workspace state manually, then retry after recovery."
+			return "The authoritative local audit failed — inspect extension logs, fix the audit runtime issue, then retry."
 		case "invalid_demo_command":
 			return "Use a demo command that starts a server, opens a UI, or runs tests — not echo/cat."
 	}
@@ -1474,35 +1553,46 @@ export function formatCompletionToolError(message: string, config: TaskConfig, o
 /**
  * Detects no-op retries after a gate block (same result re-submitted without changes).
  * Mirrors idempotency / duplicate-request guards in production APIs.
+ *
+ * Two-tier detection:
+ *   1. Within cooldown: always suppress (prevents rapid-fire retry thrashing)
+ *   2. After cooldown expired: suppress IF workspace hasn't changed (same checkpoint
+ *      hash).  This prevents the infinite loop where the agent waits for cooldown,
+ *      re-submits the same result, gets blocked again, and burns through the block
+ *      budget until the circuit breaker trips.  The agent must either change the
+ *      workspace (which changes the checkpoint hash) or change the result summary.
+ *
+ * Escape hatch: if engineering is verified, the agent should use run_finalization
+ * instead of retrying attempt_completion — the message guides this.
  */
 export function detectDuplicateCompletionSubmission(
 	config: TaskConfig,
 	result: string,
 	options?: { currentCheckpointHash?: string },
 ): string | null {
-	const blockCount = config.taskState.completionGateBlockCount ?? 0
-	const priorFingerprint = config.taskState.lastBlockedCompletionResultFingerprint
-	if (blockCount === 0 || !priorFingerprint) {
+	// Delegate to the decision engine — no local duplicate detection logic.
+	// The engine uses both result fingerprint AND workspace checkpoint hash
+	// for idempotency-key style duplicate suppression.
+	const { isDuplicateAttempt } =
+		require("./completion/CompletionLifecycleDecisionEngine") as typeof import("./completion/CompletionLifecycleDecisionEngine")
+	const { buildCompletionSnapshot } =
+		require("./completion/completionSnapshotBuilder") as typeof import("./completion/completionSnapshotBuilder")
+	const snapshot = buildCompletionSnapshot(config, { result, checkpointHash: options?.currentCheckpointHash })
+	const isDup = isDuplicateAttempt(snapshot)
+	if (!isDup) {
 		return null
 	}
-	if (hashCompletionResult(result) !== priorFingerprint) {
-		return null
+	// Duplicate detected — provide appropriate escape route message
+	if (config.taskState.engineeringVerifiedAt) {
+		return (
+			"Duplicate completion submission: the same result was re-submitted after a gate block with no workspace changes. " +
+			"Engineering is already verified — call run_finalization to complete in this session instead of retrying attempt_completion."
+		)
 	}
-
-	if (hasWorkspaceChangedSinceGateBlock(config, options?.currentCheckpointHash)) {
-		return null
-	}
-
-	const lastAttempt = config.taskState.lastCompletionAttemptAt
-	const cooldownMs = getCompletionRetryCooldownMs(blockCount)
-	if (lastAttempt && Date.now() - lastAttempt >= cooldownMs) {
-		// After backoff window, allow same summary — workspace fixes may not change the prose.
-		return null
-	}
-
 	return (
-		"Duplicate completion submission: you re-submitted the same result after a gate block. " +
-		"Fix violations in the workspace and update your result before retrying."
+		"Duplicate completion submission: the same result was re-submitted after a gate block with no workspace changes. " +
+		"Make substantive fixes in the workspace (the checkpoint hash must change), then retry with an updated result. " +
+		"If you cannot fix the violations, summarize what was accomplished and use run_finalization after engineering verification."
 	)
 }
 
@@ -1692,9 +1782,11 @@ function getCompletionGateCircuitBreakerMessage(config: TaskConfig): string | nu
 	return (
 		`Task completion blocked: maximum completion gate retries (${MAX_COMPLETION_GATE_BLOCK_COUNT}) exceeded.\n\n` +
 		"**Recovery playbook:**\n" +
-		"1. Stop calling attempt_completion — further calls will fail in this session.\n" +
+		"1. Stop calling attempt_completion — further calls will fail unless you make workspace changes.\n" +
 		"2. Review audit artifacts and fix the underlying violations in the workspace.\n" +
-		"3. After engineering is verified, use `run_finalization` to finish documentation in this session."
+		"3. After making substantive code changes (the checkpoint hash must change), one probe attempt is allowed — the circuit breaker opens to let verified work through.\n" +
+		"4. If the probe passes, engineering is verified and you can use `run_finalization` to complete in this session.\n" +
+		"5. If violations cannot be fixed, summarize what was accomplished and present it via act_mode_respond."
 	)
 }
 
@@ -1805,6 +1897,7 @@ export function markCompletionAttemptFinished(config: TaskConfig): void {
 	clearBlockedCompletionResultFingerprint(config)
 	config.taskState.lastCompletionAttemptGraphRevision = undefined
 	config.taskState.reconciliationDebounceActive = false
+	config.taskState.lastProbeCheckpointHash = undefined
 	incrementCompletionGraphRevision(config)
 }
 

@@ -1,4 +1,5 @@
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
+import { Logger } from "@shared/services/Logger"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { shouldEmitAdvisoryAuditEvent } from "./auditAdvisoryDedup"
 import { formatGateReasonsForDisplay } from "./auditGateCatalog"
@@ -20,6 +21,25 @@ export { COMPLETION_GATE_SCORE_THRESHOLD }
 
 export async function persistCompletionAudit(streamId: string, metadata: TaskAuditMetadata): Promise<void> {
 	await orchestrator.persistTaskAudit(streamId, metadata)
+}
+
+async function resolveAuditStreamFocus(taskId: string, taskDescription: string, fallback: string): Promise<string> {
+	try {
+		return await orchestrator.resolveStreamFocus(taskId, taskDescription || fallback)
+	} catch (error) {
+		Logger.warn("[CompletionAudit] Stream focus unavailable; continuing with task-local audit context.", error)
+		return (taskDescription || fallback).trim()
+	}
+}
+
+async function persistCompletionAuditBestEffort(taskId: string, metadata: TaskAuditMetadata): Promise<void> {
+	try {
+		await persistCompletionAudit(taskId, metadata)
+	} catch (error) {
+		// Persistence is durability, not the quality decision. The caller retains
+		// this authoritative audit in the task-local completion cache.
+		Logger.warn("[CompletionAudit] Audit persistence unavailable; retaining task-local audit evidence.", error)
+	}
 }
 
 export { getViolationRemediation } from "./auditViolationRemediation"
@@ -119,9 +139,9 @@ export async function runCompletionAudit(
 	result: string,
 	streamFocusFallback = "",
 ): Promise<TaskAuditMetadata> {
-	const streamFocus = await orchestrator.resolveStreamFocus(taskId, taskDescription || streamFocusFallback)
+	const streamFocus = await resolveAuditStreamFocus(taskId, taskDescription, streamFocusFallback)
 	const metadata = await orchestrator.auditTask(taskId, taskDescription, result, streamFocus || taskDescription)
-	await persistCompletionAudit(taskId, metadata)
+	await persistCompletionAuditBestEffort(taskId, metadata)
 	return metadata
 }
 
@@ -132,7 +152,7 @@ export async function runAdvisoryAudit(
 	result: string,
 	streamFocusFallback = "",
 ): Promise<TaskAuditMetadata> {
-	const streamFocus = await orchestrator.resolveStreamFocus(taskId, taskDescription || streamFocusFallback)
+	const streamFocus = await resolveAuditStreamFocus(taskId, taskDescription, streamFocusFallback)
 	return orchestrator.auditTask(taskId, taskDescription, result, streamFocus || taskDescription)
 }
 

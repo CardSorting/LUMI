@@ -14,8 +14,8 @@ import { ELECTRON_VERSION } from "./vsix-native-deps.mjs"
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 /** @param {NodeJS.Platform} [platform] */
-export function getElectronRebuildArgs(platform = process.platform) {
-	const args = ["-v", ELECTRON_VERSION, "-w", "better-sqlite3"]
+export function getElectronRebuildArgs(platform = process.platform, arch = process.arch) {
+	const args = ["-v", ELECTRON_VERSION, "-w", "better-sqlite3", "--arch", arch]
 	if (platform !== "win32") {
 		args.push("--build-from-source")
 	}

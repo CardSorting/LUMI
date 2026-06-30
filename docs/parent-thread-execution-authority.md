@@ -246,8 +246,13 @@ These tools always run full guard, hooks (unless subagent rules say otherwise), 
 
 | Handler | Change |
 |---------|--------|
-| `AttemptCompletionHandler` | Forensic compliance async; proactive guidance async; double-check uses cached advisory |
-| `completionGatePipeline` | Soft preflight for `cooldown` and `duplicate`; audit cache-aside; progressive critical-only gate |
+| `AttemptCompletionHandler` | Calls `CompletionActionGuard` as first gate; delegates eligibility to `CompletionLifecycleDecisionEngine`; forensic compliance async; proactive guidance async; double-check uses cached advisory |
+| `RunFinalizationToolHandler` | Calls `CompletionActionGuard` as first gate; delegates eligibility to engine |
+| `completionGatePipeline` | Soft preflight for `cooldown`, `duplicate`, `workspace_progress`; audit cache-aside (strict AND validity); progressive critical-only gate |
+| `CompletionLifecycleDecisionEngine` | **Single deterministic authority** — receives immutable snapshot, returns one canonical decision with binding action contract |
+| `CompletionActionGuard` | **Enforcement layer** — validates requested tool against `nextAllowedAction`; rejected actions never mutate counters |
+
+**See:** [Completion lifecycle decision engine](completion-lifecycle-decision-engine.md) for full architecture.
 
 ---
 
@@ -327,7 +332,7 @@ Labels and remediation copy: `GATE_REASON_LABELS` / `GATE_REASON_REMEDIATION` in
 
 **Progressive gate:** For the first `PARENT_PROGRESSIVE_GATE_BLOCK_LIMIT` (2) blocks, `criticalOnly` is forced — only critical violations block; warnings may pass.
 
-**Infra degradation:** If `runCompletionAudit` throws and block count &lt; warn threshold, cached metadata is used (`lastCompletionAudit` → `lastAdvisoryAudit` → `lastPlanAuditMetadata`). If cached metadata still fails the gate, status is `audit_error`.
+**Infra degradation:** Stream-focus lookup and audit persistence are best-effort. If either is unavailable, the gate evaluates a fresh local audit using the task description and retains that evidence in the task-local completion cache. The authoritative audit calculation and policy evaluation remain fail-closed; they never pass from unrelated or stale cached metadata. Only those core failures produce `audit_error`.
 
 ### Tool execution blocks (non-completion)
 
@@ -561,7 +566,11 @@ TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha \
 | `src/core/policy/UniversalGuard.ts` | Guard façade |
 | `src/shared/audit/auditPostTool.ts` | Deferred command/act advisory audits |
 | `src/shared/audit/gatePolicy.ts` | Gate thresholds and TTLs |
-| `src/core/task/tools/attemptCompletionUtils.ts` | Preflight validators, playbooks, circuit breaker |
+| `src/core/task/tools/attemptCompletionUtils.ts` | Preflight validators, playbooks, circuit breaker (delegates to engine) |
+| `src/core/task/tools/completion/CompletionLifecycleDecisionEngine.ts` | **Single deterministic authority** for completion eligibility |
+| `src/core/task/tools/completion/CompletionActionGuard.ts` | **Enforcement layer** — binding action contract at tool boundary |
+| `src/core/task/tools/completion/completionSnapshotBuilder.ts` | Adapter — normalizes TaskConfig into immutable snapshot |
+| `src/core/task/tools/completion/gateRegistry.ts` | Active/retired gate registry |
 | `src/core/task/tools/utils/ToolHookUtils.ts` | PreToolUse skip for parent I/O |
 | `src/core/task/TaskState.ts` | Gate counters, audit cache fields |
 | `src/core/task/tools/handlers/AttemptCompletionHandler.ts` | Completion orchestration |
@@ -577,5 +586,5 @@ TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha \
 - **Audits during work are advisory and async**; only `attempt_completion` can hard-block on audit score.
 - **Subagent read lanes** share the same I/O authority model with bulkhead fairness when mutation lanes compete for pool slots.
 - **Receipts are forensic, not live authority** — coordinator owns continuation; see [governed execution authority](governed-execution-authority.md).
-- **When completion fails**, read the `Completion rejected:` or gate block message — each maps to a `CompletionPreflightReason` and remediation playbook (`getCompletionGatePlaybookSteps`).
-- **After 10 gate blocks**, `attempt_completion` is forbidden; use `run_finalization` in the same session when engineering is already verified ([completion gate lifecycle](completion-gate-lifecycle-migration.md)).
+- **When completion fails**, the `CompletionActionGuard` rejects forbidden actions with a canonical correction — the agent receives a command, not prose to interpret.
+- **After 10 gate blocks**, `attempt_completion` is forbidden; the circuit breaker opens for one probe if the workspace changes, or routes to `run_finalization` when engineering is verified ([completion lifecycle decision engine](completion-lifecycle-decision-engine.md)).

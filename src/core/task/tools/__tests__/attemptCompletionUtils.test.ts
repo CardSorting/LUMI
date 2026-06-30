@@ -174,9 +174,9 @@ describe("attemptCompletionUtils", () => {
 			}
 			toolError.should.containEql("Task completion blocked")
 			taskState.consecutiveMistakeCount.should.equal(1)
-			taskState.lastCompletionBlockReason!.should.equal("circuit_breaker")
-			taskState.lastCompletionFailedStage!.should.equal("circuit_breaker")
-			taskState.completionGatePressureLevel!.should.equal("tripped")
+			taskState.lastCompletionBlockReason?.should.equal("circuit_breaker")
+			taskState.lastCompletionFailedStage?.should.equal("circuit_breaker")
+			taskState.completionGatePressureLevel?.should.equal("tripped")
 		})
 	})
 
@@ -625,26 +625,26 @@ describe("attemptCompletionUtils", () => {
 				result: "too short",
 				checkpointHash: "abc",
 			})
-			taskState.completionGateBlockCount!.should.equal(1)
-			taskState.lastCompletionBlockReason!.should.equal("result_too_brief")
-			taskState.lastCompletionFailedStage!.should.equal("min_length")
-			taskState.completionGatePressureLevel!.should.equal("stable")
+			taskState.completionGateBlockCount?.should.equal(1)
+			taskState.lastCompletionBlockReason?.should.equal("result_too_brief")
+			taskState.lastCompletionFailedStage?.should.equal("min_length")
+			taskState.completionGatePressureLevel?.should.equal("stable")
 			should.exist(taskState.lastCompletionAttemptAt)
 			should.exist(taskState.lastBlockedCompletionResultFingerprint)
-			taskState.lastGateBlockCheckpointHash!.should.equal("abc")
+			taskState.lastGateBlockCheckpointHash?.should.equal("abc")
 		})
 
 		it("does not increment block count for circuit breaker", () => {
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 			recordCompletionGateBlockEvent(configWithState(taskState), "circuit_breaker")
 			taskState.completionGateBlockCount.should.equal(MAX_COMPLETION_GATE_BLOCK_COUNT)
-			taskState.lastCompletionBlockReason!.should.equal("circuit_breaker")
+			taskState.lastCompletionBlockReason?.should.equal("circuit_breaker")
 		})
 
 		it("does not increment block count for soft throttle blocks", () => {
 			recordCompletionGateBlockEvent(configWithState(taskState), "retry_cooldown")
 			;(taskState.completionGateBlockCount ?? 0).should.equal(0)
-			taskState.lastCompletionBlockReason!.should.equal("retry_cooldown")
+			taskState.lastCompletionBlockReason?.should.equal("retry_cooldown")
 		})
 	})
 
@@ -700,9 +700,9 @@ describe("attemptCompletionUtils", () => {
 
 		it("records block reason, failed stage, and pressure on the task state", () => {
 			recordCompletionBlockReason(configWithState(taskState), "retry_cooldown")
-			taskState.lastCompletionBlockReason!.should.equal("retry_cooldown")
-			taskState.lastCompletionFailedStage!.should.equal("cooldown")
-			taskState.completionGatePressureLevel!.should.equal("stable")
+			taskState.lastCompletionBlockReason?.should.equal("retry_cooldown")
+			taskState.lastCompletionFailedStage?.should.equal("cooldown")
+			taskState.completionGatePressureLevel?.should.equal("stable")
 		})
 	})
 
@@ -753,16 +753,16 @@ describe("attemptCompletionUtils", () => {
 
 	describe("validateCompletionResultQuality", () => {
 		it("rejects empty and placeholder-marked results", () => {
-			validateCompletionResultQuality("   ")!.should.containEql("empty")
-			validateCompletionResultQuality("Done but TODO: fix tests")!.should.containEql("unfinished markers")
+			validateCompletionResultQuality("   ")?.should.containEql("empty")
+			validateCompletionResultQuality("Done but TODO: fix tests")?.should.containEql("unfinished markers")
 			should.not.exist(validateCompletionResultQuality("All tests pass and feature is complete."))
 		})
 	})
 
 	describe("validateCompletionResultTone", () => {
 		it("rejects question endings and engagement bait", () => {
-			validateCompletionResultTone("All done.\nLet me know if you need anything else")!.should.containEql("solicits")
-			validateCompletionResultTone("All changes applied. Ready for review?")!.should.containEql("ends with a question")
+			validateCompletionResultTone("All done.\nLet me know if you need anything else")?.should.containEql("solicits")
+			validateCompletionResultTone("All changes applied. Ready for review?")?.should.containEql("ends with a question")
 			should.not.exist(validateCompletionResultTone("Implemented retry logic and all tests pass."))
 		})
 	})
@@ -867,13 +867,29 @@ describe("attemptCompletionUtils", () => {
 			)
 		})
 
-		it("allows same result after cooldown window expires", () => {
+		it("blocks same result after cooldown window expires when workspace unchanged", () => {
 			const result = "Task complete: added retry logic"
 			taskState.completionGateBlockCount = 2
 			taskState.lastBlockedCompletionResultFingerprint = hashCompletionResult(result)
 			taskState.lastCompletionAttemptAt = Date.now() - 5000
+			// No checkpoint hash set — workspace hasn't changed
+			// After cooldown, same result with no workspace change is blocked
+			// to prevent infinite retry loops that burn through block budget
+			const blocked = detectDuplicateCompletionSubmission(configWithState(taskState), result)
+			should.exist(blocked)
+			blocked?.should.containEql("no workspace changes")
+		})
 
-			should.not.exist(detectDuplicateCompletionSubmission(configWithState(taskState), result))
+		it("allows same result after cooldown when engineering is verified (directs to finalization)", () => {
+			const result = "Task complete: added retry logic"
+			taskState.completionGateBlockCount = 2
+			taskState.lastBlockedCompletionResultFingerprint = hashCompletionResult(result)
+			taskState.lastCompletionAttemptAt = Date.now() - 5000
+			taskState.engineeringVerifiedAt = Date.now()
+			// Engineering verified — the message directs to run_finalization
+			const blocked = detectDuplicateCompletionSubmission(configWithState(taskState), result)
+			should.exist(blocked)
+			blocked?.should.containEql("run_finalization")
 		})
 
 		it("allows submission when result content changed", () => {
@@ -914,7 +930,7 @@ describe("attemptCompletionUtils", () => {
 					getDietCodeMessages: () => [{ say: "checkpoint_created" }, { lastCheckpointHash: "abc123" }],
 				},
 			} as unknown as TaskConfig
-			getLatestCheckpointHashFromMessages(config)!.should.equal("abc123")
+			getLatestCheckpointHashFromMessages(config)?.should.equal("abc123")
 		})
 	})
 

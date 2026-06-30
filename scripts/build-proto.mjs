@@ -1,18 +1,33 @@
 #!/usr/bin/env node
 
 import chalk from "chalk"
-import { execSync } from "child_process"
+import { execFileSync, execSync } from "child_process"
 import * as fs from "fs/promises"
 import { globby } from "globby"
 import { createRequire } from "module"
-import os from "os"
 import * as path from "path"
 import { rmrf } from "./file-utils.mjs"
 import { main as generateHostBridgeClient } from "./generate-host-bridge-client.mjs"
 import { main as generateProtoBusSetup } from "./generate-protobus-setup.mjs"
 
 const require = createRequire(import.meta.url)
-const PROTOC = path.join(require.resolve("grpc-tools"), "../bin/protoc")
+function resolveProtoc() {
+	const bundledProtoc = path.join(require.resolve("grpc-tools"), "../bin/protoc")
+	if (process.platform !== "darwin" || process.arch !== "arm64") {
+		return bundledProtoc
+	}
+
+	try {
+		execFileSync("protoc", ["--version"], { stdio: "ignore" })
+		return "protoc"
+	} catch {
+		throw new Error(
+			"Apple Silicon requires a native protoc compiler. Install it with `brew install protobuf`; Rosetta is not required.",
+		)
+	}
+}
+
+const PROTOC = resolveProtoc()
 
 const PROTO_DIR = path.resolve("proto")
 const TS_OUT_DIR = path.resolve("src/shared/proto")
@@ -42,9 +57,6 @@ async function main() {
 }
 async function compileProtos() {
 	console.log(chalk.bold.blue("Compiling Protocol Buffers..."))
-
-	// Check for Apple Silicon compatibility before proceeding
-	checkAppleSiliconCompatibility()
 
 	// Create output directories if they don't exist
 	for (const dir of [TS_OUT_DIR, GRPC_JS_OUT_DIR, NICE_JS_OUT_DIR, DESCRIPTOR_OUT_DIR]) {
@@ -150,36 +162,6 @@ async function cleanup() {
 	]
 	for (const file of [...oldhostbridgefiles, ...oldprotobusfiles]) {
 		await rmrf(file)
-	}
-}
-
-// Check for Apple Silicon compatibility
-function checkAppleSiliconCompatibility() {
-	// Only run check on macOS
-	if (process.platform !== "darwin") {
-		return
-	}
-
-	// Check if running on Apple Silicon
-	const cpuArchitecture = os.arch()
-	if (cpuArchitecture === "arm64") {
-		try {
-			// Check if Rosetta is installed
-			const rosettaCheck = execSync('/usr/bin/pgrep oahd || echo "NOT_INSTALLED"').toString().trim()
-
-			if (rosettaCheck === "NOT_INSTALLED") {
-				console.log(chalk.yellow("Detected Apple Silicon (ARM64) architecture."))
-				console.log(
-					chalk.red("Rosetta 2 is NOT installed. The npm version of protoc is not compatible with Apple Silicon."),
-				)
-				console.log(chalk.cyan("Please install Rosetta 2 using the following command:"))
-				console.log(chalk.cyan("  softwareupdate --install-rosetta --agree-to-license"))
-				console.log(chalk.red("Aborting build process."))
-				process.exit(1)
-			}
-		} catch (_error) {
-			console.log(chalk.yellow("Could not determine Rosetta installation status. Proceeding anyway."))
-		}
 	}
 }
 

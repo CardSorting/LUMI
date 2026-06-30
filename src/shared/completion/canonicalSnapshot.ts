@@ -160,6 +160,11 @@ export function validateCanonicalSnapshot(snapshot: CanonicalCompletionSnapshot)
 /**
  * Derive audit validity from the current state.
  * If the snapshot changed (checkpoint hash differs), the audit is invalidated.
+ *
+ * Graph revision awareness: if provided, a mismatched graph revision also
+ * invalidates the audit — the audit is only authoritative for the revision
+ * it was computed at.  This prevents false-positive "valid" classifications
+ * when the cache key matches but meaningful state transitions occurred.
  */
 export function deriveAuditValidity(
 	lastAuditCacheKey: string | undefined,
@@ -167,11 +172,16 @@ export function deriveAuditValidity(
 	lastAuditCachedAt: number | undefined,
 	now = Date.now(),
 	ttlMs = 5 * 60 * 1000,
+	graphRevisionMatch?: boolean,
 ): AuditValidity {
 	if (!lastAuditCacheKey || !lastAuditCachedAt) {
 		return "not_evaluated"
 	}
 	if (currentCacheKey && lastAuditCacheKey !== currentCacheKey) {
+		return "invalidated"
+	}
+	// Graph revision mismatch — workspace state changed since audit was computed
+	if (graphRevisionMatch === false) {
 		return "invalidated"
 	}
 	if (now - lastAuditCachedAt > ttlMs) {

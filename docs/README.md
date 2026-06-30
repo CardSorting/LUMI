@@ -219,6 +219,8 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Releasing](../.github/RELEASING.md) | Maintainer marketplace publish runbook |
 | [Security best practices](SECURITY_BEST_PRACTICES.md) | Approval gates, ignore files |
 | [Parent-thread execution authority](parent-thread-execution-authority.md) | I/O fast path, shift-right gates, completion audit caching |
+| [Completion gate lifecycle](completion-gate-lifecycle-migration.md) | Engineering vs finalization lanes, receipt requirements, lifecycle states |
+| [Completion lifecycle decision engine](completion-lifecycle-decision-engine.md) | Centralized deterministic authority, binding action contracts, action guard enforcement |
 | [Spider forensic engine](architecture/spider-v20-forensic-engine.md) | Policy/audit layer (BroccoliDB) |
 | [User interface design](USER_INTERFACE_DESIGN.md) | Webview UX patterns |
 
