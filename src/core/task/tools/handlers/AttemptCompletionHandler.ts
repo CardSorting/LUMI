@@ -8,17 +8,11 @@ import { processFilesIntoText } from "@integrations/misc/extract-text"
 import { showSystemNotification } from "@integrations/notifications"
 import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
-import { buildGateBlockEventSummary, enrichAuditMetadataWithGateDecision } from "@shared/audit/auditGateCatalog"
-import {
-	applyWorkspaceAuditPolicy,
-	type GatePolicyProvenance,
-	resolveCompletionGateOptions,
-} from "@shared/audit/auditGatePolicyLoader"
-import { buildPreCompletionChecklist } from "@shared/audit/auditGateReport"
+import { type GatePolicyProvenance, resolveCompletionGateOptions } from "@shared/audit/auditGatePolicyLoader"
 import { resolvePlanBaselineMetadata } from "@shared/audit/auditMessages"
 import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { enrichAuditMetadataWithArtifactPaths, persistAuditWorkspaceArtifacts } from "@shared/audit/auditWorkspaceArtifacts"
-import { buildAuditHookMetadata, buildDoubleCheckAuditSection, runAdvisoryAudit } from "@shared/audit/completionAudit"
+import { buildAuditHookMetadata } from "@shared/audit/completionAudit"
 import { detectReplanIntent } from "@shared/detectReplanIntent"
 import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
@@ -30,32 +24,24 @@ import {
 	buildCompletionGatePassedEnvelope,
 	buildCompletionGateReadinessBlock,
 	buildCompletionPreflightReadinessBrief,
-	buildDoubleCheckReverifyMessage,
 	buildProactiveCompletionGuidance,
-	formatCompletionToolError,
 	getLatestCheckpointHashFromMessages,
 	markCompletionAttemptFinished,
 	markPreflightReadinessHintEmitted,
 	markProactiveCompletionGuidanceEmitted,
-	recordCompletionGateBlockEvent,
-	recordCompletionPreflightFailure,
 	shouldEmitPreflightReadinessHint,
 	shouldEmitProactiveCompletionGuidance,
 	shouldRejectDoubleCheckCompletion,
 	validateCompletionResultQuality,
-	validateNotInReconciliationDebounce,
-	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
-import { evaluateGateLifecycle, publishGateLifecycleStatus } from "../completion/GateLifecycleEvaluator"
+import { evaluateGateLifecycle, latchEngineeringVerified, publishGateLifecycleStatus } from "../completion/GateLifecycleEvaluator"
 import {
 	type CompletionAuditGateResult,
-	emitCompletionGateBlockTelemetry,
 	evaluateCompletionAuditGate,
 	evaluateGatePreflightReadinessAsync,
 	hashCompletionAuditInput,
 	runCompletionPreflightChecks,
 } from "../completionGatePipeline"
-import { latchEngineeringFromAuditPass } from "../finalization/FinalizationRunner"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -74,10 +60,6 @@ async function buildAuditGateOptions(
 		...extras,
 		lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
 	})
-}
-
-async function applyWorkspaceAuditPolicyForTask(config: TaskConfig, metadata: TaskAuditMetadata): Promise<TaskAuditMetadata> {
-	return applyWorkspaceAuditPolicy(config.cwd, metadata, config)
 }
 
 async function persistAuditArtifactsIfEnabled(
@@ -217,217 +199,99 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		let planBaseline: TaskAuditMetadata | undefined
 		let auditGateResult: CompletionAuditGateResult | undefined
 
-		// Route to finalization if the engine says so — explicit, not emergent
-		if (decision.kind === "route_to_finalization") {
-			// Engineering is verified — take the fast path using cached audit
-			auditMetadata = config.taskState.lastCompletionAudit
-			if (auditMetadata) {
-				const messages = config.messageState?.getDietCodeMessages?.() ?? []
-				planBaseline = resolvePlanBaselineMetadata(messages, config.taskState.lastPlanAuditMetadata)
-				latchEngineeringFromAuditPass(config, checkpointHash)
-			}
+		// Completion diagnostics run only after the canonical action guard allows
+		// attempt_completion. Findings are evidence; they never return tool errors.
+		const preflightDiagnostics = await runCompletionPreflightChecks(
+			config,
+			{ result, taskProgress: block.params.task_progress, command },
+			"AttemptCompletionHandler",
+			{
+				validateQuality: validateCompletionResultQuality,
+				onFailure: () => undefined,
+			},
+		)
+		if (preflightDiagnostics.length > 0) {
+			Logger.debug(
+				`[AttemptCompletionHandler] Advisory completion diagnostics:\n${buildCompletionGateReadinessBlock(preflightDiagnostics)}`,
+			)
 		}
 
-		const canTakeFastPath = decision.kind === "route_to_finalization" && Boolean(auditMetadata)
+		if (
+			shouldRejectDoubleCheckCompletion(config.doubleCheckCompletionEnabled, config.taskState.doubleCheckCompletionPending)
+		) {
+			config.taskState.doubleCheckCompletionPending = true
+			Logger.debug("[AttemptCompletionHandler] Double-check diagnostic is advisory; canonical completion remains allowed.")
+		}
 
-		if (canTakeFastPath) {
-			// Fast path already set auditMetadata above
-		} else {
-			// If the engine allowed a probe, record the checkpoint hash so
-			// a second probe on the same checkpoint is blocked.
-			if (decision.kind === "allow_probe" && checkpointHash) {
-				config.taskState.lastProbeCheckpointHash = checkpointHash
-			}
-
-			// No-op retry suppression — if no meaningful state changed since the last
-			// attempt and we're within the reconciliation debounce window, reject
-			// immediately with a clear explanation. Prevents retry thrashing.
-			const reconciliationError = validateNotInReconciliationDebounce(config)
-			if (reconciliationError) {
-				return wrapFormattedCompletionError(reconciliationError)
-			}
-
-			const preflightError = await runCompletionPreflightChecks(
-				config,
-				{ result, taskProgress: block.params.task_progress, command },
-				"AttemptCompletionHandler",
-				{
-					validateQuality: validateCompletionResultQuality,
-					onFailure: recordCompletionPreflightFailure,
-				},
-			)
-			if (preflightError) {
-				return wrapFormattedCompletionError(preflightError)
-			}
-
-			// Double-check completion: reject attempt_completion calls that haven't been re-verified
-			if (
-				shouldRejectDoubleCheckCompletion(
-					config.doubleCheckCompletionEnabled,
-					config.taskState.doubleCheckCompletionPending,
-				)
-			) {
-				config.taskState.doubleCheckCompletionPending = true
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("say", "completion_result")
-
-				const taskPreview = getInitialTaskPreview(config) || ""
-				const taskSection = taskPreview ? `\n\n<initial_task>\n${taskPreview}\n</initial_task>` : ""
-
-				let auditPreviewSection = ""
-				const cachedAdvisory = config.taskState.lastAdvisoryAudit
-				if (cachedAdvisory) {
-					auditPreviewSection = buildDoubleCheckAuditSection(cachedAdvisory)
-					try {
-						auditPreviewSection += buildPreCompletionChecklist(
-							cachedAdvisory,
-							await buildAuditGateOptions(config, {
-								planBaselineMetadata: resolvePlanBaselineMetadata(
-									config.messageState.getDietCodeMessages(),
-									config.taskState.lastPlanAuditMetadata,
-								),
-							}),
-						)
-					} catch {
-						// Non-blocking — double-check flow uses cached advisory when available.
-					}
-				} else {
-					void (async () => {
-						try {
-							const previewAudit = await runAdvisoryAudit(config.taskId, taskPreview, result, taskPreview)
-							const policyAppliedAudit = await applyWorkspaceAuditPolicyForTask(config, previewAudit)
-							const { recordAdvisoryAuditCache } = await import("../completionGatePipeline")
-							recordAdvisoryAuditCache(config, result, taskPreview, policyAppliedAudit)
-						} catch (error) {
-							Logger.warn("[AttemptCompletionHandler] Pre-completion audit preview failed:", error)
-						}
-					})()
-				}
-
-				const blockCount = recordCompletionGateBlockEvent(config, "double_check", { result })
-				emitCompletionGateBlockTelemetry(config, "double_check", blockCount)
-				return formatCompletionToolError(
-					buildDoubleCheckReverifyMessage({
-						taskSection,
-						auditPreviewSection,
-					}),
-					config,
-					{ result },
-				)
-			}
-
-			// V225: Sovereign Forensic Gate (Passive)
-			// We perform a non-blocking check for Knowledge Ledger compliance.
-			// If non-compliant, we provide a passive advisory to the agent.
-			if (config.universalGuard) {
-				void config.universalGuard.checkForensicCompliance().then((compliance) => {
-					if (!compliance.compliant && compliance.advisory) {
-						config.callbacks.say("info", compliance.advisory).catch((error) => {
-							Logger.warn("[AttemptCompletionHandler] Failed to emit forensic advisory:", error)
-						})
-					}
-				})
-			}
-
-			// Run task audit to capture hardening & safety metrics (before emitting completion_result)
-			auditGateResult = await evaluateCompletionAuditGate(config, {
-				result,
-				taskDescription,
-				logPrefix: "AttemptCompletionHandler",
-			})
-
-			if (auditGateResult.status === "blocked") {
-				let enrichedAudit = enrichAuditMetadataWithGateDecision(
-					auditGateResult.auditMetadata,
-					auditGateResult.gateDecision,
-					auditGateResult.blockCount,
-				)
-				enrichedAudit = await persistAuditArtifactsIfEnabled(
-					config,
-					enrichedAudit,
-					"gate_block",
-					auditGateResult.gateOptions,
-					auditGateResult.policyProvenance,
-				)
-				config.taskState.lastCompletionAudit = enrichedAudit
-				planBaseline = auditGateResult.auditMetadata
-
-				telemetryService.captureAuditGateEvaluation(config.ulid, {
-					taskId: config.taskId,
-					blocked: true,
-					score: auditGateResult.gateDecision.score,
-					effectiveThreshold: auditGateResult.gateDecision.effectiveThreshold,
-					grade: auditGateResult.gateDecision.grade,
-					reasonCodes: auditGateResult.gateDecision.reasons.map((reason) => reason.code),
-					suppressedViolationCount: auditGateResult.auditMetadata.suppressed_violations?.length ?? 0,
-					workspacePolicyApplied: auditGateResult.policyProvenance.workspacePolicyApplied,
-				})
-
-				if (config.autoApprovalSettings.enableNotifications) {
-					showSystemNotification({
-						subtitle: "Completion Gate Blocked",
-						message: `Hardening audit failed (${auditGateResult.gateDecision.score}/100, threshold ${auditGateResult.gateDecision.effectiveThreshold})`,
+		// V225: passive forensic diagnostic.
+		if (config.universalGuard) {
+			void config.universalGuard.checkForensicCompliance().then((compliance) => {
+				if (!compliance.compliant && compliance.advisory) {
+					config.callbacks.say("info", compliance.advisory).catch((error) => {
+						Logger.warn("[AttemptCompletionHandler] Failed to emit forensic advisory:", error)
 					})
 				}
-
-				try {
-					await config.callbacks.say(
-						"info",
-						buildGateBlockEventSummary(auditGateResult.gateDecision, auditGateResult.blockCount),
-						undefined,
-						undefined,
-						false,
-						enrichedAudit,
-					)
-				} catch (error) {
-					Logger.warn("[AttemptCompletionHandler] Failed to emit gate block audit event:", error)
-				}
-
-				return wrapFormattedCompletionError(auditGateResult.message)
-			}
-
-			if (auditGateResult.status === "error") {
-				return wrapFormattedCompletionError(auditGateResult.message)
-			}
-
-			if (auditGateResult.status === "passed") {
-				auditMetadata = auditGateResult.auditMetadata
-				planBaseline = auditGateResult.planBaseline
-
-				telemetryService.captureAuditGateEvaluation(config.ulid, {
-					taskId: config.taskId,
-					blocked: false,
-					score: auditGateResult.gateDecision.score,
-					effectiveThreshold: auditGateResult.gateDecision.effectiveThreshold,
-					grade: auditGateResult.gateDecision.grade,
-					reasonCodes: auditGateResult.gateDecision.reasons.map((reason) => reason.code),
-					suppressedViolationCount: auditMetadata.suppressed_violations?.length ?? 0,
-					workspacePolicyApplied: auditGateResult.policyProvenance.workspacePolicyApplied,
-				})
-
-				auditMetadata = await persistAuditArtifactsIfEnabled(
-					config,
-					auditMetadata,
-					"completion",
-					auditGateResult.gateOptions,
-					auditGateResult.policyProvenance,
-				)
-				config.taskState.lastCompletionAudit = auditMetadata
-				latchEngineeringFromAuditPass(config, checkpointHash)
-				await publishGateLifecycleStatus(config, evaluateGateLifecycle(config))
-			}
+			})
 		}
 
-		const priorGateBlocks = config.taskState.completionGateBlockCount ?? 0
-		const auditScore =
-			auditGateResult?.status === "passed" ? auditGateResult.gateDecision.score : auditMetadata?.hardening_score
-		if (priorGateBlocks > 0 || auditScore !== undefined) {
+		// Capture hardening and safety evidence without affecting execution.
+		auditGateResult = await evaluateCompletionAuditGate(config, {
+			result,
+			taskDescription,
+			logPrefix: "AttemptCompletionHandler",
+		})
+
+		if (auditGateResult.status === "advisory_passed" || auditGateResult.status === "advisory_failed") {
+			auditMetadata = auditGateResult.auditMetadata
+			planBaseline =
+				auditGateResult.status === "advisory_passed"
+					? auditGateResult.planBaseline
+					: resolvePlanBaselineMetadata(
+							config.messageState.getDietCodeMessages(),
+							config.taskState.lastPlanAuditMetadata,
+						)
+
+			telemetryService.captureAuditGateEvaluation(config.ulid, {
+				taskId: config.taskId,
+				blocked: false,
+				score: auditGateResult.gateDecision.score,
+				effectiveThreshold: auditGateResult.gateDecision.effectiveThreshold,
+				grade: auditGateResult.gateDecision.grade,
+				reasonCodes: auditGateResult.gateDecision.reasons.map((reason) => reason.code),
+				suppressedViolationCount: auditMetadata.suppressed_violations?.length ?? 0,
+				workspacePolicyApplied: auditGateResult.policyProvenance.workspacePolicyApplied,
+			})
+
+			auditMetadata = await persistAuditArtifactsIfEnabled(
+				config,
+				auditMetadata,
+				"completion",
+				auditGateResult.gateOptions,
+				auditGateResult.policyProvenance,
+			)
+			config.taskState.lastCompletionAudit = auditMetadata
+
+			if (auditGateResult.status === "advisory_failed") {
+				try {
+					await config.callbacks.say("info", auditGateResult.diagnostics, undefined, undefined, false, auditMetadata)
+				} catch (error) {
+					Logger.warn("[AttemptCompletionHandler] Failed to emit advisory audit diagnostics:", error)
+				}
+			}
+		} else if (auditGateResult.status === "diagnostic_error") {
+			Logger.warn(`[AttemptCompletionHandler] ${auditGateResult.diagnostics}`)
+		}
+
+		// The canonical action guard allowed completion; latch verification from
+		// that decision, never from advisory quality diagnostics.
+		latchEngineeringVerified(config, checkpointHash)
+		await publishGateLifecycleStatus(config, evaluateGateLifecycle(config))
+
+		if (auditGateResult.status === "advisory_passed") {
 			try {
-				await config.callbacks.say(
-					"info",
-					buildCompletionGatePassedEnvelope(config, typeof auditScore === "number" ? auditScore : undefined),
-				)
+				await config.callbacks.say("info", buildCompletionGatePassedEnvelope(config, auditGateResult.gateDecision.score))
 			} catch (error) {
-				Logger.warn("[AttemptCompletionHandler] Failed to emit completion gate passed brief:", error)
+				Logger.warn("[AttemptCompletionHandler] Failed to emit completion diagnostics:", error)
 			}
 		}
 

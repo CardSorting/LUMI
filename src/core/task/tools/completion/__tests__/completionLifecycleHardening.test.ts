@@ -44,11 +44,11 @@ describe("completion lifecycle hardening", () => {
 			getCompletionGraphRevision(config).should.equal(2)
 		})
 
-		it("increments on gate block event", () => {
+		it("does not increment on advisory gate findings", () => {
 			const config = configWithState(taskState)
 			const before = getCompletionGraphRevision(config)
 			recordCompletionGateBlockEvent(config, "audit_gate", { result: "test result summary" })
-			getCompletionGraphRevision(config).should.be.greaterThan(before)
+			getCompletionGraphRevision(config).should.equal(before)
 		})
 
 		it("does not increment on gates passed (cosmetic validation result)", () => {
@@ -74,11 +74,11 @@ describe("completion lifecycle hardening", () => {
 			result.suppress.should.be.false()
 		})
 
-		it("does not suppress when graph revision changed", () => {
+		it("advisory findings do not change graph revision", () => {
 			const config = configWithState(taskState)
 			recordCompletionAttemptTime(config)
 			recordCompletionGateBlockEvent(config, "audit_gate", { result: "test result summary" })
-			// Graph revision incremented by block event — retry should be allowed
+			// Advisory diagnostics do not alter the canonical graph.
 			const result = shouldSuppressNoOpRetry(config)
 			result.suppress.should.be.false()
 		})

@@ -36,7 +36,7 @@ export const PreCompletionGateStrip = memo(
 			[auditMetadata, gateOptions],
 		)
 
-		const blocked = summary && "blocked" in summary ? summary.blocked : false
+		const blocked = summary && "advisoryFailed" in summary ? summary.advisoryFailed : false
 
 		useEffect(() => {
 			if (blocked && !previousBlockedRef.current) {
@@ -58,7 +58,7 @@ export const PreCompletionGateStrip = memo(
 
 		return (
 			<section
-				aria-label="Before finishing"
+				aria-label="Advisory completion diagnostics"
 				className={cn(
 					embedded ? "mt-1 px-1 py-1" : "mt-2 px-3 py-2.5",
 					"lumi-audit-exhale transition-opacity duration-[2s]",
@@ -67,7 +67,7 @@ export const PreCompletionGateStrip = memo(
 				)}
 				id={embedded ? undefined : TASK_AUDIT_QUALITY_GATE_ID}>
 				{embedded ? (
-					<p className="m-0 text-[10px] font-medium text-description/85">Before finishing</p>
+					<p className="m-0 text-[10px] font-medium text-description/85">Advisory completion diagnostics</p>
 				) : (
 					<button
 						aria-expanded={expanded}
@@ -75,24 +75,24 @@ export const PreCompletionGateStrip = memo(
 						onClick={() => setExpanded(!expanded)}
 						type="button">
 						<div className="flex items-center gap-2 flex-wrap">
-							<span className="font-medium text-description/85">Before finishing</span>
+							<span className="font-medium text-description/85">Advisory completion diagnostics</span>
 							<span
 								className={cn(
 									"px-1.5 py-0.5 rounded-full text-[8px] font-medium border",
-									checklist.blocked
+									checklist.advisoryFailed
 										? "border-amber-500/40 text-amber-700 dark:text-amber-400"
 										: warnCount > 0
 											? "border-amber-500/40 text-amber-600 dark:text-amber-400"
 											: "border-emerald-500/40 text-emerald-600 dark:text-emerald-400",
 								)}>
-								{checklist.blocked ? "Worth revisiting" : warnCount > 0 ? "Almost there" : "Looking good"}
+								{checklist.advisoryFailed ? "Worth revisiting" : warnCount > 0 ? "Almost there" : "Looking good"}
 							</span>
 							<span className="font-mono text-description/70">
 								{checklist.score}/{checklist.effectiveThreshold}
 							</span>
 							{failCount > 0 && <span className="text-amber-600 dark:text-amber-400">{failCount} to revisit</span>}
 							{warnCount > 0 && <span className="text-amber-600 dark:text-amber-400">{warnCount} to review</span>}
-							{pendingAdvisoryCount > 0 && !checklist.blocked && (
+							{pendingAdvisoryCount > 0 && !checklist.advisoryFailed && (
 								<span className="text-amber-600/90">
 									{pendingAdvisoryCount} note{pendingAdvisoryCount === 1 ? "" : "s"}
 								</span>
@@ -108,7 +108,7 @@ export const PreCompletionGateStrip = memo(
 
 				{showDetails && <AuditChecklistItems className="mt-2" items={checklist.items} />}
 
-				{checklist.blocked && onScrollToLatestGateBlock && (
+				{checklist.advisoryFailed && onScrollToLatestGateBlock && (
 					<button
 						className="mt-2 text-[9px] font-medium text-amber-700/80 dark:text-amber-400/80 hover:text-amber-800 dark:hover:text-amber-300 cursor-pointer bg-transparent border-0 p-0"
 						onClick={onScrollToLatestGateBlock}

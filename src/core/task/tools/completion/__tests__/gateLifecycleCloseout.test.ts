@@ -135,14 +135,14 @@ describe("gate lifecycle closeout — legacy trap reproduction", () => {
 		validateCompletionReceipt(receipt).valid.should.be.false()
 	})
 
-	it("subagent completion-gate evaluation persists gateLifecycleStatus", async () => {
+	it("subagent advisory diagnostics preserve canonical gateLifecycleStatus", async () => {
 		taskState.engineeringVerifiedAt = Date.now()
 		taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 
 		const config = configWithState(taskState)
 		const gateResult = await validateSubagentCompletionGates(config, SUBSTANTIVE_RESULT)
 
-		gateResult.lifecycle.lifecycleState.should.equal("finalization_ready")
+		gateResult.lifecycle.lifecycleState.should.equal("engineering_verified")
 		gateResult.lifecycle.allowedActions.should.containEql("run_finalization")
 
 		const builder = new SubagentEnvelopeBuilder(
@@ -161,7 +161,7 @@ describe("gate lifecycle closeout — legacy trap reproduction", () => {
 		}
 
 		const envelope = builder.build()
-		envelope.gateLifecycleStatus?.lifecycleState.should.equal("finalization_ready")
+		envelope.gateLifecycleStatus?.lifecycleState.should.equal("engineering_verified")
 		envelope.gateLifecycleStatus?.engineering.should.equal("passed")
 	})
 

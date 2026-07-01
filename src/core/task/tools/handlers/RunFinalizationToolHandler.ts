@@ -1,7 +1,6 @@
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
 import { DietCodeDefaultTool } from "@shared/tools"
-import { canRunFinalization } from "../completion/GateLifecycleEvaluator"
 import { FinalizationRunner } from "../finalization/FinalizationRunner"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
@@ -26,12 +25,6 @@ export class RunFinalizationToolHandler implements IToolHandler {
 		const guardResult = guardRunFinalization(config, decision)
 		if (!guardResult.allowed) {
 			return guardResult.rejection
-		}
-
-		if (!canRunFinalization(config) && !seal) {
-			return formatResponse.toolError(
-				"Finalization is not available. Engineering must be verified first, or completion retry must be locked with a verified engineering latch.",
-			)
 		}
 
 		const runner = new FinalizationRunner(config)

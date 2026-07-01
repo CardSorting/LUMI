@@ -18,8 +18,8 @@ describe("auditSubagentContext", () => {
 			completionGateBlockCount: 2,
 		})
 		expect(context).to.contain("<parent_audit_context>")
-		expect(context).to.contain("BLOCKED")
-		expect(context).to.contain("gate blocks this task: 2")
+		expect(context).to.contain("ADVISORY FINDINGS")
+		expect(context).to.contain("Historical completion diagnostic findings: 2")
 	})
 
 	it("builds gate signals for blocked parent", () => {
@@ -34,8 +34,8 @@ describe("auditSubagentContext", () => {
 			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
 		})
 		expect(signals).to.include("ADVISORY: GATE: PARENT_BLOCKED (2)")
-		expect(signals).to.include("ADVISORY: SIGNAL: PARENT_COMPLETION_GATE_BLOCKED")
-		expect(signals).to.include("ADVISORY: SIGNAL: PARENT_GATE_BLOCKED")
+		expect(signals).to.include("ADVISORY: SIGNAL: PARENT_COMPLETION_DIAGNOSTIC_FINDINGS")
+		expect(signals).to.include("ADVISORY: SIGNAL: PARENT_GATE_MARGINAL")
 	})
 
 	it("returns no gate signals when gate is disabled", () => {
@@ -57,7 +57,7 @@ describe("auditSubagentContext", () => {
 			completionGatePressureLevel: "elevated",
 			completionGateObservabilityEnvelope: envelope,
 		})
-		expect(context).to.contain("Last parent gate block reason: audit_gate")
+		expect(context).to.contain("Last parent advisory diagnostic reason: audit_gate")
 		expect(context).to.contain("Last parent gate failed stage: audit")
 		expect(context).to.contain("Parent gate pressure level: elevated")
 		expect(context).to.contain("<completion_gate_envelope")
@@ -84,7 +84,7 @@ describe("auditSubagentContext", () => {
 			completionGateBlockHistoryCount: 4,
 			gateOptions: { gateEnabled: true, scoreThreshold: 50 },
 		})
-		expect(signals).to.include("ADVISORY: GATE: PARENT_BLOCK_HISTORY (4)")
+		expect(signals).to.include("ADVISORY: GATE: PARENT_DIAGNOSTIC_HISTORY (4)")
 	})
 
 	it("emits parent operational state signal when not ready", () => {

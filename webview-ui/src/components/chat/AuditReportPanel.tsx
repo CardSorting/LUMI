@@ -313,8 +313,6 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 									"bg-black/[0.02] dark:bg-white/[0.02] text-description/70 border-description/10",
 								gateReadiness.level === "warning" &&
 									"bg-amber-500/8 text-amber-700/80 dark:text-amber-400/80 border-amber-500/15",
-								gateReadiness.level === "blocked" &&
-									"bg-amber-500/8 text-amber-700/80 dark:text-amber-400/80 border-amber-500/15",
 							)}>
 							{gateReadiness.label}
 							{qualityGate ? ` · ${qualityGate.score}/${qualityGate.effectiveThreshold}` : ""}
@@ -327,10 +325,10 @@ export const AuditReportPanel = memo(({ auditMetadata, variant = "success" }: Au
 
 				{auditMetadata.gate_blocked && (
 					<div className={cn(auditReadingGroup, auditSoftDivider)}>
-						<span className={auditLabel}>Before finishing</span>
+						<span className={auditLabel}>Advisory diagnostics</span>
 						<span className="text-[9px] text-amber-700/80 dark:text-amber-400/80">
-							Paused
-							{auditMetadata.gate_block_count ? ` · attempt ${auditMetadata.gate_block_count}` : ""}
+							Findings present
+							{auditMetadata.gate_block_count ? ` · historical attempt ${auditMetadata.gate_block_count}` : ""}
 							{Number.isFinite(auditMetadata.gate_effective_threshold)
 								? ` · threshold ${auditMetadata.gate_effective_threshold}`
 								: ""}

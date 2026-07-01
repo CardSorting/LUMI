@@ -10,14 +10,15 @@ describe("auditGateReadiness", () => {
 		expect(summary.shortLabel).to.equal("Ready")
 	})
 
-	it("describes blocked gate when metadata indicates gate block", () => {
+	it("describes advisory findings when legacy metadata indicates a gate failure", () => {
 		const metadata = enrichAuditMetadata({
 			violations: ["missing_validation_evidence"],
 			gate_blocked: true,
 			gate_reason_codes: ["score_below_threshold"],
 		})
 		const summary = describeGateReadiness(metadata, { scoreThreshold: 95 })
-		expect(summary.level).to.equal("blocked")
+		expect(summary.level).to.equal("warning")
+		expect(summary.label).to.equal("Advisory findings")
 	})
 
 	it("serializes intent threshold overrides omitting zero values", () => {

@@ -35,12 +35,12 @@ describe("auditGateCatalog", () => {
 		expect(enriched.gate_reason_codes?.length).to.be.greaterThan(0)
 	})
 
-	it("builds gate block event summary for audit trail messages", () => {
+	it("builds advisory diagnostic summary for audit trail messages", () => {
 		const metadata = enrichAuditMetadata({ violations: ["result_empty"] })
 		const decision = evaluateAuditGate(metadata, { scoreThreshold: 95 })
 		const summary = buildGateBlockEventSummary(decision, 1)
-		expect(summary).to.contain("blocked")
-		expect(summary).to.contain("attempt 1")
+		expect(summary).to.contain("findings present")
+		expect(summary).to.contain("historical attempt 1")
 	})
 
 	it("builds gate reason lines from persisted audit metadata", () => {

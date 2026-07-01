@@ -258,8 +258,7 @@ export function evaluateGateLifecycle(config: TaskConfig): GateLifecycleDecision
 		lifecycleState: "engineering_in_progress",
 		activeLane: "completion",
 		reasonCode: "preflight.unknown",
-		operatorMessage:
-			"Complete engineering work, then call attempt_completion. Use run_finalization after engineering is verified.",
+		operatorMessage: "Completion diagnostics are advisory. Follow the canonical next action from the lifecycle decision.",
 		engineering: "pending",
 		verification: "pending",
 		documentation: "pending",

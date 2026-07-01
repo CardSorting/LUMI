@@ -71,8 +71,8 @@ describe("audit invalidation and false-positive prevention", () => {
 		})
 
 		auditStub.called.should.be.false()
-		result.status.should.equal("passed")
-		if (result.status === "passed") {
+		result.status.should.equal("advisory_passed")
+		if (result.status === "advisory_passed") {
 			result.auditMetadata.hardening_score?.should.equal(95)
 		}
 	})
@@ -105,12 +105,14 @@ describe("audit invalidation and false-positive prevention", () => {
 			logPrefix: "Test",
 		})
 
-		// Must NOT return "passed" from the cached fallback
-		result.status.should.equal("error")
-		result.status.should.not.equal("passed")
-		if (result.status === "error") {
-			result.message.should.containEql("hardening audit evaluation failed")
+		// Must NOT claim a quality pass from the cached fallback. Diagnostic
+		// infrastructure failure remains non-blocking.
+		result.status.should.equal("diagnostic_error")
+		result.status.should.not.equal("advisory_passed")
+		if (result.status === "diagnostic_error") {
+			result.diagnostics.should.containEql("advisory")
 		}
+		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 
 		auditStub.called.should.be.true()
 	})

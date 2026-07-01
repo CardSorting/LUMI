@@ -955,6 +955,9 @@ export class SubagentRunner {
 								"Lane audit deferred to parent seal barrier — I/O authority fast path.",
 							)
 						}
+						for (const diagnostic of gateResult.diagnostics) {
+							this.envelopeBuilder?.recordWarning(diagnostic)
+						}
 						if (gateResult.error) {
 							this.envelopeBuilder?.setPhase("completion_gate")
 							this.envelopeBuilder?.recordBlocker(gateResult.error)

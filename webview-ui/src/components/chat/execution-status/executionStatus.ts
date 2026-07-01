@@ -88,7 +88,7 @@ function getSafetyLabel(
 	auditHealth: AuditHealthSummary | undefined,
 	gateLifecycle: ResolvedGateLifecycleSnapshot | undefined,
 ): string {
-	if (auditMetadata?.gate_blocked) return "Gate blocked"
+	if (auditMetadata?.gate_blocked) return "Advisory findings"
 	if ((auditHealth?.criticalViolationCount ?? 0) > 0) return "Critical issue"
 	if ((auditHealth?.warningViolationCount ?? 0) > 0) return "Review advised"
 	if (gateLifecycle?.freshness === "stale" || gateLifecycle?.freshness === "unknown") {
@@ -155,10 +155,6 @@ export function deriveExecutionStatus({
 	const safety = getSafetyLabel(auditMetadata, auditHealth, gateLifecycle)
 	const receipt = getReceiptIncident(lastMessage)
 	const lifecycleState = gateLifecycle?.decision?.lifecycleState
-	const completionMessage =
-		lastMessage?.ask === "completion_result" ||
-		lastMessage?.ask === "resume_completed_task" ||
-		lastMessage?.say === "completion_result"
 
 	let status: Omit<ExecutionStatusModel, "safety" | "confidence">
 
@@ -168,13 +164,6 @@ export function deriveExecutionStatus({
 			title: "Recovery required",
 			detail: "The workspace checkpoint could not be created or restored safely.",
 			nextAction: "Open task details and review the checkpoint error.",
-		}
-	} else if (auditMetadata?.gate_blocked) {
-		status = {
-			state: "blocked",
-			title: "Completion held for review",
-			detail: "The safety gate found unresolved evidence and stopped completion.",
-			nextAction: "Review the blocked finding before retrying completion.",
 		}
 	} else if (receipt.incident === "partial_receipt") {
 		status = {
@@ -207,10 +196,10 @@ export function deriveExecutionStatus({
 		}
 	} else if (lifecycleState === "audit_gate_corrupt") {
 		status = {
-			state: "blocked",
-			title: "Safety gate unavailable",
-			detail: gateLifecycle?.decision?.operatorMessage ?? "The completion gate stopped in a fail-closed state.",
-			nextAction: gateLifecycle?.decision?.recoveryPath.at(0)?.description ?? "Repair the gate state before continuing.",
+			state: "failed",
+			title: "Finalization unavailable",
+			detail: gateLifecycle?.decision?.operatorMessage ?? "Finalization could not produce valid evidence.",
+			nextAction: gateLifecycle?.decision?.recoveryPath.at(0)?.description ?? "Review the finalization evidence.",
 		}
 	} else if (wasCancelled(lastMessage)) {
 		status = {
@@ -241,13 +230,6 @@ export function deriveExecutionStatus({
 					? "Engineering is verified. Duplicate completion attempts are blocked while finalization runs."
 					: "LUMI is restoring a safe execution path and preserving completed work.",
 			nextAction: "No action required. Wait for the current recovery step to settle.",
-		}
-	} else if (completionMessage && gateLifecycle?.decision && gateLifecycle.freshness !== "current") {
-		status = {
-			state: "blocked",
-			title: "Completion status is stale",
-			detail: "The latest safety snapshot is not current enough to trust as final evidence.",
-			nextAction: "Wait for a fresh gate evaluation before treating the task as complete.",
 		}
 	} else if (
 		lastMessage?.type === "ask" &&

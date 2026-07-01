@@ -129,9 +129,9 @@ export function buildAuditHistoryMarkdown(
 			`- Average score: ${health.averageScore}`,
 			`- Trend: ${AUDIT_HEALTH_TREND_LABELS[health.trend] || "unknown"}`,
 		)
-		if (health.gateBlockCount > 0) lines.push(`- Gate blocks: ${health.gateBlockCount}`)
+		if (health.gateBlockCount > 0) lines.push(`- Advisory quality findings: ${health.gateBlockCount}`)
 		if (health.advisorySnapshotCount > 0) lines.push(`- Act-mode advisories: ${health.advisorySnapshotCount}`)
-		if (health.trailingGateBlockStreak > 0) lines.push(`- Consecutive blocks: ${health.trailingGateBlockStreak}`)
+		if (health.trailingGateBlockStreak > 0) lines.push(`- Consecutive advisory findings: ${health.trailingGateBlockStreak}`)
 		if (health.planRegressionDetected) lines.push("- Plan regression detected")
 		if (health.persistentViolationCount > 0) lines.push(`- Persistent violations: ${health.persistentViolationCount}`)
 		lines.push("")
@@ -150,7 +150,7 @@ export function buildAuditHistoryMarkdown(
 		const time = formatAuditTime(meta.audited_at ?? snapshot.ts)
 		lines.push(`### ${source} · ${time}`)
 		lines.push(`- Grade: ${grade} (${score})`)
-		if (meta.gate_blocked) lines.push("- Status: **Gate blocked**")
+		if (meta.gate_blocked) lines.push("- Status: **Advisory quality findings**")
 		if (snapshot.source === "advisory") lines.push("- Status: Act-mode advisory")
 		if ((meta.violations?.length ?? 0) > 0) {
 			const violations = meta.violations ?? []

@@ -1,7 +1,7 @@
 import { type CompletionGateOptions, evaluateAuditGate } from "./auditGateReport"
 import type { TaskAuditMetadata } from "./types"
 
-export type GateReadinessLevel = "ready" | "warning" | "blocked" | "disabled"
+export type GateReadinessLevel = "ready" | "warning" | "disabled"
 
 export interface GateReadinessSummary {
 	level: GateReadinessLevel
@@ -38,9 +38,9 @@ export function describeGateReadiness(
 			.map((r) => r.message)
 			.join("; ")
 		return {
-			level: "blocked",
-			label: "Gate blocked",
-			shortLabel: "Blocked",
+			level: "warning",
+			label: "Advisory findings",
+			shortLabel: "Review",
 			tooltip: reasons || `Score ${decision.score} below threshold ${decision.effectiveThreshold}`,
 		}
 	}
@@ -50,9 +50,9 @@ export function describeGateReadiness(
 		const advisoryNote = advisoryCount > 0 ? ` · ${advisoryCount} unresolved act-mode advisory finding(s)` : ""
 		return {
 			level: "warning",
-			label: "Gate marginal",
+			label: "Quality advisory",
 			shortLabel: "Marginal",
-			tooltip: `Grade ${metadata.hardening_grade} (${decision.score}/100) — resolve warnings before completing${advisoryNote}`,
+			tooltip: `Grade ${metadata.hardening_grade} (${decision.score}/100) — review warnings${advisoryNote}`,
 		}
 	}
 
@@ -60,15 +60,15 @@ export function describeGateReadiness(
 	if (pendingAdvisoryCount > 0) {
 		return {
 			level: "warning",
-			label: "Gate marginal",
+			label: "Quality advisory",
 			shortLabel: "Advisory",
-			tooltip: `${pendingAdvisoryCount} act-mode advisory finding(s) — resolve before completing`,
+			tooltip: `${pendingAdvisoryCount} act-mode advisory finding(s)`,
 		}
 	}
 
 	return {
 		level: "ready",
-		label: "Gate ready",
+		label: "Quality passed",
 		shortLabel: "Ready",
 		tooltip: `Grade ${metadata.hardening_grade} (${decision.score}/100, threshold ${decision.effectiveThreshold})`,
 	}

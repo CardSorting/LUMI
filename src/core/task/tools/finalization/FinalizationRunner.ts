@@ -34,7 +34,7 @@ export class FinalizationRunner {
 		if (!this.config.taskState.engineeringVerifiedAt) {
 			return {
 				success: false,
-				message: "Finalization requires engineering verification. Pass attempt_completion gates first.",
+				message: "Finalization requires canonical lifecycle verification from an allowed attempt_completion action.",
 			}
 		}
 

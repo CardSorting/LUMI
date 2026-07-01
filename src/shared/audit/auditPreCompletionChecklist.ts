@@ -15,6 +15,8 @@ export interface PreCompletionChecklistItem {
 }
 
 export interface PreCompletionChecklistSummary {
+	advisoryFailed: boolean
+	/** @deprecated Completion diagnostics never block execution. */
 	blocked: boolean
 	score: number
 	effectiveThreshold: number
@@ -51,7 +53,7 @@ export function buildPreCompletionChecklistSummary(
 		const grandfathered = Math.max(0, (metadata.violations?.length ?? 0) - gateViolations.length)
 		items.push({
 			key: "new_code_gate",
-			label: `New-code gate (${gateViolations.length} blocking since baseline)`,
+			label: `New-code diagnostics (${gateViolations.length} finding(s) since baseline)`,
 			status: gateViolations.length === 0 ? "pass" : "fail",
 			detail: grandfathered > 0 ? `${grandfathered} grandfathered violation(s) excluded` : undefined,
 		})
@@ -102,7 +104,8 @@ export function buildPreCompletionChecklistSummary(
 	}
 
 	return {
-		blocked: decision.blocked,
+		advisoryFailed: decision.blocked,
+		blocked: false,
 		score: decision.score,
 		effectiveThreshold: decision.effectiveThreshold,
 		grade: decision.grade,
@@ -130,9 +133,9 @@ export function buildPreCompletionChecklistMarkdown(summary: PreCompletionCheckl
 	}
 
 	const lines = [
-		"## Pre-Completion Quality Gate",
+		"## Advisory Completion Diagnostics",
 		"",
-		`- Status: ${summary.blocked ? "**BLOCKED**" : "Ready"}`,
+		`- Quality status: ${summary.advisoryFailed ? "Findings present" : "Passed"}`,
 		`- Score: ${summary.score}/${summary.effectiveThreshold}${summary.grade ? ` (Grade ${summary.grade})` : ""}`,
 		"",
 	]
@@ -154,7 +157,7 @@ export function buildPreCompletionChecklistBlock(summary: PreCompletionChecklist
 		)
 		.join("")
 	return (
-		`<pre_completion_checklist blocked="${summary.blocked ? "true" : "false"}" ` +
+		`<pre_completion_checklist authority="advisory" quality_passed="${summary.advisoryFailed ? "false" : "true"}" ` +
 		`score="${summary.score}" threshold="${summary.effectiveThreshold}"` +
 		`${summary.grade ? ` grade="${summary.grade}"` : ""}>${itemElements}</pre_completion_checklist>`
 	)

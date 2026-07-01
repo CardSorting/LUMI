@@ -86,11 +86,11 @@ export const TaskAuditBadge = memo(
 						? `${auditHealth.persistentViolationCount} persistent violation(s)`
 						: undefined,
 					auditHealth && auditHealth.trailingGateBlockStreak > 0
-						? `${auditHealth.trailingGateBlockStreak} consecutive gate block(s)`
+						? `${auditHealth.trailingGateBlockStreak} consecutive advisory finding(s)`
 						: undefined,
 					auditHealth?.planRegressionDetected ? "Plan regression detected" : undefined,
 					auditHealth && auditHealth.gateBlockCount > 0
-						? `${auditHealth.gateBlockCount} gate block(s) total`
+						? `${auditHealth.gateBlockCount} advisory finding(s) total`
 						: undefined,
 					auditHealth && auditHealth.suppressedViolationCount > 0
 						? `${auditHealth.suppressedViolationCount} waived`
@@ -101,8 +101,8 @@ export const TaskAuditBadge = memo(
 					canExpandHeader ? "Click for a quick look" : undefined,
 					gateDecision && !gateReadiness
 						? gateDecision.blocked
-							? `Gate blocked: ${gateDecision.reasons.map((r) => r.message).join("; ")}`
-							: `Gate ready (threshold ${gateDecision.effectiveThreshold})`
+							? `Advisory findings: ${gateDecision.reasons.map((r) => r.message).join("; ")}`
+							: `Advisory quality passed (threshold ${gateDecision.effectiveThreshold})`
 						: undefined,
 				]
 					.filter(Boolean)

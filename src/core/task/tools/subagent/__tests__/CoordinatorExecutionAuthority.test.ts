@@ -72,7 +72,7 @@ describe("CoordinatorExecutionAuthority", () => {
 
 	it("classifies seal preflight issues as advisory", () => {
 		const { advisory, diagnostics } = classifyPreflightIssuesForSeal([
-			{ stage: "min_length", message: "too brief", severity: "block" },
+			{ stage: "min_length", message: "too brief", severity: "warning" },
 		])
 		assert.equal(advisory[0]?.severity, "info")
 		assert.ok(diagnostics.some((d) => d.code === "duplicate_audit_path_detected"))

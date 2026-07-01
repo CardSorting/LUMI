@@ -144,13 +144,13 @@ export function buildPreCompletionChecklist(metadata: TaskAuditMetadata, options
 	const grandfatheredCount =
 		options?.newViolationsOnly && options.baselineMetadata ? Math.max(0, allViolations.length - gateViolations.length) : 0
 	const lines = [
-		"<pre_completion_checklist>",
+		'<pre_completion_checklist authority="advisory">',
 		`Hardening: ${decision.grade ?? "?"} (${decision.score}/100) · Threshold ${decision.effectiveThreshold}`,
-		decision.blocked ? "Status: BLOCKED — resolve before completing" : "Status: Gate ready",
+		decision.blocked ? "Advisory quality status: findings present" : "Advisory quality status: passed",
 	]
 
 	if (options?.newViolationsOnly) {
-		lines.push(`New-code gate: ${gateViolations.length} blocking violation(s) since baseline`)
+		lines.push(`New-code diagnostics: ${gateViolations.length} finding(s) since baseline`)
 		if (grandfatheredCount > 0) {
 			lines.push(`Grandfathered (${grandfatheredCount}): legacy debt excluded from gate _(baseline policy)_`)
 		}
@@ -169,7 +169,7 @@ export function buildPreCompletionChecklist(metadata: TaskAuditMetadata, options
 	if (decision.reasons.length > 0) {
 		for (const reason of decision.reasons) {
 			if (reason.code !== "gate_disabled") {
-				lines.push(`Gate: ${reason.message}`)
+				lines.push(`Advisory: ${reason.message}`)
 			}
 		}
 	}

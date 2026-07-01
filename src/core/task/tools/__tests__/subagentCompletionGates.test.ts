@@ -30,12 +30,12 @@ describe("subagentCompletionGates", () => {
 		taskState = new TaskState()
 	})
 
-	it("blocks lane on quality preflight without incrementing parent gate block count", () => {
+	it("reports lane quality diagnostics without blocking or incrementing counters", () => {
 		const config = configWithState(taskState)
-		const error = runSubagentCompletionLanePreflight(config, { result: "   " })
-		assert.ok(error)
+		const diagnostics = runSubagentCompletionLanePreflight(config, { result: "   " })
+		assert.ok(diagnostics.length > 0)
 		assert.equal(taskState.completionGateBlockCount, undefined)
-		assert.ok((taskState.consecutiveMistakeCount ?? 0) > 0)
+		assert.equal(taskState.consecutiveMistakeCount, 0)
 	})
 
 	it("defers hardening audit to seal barrier without calling auditTask", async () => {
@@ -52,30 +52,30 @@ describe("subagentCompletionGates", () => {
 	it("uses relaxed min length for I/O authority lanes", () => {
 		const config = configWithState(taskState)
 		const shortButValid = "x".repeat(SUBAGENT_IO_LANE_RESULT_MIN_LENGTH)
-		const error = runSubagentCompletionLanePreflight(config, {
+		const diagnostics = runSubagentCompletionLanePreflight(config, {
 			result: shortButValid,
 			laneExecutionMode: "read_only",
 		})
-		assert.equal(error, null)
+		assert.equal(diagnostics.length, 0)
 	})
 
-	it("enforces parent min length for mutation lanes", () => {
+	it("reports parent min length as advisory for mutation lanes", () => {
 		const config = configWithState(taskState)
 		const tooShort = "x".repeat(SUBAGENT_IO_LANE_RESULT_MIN_LENGTH)
-		const error = runSubagentCompletionLanePreflight(config, {
+		const diagnostics = runSubagentCompletionLanePreflight(config, {
 			result: tooShort,
 			laneExecutionMode: "mutation",
 		})
-		assert.ok(error?.includes("too brief"))
+		assert.ok(diagnostics.some((diagnostic) => diagnostic.includes("too brief")))
 	})
 
 	it("accepts concise I/O lane summaries", () => {
 		const config = configWithState(taskState)
-		const error = runSubagentCompletionLanePreflight(config, {
+		const diagnostics = runSubagentCompletionLanePreflight(config, {
 			result: IO_LANE_RESULT,
 			laneExecutionMode: "diagnostic_only",
 		})
-		assert.equal(error, null)
+		assert.equal(diagnostics.length, 0)
 	})
 
 	it("skips parent-only preflight stages for lane completion", () => {
@@ -85,7 +85,7 @@ describe("subagentCompletionGates", () => {
 		} as TaskConfig
 		taskState.currentFocusChainChecklist = "- [ ] unfinished item"
 
-		const error = runSubagentCompletionLanePreflight(config, { result: VALID_RESULT })
-		assert.equal(error, null)
+		const diagnostics = runSubagentCompletionLanePreflight(config, { result: VALID_RESULT })
+		assert.equal(diagnostics.length, 0)
 	})
 })

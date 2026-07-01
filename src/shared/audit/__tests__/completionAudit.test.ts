@@ -12,14 +12,15 @@ import { enrichAuditMetadata } from "@shared/audit/taskAuditUtils"
 import { expect } from "chai"
 
 describe("completionAudit", () => {
-	it("blocks completion when hardening score is below threshold with violations", () => {
+	it("reports advisory findings when hardening score is below threshold", () => {
 		const metadata = enrichAuditMetadata({
 			violations: ["missing_validation_evidence", "unresolved_work_marker:todo"],
 			intent_coverage: 0.1,
 			entropy_score: 0.9,
 		})
 		expect(isCompletionBlockedByAudit(metadata)).to.equal(true)
-		expect(buildCompletionGateMessage(metadata)).to.contain("COMPLETION BLOCKED")
+		expect(buildCompletionGateMessage(metadata)).to.contain("Completion diagnostics (advisory)")
+		expect(buildCompletionGateMessage(metadata)).not.to.contain("COMPLETION BLOCKED")
 	})
 
 	it("allows completion when hardening score meets threshold", () => {

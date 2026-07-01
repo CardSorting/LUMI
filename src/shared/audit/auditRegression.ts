@@ -19,6 +19,6 @@ export function buildRegressionGateSection(baseline: TaskAuditMetadata, current:
 	const currentScore = current.hardening_score ?? "N/A"
 	return (
 		`\n\n**Plan Regression Gate:** Completion score (${currentScore}) regressed more than ${PLAN_REGRESSION_SCORE_DELTA} points ` +
-		`from the last plan audit (${baselineScore}). Re-verify plan commitments before completing.`
+		`from the last plan audit (${baselineScore}). Consider re-verifying plan commitments.`
 	)
 }

@@ -32,7 +32,6 @@ import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "@/utils
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import { AlignmentGuard } from "./AlignmentGuard"
 import { AuditAdvisoryRow } from "./AuditAdvisoryRow"
-import { AuditGateBlockRow } from "./AuditGateBlockRow"
 import { ClarificationHub } from "./ClarificationHub"
 import { CommandOutputContent, CommandOutputRow } from "./CommandOutputRow"
 import { CompletionOutputRow } from "./CompletionOutputRow"
@@ -835,7 +834,13 @@ export const ChatRowContent = memo(
 						return <McpResponseDisplay responseText={message.text || ""} />
 					case "info":
 						if (message.auditMetadata?.gate_blocked) {
-							return <AuditGateBlockRow auditMetadata={message.auditMetadata} text={message.text} />
+							return (
+								<AuditAdvisoryRow
+									auditMetadata={message.auditMetadata}
+									messageTs={message.ts}
+									text={message.text}
+								/>
+							)
 						}
 						if (isAdvisoryAuditInfoMessage(message) && message.auditMetadata) {
 							return (

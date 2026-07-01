@@ -56,7 +56,7 @@ export function buildSubagentGateSignals(input: SubagentAuditContextInput): stri
 	}
 
 	if (input.completionGateBlockHistoryCount && input.completionGateBlockHistoryCount > 1) {
-		signals.push(`ADVISORY: GATE: PARENT_BLOCK_HISTORY (${input.completionGateBlockHistoryCount})`)
+		signals.push(`ADVISORY: GATE: PARENT_DIAGNOSTIC_HISTORY (${input.completionGateBlockHistoryCount})`)
 	}
 
 	if (input.completionGateSessionId) {
@@ -68,13 +68,11 @@ export function buildSubagentGateSignals(input: SubagentAuditContextInput): stri
 	}
 
 	if (input.lastCompletionAudit?.gate_blocked) {
-		signals.push("ADVISORY: SIGNAL: PARENT_COMPLETION_GATE_BLOCKED")
+		signals.push("ADVISORY: SIGNAL: PARENT_COMPLETION_DIAGNOSTIC_FINDINGS")
 	}
 
 	const readiness = describeGateReadiness(input.lastCompletionAudit, input.gateOptions)
-	if (readiness.level === "blocked") {
-		signals.push("ADVISORY: SIGNAL: PARENT_GATE_BLOCKED")
-	} else if (readiness.level === "warning") {
+	if (readiness.level === "warning") {
 		signals.push("ADVISORY: SIGNAL: PARENT_GATE_MARGINAL")
 	}
 
@@ -132,7 +130,7 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 			`- Last completion audit: Grade ${lastCompletionAudit.hardening_grade ?? "?"} (${lastCompletionAudit.hardening_score ?? "?"}/100)`,
 		)
 		if (lastCompletionAudit.gate_blocked) {
-			lines.push("- Completion gate: BLOCKED")
+			lines.push("- Completion diagnostics: ADVISORY FINDINGS")
 		}
 		const { critical } = partitionViolationsBySeverity(lastCompletionAudit.violations)
 		if (critical.length > 0) {
@@ -143,7 +141,7 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 				.filter((c): c is CompletionGateReasonCode => c !== "gate_disabled")
 				.map(formatGateReasonLabel)
 			if (labels.length > 0) {
-				lines.push(`- Gate reasons: ${labels.join("; ")}`)
+				lines.push(`- Advisory reasons: ${labels.join("; ")}`)
 			}
 		}
 		if (lastCompletionAudit.workspace_gate_policy_applied) {
@@ -163,15 +161,15 @@ export function buildSubagentAuditContext(input: SubagentAuditContextInput): str
 	}
 
 	if (completionGateBlockCount && completionGateBlockCount > 0) {
-		lines.push(`- Completion gate blocks this task: ${completionGateBlockCount}`)
+		lines.push(`- Historical completion diagnostic findings: ${completionGateBlockCount}`)
 		const remaining = MAX_COMPLETION_GATE_BLOCK_COUNT - completionGateBlockCount
 		if (remaining > 0 && remaining <= 5) {
-			lines.push(`- Parent gate pressure: ${remaining} attempt(s) before hard stop`)
+			lines.push(`- Advisory quality pressure marker: ${remaining}`)
 		}
 	}
 
 	if (lastCompletionBlockReason) {
-		lines.push(`- Last parent gate block reason: ${lastCompletionBlockReason}`)
+		lines.push(`- Last parent advisory diagnostic reason: ${lastCompletionBlockReason}`)
 	}
 
 	if (lastCompletionFailedStage) {

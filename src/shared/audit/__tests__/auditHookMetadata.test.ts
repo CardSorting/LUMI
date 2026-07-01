@@ -16,7 +16,7 @@ describe("auditHookMetadata", () => {
 		expect(hookMeta.gateBlockCount).to.equal("1")
 		expect(hookMeta.gateReasonCodes).to.contain("score_below_threshold")
 		expect(hookMeta.qualityGatePassed).to.equal("false")
-		expect(hookMeta.qualityGateStatus).to.equal("blocked")
+		expect(hookMeta.qualityGateStatus).to.equal("warning")
 	})
 
 	it("embeds SARIF report when includeSarif is enabled", () => {

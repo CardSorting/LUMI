@@ -58,22 +58,18 @@ describe("completionGatePipeline", () => {
 		}
 	})
 
-	it("fail-fast circuit breaker before quality checks", async () => {
+	it("treats historical circuit-breaker state as non-blocking diagnostics", async () => {
 		taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
-		const error = await runCompletionPreflightChecks(configWithState(taskState), { result: VALID_RESULT }, "Test", {
+		const diagnostics = await runCompletionPreflightChecks(configWithState(taskState), { result: VALID_RESULT }, "Test", {
 			validateQuality: validateCompletionResultQuality,
 			onFailure: recordCompletionPreflightFailure,
 		})
-		should.exist(error)
-		if (error === null) {
-			throw new Error("expected circuit breaker error")
-		}
-		error.should.containEql("maximum completion gate retries")
-		error.should.containEql("<completion_gate_recovery")
+		diagnostics.some((issue) => issue.stage === "circuit_breaker").should.be.false()
+		;(taskState.completionGateBlockCount ?? 0).should.equal(MAX_COMPLETION_GATE_BLOCK_COUNT)
 	})
 
-	it("rejects non-demo commands like echo in preflight", async () => {
-		const error = await runCompletionPreflightChecks(
+	it("reports non-demo commands without rejecting completion", async () => {
+		const diagnostics = await runCompletionPreflightChecks(
 			configWithState(taskState),
 			{ result: VALID_RESULT, command: "echo hello world" },
 			"Test",
@@ -82,67 +78,57 @@ describe("completionGatePipeline", () => {
 				onFailure: recordCompletionPreflightFailure,
 			},
 		)
-		should.exist(error)
-		if (error === null) {
-			throw new Error("expected demo command error")
-		}
-		error.should.containEql("demo command")
-		error.should.containEql('reason="invalid_demo_command"')
+		diagnostics.some((issue) => issue.stage === "demo_command" && issue.message.includes("demo command")).should.be.true()
+		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 	})
 
-	it("rejects result summaries exceeding max length in preflight", async () => {
+	it("reports overlong summaries as advisory diagnostics", async () => {
 		const tooLong = "x".repeat(COMPLETION_RESULT_MAX_LENGTH + 1)
-		const error = await runCompletionPreflightChecks(configWithState(taskState), { result: tooLong }, "Test", {
+		const diagnostics = await runCompletionPreflightChecks(configWithState(taskState), { result: tooLong }, "Test", {
 			validateQuality: validateCompletionResultQuality,
 			onFailure: recordCompletionPreflightFailure,
 		})
-		should.exist(error)
-		if (error === null) {
-			throw new Error("expected max length error")
-		}
-		error.should.containEql("exceeds maximum length")
-		error.should.containEql('reason="result_too_long"')
+		diagnostics
+			.some((issue) => issue.stage === "max_length" && issue.message.includes("exceeds maximum length"))
+			.should.be.true()
+		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 	})
 
-	it("increments block count on preflight quality failure", async () => {
-		const error = await runCompletionPreflightChecks(configWithState(taskState), { result: "   " }, "Test", {
+	it("does not increment counters on preflight quality failure", async () => {
+		const diagnostics = await runCompletionPreflightChecks(configWithState(taskState), { result: "   " }, "Test", {
 			validateQuality: validateCompletionResultQuality,
 			onFailure: recordCompletionPreflightFailure,
 		})
-		should.exist(error)
-		if (error === null) {
-			throw new Error("expected preflight quality failure")
-		}
-		;(taskState.completionGateBlockCount ?? 0).should.equal(1)
-		taskState.lastCompletionBlockReason?.should.equal("empty_result")
-		;(taskState.completionAttemptCount ?? 0).should.equal(1)
-		error.should.containEql("<completion_gate_envelope")
+		diagnostics.some((issue) => issue.stage === "quality").should.be.true()
+		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
+		should.not.exist(taskState.lastCompletionBlockReason)
+		;(taskState.completionAttemptCount ?? 0).should.equal(0)
 	})
 
 	it("runCompletionGateFlow passes when audit gate is disabled", async () => {
 		const flow = await runCompletionGateFlow(configWithState(taskState), { result: VALID_RESULT }, "Test")
-		flow.status.should.equal("passed")
+		flow.status.should.equal("diagnostics")
 	})
 
 	it("does not block preflight on cooldown soft stage", async () => {
 		taskState.completionGateBlockCount = 2
 		taskState.lastCompletionAttemptAt = Date.now()
-		const error = await runCompletionPreflightChecks(configWithState(taskState), { result: VALID_RESULT }, "Test", {
+		const diagnostics = await runCompletionPreflightChecks(configWithState(taskState), { result: VALID_RESULT }, "Test", {
 			validateQuality: validateCompletionResultQuality,
 			onFailure: recordCompletionPreflightFailure,
 		})
-		should.not.exist(error)
+		diagnostics.every((issue) => issue.severity === "info" || issue.severity === "warning").should.be.true()
 	})
 
 	it("does not block preflight on duplicate soft stage", async () => {
 		taskState.completionGateBlockCount = 1
 		taskState.lastBlockedCompletionResultFingerprint = hashCompletionResult(VALID_RESULT)
 		taskState.lastCompletionAttemptAt = Date.now()
-		const error = await runCompletionPreflightChecks(configWithState(taskState), { result: VALID_RESULT }, "Test", {
+		const diagnostics = await runCompletionPreflightChecks(configWithState(taskState), { result: VALID_RESULT }, "Test", {
 			validateQuality: validateCompletionResultQuality,
 			onFailure: recordCompletionPreflightFailure,
 		})
-		should.not.exist(error)
+		diagnostics.every((issue) => issue.severity === "info" || issue.severity === "warning").should.be.true()
 	})
 
 	it("recordAdvisoryAuditCache stores metadata for completion reuse", () => {
@@ -178,10 +164,46 @@ describe("completionGatePipeline", () => {
 		})
 
 		completionStub.called.should.be.false()
-		result.status.should.equal("passed")
-		if (result.status === "passed") {
+		result.status.should.equal("advisory_passed")
+		if (result.status === "advisory_passed") {
 			result.auditMetadata.hardening_score!.should.equal(95)
 		}
+	})
+
+	it("failed advisory audit does not block completion or increment circuit-breaker counters", async () => {
+		const config = {
+			...configWithState(taskState),
+			auditCompletionGateEnabled: true,
+			auditCompletionGateThreshold: 90,
+			taskId: "advisory-failure-test",
+			cwd: tmpDir,
+			ulid: "ulid-test",
+		} as TaskConfig
+		const advisory = {
+			hardening_score: 10,
+			hardening_grade: "F",
+			violations: ["result_empty"],
+		} as TaskAuditMetadata
+		recordAdvisoryAuditCache(config, VALID_RESULT, "task preview", advisory)
+
+		const result = await evaluateCompletionAuditGate(config, {
+			result: VALID_RESULT,
+			taskDescription: "task preview",
+			logPrefix: "Test",
+		})
+
+		result.status.should.equal("advisory_failed")
+		if (result.status === "advisory_failed") {
+			result.diagnostics.should.containEql("Completion diagnostics (advisory)")
+			result.diagnostics.should.not.match(/Complete engineering work/i)
+			result.diagnostics.should.not.match(/COMPLETION BLOCKED/i)
+		}
+		;(taskState.completionGateBlockCount ?? 0).should.equal(0)
+		taskState.consecutiveMistakeCount.should.equal(0)
+
+		const flow = await runCompletionGateFlow(config, { result: VALID_RESULT, taskDescription: "task preview" }, "Test")
+		flow.status.should.equal("diagnostics")
+		flow.audit.status.should.equal("advisory_failed")
 	})
 
 	it("preflight registry stages align with COMPLETION_PREFLIGHT_STAGES order", () => {

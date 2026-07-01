@@ -448,16 +448,16 @@ describe("CompletionLifecycleDecisionEngine — deterministic completion authori
 	})
 
 	describe("adapter integration — buildCompletionSnapshot from TaskConfig", () => {
-		it("builds snapshot with correct fields from TaskConfig", () => {
+		it("builds snapshot without promoting advisory gate counters to canonical authority", () => {
 			taskState.completionGateBlockCount = 3
 			taskState.engineeringVerifiedAt = Date.now()
 			taskState.lastGateBlockCheckpointHash = "chk-block"
 			const config = configWithState(taskState, [{ lastCheckpointHash: "chk-current" }])
 			const snapshot = buildCompletionSnapshot(config)
-			snapshot.blockCount.should.equal(3)
+			snapshot.blockCount.should.equal(0)
 			snapshot.engineeringVerifiedAt?.should.be.a.Number()
 			snapshot.checkpointHash?.should.equal("chk-current")
-			snapshot.lastGateBlockCheckpointHash?.should.equal("chk-block")
+			should.not.exist(snapshot.lastGateBlockCheckpointHash)
 		})
 
 		it("evaluateCompletionLifecycle returns consistent decision", () => {

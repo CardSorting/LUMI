@@ -51,6 +51,8 @@ export interface AuditArtifactIndexEntry {
 	auditedAt: number
 	hardeningGrade?: string
 	hardeningScore?: number
+	advisoryFailed: boolean
+	/** @deprecated Completion diagnostics never block execution. */
 	gateBlocked: boolean
 	suppressedViolationCount?: number
 	workspaceGatePolicyApplied?: boolean
@@ -301,7 +303,8 @@ export async function persistAuditWorkspaceArtifacts(
 		auditedAt: metadata.audited_at ?? Date.now(),
 		hardeningGrade: metadata.hardening_grade,
 		hardeningScore: metadata.hardening_score,
-		gateBlocked: metadata.gate_blocked ?? false,
+		advisoryFailed: metadata.gate_blocked ?? false,
+		gateBlocked: false,
 		gateReasonCodes: metadata.gate_reason_codes ?? [],
 		violationCount: metadata.violations?.length ?? 0,
 		criticalViolationCount: partitionViolationsBySeverity(metadata.violations).critical.length,
@@ -323,7 +326,8 @@ export async function persistAuditWorkspaceArtifacts(
 		auditedAt: metadata.audited_at ?? Date.now(),
 		hardeningGrade: metadata.hardening_grade,
 		hardeningScore: metadata.hardening_score,
-		gateBlocked: metadata.gate_blocked ?? false,
+		advisoryFailed: metadata.gate_blocked ?? false,
+		gateBlocked: false,
 		suppressedViolationCount: metadata.suppressed_violations?.length ?? 0,
 		workspaceGatePolicyApplied: metadata.workspace_gate_policy_applied ?? false,
 		sarifPath: result.relativeSarifPath,

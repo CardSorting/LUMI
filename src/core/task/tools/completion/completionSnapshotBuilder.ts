@@ -61,9 +61,12 @@ export function buildCompletionSnapshot(
 		resultFingerprint,
 		lastCompletionAttemptAt: taskState.lastCompletionAttemptAt,
 		lastCompletionAttemptGraphRevision: taskState.lastCompletionAttemptGraphRevision,
-		blockCount: taskState.completionGateBlockCount ?? 0,
-		lastGateBlockCheckpointHash: taskState.lastGateBlockCheckpointHash,
-		lastBlockedResultFingerprint: taskState.lastBlockedCompletionResultFingerprint,
+		// Legacy completion-gate counters and retry fingerprints are advisory
+		// diagnostics. They must never enter the canonical decision snapshot or
+		// gain execution authority through the circuit-breaker stages.
+		blockCount: 0,
+		lastGateBlockCheckpointHash: undefined,
+		lastBlockedResultFingerprint: undefined,
 		auditMetadata: taskState.lastCompletionAudit,
 		auditCacheKey,
 		lastAuditCacheKey: taskState.lastCompletionAuditCacheKey,
@@ -73,7 +76,7 @@ export function buildCompletionSnapshot(
 		auditGateDecision: options?.auditGateDecision,
 		cachedLifecycleState,
 		cachedLifecycleDecisionEvaluatedAt: undefined,
-		lastProbeCheckpointHash: taskState.lastProbeCheckpointHash,
+		lastProbeCheckpointHash: undefined,
 		now: Date.now(),
 	}
 }

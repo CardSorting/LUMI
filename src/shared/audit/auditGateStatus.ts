@@ -8,6 +8,9 @@ import type { CompletionGateReasonCode, TaskAuditMetadata } from "./types"
 export interface QualityGateStatus {
 	status: GateReadinessLevel
 	passed: boolean
+	/** Quality threshold was not met; diagnostic only. */
+	advisoryFailed: boolean
+	/** @deprecated Completion diagnostics never block execution. */
 	blocked: boolean
 	score: number
 	effectiveThreshold: number
@@ -38,8 +41,9 @@ export function buildQualityGateStatus(
 
 	return {
 		status: readiness.level,
-		passed: !decision.blocked && readiness.level !== "blocked",
-		blocked: decision.blocked || metadata.gate_blocked === true,
+		passed: !decision.blocked,
+		advisoryFailed: decision.blocked || metadata.gate_blocked === true,
+		blocked: false,
 		score: decision.score,
 		effectiveThreshold: decision.effectiveThreshold,
 		grade: metadata.hardening_grade,

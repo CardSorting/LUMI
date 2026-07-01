@@ -22,6 +22,7 @@ const PARENT_GATE_SIGNAL_PREFIX = "GATE: PARENT_BLOCKED"
 const PARENT_SIGNAL_PATTERNS = {
 	gateBlocked: "SIGNAL: PARENT_GATE_BLOCKED",
 	completionGateBlocked: "SIGNAL: PARENT_COMPLETION_GATE_BLOCKED",
+	completionDiagnosticFindings: "SIGNAL: PARENT_COMPLETION_DIAGNOSTIC_FINDINGS",
 	gateMarginal: "SIGNAL: PARENT_GATE_MARGINAL",
 	advisoryFindings: "SIGNAL: PARENT_ADVISORY_FINDINGS",
 	criticalViolations: "SIGNAL: PARENT_CRITICAL_VIOLATIONS",
@@ -35,8 +36,9 @@ function normalizeParentGateSignal(signal: string): string {
 }
 
 export const SUBAGENT_PARENT_SIGNAL_LABELS: Record<string, string> = {
-	[PARENT_SIGNAL_PATTERNS.gateBlocked]: "Parent gate blocked",
-	[PARENT_SIGNAL_PATTERNS.completionGateBlocked]: "Parent completion gate blocked",
+	[PARENT_SIGNAL_PATTERNS.gateBlocked]: "Parent advisory findings",
+	[PARENT_SIGNAL_PATTERNS.completionGateBlocked]: "Parent advisory completion findings",
+	[PARENT_SIGNAL_PATTERNS.completionDiagnosticFindings]: "Parent advisory completion findings",
 	[PARENT_SIGNAL_PATTERNS.gateMarginal]: "Parent gate marginal",
 	[PARENT_SIGNAL_PATTERNS.advisoryFindings]: "Parent advisory findings",
 	[PARENT_SIGNAL_PATTERNS.criticalViolations]: "Parent critical violations",
@@ -48,7 +50,7 @@ export function formatSubagentParentSignal(signal: string): string {
 	const normalized = normalizeParentGateSignal(signal)
 	if (normalized.startsWith(PARENT_GATE_SIGNAL_PREFIX)) {
 		const match = normalized.match(/GATE: PARENT_BLOCKED \((\d+)\)/)
-		return match ? `Parent gate blocked (${match[1]}×)` : "Parent gate blocked"
+		return match ? `Parent advisory findings (${match[1]}×)` : "Parent advisory findings"
 	}
 	if (normalized.startsWith("GATE: PARENT_LAST_REASON")) {
 		const match = normalized.match(/GATE: PARENT_LAST_REASON \((.+)\)/)
@@ -72,7 +74,11 @@ export function formatSubagentParentSignal(signal: string): string {
 	}
 	if (normalized.startsWith("GATE: PARENT_BLOCK_HISTORY")) {
 		const match = normalized.match(/GATE: PARENT_BLOCK_HISTORY \((\d+)\)/)
-		return match ? `Parent gate block history: ${match[1]} events` : "Parent gate block history"
+		return match ? `Parent advisory history: ${match[1]} events` : "Parent advisory history"
+	}
+	if (normalized.startsWith("GATE: PARENT_DIAGNOSTIC_HISTORY")) {
+		const match = normalized.match(/GATE: PARENT_DIAGNOSTIC_HISTORY \((\d+)\)/)
+		return match ? `Parent advisory history: ${match[1]} events` : "Parent advisory history"
 	}
 	if (normalized.startsWith("GATE: PARENT_SESSION")) {
 		const match = normalized.match(/GATE: PARENT_SESSION \((.+)\)/)
@@ -145,13 +151,15 @@ export function buildSubagentAuditSummary(messages: DietCodeMessage[]): Subagent
 		failedCount,
 		pendingCount,
 		parentGateSignals,
-		hasParentGateBlocked: parentGateSignals.some(
+		hasParentGateBlocked: false,
+		hasParentAdvisoryFindings: parentGateSignals.some(
 			(signal) =>
 				signal.startsWith(PARENT_GATE_SIGNAL_PREFIX) ||
 				signal === PARENT_SIGNAL_PATTERNS.gateBlocked ||
-				signal === PARENT_SIGNAL_PATTERNS.completionGateBlocked,
+				signal === PARENT_SIGNAL_PATTERNS.completionGateBlocked ||
+				signal === PARENT_SIGNAL_PATTERNS.completionDiagnosticFindings ||
+				signal === PARENT_SIGNAL_PATTERNS.advisoryFindings,
 		),
-		hasParentAdvisoryFindings: parentGateSignals.includes(PARENT_SIGNAL_PATTERNS.advisoryFindings),
 		hasParentCriticalViolations: parentGateSignals.includes(PARENT_SIGNAL_PATTERNS.criticalViolations),
 		hasWorkspacePolicySignal: parentGateSignals.includes(PARENT_SIGNAL_PATTERNS.workspacePolicy),
 	}

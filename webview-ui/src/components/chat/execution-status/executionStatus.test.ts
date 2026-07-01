@@ -63,8 +63,8 @@ describe("deriveExecutionStatus", () => {
 		} as ResolvedGateLifecycleSnapshot
 
 		const result = deriveExecutionStatus({ messages: [task, completion], gateLifecycle })
-		expect(result.state).toBe("blocked")
-		expect(result.title).toContain("stale")
+		expect(result.state).toBe("complete")
+		expect(result.safety).toBe("Snapshot stale")
 	})
 
 	it("does not present a partial governed receipt as complete", () => {
@@ -83,15 +83,15 @@ describe("deriveExecutionStatus", () => {
 		expect(result.nextAction).toContain("Do not retry")
 	})
 
-	it("gives a safety gate precedence over completion", () => {
+	it("renders failed quality gate metadata as advisory without overriding completion", () => {
 		const completion: DietCodeMessage = { ts: 2, type: "ask", ask: "completion_result", text: "Done" }
 		const auditMetadata = { gate_blocked: true, violations: ["critical:test"] } as TaskAuditMetadata
 
 		const result = deriveExecutionStatus({ messages: [task, completion], auditMetadata })
 
-		expect(result.state).toBe("blocked")
-		expect(result.safety).toBe("Gate blocked")
-		expect(result.confidence).toBe("Not ready")
+		expect(result.state).toBe("complete")
+		expect(result.safety).toBe("Advisory findings")
+		expect(result.confidence).toBe("Reported complete")
 	})
 
 	it("reports sealed completion confidence from a current receipt", () => {

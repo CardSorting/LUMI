@@ -155,28 +155,14 @@ describe("attemptCompletionUtils", () => {
 			should.not.exist(checkCompletionGateCircuitBreaker(config))
 		})
 
-		it("blocks completion at the retry limit and increments consecutiveMistakeCount", () => {
+		it("does not promote advisory retry history into a circuit breaker", () => {
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 			const config = configWithState(taskState)
 
-			const message = getCompletionGateCircuitBreakerError(config)
-			should.exist(message)
-			if (message === null) {
-				throw new Error("expected circuit breaker message")
-			}
-			message.should.containEql(String(MAX_COMPLETION_GATE_BLOCK_COUNT))
+			should.not.exist(getCompletionGateCircuitBreakerError(config))
 			taskState.consecutiveMistakeCount.should.equal(0)
-
-			const toolError = checkCompletionGateCircuitBreaker(config)
-			should.exist(toolError)
-			if (toolError === null) {
-				throw new Error("expected circuit breaker tool error")
-			}
-			toolError.should.containEql("Task completion blocked")
-			taskState.consecutiveMistakeCount.should.equal(1)
-			taskState.lastCompletionBlockReason?.should.equal("circuit_breaker")
-			taskState.lastCompletionFailedStage?.should.equal("circuit_breaker")
-			taskState.completionGatePressureLevel?.should.equal("tripped")
+			should.not.exist(checkCompletionGateCircuitBreaker(config))
+			should.not.exist(taskState.lastCompletionBlockReason)
 		})
 	})
 
@@ -287,8 +273,9 @@ describe("attemptCompletionUtils", () => {
 	})
 
 	describe("buildCompletionGatePassedBrief", () => {
-		it("emits passed status with score", () => {
-			buildCompletionGatePassedBrief(configWithState(taskState), 82).should.containEql('passed="true"')
+		it("emits advisory quality status with score", () => {
+			buildCompletionGatePassedBrief(configWithState(taskState), 82).should.containEql('quality_passed="true"')
+			buildCompletionGatePassedBrief(configWithState(taskState), 82).should.containEql('authority="advisory"')
 			buildCompletionGatePassedBrief(configWithState(taskState), 82).should.containEql('score="82"')
 		})
 	})
@@ -386,20 +373,21 @@ describe("attemptCompletionUtils", () => {
 	})
 
 	describe("buildCompletionGateReadinessBlock", () => {
-		it("marks ready when no issues are present", () => {
-			buildCompletionGateReadinessBlock([]).should.containEql('ready="true"')
+		it("marks advisory quality passed when no issues are present", () => {
+			buildCompletionGateReadinessBlock([]).should.containEql('quality_passed="true"')
 		})
 
-		it("lists dry-run issues with stage and http status", () => {
+		it("lists dry-run issues as advisory warnings", () => {
 			const block = buildCompletionGateReadinessBlock([
 				{ stage: "min_length", message: "Completion rejected: result is too brief" },
 			])
-			block.should.containEql('ready="false"')
+			block.should.containEql('quality_passed="false"')
+			block.should.containEql('authority="advisory"')
 			block.should.containEql('stage="min_length"')
-			block.should.containEql('http_status="422"')
+			block.should.containEql('severity="warning"')
 		})
 
-		it("keeps ready true when only info advisories are present", () => {
+		it("keeps info findings advisory", () => {
 			const block = buildCompletionGateReadinessBlock([
 				{
 					stage: "roadmap",
@@ -407,7 +395,7 @@ describe("attemptCompletionUtils", () => {
 					severity: "info",
 				},
 			])
-			block.should.containEql('ready="true"')
+			block.should.containEql('authority="advisory"')
 			block.should.containEql('advisory_count="1"')
 			block.should.containEql("<advisory")
 			block.should.containEql('governance_policy="')
@@ -415,9 +403,9 @@ describe("attemptCompletionUtils", () => {
 	})
 
 	describe("isCompletionGateCircuitBreakerTripped", () => {
-		it("detects tripped breaker without mutating state", () => {
+		it("ignores advisory gate counters without mutating state", () => {
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
-			isCompletionGateCircuitBreakerTripped(configWithState(taskState)).should.be.true()
+			isCompletionGateCircuitBreakerTripped(configWithState(taskState)).should.be.false()
 			should.not.exist(taskState.lastCompletionBlockReason)
 		})
 	})
@@ -464,9 +452,9 @@ describe("attemptCompletionUtils", () => {
 			recordCompletionBlockReason(configWithState(taskState), "audit_gate")
 			taskState.completionGateBlockCount = 2
 			const brief = buildCompletionGateHumanBrief(configWithState(taskState))
-			brief.should.containEql("Gate block")
+			brief.should.containEql("Advisory diagnostic")
 			brief.should.containEql("`audit_gate`")
-			brief.should.containEql("HTTP 422")
+			brief.should.containEql("historical finding")
 		})
 	})
 
@@ -567,12 +555,14 @@ describe("attemptCompletionUtils", () => {
 	})
 
 	describe("buildCompletionGatePassedEnvelope", () => {
-		it("wraps passed status with all-green stage progress", () => {
+		it("wraps advisory quality pass with all-green stage progress", () => {
 			const envelope = buildCompletionGatePassedEnvelope(configWithState(taskState), 91)
 			envelope.should.containEql("<completion_gate_envelope")
-			envelope.should.containEql('outcome="passed"')
-			envelope.should.containEql('passed="true"')
+			envelope.should.containEql('authority="advisory"')
+			envelope.should.containEql('quality_outcome="passed"')
+			envelope.should.containEql('quality_passed="true"')
 			envelope.should.containEql('score="91"')
+			envelope.should.containEql("Follow the canonical next action")
 		})
 	})
 
@@ -620,16 +610,16 @@ describe("attemptCompletionUtils", () => {
 	})
 
 	describe("recordCompletionGateBlockEvent", () => {
-		it("increments block count, records reason, fingerprint, and block timestamp", () => {
+		it("records advisory reason and fingerprint without incrementing counters", () => {
 			recordCompletionGateBlockEvent(configWithState(taskState), "result_too_brief", {
 				result: "too short",
 				checkpointHash: "abc",
 			})
-			taskState.completionGateBlockCount?.should.equal(1)
+			;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 			taskState.lastCompletionBlockReason?.should.equal("result_too_brief")
 			taskState.lastCompletionFailedStage?.should.equal("min_length")
 			taskState.completionGatePressureLevel?.should.equal("stable")
-			should.exist(taskState.lastCompletionAttemptAt)
+			should.not.exist(taskState.lastCompletionAttemptAt)
 			should.exist(taskState.lastBlockedCompletionResultFingerprint)
 			taskState.lastGateBlockCheckpointHash?.should.equal("abc")
 		})
@@ -651,7 +641,7 @@ describe("attemptCompletionUtils", () => {
 	describe("buildCompletionGateEscalationBrief", () => {
 		it("escalates when remaining attempts drop to critical threshold", () => {
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT - 2
-			buildCompletionGateEscalationBrief(configWithState(taskState)).should.containEql("Gate escalation")
+			buildCompletionGateEscalationBrief(configWithState(taskState)).should.containEql("Advisory quality findings")
 		})
 	})
 
@@ -694,7 +684,7 @@ describe("attemptCompletionUtils", () => {
 			taskState.completionGateBlockCount = COMPLETION_GATE_WARN_THRESHOLD - 1
 			shouldEmitProactiveCompletionGuidance(configWithState(taskState)).should.be.true()
 			const guidance = buildProactiveCompletionGuidance(configWithState(taskState))
-			guidance.should.containEql("Completion gate advisory")
+			guidance.should.containEql("Completion diagnostics advisory")
 			guidance.should.containEql("<completion_gate_envelope")
 		})
 
@@ -827,7 +817,7 @@ describe("attemptCompletionUtils", () => {
 		it("includes structured status and escalation under pressure", () => {
 			taskState.completionGateBlockCount = COMPLETION_GATE_WARN_THRESHOLD
 			taskState.consecutiveMistakeCount = 2
-			const message = buildCompletionAgentErrorMessage("Gate blocked", configWithState(taskState))
+			const message = buildCompletionAgentErrorMessage("Advisory finding", configWithState(taskState))
 			message.should.containEql("<completion_gate_status")
 			message.should.containEql('blocks="5"')
 			message.should.containEql("<completion_gate_recovery")
@@ -844,7 +834,7 @@ describe("attemptCompletionUtils", () => {
 				configWithState(taskState),
 			)
 			message.should.containEql('failed_stage="max_length"')
-			message.should.containEql("Gate block")
+			message.should.containEql("Advisory diagnostic")
 			message.should.containEql("<completion_gate_envelope")
 			message.should.containEql("<completion_gate_problem")
 			message.should.containEql("<completion_gate_playbook")
@@ -858,19 +848,16 @@ describe("attemptCompletionUtils", () => {
 	})
 
 	describe("detectDuplicateCompletionSubmission", () => {
-		it("blocks identical result re-submission after a gate block within cooldown", () => {
+		it("does not suppress identical result based on advisory history within cooldown", () => {
 			const result = "Task complete: added retry logic"
 			taskState.completionGateBlockCount = 2
 			taskState.lastBlockedCompletionResultFingerprint = hashCompletionResult(result)
 			taskState.lastCompletionAttemptAt = Date.now()
 
-			expectErrorMessage(
-				detectDuplicateCompletionSubmission(configWithState(taskState), result),
-				"Duplicate completion submission",
-			)
+			should.not.exist(detectDuplicateCompletionSubmission(configWithState(taskState), result))
 		})
 
-		it("blocks same result after cooldown window expires when workspace unchanged", () => {
+		it("does not suppress same result after cooldown when advisory workspace history is unchanged", () => {
 			const result = "Task complete: added retry logic"
 			taskState.completionGateBlockCount = 2
 			taskState.lastBlockedCompletionResultFingerprint = hashCompletionResult(result)
@@ -878,21 +865,17 @@ describe("attemptCompletionUtils", () => {
 			// No checkpoint hash set — workspace hasn't changed
 			// After cooldown, same result with no workspace change is blocked
 			// to prevent infinite retry loops that burn through block budget
-			const blocked = detectDuplicateCompletionSubmission(configWithState(taskState), result)
-			should.exist(blocked)
-			blocked?.should.containEql("no workspace changes")
+			should.not.exist(detectDuplicateCompletionSubmission(configWithState(taskState), result))
 		})
 
-		it("allows same result after cooldown when engineering is verified (directs to finalization)", () => {
+		it("does not derive finalization guidance from duplicate advisory state", () => {
 			const result = "Task complete: added retry logic"
 			taskState.completionGateBlockCount = 2
 			taskState.lastBlockedCompletionResultFingerprint = hashCompletionResult(result)
 			taskState.lastCompletionAttemptAt = Date.now() - 5000
 			taskState.engineeringVerifiedAt = Date.now()
 			// Engineering verified — the message directs to run_finalization
-			const blocked = detectDuplicateCompletionSubmission(configWithState(taskState), result)
-			should.exist(blocked)
-			blocked?.should.containEql("run_finalization")
+			should.not.exist(detectDuplicateCompletionSubmission(configWithState(taskState), result))
 		})
 
 		it("allows submission when result content changed", () => {
@@ -946,14 +929,16 @@ describe("attemptCompletionUtils", () => {
 	describe("completion gate retry guidance", () => {
 		it("adds progressive guidance as block count increases", () => {
 			buildCompletionGateRetryGuidance(1).should.equal("")
-			buildCompletionGateRetryGuidance(2).should.containEql("Repeated completion gate block")
-			buildCompletionGateRetryGuidance(COMPLETION_GATE_WARN_THRESHOLD).should.containEql("Completion gate pressure")
+			buildCompletionGateRetryGuidance(2).should.containEql("Repeated advisory quality finding")
+			buildCompletionGateRetryGuidance(COMPLETION_GATE_WARN_THRESHOLD).should.containEql(
+				"Repeated advisory quality finding",
+			)
 		})
 
 		it("appends guidance to gate block messages", () => {
 			const message = appendCompletionGateRetryGuidance("blocked", 3)
 			message.should.containEql("blocked")
-			message.should.containEql("Repeated completion gate block")
+			message.should.containEql("Repeated advisory quality finding")
 		})
 	})
 
@@ -971,9 +956,10 @@ describe("attemptCompletionUtils", () => {
 	})
 
 	describe("recordCompletionGateBlock", () => {
-		it("increments and returns the block count", () => {
-			recordCompletionGateBlock(configWithState(taskState)).should.equal(1)
-			recordCompletionGateBlock(configWithState(taskState)).should.equal(2)
+		it("is a non-mutating compatibility API", () => {
+			recordCompletionGateBlock(configWithState(taskState)).should.equal(0)
+			recordCompletionGateBlock(configWithState(taskState)).should.equal(0)
+			;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 		})
 	})
 

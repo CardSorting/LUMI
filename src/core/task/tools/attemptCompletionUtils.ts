@@ -191,18 +191,12 @@ const COMPLETION_ENGAGEMENT_BAIT_PATTERN =
 export function validateCompletionResultTone(result: string): string | null {
 	const trimmed = result.trim()
 	if (COMPLETION_QUESTION_ENDING_PATTERN.test(trimmed)) {
-		return (
-			"Completion rejected: result ends with a question. " +
-			"Provide a definitive completion summary — the user responds via the completion UI, not inline chat."
-		)
+		return "Advisory diagnostic: result ends with a question. " + "Consider a definitive completion summary."
 	}
 
 	const lastLine = trimmed.split("\n").filter(Boolean).pop() ?? ""
 	if (COMPLETION_ENGAGEMENT_BAIT_PATTERN.test(lastLine)) {
-		return (
-			"Completion rejected: result solicits further conversation. " +
-			"State what was done definitively; do not ask follow-up questions in attempt_completion."
-		)
+		return "Advisory diagnostic: result solicits further conversation. " + "Consider stating what was done definitively."
 	}
 
 	return null
@@ -215,12 +209,12 @@ export function hashCompletionResult(result: string): string {
 export function validateCompletionResultQuality(result: string): string | null {
 	const trimmed = result.trim()
 	if (!trimmed) {
-		return "Completion rejected: result is empty after trimming whitespace."
+		return "Advisory diagnostic: result is empty after trimming whitespace."
 	}
 	if (COMPLETION_QUALITY_BLOCK_PATTERN.test(trimmed)) {
 		return (
-			"Completion rejected: result contains unfinished markers (TODO/FIXME/placeholder). " +
-			"Resolve these in the workspace before calling attempt_completion."
+			"Advisory diagnostic: result contains unfinished markers (TODO/FIXME/placeholder). " +
+			"Consider resolving these in the workspace."
 		)
 	}
 	return validateCompletionResultTone(trimmed)
@@ -245,8 +239,8 @@ export function validateCompletionDemoCommand(command: string | undefined): stri
 	}
 	if (COMPLETION_DEMO_COMMAND_BLOCK_PATTERN.test(trimmed)) {
 		return (
-			"Completion rejected: demo command must showcase live output — echo/cat/printf/type are not allowed. " +
-			"Use a command that starts a server, opens a UI, or runs a meaningful demo."
+			"Advisory diagnostic: demo command must showcase live output. " +
+			"Consider a command that starts a server, opens a UI, or runs a meaningful demo."
 		)
 	}
 	return null
@@ -325,8 +319,7 @@ export function getCompletionGateTelemetryContext(config: TaskConfig): {
 export function validateCompletionResultExcludesChecklist(result: string): string | null {
 	if (COMPLETION_CHECKLIST_IN_RESULT_PATTERN.test(result)) {
 		return (
-			"Completion rejected: result must not contain checklist items. " +
-			"Put the completed checklist in task_progress, not in result."
+			"Advisory diagnostic: result must not contain checklist items. " + "Consider keeping the checklist in task_progress."
 		)
 	}
 	return null
@@ -353,8 +346,8 @@ export function validateTaskProgressAlignsWithFocusChain(config: TaskConfig, tas
 
 	if (progressLabels.length < focusLabels.length) {
 		return (
-			`Completion rejected: task_progress has ${progressLabels.length} item(s) but focus chain has ${focusLabels.length}. ` +
-			"Include every focus chain item in task_progress, all marked [x]."
+			`Advisory diagnostic: task_progress has ${progressLabels.length} item(s) but focus chain has ${focusLabels.length}. ` +
+			"Consider including every focus chain item in task_progress."
 		)
 	}
 
@@ -365,8 +358,8 @@ export function validateCompletionResultMinLength(result: string): string | null
 	const trimmed = result.trim()
 	if (trimmed.length < COMPLETION_RESULT_MIN_LENGTH) {
 		return (
-			`Completion rejected: result is too brief (${trimmed.length} chars, minimum ${COMPLETION_RESULT_MIN_LENGTH}). ` +
-			"Provide a 1–2 paragraph summary of what was done."
+			`Advisory diagnostic: result is too brief (${trimmed.length} chars, suggested minimum ${COMPLETION_RESULT_MIN_LENGTH}). ` +
+			"Consider a 1–2 paragraph summary of what was done."
 		)
 	}
 	return null
@@ -376,8 +369,8 @@ export function validateCompletionResultMaxLength(result: string): string | null
 	const trimmed = result.trim()
 	if (trimmed.length > COMPLETION_RESULT_MAX_LENGTH) {
 		return (
-			`Completion rejected: result exceeds maximum length (${trimmed.length} chars, maximum ${COMPLETION_RESULT_MAX_LENGTH}). ` +
-			"Shorten to a 1–2 paragraph summary; move checklists to task_progress."
+			`Advisory diagnostic: result exceeds maximum length (${trimmed.length} chars, suggested maximum ${COMPLETION_RESULT_MAX_LENGTH}). ` +
+			"Consider a shorter summary and moving checklists to task_progress."
 		)
 	}
 	return null
@@ -691,7 +684,7 @@ export function buildCompletionGateStageProgressPassedBlock(): string {
 		(stage, index) => `<stage name="${stage}" status="passed" order="${index + 1}" />`,
 	).join("")
 	return (
-		`<completion_gate_stages schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" outcome="passed">` +
+		`<completion_gate_stages schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" authority="advisory" quality_outcome="passed">` +
 		`${stageElements}</completion_gate_stages>`
 	)
 }
@@ -771,34 +764,26 @@ export function buildCompletionGateFocusBlock(config: TaskConfig): string {
 
 /** Dry-run readiness issues — non-mutating preflight report for proactive hints. */
 export function buildCompletionGateReadinessBlock(
-	issues: ReadonlyArray<{ stage: CompletionPreflightStage; message: string; severity?: "block" | "info" }>,
+	issues: ReadonlyArray<{ stage: CompletionPreflightStage; message: string; severity?: "warning" | "info" | "block" }>,
 ): string {
-	const blockers = issues.filter((issue) => issue.severity !== "info")
-	const advisories = issues.filter((issue) => issue.severity === "info")
-
-	if (blockers.length === 0 && advisories.length === 0) {
-		return `<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ready="true" count="0" />`
+	if (issues.length === 0) {
+		return `<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" authority="advisory" quality_passed="true" advisory_count="0" />`
 	}
 
-	const issueElements = blockers
+	const advisoryElements = issues
 		.map(
 			(issue) =>
-				`<issue stage="${issue.stage}" http_status="${mapCompletionReasonToHttpStatus(classifyCompletionPreflightReason(issue.message))}">` +
-				`${escapeCompletionGateXmlText(issue.message)}</issue>`,
+				`<advisory stage="${issue.stage}" severity="${issue.severity === "info" ? "info" : "warning"}">` +
+				`${escapeCompletionGateXmlText(issue.message)}</advisory>`,
 		)
 		.join("")
 
-	const advisoryElements = advisories
-		.map((issue) => `<advisory stage="${issue.stage}">` + `${escapeCompletionGateXmlText(issue.message)}</advisory>`)
-		.join("")
-
-	const ready = blockers.length === 0 ? "true" : "false"
 	const hasRoadmap = issues.some((issue) => issue.stage === "roadmap")
 	const policyAttr = hasRoadmap ? ` governance_policy="${escapeCompletionGateXmlText(AUTO_GOVERNANCE.governancePolicy)}"` : ""
 	return (
-		`<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" ready="${ready}" ` +
-		`count="${blockers.length}" advisory_count="${advisories.length}"${policyAttr}>` +
-		`${issueElements}${advisoryElements}</completion_gate_readiness>`
+		`<completion_gate_readiness schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" authority="advisory" ` +
+		`quality_passed="false" advisory_count="${issues.length}"${policyAttr}>` +
+		`${advisoryElements}</completion_gate_readiness>`
 	)
 }
 
@@ -890,13 +875,11 @@ export function buildCompletionGateHumanBrief(config: TaskConfig, reason?: Compl
 	}
 	const stage = mapCompletionReasonToPreflightStage(resolvedReason)
 	const blocks = config.taskState.completionGateBlockCount ?? 0
-	const remaining = Math.max(0, MAX_COMPLETION_GATE_BLOCK_COUNT - blocks)
 	const policy = getCompletionGateRetryPolicy(resolvedReason, config)
-	const action = buildCompletionPreflightRecoveryHint(resolvedReason) ?? "Fix violations before retrying."
-	const httpStatus = mapCompletionReasonToHttpStatus(resolvedReason)
+	const action = buildCompletionPreflightRecoveryHint(resolvedReason) ?? "Review the diagnostic findings."
 	return (
-		`**Gate block** \`${resolvedReason}\` at \`${stage}\` ` +
-		`(${blocks}/${MAX_COMPLETION_GATE_BLOCK_COUNT}, ${remaining} left, HTTP ${httpStatus}, retry: ${policy.retryStatus}) — ${action}`
+		`**Advisory diagnostic** \`${resolvedReason}\` at \`${stage}\` ` +
+		`(${blocks} historical finding(s), quality status: ${policy.retryStatus}) — ${action}`
 	)
 }
 
@@ -906,7 +889,7 @@ export function buildCompletionGateAgentEnvelope(blocks: string[]): string {
 	if (!inner) {
 		return ""
 	}
-	return `<completion_gate_envelope schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}">${inner}</completion_gate_envelope>`
+	return `<completion_gate_envelope schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" authority="advisory">${inner}</completion_gate_envelope>`
 }
 
 /** All structured gate blocks for errors and subagent handoff. */
@@ -949,7 +932,7 @@ export function buildCompletionGateObservabilityEnvelope(config: TaskConfig): st
 		])
 	}
 	const failedStage = mapCompletionReasonToPreflightStage(lastReason)
-	const detail = buildCompletionPreflightRecoveryHint(lastReason) ?? "Completion gate blocked"
+	const detail = buildCompletionPreflightRecoveryHint(lastReason) ?? "Completion diagnostic finding"
 	return buildCompletionGateAgentEnvelope([
 		buildCompletionGateDigestBlock(config, lastReason),
 		buildCompletionGateStateBlock(config),
@@ -1059,12 +1042,12 @@ export function buildCompletionPreflightReadinessBrief(config: TaskConfig): stri
 
 export function buildProactiveCompletionGuidance(config: TaskConfig): string {
 	const blockCount = config.taskState.completionGateBlockCount ?? 0
-	const remaining = MAX_COMPLETION_GATE_BLOCK_COUNT - blockCount
 	const lastReason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
 	const failedStage = lastReason ? mapCompletionReasonToPreflightStage(lastReason) : undefined
 	const escalationBrief = buildCompletionGateEscalationBrief(config)
 	const parts = [
-		`⚠️ **Completion gate advisory (${blockCount}/${MAX_COMPLETION_GATE_BLOCK_COUNT})** — ${remaining} attempt(s) before hard stop.`,
+		`⚠️ **Completion diagnostics advisory** — ${blockCount} historical finding(s).`,
+		"Follow the canonical next action from the lifecycle decision.",
 		buildCompletionGateObservabilityEnvelope(config),
 		buildCompletionGatePipelineBrief(failedStage),
 	]
@@ -1076,10 +1059,14 @@ export function buildProactiveCompletionGuidance(config: TaskConfig): string {
 
 export function classifyCompletionPreflightReason(message: string): CompletionPreflightReason {
 	if (message.includes("result is empty")) return "empty_result"
-	if (message.includes("result is too brief")) return "result_too_brief"
-	if (message.includes("exceeds maximum length")) return "result_too_long"
-	if (message.includes("must not contain checklist")) return "checklist_in_result"
-	if (message.includes("demo command must showcase")) return "invalid_demo_command"
+	if (message.includes("result is too brief") || message.includes("result is brief")) return "result_too_brief"
+	if (message.includes("exceeds maximum length") || message.includes("exceeds the suggested maximum length")) {
+		return "result_too_long"
+	}
+	if (message.includes("must not contain checklist") || message.includes("contains checklist")) return "checklist_in_result"
+	if (message.includes("demo command must showcase") || message.includes("demo command does not showcase")) {
+		return "invalid_demo_command"
+	}
 	if (message.includes("unfinished markers")) return "unfinished_markers"
 	if (message.includes("ends with a question") || message.includes("solicits further conversation")) return "invalid_tone"
 	if (message.includes("Duplicate completion submission")) return "duplicate_submission"
@@ -1243,8 +1230,8 @@ export function validateCompletionTaskProgressRequired(config: TaskConfig, taskP
 
 	if (!taskProgress?.trim()) {
 		return (
-			"Completion rejected: task_progress is required when a focus chain checklist exists. " +
-			"Pass the full checklist with all items marked [x]."
+			"Advisory diagnostic: task_progress is required by the focus chain checklist convention but is missing. " +
+			"Consider including the full checklist."
 		)
 	}
 
@@ -1268,8 +1255,8 @@ export function validateFocusChainComplete(config: TaskConfig): string | null {
 	if (totalItems > 0 && completedItems < totalItems) {
 		const incomplete = totalItems - completedItems
 		return (
-			`Completion rejected: focus chain has ${incomplete} incomplete item(s). ` +
-			"Mark all items [x] or update the list before attempt_completion."
+			`Advisory diagnostic: focus chain has ${incomplete} incomplete item(s). ` +
+			"Consider updating the checklist to reflect current work."
 		)
 	}
 
@@ -1285,8 +1272,8 @@ export function validateCompletionTaskProgress(taskProgress: string | undefined)
 	if (totalItems > 0 && completedItems < totalItems) {
 		const incomplete = totalItems - completedItems
 		return (
-			`Completion rejected: task_progress has ${incomplete} incomplete item(s). ` +
-			"Mark all checklist items [x] in task_progress before completing."
+			`Advisory diagnostic: task_progress has ${incomplete} incomplete item(s). ` +
+			"Consider updating checklist status to reflect current work."
 		)
 	}
 
@@ -1334,25 +1321,23 @@ export function buildCompletionGateStatusBrief(config: TaskConfig, options?: { r
 	)
 }
 
-/** Success status block — confirms gates cleared before completion is emitted. */
+/** Advisory quality status — never grants or denies a lifecycle action. */
 export function buildCompletionGatePassedBrief(config: TaskConfig, score?: number): string {
 	const attempt = config.taskState.completionAttemptCount ?? 0
 	const priorBlocks = config.taskState.completionGateBlockCount ?? 0
 	const scoreAttr = score !== undefined ? ` score="${score}"` : ""
 	return (
-		`<completion_gate_status schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" passed="true" attempt="${attempt}" prior_blocks="${priorBlocks}"` +
-		`${scoreAttr} retryable="false" retry_after_ms="0" retry_status="ready" />`
+		`<completion_gate_status schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}" authority="advisory" quality_passed="true" ` +
+		`attempt="${attempt}" historical_blocks="${priorBlocks}"${scoreAttr} />`
 	)
 }
 
-/** Success envelope — all stages passed with health snapshot (mirrors green CI run). */
+/** Advisory success envelope. Canonical lifecycle state supplies the next action. */
 export function buildCompletionGatePassedEnvelope(config: TaskConfig, score?: number): string {
 	return buildCompletionGateAgentEnvelope([
-		buildCompletionGateDigestBlock(config),
-		buildCompletionGateStateBlock(config),
-		buildCompletionGateHealthBlock(config),
 		buildCompletionGateStageProgressPassedBlock(),
 		buildCompletionGatePassedBrief(config, score),
+		"<completion_gate_guidance>Completion diagnostics are advisory. Follow the canonical next action from the lifecycle decision.</completion_gate_guidance>",
 	])
 }
 
@@ -1403,8 +1388,8 @@ export function buildCompletionGateEscalationBrief(config: TaskConfig): string {
 	}
 
 	return (
-		`🚨 **Gate escalation:** ${remaining} attempt(s) until hard stop. ` +
-		"Fix blocking violations before retrying attempt_completion."
+		`⚠️ **Advisory quality findings:** ${remaining} historical budget marker(s) remain. ` +
+		"Follow the canonical next action from the lifecycle decision."
 	)
 }
 
@@ -1503,8 +1488,8 @@ export function formatCompletionToolError(message: string, config: TaskConfig, o
  *      budget until the circuit breaker trips.  The agent must either change the
  *      workspace (which changes the checkpoint hash) or change the result summary.
  *
- * Escape hatch: if engineering is verified, the agent should use run_finalization
- * instead of retrying attempt_completion — the message guides this.
+ * Compatibility diagnostic. Canonical lifecycle projection supplies every
+ * actionable next step; this helper only detects duplicate evidence.
  */
 export function detectDuplicateCompletionSubmission(
 	config: TaskConfig,
@@ -1523,17 +1508,9 @@ export function detectDuplicateCompletionSubmission(
 	if (!isDup) {
 		return null
 	}
-	// Duplicate detected — provide appropriate escape route message
-	if (config.taskState.engineeringVerifiedAt) {
-		return (
-			"Duplicate completion submission: the same result was re-submitted after a gate block with no workspace changes. " +
-			"Engineering is already verified — call run_finalization to complete in this session instead of retrying attempt_completion."
-		)
-	}
 	return (
-		"Duplicate completion submission: the same result was re-submitted after a gate block with no workspace changes. " +
-		"Make substantive fixes in the workspace (the checkpoint hash must change), then retry with an updated result. " +
-		"If you cannot fix the violations, summarize what was accomplished and use run_finalization after engineering verification."
+		"Advisory diagnostic: the same result was re-submitted with no workspace changes. " +
+		"Follow the canonical next action from the lifecycle decision."
 	)
 }
 
@@ -1673,7 +1650,9 @@ export function getCanonicalCompletionPhase(config: TaskConfig): CanonicalComple
 }
 
 export function recordCompletionPreflightFailure(config: TaskConfig): void {
-	config.taskState.consecutiveMistakeCount++
+	// Completion preflight is advisory. Retained as a compatibility hook only;
+	// diagnostics must not consume mistake or retry budgets.
+	void config
 }
 
 /**
@@ -1681,24 +1660,12 @@ export function recordCompletionPreflightFailure(config: TaskConfig): void {
  * Appended to gate-block tool errors so the model gets actionable next steps, not just a stop signal.
  */
 export function buildCompletionGateRetryGuidance(blockCount: number): string {
-	if (blockCount <= 1 || blockCount >= MAX_COMPLETION_GATE_BLOCK_COUNT) {
+	if (blockCount <= 1) {
 		return ""
 	}
-
-	if (blockCount >= COMPLETION_GATE_WARN_THRESHOLD) {
-		const remaining = MAX_COMPLETION_GATE_BLOCK_COUNT - blockCount
-		return (
-			`\n\n⚠️ **Completion gate pressure (${blockCount}/${MAX_COMPLETION_GATE_BLOCK_COUNT})** — ` +
-			`${remaining} attempt(s) remain before a hard stop.\n` +
-			"1. Read the violations above and fix root causes in code — do not re-submit the same summary.\n" +
-			"2. Run tests or verify behavior changed before calling attempt_completion again.\n" +
-			"3. If blocked on audit score, address critical violations first; warnings may be acceptable depending on policy."
-		)
-	}
-
 	return (
-		`\n\n💡 **Repeated completion gate block (${blockCount}/${MAX_COMPLETION_GATE_BLOCK_COUNT})** — ` +
-		"address the listed violations before retrying. Re-submitting unchanged work will not pass."
+		`\n\n💡 **Repeated advisory quality finding (${blockCount})** — ` +
+		"review the listed diagnostics while following the canonical lifecycle action."
 	)
 }
 
@@ -1761,41 +1728,27 @@ export function checkCompletionGateCircuitBreaker(config: TaskConfig): ToolRespo
 }
 
 export function recordCompletionGateBlock(config: TaskConfig): number {
-	config.taskState.completionGateBlockCount = (config.taskState.completionGateBlockCount ?? 0) + 1
+	// Legacy compatibility API. Completion diagnostics cannot increment a
+	// circuit-breaker budget or create a retry lock.
 	return config.taskState.completionGateBlockCount ?? 0
 }
 
 /**
- * Unified gate block event — increments counter, records fingerprint, and reason.
- * Mirrors idempotent event-sourced gate transitions in production CI systems.
+ * Legacy diagnostic event recorder. It preserves evidence without mutating
+ * execution counters, retry locks, or the canonical lifecycle graph.
  */
 export function recordCompletionGateBlockEvent(
 	config: TaskConfig,
 	reason: CompletionPreflightReason,
 	options?: { result?: string; checkpointHash?: string },
 ): number {
-	if (reason === "circuit_breaker") {
-		config.taskState.consecutiveMistakeCount++
-		getOrCreateCompletionGateSessionId(config)
-		recordCompletionBlockReason(config, reason)
-		return config.taskState.completionGateBlockCount ?? 0
-	}
-
-	if (isCompletionSoftBlockReason(reason)) {
-		recordCompletionBlockReason(config, reason)
-		return config.taskState.completionGateBlockCount ?? 0
-	}
-
-	const blockCount = recordCompletionGateBlock(config)
-	config.taskState.lastCompletionAttemptAt = Date.now()
-	recordCompletionAttemptGraphRevision(config)
+	getOrCreateCompletionGateSessionId(config)
 	if (options?.result) {
 		recordBlockedCompletionResultFingerprint(config, options.result, options.checkpointHash)
 	}
 	recordCompletionBlockReason(config, reason)
-	incrementCompletionGraphRevision(config)
 	appendGovernanceParalysisDiagnostics(config, reason, options?.checkpointHash)
-	return blockCount
+	return config.taskState.completionGateBlockCount ?? 0
 }
 
 function appendGovernanceParalysisDiagnostics(

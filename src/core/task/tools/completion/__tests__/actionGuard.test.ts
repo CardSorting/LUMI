@@ -94,6 +94,25 @@ describe("CompletionActionGuard — binding action contract enforcement", () => 
 			const result = guardRunFinalization(configWithState(taskState), decision)
 			result.allowed.should.be.true()
 		})
+
+		it("canonical route_to_finalization overrides failed advisory gate state", () => {
+			const snapshot = makeSnapshot({
+				engineeringVerifiedAt: Date.now(),
+				blockCount: MAX_COMPLETION_GATE_BLOCK_COUNT,
+				auditGateDecision: {
+					blocked: true,
+					score: 10,
+					effectiveThreshold: 80,
+					grade: "F",
+					reasons: [{ code: "score_below_threshold", message: "Advisory score below threshold" }],
+				},
+			})
+			const decision = CompletionLifecycleDecisionEngine.evaluate(snapshot)
+
+			decision.kind.should.equal("route_to_finalization")
+			decision.nextAllowedAction.should.equal("run_finalization")
+			guardRunFinalization(configWithState(taskState), decision).allowed.should.be.true()
+		})
 	})
 
 	describe("soft_block — attempt_completion and run_finalization are forbidden", () => {
@@ -342,17 +361,17 @@ describe("CompletionActionGuard — binding action contract enforcement", () => 
 			finalizationResult.allowed.should.be.true()
 		})
 
-		it("soft_block via adapter: attempt_completion rejected without counter mutation", () => {
+		it("adapter ignores advisory gate counters when authorizing attempt_completion", () => {
 			taskState.completionGateBlockCount = 2
 			taskState.lastGateBlockCheckpointHash = "chk-1"
 			const config = configWithState(taskState, [{ lastCheckpointHash: "chk-1" }])
 			const decision = evaluateCompletionLifecycle(config)
 
-			decision.kind.should.equal("soft_block")
+			decision.kind.should.equal("allow_attempt")
 
 			const blockCountBefore = config.taskState.completionGateBlockCount ?? 0
 			const result = guardAttemptCompletion(config, decision)
-			result.allowed.should.be.false()
+			result.allowed.should.be.true()
 			config.taskState.completionGateBlockCount?.should.equal(blockCountBefore)
 		})
 	})

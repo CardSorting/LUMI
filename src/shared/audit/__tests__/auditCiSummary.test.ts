@@ -18,7 +18,8 @@ describe("auditCiSummary", () => {
 			markdownPath: ".audit/reports/task-1.audit.md",
 			manifestPath: ".audit/task-1.manifest.json",
 		})
-		expect(markdown).to.contain("Gate Blocked")
+		expect(markdown).to.contain("Advisory diagnostics")
+		expect(markdown).not.to.contain("Gate Blocked")
 		expect(markdown).to.contain("task-1")
 		expect(markdown).to.contain(".audit/sarif/task-1.sarif.json")
 	})

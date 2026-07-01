@@ -11,9 +11,9 @@ export function buildCiJobSummaryMarkdown(
 	status: QualityGateStatus,
 	entry: Pick<AuditArtifactIndexEntry, "taskId" | "event" | "manifestPath" | "sarifPath" | "markdownPath">,
 ): string {
-	const gateEmoji = status.blocked ? "⛔" : status.passed ? "✅" : "⚠️"
+	const gateEmoji = status.passed ? "✅" : "⚠️"
 	const lines = [
-		`## ${gateEmoji} Task Audit — ${entry.event === "gate_block" ? "Gate Blocked" : "Completion"}`,
+		`## ${gateEmoji} Task Audit — Advisory diagnostics`,
 		"",
 		"| Metric | Value |",
 		"| --- | --- |",
@@ -80,6 +80,7 @@ export interface CiGateStatusPayload {
 	evaluatedAt: number
 	passed: boolean
 	blocked: boolean
+	advisoryFailed: boolean
 	status: QualityGateStatus["status"]
 	score: number
 	effectiveThreshold: number
@@ -111,7 +112,8 @@ export function buildCiGateStatusJson(
 		event,
 		evaluatedAt: metadata.audited_at ?? Date.now(),
 		passed: status.passed,
-		blocked: status.blocked,
+		blocked: false,
+		advisoryFailed: status.advisoryFailed,
 		status: status.status,
 		score: status.score,
 		effectiveThreshold: status.effectiveThreshold,

@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto"
-import { telemetryService } from "@services/telemetry"
 import {
 	applyWorkspaceAuditPolicy,
 	type GatePolicyProvenance,
@@ -11,7 +10,6 @@ import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } 
 import { buildCompletionGateMessage, runCompletionAudit } from "@shared/audit/completionAudit"
 import {
 	COMPLETION_AUDIT_CACHE_TTL_MS,
-	PARENT_PROGRESSIVE_GATE_BLOCK_LIMIT,
 	parseIntentThresholdOverrides,
 	SUBAGENT_IO_LANE_RESULT_MIN_LENGTH,
 } from "@shared/audit/gatePolicy"
@@ -20,7 +18,6 @@ import { Logger } from "@shared/services/Logger"
 import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
 import { formatAutoRemediationSummary } from "@/services/roadmap/RoadmapAutoGovernance"
 import {
-	buildRoadmapCompletionExtraBlocks,
 	evaluateRoadmapCompletionBlock,
 	failClosedCompletionMessage,
 	roadmapPreflightReadinessFromDryRun,
@@ -28,21 +25,10 @@ import {
 import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
 import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import {
-	appendCompletionGateRetryGuidance,
-	buildCompletionAgentErrorMessage,
 	type CompletionPreflightStage,
-	classifyCompletionPreflightReason,
 	detectDuplicateCompletionSubmission,
-	getCompletionGateCircuitBreakerError,
-	getCompletionGateTelemetryContext,
 	getCompletionGraphRevision,
 	getLatestCheckpointHashFromMessages,
-	isCompletionGateCircuitBreakerTripped,
-	mapCompletionReasonToPreflightStage,
-	markCompletionGatesPassed,
-	recordCompletionAttemptTime,
-	recordCompletionGateBlockEvent,
-	recordCompletionPreflightFailure,
 	validateCompletionAttemptCooldown,
 	validateCompletionDemoCommand,
 	validateCompletionResultExcludesChecklist,
@@ -55,13 +41,12 @@ import {
 	validateTaskProgressAlignsWithFocusChain,
 	validateWorkspaceProgressSinceGateBlock,
 } from "./attemptCompletionUtils"
-import { mapPreflightReasonToLifecycleState, publishGateLifecycleStatus } from "./completion/GateLifecycleEvaluator"
 import { isNonMutatingMode } from "./subagent/LockNecessity"
 import type { TaskConfig } from "./types/TaskConfig"
 
 export type CompletionAuditGateResult =
 	| {
-			status: "passed"
+			status: "advisory_passed"
 			auditMetadata: TaskAuditMetadata
 			planBaseline?: TaskAuditMetadata
 			gateDecision: AuditGateDecision
@@ -69,81 +54,15 @@ export type CompletionAuditGateResult =
 			policyProvenance: GatePolicyProvenance
 	  }
 	| {
-			status: "blocked"
-			message: string
+			status: "advisory_failed"
+			diagnostics: string
 			auditMetadata: TaskAuditMetadata
 			gateDecision: AuditGateDecision
-			blockCount: number
 			gateOptions: Awaited<ReturnType<typeof resolveCompletionGateContext>>["options"]
 			policyProvenance: GatePolicyProvenance
 	  }
 	| { status: "skipped" }
-	| { status: "error"; message: string }
-
-function emitCompletionGateBlockTelemetry(
-	config: TaskConfig,
-	reason: ReturnType<typeof classifyCompletionPreflightReason>,
-	blockCount: number,
-): void {
-	const telemetryContext = getCompletionGateTelemetryContext(config)
-	telemetryService.captureCompletionPreflightBlocked(config.ulid, {
-		taskId: config.taskId,
-		reason,
-		blockCount,
-		consecutiveMistakes: config.taskState.consecutiveMistakeCount,
-		attemptCount: config.taskState.completionAttemptCount ?? 0,
-		lastReason: config.taskState.lastCompletionBlockReason,
-		failedStage: mapCompletionReasonToPreflightStage(reason),
-		pressureLevel: telemetryContext.pressureLevel,
-		retryStatus: telemetryContext.retryStatus,
-		historyLength: telemetryContext.historyLength,
-		sessionId: telemetryContext.sessionId,
-	})
-}
-
-export { emitCompletionGateBlockTelemetry }
-
-function finalizePreflightError(
-	rawMessage: string,
-	config: TaskConfig,
-	context?: { result?: string; checkpointHash?: string },
-): string {
-	const reason = classifyCompletionPreflightReason(rawMessage)
-	const blockCount = recordCompletionGateBlockEvent(config, reason, context)
-	emitCompletionGateBlockTelemetry(config, reason, blockCount)
-
-	const recovery = config.taskState.lastRoadmapGateRecovery
-	const extraBlocks =
-		recovery && reason === "roadmap_gate"
-			? buildRoadmapCompletionExtraBlocks({
-					blocked: true,
-					remediationSteps: recovery.remediationSteps,
-					blockingGates: recovery.blockingGates,
-					autoClearableOnly: recovery.autoClearableOnly ?? false,
-				})
-			: undefined
-	config.taskState.lastRoadmapGateRecovery = undefined
-
-	void publishGateLifecycleStatus(config, mapPreflightReasonToLifecycleState(config, reason))
-
-	return buildCompletionAgentErrorMessage(rawMessage, config, {
-		result: context?.result,
-		extraBlocks,
-	})
-}
-
-function rejectPreflightStage(
-	config: TaskConfig,
-	error: string,
-	context: { result: string; checkpointHash?: string },
-	checks: { onFailure: (config: TaskConfig) => void },
-	options?: { soft?: boolean },
-): string {
-	if (!options?.soft) {
-		checks.onFailure(config)
-	}
-	return finalizePreflightError(error, config, context)
-}
+	| { status: "diagnostic_error"; diagnostics: string }
 
 type PreflightCheckContext = {
 	config: TaskConfig
@@ -221,8 +140,8 @@ export const PREFLIGHT_STAGE_RUNNERS: ReadonlyArray<{
 export type GatePreflightReadinessIssue = {
 	stage: CompletionPreflightStage
 	message: string
-	/** info = non-blocking advisory (e.g. auto-clearable roadmap governance) */
-	severity?: "block" | "info"
+	/** Completion-gate findings are diagnostics only and never execution blockers. */
+	severity: "warning" | "info"
 }
 
 /** Lane-local blocking stages only — parent-only checks deferred to seal barrier (ADR-013). */
@@ -243,11 +162,6 @@ export function evaluateGatePreflightReadiness(
 	},
 	validateQuality: (result: string) => string | null = validateCompletionResultQuality,
 ): GatePreflightReadinessIssue[] {
-	if (isCompletionGateCircuitBreakerTripped(config)) {
-		const message = getCompletionGateCircuitBreakerError(config)
-		return message ? [{ stage: "circuit_breaker", message }] : []
-	}
-
 	const preflightContext: PreflightCheckContext = {
 		config,
 		params,
@@ -259,7 +173,7 @@ export function evaluateGatePreflightReadiness(
 	for (const runner of PREFLIGHT_STAGE_RUNNERS) {
 		const stageError = runner.validate(preflightContext)
 		if (stageError) {
-			issues.push({ stage: runner.stage, message: stageError, severity: "block" })
+			issues.push({ stage: runner.stage, message: stageError, severity: runner.soft ? "info" : "warning" })
 		}
 	}
 	return issues
@@ -277,19 +191,16 @@ export async function evaluateGatePreflightReadinessAsync(
 	logPrefix = "GatePreflightReadiness",
 ): Promise<GatePreflightReadinessIssue[]> {
 	const issues = evaluateGatePreflightReadiness(config, params, validateQuality)
-	if (issues.some((issue) => issue.stage === "circuit_breaker")) {
-		return issues
-	}
 
 	const roadmapError = await evaluateRoadmapCompletionGateError(config, logPrefix, { dryRun: true })
 	if (roadmapError) {
-		issues.push({ stage: "roadmap", message: roadmapError, severity: "block" })
+		issues.push({ stage: "roadmap", message: roadmapError, severity: "warning" })
 	} else if (getRoadmapConfig().enabled) {
 		try {
 			const block = await evaluateRoadmapCompletionBlock(config.cwd, { dryRun: true })
 			const advisory = roadmapPreflightReadinessFromDryRun(block)
-			if (advisory?.severity === "info") {
-				issues.push(advisory)
+			if (advisory) {
+				issues.push({ stage: advisory.stage, message: advisory.message, severity: "info" })
 			}
 		} catch {
 			// non-fatal — readiness hint must not block completion attempt
@@ -307,45 +218,12 @@ export async function runCompletionPreflightChecks(
 		command?: string
 	},
 	logPrefix: string,
-	checks: {
+	_checks: {
 		validateQuality: (result: string) => string | null
 		onFailure: (config: TaskConfig) => void
 	},
-): Promise<string | null> {
-	// Fail fast — circuit breaker before any expensive work (mirrors API gateway patterns).
-	const circuitBreakerMessage = getCompletionGateCircuitBreakerError(config)
-	if (circuitBreakerMessage) {
-		return finalizePreflightError(circuitBreakerMessage, config)
-	}
-
-	const checkpointHash = getLatestCheckpointHashFromMessages(config)
-	recordCompletionAttemptTime(config)
-
-	const gateContext = { result: params.result, checkpointHash }
-	const preflightContext: PreflightCheckContext = {
-		config,
-		params,
-		checkpointHash,
-		validateQuality: checks.validateQuality,
-	}
-
-	for (const runner of PREFLIGHT_STAGE_RUNNERS) {
-		const stageError = runner.validate(preflightContext)
-		if (stageError) {
-			if (runner.soft) {
-				// Non-blocking advisory — mirrors Retry-After without hard stop (ADR parent zen path).
-				continue
-			}
-			return rejectPreflightStage(config, stageError, gateContext, checks, { soft: runner.soft })
-		}
-	}
-
-	const roadmapError = await evaluateRoadmapCompletionGateError(config, logPrefix)
-	if (roadmapError) {
-		return finalizePreflightError(roadmapError, config, gateContext)
-	}
-
-	return null
+): Promise<GatePreflightReadinessIssue[]> {
+	return evaluateGatePreflightReadinessAsync(config, params, _checks.validateQuality, logPrefix)
 }
 
 export function hashCompletionAuditInput(result: string, taskDescription: string, checkpointHash?: string): string {
@@ -428,64 +306,41 @@ async function resolveCompletionAuditMetadata(
 	return auditMetadata
 }
 
-function resolveProgressiveGateOptions(
-	config: TaskConfig,
-	baseOptions: Awaited<ReturnType<typeof resolveCompletionGateContext>>["options"],
-): Awaited<ReturnType<typeof resolveCompletionGateContext>>["options"] {
-	const blockCount = config.taskState.completionGateBlockCount ?? 0
-	if (blockCount >= PARENT_PROGRESSIVE_GATE_BLOCK_LIMIT) {
-		return baseOptions
-	}
-	return {
-		...baseOptions,
-		criticalOnly: baseOptions.criticalOnly || true,
-	}
-}
-
 export async function evaluateRoadmapCompletionGateError(
 	config: TaskConfig,
 	logPrefix: string,
-	options?: { dryRun?: boolean },
+	_options?: { dryRun?: boolean },
 ): Promise<string | null> {
-	const circuitBreakerMessage = getCompletionGateCircuitBreakerError(config)
-	if (circuitBreakerMessage) {
-		return circuitBreakerMessage
-	}
-
 	const roadmapService = RoadmapService.getInstance()
 	if (!roadmapService.isEnabled()) {
 		return null
 	}
 
 	try {
-		const block = await evaluateRoadmapCompletionBlock(config.cwd, { dryRun: options?.dryRun })
+		const block = await evaluateRoadmapCompletionBlock(config.cwd, { dryRun: true })
 		if (block.blocked) {
-			if (!options?.dryRun) {
-				config.taskState.consecutiveMistakeCount++
-				config.taskState.lastRoadmapGateRecovery = {
-					remediationSteps: block.remediationSteps,
-					blockingGates: block.blockingGates,
-					autoClearableOnly: block.autoClearableOnly ?? false,
-				}
-			}
 			const remediated = formatAutoRemediationSummary(block.remediationSteps || [])
 			const base = block.message || failClosedCompletionMessage()
-			return remediated ? `${base}\n\n${remediated}` : base
+			return normalizeAdvisoryDiagnosticCopy(remediated ? `${base}\n\n${remediated}` : base)
 		}
-		if (options?.dryRun && block.dryRunAdvisory) {
+		if (block.dryRunAdvisory) {
 			return null
 		}
 	} catch (error) {
 		Logger.error(`[${logPrefix}] Failed to evaluate Roadmap Governance Gates:`, error)
 		if (roadmapService.getConfig().fail_closed_completion_gates) {
-			if (!options?.dryRun) {
-				config.taskState.consecutiveMistakeCount++
-			}
-			return failClosedCompletionMessage()
+			return `Roadmap diagnostics unavailable: ${normalizeAdvisoryDiagnosticCopy(failClosedCompletionMessage())}`
 		}
 	}
 
 	return null
+}
+
+function normalizeAdvisoryDiagnosticCopy(message: string): string {
+	return `Advisory roadmap diagnostic: ${message}`
+		.replace(/task completion blocked:?/gi, "quality findings detected:")
+		.replace(/attempt_completion blocked/gi, "attempt_completion quality findings")
+		.replace(/\bblocked\b/gi, "flagged")
 }
 
 export async function evaluateCompletionAuditGate(
@@ -534,22 +389,11 @@ export async function evaluateCompletionAuditGate(
 			const gateContext = await resolveCompletionGateContext(config, config.cwd, {
 				lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
 			})
-			const gateOptions = resolveProgressiveGateOptions(config, gateContext.options)
+			const gateOptions = gateContext.options
 			const gateDecision = evaluateAuditGate(cachedAudit, gateOptions)
 			if (!gateDecision.blocked) {
-				markCompletionGatesPassed(config)
-				const passContext = getCompletionGateTelemetryContext(config)
-				telemetryService.captureCompletionGatesPassed(config.ulid, {
-					taskId: config.taskId,
-					blockCount: config.taskState.completionGateBlockCount ?? 0,
-					attemptCount: config.taskState.completionAttemptCount ?? 0,
-					score: gateDecision.score,
-					sessionId: passContext.sessionId,
-					historyLength: passContext.historyLength,
-					pressureLevel: passContext.pressureLevel,
-				})
 				return {
-					status: "passed",
+					status: "advisory_passed",
 					auditMetadata: cachedAudit,
 					gateDecision,
 					gateOptions,
@@ -570,59 +414,35 @@ export async function evaluateCompletionAuditGate(
 			planBaselineMetadata: planBaseline,
 			lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
 		})
-		const gateOptions = resolveProgressiveGateOptions(config, gateContext.options)
+		const gateOptions = gateContext.options
 		const gateDecision = evaluateAuditGate(auditMetadata, gateOptions)
 
 		if (gateDecision.blocked) {
-			config.taskState.consecutiveMistakeCount++
-			const blockCount = recordCompletionGateBlockEvent(config, "audit_gate", {
-				result: params.result,
-				checkpointHash,
+			const auditHumanMessage = buildCompletionGateMessage(auditMetadata, {
+				scoreThreshold: config.auditCompletionGateThreshold,
+				criticalOnly: gateOptions.criticalOnly ?? config.auditCompletionGateCriticalOnly,
+				intentAdjustedThreshold: config.auditIntentThresholdAdjustmentsEnabled,
+				intentThresholdOverrides: parseIntentThresholdOverrides(config.auditIntentThresholdOverrides),
+				advisoryMetadata: config.taskState.lastAdvisoryAudit,
+				planBaselineMetadata: planBaseline,
+				gateDecision,
 			})
-			emitCompletionGateBlockTelemetry(config, "audit_gate", blockCount)
-			const auditHumanMessage = appendCompletionGateRetryGuidance(
-				buildCompletionGateMessage(auditMetadata, {
-					scoreThreshold: config.auditCompletionGateThreshold,
-					criticalOnly: gateOptions.criticalOnly ?? config.auditCompletionGateCriticalOnly,
-					intentAdjustedThreshold: config.auditIntentThresholdAdjustmentsEnabled,
-					intentThresholdOverrides: parseIntentThresholdOverrides(config.auditIntentThresholdOverrides),
-					advisoryMetadata: config.taskState.lastAdvisoryAudit,
-					planBaselineMetadata: planBaseline,
-					gateDecision,
-				}),
-				blockCount,
-			)
 			const checklistSummary = buildPreCompletionChecklistSummary(auditMetadata, gateOptions)
 			const checklistBlock = checklistSummary ? buildPreCompletionChecklistBlock(checklistSummary) : ""
-			const message = buildCompletionAgentErrorMessage(auditHumanMessage, config, {
-				result: params.result,
-				extraBlocks: checklistBlock ? [checklistBlock] : undefined,
-			})
+			const diagnostics = [auditHumanMessage, checklistBlock].filter(Boolean).join("\n\n")
 
 			return {
-				status: "blocked",
-				message,
+				status: "advisory_failed",
+				diagnostics,
 				auditMetadata,
 				gateDecision,
-				blockCount,
 				gateOptions,
 				policyProvenance: gateContext.policyProvenance,
 			}
 		}
 
-		markCompletionGatesPassed(config)
-		const passContext = getCompletionGateTelemetryContext(config)
-		telemetryService.captureCompletionGatesPassed(config.ulid, {
-			taskId: config.taskId,
-			blockCount: config.taskState.completionGateBlockCount ?? 0,
-			attemptCount: config.taskState.completionAttemptCount ?? 0,
-			score: gateDecision.score,
-			sessionId: passContext.sessionId,
-			historyLength: passContext.historyLength,
-			pressureLevel: passContext.pressureLevel,
-		})
 		return {
-			status: "passed",
+			status: "advisory_passed",
 			auditMetadata,
 			planBaseline,
 			gateDecision,
@@ -630,28 +450,20 @@ export async function evaluateCompletionAuditGate(
 			policyProvenance: gateContext.policyProvenance,
 		}
 	} catch (error) {
-		Logger.error(`[${params.logPrefix}] Failed to run completion audit gate:`, error)
-		// No hidden fallback — a stale cached audit must never produce a "passed" receipt.
-		// The audit layer must be atomically tied to the canonical evaluation snapshot.
-		// If the audit infra fails, emit an explicit terminal diagnostic instead.
-		config.taskState.consecutiveMistakeCount++
-		recordCompletionGateBlockEvent(config, "audit_error")
-		emitCompletionGateBlockTelemetry(config, "audit_error", config.taskState.completionGateBlockCount ?? 0)
+		Logger.warn(`[${params.logPrefix}] Completion audit diagnostics unavailable:`, error)
 		return {
-			status: "error",
-			message: buildCompletionAgentErrorMessage(
-				"Task completion blocked: hardening audit evaluation failed. " +
-					"Inspect extension logs for a local audit calculation or policy error, fix that runtime issue, then retry.",
-				config,
-				{ result: params.result },
-			),
+			status: "diagnostic_error",
+			diagnostics:
+				"Completion diagnostics are advisory and were unavailable. Follow the canonical next action from the lifecycle decision.",
 		}
 	}
 }
 
-export type CompletionGateFlowResult =
-	| { status: "passed"; audit: CompletionAuditGateResult }
-	| { status: "blocked"; message: string }
+export type CompletionGateFlowResult = {
+	status: "diagnostics"
+	preflight: GatePreflightReadinessIssue[]
+	audit: CompletionAuditGateResult
+}
 
 export type SubagentCompletionGateResult = {
 	error: string | null
@@ -668,13 +480,14 @@ export function runSubagentCompletionLanePreflight(
 		laneExecutionMode?: LaneExecutionMode
 	},
 	validateQuality: (result: string) => string | null = validateCompletionResultQuality,
-): string | null {
+): string[] {
 	const preflightContext: PreflightCheckContext = {
 		config,
 		params,
 		validateQuality,
 	}
 	const ioAuthorityLane = params.laneExecutionMode ? isNonMutatingMode(params.laneExecutionMode) : false
+	const diagnostics: string[] = []
 
 	for (const runner of PREFLIGHT_STAGE_RUNNERS) {
 		if (!SUBAGENT_LANE_PREFLIGHT_STAGES.has(runner.stage)) {
@@ -683,22 +496,19 @@ export function runSubagentCompletionLanePreflight(
 		if (runner.stage === "min_length" && ioAuthorityLane) {
 			const trimmed = params.result.trim()
 			if (trimmed.length < SUBAGENT_IO_LANE_RESULT_MIN_LENGTH) {
-				config.taskState.consecutiveMistakeCount++
-				return (
-					`Lane completion rejected: result too brief (${trimmed.length} chars, minimum ${SUBAGENT_IO_LANE_RESULT_MIN_LENGTH} for I/O authority lanes). ` +
-					"Provide a concise findings summary."
+				diagnostics.push(
+					`Advisory: lane result is brief (${trimmed.length} chars, suggested minimum ${SUBAGENT_IO_LANE_RESULT_MIN_LENGTH} for I/O authority lanes).`,
 				)
 			}
 			continue
 		}
 		const stageError = runner.validate(preflightContext)
 		if (stageError) {
-			config.taskState.consecutiveMistakeCount++
-			return stageError
+			diagnostics.push(`Advisory (${runner.stage}): ${stageError}`)
 		}
 	}
 
-	return null
+	return diagnostics
 }
 
 /**
@@ -740,7 +550,7 @@ export async function evaluateSubagentAdvisoryAudit(
 	}
 }
 
-/** Parent attempt_completion — full preflight + blocking audit. */
+/** Parent completion diagnostics — never an execution authority. */
 export async function runCompletionGateFlow(
 	config: TaskConfig,
 	params: {
@@ -751,13 +561,10 @@ export async function runCompletionGateFlow(
 	},
 	logPrefix: string,
 ): Promise<CompletionGateFlowResult> {
-	const preflightError = await runCompletionPreflightChecks(config, params, logPrefix, {
+	const preflight = await runCompletionPreflightChecks(config, params, logPrefix, {
 		validateQuality: validateCompletionResultQuality,
-		onFailure: recordCompletionPreflightFailure,
+		onFailure: () => undefined,
 	})
-	if (preflightError) {
-		return { status: "blocked", message: preflightError }
-	}
 
 	const auditResult = await evaluateCompletionAuditGate(config, {
 		result: params.result,
@@ -765,9 +572,5 @@ export async function runCompletionGateFlow(
 		logPrefix,
 	})
 
-	if (auditResult.status === "blocked" || auditResult.status === "error") {
-		return { status: "blocked", message: auditResult.message }
-	}
-
-	return { status: "passed", audit: auditResult }
+	return { status: "diagnostics", preflight, audit: auditResult }
 }

@@ -43,11 +43,12 @@ describe("auditGateReport", () => {
 		expect(decision.reasons.some((r) => r.code === "advisory_escalation")).to.equal(true)
 	})
 
-	it("builds pre-completion checklist with blocked status", () => {
+	it("builds pre-completion checklist with advisory findings", () => {
 		const metadata = enrichAuditMetadata({ violations: ["missing_validation_evidence"] })
 		const checklist = buildPreCompletionChecklist(metadata, { scoreThreshold: 95 })
-		expect(checklist).to.contain("<pre_completion_checklist>")
-		expect(checklist).to.contain("BLOCKED")
+		expect(checklist).to.contain('<pre_completion_checklist authority="advisory">')
+		expect(checklist).to.contain("findings present")
+		expect(checklist).not.to.contain("BLOCKED")
 	})
 
 	it("includes new-code gate context in pre-completion checklist", () => {
@@ -57,7 +58,7 @@ describe("auditGateReport", () => {
 			newViolationsOnly: true,
 			baselineMetadata: baseline,
 		})
-		expect(checklist).to.contain("New-code gate")
+		expect(checklist).to.contain("New-code diagnostics")
 		expect(checklist).to.contain("Grandfathered")
 		expect(checklist).to.contain("missing validation evidence")
 	})

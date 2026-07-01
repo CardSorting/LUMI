@@ -64,17 +64,17 @@ describe("auditSubagentRollup", () => {
 		const summary = buildSubagentAuditSummary(messages)
 		expect(summary?.totalAgents).to.equal(2)
 		expect(summary?.runningCount).to.equal(1)
-		expect(summary?.hasParentGateBlocked).to.equal(true)
+		expect(summary?.hasParentGateBlocked).to.equal(false)
 		expect(summary?.hasParentAdvisoryFindings).to.equal(true)
 		expect(summary?.parentGateSignals).to.have.length(3)
 	})
 
 	it("formats parent gate signals for UI labels", () => {
-		expect(formatSubagentParentSignal("GATE: PARENT_BLOCKED (2)")).to.contain("Parent gate blocked")
+		expect(formatSubagentParentSignal("GATE: PARENT_BLOCKED (2)")).to.contain("Parent advisory findings")
 		expect(formatSubagentParentSignal("SIGNAL: PARENT_ADVISORY_FINDINGS")).to.contain("advisory")
 		expect(formatSubagentParentSignal("GATE: PARENT_ATTEMPTS (5)")).to.contain("Parent completion attempts")
 		expect(formatSubagentParentSignal("GATE: PARENT_RETRY_STATUS (wait)")).to.contain("retry status")
-		expect(formatSubagentParentSignal("GATE: PARENT_BLOCK_HISTORY (4)")).to.contain("block history")
+		expect(formatSubagentParentSignal("GATE: PARENT_BLOCK_HISTORY (4)")).to.contain("advisory history")
 	})
 
 	it("builds markdown handoff section for audit export", () => {
@@ -118,6 +118,6 @@ describe("auditSubagentRollup", () => {
 		expect(summary).to.not.equal(undefined)
 		const markdown = buildSubagentHandoffMarkdown(summary!)
 		expect(markdown).to.contain("Subagent Audit Handoff")
-		expect(markdown).to.contain("Parent gate blocked")
+		expect(markdown).to.contain("Parent advisory findings")
 	})
 })

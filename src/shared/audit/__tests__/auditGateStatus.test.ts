@@ -15,7 +15,7 @@ describe("auditGateStatus", () => {
 		expect(status?.blocked).to.equal(false)
 	})
 
-	it("builds blocked quality gate status with reason codes", () => {
+	it("builds advisory-failed quality status with reason codes", () => {
 		const metadata = enrichAuditMetadata({
 			violations: ["missing_validation_evidence"],
 			gate_blocked: true,
@@ -25,7 +25,8 @@ describe("auditGateStatus", () => {
 			workspace_gate_policy_applied: true,
 		})
 		const status = buildQualityGateStatus(metadata, { gateEnabled: true, scoreThreshold: 90 })
-		expect(status?.blocked).to.equal(true)
+		expect(status?.blocked).to.equal(false)
+		expect(status?.advisoryFailed).to.equal(true)
 		expect(status?.passed).to.equal(false)
 		expect(status?.reasonCodes).to.include("score_below_threshold")
 		expect(status?.artifactPaths?.manifest).to.equal(".audit/task-1.manifest.json")

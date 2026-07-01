@@ -6,15 +6,16 @@ import type { TaskConfig } from "./types/TaskConfig"
 
 export type SubagentCompletionGateValidation = {
 	error: string | null
+	diagnostics: string[]
 	lifecycle: GateLifecycleDecision
 	/** Hardening audit deferred to parent seal barrier — never blocks lane throughput. */
 	auditDeferredToSeal: boolean
 }
 
 /**
- * Lane completion gates — zen fast path for throughput (ADR-013).
- * Sync quality/safety preflight only; expensive auditTask runs at seal barrier.
- * Parent attempt_completion retains full blocking enforcement.
+ * Lane completion diagnostics — advisory fast path for throughput.
+ * Sync quality/safety findings are evidence only; expensive auditTask runs at
+ * the seal barrier and is also advisory.
  */
 export async function validateSubagentCompletionGates(
 	config: TaskConfig,
@@ -25,22 +26,17 @@ export async function validateSubagentCompletionGates(
 ): Promise<SubagentCompletionGateValidation> {
 	const subagentConfig = config.isSubagentExecution ? config : { ...config, isSubagentExecution: true }
 
-	const preflightError = runSubagentCompletionLanePreflight(subagentConfig, {
+	const diagnostics = runSubagentCompletionLanePreflight(subagentConfig, {
 		result,
 		command,
 		laneExecutionMode: options?.laneExecutionMode,
 	})
-	if (preflightError) {
-		const lifecycle = evaluateGateLifecycle(subagentConfig)
-		cacheGateLifecycleDecision(subagentConfig, lifecycle)
-		return { error: preflightError, lifecycle, auditDeferredToSeal: false }
-	}
-
 	const lifecycle = evaluateGateLifecycle(subagentConfig)
 	cacheGateLifecycleDecision(subagentConfig, lifecycle)
 
 	return {
 		error: null,
+		diagnostics,
 		lifecycle,
 		auditDeferredToSeal: true,
 	}

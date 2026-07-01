@@ -13,7 +13,7 @@ export const GATE_REASON_LABELS: Record<CompletionGateReasonCode, string> = {
 
 export const GATE_REASON_REMEDIATION: Partial<Record<CompletionGateReasonCode, string>> = {
 	score_below_threshold: "Improve hardening score by resolving violations and adding verification evidence.",
-	critical_violations: "Resolve all critical-severity violations before completing.",
+	critical_violations: "Review all critical-severity findings.",
 	policy_violations: "Resolve new violations introduced since the workspace baseline.",
 	advisory_escalation: "Address act-mode advisory findings flagged during progress updates.",
 	plan_regression: "Restore hardening score to at least the plan audit baseline level.",
@@ -64,11 +64,11 @@ export function enrichAuditMetadataWithGateDecision(
 }
 
 export function buildGateBlockEventSummary(decision: AuditGateDecision, blockCount?: number): string {
-	const attempt = blockCount && blockCount > 0 ? ` (attempt ${blockCount})` : ""
-	const status = decision.blocked ? "blocked" : "passed"
+	const attempt = blockCount && blockCount > 0 ? ` (historical attempt ${blockCount})` : ""
+	const status = decision.blocked ? "findings present" : "quality passed"
 	const reasonLines = formatGateReasonsForDisplay(decision.reasons)
 	return [
-		`Audit gate ${status}${attempt}: Grade ${decision.grade ?? "?"} (${decision.score}/100, threshold ${decision.effectiveThreshold}).`,
+		`Advisory completion diagnostics — ${status}${attempt}: Grade ${decision.grade ?? "?"} (${decision.score}/100, threshold ${decision.effectiveThreshold}).`,
 		...reasonLines.map((line) => `- ${line}`),
 	].join("\n")
 }

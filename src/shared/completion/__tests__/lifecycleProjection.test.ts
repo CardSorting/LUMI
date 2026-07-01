@@ -153,6 +153,22 @@ describe("LifecycleProjection conflict resolver", () => {
 			should(projection.statusLabel).not.equal("Ready to complete")
 			should(projection.statusLabel).equal("Ready for finalization")
 		})
+
+		it("advisory gate failure cannot render engineering-pending guidance", () => {
+			const projection = resolveLifecycleProjection({
+				canonicalDecision: routeToFinalization,
+				legacyDecision: legacyDecision({
+					operatorMessage: "Complete engineering work, then call attempt_completion.",
+					lifecycleState: "engineering_in_progress",
+				}),
+				freshness: "current",
+			})
+
+			should(projection.statusLabel).equal("Ready for finalization")
+			should(projection.nextAction).equal("run_finalization")
+			should(projection.instruction).equal(routeToFinalization.canonicalInstruction)
+			should(projection.instruction).not.match(/Complete engineering work|Engineering In Progress/i)
+		})
 	})
 
 	describe("legacy projection only when canonical is absent", () => {

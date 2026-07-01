@@ -32,13 +32,13 @@ describe("false-positive prevention and infinite-loop elimination", () => {
 		taskState = new TaskState()
 	})
 
-	describe("circuit breaker half-open probe state", () => {
-		it("trips when block count reaches max and workspace unchanged", () => {
+	describe("advisory history isolation", () => {
+		it("does not trip when advisory count reaches the legacy maximum", () => {
 			const config = configWithState(taskState)
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 			taskState.lastGateBlockCheckpointHash = "chk-1"
 			// No messages with checkpoint hash — no change detected
-			isCompletionGateCircuitBreakerTripped(config).should.be.true()
+			isCompletionGateCircuitBreakerTripped(config).should.be.false()
 		})
 
 		it("opens for a probe attempt when workspace changed and engineering not verified", () => {
@@ -49,44 +49,39 @@ describe("false-positive prevention and infinite-loop elimination", () => {
 			isCompletionGateCircuitBreakerTripped(config).should.be.false()
 		})
 
-		it("stays tripped when workspace changed but engineering is verified (use finalization)", () => {
+		it("does not trip from advisory history when engineering is verified", () => {
 			const config = configWithState(taskState, [{ lastCheckpointHash: "chk-new" }])
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 			taskState.lastGateBlockCheckpointHash = "chk-old"
 			taskState.engineeringVerifiedAt = Date.now()
 			// Engineering verified — circuit breaker stays tripped, use run_finalization
-			isCompletionGateCircuitBreakerTripped(config).should.be.true()
+			isCompletionGateCircuitBreakerTripped(config).should.be.false()
 		})
 
-		it("circuit breaker message guides to workspace changes when not verified", () => {
+		it("does not emit circuit-breaker guidance from advisory history", () => {
 			const config = configWithState(taskState)
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 			taskState.lastGateBlockCheckpointHash = "chk-1"
 			const message = getCompletionGateCircuitBreakerError(config)
-			should.exist(message)
-			message?.should.containEql("checkpoint hash must change")
-			message?.should.containEql("probe attempt")
+			should.not.exist(message)
 		})
 
-		it("circuit breaker message guides to run_finalization when verified", () => {
+		it("does not derive finalization guidance from advisory history", () => {
 			const config = configWithState(taskState)
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 			taskState.engineeringVerifiedAt = Date.now()
 			const message = getCompletionGateCircuitBreakerError(config)
-			should.exist(message)
-			message?.should.containEql("run_finalization")
-			message?.should.containEql("seal=true")
+			should.not.exist(message)
 		})
 	})
 
-	describe("workspace progress preflight prevents audit loop", () => {
-		it("blocks when workspace unchanged since last gate block", () => {
+	describe("workspace progress diagnostics", () => {
+		it("does not suppress completion when advisory workspace history is unchanged", () => {
 			const config = configWithState(taskState, [{ lastCheckpointHash: "chk-1" }])
 			taskState.completionGateBlockCount = 2
 			taskState.lastGateBlockCheckpointHash = "chk-1"
 			const error = validateWorkspaceProgressSinceGateBlock(config, "chk-1")
-			should.exist(error)
-			error?.should.containEql("workspace hasn't changed")
+			should.not.exist(error)
 		})
 
 		it("allows when workspace changed since last gate block", () => {
@@ -121,8 +116,8 @@ describe("false-positive prevention and infinite-loop elimination", () => {
 		})
 	})
 
-	describe("duplicate submission prevents retry thrashing after cooldown", () => {
-		it("blocks identical result after cooldown with no workspace change", () => {
+	describe("duplicate advisory diagnostics", () => {
+		it("does not suppress identical result after advisory findings", () => {
 			const result = "Implemented the feature with tests and verification"
 			const config = configWithState(taskState)
 			taskState.completionGateBlockCount = 3
@@ -130,11 +125,10 @@ describe("false-positive prevention and infinite-loop elimination", () => {
 			taskState.lastCompletionAttemptAt = Date.now() - 10000
 			// Cooldown expired, but workspace unchanged — block to prevent loop
 			const error = detectDuplicateCompletionSubmission(config, result)
-			should.exist(error)
-			error?.should.containEql("no workspace changes")
+			should.not.exist(error)
 		})
 
-		it("directs to run_finalization when engineering verified and workspace unchanged", () => {
+		it("does not derive finalization routing from duplicate advisory state", () => {
 			const result = "Implemented the feature with tests and verification"
 			const config = configWithState(taskState)
 			taskState.completionGateBlockCount = 3
@@ -142,8 +136,7 @@ describe("false-positive prevention and infinite-loop elimination", () => {
 			taskState.lastCompletionAttemptAt = Date.now() - 10000
 			taskState.engineeringVerifiedAt = Date.now()
 			const error = detectDuplicateCompletionSubmission(config, result)
-			should.exist(error)
-			error?.should.containEql("run_finalization")
+			should.not.exist(error)
 		})
 
 		it("allows when workspace changed even with identical result", () => {
@@ -161,11 +154,11 @@ describe("false-positive prevention and infinite-loop elimination", () => {
 	})
 
 	describe("graph revision guards prevent stale audit false positives", () => {
-		it("graph revision increments on gate block event", () => {
+		it("advisory gate events do not increment canonical graph revision", () => {
 			const config = configWithState(taskState)
 			const before = getCompletionGraphRevision(config)
 			recordCompletionGateBlockEvent(config, "audit_gate", { result: "test result" })
-			getCompletionGraphRevision(config).should.be.greaterThan(before)
+			getCompletionGraphRevision(config).should.equal(before)
 		})
 
 		it("stale audit graph revision is detectable via mismatch", () => {
@@ -183,32 +176,21 @@ describe("false-positive prevention and infinite-loop elimination", () => {
 		})
 	})
 
-	describe("single-session completion escape routes", () => {
-		it("circuit breaker with verified engineering allows finalization, not new sessions", () => {
+	describe("single-session canonical routing", () => {
+		it("does not emit retry-lock copy from advisory counters with verified engineering", () => {
 			const config = configWithState(taskState)
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 			taskState.engineeringVerifiedAt = Date.now()
 			const message = getCompletionGateCircuitBreakerError(config)
-			should.exist(message)
-			// Must NOT suggest creating a new session or new task
-			message?.should.not.match(/new session/i)
-			message?.should.not.match(/new task/i)
-			// Must guide to same-session finalization
-			message?.should.containEql("run_finalization")
-			message?.should.containEql("seal=true")
+			should.not.exist(message)
 		})
 
-		it("circuit breaker without verified engineering provides probe attempt path", () => {
+		it("does not emit probe guidance from advisory counters", () => {
 			const config = configWithState(taskState)
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 			taskState.lastGateBlockCheckpointHash = "chk-1"
 			const message = getCompletionGateCircuitBreakerError(config)
-			should.exist(message)
-			// Must NOT suggest new session
-			message?.should.not.match(/new session/i)
-			// Must provide the probe attempt escape route
-			message?.should.containEql("probe attempt")
-			message?.should.containEql("checkpoint hash must change")
+			should.not.exist(message)
 		})
 
 		it("cooldown remains bounded — no unbounded wait", () => {

@@ -33,9 +33,8 @@ export function buildGitHubCheckRunOutput(
 	status: QualityGateStatus,
 	options?: { taskId?: string; headSha?: string },
 ): GitHubCheckRunOutput {
-	const taskId = options?.taskId ?? "task-audit"
 	const grade = metadata.hardening_grade ?? "?"
-	const conclusion: GitHubCheckRunOutput["conclusion"] = status.blocked ? "failure" : status.passed ? "success" : "neutral"
+	const conclusion: GitHubCheckRunOutput["conclusion"] = status.passed ? "success" : "neutral"
 
 	const summaryLines = [
 		`| Metric | Value |`,
@@ -59,7 +58,7 @@ export function buildGitHubCheckRunOutput(
 		path: metadata.artifact_report_path ?? ".audit/latest/summary.md",
 		start_line: 1,
 		end_line: 1,
-		annotation_level: status.criticalViolationCount > 0 ? "failure" : "warning",
+		annotation_level: "warning",
 		title: formatViolationLabel(violation),
 		message: formatViolationLabel(violation),
 		raw_details: violation,
@@ -71,7 +70,7 @@ export function buildGitHubCheckRunOutput(
 		status: "completed",
 		conclusion,
 		output: {
-			title: status.blocked ? "Quality gate failed" : "Quality gate passed",
+			title: status.advisoryFailed ? "Advisory quality findings" : "Advisory quality passed",
 			summary: summaryLines.join("\n"),
 			text: metadata.artifact_manifest_path ? `Manifest: \`${metadata.artifact_manifest_path}\`` : undefined,
 			annotations: annotations.length > 0 ? annotations : undefined,

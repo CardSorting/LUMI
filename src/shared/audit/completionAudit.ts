@@ -94,18 +94,16 @@ export function buildCompletionGateMessage(
 			: ""
 
 	return [
-		"⛔ COMPLETION BLOCKED — Architectural hardening audit failed.",
+		"Completion diagnostics (advisory) — architectural hardening findings need attention.",
 		`Grade: **${metadata.hardening_grade ?? assessment.grade}** (${metadata.hardening_score ?? assessment.score}/100, threshold ${threshold}${intentNote}).`,
-		options?.criticalOnly && warning.length > 0
-			? `\n_Note: ${warning.length} warning-level violation(s) did not trigger the gate._`
-			: "",
-		gateReasonLines.length > 0 ? `\n**Gate reasons:**\n${gateReasonLines.join("\n")}` : "",
+		options?.criticalOnly && warning.length > 0 ? `\n_Note: ${warning.length} additional warning-level finding(s)._` : "",
+		gateReasonLines.length > 0 ? `\n**Quality findings:**\n${gateReasonLines.join("\n")}` : "",
 		"",
-		"Resolve the following before calling attempt_completion again:",
+		"Suggested improvements:",
 		...remediationLines,
 		...joyLines,
 		"",
-		"Re-verify your work, address every violation, then retry completion.",
+		"Completion diagnostics are advisory. Follow the canonical next action from the lifecycle decision.",
 		buildAdvisoryRollupSection(options?.advisoryMetadata, metadata),
 		options?.advisoryMetadata && shouldEscalateFromAdvisory(options.advisoryMetadata, metadata)
 			? buildAdvisoryEscalationSection(options.advisoryMetadata)
