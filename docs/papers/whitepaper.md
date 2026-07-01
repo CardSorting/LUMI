@@ -1,3 +1,5 @@
+<!-- [LAYER: INFRASTRUCTURE] -->
+
 # LUMI Technical Whitepaper
 
 **Version 2.1.3 — Calm Agent Extension**
@@ -289,7 +291,18 @@ Hooks run as scripts in `.dietcoderules/hooks/` (and global hooks dir). Output c
 
 ### 7.3 Completion gate pipeline
 
-`attempt_completion` triggers `completionGatePipeline.ts`, which coordinates:
+`attempt_completion` triggers a four-stage deterministic spine. No handler, utility, or pipeline stage may independently decide completion eligibility — they collect context, the engine decides, handlers execute.
+
+| Stage | Role | Source |
+|-------|------|--------|
+| Snapshot builder | Reads mutable task state once → immutable `CompletionLifecycleSnapshot` | `completionSnapshotBuilder.ts` |
+| Decision engine | Pure function over snapshot → one canonical decision with full trace | `CompletionLifecycleDecisionEngine.ts` |
+| Action contract | Decision carries `nextAllowedAction`, `forbiddenActions`, `canonicalInstruction` | `CompletionLifecycleTypes.ts` |
+| Action guard | Enforces contract at tool boundary — rejects forbidden actions without mutating counters | `CompletionActionGuard.ts` |
+
+**The agent receives a command, not a prose explanation to interpret.** This closes the failure chain: `stale state → ghost audit → wrong interpretation → retry loop → circuit breaker spiral`, replacing it with `snapshot → decision → permitted action → guard enforcement`.
+
+`completionGatePipeline.ts` orchestrates the preflight stages that feed the decision engine:
 
 - Workspace audit policy (`auditGatePolicyLoader`)
 - Plan baseline alignment (`getLatestPlanAuditFromMessages`)
@@ -298,7 +311,9 @@ Hooks run as scripts in `.dietcoderules/hooks/` (and global hooks dir). Output c
 - Focus chain validation
 - Result quality, length, cooldown, circuit breaker (`attemptCompletionUtils.ts`)
 
-Failure returns structured guidance to the model — completion is **not** accepted until gates pass.
+The decision engine consumes these results and returns one binding action contract. The action guard enforces it before any handler executes. Failure returns a canonical correction — completion is **not** accepted until gates pass.
+
+Full architecture: [Completion lifecycle decision engine](../completion-lifecycle-decision-engine.md).
 
 ---
 

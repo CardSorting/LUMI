@@ -1,3 +1,5 @@
+<!-- [LAYER: INFRASTRUCTURE] -->
+
 # LUMI Companion Brief
 
 **Executive summary · v2.8.1 · workspace-verified**
@@ -71,6 +73,8 @@ LUMI applies **fail-closed verification** at three layers. All three favor teach
 | **Swarm** | `use_subagents` seal | `MergeGate` + patch reconciliation fail | `GovernedReceiptPanel` violations + rejected patch reasons |
 
 Swarm gate is **mutation-scoped**: parallel reads pass; parallel uncoordinated writes fail. Workspace roadmap changes require evidence-backed patches reconciled at seal — not direct lane writes.
+
+**Completion spine (task gate):** `attempt_completion` flows through a four-stage deterministic spine — snapshot builder → decision engine → action contract → action guard. The agent receives a command, not a prose explanation to interpret. See [Completion lifecycle decision engine](../completion-lifecycle-decision-engine.md).
 
 ---
 

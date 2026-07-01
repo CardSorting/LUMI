@@ -1,3 +1,5 @@
+<!-- [LAYER: INFRASTRUCTURE] -->
+
 # ROADMAP.md
 
 ## 1. Project Center of Gravity
@@ -152,19 +154,24 @@ Run roadmap checkpoints after meaningful direction changes.
 
 ## 11. Recent Checkpoint
 
-**Date:** 2026-06-19
+**Date:** 2026-06-30
 
 **Checkpoint Summary:**  
-Created ROADMAP.md for LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions from README, git, and code_soup_pre_audit.
+Threading the completion spine thesis through 6 existing docs so it's legible at every reading level. Updated philosophy, whitepaper, companion-brief, architecture/current, decision-engine, and migration docs with the four-stage spine (snapshot → decision → action contract → action guard), the before/after failure chain, and the thesis: "The agent receives a command, not a prose explanation to interpret."
 
 **Moved:**  
 - None
 
 **Added:**  
-- Full 12-section schema
+- "The spine" section to `docs/completion-lifecycle-decision-engine.md`
+- Spine thesis to `docs/papers/philosophy.md` § VI
+- Four-stage table + before/after chain to `docs/papers/whitepaper.md` § 7.3
+- Completion spine callout to `docs/papers/companion-brief.md`
+- Updated safety pipeline diagram in `docs/architecture/current.md`
+- Spine summary at top of `docs/completion-gate-lifecycle-migration.md`
 
 **Updated:**  
-- None
+- ROADMAP.md checkpoint date 2026-06-19 → 2026-06-30
 
 **Archived:**  
 - None
@@ -173,6 +180,6 @@ Created ROADMAP.md for LUMI — code --install-extension CardSorting.lumi-vscode
 Code soup risk Low from pre-audit.
 
 **Recommended Next Move:**  
-Complete ROADMAP.md bootstrap fill, resolve placeholders, then validate schema.
+Continue refining documentation for clarity. Consider updating `docs/parent-thread-execution-authority.md` to reference the completion spine in the cold-path gate description.
 
 ## 12. Archive

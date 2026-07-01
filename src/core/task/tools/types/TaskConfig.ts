@@ -14,6 +14,7 @@ import type { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import type { McpHub } from "@services/mcp/McpHub"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { BrowserSettings } from "@shared/BrowserSettings"
+import type { CanonicalLifecycleDecision } from "@shared/completion/canonicalLifecycleDecision"
 import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
 import type { DietCodeAsk, DietCodeSay, TaskAuditMetadata } from "@shared/ExtensionMessage"
 import type { FocusChainSettings } from "@shared/FocusChainSettings"
@@ -118,6 +119,7 @@ export interface TaskCallbacks {
 		partial?: boolean,
 		auditMetadata?: TaskAuditMetadata,
 		gateLifecycleStatus?: GateLifecycleDecision,
+		canonicalLifecycleDecision?: CanonicalLifecycleDecision,
 	) => Promise<number | undefined>
 
 	ask: (

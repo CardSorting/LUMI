@@ -12,7 +12,20 @@
 		"src/shared/utils/SensitiveDataMasker.ts": "cf2b021836d6935eba648646b77c5339fd2e50d0067adaf6f77da8f8f0684961",
 		"src/core/task/ToolExecutor.ts": "2ca298831556bdacee12e7c048c62f1fbdf41730a87fe80bc78e8b22cd62c412",
 		"src/core/task/tools/utils/ToolConstants.ts": "896d41c79f25db415423a14e779e926c9399b5bde5efdd9a241e2060f432c1ab",
-		"ROADMAP.md": "78a954908502aacc4535dbfee9ad4abcaf6e676b457eb8caee70b7017ed8f563"
+		"ROADMAP.md": "4ceab0da68c3d77f958ec25a71cb90a3dc2582cd48e652da4218a90312d5b917",
+		"src/core/task/tools/completion/CompletionLifecycleTypes.ts": "46fdf03ac187413c5970e1dd442033355aa49a026ac0910561bed72a6bf923bf",
+		"docs/completion-lifecycle-decision-engine.md": "59cee83fe7c11261162e2b8a5b5a178b0a8125ed74fa8373cd0715a4d081a827",
+		"docs/completion-gate-lifecycle-migration.md": "ec8539f131d5fc9b857bd57ae2cbde912d9f2871dff404952e6ace6998596b32",
+		"src/core/task/tools/completion/CompletionActionGuard.ts": "ac488841ee710ae5f100f7ca2f711639c691a39b49e4feca35d7c1bca351dbed",
+		"src/core/task/tools/completion/completionSnapshotBuilder.ts": "f94da8f263bc288df77624d095c96880cbbb748dc17676b33c569bfbc2c560a3",
+		"src/core/task/tools/completion/CompletionLifecycleDecisionEngine.ts": "7c0d11ee43250ff17701be38f1007b1c00abe780f8712da6fa8bf13f9aeb8ae3",
+		"docs/DOCS_GUIDE.md": "84e4ecfe790c3346609d36b3dd3c0ce4b9e11ac663d1bed69a1b52e22eb385a0",
+		"docs/README.md": "6f2456642ecabcf79d239f44e6a43a9a718ef06ed473f1ba9e1140146d367064",
+		"docs/papers/whitepaper.md": "c2bf75328ccdd06bbfff11184366136a6770cddb1e99d6cd4badf41a922d5322",
+		"docs/architecture/current.md": "25f10328c9228439683a9444d4fe313285f51c815a33f74598452a9404f2d305",
+		"docs/papers/philosophy.md": "9c4e9a8e93894c21e1c3d4025b53df336f4369a134085f6f1c9335471cfa7905",
+		"docs/papers/companion-brief.md": "7aa27a425a3865e799f170e8dfe38194c8f52c55c0677b11b6600d5d0f606edd",
+		"docs/parent-thread-execution-authority.md": "7e682332cc827ecac30d179e88e3c3ffa0e0a302d855ac6b8ca99e8f9de31fac"
 	},
 	"coherenceTokens": {}
 }

@@ -1,11 +1,11 @@
 {
 	"validation_pending": true,
 	"schema_valid": null,
-	"last_mutated_at": "2026-06-24T05:41:47.070Z",
-	"last_mutation_tool": "external",
+	"last_mutated_at": "2026-07-01T00:37:56.225Z",
+	"last_mutation_tool": "replace_in_file",
 	"last_mutation_path": "ROADMAP.md",
-	"updated_at": "2026-06-24T05:41:47.073Z",
-	"last_validated_at": "2026-06-19T13:05:25.766Z",
+	"updated_at": "2026-07-01T00:37:56.229Z",
+	"last_validated_at": "2026-07-01T00:29:07.571Z",
 	"health_status": "Coherent",
 	"recent_checkpoint_date": "2026-06-19",
 	"phase": "checkpoint",
@@ -14,37 +14,118 @@
 	"bootstrap_complete": true,
 	"lineage": [
 		{
-			"operation_id": "6f6dfd77-97a7-4d5b-a803-a4d6616eb5f5",
-			"timestamp": "2026-06-24T05:41:22.469Z",
-			"tool": "external",
-			"action": "file_mutated",
-			"schema_valid": null,
-			"health_status": "Coherent",
-			"hash": "439aadf362805401",
-			"diff_summary": "",
-			"causality_token": "1b8e764b28f5f6c5"
-		},
-		{
-			"operation_id": "cc3fca15-eb73-4b2f-bf42-6900bff832ff",
-			"timestamp": "2026-06-24T05:41:31.061Z",
-			"tool": "external",
-			"action": "file_mutated",
-			"schema_valid": null,
+			"operation_id": "7ce3ce24-173e-4248-b3e0-d70fda0222d0",
+			"timestamp": "2026-07-01T00:29:08.053Z",
+			"tool": "completion_remediator",
+			"action": "remediation_commit",
+			"schema_valid": true,
 			"health_status": "Coherent",
 			"hash": "4ceab0da68c3d77f",
-			"diff_summary": "",
-			"causality_token": "5a48cdb23436cc0f"
+			"diff_summary": "Remediation completed successfully: auto-validated ROADMAP.md schema",
+			"causality_token": "2aa058cc043dc7ee"
 		},
 		{
-			"operation_id": "53e49495-c4d1-41ea-95eb-3da8734e018f",
-			"timestamp": "2026-06-24T05:41:47.073Z",
+			"operation_id": "c4a8f782-f120-4457-ab6d-9ef6cf8585f6",
+			"timestamp": "2026-07-01T00:34:41.436Z",
 			"tool": "external",
 			"action": "file_mutated",
 			"schema_valid": null,
 			"health_status": "Coherent",
-			"hash": "4ceab0da68c3d77f",
+			"hash": "d374810876cfc618",
 			"diff_summary": "",
-			"causality_token": "0c2f3236980eec86"
+			"causality_token": "59a0f78909c1cf8b"
+		},
+		{
+			"operation_id": "3648937c-c788-4991-b696-827f5b919ba1",
+			"timestamp": "2026-07-01T00:34:41.496Z",
+			"tool": "replace_in_file",
+			"action": "file_mutated",
+			"schema_valid": null,
+			"health_status": "Coherent",
+			"hash": "565d77abf3746629",
+			"diff_summary": "",
+			"causality_token": "b2f1aec59a732c9a"
+		},
+		{
+			"operation_id": "e3164eba-2df2-4ee8-b750-3c04ecc6f91d",
+			"timestamp": "2026-07-01T00:34:41.650Z",
+			"tool": "external",
+			"action": "file_mutated",
+			"schema_valid": null,
+			"health_status": "Coherent",
+			"hash": "565d77abf3746629",
+			"diff_summary": "",
+			"causality_token": "0e9b082b4e8fa153"
+		},
+		{
+			"operation_id": "9c6f23b6-f03f-4c1b-a070-843a985b7630",
+			"timestamp": "2026-07-01T00:37:56.229Z",
+			"tool": "replace_in_file",
+			"action": "file_mutated",
+			"schema_valid": null,
+			"health_status": "Coherent",
+			"hash": "565d77abf3746629",
+			"diff_summary": "",
+			"causality_token": "b3e4397bdafacff3"
 		}
-	]
+	],
+	"runtime_state": {
+		"version": 1,
+		"project_identity": {
+			"core_purpose": "code --install-extension CardSorting.lumi-vscode",
+			"anti_goals": "Uncontrolled scope changes to LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions without a documented center of gravity.",
+			"raw_body": "\n**Core Purpose:**  \ncode --install-extension CardSorting.lumi-vscode\n\n**Primary Users / Operators:**  \nThank you for contributing to **LUMI** (`CardSorting.lumi`) — the calm coding companion VS Code extension in the [LUMI](https://github.com/CardSorting/LUMI) monorepo.\n\n**Canonical Architecture:**  \nThank you for contributing to **LUMI** (`CardSorting.lumi`) — the calm coding companion VS Code extension in the [LUMI](https://github.com/CardSorting/LUMI) monorepo.\n\n**Canonical Workflows:**  \nPreserve flows — verify with Playwright; CI: GitHub Actions.\n\n**Primary Runtime / Operational Center:**  \nWorkspace project root — ROADMAP.md lives beside source, not in plugin install trees.\n\n**What This Project Must Not Become:**  \nUncontrolled scope changes to LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions without a documented center of gravity.\n"
+		},
+		"health": {
+			"status": "Coherent",
+			"summary": "Bootstrap steering surface for LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions.",
+			"raw_body": "\n**Status:** Coherent\n\n**Phase:** checkpoint\n\n**Summary:**  \nBootstrap steering surface for LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions.\n\n**Why This Status:**  \n- ROADMAP.md created from gathered evidence\n- Schema established for long-horizon steering\n\n**Primary Risk:**  \nLimited cross-session steering until Now/Next items connect to center of gravity.\n\n**Primary Opportunity:**  \nDocument LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions center of gravity before expanding scope.\n"
+		},
+		"strategic_narrative": "\ncode --install-extension CardSorting.lumi-vscode\n",
+		"tasks": {
+			"now": {
+				"intro": "",
+				"items": [
+					{
+						"id": "e0b26019",
+						"title": "Complete ROADMAP bootstrap fill",
+						"body": "**Goal:**  \nReplace remaining template phrases with project-specific facts for LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions.\n\n**Evidence:**  \nbootstrap_fill_plan + project_fingerprint\n\n**Center-of-Gravity Impact:**  \nStrengthens"
+					},
+					{
+						"id": "7501e52c",
+						"title": "What changed ChatToolbar is now a simple bar (no <details> dropdown). Toolbar icons handle all navig",
+						"body": "**Goal:**  \nVerify or continue work tied to recent commit: 3bc4381 What changed ChatToolbar is now a simple bar (no <details> dropdown). Toolbar icons handle all navigation direct.\n\n**Evidence:**  \ngit.recent_commits\n\n**Center-of-Gravity Impact:**  \nNeutral"
+					},
+					{
+						"id": "e404ea86",
+						"title": "Fixed the blocking diagnostics from your paste:",
+						"body": "**Goal:**  \nVerify or continue work tied to recent commit: 5756775 Fixed the blocking diagnostics from your paste:.\n\n**Evidence:**  \ngit.recent_commits\n\n**Center-of-Gravity Impact:**  \nNeutral"
+					}
+				]
+			},
+			"next": {
+				"intro": "",
+				"items": []
+			},
+			"later": {
+				"intro": "",
+				"items": []
+			}
+		},
+		"discovery": "",
+		"maintenance_gravity": "\n### Hotspots\n\n| Area | Symptom | Risk | Recommended Action |\n|---|---|---|---|\n| | | Low | |\n\n### Repeated Friction\n\n### Documentation Gaps\n\n### Agent Confusion Points\n",
+		"code_soup_audit": {
+			"risk_level": "Medium",
+			"raw_body": "\n**Overall Code Soup Risk:** Medium\n\n### Canonical Path Integrity\n\n**Assessment:**  \nCode soup risk: Low — see code_soup_pre_audit.\n\n### Authority Boundaries\n\n**Assessment:**  \nRuntime authority in repo manifests; ROADMAP.md stays in project workspace only.\n\n### Structural Drift\n\n**Assessment:**  \nRecent changes from git evidence:\n- .github/workflows/publish.yml\n- README.md\n- docs/MAINTAINER.md\n- docs/docs.json\n- docs/papers/companion-brief.md\n- docs/troubleshooting/extension-wont-start.mdx\n- package-lock.json\n- package.json\n\n### Agent Coherence\n\n**Assessment:**  \nRecent commits: 3bc4381 What changed ChatToolbar is now a simple bar (no <details> dropdown). Toolbar icons handle all navigation directly: Past chats Connected tools Account Preferences New chat stays on the left; title in the center toggles task details when a conversation is active. No more text list or overflow panel — just the icon row in the header. Reload the webview to see it.; 5756775 Fixed the blocking diagnostics from your paste:; f9ce89b readme\n\n### Centralization Recommendation\n\nConverge duplicate modules (mcp.ts) or document which path is canonical.\n"
+		},
+		"decision_log": "\n### 2026-06-19 — Initial roadmap bootstrap\n\n**Decision:**  \nAdopt ROADMAP.md at workspace root as the steering surface for LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions.\n\n**Reason:**  \nAdopt ROADMAP.md as the long-horizon steering surface for LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions.\n\n**Impact:**  \nRoute LUMI — code --install-extension CardSorting.lumi-vscode — Playwright · GitHub Actions strategic work through Now/Next/Later — max 5 Now items.\n\n**Follow-up:**  \nRun roadmap checkpoints after meaningful direction changes.\n",
+		"checkpoint": {
+			"date": "2026-06-30",
+			"summary": "Threading the completion spine thesis through 6 existing docs so it's legible at every reading level. Updated philosophy, whitepaper, companion-brief, architecture/current, decision-engine, and migration docs with the four-stage spine (snapshot → decision → action contract → action guard), the before/after failure chain, and the thesis: \"The agent receives a command, not a prose explanation to interpret.\"",
+			"raw_body": "\n**Date:** 2026-06-30\n\n**Checkpoint Summary:**  \nThreading the completion spine thesis through 6 existing docs so it's legible at every reading level. Updated philosophy, whitepaper, companion-brief, architecture/current, decision-engine, and migration docs with the four-stage spine (snapshot → decision → action contract → action guard), the before/after failure chain, and the thesis: \"The agent receives a command, not a prose explanation to interpret.\"\n\n**Moved:**  \n- None\n\n**Added:**  \n- \"The spine\" section to `docs/completion-lifecycle-decision-engine.md`\n- Spine thesis to `docs/papers/philosophy.md` § VI\n- Four-stage table + before/after chain to `docs/papers/whitepaper.md` § 7.3\n- Completion spine callout to `docs/papers/companion-brief.md`\n- Updated safety pipeline diagram in `docs/architecture/current.md`\n- Spine summary at top of `docs/completion-gate-lifecycle-migration.md`\n\n**Updated:**  \n- ROADMAP.md checkpoint date 2026-06-19 → 2026-06-30\n\n**Archived:**  \n- None\n\n**Code Soup Risk:** Medium  \nCode soup risk Low from pre-audit.\n\n**Recommended Next Move:**  \nContinue refining documentation for clarity. Consider updating `docs/parent-thread-execution-authority.md` to reference the completion spine in the cold-path gate description.\n"
+		},
+		"archive": ""
+	},
+	"roadmap_md_hash": "565d77abf3746629",
+	"dependency_manifests_hash": "0127ff0548db9e7a"
 }

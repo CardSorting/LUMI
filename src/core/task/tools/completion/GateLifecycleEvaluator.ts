@@ -74,8 +74,27 @@ export function cacheGateLifecycleDecision(config: TaskConfig, decision: GateLif
 
 export async function publishGateLifecycleStatus(config: TaskConfig, decision: GateLifecycleDecision): Promise<void> {
 	cacheGateLifecycleDecision(config, decision)
+	// Evaluate the canonical decision from the engine and publish it alongside
+	// the legacy gate decision.  The webview resolver uses the canonical
+	// decision as the single authority when present.
+	let canonical: import("@shared/completion/canonicalLifecycleDecision").CanonicalLifecycleDecision | undefined
 	try {
-		await config.callbacks.say("info", decision.operatorMessage, undefined, undefined, false, undefined, decision)
+		const { evaluateCompletionLifecycle } =
+			require("./completionSnapshotBuilder") as typeof import("./completionSnapshotBuilder")
+		const engineDecision = evaluateCompletionLifecycle(config)
+		canonical = {
+			kind: engineDecision.kind,
+			nextAllowedAction: engineDecision.nextAllowedAction,
+			forbiddenActions: [...engineDecision.forbiddenActions],
+			canonicalInstruction: engineDecision.canonicalInstruction,
+			reason: engineDecision.reason,
+		}
+	} catch {
+		// If the engine fails, still publish the legacy decision — the webview
+		// resolver will fall back to legacy projection.
+	}
+	try {
+		await config.callbacks.say("info", decision.operatorMessage, undefined, undefined, false, undefined, decision, canonical)
 	} catch {
 		// Operator surface is best-effort; task state remains authoritative.
 	}

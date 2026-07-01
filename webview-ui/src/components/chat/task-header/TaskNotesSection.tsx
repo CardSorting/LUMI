@@ -122,6 +122,11 @@ export const TaskNotesSection = memo(
 				<div className="flex flex-col gap-1 px-1 pb-1.5 min-h-0 divide-y divide-border/15">
 					{showGateLifecycle && gateLifecycleSnapshot?.decision ? (
 						<GateLifecycleStatusPanel
+							canonicalDecision={gateLifecycleSnapshot.canonicalDecision}
+							checklistComplete={
+								!preCompletionSummary?.blocked &&
+								preCompletionSummary?.items.every((item) => item.status === "pass")
+							}
 							className="mx-1 my-1"
 							continuityMarker={gateLifecycleSnapshot.continuityMarker}
 							decision={gateLifecycleSnapshot.decision}

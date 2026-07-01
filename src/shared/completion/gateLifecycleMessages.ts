@@ -1,4 +1,5 @@
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
+import type { CanonicalLifecycleDecision } from "./canonicalLifecycleDecision"
 import type { GateLifecycleDecision } from "./gateLifecycleDecision"
 
 export type GateLifecycleFreshness = "current" | "stale" | "unknown"
@@ -21,6 +22,8 @@ export function getFreshnessReconciliationLabel(freshness: GateLifecycleFreshnes
 
 export interface ResolvedGateLifecycleSnapshot {
 	decision?: GateLifecycleDecision
+	/** Canonical lifecycle decision — takes precedence over `decision` when present. */
+	canonicalDecision?: CanonicalLifecycleDecision
 	freshness: GateLifecycleFreshness
 	/** Operator-visible reconciliation label — never raw "stale". */
 	reconciliationLabel: string
@@ -68,6 +71,7 @@ export function resolveGateLifecycleSnapshot(
 		const freshness = isReady ? "current" : classifyGateLifecycleFreshness(decision.evaluatedAt, now, staleAfterMs)
 		return {
 			decision,
+			canonicalDecision: message.canonicalLifecycleDecision,
 			freshness,
 			reconciliationLabel: getFreshnessReconciliationLabel(freshness),
 			evaluatedAt: decision.evaluatedAt,

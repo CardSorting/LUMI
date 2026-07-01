@@ -824,14 +824,17 @@ describe("attemptCompletionUtils", () => {
 	})
 
 	describe("buildCompletionAgentErrorMessage", () => {
-		it("includes structured status and breather hints under pressure", () => {
+		it("includes structured status and escalation under pressure", () => {
 			taskState.completionGateBlockCount = COMPLETION_GATE_WARN_THRESHOLD
 			taskState.consecutiveMistakeCount = 2
 			const message = buildCompletionAgentErrorMessage("Gate blocked", configWithState(taskState))
 			message.should.containEql("<completion_gate_status")
 			message.should.containEql('blocks="5"')
 			message.should.containEql("<completion_gate_recovery")
-			message.should.containEql("Reconciliation")
+			// Must NOT contain recovery psychology language
+			message.should.not.match(/Reconciliation/i)
+			message.should.not.match(/breather/i)
+			message.should.not.match(/cognitive/i)
 		})
 
 		it("includes failed_stage and recovery playbook for classified reasons", () => {

@@ -12,7 +12,6 @@ import {
 	COMPLETION_RESULT_MIN_LENGTH,
 	COMPLETION_RETRY_COOLDOWN_MS,
 	COMPLETION_RETRY_MAX_COOLDOWN_MS,
-	DEFAULT_MAX_CONSECUTIVE_MISTAKES,
 	MAX_COMPLETION_GATE_BLOCK_COUNT,
 } from "@shared/audit/gatePolicy"
 import {
@@ -910,7 +909,7 @@ export function buildCompletionGateAgentEnvelope(blocks: string[]): string {
 	return `<completion_gate_envelope schema_version="${COMPLETION_GATE_STATUS_SCHEMA_VERSION}">${inner}</completion_gate_envelope>`
 }
 
-/** All structured gate blocks for errors, breathers, and subagent handoff. */
+/** All structured gate blocks for errors and subagent handoff. */
 export function buildCompletionGateStructuredContext(
 	message: string,
 	config: TaskConfig,
@@ -1063,16 +1062,12 @@ export function buildProactiveCompletionGuidance(config: TaskConfig): string {
 	const remaining = MAX_COMPLETION_GATE_BLOCK_COUNT - blockCount
 	const lastReason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
 	const failedStage = lastReason ? mapCompletionReasonToPreflightStage(lastReason) : undefined
-	const breatherHint = buildCompletionBreatherHint(config)
 	const escalationBrief = buildCompletionGateEscalationBrief(config)
 	const parts = [
 		`⚠️ **Completion gate advisory (${blockCount}/${MAX_COMPLETION_GATE_BLOCK_COUNT})** — ${remaining} attempt(s) before hard stop.`,
 		buildCompletionGateObservabilityEnvelope(config),
 		buildCompletionGatePipelineBrief(failedStage),
 	]
-	if (breatherHint) {
-		parts.push(breatherHint)
-	}
 	if (escalationBrief) {
 		parts.push(escalationBrief)
 	}
@@ -1413,56 +1408,6 @@ export function buildCompletionGateEscalationBrief(config: TaskConfig): string {
 	)
 }
 
-/**
- * Controlled reconciliation lane — replaces the old "breather" escape hatch.
- *
- * The breather is now a structured reconciliation window that:
- *   1. Temporarily pauses completion pressure
- *   2. Synchronizes canonical execution state
- *   3. Reconciles evidence drift
- *   4. Either returns to ready state, emits a blocking diagnostic, or terminates cleanly
- *
- * Never: silently restarts the loop, spawns new sessions, or re-enters retry chains.
- *
- * Design: the hint only appears when meaningful reconciliation is actually
- * occurring (cooldown active).  Under fast-path success conditions, no hint
- * is emitted — the system stays quiet and decisive.
- */
-export function buildCompletionBreatherHint(config: TaskConfig): string {
-	const blockCount = config.taskState.completionGateBlockCount ?? 0
-	const mistakes = config.taskState.consecutiveMistakeCount
-	const lastReason = config.taskState.lastCompletionBlockReason as CompletionPreflightReason | undefined
-	const cooldownRemaining = getCompletionCooldownRemainingMs(config)
-	const hints: string[] = []
-
-	// Only emit reconciliation hint when cooldown is actively running —
-	// no hint under fast-path or when no blocks exist
-	if (cooldownRemaining > 0 && blockCount > 0) {
-		const seconds = Math.ceil(cooldownRemaining / 1000)
-		hints.push(`Reconciling execution state (${seconds}s) — synchronizing gate evaluation snapshot.`)
-	}
-
-	if (lastReason === "roadmap_gate" && blockCount > 0) {
-		hints.push(AUTO_GOVERNANCE.roadmapGateRecoveryHint)
-	}
-
-	if (blockCount >= COMPLETION_GATE_WARN_THRESHOLD && cooldownRemaining > 0) {
-		hints.push(
-			"Reconciliation window active — document violation fixes in scratchpad.md, run verification commands, then retry with an updated result.",
-		)
-	}
-
-	if (mistakes >= DEFAULT_MAX_CONSECUTIVE_MISTAKES - 1 && blockCount > 0) {
-		hints.push("Reconciliation in progress — review scratchpad.md and git status before the next action.")
-	}
-
-	if (hints.length === 0) {
-		return ""
-	}
-
-	return `🔄 **Reconciliation:** ${hints.join(" ")}`
-}
-
 export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflightReason): string {
 	switch (reason) {
 		case "empty_result":
@@ -1528,10 +1473,6 @@ export function buildCompletionAgentErrorMessage(
 	const playbook = buildCompletionGatePlaybook(reason)
 	if (playbook && !message.includes("Recovery playbook")) {
 		parts.push(playbook)
-	}
-	const breatherHint = buildCompletionBreatherHint(config)
-	if (breatherHint) {
-		parts.push(breatherHint)
 	}
 	const escalationBrief = buildCompletionGateEscalationBrief(config)
 	if (escalationBrief) {

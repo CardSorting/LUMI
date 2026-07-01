@@ -60,7 +60,6 @@ import { ICheckpointManager } from "@integrations/checkpoints/types"
 import { DiffViewProvider } from "@integrations/editor/DiffViewProvider"
 import { formatContentBlockToMarkdown } from "@integrations/misc/export-markdown"
 import { processFilesIntoText } from "@integrations/misc/extract-text"
-import { showSystemNotification } from "@integrations/notifications"
 import { ITerminalManager } from "@integrations/terminal/types"
 import { BrowserSession } from "@services/browser/BrowserSession"
 import { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
@@ -906,6 +905,7 @@ export class Task {
 		partial?: boolean,
 		auditMetadata?: TaskAuditMetadata,
 		gateLifecycleStatus?: import("@shared/completion/gateLifecycleDecision").GateLifecycleDecision,
+		canonicalLifecycleDecision?: import("@shared/completion/canonicalLifecycleDecision").CanonicalLifecycleDecision,
 	): Promise<number | undefined> {
 		// Allow hook messages even when aborted to enable proper cleanup
 		if (this.taskState.abort && type !== "hook_status" && type !== "hook_output_stream") {
@@ -933,6 +933,7 @@ export class Task {
 						partial,
 						auditMetadata,
 						gateLifecycleStatus,
+						canonicalLifecycleDecision,
 					})
 
 					const protoMessage = convertDietCodeMessageToProto(lastMessage)
@@ -953,6 +954,7 @@ export class Task {
 					modelInfo,
 					auditMetadata,
 					gateLifecycleStatus,
+					canonicalLifecycleDecision,
 				})
 				await this.postStateToWebview()
 				return sayTs
@@ -970,6 +972,7 @@ export class Task {
 					partial: false,
 					auditMetadata,
 					gateLifecycleStatus,
+					canonicalLifecycleDecision,
 				})
 
 				// await this.postStateToWebview()
@@ -990,6 +993,7 @@ export class Task {
 				modelInfo,
 				auditMetadata,
 				gateLifecycleStatus,
+				canonicalLifecycleDecision,
 			})
 			await this.postStateToWebview()
 			return sayTs
@@ -1007,6 +1011,7 @@ export class Task {
 			modelInfo,
 			auditMetadata,
 			gateLifecycleStatus,
+			canonicalLifecycleDecision,
 		})
 		await this.postStateToWebview()
 		return sayTs
@@ -2664,143 +2669,12 @@ export class Task {
 			this.taskState.consecutiveMistakeCount >= this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes") &&
 			!isReady
 		) {
-			// Cognitive Reflection Nudge ("Taking a Breather")
-			// Instead of a hard halt or stopping the workflow, we inject a psychological save point
-			let breatherText =
-				"You seem to be hitting some friction. Let's take a breather. Please take a moment to review your `scratchpad.md` or journal notes to re-orient yourself against the macro plan."
-
-			const completionGateBlocks = this.taskState.completionGateBlockCount ?? 0
-			if (completionGateBlocks > 0) {
-				const lastReason = this.taskState.lastCompletionBlockReason as
-					| import("./tools/attemptCompletionUtils").CompletionPreflightReason
-					| undefined
-				const { AUTO_GOVERNANCE } = await import("@/services/roadmap/RoadmapAutoGovernance")
-				const roadmapNote =
-					lastReason === "roadmap_gate"
-						? ` ${AUTO_GOVERNANCE.roadmapGateRecoveryHint}`
-						: " Fix audit/roadmap violations in the workspace first,"
-				breatherText += `\n\n⛔ **Completion gate pressure:** attempt_completion was blocked ${completionGateBlocks} time(s) this task. Do not retry with the same summary —${roadmapNote} verify with tests or commands, then call attempt_completion with an updated result.`
-				const {
-					buildCompletionBreatherHint,
-					buildCompletionGateEscalationBrief,
-					buildCompletionGateHumanBrief,
-					buildCompletionGateObservabilityEnvelope,
-					buildCompletionGatePipelineBrief,
-					buildCompletionGatePlaybook,
-					mapCompletionReasonToPreflightStage,
-				} = await import("./tools/attemptCompletionUtils")
-				const gateConfig = {
-					taskState: this.taskState,
-					focusChainSettings: this.stateManager.getGlobalSettingsKey("focusChainSettings"),
-				} as import("./tools/types/TaskConfig").TaskConfig
-				const failedStage = lastReason ? mapCompletionReasonToPreflightStage(lastReason) : undefined
-				const observabilityEnvelope =
-					this.taskState.completionGateObservabilityEnvelope ?? buildCompletionGateObservabilityEnvelope(gateConfig)
-				const pipelineBrief = buildCompletionGatePipelineBrief(failedStage)
-				const humanBrief = lastReason ? buildCompletionGateHumanBrief(gateConfig, lastReason) : ""
-				const breatherHint = buildCompletionBreatherHint(gateConfig)
-				const escalationBrief = buildCompletionGateEscalationBrief(gateConfig)
-				breatherText += `\n\n${observabilityEnvelope}\n\n${pipelineBrief}`
-				if (humanBrief) {
-					breatherText += `\n\n${humanBrief}`
-				}
-				if (escalationBrief) {
-					breatherText += `\n\n${escalationBrief}`
-				}
-				if (breatherHint) {
-					breatherText += `\n\n${breatherHint}`
-				}
-				if (lastReason) {
-					const playbook = buildCompletionGatePlaybook(lastReason)
-					if (playbook) {
-						breatherText += `\n\n${playbook}`
-					}
-				}
-			}
-
-			// 1. Memory Context Injection
-			let scratchpadExists = false
-			try {
-				const scratchpadPath = path.join(this.cwd, "scratchpad.md")
-				const stats = await fs.stat(scratchpadPath)
-				if (stats.size > 0) {
-					// Production Hardening: Prevent context bloat by truncating extremely large scratchpads
-					const scratchpadContent = await fs.readFile(scratchpadPath, "utf-8")
-					const MAX_SCRATCHPAD_LENGTH = 3000
-					const truncatedContent =
-						scratchpadContent.length > MAX_SCRATCHPAD_LENGTH
-							? scratchpadContent.slice(0, MAX_SCRATCHPAD_LENGTH) +
-								"\n\n... [TRUNCATED] Please use `read_file` for complete contents."
-							: scratchpadContent
-
-					if (truncatedContent.trim()) {
-						breatherText += `\n\nTo save you a read operation, here is the current state of your \`scratchpad.md\` for immediate review:\n<scratchpad>\n${truncatedContent}\n</scratchpad>`
-						scratchpadExists = true
-					}
-				}
-			} catch {
-				// Ignore if scratchpad doesn't exist yet
-			}
-
-			if (!scratchpadExists) {
-				breatherText += `\n\n💡 ALARM: You do not currently have a \`scratchpad.md\` file! When the substrate rejects your edits, you MUST slow down and document a map. It is highly recommended to use \`write_to_file\` to create a scratchpad to define your architecture before taking another blind stab.`
-			}
-
-			// 2. Physical Environment Anchoring (Blast Radius)
-			try {
-				const { exec } = require("child_process")
-				const { promisify } = require("util")
-				const execAsync = promisify(exec)
-				// Production Hardening: timeout and maxBuffer to prevent zombie processes or memory limits crash
-				const { stdout } = await execAsync("git status -s", { cwd: this.cwd, timeout: 2000, maxBuffer: 1024 * 1024 })
-				let statusOutput = stdout.trim()
-
-				if (statusOutput) {
-					// Production Hardening: Prevent context bloat if repository has thousands of modified files
-					const MAX_GIT_LINES = 50
-					const lines = statusOutput.split("\n")
-					if (lines.length > MAX_GIT_LINES) {
-						statusOutput = `${lines.slice(0, MAX_GIT_LINES).join("\n")}\n... and ${lines.length - MAX_GIT_LINES} more files.`
-					}
-					breatherText += `\n\nTo prevent context drift, here is the exact current \`git status -s\` of your disk. These are the files you have currently modified:\n<git_status>\n${statusOutput}\n</git_status>`
-				}
-			} catch {
-				// Ignore if git fails (e.g. no repo)
-			}
-			// 3. System Diagnostics Injection
-			if (this.toolExecutor) {
-				const diagnostics = this.toolExecutor.getSystemDiagnostics()
-				if (diagnostics.trim()) {
-					breatherText += `\n\nAdditionally, here are the exact architectural blockades and metabolic hotspots you are currently hitting. This is likely WHY your execution was failing:\n<system_diagnostics>\n${diagnostics.trim()}\n</system_diagnostics>`
-				}
-			}
-
-			userContent.push({
-				type: "text",
-				text: `<system_nudge>\n${breatherText}\n</system_nudge>`,
-			})
-
-			// Notify UI
-			await this.say(
-				"text",
-				"🗣️ [COGNITIVE REFLECTION] System triggered a breather nudge. The agent is organically reviewing its notes to re-orient.",
-			)
-
-			const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
-			if (autoApprovalSettings.enableNotifications) {
-				showSystemNotification({
-					subtitle: "Cognitive Reflection Activity",
-					message: "DietCode encountered friction and is taking a breather.",
-				})
-			}
-
-			// Clean state to give the agent a fresh attempt window without artificial throttling
+			// Canonical completion lifecycle is the single authority.
+			// Cognitive reflection / breather nudge rendering has been removed —
+			// the decision engine's canonical instruction is the only next-action
+			// guidance surfaced to the agent and operator.
 			this.taskState.consecutiveMistakeCount = 0
 			this.taskState.autoRetryAttempts = 0
-
-			// 3. Systemic Recalibration
-			// We MUST physically clear the metabolic pressure in the Universal Guard,
-			// otherwise the agent will instantly trigger a "Substrate Heat Warning" upon resuming execution.
 			if (this.toolExecutor) {
 				this.toolExecutor.resetSystemPressure()
 			}

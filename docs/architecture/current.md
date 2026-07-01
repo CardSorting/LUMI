@@ -1,3 +1,5 @@
+<!-- [LAYER: INFRASTRUCTURE] -->
+
 # Architecture (current)
 
 This document describes the **LUMI agent workspace** as it exists in this repository. BroccoliDB architecture is documented separately in [broccolidb/docs/architecture/current.md](../../broccolidb/docs/architecture/current.md).
@@ -138,9 +140,15 @@ Tool proposed → PreToolUse hook (optional)
             → User approve / auto-approve rule
             → Execute via HostProvider or MCP
             → PostToolUse hook (optional)
-attempt_completion → completionGatePipeline (audit, roadmap, focus chain)
+
+attempt_completion → snapshot builder → decision engine → action contract → action guard
+                     (immutable         (pure function,     (nextAllowedAction +    (enforces at tool
+                      snapshot)          full trace)         canonicalInstruction)   boundary, no counter
+                                                                               mutation on reject)
 use_subagents seal   → MergeGate → patch reconciliation → coordinator workspace commit
 ```
+
+The completion spine (`snapshot → decision → permitted action → guard enforcement`) ensures the agent receives a command, not a prose explanation to interpret. See [Completion lifecycle decision engine](../completion-lifecycle-decision-engine.md).
 
 Details: [Security best practices](../SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](../papers/whitepaper.md#7-approval-hooks-and-completion) · [Roadmap projection quick reference](../governed-roadmap-projection-quickref.md).
 

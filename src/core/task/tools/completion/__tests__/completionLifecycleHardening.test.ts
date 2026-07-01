@@ -3,7 +3,6 @@ import "should"
 import { MAX_COMPLETION_GATE_BLOCK_COUNT } from "@shared/audit/gatePolicy"
 import { TaskState } from "../../../TaskState"
 import {
-	buildCompletionBreatherHint,
 	clearReconciliationDebounce,
 	getCanonicalCompletionPhase,
 	getCompletionCooldownRemainingMs,
@@ -143,48 +142,6 @@ describe("completion lifecycle hardening", () => {
 			markCompletionAttemptFinished(config)
 			should.not.exist(taskState.lastCompletionAttemptGraphRevision)
 			taskState.reconciliationDebounceActive?.should.be.false()
-		})
-	})
-
-	describe("breather recovery as controlled reconciliation lane", () => {
-		it("emits reconciliation language when cooldown is active", () => {
-			const config = configWithState(taskState)
-			taskState.completionGateBlockCount = 2
-			taskState.lastCompletionAttemptAt = Date.now()
-			taskState.lastCompletionBlockReason = "audit_gate"
-
-			const hint = buildCompletionBreatherHint(config)
-			hint.should.containEql("Reconciliation")
-			hint.should.containEql("Reconciling execution state")
-			// Must NOT use old "breather" or "cognitive" language
-			hint.should.not.match(/cognitive breather/i)
-			hint.should.not.match(/Agent ergonomics/i)
-		})
-
-		it("emits reconciliation window language at warn threshold with active cooldown", () => {
-			const config = configWithState(taskState)
-			taskState.completionGateBlockCount = 5
-			taskState.lastCompletionAttemptAt = Date.now()
-			taskState.lastCompletionBlockReason = "audit_gate"
-
-			const hint = buildCompletionBreatherHint(config)
-			hint.should.containEql("Reconciliation window active")
-		})
-
-		it("does not emit warn threshold hint when cooldown expired (fast-path)", () => {
-			const config = configWithState(taskState)
-			taskState.completionGateBlockCount = 5
-			taskState.lastCompletionBlockReason = "audit_gate"
-			// No lastCompletionAttemptAt → cooldown is 0
-
-			const hint = buildCompletionBreatherHint(config)
-			hint.should.not.containEql("Reconciliation window active")
-		})
-
-		it("does not emit hint when no blocks", () => {
-			const config = configWithState(taskState)
-			const hint = buildCompletionBreatherHint(config)
-			hint.should.equal("")
 		})
 	})
 

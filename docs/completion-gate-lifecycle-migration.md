@@ -1,6 +1,31 @@
+<!-- [LAYER: INFRASTRUCTURE] -->
+
 # Completion & Finalization Gate — Reference
 
 Modern-only execution model for engineering verification, same-session finalization, and sealed receipts. No legacy compatibility layer.
+
+## The completion spine
+
+Completion eligibility flows through a deterministic four-stage spine. This is the architecture that replaced the scattered decision logic described in the migration sections below.
+
+| Stage | Role | Source |
+|-------|------|--------|
+| **Snapshot builder** | Reads mutable task state once, produces an immutable `CompletionLifecycleSnapshot` | `completionSnapshotBuilder.ts` |
+| **Decision engine** | Pure function over the snapshot — returns one canonical decision with a full trace | `CompletionLifecycleDecisionEngine.ts` |
+| **Action contract** | The decision carries `nextAllowedAction`, `forbiddenActions`, and a one-line `canonicalInstruction` | `CompletionLifecycleTypes.ts` |
+| **Action guard** | Enforces the contract at the tool boundary — rejects forbidden actions without mutating counters | `CompletionActionGuard.ts` |
+
+> **The agent receives a command, not a prose explanation to interpret.**
+
+This closed the failure chain that motivated the migration:
+
+> stale state → ghost audit → wrong interpretation → retry loop → circuit breaker spiral
+
+Replacing it with:
+
+> snapshot → decision → permitted action → guard enforcement
+
+Full architecture: [Completion lifecycle decision engine](completion-lifecycle-decision-engine.md).
 
 ## Architecture
 

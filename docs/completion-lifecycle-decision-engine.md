@@ -3,12 +3,39 @@ title: "Completion Lifecycle Decision Engine"
 sidebarTitle: "Decision Engine"
 description: "Centralized, deterministic completion lifecycle authority with binding action contracts enforced at the tool boundary."
 ---
+<!-- [LAYER: INFRASTRUCTURE] -->
+
 
 # Completion lifecycle decision engine
 
 This document describes the **single deterministic authority** that owns all completion and finalization eligibility decisions, and the **action guard** that enforces those decisions at the tool boundary.
 
 **Principle:** The decision engine determines truth. The action guard enforces truth. The agent only executes the permitted next action.
+
+---
+
+## The spine
+
+Completion eligibility flows through a four-stage spine. Each stage has one job, and agent prose has no authority at any stage.
+
+| Stage | Role | Source file |
+|-------|------|-------------|
+| **Snapshot builder** | Reads mutable task state once, produces an immutable `CompletionLifecycleSnapshot` frozen at evaluation time | `completionSnapshotBuilder.ts` |
+| **Decision engine** | Pure function over the snapshot — returns one canonical `CompletionLifecycleDecision` with a full trace | `CompletionLifecycleDecisionEngine.ts` |
+| **Action contract** | The decision carries `nextAllowedAction`, `forbiddenActions`, and a one-line `canonicalInstruction` — the only tool action the agent may execute next | `CompletionLifecycleTypes.ts` |
+| **Action guard** | Enforces the contract at the tool boundary — rejects forbidden actions without mutating counters, creating audit state, or triggering retries | `CompletionActionGuard.ts` |
+
+> **The agent receives a command, not a prose explanation to interpret.**
+
+This closes the real failure chain that existed before the spine:
+
+> stale state → ghost audit → wrong interpretation → retry loop → circuit breaker spiral
+
+The spine replaces it with:
+
+> snapshot → decision → permitted action → guard enforcement
+
+That is boring in the exact right way.
 
 ---
 

@@ -3,6 +3,8 @@ title: "Parent-Thread Execution Authority"
 sidebarTitle: "Execution Authority"
 description: "Hot/warm/cold execution model for parent main-thread throughput — I/O authority, shift-right gates, and completion audit caching."
 ---
+<!-- [LAYER: INFRASTRUCTURE] -->
+
 
 # Parent-thread execution authority
 
@@ -93,7 +95,7 @@ These **should** block — they indicate real policy or engineering failures:
 |------|------|---------------------|----------|
 | **Hot** | Every parent I/O tool call | Only cheap safety (ignore rules, missing params) | I/O guard bypass, sync `onReadIoAuthority`, approval-before-I/O |
 | **Warm** | After result is pushed / background | No | Deferred audits, post-guard GC, file-context tracking, roadmap journal |
-| **Cold** | `attempt_completion` / swarm seal | Yes (authoritative) | Completion audit gate, progressive threshold, circuit breaker |
+| **Cold** | `attempt_completion` / swarm seal | Yes (authoritative) | Completion spine: snapshot → decision engine → action contract → action guard. The agent receives a command, not prose. See [Completion lifecycle decision engine](completion-lifecycle-decision-engine.md). |
 
 Industry patterns mirrored:
 

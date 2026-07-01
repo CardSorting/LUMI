@@ -7,6 +7,7 @@ import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import { ApiConfiguration } from "./api"
 import type { TaskAuditMetadata } from "./audit/types"
 import { BrowserSettings } from "./BrowserSettings"
+import type { CanonicalLifecycleDecision } from "./completion/canonicalLifecycleDecision"
 import type { GateLifecycleDecision } from "./completion/gateLifecycleDecision"
 import { DietCodeFeatureSetting } from "./DietCodeFeatureSetting"
 import { BannerCardData } from "./dietcode/banner"
@@ -154,6 +155,8 @@ export interface DietCodeMessage {
 	modelInfo?: DietCodeMessageModelInfo
 	auditMetadata?: TaskAuditMetadata
 	gateLifecycleStatus?: GateLifecycleDecision
+	/** Canonical lifecycle decision from the CompletionLifecycleDecisionEngine. */
+	canonicalLifecycleDecision?: CanonicalLifecycleDecision
 }
 
 export type DietCodeAsk =

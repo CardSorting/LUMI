@@ -2,7 +2,7 @@
  * Canonical Completion Snapshot — unified lifecycle model.
  *
  * All completion-critical subsystems (gate readiness, walkthrough, freshness,
- * audit validity, breather, finalization eligibility) derive from this single
+ * audit validity, cooldown, finalization eligibility) derive from this single
  * authoritative snapshot.  No subsystem may carry independent stale clocks or
  * competing readiness derivations.
  *
@@ -26,8 +26,8 @@ export type CanonicalCompletionPhase =
 /** Audit validity — atomically tied to the canonical snapshot revision. */
 export type AuditValidity = "valid" | "invalidated" | "stale_pending_reconciliation" | "not_evaluated"
 
-/** Breather status — controlled reconciliation lane, not an escape hatch. */
-export type BreatherStatus = "inactive" | "reconciling" | "completed" | "terminated"
+/** Cooldown status — whether the completion gate is in an active cooldown window. */
+export type CooldownStatus = "inactive" | "cooling_down"
 
 /**
  * Unified snapshot — all completion-critical state in one place.
@@ -45,8 +45,8 @@ export interface CanonicalCompletionSnapshot {
 	freshness: GateLifecycleFreshness
 	/** Audit validity — invalidated when snapshot changes. */
 	auditValidity: AuditValidity
-	/** Breather reconciliation status. */
-	breatherStatus: BreatherStatus
+	/** Cooldown status — whether the gate is in an active cooldown window. */
+	cooldownStatus: CooldownStatus
 	/** Whether completion can proceed right now. */
 	completionEligible: boolean
 	/** The specific blocker if completion cannot proceed. */
@@ -191,36 +191,29 @@ export function deriveAuditValidity(
 }
 
 /**
- * Derive the breather status from task state.
- * The breather is a controlled reconciliation lane — it either reconciles
- * and returns to ready, or terminates cleanly with a diagnostic.
+ * Derive the cooldown status from task state.
  *
- * Design: once cooldown expires, the breather is immediately `inactive` —
- * no lingering `completed` state that creates stale synchronization UI.
- * The system clears reconciliation indicators aggressively when readiness
- * is already known.
- *
- * Fast-exit: if engineering is already verified (readiness is valid),
- * exit the breather immediately regardless of cooldown remaining.
- * Do not wait out the full breather duration when the system is ready.
+ * Returns "cooling_down" when the completion gate has an active cooldown
+ * (block count > 0, engineering not verified, cooldown remaining > 0).
+ * Returns "inactive" otherwise — including when engineering is verified
+ * (fast-exit: no cooldown needed when readiness is established).
  */
-export function deriveBreatherStatus(
+export function deriveCooldownStatus(
 	lastBlockReason: string | undefined,
 	blockCount: number,
 	cooldownRemainingMs: number,
 	engineeringVerified = false,
-): BreatherStatus {
+): CooldownStatus {
 	if (blockCount === 0 || !lastBlockReason) {
 		return "inactive"
 	}
-	// Fast-exit: readiness is valid — no reason to hold the breather
+	// Fast-exit: readiness is valid — no cooldown needed
 	if (engineeringVerified) {
 		return "inactive"
 	}
 	if (cooldownRemainingMs > 0) {
-		return "reconciling"
+		return "cooling_down"
 	}
-	// Cooldown expired — immediately inactive, no lingering "completed" state
 	return "inactive"
 }
 
@@ -266,13 +259,8 @@ export function resolveBlockingCondition(snapshot: CanonicalCompletionSnapshot):
 	if (snapshot.completionEligible) {
 		return undefined
 	}
-	// Fast-clear: freshness is current and audit is not invalidated —
-	// any breather/reconciliation labels are stale and should not show.
-	const freshnessRestored = snapshot.freshness === "current" && snapshot.auditValidity !== "invalidated"
-	if (freshnessRestored && snapshot.breatherStatus === "reconciling") {
-		// Skip breather label — readiness is already known
-	} else if (snapshot.breatherStatus === "reconciling") {
-		return "Awaiting reconciliation completion — execution state is being refreshed."
+	if (snapshot.cooldownStatus === "cooling_down") {
+		return "Completion gate cooldown active — workspace changes required before retry."
 	}
 	if (snapshot.auditValidity === "invalidated") {
 		return "Execution state changed — refreshing completion readiness."
@@ -280,7 +268,7 @@ export function resolveBlockingCondition(snapshot: CanonicalCompletionSnapshot):
 	// stale_pending_reconciliation only applies when freshness is NOT current —
 	// don't show "refreshing audit" if the snapshot is already fresh.
 	if (snapshot.auditValidity === "stale_pending_reconciliation" && snapshot.freshness !== "current") {
-		return "Refreshing audit evaluation — reconciling latest evidence."
+		return "Refreshing audit evaluation — validating latest evidence."
 	}
 	if (snapshot.freshness === "stale") {
 		return "Refreshing orchestration state — validating completion readiness."

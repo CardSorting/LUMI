@@ -1,3 +1,5 @@
+<!-- [LAYER: INFRASTRUCTURE] -->
+
 # LUMI: A Philosophy of Calm Agency
 
 *Design values grounded in the agent workspace implementation (`src/`, `webview-ui/`).*
@@ -108,22 +110,41 @@ Auto-approve is opt-in trust, not default autonomy.
 
 Any agent can say "I'm done." LUMI treats `attempt_completion` as a **request**, not a fact.
 
-`completionGatePipeline.ts` orchestrates:
+Completion eligibility flows through a deterministic four-stage spine — no handler, utility, or pipeline stage may independently decide whether a task is allowed to complete:
 
-- Audit alignment with plan baseline
-- Focus chain completeness
-- Roadmap validation (`RoadmapCompletionGate`, `lumi.roadmap.*` settings)
-- Result quality and length checks
-- Circuit breakers against duplicate completion spam
+| Stage | Role | Source |
+|-------|------|--------|
+| **Snapshot builder** | Reads mutable task state once, produces an immutable `CompletionLifecycleSnapshot` | `completionSnapshotBuilder.ts` |
+| **Decision engine** | Pure function over the snapshot — returns one canonical decision with a full trace | `CompletionLifecycleDecisionEngine.ts` |
+| **Action contract** | The decision carries `nextAllowedAction`, `forbiddenActions`, and a one-line `canonicalInstruction` | `CompletionLifecycleTypes.ts` |
+| **Action guard** | Enforces the contract at the tool boundary — rejects forbidden actions without mutating counters | `CompletionActionGuard.ts` |
 
-Philosophy encoded as pipeline order:
+**The agent receives a command, not a prose explanation to interpret.**
+
+This closes the real failure chain that existed before the spine:
+
+> stale state → ghost audit → wrong interpretation → retry loop → circuit breaker spiral
+
+The spine replaces it with:
+
+> snapshot → decision → permitted action → guard enforcement
+
+That is boring in the exact right way.
+
+The decision engine evaluates: audit validity (strict AND — cache key + graph revision + TTL + gate active), workspace progress (checkpoint hash change detection), duplicate suppression (result fingerprint + workspace hash), circuit breaker state (closed / tripped / half-open probe), engineering verification, and finalization routing. Every decision emits a structured trace showing each evaluated stage.
+
+`completionGatePipeline.ts` orchestrates the preflight stages (quality, focus chain, roadmap, audit score). The decision engine is the single authority that consumes those results and returns one binding action contract. The action guard enforces it before any handler executes.
+
+Philosophy encoded as the spine:
 
 1. Did the work match the stated task?
 2. Did audit/policy pass?
 3. Did roadmap steering agree (when enabled)?
 4. Only then — present completion to the user.
 
-BroccoliDB proves structure; LUMI proves **the session earned its ending**.
+BroccoliDB proves structure; LUMI proves **the session earned its ending** — and the agent earns it by receiving a command, not by interpreting prose.
+
+**See:** [Completion lifecycle decision engine](../completion-lifecycle-decision-engine.md) for full architecture, action contracts, and enforcement model.
 
 ---
 

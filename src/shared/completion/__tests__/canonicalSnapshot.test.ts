@@ -3,7 +3,7 @@ import "should"
 import {
 	type CanonicalCompletionSnapshot,
 	deriveAuditValidity,
-	deriveBreatherStatus,
+	deriveCooldownStatus,
 	isWithinReconciliationDebounce,
 	mapLifecycleToCanonicalPhase,
 	RECONCILIATION_DEBOUNCE_MS,
@@ -35,7 +35,7 @@ function makeSnapshot(overrides: Partial<CanonicalCompletionSnapshot> = {}): Can
 		decision,
 		freshness: "current",
 		auditValidity: "not_evaluated",
-		breatherStatus: "inactive",
+		cooldownStatus: "inactive",
 		completionEligible: false,
 		graphRevision: 1,
 		evaluatedAt: Date.now(),
@@ -234,17 +234,17 @@ describe("canonicalSnapshot", () => {
 		})
 	})
 
-	describe("deriveBreatherStatus", () => {
+	describe("deriveCooldownStatus", () => {
 		it("returns inactive when no blocks", () => {
-			deriveBreatherStatus(undefined, 0, 0).should.equal("inactive")
+			deriveCooldownStatus(undefined, 0, 0).should.equal("inactive")
 		})
 
-		it("returns reconciling when cooldown is active", () => {
-			deriveBreatherStatus("audit_gate", 2, 5000).should.equal("reconciling")
+		it("returns cooling_down when cooldown is active", () => {
+			deriveCooldownStatus("audit_gate", 2, 5000).should.equal("cooling_down")
 		})
 
-		it("returns inactive when cooldown expired — no lingering completed state", () => {
-			deriveBreatherStatus("audit_gate", 2, 0).should.equal("inactive")
+		it("returns inactive when cooldown expired", () => {
+			deriveCooldownStatus("audit_gate", 2, 0).should.equal("inactive")
 		})
 	})
 
