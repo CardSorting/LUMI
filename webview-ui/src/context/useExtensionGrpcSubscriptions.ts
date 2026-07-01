@@ -1,4 +1,5 @@
 import { findLastIndex } from "@shared/array"
+import { projectMessageForWebview, projectMessagesForWebview } from "@shared/diagnostics/webviewDiagnostics"
 import type { ExtensionState } from "@shared/ExtensionMessage"
 import { DEFAULT_STALE_AFTER_MS } from "@shared/grpc/persistent-stream"
 import { EmptyRequest } from "@shared/proto/dietcode/common"
@@ -70,6 +71,9 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 			if (!response.stateJson) return
 			try {
 				const stateData = JSON.parse(response.stateJson) as ExtensionState
+				stateData.dietcodeMessages = projectMessagesForWebview(stateData.dietcodeMessages ?? [], {
+					showInternalDiagnostics: stateData.showInternalDiagnostics === true,
+				})
 				setState((prevState) => {
 					const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
 					const currentVersion = prevState.autoApprovalSettings?.version ?? 1
@@ -102,8 +106,11 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		onMessage: (protoMessage) => {
 			try {
 				if (!protoMessage.ts || protoMessage.ts <= 0) return
-				const partialMessage = convertProtoToDietCodeMessage(protoMessage)
+				const incomingPartialMessage = convertProtoToDietCodeMessage(protoMessage)
 				setState((prevState) => {
+					const partialMessage = projectMessageForWebview(incomingPartialMessage, {
+						showInternalDiagnostics: prevState.showInternalDiagnostics === true,
+					})
 					const lastIndex = findLastIndex(prevState.dietcodeMessages, (msg) => msg.ts === partialMessage.ts)
 					if (lastIndex === -1) return prevState
 					const newDietCodeMessages = [...prevState.dietcodeMessages]

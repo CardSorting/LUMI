@@ -171,15 +171,17 @@ describe("LifecycleProjection conflict resolver", () => {
 		})
 	})
 
-	describe("legacy projection only when canonical is absent", () => {
-		it("falls back to legacy_gate source when no canonical decision", () => {
+	describe("legacy projection is evidence-only when canonical is absent", () => {
+		it("does not derive current guidance from a legacy gate", () => {
 			const projection = resolveLifecycleProjection({
 				legacyDecision: legacyDecision({ lifecycleState: "finalization_ready" }),
 				freshness: "current",
 			})
 
 			should(projection.source).equal("legacy_gate")
-			should(projection.statusLabel).equal("Ready for finalization")
+			should(projection.statusLabel).equal("Ready to complete")
+			should(projection.nextAction).be.null()
+			should(projection.isLegacyActionable).be.false()
 		})
 
 		it("falls back to fallback source when no decision at all", () => {
@@ -261,14 +263,14 @@ describe("LifecycleProjection conflict resolver", () => {
 			should(projection.nextAction).not.equal("attempt_completion")
 		})
 
-		it("shouldRenderLegacyLabel returns false when canonical exists", () => {
+		it("never renders legacy labels as current guidance", () => {
 			should(shouldRenderLegacyLabel(true)).be.false()
-			should(shouldRenderLegacyLabel(false)).be.true()
+			should(shouldRenderLegacyLabel(false)).be.false()
 		})
 
-		it("shouldRenderLegacyNextAction returns false when canonical exists", () => {
+		it("never renders legacy next actions as current guidance", () => {
 			should(shouldRenderLegacyNextAction(true)).be.false()
-			should(shouldRenderLegacyNextAction(false)).be.true()
+			should(shouldRenderLegacyNextAction(false)).be.false()
 		})
 	})
 
@@ -412,14 +414,15 @@ describe("LifecycleProjection conflict resolver", () => {
 			should(projection.statusLabel).equal("Ready to complete")
 		})
 
-		it("current legacy without canonical or checklist is actionable", () => {
+		it("current legacy without canonical or checklist remains evidence-only", () => {
 			const projection = resolveLifecycleProjection({
 				legacyDecision: legacyDecision({ lifecycleState: "engineering_in_progress" }),
 				freshness: "current",
 			})
 
-			should(projection.isLegacyActionable).be.true()
-			should(projection.nextAction).equal("attempt_completion")
+			should(projection.isLegacyActionable).be.false()
+			should(projection.nextAction).be.null()
+			should(projection.instruction).not.match(/attempt_completion|run_verification/i)
 		})
 	})
 

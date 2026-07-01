@@ -1,3 +1,4 @@
+import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import { execa } from "execa"
 import { platform } from "os"
 import { Logger } from "@/shared/services/Logger"
@@ -66,10 +67,16 @@ async function showLinuxNotification(options: NotificationOptions): Promise<void
 
 export async function showSystemNotification(options: NotificationOptions): Promise<void> {
 	try {
+		options = {
+			...options,
+			title: options.title ? sanitizeWebviewMessageContent(options.title) : options.title,
+			subtitle: options.subtitle ? sanitizeWebviewMessageContent(options.subtitle) : options.subtitle,
+			message: sanitizeWebviewMessageContent(options.message),
+		}
 		const { title = "DietCode", message } = options
 
 		if (!message) {
-			throw new Error("Message is required")
+			return
 		}
 
 		const escapedOptions = {

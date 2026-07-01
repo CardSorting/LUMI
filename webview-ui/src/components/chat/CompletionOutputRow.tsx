@@ -66,7 +66,12 @@ export const CompletionOutputRow = memo(
 							<MarkdownRow markdown={text} />
 						</div>
 					</div>
-					{auditMetadata && <AuditReportPanel auditMetadata={auditMetadata} variant="success" />}
+					{auditMetadata && (
+						<details className="mt-2 rounded-sm border border-description/20 p-2 text-[10px]">
+							<summary>Internal diagnostics</summary>
+							<AuditReportPanel auditMetadata={auditMetadata} variant="success" />
+						</details>
+					)}
 				</div>
 				{showActionRow && (
 					<CompletionOutputActionRow

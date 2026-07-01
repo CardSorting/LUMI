@@ -63,6 +63,15 @@ export function resolveGateLifecycleSnapshot(
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const message = messages[i]
 		const decision = message?.gateLifecycleStatus
+		const canonicalDecision = message?.canonicalLifecycleDecision
+		if (canonicalDecision && !decision) {
+			return {
+				canonicalDecision,
+				freshness: "current",
+				reconciliationLabel: getFreshnessReconciliationLabel("current"),
+				sourceMessageTs: message.ts,
+			}
+		}
 		if (!decision) {
 			continue
 		}
@@ -71,7 +80,7 @@ export function resolveGateLifecycleSnapshot(
 		const freshness = isReady ? "current" : classifyGateLifecycleFreshness(decision.evaluatedAt, now, staleAfterMs)
 		return {
 			decision,
-			canonicalDecision: message.canonicalLifecycleDecision,
+			canonicalDecision,
 			freshness,
 			reconciliationLabel: getFreshnessReconciliationLabel(freshness),
 			evaluatedAt: decision.evaluatedAt,

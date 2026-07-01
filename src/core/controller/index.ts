@@ -11,6 +11,7 @@ import { DietCodeAccountService } from "@services/account/DietCodeAccountService
 import { McpHub } from "@services/mcp/McpHub"
 import type { ApiProvider, ModelInfo } from "@shared/api"
 import type { ChatContent } from "@shared/ChatContent"
+import { isInternalDiagnosticsEnabled, projectMessagesForWebview } from "@shared/diagnostics/webviewDiagnostics"
 import type { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { McpMarketplaceCatalog, McpMarketplaceItem } from "@shared/mcp"
@@ -985,8 +986,12 @@ export class Controller implements IController {
 		const workflowToggles = this.stateManager.getWorkspaceStateKey("workflowToggles")
 
 		const currentTaskItem = this.task?.taskId ? (taskHistory || []).find((item) => item.id === this.task?.taskId) : undefined
-		// Spread to create new array reference - React needs this to detect changes in useEffect dependencies
-		const dietcodeMessages = [...(this.task?.messageStateHandler.getDietCodeMessages() || [])]
+		// Internal diagnostics are backend-only unless an explicit developer flag
+		// opts into structured metadata. Prose is sanitized in both modes.
+		const showInternalDiagnostics = isInternalDiagnosticsEnabled(process.env.LUMI_SHOW_INTERNAL_DIAGNOSTICS)
+		const dietcodeMessages = projectMessagesForWebview(this.task?.messageStateHandler.getDietCodeMessages() || [], {
+			showInternalDiagnostics,
+		})
 		const checkpointManagerErrorMessage = this.task?.taskState.checkpointManagerErrorMessage
 
 		const processedTaskHistory = (taskHistory || [])
@@ -1099,6 +1104,7 @@ export class Controller implements IController {
 			auditIntentThresholdOverrides,
 			auditSarifHookExportEnabled,
 			auditWorkspaceArtifactsEnabled,
+			showInternalDiagnostics,
 			banners,
 			welcomeBanners,
 			openAiCodexIsAuthenticated,

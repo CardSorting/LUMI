@@ -70,6 +70,7 @@ import { ApiConfiguration } from "@shared/api"
 import { findLast, findLastIndex } from "@shared/array"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
+import { type InternalDiagnosticMetadata, sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import {
 	DietCodeApiReqCancelReason,
 	DietCodeApiReqInfo,
@@ -906,6 +907,7 @@ export class Task {
 		auditMetadata?: TaskAuditMetadata,
 		gateLifecycleStatus?: import("@shared/completion/gateLifecycleDecision").GateLifecycleDecision,
 		canonicalLifecycleDecision?: import("@shared/completion/canonicalLifecycleDecision").CanonicalLifecycleDecision,
+		diagnostics?: InternalDiagnosticMetadata,
 	): Promise<number | undefined> {
 		// Allow hook messages even when aborted to enable proper cleanup
 		if (this.taskState.abort && type !== "hook_status" && type !== "hook_output_stream") {
@@ -917,6 +919,14 @@ export class Task {
 			providerId: providerInfo.providerId,
 			modelId: providerInfo.model.id,
 			mode: providerInfo.mode,
+		}
+
+		if (text !== undefined) {
+			const sanitizedText = sanitizeWebviewMessageContent(text)
+			if (sanitizedText !== text) {
+				Logger.debug(`[Task ${this.taskId}] Removed internal diagnostics from ${type} webview message:\n${text}`)
+			}
+			text = sanitizedText || undefined
 		}
 
 		if (partial !== undefined) {
@@ -934,6 +944,7 @@ export class Task {
 						auditMetadata,
 						gateLifecycleStatus,
 						canonicalLifecycleDecision,
+						diagnostics,
 					})
 
 					const protoMessage = convertDietCodeMessageToProto(lastMessage)
@@ -955,6 +966,7 @@ export class Task {
 					auditMetadata,
 					gateLifecycleStatus,
 					canonicalLifecycleDecision,
+					diagnostics,
 				})
 				await this.postStateToWebview()
 				return sayTs
@@ -973,6 +985,7 @@ export class Task {
 					auditMetadata,
 					gateLifecycleStatus,
 					canonicalLifecycleDecision,
+					diagnostics,
 				})
 
 				// await this.postStateToWebview()
@@ -994,6 +1007,7 @@ export class Task {
 				auditMetadata,
 				gateLifecycleStatus,
 				canonicalLifecycleDecision,
+				diagnostics,
 			})
 			await this.postStateToWebview()
 			return sayTs
@@ -1012,6 +1026,7 @@ export class Task {
 			auditMetadata,
 			gateLifecycleStatus,
 			canonicalLifecycleDecision,
+			diagnostics,
 		})
 		await this.postStateToWebview()
 		return sayTs

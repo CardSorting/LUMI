@@ -1,7 +1,8 @@
+import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import { McpDisplayMode } from "@shared/McpDisplayMode"
 import { VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import styled from "styled-components"
 import ChatErrorBoundary from "@/components/chat/ChatErrorBoundary"
 import { CODE_BLOCK_BG_COLOR } from "@/components/common/CodeBlock"
@@ -77,6 +78,7 @@ interface McpResponseDisplayProps {
 }
 
 const McpResponseDisplay: React.FC<McpResponseDisplayProps> = ({ responseText }) => {
+	const sanitizedResponseText = useMemo(() => sanitizeWebviewMessageContent(responseText), [responseText])
 	const { mcpResponsesCollapsed, mcpDisplayMode } = useExtensionState() // Get setting from context
 	const [isExpanded, setIsExpanded] = useState(!mcpResponsesCollapsed) // Initialize with context setting
 	const [isLoading, setIsLoading] = useState(false) // Initial loading state for rich content
@@ -114,7 +116,7 @@ const McpResponseDisplay: React.FC<McpResponseDisplayProps> = ({ responseText })
 
 		// Use the orchestrator function from mcpRichUtil
 		const cleanup = processResponseUrls(
-			responseText || "",
+			sanitizedResponseText,
 			MAX_URLS,
 			(matches) => {
 				setUrlMatches(matches)
@@ -130,7 +132,7 @@ const McpResponseDisplay: React.FC<McpResponseDisplayProps> = ({ responseText })
 		)
 
 		return cleanup
-	}, [responseText, mcpDisplayMode, isExpanded, urlMatches.length])
+	}, [sanitizedResponseText, mcpDisplayMode, isExpanded, urlMatches.length])
 
 	// Helper function to render a display segment
 	const renderSegment = (segment: DisplaySegment): JSX.Element => {
@@ -190,24 +192,24 @@ const McpResponseDisplay: React.FC<McpResponseDisplayProps> = ({ responseText })
 		}
 
 		if (mcpDisplayMode === "plain") {
-			return <UrlText>{truncateDataUris(responseText)}</UrlText>
+			return <UrlText>{truncateDataUris(sanitizedResponseText)}</UrlText>
 		}
 
 		if (mcpDisplayMode === "markdown") {
-			return <MarkdownBlock markdown={truncateDataUris(responseText)} />
+			return <MarkdownBlock markdown={truncateDataUris(sanitizedResponseText)} />
 		}
 
 		if (error) {
 			return (
 				<>
 					<div style={{ color: "var(--vscode-errorForeground)", marginBottom: "10px" }}>{error}</div>
-					<UrlText>{responseText}</UrlText>
+					<UrlText>{sanitizedResponseText}</UrlText>
 				</>
 			)
 		}
 
 		if (mcpDisplayMode === "rich") {
-			const segments = buildDisplaySegments(responseText, urlMatches)
+			const segments = buildDisplaySegments(sanitizedResponseText, urlMatches)
 			return <>{segments.map(renderSegment)}</>
 		}
 
@@ -263,7 +265,7 @@ const McpResponseDisplay: React.FC<McpResponseDisplayProps> = ({ responseText })
 				{isExpanded && (
 					<div className="response-content">
 						<div style={{ color: "var(--vscode-errorForeground)" }}>Error parsing response:</div>
-						<UrlText>{responseText}</UrlText>
+						<UrlText>{sanitizedResponseText}</UrlText>
 					</div>
 				)}
 			</ResponseContainer>

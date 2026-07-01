@@ -16,6 +16,7 @@ import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { BrowserSettings } from "@shared/BrowserSettings"
 import type { CanonicalLifecycleDecision } from "@shared/completion/canonicalLifecycleDecision"
 import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
+import type { InternalDiagnosticMetadata } from "@shared/diagnostics/webviewDiagnostics"
 import type { DietCodeAsk, DietCodeSay, TaskAuditMetadata } from "@shared/ExtensionMessage"
 import type { FocusChainSettings } from "@shared/FocusChainSettings"
 import type { DietCodeContent, DietCodeToolResponseContent } from "@shared/messages/content"
@@ -120,6 +121,7 @@ export interface TaskCallbacks {
 		auditMetadata?: TaskAuditMetadata,
 		gateLifecycleStatus?: GateLifecycleDecision,
 		canonicalLifecycleDecision?: CanonicalLifecycleDecision,
+		diagnostics?: InternalDiagnosticMetadata,
 	) => Promise<number | undefined>
 
 	ask: (

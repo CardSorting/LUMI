@@ -9,6 +9,7 @@ import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifec
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { ChevronRight } from "lucide-react"
 import { memo, useEffect, useMemo, useState } from "react"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
 import { GateLifecycleStatusPanel } from "../completion/GateLifecycleStatusPanel"
@@ -47,6 +48,7 @@ export const TaskNotesSection = memo(
 		onScrollToLatestGateBlock,
 		onScrollToLatestAdvisory,
 	}: TaskNotesSectionProps) => {
+		const { showInternalDiagnostics } = useExtensionState()
 		const gateOptions = useAuditGateEvaluation(latestAuditMetadata)
 		const preCompletionSummary = useMemo(
 			() => buildPreCompletionChecklistSummary(latestAuditMetadata, gateOptions),
@@ -57,10 +59,13 @@ export const TaskNotesSection = memo(
 			[latestAuditMetadata, gateOptions],
 		)
 
-		const hasGateBlock = latestAuditMetadata?.gate_blocked === true
-		const showAuditHistory = Boolean(auditSnapshots && shouldShowAuditHistoryStrip(auditSnapshots, auditHealth))
-		const showPreCompletion = shouldShowPreCompletionChecklist(preCompletionSummary)
+		const hasGateBlock = showInternalDiagnostics === true && latestAuditMetadata?.gate_blocked === true
+		const showAuditHistory =
+			showInternalDiagnostics === true &&
+			Boolean(auditSnapshots && shouldShowAuditHistoryStrip(auditSnapshots, auditHealth))
+		const showPreCompletion = showInternalDiagnostics === true && shouldShowPreCompletionChecklist(preCompletionSummary)
 		const showOrchestrator =
+			showInternalDiagnostics === true &&
 			Boolean(orchestratorStatus && latestAuditMetadata && gateOptions.gateEnabled !== false) &&
 			Boolean(
 				orchestratorStatus &&
@@ -70,20 +75,24 @@ export const TaskNotesSection = memo(
 						orchestratorStatus.artifactManifestPath ||
 						orchestratorStatus.criticalViolationCount > 0),
 			)
-		const showViolations = Boolean(auditSnapshots && auditSnapshots.length > 0)
-		const showSubagent = Boolean(subagentAuditSummary && subagentAuditSummary.parentGateSignals.length > 0)
-		const showGateLifecycle = Boolean(gateLifecycleSnapshot?.decision)
+		const showViolations = showInternalDiagnostics === true && Boolean(auditSnapshots && auditSnapshots.length > 0)
+		const showSubagent =
+			showInternalDiagnostics === true && Boolean(subagentAuditSummary && subagentAuditSummary.parentGateSignals.length > 0)
+		const showGateLifecycle = Boolean(
+			gateLifecycleSnapshot?.canonicalDecision || (showInternalDiagnostics === true && gateLifecycleSnapshot?.decision),
+		)
 
 		const hasContent =
 			showGateLifecycle || showAuditHistory || showPreCompletion || showOrchestrator || showViolations || showSubagent
 
 		const summaryLabel = useMemo(() => {
+			if (showInternalDiagnostics === true) return "Internal diagnostics"
 			if (hasGateBlock) return "Needs your review"
 			if ((auditHealth?.warningViolationCount ?? 0) + (auditHealth?.criticalViolationCount ?? 0) > 0) {
 				return "Notes to review"
 			}
 			return "Notes & status"
-		}, [auditHealth?.criticalViolationCount, auditHealth?.warningViolationCount, hasGateBlock])
+		}, [auditHealth?.criticalViolationCount, auditHealth?.warningViolationCount, hasGateBlock, showInternalDiagnostics])
 
 		const [open, setOpen] = useState(hasGateBlock)
 
@@ -120,7 +129,7 @@ export const TaskNotesSection = memo(
 				</summary>
 
 				<div className="flex flex-col gap-1 px-1 pb-1.5 min-h-0 divide-y divide-border/15">
-					{showGateLifecycle && gateLifecycleSnapshot?.decision ? (
+					{showGateLifecycle && gateLifecycleSnapshot ? (
 						<GateLifecycleStatusPanel
 							canonicalDecision={gateLifecycleSnapshot.canonicalDecision}
 							checklistComplete={
@@ -131,6 +140,7 @@ export const TaskNotesSection = memo(
 							continuityMarker={gateLifecycleSnapshot.continuityMarker}
 							decision={gateLifecycleSnapshot.decision}
 							freshness={gateLifecycleSnapshot.freshness}
+							showInternalDiagnostics={showInternalDiagnostics === true}
 						/>
 					) : null}
 

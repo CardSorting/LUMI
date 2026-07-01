@@ -10,6 +10,7 @@ import { BrowserSettings } from "./BrowserSettings"
 import type { CanonicalLifecycleDecision } from "./completion/canonicalLifecycleDecision"
 import type { GateLifecycleDecision } from "./completion/gateLifecycleDecision"
 import { DietCodeFeatureSetting } from "./DietCodeFeatureSetting"
+import type { InternalDiagnosticMetadata } from "./diagnostics/webviewDiagnostics"
 import { BannerCardData } from "./dietcode/banner"
 import { DietCodeRulesToggles } from "./dietcode-rules"
 import { FocusChainSettings } from "./FocusChainSettings"
@@ -127,6 +128,8 @@ export interface ExtensionState {
 	auditIntentThresholdOverrides?: string
 	auditSarifHookExportEnabled?: boolean
 	auditWorkspaceArtifactsEnabled?: boolean
+	/** Explicit developer-only diagnostic projection flag. Defaults to false. */
+	showInternalDiagnostics?: boolean
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
@@ -157,6 +160,8 @@ export interface DietCodeMessage {
 	gateLifecycleStatus?: GateLifecycleDecision
 	/** Canonical lifecycle decision from the CompletionLifecycleDecisionEngine. */
 	canonicalLifecycleDecision?: CanonicalLifecycleDecision
+	/** Backend-only unless showInternalDiagnostics is explicitly enabled. */
+	diagnostics?: InternalDiagnosticMetadata
 }
 
 export type DietCodeAsk =

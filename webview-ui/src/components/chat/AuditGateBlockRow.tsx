@@ -49,7 +49,7 @@ export const AuditGateBlockRow = memo(({ text, auditMetadata }: AuditGateBlockRo
 					<div className="flex-1 min-w-0 space-y-1.5">
 						<div className="flex items-center gap-2 flex-wrap">
 							<span className="text-[10px] font-medium text-amber-800/90 dark:text-amber-300/90">
-								Something worth revisiting
+								Internal diagnostics
 							</span>
 							{auditMetadata.gate_block_count ? (
 								<span className="text-[9px] font-normal text-amber-700/70 dark:text-amber-400/70">

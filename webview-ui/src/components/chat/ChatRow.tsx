@@ -1,5 +1,6 @@
 import { isAdvisoryAuditInfoMessage } from "@shared/audit/auditMessages"
 import { COMMAND_OUTPUT_STRING } from "@shared/combineCommandSequences"
+import { projectMessageForWebview } from "@shared/diagnostics/webviewDiagnostics"
 import {
 	COMPLETION_RESULT_CHANGES_FLAG,
 	DietCodeApiReqInfo,
@@ -80,6 +81,20 @@ const InvisibleSpacer = () => <div aria-hidden className="h-px" />
 const ChatRow = memo(
 	(props: ChatRowProps) => {
 		const { isLast, onHeightChange } = props
+		const { showInternalDiagnostics } = useExtensionState()
+		const projectedMessage = useMemo(
+			() => projectMessageForWebview(props.message, { showInternalDiagnostics: showInternalDiagnostics === true }),
+			[props.message, showInternalDiagnostics],
+		)
+		const projectedLastModifiedMessage = useMemo(
+			() =>
+				props.lastModifiedMessage
+					? projectMessageForWebview(props.lastModifiedMessage, {
+							showInternalDiagnostics: showInternalDiagnostics === true,
+						})
+					: undefined,
+			[props.lastModifiedMessage, showInternalDiagnostics],
+		)
 		// Store the previous height to compare with the current height
 		// This allows us to detect changes without causing re-renders
 		const prevHeightRef = useRef(0)
@@ -92,7 +107,7 @@ const ChatRow = memo(
 					paddingRight: "var(--lumi-row-px, 16px)",
 					paddingTop: "var(--lumi-row-pt, 16px)",
 				}}>
-				<ChatRowContent {...props} />
+				<ChatRowContent {...props} lastModifiedMessage={projectedLastModifiedMessage} message={projectedMessage} />
 			</div>,
 		)
 
@@ -134,8 +149,14 @@ export const ChatRowContent = memo(
 		reasoningContent,
 		responseStarted,
 	}: ChatRowContentProps) => {
-		const { backgroundEditEnabled, mcpServers, mcpMarketplaceCatalog, onRelinquishControl, dietcodeMessages } =
-			useExtensionState()
+		const {
+			backgroundEditEnabled,
+			mcpServers,
+			mcpMarketplaceCatalog,
+			onRelinquishControl,
+			dietcodeMessages,
+			showInternalDiagnostics,
+		} = useExtensionState()
 		const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 		const [explainChangesDisabled, setExplainChangesDisabled] = useState(false)
 		const contentRef = useRef<HTMLDivElement>(null)
@@ -853,12 +874,22 @@ export const ChatRowContent = memo(
 						}
 						if (message.text?.trim()) {
 							return (
-								<div className="flex items-start gap-2 py-2 px-3 my-2 bg-quote/60 rounded-sm border border-description/15 text-[11px] text-description/90">
-									<Icon className="mt-0.5 size-2 shrink-0" name="InfoIcon" />
-									<div className="break-words flex-1 ph-no-capture">
-										<MarkdownRow markdown={message.text} showCursor={false} />
+								<>
+									<div className="flex items-start gap-2 py-2 px-3 my-2 bg-quote/60 rounded-sm border border-description/15 text-[11px] text-description/90">
+										<Icon className="mt-0.5 size-2 shrink-0" name="InfoIcon" />
+										<div className="break-words flex-1 ph-no-capture">
+											<MarkdownRow markdown={message.text} showCursor={false} />
+										</div>
 									</div>
-								</div>
+									{showInternalDiagnostics === true && message.diagnostics && (
+										<details className="my-2 rounded-sm border border-description/20 p-2 text-[10px]">
+											<summary>Internal diagnostics</summary>
+											<pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words">
+												{JSON.stringify(message.diagnostics, null, 2)}
+											</pre>
+										</details>
+									)}
+								</>
 							)
 						}
 						return <InvisibleSpacer />

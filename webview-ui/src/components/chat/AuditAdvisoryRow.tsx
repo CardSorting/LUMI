@@ -41,7 +41,7 @@ export const AuditAdvisoryRow = memo(({ text, auditMetadata, messageTs }: AuditA
 					<div className="flex-1 min-w-0 space-y-1.5">
 						<div className="flex items-center gap-2 flex-wrap">
 							<span className="text-[10px] font-medium text-amber-800/90 dark:text-amber-300/90">
-								An observation
+								Internal diagnostics
 							</span>
 							{grade && (
 								<span

@@ -1,6 +1,8 @@
 import { isApiRequestInProgress } from "@shared/agentActivity"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
+import { resolveLifecycleProjection } from "@shared/completion/lifecycleProjection"
+import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import type {
 	DietCodeMessage,
 	DietCodeSaySubagentStatus,
@@ -155,6 +157,12 @@ export function deriveExecutionStatus({
 	const safety = getSafetyLabel(auditMetadata, auditHealth, gateLifecycle)
 	const receipt = getReceiptIncident(lastMessage)
 	const lifecycleState = gateLifecycle?.decision?.lifecycleState
+	const lifecycleProjection = resolveLifecycleProjection({
+		canonicalDecision: gateLifecycle?.canonicalDecision,
+		legacyDecision: gateLifecycle?.decision,
+		freshness: gateLifecycle?.freshness,
+		continuityMarker: gateLifecycle?.continuityMarker,
+	})
 
 	let status: Omit<ExecutionStatusModel, "safety" | "confidence">
 
@@ -198,8 +206,8 @@ export function deriveExecutionStatus({
 		status = {
 			state: "failed",
 			title: "Finalization unavailable",
-			detail: gateLifecycle?.decision?.operatorMessage ?? "Finalization could not produce valid evidence.",
-			nextAction: gateLifecycle?.decision?.recoveryPath.at(0)?.description ?? "Review the finalization evidence.",
+			detail: "Finalization could not produce valid evidence.",
+			nextAction: "Review the finalization evidence.",
 		}
 	} else if (wasCancelled(lastMessage)) {
 		status = {
@@ -300,12 +308,14 @@ export function deriveExecutionStatus({
 			detail: "LUMI is working through the current step. You can steer or stop it at any time.",
 			nextAction: "No action required. Monitor the timeline or add guidance.",
 		}
-	} else if (gateLifecycle?.decision?.userInputRequired) {
+	} else if (gateLifecycle?.decision?.userInputRequired || gateLifecycle?.canonicalDecision?.nextAllowedAction === "none") {
 		status = {
 			state: "input",
 			title: "Gate decision required",
-			detail: gateLifecycle.decision.operatorMessage,
-			nextAction: gateLifecycle.decision.recoveryPath.at(0)?.description ?? "Review the gate evidence before continuing.",
+			detail: lifecycleProjection.instruction,
+			nextAction: lifecycleProjection.nextAction
+				? `Continue with ${lifecycleProjection.nextAction}.`
+				: "Review the canonical task state before continuing.",
 		}
 	} else {
 		status = {
@@ -317,8 +327,11 @@ export function deriveExecutionStatus({
 	}
 
 	return {
-		...status,
-		safety,
-		confidence: getCompletionConfidence(status.state, auditHealth, gateLifecycle),
+		state: status.state,
+		title: sanitizeWebviewMessageContent(status.title),
+		detail: sanitizeWebviewMessageContent(status.detail),
+		nextAction: sanitizeWebviewMessageContent(status.nextAction),
+		safety: sanitizeWebviewMessageContent(safety),
+		confidence: sanitizeWebviewMessageContent(getCompletionConfidence(status.state, auditHealth, gateLifecycle)),
 	}
 }

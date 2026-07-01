@@ -366,9 +366,10 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 						const isAgile = finalContent.includes("# AGILE_MODE")
 						const audit = await scribe.validate(finalContent, isAgile)
 						if (!audit.success) {
-							await config.callbacks.say(
-								"info",
-								`⚠️ STABILITY AUDIT FAILED:\n${audit.errors.map((e) => `- ${e}`).join("\n")}`,
+							Logger.debug(
+								`[WriteToFileToolHandler] Scratchpad stability audit diagnostic:\n${audit.errors
+									.map((error) => `- ${error}`)
+									.join("\n")}`,
 							)
 						}
 					} catch (error) {

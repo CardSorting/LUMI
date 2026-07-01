@@ -137,81 +137,6 @@ function canonicalDecisionToStatusLabel(decision: CanonicalLifecycleDecision): C
 	}
 }
 
-// ─── Legacy Fallback ──────────────────────────────────────────────────────────
-
-/**
- * Map a legacy GateLifecycleState to a canonical phase.
- * This mirrors `mapLifecycleToCanonicalPhase` from canonicalSnapshot.ts but
- * is intentionally separate — the resolver is the single mapping point.
- */
-function legacyStateToPhase(state: GateLifecycleDecision["lifecycleState"]): CanonicalCompletionPhase {
-	switch (state) {
-		case "completed_without_retry_completion":
-		case "receipt_sealed":
-		case "finalization_completed":
-			return "finalized"
-		case "audit_gate_corrupt":
-			return "failed_with_receipt"
-		case "completion_retry_locked":
-			return "blocked"
-		case "finalization_running":
-		case "finalization_ready":
-		case "engineering_verified":
-			return "completing"
-		default:
-			return "evaluating"
-	}
-}
-
-/**
- * Map a legacy GateLifecycleDecision to a normalized status label.
- * This is the fallback path — only used when no canonical decision exists.
- */
-function legacyDecisionToStatusLabel(decision: GateLifecycleDecision): CanonicalStatusLabel {
-	const state = decision.lifecycleState
-	switch (state) {
-		case "completed_without_retry_completion":
-		case "receipt_sealed":
-		case "finalization_completed":
-			return "Finalized"
-		case "audit_gate_corrupt":
-			return "Failed — receipt available"
-		case "completion_retry_locked":
-			if (decision.engineering === "passed") {
-				return "Ready for finalization"
-			}
-			return "Blocked"
-		case "finalization_running":
-		case "finalization_ready":
-		case "engineering_verified":
-			return "Ready for finalization"
-		default:
-			return "Ready to complete"
-	}
-}
-
-/**
- * Derive next action from legacy decision's allowedActions.
- * Only used as fallback when no canonical decision exists.
- */
-function legacyNextAction(decision: GateLifecycleDecision): string | null {
-	if (decision.allowedActions.length === 0) {
-		return null
-	}
-	// Map legacy gate actions to canonical action vocabulary
-	const first = decision.allowedActions[0]
-	if (first === "attempt_completion" || first === "run_verification") {
-		return "attempt_completion"
-	}
-	if (first === "run_finalization" || first === "emit_receipt" || first === "seal_session") {
-		return "run_finalization"
-	}
-	if (first === "act_mode_respond") {
-		return null
-	}
-	return first
-}
-
 // ─── Projection from Canonical Decision ────────────────────────────────────────
 
 /**
@@ -245,12 +170,6 @@ function projectFromCanonicalDecision(
 function projectFromFallbackLegacyState(input: LifecycleProjectionInput): LifecycleProjection {
 	const legacy = input.legacyDecision
 	const freshness = input.freshness ?? "unknown"
-	const isStale = freshness === "stale" || freshness === "unknown"
-
-	// Legacy is NOT actionable when:
-	// - checklist is complete (task progress done, stale gate is evidence only)
-	// - legacy snapshot is stale (stale snapshots are evidence/debug only)
-	const isLegacyActionable = !input.checklistComplete && !isStale
 
 	if (!legacy) {
 		return {
@@ -262,37 +181,22 @@ function projectFromFallbackLegacyState(input: LifecycleProjectionInput): Lifecy
 			instruction: "Awaiting lifecycle evaluation.",
 			freshness,
 			continuityMarker: input.continuityMarker,
-			isLegacyActionable,
-		}
-	}
-
-	// When checklist is complete or legacy is stale, demote to evidence-only:
-	// render a neutral status, no actionable next step, no legacy operatorMessage
-	if (!isLegacyActionable) {
-		return {
-			source: "legacy_gate",
-			statusLabel: "Ready to complete",
-			phase: "evaluating",
-			nextAction: null,
-			forbiddenActions: [],
-			instruction: "Stale gate snapshot — awaiting fresh lifecycle evaluation.",
-			freshness,
-			continuityMarker: input.continuityMarker,
 			isLegacyActionable: false,
-			legacyDecision: legacy,
 		}
 	}
 
+	// Legacy lifecycle state is evidence only. It must never supply current
+	// instructions, allowed actions, or status labels to normal UI.
 	return {
 		source: "legacy_gate",
-		statusLabel: legacyDecisionToStatusLabel(legacy),
-		phase: legacyStateToPhase(legacy.lifecycleState),
-		nextAction: legacyNextAction(legacy),
-		forbiddenActions: legacy.forbiddenActions,
-		instruction: legacy.operatorMessage,
+		statusLabel: "Ready to complete",
+		phase: "evaluating",
+		nextAction: null,
+		forbiddenActions: [],
+		instruction: "Awaiting canonical lifecycle evaluation.",
 		freshness,
 		continuityMarker: input.continuityMarker,
-		isLegacyActionable: true,
+		isLegacyActionable: false,
 		legacyDecision: legacy,
 	}
 }
@@ -314,8 +218,8 @@ function projectFromFallbackLegacyState(input: LifecycleProjectionInput): Lifecy
  *   required" and must NOT show verification/finalization as pending work.
  * - If canonical decision says `hard_block`, UI must show "blocked" / "stop
  *   and report."
- * - If no canonical decision exists, legacy projection may be used only as
- *   fallback.
+ * - If no canonical decision exists, legacy state remains evidence-only and
+ *   cannot produce current guidance.
  */
 export function resolveLifecycleProjection(input: LifecycleProjectionInput): LifecycleProjection {
 	if (input.canonicalDecision) {
@@ -327,21 +231,19 @@ export function resolveLifecycleProjection(input: LifecycleProjectionInput): Lif
 // ─── Convenience: Check if a legacy label should be suppressed ────────────────
 
 /**
- * Whether a legacy gate lifecycle label should be rendered.
- * Returns false when a canonical decision exists — legacy labels are always
- * suppressed in that case.
+ * Legacy gate lifecycle labels are evidence-only and never render as current
+ * user guidance.
  */
-export function shouldRenderLegacyLabel(canonicalDecisionExists: boolean): boolean {
-	return !canonicalDecisionExists
+export function shouldRenderLegacyLabel(_canonicalDecisionExists: boolean): boolean {
+	return false
 }
 
 /**
- * Whether the "Next:" guidance should be rendered from legacy allowedActions.
- * Returns false when a canonical decision exists — the canonical
- * `nextAllowedAction` is the only next-step guidance.
+ * Legacy allowedActions never render as "Next:" guidance. Canonical
+ * `nextAllowedAction` is the only next-step authority.
  */
-export function shouldRenderLegacyNextAction(canonicalDecisionExists: boolean): boolean {
-	return !canonicalDecisionExists
+export function shouldRenderLegacyNextAction(_canonicalDecisionExists: boolean): boolean {
+	return false
 }
 
 /**

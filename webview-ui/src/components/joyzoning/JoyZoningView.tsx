@@ -153,7 +153,7 @@ const JoyZoningView = ({ onDone }: { onDone: () => void }) => {
 		const summary = `
 Project Health Report (${new Date().toLocaleDateString()})
 Grade: ${asText(report.grade, "--")}
-Health: ${asNumber(report.buildHealth)}%
+Project condition: ${asNumber(report.buildHealth)}%
 Critical Fixes: ${violations.length}
 Optimizations: ${optimizations.length}
 Stability: ${asNumber(report.stabilityScore)}%

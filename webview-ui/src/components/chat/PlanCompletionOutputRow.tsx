@@ -37,7 +37,12 @@ const PlanCompletionOutputRow = memo(({ text, headClassNames, auditMetadata, isS
 					</div>
 				</div>
 			</div>
-			{!isStreaming && auditMetadata && <AuditReportPanel auditMetadata={auditMetadata} variant="neutral" />}
+			{!isStreaming && auditMetadata && (
+				<details className="mt-2 rounded-sm border border-description/20 p-2 text-[10px]">
+					<summary>Internal diagnostics</summary>
+					<AuditReportPanel auditMetadata={auditMetadata} variant="neutral" />
+				</details>
+			)}
 			{!isStreaming && <p className="text-description/70 text-[11px] px-1 pt-2 pb-0.5">I'll keep going from here.</p>}
 		</div>
 	)

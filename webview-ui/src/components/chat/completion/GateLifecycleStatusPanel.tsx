@@ -7,6 +7,7 @@ import {
 } from "@shared/completion/gateLifecycleLabels"
 import type { GateLifecycleFreshness } from "@shared/completion/gateLifecycleMessages"
 import { type LifecycleProjection, resolveLifecycleProjection } from "@shared/completion/lifecycleProjection"
+import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import { memo, useMemo } from "react"
 import { cn } from "@/lib/utils"
 
@@ -19,6 +20,7 @@ interface GateLifecycleStatusPanelProps {
 	continuityMarker?: string
 	/** Whether task progress / checklist is complete (all steps done). */
 	checklistComplete?: boolean
+	showInternalDiagnostics?: boolean
 	className?: string
 }
 
@@ -48,6 +50,7 @@ export const GateLifecycleStatusPanel = memo(
 		freshness = "current",
 		continuityMarker,
 		checklistComplete = false,
+		showInternalDiagnostics = false,
 		className,
 	}: GateLifecycleStatusPanelProps) => {
 		const projection: LifecycleProjection = useMemo(
@@ -65,7 +68,7 @@ export const GateLifecycleStatusPanel = memo(
 		const evaluatedAt = decision?.evaluatedAt ?? Date.now()
 		const evaluatedLabel = useMemo(() => formatEvaluatedAt(evaluatedAt), [evaluatedAt])
 
-		if (!decision && !canonicalDecision) {
+		if ((!decision && !canonicalDecision) || (!canonicalDecision && showInternalDiagnostics !== true)) {
 			return null
 		}
 
@@ -78,6 +81,11 @@ export const GateLifecycleStatusPanel = memo(
 		// the stale banner is suppressed to avoid confusion.
 		const isStale = (projection.freshness === "stale" || projection.freshness === "unknown") && projection.isLegacyActionable
 
+		const instruction = sanitizeWebviewMessageContent(projection.instruction)
+		const nextAction = projection.nextAction ? sanitizeWebviewMessageContent(projection.nextAction) : null
+		const forbiddenActions = projection.forbiddenActions
+			.map((action) => sanitizeWebviewMessageContent(action))
+			.filter(Boolean)
 		const evidencePreview = decision?.finalizationEvidence?.changelogEntryPreview
 		const receiptId = decision?.completionReceipt?.receiptId
 
@@ -115,27 +123,27 @@ export const GateLifecycleStatusPanel = memo(
 					</p>
 				) : null}
 
-				<p className="m-0 text-[11px] font-medium text-description">{projection.instruction}</p>
+				<p className="m-0 text-[11px] font-medium text-description">{instruction}</p>
 
 				<p className="m-0 text-[10px] text-description/70">{subtitle}</p>
 
-				{projection.nextAction ? (
+				{nextAction ? (
 					<div className="text-[9px] text-description/80">
 						<span className="font-medium">Next: </span>
-						{projection.nextAction}
+						{nextAction}
 					</div>
 				) : null}
 
-				{projection.forbiddenActions.length > 0 ? (
+				{forbiddenActions.length > 0 ? (
 					<div className="text-[9px] text-description/70">
 						<span className="font-medium">Avoid: </span>
-						{projection.forbiddenActions.join(", ")}
+						{forbiddenActions.join(", ")}
 					</div>
 				) : null}
 
-				{(continuityMarker || evidencePreview || receiptId) && (
+				{showInternalDiagnostics === true && (continuityMarker || evidencePreview || receiptId) && (
 					<details className="text-[9px] text-description/70">
-						<summary className="cursor-pointer font-medium">Evidence</summary>
+						<summary className="cursor-pointer font-medium">Internal diagnostics</summary>
 						{continuityMarker ? <p className="m-0 mt-1 font-mono">Continuity: {continuityMarker}</p> : null}
 						{receiptId ? <p className="m-0 mt-1 font-mono">Receipt: {receiptId}</p> : null}
 						{evidencePreview ? <p className="m-0 mt-1 whitespace-pre-wrap">{evidencePreview}</p> : null}

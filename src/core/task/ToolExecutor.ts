@@ -874,9 +874,9 @@ export class ToolExecutor {
 					) {
 						const telemetry = this.guard.getStabilityTelemetry(block.params.path)
 						const summary = (formatResponse as any).postExecutionSummary(telemetry, postExecResult.violations)
-						this.say("text", summary).catch(() => undefined)
+						Logger.debug(`[ToolExecutor] Post-execution substrate telemetry:\n${summary}`)
 					} else if (postExecResult.warning) {
-						this.say("text", postExecResult.warning).catch(() => undefined)
+						Logger.debug(`[ToolExecutor] Post-execution policy diagnostic:\n${postExecResult.warning}`)
 					}
 				}
 

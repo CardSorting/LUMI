@@ -1,3 +1,4 @@
+import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import { memo, useEffect } from "react"
 import { useRemark } from "react-remark"
 import rehypeHighlight, { Options } from "rehype-highlight"
@@ -146,7 +147,7 @@ const CodeBlock = memo(({ source, forceWrap = false }: CodeBlockProps) => {
 	})
 
 	useEffect(() => {
-		setMarkdownSource(source || "")
+		setMarkdownSource(sanitizeWebviewMessageContent(source || ""))
 	}, [source, setMarkdownSource])
 
 	return (

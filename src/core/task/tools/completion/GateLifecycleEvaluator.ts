@@ -5,6 +5,7 @@ import type { GateAction, GateRecoveryStep } from "@shared/completion/gateAction
 import { buildGateLifecycleDecision, type GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
 import type { GateReasonCode } from "@shared/completion/gateReasonCodes"
 import { appendLifecycleTransitionLog } from "@shared/completion/lifecycleTransitionLog"
+import { buildCanonicalCompletionSummary } from "@shared/diagnostics/webviewDiagnostics"
 import {
 	getCompletionGateCircuitBreakerError,
 	getCompletionGraphRevision,
@@ -94,7 +95,25 @@ export async function publishGateLifecycleStatus(config: TaskConfig, decision: G
 		// resolver will fall back to legacy projection.
 	}
 	try {
-		await config.callbacks.say("info", decision.operatorMessage, undefined, undefined, false, undefined, decision, canonical)
+		const completionGateEnvelope = config.taskState.completionGateObservabilityEnvelope
+		await config.callbacks.say(
+			"info",
+			buildCanonicalCompletionSummary({ canonicalLifecycleDecision: canonical }),
+			undefined,
+			undefined,
+			false,
+			undefined,
+			decision,
+			canonical,
+			completionGateEnvelope
+				? {
+						completionGateEnvelope: {
+							authority: "advisory",
+							rawXml: completionGateEnvelope,
+						},
+					}
+				: undefined,
+		)
 	} catch {
 		// Operator surface is best-effort; task state remains authoritative.
 	}

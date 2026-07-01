@@ -89,8 +89,7 @@ describe("GateLifecycleStatusPanel freshness UI", () => {
 			/>,
 		)
 		expect(screen.queryByText(/may be outdated/i)).not.toBeInTheDocument()
-		// Evidence section still renders
-		expect(screen.getByText(/Continuity:/i)).toBeInTheDocument()
+		expect(screen.queryByText(/Continuity:/i)).not.toBeInTheDocument()
 	})
 
 	it("renders canonical 'Ready for finalization' label when route_to_finalization is present", () => {
@@ -155,10 +154,22 @@ describe("GateLifecycleStatusPanel freshness UI", () => {
 		expect(nextLine?.textContent).not.toContain("attempt_completion")
 	})
 
-	it("falls back to legacy projection when no canonical decision exists", () => {
-		render(<GateLifecycleStatusPanel decision={baseDecision()} freshness="current" />)
-		// No canonical — should show legacy-derived "Ready for finalization"
-		expect(screen.getByText("Ready for finalization")).toBeInTheDocument()
+	it("does not render legacy-only lifecycle guidance by default", () => {
+		const { container } = render(<GateLifecycleStatusPanel decision={baseDecision()} freshness="current" />)
+		expect(container).toBeEmptyDOMElement()
+	})
+
+	it("labels legacy evidence as internal diagnostics in explicit debug mode", () => {
+		render(
+			<GateLifecycleStatusPanel
+				continuityMarker="gate:preflight.quality:123"
+				decision={baseDecision()}
+				freshness="current"
+				showInternalDiagnostics
+			/>,
+		)
+		expect(screen.getByText("Internal diagnostics")).toBeInTheDocument()
+		expect(screen.getByText(/Continuity:/i)).toBeInTheDocument()
 	})
 })
 
@@ -299,5 +310,22 @@ describe("regression hardening — completed task progress vs stale legacy UI", 
 		expect(text).not.toMatch(/COGNITIVE REFLECTION/i)
 		expect(text).not.toMatch(/breather nudge/i)
 		expect(text).not.toMatch(/taking a breather/i)
+	})
+
+	it("sanitizes canonical projection fields before rendering", () => {
+		const { container } = render(
+			<GateLifecycleStatusPanel
+				canonicalDecision={{
+					...routeToFinalization,
+					canonicalInstruction:
+						"COGNITIVE REFLECTION\nHealth: 1%\n<completion_gate_envelope>internal</completion_gate_envelope>",
+				}}
+				decision={baseDecision()}
+				freshness="current"
+			/>,
+		)
+		const text = container.textContent ?? ""
+		expect(text).toContain("run_finalization")
+		expect(text).not.toMatch(/COGNITIVE REFLECTION|Health:|completion_gate_envelope/i)
 	})
 })

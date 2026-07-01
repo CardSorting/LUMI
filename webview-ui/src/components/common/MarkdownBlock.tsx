@@ -1,3 +1,4 @@
+import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { marked } from "marked"
 import type { ComponentProps } from "react"
@@ -306,6 +307,10 @@ const InlineCodeWithFileCheck: React.FC<ComponentProps<"code"> & { [key: string]
 }
 
 const MarkdownBlock = memo(({ markdown, compact, showCursor }: MarkdownBlockProps) => {
+	const sanitizedMarkdown = useMemo(
+		() => (markdown === undefined ? undefined : sanitizeWebviewMessageContent(markdown)),
+		[markdown],
+	)
 	return (
 		<div className="inline-markdown-block">
 			<span
@@ -313,7 +318,7 @@ const MarkdownBlock = memo(({ markdown, compact, showCursor }: MarkdownBlockProp
 					"inline-cursor-container": showCursor,
 					"[&>p]:m-0": compact,
 				})}>
-				{markdown ? <MemoizedMarkdown content={markdown} id="markdown-block" /> : markdown}
+				{sanitizedMarkdown ? <MemoizedMarkdown content={sanitizedMarkdown} id="markdown-block" /> : sanitizedMarkdown}
 			</span>
 		</div>
 	)

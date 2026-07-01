@@ -121,4 +121,19 @@ describe("deriveExecutionStatus", () => {
 		expect(result.safety).toBe("Active")
 		expect(result.confidence).toBe("Receipt sealed")
 	})
+
+	it("never renders legacy operator or recovery prose as current guidance", () => {
+		const gateLifecycle = {
+			freshness: "current",
+			decision: {
+				lifecycleState: "audit_gate_corrupt",
+				operatorMessage: "COGNITIVE REFLECTION — take a breather nudge",
+				recoveryPath: [{ description: "Next: attempt_completion, run_verification" }],
+			},
+		} as ResolvedGateLifecycleSnapshot
+
+		const result = deriveExecutionStatus({ messages: [task], gateLifecycle })
+		const rendered = Object.values(result).join(" ")
+		expect(rendered).not.toMatch(/COGNITIVE REFLECTION|breather nudge|run_verification/i)
+	})
 })

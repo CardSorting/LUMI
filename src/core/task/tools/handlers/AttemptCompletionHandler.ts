@@ -21,7 +21,6 @@ import { finalizeRoadmapSession } from "@/services/roadmap/RoadmapLifecycle"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
 import {
-	buildCompletionGatePassedEnvelope,
 	buildCompletionGateReadinessBlock,
 	buildCompletionPreflightReadinessBrief,
 	buildProactiveCompletionGuidance,
@@ -227,9 +226,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		if (config.universalGuard) {
 			void config.universalGuard.checkForensicCompliance().then((compliance) => {
 				if (!compliance.compliant && compliance.advisory) {
-					config.callbacks.say("info", compliance.advisory).catch((error) => {
-						Logger.warn("[AttemptCompletionHandler] Failed to emit forensic advisory:", error)
-					})
+					Logger.debug(`[AttemptCompletionHandler] Forensic advisory:\n${compliance.advisory}`)
 				}
 			})
 		}
@@ -272,11 +269,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			config.taskState.lastCompletionAudit = auditMetadata
 
 			if (auditGateResult.status === "advisory_failed") {
-				try {
-					await config.callbacks.say("info", auditGateResult.diagnostics, undefined, undefined, false, auditMetadata)
-				} catch (error) {
-					Logger.warn("[AttemptCompletionHandler] Failed to emit advisory audit diagnostics:", error)
-				}
+				Logger.debug(`[AttemptCompletionHandler] Advisory audit diagnostics:\n${auditGateResult.diagnostics}`)
 			}
 		} else if (auditGateResult.status === "diagnostic_error") {
 			Logger.warn(`[AttemptCompletionHandler] ${auditGateResult.diagnostics}`)
@@ -288,11 +281,9 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		await publishGateLifecycleStatus(config, evaluateGateLifecycle(config))
 
 		if (auditGateResult.status === "advisory_passed") {
-			try {
-				await config.callbacks.say("info", buildCompletionGatePassedEnvelope(config, auditGateResult.gateDecision.score))
-			} catch (error) {
-				Logger.warn("[AttemptCompletionHandler] Failed to emit completion diagnostics:", error)
-			}
+			Logger.debug(
+				`[AttemptCompletionHandler] Completion diagnostics passed with score ${auditGateResult.gateDecision.score}.`,
+			)
 		}
 
 		if (config.autoApprovalSettings.enableNotifications) {
