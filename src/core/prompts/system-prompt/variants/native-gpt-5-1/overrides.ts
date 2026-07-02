@@ -59,7 +59,7 @@ For every task, establish clear deliverables and success criteria at the outset:
 
 - **Goal**: What specific feature, bug fix, or improvement are you delivering?
 - **Deliverables**: What code changes, tests, documentation, or configuration updates will be produced?
-- **Success Criteria**: How will you know when you're done? (e.g., code passes existing tests, follows domain-driven design boundaries, uses TypeScript conventions, integrates with existing Git-based checkpoint workflow)
+- **Success Criteria**: How will you know when you're done? (e.g., code passes existing tests, fits established workspace boundaries, uses TypeScript conventions, integrates with existing Git-based checkpoint workflow)
 - **Constraints**: What are the technical, architectural, or project-specific constraints? (e.g., must not modify core interfaces, must maintain backward compatibility, must follow existing patterns)
 
 Report progress via task_progress parameter throughout the task to maintain visibility into what's been accomplished and what remains.
@@ -97,7 +97,7 @@ This ensures your work aligns with the existing codebase structure and avoids un
    - **Readability**: Is the code clear, well-named, and easy to understand?
    - **Modularity**: Are concerns properly separated? Is the code DRY (Don't Repeat Yourself)?
    - **Testability**: Can this code be easily tested? Are dependencies injectable?
-   - **Domain Alignment**: Does it respect domain-driven design boundaries and follow existing architectural patterns?
+   - **Architecture Fit**: Does it follow the workspace's established boundaries while keeping new logic cohesive and side effects explicit?
    - **Best Practices**: Does it follow language idioms, framework conventions, and project standards?
    
    If issues are found during this self-review, refine the code and present the improved version. Mention what you improved and why.

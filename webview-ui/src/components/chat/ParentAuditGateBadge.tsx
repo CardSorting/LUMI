@@ -1,6 +1,6 @@
 import { describeGateReadiness } from "@shared/audit/auditGateReadiness"
 import { getLatestAuditFromMessages } from "@shared/audit/auditMessages"
-import { ShieldAlertIcon, ShieldCheckIcon, ShieldOffIcon } from "lucide-react"
+import { ShieldAlertIcon, ShieldCheckIcon } from "lucide-react"
 import { memo, useMemo } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils"
 const LEVEL_STYLES = {
 	ready: "text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
 	warning: "text-amber-600 dark:text-amber-400 border-amber-500/30",
-	blocked: "text-amber-700 dark:text-amber-400 border-amber-500/30",
 	disabled: "text-description/60 border-description/30",
 } as const
 
@@ -24,7 +23,7 @@ export const ParentAuditGateBadge = memo(() => {
 		return null
 	}
 
-	const Icon = readiness.level === "blocked" ? ShieldOffIcon : readiness.level === "ready" ? ShieldCheckIcon : ShieldAlertIcon
+	const Icon = readiness.level === "ready" ? ShieldCheckIcon : ShieldAlertIcon
 
 	return (
 		<span

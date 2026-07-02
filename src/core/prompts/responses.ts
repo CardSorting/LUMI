@@ -53,7 +53,6 @@ export const formatResponse = {
 	) => {
 		const label = (telemetry.layer || "unknown").toUpperCase()
 		const pressure = (telemetry.pressure ?? 0).toFixed(1)
-		const resonance = (telemetry.resonance ?? 0).toFixed(1)
 
 		const statusLine =
 			telemetry.health === 100
@@ -284,12 +283,14 @@ Otherwise, if you have not completed the task and do not need additional informa
 	},
 
 	planModeInstructions: () => {
-		return `In this mode you should focus on information gathering, asking questions, and architecting a solution through the lens of JoyZoning layers (Domain, Core, Infrastructure, UI, Plumbing). 
+		return `In this mode you should gather information and design a solution that fits the workspace before choosing abstractions.
 
-# Architectural Planning Guide:
-1. **Identify affected layers**: Before proposing a change, determine which layers it touches.
-2. **Decompose by layer**: Plan your implementation in a "Domain-first" manner (logic/models) before Infrastructure (adapters/IO) or UI.
-3. **Map the bridges**: If a change crosses layers, explicitly plan the interfaces or adapters needed to maintain purity.
+# Architecture Fit Guide:
+1. **Read the workspace**: Inspect repository rules, nearby analogous code, tests, manifests, and tooling.
+2. **Mirror real boundaries**: Plan with the modules and dependency flow the workspace already uses. Apply canonical JoyZoning layer names only for greenfield or explicitly JoyZoned projects.
+3. **Steer every change**: Keep JoyZoning active inside the workspace-native shape: make new functions/classes cohesive and testable, separate decisions from side effects at existing seams, and add contracts only where volatility requires them.
+4. **Limit migration**: Do not restructure unrelated code or introduce DDD ceremony solely for architectural appearance.
+5. **Prove quality**: Select the quality attributes materially affected by the change and plan observable evidence using the workspace's native tests, checks, benchmarks, security controls, or telemetry.
 
 Once you have a detailed architectural plan, use the plan_mode_respond tool to present it. The system will automatically transition to ACT MODE so you can implement. Do not use the plan_mode_respond tool until you've gathered all the information you need e.g. with read_file or ask_followup_question.`
 	},

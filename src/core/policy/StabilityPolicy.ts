@@ -1,6 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
+import { DEFAULT_JOY_ZONING_STEERING_THRESHOLDS } from "./WorkspaceArchitectureProfile"
 
 export interface LayerConfig {
 	optimalLogicDensity: number
@@ -18,6 +19,13 @@ export interface StabilityConfig {
 		supportedLayerTags?: string[]
 		excludePaths?: string[]
 		auditAggressiveness?: "CONSERVATIVE" | "BALANCED" | "AGGRESSIVE"
+		architectureMode?: "auto" | "joy-zoning" | "workspace-native"
+		joyZoningSteering?: {
+			maxFunctionLines?: number
+			minBoundaryLines?: number
+			minBoundaryDecisions?: number
+			maxClassMethods?: number
+		}
 	}
 }
 
@@ -74,6 +82,8 @@ export class StabilityPolicy {
 				supportedLayerTags: [".ts", ".tsx", ".js", ".jsx"],
 				excludePaths: [],
 				auditAggressiveness: "BALANCED",
+				architectureMode: "auto",
+				joyZoningSteering: { ...DEFAULT_JOY_ZONING_STEERING_THRESHOLDS },
 			},
 		}
 	}

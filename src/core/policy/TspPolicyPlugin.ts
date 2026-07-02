@@ -3,6 +3,7 @@ import * as ts from "typescript"
 import { getLayer, isLayerTagSupported, Layer, parseLayerTag, validateImportDepth } from "@/utils/joy-zoning"
 import { Logger } from "../../shared/services/Logger"
 import { SpiderEngine } from "./spider/SpiderEngine"
+import { detectWorkspaceArchitectureProfile, type WorkspaceArchitectureProfile } from "./WorkspaceArchitectureProfile"
 
 /**
  * Policy Enforcement Theme: Defines the strictness level of architectural validation
@@ -32,6 +33,16 @@ export interface FileQualityScore {
  * Joy-Zoning architectural policies at the AST level with intelligent flexibility.
  */
 export class TspPolicyPlugin {
+	private readonly architectureProfile: WorkspaceArchitectureProfile
+
+	public constructor(cwd = process.cwd()) {
+		this.architectureProfile = detectWorkspaceArchitectureProfile(cwd)
+	}
+
+	public getArchitectureProfile(): WorkspaceArchitectureProfile {
+		return this.architectureProfile
+	}
+
 	/**
 	 * Configurable enforcement theme (default: safety mode for best balance)
 	 * - strict: All validation rules enforced, strict layer boundaries apply
@@ -247,7 +258,7 @@ export class TspPolicyPlugin {
 		if (lines > 800) {
 			warnings.push(
 				`🐋 FAT MODULE DETECTED: ${path.basename(filePath)} has ${lines} lines. Logic density exceeds structural safety limits. ` +
-					"STRATEGY: Split into smaller cohesive domain services or use an orchestrator.",
+					"STRATEGY: Consider splitting cohesive responsibilities through the workspace's established module pattern.",
 			)
 		}
 
@@ -258,6 +269,19 @@ export class TspPolicyPlugin {
 
 		const currentLayer = getLayer(filePath)
 		const lineCount = (content.match(/\n/g) || []).length + 1
+
+		// Blended mode keeps JoyZoning active as non-blocking design steering while
+		// leaving directory taxonomy, naming, and dependency topology to the
+		// established workspace.
+		if (!this.architectureProfile.enforceCanonicalLayers) {
+			warnings.push(...this.validateBlendedSteering(filePath, content))
+			if (lineCount > this.THRESHOLDS.MAX_WARNING_LINES) {
+				const quality = this.analyzeFileStructure(content)
+				warnings.push(`${path.basename(filePath)}: Large file (${lineCount} lines). Quality Score: ${quality.score}/100.`)
+				warnings.push(...quality.recommendations.map((recommendation) => `  - ${recommendation}`))
+			}
+			return { success: true, errors: [], warnings }
+		}
 
 		// Safety/Relaxed Theme logic
 		if (this.theme !== "strict") {
@@ -329,6 +353,126 @@ export class TspPolicyPlugin {
 	}
 
 	/**
+	 * Applies topology-neutral JoyZoning guidance to established workspaces.
+	 * These checks never reject a write or prescribe canonical directories.
+	 */
+	private validateBlendedSteering(filePath: string, content: string): string[] {
+		if (this.isTestFile(filePath) || this.isGeneratedContent(content)) return []
+
+		const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true)
+		const warnings: string[] = []
+		const units: Array<{ name: string; body: ts.Block }> = []
+
+		const collectUnits = (node: ts.Node) => {
+			if (ts.isFunctionDeclaration(node) && node.body) {
+				units.push({ name: node.name?.text || "anonymous function", body: node.body })
+			} else if (ts.isMethodDeclaration(node) && node.body) {
+				units.push({ name: node.name.getText(sourceFile), body: node.body })
+			} else if (ts.isConstructorDeclaration(node) && node.body) {
+				units.push({ name: "constructor", body: node.body })
+			} else if (
+				ts.isVariableDeclaration(node) &&
+				node.initializer &&
+				(ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) &&
+				ts.isBlock(node.initializer.body)
+			) {
+				units.push({ name: node.name.getText(sourceFile), body: node.initializer.body })
+			}
+			ts.forEachChild(node, collectUnits)
+		}
+		collectUnits(sourceFile)
+
+		for (const unit of units) {
+			const startLine = sourceFile.getLineAndCharacterOfPosition(unit.body.getStart(sourceFile)).line
+			const endLine = sourceFile.getLineAndCharacterOfPosition(unit.body.getEnd()).line
+			const lineCount = endLine - startLine + 1
+			const metrics = this.measureDecisionAndEffects(unit.body, sourceFile)
+
+			if (lineCount > this.architectureProfile.steeringThresholds.maxFunctionLines) {
+				warnings.push(
+					`[JOY STEERING JZ-C01: COHESION] ${unit.name} spans ${lineCount} lines. Keep its workspace-native placement, but consider extracting one coherent responsibility using nearby project patterns.`,
+				)
+			}
+
+			if (
+				lineCount >= this.architectureProfile.steeringThresholds.minBoundaryLines &&
+				metrics.decisions >= this.architectureProfile.steeringThresholds.minBoundaryDecisions &&
+				metrics.externalEffects > 0
+			) {
+				warnings.push(
+					`[JOY STEERING JZ-B01: BOUNDARY] ${unit.name} combines ${metrics.decisions} decision points with ${metrics.externalEffects} external-effect call(s). Mirror the workspace's existing boundary seam, then keep the decision portion independently testable where practical.`,
+				)
+			}
+		}
+
+		const inspectClass = (node: ts.Node) => {
+			if (ts.isClassDeclaration(node) && node.name) {
+				const methodCount = node.members.filter((member) => ts.isMethodDeclaration(member)).length
+				if (methodCount > this.architectureProfile.steeringThresholds.maxClassMethods) {
+					warnings.push(
+						`[JOY STEERING JZ-O01: OWNERSHIP] ${node.name.text} exposes ${methodCount} methods. Preserve local class conventions, but verify that it still represents one cohesive capability.`,
+					)
+				}
+			}
+			ts.forEachChild(node, inspectClass)
+		}
+		inspectClass(sourceFile)
+
+		return warnings
+	}
+
+	private measureDecisionAndEffects(body: ts.Block, sourceFile: ts.SourceFile) {
+		let decisions = 0
+		let externalEffects = 0
+		const effectPattern =
+			/(?:^|\.)(?:fetch|request|query|execute|save|send|publish|emit|readFile|writeFile|appendFile|now|random)\b|\b(?:axios|fs|database|repository|process)\./i
+
+		const visit = (node: ts.Node) => {
+			if (node !== body && this.isNestedFunction(node)) return
+			if (
+				ts.isIfStatement(node) ||
+				ts.isSwitchStatement(node) ||
+				ts.isConditionalExpression(node) ||
+				ts.isForStatement(node) ||
+				ts.isForInStatement(node) ||
+				ts.isForOfStatement(node) ||
+				ts.isWhileStatement(node) ||
+				ts.isDoStatement(node) ||
+				ts.isCatchClause(node)
+			)
+				decisions++
+			if (ts.isCallExpression(node) && effectPattern.test(node.expression.getText(sourceFile))) {
+				externalEffects++
+			}
+			ts.forEachChild(node, visit)
+		}
+		visit(body)
+		return { decisions, externalEffects }
+	}
+
+	private isNestedFunction(node: ts.Node): boolean {
+		return (
+			ts.isFunctionDeclaration(node) ||
+			ts.isFunctionExpression(node) ||
+			ts.isArrowFunction(node) ||
+			ts.isMethodDeclaration(node) ||
+			ts.isConstructorDeclaration(node)
+		)
+	}
+
+	private isTestFile(filePath: string): boolean {
+		const normalized = filePath.replace(/\\/g, "/").toLowerCase()
+		return /(?:^|\/)(?:__tests__|test|tests)\//.test(normalized) || /\.(?:test|spec)\.[^.]+$/.test(normalized)
+	}
+
+	private isGeneratedContent(content: string): boolean {
+		const header = content.slice(0, 5000)
+		return ["@generated", "Code generated by", "DO NOT EDIT", "Automatically generated"].some((marker) =>
+			header.includes(marker),
+		)
+	}
+
+	/**
 	 * Validates only CRITICAL rules for large files.
 	 */
 	private validateCriticalRules(
@@ -350,6 +494,8 @@ export class TspPolicyPlugin {
 	}
 
 	public findCrossLayerViolations(sourceFile: ts.SourceFile, filePath: string): string[] {
+		if (!this.architectureProfile.enforceCanonicalLayers) return []
+
 		const violations: string[] = []
 		const currentLayer = getLayer(filePath)
 		this.validateImports(sourceFile, filePath, currentLayer, [], violations)

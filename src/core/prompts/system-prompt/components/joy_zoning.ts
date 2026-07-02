@@ -1,3 +1,4 @@
+import { detectWorkspaceArchitectureProfile } from "@/core/policy/WorkspaceArchitectureProfile"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { dbPool } from "@/infrastructure/db/BufferedDbPool"
 import { SystemPromptSection } from "../templates/placeholders"
@@ -5,6 +6,13 @@ import type { PromptVariant, SystemPromptContext } from "../types"
 
 export async function getJoyZoningSection(_variant?: PromptVariant, context?: SystemPromptContext) {
 	const mode = context?.mode || "act"
+	const architectureProfile = detectWorkspaceArchitectureProfile(context?.cwd)
+	const posture =
+		architectureProfile.mode === "workspace-native"
+			? "BLENDED — WORKSPACE-NATIVE + JOYZONING STEERING"
+			: architectureProfile.mode === "greenfield"
+				? "GREENFIELD"
+				: "JOY-ZONING NATIVE"
 	const sovereignCommitment = context?.taskState?.sovereignAuditSynthesis
 		? `\n\n[SOVEREIGN COMMITMENT SEAL]
 Your architectural audit resulted in the following hardening synthesis:
@@ -104,40 +112,27 @@ Maintain this commitment strictly during execution.`
 	const modeGuidance =
 		mode === "plan"
 			? `\n
-# 🗺️ PLAN MODE — Architectural Mapping
-You are currently an **Architectural Consultant**. Your goal is to map the system's topology and design the integration path.
-- **Prioritize Interface Contracts**: Research interfaces and type definitions before implementation details.
-- **Trace Dependencies**: Map how a change in one layer (e.g., Domain) will ripple through others (Core, Infrastructure).
-- **Enforce Inversion**: Ensure Domain remains isolated. If you find a Domain file importing from Infrastructure, flag it as a violation immediately.
-- **Validate Suitability**: Question if logic is in the correct JoyZoning layer.
+# 🗺️ PLAN MODE — Architecture Fit
+Map the workspace before choosing a structure:
+1. Read repository rules, manifests, build/lint/test configuration, and the nearest analogous feature.
+2. Trace the actual dependency and data flow through the files involved.
+3. Identify the workspace's vocabulary, module boundaries, error handling, testing style, and extension seams.
+4. Classify each proposed abstraction as required now, already established, or speculative.
+5. Plan the smallest change that looks native to this repository.
 
-# 🏗️ ACT MODE — Architectural Commitment
-You are now in the execution phase. Respect the **Architectural Commitment Seal** provided in your plan.
-- **Follow the Ruleset**: Every file you read in ACT mode will include a **Layer Toolkit** with hardening rules. Follow them strictly.
-- **Maintain Purity**: If you are editing a Domain file, ensure it remains free of platform leakage and side effects.
-- **Implement via Interfaces**: Infrastructure changes must strictly implement the contracts defined in Domain/Core.
-
-🔍 LAYER PROBING (Questions to answer in your plan):
-- **DOMAIN**: Is this logic "pure"? Can it exist without knowing about databases or APIs?
-- **CORE**: What are the high-level steps? Which Domain models does this coordinate?
-- **INFRASTRUCTURE**: What external world interactions (disk, net, 3rd party) are needed?
-- **UI**: What state does the user need to see? What actions will they trigger?
-
-Example plan structure:
-  📁 Domain: Add 'Order' model + validation rules (pure, no I/O)
-  📁 Infrastructure: Create 'OrderRepository' adapter (implements domain interface)
-  📁 Core: Wire up 'OrderTaskHandler' to coordinate domain + infra
-  📁 UI: Add 'OrderForm' component (renders state, dispatches actions)`
+For an existing workspace, describe impact using its real modules and boundaries, then apply the JoyZoning lens to cohesion, ownership, effects, and testability. Do not force a Domain/Core/Infrastructure decomposition into the plan.
+For greenfield work or an explicit JoyZoning workspace, use the canonical layer guide when it is proportional to the app's complexity.`
 			: `\n
-⚡ ACT MODE — Execution Awareness:
-Before each change, quick-scan:
-1. Which layer does this file live in?
-2. Am I importing from a layer I shouldn't?
-3. Can I make this change smaller and more focused?
+⚡ ACT MODE — Infused Execution:
+Before each change:
+1. Compare the target with neighboring production code and tests.
+2. Put the change where this workspace would expect to find it.
+3. Keep each new function/class cohesive, explicit, and independently testable.
+4. Keep pure decisions separate from I/O and framework effects, using the workspace's existing boundary style.
+5. Avoid unrelated architectural migration and speculative interfaces.
 ${sovereignCommitment}
 
-After each write, you'll see layer confirmation (✅ clean or 📍 with guidance).
-When creating a new file, the system will suggest the best layer for your content.
+JoyZoning never switches off. In canonical projects it can govern structure; in workspace-native projects it remains active as non-blocking steering inside the workspace's existing form.
 
 ⚠️ GROUNDED REALITY NOTE:
 The terms "Metabolic," "Substrate," "Immune," and "Forensic" are architectural metaphors used within the DietCode project to describe code quality and performance metrics. 
@@ -148,56 +143,88 @@ The terms "Metabolic," "Substrate," "Immune," and "Forensic" are architectural m
 
 	return `=== ${SystemPromptSection.JOY_ZONING} ===
 
-🏗️ JOY-ZONING: Your Architectural Guide
+🏗️ JOY-ZONING INFUSION: Workspace-Native Architecture
 
-Joy-Zoning organizes code into clear layers so developers can find, understand, and evolve the codebase with confidence. Think of each layer as a creative zone — your job is to place code where it naturally belongs.
+Current posture: **${posture}**
+Reason: ${architectureProfile.reason}
 
-📐 LAYER GUIDE:
+JoyZoning is a steering methodology, not always a directory mandate. Preserve the architecture already carrying the application while using JoyZoning to shape each new decision, function, class, and boundary.
 
-DOMAIN (src/domain/)
-  Purpose: Pure business logic — the heart of the application.
-  What belongs here: Models, value objects, business rules, state machines, domain events.
-  What to avoid: I/O, external imports (fs, http, fetch), UI state, side effects.
-  Principle: If you can't test it with zero mocks, it doesn't belong here.
+🧭 BLENDED OPERATING MODEL — MIRROR, STEER, VERIFY
 
-CORE (src/core/)
-  Purpose: Application orchestration — coordinates domain logic with infrastructure.
-  What belongs here: Task coordination, prompt assembly, tool execution, API routing.
-  What to avoid: Direct UI rendering, raw database queries (delegate to infrastructure).
-  Principle: Orchestrate, don't implement low-level concerns directly.
+1. **Mirror the workspace**: Find the nearest analogous code and adopt its placement, vocabulary, framework idioms, dependency style, and testing seam.
+2. **Steer with JoyZoning**: Within that native shape, improve cohesion, ownership, explicit contracts, pure decision logic, and effect boundaries.
+3. **Verify continuity**: The result should pass native tooling, look expected to maintainers, and avoid introducing a second architecture.
 
-INFRASTRUCTURE (src/infrastructure/, src/services/, src/integrations/)
-  Purpose: Adapters and integrations — connects the outside world to domain contracts.
-  What belongs here: API clients, database adapters, file system operations, external service wrappers.
-  What to avoid: Business rules, UI components, domain logic.
-  Principle: Implement interfaces defined by domain. Keep domain-agnostic.
+Workspace-native determines **where and how the code fits**. JoyZoning continuously influences **how clearly the new code carries its responsibilities**.
 
-UI (webview-ui/)
-  Purpose: Presentation — what the user sees and interacts with.
-  What belongs here: Components, views, event handlers, visual state.
-  What to avoid: Business logic, direct I/O, infrastructure imports.
-  Principle: Render state, dispatch intentions. Never compute business outcomes.
+🏛️ INDUSTRY-CONVERGENT PATTERN FIT
 
-PLUMBING (src/utils/)
-  Purpose: Shared utilities — stateless helpers used across layers.
-  What belongs here: String formatters, validators, type guards, pure functions.
-  What to avoid: Dependencies on any other layer (domain, infra, UI).
-  Principle: Zero context. If it needs to know about a specific layer, it belongs in that layer instead.
+Recognize the workspace's familiar pattern before designing:
+- **Vertical slice / feature modules**: keep behavior, data access, and tests in the established feature boundary.
+- **Layered / MVC / MVVM**: preserve the framework's role separation and dependency direction.
+- **Hexagonal / Clean / Onion**: add ports only at real external or volatility boundaries; reuse existing adapters.
+- **Modular monolith**: respect module ownership and public APIs; avoid imports into another module's internals.
+- **Event-driven / CQRS**: preserve message contracts and account for idempotency, ordering, retries, and observability.
+- **Plugin architecture**: extend the registered contract and lifecycle instead of bypassing it.
 
-🔄 DEPENDENCY FLOW (what can import what):
-  Domain → (nothing external)
-  Core → Domain, Infrastructure, Plumbing
-  Infrastructure → Domain, Plumbing
-  UI → Domain, Plumbing (not Infrastructure directly)
-  Plumbing → (nothing — fully independent)
+Do not pattern-shop or rename the architecture. Select the row that best describes evidence in the repository and implement in that vocabulary.
+
+🎯 QUALITY-ATTRIBUTE FIT
+
+- Work at the lowest necessary abstraction level: system, deployable unit, component/module, then code.
+- Establish functional correctness plus the 2–3 quality attributes most affected by the change, such as security, reliability, performance, compatibility, usability, or maintainability.
+- Turn each selected attribute into observable acceptance evidence: a test, benchmark, type check, security control, telemetry signal, or documented manual probe.
+- Prefer small, reversible, independently verifiable changes that keep the workspace deployable.
+- For risky legacy behavior, characterize current behavior first, introduce the smallest seam, and evolve incrementally.
+- Record an ADR only for an architecturally significant decision with meaningful alternatives and consequences; do not create ceremony for local implementation details.
+
+🔁 EXECUTION STANDARD — DISCOVER → CLASSIFY → CONVERGE → PROVE
+
+1. **Discover** repository rules, analogous code, dependency flow, tests, and operational constraints.
+2. **Classify** the native architecture pattern, affected abstraction level, and relevant quality attributes.
+3. **Converge** on the smallest design that satisfies the task, mirrors the workspace, and improves JoyZoning qualities.
+4. **Implement** in a reversible slice with explicit failure behavior and no unrelated migration.
+5. **Prove** with native checks and risk-proportionate tests; security-sensitive changes must verify the affected controls.
+6. **Record** only durable architectural decisions, residual risks, or follow-up work that maintainers need.
+
+🌿 WORKSPACE ZEN — MACRO RULES
+
+- Repository instructions and user requirements are authoritative.
+- In established code, nearby patterns, framework conventions, tests, and dependency flow determine the structural shape; JoyZoning steers quality within that shape.
+- Match local naming, file placement, exports, error handling, state management, dependency injection, and test style.
+- Extend an existing seam before inventing a parallel architecture.
+- Do not add \`domain/\`, \`core/\`, \`infrastructure/\`, repositories, services, factories, or layer tags merely to demonstrate architectural purity.
+- Do not perform a broad migration unless the user requests it or the scoped change cannot be made safely without one.
+- If local precedent conflicts with correctness, security, or the explicit task, call out the conflict and make the narrowest defensible improvement.
+
+✨ JOYZONING INFUSION — MICRO RULES
+
+- Give each function or class one coherent reason to change.
+- Make inputs, outputs, invariants, failure behavior, and ownership legible.
+- Keep business decisions as pure as practical; isolate I/O, time, randomness, network, storage, and framework effects at the nearest boundary the workspace already recognizes.
+- Depend on contracts only at genuine volatility or substitution boundaries. Do not create one-to-one interfaces for every class.
+- Prefer composition and small focused units, but follow the language and framework's idioms.
+- Add tests at the repository's normal testing seam and verify behavior rather than internal ceremony.
+- Treat runtime JoyZoning findings as steering advisories: evaluate them against local precedent and apply them when they improve the scoped change.
+- Stable advisory IDs identify the concern: JZ-C01 cohesion, JZ-B01 decision/effect boundaries, and JZ-O01 ownership. They are evidence for judgment, not automatic refactoring orders.
+- Leave the touched area more understandable without making the rest of the workspace look foreign.
+
+📐 CANONICAL LAYER GUIDE — USE WHEN GREENFIELD OR EXPLICITLY ADOPTED
+
+- **Domain**: pure business rules, models, state transitions, and domain events.
+- **Core**: application orchestration and use-case coordination.
+- **Infrastructure**: persistence, APIs, filesystem, and external adapters.
+- **UI**: rendering and user interaction.
+- **Plumbing**: context-free shared helpers.
+
+Canonical dependency flow:
+  Domain → no platform dependencies
+  Core → Domain plus boundary contracts/adapters
+  Infrastructure → Domain/Plumbing
+  UI → application-facing contracts, not concrete infrastructure
+  Plumbing → no higher-level modules
 ${modeGuidance}
 
-💡 WHEN VIOLATIONS ARE DETECTED:
-If the system flags an architectural issue, don't fight it — use it as a signal:
-- Cross-layer import? → Extract an interface in Domain, implement in Infrastructure.
-- Business logic in UI? → Move the logic to Domain, pass results to UI as props/state.
-- I/O in Domain? → Wrap it in an Infrastructure adapter, inject via dependency inversion.
-- 'any' type in Domain? → Define a proper interface or type alias.
-
-These patterns keep the codebase navigable and maintainable over time.${auditContext}`
+The goal is blended continuity plus improvement: mirror the workspace at the macro level and express JoyZoning continuously at the micro level.${auditContext}`
 }

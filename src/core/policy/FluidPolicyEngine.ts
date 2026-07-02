@@ -52,7 +52,7 @@ export interface PolicyResult {
  * This prevents infinite deadlock while still educating the agent.
  */
 export class FluidPolicyEngine {
-	private readonly tspPlugin = new TspPolicyPlugin()
+	private readonly tspPlugin: TspPolicyPlugin
 	private readonly spiderEngine: SpiderEngine
 	private mode: "plan" | "act" = "act"
 	private commitSeal: string | null = null
@@ -101,6 +101,7 @@ export class FluidPolicyEngine {
 		private stateManager?: StateManager,
 		private virtualResolver?: (path: string) => string | undefined,
 	) {
+		this.tspPlugin = new TspPolicyPlugin(this.cwd)
 		this.spiderEngine = new SpiderEngine(this.cwd)
 		this.auditRecorder = new AuditRecorder(this.cwd)
 		this.simulationEngine = new SimulationEngine(this.cwd)
@@ -112,7 +113,13 @@ export class FluidPolicyEngine {
 		this.anomalies = new AnomalyRegistry(this.cwd)
 		this.refactorHealer = new RefactorHealer(this.cwd)
 		this.forensics = new StabilityForensics(this.cwd, this.stabilityMonitor, this.spiderEngine)
-		this.garbageCollector = new IntegrityGarbageCollector(this.cwd, this.spiderEngine, this.anomalies, this.stabilityMonitor)
+		this.garbageCollector = new IntegrityGarbageCollector(
+			this.cwd,
+			this.spiderEngine,
+			this.anomalies,
+			this.stabilityMonitor,
+			this.usesCanonicalJoyZoning(),
+		)
 		this.telemetrics = new StabilityTelemetrics(this.cwd, this.stabilityMonitor, this.spiderEngine, this.anomalies)
 		this.verification = new AxiomVerificationService(
 			this.cwd,
@@ -231,8 +238,16 @@ export class FluidPolicyEngine {
 	}
 
 	public getFileLayerContext(filePath: string): string {
+		const architectureProfile = this.tspPlugin.getArchitectureProfile()
+		if (!architectureProfile.enforceCanonicalLayers) {
+			return `📍 ${path.basename(filePath)} → WORKSPACE-NATIVE · JOYZONING-STEERED\n  ✅ Mirror nearby modules, naming, dependency flow, tests, and framework idioms\n  🧭 Use JoyZoning to steer cohesion, ownership, testability, and decision/effect boundaries\n  🚫 Do not introduce JoyZoning folders, layer tags, or DDD abstractions unless the workspace already uses them`
+		}
 		const layer = this.getCachedLayer(filePath)
 		return this.verification.getFileLayerContext(filePath, layer)
+	}
+
+	private usesCanonicalJoyZoning(): boolean {
+		return this.tspPlugin.getArchitectureProfile().enforceCanonicalLayers
 	}
 
 	public getCorrectionHint(errors: string[], filePath?: string): string {
@@ -668,7 +683,7 @@ export class FluidPolicyEngine {
 				}
 
 				// V26: Axiom Lockdown (Structural Debt Prevention)
-				if (!isScratchpad && block.name === DietCodeDefaultTool.FILE_EDIT) {
+				if (this.usesCanonicalJoyZoning() && !isScratchpad && block.name === DietCodeDefaultTool.FILE_EDIT) {
 					const content = (block.params as { content: string }).content
 					if (content) {
 						const result = this.verification.calculateAxiomaticDrift(targetPath, content)
@@ -713,7 +728,10 @@ export class FluidPolicyEngine {
 			}
 		}
 		// 0. Rule: Logic Axiom Guard (Substrate Maturity)
-		if (block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.APPLY_PATCH) {
+		if (
+			this.usesCanonicalJoyZoning() &&
+			(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.APPLY_PATCH)
+		) {
 			const { path: filePath, content } = block.params as unknown as { path: string; content?: string }
 			if (content) {
 				const axiomViolations = this.axiomEngine.validateAxioms(filePath, content, this.spiderEngine)
@@ -1047,7 +1065,7 @@ export class FluidPolicyEngine {
 				}
 
 				// For new files: proactively suggest the best layer if content doesn't match location
-				if (block.name === DietCodeDefaultTool.FILE_NEW && block.params.content) {
+				if (this.usesCanonicalJoyZoning() && block.name === DietCodeDefaultTool.FILE_NEW && block.params.content) {
 					// consolidated to top-level import
 					const currentLayer = getLayer(filePath)
 					const suggestion = suggestLayerForContent(block.params.content)
@@ -1086,7 +1104,7 @@ export class FluidPolicyEngine {
 				block.name === DietCodeDefaultTool.FILE_EDIT ||
 				block.name === DietCodeDefaultTool.APPLY_PATCH
 
-			if (block.params?.path && isModifyingTool) {
+			if (this.usesCanonicalJoyZoning() && block.params?.path && isModifyingTool) {
 				const normalizedPath = this.normalize(block.params.path)
 				this.stabilityMonitor.recordWrite(normalizedPath) // V31: Intent record (without content)
 
@@ -1292,7 +1310,9 @@ export class FluidPolicyEngine {
 		}
 
 		// Axiomatic Logic Report
-		const axioms = this.axiomEngine.validateAxioms(absolutePath, content, this.spiderEngine)
+		const axioms = this.usesCanonicalJoyZoning()
+			? this.axiomEngine.validateAxioms(absolutePath, content, this.spiderEngine)
+			: []
 		if (axioms.length > 0) {
 			header += `\n🧠 LOGIC AXIOM ANALYSIS:\n${axioms.map((v) => `  - [${v.axiom}] ${v.message}`).join("\n")}\n`
 		}
@@ -1451,11 +1471,15 @@ export class FluidPolicyEngine {
 						const lastIntegrity = this.spiderEngine.nodes.get(normPath)?.namingScore || 1.0
 
 						// 2.1: System Consistency Snapshot (V187)
-						const lastAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
+						const lastAxioms = this.usesCanonicalJoyZoning()
+							? this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
+							: []
 
 						this.spiderEngine.updateNode(normPath, content)
 						const currentIntegrity = this.spiderEngine.nodes.get(normPath)?.namingScore || 1.0
-						const currentAxioms = this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
+						const currentAxioms = this.usesCanonicalJoyZoning()
+							? this.axiomEngine.validateAxioms(normPath, content, this.spiderEngine)
+							: []
 						const axiomaticResult = this.axiomEngine.compareAxiomSessions(lastAxioms, currentAxioms)
 
 						// 2.2: Sync Status Tracking (V186)

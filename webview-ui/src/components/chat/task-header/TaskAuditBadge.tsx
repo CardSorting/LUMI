@@ -5,7 +5,7 @@ import { AUDIT_TREND_LABELS, type AuditTrend } from "@shared/audit/auditMessages
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import { HARDENING_GRADE_STYLES, type HardeningGrade } from "@shared/audit/taskAuditUtils"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
-import { ShieldAlertIcon, ShieldCheckIcon, ShieldOffIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react"
+import { ShieldAlertIcon, ShieldCheckIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react"
 import { memo, useMemo } from "react"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
@@ -30,7 +30,6 @@ const TREND_STYLES: Record<Exclude<AuditTrend, "unknown">, string> = {
 const GATE_READINESS_STYLES = {
 	ready: "border-emerald-500/40",
 	warning: "border-amber-500/40",
-	blocked: "border-red-500/40",
 } as const
 
 export const TaskAuditBadge = memo(
@@ -59,17 +58,15 @@ export const TaskAuditBadge = memo(
 		const divergent = auditMetadata.divergence_detected === true
 		const trendLabel = auditTrend && auditTrend !== "unknown" ? AUDIT_TREND_LABELS[auditTrend] : undefined
 		const gateVisualLevel = gateReadiness?.level === "disabled" ? undefined : gateReadiness?.level
-		const GateIcon =
-			gateVisualLevel === "blocked" ? ShieldOffIcon : gateVisualLevel === "warning" ? ShieldAlertIcon : ShieldCheckIcon
+		const GateIcon = gateVisualLevel === "warning" ? ShieldAlertIcon : ShieldCheckIcon
 
-		const canJumpToGate = gateVisualLevel === "blocked" && onJumpToGateBlock !== undefined
-		const canExpandHeader = gateVisualLevel === "warning" && onExpandTaskHeader !== undefined
+		const reviewHandler = onExpandTaskHeader ?? onJumpToGateBlock
+		const canReview = gateVisualLevel === "warning" && reviewHandler !== undefined
 		const badgeClassName = cn(
 			"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border",
 			HARDENING_GRADE_STYLES[grade],
 			gateVisualLevel && GATE_READINESS_STYLES[gateVisualLevel],
-			canJumpToGate && "cursor-pointer hover:opacity-90",
-			canExpandHeader && "cursor-pointer hover:opacity-90",
+			canReview && "cursor-pointer hover:opacity-90",
 			className,
 		)
 		const titleText = Number.isFinite(auditMetadata.hardening_score)
@@ -97,8 +94,7 @@ export const TaskAuditBadge = memo(
 						: undefined,
 					auditMetadata.workspace_gate_policy_applied ? "Workspace gate policy" : undefined,
 					gateReadiness?.tooltip,
-					canJumpToGate ? "Click to see what needs attention" : undefined,
-					canExpandHeader ? "Click for a quick look" : undefined,
+					canReview ? "Click for a quick look" : undefined,
 					gateDecision && !gateReadiness
 						? gateDecision.blocked
 							? `Advisory findings: ${gateDecision.reasons.map((r) => r.message).join("; ")}`
@@ -124,23 +120,11 @@ export const TaskAuditBadge = memo(
 			</>
 		)
 
-		if (canJumpToGate) {
+		if (canReview) {
 			return (
 				<button
 					className={cn(badgeClassName, "bg-transparent font-sans")}
-					onClick={onJumpToGateBlock}
-					title={titleText}
-					type="button">
-					{badgeContent}
-				</button>
-			)
-		}
-
-		if (canExpandHeader) {
-			return (
-				<button
-					className={cn(badgeClassName, "bg-transparent font-sans")}
-					onClick={onExpandTaskHeader}
+					onClick={reviewHandler}
 					title={titleText}
 					type="button">
 					{badgeContent}

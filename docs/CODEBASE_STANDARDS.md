@@ -60,6 +60,48 @@ Verified map — full detail in [Project map](PROJECT_MAP.md):
 
 The sidebar includes **JoyZoning Audit** (`lumi.joyZoningButtonClicked`) for architecture compliance review. This is separate from everyday lint — it targets layering and structural discipline.
 
+JoyZoning now has two operating postures:
+
+| Posture | When it applies | Behavior |
+|---------|-----------------|----------|
+| **Canonical** | Empty/greenfield workspaces or projects that opt in with `stability.config.json` | Domain, Core, Infrastructure, UI, and Plumbing are structural boundaries and can be audited directly. |
+| **Blended workspace-native** | Existing projects without a JoyZoning structural opt-in | Existing topology, vocabulary, framework idioms, and tests determine code shape. JoyZoning remains continuously active as non-blocking steering for cohesion, ownership, explicit boundaries, testability, and side-effect isolation. |
+
+Blended workspace-native mode follows **Mirror → Steer → Verify**: mirror the nearest established seam, steer new functions/classes with JoyZoning principles, then verify with native tooling and tests. It does not add layer directories, mandatory tags, DDD interfaces, or broad refactors merely to make an existing project resemble a greenfield JoyZoning application.
+
+For implementation, this expands to **Discover → Classify → Converge → Prove**:
+
+1. Discover repository rules, analogous code, dependencies, tests, and operational constraints.
+2. Classify the familiar native pattern (vertical slice, MVC/MVVM, layered, hexagonal, modular monolith, event-driven, or plugin) and the affected abstraction level.
+3. Converge on the smallest reversible design that mirrors the workspace while improving JoyZoning qualities.
+4. Prove functional correctness and the relevant quality attributes with native tooling and risk-proportionate evidence.
+
+Runtime steering uses stable, non-blocking advisory IDs:
+
+| ID | Concern | Expected response |
+|----|---------|-------------------|
+| `JZ-C01` | Function cohesion | Consider extracting one responsibility using a nearby project pattern. |
+| `JZ-B01` | Decision/effect boundary | Use an existing boundary seam where it improves independent testing. |
+| `JZ-O01` | Class ownership | Verify that the class still represents one cohesive capability. |
+
+Thresholds are workspace-calibratable under `global.joyZoningSteering`:
+
+```json
+{
+  "global": {
+    "architectureMode": "workspace-native",
+    "joyZoningSteering": {
+      "maxFunctionLines": 80,
+      "minBoundaryLines": 20,
+      "minBoundaryDecisions": 2,
+      "maxClassMethods": 12
+    }
+  }
+}
+```
+
+Set `global.architectureMode` in `stability.config.json` to `joy-zoning` or `workspace-native` to override automatic detection. A legacy `stability.config.json` without this field remains a canonical JoyZoning opt-in for compatibility.
+
 ## Related
 
 - [Philosophy — extension without chaos](papers/philosophy.md#vii-extension-without-chaos)
