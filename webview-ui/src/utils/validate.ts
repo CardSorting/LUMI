@@ -28,6 +28,11 @@ export function validateApiConfiguration(currentMode: Mode, apiConfiguration?: A
 				return "You must provide a valid API key or choose a different provider."
 			}
 			break
+		case "cline-pass":
+			if (!apiConfiguration.clineApiKey) {
+				return "You must provide a valid Cline API key."
+			}
+			break
 	}
 
 	return undefined

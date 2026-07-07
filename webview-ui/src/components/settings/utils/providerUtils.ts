@@ -1,6 +1,8 @@
 import {
 	ApiConfiguration,
 	ApiProvider,
+	clinePassDefaultModelId,
+	clinePassModels,
 	cloudflareDefaultModelId,
 	cloudflareModels,
 	ModelInfo,
@@ -34,6 +36,8 @@ export function getModelsForProvider(
 			return openAiCodexModels
 		case "nousResearch":
 			return nousResearchModels
+		case "cline-pass":
+			return clinePassModels
 		default:
 			return undefined
 	}
@@ -80,6 +84,8 @@ export function normalizeApiConfiguration(
 	switch (provider) {
 		case "cloudflare":
 			return getProviderData(cloudflareModels, cloudflareDefaultModelId)
+		case "cline-pass":
+			return getProviderData(clinePassModels, clinePassDefaultModelId)
 		case "openai-codex":
 			return getProviderData(openAiCodexModels, openAiCodexDefaultModelId)
 		case "openrouter":
@@ -132,6 +138,7 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 			// Provider-specific model IDs
 			openRouterModelId: undefined,
 			nousResearchModelId: undefined,
+			clinePassModelId: undefined,
 
 			// Model info objects
 			openRouterModelInfo: undefined,
@@ -146,6 +153,8 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 		mode === "plan" ? apiConfiguration.planModeOpenRouterModelId : apiConfiguration.actModeOpenRouterModelId
 	const openRouterModelInfo =
 		mode === "plan" ? apiConfiguration.planModeOpenRouterModelInfo : apiConfiguration.actModeOpenRouterModelInfo
+	const clinePassModelId =
+		mode === "plan" ? apiConfiguration.planModeClinePassModelId : apiConfiguration.actModeClinePassModelId
 
 	return {
 		// Core fields
@@ -156,6 +165,7 @@ export function getModeSpecificFields(apiConfiguration: ApiConfiguration | undef
 		openRouterModelId,
 		nousResearchModelId:
 			mode === "plan" ? apiConfiguration.planModeNousResearchModelId : apiConfiguration.actModeNousResearchModelId,
+		clinePassModelId,
 
 		// Model info objects
 		openRouterModelInfo,
@@ -209,6 +219,10 @@ export async function syncModeConfigurations(
 		case "nousResearch":
 			updates.planModeNousResearchModelId = sourceFields.nousResearchModelId
 			updates.actModeNousResearchModelId = sourceFields.nousResearchModelId
+			break
+		case "cline-pass":
+			updates.planModeClinePassModelId = sourceFields.clinePassModelId
+			updates.actModeClinePassModelId = sourceFields.clinePassModelId
 			break
 		default:
 			updates.planModeApiModelId = sourceFields.apiModelId

@@ -2,6 +2,7 @@ import { ApiConfiguration } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import { isE2ETestMode } from "@/shared/e2e-mode"
 import { Logger } from "@/shared/services/Logger"
+import { ClinePassHandler } from "./providers/clinepass"
 import { CloudflareHandler } from "./providers/cloudflare"
 import { E2EMockOpenRouterHandler } from "./providers/e2e-mock-openrouter"
 import { NousResearchHandler } from "./providers/nousresearch"
@@ -56,6 +57,15 @@ function createHandlerForProvider(
 				onRetryAttempt: options.onRetryAttempt,
 				nousResearchApiKey: options.nousResearchApiKey,
 				apiModelId: mode === "plan" ? options.planModeNousResearchModelId : options.actModeNousResearchModelId,
+			})
+		case "cline-pass":
+			return new ClinePassHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				clineApiKey: options.clineApiKey,
+				apiModelId: mode === "plan" ? options.planModeClinePassModelId : options.actModeClinePassModelId,
+				thinkingBudgetTokens:
+					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 			})
 		default:
 			if (isE2ETestMode()) {

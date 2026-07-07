@@ -15,6 +15,10 @@
 		{
 			"value": "cloudflare",
 			"label": "Cloudflare Workers AI"
+		},
+		{
+			"value": "cline-pass",
+			"label": "ClinePass"
 		}
 	]
 }

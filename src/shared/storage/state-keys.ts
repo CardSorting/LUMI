@@ -175,6 +175,8 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	planModeAwsBedrockCustomModelBaseId: { default: undefined as string | undefined },
 	planModeOpenRouterModelId: { default: undefined as string | undefined },
 	planModeOpenRouterModelInfo: { default: undefined as ModelInfo | undefined },
+	planModeClinePassModelId: { default: undefined as string | undefined },
+	planModeClinePassModelInfo: { default: undefined as ModelInfo | undefined },
 	planModeDietCodeModelId: { default: undefined as string | undefined },
 	planModeDietCodeModelInfo: { default: undefined as ModelInfo | undefined },
 	planModeOpenAiModelId: { default: undefined as string | undefined },
@@ -219,6 +221,8 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	actModeAwsBedrockCustomModelBaseId: { default: undefined as string | undefined },
 	actModeOpenRouterModelId: { default: undefined as string | undefined },
 	actModeOpenRouterModelInfo: { default: undefined as ModelInfo | undefined },
+	actModeClinePassModelId: { default: undefined as string | undefined },
+	actModeClinePassModelInfo: { default: undefined as ModelInfo | undefined },
 	actModeDietCodeModelId: { default: undefined as string | undefined },
 	actModeDietCodeModelInfo: { default: undefined as ModelInfo | undefined },
 	actModeOpenAiModelId: { default: undefined as string | undefined },
@@ -340,6 +344,7 @@ const GLOBAL_STATE_AND_SETTINGS_FIELDS = { ...GLOBAL_STATE_FIELDS, ...SETTINGS_F
 const SECRETS_KEYS = [
 	"apiKey",
 	"dietcodeApiKey",
+	"clineApiKey",
 	"dietcodeAccountId", // DietCode Account ID for Firebase
 	"dietcode:dietcodeAccountId",
 	"dietcode:googleAuthInfo",

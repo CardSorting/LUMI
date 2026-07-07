@@ -468,6 +468,7 @@ enum ApiProvider {
   OPENAI_CODEX = 40;
   CLOUDFLARE = 41;
   GOOGLE_PERSONAL = 42;
+  CLINE_PASS = 43;
 }
 
 enum ApiFormat {
@@ -612,6 +613,7 @@ message ModelsApiConfiguration {
   optional string embedding_open_ai_base_url = 90;
   optional string cloudflare_account_id = 91;
   optional string cloudflare_api_token = 92;
+  optional string cline_api_key = 93;
 
   // Plan mode configurations
   optional ApiProvider plan_mode_api_provider = 100;
@@ -656,6 +658,8 @@ message ModelsApiConfiguration {
   optional string gemini_plan_mode_thinking_level = 139;
   optional string plan_mode_dietcode_model_id = 140;
   optional OpenRouterModelInfo plan_mode_dietcode_model_info = 141;
+  optional string plan_mode_cline_pass_model_id = 142;
+  optional OpenRouterModelInfo plan_mode_cline_pass_model_info = 143;
 
   // Act mode configurations
   optional ApiProvider act_mode_api_provider = 200;
@@ -700,4 +704,6 @@ message ModelsApiConfiguration {
   optional string gemini_act_mode_thinking_level = 239;
   optional string act_mode_dietcode_model_id = 240;
   optional OpenRouterModelInfo act_mode_dietcode_model_info = 241;
+  optional string act_mode_cline_pass_model_id = 242;
+  optional OpenRouterModelInfo act_mode_cline_pass_model_info = 243;
 }

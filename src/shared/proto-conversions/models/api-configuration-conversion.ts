@@ -87,6 +87,8 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.OPENAI_CODEX
 		case "cloudflare":
 			return ProtoApiProvider.CLOUDFLARE
+		case "cline-pass":
+			return ProtoApiProvider.CLINE_PASS
 		default:
 			return ProtoApiProvider.OPENROUTER
 	}
@@ -103,6 +105,8 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 			return "openai-codex"
 		case ProtoApiProvider.CLOUDFLARE:
 			return "cloudflare"
+		case ProtoApiProvider.CLINE_PASS:
+			return "cline-pass"
 		default:
 			return "openrouter"
 	}
@@ -121,6 +125,7 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		nousResearchApiKey: config.nousResearchApiKey,
 		cloudflareAccountId: config.cloudflareAccountId,
 		cloudflareApiToken: config.cloudflareApiToken,
+		clineApiKey: config.clineApiKey,
 
 		// Plan mode configurations
 		planModeApiProvider: config.planModeApiProvider ? convertApiProviderToProto(config.planModeApiProvider) : undefined,
@@ -130,6 +135,8 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		planModeOpenRouterModelId: config.planModeOpenRouterModelId,
 		planModeOpenRouterModelInfo: convertModelInfoToProtoOpenRouter(config.planModeOpenRouterModelInfo),
 		planModeNousResearchModelId: config.planModeNousResearchModelId,
+		planModeClinePassModelId: config.planModeClinePassModelId,
+		planModeClinePassModelInfo: convertModelInfoToProtoOpenRouter(config.planModeClinePassModelInfo),
 
 		// Act mode configurations
 		actModeApiProvider: config.actModeApiProvider ? convertApiProviderToProto(config.actModeApiProvider) : undefined,
@@ -139,6 +146,8 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		actModeOpenRouterModelId: config.actModeOpenRouterModelId,
 		actModeOpenRouterModelInfo: convertModelInfoToProtoOpenRouter(config.actModeOpenRouterModelInfo),
 		actModeNousResearchModelId: config.actModeNousResearchModelId,
+		actModeClinePassModelId: config.actModeClinePassModelId,
+		actModeClinePassModelInfo: convertModelInfoToProtoOpenRouter(config.actModeClinePassModelInfo),
 	}
 }
 
@@ -155,6 +164,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		nousResearchApiKey: protoConfig.nousResearchApiKey,
 		cloudflareAccountId: protoConfig.cloudflareAccountId,
 		cloudflareApiToken: protoConfig.cloudflareApiToken,
+		clineApiKey: protoConfig.clineApiKey,
 
 		// Plan mode configurations
 		planModeApiProvider:
@@ -167,6 +177,8 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		planModeOpenRouterModelId: protoConfig.planModeOpenRouterModelId,
 		planModeOpenRouterModelInfo: convertProtoToModelInfo(protoConfig.planModeOpenRouterModelInfo),
 		planModeNousResearchModelId: protoConfig.planModeNousResearchModelId,
+		planModeClinePassModelId: protoConfig.planModeClinePassModelId,
+		planModeClinePassModelInfo: convertProtoToModelInfo(protoConfig.planModeClinePassModelInfo),
 
 		// Act mode configurations
 		actModeApiProvider:
@@ -177,5 +189,7 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		actModeOpenRouterModelId: protoConfig.actModeOpenRouterModelId,
 		actModeOpenRouterModelInfo: convertProtoToModelInfo(protoConfig.actModeOpenRouterModelInfo),
 		actModeNousResearchModelId: protoConfig.actModeNousResearchModelId,
+		actModeClinePassModelId: protoConfig.actModeClinePassModelId,
+		actModeClinePassModelInfo: convertProtoToModelInfo(protoConfig.actModeClinePassModelInfo),
 	}
 }

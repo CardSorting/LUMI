@@ -6,6 +6,7 @@ import {
 	anthropicDefaultModelId,
 	basetenDefaultModelId,
 	bedrockDefaultModelId,
+	clinePassDefaultModelId,
 	deepSeekDefaultModelId,
 	fireworksDefaultModelId,
 	geminiDefaultModelId,
@@ -26,6 +27,7 @@ import {
 
 const ProviderKeyMap: Partial<Record<ApiProvider, string>> = {
 	openrouter: "OpenRouterModelId",
+	"cline-pass": "ClinePassModelId",
 	dietcode: "DietCodeModelId",
 	openai: "OpenAiModelId",
 	ollama: "OllamaModelId",
@@ -47,6 +49,7 @@ const ProviderKeyMap: Partial<Record<ApiProvider, string>> = {
 } as const
 
 export const ProviderToApiKeyMap: Partial<Record<ApiProvider, keyof Secrets | (keyof Secrets)[]>> = {
+	"cline-pass": "clineApiKey",
 	dietcode: ["dietcodeApiKey", "dietcodeAccountId"],
 	anthropic: "apiKey",
 	openrouter: "openRouterApiKey",
@@ -89,6 +92,7 @@ export const ProviderToApiKeyMap: Partial<Record<ApiProvider, keyof Secrets | (k
 const ProviderDefaultModelMap: Partial<Record<ApiProvider, string>> = {
 	anthropic: anthropicDefaultModelId,
 	openrouter: openRouterDefaultModelId,
+	"cline-pass": clinePassDefaultModelId,
 	dietcode: openRouterDefaultModelId,
 	openai: openAiNativeDefaultModelId,
 	ollama: "",

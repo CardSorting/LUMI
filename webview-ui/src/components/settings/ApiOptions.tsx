@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { DROPDOWN_Z_INDEX, DropdownContainer } from "./constants"
+import { ClinePassProvider } from "./providers/ClinePassProvider"
 import { CloudflareProvider } from "./providers/CloudflareProvider"
 import { NousResearchProvider } from "./providers/NousresearchProvider"
 import { OpenAiCodexProvider } from "./providers/OpenAiCodexProvider"
@@ -266,6 +267,10 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 
 			{apiConfiguration && selectedProvider === "nousResearch" && (
 				<NousResearchProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
+			)}
+
+			{apiConfiguration && selectedProvider === "cline-pass" && (
+				<ClinePassProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
 			{apiErrorMessage && (
