@@ -74,6 +74,7 @@ The settings UI reads `src/shared/providers/providers.json`. **`buildApiHandler`
 | `openai-codex` | `OpenAiCodexHandler` | ChatGPT Subscription |
 | `nousResearch` | `NousResearchHandler` | NousResearch |
 | `cloudflare` | `CloudflareHandler` | Cloudflare Workers AI |
+| `cline-pass` | `ClinePassHandler` | ClinePass |
 
 Additional handler files exist under `src/core/api/providers/` for other backends; they are not registered in `buildApiHandler` in this build. Plan and Act modes can use different providers (`planModeApiProvider` / `actModeApiProvider`).
 

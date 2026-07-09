@@ -12,6 +12,9 @@ export interface FinalizationEvidence {
 	schemaValidationPassed: boolean
 	artifactPaths: string[]
 	changelogEntryPreview?: string
+	workspaceIntelligenceUpdated?: boolean
+	workspaceIntelligenceArtifacts?: string[]
+	workspaceKnowledgeCategories?: Record<string, number>
 	completedAt?: number
 	accessDeniedReason?: string
 }

@@ -210,6 +210,9 @@ export class TaskState {
 	/** Checkpoint hash used for the last half-open circuit breaker probe attempt.
 	 * Prevents multiple probes on the same workspace checkpoint. */
 	lastProbeCheckpointHash?: string
+
+	// Workspace Intelligence
+	workspaceIntelligenceSummary?: string
 }
 
 export enum PolicyHealth {

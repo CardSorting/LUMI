@@ -40,7 +40,7 @@ Workspace-verified figures from [papers/companion-brief.md](papers/companion-bri
 |--------|-------|--------|
 | Extension ID | `CardSorting.lumi` | `package.json` |
 | Typed tools | **62** | `src/shared/tools.ts` |
-| Wired LLM providers | **4** | `src/shared/providers/providers.json` |
+| Wired LLM providers | **5** | `src/shared/providers/providers.json` |
 | Built-in slash commands | **10** | `src/core/slash-commands/index.ts` |
 | Lifecycle hook kinds | **8** | `VALID_HOOK_TYPES` in `src/core/hooks/utils.ts` |
 | Roadmap VS Code settings | **5** | `lumi.roadmap.*` in `package.json` |
@@ -192,7 +192,7 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | Project rules | [customization/dietcode-rules.mdx](customization/dietcode-rules.mdx) |
 | Ignore file | [customization/dietcodeignore.mdx](customization/dietcodeignore.mdx) |
 | MCP | [mcp/mcp-overview.mdx](mcp/mcp-overview.mdx) |
-| Providers (active 4) | [provider-config/README.mdx](provider-config/README.mdx) |
+| Providers (active 5) | [provider-config/README.mdx](provider-config/README.mdx) |
 
 ---
 

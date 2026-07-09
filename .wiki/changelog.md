@@ -1,6 +1,15 @@
 # Active Technical Changelog
 
-This log provides a granular, reverse-chronological record of every technical change in the DietCode codebase.
+This log preserves historical wiki entries and records current LUMI workspace knowledge-layer changes.
+
+## [Agent Continuity Refresh] — 2026-07-09
+
+### Agent Playbook and Living Wiki operating layer
+
+- Added root continuity docs: `AGENT_PLAYBOOK.md`, `WIKI.md`, `TROUBLESHOOTING.md`, `DECISIONS.md`, and `HANDOFF.md`.
+- Refreshed `.wiki/index.md` and `.wiki/01-system-overview.md` to point future agents at current LUMI/BroccoliDB operating knowledge.
+- Captured current known drift: stale `ROADMAP.md`, provider-count documentation drift, README badge version drift, and sandbox-specific roadmap progress write failures.
+- Linked current Agent Playbook finalization work so future agents do not rediscover the same validation commands and failure modes.
 
 ## [5.10.30] — 2026-04-25
 

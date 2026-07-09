@@ -26,12 +26,12 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI"><img src="https://api.securityscorecards.dev/projects/github.com/CardSorting/LUMI/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-2.8.1-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-2.10.0-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
   <img src="https://img.shields.io/badge/tools-63-orange" alt="Tools" />
-  <img src="https://img.shields.io/badge/providers-4-blue" alt="Providers" />
+  <img src="https://img.shields.io/badge/providers-5-blue" alt="Providers" />
 </p>
 
 <p align="center">
@@ -98,7 +98,7 @@ Design philosophy: [docs/papers/philosophy.md](docs/papers/philosophy.md) · Sta
 |--------|-------|
 | Typed tools | **63** (`src/shared/tools.ts`) |
 | Read-only tools | **12** (`READ_ONLY_TOOLS`) |
-| Wired providers | **4** (`providers.json`) |
+| Wired providers | **5** (`providers.json`) |
 | Slash commands | **10** |
 | Hook kinds | **8** |
 | Agent modes | **plan** · **act** |
@@ -174,7 +174,7 @@ Thank you to the Cline maintainers and contributors for the foundation this proj
 - **MCP** — connect external tools and prompts
 - **Governed subagents** — parallel lanes with execution modes, merge gate, and durable receipts
 - **Local-first** — settings and secrets under `~/.dietcode/data/`; workspace DB at `./dietcode.db`
-- **Four providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI
+- **Five providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI, ClinePass
 
 **@ mentions** — attach files, folders, problems, terminal output, git diffs, and URLs in chat. Guide: [working-with-files](docs/core-workflows/working-with-files.mdx)
 
@@ -190,7 +190,7 @@ Thank you to the Cline maintainers and contributors for the foundation this proj
 
 - VS Code **1.84+** (or Cursor with extension support)
 - **Git** on `PATH` (for checkpoints)
-- API credentials for one provider (OpenRouter, ChatGPT Subscription, NousResearch, or Cloudflare)
+- API credentials for one provider (OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare, or ClinePass)
 
 ### Install
 
@@ -222,6 +222,11 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 
 | Doc | Description |
 |-----|-------------|
+| **[Agent playbook](AGENT_PLAYBOOK.md)** | Current-state operating brief for future agents |
+| [Workspace wiki](WIKI.md) | Stable architecture, workflows, setup, testing, deployment notes |
+| [Troubleshooting](TROUBLESHOOTING.md) | Reproduced failures, fixes, non-causes, validation guidance |
+| [Decisions](DECISIONS.md) | Root continuity and operating ADRs |
+| [Handoff](HANDOFF.md) | Current working-tree state and next-agent transfer notes |
 | **[docs/README.md](docs/README.md)** | Documentation hub — reading paths by audience |
 | [Product evolution](docs/EVOLUTION.md) | Cline → DietCode → LUMI timeline, migration playbook |
 | [Companion brief](docs/papers/companion-brief.md) | Product summary with live metrics |
@@ -364,7 +369,7 @@ flowchart TB
 | **LUMI extension** | repo root | VS Code agent — `CardSorting.lumi-vscode` / `CardSorting.lumi` |
 | **BroccoliDB** | `broccolidb/` | Context store, runtime, Spider |
 
-**Stack:** TypeScript extension host · React webview · Protobuf host bridge · `buildApiHandler` (4 providers) · BroccoliDB SQLite · governed receipt schema v3 · Biome · Mocha / Playwright tests · Mintlify docs.
+**Stack:** TypeScript extension host · React webview · Protobuf host bridge · `buildApiHandler` (5 providers) · BroccoliDB SQLite · governed receipt schema v3 · Biome · Mocha / Playwright tests · Mintlify docs.
 
 Canonical map: [docs/AGENT_STACK.md](docs/AGENT_STACK.md)
 
@@ -427,7 +432,7 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 | **Bug reports** | [GitHub Issues](https://github.com/CardSorting/LUMI/issues/new?template=bug_report.yml) |
 | **Security (private)** | [SECURITY.md](SECURITY.md) |
 
-Include VS Code version, LUMI **2.8.1**, provider used, and steps to reproduce.
+Include VS Code version, LUMI **2.10.0**, provider used, and steps to reproduce.
 
 ---
 

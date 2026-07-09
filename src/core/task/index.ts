@@ -54,6 +54,7 @@ import {
 import { releaseTaskLock } from "@core/task/TaskLockUtils"
 import { isMultiRootEnabled } from "@core/workspace/multi-root-utils"
 import { WorkspaceRootManager } from "@core/workspace/WorkspaceRootManager"
+import { WorkspaceIntelligenceReader, WorkspaceIntelligenceStore } from "@core/workspace-intelligence"
 import { buildCheckpointManager, shouldUseMultiRoot } from "@integrations/checkpoints/factory"
 import { ensureCheckpointInitialized } from "@integrations/checkpoints/initializer"
 import { ICheckpointManager } from "@integrations/checkpoints/types"
@@ -1197,6 +1198,7 @@ export class Task {
 		// Phase 0: Multi-Agent Stream Initiation moved to Phase 2 (Intent Grounding Handoff)
 		// in initiateTaskLoop() to ensure grounded context is available.
 
+		await this.loadWorkspaceIntelligence()
 		this.taskState.isInitialized = true
 
 		// Auto-bootstrap ROADMAP.md when missing (evidence-driven, non-blocking)
@@ -1377,6 +1379,7 @@ export class Task {
 			askType = "resume_task"
 		}
 
+		await this.loadWorkspaceIntelligence()
 		this.taskState.isInitialized = true
 		this.taskState.abort = false // Reset abort flag when resuming task
 
@@ -4087,5 +4090,19 @@ export class Task {
 
 		this.knowledgeGraphService = await KnowledgeGraphService.getInstance(embeddingHandler)
 		return this.knowledgeGraphService
+	}
+
+	private async loadWorkspaceIntelligence(): Promise<void> {
+		try {
+			const store = new WorkspaceIntelligenceStore(this.cwd)
+			const model = await store.readModel()
+			if (model) {
+				const reader = new WorkspaceIntelligenceReader(model)
+				this.taskState.workspaceIntelligenceSummary = reader.getCompactSummary()
+				Logger.info(`[Workspace Intelligence] Loaded model from task ${model.taskId}`)
+			}
+		} catch (error) {
+			Logger.error("Failed to load workspace intelligence summary:", error)
+		}
 	}
 }

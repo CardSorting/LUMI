@@ -72,7 +72,7 @@ export async function getSystemInfo(variant: PromptVariant, context: SystemPromp
 
 	const template = variant.componentOverrides?.[SystemPromptSection.SYSTEM_INFO]?.template || SYSTEM_INFO_TEMPLATE_TEXT
 
-	return new TemplateEngine().resolve(template, context, {
+	let result = new TemplateEngine().resolve(template, context, {
 		os: info.os,
 		ide: info.ide,
 		shell: info.shell,
@@ -80,4 +80,10 @@ export async function getSystemInfo(variant: PromptVariant, context: SystemPromp
 		WORKSPACE_TITLE,
 		workingDir: workingDirInfo,
 	})
+
+	if (context.taskState?.workspaceIntelligenceSummary) {
+		result += `\n\n${context.taskState.workspaceIntelligenceSummary}`
+	}
+
+	return result
 }
