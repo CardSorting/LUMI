@@ -81,6 +81,10 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 	switch (provider) {
 		case "openrouter":
 			return ProtoApiProvider.OPENROUTER
+		case "openai":
+			return ProtoApiProvider.OPENAI
+		case "gemini":
+			return ProtoApiProvider.GEMINI
 		case "nousResearch":
 			return ProtoApiProvider.NOUSRESEARCH
 		case "openai-codex":
@@ -101,6 +105,10 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 	switch (provider) {
 		case ProtoApiProvider.OPENROUTER:
 			return "openrouter"
+		case ProtoApiProvider.OPENAI:
+			return "openai"
+		case ProtoApiProvider.GEMINI:
+			return "gemini"
 		case ProtoApiProvider.NOUSRESEARCH:
 			return "nousResearch"
 		case ProtoApiProvider.OPENAI_CODEX:
@@ -126,10 +134,15 @@ export function convertApiConfigurationToProto(config: ApiConfiguration): ProtoA
 		openAiHeaders: config.openAiHeaders || {},
 		openRouterApiKey: config.openRouterApiKey,
 		openRouterProviderSorting: config.openRouterProviderSorting,
+		xaiApiKey: config.xaiApiKey,
 		nousResearchApiKey: config.nousResearchApiKey,
 		cloudflareAccountId: config.cloudflareAccountId,
 		cloudflareApiToken: config.cloudflareApiToken,
 		clineApiKey: config.clineApiKey,
+		embeddingProvider: config.embeddingProvider ? convertApiProviderToProto(config.embeddingProvider) : undefined,
+		embeddingModelId: config.embeddingModelId,
+		embeddingApiKey: config.embeddingApiKey,
+		embeddingOpenAiBaseUrl: config.embeddingOpenAiBaseUrl,
 
 		// Plan mode configurations
 		planModeApiProvider: config.planModeApiProvider ? convertApiProviderToProto(config.planModeApiProvider) : undefined,
@@ -165,10 +178,16 @@ export function convertProtoToApiConfiguration(protoConfig: ProtoApiConfiguratio
 		openAiHeaders: Object.keys(protoConfig.openAiHeaders || {}).length > 0 ? protoConfig.openAiHeaders : undefined,
 		openRouterApiKey: protoConfig.openRouterApiKey,
 		openRouterProviderSorting: protoConfig.openRouterProviderSorting,
+		xaiApiKey: protoConfig.xaiApiKey,
 		nousResearchApiKey: protoConfig.nousResearchApiKey,
 		cloudflareAccountId: protoConfig.cloudflareAccountId,
 		cloudflareApiToken: protoConfig.cloudflareApiToken,
 		clineApiKey: protoConfig.clineApiKey,
+		embeddingProvider:
+			protoConfig.embeddingProvider !== undefined ? convertProtoToApiProvider(protoConfig.embeddingProvider) : undefined,
+		embeddingModelId: protoConfig.embeddingModelId,
+		embeddingApiKey: protoConfig.embeddingApiKey,
+		embeddingOpenAiBaseUrl: protoConfig.embeddingOpenAiBaseUrl,
 
 		// Plan mode configurations
 		planModeApiProvider:
