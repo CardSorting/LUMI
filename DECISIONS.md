@@ -37,7 +37,7 @@ Last audited: 2026-07-09
 **Consequences:**
 
 - Provider truth comes from `src/core/api/index.ts` and `src/shared/providers/providers.json`; provider-count docs were corrected to 5 in this pass.
-- Version truth comes from `package.json`; root README version references were corrected to 2.10.0 in this pass.
+- Version truth comes from `package.json`; root README version references were corrected to 3.0.0 in this pass.
 - Architecture truth comes from maintained docs plus current source layout.
 - The roadmap and `.wiki` need explicit refresh passes before they can be treated as authoritative.
 

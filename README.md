@@ -26,7 +26,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI"><img src="https://api.securityscorecards.dev/projects/github.com/CardSorting/LUMI/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-2.10.0-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-3.0.0-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
@@ -463,7 +463,7 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 | **Bug reports** | [GitHub Issues](https://github.com/CardSorting/LUMI/issues/new?template=bug_report.yml) |
 | **Security (private)** | [SECURITY.md](SECURITY.md) |
 
-Include VS Code version, LUMI **2.10.0**, provider used, and steps to reproduce.
+Include VS Code version, LUMI **3.0.0**, provider used, and steps to reproduce.
 
 ---
 
