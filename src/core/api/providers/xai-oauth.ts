@@ -1,9 +1,7 @@
 import { ModelInfo, XAIModelId, xaiDefaultModelId, xaiModels } from "@shared/api"
-import * as fs from "fs/promises"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
-import * as os from "os"
-import * as path from "path"
+import { xaiOAuthManager } from "@/integrations/xai-oauth/oauth"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import { withRetry } from "../retry"
@@ -12,7 +10,6 @@ import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface XAIOauthHandlerOptions extends CommonApiHandlerOptions {
-	xaiApiKey?: string
 	reasoningEffort?: string
 	apiModelId?: string
 }
@@ -29,30 +26,9 @@ export class XAIOauthHandler implements ApiHandler {
 	}
 
 	private async getAuthToken(): Promise<string> {
-		// 1. Try to read from ~/.hermes/auth.json
-		try {
-			const authPath = path.join(os.homedir(), ".hermes", "auth.json")
-			const content = await fs.readFile(authPath, "utf-8")
-			const data = JSON.parse(content)
-
-			// Try to extract access token from providers["xai-oauth"] or credential_pool["xai-oauth"]
-			const oauthToken =
-				data.providers?.["xai-oauth"]?.access_token || data.credential_pool?.["xai-oauth"]?.[0]?.access_token
-			if (oauthToken) {
-				return oauthToken
-			}
-		} catch (err) {
-			// Ignore file read error and fall back
-		}
-
-		// 2. Fallback to settings api key
-		if (this.options.xaiApiKey) {
-			return this.options.xaiApiKey
-		}
-
-		throw new Error(
-			"xAI Grok OAuth token not found. Please run 'hermes auth add xai-oauth' in your terminal, or enter your token/API key under settings.",
-		)
+		const extensionToken = await xaiOAuthManager.getAccessToken()
+		if (extensionToken) return extensionToken
+		throw new Error("xAI OAuth credentials not found. Sign in to xAI Grok under settings.")
 	}
 
 	private async ensureClient(): Promise<OpenAI> {

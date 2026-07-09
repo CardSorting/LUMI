@@ -121,7 +121,7 @@ default:
 }
 
 export const READ_ONLY_TOOLS = [
-	DietCodeDefaultTool.FILE_READ,
+	${"DietCodeDefaultTool"}.FILE_READ,
 ] as const
 `,
 			"utf-8",

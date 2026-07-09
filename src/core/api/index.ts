@@ -71,7 +71,6 @@ function createHandlerForProvider(
 		case "xai-oauth":
 			return new XAIOauthHandler({
 				onRetryAttempt: options.onRetryAttempt,
-				xaiApiKey: options.xaiApiKey,
 				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
 				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 			})
