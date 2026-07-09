@@ -12,6 +12,8 @@ import {
 	openAiCodexModels,
 	openRouterDefaultModelId,
 	openRouterDefaultModelInfo,
+	xaiDefaultModelId,
+	xaiModels,
 } from "@shared/api"
 import { Mode } from "@shared/storage/types"
 import * as reasoningSupport from "@shared/utils/reasoning-support"
@@ -38,6 +40,8 @@ export function getModelsForProvider(
 			return nousResearchModels
 		case "cline-pass":
 			return clinePassModels
+		case "xai-oauth":
+			return xaiModels
 		default:
 			return undefined
 	}
@@ -88,6 +92,8 @@ export function normalizeApiConfiguration(
 			return getProviderData(clinePassModels, clinePassDefaultModelId)
 		case "openai-codex":
 			return getProviderData(openAiCodexModels, openAiCodexDefaultModelId)
+		case "xai-oauth":
+			return getProviderData(xaiModels, xaiDefaultModelId)
 		case "openrouter":
 			const openRouterModelId =
 				currentMode === "plan" ? apiConfiguration?.planModeOpenRouterModelId : apiConfiguration?.actModeOpenRouterModelId

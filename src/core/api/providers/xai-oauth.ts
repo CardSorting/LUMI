@@ -1,17 +1,14 @@
 import { ModelInfo, XAIModelId, xaiDefaultModelId, xaiModels } from "@shared/api"
-import { shouldSkipReasoningForModel } from "@utils/model-utils"
 import * as fs from "fs/promises"
 import OpenAI from "openai"
 import type { ChatCompletionTool as OpenAITool } from "openai/resources/chat/completions"
-import { ChatCompletionReasoningEffort } from "openai/resources/chat/completions"
 import * as os from "os"
 import * as path from "path"
 import { DietCodeStorageMessage } from "@/shared/messages/content"
 import { createOpenAIClient } from "@/shared/net"
 import { withRetry } from "../retry"
-import { convertToOpenAiMessages } from "../transform/openai-format"
-import { ApiStream } from "../transform/stream"
-import { getOpenAIToolParams, ToolCallProcessor } from "../transform/tool-call-processor"
+import { convertToOpenAIResponsesInput } from "../transform/openai-response-format"
+import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { ApiHandler, CommonApiHandlerOptions } from "../types"
 
 interface XAIOauthHandlerOptions extends CommonApiHandlerOptions {
@@ -23,6 +20,9 @@ interface XAIOauthHandlerOptions extends CommonApiHandlerOptions {
 export class XAIOauthHandler implements ApiHandler {
 	private options: XAIOauthHandlerOptions
 	private client: OpenAI | undefined
+	private pendingToolCallId: string | undefined
+	private pendingToolCallName: string | undefined
+	private abortController?: AbortController
 
 	constructor(options: XAIOauthHandlerOptions) {
 		this.options = options
@@ -74,61 +74,175 @@ export class XAIOauthHandler implements ApiHandler {
 	async *createMessage(systemPrompt: string, messages: DietCodeStorageMessage[], tools?: OpenAITool[]): ApiStream {
 		const client = await this.ensureClient()
 		const modelId = this.getModel().id
-		// ensure reasoning effort is either "low" or "high" for grok-3-mini
-		let reasoningEffort: ChatCompletionReasoningEffort | undefined
-		if (modelId.includes("3-mini")) {
-			let reasoningEffort = this.options.reasoningEffort
-			if (reasoningEffort && !["low", "high"].includes(reasoningEffort)) {
-				reasoningEffort = undefined
-			}
-		}
-		const stream = await client.chat.completions.create({
+
+		// Reset state for this request
+		this.pendingToolCallId = undefined
+		this.pendingToolCallName = undefined
+		this.abortController = new AbortController()
+
+		const { input } = convertToOpenAIResponsesInput(messages, { usePreviousResponseId: false })
+
+		// Build request body for the Responses API
+		const requestBody: any = {
 			model: modelId,
-			max_completion_tokens: this.getModel().info.maxTokens,
-			temperature: 0,
-			messages: [{ role: "system", content: systemPrompt }, ...convertToOpenAiMessages(messages)],
+			input: input,
+			instructions: systemPrompt,
 			stream: true,
-			stream_options: { include_usage: true },
-			reasoning_effort: reasoningEffort,
-			...getOpenAIToolParams(tools),
-		})
+		}
 
-		const toolCallProcessor = new ToolCallProcessor()
+		if (tools && tools.length > 0) {
+			requestBody.tools = tools
+				.filter((tool: any) => tool?.type === "function")
+				.map((tool: any) => ({
+					type: "function",
+					name: tool.function.name,
+					description: tool.function.description,
+					parameters: tool.function.parameters,
+					strict: tool.function.strict ?? true,
+				}))
+		}
 
-		for await (const chunk of stream) {
-			const delta = chunk.choices?.[0]?.delta
-			if (delta?.content) {
-				yield {
-					type: "text",
-					text: delta.content,
+		try {
+			const stream = (await (client as any).responses.create(requestBody, {
+				signal: this.abortController.signal,
+			})) as AsyncIterable<any>
+
+			if (typeof (stream as any)?.[Symbol.asyncIterator] !== "function") {
+				throw new Error("xAI Responses API did not return an AsyncIterable")
+			}
+
+			for await (const event of stream) {
+				if (this.abortController.signal.aborted) {
+					break
+				}
+
+				for await (const outChunk of this.processEvent(event)) {
+					yield outChunk
 				}
 			}
+		} finally {
+			this.abortController = undefined
+		}
+	}
 
-			if (delta?.tool_calls) {
-				yield* toolCallProcessor.processToolCallDeltas(delta.tool_calls)
+	private async *processEvent(event: any): ApiStream {
+		// Handle text deltas
+		if (event?.type === "response.text.delta" || event?.type === "response.output_text.delta") {
+			if (event?.delta) {
+				yield { type: "text", text: event.delta }
 			}
+			return
+		}
 
-			if (delta && "reasoning_content" in delta && delta.reasoning_content) {
-				// Skip reasoning content for Grok 4 models since it only displays "thinking" without providing useful information
-				if (!shouldSkipReasoningForModel(modelId)) {
-					yield {
-						type: "reasoning",
-						// @ts-expect-error-next-line
-						reasoning: delta.reasoning_content,
+		// Handle reasoning deltas
+		if (
+			event?.type === "response.reasoning.delta" ||
+			event?.type === "response.reasoning_text.delta" ||
+			event?.type === "response.reasoning_summary.delta" ||
+			event?.type === "response.reasoning_summary_text.delta"
+		) {
+			if (event?.delta) {
+				yield { type: "reasoning", reasoning: event.delta }
+			}
+			return
+		}
+
+		// Handle refusal deltas
+		if (event?.type === "response.refusal.delta") {
+			if (event?.delta) {
+				yield { type: "text", text: `[Refusal] ${event.delta}` }
+			}
+			return
+		}
+
+		// Handle tool/function call deltas
+		if (event?.type === "response.tool_call_arguments.delta" || event?.type === "response.function_call_arguments.delta") {
+			const callId = event.call_id || event.tool_call_id || event.id || this.pendingToolCallId
+			const name = event.name || event.function_name || this.pendingToolCallName
+			const args = event.delta || event.arguments
+
+			if (typeof callId === "string" && callId.length > 0 && typeof name === "string" && name.length > 0) {
+				yield {
+					type: "tool_calls",
+					tool_call: {
+						call_id: callId,
+						function: {
+							id: callId,
+							name,
+							arguments: typeof args === "string" ? args : "",
+						},
+					},
+				}
+			}
+			return
+		}
+
+		// Handle output item events
+		if (event?.type === "response.output_item.added" || event?.type === "response.output_item.done") {
+			const item = event?.item
+			if (item) {
+				// Capture tool identity for subsequent argument deltas
+				if (item.type === "function_call" || item.type === "tool_call") {
+					const callId = item.call_id || item.tool_call_id || item.id
+					const name = item.name || item.function?.name || item.function_name
+					if (typeof callId === "string" && callId.length > 0) {
+						this.pendingToolCallId = callId
+						this.pendingToolCallName = typeof name === "string" ? name : undefined
+					}
+				}
+
+				if (item.type === "text" && item.text) {
+					yield { type: "text", text: item.text }
+				} else if (item.type === "reasoning" && item.text) {
+					yield { type: "reasoning", reasoning: item.text }
+				} else if (item.type === "message" && Array.isArray(item.content)) {
+					for (const content of item.content) {
+						if ((content?.type === "text" || content?.type === "output_text") && content?.text) {
+							yield { type: "text", text: content.text }
+						}
+					}
+				} else if (
+					(item.type === "function_call" || item.type === "tool_call") &&
+					event.type === "response.output_item.done"
+				) {
+					const callId = item.call_id || item.tool_call_id || item.id
+					if (callId) {
+						const args = item.arguments || item.function?.arguments || item.function_arguments
+						yield {
+							type: "tool_calls",
+							tool_call: {
+								call_id: callId,
+								function: {
+									id: callId,
+									name: item.name || item.function?.name || item.function_name || "",
+									arguments: typeof args === "string" ? args : JSON.stringify(args || {}),
+								},
+							},
+						}
 					}
 				}
 			}
+			return
+		}
 
-			if (chunk.usage) {
-				yield {
-					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0,
-					outputTokens: chunk.usage.completion_tokens || 0,
-					cacheReadTokens: chunk.usage.prompt_tokens_details?.cached_tokens || 0,
-					// @ts-expect-error-next-line
-					cacheWriteTokens: chunk.usage.prompt_tokens_details?.cached_creation_tokens || 0,
-				}
-			}
+		// Handle usage chunks
+		if (event?.type === "response.done" && event?.response?.usage) {
+			const usage = event.response.usage
+			const inputDetails = usage.input_tokens_details ?? usage.prompt_tokens_details
+			const cachedFromDetails = inputDetails?.cached_tokens ?? 0
+			const totalInputTokens = usage.input_tokens ?? usage.prompt_tokens ?? 0
+			const totalOutputTokens = usage.output_tokens ?? usage.completion_tokens ?? 0
+			const cacheWriteTokens = usage.cache_creation_input_tokens ?? usage.cache_write_tokens ?? 0
+			const cacheReadTokens =
+				usage.cache_read_input_tokens ?? usage.cache_read_tokens ?? usage.cached_tokens ?? cachedFromDetails ?? 0
+
+			yield {
+				type: "usage",
+				inputTokens: totalInputTokens,
+				outputTokens: totalOutputTokens,
+				cacheWriteTokens: cacheWriteTokens,
+				cacheReadTokens: cacheReadTokens,
+			} as ApiStreamUsageChunk
 		}
 	}
 

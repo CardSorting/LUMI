@@ -16,6 +16,7 @@ export function validateApiConfiguration(currentMode: Mode, apiConfiguration?: A
 			}
 			break
 		case "openai-codex":
+		case "xai-oauth":
 			// Authentication is handled via OAuth, not API key
 			break
 		case "openrouter":

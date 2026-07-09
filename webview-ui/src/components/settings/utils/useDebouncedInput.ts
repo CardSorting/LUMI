@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useDebounceEffect } from "@/utils/useDebounceEffect"
 
 /**
@@ -16,23 +16,35 @@ export function useDebouncedInput<T>(initialValue: T, onChange: (value: T) => vo
 
 	// Track previous initialValue to detect external changes
 	const prevInitialValueRef = useRef<T>(initialValue)
+	const hasPendingUserChangeRef = useRef(false)
 
 	// Sync local state when initialValue changes externally (e.g., when switching Plan/Act tabs)
 	useEffect(() => {
 		if (prevInitialValueRef.current !== initialValue) {
+			hasPendingUserChangeRef.current = false
 			setLocalValue(initialValue)
 			prevInitialValueRef.current = initialValue
 		}
 	}, [initialValue])
 
+	const setUserValue = useCallback((value: T) => {
+		hasPendingUserChangeRef.current = true
+		setLocalValue(value)
+	}, [])
+
 	// Debounced backend save - saves after user stops changing value
 	useDebounceEffect(
 		() => {
+			if (!hasPendingUserChangeRef.current) {
+				return
+			}
+
+			hasPendingUserChangeRef.current = false
 			onChange(localValue)
 		},
 		debounceMs,
 		[localValue],
 	)
 
-	return [localValue, setLocalValue]
+	return [localValue, setUserValue]
 }

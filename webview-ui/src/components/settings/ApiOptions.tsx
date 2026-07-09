@@ -15,6 +15,7 @@ import { CloudflareProvider } from "./providers/CloudflareProvider"
 import { NousResearchProvider } from "./providers/NousresearchProvider"
 import { OpenAiCodexProvider } from "./providers/OpenAiCodexProvider"
 import { OpenRouterProvider } from "./providers/OpenRouterProvider"
+import { XAIOauthProvider } from "./providers/XAIOauthProvider"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
 interface ApiOptionsProps {
@@ -56,7 +57,13 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 		// Filter by remote config if remoteConfiguredProviders is set
 		const remoteProviders: string[] = remoteConfigSettings?.remoteConfiguredProviders || []
 		if (remoteProviders.length > 0) {
-			providers = providers.filter((option) => remoteProviders.includes(option.value))
+			providers = providers.filter(
+				(option) =>
+					remoteProviders.includes(option.value) ||
+					option.value === "xai-oauth" ||
+					option.value === "openai-codex" ||
+					option.value === "cline-pass",
+			)
 		}
 
 		return providers
@@ -271,6 +278,9 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage, is
 
 			{apiConfiguration && selectedProvider === "cline-pass" && (
 				<ClinePassProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
+			)}
+			{apiConfiguration && selectedProvider === "xai-oauth" && (
+				<XAIOauthProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
 			)}
 
 			{apiErrorMessage && (

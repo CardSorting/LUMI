@@ -9,29 +9,33 @@ export function getConfiguredProviders(
 	remoteConfig: Partial<RemoteConfigFields> | undefined,
 	apiConfiguration: ApiConfiguration | undefined,
 ): ApiProvider[] {
-	if (remoteConfig?.remoteConfiguredProviders?.length) {
-		return remoteConfig.remoteConfiguredProviders
-	}
-
 	const configured: ApiProvider[] = []
 
-	if (!apiConfiguration) {
-		return configured
+	if (remoteConfig?.remoteConfiguredProviders?.length) {
+		configured.push(...remoteConfig.remoteConfiguredProviders)
+	} else if (apiConfiguration) {
+		if (apiConfiguration.cloudflareAccountId && apiConfiguration.cloudflareApiToken) {
+			configured.push("cloudflare")
+		}
+
+		if (apiConfiguration.openRouterApiKey) {
+			configured.push("openrouter")
+		}
+
+		if (apiConfiguration.nousResearchApiKey) {
+			configured.push("nousResearch")
+		}
 	}
 
-	if (apiConfiguration.cloudflareAccountId && apiConfiguration.cloudflareApiToken) {
-		configured.push("cloudflare")
+	// Always ensure local / subscription-based providers are allowed/configured
+	if (!configured.includes("openai-codex")) {
+		configured.push("openai-codex")
 	}
-
-	// OpenAI Codex - subscription-based OAuth, always available
-	configured.push("openai-codex")
-
-	if (apiConfiguration.openRouterApiKey) {
-		configured.push("openrouter")
+	if (!configured.includes("cline-pass")) {
+		configured.push("cline-pass")
 	}
-
-	if (apiConfiguration.nousResearchApiKey) {
-		configured.push("nousResearch")
+	if (!configured.includes("xai-oauth")) {
+		configured.push("xai-oauth")
 	}
 
 	return configured
