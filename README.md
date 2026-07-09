@@ -59,6 +59,7 @@ code --install-extension CardSorting.lumi
 - [Quick start](#quick-start)
 - [Documentation](#documentation)
 - [Governed subagent execution](#governed-subagent-execution)
+- [Workspace Knowledge System](#workspace-knowledge-system)
 - [Plan & Act modes](#plan--act-modes)
 - [Built-in slash commands](#built-in-slash-commands)
 - [Lifecycle hooks](#lifecycle-hooks)
@@ -282,6 +283,30 @@ Declare in lane prompts: `[execution_mode:read_only] [read_set:src/api.ts]`
 | [Architecture](docs/governed-subagent-execution.md) | Full lifecycle |
 | [Runbook](docs/governed-execution-runbook.md) | Violations, retry flow |
 | [Schema](docs/governed-execution-schema.md) | Receipt v3 fields |
+
+---
+
+## Workspace Knowledge System
+
+LUMI maintains an advisory, non-blocking **Workspace Knowledge System** (Observability Seatbelt) that builds a durable project memory after each completed task to orient future agent execution.
+
+```mermaid
+flowchart TD
+  TF[Task Finalization] --> |learnFromFinalization| WKE[WorkspaceIntelligenceEngine]
+  WKE --> |writeModel| WIS[WorkspaceIntelligenceStore]
+  WIS --> |Append Event| DL[diagnostics.jsonl]
+  WIS --> |Write Projections| WIJ[workspace-intelligence.json]
+  WIS --> |Write Projections| WIM[workspace-intelligence.md]
+  WIJ --> |Read Facts| WIR[WorkspaceIntelligenceReader]
+  DL --> |Read Health| WIR
+  WIR --> |Advisory Context| NT[Next Task Initialization]
+```
+
+- **Durable Facts & Provenance:** Captures stable/volatile subsystems, recent architectural decisions (ADRs), stale docs, risk areas, and handoff facts. Every fact links to a provenance trail (*why we believe it*) and a lifecycle state (*whether it is still valid*).
+- **Observability Seatbelt:** System errors (e.g. read-only filesystem or full disk) log to diagnostics but degrade gracefully, ensuring knowledge updates never block task completion or tool executions.
+- **Append-Only Event Log (`diagnostics.jsonl`):** Diagnostics are written to an append-only JSON Lines event log.
+- **Read-Only Health API:** Downstream tools check status via `getKnowledgeHealth()`, which parses diagnostic lines, returns status (`healthy | degraded`), and compiles actionable recovery hints.
+- **Human-Readable Dashboard:** Exposes active system health alerts and collapsible diagnostics lists directly at the top of [workspace-intelligence.md](file:///.wiki/intelligence/workspace-intelligence.md).
 
 ---
 

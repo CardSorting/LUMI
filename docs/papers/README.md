@@ -7,6 +7,10 @@ Three documents describe the **agent layer** (`src/`, `webview-ui/`) the same wa
 | 1 | [Companion brief](companion-brief.md) | Executives, PMs, new contributors | 5 min |
 | 2 | [Philosophy](philosophy.md) | Designers, tech leads — *why* calm agency | 15 min |
 | 3 | [Whitepaper](whitepaper.md) | Engineers — *how* it is built (incl. §8 governed execution) | 45 min |
+| 4 | [Knowledge brief](knowledge-brief.md) | Designers, Leads — Workspace Knowledge brief | 5 min |
+| 5 | [Knowledge philosophy](knowledge-philosophy.md) | Leads, Designers — Advisory memory tenets | 10 min |
+| 6 | [Knowledge thesis](knowledge-thesis.md) | Architects — Sovereign advisory invariant | 15 min |
+| 7 | [Knowledge whitepaper](knowledge-whitepaper.md) | Engineers — Architecture details | 30 min |
 
 ## One-line summary
 
@@ -53,3 +57,7 @@ cd broccolidb && npm run test:guardrails
 | [Governed execution runbook](../governed-execution-runbook.md) | Operator incidents |
 | [Governed execution decisions](../governed-execution-decisions.md) | ADRs |
 | [BroccoliDB papers](../../broccolidb/docs/papers/philosophy.md) | Substrate philosophy |
+| [Workspace Knowledge Thesis](knowledge-thesis.md) | Invariant thesis |
+| [Workspace Knowledge Philosophy](knowledge-philosophy.md) | Philosophy tenets |
+| [Workspace Knowledge Brief](knowledge-brief.md) | Executive brief |
+| [Workspace Knowledge Whitepaper](knowledge-whitepaper.md) | Technical whitepaper |
