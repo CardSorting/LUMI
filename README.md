@@ -91,7 +91,7 @@ code --install-extension CardSorting.lumi
 
 Task history and cognitive memory use **BroccoliDB** (`@noorm/broccolidb`) locally. Multi-lane **governed swarms** (`use_subagents`) produce durable receipts, conditional mutation locks, and a merge gate so parallel agents do not false-positive collide on reads.
 
-Design philosophy: [docs/papers/philosophy.md](docs/papers/philosophy.md) · Stack map: [docs/AGENT_STACK.md](docs/AGENT_STACK.md)
+Design philosophy: [docs/papers/philosophy.md](docs/papers/philosophy.md) (agent) · [docs/papers/knowledge-philosophy.md](docs/papers/knowledge-philosophy.md) (knowledge) · Stack map: [docs/AGENT_STACK.md](docs/AGENT_STACK.md)
 
 ### By the numbers
 
@@ -105,7 +105,7 @@ Design philosophy: [docs/papers/philosophy.md](docs/papers/philosophy.md) · Sta
 | Agent modes | **plan** · **act** |
 | Governed receipt schema | **v3** |
 
-Workspace-verified metrics: [docs/papers/companion-brief.md](docs/papers/companion-brief.md)
+Workspace-verified metrics: [docs/papers/companion-brief.md](docs/papers/companion-brief.md) · Knowledge brief: [docs/papers/knowledge-brief.md](docs/papers/knowledge-brief.md)
 
 ---
 
@@ -231,6 +231,12 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | **[docs/README.md](docs/README.md)** | Documentation hub — reading paths by audience |
 | [Product evolution](docs/EVOLUTION.md) | Cline → DietCode → LUMI timeline, migration playbook |
 | [Companion brief](docs/papers/companion-brief.md) | Product summary with live metrics |
+| [Philosophy](docs/papers/philosophy.md) | Design values and philosophy of LUMI calm agency |
+| [Whitepaper](docs/papers/whitepaper.md) | Technical whitepaper on LUMI and governed execution |
+| [Workspace knowledge brief](docs/papers/knowledge-brief.md) | Executive brief of the Workspace Knowledge System |
+| [Workspace knowledge philosophy](docs/papers/knowledge-philosophy.md) | Advisory memory design principles |
+| [Workspace knowledge thesis](docs/papers/knowledge-thesis.md) | Sovereign advisory invariant thesis |
+| [Workspace knowledge whitepaper](docs/papers/knowledge-whitepaper.md) | Architecture blueprint and NDJSON engine |
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
 | [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook |
 | [Memory & reasoning](docs/MEMORY_AND_REASONING.md) | BroccoliDB cognitive layer |
