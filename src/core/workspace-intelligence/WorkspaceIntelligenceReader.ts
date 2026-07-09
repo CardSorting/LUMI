@@ -1,7 +1,10 @@
+import fs from "node:fs"
+import path from "node:path"
 import type {
 	ArchitectureDecisionFact,
 	DocumentationSurfaceFact,
 	HandoffFact,
+	KnowledgeDiagnostic,
 	RiskAreaFact,
 	SubsystemStabilityFact,
 	WorkspaceCognitiveModel,
@@ -9,11 +12,15 @@ import type {
 	WorkspaceFactLifecycle,
 	WorkspaceFactType,
 	WorkspaceKnowledgeConfidence,
+	WorkspaceKnowledgeHealth,
 	WorkspaceProvenance,
 } from "./types"
 
 export class WorkspaceIntelligenceReader {
-	constructor(private readonly model: WorkspaceCognitiveModel) {}
+	constructor(
+		private readonly model: WorkspaceCognitiveModel,
+		private readonly cwd?: string,
+	) {}
 
 	getFacts(): WorkspaceFact[] {
 		return this.model.facts || []
@@ -180,6 +187,130 @@ export class WorkspaceIntelligenceReader {
 		return this.getFacts().filter((f) => f.lifecycle === "disputed")
 	}
 
+	getKnowledgeHealth(): WorkspaceKnowledgeHealth {
+		const result: WorkspaceKnowledgeHealth = {
+			status: "healthy",
+			recoveryHints: [],
+			recentDiagnostics: [],
+		}
+
+		if (!this.cwd) {
+			return result
+		}
+
+		const jsonlPath = path.join(this.cwd, ".wiki/intelligence/diagnostics.jsonl")
+		const logPath = path.join(this.cwd, ".wiki/intelligence/diagnostics.log")
+
+		let logContent = ""
+		let isJsonl = false
+
+		if (fs.existsSync(jsonlPath)) {
+			try {
+				logContent = fs.readFileSync(jsonlPath, "utf-8")
+				isJsonl = true
+			} catch {
+				// Stay advisory-only
+			}
+		} else if (fs.existsSync(logPath)) {
+			try {
+				logContent = fs.readFileSync(logPath, "utf-8")
+			} catch {
+				// Stay advisory-only
+			}
+		}
+
+		if (!logContent) {
+			return result
+		}
+
+		try {
+			const lines = logContent.split("\n").filter(Boolean)
+
+			if (isJsonl) {
+				for (const line of lines) {
+					try {
+						const entry = JSON.parse(line) as KnowledgeDiagnostic
+						result.recentDiagnostics.push(entry)
+						if (entry.severity === "info") {
+							result.lastSuccessfulWrite = entry.timestamp
+						}
+					} catch {
+						// Ignore malformed json lines
+					}
+				}
+			} else {
+				// Fallback parsing for legacy raw text log format
+				for (const line of lines) {
+					const match = line.match(/^\[([^\]]+)\]\s+\[(info|warning|degraded)\]\s+(.*)$/)
+					if (match) {
+						const timestamp = match[1]
+						const severity = match[2] as "info" | "warning" | "degraded"
+						const message = match[3]
+
+						result.recentDiagnostics.push({
+							severity,
+							code: severity === "info" ? "WRITE_SUCCESS" : severity === "warning" ? "PARSE_ERROR" : "WRITE_ERROR",
+							message,
+							timestamp,
+							source: "LegacyLogParser",
+							recoveryHints: [],
+						})
+
+						if (severity === "info") {
+							result.lastSuccessfulWrite = timestamp
+						}
+					}
+				}
+			}
+
+			result.recentDiagnostics.reverse()
+
+			const lastEntry = result.recentDiagnostics[0]
+			if (lastEntry) {
+				if (lastEntry.severity === "degraded") {
+					result.status = "degraded"
+					result.lastDegradedReason = lastEntry.message
+
+					if (lastEntry.recoveryHints && lastEntry.recoveryHints.length > 0) {
+						result.recoveryHints = [...lastEntry.recoveryHints]
+					} else {
+						if (
+							lastEntry.message.toLowerCase().includes("permission") ||
+							lastEntry.message.toLowerCase().includes("eacces")
+						) {
+							result.recoveryHints.push(
+								"Filesystem write permission denied. Verify directory permissions of .wiki/intelligence/",
+							)
+							result.recoveryHints.push(
+								"Check if execution is running in a sandbox environment that restricts write access.",
+							)
+						} else if (
+							lastEntry.message.toLowerCase().includes("disk") ||
+							lastEntry.message.toLowerCase().includes("nospc")
+						) {
+							result.recoveryHints.push("Disk space is full. Free up some space or clean up directory files.")
+						} else {
+							result.recoveryHints.push("Check the full diagnostic trace in .wiki/intelligence/diagnostics.jsonl")
+							result.recoveryHints.push("Run a manual finalization attempt or check repository accessibility.")
+						}
+					}
+				} else if (lastEntry.severity === "warning") {
+					if (lastEntry.recoveryHints && lastEntry.recoveryHints.length > 0) {
+						result.recoveryHints = [...lastEntry.recoveryHints]
+					} else {
+						result.recoveryHints.push(
+							"A warning was logged during model parse. Verify if workspace-intelligence.json JSON format is valid.",
+						)
+					}
+				}
+			}
+		} catch {
+			// Stay advisory-only
+		}
+
+		return result
+	}
+
 	getCompactSummary(): string {
 		const lines: string[] = [
 			`=== Workspace Intelligence (Task ${this.model.taskId}) ===`,
@@ -207,6 +338,14 @@ export class WorkspaceIntelligenceReader {
 			lines.push(`Handoff-Relevant Facts: ${this.getHandoffRelevantFacts().join(" | ")}`)
 		}
 
+		const health = this.getKnowledgeHealth()
+		lines.push(
+			`Knowledge Health: ${health.status}${health.status === "degraded" ? ` (degraded reason: ${health.lastDegradedReason})` : ""}`,
+		)
+		if (health.status === "degraded" && health.recoveryHints.length) {
+			lines.push(`Recovery Hints: ${health.recoveryHints.join(" | ")}`)
+		}
+
 		lines.push("")
 		lines.push("=== Programmatic Query Endpoints ===")
 		lines.push("- getSubsystemHealth(path): Query stability/volatility & provenance trail")
@@ -218,6 +357,7 @@ export class WorkspaceIntelligenceReader {
 		lines.push("- getFactsByProvenance(runId): Query facts observed in a specific task execution run")
 		lines.push("- getStaleFacts(): List stale facts pending deprecation")
 		lines.push("- getDisputedFacts(): List disputed/diverged workspace observations")
+		lines.push("- getKnowledgeHealth(): Retrieve current Workspace Knowledge health status, logs & recovery hints")
 
 		return lines.join("\n")
 	}

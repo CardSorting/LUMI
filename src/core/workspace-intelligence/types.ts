@@ -172,3 +172,20 @@ export interface WorkspaceIntelligenceRunResult {
 	categoryCounts: Record<WorkspaceKnowledgeCategory, number>
 	memoryLayerUpdated: boolean
 }
+
+export interface KnowledgeDiagnostic {
+	severity: "info" | "warning" | "degraded"
+	code: string
+	message: string
+	timestamp: string
+	source: string
+	recoveryHints: string[]
+}
+
+export interface WorkspaceKnowledgeHealth {
+	status: "healthy" | "degraded"
+	lastSuccessfulWrite?: string
+	lastDegradedReason?: string
+	recoveryHints: string[]
+	recentDiagnostics: KnowledgeDiagnostic[]
+}

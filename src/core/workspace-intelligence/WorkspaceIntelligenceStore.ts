@@ -1,13 +1,18 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { Logger } from "@/shared/services/Logger"
-import { type SubsystemStabilityFact, type WorkspaceCognitiveModel, type WorkspaceIntelligenceArtifactRecord } from "./types"
+import {
+	type SubsystemStabilityFact,
+	type WorkspaceCognitiveModel,
+	type WorkspaceIntelligenceArtifactRecord,
+	type WorkspaceKnowledgeHealth,
+} from "./types"
 
 export class WorkspaceIntelligenceStore {
 	private readonly intelligenceDir: string
 
-	constructor(cwd: string) {
-		this.intelligenceDir = path.join(cwd, ".wiki/intelligence")
+	constructor(private readonly workspaceRoot: string) {
+		this.intelligenceDir = path.join(workspaceRoot, ".wiki/intelligence")
 	}
 
 	async readModel(): Promise<WorkspaceCognitiveModel | undefined> {
@@ -77,11 +82,18 @@ export class WorkspaceIntelligenceStore {
 				try {
 					const { appendFile, mkdir } = await import("node:fs/promises")
 					await mkdir(this.intelligenceDir, { recursive: true })
-					await appendFile(
-						path.join(this.intelligenceDir, "diagnostics.log"),
-						`[${new Date().toISOString()}] Warning: failed to parse workspace-intelligence.json: ${errMsg}\n`,
-						"utf-8",
-					)
+					const entry = {
+						severity: "warning" as const,
+						code: "PARSE_ERROR",
+						message: `failed to parse workspace-intelligence.json: ${errMsg}`,
+						timestamp: new Date().toISOString(),
+						source: "WorkspaceIntelligenceStore.readModel",
+						recoveryHints: [
+							"Verify if workspace-intelligence.json JSON format is valid.",
+							"Restore a backup of workspace-intelligence.json if it is corrupted.",
+						],
+					}
+					await appendFile(path.join(this.intelligenceDir, "diagnostics.jsonl"), `${JSON.stringify(entry)}\n`, "utf-8")
 				} catch {
 					// Stay advisory-only
 				}
@@ -97,8 +109,32 @@ export class WorkspaceIntelligenceStore {
 		const jsonPath = path.join(this.intelligenceDir, "workspace-intelligence.json")
 		const mdPath = path.join(this.intelligenceDir, "workspace-intelligence.md")
 
+		try {
+			const { appendFile } = await import("node:fs/promises")
+			const entry = {
+				severity: "info" as const,
+				code: "WRITE_SUCCESS",
+				message: "workspace-intelligence.json written successfully",
+				timestamp: new Date().toISOString(),
+				source: "WorkspaceIntelligenceStore.writeModel",
+				recoveryHints: [],
+			}
+			await appendFile(path.join(this.intelligenceDir, "diagnostics.jsonl"), `${JSON.stringify(entry)}\n`, "utf-8")
+		} catch {
+			// Stay advisory-only
+		}
+
+		let health: WorkspaceKnowledgeHealth | undefined
+		try {
+			const { WorkspaceIntelligenceReader } = await import("./WorkspaceIntelligenceReader")
+			const reader = new WorkspaceIntelligenceReader(model, this.workspaceRoot)
+			health = reader.getKnowledgeHealth()
+		} catch {
+			// Stay advisory-only
+		}
+
 		await writeFile(jsonPath, JSON.stringify(model, null, 2), "utf-8")
-		await writeFile(mdPath, renderMarkdownModel(model), "utf-8")
+		await writeFile(mdPath, renderMarkdownModel(model, health), "utf-8")
 
 		return [
 			{
@@ -113,11 +149,49 @@ export class WorkspaceIntelligenceStore {
 	}
 }
 
-export function renderMarkdownModel(model: WorkspaceCognitiveModel): string {
+export function renderMarkdownModel(model: WorkspaceCognitiveModel, health?: WorkspaceKnowledgeHealth): string {
 	const lines: string[] = []
 
 	lines.push(`# Workspace Intelligence: ${model.workspaceName}`)
 	lines.push("")
+
+	if (health) {
+		if (health.status === "degraded") {
+			lines.push("> [!WARNING]")
+			lines.push(`> **Workspace Knowledge Health: degraded**`)
+			lines.push(`> - Last Degraded Reason: \`${health.lastDegradedReason || "Unknown"}\``)
+			if (health.recoveryHints.length) {
+				lines.push("> - Recovery Hints:")
+				for (const hint of health.recoveryHints) {
+					lines.push(`>   - ${hint}`)
+				}
+			}
+		} else {
+			lines.push("> [!NOTE]")
+			lines.push(`> **Workspace Knowledge Health: healthy**`)
+			if (health.lastSuccessfulWrite) {
+				lines.push(`> - Last Successful Write: \`${health.lastSuccessfulWrite}\``)
+			}
+		}
+		lines.push("")
+
+		if (health.recentDiagnostics.length) {
+			lines.push("<details>")
+			lines.push("<summary>📋 Recent Knowledge System Diagnostics</summary>")
+			lines.push("")
+			lines.push("| Timestamp | Severity | Code | Source | Message |")
+			lines.push("|---|---|---|---|---|")
+			for (const diag of health.recentDiagnostics.slice(0, 10)) {
+				lines.push(
+					`| \`${diag.timestamp}\` | \`${diag.severity}\` | \`${diag.code}\` | \`${diag.source}\` | ${diag.message} |`,
+				)
+			}
+			lines.push("")
+			lines.push("</details>")
+			lines.push("")
+		}
+	}
+
 	lines.push(`- Generated At: \`${model.generatedAt}\``)
 	lines.push(`- Task ID: \`${model.taskId}\``)
 	lines.push(`- Finalization Run ID: \`${model.finalizationRunId}\``)
@@ -151,6 +225,7 @@ export function renderMarkdownModel(model: WorkspaceCognitiveModel): string {
 			model.facts.filter(
 				(f) => f.type === "subsystem_stability" && (f.value as SubsystemStabilityFact)?.status === "stable",
 			),
+			(v: SubsystemStabilityFact) => `${v.path} (${v.status})`,
 		),
 	)
 	lines.push("", "### Volatile Subsystems")
@@ -159,6 +234,7 @@ export function renderMarkdownModel(model: WorkspaceCognitiveModel): string {
 			model.facts.filter(
 				(f) => f.type === "subsystem_stability" && (f.value as SubsystemStabilityFact)?.status === "volatile",
 			),
+			(v: SubsystemStabilityFact) => `${v.path} (${v.status})`,
 		),
 	)
 	lines.push("", "### Recent Architecture Decisions")

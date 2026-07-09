@@ -153,14 +153,21 @@ export class AutonomousDocumentationFinalizer {
 				const errMsg = err instanceof Error ? err.message : String(err)
 				Logger.warn(`[Workspace Knowledge System] Degraded state: ${errMsg}`)
 				try {
-					const diagnosticPath = path.join(wikiDir, "intelligence/diagnostics.log")
+					const diagnosticPath = path.join(wikiDir, "intelligence/diagnostics.jsonl")
 					await mkdir(path.join(wikiDir, "intelligence"), { recursive: true })
-					await appendFile(
-						diagnosticPath,
-						`[${timestamp}] Finalization Run ${runId} failed to update intelligence: ${errMsg}\n`,
-						"utf-8",
-					)
-					docsUpdated.push(".wiki/intelligence/diagnostics.log")
+					const diagnosticEntry = {
+						severity: "degraded" as const,
+						code: "FINALIZER_ERROR",
+						message: `finalization failed to update intelligence: ${errMsg}`,
+						timestamp,
+						source: "AutonomousDocumentationFinalizer",
+						recoveryHints: [
+							"Inspect the stack trace in the error logs.",
+							"Verify directory permissions of .wiki/intelligence/.",
+						],
+					}
+					await appendFile(diagnosticPath, `${JSON.stringify(diagnosticEntry)}\n`, "utf-8")
+					docsUpdated.push(".wiki/intelligence/diagnostics.jsonl")
 					artifactPaths.push(diagnosticPath)
 				} catch {
 					// Ignore diagnostic write errors to stay advisory-only

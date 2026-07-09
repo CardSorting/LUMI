@@ -313,9 +313,28 @@ export class WorkspaceIntelligenceEngine {
 			try {
 				const { appendFile, mkdir } = await import("node:fs/promises")
 				await mkdir(path.join(this.config.cwd, ".wiki/intelligence"), { recursive: true })
+				const entry = {
+					severity: "degraded" as const,
+					code: "WRITE_ERROR",
+					message: `failed to write model files: ${errMsg}`,
+					timestamp: input.timestamp,
+					source: "WorkspaceIntelligenceEngine.learnFromFinalization",
+					recoveryHints:
+						errMsg.toLowerCase().includes("permission") || errMsg.toLowerCase().includes("eacces")
+							? [
+									"Filesystem write permission denied. Verify directory permissions of .wiki/intelligence/",
+									"Check if execution is running in a sandbox environment that restricts write access.",
+								]
+							: errMsg.toLowerCase().includes("disk") || errMsg.toLowerCase().includes("nospc")
+								? ["Disk space is full. Free up some space or clean up directory files."]
+								: [
+										"Check the full diagnostic trace in .wiki/intelligence/diagnostics.jsonl",
+										"Run a manual finalization attempt or check repository accessibility.",
+									],
+				}
 				await appendFile(
-					path.join(this.config.cwd, ".wiki/intelligence/diagnostics.log"),
-					`[${input.timestamp}] Warning: failed to write model files: ${errMsg}\n`,
+					path.join(this.config.cwd, ".wiki/intelligence/diagnostics.jsonl"),
+					`${JSON.stringify(entry)}\n`,
 					"utf-8",
 				)
 			} catch {

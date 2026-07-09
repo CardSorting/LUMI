@@ -130,6 +130,18 @@ export const READ_ONLY_TOOLS = [
 			await writeFile(path.join(tmpDir, docName), `# ${docName}\n`, "utf-8")
 		}
 
+		// Write a seed diagnostic warning entry to verify NDJSON parsing and markdown rendering
+		const seedEntry = {
+			severity: "warning" as const,
+			code: "TEST_SEED",
+			message: "Pre-existing test warning",
+			timestamp: new Date().toISOString(),
+			source: "TestFramework",
+			recoveryHints: ["Verify system operation"],
+		}
+		await mkdir(path.join(tmpDir, ".wiki/intelligence"), { recursive: true })
+		await writeFile(path.join(tmpDir, ".wiki/intelligence/diagnostics.jsonl"), `${JSON.stringify(seedEntry)}\n`, "utf-8")
+
 		const runner = new FinalizationRunner(config)
 		const result = await runner.run()
 		result.success.should.be.true()
@@ -155,6 +167,8 @@ export const READ_ONLY_TOOLS = [
 		const markdown = await readFile(path.join(tmpDir, ".wiki/intelligence/workspace-intelligence.md"), "utf-8")
 		markdown.should.containEql("Workspace Intelligence:")
 		markdown.should.containEql("intelligence-workspace")
+		markdown.should.containEql("Workspace Knowledge Health: healthy")
+		markdown.should.containEql("📋 Recent Knowledge System Diagnostics")
 	})
 
 	it("finalization is idempotent on replay", async () => {
@@ -250,12 +264,18 @@ export const READ_ONLY_TOOLS = [
 			throw new Error("loadedModel is undefined")
 		}
 
-		const reader = new WorkspaceIntelligenceReader(loadedModel)
+		const reader = new WorkspaceIntelligenceReader(loadedModel, tmpDir)
 		reader.getVolatileSubsystems().should.containEql("src/")
 		reader.getStableSubsystems().should.containEql(".wiki/")
 		reader
 			.getRecentArchitectureDecisions()
 			.should.deepEqual([{ id: "ADR-001", title: "Standard decision", status: "Approved" }])
+
+		// Verify Health Diagnostics
+		const health = reader.getKnowledgeHealth()
+		health.status.should.equal("healthy")
+		health.recentDiagnostics.length.should.be.greaterThan(0)
+		health.recentDiagnostics[0].severity.should.equal("info")
 
 		// Verify Query APIs
 		reader.getSubsystemHealth("src/").status.should.equal("volatile")
@@ -358,9 +378,12 @@ export const READ_ONLY_TOOLS = [
 		// Should parse as undefined without throwing
 		;(model === undefined).should.be.true()
 
-		// Check that the error was logged in diagnostics.log
-		const logs = await readFile(path.join(tmpDir, ".wiki/intelligence/diagnostics.log"), "utf-8")
-		logs.should.containEql("Warning: failed to parse workspace-intelligence.json")
+		// Check that the error was logged in diagnostics.jsonl
+		const logs = await readFile(path.join(tmpDir, ".wiki/intelligence/diagnostics.jsonl"), "utf-8")
+		const parsed = JSON.parse(logs.trim())
+		parsed.severity.should.equal("warning")
+		parsed.code.should.equal("PARSE_ERROR")
+		parsed.source.should.equal("WorkspaceIntelligenceStore.readModel")
 	})
 
 	it("merges and deduplicates facts with the same ID and audits incomplete provenance", async () => {
@@ -456,8 +479,16 @@ export const READ_ONLY_TOOLS = [
 			const evidence = JSON.parse(result.evidenceJson ?? "{}")
 			evidence.workspaceIntelligenceUpdated.should.be.false()
 
-			const logs = await readFile(path.join(tmpDir, ".wiki/intelligence/diagnostics.log"), "utf-8")
-			logs.should.containEql("failed to write model files: Disk is full / read-only filesystem")
+			const { WorkspaceIntelligenceReader } = await import("@core/workspace-intelligence")
+			const failedReader = new WorkspaceIntelligenceReader({} as any, tmpDir)
+			const healthStatus = failedReader.getKnowledgeHealth()
+			healthStatus.status.should.equal("degraded")
+			healthStatus.lastDegradedReason!.should.containEql("Disk is full")
+			healthStatus.recoveryHints.should.containEql("Disk space is full. Free up some space or clean up directory files.")
+
+			const logs = await readFile(path.join(tmpDir, ".wiki/intelligence/diagnostics.jsonl"), "utf-8")
+			logs.should.containEql("failed to write model files")
+			logs.should.containEql("WRITE_ERROR")
 		} finally {
 			WorkspaceIntelligenceStore.prototype.writeModel = originalWriteModel
 		}
