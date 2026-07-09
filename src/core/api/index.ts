@@ -8,6 +8,7 @@ import { E2EMockOpenRouterHandler } from "./providers/e2e-mock-openrouter"
 import { NousResearchHandler } from "./providers/nousresearch"
 import { OpenAiCodexHandler } from "./providers/openai-codex"
 import { OpenRouterHandler } from "./providers/openrouter"
+import { XAIOauthHandler } from "./providers/xai-oauth"
 import { ApiHandler, ApiHandlerModel, ApiProviderInfo, CommonApiHandlerOptions, SingleCompletionHandler } from "./types"
 
 // Re-export the API handler contract for backward compatibility.
@@ -65,6 +66,13 @@ function createHandlerForProvider(
 				apiModelId: mode === "plan" ? options.planModeClinePassModelId : options.actModeClinePassModelId,
 				thinkingBudgetTokens:
 					mode === "plan" ? options.planModeThinkingBudgetTokens : options.actModeThinkingBudgetTokens,
+				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
+			})
+		case "xai-oauth":
+			return new XAIOauthHandler({
+				onRetryAttempt: options.onRetryAttempt,
+				xaiApiKey: options.xaiApiKey,
+				apiModelId: mode === "plan" ? options.planModeApiModelId : options.actModeApiModelId,
 				reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 			})
 		default:

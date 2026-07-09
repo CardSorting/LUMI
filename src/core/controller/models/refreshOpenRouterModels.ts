@@ -339,6 +339,28 @@ const DIETCODE_STEALTH_MODELS: Record<string, ModelInfo> = {
 		outputPrice: 0,
 		description: "A stealth model for testing purposes. Not a real potato.",
 	},
+	"x-ai/grok-4.5": {
+		name: "Grok 4.5",
+		maxTokens: 128_000,
+		contextWindow: 500_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 2.0,
+		outputPrice: 10.0,
+		description: "xAI's Grok 4.5 flagship model with 500K context window.",
+	},
+	"xai/grok-4.5": {
+		name: "Grok 4.5 (Alternate Mapping)",
+		maxTokens: 128_000,
+		contextWindow: 500_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 2.0,
+		outputPrice: 10.0,
+		description: "xAI's Grok 4.5 flagship model with 500K context window (alternate mapping).",
+	},
 }
 
 export function appendDietCodeStealthModels(currentModels: Record<string, ModelInfo>): Record<string, ModelInfo> {

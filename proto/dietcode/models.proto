@@ -469,6 +469,7 @@ enum ApiProvider {
   CLOUDFLARE = 41;
   GOOGLE_PERSONAL = 42;
   CLINE_PASS = 43;
+  XAI_OAUTH = 44;
 }
 
 enum ApiFormat {

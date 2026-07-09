@@ -6,6 +6,16 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-07-09
+
+### Added
+
+- **ChatGPT Subscription Models catalog update** — Added the full suite of GPT-5.6 models (`gpt-5.6-sol`, `gpt-5.6-sol-pro`, `gpt-5.6-terra`, `gpt-5.6-terra-pro`, `gpt-5.6-luna`, `gpt-5.6-luna-pro`), `gpt-5.4-mini`, and `gpt-5.3-codex-spark` to the OpenAI Codex provider catalog.
+- **Calibrated Context Window sizes** — Aligned context window limit parameters (`372_000` tokens for GPT-5.6 series, `272_000` tokens for GPT-5.5/5.4/5.3 series) to match the official `codex-main` configurations.
+- **Double platform-targeted packaging VSIX builds** — Created separate target-specific packages (`lumi-vscode` and `lumi`) to distribute native compiled binaries cleanly on all marketplaces.
+
+## [3.0.0] - 2026-07-09
+
 ### Added
 
 - **Completion lifecycle decision engine** (`CompletionLifecycleDecisionEngine`) — a single deterministic authority that owns all completion/finalization eligibility decisions. Receives an immutable snapshot, returns one canonical decision with a binding action contract (`nextAllowedAction`, `forbiddenActions`, `canonicalInstruction`) and a full structured decision trace.

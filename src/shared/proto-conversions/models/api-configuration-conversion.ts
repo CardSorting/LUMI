@@ -89,6 +89,8 @@ function convertApiProviderToProto(provider: string | undefined): ProtoApiProvid
 			return ProtoApiProvider.CLOUDFLARE
 		case "cline-pass":
 			return ProtoApiProvider.CLINE_PASS
+		case "xai-oauth":
+			return ProtoApiProvider.XAI_OAUTH
 		default:
 			return ProtoApiProvider.OPENROUTER
 	}
@@ -107,6 +109,8 @@ export function convertProtoToApiProvider(provider: ProtoApiProvider): ApiProvid
 			return "cloudflare"
 		case ProtoApiProvider.CLINE_PASS:
 			return "cline-pass"
+		case ProtoApiProvider.XAI_OAUTH:
+			return "xai-oauth"
 		default:
 			return "openrouter"
 	}

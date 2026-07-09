@@ -40,9 +40,15 @@ export const DIETCODE_RECOMMENDED_MODELS_FALLBACK: DietCodeRecommendedModelsData
 			tags: ["BEST"],
 		},
 		{
-			id: "openai/gpt-5.5-codex",
-			name: "OpenAI GPT-5.5 Codex",
+			id: "openai/gpt-5.6-sol",
+			name: "OpenAI GPT-5.6 Sol",
 			description: "OpenAI's latest and most capable coding model via ChatGPT subscription",
+			tags: ["NEW", "BEST"],
+		},
+		{
+			id: "xai/grok-4.5",
+			name: "xAI Grok 4.5",
+			description: "xAI's latest flagship model with advanced reasoning capabilities",
 			tags: ["NEW", "BEST"],
 		},
 	],

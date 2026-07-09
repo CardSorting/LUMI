@@ -19,6 +19,10 @@
 		{
 			"value": "cline-pass",
 			"label": "ClinePass"
+		},
+		{
+			"value": "xai-oauth",
+			"label": "Grok/X Subscription"
 		}
 	]
 }

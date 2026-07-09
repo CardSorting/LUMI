@@ -28,6 +28,7 @@ export type ApiProvider =
 	| "fireworks"
 	| "asksage"
 	| "xai"
+	| "xai-oauth"
 	| "sambanova"
 	| "cerebras"
 	| "groq"
@@ -2066,9 +2067,76 @@ export const openAiNativeModels = {
 export type OpenAiCodexModelId = keyof typeof openAiCodexModels
 export const openAiCodexDefaultModelId: OpenAiCodexModelId = "gpt-5.3-codex"
 export const openAiCodexModels = {
+	"gpt-5.6-sol": {
+		maxTokens: 128_000,
+		contextWindow: 372_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		// Subscription-based: no per-token costs
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.6 Sol: OpenAI's latest flagship coding model via ChatGPT subscription",
+	},
+	"gpt-5.6-sol-pro": {
+		maxTokens: 128_000,
+		contextWindow: 372_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.6 Sol Pro: High-effort reasoning flagship model via ChatGPT subscription",
+	},
+	"gpt-5.6-terra": {
+		maxTokens: 128_000,
+		contextWindow: 372_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.6 Terra: Balanced flagship coding model via ChatGPT subscription",
+	},
+	"gpt-5.6-terra-pro": {
+		maxTokens: 128_000,
+		contextWindow: 372_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.6 Terra Pro: High-effort reasoning balanced model via ChatGPT subscription",
+	},
+	"gpt-5.6-luna": {
+		maxTokens: 128_000,
+		contextWindow: 372_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.6 Luna: High-velocity flagship coding model via ChatGPT subscription",
+	},
+	"gpt-5.6-luna-pro": {
+		maxTokens: 128_000,
+		contextWindow: 372_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.6 Luna Pro: High-effort reasoning high-velocity model via ChatGPT subscription",
+	},
 	"gpt-5.5": {
 		maxTokens: 128_000,
-		contextWindow: 1_000_000,
+		contextWindow: 272_000,
 		supportsImages: true,
 		supportsPromptCache: true,
 		supportsReasoning: true,
@@ -2080,7 +2148,7 @@ export const openAiCodexModels = {
 	},
 	"gpt-5.4": {
 		maxTokens: 128_000,
-		contextWindow: 1_000_000,
+		contextWindow: 272_000,
 		supportsImages: true,
 		supportsPromptCache: true,
 		supportsReasoning: true,
@@ -2090,9 +2158,20 @@ export const openAiCodexModels = {
 		outputPrice: 0,
 		description: "GPT-5.4 Codex: OpenAI's latest flagship coding model via ChatGPT subscription",
 	},
+	"gpt-5.4-mini": {
+		maxTokens: 128_000,
+		contextWindow: 272_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.4 Mini: Faster version for coding tasks via ChatGPT subscription",
+	},
 	"gpt-5.3-codex": {
 		maxTokens: 128_000,
-		contextWindow: 400_000,
+		contextWindow: 272_000,
 		supportsImages: true,
 		supportsPromptCache: true,
 		supportsReasoning: true,
@@ -2101,6 +2180,17 @@ export const openAiCodexModels = {
 		inputPrice: 0,
 		outputPrice: 0,
 		description: "GPT-5.3 Codex: OpenAI's latest flagship coding model via ChatGPT subscription",
+	},
+	"gpt-5.3-codex-spark": {
+		maxTokens: 128_000,
+		contextWindow: 272_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		apiFormat: ApiFormat.OPENAI_RESPONSES,
+		inputPrice: 0,
+		outputPrice: 0,
+		description: "GPT-5.3 Codex Spark: Research preview coding model via ChatGPT subscription",
 	},
 	"gpt-5.2-codex": {
 		maxTokens: 128_000,
@@ -3476,6 +3566,15 @@ export const nebiusDefaultModelId = "Qwen/Qwen2.5-32B-Instruct-fast" satisfies N
 export type XAIModelId = keyof typeof xaiModels
 export const xaiDefaultModelId: XAIModelId = "grok-4"
 export const xaiModels = {
+	"grok-4.5": {
+		contextWindow: 500_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 2.0,
+		outputPrice: 10.0,
+		description: "xAI's Grok 4.5 flagship model with 500K context window.",
+	},
 	"grok-4-1-fast-reasoning": {
 		contextWindow: 2_000_000,
 		supportsImages: false,
@@ -4988,6 +5087,26 @@ export const minimaxModels = {
 export type NousResearchModelId = keyof typeof nousResearchModels
 export const nousResearchDefaultModelId: NousResearchModelId = "Hermes-4-405B"
 export const nousResearchModels = {
+	"~x-ai/grok-4.5": {
+		maxTokens: 128_000,
+		contextWindow: 500_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 2.0,
+		outputPrice: 10.0,
+		description: "xAI's Grok 4.5 via Nous Portal subscription",
+	},
+	"~xai/grok-4.5": {
+		maxTokens: 128_000,
+		contextWindow: 500_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoning: true,
+		inputPrice: 2.0,
+		outputPrice: 10.0,
+		description: "xAI's Grok 4.5 via Nous Portal subscription (alternate mapping)",
+	},
 	"Hermes-4-405B": {
 		maxTokens: 8192,
 		contextWindow: 128_000,
