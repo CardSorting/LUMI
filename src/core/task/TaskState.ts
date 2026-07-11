@@ -81,6 +81,37 @@ export class TaskState {
 	// Focus Chain / Todo List Management
 	apiRequestCount = 0
 	apiRequestsSinceLastTodoUpdate = 0
+	goldenCartridgeActive = false
+	/** Ephemeral structured evidence owned by this task; never persisted as repository authority. */
+	goldenCartridgeEvidenceCache = new Map<
+		string,
+		{ revision: number; verb: string; result: unknown; evidence: unknown[]; createdAt: number }
+	>()
+	goldenCartridgeEvidenceGeneration = 0
+	goldenCartridgeCanonicalWorkspaceRevision?: number
+	goldenCartridgeObservedMutationFlag = false
+	goldenCartridgeWorkingSet?: Record<string, unknown>
+	goldenCartridgeRecentResults = new Map<string, unknown>()
+	goldenCartridgeValidationHistory: import("@shared/golden-cartridge").GoldenCartridgeValidationObservation[] = []
+	goldenCartridgeMetrics = {
+		callsByVerb: {} as Record<string, number>,
+		cacheHits: 0,
+		cacheMisses: 0,
+		compressions: 0,
+		patchAttempts: 0,
+		patchFailures: 0,
+		commands: 0,
+		testCommands: 0,
+		commandDurationMs: 0,
+		validationRecommended: 0,
+		validationReused: 0,
+		validationInvalidated: 0,
+		evidenceItemsReused: 0,
+		evidenceItemsInvalidated: 0,
+		repositoryCollectionsReused: 0,
+		repositoryRevisionChanges: 0,
+		lastMutationAt: undefined as number | undefined,
+	}
 	currentFocusChainChecklist: string | null = null
 	todoListWasUpdatedByUser = false
 

@@ -397,6 +397,7 @@ export async function orchestrateCommandExecution(
 						userRejected: false,
 						result: `Command execution timed out after ${timeoutSeconds} seconds. ${result.length > 0 ? `\nOutput so far:\n${result}` : ""}`,
 						completed: false,
+						timedOut: true,
 						outputLines,
 					}
 				}

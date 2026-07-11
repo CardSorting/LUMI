@@ -1,0 +1,292 @@
+---
+title: "Golden Cartridge Protocol"
+sidebarTitle: "Golden Cartridge"
+description: "Optional high-information, low-mass development workbench and tools reference."
+---
+
+## Overview
+
+The **Golden Cartridge Protocol** is an optional agent development workbench designed to find high-information, low-mass engineering paths. It operates under the core philosophy that context window size, command execution, mutation surface, and human review capacity are finite resources.
+
+Rather than running broad traversals or inventing new architectures, the Golden Cartridge workflow optimizes for verified engineering value per unit of cost by promoting surgical reads, structural reuse, compact representation, and automated disproving checks.
+
+---
+
+## How to Enable
+
+You can activate the protocol in one of two ways:
+
+1. **Toolbar Toggle**: Click the scale/skills icon at the bottom of the chat panel next to the model selector, and toggle **Golden Cartridge Protocol**.
+2. **Dynamic Invocation**: Call `use_skill` with the name `golden-cartridge-protocol`.
+
+Activating the skill supplies its methodology and exposes the compact `golden_cartridge` tool facade on the next model inference. It cannot modify the tool schema of an active request already in progress.
+
+---
+
+## The `golden_cartridge` Tool
+
+The tool uses a single native schema with the following format:
+
+* **Name**: `golden_cartridge`
+* **Parameters**:
+  * `verb` (string, required): One of the twelve verbs listed below.
+  * `payload` (string, optional): A compact JSON string specifying inputs specific to the chosen verb.
+
+### Summary of Verbs
+
+The tool supports twelve verbs to handle discovery, context, design, mutation, validation, and verification:
+
+| Verb | Purpose | Delegated Authority / Sub-tools Called |
+| :--- | :--- | :--- |
+| [`trace`](#trace) | Projects the shortest route from the project map. | `project_map` |
+| [`slice`](#slice) | Collects focused symbol definitions and lexical context. | `list_code_definition_names`, `search_files` |
+| [`resolve_authority`](#resolve-authority) | Ranks repository files by structural ownership. | `project_map`, `search_files` |
+| [`find_reuse`](#find-reuse) | Finds existing implementations and behavior to reuse. | `project_map`, `search_files` |
+| [`compress`](#compress) | Updates task working set and cognitive memory. | `create_cognitive_snapshot`, `condense` |
+| [`compare_mass`](#compare-mass) | Performs deterministic tradeoff analysis of solution candidates. | *None (pure computation)* |
+| [`design_compact`](#design-compact) | Suggests alternative representations to reduce logic duplication. | *None (computational suggestion)* |
+| [`patch_smallest`](#patch-smallest) | Executes a narrow patch on target files. | `apply_patch` |
+| [`disprove`](#disprove) | Discovers and executes minimal disproving checks or unit tests. | `search_files`, `execute_command` |
+| [`measure`](#measure) | Projects task metrics (API usage, reads, caching). | *None (observational telemetry)* |
+| [`reclaim`](#reclaim) | Identifies duplicate or superseded context and validation. | *None (observational telemetry)* |
+| [`seal`](#seal) | Compiles a handoff receipt from evidence and results. | *None (observational telemetry)* |
+
+---
+
+## Detailed Verb Reference
+
+### `trace`
+Projects a deduplicated path through the repository structural graph from a query or target symbol.
+
+* **Payload Parameters**:
+  * `target` (string): Target symbol or filename.
+  * `question` (string): Natural language context or query.
+  * `evidence` (array of `GoldenCartridgeEvidence`): Working context evidence.
+* **Example Payload**:
+  ```json
+  {
+    "target": "NativeMutationManager",
+    "question": "Where is workspace revision tracked?"
+  }
+  ```
+
+---
+
+### `slice`
+Retrieves direct lexical context and definitions for a target file or query, omitting massive full-file reads.
+
+* **Payload Parameters**:
+  * `target` (string): Target file path.
+  * `question` (string): Query regex or text to search.
+* **Example Payload**:
+  ```json
+  {
+    "target": "src/shared/golden-cartridge.ts",
+    "question": "export interface"
+  }
+  ```
+
+---
+
+### `resolve_authority`
+Ranks and traces the files that own or manage a specific requirement.
+
+* **Payload Parameters**:
+  * `requirement` (string): The rule or logic requirement.
+  * `target` (string): Context file path.
+* **Example Payload**:
+  ```json
+  {
+    "requirement": "Verify completion gate status mapping",
+    "target": "src/core/task/tools/completion/"
+  }
+  ```
+
+---
+
+### `find_reuse`
+Searches for structural and lexical matches to identify existing code patterns, preventing redundant invention.
+
+* **Payload Parameters**:
+  * `requirement` (string): Behavior/feature to implement.
+* **Example Payload**:
+  ```json
+  {
+    "requirement": "check validation cache exit codes"
+  }
+  ```
+
+---
+
+### `compress`
+Updates the task-local working set and condenses redundant chat context.
+
+* **Payload Parameters**:
+  * `requirement` (string): The ongoing task description.
+  * `release` (array of strings): Context elements to clean up.
+  * `persistDurableMemory` (boolean): Set to `true` to store a permanent cognitive snapshot.
+* **Example Payload**:
+  ```json
+  {
+    "requirement": "Implement validation history caching",
+    "release": ["previous failed bash output"],
+    "persistDurableMemory": true
+  }
+  ```
+
+---
+
+### `compare_mass`
+Performs a deterministic, multidimensional comparison of solution candidates using structural criteria (number of files touched, public interfaces, dependencies, readability, etc.) instead of plain line-count scores.
+
+* **Payload Parameters**:
+  * `candidates` (array of `SolutionCandidate`): Candidate options.
+* **Example Payload**:
+  ```json
+  {
+    "candidates": [
+      {
+        "id": "opt_inline",
+        "description": "Inline validation in handler",
+        "filesTouched": 1,
+        "newAbstractions": 0,
+        "runtimeWork": "low",
+        "regressionExposure": "low"
+      },
+      {
+        "id": "opt_service",
+        "description": "Extract validation service class",
+        "filesTouched": 3,
+        "newAbstractions": 1,
+        "runtimeWork": "medium",
+        "regressionExposure": "low"
+      }
+    ]
+  }
+  ```
+
+---
+
+### `design_compact`
+Generates bounded representation options from existing patterns to remove duplicated decision state.
+
+* **Payload Parameters**:
+  * `requirement` (string): Design requirement.
+  * `evidence` (array of `GoldenCartridgeEvidence`): Related codebase findings.
+* **Example Payload**:
+  ```json
+  {
+    "requirement": "Map validation outcome status",
+    "evidence": [
+      {
+        "source": "src/shared/golden-cartridge.ts",
+        "provenance": "repository",
+        "statement": "Validation status contains exitCode and signal details."
+      }
+    ]
+  }
+  ```
+
+---
+
+### `patch_smallest`
+Delegates applying the smallest possible authoritative patch to the codebase.
+
+* **Payload Parameters**:
+  * `proposedChange` (string): Unified diff block / patch.
+  * `canonicalTarget` (string): Absolute target path.
+  * `allowedFiles` (array of strings): Allowed mutation scope.
+* **Example Payload**:
+  ```json
+  {
+    "proposedChange": "*** Update File: src/shared/golden-cartridge.ts\n...",
+    "canonicalTarget": "src/shared/golden-cartridge.ts"
+  }
+  ```
+
+---
+
+### `disprove`
+Collects, filters, and executes the cheapest validation checks or unit tests to quickly disprove the correctness of current code or changes.
+
+* **Payload Parameters**:
+  * `validationQuestion` (string): Goal of the test check.
+  * `changedSurfaces` (array of strings): Files modified.
+  * `testFiles` (array of strings): Known test filenames.
+  * `execute` (boolean): Defaults to `true`. If `false`, registers/recommends commands without running them.
+* **Example Payload**:
+  ```json
+  {
+    "validationQuestion": "Verify cartridge validation caching",
+    "changedSurfaces": ["src/core/task/tools/handlers/GoldenCartridgeToolHandler.ts"],
+    "execute": true
+  }
+  ```
+
+---
+
+### `measure`
+Exposes the observational metrics of the current task run (e.g., API requests, unique files read, cache hits/misses, and validation durations).
+
+* **Payload Parameters**: *None*
+* **Example Payload**:
+  ```json
+  {}
+  ```
+
+---
+
+### `reclaim`
+Identifies redundant evidence, duplicate statements, or candidate validation scopes that can be safely discarded to reduce context mass.
+
+* **Payload Parameters**:
+  * `candidateSurfaces` (array of strings): Modified directories or files.
+  * `supersededWork` (array of strings): Discarded solutions or approaches.
+* **Example Payload**:
+  ```json
+  {
+    "candidateSurfaces": ["src/core/task/tools/handlers/GoldenCartridgeToolHandler.ts"],
+    "supersededWork": ["old_validation_check_script"]
+  }
+  ```
+
+---
+
+### `seal`
+Compiles an informational receipt mapping requirements, critical paths, validation outcomes, and confidence values. Useful for handoffs.
+
+* **Payload Parameters**:
+  * `validationEvidence` (array of `GoldenCartridgeEvidence`): Specific validation runs.
+  * `residualRisks` (array of strings): Open concerns or future risks.
+* **Example Payload**:
+  ```json
+  {
+    "validationEvidence": [
+      {
+        "source": "npm test",
+        "provenance": "runtime",
+        "statement": "All tests passed successfully."
+      }
+    ],
+    "residualRisks": ["stale cache risk if updated outside the tool coordinator"]
+  }
+  ```
+
+---
+
+## Caching & Invalidations
+
+To minimize codebase scanning overhead, the Golden Cartridge framework utilizes two levels of caching:
+
+1. **Evidence Caching**: Results from discovery verbs (`trace`, `slice`, `resolve_authority`, `find_reuse`) are cached. The cache is automatically cleared if a file mutation (`didEditFile`) or a repository revision change is detected. Users can bypass this by passing `refresh: true` or `bypassCache: true` in the payload.
+2. **Validation Caching**: Passing test results from `disprove` are cached per workspace revision. They are invalidated if the workspace revision increments (e.g., following a patch or commit).
+
+---
+
+## Dependency & Implementation Structure
+
+The dependency relationship between the Golden Cartridge and the rest of the editor is **one-way**. While Golden Cartridge relies on and coordinates existing core tools (like `project_map`, `search_files`, `apply_patch`, and `execute_command`), no core subsystem depends on the Golden Cartridge. 
+
+* **Types & Interfaces**: [src/shared/golden-cartridge.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/shared/golden-cartridge.ts)
+* **Tool Handler**: [src/core/task/tools/handlers/GoldenCartridgeToolHandler.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/tools/handlers/GoldenCartridgeToolHandler.ts)
+* **Skill Definitions**: [optional-skills/dietcode/golden-cartridge-protocol/SKILL.md](file:///Users/bozoegg/Downloads/codemarie-new/optional-skills/dietcode/golden-cartridge-protocol/SKILL.md)

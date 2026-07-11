@@ -86,6 +86,37 @@ Every skill has a toggle to enable or disable it. This lets you control which sk
 
 For example, you might disable a CI/CD skill when working on local development, or enable a client-specific skill only when working on that client's project.
 
+## Golden Cartridge
+
+Golden Cartridge is an optional development workbench for finding high-information, low-mass engineering paths. Enable **Golden Cartridge Protocol** from the persistent **Skills** control in the chat toolbar. For a detailed reference on all verbs and schemas, see the [Golden Cartridge Protocol Reference](/tools-reference/golden-cartridge).
+
+The preference controls whether the compact `golden_cartridge` facade is available when a task starts. Activating `golden-cartridge-protocol` with `use_skill` supplies its methodology and exposes the facade on the next model inference; it cannot alter the tool schema of a request already in progress.
+
+The facade provides twelve verbs through one native schema:
+
+| Verb | Existing authority composed |
+|------|-----------------------------|
+| `trace` | Project map and repository graph |
+| `slice` | Definition lookup and focused search |
+| `resolve_authority` | Project map plus repository evidence |
+| `find_reuse` | Structural and indexed search |
+| `compress` | Cognitive snapshot and context condensation |
+| `compare_mass` | Deterministic caller-provided candidate comparison |
+| `design_compact` | Bounded representation analysis |
+| `patch_smallest` | Existing patch handler |
+| `disprove` | Existing command handler |
+| `measure` | Existing task-state observations |
+| `reclaim` | Working-set and proposal analysis |
+| `seal` | Evidence and telemetry projection |
+
+Golden Cartridge adds vocabulary and composition only. It does not grant or deny mutation permission, enforce budgets, replace repository or memory systems, or authorize completion. Patch and command verbs retain their normal approval behavior. Cost measurements are observational, and `seal` produces an informational receipt rather than a lifecycle decision.
+
+Within a task, discovery verbs reuse compact structured evidence until a Golden Cartridge mutation invalidates it; callers can pass `refresh: true` or `bypassCache: true`. `compress` updates only the task working set by default—durable cognitive memory requires explicit `persistDurableMemory: true`. `disprove` can recommend nearby repository tests without execution by passing `execute: false`.
+
+Validation receipts use structured evidence from the ordinary command executor—approval, completion, exit code, signal, timeout, and duration—rather than interpreting optimistic output text. Successful results may be reused only for the same observed repository revision; mutation invalidates them, while external changes outside canonical mutation tracking remain an explicit stale risk.
+
+The dependency boundary is one-way: Golden Cartridge may call existing authorities, but ordinary project mapping, reading, memory, mutation, execution, telemetry, validation, and completion do not depend on the facade. Removing Golden Cartridge therefore removes its vocabulary and projections without removing ordinary capabilities.
+
 ## Writing Your SKILL.md
 
 ### Naming Conventions

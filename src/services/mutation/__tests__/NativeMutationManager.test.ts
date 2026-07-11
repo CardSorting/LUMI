@@ -44,6 +44,7 @@ describe("NativeMutationManager", () => {
 
 			const fileContent = await fs.readFile(fullPath, "utf8")
 			assert.strictEqual(fileContent, "const foo = 100;\n")
+			assert.strictEqual(await manager.getWorkspaceRevision(tempWorkspace), res.kernel.revisionAfter)
 		})
 
 		it("should execute verify command and return exit status", async () => {

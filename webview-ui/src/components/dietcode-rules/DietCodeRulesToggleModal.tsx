@@ -67,7 +67,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 	const { width: viewportWidth, height: viewportHeight } = useWindowSize()
 	const [arrowPosition, setArrowPosition] = useState(0)
 	const [menuPosition, setMenuPosition] = useState(0)
-	const [currentView, setCurrentView] = useState<"rules" | "workflows" | "hooks" | "skills">("rules")
+	const [currentView, setCurrentView] = useState<"rules" | "workflows" | "hooks" | "skills">("skills")
 
 	// Auto-switch to rules tab if hooks become disabled while viewing hooks tab
 	useEffect(() => {
@@ -437,14 +437,15 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		<div className="inline-flex min-w-0 max-w-full items-center" ref={modalRef}>
 			<div className="inline-flex w-full items-center" ref={buttonRef}>
 				<Tooltip>
-					{!isVisible && <TooltipContent>Manage LUMI Rules & Workflows</TooltipContent>}
+					{!isVisible && <TooltipContent>Manage skills and agent preferences</TooltipContent>}
 					<TooltipTrigger>
 						<VSCodeButton
-							appearance="icon"
-							aria-label={isVisible ? "Hide LUMI Rules & Workflows" : "Show LUMI Rules & Workflows"}
-							className="p-0 m-0 flex items-center"
+							appearance="secondary"
+							aria-label={isVisible ? "Hide Skills" : "Manage Skills"}
+							className="m-0 flex h-7 items-center gap-1 px-2 text-[11px]"
 							onClick={() => setIsVisible(!isVisible)}>
-							<VscIcon className="" name="law" style={{ fontSize: "12.5px" }} />
+							<VscIcon className="" name="sparkle" style={{ fontSize: "12.5px" }} />
+							<span>Skills</span>
 						</VSCodeButton>
 					</TooltipTrigger>
 				</Tooltip>

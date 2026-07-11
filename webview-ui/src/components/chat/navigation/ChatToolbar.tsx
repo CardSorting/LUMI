@@ -1,5 +1,6 @@
 import { ArrowLeft, MoreHorizontal } from "lucide-react"
 import { useCallback, useMemo } from "react"
+import DietCodeRulesToggleModal from "@/components/dietcode-rules/DietCodeRulesToggleModal"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -125,6 +126,8 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }
 				</div>
 
 				<nav aria-label="Workspace navigation" className="flex shrink-0 items-center gap-1">
+					{!showHistory ? <DietCodeRulesToggleModal /> : null}
+
 					{!showHistory ? (
 						<Button
 							aria-current={activePanel === "history" ? "page" : undefined}

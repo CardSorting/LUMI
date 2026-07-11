@@ -10,6 +10,11 @@ import {
 	isVerificationCommand,
 } from "@shared/audit/auditPostTool"
 import { COMMAND_REQ_APP_STRING } from "@shared/combineCommandSequences"
+import {
+	attachCommandExecutionEvidence,
+	type CommandExecutionEvidence,
+	readCommandExecutionEvidence,
+} from "@shared/command-execution-evidence"
 import { DietCodeAsk } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { arePathsEqual } from "@utils/path"
@@ -100,6 +105,17 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		const requiresApprovalPerLLM = requiresApprovalRaw?.toLowerCase() === "true"
 		const timeoutParam: string | undefined = block.params.timeout
 		let timeoutSeconds: number | undefined
+		const evidenceResponse = (content: ToolResponse, overrides: Partial<CommandExecutionEvidence> = {}): ToolResponse =>
+			attachCommandExecutionEvidence(content, {
+				command: command ?? "",
+				approvalStatus: "unknown",
+				started: false,
+				completed: false,
+				timedOut: false,
+				stdoutAvailable: false,
+				stderrAvailable: false,
+				...overrides,
+			})
 
 		// Extract provider using the proven pattern from ReportBugHandler
 		const apiConfig = config.services.stateManager.getApiConfiguration()
@@ -179,7 +195,9 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			if (!config.isSubagentExecution) {
 				await config.callbacks.say("command_permission_denied", errorMessage)
 			}
-			return formatResponse.toolError(formatResponse.permissionDeniedError(errorMessage))
+			return evidenceResponse(formatResponse.toolError(formatResponse.permissionDeniedError(errorMessage)), {
+				approvalStatus: "denied",
+			})
 		}
 
 		// Check dietcodeignore validation for command
@@ -188,10 +206,11 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			if (!config.isSubagentExecution) {
 				await config.callbacks.say("dietcodeignore_error", commandValidation.error)
 			}
-			return formatResponse.toolError(commandValidation.error)
+			return evidenceResponse(formatResponse.toolError(commandValidation.error), { approvalStatus: "denied" })
 		}
 
 		let didAutoApprove = false
+		let approvalStatus: CommandExecutionEvidence["approvalStatus"] = "unknown"
 
 		// If the model says this command is safe and auto approval for safe commands is true, execute the command
 		// If the model says the command is risky, but *BOTH* auto approve settings are true, execute the command
@@ -234,6 +253,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 				await config.callbacks.say("command", actualCommand, undefined, undefined, false)
 			}
 			didAutoApprove = true
+			approvalStatus = requiresApprovalPerLLM ? "approved" : "not_required"
 			telemetryService.captureToolUsage(
 				config.ulid,
 				block.name,
@@ -267,8 +287,9 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 					workspaceContext,
 					block.isNativeToolCall,
 				)
-				return formatResponse.toolDenied()
+				return evidenceResponse(formatResponse.toolDenied(), { approvalStatus: "denied" })
 			}
+			approvalStatus = "approved"
 			telemetryService.captureToolUsage(
 				config.ulid,
 				block.name,
@@ -288,7 +309,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		} catch (error) {
 			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
 			if (error instanceof PreToolUseHookCancellationError) {
-				return formatResponse.toolDenied()
+				return evidenceResponse(formatResponse.toolDenied(), { approvalStatus: "denied" })
 			}
 			throw error
 		}
@@ -313,11 +334,30 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			finalCommand = `cd "${executionDir}" && ${actualCommand}`
 		}
 
-		const [userRejected, result] = await executor.execute(
-			config.ulid,
-			() => config.callbacks.executeCommandTool(finalCommand, timeoutSeconds),
-			{ concurrencyGroup: "shell" },
-		)
+		let userRejected: boolean
+		let result: ToolResponse
+		const startedAt = Date.now()
+		try {
+			;[userRejected, result] = await executor.execute(
+				config.ulid,
+				() => config.callbacks.executeCommandTool(finalCommand, timeoutSeconds),
+				{ concurrencyGroup: "shell" },
+			)
+		} catch (error) {
+			return evidenceResponse(formatResponse.toolError(`Command execution failed: ${String(error)}`), {
+				approvalStatus,
+				started: true,
+				executionError: error instanceof Error ? error.message : String(error),
+				durationMs: Date.now() - startedAt,
+			})
+		}
+		const canonicalEvidence = readCommandExecutionEvidence(result)
+		result = evidenceResponse(result, {
+			...canonicalEvidence,
+			command: actualCommand,
+			approvalStatus,
+			durationMs: canonicalEvidence?.durationMs ?? Date.now() - startedAt,
+		})
 
 		if (timeoutId) {
 			clearTimeout(timeoutId)

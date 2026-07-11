@@ -1,6 +1,7 @@
 import * as assert from "assert"
 import { describe, it } from "mocha"
 import { BUNDLED_SKILL_NAME } from "@/services/roadmap/RoadmapSkillInstall"
+import { GOLDEN_CARTRIDGE_SKILL_NAME } from "@/shared/golden-cartridge"
 import type { SkillMetadata } from "@/shared/skills"
 import { BUNDLED_SKILL_URI_PREFIX, isSkillEnabled, skillToggleKey } from "@/shared/skills"
 import { filterPromptSkills } from "../skillRuntime"
@@ -23,6 +24,19 @@ describe("skillRuntime", () => {
 })
 
 describe("skillToggleKey", () => {
+	it("keeps optional bundled skills disabled until the preference is enabled", () => {
+		const skill: SkillMetadata = {
+			name: GOLDEN_CARTRIDGE_SKILL_NAME,
+			description: "d",
+			path: `${BUNDLED_SKILL_URI_PREFIX}${GOLDEN_CARTRIDGE_SKILL_NAME}`,
+			source: "bundled",
+			defaultEnabled: false,
+		}
+		const key = skillToggleKey(skill)
+		assert.strictEqual(isSkillEnabled(skill, {}, {}), false)
+		assert.strictEqual(isSkillEnabled(skill, { [key]: true }, {}), true)
+	})
+
 	it("uses stable URI for bundled skills", () => {
 		const key = skillToggleKey({
 			name: BUNDLED_SKILL_NAME,

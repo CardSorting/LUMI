@@ -9,6 +9,7 @@ import type { SkillMetadata } from "@shared/skills"
 import { telemetrySkillSource } from "@shared/skills"
 import { BUNDLED_SKILL_NAME } from "@/services/roadmap/RoadmapSkillInstall"
 import { telemetryService } from "@/services/telemetry"
+import { GOLDEN_CARTRIDGE_SKILL_NAME } from "@/shared/golden-cartridge"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
@@ -20,11 +21,15 @@ function parseFullReference(value: string | undefined): boolean {
 	return normalized === "true" || normalized === "1" || normalized === "yes"
 }
 
-function skillLoadReason(skillName: string, fullReference: boolean, loadMode: "digest" | "full"): string {
+function skillLoadReason(skillName: string, fullReference: boolean, _loadMode: "digest" | "full"): string {
 	if (skillName === BUNDLED_SKILL_NAME) {
 		return fullReference ? "explicit_full_reference" : "bundled_roadmap_digest_default"
 	}
 	return fullReference ? "explicit_full_reference" : "standard_skill_full"
+}
+
+export function activateSkillTools(taskState: TaskConfig["taskState"], skillName: string): void {
+	if (skillName === GOLDEN_CARTRIDGE_SKILL_NAME) taskState.goldenCartridgeActive = true
 }
 
 export class UseSkillToolHandler implements IToolHandler, IPartialBlockHandler {
@@ -59,6 +64,13 @@ export class UseSkillToolHandler implements IToolHandler, IPartialBlockHandler {
 		const resolvedSkills = await getResolvedSkillsForCwd(config.cwd)
 		const cacheHit = wasLastSkillsCacheHit()
 		const availableSkills = filterEnabledSkills(resolvedSkills, globalSkillsToggles, localSkillsToggles)
+		const requestedGoldenCartridge = skillName === GOLDEN_CARTRIDGE_SKILL_NAME
+		if (requestedGoldenCartridge) {
+			const bundledGoldenCartridge = resolvedSkills.find((skill) => skill.name === GOLDEN_CARTRIDGE_SKILL_NAME)
+			if (bundledGoldenCartridge && !availableSkills.some((skill) => skill.name === GOLDEN_CARTRIDGE_SKILL_NAME)) {
+				availableSkills.push(bundledGoldenCartridge)
+			}
+		}
 
 		if (availableSkills.length === 0) {
 			return `Error: No skills are available. Skills may be disabled or not configured.`
@@ -85,6 +97,10 @@ export class UseSkillToolHandler implements IToolHandler, IPartialBlockHandler {
 			if (!skillContent) {
 				const availableNames = availableSkills.map((s: SkillMetadata) => s.name).join(", ")
 				return `Error: Skill "${skillName}" not found. Available skills: ${availableNames || "none"}`
+			}
+
+			if (requestedGoldenCartridge) {
+				activateSkillTools(config.taskState, skillName)
 			}
 
 			const loadReason = skillLoadReason(skillName, fullReference, loadMode)

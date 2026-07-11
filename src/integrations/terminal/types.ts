@@ -342,6 +342,8 @@ export interface OrchestrationResult {
 	result: DietCodeToolResponseContent
 	/** Whether the command completed */
 	completed: boolean
+	/** True when the managed wait timeout elapsed before process completion. */
+	timedOut?: boolean
 	/** All output lines captured */
 	outputLines: string[]
 	/** Path to log file if output was too large and written to file */

@@ -7,6 +7,8 @@ export interface SkillMetadata {
 	description: string
 	path: string
 	source: "global" | "project" | "bundled"
+	/** Bundled preferences may be offered without changing normal agent behavior. */
+	defaultEnabled?: boolean
 }
 
 /**
@@ -33,8 +35,7 @@ export function isSkillEnabled(
 ): boolean {
 	const toggles = skill.source === "project" ? localToggles : globalToggles
 	const key = skillToggleKey(skill)
-	if (toggles[key] === false) return false
-	return true
+	return toggles[key] ?? skill.defaultEnabled ?? true
 }
 
 export function telemetrySkillSource(source: SkillMetadata["source"]): "global" | "project" | "bundled" {

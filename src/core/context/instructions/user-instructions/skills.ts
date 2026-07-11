@@ -1,4 +1,5 @@
 import { getSkillsDirectoriesForScan } from "@core/storage/disk"
+import { GOLDEN_CARTRIDGE_SKILL_NAME } from "@shared/golden-cartridge"
 import type { SkillContent, SkillMetadata } from "@shared/skills"
 import { BUNDLED_SKILL_URI_PREFIX } from "@shared/skills"
 import { fileExistsAtPath, isDirectory } from "@utils/fs"
@@ -9,6 +10,9 @@ import { BUNDLED_SKILL_NAME, bundledSkillPath, getBundledRoadmapSkillMetadata } 
 import { Logger } from "@/shared/services/Logger"
 import { parseYamlFrontmatter } from "./frontmatter"
 import { ROADMAP_SKILL_EXECUTION_DIGEST } from "./roadmapSkillDigest"
+
+const GOLDEN_CARTRIDGE_SKILL_DESCRIPTION =
+	"Apply an explicit scarcity budget to development work. Enable this optional preference when you want minimal repository reads, mutations, abstractions, dependencies, delegation, and validation cost."
 
 export {
 	filterEnabledSkills,
@@ -110,7 +114,7 @@ async function loadSkillMetadata(
  * Returns skills in order: project skills first, then global skills.
  * Global skills take precedence over project skills with the same name.
  */
-export async function discoverSkills(cwd: string): Promise<SkillMetadata[]> {
+export async function discoverSkills(cwd: string, includeOptionalBundled = false): Promise<SkillMetadata[]> {
 	const skills: SkillMetadata[] = []
 
 	const scanDirs = getSkillsDirectoriesForScan(cwd)
@@ -123,6 +127,19 @@ export async function discoverSkills(cwd: string): Promise<SkillMetadata[]> {
 	const bundledSkill = await getBundledRoadmapSkillMetadata()
 	if (bundledSkill) {
 		skills.push(bundledSkill)
+	}
+
+	if (includeOptionalBundled && getRoadmapConfig().auto_install_skills) {
+		try {
+			await fs.access(await bundledSkillPath(GOLDEN_CARTRIDGE_SKILL_NAME))
+			skills.push({
+				name: GOLDEN_CARTRIDGE_SKILL_NAME,
+				description: GOLDEN_CARTRIDGE_SKILL_DESCRIPTION,
+				path: `${BUNDLED_SKILL_URI_PREFIX}${GOLDEN_CARTRIDGE_SKILL_NAME}`,
+				source: "bundled",
+				defaultEnabled: false,
+			})
+		} catch {}
 	}
 
 	return skills
@@ -175,7 +192,7 @@ export async function getSkillContent(
 	}
 
 	try {
-		const readPath = skill.path.startsWith(BUNDLED_SKILL_URI_PREFIX) ? await bundledSkillPath() : skill.path
+		const readPath = skill.path.startsWith(BUNDLED_SKILL_URI_PREFIX) ? await bundledSkillPath(skill.name) : skill.path
 		const fileContent = await fs.readFile(readPath, "utf-8")
 		const { content: body } = parseFrontmatter(fileContent)
 

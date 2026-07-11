@@ -59,7 +59,7 @@ export async function getResolvedSkillsForCwd(cwd: string, forceRefresh = false)
 	cacheMetrics.misses++
 	cacheMetrics.lastHit = false
 
-	const allSkills = await discoverSkills(cwd)
+	const allSkills = await discoverSkills(cwd, true)
 	const resolved = getAvailableSkills(allSkills)
 	skillsCache.set(key, { skills: resolved, cachedAt: Date.now() })
 	return resolved

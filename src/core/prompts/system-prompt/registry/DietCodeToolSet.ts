@@ -87,6 +87,7 @@ export class DietCodeToolSet {
 	public static getEnabledTools(variant: PromptVariant, context: SystemPromptContext): DietCodeToolSet[] {
 		const resolved: DietCodeToolSet[] = []
 		const requestedIds = variant.tools ? [...variant.tools] : []
+		if (context.goldenCartridgeAvailable === true) requestedIds.push(DietCodeDefaultTool.GOLDEN_CARTRIDGE)
 		for (const id of requestedIds) {
 			const tool = DietCodeToolSet.getToolByNameWithFallback(id, variant.family)
 			if (tool) {

@@ -22,11 +22,11 @@ export function setRoadmapExtensionRoot(root: string): void {
 	extensionRoot = path.resolve(root)
 }
 
-function bundledSkillCandidates(): string[] {
+function bundledSkillCandidates(skillName = BUNDLED_SKILL_NAME): string[] {
 	const candidates: string[] = []
 	if (extensionRoot) {
-		candidates.push(path.join(extensionRoot, "optional-skills", "dietcode", "auto-rolling-roadmap", "SKILL.md"))
-		candidates.push(path.join(extensionRoot, "SKILL.md"))
+		candidates.push(path.join(extensionRoot, "optional-skills", "dietcode", skillName, "SKILL.md"))
+		if (skillName === BUNDLED_SKILL_NAME) candidates.push(path.join(extensionRoot, "SKILL.md"))
 	}
 	const roots = [
 		process.cwd(),
@@ -35,20 +35,20 @@ function bundledSkillCandidates(): string[] {
 		path.resolve(__dirname, "..", "..", "..", ".."),
 	]
 	for (const root of roots) {
-		candidates.push(path.join(root, "optional-skills", "dietcode", "auto-rolling-roadmap", "SKILL.md"))
-		candidates.push(path.join(root, "SKILL.md"))
+		candidates.push(path.join(root, "optional-skills", "dietcode", skillName, "SKILL.md"))
+		if (skillName === BUNDLED_SKILL_NAME) candidates.push(path.join(root, "SKILL.md"))
 	}
 	return [...new Set(candidates)]
 }
 
-export async function bundledSkillPath(): Promise<string> {
-	for (const candidate of bundledSkillCandidates()) {
+export async function bundledSkillPath(skillName = BUNDLED_SKILL_NAME): Promise<string> {
+	for (const candidate of bundledSkillCandidates(skillName)) {
 		try {
 			await fs.access(candidate)
 			return candidate
 		} catch {}
 	}
-	return bundledSkillCandidates()[0]
+	return bundledSkillCandidates(skillName)[0]
 }
 
 export async function isBundledSkillAvailable(): Promise<boolean> {

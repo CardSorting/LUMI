@@ -6,6 +6,7 @@
  */
 
 import { findLastIndex } from "@shared/array"
+import { attachCommandExecutionEvidence } from "@shared/command-execution-evidence"
 import { DietCodeToolResponseContent } from "@shared/messages"
 import { Logger } from "@/shared/services/Logger"
 import { orchestrateCommandExecution } from "./CommandOrchestrator"
@@ -72,6 +73,7 @@ export class CommandExecutor {
 		const terminalInfo = await manager.getOrCreateTerminal(this.cwd)
 		terminalInfo.terminal.show()
 		const process = manager.runCommand(terminalInfo, command)
+		const startedAt = Date.now()
 
 		// Reset cancellation flag and track the current process
 		this.wasCancelledExternally = false
@@ -98,10 +100,38 @@ export class CommandExecutor {
 				result.outputLines.length > 0
 					? `\nOutput captured before cancellation:\n${manager.processOutput(result.outputLines)}`
 					: ""
-			return [true, `Command was cancelled by the user.${outputSoFar}`]
+			return [
+				true,
+				attachCommandExecutionEvidence(`Command was cancelled by the user.${outputSoFar}`, {
+					command,
+					approvalStatus: "unknown",
+					started: true,
+					completed: false,
+					exitCode: result.exitCode ?? undefined,
+					signal: result.signal ?? undefined,
+					timedOut: false,
+					durationMs: Date.now() - startedAt,
+					stdoutAvailable: result.outputLines.length > 0,
+					stderrAvailable: false,
+				}),
+			]
 		}
 
-		return [result.userRejected, result.result]
+		return [
+			result.userRejected,
+			attachCommandExecutionEvidence(result.result, {
+				command,
+				approvalStatus: "unknown",
+				started: true,
+				completed: result.completed,
+				exitCode: result.exitCode ?? undefined,
+				signal: result.signal ?? undefined,
+				timedOut: result.timedOut === true,
+				durationMs: Date.now() - startedAt,
+				stdoutAvailable: result.outputLines.length > 0,
+				stderrAvailable: false,
+			}),
+		]
 	}
 
 	/**

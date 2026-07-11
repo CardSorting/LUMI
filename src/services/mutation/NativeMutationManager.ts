@@ -231,6 +231,11 @@ export class NativeMutationManager {
 		} catch {}
 	}
 
+	/** Lightweight revision projection for consumers that only need cache invalidation. */
+	public async getWorkspaceRevision(workspace: string): Promise<number> {
+		return (await this.readMutationState(workspace)).workspaceRevision
+	}
+
 	public async getStatus(workspace: string, taskId?: string): Promise<any> {
 		try {
 			const state = await this.readMutationState(workspace)

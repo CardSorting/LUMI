@@ -121,7 +121,8 @@
 						"pages": [
 							"tools-reference/README",
 							"tools-reference/all-dietcode-tools",
-							"tools-reference/browser-automation"
+							"tools-reference/browser-automation",
+							"tools-reference/golden-cartridge"
 						]
 					},
 					{
@@ -207,7 +208,10 @@
 						"pages": [
 							"papers/companion-brief",
 							"papers/philosophy",
-							"papers/whitepaper"
+							"papers/whitepaper",
+							"papers/golden-cartridge-brief",
+							"papers/golden-cartridge-philosophy",
+							"papers/golden-cartridge-whitepaper"
 						]
 					},
 					{

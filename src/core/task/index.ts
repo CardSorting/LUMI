@@ -116,6 +116,7 @@ import {
 import { DietCodeError, DietCodeErrorType, ErrorService } from "@/services/error"
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeClient } from "@/shared/dietcode"
+import { GOLDEN_CARTRIDGE_SKILL_NAME } from "@/shared/golden-cartridge"
 import {
 	DietCodeAssistantContent,
 	DietCodeContent,
@@ -2206,6 +2207,8 @@ export class Task {
 		const localSkillsToggles = this.stateManager.getWorkspaceStateKey("localSkillsToggles") ?? {}
 		const availableSkills = filterEnabledSkills(resolvedSkills, globalSkillsToggles, localSkillsToggles)
 		const promptSkills = filterPromptSkills(availableSkills)
+		const goldenCartridgeAvailable =
+			this.taskState.goldenCartridgeActive || availableSkills.some((skill) => skill.name === GOLDEN_CARTRIDGE_SKILL_NAME)
 
 		// Snapshot editor tabs so prompt tools can decide whether to include
 		// filetype-specific instructions (e.g. notebooks) without adding bespoke flags.
@@ -2250,6 +2253,7 @@ export class Task {
 			terminalExecutionMode: this.terminalExecutionMode,
 			mode: (providerInfo.mode as "plan" | "act") || "act",
 			taskState: this.taskState,
+			goldenCartridgeAvailable,
 			environmentBlueprint,
 		}
 

@@ -70,6 +70,7 @@ export enum DietCodeDefaultTool {
 	ROADMAP = "roadmap",
 	ROADMAP_CHECKPOINT = "roadmap_checkpoint",
 	DIETCODE_KERNEL = "dietcode_kernel",
+	GOLDEN_CARTRIDGE = "golden_cartridge",
 }
 
 // Array of all tool names for compatibility

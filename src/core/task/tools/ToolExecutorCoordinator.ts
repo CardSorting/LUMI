@@ -32,6 +32,7 @@ import { DependencyMapHandler } from "./handlers/DependencyMapHandler"
 import { DietcodeKernelToolHandler } from "./handlers/DietcodeKernelToolHandler"
 import { ExecuteCommandToolHandler } from "./handlers/ExecuteCommandToolHandler"
 import { GenerateExplanationToolHandler } from "./handlers/GenerateExplanationToolHandler"
+import { GoldenCartridgeToolHandler } from "./handlers/GoldenCartridgeToolHandler"
 import { ListCodeDefinitionNamesToolHandler } from "./handlers/ListCodeDefinitionNamesToolHandler"
 import { ListFilesToolHandler } from "./handlers/ListFilesToolHandler"
 import { LoadMcpDocumentationHandler } from "./handlers/LoadMcpDocumentationHandler"
@@ -149,6 +150,7 @@ export class ToolExecutorCoordinator {
 		[DietCodeDefaultTool.ROADMAP_CHECKPOINT]: (_v: ToolValidator) =>
 			new RoadmapToolHandler(DietCodeDefaultTool.ROADMAP_CHECKPOINT),
 		[DietCodeDefaultTool.DIETCODE_KERNEL]: (_v: ToolValidator) => new DietcodeKernelToolHandler(),
+		[DietCodeDefaultTool.GOLDEN_CARTRIDGE]: (v: ToolValidator) => GoldenCartridgeToolHandler.fromValidator(v),
 	}
 
 	/**

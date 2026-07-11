@@ -70,6 +70,8 @@ export const toolParamNames = [
 	"summary",
 	"resume_swarm_id",
 	"full_reference",
+	"verb",
+	"payload",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]

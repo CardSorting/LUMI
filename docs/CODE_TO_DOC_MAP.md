@@ -39,6 +39,9 @@ Use this when you change code and need to update the matching doc.
 | `src/services/roadmap/` | [Roadmap steering](features/roadmap-steering.mdx) · [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
 | `src/services/roadmap/RoadmapAutoGovernance.ts` | [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
 | `src/services/roadmap/RoadmapCompletionGate.ts` | [Roadmap steering](features/roadmap-steering.mdx) · [Auto-governance post-mortem](features/roadmap-auto-governance-postmortem.mdx) |
+| `src/shared/golden-cartridge.ts` | [Golden Cartridge](tools-reference/golden-cartridge.mdx) · [Skills](customization/skills.mdx) |
+| `src/core/task/tools/handlers/GoldenCartridgeToolHandler.ts` | [Golden Cartridge](tools-reference/golden-cartridge.mdx) |
+| `optional-skills/dietcode/golden-cartridge-protocol/` | [Golden Cartridge](tools-reference/golden-cartridge.mdx) · [Skills](customization/skills.mdx) |
 
 ## UI & host
 
@@ -95,4 +98,7 @@ Use this when you change code and need to update the matching doc.
 | Values | [papers/philosophy.md](papers/philosophy.md) |
 | Metrics | [papers/companion-brief.md](papers/companion-brief.md) |
 | Engineering | [papers/whitepaper.md](papers/whitepaper.md) |
+| Golden Cartridge Brief | [papers/golden-cartridge-brief.md](papers/golden-cartridge-brief.md) |
+| Golden Cartridge Philosophy | [papers/golden-cartridge-philosophy.md](papers/golden-cartridge-philosophy.md) |
+| Golden Cartridge Whitepaper | [papers/golden-cartridge-whitepaper.md](papers/golden-cartridge-whitepaper.md) |
 | Two-layer hub | [AGENT_STACK.md](AGENT_STACK.md) |
