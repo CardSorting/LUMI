@@ -24,11 +24,6 @@ interface PageData {
 
 const docsData = docsDataRaw as PageData[]
 
-// Helper to escape regex special characters
-function escapeRegex(value: string) {
-	return value.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")
-}
-
 // Tree structure interface for Sidebar
 interface FileTreeNode {
 	name: string
@@ -131,6 +126,9 @@ export default function App() {
 		return localStorage.getItem("essential-only") === "true"
 	})
 
+	// Global spotlight search modal state
+	const [spotlightOpen, setSpotlightOpen] = useState(false)
+
 	useEffect(() => {
 		if (theme === "light") {
 			document.body.classList.add("light-theme")
@@ -139,6 +137,18 @@ export default function App() {
 		}
 		localStorage.setItem("theme", theme)
 	}, [theme])
+
+	// Command-K keyboard shortcut listener
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+				e.preventDefault()
+				setSpotlightOpen((prev) => !prev)
+			}
+		}
+		window.addEventListener("keydown", handleKeyDown)
+		return () => window.removeEventListener("keydown", handleKeyDown)
+	}, [])
 
 	const toggleTheme = () => {
 		setTheme((prev) => (prev === "light" ? "dark" : "light"))
@@ -156,13 +166,14 @@ export default function App() {
 		<HashRouter>
 			<div className="app-container">
 				<Routes>
-					<Route element={<LandingPage toggleTheme={toggleTheme} />} path="/" />
+					<Route element={<LandingPage setSpotlightOpen={setSpotlightOpen} toggleTheme={toggleTheme} />} path="/" />
 					<Route
 						element={
 							<PortalDashboard
 								completedPages={completedPages}
 								namespace="docs"
 								setShowEssentialOnly={setShowEssentialOnly}
+								setSpotlightOpen={setSpotlightOpen}
 								showEssentialOnly={showEssentialOnly}
 								toggleTheme={toggleTheme}
 							/>
@@ -175,6 +186,7 @@ export default function App() {
 								completedPages={completedPages}
 								namespace="papers"
 								setShowEssentialOnly={setShowEssentialOnly}
+								setSpotlightOpen={setSpotlightOpen}
 								showEssentialOnly={showEssentialOnly}
 								toggleTheme={toggleTheme}
 							/>
@@ -187,6 +199,7 @@ export default function App() {
 								completedPages={completedPages}
 								namespace="docs"
 								setShowEssentialOnly={setShowEssentialOnly}
+								setSpotlightOpen={setSpotlightOpen}
 								showEssentialOnly={showEssentialOnly}
 								togglePageCompleted={togglePageCompleted}
 								toggleTheme={toggleTheme}
@@ -200,6 +213,7 @@ export default function App() {
 								completedPages={completedPages}
 								namespace="papers"
 								setShowEssentialOnly={setShowEssentialOnly}
+								setSpotlightOpen={setSpotlightOpen}
 								showEssentialOnly={showEssentialOnly}
 								togglePageCompleted={togglePageCompleted}
 								toggleTheme={toggleTheme}
@@ -208,6 +222,9 @@ export default function App() {
 						path="/papers/*"
 					/>
 				</Routes>
+
+				{/* Global Spotlight Search Overlay */}
+				<SpotlightModal isOpen={spotlightOpen} onClose={() => setSpotlightOpen(false)} />
 			</div>
 		</HashRouter>
 	)
@@ -218,9 +235,10 @@ export default function App() {
 // ==========================================
 interface LandingProps {
 	toggleTheme: () => void
+	setSpotlightOpen: (val: boolean) => void
 }
 
-function LandingPage({ toggleTheme }: LandingProps) {
+function LandingPage({ toggleTheme, setSpotlightOpen }: LandingProps) {
 	const navigate = useNavigate()
 
 	const themeToggleSvg = (
@@ -230,13 +248,21 @@ function LandingPage({ toggleTheme }: LandingProps) {
 	)
 
 	return (
-		<div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+		<div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", overflowY: "auto" }}>
 			<header>
 				<div className="logo-container">
 					<div className="logo-icon" />
 					<div className="logo-title">LUMI</div>
 				</div>
 				<div className="nav-right">
+					{/* Universal Header Search Button */}
+					<div className="header-search-container">
+						<button className="header-search-btn" onClick={() => setSpotlightOpen(true)}>
+							<span>Search...</span>
+							<span className="spotlight-kbd">⌘K</span>
+						</button>
+					</div>
+
 					<div className="nav-links">
 						<Link className="active" to="/">
 							Home
@@ -250,7 +276,7 @@ function LandingPage({ toggleTheme }: LandingProps) {
 				</div>
 			</header>
 
-			<main className="landing-container">
+			<main className="landing-container" style={{ flexGrow: 1 }}>
 				<section className="landing-hero">
 					<span className="landing-hero-tagline">Comfort-First Developer Tooling</span>
 					<h1>LUMI - Calm Coding Companion</h1>
@@ -328,11 +354,9 @@ function LandingPage({ toggleTheme }: LandingProps) {
 						</div>
 					</div>
 				</section>
-
-				<footer className="landing-footer">
-					<p>LUMI is developed by DietCode Inc. Apache-2.0 Licensed.</p>
-				</footer>
 			</main>
+
+			<Footer />
 		</div>
 	)
 }
@@ -346,16 +370,19 @@ interface PortalProps {
 	completedPages: string[]
 	showEssentialOnly: boolean
 	setShowEssentialOnly: (val: boolean) => void
+	setSpotlightOpen: (val: boolean) => void
 }
 
-function PortalDashboard({ namespace, toggleTheme, completedPages, showEssentialOnly, setShowEssentialOnly }: PortalProps) {
-	const [query, setQuery] = useState("")
-	const [activeIndex, setActiveIndex] = useState(0)
+function PortalDashboard({
+	namespace,
+	toggleTheme,
+	completedPages,
+	showEssentialOnly,
+	setShowEssentialOnly,
+	setSpotlightOpen,
+}: PortalProps) {
 	const [activeCategory, setActiveCategory] = useState<string | null>(null)
 	const [referenceOpen, setReferenceOpen] = useState(false)
-	const searchInputRef = useRef<HTMLInputElement>(null)
-	const resultsContainerRef = useRef<HTMLDivElement>(null)
-	const navigate = useNavigate()
 	const location = useLocation()
 
 	// Folder filter from breadcrumbs query params
@@ -382,111 +409,6 @@ function PortalDashboard({ namespace, toggleTheme, completedPages, showEssential
 	if (showEssentialOnly) {
 		displayCards = namespaceData.filter((p) => p.isEssential)
 	}
-
-	// Focus shortcut '/'
-	useEffect(() => {
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === "/" && document.activeElement !== searchInputRef.current) {
-				e.preventDefault()
-				searchInputRef.current?.focus()
-				searchInputRef.current?.select()
-			}
-		}
-		window.addEventListener("keydown", handleKeyDown)
-		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [])
-
-	const getFilteredMatches = () => {
-		const trimmed = query.trim().toLowerCase()
-		if (!trimmed) return []
-
-		const matches: Array<{
-			title: string
-			category: string
-			snippet: string
-			path: string
-		}> = []
-
-		displayCards.forEach((item) => {
-			let snippet = ""
-			let matched = false
-
-			if (
-				item.title.toLowerCase().includes(trimmed) ||
-				item.description.toLowerCase().includes(trimmed) ||
-				item.category.toLowerCase().includes(trimmed)
-			) {
-				matched = true
-				snippet = item.description
-			} else {
-				const textLower = item.html.replace(/<[^>]*>/g, " ").toLowerCase()
-				const idx = textLower.indexOf(trimmed)
-				if (idx !== -1) {
-					matched = true
-					const rawText = item.html.replace(/<[^>]*>/g, " ")
-					const start = Math.max(0, idx - 60)
-					const end = Math.min(rawText.length, idx + 60)
-					snippet =
-						(start > 0 ? "..." : "") +
-						rawText.substring(start, end).replace(/\s+/g, " ") +
-						(end < rawText.length ? "..." : "")
-				}
-			}
-
-			if (matched) {
-				const regex = new RegExp("(" + escapeRegex(trimmed) + ")", "gi")
-				const highlightedTitle = item.title.replace(regex, '<mark class="search-highlight">$1</mark>')
-				const highlightedSnippet = snippet.replace(regex, '<mark class="search-highlight">$1</mark>')
-
-				matches.push({
-					title: highlightedTitle,
-					category: item.category,
-					snippet: highlightedSnippet,
-					path: item.path,
-				})
-			}
-		})
-
-		return matches
-	}
-
-	const filteredMatches = getFilteredMatches()
-
-	useEffect(() => {
-		setActiveIndex(0)
-	}, [query])
-
-	// Keyboard navigation shortcuts
-	useEffect(() => {
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (filteredMatches.length > 0 && query.trim() !== "") {
-				if (e.key === "ArrowDown") {
-					e.preventDefault()
-					setActiveIndex((prev) => Math.min(prev + 1, filteredMatches.length - 1))
-				} else if (e.key === "ArrowUp") {
-					e.preventDefault()
-					setActiveIndex((prev) => Math.max(prev - 1, 0))
-				} else if (e.key === "Enter") {
-					e.preventDefault()
-					if (filteredMatches[activeIndex]) {
-						navigate(`/${namespace}/${filteredMatches[activeIndex].path}`)
-					}
-				} else if (e.key === "Escape") {
-					searchInputRef.current?.blur()
-					setQuery("")
-				}
-			}
-		}
-		window.addEventListener("keydown", handleKeyDown)
-		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [filteredMatches, activeIndex, query, navigate, namespace])
-
-	useEffect(() => {
-		const activeEl = resultsContainerRef.current?.querySelector(".search-result-item.selected")
-		if (activeEl) {
-			activeEl.scrollIntoView({ block: "nearest" })
-		}
-	}, [activeIndex])
 
 	// Get unique categories
 	const allUniqueCategories = Array.from(
@@ -520,6 +442,14 @@ function PortalDashboard({ namespace, toggleTheme, completedPages, showEssential
 
 				{/* Curated controls header */}
 				<div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+					{/* Universal Header Search Button */}
+					<div className="header-search-container">
+						<button className="header-search-btn" onClick={() => setSpotlightOpen(true)}>
+							<span>Search...</span>
+							<span className="spotlight-kbd">⌘K</span>
+						</button>
+					</div>
+
 					<div className="essential-switch-container">
 						<span>Essential Only</span>
 						<label className="switch-toggle">
@@ -552,7 +482,7 @@ function PortalDashboard({ namespace, toggleTheme, completedPages, showEssential
 				</div>
 			</header>
 
-			<div className="main-container">
+			<div className="main-container" style={{ flexGrow: 1 }}>
 				{/* Hierarchical Sidebar */}
 				<aside className="sidebar-left" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 					<div style={{ flexGrow: 1, overflowY: "auto" }}>
@@ -565,8 +495,10 @@ function PortalDashboard({ namespace, toggleTheme, completedPages, showEssential
 				</aside>
 
 				{/* Dashboard Content Grid */}
-				<div className="content-pane" style={{ flexGrow: 1 }}>
-					<div className="wiki-wrapper">
+				<div
+					className="content-pane"
+					style={{ flexGrow: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+					<div className="wiki-wrapper" style={{ flexGrow: 1 }}>
 						<div className="breadcrumbs">
 							<Link to="/">Home</Link>
 							<span className="breadcrumbs-separator">/</span>
@@ -596,7 +528,7 @@ function PortalDashboard({ namespace, toggleTheme, completedPages, showEssential
 						</section>
 
 						{/* CURATED READING PATHS / LEARNING TRACKS SECTION */}
-						{!query.trim() && !folderFilter && !activeCategory && (
+						{!folderFilter && !activeCategory && (
 							<section className="learning-tracks-section">
 								<div className="learning-tracks-header">
 									<span>🗺️</span> Curated Reading Tracks
@@ -693,7 +625,7 @@ function PortalDashboard({ namespace, toggleTheme, completedPages, showEssential
 						)}
 
 						{/* Category Filter Bubbles */}
-						{!query.trim() && !folderFilter && (
+						{!folderFilter && (
 							<div className="filter-bubble-container">
 								<button
 									className={`filter-bubble ${activeCategory === null ? "active" : ""}`}
@@ -716,201 +648,130 @@ function PortalDashboard({ namespace, toggleTheme, completedPages, showEssential
 							</div>
 						)}
 
-						<div className="wiki-search-box">
-							<input
-								className="wiki-search-input"
-								onChange={(e) => setQuery(e.target.value)}
-								placeholder={`Search curated files... (Press '/' to focus)`}
-								ref={searchInputRef}
-								type="text"
-								value={query}
-							/>
-							<span className="search-shortcut-hint" style={{ right: "1rem" }}>
-								/
-							</span>
+						{/* ESSENTIAL CARDS GRID (Always visible at top of library section) */}
+						<div style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "1.25rem", color: "var(--text-color)" }}>
+							⭐ Must-Read Specifications
 						</div>
-
-						{query.trim() && (
-							<div
-								className="search-results-overlay active"
-								ref={resultsContainerRef}
-								style={{ position: "relative", top: 0, left: 0, right: 0, width: "100%", marginBottom: "2rem" }}>
-								{filteredMatches.length > 0 ? (
-									filteredMatches.map((match, mIdx) => (
+						<div className="wiki-grid" style={{ marginBottom: "2.5rem" }}>
+							{displayCards
+								.filter((p) => p.isEssential)
+								.map((page) => {
+									const isPageDone = completedPages.includes(page.path)
+									return (
 										<div
-											className={`search-result-item ${activeIndex === mIdx ? "selected" : ""}`}
-											key={mIdx}
-											style={{ borderBottom: "1px solid var(--panel-border)" }}>
+											className="wiki-card"
+											key={page.path}
+											style={{
+												borderLeft: isPageDone ? "4px solid var(--tip-color)" : "",
+												borderTop: "2px solid var(--primary-color)",
+											}}>
+											<span className="wiki-card-badge-essential">Essential</span>
+											{isPageDone && (
+												<span
+													className="wiki-card-badge-essential"
+													style={{
+														right: "5.5rem",
+														backgroundColor: "rgba(16, 185, 129, 0.12)",
+														color: "var(--tip-color)",
+														borderColor: "rgba(16, 185, 129, 0.25)",
+													}}>
+													Read ✓
+												</span>
+											)}
+											<div>
+												<button
+													className="wiki-card-category"
+													onClick={() => setActiveCategory(page.category)}
+													style={{
+														background: "transparent",
+														border: "none",
+														cursor: "pointer",
+														padding: 0,
+														textAlign: "left",
+														outline: "none",
+													}}>
+													{page.category}
+												</button>
+												<div className="wiki-card-title">{page.title}</div>
+												<div className="wiki-card-desc">{page.description}</div>
+											</div>
 											<Link
-												style={{
-													textDecoration: "none",
-													border: "none",
-													color: "inherit",
-													display: "block",
-												}}
-												to={`/${namespace}/${match.path}`}>
-												<div className="search-result-meta">
-													<span className="search-result-category">{match.category}</span>
-												</div>
-												<div
-													className="search-result-title"
-													dangerouslySetInnerHTML={{ __html: match.title }}
-												/>
-												<div
-													className="search-result-snippet"
-													dangerouslySetInnerHTML={{ __html: match.snippet }}
-												/>
+												className="wiki-card-link"
+												style={{ border: "none", color: "#ffffff" }}
+												to={`/${namespace}/${page.path}`}>
+												Explore spec
 											</Link>
 										</div>
-									))
-								) : (
-									<div
-										className="search-result-item"
-										style={{ textAlign: "center", color: "var(--text-muted)" }}>
-										No matching specifications found.
+									)
+								})}
+						</div>
+
+						{/* Collapsible reference library panel (to hide 200+ cards) */}
+						{!showEssentialOnly && (
+							<div className="collapsible-reference-container" style={{ marginBottom: "3rem" }}>
+								<button className="collapsible-reference-header" onClick={() => setReferenceOpen(!referenceOpen)}>
+									<span>📁 Reference Library ({displayCards.length} articles)</span>
+									<span>{referenceOpen ? "▲ Collapse reference" : "▼ Show all reference documents"}</span>
+								</button>
+								{referenceOpen && (
+									<div className="collapsible-reference-body">
+										<div className="wiki-grid">
+											{displayCards.map((page) => {
+												const isPageDone = completedPages.includes(page.path)
+												return (
+													<div
+														className="wiki-card"
+														key={page.path}
+														style={{ borderLeft: isPageDone ? "4px solid var(--tip-color)" : "" }}>
+														{page.isEssential && (
+															<span className="wiki-card-badge-essential">Essential</span>
+														)}
+														{isPageDone && (
+															<span
+																className="wiki-card-badge-essential"
+																style={{
+																	right: page.isEssential ? "5.5rem" : "1rem",
+																	backgroundColor: "rgba(16, 185, 129, 0.12)",
+																	color: "var(--tip-color)",
+																	borderColor: "rgba(16, 185, 129, 0.25)",
+																}}>
+																Read ✓
+															</span>
+														)}
+														<div>
+															<button
+																className="wiki-card-category"
+																onClick={() => setActiveCategory(page.category)}
+																style={{
+																	background: "transparent",
+																	border: "none",
+																	cursor: "pointer",
+																	padding: 0,
+																	textAlign: "left",
+																	outline: "none",
+																}}>
+																{page.category}
+															</button>
+															<div className="wiki-card-title">{page.title}</div>
+															<div className="wiki-card-desc">{page.description}</div>
+														</div>
+														<Link
+															className="wiki-card-link"
+															style={{ border: "none", color: "#ffffff" }}
+															to={`/${namespace}/${page.path}`}>
+															Explore spec
+														</Link>
+													</div>
+												)
+											})}
+										</div>
 									</div>
 								)}
 							</div>
 						)}
-
-						{!query.trim() && (
-							<>
-								{/* ESSENTIAL CARDS GRID (Always visible at top of library section) */}
-								<div
-									style={{
-										fontSize: "1rem",
-										fontWeight: 700,
-										marginBottom: "1.25rem",
-										color: "var(--text-color)",
-									}}>
-									⭐ Must-Read Specifications
-								</div>
-								<div className="wiki-grid" style={{ marginBottom: "2.5rem" }}>
-									{displayCards
-										.filter((p) => p.isEssential)
-										.map((page) => {
-											const isPageDone = completedPages.includes(page.path)
-											return (
-												<div
-													className="wiki-card"
-													key={page.path}
-													style={{
-														borderLeft: isPageDone ? "4px solid var(--tip-color)" : "",
-														borderTop: "2px solid var(--primary-color)",
-													}}>
-													<span className="wiki-card-badge-essential">Essential</span>
-													{isPageDone && (
-														<span
-															className="wiki-card-badge-essential"
-															style={{
-																right: "5.5rem",
-																backgroundColor: "rgba(16, 185, 129, 0.12)",
-																color: "var(--tip-color)",
-																borderColor: "rgba(16, 185, 129, 0.25)",
-															}}>
-															Read ✓
-														</span>
-													)}
-													<div>
-														<button
-															className="wiki-card-category"
-															onClick={() => setActiveCategory(page.category)}
-															style={{
-																background: "transparent",
-																border: "none",
-																cursor: "pointer",
-																padding: 0,
-																textAlign: "left",
-																outline: "none",
-															}}>
-															{page.category}
-														</button>
-														<div className="wiki-card-title">{page.title}</div>
-														<div className="wiki-card-desc">{page.description}</div>
-													</div>
-													<Link
-														className="wiki-card-link"
-														style={{ border: "none", color: "#ffffff" }}
-														to={`/${namespace}/${page.path}`}>
-														Explore spec
-													</Link>
-												</div>
-											)
-										})}
-								</div>
-
-								{/* Collapsible reference library panel (to hide 200+ cards) */}
-								{!showEssentialOnly && (
-									<div className="collapsible-reference-container">
-										<button
-											className="collapsible-reference-header"
-											onClick={() => setReferenceOpen(!referenceOpen)}>
-											<span>📁 Reference Library ({displayCards.length} articles)</span>
-											<span>
-												{referenceOpen ? "▲ Collapse reference" : "▼ Show all reference documents"}
-											</span>
-										</button>
-										{referenceOpen && (
-											<div className="collapsible-reference-body">
-												<div className="wiki-grid">
-													{displayCards.map((page) => {
-														const isPageDone = completedPages.includes(page.path)
-														return (
-															<div
-																className="wiki-card"
-																key={page.path}
-																style={{
-																	borderLeft: isPageDone ? "4px solid var(--tip-color)" : "",
-																}}>
-																{page.isEssential && (
-																	<span className="wiki-card-badge-essential">Essential</span>
-																)}
-																{isPageDone && (
-																	<span
-																		className="wiki-card-badge-essential"
-																		style={{
-																			right: page.isEssential ? "5.5rem" : "1rem",
-																			backgroundColor: "rgba(16, 185, 129, 0.12)",
-																			color: "var(--tip-color)",
-																			borderColor: "rgba(16, 185, 129, 0.25)",
-																		}}>
-																		Read ✓
-																	</span>
-																)}
-																<div>
-																	<button
-																		className="wiki-card-category"
-																		onClick={() => setActiveCategory(page.category)}
-																		style={{
-																			background: "transparent",
-																			border: "none",
-																			cursor: "pointer",
-																			padding: 0,
-																			textAlign: "left",
-																			outline: "none",
-																		}}>
-																		{page.category}
-																	</button>
-																	<div className="wiki-card-title">{page.title}</div>
-																	<div className="wiki-card-desc">{page.description}</div>
-																</div>
-																<Link
-																	className="wiki-card-link"
-																	style={{ border: "none", color: "#ffffff" }}
-																	to={`/${namespace}/${page.path}`}>
-																	Explore spec
-																</Link>
-															</div>
-														)
-													})}
-												</div>
-											</div>
-										)}
-									</div>
-								)}
-							</>
-						)}
 					</div>
+
+					<Footer />
 				</div>
 			</div>
 		</div>
@@ -927,6 +788,7 @@ interface WikiLayoutProps {
 	togglePageCompleted: (path: string) => void
 	showEssentialOnly: boolean
 	setShowEssentialOnly: (val: boolean) => void
+	setSpotlightOpen: (val: boolean) => void
 }
 
 function WikiLayout({
@@ -936,6 +798,7 @@ function WikiLayout({
 	togglePageCompleted,
 	showEssentialOnly,
 	setShowEssentialOnly,
+	setSpotlightOpen,
 }: WikiLayoutProps) {
 	const location = useLocation()
 	const navigate = useNavigate()
@@ -1181,6 +1044,14 @@ function WikiLayout({
 
 				{/* Curated controls header */}
 				<div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+					{/* Universal Header Search Button */}
+					<div className="header-search-container">
+						<button className="header-search-btn" onClick={() => setSpotlightOpen(true)}>
+							<span>Search...</span>
+							<span className="spotlight-kbd">⌘K</span>
+						</button>
+					</div>
+
 					<div className="essential-switch-container">
 						<span>Essential Only</span>
 						<label className="switch-toggle">
@@ -1218,7 +1089,7 @@ function WikiLayout({
 				<div className="progress-bar" ref={progressBarRef} style={{ width: `${scrollProgress}%` }} />
 			</div>
 
-			<div className="main-container">
+			<div className="main-container" style={{ flexGrow: 1 }}>
 				{/* Left Collapsible Accordion Sidebar */}
 				<aside
 					className={`sidebar-left ${mobileSidebarOpen ? "open" : ""}`}
@@ -1271,8 +1142,11 @@ function WikiLayout({
 				)}
 
 				{/* Center Panel Content Reader */}
-				<div className="content-pane" ref={contentPaneRef} style={{ flexGrow: 1 }}>
-					<div className="wiki-wrapper">
+				<div
+					className="content-pane"
+					ref={contentPaneRef}
+					style={{ flexGrow: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+					<div className="wiki-wrapper" style={{ flexGrow: 1 }}>
 						<div className="breadcrumbs">
 							<Link to="/">Home</Link>
 							<span className="breadcrumbs-separator">/</span>
@@ -1321,7 +1195,7 @@ function WikiLayout({
 
 							{/* Next/Prev Navigation buttons */}
 							{(prevPage || nextPage) && (
-								<div className="wiki-page-navigation" style={{ marginTop: "2.5rem" }}>
+								<div className="wiki-page-navigation" style={{ marginTop: "2.5rem", marginBottom: "3rem" }}>
 									{prevPage && (
 										<Link className="wiki-page-nav-link" to={`/${namespace}/${prevPage.path}`}>
 											<span>← Previous</span>
@@ -1347,6 +1221,8 @@ function WikiLayout({
 						onClick={scrollToTop}>
 						{backToTopArrowSvg}
 					</button>
+
+					<Footer />
 				</div>
 
 				{/* Right Sidebar TOC */}
@@ -1388,20 +1264,16 @@ interface SidebarWidgetProps {
 function SidebarProgressWidget({ namespace, completedPages }: SidebarWidgetProps) {
 	const tracks = LEARNING_TRACKS[namespace]
 
-	// Find the first track that is not fully completed
 	let activeTrack = tracks.find((track) => {
 		return track.steps.some((step) => !completedPages.includes(step.path))
 	})
 
-	// Fallback to the first track if all are completed
 	if (!activeTrack) {
 		activeTrack = tracks[0]
 	}
 
-	// Find the first unread step in the active track
 	const nextStep = activeTrack.steps.find((step) => !completedPages.includes(step.path))
 
-	// If all steps in the active track are read, then they are done!
 	if (!nextStep) {
 		return (
 			<div
@@ -1433,6 +1305,263 @@ function SidebarProgressWidget({ namespace, completedPages }: SidebarWidgetProps
 				Read Next →
 			</Link>
 		</div>
+	)
+}
+
+// ==========================================
+// Global Spotlight Search Overlay Modal
+// ==========================================
+interface SpotlightProps {
+	isOpen: boolean
+	onClose: () => void
+}
+
+function SpotlightModal({ isOpen, onClose }: SpotlightProps) {
+	const [query, setQuery] = useState("")
+	const [activeIndex, setActiveIndex] = useState(0)
+	const inputRef = useRef<HTMLInputElement>(null)
+	const resultsRef = useRef<HTMLDivElement>(null)
+	const navigate = useNavigate()
+
+	useEffect(() => {
+		if (isOpen) {
+			setQuery("")
+			setActiveIndex(0)
+			setTimeout(() => inputRef.current?.focus(), 50)
+		}
+	}, [isOpen])
+
+	// Handle escape to close, keyboard arrows to select, enter to navigate
+	useEffect(() => {
+		if (!isOpen) return
+
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				onClose()
+			}
+		}
+		window.addEventListener("keydown", handleKeyDown)
+		return () => window.removeEventListener("keydown", handleKeyDown)
+	}, [isOpen, onClose])
+
+	if (!isOpen) return null
+
+	const getFilteredMatches = () => {
+		const trimmed = query.trim().toLowerCase()
+		if (!trimmed) {
+			// Show default essential articles when query is empty!
+			return docsData
+				.filter((p) => p.isEssential)
+				.map((p) => ({
+					title: p.title,
+					category: p.category,
+					description: p.description,
+					path: p.path,
+				}))
+		}
+
+		const matches: Array<{
+			title: string
+			category: string
+			description: string
+			path: string
+		}> = []
+
+		docsData.forEach((item) => {
+			if (
+				item.title.toLowerCase().includes(trimmed) ||
+				item.description.toLowerCase().includes(trimmed) ||
+				item.category.toLowerCase().includes(trimmed) ||
+				item.html.toLowerCase().includes(trimmed)
+			) {
+				matches.push({
+					title: item.title,
+					category: item.category,
+					description: item.description,
+					path: item.path,
+				})
+			}
+		})
+
+		return matches.slice(0, 8) // Limit to top 8 spotlight results
+	}
+
+	const matches = getFilteredMatches()
+
+	const handleKeyDown = (e: React.KeyboardEvent) => {
+		if (matches.length === 0) return
+		if (e.key === "ArrowDown") {
+			e.preventDefault()
+			setActiveIndex((prev) => Math.min(prev + 1, matches.length - 1))
+		} else if (e.key === "ArrowUp") {
+			e.preventDefault()
+			setActiveIndex((prev) => Math.max(prev - 1, 0))
+		} else if (e.key === "Enter") {
+			e.preventDefault()
+			const selected = matches[activeIndex]
+			if (selected) {
+				const isPaper = selected.path.startsWith("papers/") || selected.category === "papers"
+				navigate(`/${isPaper ? "papers" : "docs"}/${selected.path}`)
+				onClose()
+			}
+		}
+	}
+
+	return (
+		<div className="spotlight-backdrop" onClick={onClose}>
+			<div className="spotlight-dialog" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+				<div className="spotlight-search-header">
+					<span style={{ fontSize: "1.2rem" }}>🔍</span>
+					<input
+						className="spotlight-search-input"
+						onChange={(e) => {
+							setQuery(e.target.value)
+							setActiveIndex(0)
+						}}
+						placeholder="Type page title, topic, or category..."
+						ref={inputRef}
+						type="text"
+						value={query}
+					/>
+					<span className="spotlight-kbd" onClick={onClose} style={{ cursor: "pointer" }}>
+						ESC
+					</span>
+				</div>
+
+				<div className="spotlight-results" ref={resultsRef}>
+					{matches.length > 0 ? (
+						matches.map((match, idx) => {
+							const isPaper = match.path.startsWith("papers/") || match.category === "papers"
+							return (
+								<Link
+									className={`spotlight-result-item ${activeIndex === idx ? "selected" : ""}`}
+									key={match.path}
+									onClick={onClose}
+									onMouseEnter={() => setActiveIndex(idx)}
+									to={`/${isPaper ? "papers" : "docs"}/${match.path}`}>
+									<span className="spotlight-result-category">{match.category}</span>
+									<span className="spotlight-result-title">{match.title}</span>
+									<span className="spotlight-result-desc">{match.description}</span>
+								</Link>
+							)
+						})
+					) : (
+						<div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.9rem" }}>
+							No matches found for "{query}"
+						</div>
+					)}
+				</div>
+
+				<div className="spotlight-footer">
+					<div className="spotlight-kbd-guide">
+						<span>
+							<span className="spotlight-kbd">↑↓</span> Navigate
+						</span>
+						<span>
+							<span className="spotlight-kbd">⏎</span> Select
+						</span>
+					</div>
+					<div>Spotlight Search</div>
+				</div>
+			</div>
+		</div>
+	)
+}
+
+// ==========================================
+// 4. World-Class Multi-Column Footer Component
+// ==========================================
+function Footer() {
+	return (
+		<footer style={{ marginTop: "auto", background: "var(--bg-color)" }}>
+			<div className="footer-columns-container">
+				<div className="footer-column footer-brand">
+					<div className="footer-brand-logo">
+						<div className="logo-icon" />
+						<div className="logo-title">LUMI</div>
+					</div>
+					<p className="footer-brand-text">
+						Comfort-First Developer Tooling.
+						<br />
+						Deterministic orchestration & calm pairing sessions.
+					</p>
+					<div className="footer-social-row">
+						<a
+							aria-label="LUMI GitHub Repository"
+							className="footer-social-link"
+							href="https://github.com/CardSorting/LUMI">
+							<svg fill="currentColor" height="20" viewBox="0 0 24 24" width="20">
+								<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+							</svg>
+						</a>
+					</div>
+				</div>
+
+				<div className="footer-column">
+					<span className="footer-column-title">Documentation</span>
+					<ul className="footer-column-links">
+						<li>
+							<Link to="/docs/getting-started/quick-start">Quick Start</Link>
+						</li>
+						<li>
+							<Link to="/docs/getting-started/installation">Installation</Link>
+						</li>
+						<li>
+							<Link to="/docs/getting-started/running-models-locally">Running Models</Link>
+						</li>
+						<li>
+							<Link to="/docs/api/database-engine-broccolidb">BroccoliDB Specification</Link>
+						</li>
+					</ul>
+				</div>
+
+				<div className="footer-column">
+					<span className="footer-column-title">Research</span>
+					<ul className="footer-column-links">
+						<li>
+							<Link to="/papers/papers/golden-cartridge-philosophy">Philosophy Papers</Link>
+						</li>
+						<li>
+							<Link to="/papers/papers/golden-cartridge-brief">Conceptual Briefs</Link>
+						</li>
+						<li>
+							<Link to="/papers/papers/knowledge-item-thesis">Knowledge Item Thesis</Link>
+						</li>
+					</ul>
+				</div>
+
+				<div className="footer-column">
+					<span className="footer-column-title">Community</span>
+					<ul className="footer-column-links">
+						<li>
+							<a href="https://github.com/CardSorting/LUMI">GitHub Project</a>
+						</li>
+						<li>
+							<a href="https://github.com/CardSorting/LUMI/issues">Issue Tracker</a>
+						</li>
+						<li>
+							<a href="https://github.com/CardSorting/LUMI/discussions">Discussions</a>
+						</li>
+					</ul>
+				</div>
+			</div>
+
+			<div className="footer-bottom-bar">
+				<span>© {new Date().getFullYear()} DietCode Inc. Apache-2.0 Licensed.</span>
+				<div style={{ display: "flex", gap: "1.5rem" }}>
+					<Link
+						style={{ textDecoration: "none", color: "inherit", border: "none" }}
+						to="/docs/getting-started/quick-start">
+						Privacy Policy
+					</Link>
+					<Link
+						style={{ textDecoration: "none", color: "inherit", border: "none" }}
+						to="/docs/getting-started/quick-start">
+						Terms of Service
+					</Link>
+				</div>
+			</div>
+		</footer>
 	)
 }
 
