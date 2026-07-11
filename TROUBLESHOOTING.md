@@ -4,7 +4,7 @@
 > **When do I use it?** When a command, build, or test fails unexpectedly to cross-reference known issues and apply verified fixes.
 > **What is the source of truth?** Reproduced execution logs, stderr outputs, and validated resolution command receipts.
 
-Last audited: 2026-07-09
+Last audited: 2026-07-10
 
 ## Quick Triage
 
@@ -17,6 +17,8 @@ Last audited: 2026-07-09
 | Webview tests/build fail after core proto changes | Generated proto clients stale | Check changed files under `proto/` or `src/generated/` | Run `npm run protos`, then webview build/test | `npm run build:webview` |
 | Completion keeps routing incorrectly | Eligibility logic added outside decision spine | Inspect completion handlers for local bypass logic | Move policy into `CompletionLifecycleDecisionEngine`; enforce with `CompletionActionGuard` | Completion lifecycle tests pass |
 | Subagent lanes collide on read-only work | Execution mode omitted, defaulting to `mutation` | Inspect prompt tags and `LockNecessity` | Use `[execution_mode:read_only]` or correct lane config | Governed execution lock tests pass |
+| Safe subagent work repeatedly reruns after evidence warnings | Advisory quality checks were treated as blocking merge violations | Inspect `mergeGate.findings`, `advisoryWarnings`, and `retryDisposition` | Do not retry on `not_needed`; enrich evidence asynchronously or repair only targeted lanes | Governed hardening/reliability and receipt-panel tests pass |
+| Stale claim remains blocked after successful release | Consumer counted historical `stale_detected` events instead of current lifecycle state | Confirm matching `claimId` has a later `released` event | Upgrade to lifecycle-aware merge gate; unresolved stale ownership still requires recovery | `clears stale ownership after the matching claim is released` passes |
 | Roadmap updates from lanes conflict | Lane tried to mutate workspace roadmap directly | Inspect governed receipt for direct workspace roadmap mutation | Use local roadmap events and proposed patches; coordinator commits | Roadmap projection tests pass |
 
 ## Reproduced Failures From This Pass

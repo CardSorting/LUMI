@@ -369,6 +369,38 @@ Full prompt and operator checklist: [governed-execution-authority.md](governed-e
 
 ---
 
+## ADR-016: Required merge checks, advisory audits, and bounded remediation
+
+**Status:** Accepted
+
+**Context:** The merge gate previously flattened transaction-safety failures and evidence-quality heuristics into one `violations[]` list. Missing evidence, placeholder text, transcript pointers, and tool steps could fail an otherwise safe completed swarm. Stale ownership events were also counted historically, so `stale_detected` remained fatal after a matching release. Parent agents interpreted every failed seal as a reason to rerun the whole swarm, amplifying cost and retry loops.
+
+**Decision:**
+
+- Mirror familiar required-check vs informational-check workflows: only mutation safety, live ownership, terminal lane consistency, replay integrity, and authoritative roadmap conflicts block seal.
+- Preserve evidence and observability quality checks as receipt/UI advisories.
+- Apply the same split to envelope persistence and resume validation: missing pointers are advisory, while malformed structure, checksum mismatch, and transcript corruption remain hard.
+- Emit structured `findings[]` instead of forcing callers to parse prose.
+- Emit `retryDisposition`: `not_needed`, `targeted_repair`, `retry_after_recovery`, or `do_not_retry`.
+- Reconstruct current claim state from lifecycle events. A matching `released` event clears prior stale/orphan state; unresolved ownership remains fail-closed.
+- Keep lane-level transient retries bounded at three attempts with full jitter. Merge remediation never implies a blind whole-swarm retry.
+
+**Consequences:**
+
+- Safe work seals despite incomplete secondary audit metadata.
+- Hard correctness and concurrency invariants remain fail-closed.
+- Recovery has explicit scope, so successful lanes and billable work are preserved.
+- Historical schema-v3 receipts remain readable because new fields are optional on read.
+
+**Industry pattern mapping:**
+
+- Required vs non-required status checks for merge policy.
+- Workflow retry policies with maximum attempts and non-retryable failure classes.
+- Saga-style compensation/recovery before retrying ownership failures.
+- Structured reason codes instead of control flow based on log strings.
+
+---
+
 ## Open decisions (not yet implemented)
 
 | Topic | State | Notes |

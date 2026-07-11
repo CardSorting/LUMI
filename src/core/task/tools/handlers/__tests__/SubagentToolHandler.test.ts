@@ -12,7 +12,7 @@ import { TaskState } from "../../../TaskState"
 import { AgentConfigLoader } from "../../subagent/AgentConfigLoader"
 import { GovernedSwarmCoordinator } from "../../subagent/GovernedSwarmCoordinator"
 import { computeSwarmArtifactChecksum } from "../../subagent/ResumeSwarmFromArtifact"
-import { loadSwarmEnvelope } from "../../subagent/SubagentExecutionStore"
+import * as subagentExecutionStore from "../../subagent/SubagentExecutionStore"
 import { SubagentRunner } from "../../subagent/SubagentRunner"
 import type { TaskConfig } from "../../types/TaskConfig"
 import { createUIHelpers } from "../../types/UIHelpers"
@@ -136,6 +136,50 @@ function emptyStats() {
 		contextWindow: 200000,
 		contextUsagePercentage: 0,
 	}
+}
+
+function stubCompletedEnvelopeRun(): void {
+	sinon.stub(SubagentRunner.prototype, "runWithEnvelope").callsFake(async (prompt, _onProgress, context) => {
+		const now = Date.now()
+		return {
+			status: "completed",
+			result: "done",
+			stats: emptyStats(),
+			envelope: {
+				agentId: context.agentId,
+				executionId: context.executionId || "execution-1",
+				role: context.role,
+				parentSwarmId: context.swarmId,
+				parentTaskId: context.taskId,
+				lineage: { swarmId: context.swarmId, index: context.index, depth: context.depth },
+				phase: "completed",
+				status: "completed",
+				prompt,
+				verbatimOutput: "done",
+				structuredFindings: [],
+				evidenceRefs: [
+					{
+						id: "evidence-1",
+						kind: "file",
+						path: "src/example.ts",
+						label: "implementation",
+						timestamp: now,
+					},
+				],
+				touchedFiles: [],
+				toolSteps: [],
+				compactionEvents: [],
+				blockers: [],
+				warnings: [],
+				confidence: "high",
+				retryHints: [],
+				transcriptArtifactPath: "transcripts/agent-1.jsonl",
+				transcriptEventCount: 1,
+				transcriptByteSize: 32,
+				timestamps: { spawned: now, started: now, completed: now },
+			},
+		}
+	})
 }
 
 describe("SubagentToolHandler", () => {
@@ -440,7 +484,7 @@ describe("SubagentToolHandler", () => {
 		const finalCall = subagentStatusCalls[subagentStatusCalls.length - 1]
 		assert.equal(finalCall.args[4], false)
 		const finalStatus = JSON.parse(finalCall.args[1])
-		const artifact = await loadSwarmEnvelope(config.taskId, finalStatus.swarmId)
+		const artifact = await subagentExecutionStore.loadSwarmEnvelope(config.taskId, finalStatus.swarmId)
 		assert.ok(artifact)
 		assert.equal(artifact.status, finalStatus.status)
 		assert.match(artifact.summaryOverlay || "", /SWARM EXECUTION SUMMARY/)
@@ -455,6 +499,40 @@ describe("SubagentToolHandler", () => {
 		assert.equal(usagePayload.cacheWrites, 0)
 		assert.equal(usagePayload.cacheReads, 0)
 		assert.equal(usagePayload.cost, 0.75)
+	})
+
+	it("preserves accepted work when final artifact promotion fails after receipt seal", async () => {
+		const { config, callbacks } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "subagent-promotion-"))
+		tempDirs.push(tempDir)
+		const disk = await import("@core/storage/disk")
+		sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
+		stubCompletedEnvelopeRun()
+
+		const persistOriginal = subagentExecutionStore.persistSwarmEnvelope
+		let persistCalls = 0
+		sinon.stub(subagentExecutionStore, "persistSwarmEnvelope").callsFake(async (...args) => {
+			persistCalls++
+			if (persistCalls === 2) {
+				throw Object.assign(new Error("transient promotion failure"), { code: "EBUSY" })
+			}
+			return persistOriginal(...args)
+		})
+
+		const result = await new UseSubagentsToolHandler().execute(config, {
+			type: "tool_use",
+			name: DietCodeDefaultTool.USE_SUBAGENTS,
+			params: { prompt_1: "one" },
+			partial: false,
+		})
+
+		assert.match(String(result), /Continuation: accept/)
+		assert.match(String(result), /terminal artifact promotion deferred/)
+		const finalStatusCall = callbacks.say
+			.getCalls()
+			.filter((call) => call.args[0] === "subagent")
+			.at(-1)
+		assert.equal(JSON.parse(finalStatusCall?.args[1]).status, "completed")
 	})
 
 	it("does not let child-stream registration block any lane", async () => {

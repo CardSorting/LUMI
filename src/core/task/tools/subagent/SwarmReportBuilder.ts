@@ -59,6 +59,10 @@ export function buildParentToolResult(
 		envelope.invariants.violations.length > 0
 			? `\n\n### INVARIANT WARNINGS\n${envelope.invariants.violations.map((v) => `- ${v}`).join("\n")}`
 			: ""
+	const advisories = [...(governedReceipt?.mergeGate.advisoryWarnings ?? []), ...(envelope.invariants.advisoryWarnings ?? [])]
+	const advisoryNote = advisories.length
+		? `\n\n### AUDIT ADVISORIES (NO RETRY REQUIRED)\n${[...new Set(advisories)].map((warning) => `- ${warning}`).join("\n")}`
+		: ""
 
 	const governedNote = governedReceipt
 		? [
@@ -69,6 +73,8 @@ export function buildParentToolResult(
 				`Sealed: ${governedReceipt.sealed}`,
 				`Lanes: ${governedReceipt.laneReceipts.length} (sealed DAG: ${governedReceipt.laneDag.filter((l) => l.state === "sealed").length})`,
 				`Integrity valid: ${governedReceipt.integrity.valid}`,
+				`Retry disposition: ${governedReceipt.mergeGate.retryDisposition ?? "targeted_repair"}`,
+				`Continuation: ${governedReceipt.continuationDecision?.action ?? "legacy"}`,
 				...(governedReceipt.mergeGate.mergeAudit.overlappingPaths.length > 0
 					? [
 							`Overlapping paths: ${governedReceipt.mergeGate.mergeAudit.overlappingPaths
@@ -87,6 +93,7 @@ export function buildParentToolResult(
 		`Resume token: ${envelope.continuity.resumeToken}`,
 		`Continuity status: ${envelope.continuity.status}`,
 		invariantNote,
+		advisoryNote,
 		governedNote,
 	].join("\n")
 }

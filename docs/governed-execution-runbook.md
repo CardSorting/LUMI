@@ -26,7 +26,8 @@ SRE-style playbook for governed swarm receipts: triage incidents, interpret viol
 | Can lanes mutate workspace roadmap directly? | **No** — use `propose_patch`; coordinator commits after reconciliation |
 | What changes workspace roadmap? | `commitWorkspaceRoadmapPatches` under `roadmap:workspace` lock after seal |
 | When is retry safe? | `diagnostics.retrySafe === true` in incident console |
-| What blocks merge? | `mergeGate.violations` — see [violation catalog](#violation-catalog) |
+| What blocks merge? | `mergeGate.violations` only; `advisoryWarnings` never block — see [violation catalog](#violation-catalog) |
+| Should I retry the swarm? | Follow `retryDisposition`; never infer retry scope from warning text |
 
 ---
 
@@ -80,6 +81,8 @@ Derived by `deriveReceiptIncident()` (priority order). Use **Symptom → Diagnos
 | Workspace commit status | `diagnostics.roadmapCommitStatus` |
 | Stale projections | `diagnostics.staleProjectionWarnings` |
 | Merge violations | `violations[]` |
+| Audit advisories | `advisoryWarnings[]` — visible, no retry required |
+| Retry action | `retryDisposition` — explicit coordinator guidance |
 
 ---
 
@@ -189,6 +192,19 @@ Check receipt `roadmapLinkage.workspaceCommit.blockReason`:
 
 ## Retry decision flow
 
+### Retry dispositions
+
+| Value | Operator action |
+|-------|-----------------|
+| `not_needed` | Accept the seal. Advisory enrichment may happen later; do not rerun completed work. |
+| `targeted_repair` | Repair/resume only affected lanes and dependent descendants. Preserve successful lane artifacts. |
+| `retry_after_recovery` | Reconcile claims, leases, or coordinator state first; then retry only incomplete work. |
+| `do_not_retry` | Use authoritative sealed state or create an explicitly linked child attempt. |
+
+### Parent continuation
+
+`continuationDecision` is the sole final parent action. Downstream presentation may render advisories but must not reinterpret findings or retry dispositions. A clean accepted receipt uses `accept`; a safe receipt with warnings uses `accept_with_advisories`; localized defects use `targeted_repair`; coordination interruption uses `recover_and_resume`; hard ownership conflicts use `halt_for_conflict`; corrupt immutable results use `reject_invalid_result`.
+
 ### Live parent-flow policy
 
 | Control | Runtime behavior | Operator implication |
@@ -211,16 +227,14 @@ Worker lanes cannot spawn verifier lanes. A worker emits `SIGNAL: REVIEW_REQUEST
 
 ```mermaid
 flowchart TD
-  A[Need to retry swarm?] --> B{diagnostics.retrySafe?}
-  B -->|yes| C[Set parentAttemptId to failed/partial attemptId]
-  C --> D[Re-run use_subagents with resume context]
-  B -->|no| E{Reason?}
-  E -->|Active claims| F[recoverStale + release or wait]
-  E -->|Stale claims| G[Stale recovery procedure]
-  E -->|Supersession blocked| H[Do not retry without parentAttemptId chain]
-  E -->|Lanes running| I[Wait for seal or abort cleanly]
-  F --> B
-  G --> B
+	A[Read retryDisposition] --> B{Disposition}
+	B -->|not_needed| C[Accept seal; no retry]
+	B -->|targeted_repair| D[Resume affected lanes and descendants]
+	B -->|retry_after_recovery| E[Recover ownership or coordinator state]
+	E --> F{diagnostics.retrySafe?}
+	F -->|yes| D
+	F -->|no| E
+	B -->|do_not_retry| G[Use authoritative result or linked child attempt]
 ```
 
 ### isRetrySafe() conditions
@@ -251,14 +265,16 @@ Exact strings from `MergeGate.runMergeGate()`. Use for log search and alert rout
 | `mutation lane {laneId} performed writes without lock` | Write tools ran without claim | Ensure mutation acquire succeeded |
 | `non-mutating lane {laneId} ({mode}) performed writes without lock` | Mode/write mismatch | Add `[write_set:…]` and accept lock, or fix lane tools |
 
-### Evidence
+### Audit advisories (non-blocking)
 
-| Violation pattern | Remediation |
-|-------------------|-------------|
+| Advisory pattern | Follow-up |
+|------------------|-----------|
 | `missing evidence: {agentIds}` | Ensure agents record `evidenceRefs` |
 | `missing transcript pointer: {laneIds}` | Completed lanes need `transcriptArtifactPath` |
 | `missing tool evidence: {laneIds}` | Completed lanes need tool steps or evidence |
 | `unresolved placeholders: {agentIds}` | Remove TODO/FIXME/PLACEHOLDER/TBD from output |
+
+These signals remain audit-visible but do not fail a safe merge. Enrich evidence or repair transcript persistence asynchronously; do not rerun the whole swarm solely for these findings.
 
 ### Status integrity
 
@@ -275,7 +291,7 @@ Exact strings from `MergeGate.runMergeGate()`. Use for log search and alert rout
 |-------------------|-------------|
 | `orphaned claims: {count}` | Release or recover — filter `lockRequired` lanes |
 | `unreleased claims: {laneIds}` | Call release path; check crash phase |
-| `stale leases: {count}` | Stale recovery procedure |
+| `stale leases: {count}` | Unresolved stale ownership only; run stale recovery. A matching later `released` event clears the gate. |
 | `duplicate claim on '{resource}': {a}, {b}` | Split-brain acquire — recover stale |
 | `duplicate claimId '{id}' on resources '…' and '…'` | Claim ID collision — forensic claim history |
 | `split-brain lock authority detected` | Multiple owner:token per resource |

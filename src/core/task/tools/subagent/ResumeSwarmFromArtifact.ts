@@ -8,6 +8,7 @@ import { loadTranscriptEvents } from "./SubagentTranscriptRecorder"
 export interface SwarmArtifactIntegrityReport {
 	valid: boolean
 	violations: string[]
+	advisoryWarnings?: string[]
 	checksum: string
 }
 
@@ -56,6 +57,8 @@ export interface SwarmResumePlan {
 	retryAgents: SwarmResumeAgentRetry[]
 	restartAgents: SwarmResumeAgentRestart[]
 	recoveryReceipt: SwarmRecoveryReceipt
+	/** Immutable source already validated by planResumeFromArtifact; avoids one read per reused lane. */
+	sourceEnvelope: SwarmExecutionEnvelope
 	rejectedReason?: string
 }
 
@@ -69,6 +72,7 @@ export async function validateArtifactIntegrity(
 	envelope: SwarmExecutionEnvelope,
 ): Promise<SwarmArtifactIntegrityReport> {
 	const violations: string[] = []
+	const advisoryWarnings: string[] = []
 
 	if (envelope.schemaVersion !== SWARM_ENVELOPE_SCHEMA_VERSION) {
 		violations.push(`unsupported schema version: ${envelope.schemaVersion}`)
@@ -79,6 +83,7 @@ export async function validateArtifactIntegrity(
 
 	const invariantReport = validateSwarmEnvelope(envelope)
 	violations.push(...invariantReport.violations)
+	advisoryWarnings.push(...(invariantReport.advisoryWarnings ?? []))
 	if (envelope.invariants.violations.includes(SWARM_TERMINAL_STAGING_VIOLATION)) {
 		violations.push(SWARM_TERMINAL_STAGING_VIOLATION)
 	}
@@ -86,7 +91,7 @@ export async function validateArtifactIntegrity(
 	for (const agent of envelope.agents) {
 		if (!agent.transcriptArtifactPath) {
 			if (agent.status === "completed" || agent.status === "failed") {
-				violations.push(`agent ${agent.agentId}: missing transcript artifact path`)
+				advisoryWarnings.push(`agent ${agent.agentId}: missing transcript artifact path`)
 			}
 			continue
 		}
@@ -112,6 +117,7 @@ export async function validateArtifactIntegrity(
 	return {
 		valid: violations.length === 0,
 		violations,
+		advisoryWarnings: [...new Set(advisoryWarnings)],
 		checksum,
 	}
 }
@@ -195,6 +201,7 @@ export async function planResumeFromArtifact(
 		sourceSwarmId,
 		taskId,
 		newSwarmId,
+		sourceEnvelope: envelope,
 		reuseAgents,
 		retryAgents,
 		restartAgents,

@@ -28,6 +28,8 @@ describe("GovernedReceiptPanel", () => {
 					replayArtifactPath: "subagent_executions/swarm-1.json",
 					replayChecksum: "abcd1234efgh5678",
 					violations: ["unsafe overlap on 'src/a.ts': a, b"],
+					advisoryWarnings: ["missing transcript pointer: swarm-lane:swarm-1:1"],
+					retryDisposition: "retry_after_recovery",
 					claimTimeline: [
 						{ label: "admitted", event: "admitted", timestamp: Date.now(), status: "ok" },
 						{
@@ -112,6 +114,8 @@ describe("GovernedReceiptPanel", () => {
 		expect(screen.getByText(/File overlaps/i)).toBeInTheDocument()
 		expect(screen.getByText(/Retry lineage/i)).toBeInTheDocument()
 		expect(screen.getByText(/merge gate blocked/i)).toBeInTheDocument()
+		expect(screen.getByText(/retry_after_recovery/i)).toBeInTheDocument()
+		expect(screen.getByText(/Audit advisories · no retry required/i)).toBeInTheDocument()
 	})
 
 	it("shows execution mode and lock-skipped lanes without missing-lock noise", () => {

@@ -122,6 +122,12 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 					</span>
 				</div>
 				<div>
+					Retry action: <span className="text-foreground/70">{receipt.retryDisposition || "legacy receipt"}</span>
+				</div>
+				<div>
+					Continuation: <span className="text-foreground/70">{receipt.continuationDecision?.action || "legacy"}</span>
+				</div>
+				<div>
 					Authoritative:{" "}
 					<span className="text-foreground/70 truncate" title={diagnostics?.authoritativeAttemptId}>
 						{diagnostics?.authoritativeAttemptId?.slice(0, 8) || "—"}
@@ -147,7 +153,7 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 				</div>
 				<div>
 					Evidence:{" "}
-					<span className={receipt.evidenceComplete ? "text-success" : "text-error"}>
+					<span className={receipt.evidenceComplete ? "text-success" : "text-amber-600 dark:text-amber-400"}>
 						{receipt.evidenceComplete ? "complete" : "incomplete"}
 					</span>
 				</div>
@@ -271,14 +277,14 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 
 			{((diagnostics?.missingTranscripts.length ?? 0) > 0 || (diagnostics?.missingToolEvidence.length ?? 0) > 0) && (
 				<div className="space-y-0.5">
-					<div className="text-[9px] font-mono uppercase text-foreground/50">Missing evidence</div>
-					{diagnostics!.missingTranscripts.map((laneId) => (
-						<div className="text-[10px] font-mono text-error/80" key={`t-${laneId}`}>
+					<div className="text-[9px] font-mono uppercase text-amber-600 dark:text-amber-400">Evidence advisories</div>
+					{diagnostics?.missingTranscripts.map((laneId) => (
+						<div className="text-[10px] font-mono text-foreground/60" key={`t-${laneId}`}>
 							transcript: {laneId}
 						</div>
 					))}
-					{diagnostics!.missingToolEvidence.map((laneId) => (
-						<div className="text-[10px] font-mono text-error/80" key={`e-${laneId}`}>
+					{diagnostics?.missingToolEvidence.map((laneId) => (
+						<div className="text-[10px] font-mono text-foreground/60" key={`e-${laneId}`}>
 							tool steps: {laneId}
 						</div>
 					))}
@@ -465,6 +471,19 @@ export function GovernedReceiptPanel({ receipt }: GovernedReceiptPanelProps) {
 					{receipt.violations.slice(0, 5).map((violation) => (
 						<div className="text-[10px] text-error/90 font-mono break-words" key={violation}>
 							{violation}
+						</div>
+					))}
+				</div>
+			)}
+
+			{(receipt.advisoryWarnings?.length ?? 0) > 0 && (
+				<div className="space-y-0.5 rounded border border-amber-500/20 bg-amber-500/5 px-1.5 py-1">
+					<div className="text-[9px] font-mono uppercase text-amber-600 dark:text-amber-400">
+						Audit advisories · no retry required
+					</div>
+					{receipt.advisoryWarnings?.slice(0, 5).map((warning) => (
+						<div className="text-[10px] text-foreground/70 font-mono break-words" key={warning}>
+							{warning}
 						</div>
 					))}
 				</div>

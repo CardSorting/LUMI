@@ -3,13 +3,44 @@ import * as path from "node:path"
 import { ensureTaskDirectoryExists } from "@core/storage/disk"
 import { Logger } from "@shared/services/Logger"
 import { SUBAGENT_EXECUTIONS_DIR } from "@shared/subagent/executionEnvelope"
-import type { GovernedRetryHistoryEntry, GovernedSwarmReceipt } from "@shared/subagent/governedExecution"
+import type {
+	GovernedExecutionPathMetrics,
+	GovernedRetryHistoryEntry,
+	GovernedSwarmReceipt,
+} from "@shared/subagent/governedExecution"
 import { GOVERNED_RECEIPT_SCHEMA_VERSION } from "@shared/subagent/governedExecution"
 
 export interface GovernedReceiptValidation {
 	valid: boolean
 	corrupted: boolean
 	violations: string[]
+}
+
+export const GOVERNED_RECEIPT_PERSIST_MAX_ATTEMPTS = 2
+
+export function isTransientReceiptPersistenceError(error: unknown): boolean {
+	const code = (error as NodeJS.ErrnoException).code
+	return code !== undefined && ["EAGAIN", "EBUSY", "EMFILE", "ENFILE", "ETIMEDOUT"].includes(code)
+}
+
+export async function runWithBoundedReceiptPersistenceRetry<T>(
+	operation: () => Promise<T>,
+	metrics?: GovernedExecutionPathMetrics,
+): Promise<T> {
+	for (let attempt = 1; attempt <= GOVERNED_RECEIPT_PERSIST_MAX_ATTEMPTS; attempt++) {
+		try {
+			return await operation()
+		} catch (error) {
+			if (attempt < GOVERNED_RECEIPT_PERSIST_MAX_ATTEMPTS && isTransientReceiptPersistenceError(error)) {
+				if (metrics) {
+					metrics.retryDecisions++
+				}
+				continue
+			}
+			throw error
+		}
+	}
+	throw new Error("Governed receipt persistence exhausted its bounded retry budget.")
 }
 
 export function buildGovernedArtifactRelativePath(swarmId: string, attemptId?: string): string {
@@ -53,7 +84,11 @@ function shouldUpdateLatestPointer(existing: GovernedSwarmReceipt | null, incomi
 export async function persistGovernedReceipt(
 	taskId: string,
 	receipt: GovernedSwarmReceipt,
-	options?: { existingLatest?: GovernedSwarmReceipt | null },
+	options?: {
+		existingLatest?: GovernedSwarmReceipt | null
+		existingHistory?: GovernedRetryHistoryEntry[]
+		metrics?: GovernedExecutionPathMetrics
+	},
 ): Promise<string> {
 	const taskDir = await ensureTaskDirectoryExists(taskId)
 	const executionsDir = path.join(taskDir, SUBAGENT_EXECUTIONS_DIR)
@@ -74,13 +109,20 @@ export async function persistGovernedReceipt(
 	}
 
 	try {
-		await fs.writeFile(attemptPath, JSON.stringify(payload, null, 2), "utf8")
+		const serialized = JSON.stringify(payload, null, 2)
+		await runWithBoundedReceiptPersistenceRetry(() => fs.writeFile(attemptPath, serialized, "utf8"), options?.metrics)
+		if (options?.metrics) {
+			options.metrics.receiptPersistenceWrites++
+		}
 		const existingLatest =
 			options?.existingLatest !== undefined ? options.existingLatest : await loadGovernedReceipt(taskId, receipt.swarmId)
 		if (shouldUpdateLatestPointer(existingLatest, payload)) {
-			await fs.writeFile(latestPath, JSON.stringify(payload, null, 2), "utf8")
+			await runWithBoundedReceiptPersistenceRetry(() => fs.writeFile(latestPath, serialized, "utf8"), options?.metrics)
+			if (options?.metrics) {
+				options.metrics.receiptPersistenceWrites++
+			}
 		}
-		await appendReceiptHistory(taskId, receipt)
+		await appendReceiptHistory(taskId, receipt, options?.existingHistory, options?.metrics)
 		return payload.governedArtifactPath
 	} catch (error) {
 		Logger.error("[GovernedExecutionStore] Failed to persist governed receipt:", error)
@@ -88,10 +130,18 @@ export async function persistGovernedReceipt(
 	}
 }
 
-async function appendReceiptHistory(taskId: string, receipt: GovernedSwarmReceipt): Promise<void> {
+async function appendReceiptHistory(
+	taskId: string,
+	receipt: GovernedSwarmReceipt,
+	existingHistory?: GovernedRetryHistoryEntry[],
+	metrics?: GovernedExecutionPathMetrics,
+): Promise<void> {
 	const taskDir = await ensureTaskDirectoryExists(taskId)
 	const historyPath = path.join(taskDir, SUBAGENT_EXECUTIONS_DIR, `${receipt.swarmId}.governed.history.jsonl`)
-	const existing = await listGovernedReceiptHistory(taskId, receipt.swarmId)
+	const existing = existingHistory ?? (await listGovernedReceiptHistory(taskId, receipt.swarmId))
+	if (!existingHistory && metrics) {
+		metrics.receiptHistoryReads++
+	}
 	if (existing.some((entry) => entry.attemptId === receipt.attemptId)) {
 		return
 	}
@@ -104,7 +154,10 @@ async function appendReceiptHistory(taskId: string, receipt: GovernedSwarmReceip
 		parentAttemptId: receipt.parentAttemptId,
 		retryReason: receipt.retryReason,
 	})
-	await fs.appendFile(historyPath, `${entry}\n`, "utf8")
+	await runWithBoundedReceiptPersistenceRetry(() => fs.appendFile(historyPath, `${entry}\n`, "utf8"), metrics)
+	if (metrics) {
+		metrics.receiptPersistenceWrites++
+	}
 }
 
 export async function listGovernedReceiptHistory(taskId: string, swarmId: string): Promise<GovernedRetryHistoryEntry[]> {

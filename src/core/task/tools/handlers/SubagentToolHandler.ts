@@ -29,7 +29,7 @@ import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import type { GatePreflightReadinessIssue } from "../completionGatePipeline"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
-import { evaluateCoordinatorFastContinuation } from "../subagent/CoordinatorExecutionAuthority"
+import { createSwarmValidationSnapshot } from "../subagent/executionValidation"
 import {
 	buildLaneDependencyMap,
 	buildLaneRoadmapItemMap,
@@ -53,6 +53,7 @@ import {
 	CoalescingAsyncEmitter,
 	calculateRetryDelayMs,
 	computeMaxInFlightLanes,
+	createGovernedExecutionPathMetrics,
 	createParentAbortWatcher,
 	createSwarmSchedulerWake,
 	DEFAULT_SUBAGENT_CONCURRENCY,
@@ -78,7 +79,7 @@ import {
 	type SwarmResumePlan,
 } from "../subagent/ResumeSwarmFromArtifact"
 import { constrainSubagentToolsForLane, SUBAGENT_DEFAULT_ALLOWED_TOOLS, SubagentBuilder } from "../subagent/SubagentBuilder"
-import { loadSwarmEnvelope, persistSwarmEnvelope } from "../subagent/SubagentExecutionStore"
+import { persistSwarmEnvelope } from "../subagent/SubagentExecutionStore"
 import { SubagentRunner, type SubagentRunResult } from "../subagent/SubagentRunner"
 import { buildParentToolResult, buildSwarmSummaryOverlay } from "../subagent/SwarmReportBuilder"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -396,6 +397,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 
 		const laneDependencies = buildLaneDependencyMap(prompts, block.params as Record<string, string | undefined>)
 		const laneRoadmapItems = buildLaneRoadmapItemMap(prompts, block.params as Record<string, string | undefined>)
+		const executionPathMetrics = createGovernedExecutionPathMetrics()
 
 		const governedCoordinator = new GovernedSwarmCoordinator(
 			config.cwd,
@@ -405,6 +407,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			createLockAuthority({ inMemory: process.env.TS_NODE_PROJECT?.includes("unit-test") ?? false }),
 			undefined,
 			resumePlan?.recoveryReceipt?.resumeAttemptId,
+			executionPathMetrics,
 		)
 		const swarmAdmission = await governedCoordinator.admitSwarm(config.taskId)
 		if (!swarmAdmission.admitted) {
@@ -699,7 +702,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 					if (reused) {
 						entry.status = "completed"
 						entry.result = reused.result
-						const sourceEnvelope = (await loadSwarmEnvelope(config.taskId, resumePlan.sourceSwarmId))?.agents.find(
+						const sourceEnvelope = resumePlan.sourceEnvelope.agents.find(
 							(agent) => agent.agentId === reused.envelopeId,
 						)
 						if (sourceEnvelope) {
@@ -978,6 +981,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 							}
 
 							shouldRetry = true
+							executionPathMetrics.retryDecisions++
 							retryDelayMs = calculateRetryDelayMs(attempt)
 						} finally {
 							if (runner && activeRunners.get(index) === runner) {
@@ -1315,20 +1319,6 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				usageCost += result.value.stats.totalCost || 0
 			})
 
-			const continuation = evaluateCoordinatorFastContinuation({
-				taskId: config.taskId,
-				hasRunningLanes: entries.some((entry) => entry.status === "running"),
-				proposedHardBlockers: entries
-					.filter(
-						(entry) => entry.status === "failed" && !entry.warnings?.some((w) => w.startsWith("degraded_complete")),
-					)
-					.map((entry) => entry.error || "lane_hard_blocked"),
-				advisorySignalCount: entries.reduce((acc, entry) => acc + (entry.warnings?.length ?? 0), 0),
-			})
-			if (continuation.diagnostics.length > 0 && config.taskState.swarmRuntime) {
-				config.taskState.swarmRuntime.advisoryNoiseSuppressed += continuation.diagnostics.length
-			}
-
 			const failures = entries.filter(
 				(entry) => entry.status === "failed" && !entry.warnings?.some((w) => w.startsWith("degraded_complete")),
 			).length
@@ -1367,6 +1357,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			})
 
 			finalEnvelope.checksum = computeSwarmArtifactChecksum(finalEnvelope)
+			const validationSnapshot = createSwarmValidationSnapshot(finalEnvelope, finalEnvelope.checksum, executionPathMetrics)
 			let terminalArtifactPrepared = false
 			try {
 				const stagingEnvelope: SwarmExecutionEnvelope = {
@@ -1376,13 +1367,15 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						violations: [...finalEnvelope.invariants.violations, SWARM_TERMINAL_STAGING_VIOLATION],
 					},
 				}
-				swarmArtifactPath = await persistSwarmEnvelope(config.taskId, stagingEnvelope)
+				swarmArtifactPath = await persistSwarmEnvelope(config.taskId, stagingEnvelope, {
+					validationSnapshot,
+					metrics: executionPathMetrics,
+				})
 				finalEnvelope.artifactPath = swarmArtifactPath
 				terminalArtifactPrepared = true
 			} catch (error) {
 				Logger.warn("[SubagentToolHandler] Failed to stage terminal swarm execution artifact:", error)
 				finalSwarmStatus = "failed"
-				finalEnvelope.status = "failed"
 				finalEnvelope.invariants.violations.push(`terminal artifact staging failed: ${errorMessage(error)}`)
 			}
 
@@ -1402,7 +1395,6 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						retryReason: config.taskState.abort ? "abort:parent" : "timeout:swarm",
 					})
 					finalSwarmStatus = "failed"
-					finalEnvelope.status = "failed"
 					finalEnvelope.invariants.violations.push(`crash:${swarmCrashPhase}`)
 				} else {
 					governedReceipt = await governedCoordinator.sealReceipt({
@@ -1413,13 +1405,14 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						forceFail: !terminalArtifactPrepared,
 						preflightIssues: auditPreflightIssues,
 						completionPolicy: roadmapCompletionPolicy,
+						validationSnapshot,
+						recoveryActive: Boolean(resumePlan),
 					})
 					finalEnvelope.invariants.violations.push(...governedReceipt.mergeGate.violations)
 					finalEnvelope.invariants.validated = governedReceipt.sealed
 
-					if (!governedReceipt.sealed) {
+					if (governedReceipt.continuationDecision?.permittedAction !== "continue_parent") {
 						finalSwarmStatus = "failed"
-						finalEnvelope.status = "failed"
 					}
 				}
 
@@ -1427,36 +1420,49 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			} catch (error) {
 				Logger.warn("[SubagentToolHandler] Failed to seal governed swarm receipt:", error)
 				finalSwarmStatus = "failed"
-				finalEnvelope.status = "failed"
 				finalEnvelope.invariants.violations.push(`governed receipt sealing failed: ${errorMessage(error)}`)
 			}
 
+			const executionStateChanged = finalEnvelope.status !== finalSwarmStatus
 			finalEnvelope.status = finalSwarmStatus
-			finalEnvelope.continuity = createContinuityMarker(
-				swarmId,
-				config.taskId,
-				entries.length,
-				entries.filter((entry) => entry.status === "completed" || entry.status === "failed").length,
-				finalSwarmStatus,
-			)
-			finalEnvelope.timestamps.completed = Date.now()
-			finalEnvelope.checksum = computeSwarmArtifactChecksum(finalEnvelope)
-			try {
-				swarmArtifactPath = await persistSwarmEnvelope(config.taskId, finalEnvelope)
-				finalEnvelope.artifactPath = swarmArtifactPath
-			} catch (error) {
-				Logger.warn("[SubagentToolHandler] Failed to persist terminal swarm execution artifact:", error)
-				finalSwarmStatus = "failed"
-				finalEnvelope.status = "failed"
-				finalEnvelope.invariants.violations.push(`terminal artifact persistence failed: ${errorMessage(error)}`)
+			if (executionStateChanged) {
 				finalEnvelope.continuity = createContinuityMarker(
 					swarmId,
 					config.taskId,
 					entries.length,
 					entries.filter((entry) => entry.status === "completed" || entry.status === "failed").length,
-					"failed",
+					finalSwarmStatus,
 				)
+				finalEnvelope.timestamps.completed = Date.now()
 				finalEnvelope.checksum = computeSwarmArtifactChecksum(finalEnvelope)
+			}
+			try {
+				swarmArtifactPath = await persistSwarmEnvelope(config.taskId, finalEnvelope, {
+					validationSnapshot,
+					metrics: executionPathMetrics,
+				})
+				finalEnvelope.artifactPath = swarmArtifactPath
+			} catch (error) {
+				Logger.warn("[SubagentToolHandler] Failed to persist terminal swarm execution artifact:", error)
+				const receiptAccepted = governedReceipt?.continuationDecision?.permittedAction === "continue_parent"
+				if (receiptAccepted) {
+					finalEnvelope.invariants.advisoryWarnings = [
+						...(finalEnvelope.invariants.advisoryWarnings ?? []),
+						`terminal artifact promotion deferred: ${errorMessage(error)}`,
+					]
+				} else {
+					finalSwarmStatus = "failed"
+					finalEnvelope.status = "failed"
+					finalEnvelope.invariants.violations.push(`terminal artifact persistence failed: ${errorMessage(error)}`)
+					finalEnvelope.continuity = createContinuityMarker(
+						swarmId,
+						config.taskId,
+						entries.length,
+						entries.filter((entry) => entry.status === "completed" || entry.status === "failed").length,
+						"failed",
+					)
+					finalEnvelope.checksum = computeSwarmArtifactChecksum(finalEnvelope)
+				}
 			}
 
 			await emitStatus(finalSwarmStatus === "failed" ? "failed" : "completed", false, {

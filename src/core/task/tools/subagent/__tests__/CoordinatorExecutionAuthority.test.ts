@@ -7,6 +7,7 @@ import {
 	evaluateCoordinatorHaltDecision,
 	GovernanceParalysisTracker,
 	mergeGovernanceDiagnostics,
+	reduceGovernedContinuation,
 	resolveContinuationFromParentSignals,
 	resolvePriorSealedReceiptForMerge,
 } from "../CoordinatorExecutionAuthority"
@@ -103,5 +104,109 @@ describe("CoordinatorExecutionAuthority", () => {
 			[{ code: "governance_recursion_detected", message: "same path", at }],
 		)
 		assert.equal(merged.length, 1)
+	})
+
+	it("owns the final clean-path continuation decision", () => {
+		const metrics = {
+			envelopeValidationCalls: 1,
+			envelopeValidationReuses: 0,
+			replayValidationCalls: 2,
+			claimReconstructions: 1,
+			receiptContextReads: 1,
+			receiptHistoryReads: 1,
+			envelopePersistenceWrites: 0,
+			receiptPersistenceWrites: 0,
+			continuationReductions: 0,
+			retryDecisions: 0,
+			lockAcquisitions: 0,
+		}
+		const decision = reduceGovernedContinuation({
+			receipt: sealedReceipt("attempt-clean"),
+			envelopeStructurallyValid: true,
+			validatedStateUnchanged: true,
+			recoveryActive: false,
+			metrics,
+		})
+
+		assert.deepEqual(decision, {
+			action: "accept",
+			retryDisposition: "not_needed",
+			reasonCode: "sealed_clean",
+			cleanPath: true,
+			permittedAction: "continue_parent",
+		})
+		assert.equal(metrics.continuationReductions, 1)
+	})
+
+	it("accepts advisories without retry and targets localized repair", () => {
+		const advisoryReceipt = sealedReceipt("attempt-advisory")
+		advisoryReceipt.mergeGate.advisoryWarnings = ["missing optional evidence"]
+		advisoryReceipt.mergeGate.retryDisposition = "not_needed"
+		const advisory = reduceGovernedContinuation({
+			receipt: advisoryReceipt,
+			envelopeStructurallyValid: true,
+			validatedStateUnchanged: true,
+			recoveryActive: false,
+		})
+		assert.equal(advisory.action, "accept_with_advisories")
+		assert.equal(advisory.permittedAction, "continue_parent")
+
+		const repairReceipt = sealedReceipt("attempt-repair")
+		repairReceipt.sealed = false
+		repairReceipt.mergeGate.passed = false
+		repairReceipt.mergeGate.retryDisposition = "targeted_repair"
+		const repair = reduceGovernedContinuation({
+			receipt: repairReceipt,
+			envelopeStructurallyValid: true,
+			validatedStateUnchanged: true,
+			recoveryActive: false,
+		})
+		assert.equal(repair.action, "targeted_repair")
+		assert.equal(repair.permittedAction, "repair_lanes")
+	})
+
+	it("keeps recovery bounded and hard conflicts fail-closed", () => {
+		const recoveryReceipt = sealedReceipt("attempt-recovery")
+		recoveryReceipt.sealed = false
+		recoveryReceipt.mergeGate.passed = false
+		recoveryReceipt.mergeGate.retryDisposition = "retry_after_recovery"
+		const recovery = reduceGovernedContinuation({
+			receipt: recoveryReceipt,
+			envelopeStructurallyValid: true,
+			validatedStateUnchanged: true,
+			recoveryActive: true,
+			interrupted: true,
+		})
+		assert.equal(recovery.action, "recover_and_resume")
+
+		const conflictReceipt = sealedReceipt("attempt-conflict")
+		conflictReceipt.sealed = false
+		conflictReceipt.mergeGate.passed = false
+		conflictReceipt.mergeGate.findings = [
+			{ code: "mutation_write_overlap", severity: "blocking", message: "overlap", retryable: false },
+		]
+		const conflict = reduceGovernedContinuation({
+			receipt: conflictReceipt,
+			envelopeStructurallyValid: true,
+			validatedStateUnchanged: true,
+			recoveryActive: false,
+		})
+		assert.equal(conflict.action, "halt_for_conflict")
+		assert.equal(conflict.permittedAction, "halt")
+
+		const corruptReplayReceipt = sealedReceipt("attempt-corrupt-replay")
+		corruptReplayReceipt.sealed = false
+		corruptReplayReceipt.mergeGate.passed = false
+		corruptReplayReceipt.mergeGate.findings = [
+			{ code: "replay_checksum_mismatch", severity: "blocking", message: "checksum mismatch", retryable: false },
+		]
+		const corruptReplay = reduceGovernedContinuation({
+			receipt: corruptReplayReceipt,
+			envelopeStructurallyValid: true,
+			validatedStateUnchanged: true,
+			recoveryActive: false,
+		})
+		assert.equal(corruptReplay.action, "reject_invalid_result")
+		assert.equal(corruptReplay.retryDisposition, "do_not_retry")
 	})
 })

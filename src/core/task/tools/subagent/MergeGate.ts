@@ -2,11 +2,15 @@ import type { ExecutionReplayArtifact } from "@shared/execution/replayContract"
 import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import type {
 	ClaimHistoryEntry,
+	GovernedExecutionPathMetrics,
+	GovernedResourceOwner,
 	GovernedRoadmapLinkage,
 	GovernedSwarmReceipt,
 	LaneDAGNode,
 	LaneExecutionReceipt,
+	MergeGateFinding,
 	MergeGateResult,
+	MergeGateRetryDisposition,
 	MergeSafetyAudit,
 } from "@shared/subagent/governedExecution"
 import { verifyReplayArtifact } from "./executionReplayMappers"
@@ -26,6 +30,11 @@ export interface MergeGateInput {
 	storedReplayChecksum?: string
 	roadmapLinkage?: GovernedRoadmapLinkage
 	sealed?: boolean
+	metrics?: GovernedExecutionPathMetrics
+}
+
+export interface MergeGateEvaluation extends MergeGateResult {
+	normalizedResourceOwners: GovernedResourceOwner[]
 }
 
 function laneDependsOn(ancestor: number, descendant: number, dag: LaneDAGNode[]): boolean {
@@ -107,29 +116,65 @@ function auditPlaceholders(agents: SubagentExecutionEnvelope[]): string[] {
 	return warnings
 }
 
-function auditOrphanedClaims(claimHistory: ClaimHistoryEntry[], laneReceipts: LaneExecutionReceipt[]): number {
-	const acquired = new Map<string, ClaimHistoryEntry>()
-	let orphaned = 0
+function claimIdentity(entry: ClaimHistoryEntry): string {
+	return entry.claimId || `${entry.resourceKey}:${entry.ownerId}:${entry.fencingToken}`
+}
+
+interface ClaimLifecycleState {
+	active: Map<string, ClaimHistoryEntry>
+	unresolvedStale: Map<string, ClaimHistoryEntry>
+	resourceOwners: Map<string, GovernedResourceOwner>
+}
+
+/** Reconstruct current ownership; historical stale events stop blocking after a matching release. */
+function reconcileClaimLifecycle(claimHistory: ClaimHistoryEntry[]): ClaimLifecycleState {
+	const active = new Map<string, ClaimHistoryEntry>()
+	const unresolvedStale = new Map<string, ClaimHistoryEntry>()
+	const resourceOwners = new Map<string, GovernedResourceOwner>()
 
 	for (const entry of claimHistory) {
+		const key = claimIdentity(entry)
 		if (entry.event === "acquired" || entry.event === "recovered") {
-			acquired.set(entry.resourceKey, entry)
-		} else if (entry.event === "released") {
-			acquired.delete(entry.resourceKey)
+			active.set(key, entry)
+			unresolvedStale.delete(key)
+			resourceOwners.set(entry.resourceKey, {
+				resourceKey: entry.resourceKey,
+				ownerId: entry.ownerId,
+				laneId: entry.laneId,
+				claimId: entry.claimId,
+				fencingToken: entry.fencingToken,
+				lockBackends: entry.lockBackends,
+				status: "active",
+			})
 		} else if (entry.event === "stale_detected") {
-			orphaned++
+			unresolvedStale.set(key, entry)
+			const owner = resourceOwners.get(entry.resourceKey)
+			if (owner) {
+				owner.status = "stale"
+			}
+		} else if (entry.event === "released") {
+			active.delete(key)
+			unresolvedStale.delete(key)
+			resourceOwners.set(entry.resourceKey, {
+				resourceKey: entry.resourceKey,
+				ownerId: entry.ownerId,
+				laneId: entry.laneId,
+				claimId: entry.claimId,
+				fencingToken: entry.fencingToken,
+				lockBackends: entry.lockBackends,
+				status: "released",
+			})
 		}
 	}
 
-	for (const entry of acquired.values()) {
+	return { active, unresolvedStale, resourceOwners }
+}
+
+function auditOrphanedClaims(lifecycle: ClaimLifecycleState, laneReceipts: LaneExecutionReceipt[]): number {
+	let orphaned = 0
+	for (const entry of lifecycle.active.values()) {
 		const lane = laneReceipts.find((l) => l.laneId === entry.laneId)
 		if (lane && !lane.lockRequired && !lane.roadmapMutationLockRequired) {
-			continue
-		}
-		if (lane?.roadmapMutationLockRequired && lane.roadmapMutationClaimReleased) {
-			continue
-		}
-		if (lane && lane.lockRequired && lane.claimReleased) {
 			continue
 		}
 		orphaned++
@@ -138,49 +183,61 @@ function auditOrphanedClaims(claimHistory: ClaimHistoryEntry[], laneReceipts: La
 	return orphaned
 }
 
-function auditStaleLeases(claimHistory: ClaimHistoryEntry[], laneReceipts: LaneExecutionReceipt[]): number {
-	const lockSkipped = new Set(laneReceipts.filter((l) => !l.lockRequired).map((l) => l.laneId))
-	return claimHistory.filter((entry) => entry.event === "stale_detected" && !lockSkipped.has(entry.laneId)).length
+function auditStaleLeases(lifecycle: ClaimLifecycleState, laneReceipts: LaneExecutionReceipt[]): number {
+	const lockSkipped = new Set(
+		laneReceipts.filter((lane) => !lane.lockRequired && !lane.roadmapMutationLockRequired).map((lane) => lane.laneId),
+	)
+	return [...lifecycle.unresolvedStale.values()].filter((entry) => !lockSkipped.has(entry.laneId)).length
 }
 
 function auditDuplicateClaims(claimHistory: ClaimHistoryEntry[]): string[] {
-	const active = new Map<string, string>()
+	const active = new Map<string, Map<string, ClaimHistoryEntry>>()
 	const violations: string[] = []
 
 	for (const entry of claimHistory) {
 		if (entry.event !== "acquired" && entry.event !== "recovered") {
 			if (entry.event === "released") {
-				active.delete(entry.resourceKey)
+				const holders = active.get(entry.resourceKey)
+				holders?.delete(claimIdentity(entry))
+				if (holders?.size === 0) {
+					active.delete(entry.resourceKey)
+				}
 			}
 			continue
 		}
-		const existing = active.get(entry.resourceKey)
-		if (existing && existing !== entry.ownerId) {
-			violations.push(`duplicate claim on '${entry.resourceKey}': ${existing}, ${entry.ownerId}`)
+		const holders = active.get(entry.resourceKey) ?? new Map<string, ClaimHistoryEntry>()
+		const existing = [...holders.values()].find((holder) => holder.ownerId !== entry.ownerId)
+		if (existing) {
+			violations.push(`duplicate claim on '${entry.resourceKey}': ${existing.ownerId}, ${entry.ownerId}`)
 		}
-		active.set(entry.resourceKey, entry.ownerId)
+		holders.set(claimIdentity(entry), entry)
+		active.set(entry.resourceKey, holders)
 	}
 
 	return violations
 }
 
 function auditSplitBrain(claimHistory: ClaimHistoryEntry[]): boolean {
-	const activeByResource = new Map<string, Set<string>>()
+	const activeByResource = new Map<string, Map<string, ClaimHistoryEntry>>()
 
 	for (const entry of claimHistory) {
 		if (entry.event === "released") {
-			activeByResource.delete(entry.resourceKey)
+			const owners = activeByResource.get(entry.resourceKey)
+			owners?.delete(claimIdentity(entry))
+			if (owners?.size === 0) {
+				activeByResource.delete(entry.resourceKey)
+			}
 			continue
 		}
 		if (entry.event === "acquired" || entry.event === "recovered") {
-			const owners = activeByResource.get(entry.resourceKey) || new Set()
-			owners.add(`${entry.ownerId}:${entry.fencingToken}`)
+			const owners = activeByResource.get(entry.resourceKey) || new Map<string, ClaimHistoryEntry>()
+			owners.set(claimIdentity(entry), entry)
 			activeByResource.set(entry.resourceKey, owners)
 		}
 	}
 
 	for (const owners of activeByResource.values()) {
-		if (owners.size > 1) {
+		if (new Set([...owners.values()].map((entry) => `${entry.ownerId}:${entry.fencingToken}`)).size > 1) {
 			return true
 		}
 	}
@@ -294,69 +351,156 @@ function auditSealedSupersession(
 /**
  * Canonical merge gate — fail closed before swarm success.
  */
-export function runMergeGate(input: MergeGateInput): MergeGateResult {
+export function runMergeGate(input: MergeGateInput): MergeGateEvaluation {
 	const violations: string[] = []
-	const overlapAudit = auditMutationWriteOverlaps(input.laneReceipts, input.laneDag)
-	violations.push(...overlapAudit.violations)
+	const advisoryWarnings: string[] = []
+	const findings: MergeGateFinding[] = []
+	const addBlocking = (code: string, messages: string[], remediation: string, retryable = true): void => {
+		for (const message of messages) {
+			violations.push(message)
+			findings.push({ code, severity: "blocking", message, retryable, remediation })
+		}
+	}
+	const addAdvisory = (code: string, messages: string[], remediation: string): void => {
+		for (const message of messages) {
+			advisoryWarnings.push(message)
+			findings.push({ code, severity: "advisory", message, retryable: false, remediation })
+		}
+	}
 
-	violations.push(...auditMutationWithoutLock(input.laneReceipts, input.agents))
-	violations.push(...auditNonMutatingWithWrites(input.laneReceipts, input.agents))
+	const overlapAudit = auditMutationWriteOverlaps(input.laneReceipts, input.laneDag)
+	addBlocking(
+		"mutation_write_overlap",
+		overlapAudit.violations,
+		"Serialize only the conflicting lanes with a DAG dependency or split their write sets.",
+	)
+
+	addBlocking(
+		"mutation_without_lock",
+		auditMutationWithoutLock(input.laneReceipts, input.agents),
+		"Re-run the affected mutation lane under a governed claim.",
+	)
+	addBlocking(
+		"undeclared_mutation",
+		auditNonMutatingWithWrites(input.laneReceipts, input.agents),
+		"Escalate the affected lane to mutation mode and re-run that lane.",
+	)
 
 	const missingEvidence = auditMissingEvidence(input.agents)
 	if (missingEvidence.length > 0) {
-		violations.push(`missing evidence: ${missingEvidence.join(", ")}`)
+		addAdvisory(
+			"evidence_reference_missing",
+			[`missing evidence: ${missingEvidence.join(", ")}`],
+			"Attach evidence references during follow-up; do not re-run completed work solely for this warning.",
+		)
 	}
 
 	const placeholderWarnings = auditPlaceholders(input.agents)
 	if (placeholderWarnings.length > 0) {
-		violations.push(`unresolved placeholders: ${placeholderWarnings.join(", ")}`)
+		addAdvisory(
+			"placeholder_detected",
+			[`unresolved placeholders: ${placeholderWarnings.join(", ")}`],
+			"Review the referenced output and resolve placeholders only when they affect the requested deliverable.",
+		)
 	}
 
 	const missingTranscripts = auditMissingTranscripts(input.laneReceipts)
 	if (missingTranscripts.length > 0) {
-		violations.push(`missing transcript pointer: ${missingTranscripts.join(", ")}`)
+		addAdvisory(
+			"transcript_pointer_missing",
+			[`missing transcript pointer: ${missingTranscripts.join(", ")}`],
+			"Repair transcript persistence asynchronously; the sealed swarm envelope remains the replay source.",
+		)
 	}
 
 	const missingToolEvidence = auditMissingToolEvidence(input.laneReceipts)
 	if (missingToolEvidence.length > 0) {
-		violations.push(`missing tool evidence: ${missingToolEvidence.join(", ")}`)
+		addAdvisory(
+			"tool_evidence_missing",
+			[`missing tool evidence: ${missingToolEvidence.join(", ")}`],
+			"Request targeted evidence enrichment instead of retrying the whole swarm.",
+		)
 	}
 
 	const laneStatusViolations = auditLaneStatusMismatch(input.agents, input.laneReceipts)
-	violations.push(...laneStatusViolations)
+	addBlocking(
+		"lane_status_mismatch",
+		laneStatusViolations,
+		"Reconcile the affected lane receipt with its execution envelope before seal.",
+	)
 
 	const failedLanes = input.laneReceipts.filter((lane) => lane.status === "failed")
 	if (failedLanes.length > 0) {
-		violations.push(`failed lanes: ${failedLanes.map((l) => l.laneId).join(", ")}`)
+		addBlocking(
+			"failed_lanes",
+			[`failed lanes: ${failedLanes.map((l) => l.laneId).join(", ")}`],
+			"Resume or repair only failed lanes and their dependent descendants.",
+		)
 	}
 
 	const unsealedLanes = input.laneDag.filter((node) => node.state !== "sealed" && node.state !== "failed")
 	if (unsealedLanes.length > 0) {
-		violations.push(`unsealed DAG nodes: ${unsealedLanes.map((n) => n.laneId).join(", ")}`)
+		addBlocking(
+			"incomplete_lane_dag",
+			[`unsealed DAG nodes: ${unsealedLanes.map((n) => n.laneId).join(", ")}`],
+			"Wait for running lanes or resume only incomplete DAG nodes.",
+		)
 	}
 
 	const duplicateViolations = auditDuplicateClaims(input.claimHistory)
-	violations.push(...duplicateViolations)
-	violations.push(...auditDuplicateClaimIds(input.claimHistory))
+	addBlocking("duplicate_claim", duplicateViolations, "Recover conflicting ownership before any retry.", false)
+	addBlocking(
+		"duplicate_claim_id",
+		auditDuplicateClaimIds(input.claimHistory),
+		"Repair claim identity generation and inspect concurrent ownership before retry.",
+		false,
+	)
 
 	const splitBrainDetected = auditSplitBrain(input.claimHistory)
 	if (splitBrainDetected) {
-		violations.push("split-brain lock authority detected")
+		addBlocking(
+			"split_brain",
+			["split-brain lock authority detected"],
+			"Reconcile lock backends and fencing tokens before retry.",
+			false,
+		)
 	}
 
-	const orphanedClaimCount = auditOrphanedClaims(input.claimHistory, input.laneReceipts)
+	const claimLifecycle = reconcileClaimLifecycle(input.claimHistory)
+	if (input.metrics) {
+		input.metrics.claimReconstructions++
+	}
+	const orphanedClaimCount = auditOrphanedClaims(claimLifecycle, input.laneReceipts)
 	if (orphanedClaimCount > 0) {
-		violations.push(`orphaned claims: ${orphanedClaimCount}`)
+		addBlocking(
+			"orphaned_claim",
+			[`orphaned claims: ${orphanedClaimCount}`],
+			"Release or recover active mutation claims before retry.",
+			false,
+		)
 	}
 
-	const staleLeaseCount = auditStaleLeases(input.claimHistory, input.laneReceipts)
+	const staleLeaseCount = auditStaleLeases(claimLifecycle, input.laneReceipts)
 	if (staleLeaseCount > 0) {
-		violations.push(`stale leases: ${staleLeaseCount}`)
+		addBlocking(
+			"stale_lease",
+			[`stale leases: ${staleLeaseCount}`],
+			"Recover unresolved stale leases, then retry only incomplete lanes.",
+			false,
+		)
 	}
 
 	const replayIntegrity = verifyReplayArtifact(input.replayArtifact)
+	if (input.metrics) {
+		input.metrics.replayValidationCalls++
+	}
 	if (!replayIntegrity.valid) {
-		violations.push(...replayIntegrity.violations)
+		addBlocking(
+			"replay_integrity",
+			replayIntegrity.violations,
+			"Repair or regenerate the replay artifact before merge.",
+			false,
+		)
 	}
 
 	const sealedSupersessionBlocked = auditSealedSupersession(
@@ -366,7 +510,12 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 		input.laneDag,
 	)
 	if (sealedSupersessionBlocked) {
-		violations.push("unsealed retry cannot supersede prior sealed receipt")
+		addBlocking(
+			"sealed_supersession",
+			["unsealed retry cannot supersede prior sealed receipt"],
+			"Use the authoritative sealed result or link a deliberate child attempt via parentAttemptId.",
+			false,
+		)
 	}
 
 	if (input.storedReplayChecksum) {
@@ -400,9 +549,15 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 				replayChecksum: input.storedReplayChecksum,
 			},
 			input.replayArtifact,
+			replayIntegrity,
 		)
 		if (!replayProbe.valid) {
-			violations.push(...explainReplayMismatch(replayProbe.violations))
+			addBlocking(
+				"replay_checksum_mismatch",
+				explainReplayMismatch(replayProbe.violations),
+				"Restore the authoritative artifact or start a linked targeted attempt.",
+				false,
+			)
 		}
 	}
 
@@ -413,7 +568,12 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 				(lane.roadmapMutationLockRequired && lane.roadmapMutationClaimReleased === false)),
 	)
 	if (unreleased.length > 0) {
-		violations.push(`unreleased claims: ${unreleased.map((l) => l.laneId).join(", ")}`)
+		addBlocking(
+			"unreleased_claim",
+			[`unreleased claims: ${unreleased.map((l) => l.laneId).join(", ")}`],
+			"Release active claims before retrying incomplete lanes.",
+			false,
+		)
 	}
 
 	const mergePassedProbe = violations.length === 0
@@ -426,7 +586,11 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 		mergePassed: mergePassedProbe,
 		sealed: input.sealed ?? mergePassedProbe,
 	})
-	violations.push(...roadmapAudit.violations)
+	addBlocking(
+		"roadmap_merge_safety",
+		roadmapAudit.violations,
+		"Repair only conflicting or unauthorized roadmap mutations before commit.",
+	)
 
 	const mergeAudit: MergeSafetyAudit = {
 		safe: violations.length === 0,
@@ -435,6 +599,23 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 		missingEvidence,
 		placeholderWarnings,
 	}
+	const blockingCodes = new Set(findings.filter((finding) => finding.severity === "blocking").map((finding) => finding.code))
+	const retryDisposition: MergeGateRetryDisposition = sealedSupersessionBlocked
+		? "do_not_retry"
+		: [...blockingCodes].some((code) =>
+					[
+						"duplicate_claim",
+						"duplicate_claim_id",
+						"split_brain",
+						"orphaned_claim",
+						"stale_lease",
+						"unreleased_claim",
+					].includes(code),
+				)
+			? "retry_after_recovery"
+			: violations.length > 0
+				? "targeted_repair"
+				: "not_needed"
 
 	return {
 		passed: violations.length === 0,
@@ -447,5 +628,9 @@ export function runMergeGate(input: MergeGateInput): MergeGateResult {
 		staleLeaseCount,
 		splitBrainDetected,
 		sealedSupersessionBlocked,
+		findings,
+		advisoryWarnings,
+		retryDisposition,
+		normalizedResourceOwners: [...claimLifecycle.resourceOwners.values()],
 	}
 }

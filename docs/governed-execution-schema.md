@@ -57,6 +57,8 @@ Top-level durable record written by `persistGovernedReceipt()`.
 | `integrity` | `ExecutionReplayIntegrityReport` | yes | Replay validation result |
 | `roadmapLinkage` | `GovernedRoadmapLinkage` | no | Roadmap pressure, per-lane items, completion advisory |
 | `auditIntegration` | `GovernedAuditIntegration` | no | Preflight, per-lane completion audit, merge gate role, storage boundary |
+| `continuationDecision` | `GovernedContinuationDecision` | no | Final parent action reduced once from sealed normalized state |
+| `executionPathMetrics` | `GovernedExecutionPathMetrics` | no | Critical-path validation, reconstruction, read, write, retry, and lock counters |
 
 ### Latest pointer semantics
 
@@ -90,7 +92,7 @@ Use `loadAuthoritativeGovernedReceipt()` or walk `history.jsonl` reverse for tru
 | `touchedFiles` | string[] | raw envelope paths | same |
 | `evidenceCount` | number | evidence refs count | same |
 | `toolStepCount` | number | tool steps | same |
-| `transcriptArtifactPath` | string | required for completed | same |
+| `transcriptArtifactPath` | string | recommended for completed; missing pointer is advisory | same |
 | `placeholderWarnings` | string[] | TODO/FIXME agents | optional |
 | `auditResult` | `"passed"` \| `"failed"` | lane audit | same |
 | `dagState` | `LaneDAGState` | DAG node state | optional |
@@ -329,7 +331,10 @@ Mutation lanes only. Lock-skipped lanes produce **no entries**.
 | Field | Semantics |
 |-------|-----------|
 | `passed` | `violations.length === 0` |
-| `violations` | Human-readable failure strings |
+| `violations` | Blocking human-readable failure strings only |
+| `advisoryWarnings` | Non-blocking evidence/quality warnings; never requires a whole-swarm retry |
+| `findings` | Structured `{ code, severity, message, retryable, remediation? }` records |
+| `retryDisposition` | `not_needed` \| `targeted_repair` \| `retry_after_recovery` \| `do_not_retry` |
 | `mergeAudit` | `MergeSafetyAudit` — overlaps, missing evidence, placeholders |
 | `replayIntegrity` | Replay artifact validation |
 | `failedLaneCount` | Count of failed lanes |
@@ -337,6 +342,14 @@ Mutation lanes only. Lock-skipped lanes produce **no entries**.
 | `staleLeaseCount` | Excludes lock-skipped lanes |
 | `splitBrainDetected` | Multiple owners per resource |
 | `sealedSupersessionBlocked` | Unsafe retry over sealed receipt |
+
+The newer structured fields are optional when reading historical schema-v3 receipts and always populated on newly sealed receipts. This preserves on-disk compatibility without a schema migration.
+
+**Required checks:** mutation/claim safety, lane terminal consistency, replay integrity, and authoritative roadmap reconciliation.
+
+**Advisory checks:** missing evidence references, placeholder text, transcript pointers, and tool evidence. These remain visible through `mergeAudit`, diagnostics, and the incident console without changing `passed`.
+
+The swarm envelope mirrors this split through `SwarmInvariantReport.violations` (structural/integrity failures) and optional `advisoryWarnings` (missing evidence or transcript pointers). Resume integrity accepts advisory-only envelopes but still rejects malformed schemas, task/checksum mismatch, transcript corruption, and invalid compaction anchors.
 
 ---
 
@@ -352,8 +365,9 @@ Aggregated view in `GovernedReceiptPanel`. Not a separate on-disk schema.
 | `claimTimeline[]` | Operator-friendly claim events |
 | `resourceOwners[]` | Active/released/stale ownership |
 | `retryHistory[]` | Attempt lineage |
-| `diagnostics` | `incident`, `retrySafe`, overlap lists, replay causes, projection fields |
-| `violations` | Merge gate violations |
+| `diagnostics` | `incident`, `retrySafe`, `retryDisposition`, overlap lists, replay causes, projection fields |
+| `violations` | Blocking merge-gate violations |
+| `advisoryWarnings` | Visible quality findings that do not block seal |
 | `roadmapLinkage` | Full roadmap linkage including `patchReconciliation`, `workspaceCommit` |
 
 ### GovernedReceiptDiagnostics (projection fields)

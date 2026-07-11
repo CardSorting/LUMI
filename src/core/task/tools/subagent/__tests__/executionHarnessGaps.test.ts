@@ -15,7 +15,7 @@ import {
 	verifyReplayArtifact,
 } from "../executionReplayMappers"
 import { validateSubagentEnvelope } from "../executionValidation"
-import { isArtifactStale, planResumeFromArtifact } from "../ResumeSwarmFromArtifact"
+import { isArtifactStale, planResumeFromArtifact, validateArtifactIntegrity } from "../ResumeSwarmFromArtifact"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
 import { loadSwarmEnvelope, persistSwarmEnvelope } from "../SubagentExecutionStore"
 import { loadTranscriptEvents, SubagentTranscriptRecorder } from "../SubagentTranscriptRecorder"
@@ -190,6 +190,15 @@ describe("execution harness gap closure", () => {
 		assert.equal(isArtifactStale(loaded!), true)
 
 		await assert.rejects(() => planResumeFromArtifact("task-1", "swarm-1"), /stale/)
+	})
+
+	it("keeps a missing transcript pointer advisory during resume integrity validation", async () => {
+		const swarm = buildSwarm([buildAgent({ transcriptArtifactPath: undefined })], "interrupted")
+		const integrity = await validateArtifactIntegrity("task-1", swarm)
+
+		assert.equal(integrity.valid, true)
+		assert.equal(integrity.violations.length, 0)
+		assert.ok(integrity.advisoryWarnings?.some((warning) => warning.includes("missing transcript artifact path")))
 	})
 
 	it("converts swarm and broccoli artifacts to shared replay contract", () => {

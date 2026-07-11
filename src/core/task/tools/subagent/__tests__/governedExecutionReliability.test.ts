@@ -322,7 +322,7 @@ describe("governed execution reliability", () => {
 			sealedAt: Date.now(),
 		}
 
-		it("blocks missing transcript pointer", () => {
+		it("records a missing transcript pointer as advisory", () => {
 			const agent = buildAgent("a", 0)
 			const gate = runMergeGate({
 				agents: [agent],
@@ -331,7 +331,37 @@ describe("governed execution reliability", () => {
 				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" as const }],
 				replayArtifact: swarmEnvelopeToReplayArtifact(buildEnvelope([agent])),
 			})
-			assert.ok(gate.violations.some((v) => v.includes("missing transcript pointer")))
+			assert.equal(gate.passed, true)
+			assert.ok(gate.advisoryWarnings?.some((warning) => warning.includes("missing transcript pointer")))
+			assert.equal(gate.retryDisposition, "not_needed")
+		})
+
+		it("clears stale ownership after the matching claim is released", () => {
+			const agent = buildAgent("a", 0)
+			const claim = {
+				claimId: "c0",
+				laneId: "l0",
+				resourceKey: "k",
+				ownerId: "a",
+				fencingToken: 1,
+				timestamp: 1,
+			}
+			const gate = runMergeGate({
+				agents: [agent],
+				laneReceipts: [{ ...baseLane, status: "completed" }],
+				claimHistory: [
+					{ ...claim, event: "acquired" as const },
+					{ ...claim, event: "stale_detected" as const, timestamp: 2 },
+					{ ...claim, event: "released" as const, timestamp: 3 },
+				],
+				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" as const }],
+				replayArtifact: swarmEnvelopeToReplayArtifact(buildEnvelope([agent])),
+			})
+
+			assert.equal(gate.passed, true, gate.violations.join("; "))
+			assert.equal(gate.staleLeaseCount, 0)
+			assert.equal(gate.orphanedClaimCount, 0)
+			assert.equal(gate.retryDisposition, "not_needed")
 		})
 
 		it("blocks failed lane marked successful in envelope", () => {
@@ -563,7 +593,35 @@ describe("governed execution reliability", () => {
 					},
 				],
 				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" as const }],
-				claimHistory: [],
+				claimHistory: [
+					{
+						claimId: "claim-resolved",
+						laneId: "l0",
+						resourceKey: "k",
+						ownerId: "a",
+						fencingToken: 1,
+						event: "acquired",
+						timestamp: 1,
+					},
+					{
+						claimId: "claim-resolved",
+						laneId: "l0",
+						resourceKey: "k",
+						ownerId: "a",
+						fencingToken: 1,
+						event: "stale_detected",
+						timestamp: 2,
+					},
+					{
+						claimId: "claim-resolved",
+						laneId: "l0",
+						resourceKey: "k",
+						ownerId: "a",
+						fencingToken: 1,
+						event: "released",
+						timestamp: 3,
+					},
+				],
 				mergeGate: {
 					passed: true,
 					mergeAudit: {

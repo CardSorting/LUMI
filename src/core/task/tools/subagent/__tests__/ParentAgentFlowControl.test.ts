@@ -1,12 +1,14 @@
 import { strict as assert } from "node:assert"
 import { setTimeout as delay } from "node:timers/promises"
 import { describe, it } from "mocha"
+import { runWithBoundedReceiptPersistenceRetry } from "../GovernedExecutionStore"
 import {
 	AuthorityAwareExecutionPool,
 	addSubagentRunStats,
 	CoalescingAsyncEmitter,
 	calculateRetryDelayMs,
 	computeMaxInFlightLanes,
+	createGovernedExecutionPathMetrics,
 	createParentAbortWatcher,
 	createSwarmSchedulerWake,
 	emptySubagentRunStats,
@@ -40,6 +42,32 @@ describe("ParentAgentFlowControl", () => {
 			calculateRetryDelayMs(20, () => 1),
 			5_000,
 		)
+	})
+
+	it("bounds transient receipt persistence recovery without retrying semantic failures", async () => {
+		const metrics = createGovernedExecutionPathMetrics()
+		let transientAttempts = 0
+		const result = await runWithBoundedReceiptPersistenceRetry(async () => {
+			transientAttempts++
+			if (transientAttempts === 1) {
+				throw Object.assign(new Error("busy"), { code: "EBUSY" })
+			}
+			return "persisted"
+		}, metrics)
+		assert.equal(result, "persisted")
+		assert.equal(transientAttempts, 2)
+		assert.equal(metrics.retryDecisions, 1)
+
+		let semanticAttempts = 0
+		await assert.rejects(
+			() =>
+				runWithBoundedReceiptPersistenceRetry(async () => {
+					semanticAttempts++
+					throw Object.assign(new Error("permission denied"), { code: "EACCES" })
+				}),
+			/permission denied/,
+		)
+		assert.equal(semanticAttempts, 1)
 	})
 
 	it("accumulates billable retry usage and preserves peak context pressure", () => {

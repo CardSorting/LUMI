@@ -287,7 +287,7 @@ describe("governed execution hardening", () => {
 			assert.ok(!gate.violations.some((v) => v.includes("unsafe mutation overlap")))
 		})
 
-		it("fails on missing evidence and placeholders", () => {
+		it("seals with advisory findings for missing evidence and placeholders", () => {
 			const agent = buildAgent("a", 0, {
 				evidenceRefs: [],
 				verbatimOutput: "Done. TODO: finish.",
@@ -333,7 +333,11 @@ describe("governed execution hardening", () => {
 				laneDag: [{ index: 0, laneId: "l0", dependsOn: [], state: "sealed" }],
 				replayArtifact: swarmEnvelopeToReplayArtifact(envelope),
 			})
-			assert.equal(gate.passed, false)
+			assert.equal(gate.passed, true)
+			assert.equal(gate.violations.length, 0)
+			assert.ok(gate.advisoryWarnings?.some((warning) => warning.includes("missing evidence")))
+			assert.ok(gate.advisoryWarnings?.some((warning) => warning.includes("unresolved placeholders")))
+			assert.equal(gate.retryDisposition, "not_needed")
 		})
 
 		it("fails on orphaned claims and failed lanes", () => {
@@ -378,6 +382,16 @@ describe("governed execution hardening", () => {
 				],
 				claimHistory: [
 					{
+						claimId: "c0",
+						laneId: "l0",
+						resourceKey: "k",
+						ownerId: "a",
+						fencingToken: 1,
+						event: "acquired",
+						timestamp: Date.now() - 1,
+					},
+					{
+						claimId: "c0",
 						laneId: "l0",
 						resourceKey: "k",
 						ownerId: "a",
@@ -392,6 +406,7 @@ describe("governed execution hardening", () => {
 			assert.equal(gate.passed, false)
 			assert.ok(gate.orphanedClaimCount > 0)
 			assert.ok(gate.staleLeaseCount > 0)
+			assert.equal(gate.retryDisposition, "retry_after_recovery")
 		})
 
 		it("detects duplicate claims in merge gate", () => {

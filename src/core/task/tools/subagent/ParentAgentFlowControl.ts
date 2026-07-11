@@ -1,3 +1,4 @@
+import type { GovernedExecutionPathMetrics } from "@shared/subagent/governedExecution"
 import type { SubagentRunResult } from "./SubagentRunner"
 
 export const DEFAULT_SUBAGENT_CONCURRENCY = 3
@@ -13,6 +14,22 @@ export const SUBAGENT_AUDIT_PREFLIGHT_TIMEOUT_MS = 10_000
 export const SUBAGENT_FAST_IO_RESERVED_SLOTS = 1
 /** Cap concurrent lane lifecycles to pool capacity + one queued successor (bounded work queue). */
 export const SUBAGENT_IN_FLIGHT_LANE_BUFFER = 1
+
+export function createGovernedExecutionPathMetrics(): GovernedExecutionPathMetrics {
+	return {
+		envelopeValidationCalls: 0,
+		envelopeValidationReuses: 0,
+		replayValidationCalls: 0,
+		claimReconstructions: 0,
+		receiptContextReads: 0,
+		receiptHistoryReads: 0,
+		envelopePersistenceWrites: 0,
+		receiptPersistenceWrites: 0,
+		continuationReductions: 0,
+		retryDecisions: 0,
+		lockAcquisitions: 0,
+	}
+}
 
 export function computeMaxInFlightLanes(concurrency = DEFAULT_SUBAGENT_CONCURRENCY): number {
 	return concurrency + SUBAGENT_IN_FLIGHT_LANE_BUFFER

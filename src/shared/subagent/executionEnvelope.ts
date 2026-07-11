@@ -87,6 +87,7 @@ export interface ExecutionContinuityMarker {
 export interface SwarmInvariantReport {
 	validated: boolean
 	violations: string[]
+	advisoryWarnings?: string[]
 }
 
 export interface SwarmRecoveryReceipt {

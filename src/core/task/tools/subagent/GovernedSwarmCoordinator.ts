@@ -4,8 +4,10 @@ import type {
 	ClaimHistoryEntry,
 	GovernedAdmissionResult,
 	GovernedCrashPhase,
+	GovernedExecutionPathMetrics,
 	GovernedOrchestrationLease,
 	GovernedReceiptSummary,
+	GovernedResourceOwner,
 	GovernedRetryHistoryEntry,
 	GovernedSwarmReceipt,
 	LaneExecutionMode,
@@ -46,9 +48,11 @@ import {
 	classifyPreflightIssuesForSeal,
 	evaluateCoordinatorHaltDecision,
 	mergeGovernanceDiagnostics,
+	reduceGovernedContinuation,
 	resolvePriorSealedReceiptForMerge,
 } from "./CoordinatorExecutionAuthority"
 import { swarmEnvelopeToReplayArtifact } from "./executionReplayMappers"
+import type { SwarmValidationSnapshot } from "./executionValidation"
 import {
 	buildGovernedArtifactRelativePath,
 	listGovernedReceiptHistory,
@@ -86,6 +90,7 @@ export class GovernedSwarmCoordinator {
 	private workspaceRoadmapSnapshotId?: string
 	private swarmRoadmapPlan?: import("@shared/subagent/roadmapProjection").SwarmRoadmapPlan
 	private receiptHistoryCache?: GovernedRetryHistoryEntry[]
+	private normalizedResourceOwners?: GovernedResourceOwner[]
 
 	constructor(
 		private readonly workspace: string,
@@ -95,6 +100,7 @@ export class GovernedSwarmCoordinator {
 		lockAuthority?: LockAuthority,
 		attemptId?: string,
 		private readonly parentAttemptId?: string,
+		private readonly executionPathMetrics?: GovernedExecutionPathMetrics,
 	) {
 		this.lockAuthority = lockAuthority ?? createLockAuthority()
 		this.laneDag = new LaneDAG(laneCount, dependencies)
@@ -201,6 +207,9 @@ export class GovernedSwarmCoordinator {
 			acquired: true,
 			released: false,
 			expiresAt: result.expires_at,
+		}
+		if (this.executionPathMetrics) {
+			this.executionPathMetrics.lockAcquisitions++
 		}
 
 		return { acquired: true, expiresAt: result.expires_at }
@@ -311,10 +320,13 @@ export class GovernedSwarmCoordinator {
 				})
 				return { success: false, error: result.error }
 			}
+			if (this.executionPathMetrics) {
+				this.executionPathMetrics.lockAcquisitions++
+			}
 
 			const verify = await this.lockAuthority.verify(result.claim, this.workspace)
 			if (!verify.valid) {
-				await releaseGovernedLock(this.lockAuthority, result.claim, this.workspace)
+				const releaseResult = await releaseGovernedLock(this.lockAuthority, result.claim, this.workspace)
 				this.claimHistory.push(
 					lockClaimToHistoryEntry(
 						result.claim,
@@ -323,6 +335,11 @@ export class GovernedSwarmCoordinator {
 						verify.reason,
 					),
 				)
+				if (releaseResult.ok) {
+					this.claimHistory.push(lockClaimToHistoryEntry(result.claim, laneId, "released"))
+				} else {
+					this.claimHistory.push(lockClaimToHistoryEntry(result.claim, laneId, "rejected", releaseResult.error))
+				}
 				return { success: false, error: `Claim verification failed (${verify.reason}).` }
 			}
 
@@ -562,8 +579,14 @@ export class GovernedSwarmCoordinator {
 		retryReason?: string
 		preflightIssues?: GatePreflightReadinessIssue[]
 		completionPolicy?: RoadmapCompletionUpdatePolicy
+		validationSnapshot?: SwarmValidationSnapshot
+		recoveryActive?: boolean
 	}): Promise<GovernedSwarmReceipt> {
 		const replayArtifact = options.replayArtifact || swarmEnvelopeToReplayArtifact(options.envelope)
+		if (this.executionPathMetrics) {
+			this.executionPathMetrics.receiptContextReads++
+			this.executionPathMetrics.receiptHistoryReads++
+		}
 		const sealContext = await loadSealReceiptContext(options.taskId, options.envelope.swarmId)
 		this.receiptHistoryCache = sealContext.history
 		const latestPointerReceipt = sealContext.latestPointer
@@ -577,7 +600,7 @@ export class GovernedSwarmCoordinator {
 		)
 		let governanceDiagnostics = mergeGovernanceDiagnostics(undefined, [...priorReceiptDiagnostics, ...preflightDiagnostics])
 
-		const mergeGate = runMergeGate({
+		const { normalizedResourceOwners, ...mergeGate } = runMergeGate({
 			agents: options.envelope.agents,
 			laneReceipts: options.laneReceipts,
 			claimHistory: this.claimHistory,
@@ -586,7 +609,9 @@ export class GovernedSwarmCoordinator {
 			priorSealedReceipt: priorSealedReceipt?.sealed ? priorSealedReceipt : null,
 			attemptId: this.attemptId,
 			parentAttemptId: this.parentAttemptId,
+			metrics: this.executionPathMetrics,
 		})
+		this.normalizedResourceOwners = normalizedResourceOwners
 
 		let sealed = mergeGate.passed && !options.forceFail
 		let mergePassed = mergeGate.passed
@@ -624,7 +649,10 @@ export class GovernedSwarmCoordinator {
 			},
 		}
 
-		const replayValidation = validateDeterministicReplay(receipt, replayArtifact)
+		if (this.executionPathMetrics) {
+			this.executionPathMetrics.replayValidationCalls++
+		}
+		const replayValidation = validateDeterministicReplay(receipt, replayArtifact, mergeGate.replayIntegrity)
 		receipt.replayChecksum = replayValidation.deterministicChecksum
 		if (!replayValidation.valid) {
 			receipt.integrity.valid = false
@@ -652,7 +680,11 @@ export class GovernedSwarmCoordinator {
 			if (!supersessionHalt.shouldHalt) {
 				receipt.mergeGate.sealedSupersessionBlocked = false
 				receipt.mergeGate.violations = receipt.mergeGate.violations.filter((v) => !v.includes("supersede prior sealed"))
+				receipt.mergeGate.findings = receipt.mergeGate.findings?.filter(
+					(finding) => finding.code !== "sealed_supersession",
+				)
 				receipt.mergeGate.passed = receipt.mergeGate.violations.length === 0
+				receipt.mergeGate.retryDisposition = receipt.mergeGate.passed ? "not_needed" : "targeted_repair"
 				mergePassed = receipt.mergeGate.passed
 				unsafeRetry = false
 				if (receipt.mergeGate.passed && !options.forceFail && !replayMismatch) {
@@ -692,6 +724,17 @@ export class GovernedSwarmCoordinator {
 			mergePassed = false
 			receipt.mergeGate.passed = false
 			receipt.mergeGate.violations.push(...projectionViolations)
+			receipt.mergeGate.findings = [
+				...(receipt.mergeGate.findings ?? []),
+				...projectionViolations.map((message) => ({
+					code: "roadmap_projection_conflict",
+					severity: "blocking" as const,
+					message,
+					retryable: true,
+					remediation: "Repair only rejected or conflicting roadmap patches; preserve completed lane results.",
+				})),
+			]
+			receipt.mergeGate.retryDisposition = "targeted_repair"
 			receipt.mergeGate.roadmapAudit = {
 				safe: false,
 				violations: [...(receipt.mergeGate.roadmapAudit?.violations ?? []), ...projectionViolations],
@@ -755,6 +798,17 @@ export class GovernedSwarmCoordinator {
 		if (lateRoadmapViolations.length > 0) {
 			receipt.mergeGate.passed = false
 			receipt.mergeGate.violations.push(...lateRoadmapViolations)
+			receipt.mergeGate.findings = [
+				...(receipt.mergeGate.findings ?? []),
+				...lateRoadmapViolations.map((message) => ({
+					code: "roadmap_seal_integrity",
+					severity: "blocking" as const,
+					message,
+					retryable: false,
+					remediation: "Reconcile the coordinator roadmap lease or completion state before retry.",
+				})),
+			]
+			receipt.mergeGate.retryDisposition = "retry_after_recovery"
 			receipt.mergeGate.roadmapAudit = {
 				safe: false,
 				violations: [...(receipt.mergeGate.roadmapAudit?.violations ?? []), ...lateRoadmapViolations],
@@ -771,8 +825,23 @@ export class GovernedSwarmCoordinator {
 			receipt.auditIntegration.workspaceAuditAtSeal = receipt.integrity.valid && mergeGate.passed
 		}
 
+		const validationSnapshotCurrent = options.validationSnapshot
+			? options.envelope.checksum === options.validationSnapshot.executionChecksum
+			: true
+		const envelopeStructurallyValid = options.validationSnapshot?.report.validated ?? true
+		receipt.continuationDecision = reduceGovernedContinuation({
+			receipt,
+			envelopeStructurallyValid,
+			validatedStateUnchanged: validationSnapshotCurrent,
+			recoveryActive: options.recoveryActive ?? false,
+			metrics: this.executionPathMetrics,
+		})
+		receipt.executionPathMetrics = this.executionPathMetrics
+
 		receipt.governedArtifactPath = await persistGovernedReceipt(options.taskId, receipt, {
 			existingLatest: latestPointerReceipt,
+			existingHistory: sealContext.history,
+			metrics: this.executionPathMetrics,
 		})
 		return receipt
 	}
@@ -814,7 +883,7 @@ export class GovernedSwarmCoordinator {
 			schemaVersion: 1,
 		}
 
-		const mergeGate = runMergeGate({
+		const { normalizedResourceOwners, ...mergeGate } = runMergeGate({
 			agents: [],
 			laneReceipts,
 			claimHistory: this.claimHistory,
@@ -836,7 +905,9 @@ export class GovernedSwarmCoordinator {
 			},
 			attemptId: this.attemptId,
 			parentAttemptId: this.parentAttemptId,
+			metrics: this.executionPathMetrics,
 		})
+		this.normalizedResourceOwners = normalizedResourceOwners
 
 		const mergeViolations = [`crash at ${options.crashPhase}`, ...mergeGate.violations]
 		const leaseSnapshotBeforeRelease = this.getOrchestrationLeaseSnapshot()
@@ -891,14 +962,25 @@ export class GovernedSwarmCoordinator {
 			receiptIntegrityValid: false,
 			roadmapLinkage: receipt.roadmapLinkage,
 		})
+		receipt.continuationDecision = reduceGovernedContinuation({
+			receipt,
+			envelopeStructurallyValid: false,
+			validatedStateUnchanged: true,
+			recoveryActive: true,
+			interrupted: true,
+			metrics: this.executionPathMetrics,
+		})
+		receipt.executionPathMetrics = this.executionPathMetrics
 
-		receipt.governedArtifactPath = await persistGovernedReceipt(options.taskId, receipt)
+		receipt.governedArtifactPath = await persistGovernedReceipt(options.taskId, receipt, {
+			metrics: this.executionPathMetrics,
+		})
 		return receipt
 	}
 
 	async buildReceiptSummary(receipt: GovernedSwarmReceipt): Promise<GovernedReceiptSummary> {
 		const history = this.receiptHistoryCache ?? (await listGovernedReceiptHistory(receipt.taskId, receipt.swarmId))
-		return buildGovernedReceiptSummary(receipt, history)
+		return buildGovernedReceiptSummary(receipt, history, this.normalizedResourceOwners, this.executionPathMetrics)
 	}
 
 	buildLiveReceiptSummary(

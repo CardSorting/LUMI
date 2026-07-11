@@ -2,13 +2,17 @@ import { strict as assert } from "node:assert"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
-import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
+import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { InMemoryLockAuthority } from "@/core/governance/LockAuthority"
+import { createSwarmValidationSnapshot } from "../executionValidation"
 import { loadGovernedReceipt } from "../GovernedExecutionStore"
 import { GovernedSwarmCoordinator } from "../GovernedSwarmCoordinator"
+import { createGovernedExecutionPathMetrics } from "../ParentAgentFlowControl"
+import { computeSwarmArtifactChecksum, SWARM_TERMINAL_STAGING_VIOLATION } from "../ResumeSwarmFromArtifact"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
+import { persistSwarmEnvelope } from "../SubagentExecutionStore"
 
 function buildAgent(agentId: string, overrides?: Partial<SubagentExecutionEnvelope>): SubagentExecutionEnvelope {
 	const builder = new SubagentEnvelopeBuilder(agentId, "exec-1", "researcher", "swarm-1", "task-1", "inspect module", {
@@ -127,5 +131,81 @@ describe("GovernedSwarmCoordinator", () => {
 		assert.ok(second.claim.lockClaim)
 		await coordinator.releaseLane(second.claim, true, false)
 		assert.equal(coordinator.getLaneDAG().getNode(0)?.state, "sealed")
+	})
+
+	it("selects the clean path and reuses immutable validation across crash-safe persistence", async () => {
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "governed-fast-"))
+		const disk = await import("@core/storage/disk")
+		sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
+		const metrics = createGovernedExecutionPathMetrics()
+		const coordinator = new GovernedSwarmCoordinator(
+			"/tmp",
+			false,
+			1,
+			undefined,
+			new InMemoryLockAuthority(),
+			"attempt-fast",
+			undefined,
+			metrics,
+		)
+		const agent = buildAgent("agent-fast")
+		const claim = await coordinator.acquireLane("swarm-fast", "agent-fast", 0, { executionMode: "read_only" })
+		assert.ok(claim.claim)
+		await coordinator.releaseLane(claim.claim, true, false)
+		const envelope: SwarmExecutionEnvelope = {
+			swarmId: "swarm-fast",
+			executionId: "exec-fast",
+			taskId: "task-fast",
+			continuity: {
+				swarmId: "swarm-fast",
+				taskId: "task-fast",
+				resumeToken: "swarm-fast:1:1",
+				lastPersistedAt: 1,
+				completedAgents: 1,
+				totalAgents: 1,
+				status: "completed",
+			},
+			agents: [agent],
+			blackboardSnapshot: [],
+			timestamps: { started: 1, completed: 2 },
+			status: "completed",
+			invariants: { validated: true, violations: [] },
+			artifactPath: "subagent_executions/swarm-fast.json",
+			schemaVersion: 1,
+		}
+		envelope.checksum = computeSwarmArtifactChecksum(envelope)
+		const validationSnapshot = createSwarmValidationSnapshot(envelope, envelope.checksum, metrics)
+
+		await persistSwarmEnvelope(
+			"task-fast",
+			{
+				...envelope,
+				invariants: { validated: false, violations: [SWARM_TERMINAL_STAGING_VIOLATION] },
+			},
+			{ validationSnapshot, metrics },
+		)
+		const receipt = await coordinator.sealReceipt({
+			taskId: "task-fast",
+			envelope,
+			admission: { admitted: true, backoffMs: 0 },
+			laneReceipts: [coordinator.buildLaneReceipt(claim.claim, agent, "completed", true)],
+			validationSnapshot,
+		})
+		await persistSwarmEnvelope("task-fast", envelope, { validationSnapshot, metrics })
+		const summary = await coordinator.buildReceiptSummary(receipt)
+
+		assert.equal(receipt.continuationDecision?.action, "accept")
+		assert.equal(receipt.continuationDecision?.cleanPath, true)
+		assert.equal(summary.resourceOwners.length, 0)
+		assert.equal(metrics.envelopeValidationCalls, 1)
+		assert.equal(metrics.envelopeValidationReuses, 2)
+		assert.equal(metrics.claimReconstructions, 1)
+		assert.equal(metrics.replayValidationCalls, 2)
+		assert.equal(metrics.receiptHistoryReads, 1)
+		assert.equal(metrics.envelopePersistenceWrites, 2)
+		assert.equal(metrics.receiptPersistenceWrites, 3)
+		assert.equal(metrics.continuationReductions, 1)
+		assert.equal(metrics.retryDecisions, 0)
+		assert.equal(metrics.lockAcquisitions, 0)
 	})
 })

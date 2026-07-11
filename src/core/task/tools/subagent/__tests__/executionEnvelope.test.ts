@@ -103,6 +103,16 @@ describe("subagent execution envelope", () => {
 		assert.ok(report.violations.some((violation) => violation.includes("verbatim output")))
 	})
 
+	it("keeps missing evidence and transcript pointers advisory", () => {
+		const agent = createAgentEnvelope({ evidenceRefs: [], transcriptArtifactPath: undefined })
+		const report = validateSwarmEnvelope(createSwarmEnvelope([agent]))
+
+		assert.equal(report.validated, true)
+		assert.equal(report.violations.length, 0)
+		assert.ok(report.advisoryWarnings?.some((warning) => warning.includes("missing evidence references")))
+		assert.ok(report.advisoryWarnings?.some((warning) => warning.includes("missing transcript artifact path")))
+	})
+
 	it("rejects orphaned subtasks when swarm is marked completed", () => {
 		const completed = createAgentEnvelope()
 		const pending = createAgentEnvelope({ agentId: "agent-2", status: "pending", verbatimOutput: undefined })

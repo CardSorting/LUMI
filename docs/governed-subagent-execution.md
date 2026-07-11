@@ -197,13 +197,22 @@ Full field reference: [governed-execution-schema.md](governed-execution-schema.m
 
 `MergeGate.runMergeGate()` is the commit barrier. Parallel lanes execute optimistically; the gate rejects merge if reconciliation fails.
 
+The gate follows a **required-check / advisory-check** model:
+
+| Class | Examples | Effect |
+|-------|----------|--------|
+| **Blocking safety** | write overlap, mutation without a claim, split-brain, unresolved ownership, replay corruption, failed/incomplete lanes, authoritative roadmap conflict | Blocks seal and emits a targeted retry disposition |
+| **Advisory quality** | missing evidence reference, placeholder text, missing transcript pointer, missing tool evidence | Preserved on the receipt and operator UI; does not fail otherwise safe work |
+
+`findings[]` is the structured policy source (`code`, `severity`, `retryable`, `remediation`). `violations[]` contains blocking findings only; `advisoryWarnings[]` contains non-blocking quality findings. Parent agents use `retryDisposition` instead of inferring recovery behavior from message text.
+
 **Mutation-scoped overlap:** `auditMutationWriteOverlaps` uses `writeSet`, or `touchedFiles` when `lockRequired`. Read-set overlap never violates.
 
 **DAG ordering exemption:** overlapping writes allowed when one lane transitively depends on the other (`LaneDAG` infrastructure — see [Known limitations](#known-limitations)).
 
 ### 4. One operator surface
 
-`GovernedReceiptPanel` renders incident class, lane execution modes, lock skipped/required, read/write counts, claim timeline, resource ownership, violations, and **roadmap projection state** (workspace snapshot, swarm plan, per-agent projections, accepted/rejected patches, rebase outcomes, commit status, rejection reasons).
+`GovernedReceiptPanel` renders incident class, lane execution modes, lock skipped/required, read/write counts, claim timeline, resource ownership, blocking violations, advisory warnings, retry disposition, and **roadmap projection state** (workspace snapshot, swarm plan, per-agent projections, accepted/rejected patches, rebase outcomes, commit status, rejection reasons).
 
 Data path: `GovernedSwarmCoordinator.buildReceiptSummary()` → `DietCodeSaySubagentStatus.governedReceipt`.
 
@@ -534,7 +543,7 @@ Summary:
 | Category | Examples |
 |----------|----------|
 | **Mutation safety** | `unsafe mutation overlap`, `mutation lane … missing governed lock`, `non-mutating lane … performed writes without lock` |
-| **Evidence** | `missing evidence`, `missing transcript pointer`, `missing tool evidence` |
+| **Evidence advisories** | `missing evidence`, `missing transcript pointer`, `missing tool evidence` (visible; non-blocking) |
 | **Integrity** | `split-brain lock authority detected`, `duplicate claimId`, `replay checksum mismatch` |
 | **Ownership** | `orphaned claims`, `unreleased claims`, `stale leases` (lock-required lanes only) |
 | **Roadmap** | `unsafe roadmap mutation overlap`, `roadmap mutation without claim`, `lock-skipped lane … mutated roadmap`, `stale roadmap orchestration lease`, completion integrity, `conflicting workspace patches`, `agent … cannot directly mutate workspace roadmap`, `smuggled authoritative mutation via local event` |

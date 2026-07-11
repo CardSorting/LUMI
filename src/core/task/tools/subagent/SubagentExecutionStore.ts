@@ -5,7 +5,8 @@ import { ensureTaskDirectoryExists } from "@core/storage/disk"
 import { Logger } from "@shared/services/Logger"
 import type { SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { SUBAGENT_EXECUTIONS_DIR, SWARM_ENVELOPE_SCHEMA_VERSION } from "@shared/subagent/executionEnvelope"
-import { validateSwarmEnvelope } from "./executionValidation"
+import type { GovernedExecutionPathMetrics } from "@shared/subagent/governedExecution"
+import { reuseSwarmValidationSnapshot, type SwarmValidationSnapshot, validateSwarmEnvelope } from "./executionValidation"
 import { computeSwarmArtifactChecksum } from "./ResumeSwarmFromArtifact"
 
 const artifactWriteQueues = new Map<string, Promise<void>>()
@@ -42,22 +43,39 @@ async function getExecutionsDir(taskId: string): Promise<string> {
 	return executionsDir
 }
 
-export async function persistSwarmEnvelope(taskId: string, envelope: SwarmExecutionEnvelope): Promise<string> {
+export async function persistSwarmEnvelope(
+	taskId: string,
+	envelope: SwarmExecutionEnvelope,
+	options?: { validationSnapshot?: SwarmValidationSnapshot; metrics?: GovernedExecutionPathMetrics },
+): Promise<string> {
 	const queueKey = `${taskId}\0${envelope.swarmId}`
 	const artifactPath = path.join(SUBAGENT_EXECUTIONS_DIR, `${envelope.swarmId}.json`)
-	const validation = validateSwarmEnvelope(envelope)
-	const declaredViolations = envelope.invariants?.violations ?? []
-	const invariants = {
-		validated: validation.validated && declaredViolations.length === 0,
-		violations: [...new Set([...declaredViolations, ...validation.violations])],
-	}
-	const payload: SwarmExecutionEnvelope = {
+	const basePayload: SwarmExecutionEnvelope = {
 		...envelope,
 		schemaVersion: SWARM_ENVELOPE_SCHEMA_VERSION,
-		invariants,
 		artifactPath,
 	}
-	payload.checksum = computeSwarmArtifactChecksum(payload)
+	const executionChecksum = computeSwarmArtifactChecksum(basePayload)
+	const validation =
+		reuseSwarmValidationSnapshot(options?.validationSnapshot, executionChecksum, options?.metrics) ??
+		validateSwarmEnvelope(basePayload)
+	if (!options?.validationSnapshot || options.validationSnapshot.executionChecksum !== executionChecksum) {
+		if (options?.metrics) {
+			options.metrics.envelopeValidationCalls++
+		}
+	}
+	const declaredViolations = envelope.invariants?.violations ?? []
+	const payload: SwarmExecutionEnvelope = {
+		...basePayload,
+		invariants: {
+			validated: validation.validated && declaredViolations.length === 0,
+			violations: [...new Set([...declaredViolations, ...validation.violations])],
+			advisoryWarnings: [
+				...new Set([...(envelope.invariants?.advisoryWarnings ?? []), ...(validation.advisoryWarnings ?? [])]),
+			],
+		},
+		checksum: executionChecksum,
+	}
 	const serialized = JSON.stringify(payload, null, 2)
 
 	try {
@@ -65,6 +83,9 @@ export async function persistSwarmEnvelope(taskId: string, envelope: SwarmExecut
 			const executionsDir = await getExecutionsDir(taskId)
 			const filePath = path.join(executionsDir, `${envelope.swarmId}.json`)
 			await atomicReplace(filePath, serialized)
+			if (options?.metrics) {
+				options.metrics.envelopePersistenceWrites++
+			}
 		})
 		return artifactPath
 	} catch (error) {

@@ -1,10 +1,5 @@
 import { createHash } from "node:crypto"
-import {
-	type BlockerSource,
-	classifyBlockerSeverity,
-	filterAdvisoryParentSignals,
-	getSoftBlockRetryBudget,
-} from "@shared/subagent/blockerPolicy"
+import { type BlockerSource, classifyBlockerSeverity, filterAdvisoryParentSignals } from "@shared/subagent/blockerPolicy"
 import type {
 	CoordinatorContinuationContext,
 	CoordinatorHaltDecision,
@@ -12,7 +7,11 @@ import type {
 	GovernanceDiagnosticCode,
 	GovernanceDiagnosticEvent,
 } from "@shared/subagent/coordinatorAuthority"
-import type { GovernedSwarmReceipt } from "@shared/subagent/governedExecution"
+import type {
+	GovernedContinuationDecision,
+	GovernedExecutionPathMetrics,
+	GovernedSwarmReceipt,
+} from "@shared/subagent/governedExecution"
 import type { GatePreflightReadinessIssue } from "@/core/task/tools/completionGatePipeline"
 
 const PARALYSIS_REPEAT_THRESHOLD = 3
@@ -290,69 +289,99 @@ export function resetGovernanceParalysisTracker(taskId: string): void {
 	paralysisByTask.delete(taskId)
 }
 
-export interface CoordinatorFastContinuationDecision {
-	shouldContinue: boolean
-	reason: string
-	diagnostics: GovernanceDiagnosticEvent[]
-}
+const CONFLICT_FINDING_CODES = new Set([
+	"mutation_write_overlap",
+	"mutation_without_lock",
+	"undeclared_mutation",
+	"duplicate_claim",
+	"duplicate_claim_id",
+	"split_brain",
+	"sealed_supersession",
+	"roadmap_merge_safety",
+	"roadmap_projection_conflict",
+])
 
-/**
- * Fast-path continuation when no live coordinator hard blocker exists.
- * Receipt/audit/historical artifacts alone never justify halting.
- */
-export function evaluateCoordinatorFastContinuation(options: {
-	taskId: string
-	hasRunningLanes?: boolean
-	proposedHardBlockers?: string[]
-	proposedSoftBlockers?: string[]
-	advisorySignalCount?: number
-}): CoordinatorFastContinuationDecision {
-	const diagnostics: GovernanceDiagnosticEvent[] = []
-	const hard = options.proposedHardBlockers ?? []
-	const soft = options.proposedSoftBlockers ?? []
+const INVALID_RESULT_FINDING_CODES = new Set(["lane_status_mismatch", "replay_integrity", "replay_checksum_mismatch"])
 
-	if (hard.length > 0) {
-		const confirmed = hard.filter((reason) => classifyBlockerSeverity("coordinator_merge", reason) === "hard")
-		if (confirmed.length > 0) {
-			return {
-				shouldContinue: false,
-				reason: confirmed[0],
-				diagnostics,
-			}
+/** Single parent continuation authority derived from the final normalized receipt. */
+export function reduceGovernedContinuation(options: {
+	receipt: GovernedSwarmReceipt
+	envelopeStructurallyValid: boolean
+	validatedStateUnchanged: boolean
+	recoveryActive: boolean
+	interrupted?: boolean
+	metrics?: GovernedExecutionPathMetrics
+}): GovernedContinuationDecision {
+	if (options.metrics) {
+		options.metrics.continuationReductions++
+	}
+	const { receipt } = options
+	const retryDisposition = receipt.mergeGate.retryDisposition ?? (receipt.mergeGate.passed ? "not_needed" : "targeted_repair")
+	const findingCodes = new Set(receipt.mergeGate.findings?.map((finding) => finding.code) ?? [])
+	const hasConflict = receipt.mergeGate.splitBrainDetected || [...findingCodes].some((code) => CONFLICT_FINDING_CODES.has(code))
+	const hasInvalidResult = [...findingCodes].some((code) => INVALID_RESULT_FINDING_CODES.has(code))
+
+	if (hasConflict || retryDisposition === "do_not_retry") {
+		return {
+			action: "halt_for_conflict",
+			retryDisposition: "do_not_retry",
+			reasonCode: hasConflict ? "hard_conflict" : "retry_prohibited",
+			cleanPath: false,
+			permittedAction: "halt",
+		}
+	}
+	if (options.interrupted) {
+		return {
+			action: "recover_and_resume",
+			retryDisposition: "retry_after_recovery",
+			reasonCode: "execution_interrupted",
+			cleanPath: false,
+			permittedAction: "recover_state",
+		}
+	}
+	if (
+		hasInvalidResult ||
+		!options.envelopeStructurallyValid ||
+		!options.validatedStateUnchanged ||
+		!receipt.mergeGate.replayIntegrity.valid
+	) {
+		return {
+			action: "reject_invalid_result",
+			retryDisposition: "do_not_retry",
+			reasonCode: "execution_state_invalid",
+			cleanPath: false,
+			permittedAction: "reject",
+		}
+	}
+	if (retryDisposition === "retry_after_recovery") {
+		return {
+			action: "recover_and_resume",
+			retryDisposition,
+			reasonCode: "coordination_recovery_required",
+			cleanPath: false,
+			permittedAction: "recover_state",
+		}
+	}
+	if (retryDisposition === "targeted_repair" || !receipt.sealed || !receipt.mergeGate.passed) {
+		return {
+			action: "targeted_repair",
+			retryDisposition: "targeted_repair",
+			reasonCode: "localized_repair_required",
+			cleanPath: false,
+			permittedAction: "repair_lanes",
 		}
 	}
 
-	if (soft.length > 0) {
-		const budget = getSoftBlockRetryBudget(options.taskId)
-		const key = soft[0] ?? "soft_block"
-		const retry = budget.consume(key)
-		if (!retry.allowed) {
-			diagnostics.push(
-				diagnostic("no_progress_execution_loop", `Soft blocker "${key}" exceeded retry budget (${retry.attempt}).`),
-			)
-			return {
-				shouldContinue: options.hasRunningLanes === true,
-				reason: `soft_block_exhausted:${key}`,
-				diagnostics,
-			}
-		}
-		diagnostics.push(
-			diagnostic("duplicate_audit_path_detected", `Soft blocker deferred (attempt ${retry.attempt}): ${key.slice(0, 80)}`),
-		)
-	}
-
-	if ((options.advisorySignalCount ?? 0) > 0) {
-		diagnostics.push(
-			diagnostic(
-				"duplicate_audit_path_detected",
-				`${options.advisorySignalCount} advisory signal(s) recorded — continuation allowed.`,
-			),
-		)
-	}
-
+	const advisoryCount = receipt.mergeGate.advisoryWarnings?.length ?? 0
 	return {
-		shouldContinue: true,
-		reason: "no_live_hard_blocker",
-		diagnostics,
+		action: advisoryCount > 0 ? "accept_with_advisories" : "accept",
+		retryDisposition: "not_needed",
+		reasonCode: advisoryCount > 0 ? "sealed_with_advisories" : "sealed_clean",
+		cleanPath:
+			!options.recoveryActive &&
+			receipt.mergeGate.orphanedClaimCount === 0 &&
+			receipt.mergeGate.staleLeaseCount === 0 &&
+			receipt.mergeGate.failedLaneCount === 0,
+		permittedAction: "continue_parent",
 	}
 }

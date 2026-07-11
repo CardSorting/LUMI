@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import type { ExecutionReplayArtifact } from "@shared/execution/replayContract"
+import type { ExecutionReplayArtifact, ExecutionReplayIntegrityReport } from "@shared/execution/replayContract"
 import type { GovernedSwarmReceipt } from "@shared/subagent/governedExecution"
 import { verifyReplayArtifact } from "./executionReplayMappers"
 
@@ -15,9 +15,10 @@ export interface ReplayValidationResult {
 export function validateDeterministicReplay(
 	receipt: GovernedSwarmReceipt,
 	replayArtifact: ExecutionReplayArtifact,
+	prevalidatedReplay?: ExecutionReplayIntegrityReport,
 ): ReplayValidationResult {
 	const violations: string[] = []
-	const replayCheck = verifyReplayArtifact(replayArtifact)
+	const replayCheck = prevalidatedReplay ?? verifyReplayArtifact(replayArtifact)
 
 	if (!replayCheck.valid) {
 		violations.push(...replayCheck.violations)
