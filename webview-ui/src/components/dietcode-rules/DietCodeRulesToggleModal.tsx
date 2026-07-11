@@ -3,16 +3,14 @@ import {
 	DietCodeRulesToggles,
 	RefreshedRules,
 	RuleScope,
-	SkillInfo,
 	ToggleAgentsRuleRequest,
 	ToggleCursorRuleRequest,
 	ToggleDietCodeRuleRequest,
-	ToggleSkillRequest,
 	ToggleWindsurfRuleRequest,
 	ToggleWorkflowRequest,
 } from "@shared/proto/dietcode/file"
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
-import React, { useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useClickAway, useWindowSize } from "react-use"
 import styled from "styled-components"
 import PopupModalContainer from "@/components/common/PopupModalContainer"
@@ -35,8 +33,6 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		localAgentsRulesToggles = {},
 		localWorkflowToggles = {},
 		globalWorkflowToggles = {},
-		globalSkillsToggles = {},
-		localSkillsToggles = {},
 		remoteRulesToggles = {},
 		remoteWorkflowToggles = {},
 		remoteConfigSettings = {},
@@ -48,8 +44,6 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		setLocalAgentsRulesToggles,
 		setLocalWorkflowToggles,
 		setGlobalWorkflowToggles,
-		setGlobalSkillsToggles,
-		setLocalSkillsToggles,
 		setRemoteRulesToggles,
 		setRemoteWorkflowToggles,
 	} = useExtensionState()
@@ -57,8 +51,6 @@ const DietCodeRulesToggleModal: React.FC = () => {
 	const [workspaceHooks, setWorkspaceHooks] = useState<
 		Array<{ workspaceName: string; hooks: Array<{ name: string; enabled: boolean; absolutePath: string }> }>
 	>([])
-	const [globalSkills, setGlobalSkills] = useState<SkillInfo[]>([])
-	const [localSkills, setLocalSkills] = useState<SkillInfo[]>([])
 
 	const isWindows = !isMacOSOrLinux()
 	const [isVisible, setIsVisible] = useState(false)
@@ -67,7 +59,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 	const { width: viewportWidth, height: viewportHeight } = useWindowSize()
 	const [arrowPosition, setArrowPosition] = useState(0)
 	const [menuPosition, setMenuPosition] = useState(0)
-	const [currentView, setCurrentView] = useState<"rules" | "workflows" | "hooks" | "skills">("skills")
+	const [currentView, setCurrentView] = useState<"rules" | "workflows" | "hooks">("rules")
 
 	// Auto-switch to rules tab if hooks become disabled while viewing hooks tab
 	useEffect(() => {
@@ -76,39 +68,36 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		}
 	}, [currentView, hooksEnabled])
 
-	useEffect(() => {
-		if (isVisible) {
-			FileServiceClient.refreshRules({} as EmptyRequest)
-				.then((response: RefreshedRules) => {
-					// Update state with the response data using all available setters
-					if (response.globalDietcodeRulesToggles?.toggles) {
-						setGlobalDietCodeRulesToggles(response.globalDietcodeRulesToggles.toggles)
-					}
-					if (response.localDietcodeRulesToggles?.toggles) {
-						setLocalDietCodeRulesToggles(response.localDietcodeRulesToggles.toggles)
-					}
-					if (response.localCursorRulesToggles?.toggles) {
-						setLocalCursorRulesToggles(response.localCursorRulesToggles.toggles)
-					}
-					if (response.localWindsurfRulesToggles?.toggles) {
-						setLocalWindsurfRulesToggles(response.localWindsurfRulesToggles.toggles)
-					}
-					if (response.localAgentsRulesToggles?.toggles) {
-						setLocalAgentsRulesToggles(response.localAgentsRulesToggles.toggles)
-					}
-					if (response.localWorkflowToggles?.toggles) {
-						setLocalWorkflowToggles(response.localWorkflowToggles.toggles)
-					}
-					if (response.globalWorkflowToggles?.toggles) {
-						setGlobalWorkflowToggles(response.globalWorkflowToggles.toggles)
-					}
-				})
-				.catch((error) => {
-					console.error("Failed to refresh rules:", error)
-				})
-		}
+	const refreshRules = useCallback(() => {
+		FileServiceClient.refreshRules({} as EmptyRequest)
+			.then((response: RefreshedRules) => {
+				// Update state with the response data using all available setters
+				if (response.globalDietcodeRulesToggles?.toggles) {
+					setGlobalDietCodeRulesToggles(response.globalDietcodeRulesToggles.toggles)
+				}
+				if (response.localDietcodeRulesToggles?.toggles) {
+					setLocalDietCodeRulesToggles(response.localDietcodeRulesToggles.toggles)
+				}
+				if (response.localCursorRulesToggles?.toggles) {
+					setLocalCursorRulesToggles(response.localCursorRulesToggles.toggles)
+				}
+				if (response.localWindsurfRulesToggles?.toggles) {
+					setLocalWindsurfRulesToggles(response.localWindsurfRulesToggles.toggles)
+				}
+				if (response.localAgentsRulesToggles?.toggles) {
+					setLocalAgentsRulesToggles(response.localAgentsRulesToggles.toggles)
+				}
+				if (response.localWorkflowToggles?.toggles) {
+					setLocalWorkflowToggles(response.localWorkflowToggles.toggles)
+				}
+				if (response.globalWorkflowToggles?.toggles) {
+					setGlobalWorkflowToggles(response.globalWorkflowToggles.toggles)
+				}
+			})
+			.catch((error) => {
+				console.error("Failed to refresh rules:", error)
+			})
 	}, [
-		isVisible,
 		setGlobalDietCodeRulesToggles,
 		setLocalDietCodeRulesToggles,
 		setGlobalWorkflowToggles,
@@ -118,30 +107,27 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		setLocalAgentsRulesToggles,
 	])
 
+	useEffect(() => {
+		if (isVisible) {
+			refreshRules()
+		}
+	}, [isVisible, refreshRules])
+
+	const refreshHooks = useCallback(() => {
+		FileServiceClient.refreshHooks({} as EmptyRequest)
+			.then((response) => {
+				setGlobalHooks(response.globalHooks || [])
+				setWorkspaceHooks(response.workspaceHooks || [])
+			})
+			.catch((error) => {
+				console.error("Failed to refresh hooks:", error)
+			})
+	}, [])
+
 	// Refresh hooks when hooks tab becomes visible
 	useEffect(() => {
 		if (!isVisible || currentView !== "hooks") {
 			return
-		}
-
-		const abortController = new AbortController()
-
-		// Initial refresh when tab opens
-		const refreshHooks = () => {
-			if (abortController.signal.aborted) return
-
-			FileServiceClient.refreshHooks({} as EmptyRequest)
-				.then((response) => {
-					if (!abortController.signal.aborted) {
-						setGlobalHooks(response.globalHooks || [])
-						setWorkspaceHooks(response.workspaceHooks || [])
-					}
-				})
-				.catch((error) => {
-					if (!abortController.signal.aborted) {
-						console.error("Failed to refresh hooks:", error)
-					}
-				})
 		}
 
 		// Refresh immediately
@@ -151,47 +137,9 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		const pollInterval = setInterval(refreshHooks, 1000)
 
 		return () => {
-			abortController.abort()
 			clearInterval(pollInterval)
 		}
-	}, [isVisible, currentView])
-
-	// Refresh skills when skills tab becomes visible
-	useEffect(() => {
-		if (!isVisible || currentView !== "skills") {
-			return
-		}
-
-		let isCancelled = false
-
-		const refreshSkills = () => {
-			if (isCancelled) return
-
-			FileServiceClient.refreshSkills({} as EmptyRequest)
-				.then((response) => {
-					if (!isCancelled) {
-						setGlobalSkills(response.globalSkills || [])
-						setLocalSkills(response.localSkills || [])
-					}
-				})
-				.catch((error) => {
-					if (!isCancelled) {
-						console.error("Failed to refresh skills:", error)
-					}
-				})
-		}
-
-		// Refresh immediately
-		refreshSkills()
-
-		// Poll every 1 second to detect filesystem changes
-		const pollInterval = setInterval(refreshSkills, 30_000)
-
-		return () => {
-			isCancelled = true
-			clearInterval(pollInterval)
-		}
-	}, [isVisible, currentView])
+	}, [isVisible, currentView, refreshHooks])
 
 	// Format global rules for display with proper typing
 	const globalRules = Object.entries(globalDietCodeRulesToggles || {})
@@ -233,7 +181,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 
 	// Handle toggle rule using gRPC
 	const toggleRule = (isGlobal: boolean, rulePath: string, enabled: boolean) => {
-		FileServiceClient.toggleDietCodeRule(
+		return FileServiceClient.toggleDietCodeRule(
 			ToggleDietCodeRuleRequest.create({
 				scope: isGlobal ? RuleScope.GLOBAL : RuleScope.LOCAL,
 				rulePath,
@@ -258,7 +206,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 	}
 
 	const toggleCursorRule = (rulePath: string, enabled: boolean) => {
-		FileServiceClient.toggleCursorRule(
+		return FileServiceClient.toggleCursorRule(
 			ToggleCursorRuleRequest.create({
 				rulePath,
 				enabled,
@@ -276,7 +224,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 	}
 
 	const toggleWindsurfRule = (rulePath: string, enabled: boolean) => {
-		FileServiceClient.toggleWindsurfRule(
+		return FileServiceClient.toggleWindsurfRule(
 			ToggleWindsurfRuleRequest.create({
 				rulePath,
 				enabled,
@@ -293,7 +241,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 	}
 
 	const toggleAgentsRule = (rulePath: string, enabled: boolean) => {
-		FileServiceClient.toggleAgentsRule(
+		return FileServiceClient.toggleAgentsRule(
 			ToggleAgentsRuleRequest.create({
 				rulePath,
 				enabled,
@@ -311,7 +259,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 
 	// Toggle hook handler
 	const toggleHook = (isGlobal: boolean, hookName: string, enabled: boolean, workspaceName?: string) => {
-		FileServiceClient.toggleHook({
+		return FileServiceClient.toggleHook({
 			metadata: {} as any,
 			hookName,
 			isGlobal,
@@ -328,7 +276,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 	}
 
 	const toggleWorkflow = (isGlobal: boolean, workflowPath: string, enabled: boolean) => {
-		FileServiceClient.toggleWorkflow(
+		return FileServiceClient.toggleWorkflow(
 			ToggleWorkflowRequest.create({
 				workflowPath,
 				enabled,
@@ -351,7 +299,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 
 	// Handle toggle for remote rules
 	const toggleRemoteRule = (ruleName: string, enabled: boolean) => {
-		FileServiceClient.toggleDietCodeRule(
+		return FileServiceClient.toggleDietCodeRule(
 			ToggleDietCodeRuleRequest.create({
 				scope: RuleScope.REMOTE,
 				rulePath: ruleName,
@@ -371,7 +319,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 
 	// Handle toggle for remote workflows
 	const toggleRemoteWorkflow = (workflowName: string, enabled: boolean) => {
-		FileServiceClient.toggleWorkflow(
+		return FileServiceClient.toggleWorkflow(
 			ToggleWorkflowRequest.create({
 				workflowPath: workflowName,
 				enabled,
@@ -385,34 +333,6 @@ const DietCodeRulesToggleModal: React.FC = () => {
 			})
 			.catch((error) => {
 				console.error("Error toggling remote workflow:", error)
-			})
-	}
-
-	// Handle toggle for skills
-	const toggleSkill = (isGlobal: boolean, skillPath: string, enabled: boolean) => {
-		FileServiceClient.toggleSkill(
-			ToggleSkillRequest.create({
-				skillPath,
-				isGlobal,
-				enabled,
-			}),
-		)
-			.then((response) => {
-				if (response.globalSkillsToggles) {
-					setGlobalSkillsToggles(response.globalSkillsToggles)
-				}
-				if (response.localSkillsToggles) {
-					setLocalSkillsToggles(response.localSkillsToggles)
-				}
-				// Update local skills state
-				if (isGlobal) {
-					setGlobalSkills((prev) => prev.map((s) => (s.path === skillPath ? { ...s, enabled } : s)))
-				} else {
-					setLocalSkills((prev) => prev.map((s) => (s.path === skillPath ? { ...s, enabled } : s)))
-				}
-			})
-			.catch((error) => {
-				console.error("Error toggling skill:", error)
 			})
 	}
 
@@ -437,15 +357,15 @@ const DietCodeRulesToggleModal: React.FC = () => {
 		<div className="inline-flex min-w-0 max-w-full items-center" ref={modalRef}>
 			<div className="inline-flex w-full items-center" ref={buttonRef}>
 				<Tooltip>
-					{!isVisible && <TooltipContent>Manage skills and agent preferences</TooltipContent>}
+					{!isVisible && <TooltipContent>Manage rules and agent preferences</TooltipContent>}
 					<TooltipTrigger>
 						<VSCodeButton
 							appearance="secondary"
-							aria-label={isVisible ? "Hide Skills" : "Manage Skills"}
+							aria-label={isVisible ? "Hide Rules" : "Manage Rules"}
 							className="m-0 flex h-7 items-center gap-1 px-2 text-[11px]"
 							onClick={() => setIsVisible(!isVisible)}>
 							<VscIcon className="" name="sparkle" style={{ fontSize: "12.5px" }} />
-							<span>Skills</span>
+							<span>Rules</span>
 						</VSCodeButton>
 					</TooltipTrigger>
 				</Tooltip>
@@ -479,9 +399,6 @@ const DietCodeRulesToggleModal: React.FC = () => {
 										Hooks
 									</TabButton>
 								)}
-								<TabButton isActive={currentView === "skills"} onClick={() => setCurrentView("skills")}>
-									Skills
-								</TabButton>
 							</div>
 						</div>
 
@@ -519,11 +436,6 @@ const DietCodeRulesToggleModal: React.FC = () => {
 										href="https://docs.dietcode.bot/features/slash-commands/workflows">
 										Docs
 									</VSCodeLink>
-								</p>
-							) : currentView === "skills" ? (
-								<p>
-									Skills are little playbooks LUMI can pull in when a task fits. When something matches, LUMI
-									loads the full instructions automatically.{" "}
 								</p>
 							) : (
 								<p>
@@ -570,6 +482,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={true}
 										listGap="small"
+										onSuccess={refreshRules}
 										rules={globalRules}
 										ruleType={"dietcode"}
 										showNewRule={true}
@@ -584,6 +497,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={false}
 										listGap="small"
+										onSuccess={refreshRules}
 										rules={localRules}
 										ruleType={"dietcode"}
 										showNewRule={false}
@@ -594,6 +508,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={false}
 										listGap="small"
+										onSuccess={refreshRules}
 										rules={cursorRules}
 										ruleType={"cursor"}
 										showNewRule={false}
@@ -603,6 +518,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={false}
 										listGap="small"
+										onSuccess={refreshRules}
 										rules={windsurfRules}
 										ruleType={"windsurf"}
 										showNewRule={false}
@@ -612,6 +528,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={false}
 										listGap="small"
+										onSuccess={refreshRules}
 										rules={agentsRules}
 										ruleType={"agents"}
 										showNewRule={true}
@@ -655,6 +572,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={true}
 										listGap="small"
+										onSuccess={refreshRules}
 										rules={globalWorkflows}
 										ruleType={"workflow"}
 										showNewRule={true}
@@ -669,6 +587,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 									<RulesToggleList
 										isGlobal={false}
 										listGap="small"
+										onSuccess={refreshRules}
 										rules={localWorkflows}
 										ruleType={"workflow"}
 										showNewRule={true}
@@ -732,6 +651,7 @@ const DietCodeRulesToggleModal: React.FC = () => {
 										<NewRuleRow
 											existingHooks={globalHooks.map((h) => h.name)}
 											isGlobal={true}
+											onSuccess={refreshHooks}
 											ruleType="hook"
 										/>
 									</div>
@@ -770,54 +690,13 @@ const DietCodeRulesToggleModal: React.FC = () => {
 											<NewRuleRow
 												existingHooks={workspace.hooks.map((h) => h.name)}
 												isGlobal={false}
+												onSuccess={refreshHooks}
 												ruleType="hook"
 												workspaceName={workspace.workspaceName}
 											/>
 										</div>
 									</div>
 								))}
-							</>
-						) : currentView === "skills" ? (
-							<>
-								{/* Global Skills Section */}
-								<div className="mb-3">
-									<div className="text-sm font-normal mb-2">Global Skills</div>
-									<div className="flex flex-col gap-0">
-										{globalSkills
-											.sort((a, b) => a.name.localeCompare(b.name))
-											.map((skill) => (
-												<RuleRow
-													enabled={skill.enabled}
-													isGlobal={true}
-													key={skill.path}
-													rulePath={skill.path}
-													ruleType="skill"
-													toggleRule={(path, enabled) => toggleSkill(true, path, enabled)}
-												/>
-											))}
-										<NewRuleRow isGlobal={true} ruleType="skill" />
-									</div>
-								</div>
-
-								{/* Workspace Skills Section */}
-								<div className="-mb-2.5">
-									<div className="text-sm font-normal mb-2">Workspace Skills</div>
-									<div className="flex flex-col gap-0">
-										{localSkills
-											.sort((a, b) => a.name.localeCompare(b.name))
-											.map((skill) => (
-												<RuleRow
-													enabled={skill.enabled}
-													isGlobal={false}
-													key={skill.path}
-													rulePath={skill.path}
-													ruleType="skill"
-													toggleRule={(path, enabled) => toggleSkill(false, path, enabled)}
-												/>
-											))}
-										<NewRuleRow isGlobal={false} ruleType="skill" />
-									</div>
-								</div>
 							</>
 						) : null}
 					</div>

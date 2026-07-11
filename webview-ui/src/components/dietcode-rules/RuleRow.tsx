@@ -1,6 +1,8 @@
 import { StringRequest } from "@shared/proto/dietcode/common"
 import { DeleteSkillRequest, RuleFileRequest } from "@shared/proto/index.dietcode"
 import { REMOTE_URI_SCHEME } from "@shared/remote-config/constants"
+import { Loader2 } from "lucide-react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
 import { Switch } from "@/components/ui/switch"
@@ -33,11 +35,14 @@ const RuleRow: React.FC<{
 	enabled: boolean
 	isGlobal: boolean
 	ruleType: string
-	toggleRule: (rulePath: string, enabled: boolean) => void
+	toggleRule: (rulePath: string, enabled: boolean) => Promise<any> | any
 	isRemote?: boolean
 	alwaysEnabled?: boolean
 	onDeleteSkill?: () => void
 }> = ({ rulePath, enabled, isGlobal, toggleRule, ruleType, isRemote = false, alwaysEnabled = false, onDeleteSkill }) => {
+	const [isToggling, setIsToggling] = useState(false)
+	const [isDeleting, setIsDeleting] = useState(false)
+
 	const displayName = getDisplayNameFromPath(rulePath)
 	const skillDisplayName = getSkillDisplayNameFromSkillMdPath(rulePath)
 
@@ -108,24 +113,43 @@ const RuleRow: React.FC<{
 		)
 	}
 
-	const handleDeleteClick = () => {
-		if (ruleType === "skill") {
-			FileServiceClient.deleteSkillFile(
-				DeleteSkillRequest.create({
-					skillPath: rulePath,
-					isGlobal,
-				}),
-			)
-				.then(() => onDeleteSkill?.())
-				.catch((err) => console.error("Failed to delete skill:", err))
-		} else {
-			FileServiceClient.deleteRuleFile(
-				RuleFileRequest.create({
-					rulePath,
-					isGlobal,
-					type: ruleType || "dietcode",
-				}),
-			).catch((err) => console.error("Failed to delete rule file:", err))
+	const handleToggle = async () => {
+		if (isToggling || isDeleting) return
+		setIsToggling(true)
+		try {
+			await toggleRule(rulePath, !enabled)
+		} catch (err) {
+			console.error("Failed to toggle rule:", err)
+		} finally {
+			setIsToggling(false)
+		}
+	}
+
+	const handleDeleteClick = async () => {
+		if (isDeleting || isToggling) return
+		setIsDeleting(true)
+		try {
+			if (ruleType === "skill") {
+				await FileServiceClient.deleteSkillFile(
+					DeleteSkillRequest.create({
+						skillPath: rulePath,
+						isGlobal,
+					}),
+				)
+				onDeleteSkill?.()
+			} else {
+				await FileServiceClient.deleteRuleFile(
+					RuleFileRequest.create({
+						rulePath,
+						isGlobal,
+						type: ruleType || "dietcode",
+					}),
+				)
+			}
+		} catch (err) {
+			console.error("Failed to delete rule/skill:", err)
+		} finally {
+			setIsDeleting(false)
 		}
 	}
 
@@ -149,16 +173,21 @@ const RuleRow: React.FC<{
 
 				{/* Toggle Switch */}
 				<div className="flex items-center space-x-2 gap-2">
-					<Switch
-						checked={enabled}
-						className="mx-1"
-						disabled={isDisabled}
-						key={rulePath}
-						onClick={() => toggleRule(rulePath, !enabled)}
-						title={isDisabled ? "This rule is required and cannot be disabled" : undefined}
-					/>
+					{isToggling ? (
+						<Loader2 className="animate-spin h-4 w-4 text-foreground mx-2" />
+					) : (
+						<Switch
+							checked={enabled}
+							className="mx-1"
+							disabled={isDisabled || isDeleting}
+							key={rulePath}
+							onClick={handleToggle}
+							title={isDisabled ? "This rule is required and cannot be disabled" : undefined}
+						/>
+					)}
 					<Button
 						aria-label={isRemote ? "View rule file" : "Edit rule file"}
+						disabled={isToggling || isDeleting}
 						onClick={handleEditClick}
 						size="xs"
 						title={isRemote ? "View rule file (read-only)" : "Edit rule file"}
@@ -167,12 +196,16 @@ const RuleRow: React.FC<{
 					</Button>
 					<Button
 						aria-label="Delete rule file"
-						disabled={isRemote}
+						disabled={isRemote || isToggling || isDeleting}
 						onClick={handleDeleteClick}
 						size="xs"
 						title="Delete rule file"
 						variant="icon">
-						<Icon name="Trash2Icon" />
+						{isDeleting ? (
+							<Loader2 className="animate-spin h-3.5 w-3.5 text-foreground" />
+						) : (
+							<Icon name="Trash2Icon" />
+						)}
 					</Button>
 				</div>
 			</div>

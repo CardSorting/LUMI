@@ -9,6 +9,7 @@ import {
 	Info,
 	type LucideIcon,
 	SlidersHorizontal,
+	Sparkles,
 	SquareMousePointer,
 	SquareTerminal,
 	Wrench,
@@ -32,6 +33,7 @@ import EmbeddingConfigurationSection from "./sections/EmbeddingConfigurationSect
 import FeatureSettingsSection from "./sections/FeatureSettingsSection"
 import GeneralSettingsSection from "./sections/GeneralSettingsSection"
 import { RemoteConfigSection } from "./sections/RemoteConfigSection"
+import SkillsSettingsSection from "./sections/SkillsSettingsSection"
 import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 
 const IS_DEV = process.env.IS_DEV
@@ -41,6 +43,7 @@ type SettingsTabID =
 	| "api-config"
 	| "embedding"
 	| "features"
+	| "skills"
 	| "browser"
 	| "terminal"
 	| "general"
@@ -77,6 +80,13 @@ export const SETTINGS_TABS: SettingsTab[] = [
 		tooltipText: "How LUMI behaves",
 		headerText: "Preferences",
 		icon: CheckCheck,
+	},
+	{
+		id: "skills",
+		name: "Skills",
+		tooltipText: "Manage LUMI skills",
+		headerText: "Skills",
+		icon: Sparkles,
 	},
 	{
 		id: "browser",
@@ -156,6 +166,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			embedding: EmbeddingConfigurationSection,
 			general: GeneralSettingsSection,
 			features: FeatureSettingsSection,
+			skills: SkillsSettingsSection,
 			browser: BrowserSettingsSection,
 			terminal: TerminalSettingsSection,
 			"remote-config": RemoteConfigSection,

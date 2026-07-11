@@ -1,5 +1,5 @@
 import { CreateHookRequest, CreateSkillRequest, RuleFileRequest } from "@shared/proto/index.dietcode"
-import { PlusIcon } from "lucide-react"
+import { Loader2, PlusIcon } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useClickAway } from "react-use"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ interface NewRuleRowProps {
 	ruleType?: string
 	existingHooks?: string[]
 	workspaceName?: string
+	onSuccess?: () => void
 }
 
 const HOOK_TYPES = [
@@ -24,11 +25,12 @@ const HOOK_TYPES = [
 	{ name: "PreCompact", description: "Executes before conversation compaction" },
 ]
 
-const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHooks = [], workspaceName }) => {
+const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHooks = [], workspaceName, onSuccess }) => {
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [filename, setFilename] = useState("")
 	const inputRef = useRef<HTMLInputElement>(null)
 	const [error, setError] = useState<string | null>(null)
+	const [isCreating, setIsCreating] = useState(false)
 
 	const componentRef = useRef<HTMLDivElement>(null)
 
@@ -63,8 +65,10 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 	}
 
 	const handleCreateHook = async (hookName: string) => {
-		if (!hookName) return
+		if (!hookName || isCreating) return
 
+		setIsCreating(true)
+		setError(null)
 		try {
 			await FileServiceClient.createHook(
 				CreateHookRequest.create({
@@ -73,13 +77,18 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 					workspaceName,
 				}),
 			)
+			onSuccess?.()
 		} catch (err) {
 			console.error("Error creating hook:", err)
+			setError(err instanceof Error ? err.message : "Failed to create hook")
+		} finally {
+			setIsCreating(false)
 		}
 	}
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault()
+		if (isCreating) return
 
 		if (filename.trim()) {
 			const trimmedFilename = filename.trim()
@@ -92,6 +101,8 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 					return
 				}
 
+				setIsCreating(true)
+				setError(null)
 				try {
 					await FileServiceClient.createSkillFile(
 						CreateSkillRequest.create({
@@ -100,10 +111,12 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 						}),
 					)
 					setFilename("")
-					setError(null)
 					setIsExpanded(false)
+					onSuccess?.()
 				} catch (err) {
 					setError(err instanceof Error ? err.message : "Failed to create skill")
+				} finally {
+					setIsCreating(false)
 				}
 				return
 			}
@@ -120,6 +133,8 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 				finalFilename = `${trimmedFilename}.md`
 			}
 
+			setIsCreating(true)
+			setError(null)
 			try {
 				await FileServiceClient.createRuleFile(
 					RuleFileRequest.create({
@@ -128,13 +143,15 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 						type: ruleType || "dietcode",
 					}),
 				)
+				setFilename("")
+				setIsExpanded(false)
+				onSuccess?.()
 			} catch (err) {
 				console.error("Error creating rule file:", err)
+				setError(err instanceof Error ? err.message : "Failed to create rule file")
+			} finally {
+				setIsCreating(false)
 			}
-
-			setFilename("")
-			setError(null)
-			setIsExpanded(false)
 		}
 	}
 
@@ -173,7 +190,7 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 							aria-describedby="hook-select-description"
 							aria-label="Select hook type to create"
 							className="flex-1 bg-input-background text-input-foreground border-0 outline-0 rounded focus:outline-none focus:ring-0 focus:border-transparent px-2 cursor-pointer"
-							disabled={availableHookTypes.length === 0}
+							disabled={availableHookTypes.length === 0 || isCreating}
 							id="hook-type-select"
 							onChange={(e) => {
 								if (e.target.value) {
@@ -208,9 +225,14 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 								"flex-1 bg-input-background text-input-foreground border-0 outline-0 rounded focus:outline-none focus:ring-0 focus:border-transparent",
 								{
 									italic: !isExpanded,
+									"opacity-50": isCreating,
 								},
 							)}
-							onChange={(e) => setFilename(e.target.value)}
+							disabled={isCreating}
+							onChange={(e) => {
+								setFilename(e.target.value)
+								if (error) setError(null)
+							}}
 							placeholder={
 								isExpanded
 									? ruleType === "workflow"
@@ -242,6 +264,7 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 											: "New rule file..."
 							}
 							className="mx-0.5"
+							disabled={isCreating}
 							onClick={(e) => {
 								e.stopPropagation()
 								if (!isExpanded) {
@@ -252,7 +275,7 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 							title={isExpanded ? (ruleType === "skill" ? "Create skill" : "Create file") : "New file"}
 							type={isExpanded ? "submit" : "button"}
 							variant="icon">
-							<PlusIcon />
+							{isCreating ? <Loader2 className="animate-spin h-4 w-4 text-foreground" /> : <PlusIcon />}
 						</Button>
 					</form>
 				)}
