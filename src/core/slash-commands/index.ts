@@ -1,4 +1,9 @@
 import type { ApiProviderInfo } from "@core/api"
+import {
+	filterEnabledSkills,
+	getResolvedSkillsForCwd,
+	getSkillContent,
+} from "@core/context/instructions/user-instructions/skills"
 import { DietCodeRulesToggles } from "@shared/dietcode-rules"
 import { McpPromptResponse } from "@shared/mcp"
 import fs from "fs/promises"
@@ -219,6 +224,34 @@ export async function parseSlashCommands(
 				}
 			}
 
+			// Check for enabled skills
+			const stateManager = StateManager.get()
+			const globalSkillsToggles = stateManager.getGlobalSettingsKey("globalSkillsToggles") ?? {}
+			const localSkillsToggles = stateManager.getWorkspaceStateKey("localSkillsToggles") ?? {}
+			const resolvedSkills = await getResolvedSkillsForCwd(workspace || process.cwd())
+			const availableSkills = filterEnabledSkills(resolvedSkills, globalSkillsToggles, localSkillsToggles)
+			const matchingSkill = availableSkills.find((skill) => skill.name === commandName)
+
+			if (matchingSkill) {
+				try {
+					const skillContent = await getSkillContent(commandName, availableSkills, { mode: "full" })
+					if (skillContent) {
+						// remove the slash command and add skill instructions
+						const textWithoutSlashCommand = removeSlashCommand(text, tagContent, contentStartIndex, slashMatch)
+						const processedText =
+							`<explicit_instructions type="skill:${matchingSkill.name}">\n${skillContent.instructions}\n</explicit_instructions>\n` +
+							textWithoutSlashCommand
+
+						// Track telemetry for skill usage (reusing workflow command category)
+						telemetryService.captureSlashCommandUsed(ulid, commandName, "workflow")
+
+						return { processedText, needsDietCoderulesFileCheck: false }
+					}
+				} catch (error) {
+					Logger.error(`Error reading skill ${commandName}: ${error}`)
+				}
+			}
+
 			const globalWorkflows: Workflow[] = Object.entries(globalWorkflowToggles)
 				.filter(([_, enabled]) => enabled)
 				.map(([filePath, _]) => ({
@@ -236,7 +269,6 @@ export async function parseSlashCommands(
 				}))
 
 			// Get remote workflows from remote config
-			const stateManager = StateManager.get()
 			const remoteConfigSettings = stateManager.getRemoteConfigSettings()
 			const remoteWorkflows = remoteConfigSettings.remoteGlobalWorkflows || []
 			const remoteWorkflowToggles = stateManager.getGlobalStateKey("remoteWorkflowToggles") || {}

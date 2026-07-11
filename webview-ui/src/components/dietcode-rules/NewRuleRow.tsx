@@ -12,6 +12,7 @@ interface NewRuleRowProps {
 	existingHooks?: string[]
 	workspaceName?: string
 	onSuccess?: () => void
+	existingNames?: string[]
 }
 
 const HOOK_TYPES = [
@@ -25,7 +26,14 @@ const HOOK_TYPES = [
 	{ name: "PreCompact", description: "Executes before conversation compaction" },
 ]
 
-const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHooks = [], workspaceName, onSuccess }) => {
+const NewRuleRow: React.FC<NewRuleRowProps> = ({
+	isGlobal,
+	ruleType,
+	existingHooks = [],
+	workspaceName,
+	onSuccess,
+	existingNames,
+}) => {
 	const [isExpanded, setIsExpanded] = useState(false)
 	const [filename, setFilename] = useState("")
 	const inputRef = useRef<HTMLInputElement>(null)
@@ -90,68 +98,85 @@ const NewRuleRow: React.FC<NewRuleRowProps> = ({ isGlobal, ruleType, existingHoo
 		e.preventDefault()
 		if (isCreating) return
 
-		if (filename.trim()) {
-			const trimmedFilename = filename.trim()
+		const trimmedFilename = filename.trim()
+		if (!trimmedFilename) {
+			setError("Name cannot be empty")
+			return
+		}
 
-			// Skills use directory names, not file extensions
-			if (ruleType === "skill") {
-				// Validate skill name - only allow alphanumeric, dashes, underscores
-				if (!/^[a-zA-Z0-9_-]+$/.test(trimmedFilename)) {
-					setError("Skill name can only contain letters, numbers, dashes, and underscores")
-					return
-				}
+		// Check for duplicates (case-insensitive, considering potential auto-appended extensions)
+		if (existingNames) {
+			const lowerName = trimmedFilename.toLowerCase()
+			const lowerMd = (trimmedFilename + ".md").toLowerCase()
+			const isDuplicate = existingNames.some((name) => {
+				const lowerExisting = name.toLowerCase()
+				return lowerExisting === lowerName || lowerExisting === lowerMd
+			})
 
-				setIsCreating(true)
-				setError(null)
-				try {
-					await FileServiceClient.createSkillFile(
-						CreateSkillRequest.create({
-							skillName: trimmedFilename,
-							isGlobal,
-						}),
-					)
-					setFilename("")
-					setIsExpanded(false)
-					onSuccess?.()
-				} catch (err) {
-					setError(err instanceof Error ? err.message : "Failed to create skill")
-				} finally {
-					setIsCreating(false)
-				}
+			if (isDuplicate) {
+				setError(`A ${ruleType || "rule"} with this name already exists`)
 				return
 			}
+		}
 
-			const extension = getExtension(trimmedFilename)
-
-			if (!isValidExtension(extension)) {
-				setError("Only .md, .txt, or no file extension allowed")
+		// Skills use directory names, not file extensions
+		if (ruleType === "skill") {
+			// Validate skill name - only allow alphanumeric, dashes, underscores
+			if (!/^[a-zA-Z0-9_-]+$/.test(trimmedFilename)) {
+				setError("Skill name can only contain letters, numbers, dashes, and underscores")
 				return
-			}
-
-			let finalFilename = trimmedFilename
-			if (extension === "") {
-				finalFilename = `${trimmedFilename}.md`
 			}
 
 			setIsCreating(true)
 			setError(null)
 			try {
-				await FileServiceClient.createRuleFile(
-					RuleFileRequest.create({
+				await FileServiceClient.createSkillFile(
+					CreateSkillRequest.create({
+						skillName: trimmedFilename,
 						isGlobal,
-						filename: finalFilename,
-						type: ruleType || "dietcode",
 					}),
 				)
 				setFilename("")
 				setIsExpanded(false)
 				onSuccess?.()
 			} catch (err) {
-				console.error("Error creating rule file:", err)
-				setError(err instanceof Error ? err.message : "Failed to create rule file")
+				setError(err instanceof Error ? err.message : "Failed to create skill")
 			} finally {
 				setIsCreating(false)
 			}
+			return
+		}
+
+		const extension = getExtension(trimmedFilename)
+
+		if (!isValidExtension(extension)) {
+			setError("Only .md, .txt, or no file extension allowed")
+			return
+		}
+
+		let finalFilename = trimmedFilename
+		if (extension === "") {
+			finalFilename = `${trimmedFilename}.md`
+		}
+
+		setIsCreating(true)
+		setError(null)
+		try {
+			await FileServiceClient.createRuleFile(
+				RuleFileRequest.create({
+					isGlobal,
+					filename: finalFilename,
+					type: ruleType || "dietcode",
+				}),
+			)
+			setFilename("")
+			setIsExpanded(false)
+			onSuccess?.()
+		} catch (err) {
+			console.error("Error creating rule file:", err)
+			setError(err instanceof Error ? err.message : "Failed to create rule file")
+		} finally {
+			setIsCreating(false)
 		}
 	}
 

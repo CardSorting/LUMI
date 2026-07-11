@@ -1,6 +1,6 @@
 import { mentionRegex } from "@shared/context-mentions"
-import { StringRequest } from "@shared/proto/dietcode/common"
-import { FileSearchRequest, FileSearchType, RelativePathsRequest } from "@shared/proto/dietcode/file"
+import { EmptyRequest, StringRequest } from "@shared/proto/dietcode/common"
+import { FileSearchRequest, FileSearchType, RelativePathsRequest, SkillInfo } from "@shared/proto/dietcode/file"
 import type React from "react"
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import DynamicTextArea from "react-textarea-autosize"
@@ -113,11 +113,22 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			remoteConfigSettings,
 			navigateToSettingsModelPicker,
 			mcpServers,
+			globalSkillsToggles,
+			localSkillsToggles,
 		} = useExtensionState()
 		const isCompact = useIsCompact()
 		const isUltraCompact = useIsUltraCompact()
 		const [isDraggingOver, setIsDraggingOver] = useState(false)
 		const [isInputFocused, setIsInputFocused] = useState(false)
+		const [skills, setSkills] = useState<SkillInfo[]>([])
+
+		useEffect(() => {
+			FileServiceClient.refreshSkills({} as EmptyRequest)
+				.then((res) => {
+					setSkills([...(res.globalSkills || []), ...(res.localSkills || [])])
+				})
+				.catch((err) => console.error("Failed to load skills for autocomplete:", err))
+		}, [globalSkillsToggles, localSkillsToggles])
 		const [gitCommits, setGitCommits] = useState<GitCommit[]>([])
 		const [showSlashCommandsMenu, setShowSlashCommandsMenu] = useState(false)
 		const [selectedSlashCommandsIndex, setSelectedSlashCommandsIndex] = useState(0)
@@ -925,6 +936,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								remoteWorkflowToggles,
 								remoteConfigSettings?.remoteGlobalWorkflows,
 								mcpServers,
+								skills,
 							)
 
 							if (allCommands.length === 0) {
@@ -950,6 +962,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							remoteWorkflowToggles,
 							remoteConfigSettings?.remoteGlobalWorkflows,
 							mcpServers,
+							skills,
 						)
 						if (commands.length > 0) {
 							handleSlashCommandsSelect(commands[selectedSlashCommandsIndex])
@@ -1114,6 +1127,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				mcpServers,
 				remoteConfigSettings?.remoteGlobalWorkflows,
 				remoteWorkflowToggles,
+				skills,
 			],
 		)
 
@@ -1202,6 +1216,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								remoteWorkflowToggles={remoteWorkflowToggles}
 								selectedIndex={selectedSlashCommandsIndex}
 								setSelectedIndex={setSelectedSlashCommandsIndex}
+								skills={skills}
 							/>
 						</div>
 					)}

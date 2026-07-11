@@ -32,6 +32,11 @@ const RulesToggleList = ({
 
 	const gapClass = gapClasses[listGap]
 
+	const existingNames = rules.map(([path]) => {
+		const parts = path.split(/[/\\]/)
+		return parts[parts.length - 1] || path
+	})
+
 	return (
 		<div className={`flex flex-col ${gapClass}`}>
 			{rules.length > 0 ? (
@@ -48,7 +53,9 @@ const RulesToggleList = ({
 							toggleRule={toggleRule}
 						/>
 					))}
-					{showNewRule && <NewRuleRow isGlobal={isGlobal} onSuccess={onSuccess} ruleType={ruleType} />}
+					{showNewRule && (
+						<NewRuleRow existingNames={existingNames} isGlobal={isGlobal} onSuccess={onSuccess} ruleType={ruleType} />
+					)}
 				</>
 			) : (
 				<>
@@ -57,7 +64,9 @@ const RulesToggleList = ({
 							{ruleType === "workflow" ? "No workflows found" : "No rules found"}
 						</div>
 					)}
-					{showNewRule && <NewRuleRow isGlobal={isGlobal} onSuccess={onSuccess} ruleType={ruleType} />}
+					{showNewRule && (
+						<NewRuleRow existingNames={existingNames} isGlobal={isGlobal} onSuccess={onSuccess} ruleType={ruleType} />
+					)}
 				</>
 			)}
 		</div>

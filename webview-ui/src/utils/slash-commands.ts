@@ -1,4 +1,5 @@
 import type { McpServer } from "@shared/mcp"
+import type { SkillInfo } from "@shared/proto/dietcode/file"
 import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
 import { BASE_SLASH_COMMANDS, type SlashCommand, VSCODE_ONLY_COMMANDS } from "../../../src/shared/slashCommands.ts"
 
@@ -11,7 +12,7 @@ export function getWorkflowCommands(
 	localWorkflowToggles: Record<string, boolean>,
 	globalWorkflowToggles: Record<string, boolean>,
 	remoteWorkflowToggles?: Record<string, boolean>,
-	remoteWorkflows?: any[],
+	remoteWorkflows?: { name: string; contents: string; alwaysEnabled?: boolean }[],
 ): SlashCommand[] {
 	const { workflows: localWorkflows, nameSet: localWorkflowNames } = Object.entries(localWorkflowToggles)
 		.filter(([_, enabled]) => enabled)
@@ -179,8 +180,9 @@ export function getMatchingSlashCommands(
 	localWorkflowToggles: Record<string, boolean> = {},
 	globalWorkflowToggles: Record<string, boolean> = {},
 	remoteWorkflowToggles?: Record<string, boolean>,
-	remoteWorkflows?: any[],
+	remoteWorkflows?: { name: string; contents: string; alwaysEnabled?: boolean }[],
 	mcpServers: McpServer[] = [],
+	skills: SkillInfo[] = [],
 ): SlashCommand[] {
 	const workflowCommands = getWorkflowCommands(
 		localWorkflowToggles,
@@ -189,7 +191,16 @@ export function getMatchingSlashCommands(
 		remoteWorkflows,
 	)
 	const mcpPromptCommands = getMcpPromptCommands(mcpServers)
-	const allCommands = [...DEFAULT_SLASH_COMMANDS, ...workflowCommands, ...mcpPromptCommands]
+
+	const skillCommands = skills
+		.filter((s) => s.enabled)
+		.map((s) => ({
+			name: s.name,
+			description: s.description,
+			section: "skills" as const,
+		}))
+
+	const allCommands = [...DEFAULT_SLASH_COMMANDS, ...workflowCommands, ...mcpPromptCommands, ...skillCommands]
 
 	if (!query) {
 		return allCommands
@@ -231,8 +242,9 @@ export function validateSlashCommand(
 	localWorkflowToggles: Record<string, boolean> = {},
 	globalWorkflowToggles: Record<string, boolean> = {},
 	remoteWorkflowToggles?: Record<string, boolean>,
-	remoteWorkflows?: any[],
+	remoteWorkflows?: { name: string; contents: string; alwaysEnabled?: boolean }[],
 	mcpServers: McpServer[] = [],
+	skills: SkillInfo[] = [],
 ): "full" | "partial" | null {
 	if (!command) {
 		return null
@@ -245,7 +257,16 @@ export function validateSlashCommand(
 		remoteWorkflows,
 	)
 	const mcpPromptCommands = getMcpPromptCommands(mcpServers)
-	const allCommands = [...DEFAULT_SLASH_COMMANDS, ...workflowCommands, ...mcpPromptCommands]
+
+	const skillCommands = skills
+		.filter((s) => s.enabled)
+		.map((s) => ({
+			name: s.name,
+			description: s.description,
+			section: "skills" as const,
+		}))
+
+	const allCommands = [...DEFAULT_SLASH_COMMANDS, ...workflowCommands, ...mcpPromptCommands, ...skillCommands]
 
 	// case insensitive matching
 	const exactMatch = allCommands.some((cmd) => cmd.name.toLowerCase() === command.toLowerCase())

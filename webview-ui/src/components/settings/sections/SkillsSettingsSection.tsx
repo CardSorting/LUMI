@@ -51,16 +51,18 @@ const SkillsSettingsSection = ({ renderSectionHeader }: SkillsSettingsSectionPro
 			})
 	}
 
+	const cleanSearchQuery = searchQuery.startsWith("/") ? searchQuery.slice(1) : searchQuery
+
 	const filteredGlobalSkills = globalSkills.filter(
 		(skill) =>
-			skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			skill.path.toLowerCase().includes(searchQuery.toLowerCase()),
+			skill.name.toLowerCase().includes(cleanSearchQuery.toLowerCase()) ||
+			skill.path.toLowerCase().includes(cleanSearchQuery.toLowerCase()),
 	)
 
 	const filteredLocalSkills = localSkills.filter(
 		(skill) =>
-			skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			skill.path.toLowerCase().includes(searchQuery.toLowerCase()),
+			skill.name.toLowerCase().includes(cleanSearchQuery.toLowerCase()) ||
+			skill.path.toLowerCase().includes(cleanSearchQuery.toLowerCase()),
 	)
 
 	return (
@@ -74,13 +76,22 @@ const SkillsSettingsSection = ({ renderSectionHeader }: SkillsSettingsSectionPro
 					</p>
 
 					{/* Search input field */}
-					<div className="flex flex-col gap-2 mt-1">
+					<div className="flex flex-col gap-2 mt-1 relative">
 						<VSCodeTextField
 							onInput={(e: any) => setSearchQuery(e.target.value)}
 							placeholder="Search skills..."
 							style={{ width: "100%" }}
 							value={searchQuery}
 						/>
+						{searchQuery && (
+							<button
+								className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer opacity-70 hover:opacity-100 bg-transparent border-0 text-foreground"
+								onClick={() => setSearchQuery("")}
+								style={{ padding: "4px" }}
+								title="Clear search">
+								✕
+							</button>
+						)}
 					</div>
 
 					{/* Global Skills Section */}
@@ -108,7 +119,14 @@ const SkillsSettingsSection = ({ renderSectionHeader }: SkillsSettingsSectionPro
 										/>
 									))
 							)}
-							{!searchQuery && <NewRuleRow isGlobal={true} onSuccess={refreshSkills} ruleType="skill" />}
+							{!searchQuery && (
+								<NewRuleRow
+									existingNames={globalSkills.map((s) => s.name)}
+									isGlobal={true}
+									onSuccess={refreshSkills}
+									ruleType="skill"
+								/>
+							)}
 						</div>
 					</div>
 
@@ -137,7 +155,14 @@ const SkillsSettingsSection = ({ renderSectionHeader }: SkillsSettingsSectionPro
 										/>
 									))
 							)}
-							{!searchQuery && <NewRuleRow isGlobal={false} onSuccess={refreshSkills} ruleType="skill" />}
+							{!searchQuery && (
+								<NewRuleRow
+									existingNames={localSkills.map((s) => s.name)}
+									isGlobal={false}
+									onSuccess={refreshSkills}
+									ruleType="skill"
+								/>
+							)}
 						</div>
 					</div>
 				</div>

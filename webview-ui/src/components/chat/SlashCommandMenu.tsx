@@ -1,4 +1,5 @@
 import type { McpServer } from "@shared/mcp"
+import type { SkillInfo } from "@shared/proto/dietcode/file"
 import React, { useCallback, useEffect, useRef } from "react"
 import ScreenReaderAnnounce from "@/components/common/ScreenReaderAnnounce"
 import { useMenuAnnouncement } from "@/hooks/useMenuAnnouncement"
@@ -15,8 +16,9 @@ interface SlashCommandMenuProps {
 	localWorkflowToggles?: Record<string, boolean>
 	globalWorkflowToggles?: Record<string, boolean>
 	remoteWorkflowToggles?: Record<string, boolean>
-	remoteWorkflows?: any[]
+	remoteWorkflows?: { name: string; contents: string; alwaysEnabled?: boolean }[]
 	mcpServers?: McpServer[]
+	skills?: SkillInfo[]
 }
 
 const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
@@ -30,6 +32,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 	remoteWorkflowToggles,
 	remoteWorkflows,
 	mcpServers = [],
+	skills = [],
 }) => {
 	const menuRef = useRef<HTMLDivElement>(null)
 
@@ -41,9 +44,11 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 		remoteWorkflowToggles,
 		remoteWorkflows,
 		mcpServers,
+		skills,
 	)
 	const defaultCommands = filteredCommands.filter((cmd) => cmd.section === "default" || !cmd.section)
 	const workflowCommands = filteredCommands.filter((cmd) => cmd.section === "custom")
+	const skillCommands = filteredCommands.filter((cmd) => cmd.section === "skills")
 	const mcpCommands = filteredCommands.filter((cmd) => cmd.section === "mcp")
 
 	// Screen reader announcements
@@ -145,9 +150,15 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 						{renderCommandSection(defaultCommands, "Common", 0, true)}
 						{renderCommandSection(workflowCommands, "Your workflows", defaultCommands.length, false)}
 						{renderCommandSection(
+							skillCommands,
+							"Active skills",
+							defaultCommands.length + workflowCommands.length,
+							true,
+						)}
+						{renderCommandSection(
 							mcpCommands,
 							"Connected tools",
-							defaultCommands.length + workflowCommands.length,
+							defaultCommands.length + workflowCommands.length + skillCommands.length,
 							true,
 						)}
 					</>
