@@ -62,3 +62,6 @@ evals/smoke-tests/results/
 
 # Jobs
 /jobs/
+
+# Generated blog directory
+build-blog/
