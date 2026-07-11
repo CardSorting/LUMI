@@ -1474,3 +1474,116 @@ input:checked + .switch-slider:before {
 	font-size: 0.75rem;
 	color: var(--text-muted);
 }
+
+/* Premium Next/Prev Page Navigation Buttons */
+.wiki-page-navigation {
+	display: flex;
+	justify-content: space-between;
+	gap: 1.5rem;
+	margin-top: 3.5rem;
+	margin-bottom: 3.5rem;
+	flex-wrap: wrap;
+	width: 100%;
+}
+
+.wiki-page-nav-link {
+	flex: 1;
+	min-width: 240px;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	padding: 1.25rem 1.5rem;
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: 0.65rem;
+	text-decoration: none !important;
+	transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+	cursor: pointer;
+	border-bottom: 1px solid var(--panel-border) !important;
+}
+
+.wiki-page-nav-link.next-link {
+	align-items: flex-end;
+	text-align: right;
+}
+
+.wiki-page-nav-link:hover {
+	border-color: var(--primary-color) !important;
+	background: rgba(139, 92, 246, 0.03);
+	box-shadow: 0 4px 15px var(--shadow-color);
+	transform: translateY(-2px);
+}
+
+.wiki-page-nav-link span {
+	font-size: 0.75rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.8px;
+	color: var(--text-muted);
+	transition: color 0.2s ease;
+	border-bottom: none !important;
+}
+
+.wiki-page-nav-link:hover span {
+	color: var(--accent-color);
+}
+
+.wiki-page-nav-link-title {
+	font-family: "Outfit", sans-serif;
+	font-size: 1.05rem;
+	font-weight: 700;
+	color: var(--text-color);
+	margin-top: 0.35rem;
+	transition: color 0.2s ease;
+	border-bottom: none !important;
+}
+
+.wiki-page-nav-link:hover .wiki-page-nav-link-title {
+	color: var(--accent-color);
+}
+
+/* Floating Glassmorphic Back-To-Top Button */
+.back-to-top-btn {
+	position: fixed;
+	bottom: 2.5rem;
+	right: 2.5rem;
+	width: 2.75rem;
+	height: 2.75rem;
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	color: var(--text-muted);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(10px);
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	z-index: 99;
+	box-shadow: 0 4px 15px var(--shadow-color);
+	outline: none;
+}
+
+.back-to-top-btn.visible {
+	opacity: 1;
+	pointer-events: auto;
+	transform: translateY(0);
+}
+
+.back-to-top-btn:hover {
+	color: #ffffff;
+	border-color: var(--primary-color);
+	background: var(--primary-color);
+	box-shadow: 0 0 12px var(--primary-glow);
+	transform: translateY(-2px);
+}
+
+.back-to-top-icon {
+	width: 1.25rem;
+	height: 1.25rem;
+	fill: currentColor;
+}
