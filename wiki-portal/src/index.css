@@ -414,9 +414,6 @@ h3:hover .header-anchor {
 	.sidebar-left.open {
 		transform: translateX(0);
 	}
-	.sidebar-right {
-		display: none;
-	}
 	.back-to-top-btn {
 		right: 2rem !important;
 	}
@@ -709,6 +706,84 @@ body.light-theme header {
 	height: calc(100vh - 3.5rem);
 	overflow: hidden;
 	position: relative;
+}
+
+/* Sidebar Left Desktop Layout Styles */
+.sidebar-left {
+	width: 280px;
+	flex-shrink: 0;
+	border-right: 1px solid var(--panel-border);
+	background: var(--panel-bg);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.content-pane {
+	flex: 1;
+	overflow-y: auto;
+	background: var(--bg-color);
+	display: flex;
+	flex-direction: column;
+}
+
+.wiki-wrapper {
+	max-width: 820px;
+	margin: 0 auto;
+	padding: 2.5rem 2rem 4rem 2rem;
+	width: 100%;
+	flex-grow: 1;
+	transition: max-width 0.3s ease;
+}
+
+/* Zen Focus Mode Styles (Desktop Only) */
+@media (min-width: 992px) {
+	.main-container.focus-mode .sidebar-left {
+		width: 0 !important;
+		border-right: none !important;
+		opacity: 0 !important;
+		pointer-events: none !important;
+		overflow: hidden !important;
+	}
+
+	.main-container.focus-mode .wiki-wrapper {
+		max-width: 740px;
+	}
+}
+
+/* Focus mode header toggle button */
+.focus-toggle-btn {
+	background: var(--input-bg);
+	border: 1px solid var(--panel-border);
+	color: var(--text-muted);
+	cursor: pointer;
+	padding: 0 0.75rem;
+	height: 2rem;
+	border-radius: 0.35rem;
+	font-family: inherit;
+	font-size: 0.75rem;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	transition: all 0.2s ease;
+	outline: none;
+}
+
+.focus-toggle-btn:hover {
+	border-color: var(--primary-color);
+	color: var(--text-color);
+	box-shadow: 0 0 6px var(--primary-glow);
+}
+
+.focus-toggle-btn.active {
+	background: rgba(139, 92, 246, 0.15);
+	border-color: var(--primary-color);
+	color: var(--accent-color);
+	box-shadow: 0 0 8px var(--primary-glow);
 }
 
 /* Footer Section */

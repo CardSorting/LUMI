@@ -129,6 +129,11 @@ export default function App() {
 	// Global spotlight search modal state
 	const [spotlightOpen, setSpotlightOpen] = useState(false)
 
+	// Distraction-free Focus Mode state
+	const [focusMode, setFocusMode] = useState<boolean>(() => {
+		return localStorage.getItem("focus-mode") === "true"
+	})
+
 	useEffect(() => {
 		if (theme === "light") {
 			document.body.classList.add("light-theme")
@@ -171,7 +176,9 @@ export default function App() {
 						element={
 							<PortalDashboard
 								completedPages={completedPages}
+								focusMode={focusMode}
 								namespace="docs"
+								setFocusMode={setFocusMode}
 								setShowEssentialOnly={setShowEssentialOnly}
 								setSpotlightOpen={setSpotlightOpen}
 								showEssentialOnly={showEssentialOnly}
@@ -184,7 +191,9 @@ export default function App() {
 						element={
 							<PortalDashboard
 								completedPages={completedPages}
+								focusMode={focusMode}
 								namespace="papers"
+								setFocusMode={setFocusMode}
 								setShowEssentialOnly={setShowEssentialOnly}
 								setSpotlightOpen={setSpotlightOpen}
 								showEssentialOnly={showEssentialOnly}
@@ -197,7 +206,9 @@ export default function App() {
 						element={
 							<WikiLayout
 								completedPages={completedPages}
+								focusMode={focusMode}
 								namespace="docs"
+								setFocusMode={setFocusMode}
 								setShowEssentialOnly={setShowEssentialOnly}
 								setSpotlightOpen={setSpotlightOpen}
 								showEssentialOnly={showEssentialOnly}
@@ -211,7 +222,9 @@ export default function App() {
 						element={
 							<WikiLayout
 								completedPages={completedPages}
+								focusMode={focusMode}
 								namespace="papers"
+								setFocusMode={setFocusMode}
 								setShowEssentialOnly={setShowEssentialOnly}
 								setSpotlightOpen={setSpotlightOpen}
 								showEssentialOnly={showEssentialOnly}
@@ -371,6 +384,8 @@ interface PortalProps {
 	showEssentialOnly: boolean
 	setShowEssentialOnly: (val: boolean) => void
 	setSpotlightOpen: (val: boolean) => void
+	focusMode: boolean
+	setFocusMode: (val: boolean) => void
 }
 
 function PortalDashboard({
@@ -380,6 +395,8 @@ function PortalDashboard({
 	showEssentialOnly,
 	setShowEssentialOnly,
 	setSpotlightOpen,
+	focusMode,
+	setFocusMode,
 }: PortalProps) {
 	const [activeCategory, setActiveCategory] = useState<string | null>(null)
 	const [referenceOpen, setReferenceOpen] = useState(false)
@@ -450,6 +467,16 @@ function PortalDashboard({
 						</button>
 					</div>
 
+					<button
+						className={`focus-toggle-btn ${focusMode ? "active" : ""}`}
+						onClick={() => {
+							setFocusMode(!focusMode)
+							localStorage.setItem("focus-mode", (!focusMode).toString())
+						}}
+						title="Toggle Zen Focus Mode">
+						<span>🧘 Focus</span>
+					</button>
+
 					<div className="essential-switch-container">
 						<span>Essential Only</span>
 						<label className="switch-toggle">
@@ -482,9 +509,9 @@ function PortalDashboard({
 				</div>
 			</header>
 
-			<div className="main-container" style={{ flexGrow: 1 }}>
+			<div className={`main-container ${focusMode ? "focus-mode" : ""}`}>
 				{/* Hierarchical Sidebar */}
-				<aside className="sidebar-left" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+				<aside className="sidebar-left">
 					<div style={{ flexGrow: 1, overflowY: "auto" }}>
 						<div className="nav-title">EXPLORER</div>
 						<FileTree activePath="" completedPages={completedPages} namespace={namespace} treeNode={fileTreeRoot} />
@@ -495,10 +522,8 @@ function PortalDashboard({
 				</aside>
 
 				{/* Dashboard Content Grid */}
-				<div
-					className="content-pane"
-					style={{ flexGrow: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-					<div className="wiki-wrapper" style={{ flexGrow: 1 }}>
+				<div className="content-pane">
+					<div className="wiki-wrapper">
 						<div className="breadcrumbs">
 							<Link to="/">Home</Link>
 							<span className="breadcrumbs-separator">/</span>
@@ -789,6 +814,8 @@ interface WikiLayoutProps {
 	showEssentialOnly: boolean
 	setShowEssentialOnly: (val: boolean) => void
 	setSpotlightOpen: (val: boolean) => void
+	focusMode: boolean
+	setFocusMode: (val: boolean) => void
 }
 
 function WikiLayout({
@@ -799,6 +826,8 @@ function WikiLayout({
 	showEssentialOnly,
 	setShowEssentialOnly,
 	setSpotlightOpen,
+	focusMode,
+	setFocusMode,
 }: WikiLayoutProps) {
 	const location = useLocation()
 	const navigate = useNavigate()
@@ -819,7 +848,6 @@ function WikiLayout({
 	const progressBarRef = useRef<HTMLDivElement>(null)
 	const [scrollProgress, setScrollProgress] = useState(0)
 	const [backToTopVisible, setBackToTopVisible] = useState(false)
-	const [activeTocId, setActiveTocId] = useState("")
 	const [searchQuery, setSearchQuery] = useState("")
 	const sidebarSearchRef = useRef<HTMLInputElement>(null)
 	const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -873,26 +901,6 @@ function WikiLayout({
 			const scrolled = totalHeight > 0 ? (contentPane.scrollTop / totalHeight) * 100 : 0
 			setScrollProgress(scrolled)
 			setBackToTopVisible(contentPane.scrollTop > 300)
-
-			// Scroll Spy TOC
-			const headings = Array.from(contentPane.querySelectorAll("h2, h3"))
-			if (headings.length > 0) {
-				let currentActive = ""
-				const triggerBound = contentPane.getBoundingClientRect().top + 120
-
-				for (let i = 0; i < headings.length; i++) {
-					const rect = headings[i].getBoundingClientRect()
-					if (rect.top <= triggerBound) {
-						currentActive = headings[i].id
-					} else {
-						break
-					}
-				}
-				if (!currentActive) {
-					currentActive = headings[0].id
-				}
-				setActiveTocId(currentActive)
-			}
 		}
 
 		contentPane.addEventListener("scroll", handleScroll)
@@ -1052,6 +1060,16 @@ function WikiLayout({
 						</button>
 					</div>
 
+					<button
+						className={`focus-toggle-btn ${focusMode ? "active" : ""}`}
+						onClick={() => {
+							setFocusMode(!focusMode)
+							localStorage.setItem("focus-mode", (!focusMode).toString())
+						}}
+						title="Toggle Zen Focus Mode">
+						<span>🧘 Focus</span>
+					</button>
+
 					<div className="essential-switch-container">
 						<span>Essential Only</span>
 						<label className="switch-toggle">
@@ -1089,11 +1107,9 @@ function WikiLayout({
 				<div className="progress-bar" ref={progressBarRef} style={{ width: `${scrollProgress}%` }} />
 			</div>
 
-			<div className="main-container" style={{ flexGrow: 1 }}>
+			<div className={`main-container ${focusMode ? "focus-mode" : ""}`}>
 				{/* Left Collapsible Accordion Sidebar */}
-				<aside
-					className={`sidebar-left ${mobileSidebarOpen ? "open" : ""}`}
-					style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+				<aside className={`sidebar-left ${mobileSidebarOpen ? "open" : ""}`}>
 					<div style={{ flexGrow: 1, overflowY: "auto" }}>
 						<div className="sidebar-search-box">
 							<input
@@ -1142,11 +1158,8 @@ function WikiLayout({
 				)}
 
 				{/* Center Panel Content Reader */}
-				<div
-					className="content-pane"
-					ref={contentPaneRef}
-					style={{ flexGrow: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-					<div className="wiki-wrapper" style={{ flexGrow: 1 }}>
+				<div className="content-pane" ref={contentPaneRef}>
+					<div className="wiki-wrapper">
 						<div className="breadcrumbs">
 							<Link to="/">Home</Link>
 							<span className="breadcrumbs-separator">/</span>
@@ -1224,30 +1237,6 @@ function WikiLayout({
 
 					<Footer />
 				</div>
-
-				{/* Right Sidebar TOC */}
-				<aside className="sidebar-right">
-					<div className="toc-title">On This Page</div>
-					{activePage.pageHeaders.length > 0 ? (
-						<ul className="toc-list">
-							{activePage.pageHeaders.map((header, hIdx) => {
-								const depthClass = header.level === 3 ? "toc-depth-3" : ""
-								const isActive = activeTocId === header.id
-								return (
-									<li className="toc-item" key={hIdx}>
-										<a
-											className={`toc-link ${depthClass} ${isActive ? "active" : ""}`}
-											href={`#${header.id}`}>
-											{header.text}
-										</a>
-									</li>
-								)
-							})}
-						</ul>
-					) : (
-						<p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>No sections found.</p>
-					)}
-				</aside>
 			</div>
 		</div>
 	)
@@ -1686,7 +1675,6 @@ function FileTree({
 		</ul>
 	)
 }
-
 // Global script helpers
 ;(window as any).copyCode = (btn: HTMLButtonElement) => {
 	const container = btn.closest(".code-block-container")
