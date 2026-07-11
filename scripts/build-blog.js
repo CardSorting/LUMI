@@ -485,6 +485,8 @@ function build() {
 	console.log(`Successfully generated JSON database at ${DATA_FILE}!`)
 
 	// Build the Vite project
+	console.log("Installing wiki-portal dependencies...")
+	execSync("npm install", { cwd: SUBPROJECT_DIR, stdio: "inherit" })
 	console.log("Building React Vite application...")
 	execSync("npm run build", { cwd: SUBPROJECT_DIR, stdio: "inherit" })
 
