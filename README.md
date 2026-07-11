@@ -60,6 +60,7 @@ code --install-extension CardSorting.lumi
 - [Documentation](#documentation)
 - [Governed subagent execution](#governed-subagent-execution)
 - [Workspace Knowledge System](#workspace-knowledge-system)
+- [Golden Cartridge Protocol](#golden-cartridge-protocol)
 - [Plan & Act modes](#plan--act-modes)
 - [Built-in slash commands](#built-in-slash-commands)
 - [Lifecycle hooks](#lifecycle-hooks)
@@ -237,6 +238,10 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | [Workspace knowledge philosophy](docs/papers/knowledge-philosophy.md) | Advisory memory design principles |
 | [Workspace knowledge thesis](docs/papers/knowledge-thesis.md) | Sovereign advisory invariant thesis |
 | [Workspace knowledge whitepaper](docs/papers/knowledge-whitepaper.md) | Architecture blueprint and NDJSON engine |
+| [Golden Cartridge brief](docs/papers/golden-cartridge-brief.md) | Summary of the resource-constrained development workbench |
+| [Golden Cartridge philosophy](docs/papers/golden-cartridge-philosophy.md) | Tenets of resource-conscious software agency |
+| [Golden Cartridge whitepaper](docs/papers/golden-cartridge-whitepaper.md) | Technical overlay architecture, cache, and validation |
+| [Golden Cartridge reference](docs/tools-reference/golden-cartridge.mdx) | Specialized tool parameter schemas and verbs |
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
 | [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook |
 | [Memory & reasoning](docs/MEMORY_AND_REASONING.md) | BroccoliDB cognitive layer |
@@ -313,6 +318,21 @@ flowchart TD
 - **Append-Only Event Log (`diagnostics.jsonl`):** Diagnostics are written to an append-only JSON Lines event log.
 - **Read-Only Health API:** Downstream tools check status via `getKnowledgeHealth()`, which parses diagnostic lines, returns status (`healthy | degraded`), and compiles actionable recovery hints.
 - **Human-Readable Dashboard:** Exposes active system health alerts and collapsible diagnostics lists directly at the top of [workspace-intelligence.md](file:///.wiki/intelligence/workspace-intelligence.md).
+
+---
+
+## Golden Cartridge Protocol
+
+LUMI supports the optional **Golden Cartridge Protocol**, a development workbench designed to target high-information, low-mass engineering paths under finite resource constraints (context mass, mutations, execution, and review capacity).
+
+It uses a single tool facade (`golden_cartridge`) coordinating twelve verbs to trace routes, slice focused context, find structural reuse, design compact representations, patch code surgically, run disproving validation tests, and seal execution receipts.
+
+| Paper / Guide | Target Audience / Purpose |
+|---------------|--------------------------|
+| **[Companion brief](docs/papers/golden-cartridge-brief.md)** | Product summary, pillars, and developer value |
+| **[Philosophy](docs/papers/golden-cartridge-philosophy.md)** | Core principles of resource efficiency and one-way boundaries |
+| **[Technical whitepaper](docs/papers/golden-cartridge-whitepaper.md)** | Tool coordination, caching invalidations, and Pareto-dominance |
+| **[Tools Reference](docs/tools-reference/golden-cartridge.mdx)** | Complete parameter schemas, JSON payloads, and verb reference |
 
 ---
 
