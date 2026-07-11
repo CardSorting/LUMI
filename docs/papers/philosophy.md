@@ -1,4 +1,4 @@
-<!-- [LAYER: INFRASTRUCTURE] -->
+{/* [LAYER: INFRASTRUCTURE] */}
 
 # LUMI: A Philosophy of Calm Agency
 

@@ -14,7 +14,7 @@ const linkPattern = /\[[^\]]+\]\(([^)]+)\)/g
 const broken = []
 
 function resolve(target) {
-	if (!target || target.startsWith("http") || target.startsWith("mailto:")) return null
+	if (!target || target.startsWith("http") || target.startsWith("mailto:") || target.startsWith("file://")) return null
 	const noAnchor = target.split("#")[0]
 	if (!noAnchor) return null
 	const resolved = path.resolve(repoRoot, noAnchor)
@@ -27,7 +27,7 @@ function resolve(target) {
 let m
 while ((m = linkPattern.exec(readme))) {
 	const target = m[1]
-	if (target.startsWith("http") || target.startsWith("mailto:")) continue
+	if (target.startsWith("http") || target.startsWith("mailto:") || target.startsWith("file://")) continue
 	const noAnchor = target.split("#")[0]
 	if (!noAnchor) continue
 	const resolved = resolve(noAnchor)

@@ -3,7 +3,7 @@ title: "Parent-Thread Execution Authority"
 sidebarTitle: "Execution Authority"
 description: "Hot/warm/cold execution model for parent main-thread throughput — I/O authority, shift-right gates, and completion audit caching."
 ---
-<!-- [LAYER: INFRASTRUCTURE] -->
+{/* [LAYER: INFRASTRUCTURE] */}
 
 
 # Parent-thread execution authority

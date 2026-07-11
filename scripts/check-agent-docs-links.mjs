@@ -57,7 +57,15 @@ function walkDocs(dir, out = []) {
 }
 
 function resolveLink(fromFile, target) {
-	if (!target || target.startsWith("http") || target.startsWith("#") || target.startsWith("mailto:")) {
+	if (!target) return null
+	if (target.startsWith("file://")) {
+		try {
+			return fileURLToPath(target.split("#")[0])
+		} catch {
+			return null
+		}
+	}
+	if (target.startsWith("http") || target.startsWith("#") || target.startsWith("mailto:")) {
 		return null
 	}
 	const noAnchor = target.split("#")[0]

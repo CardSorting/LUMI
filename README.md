@@ -26,12 +26,12 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI"><img src="https://api.securityscorecards.dev/projects/github.com/CardSorting/LUMI/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-3.1.3-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-3.3.0-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
-  <img src="https://img.shields.io/badge/tools-63-orange" alt="Tools" />
-  <img src="https://img.shields.io/badge/providers-5-blue" alt="Providers" />
+  <img src="https://img.shields.io/badge/tools-64-orange" alt="Tools" />
+  <img src="https://img.shields.io/badge/providers-6-blue" alt="Providers" />
 </p>
 
 <p align="center">
@@ -98,9 +98,9 @@ Design philosophy: [docs/papers/philosophy.md](docs/papers/philosophy.md) (agent
 
 | Metric | Value |
 |--------|-------|
-| Typed tools | **63** (`src/shared/tools.ts`) |
+| Typed tools | **64** (`src/shared/tools.ts`) |
 | Read-only tools | **12** (`READ_ONLY_TOOLS`) |
-| Wired providers | **5** (`providers.json`) |
+| Wired providers | **6** (`providers.json`) |
 | Slash commands | **10** |
 | Hook kinds | **8** |
 | Agent modes | **plan** · **act** |
@@ -169,14 +169,14 @@ Thank you to the Cline maintainers and contributors for the foundation this proj
 
 - **Approval gates** — diff before write; you control when mutating tools run
 - **Plan before Act** — `plan_mode_respond` for exploration; `act_mode_respond` for implementation
-- **63 typed tools** — dedicated handlers instead of ad-hoc shell access
+- **64 typed tools** — dedicated handlers instead of ad-hoc shell access
 - **Checkpoints** — shadow Git rollback after each tool use
 - **Completion gates** — `attempt_completion` must pass `completionGatePipeline` before “done”
 - **Roadmap steering** — `ROADMAP.md` integration with validation gates
 - **MCP** — connect external tools and prompts
 - **Governed subagents** — parallel lanes with execution modes, merge gate, and durable receipts
 - **Local-first** — settings and secrets under `~/.dietcode/data/`; workspace DB at `./dietcode.db`
-- **Five providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI, ClinePass
+- **Six providers** — OpenRouter, ChatGPT Subscription, NousResearch, Cloudflare Workers AI, ClinePass, Grok/X Subscription
 
 **@ mentions** — attach files, folders, problems, terminal output, git diffs, and URLs in chat. Guide: [working-with-files](docs/core-workflows/working-with-files.mdx)
 
@@ -483,7 +483,7 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 | **Bug reports** | [GitHub Issues](https://github.com/CardSorting/LUMI/issues/new?template=bug_report.yml) |
 | **Security (private)** | [SECURITY.md](SECURITY.md) |
 
-Include VS Code version, LUMI **3.1.3**, provider used, and steps to reproduce.
+Include VS Code version, LUMI **3.3.0**, provider used, and steps to reproduce.
 
 ---
 

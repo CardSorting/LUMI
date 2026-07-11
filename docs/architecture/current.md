@@ -1,4 +1,4 @@
-<!-- [LAYER: INFRASTRUCTURE] -->
+{/* [LAYER: INFRASTRUCTURE] */}
 
 # Architecture (current)
 

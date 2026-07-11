@@ -1,4 +1,4 @@
-<!-- [LAYER: INFRASTRUCTURE] -->
+{/* [LAYER: INFRASTRUCTURE] */}
 
 # Companion Brief: Workspace Knowledge System
 

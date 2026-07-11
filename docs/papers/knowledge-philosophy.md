@@ -1,4 +1,4 @@
-<!-- [LAYER: INFRASTRUCTURE] -->
+{/* [LAYER: INFRASTRUCTURE] */}
 
 # Workspace Knowledge: The Philosophy of Advisory Memory
 

@@ -1,4 +1,4 @@
-<!-- [LAYER: INFRASTRUCTURE] -->
+{/* [LAYER: INFRASTRUCTURE] */}
 
 # LUMI Technical Whitepaper
 
@@ -46,10 +46,10 @@ Coding agents promise speed. They risk **opacity** — changes appear without co
 
 | Artifact | Count / location |
 |----------|------------------|
-| Extension version | **2.1.3** — `package.json` |
-| Static tool enum values | **63** — `src/shared/tools.ts` |
+| Extension version | **3.3.0** — `package.json` |
+| Static tool enum values | **64** — `src/shared/tools.ts` |
 | Tool handler implementations | **55** files — `src/core/task/tools/handlers/` |
-| Wired LLM providers | **4** — `src/shared/providers/providers.json` + `src/core/api/index.ts` |
+| Wired LLM providers | **6** — `src/shared/providers/providers.json` + `src/core/api/index.ts` |
 | Lifecycle hook kinds | **8** — `src/core/hooks/hook-factory.ts` |
 | Built-in slash commands | **10** — `src/core/slash-commands/index.ts` |
 | Lane execution modes | **6** — `LockNecessity.ts` |
@@ -636,8 +636,8 @@ Extension activation: `src/extension.ts` (~788 lines). Registry: `src/registry.t
 | Guaranteed | Not guaranteed |
 |------------|----------------|
 | Default approval path for mutating tools | Correct LLM reasoning |
-| 4 providers wired in `buildApiHandler` | All provider UI components functional |
-| 63 enum tool names; coordinator routing | Every enum has active handler (some reserved) |
+| 6 providers wired in `buildApiHandler` | All provider UI components functional |
+| 64 enum tool names; coordinator routing | Every enum has active handler (some reserved) |
 | Completion pipeline on `attempt_completion` | Zero false gate blocks |
 | Governed merge gate + patch reconciliation before swarm seal | Zero false merge blocks |
 | Coordinator-only workspace roadmap commit | Lanes cannot directly mutate kanban |

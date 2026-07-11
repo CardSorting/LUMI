@@ -1,8 +1,8 @@
-<!-- [LAYER: INFRASTRUCTURE] -->
+{/* [LAYER: INFRASTRUCTURE] */}
 
 # LUMI Companion Brief
 
-**Executive summary · v2.8.1 · workspace-verified**
+**Executive summary · v3.3.0 · workspace-verified**
 
 *Companion to the [Technical Whitepaper](whitepaper.md). All figures below are measured from the agent workspace (`src/`, `webview-ui/`, root `package.json`).*
 
@@ -10,7 +10,7 @@
 
 ## One sentence
 
-**LUMI** (`CardSorting.lumi-vscode` on VS Marketplace, `CardSorting.lumi` on Open VSX) is a VS Code agent extension in the [LUMI monorepo](https://github.com/CardSorting/LUMI): Plan/Act modes, 63 typed tools, human-in-the-loop approval, MCP and governed subagent execution, and BroccoliDB-backed memory — designed as a calm coding companion you can keep open all day.
+**LUMI** (`CardSorting.lumi-vscode` on VS Marketplace, `CardSorting.lumi` on Open VSX) is a VS Code agent extension in the [LUMI monorepo](https://github.com/CardSorting/LUMI): Plan/Act modes, 64 typed tools, human-in-the-loop approval, MCP and governed subagent execution, and BroccoliDB-backed memory — designed as a calm coding companion you can keep open all day.
 
 ---
 
@@ -18,13 +18,13 @@
 
 | Metric | Value | Where |
 |--------|-------|-------|
-| Extension version | **2.8.1** | `package.json` |
+| Extension version | **3.3.0** | `package.json` |
 | Publisher / ID | **CardSorting.lumi-vscode** (VS Marketplace) · **CardSorting.lumi** (Open VSX) | `package.json` |
 | Registered VS Code commands | **~25** `lumi.*` | `package.json` `contributes.commands` |
-| Static tool enum values | **63** | `DietCodeDefaultTool` in `src/shared/tools.ts` |
+| Static tool enum values | **64** | `DietCodeDefaultTool` in `src/shared/tools.ts` |
 | Tool handler files | **55** | `src/core/task/tools/handlers/` |
 | Read-only tools (checkpoint-safe) | **12** | `READ_ONLY_TOOLS` in `src/shared/tools.ts` |
-| Wired LLM providers | **4** | `src/shared/providers/providers.json` |
+| Wired LLM providers | **6** | `src/shared/providers/providers.json` |
 | Provider handler files (total) | **45** | `src/core/api/providers/` |
 | Built-in slash commands | **10** | `SUPPORTED_DEFAULT_COMMANDS` in `src/core/slash-commands/index.ts` |
 | Lifecycle hook kinds | **8** | `Hooks` in `src/core/hooks/hook-factory.ts` |

@@ -3,7 +3,7 @@ title: "Completion Lifecycle Decision Engine"
 sidebarTitle: "Decision Engine"
 description: "Centralized, deterministic completion lifecycle authority with binding action contracts enforced at the tool boundary."
 ---
-<!-- [LAYER: INFRASTRUCTURE] -->
+{/* [LAYER: INFRASTRUCTURE] */}
 
 
 # Completion lifecycle decision engine

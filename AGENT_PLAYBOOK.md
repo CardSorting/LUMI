@@ -10,12 +10,12 @@ Last audited: 2026-07-09
 
 | Area | State | Evidence |
 |---|---|---|
-| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `3.1.0` |
+| Product | LUMI VS Code extension monorepo | `package.json` name `lumi-vscode`, version `3.3.0` |
 | Workspaces | Root package plus `broccolidb` | `package.json` workspaces: `.`, `broccolidb` |
 | UI | React/Vite webview | `webview-ui/package.json` |
 | Substrate | BroccoliDB package | `broccolidb/package.json` name `@noorm/broccolidb` |
-| Tools | 63 typed tool enum values | `src/shared/tools.ts` |
-| Providers | 5 provider keys in code/UI | `src/core/api/index.ts`, `src/shared/providers/providers.json` |
+| Tools | 64 typed tool enum values | `src/shared/tools.ts` |
+| Providers | 6 provider keys in code/UI | `src/core/api/index.ts`, `src/shared/providers/providers.json` |
 | Active pass | Workspace Intelligence Engine integration | Current working tree |
 
 ## What Is Happening Right Now

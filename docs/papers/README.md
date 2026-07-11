@@ -17,7 +17,7 @@ Three documents describe the **agent layer** (`src/`, `webview-ui/`) the same wa
 
 ## One-line summary
 
-**LUMI** is a VS Code extension that runs an approval-gated agent loop (Plan/Act, 63 tools, 4 providers) with **governed subagent swarms** (lock-necessity, per-agent roadmap projection, patch reconciliation, merge gate, receipt schema v3) on top of **BroccoliDB** memory and structural proof.
+**LUMI** is a VS Code extension that runs an approval-gated agent loop (Plan/Act, 64 tools, 6 providers) with **governed subagent swarms** (lock-necessity, per-agent roadmap projection, patch reconciliation, merge gate, receipt schema v3) on top of **BroccoliDB** memory and structural proof.
 
 ## Two layers in this monorepo
 
