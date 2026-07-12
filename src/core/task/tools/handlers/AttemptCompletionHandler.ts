@@ -12,7 +12,7 @@ import { type GatePolicyProvenance, resolveCompletionGateOptions } from "@shared
 import { resolvePlanBaselineMetadata } from "@shared/audit/auditMessages"
 import { buildPreCompletionChecklistBlock, buildPreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import { enrichAuditMetadataWithArtifactPaths, persistAuditWorkspaceArtifacts } from "@shared/audit/auditWorkspaceArtifacts"
-import { buildAuditHookMetadata } from "@shared/audit/completionAudit"
+import { buildAuditHookMetadata, scheduleCompletionAuditPersistence } from "@shared/audit/completionAudit"
 import { detectReplanIntent } from "@shared/detectReplanIntent"
 import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
@@ -59,6 +59,24 @@ async function buildAuditGateOptions(
 		...extras,
 		lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
 	})
+}
+
+function scheduleRoadmapFinalization(config: TaskConfig): void {
+	const scope = "roadmap-finalization"
+	config.latencyTracker?.mark("persistence_scheduled", { scope })
+	void finalizeRoadmapSession(config.cwd, config.taskId)
+		.then(() => config.latencyTracker?.mark("persistence_completed", { scope }))
+		.catch((error) => {
+			config.latencyTracker?.mark("persistence_failed", { scope })
+			Logger.warn("[AttemptCompletionHandler] Deferred roadmap finalization skipped:", error)
+		})
+}
+
+function schedulePendingCompletionAuditPersistence(config: TaskConfig): void {
+	const pending = config.taskState.pendingCompletionAuditPersistence
+	if (!pending) return
+	config.taskState.pendingCompletionAuditPersistence = undefined
+	scheduleCompletionAuditPersistence(config.taskId, pending, config.latencyTracker)
 }
 
 async function persistAuditArtifactsIfEnabled(
@@ -118,6 +136,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			config.taskState.consecutiveMistakeCount++
 			return await config.callbacks.sayAndCreateMissingParamError(this.name, "result")
 		}
+		config.latencyTracker?.mark("completion_validation_started", {
+			invocationId: block.call_id,
+			toolName: block.name,
+			scope: "attempt-completion",
+		})
 
 		// Backend-only: the proactive completion guidance and preflight readiness brief
 		// (including the machine-parseable <completion_gate_envelope> payload) are diagnostic
@@ -191,6 +214,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		const { guardAttemptCompletion } = await import("../completion/CompletionActionGuard")
 		const guardResult = guardAttemptCompletion(config, decision)
 		if (!guardResult.allowed) {
+			config.latencyTracker?.mark("authoritative_completion_decided", {
+				invocationId: block.call_id,
+				toolName: block.name,
+				scope: "rejected",
+			})
 			return guardResult.rejection
 		}
 
@@ -278,6 +306,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		// The canonical action guard allowed completion; latch verification from
 		// that decision, never from advisory quality diagnostics.
 		latchEngineeringVerified(config, checkpointHash)
+		config.latencyTracker?.mark("authoritative_completion_decided", {
+			invocationId: block.call_id,
+			toolName: block.name,
+			scope: "authoritative-result",
+		})
 		await publishGateLifecycleStatus(config, evaluateGateLifecycle(config))
 
 		if (auditGateResult.status === "advisory_passed") {
@@ -338,6 +371,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		if (command) {
 			if (lastMessage && lastMessage.ask !== "command") {
 				// haven't sent a command message yet so first send completion_result then command
+				config.latencyTracker?.mark("result_presentation_started", { scope: "authoritative-result" })
 				const completionMessageTs = await config.callbacks.say(
 					"completion_result",
 					result,
@@ -346,10 +380,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 					false,
 					auditMetadata,
 				)
+				config.latencyTracker?.mark("result_presentation_completed", { scope: "authoritative-result" })
+				schedulePendingCompletionAuditPersistence(config)
 				await config.callbacks.saveCheckpoint(true, completionMessageTs)
 				await addNewChangesFlagToLastCompletionResultMessage()
 			} else {
 				// we already sent a command message, meaning the complete completion message has also been sent
+				schedulePendingCompletionAuditPersistence(config)
 				await config.callbacks.saveCheckpoint(true)
 			}
 
@@ -399,12 +436,13 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			)
 			try {
 				flushTaskGeneration(getJoyRideCache(), config.taskId, "task_completed")
-				await finalizeRoadmapSession(config.cwd, config.taskId)
+				scheduleRoadmapFinalization(config)
 			} catch (error) {
 				Logger.warn("[AttemptCompletionHandler] Roadmap session finalize skipped:", error)
 			}
 		} else {
 			// Send the complete completion_result message (partial was already removed above)
+			config.latencyTracker?.mark("result_presentation_started", { scope: "authoritative-result" })
 			const completionMessageTs = await config.callbacks.say(
 				"completion_result",
 				result,
@@ -413,6 +451,8 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				false,
 				auditMetadata,
 			)
+			config.latencyTracker?.mark("result_presentation_completed", { scope: "authoritative-result" })
+			schedulePendingCompletionAuditPersistence(config)
 			await config.callbacks.saveCheckpoint(true, completionMessageTs)
 			await addNewChangesFlagToLastCompletionResultMessage()
 			telemetryService.captureTaskCompleted(
@@ -424,7 +464,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			)
 			try {
 				flushTaskGeneration(getJoyRideCache(), config.taskId, "task_completed")
-				await finalizeRoadmapSession(config.cwd, config.taskId)
+				scheduleRoadmapFinalization(config)
 			} catch (error) {
 				Logger.warn("[AttemptCompletionHandler] Roadmap session finalize skipped:", error)
 			}

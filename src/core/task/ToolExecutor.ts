@@ -22,20 +22,28 @@ import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
 import { ToolResponse } from "."
+import type { TaskLatencyTracker } from "./latency/TaskLatencyTracker"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
 import { canonicalizeAttemptCompletionParams, checkCompletionGateCircuitBreaker } from "./tools/attemptCompletionUtils"
 import { AutoApprove } from "./tools/autoApprove"
 import {
+	isLocalMutationTool,
 	shouldBypassGuardForParentIoTool,
 	shouldCloseBrowserBetweenTools,
 	shouldDeferParentGuardPostExecution,
 	shouldSkipLayerInjectionForParentIoTool,
 	shouldUseIoAuthorityReadFastPath,
 } from "./tools/executionAuthority"
-import { buildIoCoalesceKey, getIoRequestCoalescer } from "./tools/io/IoRequestCoalescer"
+import { buildIoCoalesceKey, getIoRequestCoalescer, resetIoRequestCoalescer } from "./tools/io/IoRequestCoalescer"
 import { acquireParentIoSlot } from "./tools/io/ParentIoBulkhead"
 import { RefactorHealer } from "./tools/RefactorHealer"
+import {
+	type CapturedPresentationEvent,
+	type CapturedToolResultContent,
+	resolveInvocationResultTarget,
+	runWithToolInvocationContext,
+} from "./tools/siblings/ToolInvocationContext"
 import { IPartialBlockHandler, ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator"
 import { ToolValidator } from "./tools/ToolValidator"
 import { TaskConfig, validateTaskConfig } from "./tools/types/TaskConfig"
@@ -57,6 +65,66 @@ export class ToolExecutor {
 	private cachedToolConfig?: TaskConfig
 	private cachedToolConfigKey?: string
 	private knowledgeGraphServicePromise?: Promise<KnowledgeGraphService | undefined>
+
+	public async executeToolCaptured(
+		block: ToolUse,
+		sequence: number,
+		capturePresentation: boolean,
+		invocationId = block.call_id || `sibling-${sequence}`,
+		signal?: AbortSignal,
+	): Promise<{
+		resultContent: CapturedToolResultContent[]
+		presentationEvents: CapturedPresentationEvent[]
+		outcome: "succeeded" | "failed"
+		error?: string
+	}> {
+		const context = {
+			invocationId,
+			sequence,
+			capturePresentation,
+			resultContent: [] as CapturedToolResultContent[],
+			presentationEvents: [] as CapturedPresentationEvent[],
+			signal,
+		}
+		signal?.throwIfAborted()
+		await runWithToolInvocationContext(context, () => this.executeTool(block))
+		signal?.throwIfAborted()
+		let serializedResult = ""
+		try {
+			serializedResult = JSON.stringify(context.resultContent)
+		} catch {
+			// Result capture remains usable even when an extension-provided block is
+			// not JSON-serializable; local execution already completed.
+		}
+		const failed =
+			serializedResult.includes("The tool execution failed with the following error:") ||
+			serializedResult.includes("The user denied this operation.") ||
+			serializedResult.includes("Tool was interrupted and not executed") ||
+			serializedResult.includes("Skipping tool due to user rejecting")
+		return {
+			resultContent: context.resultContent,
+			presentationEvents: context.presentationEvents,
+			outcome: failed ? "failed" : "succeeded",
+			error: failed ? "Tool returned an authoritative failure result" : undefined,
+		}
+	}
+
+	public async captureSyntheticToolResult(
+		block: ToolUse,
+		sequence: number,
+		invocationId: string,
+		content: ToolResponse,
+	): Promise<CapturedToolResultContent[]> {
+		const context = {
+			invocationId,
+			sequence,
+			capturePresentation: true,
+			resultContent: [] as CapturedToolResultContent[],
+			presentationEvents: [] as CapturedPresentationEvent[],
+		}
+		await runWithToolInvocationContext(context, async () => this.pushToolResult(content, block))
+		return context.resultContent
+	}
 
 	public resetSystemPressure(): void {
 		if (this.guard) {
@@ -145,6 +213,7 @@ export class ToolExecutor {
 			context: "initial_task" | "resume" | "feedback",
 		) => Promise<{ cancel?: boolean; wasCancelled?: boolean; contextModification?: string; errorMessage?: string }>,
 		private getKnowledgeGraphService: () => Promise<KnowledgeGraphService | undefined>,
+		private readonly latencyTracker?: TaskLatencyTracker,
 	) {
 		this.autoApprover = new AutoApprove(this.stateManager)
 		this.guard = new UniversalGuard(cwd, taskId, this.stateManager)
@@ -230,6 +299,7 @@ export class ToolExecutor {
 			enableParallelToolCalling: this.isParallelToolCallingEnabled(),
 			isSubagentExecution: false,
 			finalizationMode: false,
+			latencyTracker: this.latencyTracker,
 			cwd: this.cwd,
 			workspaceManager: this.workspaceManager,
 			isMultiRootEnabled: this.isMultiRootEnabled,
@@ -439,7 +509,7 @@ export class ToolExecutor {
 
 			// Check if a tool has already been used in this message (only enforced when parallel tool calling is disabled)
 			if (!this.isParallelToolCallingEnabled() && this.taskState.didAlreadyUseTool) {
-				this.taskState.userMessageContent.push({
+				resolveInvocationResultTarget(this.taskState.userMessageContent).push({
 					type: "text",
 					text: formatResponse.toolAlreadyUsed(block.name),
 				})
@@ -538,7 +608,7 @@ export class ToolExecutor {
 	 * @param reason Human-readable explanation of why the tool was rejected
 	 */
 	private createToolRejectionMessage(block: ToolUse, reason: string): void {
-		this.taskState.userMessageContent.push({
+		resolveInvocationResultTarget(this.taskState.userMessageContent).push({
 			type: "text",
 			text: `${reason} ${ToolDisplayUtils.getToolDescription(block, this.coordinator)}`,
 		})
@@ -581,7 +651,7 @@ export class ToolExecutor {
 			text: `<hook_context source="${source}" type="${contextType}">\n${content}\n</hook_context>`,
 		}
 
-		this.taskState.userMessageContent.push(hookContextBlock)
+		resolveInvocationResultTarget(this.taskState.userMessageContent).push(hookContextBlock)
 	}
 
 	/**
@@ -708,6 +778,10 @@ export class ToolExecutor {
 		this.guard.setMode(this.stateManager.getGlobalSettingsKey("mode") || "act")
 
 		const parentIoFastPath = shouldBypassGuardForParentIoTool(block.name)
+		this.latencyTracker?.markOnce("tool_dispatch_started", {
+			invocationId: block.call_id,
+			toolName: block.name,
+		})
 
 		// Direct Layer Injection — skip for I/O authority (joy-zoning not needed on read/list/search)
 		if (!shouldSkipLayerInjectionForParentIoTool(block.name) && block.params.path) {
@@ -770,14 +844,21 @@ export class ToolExecutor {
 			}
 
 			// Execute the actual tool (parent I/O bulkhead + coalescing when parallel calling enabled)
-			const executeTool = async (): Promise<unknown> => this.coordinator.execute(config, block)
+			const executeTool = async (): Promise<unknown> => {
+				if (parentIoFastPath) {
+					this.latencyTracker?.markOnce("useful_io_started", {
+						invocationId: block.call_id,
+						toolName: block.name,
+					})
+				}
+				return this.coordinator.execute(config, block)
+			}
 			if (parentIoFastPath && config.enableParallelToolCalling) {
 				const release = await acquireParentIoSlot(true, Boolean(this.taskState.swarmRuntime))
 				try {
-					const coalesceKey = buildIoCoalesceKey(block, this.cwd)
-					toolResult = coalesceKey
-						? await getIoRequestCoalescer(this.taskId).coalesce(coalesceKey, executeTool)
-						: await executeTool()
+					const coalescer = getIoRequestCoalescer(this.taskId)
+					const coalesceKey = buildIoCoalesceKey(block, this.cwd, coalescer.generation)
+					toolResult = coalesceKey ? await coalescer.coalesce(coalesceKey, executeTool) : await executeTool()
 				} finally {
 					release()
 				}
@@ -785,6 +866,21 @@ export class ToolExecutor {
 				toolResult = await executeTool()
 			}
 			toolWasExecuted = true
+			if (parentIoFastPath) {
+				this.latencyTracker?.markOnce("useful_io_completed", {
+					invocationId: block.call_id,
+					toolName: block.name,
+				})
+			}
+
+			// A local mutation ends the validity window for completed I/O cache entries.
+			// In-flight query coalescing remains available on the next stable generation.
+			const scratchpadReadMayCreate =
+				block.name === DietCodeDefaultTool.FILE_READ &&
+				path.basename(block.params.path?.trim() ?? "").toLowerCase() === "scratchpad.md"
+			if (isLocalMutationTool(block.name) || scratchpadReadMayCreate) {
+				resetIoRequestCoalescer(this.taskId)
+			}
 
 			// Roadmap post-write: record mutation and attach validate nudge
 			if (

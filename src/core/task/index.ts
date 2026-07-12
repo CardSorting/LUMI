@@ -94,7 +94,7 @@ import {
 	isNextGenModelFamily,
 	isParallelToolCallingEnabled,
 } from "@utils/model-utils"
-import { arePathsEqual, getDesktopDir } from "@utils/path"
+import { arePathsEqual, getDesktopDir, isLocatedInPath, isLocatedInWorkspace } from "@utils/path"
 import { filterExistingFiles } from "@utils/tabFiltering"
 import cloneDeep from "clone-deep"
 import fs from "fs/promises"
@@ -146,10 +146,19 @@ import { IController } from "../controller/types"
 import { executeHook } from "../hooks/hook-executor"
 import { StateManager } from "../storage/StateManager"
 import { FocusChainManager } from "./focus-chain"
+import { type TaskLatencySnapshot, TaskLatencyTracker } from "./latency/TaskLatencyTracker"
 import { MessageStateHandler } from "./message-state"
 import { StreamResponseHandler } from "./StreamResponseHandler"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
+import { isIoAuthorityTool } from "./tools/executionAuthority"
+import { buildSiblingToolDependencyModel, isReadOnlyVerificationCommand } from "./tools/siblings/SiblingToolDependency"
+import { DEFAULT_SIBLING_TOOL_CONCURRENCY, SiblingToolScheduler } from "./tools/siblings/SiblingToolScheduler"
+import {
+	type CapturedPresentationEvent,
+	type CapturedToolResultContent,
+	getToolInvocationContext,
+} from "./tools/siblings/ToolInvocationContext"
 import { detectAvailableCliTools, extractProviderDomainFromUrl, updateApiReqMsg } from "./utils"
 import { buildUserFeedbackContent } from "./utils/buildUserFeedbackContent"
 import { consumeIdleGapFeedback, queueIdleGapFeedback, shouldAcceptIdleGapFeedback } from "./utils/idleGapFeedback"
@@ -302,7 +311,11 @@ export class Task {
 	// Command executor for running shell commands (extracted from executeCommandTool)
 	private commandExecutor!: CommandExecutor
 
-	private environmentLeasePromise: Promise<import("../integrity/EnvironmentIntegrity").EnvironmentLease>
+	private environmentLeaseSnapshot?: import("../integrity/EnvironmentIntegrity").EnvironmentLease
+	private readonly latencyTracker: TaskLatencyTracker
+	private siblingBatchSequence = 0
+	private activeSiblingScheduler?: { cancel: () => void }
+	private activeSiblingBatchPromise?: Promise<void>
 
 	constructor(params: TaskParams) {
 		const {
@@ -329,6 +342,7 @@ export class Task {
 
 		this.taskInitializationStartTime = performance.now()
 		this.taskState = new TaskState()
+		this.latencyTracker = new TaskLatencyTracker()
 		if (params.initialTaskState) {
 			Object.assign(this.taskState, params.initialTaskState)
 		}
@@ -616,12 +630,28 @@ export class Task {
 			this.getActiveHookExecution.bind(this),
 			this.runUserPromptSubmitHook.bind(this),
 			this.getKnowledgeGraphService.bind(this),
+			this.latencyTracker,
 		)
 
-		// V190: Non-Blocking Pre-flight Boot
-		// We trigger the environment validation here in the background.
-		// Acting tools will await this promise before execution.
-		this.environmentLeasePromise = this.toolExecutor.getGuard().validateEnvironment()
+		// Environment discovery is advisory context. Start it eagerly, but never
+		// make task admission or tool dispatch wait for a forensic probe.
+		this.refreshEnvironmentLease()
+	}
+
+	private refreshEnvironmentLease(): void {
+		const probe = this.toolExecutor.getGuard().validateEnvironment()
+		void probe
+			.then((lease) => {
+				this.environmentLeaseSnapshot = lease
+			})
+			.catch((error) => {
+				Logger.warn(`[Task ${this.taskId}] Environment discovery unavailable; continuing:`, error)
+			})
+	}
+
+	/** Task-local advisory timing evidence for tests and development diagnostics. */
+	public getLatencySnapshot(): TaskLatencySnapshot {
+		return this.latencyTracker.snapshot()
 	}
 
 	// Communicate with webview
@@ -641,6 +671,9 @@ export class Task {
 		// Allow resume asks even when aborted to enable resume button after cancellation
 		if (this.taskState.abort && type !== "resume_task" && type !== "resume_completed_task") {
 			throw new Error("DietCode instance aborted")
+		}
+		if (getToolInvocationContext()?.capturePresentation) {
+			throw new Error("Concurrent workspace query unexpectedly required interactive approval")
 		}
 
 		let askTs: number
@@ -915,6 +948,11 @@ export class Task {
 		if (this.taskState.abort && type !== "hook_status" && type !== "hook_output_stream") {
 			throw new Error("DietCode instance aborted")
 		}
+		const invocationContext = getToolInvocationContext()
+		if (invocationContext?.capturePresentation) {
+			invocationContext.presentationEvents.push({ type: "say", args: [type, text, images, files, partial] })
+			return Date.now()
+		}
 
 		const providerInfo = this.getCurrentProviderInfo()
 		const modelInfo: DietCodeMessageModelInfo = {
@@ -1045,6 +1083,11 @@ export class Task {
 	}
 
 	async removeLastPartialMessageIfExistsWithType(type: "ask" | "say", askOrSay: DietCodeAsk | DietCodeSay) {
+		const invocationContext = getToolInvocationContext()
+		if (invocationContext?.capturePresentation) {
+			invocationContext.presentationEvents.push({ type: "remove_partial", messageType: type, askOrSay })
+			return
+		}
 		const dietcodeMessages = this.messageStateHandler.getDietCodeMessages()
 		const lastMessage = dietcodeMessages.at(-1)
 		if (lastMessage?.partial && lastMessage.type === type && (lastMessage.ask === askOrSay || lastMessage.say === askOrSay)) {
@@ -1189,11 +1232,14 @@ export class Task {
 		await this.say("task", task, images, files)
 
 		if (task?.trim()) {
-			try {
-				this.taskState.preAuditedIntent = await orchestrator.recordPreAuditedIntent(this.taskId, task)
-			} catch (error) {
-				Logger.warn(`[Task] Pre-audit intent classification failed for ${this.taskId.slice(0, 8)}:`, error)
-			}
+			void orchestrator
+				.recordPreAuditedIntent(this.taskId, task)
+				.then((intent) => {
+					this.taskState.preAuditedIntent = intent
+				})
+				.catch((error) => {
+					Logger.warn(`[Task] Pre-audit intent classification failed for ${this.taskId.slice(0, 8)}:`, error)
+				})
 		}
 
 		// Phase 0: Multi-Agent Stream Initiation moved to Phase 2 (Intent Grounding Handoff)
@@ -1202,20 +1248,17 @@ export class Task {
 		await this.loadWorkspaceIntelligence()
 		this.taskState.isInitialized = true
 
-		// Auto-bootstrap ROADMAP.md when missing (evidence-driven, non-blocking)
-		try {
-			const { initRoadmapSession } = await import("@/services/roadmap/RoadmapLifecycle")
-			invalidateSkillsCache(this.cwd)
-			const initResult = await initRoadmapSession(this.cwd, this.taskId)
-			if (initResult?.bootstrap && (initResult.bootstrap as Record<string, unknown>).written) {
-				Logger.info("[Roadmap] Auto-bootstrapped ROADMAP.md from workspace evidence")
-			}
-			if (initResult?.bundled_skill_available) {
-				Logger.info("[Roadmap] Bundled default skill available: auto-rolling-roadmap")
-			}
-		} catch (error) {
-			Logger.warn("[Roadmap] Session roadmap init skipped:", error)
-		}
+		// Roadmap orientation and progress journaling are advisory. Reuse cached
+		// workspace evidence in the background and leave bootstrap writes to an
+		// explicit roadmap operation or completion remediation.
+		invalidateSkillsCache(this.cwd)
+		void import("@/services/roadmap/RoadmapLifecycle")
+			.then(({ initRoadmapSession }) =>
+				initRoadmapSession(this.cwd, this.taskId, { bootstrap: false, forceRefresh: false }),
+			)
+			.catch((error) => {
+				Logger.warn("[Roadmap] Session roadmap init skipped:", error)
+			})
 
 		const imageBlocks: DietCodeImageContentBlock[] = formatResponse.imageBlocks(images)
 
@@ -1311,12 +1354,10 @@ export class Task {
 			})
 		}
 
-		// Record environment metadata for new task
-		try {
-			await this.environmentContextTracker.recordEnvironment()
-		} catch (error) {
+		// Environment history is evidence, not admission authority.
+		void this.environmentContextTracker.recordEnvironment().catch((error) => {
 			Logger.error("Failed to record environment metadata:", error)
-		}
+		})
 
 		await this.initiateTaskLoop(userContent)
 	}
@@ -1749,6 +1790,7 @@ export class Task {
 			// This must happen before canceling hooks so that hook catch blocks
 			// can properly detect the abort state
 			this.taskState.abort = true
+			this.activeSiblingScheduler?.cancel()
 
 			// PHASE 3: Cancel any running hook execution
 			const activeHook = await this.getActiveHookExecution()
@@ -1771,6 +1813,12 @@ export class Task {
 					Logger.error("Failed to cancel background command during task abort", error)
 				}
 			}
+
+			// A task cannot finalize cancellation while task-owned tool children are
+			// still settling. The scheduler has already received the abort signal.
+			await this.activeSiblingBatchPromise?.catch((error) => {
+				Logger.debug(`[Task ${this.taskId}] Cancelled sibling batch settled with: ${error}`)
+			})
 
 			// PHASE 4: Run TaskCancel hook
 			// This allows the hook UI to appear in the webview
@@ -1914,11 +1962,13 @@ export class Task {
 
 		// V191 Hardening: Auto-Revoke environmental lease for sensitive commands
 		// If command contains tools that likely alter the environment, revoke the lease for fresh probing.
-		if (isEnvAlteringCommand(command) && result[0]) {
+		if (isEnvAlteringCommand(command) && !result[0]) {
 			Logger.info(
 				`[Task ${this.taskId}] Env-altering command detected (\`${command}\`). Revoking environmental lease for re-probe.`,
 			)
 			this.toolExecutor.getGuard().engine.revokeLease()
+			this.environmentLeaseSnapshot = undefined
+			this.refreshEnvironmentLease()
 			try {
 				const snapshot = await buildJoyRideWorkspaceSnapshot(this.cwd, this.terminalExecutionMode)
 				flushWorkspace(getJoyRideCache(), snapshot.workspaceFingerprint, "command_environment_changed")
@@ -2128,17 +2178,18 @@ export class Task {
 	async *attemptApiRequest(previousApiReqIndex: number): ApiStream {
 		// Wait for MCP servers to be connected before generating system prompt
 		await pWaitFor(() => this.mcpHub.isConnecting !== true, {
-			timeout: 10_000,
+			timeout: 1_000,
 		}).catch(() => {
-			Logger.error("MCP servers failed to connect in time")
+			Logger.info("MCP servers are still connecting; continuing with currently available tools")
 		})
 
-		// V192: Environment Blueprinting
-		const lease = await this.environmentLeasePromise
+		// Environment blueprinting is cache-aside and advisory. A later request
+		// consumes the completed probe without delaying this one.
+		const lease = this.environmentLeaseSnapshot
 		const environmentBlueprint = {
-			detectedProjectTypes: lease.details?.detectedProjectTypes || [],
-			toolchain: lease.details?.toolchain || {},
-			manifests: lease.details?.manifests || [],
+			detectedProjectTypes: lease?.details?.detectedProjectTypes || [],
+			toolchain: lease?.details?.toolchain || {},
+			manifests: lease?.details?.manifests || [],
 		}
 
 		const providerInfo = this.getCurrentProviderInfo()
@@ -2314,6 +2365,7 @@ export class Task {
 		}
 
 		// Response API requires native tool calls to be enabled
+		this.latencyTracker.markOnce("model_request_started")
 		const stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory, tools)
 
 		const iterator = stream[Symbol.asyncIterator]()
@@ -2502,6 +2554,156 @@ export class Task {
 		yield* iterator
 	}
 
+	private async resolveSiblingWorkspaceLocality(blocks: ToolUse[]): Promise<boolean[]> {
+		return await Promise.all(
+			blocks.map(async (block) => {
+				if (!isIoAuthorityTool(block.name) || !block.params.path?.trim()) return true
+				try {
+					return await isLocatedInWorkspace(block.params.path)
+				} catch {
+					// Unknown locality keeps the existing approval path; it does not block
+					// unrelated workspace-local siblings.
+					return false
+				}
+			}),
+		)
+	}
+
+	private async replaySiblingPresentation(events: CapturedPresentationEvent[]): Promise<void> {
+		for (const event of events) {
+			try {
+				if (event.type === "say") {
+					await this.say(...event.args)
+				} else {
+					await this.removeLastPartialMessageIfExistsWithType(event.messageType, event.askOrSay)
+				}
+			} catch (error) {
+				// Execution evidence is authoritative; a failed UI projection must not
+				// erase a completed tool result.
+				Logger.warn(`[Task ${this.taskId}] Sibling presentation event failed:`, error)
+			}
+		}
+	}
+
+	private async executeSiblingToolBatch(blocks: ToolUse[]): Promise<void> {
+		const workspaceLocalBySequence = await this.resolveSiblingWorkspaceLocality(blocks)
+		const batchId = `${this.taskId}:${++this.siblingBatchSequence}`
+		const nodes = buildSiblingToolDependencyModel(blocks, this.cwd, {
+			workspaceLocalBySequence,
+			invocationPrefix: batchId,
+		})
+
+		for (const node of nodes) {
+			this.latencyTracker.mark("tool_admitted", {
+				invocationId: node.id,
+				sequence: node.sequence,
+				toolName: node.block.name,
+			})
+		}
+
+		// Allocate one stable progress surface for the batch. Pure query children
+		// capture their own tool cards, so this update can overlap their I/O.
+		const progressPromise = this.say("info", `Running ${nodes.length} tool operations…`)
+			.then(() => this.latencyTracker.markOnce("first_progress_visible", { scope: batchId }))
+			.catch((error) => Logger.debug(`[Task ${this.taskId}] Batch progress unavailable: ${error}`))
+		if (nodes.some((node) => !node.capturePresentation)) {
+			// The global ask channel is intentionally single-owner. Ensure the batch
+			// placeholder lands before an interactive sibling can ask for approval.
+			await progressPromise
+		}
+
+		const checkpointAtAdmission = this.initialCheckpointCommitPromise
+		let checkpointReady = !checkpointAtAdmission
+		const scheduler = new SiblingToolScheduler<{
+			resultContent: CapturedToolResultContent[]
+			presentationEvents: CapturedPresentationEvent[]
+			outcome?: "succeeded" | "failed"
+			error?: string
+		}>({
+			concurrency: DEFAULT_SIBLING_TOOL_CONCURRENCY,
+			isCancelled: () => this.taskState.abort,
+			canStart: (node) => !node.requiresCheckpoint || checkpointReady,
+			classifyResult: (value) => ({
+				status: value.outcome ?? "succeeded",
+				error: value.error,
+			}),
+			onEvent: (event) => {
+				const detail = {
+					invocationId: event.node.id,
+					sequence: event.node.sequence,
+					toolName: event.node.block.name,
+				}
+				if (event.type === "queued") {
+					this.latencyTracker.mark("sibling_queued", { ...detail, status: "queued" })
+				} else if (event.type === "started") {
+					this.latencyTracker.mark("sibling_started", { ...detail, status: "running" })
+				} else {
+					this.latencyTracker.mark("sibling_completed", { ...detail, status: event.status })
+				}
+			},
+			run: async (node, signal) => {
+				if (signal.aborted) throw new Error("Task cancelled before sibling execution")
+				return await this.toolExecutor.executeToolCaptured(
+					node.block,
+					node.sequence,
+					node.capturePresentation,
+					node.id,
+					signal,
+				)
+			},
+		})
+		if (checkpointAtAdmission) {
+			void checkpointAtAdmission
+				.catch((error) => {
+					Logger.error(`[Task] Initial checkpoint commit failed for ${this.taskId}:`, error)
+				})
+				.finally(() => {
+					checkpointReady = true
+					if (this.initialCheckpointCommitPromise === checkpointAtAdmission) {
+						this.initialCheckpointCommitPromise = undefined
+					}
+					scheduler.signalReady()
+				})
+		}
+
+		this.activeSiblingScheduler = scheduler
+		let releaseBatchJoin!: () => void
+		const batchJoin = new Promise<void>((resolve) => {
+			releaseBatchJoin = resolve
+		})
+		this.activeSiblingBatchPromise = batchJoin
+		let envelopes: Awaited<ReturnType<typeof scheduler.execute>>
+		try {
+			envelopes = await scheduler.execute(nodes)
+		} finally {
+			if (this.activeSiblingScheduler === scheduler) this.activeSiblingScheduler = undefined
+			releaseBatchJoin()
+			if (this.activeSiblingBatchPromise === batchJoin) this.activeSiblingBatchPromise = undefined
+		}
+
+		await progressPromise
+		this.latencyTracker.mark("result_presentation_started", { scope: batchId })
+		const orderedResultContent: CapturedToolResultContent[] = []
+		for (const envelope of envelopes) {
+			let resultContent = envelope.value?.resultContent
+			if (!resultContent) {
+				resultContent = await this.toolExecutor.captureSyntheticToolResult(
+					envelope.node.block,
+					envelope.sequence,
+					envelope.id,
+					formatResponse.toolError(envelope.error ?? `Sibling ${envelope.status}`),
+				)
+			}
+			await this.replaySiblingPresentation(envelope.value?.presentationEvents ?? [])
+			orderedResultContent.push(...resultContent)
+			if (envelope.node.block.call_id) {
+				Session.get().updateToolCall(envelope.node.block.call_id, envelope.node.block.name)
+			}
+		}
+		this.taskState.userMessageContent.push(...orderedResultContent)
+		this.latencyTracker.mark("result_presentation_completed", { scope: batchId })
+	}
+
 	async presentAssistantMessage() {
 		if (this.taskState.abort) {
 			throw new Error("DietCode instance aborted")
@@ -2528,6 +2730,7 @@ export class Task {
 		}
 
 		const block = cloneDeep(this.taskState.assistantMessageContent[this.taskState.currentStreamingContentIndex]) // need to create copy bc while stream is updating the array, it could be updating the reference block properties too
+		let processedBlockCount = 1
 		switch (block.type) {
 			case "text": {
 				// Skip text rendering if tool was rejected, or if a tool was already used and parallel calling is disabled
@@ -2595,16 +2798,40 @@ export class Task {
 				break
 			}
 			case "tool_use": {
+				const completeSiblings: ToolUse[] = []
+				if (this.isParallelToolCallingEnabled()) {
+					for (const candidate of this.taskState.assistantMessageContent.slice(
+						this.taskState.currentStreamingContentIndex,
+					)) {
+						if (candidate.type !== "tool_use" || candidate.partial) break
+						completeSiblings.push(cloneDeep(candidate))
+					}
+				}
+				if (completeSiblings.length > 1) {
+					processedBlockCount = completeSiblings.length
+					await this.executeSiblingToolBatch(completeSiblings)
+					break
+				}
+				if (!block.partial) {
+					this.latencyTracker.mark("tool_admitted", {
+						invocationId: block.call_id,
+						sequence: this.taskState.currentStreamingContentIndex,
+						toolName: block.name,
+					})
+				}
 				// If we have a pending initial commit, non-read-only tools must wait until it finishes.
-				const isReadOnlyTool = (READ_ONLY_TOOLS as readonly string[]).includes(block.name as string)
+				const isScratchpadReadMutation =
+					block.name === DietCodeDefaultTool.FILE_READ &&
+					path.basename(block.params.path?.trim() ?? "").toLowerCase() === "scratchpad.md"
+				const isReadOnlyTool =
+					((READ_ONLY_TOOLS as readonly string[]).includes(block.name as string) && !isScratchpadReadMutation) ||
+					(block.name === DietCodeDefaultTool.BASH && isReadOnlyVerificationCommand(block.params.command))
 				if (this.initialCheckpointCommitPromise && !isReadOnlyTool) {
 					await this.initialCheckpointCommitPromise.catch((error) => {
 						Logger.error(`[Task] Initial checkpoint commit failed for ${this.taskId}:`, error)
 					})
 					this.initialCheckpointCommitPromise = undefined
 				}
-				// V190: Interlock - Wait for environment validation before executing any acting tool
-				await this.environmentLeasePromise
 				await this.toolExecutor.executeTool(block)
 				if (block.call_id) {
 					Session.get().updateToolCall(block.call_id, block.name)
@@ -2626,14 +2853,15 @@ export class Task {
 			(!this.isParallelToolCallingEnabled() && this.taskState.didAlreadyUseTool)
 		) {
 			// block is finished streaming and executing
-			if (this.taskState.currentStreamingContentIndex === this.taskState.assistantMessageContent.length - 1) {
+			const finalProcessedIndex = this.taskState.currentStreamingContentIndex + processedBlockCount - 1
+			if (finalProcessedIndex === this.taskState.assistantMessageContent.length - 1) {
 				// its okay that we increment if !didCompleteReadingStream, it'll just return bc out of bounds and as streaming continues it will call presentAssistantMessage if a new block is ready. if streaming is finished then we set userMessageContentReady to true when out of bounds. This gracefully allows the stream to continue on and all potential content blocks be presented.
 				// last block is complete and it is finished executing
 				this.taskState.userMessageContentReady = true // will allow pwaitfor to continue
 			}
 
 			// call next block if it exists (if not then read stream will call it when its ready)
-			this.taskState.currentStreamingContentIndex++ // need to increment regardless, so when read stream calls this function again it will be streaming the next block
+			this.taskState.currentStreamingContentIndex += processedBlockCount // advance the full sibling batch in emission order
 
 			if (this.taskState.currentStreamingContentIndex < this.taskState.assistantMessageContent.length) {
 				// there are already more content blocks to stream, so we'll call this function ourselves
@@ -2712,28 +2940,8 @@ export class Task {
 		const isFirstRequest =
 			this.messageStateHandler.getDietCodeMessages().filter((m) => m.say === "api_req_started").length === 0
 
-		// Initialize checkpointManager first if enabled and it's the first request
-		if (
-			isFirstRequest &&
-			this.stateManager.getGlobalSettingsKey("enableCheckpointsSetting") &&
-			this.checkpointManager &&
-			!this.taskState.checkpointManagerErrorMessage
-		) {
-			try {
-				await ensureCheckpointInitialized({ checkpointManager: this.checkpointManager })
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : "Unknown error"
-				Logger.error("Failed to initialize checkpoint manager:", errorMessage)
-				this.taskState.checkpointManagerErrorMessage = errorMessage // will be displayed right away since we saveDietCodeMessages next which posts state to webview
-				HostProvider.window.showMessage({
-					type: ShowMessageType.ERROR,
-					message: `Checkpoint initialization timed out: ${errorMessage}`,
-				})
-			}
-		}
-
-		// Now, if it's the first request AND checkpoints are enabled AND tracker was successfully initialized,
-		// then say "checkpoint_created" and perform the commit.
+		// Initialize and commit the rollback boundary in the background. Query
+		// tools may proceed immediately; the first mutation awaits this promise.
 		if (
 			isFirstRequest &&
 			process.env.E2E_TEST !== "true" &&
@@ -2747,10 +2955,25 @@ export class Task {
 				(m) => m.say === "checkpoint_created",
 			)
 			if (lastCheckpointMessageIndex !== -1) {
-				const commitPromise = this.checkpointManager?.commit()
+				const checkpointManager = this.checkpointManager
+				const commitPromise = (async () => {
+					try {
+						await ensureCheckpointInitialized({ checkpointManager })
+						return await checkpointManager.commit()
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : "Unknown error"
+						Logger.error(`[TaskCheckpointManager] Failed to initialize checkpoint for ${this.taskId}:`, errorMessage)
+						this.taskState.checkpointManagerErrorMessage = errorMessage
+						HostProvider.window.showMessage({
+							type: ShowMessageType.ERROR,
+							message: `Checkpoint initialization timed out: ${errorMessage}`,
+						})
+						return undefined
+					}
+				})()
 				this.initialCheckpointCommitPromise = commitPromise
 				commitPromise
-					?.then(async (commitHash) => {
+					.then(async (commitHash) => {
 						if (commitHash) {
 							await this.messageStateHandler.updateDietCodeMessage(lastCheckpointMessageIndex, {
 								lastCheckpointHash: commitHash,
@@ -2761,7 +2984,7 @@ export class Task {
 						}
 					})
 					.catch((error) => {
-						Logger.error(`[TaskCheckpointManager] Failed to create checkpoint commit for task ${this.taskId}:`, error)
+						Logger.error(`[TaskCheckpointManager] Failed to record checkpoint for task ${this.taskId}:`, error)
 					})
 			}
 		} else if (
@@ -3086,6 +3309,9 @@ export class Task {
 					) {
 						this.taskState.taskFirstTokenTimeMs = Math.max(0, Date.now() - this.taskState.taskStartTimeMs)
 					}
+					if (chunk.type === "text" || chunk.type === "reasoning" || chunk.type === "tool_calls") {
+						this.latencyTracker.markOnce("first_model_token")
+					}
 
 					switch (chunk.type) {
 						case "usage":
@@ -3121,6 +3347,10 @@ export class Task {
 							break
 						}
 						case "tool_calls": {
+							this.latencyTracker.markOnce("first_tool_recognized", {
+								invocationId: chunk.tool_call.call_id,
+								toolName: chunk.tool_call.function?.name,
+							})
 							// Accumulate tool use blocks in proper Anthropic format
 							toolUseHandler.processToolUseDelta(
 								{
@@ -3161,6 +3391,15 @@ export class Task {
 							const prevLength = this.taskState.assistantMessageContent.length
 
 							this.taskState.assistantMessageContent = parseAssistantMessageV2(assistantMessage)
+							const recognizedTool = this.taskState.assistantMessageContent.find(
+								(candidate) => candidate.type === "tool_use",
+							)
+							if (recognizedTool?.type === "tool_use") {
+								this.latencyTracker.markOnce("first_tool_recognized", {
+									invocationId: recognizedTool.call_id,
+									toolName: recognizedTool.name,
+								})
+							}
 
 							if (this.taskState.assistantMessageContent.length > prevLength) {
 								this.taskState.userMessageContentReady = false // new content we need to present, reset to false in case previous content set this to true
@@ -3262,138 +3501,175 @@ export class Task {
 			}
 
 			// Finalize any remaining tool calls at the end of the stream
-
-			// OpenRouter/DietCode may not return token usage as part of the stream (since it may abort early), so we fetch after the stream is finished
-			// (updateApiReq below will update the api_req_started message with the usage details. we do this async so it updates the api_req_started message in the background)
-			if (!didReceiveUsageChunk) {
-				this.api.getApiStreamUsage?.().then(async (apiStreamUsage) => {
-					if (apiStreamUsage) {
-						taskMetrics.inputTokens += apiStreamUsage.inputTokens
-						taskMetrics.outputTokens += apiStreamUsage.outputTokens
-						taskMetrics.cacheWriteTokens += apiStreamUsage.cacheWriteTokens ?? 0
-						taskMetrics.cacheReadTokens += apiStreamUsage.cacheReadTokens ?? 0
-						taskMetrics.totalCost = apiStreamUsage.totalCost ?? taskMetrics.totalCost
-					}
-				})
-			}
-
-			// Update the api_req_started message with final usage and cost details
-			await updateApiReqMsg({
-				messageStateHandler: this.messageStateHandler,
-				lastApiReqIndex,
-				inputTokens: taskMetrics.inputTokens,
-				outputTokens: taskMetrics.outputTokens,
-				cacheWriteTokens: taskMetrics.cacheWriteTokens,
-				cacheReadTokens: taskMetrics.cacheReadTokens,
-				api: this.api,
-				totalCost: taskMetrics.totalCost,
-			})
-			await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
-
-			// V6: Record usage telemetry
-			await EnvironmentTracker.recordUsage(
-				this.cwd,
-				"cline-agent",
-				{
-					promptTokens: taskMetrics.inputTokens,
-					completionTokens: taskMetrics.outputTokens,
-					modelId: this.api.getModel().id,
-				},
-				this.taskId,
-			)
-
-			await this.postStateToWebview()
-
-			if (this.taskState.steeringInterruptRequested) {
-				return await this.continueFromSteeringInterrupt({
-					assistantTextOnly,
-					taskMetrics,
-					modelInfo,
-				})
-			}
-
-			// need to call here in case the stream was aborted
-			if (this.taskState.abort) {
-				throw new Error("DietCode instance aborted")
-			}
-
-			// Stored the assistant API response immediately after the stream finishes in the same turn
-			const assistantHasContent = assistantMessage.length > 0 || this.useNativeToolCalls
-			if (assistantHasContent) {
-				telemetryService.captureConversationTurnEvent(
-					this.ulid,
-					providerId,
-					model.id,
-					"assistant",
-					modelInfo.mode,
-					{
-						tokensIn: taskMetrics.inputTokens,
-						tokensOut: taskMetrics.outputTokens,
-						cacheWriteTokens: taskMetrics.cacheWriteTokens,
-						cacheReadTokens: taskMetrics.cacheReadTokens,
-						totalCost: taskMetrics.totalCost,
-					},
-					this.useNativeToolCalls,
+			let finalizedNativeToolsEarly = false
+			let earlyNativePresentation: Promise<void> | undefined
+			const finalizedNativeToolBlocks =
+				toolUseHandler.getPartialToolUsesAsContent()?.map((block) => ({ ...block, partial: false })) ?? []
+			if (
+				this.useNativeToolCalls &&
+				finalizedNativeToolBlocks.length > 1 &&
+				!this.taskState.abort &&
+				!this.taskState.steeringInterruptRequested &&
+				!this.taskState.didRejectTool
+			) {
+				const allEarlyQueries = finalizedNativeToolBlocks.every(
+					(block) =>
+						isIoAuthorityTool(block.name) &&
+						(!block.params.path?.trim() || isLocatedInPath(this.cwd, path.resolve(this.cwd, block.params.path))) &&
+						!(
+							block.name === DietCodeDefaultTool.FILE_READ &&
+							path.basename(block.params.path?.trim() ?? "").toLowerCase() === "scratchpad.md"
+						),
 				)
-
-				const { reasonsHandler } = this.streamHandler.getHandlers()
-				const redactedThinkingContent = reasonsHandler.getRedactedThinking()
-
-				const requestId = this.streamHandler.requestId
-
-				// Build content array with thinking blocks, text (if any), and tool use blocks
-				const assistantContent: Array<DietCodeAssistantContent> = [
-					// This is critical for maintaining the model's reasoning flow and conversation integrity.
-					// "When providing thinking blocks, the entire sequence of consecutive thinking blocks must match the outputs generated by the model during the original request; you cannot rearrange or modify the sequence of these blocks." The signature_delta is used to verify that the thinking was generated by Claude, and the thinking blocks will be ignored if it's incorrect or missing.
-					// https://docs.claude.com/en/docs/build-with-claude/extended-thinking#preserving-thinking-blocks
-					...redactedThinkingContent,
-				]
-				// Add thinking block from the reasoning handler if available
-				const thinkingBlock = reasonsHandler.getCurrentReasoning()
-				if (thinkingBlock) {
-					assistantContent.push({ ...thinkingBlock })
+				if (allEarlyQueries) {
+					// Query-only siblings do not depend on assistant-history persistence.
+					// Start them before usage bookkeeping and message journaling.
+					this.taskState.didCompleteReadingStream = true
+					await this.processNativeToolCalls(assistantTextOnly, finalizedNativeToolBlocks)
+					finalizedNativeToolsEarly = true
+					earlyNativePresentation = this.presentAssistantMessage()
 				}
+			}
 
-				// Only add text block if there's actual text (not just tool XML)
-				const hasAssistantText = assistantTextOnly.trim().length > 0
-				if (hasAssistantText) {
-					assistantContent.push({
-						type: "text",
-						text: assistantTextOnly,
-						// reasoning_details only exists for dietcode/openrouter providers
-						reasoning_details: thinkingBlock?.summary as DietCodeReasoningDetailParam[],
-						signature: assistantTextSignature,
-						call_id: assistantMessageId,
+			const assistantHasContent = assistantMessage.length > 0 || this.useNativeToolCalls
+			try {
+				// OpenRouter/DietCode may not return token usage as part of the stream (since it may abort early), so we fetch after the stream is finished
+				// (updateApiReq below will update the api_req_started message with the usage details. we do this async so it updates the api_req_started message in the background)
+				if (!didReceiveUsageChunk) {
+					this.api.getApiStreamUsage?.().then(async (apiStreamUsage) => {
+						if (apiStreamUsage) {
+							taskMetrics.inputTokens += apiStreamUsage.inputTokens
+							taskMetrics.outputTokens += apiStreamUsage.outputTokens
+							taskMetrics.cacheWriteTokens += apiStreamUsage.cacheWriteTokens ?? 0
+							taskMetrics.cacheReadTokens += apiStreamUsage.cacheReadTokens ?? 0
+							taskMetrics.totalCost = apiStreamUsage.totalCost ?? taskMetrics.totalCost
+						}
 					})
 				}
 
-				// Get finalized tool use blocks from the handler
-				const toolUseBlocks = toolUseHandler.getAllFinalizedToolUses(
-					// NOTE: If there is no assistant text but there is a thinking block, we attach the summary to the tool use blocks
-					// for providers that required reasoning traces included with assistant content.
-					hasAssistantText ? undefined : thinkingBlock?.summary,
+				// Update the api_req_started message with final usage and cost details
+				await updateApiReqMsg({
+					messageStateHandler: this.messageStateHandler,
+					lastApiReqIndex,
+					inputTokens: taskMetrics.inputTokens,
+					outputTokens: taskMetrics.outputTokens,
+					cacheWriteTokens: taskMetrics.cacheWriteTokens,
+					cacheReadTokens: taskMetrics.cacheReadTokens,
+					api: this.api,
+					totalCost: taskMetrics.totalCost,
+				})
+				await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
+
+				// V6: Record usage telemetry
+				await EnvironmentTracker.recordUsage(
+					this.cwd,
+					"cline-agent",
+					{
+						promptTokens: taskMetrics.inputTokens,
+						completionTokens: taskMetrics.outputTokens,
+						modelId: this.api.getModel().id,
+					},
+					this.taskId,
 				)
-				// Append tool use blocks if any exist
-				if (toolUseBlocks.length > 0) {
-					assistantContent.push(...toolUseBlocks)
+
+				await this.postStateToWebview()
+
+				if (this.taskState.steeringInterruptRequested) {
+					return await this.continueFromSteeringInterrupt({
+						assistantTextOnly,
+						taskMetrics,
+						modelInfo,
+					})
 				}
 
-				// Append the assistant's content to the API conversation history only if there's content
-				if (assistantContent.length > 0) {
-					await this.messageStateHandler.addToApiConversationHistory({
-						role: "assistant",
-						content: assistantContent,
-						modelInfo,
-						id: requestId,
-						metrics: {
-							tokens: {
-								prompt: taskMetrics.inputTokens,
-								completion: taskMetrics.outputTokens,
-								cached: (taskMetrics.cacheWriteTokens ?? 0) + (taskMetrics.cacheReadTokens ?? 0),
-							},
-							cost: taskMetrics.totalCost,
+				// need to call here in case the stream was aborted
+				if (this.taskState.abort) {
+					throw new Error("DietCode instance aborted")
+				}
+
+				// Stored the assistant API response immediately after the stream finishes in the same turn
+				if (assistantHasContent) {
+					telemetryService.captureConversationTurnEvent(
+						this.ulid,
+						providerId,
+						model.id,
+						"assistant",
+						modelInfo.mode,
+						{
+							tokensIn: taskMetrics.inputTokens,
+							tokensOut: taskMetrics.outputTokens,
+							cacheWriteTokens: taskMetrics.cacheWriteTokens,
+							cacheReadTokens: taskMetrics.cacheReadTokens,
+							totalCost: taskMetrics.totalCost,
 						},
-						ts: Date.now(),
+						this.useNativeToolCalls,
+					)
+
+					const { reasonsHandler } = this.streamHandler.getHandlers()
+					const redactedThinkingContent = reasonsHandler.getRedactedThinking()
+
+					const requestId = this.streamHandler.requestId
+
+					// Build content array with thinking blocks, text (if any), and tool use blocks
+					const assistantContent: Array<DietCodeAssistantContent> = [
+						// This is critical for maintaining the model's reasoning flow and conversation integrity.
+						// "When providing thinking blocks, the entire sequence of consecutive thinking blocks must match the outputs generated by the model during the original request; you cannot rearrange or modify the sequence of these blocks." The signature_delta is used to verify that the thinking was generated by Claude, and the thinking blocks will be ignored if it's incorrect or missing.
+						// https://docs.claude.com/en/docs/build-with-claude/extended-thinking#preserving-thinking-blocks
+						...redactedThinkingContent,
+					]
+					// Add thinking block from the reasoning handler if available
+					const thinkingBlock = reasonsHandler.getCurrentReasoning()
+					if (thinkingBlock) {
+						assistantContent.push({ ...thinkingBlock })
+					}
+
+					// Only add text block if there's actual text (not just tool XML)
+					const hasAssistantText = assistantTextOnly.trim().length > 0
+					if (hasAssistantText) {
+						assistantContent.push({
+							type: "text",
+							text: assistantTextOnly,
+							// reasoning_details only exists for dietcode/openrouter providers
+							reasoning_details: thinkingBlock?.summary as DietCodeReasoningDetailParam[],
+							signature: assistantTextSignature,
+							call_id: assistantMessageId,
+						})
+					}
+
+					// Get finalized tool use blocks from the handler
+					const toolUseBlocks = toolUseHandler.getAllFinalizedToolUses(
+						// NOTE: If there is no assistant text but there is a thinking block, we attach the summary to the tool use blocks
+						// for providers that required reasoning traces included with assistant content.
+						hasAssistantText ? undefined : thinkingBlock?.summary,
+					)
+					// Append tool use blocks if any exist
+					if (toolUseBlocks.length > 0) {
+						assistantContent.push(...toolUseBlocks)
+					}
+
+					// Append the assistant's content to the API conversation history only if there's content
+					if (assistantContent.length > 0) {
+						await this.messageStateHandler.addToApiConversationHistory({
+							role: "assistant",
+							content: assistantContent,
+							modelInfo,
+							id: requestId,
+							metrics: {
+								tokens: {
+									prompt: taskMetrics.inputTokens,
+									completion: taskMetrics.outputTokens,
+									cached: (taskMetrics.cacheWriteTokens ?? 0) + (taskMetrics.cacheReadTokens ?? 0),
+								},
+								cost: taskMetrics.totalCost,
+							},
+							ts: Date.now(),
+						})
+					}
+				}
+			} finally {
+				if (earlyNativePresentation) {
+					await earlyNativePresentation.catch((error) => {
+						Logger.debug(`[Task ${this.taskId}] Early sibling presentation settled with: ${error}`)
 					})
 				}
 			}
@@ -3407,10 +3683,12 @@ export class Task {
 				block.partial = false
 			})
 			// in case there are native tool calls pending
-			const partialToolBlocks = toolUseHandler.getPartialToolUsesAsContent()?.map((block) => ({ ...block, partial: false }))
-			await this.processNativeToolCalls(assistantTextOnly, partialToolBlocks)
+			const partialToolBlocks = finalizedNativeToolBlocks
+			if (!finalizedNativeToolsEarly) {
+				await this.processNativeToolCalls(assistantTextOnly, partialToolBlocks)
+			}
 
-			if (partialBlocks.length > 0) {
+			if (!earlyNativePresentation && partialBlocks.length > 0) {
 				await this.presentAssistantMessage() // if there is content to update then it will complete and update this.userMessageContentReady to true, which we pwaitfor before making the next request. all this is really doing is presenting the last partial message that we just set to complete
 			}
 

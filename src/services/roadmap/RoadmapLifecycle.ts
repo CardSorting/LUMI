@@ -5,9 +5,22 @@ import { RoadmapService } from "./RoadmapService"
 import { sessionBrief } from "./RoadmapSession"
 import { isBundledSkillAvailable } from "./RoadmapSkillInstall"
 
-export async function initRoadmapSession(workspace: string, taskId?: string): Promise<Record<string, unknown> | null> {
+export interface RoadmapSessionInitOptions {
+	/** Bootstrap mutates ROADMAP.md and is reserved for explicit lifecycle callers. */
+	bootstrap?: boolean
+	/** Prefer cached workspace intelligence on admission. */
+	forceRefresh?: boolean
+}
+
+export async function initRoadmapSession(
+	workspace: string,
+	taskId?: string,
+	options: RoadmapSessionInitOptions = {},
+): Promise<Record<string, unknown> | null> {
 	const cfg = getRoadmapConfig()
 	if (!cfg.enabled) return null
+	const bootstrapEnabled = options.bootstrap ?? true
+	const forceRefresh = options.forceRefresh ?? true
 
 	const result: Record<string, unknown> = { workspace, taskId: taskId || null }
 
@@ -17,17 +30,21 @@ export async function initRoadmapSession(workspace: string, taskId?: string): Pr
 		result.skill_install_error = error instanceof Error ? error.message : String(error)
 	}
 
-	try {
-		const bootstrap = await RoadmapService.getInstance().autoBootstrapIfNeeded(workspace)
-		if (bootstrap) {
-			result.bootstrap = bootstrap
+	if (bootstrapEnabled) {
+		try {
+			const bootstrap = await RoadmapService.getInstance().autoBootstrapIfNeeded(workspace)
+			if (bootstrap) {
+				result.bootstrap = bootstrap
+			}
+		} catch (error) {
+			result.bootstrap_error = error instanceof Error ? error.message : String(error)
 		}
-	} catch (error) {
-		result.bootstrap_error = error instanceof Error ? error.message : String(error)
 	}
 
-	invalidateRoadmapWorkspaceCache(workspace)
-	const brief = await sessionBrief(workspace, true)
+	if (forceRefresh) {
+		invalidateRoadmapWorkspaceCache(workspace)
+	}
+	const brief = await sessionBrief(workspace, forceRefresh)
 	result.brief = brief
 
 	await emitProgress("roadmap.session_started", {

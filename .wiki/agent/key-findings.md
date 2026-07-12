@@ -1,0 +1,44 @@
+# Key Findings
+
+## 2026-07-12 Throughput Pass
+
+- Every tool previously awaited the environment forensic probe even though its result did not authorize or reject the tool. Tool dispatch now proceeds while the advisory probe runs in the background.
+- Initial API requests waited up to 10 seconds for MCP connection. The bounded admission wait is now 1 second; partial MCP degradation no longer prevents the first request.
+- Task admission synchronously persisted intent classification, initialized roadmap lifecycle with possible workspace mutation, and recorded environment history. These bookkeeping operations now run off the critical path; admission does not auto-bootstrap `ROADMAP.md`.
+- Workspace-local read/list/search/definition tools previously entered manual approval when auto-approval was disabled. They now reuse task authority after `.dietcodeignore` validation; external paths retain approval.
+- Completion readiness evaluated the same roadmap dry-run twice. It now consumes one canonical evaluation.
+- Completion audit reconstructed grounded task context from the database and synchronously waited for two persistence writes. Grounded context skips the read, audit evidence persists asynchronously, and the two writes use one batch.
+- Roadmap progress log write failures previously rejected lifecycle calls. They now fail open with a 60-second retry circuit.
+- Successful environment-changing commands previously failed to revoke the environment lease because the tuple's `userRejected` flag was interpreted backwards. The lease and workspace cache now invalidate after successful execution.
+
+## Verification Evidence
+
+- TypeScript: clean via `npx tsc --noEmit --pretty false`.
+- Focused sibling/latency/cache, command, and completion-persistence suites: all passing; deterministic scheduler workloads complete in milliseconds.
+- Full unit suite after both throughput passes: 2,263 passing in about 1 minute, with 4 expected pending tests.
+- Full lint and handler-import audit: passed.
+- Roadmap production audit: passed via `npm run roadmap:audit`.
+
+## 2026-07-12 Sibling Concurrency Pass
+
+- The exact serialization point was `Task.presentAssistantMessage()`: one presenter lock awaited each complete tool, advanced one cursor, and recursively admitted the next. The stream loop also awaited that presenter after every chunk, so the existing four-slot I/O bulkhead never received concurrent callers.
+- Native tool deltas used one mutable `lastToolCall`; interleaved sibling indexes could inherit another call's ID/name. State is now isolated by tool-call index and emits a stable `call_id`.
+- When parallel calling is enabled, complete contiguous sibling groups larger than one enter a bounded dependency batch. Local read/read and bounded verification/read work overlap. Every classified mutation shares a task-wide mutation claim; unknown tools, mutating commands, and interactive operations remain conservatively ordered.
+- Tool result blocks are invocation-local for scheduled children. Presentation events are captured per invocation for workspace-local queries; non-query and interactive presentation remains shared. Execution may finish out of order, while the batch replays captured query UI and appends results in model-emission order.
+- Query-only finalized native batches can start before usage bookkeeping and assistant-history persistence, then join in a `finally` barrier. Cancellation aborts the scheduler, cancels queued work, and awaits scheduler `run` promises; prompt backend interruption depends on signal support.
+- Foreground command activity is now reported by `CommandExecutor`; cancellation calls the host process termination hook immediately instead of sleeping 300 ms for presentation. The VS Code process sends Ctrl+C and releases its command waiter.
+- Task-local monotonic evidence now covers admission, first token/tool/progress/I/O, sibling queue/start/completion, canonical completion, visible result, and deferred persistence. Recording is bounded and fail-open.
+- Cache keys include resolved target, tool, generation, query/regex, `file_pattern`, and list recursion where applicable. Local mutation replaces the task coalescer. An old-generation in-flight result can populate only its old coalescer object, not the replacement generation.
+
+### Deterministic workload evidence
+
+| Workload | Sequential estimate | Concurrent wall | Max concurrency |
+| :--- | ---: | ---: | ---: |
+| Four file reads | 280 ms | 100 ms | 4 |
+| Two reads + two searches | 290 ms | 100 ms | 4 |
+| Diagnostic + safe test command | 220 ms | 140 ms | 2 |
+| Mutation + two disjoint reads | 230 ms | 120 ms | 3 |
+| Overlapping mutations | 200 ms | 200 ms | 1 |
+| One failed sibling + two successes | 190 ms | 100 ms | 3 |
+
+These are fake-clock scheduler fixtures, not extension-host measurements. All workloads start simulated useful I/O at 0 ms, use zero queue wait when independent, preserve sequence-ordered envelopes, and retain partial successes. The cooperative cancellation fixture stops one active and two queued siblings with 0 ms fake-clock latency and leaves no fixture timer pending.

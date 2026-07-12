@@ -53,6 +53,10 @@ class FakeTerminalProcess extends EventEmitter<TerminalProcessEvents> implements
 		this.rejectPromise(error)
 	}
 
+	terminate(): void {
+		this.complete({ exitCode: null, signal: "SIGINT" })
+	}
+
 	asResultPromise(): TerminalProcessResultPromise {
 		const processWithPromise = this as unknown as FakeTerminalProcess & Partial<TerminalProcessResultPromise>
 		processWithPromise.then = this.promise.then.bind(this.promise)
@@ -168,5 +172,22 @@ describe("CommandExecutor structured evidence", () => {
 		const timedOut = await timeoutExecutor.execute("npm test", 0.001)
 		assert.equal(readCommandExecutionEvidence(timedOut[1])?.timedOut, true)
 		assert.equal(readCommandExecutionEvidence(timedOut[1])?.completed, false)
+	})
+
+	it("reports active foreground work and cancels it without presentation sleep", async () => {
+		const process = new FakeTerminalProcess()
+		const manager = {
+			...createTerminalManager(),
+			getOrCreateTerminal: async () => terminalInfo,
+			runCommand: () => process.asResultPromise(),
+		} as unknown as ITerminalManager
+		const executor = new CommandExecutor(executorConfig(manager), createCallbacks())
+		const pending = executor.execute("npm test", undefined)
+		await new Promise((resolve) => setImmediate(resolve))
+		assert.equal(executor.hasActiveBackgroundCommand(), true)
+
+		assert.equal(await executor.cancelBackgroundCommand(), true)
+		assert.equal((await pending)[0], true)
+		assert.equal(executor.hasActiveBackgroundCommand(), false)
 	})
 })

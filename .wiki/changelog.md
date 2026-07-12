@@ -2,6 +2,22 @@
 
 This log preserves historical wiki entries and records current LUMI workspace knowledge-layer changes.
 
+## [Execution Throughput Pass] — 2026-07-12
+
+- Added workspace-local query authority while preserving `.dietcodeignore` and external-path approvals.
+- Shifted environment discovery, intent persistence, roadmap admission, environment history, audit persistence, and roadmap completion journaling off critical execution paths where they are advisory.
+- Consolidated duplicate roadmap completion readiness evaluation and batched audit evidence writes.
+- Added mutation-aware I/O cache invalidation and a fail-open roadmap progress persistence circuit.
+- Added `.wiki/agent/` operating memory with focused validation commands and reproduced pitfalls.
+
+## [Sibling Concurrency and Latency Pass] — 2026-07-12
+
+- Added task-local monotonic latency evidence across model, tool, I/O, completion, presentation, and asynchronous persistence boundaries.
+- Replaced presenter-driven sibling serialization with a bounded task-owned dependency scheduler and deterministic result projection.
+- Isolated tool-call parsing, UI events, and API result blocks per invocation so independent operations may finish out of order safely.
+- Added path/generation-aware query coalescing and race tests preventing stale promotion after mutation.
+- Added deterministic concurrency workloads plus cancellation, checkpoint, approval, partial-failure, cache, and native-stream regression tests.
+
 ## [Agent Continuity Refresh] — 2026-07-09
 
 ### Agent Playbook and Living Wiki operating layer
@@ -10,6 +26,13 @@ This log preserves historical wiki entries and records current LUMI workspace kn
 - Refreshed `.wiki/index.md` and `.wiki/01-system-overview.md` to point future agents at current LUMI/BroccoliDB operating knowledge.
 - Captured current known drift: stale `ROADMAP.md`, provider-count documentation drift, README badge version drift, and sandbox-specific roadmap progress write failures.
 - Linked current Agent Playbook finalization work so future agents do not rediscover the same validation commands and failure modes.
+
+## [Canonical High-Throughput Design Capture] — 2026-07-12
+
+- Added the executive brief, execution philosophy, technical whitepaper, ADR series, and migration/evolution report under `.wiki/`.
+- Linked the canonical suite from `.wiki/index.md` and the agent fast-orientation page.
+- Captured measured scheduler workloads, latency-event semantics, intentional serialization boundaries, and residual technical debt without changing production architecture.
+- Re-audited canonical claims against the implementation: documented the exact sibling-batch eligibility window, task-wide mutation serialization, query-only presentation capture, cooperative cancellation boundary, task-wide cache generation, and synchronous portions that remain in completion.
 
 ## [5.10.30] — 2026-04-25
 

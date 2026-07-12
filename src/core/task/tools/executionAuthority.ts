@@ -14,6 +14,15 @@ export const IO_AUTHORITY_TOOLS = new Set<DietCodeDefaultTool>([
 	DietCodeDefaultTool.STABILITY_DIAGNOSE,
 ])
 
+/** Tools that can change workspace files and therefore invalidate query caches. */
+export const LOCAL_MUTATION_TOOLS = new Set<DietCodeDefaultTool>([
+	DietCodeDefaultTool.FILE_NEW,
+	DietCodeDefaultTool.FILE_EDIT,
+	DietCodeDefaultTool.NEW_RULE,
+	DietCodeDefaultTool.APPLY_PATCH,
+	DietCodeDefaultTool.DIETCODE_KERNEL,
+])
+
 const NON_MUTATING_MODES: LaneExecutionMode[] = [
 	"read_only",
 	"audit_only",
@@ -24,6 +33,18 @@ const NON_MUTATING_MODES: LaneExecutionMode[] = [
 
 export function isIoAuthorityTool(toolName: string): boolean {
 	return IO_AUTHORITY_TOOLS.has(toolName as DietCodeDefaultTool)
+}
+
+export function isLocalMutationTool(toolName: string): boolean {
+	return LOCAL_MUTATION_TOOLS.has(toolName as DietCodeDefaultTool)
+}
+
+/**
+ * Workspace-local queries already have task authority. Ignore rules remain the
+ * security boundary, but an additional approval dialog adds no mutation safety.
+ */
+export function hasWorkspaceLocalIoAuthority(isSubagentExecution: boolean, isLocatedInWorkspace: boolean): boolean {
+	return isSubagentExecution || isLocatedInWorkspace
 }
 
 /** Parent main thread — skip UniversalGuard for pure I/O tools (shift-right enforcement). */

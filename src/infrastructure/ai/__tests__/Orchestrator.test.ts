@@ -145,21 +145,25 @@ describe("AgentOrchestrator audit ergonomics", () => {
 					}
 					return []
 				},
-				push: async (op: {
-					type: string
-					table: string
-					values?: { key?: string; value?: string; streamId?: string }
-				}) => {
-					if (op.type === "upsert" && op.values?.key?.startsWith("audit_trail_")) {
-						stored.last_completion_audit = op.values.value ?? ""
-						memoryRows.push({
-							key: op.values.key,
-							value: op.values.value ?? "",
-							streamId: op.values.streamId ?? "stream-persist",
-						})
-					}
-					if (op.type === "upsert" && op.values?.key === "last_completion_audit") {
-						stored.last_completion_audit = op.values.value ?? ""
+				pushBatch: async (
+					ops: Array<{
+						type: string
+						table: string
+						values?: { key?: string; value?: string; streamId?: string }
+					}>,
+				) => {
+					for (const op of ops) {
+						if (op.type === "upsert" && op.values?.key?.startsWith("audit_trail_")) {
+							stored.last_completion_audit = op.values.value ?? ""
+							memoryRows.push({
+								key: op.values.key,
+								value: op.values.value ?? "",
+								streamId: op.values.streamId ?? "stream-persist",
+							})
+						}
+						if (op.type === "upsert" && op.values?.key === "last_completion_audit") {
+							stored.last_completion_audit = op.values.value ?? ""
+						}
 					}
 				},
 			},

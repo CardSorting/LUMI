@@ -2,6 +2,7 @@ import type { ToolUse } from "@core/assistant-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import { PreToolUseHookCancellationError } from "@core/hooks/PreToolUseHookCancellationError"
 import { shouldSkipPreToolUseForParentIoTool } from "../executionAuthority"
+import { resolveInvocationResultTarget } from "../siblings/ToolInvocationContext"
 import type { TaskConfig } from "../types/TaskConfig"
 
 /**
@@ -159,6 +160,6 @@ export class ToolHookUtils {
 			text: `<hook_context source="${source}" type="${contextType}">\n${content}\n</hook_context>`,
 		}
 
-		config.taskState.userMessageContent.push(hookContextBlock)
+		resolveInvocationResultTarget(config.taskState.userMessageContent).push(hookContextBlock)
 	}
 }

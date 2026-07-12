@@ -12,10 +12,10 @@ import type { ApiStreamToolCallsChunk } from "./stream"
  * and yields properly formatted tool call chunks when arguments are received.
  */
 export class ToolCallProcessor {
-	private lastToolCall: { id: string; name: string }
+	private toolCallsByIndex: Map<number, { id: string; name: string }>
 
 	constructor() {
-		this.lastToolCall = { id: "", name: "" }
+		this.toolCallsByIndex = new Map()
 	}
 
 	/**
@@ -31,27 +31,31 @@ export class ToolCallProcessor {
 		}
 
 		for (const toolCallDelta of toolCallDeltas) {
+			const index = toolCallDelta.index ?? 0
+			const state = this.toolCallsByIndex.get(index) ?? { id: "", name: "" }
 			// Accumulate the tool call ID if present
 			if (toolCallDelta.id) {
-				this.lastToolCall.id = toolCallDelta.id
+				state.id = toolCallDelta.id
 			}
 
 			// Accumulate the function name if present
 			if (toolCallDelta.function?.name) {
 				Logger.debug(`[ToolCallProcessor] Native Tool Called: ${toolCallDelta.function.name}`)
-				this.lastToolCall.name = toolCallDelta.function.name
+				state.name = toolCallDelta.function.name
 			}
+			this.toolCallsByIndex.set(index, state)
 
 			// Only yield when we have all required fields: id, name, and arguments
-			if (this.lastToolCall.id && this.lastToolCall.name && toolCallDelta.function?.arguments) {
+			if (state.id && state.name && toolCallDelta.function?.arguments) {
 				yield {
 					type: "tool_calls",
 					tool_call: {
 						...toolCallDelta,
+						call_id: state.id,
 						function: {
 							...toolCallDelta.function,
-							id: this.lastToolCall.id,
-							name: this.lastToolCall.name,
+							id: state.id,
+							name: state.name,
 						},
 					},
 				}
@@ -63,14 +67,14 @@ export class ToolCallProcessor {
 	 * Reset the internal state. Call this when starting a new message.
 	 */
 	reset(): void {
-		this.lastToolCall = { id: "", name: "" }
+		this.toolCallsByIndex.clear()
 	}
 
 	/**
 	 * Get the current accumulated tool call state (useful for debugging).
 	 */
-	getState(): { id: string; name: string } {
-		return { ...this.lastToolCall }
+	getState(index = 0): { id: string; name: string } {
+		return { ...(this.toolCallsByIndex.get(index) ?? { id: "", name: "" }) }
 	}
 }
 

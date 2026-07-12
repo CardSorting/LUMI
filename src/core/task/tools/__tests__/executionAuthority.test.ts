@@ -4,7 +4,9 @@ import { DietCodeDefaultTool } from "@/shared/tools"
 import {
 	appendSessionStabilityContext,
 	computeFastIoReservedSlots,
+	hasWorkspaceLocalIoAuthority,
 	isIoAuthorityTool,
+	isLocalMutationTool,
 	resolveSessionSpiderEngine,
 	shouldBypassGuardForLaneIoTool,
 	shouldBypassGuardForParentIoTool,
@@ -22,6 +24,19 @@ describe("executionAuthority", () => {
 		assert.equal(isIoAuthorityTool(DietCodeDefaultTool.FILE_READ), true)
 		assert.equal(isIoAuthorityTool(DietCodeDefaultTool.BASH), false)
 		assert.equal(shouldBypassGuardForParentIoTool(DietCodeDefaultTool.SEARCH), true)
+	})
+
+	it("grants durable authority to workspace-local queries without granting external reads", () => {
+		assert.equal(hasWorkspaceLocalIoAuthority(false, true), true)
+		assert.equal(hasWorkspaceLocalIoAuthority(true, false), true)
+		assert.equal(hasWorkspaceLocalIoAuthority(false, false), false)
+	})
+
+	it("classifies cache-invalidating local mutations narrowly", () => {
+		assert.equal(isLocalMutationTool(DietCodeDefaultTool.FILE_EDIT), true)
+		assert.equal(isLocalMutationTool(DietCodeDefaultTool.APPLY_PATCH), true)
+		assert.equal(isLocalMutationTool(DietCodeDefaultTool.FILE_READ), false)
+		assert.equal(isLocalMutationTool(DietCodeDefaultTool.BASH), false)
 	})
 
 	it("bypasses guard for lane I/O only on non-mutating modes", () => {

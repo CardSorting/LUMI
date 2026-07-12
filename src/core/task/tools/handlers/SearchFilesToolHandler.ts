@@ -18,6 +18,7 @@ import { DietCodeSayTool } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
+import { hasWorkspaceLocalIoAuthority } from "../executionAuthority"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
@@ -187,19 +188,23 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		// Create and show partial UI message
 		const filePattern = block.params.file_pattern
 
+		const operationIsLocatedInWorkspace = await isLocatedInWorkspace(relPath)
 		const sharedMessageProps = {
 			tool: "searchFiles",
 			path: getReadablePath(config.cwd, uiHelpers.removeClosingTag(block, "path", relPath)),
 			content: "",
 			regex: uiHelpers.removeClosingTag(block, "regex", regex),
 			filePattern: uiHelpers.removeClosingTag(block, "file_pattern", filePattern),
-			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath),
+			operationIsLocatedInWorkspace,
 		} satisfies DietCodeSayTool
 
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
 		// Handle auto-approval vs manual approval for partial
-		if (await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath)) {
+		if (
+			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
+			(await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath))
+		) {
 			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool")
 			await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 		} else {
@@ -303,19 +308,21 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		}
 
 		// Approval before search I/O — cache-aside hits skip this path entirely
+		const operationIsLocatedInWorkspace = await isLocatedInWorkspace(parsedPath)
 		const pendingMessageProps = {
 			tool: "searchFiles",
 			path: getReadablePath(config.cwd, relDirPath!),
 			content: "",
 			regex: regex,
 			filePattern: filePattern,
-			operationIsLocatedInWorkspace: await isLocatedInWorkspace(parsedPath),
+			operationIsLocatedInWorkspace,
 		} satisfies DietCodeSayTool
 
 		const pendingMessage = JSON.stringify(pendingMessageProps)
 
 		const shouldAutoApprove =
-			config.isSubagentExecution || (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
+			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
+			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
 		if (shouldAutoApprove) {
 			if (!config.isSubagentExecution) {
 				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")

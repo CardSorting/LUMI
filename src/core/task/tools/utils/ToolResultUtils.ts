@@ -5,6 +5,7 @@ import { maybeTransitionToReplanMode } from "@core/task/utils/replanModeTransiti
 import { processFilesIntoText } from "@/integrations/misc/extract-text"
 import { DietCodeAsk } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
+import { resolveInvocationResultTarget } from "../siblings/ToolInvocationContext"
 import type { ToolExecutorCoordinator } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
 
@@ -23,6 +24,7 @@ export class ToolResultUtils {
 		coordinator?: ToolExecutorCoordinator,
 		toolUseIdMap?: Map<string, string>,
 	): void {
+		userMessageContent = resolveInvocationResultTarget(userMessageContent)
 		if (typeof content === "string") {
 			const resultText = content || "(tool did not return anything)"
 
@@ -94,6 +96,7 @@ export class ToolResultUtils {
 		images?: string[],
 		fileContentString?: string,
 	): void {
+		userMessageContent = resolveInvocationResultTarget(userMessageContent)
 		// Check if we have any meaningful content to add
 		const hasMeaningfulFeedback = feedback && feedback.trim() !== ""
 		const hasImages = images && images.length > 0

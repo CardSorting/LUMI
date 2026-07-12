@@ -1,3 +1,4 @@
+import type { TaskLatencyTracker } from "@core/task/latency/TaskLatencyTracker"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
@@ -24,6 +25,11 @@ export async function persistCompletionAudit(streamId: string, metadata: TaskAud
 }
 
 async function resolveAuditStreamFocus(taskId: string, taskDescription: string, fallback: string): Promise<string> {
+	// Callers that already hold a grounded task description should not perform a
+	// database round trip to reconstruct the same context.
+	if (fallback.trim()) {
+		return fallback.trim()
+	}
 	try {
 		return await orchestrator.resolveStreamFocus(taskId, taskDescription || fallback)
 	} catch (error) {
@@ -32,14 +38,30 @@ async function resolveAuditStreamFocus(taskId: string, taskDescription: string, 
 	}
 }
 
-async function persistCompletionAuditBestEffort(taskId: string, metadata: TaskAuditMetadata): Promise<void> {
+async function persistCompletionAuditBestEffort(taskId: string, metadata: TaskAuditMetadata): Promise<boolean> {
 	try {
 		await persistCompletionAudit(taskId, metadata)
+		return true
 	} catch (error) {
 		// Persistence is durability, not the quality decision. The caller retains
 		// this authoritative audit in the task-local completion cache.
 		Logger.warn("[CompletionAudit] Audit persistence unavailable; retaining task-local audit evidence.", error)
+		return false
 	}
+}
+
+export function scheduleCompletionAuditPersistence(
+	taskId: string,
+	metadata: TaskAuditMetadata,
+	latencyTracker?: TaskLatencyTracker,
+): void {
+	const persistenceScope = "completion-audit"
+	latencyTracker?.mark("persistence_scheduled", { scope: persistenceScope })
+	void persistCompletionAuditBestEffort(taskId, metadata).then((persisted) => {
+		latencyTracker?.mark(persisted ? "persistence_completed" : "persistence_failed", {
+			scope: persistenceScope,
+		})
+	})
 }
 
 export { getViolationRemediation } from "./auditViolationRemediation"
@@ -136,10 +158,14 @@ export async function runCompletionAudit(
 	taskDescription: string,
 	result: string,
 	streamFocusFallback = "",
+	latencyTracker?: TaskLatencyTracker,
+	schedulePersistence = true,
 ): Promise<TaskAuditMetadata> {
 	const streamFocus = await resolveAuditStreamFocus(taskId, taskDescription, streamFocusFallback)
 	const metadata = await orchestrator.auditTask(taskId, taskDescription, result, streamFocus || taskDescription)
-	await persistCompletionAuditBestEffort(taskId, metadata)
+	// The task-local result is authoritative for the completion decision. Durable
+	// audit persistence is ordered evidence, but not part of response latency.
+	if (schedulePersistence) scheduleCompletionAuditPersistence(taskId, metadata, latencyTracker)
 	return metadata
 }
 

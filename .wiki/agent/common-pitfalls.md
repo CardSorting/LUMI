@@ -1,0 +1,15 @@
+# Common Pitfalls
+
+- Do not add another pre-tool gate for workspace-local queries; required parameters and `.dietcodeignore` already provide the relevant boundary.
+- Do not cache completed reads across a file mutation. Reset `IoRequestCoalescer` for the task.
+- Do not treat roadmap or audit diagnostic failure as negative engineering evidence.
+- Do not put evidence persistence on the response path when task-local evidence already exists.
+- Do not auto-bootstrap or rewrite `ROADMAP.md` merely because a task started.
+- Do not interpret `CommandExecutor.execute()` tuple item zero as success; it is `userRejected`.
+- Do not run a supposedly focused Mocha command without `--no-config`.
+- Do not use `Promise.all(executeTool)` directly. Tool results, partial tool cards, and the approval response slot are shared mutable state unless invocation capture is active.
+- Do not let a checkpoint-blocked mutation consume one of the four execution slots; use scheduler readiness plus `signalReady()` so reads can fill the pool.
+- Do not treat every shell command as a query. Only bounded test/lint/typecheck forms without shell operators use the verification-read scope.
+- Do not assume presentation has been fully decoupled. Workspace-local query cards are captured and projected by sibling sequence; non-query and interactive presentation still uses shared state.
+- Do not assume `hasActiveBackgroundCommand()` means detached-only work; it is the task cancellation probe for the current foreground terminal process as well.
+- Focused tests that import `Task` must require `./src/test/requires.cjs`, or Node will fail to resolve the VS Code test shim.

@@ -143,10 +143,10 @@ export class CommandExecutor {
 		let cancelled = false
 
 		// Cancel the current foreground process if the host process supports termination.
-		if (this.currentProcess && typeof (this.currentProcess as any).terminate === "function") {
+		if (this.currentProcess?.terminate) {
 			// Set flag so execute() knows the command was cancelled externally
 			this.wasCancelledExternally = true
-			;(this.currentProcess as any).terminate()
+			await this.currentProcess.terminate()
 			this.currentProcess = null
 			cancelled = true
 			Logger.info("Cancelled foreground command")
@@ -158,10 +158,6 @@ export class CommandExecutor {
 		// "Current ask promise was ignored" errors)
 		if (cancelled) {
 			this.callbacks.updateBackgroundCommandState(false)
-
-			// Wait for terminal buffers to flush before updating the message
-			// This prevents the cancellation notice from appearing in the middle of output
-			await new Promise((resolve) => setTimeout(resolve, 300))
 
 			// Find the last command_output message and update it
 			const messages = this.callbacks.getDietCodeMessages()
@@ -178,11 +174,9 @@ export class CommandExecutor {
 		return cancelled
 	}
 
-	/**
-	 * Check if any detached background commands are active.
-	 */
+	/** Check whether this task owns a cancellable terminal process. */
 	hasActiveBackgroundCommand(): boolean {
-		return false
+		return this.currentProcess !== null
 	}
 
 	/**

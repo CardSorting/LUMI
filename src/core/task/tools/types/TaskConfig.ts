@@ -26,6 +26,7 @@ import type { DietCodeAskResponse } from "@shared/WebviewMessage"
 import { WorkspaceRootManager } from "@/core/workspace"
 import type { ContextManager } from "../../../context/context-management/ContextManager"
 import type { StateManager } from "../../../storage/StateManager"
+import type { TaskLatencyTracker } from "../../latency/TaskLatencyTracker"
 import type { MessageStateHandler } from "../../message-state"
 import type { TaskState } from "../../TaskState"
 import type { AutoApprove } from "../../tools/autoApprove"
@@ -63,6 +64,7 @@ export interface TaskConfig {
 	/** True while same-session finalization lane is active — authorizes .wiki writes. */
 	finalizationMode?: boolean
 	recursionDepth?: number
+	latencyTracker?: TaskLatencyTracker
 
 	// Multi-workspace support (optional for backward compatibility)
 	workspaceManager?: WorkspaceRootManager

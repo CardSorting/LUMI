@@ -158,6 +158,7 @@ export class TaskState {
 	// Agent ergonomics: intent routing + completion audit state
 	preAuditedIntent?: string
 	lastCompletionAudit?: TaskAuditMetadata
+	pendingCompletionAuditPersistence?: TaskAuditMetadata
 	lastAdvisoryAudit?: TaskAuditMetadata
 	/** Cache key for advisory audits (act-mode, command output) — reused at completion. */
 	lastAdvisoryAuditCacheKey?: string

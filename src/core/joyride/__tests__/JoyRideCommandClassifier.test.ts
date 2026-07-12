@@ -78,6 +78,12 @@ describe("JoyRideCommandClassifier", () => {
 			assert.isFalse(result.canSkipExecution)
 			assert.isTrue(result.canStoreDiagnostic)
 		})
+
+		it("should recognize bounded wrapper-based verification commands", () => {
+			assert.equal(classifyCommand("npx tsc --noEmit").tier, "verification")
+			assert.equal(classifyCommand("dotnet test").tier, "verification")
+			assert.equal(classifyCommand("mix test").tier, "verification")
+		})
 	})
 
 	describe("shell and platform edge cases", () => {

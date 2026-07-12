@@ -39,8 +39,10 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 	private hotTimer: NodeJS.Timeout | null = null
 	private exitCode: number | null | undefined = undefined
 	private signal: NodeJS.Signals | null = null
+	private activeTerminal?: vscode.Terminal
 
 	async run(terminal: vscode.Terminal, command: string) {
+		this.activeTerminal = terminal
 		this.exitCode = undefined
 		this.signal = null
 
@@ -236,6 +238,7 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 
 			this.emit("completed", this.getCompletionDetails())
 			this.emit("continue")
+			this.activeTerminal = undefined
 		} else {
 			// no shell integration detected, we'll fallback to running the command and capturing the terminal's output after some time
 			telemetryService.captureTerminalOutputFailure(TerminalOutputFailureReason.NO_SHELL_INTEGRATION, "vscode")
@@ -258,6 +261,7 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 			this.emit("completed", this.getCompletionDetails())
 			this.emit("continue")
 			this.emit("no_shell_integration")
+			this.activeTerminal = undefined
 			// setTimeout(() => {
 			// 	Logger.log(`Emitting continue after delay for terminal`)
 			// 	// can't emit completed since we don't if the command actually completed, it could still be running server
@@ -296,6 +300,13 @@ export class VscodeTerminalProcess extends EventEmitter<TerminalProcessEvents> i
 		this.isListening = false
 		this.removeAllListeners("line")
 		this.emit("continue")
+	}
+
+	terminate(): void {
+		if (!this.activeTerminal) return
+		this.signal = "SIGINT"
+		this.activeTerminal.sendText("\u0003", false)
+		this.continue()
 	}
 
 	/**

@@ -7,6 +7,7 @@ import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/pat
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
+import { hasWorkspaceLocalIoAuthority } from "../executionAuthority"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
@@ -34,17 +35,21 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 		// Create and show partial UI message
 		const recursiveRaw = block.params.recursive
 		const recursive = recursiveRaw?.toLowerCase() === "true"
+		const operationIsLocatedInWorkspace = await isLocatedInWorkspace(relPath)
 		const sharedMessageProps = {
 			tool: recursive ? "listFilesRecursive" : "listFilesTopLevel",
 			path: getReadablePath(config.cwd, uiHelpers.removeClosingTag(block, "path", relPath)),
 			content: "",
-			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath),
+			operationIsLocatedInWorkspace,
 		}
 
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
 		// Handle auto-approval vs manual approval for partial
-		if (await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath)) {
+		if (
+			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
+			(await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath))
+		) {
 			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool")
 			await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 		} else {
@@ -95,17 +100,19 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 		}
 
 		// Handle approval before I/O — mirrors read_file (avoid wasted work on manual deny)
+		const operationIsLocatedInWorkspace = await isLocatedInWorkspace(relDirPath!)
 		const sharedMessageProps = {
 			tool: recursive ? "listFilesRecursive" : "listFilesTopLevel",
 			path: getReadablePath(config.cwd, displayPath),
 			content: "",
-			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relDirPath!),
+			operationIsLocatedInWorkspace,
 		}
 
 		const completeMessage = JSON.stringify(sharedMessageProps)
 
 		const shouldAutoApprove =
-			config.isSubagentExecution || (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
+			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
+			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
 		if (shouldAutoApprove) {
 			if (!config.isSubagentExecution) {
 				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")

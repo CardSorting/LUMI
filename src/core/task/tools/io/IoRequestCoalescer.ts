@@ -1,3 +1,4 @@
+import pathModule from "node:path"
 import type { ToolUse } from "@core/assistant-message"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { isIoAuthorityTool } from "../executionAuthority"
@@ -5,15 +6,16 @@ import { isIoAuthorityTool } from "../executionAuthority"
 export type IoCoalesceKey = string
 
 /** Build a stable dedupe key for parent/lane I/O authority tools. */
-export function buildIoCoalesceKey(block: ToolUse, cwd: string): IoCoalesceKey | null {
+export function buildIoCoalesceKey(block: ToolUse, cwd: string, generation = 0): IoCoalesceKey | null {
 	if (!isIoAuthorityTool(block.name)) {
 		return null
 	}
-	const path = block.params.path?.trim()
+	const rawPath = block.params.path?.trim()
+	const target = pathModule.resolve(cwd, rawPath || ".")
 	const query = block.params.query?.trim() || block.params.regex?.trim()
-	const parts = [block.name, cwd, path ?? "", query ?? ""]
+	const parts = [`generation:${generation}`, block.name, target, query ?? "", block.params.file_pattern?.trim() ?? ""]
 	if (block.name === DietCodeDefaultTool.LIST_FILES) {
-		parts.push(block.params.recursive ?? "", block.params.path ?? ".")
+		parts.push(block.params.recursive ?? "")
 	}
 	return parts.join("|")
 }
@@ -30,10 +32,14 @@ type InFlightEntry<T> = {
 export class IoRequestCoalescer {
 	private readonly inFlight = new Map<IoCoalesceKey, InFlightEntry<unknown>>()
 	private readonly recent = new Map<IoCoalesceKey, { value: unknown; at: number }>()
+	private cacheHits = 0
+	private coalescedWaiters = 0
+	private executions = 0
 
 	constructor(
 		private readonly recentTtlMs = 5_000,
 		private readonly maxEntries = 128,
+		readonly generation = 0,
 	) {}
 
 	async coalesce<T>(key: IoCoalesceKey, execute: () => Promise<T>): Promise<T> {
@@ -42,14 +48,17 @@ export class IoRequestCoalescer {
 
 		const cached = this.recent.get(key)
 		if (cached && now - cached.at < this.recentTtlMs) {
+			this.cacheHits++
 			return cached.value as T
 		}
 
 		const existing = this.inFlight.get(key)
 		if (existing) {
+			this.coalescedWaiters++
 			return existing.promise as Promise<T>
 		}
 
+		this.executions++
 		const promise = execute()
 			.then((value) => {
 				this.recent.set(key, { value, at: Date.now() })
@@ -63,8 +72,22 @@ export class IoRequestCoalescer {
 		return promise
 	}
 
-	getStats(): { inFlight: number; cached: number } {
-		return { inFlight: this.inFlight.size, cached: this.recent.size }
+	getStats(): {
+		inFlight: number
+		cached: number
+		generation: number
+		cacheHits: number
+		coalescedWaiters: number
+		executions: number
+	} {
+		return {
+			inFlight: this.inFlight.size,
+			cached: this.recent.size,
+			generation: this.generation,
+			cacheHits: this.cacheHits,
+			coalescedWaiters: this.coalescedWaiters,
+			executions: this.executions,
+		}
 	}
 
 	private prune(now: number): void {
@@ -82,17 +105,25 @@ export class IoRequestCoalescer {
 	}
 }
 
-const coalescersByTask = new Map<string, IoRequestCoalescer>()
+const coalescersByTask = new Map<string, { generation: number; coalescer: IoRequestCoalescer }>()
 
 export function getIoRequestCoalescer(taskId: string): IoRequestCoalescer {
-	let coalescer = coalescersByTask.get(taskId)
-	if (!coalescer) {
-		coalescer = new IoRequestCoalescer()
-		coalescersByTask.set(taskId, coalescer)
+	let state = coalescersByTask.get(taskId)
+	if (!state) {
+		state = { generation: 0, coalescer: new IoRequestCoalescer(5_000, 128, 0) }
+		coalescersByTask.set(taskId, state)
 	}
-	return coalescer
+	return state.coalescer
 }
 
 export function resetIoRequestCoalescer(taskId: string): void {
-	coalescersByTask.delete(taskId)
+	const generation = (coalescersByTask.get(taskId)?.generation ?? 0) + 1
+	coalescersByTask.set(taskId, {
+		generation,
+		coalescer: new IoRequestCoalescer(5_000, 128, generation),
+	})
+}
+
+export function getIoRequestCoalescerGeneration(taskId: string): number {
+	return coalescersByTask.get(taskId)?.generation ?? 0
 }

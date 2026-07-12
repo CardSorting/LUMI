@@ -450,8 +450,24 @@ export class AgentOrchestrator {
 
 	public async persistTaskAudit(streamId: string, metadata: TaskAuditMetadata): Promise<void> {
 		const serialized = JSON.stringify(metadata)
-		await this.storeMemory(streamId, "last_completion_audit", serialized)
-		await this.storeMemory(streamId, `audit_trail_${Date.now()}`, serialized)
+		await dbPool.pushBatch(
+			[
+				{
+					type: "upsert",
+					table: "agent_memory",
+					values: { streamId, key: "last_completion_audit", value: serialized, updatedAt: Date.now() },
+					layer: "domain",
+				},
+				{
+					type: "upsert",
+					table: "agent_memory",
+					values: { streamId, key: `audit_trail_${Date.now()}`, value: serialized, updatedAt: Date.now() },
+					layer: "domain",
+				},
+			],
+			streamId,
+			`agent_memory:${streamId}:completion_audit`,
+		)
 	}
 
 	public async recallLastTaskAudit(streamId: string): Promise<TaskAuditMetadata | undefined> {

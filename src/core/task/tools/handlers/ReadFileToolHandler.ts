@@ -9,7 +9,8 @@ import { DietCodeSayTool } from "@/shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { SafeNumber } from "../../../../shared/utils/SafeNumber"
 import { showNotificationForApproval } from "../../utils"
-import { appendSessionStabilityContext } from "../executionAuthority"
+import { appendSessionStabilityContext, hasWorkspaceLocalIoAuthority } from "../executionAuthority"
+import { resolveInvocationResultTarget } from "../siblings/ToolInvocationContext"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
@@ -34,17 +35,21 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		}
 
 		// Create and show partial UI message
+		const operationIsLocatedInWorkspace = await isLocatedInWorkspace(relPath)
 		const sharedMessageProps = {
 			tool: "readFile",
 			path: getReadablePath(config.cwd, uiHelpers.removeClosingTag(block, "path", relPath)),
 			content: undefined,
-			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath),
+			operationIsLocatedInWorkspace,
 		}
 
 		const partialMessage = JSON.stringify(sharedMessageProps)
 
 		// Handle auto-approval vs manual approval for partial
-		if (await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath)) {
+		if (
+			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
+			(await uiHelpers.shouldAutoApproveToolWithPath(block.name, relPath))
+		) {
 			await uiHelpers.removeLastPartialMessageIfExistsWithType("ask", "tool")
 			await uiHelpers.say("tool", partialMessage, undefined, undefined, block.partial)
 		} else {
@@ -93,17 +98,19 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 		}
 
 		// Handle approval flow
+		const operationIsLocatedInWorkspace = await isLocatedInWorkspace(relPath)
 		const sharedMessageProps = {
 			tool: "readFile",
 			path: getReadablePath(config.cwd, displayPath),
 			content: absolutePath,
-			operationIsLocatedInWorkspace: await isLocatedInWorkspace(relPath),
+			operationIsLocatedInWorkspace,
 		} satisfies DietCodeSayTool
 
 		const completeMessage = JSON.stringify(sharedMessageProps)
 
 		const shouldAutoApprove =
-			config.isSubagentExecution || (await config.callbacks.shouldAutoApproveToolWithPath(block.name, relPath))
+			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
+			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relPath))
 		if (shouldAutoApprove) {
 			// Auto-approval flow
 			if (!config.isSubagentExecution) {
@@ -223,7 +230,7 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 
 		// Handle image blocks separately - they need to be pushed to userMessageContent
 		if (fileContent.imageBlock) {
-			config.taskState.userMessageContent.push(fileContent.imageBlock)
+			resolveInvocationResultTarget(config.taskState.userMessageContent).push(fileContent.imageBlock)
 		}
 
 		fileContent.text = appendSessionStabilityContext(config, relPath as string, fileContent.text)

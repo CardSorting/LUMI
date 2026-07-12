@@ -1,6 +1,7 @@
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import { Logger } from "@/shared/services/Logger"
 import { formatWatchSteeringLine } from "./RoadmapAgentSteering"
 import {
 	AUTO_GOVERNANCE,
@@ -13,6 +14,8 @@ import { recommendNextAction } from "./RoadmapOperator"
 
 const MAX_LOG_BYTES = 1024 * 1024
 const MAX_LOG_LINES = 2000
+const PROGRESS_RETRY_COOLDOWN_MS = 60_000
+let progressRetryAfter = 0
 
 function sessionDir(): string {
 	const raw = process.env.DIETCODE_SESSION_DIR?.trim()
@@ -71,11 +74,21 @@ export async function emitProgress(
 	const line = JSON.stringify(event)
 	const jsonl = progressJsonlPath()
 	const current = progressCurrentPath()
+	if (Date.now() < progressRetryAfter) {
+		return event
+	}
 
-	await fs.mkdir(path.dirname(jsonl), { recursive: true })
-	await fs.appendFile(jsonl, `${line}\n`, "utf8")
-	await trimJsonl(jsonl)
-	await fs.writeFile(current, JSON.stringify(event, null, 2), "utf8")
+	try {
+		await fs.mkdir(path.dirname(jsonl), { recursive: true })
+		await fs.appendFile(jsonl, `${line}\n`, "utf8")
+		await trimJsonl(jsonl)
+		await fs.writeFile(current, JSON.stringify(event, null, 2), "utf8")
+	} catch (error) {
+		// Progress telemetry is advisory. A read-only home directory must not
+		// prevent roadmap admission, completion, or finalization.
+		progressRetryAfter = Date.now() + PROGRESS_RETRY_COOLDOWN_MS
+		Logger.warn("[RoadmapProgress] Progress journal unavailable; continuing:", error)
+	}
 	return event
 }
 

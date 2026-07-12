@@ -41,7 +41,9 @@ const VERIFICATION_COMMAND_PATTERNS: RegExp[] = [
 	/^(npm|pnpm|yarn|bun)\s+(run\s+)?(test|lint|typecheck|check)\b/i,
 	/^(npm|pnpm|yarn|bun)\s+test\b/i,
 	/^(pytest|tox|nox|jest|vitest|mocha|eslint|tsc)\b/i,
+	/^npx\s+(tsc|eslint|jest|vitest|mocha)\b/i,
 	/^(cargo|go|mvn|gradle|gradlew)\s+(test|check)\b/i,
+	/^(mix|dotnet)\s+test\b/i,
 	/^make\s+(test|check)\b/i,
 ]
 

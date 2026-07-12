@@ -16,14 +16,8 @@ import {
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
-import { formatAutoRemediationSummary } from "@/services/roadmap/RoadmapAutoGovernance"
-import {
-	evaluateRoadmapCompletionBlock,
-	failClosedCompletionMessage,
-	roadmapPreflightReadinessFromDryRun,
-} from "@/services/roadmap/RoadmapCompletionGate"
+import { evaluateRoadmapCompletionBlock, roadmapPreflightReadinessFromDryRun } from "@/services/roadmap/RoadmapCompletionGate"
 import { getRoadmapConfig } from "@/services/roadmap/RoadmapConfig"
-import { RoadmapService } from "@/services/roadmap/RoadmapService"
 import {
 	type CompletionPreflightStage,
 	detectDuplicateCompletionSubmission,
@@ -192,18 +186,21 @@ export async function evaluateGatePreflightReadinessAsync(
 ): Promise<GatePreflightReadinessIssue[]> {
 	const issues = evaluateGatePreflightReadiness(config, params, validateQuality)
 
-	const roadmapError = await evaluateRoadmapCompletionGateError(config, logPrefix, { dryRun: true })
-	if (roadmapError) {
-		issues.push({ stage: "roadmap", message: roadmapError, severity: "warning" })
-	} else if (getRoadmapConfig().enabled) {
+	if (getRoadmapConfig().enabled) {
 		try {
+			// One canonical roadmap snapshot per readiness pass. The previous flow
+			// evaluated the same dry-run twice and reconstructed the decision.
 			const block = await evaluateRoadmapCompletionBlock(config.cwd, { dryRun: true })
 			const advisory = roadmapPreflightReadinessFromDryRun(block)
 			if (advisory) {
-				issues.push({ stage: advisory.stage, message: advisory.message, severity: "info" })
+				issues.push({
+					stage: advisory.stage,
+					message: normalizeAdvisoryDiagnosticCopy(advisory.message),
+					severity: advisory.severity === "block" ? "warning" : "info",
+				})
 			}
-		} catch {
-			// non-fatal — readiness hint must not block completion attempt
+		} catch (error) {
+			Logger.warn(`[${logPrefix}] Roadmap readiness diagnostics unavailable; continuing:`, error)
 		}
 	}
 
@@ -298,42 +295,20 @@ async function resolveCompletionAuditMetadata(
 		return advisory
 	}
 
-	let auditMetadata = await runCompletionAudit(config.taskId, params.taskDescription, params.result, params.taskDescription)
+	let auditMetadata = await runCompletionAudit(
+		config.taskId,
+		params.taskDescription,
+		params.result,
+		params.taskDescription,
+		config.latencyTracker,
+		false,
+	)
 	auditMetadata = await applyWorkspaceAuditPolicy(config.cwd, auditMetadata, config)
+	config.taskState.pendingCompletionAuditPersistence = auditMetadata
 	config.taskState.lastCompletionAuditCacheKey = cacheKey
 	config.taskState.lastCompletionAuditCachedAt = Date.now()
 	config.taskState.lastCompletionAuditGraphRevision = currentRevision
 	return auditMetadata
-}
-
-export async function evaluateRoadmapCompletionGateError(
-	config: TaskConfig,
-	logPrefix: string,
-	_options?: { dryRun?: boolean },
-): Promise<string | null> {
-	const roadmapService = RoadmapService.getInstance()
-	if (!roadmapService.isEnabled()) {
-		return null
-	}
-
-	try {
-		const block = await evaluateRoadmapCompletionBlock(config.cwd, { dryRun: true })
-		if (block.blocked) {
-			const remediated = formatAutoRemediationSummary(block.remediationSteps || [])
-			const base = block.message || failClosedCompletionMessage()
-			return normalizeAdvisoryDiagnosticCopy(remediated ? `${base}\n\n${remediated}` : base)
-		}
-		if (block.dryRunAdvisory) {
-			return null
-		}
-	} catch (error) {
-		Logger.error(`[${logPrefix}] Failed to evaluate Roadmap Governance Gates:`, error)
-		if (roadmapService.getConfig().fail_closed_completion_gates) {
-			return `Roadmap diagnostics unavailable: ${normalizeAdvisoryDiagnosticCopy(failClosedCompletionMessage())}`
-		}
-	}
-
-	return null
 }
 
 function normalizeAdvisoryDiagnosticCopy(message: string): string {
@@ -530,7 +505,13 @@ export async function evaluateSubagentAdvisoryAudit(
 	try {
 		const messages = config.messageState?.getDietCodeMessages?.() ?? []
 		const planBaseline = resolvePlanBaselineMetadata(messages, config.taskState.lastPlanAuditMetadata)
-		let auditMetadata = await runCompletionAudit(config.taskId, params.taskDescription, params.result, params.taskDescription)
+		let auditMetadata = await runCompletionAudit(
+			config.taskId,
+			params.taskDescription,
+			params.result,
+			params.taskDescription,
+			config.latencyTracker,
+		)
 		auditMetadata = await applyWorkspaceAuditPolicy(config.cwd, auditMetadata, config)
 
 		const gateContext = await resolveCompletionGateContext(config, config.cwd, {
