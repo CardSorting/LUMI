@@ -46,7 +46,7 @@ Coding agents promise speed. They risk **opacity** — changes appear without co
 
 | Artifact | Count / location |
 |----------|------------------|
-| Extension version | **3.3.0** — `package.json` |
+| Extension version | **4.0.0** — `package.json` |
 | Static tool enum values | **64** — `src/shared/tools.ts` |
 | Tool handler implementations | **55** files — `src/core/task/tools/handlers/` |
 | Wired LLM providers | **6** — `src/shared/providers/providers.json` + `src/core/api/index.ts` |
