@@ -1,4 +1,4 @@
-# HTE-003: Risk-Proportional Governance
+# MEOW-003: Risk-Proportional Governance
 
 **Status:** Accepted  
 **Implementation:** dependency classification, approval handlers, `completionAudit.ts`

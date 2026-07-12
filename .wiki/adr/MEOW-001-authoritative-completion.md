@@ -1,4 +1,4 @@
-# HTE-001: Authoritative Completion
+# MEOW-001: Authoritative Completion
 
 **Status:** Accepted  
 **Implementation:** `src/core/task/tools/handlers/AttemptCompletionHandler.ts`, `completionGatePipeline.ts`

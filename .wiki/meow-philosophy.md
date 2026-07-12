@@ -1,8 +1,12 @@
-# Dependency-Oriented High-Throughput Execution Philosophy
+# MEOW: Philosophy and Principles
 
-This document defines the reasoning behind the Dependency-Oriented High-Throughput Execution Architecture. It is normative for future contributors: extend the implementation in ways that preserve these principles, and treat a departure as an architectural decision rather than a local convenience.
+**MEOW (Model-Efficient Order-aware Workflow)** is the execution architecture governing parallel tool dispatch, structured task ownership, deterministic projection, and authoritative completion.
+
+This document defines the reasoning behind the MEOW Architecture. It is normative for future contributors: extend the implementation in ways that preserve these principles, and treat a departure as an architectural decision rather than a local convenience.
 
 The document separates **principles** (desired design constraints), **mechanisms** (the implementation that exists), and **evidence** (measurements and tests). A principle is not evidence that the current implementation satisfies it universally. Where the implementation is narrower, the mechanism description governs claims about present behavior.
+
+---
 
 ## Execution is the product
 
@@ -61,4 +65,4 @@ Every gate must answer: what concrete material failure does this prevent, and wh
 
 ## Investigation terminates in implementation
 
-The architecture values measured bottlenecks over theoretical elegance. A latency trace, a deterministic barrier test, or a reproducible queue wait should lead to a small change and a verification pass. Reopening settled decisions without new evidence is itself throughput debt. Future contributors should preserve the current boundaries and change only the contention that evidence identifies.
+The MEOW architecture values measured bottlenecks over theoretical elegance. A latency trace, a deterministic barrier test, or a reproducible queue wait should lead to a small change and a verification pass. Reopening settled decisions without new evidence is itself throughput debt. Future contributors should preserve the current boundaries and change only the contention that evidence identifies.

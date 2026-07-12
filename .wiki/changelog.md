@@ -27,7 +27,7 @@ This log preserves historical wiki entries and records current LUMI workspace kn
 - Captured current known drift: stale `ROADMAP.md`, provider-count documentation drift, README badge version drift, and sandbox-specific roadmap progress write failures.
 - Linked current Agent Playbook finalization work so future agents do not rediscover the same validation commands and failure modes.
 
-## [Canonical High-Throughput Design Capture] — 2026-07-12
+## [Canonical MEOW Design Capture] — 2026-07-12
 
 - Added the executive brief, execution philosophy, technical whitepaper, ADR series, and migration/evolution report under `.wiki/`.
 - Linked the canonical suite from `.wiki/index.md` and the agent fast-orientation page.

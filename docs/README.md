@@ -234,10 +234,10 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Companion brief](papers/companion-brief.md) | Leads, evaluators | Executive summary · workspace-verified metrics |
 | [Philosophy](papers/philosophy.md) | Builders, policy | Calm agency · approval · completion gates |
 | [Whitepaper](papers/whitepaper.md) | Engineers | Full technical architecture |
-| [High-throughput brief](../.wiki/high-throughput-execution-executive-brief.md) | Leads, onboarding | Executive brief for dependency-oriented execution |
-| [High-throughput philosophy](../.wiki/high-throughput-execution-philosophy.md) | Leads, builders | Normative reasoning and calm concurrency principles |
-| [High-throughput whitepaper](../.wiki/high-throughput-execution-whitepaper.md) | Engineers | Canonical technical architecture for execution lane swarms |
-| [High-throughput migration](../.wiki/high-throughput-execution-migration.md) | Evaluators | Measured evidence and naming evolution |
+| [MEOW brief](../.wiki/meow-executive-brief.md) | Leads, onboarding | Executive brief for the Model-Efficient Order-aware Workflow |
+| [MEOW philosophy](../.wiki/meow-philosophy.md) | Leads, builders | Normative reasoning and calm concurrency principles |
+| [MEOW whitepaper](../.wiki/meow-whitepaper.md) | Engineers | Canonical technical architecture for execution lane swarms |
+| [MEOW migration](../.wiki/meow-migration.md) | Evaluators | Measured evidence and naming evolution |
 
 Substrate papers: [broccolidb/docs/papers/](../broccolidb/docs/papers/) — separate narrative.
 

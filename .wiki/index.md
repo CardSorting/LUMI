@@ -17,11 +17,11 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 - [**Handoff**](../HANDOFF.md) — Current working-tree transfer notes.
 - [**01 System Overview**](01-system-overview.md) — Current `.wiki` overview aligned to LUMI + BroccoliDB.
 - [**Active Technical Changelog**](changelog.md) — Ledger change record.
-- [**Dependency-Oriented Execution Executive Brief**](high-throughput-execution-executive-brief.md) — Maintainer and onboarding summary.
-- [**Dependency-Oriented Execution Philosophy**](high-throughput-execution-philosophy.md) — Normative reasoning and operating principles.
-- [**Dependency-Oriented Execution Whitepaper**](high-throughput-execution-whitepaper.md) — Canonical technical architecture reference.
-- [**Dependency-Oriented Execution ADRs**](adr/README.md) — Decision records for the execution model.
-- [**Dependency-Oriented Execution Migration Report**](high-throughput-execution-migration.md) — Before/after evolution and measured evidence.
+- [**MEOW Executive Brief**](meow-executive-brief.md) — Maintainer and onboarding summary.
+- [**MEOW Philosophy**](meow-philosophy.md) — Normative reasoning and operating principles.
+- [**MEOW Technical Whitepaper**](meow-whitepaper.md) — Canonical technical architecture reference.
+- [**MEOW Architecture Decision Records (ADRs)**](adr/README.md) — Decision records for the execution model.
+- [**MEOW Migration Report**](meow-migration.md) — Before/after evolution and measured evidence.
 - [**00 Forensic Substrate Report**](00-forensics.md) — Historical forensic report; refresh before treating as current.
 
 ## Current Verification Matrix
@@ -34,7 +34,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 | Root decisions / ADR log exists | [x] `DECISIONS.md` |
 | Current handoff exists | [x] `HANDOFF.md` |
 | Sibling concurrency and latency evidence recorded | [x] [Agent key findings](agent/key-findings.md) |
-| Canonical high-throughput architecture suite linked | [x] [Whitepaper](high-throughput-execution-whitepaper.md) |
+| Canonical MEOW architecture suite linked | [x] [Whitepaper](meow-whitepaper.md) |
 | Historical forensic report refreshed after 2026-07-09 | [ ] Pending fresh diagnostics |
 | `ROADMAP.md` repaired after bootstrap drift | [ ] Pending roadmap pass |
 

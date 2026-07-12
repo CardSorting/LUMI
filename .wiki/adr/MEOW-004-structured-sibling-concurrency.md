@@ -1,4 +1,4 @@
-# HTE-004: Structured Sibling Concurrency
+# MEOW-004: Structured Sibling Concurrency
 
 **Status:** Accepted  
 **Implementation:** `src/core/task/tools/siblings/SiblingToolScheduler.ts`

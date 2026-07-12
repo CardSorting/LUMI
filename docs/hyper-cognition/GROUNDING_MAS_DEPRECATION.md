@@ -34,7 +34,7 @@ A refactor (e.g., adding timeouts or confidence thresholds) was considered but r
 
 ## 🏗️ New Architectural Direction: Observe-Act-Adjust
 
-Following the removal of these layers, LUMI has moved to a simplified, high-throughput execution model:
+Following the removal of these layers, LUMI has moved to the simplified MEOW execution model:
 
 1. **Observe**: Gather immediate context from BroccoliDB, Spider Engine, and Diagnostics.
 2. **Act**: Propose a plan and execute tool calls with built-in policy guards (`UniversalGuard`).

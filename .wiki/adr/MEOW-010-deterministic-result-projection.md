@@ -1,4 +1,4 @@
-# HTE-010: Deterministic Result Projection
+# MEOW-010: Deterministic Result Projection
 
 **Status:** Accepted  
 **Implementation:** `src/core/task/index.ts`, `ToolInvocationContext.ts`

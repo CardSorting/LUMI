@@ -1,4 +1,4 @@
-# HTE-005: Invocation-Local Presentation Context
+# MEOW-005: Invocation-Local Presentation Context
 
 **Status:** Accepted  
 **Implementation:** `src/core/task/tools/siblings/ToolInvocationContext.ts`, `ToolExecutor.ts`

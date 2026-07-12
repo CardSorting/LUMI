@@ -1,4 +1,4 @@
-# Dependency-Oriented High-Throughput Execution Architecture
+# MEOW: Model-Efficient Order-aware Workflow
 
 ## An Implementation-Backed Architecture Description and Evaluation
 
@@ -23,7 +23,7 @@
 
 The task execution engine historically coupled tool admission, execution, presentation, completion, and supporting persistence through a substantially sequential control path. This design preserved safety but serialized independent sibling operations and allowed shared presentation state, lifecycle bookkeeping, and selected persistence activities to delay otherwise valid execution.
 
-This paper describes an implementation-backed transition to dependency-oriented execution for a bounded scope: contiguous, complete sibling tool blocks discovered while parallel tool calling is enabled. Each eligible operation is classified by resource claims, explicit prerequisites, safety boundaries, mutation scope, approval requirements, and completion semantics. Independent children execute through a bounded, task-owned scheduler. Conflicting, prerequisite-bound, interactive, externally visible, unknown, and correctness-sensitive operations remain ordered.
+This paper describes an implementation-backed transition to a Model-Efficient Order-aware Workflow (MEOW) for a Bounded Scope: contiguous, complete sibling tool blocks discovered while parallel tool calling is enabled. Each eligible operation is classified by resource claims, explicit prerequisites, safety boundaries, mutation scope, approval requirements, and completion semantics. Independent children execute through a bounded, task-owned scheduler. Conflicting, prerequisite-bound, interactive, externally visible, unknown, and correctness-sensitive operations remain ordered.
 
 Execution eligibility is therefore determined by dependencies, resource ownership, and concrete risk rather than by presentation state, stream-cursor ownership, or model-emission order. Invocation-local result envelopes isolate concurrent execution evidence. Results may complete out of order but are projected deterministically in model-emission order. Task-generation-aware I/O coalescing prevents stale in-flight results from crossing mutation boundaries. Completion retains one authoritative decision path, while selected audit and roadmap persistence are deferred until after the result path.
 
@@ -41,10 +41,10 @@ The contribution is not dependency scheduling as a novel concept. It is the appl
 
 This document serves four purposes:
 
-1. Define the architectural contracts governing multi-tool execution.
+1. Define the architectural contracts governing multi-tool execution under MEOW.
 2. Describe the mechanisms currently implementing those contracts.
-3. present the evidence used to evaluate the implementation.
-4. establish extension and conformance requirements for future changes.
+3. Present the evidence used to evaluate the implementation.
+4. Establish extension and conformance requirements for future changes.
 
 It is both an explanatory whitepaper and a canonical architecture reference. It is not a user tutorial, operational runbook, or replacement for individual architectural decision records.
 
@@ -192,7 +192,7 @@ The implementation contributes:
 
 ## 5.1 Included execution path
 
-The dependency-oriented path applies when:
+The MEOW path applies when:
 
 * parallel tool calling is enabled;
 * the model stream contains consecutive tool blocks;
@@ -214,7 +214,7 @@ Within that scope, the runtime can:
 
 ## 5.2 Excluded or partially covered paths
 
-The following remain partly or wholly outside the batch model:
+The following remain partly or wholly outside the MEOW batch model:
 
 * single-tool model responses;
 * non-contiguous tool blocks;
@@ -467,13 +467,13 @@ Eligible local reads may proceed while checkpoint creation settles. Checkpoint w
 
 `SiblingToolScheduler.ts` maintains:
 
-* bounded capacity;
-* task-owned cancellation;
-* dependency-aware readiness;
-* sequence-indexed outcomes;
-* queue, start, and completion evidence;
-* dependency-local failure handling;
-* a strict batch join.
+* Bounded capacity;
+* Task-owned cancellation;
+* Dependency-aware readiness;
+* Sequence-indexed outcomes;
+* Queue, start, and completion evidence;
+* Dependency-local failure handling;
+* A strict batch join.
 
 The current task path uses capacity four.
 
@@ -806,7 +806,7 @@ The tracker is bounded to 1,024 events.
 
 Snapshots expose:
 
-* admission latency;
+* admission lifecycle latency;
 * time to first model token;
 * time to first tool recognition;
 * time to first useful I/O;
@@ -1053,7 +1053,7 @@ These constraints and debts should remain explicit rather than being represented
 
 # 22. Conformance and Extension Requirements
 
-A tool intended to participate in sibling execution **MUST** define:
+A tool intended to participate in sibling execution under MEOW **MUST** define:
 
 1. operation category;
 2. canonical resource claims;
@@ -1093,7 +1093,7 @@ Future implementations **MUST NOT**:
 
 | Architectural principle        | Runtime contract                            | Current mechanism                     | Principal evidence                   |
 | ------------------------------ | ------------------------------------------- | ------------------------------------- | ------------------------------------ |
-| Dependency-oriented execution  | Independent work may begin independently    | `SiblingToolDependency.ts`            | Dependency and scheduler tests       |
+| Model-efficient workflow (MEOW)| Independent work may begin independently    | `SiblingToolDependency.ts`            | Dependency and scheduler tests       |
 | Resource-oriented coordination | Conflicting claims remain ordered           | Canonical claims and backward edges   | Mutation and mixed-workload fixtures |
 | Structured concurrency         | Children remain bounded and task-owned      | `SiblingToolScheduler.ts`             | Join and cancellation tests          |
 | Deterministic projection       | Final order follows model sequence          | Sequence-indexed envelopes            | Out-of-order completion tests        |
@@ -1197,7 +1197,7 @@ The architecture should evolve through more precise ownership rather than more e
 
 # 27. Conclusion
 
-The dependency-oriented execution architecture changes the operational meaning of a supported multi-tool model turn.
+The MEOW architecture changes the operational meaning of a supported multi-tool model turn.
 
 A turn is no longer treated only as a presentation-ordered list of tool calls. For contiguous, complete sibling blocks on the parallel path, it becomes a dependency-constrained set of task-owned operations. Eligibility is determined by explicit claims, prerequisites, barriers, and safety predicates.
 

@@ -1,4 +1,4 @@
-# HTE-006: Dependency-Based Scheduling
+# MEOW-006: Dependency-Based Scheduling
 
 **Status:** Accepted  
 **Implementation:** `src/core/task/tools/siblings/SiblingToolDependency.ts`

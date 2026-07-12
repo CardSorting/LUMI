@@ -1,4 +1,4 @@
-# HTE-009: Latency Instrumentation
+# MEOW-009: Latency Instrumentation
 
 **Status:** Accepted  
 **Implementation:** `src/core/task/latency/TaskLatencyTracker.ts`

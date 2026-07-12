@@ -1,4 +1,4 @@
-# HTE-008: Cache Generation Invalidation
+# MEOW-008: Cache Generation Invalidation
 
 **Status:** Accepted  
 **Implementation:** `src/core/task/tools/io/IoRequestCoalescer.ts`, `ToolExecutor.ts`

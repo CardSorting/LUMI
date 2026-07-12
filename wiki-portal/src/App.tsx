@@ -112,13 +112,13 @@ const LEARNING_TRACKS = {
 			],
 		},
 		{
-			title: "⚡ Dependency-Oriented High-Throughput Execution",
-			description: "Technical specifications and measured evidence for high-throughput concurrency:",
+			title: "⚡ MEOW: Model-Efficient Order-aware Workflow",
+			description: "Technical specifications and measured evidence for concurrency under MEOW:",
 			steps: [
-				{ path: "wiki/high-throughput-execution-executive-brief", label: "Executive Brief" },
-				{ path: "wiki/high-throughput-execution-philosophy", label: "Philosophy & Principles" },
-				{ path: "wiki/high-throughput-execution-whitepaper", label: "Technical Whitepaper" },
-				{ path: "wiki/high-throughput-execution-migration", label: "Migration Report" },
+				{ path: "wiki/meow-executive-brief", label: "Executive Brief" },
+				{ path: "wiki/meow-philosophy", label: "Philosophy & Principles" },
+				{ path: "wiki/meow-whitepaper", label: "Technical Whitepaper" },
+				{ path: "wiki/meow-migration", label: "Migration Report" },
 			],
 		},
 	],
@@ -1539,7 +1539,7 @@ function Footer() {
 							<Link to="/papers/papers/knowledge-item-thesis">Knowledge Item Thesis</Link>
 						</li>
 						<li>
-							<Link to="/docs/wiki/high-throughput-execution-whitepaper">High-Throughput Execution</Link>
+							<Link to="/docs/wiki/meow-whitepaper">MEOW Architecture</Link>
 						</li>
 					</ul>
 				</div>

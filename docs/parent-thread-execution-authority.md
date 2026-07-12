@@ -8,7 +8,7 @@ description: "Hot/warm/cold execution model for parent main-thread throughput â€
 
 # Parent-thread execution authority
 
-This document describes the **throughput-oriented execution model** for the parent main-thread agent loop and subagent I/O lanes. The goal is high-throughput tool execution without weakening authoritative safety at `attempt_completion`.
+This document describes the **Model-Efficient Order-aware Workflow (MEOW)** for the parent main-thread agent loop and subagent I/O lanes. The goal is high-throughput tool execution without weakening authoritative safety at `attempt_completion`.
 
 **Canonical code:** `src/core/task/tools/executionAuthority.ts`  
 **Parent entry:** `src/core/task/ToolExecutor.ts`  

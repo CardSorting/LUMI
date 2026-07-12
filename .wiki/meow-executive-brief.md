@@ -1,4 +1,4 @@
-# Dependency-Oriented High-Throughput Execution Architecture
+# MEOW: Model-Efficient Order-aware Workflow
 
 ## Executive Brief
 
@@ -6,15 +6,23 @@
 **Audience:** Maintainers, reviewers, contributors, and project leads  
 **Scope:** Task execution, dependency scheduling, structured concurrency, presentation, completion, caching, auditing, and lifecycle management within `src/core/task/`.
 
+### What is MEOW?
+
+Think of MEOW as helping the agent decide which jobs can safely happen together. If two jobs don't get in each other's way, they can run at the same time. If they might conflict, MEOW keeps them in the correct order. The result is faster execution without sacrificing safety.
+
+**MEOW (Model-Efficient Order-aware Workflow)** is the architectural execution model governing dependency-aware task scheduling, structured concurrency, deterministic projection, and authoritative completion.
+
+---
+
 ## Executive Summary
 
 The execution engine was historically optimized for correctness through conservative serialization. Although safe, this design allowed presentation, governance, and bookkeeping concerns to occupy portions of the critical path without materially improving correctness. Independent sibling tools waited behind one another, shared presentation state acted as an accidental execution lock, and advisory persistence could delay results whose validity had already been established.
 
-This work replaces that model with dependency-oriented execution.
+This work replaces that model with the MEOW execution architecture.
 
 Throughput is the outcome; dependencies, resource ownership, and authoritative completion are the governing principles. Eligible sibling operations can execute concurrently under a bounded, task-owned scheduler. Conflicting, prerequisite-bound, interactive, and conservatively classified operations remain ordered. Batch results are projected deterministically. The critical path is narrower than before, although completion still contains synchronous audit evaluation, optional workspace-artifact persistence, UI persistence, and checkpoint work.
 
-This is not merely a local performance optimization. For model turns that expose an eligible sibling batch, it changes admission from presenter-driven sequencing to dependency-constrained scheduling.
+This is not merely a local performance optimization. For model turns that expose an eligible sibling batch, it changes admission from presenter-driven sequencing to dependency-constrained scheduling governed by MEOW.
 
 ## Problem Statement
 
@@ -33,23 +41,21 @@ Presentation controlled execution, execution controlled admission, and shared UI
 
 Completion had similar coupling. Diagnostics, audit persistence, roadmap bookkeeping, and other advisory work could remain on the response path even after the requested work had been validated successfully.
 
-The architecture therefore conflated four distinct concerns:
+The MEOW architecture separates these four distinct concerns and gives each one an explicit contract:
 
 * execution eligibility
 * safety and governance
 * visual presentation
 * durable observability
 
-The redesign separates those concerns and gives each one an explicit contract.
-
 ## Architectural Transformation
 
-A contiguous group of complete tool blocks is interpreted as a dependency-constrained batch when parallel tool calling is enabled and the group contains more than one tool:
+A contiguous group of complete tool blocks is interpreted as a dependency-constrained batch under MEOW when parallel tool calling is enabled and the group contains more than one tool:
 
 ```text
 model response
-    -> dependency and resource classification
-    -> bounded task-owned scheduling
+    -> dependency and resource classification (MEOW)
+    -> bounded task-owned scheduling (MEOW)
     -> concurrent independent tool children
     -> deterministic result projection
     -> authoritative completion
@@ -62,7 +68,7 @@ For workspace-local query siblings, presentation is captured per invocation and 
 
 ## Architectural Principles
 
-### 1. Dependency-Oriented Execution
+### 1. Model-Efficient Execution
 
 Eligible independent siblings should begin independently.
 
@@ -149,7 +155,7 @@ Task abort cancels the active scheduler, and task abort handling waits for the a
 
 ## Implementation Mechanisms
 
-The architecture is implemented through the following components.
+The MEOW architecture is implemented through the following components.
 
 ### `TaskLatencyTracker.ts`
 

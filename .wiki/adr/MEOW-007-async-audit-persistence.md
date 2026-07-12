@@ -1,4 +1,4 @@
-# HTE-007: Asynchronous Audit Persistence
+# MEOW-007: Asynchronous Audit Persistence
 
 **Status:** Accepted  
 **Implementation:** `src/shared/audit/completionAudit.ts`, `TaskState.ts`

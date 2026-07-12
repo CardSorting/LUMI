@@ -45,10 +45,10 @@ For Task-level focused tests, also require `./src/test/requires.cjs` so the VS C
 - [Common pitfalls](common-pitfalls.md)
 - [Patterns](patterns.md)
 
-## Canonical dependency-oriented architecture references
+## Canonical MEOW architecture references
 
-- [Executive brief](../high-throughput-execution-executive-brief.md)
-- [Execution philosophy](../high-throughput-execution-philosophy.md)
-- [Technical whitepaper](../high-throughput-execution-whitepaper.md)
+- [Executive brief](../meow-executive-brief.md)
+- [Execution philosophy](../meow-philosophy.md)
+- [Technical whitepaper](../meow-whitepaper.md)
 - [ADR index](../adr/README.md)
-- [Migration report](../high-throughput-execution-migration.md)
+- [Migration report](../meow-migration.md)

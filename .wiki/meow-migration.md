@@ -1,8 +1,12 @@
-# Dependency-Oriented High-Throughput Execution Migration and Evolution Report
+# MEOW: Migration and Evolution Report
+
+**MEOW (Model-Efficient Order-aware Workflow)** is the execution architecture governing parallel tool dispatch, structured task ownership, deterministic projection, and authoritative completion.
 
 ## Purpose
 
-This report preserves the transition from the previous execution model to the implemented architecture. It is historical context for future maintainers, not a proposal for another rewrite.
+This report preserves the transition from the previous execution model to the implemented MEOW architecture. It is historical context for future maintainers, not a proposal for another rewrite.
+
+---
 
 ## Previous model
 
@@ -16,17 +20,21 @@ stream chunk -> shared presenter lock -> execute tool -> append shared content
 
 The presenter effectively owned admission. A single mutable current-tool state and shared message updates meant that even independent reads waited for the previous sibling. Native tool deltas could reset a cursor and completion-order appends were difficult to project deterministically. Governance and evidence work had more opportunities to appear as synchronous gates than their risk justified.
 
-## Implemented model
+---
+
+## Implemented model (MEOW)
 
 ```text
 stream -> per-index tool identity -> contiguous sibling window
-       -> claims/edges -> bounded task-owned scheduler
+       -> claims/edges -> bounded task-owned scheduler (MEOW)
        -> invocation-local envelopes -> stable projection
        -> one completion validation -> authoritative result
        -> async audit/roadmap persistence -> child join/finalize
 ```
 
 The migration was incremental. Existing authority, workspace policy, approvals, checkpoint, rollback, receipts, and completion semantics were retained. The change extracted only the concurrency boundary and the evidence needed to prove it.
+
+---
 
 ## Why each change happened
 
@@ -54,6 +62,8 @@ Overlapping reads made “clear the cache” insufficient: an old in-flight comp
 
 Claims and dependency edges distinguish independent reads from the task-wide mutation lane, command environment barriers, approvals, checkpoint prerequisites, and explicit result references. The scheduler is bounded and task-owned rather than global.
 
+---
+
 ## Before-and-after traces
 
 ### Four independent reads
@@ -75,6 +85,8 @@ Before and after in the deterministic scheduler fixture: the two mutations remai
 Before: a sequential all-or-nothing path could delay usable results behind the failed child.  
 After: successful siblings complete and remain usable beside the individual failure; 190 ms estimate becomes 100 ms.
 
+---
+
 ## Measured evidence
 
 | Workload | Sequential estimate | New wall time | Queue wait | Safety behavior |
@@ -88,9 +100,13 @@ After: successful siblings complete and remain usable beside the individual fail
 
 The latency tracker fixture proves event coverage, not provider performance: admission 5 ms, first token 7 ms, first useful I/O 12 ms, authoritative-to-visible 5 ms, persistence 10 ms. Production task snapshots are the source for host-specific measurement.
 
+---
+
 ## Safety guarantees preserved
 
 The sibling batch still executes every child through `ToolExecutor`, so `.dietcodeignore`, workspace boundaries, external-path approval, destructive/manual command approval, credentials/protected paths, rollback, receipts, publication controls, and direct validation are not bypassed by the scheduler. Checkpoint readiness is an admission predicate for mutation-like nodes. Task abort cancels the scheduler and waits for the batch promise; backend interruption depends on signal support. Old I/O completions cannot populate the replacement coalescer generation.
+
+---
 
 ## Intentionally serialized work
 
@@ -105,6 +121,8 @@ The following remain ordered because the implementation has a concrete shared re
 - explicit model-produced prerequisite/result-reference edges;
 - final canonical completion and stable result projection.
 
+---
+
 ## Residual technical debt
 
 1. The task-wide mutation claim prevents even disjoint sibling writes from overlapping; narrowing it would also require validating diff/presentation ownership.
@@ -113,9 +131,13 @@ The following remain ordered because the implementation has a concrete shared re
 4. Captured query presentation no longer controls sibling admission, but shared non-query presentation and final message persistence remain synchronous.
 5. Deterministic fixtures do not replace live provider and host latency measurements.
 
+---
+
 ## What future work should not change casually
 
 Do not restore a shared current-tool lock, make audit persistence synchronous, add a second completion authority, use unbounded `Promise.all`, or replace resource claims with a workspace-wide lock. Do not broaden mutation authority to make a query easier. Any proposed serialization must identify the concrete resource or protocol failure it prevents and include a barrier-based test plus a latency snapshot.
+
+---
 
 ## Validation record
 

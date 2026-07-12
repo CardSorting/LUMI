@@ -1,4 +1,4 @@
-# HTE-002: Fast Path and Governed Mutation
+# MEOW-002: Fast Path and Governed Mutation
 
 **Status:** Accepted  
 **Implementation:** `src/core/task/tools/executionAuthority.ts`, `src/core/task/tools/siblings/SiblingToolDependency.ts`
