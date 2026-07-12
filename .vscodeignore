@@ -5,6 +5,7 @@
 CLAUDE.local.md
 out/
 dist-standalone/
+dist/*.vsix
 node_modules/
 !node_modules/better-sqlite3/package.json
 !node_modules/better-sqlite3/lib/**
@@ -61,19 +62,16 @@ evals/
 buf.yaml
 .clinerules/
 
-# Ignore all webview-ui files except the build directory (https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/frameworks/hello-world-react-cra/.vscodeignore)
-webview-ui/src/**
-webview-ui/public/**
-webview-ui/index.html
-webview-ui/README.md
-webview-ui/package.json
-webview-ui/package-lock.json
-webview-ui/node_modules/**
+# Ignore all webview-ui files except the build directory
+webview-ui/**
+!webview-ui/build/**
 **/.gitignore
 
-# Ignore docs
+# Ignore docs, wiki-portal, and build-blog
 docs/**
 old_docs/**
+wiki-portal/**
+build-blog/**
 
 # Fix issue where codicons don't get packaged (https://github.com/microsoft/vscode-extension-samples/issues/692)
 !node_modules/@vscode/codicons/dist/codicon.css
