@@ -1,125 +1,765 @@
 # Dependency-Oriented High-Throughput Execution Architecture
 
-## Technical Whitepaper
+## An Implementation-Backed Architecture Description and Evaluation
 
-**Canonical implementation reference**  
-Primary surfaces: `src/core/task/index.ts`, `src/core/task/ToolExecutor.ts`, `src/core/task/tools/siblings/`, `src/core/task/latency/TaskLatencyTracker.ts`, `src/core/task/tools/io/IoRequestCoalescer.ts`, and `src/core/task/tools/handlers/AttemptCompletionHandler.ts`.
+**Document status:** Canonical implementation reference
+**Maturity:** Implemented and deterministically verified; production performance not yet characterized
+**System of interest:** Task execution runtime under `src/core/task/`
+**Version date:** July 12, 2026
+**Intended audience:** Runtime maintainers, tool authors, UI contributors, reviewers, auditors, and performance engineers
+
+**Primary implementation surfaces:**
+
+* `src/core/task/index.ts`
+* `src/core/task/ToolExecutor.ts`
+* `src/core/task/tools/siblings/`
+* `src/core/task/latency/TaskLatencyTracker.ts`
+* `src/core/task/tools/io/IoRequestCoalescer.ts`
+* `src/core/task/tools/handlers/AttemptCompletionHandler.ts`
+
+---
 
 ## Abstract
 
-The execution engine combines a fast path for eligible parent I/O, conservative sibling dependency classification, bounded batch concurrency, deterministic batch projection, task-generation-aware I/O coalescing, and deferred completion-audit and roadmap persistence. The implementation separates execution eligibility from presentation for a specific path: contiguous complete sibling tool blocks when parallel tool calling is enabled. Existing single-tool, interactive, completion, and persistence paths remain partly synchronous.
+The task execution engine historically coupled tool admission, execution, presentation, completion, and supporting persistence through a substantially sequential control path. This design preserved safety but serialized independent sibling operations and allowed shared presentation state, lifecycle bookkeeping, and selected persistence activities to delay otherwise valid execution.
 
-## Architectural vocabulary
+This paper describes an implementation-backed transition to dependency-oriented execution for a bounded scope: contiguous, complete sibling tool blocks discovered while parallel tool calling is enabled. Each eligible operation is classified by resource claims, explicit prerequisites, safety boundaries, mutation scope, approval requirements, and completion semantics. Independent children execute through a bounded, task-owned scheduler. Conflicting, prerequisite-bound, interactive, externally visible, unknown, and correctness-sensitive operations remain ordered.
 
-The paper distinguishes three layers deliberately:
+Execution eligibility is therefore determined by dependencies, resource ownership, and concrete risk rather than by presentation state, stream-cursor ownership, or model-emission order. Invocation-local result envelopes isolate concurrent execution evidence. Results may complete out of order but are projected deterministically in model-emission order. Task-generation-aware I/O coalescing prevents stale in-flight results from crossing mutation boundaries. Completion retains one authoritative decision path, while selected audit and roadmap persistence are deferred until after the result path.
 
-| Layer | Question answered | Examples |
-| --- | --- | --- |
-| **Principles** | What must remain true? | dependency-oriented execution, proportional governance, authoritative completion, deterministic projection, structured concurrency |
-| **Mechanisms** | How is that principle enforced? | dependency classifier, bounded scheduler, invocation context, cache generations, completion handler, latency tracker |
-| **Evidence** | How do we know it works? | barrier-based tests, scheduler benchmarks, latency snapshots, full-suite and lint results |
+Deterministic workload fixtures report wall-time reductions of 36.4%–65.5% for independent or partially independent workloads while preserving full serialization for overlapping mutations. These measurements establish scheduler behavior under controlled conditions; they do not constitute live provider, extension-host, filesystem, subprocess, or end-user latency measurements.
 
-Principles constrain design. Mechanisms are replaceable implementations of those constraints. Evidence is the basis for changing either; prose or architectural preference alone is not.
+The contribution is not dependency scheduling as a novel concept. It is the application of explicit dependency modeling, structured task ownership, deterministic projection, generation-safe caching, and singular completion authority to this agent runtime without weakening its established safety boundaries.
 
-## 1. Lifecycle
+**Keywords:** agent runtime, dependency scheduling, structured concurrency, deterministic projection, resource claims, authoritative completion, cache coherence, task orchestration
+
+---
+
+# 1. Document Purpose and Method
+
+## 1.1 Purpose
+
+This document serves four purposes:
+
+1. Define the architectural contracts governing multi-tool execution.
+2. Describe the mechanisms currently implementing those contracts.
+3. present the evidence used to evaluate the implementation.
+4. establish extension and conformance requirements for future changes.
+
+It is both an explanatory whitepaper and a canonical architecture reference. It is not a user tutorial, operational runbook, or replacement for individual architectural decision records.
+
+## 1.2 Documentation method
+
+The document is informed by established architecture-documentation practices:
+
+* stakeholder, concern, viewpoint, and architecture-description concepts from ISO/IEC/IEEE 42010;
+* scope, constraints, runtime behavior, quality requirements, decisions, risks, and technical debt emphasized by arc42;
+* explicit requirements language and consistent terminology associated with RFC documentation;
+* separation of explanation, reference, tutorials, and procedural guidance advocated by Diátaxis.
+
+This document applies selected practices from those sources but does not claim formal certification or complete conformance with any external standard.
+
+## 1.3 Normative language
+
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, and **MAY**, when written in uppercase, express normative requirements as defined by BCP 14. Lowercase uses retain their ordinary-language meaning.
+
+---
+
+# 2. Status, Evidence, and Claim Classification
+
+To prevent implementation claims, test results, and future intentions from being conflated, this paper uses the following classifications.
+
+| Classification  | Meaning                                                                              |
+| --------------- | ------------------------------------------------------------------------------------ |
+| **Implemented** | The mechanism exists in the identified source path.                                  |
+| **Verified**    | Deterministic tests exercise the stated contract.                                    |
+| **Measured**    | A numerical result was produced by the described fixture or trace.                   |
+| **Observed**    | Runtime evidence was collected outside a deterministic fixture.                      |
+| **Inferred**    | A conclusion follows from implementation and evidence but was not measured directly. |
+| **Proposed**    | A future change that is not part of the current architecture.                        |
+| **Unmeasured**  | The paper explicitly lacks relevant runtime evidence.                                |
+
+Unless otherwise stated:
+
+* architecture mechanisms described in Sections 7–14 are **implemented**;
+* behavioral claims backed by the focused suites are **verified**;
+* benchmark-table values are **measured in deterministic fixtures**;
+* provider- and host-specific performance is **unmeasured**.
+
+---
+
+# 3. Stakeholders and Architectural Concerns
+
+The architecture is evaluated against the concerns of the following stakeholders.
+
+| Stakeholder          | Primary concerns                                                         |
+| -------------------- | ------------------------------------------------------------------------ |
+| End user             | Responsiveness, stable results, safe execution, prompt cancellation      |
+| Runtime maintainer   | Correct lifecycle semantics, bounded concurrency, diagnosability         |
+| Tool author          | Classification rules, resource claims, cancellation, result envelopes    |
+| UI contributor       | Presentation isolation, stable ordering, non-authoritative rendering     |
+| Security reviewer    | Workspace boundaries, credentials, destructive actions, external effects |
+| Reliability reviewer | Task ownership, failure containment, cancellation, no detached work      |
+| Performance engineer | Critical-path latency, queueing, concurrency, measurement validity       |
+| Auditor              | Traceability from architectural claims to mechanisms and evidence        |
+| Project lead         | Scope, residual risk, technical debt, future investment boundaries       |
+
+The principal architectural concerns are:
+
+1. **Correctness:** dependent and conflicting operations must remain ordered.
+2. **Safety:** concurrency must not bypass established controls.
+3. **Determinism:** visible results must remain stable across execution interleavings.
+4. **Responsiveness:** independent work should not wait on accidental shared state.
+5. **Lifecycle integrity:** no child may outlive its owning task.
+6. **Consistency:** stale pre-mutation evidence must not be reused after mutation.
+7. **Auditability:** execution and latency evidence must remain attributable.
+8. **Evolvability:** new tools must declare execution semantics explicitly.
+9. **Measurement validity:** synthetic evidence must not be represented as production performance.
+
+---
+
+# 4. Problem Definition
+
+## 4.1 Prior execution model
+
+The previous effective path treated a model response as a sequential presentation sequence:
+
+```text
+model response
+  -> acquire presentation ownership
+  -> execute one tool
+  -> update shared message state
+  -> advance the stream cursor
+  -> admit the next tool
+  -> repeat
+```
+
+This design produced several forms of accidental coupling:
+
+* presentation ownership controlled tool admission;
+* full tool execution occurred while presentation state was held;
+* recursive sibling admission preserved one-at-a-time execution;
+* shared message state received writes in completion order;
+* a task-global streaming cursor constrained discovery;
+* mutable native tool-call state could be shared across interleaved deltas;
+* completion could wait on work that did not alter the completion decision.
+
+The relevant failure was not the existence of serialization itself. It was the inability to distinguish serialization required by correctness from serialization inherited from shared implementation state.
+
+## 4.2 Design problem
+
+Given a model turn containing multiple tool operations, the runtime must determine:
+
+* which operations are genuinely independent;
+* which operations share a protected resource;
+* which operations depend on earlier results;
+* which operations require approval or checkpoint readiness;
+* which failures invalidate dependents;
+* how concurrent results are presented deterministically;
+* when the task is authoritatively complete;
+* which supporting work may safely occur afterward.
+
+## 4.3 Design questions
+
+This architecture addresses five design questions.
+
+**DQ1:** Can independent sibling operations overlap without weakening tool-local validation or existing safety controls?
+
+**DQ2:** Can execution order be decoupled from presentation order while preserving deterministic visible results?
+
+**DQ3:** Can concurrent I/O remain coherent across local mutations and in-flight cache entries?
+
+**DQ4:** Can completion remain singular and authoritative while selected supporting persistence is deferred?
+
+**DQ5:** Can the runtime expose enough evidence to distinguish genuine contention from accidental serialization?
+
+## 4.4 Contributions
+
+The implementation contributes:
+
+1. an explicit sibling dependency and resource-claim model;
+2. a bounded, task-owned scheduler;
+3. invocation-local execution and presentation capture;
+4. deterministic projection independent of completion order;
+5. generation-safe request coalescing across local mutations;
+6. a singular completion authority with selected deferred persistence;
+7. task-local latency instrumentation;
+8. deterministic evaluation fixtures for ordering, cancellation, failure, and throughput.
+
+---
+
+# 5. Scope and Non-Goals
+
+## 5.1 Included execution path
+
+The dependency-oriented path applies when:
+
+* parallel tool calling is enabled;
+* the model stream contains consecutive tool blocks;
+* those blocks are complete;
+* the collected window contains more than one operation;
+* the operations can be classified before dispatch.
+
+Within that scope, the runtime can:
+
+* collect a contiguous sibling window;
+* classify operations and resource claims;
+* derive backward dependency edges;
+* admit ready operations concurrently;
+* preserve invocation-local evidence;
+* propagate cancellation;
+* join all task-owned children;
+* project results in canonical sequence order;
+* continue through the existing completion lifecycle.
+
+## 5.2 Excluded or partially covered paths
+
+The following remain partly or wholly outside the batch model:
+
+* single-tool model responses;
+* non-contiguous tool blocks;
+* incomplete streaming blocks;
+* XML tool calls discovered in separate stream windows;
+* interactive approval paths;
+* singleton terminal-process operations;
+* shared diff-buffer mutation paths;
+* portions of completion presentation;
+* selected message and checkpoint persistence;
+* pre-result audit evaluation;
+* optional workspace audit-artifact persistence.
+
+## 5.3 Non-goals
+
+The implementation does not attempt to:
+
+* parallelize every mutation;
+* replace the complete task lifecycle;
+* infer that concurrent work is inherently safe;
+* bypass tool-local validation;
+* create unbounded fan-out;
+* spawn detached background children;
+* make all persistence asynchronous;
+* guarantee immediate interruption of non-cooperative backends;
+* claim production speedups from deterministic fixtures;
+* establish a novel general theory of task scheduling.
+
+---
+
+# 6. Conceptual Model
+
+## 6.1 Tool batch
+
+Let a sibling batch be an ordered set:
+
+```text
+B = [t0, t1, ... tn-1]
+```
+
+Each operation `ti` has:
+
+* a model-emission sequence `si`;
+* an operation category `ci`;
+* a set of read claims `Ri`;
+* a set of write or exclusive claims `Wi`;
+* a set of explicit prerequisites `Pi`;
+* a completion-barrier indicator `Bi`;
+* an approval or checkpoint predicate `Gi`;
+* an invocation-local result envelope `Ei`.
+
+## 6.2 Conflict relation
+
+Two operations conflict when the implementation identifies at least one of the following:
+
+* overlapping write claims;
+* a write claim overlapping another operation’s read claim;
+* a shared exclusive resource claim;
+* a completion barrier;
+* an environment or workspace-wide fence;
+* an unresolved unknown side effect;
+* an explicit prerequisite or result reference.
+
+The current implementation is deliberately more conservative than path-level conflict alone. Every classified mutation also claims `workspace-mutation`, which serializes all sibling mutations.
+
+## 6.3 Dependency graph
+
+The classifier produces a directed acyclic graph over model-emission order. Edges point backward to earlier siblings and represent:
+
+* **conflict edges**;
+* **prerequisite edges**;
+* **barrier edges**.
+
+An operation is ready when:
+
+1. all required predecessor states are terminal;
+2. no failed prerequisite invalidates it;
+3. required checkpoint or approval conditions are satisfied;
+4. scheduler capacity is available;
+5. the parent task has not been cancelled.
+
+## 6.4 Deterministic projection
+
+Let `E` be the set of settled invocation envelopes. Final result projection is:
+
+```text
+project(E) = sort(E, by=model-emission sequence)
+```
+
+Execution completion order does not determine final visible order.
+
+---
+
+# 7. Architecture Overview
+
+```mermaid
+flowchart LR
+  MP[Model provider and stream] --> TS[Task stream processing]
+  TS --> DC[Dependency and resource classifier]
+  DC --> SS[Bounded sibling scheduler]
+
+  SS --> TH1[Tool child 1]
+  SS --> TH2[Tool child 2]
+  SS --> THN[Tool child N]
+
+  TH1 --> IE[Invocation-local envelopes]
+  TH2 --> IE
+  THN --> IE
+
+  IE --> DP[Deterministic projection]
+  DP --> UI[Presentation layer]
+  DP --> CL[Completion lifecycle]
+
+  CL --> AR[Authoritative result]
+  AR --> UI
+  AR -. deferred .-> AP[Audit persistence]
+  AR -. deferred .-> RF[Roadmap finalization]
+
+  TH1 <--> WS[Workspace and I/O]
+  TH2 <--> WS
+  THN <--> TERM[Terminal and external handlers]
+```
+
+The architecture separates five authorities:
+
+| Authority             | Responsibility                                             |
+| --------------------- | ---------------------------------------------------------- |
+| Dependency classifier | Determines claims and ordering relationships               |
+| Scheduler             | Determines when ready operations may start                 |
+| Tool handler          | Determines local parameter validity and execution behavior |
+| Projection layer      | Determines stable visible ordering                         |
+| Completion handler    | Determines authoritative task completion                   |
+
+No presentation component is an execution authority. No persistence component is a second completion authority.
+
+---
+
+# 8. Lifecycle Contract
 
 ```mermaid
 flowchart TD
   A[Task admitted] --> B[Model request and stream]
   B --> C[Recognize tool blocks]
-  C --> D{Parallel, contiguous, complete siblings?}
-  D -->|no| X[Existing single-tool presenter path]
-  D -->|yes| E[Classify claims and backward dependency edges]
-  E --> F[Bounded task scheduler]
-  F --> G[Invocation result envelopes]
-  G --> H[Sequence-ordered query presentation and results]
-  H --> I[Continue model turn]
-  X --> I
-  I --> J[Completion lifecycle decision when requested]
-  J --> K[Diagnostics and optional audit artifacts]
-  K --> L[Authoritative result and presentation]
-  L --> M[Await message/checkpoint follow-up]
+  C --> D{Eligible sibling window?}
+
+  D -->|No| X[Existing single-tool path]
+  D -->|Yes| E[Classify claims and dependencies]
+  E --> F[Bounded task-owned scheduling]
+  F --> G[Invocation-local outcomes]
+  G --> H[Deterministic projection]
+
+  X --> I[Continue model turn]
+  H --> I
+  I --> J{Completion requested?}
+  J -->|No| B
+  J -->|Yes| K[Lifecycle decision and required diagnostics]
+  K --> L[Authoritative result]
+  L --> M[Result presentation and required follow-up]
   L -. schedule .-> N[Completion-audit persistence]
   M -. schedule .-> O[Roadmap finalization]
 ```
 
-`Task` admits work and owns cancellation. The model stream emits native or XML tool blocks. The parser preserves native call identity by index (`tool-call-processor.ts`). When parallel tool calling is enabled, `Task.presentAssistantMessage()` gathers consecutive complete `tool_use` blocks beginning at the current streaming index. It uses the sibling scheduler only when that group contains more than one block. Single tools and non-contiguous blocks continue through the original presentation path.
+A conforming implementation:
 
-## 2. Dependency and resource model
+* **MUST** retain parent-task ownership of every child;
+* **MUST NOT** permit a child to silently outlive task finalization;
+* **MUST** settle required predecessors before dependent admission;
+* **MUST** join or otherwise account for every admitted child;
+* **MUST** preserve one completion authority;
+* **MUST NOT** allow deferred persistence failure to reverse a latched completion decision;
+* **SHOULD** preserve useful independent outcomes after localized failure.
 
-`SiblingToolDependency.ts` produces claims and backward edges in model-emission order. Categories include query, mutation, command, approval, external, completion, and unknown. Path claims are resolved against the workspace and canonicalized through the nearest existing ancestor. Explicit `depends_on` values and recognized result-reference markers create prerequisite edges only to earlier siblings. Multi-file `apply_patch` targets are extracted, but every mutation also claims `workspace-mutation`, so mutations are serialized with all earlier mutations today. Unknown tools receive a workspace-wide write fence.
+---
 
-```mermaid
-graph LR
-  R1[read file A] -. read/read independent .-> R2[search symbols]
-  W1[write file A] -->|path conflict| R1
-  RB[read file B] -. no overlapping claim .-> W1
-  W2[write file B] -->|shared workspace-mutation claim| W1
-  C[command mutating env] -->|environment barrier| Q[dependent query]
-  A[approval-required tool] -->|approval edge| X[external action]
-```
+# 9. Dependency and Resource Contract
 
-Edges are conflict, prerequisite, or barrier edges. A recognized result-reference marker creates a prerequisite even when resources appear disjoint. The initial-checkpoint predicate holds mutations, mutating or unknown commands, and unknown tools outside scheduler capacity until the checkpoint promise settles; eligible reads can start meanwhile.
+## 9.1 Operation categories
 
-## 3. Scheduler and structured concurrency
+`SiblingToolDependency.ts` classifies operations as:
 
-`SiblingToolScheduler.ts` maintains a bounded admission loop (the task path uses capacity four), an internal `AbortController`, sequence-indexed outcomes, and per-child result classification. Read/read work can start concurrently. All classified mutations serialize with one another. Read-only verification commands share one command-lane claim; other commands fence the workspace. Mutation, command, approval, external, and unknown categories also share an interactive-presentation claim and therefore remain mutually conservative where those claims overlap. The scheduler returns only after every admitted `run` promise settles.
+* query;
+* mutation;
+* command;
+* approval-bound;
+* external;
+* completion;
+* unknown.
 
-```mermaid
-sequenceDiagram
-  participant M as Model stream
-  participant T as Task
-  participant S as Sibling scheduler
-  participant E as Tool executors
-  participant P as Projection
-  participant C as Completion
-  M->>T: emit blocks 0..3
-  T->>S: claims + dependency edges
-  par ready block 0
-    S->>E: start invocation 0
-  and ready block 1
-    S->>E: start invocation 1
-  and ready block 2
-    S->>E: start invocation 2
-  end
-  E-->>S: outcomes (possibly out of order)
-  S->>P: sequence-indexed envelopes
-  P->>T: stable emission-order projection
-  T->>C: all required outcomes
-  C-->>T: authoritative completion
-  T-->>M: visible result
-  C--)T: schedule advisory persistence
-```
+Categories inform claims and conservative fallback behavior. Classification does not replace handler validation.
 
-Each child uses `ToolInvocationContext.ts` for invocation-local result content and an abort signal. Presentation events are captured only when `capturePresentation` is true, currently for workspace-local queries. `ToolExecutor.executeToolCaptured()` records a semantic outcome in the captured envelope. One failed independent query is represented as its own synthetic error result while successful siblings remain usable. A failed non-conflict prerequisite skips its dependents. Scheduler cancellation marks queued children cancelled and aborts active contexts; interruption of in-progress backend work depends on the handler honoring the signal.
+## 9.2 Resource claims
 
-## 4. Execution versus presentation
+Claims may include:
 
-The execution path no longer waits for a UI message slot before admitting the next safe sibling. Progress events are associated with invocation sequence numbers. The projection layer can update grouped progress surfaces or completion-order indicators, while final result content is rendered in stable model-emission order. `Task.presentAssistantMessage()` advances `processedBlockCount` only after the sibling window has been collected and the task-owned batch has been joined.
+* canonical filesystem paths;
+* workspace-mutation scope;
+* terminal-process ownership;
+* command-environment scope;
+* interactive-presentation ownership;
+* approval-channel ownership;
+* external-action scope;
+* completion barriers.
 
-The distinction is intentional:
+Filesystem targets are resolved relative to the workspace and canonicalized through the nearest existing ancestor where required.
 
-| Concern | Authority | Ordering |
-| --- | --- | --- |
-| Eligibility | dependency model and scheduler | resource/dependency order |
-| Progress | invocation context and presentation projection | completion order permitted |
-| Final result | sequence-indexed envelopes | model-emission order |
-| Validity | `AttemptCompletionHandler` | one canonical decision |
-| Deferred completion audit/roadmap | scheduled persistence | after result presentation/finalization branch |
+## 9.3 Explicit prerequisites
 
-Failures while replaying captured per-query presentation events are logged and do not remove the captured result content. Shared presentation paths for interactive and non-query tools remain outside this guarantee.
+The classifier recognizes:
 
-## 5. Fast and governed paths
+* declared `depends_on` relationships;
+* recognized tool-result references;
+* completion barriers;
+* safety predicates such as initial-checkpoint readiness.
 
-The fast path covers read-only, diagnostic, local, reversible, known-scope work under existing task authority. Query handlers use `executionAuthority.ts` and the task's established scope. The governed path remains for protected paths, external paths, destructive/manual commands, credentials, unresolved mutation scope, approval, and publication. The architecture does not infer safety from concurrency: every child still passes local validation and the governed path can serialize a child without collapsing unrelated reads.
+A result-reference dependency remains authoritative even when filesystem claims appear disjoint.
 
-## 6. Cache generations and mutation consistency
+## 9.4 Mutation policy
 
-`IoRequestCoalescer.ts` keys supported parent-I/O requests by a resolved target string, task generation, tool name, query/regex, `file_pattern`, and `recursive` for list operations. A qualifying local mutation or scratchpad read-that-may-create replaces the task's coalescer with a new generation. An old in-flight request may still complete and populate the old object for its existing callers, but cannot seed the replacement object. The current invalidation is task-wide, not target-local, and command execution does not reset this coalescer in the shown implementation.
+Multi-file patch targets are parsed for add, update, delete, and move operations. The implementation nevertheless assigns a shared `workspace-mutation` claim to every mutation.
 
-## 7. Completion and persistence
+Consequently:
 
-Completion blocks receive barrier edges to every earlier sibling in the same batch. `AttemptCompletionHandler.ts` evaluates the lifecycle snapshot and action guard once per attempt, then awaits preflight diagnostics, completion audit evaluation, and—when enabled—workspace audit-artifact persistence before latching the authoritative result. It presents the completion message, schedules pending completion-audit persistence, and then awaits checkpoint/message follow-up work. Roadmap finalization is scheduled later. The completion path is therefore narrower than before but is not fully asynchronous or reducible to one synchronous function call.
+* mutation/query overlap may be permitted for disjoint claims;
+* mutation/mutation overlap remains prohibited in the sibling scheduler;
+* path extraction improves evidence and future extensibility;
+* it does not currently authorize concurrent commits.
+
+This is an implementation constraint, not a general claim that all filesystem mutations must serialize.
+
+## 9.5 Unknown operations
+
+Unknown tools receive a workspace-wide write fence.
+
+The runtime chooses conservative serialization when side effects cannot be determined. Future narrowing requires an explicit category, claim model, and verification evidence.
+
+## 9.6 Checkpoint readiness
+
+Initial checkpoint completion gates:
+
+* mutations;
+* mutating commands;
+* unknown commands;
+* unknown tools.
+
+Eligible local reads may proceed while checkpoint creation settles. Checkpoint waiting occurs outside query scheduler capacity.
+
+---
+
+# 10. Scheduling and Structured-Concurrency Contract
+
+`SiblingToolScheduler.ts` maintains:
+
+* bounded capacity;
+* task-owned cancellation;
+* dependency-aware readiness;
+* sequence-indexed outcomes;
+* queue, start, and completion evidence;
+* dependency-local failure handling;
+* a strict batch join.
+
+The current task path uses capacity four.
+
+## 10.1 Admission procedure
+
+A child may begin when:
+
+1. its prerequisite and barrier conditions are satisfied;
+2. no required predecessor has failed;
+3. its safety predicates are satisfied;
+4. scheduler capacity is available;
+5. cancellation has not been requested.
+
+The scheduler **MUST NOT** admit work solely because capacity is available.
+
+## 10.2 Child ownership
+
+Every admitted child receives:
+
+* an invocation identity;
+* a model-emission sequence;
+* an invocation-local context;
+* a task-scoped abort signal;
+* an attributable result envelope.
+
+The scheduler **MUST NOT** use detached promises for sibling execution.
+
+## 10.3 Joining
+
+The scheduler returns after admitted operations have:
+
+* succeeded;
+* failed;
+* been skipped because of dependency failure;
+* or been cancelled.
+
+The scheduler does not determine task completion. It returns a batch outcome to the owning task.
+
+## 10.4 Bounded fan-out
+
+Capacity limits protect:
+
+* extension-host responsiveness;
+* filesystem and subprocess resources;
+* cancellation responsiveness;
+* predictable queueing behavior.
+
+The concurrency cap **SHOULD** remain centrally configured and **MUST NOT** be replaced by unbounded `Promise.all` over arbitrary model output.
+
+---
+
+# 11. Presentation Contract
+
+## 11.1 Separation of concerns
+
+The runtime distinguishes:
+
+| Concern              | Authority                         | Ordering rule                 |
+| --------------------- | --------------------------------- | ----------------------------- |
+| Eligibility          | Dependency model and scheduler    | Dependency and resource order |
+| Progress             | Invocation context and projection | Completion order permitted    |
+| Final tool results   | Sequence-indexed envelopes        | Model-emission order          |
+| Validity             | Completion handler                | Canonical lifecycle order     |
+| Deferred persistence | Pending task state                | Post-result scheduling        |
+
+Presentation is a projection of execution. It is not an execution lock.
+
+## 11.2 Invocation-local capture
+
+`ToolInvocationContext.ts` isolates:
+
+* result content;
+* presentation events;
+* semantic outcome;
+* abort signal;
+* invocation identity.
+
+This prevents supported sibling operations from overwriting a task-global “current tool” or result surface.
+
+## 11.3 Capture boundary
+
+Presentation capture is currently enabled for eligible workspace-local query operations.
+
+Interactive, mutating, or other shared presentation paths do not yet receive the same isolation guarantee and therefore remain conservatively ordered where necessary.
+
+## 11.4 Failure behavior
+
+Failure while replaying captured query presentation events is logged. It does not erase already captured execution evidence.
+
+A conforming implementation **MUST NOT** treat a non-authoritative rendering failure as proof that the tool execution did not occur.
+
+---
+
+# 12. Failure and Cancellation Contract
+
+## 12.1 Independent failure
+
+A failed independent query produces an invocation-specific error result. Successful siblings remain available.
+
+The batch is not inherently transactional or all-or-nothing.
+
+## 12.2 Prerequisite failure
+
+Failure propagates only through dependency edges that require the failed result.
+
+Unrelated siblings may continue.
+
+## 12.3 Semantic classification
+
+`ToolExecutor.executeToolCaptured()` records the semantic outcome in the invocation envelope. The scheduler distinguishes:
+
+* successful execution;
+* tool-level failure;
+* dependency-based skipping;
+* task cancellation.
+
+## 12.4 Cancellation procedure
+
+On task cancellation, the scheduler:
+
+* stops further admission;
+* marks queued children cancelled;
+* aborts active invocation contexts;
+* joins or accounts for owned work before returning.
+
+Foreground-command cancellation additionally invokes the host termination path and sends interruption through the VS Code terminal integration.
+
+## 12.5 Cooperative limitation
+
+Cancellation propagation is immediate at the scheduler boundary, but backend settlement is handler-dependent. Filesystem, subprocess, or external operations that do not consume `AbortSignal` may continue until an operation-specific boundary.
+
+The paper therefore claims prompt propagation, not universal instantaneous termination.
+
+---
+
+# 13. Safety and Governance Contract
+
+Concurrency does not create execution authority.
+
+Every child remains subject to tool-local validation and existing governance.
+
+## 13.1 Fast path
+
+The fast path applies to work that is:
+
+* workspace-local;
+* read-only or diagnostic;
+* known in scope;
+* permitted by ignore policy;
+* reversible;
+* covered by existing task authority.
+
+Such work does not require mutation authority merely because it participates in a concurrent batch.
+
+## 13.2 Governed path
+
+The governed path remains for:
+
+* protected resources;
+* external paths;
+* credentials;
+* destructive commands;
+* manual approval;
+* external publication;
+* unknown side effects;
+* unresolved mutation targets;
+* direct validation failures.
+
+## 13.3 Preserved controls
+
+The implementation preserves:
+
+* `.dietcodeignore`;
+* workspace-boundary enforcement;
+* external-path policy;
+* credential and protected-resource restrictions;
+* destructive and manual approvals;
+* first-mutation checkpoint readiness;
+* mutation conflict detection;
+* rollback and receipt integrity;
+* publication controls;
+* cancellation;
+* direct authoritative validation.
+
+The system improves throughput by applying coordination more precisely, not by weakening these controls.
+
+## 13.4 Concurrency-specific hazards
+
+| Hazard                                   | Mitigation                                          |
+| ---------------------------------------- | --------------------------------------------------- |
+| Concurrent writes corrupt shared state   | Shared mutation claim and diff-buffer serialization |
+| Read observes stale post-mutation state  | Task-generation cache invalidation                  |
+| Child outlives task                      | Task ownership, cancellation, and join barrier      |
+| Result order varies nondeterministically | Sequence-indexed deterministic projection           |
+| UI failure erases execution evidence     | Invocation-local result capture                     |
+| External read bypasses approval          | External-path classification and existing policy    |
+| Unknown tool runs concurrently           | Workspace-wide conservative fence                   |
+| Failed sibling collapses unrelated work  | Dependency-local failure propagation                |
+
+---
+
+# 14. Consistency and Cache Contract
+
+## 14.1 Request identity
+
+`IoRequestCoalescer.ts` identifies supported requests using:
+
+* canonical resolved target;
+* task generation;
+* tool name;
+* query or regular expression;
+* `file_pattern`;
+* recursive-list behavior;
+* other result-affecting inputs.
+
+Concurrent identical requests in the same generation may share one execution.
+
+## 14.2 Mutation invalidation
+
+A qualifying local mutation replaces the task’s coalescer with a new generation.
+
+A scratchpad read that may create state also advances generation.
+
+## 14.3 In-flight results
+
+A request started in an older generation may complete for existing callers awaiting that generation. It cannot populate the replacement generation.
+
+This provides generation safety without requiring cancellation of every pre-mutation read.
+
+## 14.4 Current limitations
+
+The current invalidation model is:
+
+* task-wide rather than target-local;
+* generation-based rather than versioned per resource;
+* not reset by command execution in the implementation described here.
+
+The architecture therefore provides coarse generation coherence, not complete transactional isolation.
+
+---
+
+# 15. Completion Contract
+
+Completion tools receive barrier edges to all earlier siblings in the same batch.
+
+## 15.1 Authoritative procedure
+
+`AttemptCompletionHandler.ts` currently:
+
+1. evaluates the lifecycle snapshot;
+2. evaluates the action guard;
+3. awaits required preflight diagnostics;
+4. evaluates completion audit state;
+5. optionally persists enabled workspace audit artifacts;
+6. latches the authoritative result;
+7. presents completion;
+8. schedules selected supporting persistence and finalization work.
+
+The lifecycle and action guard are evaluated once per completion attempt.
+
+## 15.2 Synchronous work
+
+The following remain synchronous or partially synchronous:
+
+* lifecycle decision;
+* action guard;
+* preflight diagnostics;
+* completion-audit evaluation;
+* optional workspace audit-artifact persistence;
+* completion presentation;
+* selected message and checkpoint follow-up.
+
+The completion path is narrower than its predecessor but is not fully asynchronous.
+
+## 15.3 Deferred work
+
+The following are scheduled after the authoritative result path:
+
+* completion-audit persistence;
+* roadmap finalization.
+
+Failure in these scheduled operations is logged and does not reverse the latched decision.
+
+## 15.4 Singular authority
+
+Audit, roadmap, telemetry, and persistence systems may support or record completion. They **MUST NOT** become independent completion authorities.
 
 ```mermaid
 stateDiagram-v2
@@ -130,62 +770,449 @@ stateDiagram-v2
   Running --> AwaitingRequiredChildren
   AwaitingRequiredChildren --> LifecycleDecision
   LifecycleDecision --> Rejected
-  LifecycleDecision --> CompletionDiagnostics: allowed
+  LifecycleDecision --> CompletionDiagnostics: Allowed
   CompletionDiagnostics --> AuthoritativeResult
   AuthoritativeResult --> ResultPresentation
+  ResultPresentation --> AwaitedRequiredFollowUp
   ResultPresentation --> ScheduledAuditPersistence
-  ResultPresentation --> AwaitedCheckpointAndMessageWork
-  AwaitedCheckpointAndMessageWork --> ScheduledRoadmapFinalization
-  AwaitedCheckpointAndMessageWork --> Finalized
+  AwaitedRequiredFollowUp --> ScheduledRoadmapFinalization
+  AwaitedRequiredFollowUp --> Finalized
   Running --> Cancelled
   Rejected --> Running
-  ScheduledAuditPersistence --> [*]
-  ScheduledRoadmapFinalization --> [*]
   Cancelled --> Finalized
 ```
 
-Failure of scheduled completion-audit persistence or roadmap finalization is logged after the result path and does not alter the latched completion decision. Pre-result audit evaluation and optional workspace-artifact persistence have different timing and should not be described as deferred.
+---
 
-## 8. Latency observability
+# 16. Observability Contract
 
-`TaskLatencyTracker.ts` records monotonic events: admission, model request, first token, first tool recognition, first visible progress, tool admission/dispatch, useful I/O start/completion, sibling queue/start/completion, completion validation/decision, result presentation, and persistence scheduled/completed/failed. It is task-local and bounded to 1,024 events. Missing instrumentation never blocks execution.
+`TaskLatencyTracker.ts` records monotonic task-local events, including:
 
-The canonical trace is:
+* task admission;
+* model request start;
+* first model token;
+* first tool recognition;
+* first visible progress;
+* tool admission and dispatch;
+* useful I/O start and completion;
+* sibling queue, start, and completion;
+* completion validation and decision;
+* result-presentation start and completion;
+* persistence scheduled, completed, or failed.
+
+The tracker is bounded to 1,024 events.
+
+## 16.1 Derived metrics
+
+Snapshots expose:
+
+* admission latency;
+* time to first model token;
+* time to first tool recognition;
+* time to first useful I/O;
+* sibling queue wait;
+* sibling execution duration;
+* presentation-induced delay;
+* completion-decision latency;
+* authoritative-result-to-visible-result latency;
+* post-result persistence duration.
+
+## 16.2 Non-authoritative status
+
+Instrumentation is advisory, bounded, task-local, and fail-open.
+
+It **MUST NOT** become:
+
+* a receipt requirement;
+* a lifecycle gate;
+* a completion prerequisite;
+* a mandatory persistence dependency.
+
+## 16.3 Canonical event sequence
 
 ```text
-admitted -> model_started -> first_token -> tool_recognized
- -> sibling_queued -> sibling_started -> useful_io_started/completed
- -> sibling_completed -> completion_validation -> authoritative_decision
- -> presentation_started/completed -> persistence_scheduled/completed
+admitted
+  -> model_started
+  -> first_token
+  -> tool_recognized
+  -> sibling_queued
+  -> sibling_started
+  -> useful_io_started
+  -> useful_io_completed
+  -> sibling_completed
+  -> completion_validation
+  -> authoritative_decision
+  -> presentation_started
+  -> presentation_completed
+  -> persistence_scheduled
+  -> persistence_completed | persistence_failed
 ```
 
-The snapshot exposes queue wait, execution duration, presentation-induced delay, completion latency, authoritative-result-to-visible-result latency, and post-result persistence duration. The deterministic fixture demonstrates the schema (admission 5 ms, first token 7 ms, first useful I/O 12 ms, authoritative-to-visible 5 ms, persistence 10 ms); production values must come from task snapshots rather than fixture values.
+---
 
-## 9. Before/after critical path
+# 17. Evaluation Method
 
-**Before the sibling-batch change:** the presenter processed tool blocks one at a time, awaited execution, and advanced the streaming index. Shared message state coupled admission to presentation.
+## 17.1 Evaluation objectives
 
-**Current batch path:** native identity is tracked per index; a consecutive complete sibling window is classified once; ready children run with capacity four; invocation envelopes are collected; captured query presentation and results are replayed in sequence order. The completion handler retains additional synchronous diagnostic, artifact, message, and checkpoint work, while completion-audit persistence and roadmap finalization are deferred.
+The evaluation tests whether the implementation:
 
-## 10. Verification and benchmark method
+1. overlaps independent work;
+2. preserves required serialization;
+3. preserves deterministic projection;
+4. contains failure to dependency domains;
+5. propagates cancellation;
+6. prevents stale cache promotion;
+7. preserves one completion decision.
 
-Tests use deferred promises and barriers, not real-time sleeps, to prove overlap, ordering, and cancellation. Focused suites cover dependency classification, scheduler behavior, presentation, cache generation, and completion. The performance fixture reports sequential estimate, concurrent wall time, maximum concurrency, queue wait, and outcome status. Current results are:
+## 17.2 Experimental design
 
-| Workload | Sequential estimate | Concurrent wall | Max concurrency | Safety result |
-| --- | ---: | ---: | ---: | --- |
-| Four reads | 280 ms | 100 ms | 4 | all overlap |
-| Two reads + two searches | 290 ms | 100 ms | 4 | all overlap |
-| Diagnostic + read-only command | 220 ms | 140 ms | 2 | command lane preserved |
-| Mutation + two disjoint reads | 230 ms | 120 ms | 3 | mutation boundary preserved |
-| Overlapping mutations | 200 ms | 200 ms | 1 | serialized |
-| One failed sibling + successes | 190 ms | 100 ms | 3 | partial success |
+Tests use:
 
-The implementation pass recorded 2,263 passing and 4 pending in the full unit suite, plus five passing in the final targeted presentation-failure regression and successful TypeScript, lint, and roadmap-audit runs. The documentation grounding pass on 2026-07-12 reran 44 focused dependency, scheduler, batch, cache, latency, and completion-audit tests successfully. Documentation-link and diff-whitespace checks also passed. Live provider, webview, filesystem, and subprocess latency were not measured.
+* deferred promises;
+* deterministic barriers;
+* controlled operation durations;
+* fake-clock advancement;
+* explicit concurrency counters.
 
-## 11. Safety boundaries and residual limits
+Real-time sleeps are avoided where controllable synchronization can establish ordering.
 
-The existing executor continues to enforce `.dietcodeignore`, workspace/external-path policy, protected credentials, destructive/manual approvals, checkpoint readiness, rollback/receipt rules, publication controls, and direct validation. The dependency model additionally serializes all mutations, the shared command lane, interactive presentation claims, and completion barriers. XML calls split across stream chunks may miss a common batch; non-interruptible backend I/O limits cancellation; audit artifacts, message persistence, and checkpoint saving remain on portions of the completion path. No live extension-host measurement yet ranks these residual costs.
+## 17.3 Variables
 
-## 12. Extension rules
+**Independent variables:**
 
-When adding a tool: define its category, normalized claims, explicit dependencies, cancellation behavior, result envelope, and cache generation effects. Add a deterministic barrier test for any new ordering rule. Do not use presentation state as an execution lock, do not spawn detached promises, do not add a second completion authority, and do not make audit persistence synchronous without evidence that it changes validity.
+* dependency topology;
+* resource-claim overlap;
+* operation category;
+* failure location;
+* scheduler capacity;
+* cancellation timing.
+
+**Dependent variables:**
+
+* total wall time;
+* sequential-duration estimate;
+* maximum concurrency;
+* queue wait;
+* invocation outcome;
+* projection order;
+* cache execution count;
+* child-settlement state.
+
+## 17.4 Baseline definition
+
+The reported sequential baseline is the sum or controlled serial composition of fixture operation durations.
+
+It is not a recorded measurement from a previous production runtime.
+
+This distinction matters: the results demonstrate scheduler semantics and potential latency reduction under the fixture, not an end-to-end production regression comparison.
+
+## 17.5 Statistical treatment
+
+The fixtures are deterministic contract tests rather than sampled performance experiments. Inferential statistics, confidence intervals, and variance estimates are therefore not reported.
+
+Future production evaluation should collect repeated traces and report distributions such as median, tail latency, and confidence intervals where appropriate.
+
+---
+
+# 18. Evaluation Results
+
+| Workload                             | Sequential estimate | Concurrent wall | Speedup | Wall-time reduction | Max concurrency | Correctness result               |
+| ------------------------------------ | ------------------: | --------------: | ------: | ------------------: | --------------: | -------------------------------- |
+| Four independent reads               |              280 ms |          100 ms |   2.80× |               64.3% |               4 | All operations overlap           |
+| Two reads and two searches           |              290 ms |          100 ms |   2.90× |               65.5% |               4 | All operations overlap           |
+| Diagnostic and read-only command     |              220 ms |          140 ms |   1.57× |               36.4% |               2 | Command lane preserved           |
+| Mutation and two disjoint reads      |              230 ms |          120 ms |   1.92× |               47.8% |               3 | Governed mutation overlaps reads |
+| Overlapping mutations                |              200 ms |          200 ms |   1.00× |                0.0% |               1 | Mutations remain serialized      |
+| One failed sibling and two successes |              190 ms |          100 ms |   1.90× |               47.4% |               3 | Partial success preserved        |
+
+## 18.1 Interpretation
+
+The results support the following bounded conclusions:
+
+* the scheduler admits independent fixture operations concurrently;
+* mixed workloads overlap only across permitted lanes;
+* mutation serialization remains effective;
+* an independent failure does not erase successful sibling outcomes;
+* deterministic fixtures show reduced constructed wall time where independence exists.
+
+The results do not establish:
+
+* provider-level latency improvement;
+* extension-host responsiveness under sustained load;
+* throughput under large sibling batches;
+* filesystem or subprocess scaling;
+* UI rendering performance;
+* production tail-latency reduction.
+
+---
+
+# 19. Verification Record
+
+The implementation pass recorded:
+
+* 2,263 passing unit tests;
+* 4 expected pending tests;
+* 5 passing targeted presentation-failure regressions;
+* successful TypeScript validation;
+* successful lint validation;
+* successful roadmap audit.
+
+The documentation-grounding pass on July 12, 2026, reran 44 focused dependency, scheduler, batch, cache, latency, and completion-audit tests successfully.
+
+Documentation-link and diff-whitespace checks also passed.
+
+These results provide broad regression evidence. They do not substitute for live performance measurements or formal verification.
+
+---
+
+# 20. Threats to Validity
+
+## 20.1 Construct validity
+
+The deterministic wall-time fixtures model controlled operation durations. They may not represent provider streaming, extension-host scheduling, actual filesystem behavior, subprocess startup, or UI persistence costs.
+
+The sequential estimate measures the fixture’s serial composition, not necessarily the exact pre-change runtime.
+
+## 20.2 Internal validity
+
+The tests use controlled barriers and clocks, reducing timing nondeterminism. However:
+
+* untested shared state may still exist outside the captured paths;
+* handlers that ignore cancellation may settle later than scheduler evidence suggests;
+* production event-loop contention may alter admission behavior;
+* single-tool and separate-window XML paths remain different.
+
+## 20.3 External validity
+
+The workloads are small and targeted. Results may not generalize to:
+
+* large sibling batches;
+* long-running commands;
+* high file-descriptor pressure;
+* remote tools;
+* slow disks;
+* provider interruptions;
+* sustained multi-task workloads.
+
+## 20.4 Conclusion validity
+
+Because the fixtures are deterministic, the results establish contract behavior but not probabilistic performance claims.
+
+No claim about average production improvement, tail latency, or user-perceived responsiveness should be made until repeated live traces are collected.
+
+## 20.5 Documentation validity
+
+Source paths, test counts, and behavior descriptions reflect the implementation state documented on July 12, 2026. Changes to classification, completion, caching, or presentation may invalidate portions of this paper and must trigger review.
+
+---
+
+# 21. Residual Constraints and Technical Debt
+
+## 21.1 Safety-required serialization
+
+The following remain ordered because they protect concrete risk or protocol semantics:
+
+* destructive or manual approval;
+* external publication;
+* credential-sensitive operations;
+* protected-path access;
+* first-mutation checkpoint readiness;
+* completion barriers;
+* explicit prerequisites;
+* result-reference dependencies;
+* environment-mutating commands;
+* unknown operations.
+
+## 21.2 Shared implementation resources
+
+The following remain serialized because current implementations expose shared mutable ownership:
+
+* singleton diff-buffer state;
+* one foreground terminal process;
+* one interactive approval response channel;
+* shared interactive presentation state;
+* global mutation claim within sibling batches.
+
+## 21.3 Discovery-window limitation
+
+XML calls emitted across separate stream chunks may not enter the same sibling batch window.
+
+The current system classifies a collected complete batch rather than maintaining a continuously open incremental execution frontier.
+
+## 21.4 Cancellation limitation
+
+Scheduler cancellation is prompt, but operation settlement remains handler-dependent where backends do not consume cancellation.
+
+## 21.5 Measurement limitation
+
+No live provider, extension-host, webview, filesystem, or subprocess benchmark currently ranks residual latency by user impact.
+
+These constraints and debts should remain explicit rather than being represented as architectural invariants.
+
+---
+
+# 22. Conformance and Extension Requirements
+
+A tool intended to participate in sibling execution **MUST** define:
+
+1. operation category;
+2. canonical resource claims;
+3. workspace or environment mutation behavior;
+4. explicit prerequisite semantics;
+5. checkpoint requirements;
+6. approval and external-path behavior;
+7. cancellation behavior;
+8. invocation-envelope behavior;
+9. presentation-capture compatibility;
+10. cache identity and generation effects.
+
+A new ordering rule **SHOULD** include a deterministic barrier-based test.
+
+A change to completion semantics **MUST** identify whether it affects the singular authoritative decision.
+
+A change to caching **MUST** demonstrate that old-generation work cannot populate current-generation state.
+
+## 22.1 Prohibited regressions
+
+Future implementations **MUST NOT**:
+
+* use presentation state as an execution lock;
+* spawn detached sibling work;
+* introduce unbounded model-directed fan-out;
+* add a second completion authority;
+* treat persistence as proof that completion occurred;
+* permit stale old-generation I/O to seed a new generation;
+* discard successful independent outcomes solely because one sibling failed;
+* bypass handler validation through scheduler classification;
+* weaken workspace, approval, credential, or destructive-action controls;
+* broaden resource fences without documenting the protected concern.
+
+---
+
+# 23. Traceability Matrix
+
+| Architectural principle        | Runtime contract                            | Current mechanism                     | Principal evidence                   |
+| ------------------------------ | ------------------------------------------- | ------------------------------------- | ------------------------------------ |
+| Dependency-oriented execution  | Independent work may begin independently    | `SiblingToolDependency.ts`            | Dependency and scheduler tests       |
+| Resource-oriented coordination | Conflicting claims remain ordered           | Canonical claims and backward edges   | Mutation and mixed-workload fixtures |
+| Structured concurrency         | Children remain bounded and task-owned      | `SiblingToolScheduler.ts`             | Join and cancellation tests          |
+| Deterministic projection       | Final order follows model sequence          | Sequence-indexed envelopes            | Out-of-order completion tests        |
+| Presentation non-authority     | Rendering does not govern eligibility       | `ToolInvocationContext.ts`            | Presentation-failure regression      |
+| Generation consistency         | Old work cannot seed new state              | `IoRequestCoalescer.ts`               | Cache-generation race tests          |
+| Authoritative completion       | One component determines completion         | `AttemptCompletionHandler.ts`         | Completion lifecycle tests           |
+| Advisory observability         | Instrumentation cannot block execution      | `TaskLatencyTracker.ts`               | Latency and resilience tests         |
+| Proportional governance        | Safety boundaries remain local and explicit | Existing executor controls and claims | Authority and policy tests           |
+
+---
+
+# 24. Document Governance
+
+This paper **MUST** be reviewed when any of the following changes:
+
+* sibling-window discovery;
+* operation classification;
+* resource-claim semantics;
+* scheduler capacity or ownership;
+* mutation serialization;
+* invocation-local presentation capture;
+* cache-generation behavior;
+* completion authority;
+* synchronous versus deferred persistence;
+* preserved safety boundaries;
+* latency-event definitions.
+
+A review should include:
+
+1. implementation-path verification;
+2. traceability-matrix updates;
+3. focused contract tests;
+4. benchmark reruns;
+5. threat-to-validity review;
+6. explicit identification of newly measured and still-unmeasured claims.
+
+Historical measurements should not be silently replaced. New measurements should identify the code revision, environment, workload, and method.
+
+---
+
+# 25. Future Evaluation
+
+The next rigorous evaluation should measure live task traces across:
+
+* provider response latency;
+* extension-host scheduling;
+* filesystem operations;
+* subprocess startup and cancellation;
+* webview projection;
+* completion persistence;
+* representative sibling-batch sizes.
+
+Recommended metrics include:
+
+* time to first useful I/O;
+* time to first visible progress;
+* queue-wait distribution;
+* batch wall time;
+* completion-decision latency;
+* authoritative-to-visible latency;
+* cancellation-settlement latency;
+* median and tail latency;
+* scheduler utilization;
+* conflict and false-serialization frequency.
+
+A production comparison should state:
+
+* workload selection;
+* warm versus cold conditions;
+* host hardware;
+* provider and model;
+* repository size;
+* scheduler capacity;
+* repetition count;
+* variance;
+* excluded outliers;
+* before-and-after revision identifiers.
+
+---
+
+# 26. Evolution Rule
+
+Future execution changes should follow this sequence:
+
+1. Measure the actual critical path.
+2. identify the specific dependency, resource, or protocol constraint.
+3. determine whether serialization protects correctness or reflects accidental shared state.
+4. narrow ownership or introduce reversible isolation where justified.
+5. preserve bounded task ownership.
+6. preserve deterministic projection.
+7. preserve one authoritative completion decision.
+8. verify correctness with deterministic tests.
+9. evaluate performance with appropriately scoped measurements.
+10. update this architecture description and its traceability evidence.
+
+A new global coordinator, lifecycle gate, mandatory receipt, or synchronization layer **MUST NOT** be introduced unless a concrete correctness concern cannot be enforced more narrowly.
+
+The architecture should evolve through more precise ownership rather than more elaborate ceremony.
+
+---
+
+# 27. Conclusion
+
+The dependency-oriented execution architecture changes the operational meaning of a supported multi-tool model turn.
+
+A turn is no longer treated only as a presentation-ordered list of tool calls. For contiguous, complete sibling blocks on the parallel path, it becomes a dependency-constrained set of task-owned operations. Eligibility is determined by explicit claims, prerequisites, barriers, and safety predicates.
+
+Independent work may execute concurrently. Conflicting work remains ordered. Execution evidence remains invocation-local. Final results remain deterministic. Cache generations preserve coherence across local mutation. Completion remains singular. Selected supporting persistence may occur after the result without redefining validity.
+
+The implementation does not promise universal concurrency, transactional isolation, or production-level speedups from synthetic evidence. It establishes a narrower and more defensible rule:
+
+> **Serialization must protect a dependency, a resource, a protocol boundary, or a concrete risk. Presentation convenience and advisory infrastructure are insufficient reasons.**
+
+---
+
+# References
+
+1. ISO/IEC/IEEE 42010:2022, *Software, systems and enterprise — Architecture description*.
+2. RFC 7322, *RFC Style Guide*.
+3. RFC 2119 and RFC 8174, normative requirements terminology.
+4. arc42 architecture-documentation structure and guidance.
+5. Diátaxis documentation framework.

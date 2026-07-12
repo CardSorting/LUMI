@@ -415,6 +415,15 @@ function copyDirSync(src, dest) {
 
 // Main Build Process
 function build() {
+	const WIKI_SRC_DIR = path.join(__dirname, "..", ".wiki")
+	const WIKI_DEST_DIR = path.join(DOCS_DIR, "wiki")
+
+	console.log("Copying .wiki content to docs/wiki...")
+	if (fs.existsSync(WIKI_DEST_DIR)) {
+		fs.rmSync(WIKI_DEST_DIR, { recursive: true, force: true })
+	}
+	copyDirSync(WIKI_SRC_DIR, WIKI_DEST_DIR)
+
 	const files = getMarkdownFiles(DOCS_DIR)
 	console.log(`Scanning and compiling ${files.length} markdown documents...`)
 
@@ -483,6 +492,11 @@ function build() {
 	}
 	fs.writeFileSync(DATA_FILE, JSON.stringify(pages, null, 2), "utf-8")
 	console.log(`Successfully generated JSON database at ${DATA_FILE}!`)
+
+	console.log("Cleaning up docs/wiki...")
+	if (fs.existsSync(WIKI_DEST_DIR)) {
+		fs.rmSync(WIKI_DEST_DIR, { recursive: true, force: true })
+	}
 
 	// Build the Vite project
 	console.log("Installing wiki-portal dependencies...")

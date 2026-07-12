@@ -83,6 +83,15 @@ const LEARNING_TRACKS = {
 			],
 		},
 		{
+			title: "🗺️ Workspace Knowledge Ledger",
+			description: "Sovereign Knowledge Ledger and workspace continuity index:",
+			steps: [
+				{ path: "wiki/index", label: "Knowledge Ledger Index" },
+				{ path: "wiki/01-system-overview", label: "System Overview" },
+				{ path: "wiki/changelog", label: "Technical Changelog" },
+			],
+		},
+		{
 			title: "🛡️ Core Hardening & Orchestration",
 			description: "Understand safety bounds, forensic verification, and backing databases:",
 			steps: [
@@ -100,6 +109,16 @@ const LEARNING_TRACKS = {
 				{ path: "papers/golden-cartridge-philosophy", label: "Philosophy Whitepaper" },
 				{ path: "papers/golden-cartridge-brief", label: "Conceptual Brief" },
 				{ path: "papers/knowledge-item-thesis", label: "Knowledge Item Thesis" },
+			],
+		},
+		{
+			title: "⚡ Dependency-Oriented High-Throughput Execution",
+			description: "Technical specifications and measured evidence for high-throughput concurrency:",
+			steps: [
+				{ path: "wiki/high-throughput-execution-executive-brief", label: "Executive Brief" },
+				{ path: "wiki/high-throughput-execution-philosophy", label: "Philosophy & Principles" },
+				{ path: "wiki/high-throughput-execution-whitepaper", label: "Technical Whitepaper" },
+				{ path: "wiki/high-throughput-execution-migration", label: "Migration Report" },
 			],
 		},
 	],
@@ -1501,6 +1520,9 @@ function Footer() {
 						<li>
 							<Link to="/docs/api/database-engine-broccolidb">BroccoliDB Specification</Link>
 						</li>
+						<li>
+							<Link to="/docs/wiki/index">Knowledge Ledger Index</Link>
+						</li>
 					</ul>
 				</div>
 
@@ -1515,6 +1537,9 @@ function Footer() {
 						</li>
 						<li>
 							<Link to="/papers/papers/knowledge-item-thesis">Knowledge Item Thesis</Link>
+						</li>
+						<li>
+							<Link to="/docs/wiki/high-throughput-execution-whitepaper">High-Throughput Execution</Link>
 						</li>
 					</ul>
 				</div>

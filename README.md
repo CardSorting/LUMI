@@ -226,6 +226,7 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 |-----|-------------|
 | **[Agent playbook](AGENT_PLAYBOOK.md)** | Current-state operating brief for future agents |
 | [Workspace wiki](WIKI.md) | Stable architecture, workflows, setup, testing, deployment notes |
+| **[Knowledge ledger](.wiki/index.md)** | Sovereign knowledge ledger index and navigation |
 | [Troubleshooting](TROUBLESHOOTING.md) | Reproduced failures, fixes, non-causes, validation guidance |
 | [Decisions](DECISIONS.md) | Root continuity and operating ADRs |
 | [Handoff](HANDOFF.md) | Current working-tree state and next-agent transfer notes |
@@ -238,6 +239,10 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | [Workspace knowledge philosophy](docs/papers/knowledge-philosophy.md) | Advisory memory design principles |
 | [Workspace knowledge thesis](docs/papers/knowledge-thesis.md) | Sovereign advisory invariant thesis |
 | [Workspace knowledge whitepaper](docs/papers/knowledge-whitepaper.md) | Architecture blueprint and NDJSON engine |
+| [High-throughput brief](.wiki/high-throughput-execution-executive-brief.md) | Executive brief for dependency-oriented execution |
+| [High-throughput philosophy](.wiki/high-throughput-execution-philosophy.md) | Normative reasoning and calm concurrency principles |
+| [High-throughput whitepaper](.wiki/high-throughput-execution-whitepaper.md) | Canonical technical architecture for execution lane swarms |
+| [High-throughput migration](.wiki/high-throughput-execution-migration.md) | Measured throughput evidence and naming evolution |
 | [Golden Cartridge brief](docs/papers/golden-cartridge-brief.md) | Summary of the resource-constrained development workbench |
 | [Golden Cartridge philosophy](docs/papers/golden-cartridge-philosophy.md) | Tenets of resource-conscious software agency |
 | [Golden Cartridge whitepaper](docs/papers/golden-cartridge-whitepaper.md) | Technical overlay architecture, cache, and validation |
