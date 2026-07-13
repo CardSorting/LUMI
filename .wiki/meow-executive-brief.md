@@ -12,12 +12,48 @@
 
 MEOW is the **execution coordinator** for a model turn: it decides **when work starts, what can overlap, what must wait, and how the completed work is presented consistently.**
 
+```text
+Model emits tool calls
+          │
+          ▼
+      MEOW analyzes
+   dependencies & safety
+          │
+          ▼
+ ┌──────────────────────┐
+ │ Run together if safe │
+ │ Wait if they conflict│
+ └──────────────────────┘
+          │
+          ▼
+ Project results back into
+ deterministic order
+          │
+          ▼
+ One authoritative completion
+```
+
 At any moment, MEOW is continuously answering five core questions:
 1. **Can this run now?** (Does it need user approval or credentials first?)
 2. **Does it conflict with anything?** (Can these queries run together, or does a mutation fence require serialization?)
 3. **Do I already know the answer?** (Can we reuse cached path authority or coalesced request results?)
 4. **How do I keep the final output deterministic?** (How do we project out-of-order executions back into model-emission sequence?)
 5. **Can I stop immediately if the task dies?** (Does task cancellation kill active processes and release resources immediately?)
+
+---
+
+## What MEOW Is Responsible For
+
+MEOW is responsible for coordinating execution during a model turn. Specifically, it determines:
+* **which operations are eligible to begin** (scheduling readiness);
+* **which operations must wait** (prerequisite enforcement);
+* **which operations may execute concurrently** (concurrency allocation);
+* **how concurrent execution is isolated** (invocation-local context capturing);
+* **how execution is cancelled** (cancellation propagation);
+* **how results are projected deterministically** (canonical sequence reconstruction);
+* **when execution is considered authoritatively complete** (completion gate evaluation).
+
+MEOW is **not** responsible for tool semantics, permission policy, or presentation rendering. Those remain responsibilities of the tool handlers, policy layer, and UI respectively.
 
 ---
 

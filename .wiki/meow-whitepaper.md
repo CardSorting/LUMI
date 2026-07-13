@@ -443,6 +443,19 @@ To build a clear mental model, consider the following timeline of a single model
    - *How do I keep the final output deterministic?* (Sequences captured envelopes)
    - *Can I stop immediately if the task dies?* (Cleans up open processes and handles on cancel)
 
+### 7.3 What MEOW Is Responsible For
+
+MEOW is responsible for coordinating execution during a model turn. Specifically, it determines:
+* **which operations are eligible to begin** (scheduling readiness);
+* **which operations must wait** (prerequisite enforcement);
+* **which operations may execute concurrently** (concurrency allocation);
+* **how concurrent execution is isolated** (invocation-local context capturing);
+* **how execution is cancelled** (cancellation propagation);
+* **how results are projected deterministically** (canonical sequence reconstruction);
+* **when execution is considered authoritatively complete** (completion gate evaluation).
+
+MEOW is **not** responsible for tool semantics, permission policy, or presentation rendering. Those remain responsibilities of the tool handlers, policy layer, and UI respectively.
+
 ---
 
 # 8. Lifecycle Contract

@@ -301,3 +301,4 @@ Architecture milestone notes (archaeology only): [history/architecture/](history
 **Calm agency:** approve before mutate, checkpoint after tool use, complete only through gates.
 
 
+
