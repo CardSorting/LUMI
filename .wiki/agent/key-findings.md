@@ -1,5 +1,32 @@
 # Key Findings
 
+## 2026-07-13 I/O Hyper-Execution Pass
+
+- Cold path/authority work dominated scheduler-ready-to-backend-start for one small read: 1.362 ms of a 2.396 ms local fixture trace. Warm generation reuse reduced that path to 0.114 ms and the complete handoff to 0.157 ms with no filesystem calls.
+- Read extraction previously performed `access` plus pathname metadata plus another open. It now uses one `open` → descriptor `stat` → bounded read, with a UTF-8 fast path and byte-correct truncation.
+- Recursive listing's directory expansion caused 144 `stat` calls in the fixture. Deterministic bounded breadth-first traversal removes them, snapshots repository ignore evidence once, and emits the first page before completion.
+- Search buffered the entire child output and handler cache preflight could cost more than a small `rg` invocation. Search now directly spawns the resolved executable, parses bounded JSON incrementally, caches executable/static state, coalesces identical requests, and kills/joins its owned child on cancellation.
+- Coalescing occurs before class-budget acquisition, so identical waiters consume one backend slot. The global scheduler limit remains four; search and traversal backend classes are capped at two rather than raising the global fan-out.
+- Authority and result caches carry workspace, filesystem, and policy generations. Late old-generation completions cannot enter the current generation, while external-path and approval evidence is never cached.
+- Direct single-tool I/O now shares task cancellation with sibling I/O, is joined during abort, and performs a post-backend abort check before read history or result projection. Multi-root search failure aborts and joins sibling search workers and rejects rather than caching a false empty result.
+- `apply_patch` policy targets are parsed after mutation; opaque mutating shell/MCP work reloads ignore policy before the next read. Bounded verification commands skip both the reload and result-generation rotation.
+- The final result envelope no longer JSON-serializes the full payload merely to detect failure. Invocation result/presentation arrays become immutable, canonical projection writes directly by sequence, and advisory presentation cannot gate projection.
+
+### Deterministic local-fixture evidence
+
+These values are development-fixture measurements, not production telemetry; “cold” clears task caches but does not control the OS page cache. The ten service rows stress backends directly; the runtime total/class caps are verified separately with controlled pool tests.
+
+| Workload | Before | After | Dominant effect |
+| :--- | ---: | ---: | :--- |
+| One cold small read | 4.438 ms | 1.102 ms | one open/fstat/read path |
+| Large-tree list, cold | 28.430 ms | 18.247 ms | 144 metadata calls removed |
+| Large-tree list, warm | 15.288 ms | 6.295 ms | reused ignore/static state |
+| Four cold searches: first result | 65.224 ms | 7.437 ms | incremental output exposure |
+| Repeated warm search | 15.008 ms | 0.136 ms | 8 cache hits, 0 spawns |
+| Search cancellation settlement | 7.932 ms | 1.161 ms | signal → kill → close ownership |
+
+The 577-file, ten-workload final run left active handles unchanged (`2 → 2`). Focused I/O/scheduler tests: 123 passing; TypeScript, targeted Biome, handler-import audit, and the broad unit command pass.
+
 ## 2026-07-12 Throughput Pass
 
 - Every tool previously awaited the environment forensic probe even though its result did not authorize or reject the tool. Tool dispatch now proceeds while the advisory probe runs in the background.

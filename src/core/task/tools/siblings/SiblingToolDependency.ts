@@ -40,6 +40,8 @@ export interface SiblingDependencyModelOptions {
 	/** False means a query may require the existing external-path approval channel. */
 	workspaceLocalBySequence?: readonly boolean[]
 	invocationPrefix?: string
+	/** Scheduler-prewarmed canonical targets avoid another realpath walk for queries. */
+	canonicalTargetBySequence?: readonly (string | undefined)[]
 }
 
 const EXTERNAL_TOOLS = new Set<string>([
@@ -127,8 +129,8 @@ function referencesResult(block: ToolUse, invocationId: string): boolean {
 	)
 }
 
-function claimsFor(block: ToolUse, cwd: string, category: SiblingToolCategory): SiblingResourceClaim[] {
-	const target = normalizedTarget(cwd, block)
+function claimsFor(block: ToolUse, cwd: string, category: SiblingToolCategory, canonicalTarget?: string): SiblingResourceClaim[] {
+	const target = canonicalTarget ?? normalizedTarget(cwd, block)
 	switch (category) {
 		case "query":
 			return target
@@ -207,7 +209,7 @@ export function buildSiblingToolDependencyModel(
 		const workspaceLocal = options.workspaceLocalBySequence?.[sequence] ?? true
 		const queryNeedsApproval = category === "query" && !workspaceLocal
 		const readOnlyVerificationCommand = category === "command" && isReadOnlyVerificationCommand(block.params.command)
-		const claims = claimsFor(block, cwd, category)
+		const claims = claimsFor(block, cwd, category, options.canonicalTargetBySequence?.[sequence])
 		if (queryNeedsApproval) {
 			claims.push(
 				{ key: "user-approval", access: "write", kind: "approval" },

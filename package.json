@@ -443,6 +443,7 @@
 		"test:integration": "vscode-test",
 		"test:unit": "cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha",
 		"test:unit:update-snapshots": "cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json UPDATE_SNAPSHOTS=true mocha",
+		"benchmark:meow-io": "cross-env TS_NODE_TRANSPILE_ONLY=1 ts-node -P tsconfig.unit-test.json -r tsconfig-paths/register scripts/meow-io-benchmark.ts",
 		"roadmap:audit": "npx ts-node -P tsconfig.unit-test.json -r tsconfig-paths/register scripts/roadmap_audit.ts",
 		"test:coverage": "vscode-test --coverage",
 		"e2e": "playwright test -c playwright.config.ts",

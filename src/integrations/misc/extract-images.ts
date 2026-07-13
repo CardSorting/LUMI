@@ -9,10 +9,11 @@ import { getMimeType } from "./process-files"
  */
 export async function extractImageContent(
 	filePath: string,
+	signal?: AbortSignal,
 ): Promise<{ success: true; imageBlock: Anthropic.ImageBlockParam } | { success: false; error: string }> {
 	try {
 		// Read the file into a buffer
-		const buffer = await fs.readFile(filePath)
+		const buffer = await fs.readFile(filePath, { signal })
 
 		// Convert Node.js Buffer to Uint8Array for image-size
 		const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)

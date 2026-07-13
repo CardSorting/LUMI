@@ -39,3 +39,23 @@ Build one canonical snapshot per lifecycle decision and pass its result downstre
 - A disjoint read may overlap a mutation.
 - Apply-patch target headers become individual path claims; an unparseable or targetless mutation receives a workspace-wide claim.
 - All diff-backed writes still serialize until the singleton diff buffer is replaced with per-invocation state.
+
+## Generation-Safe I/O Backend
+
+1. Validate parameters and resolve immutable path authority under the task's workspace/filesystem/policy generations.
+2. Complete any required external-path approval before reusable backend lookup; external results are never cacheable.
+3. Look up and singleflight the semantic request before acquiring a class budget, so duplicate waiters consume one slot.
+4. Acquire the centrally bounded metadata/read, search, or traversal class and pass the invocation `AbortSignal` into the backend.
+5. Record backend start and first useful evidence independently from canonical completion.
+6. Publish one immutable payload into the current generation only; discard late old-generation completions.
+7. Project final results by model sequence, then replay advisory presentation.
+
+For direct operations, use the task signal when no sibling invocation signal exists. Task abort must signal, join the active backend, and recheck cancellation before any history or projection mutation.
+
+## Bounded Incremental Producer
+
+- Apply output and result limits while consuming the producer, not after buffering it.
+- Reserve marker space so truncation is represented honestly.
+- Stop admitting traversal work after cancellation/limit/timeout, await active work, and release partial buffers.
+- A cancelled subprocess is not settled until the owned process closes; escalation timers and listeners must be cleared on every terminal path.
+- A failed multi-root producer aborts its peer producers, joins all of them, and rejects. Never normalize backend failure into a cacheable empty result.

@@ -43,3 +43,21 @@ Fix: update the readiness flag and call `SiblingToolScheduler.signalReady()`. Do
 Symptom: interleaved OpenAI-compatible deltas attach arguments to a neighboring tool call.
 
 Check `ToolCallProcessor` state by delta `index`. Each index must retain its own ID/name and emit the ID as both `call_id` and function ID.
+
+## MEOW I/O Benchmark Fails Under `tsx`
+
+Symptom: the benchmark fails while resolving extension-host-only package exports (for example `unicorn-magic`) even though unit tests work.
+
+Fix: use the validated package script, which matches the unit-test TypeScript resolver and runs transpile-only:
+
+```sh
+npm run benchmark:meow-io
+```
+
+Interpretation: the report is a deterministic 577-file fixture. “Cold” means task-cache cold, not guaranteed OS-page-cache cold. Confirm `activeHandleDelta` is zero after cancellation workloads.
+
+## Cancelled Direct Search Projects a Late Result
+
+Symptom: cancelling one non-sibling search stops the task UI, but a result or read-history entry appears later.
+
+Check that `TaskIoBackend` falls back to `TaskConfig.taskSignal`, `Task.abortTask()` aborts and joins `activeSingleIoPromise`, and ToolExecutor checks the signal immediately after the handler returns. Do not fix this with polling or a detached kill timer.

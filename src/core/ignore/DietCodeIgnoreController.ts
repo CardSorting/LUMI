@@ -1,4 +1,3 @@
-import { fileExistsAtPath } from "@utils/fs"
 import chokidar, { FSWatcher } from "chokidar"
 import fs from "fs/promises"
 import ignore, { Ignore } from "ignore"
@@ -6,6 +5,23 @@ import path from "path"
 import { Logger } from "@/shared/services/Logger"
 
 export const LOCK_TEXT_SYMBOL = "\u{1F512}"
+
+const MAX_ACCESS_DECISIONS = 4_096
+
+type ReadTextFile = (filePath: string, encoding: "utf8") => Promise<string>
+
+export interface DietCodeIgnoreControllerOptions {
+	/** Injectable for deterministic policy-reload tests. */
+	readFile?: ReadTextFile
+}
+
+type IgnorePolicySnapshot = {
+	content: string | undefined
+	hasPolicyFile: boolean
+	ignoreInstance: Ignore
+	includePaths: Set<string>
+	identity: string
+}
 
 /**
  * Controls LLM access to files by enforcing ignore patterns.
@@ -16,11 +32,19 @@ export class DietCodeIgnoreController {
 	private cwd: string
 	private ignoreInstance: Ignore
 	private fileWatcher?: FSWatcher
+	private readonly readFile: ReadTextFile
+	private hasPolicyFile = false
+	private policyGeneration = 0
+	private policyIdentity: string | undefined
+	private reloadRequest = 0
+	private activeIncludePaths = new Set<string>()
+	private readonly accessDecisionCache = new Map<string, boolean>()
 	dietcodeIgnoreContent: string | undefined
 
-	constructor(cwd: string) {
+	constructor(cwd: string, options: DietCodeIgnoreControllerOptions = {}) {
 		this.cwd = cwd
 		this.ignoreInstance = ignore()
+		this.readFile = options.readFile ?? ((filePath, encoding) => fs.readFile(filePath, encoding))
 		this.dietcodeIgnoreContent = undefined
 	}
 
@@ -31,7 +55,48 @@ export class DietCodeIgnoreController {
 	async initialize(): Promise<void> {
 		// Set up file watcher for .dietcodeignore
 		this.setupFileWatcher()
-		await this.loadDietCodeIgnore()
+		await this.refreshPolicy()
+	}
+
+	/** Monotonic identity for task-local authority and result-cache invalidation. */
+	getPolicyGeneration(): number {
+		return this.policyGeneration
+	}
+
+	/**
+	 * Mutation handoff for the task runtime. Policy-file writes are uncommon, so
+	 * synchronously reload only when the completed target is the root policy or
+	 * one of its active includes. This closes the watcher-delivery race without
+	 * adding filesystem work to ordinary mutations.
+	 */
+	async refreshPolicyIfAffected(filePath: string): Promise<boolean> {
+		const absolutePath = path.resolve(this.cwd, filePath)
+		const ignorePath = path.resolve(this.cwd, ".dietcodeignore")
+		const affected =
+			pathsEqual(absolutePath, ignorePath) || [...this.activeIncludePaths].some((p) => pathsEqual(p, absolutePath))
+		if (!affected) return false
+		await this.refreshPolicy()
+		return true
+	}
+
+	/**
+	 * Reload the policy without waiting for watcher delivery. Concurrent reloads
+	 * commit latest-request-wins, so an older slow read can never replace a newer
+	 * policy snapshot.
+	 */
+	async refreshPolicy(): Promise<void> {
+		const request = ++this.reloadRequest
+		try {
+			const snapshot = await this.buildPolicySnapshot()
+			if (request !== this.reloadRequest) {
+				return
+			}
+			this.commitPolicySnapshot(snapshot)
+		} catch (error) {
+			// Retain the last complete snapshot. A partially loaded policy must never
+			// become visible to access checks.
+			Logger.error("Unexpected error loading .dietcodeignore:", error)
+		}
 	}
 
 	/**
@@ -53,15 +118,15 @@ export class DietCodeIgnoreController {
 
 		// Watch for file changes, creation, and deletion
 		this.fileWatcher.on("change", () => {
-			this.loadDietCodeIgnore()
+			void this.refreshPolicy()
 		})
 
 		this.fileWatcher.on("add", () => {
-			this.loadDietCodeIgnore()
+			void this.refreshPolicy()
 		})
 
 		this.fileWatcher.on("unlink", () => {
-			this.loadDietCodeIgnore()
+			void this.refreshPolicy()
 		})
 
 		this.fileWatcher.on("error", (error) => {
@@ -69,82 +134,117 @@ export class DietCodeIgnoreController {
 		})
 	}
 
-	/**
-	 * Load custom patterns from .dietcodeignore if it exists.
-	 * Supports "!include <filename>" to load additional ignore patterns from other files.
-	 */
-	private async loadDietCodeIgnore(): Promise<void> {
+	private async buildPolicySnapshot(): Promise<IgnorePolicySnapshot> {
+		const ignorePath = path.join(this.cwd, ".dietcodeignore")
+		const nextIgnoreInstance = ignore()
+		let content: string | undefined
 		try {
-			// Reset ignore instance to prevent duplicate patterns
-			this.ignoreInstance = ignore()
-			const ignorePath = path.join(this.cwd, ".dietcodeignore")
-			if (await fileExistsAtPath(ignorePath)) {
-				const content = await fs.readFile(ignorePath, "utf8")
-				this.dietcodeIgnoreContent = content
-				await this.processIgnoreContent(content)
-				this.ignoreInstance.add(".dietcodeignore")
-			} else {
-				this.dietcodeIgnoreContent = undefined
-			}
+			content = await this.readFile(ignorePath, "utf8")
 		} catch (error) {
-			// Should never happen: reading file failed even though it exists
-			Logger.error("Unexpected error loading .dietcodeignore:", error)
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+				throw error
+			}
+		}
+
+		if (content === undefined) {
+			return {
+				content: undefined,
+				hasPolicyFile: false,
+				ignoreInstance: nextIgnoreInstance,
+				includePaths: new Set(),
+				identity: "absent",
+			}
+		}
+
+		const { combinedContent, includePaths } = await this.processIgnoreContent(content)
+		nextIgnoreInstance.add(combinedContent)
+		// The policy file itself is never readable, including when it is empty.
+		nextIgnoreInstance.add(".dietcodeignore")
+
+		return {
+			content,
+			hasPolicyFile: true,
+			ignoreInstance: nextIgnoreInstance,
+			includePaths,
+			identity: JSON.stringify({ combinedContent, includePaths: [...includePaths].sort() }),
 		}
 	}
 
-	/**
-	 * Process ignore content and apply all ignore patterns
-	 */
-	private async processIgnoreContent(content: string): Promise<void> {
-		// Optimization: first check if there are any !include directives
+	private commitPolicySnapshot(snapshot: IgnorePolicySnapshot): void {
+		const policyChanged = snapshot.identity !== this.policyIdentity
+		this.ignoreInstance = snapshot.ignoreInstance
+		this.dietcodeIgnoreContent = snapshot.content
+		this.hasPolicyFile = snapshot.hasPolicyFile
+		this.policyIdentity = snapshot.identity
+		this.updateIncludeWatches(snapshot.includePaths)
+
+		if (policyChanged) {
+			this.policyGeneration++
+			this.accessDecisionCache.clear()
+		}
+	}
+
+	private updateIncludeWatches(nextIncludePaths: Set<string>): void {
+		const watcher = this.fileWatcher
+		if (watcher) {
+			const removed = [...this.activeIncludePaths].filter((includePath) => !nextIncludePaths.has(includePath))
+			const added = [...nextIncludePaths].filter((includePath) => !this.activeIncludePaths.has(includePath))
+			if (removed.length > 0) {
+				try {
+					watcher.unwatch(removed)
+				} catch (error) {
+					Logger.error("Error removing .dietcodeignore include watches:", error)
+				}
+			}
+			if (added.length > 0) {
+				watcher.add(added)
+			}
+		}
+		this.activeIncludePaths = new Set(nextIncludePaths)
+	}
+
+	private async processIgnoreContent(content: string): Promise<{ combinedContent: string; includePaths: Set<string> }> {
 		if (!content.includes("!include ")) {
-			this.ignoreInstance.add(content)
-			return
+			return { combinedContent: content, includePaths: new Set() }
 		}
-
-		// Process !include directives
-		const combinedContent = await this.processDietCodeIgnoreIncludes(content)
-		this.ignoreInstance.add(combinedContent)
+		return this.processDietCodeIgnoreIncludes(content)
 	}
 
-	/**
-	 * Process !include directives and combine all included file contents
-	 */
-	private async processDietCodeIgnoreIncludes(content: string): Promise<string> {
+	private async processDietCodeIgnoreIncludes(
+		content: string,
+	): Promise<{ combinedContent: string; includePaths: Set<string> }> {
 		let combinedContent = ""
+		const includePaths = new Set<string>()
 		const lines = content.split(/\r?\n/)
 
 		for (const line of lines) {
 			const trimmedLine = line.trim()
-
 			if (!trimmedLine.startsWith("!include ")) {
 				combinedContent += `\n${line}`
 				continue
 			}
 
-			// Process !include directive
-			const includedContent = await this.readIncludedFile(trimmedLine)
+			const includePath = path.resolve(this.cwd, trimmedLine.substring("!include ".length).trim())
+			includePaths.add(includePath)
+			const includedContent = await this.readIncludedFile(includePath)
 			if (includedContent) {
 				combinedContent += `\n${includedContent}`
 			}
 		}
 
-		return combinedContent
+		return { combinedContent, includePaths }
 	}
 
-	/**
-	 * Read content from an included file specified by !include directive
-	 */
-	private async readIncludedFile(includeLine: string): Promise<string | null> {
-		const includePath = includeLine.substring("!include ".length).trim()
-		const resolvedIncludePath = path.join(this.cwd, includePath)
-
-		if (!(await fileExistsAtPath(resolvedIncludePath))) {
-			Logger.debug(`[DietCodeIgnore] Included file not found: ${resolvedIncludePath}`)
-			return null
+	private async readIncludedFile(resolvedIncludePath: string): Promise<string | null> {
+		try {
+			return await this.readFile(resolvedIncludePath, "utf8")
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+				Logger.debug(`[DietCodeIgnore] Included file not found: ${resolvedIncludePath}`)
+				return null
+			}
+			throw error
 		}
-
-		return await fs.readFile(resolvedIncludePath, "utf8")
 	}
 
 	/**
@@ -154,16 +254,31 @@ export class DietCodeIgnoreController {
 	 */
 	validateAccess(filePath: string): boolean {
 		// Always allow access if .dietcodeignore does not exist
-		if (!this.dietcodeIgnoreContent) {
+		if (!this.hasPolicyFile) {
 			return true
 		}
 		try {
 			// Normalize path to be relative to cwd and use forward slashes
 			const absolutePath = path.resolve(this.cwd, filePath)
-			const relativePath = path.relative(this.cwd, absolutePath).toPosix()
+			const relativePath = path.relative(this.cwd, absolutePath).replace(/\\/g, "/")
+			const cached = this.accessDecisionCache.get(relativePath)
+			if (cached !== undefined) {
+				// LRU touch without copying the bounded map.
+				this.accessDecisionCache.delete(relativePath)
+				this.accessDecisionCache.set(relativePath, cached)
+				return cached
+			}
 
 			// Ignore expects paths to be path.relative()'d
-			return !this.ignoreInstance.ignores(relativePath)
+			const allowed = !this.ignoreInstance.ignores(relativePath)
+			this.accessDecisionCache.set(relativePath, allowed)
+			if (this.accessDecisionCache.size > MAX_ACCESS_DECISIONS) {
+				const oldest = this.accessDecisionCache.keys().next().value
+				if (oldest !== undefined) {
+					this.accessDecisionCache.delete(oldest)
+				}
+			}
+			return allowed
 		} catch (_error) {
 			// Logger.error(`Error validating access for ${filePath}:`, error)
 			// Ignore is designed to work with relative file paths, so will throw error for paths outside cwd. We are allowing access to all files outside cwd.
@@ -178,7 +293,7 @@ export class DietCodeIgnoreController {
 	 */
 	validateCommand(command: string): string | undefined {
 		// Always allow if no .dietcodeignore exists
-		if (!this.dietcodeIgnoreContent) {
+		if (!this.hasPolicyFile) {
 			return undefined
 		}
 
@@ -251,9 +366,21 @@ export class DietCodeIgnoreController {
 	 * Clean up resources when the controller is no longer needed
 	 */
 	async dispose(): Promise<void> {
+		// Exclude any in-flight policy read from committing after disposal.
+		this.reloadRequest++
 		if (this.fileWatcher) {
 			await this.fileWatcher.close()
 			this.fileWatcher = undefined
 		}
+		this.activeIncludePaths.clear()
+		this.accessDecisionCache.clear()
 	}
+}
+
+function pathsEqual(left: string, right: string): boolean {
+	const normalizedLeft = path.normalize(left)
+	const normalizedRight = path.normalize(right)
+	return process.platform === "win32"
+		? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+		: normalizedLeft === normalizedRight
 }

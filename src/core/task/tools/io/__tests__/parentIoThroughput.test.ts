@@ -9,7 +9,12 @@ import {
 	IoRequestCoalescer,
 	resetIoRequestCoalescer,
 } from "../IoRequestCoalescer"
-import { acquireParentIoSlot, resetParentIoBulkheadForTests } from "../ParentIoBulkhead"
+import {
+	acquireParentIoSlot,
+	classifyParentIoWorkClass,
+	ParentIoBudgetPool,
+	resetParentIoBulkheadForTests,
+} from "../ParentIoBulkhead"
 
 function deferred<T>() {
 	let resolve!: (value: T) => void
@@ -39,14 +44,36 @@ describe("IoRequestCoalescer", () => {
 			cached: 0,
 			generation: 0,
 			cacheHits: 0,
+			cacheMisses: 2,
 			coalescedWaiters: 1,
 			executions: 1,
+			cancelledWaiters: 0,
 		})
 		execution.resolve("content")
 		const [a, b] = await Promise.all([aPromise, bPromise])
 		assert.equal(a, "content")
 		assert.equal(b, "content")
 		assert.equal(calls, 1)
+	})
+
+	it("never caches a rejected backend result", async () => {
+		const coalescer = new IoRequestCoalescer(5_000)
+		let attempts = 0
+		await assert.rejects(
+			coalescer.coalesce("search|workspace|needle", async () => {
+				attempts++
+				throw new Error("backend unavailable")
+			}),
+			/backend unavailable/,
+		)
+		assert.equal(
+			await coalescer.coalesce("search|workspace|needle", async () => {
+				attempts++
+				return "fresh result"
+			}),
+			"fresh result",
+		)
+		assert.equal(attempts, 2)
 	})
 
 	it("builds stable coalesce keys for file reads", () => {
@@ -121,8 +148,10 @@ describe("IoRequestCoalescer", () => {
 			cached: 1,
 			generation: currentGeneration,
 			cacheHits: 1,
+			cacheMisses: 1,
 			coalescedWaiters: 0,
 			executions: 1,
+			cancelledWaiters: 0,
 		})
 
 		resetIoRequestCoalescer(taskId)
@@ -130,11 +159,83 @@ describe("IoRequestCoalescer", () => {
 })
 
 describe("ParentIoBulkhead", () => {
+	it("classifies expensive tools into centrally bounded work classes", () => {
+		assert.equal(classifyParentIoWorkClass(DietCodeDefaultTool.FILE_READ), "small-read")
+		assert.equal(classifyParentIoWorkClass(DietCodeDefaultTool.SEARCH), "search")
+		assert.equal(classifyParentIoWorkClass(DietCodeDefaultTool.LIST_FILES), "traversal")
+		assert.equal(classifyParentIoWorkClass(DietCodeDefaultTool.LIST_CODE_DEF), "traversal")
+	})
+
 	it("allows parallel parent I/O slot acquisition", async () => {
 		resetParentIoBulkheadForTests()
 		const releaseA = await acquireParentIoSlot(true, true)
 		const releaseB = await acquireParentIoSlot(true, true)
 		releaseA()
 		releaseB()
+	})
+
+	it("keeps expensive search pressure from consuming lightweight capacity", async () => {
+		const pool = new ParentIoBudgetPool()
+		const releaseSearchA = await pool.acquire(0, true, { workClass: "search" })
+		const releaseSearchB = await pool.acquire(0, true, { workClass: "search" })
+		const queuedSearch = pool.acquire(0, true, { workClass: "search" })
+		let queuedSearchStarted = false
+		void queuedSearch.then(() => {
+			queuedSearchStarted = true
+		})
+
+		const releaseRead = await pool.acquire(0, true, { workClass: "small-read" })
+		const releaseMetadata = await pool.acquire(0, true, { workClass: "metadata" })
+		await Promise.resolve()
+
+		assert.equal(queuedSearchStarted, false)
+		assert.equal(pool.getActiveCount(), 4)
+		assert.equal(pool.getPendingCount(), 1)
+		assert.deepEqual(pool.getStats().byClass.search, {
+			capacity: 2,
+			active: 2,
+			pending: 1,
+			maxActive: 2,
+			maxPending: 1,
+			started: 2,
+			completed: 0,
+			cancelled: 0,
+		})
+
+		releaseSearchA()
+		const releaseSearchC = await queuedSearch
+		assert.equal(queuedSearchStarted, true)
+		assert.equal(pool.getStats().byClass.search.maxActive, 2)
+
+		releaseSearchB()
+		releaseSearchC()
+		releaseRead()
+		releaseMetadata()
+		assert.equal(pool.getActiveCount(), 0)
+		assert.equal(pool.getPendingCount(), 0)
+	})
+
+	it("removes an aborted queued acquisition without leaking capacity", async () => {
+		const pool = new ParentIoBudgetPool()
+		const releaseSearchA = await pool.acquire(0, true, { workClass: "search" })
+		const releaseSearchB = await pool.acquire(0, true, { workClass: "search" })
+		const controller = new AbortController()
+		const queued = pool.acquire(0, true, { workClass: "search", signal: controller.signal })
+
+		assert.equal(pool.getPendingCount(), 1)
+		controller.abort()
+		await assert.rejects(queued, (error: unknown) => error instanceof Error && error.name === "AbortError")
+		assert.equal(pool.getPendingCount(), 0)
+		assert.equal(pool.getStats().byClass.search.cancelled, 1)
+
+		await assert.rejects(
+			pool.acquire(0, true, { workClass: "small-read", signal: controller.signal }),
+			(error: unknown) => error instanceof Error && error.name === "AbortError",
+		)
+		assert.equal(pool.getActiveCount(), 2)
+
+		releaseSearchA()
+		releaseSearchB()
+		assert.equal(pool.getActiveCount(), 0)
 	})
 })

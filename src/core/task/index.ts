@@ -88,7 +88,7 @@ import { convertDietCodeMessageToProto } from "@shared/proto-conversions/dietcod
 import { DietCodeDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
 import { DietCodeAskResponse } from "@shared/WebviewMessage"
 import { isClaude4PlusModelFamily, isGPT5ModelFamily, isLocalModel, isParallelToolCallingEnabled } from "@utils/model-utils"
-import { arePathsEqual, getDesktopDir, isLocatedInPath, isLocatedInWorkspace } from "@utils/path"
+import { arePathsEqual, getDesktopDir, isLocatedInPath } from "@utils/path"
 import { filterExistingFiles } from "@utils/tabFiltering"
 import cloneDeep from "clone-deep"
 import fs from "fs/promises"
@@ -310,6 +310,10 @@ export class Task {
 	private siblingBatchSequence = 0
 	private activeSiblingScheduler?: { cancel: () => void }
 	private activeSiblingBatchPromise?: Promise<void>
+	private ioAbortController = new AbortController()
+	private activeSingleIoPromise?: Promise<void>
+	/** Owned advisory tail; canonical tool settlement never awaits presentation. */
+	private presentationReplayTail: Promise<void> = Promise.resolve()
 
 	constructor(params: TaskParams) {
 		const {
@@ -624,6 +628,7 @@ export class Task {
 			this.getActiveHookExecution.bind(this),
 			this.runUserPromptSubmitHook.bind(this),
 			this.getKnowledgeGraphService.bind(this),
+			() => this.ioAbortController.signal,
 			this.latencyTracker,
 		)
 
@@ -1423,6 +1428,7 @@ export class Task {
 		await this.loadWorkspaceIntelligence()
 		this.taskState.isInitialized = true
 		this.taskState.abort = false // Reset abort flag when resuming task
+		this.ioAbortController = new AbortController()
 
 		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
 		const inferredMode = inferAgentModeFromMessages(this.messageStateHandler.getDietCodeMessages(), yoloModeToggled)
@@ -1789,6 +1795,7 @@ export class Task {
 			// This must happen before canceling hooks so that hook catch blocks
 			// can properly detect the abort state
 			this.taskState.abort = true
+			this.ioAbortController.abort(new Error("Task I/O cancelled"))
 			this.activeSiblingScheduler?.cancel()
 
 			// PHASE 3: Cancel any running hook execution
@@ -1817,6 +1824,9 @@ export class Task {
 			// still settling. The scheduler has already received the abort signal.
 			await this.activeSiblingBatchPromise?.catch((error) => {
 				Logger.debug(`[Task ${this.taskId}] Cancelled sibling batch settled with: ${error}`)
+			})
+			await this.activeSingleIoPromise?.catch((error) => {
+				Logger.debug(`[Task ${this.taskId}] Cancelled single I/O settled with: ${error}`)
 			})
 
 			// PHASE 4: Run TaskCancel hook
@@ -1894,6 +1904,7 @@ export class Task {
 			}
 
 			// PHASE 7: Clean up resources
+			this.toolExecutor.disposeIoResources()
 			// Flush JoyRide cache entries for this cancelled task
 			try {
 				bumpTaskGeneration(getJoyRideCache(), this.taskId)
@@ -1904,7 +1915,7 @@ export class Task {
 			await this.terminalManager.disposeAll()
 			this.urlContentFetcher.closeBrowser()
 			await this.browserSession.dispose()
-			this.dietcodeIgnoreController.dispose()
+			await this.dietcodeIgnoreController.dispose()
 			this.fileContextTracker.dispose()
 			// need to await for when we want to make sure directories/files are reverted before
 			// re-starting the task from a checkpoint
@@ -1956,6 +1967,7 @@ export class Task {
 			return decision.value
 		}
 
+		this.latencyTracker.incrementCounter("shellSpawns")
 		const result = await this.commandExecutor.execute(command, timeoutSeconds, options)
 		await storeReusableCommandResult(getJoyRideCache(), command, result, scope)
 
@@ -2554,22 +2566,30 @@ export class Task {
 	}
 
 	private async resolveSiblingWorkspaceLocality(blocks: ToolUse[]): Promise<boolean[]> {
-		return await Promise.all(
-			blocks.map(async (block) => {
-				if (!isIoAuthorityTool(block.name) || !block.params.path?.trim()) return true
+		const results = new Array<boolean>(blocks.length).fill(true)
+		let cursor = 0
+		const workers = Array.from({ length: Math.min(DEFAULT_SIBLING_TOOL_CONCURRENCY, blocks.length) }, async () => {
+			while (cursor < blocks.length) {
+				const index = cursor++
+				const block = blocks[index]
+				if (!isIoAuthorityTool(block.name) || !(block.params.path ?? block.params.absolutePath)?.trim()) continue
 				try {
-					return await isLocatedInWorkspace(block.params.path)
+					const authority = await this.toolExecutor.prepareIoAuthority(block)
+					results[index] = authority.contained
 				} catch {
 					// Unknown locality keeps the existing approval path; it does not block
 					// unrelated workspace-local siblings.
-					return false
+					results[index] = false
 				}
-			}),
-		)
+			}
+		})
+		await Promise.all(workers)
+		return results
 	}
 
 	private async replaySiblingPresentation(events: CapturedPresentationEvent[]): Promise<void> {
 		for (const event of events) {
+			if (this.taskState.abort) return
 			try {
 				if (event.type === "say") {
 					await this.say(...event.args)
@@ -2584,12 +2604,35 @@ export class Task {
 		}
 	}
 
+	private scheduleSiblingPresentation(
+		batchId: string,
+		progress: Promise<unknown>,
+		batches: readonly CapturedPresentationEvent[][],
+	): void {
+		this.presentationReplayTail = Promise.all([this.presentationReplayTail, progress])
+			.then(async () => {
+				if (this.taskState.abort) return
+				this.latencyTracker.mark("result_presentation_started", { scope: batchId })
+				for (const events of batches) await this.replaySiblingPresentation(events)
+				this.latencyTracker.mark("result_presentation_completed", { scope: batchId })
+			})
+			.catch((error) => Logger.warn(`[Task ${this.taskId}] Advisory presentation replay failed:`, error))
+	}
+
 	private async executeSiblingToolBatch(blocks: ToolUse[]): Promise<void> {
-		const workspaceLocalBySequence = await this.resolveSiblingWorkspaceLocality(blocks)
 		const batchId = `${this.taskId}:${++this.siblingBatchSequence}`
+		for (const [sequence, block] of blocks.entries()) {
+			this.latencyTracker.markIoStage("scheduler_ready", {
+				invocationId: block.call_id?.trim() || `${batchId}-${sequence}`,
+				sequence,
+				toolName: block.name,
+			})
+		}
+		const workspaceLocalBySequence = await this.resolveSiblingWorkspaceLocality(blocks)
 		const nodes = buildSiblingToolDependencyModel(blocks, this.cwd, {
 			workspaceLocalBySequence,
 			invocationPrefix: batchId,
+			canonicalTargetBySequence: blocks.map((block) => this.toolExecutor.peekIoAuthority?.(block)?.canonicalTarget),
 		})
 
 		for (const node of nodes) {
@@ -2680,9 +2723,8 @@ export class Task {
 			if (this.activeSiblingBatchPromise === batchJoin) this.activeSiblingBatchPromise = undefined
 		}
 
-		await progressPromise
-		this.latencyTracker.mark("result_presentation_started", { scope: batchId })
-		const orderedResultContent: CapturedToolResultContent[] = []
+		// Commit the canonical ordered projection before replaying advisory UI.
+		// Presentation failure or latency cannot withhold completed tool evidence.
 		for (const envelope of envelopes) {
 			let resultContent = envelope.value?.resultContent
 			if (!resultContent) {
@@ -2693,14 +2735,21 @@ export class Task {
 					formatResponse.toolError(envelope.error ?? `Sibling ${envelope.status}`),
 				)
 			}
-			await this.replaySiblingPresentation(envelope.value?.presentationEvents ?? [])
-			orderedResultContent.push(...resultContent)
+			this.taskState.userMessageContent.push(...resultContent)
+			this.latencyTracker.markIoStage("projection_ready", {
+				invocationId: envelope.id,
+				sequence: envelope.sequence,
+				toolName: envelope.node.block.name,
+			})
 			if (envelope.node.block.call_id) {
 				Session.get().updateToolCall(envelope.node.block.call_id, envelope.node.block.name)
 			}
 		}
-		this.taskState.userMessageContent.push(...orderedResultContent)
-		this.latencyTracker.mark("result_presentation_completed", { scope: batchId })
+		this.scheduleSiblingPresentation(
+			batchId,
+			progressPromise,
+			envelopes.map((envelope) => envelope.value?.presentationEvents ?? []),
+		)
 	}
 
 	async presentAssistantMessage() {
@@ -2812,8 +2861,14 @@ export class Task {
 					break
 				}
 				if (!block.partial) {
+					const invocationId = block.call_id?.trim() || `single-${this.taskState.currentStreamingContentIndex}`
+					this.latencyTracker.markIoStage("scheduler_ready", {
+						invocationId,
+						sequence: this.taskState.currentStreamingContentIndex,
+						toolName: block.name,
+					})
 					this.latencyTracker.mark("tool_admitted", {
-						invocationId: block.call_id,
+						invocationId,
 						sequence: this.taskState.currentStreamingContentIndex,
 						toolName: block.name,
 					})
@@ -2831,7 +2886,20 @@ export class Task {
 					})
 					this.initialCheckpointCommitPromise = undefined
 				}
-				await this.toolExecutor.executeTool(block)
+				const execution = this.toolExecutor.executeTool(block)
+				if (isIoAuthorityTool(block.name)) this.activeSingleIoPromise = execution
+				try {
+					await execution
+				} finally {
+					if (this.activeSingleIoPromise === execution) this.activeSingleIoPromise = undefined
+				}
+				if (!block.partial) {
+					this.latencyTracker.markIoStage("projection_ready", {
+						invocationId: block.call_id?.trim() || `single-${this.taskState.currentStreamingContentIndex}`,
+						sequence: this.taskState.currentStreamingContentIndex,
+						toolName: block.name,
+					})
+				}
 				if (block.call_id) {
 					Session.get().updateToolCall(block.call_id, block.name)
 				}

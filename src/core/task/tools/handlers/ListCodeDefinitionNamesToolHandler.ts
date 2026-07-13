@@ -7,6 +7,7 @@ import { telemetryService } from "@/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import { hasWorkspaceLocalIoAuthority } from "../executionAuthority"
+import { executeTaskIoBackend } from "../io/TaskIoBackend"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
@@ -72,16 +73,22 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 
 			return formatResponse.toolError(validation.error)
 		}
+		if (!relDirPath) return formatResponse.toolError("Missing required parameter 'path'.")
 
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Resolve the absolute path based on multi-workspace configuration
-		const pathResult = resolveWorkspacePath(config, relDirPath!, "ListCodeDefinitionNamesToolHandler.execute")
-		const { absolutePath, displayPath } =
-			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relDirPath! } : pathResult
+		const authority = config.peekIoAuthority?.(block) ?? (await config.resolveIoAuthority?.(block))
+		if (authority && !authority.ignoreAllowed) return formatResponse.toolError(`Access to '${relDirPath}' is RESTRICTED.`)
+		const pathResult = authority ?? resolveWorkspacePath(config, relDirPath, "ListCodeDefinitionNamesToolHandler.execute")
+		const { absolutePath, displayPath } = authority
+			? { absolutePath: authority.absolutePath, displayPath: authority.displayPath }
+			: typeof pathResult === "string"
+				? { absolutePath: pathResult, displayPath: relDirPath }
+				: pathResult
 
 		// Approval before I/O — mirrors read_file
-		const operationIsLocatedInWorkspace = await isLocatedInWorkspace(relDirPath!)
+		const operationIsLocatedInWorkspace = authority?.contained ?? (await isLocatedInWorkspace(relDirPath))
 		const sharedMessageProps = {
 			tool: "listCodeDefinitionNames",
 			path: getReadablePath(config.cwd, displayPath),
@@ -91,13 +98,16 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 
 		const completeMessage = JSON.stringify(sharedMessageProps)
 
+		let pendingPresentation: Promise<void> = Promise.resolve()
 		const shouldAutoApprove =
 			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
 			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
 		if (shouldAutoApprove) {
 			if (!config.isSubagentExecution) {
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
+				pendingPresentation = (async () => {
+					await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
+					await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
+				})().catch(() => undefined)
 			}
 
 			telemetryService.captureToolUsage(
@@ -144,8 +154,10 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 		}
 
 		try {
-			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+			if (config.isSubagentExecution) {
+				const { ToolHookUtils } = await import("../utils/ToolHookUtils")
+				await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+			}
 		} catch (error) {
 			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
 			if (error instanceof PreToolUseHookCancellationError) {
@@ -154,11 +166,26 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 			throw error
 		}
 
-		const result = await parseSourceCodeForDefinitionsTopLevel(absolutePath, config.services.dietcodeIgnoreController)
+		const result = await executeTaskIoBackend(config, block, authority, "traversal", async (io, signal) =>
+			parseSourceCodeForDefinitionsTopLevel(absolutePath, config.services.dietcodeIgnoreController, {
+				signal,
+				targetExists: authority?.targetExists,
+				onFirstResult: io.firstUsefulResult,
+				onFileRead: (bytes) => {
+					io.incrementCounter("fileOpenCalls")
+					io.incrementCounter("fileReadCalls")
+					io.incrementCounter("bytesRead", bytes)
+				},
+			}),
+		)
 
 		if (shouldAutoApprove && !config.isSubagentExecution) {
 			const resultMessage = JSON.stringify({ ...sharedMessageProps, content: result })
-			await config.callbacks.say("tool", resultMessage, undefined, undefined, false)
+			void pendingPresentation
+				.then(() => config.callbacks.say("tool", resultMessage, undefined, undefined, false))
+				.catch(() => undefined)
+		} else {
+			void pendingPresentation
 		}
 
 		return result

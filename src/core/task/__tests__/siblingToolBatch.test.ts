@@ -64,6 +64,7 @@ describe("Task sibling tool batch", () => {
 			task.taskState.userMessageContent.map((content: { text?: string }) => content.text),
 			["result-0", "result-1", "result-2", "result-3"],
 		)
+		await task.presentationReplayTail
 		assert.deepEqual(visible.slice(1), ["card-0", "card-1", "card-2", "card-3"])
 		assert.equal(task.latencyTracker.snapshot().maxConcurrentSiblings, 4)
 		assert.equal(task.activeSiblingScheduler, undefined)
@@ -139,5 +140,23 @@ describe("Task sibling tool batch", () => {
 			task.taskState.userMessageContent.map((content: { text?: string }) => content.text),
 			["durable result", "durable result"],
 		)
+	})
+
+	it("does not let deferred progress presentation withhold canonical projection", async () => {
+		const { task } = bareTask(async (_block, sequence) => ({
+			resultContent: [{ type: "text", text: `projected-${sequence}` }],
+			presentationEvents: [],
+		}))
+		const progress = deferred<number>()
+		task.say = () => progress.promise
+
+		await task.executeSiblingToolBatch([read("a.ts"), read("b.ts")])
+		assert.deepEqual(
+			task.taskState.userMessageContent.map((content: { text?: string }) => content.text),
+			["projected-0", "projected-1"],
+		)
+
+		progress.resolve(1)
+		await task.presentationReplayTail
 	})
 })

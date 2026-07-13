@@ -4,6 +4,7 @@ import { Logger } from "@/shared/services/Logger"
  * ExecuteOptions defines the reliability parameters for a tool action.
  */
 export interface ExecuteOptions {
+	/** Set to zero when the backend owns timeout/cancellation. */
 	timeoutMs?: number
 	maxRetries?: number
 	backoffMs?: number
@@ -48,9 +49,10 @@ export class ActionExecutor {
 			}
 
 			try {
-				const result = await this.withConcurrency(concurrencyGroup, () =>
-					this.withTimeout(taskId, operation(), timeoutMs),
-				)
+				const result = await this.withConcurrency(concurrencyGroup, () => {
+					const running = operation()
+					return timeoutMs > 0 ? this.withTimeout(taskId, running, timeoutMs) : running
+				})
 				this.onSuccess()
 				return result
 			} catch (err: any) {
@@ -108,10 +110,15 @@ export class ActionExecutor {
 	}
 
 	private async withTimeout<T>(id: string, promise: Promise<T>, ms: number): Promise<T> {
+		let timeoutId: ReturnType<typeof setTimeout> | undefined
 		const timeout = new Promise<never>((_, reject) => {
-			setTimeout(() => reject(new Error(`[ActionExecutor] Task ${id} timed out after ${ms}ms`)), ms)
+			timeoutId = setTimeout(() => reject(new Error(`[ActionExecutor] Task ${id} timed out after ${ms}ms`)), ms)
 		})
-		return Promise.race([promise, timeout])
+		try {
+			return await Promise.race([promise, timeout])
+		} finally {
+			if (timeoutId) clearTimeout(timeoutId)
+		}
 	}
 
 	private isRetryableError(err: any): boolean {

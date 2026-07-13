@@ -1,6 +1,6 @@
 # Agent Fast Orientation
 
-Last validated: 2026-07-12
+Last validated: 2026-07-13
 
 ## Current Snapshot
 
@@ -13,6 +13,11 @@ Last validated: 2026-07-12
 - Task latency trace: `src/core/task/latency/TaskLatencyTracker.ts`.
 - Sibling dependency, bounded scheduling, and invocation capture: `src/core/task/tools/siblings/`.
 - Query singleflight/generation evidence: `src/core/task/tools/io/IoRequestCoalescer.ts`.
+- Generation-scoped canonical path evidence: `src/core/task/tools/io/TaskPathAuthorityCache.ts`.
+- Backend admission and class budgets: `src/core/task/tools/io/TaskIoBackend.ts` and `ParentIoBulkhead.ts`.
+- Task/process ownership: `src/core/task/index.ts`, `src/core/task/ActionExecutor.ts`, and `ExecuteCommandToolHandler.ts`.
+- Read/list/search/definition backends: `src/integrations/misc/`, `src/services/glob/`, `src/services/ripgrep/`, and `src/services/tree-sitter/`.
+- Reproducible I/O fixture: `scripts/meow-io-benchmark.ts` (`npm run benchmark:meow-io`).
 - Native sibling delta identity: `src/core/api/transform/tool-call-processor.ts`.
 
 ## Orientation Loop
@@ -31,11 +36,14 @@ npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --requ
 npm run test:unit
 npm run lint
 npm run roadmap:audit
+npm run benchmark:meow-io
 ```
 
 `mocha` must use `--no-config` for a truly focused run; `.mocharc.json` otherwise adds every `src/**/__tests__/*.ts` test.
 
 For Task-level focused tests, also require `./src/test/requires.cjs` so the VS Code shim is installed.
+
+The benchmark reports deterministic local-fixture evidence. Its “cold” mode clears task caches only; it does not claim control over the OS page cache. Service rows intentionally call backends directly; controlled tests verify the runtime total/class budgets.
 
 ## Links
 
@@ -50,5 +58,6 @@ For Task-level focused tests, also require `./src/test/requires.cjs` so the VS C
 - [Executive brief](../meow-executive-brief.md)
 - [Execution philosophy](../meow-philosophy.md)
 - [Technical whitepaper](../meow-whitepaper.md)
+- [Operations guide](../meow-operations-guide.md)
 - [ADR index](../adr/README.md)
 - [Migration report](../meow-migration.md)

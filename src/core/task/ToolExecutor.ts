@@ -35,12 +35,15 @@ import {
 	shouldSkipLayerInjectionForParentIoTool,
 	shouldUseIoAuthorityReadFastPath,
 } from "./tools/executionAuthority"
-import { buildIoCoalesceKey, getIoRequestCoalescer, resetIoRequestCoalescer } from "./tools/io/IoRequestCoalescer"
-import { acquireParentIoSlot } from "./tools/io/ParentIoBulkhead"
+import { disposeIoRequestCoalescer, getIoRequestCoalescer, resetIoRequestCoalescer } from "./tools/io/IoRequestCoalescer"
+import { type PathAuthorityRecord, TaskPathAuthorityCache } from "./tools/io/TaskPathAuthorityCache"
 import { RefactorHealer } from "./tools/RefactorHealer"
+import { isReadOnlyVerificationCommand } from "./tools/siblings/SiblingToolDependency"
 import {
 	type CapturedPresentationEvent,
 	type CapturedToolResultContent,
+	getToolInvocationContext,
+	getToolInvocationSignal,
 	resolveInvocationResultTarget,
 	runWithToolInvocationContext,
 } from "./tools/siblings/ToolInvocationContext"
@@ -56,6 +59,42 @@ export { canonicalizeAttemptCompletionParams } from "./tools/attemptCompletionUt
 import { ReactivePolicyObserver } from "../policy/ReactivePolicyObserver"
 import { UniversalGuard } from "../policy/UniversalGuard"
 
+const TOOL_FAILURE_RESULT_PATTERN =
+	/The tool execution failed with the following error:|The user denied this operation\.|Tool was interrupted and not executed|Skipping tool due to user rejecting/
+
+function mutationTargetPaths(block: ToolUse, cwd: string): string[] {
+	if (block.name !== DietCodeDefaultTool.APPLY_PATCH) {
+		return block.params.path?.trim() ? [path.resolve(cwd, block.params.path)] : []
+	}
+	const targets = new Set<string>()
+	for (const line of block.params.input?.split("\n") ?? []) {
+		const match = /^\*\*\* (?:Add File|Update File|Delete File|Move to):\s+(.+)$/.exec(line.trim())
+		if (match?.[1]) targets.add(path.resolve(cwd, match[1]))
+	}
+	return [...targets]
+}
+
+export async function refreshIgnorePolicyAfterToolMutation(
+	block: ToolUse,
+	cwd: string,
+	controller: Pick<DietCodeIgnoreController, "refreshPolicy" | "refreshPolicyIfAffected">,
+	localMutation: boolean,
+): Promise<void> {
+	if (block.name === DietCodeDefaultTool.BASH && isReadOnlyVerificationCommand(block.params.command)) return
+	if (block.name === DietCodeDefaultTool.BASH || block.name === DietCodeDefaultTool.MCP_USE) {
+		await controller.refreshPolicy()
+		return
+	}
+	if (!localMutation) return
+
+	const targets = mutationTargetPaths(block, cwd)
+	if (targets.length === 0) {
+		await controller.refreshPolicy()
+		return
+	}
+	for (const target of targets) await controller.refreshPolicyIfAffected(target)
+}
+
 export class ToolExecutor {
 	private autoApprover: AutoApprove
 	private coordinator: ToolExecutorCoordinator
@@ -65,6 +104,51 @@ export class ToolExecutor {
 	private cachedToolConfig?: TaskConfig
 	private cachedToolConfigKey?: string
 	private knowledgeGraphServicePromise?: Promise<KnowledgeGraphService | undefined>
+	private readonly ioAuthorityCache: TaskPathAuthorityCache
+
+	private invocationDetail(block: ToolUse, invocationId?: string) {
+		const context = getToolInvocationContext()
+		return {
+			invocationId: invocationId ?? context?.invocationId ?? block.call_id ?? `${block.name}:single`,
+			sequence: context?.sequence,
+			toolName: block.name,
+		}
+	}
+
+	/** Scheduler prewarm: populate evidence without moving invocation-stage clocks. */
+	public prepareIoAuthority(
+		block: ToolUse,
+		signal = getToolInvocationSignal() ?? this.getTaskSignal(),
+	): Promise<PathAuthorityRecord> {
+		return this.ioAuthorityCache.resolve({ path: block.params.path, absolutePath: block.params.absolutePath }, signal)
+	}
+
+	/** Handler validation: reuse scheduler evidence and expose the ordered authority trace. */
+	public async resolveIoAuthority(
+		block: ToolUse,
+		signal = getToolInvocationSignal() ?? this.getTaskSignal(),
+	): Promise<PathAuthorityRecord> {
+		const record = await this.prepareIoAuthority(block, signal)
+		const detail = this.invocationDetail(block)
+		this.latencyTracker?.markIoStage("authority_resolved", detail)
+		this.latencyTracker?.markIoStage("path_normalized", detail)
+		this.latencyTracker?.markIoStage("workspace_containment_verified", detail)
+		this.latencyTracker?.markIoStage("ignore_policy_resolved", detail)
+		return record
+	}
+
+	public peekIoAuthority(block: ToolUse): PathAuthorityRecord | undefined {
+		return this.ioAuthorityCache.peek({ path: block.params.path, absolutePath: block.params.absolutePath })
+	}
+
+	public disposeIoResources(): void {
+		this.ioAuthorityCache.dispose()
+		disposeIoRequestCoalescer(this.taskId)
+	}
+
+	private async refreshIgnorePolicyAfterMutation(block: ToolUse, localMutation: boolean): Promise<void> {
+		await refreshIgnorePolicyAfterToolMutation(block, this.cwd, this.dietcodeIgnoreController, localMutation)
+	}
 
 	public async executeToolCaptured(
 		block: ToolUse,
@@ -89,18 +173,24 @@ export class ToolExecutor {
 		signal?.throwIfAborted()
 		await runWithToolInvocationContext(context, () => this.executeTool(block))
 		signal?.throwIfAborted()
-		let serializedResult = ""
-		try {
-			serializedResult = JSON.stringify(context.resultContent)
-		} catch {
-			// Result capture remains usable even when an extension-provided block is
-			// not JSON-serializable; local execution already completed.
+		const stack: unknown[] = [...context.resultContent]
+		const seen = new Set<object>()
+		let failed = false
+		for (let visited = 0; stack.length > 0 && visited < 4_096 && !failed; visited++) {
+			const value = stack.pop()
+			if (typeof value === "string") {
+				failed = TOOL_FAILURE_RESULT_PATTERN.test(value)
+			} else if (value && typeof value === "object" && !seen.has(value)) {
+				seen.add(value)
+				for (const [key, nested] of Object.entries(value)) {
+					// Image base64 is immutable payload, never an execution-status carrier.
+					if (key !== "data") stack.push(nested)
+				}
+			}
 		}
-		const failed =
-			serializedResult.includes("The tool execution failed with the following error:") ||
-			serializedResult.includes("The user denied this operation.") ||
-			serializedResult.includes("Tool was interrupted and not executed") ||
-			serializedResult.includes("Skipping tool due to user rejecting")
+		this.latencyTracker?.markIoStage("envelope_completed", this.invocationDetail(block, invocationId))
+		Object.freeze(context.resultContent)
+		Object.freeze(context.presentationEvents)
 		return {
 			resultContent: context.resultContent,
 			presentationEvents: context.presentationEvents,
@@ -213,12 +303,25 @@ export class ToolExecutor {
 			context: "initial_task" | "resume" | "feedback",
 		) => Promise<{ cancel?: boolean; wasCancelled?: boolean; contextModification?: string; errorMessage?: string }>,
 		private getKnowledgeGraphService: () => Promise<KnowledgeGraphService | undefined>,
+		private readonly getTaskSignal: () => AbortSignal,
 		private readonly latencyTracker?: TaskLatencyTracker,
 	) {
 		this.autoApprover = new AutoApprove(this.stateManager)
 		this.guard = new UniversalGuard(cwd, taskId, this.stateManager)
 		this.policyObserver = new ReactivePolicyObserver(this.guard as any) // Guard wraps engine
 		this.healer = new RefactorHealer(this.cwd)
+		this.ioAuthorityCache = new TaskPathAuthorityCache({
+			cwd: this.cwd,
+			ignorePolicy: this.dietcodeIgnoreController,
+			getFilesystemGeneration: () => getIoRequestCoalescer(this.taskId).generation,
+			getWorkspaceRoots: () => this.workspaceManager?.getRoots() ?? [{ path: this.cwd, name: path.basename(this.cwd) }],
+			observe: ({ name }) => {
+				if (name === "cache_hit") this.latencyTracker?.incrementCounter("pathAuthorityCacheHits")
+				else if (name === "cache_miss") this.latencyTracker?.incrementCounter("pathAuthorityCacheMisses")
+				else if (name === "realpath_requested") this.latencyTracker?.incrementCounter("realpathCalls")
+				else if (name === "ignore_policy_evaluated") this.latencyTracker?.incrementCounter("ignorePolicyEvaluations")
+			},
+		})
 		this.coordinator = new ToolExecutorCoordinator()
 		this.registerToolHandlers()
 	}
@@ -250,6 +353,7 @@ export class ToolExecutor {
 		config.auditSarifHookExportEnabled = this.stateManager.getGlobalSettingsKey("auditSarifHookExportEnabled")
 		config.auditWorkspaceArtifactsEnabled = this.stateManager.getGlobalSettingsKey("auditWorkspaceArtifactsEnabled")
 		config.enableParallelToolCalling = this.isParallelToolCallingEnabled()
+		config.taskSignal = this.getTaskSignal()
 		config.autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 		config.browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
 		config.focusChainSettings = this.stateManager.getGlobalSettingsKey("focusChainSettings")
@@ -300,6 +404,9 @@ export class ToolExecutor {
 			isSubagentExecution: false,
 			finalizationMode: false,
 			latencyTracker: this.latencyTracker,
+			taskSignal: this.getTaskSignal(),
+			resolveIoAuthority: this.resolveIoAuthority.bind(this),
+			peekIoAuthority: this.peekIoAuthority.bind(this),
 			cwd: this.cwd,
 			workspaceManager: this.workspaceManager,
 			isMultiRootEnabled: this.isMultiRootEnabled,
@@ -365,7 +472,12 @@ export class ToolExecutor {
 	 * Register all tool handlers with the coordinator
 	 */
 	private registerToolHandlers(): void {
-		const validator = new ToolValidator(this.dietcodeIgnoreController, this.guard as any)
+		const validator = new ToolValidator(
+			this.dietcodeIgnoreController,
+			this.guard as any,
+			this.resolveIoAuthority.bind(this),
+			(block) => this.latencyTracker?.markIoStage("parameters_validated", this.invocationDetail(block)),
+		)
 		// Register all tools via toolUseNames
 		for (const tool of toolUseNames) {
 			this.coordinator.registerByName(tool, validator)
@@ -778,10 +890,9 @@ export class ToolExecutor {
 		this.guard.setMode(this.stateManager.getGlobalSettingsKey("mode") || "act")
 
 		const parentIoFastPath = shouldBypassGuardForParentIoTool(block.name)
-		this.latencyTracker?.markOnce("tool_dispatch_started", {
-			invocationId: block.call_id,
-			toolName: block.name,
-		})
+		const invocationDetail = this.invocationDetail(block)
+		this.latencyTracker?.markOnce("tool_dispatch_started", invocationDetail)
+		this.latencyTracker?.markIoStage("dispatch_entered", invocationDetail)
 
 		// Direct Layer Injection — skip for I/O authority (joy-zoning not needed on read/list/search)
 		if (!shouldSkipLayerInjectionForParentIoTool(block.name) && block.params.path) {
@@ -843,34 +954,12 @@ export class ToolExecutor {
 				return
 			}
 
-			// Execute the actual tool (parent I/O bulkhead + coalescing when parallel calling enabled)
-			const executeTool = async (): Promise<unknown> => {
-				if (parentIoFastPath) {
-					this.latencyTracker?.markOnce("useful_io_started", {
-						invocationId: block.call_id,
-						toolName: block.name,
-					})
-				}
-				return this.coordinator.execute(config, block)
-			}
-			if (parentIoFastPath && config.enableParallelToolCalling) {
-				const release = await acquireParentIoSlot(true, Boolean(this.taskState.swarmRuntime))
-				try {
-					const coalescer = getIoRequestCoalescer(this.taskId)
-					const coalesceKey = buildIoCoalesceKey(block, this.cwd, coalescer.generation)
-					toolResult = coalesceKey ? await coalescer.coalesce(coalesceKey, executeTool) : await executeTool()
-				} finally {
-					release()
-				}
-			} else {
-				toolResult = await executeTool()
-			}
+			// Parent I/O handlers acquire their work-class budget inside the
+			// generation-safe singleflight leader, after per-invocation validation.
+			toolResult = await this.coordinator.execute(config, block)
 			toolWasExecuted = true
 			if (parentIoFastPath) {
-				this.latencyTracker?.markOnce("useful_io_completed", {
-					invocationId: block.call_id,
-					toolName: block.name,
-				})
+				;(getToolInvocationSignal() ?? this.getTaskSignal()).throwIfAborted()
 			}
 
 			// A local mutation ends the validity window for completed I/O cache entries.
@@ -878,7 +967,12 @@ export class ToolExecutor {
 			const scratchpadReadMayCreate =
 				block.name === DietCodeDefaultTool.FILE_READ &&
 				path.basename(block.params.path?.trim() ?? "").toLowerCase() === "scratchpad.md"
-			if (isLocalMutationTool(block.name) || scratchpadReadMayCreate) {
+			const localMutation = isLocalMutationTool(block.name) || scratchpadReadMayCreate
+			const opaqueMutation =
+				block.name === DietCodeDefaultTool.MCP_USE ||
+				(block.name === DietCodeDefaultTool.BASH && !isReadOnlyVerificationCommand(block.params.command))
+			await this.refreshIgnorePolicyAfterMutation(block, localMutation)
+			if (localMutation || opaqueMutation) {
 				resetIoRequestCoalescer(this.taskId)
 			}
 
@@ -960,6 +1054,7 @@ export class ToolExecutor {
 			}
 
 			this.pushToolResult(toolResult, block)
+			this.latencyTracker?.markIoStage("envelope_completed", invocationDetail)
 
 			if (!parentIoFastPath) {
 				const runPostExecution = async () => {

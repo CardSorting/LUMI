@@ -2,6 +2,7 @@
  * [LAYER: CORE]
  */
 import type { ApiHandler } from "@core/api"
+import type { ToolUse } from "@core/assistant-message"
 import type { FileContextTracker } from "@core/context/context-tracking/FileContextTracker"
 import type { KnowledgeGraphService } from "@core/context/KnowledgeGraphService"
 import type { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
@@ -31,6 +32,7 @@ import type { MessageStateHandler } from "../../message-state"
 import type { TaskState } from "../../TaskState"
 import type { AutoApprove } from "../../tools/autoApprove"
 import type { HookExecution } from "../../types/HookExecution"
+import type { PathAuthorityRecord } from "../io/TaskPathAuthorityCache"
 import type { ToolExecutorCoordinator } from "../ToolExecutorCoordinator"
 import { TASK_CALLBACKS_KEYS, TASK_CONFIG_KEYS, TASK_SERVICES_KEYS } from "../utils/ToolConstants"
 
@@ -65,6 +67,11 @@ export interface TaskConfig {
 	finalizationMode?: boolean
 	recursionDepth?: number
 	latencyTracker?: TaskLatencyTracker
+	/** Task-owned cancellation for non-sibling invocations. */
+	taskSignal?: AbortSignal
+	/** Task-generation path evidence. Optional for isolated/subagent configs. */
+	resolveIoAuthority?: (block: ToolUse, signal?: AbortSignal) => Promise<PathAuthorityRecord>
+	peekIoAuthority?: (block: ToolUse) => PathAuthorityRecord | undefined
 
 	// Multi-workspace support (optional for backward compatibility)
 	workspaceManager?: WorkspaceRootManager

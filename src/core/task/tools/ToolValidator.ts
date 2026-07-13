@@ -2,6 +2,7 @@ import { ToolParamName, ToolUse } from "@core/assistant-message"
 import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { UniversalGuard } from "../../policy/UniversalGuard"
+import type { PathAuthorityRecord } from "./io/TaskPathAuthorityCache"
 
 export type ValidationResult = { ok: true } | { ok: false; error: string; hint?: string }
 
@@ -12,7 +13,9 @@ export type ValidationResult = { ok: true } | { ok: false; error: string; hint?:
 export class ToolValidator {
 	constructor(
 		private readonly ignoreController: DietCodeIgnoreController,
-		private readonly guard: UniversalGuard,
+		_guard: UniversalGuard,
+		private readonly resolveIoAuthority?: (block: ToolUse, signal?: AbortSignal) => Promise<PathAuthorityRecord>,
+		private readonly onParametersValidated?: (block: ToolUse) => void,
 	) {}
 
 	/**
@@ -26,12 +29,15 @@ export class ToolValidator {
 				return { ok: false, error: `Missing required parameter '${p}' for tool '${block.name}'.` }
 			}
 		}
+		this.onParametersValidated?.(block)
 
 		const params = block.params as any
 
 		// 2. Security Audit
 		if (params.path) {
-			const ignoreResult = await this.checkDietCodeIgnorePath(params.path)
+			const ignoreResult = this.resolveIoAuthority
+				? await this.checkResolvedAuthority(block)
+				: await this.checkDietCodeIgnorePath(params.path)
 			if (!ignoreResult.ok) return ignoreResult
 		}
 
@@ -47,6 +53,19 @@ export class ToolValidator {
 			return await this.checkArchitecturalPurity(params.path, editContent)
 		}
 
+		return { ok: true }
+	}
+
+	private async checkResolvedAuthority(block: ToolUse): Promise<ValidationResult> {
+		const resolver = this.resolveIoAuthority
+		if (!resolver) return this.checkDietCodeIgnorePath(block.params.path ?? "")
+		const authority = await resolver(block)
+		if (!authority.ignoreAllowed) {
+			return {
+				ok: false,
+				error: `Access to '${authority.originalInput}' is RESTRICTED by .dietcodeignore policies.`,
+			}
+		}
 		return { ok: true }
 	}
 

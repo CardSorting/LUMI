@@ -2,6 +2,15 @@
 
 - Do not add another pre-tool gate for workspace-local queries; required parameters and `.dietcodeignore` already provide the relevant boundary.
 - Do not cache completed reads across a file mutation. Reset `IoRequestCoalescer` for the task.
+- Do not acquire a backend bulkhead slot before coalescing. Identical waiters would consume the whole class budget while one backend runs.
+- Do not wrap the complete handler in a reusable cache: validation and external approval must execute per invocation. Cache only contained, generation-bound backend payloads after approval.
+- Do not infer canonical workspace containment from a lexical prefix. Resolve symlinks/nearest existing ancestors and key evidence by workspace identity plus filesystem/policy generation.
+- Do not retain a successful search/list/read result after a generation changes during execution; retry or discard it before projection.
+- Do not assume only sibling invocations need cancellation. Direct I/O must use the task-owned signal and be joined by task abort.
+- Do not turn a failed repository search into “Found 0 results”; a resolved false negative becomes reusable cache evidence.
+- Do not rely on watcher delivery after `apply_patch`, shell, or MCP mutation of `.dietcodeignore`; refresh affected or opaque policy state before rotating the result generation.
+- Do not use unbounded directory expansion or buffer full ripgrep stdout. Enforce traversal, byte, line, and result limits during production.
+- Do not wrap the owned shell process in another timeout/retry race. A timed-out promise does not terminate its process and can create duplicate live commands.
 - Do not treat roadmap or audit diagnostic failure as negative engineering evidence.
 - Do not put evidence persistence on the response path when task-local evidence already exists.
 - Do not auto-bootstrap or rewrite `ROADMAP.md` merely because a task started.

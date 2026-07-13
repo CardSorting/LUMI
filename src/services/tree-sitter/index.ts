@@ -1,184 +1,110 @@
-import { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
+import type { DietCodeIgnoreController } from "@core/ignore/DietCodeIgnoreController"
 import { listFiles } from "@services/glob/list-files"
-import { fileExistsAtPath } from "@utils/fs"
-import * as fs from "fs/promises"
-import * as path from "path"
 import { Logger } from "@/shared/services/Logger"
-import { LanguageParser, loadRequiredLanguageParsers } from "./languageParser"
+import { type LanguageParser, loadRequiredLanguageParsers } from "./languageParser"
 
-// TODO: implement caching behavior to avoid having to keep analyzing project for new tasks.
+export interface DefinitionScanOptions {
+	signal?: AbortSignal
+	readConcurrency?: number
+	targetExists?: boolean
+	onFirstResult?: () => void
+	onFileRead?: (bytes: number) => void
+}
+
+const SOURCE_EXTENSIONS = new Set(
+	["js", "jsx", "ts", "tsx", "py", "rs", "go", "c", "h", "cpp", "hpp", "cs", "rb", "java", "php", "swift", "kt"].map(
+		(extension) => `.${extension}`,
+	),
+)
+
+function throwIfAborted(signal?: AbortSignal): void {
+	if (signal?.aborted) throw signal.reason ?? new Error("Definition scan aborted")
+}
+
+async function mapBounded<T, R>(
+	values: readonly T[],
+	concurrency: number,
+	map: (value: T, index: number) => Promise<R>,
+): Promise<R[]> {
+	const results = new Array<R>(values.length)
+	let cursor = 0
+	const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+		while (cursor < values.length) {
+			const index = cursor++
+			results[index] = await map(values[index], index)
+		}
+	})
+	await Promise.all(workers)
+	return results
+}
+
 export async function parseSourceCodeForDefinitionsTopLevel(
 	dirPath: string,
 	dietcodeIgnoreController?: DietCodeIgnoreController,
+	options: DefinitionScanOptions = {},
 ): Promise<string> {
-	// check if the path exists
-	const dirExists = await fileExistsAtPath(path.resolve(dirPath))
-	if (!dirExists) {
-		return "This directory does not exist or you do not have permission to access it."
-	}
-
-	// Get all files at top level (not gitignored)
-	const [allFiles, _] = await listFiles(dirPath, false, 200)
-
-	let result = ""
-
-	// Separate files to parse and remaining files
-	const { filesToParse, remainingFiles } = separateFiles(allFiles)
-
-	const languageParsers = await loadRequiredLanguageParsers(filesToParse)
-
-	// Parse specific files we have language parsers for
-	// const filesWithoutDefinitions: string[] = []
-
-	// Filter filepaths for access if controller is provided
-	const allowedFilesToParse = dietcodeIgnoreController ? dietcodeIgnoreController.filterPaths(filesToParse) : filesToParse
-
-	for (const filePath of allowedFilesToParse) {
-		const definitions = await parseFile(filePath, languageParsers, dietcodeIgnoreController)
-		if (definitions) {
-			result += `${path.relative(dirPath, filePath).toPosix()}\n${definitions}\n`
+	throwIfAborted(options.signal)
+	if (options.targetExists !== true) {
+		try {
+			const stat = await fs.stat(path.resolve(dirPath))
+			if (!stat.isDirectory()) return "This directory does not exist or you do not have permission to access it."
+		} catch {
+			return "This directory does not exist or you do not have permission to access it."
 		}
-		// else {
-		// 	filesWithoutDefinitions.push(file)
-		// }
 	}
 
-	// List remaining files' paths
-	// let didFindUnparsedFiles = false
-	// filesWithoutDefinitions
-	// 	.concat(remainingFiles)
-	// 	.sort()
-	// 	.forEach((file) => {
-	// 		if (!didFindUnparsedFiles) {
-	// 			result += "# Unparsed Files\n\n"
-	// 			didFindUnparsedFiles = true
-	// 		}
-	// 		result += `${path.relative(dirPath, file)}\n`
-	// 	})
+	const [allFiles] = await listFiles(dirPath, false, 200, { signal: options.signal })
+	throwIfAborted(options.signal)
+	const filesToParse = allFiles.filter((file) => SOURCE_EXTENSIONS.has(path.extname(file))).slice(0, 50)
+	const allowedFiles = dietcodeIgnoreController
+		? filesToParse.filter((file) => dietcodeIgnoreController.validateAccess(file))
+		: filesToParse
+	if (allowedFiles.length === 0) return "No source code definitions found."
 
-	return result ? result : "No source code definitions found."
+	const languageParsers = await loadRequiredLanguageParsers(allowedFiles)
+	const readConcurrency = Math.max(1, Math.min(8, options.readConcurrency ?? 8))
+	const contents = await mapBounded(allowedFiles, readConcurrency, async (filePath) => {
+		throwIfAborted(options.signal)
+		const content = await fs.readFile(filePath, "utf8")
+		options.onFileRead?.(Buffer.byteLength(content))
+		return content
+	})
+
+	const resultParts: string[] = []
+	for (let index = 0; index < allowedFiles.length; index++) {
+		throwIfAborted(options.signal)
+		const definitions = parseFileContent(allowedFiles[index], contents[index], languageParsers)
+		if (!definitions) continue
+		if (resultParts.length === 0) options.onFirstResult?.()
+		resultParts.push(`${path.relative(dirPath, allowedFiles[index]).toPosix()}\n${definitions}\n`)
+	}
+	return resultParts.length > 0 ? resultParts.join("") : "No source code definitions found."
 }
 
-function separateFiles(allFiles: string[]): {
-	filesToParse: string[]
-	remainingFiles: string[]
-} {
-	const extensions = [
-		"js",
-		"jsx",
-		"ts",
-		"tsx",
-		"py",
-		// Rust
-		"rs",
-		"go",
-		// C
-		"c",
-		"h",
-		// C++
-		"cpp",
-		"hpp",
-		// C#
-		"cs",
-		// Ruby
-		"rb",
-		"java",
-		"php",
-		"swift",
-		// Kotlin
-		"kt",
-	].map((e) => `.${e}`)
-	const filesToParse = allFiles.filter((file) => extensions.includes(path.extname(file))).slice(0, 50) // 50 files max
-	const remainingFiles = allFiles.filter((file) => !filesToParse.includes(file))
-	return { filesToParse, remainingFiles }
-}
+function parseFileContent(filePath: string, fileContent: string, languageParsers: LanguageParser): string | null {
+	const extension = path.extname(filePath).toLowerCase().slice(1)
+	const { parser, query } = languageParsers[extension] || {}
+	if (!parser || !query) return `Unsupported file type: ${filePath}`
 
-/*
-Parsing files using tree-sitter
-
-1. Parse the file content into an AST (Abstract Syntax Tree) using the appropriate language grammar (set of rules that define how the components of a language like keywords, expressions, and statements can be combined to create valid programs).
-2. Create a query using a language-specific query string, and run it against the AST's root node to capture specific syntax elements.
-    - We use tag queries to identify named entities in a program, and then use a syntax capture to label the entity and its name. A notable example of this is GitHub's search-based code navigation.
-	- Our custom tag queries are based on tree-sitter's default tag queries, but modified to only capture definitions.
-3. Sort the captures by their position in the file, output the name of the definition, and format by i.e. adding "|----\n" for gaps between captured sections.
-
-This approach allows us to focus on the most relevant parts of the code (defined by our language-specific queries) and provides a concise yet informative view of the file's structure and key elements.
-
-- https://github.com/tree-sitter/node-tree-sitter/blob/master/test/query_test.js
-- https://github.com/tree-sitter/tree-sitter/blob/master/lib/binding_web/test/query-test.js
-- https://github.com/tree-sitter/tree-sitter/blob/master/lib/binding_web/test/helper.js
-- https://tree-sitter.github.io/tree-sitter/code-navigation-systems
-*/
-async function parseFile(
-	filePath: string,
-	languageParsers: LanguageParser,
-	dietcodeIgnoreController?: DietCodeIgnoreController,
-): Promise<string | null> {
-	if (dietcodeIgnoreController && !dietcodeIgnoreController.validateAccess(filePath)) {
-		return null
-	}
-	const fileContent = await fs.readFile(filePath, "utf8")
-	const ext = path.extname(filePath).toLowerCase().slice(1)
-
-	const { parser, query } = languageParsers[ext] || {}
-	if (!parser || !query) {
-		return `Unsupported file type: ${filePath}`
-	}
-
-	let formattedOutput = ""
-
+	const output: string[] = []
 	try {
-		// Parse the file content into an Abstract Syntax Tree (AST), a tree-like representation of the code
 		const tree = parser.parse(fileContent)
-		if (!tree || !tree.rootNode) {
-			return null
-		}
-
-		// Apply the query to the AST and get the captures
-		// Captures are specific parts of the AST that match our query patterns, each capture represents a node in the AST that we're interested in.
+		if (!tree?.rootNode) return null
 		const captures = query.captures(tree.rootNode)
-
-		// Sort captures by their start position
-		captures.sort((a, b) => a.node.startPosition.row - b.node.startPosition.row)
-
-		// Split the file content into individual lines
+		captures.sort((left, right) => left.node.startPosition.row - right.node.startPosition.row)
 		const lines = fileContent.split("\n")
-
-		// Keep track of the last line we've processed
 		let lastLine = -1
-
-		captures.forEach((capture) => {
+		for (const capture of captures) {
 			const { node, name } = capture
-			// Get the start and end lines of the current AST node
 			const startLine = node.startPosition.row
-			const endLine = node.endPosition.row
-			// Once we've retrieved the nodes we care about through the language query, we filter for lines with definition names only.
-			// name.startsWith("name.reference.") > refs can be used for ranking purposes, but we don't need them for the output
-			// previously we did `name.startsWith("name.definition.")` but this was too strict and excluded some relevant definitions
-
-			// Add separator if there's a gap between captures
-			if (lastLine !== -1 && startLine > lastLine + 1) {
-				formattedOutput += "|----\n"
-			}
-			// Only add the first line of the definition
-			// query captures includes the definition name and the definition implementation, but we only want the name (I found discrepancies in the naming structure for various languages, i.e. javascript names would be 'name' and typescript names would be 'name.definition)
-			if (name.includes("name") && lines[startLine]) {
-				formattedOutput += `│${lines[startLine]}\n`
-			}
-			// Adds all the captured lines
-			// for (let i = startLine; i <= endLine; i++) {
-			// 	formattedOutput += `│${lines[i]}\n`
-			// }
-			//}
-
-			lastLine = endLine
-		})
+			if (lastLine !== -1 && startLine > lastLine + 1) output.push("|----\n")
+			if (name.includes("name") && lines[startLine]) output.push(`│${lines[startLine]}\n`)
+			lastLine = node.endPosition.row
+		}
 	} catch (error) {
 		Logger.log(`Error parsing file: ${error}\n`)
 	}
-
-	if (formattedOutput.length > 0) {
-		return `|----\n${formattedOutput}|----\n`
-	}
-	return null
+	return output.length > 0 ? `|----\n${output.join("")}|----\n` : null
 }

@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { describe, it } from "mocha"
 import type { ToolUse } from "../../assistant-message"
-import { canonicalizeAttemptCompletionParams } from "../ToolExecutor"
+import { canonicalizeAttemptCompletionParams, refreshIgnorePolicyAfterToolMutation } from "../ToolExecutor"
 
 describe("ToolExecutor canonicalization", () => {
 	it("canonicalizes attempt_completion response into result", () => {
@@ -54,5 +54,55 @@ describe("ToolExecutor canonicalization", () => {
 
 		assert.equal(didCanonicalize, false)
 		assert.equal(block.params.result, undefined)
+	})
+
+	it("refreshes a newly patched ignore policy before the next read", async () => {
+		const affected: string[] = []
+		let broadRefreshes = 0
+		const block: ToolUse = {
+			type: "tool_use",
+			name: DietCodeDefaultTool.APPLY_PATCH,
+			params: { input: "*** Begin Patch\n*** Add File: .dietcodeignore\n+secret.txt\n*** End Patch" },
+			partial: false,
+		}
+
+		await refreshIgnorePolicyAfterToolMutation(
+			block,
+			"/workspace",
+			{
+				refreshPolicy: async () => {
+					broadRefreshes++
+				},
+				refreshPolicyIfAffected: async (target) => {
+					affected.push(target)
+					return true
+				},
+			},
+			true,
+		)
+
+		assert.deepEqual(affected, ["/workspace/.dietcodeignore"])
+		assert.equal(broadRefreshes, 0)
+	})
+
+	it("does not reload ignore policy after a bounded verification command", async () => {
+		let refreshes = 0
+		await refreshIgnorePolicyAfterToolMutation(
+			{
+				type: "tool_use",
+				name: DietCodeDefaultTool.BASH,
+				params: { command: "npm test -- --group unit" },
+				partial: false,
+			},
+			"/workspace",
+			{
+				refreshPolicy: async () => {
+					refreshes++
+				},
+				refreshPolicyIfAffected: async () => true,
+			},
+			false,
+		)
+		assert.equal(refreshes, 0)
 	})
 })

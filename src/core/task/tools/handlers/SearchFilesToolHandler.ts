@@ -1,11 +1,4 @@
 import type { ToolUse } from "@core/assistant-message"
-import {
-	createJoyRideTaskScope,
-	getJoyRideCache,
-	isJoyRideHitDecision,
-	lookupSearchResult,
-	storeSearchResult,
-} from "@core/joyride"
 import { regexSearchFiles } from "@services/ripgrep"
 import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/path"
 import * as path from "path"
@@ -19,6 +12,8 @@ import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import { hasWorkspaceLocalIoAuthority } from "../executionAuthority"
+import { executeTaskIoBackend, type TaskIoBackendCallbacks } from "../io/TaskIoBackend"
+import type { PathAuthorityRecord } from "../io/TaskPathAuthorityCache"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
@@ -44,6 +39,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		parsedPath: string,
 		workspaceHint: string | undefined,
 		originalPath: string,
+		authority?: PathAuthorityRecord,
 	): Array<{ absolutePath: string; workspaceName?: string; workspaceRoot?: string }> {
 		if (config.isMultiRootEnabled && config.workspaceManager) {
 			const adapter = new WorkspacePathAdapter({
@@ -54,7 +50,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 			if (workspaceHint) {
 				// Search only in the specified workspace
-				const absolutePath = adapter.resolvePath(parsedPath, workspaceHint)
+				const absolutePath = authority?.absolutePath ?? adapter.resolvePath(parsedPath, workspaceHint)
 				const workspaceRoots = adapter.getWorkspaceRoots()
 				const root = workspaceRoots.find((r) => r.name === workspaceHint)
 				return [{ absolutePath, workspaceName: workspaceHint, workspaceRoot: root?.path }]
@@ -70,6 +66,15 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			}))
 		}
 		// Single-workspace mode (backward compatible)
+		if (authority) {
+			return [
+				{
+					absolutePath: authority.absolutePath,
+					workspaceName: authority.selectedWorkspaceRoot.name,
+					workspaceRoot: authority.selectedWorkspaceRoot.path,
+				},
+			]
+		}
 		const pathResult = resolveWorkspacePath(config, originalPath, "SearchFilesTool.execute")
 		const absolutePath = typeof pathResult === "string" ? pathResult : pathResult.absolutePath
 		return [{ absolutePath, workspaceRoot: config.cwd }]
@@ -85,6 +90,8 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		workspaceRoot: string | undefined,
 		regex: string,
 		filePattern: string | undefined,
+		signal: AbortSignal | undefined,
+		io: TaskIoBackendCallbacks,
 	) {
 		try {
 			// Use workspace root for relative path calculation, fallback to cwd
@@ -96,6 +103,16 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 				regex,
 				filePattern,
 				config.services.dietcodeIgnoreController,
+				{
+					signal,
+					onFirstResult: io.firstUsefulResult,
+					onStats: (stats) => {
+						io.incrementCounter("repositorySearchSpawns", stats.spawnCount)
+						io.incrementCounter("bytesRead", stats.stdoutBytes + stats.stderrBytes)
+						io.incrementCounter("bytesCopied", stats.bytesCopied)
+						io.incrementCounter("ignorePolicyEvaluations", stats.matchEvents)
+					},
+				},
 			)
 
 			// Parse the result count from the first line
@@ -110,15 +127,58 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 				success: true,
 			}
 		} catch (error) {
-			// If search fails in one workspace, return error info
+			if (signal?.aborted) throw signal.reason ?? error
 			Logger.error(`Search failed in ${absolutePath}:`, error)
-			return {
-				workspaceName,
-				workspaceResults: "",
-				resultCount: 0,
-				success: false,
-			}
+			// A backend failure is not an authoritative empty result. Propagate it so
+			// TaskIoBackend cannot cache a false-negative or partial multi-root value.
+			throw error
 		}
+	}
+
+	private async executeSearchesBounded(
+		config: TaskConfig,
+		searchPaths: Array<{ absolutePath: string; workspaceName?: string; workspaceRoot?: string }>,
+		regex: string,
+		filePattern: string | undefined,
+		signal: AbortSignal | undefined,
+		io: TaskIoBackendCallbacks,
+	) {
+		const results = new Array<Awaited<ReturnType<SearchFilesToolHandler["executeSearch"]>>>(searchPaths.length)
+		const ownedController = new AbortController()
+		const forwardTaskAbort = () => ownedController.abort(signal?.reason)
+		if (signal?.aborted) forwardTaskAbort()
+		else signal?.addEventListener("abort", forwardTaskAbort, { once: true })
+		let cursor = 0
+		const workers = Array.from({ length: Math.min(2, searchPaths.length) }, async () => {
+			try {
+				while (cursor < searchPaths.length) {
+					ownedController.signal.throwIfAborted()
+					const index = cursor++
+					const target = searchPaths[index]
+					results[index] = await this.executeSearch(
+						config,
+						target.absolutePath,
+						target.workspaceName,
+						target.workspaceRoot,
+						regex,
+						filePattern,
+						ownedController.signal,
+						io,
+					)
+				}
+			} catch (error) {
+				if (!ownedController.signal.aborted) ownedController.abort(error)
+				throw error
+			}
+		})
+		// Always join both bounded workers. Promise.all would reject on the first
+		// failed workspace while another owned ripgrep process was still closing.
+		const settled = await Promise.allSettled(workers)
+		signal?.removeEventListener("abort", forwardTaskAbort)
+		if (signal?.aborted) throw signal.reason ?? new Error("Search cancelled")
+		const failed = settled.find((result): result is PromiseRejectedResult => result.status === "rejected")
+		if (failed) throw failed.reason
+		return results
 	}
 
 	/**
@@ -227,7 +287,7 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		const validation = await this.validator.validate(block, "path", "regex")
 		if (!validation.ok) {
 			if (!config.isSubagentExecution && validation.error.includes("RESTRICTED")) {
-				await config.callbacks.say("dietcodeignore_error", relDirPath!)
+				await config.callbacks.say("dietcodeignore_error", relDirPath)
 			}
 
 			if (validation.error.includes("Missing required parameter")) {
@@ -238,32 +298,17 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 			return formatResponse.toolError(validation.error)
 		}
+		if (!relDirPath || !regex) return formatResponse.toolError("Missing required search parameters.")
 
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Parse workspace hint from the path
-		const { workspaceHint, relPath: parsedPath } = parseWorkspaceInlinePath(relDirPath!)
+		const { workspaceHint, relPath: parsedPath } = parseWorkspaceInlinePath(relDirPath)
+		const authority = config.peekIoAuthority?.(block) ?? (await config.resolveIoAuthority?.(block))
+		if (authority && !authority.ignoreAllowed) return formatResponse.toolError(`Access to '${relDirPath}' is RESTRICTED.`)
 
 		// Determine which paths to search
-		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath!)
-
-		const joyRideScope = createJoyRideTaskScope(
-			config.taskId,
-			config.cwd,
-			config.vscodeTerminalExecutionMode,
-			config.taskState.apiRequestCount,
-		)
-		const grepCacheKey = `${regex}:${filePattern ?? ""}:${searchPaths.map((p) => p.absolutePath).join("|")}`
-		const grepOptions = {
-			cwd: config.cwd,
-			includeGlobs: filePattern ? [filePattern] : undefined,
-			excludeGlobs: undefined as string[] | undefined,
-			caseSensitive: true,
-		}
-		const searchDecision = await lookupSearchResult(getJoyRideCache(), grepCacheKey, grepOptions, joyRideScope)
-		if (isJoyRideHitDecision(searchDecision)) {
-			return searchDecision.value
-		}
+		const searchPaths = this.determineSearchPaths(config, parsedPath, workspaceHint, relDirPath, authority)
 
 		// Determine workspace context for telemetry
 		const primaryWorkspaceRoot = searchPaths[0]?.workspaceRoot
@@ -307,11 +352,12 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			)
 		}
 
-		// Approval before search I/O — cache-aside hits skip this path entirely
-		const operationIsLocatedInWorkspace = await isLocatedInWorkspace(parsedPath)
+		// Approval before search I/O and reusable lookup. External-path results are
+		// never cacheable, and approval remains per invocation.
+		const operationIsLocatedInWorkspace = authority?.contained ?? (await isLocatedInWorkspace(parsedPath))
 		const pendingMessageProps = {
 			tool: "searchFiles",
-			path: getReadablePath(config.cwd, relDirPath!),
+			path: getReadablePath(config.cwd, relDirPath),
 			content: "",
 			regex: regex,
 			filePattern: filePattern,
@@ -320,13 +366,16 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 		const pendingMessage = JSON.stringify(pendingMessageProps)
 
+		let pendingPresentation: Promise<void> = Promise.resolve()
 		const shouldAutoApprove =
 			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
 			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
 		if (shouldAutoApprove) {
 			if (!config.isSubagentExecution) {
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-				await config.callbacks.say("tool", pendingMessage, undefined, undefined, false)
+				pendingPresentation = (async () => {
+					await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
+					await config.callbacks.say("tool", pendingMessage, undefined, undefined, false)
+				})().catch(() => undefined)
 			}
 
 			telemetryService.captureToolUsage(
@@ -373,8 +422,10 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 		}
 
 		try {
-			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+			if (config.isSubagentExecution) {
+				const { ToolHookUtils } = await import("../utils/ToolHookUtils")
+				await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+			}
 		} catch (error) {
 			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
 			if (error instanceof PreToolUseHookCancellationError) {
@@ -383,26 +434,21 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 			throw error
 		}
 
-		// Execute searches in all relevant workspaces in parallel
-		const searchPromises = searchPaths.map(({ absolutePath, workspaceName, workspaceRoot }) =>
-			this.executeSearch(config, absolutePath, workspaceName, workspaceRoot, regex as string, filePattern),
-		)
-
-		// Wait for all searches to complete
 		const searchStartTime = performance.now()
-		const searchResults = await Promise.all(searchPromises)
+		let searchResults: Awaited<ReturnType<SearchFilesToolHandler["executeSearchesBounded"]>> = []
+		const results = await executeTaskIoBackend(config, block, authority, "search", async (io, signal) => {
+			searchResults = await this.executeSearchesBounded(config, searchPaths, regex, filePattern, signal, io)
+			return this.formatSearchResults(config, searchResults, searchPaths)
+		})
 		const searchDurationMs = performance.now() - searchStartTime
-
-		// Format and combine results
-		const results = this.formatSearchResults(config, searchResults, searchPaths)
-
-		const totalResultCount = searchResults.reduce((sum, r) => sum + (r.success ? r.resultCount : 0), 0)
-		void storeSearchResult(getJoyRideCache(), grepCacheKey, grepOptions, results, totalResultCount, joyRideScope)
 
 		// Capture workspace search pattern telemetry
 		if (config.isMultiRootEnabled && config.workspaceManager) {
 			const searchType = workspaceHint ? "targeted" : searchPaths.length > 1 ? "cross_workspace" : "primary_only"
-			const resultsFound = searchResults.some((result) => result.resultCount > 0)
+			// A warm backend-cache hit intentionally bypasses executeSearchesBounded, so
+			// derive this advisory bit from the canonical payload rather than transient
+			// per-process state.
+			const resultsFound = !results.startsWith("Found 0 result")
 
 			telemetryService.captureWorkspaceSearchPattern(
 				config.ulid,
@@ -416,15 +462,19 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 
 		const sharedMessageProps = {
 			tool: "searchFiles",
-			path: getReadablePath(config.cwd, relDirPath!),
+			path: getReadablePath(config.cwd, relDirPath),
 			content: results,
 			regex: regex,
 			filePattern: filePattern,
-			operationIsLocatedInWorkspace: await isLocatedInWorkspace(parsedPath),
+			operationIsLocatedInWorkspace,
 		} satisfies DietCodeSayTool
 
 		if (shouldAutoApprove && !config.isSubagentExecution) {
-			await config.callbacks.say("tool", JSON.stringify(sharedMessageProps), undefined, undefined, false)
+			void pendingPresentation
+				.then(() => config.callbacks.say("tool", JSON.stringify(sharedMessageProps), undefined, undefined, false))
+				.catch(() => undefined)
+		} else {
+			void pendingPresentation
 		}
 
 		return results

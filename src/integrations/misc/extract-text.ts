@@ -1,23 +1,58 @@
+import { isUtf8 } from "node:buffer"
+import fs from "node:fs/promises"
+import * as path from "node:path"
 import ExcelJS from "exceljs"
-import fs from "fs/promises"
 import * as iconv from "iconv-lite"
 import { isBinaryFile } from "isbinaryfile"
 import * as chardet from "jschardet"
 import mammoth from "mammoth"
-import * as path from "path"
 // @ts-expect-error-next-line
 import pdf from "pdf-parse/lib/pdf-parse"
-import { truncateContent } from "@/shared/content-limits"
+import { formatBytes, MAX_CONTENT_SIZE_BYTES } from "@/shared/content-limits"
 import { Logger } from "@/shared/services/Logger"
 import { sanitizeNotebookForLLM } from "./notebook-utils"
 
+const MAX_TEXT_FILE_BYTES = 20 * 1000 * 1024
+const DEFAULT_TEXT_PREFIX_BYTES = MAX_CONTENT_SIZE_BYTES * 4 + 4
+const TRUNCATION_NOTICE_RESERVE_BYTES = 512
+
+export interface TextExtractionStats {
+	fileOpens: number
+	metadataCalls: number
+	readOperations: number
+	bytesRead: number
+	bytesCopied: number
+	utf8FastPath: boolean
+	truncated: boolean
+	durationMs: number
+}
+
+export interface TextExtractionOptions {
+	signal?: AbortSignal
+	maxReadBytes?: number
+	onFirstBytes?: () => void
+	onStats?: (stats: Readonly<TextExtractionStats>) => void
+	now?: () => number
+}
+
+function abortError(): Error {
+	const error = new Error("File read aborted")
+	error.name = "AbortError"
+	return error
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+	if (signal?.aborted) throw abortError()
+}
+
 export async function detectEncoding(fileBuffer: Buffer, fileExtension?: string): Promise<string> {
-	const detected = chardet.detect(fileBuffer)
+	if (isUtf8(fileBuffer)) return "utf8"
+	const detected: unknown = chardet.detect(fileBuffer)
 	if (typeof detected === "string") {
 		return detected
 	}
-	if (detected && (detected as any).encoding) {
-		return (detected as any).encoding
+	if (typeof detected === "object" && detected !== null && "encoding" in detected && typeof detected.encoding === "string") {
+		return detected.encoding
 	}
 	if (fileExtension) {
 		const isBinary = await isBinaryFile(fileBuffer).catch(() => false)
@@ -30,54 +65,160 @@ export async function detectEncoding(fileBuffer: Buffer, fileExtension?: string)
 
 export async function extractTextFromFile(filePath: string): Promise<string> {
 	try {
-		await fs.access(filePath)
-	} catch (_error) {
-		throw new Error(`File not found: ${filePath}`)
+		return await callTextExtractionFunctions(filePath)
+	} catch (error) {
+		if (isFileNotFoundError(error)) throw new Error(`File not found: ${filePath}`)
+		throw error
 	}
-
-	return callTextExtractionFunctions(filePath)
 }
 
 /**
- * Expects the fs.access call to have already been performed prior to calling.
- * Content is automatically truncated if it exceeds 400KB to prevent context overflow.
+ * Opens ordinary text files once, reads a bounded prefix, and automatically
+ * truncates decoded content if it exceeds the context limit.
  */
-export async function callTextExtractionFunctions(filePath: string): Promise<string> {
-	const fileExtension = path.extname(filePath).toLowerCase()
-
-	let content: string
-
-	switch (fileExtension) {
-		case ".pdf":
-			content = await extractTextFromPDF(filePath)
-			break
-		case ".docx":
-			content = await extractTextFromDOCX(filePath)
-			break
-		case ".ipynb":
-			content = await extractTextFromIPYNB(filePath)
-			break
-		case ".xlsx":
-			content = await extractTextFromExcel(filePath)
-			break
-		default:
-			// Check file size with stat() first - faster than reading entire file for size check
-			const fileStat = await fs.stat(filePath)
-			if (fileStat.size > 20 * 1000 * 1024) {
-				// 20MB limit (20 * 1000 * 1024 bytes, decimal MB)
-				throw new Error(`File is too large to read into context.`)
-			}
-			const fileBuffer = await fs.readFile(filePath)
-			const encoding = await detectEncoding(fileBuffer, fileExtension)
-			content = iconv.decode(fileBuffer, encoding)
+export async function callTextExtractionFunctions(filePath: string, options: TextExtractionOptions = {}): Promise<string> {
+	const now = options.now ?? performance.now.bind(performance)
+	const startedAt = now()
+	const stats: TextExtractionStats = {
+		fileOpens: 0,
+		metadataCalls: 0,
+		readOperations: 0,
+		bytesRead: 0,
+		bytesCopied: 0,
+		utf8FastPath: false,
+		truncated: false,
+		durationMs: 0,
 	}
+	const fileExtension = path.extname(filePath).toLowerCase()
+	try {
+		throwIfAborted(options.signal)
+		let content: string
+		let prefixWasBounded = false
+		let totalFileBytes: number | undefined
 
-	// Truncate content if it exceeds 400KB to prevent context overflow
-	return truncateContent(content)
+		switch (fileExtension) {
+			case ".pdf":
+				content = await extractTextFromPDF(filePath, options, stats)
+				break
+			case ".docx":
+				content = await extractTextFromDOCX(filePath)
+				break
+			case ".ipynb":
+				content = await extractTextFromIPYNB(filePath, options, stats)
+				break
+			case ".xlsx":
+				content = await extractTextFromExcel(filePath)
+				break
+			default: {
+				const readResult = await readBoundedTextPrefix(filePath, options, stats)
+				totalFileBytes = readResult.totalFileBytes
+				prefixWasBounded = readResult.prefixWasBounded
+				if (isUtf8(readResult.buffer)) {
+					stats.utf8FastPath = true
+					content = readResult.buffer.toString("utf8")
+				} else {
+					const encoding = await detectEncoding(readResult.buffer, fileExtension)
+					content = iconv.decode(readResult.buffer, encoding)
+				}
+				stats.bytesCopied += readResult.buffer.byteLength + Buffer.byteLength(content, "utf8")
+				break
+			}
+		}
+
+		throwIfAborted(options.signal)
+		if (prefixWasBounded && totalFileBytes !== undefined) {
+			stats.truncated = true
+			return formatBoundedTextPrefix(content, totalFileBytes, "file")
+		}
+		const contentBytes = Buffer.byteLength(content, "utf8")
+		stats.truncated = contentBytes > MAX_CONTENT_SIZE_BYTES
+		return stats.truncated ? formatBoundedTextPrefix(content, contentBytes, "content") : content
+	} finally {
+		stats.durationMs = Math.max(0, now() - startedAt)
+		try {
+			options.onStats?.({ ...stats })
+		} catch {
+			// Instrumentation is advisory and fail-open.
+		}
+	}
 }
 
-async function extractTextFromPDF(filePath: string): Promise<string> {
-	const dataBuffer = await fs.readFile(filePath)
+async function readBoundedTextPrefix(
+	filePath: string,
+	options: TextExtractionOptions,
+	stats: TextExtractionStats,
+): Promise<{ buffer: Buffer; totalFileBytes: number; prefixWasBounded: boolean }> {
+	throwIfAborted(options.signal)
+	stats.fileOpens++
+	const handle = await fs.open(filePath, "r")
+	try {
+		stats.metadataCalls++
+		const fileStat = await handle.stat()
+		if (fileStat.size > MAX_TEXT_FILE_BYTES) throw new Error(`File is too large to read into context.`)
+
+		const configuredReadLimit = options.maxReadBytes
+		const requestedLimit =
+			configuredReadLimit === undefined || !Number.isFinite(configuredReadLimit)
+				? DEFAULT_TEXT_PREFIX_BYTES
+				: Math.min(DEFAULT_TEXT_PREFIX_BYTES, Math.max(1, Math.floor(configuredReadLimit)))
+		const bytesToRead = Math.min(fileStat.size, requestedLimit)
+		const buffer = Buffer.allocUnsafe(bytesToRead)
+		let offset = 0
+		while (offset < bytesToRead) {
+			throwIfAborted(options.signal)
+			stats.readOperations++
+			const read = await handle.read(buffer, offset, bytesToRead - offset, offset)
+			if (read.bytesRead === 0) break
+			if (offset === 0) {
+				try {
+					options.onFirstBytes?.()
+				} catch {
+					// Advisory first-byte telemetry must never fail a read.
+				}
+			}
+			offset += read.bytesRead
+			stats.bytesRead += read.bytesRead
+		}
+		throwIfAborted(options.signal)
+		return {
+			buffer: offset === buffer.byteLength ? buffer : buffer.subarray(0, offset),
+			totalFileBytes: fileStat.size,
+			prefixWasBounded: fileStat.size > offset,
+		}
+	} finally {
+		await handle.close()
+	}
+}
+
+function formatBoundedTextPrefix(content: string, totalBytes: number, source: "file" | "content"): string {
+	const encodedContent = Buffer.from(content, "utf8")
+	const visibleLimit = Math.max(1, MAX_CONTENT_SIZE_BYTES - TRUNCATION_NOTICE_RESERVE_BYTES)
+	const visibleBuffer = sliceCompleteUtf8Prefix(encodedContent, visibleLimit)
+	const visibleContent = visibleBuffer.toString("utf8")
+	const notice = `\n\n---\n\n[FILE TRUNCATED: This ${source} is ${formatBytes(totalBytes)} but only a bounded ${formatBytes(visibleBuffer.byteLength)} UTF-8 prefix is shown. Use search_files to find specific patterns, or execute_command with grep/head/tail for targeted reading.]`
+	return `${visibleContent}${notice}`
+}
+
+function sliceCompleteUtf8Prefix(content: Buffer, maximumBytes: number): Buffer {
+	let end = Math.min(content.byteLength, maximumBytes)
+	if (end === content.byteLength) return content
+	while (end > 0 && (content[end] & 0xc0) === 0x80) end--
+	return content.subarray(0, end)
+}
+
+function isFileNotFoundError(error: unknown): boolean {
+	return (
+		(typeof error === "object" && error !== null && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") ||
+		(error instanceof Error && error.message.includes("ENOENT"))
+	)
+}
+
+async function extractTextFromPDF(filePath: string, options: TextExtractionOptions, stats: TextExtractionStats): Promise<string> {
+	stats.fileOpens++
+	stats.readOperations++
+	const dataBuffer = await fs.readFile(filePath, { signal: options.signal })
+	stats.bytesRead += dataBuffer.byteLength
+	reportFirstBytes(options)
 	const data = await pdf(dataBuffer)
 	return data.text
 }
@@ -87,8 +228,16 @@ async function extractTextFromDOCX(filePath: string): Promise<string> {
 	return result.value
 }
 
-async function extractTextFromIPYNB(filePath: string): Promise<string> {
-	const fileBuffer = await fs.readFile(filePath)
+async function extractTextFromIPYNB(
+	filePath: string,
+	options: TextExtractionOptions,
+	stats: TextExtractionStats,
+): Promise<string> {
+	stats.fileOpens++
+	stats.readOperations++
+	const fileBuffer = await fs.readFile(filePath, { signal: options.signal })
+	stats.bytesRead += fileBuffer.byteLength
+	reportFirstBytes(options)
 	const encoding = await detectEncoding(fileBuffer)
 	const data = iconv.decode(fileBuffer, encoding)
 
@@ -96,6 +245,14 @@ async function extractTextFromIPYNB(filePath: string): Promise<string> {
 	// notebook structure. For Jupyter commands, the specific cell's outputs are included
 	// separately via sanitizeCellForLLM which preserves text outputs.
 	return sanitizeNotebookForLLM(data, true)
+}
+
+function reportFirstBytes(options: TextExtractionOptions): void {
+	try {
+		options.onFirstBytes?.()
+	} catch {
+		// Advisory first-byte telemetry must never fail a read.
+	}
 }
 
 /**
@@ -186,9 +343,10 @@ async function extractTextFromExcel(filePath: string): Promise<string> {
 		})
 
 		return excelText.trim()
-	} catch (error: any) {
+	} catch (error: unknown) {
 		Logger.error(`Error extracting text from Excel ${filePath}:`, error)
-		throw new Error(`Failed to extract text from Excel: ${error.message}`)
+		const errorMessage = error instanceof Error ? error.message : String(error)
+		throw new Error(`Failed to extract text from Excel: ${errorMessage}`)
 	}
 }
 
@@ -207,7 +365,8 @@ export async function processFilesIntoText(files: string[]): Promise<string> {
 			return `<file_content path="${filePath.toPosix()}">\n${content}\n</file_content>`
 		} catch (error) {
 			Logger.error(`Error processing file ${filePath}:`, error)
-			return `<file_content path="${filePath.toPosix()}">\nError fetching content: ${error.message}\n</file_content>`
+			const errorMessage = error instanceof Error ? error.message : String(error)
+			return `<file_content path="${filePath.toPosix()}">\nError fetching content: ${errorMessage}\n</file_content>`
 		}
 	})
 

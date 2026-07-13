@@ -1,4 +1,4 @@
-import * as path from "path"
+import * as path from "node:path"
 import Parser from "web-tree-sitter"
 import {
 	cppQuery,
@@ -23,114 +23,139 @@ export interface LanguageParser {
 	}
 }
 
-async function loadLanguage(langName: string) {
-	return await Parser.Language.load(path.join(__dirname, `tree-sitter-${langName}.wasm`))
+type LoadedGrammar = { language: Parser.Language; query: Parser.Query }
+type LanguageParserRuntime = {
+	init: () => Promise<void>
+	loadLanguage: (wasmPath: string) => Promise<Parser.Language>
+	createParser: () => Parser
 }
 
-let isParserInitialized = false
+const defaultRuntime: LanguageParserRuntime = {
+	init: () => Parser.init(),
+	loadLanguage: (wasmPath) => Parser.Language.load(wasmPath),
+	createParser: () => new Parser(),
+}
+let runtime = defaultRuntime
 
-async function initializeParser() {
-	if (!isParserInitialized) {
-		await Parser.init()
-		isParserInitialized = true
+const grammarByExtension = new Map<string, Promise<LoadedGrammar>>()
+let parserInitialization: Promise<void> | undefined
+let parserInitCalls = 0
+let grammarLoads = 0
+let grammarCacheHits = 0
+
+function initializeParser(): Promise<void> {
+	if (!parserInitialization) {
+		parserInitCalls++
+		parserInitialization = runtime.init().catch((error) => {
+			parserInitialization = undefined
+			throw error
+		})
+	}
+	return parserInitialization
+}
+
+function grammarSpec(extension: string): { languageName: string; querySource: string } {
+	switch (extension) {
+		case "js":
+		case "jsx":
+			return { languageName: "javascript", querySource: javascriptQuery }
+		case "ts":
+			return { languageName: "typescript", querySource: typescriptQuery }
+		case "tsx":
+			return { languageName: "tsx", querySource: typescriptQuery }
+		case "py":
+			return { languageName: "python", querySource: pythonQuery }
+		case "rs":
+			return { languageName: "rust", querySource: rustQuery }
+		case "go":
+			return { languageName: "go", querySource: goQuery }
+		case "cpp":
+		case "hpp":
+			return { languageName: "cpp", querySource: cppQuery }
+		case "c":
+		case "h":
+			return { languageName: "c", querySource: cQuery }
+		case "cs":
+			return { languageName: "c_sharp", querySource: csharpQuery }
+		case "rb":
+			return { languageName: "ruby", querySource: rubyQuery }
+		case "java":
+			return { languageName: "java", querySource: javaQuery }
+		case "php":
+			return { languageName: "php", querySource: phpQuery }
+		case "swift":
+			return { languageName: "swift", querySource: swiftQuery }
+		case "kt":
+			return { languageName: "kotlin", querySource: kotlinQuery }
+		default:
+			throw new Error(`Unsupported language: ${extension}`)
 	}
 }
 
-/*
-Using node bindings for tree-sitter is problematic in vscode extensions 
-because of incompatibility with electron. Going the .wasm route has the 
-advantage of not having to build for multiple architectures.
+async function loadGrammar(extension: string): Promise<LoadedGrammar> {
+	const cached = grammarByExtension.get(extension)
+	if (cached) {
+		grammarCacheHits++
+		return cached
+	}
 
-We use web-tree-sitter and tree-sitter-wasms which provides auto-updating prebuilt WASM binaries for tree-sitter's language parsers.
+	const loading = (async () => {
+		await initializeParser()
+		const { languageName, querySource } = grammarSpec(extension)
+		grammarLoads++
+		const language = await runtime.loadLanguage(path.join(__dirname, `tree-sitter-${languageName}.wasm`))
+		return { language, query: language.query(querySource) }
+	})().catch((error) => {
+		grammarByExtension.delete(extension)
+		throw error
+	})
+	grammarByExtension.set(extension, loading)
+	return loading
+}
 
-This function loads WASM modules for relevant language parsers based on input files:
-1. Extracts unique file extensions
-2. Maps extensions to language names
-3. Loads corresponding WASM files (containing grammar rules)
-4. Uses WASM modules to initialize tree-sitter parsers
-
-This approach optimizes performance by loading only necessary parsers once for all relevant files.
-
-Sources:
-- https://github.com/tree-sitter/node-tree-sitter/issues/169
-- https://github.com/tree-sitter/node-tree-sitter/issues/168
-- https://github.com/Gregoor/tree-sitter-wasms/blob/main/README.md
-- https://github.com/tree-sitter/tree-sitter/blob/master/lib/binding_web/README.md
-- https://github.com/tree-sitter/tree-sitter/blob/master/lib/binding_web/test/query-test.js
-*/
+/**
+ * Load each WASM grammar/query once per extension host. Parser instances remain
+ * invocation-local because web-tree-sitter parsers are mutable and must not be
+ * shared by concurrent definition scans.
+ */
 export async function loadRequiredLanguageParsers(filesToParse: string[]): Promise<LanguageParser> {
-	await initializeParser()
-	const extensionsToLoad = new Set(filesToParse.map((file) => path.extname(file).toLowerCase().slice(1)))
+	const extensions = [...new Set(filesToParse.map((file) => path.extname(file).toLowerCase().slice(1)))].sort()
+	const grammars = await Promise.all(extensions.map(async (extension) => [extension, await loadGrammar(extension)] as const))
 	const parsers: LanguageParser = {}
-	for (const ext of extensionsToLoad) {
-		let language: Parser.Language
-		let query: Parser.Query
-		switch (ext) {
-			case "js":
-			case "jsx":
-				language = await loadLanguage("javascript")
-				query = language.query(javascriptQuery)
-				break
-			case "ts":
-				language = await loadLanguage("typescript")
-				query = language.query(typescriptQuery)
-				break
-			case "tsx":
-				language = await loadLanguage("tsx")
-				query = language.query(typescriptQuery)
-				break
-			case "py":
-				language = await loadLanguage("python")
-				query = language.query(pythonQuery)
-				break
-			case "rs":
-				language = await loadLanguage("rust")
-				query = language.query(rustQuery)
-				break
-			case "go":
-				language = await loadLanguage("go")
-				query = language.query(goQuery)
-				break
-			case "cpp":
-			case "hpp":
-				language = await loadLanguage("cpp")
-				query = language.query(cppQuery)
-				break
-			case "c":
-			case "h":
-				language = await loadLanguage("c")
-				query = language.query(cQuery)
-				break
-			case "cs":
-				language = await loadLanguage("c_sharp")
-				query = language.query(csharpQuery)
-				break
-			case "rb":
-				language = await loadLanguage("ruby")
-				query = language.query(rubyQuery)
-				break
-			case "java":
-				language = await loadLanguage("java")
-				query = language.query(javaQuery)
-				break
-			case "php":
-				language = await loadLanguage("php")
-				query = language.query(phpQuery)
-				break
-			case "swift":
-				language = await loadLanguage("swift")
-				query = language.query(swiftQuery)
-				break
-			case "kt":
-				language = await loadLanguage("kotlin")
-				query = language.query(kotlinQuery)
-				break
-			default:
-				throw new Error(`Unsupported language: ${ext}`)
-		}
-		const parser = new Parser()
-		parser.setLanguage(language)
-		parsers[ext] = { parser, query }
+	for (const [extension, grammar] of grammars) {
+		const parser = runtime.createParser()
+		parser.setLanguage(grammar.language)
+		parsers[extension] = { parser, query: grammar.query }
 	}
 	return parsers
+}
+
+export function getLanguageParserCacheStats(): {
+	initialized: boolean
+	parserInitCalls: number
+	grammarLoads: number
+	grammarCacheHits: number
+	cachedGrammars: number
+} {
+	return {
+		initialized: Boolean(parserInitialization),
+		parserInitCalls,
+		grammarLoads,
+		grammarCacheHits,
+		cachedGrammars: grammarByExtension.size,
+	}
+}
+
+export function resetLanguageParserCacheForTests(): void {
+	grammarByExtension.clear()
+	parserInitialization = undefined
+	parserInitCalls = 0
+	grammarLoads = 0
+	grammarCacheHits = 0
+	runtime = defaultRuntime
+}
+
+export function setLanguageParserRuntimeForTests(overrides: LanguageParserRuntime): void {
+	resetLanguageParserCacheForTests()
+	runtime = overrides
 }

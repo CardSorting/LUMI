@@ -337,19 +337,40 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		let userRejected: boolean
 		let result: ToolResponse
 		const startedAt = Date.now()
+		const ioClass = isVerificationCommand(finalCommand) ? "verification-command" : "mutation-command"
+		let commandStarted = false
+		config.latencyTracker?.recordIoClassQueued(ioClass)
 		try {
 			;[userRejected, result] = await executor.execute(
 				config.ulid,
-				() => config.callbacks.executeCommandTool(finalCommand, timeoutSeconds),
-				{ concurrencyGroup: "shell" },
+				async () => {
+					commandStarted = true
+					config.latencyTracker?.recordIoClassStarted(ioClass)
+					try {
+						return await config.callbacks.executeCommandTool(finalCommand, timeoutSeconds)
+					} finally {
+						if (config.taskState.abort) config.latencyTracker?.recordIoClassCancelled(ioClass, "active")
+						else config.latencyTracker?.recordIoClassCompleted(ioClass)
+					}
+				},
+				{
+					concurrencyGroup: "shell",
+					// CommandExecutor owns process timeout and cancellation. A second
+					// Promise.race here could retry while the original shell was alive.
+					timeoutMs: 0,
+					maxRetries: 1,
+				},
 			)
 		} catch (error) {
+			if (!commandStarted) config.latencyTracker?.recordIoClassCancelled(ioClass)
 			return evidenceResponse(formatResponse.toolError(`Command execution failed: ${String(error)}`), {
 				approvalStatus,
 				started: true,
 				executionError: error instanceof Error ? error.message : String(error),
 				durationMs: Date.now() - startedAt,
 			})
+		} finally {
+			if (timeoutId) clearTimeout(timeoutId)
 		}
 		const canonicalEvidence = readCommandExecutionEvidence(result)
 		result = evidenceResponse(result, {
@@ -358,10 +379,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			approvalStatus,
 			durationMs: canonicalEvidence?.durationMs ?? Date.now() - startedAt,
 		})
-
-		if (timeoutId) {
-			clearTimeout(timeoutId)
-		}
 
 		if (userRejected) {
 			config.taskState.didRejectTool = true

@@ -8,6 +8,7 @@ import { telemetryService } from "@/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import { hasWorkspaceLocalIoAuthority } from "../executionAuthority"
+import { executeTaskIoBackend } from "../io/TaskIoBackend"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
@@ -72,7 +73,7 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 		const validation = await this.validator.validate(block, "path")
 		if (!validation.ok) {
 			if (!config.isSubagentExecution && validation.error.includes("RESTRICTED")) {
-				await config.callbacks.say("dietcodeignore_error", relDirPath!)
+				await config.callbacks.say("dietcodeignore_error", relDirPath)
 			}
 
 			if (validation.error.includes("Missing required parameter")) {
@@ -82,25 +83,33 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 
 			return formatResponse.toolError(validation.error)
 		}
+		if (!relDirPath) return formatResponse.toolError("Missing required parameter 'path'.")
 
 		config.taskState.consecutiveMistakeCount = 0
 
 		// Resolve the absolute path based on multi-workspace configuration
-		const pathResult = resolveWorkspacePath(config, relDirPath!, "ListFilesToolHandler.execute")
-		const { absolutePath, displayPath } =
-			typeof pathResult === "string" ? { absolutePath: pathResult, displayPath: relDirPath! } : pathResult
+		const authority = config.peekIoAuthority?.(block) ?? (await config.resolveIoAuthority?.(block))
+		if (authority && !authority.ignoreAllowed) return formatResponse.toolError(`Access to '${relDirPath}' is RESTRICTED.`)
+		const pathResult = authority ?? resolveWorkspacePath(config, relDirPath, "ListFilesToolHandler.execute")
+		const { absolutePath, displayPath } = authority
+			? { absolutePath: authority.absolutePath, displayPath: authority.displayPath }
+			: typeof pathResult === "string"
+				? { absolutePath: pathResult, displayPath: relDirPath }
+				: pathResult
 
 		// Determine workspace context for telemetry
 		const fallbackAbsolutePath = path.resolve(config.cwd, relDirPath ?? "")
 		const workspaceContext = {
 			isMultiRootEnabled: config.isMultiRootEnabled || false,
-			usedWorkspaceHint: typeof pathResult !== "string", // multi-root path result indicates hint usage
+			usedWorkspaceHint: authority ? Boolean(authority.workspaceHint) : typeof pathResult !== "string",
 			resolvedToNonPrimary: !arePathsEqual(absolutePath, fallbackAbsolutePath),
-			resolutionMethod: (typeof pathResult !== "string" ? "hint" : "primary_fallback") as "hint" | "primary_fallback",
+			resolutionMethod: (authority?.workspaceHint || typeof pathResult !== "string" ? "hint" : "primary_fallback") as
+				| "hint"
+				| "primary_fallback",
 		}
 
 		// Handle approval before I/O — mirrors read_file (avoid wasted work on manual deny)
-		const operationIsLocatedInWorkspace = await isLocatedInWorkspace(relDirPath!)
+		const operationIsLocatedInWorkspace = authority?.contained ?? (await isLocatedInWorkspace(relDirPath))
 		const sharedMessageProps = {
 			tool: recursive ? "listFilesRecursive" : "listFilesTopLevel",
 			path: getReadablePath(config.cwd, displayPath),
@@ -110,13 +119,16 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 
 		const completeMessage = JSON.stringify(sharedMessageProps)
 
+		let pendingPresentation: Promise<void> = Promise.resolve()
 		const shouldAutoApprove =
 			hasWorkspaceLocalIoAuthority(config.isSubagentExecution, operationIsLocatedInWorkspace) ||
 			(await config.callbacks.shouldAutoApproveToolWithPath(block.name, relDirPath))
 		if (shouldAutoApprove) {
 			if (!config.isSubagentExecution) {
-				await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
-				await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
+				pendingPresentation = (async () => {
+					await config.callbacks.removeLastPartialMessageIfExistsWithType("ask", "tool")
+					await config.callbacks.say("tool", completeMessage, undefined, undefined, false)
+				})().catch(() => undefined)
 			}
 
 			telemetryService.captureToolUsage(
@@ -163,8 +175,10 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 		}
 
 		try {
-			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+			if (config.isSubagentExecution) {
+				const { ToolHookUtils } = await import("../utils/ToolHookUtils")
+				await ToolHookUtils.runPreToolUseIfEnabled(config, block)
+			}
 		} catch (error) {
 			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
 			if (error instanceof PreToolUseHookCancellationError) {
@@ -173,12 +187,25 @@ export class ListFilesToolHandler implements IFullyManagedTool {
 			throw error
 		}
 
-		const [files, didHitLimit] = await listFiles(absolutePath, recursive, 200)
-		const result = formatResponse.formatFilesList(absolutePath, files, didHitLimit, config.services.dietcodeIgnoreController)
+		const result = await executeTaskIoBackend(config, block, authority, "traversal", async (io, signal) => {
+			const [files, didHitLimit] = await listFiles(absolutePath, recursive, 200, {
+				signal,
+				onFirstResult: io.firstUsefulResult,
+				onStats: (stats) => {
+					io.incrementCounter("directoryReadCalls", stats.directoryReadOperations)
+				},
+			})
+			io.incrementCounter("ignorePolicyEvaluations", files.length)
+			return formatResponse.formatFilesList(absolutePath, files, didHitLimit, config.services.dietcodeIgnoreController)
+		})
 
 		if (shouldAutoApprove && !config.isSubagentExecution) {
 			const resultMessage = JSON.stringify({ ...sharedMessageProps, content: result })
-			await config.callbacks.say("tool", resultMessage, undefined, undefined, false)
+			void pendingPresentation
+				.then(() => config.callbacks.say("tool", resultMessage, undefined, undefined, false))
+				.catch(() => undefined)
+		} else {
+			void pendingPresentation
 		}
 
 		return result

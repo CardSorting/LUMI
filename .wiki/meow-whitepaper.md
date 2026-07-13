@@ -350,6 +350,39 @@ The architecture separates five authorities:
 
 No presentation component is an execution authority. No persistence component is a second completion authority.
 
+### 7.1 End-to-End Processing Sequence
+
+The following sequence diagram tracks a batch from stream reception to canonical projection and authoritative completion:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant MP as Model Provider / Stream
+    participant TE as ToolExecutor (Task)
+    participant SD as SiblingToolDependency (Classifier)
+    participant SS as SiblingToolScheduler (Scheduler)
+    participant BH as ParentIoBulkhead (Bulkhead)
+    participant EB as TaskIoBackend & FS
+    participant PR as Presentation & Projection
+    participant CH as AttemptCompletionHandler
+
+    MP->>TE: Emit tool calls (stream)
+    TE->>SD: Classify dependencies, claims, & edges
+    SD-->>TE: Returns dependency graph
+    TE->>SS: Admit batch (queries + mutations)
+    SS->>BH: Acquire concurrent/class execution slot
+    BH-->>SS: Slot granted
+    SS->>EB: Execute backend query (cancellable)
+    EB-->>SS: Return execution envelope
+    SS->>BH: Release execution slot
+    SS-->>TE: All siblings completed/settled
+    TE->>PR: Replay & project results in emission order
+    TE->>CH: Evaluate completion lifecycle
+    CH->>CH: Auth decision (Success/Fail)
+    Note over CH,PR: Post-result presentation/finalization
+    CH-.->PR: Non-authoritative logs, audit, & roadmap
+```
+
 ---
 
 # 8. Lifecycle Contract
@@ -673,23 +706,66 @@ The system improves throughput by applying coordination more precisely, not by w
 | Unknown tool runs concurrently           | Workspace-wide conservative fence                   |
 | Failed sibling collapses unrelated work  | Dependency-local failure propagation                |
 
+## 13.5 Concurrency and Caching Threat Model
+
+Operating at high levels of concurrency introduces specific security and integrity threat vectors. MEOW/ACC implements precise structural guards to neutralize these threats:
+
+### 13.5.1 Symlink Escapes & Directory Traversal
+* **Threat:** A concurrent read or search path references a malicious symlink that points to a target outside the workspace, escaping the containment verification step due to timing or cache coherence lag.
+* **Mitigation:** The `TaskPathAuthorityCache` resolves canonical paths synchronously and peeks at ancestors on every request. If a target contains a symlink, the `nearestExistingAncestor` verification walk resolves its physical parent target on disk. If the resolved canonical parent target is outside the workspace root, the path is classified as `external = true` and rejected or sent to the manual approval gate. Cache records carry the unique `workspaceIdentity` and `workspaceGeneration` to prevent cached results from being re-used under a different workspace context.
+
+### 13.5.2 Cache Pollution & Poisoning
+* **Threat:** A failed query, an external path access, or a system document like `scratchpad.md` is cached, allowing subsequent queries to bypass approvals or return mock/poisoned results.
+* **Mitigation:** `IoRequestCoalescer` enforces strict filtering criteria. The key builder `buildIoCoalesceKey` returns `null` for:
+  * External paths (never eligible for task-level coalesced caching);
+  * Any request requiring explicit user approval (preventing reuse of transient permissions);
+  * Diagnostic and state-creating resources (e.g. `scratchpad.md`);
+  * Image payloads (`.png`, `.jpg`, etc.) due to potential payload mutation;
+  * Rejected backend results or transient validation failures (ensuring a failed query is immediately retried on the backend rather than cached).
+
+### 13.5.3 Cache Generation Races
+* **Threat:** An in-flight query started in Generation A finishes *after* a mutating command has moved the workspace state into Generation B, overwriting the new cache entries with stale data.
+* **Mitigation:** Caches are bound to the specific `filesystemGeneration` under which they were requested. When a local mutation finishes, the cache generation is incremented (`generation++`). If an old in-flight query from Generation A completes, it is written only into the stale coalescer instance of Generation A, preventing it from corrupting or repopulating the active coalescer of Generation B.
+
 ---
 
 # 14. Consistency and Cache Contract
 
 ## 14.1 Request identity
 
-`IoRequestCoalescer.ts` identifies supported requests using:
+`IoRequestCoalescer.ts` identifies supported requests by constructing a collision-free semantic identity key.
 
-* canonical resolved target;
-* task generation;
-* tool name;
-* query or regular expression;
-* `file_pattern`;
-* recursive-list behavior;
-* other result-affecting inputs.
+### 14.1.1 Key Layout Structure
 
-Concurrent identical requests in the same generation may share one execution.
+The key is a serialized JSON array structured as follows:
+
+```json
+[
+  "io-v2",
+  "tool_name",
+  "canonical_absolute_target",
+  "filesystem_generation",
+  "policy_generation",
+  "workspace_identity",
+  "...semantic_inputs"
+]
+```
+
+### 14.1.2 Field Definitions
+
+* **`io-v2`**: A static prefix version string to prevent key structure collisions with older caching namespaces.
+* **`tool_name`**: The exact default tool name string (e.g., `read_file`, `search_files`, `list_files`).
+* **`canonical_absolute_target`**: The fully resolved, case-normalized canonical absolute path to the target file or directory.
+* **`filesystem_generation`**: The sequential generation index representing the number of mutations executed since task start.
+* **`policy_generation`**: The current generation of ignore policies (mutated whenever ignore rules are re-scanned).
+* **`workspace_identity`**: The canonical path to the parent workspace root hosting the resource.
+* **`semantic_inputs`**: Tool-specific array extensions representing parameters that alter the output payload:
+  * **`read_file`**: No semantic inputs (path resolution is covered by target).
+  * **`list_files`**: Appends boolean `recursive` (converted to string/lowercased).
+  * **`search_files`**: Appends the query/regex string and the `file_pattern` filter.
+  * **`list_code_definition_names`**: No semantic inputs.
+
+Concurrent identical requests in the same generation resolving to the same key share a single execution. If a cache entry matches the key, it is served as a `cache_hit` without invoking the filesystem. If a request is active for the key, subsequent callers register as `coalesced_waiters` and await the leader's completion.
 
 ## 14.2 Mutation invalidation
 
@@ -959,7 +1035,13 @@ The implementation pass recorded:
 
 The documentation-grounding pass on July 12, 2026, reran 44 focused dependency, scheduler, batch, cache, latency, and completion-audit tests successfully.
 
-Documentation-link and diff-whitespace checks also passed.
+The stabilization and closure pass on July 13, 2026, successfully verified:
+* 71 focused MEOW/ACC tests passing (126ms);
+* TypeScript compiler (`check-types`) clean;
+* Biome lint checked 1,830 files clean;
+* Roadmap audit passed;
+* Agent documentation links checked clean (24 required, 109 scanned);
+* `git diff --check` clean.
 
 These results provide broad regression evidence. They do not substitute for live performance measurements or formal verification.
 
