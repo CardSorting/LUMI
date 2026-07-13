@@ -8,9 +8,16 @@
 
 ### What is MEOW?
 
-Think of MEOW as helping the agent decide which jobs can safely happen together. If two jobs don't get in each other's way, they can run at the same time. If they might conflict, MEOW keeps them in the correct order. The result is faster execution without sacrificing safety.
+**MEOW decides what can safely run at the same time and what must wait, then makes sure the final result still looks like everything happened in order.**
 
-**MEOW (Model-Efficient Order-aware Workflow)** is the architectural execution model governing dependency-aware task scheduling, structured concurrency, deterministic projection, and authoritative completion.
+MEOW is the **execution coordinator** for a model turn: it decides **when work starts, what can overlap, what must wait, and how the completed work is presented consistently.**
+
+At any moment, MEOW is continuously answering five core questions:
+1. **Can this run now?** (Does it need user approval or credentials first?)
+2. **Does it conflict with anything?** (Can these queries run together, or does a mutation fence require serialization?)
+3. **Do I already know the answer?** (Can we reuse cached path authority or coalesced request results?)
+4. **How do I keep the final output deterministic?** (How do we project out-of-order executions back into model-emission sequence?)
+5. **Can I stop immediately if the task dies?** (Does task cancellation kill active processes and release resources immediately?)
 
 ---
 

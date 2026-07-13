@@ -383,6 +383,66 @@ sequenceDiagram
     CH-.->PR: Non-authoritative logs, audit, & roadmap
 ```
 
+### 7.2 What MEOW Does (A Simplified Mental Model)
+
+MEOW receives a group of tool calls from the model. It analyzes their dependencies, identifies which operations are independent, safely executes eligible work concurrently, preserves required ordering for conflicting operations, and projects the completed results back in a deterministic sequence before one authoritative completion decision is made.
+
+To build a clear mental model, consider the following timeline of a single model turn:
+
+1. **The Model Request:** The model emits a sequence of tool calls:
+   ```text
+   1. Read config.json
+   2. Search for TODOs
+   3. List all TypeScript files
+   4. Update package.json
+   5. Run tests
+   6. Finish
+   ```
+
+2. **Classification & Dependency Mapping:** Rather than executing sequentially, MEOW parses the list, checks resource claims, and builds a dependency graph:
+   ```text
+   Read config
+           \
+            \
+   Search -----> Finish
+
+   List files
+
+   Update package
+         |
+   Run tests
+         |
+   Finish
+   ```
+
+3. **Concurrency Analysis:** MEOW coordinates execution based on the graph:
+   - Reading, searching, and glob listing have no resource conflicts and are admitted **concurrently** to the Sibling Scheduler.
+   - Updating `package.json` is a mutation and must execute **alone** (serialized).
+   - Running tests depends on the mutation finishing first, so it waits.
+
+   ```text
+   Read config ──────┐
+   Search ----------├── together
+   List files ------┘
+
+   Update package ──────── alone
+
+   Run tests
+
+   Finish
+   ```
+
+4. **Deterministic Projection:** Even if the concurrent tasks finish out of order (e.g., `Search` completes before `Read`), MEOW buffers their presentation output and projects them back to the user in the model's original emission order:
+   - *Execution order:* Free (based on network/disk speed)
+   - *Presentation order:* Stable and deterministic (sequential layout matching the prompt)
+
+5. **Decision Checklist:** At every stage of the turn, MEOW answers five core questions:
+   - *Can this run now?* (Checks user approvals and credentials)
+   - *Does it conflict with anything?* (Enforces mutation fences and command locks)
+   - *Do I already know the answer?* (Deduplicates and serves from local generation cache)
+   - *How do I keep the final output deterministic?* (Sequences captured envelopes)
+   - *Can I stop immediately if the task dies?* (Cleans up open processes and handles on cancel)
+
 ---
 
 # 8. Lifecycle Contract
