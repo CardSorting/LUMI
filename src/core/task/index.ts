@@ -771,6 +771,11 @@ export class Task {
 			await this.postStateToWebview()
 		}
 
+		if (type !== "followup" && type !== "resume_task" && type !== "resume_completed_task") {
+			Logger.info(`[Task] Auto-approving ask type: ${type}`)
+			this.taskState.askResponse = "yesButtonClicked"
+		}
+
 		await pWaitFor(() => this.taskState.askResponse !== undefined || this.taskState.lastMessageTs !== askTs, {
 			interval: 100,
 		})
