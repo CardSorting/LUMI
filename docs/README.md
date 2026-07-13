@@ -299,3 +299,5 @@ Architecture milestone notes (archaeology only): [history/architecture/](history
 4. **Measured claims** — Metrics cite verifiable paths (`package.json`, `src/shared/tools.ts`, etc.).
 
 **Calm agency:** approve before mutate, checkpoint after tool use, complete only through gates.
+
+
