@@ -3,7 +3,7 @@ import { Activity } from "lucide-react"
 import type React from "react"
 import { useMemo } from "react"
 import { Virtuoso } from "react-virtuoso"
-import { useIsCompact, useIsUltraCompact } from "@/context/DensityContext"
+import { useIsCompact } from "@/context/DensityContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import type { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
@@ -34,7 +34,6 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	const { dietcodeMessages } = useExtensionState()
 	const lastRawMessage = useMemo(() => dietcodeMessages.at(-1), [dietcodeMessages])
 	const isCompact = useIsCompact()
-	const isUltraCompact = useIsUltraCompact()
 
 	const {
 		virtuosoRef,
@@ -190,16 +189,13 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		<section aria-label="Execution timeline" className="overflow-hidden flex flex-col h-full">
 			<header
 				className={cn(
-					"flex shrink-0 items-center gap-2 border-y border-border/25 bg-foreground/[0.015]",
-					isCompact ? "h-7 px-3" : "h-8 px-4",
+					"flex shrink-0 items-center gap-1.5 border-y border-border/25 bg-foreground/[0.015]",
+					isCompact ? "h-6 px-2.5" : "h-7 px-3",
 				)}>
-				<Activity aria-hidden className="size-3.5 text-description" strokeWidth={1.75} />
-				<h2 className={cn("m-0 font-semibold text-foreground/90", isCompact ? "text-[9px]" : "text-[10px]")}>
+				<Activity aria-hidden className="size-3 text-description" strokeWidth={1.75} />
+				<h2 className={cn("m-0 font-semibold text-foreground/90", isCompact ? "text-[8.5px]" : "text-[9.5px]")}>
 					Execution timeline
 				</h2>
-				{!isUltraCompact && (
-					<span className="ml-auto text-[8px] uppercase tracking-wide text-description/60">Latest below</span>
-				)}
 			</header>
 			<div className="grow flex" ref={scrollContainerRef}>
 				<Virtuoso

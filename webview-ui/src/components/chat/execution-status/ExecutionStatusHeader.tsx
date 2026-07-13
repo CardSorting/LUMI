@@ -54,7 +54,7 @@ function compactSafety(safety: string): string {
 	if (safety.startsWith("Critical")) return "Critical"
 	if (safety.startsWith("Review")) return "Review"
 	if (safety.startsWith("Snapshot")) return "Stale"
-	return safety.slice(0, 10) + "…"
+	return `${safety.slice(0, 10)}…`
 }
 
 function StateIcon({ state }: { state: ExecutionState }) {
@@ -104,17 +104,27 @@ export const ExecutionStatusHeader = memo(
 				className={cn("overflow-hidden rounded-lg border shadow-sm shadow-black/[0.04]", style.panel)}
 				data-execution-state={status.state}>
 				{/* ── Row 1: State + Title + Safety pill + Chevron ── */}
-				<div className={cn("flex items-center gap-2", isCompact ? "px-2.5 py-2" : "items-start gap-2.5 p-3")}>
+				<div
+					className={cn(
+						"flex items-center gap-2",
+						isCompact
+							? isDetailsOpen
+								? "px-2.5 py-2"
+								: "px-2 py-1"
+							: isDetailsOpen
+								? "items-start gap-2.5 p-3"
+								: "items-center gap-2 px-3 py-1.5",
+					)}>
 					<div
 						className={cn(
 							"flex shrink-0 items-center justify-center rounded-md",
 							style.icon,
-							isCompact ? "size-6" : "size-7",
+							isCompact || !isDetailsOpen ? "size-5" : "size-7",
 						)}>
 						<StateIcon state={status.state} />
 					</div>
 					<div aria-atomic="true" aria-live="polite" className="min-w-0 flex-1">
-						{!isCompact && (
+						{!isCompact && isDetailsOpen && (
 							<p className="m-0 text-[9px] font-semibold uppercase tracking-[0.12em] text-description/75">
 								Execution status
 							</p>
@@ -122,12 +132,12 @@ export const ExecutionStatusHeader = memo(
 						<h2
 							className={cn(
 								"font-semibold leading-tight text-foreground",
-								isCompact ? "text-[12px] m-0 truncate" : "mt-0.5 text-[13px]",
+								isCompact || !isDetailsOpen ? "text-[11px] m-0 truncate" : "mt-0.5 text-[13px]",
 							)}>
 							{status.title}
 						</h2>
-						{/* Detail text — hidden at compact density and short heights */}
-						{!isCompact && (
+						{/* Detail text — hidden at compact density, short heights, or when collapsed */}
+						{!isCompact && isDetailsOpen && (
 							<p
 								className={cn(
 									"lumi-execution-detail mt-1 text-[11px] leading-[1.45] text-description",
@@ -137,8 +147,8 @@ export const ExecutionStatusHeader = memo(
 							</p>
 						)}
 					</div>
-					{/* Safety pill — always visible at compact as inline indicator */}
-					{isCompact && (
+					{/* Safety pill — visible when collapsed as inline indicator */}
+					{(isCompact || !isDetailsOpen) && (
 						<span
 							className={cn(
 								"shrink-0 rounded-full border px-1.5 py-0.5 text-[8px] font-medium leading-none",
@@ -157,21 +167,25 @@ export const ExecutionStatusHeader = memo(
 						aria-label={isDetailsOpen ? "Hide task details" : "Show task details"}
 						className={cn(
 							"flex shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-description transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-							isCompact ? "-mr-0.5 size-6" : "-mr-1 size-7",
+							isCompact || !isDetailsOpen ? "-mr-0.5 size-5" : "-mr-1 size-7",
 						)}
 						onClick={onToggleDetails}
 						title={isDetailsOpen ? "Hide task details" : "Show task details"}
 						type="button">
 						<ChevronDown
 							aria-hidden
-							className={cn("size-4 transition-transform", !isDetailsOpen && "-rotate-90")}
+							className={cn(
+								isCompact || !isDetailsOpen ? "size-3" : "size-4",
+								"transition-transform",
+								!isDetailsOpen && "-rotate-90",
+							)}
 							strokeWidth={1.8}
 						/>
 					</button>
 				</div>
 
-				{/* ── Row 2: Next action (visible at comfortable OR when expanded at compact) ── */}
-				{(!isCompact || isDetailsOpen) && (
+				{/* ── Row 2: Next action (visible when expanded) ── */}
+				{isDetailsOpen && (
 					<div className={cn("border-t border-current/10 bg-background/25", isCompact ? "px-2.5 py-1.5" : "px-3 py-2")}>
 						<div className="flex items-start gap-2">
 							<span
@@ -200,8 +214,8 @@ export const ExecutionStatusHeader = memo(
 					</div>
 				)}
 
-				{/* ── Row 3: Safety + Completion grid (visible at comfortable OR when expanded at compact) ── */}
-				{(!isCompact || isDetailsOpen) && (
+				{/* ── Row 3: Safety + Completion grid (visible when expanded) ── */}
+				{isDetailsOpen && (
 					<div
 						className={cn(
 							"lumi-execution-meta border-t border-current/10 bg-background/15",

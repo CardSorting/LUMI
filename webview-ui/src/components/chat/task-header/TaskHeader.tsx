@@ -147,7 +147,16 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 
 	return (
 		<div className="flex flex-col min-h-0">
-			<div className={cn("pt-3 pb-2", isCompact ? "px-2.5" : "px-3")}>
+			<div
+				className={cn(
+					isTaskExpanded
+						? isCompact
+							? "pt-2.5 pb-2 px-2.5"
+							: "pt-3 pb-2 px-3"
+						: isCompact
+							? "pt-1.5 pb-1 px-2.5"
+							: "pt-2 pb-1.5 px-3",
+				)}>
 				<ExecutionStatusHeader
 					auditHealth={auditHealth}
 					auditMetadata={latestAuditMetadata}
