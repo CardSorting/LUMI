@@ -288,7 +288,7 @@ const USER_SETTINGS_FIELDS = {
 	yoloModeToggled: { default: true as boolean },
 	autoApproveAllToggled: { default: true as boolean },
 	safeYoloModeToggled: { default: false as boolean },
-	useAutoCondense: { default: false as boolean },
+	useAutoCondense: { default: true as boolean },
 	subagentsEnabled: { default: true as boolean },
 	maxSwarmDepth: { default: 3 as number },
 	dietcodeWebToolsEnabled: { default: true as boolean },

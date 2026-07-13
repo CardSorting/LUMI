@@ -36,7 +36,6 @@ import { HostRegistryInfo } from "@/registry"
 import { DietCodeError, DietCodeErrorType } from "@/services/error"
 import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@/utils/cost"
-import { isNextGenModelFamily } from "@/utils/model-utils"
 import { TaskState } from "../../TaskState"
 import {
 	buildCompletionGateObservabilityEnvelope,
@@ -1311,7 +1310,7 @@ export class SubagentRunner {
 		}
 
 		const optimizedConversation = optimizationResult.optimizedConversationHistory.map(
-			(message: any) => message as DietCodeStorageMessage,
+			(message: unknown) => message as DietCodeStorageMessage,
 		)
 		conversation.splice(0, conversation.length, ...optimizedConversation)
 		return { didOptimize: true, needToTruncate: optimizationResult.needToTruncate }
@@ -1320,11 +1319,11 @@ export class SubagentRunner {
 	private shouldCompactBeforeNextRequest(
 		requestTotalTokens: number,
 		api: ReturnType<typeof buildApiHandler>,
-		modelId: string,
+		_modelId: string,
 	): boolean {
 		const { contextWindow, maxAllowedSize } = getContextWindowInfo(api)
 		const useAutoCondense = this.baseConfig.services.stateManager.getGlobalSettingsKey("useAutoCondense")
-		if (useAutoCondense && isNextGenModelFamily(modelId)) {
+		if (useAutoCondense) {
 			const autoCondenseThreshold = 0.75
 			const roundedThreshold = autoCondenseThreshold ? Math.floor(contextWindow * autoCondenseThreshold) : maxAllowedSize
 			const thresholdTokens = Math.min(roundedThreshold, maxAllowedSize)

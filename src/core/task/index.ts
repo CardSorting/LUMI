@@ -87,13 +87,7 @@ import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertDietCodeMessageToProto } from "@shared/proto-conversions/dietcode-message"
 import { DietCodeDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
 import { DietCodeAskResponse } from "@shared/WebviewMessage"
-import {
-	isClaude4PlusModelFamily,
-	isGPT5ModelFamily,
-	isLocalModel,
-	isNextGenModelFamily,
-	isParallelToolCallingEnabled,
-} from "@utils/model-utils"
+import { isClaude4PlusModelFamily, isGPT5ModelFamily, isLocalModel, isParallelToolCallingEnabled } from "@utils/model-utils"
 import { arePathsEqual, getDesktopDir, isLocatedInPath, isLocatedInWorkspace } from "@utils/path"
 import { filterExistingFiles } from "@utils/tabFiltering"
 import cloneDeep from "clone-deep"
@@ -771,7 +765,7 @@ export class Task {
 			await this.postStateToWebview()
 		}
 
-		if (type !== "followup" && type !== "resume_task" && type !== "resume_completed_task") {
+		if (type !== "followup") {
 			Logger.info(`[Task] Auto-approving ask type: ${type}`)
 			this.taskState.askResponse = "yesButtonClicked"
 		} else {
@@ -2330,7 +2324,7 @@ export class Task {
 			this.taskState.conversationHistoryDeletedRange,
 			previousApiReqIndex,
 			await ensureTaskDirectoryExists(this.taskId),
-			this.stateManager.getGlobalSettingsKey("useAutoCondense") && isNextGenModelFamily(this.api.getModel().id),
+			this.stateManager.getGlobalSettingsKey("useAutoCondense"),
 		)
 
 		if (contextManagementMetadata.updatedConversationHistoryDeletedRange) {
@@ -3009,7 +3003,7 @@ export class Task {
 		let shouldCompact = false
 		const useAutoCondense = this.stateManager.getGlobalSettingsKey("useAutoCondense")
 
-		if (useAutoCondense && isNextGenModelFamily(this.api.getModel().id)) {
+		if (useAutoCondense) {
 			// When we initially trigger context cleanup, we increase the context window size, so we need state `currentlySummarizing`
 			// to track if we've already started the context summarization flow. After summarizing, we increment
 			// conversationHistoryDeletedRange to mask out the summarization-trigger user & assistant response messages
@@ -3840,7 +3834,7 @@ export class Task {
 			}
 
 			return didEndLoop // will always be false for now
-		} catch (_error) {
+		} catch {
 			if (this.taskState.steeringInterruptRequested) {
 				const providerInfo = this.getCurrentProviderInfo()
 				return await this.continueFromSteeringInterrupt({
@@ -4261,7 +4255,7 @@ export class Task {
 			try {
 				const { tokensIn, tokensOut, cacheWrites, cacheReads } = JSON.parse(msg.text)
 				return (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
-			} catch (_e) {
+			} catch {
 				return 0
 			}
 		}
