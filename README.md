@@ -26,7 +26,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI"><img src="https://api.securityscorecards.dev/projects/github.com/CardSorting/LUMI/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-4.0.0-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-4.6.0-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
@@ -262,28 +262,45 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 
 ## Governed subagent execution
 
-Multi-lane swarms via `use_subagents` run through a **governed execution harness**: the parent coordinates, lanes execute with declared intent, and a **merge gate** reconciles parallel work before declaring success.
+Multi-lane swarms via `use_subagents` separate **whether work executed correctly** from **how certain each finding is**. Vague research can now finish with bounded uncertainty instead of retrying until the swarm invents confidence or falls into a merge loop.
+
+```text
+Before: vague task → uncertainty → retry → interpretation drift → merge loop
+Now:    vague task → tentative finding → bounded probe if critical → confidence plateau → converge with uncertainty
+```
 
 > **North-star invariant:** Private roadmap state is cheap. Workspace roadmap truth is expensive. Only the coordinator may spend it.
 
 ```mermaid
-flowchart LR
-  subgraph coord ["Roadmap & audit"]
-    AD[scheduleAdmission]
-    OL[orchestration lease]
-    PF[audit preflight]
-  end
-  subgraph execute ["Execute"]
-    R[SubagentRunner]
-    RC[Lane receipt]
-  end
-  subgraph commit ["Commit"]
-    MG[MergeGate]
-    WC[coordinator workspace commit]
-    SE[sealReceipt]
-  end
-  AD --> OL --> PF --> R --> RC --> MG --> WC --> SE
+flowchart TD
+  T[Precise, vague, or exploratory task] --> L[Independent lanes execute with governed authority]
+  L --> V{Execution structurally valid?}
+
+  V -->|Isolated invalid lane| R[Repair only the invalid lane]
+  R --> L
+  V -->|Hard integrity, authority, lock, or provenance failure| H[Hard block]
+  V -->|Valid| F[Preserve each finding's confidence, evidence, assumptions, and provenance]
+
+  F --> X[Classify ambiguity and contradictions]
+  X --> D{What does the parent need?}
+  D -->|Strong supported conclusion| C[Converge]
+  D -->|Advisory or non-critical uncertainty| U[Bound the uncertainty]
+  D -->|One decision-critical evidence gap| P[Run one targeted read-only probe]
+
+  P --> E{Meaningful semantic evidence delta?}
+  E -->|Yes| F
+  E -->|No or budget exhausted| CP[Confidence plateau]
+  CP --> U
+
+  U --> S{Safe under a surviving interpretation?}
+  S -->|Yes| CU[Converge with uncertainty]
+  S -->|No safe mutation or action| H
+
+  C --> SE[Seal receipt and synthesize parent result]
+  CU --> SE
 ```
+
+Low or unknown confidence never invalidates a valid lane. Advisory findings remain tentative, contradictory interpretations retain their assumptions, and repeated reads of the same evidence do not count as progress. Receipt, checksum, mutation-authority, lock, and provenance failures still fail closed.
 
 | Mode | Lock | Use |
 |------|------|-----|
@@ -298,7 +315,7 @@ Declare in lane prompts: `[execution_mode:read_only] [read_set:src/api.ts]`
 | [Quick reference](docs/governed-roadmap-projection-quickref.md) | Patch tags, one page |
 | [Architecture](docs/governed-subagent-execution.md) | Full lifecycle |
 | [Runbook](docs/governed-execution-runbook.md) | Violations, retry flow |
-| [Schema](docs/governed-execution-schema.md) | Receipt v3 fields |
+| [Convergence and receipt guide](docs/governed-execution-schema.md) | Behavioral model, decision flow, invariants, and receipt v3 fields |
 
 ---
 
@@ -488,7 +505,7 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 | **Bug reports** | [GitHub Issues](https://github.com/CardSorting/LUMI/issues/new?template=bug_report.yml) |
 | **Security (private)** | [SECURITY.md](SECURITY.md) |
 
-Include VS Code version, LUMI **4.0.0**, provider used, and steps to reproduce.
+Include VS Code version, LUMI **4.6.0**, provider used, and steps to reproduce.
 
 ---
 
