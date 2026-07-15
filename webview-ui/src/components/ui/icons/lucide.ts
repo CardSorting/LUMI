@@ -181,6 +181,7 @@ export const LUCIDE_ICONS: Record<string, LucideIcon> = {
 	send: Send,
 	server: Server,
 	"settings-gear": Settings,
+	SettingsIcon: Settings,
 	SquareArrowOutUpRightIcon: SquareArrowOutUpRight,
 	SquareMinus,
 	SquareMinusIcon: SquareMinus,

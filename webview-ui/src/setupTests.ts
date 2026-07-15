@@ -24,3 +24,12 @@ vi.stubGlobal("acquireVsCodeApi", () => ({
 	getState: vi.fn(),
 	setState: vi.fn(),
 }))
+
+// Radix positioning and the responsive sidebar shell rely on ResizeObserver.
+class ResizeObserverMock {
+	observe = vi.fn()
+	unobserve = vi.fn()
+	disconnect = vi.fn()
+}
+
+vi.stubGlobal("ResizeObserver", ResizeObserverMock)

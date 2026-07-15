@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 import styled from "styled-components"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { McpServiceClient } from "@/services/grpc-client"
-import ViewHeader from "../../common/ViewHeader"
+import { Tab, TabContent, TabList, TabTrigger } from "../../common/Tab"
 import AddRemoteServerForm from "./tabs/add-server/AddRemoteServerForm"
 import ConfigureServersView from "./tabs/installed/ConfigureServersView"
 import McpMarketplaceView from "./tabs/marketplace/McpMarketplaceView"
@@ -16,8 +16,8 @@ type McpViewProps = {
 	initialTab?: McpViewTab
 }
 
-const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
-	const { remoteConfigSettings, setMcpServers, environment } = useExtensionState()
+const McpConfigurationView = ({ initialTab }: McpViewProps) => {
+	const { remoteConfigSettings, setMcpServers } = useExtensionState()
 	// Show marketplace by default unless remote config explicitly disables it
 	const showMarketplace = remoteConfigSettings?.mcpMarketplaceEnabled !== false
 	const showRemoteServers = remoteConfigSettings?.blockPersonalRemoteMCPServers !== true
@@ -64,52 +64,52 @@ const McpConfigurationView = ({ onDone, initialTab }: McpViewProps) => {
 	}, [showMarketplace, setMcpMarketplaceCatalog, setMcpServers])
 
 	return (
-		<div
-			style={{
-				position: "fixed",
-				top: 0,
-				left: 0,
-				right: 0,
-				bottom: 0,
-				display: "flex",
-				flexDirection: "column",
-			}}>
-			<ViewHeader environment={environment} onDone={onDone} title="Extra tools" />
+		<Tab>
+			<TabList
+				aria-label="Tool sections"
+				className="lumi-scroll-chips shrink-0 gap-0.5 overflow-x-auto border-b border-border-panel px-2"
+				onValueChange={(value) => handleTabChange(value as McpViewTab)}
+				value={activeTab}>
+				{showMarketplace && (
+					<TabTrigger
+						aria-label="Browse tools"
+						className="min-h-9 shrink-0 border-b-2 border-transparent px-3 text-xs text-description hover:text-foreground aria-selected:border-foreground aria-selected:text-foreground"
+						title="Browse available tools"
+						value="marketplace">
+						Browse
+					</TabTrigger>
+				)}
+				{showRemoteServers && (
+					<TabTrigger
+						aria-label="Add a tool"
+						className="min-h-9 shrink-0 border-b-2 border-transparent px-3 text-xs text-description hover:text-foreground aria-selected:border-foreground aria-selected:text-foreground"
+						title="Connect a remote tool"
+						value="addRemote">
+						Add
+					</TabTrigger>
+				)}
+				<TabTrigger
+					aria-label="Your tools"
+					className="min-h-9 shrink-0 border-b-2 border-transparent px-3 text-xs text-description hover:text-foreground aria-selected:border-foreground aria-selected:text-foreground"
+					title="Manage connected tools"
+					value="configure">
+					Your tools
+				</TabTrigger>
+			</TabList>
 
-			<div style={{ flex: 1, overflow: "auto" }}>
-				{/* Tabs container */}
-				<div
-					style={{
-						display: "flex",
-						gap: "1px",
-						padding: "0 20px 0 20px",
-						borderBottom: "1px solid var(--vscode-panel-border)",
-					}}>
-					{showMarketplace && (
-						<TabButton isActive={activeTab === "marketplace"} onClick={() => handleTabChange("marketplace")}>
-							Marketplace
-						</TabButton>
-					)}
-					{showRemoteServers && (
-						<TabButton isActive={activeTab === "addRemote"} onClick={() => handleTabChange("addRemote")}>
-							Remote Servers
-						</TabButton>
-					)}
-					<TabButton isActive={activeTab === "configure"} onClick={() => handleTabChange("configure")}>
-						Configure
-					</TabButton>
-				</div>
-
-				{/* Content container */}
-				<div style={{ width: "100%" }}>
-					{showMarketplace && activeTab === "marketplace" && <McpMarketplaceView />}
-					{showRemoteServers && activeTab === "addRemote" && (
-						<AddRemoteServerForm onServerAdded={() => handleTabChange("configure")} />
-					)}
-					{activeTab === "configure" && <ConfigureServersView />}
-				</div>
-			</div>
-		</div>
+			<TabContent
+				aria-labelledby={`lumi-tab-${activeTab}`}
+				className="w-full outline-none"
+				id={`lumi-tabpanel-${activeTab}`}
+				role="tabpanel"
+				tabIndex={0}>
+				{showMarketplace && activeTab === "marketplace" && <McpMarketplaceView />}
+				{showRemoteServers && activeTab === "addRemote" && (
+					<AddRemoteServerForm onServerAdded={() => handleTabChange("configure")} />
+				)}
+				{activeTab === "configure" && <ConfigureServersView />}
+			</TabContent>
+		</Tab>
 	)
 }
 
@@ -127,9 +127,15 @@ const StyledTabButton = styled.button.withConfig({
 	font-family: inherit;
 	opacity: ${(props) => (props.disabled ? 0.6 : 1)};
 	pointer-events: ${(props) => (props.disabled ? "none" : "auto")};
+	min-height: 36px;
 
 	&:hover {
 		color: ${(props) => (props.disabled ? "var(--vscode-descriptionForeground)" : "var(--vscode-foreground)")};
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--vscode-focusBorder);
+		outline-offset: -2px;
 	}
 `
 
@@ -146,7 +152,13 @@ export const TabButton = ({
 	disabled?: boolean
 	style?: React.CSSProperties
 }) => (
-	<StyledTabButton disabled={disabled} isActive={isActive} onClick={onClick} style={style}>
+	<StyledTabButton
+		aria-pressed={isActive}
+		disabled={disabled}
+		isActive={isActive}
+		onClick={onClick}
+		style={style}
+		type="button">
 		{children}
 	</StyledTabButton>
 )

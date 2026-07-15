@@ -15,51 +15,65 @@ interface McpMarketplaceCardProps {
 const McpMarketplaceCard = ({ item, installedServers, setError }: McpMarketplaceCardProps) => {
 	const isInstalled = installedServers.some((server) => server.name === item.mcpId)
 	const [isDownloading, setIsDownloading] = useState(false)
-	const [isLoading, setIsLoading] = useState(false)
 	const githubLinkRef = useRef<HTMLDivElement>(null)
 	const { onRelinquishControl } = useExtensionState()
 
 	useEffect(() => {
 		return onRelinquishControl(() => {
-			setIsLoading(false)
+			setIsDownloading(false)
 		})
 	}, [onRelinquishControl])
 
 	const githubAuthorUrl = useMemo(() => {
-		const url = new URL(item.githubUrl)
-		const pathParts = url.pathname.split("/")
-		if (pathParts.length >= 2) {
-			return `${url.origin}/${pathParts[1]}`
+		try {
+			const url = new URL(item.githubUrl)
+			const pathParts = url.pathname.split("/")
+			if (pathParts.length >= 2) {
+				return `${url.origin}/${pathParts[1]}`
+			}
+		} catch {
+			return item.githubUrl
 		}
 		return item.githubUrl
 	}, [item.githubUrl])
+
+	const handleInstall = async () => {
+		if (isInstalled || isDownloading) return
+		setIsDownloading(true)
+		try {
+			const response = await McpServiceClient.downloadMcp(StringRequest.create({ value: item.mcpId }))
+			if (response.error) {
+				console.error("Tool download failed:", response.error)
+				setError(response.error)
+			} else {
+				setError(null)
+			}
+		} catch (error) {
+			console.error("Failed to add tool:", error)
+			setError(`Couldn’t add ${item.name}. Please try again.`)
+		} finally {
+			setIsDownloading(false)
+		}
+	}
 
 	return (
 		<>
 			<style>
 				{`
 					.mcp-card {
-						cursor: pointer;
-						outline: none !important;
 					}
 					.mcp-card:hover {
 						background-color: var(--vscode-list-hoverBackground);
 					}
-					.mcp-card:focus {
-						outline: none !important;
-					}
 				`}
 			</style>
-			<a
+			<article
 				className="mcp-card"
-				href={item.githubUrl}
 				style={{
 					padding: "14px 16px",
 					display: "flex",
 					flexDirection: "column",
 					gap: 12,
-					cursor: isLoading ? "wait" : "pointer",
-					textDecoration: "none",
 					color: "inherit",
 				}}>
 				{/* Main container with logo and content */}
@@ -94,44 +108,19 @@ const McpMarketplaceCard = ({ item, installedServers, setError }: McpMarketplace
 								alignItems: "center",
 								gap: "16px",
 							}}>
-							<h3
-								style={{
-									margin: 0,
-									fontSize: "13px",
-									fontWeight: 600,
-								}}>
-								{item.name}
+							<h3 style={{ margin: 0, fontSize: "13px", fontWeight: 600 }}>
+								<a href={item.githubUrl} style={{ color: "inherit", textDecoration: "none" }}>
+									{item.name}
+								</a>
 							</h3>
-							<div
-								onClick={async (e) => {
-									e.preventDefault() // Prevent card click when clicking install
-									e.stopPropagation() // Stop event from bubbling up to parent link
-									if (!isInstalled && !isDownloading) {
-										setIsDownloading(true)
-										try {
-											const response = await McpServiceClient.downloadMcp(
-												StringRequest.create({ value: item.mcpId }),
-											)
-											if (response.error) {
-												console.error("MCP download failed:", response.error)
-												setError(response.error)
-											} else {
-												console.log("MCP download successful:", response)
-												// Clear any previous errors on success
-												setError(null)
-											}
-										} catch (error) {
-											console.error("Failed to download MCP:", error)
-										} finally {
-											setIsDownloading(false)
-										}
-									}
-								}}
-								style={{}}>
-								<StyledInstallButton $isInstalled={isInstalled} disabled={isInstalled || isDownloading}>
-									{isInstalled ? "Installed" : isDownloading ? "Installing..." : "Install"}
-								</StyledInstallButton>
-							</div>
+							<StyledInstallButton
+								$isInstalled={isInstalled}
+								aria-label={isInstalled ? `${item.name} is added` : `Add ${item.name}`}
+								disabled={isInstalled || isDownloading}
+								onClick={handleInstall}
+								type="button">
+								{isInstalled ? "Added" : isDownloading ? "Adding…" : "Add"}
+							</StyledInstallButton>
 						</div>
 
 						{/* Second row: metadata */}
@@ -284,7 +273,7 @@ const McpMarketplaceCard = ({ item, installedServers, setError }: McpMarketplace
 						/>
 					</div>
 				</div>
-			</a>
+			</article>
 		</>
 	)
 }
@@ -309,6 +298,11 @@ const StyledInstallButton = styled.button<{ $isInstalled?: boolean }>`
 		background: ${(props) =>
 			props.$isInstalled ? "var(--vscode-button-secondaryBackground)" : "var(--vscode-button-background)"};
 		opacity: 0.7;
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--vscode-focusBorder);
+		outline-offset: 2px;
 	}
 
 	&:disabled {

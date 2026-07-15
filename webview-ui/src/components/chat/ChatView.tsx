@@ -49,7 +49,6 @@ import {
 } from "./chat-view"
 import { ChatFooter } from "./chat-view/components/layout/ChatFooter"
 import { MessagesArea } from "./chat-view/components/layout/MessagesArea"
-import { ChatToolbar } from "./navigation/ChatToolbar"
 
 interface ChatViewProps {
 	isHidden: boolean
@@ -400,21 +399,12 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		return pickChatPlaceholder(Boolean(task), seed, sessionMinutes, isNightDesk, agentActive, idleGap)
 	}, [task, sessionMinutes, isNightDesk, messages, chatState.dietcodeAsk])
 
-	const conversationTitle = useMemo(() => {
-		if (!task?.text) {
-			return undefined
-		}
-		const singleLine = task.text.replace(/\s+/g, " ").trim()
-		return singleLine.length > 36 ? `${singleLine.slice(0, 36)}…` : singleLine
-	}, [task?.text])
-
 	return (
 		<ChatLayout isHidden={isHidden} isNightDesk={isNightDesk} serenityLevel={serenityLevel}>
 			<div aria-atomic="true" aria-live="polite" className="sr-only">
 				{auditLiveAnnouncement}
 			</div>
 			<div className="flex flex-col flex-1 overflow-hidden">
-				<ChatToolbar conversationTitle={conversationTitle} hasActiveConversation={Boolean(task)} />
 				{showHistory ? (
 					<InlineHistoryPanel hasActiveConversation={Boolean(task)} onClose={hideHistory} />
 				) : task ? (

@@ -76,9 +76,9 @@ const ServerRow = ({
 		}
 	})()
 
-	const handleRowClick = () => {
+	const handleToggleExpanded = () => {
 		if (!server.error && isExpandable) {
-			setIsExpanded(!isExpanded)
+			setIsExpanded((expanded) => !expanded)
 		}
 	}
 
@@ -91,7 +91,7 @@ const ServerRow = ({
 		}
 	})
 
-	const handleTimeoutChange = (e: any) => {
+	const handleTimeoutChange = (e: Event | React.FormEvent<HTMLElement>) => {
 		const select = e.target as HTMLSelectElement
 		const value = select.value
 		const num = Number.parseInt(value, 10)
@@ -203,43 +203,48 @@ const ServerRow = ({
 		const remoteServer = remoteMCPServers.find((remote) => remote.url === serverUrl)
 		return remoteServer?.alwaysEnabled === true
 	})()
+	const displayName = getMcpServerDisplayName(server.name, mcpMarketplaceCatalog)
+	const detailsId = `tool-details-${server.name.replace(/[^a-zA-Z0-9_-]/g, "-")}`
+	const statusLabel =
+		server.status === "connected" ? "connected" : server.status === "connecting" ? "connecting" : "disconnected"
 
 	return (
 		<div className="mb-2.5">
-			<div
-				className={cn("flex bg-code-block-background p-2 gap-4 items-center", {
-					"cursor-pointer": !server.error && isExpandable,
-				})}
-				onClick={handleRowClick}>
+			<div className="flex items-center gap-2 bg-code-block-background p-2">
 				{!server.error && isExpandable && (
-					<VscIcon className="mr-2" name={isExpanded ? "chevron-down" : "chevron-right"} />
+					<Button
+						aria-controls={detailsId}
+						aria-expanded={isExpanded}
+						aria-label={`${isExpanded ? "Collapse" : "Expand"} ${displayName}`}
+						className="h-8 w-8 shrink-0"
+						onClick={handleToggleExpanded}
+						size="icon"
+						variant="icon">
+						<VscIcon className="" name={isExpanded ? "chevron-down" : "chevron-right"} />
+					</Button>
 				)}
-				<span className="flex-1 overflow-hidden break-all whitespace-normal flex items-center">
-					{getMcpServerDisplayName(server.name, mcpMarketplaceCatalog)}
-				</span>
+				<span className="flex-1 overflow-hidden break-all whitespace-normal flex items-center">{displayName}</span>
 				{/* Collapsed view controls */}
 				{!server.error && (
 					<Button
+						aria-label={`Reconnect ${displayName}`}
+						className="h-8 w-8 shrink-0"
 						disabled={server.status === "connecting" || isRestarting || server.disabled}
-						onClick={(e) => {
-							e.stopPropagation()
-							handleRestart()
-						}}
+						onClick={handleRestart}
 						size="icon"
-						title="Restart Server"
+						title="Reconnect tool"
 						variant="icon">
 						<RefreshCcwIcon />
 					</Button>
 				)}
 				{!server.error && hasTrashIcon && (
 					<Button
+						aria-label={`Remove ${displayName}`}
+						className="h-8 w-8 shrink-0"
 						disabled={isDeleting}
-						onClick={(e) => {
-							e.stopPropagation()
-							handleDelete()
-						}}
+						onClick={handleDelete}
 						size="icon"
-						title="Delete Server"
+						title="Remove tool"
 						variant="icon">
 						<Trash2Icon />
 					</Button>
@@ -249,33 +254,38 @@ const ServerRow = ({
 					<TooltipTrigger asChild>
 						<div className="flex items-center gap-2">
 							<Switch
+								aria-label={`${server.disabled ? "Enable" : "Disable"} ${displayName}`}
 								checked={!server.disabled}
+								className="h-6"
 								disabled={isAlwaysEnabled}
 								key={server.name}
-								onClick={(e) => {
-									e.stopPropagation()
-									handleToggleMcpServer()
-								}}
+								onCheckedChange={handleToggleMcpServer}
+								size="lg"
 							/>
 							{isAlwaysEnabled && <VscIcon className="text-description text-sm" name="lock" />}
 						</div>
 					</TooltipTrigger>
 					<TooltipContent className="max-w-xs" hidden={!isAlwaysEnabled} side="top">
-						This server can't be disabled because it is enabled by your organization
+						This tool stays on because it is managed by your organization
 					</TooltipContent>
 				</Tooltip>
 				<div
+					aria-label={`${displayName} is ${statusLabel}`}
 					className={cn("h-2 w-2 ml-0.5 rounded-full", {
 						"bg-success": server.status === "connected",
 						"bg-warning": server.status === "connecting",
 						"bg-error": server.status === "disconnected",
 					})}
+					role="img"
+					title={statusLabel}
 				/>
 			</div>
 
 			{server.error ? (
 				<div className="text-sm bg-text-block-background rounded-b-sm">
-					<div className="text-failed-icon mb-2 px-2.5 break-words">{server.error}</div>
+					<div className="text-failed-icon mb-2 px-2.5 break-words" role="alert">
+						{server.error}
+					</div>
 					{server.oauthRequired && server.oauthAuthStatus === "unauthenticated" ? (
 						<Button
 							className="m-2.5 mt-0 max-w-[calc(100%-20px)]"
@@ -284,7 +294,7 @@ const ServerRow = ({
 								McpServiceClient.authenticateMcpServer(StringRequest.create({ value: server.name }))
 							}}
 							variant="default">
-							Authenticate
+							Sign in to tool
 						</Button>
 					) : (
 						<Button
@@ -292,7 +302,7 @@ const ServerRow = ({
 							disabled={server.status === "connecting"}
 							onClick={handleRestart}
 							variant="secondary">
-							{server.status === "connecting" || isRestarting ? "Retrying..." : "Retry Connection"}
+							{server.status === "connecting" || isRestarting ? "Retrying…" : "Retry connection"}
 						</Button>
 					)}
 
@@ -302,13 +312,13 @@ const ServerRow = ({
 							disabled={isDeleting}
 							onClick={handleDelete}
 							variant="danger">
-							{isDeleting ? "Deleting..." : "Delete Server"}
+							{isDeleting ? "Removing…" : "Remove tool"}
 						</Button>
 					)}
 				</div>
 			) : (
 				isExpanded && (
-					<div className="bg-text-block-background p-2.5 pt-0 text-sm rounded-b-sm">
+					<div className="bg-text-block-background p-2.5 pt-0 text-sm rounded-b-sm" id={detailsId}>
 						<VSCodePanels>
 							<VSCodePanelTab id="tools">Tools ({server.tools?.length || 0})</VSCodePanelTab>
 							<VSCodePanelTab id="resources">
@@ -364,7 +374,7 @@ const ServerRow = ({
 											paddingTop: "8px",
 										}}>
 										{server.prompts.map((prompt) => (
-											<McpPromptRow key={prompt.name} prompt={prompt} serverName={server.name} />
+											<McpPromptRow key={prompt.name} prompt={prompt} />
 										))}
 									</div>
 								) : (
@@ -380,8 +390,14 @@ const ServerRow = ({
 						</VSCodePanels>
 
 						<div className="my-2.5 mx-1.5">
-							<label className="block mb-1 text-[13px]">Request Timeout</label>
-							<VSCodeDropdown className="w-full" onChange={handleTimeoutChange} value={timeoutValue}>
+							<label className="block mb-1 text-[13px]" htmlFor={`response-timeout-${server.name}`}>
+								Response timeout
+							</label>
+							<VSCodeDropdown
+								className="w-full"
+								id={`response-timeout-${server.name}`}
+								onChange={handleTimeoutChange}
+								value={timeoutValue}>
 								{TimeoutOptions}
 							</VSCodeDropdown>
 						</div>
@@ -390,7 +406,7 @@ const ServerRow = ({
 							disabled={server.status === "connecting" || isRestarting}
 							onClick={handleRestart}
 							variant="secondary">
-							{server.status === "connecting" || isRestarting ? "Restarting..." : "Restart Server"}
+							{server.status === "connecting" || isRestarting ? "Reconnecting…" : "Reconnect tool"}
 						</Button>
 
 						{!isRemoteManagedServer && (
@@ -399,7 +415,7 @@ const ServerRow = ({
 								disabled={isDeleting}
 								onClick={handleDelete}
 								variant="danger">
-								{isDeleting ? "Deleting..." : "Delete Server"}
+								{isDeleting ? "Removing…" : "Remove tool"}
 							</Button>
 						)}
 					</div>

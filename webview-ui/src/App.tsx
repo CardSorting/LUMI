@@ -1,8 +1,9 @@
 import type { Boolean, EmptyRequest } from "@shared/proto/dietcode/common"
-import { useEffect } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import AccountView from "./components/account/AccountView"
 import ChatView from "./components/chat/ChatView"
-import JoyZoningView from "./components/joyzoning/JoyZoningView"
+import { ChatToolbar } from "./components/chat/navigation/ChatToolbar"
+import { NewChatConfirmModal } from "./components/common/NewChatConfirmModal"
 import McpView from "./components/mcp/configuration/McpConfigurationView"
 import SettingsView from "./components/settings/SettingsView"
 import WorktreesView from "./components/worktrees/WorktreesView"
@@ -10,6 +11,18 @@ import { useDietCodeAuth } from "./context/DietCodeAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
 import { Providers } from "./Providers"
 import { TaskServiceClient, UiServiceClient } from "./services/grpc-client"
+
+const isEditableTarget = (target: EventTarget | null) => {
+	if (!(target instanceof HTMLElement)) return false
+	const tagName = target.tagName.toLowerCase()
+	return (
+		tagName === "input" ||
+		tagName === "textarea" ||
+		tagName === "select" ||
+		target.isContentEditable ||
+		tagName.startsWith("vscode-")
+	)
+}
 
 const AppContent = () => {
 	const {
@@ -22,16 +35,16 @@ const AppContent = () => {
 		settingsTargetSection,
 		showAccount,
 		showWorktrees,
-		showJoyZoning,
 		showAnnouncement,
+		showNewChatConfirm,
+		dietcodeMessages,
 		setShowAnnouncement,
+		setShowNewChatConfirm,
 		setShouldShowAnnouncement,
-		hideHistory,
 		closeMcpView,
 		hideSettings,
 		hideAccount,
 		hideWorktrees,
-		hideJoyZoning,
 		hideAnnouncement,
 		navigateToHistory,
 		navigateToMcp,
@@ -41,52 +54,89 @@ const AppContent = () => {
 	} = useExtensionState()
 
 	const { dietcodeUser, organizations, activeOrganization } = useDietCodeAuth()
+	const [isStartingNewChat, setIsStartingNewChat] = useState(false)
+	const [newChatError, setNewChatError] = useState<string | null>(null)
+
+	const task = useMemo(() => dietcodeMessages.at(0), [dietcodeMessages])
+	const hasActiveConversation = !!task
+	const conversationTitle = useMemo(() => {
+		if (!task?.text) {
+			return undefined
+		}
+		const singleLine = task.text.replace(/\s+/g, " ").trim()
+		return singleLine.length > 36 ? `${singleLine.slice(0, 36)}…` : singleLine
+	}, [task?.text])
+
+	const handleRequestNewChat = useCallback(() => {
+		setNewChatError(null)
+		if (hasActiveConversation) {
+			setShowNewChatConfirm(true)
+			return
+		}
+
+		TaskServiceClient.clearTask({})
+			.then(() => navigateToChat())
+			.catch((error) => console.error("Failed to start a new chat:", error))
+	}, [hasActiveConversation, navigateToChat, setShowNewChatConfirm])
+
+	const handleCancelNewChat = useCallback(() => {
+		if (isStartingNewChat) return
+		setNewChatError(null)
+		setShowNewChatConfirm(false)
+	}, [isStartingNewChat, setShowNewChatConfirm])
+
+	const handleConfirmNewChat = useCallback(async () => {
+		if (isStartingNewChat) return
+		setIsStartingNewChat(true)
+		setNewChatError(null)
+
+		try {
+			await TaskServiceClient.clearTask({})
+			setShowNewChatConfirm(false)
+			navigateToChat()
+		} catch (error) {
+			console.error("Failed to start a new chat:", error)
+			setNewChatError("Couldn’t start a new chat. Please try again.")
+		} finally {
+			setIsStartingNewChat(false)
+		}
+	}, [isStartingNewChat, navigateToChat, setShowNewChatConfirm])
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.defaultPrevented || showNewChatConfirm) return
+
+			if (
+				event.key === "Escape" &&
+				(showHistory || showMcp || showSettings || showAccount || showWorktrees) &&
+				!isEditableTarget(event.target)
+			) {
+				event.preventDefault()
+				navigateToChat()
+				return
+			}
+
 			// Alt + Shift + H / T / S / A / C / N / 1-5
 			if (event.altKey && event.shiftKey) {
 				const key = event.key.toLowerCase()
 				if (key === "h" || key === "2") {
 					event.preventDefault()
-					if (showHistory) hideHistory()
-					else navigateToHistory()
+					navigateToHistory()
 				} else if (key === "t" || key === "3") {
 					event.preventDefault()
-					if (showMcp) closeMcpView()
-					else navigateToMcp()
+					navigateToMcp()
 				} else if (key === "s" || key === "5") {
 					event.preventDefault()
-					if (showSettings) hideSettings()
-					else navigateToSettings()
+					navigateToSettings()
 				} else if (key === "a" || key === "4") {
 					event.preventDefault()
-					if (showAccount) hideAccount()
-					else navigateToAccount()
+					navigateToAccount()
 				} else if (key === "c") {
 					event.preventDefault()
-					hideHistory()
-					hideSettings()
-					closeMcpView()
-					hideAccount()
-					hideWorktrees()
-					hideJoyZoning()
+					navigateToChat()
 				} else if (key === "n" || key === "1") {
 					event.preventDefault()
-					const confirmed = window.confirm(
-						"Are you sure you want to start a new chat? This will clear the active task and reset the conversation.",
-					)
-					if (confirmed) {
-						hideHistory()
-						hideSettings()
-						closeMcpView()
-						hideAccount()
-						hideWorktrees()
-						hideJoyZoning()
-						TaskServiceClient.clearTask({})
-							.catch((error) => console.error("Failed to clear task:", error))
-							.finally(() => navigateToChat())
-					}
+					handleRequestNewChat()
 				}
 			}
 		}
@@ -100,17 +150,14 @@ const AppContent = () => {
 		showMcp,
 		showSettings,
 		showAccount,
-		hideHistory,
+		showWorktrees,
+		showNewChatConfirm,
 		navigateToHistory,
-		closeMcpView,
 		navigateToMcp,
-		hideSettings,
 		navigateToSettings,
-		hideAccount,
 		navigateToAccount,
-		hideWorktrees,
-		hideJoyZoning,
 		navigateToChat,
+		handleRequestNewChat,
 	])
 
 	useEffect(() => {
@@ -132,25 +179,46 @@ const AppContent = () => {
 	}
 
 	return (
-		<div className="flex h-screen w-full flex-col">
-			{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
-			{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
-			{showAccount && (
-				<AccountView
-					activeOrganization={activeOrganization}
-					dietcodeUser={dietcodeUser}
-					onDone={hideAccount}
-					organizations={organizations}
+		<div className="flex h-screen w-full flex-col bg-background">
+			<a
+				className="sr-only z-50 rounded bg-button-background px-3 py-2 text-button-foreground focus:not-sr-only focus:absolute focus:left-2 focus:top-2"
+				href="#lumi-main-content">
+				Skip to content
+			</a>
+			<ChatToolbar
+				conversationTitle={conversationTitle}
+				hasActiveConversation={hasActiveConversation}
+				onRequestNewChat={handleRequestNewChat}
+			/>
+			<main
+				aria-labelledby="lumi-view-title"
+				className="relative min-h-0 w-full flex-1 overflow-hidden"
+				id="lumi-main-content"
+				tabIndex={-1}>
+				{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
+				{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
+				{showAccount && (
+					<AccountView
+						activeOrganization={activeOrganization}
+						dietcodeUser={dietcodeUser}
+						onDone={hideAccount}
+						organizations={organizations}
+					/>
+				)}
+				{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
+				<ChatView
+					hideAnnouncement={hideAnnouncement}
+					isHidden={showSettings || showMcp || showAccount || showWorktrees}
+					showAnnouncement={showAnnouncement}
+					showHistoryView={navigateToHistory}
 				/>
-			)}
-			{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
-			{showJoyZoning && <JoyZoningView onDone={hideJoyZoning} />}
-			{/* History is inline inside ChatView — keeps toolbar visible, no extra overlay pane */}
-			<ChatView
-				hideAnnouncement={hideAnnouncement}
-				isHidden={showSettings || showMcp || showAccount || showWorktrees || showJoyZoning}
-				showAnnouncement={showAnnouncement}
-				showHistoryView={navigateToHistory}
+			</main>
+			<NewChatConfirmModal
+				error={newChatError}
+				isOpen={showNewChatConfirm}
+				isPending={isStartingNewChat}
+				onCancel={handleCancelNewChat}
+				onConfirm={handleConfirmNewChat}
 			/>
 		</div>
 	)

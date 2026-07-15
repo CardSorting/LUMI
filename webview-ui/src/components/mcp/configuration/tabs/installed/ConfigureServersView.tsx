@@ -20,8 +20,8 @@ const ConfigureServersView = () => {
 					marginBottom: "16px",
 					marginTop: "5px",
 				}}>
-				Connect LUMI to extra tools in your workspace — pick from the community, or describe what you need in chat (like
-				"add a tool that fetches npm docs").{" "}
+				Turn connected tools on or off, review their status, or add another one from Browse. You can also describe what
+				you need in chat (for example, “add a tool that fetches npm docs”).{" "}
 				<VSCodeLink href="https://x.com/sdrzn/status/1867271665086074969" style={{ display: "inline" }}>
 					See a demo here.
 				</VSCodeLink>
@@ -48,12 +48,12 @@ const ConfigureServersView = () => {
 					}}
 					style={{ width: "100%", marginBottom: "5px" }}>
 					<VscIcon className="" name="server" style={{ marginRight: "6px" }} />
-					Configure MCP Servers
+					Open advanced tool configuration
 				</VSCodeButton>
 
 				<div style={{ textAlign: "center" }}>
 					<VSCodeLink onClick={() => navigateToSettings("features")} style={{ fontSize: "12px" }}>
-						Advanced MCP Settings
+						Tool permissions and automation
 					</VSCodeLink>
 				</div>
 			</div>

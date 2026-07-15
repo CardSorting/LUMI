@@ -16,14 +16,13 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useEvent } from "react-use"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useDietCodeAuth } from "@/context/DietCodeAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { useDensity } from "@/hooks/useDensity"
 import { cn } from "@/lib/utils"
 import { StateServiceClient } from "@/services/grpc-client"
 import { isAdminOrOwner } from "../account/helpers"
 import { Tab, TabContent, TabList, TabTrigger } from "../common/Tab"
-import ViewHeader from "../common/ViewHeader"
 import SectionHeader from "./SectionHeader"
 import AboutSection from "./sections/AboutSection"
 import ApiConfigurationSection from "./sections/ApiConfigurationSection"
@@ -158,9 +157,10 @@ const renderSectionHeader = (tabId: string) => {
 	)
 }
 
-const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
+const SettingsView = ({ targetSection }: SettingsViewProps) => {
 	// Memoize to avoid recreation
-	const TAB_CONTENT_MAP: Record<SettingsTabID, React.FC<any>> = useMemo(
+	// biome-ignore lint/suspicious/noExplicitAny: Components in map take different props
+	const TAB_CONTENT_MAP: Record<SettingsTabID, React.ComponentType<any>> = useMemo(
 		() => ({
 			"api-config": ApiConfigurationSection,
 			embedding: EmbeddingConfigurationSection,
@@ -176,10 +176,15 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 		[],
 	) // Empty deps - these imports never change
 
-	const { version, environment, settingsInitialModelTab } = useExtensionState()
+	const { version, settingsInitialModelTab } = useExtensionState()
 	const { activeOrganization } = useDietCodeAuth()
+	const { width } = useDensity()
+	const useHorizontalNavigation = width < 340
 
-	const [activeTab, setActiveTab] = useState<string>(targetSection || SETTINGS_TABS[0].id)
+	const [activeTab, setActiveTab] = useState<SettingsTabID>(() =>
+		SETTINGS_TABS.some((tab) => tab.id === targetSection) ? (targetSection as SettingsTabID) : SETTINGS_TABS[0].id,
+	)
+	const visibleTabs = useMemo(() => SETTINGS_TABS.filter((tab) => !tab.hidden?.({ activeOrganization })), [activeOrganization])
 
 	// Optimized message handler with early returns
 	const handleMessage = useCallback((event: MessageEvent) => {
@@ -200,7 +205,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 
 		// Check if valid tab ID
 		if (SETTINGS_TABS.some((tab) => tab.id === tabId)) {
-			setActiveTab(tabId)
+			setActiveTab(tabId as SettingsTabID)
 			return
 		}
 
@@ -234,36 +239,44 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 
 	// Update active tab when targetSection changes
 	useEffect(() => {
-		if (targetSection) {
-			setActiveTab(targetSection)
+		if (targetSection && visibleTabs.some((tab) => tab.id === targetSection)) {
+			setActiveTab(targetSection as SettingsTabID)
 		}
-	}, [targetSection])
+	}, [targetSection, visibleTabs])
+
+	useEffect(() => {
+		if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+			setActiveTab(visibleTabs[0]?.id ?? SETTINGS_TABS[0].id)
+		}
+	}, [activeTab, visibleTabs])
 
 	// Memoized tab item renderer
 	const renderTabItem = useCallback(
 		(tab: (typeof SETTINGS_TABS)[0]) => {
+			const isActive = activeTab === tab.id
 			return (
-				<TabTrigger className="flex justify-baseline" data-testid={`tab-${tab.id}`} key={tab.id} value={tab.id}>
-					<Tooltip key={tab.id}>
-						<TooltipTrigger>
-							<div
-								className={cn(
-									"whitespace-nowrap overflow-hidden h-12 sm:py-3 box-border flex items-center border-l-2 border-transparent text-foreground opacity-70 bg-transparent hover:bg-list-hover p-4 cursor-pointer gap-2",
-									{
-										"opacity-100 border-l-2 border-l-foreground border-t-0 border-r-0 border-b-0 bg-selection":
-											activeTab === tab.id,
-									},
-								)}>
-								<tab.icon className="w-4 h-4" />
-								<span className="hidden sm:block">{tab.name}</span>
-							</div>
-						</TooltipTrigger>
-						<TooltipContent side="right">{tab.tooltipText}</TooltipContent>
-					</Tooltip>
+				<TabTrigger
+					aria-label={tab.name}
+					className={cn(
+						"flex shrink-0 items-center gap-2 overflow-hidden whitespace-nowrap border-transparent px-3 text-foreground/70 hover:bg-list-hover hover:text-foreground",
+						useHorizontalNavigation
+							? "min-h-10 w-auto justify-start border-b-2"
+							: "min-h-11 w-36 justify-start border-l-2",
+						isActive &&
+							(useHorizontalNavigation
+								? "border-b-foreground bg-selection-inactive text-foreground"
+								: "border-l-foreground bg-selection-inactive text-foreground"),
+					)}
+					data-testid={`tab-${tab.id}`}
+					key={tab.id}
+					title={tab.tooltipText}
+					value={tab.id}>
+					<tab.icon aria-hidden className="h-4 w-4 shrink-0" />
+					<span className="truncate text-left text-xs">{tab.name}</span>
 				</TabTrigger>
 			)
 		},
-		[activeTab],
+		[activeTab, useHorizontalNavigation],
 	)
 
 	// Memoized active content component
@@ -274,6 +287,7 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 		}
 
 		// Special props for specific components
+		// biome-ignore lint/suspicious/noExplicitAny: Dynamic props mapped to specific components
 		const props: any = { renderSectionHeader }
 		if (activeTab === "debug") {
 			props.onResetState = handleResetState
@@ -288,17 +302,29 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 
 	return (
 		<Tab>
-			<ViewHeader environment={environment} onDone={onDone} title="Settings" />
-
-			<div className="flex flex-1 overflow-hidden">
+			<div className={cn("flex flex-1 overflow-hidden", useHorizontalNavigation && "flex-col")}>
 				<TabList
-					className="shrink-0 flex flex-col overflow-y-auto border-r border-sidebar-background"
-					onValueChange={setActiveTab}
+					aria-label="Settings sections"
+					aria-orientation={useHorizontalNavigation ? "horizontal" : "vertical"}
+					className={cn(
+						"flex shrink-0",
+						useHorizontalNavigation
+							? "lumi-scroll-chips w-full flex-row overflow-x-auto border-b border-border/30"
+							: "w-36 flex-col overflow-y-auto border-r border-border/30",
+					)}
+					onValueChange={(value) => setActiveTab(value as SettingsTabID)}
 					value={activeTab}>
-					{SETTINGS_TABS.filter((tab) => !tab.hidden?.({ activeOrganization })).map(renderTabItem)}
+					{visibleTabs.map(renderTabItem)}
 				</TabList>
 
-				<TabContent className="flex-1 overflow-auto">{ActiveContent}</TabContent>
+				<TabContent
+					aria-labelledby={`lumi-tab-${activeTab}`}
+					className="flex-1 overflow-auto outline-none"
+					id={`lumi-tabpanel-${activeTab}`}
+					role="tabpanel"
+					tabIndex={0}>
+					{ActiveContent}
+				</TabContent>
 			</div>
 		</Tab>
 	)

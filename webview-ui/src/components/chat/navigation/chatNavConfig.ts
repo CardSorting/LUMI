@@ -1,56 +1,71 @@
-export type ChatNavItemId = "newChat" | "history" | "tools" | "account" | "settings"
+export type ChatNavItemId = "newChat" | "chat" | "history" | "tools" | "account" | "settings"
 
 export interface ChatNavItem {
 	id: ChatNavItemId
 	label: string
 	shortLabel: string
+	description: string
 	tooltip: string
 	icon: string
-	/** Pinned in the compact toolbar (narrow sidebar). */
+	/** Kept directly visible in the compact app bar. */
 	showInToolbar: boolean
 }
 
-/** Shared navigation — plain labels; all destinations are toolbar icon buttons. */
+/** Shared navigation copy for the app bar, overflow menu, shortcuts, and tests. */
 export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 	{
 		id: "newChat",
 		label: "New chat",
 		shortLabel: "New",
-		tooltip: "Start New Chat (Alt+Shift+1 or Alt+Shift+N)",
+		description: "Start a blank conversation",
+		tooltip: "New chat (Alt+Shift+1 or Alt+Shift+N)",
 		icon: "PlusIcon",
 		showInToolbar: true,
+	},
+	{
+		id: "chat",
+		label: "Current chat",
+		shortLabel: "Chat",
+		description: "Return to the active conversation",
+		tooltip: "Current chat (Alt+Shift+C)",
+		icon: "feedback",
+		showInToolbar: false,
 	},
 	{
 		id: "history",
 		label: "Past chats",
 		shortLabel: "History",
-		tooltip: "Past Chats & History (Alt+Shift+2 or Alt+Shift+H)",
+		description: "Open a previous conversation",
+		tooltip: "Past chats (Alt+Shift+2 or Alt+Shift+H)",
 		icon: "HistoryIcon",
 		showInToolbar: true,
 	},
 	{
 		id: "tools",
-		label: "Connected tools",
+		label: "Tools",
 		shortLabel: "Tools",
-		tooltip: "Connected Tools (MCP) (Alt+Shift+3 or Alt+Shift+T)",
+		description: "Manage connected tools",
+		tooltip: "Tools (Alt+Shift+3 or Alt+Shift+T)",
 		icon: "server",
-		showInToolbar: true,
+		showInToolbar: false,
 	},
 	{
 		id: "account",
 		label: "Account",
 		shortLabel: "Account",
-		tooltip: "Account & Usage (Alt+Shift+4 or Alt+Shift+A)",
+		description: "View usage and sign-in details",
+		tooltip: "Account (Alt+Shift+4 or Alt+Shift+A)",
 		icon: "UserCircleIcon",
-		showInToolbar: true,
+		showInToolbar: false,
 	},
 	{
 		id: "settings",
-		label: "Preferences",
+		label: "Settings",
 		shortLabel: "Settings",
-		tooltip: "Preferences & Settings (Alt+Shift+5 or Alt+Shift+S)",
+		description: "Models, preferences, and privacy",
+		tooltip: "Settings (Alt+Shift+5 or Alt+Shift+S)",
 		icon: "SettingsIcon",
-		showInToolbar: true,
+		showInToolbar: false,
 	},
 ]
 
@@ -60,3 +75,5 @@ export const CHAT_NAV_BY_ID = Object.fromEntries(CHAT_NAV_ITEMS.map((item) => [i
 >
 
 export const CHAT_TOOLBAR_ITEMS = CHAT_NAV_ITEMS.filter((item) => item.showInToolbar && item.id !== "newChat")
+
+export const CHAT_MENU_ITEMS = CHAT_NAV_ITEMS.filter((item) => item.id !== "newChat")

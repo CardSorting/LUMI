@@ -118,6 +118,17 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 
 	const isCompact = useIsCompact()
 
+	const isMac = useMemo(() => typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent), [])
+
+	const resourceDisplay = useMemo(() => {
+		if (!presentation.resource) return null
+		return (
+			<code className="min-w-0 truncate bg-transparent font-mono text-[9px]" title={presentation.resource}>
+				{presentation.resource}
+			</code>
+		)
+	}, [presentation.resource])
+
 	if (!task || !hasButtons || (executionControlConfigured && !isExecutionControl)) return null
 
 	const opacity = canInteract || task.partial === true ? 1 : 0.62
@@ -181,16 +192,6 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 				: "Reversible"
 
 	const buttonHeight = "h-[26px]"
-	const isMac = useMemo(() => typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.userAgent), [])
-
-	const resourceDisplay = useMemo(() => {
-		if (!presentation.resource) return null
-		return (
-			<code className="min-w-0 truncate bg-transparent font-mono text-[9px]" title={presentation.resource}>
-				{presentation.resource}
-			</code>
-		)
-	}, [presentation.resource])
 
 	return (
 		<section

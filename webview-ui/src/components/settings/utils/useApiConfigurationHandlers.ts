@@ -71,23 +71,21 @@ export const useApiConfigurationHandlers = () => {
 		values: T,
 		currentMode: Mode,
 	) => {
+		const updates: Record<string, unknown> = {}
 		if (planActSeparateModelsSetting) {
 			// Update only the current mode's fields
-			const updates: Partial<ApiConfiguration> = {}
 			Object.entries(fieldPairs).forEach(([key, { plan, act }]) => {
 				const targetField = currentMode === "plan" ? plan : act
-				updates[targetField] = values[key]
+				updates[targetField as string] = values[key]
 			})
-			await handleFieldsChange(updates)
 		} else {
 			// Update both modes' fields
-			const updates: Partial<ApiConfiguration> = {}
 			Object.entries(fieldPairs).forEach(([key, { plan, act }]) => {
-				updates[plan] = values[key]
-				updates[act] = values[key]
+				updates[plan as string] = values[key]
+				updates[act as string] = values[key]
 			})
-			await handleFieldsChange(updates)
 		}
+		await handleFieldsChange(updates as Partial<ApiConfiguration>)
 	}
 
 	return { handleFieldChange, handleFieldsChange, handleModeFieldChange, handleModeFieldsChange }

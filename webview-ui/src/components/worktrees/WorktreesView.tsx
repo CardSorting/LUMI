@@ -11,9 +11,7 @@ import { VSCodeButton, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { memo, useCallback, useEffect, useState } from "react"
 import { Icon } from "@/components/ui/icons"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useExtensionState } from "@/context/ExtensionStateContext"
 import { FileServiceClient, TaskServiceClient, WorktreeServiceClient } from "@/services/grpc-client"
-import { getEnvironmentColor } from "@/utils/environmentColors"
 import CreateWorktreeModal from "./CreateWorktreeModal"
 import DeleteWorktreeModal from "./DeleteWorktreeModal"
 
@@ -22,7 +20,6 @@ type WorktreesViewProps = {
 }
 
 const WorktreesView = ({ onDone }: WorktreesViewProps) => {
-	const { environment } = useExtensionState()
 	const [worktrees, setWorktrees] = useState<WorktreeProto[]>([])
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
@@ -237,15 +234,7 @@ Please help me resolve these merge conflicts, then complete the merge, and delet
 	}, [mergeResult, mergeWorktree, closeMergeModal, onDone])
 
 	return (
-		<div className="fixed inset-0 flex flex-col overflow-hidden">
-			{/* Sticky Header with title and Done button */}
-			<div className="flex-none flex justify-between items-center px-5 py-3 border-b border-[var(--vscode-panel-border)]">
-				<h3 className="m-0" style={{ color: getEnvironmentColor(environment) }}>
-					Worktrees
-				</h3>
-				<VSCodeButton onClick={onDone}>Done</VSCodeButton>
-			</div>
-
+		<div className="w-full h-full flex flex-col overflow-hidden">
 			{/* Scrollable Content */}
 			<div className="flex-1 overflow-y-auto p-5">
 				{/* Description */}
@@ -547,7 +536,14 @@ Please help me resolve these merge conflicts, then complete the merge, and delet
 						if (e.target === e.currentTarget && !isMerging) {
 							closeMergeModal()
 						}
-					}}>
+					}}
+					onKeyDown={(e) => {
+						if (e.key === "Escape" && !isMerging) {
+							closeMergeModal()
+						}
+					}}
+					role="button"
+					tabIndex={-1}>
 					<div className="bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded-lg p-5 w-[450px] max-w-[90vw] relative">
 						{/* Close button */}
 						<button
@@ -624,13 +620,11 @@ Please help me resolve these merge conflicts, then complete the merge, and delet
 									.
 								</p>
 
-								<label className="flex items-center gap-2 cursor-pointer">
-									<VSCodeCheckbox
-										checked={deleteAfterMerge}
-										onChange={(e) => setDeleteAfterMerge((e.target as HTMLInputElement).checked)}
-									/>
+								<VSCodeCheckbox
+									checked={deleteAfterMerge}
+									onChange={(e) => setDeleteAfterMerge((e.target as HTMLInputElement).checked)}>
 									<span className="text-sm">Delete worktree after successful merge</span>
-								</label>
+								</VSCodeCheckbox>
 
 								{mergeError && (
 									<div className="flex items-start gap-2 p-3 rounded bg-[var(--vscode-inputValidation-errorBackground)] border border-[var(--vscode-inputValidation-errorBorder)]">

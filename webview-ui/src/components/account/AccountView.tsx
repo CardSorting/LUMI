@@ -10,7 +10,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { type DietCodeUser, handleSignOut } from "@/context/DietCodeAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { AccountServiceClient } from "@/services/grpc-client"
-import ViewHeader from "../common/ViewHeader"
 import VSCodeButtonLink from "../common/VSCodeButtonLink"
 import { updateSetting } from "../settings/utils/settingsHandlers"
 import { AccountWelcomeView } from "./AccountWelcomeView"
@@ -42,12 +41,11 @@ type CachedData = {
 
 const DietCodeEnvOptions = ["Production", "Staging", "Local"] as const
 
-const AccountView = ({ onDone, dietcodeUser, organizations, activeOrganization }: AccountViewProps) => {
+const AccountView = ({ dietcodeUser, organizations, activeOrganization }: AccountViewProps) => {
 	const { environment } = useExtensionState()
 
 	return (
-		<div className="fixed inset-0 flex flex-col overflow-hidden">
-			<ViewHeader environment={environment} onDone={onDone} showEnvironmentSuffix title="Account" />
+		<div className="w-full h-full flex flex-col overflow-hidden">
 			<div className="grow flex flex-col px-5 overflow-y-auto">
 				{dietcodeUser?.uid ? (
 					<DietCodeAccountView
@@ -188,7 +186,7 @@ export const DietCodeAccountView = ({
 	)
 
 	const handleOrganizationChange = useCallback(
-		async (event: any) => {
+		async (event: Event | React.FormEvent<HTMLElement>) => {
 			const target = event.target as HTMLSelectElement
 			if (!target) {
 				return
@@ -332,21 +330,23 @@ export const DietCodeAccountView = ({
 
 							<div className="flex gap-2 items-center mt-1">
 								<Tooltip>
-									<TooltipTrigger>
-										<VSCodeDropdown
-											className="w-full"
-											currentValue={dropdownValue}
-											disabled={isLoading || isLockedByRemoteConfig}
-											onChange={handleOrganizationChange}>
-											<VSCodeOption key="personal" value={uid}>
-												Personal
-											</VSCodeOption>
-											{userOrganizations?.map((org: UserOrganization) => (
-												<VSCodeOption key={org.organizationId} value={org.organizationId}>
-													{org.name}
+									<TooltipTrigger asChild>
+										<div className="w-full">
+											<VSCodeDropdown
+												className="w-full"
+												currentValue={dropdownValue}
+												disabled={isLoading || isLockedByRemoteConfig}
+												onChange={handleOrganizationChange}>
+												<VSCodeOption key="personal" value={uid}>
+													Personal
 												</VSCodeOption>
-											))}
-										</VSCodeDropdown>
+												{userOrganizations?.map((org: UserOrganization) => (
+													<VSCodeOption key={org.organizationId} value={org.organizationId}>
+														{org.name}
+													</VSCodeOption>
+												))}
+											</VSCodeDropdown>
+										</div>
 									</TooltipTrigger>
 									<TooltipContent hidden={!isLockedByRemoteConfig}>
 										This cannot be changed while your organization has remote configuration enabled.

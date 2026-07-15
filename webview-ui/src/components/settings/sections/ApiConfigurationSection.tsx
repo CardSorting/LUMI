@@ -28,7 +28,6 @@ const ApiConfigurationSection = ({ renderSectionHeader, initialModelTab }: ApiCo
 					<div className="rounded-md mb-5">
 						<div className="flex gap-px mb-[10px] -mt-2 border-0 border-b border-solid border-(--vscode-panel-border)">
 							<TabButton
-								disabled={currentTab === "plan"}
 								isActive={currentTab === "plan"}
 								onClick={() => setCurrentTab("plan")}
 								style={{
@@ -38,7 +37,6 @@ const ApiConfigurationSection = ({ renderSectionHeader, initialModelTab }: ApiCo
 								Planning phase
 							</TabButton>
 							<TabButton
-								disabled={currentTab === "act"}
 								isActive={currentTab === "act"}
 								onClick={() => setCurrentTab("act")}
 								style={{
@@ -62,8 +60,8 @@ const ApiConfigurationSection = ({ renderSectionHeader, initialModelTab }: ApiCo
 					<VSCodeCheckbox
 						checked={planActSeparateModelsSetting}
 						className="mb-[5px]"
-						onChange={async (e: any) => {
-							const checked = e.target.checked === true
+						onChange={async (e: Event | React.FormEvent<HTMLElement>) => {
+							const checked = (e.target as HTMLInputElement).checked === true
 							try {
 								// If unchecking the toggle, wait a bit for state to update, then sync configurations
 								if (!checked) {

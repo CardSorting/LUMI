@@ -8,24 +8,36 @@ import { useEffect, useMemo, useState } from "react"
 import { expect, userEvent, within } from "storybook/test"
 import { ExtensionStateContext, useExtensionState } from "@/context/ExtensionStateContext"
 import ChatView from "./components/chat/ChatView"
+import { ChatToolbar } from "./components/chat/navigation/ChatToolbar"
 import WelcomeView from "./components/welcome/WelcomeView"
 
 // Mock component that mimics App behavior but works in Storybook
 const MockApp = () => {
-	const { showWelcome, showAnnouncement } = useExtensionState()
+	const { showWelcome, showAnnouncement, dietcodeMessages } = useExtensionState()
+	const task = dietcodeMessages.at(0)
+	const conversationTitle = task?.text?.replace(/\s+/g, " ").trim()
 
 	return (
 		<HeroUIProvider>
-			{showWelcome ? (
-				<WelcomeView />
-			) : (
-				<ChatView
-					hideAnnouncement={() => {}}
-					isHidden={false}
-					showAnnouncement={showAnnouncement}
-					showHistoryView={() => {}}
+			<div className="flex h-full w-full flex-col">
+				<ChatToolbar
+					conversationTitle={conversationTitle}
+					hasActiveConversation={Boolean(task)}
+					onRequestNewChat={() => {}}
 				/>
-			)}
+				<div className="min-h-0 flex-1">
+					{showWelcome ? (
+						<WelcomeView />
+					) : (
+						<ChatView
+							hideAnnouncement={() => {}}
+							isHidden={false}
+							showAnnouncement={showAnnouncement}
+							showHistoryView={() => {}}
+						/>
+					)}
+				</div>
+			</div>
 		</HeroUIProvider>
 	)
 }

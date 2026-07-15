@@ -9,15 +9,11 @@ const PopoverTrigger = PopoverPrimitive.Trigger
 
 const PopoverAnchor = PopoverPrimitive.Anchor
 
-function PopoverContent({
-	className,
-	align = "center",
-	sideOffset = 4,
-	children,
-	...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
-	// Get side prop for conditional arrow positioning
-	const side = (props as any).side
+const PopoverContent = React.forwardRef<
+	React.ElementRef<typeof PopoverPrimitive.Content>,
+	React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
+>(({ className, align = "center", sideOffset = 4, children, ...props }, ref) => {
+	const side = props.side
 
 	return (
 		<PopoverPrimitive.Portal>
@@ -28,6 +24,7 @@ function PopoverContent({
 					className,
 				)}
 				data-slot="popover-content"
+				ref={ref}
 				sideOffset={sideOffset}
 				{...props}>
 				{children}
@@ -40,7 +37,7 @@ function PopoverContent({
 			</PopoverPrimitive.Content>
 		</PopoverPrimitive.Portal>
 	)
-}
+})
 
 PopoverContent.displayName = PopoverPrimitive.Content.displayName
 

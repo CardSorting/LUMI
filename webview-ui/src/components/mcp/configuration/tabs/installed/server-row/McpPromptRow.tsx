@@ -3,10 +3,9 @@ import { VscIcon } from "@/components/ui/vsc-icon"
 
 type McpPromptRowProps = {
 	prompt: McpPrompt
-	serverName?: string
 }
 
-const McpPromptRow = ({ prompt, serverName }: McpPromptRowProps) => {
+const McpPromptRow = ({ prompt }: McpPromptRowProps) => {
 	return (
 		<div
 			key={prompt.name}
@@ -15,7 +14,6 @@ const McpPromptRow = ({ prompt, serverName }: McpPromptRowProps) => {
 			}}>
 			<div
 				data-testid="prompt-row-container"
-				onClick={(e) => e.stopPropagation()}
 				style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "4px" }}>
 				<div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: "1 1 auto" }}>
 					<VscIcon className="" name="comment-discussion" style={{ marginRight: "6px", flexShrink: 0 }} />

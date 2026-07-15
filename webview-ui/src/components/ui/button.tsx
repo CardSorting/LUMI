@@ -4,7 +4,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-	"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 cursor-pointer [&_svg]:size-2 overflow-hidden",
+	"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 cursor-pointer [&_svg]:size-2 overflow-hidden",
 	{
 		variants: {
 			variant: {
@@ -18,7 +18,7 @@ const buttonVariants = cva(
 				ghost: "hover:bg-accent/10",
 				link: "text-link underline-offset-4 hover:underline p-0 m-0 cursor-text select-text hover:text-link-hover",
 				text: "text-foreground cursor-text select-text p-0 m-0",
-				icon: "hover:opacity-80 p-0 m-0 border-0 cursor-pointer hover:shadow-none focus:ring-0 focus:ring-offset-0",
+				icon: "hover:opacity-80 p-0 m-0 border-0 cursor-pointer hover:shadow-none",
 				dietcode: "bg-lumi border-foreground/20 text-lumi-foreground",
 				lumi: "bg-lumi border-foreground/20 text-lumi-foreground",
 				success:
@@ -30,7 +30,7 @@ const buttonVariants = cva(
 				sm: "py-1 px-3 text-sm [&_svg]:size-2",
 				xs: "p-1 text-xs [&_svg]:size-2",
 				lg: "py-4 px-8 [&_svg]:size-4 font-medium",
-				icon: "px-0.5 m-0 [&_svg]:size-2",
+				icon: "min-h-6 min-w-6 px-0.5 m-0 [&_svg]:size-4",
 				header: "py-1 px-4 [&_svg]:size-2.5",
 			},
 		},

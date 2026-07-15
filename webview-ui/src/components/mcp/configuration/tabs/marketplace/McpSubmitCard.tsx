@@ -2,7 +2,7 @@ import { VscIcon } from "@/components/ui/vsc-icon"
 
 const McpSubmitCard = () => {
 	return (
-		<div
+		<aside
 			style={{
 				display: "flex",
 				flexDirection: "column",
@@ -33,14 +33,14 @@ const McpSubmitCard = () => {
 						fontWeight: 600,
 						color: "var(--vscode-foreground)",
 					}}>
-					Submit MCP Server
+					Share a tool
 				</h3>
 				<p style={{ fontSize: "13px", margin: 0, color: "var(--vscode-descriptionForeground)" }}>
-					Help others discover great MCP servers by submitting an issue to{" "}
-					<a href="https://github.com/dietcode/mcp-marketplace">github.com/dietcode/mcp-marketplace</a>
+					Built a useful connection? Help others discover it by submitting it to the{" "}
+					<a href="https://github.com/dietcode/mcp-marketplace">community tool directory</a>.
 				</p>
 			</div>
-		</div>
+		</aside>
 	)
 }
 

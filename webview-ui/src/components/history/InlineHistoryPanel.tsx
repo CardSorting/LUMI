@@ -4,6 +4,7 @@ import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { Star } from "lucide-react"
 import { memo, useCallback, useMemo, useState } from "react"
 import { Virtuoso } from "react-virtuoso"
+import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
@@ -32,9 +33,9 @@ const formatWhen = (timestamp: number) => {
 const HistoryRow = memo(({ item, onOpen }: { item: HistoryItem; onOpen: (id: string) => void }) => (
 	<button
 		className={cn(
-			"w-full text-left flex items-center gap-2 px-2.5 py-2 border-b border-border/20",
+			"flex min-h-11 w-full items-center gap-2 border-b border-border/20 px-2.5 py-2 text-left",
 			"hover:bg-[color-mix(in_srgb,var(--vscode-list-hoverBackground)_80%,transparent)]",
-			"focus-visible:outline-none focus-visible:bg-accent/15",
+			"focus-visible:bg-accent/15 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--vscode-focusBorder)]",
 		)}
 		onClick={() => onOpen(item.id)}
 		type="button">
@@ -59,7 +60,7 @@ HistoryRow.displayName = "HistoryRow"
  * Familiar sidebar pattern: search, tap to resume, back via toolbar.
  */
 export const InlineHistoryPanel = memo(({ onClose, hasActiveConversation = false }: InlineHistoryPanelProps) => {
-	const { taskHistory, navigateToChat } = useExtensionState()
+	const { taskHistory, navigateToChat, setShowNewChatConfirm } = useExtensionState()
 	const [searchQuery, setSearchQuery] = useState("")
 
 	const items = useMemo(() => {
@@ -82,73 +83,63 @@ export const InlineHistoryPanel = memo(({ onClose, hasActiveConversation = false
 
 	const handleStartNewChat = useCallback(() => {
 		if (hasActiveConversation) {
-			const confirmed = window.confirm(
-				"Are you sure you want to start a new chat? This will clear the active task and reset the conversation.",
-			)
-			if (!confirmed) {
-				return
-			}
+			setShowNewChatConfirm(true)
+		} else {
+			TaskServiceClient.clearTask({})
+				.catch((error) => console.error("Failed to clear task:", error))
+				.finally(() => {
+					onClose()
+					navigateToChat()
+				})
 		}
-		TaskServiceClient.clearTask({})
-			.catch((error) => console.error("Failed to clear task:", error))
-			.finally(() => {
-				onClose()
-				navigateToChat()
-			})
-	}, [hasActiveConversation, navigateToChat, onClose])
+	}, [hasActiveConversation, navigateToChat, onClose, setShowNewChatConfirm])
 
 	return (
 		<div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 			<div className="px-2 pt-1 pb-2 shrink-0">
 				<VSCodeTextField
+					aria-label="Search past chats"
 					className="w-full"
 					onInput={(e) => setSearchQuery((e.target as HTMLInputElement)?.value ?? "")}
 					placeholder="Search chats…"
 					value={searchQuery}>
 					<Icon className="opacity-70 !text-xs mt-0.5" name="search" slot="start" />
 					{searchQuery && (
-						<Icon
+						<button
 							aria-label="Clear search"
-							className="input-icon-button flex justify-center items-center h-full"
-							name="close"
+							className="input-icon-button flex h-7 w-7 items-center justify-center rounded border-0 bg-transparent text-foreground focus-visible:outline-2 focus-visible:outline-[var(--vscode-focusBorder)]"
 							onClick={() => setSearchQuery("")}
 							slot="end"
-						/>
+							type="button">
+							<Icon name="close" size={14} />
+						</button>
 					)}
 				</VSCodeTextField>
 			</div>
 
 			{items.length === 0 ? (
-				<div className="flex-1 flex items-center justify-center px-4 text-center">
-					<p className="text-xs text-muted-foreground m-0">
+				<output className="flex-1 flex items-center justify-center px-4 text-center">
+					<span className="text-xs text-muted-foreground">
 						{searchQuery ? "No chats match your search." : "No past conversations yet."}
-					</p>
-				</div>
+					</span>
+				</output>
 			) : (
-				<>
-					<Virtuoso
-						className="flex-1"
-						data={items}
-						itemContent={(index) => <HistoryRow item={items[index]} onOpen={handleOpen} />}
-					/>
-					<p className="shrink-0 px-3 py-2 m-0 text-center text-[10px] text-muted-foreground border-t border-border/20">
-						Tap a chat to continue,{" "}
-						<button
-							className="underline bg-transparent border-0 p-0 cursor-pointer text-inherit hover:text-foreground"
-							onClick={handleStartNewChat}
-							type="button">
-							start a new chat
-						</button>
-						{", or "}
-						<button
-							className="underline bg-transparent border-0 p-0 cursor-pointer text-inherit hover:text-foreground"
-							onClick={onClose}
-							type="button">
-							go back to active chat
-						</button>
-					</p>
-				</>
+				<Virtuoso
+					aria-label="Past chats"
+					className="flex-1"
+					data={items}
+					itemContent={(index) => <HistoryRow item={items[index]} onOpen={handleOpen} />}
+				/>
 			)}
+
+			<div className="flex shrink-0 gap-2 border-t border-border/30 p-2">
+				<Button className="h-8 min-w-0 flex-1 px-2 text-[11px]" onClick={onClose} variant="outline">
+					Back to chat
+				</Button>
+				<Button className="h-8 min-w-0 flex-1 px-2 text-[11px]" onClick={handleStartNewChat}>
+					New chat
+				</Button>
+			</div>
 		</div>
 	)
 })

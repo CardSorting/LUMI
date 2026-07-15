@@ -36,7 +36,6 @@ export interface ExtensionGrpcSubscriptionsParams {
 	navigateToChat: () => void
 	navigateToSettings: () => void
 	navigateToWorktrees: () => void
-	navigateToJoyZoning: () => void
 	navigateToAccount: () => void
 }
 
@@ -57,7 +56,6 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		navigateToChat,
 		navigateToSettings,
 		navigateToWorktrees,
-		navigateToJoyZoning,
 		navigateToAccount,
 	} = params
 
@@ -207,14 +205,6 @@ export function useExtensionGrpcSubscriptions(params: ExtensionGrpcSubscriptions
 		request: EMPTY_REQUEST,
 		staleAfterMs: null,
 		onMessage: () => navigateToWorktrees(),
-	})
-	useGrpcSubscription({
-		key: "joyZoningButtonClicked",
-		debugLabel: "JoyZoning Nav",
-		subscribe: UiServiceClient.subscribeToJoyZoningButtonClicked.bind(UiServiceClient),
-		request: EMPTY_REQUEST,
-		staleAfterMs: null,
-		onMessage: () => navigateToJoyZoning(),
 	})
 	useGrpcSubscription({
 		key: "accountButtonClicked",

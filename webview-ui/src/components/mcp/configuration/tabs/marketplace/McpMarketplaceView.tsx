@@ -8,7 +8,7 @@ import {
 	VSCodeRadioGroup,
 	VSCodeTextField,
 } from "@vscode/webview-ui-toolkit/react"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { VscIcon } from "@/components/ui/vsc-icon"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { McpServiceClient } from "@/services/grpc-client"
@@ -60,39 +60,43 @@ const McpMarketplaceView = () => {
 			})
 	}, [items, searchQuery, selectedCategory, sortBy])
 
-	const fetchMarketplace = (forceRefresh = false) => {
-		if (forceRefresh) {
-			setIsRefreshing(true)
-		} else {
-			setIsLoading(true)
-		}
-		setError(null)
+	const fetchMarketplace = useCallback(
+		async (forceRefresh = false) => {
+			if (forceRefresh) {
+				setIsRefreshing(true)
+			} else {
+				setIsLoading(true)
+			}
+			setError(null)
 
-		if (showMarketplace) {
-			McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
-				.then((response) => {
-					setMcpMarketplaceCatalog(response)
-				})
-				.catch((error) => {
-					console.error("Error refreshing MCP marketplace:", error)
-					setError("Failed to load marketplace data")
-					setIsLoading(false)
-					setIsRefreshing(false)
-				})
-		}
-	}
+			if (!showMarketplace) {
+				setIsLoading(false)
+				setIsRefreshing(false)
+				return
+			}
+
+			try {
+				const response = await McpServiceClient.refreshMcpMarketplace(EmptyRequest.create({}))
+				setMcpMarketplaceCatalog(response)
+			} catch (error) {
+				console.error("Error refreshing MCP marketplace:", error)
+				setError("Couldn’t load tools right now.")
+			} finally {
+				setIsLoading(false)
+				setIsRefreshing(false)
+			}
+		},
+		[setMcpMarketplaceCatalog, showMarketplace],
+	)
 
 	useEffect(() => {
-		// Fetch marketplace catalog on initial load
-		fetchMarketplace()
-	}, [
-		// Fetch marketplace catalog on initial load
-		fetchMarketplace,
-	])
+		void fetchMarketplace()
+	}, [fetchMarketplace])
 
 	if (isLoading || isRefreshing) {
 		return (
-			<div
+			<output
+				aria-label="Loading available tools"
 				style={{
 					display: "flex",
 					justifyContent: "center",
@@ -100,8 +104,9 @@ const McpMarketplaceView = () => {
 					height: "100%",
 					padding: "20px",
 				}}>
-				<VSCodeProgressRing />
-			</div>
+				<VSCodeProgressRing aria-hidden="true" />
+				<span className="sr-only">Loading available tools…</span>
+			</output>
 		)
 	}
 
@@ -117,7 +122,9 @@ const McpMarketplaceView = () => {
 					padding: "20px",
 					gap: "12px",
 				}}>
-				<div style={{ color: "var(--vscode-errorForeground)" }}>{error}</div>
+				<div role="alert" style={{ color: "var(--vscode-errorForeground)" }}>
+					{error}
+				</div>
 				<VSCodeButton appearance="secondary" onClick={() => fetchMarketplace(true)}>
 					<VscIcon className="" name="refresh" style={{ marginRight: "6px" }} />
 					Retry
@@ -136,8 +143,9 @@ const McpMarketplaceView = () => {
 			<div style={{ padding: "20px 20px 5px", display: "flex", flexDirection: "column", gap: "16px" }}>
 				{/* Search row */}
 				<VSCodeTextField
+					aria-label="Search available tools"
 					onInput={(e) => setSearchQuery((e.target as HTMLInputElement).value)}
-					placeholder="Search MCPs..."
+					placeholder="Search tools…"
 					style={{ width: "100%" }}
 					value={searchQuery}>
 					<VscIcon
@@ -149,19 +157,14 @@ const McpMarketplaceView = () => {
 						}}
 					/>
 					{searchQuery && (
-						<VscIcon
+						<button
 							aria-label="Clear search"
-							name="close"
+							className="input-icon-button flex h-7 w-7 items-center justify-center rounded border-0 bg-transparent text-foreground focus-visible:outline-2 focus-visible:outline-[var(--vscode-focusBorder)]"
 							onClick={() => setSearchQuery("")}
 							slot="end"
-							style={{
-								display: "flex",
-								justifyContent: "center",
-								alignItems: "center",
-								height: "100%",
-								cursor: "pointer",
-							}}
-						/>
+							type="button">
+							<VscIcon className="" name="close" />
+						</button>
 					)}
 				</VSCodeTextField>
 
@@ -189,6 +192,7 @@ const McpMarketplaceView = () => {
 							flex: 1,
 						}}>
 						<VSCodeDropdown
+							aria-label="Filter tools by category"
 							onChange={(e) => setSelectedCategory((e.target as HTMLSelectElement).value || null)}
 							style={{
 								width: "100%",
@@ -221,6 +225,7 @@ const McpMarketplaceView = () => {
 						Sort:
 					</span>
 					<VSCodeRadioGroup
+						aria-label="Sort tools"
 						onChange={(e) => setSortBy((e.target as HTMLInputElement).value as typeof sortBy)}
 						style={{
 							display: "flex",
@@ -228,9 +233,9 @@ const McpMarketplaceView = () => {
 							marginTop: "-2.5px",
 						}}
 						value={sortBy}>
-						<VSCodeRadio value="downloadCount">Most Installs</VSCodeRadio>
+						<VSCodeRadio value="downloadCount">Most used</VSCodeRadio>
 						<VSCodeRadio value="newest">Newest</VSCodeRadio>
-						<VSCodeRadio value="stars">GitHub Stars</VSCodeRadio>
+						<VSCodeRadio value="stars">Most starred</VSCodeRadio>
 						<VSCodeRadio value="name">Name</VSCodeRadio>
 					</VSCodeRadioGroup>
 				</div>
@@ -260,7 +265,7 @@ const McpMarketplaceView = () => {
 			{remoteConfigSettings?.allowedMCPServers && (
 				<div className="flex items-center gap-2 px-5 py-3 mx-5 mb-4 bg-vscode-textBlockQuote-background border-l-[3px] border-vscode-textLink-foreground">
 					<VscIcon className="text-sm" name="lock" />
-					<span className="text-[13px]">Your organization has pre-configured the available MCP servers</span>
+					<span className="text-[13px]">Your organization manages which tools are available</span>
 				</div>
 			)}
 
@@ -275,9 +280,7 @@ const McpMarketplaceView = () => {
 							padding: "20px",
 							color: "var(--vscode-descriptionForeground)",
 						}}>
-						{searchQuery || selectedCategory
-							? "No matching MCP servers found"
-							: "No MCP servers found in the marketplace"}
+						{searchQuery || selectedCategory ? "No tools match these filters." : "No tools are available right now."}
 					</div>
 				) : (
 					filteredItems.map((item) => (
