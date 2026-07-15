@@ -6,6 +6,26 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-07-15
+
+### Added
+
+- **Confidence-preserving subagent convergence** — Findings now retain independent execution validity, confidence, confidence reason, evidence, assumptions, and decision criticality instead of collapsing into a lane-wide pass/fail score.
+- **Bounded critical-claim verification** — Consequential uncertainty can launch one read-only, claim-specific evidence probe, capped at one probe per claim and two probes per swarm.
+- **Structured uncertainty results** — Parent synthesis receives accepted, tentative, and rejected findings, classified contradictions, explicit assumptions, safe-to-proceed guidance, and evidence needed to resolve remaining uncertainty.
+- **Durable confidence governance** — Governed receipts and resume plans preserve ambiguity profiles, probe history, semantic evidence deltas, confidence plateaus, source authority, and original confidence values.
+
+### Changed
+
+- Low-confidence, unknown, advisory, and analytically contradictory findings now converge with bounded uncertainty when governance remains valid.
+- Swarm-wide confidence retries are replaced by targeted probes; successful lanes are not restarted merely to obtain a stronger self-reported score.
+- README and governed execution documentation now explain the behavioral convergence model, safety invariants, user-visible flow, and layered runtime architecture before implementation details.
+
+### Fixed
+
+- Prevented vague or exploratory tasks from entering recursive merge loops when repeated attempts produce no semantically new evidence.
+- Preserved fail-closed behavior for invalid receipts, checksum or provenance failures, mutation-authority violations, lock conflicts, and operations unsafe under every surviving interpretation.
+
 ## [3.1.0] - 2026-07-09
 
 ### Added

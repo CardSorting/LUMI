@@ -26,7 +26,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CardSorting/LUMI" alt="License" /></a>
   <a href="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml"><img src="https://github.com/CardSorting/LUMI/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/CardSorting/LUMI"><img src="https://api.securityscorecards.dev/projects/github.com/CardSorting/LUMI/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-4.6.0-green" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-5.0.0-green" alt="Version" /></a>
   <img src="https://img.shields.io/badge/VS%20Code-%5E1.84.0-007ACC?logo=visualstudiocode&logoColor=white" alt="VS Code" />
   <img src="https://img.shields.io/badge/extension-CardSorting.lumi--vscode-purple" alt="VS Marketplace ID" />
   <img src="https://img.shields.io/badge/Open%20VSX-CardSorting.lumi-blue" alt="Open VSX ID" />
@@ -438,9 +438,9 @@ flowchart TB
     TOOLS --> SWARM[Governed subagent harness]
     SWARM --> LANES[Parallel lanes with declared execution intent]
     LANES --> EVIDENCE[Execution envelopes, evidence, and lane receipts]
-    EVIDENCE --> SAFETY[Authority, lock, mutation, replay, and merge validation]
-    SAFETY --> CONVERGE[Confidence-aware convergence]
-    CONVERGE --> PARENT[Parent synthesis: accepted, tentative, and rejected findings]
+    EVIDENCE -->|Validate| GOVERNANCE[Execution Governance]
+    GOVERNANCE -->|Converge| CONVERGE[Confidence-aware convergence]
+    CONVERGE -->|Synthesize| PARENT[Parent synthesis: accepted, tentative, and rejected findings]
     PARENT --> TASK
   end
 
@@ -453,7 +453,7 @@ flowchart TB
   subgraph durability ["Durability boundaries"]
     TASK <--> BDB[BroccoliDB: cognitive memory, graph, snapshots, runtime state]
     EVIDENCE --> RECEIPTS[Task-local transcripts and governed receipts]
-    SAFETY --> RECEIPTS
+    GOVERNANCE --> RECEIPTS
     CONVERGE --> RECEIPTS
   end
 
@@ -465,12 +465,14 @@ flowchart TB
 | **Webview** | Conversation UI, approval decisions, diff and swarm status presentation | Presents decisions; it does not execute workspace mutations directly |
 | **Session control** | Conversation state, model turns, task lifecycle, completion routing | Coordinates work; physical I/O stays behind typed tools and the host bridge |
 | **Tool execution** | Typed dispatch, lifecycle hooks, MCP calls, approval enforcement | Direct tools and subagent swarms enter through the same governed tool boundary |
-| **Governed swarm** | Lane scheduling, execution intent, mutation claims, evidence, convergence, parent synthesis | Low confidence is non-blocking; invalid authority, integrity, or unsafe mutation remains fail-closed |
+| **Governed lanes** | Lane scheduling, declared execution intent, mutation claims, evidence collection | Produces execution records; it does not decide merge eligibility or manufacture consensus |
+| **Execution governance** | Receipt integrity, authority, locks, mutation legality, replay legality, and merge eligibility | Fail-closed execution firewall; confidence cannot override a governance failure |
+| **Convergence and synthesis** | Finding confidence, ambiguity, contradictions, bounded probes, uncertainty, and the parent result | Consumes governance-approved execution; low confidence changes synthesis, not execution validity |
 | **VS Code host** | Filesystem, terminals, diagnostics, tabs, and checkpoints | Physical IDE operations are isolated behind the Protobuf host bridge |
 | **Task artifacts** | Append-only transcripts, execution envelopes, immutable attempt receipts, replay checksums | Authoritative swarm execution history lives under the task directory, not in cognitive memory |
 | **BroccoliDB** | Cognitive memory, runtime graph, snapshots, structural analysis, and fencing substrate | Advisory knowledge and substrate state; not the governed swarm receipt store |
 
-Confidence-aware convergence runs inside the existing merge path. It can add a bounded read-only verification probe or return an uncertainty package, but it cannot bypass receipt integrity, mutation authority, locks, replay checks, or completion gates.
+Execution Governance is the fail-closed firewall between lane output and convergence. Confidence-aware convergence sees only governance-approved execution; it can add a bounded read-only verification probe or return an uncertainty package, but it cannot bypass receipt integrity, mutation authority, locks, replay checks, or completion gates.
 
 **Stack:** TypeScript extension host · React webview · provider adapters · typed tools and MCP · Protobuf host bridge · BroccoliDB SQLite · governed receipt schema v3 · Biome · Mocha / Playwright tests · Mintlify docs.
 
@@ -535,7 +537,7 @@ Full guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 | **Bug reports** | [GitHub Issues](https://github.com/CardSorting/LUMI/issues/new?template=bug_report.yml) |
 | **Security (private)** | [SECURITY.md](SECURITY.md) |
 
-Include VS Code version, LUMI **4.6.0**, provider used, and steps to reproduce.
+Include VS Code version, LUMI **5.0.0**, provider used, and steps to reproduce.
 
 ---
 
