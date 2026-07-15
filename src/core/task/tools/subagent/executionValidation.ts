@@ -22,6 +22,9 @@ export function validateSubagentEnvelope(envelope: SubagentExecutionEnvelope): s
 	}
 
 	if (envelope.status === "completed") {
+		if (envelope.executionValidity === "invalid") {
+			violations.push(`agent ${envelope.agentId}: completed with invalid execution validity`)
+		}
 		if (!envelope.verbatimOutput?.trim()) {
 			violations.push(`agent ${envelope.agentId}: completed without verbatim output`)
 		}
@@ -32,6 +35,9 @@ export function validateSubagentEnvelope(envelope: SubagentExecutionEnvelope): s
 
 	if (envelope.status === "failed" && !envelope.error?.trim()) {
 		violations.push(`agent ${envelope.agentId}: failed without error message`)
+	}
+	if (envelope.status === "failed" && envelope.executionValidity === "valid") {
+		violations.push(`agent ${envelope.agentId}: failed with valid execution validity`)
 	}
 
 	for (const compaction of envelope.compactionEvents || []) {
@@ -57,6 +63,9 @@ export function auditSubagentEnvelopeQuality(envelope: SubagentExecutionEnvelope
 	}
 	if (envelope.status === "completed" && envelope.verbatimOutput?.trim() && envelope.evidenceRefs.length === 0) {
 		warnings.push(`agent ${envelope.agentId}: missing evidence references`)
+	}
+	if (!envelope.executionValidity) {
+		warnings.push(`agent ${envelope.agentId}: historical envelope missing execution validity`)
 	}
 	return warnings
 }

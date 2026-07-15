@@ -347,6 +347,7 @@ export interface SubagentStatusItem {
 	warnings?: string[]
 	toolSteps?: SubagentToolStepSummary[]
 	touchedFiles?: string[]
+	executionValidity?: "valid" | "invalid"
 	confidence?: SubagentExecutionConfidence
 	evidenceCount?: number
 	transcriptEventCount?: number

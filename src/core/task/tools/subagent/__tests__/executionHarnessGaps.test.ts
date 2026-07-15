@@ -209,9 +209,12 @@ describe("execution harness gap closure", () => {
 		const disk = await import("@core/storage/disk")
 		sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
 
-		const completed = buildAgent({ status: "completed", agentId: "a-done" })
+		const completed = buildAgent({ status: "completed", agentId: "a-done", confidence: "low" })
+		completed.structuredFindings[0].confidence = "low"
+		completed.structuredFindings[0].confidenceReason = "missing_context"
 		const failed = buildAgent({
 			status: "failed",
+			executionValidity: "invalid",
 			agentId: "a-fail",
 			verbatimOutput: undefined,
 			error: "timeout",
@@ -219,6 +222,7 @@ describe("execution harness gap closure", () => {
 		})
 		const pending = buildAgent({
 			status: "pending",
+			executionValidity: "invalid",
 			agentId: "a-pending",
 			verbatimOutput: undefined,
 			lineage: { swarmId: "swarm-1", index: 3, depth: 1 },
@@ -249,6 +253,9 @@ describe("execution harness gap closure", () => {
 						agentId: "a-done",
 						index: 1,
 						status: "completed",
+						executionValidity: "valid",
+						findingConfidence: "low",
+						confidenceReason: "missing_context",
 						claimId: "source-claim-1",
 						claimReleased: true,
 						evidenceCount: 1,
@@ -261,6 +268,63 @@ describe("execution harness gap closure", () => {
 				mergeGate: { passed: true },
 				sealed: true,
 				integrity: { valid: true, violations: [], checksum: "resume-source-checksum" },
+				confidenceAwareConvergence: {
+					decision: "converge_with_uncertainty",
+					gateDecision: {
+						kind: "converge_with_uncertainty",
+						evidence: {
+							acceptedFindingIds: [],
+							tentativeFindingIds: ["source-lane-1:finding"],
+							rejectedFindingIds: [],
+							usableLaneIds: ["source-lane-1"],
+						},
+						uncertainty: {
+							causes: ["missing_context"],
+							affectedClaims: ["source-lane-1:finding"],
+							safeToProceed: true,
+							resolutionEvidenceNeeded: ["more context"],
+						},
+					},
+					acceptedFindings: [],
+					tentativeFindings: [],
+					rejectedFindings: [],
+					unresolvedContradictions: [],
+					assumptions: [],
+					taskAmbiguityProfile: { detected: true, reasons: ["insufficient_source_material"], assumptionsAllowed: true },
+					probeHistory: [
+						{
+							probeId: "probe-exhausted",
+							claimId: "source-lane-1:finding",
+							question: "Verify the finding",
+							sourceLaneIds: ["source-lane-1"],
+							reason: "critical_claim_unverified",
+							attempt: 1,
+							launchedAt: 1,
+							completedAt: 2,
+							evidenceRefs: [],
+							evidenceDelta: [],
+							principalClaims: ["source-lane-1:finding"],
+							findingConfidence: "low",
+							confidenceReason: "missing_context",
+							toolSequence: [],
+							fingerprint: "plateau",
+							status: "exhausted",
+							confidencePlateau: true,
+						},
+					],
+					confidencePlateau: true,
+					diagnostics: {
+						events: ["confidence_plateau"],
+						lowConfidenceLanesAccepted: 1,
+						confidenceOnlyRetriesSuppressed: 1,
+						targetedProbesLaunched: 0,
+						probeBudgetsExhausted: 1,
+						convergedWithBoundedUncertainty: 1,
+						trueHardBlocks: 0,
+						contradictionClassifications: {},
+						confidenceChanges: [],
+					},
+				},
 			}),
 			"utf8",
 		)
@@ -268,6 +332,9 @@ describe("execution harness gap closure", () => {
 		const plan = await planResumeFromArtifact("task-1", "swarm-1", { newSwarmId: "swarm-2", maxAgeMs: 60_000 })
 		assert.equal(plan.reuseAgents.length, 1)
 		assert.equal(plan.reuseAgents[0].sourceLaneReceipt?.claimId, "source-claim-1")
+		assert.equal(plan.reuseAgents[0].sourceLaneReceipt?.findingConfidence, "low")
+		assert.equal(plan.sourceEnvelope.agents.find((agent) => agent.agentId === "a-done")?.confidence, "low")
+		assert.equal(plan.probeHistory[0]?.confidencePlateau, true)
 		assert.equal(plan.retryAgents.length, 1)
 		assert.equal(plan.restartAgents.length, 1)
 		assert.equal(plan.recoveryReceipt.operatorVisible, true)

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import type { SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { SWARM_ARTIFACT_MAX_AGE_MS, SWARM_ENVELOPE_SCHEMA_VERSION } from "@shared/subagent/executionEnvelope"
-import type { LaneExecutionReceipt } from "@shared/subagent/governedExecution"
+import type { ConfidenceProbeHistoryEntry, LaneExecutionReceipt } from "@shared/subagent/governedExecution"
 import { validateSwarmEnvelope } from "./executionValidation"
 import { loadAuthoritativeGovernedReceipt, validateGovernedReceipt } from "./GovernedExecutionStore"
 import { loadSwarmEnvelope } from "./SubagentExecutionStore"
@@ -63,6 +63,8 @@ export interface SwarmResumePlan {
 	recoveryReceipt: SwarmRecoveryReceipt
 	/** Immutable source already validated by planResumeFromArtifact; avoids one read per reused lane. */
 	sourceEnvelope: SwarmExecutionEnvelope
+	/** Exhausted probes remain exhausted across resume; tentative evidence remains tentative. */
+	probeHistory: ConfidenceProbeHistoryEntry[]
 	rejectedReason?: string
 }
 
@@ -228,6 +230,7 @@ export async function planResumeFromArtifact(
 		taskId,
 		newSwarmId,
 		sourceEnvelope: envelope,
+		probeHistory: sourceGovernedReceipt?.confidenceAwareConvergence?.probeHistory ?? [],
 		reuseAgents,
 		retryAgents,
 		restartAgents,

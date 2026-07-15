@@ -320,6 +320,35 @@ export function reduceGovernedContinuation(options: {
 	const findingCodes = new Set(receipt.mergeGate.findings?.map((finding) => finding.code) ?? [])
 	const hasConflict = receipt.mergeGate.splitBrainDetected || [...findingCodes].some((code) => CONFLICT_FINDING_CODES.has(code))
 	const hasInvalidResult = [...findingCodes].some((code) => INVALID_RESULT_FINDING_CODES.has(code))
+	const convergenceDecision = receipt.confidenceAwareConvergence ?? receipt.mergeGate.confidenceAwareConvergence
+
+	if (convergenceDecision?.decision === "block_hard_failure") {
+		return {
+			action: "halt_for_conflict",
+			retryDisposition: "do_not_retry",
+			reasonCode: "confidence_aware_hard_failure",
+			cleanPath: false,
+			permittedAction: "halt",
+		}
+	}
+	if (convergenceDecision?.decision === "restart_invalid_lane") {
+		return {
+			action: "targeted_repair",
+			retryDisposition: "targeted_repair",
+			reasonCode: "structurally_invalid_lane",
+			cleanPath: false,
+			permittedAction: "repair_lanes",
+		}
+	}
+	if (convergenceDecision?.decision === "targeted_probe") {
+		return {
+			action: "targeted_probe",
+			retryDisposition: "targeted_probe",
+			reasonCode: "critical_claim_verification_required",
+			cleanPath: false,
+			permittedAction: "repair_lanes",
+		}
+	}
 
 	if (hasConflict || retryDisposition === "do_not_retry") {
 		return {
@@ -373,10 +402,15 @@ export function reduceGovernedContinuation(options: {
 	}
 
 	const advisoryCount = receipt.mergeGate.advisoryWarnings?.length ?? 0
+	const convergedWithUncertainty = convergenceDecision?.decision === "converge_with_uncertainty"
 	return {
-		action: advisoryCount > 0 ? "accept_with_advisories" : "accept",
+		action: advisoryCount > 0 || convergedWithUncertainty ? "accept_with_advisories" : "accept",
 		retryDisposition: "not_needed",
-		reasonCode: advisoryCount > 0 ? "sealed_with_advisories" : "sealed_clean",
+		reasonCode: convergedWithUncertainty
+			? "sealed_with_bounded_uncertainty"
+			: advisoryCount > 0
+				? "sealed_with_advisories"
+				: "sealed_clean",
 		cleanPath:
 			!options.recoveryActive &&
 			receipt.mergeGate.orphanedClaimCount === 0 &&

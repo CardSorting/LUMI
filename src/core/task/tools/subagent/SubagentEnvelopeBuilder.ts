@@ -3,6 +3,9 @@ import type { SubagentExecutionStatus } from "@shared/ExtensionMessage"
 import type {
 	EvidenceReference,
 	ExecutionConfidence,
+	ExecutionValidity,
+	FindingConfidenceReason,
+	FindingDecisionCriticality,
 	StructuredFinding,
 	SubagentExecutionEnvelope,
 	SubagentExecutionPhase,
@@ -11,6 +14,77 @@ import type {
 import type { CompactionEventRecord } from "@shared/subagent/transcript"
 
 const FILE_TOOL_PARAMS = new Set(["path", "file_path", "target_file"])
+
+const EXPLICIT_CONFIDENCE = /\[confidence\s*:\s*(high|medium|low|unknown)\]/i
+const EXPLICIT_CONFIDENCE_REASON =
+	/\[confidence_reason\s*:\s*(direct_evidence|indirect_evidence|underspecified_goal|conflicting_evidence|missing_context|exploratory_hypothesis|model_uncertainty|other)\]/i
+const EXPLICIT_CRITICALITY = /\[criticality\s*:\s*(critical|important|advisory)\]/i
+const UNKNOWN_LANGUAGE =
+	/\b(?:unknown|cannot determine|can't determine|insufficient evidence|no definitive answer|not enough (?:evidence|context))\b/i
+const LOW_CONFIDENCE_LANGUAGE =
+	/\b(?:low confidence|uncertain|unclear|tentative|hypothesis|hypothesize|may be|might be|could be)\b/i
+const MEDIUM_CONFIDENCE_LANGUAGE = /\b(?:medium confidence|likely|probably|suggests?|indirect evidence)\b/i
+
+export interface CompletionFindingMetadata {
+	confidence: ExecutionConfidence
+	confidenceReason: FindingConfidenceReason
+	assumptions: string[]
+	decisionCriticality: FindingDecisionCriticality
+}
+
+function extractAssumptions(result: string): string[] {
+	const assumptions: string[] = []
+	for (const line of result.split("\n")) {
+		const match = line.match(/^\s*(?:[-*]\s*)?(?:assumption|assuming)\s*:\s*(.+)$/i)
+		if (match?.[1]?.trim()) {
+			assumptions.push(match[1].trim())
+		}
+	}
+	for (const match of result.matchAll(/\[assumption\s*:\s*([^\]]+)\]/gi)) {
+		if (match[1]?.trim()) {
+			assumptions.push(match[1].trim())
+		}
+	}
+	return [...new Set(assumptions)]
+}
+
+/** Preserve explicit model uncertainty; infer only when the result uses unambiguous uncertainty language. */
+export function deriveCompletionFindingMetadata(
+	result: string,
+	options?: { confidence?: ExecutionConfidence; hasDirectEvidence?: boolean },
+): CompletionFindingMetadata {
+	const explicitConfidence = result.match(EXPLICIT_CONFIDENCE)?.[1]?.toLowerCase() as ExecutionConfidence | undefined
+	const confidence =
+		options?.confidence ??
+		explicitConfidence ??
+		(UNKNOWN_LANGUAGE.test(result)
+			? "unknown"
+			: LOW_CONFIDENCE_LANGUAGE.test(result)
+				? "low"
+				: MEDIUM_CONFIDENCE_LANGUAGE.test(result)
+					? "medium"
+					: "high")
+	const explicitReason = result.match(EXPLICIT_CONFIDENCE_REASON)?.[1]?.toLowerCase() as FindingConfidenceReason | undefined
+	const confidenceReason =
+		explicitReason ??
+		(/\b(?:underspecified|ambiguous|vague objective|missing success criteria)\b/i.test(result)
+			? "underspecified_goal"
+			: /\bconflicting evidence\b/i.test(result)
+				? "conflicting_evidence"
+				: /\b(?:missing context|insufficient evidence|not enough (?:evidence|context))\b/i.test(result)
+					? "missing_context"
+					: /\b(?:hypothesis|hypothesize|exploratory)\b/i.test(result)
+						? "exploratory_hypothesis"
+						: confidence === "low" || confidence === "unknown"
+							? "model_uncertainty"
+							: options?.hasDirectEvidence
+								? "direct_evidence"
+								: "indirect_evidence")
+	const decisionCriticality =
+		(result.match(EXPLICIT_CRITICALITY)?.[1]?.toLowerCase() as FindingDecisionCriticality | undefined) ?? "advisory"
+
+	return { confidence, confidenceReason, assumptions: extractAssumptions(result), decisionCriticality }
+}
 
 function extractTouchedPaths(params: Record<string, string>): string[] {
 	const paths: string[] = []
@@ -58,6 +132,7 @@ export class SubagentEnvelopeBuilder {
 	private transcriptByteSize?: number
 	private error?: string
 	private confidence: ExecutionConfidence = "unknown"
+	private executionValidity: ExecutionValidity = "invalid"
 	private readonly spawnedAt: number
 
 	constructor(
@@ -122,7 +197,10 @@ export class SubagentEnvelopeBuilder {
 			severity: "blocker",
 			source: "gate",
 			confidence: "high",
+			confidenceReason: "direct_evidence",
 			evidenceIds: [],
+			assumptions: [],
+			decisionCriticality: "critical",
 		})
 	}
 
@@ -138,7 +216,10 @@ export class SubagentEnvelopeBuilder {
 			severity: "warning",
 			source: "inferred",
 			confidence: "medium",
+			confidenceReason: "indirect_evidence",
 			evidenceIds: [],
+			assumptions: [],
+			decisionCriticality: "advisory",
 		})
 	}
 
@@ -165,11 +246,16 @@ export class SubagentEnvelopeBuilder {
 
 	private lineageParentExecutionId?: string
 
-	complete(result: string, confidence: ExecutionConfidence = "high"): void {
+	complete(result: string, confidence?: ExecutionConfidence): void {
 		this.verbatimOutput = result
 		this.status = "completed"
 		this.phase = "completed"
-		this.confidence = confidence
+		this.executionValidity = "valid"
+		const metadata = deriveCompletionFindingMetadata(result, {
+			confidence,
+			hasDirectEvidence: this.toolSteps.length > 0,
+		})
+		this.confidence = metadata.confidence
 
 		const evidenceId = `evidence_${this.agentId}_verbatim`
 		this.evidenceRefs.push({
@@ -184,8 +270,11 @@ export class SubagentEnvelopeBuilder {
 			summary: excerpt(result, 200),
 			severity: "info",
 			source: "verbatim",
-			confidence,
-			evidenceIds: [evidenceId],
+			confidence: metadata.confidence,
+			confidenceReason: metadata.confidenceReason,
+			evidenceIds: this.evidenceRefs.map((evidence) => evidence.id),
+			assumptions: metadata.assumptions,
+			decisionCriticality: metadata.decisionCriticality,
 		})
 	}
 
@@ -193,7 +282,8 @@ export class SubagentEnvelopeBuilder {
 		this.error = error
 		this.status = "failed"
 		this.phase = "failed"
-		this.confidence = "low"
+		this.executionValidity = "invalid"
+		this.confidence = "unknown"
 		this.recordWarning(error)
 	}
 
@@ -201,6 +291,7 @@ export class SubagentEnvelopeBuilder {
 		this.status = "failed"
 		this.phase = "aborted"
 		this.error = this.error || "Subagent run aborted."
+		this.executionValidity = "invalid"
 	}
 
 	build(): SubagentExecutionEnvelope {
@@ -226,6 +317,7 @@ export class SubagentEnvelopeBuilder {
 			blockers: this.blockers,
 			warnings: this.warnings,
 			gateLifecycleStatus: this.gateLifecycleStatus,
+			executionValidity: this.executionValidity,
 			confidence: this.confidence,
 			retryHints: this.retryHints,
 			transcriptArtifactPath: this.transcriptArtifactPath,

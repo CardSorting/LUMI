@@ -119,6 +119,12 @@ describe("CoordinatorExecutionAuthority", () => {
 			continuationReductions: 0,
 			retryDecisions: 0,
 			lockAcquisitions: 0,
+			lowConfidenceLanesAccepted: 0,
+			confidenceOnlyRetriesSuppressed: 0,
+			targetedProbesLaunched: 0,
+			probeBudgetsExhausted: 0,
+			convergedWithBoundedUncertainty: 0,
+			trueHardBlocks: 0,
 		}
 		const decision = reduceGovernedContinuation({
 			receipt: sealedReceipt("attempt-clean"),

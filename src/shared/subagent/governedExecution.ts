@@ -1,6 +1,14 @@
 import type { ExecutionReplayIntegrityReport } from "@shared/execution/replayContract"
 import type { LockBackends, LockClaim } from "@shared/governance/lockTypes"
 import type {
+	EvidenceReference,
+	ExecutionConfidence,
+	ExecutionValidity,
+	FindingConfidenceReason,
+	FindingDecisionCriticality,
+	TaskAmbiguityProfile,
+} from "@shared/subagent/executionEnvelope"
+import type {
 	AgentRoadmapProjection,
 	LocalRoadmapEvent,
 	ProposedWorkspacePatch,
@@ -82,6 +90,10 @@ export interface LaneExecutionReceipt {
 	agentId: string
 	index: number
 	status: LaneExecutionStatus
+	/** Additive v3 fields; absent only on historical receipts. */
+	executionValidity?: ExecutionValidity
+	findingConfidence?: ExecutionConfidence
+	confidenceReason?: FindingConfidenceReason
 	dagState?: LaneDAGState
 	attemptId?: string
 	claimId?: string
@@ -122,6 +134,12 @@ export interface LaneExecutionReceipt {
 	proposedWorkspacePatch?: ProposedWorkspacePatch[]
 	directWorkspaceRoadmapMutation?: boolean
 	localEventContainmentViolations?: string[]
+	sourceAuthority?: {
+		sourceSwarmId: string
+		sourceAttemptId: string
+		sourceLaneId: string
+		sourceAgentId: string
+	}
 }
 
 export type ClaimHistoryEvent = "acquired" | "released" | "rejected" | "stale_detected" | "recovered"
@@ -166,11 +184,156 @@ export interface MergeSafetyAudit {
 
 export type MergeGateFindingSeverity = "blocking" | "advisory"
 
-export type MergeGateRetryDisposition = "not_needed" | "targeted_repair" | "retry_after_recovery" | "do_not_retry"
+export type MergeGateRetryDisposition =
+	| "not_needed"
+	| "targeted_probe"
+	| "targeted_repair"
+	| "retry_after_recovery"
+	| "do_not_retry"
+
+export type ContradictionKind =
+	| "different_scope"
+	| "different_assumption"
+	| "different_timeframe"
+	| "evidence_conflict"
+	| "mutually_exclusive_claim"
+	| "mutation_conflict"
+
+export interface GovernedFinding {
+	id: string
+	laneId: string
+	claim: string
+	confidence: ExecutionConfidence
+	confidenceReason: FindingConfidenceReason
+	evidenceRefs: EvidenceReference[]
+	assumptions: string[]
+	decisionCriticality: FindingDecisionCriticality
+}
+
+export interface RejectedFinding {
+	finding: GovernedFinding
+	reason: string
+}
+
+export interface GovernedContradiction {
+	id: string
+	kind: ContradictionKind
+	findingIds: string[]
+	summary: string
+	critical: boolean
+	resolved: boolean
+	preferredFindingId?: string
+}
+
+export type ConfidenceProbeReason = "critical_claim_unverified" | "mutually_exclusive_critical_claim" | "evidence_conflict"
+
+export interface ConfidenceProbeHistoryEntry {
+	probeId: string
+	claimId: string
+	question: string
+	sourceLaneIds: string[]
+	reason: ConfidenceProbeReason
+	attempt: number
+	launchedAt: number
+	completedAt?: number
+	evidenceRefs: EvidenceReference[]
+	evidenceDelta: string[]
+	principalClaims: string[]
+	findingConfidence: ExecutionConfidence
+	confidenceReason: FindingConfidenceReason
+	toolSequence: string[]
+	fingerprint: string
+	status: "launched" | "completed" | "failed" | "exhausted"
+	confidencePlateau: boolean
+}
+
+export interface ConvergenceEvidence {
+	acceptedFindingIds: string[]
+	tentativeFindingIds: string[]
+	rejectedFindingIds: string[]
+	usableLaneIds: string[]
+}
+
+export interface UncertaintySummary {
+	causes: string[]
+	affectedClaims: string[]
+	safeToProceed: boolean
+	resolutionEvidenceNeeded: string[]
+}
+
+export type StructuralFailureReason =
+	| "structurally_invalid_result_envelope"
+	| "lane_execution_failed"
+	| "required_evidence_omitted"
+	| "recoverable_governance_failure"
+
+export type HardFailureReason =
+	| "invalid_governed_receipt"
+	| "receipt_integrity_violation"
+	| "mutation_authority_violation"
+	| "unreconciled_mutation_conflict"
+	| "execution_provenance_corrupt"
+	| "every_lane_failed"
+	| "unsafe_under_all_interpretations"
+	| "required_invariant_violated"
+
+export type ConvergenceGateDecision =
+	| { kind: "converge"; evidence: ConvergenceEvidence }
+	| { kind: "converge_with_uncertainty"; evidence: ConvergenceEvidence; uncertainty: UncertaintySummary }
+	| {
+			kind: "targeted_probe"
+			question: string
+			sourceLaneIds: string[]
+			reason: ConfidenceProbeReason
+	  }
+	| { kind: "restart_invalid_lane"; laneId: string; reason: StructuralFailureReason }
+	| { kind: "block_hard_failure"; reason: HardFailureReason }
+
+export type ConvergenceDiagnostic =
+	| "execution_invalid"
+	| "finding_low_confidence"
+	| "task_ambiguous"
+	| "critical_claim_unverified"
+	| "confidence_plateau"
+	| "converged_with_uncertainty"
+	| "hard_blocked"
+
+export interface ConfidenceAwareConvergenceDiagnostics {
+	events: ConvergenceDiagnostic[]
+	lowConfidenceLanesAccepted: number
+	confidenceOnlyRetriesSuppressed: number
+	targetedProbesLaunched: number
+	probeBudgetsExhausted: number
+	convergedWithBoundedUncertainty: number
+	trueHardBlocks: number
+	contradictionClassifications: Partial<Record<ContradictionKind, number>>
+	confidenceChanges: Array<{
+		findingId: string
+		from: ExecutionConfidence
+		to: ExecutionConfidence
+		evidenceDelta: string[]
+	}>
+}
+
+export interface ConfidenceAwareConvergenceResult {
+	decision: "converge" | "converge_with_uncertainty" | "targeted_probe" | "restart_invalid_lane" | "block_hard_failure"
+	gateDecision: ConvergenceGateDecision
+	acceptedFindings: GovernedFinding[]
+	tentativeFindings: GovernedFinding[]
+	rejectedFindings: RejectedFinding[]
+	unresolvedContradictions: GovernedContradiction[]
+	assumptions: string[]
+	taskAmbiguityProfile: TaskAmbiguityProfile
+	probeHistory: ConfidenceProbeHistoryEntry[]
+	confidencePlateau: boolean
+	uncertaintySummary?: UncertaintySummary
+	diagnostics: ConfidenceAwareConvergenceDiagnostics
+}
 
 export type GovernedContinuationAction =
 	| "accept"
 	| "accept_with_advisories"
+	| "targeted_probe"
 	| "targeted_repair"
 	| "recover_and_resume"
 	| "halt_for_conflict"
@@ -197,6 +360,12 @@ export interface GovernedExecutionPathMetrics {
 	continuationReductions: number
 	retryDecisions: number
 	lockAcquisitions: number
+	lowConfidenceLanesAccepted: number
+	confidenceOnlyRetriesSuppressed: number
+	targetedProbesLaunched: number
+	probeBudgetsExhausted: number
+	convergedWithBoundedUncertainty: number
+	trueHardBlocks: number
 }
 
 /** Structured gate result so callers do not infer retry behavior from human-readable strings. */
@@ -223,6 +392,7 @@ export interface MergeGateResult {
 	findings?: MergeGateFinding[]
 	advisoryWarnings?: string[]
 	retryDisposition?: MergeGateRetryDisposition
+	confidenceAwareConvergence?: ConfidenceAwareConvergenceResult
 }
 
 export interface GovernedClaimTimelineEntry {
@@ -288,6 +458,7 @@ export interface GovernedReceiptDiagnostics {
 	replayMismatchCauses: string[]
 	advisoryWarnings?: string[]
 	retryDisposition?: MergeGateRetryDisposition
+	convergenceDiagnostics?: ConfidenceAwareConvergenceDiagnostics
 }
 
 export interface GovernedReceiptSummary {
@@ -317,10 +488,14 @@ export interface GovernedReceiptSummary {
 	retryDisposition?: MergeGateRetryDisposition
 	continuationDecision?: GovernedContinuationDecision
 	executionPathMetrics?: GovernedExecutionPathMetrics
+	confidenceAwareConvergence?: ConfidenceAwareConvergenceResult
 	laneStates: Array<{
 		index: number
 		laneId: string
 		status: LaneExecutionStatus
+		executionValidity?: ExecutionValidity
+		findingConfidence?: ExecutionConfidence
+		confidenceReason?: FindingConfidenceReason
 		dagState?: LaneDAGState
 		claimId?: string
 		evidenceCount?: number
@@ -435,6 +610,8 @@ export interface GovernedSwarmReceipt {
 	auditIntegration?: GovernedAuditIntegration
 	continuationDecision?: GovernedContinuationDecision
 	executionPathMetrics?: GovernedExecutionPathMetrics
+	/** Additive schema-v3 convergence package; optional only for historical receipts. */
+	confidenceAwareConvergence?: ConfidenceAwareConvergenceResult
 }
 
 export function buildLaneId(swarmId: string, index: number): string {
@@ -772,6 +949,7 @@ export function buildReceiptDiagnostics(
 		replayMismatchCauses: options?.replayMismatchCauses ?? receipt.integrity.violations,
 		advisoryWarnings: receipt.mergeGate.advisoryWarnings ?? [],
 		retryDisposition: receipt.mergeGate.retryDisposition,
+		convergenceDiagnostics: receipt.confidenceAwareConvergence?.diagnostics,
 	}
 }
 
@@ -821,10 +999,14 @@ export function buildGovernedReceiptSummary(
 		retryDisposition: receipt.mergeGate.retryDisposition,
 		continuationDecision: receipt.continuationDecision,
 		executionPathMetrics: receipt.executionPathMetrics,
+		confidenceAwareConvergence: receipt.confidenceAwareConvergence,
 		laneStates: receipt.laneReceipts.map((lane) => ({
 			index: lane.index,
 			laneId: lane.laneId,
 			status: lane.status,
+			executionValidity: lane.executionValidity,
+			findingConfidence: lane.findingConfidence,
+			confidenceReason: lane.confidenceReason,
 			dagState: lane.dagState,
 			claimId: lane.claimId,
 			evidenceCount: lane.evidenceCount,

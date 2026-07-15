@@ -2,6 +2,7 @@ import type { ExecutionReplayArtifact } from "@shared/execution/replayContract"
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import type {
 	ClaimHistoryEntry,
+	ConfidenceProbeHistoryEntry,
 	GovernedAdmissionResult,
 	GovernedCrashPhase,
 	GovernedExecutionPathMetrics,
@@ -43,6 +44,7 @@ import {
 	collectRoadmapLaneArtifacts,
 	computeRoadmapSnapshotId,
 } from "./AgentRoadmapProjection"
+import { evaluateConfidenceAwareConvergence } from "./ConfidenceAwareConvergence"
 import {
 	buildCoordinatorContinuationContext,
 	classifyPreflightIssuesForSeal,
@@ -471,6 +473,12 @@ export class GovernedSwarmCoordinator {
 			agentId: claim.agentId,
 			index: claim.index,
 			status,
+			executionValidity:
+				envelope?.executionValidity ?? (status === "completed" || status === "skipped" ? "valid" : "invalid"),
+			findingConfidence: envelope?.confidence ?? "unknown",
+			confidenceReason:
+				envelope?.structuredFindings.find((finding) => finding.source === "verbatim")?.confidenceReason ??
+				(envelope?.confidence === "high" ? "direct_evidence" : "model_uncertainty"),
 			dagState: dagNode?.state,
 			attemptId: this.attemptId,
 			claimId: claim.lockRequired ? claim.lockClaim?.claimId : undefined,
@@ -581,6 +589,7 @@ export class GovernedSwarmCoordinator {
 		completionPolicy?: RoadmapCompletionUpdatePolicy
 		validationSnapshot?: SwarmValidationSnapshot
 		recoveryActive?: boolean
+		probeHistory?: ConfidenceProbeHistoryEntry[]
 	}): Promise<GovernedSwarmReceipt> {
 		const replayArtifact = options.replayArtifact || swarmEnvelopeToReplayArtifact(options.envelope)
 		if (this.executionPathMetrics) {
@@ -610,10 +619,12 @@ export class GovernedSwarmCoordinator {
 			attemptId: this.attemptId,
 			parentAttemptId: this.parentAttemptId,
 			metrics: this.executionPathMetrics,
+			taskAmbiguityProfile: options.envelope.taskAmbiguityProfile,
+			probeHistory: options.probeHistory,
 		})
 		this.normalizedResourceOwners = normalizedResourceOwners
 
-		let sealed = mergeGate.passed && !options.forceFail
+		let sealed = mergeGate.passed && !options.forceFail && mergeGate.confidenceAwareConvergence?.decision !== "targeted_probe"
 		let mergePassed = mergeGate.passed
 		const completionPolicy = options.completionPolicy ?? "advisory_only"
 		let replayMismatch = false
@@ -647,6 +658,7 @@ export class GovernedSwarmCoordinator {
 				violations: mergeGate.violations,
 				checksum: mergeGate.replayIntegrity.checksum,
 			},
+			confidenceAwareConvergence: mergeGate.confidenceAwareConvergence,
 		}
 
 		if (this.executionPathMetrics) {
@@ -829,6 +841,42 @@ export class GovernedSwarmCoordinator {
 			? options.envelope.checksum === options.validationSnapshot.executionChecksum
 			: true
 		const envelopeStructurallyValid = options.validationSnapshot?.report.validated ?? true
+		const finalConvergence = evaluateConfidenceAwareConvergence({
+			agents: options.envelope.agents,
+			laneReceipts: options.laneReceipts,
+			mergeFindings: receipt.mergeGate.findings,
+			taskAmbiguityProfile: options.envelope.taskAmbiguityProfile,
+			probeHistory: options.probeHistory,
+			hardFailureReason: replayMismatch
+				? "execution_provenance_corrupt"
+				: options.forceFail
+					? "required_invariant_violated"
+					: undefined,
+		})
+		receipt.confidenceAwareConvergence = finalConvergence
+		receipt.mergeGate.confidenceAwareConvergence = finalConvergence
+		if (this.executionPathMetrics) {
+			this.executionPathMetrics.lowConfidenceLanesAccepted = Math.max(
+				this.executionPathMetrics.lowConfidenceLanesAccepted,
+				finalConvergence.diagnostics.lowConfidenceLanesAccepted,
+			)
+			this.executionPathMetrics.confidenceOnlyRetriesSuppressed = Math.max(
+				this.executionPathMetrics.confidenceOnlyRetriesSuppressed,
+				finalConvergence.diagnostics.confidenceOnlyRetriesSuppressed,
+			)
+			this.executionPathMetrics.probeBudgetsExhausted = Math.max(
+				this.executionPathMetrics.probeBudgetsExhausted,
+				finalConvergence.diagnostics.probeBudgetsExhausted,
+			)
+			this.executionPathMetrics.convergedWithBoundedUncertainty = Math.max(
+				this.executionPathMetrics.convergedWithBoundedUncertainty,
+				finalConvergence.diagnostics.convergedWithBoundedUncertainty,
+			)
+			this.executionPathMetrics.trueHardBlocks = Math.max(
+				this.executionPathMetrics.trueHardBlocks,
+				finalConvergence.diagnostics.trueHardBlocks,
+			)
+		}
 		receipt.continuationDecision = reduceGovernedContinuation({
 			receipt,
 			envelopeStructurallyValid,
@@ -939,6 +987,7 @@ export class GovernedSwarmCoordinator {
 			sealed: false,
 			retryReason: options.retryReason || `crash:${options.crashPhase}`,
 			integrity: { valid: false, violations: [`crash:${options.crashPhase}`], checksum: "" },
+			confidenceAwareConvergence: mergeGate.confidenceAwareConvergence,
 		}
 
 		receipt.roadmapLinkage = await this.finalizeRoadmapSealState({

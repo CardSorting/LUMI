@@ -11,6 +11,7 @@ import {
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { createContinuityMarker, SWARM_ENVELOPE_SCHEMA_VERSION } from "@shared/subagent/executionEnvelope"
 import type {
+	ConfidenceProbeHistoryEntry,
 	GovernedCrashPhase,
 	GovernedReceiptSummary,
 	GovernedSwarmReceipt,
@@ -29,6 +30,13 @@ import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
 import type { GatePreflightReadinessIssue } from "../completionGatePipeline"
 import { AgentConfigLoader } from "../subagent/AgentConfigLoader"
+import {
+	buildConfidenceRetryFingerprint,
+	computeEvidenceDelta,
+	evaluateConfidenceAwareConvergence,
+	evidenceIdentity,
+	MAX_TOTAL_CONFIDENCE_PROBES,
+} from "../subagent/ConfidenceAwareConvergence"
 import { createSwarmValidationSnapshot } from "../subagent/executionValidation"
 import {
 	buildLaneDependencyMap,
@@ -143,6 +151,7 @@ function enrichEntryFromEnvelope(entry: SubagentStatusItem, envelope?: SubagentE
 	entry.blockers = envelope.blockers
 	entry.warnings = envelope.warnings
 	entry.touchedFiles = envelope.touchedFiles
+	entry.executionValidity = envelope.executionValidity
 	entry.confidence = envelope.confidence
 	entry.evidenceCount = envelope.evidenceRefs.length
 	entry.transcriptEventCount = envelope.transcriptEventCount
@@ -175,6 +184,7 @@ function buildSwarmEnvelopeDraft(options: {
 	status: SwarmExecutionEnvelope["status"]
 	summaryOverlay?: string
 	artifactPath?: string
+	taskAmbiguityProfile?: SwarmExecutionEnvelope["taskAmbiguityProfile"]
 }): SwarmExecutionEnvelope {
 	const completedAgents = options.entries.filter((entry) => entry.status === "completed" || entry.status === "failed").length
 
@@ -186,6 +196,7 @@ function buildSwarmEnvelopeDraft(options: {
 		parentExecutionId: options.parentExecutionId,
 		resumeAttemptId: options.resumeAttemptId,
 		recoveryReceipt: options.recoveryReceipt,
+		taskAmbiguityProfile: options.taskAmbiguityProfile,
 		continuity: createContinuityMarker(
 			options.swarmId,
 			options.taskId,
@@ -734,6 +745,17 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 							attemptId: governedCoordinator.getAttemptId(),
 							status: "skipped",
 							sealedAt: Date.now(),
+							executionValidity: "valid",
+							findingConfidence: originalSourceEnvelope?.confidence ?? reused.sourceLaneReceipt.findingConfidence,
+							confidenceReason:
+								originalSourceEnvelope?.structuredFindings.find((finding) => finding.source === "verbatim")
+									?.confidenceReason ?? reused.sourceLaneReceipt.confidenceReason,
+							sourceAuthority: {
+								sourceSwarmId: resumePlan.sourceSwarmId,
+								sourceAttemptId: reused.sourceLaneReceipt.attemptId ?? "historical",
+								sourceLaneId: reused.sourceLaneReceipt.laneId,
+								sourceAgentId: reused.sourceLaneReceipt.agentId,
+							},
 						})
 						governedCoordinator.markLaneSkipped(index)
 						completeChildStream(
@@ -1333,6 +1355,132 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				(entry) => entry.status === "failed" && !entry.warnings?.some((w) => w.startsWith("degraded_complete")),
 			).length
 			let finalSwarmStatus: SwarmExecutionEnvelope["status"] = failures > 0 ? "failed" : "completed"
+			const confidenceProbeHistory: ConfidenceProbeHistoryEntry[] = [...(resumePlan?.probeHistory ?? [])]
+			let preliminaryConvergence = evaluateConfidenceAwareConvergence({
+				agents: [...agentEnvelopes.values()],
+				laneReceipts,
+				probeHistory: confidenceProbeHistory,
+			})
+
+			while (
+				failures === 0 &&
+				!swarmInterrupted &&
+				!config.taskState.abort &&
+				preliminaryConvergence.gateDecision.kind === "targeted_probe" &&
+				confidenceProbeHistory.length < MAX_TOTAL_CONFIDENCE_PROBES
+			) {
+				const probeDecision = preliminaryConvergence.gateDecision
+				const candidateFindings = [
+					...preliminaryConvergence.tentativeFindings,
+					...preliminaryConvergence.acceptedFindings,
+				].filter((finding) => probeDecision.sourceLaneIds.includes(finding.laneId))
+				const sourceFinding =
+					candidateFindings.find((finding) => probeDecision.question.includes(`"${finding.claim}"`)) ??
+					candidateFindings[0]
+				if (!sourceFinding) break
+
+				const probeId = uuidv4()
+				const probeLaunchedAt = Date.now()
+				const probeIndex = prompts.length + confidenceProbeHistory.length
+				const probeBuilder = new SubagentBuilder(config, configuredSubagentName)
+				probeBuilder.setAllowedTools(constrainSubagentToolsForLane(effectiveAllowedTools, false))
+				const probeRunner = new SubagentRunner(config, probeBuilder)
+				probeRunner.setRecursionDepth(currentDepth + 1)
+				probeRunner.setLaneExecutionMode("diagnostic_only")
+				activeRunners.set(probeIndex, probeRunner)
+
+				let probeResult: SubagentRunResult | undefined
+				let probeError: string | undefined
+				try {
+					const remainingSwarmMs = Math.max(1, swarmDeadline - Date.now())
+					probeResult = await pTimeout(
+						probeRunner.runWithEnvelope(probeDecision.question, () => undefined, {
+							agentId: probeId,
+							role: "Confidence verification probe",
+							swarmId,
+							taskId: config.taskId,
+							index: probeIndex,
+							depth: currentDepth + 1,
+							parentStreamId,
+							parentExecutionId: resumePlan?.parentExecutionId,
+							resumeAttemptId: resumePlan?.resumeAttemptId,
+							prefetchedParentContext: prefetchedParentContextPromise,
+							swarmGateOptions: await swarmGateOptionsPromise,
+						}),
+						{
+							milliseconds: Math.min(SUBAGENT_ATTEMPT_TIMEOUT_MS, remainingSwarmMs),
+							message: `Confidence probe ${probeId} timed out.`,
+						},
+					)
+				} catch (error) {
+					probeError = errorMessage(error)
+					await probeRunner.abort().catch(() => undefined)
+				} finally {
+					activeRunners.delete(probeIndex)
+				}
+
+				if (probeResult) {
+					usageTokensIn += probeResult.stats.inputTokens
+					usageTokensOut += probeResult.stats.outputTokens
+					usageCacheWrites += probeResult.stats.cacheWriteTokens
+					usageCacheReads += probeResult.stats.cacheReadTokens
+					usageCost += probeResult.stats.totalCost
+				}
+				const probeEnvelope = probeResult?.envelope
+				const meaningfulEvidence = (probeEnvelope?.evidenceRefs ?? []).filter(
+					(evidence) => evidence.kind === "file" || evidence.kind === "tool_output",
+				)
+				const evidenceDelta = computeEvidenceDelta(sourceFinding.evidenceRefs, meaningfulEvidence)
+				const probeFinding = probeEnvelope?.structuredFindings.find((finding) => finding.source === "verbatim")
+				const principalClaims = probeFinding?.summary
+					? [probeFinding.summary]
+					: probeResult?.result?.trim()
+						? [excerpt(probeResult.result, 500)]
+						: [probeError || "Probe produced no finding."]
+				const confidenceReason = probeFinding?.confidenceReason ?? "model_uncertainty"
+				const toolSequence = probeEnvelope?.toolSteps.map((step) => step.toolName) ?? []
+				const fingerprint = buildConfidenceRetryFingerprint({
+					assignment: probeDecision.question,
+					evidenceRefs: meaningfulEvidence,
+					principalClaims,
+					confidenceReason,
+					toolSequence,
+				})
+				const confidencePlateau =
+					evidenceDelta.length === 0 ||
+					confidenceProbeHistory.some(
+						(previous) => previous.claimId === sourceFinding.id && previous.fingerprint === fingerprint,
+					)
+				confidenceProbeHistory.push({
+					probeId,
+					claimId: sourceFinding.id,
+					question: probeDecision.question,
+					sourceLaneIds: probeDecision.sourceLaneIds,
+					reason: probeDecision.reason,
+					attempt: confidenceProbeHistory.filter((previous) => previous.claimId === sourceFinding.id).length + 1,
+					launchedAt: probeLaunchedAt,
+					completedAt: Date.now(),
+					evidenceRefs: meaningfulEvidence,
+					evidenceDelta: evidenceDelta.map(evidenceIdentity),
+					principalClaims,
+					findingConfidence: probeFinding?.confidence ?? probeEnvelope?.confidence ?? "unknown",
+					confidenceReason,
+					toolSequence,
+					fingerprint,
+					status:
+						probeResult?.status === "completed" && evidenceDelta.length > 0
+							? "completed"
+							: probeResult?.status === "failed" || probeError
+								? "failed"
+								: "exhausted",
+					confidencePlateau,
+				})
+				preliminaryConvergence = evaluateConfidenceAwareConvergence({
+					agents: [...agentEnvelopes.values()],
+					laneReceipts,
+					probeHistory: confidenceProbeHistory,
+				})
+			}
 
 			const blackboard = config.taskState.swarmBlackboard || []
 			const summaryOverlay = buildSwarmSummaryOverlay(
@@ -1364,6 +1512,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				status: finalSwarmStatus,
 				summaryOverlay,
 				artifactPath: swarmArtifactPath,
+				taskAmbiguityProfile: preliminaryConvergence.taskAmbiguityProfile,
 			})
 
 			finalEnvelope.checksum = computeSwarmArtifactChecksum(finalEnvelope)
@@ -1417,6 +1566,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						completionPolicy: roadmapCompletionPolicy,
 						validationSnapshot,
 						recoveryActive: Boolean(resumePlan),
+						probeHistory: confidenceProbeHistory,
 					})
 					finalEnvelope.invariants.violations.push(...governedReceipt.mergeGate.violations)
 					finalEnvelope.invariants.validated = governedReceipt.sealed

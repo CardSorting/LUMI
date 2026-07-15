@@ -12,6 +12,7 @@ import { TaskState } from "../../../TaskState"
 import { AgentConfigLoader } from "../../subagent/AgentConfigLoader"
 import { GovernedSwarmCoordinator } from "../../subagent/GovernedSwarmCoordinator"
 import { computeSwarmArtifactChecksum } from "../../subagent/ResumeSwarmFromArtifact"
+import { SubagentEnvelopeBuilder } from "../../subagent/SubagentEnvelopeBuilder"
 import * as subagentExecutionStore from "../../subagent/SubagentExecutionStore"
 import { SubagentRunner } from "../../subagent/SubagentRunner"
 import type { TaskConfig } from "../../types/TaskConfig"
@@ -171,6 +172,7 @@ function stubCompletedEnvelopeRun(): void {
 				compactionEvents: [],
 				blockers: [],
 				warnings: [],
+				executionValidity: "valid",
 				confidence: "high",
 				retryHints: [],
 				transcriptArtifactPath: "transcripts/agent-1.jsonl",
@@ -348,6 +350,55 @@ describe("SubagentToolHandler", () => {
 		sinon.assert.notCalled(callbacks.ask)
 		const subagentStatusCalls = callbacks.say.getCalls().filter((call) => call.args[0] === "subagent")
 		assert.ok(subagentStatusCalls.length >= 1)
+	})
+
+	it("executes one bounded read-only confidence probe and preserves the tentative source finding", async () => {
+		const { config } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "confidence-probe-handler-"))
+		tempDirs.push(tempDir)
+		const disk = await import("@core/storage/disk")
+		sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
+		const runStub = sinon
+			.stub(SubagentRunner.prototype, "runWithEnvelope")
+			.callsFake(async (prompt, _onProgress, context) => {
+				const isProbe = prompt.startsWith("Verify this single critical claim")
+				const builder = new SubagentEnvelopeBuilder(
+					context.agentId,
+					context.executionId || `exec-${context.agentId}`,
+					context.role,
+					context.swarmId,
+					context.taskId,
+					prompt,
+					{ swarmId: context.swarmId, index: context.index, depth: context.depth },
+				)
+				builder.setStatus("running")
+				builder.recordToolStep("read_file", "read authoritative implementation", "direct evidence", {
+					path: "src/authoritative.ts",
+				})
+				builder.setTranscriptMeta(
+					`subagent_executions/${context.swarmId}/agents/${context.agentId}.transcript.jsonl`,
+					1,
+					32,
+				)
+				const result = isProbe
+					? "[confidence: high] [confidence_reason: direct_evidence] Direct verification supports the claim."
+					: "[confidence: low] [criticality: critical] The claim may be true, but verification is required."
+				builder.complete(result)
+				return { status: "completed" as const, result, stats: emptyStats(), envelope: builder.build() }
+			})
+
+		const result = await new UseSubagentsToolHandler().execute(config, {
+			type: "tool_use",
+			name: DietCodeDefaultTool.USE_SUBAGENTS,
+			params: { prompt_1: "[execution_mode:read_only] Verify the critical implementation claim" },
+			partial: false,
+		})
+
+		assert.equal(runStub.callCount, 2)
+		assert.match(runStub.secondCall.args[0], /^Verify this single critical claim/)
+		assert.match(String(result), /Decision: converge_with_uncertainty/)
+		assert.match(String(result), /\[low; model_uncertainty\]/)
+		assert.match(String(result), /Merge gate passed: true/)
 	})
 
 	it("requires edit approval once for mutating lane I/O", async () => {

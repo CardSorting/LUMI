@@ -13,6 +13,35 @@ export type SubagentExecutionPhase =
 
 export type ExecutionConfidence = "high" | "medium" | "low" | "unknown"
 
+export type ExecutionValidity = "valid" | "invalid"
+
+export type FindingConfidenceReason =
+	| "direct_evidence"
+	| "indirect_evidence"
+	| "underspecified_goal"
+	| "conflicting_evidence"
+	| "missing_context"
+	| "exploratory_hypothesis"
+	| "model_uncertainty"
+	| "other"
+
+export type FindingDecisionCriticality = "critical" | "important" | "advisory"
+
+export type TaskAmbiguityReason =
+	| "multiple_valid_interpretations"
+	| "missing_success_criteria"
+	| "missing_scope_boundary"
+	| "insufficient_source_material"
+	| "subjective_judgment"
+	| "open_ended_exploration"
+	| "conflicting_constraints"
+
+export interface TaskAmbiguityProfile {
+	detected: boolean
+	reasons: TaskAmbiguityReason[]
+	assumptionsAllowed: boolean
+}
+
 export type SwarmExecutionStatus = "running" | "completed" | "failed" | "interrupted"
 
 export interface EvidenceReference {
@@ -30,7 +59,12 @@ export interface StructuredFinding {
 	severity: "info" | "warning" | "blocker" | "critical"
 	source: "verbatim" | "inferred" | "gate"
 	confidence: ExecutionConfidence
+	confidenceReason: FindingConfidenceReason
 	evidenceIds: string[]
+	assumptions: string[]
+	decisionCriticality: FindingDecisionCriticality
+	/** Optional structured conflict hints; the convergence gate owns final classification. */
+	contradictsFindingIds?: string[]
 }
 
 export interface SubagentToolStepRecord {
@@ -65,6 +99,7 @@ export interface SubagentExecutionEnvelope {
 	blockers: string[]
 	warnings: string[]
 	gateLifecycleStatus?: GateLifecycleDecision
+	executionValidity: ExecutionValidity
 	confidence: ExecutionConfidence
 	retryHints: string[]
 	transcriptArtifactPath?: string
@@ -109,6 +144,7 @@ export interface SwarmExecutionEnvelope {
 	parentExecutionId?: string
 	resumeAttemptId?: string
 	recoveryReceipt?: SwarmRecoveryReceipt
+	taskAmbiguityProfile?: TaskAmbiguityProfile
 	continuity: ExecutionContinuityMarker
 	agents: SubagentExecutionEnvelope[]
 	blackboardSnapshot: string[]

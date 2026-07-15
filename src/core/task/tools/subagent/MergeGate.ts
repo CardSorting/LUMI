@@ -1,7 +1,9 @@
 import type { ExecutionReplayArtifact } from "@shared/execution/replayContract"
-import type { SubagentExecutionEnvelope } from "@shared/subagent/executionEnvelope"
+import type { SubagentExecutionEnvelope, TaskAmbiguityProfile } from "@shared/subagent/executionEnvelope"
 import type {
 	ClaimHistoryEntry,
+	ConfidenceProbeHistoryEntry,
+	GovernedContradiction,
 	GovernedExecutionPathMetrics,
 	GovernedResourceOwner,
 	GovernedRoadmapLinkage,
@@ -13,6 +15,7 @@ import type {
 	MergeGateRetryDisposition,
 	MergeSafetyAudit,
 } from "@shared/subagent/governedExecution"
+import { evaluateConfidenceAwareConvergence } from "./ConfidenceAwareConvergence"
 import { verifyReplayArtifact } from "./executionReplayMappers"
 import { envelopeIndicatesWrites } from "./LockNecessity"
 import { explainReplayMismatch, validateDeterministicReplay } from "./ReplayValidator"
@@ -31,6 +34,9 @@ export interface MergeGateInput {
 	roadmapLinkage?: GovernedRoadmapLinkage
 	sealed?: boolean
 	metrics?: GovernedExecutionPathMetrics
+	taskAmbiguityProfile?: TaskAmbiguityProfile
+	contradictions?: GovernedContradiction[]
+	probeHistory?: ConfidenceProbeHistoryEntry[]
 }
 
 export interface MergeGateEvaluation extends MergeGateResult {
@@ -266,6 +272,16 @@ function auditLaneStatusMismatch(agents: SubagentExecutionEnvelope[], laneReceip
 		}
 		if (lane.status === "failed" && agent.status === "completed") {
 			violations.push(`failed lane marked successful in envelope: ${lane.laneId}`)
+		}
+		const agentValidity = agent.executionValidity ?? (agent.status === "completed" ? "valid" : "invalid")
+		const laneValidity = lane.executionValidity ?? agentValidity
+		if (laneValidity !== agentValidity) {
+			violations.push(
+				`lane ${lane.laneId} execution validity ${laneValidity} disagrees with agent validity ${agentValidity}`,
+			)
+		}
+		if ((lane.status === "completed" || agent.status === "completed") && agentValidity === "invalid") {
+			violations.push(`completed lane has structurally invalid execution: ${lane.laneId}`)
 		}
 	}
 	return violations
@@ -592,6 +608,43 @@ export function runMergeGate(input: MergeGateInput): MergeGateEvaluation {
 		"Repair only conflicting or unauthorized roadmap mutations before commit.",
 	)
 
+	const confidenceAwareConvergence = evaluateConfidenceAwareConvergence({
+		agents: input.agents,
+		laneReceipts: input.laneReceipts,
+		mergeFindings: findings,
+		taskAmbiguityProfile: input.taskAmbiguityProfile,
+		contradictions: input.contradictions,
+		probeHistory: input.probeHistory,
+	})
+	if (confidenceAwareConvergence.decision === "converge_with_uncertainty") {
+		addAdvisory(
+			"bounded_uncertainty",
+			["valid execution converged with bounded finding uncertainty"],
+			"Preserve the uncertainty summary and gather only the listed resolution evidence when needed.",
+		)
+	}
+	if (
+		confidenceAwareConvergence.decision === "block_hard_failure" &&
+		confidenceAwareConvergence.gateDecision.kind === "block_hard_failure" &&
+		confidenceAwareConvergence.gateDecision.reason === "unsafe_under_all_interpretations"
+	) {
+		addBlocking(
+			"critical_mutation_uncertainty",
+			["critical mutation is unsafe under every surviving interpretation"],
+			"Omit or reverse the unsafe mutation, or attach direct evidence resolving its critical assumption.",
+			false,
+		)
+	}
+	if (input.metrics) {
+		const convergenceMetrics = confidenceAwareConvergence.diagnostics
+		input.metrics.lowConfidenceLanesAccepted += convergenceMetrics.lowConfidenceLanesAccepted
+		input.metrics.confidenceOnlyRetriesSuppressed += convergenceMetrics.confidenceOnlyRetriesSuppressed
+		input.metrics.targetedProbesLaunched += convergenceMetrics.targetedProbesLaunched
+		input.metrics.probeBudgetsExhausted += convergenceMetrics.probeBudgetsExhausted
+		input.metrics.convergedWithBoundedUncertainty += convergenceMetrics.convergedWithBoundedUncertainty
+		input.metrics.trueHardBlocks += convergenceMetrics.trueHardBlocks
+	}
+
 	const mergeAudit: MergeSafetyAudit = {
 		safe: violations.length === 0,
 		violations,
@@ -600,22 +653,25 @@ export function runMergeGate(input: MergeGateInput): MergeGateEvaluation {
 		placeholderWarnings,
 	}
 	const blockingCodes = new Set(findings.filter((finding) => finding.severity === "blocking").map((finding) => finding.code))
-	const retryDisposition: MergeGateRetryDisposition = sealedSupersessionBlocked
-		? "do_not_retry"
-		: [...blockingCodes].some((code) =>
-					[
-						"duplicate_claim",
-						"duplicate_claim_id",
-						"split_brain",
-						"orphaned_claim",
-						"stale_lease",
-						"unreleased_claim",
-					].includes(code),
-				)
-			? "retry_after_recovery"
-			: violations.length > 0
-				? "targeted_repair"
-				: "not_needed"
+	const retryDisposition: MergeGateRetryDisposition =
+		confidenceAwareConvergence.decision === "targeted_probe"
+			? "targeted_probe"
+			: sealedSupersessionBlocked
+				? "do_not_retry"
+				: [...blockingCodes].some((code) =>
+							[
+								"duplicate_claim",
+								"duplicate_claim_id",
+								"split_brain",
+								"orphaned_claim",
+								"stale_lease",
+								"unreleased_claim",
+							].includes(code),
+						)
+					? "retry_after_recovery"
+					: violations.length > 0
+						? "targeted_repair"
+						: "not_needed"
 
 	return {
 		passed: violations.length === 0,
@@ -631,6 +687,7 @@ export function runMergeGate(input: MergeGateInput): MergeGateEvaluation {
 		findings,
 		advisoryWarnings,
 		retryDisposition,
+		confidenceAwareConvergence,
 		normalizedResourceOwners: [...claimLifecycle.resourceOwners.values()],
 	}
 }

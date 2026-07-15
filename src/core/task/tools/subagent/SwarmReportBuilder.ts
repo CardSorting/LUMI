@@ -63,6 +63,53 @@ export function buildParentToolResult(
 	const advisoryNote = advisories.length
 		? `\n\n### AUDIT ADVISORIES (NO RETRY REQUIRED)\n${[...new Set(advisories)].map((warning) => `- ${warning}`).join("\n")}`
 		: ""
+	const convergence = governedReceipt?.confidenceAwareConvergence ?? governedReceipt?.mergeGate.confidenceAwareConvergence
+	const convergenceNote = convergence
+		? [
+				"",
+				"### CONFIDENCE-AWARE CONVERGENCE",
+				`Decision: ${convergence.decision}`,
+				`Accepted findings: ${convergence.acceptedFindings.length}`,
+				`Tentative findings: ${convergence.tentativeFindings.length}`,
+				`Rejected findings: ${convergence.rejectedFindings.length}`,
+				...(convergence.acceptedFindings.length > 0
+					? [
+							"Strongest supported findings:",
+							...convergence.acceptedFindings.map(
+								(finding) =>
+									`- [${finding.confidence}; ${finding.confidenceReason}] ${excerpt(finding.claim, 220)}`,
+							),
+						]
+					: []),
+				...(convergence.assumptions.length > 0
+					? ["Assumptions:", ...convergence.assumptions.map((assumption) => `- ${assumption}`)]
+					: []),
+				...(convergence.tentativeFindings.length > 0
+					? [
+							"Tentative findings (confidence preserved):",
+							...convergence.tentativeFindings.map(
+								(finding) =>
+									`- [${finding.confidence}; ${finding.confidenceReason}] ${excerpt(finding.claim, 220)}`,
+							),
+						]
+					: []),
+				...(convergence.unresolvedContradictions.length > 0
+					? [
+							"Plausible alternatives / unresolved contradictions:",
+							...convergence.unresolvedContradictions.map(
+								(contradiction) => `- [${contradiction.kind}] ${contradiction.summary}`,
+							),
+						]
+					: []),
+				...(convergence.uncertaintySummary
+					? [
+							`Safe to proceed: ${convergence.uncertaintySummary.safeToProceed}`,
+							`Uncertainty causes: ${convergence.uncertaintySummary.causes.join(", ") || "unspecified"}`,
+							`Resolution evidence: ${convergence.uncertaintySummary.resolutionEvidenceNeeded.join("; ") || "none required"}`,
+						]
+					: []),
+			].join("\n")
+		: ""
 
 	const governedNote = governedReceipt
 		? [
@@ -94,6 +141,7 @@ export function buildParentToolResult(
 		`Continuity status: ${envelope.continuity.status}`,
 		invariantNote,
 		advisoryNote,
+		convergenceNote,
 		governedNote,
 	].join("\n")
 }
@@ -122,6 +170,7 @@ export function agentEnvelopeFromEntry(
 		compactionEvents: agentEnvelope.compactionEvents || [],
 		blockers: agentEnvelope.blockers || entry.blockers || [],
 		warnings: agentEnvelope.warnings || entry.warnings || [],
+		executionValidity: agentEnvelope.executionValidity || (entry.status === "completed" ? "valid" : "invalid"),
 		confidence: agentEnvelope.confidence || entry.confidence || "unknown",
 		retryHints: agentEnvelope.retryHints || [],
 		timestamps: agentEnvelope.timestamps || { spawned: Date.now() },

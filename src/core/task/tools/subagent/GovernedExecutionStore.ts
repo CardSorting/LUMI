@@ -68,6 +68,14 @@ export function validateGovernedReceipt(raw: unknown): GovernedReceiptValidation
 	if (!receipt.mergeGate || typeof receipt.mergeGate.passed !== "boolean") {
 		violations.push("mergeGate missing or invalid")
 	}
+	if (
+		receipt.confidenceAwareConvergence !== undefined &&
+		(!Array.isArray(receipt.confidenceAwareConvergence.acceptedFindings) ||
+			!Array.isArray(receipt.confidenceAwareConvergence.tentativeFindings) ||
+			!receipt.confidenceAwareConvergence.gateDecision)
+	) {
+		violations.push("confidenceAwareConvergence missing required structured fields")
+	}
 	return { valid: violations.length === 0, corrupted: violations.length > 0, violations }
 }
 

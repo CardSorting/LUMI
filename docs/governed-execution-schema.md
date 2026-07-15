@@ -59,6 +59,7 @@ Top-level durable record written by `persistGovernedReceipt()`.
 | `auditIntegration` | `GovernedAuditIntegration` | no | Preflight, per-lane completion audit, merge gate role, storage boundary |
 | `continuationDecision` | `GovernedContinuationDecision` | no | Final parent action reduced once from sealed normalized state |
 | `executionPathMetrics` | `GovernedExecutionPathMetrics` | no | Critical-path validation, reconstruction, read, write, retry, and lock counters |
+| `confidenceAwareConvergence` | `ConfidenceAwareConvergenceResult` | no | Additive v3 finding-level confidence, ambiguity, contradiction, probe, plateau, and parent-decision package; absent only on historical receipts |
 
 ### Latest pointer semantics
 
@@ -79,6 +80,9 @@ Use `loadAuthoritativeGovernedReceipt()` or walk `history.jsonl` reverse for tru
 | `agentId` | string | agent ID | same |
 | `index` | number | 0-based | same |
 | `status` | enum | see below | same |
+| `executionValidity` | `valid` \| `invalid` | structural lane outcome | same |
+| `findingConfidence` | `high` \| `medium` \| `low` \| `unknown` | principal finding confidence; never changes execution validity | same |
+| `confidenceReason` | `FindingConfidenceReason` | provenance for the principal confidence value | same |
 | `executionMode` | `LaneExecutionMode` | `mutation` | `read_only`, etc. |
 | `lockRequired` | boolean | `true` | `false` |
 | `reasonLockAcquired` | string | classifier reason | — |
@@ -107,6 +111,7 @@ Use `loadAuthoritativeGovernedReceipt()` or walk `history.jsonl` reverse for tru
 | `proposedWorkspacePatch` | `ProposedWorkspacePatch[]` | optional | Workspace change proposals |
 | `directWorkspaceRoadmapMutation` | boolean | optional | Direct workspace write attempted |
 | `localEventContainmentViolations` | string[] | optional | Smuggled local event violations |
+| `sourceAuthority` | object | optional | Original swarm, attempt, lane, and agent authority retained when a sealed lane is reused |
 
 ### Lane status values
 
@@ -334,7 +339,7 @@ Mutation lanes only. Lock-skipped lanes produce **no entries**.
 | `violations` | Blocking human-readable failure strings only |
 | `advisoryWarnings` | Non-blocking evidence/quality warnings; never requires a whole-swarm retry |
 | `findings` | Structured `{ code, severity, message, retryable, remediation? }` records |
-| `retryDisposition` | `not_needed` \| `targeted_repair` \| `retry_after_recovery` \| `do_not_retry` |
+| `retryDisposition` | `not_needed` \| `targeted_probe` \| `targeted_repair` \| `retry_after_recovery` \| `do_not_retry` |
 | `mergeAudit` | `MergeSafetyAudit` — overlaps, missing evidence, placeholders |
 | `replayIntegrity` | Replay artifact validation |
 | `failedLaneCount` | Count of failed lanes |
@@ -350,6 +355,26 @@ The newer structured fields are optional when reading historical schema-v3 recei
 **Advisory checks:** missing evidence references, placeholder text, transcript pointers, and tool evidence. These remain visible through `mergeAudit`, diagnostics, and the incident console without changing `passed`.
 
 The swarm envelope mirrors this split through `SwarmInvariantReport.violations` (structural/integrity failures) and optional `advisoryWarnings` (missing evidence or transcript pointers). Resume integrity accepts advisory-only envelopes but still rejects malformed schemas, task/checksum mismatch, transcript corruption, and invalid compaction anchors.
+
+## Confidence-aware convergence
+
+`confidenceAwareConvergence` is produced by the canonical merge gate. Confidence belongs to individual findings; the gate does not average it into a swarm score.
+
+| Field | Semantics |
+|-------|-----------|
+| `decision` | `converge`, `converge_with_uncertainty`, `targeted_probe`, `restart_invalid_lane`, or `block_hard_failure` |
+| `acceptedFindings` | Valid high/medium-confidence findings with original evidence and lane provenance |
+| `tentativeFindings` | Valid low/unknown-confidence findings, retained without confidence inflation |
+| `rejectedFindings` | Findings excluded because their source execution was structurally invalid |
+| `taskAmbiguityProfile` | Vague-task reasons and whether explicit assumptions are allowed |
+| `unresolvedContradictions` | Classified scope, assumption, timeframe, evidence, claim, or mutation conflicts |
+| `probeHistory` | Bounded critical-claim probes, evidence deltas, tool sequence, fingerprint, and plateau state |
+| `uncertaintySummary` | Known causes, affected claims, safe-to-proceed decision, and evidence needed to resolve uncertainty |
+| `diagnostics` | Separate invalidity, low-confidence, ambiguity, probe, plateau, bounded-uncertainty, and hard-block counters/events |
+
+The default budgets are one probe per critical claim and two probes per swarm. A probe is read-only, addresses one claim, and must attach file or tool-output evidence to count as a meaningful delta. Repeated claim/evidence/reason/tool fingerprints terminate as a confidence plateau. Resume preserves source confidence, authority, evidence, and exhausted probe history.
+
+Low confidence, `unknown`, non-critical disagreement, or unresolved advisory audit output do not change merge safety or receipt health. A hard block remains limited to structural, integrity, authority, unreconciled mutation, provenance, or unavoidable safety failures.
 
 ---
 
@@ -369,6 +394,7 @@ Aggregated view in `GovernedReceiptPanel`. Not a separate on-disk schema.
 | `violations` | Blocking merge-gate violations |
 | `advisoryWarnings` | Visible quality findings that do not block seal |
 | `roadmapLinkage` | Full roadmap linkage including `patchReconciliation`, `workspaceCommit` |
+| `confidenceAwareConvergence` | Parent convergence package with accepted/tentative/rejected findings and bounded uncertainty |
 
 ### GovernedReceiptDiagnostics (projection fields)
 
