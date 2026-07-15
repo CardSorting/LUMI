@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
+import "@testing-library/jest-dom"
 import { WorkspaceNavigationMenu } from "./WorkspaceNavigationMenu"
 
 describe("WorkspaceNavigationMenu", () => {
@@ -12,7 +13,7 @@ describe("WorkspaceNavigationMenu", () => {
 		await user.click(screen.getByRole("button", { name: "Menu" }))
 		const currentChat = await screen.findByRole("menuitem", { name: /Current chat/ })
 		const pastChats = screen.getByRole("menuitem", { name: /Past chats/ })
-		expect(screen.getAllByRole("menuitem")).toHaveLength(5)
+		expect(screen.getAllByRole("menuitem")).toHaveLength(3)
 		expect(currentChat).toHaveAttribute("aria-current", "page")
 		await waitFor(() => expect(currentChat).toHaveFocus())
 

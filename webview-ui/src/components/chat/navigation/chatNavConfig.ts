@@ -40,24 +40,7 @@ export const CHAT_NAV_ITEMS: ChatNavItem[] = [
 		icon: "HistoryIcon",
 		showInToolbar: true,
 	},
-	{
-		id: "tools",
-		label: "Tools",
-		shortLabel: "Tools",
-		description: "Manage connected tools",
-		tooltip: "Tools (Alt+Shift+3 or Alt+Shift+T)",
-		icon: "server",
-		showInToolbar: false,
-	},
-	{
-		id: "account",
-		label: "Account",
-		shortLabel: "Account",
-		description: "View usage and sign-in details",
-		tooltip: "Account (Alt+Shift+4 or Alt+Shift+A)",
-		icon: "UserCircleIcon",
-		showInToolbar: false,
-	},
+
 	{
 		id: "settings",
 		label: "Settings",
