@@ -3,7 +3,6 @@ import type { Mode } from "@shared/storage/types"
 import AutoApproveBar from "@/components/chat/auto-approve-menu/AutoApproveBar"
 import { SuggestedTasks } from "@/components/welcome/SuggestedTasks"
 import type { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
-import { ActionButtons } from "./ActionButtons"
 import { InputSection } from "./InputSection"
 import { ScrollToBottomBar } from "./ScrollToBottomBar"
 
@@ -52,7 +51,6 @@ export const ChatFooter = ({
 					}}
 				/>
 			)}
-			<ActionButtons chatState={chatState} messageHandlers={messageHandlers} messages={messages} mode={mode} task={task} />
 			<AutoApproveBar />
 			<InputSection
 				chatState={chatState}

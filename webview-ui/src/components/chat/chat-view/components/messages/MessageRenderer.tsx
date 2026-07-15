@@ -5,8 +5,9 @@ import BrowserSessionRow from "@/components/chat/BrowserSessionRow"
 import ChatRow from "@/components/chat/ChatRow"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
-import type { MessageHandlers } from "../../types/chatTypes"
+import type { ChatState, MessageHandlers } from "../../types/chatTypes"
 import { findReasoningForApiReq, isTextMessagePendingToolCall, isToolGroup } from "../../utils/messageUtils"
+import { ActionButtons } from "../layout/ActionButtons"
 import { ToolGroupRenderer } from "./ToolGroupRenderer"
 
 interface MessageRendererProps {
@@ -21,6 +22,8 @@ interface MessageRendererProps {
 	inputValue: string
 	messageHandlers: MessageHandlers
 	footerActive: boolean
+	chatState: ChatState
+	task: DietCodeMessage
 }
 
 /**
@@ -39,6 +42,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 	inputValue,
 	messageHandlers,
 	footerActive,
+	chatState,
+	task,
 }) => {
 	const { mode } = useExtensionState()
 
@@ -77,33 +82,29 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 		return false
 	}, [messageOrGroup, groupedMessages, index])
 
-	if (isToolGroup(messageOrGroup)) {
-		return <ToolGroupRenderer allMessages={modifiedMessages} isLastGroup={isLastToolGroup} messages={messageOrGroup} />
-	}
+	const content = (() => {
+		if (isToolGroup(messageOrGroup)) {
+			return <ToolGroupRenderer allMessages={modifiedMessages} isLastGroup={isLastToolGroup} messages={messageOrGroup} />
+		}
 
-	// Browser session group
-	if (Array.isArray(messageOrGroup)) {
+		// Browser session group
+		if (Array.isArray(messageOrGroup)) {
+			return (
+				<BrowserSessionRow
+					expandedRows={expandedRows}
+					isLast={isLastMessage}
+					key={messageOrGroup[0]?.ts}
+					lastModifiedMessage={modifiedMessages.at(-1)}
+					messages={messageOrGroup}
+					onHeightChange={onHeightChange}
+					onPendingQuoteChange={onPendingQuoteChange}
+					onToggleExpand={onToggleExpand}
+				/>
+			)
+		}
+
+		// Regular message
 		return (
-			<BrowserSessionRow
-				expandedRows={expandedRows}
-				isLast={isLastMessage}
-				key={messageOrGroup[0]?.ts}
-				lastModifiedMessage={modifiedMessages.at(-1)}
-				messages={messageOrGroup}
-				onHeightChange={onHeightChange}
-				onPendingQuoteChange={onPendingQuoteChange}
-				onToggleExpand={onToggleExpand}
-			/>
-		)
-	}
-
-	// Regular message
-	return (
-		<div
-			className={cn({
-				"pb-2.5": isLastMessage && !footerActive,
-			})}
-			data-message-ts={messageOrGroup.ts}>
 			<ChatRow
 				inputValue={inputValue}
 				isExpanded={expandedRows[messageOrGroup.ts] || false}
@@ -121,6 +122,27 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
 				responseStarted={reasoningData.responseStarted}
 				sendMessageFromChatRow={messageHandlers.handleSendMessage}
 			/>
+		)
+	})()
+
+	return (
+		<div
+			className={cn({
+				"pb-2.5": isLastMessage && !footerActive,
+			})}
+			data-message-ts={Array.isArray(messageOrGroup) ? messageOrGroup[0]?.ts : messageOrGroup.ts}>
+			{content}
+			{isLastMessage && (
+				<div className="mt-2.5">
+					<ActionButtons
+						chatState={chatState}
+						messageHandlers={messageHandlers}
+						messages={modifiedMessages}
+						mode={mode}
+						task={task}
+					/>
+				</div>
+			)}
 		</div>
 	)
 }
@@ -139,9 +161,12 @@ export const createMessageRenderer = (
 	inputValue: string,
 	messageHandlers: MessageHandlers,
 	footerActive: boolean,
+	chatState: ChatState,
+	task: DietCodeMessage,
 ) => {
 	return (index: number, messageOrGroup: DietCodeMessage | DietCodeMessage[]) => (
 		<MessageRenderer
+			chatState={chatState}
 			expandedRows={expandedRows}
 			footerActive={footerActive}
 			groupedMessages={groupedMessages}
@@ -153,6 +178,7 @@ export const createMessageRenderer = (
 			onHeightChange={onHeightChange}
 			onPendingQuoteChange={onPendingQuoteChange}
 			onToggleExpand={onToggleExpand}
+			task={task}
 		/>
 	)
 }

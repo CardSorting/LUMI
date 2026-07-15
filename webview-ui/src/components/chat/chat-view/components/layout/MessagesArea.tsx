@@ -164,6 +164,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 				inputValue,
 				messageHandlers,
 				false,
+				chatState,
+				task,
 			),
 		[
 			displayedGroupedMessages,
@@ -174,6 +176,8 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 			setPendingQuote,
 			inputValue,
 			messageHandlers,
+			chatState,
+			task,
 		],
 	)
 
