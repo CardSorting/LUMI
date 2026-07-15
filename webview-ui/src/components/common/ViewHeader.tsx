@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { getEnvironmentColor } from "@/utils/environmentColors"
 import type { Environment } from "../../../../src/shared/config-types"
@@ -26,13 +27,40 @@ const ViewHeader = ({ title, onDone, showEnvironmentSuffix, environment }: ViewH
 	const capitalizedEnv = environment ? ENV_DISPLAY_NAMES[environment] : ""
 	const titleColor = getEnvironmentColor(environment)
 
+	useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				// Don't close if user is typing in an input or textarea
+				const activeElement = document.activeElement
+				if (activeElement) {
+					const tagName = activeElement.tagName.toLowerCase()
+					const isInput =
+						tagName === "input" ||
+						tagName === "textarea" ||
+						activeElement.getAttribute("contenteditable") === "true" ||
+						tagName.startsWith("vscode-")
+					if (isInput) {
+						return
+					}
+				}
+				onDone()
+			}
+		}
+
+		window.addEventListener("keydown", handleKeyDown)
+		return () => {
+			window.removeEventListener("keydown", handleKeyDown)
+		}
+	}, [onDone])
+
 	return (
 		<header className="flex items-center gap-1.5 py-1.5 px-2 mb-2 border-b border-border/30 shrink-0">
 			<Button
 				aria-label="Back to chat"
-				className="h-7 w-7 shrink-0 rounded-md"
+				className="h-7 w-7 shrink-0 rounded-md text-foreground/75 hover:bg-toolbar-hover hover:text-foreground transition-all"
 				onClick={onDone}
 				size="icon"
+				title="Go Back (Esc)"
 				variant="ghost">
 				<ArrowLeft aria-hidden className="size-4" />
 			</Button>

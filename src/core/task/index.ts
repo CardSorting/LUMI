@@ -770,7 +770,13 @@ export class Task {
 			await this.postStateToWebview()
 		}
 
-		if (type !== "followup") {
+		if (
+			type !== "followup" &&
+			type !== "api_req_failed" &&
+			type !== "mistake_limit_reached" &&
+			type !== "resume_task" &&
+			type !== "resume_completed_task"
+		) {
 			Logger.info(`[Task] Auto-approving ask type: ${type}`)
 			this.taskState.askResponse = "yesButtonClicked"
 		} else {
@@ -2986,10 +2992,28 @@ export class Task {
 			this.taskState.consecutiveMistakeCount >= this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes") &&
 			!isReady
 		) {
-			// Canonical completion lifecycle is the single authority.
-			// Cognitive reflection / breather nudge rendering has been removed —
-			// the decision engine's canonical instruction is the only next-action
-			// guidance surfaced to the agent and operator.
+			// Trigger the mistake limit approval gate so the user can intervene and help the agent
+			try {
+				const askResult = await this.ask(
+					"mistake_limit_reached",
+					`I have made ${this.taskState.consecutiveMistakeCount} consecutive mistakes (e.g. repeated errors or no tools used). Please help guide my next steps.`,
+				)
+
+				if (askResult.response === "messageResponse" && askResult.text) {
+					// Append user's typed feedback to the message log so the LLM receives it in the next request
+					await this.say("user_feedback", askResult.text, askResult.images, askResult.files)
+					await this.checkpointManager?.saveCheckpoint()
+
+					// Push it into the active userMessageContent so the task runner submits it in the next turn
+					this.taskState.userMessageContent.push({
+						type: "text",
+						text: askResult.text,
+					})
+				}
+			} catch (err) {
+				Logger.error(`[Task] Mistake limit ask failed: ${err}`)
+			}
+
 			this.taskState.consecutiveMistakeCount = 0
 			this.taskState.autoRetryAttempts = 0
 			if (this.toolExecutor) {

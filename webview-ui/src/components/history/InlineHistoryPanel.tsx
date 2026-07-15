@@ -11,6 +11,7 @@ import { TaskServiceClient } from "@/services/grpc-client"
 
 interface InlineHistoryPanelProps {
 	onClose: () => void
+	hasActiveConversation?: boolean
 }
 
 const formatWhen = (timestamp: number) => {
@@ -57,7 +58,7 @@ HistoryRow.displayName = "HistoryRow"
  * Inline conversation list — lives inside ChatView (no full-screen overlay).
  * Familiar sidebar pattern: search, tap to resume, back via toolbar.
  */
-export const InlineHistoryPanel = memo(({ onClose }: InlineHistoryPanelProps) => {
+export const InlineHistoryPanel = memo(({ onClose, hasActiveConversation = false }: InlineHistoryPanelProps) => {
 	const { taskHistory, navigateToChat } = useExtensionState()
 	const [searchQuery, setSearchQuery] = useState("")
 
@@ -80,13 +81,21 @@ export const InlineHistoryPanel = memo(({ onClose }: InlineHistoryPanelProps) =>
 	)
 
 	const handleStartNewChat = useCallback(() => {
+		if (hasActiveConversation) {
+			const confirmed = window.confirm(
+				"Are you sure you want to start a new chat? This will clear the active task and reset the conversation.",
+			)
+			if (!confirmed) {
+				return
+			}
+		}
 		TaskServiceClient.clearTask({})
 			.catch((error) => console.error("Failed to clear task:", error))
 			.finally(() => {
 				onClose()
 				navigateToChat()
 			})
-	}, [navigateToChat, onClose])
+	}, [hasActiveConversation, navigateToChat, onClose])
 
 	return (
 		<div className="flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -123,12 +132,19 @@ export const InlineHistoryPanel = memo(({ onClose }: InlineHistoryPanelProps) =>
 						itemContent={(index) => <HistoryRow item={items[index]} onOpen={handleOpen} />}
 					/>
 					<p className="shrink-0 px-3 py-2 m-0 text-center text-[10px] text-muted-foreground border-t border-border/20">
-						Tap a chat to continue, or{" "}
+						Tap a chat to continue,{" "}
 						<button
 							className="underline bg-transparent border-0 p-0 cursor-pointer text-inherit hover:text-foreground"
 							onClick={handleStartNewChat}
 							type="button">
 							start a new chat
+						</button>
+						{", or "}
+						<button
+							className="underline bg-transparent border-0 p-0 cursor-pointer text-inherit hover:text-foreground"
+							onClick={onClose}
+							type="button">
+							go back to active chat
 						</button>
 					</p>
 				</>

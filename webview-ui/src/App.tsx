@@ -9,12 +9,13 @@ import WorktreesView from "./components/worktrees/WorktreesView"
 import { useDietCodeAuth } from "./context/DietCodeAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
 import { Providers } from "./Providers"
-import { UiServiceClient } from "./services/grpc-client"
+import { TaskServiceClient, UiServiceClient } from "./services/grpc-client"
 
 const AppContent = () => {
 	const {
 		didHydrateState,
 		shouldShowAnnouncement,
+		showHistory,
 		showMcp,
 		mcpTab,
 		showSettings,
@@ -25,16 +26,92 @@ const AppContent = () => {
 		showAnnouncement,
 		setShowAnnouncement,
 		setShouldShowAnnouncement,
+		hideHistory,
 		closeMcpView,
-		navigateToHistory,
 		hideSettings,
 		hideAccount,
 		hideWorktrees,
 		hideJoyZoning,
 		hideAnnouncement,
+		navigateToHistory,
+		navigateToMcp,
+		navigateToSettings,
+		navigateToAccount,
+		navigateToChat,
 	} = useExtensionState()
 
 	const { dietcodeUser, organizations, activeOrganization } = useDietCodeAuth()
+
+	useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			// Alt + Shift + H / T / S / A / C / N / 1-5
+			if (event.altKey && event.shiftKey) {
+				const key = event.key.toLowerCase()
+				if (key === "h" || key === "2") {
+					event.preventDefault()
+					if (showHistory) hideHistory()
+					else navigateToHistory()
+				} else if (key === "t" || key === "3") {
+					event.preventDefault()
+					if (showMcp) closeMcpView()
+					else navigateToMcp()
+				} else if (key === "s" || key === "5") {
+					event.preventDefault()
+					if (showSettings) hideSettings()
+					else navigateToSettings()
+				} else if (key === "a" || key === "4") {
+					event.preventDefault()
+					if (showAccount) hideAccount()
+					else navigateToAccount()
+				} else if (key === "c") {
+					event.preventDefault()
+					hideHistory()
+					hideSettings()
+					closeMcpView()
+					hideAccount()
+					hideWorktrees()
+					hideJoyZoning()
+				} else if (key === "n" || key === "1") {
+					event.preventDefault()
+					const confirmed = window.confirm(
+						"Are you sure you want to start a new chat? This will clear the active task and reset the conversation.",
+					)
+					if (confirmed) {
+						hideHistory()
+						hideSettings()
+						closeMcpView()
+						hideAccount()
+						hideWorktrees()
+						hideJoyZoning()
+						TaskServiceClient.clearTask({})
+							.catch((error) => console.error("Failed to clear task:", error))
+							.finally(() => navigateToChat())
+					}
+				}
+			}
+		}
+
+		window.addEventListener("keydown", handleKeyDown)
+		return () => {
+			window.removeEventListener("keydown", handleKeyDown)
+		}
+	}, [
+		showHistory,
+		showMcp,
+		showSettings,
+		showAccount,
+		hideHistory,
+		navigateToHistory,
+		closeMcpView,
+		navigateToMcp,
+		hideSettings,
+		navigateToSettings,
+		hideAccount,
+		navigateToAccount,
+		hideWorktrees,
+		hideJoyZoning,
+		navigateToChat,
+	])
 
 	useEffect(() => {
 		if (shouldShowAnnouncement) {

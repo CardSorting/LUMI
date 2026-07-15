@@ -416,7 +416,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 			<div className="flex flex-col flex-1 overflow-hidden">
 				<ChatToolbar conversationTitle={conversationTitle} hasActiveConversation={Boolean(task)} />
 				{showHistory ? (
-					<InlineHistoryPanel onClose={hideHistory} />
+					<InlineHistoryPanel hasActiveConversation={Boolean(task)} onClose={hideHistory} />
 				) : task ? (
 					<div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 						<div className="shrink-0 z-[5] bg-background">

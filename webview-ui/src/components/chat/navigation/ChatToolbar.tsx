@@ -1,4 +1,4 @@
-import { ArrowLeft, MoreHorizontal } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
@@ -11,7 +11,7 @@ interface ChatToolbarProps {
 	conversationTitle?: string
 }
 
-/** Compact workspace navigation. Secondary destinations live in a familiar overflow menu. */
+/** Compact workspace navigation. Core destinations are laid out directly in a unified row. */
 export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }: ChatToolbarProps) => {
 	const {
 		navigateToHistory,
@@ -43,6 +43,14 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }
 		(id: ChatNavItemId) => {
 			switch (id) {
 				case "newChat":
+					if (hasActiveConversation) {
+						const confirmed = window.confirm(
+							"Are you sure you want to start a new chat? This will clear the active task and reset the conversation.",
+						)
+						if (!confirmed) {
+							break
+						}
+					}
 					collapseTaskDetails()
 					hideHistory()
 					TaskServiceClient.clearTask({})
@@ -73,6 +81,7 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }
 		},
 		[
 			collapseTaskDetails,
+			hasActiveConversation,
 			hideHistory,
 			navigateToAccount,
 			navigateToChat,
@@ -84,17 +93,27 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }
 	)
 
 	const newChatItem = CHAT_NAV_BY_ID.newChat
-	const historyItem = CHAT_NAV_BY_ID.history
 	const centerLabel = showHistory ? "Past chats" : conversationTitle?.trim() || "Chat"
-	const overflowItems = CHAT_TOOLBAR_ITEMS.filter((item) => item.id !== "history")
 
 	return (
 		<header className="z-10 flex-none border-b border-border/40 bg-background">
+			<style>{`
+				@keyframes lumi-tab-scale-in {
+					from {
+						transform: scaleX(0.2);
+						opacity: 0;
+					}
+					to {
+						transform: scaleX(1);
+						opacity: 1;
+					}
+				}
+			`}</style>
 			<div className="flex h-11 items-center gap-2 px-3" id="lumi-chat-toolbar">
 				{showHistory ? (
 					<Button
 						aria-label="Back to chat"
-						className="h-8 w-8 shrink-0 rounded-md"
+						className="h-8 w-8 shrink-0 rounded-md text-foreground/75 hover:bg-toolbar-hover hover:text-foreground transition-all focus-visible:ring-1 focus-visible:ring-foreground"
 						data-testid="chat-nav-back"
 						onClick={hideHistory}
 						size="icon"
@@ -105,7 +124,7 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }
 				) : (
 					<Button
 						aria-label={newChatItem.label}
-						className="h-8 w-8 shrink-0 rounded-md"
+						className="h-8 w-8 shrink-0 rounded-md text-foreground/75 hover:bg-toolbar-hover hover:text-foreground transition-all focus-visible:ring-1 focus-visible:ring-foreground"
 						data-testid="chat-nav-new"
 						onClick={() => handleNavigate("newChat")}
 						size="icon"
@@ -124,45 +143,37 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle }
 					) : null}
 				</div>
 
-				<nav aria-label="Workspace navigation" className="flex shrink-0 items-center gap-1">
-					{!showHistory ? (
-						<Button
-							aria-current={activePanel === "history" ? "page" : undefined}
-							aria-label={historyItem.label}
-							className="h-8 w-8 rounded-md"
-							data-testid="chat-nav-history"
-							onClick={() => handleNavigate("history")}
-							size="icon"
-							title={historyItem.tooltip}
-							variant="icon">
-							<Icon name={historyItem.icon} size={16} />
-						</Button>
-					) : null}
-
-					<details className="lumi-details-menu group relative">
-						<summary
-							aria-label="More navigation"
-							className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-foreground transition-colors hover:bg-toolbar-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							title="More navigation">
-							<MoreHorizontal aria-hidden className="size-4" strokeWidth={1.75} />
-						</summary>
-						<div className="absolute right-0 top-9 z-50 min-w-44 rounded-lg border border-menu-border bg-menu p-1.5 text-menu-foreground shadow-lg">
-							{overflowItems.map((item) => (
-								<Button
-									aria-current={activePanel === item.id ? "page" : undefined}
-									aria-label={item.label}
-									className="flex h-8 w-full justify-start gap-2 rounded-md px-2 text-[11px] hover:bg-list-hover"
-									data-testid={`chat-nav-${item.id}`}
-									key={item.id}
-									onClick={() => handleNavigate(item.id)}
-									title={item.tooltip}
-									variant="ghost">
-									<Icon name={item.icon} size={16} />
-									<span>{item.label}</span>
-								</Button>
-							))}
-						</div>
-					</details>
+				<nav aria-label="Workspace navigation" className="flex shrink-0 items-center gap-0.5">
+					{CHAT_TOOLBAR_ITEMS.map((item) => {
+						const isActive = activePanel === item.id
+						return (
+							<Button
+								aria-current={isActive ? "page" : undefined}
+								aria-label={item.label}
+								className={`h-8 w-8 rounded-md transition-all relative flex items-center justify-center focus-visible:ring-1 focus-visible:ring-foreground ${
+									isActive
+										? "bg-toolbar-hover text-[var(--vscode-button-background)]"
+										: "text-foreground/75 hover:bg-toolbar-hover hover:text-foreground"
+								}`}
+								data-testid={`chat-nav-${item.id}`}
+								key={item.id}
+								onClick={() => handleNavigate(item.id)}
+								size="icon"
+								title={item.tooltip}
+								variant="icon">
+								<Icon name={item.icon} size={16} />
+								{isActive && (
+									<div
+										className="absolute bottom-0.5 left-1.5 right-1.5 h-0.5 rounded-full bg-[var(--vscode-button-background)]"
+										style={{
+											animation: "lumi-tab-scale-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+											transformOrigin: "center",
+										}}
+									/>
+								)}
+							</Button>
+						)
+					})}
 				</nav>
 			</div>
 		</header>
