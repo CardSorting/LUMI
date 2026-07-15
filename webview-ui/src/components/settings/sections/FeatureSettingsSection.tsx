@@ -113,13 +113,6 @@ const editorFeatures: FeatureToggle[] = [
 
 const experimentalFeatures: FeatureToggle[] = [
 	{
-		id: "yolo",
-		label: "Skip confirmations",
-		description: "Let LUMI move ahead without asking each time. Only turn this on if you really trust the workflow.",
-		stateKey: "yoloModeToggled",
-		settingKey: "yoloModeToggled",
-	},
-	{
 		id: "double-check-completion",
 		label: "Double-check my work",
 		description: "Before saying we're done, LUMI takes a second look at what you originally asked for.",
@@ -259,7 +252,6 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		enableCheckpointsSetting,
 		mcpDisplayMode,
 		strictPlanModeEnabled,
-		yoloModeToggled,
 		useAutoCondense,
 		subagentsEnabled,
 		dietcodeWebToolsEnabled,
@@ -292,8 +284,6 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		[focusChainSettings],
 	)
 
-	const isYoloRemoteLocked = remoteConfigSettings?.yoloModeToggled !== undefined
-
 	// State lookup for mapped features
 	const featureState: Record<string, boolean | undefined> = {
 		enableCheckpointsSetting,
@@ -317,7 +307,6 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		auditIntentThresholdAdjustmentsEnabled,
 		auditSarifHookExportEnabled,
 		auditWorkspaceArtifactsEnabled,
-		yoloModeToggled: isYoloRemoteLocked ? remoteConfigSettings?.yoloModeToggled : yoloModeToggled,
 	}
 
 	// Visibility lookup for features with feature flags
@@ -453,13 +442,10 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 								<FeatureRow
 									checked={featureState[feature.stateKey]}
 									description={feature.description}
-									disabled={feature.id === "yolo" && isYoloRemoteLocked}
-									isRemoteLocked={feature.id === "yolo" && isYoloRemoteLocked}
 									isVisible={featureVisibility[feature.stateKey] ?? true}
 									key={feature.id}
 									label={feature.label}
 									onChange={(checked) => handleFeatureChange(feature, checked)}
-									remoteTooltip="This setting is managed by your organization's remote configuration"
 								/>
 							))}
 						</div>

@@ -641,6 +641,9 @@ export class StateManager {
 		if (!this.isInitialized) {
 			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
 		}
+		if (key === "yoloModeToggled") {
+			return false as any
+		}
 		if (this.remoteConfigCache[key] !== undefined) {
 			return this.remoteConfigCache[key] as Settings[K]
 		}

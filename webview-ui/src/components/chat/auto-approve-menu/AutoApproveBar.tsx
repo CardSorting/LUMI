@@ -9,7 +9,7 @@ interface AutoApproveBarProps {
 }
 
 const AutoApproveBar = ({ style }: AutoApproveBarProps) => {
-	const { autoApprovalSettings, yoloModeToggled, navigateToSettings } = useExtensionState()
+	const { autoApprovalSettings, navigateToSettings } = useExtensionState()
 
 	const handleNavigateToFeatures = (e: React.MouseEvent) => {
 		e.preventDefault()
@@ -47,22 +47,8 @@ const AutoApproveBar = ({ style }: AutoApproveBarProps) => {
 		return actionsToShow.map((action) => action?.shortName).join(", ")
 	}, [enabledActionsNames])
 
-	if (!yoloModeToggled && enabledActionsNames.length === 0) {
+	if (enabledActionsNames.length === 0) {
 		return null
-	}
-
-	if (yoloModeToggled) {
-		return (
-			<p className="mx-2 px-2 py-1.5 m-0 text-[11px] text-muted-foreground border-t border-border/20" style={style}>
-				Changes run without asking.{" "}
-				<button
-					className="underline bg-transparent border-0 p-0 cursor-pointer text-inherit hover:text-foreground"
-					onClick={handleNavigateToFeatures}
-					type="button">
-					Change in Settings
-				</button>
-			</p>
-		)
 	}
 
 	return (
