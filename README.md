@@ -418,33 +418,63 @@ Details: [docs/features/roadmap-steering.mdx](docs/features/roadmap-steering.mdx
 
 ## Architecture
 
+LUMI is split into a **session and control plane**, an **execution plane**, and two distinct durability boundaries. The ordinary tool path and governed swarm path share the same approval and VS Code host boundaries, but swarms add lane authority, receipts, merge validation, and confidence-aware parent synthesis.
+
 ```mermaid
 flowchart TB
-  subgraph ext ["LUMI extension"]
-    WP[webview-ui] <--> CT[Controller]
-    CT --> TK[Task loop]
-    TK --> TL[ToolExecutorCoordinator]
-    TL --> GSC[GovernedSwarmCoordinator]
-    GSC --> MG[MergeGate]
+  USER[Developer] <--> UI[React webview: chat, approvals, status]
+
+  subgraph session ["Session and control plane"]
+    UI <--> CTRL[Session controller]
+    CTRL --> TASK[Agent task loop]
+    TASK <--> MODEL[Provider adapters and language models]
+    TASK --> TOOLS[Typed tool execution coordinator]
+    TOOLS -. approval request and result .-> UI
+    TASK --> COMPLETE[Completion and roadmap gates]
   end
-  subgraph host ["VS Code host"]
-    HB[hostbridge]
-    TL --> HB
+
+  subgraph execution ["Execution plane"]
+    TOOLS --> DIRECT[Direct tools, MCP, and lifecycle hooks]
+    TOOLS --> SWARM[Governed subagent harness]
+    SWARM --> LANES[Parallel lanes with declared execution intent]
+    LANES --> EVIDENCE[Execution envelopes, evidence, and lane receipts]
+    EVIDENCE --> SAFETY[Authority, lock, mutation, replay, and merge validation]
+    SAFETY --> CONVERGE[Confidence-aware convergence]
+    CONVERGE --> PARENT[Parent synthesis: accepted, tentative, and rejected findings]
+    PARENT --> TASK
   end
-  subgraph store ["Local store"]
-    BDB["@noorm/broccolidb"]
-    TK --> BDB
+
+  subgraph host ["VS Code host boundary"]
+    DIRECT --> BRIDGE[Protobuf host bridge]
+    LANES --> BRIDGE
+    BRIDGE --> VSCODE[Files, terminals, diagnostics, checkpoints]
   end
+
+  subgraph durability ["Durability boundaries"]
+    TASK <--> BDB[BroccoliDB: cognitive memory, graph, snapshots, runtime state]
+    EVIDENCE --> RECEIPTS[Task-local transcripts and governed receipts]
+    SAFETY --> RECEIPTS
+    CONVERGE --> RECEIPTS
+  end
+
+  COMPLETE --> UI
 ```
 
-| Package | Path | Role |
-|---------|------|------|
-| **LUMI extension** | repo root | VS Code agent — `CardSorting.lumi-vscode` / `CardSorting.lumi` |
-| **BroccoliDB** | `broccolidb/` | Context store, runtime, Spider |
+| Layer | Owns | Boundary |
+|-------|------|----------|
+| **Webview** | Conversation UI, approval decisions, diff and swarm status presentation | Presents decisions; it does not execute workspace mutations directly |
+| **Session control** | Conversation state, model turns, task lifecycle, completion routing | Coordinates work; physical I/O stays behind typed tools and the host bridge |
+| **Tool execution** | Typed dispatch, lifecycle hooks, MCP calls, approval enforcement | Direct tools and subagent swarms enter through the same governed tool boundary |
+| **Governed swarm** | Lane scheduling, execution intent, mutation claims, evidence, convergence, parent synthesis | Low confidence is non-blocking; invalid authority, integrity, or unsafe mutation remains fail-closed |
+| **VS Code host** | Filesystem, terminals, diagnostics, tabs, and checkpoints | Physical IDE operations are isolated behind the Protobuf host bridge |
+| **Task artifacts** | Append-only transcripts, execution envelopes, immutable attempt receipts, replay checksums | Authoritative swarm execution history lives under the task directory, not in cognitive memory |
+| **BroccoliDB** | Cognitive memory, runtime graph, snapshots, structural analysis, and fencing substrate | Advisory knowledge and substrate state; not the governed swarm receipt store |
 
-**Stack:** TypeScript extension host · React webview · Protobuf host bridge · `buildApiHandler` (5 providers) · BroccoliDB SQLite · governed receipt schema v3 · Biome · Mocha / Playwright tests · Mintlify docs.
+Confidence-aware convergence runs inside the existing merge path. It can add a bounded read-only verification probe or return an uncertainty package, but it cannot bypass receipt integrity, mutation authority, locks, replay checks, or completion gates.
 
-Canonical map: [docs/AGENT_STACK.md](docs/AGENT_STACK.md)
+**Stack:** TypeScript extension host · React webview · provider adapters · typed tools and MCP · Protobuf host bridge · BroccoliDB SQLite · governed receipt schema v3 · Biome · Mocha / Playwright tests · Mintlify docs.
+
+Canonical stack map: [docs/AGENT_STACK.md](docs/AGENT_STACK.md) · Governed lifecycle: [docs/governed-subagent-execution.md](docs/governed-subagent-execution.md) · Confidence and receipt model: [docs/governed-execution-schema.md](docs/governed-execution-schema.md)
 
 ---
 
