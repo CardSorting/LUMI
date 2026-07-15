@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto"
 import type { SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { SWARM_ARTIFACT_MAX_AGE_MS, SWARM_ENVELOPE_SCHEMA_VERSION } from "@shared/subagent/executionEnvelope"
+import type { LaneExecutionReceipt } from "@shared/subagent/governedExecution"
 import { validateSwarmEnvelope } from "./executionValidation"
+import { loadAuthoritativeGovernedReceipt, validateGovernedReceipt } from "./GovernedExecutionStore"
 import { loadSwarmEnvelope } from "./SubagentExecutionStore"
 import { loadTranscriptEvents } from "./SubagentTranscriptRecorder"
 
@@ -20,6 +22,8 @@ export interface SwarmResumeAgentReuse {
 	prompt: string
 	result: string
 	envelopeId: string
+	/** Original governed authority receipt; required before historical work can be reused. */
+	sourceLaneReceipt: LaneExecutionReceipt
 }
 
 export interface SwarmResumeAgentRetry {
@@ -152,6 +156,16 @@ export async function planResumeFromArtifact(
 
 	const resumeAttemptId = `resume_${Date.now()}`
 	const newSwarmId = options?.newSwarmId || `swarm_${resumeAttemptId}`
+	const candidateGovernedReceipt = await loadAuthoritativeGovernedReceipt(taskId, sourceSwarmId)
+	const sourceGovernedReceipt =
+		validateGovernedReceipt(candidateGovernedReceipt).valid &&
+		candidateGovernedReceipt?.taskId === taskId &&
+		candidateGovernedReceipt.swarmId === sourceSwarmId &&
+		candidateGovernedReceipt.sealed === true &&
+		candidateGovernedReceipt.mergeGate.passed === true &&
+		candidateGovernedReceipt.integrity?.valid === true
+			? candidateGovernedReceipt
+			: null
 	const reuseAgents: SwarmResumeAgentReuse[] = []
 	const retryAgents: SwarmResumeAgentRetry[] = []
 	const restartAgents: SwarmResumeAgentRestart[] = []
@@ -164,11 +178,23 @@ export async function planResumeFromArtifact(
 		}
 
 		if (agent.status === "completed" && agent.verbatimOutput?.trim()) {
-			reuseAgents.push({
-				...base,
-				result: agent.verbatimOutput,
-				envelopeId: agent.agentId,
-			})
+			const candidateReceipt = sourceGovernedReceipt?.laneReceipts.find((lane) => lane.agentId === agent.agentId)
+			const sourceLaneReceipt =
+				candidateReceipt?.status === "completed" &&
+				candidateReceipt.claimReleased &&
+				(candidateReceipt.executionMode !== "mutation" || (candidateReceipt.lockRequired && candidateReceipt.claimId))
+					? candidateReceipt
+					: undefined
+			if (sourceLaneReceipt) {
+				reuseAgents.push({
+					...base,
+					result: agent.verbatimOutput,
+					envelopeId: agent.agentId,
+					sourceLaneReceipt,
+				})
+			} else {
+				restartAgents.push(base)
+			}
 			continue
 		}
 

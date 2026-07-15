@@ -22,3 +22,7 @@
 - Do not assume presentation has been fully decoupled. Workspace-local query cards are captured and projected by sibling sequence; non-query and interactive presentation still uses shared state.
 - Do not assume `hasActiveBackgroundCommand()` means detached-only work; it is the task cancellation probe for the current foreground terminal process as well.
 - Focused tests that import `Task` must require `./src/test/requires.cjs`, or Node will fail to resolve the VS Code test shim.
+- Do not check `activeLaneExecutions` to limit concurrent subagent execution lanes; track executing lanes via `running.size` because `runSubagent` yields during setup, causing the entire pending queue to spill.
+- Do not reuse completed subagents on swarm resume without checking that the source governed receipt is sealed and has valid checksum integrity; doing so leads to unsafe work reuse.
+- Do not block swarm initialization or lane admission on parent context prefetching; fetch it asynchronously and pass the promise to the runner.
+- Do not let a subagent run in a loop calling the same tool with identical parameters; ensure repetition detection and self-correction nudges are active.

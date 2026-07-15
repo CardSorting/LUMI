@@ -2,6 +2,15 @@
 
 This log preserves historical wiki entries and records current LUMI workspace knowledge-layer changes.
 
+## [Subagent Execution and Scoped Cancellation Pass] — 2026-07-15
+
+- Implemented owner-scoped command cancellation in `CommandExecutor` to independently manage and terminate concurrent subprocesses.
+- Hardened subagent queue concurrency checking by tracking active execution slots (`running.size`) rather than yielded lifecycles, avoiding queue saturation in a single tick.
+- Prefetched parent context asynchronously off the critical subagent startup path.
+- Enforced sealed governed receipt validation and checksum integrity checks to prevent unsafe agent reuse during resumes.
+- Implemented tool repetition detection and self-correction nudges in `SubagentRunner` to resolve loop blocks and signal toxic hotspots.
+- Added atomic, write-behind log flushes to prevent transcript file corruption.
+
 ## [Execution Throughput Pass] — 2026-07-12
 
 - Added workspace-local query authority while preserving `.dietcodeignore` and external-path approvals.

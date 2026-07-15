@@ -61,3 +61,19 @@ Interpretation: the report is a deterministic 577-file fixture. “Cold” means
 Symptom: cancelling one non-sibling search stops the task UI, but a result or read-history entry appears later.
 
 Check that `TaskIoBackend` falls back to `TaskConfig.taskSignal`, `Task.abortTask()` aborts and joins `activeSingleIoPromise`, and ToolExecutor checks the signal immediately after the handler returns. Do not fix this with polling or a detached kill timer.
+
+## Subagent Stuck in Repetition Loop
+
+Symptom: A subagent runs in a loop executing the same tool with identical inputs consecutively.
+
+Cause: The agent is stuck in an architectural loop, context drift, or lacks direction.
+
+Mitigation: The `SubagentRunner` detects loops when consecutive identical tool calls exceed the threshold of 3. It will inject a `[SELF-CORRECTION NUDGE]` into the assistant turn and signal a `TOXIC HOTSPOT DETECTED` to the parent swarm. If the agent continues to loop, re-evaluate parameters manually, use a different strategy, or use `ask_followup_question` to seek guidance.
+
+## Completed Agents Restarted on Swarm Resume
+
+Symptom: Resuming a swarm execution restarts agents that were already marked "completed" in previous attempts.
+
+Cause: The resume plan requires verification of a sealed governed authority receipt (`subagent_executions/<swarmId>.governed.json`) and a valid integrity checksum. If the receipt is unsealed, missing, or fails validation, agent results cannot be safely reused.
+
+Fix: Verify that the previous swarm run completed successfully up to a checkpoint and produced a sealed governed receipt. If the previous attempt was abruptly interrupted before sealing, the agent lanes must be restarted to guarantee workspace state integrity.

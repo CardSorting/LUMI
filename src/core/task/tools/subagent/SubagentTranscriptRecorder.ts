@@ -28,7 +28,11 @@ export class SubagentTranscriptRecorder {
 	private eventCount = 0
 	private readonly events: SubagentTranscriptEvent[] = []
 	private filePath?: string
-	private flushedLines = 0
+	private persistedLines = 0
+	private queuedThrough = 0
+	private flushTimer?: ReturnType<typeof setTimeout>
+	private writeTail: Promise<void> = Promise.resolve()
+	private recoveredWriteTail: Promise<void> = Promise.resolve()
 
 	constructor(private readonly context: TranscriptRecorderContext) {}
 
@@ -91,19 +95,81 @@ export class SubagentTranscriptRecorder {
 		return event
 	}
 
+	/**
+	 * Schedule a write-behind flush. Progress events stay memory-local on the hot path;
+	 * callers use flush() as the durability barrier before publishing a terminal envelope.
+	 */
+	scheduleFlush(delayMs = 25): void {
+		if (this.flushTimer || this.queuedThrough >= this.events.length) {
+			return
+		}
+		this.flushTimer = setTimeout(
+			() => {
+				this.flushTimer = undefined
+				void this.queuePendingWrite().catch((error) => {
+					Logger.error("[SubagentTranscriptRecorder] Deferred transcript flush failed:", error)
+				})
+			},
+			Math.max(0, delayMs),
+		)
+	}
+
 	async flush(): Promise<void> {
 		if (!this.filePath) {
 			throw new Error("Transcript recorder not initialized")
 		}
-
-		const pending = this.events.slice(this.flushedLines)
-		if (pending.length === 0) {
-			return
+		if (this.flushTimer) {
+			clearTimeout(this.flushTimer)
+			this.flushTimer = undefined
 		}
 
-		const lines = pending.map((event) => `${JSON.stringify(event)}\n`).join("")
-		await fs.appendFile(this.filePath, lines, "utf8")
-		this.flushedLines = this.events.length
+		await this.queuePendingWrite()
+		await this.writeTail
+	}
+
+	private async queuePendingWrite(): Promise<void> {
+		if (!this.filePath) {
+			throw new Error("Transcript recorder not initialized")
+		}
+
+		const target = this.events.length
+		if (target <= this.queuedThrough) {
+			return this.writeTail
+		}
+
+		const filePath = this.filePath
+		const previousWrite = this.recoveredWriteTail
+		this.queuedThrough = target
+		const write = previousWrite.then(async () => {
+			if (target <= this.persistedLines) {
+				return
+			}
+			// Replace the durable prefix atomically. Retrying appendFile after a partial
+			// filesystem write can duplicate or corrupt JSONL because line progress is
+			// unknowable after rejection.
+			const lines = this.events
+				.slice(0, target)
+				.map((event) => `${JSON.stringify(event)}\n`)
+				.join("")
+			const temporaryPath = `${filePath}.${this.context.executionId}.tmp`
+			await fs.writeFile(temporaryPath, lines, "utf8")
+			await fs.rename(temporaryPath, filePath)
+			this.persistedLines = target
+		})
+		const trackedWrite = write.catch((error) => {
+			if (this.queuedThrough === target) {
+				this.queuedThrough = this.persistedLines
+			}
+			throw error
+		})
+		// Current durability barriers observe trackedWrite failures. Only the
+		// scheduling chain recovers so a later flush can resume from persistedLines.
+		this.writeTail = trackedWrite
+		this.recoveredWriteTail = trackedWrite.then(
+			() => undefined,
+			() => undefined,
+		)
+		await trackedWrite
 	}
 
 	getEvents(): SubagentTranscriptEvent[] {

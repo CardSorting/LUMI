@@ -64,6 +64,7 @@ const MAX_EMPTY_ASSISTANT_RETRIES = 3
 const MAX_INITIAL_STREAM_ATTEMPTS = 3
 const INITIAL_STREAM_RETRY_BASE_DELAY_MS = 250
 const MAX_TOTAL_TOOL_CALLS = 50
+const MAX_PARALLEL_IO_TOOL_CALLS = 4
 const MAX_TASK_ITERATIONS = 25
 
 function getParentCompletionFailedStage(taskState: TaskState): string | undefined {
@@ -317,7 +318,8 @@ export class SubagentRunner {
 	private abortRequested = false
 	private recursionDepth = 0
 	private laneExecutionMode: LaneExecutionMode = "mutation"
-	private prefetchedParentContext?: string
+	private commandOwnerId = uuidv4()
+	private prefetchedParentContext?: string | Promise<string | undefined>
 	private swarmGateOptions?: CompletionGateOptions
 	private activeCommandExecutions = 0
 	private abortingCommands = false
@@ -327,6 +329,8 @@ export class SubagentRunner {
 	private totalConsecutiveIdenticalCalls = 0
 	private readonly MAX_CONSECUTIVE_IDENTICAL_CALLS = 3
 	private signaledFindings = new Set<string>()
+	private signalingFindings = new Set<string>()
+	private signalSequence = 0
 	private stats: SubagentRunStats = {
 		toolCalls: 0,
 		inputTokens: 0,
@@ -373,7 +377,7 @@ export class SubagentRunner {
 		if (this.activeCommandExecutions > 0 && !this.abortingCommands && this.baseConfig.callbacks.cancelRunningCommandTool) {
 			this.abortingCommands = true
 			try {
-				await this.baseConfig.callbacks.cancelRunningCommandTool()
+				await this.baseConfig.callbacks.cancelRunningCommandTool(this.commandOwnerId)
 			} catch (error) {
 				Logger.error("[SubagentRunner] failed to cancel running command execution", error)
 			} finally {
@@ -423,13 +427,14 @@ export class SubagentRunner {
 			parentExecutionId?: string
 			resumeAttemptId?: string
 			executionId?: string
-			prefetchedParentContext?: string
+			prefetchedParentContext?: string | Promise<string | undefined>
 			swarmGateOptions?: CompletionGateOptions
 			onTranscriptFlush?: () => Promise<void>
 		},
 		streamId?: string,
 	): Promise<SubagentRunResult> {
 		const executionId = envelopeContext.executionId || uuidv4()
+		this.commandOwnerId = executionId
 		this.prefetchedParentContext = envelopeContext.prefetchedParentContext
 		this.swarmGateOptions = envelopeContext.swarmGateOptions
 		this.onTranscriptFlush = envelopeContext.onTranscriptFlush
@@ -479,7 +484,7 @@ export class SubagentRunner {
 				this.transcriptRecorder.getEvents().length,
 				this.transcriptRecorder.getMeta(this.transcriptArtifactPath).byteSize,
 			)
-			await this.onTranscriptFlush?.()
+			await this.invokeTranscriptFlushCallback()
 		}
 
 		const state = new TaskState()
@@ -638,8 +643,9 @@ export class SubagentRunner {
 						gateOptions,
 					})
 					const compressed =
-						this.prefetchedParentContext ??
-						(await orchestrator.getCompressedContext(parentStreamId).catch(() => undefined))
+						this.prefetchedParentContext !== undefined
+							? await this.prefetchedParentContext
+							: await orchestrator.getCompressedContext(parentStreamId).catch(() => undefined)
 					const combined = [auditContext, compressed].filter(Boolean).join("\n\n")
 					this.agent.setParentStreamContext(combined)
 				} catch (err) {
@@ -653,16 +659,14 @@ export class SubagentRunner {
 			if (useNativeToolCalls && (!nativeTools || nativeTools.length === 0)) {
 				const error = "Subagent tool requires native tool calling support."
 				this.envelopeBuilder?.fail(error)
-				onProgress({ status: "failed", error, stats })
-				return this.finalizeResult({ status: "failed", error, stats })
+				return this.finalizeAndPublish({ status: "failed", error, stats })
 			}
 
 			if (this.shouldAbort()) {
 				await this.abort()
 				const error = "Subagent run cancelled."
 				this.envelopeBuilder?.abort()
-				onProgress({ status: "failed", error, stats: { ...stats } })
-				return this.finalizeResult({ status: "failed", error, stats })
+				return this.finalizeAndPublish({ status: "failed", error, stats })
 			}
 
 			const workspaceMetadataEnvironmentBlock = await this.getWorkspaceMetadataEnvironmentBlock()
@@ -759,16 +763,14 @@ export class SubagentRunner {
 								Logger.warn(`[SubagentRunner] ${error}`)
 								this.envelopeBuilder?.fail(error)
 								this.envelopeBuilder?.recordRetryHint("Reduce context usage or raise token budget before retry.")
-								onProgress({ status: "failed", error, stats: { ...stats } })
-								return this.finalizeResult({ status: "failed", error, stats })
+								return this.finalizeAndPublish({ status: "failed", error, stats })
 							}
 							if (stats.maxCost && stats.totalCost > stats.maxCost) {
 								const error = `Swarm Cost Budget Exceeded ($${stats.maxCost}). Terminating subagent to prevent runaway costs.`
 								Logger.warn(`[SubagentRunner] ${error}`)
 								this.envelopeBuilder?.fail(error)
 								this.envelopeBuilder?.recordRetryHint("Lower tool usage or raise cost budget before retry.")
-								onProgress({ status: "failed", error, stats: { ...stats } })
-								return this.finalizeResult({ status: "failed", error, stats })
+								return this.finalizeAndPublish({ status: "failed", error, stats })
 							}
 
 							if (stats.toolCalls >= MAX_TOTAL_TOOL_CALLS) {
@@ -778,8 +780,7 @@ export class SubagentRunner {
 								this.envelopeBuilder?.recordRetryHint(
 									"Simplify the objective or decompose into smaller subtasks.",
 								)
-								onProgress({ status: "failed", error, stats: { ...stats } })
-								return this.finalizeResult({ status: "failed", error, stats })
+								return this.finalizeAndPublish({ status: "failed", error, stats })
 							}
 							break
 						case "text":
@@ -808,8 +809,7 @@ export class SubagentRunner {
 						await this.abort()
 						const error = "Subagent run cancelled."
 						this.envelopeBuilder?.abort()
-						onProgress({ status: "failed", error, stats: { ...stats } })
-						return this.finalizeResult({ status: "failed", error, stats })
+						return this.finalizeAndPublish({ status: "failed", error, stats })
 					}
 				}
 
@@ -892,8 +892,7 @@ export class SubagentRunner {
 						const error = "Subagent did not call attempt_completion."
 						this.envelopeBuilder?.fail(error)
 						this.envelopeBuilder?.recordRetryHint("Ensure the subagent calls attempt_completion with a result.")
-						onProgress({ status: "failed", error, stats: { ...stats } })
-						return this.finalizeResult({ status: "failed", error, stats })
+						return this.finalizeAndPublish({ status: "failed", error, stats })
 					}
 
 					// Mirror the main loop's no-tools-used nudge so empty/blank model turns
@@ -923,6 +922,16 @@ export class SubagentRunner {
 					continue
 				}
 				emptyAssistantResponseRetries = 0
+
+				if (this.canExecuteParallelIoBatch(finalizedToolCalls)) {
+					const toolResultBlocks = await this.executeParallelIoBatch(finalizedToolCalls, subagentConfig, state)
+					conversation.push({
+						role: "user",
+						content: toolResultBlocks,
+					})
+					await delay(0)
+					continue
+				}
 
 				const toolResultBlocks = [] as DietCodeUserContent[]
 				for (const call of finalizedToolCalls) {
@@ -974,10 +983,11 @@ export class SubagentRunner {
 						this.envelopeBuilder?.setPhase("completion_gate")
 						this.envelopeBuilder?.complete(completionResult)
 						await this.recordTranscript("completion", { result: completionResult }, "raw")
-						onProgress({ status: "completed", result: completionResult, stats: { ...stats } })
-						await this.signalCriticalFindingsToSwarm(completionResult)
+						const finalized = await this.finalizeResult({ status: "completed", result: completionResult, stats })
+						void this.signalCriticalFindingsToSwarm(completionResult)
 						await SwarmConsensusHandler.handleSignal(this.baseConfig, completionResult)
-						return this.finalizeResult({ status: "completed", result: completionResult, stats })
+						onProgress({ status: "completed", result: completionResult, stats: { ...stats } })
+						return finalized
 					}
 
 					if (!this.allowedTools.includes(toolName)) {
@@ -1110,39 +1120,13 @@ export class SubagentRunner {
 					pushSubagentToolResultBlock(toolResultBlocks, call, toolDescription, serializedToolResult)
 
 					// Phase 5: Cross-Swarm Memory Signalling
-					// If the tool execution revealed something architecturally significant, signal it via orchestrator
+					// Advisory cross-swarm persistence must not delay the next model turn.
 					if (serializedToolResult.length > 0) {
-						await this.signalCriticalFindingsToSwarm(serializedToolResult)
+						void this.signalCriticalFindingsToSwarm(serializedToolResult)
 					}
 
 					// Phase 6: Repetition Detection & Self-Correction
-					const currentCallKey = `${toolName}:${JSON.stringify(toolCallParams)}`
-					if (
-						this.toolCallHistory.length > 0 &&
-						this.toolCallHistory[this.toolCallHistory.length - 1] === currentCallKey
-					) {
-						this.totalConsecutiveIdenticalCalls += 1
-					} else {
-						this.totalConsecutiveIdenticalCalls = 0
-					}
-					this.toolCallHistory.push(currentCallKey)
-					if (this.toolCallHistory.length > 10) this.toolCallHistory.shift()
-
-					if (this.totalConsecutiveIdenticalCalls >= this.MAX_CONSECUTIVE_IDENTICAL_CALLS) {
-						const nudge = `[SELF-CORRECTION NUDGE] You have called the same tool with the same parameters ${this.MAX_CONSECUTIVE_IDENTICAL_CALLS + 1} times in a row. This suggests you are stuck. Please RE-EVALUATE your approach, explore a different architectural layer, or use 'ask_followup_question' to clarify the objective with the parent.`
-						toolResultBlocks.push({
-							type: "text",
-							text: nudge,
-						})
-						Logger.warn(`[SubagentRunner] Repetition detected for tool ${toolName}; injected nudge.`)
-
-						// Phase 4: Autonomous Toxic Hotspot Signaling
-						this.signalCriticalFindingsToSwarm(
-							`TOXIC HOTSPOT DETECTED: Subagent is stuck in a repetition loop with tool '${toolName}'. Potential architectural conflict or context uncertainty at this depth.`,
-						).catch((e) => Logger.warn("[SubagentRunner] Failed to signal toxic hotspot:", e))
-
-						this.totalConsecutiveIdenticalCalls = 0 // Reset after nudge
-					}
+					this.applyRepetitionDetection(toolName, toolCallParams, toolResultBlocks)
 				}
 
 				conversation.push({
@@ -1156,21 +1140,18 @@ export class SubagentRunner {
 			const loopError = `Swarm Iteration Limit Exceeded (${MAX_TASK_ITERATIONS}). Subagent failed to complete the task within allowed turns.`
 			this.envelopeBuilder?.fail(loopError)
 			this.envelopeBuilder?.recordRetryHint("Decompose the task or increase iteration budget.")
-			onProgress({ status: "failed", error: loopError, stats: { ...stats } })
-			return this.finalizeResult({ status: "failed", error: loopError, stats })
+			return this.finalizeAndPublish({ status: "failed", error: loopError, stats })
 		} catch (error) {
 			if (this.shouldAbort()) {
 				const cancelledError = "Subagent run cancelled."
 				this.envelopeBuilder?.abort()
-				onProgress({ status: "failed", error: cancelledError, stats: { ...stats } })
-				return this.finalizeResult({ status: "failed", error: cancelledError, stats })
+				return this.finalizeAndPublish({ status: "failed", error: cancelledError, stats })
 			}
 
 			const errorText = (error as Error).message || "Subagent execution failed."
 			Logger.error("[SubagentRunner] run failed", error)
 			this.envelopeBuilder?.fail(errorText)
-			onProgress({ status: "failed", error: errorText, stats: { ...stats } })
-			return this.finalizeResult({ status: "failed", error: errorText, stats })
+			return this.finalizeAndPublish({ status: "failed", error: errorText, stats })
 		} finally {
 			this.activeApiAbort = undefined
 		}
@@ -1211,6 +1192,7 @@ export class SubagentRunner {
 					try {
 						return await baseCallbacks.executeCommandTool(command, timeoutSeconds, {
 							suppressUserInteraction: true,
+							ownerId: this.commandOwnerId,
 						})
 					} finally {
 						this.activeCommandExecutions = Math.max(0, this.activeCommandExecutions - 1)
@@ -1242,10 +1224,149 @@ export class SubagentRunner {
 			return
 		}
 		this.transcriptRecorder.append(kind, payload, contentKind)
-		await this.transcriptRecorder.flush()
-		const meta = this.transcriptRecorder.getMeta(this.transcriptArtifactPath)
-		this.envelopeBuilder?.setTranscriptMeta(meta.artifactPath, meta.eventCount, meta.byteSize)
-		await this.onTranscriptFlush?.()
+		if (kind === "compaction") {
+			// Compaction is a recovery boundary: persist it before dropping context.
+			await this.transcriptRecorder.flush()
+			return
+		}
+		this.transcriptRecorder.scheduleFlush()
+	}
+
+	private canExecuteParallelIoBatch(calls: SubagentToolCall[]): boolean {
+		return (
+			calls.length > 1 &&
+			calls.every((call) => {
+				const toolName = call.name as DietCodeDefaultTool
+				return (
+					toolName !== DietCodeDefaultTool.ATTEMPT &&
+					this.allowedTools.includes(toolName) &&
+					shouldBypassGuardForLaneIoTool(this.laneExecutionMode, toolName)
+				)
+			})
+		)
+	}
+
+	/** Execute pure lane-local queries together, then project evidence in model-emission order. */
+	private async executeParallelIoBatch(
+		calls: SubagentToolCall[],
+		subagentConfig: TaskConfig,
+		state: TaskState,
+	): Promise<DietCodeUserContent[]> {
+		const executeCall = async (call: SubagentToolCall) => {
+			const toolName = call.name as DietCodeDefaultTool
+			const toolCallParams = toToolUseParams(call.input)
+			const toolCallBlock: ToolUse = {
+				type: "tool_use",
+				name: toolName,
+				params: toolCallParams,
+				partial: false,
+				isNativeToolCall: call.isNativeToolCall,
+				call_id: call.call_id || call.toolUseId,
+			}
+			if (call.call_id) {
+				state.toolUseIdMap.set(call.call_id, call.toolUseId)
+			}
+
+			const latestToolCall = formatToolCallPreview(toolName, toolCallParams)
+			this.onProgress?.({ latestToolCall })
+			await this.recordTranscript("tool_call", { toolName, preview: latestToolCall, params: toolCallParams }, "raw")
+			const handler = this.baseConfig.coordinator.getHandler(toolName)
+			let toolResult: unknown
+			try {
+				toolResult = handler
+					? await handler.execute(subagentConfig, toolCallBlock)
+					: formatResponse.toolError(`No handler registered for tool '${toolName}'.`)
+			} catch (error) {
+				toolResult = formatResponse.toolError((error as Error).message)
+			}
+
+			return { call, handler, latestToolCall, toolCallParams, toolResult, executed: true }
+		}
+		const executableCount = Math.min(calls.length, Math.max(0, MAX_TOTAL_TOOL_CALLS - this.stats.toolCalls))
+		const outcomes: Awaited<ReturnType<typeof executeCall>>[] = []
+		for (let offset = 0; offset < executableCount; offset += MAX_PARALLEL_IO_TOOL_CALLS) {
+			outcomes.push(...(await Promise.all(calls.slice(offset, offset + MAX_PARALLEL_IO_TOOL_CALLS).map(executeCall))))
+		}
+		for (const call of calls.slice(executableCount)) {
+			const toolName = call.name as DietCodeDefaultTool
+			const toolCallParams = toToolUseParams(call.input)
+			outcomes.push({
+				call,
+				handler: this.baseConfig.coordinator.getHandler(toolName),
+				latestToolCall: formatToolCallPreview(toolName, toolCallParams),
+				toolCallParams,
+				toolResult: formatResponse.toolError(
+					`Swarm Tool Call Limit Exceeded (${MAX_TOTAL_TOOL_CALLS}). Tool was not executed.`,
+				),
+				executed: false,
+			})
+		}
+
+		const toolResultBlocks: DietCodeUserContent[] = []
+		for (const outcome of outcomes) {
+			const { call, handler, latestToolCall, toolCallParams, toolResult, executed } = outcome
+			const toolName = call.name as DietCodeDefaultTool
+			if (executed) {
+				this.stats.toolCalls += 1
+				this.onProgress?.({ stats: { ...this.stats } })
+			} else {
+				await this.recordTranscript("tool_call", { toolName, preview: latestToolCall, params: toolCallParams }, "raw")
+			}
+			const serializedToolResult = serializeToolResult(toolResult)
+			const toolDescription =
+				handler?.getDescription({
+					type: "tool_use",
+					name: toolName,
+					params: toolCallParams,
+					partial: false,
+				}) || `[${toolName}]`
+			this.recordToolStepInEnvelope(
+				toolName,
+				latestToolCall,
+				serializedToolResult,
+				toolCallParams as Record<string, string>,
+			)
+			await this.recordTranscript(
+				"tool_response",
+				{ toolName, preview: latestToolCall, resultExcerpt: serializedToolResult.slice(0, 500) },
+				"raw",
+			)
+			pushSubagentToolResultBlock(toolResultBlocks, call, toolDescription, serializedToolResult)
+			if (executed) {
+				this.applyRepetitionDetection(toolName, toolCallParams, toolResultBlocks)
+			}
+			if (executed && serializedToolResult.length > 0) {
+				void this.signalCriticalFindingsToSwarm(serializedToolResult)
+			}
+		}
+		return toolResultBlocks
+	}
+
+	private applyRepetitionDetection(
+		toolName: DietCodeDefaultTool,
+		toolCallParams: ToolUse["params"],
+		toolResultBlocks: DietCodeUserContent[],
+	): void {
+		const currentCallKey = `${toolName}:${JSON.stringify(toolCallParams)}`
+		if (this.toolCallHistory.at(-1) === currentCallKey) {
+			this.totalConsecutiveIdenticalCalls += 1
+		} else {
+			this.totalConsecutiveIdenticalCalls = 0
+		}
+		this.toolCallHistory.push(currentCallKey)
+		if (this.toolCallHistory.length > 10) this.toolCallHistory.shift()
+
+		if (this.totalConsecutiveIdenticalCalls < this.MAX_CONSECUTIVE_IDENTICAL_CALLS) return
+
+		toolResultBlocks.push({
+			type: "text",
+			text: `[SELF-CORRECTION NUDGE] You have called the same tool with the same parameters ${this.MAX_CONSECUTIVE_IDENTICAL_CALLS + 1} times in a row. This suggests you are stuck. Please RE-EVALUATE your approach, explore a different architectural layer, or use 'ask_followup_question' to clarify the objective with the parent.`,
+		})
+		Logger.warn(`[SubagentRunner] Repetition detected for tool ${toolName}; injected nudge.`)
+		void this.signalCriticalFindingsToSwarm(
+			`TOXIC HOTSPOT DETECTED: Subagent is stuck in a repetition loop with tool '${toolName}'. Potential architectural conflict or context uncertainty at this depth.`,
+		)
+		this.totalConsecutiveIdenticalCalls = 0
 	}
 
 	private async compactConversationForContextWindow(
@@ -1384,16 +1505,40 @@ export class SubagentRunner {
 		}
 	}
 
-	private finalizeResult(result: Omit<SubagentRunResult, "envelope">): SubagentRunResult {
+	private async finalizeResult(result: Omit<SubagentRunResult, "envelope">): Promise<SubagentRunResult> {
 		if (this.transcriptRecorder && this.envelopeBuilder) {
+			let transcriptDurable = false
+			try {
+				await this.transcriptRecorder.flush()
+				transcriptDurable = true
+			} catch (error) {
+				Logger.warn("[SubagentRunner] Failed to flush terminal transcript:", error)
+				this.envelopeBuilder.recordWarning("Terminal transcript flush failed; in-memory execution result preserved.")
+			}
 			const built = this.envelopeBuilder.build()
-			if (built.transcriptArtifactPath) {
+			if (transcriptDurable && built.transcriptArtifactPath) {
 				const meta = this.transcriptRecorder.getMeta(built.transcriptArtifactPath)
 				this.envelopeBuilder.setTranscriptMeta(meta.artifactPath, meta.eventCount, meta.byteSize)
 			}
+			await this.invokeTranscriptFlushCallback()
 		}
 		const envelope = this.envelopeBuilder?.build()
 		return { ...result, envelope }
+	}
+
+	private async finalizeAndPublish(result: Omit<SubagentRunResult, "envelope">): Promise<SubagentRunResult> {
+		const finalized = await this.finalizeResult(result)
+		this.onProgress?.({ ...result, stats: { ...result.stats } })
+		return finalized
+	}
+
+	private async invokeTranscriptFlushCallback(): Promise<void> {
+		try {
+			await this.onTranscriptFlush?.()
+		} catch (error) {
+			Logger.warn("[SubagentRunner] Transcript flush callback failed:", error)
+			this.envelopeBuilder?.recordWarning("Transcript flush callback failed; execution result preserved in memory.")
+		}
 	}
 
 	private recordToolStepInEnvelope(toolName: string, preview: string, result: string, params: Record<string, string>): void {
@@ -1429,7 +1574,7 @@ export class SubagentRunner {
 		const upperResult = result.toUpperCase()
 		const findingKey = this.hashString(upperResult).slice(0, 16)
 
-		if (this.signaledFindings.has(findingKey)) {
+		if (this.signaledFindings.has(findingKey) || this.signalingFindings.has(findingKey)) {
 			return // De-duplicate identical findings
 		}
 
@@ -1437,16 +1582,20 @@ export class SubagentRunner {
 			const matchingKeywords = criticalKeywords.filter((keyword) => upperResult.includes(keyword))
 			this.activeSignals = Array.from(new Set([...this.activeSignals, ...matchingKeywords]))
 			this.onProgress?.({ activeSignals: this.activeSignals })
+			this.signalingFindings.add(findingKey)
 
 			try {
+				const signalId = `${Date.now()}_${++this.signalSequence}`
 				const label =
 					upperResult.includes("GROUNDED SPECIFICATION REFRESH") || upperResult.includes("CONTEXT UNCERTAINTY")
-						? `swarm_nudge_${Date.now()}`
-						: `swarm_finding_${Date.now()}`
+						? `swarm_nudge_${signalId}`
+						: `swarm_finding_${signalId}`
 				await orchestrator.storeMemory(parentStreamId, label, result.slice(0, 1500))
 				this.signaledFindings.add(findingKey)
 			} catch (e) {
 				Logger.warn("[SubagentRunner] Failed to signal swarm finding:", e)
+			} finally {
+				this.signalingFindings.delete(findingKey)
 			}
 		}
 	}

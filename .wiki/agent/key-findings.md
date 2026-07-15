@@ -1,5 +1,14 @@
 # Key Findings
 
+## 2026-07-15 Subagent Concurrency and Scoped Cancellation Pass
+
+- Scoped command cancellation via `ownerId` prevents cross-contamination of concurrent subprocesses. `CommandExecutor` independent tracking ensures cancellations target the correct processes and preserves cancellation authority across terminal acquisition races.
+- Lane admission in `UseSubagentsToolHandler` now tracks pool execution slots (`running.size`) rather than yielded lifecycle states (`activeLaneExecutions`), avoiding premature queue saturation when multiple lanes start in a single tick.
+- Fetching parent context asynchronously as a promise removes context retrieval from the critical subagent lane admission path, ensuring faster startup times.
+- Resuming swarms requires checking that the source governed receipt is sealed and has valid integrity with a matching checksum. Missing or unsealed receipts result in restart rather than unsafe work reuse.
+- Tool repetition checks (`MAX_CONSECUTIVE_IDENTICAL_CALLS = 3`) identify stuck subagents, inject self-correction nudges to re-evaluate parameters, and notify the parent swarm of toxic hotspots.
+- Transcript flushes use atomic temporary files renamed on success to prevent corruption under deferred write-behind scheduling. Published envelopes require transcript durability.
+
 ## 2026-07-13 I/O Hyper-Execution Pass
 
 - Cold path/authority work dominated scheduler-ready-to-backend-start for one small read: 1.362 ms of a 2.396 ms local fixture trace. Warm generation reuse reduced that path to 0.114 ms and the complete handoff to 0.157 ms with no filesystem calls.

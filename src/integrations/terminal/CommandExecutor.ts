@@ -30,11 +30,10 @@ export class CommandExecutor {
 	private terminalManager: ITerminalManager
 	private callbacks: CommandExecutorCallbacks
 
-	// Track the currently executing foreground process for cancellation
-	private currentProcess: TerminalProcessResultPromise | null = null
-
-	// Flag to track if the current command was cancelled externally
-	private wasCancelledExternally = false
+	private readonly activeProcesses = new Map<string, Map<TerminalProcessResultPromise, { wasCancelledExternally: boolean }>>()
+	private readonly cancelledOwners = new Set<string>()
+	private nextOwnerSequence = 0
+	private cancellationGeneration = 0
 
 	// Track shell integration warnings to determine when to show the stronger troubleshooting suggestion
 	private shellIntegrationWarningTracker: ShellIntegrationWarningTracker = {
@@ -69,20 +68,34 @@ export class CommandExecutor {
 		const manager = this.terminalManager
 		Logger.info(`Executing command in VS Code terminal: ${command}`)
 
+		const ownerId = options?.ownerId || `command-${++this.nextOwnerSequence}`
+		const startingCancellationGeneration = this.cancellationGeneration
 		// Get terminal and run command
 		const terminalInfo = await manager.getOrCreateTerminal(this.cwd)
 		terminalInfo.terminal.show()
 		const process = manager.runCommand(terminalInfo, command)
 		const startedAt = Date.now()
 
-		// Reset cancellation flag and track the current process
-		this.wasCancelledExternally = false
-		this.currentProcess = process
+		const processState = { wasCancelledExternally: false }
+		const ownerProcesses = this.activeProcesses.get(ownerId) || new Map()
+		ownerProcesses.set(process, processState)
+		this.activeProcesses.set(ownerId, ownerProcesses)
 		const clearCurrentProcess = () => {
-			this.currentProcess = null
+			const currentOwnerProcesses = this.activeProcesses.get(ownerId)
+			currentOwnerProcesses?.delete(process)
+			if (currentOwnerProcesses?.size === 0) {
+				this.activeProcesses.delete(ownerId)
+			}
 		}
 		process.once("completed", clearCurrentProcess)
 		process.once("error", clearCurrentProcess)
+		if (
+			(this.cancelledOwners.has(ownerId) || startingCancellationGeneration !== this.cancellationGeneration) &&
+			process.terminate
+		) {
+			processState.wasCancelledExternally = true
+			await process.terminate()
+		}
 
 		// Use shared orchestration logic.
 		const result = await orchestrateCommandExecution(process, manager, this.callbacks, {
@@ -95,14 +108,14 @@ export class CommandExecutor {
 
 		// If the command was cancelled externally (via cancel button), return a clear cancellation message
 		// This ensures the AI agent knows the command was cancelled by the user
-		if (this.wasCancelledExternally) {
+		if (processState.wasCancelledExternally) {
 			const outputSoFar =
 				result.outputLines.length > 0
 					? `\nOutput captured before cancellation:\n${manager.processOutput(result.outputLines)}`
 					: ""
 			return [
 				true,
-				attachCommandExecutionEvidence(`Command was cancelled by the user.${outputSoFar}`, {
+				attachCommandExecutionEvidence(`Command was cancelled.${outputSoFar}`, {
 					command,
 					approvalStatus: "unknown",
 					started: true,
@@ -139,25 +152,35 @@ export class CommandExecutor {
 	 *
 	 * @returns true if any commands were cancelled, false otherwise
 	 */
-	async cancelBackgroundCommand(): Promise<boolean> {
-		let cancelled = false
-
-		// Cancel the current foreground process if the host process supports termination.
-		if (this.currentProcess?.terminate) {
-			// Set flag so execute() knows the command was cancelled externally
-			this.wasCancelledExternally = true
-			await this.currentProcess.terminate()
-			this.currentProcess = null
-			cancelled = true
-			Logger.info("Cancelled foreground command")
+	async cancelBackgroundCommand(ownerId?: string): Promise<boolean> {
+		if (ownerId) {
+			// Preserve cancellation authority across terminal acquisition/startup races.
+			this.cancelledOwners.add(ownerId)
+		} else {
+			this.cancellationGeneration += 1
 		}
+		const targets = ownerId ? ([[ownerId, this.activeProcesses.get(ownerId)]] as const) : [...this.activeProcesses.entries()]
+		const terminations: Promise<void>[] = []
+		for (const [targetOwnerId, processes] of targets) {
+			if (!processes) continue
+			for (const [process, state] of processes) {
+				if (!process.terminate) continue
+				state.wasCancelledExternally = true
+				terminations.push(Promise.resolve(process.terminate()))
+			}
+			Logger.info(`Cancelling foreground command owner '${targetOwnerId}'`)
+		}
+		if (terminations.length > 0) {
+			await Promise.allSettled(terminations)
+		}
+		const cancelled = terminations.length > 0
 
 		// Update UI state and notify user by modifying existing message
 		// We modify the previous command_output message instead of sending a new say()
 		// to avoid interfering with any pending ask() dialogs (which would cause
 		// "Current ask promise was ignored" errors)
 		if (cancelled) {
-			this.callbacks.updateBackgroundCommandState(false)
+			this.callbacks.updateBackgroundCommandState(this.hasActiveBackgroundCommand())
 
 			// Find the last command_output message and update it
 			const messages = this.callbacks.getDietCodeMessages()
@@ -175,8 +198,8 @@ export class CommandExecutor {
 	}
 
 	/** Check whether this task owns a cancellable terminal process. */
-	hasActiveBackgroundCommand(): boolean {
-		return this.currentProcess !== null
+	hasActiveBackgroundCommand(ownerId?: string): boolean {
+		return ownerId ? (this.activeProcesses.get(ownerId)?.size ?? 0) > 0 : this.activeProcesses.size > 0
 	}
 
 	/**

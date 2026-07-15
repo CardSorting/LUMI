@@ -288,6 +288,8 @@ export interface CommandExecutionOptions {
 	 * Command output is still captured and returned as the tool result.
 	 */
 	suppressUserInteraction?: boolean
+	/** Ownership scope used for targeted cancellation of concurrent commands. */
+	ownerId?: string
 }
 
 /**

@@ -59,3 +59,30 @@ For direct operations, use the task signal when no sibling invocation signal exi
 - Stop admitting traversal work after cancellation/limit/timeout, await active work, and release partial buffers.
 - A cancelled subprocess is not settled until the owned process closes; escalation timers and listeners must be cleared on every terminal path.
 - A failed multi-root producer aborts its peer producers, joins all of them, and rejects. Never normalize backend failure into a cacheable empty result.
+
+## Owner-Scoped Command Cancellation
+
+1. Tag running subprocesses with an `ownerId` parameter upon creation.
+2. In `CommandExecutor`, map executing processes to their respective `ownerId`.
+3. Cancel specific scopes using `cancelBackgroundCommand(ownerId)` without terminating other concurrently running subprocesses.
+4. Check scoped status using `hasActiveBackgroundCommand(ownerId)`.
+
+## Swarm Resume Authority Verification
+
+1. Load the candidate governed authority receipt matching the swarm and task.
+2. Verify the receipt is sealed and passes integrity checksum checks.
+3. Reuse historical agent results only if the matching lane receipt is completed and claim-released.
+4. Restart lanes that lack a valid, sealed governed receipt.
+
+## Subagent Repetition Self-Correction
+
+1. Keep a sliding history of the last 10 tool calls (`toolName:JSON.stringify(params)`).
+2. Track consecutive identical tool calls.
+3. If they reach the repetition threshold, inject a self-correction nudge into the LLM context.
+4. Signal a toxic hotspot finding to the parent swarm.
+
+## Atomic, Durable Transcripts
+
+1. Support deferred write-behind transcript flushes to keep the hot path responsive.
+2. Force a full flush as a durability barrier before publishing completions or failure results.
+3. Perform atomic writes by writing the transcript history to a temporary file (`.tmp`) and renaming it to the final destination to prevent JSONL corruption/duplication.

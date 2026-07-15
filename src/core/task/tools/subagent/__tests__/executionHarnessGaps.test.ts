@@ -86,6 +86,74 @@ describe("execution harness gap closure", () => {
 		assert.equal(loaded.events[3].kind, "tool_response")
 	})
 
+	it("buffers bursty transcript progress until an explicit durability barrier", async () => {
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "transcript-buffered-"))
+		const disk = await import("@core/storage/disk")
+		sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
+		const recorder = new SubagentTranscriptRecorder({
+			swarmId: "swarm-buffered",
+			agentId: "agent-buffered",
+			taskId: "task-buffered",
+			executionId: "exec-buffered",
+		})
+		await recorder.init()
+		recorder.append("llm_request", { iteration: 1 })
+		recorder.scheduleFlush(60_000)
+		recorder.append("assistant_turn", { text: "ready" })
+		recorder.scheduleFlush(60_000)
+
+		const transcriptPath = path.join(tempDir, "subagent_executions/swarm-buffered/agents/agent-buffered.transcript.jsonl")
+		await assert.rejects(
+			() => fs.readFile(transcriptPath, "utf8"),
+			(error: NodeJS.ErrnoException) => error.code === "ENOENT",
+		)
+		await recorder.flush()
+
+		const loaded = await loadTranscriptEvents("task-buffered", "swarm-buffered", "agent-buffered")
+		assert.deepEqual(
+			loaded.events.map((event) => event.kind),
+			["llm_request", "assistant_turn"],
+		)
+	})
+
+	it("retries transcript lines after a deferred append failure", async () => {
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "transcript-retry-"))
+		const disk = await import("@core/storage/disk")
+		sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
+
+		const recorder = new SubagentTranscriptRecorder({
+			swarmId: "swarm-retry",
+			agentId: "agent-retry",
+			taskId: "task-retry",
+			executionId: "exec-retry",
+		})
+		await recorder.init()
+		recorder.append("llm_request", { iteration: 1 })
+		const executionsPath = path.join(tempDir, "subagent_executions")
+		await fs.rm(executionsPath, { recursive: true })
+		await fs.writeFile(executionsPath, "temporarily unavailable", "utf8")
+
+		const barriers = await Promise.allSettled([recorder.flush(), recorder.flush()])
+		assert.deepEqual(
+			barriers.map((barrier) => barrier.status),
+			["rejected", "rejected"],
+		)
+		for (const barrier of barriers) {
+			if (barrier.status === "rejected") {
+				assert.equal((barrier.reason as NodeJS.ErrnoException).code, "ENOTDIR")
+			}
+		}
+		await fs.rm(executionsPath)
+		await fs.mkdir(path.join(executionsPath, "swarm-retry", "agents"), { recursive: true })
+		await recorder.flush()
+
+		const loaded = await loadTranscriptEvents("task-retry", "swarm-retry", "agent-retry")
+		assert.deepEqual(
+			loaded.events.map((event) => event.kind),
+			["llm_request"],
+		)
+	})
+
 	it("records compaction boundary before context drop and fails validation when missing", async () => {
 		const agent = buildAgent({
 			compactionEvents: [
@@ -168,12 +236,60 @@ describe("execution harness gap closure", () => {
 
 		const swarm = buildSwarm([completed, failed, pending], "interrupted")
 		await persistSwarmEnvelope("task-1", swarm)
+		await fs.writeFile(
+			path.join(tempDir, "subagent_executions/swarm-1.governed.json"),
+			JSON.stringify({
+				schemaVersion: 3,
+				swarmId: "swarm-1",
+				taskId: "task-1",
+				attemptId: "attempt-source",
+				laneReceipts: [
+					{
+						laneId: "source-lane-1",
+						agentId: "a-done",
+						index: 1,
+						status: "completed",
+						claimId: "source-claim-1",
+						claimReleased: true,
+						evidenceCount: 1,
+						touchedFiles: [],
+						sealedAt: Date.now(),
+						executionMode: "mutation",
+						lockRequired: true,
+					},
+				],
+				mergeGate: { passed: true },
+				sealed: true,
+				integrity: { valid: true, violations: [], checksum: "resume-source-checksum" },
+			}),
+			"utf8",
+		)
 
 		const plan = await planResumeFromArtifact("task-1", "swarm-1", { newSwarmId: "swarm-2", maxAgeMs: 60_000 })
 		assert.equal(plan.reuseAgents.length, 1)
+		assert.equal(plan.reuseAgents[0].sourceLaneReceipt?.claimId, "source-claim-1")
 		assert.equal(plan.retryAgents.length, 1)
 		assert.equal(plan.restartAgents.length, 1)
 		assert.equal(plan.recoveryReceipt.operatorVisible, true)
+
+		const governedPath = path.join(tempDir, "subagent_executions/swarm-1.governed.json")
+		const governedReceipt = JSON.parse(await fs.readFile(governedPath, "utf8"))
+		governedReceipt.sealed = false
+		await fs.writeFile(governedPath, JSON.stringify(governedReceipt), "utf8")
+		const unsealedPlan = await planResumeFromArtifact("task-1", "swarm-1", {
+			newSwarmId: "swarm-unsealed",
+			maxAgeMs: 60_000,
+		})
+		assert.equal(unsealedPlan.reuseAgents.length, 0)
+		assert.equal(unsealedPlan.restartAgents.length, 2)
+
+		await fs.rm(governedPath)
+		const ungovernedPlan = await planResumeFromArtifact("task-1", "swarm-1", {
+			newSwarmId: "swarm-3",
+			maxAgeMs: 60_000,
+		})
+		assert.equal(ungovernedPlan.reuseAgents.length, 0)
+		assert.equal(ungovernedPlan.restartAgents.length, 2)
 	})
 
 	it("rejects corrupted and stale artifacts for resume", async () => {

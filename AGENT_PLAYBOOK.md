@@ -4,7 +4,7 @@
 > **When do I use it?** At task start to understand the active developer landscape, blockers, and orientation paths.
 > **What is the source of truth?** The live workspace layout, manifests, package files, and the active task requirements.
 
-Last audited: 2026-07-09
+Last audited: 2026-07-15
 
 ## Current Status
 
@@ -16,19 +16,17 @@ Last audited: 2026-07-09
 | Substrate | BroccoliDB package | `broccolidb/package.json` name `@noorm/broccolidb` |
 | Tools | 64 typed tool enum values | `src/shared/tools.ts` |
 | Providers | 6 provider keys in code/UI | `src/core/api/index.ts`, `src/shared/providers/providers.json` |
-| Active pass | Workspace Intelligence Engine integration | Current working tree |
+| Active pass | Subagent Execution & Scoped Cancellation pass | Current working tree |
 
 ## What Is Happening Right Now
 
-The active work is upgrading agent continuity into a code-level Workspace Intelligence System:
+The active work is hardening and optimizing subagent task execution, scoped cancellation, and durability:
 
-- `src/core/prompts/system-prompt/components/integrity_wiki.ts` now defines the Agent Playbook Method.
-- `src/core/task/tools/finalization/AutonomousDocumentationFinalizer.ts` now generates `.wiki/agent/*` playbook artifacts during `run_finalization`.
-- `src/core/workspace-intelligence/` now owns classified knowledge signals, drift findings, model persistence, and optional BroccoliDB cognitive memory publication.
-- `src/shared/completion/finalizationEvidence.ts` now records workspace-intelligence artifact paths and category counts in finalization evidence.
-- `src/core/task/tools/finalization/__tests__/finalizationRunner.test.ts` covers workspace-specific playbook generation and intelligence model persistence.
-- `.agents/skills/agent-playbook-method/SKILL.md` adds a workspace skill for wiki/playbook work.
-- This pass adds root-level continuity docs: `AGENT_PLAYBOOK.md`, `WIKI.md`, `TROUBLESHOOTING.md`, `DECISIONS.md`, and `HANDOFF.md`.
+- `src/integrations/terminal/CommandExecutor.ts` implements scoped command cancellation using `ownerId` to cancel processes concurrently and independently.
+- `src/core/task/tools/handlers/SubagentToolHandler.ts` improves subagent concurrency controls by counting active execution slots (`running.size`) rather than yielded lifecycle states, and prefetches parent context asynchronously off the critical path.
+- `src/core/task/tools/subagent/ResumeSwarmFromArtifact.ts` ensures resume safety by requiring a valid, sealed governed lane receipt and matching checksum before reusing previous agent results.
+- `src/core/task/tools/subagent/SubagentRunner.ts` implements repetition detection to break tool repetition loops with self-correction nudges and signal toxic hotspots.
+- `src/core/task/tools/subagent/SubagentTranscriptRecorder.ts` writes JSONL logs atomically using temporary files to prevent corruption, and supports deferred write-behind scheduling.
 
 ## First 10 Minutes For A New Agent
 
@@ -61,12 +59,12 @@ The active work is upgrading agent continuity into a code-level Workspace Intell
 
 | File | Why it changed |
 |---|---|
-| `src/core/prompts/system-prompt/components/integrity_wiki.ts` | Adds Agent Playbook Method to the wiki prompt contract |
-| `src/core/task/tools/finalization/AutonomousDocumentationFinalizer.ts` | Generates `.wiki/agent/*` playbook files from workspace evidence |
-| `src/core/workspace-intelligence/` | Adds Workspace Intelligence Engine, store, schema, and exports |
-| `src/shared/completion/finalizationEvidence.ts` | Adds finalization evidence fields for intelligence artifacts/category counts |
-| `src/core/task/tools/finalization/__tests__/finalizationRunner.test.ts` | Verifies finalization creates playbook artifacts and intelligence model artifacts |
-| `.agents/skills/agent-playbook-method/SKILL.md` | Adds a project skill for manual playbook/wiki continuity work |
+| `src/integrations/terminal/CommandExecutor.ts` | Scoped terminal command cancellation via `ownerId`. |
+| `src/core/task/tools/handlers/SubagentToolHandler.ts` | Subagent queue admission concurrency fixes and async prefetching. |
+| `src/core/task/tools/subagent/ResumeSwarmFromArtifact.ts` | Resuming swarms requires valid governed receipt integrity. |
+| `src/core/task/tools/subagent/SubagentRunner.ts` | Subagent tool repetition detection and durable transcript checks. |
+| `src/core/task/tools/subagent/SubagentTranscriptRecorder.ts` | Atomic, buffered transcript persistence to disk. |
+| `src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts` | Tests for transcript durability, retry, integrity, and replay contract. |
 
 ## Files To Avoid Touching Casually
 
@@ -95,7 +93,7 @@ The active work is upgrading agent continuity into a code-level Workspace Intell
 | Scope | Command |
 |---|---|
 | Production TypeScript | `npx tsc --noEmit --pretty false --project tsconfig.json` |
-| Changed finalization spec | `TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs src/core/task/tools/finalization/__tests__/finalizationRunner.test.ts` |
+| Focused Subagent/Executor tests | `TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts src/integrations/terminal/CommandOrchestrator.test.ts` |
 | Touched file style | `npx biome check <files> --files-ignore-unknown=true --diagnostic-level=error` |
 | Docs links | `npm run docs:check-agent-links` |
 | Docs branding | `npm run docs:check-agent-branding` |

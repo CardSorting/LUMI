@@ -17,6 +17,7 @@ import type {
 class FakeTerminalProcess extends EventEmitter<TerminalProcessEvents> implements ITerminalProcess {
 	isHot = false
 	waitForShellIntegration = false
+	terminateCount = 0
 	private readonly promise: Promise<void>
 	private resolvePromise!: () => void
 	private rejectPromise!: (error: Error) => void
@@ -54,6 +55,7 @@ class FakeTerminalProcess extends EventEmitter<TerminalProcessEvents> implements
 	}
 
 	terminate(): void {
+		this.terminateCount += 1
 		this.complete({ exitCode: null, signal: "SIGINT" })
 	}
 
@@ -188,6 +190,60 @@ describe("CommandExecutor structured evidence", () => {
 
 		assert.equal(await executor.cancelBackgroundCommand(), true)
 		assert.equal((await pending)[0], true)
+		assert.equal(executor.hasActiveBackgroundCommand(), false)
+	})
+
+	it("supervises concurrent command owners independently", async () => {
+		const processA = new FakeTerminalProcess()
+		const processB = new FakeTerminalProcess()
+		const processes = new Map([
+			["command-a", processA],
+			["command-b", processB],
+		])
+		const manager = {
+			...createTerminalManager(),
+			getOrCreateTerminal: async () => terminalInfo,
+			runCommand: (_terminal: unknown, command: string) => processes.get(command)?.asResultPromise(),
+		} as unknown as ITerminalManager
+		const executor = new CommandExecutor(executorConfig(manager), createCallbacks())
+		const pendingA = executor.execute("command-a", undefined, { ownerId: "lane-a" })
+		const pendingB = executor.execute("command-b", undefined, { ownerId: "lane-b" })
+		await new Promise((resolve) => setImmediate(resolve))
+
+		processA.complete({ exitCode: 0, signal: null })
+		assert.equal((await pendingA)[0], false)
+		assert.equal(executor.hasActiveBackgroundCommand("lane-b"), true)
+		assert.equal(await executor.cancelBackgroundCommand("lane-b"), true)
+
+		assert.equal(processA.terminateCount, 0)
+		assert.equal(processB.terminateCount, 1)
+		assert.equal((await pendingB)[0], true)
+		assert.equal(executor.hasActiveBackgroundCommand(), false)
+	})
+
+	it("cancels a scoped command that starts after the cancellation request", async () => {
+		const process = new FakeTerminalProcess()
+		let releaseTerminal!: () => void
+		const terminalReady = new Promise<void>((resolve) => {
+			releaseTerminal = resolve
+		})
+		const manager = {
+			...createTerminalManager(),
+			getOrCreateTerminal: async () => {
+				await terminalReady
+				return terminalInfo
+			},
+			runCommand: () => process.asResultPromise(),
+		} as unknown as ITerminalManager
+		const executor = new CommandExecutor(executorConfig(manager), createCallbacks())
+		const pending = executor.execute("late-command", undefined, { ownerId: "late-lane" })
+		await new Promise((resolve) => setImmediate(resolve))
+
+		assert.equal(await executor.cancelBackgroundCommand("late-lane"), false)
+		releaseTerminal()
+
+		assert.equal((await pending)[0], true)
+		assert.equal(process.terminateCount, 1)
 		assert.equal(executor.hasActiveBackgroundCommand(), false)
 	})
 })

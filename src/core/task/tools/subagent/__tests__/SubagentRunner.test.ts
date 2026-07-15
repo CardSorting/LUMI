@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert"
+import { setTimeout as delay } from "node:timers/promises"
 import * as coreApi from "@core/api"
 import * as skillRuntime from "@core/context/instructions/user-instructions/skillRuntime"
 import * as skills from "@core/context/instructions/user-instructions/skills"
@@ -14,6 +15,7 @@ import { DietCodeDefaultTool } from "@/shared/tools"
 import { TaskState } from "../../../TaskState"
 import { SubagentBuilder } from "../SubagentBuilder"
 import { SubagentRunner } from "../SubagentRunner"
+import { SubagentTranscriptRecorder } from "../SubagentTranscriptRecorder"
 
 const VALID_SUBAGENT_COMPLETION_RESULT =
 	"Subagent completed the assigned scope successfully. All verification steps passed and the deliverable is ready for review."
@@ -238,6 +240,146 @@ describe("SubagentRunner", () => {
 		assert.equal(result.status, "completed")
 		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
+	})
+
+	it("publishes terminal completion only after transcript durability and tolerates flush callback failure", async () => {
+		const createMessage = sinon.stub().callsFake(async function* () {
+			yield {
+				type: "tool_calls",
+				tool_call: {
+					function: {
+						id: "toolu_durable_completion",
+						name: DietCodeDefaultTool.ATTEMPT,
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
+					},
+				},
+			}
+		})
+		const promptRegistry = PromptRegistry.getInstance()
+		sinon.stub(promptRegistry, "get").callsFake(async () => {
+			promptRegistry.nativeTools = [{ name: "attempt_completion" } as any]
+			return "system prompt"
+		})
+		sinon.stub(SubagentBuilder.prototype, "buildNativeTools").returns([{ name: "attempt_completion" }] as any)
+		stubApiHandler(createMessage)
+		initializeHostProvider()
+
+		const flush = sinon.stub(SubagentTranscriptRecorder.prototype, "flush").resolves()
+		sinon.stub(SubagentTranscriptRecorder.prototype, "init").resolves("/tmp/subagent-durable.transcript.jsonl")
+		const callback = sinon.stub().rejects(new Error("status sink unavailable"))
+		const config = createTaskConfig(true)
+		const runner = new SubagentRunner(config, new SubagentBuilder(config, "subagent"))
+		const result = await runner.runWithEnvelope(
+			"Complete durably",
+			(update) => {
+				if (update.status === "completed") assert.ok(flush.callCount >= 2)
+			},
+			{
+				agentId: "agent-durable",
+				role: "worker",
+				swarmId: "swarm-durable",
+				taskId: "task-durable",
+				index: 0,
+				depth: 0,
+				onTranscriptFlush: callback,
+			},
+		)
+
+		assert.equal(result.status, "completed")
+		assert.ok(result.envelope?.warnings.some((warning) => warning.includes("flush callback failed")))
+	})
+
+	it("executes independent I/O authority calls concurrently and projects results in emission order", async () => {
+		const createMessage = sinon.stub()
+		createMessage.onFirstCall().callsFake(async function* () {
+			for (const [id, path] of ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "f.ts"].map(
+				(path, index) => [`toolu_parallel_${index}`, path] as const,
+			)) {
+				yield {
+					type: "tool_calls",
+					tool_call: {
+						function: {
+							id,
+							name: DietCodeDefaultTool.LIST_FILES,
+							arguments: JSON.stringify({ path, recursive: false }),
+						},
+					},
+				}
+			}
+		})
+		createMessage.onSecondCall().callsFake(async function* (_systemPrompt: string, conversation: unknown[]) {
+			const results = (conversation[2] as { content: Array<{ content?: string }> }).content
+			assert.deepEqual(
+				results.map((result) => result.content),
+				["result:a.ts", "result:b.ts", "result:c.ts", "result:d.ts", "result:e.ts", "result:f.ts"],
+			)
+			yield {
+				type: "tool_calls",
+				tool_call: {
+					function: {
+						id: "toolu_parallel_complete",
+						name: DietCodeDefaultTool.ATTEMPT,
+						arguments: JSON.stringify({ result: VALID_SUBAGENT_COMPLETION_RESULT }),
+					},
+				},
+			}
+		})
+
+		const promptRegistry = PromptRegistry.getInstance()
+		sinon.stub(promptRegistry, "get").callsFake(async () => {
+			promptRegistry.nativeTools = [{ name: "list_files" } as any]
+			return "system prompt"
+		})
+		sinon.stub(SubagentBuilder.prototype, "buildNativeTools").returns([{ name: "list_files" }] as any)
+		stubApiHandler(createMessage)
+		initializeHostProvider()
+
+		const config = createTaskConfig(true)
+		const releases = new Map<string, () => void>()
+		const started: string[] = []
+		let resolveFirstWaveStarted!: () => void
+		const firstWaveStarted = new Promise<void>((resolve) => {
+			resolveFirstWaveStarted = resolve
+		})
+		let resolveAllStarted!: () => void
+		const allStarted = new Promise<void>((resolve) => {
+			resolveAllStarted = resolve
+		})
+		config.coordinator.getHandler = sinon.stub().returns({
+			execute: sinon.stub().callsFake(async (_config: TaskConfig, block: { params: { path: string } }) => {
+				started.push(block.params.path)
+				if (started.length === 4) resolveFirstWaveStarted()
+				if (started.length === 6) resolveAllStarted()
+				await new Promise<void>((resolve) => releases.set(block.params.path, resolve))
+				return `result:${block.params.path}`
+			}),
+			getDescription: sinon.stub().returns("list_files"),
+		})
+		const runner = new SubagentRunner(config, new SubagentBuilder(config, "subagent"))
+		runner.setLaneExecutionMode("read_only")
+		const execution = runner.run("Read files", () => {})
+
+		await Promise.race([
+			firstWaveStarted,
+			delay(500).then(() => {
+				throw new Error("bounded I/O batch did not start concurrently")
+			}),
+		])
+		assert.deepEqual(started, ["a.ts", "b.ts", "c.ts", "d.ts"])
+		for (const path of started) releases.get(path)?.()
+		await Promise.race([
+			allStarted,
+			delay(500).then(() => {
+				throw new Error("queued I/O calls did not start after capacity was released")
+			}),
+		])
+		assert.deepEqual(started, ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "f.ts"])
+		releases.get("e.ts")?.()
+		releases.get("f.ts")?.()
+		const result = await execution
+
+		assert.equal(result.status, "completed")
+		assert.equal(result.stats.toolCalls, 7)
 	})
 
 	it("does not inherit parent focus-chain blockers at lane completion", async () => {

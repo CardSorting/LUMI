@@ -289,7 +289,7 @@ export class ToolExecutor {
 			timeoutSeconds: number | undefined,
 			options?: CommandExecutionOptions,
 		) => Promise<[boolean, any]>,
-		private cancelRunningCommandTool: () => Promise<boolean>,
+		private cancelRunningCommandTool: (ownerId?: string) => Promise<boolean>,
 		private doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>,
 		private updateFCListFromToolResponse: (taskProgress: string | undefined) => Promise<void>,
 		private switchToActMode: () => Promise<boolean>,

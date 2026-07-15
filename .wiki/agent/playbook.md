@@ -1,6 +1,6 @@
 # Agent Fast Orientation
 
-Last validated: 2026-07-13
+Last validated: 2026-07-15
 
 ## Current Snapshot
 
@@ -32,7 +32,7 @@ Last validated: 2026-07-13
 
 ```sh
 npx tsc --noEmit --pretty false
-npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 <test-files>
+TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts src/integrations/terminal/CommandOrchestrator.test.ts
 npm run test:unit
 npm run lint
 npm run roadmap:audit

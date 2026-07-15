@@ -159,7 +159,7 @@ export interface TaskCallbacks {
 		timeoutSeconds: number | undefined,
 		options?: CommandExecutionOptions,
 	) => Promise<[boolean, DietCodeToolResponseContent]>
-	cancelRunningCommandTool?: () => Promise<boolean>
+	cancelRunningCommandTool?: (ownerId?: string) => Promise<boolean>
 
 	doesLatestTaskCompletionHaveNewChanges: () => Promise<boolean>
 

@@ -1995,8 +1995,8 @@ export class Task {
 	 * Cancel a background command that is running in the background
 	 * @returns true if a command was cancelled, false if no command was running
 	 */
-	public async cancelBackgroundCommand(): Promise<boolean> {
-		return this.commandExecutor.cancelBackgroundCommand()
+	public async cancelBackgroundCommand(ownerId?: string): Promise<boolean> {
+		return this.commandExecutor.cancelBackgroundCommand(ownerId)
 	}
 
 	/**

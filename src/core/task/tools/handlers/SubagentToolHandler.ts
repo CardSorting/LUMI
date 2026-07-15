@@ -429,16 +429,18 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				block.params as Record<string, string | undefined>,
 			)
 
-			const auditPreflightIssuesPromise: Promise<GatePreflightReadinessIssue[]> = pTimeout(
-				runGovernedSwarmAuditPreflight(config, swarmSummaryFromEntries(prompts)),
-				{
-					milliseconds: SUBAGENT_AUDIT_PREFLIGHT_TIMEOUT_MS,
-					message: "Governed swarm audit preflight timed out.",
-				},
-			).catch((error) => {
-				Logger.warn("[SubagentToolHandler] Governed swarm audit preflight failed:", error)
-				return [{ stage: "roadmap_governance", message: "preflight unavailable", severity: "info" as const }]
+			let auditPreflightIssues: GatePreflightReadinessIssue[] = []
+			void pTimeout(runGovernedSwarmAuditPreflight(config, swarmSummaryFromEntries(prompts)), {
+				milliseconds: SUBAGENT_AUDIT_PREFLIGHT_TIMEOUT_MS,
+				message: "Governed swarm audit preflight timed out.",
 			})
+				.catch((error) => {
+					Logger.warn("[SubagentToolHandler] Governed swarm audit preflight failed:", error)
+					return [{ stage: "audit" as const, message: "governed preflight unavailable", severity: "info" as const }]
+				})
+				.then((issues) => {
+					auditPreflightIssues = issues
+				})
 
 			const laneReceipts: LaneExecutionReceipt[] = []
 			let governedReceiptSummary: GovernedReceiptSummary | undefined
@@ -520,7 +522,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				}
 
 				if (partial && status === "running") {
-					void pTimeout(config.callbacks.say("subagent", JSON.stringify(payload), undefined, undefined, partial), {
+					await pTimeout(config.callbacks.say("subagent", JSON.stringify(payload), undefined, undefined, partial), {
 						milliseconds: SUBAGENT_UI_IO_TIMEOUT_MS,
 						message: "Subagent status UI timed out.",
 					}).catch((error) => Logger.warn("[SubagentToolHandler] Non-blocking status emit failed:", error))
@@ -664,17 +666,18 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			const maxInFlightLanes = computeMaxInFlightLanes(DEFAULT_SUBAGENT_CONCURRENCY)
 			const schedulerWake = createSwarmSchedulerWake()
 			let activeLaneExecutions = 0
-			const swarmExecutionContextPromise = Promise.all([
-				resolveCompletionGateOptions(config, config.cwd, {
-					lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
-				}),
-				parentStreamId
-					? pTimeout(orchestrator.getCompressedContext(parentStreamId), {
-							milliseconds: SUBAGENT_UI_IO_TIMEOUT_MS,
-							message: "Parent context prefetch timed out.",
-						}).catch(() => undefined)
-					: Promise.resolve(undefined),
-			])
+			const swarmGateOptionsPromise = resolveCompletionGateOptions(config, config.cwd, {
+				lastAdvisoryAudit: config.taskState.lastAdvisoryAudit,
+			})
+			// Optional parent context starts early and overlaps lane admission, runner setup,
+			// skill discovery, and system-prompt generation. Its bounded failure is reused;
+			// a lane never repeats a slow context fetch on the critical path.
+			const prefetchedParentContextPromise = parentStreamId
+				? pTimeout(orchestrator.getCompressedContext(parentStreamId), {
+						milliseconds: SUBAGENT_UI_IO_TIMEOUT_MS,
+						message: "Parent context prefetch timed out.",
+					}).catch(() => undefined)
+				: Promise.resolve(undefined)
 			let totalSwarmCost = 0
 			const MAX_PARENT_COST = config.taskState.maxCost
 			const swarmDeadline = swarmStartedAt + SUBAGENT_SWARM_TIMEOUT_MS
@@ -699,33 +702,39 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				if (resumePlan) {
 					const entry = entries[index]
 					const reused = resumePlan.reuseAgents.find((agent) => agent.index === entry.index)
-					if (reused) {
+					if (reused?.sourceLaneReceipt) {
 						entry.status = "completed"
 						entry.result = reused.result
-						const sourceEnvelope = resumePlan.sourceEnvelope.agents.find(
+						const originalSourceEnvelope = resumePlan.sourceEnvelope.agents.find(
 							(agent) => agent.agentId === reused.envelopeId,
 						)
+						const sourceEnvelope = originalSourceEnvelope
+							? {
+									...originalSourceEnvelope,
+									agentId: entry.id,
+									parentSwarmId: swarmId,
+									parentTaskId: config.taskId,
+									lineage: {
+										...originalSourceEnvelope.lineage,
+										swarmId,
+										index: entry.index,
+										resumeAttemptId: resumePlan.resumeAttemptId,
+									},
+								}
+							: undefined
 						if (sourceEnvelope) {
 							agentEnvelopes.set(entry.id, sourceEnvelope)
 							enrichEntryFromEnvelope(entry, sourceEnvelope)
 						}
-						laneReceipts.push(
-							governedCoordinator.buildLaneReceipt(
-								{
-									laneId: `swarm-lane:${swarmId}:${index}`,
-									swarmId,
-									agentId: entry.id,
-									index,
-									roadmapLeaseTaskId: `swarm-lane-${swarmId}-${index}`,
-									claimedAt: Date.now(),
-									executionMode: "mutation",
-									lockRequired: true,
-								},
-								sourceEnvelope,
-								"skipped",
-								true,
-							),
-						)
+						laneReceipts.push({
+							...reused.sourceLaneReceipt,
+							laneId: `swarm-lane:${swarmId}:${index}`,
+							agentId: entry.id,
+							index,
+							attemptId: governedCoordinator.getAttemptId(),
+							status: "skipped",
+							sealedAt: Date.now(),
+						})
 						governedCoordinator.markLaneSkipped(index)
 						completeChildStream(
 							index,
@@ -757,7 +766,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 				const current = entries[index]
 				const laneIntent = laneIntents[index]
 				const laneNecessity = laneNecessities[index]
-				const [swarmGateOptions, prefetchedParentContext] = await swarmExecutionContextPromise
+				const swarmGateOptions = await swarmGateOptionsPromise
 				let activeClaim: WorkLaneClaim | undefined
 
 				try {
@@ -898,7 +907,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 										parentStreamId,
 										parentExecutionId: resumePlan?.parentExecutionId,
 										resumeAttemptId: resumePlan?.resumeAttemptId,
-										prefetchedParentContext,
+										prefetchedParentContext: prefetchedParentContextPromise,
 										swarmGateOptions,
 										onTranscriptFlush: async () => {
 											queueStatusUpdate("running", true)
@@ -1157,7 +1166,10 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 						.getReadyLanesByPriority(laneDispatchWeights)
 						.filter((index) => pending.has(index))
 					for (const index of readyByPriority) {
-						if (activeLaneExecutions >= maxInFlightLanes) {
+						// Count admitted lane lifecycles, not only runners that have acquired a
+						// pool slot. runSubagent yields during setup, so activeLaneExecutions alone
+						// allowed the entire pending set to spill into the queue in one tick.
+						if (running.size >= maxInFlightLanes) {
 							break
 						}
 						pending.delete(index)
@@ -1261,13 +1273,11 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 					swarmInterrupted = true
 				}
 			}
-			// Drain status coalescer and finish audit preflight in parallel — neither blocks seal prep.
-			const [, auditPreflightIssues] = await Promise.all([
-				activeStatusEmitter.stop().catch((error) => {
-					Logger.warn("[SubagentToolHandler] Status emitter drain failed (non-fatal):", error)
-				}),
-				auditPreflightIssuesPromise,
-			])
+			// Drain parent-visible status writes. Advisory audit preflight is sampled if ready
+			// and never delays receipt sealing or parent continuation.
+			await activeStatusEmitter.stop().catch((error) => {
+				Logger.warn("[SubagentToolHandler] Status emitter drain failed (non-fatal):", error)
+			})
 
 			if (swarmInterrupted) {
 				const dagSnapshot = governedCoordinator.getLaneDAG().snapshot()
