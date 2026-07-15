@@ -1,16 +1,232 @@
-# Governed Execution Receipt Schema
+# Confidence-Preserving Subagent Convergence
 
-Reference for `GovernedSwarmReceipt` and related types. Schema version: **`GOVERNED_RECEIPT_SCHEMA_VERSION = 3`**.
+The harness can now finish vague, exploratory, and genuinely inconclusive work without pretending that the uncertainty disappeared. It preserves what each lane knows, what it only suspects, and why. It retries only when another narrowly scoped check could change a consequential decision.
 
-Roadmap projection fields (`agentRoadmapId`, `proposedWorkspacePatch`, `patchReconciliation`, etc.) are **additive v3 fields** — no schema version bump. Types live in `src/shared/subagent/roadmapProjection.ts` and are embedded on lane receipts and `GovernedRoadmapLinkage`.
+## 1. The problem before this change
 
-Source: `src/shared/subagent/governedExecution.ts`.
+The old convergence behavior treated weak confidence as evidence that a lane had not completed successfully. That was usually tolerable for a precise implementation task, but it failed badly for research and exploration.
+
+A vague objective naturally produces tentative answers. Different lanes may choose different reasonable scopes, make different assumptions, or conclude that the available material does not support a definitive answer. Those are useful results, not execution failures.
+
+The merge gate could not express that distinction. When a lane returned a weak or unknown conclusion, the gate interpreted the result as failed validation and sent the lane back through retry or repair. The retry inherited the same vague objective, so it often produced the same evidence under slightly different wording. Other lanes could drift toward different interpretations in the meantime. The apparent disagreement increased, confidence fell further, and the swarm stopped making progress.
+
+```text
+vague task
+    ↓
+tentative or conflicting findings
+    ↓
+low confidence interpreted as failed validation
+    ↓
+lane or swarm retry
+    ↓
+same evidence, new wording, wider interpretation drift
+    ↓
+more disagreement and lower confidence
+    ↓
+merge loop
+```
+
+The gate could not converge because its only safe-looking choices were to accept a conclusion as though it were settled or reject the work as though the lane had malfunctioned. It had no terminal state for “the work ran correctly, but the answer remains uncertain.”
+
+## 2. The root cause
+
+The execution model was missing independent representations for two different questions:
+
+1. Did the lane execute correctly and under valid governance?
+2. How strongly does the resulting evidence support each claim?
+
+Those questions had been collapsed into one success-or-failure signal. The model also lacked finding-level confidence reasons, decision criticality, explicit assumptions, task ambiguity, classified contradictions, probe history, and meaningful evidence deltas.
+
+As a result, several conditions looked identical to the merge gate:
+
+- a malformed or unauthorized execution;
+- a valid lane with incomplete evidence;
+- a valid lane answering a different interpretation of an ambiguous request;
+- a tentative hypothesis;
+- an advisory observation;
+- an honest “unknown” result.
+
+Once these states were indistinguishable, advisory findings could accidentally influence blocking decisions, uncertainty could trigger structural retry behavior, and an invalid execution could appear equivalent to a merely cautious answer. Repeating a claim also looked like progress because the model did not know whether the retry had produced any semantically new evidence.
+
+Resume amplified the problem. Without a durable uncertainty record, reused findings could be remapped as generic successful results, losing the original confidence reason and exhausted-verification state. The resumed swarm could then probe the same unresolved question again.
+
+## 3. The conceptual model now
+
+The new model treats execution trust and knowledge strength as separate dimensions. A lane can be completely valid while its answer remains low-confidence or unknown.
+
+| Concept | Meaning | Effect on convergence |
+|---------|---------|-----------------------|
+| Execution validity | Whether the lane produced a structurally sound result under valid authority, locks, receipts, checksums, provenance, and output contracts. | Invalid execution is rejected or repaired. Valid execution remains usable regardless of confidence. |
+| Finding validity | Whether an individual claim is eligible for parent synthesis because it came from a valid execution and retains its provenance. | A valid finding may be accepted as supported or retained as tentative. A finding from invalid execution is rejected. |
+| Confidence | How strongly the source model believes the evidence supports one finding. It belongs to that finding, not the lane or swarm as a whole. | Low or unknown confidence creates bounded uncertainty; it does not retroactively invalidate execution. |
+| Advisory observation | A non-authoritative note that may be useful but is not required for a consequential decision. | It stays visible and never requires a retry by itself. |
+| Contradiction | A recorded relationship between findings that differ by scope, assumption, timeframe, evidence, claim, or mutation intent. | Analytical disagreement is preserved. Only unresolved mutation or unavoidable safety conflicts hard-block. |
+| Assumption | An explicit condition under which a finding is intended to hold. | The parent can select a working conclusion without erasing plausible alternatives. |
+| Uncertainty | A bounded description of what is unknown, why, which claims are affected, whether proceeding is safe, and what evidence would resolve the gap. | It is a successful terminal state when no hard invariant is violated. |
+
+This produces three useful finding groups:
+
+- **Accepted findings** have valid provenance and high or medium confidence.
+- **Tentative findings** have valid provenance and low or unknown confidence. They remain visible with their original reasons and evidence.
+- **Rejected findings** came from structurally invalid execution. Confidence cannot rescue them.
+
+There is deliberately no swarm-wide average confidence. Three well-supported facts and two hypotheses remain three supported facts and two hypotheses.
+
+## 4. How convergence behaves now
+
+The old behavior had no bounded-uncertainty terminal state:
+
+```text
+vague task
+    ↓
+uncertainty
+    ↓
+retry
+    ↓
+merge loop
+```
+
+The new behavior keeps uncertainty attached to the finding and spends verification effort only where it can affect a consequential decision:
+
+```text
+vague task
+    ↓
+tentative finding
+    ↓
+bounded verification (only if decision-critical)
+    ↓
+new evidence ───────────────→ re-evaluate the specific claim
+    │
+    └─ no meaningful evidence delta
+                 ↓
+         confidence plateau
+                 ↓
+      converge with uncertainty
+```
+
+The complete decision flow is:
+
+```text
+validate receipts, envelopes, provenance, checksums, authority, and locks
+    │
+    ├─ hard integrity, authority, mutation, or safety failure
+    │      → hard block
+    │
+    ├─ one structurally invalid lane, with usable valid lanes remaining
+    │      → repair or restart only that invalid lane
+    │
+    └─ structurally valid evidence exists
+           ↓
+       preserve every finding's confidence, reason, assumptions, and evidence
+           ↓
+       classify ambiguity and contradictions
+           ↓
+       evaluate uncertainty in proportion to decision criticality
+           │
+           ├─ advisory uncertainty
+           │      → retain as tentative; no probe and no retry
+           │
+           ├─ important uncertainty
+           │      → retain explicitly and converge; do not retry merely for a stronger score
+           │
+           └─ critical uncertainty
+                  → run at most one claim-specific, read-only evidence probe
+                         │
+                         ├─ meaningful evidence delta
+                         │      → re-evaluate that claim without changing source confidence
+                         │
+                         └─ no meaningful evidence delta or budget exhausted
+                                → mark a confidence plateau
+                                → converge with explicit uncertainty when safe
+                                → omit unsafe mutation or hard-block only if every action is unsafe
+```
+
+In pseudocode:
+
+```ts
+if (hardGovernanceOrIntegrityFailure) return hardBlock
+if (everyLaneIsStructurallyInvalid) return hardBlock
+if (oneLaneIsStructurallyInvalid) return restartOnlyThatLane
+
+preserveFindingsAndProvenance()
+classifyAmbiguityAssumptionsAndContradictions()
+
+if (criticalClaimIsUnverified && probeBudgetRemains) {
+  return probeOneSpecificClaim
+}
+
+if (probeProducedNoSemanticEvidenceDelta) {
+  markConfidencePlateau()
+}
+
+if (unsafeMutationHasNoSafeInterpretation) return hardBlock
+if (uncertaintyRemains) return convergeWithUncertainty
+return converge
+```
+
+Convergence therefore requires valid governance and some usable result, not universal confidence or artificial consensus. A critical unknown is acceptable when the parent can state what is known, why the gap remains, which assumption it used, whether acting is safe, and what evidence would settle the question.
+
+## 5. Invariants
+
+The following rules define the safety boundary:
+
+- Low or unknown confidence never invalidates an otherwise valid execution.
+- Structural success never raises a finding's confidence.
+- Confidence belongs to findings and is never averaged into a swarm score.
+- Advisory observations remain visible but cannot become authoritative facts automatically.
+- Repetition, reuse, summarization, or inherited assumptions cannot increase confidence.
+- Confidence may improve only through materially new evidence or a resolved contradiction.
+- Evidence identity is semantic. Regenerated receipt or evidence IDs do not make a reread count as new evidence.
+- A probe addresses one claim, is read-only, does not restart successful lanes, and cannot recursively create more probes.
+- Probe budgets are strict: one probe per critical claim and two confidence probes per swarm.
+- A confidence plateau is a valid terminal state for exploratory work.
+- Analytical contradictions preserve both sides and their assumptions; they do not imply execution failure.
+- Uncertain mutations never bypass authority, lock, receipt, or safety rules.
+- Invalid or corrupted receipts, checksum failures, invalid provenance, unresolved mutation conflicts, and unsafe operations remain fail-closed.
+- Resume preserves source confidence, confidence reason, assumptions, evidence, authority, contradictions, and exhausted probes.
+- Reused tentative evidence remains tentative.
+- “Converged with uncertainty” is successful execution health, not a degraded or failed swarm.
+
+## 6. What a harness user notices
+
+The practical change is that exploratory work now ends with an honest result instead of an orchestration failure.
+
+- Vague research tasks complete even when no definitive answer exists.
+- A weak lane no longer vetoes stronger valid lanes.
+- “Unknown” is reported as an insufficient-evidence conclusion rather than a failed execution.
+- Contradictory interpretations appear as alternatives with their scopes and assumptions instead of triggering endless retries.
+- Advisory audit findings remain visible while the receipt still seals.
+- A consequential evidence gap launches one focused verification request instead of replaying the original assignment across the swarm.
+- Repeated verification over the same evidence stops at a confidence plateau.
+- Resume does not re-probe exhausted claims or silently turn tentative findings into facts.
+- Parent synthesis can say, “Under assumption A, B is the strongest current conclusion; C remains unspecified, and D is still plausible.”
+- Operators can distinguish invalid execution, low confidence, task ambiguity, unverified critical claims, plateaus, bounded-uncertainty completion, and true hard blocks in diagnostics.
+
+## 7. How the implementation provides this behavior
+
+The implementation extends the existing convergence path rather than adding a second generic gate:
+
+- `SubagentEnvelopeBuilder` creates result envelopes with independent `executionValidity` and finding-level confidence metadata. It preserves confidence reasons, assumptions, criticality, evidence, and explicit uncertainty language in `src/core/task/tools/subagent/SubagentEnvelopeBuilder.ts`.
+- `ConfidenceAwareConvergence` is the canonical decision evaluator. It groups findings, detects ambiguity, classifies contradictions, enforces probe budgets, compares semantic evidence, detects plateaus, and returns the structured convergence package in `src/core/task/tools/subagent/ConfidenceAwareConvergence.ts`.
+- `MergeGate` invokes that evaluator after the existing authority, mutation, receipt, and replay checks. Bounded uncertainty becomes advisory; existing hard safety violations remain blocking in `src/core/task/tools/subagent/MergeGate.ts`.
+- `UseSubagentsToolHandler` executes only the requested bounded, read-only probe and feeds its evidence delta back into the same evaluator in `src/core/task/tools/handlers/SubagentToolHandler.ts`.
+- `GovernedSwarmCoordinator` and `GovernedExecutionStore` seal and validate the decision package alongside the receipt in `src/core/task/tools/subagent/GovernedSwarmCoordinator.ts` and `src/core/task/tools/subagent/GovernedExecutionStore.ts`.
+- `ResumeSwarmFromArtifact` carries forward source authority, original confidence, and exhausted probe history in `src/core/task/tools/subagent/ResumeSwarmFromArtifact.ts`.
+- `CoordinatorExecutionAuthority` reduces the structured decision into the parent continuation action, while `SwarmReportBuilder` renders accepted findings, tentative findings, assumptions, alternatives, safety, and resolution evidence in the parent result.
+- Shared durable types live in `src/shared/subagent/executionEnvelope.ts` and `src/shared/subagent/governedExecution.ts`.
+- Focused regression coverage is in `src/core/task/tools/subagent/__tests__/confidenceAwareConvergence.test.ts`, with runtime probe and resume coverage in the neighboring handler and execution-harness tests.
+
+The persisted representation is an additive schema-v3 extension. Historical receipts remain readable; new receipts include the confidence-aware package described below.
 
 Architecture context: [governed-subagent-execution.md](governed-subagent-execution.md) · Patch quick reference: [governed-roadmap-projection-quickref.md](governed-roadmap-projection-quickref.md).
 
 ---
 
-## Artifact layout
+## Receipt schema reference
+
+The durable record uses `GOVERNED_RECEIPT_SCHEMA_VERSION = 3`. Roadmap projection and confidence-aware convergence fields are additive v3 fields, so this change does not require a schema-version bump.
+
+### Artifact layout
 
 All paths relative to task directory `{taskDir}/subagent_executions/`:
 
@@ -356,9 +572,9 @@ The newer structured fields are optional when reading historical schema-v3 recei
 
 The swarm envelope mirrors this split through `SwarmInvariantReport.violations` (structural/integrity failures) and optional `advisoryWarnings` (missing evidence or transcript pointers). Resume integrity accepts advisory-only envelopes but still rejects malformed schemas, task/checksum mismatch, transcript corruption, and invalid compaction anchors.
 
-## Confidence-aware convergence
+## Confidence-aware convergence package fields
 
-`confidenceAwareConvergence` is produced by the canonical merge gate. Confidence belongs to individual findings; the gate does not average it into a swarm score.
+The receipt persists the behavioral decision described above in `confidenceAwareConvergence`.
 
 | Field | Semantics |
 |-------|-----------|
@@ -372,9 +588,7 @@ The swarm envelope mirrors this split through `SwarmInvariantReport.violations` 
 | `uncertaintySummary` | Known causes, affected claims, safe-to-proceed decision, and evidence needed to resolve uncertainty |
 | `diagnostics` | Separate invalidity, low-confidence, ambiguity, probe, plateau, bounded-uncertainty, and hard-block counters/events |
 
-The default budgets are one probe per critical claim and two probes per swarm. A probe is read-only, addresses one claim, and must attach file or tool-output evidence to count as a meaningful delta. Repeated claim/evidence/reason/tool fingerprints terminate as a confidence plateau. Resume preserves source confidence, authority, evidence, and exhausted probe history.
-
-Low confidence, `unknown`, non-critical disagreement, or unresolved advisory audit output do not change merge safety or receipt health. A hard block remains limited to structural, integrity, authority, unreconciled mutation, provenance, or unavoidable safety failures.
+New receipts always populate the package. It remains optional when loading historical schema-v3 receipts so no on-disk migration is required.
 
 ---
 
