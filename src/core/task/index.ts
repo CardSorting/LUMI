@@ -1832,6 +1832,11 @@ export class Task {
 
 		try {
 			while (!this.taskState.abort) {
+				if (isTaskHarnessTerminal(this.taskState)) {
+					Logger.info(`[Task ${this.taskId}] Task execution loop ending: task state is terminal.`)
+					break
+				}
+
 				const idleGapAtLoopStart = await this.consumeIdleGapFeedbackIfPending()
 				if (idleGapAtLoopStart) {
 					nextUserContent = idleGapAtLoopStart
@@ -1876,6 +1881,9 @@ export class Task {
 			}
 		} finally {
 			this.taskLoopActive = false
+			await this.postStateToWebview().catch((error) => {
+				Logger.error("Failed to post state to webview on loop finish:", error)
+			})
 			if (this.taskState.idleGapFeedbackRequested && !this.taskState.abort) {
 				this.scheduleIdleGapContinuation()
 			}
@@ -3134,6 +3142,11 @@ export class Task {
 		// Check abort flag at the very start to prevent any execution after cancellation
 		if (this.taskState.abort) {
 			throw new Error("Task instance aborted")
+		}
+
+		if (isTaskHarnessTerminal(this.taskState)) {
+			Logger.info(`[Task ${this.taskId}] Task execution loop ending: task state is terminal.`)
+			return true
 		}
 
 		const idleGapAtRequestStart = await this.consumeIdleGapFeedbackIfPending()

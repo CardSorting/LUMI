@@ -21,8 +21,39 @@ export const INSTALLED_NATIVE_MODULE_RELATIVE = "node_modules/better-sqlite3/bui
 export const MIN_NATIVE_BINARY_BYTES = 100_000
 
 export const ELECTRON_VERSION = "39.2.3"
+export const EXPECTED_ELECTRON_ABI = 140
 
 export const NATIVE_VSIX_TARGETS = ["win32-x64", "win32-arm64", "linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]
+
+export function detectBinaryAbi(binaryPath) {
+	try {
+		execFileSync(process.execPath, ["-e", `require('${binaryPath}')`], { stdio: "pipe" })
+		return Number.parseInt(process.versions.modules, 10)
+	} catch (error) {
+		const stderr = error.stderr?.toString() || error.message || ""
+		const match = stderr.match(/NODE_MODULE_VERSION\s+(\d+)/)
+		if (match) {
+			return Number.parseInt(match[1], 10)
+		}
+		return null
+	}
+}
+
+export function detectBinaryBufferAbi(buffer) {
+	const tmpPath = path.join(os.tmpdir(), `lumi-abi-check-${Date.now()}-${Math.random().toString(36).slice(2)}.node`)
+	try {
+		fs.writeFileSync(tmpPath, buffer)
+		return detectBinaryAbi(tmpPath)
+	} catch {
+		return null
+	} finally {
+		try {
+			if (fs.existsSync(tmpPath)) {
+				fs.unlinkSync(tmpPath)
+			}
+		} catch {}
+	}
+}
 
 const HOST_TARGETS = new Map([
 	["win32:x64", "win32-x64"],
@@ -231,6 +262,28 @@ export function auditVsixHealth(vsixPath) {
 				: ["Package on the matching operating system with: npm run package:vsix:all"],
 	})
 
+	let abiStatus = "fail"
+	let abiDetail = "Could not verify binary ABI version"
+	if (hasBinary) {
+		const binaryBuffer = readVsixNativeBinary(vsixPath)
+		if (binaryBuffer) {
+			const actualAbi = detectBinaryBufferAbi(binaryBuffer)
+			if (actualAbi === EXPECTED_ELECTRON_ABI) {
+				abiStatus = "pass"
+				abiDetail = undefined
+			} else {
+				abiDetail = `Expected Electron ABI ${EXPECTED_ELECTRON_ABI}, but found ABI ${actualAbi ?? "unknown"}`
+			}
+		}
+	}
+	checks.push({
+		id: `${name}:binary-abi`,
+		status: abiStatus,
+		title: `${name} SQLite native binary matches Electron ABI ${EXPECTED_ELECTRON_ABI}`,
+		detail: abiDetail,
+		fix: abiStatus === "pass" ? undefined : ["Run: npm run rebuild:electron:better-sqlite3", "Then re-package the VSIX"],
+	})
+
 	checks.push(...auditOpenVsxPackaging(listing, name))
 
 	return checks
@@ -329,8 +382,14 @@ export function auditExtensionHealth(extensionDir, { ideLabel = "Editor" } = {})
 			const expectedTarget = nativeTargetForHost()
 			const actualTarget = detectNativeBinaryTarget(fs.readFileSync(binaryPath))
 			if (actualTarget === expectedTarget) {
-				binaryStatus = "pass"
-				binaryDetail = undefined
+				const actualAbi = detectBinaryAbi(binaryPath)
+				if (actualAbi === EXPECTED_ELECTRON_ABI) {
+					binaryStatus = "pass"
+					binaryDetail = undefined
+				} else {
+					binaryStatus = "fail"
+					binaryDetail = `Platform matches (${actualTarget}), but ABI is ${actualAbi ?? "unknown"} (expected Electron ABI ${EXPECTED_ELECTRON_ABI})`
+				}
 			} else {
 				binaryDetail = actualTarget
 					? `Expected ${expectedTarget}, but installed binary is ${actualTarget}`
@@ -432,9 +491,19 @@ export function discoverLumiExtensions(extensionsRoots = DEFAULT_EXTENSION_ROOTS
 }
 
 export function pickRepairVsix(distDir, extensionFolderName, target = nativeTargetForHost()) {
-	const candidates = discoverVsixFiles(distDir).filter((file) => inferVsixTarget(file) === target)
+	const versionMatch = extensionFolderName.match(/-(\d+\.\d+\.\d+(?:-universal)?)$/)
+	const version = versionMatch ? versionMatch[1].replace("-universal", "") : null
+
+	let candidates = discoverVsixFiles(distDir).filter((file) => inferVsixTarget(file) === target)
 	if (candidates.length === 0) {
 		return null
+	}
+
+	if (version) {
+		const versionCandidates = candidates.filter((file) => path.basename(file).includes(`-${version}`))
+		if (versionCandidates.length > 0) {
+			candidates = versionCandidates
+		}
 	}
 
 	const lower = extensionFolderName.toLowerCase()

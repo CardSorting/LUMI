@@ -17,6 +17,11 @@ import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMet
 import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
+import {
+	createTaskGenerationId,
+	createTaskLifecycleIntentId,
+	getTaskLifecycleAuthority,
+} from "@/core/task/lifecycle/TaskLifecycleFunnel"
 import { finalizeRoadmapSession } from "@/services/roadmap/RoadmapLifecycle"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
 import {
@@ -501,6 +506,30 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		const prefix = "[attempt_completion] Result: Done"
 		if (response === "yesButtonClicked") {
 			return prefix // signals to recursive loop to stop (for now this never happens since yesButtonClicked will trigger a new task)
+		}
+
+		// The user rejected completion and provided feedback.
+		// Reactivate the task lifecycle so the agent can execute tools to resolve the feedback.
+		try {
+			const authority = getTaskLifecycleAuthority(config.taskState)
+			const currentLifecycle =
+				authority.readProjection(config.taskState) ?? (await authority.restore(config.taskState, config.taskId))
+			if (currentLifecycle && currentLifecycle.state === "terminal") {
+				await authority.submit(config.taskState, {
+					type: "ResumeWithGeneration",
+					intentId: createTaskLifecycleIntentId(),
+					taskId: config.taskId,
+					generationId: currentLifecycle.generationId,
+					newGenerationId: createTaskGenerationId(),
+					cause: {
+						source: "task",
+						reason: "The user rejected the completion attempt and provided feedback.",
+					},
+				})
+				Logger.info(`[AttemptCompletionHandler] Reactivated task ${config.taskId} for feedback resolution.`)
+			}
+		} catch (error) {
+			Logger.error("[AttemptCompletionHandler] Failed to reactivate task lifecycle:", error)
 		}
 
 		await config.callbacks.say("user_feedback", text ?? "", images, completionFiles)
