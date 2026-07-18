@@ -6,6 +6,7 @@ import { ChatToolbar } from "./components/chat/navigation/ChatToolbar"
 import { NewChatConfirmModal } from "./components/common/NewChatConfirmModal"
 import McpView from "./components/mcp/configuration/McpConfigurationView"
 import SettingsView from "./components/settings/SettingsView"
+import WelcomeView from "./components/welcome/WelcomeView"
 import WorktreesView from "./components/worktrees/WorktreesView"
 import { useDietCodeAuth } from "./context/DietCodeAuthContext"
 import { useExtensionState } from "./context/ExtensionStateContext"
@@ -28,6 +29,7 @@ const AppContent = () => {
 	const {
 		didHydrateState,
 		shouldShowAnnouncement,
+		showWelcome,
 		showHistory,
 		showMcp,
 		mcpTab,
@@ -51,6 +53,7 @@ const AppContent = () => {
 		navigateToSettings,
 		navigateToAccount,
 		navigateToChat,
+		navigateToWorktrees,
 	} = useExtensionState()
 
 	const { dietcodeUser, organizations, activeOrganization } = useDietCodeAuth()
@@ -104,7 +107,7 @@ const AppContent = () => {
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.defaultPrevented || showNewChatConfirm) return
+			if (event.defaultPrevented || showNewChatConfirm || showWelcome) return
 
 			if (
 				event.key === "Escape" &&
@@ -131,6 +134,9 @@ const AppContent = () => {
 				} else if (key === "a" || key === "4") {
 					event.preventDefault()
 					navigateToAccount()
+				} else if (key === "w" || key === "6") {
+					event.preventDefault()
+					navigateToWorktrees()
 				} else if (key === "c") {
 					event.preventDefault()
 					navigateToChat()
@@ -146,6 +152,7 @@ const AppContent = () => {
 			window.removeEventListener("keydown", handleKeyDown)
 		}
 	}, [
+		showWelcome,
 		showHistory,
 		showMcp,
 		showSettings,
@@ -157,6 +164,7 @@ const AppContent = () => {
 		navigateToSettings,
 		navigateToAccount,
 		navigateToChat,
+		navigateToWorktrees,
 		handleRequestNewChat,
 	])
 
@@ -185,34 +193,40 @@ const AppContent = () => {
 				href="#lumi-main-content">
 				Skip to content
 			</a>
-			<ChatToolbar
-				conversationTitle={conversationTitle}
-				hasActiveConversation={hasActiveConversation}
-				onRequestNewChat={handleRequestNewChat}
-			/>
-			<main
-				aria-labelledby="lumi-view-title"
-				className="relative min-h-0 w-full flex-1 overflow-hidden"
-				id="lumi-main-content"
-				tabIndex={-1}>
-				{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
-				{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
-				{showAccount && (
-					<AccountView
-						activeOrganization={activeOrganization}
-						dietcodeUser={dietcodeUser}
-						onDone={hideAccount}
-						organizations={organizations}
+			{showWelcome ? (
+				<WelcomeView />
+			) : (
+				<>
+					<ChatToolbar
+						conversationTitle={conversationTitle}
+						hasActiveConversation={hasActiveConversation}
+						onRequestNewChat={handleRequestNewChat}
 					/>
-				)}
-				{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
-				<ChatView
-					hideAnnouncement={hideAnnouncement}
-					isHidden={showSettings || showMcp || showAccount || showWorktrees}
-					showAnnouncement={showAnnouncement}
-					showHistoryView={navigateToHistory}
-				/>
-			</main>
+					<main
+						aria-labelledby="lumi-view-title"
+						className="relative min-h-0 w-full flex-1 overflow-hidden"
+						id="lumi-main-content"
+						tabIndex={-1}>
+						{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
+						{showMcp && <McpView initialTab={mcpTab} onDone={closeMcpView} />}
+						{showAccount && (
+							<AccountView
+								activeOrganization={activeOrganization}
+								dietcodeUser={dietcodeUser}
+								onDone={hideAccount}
+								organizations={organizations}
+							/>
+						)}
+						{showWorktrees && <WorktreesView onDone={hideWorktrees} />}
+						<ChatView
+							hideAnnouncement={hideAnnouncement}
+							isHidden={showSettings || showMcp || showAccount || showWorktrees}
+							showAnnouncement={showAnnouncement}
+							showHistoryView={navigateToHistory}
+						/>
+					</main>
+				</>
+			)}
 			<NewChatConfirmModal
 				error={newChatError}
 				isOpen={showNewChatConfirm}

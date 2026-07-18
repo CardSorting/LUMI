@@ -1,5 +1,12 @@
 import path from "node:path"
 
+let vscode: typeof import("vscode") | undefined
+try {
+	vscode = require("vscode")
+} catch {
+	// Not in VS Code environment (e.g. tests)
+}
+
 export interface CommandValidationResult {
 	error?: string
 	valid: boolean
@@ -624,8 +631,12 @@ function validateSimpleCommand(tokens: string[], depth: number): CommandValidati
 	if (executable === "npm" && ["adduser", "login"].includes(args[0])) {
 		return blocked(`npm ${args[0]}`, "Configure an authentication token non-interactively.")
 	}
-	if (executable === "npm" && args[0] === "init" && !args.some((argument) => argument === "--yes" || argument === "-y")) {
-		return blocked("npm init", "Add --yes/-y or provide a package initializer with all required arguments.")
+	if (
+		["npm", "yarn", "pnpm", "bun"].includes(executable) &&
+		["init", "create"].includes(args[0]) &&
+		!args.some((argument) => argument === "--yes" || argument === "-y")
+	) {
+		return blocked(`${executable} ${args[0]}`, "Add --yes/-y or provide a package initializer with all required arguments.")
 	}
 	if (executable === "docker" && args[0] === "login" && !args.includes("--password-stdin")) {
 		return blocked("docker login", "Pass credentials through --password-stdin.")
@@ -676,11 +687,50 @@ function validateCommandInternal(command: string, depth: number): CommandValidat
 	return { valid: true }
 }
 
+function checkAllowedCommand(command: string): boolean {
+	const envAllowed = process.env.LUMI_ALLOWED_INTERACTIVE_COMMANDS
+	if (envAllowed) {
+		const allowedPatterns = envAllowed.split(",").map((p) => p.trim())
+		if (
+			allowedPatterns.some((pat: string) => {
+				const escaped = pat.replace(/[-/\\^$+?.()|[\]{}]/g, "\\$&")
+				const regex = new RegExp(`^${escaped.replace(/\*/g, ".*")}$`, "i")
+				return regex.test(command)
+			})
+		) {
+			return true
+		}
+	}
+
+	if (vscode?.workspace) {
+		try {
+			const config = vscode.workspace.getConfiguration("lumi")
+			const allowedCommands = config.get<string[]>("allowedInteractiveCommands") || []
+			if (
+				allowedCommands.some((pat: string) => {
+					const escaped = pat.replace(/[-/\\^$+?.()|[\]{}]/g, "\\$&")
+					const regex = new RegExp(`^${escaped.replace(/\*/g, ".*")}$`, "i")
+					return regex.test(command)
+				})
+			) {
+				return true
+			}
+		} catch {
+			// Ignore config lookup error
+		}
+	}
+
+	return false
+}
+
 /**
  * Fail fast for command shapes that are known to wait indefinitely for a TTY.
  * Runtime prompt detection remains the second line of defense for tools whose
  * interactivity depends on credentials or local configuration.
  */
 export function validateCommand(command: string): CommandValidationResult {
+	if (checkAllowedCommand(command.trim())) {
+		return { valid: true }
+	}
 	return validateCommandInternal(command, 0)
 }

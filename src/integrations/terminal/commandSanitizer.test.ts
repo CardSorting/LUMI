@@ -129,10 +129,25 @@ describe("commandSanitizer", () => {
 		it("blocks common credential and initialization prompts", () => {
 			assert.equal(validateCommand("npm login").valid, false)
 			assert.equal(validateCommand("npm init").valid, false)
+			assert.equal(validateCommand("npm create vite@latest").valid, false)
+			assert.equal(validateCommand("pnpm create vite@latest").valid, false)
 			assert.equal(validateCommand("docker login registry.example.com").valid, false)
 			assert.equal(validateCommand("gh auth login").valid, false)
 			assert.equal(validateCommand("npm init -y").valid, true)
+			assert.equal(validateCommand("npm create vite@latest -y").valid, true)
 			assert.equal(validateCommand("docker login --password-stdin registry.example.com").valid, true)
+		})
+
+		it("allows interactive/init/create commands dynamically via environment variable overrides", () => {
+			const originalEnv = process.env.LUMI_ALLOWED_INTERACTIVE_COMMANDS
+			try {
+				process.env.LUMI_ALLOWED_INTERACTIVE_COMMANDS = "npm create*, git commit"
+				assert.equal(validateCommand("npm create vite@latest .").valid, true)
+				assert.equal(validateCommand("git commit").valid, true)
+				assert.equal(validateCommand("npm init").valid, false)
+			} finally {
+				process.env.LUMI_ALLOWED_INTERACTIVE_COMMANDS = originalEnv
+			}
 		})
 	})
 })

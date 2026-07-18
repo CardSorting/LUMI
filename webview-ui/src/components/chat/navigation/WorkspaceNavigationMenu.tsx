@@ -3,22 +3,25 @@ import { useCallback, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
-import { CHAT_MENU_ITEMS, type ChatNavItemId } from "./chatNavConfig"
+import { type ChatNavItem, type ChatNavItemId } from "./chatNavConfig"
 
 interface WorkspaceNavigationMenuProps {
 	activePanel: ChatNavItemId | null
 	onNavigate: (id: ChatNavItemId) => void
+	menuItems: ChatNavItem[]
 }
 
 /**
  * Labeled overflow navigation for destinations that do not fit in the narrow
- * sidebar app bar. The direct history shortcut stays visible in the toolbar;
- * this menu makes every destination discoverable by name and description.
+ * sidebar app bar.
  */
-export const WorkspaceNavigationMenu = ({ activePanel, onNavigate }: WorkspaceNavigationMenuProps) => {
+export const WorkspaceNavigationMenu = ({ activePanel, onNavigate, menuItems }: WorkspaceNavigationMenuProps) => {
+	const { platform } = useExtensionState()
 	const [isOpen, setIsOpen] = useState(false)
 	const menuRef = useRef<HTMLDivElement>(null)
+	const isMac = platform === "darwin"
 
 	const getMenuItems = useCallback(
 		() => Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []),
@@ -89,46 +92,107 @@ export const WorkspaceNavigationMenu = ({ activePanel, onNavigate }: WorkspaceNa
 			<PopoverContent
 				align="end"
 				aria-label="Workspace navigation"
-				className="w-[min(17rem,calc(100vw-1rem))] rounded-md p-1.5"
+				className={cn(
+					"w-[min(17rem,calc(100vw-1rem))] rounded-xl p-2 shadow-2xl border border-border/40 bg-popover text-popover-foreground outline-none",
+					"data-[state=open]:animate-in data-[state=closed]:animate-out",
+					"data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
+					"data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
+					"data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2",
+					"duration-150 ease-out",
+				)}
 				collisionPadding={8}
 				onKeyDown={handleMenuKeyDown}
 				onOpenAutoFocus={(event) => {
 					event.preventDefault()
 					requestAnimationFrame(() => {
 						const items = getMenuItems()
-						const activeIndex = CHAT_MENU_ITEMS.findIndex((item) => item.id === activePanel)
+						const activeIndex = menuItems.findIndex((item) => item.id === activePanel)
 						items[Math.max(activeIndex, 0)]?.focus()
 					})
 				}}
 				ref={menuRef}
 				role="menu"
 				sideOffset={5}>
-				<p className="m-0 px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-description">Go to</p>
-				{CHAT_MENU_ITEMS.map((item) => {
-					const isActive = activePanel === item.id
+				{(() => {
+					const chatSection = menuItems.filter((item) => ["newChat", "chat", "history"].includes(item.id))
+					const devSection = menuItems.filter((item) => ["tools", "worktrees"].includes(item.id))
+					const prefSection = menuItems.filter((item) => ["account", "settings"].includes(item.id))
+
+					const renderSection = (title: string, itemsList: typeof menuItems) => {
+						if (itemsList.length === 0) return null
+						return (
+							<div className="flex flex-col gap-0.5">
+								<p className="m-0 px-2 pb-1 pt-1.5 text-[9px] font-bold uppercase tracking-wider text-description/60 select-none">
+									{title}
+								</p>
+								{itemsList.map((item) => {
+									const isActive = activePanel === item.id
+									const shortcut = isMac ? item.shortcutMac : item.shortcutWin
+									return (
+										<button
+											aria-current={isActive ? "page" : undefined}
+											className={cn(
+												"flex min-h-[38px] w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-foreground outline-none transition-colors",
+												"hover:bg-list-hover focus-visible:bg-list-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--vscode-focusBorder)]",
+												isActive &&
+													"bg-selection-inactive font-medium text-[var(--vscode-button-background)]",
+											)}
+											key={item.id}
+											onClick={() => handleSelect(item.id)}
+											role="menuitem"
+											type="button">
+											<Icon
+												className={cn(
+													"text-foreground/70",
+													isActive && "text-[var(--vscode-button-background)]",
+												)}
+												name={item.icon}
+												size={15}
+											/>
+											<span className="min-w-0 flex-1">
+												<span className="block text-xs leading-tight">{item.label}</span>
+												<span className="mt-0.5 block truncate text-[10px] leading-tight text-description/70 font-normal">
+													{item.description}
+												</span>
+											</span>
+											<div className="flex items-center gap-1.5 shrink-0 ml-auto pl-2">
+												{shortcut && (
+													<span
+														className={cn(
+															"text-[9px] font-mono tracking-wide select-none",
+															isActive
+																? "text-[var(--vscode-button-background)]/70"
+																: "text-description/50",
+														)}>
+														{shortcut}
+													</span>
+												)}
+												{isActive && (
+													<Check
+														aria-hidden
+														className="size-3.5 shrink-0 text-[var(--vscode-button-background)]"
+													/>
+												)}
+											</div>
+										</button>
+									)
+								})}
+							</div>
+						)
+					}
+
 					return (
-						<button
-							aria-current={isActive ? "page" : undefined}
-							className={cn(
-								"flex min-h-10 w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-foreground outline-none",
-								"hover:bg-list-hover focus-visible:bg-list-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--vscode-focusBorder)]",
-								isActive && "bg-selection-inactive",
+						<>
+							{chatSection.length > 0 && renderSection("Conversation", chatSection)}
+							{chatSection.length > 0 && (devSection.length > 0 || prefSection.length > 0) && (
+								<div className="h-px bg-border/20 my-1" />
 							)}
-							key={item.id}
-							onClick={() => handleSelect(item.id)}
-							role="menuitem"
-							type="button">
-							<Icon className="text-foreground/80" name={item.icon} size={17} />
-							<span className="min-w-0 flex-1">
-								<span className="block text-xs font-medium leading-tight">{item.label}</span>
-								<span className="mt-0.5 block truncate text-[10px] leading-tight text-description">
-									{item.description}
-								</span>
-							</span>
-							{isActive ? <Check aria-hidden className="size-3.5 shrink-0" /> : null}
-						</button>
+							{devSection.length > 0 && renderSection("Workspace", devSection)}
+							{devSection.length > 0 && prefSection.length > 0 && <div className="h-px bg-border/20 my-1" />}
+							{prefSection.length > 0 && renderSection("Preferences", prefSection)}
+						</>
 					)
-				})}
+				})()}
 			</PopoverContent>
 		</Popover>
 	)

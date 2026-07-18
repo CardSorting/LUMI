@@ -214,7 +214,7 @@ export class ExecuteCommandToolHandler implements IToolHandler, IPartialBlockHan
 		config.latencyTracker?.recordIoClassQueued(ioClass)
 		try {
 			;[userRejected, result] = await executionFunnel.executeReliableAction(
-				config.ulid,
+				config.taskId,
 				config.taskState.executionGeneration,
 				async () => {
 					commandStarted = true

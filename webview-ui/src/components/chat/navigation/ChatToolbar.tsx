@@ -3,7 +3,8 @@ import { useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icons"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { CHAT_NAV_BY_ID, CHAT_TOOLBAR_ITEMS, type ChatNavItemId } from "./chatNavConfig"
+import { useDensity } from "@/hooks/useDensity"
+import { CHAT_NAV_BY_ID, CHAT_NAV_ITEMS, type ChatNavItemId } from "./chatNavConfig"
 import { WorkspaceNavigationMenu } from "./WorkspaceNavigationMenu"
 
 interface ChatToolbarProps {
@@ -20,6 +21,7 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 		navigateToAccount,
 		navigateToMcp,
 		navigateToChat,
+		navigateToWorktrees,
 		showHistory,
 		showMcp,
 		showSettings,
@@ -27,6 +29,8 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 		showWorktrees,
 		setExpandTaskHeader,
 	} = useExtensionState()
+
+	const { density } = useDensity()
 
 	const isSubViewActive = useMemo(() => {
 		return showHistory || showMcp || showSettings || showAccount || showWorktrees
@@ -37,9 +41,26 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 		if (showMcp) return "tools"
 		if (showAccount) return "account"
 		if (showSettings) return "settings"
+		if (showWorktrees) return "worktrees"
 		if (!isSubViewActive) return "chat"
 		return null
-	}, [showHistory, showMcp, showAccount, showSettings, isSubViewActive])
+	}, [showHistory, showMcp, showAccount, showSettings, showWorktrees, isSubViewActive])
+
+	const visibleToolbarItems = useMemo(() => {
+		const items = CHAT_NAV_ITEMS.filter((item) => item.id !== "newChat" && item.id !== "chat")
+		if (density === "comfortable") {
+			return items
+		}
+		if (density === "compact") {
+			return items.filter((item) => item.id === "history" || item.id === "tools" || item.id === "settings")
+		}
+		return items.filter((item) => item.id === "history")
+	}, [density])
+
+	const overflowItems = useMemo(() => {
+		const visibleIds = new Set(visibleToolbarItems.map((item) => item.id))
+		return CHAT_NAV_ITEMS.filter((item) => !visibleIds.has(item.id) || item.id === "chat" || item.id === "newChat")
+	}, [visibleToolbarItems])
 
 	const collapseTaskDetails = useCallback(() => {
 		setExpandTaskHeader(false)
@@ -68,6 +89,10 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 					collapseTaskDetails()
 					navigateToMcp()
 					break
+				case "worktrees":
+					collapseTaskDetails()
+					navigateToWorktrees()
+					break
 				case "account":
 					collapseTaskDetails()
 					navigateToAccount()
@@ -85,17 +110,18 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 			navigateToHistory,
 			navigateToMcp,
 			navigateToSettings,
+			navigateToWorktrees,
 			onRequestNewChat,
 		],
 	)
 
 	const newChatItem = CHAT_NAV_BY_ID.newChat
 	const centerLabel = useMemo(() => {
-		if (showHistory) return "Past chats"
-		if (showMcp) return "Connected tools"
-		if (showSettings) return "Settings"
-		if (showAccount) return "Account"
-		if (showWorktrees) return "Worktrees"
+		if (showHistory) return CHAT_NAV_BY_ID.history?.label || "Chat history"
+		if (showMcp) return CHAT_NAV_BY_ID.tools?.label || "Plugins & tools"
+		if (showSettings) return CHAT_NAV_BY_ID.settings?.label || "Settings"
+		if (showAccount) return CHAT_NAV_BY_ID.account?.label || "Account & billing"
+		if (showWorktrees) return CHAT_NAV_BY_ID.worktrees?.label || "Branch workspaces"
 		return conversationTitle?.trim() || "Chat"
 	}, [showHistory, showMcp, showSettings, showAccount, showWorktrees, conversationTitle])
 
@@ -153,7 +179,7 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 				</div>
 
 				<nav aria-label="Quick navigation" className="flex shrink-0 items-center gap-0.5">
-					{CHAT_TOOLBAR_ITEMS.map((item) => {
+					{visibleToolbarItems.map((item) => {
 						const isActive = activePanel === item.id
 						return (
 							<Button
@@ -183,7 +209,7 @@ export const ChatToolbar = ({ hasActiveConversation = false, conversationTitle, 
 							</Button>
 						)
 					})}
-					<WorkspaceNavigationMenu activePanel={activePanel} onNavigate={handleNavigate} />
+					<WorkspaceNavigationMenu activePanel={activePanel} menuItems={overflowItems} onNavigate={handleNavigate} />
 				</nav>
 			</div>
 		</header>

@@ -732,4 +732,214 @@ describe("ExecutionFunnel approval authority", () => {
 		assert.equal(appendSessionStabilityContext(taskConfig, "src/a.ts", "file body"), "file body")
 		assert.equal(resolveSessionSpiderEngine(taskConfig), spider)
 	})
+
+	it("allows deep nested subagent tool execution delegating to ancestors, and rejects mismatching ones", async () => {
+		const state = new TaskState()
+		const funnel = new ExecutionFunnel()
+		const parentConfig = config(state)
+
+		const subagentAState = new TaskState()
+		const subagentAConfig = config(subagentAState, {
+			taskId: "task-1:subagent:agent-A",
+			isSubagentExecution: true,
+		})
+		bindTaskLifecycleAuthority(subagentAState, getTaskLifecycleAuthority(state))
+
+		const subagentBState = new TaskState()
+		const subagentBConfig = config(subagentBState, {
+			taskId: "task-1:subagent:agent-A:subagent:agent-B",
+			isSubagentExecution: true,
+		})
+		bindTaskLifecycleAuthority(subagentBState, getTaskLifecycleAuthority(state))
+
+		const authority = getTaskLifecycleAuthority(state)
+		await authority.registerAndActivate(state, "task-1", { source: "test", reason: "parent" })
+		await authority.registerAndActivate(
+			subagentAState,
+			"task-1:subagent:agent-A",
+			{
+				source: "test",
+				reason: "subagent-A",
+			},
+			{
+				taskId: "task-1",
+				generationId: state.executionGeneration,
+				governance: "attached",
+			},
+		)
+		await authority.registerAndActivate(
+			subagentBState,
+			"task-1:subagent:agent-A:subagent:agent-B",
+			{
+				source: "test",
+				reason: "subagent-B",
+			},
+			{
+				taskId: "task-1:subagent:agent-A",
+				generationId: subagentAState.executionGeneration,
+				governance: "attached",
+			},
+		)
+
+		const subagentBHandler = handler(DietCodeDefaultTool.BASH, async () => {
+			// Subagent B delegates to root parent task-1
+			const parentDelegatedResult = await funnel.executeReliableAction(
+				"task-1",
+				state.executionGeneration,
+				async () => "root parent delegated success",
+			)
+			assert.equal(parentDelegatedResult, "root parent delegated success")
+
+			// Subagent B delegates to immediate parent subagent-A
+			const subagentADelegatedResult = await funnel.executeReliableAction(
+				"task-1:subagent:agent-A",
+				subagentAState.executionGeneration,
+				async () => "immediate parent delegated success",
+			)
+			assert.equal(subagentADelegatedResult, "immediate parent delegated success")
+
+			// Subagent B tries wrong task context
+			await assert.rejects(
+				funnel.executeReliableAction("task-wrong", state.executionGeneration, async () => "wrong"),
+				/Execution permit task mismatch; nested operation rejected/,
+			)
+
+			return "done"
+		})
+
+		const subagentAHandler = handler(DietCodeDefaultTool.BASH, async () => {
+			const subagentBOutcome = await funnel.execute({
+				config: subagentBConfig,
+				block: block(DietCodeDefaultTool.BASH, "nested-call-B", { command: "ls" }),
+				registered: true,
+				handler: subagentBHandler,
+				lane: "subagent",
+			})
+			assert.equal(subagentBOutcome.event.phase, "succeeded")
+			return "done"
+		})
+
+		const parentHandler = handler(DietCodeDefaultTool.ATTEMPT, async () => {
+			const subagentAOutcome = await funnel.execute({
+				config: subagentAConfig,
+				block: block(DietCodeDefaultTool.BASH, "nested-call-A", { command: "ls" }),
+				registered: true,
+				handler: subagentAHandler,
+				lane: "subagent",
+			})
+			assert.equal(subagentAOutcome.event.phase, "succeeded")
+			return "done"
+		})
+
+		const outcome = await funnel.execute({
+			config: parentConfig,
+			block: block(DietCodeDefaultTool.ATTEMPT, "parent-call"),
+			registered: true,
+			handler: parentHandler,
+			lane: "parent",
+		})
+
+		assert.equal(outcome.event.phase, "succeeded")
+	})
+
+	it("aborts retry loop and backoff immediately upon cancellation", async () => {
+		const state = new TaskState()
+		const funnel = new ExecutionFunnel()
+		const parentConfig = config(state)
+
+		const authority = getTaskLifecycleAuthority(state)
+		await authority.registerAndActivate(state, "task-1", { source: "test", reason: "parent" })
+
+		const abortController = new AbortController()
+		let attempts = 0
+
+		let reliableActionError: any = null
+
+		const parentHandler = handler(DietCodeDefaultTool.BASH, async () => {
+			try {
+				return await funnel.executeReliableAction(
+					"task-1",
+					state.executionGeneration,
+					async () => {
+						attempts++
+						throw new Error("TIMEOUT")
+					},
+					{ maxRetries: 3, backoffMs: 10000 },
+				)
+			} catch (e) {
+				reliableActionError = e
+				throw e
+			}
+		})
+
+		const executionPromise = funnel.execute({
+			config: parentConfig,
+			block: block(DietCodeDefaultTool.BASH, "parent-call"),
+			registered: true,
+			handler: parentHandler,
+			lane: "parent",
+			signal: abortController.signal,
+		})
+
+		await new Promise((resolve) => setTimeout(resolve, 50))
+		const startTime = Date.now()
+		abortController.abort()
+
+		const outcome = await executionPromise
+		assert.ok(outcome.error, "Expected execution error")
+		const duration = Date.now() - startTime
+		assert.ok(duration < 1000, `Expected quick cancellation, took ${duration}ms`)
+		assert.equal(attempts, 1)
+		assert.match(reliableActionError?.message, /Reliability execution aborted during retry backoff/)
+	})
+
+	it("aborts queued concurrency immediately upon cancellation", async () => {
+		const state = new TaskState()
+		const funnel = new ExecutionFunnel()
+		const parentConfig = config(state)
+
+		const authority = getTaskLifecycleAuthority(state)
+		await authority.registerAndActivate(state, "task-1", { source: "test", reason: "parent" })
+
+		const abortController = new AbortController()
+
+		const parentHandler = handler(DietCodeDefaultTool.BASH, async () => {
+			const resolves: (() => void)[] = []
+			for (let i = 0; i < 5; i++) {
+				void funnel.executeReliableAction(
+					"task-1",
+					state.executionGeneration,
+					() => {
+						return new Promise<void>((resolve) => resolves.push(resolve))
+					},
+					{ concurrencyGroup: "test-concurrency" },
+				)
+			}
+
+			const queuedPromise = funnel.executeReliableAction(
+				"task-1",
+				state.executionGeneration,
+				async () => {
+					return "should not run"
+				},
+				{ concurrencyGroup: "test-concurrency" },
+			)
+
+			abortController.abort()
+
+			await assert.rejects(queuedPromise, /Reliability execution aborted while queued for concurrency/)
+
+			resolves.forEach((resolve) => resolve())
+			return "done"
+		})
+
+		await funnel.execute({
+			config: parentConfig,
+			block: block(DietCodeDefaultTool.BASH, "parent-call"),
+			registered: true,
+			handler: parentHandler,
+			lane: "parent",
+			signal: abortController.signal,
+		})
+	})
 })

@@ -196,6 +196,11 @@ interface ReliabilityContext {
 	approvalDecisionId: string
 	approvalIntent: RecordedApprovalIntent
 	stages: ExecutionFunnelStage[]
+	ancestors?: Array<{
+		taskId: string
+		taskGeneration: string
+	}>
+	signal?: AbortSignal
 }
 
 interface CircuitState {
@@ -215,6 +220,10 @@ class ExecutionReliability {
 
 	runWithPermit<T>(context: ReliabilityContext, operation: () => Promise<T>): Promise<T> {
 		return this.storage.run(context, operation)
+	}
+
+	getActiveContextStore(): ReliabilityContext | undefined {
+		return this.storage.getStore()
 	}
 
 	getActiveContext(): ReliabilityContext {
@@ -250,7 +259,14 @@ class ExecutionReliability {
 			throw new Error("Reliability execution rejected: no approval-linked ExecutionFunnel permit.")
 		}
 		if (context.taskId !== taskId || context.taskGeneration !== taskGeneration) {
-			throw new Error("Execution permit task mismatch; nested operation rejected.")
+			const isAncestor = context.ancestors?.some(
+				(ancestor) => ancestor.taskId === taskId && ancestor.taskGeneration === taskGeneration,
+			)
+			if (!isAncestor) {
+				throw new Error(
+					`Execution permit task mismatch; nested operation rejected. (context.taskId='${context.taskId}', taskId='${taskId}', context.taskGeneration='${context.taskGeneration}', taskGeneration='${taskGeneration}')`,
+				)
+			}
 		}
 		const timeoutMs = options.timeoutMs ?? this.defaultTimeoutMs
 		const maxRetries = options.maxRetries ?? 3
@@ -260,15 +276,22 @@ class ExecutionReliability {
 		let attempts = 0
 
 		while (attempts < maxRetries) {
+			if (context?.signal?.aborted) {
+				throw new Error("Reliability execution aborted: task cancellation active.")
+			}
 			if (this.isCircuitOpen(circuitKey)) {
 				context?.stages.push(fail("reliability.circuit", `Task-scoped ${concurrencyGroup} circuit is open`, true))
 				throw new Error(`[ExecutionFunnel] Circuit is OPEN for task ${taskId} (${concurrencyGroup}).`)
 			}
 			try {
-				const result = await this.withConcurrency(concurrencyGroup, () => {
-					const running = operation()
-					return timeoutMs > 0 ? this.withTimeout(taskId, running, timeoutMs) : running
-				})
+				const result = await this.withConcurrency(
+					concurrencyGroup,
+					() => {
+						const running = operation()
+						return timeoutMs > 0 ? this.withTimeout(taskId, running, timeoutMs) : running
+					},
+					context?.signal,
+				)
 				this.onSuccess(circuitKey)
 				context?.stages.push(pass("reliability", `Operation completed after ${attempts + 1} attempt(s)`))
 				return result
@@ -280,20 +303,52 @@ class ExecutionReliability {
 					Logger.error(`[ExecutionFunnel] Task ${taskId} failed permanently after ${attempts} attempts:`, error)
 					throw error
 				}
+				if (context?.signal?.aborted) {
+					throw new Error("Reliability execution aborted: task cancellation active.")
+				}
 				const delay = backoffMs * 2 ** (attempts - 1)
 				context?.stages.push(pass("reliability.retry", `Retry ${attempts}/${maxRetries} after ${delay}ms`))
-				await new Promise<void>((resolve) => setTimeout(resolve, delay))
+				await new Promise<void>((resolve, reject) => {
+					const onAbort = () => {
+						clearTimeout(timeoutId)
+						reject(new Error("Reliability execution aborted during retry backoff: task cancellation active."))
+					}
+					const timeoutId = setTimeout(() => {
+						context?.signal?.removeEventListener("abort", onAbort)
+						resolve()
+					}, delay)
+					if (context?.signal?.aborted) {
+						onAbort()
+					} else {
+						context?.signal?.addEventListener("abort", onAbort)
+					}
+				})
 			}
 		}
 		throw new Error(`[ExecutionFunnel] Task ${taskId} failed after max retries`)
 	}
 
-	private async withConcurrency<T>(group: string, operation: () => Promise<T>): Promise<T> {
+	private async withConcurrency<T>(group: string, operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
 		if ((this.activeOperations.get(group) ?? 0) >= this.maxConcurrency) {
-			await new Promise<void>((resolve) => {
+			await new Promise<void>((resolve, reject) => {
 				const queue = this.queues.get(group) ?? []
-				queue.push(resolve)
+				const onAbort = () => {
+					const idx = queue.indexOf(onResolve)
+					if (idx >= 0) queue.splice(idx, 1)
+					if (queue.length === 0) this.queues.delete(group)
+					reject(new Error("Reliability execution aborted while queued for concurrency: task cancellation active."))
+				}
+				const onResolve = () => {
+					signal?.removeEventListener("abort", onAbort)
+					resolve()
+				}
+				queue.push(onResolve)
 				this.queues.set(group, queue)
+				if (signal?.aborted) {
+					onAbort()
+				} else {
+					signal?.addEventListener("abort", onAbort)
+				}
 			})
 		}
 		this.activeOperations.set(group, (this.activeOperations.get(group) ?? 0) + 1)
@@ -902,6 +957,14 @@ export class ExecutionFunnel {
 			)
 			this.publish(decision, "executing", "allow", "authorized", false, "The authorized operation is executing.")
 
+			const activeContext = this.reliability.getActiveContextStore()
+			const ancestors = activeContext
+				? [
+						{ taskId: activeContext.taskId, taskGeneration: activeContext.taskGeneration },
+						...(activeContext.ancestors || []),
+					]
+				: undefined
+
 			try {
 				const handlerResult = await this.reliability.runWithPermit(
 					{
@@ -912,6 +975,8 @@ export class ExecutionFunnel {
 						approvalDecisionId: decision.approvalDecision.decisionId,
 						approvalIntent: decision.approvalIntent,
 						stages: decision.stages,
+						ancestors,
+						signal: input.signal,
 					},
 					() =>
 						this.reliability.execute(
