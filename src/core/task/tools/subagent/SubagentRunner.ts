@@ -1015,7 +1015,7 @@ export class SubagentRunner {
 							typeof toolCallParams?.command === "string" ? toolCallParams.command : undefined,
 							{ laneExecutionMode: this.laneExecutionMode },
 						)
-						this.envelopeBuilder?.recordGateLifecycle(gateResult.lifecycle)
+						this.envelopeBuilder?.recordCompletionFunnel(gateResult.completionFunnelEvent)
 						if (gateResult.auditDeferredToSeal) {
 							this.envelopeBuilder?.recordWarning(
 								"Lane audit deferred to parent seal barrier — I/O authority fast path.",

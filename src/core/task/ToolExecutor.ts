@@ -26,7 +26,7 @@ import { ToolResponse } from "."
 import type { TaskLatencyTracker } from "./latency/TaskLatencyTracker"
 import { MessageStateHandler } from "./message-state"
 import { TaskState } from "./TaskState"
-import { canonicalizeAttemptCompletionParams, checkCompletionGateCircuitBreaker } from "./tools/attemptCompletionUtils"
+import { canonicalizeAttemptCompletionParams } from "./tools/attemptCompletionUtils"
 import { AutoApprove } from "./tools/autoApprove"
 import {
 	isLocalMutationTool,
@@ -601,14 +601,6 @@ export class ToolExecutor {
 		canonicalizeAttemptCompletionParams(block)
 
 		const config = await this.asToolConfig()
-
-		if (block.name === DietCodeDefaultTool.ATTEMPT && !block.partial) {
-			const breakerResult = checkCompletionGateCircuitBreaker(config)
-			if (breakerResult) {
-				this.pushToolResult(breakerResult, block)
-				return true
-			}
-		}
 
 		try {
 			// Check if user rejected a previous tool

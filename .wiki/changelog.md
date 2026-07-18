@@ -2,6 +2,14 @@
 
 This log preserves historical wiki entries and records current LUMI workspace knowledge-layer changes.
 
+## [Central Completion Funnel Migration] — 2026-07-18
+
+- Replaced competing lifecycle/finalization authorities with one large `CompletionFunnel.ts` authority covering collection through durable CAS and terminal publication.
+- Migrated task, subagent, shared-message, resume, and webview consumers to the immutable `CompletionFunnelEvent` contract.
+- Deleted the legacy decision engine, lifecycle types/projections, isolated gate/action handlers, receipt validator, and lifecycle UI.
+- Demoted `run_finalization` to optional post-completion documentation maintenance with no authority over completion.
+- Added monotonic terminal-state, collision, fencing, message-resolution, resume, and UI regression coverage.
+
 ## [Subagent Execution and Scoped Cancellation Pass] — 2026-07-15
 
 - Implemented owner-scoped command cancellation in `CommandExecutor` to independently manage and terminate concurrent subprocesses.

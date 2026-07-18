@@ -1,5 +1,25 @@
 # Troubleshooting
 
+## Completion UI Says Pending After Durable Success
+
+Symptom: task history or the database says the task completed, while a header, resume card, or finalization view still says pending.
+
+Meaning: a consumer is deriving a second completion projection or selecting stale presentation state instead of the modern funnel event.
+
+Response:
+
+1. Inspect the `task_completions` row and `TaskState.completionFunnelEventJson`.
+2. Confirm the terminal event has `phase: "completed"`, `kind: "completed"`, `nextAllowedAction: "none"`, and forbids `attempt_completion`.
+3. Trace the ordered `stages` array and `decisionId`/`completionId` in `CompletionFunnel.ts`; this is the entire authoritative audit trail.
+4. Make the consumer use `resolveCompletionFunnelEvent()` or `getTaskCompletionEvidence()`. Do not add a local lifecycle reducer or merge partial snapshots.
+5. If a generic resume marker follows terminal success, preserve completion. Reopen only for explicit new user work.
+
+Focused proof:
+
+```sh
+npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs src/core/task/tools/completion/__tests__/CompletionFunnel.test.ts src/core/task/tools/completion/__tests__/completionFunnelHardening.test.ts src/core/task/tools/__tests__/TaskCompletionTerminalization.test.ts src/shared/completion/__tests__/completionFunnelMessages.test.ts src/shared/completion/__tests__/taskCompletionEvidence.test.ts --timeout 10000 --exit
+```
+
 ## SQLite Coordination Authority Is Unavailable
 
 Symptom: lock acquisition, reconciliation, fencing validation, or completion persistence raises `DATABASE_AUTHORITY_UNAVAILABLE`.

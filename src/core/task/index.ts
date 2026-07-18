@@ -71,6 +71,7 @@ import { ApiConfiguration } from "@shared/api"
 import { findLast, findLastIndex } from "@shared/array"
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
+import { resolveTaskResumeAsk } from "@shared/completion/taskCompletionEvidence"
 import { type InternalDiagnosticMetadata, sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import {
 	DietCodeApiReqCancelReason,
@@ -145,6 +146,11 @@ import { MessageStateHandler } from "./message-state"
 import { StreamResponseHandler } from "./StreamResponseHandler"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
+import {
+	durableGetTaskCompletion,
+	getCachedCompletionFunnelEventFromState,
+	isTaskHarnessTerminal,
+} from "./tools/completion/CompletionFunnel"
 import { isIoAuthorityTool } from "./tools/executionAuthority"
 import { buildSiblingToolDependencyModel, isReadOnlyVerificationCommand } from "./tools/siblings/SiblingToolDependency"
 import { DEFAULT_SIBLING_TOOL_CONCURRENCY, SiblingToolScheduler } from "./tools/siblings/SiblingToolScheduler"
@@ -950,8 +956,7 @@ export class Task {
 		files?: string[],
 		partial?: boolean,
 		auditMetadata?: TaskAuditMetadata,
-		gateLifecycleStatus?: import("@shared/completion/gateLifecycleDecision").GateLifecycleDecision,
-		canonicalLifecycleDecision?: import("@shared/completion/canonicalLifecycleDecision").CanonicalLifecycleDecision,
+		completionFunnelEvent?: import("@shared/completion/completionFunnelEvent").CompletionFunnelEvent,
 		diagnostics?: InternalDiagnosticMetadata,
 	): Promise<number | undefined> {
 		// Allow hook messages even when aborted to enable proper cleanup
@@ -992,8 +997,7 @@ export class Task {
 						files,
 						partial,
 						auditMetadata,
-						gateLifecycleStatus,
-						canonicalLifecycleDecision,
+						completionFunnelEvent,
 						diagnostics,
 					})
 
@@ -1014,8 +1018,7 @@ export class Task {
 					partial,
 					modelInfo,
 					auditMetadata,
-					gateLifecycleStatus,
-					canonicalLifecycleDecision,
+					completionFunnelEvent,
 					diagnostics,
 				})
 				await this.postStateToWebview()
@@ -1033,8 +1036,7 @@ export class Task {
 					files,
 					partial: false,
 					auditMetadata,
-					gateLifecycleStatus,
-					canonicalLifecycleDecision,
+					completionFunnelEvent,
 					diagnostics,
 				})
 
@@ -1055,8 +1057,7 @@ export class Task {
 				files,
 				modelInfo,
 				auditMetadata,
-				gateLifecycleStatus,
-				canonicalLifecycleDecision,
+				completionFunnelEvent,
 				diagnostics,
 			})
 			await this.postStateToWebview()
@@ -1074,8 +1075,7 @@ export class Task {
 			files,
 			modelInfo,
 			auditMetadata,
-			gateLifecycleStatus,
-			canonicalLifecycleDecision,
+			completionFunnelEvent,
 			diagnostics,
 		})
 		await this.postStateToWebview()
@@ -1372,6 +1372,22 @@ export class Task {
 		await this.initiateTaskLoop(userContent)
 	}
 
+	private async resolveResumeAskType(messages: readonly DietCodeMessage[]): Promise<DietCodeAsk> {
+		try {
+			const durableCompletion = await durableGetTaskCompletion(this.taskId)
+			if (durableCompletion?.status === "succeeded") {
+				this.taskState.isTerminalState = true
+				this.taskState.lastCompletionDecisionId = durableCompletion.decisionId
+			}
+			return resolveTaskResumeAsk(messages, durableCompletion?.status)
+		} catch (error) {
+			// Transcript evidence remains useful for presentation when the durable
+			// authority is temporarily unavailable; mutations still fail closed.
+			Logger.warn(`[Task ${this.taskId}] Could not read durable completion while resolving resume state:`, error)
+			return resolveTaskResumeAsk(messages)
+		}
+	}
+
 	public async resumeTaskFromHistory() {
 		try {
 			await this.dietcodeIgnoreController.initialize()
@@ -1418,18 +1434,12 @@ export class Task {
 		await ensureTaskDirectoryExists(this.taskId)
 		await this.contextManager.initializeContextHistory(await ensureTaskDirectoryExists(this.taskId))
 
-		const lastDietCodeMessage = this.messageStateHandler
-			.getDietCodeMessages()
+		const currentDietCodeMessages = this.messageStateHandler.getDietCodeMessages()
+		const lastDietCodeMessage = currentDietCodeMessages
 			.slice()
 			.reverse()
-			.find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")) // could be multiple resume tasks
-
-		let askType: DietCodeAsk
-		if (lastDietCodeMessage?.ask === "completion_result") {
-			askType = "resume_completed_task"
-		} else {
-			askType = "resume_task"
-		}
+			.find((message) => !(message.ask === "resume_task" || message.ask === "resume_completed_task"))
+		const askType = await this.resolveResumeAskType(currentDietCodeMessages)
 
 		await this.loadWorkspaceIntelligence()
 		this.taskState.isInitialized = true
@@ -1862,18 +1872,7 @@ export class Task {
 
 					// TaskCancel completed successfully
 					// Present resume button after successful TaskCancel hook
-					const lastDietCodeMessage = this.messageStateHandler
-						.getDietCodeMessages()
-						.slice()
-						.reverse()
-						.find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"))
-
-					let askType: DietCodeAsk
-					if (lastDietCodeMessage?.ask === "completion_result") {
-						askType = "resume_completed_task"
-					} else {
-						askType = "resume_task"
-					}
+					const askType = await this.resolveResumeAskType(this.messageStateHandler.getDietCodeMessages())
 
 					// Present the resume ask - this will show the resume button in the UI
 					// We don't await this because we want to set the abort flag immediately
@@ -2049,21 +2048,10 @@ export class Task {
 	}
 
 	private isHarnessTerminalForNoToolsNudge(): boolean {
-		const { isTaskHarnessTerminal } =
-			require("./tools/completion/GateLifecycleEvaluator") as typeof import("./tools/completion/GateLifecycleEvaluator")
 		return isTaskHarnessTerminal(this.taskState)
 	}
 
 	private buildNoToolsUsedNudge(): string {
-		if (this.taskState.engineeringVerifiedAt) {
-			const retryLocked = (this.taskState.completionGateBlockCount ?? 0) >= 10
-			if (retryLocked || this.taskState.completionLifecycleState === "finalization_ready") {
-				return (
-					"[Response required] Completion retry is locked but engineering is verified. " +
-					"Use the run_finalization tool to finish documentation in this session, then seal with seal=true."
-				)
-			}
-		}
 		return formatResponse.noToolsUsed(this.useNativeToolCalls)
 	}
 
@@ -2978,16 +2966,8 @@ export class Task {
 			mode: mode,
 		}
 
-		const isReady =
-			this.taskState.engineeringVerifiedAt !== undefined ||
-			(this.taskState.completionLifecycleState &&
-				[
-					"engineering_verified",
-					"finalization_ready",
-					"finalization_running",
-					"finalization_completed",
-					"receipt_sealed",
-				].includes(this.taskState.completionLifecycleState))
+		const completionFunnelEvent = getCachedCompletionFunnelEventFromState(this.taskState)
+		const isReady = completionFunnelEvent?.phase === "ready" || completionFunnelEvent?.phase === "completed"
 
 		if (
 			this.taskState.consecutiveMistakeCount >= this.stateManager.getGlobalSettingsKey("maxConsecutiveMistakes") &&

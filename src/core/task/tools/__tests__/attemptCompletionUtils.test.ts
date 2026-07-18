@@ -44,12 +44,10 @@ import {
 	buildProactiveCompletionGuidance,
 	canonicalizeAttemptCompletionParams,
 	canonicalizeAttemptCompletionResultParams,
-	checkCompletionGateCircuitBreaker,
 	classifyCompletionPreflightReason,
 	detectDuplicateCompletionSubmission,
 	extractFocusChainItemLabels,
 	formatCompletionToolError,
-	getCompletionGateCircuitBreakerError,
 	getCompletionGateOperationalState,
 	getCompletionGatePressureLevel,
 	getCompletionGateRetryPolicy,
@@ -59,7 +57,6 @@ import {
 	getOrCreateCompletionGateSessionId,
 	getRemainingCompletionGateStages,
 	hashCompletionResult,
-	isCompletionGateCircuitBreakerTripped,
 	mapCompletionReasonToHttpStatus,
 	mapCompletionReasonToPreflightStage,
 	markCompletionAttemptFinished,
@@ -68,7 +65,6 @@ import {
 	markProactiveCompletionGuidanceEmitted,
 	recordCompletionAttemptTime,
 	recordCompletionBlockReason,
-	recordCompletionGateBlock,
 	recordCompletionGateBlockEvent,
 	resolveCompletionBlockReason,
 	shouldEmitPreflightReadinessHint,
@@ -143,26 +139,6 @@ describe("attemptCompletionUtils", () => {
 			const params: Record<string, unknown> = { response: "subagent done" }
 			canonicalizeAttemptCompletionResultParams(params).should.be.true()
 			;(params.result as string).should.equal("subagent done")
-		})
-	})
-
-	describe("completion gate circuit breaker", () => {
-		it("allows completion below the retry limit", () => {
-			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT - 1
-			const config = configWithState(taskState)
-
-			should.not.exist(getCompletionGateCircuitBreakerError(config))
-			should.not.exist(checkCompletionGateCircuitBreaker(config))
-		})
-
-		it("does not promote advisory retry history into a circuit breaker", () => {
-			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
-			const config = configWithState(taskState)
-
-			should.not.exist(getCompletionGateCircuitBreakerError(config))
-			taskState.consecutiveMistakeCount.should.equal(0)
-			should.not.exist(checkCompletionGateCircuitBreaker(config))
-			should.not.exist(taskState.lastCompletionBlockReason)
 		})
 	})
 
@@ -399,14 +375,6 @@ describe("attemptCompletionUtils", () => {
 			block.should.containEql('advisory_count="1"')
 			block.should.containEql("<advisory")
 			block.should.containEql('governance_policy="')
-		})
-	})
-
-	describe("isCompletionGateCircuitBreakerTripped", () => {
-		it("ignores advisory gate counters without mutating state", () => {
-			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
-			isCompletionGateCircuitBreakerTripped(configWithState(taskState)).should.be.false()
-			should.not.exist(taskState.lastCompletionBlockReason)
 		})
 	})
 
@@ -805,9 +773,10 @@ describe("attemptCompletionUtils", () => {
 			buildCompletionPreflightRecoveryHint("focus_chain_incomplete").should.containEql("focus chain")
 		})
 
-		it("routes circuit breaker recovery to same-session finalization", () => {
+		it("routes circuit breaker recovery back through the central completion funnel", () => {
 			const hint = buildCompletionPreflightRecoveryHint("circuit_breaker")
-			hint.should.containEql("run_finalization")
+			hint.should.containEql("central completion funnel")
+			hint.should.not.containEql("run_finalization")
 			hint.should.not.match(/new task/i)
 			hint.should.not.match(/new session/i)
 		})
@@ -868,13 +837,11 @@ describe("attemptCompletionUtils", () => {
 			should.not.exist(detectDuplicateCompletionSubmission(configWithState(taskState), result))
 		})
 
-		it("does not derive finalization guidance from duplicate advisory state", () => {
+		it("does not derive a second completion lane from duplicate advisory state", () => {
 			const result = "Task complete: added retry logic"
 			taskState.completionGateBlockCount = 2
 			taskState.lastBlockedCompletionResultFingerprint = hashCompletionResult(result)
 			taskState.lastCompletionAttemptAt = Date.now() - 5000
-			taskState.engineeringVerifiedAt = Date.now()
-			// Engineering verified — the message directs to run_finalization
 			should.not.exist(detectDuplicateCompletionSubmission(configWithState(taskState), result))
 		})
 
@@ -952,14 +919,6 @@ describe("attemptCompletionUtils", () => {
 			message.should.containEql("<initial_task>")
 			message.should.containEql("<audit_preview />")
 			message.should.containEql("call attempt_completion again")
-		})
-	})
-
-	describe("recordCompletionGateBlock", () => {
-		it("is a non-mutating compatibility API", () => {
-			recordCompletionGateBlock(configWithState(taskState)).should.equal(0)
-			recordCompletionGateBlock(configWithState(taskState)).should.equal(0)
-			;(taskState.completionGateBlockCount ?? 0).should.equal(0)
 		})
 	})
 

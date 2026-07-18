@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import type Anthropic from "@anthropic-ai/sdk"
 import type { ToolUse } from "@core/assistant-message"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
@@ -17,12 +16,8 @@ import { buildAuditHookMetadata, scheduleCompletionAuditPersistence } from "@sha
 import { detectReplanIntent } from "@shared/detectReplanIntent"
 import { COMPLETION_RESULT_CHANGES_FLAG, type DietCodeMessage, type TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
-import type { LockClaim } from "@shared/governance/lockTypes"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
-import { configuredCoordinationAuthorityMode } from "@/core/governance/LockAuthority"
-import { SWARM_LOCK_PROTOCOL_VERSION, SwarmMutexService } from "@/core/swarm/SwarmMutexService"
-import { getCoordinationRawDb } from "@/infrastructure/db/Config"
 import { finalizeRoadmapSession } from "@/services/roadmap/RoadmapLifecycle"
 import { showNotificationForApproval } from "../../utils"
 import { buildUserFeedbackContent } from "../../utils/buildUserFeedbackContent"
@@ -30,17 +25,15 @@ import {
 	buildCompletionGateReadinessBlock,
 	buildCompletionPreflightReadinessBrief,
 	buildProactiveCompletionGuidance,
-	getLatestCheckpointHashFromMessages,
 	markCompletionAttemptFinished,
 	markPreflightReadinessHintEmitted,
 	markProactiveCompletionGuidanceEmitted,
-	resolveAuditStateIdentifier,
 	shouldEmitPreflightReadinessHint,
 	shouldEmitProactiveCompletionGuidance,
 	shouldRejectDoubleCheckCompletion,
 	validateCompletionResultQuality,
 } from "../attemptCompletionUtils"
-import { evaluateGateLifecycle, latchEngineeringVerified, publishGateLifecycleStatus } from "../completion/GateLifecycleEvaluator"
+import { runCompletionFunnelAttempt } from "../completion/CompletionFunnel"
 import {
 	type CompletionAuditGateResult,
 	evaluateCompletionAuditGate,
@@ -113,378 +106,6 @@ async function persistAuditArtifactsIfEnabled(
 		Logger.warn("[AttemptCompletionHandler] Failed to persist audit workspace artifacts:", error)
 	}
 	return metadata
-}
-
-export interface CompletionDecision {
-	status: "approved" | "blocked_recoverable" | "blocked_terminal"
-	code:
-		| "COMPLETION_APPROVED"
-		| "ROADMAP_REMEDIATION_REQUIRED"
-		| "AUDIT_REQUIRED"
-		| "STATE_CHANGED_AFTER_AUDIT"
-		| "ACTIVE_WORK_REMAINS"
-		| "VERIFICATION_FAILED"
-		| "INTEGRITY_FAILURE"
-	nextTransition:
-		| "TERMINAL_SUCCESS"
-		| "REMEDIATE_ROADMAP"
-		| "RUN_AUDIT"
-		| "REVERIFY"
-		| "RETURN_TO_EXECUTION"
-		| "TERMINAL_FAILURE"
-	stateVersion: number
-	decisionId: string
-	details?: Record<string, unknown>
-}
-
-export const COMPLETION_DECISION_SCHEMA_VERSION = 1
-
-export type TaskCompletionStatus = "succeeded" | "failed" | "cancelled"
-
-export interface CompletionDecisionIdentityInput {
-	taskId: string
-	evaluatedStateVersion: number
-	checkpoint: string
-	outcome: TaskCompletionStatus
-	decisionSchemaVersion: number
-}
-
-export interface TaskCompletionRecord {
-	taskId: string
-	decisionId: string
-	status: TaskCompletionStatus
-	evaluatedStateVersion: number
-	evaluatedCheckpointJson: string
-	decisionJson: string
-	ownerId: string
-	leaseEpoch: string
-	fencingToken: string
-	committedAt: number
-}
-
-interface CompletionRawDatabase {
-	exec(sql: string): void
-	prepare(sql: string): {
-		get(...parameters: unknown[]): unknown
-		run(...parameters: unknown[]): { changes: number }
-	}
-}
-
-function canonicalize(value: unknown): unknown {
-	if (Array.isArray(value)) return value.map(canonicalize)
-	if (value && typeof value === "object") {
-		const result: Record<string, unknown> = {}
-		for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-			const child = (value as Record<string, unknown>)[key]
-			if (child !== undefined) result[key] = canonicalize(child)
-		}
-		return result
-	}
-	if (typeof value === "bigint") return value.toString()
-	return value
-}
-
-export function canonicalCompletionJson(value: unknown): string {
-	return JSON.stringify(canonicalize(value))
-}
-
-/**
- * Generates a canonical, schema-versioned decision ID using SHA-256.
- * The digest is computed over sorted, explicit identity fields.
- */
-export function canonicalDecisionId(input: CompletionDecisionIdentityInput): string {
-	return createHash("sha256").update(canonicalCompletionJson(input)).digest("hex")
-}
-
-function parseCompletionRecord(row: unknown): TaskCompletionRecord {
-	const record = row as Partial<TaskCompletionRecord>
-	if (
-		!record ||
-		typeof record.taskId !== "string" ||
-		typeof record.decisionId !== "string" ||
-		(record.status !== "succeeded" && record.status !== "failed" && record.status !== "cancelled") ||
-		!Number.isInteger(record.evaluatedStateVersion) ||
-		typeof record.evaluatedCheckpointJson !== "string" ||
-		typeof record.decisionJson !== "string" ||
-		typeof record.ownerId !== "string" ||
-		typeof record.leaseEpoch !== "string" ||
-		typeof record.fencingToken !== "string" ||
-		!Number.isFinite(record.committedAt)
-	) {
-		throw new CoordinationError(
-			CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-			"Malformed task completion record.",
-			"fail_closed",
-		)
-	}
-	let checkpoint: unknown
-	try {
-		checkpoint = JSON.parse(record.evaluatedCheckpointJson)
-		JSON.parse(record.decisionJson)
-	} catch (error) {
-		throw new CoordinationError(
-			CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-			`Task completion '${record.taskId}' contains invalid JSON.`,
-			"fail_closed",
-			undefined,
-			error,
-		)
-	}
-	if (
-		!checkpoint ||
-		typeof checkpoint !== "object" ||
-		typeof (checkpoint as { checkpoint?: unknown }).checkpoint !== "string"
-	) {
-		throw new CoordinationError(
-			CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-			`Task completion '${record.taskId}' has an invalid checkpoint payload.`,
-			"fail_closed",
-		)
-	}
-	const expectedDecisionId = canonicalDecisionId({
-		taskId: record.taskId,
-		evaluatedStateVersion: record.evaluatedStateVersion as number,
-		checkpoint: (checkpoint as { checkpoint: string }).checkpoint,
-		outcome: record.status,
-		decisionSchemaVersion: COMPLETION_DECISION_SCHEMA_VERSION,
-	})
-	if (expectedDecisionId !== record.decisionId) {
-		throw new CoordinationError(
-			CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-			`Task completion '${record.taskId}' failed decision digest validation.`,
-			"fail_closed",
-		)
-	}
-	return record as TaskCompletionRecord
-}
-
-export async function durableGetTaskCompletion(taskId: string): Promise<TaskCompletionRecord | undefined> {
-	let rawDb: CompletionRawDatabase
-	try {
-		rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
-	} catch (error) {
-		throw new CoordinationError(
-			CoordinationErrorCode.DATABASE_AUTHORITY_UNAVAILABLE,
-			"SQLite authority unavailable while reading task completion.",
-			"retry",
-			undefined,
-			error,
-		)
-	}
-	const row = rawDb.prepare("SELECT * FROM task_completions WHERE taskId = ?").get(taskId)
-	return row ? parseCompletionRecord(row) : undefined
-}
-
-export interface CommitTaskCompletionInput {
-	record: TaskCompletionRecord
-	resourceKey: string
-	currentStateVersion: () => number
-}
-
-export type CommitTaskCompletionResult = {
-	kind: "committed" | "idempotent" | "duplicate_suppressed"
-	record: TaskCompletionRecord
-}
-
-/** Strict BEGIN IMMEDIATE terminal CAS with lease, generation, payload, and state-version validation. */
-export function commitTaskCompletionTransaction(
-	rawDb: CompletionRawDatabase,
-	input: CommitTaskCompletionInput,
-): CommitTaskCompletionResult {
-	rawDb.exec("BEGIN IMMEDIATE")
-	try {
-		const lease = rawDb.prepare("SELECT * FROM swarm_locks WHERE resource = ?").get(input.resourceKey) as
-			| Record<string, unknown>
-			| undefined
-		if (
-			!lease ||
-			lease.ownerId !== input.record.ownerId ||
-			lease.leaseEpoch !== input.record.leaseEpoch ||
-			lease.fencingToken !== input.record.fencingToken ||
-			lease.authorityMode !== "sqlite" ||
-			Number(lease.protocolVersion) !== SWARM_LOCK_PROTOCOL_VERSION ||
-			Number(lease.expiresAt) < Date.now()
-		) {
-			throw new CoordinationError(
-				CoordinationErrorCode.FENCING_TOKEN_REJECTED,
-				"Completion lease ownership, epoch, token, protocol, or expiry validation failed.",
-				"abort_owner",
-			)
-		}
-		const generation = rawDb
-			.prepare("SELECT highestLeaseEpoch, highestFencingToken FROM swarm_lock_generations WHERE resourceKey = ?")
-			.get(input.resourceKey) as Record<string, unknown> | undefined
-		if (
-			!generation ||
-			generation.highestLeaseEpoch !== input.record.leaseEpoch ||
-			generation.highestFencingToken !== input.record.fencingToken
-		) {
-			throw new CoordinationError(
-				CoordinationErrorCode.FENCING_TOKEN_REJECTED,
-				"Completion lease is not the freshest allocated generation.",
-				"abort_owner",
-			)
-		}
-		if (input.currentStateVersion() !== input.record.evaluatedStateVersion) {
-			throw new CoordinationError(
-				CoordinationErrorCode.OWNERSHIP_CHANGED,
-				"Task state changed after completion evaluation.",
-				"abort_owner",
-			)
-		}
-
-		const existingRaw = rawDb.prepare("SELECT * FROM task_completions WHERE taskId = ?").get(input.record.taskId)
-		if (existingRaw) {
-			const existing = parseCompletionRecord(existingRaw)
-			if (existing.decisionId === input.record.decisionId) {
-				if (
-					existing.decisionJson !== input.record.decisionJson ||
-					existing.evaluatedCheckpointJson !== input.record.evaluatedCheckpointJson ||
-					existing.status !== input.record.status
-				) {
-					throw new CoordinationError(
-						CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-						"The same completion decision ID has a different payload.",
-						"fail_closed",
-					)
-				}
-				rawDb.exec("COMMIT")
-				return { kind: "idempotent", record: existing }
-			}
-			if (existing.status === input.record.status) {
-				rawDb.exec("COMMIT")
-				return { kind: "duplicate_suppressed", record: existing }
-			}
-			throw new CoordinationError(
-				CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-				`Terminal conflict: existing status '${existing.status}', proposed '${input.record.status}'.`,
-				"fail_closed",
-			)
-		}
-
-		rawDb
-			.prepare(
-				`INSERT INTO task_completions (
-					taskId, decisionId, status, evaluatedStateVersion, evaluatedCheckpointJson,
-					decisionJson, ownerId, leaseEpoch, fencingToken, committedAt
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			)
-			.run(
-				input.record.taskId,
-				input.record.decisionId,
-				input.record.status,
-				input.record.evaluatedStateVersion,
-				input.record.evaluatedCheckpointJson,
-				input.record.decisionJson,
-				input.record.ownerId,
-				input.record.leaseEpoch,
-				input.record.fencingToken,
-				input.record.committedAt,
-			)
-		rawDb.exec("COMMIT")
-		return { kind: "committed", record: input.record }
-	} catch (error) {
-		try {
-			rawDb.exec("ROLLBACK")
-		} catch {}
-		throw error
-	}
-}
-
-async function evaluateCompletionDecision(
-	config: TaskConfig,
-	result: string,
-	taskDescription: string,
-	decisionId: string,
-	stateVersion: number,
-	_command?: string,
-): Promise<CompletionDecision> {
-	// 1. Check roadmap gate
-	try {
-		const { evaluateRoadmapCompletionBlock } = require("@/services/roadmap/RoadmapCompletionGate")
-		const roadmapBlock = await evaluateRoadmapCompletionBlock(config.cwd)
-		if (roadmapBlock.blocked) {
-			return {
-				status: "blocked_recoverable",
-				code: "ROADMAP_REMEDIATION_REQUIRED",
-				nextTransition: "REMEDIATE_ROADMAP",
-				stateVersion,
-				decisionId,
-				details: {
-					blocker: roadmapBlock.message || "ROADMAP steering gate closed.",
-					remediationSteps: roadmapBlock.remediationSteps,
-				},
-			}
-		}
-	} catch (error) {
-		Logger.warn("[AttemptCompletionHandler] Roadmap completion gate check failed:", error)
-	}
-
-	// 2. Lifecycle guard check
-	const { evaluateCompletionLifecycle } = await import("../completion/completionSnapshotBuilder")
-	const lifecycleDecision = evaluateCompletionLifecycle(config, {
-		result,
-		taskDescription,
-		auditCacheKey: decisionId,
-	})
-
-	if (lifecycleDecision.kind === "hard_block") {
-		return {
-			status: "blocked_terminal",
-			code: "VERIFICATION_FAILED",
-			nextTransition: "TERMINAL_FAILURE",
-			stateVersion,
-			decisionId,
-			details: { blocker: lifecycleDecision.reason || "Verification failed." },
-		}
-	}
-
-	if (lifecycleDecision.nextAllowedAction === "run_finalization") {
-		return {
-			status: "blocked_recoverable",
-			code: "ROADMAP_REMEDIATION_REQUIRED",
-			nextTransition: "REMEDIATE_ROADMAP",
-			stateVersion,
-			decisionId,
-			details: { blocker: lifecycleDecision.reason },
-		}
-	}
-
-	if (lifecycleDecision.nextAllowedAction === "modify_workspace") {
-		return {
-			status: "blocked_recoverable",
-			code: "AUDIT_REQUIRED",
-			nextTransition: "RUN_AUDIT",
-			stateVersion,
-			decisionId,
-			details: { blocker: lifecycleDecision.reason },
-		}
-	}
-
-	// 3. Check active work remaining (unsealed lanes)
-	if (config.taskState.swarmRuntime && config.taskState.swarmRuntime.lanesComplete < config.taskState.swarmRuntime.lanesTotal) {
-		return {
-			status: "blocked_recoverable",
-			code: "ACTIVE_WORK_REMAINS",
-			nextTransition: "RETURN_TO_EXECUTION",
-			stateVersion,
-			decisionId,
-			details: {
-				blocker: "Swarm has active, unsealed lanes remaining.",
-				lanesComplete: config.taskState.swarmRuntime.lanesComplete,
-				lanesTotal: config.taskState.swarmRuntime.lanesTotal,
-			},
-		}
-	}
-
-	// 4. Default approval
-	return {
-		status: "approved",
-		code: "COMPLETION_APPROVED",
-		nextTransition: "TERMINAL_SUCCESS",
-		stateVersion,
-		decisionId,
-	}
 }
 
 export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHandler {
@@ -572,95 +193,32 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			})()
 		}
 
-		const checkpointHash = getLatestCheckpointHashFromMessages(config)
 		const taskDescription = getInitialTaskPreview(config) || ""
-		const stateIdentifier = await resolveAuditStateIdentifier(config)
-		const evaluatedStateVersion = config.taskState.workspaceStateVersion || 0
-		const decisionId = canonicalDecisionId({
-			taskId: config.taskId,
-			evaluatedStateVersion,
-			checkpoint: stateIdentifier,
-			outcome: "succeeded",
-			decisionSchemaVersion: COMPLETION_DECISION_SCHEMA_VERSION,
-		})
-		const activeLockContainer = config.taskState.activeLockClaim as LockClaim | { lockClaim?: LockClaim } | undefined
-		const activeLockClaim =
-			activeLockContainer && "lockClaim" in activeLockContainer
-				? activeLockContainer.lockClaim
-				: (activeLockContainer as LockClaim | undefined)
-		const authorityMode = activeLockClaim?.authorityMode ?? configuredCoordinationAuthorityMode()
 		const successResponse = [{ type: "text" as const, text: "[attempt_completion] Result: Done" }]
-		let existingCompletion: TaskCompletionRecord | undefined
-
-		// Durable state is authoritative in production and is checked before re-evaluation.
-		if (authorityMode === "sqlite") {
-			try {
-				existingCompletion = await durableGetTaskCompletion(config.taskId)
-				if (existingCompletion) {
-					if (existingCompletion.status !== "succeeded") {
-						return formatResponse.toolError(
-							`Terminal conflict: task already committed with status '${existingCompletion.status}' (${existingCompletion.decisionId}).`,
+		let funnelResult: Awaited<ReturnType<typeof runCompletionFunnelAttempt>>
+		try {
+			funnelResult = await runCompletionFunnelAttempt(config, { result, taskDescription })
+		} catch (error) {
+			const coordination =
+				error instanceof CoordinationError
+					? error
+					: new CoordinationError(
+							CoordinationErrorCode.DATABASE_AUTHORITY_UNAVAILABLE,
+							"Central completion funnel failed.",
+							"retry",
+							undefined,
+							error,
 						)
-					}
-					if (existingCompletion.decisionId !== decisionId) {
-						Logger.info(
-							`[AttemptCompletionHandler] Suppressed duplicate completion ${decisionId}; existing decision is ${existingCompletion.decisionId}.`,
-						)
-						config.taskState.isTerminalState = true
-						config.taskState.lastCompletionDecisionId = existingCompletion.decisionId
-						config.taskState.lastCompletionDecisionResult = JSON.stringify(successResponse)
-						return successResponse
-					}
-				}
-			} catch (error) {
-				const coordination =
-					error instanceof CoordinationError
-						? error
-						: new CoordinationError(
-								CoordinationErrorCode.DATABASE_AUTHORITY_UNAVAILABLE,
-								"SQLite completion authority unavailable.",
-								"retry",
-								undefined,
-								error,
-							)
-				return formatResponse.toolError(
-					JSON.stringify({
-						code: coordination.code,
-						retryClass: coordination.retryClass,
-						message: coordination.message,
-					}),
-				)
-			}
-		} else if (config.taskState.lastCompletionDecisionId === decisionId && config.taskState.lastCompletionDecisionResult) {
-			Logger.info(
-				`[AttemptCompletionHandler] Idempotent completion call for decisionId=${decisionId}. Returning cached result.`,
+			return formatResponse.toolError(
+				JSON.stringify({ code: coordination.code, retryClass: coordination.retryClass, message: coordination.message }),
 			)
-			return JSON.parse(config.taskState.lastCompletionDecisionResult)
 		}
-
-		// ─── Strongly-Typed Completion Decision Evaluation ───
-		const completionDecision = await evaluateCompletionDecision(
-			config,
-			result,
-			taskDescription,
-			decisionId,
-			evaluatedStateVersion,
-			command,
-		)
+		const completionDecision = funnelResult.decision
 		Logger.info(
-			`[AttemptCompletionHandler] Completion lifecycle decision: status=${completionDecision.status}, code=${completionDecision.code}`,
+			`[AttemptCompletionHandler] Completion funnel decision: status=${completionDecision.status}, code=${completionDecision.code}`,
 		)
 
-		if (completionDecision.status !== "approved") {
-			if (existingCompletion?.decisionId === decisionId) {
-				return formatResponse.toolError(
-					JSON.stringify({
-						code: CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-						retryClass: "fail_closed",
-						message: "The same completion decision ID now evaluates to a different terminal payload.",
-					}),
-				)
-			}
+		if (funnelResult.kind === "blocked") {
 			config.latencyTracker?.mark("authoritative_completion_decided", {
 				invocationId: block.call_id,
 				toolName: block.name,
@@ -674,123 +232,15 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 				} else {
 					config.taskState.executionQualityCounters.prematureCompletionAttempts++
 				}
-			} else if (completionDecision.status === "blocked_terminal") {
+			} else if (completionDecision.status === "blocked_hard") {
 				config.taskState.executionQualityCounters.prematureCompletionAttempts++
 			}
 
 			const structuredError = JSON.stringify(completionDecision, null, 2)
-			// Cache error response for idempotency
-			config.taskState.lastCompletionDecisionId = decisionId
+			config.taskState.lastCompletionDecisionId = completionDecision.decisionId
 			config.taskState.lastCompletionDecisionResult = JSON.stringify(formatResponse.toolError(structuredError))
 			return formatResponse.toolError(structuredError)
 		}
-
-		// ─── Durable CAS Terminalization ───
-		if (authorityMode === "sqlite") {
-			const checkpointJson = canonicalCompletionJson({ checkpoint: stateIdentifier })
-			const decisionJson = canonicalCompletionJson({ decision: completionDecision, result })
-			if (existingCompletion?.decisionId === decisionId) {
-				if (
-					existingCompletion.evaluatedCheckpointJson !== checkpointJson ||
-					existingCompletion.decisionJson !== decisionJson
-				) {
-					return formatResponse.toolError(
-						JSON.stringify({
-							code: CoordinationErrorCode.COORDINATION_STATE_CORRUPT,
-							retryClass: "fail_closed",
-							message: "The same completion decision ID has a different payload.",
-						}),
-					)
-				}
-				config.taskState.isTerminalState = true
-				config.taskState.lastCompletionDecisionId = existingCompletion.decisionId
-				config.taskState.lastCompletionDecisionResult = JSON.stringify(successResponse)
-				return successResponse
-			}
-			let commitClaim = activeLockClaim
-			let releaseOwnedCompletionLease = false
-			try {
-				if (commitClaim && (commitClaim.authorityMode !== "sqlite" || !commitClaim.backends.swarmMutex)) {
-					throw new CoordinationError(
-						CoordinationErrorCode.AUTHORITY_MODE_MISMATCH,
-						"A local-test or non-durable claim cannot terminalize through SQLite authority.",
-						"fail_closed",
-					)
-				}
-				if (!commitClaim) {
-					const lease = await SwarmMutexService.acquireLease(`task-completion:${config.taskId}`, config.taskId, 60_000)
-					commitClaim = {
-						claimId: `completion:${decisionId}`,
-						resourceKey: lease.resource,
-						ownerId: lease.ownerId,
-						fencingToken: lease.fencingToken,
-						leaseEpoch: lease.leaseEpoch,
-						authorityMode: "sqlite",
-						acquiredAt: lease.createdAt,
-						backends: {
-							inProcess: false,
-							swarmMutex: true,
-							roadmapLease: false,
-							fileLock: false,
-							broccoliFence: false,
-						},
-					}
-					releaseOwnedCompletionLease = true
-				}
-
-				const completionRecord: TaskCompletionRecord = {
-					taskId: config.taskId,
-					decisionId,
-					status: "succeeded",
-					evaluatedStateVersion,
-					evaluatedCheckpointJson: checkpointJson,
-					decisionJson,
-					ownerId: commitClaim.ownerId,
-					leaseEpoch: commitClaim.leaseEpoch,
-					fencingToken: commitClaim.fencingToken,
-					committedAt: Date.now(),
-				}
-				const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
-				const committed = commitTaskCompletionTransaction(rawDb, {
-					record: completionRecord,
-					resourceKey: commitClaim.resourceKey,
-					currentStateVersion: () => config.taskState.workspaceStateVersion || 0,
-				})
-				if (committed.kind === "duplicate_suppressed") {
-					Logger.info(
-						`[AttemptCompletionHandler] Suppressed duplicate completion ${decisionId}; existing decision is ${committed.record.decisionId}.`,
-					)
-				}
-			} catch (error) {
-				const coordination =
-					error instanceof CoordinationError
-						? error
-						: new CoordinationError(
-								CoordinationErrorCode.DATABASE_AUTHORITY_UNAVAILABLE,
-								"SQLite completion CAS failed.",
-								"retry",
-								undefined,
-								error,
-							)
-				return formatResponse.toolError(
-					JSON.stringify({
-						code: coordination.code,
-						retryClass: coordination.retryClass,
-						message: coordination.message,
-					}),
-				)
-			} finally {
-				if (releaseOwnedCompletionLease && commitClaim) {
-					await SwarmMutexService.release(
-						commitClaim.resourceKey,
-						commitClaim.ownerId,
-						commitClaim.leaseEpoch,
-						commitClaim.fencingToken,
-					).catch((error) => Logger.warn("[AttemptCompletionHandler] Completion lease cleanup failed:", error))
-				}
-			}
-		}
-		config.taskState.isTerminalState = true
 
 		let auditMetadata: TaskAuditMetadata | undefined
 		let planBaseline: TaskAuditMetadata | undefined
@@ -873,16 +323,11 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			Logger.warn(`[AttemptCompletionHandler] ${auditGateResult.diagnostics}`)
 		}
 
-		// The canonical action guard allowed completion; latch verification from
-		// that decision, never from advisory quality diagnostics.
-		latchEngineeringVerified(config, checkpointHash)
 		config.latencyTracker?.mark("authoritative_completion_decided", {
 			invocationId: block.call_id,
 			toolName: block.name,
 			scope: "authoritative-result",
 		})
-		await publishGateLifecycleStatus(config, evaluateGateLifecycle(config))
-
 		if (auditGateResult.status === "advisory_passed") {
 			Logger.debug(
 				`[AttemptCompletionHandler] Completion diagnostics passed with score ${auditGateResult.gateDecision.score}.`,
@@ -890,7 +335,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 		}
 
 		// Cache terminal success response for idempotency
-		config.taskState.lastCompletionDecisionId = decisionId
+		config.taskState.lastCompletionDecisionId = completionDecision.decisionId
 		config.taskState.lastCompletionDecisionResult = JSON.stringify(successResponse)
 
 		if (config.autoApprovalSettings.enableNotifications) {

@@ -1,7 +1,7 @@
 import { isApiRequestInProgress } from "@shared/agentActivity"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
-import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
-import { resolveLifecycleProjection } from "@shared/completion/lifecycleProjection"
+import type { ResolvedCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
+import { hasTerminalCompletionEvidence } from "@shared/completion/taskCompletionEvidence"
 import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import type {
 	DietCodeMessage,
@@ -34,7 +34,7 @@ interface ExecutionStatusOptions {
 	messages: readonly DietCodeMessage[]
 	auditMetadata?: TaskAuditMetadata
 	auditHealth?: AuditHealthSummary
-	gateLifecycle?: ResolvedGateLifecycleSnapshot
+	completionFunnel?: ResolvedCompletionFunnelSnapshot
 	checkpointError?: string
 }
 
@@ -88,27 +88,25 @@ function getApprovalDetail(message: DietCodeMessage): string {
 function getSafetyLabel(
 	auditMetadata: TaskAuditMetadata | undefined,
 	auditHealth: AuditHealthSummary | undefined,
-	gateLifecycle: ResolvedGateLifecycleSnapshot | undefined,
+	completionFunnel: ResolvedCompletionFunnelSnapshot | undefined,
 ): string {
 	if (auditMetadata?.gate_blocked) return "Advisory findings"
 	if ((auditHealth?.criticalViolationCount ?? 0) > 0) return "Critical issue"
 	if ((auditHealth?.warningViolationCount ?? 0) > 0) return "Review advised"
-	if (gateLifecycle?.freshness === "stale" || gateLifecycle?.freshness === "unknown") {
-		return gateLifecycle.decision ? "Snapshot stale" : "Active"
-	}
-	if (gateLifecycle?.decision?.verification === "passed") return "Passed"
+	if (completionFunnel?.terminalCompletion || completionFunnel?.event?.phase === "ready") return "Passed"
 	return "Active"
 }
 
 function getCompletionConfidence(
 	state: ExecutionState,
 	auditHealth: AuditHealthSummary | undefined,
-	gateLifecycle: ResolvedGateLifecycleSnapshot | undefined,
+	_completionFunnel: ResolvedCompletionFunnelSnapshot | undefined,
+	terminalCompletion: boolean,
 ): string {
 	if (state === "blocked" || state === "failed") return "Not ready"
 	if (state === "cancelled") return "Stopped"
 	if (state !== "complete") return "Pending"
-	if (gateLifecycle?.freshness === "current" && gateLifecycle.decision?.completionReceipt) return "Receipt sealed"
+	if (terminalCompletion) return "Recorded"
 	if (auditHealth?.latestGrade) return `${auditHealth.latestGrade} audit`
 	if (
 		auditHealth &&
@@ -150,23 +148,25 @@ export function deriveExecutionStatus({
 	messages,
 	auditMetadata,
 	auditHealth,
-	gateLifecycle,
+	completionFunnel,
 	checkpointError,
 }: ExecutionStatusOptions): ExecutionStatusModel {
 	const lastMessage = messages.at(-1)
-	const safety = getSafetyLabel(auditMetadata, auditHealth, gateLifecycle)
+	const safety = getSafetyLabel(auditMetadata, auditHealth, completionFunnel)
 	const receipt = getReceiptIncident(lastMessage)
-	const lifecycleState = gateLifecycle?.decision?.lifecycleState
-	const lifecycleProjection = resolveLifecycleProjection({
-		canonicalDecision: gateLifecycle?.canonicalDecision,
-		legacyDecision: gateLifecycle?.decision,
-		freshness: gateLifecycle?.freshness,
-		continuityMarker: gateLifecycle?.continuityMarker,
-	})
+	const terminalCompletion = completionFunnel?.terminalCompletion ?? hasTerminalCompletionEvidence(messages)
+	const funnelEvent = completionFunnel?.event
 
 	let status: Omit<ExecutionStatusModel, "safety" | "confidence">
 
-	if (checkpointError) {
+	if (terminalCompletion || funnelEvent?.terminal) {
+		status = {
+			state: "complete",
+			title: "Execution complete",
+			detail: "The final outcome is recorded and older pending gate projections are no longer actionable.",
+			nextAction: "Review the result or start a new task.",
+		}
+	} else if (checkpointError) {
 		status = {
 			state: "failed",
 			title: "Recovery required",
@@ -202,13 +202,6 @@ export function deriveExecutionStatus({
 				? "Follow the recovery path in the receipt."
 				: "Inspect the receipt before retrying or merging changes.",
 		}
-	} else if (lifecycleState === "audit_gate_corrupt") {
-		status = {
-			state: "failed",
-			title: "Finalization unavailable",
-			detail: "Finalization could not produce valid evidence.",
-			nextAction: "Review the finalization evidence.",
-		}
 	} else if (wasCancelled(lastMessage)) {
 		status = {
 			state: "cancelled",
@@ -216,27 +209,32 @@ export function deriveExecutionStatus({
 			detail: "The active model turn was cancelled. Completed workspace changes remain in place.",
 			nextAction: "Review the timeline, then resume with updated guidance when ready.",
 		}
+	} else if (receipt.incident === "sealed_success") {
+		status = {
+			state: "complete",
+			title: "Execution complete",
+			detail: "The final outcome is recorded and older pending gate projections are no longer actionable.",
+			nextAction: "Review the result or start a new task.",
+		}
+	} else if (funnelEvent?.phase === "failed" || funnelEvent?.phase === "blocked") {
+		status = {
+			state: funnelEvent.phase === "failed" ? "failed" : "blocked",
+			title: funnelEvent.phase === "failed" ? "Completion blocked" : "Workspace changes required",
+			detail: funnelEvent.reason,
+			nextAction:
+				funnelEvent.nextAllowedAction === "none"
+					? "Review the funnel audit trace."
+					: `Continue with ${funnelEvent.nextAllowedAction}.`,
+		}
 	} else if (
 		lastMessage?.say === "api_req_retried" ||
 		lastMessage?.say === "error_retry" ||
-		receipt.incident === "in_progress" ||
-		lifecycleState === "completion_retry_locked" ||
-		lifecycleState === "finalization_running" ||
-		lifecycleState === "finalization_completed" ||
-		lifecycleState === "receipt_sealed"
+		receipt.incident === "in_progress"
 	) {
 		status = {
 			state: "recovering",
-			title:
-				lifecycleState === "completion_retry_locked"
-					? "Finalization is retry-locked"
-					: lifecycleState?.startsWith("finalization") || lifecycleState === "receipt_sealed"
-						? "Finalizing execution"
-						: "Recovering execution",
-			detail:
-				lifecycleState === "completion_retry_locked"
-					? "Engineering is verified. Duplicate completion attempts are blocked while finalization runs."
-					: "LUMI is restoring a safe execution path and preserving completed work.",
+			title: "Recovering execution",
+			detail: "LUMI is restoring a safe execution path and preserving completed work.",
 			nextAction: "No action required. Wait for the current recovery step to settle.",
 		}
 	} else if (
@@ -258,13 +256,6 @@ export function deriveExecutionStatus({
 			title: "Execution interrupted",
 			detail: "The latest action did not complete successfully.",
 			nextAction: "Review the error in the timeline and choose a recovery path.",
-		}
-	} else if (lifecycleState === "completed_without_retry_completion" || receipt.incident === "sealed_success") {
-		status = {
-			state: "complete",
-			title: "Execution complete",
-			detail: "The governed receipt is sealed and the session has authoritative completion evidence.",
-			nextAction: "Review the receipt or start a new task.",
 		}
 	} else if (
 		lastMessage?.type === "ask" &&
@@ -308,15 +299,6 @@ export function deriveExecutionStatus({
 			detail: "LUMI is working through the current step. You can steer or stop it at any time.",
 			nextAction: "No action required. Monitor the timeline or add guidance.",
 		}
-	} else if (gateLifecycle?.decision?.userInputRequired || gateLifecycle?.canonicalDecision?.nextAllowedAction === "none") {
-		status = {
-			state: "input",
-			title: "Gate decision required",
-			detail: lifecycleProjection.instruction,
-			nextAction: lifecycleProjection.nextAction
-				? `Continue with ${lifecycleProjection.nextAction}.`
-				: "Review the canonical task state before continuing.",
-		}
 	} else {
 		status = {
 			state: "ready",
@@ -332,6 +314,8 @@ export function deriveExecutionStatus({
 		detail: sanitizeWebviewMessageContent(status.detail),
 		nextAction: sanitizeWebviewMessageContent(status.nextAction),
 		safety: sanitizeWebviewMessageContent(safety),
-		confidence: sanitizeWebviewMessageContent(getCompletionConfidence(status.state, auditHealth, gateLifecycle)),
+		confidence: sanitizeWebviewMessageContent(
+			getCompletionConfidence(status.state, auditHealth, completionFunnel, terminalCompletion),
+		),
 	}
 }

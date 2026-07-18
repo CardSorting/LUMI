@@ -1,13 +1,17 @@
-import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
+import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
 import type { LaneExecutionMode } from "@shared/subagent/governedExecution"
-import { cacheGateLifecycleDecision, evaluateGateLifecycle } from "./completion/GateLifecycleEvaluator"
+import {
+	cacheCompletionFunnelEvent,
+	decisionToCompletionFunnelEvent,
+	evaluateCompletionFunnel,
+} from "./completion/CompletionFunnel"
 import { runSubagentCompletionLanePreflight } from "./completionGatePipeline"
 import type { TaskConfig } from "./types/TaskConfig"
 
 export type SubagentCompletionGateValidation = {
 	error: string | null
 	diagnostics: string[]
-	lifecycle: GateLifecycleDecision
+	completionFunnelEvent: CompletionFunnelEvent
 	/** Hardening audit deferred to parent seal barrier — never blocks lane throughput. */
 	auditDeferredToSeal: boolean
 }
@@ -31,13 +35,16 @@ export async function validateSubagentCompletionGates(
 		command,
 		laneExecutionMode: options?.laneExecutionMode,
 	})
-	const lifecycle = evaluateGateLifecycle(subagentConfig)
-	cacheGateLifecycleDecision(subagentConfig, lifecycle)
+	const completionFunnelEvent = decisionToCompletionFunnelEvent(
+		subagentConfig,
+		evaluateCompletionFunnel(subagentConfig, { result }),
+	)
+	cacheCompletionFunnelEvent(subagentConfig, completionFunnelEvent)
 
 	return {
 		error: null,
 		diagnostics,
-		lifecycle,
+		completionFunnelEvent,
 		auditDeferredToSeal: true,
 	}
 }

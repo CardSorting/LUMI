@@ -208,9 +208,9 @@ export function sanitizeWebviewMessageContent(content: string): string {
 	return sanitizePlainWebviewContent(content)
 }
 
-export function buildCanonicalCompletionSummary(message: Pick<DietCodeMessage, "canonicalLifecycleDecision">): string {
-	const nextAction = message.canonicalLifecycleDecision?.nextAllowedAction ?? "none"
-	return `Completion diagnostics: advisory\nCanonical next action: ${nextAction}`
+export function buildCompletionFunnelSummary(message: Pick<DietCodeMessage, "completionFunnelEvent">): string {
+	const nextAction = message.completionFunnelEvent?.nextAllowedAction ?? "none"
+	return `Completion funnel\nNext action: ${nextAction}`
 }
 
 export interface WebviewDiagnosticProjectionOptions {
@@ -233,18 +233,21 @@ export function projectMessageForWebview(
 		...message,
 		text: message.text === undefined ? undefined : sanitizeWebviewMessageContent(message.text),
 		reasoning: message.reasoning === undefined ? undefined : sanitizeWebviewMessageContent(message.reasoning),
-		canonicalLifecycleDecision: message.canonicalLifecycleDecision
+		completionFunnelEvent: message.completionFunnelEvent
 			? {
-					...message.canonicalLifecycleDecision,
-					canonicalInstruction: sanitizeWebviewMessageContent(message.canonicalLifecycleDecision.canonicalInstruction),
-					reason: sanitizeWebviewMessageContent(message.canonicalLifecycleDecision.reason),
+					...message.completionFunnelEvent,
+					canonicalInstruction: sanitizeWebviewMessageContent(message.completionFunnelEvent.canonicalInstruction),
+					reason: sanitizeWebviewMessageContent(message.completionFunnelEvent.reason),
+					stages: message.completionFunnelEvent.stages.map((stage) => ({
+						...stage,
+						reason: sanitizeWebviewMessageContent(stage.reason),
+					})),
 				}
 			: undefined,
 	}
 
 	if (!options.showInternalDiagnostics) {
 		delete projected.diagnostics
-		delete projected.gateLifecycleStatus
 		delete projected.auditMetadata
 	}
 

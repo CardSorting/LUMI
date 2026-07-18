@@ -1,4 +1,4 @@
-import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
+import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
 import type { SubagentExecutionStatus } from "@shared/ExtensionMessage"
 import type { CompactionEventRecord } from "@shared/subagent/transcript"
 
@@ -98,7 +98,7 @@ export interface SubagentExecutionEnvelope {
 	compactionEvents: CompactionEventRecord[]
 	blockers: string[]
 	warnings: string[]
-	gateLifecycleStatus?: GateLifecycleDecision
+	completionFunnelEvent?: CompletionFunnelEvent
 	executionValidity: ExecutionValidity
 	confidence: ExecutionConfidence
 	retryHints: string[]

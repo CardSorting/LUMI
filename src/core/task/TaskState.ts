@@ -207,21 +207,12 @@ export class TaskState {
 	completionGateSessionId?: string
 	/** Coordinator authority diagnostics from governance paralysis / stale receipt detection. */
 	governanceDiagnostics?: import("@shared/subagent/coordinatorAuthority").GovernanceDiagnosticEvent[]
-	/** Engineering verification latched — finalization lane may proceed without re-audit. */
-	engineeringVerifiedAt?: number
-	engineeringVerifiedCheckpointHash?: string
-	/** Current completion lifecycle state for operator surfaces. */
-	completionLifecycleState?: string
-	/** Last unified gate lifecycle decision snapshot. */
-	lastGateLifecycleDecision?: string
-	/** Finalization lane state. */
+	/** Sole modern completion authority cached as one immutable funnel event. */
+	completionFunnelEventJson?: string
+	/** Optional post-completion documentation maintenance state; never a completion gate. */
 	finalizationPhase?: "ready" | "running" | "completed" | "failed"
 	finalizationRunId?: string
 	finalizationEvidenceJson?: string
-	/** Sealed completion receipt (operator-visible). */
-	completionReceiptJson?: string
-	/** Append-only lifecycle transition log for receipt continuity. */
-	lifecycleTransitionLogJson?: string
 	/** Cached roadmap gate recovery payload for structured agent envelope on next error format. */
 	lastRoadmapGateRecovery?: {
 		remediationSteps?: string[]
@@ -240,10 +231,6 @@ export class TaskState {
 	_cachedCheckpointMsgCount?: number
 	/** Graph revision at the time the last completion audit was cached. */
 	lastCompletionAuditGraphRevision?: number
-	/** Checkpoint hash when the last gate lifecycle decision was cached. */
-	lastGateLifecycleDecisionCheckpointHash?: string
-	/** Graph revision when the last gate lifecycle decision was cached. */
-	lastGateLifecycleDecisionGraphRevision?: number
 	/** Checkpoint hash used for the last half-open circuit breaker probe attempt.
 	 * Prevents multiple probes on the same workspace checkpoint. */
 	lastProbeCheckpointHash?: string

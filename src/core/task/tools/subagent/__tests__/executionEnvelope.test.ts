@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
-import { buildGateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
+import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { createContinuityMarker } from "@shared/subagent/executionEnvelope"
 import { afterEach, describe, it } from "mocha"
@@ -196,28 +196,25 @@ describe("subagent execution envelope", () => {
 			"verify module",
 			{ swarmId: "swarm-1", index: 1, depth: 1 },
 		)
-		const lifecycle = buildGateLifecycleDecision({
-			lifecycleState: "engineering_in_progress",
-			activeLane: "completion",
-			reasonCode: "engineering.in_progress",
-			operatorMessage: "Fix audit violations before completing.",
-			engineering: "failed",
-			verification: "pending",
-			documentation: "not_applicable",
-			ledger: "not_applicable",
-			finalization: "not_applicable",
-			allowedActions: [],
+		const completionFunnelEvent: CompletionFunnelEvent = {
+			schemaVersion: 1,
+			taskId: "task-1",
+			phase: "blocked",
+			kind: "soft_block",
+			terminal: false,
+			nextAllowedAction: "modify_workspace",
 			forbiddenActions: ["attempt_completion"],
-			recoveryPath: [],
-			receiptEligible: false,
-			moreToolCallsUseful: true,
-			userInputRequired: false,
-		})
+			canonicalInstruction: "Fix audit violations before completing.",
+			reason: "Audit blocked.",
+			stages: [],
+			graphRevision: 1,
+			evaluatedAt: Date.now(),
+		}
 		builder.setPhase("completion_gate")
-		builder.recordGateLifecycle(lifecycle)
+		builder.recordCompletionFunnel(completionFunnelEvent)
 		builder.recordBlocker("audit gate blocked")
 		const envelope = builder.build()
-		assert.equal(envelope.gateLifecycleStatus?.lifecycleState, "engineering_in_progress")
+		assert.equal(envelope.completionFunnelEvent?.phase, "blocked")
 		assert.equal(envelope.phase, "completion_gate")
 		assert.ok(envelope.blockers.length > 0)
 	})

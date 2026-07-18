@@ -1,4 +1,4 @@
-import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
+import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
 import type { SubagentExecutionStatus } from "@shared/ExtensionMessage"
 import type {
 	EvidenceReference,
@@ -125,7 +125,7 @@ export class SubagentEnvelopeBuilder {
 	private warnings: string[] = []
 	private retryHints: string[] = []
 	private verbatimOutput?: string
-	private gateLifecycleStatus?: GateLifecycleDecision
+	private completionFunnelEvent?: CompletionFunnelEvent
 	private compactionEvents: CompactionEventRecord[] = []
 	private transcriptArtifactPath?: string
 	private transcriptEventCount?: number
@@ -204,8 +204,8 @@ export class SubagentEnvelopeBuilder {
 		})
 	}
 
-	recordGateLifecycle(decision: GateLifecycleDecision): void {
-		this.gateLifecycleStatus = decision
+	recordCompletionFunnel(event: CompletionFunnelEvent): void {
+		this.completionFunnelEvent = event
 	}
 
 	recordWarning(message: string): void {
@@ -316,7 +316,7 @@ export class SubagentEnvelopeBuilder {
 			compactionEvents: this.compactionEvents,
 			blockers: this.blockers,
 			warnings: this.warnings,
-			gateLifecycleStatus: this.gateLifecycleStatus,
+			completionFunnelEvent: this.completionFunnelEvent,
 			executionValidity: this.executionValidity,
 			confidence: this.confidence,
 			retryHints: this.retryHints,

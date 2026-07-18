@@ -7,8 +7,7 @@ import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import { ApiConfiguration } from "./api"
 import type { TaskAuditMetadata } from "./audit/types"
 import { BrowserSettings } from "./BrowserSettings"
-import type { CanonicalLifecycleDecision } from "./completion/canonicalLifecycleDecision"
-import type { GateLifecycleDecision } from "./completion/gateLifecycleDecision"
+import type { CompletionFunnelEvent } from "./completion/completionFunnelEvent"
 import { DietCodeFeatureSetting } from "./DietCodeFeatureSetting"
 import type { InternalDiagnosticMetadata } from "./diagnostics/webviewDiagnostics"
 import { BannerCardData } from "./dietcode/banner"
@@ -158,9 +157,8 @@ export interface DietCodeMessage {
 	conversationHistoryDeletedRange?: [number, number] // for when conversation history is truncated for API requests
 	modelInfo?: DietCodeMessageModelInfo
 	auditMetadata?: TaskAuditMetadata
-	gateLifecycleStatus?: GateLifecycleDecision
-	/** Canonical lifecycle decision from the CompletionLifecycleDecisionEngine. */
-	canonicalLifecycleDecision?: CanonicalLifecycleDecision
+	/** Sole completion authority. Older gate/lifecycle projections are not published. */
+	completionFunnelEvent?: CompletionFunnelEvent
 	/** Backend-only unless showInternalDiagnostics is explicitly enabled. */
 	diagnostics?: InternalDiagnosticMetadata
 }

@@ -456,7 +456,7 @@ describe("GoldenCartridgeToolHandler", () => {
 			didRejectTool: taskState.didRejectTool,
 			didEditFile: taskState.didEditFile,
 			doubleCheckCompletionPending: taskState.doubleCheckCompletionPending,
-			completionLifecycleState: taskState.completionLifecycleState,
+			completionFunnelEventJson: taskState.completionFunnelEventJson,
 		}
 		await result(handler, config, "measure")
 		await result(handler, config, "compare_mass", { candidates: [] })
@@ -466,7 +466,7 @@ describe("GoldenCartridgeToolHandler", () => {
 				didRejectTool: taskState.didRejectTool,
 				didEditFile: taskState.didEditFile,
 				doubleCheckCompletionPending: taskState.doubleCheckCompletionPending,
-				completionLifecycleState: taskState.completionLifecycleState,
+				completionFunnelEventJson: taskState.completionFunnelEventJson,
 			},
 			before,
 		)

@@ -15,8 +15,7 @@ import type { UrlContentFetcher } from "@services/browser/UrlContentFetcher"
 import type { McpHub } from "@services/mcp/McpHub"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { BrowserSettings } from "@shared/BrowserSettings"
-import type { CanonicalLifecycleDecision } from "@shared/completion/canonicalLifecycleDecision"
-import type { GateLifecycleDecision } from "@shared/completion/gateLifecycleDecision"
+import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
 import type { InternalDiagnosticMetadata } from "@shared/diagnostics/webviewDiagnostics"
 import type { DietCodeAsk, DietCodeSay, TaskAuditMetadata } from "@shared/ExtensionMessage"
 import type { FocusChainSettings } from "@shared/FocusChainSettings"
@@ -128,8 +127,7 @@ export interface TaskCallbacks {
 		files?: string[],
 		partial?: boolean,
 		auditMetadata?: TaskAuditMetadata,
-		gateLifecycleStatus?: GateLifecycleDecision,
-		canonicalLifecycleDecision?: CanonicalLifecycleDecision,
+		completionFunnelEvent?: CompletionFunnelEvent,
 		diagnostics?: InternalDiagnosticMetadata,
 	) => Promise<number | undefined>
 

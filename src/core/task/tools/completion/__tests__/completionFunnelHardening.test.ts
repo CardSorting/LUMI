@@ -27,7 +27,7 @@ function configWithState(taskState: TaskState): TaskConfig {
 	} as unknown as TaskConfig
 }
 
-describe("completion lifecycle hardening", () => {
+describe("completion funnel hardening", () => {
 	let taskState: TaskState
 
 	beforeEach(() => {
@@ -151,16 +151,16 @@ describe("completion lifecycle hardening", () => {
 			getCanonicalCompletionPhase(config).should.equal("evaluating")
 		})
 
-		it("returns finalized for completed_without_retry_completion", () => {
+		it("returns completed for a terminal funnel event", () => {
 			const config = configWithState(taskState)
-			taskState.completionLifecycleState = "completed_without_retry_completion"
-			getCanonicalCompletionPhase(config).should.equal("finalized")
+			taskState.completionFunnelEventJson = JSON.stringify({ phase: "completed" })
+			getCanonicalCompletionPhase(config).should.equal("completed")
 		})
 
-		it("returns failed_with_receipt for audit_gate_corrupt", () => {
+		it("returns failed for a failed funnel event", () => {
 			const config = configWithState(taskState)
-			taskState.completionLifecycleState = "audit_gate_corrupt"
-			getCanonicalCompletionPhase(config).should.equal("failed_with_receipt")
+			taskState.completionFunnelEventJson = JSON.stringify({ phase: "failed" })
+			getCanonicalCompletionPhase(config).should.equal("failed")
 		})
 	})
 
@@ -170,9 +170,8 @@ describe("completion lifecycle hardening", () => {
 			taskState.completionGateBlockCount = MAX_COMPLETION_GATE_BLOCK_COUNT
 			taskState.lastCompletionBlockReason = "circuit_breaker"
 
-			// The circuit breaker message is tested via getCompletionGateCircuitBreakerError
-			// which is already tested in attemptCompletionUtils.test.ts
-			// Here we verify the cooldown remains bounded
+			// Advisory history cannot route around the central funnel; its cooldown
+			// remains bounded and has no separate terminal authority.
 			const cooldown = getCompletionCooldownRemainingMs(config)
 			cooldown.should.be.lessThanOrEqual(30000)
 		})

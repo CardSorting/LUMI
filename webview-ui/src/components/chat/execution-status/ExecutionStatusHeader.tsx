@@ -1,5 +1,5 @@
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
-import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
+import type { ResolvedCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
 import type { DietCodeMessage, TaskAuditMetadata } from "@shared/ExtensionMessage"
 import {
 	BadgeCheck,
@@ -22,7 +22,7 @@ interface ExecutionStatusHeaderProps {
 	messages: readonly DietCodeMessage[]
 	auditMetadata?: TaskAuditMetadata
 	auditHealth?: AuditHealthSummary
-	gateLifecycle?: ResolvedGateLifecycleSnapshot
+	completionFunnel?: ResolvedCompletionFunnelSnapshot
 	checkpointError?: string
 	isDetailsOpen: boolean
 	onToggleDetails: () => void
@@ -85,15 +85,15 @@ export const ExecutionStatusHeader = memo(
 		messages,
 		auditMetadata,
 		auditHealth,
-		gateLifecycle,
+		completionFunnel,
 		checkpointError,
 		isDetailsOpen,
 		onToggleDetails,
 		onReviewBlock,
 	}: ExecutionStatusHeaderProps) => {
 		const status = useMemo(
-			() => deriveExecutionStatus({ messages, auditMetadata, auditHealth, gateLifecycle, checkpointError }),
-			[messages, auditMetadata, auditHealth, gateLifecycle, checkpointError],
+			() => deriveExecutionStatus({ messages, auditMetadata, auditHealth, completionFunnel, checkpointError }),
+			[messages, auditMetadata, auditHealth, completionFunnel, checkpointError],
 		)
 		const style = STATE_STYLE[status.state]
 		const isCompact = useIsCompact()

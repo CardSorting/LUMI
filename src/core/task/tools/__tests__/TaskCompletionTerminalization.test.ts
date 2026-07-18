@@ -11,7 +11,7 @@ import {
 	canonicalDecisionId,
 	commitTaskCompletionTransaction,
 	type TaskCompletionRecord,
-} from "../handlers/AttemptCompletionHandler"
+} from "../completion/CompletionFunnel"
 
 /**
  * Create an isolated test SQLite database with the required tables.

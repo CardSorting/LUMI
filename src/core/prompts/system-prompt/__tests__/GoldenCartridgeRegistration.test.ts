@@ -53,14 +53,14 @@ describe("Golden Cartridge registration", () => {
 		const before = {
 			didRejectTool: taskState.didRejectTool,
 			doubleCheckCompletionPending: taskState.doubleCheckCompletionPending,
-			completionLifecycleState: taskState.completionLifecycleState,
+			completionFunnelEventJson: taskState.completionFunnelEventJson,
 		}
 		activateSkillTools(taskState, GOLDEN_CARTRIDGE_SKILL_NAME)
 		assert.deepEqual(
 			{
 				didRejectTool: taskState.didRejectTool,
 				doubleCheckCompletionPending: taskState.doubleCheckCompletionPending,
-				completionLifecycleState: taskState.completionLifecycleState,
+				completionFunnelEventJson: taskState.completionFunnelEventJson,
 			},
 			before,
 		)

@@ -2,7 +2,7 @@ import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessag
 import type { PreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
-import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
+import type { ResolvedCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import React from "react"
 import TaskHeader from "@/components/chat/task-header/TaskHeader"
@@ -34,7 +34,7 @@ interface TaskSectionProps {
 	onScrollToAuditMessage?: (ts: number) => void
 	onScrollToLatestGateBlock?: () => void
 	onScrollToLatestAdvisory?: () => void
-	gateLifecycleSnapshot?: ResolvedGateLifecycleSnapshot
+	completionFunnelSnapshot?: ResolvedCompletionFunnelSnapshot
 }
 
 /**
@@ -58,7 +58,7 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 	onScrollToAuditMessage,
 	onScrollToLatestGateBlock,
 	onScrollToLatestAdvisory,
-	gateLifecycleSnapshot,
+	completionFunnelSnapshot,
 }) => {
 	return (
 		<TaskHeader
@@ -68,8 +68,8 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 			cacheReads={apiMetrics.totalCacheReads}
 			cacheWrites={apiMetrics.totalCacheWrites}
 			checklistSummary={checklistSummary}
+			completionFunnelSnapshot={completionFunnelSnapshot}
 			doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
-			gateLifecycleSnapshot={gateLifecycleSnapshot}
 			lastApiReqTotalTokens={lastApiReqTotalTokens}
 			lastProgressMessageText={lastProgressMessageText}
 			latestAuditMetadata={latestAuditMetadata}

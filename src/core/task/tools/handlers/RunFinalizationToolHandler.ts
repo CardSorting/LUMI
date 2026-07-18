@@ -15,22 +15,10 @@ export class RunFinalizationToolHandler implements IToolHandler {
 	async execute(config: TaskConfig, block: ToolUse): Promise<ToolResponse> {
 		const seal = block.params.seal === "true"
 
-		// ── Action Guard: enforce the binding action contract ──
-		// The decision engine determines truth. The action guard enforces truth.
-		// Rejected actions do NOT increment counters, create audit state, or
-		// trigger retry loops.
-		const { evaluateCompletionLifecycle } = await import("../completion/completionSnapshotBuilder")
-		const { guardRunFinalization } = await import("../completion/CompletionActionGuard")
-		const decision = evaluateCompletionLifecycle(config)
-		const guardResult = guardRunFinalization(config, decision)
-		if (!guardResult.allowed) {
-			return guardResult.rejection
-		}
-
 		const runner = new FinalizationRunner(config)
 
 		if (seal) {
-			const sealResult = await runner.sealSession(block.params.summary)
+			const sealResult = await runner.sealSession()
 			if (!sealResult.success) {
 				return formatResponse.toolError(sealResult.message)
 			}
@@ -45,7 +33,7 @@ export class RunFinalizationToolHandler implements IToolHandler {
 		}
 
 		return formatResponse.toolResult(
-			`${result.message}\n\n<finalization_evidence>${result.evidenceJson}</finalization_evidence>\n\nCall run_finalization with seal=true to emit the sealed receipt and end the session.`,
+			`${result.message}\n\n<finalization_evidence>${result.evidenceJson}</finalization_evidence>`,
 		)
 	}
 }

@@ -17,7 +17,7 @@ import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
 import { combineHookSequences } from "@shared/combineHookSequences"
-import { resolveGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
+import { resolveCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
 import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, type String as ProtoString, StringRequest } from "@shared/proto/dietcode/common"
 import type { ShowWebviewEvent } from "@shared/proto/dietcode/ui"
@@ -90,7 +90,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	const lastApiReqTotalTokens = useMemo(() => getLastApiReqTotalTokens(modifiedMessages) || undefined, [modifiedMessages])
 
 	const latestAuditMetadata = useMemo(() => getLatestGateAuditFromMessages(messages), [messages])
-	const gateLifecycleSnapshot = useMemo(() => resolveGateLifecycleSnapshot(messages), [messages])
+	const completionFunnelSnapshot = useMemo(() => resolveCompletionFunnelSnapshot(messages), [messages])
 	const auditTrend = useMemo(() => {
 		const previous = getPreviousGateAuditFromMessages(messages)
 		return getAuditTrend(previous, latestAuditMetadata)
@@ -416,7 +416,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 								auditSnapshots={auditSnapshots}
 								auditTrend={auditTrend}
 								checklistSummary={checklistSummary}
-								gateLifecycleSnapshot={gateLifecycleSnapshot}
+								completionFunnelSnapshot={completionFunnelSnapshot}
 								lastApiReqTotalTokens={lastApiReqTotalTokens}
 								lastProgressMessageText={lastProgressMessageText}
 								latestAuditMetadata={latestAuditMetadata}

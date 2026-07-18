@@ -1,5 +1,21 @@
 # Key Findings
 
+## 2026-07-18 Central Completion Funnel Migration
+
+- `src/core/task/tools/completion/CompletionFunnel.ts` is the sole completion authority. One auditable monolith now owns the entire funnel: evidence collection, registry-ordered stage trace, gate decision, action guard, canonical digest, lease-fenced SQLite compare-and-swap, event publication, cache monotonicity, roadmap/swarm checks, and terminal classification.
+- The durable `task_completions` row is the terminal fact. The shared `CompletionFunnelEvent` is its one modern projection across task state, message history, subagent envelopes, and webview status. Consumers select a whole newest event; they never merge fields from competing projections.
+- Terminal success is monotonic: `phase: completed`, `kind: completed`, `nextAllowedAction: none`, and `attempt_completion` is forbidden. Generic resume markers and bookkeeping cannot demote it to pending; only explicit new user work can reopen a completed task.
+- `AttemptCompletionHandler` is now an adapter around `runCompletionFunnelAttempt()`. The former lifecycle decision engine, snapshot builder, action guard, gate registry/evaluator, canonical lifecycle projection, receipt validation, and legacy webview panel were deleted rather than retained as compatibility authorities.
+- `ToolExecutor` no longer runs a pre-handler completion circuit breaker. There is no second interception point before the funnel, and advisory diagnostic counters cannot acquire action authority.
+- `FinalizationRunner` is limited to optional post-completion Knowledge Ledger maintenance. It cannot authorize, reject, reopen, seal, or publish task completion, so documentation state cannot compete with the durable completion fact.
+
+### Verification evidence
+
+- Completion-focused root regression set: 141 passing.
+- Webview suite: 171 passing.
+- Broad unit matrix: 2,161 passing and 4 expected pending with the timing-sensitive governed-execution file excluded; that file passes 20/20 in isolation (2,181 passing total).
+- `npm run check-types`, `npm run lint`, `npm run check:handler-imports`, `npm run ci:build`, and `git diff --check`: passed.
+
 ## 2026-07-18 Lease Reconciliation and Terminalization Pass
 
 - Production coordination has one authority: SQLite. `local_test` is explicit and immutable; connection/query failure surfaces `DATABASE_AUTHORITY_UNAVAILABLE` and never falls back to memory or files.

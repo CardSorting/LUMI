@@ -172,8 +172,7 @@ describe("Sovereign Integrity and Liveness Hardening Test Suite", () => {
 				taskDescription: "task description",
 				logPrefix: "Test",
 			})
-			// Wait, the cache key check should pass only if engineeringVerifiedAt is set
-			config.taskState.engineeringVerifiedAt = Date.now()
+			// The cache key and graph revision are the complete cache authority.
 			config.taskState.lastCompletionAuditGraphRevision = 0
 			config.taskState.lastCompletionAuditCacheKey = config.taskState.lastAdvisoryAuditCacheKey
 			config.taskState.lastCompletionAudit = advisory

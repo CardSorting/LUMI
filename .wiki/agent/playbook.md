@@ -7,8 +7,9 @@ Last validated: 2026-07-18
 - Task admission and agent loop: `src/core/task/index.ts`.
 - Tool dispatch and execution policy: `src/core/task/ToolExecutor.ts` and `src/core/task/tools/`.
 - Workspace-local query authority: `src/core/task/tools/executionAuthority.ts`.
-- Completion diagnostics: `src/core/task/tools/completionGatePipeline.ts`.
-- Durable completion: `src/core/task/tools/handlers/AttemptCompletionHandler.ts` and SQLite `task_completions` in `src/infrastructure/db/Config.ts`.
+- Completion authority: `src/core/task/tools/completion/CompletionFunnel.ts`. This monolith owns collection, ordered gate evaluation, action authorization, canonical identity, durable SQLite CAS, publication, terminal classification, and the auditable stage trace.
+- Completion adapters: `AttemptCompletionHandler.ts`, task resume, subagent envelopes, and the webview consume the single `CompletionFunnelEvent`; they must not derive independent lifecycle or completion decisions.
+- Completion diagnostics remain advisory in `src/core/task/tools/completionGatePipeline.ts`; `run_finalization` is optional post-completion documentation maintenance and has no gate authority.
 - Production lease authority: `src/core/governance/LockAuthority.ts` and `src/core/swarm/SwarmMutexService.ts`.
 - Projection safety: `src/shared/governance/fileLock.ts` and `src/core/governance/BroccoliFencingAdapter.ts`.
 - Scheduler liveness: `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` plus versioned snapshots in `SubagentToolHandler.ts` and `LaneDAG.ts`.
@@ -39,12 +40,16 @@ npx tsc --noEmit --pretty false
 TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts src/integrations/terminal/CommandOrchestrator.test.ts
 npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/__tests__/LockAuthorityReconciliation.test.ts src/core/task/tools/subagent/__tests__/TarjanDeadlockDetector.test.ts src/core/task/tools/__tests__/TaskCompletionTerminalization.test.ts
 npm run test:unit
+cd webview-ui && npm test -- --run
 npm run lint
+npm run ci:build
 npm run roadmap:audit
 npm run benchmark:meow-io
 ```
 
 `mocha` must use `--no-config` for a truly focused run; `.mocharc.json` otherwise adds every `src/**/__tests__/*.ts` test.
+
+For completion work, start with `CompletionFunnel.test.ts`, `completionFunnelHardening.test.ts`, `TaskCompletionTerminalization.test.ts`, `completionFunnelMessages.test.ts`, and `taskCompletionEvidence.test.ts`. A terminal event must always be `phase: "completed"`, expose no next action, forbid `attempt_completion`, and never regress to pending when generic resume bookkeeping is appended.
 
 For Task-level focused tests, also require `./src/test/requires.cjs` so the VS Code shim is installed.
 

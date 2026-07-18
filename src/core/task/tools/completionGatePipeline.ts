@@ -364,7 +364,7 @@ export async function evaluateCompletionAuditGate(
 		cachedAt !== undefined &&
 		Date.now() - cachedAt < COMPLETION_AUDIT_CACHE_TTL_MS
 
-	if (isCacheValid && config.taskState.engineeringVerifiedAt) {
+	if (isCacheValid) {
 		// Re-evaluate the gate decision with the cached metadata to produce a
 		// fresh result object, but skip the expensive audit run and policy load.
 		try {

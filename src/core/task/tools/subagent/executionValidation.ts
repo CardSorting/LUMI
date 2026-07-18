@@ -49,8 +49,8 @@ export function validateSubagentEnvelope(envelope: SubagentExecutionEnvelope): s
 		}
 	}
 
-	if (envelope.phase === "completion_gate" && !envelope.gateLifecycleStatus) {
-		violations.push(`agent ${envelope.agentId}: completion_gate phase without gateLifecycleStatus snapshot`)
+	if (envelope.phase === "completion_gate" && !envelope.completionFunnelEvent) {
+		violations.push(`agent ${envelope.agentId}: completion_gate phase without completionFunnelEvent snapshot`)
 	}
 
 	return violations

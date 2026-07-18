@@ -55,7 +55,7 @@ export async function getRulesSection(variant: PromptVariant, context: SystemPro
 	const isSubagent = context.isSubagentRun === true
 	const WIKI_RULES = isSubagent
 		? `\n- SOVEREIGN KNOWLEDGE LEDGER: Return ledger-ready evidence for your assigned scope. Write directly to \`.wiki/\` only when your lane explicitly owns documentation and was launched with mutation/write-set authority; otherwise leave shared-ledger synthesis to the parent to avoid cross-lane conflicts. Do NOT attempt to run \`run_finalization\` (it is unavailable to subagents). When done, call \`attempt_completion\` to complete your task.`
-		: `\n- SOVEREIGN KNOWLEDGE LEDGER: Maintain the project's Knowledge Ledger (SKL) in the \`.wiki/\` directory as a granular, multi-file breakdown (index.md, changelog.md, etc.). Direct \`.wiki/\` writes are authorized only during \`run_finalization\` (same-session finalization lane) or subagent execution — not via ordinary file tools. After engineering verification, call \`run_finalization\` to update documentation and stamp the ledger, then \`run_finalization seal=true\` to seal the receipt.`
+		: `\n- SOVEREIGN KNOWLEDGE LEDGER: Maintain the project's Knowledge Ledger (SKL) through the workspace documentation workflow. \`run_finalization\`, when available, is optional post-completion documentation maintenance only; it cannot authorize, block, reopen, or seal task completion.`
 
 	const GOVERNED_AUTHORITY_RULES =
 		context.subagentsEnabled === true

@@ -5,14 +5,14 @@ import type { PreCompletionChecklistSummary } from "@shared/audit/auditPreComple
 import { buildPreCompletionChecklistSummary, shouldShowPreCompletionChecklist } from "@shared/audit/auditPreCompletionChecklist"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
-import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
+import type { ResolvedCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { ChevronRight } from "lucide-react"
 import { memo, useEffect, useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAuditGateEvaluation } from "@/hooks/useAuditGateEvaluation"
 import { cn } from "@/lib/utils"
-import { GateLifecycleStatusPanel } from "../completion/GateLifecycleStatusPanel"
+import { CompletionFunnelStatusPanel } from "../completion/CompletionFunnelStatusPanel"
 import { AuditHistoryStrip } from "./AuditHistoryStrip"
 import { OrchestratorGateStrip } from "./OrchestratorGateStrip"
 import { PreCompletionGateStrip } from "./PreCompletionGateStrip"
@@ -25,7 +25,7 @@ interface TaskNotesSectionProps {
 	auditTrend?: AuditTrend
 	checklistSummary?: PreCompletionChecklistSummary
 	latestAuditMetadata?: TaskAuditMetadata
-	gateLifecycleSnapshot?: ResolvedGateLifecycleSnapshot
+	completionFunnelSnapshot?: ResolvedCompletionFunnelSnapshot
 	subagentAuditSummary?: SubagentAuditSummary
 	onScrollToAuditMessage?: (ts: number) => void
 	onScrollToLatestGateBlock?: () => void
@@ -42,7 +42,7 @@ export const TaskNotesSection = memo(
 		auditHealth,
 		checklistSummary,
 		latestAuditMetadata,
-		gateLifecycleSnapshot,
+		completionFunnelSnapshot,
 		subagentAuditSummary,
 		onScrollToAuditMessage,
 		onScrollToLatestGateBlock,
@@ -78,12 +78,10 @@ export const TaskNotesSection = memo(
 		const showViolations = showInternalDiagnostics === true && Boolean(auditSnapshots && auditSnapshots.length > 0)
 		const showSubagent =
 			showInternalDiagnostics === true && Boolean(subagentAuditSummary && subagentAuditSummary.parentGateSignals.length > 0)
-		const showGateLifecycle = Boolean(
-			gateLifecycleSnapshot?.canonicalDecision || (showInternalDiagnostics === true && gateLifecycleSnapshot?.decision),
-		)
+		const showCompletionFunnel = Boolean(completionFunnelSnapshot?.terminalCompletion || completionFunnelSnapshot?.event)
 
 		const hasContent =
-			showGateLifecycle || showAuditHistory || showPreCompletion || showOrchestrator || showViolations || showSubagent
+			showCompletionFunnel || showAuditHistory || showPreCompletion || showOrchestrator || showViolations || showSubagent
 
 		const summaryLabel = useMemo(() => {
 			if (showInternalDiagnostics === true) return "Internal diagnostics"
@@ -129,18 +127,12 @@ export const TaskNotesSection = memo(
 				</summary>
 
 				<div className="flex flex-col gap-1 px-1 pb-1.5 min-h-0 divide-y divide-border/15">
-					{showGateLifecycle && gateLifecycleSnapshot ? (
-						<GateLifecycleStatusPanel
-							canonicalDecision={gateLifecycleSnapshot.canonicalDecision}
-							checklistComplete={
-								!preCompletionSummary?.blocked &&
-								preCompletionSummary?.items.every((item) => item.status === "pass")
-							}
+					{showCompletionFunnel && completionFunnelSnapshot ? (
+						<CompletionFunnelStatusPanel
 							className="mx-1 my-1"
-							continuityMarker={gateLifecycleSnapshot.continuityMarker}
-							decision={gateLifecycleSnapshot.decision}
-							freshness={gateLifecycleSnapshot.freshness}
+							event={completionFunnelSnapshot.event}
 							showInternalDiagnostics={showInternalDiagnostics === true}
+							terminalCompletion={completionFunnelSnapshot.terminalCompletion}
 						/>
 					) : null}
 

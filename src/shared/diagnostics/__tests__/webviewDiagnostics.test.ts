@@ -1,7 +1,7 @@
 import { expect } from "chai"
-import { resolveGateLifecycleSnapshot } from "../../completion/gateLifecycleMessages"
+import { resolveCompletionFunnelSnapshot } from "../../completion/completionFunnelMessages"
 import type { DietCodeMessage } from "../../ExtensionMessage"
-import { buildCanonicalCompletionSummary, isInternalDiagnosticsEnabled, projectMessageForWebview } from "../webviewDiagnostics"
+import { buildCompletionFunnelSummary, isInternalDiagnosticsEnabled, projectMessageForWebview } from "../webviewDiagnostics"
 
 describe("webview diagnostic boundary", () => {
 	const render = (text: string): string => projectMessageForWebview({ ts: 1, type: "say", say: "text", text }).text ?? ""
@@ -64,25 +64,32 @@ describe("webview diagnostic boundary", () => {
 		expect(rendered).not.to.contain("<completion_gate_readiness")
 	})
 
-	it("keeps canonical lifecycle projection user-facing", () => {
+	it("keeps the completion funnel event user-facing", () => {
 		const message: DietCodeMessage = {
 			ts: 1,
 			type: "say",
 			say: "info",
-			text: "legacy diagnostic",
-			canonicalLifecycleDecision: {
-				kind: "route_to_finalization",
-				nextAllowedAction: "run_finalization",
+			text: "diagnostic",
+			completionFunnelEvent: {
+				schemaVersion: 1,
+				taskId: "task-1",
+				phase: "ready",
+				kind: "allow_attempt",
+				terminal: false,
+				nextAllowedAction: "attempt_completion",
 				forbiddenActions: ["attempt_completion"],
-				canonicalInstruction: "Run finalization.",
-				reason: "Engineering is complete.",
+				canonicalInstruction: "Attempt completion.",
+				reason: "Ready.",
+				stages: [],
+				graphRevision: 1,
+				evaluatedAt: 1,
 			},
 		}
-		message.text = buildCanonicalCompletionSummary(message)
+		message.text = buildCompletionFunnelSummary(message)
 
 		const projected = projectMessageForWebview(message)
-		expect(projected.text).to.equal("Completion diagnostics: advisory\nCanonical next action: run_finalization")
-		expect(projected.canonicalLifecycleDecision?.nextAllowedAction).to.equal("run_finalization")
+		expect(projected.text).to.equal("Completion funnel\nNext action: attempt_completion")
+		expect(projected.completionFunnelEvent?.nextAllowedAction).to.equal("attempt_completion")
 	})
 
 	it("exposes structured diagnostics only behind the explicit debug flag", () => {
@@ -158,44 +165,46 @@ describe("webview diagnostic boundary", () => {
 		expect(isInternalDiagnosticsEnabled("true")).to.equal(true)
 	})
 
-	it("removes legacy gate and audit metadata from the normal projection", () => {
+	it("removes audit metadata from the normal projection", () => {
 		const message = {
 			ts: 1,
 			type: "say",
 			say: "info",
 			text: "Completion diagnostics: advisory",
 			auditMetadata: { violations: ["internal"] },
-			gateLifecycleStatus: { operatorMessage: "Engineering In Progress" },
 		} as unknown as DietCodeMessage
 
 		const normal = projectMessageForWebview(message)
 		expect(normal.auditMetadata).to.equal(undefined)
-		expect(normal.gateLifecycleStatus).to.equal(undefined)
 
 		const debug = projectMessageForWebview(message, { showInternalDiagnostics: true })
 		expect(debug.auditMetadata).not.to.equal(undefined)
-		expect(debug.gateLifecycleStatus).not.to.equal(undefined)
 	})
 
-	it("keeps canonical lifecycle resolution after legacy gate metadata is removed", () => {
+	it("resolves the exact completion funnel event without merging projections", () => {
 		const projected = projectMessageForWebview({
 			ts: 1,
 			type: "say",
 			say: "info",
-			text: "Completion diagnostics: advisory\nCanonical next action: run_finalization",
-			canonicalLifecycleDecision: {
-				kind: "route_to_finalization",
-				nextAllowedAction: "run_finalization",
+			text: "Completion funnel\nNext action: attempt_completion",
+			completionFunnelEvent: {
+				schemaVersion: 1,
+				taskId: "task-1",
+				phase: "ready",
+				kind: "allow_attempt",
+				terminal: false,
+				nextAllowedAction: "attempt_completion",
 				forbiddenActions: ["attempt_completion"],
-				canonicalInstruction: "Run finalization.",
-				reason: "Engineering is complete.",
+				canonicalInstruction: "Attempt completion.",
+				reason: "Ready.",
+				stages: [],
+				graphRevision: 1,
+				evaluatedAt: 1,
 			},
-			gateLifecycleStatus: { operatorMessage: "Engineering In Progress" },
 		} as unknown as DietCodeMessage)
-		const snapshot = resolveGateLifecycleSnapshot([projected])
+		const snapshot = resolveCompletionFunnelSnapshot([projected])
 
-		expect(projected.gateLifecycleStatus).to.equal(undefined)
-		expect(snapshot.canonicalDecision?.nextAllowedAction).to.equal("run_finalization")
-		expect(snapshot.freshness).to.equal("current")
+		expect(snapshot.event?.nextAllowedAction).to.equal("attempt_completion")
+		expect(snapshot.terminalCompletion).to.equal(false)
 	})
 })

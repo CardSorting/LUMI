@@ -2,7 +2,7 @@ import type { AuditMessageSnapshot, AuditTrend } from "@shared/audit/auditMessag
 import type { PreCompletionChecklistSummary } from "@shared/audit/auditPreCompletionChecklist"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { SubagentAuditSummary } from "@shared/audit/auditSubagentRollup"
-import type { ResolvedGateLifecycleSnapshot } from "@shared/completion/gateLifecycleMessages"
+import type { ResolvedCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
 import { DietCodeMessage } from "@shared/ExtensionMessage"
 import { StringArrayRequest } from "@shared/proto/dietcode/common"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
@@ -34,7 +34,7 @@ interface TaskHeaderProps {
 	lastApiReqTotalTokens?: number
 	lastProgressMessageText?: string
 	latestAuditMetadata?: DietCodeMessage["auditMetadata"]
-	gateLifecycleSnapshot?: ResolvedGateLifecycleSnapshot
+	completionFunnelSnapshot?: ResolvedCompletionFunnelSnapshot
 	auditTrend?: AuditTrend
 	auditSnapshots?: AuditMessageSnapshot[]
 	auditHealth?: AuditHealthSummary
@@ -60,7 +60,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	lastApiReqTotalTokens,
 	lastProgressMessageText,
 	latestAuditMetadata,
-	gateLifecycleSnapshot,
+	completionFunnelSnapshot,
 	auditTrend: _auditTrend,
 	auditSnapshots,
 	auditHealth,
@@ -161,7 +161,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 					auditHealth={auditHealth}
 					auditMetadata={latestAuditMetadata}
 					checkpointError={checkpointManagerErrorMessage}
-					gateLifecycle={gateLifecycleSnapshot}
+					completionFunnel={completionFunnelSnapshot}
 					isDetailsOpen={isTaskExpanded}
 					messages={dietcodeMessages}
 					onReviewBlock={onScrollToLatestGateBlock}
@@ -233,7 +233,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							auditSnapshots={auditSnapshots}
 							auditTrend={_auditTrend}
 							checklistSummary={checklistSummary}
-							gateLifecycleSnapshot={gateLifecycleSnapshot}
+							completionFunnelSnapshot={completionFunnelSnapshot}
 							latestAuditMetadata={latestAuditMetadata}
 							onScrollToAuditMessage={onScrollToAuditMessage}
 							onScrollToLatestAdvisory={onScrollToLatestAdvisory}

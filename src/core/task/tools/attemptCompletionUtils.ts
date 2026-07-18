@@ -8,7 +8,6 @@ const execAsync = promisify(exec)
 
 import type { ToolUse } from "@core/assistant-message"
 import { formatResponse } from "@core/prompts/responses"
-import { telemetryService } from "@services/telemetry"
 import { findLastIndex } from "@shared/array"
 import {
 	COMPLETION_GATE_BLOCK_HISTORY_MAX,
@@ -21,11 +20,7 @@ import {
 	COMPLETION_RETRY_MAX_COOLDOWN_MS,
 	MAX_COMPLETION_GATE_BLOCK_COUNT,
 } from "@shared/audit/gatePolicy"
-import {
-	type CanonicalCompletionPhase,
-	isWithinReconciliationDebounce,
-	mapLifecycleToCanonicalPhase,
-} from "@shared/completion/canonicalSnapshot"
+import type { CompletionFunnelEvent, CompletionFunnelPhase } from "@shared/completion/completionFunnelEvent"
 import type { DietCodeMessage, TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { Logger } from "@shared/services/Logger"
 import { DietCodeDefaultTool } from "@shared/tools"
@@ -113,15 +108,11 @@ export function getCompletionRetryCooldownMs(blockCount: number): number {
 }
 
 export function getCompletionCooldownRemainingMs(config: TaskConfig): number {
-	if (config.taskState.engineeringVerifiedAt) {
-		return 0
-	}
-	const raw = config.taskState.lastGateLifecycleDecision
+	const raw = config.taskState.completionFunnelEventJson
 	if (raw) {
 		try {
-			const decision = JSON.parse(raw)
-			const phase = mapLifecycleToCanonicalPhase(decision.lifecycleState, decision)
-			if (phase === "ready_for_completion" || phase === "completing" || phase === "finalized") {
+			const event = JSON.parse(raw) as CompletionFunnelEvent
+			if (event.phase === "ready" || event.phase === "completed") {
 				return 0
 			}
 		} catch {}
@@ -485,7 +476,7 @@ const COMPLETION_GATE_PLAYBOOK_STEPS: Partial<Record<CompletionPreflightReason, 
 	workspace_unchanged: [
 		"Make actual code changes — rewording the result summary won't fix audit violations.",
 		"Verify the checkpoint hash changed (via git status or a test run) before retrying.",
-		"If violations can't be fixed, summarize progress and use run_finalization after engineering verification.",
+		"If violations can't be fixed, stop and report the unresolved blocker instead of submitting another completion attempt.",
 	],
 	retry_cooldown: [
 		"Use the cooldown window to fix violations listed above.",
@@ -539,9 +530,8 @@ const COMPLETION_GATE_PLAYBOOK_STEPS: Partial<Record<CompletionPreflightReason, 
 	],
 	circuit_breaker: [
 		"Stop calling attempt_completion in this session.",
-		"If engineering is verified, call run_finalization to finish documentation in this session.",
-		"If not verified, make substantive workspace changes (checkpoint hash must change) — the circuit breaker opens for one probe attempt.",
-		"Seal the receipt with run_finalization seal=true when finalization completes.",
+		"Make substantive workspace changes (checkpoint hash must change) — the circuit breaker opens for one probe attempt.",
+		"If the work cannot be repaired, stop and report the blocking funnel evidence.",
 	],
 }
 
@@ -593,7 +583,7 @@ export function getRemainingCompletionGateStages(failedStage: CompletionPrefligh
 /** Short agent hints per pipeline stage — mirrors CI job descriptions. */
 export const COMPLETION_PREFLIGHT_STAGE_HINTS: Partial<Record<CompletionPreflightStage, string>> = {
 	circuit_breaker:
-		"Hard stop — attempt_completion forbidden; use run_finalization when engineering is verified, or make workspace changes for a probe attempt",
+		"Hard stop — attempt_completion is forbidden until the workspace changes enough for the central funnel to admit a probe attempt",
 	quality: "Substantive prose summary; no TODOs, placeholders, or engagement bait",
 	checklist_in_result: "Keep checklists in task_progress, not in result",
 	min_length: "Result must be at least 40 characters (1–2 paragraphs)",
@@ -633,20 +623,6 @@ export function getCompletionGateOperationalState(config: TaskConfig): Completio
 		}
 	}
 	return "ready"
-}
-
-export function isCompletionGateCircuitBreakerTripped(config: TaskConfig): boolean {
-	// Delegate to the decision engine — no local eligibility logic.
-	// The engine uses a pure snapshot with deterministic half-open probe rules.
-	const { evaluateCircuitBreaker } =
-		require("./completion/CompletionLifecycleDecisionEngine") as typeof import("./completion/CompletionLifecycleDecisionEngine")
-	const { buildCompletionSnapshot } =
-		require("./completion/completionSnapshotBuilder") as typeof import("./completion/completionSnapshotBuilder")
-	const snapshot = buildCompletionSnapshot(config)
-	const cbState = evaluateCircuitBreaker(snapshot)
-	// "closed" and "half_open" = not tripped (half-open allows a probe attempt)
-	// "tripped" = hard stop
-	return cbState.state === "tripped"
 }
 
 export type CompletionGatePressureLevel = "stable" | "elevated" | "critical" | "tripped"
@@ -1140,18 +1116,15 @@ export function hasWorkspaceChangedSinceGateBlock(config: TaskConfig, currentChe
  * If the workspace is unchanged, the audit will produce the same result —
  * rewording the summary doesn't fix violations.
  *
- * Escape hatch: if engineering is verified, direct to run_finalization.
  * Soft block: doesn't consume circuit-breaker budget, just prevents the
  * audit from running until the workspace actually changes.
  */
 export function validateWorkspaceProgressSinceGateBlock(config: TaskConfig, _currentCheckpointHash?: string): string | null {
-	// Delegate to the decision engine — no local workspace progress logic.
+	// Delegate to the central completion funnel — no local workspace progress logic.
 	// The engine uses checkpoint hash comparison (workspace fingerprint),
 	// not result text comparison, so rewording can't bypass this check.
-	const { hasWorkspaceProgress } =
-		require("./completion/CompletionLifecycleDecisionEngine") as typeof import("./completion/CompletionLifecycleDecisionEngine")
-	const { buildCompletionSnapshot } =
-		require("./completion/completionSnapshotBuilder") as typeof import("./completion/completionSnapshotBuilder")
+	const { hasWorkspaceProgress } = require("./completion/CompletionFunnel") as typeof import("./completion/CompletionFunnel")
+	const { buildCompletionSnapshot } = require("./completion/CompletionFunnel") as typeof import("./completion/CompletionFunnel")
 	const snapshot = buildCompletionSnapshot(config)
 
 	// No prior blocks — nothing to check
@@ -1164,11 +1137,6 @@ export function validateWorkspaceProgressSinceGateBlock(config: TaskConfig, _cur
 		return null
 	}
 
-	// Engineering verified — don't block, finalization lane handles it
-	if (snapshot.engineeringVerifiedAt) {
-		return null
-	}
-
 	// Workspace changed — allow
 	if (hasWorkspaceProgress(snapshot)) {
 		return null
@@ -1178,21 +1146,16 @@ export function validateWorkspaceProgressSinceGateBlock(config: TaskConfig, _cur
 	return (
 		"Completion blocked: the workspace hasn't changed since the last gate block. " +
 		"Rewording the result summary won't change the audit outcome. " +
-		"Make substantive fixes to the code (the checkpoint hash must change), then retry. " +
-		"If the violations can't be fixed, use run_finalization after engineering verification."
+		"Make substantive fixes to the code (the checkpoint hash must change), then retry."
 	)
 }
 
 export function validateCompletionAttemptCooldown(config: TaskConfig): string | null {
-	if (config.taskState.engineeringVerifiedAt) {
-		return null
-	}
-	const raw = config.taskState.lastGateLifecycleDecision
+	const raw = config.taskState.completionFunnelEventJson
 	if (raw) {
 		try {
-			const decision = JSON.parse(raw)
-			const phase = mapLifecycleToCanonicalPhase(decision.lifecycleState, decision)
-			if (phase === "ready_for_completion" || phase === "completing" || phase === "finalized") {
+			const event = JSON.parse(raw) as CompletionFunnelEvent
+			if (event.phase === "ready" || event.phase === "completed") {
 				return null
 			}
 		} catch {}
@@ -1432,7 +1395,7 @@ export function buildCompletionPreflightRecoveryHint(reason: CompletionPreflight
 		case "task_progress_align":
 			return "Include every focus chain item in task_progress with matching labels, all [x]."
 		case "circuit_breaker":
-			return "Stop calling attempt_completion. If engineering is verified, use run_finalization in this session. If not, make workspace changes (checkpoint hash must change) for a probe attempt."
+			return "Stop calling attempt_completion. Make substantive workspace changes so the checkpoint hash changes, then let the central completion funnel evaluate one probe attempt."
 		case "roadmap_gate":
 			return AUTO_GOVERNANCE.roadmapGateRecoveryHint
 		case "audit_gate":
@@ -1506,13 +1469,11 @@ export function detectDuplicateCompletionSubmission(
 	result: string,
 	options?: { currentCheckpointHash?: string },
 ): string | null {
-	// Delegate to the decision engine — no local duplicate detection logic.
+	// Delegate to the central completion funnel — no local duplicate detection logic.
 	// The engine uses both result fingerprint AND workspace checkpoint hash
 	// for idempotency-key style duplicate suppression.
-	const { isDuplicateAttempt } =
-		require("./completion/CompletionLifecycleDecisionEngine") as typeof import("./completion/CompletionLifecycleDecisionEngine")
-	const { buildCompletionSnapshot } =
-		require("./completion/completionSnapshotBuilder") as typeof import("./completion/completionSnapshotBuilder")
+	const { isDuplicateAttempt } = require("./completion/CompletionFunnel") as typeof import("./completion/CompletionFunnel")
+	const { buildCompletionSnapshot } = require("./completion/CompletionFunnel") as typeof import("./completion/CompletionFunnel")
 	const snapshot = buildCompletionSnapshot(config, { result, checkpointHash: options?.currentCheckpointHash })
 	const isDup = isDuplicateAttempt(snapshot)
 	if (!isDup) {
@@ -1548,6 +1509,19 @@ export function incrementCompletionGraphRevision(config: TaskConfig): number {
  */
 export function getCompletionGraphRevision(config: TaskConfig): number {
 	return config.taskState.completionGraphRevision ?? 0
+}
+
+function isWithinReconciliationDebounce(
+	lastAttemptAt: number | undefined,
+	lastGraphRevision: number | undefined,
+	currentGraphRevision: number,
+	now = Date.now(),
+	debounceMs = 600,
+	ready = false,
+): boolean {
+	if (ready || !lastAttemptAt) return false
+	if (lastGraphRevision !== undefined && lastGraphRevision !== currentGraphRevision) return false
+	return now - lastAttemptAt < debounceMs
 }
 
 /**
@@ -1587,22 +1561,12 @@ export function shouldSuppressNoOpRetry(config: TaskConfig, now = Date.now()): {
 		return { suppress: false }
 	}
 
-	// Fast-path: if engineering is already verified, the agent is in a ready
-	// state.  Suppressing a valid retry here would make completion feel blocked
-	// for no reason — the graph revision match is expected because nothing
-	// needs to change between finalization-ready and completion.
-	if (config.taskState.engineeringVerifiedAt) {
-		return { suppress: false }
-	}
 	let isReady = false
-	const raw = config.taskState.lastGateLifecycleDecision
+	const raw = config.taskState.completionFunnelEventJson
 	if (raw) {
 		try {
-			const decision = JSON.parse(raw)
-			const phase = mapLifecycleToCanonicalPhase(decision.lifecycleState, decision)
-			if (phase === "ready_for_completion" || phase === "completing" || phase === "finalized") {
-				isReady = true
-			}
+			const event = JSON.parse(raw) as CompletionFunnelEvent
+			isReady = event.phase === "ready" || event.phase === "completed"
 		} catch {}
 	}
 	if (isReady) {
@@ -1652,11 +1616,14 @@ export function clearReconciliationDebounce(config: TaskConfig): void {
  * Get the canonical phase for the current task state.
  * This is the single mapping point from internal lifecycle to operator-facing phase.
  */
-export function getCanonicalCompletionPhase(config: TaskConfig): CanonicalCompletionPhase {
-	const lifecycleState = (config.taskState.completionLifecycleState ?? "engineering_in_progress") as Parameters<
-		typeof mapLifecycleToCanonicalPhase
-	>[0]
-	return mapLifecycleToCanonicalPhase(lifecycleState)
+export function getCanonicalCompletionPhase(config: TaskConfig): CompletionFunnelPhase {
+	const raw = config.taskState.completionFunnelEventJson
+	if (!raw) return "evaluating"
+	try {
+		return (JSON.parse(raw) as CompletionFunnelEvent).phase
+	} catch {
+		return "evaluating"
+	}
 }
 
 export function recordCompletionPreflightFailure(config: TaskConfig): void {
@@ -1684,68 +1651,9 @@ export function appendCompletionGateRetryGuidance(message: string, blockCount: n
 	return guidance ? `${message}${guidance}` : message
 }
 
-function getCompletionGateCircuitBreakerMessage(config: TaskConfig): string | null {
-	if (!isCompletionGateCircuitBreakerTripped(config)) {
-		return null
-	}
-	if (config.taskState.engineeringVerifiedAt) {
-		return (
-			`Completion retry locked: maximum completion gate retries (${MAX_COMPLETION_GATE_BLOCK_COUNT}) exceeded.\n\n` +
-			"**Same-session finalization lane active:**\n" +
-			"1. Do not call attempt_completion again in this session.\n" +
-			"2. Call `run_finalization` to update documentation and stamp the ledger.\n" +
-			"3. Call `run_finalization` with `seal=true` to emit the sealed receipt and end the session."
-		)
-	}
-	return (
-		`Task completion blocked: maximum completion gate retries (${MAX_COMPLETION_GATE_BLOCK_COUNT}) exceeded.\n\n` +
-		"**Recovery playbook:**\n" +
-		"1. Stop calling attempt_completion — further calls will fail unless you make workspace changes.\n" +
-		"2. Review audit artifacts and fix the underlying violations in the workspace.\n" +
-		"3. After making substantive code changes (the checkpoint hash must change), one probe attempt is allowed — the circuit breaker opens to let verified work through.\n" +
-		"4. If the probe passes, engineering is verified and you can use `run_finalization` to complete in this session.\n" +
-		"5. If violations cannot be fixed, summarize what was accomplished and present it via act_mode_respond."
-	)
-}
-
-export function getCompletionGateCircuitBreakerError(config: TaskConfig): string | null {
-	return getCompletionGateCircuitBreakerMessage(config)
-}
-
-export function checkCompletionGateCircuitBreaker(config: TaskConfig): ToolResponse | null {
-	const message = getCompletionGateCircuitBreakerMessage(config)
-	if (!message) {
-		return null
-	}
-	if (config.taskState.lastCompletionBlockReason !== "circuit_breaker") {
-		recordCompletionGateBlockEvent(config, "circuit_breaker")
-	}
-	const telemetryContext = getCompletionGateTelemetryContext(config)
-	telemetryService.captureCompletionPreflightBlocked(config.ulid, {
-		taskId: config.taskId,
-		reason: "circuit_breaker",
-		blockCount: config.taskState.completionGateBlockCount ?? 0,
-		consecutiveMistakes: config.taskState.consecutiveMistakeCount,
-		attemptCount: config.taskState.completionAttemptCount ?? 0,
-		lastReason: config.taskState.lastCompletionBlockReason,
-		failedStage: "circuit_breaker",
-		pressureLevel: telemetryContext.pressureLevel,
-		retryStatus: telemetryContext.retryStatus,
-		historyLength: telemetryContext.historyLength,
-		sessionId: telemetryContext.sessionId,
-	})
-	return formatCompletionToolError(message, config)
-}
-
-export function recordCompletionGateBlock(config: TaskConfig): number {
-	// Legacy compatibility API. Completion diagnostics cannot increment a
-	// circuit-breaker budget or create a retry lock.
-	return config.taskState.completionGateBlockCount ?? 0
-}
-
 /**
- * Legacy diagnostic event recorder. It preserves evidence without mutating
- * execution counters, retry locks, or the canonical lifecycle graph.
+ * Advisory diagnostic event recorder. It preserves evidence without mutating
+ * execution counters, retry locks, or the canonical funnel graph.
  */
 export function recordCompletionGateBlockEvent(
 	config: TaskConfig,
