@@ -1158,6 +1158,7 @@ export interface CompletionAttemptRecord {
 	commandIntentJson: string | null
 	commandDigest: string | null
 	expectedLifecycleRevision: number
+	evaluatedStateVersion: number | null
 	proposalEventId: string | null
 	decisionId: string | null
 	version: number
@@ -1185,9 +1186,9 @@ export async function insertCompletionAttempt(record: CompletionAttemptRecord): 
 				`INSERT INTO completion_attempts (
 					completionAttemptId, taskId, generationId, originatingInvocationId,
 					phase, evidenceRequestId, evidenceInvocationId, evidenceExecutionEventId,
-					commandIntentJson, commandDigest, expectedLifecycleRevision,
+					commandIntentJson, commandDigest, expectedLifecycleRevision, evaluatedStateVersion,
 					proposalEventId, decisionId, version, createdAt, updatedAt
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.run(
 				record.completionAttemptId,
@@ -1201,6 +1202,7 @@ export async function insertCompletionAttempt(record: CompletionAttemptRecord): 
 				record.commandIntentJson,
 				record.commandDigest,
 				record.expectedLifecycleRevision,
+				record.evaluatedStateVersion,
 				record.proposalEventId,
 				record.decisionId,
 				record.version,
@@ -1423,6 +1425,7 @@ export async function prepareCompletionAttempt(
 			commandIntentJson: input.command ? JSON.stringify({ command: input.command }) : null,
 			commandDigest,
 			expectedLifecycleRevision,
+			evaluatedStateVersion,
 			proposalEventId: null,
 			decisionId: proposedDecisionId,
 			version: 1,
@@ -1686,7 +1689,7 @@ export async function continueCompletionAttempt(
 						taskId: config.taskId,
 						decisionId: attempt.decisionId || "",
 						status: "succeeded",
-						evaluatedStateVersion: attempt.expectedLifecycleRevision,
+						evaluatedStateVersion: attempt.evaluatedStateVersion ?? config.taskState.workspaceStateVersion ?? 0,
 						evaluatedCheckpointJson: canonicalCompletionJson({
 							checkpoint: await resolveAuditStateIdentifier(config),
 						}),

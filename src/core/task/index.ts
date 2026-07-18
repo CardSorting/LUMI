@@ -1322,27 +1322,30 @@ export class Task {
 				"Restored task registration",
 			)
 			record = registered.record
+		}
+		if (!record) {
+			throw new Error("Failed to restore or register task lifecycle record.")
+		}
 
-			// A pre-funnel durable completion is migrated as an authoritative fact,
-			// never inferred into mutable task state.
-			const durableCompletion = await durableGetTaskCompletion(this.taskId)
-			if (durableCompletion?.status === "succeeded") {
-				record = this.requireLifecycleCommit(
-					await authority.submit(this.taskState, {
-						type: "SettleCompletion",
-						intentId: createTaskLifecycleIntentId(),
-						taskId: this.taskId,
-						generationId: record.generationId,
-						cause: {
-							source: "completion_funnel",
-							reason: "Existing durable CompletionFunnel fact migrated during validated restoration.",
-							originatingOperationId: durableCompletion.decisionId,
-							authoritativeAt: durableCompletion.committedAt,
-						},
-					}),
-					"Durable completion restoration",
-				).record
-			}
+		// A pre-funnel durable completion is migrated as an authoritative fact,
+		// never inferred into mutable task state.
+		const durableCompletion = await durableGetTaskCompletion(this.taskId)
+		if (durableCompletion?.status === "succeeded" && record.state !== "terminal") {
+			record = this.requireLifecycleCommit(
+				await authority.submit(this.taskState, {
+					type: "SettleCompletion",
+					intentId: createTaskLifecycleIntentId(),
+					taskId: this.taskId,
+					generationId: record.generationId,
+					cause: {
+						source: "completion_funnel",
+						reason: "Existing durable CompletionFunnel fact migrated during validated restoration.",
+						originatingOperationId: durableCompletion.decisionId,
+						authoritativeAt: durableCompletion.committedAt,
+					},
+				}),
+				"Durable completion restoration",
+			).record
 		}
 
 		// Reconciliation for interrupted rejection reactivation:

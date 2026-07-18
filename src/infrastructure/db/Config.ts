@@ -867,6 +867,7 @@ export async function getDb(): Promise<Kysely<Schema>> {
 					commandIntentJson TEXT,
 					commandDigest TEXT,
 					expectedLifecycleRevision INTEGER NOT NULL,
+					evaluatedStateVersion INTEGER,
 					proposalEventId TEXT,
 					decisionId TEXT,
 					version INTEGER NOT NULL,
@@ -951,6 +952,24 @@ export async function getDb(): Promise<Kysely<Schema>> {
 			if (!hasPid) {
 				try {
 					await execute("ALTER TABLE swarm_locks ADD COLUMN pid INTEGER")
+				} catch {}
+			}
+
+			// completion_attempts evaluatedStateVersion migration
+			let hasEvaluatedStateVersion = false
+			try {
+				const result = await execute("PRAGMA table_info(completion_attempts)")
+				if (result?.rows) {
+					for (const row of result.rows) {
+						const name = (row as { name?: string })?.name
+						if (name === "evaluatedStateVersion") hasEvaluatedStateVersion = true
+					}
+				}
+			} catch {}
+
+			if (!hasEvaluatedStateVersion) {
+				try {
+					await execute("ALTER TABLE completion_attempts ADD COLUMN evaluatedStateVersion INTEGER")
 				} catch {}
 			}
 

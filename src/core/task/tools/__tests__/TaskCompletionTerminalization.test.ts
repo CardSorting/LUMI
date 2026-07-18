@@ -12,6 +12,7 @@ import {
 	commitTaskCompletionTransaction,
 	type TaskCompletionRecord,
 } from "../completion/CompletionFunnel"
+import type { TaskConfig } from "../types/TaskConfig"
 
 /**
  * Create an isolated test SQLite database with the required tables.
@@ -689,6 +690,7 @@ describe("TaskCompletionTerminalization", () => {
 				commandIntentJson: null,
 				commandDigest: null,
 				expectedLifecycleRevision: 1,
+				evaluatedStateVersion: null,
 				proposalEventId: null,
 				decisionId: "dec-99",
 				version: 1,
@@ -748,10 +750,10 @@ describe("TaskCompletionTerminalization", () => {
 
 			let errorThrown = false
 			try {
-				await CompletionSagaCoordinator.consume({} as any, dummyEvent)
-			} catch (err: any) {
+				await CompletionSagaCoordinator.consume({} as unknown as TaskConfig, dummyEvent)
+			} catch (err) {
 				errorThrown = true
-				err.message.should.containEql("only consume committed terminal execution events")
+				;(err as Error).message.should.containEql("only consume committed terminal execution events")
 			}
 			errorThrown.should.be.true()
 
@@ -764,10 +766,10 @@ describe("TaskCompletionTerminalization", () => {
 
 			errorThrown = false
 			try {
-				await CompletionSagaCoordinator.consume({} as any, terminalEvent)
-			} catch (err: any) {
+				await CompletionSagaCoordinator.consume({} as unknown as TaskConfig, terminalEvent)
+			} catch (err) {
 				errorThrown = true
-				err.message.should.containEql("No completion attempt found matching committed event")
+				;(err as Error).message.should.containEql("No completion attempt found matching committed event")
 			}
 			errorThrown.should.be.true()
 		})
