@@ -102,6 +102,19 @@ graph LR
 	The recovery command rebuilds the index by reading data from existing task folders. If the `tasks/` directory or individual task folders have been permanently deleted, the associated data cannot be recovered.
 </Warning>
 
+## Lifecycle-safe restoration
+
+The history index and conversation files are not task lifecycle authority. When a recovered task is opened, LUMI restores the durable lifecycle record through `TaskLifecycleFunnel`:
+
+- the stored task generation and lifecycle revision are preserved;
+- an interrupted active task is explicitly suspended before it resumes;
+- a suspended generation resumes only through an explicit lifecycle transition;
+- a terminal generation requires a new generation to continue;
+- stale callbacks from the prior generation are rejected;
+- legacy completion evidence is submitted as a lifecycle fact rather than copied into mutable status fields.
+
+If lifecycle persistence is unavailable or a newer revision already exists, restoration fails closed instead of overwriting the newer state. See [Task resume and recovery](../task-resume-recovery.md).
+
 ## Manual Recovery
 
 ### Restoring from Backup

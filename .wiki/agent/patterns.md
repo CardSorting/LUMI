@@ -1,5 +1,18 @@
 # Execution Patterns
 
+## Transactional Task Lifecycle
+
+1. Construct one typed transition intent with task, exact generation, idempotency ID, causal source, and originating operation/event identity.
+2. Submit it to the task-bound `TaskLifecycleFunnel`; never submit a replacement state object.
+3. Load and validate the current record, generation, state-machine edge, cancellation fence, and parent/child constraint.
+4. Resolve the documented terminal conflict policy without reinterpreting another funnel's semantic fact.
+5. Compare-and-swap generation plus lifecycle revision.
+6. In one transaction, update the current record, append the immutable event, and allocate its monotonic sequence.
+7. Project and publish only after commit.
+8. Treat persistence/CAS rejection as final for that request; do not write a compatibility field.
+9. Resume suspended generations explicitly and replace terminal generations atomically with a new ID.
+10. Keep execution and semantic completion in their own funnels; they query or submit facts to lifecycle.
+
 ## Central Execution Funnel
 
 1. Give every invocation a stable task-scoped invocation ID.

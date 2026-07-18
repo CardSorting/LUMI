@@ -41,8 +41,10 @@ import {
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
 import type { LockClaim } from "@shared/governance/lockTypes"
+import { isTaskLifecycleRecord } from "@shared/lifecycle/taskLifecycleEvent"
 import { configuredCoordinationAuthorityMode } from "@/core/governance/LockAuthority"
 import { SWARM_LOCK_PROTOCOL_VERSION, SwarmMutexService } from "@/core/swarm/SwarmMutexService"
+import { createTaskLifecycleIntentId, getTaskLifecycleAuthority } from "@/core/task/lifecycle/TaskLifecycleFunnel"
 import { getCoordinationRawDb } from "@/infrastructure/db/Config"
 import {
 	getCompletionGraphRevision,
@@ -919,7 +921,6 @@ export function cacheCompletionFunnelEvent(config: TaskConfig, event: Completion
 	const accepted = existing?.terminal ? existing : event
 	config.taskState.completionFunnelEventJson = JSON.stringify(accepted)
 	if (accepted.terminal) {
-		config.taskState.isTerminalState = true
 		config.taskState.lastCompletionDecisionId = accepted.decisionId
 	}
 	return accepted
@@ -942,13 +943,50 @@ export async function publishCompletionFunnelEvent(config: TaskConfig, event: Co
 	}
 }
 
-export function isTaskHarnessTerminal(taskState: { isTerminalState?: boolean; completionFunnelEventJson?: string }): boolean {
-	if (taskState.isTerminalState) return true
-	if (!taskState.completionFunnelEventJson) return false
+export function isTaskHarnessTerminal(taskState: { lifecycleFunnelRecordJson?: string }): boolean {
+	if (!taskState.lifecycleFunnelRecordJson) return false
 	try {
-		return (JSON.parse(taskState.completionFunnelEventJson) as CompletionFunnelEvent).terminal === true
+		const record = JSON.parse(taskState.lifecycleFunnelRecordJson) as unknown
+		return isTaskLifecycleRecord(record) && record.state === "terminal"
 	} catch {
 		return false
+	}
+}
+
+export async function commitCompletionLifecycleFact(config: TaskConfig, decisionId: string, committedAt: number): Promise<void> {
+	const authority = getTaskLifecycleAuthority(config.taskState)
+	let current = authority.readProjection(config.taskState) ?? (await authority.restore(config.taskState, config.taskId))
+	if (!current) {
+		const activated = await authority.ensureActive(config.taskState, config.taskId, {
+			source: "completion_funnel",
+			reason: "Completion evaluation requires a registered active lifecycle generation.",
+			originatingOperationId: decisionId,
+		})
+		if (activated.kind === "rejected") {
+			throw new Error(`Lifecycle activation rejected (${activated.code}): ${activated.reason}`)
+		}
+		current = activated.record
+	}
+	if (current.state === "terminal") {
+		if (current.terminalOutcome === "completed") return
+		throw new Error(
+			`Lifecycle terminal conflict: generation '${current.generationId}' is already '${current.terminalOutcome}'.`,
+		)
+	}
+	const lifecycleResult = await authority.submit(config.taskState, {
+		type: "SettleCompletion",
+		intentId: createTaskLifecycleIntentId(),
+		taskId: config.taskId,
+		generationId: current.generationId,
+		cause: {
+			source: "completion_funnel",
+			reason: "CompletionFunnel durably committed the semantic completion fact.",
+			originatingOperationId: decisionId,
+			authoritativeAt: committedAt,
+		},
+	})
+	if (lifecycleResult.kind === "rejected") {
+		throw new Error(`Lifecycle completion rejected (${lifecycleResult.code}): ${lifecycleResult.reason}`)
 	}
 }
 
@@ -1149,6 +1187,7 @@ export async function runCompletionFunnelAttempt(
 			decisionId: existingCompletion.decisionId,
 			committedAt: existingCompletion.committedAt,
 		})
+		await commitCompletionLifecycleFact(config, existingCompletion.decisionId, existingCompletion.committedAt)
 		await publishCompletionFunnelEvent(config, event)
 		return { kind: "terminal", decision, record: existingCompletion, event }
 	}
@@ -1242,6 +1281,7 @@ export async function runCompletionFunnelAttempt(
 	const decisionId = committedRecord?.decisionId ?? proposedDecisionId
 	const committedAt = committedRecord?.committedAt ?? Date.now()
 	const event = decisionToCompletionFunnelEvent(config, evaluation.funnelDecision, { decisionId, committedAt })
+	await commitCompletionLifecycleFact(config, decisionId, committedAt)
 	await publishCompletionFunnelEvent(config, event)
 	return { kind: "terminal", decision: { ...decision, decisionId }, record: committedRecord, event }
 }

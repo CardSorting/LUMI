@@ -1,3 +1,4 @@
+import { getTaskLifecycleAuthority } from "@/core/task/lifecycle/TaskLifecycleFunnel"
 import { Logger } from "@/shared/services/Logger"
 import type { DietCodeDefaultTool } from "@/shared/tools"
 import { DietCodeToolSet } from "../registry/DietCodeToolSet"
@@ -52,7 +53,8 @@ export class PromptBuilder {
 				nextAction = `Complete remaining ${lanesTotal - lanesComplete} lane(s)`
 				completionCondition = `All ${lanesTotal} lanes completed`
 			}
-			if (taskState?.isTerminalState) {
+			const lifecycleRecord = taskState ? getTaskLifecycleAuthority(taskState).readProjection(taskState) : undefined
+			if (lifecycleRecord?.state === "terminal") {
 				nextAction = "Task is terminal — no further action"
 				completionCondition = "Already terminal"
 			}

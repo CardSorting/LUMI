@@ -34,6 +34,7 @@ Related:
 | [Governed subagent execution](governed-subagent-execution.md) | Swarm architecture |
 | [Governed execution runbook](governed-execution-runbook.md) | Authoritative state procedure |
 | [Central execution funnel](parent-thread-execution-authority.md) | Parent, sibling, and subagent tool permits and terminal events |
+| [Task lifecycle authority](task-lifecycle-authority.md) | Generation-bound task/child state, cancellation, resume, and terminal events |
 | [Governed execution decisions § ADR-001/015](governed-execution-decisions.md) | Locks, receipts, coordinator authority |
 
 ---
@@ -68,6 +69,7 @@ Implementation anchors:
 | Authoritative receipt | Last `sealed && mergePassed` in `.governed.history.jsonl` ([runbook procedure](governed-execution-runbook.md#authoritative-state-procedure)) |
 | Parent completion eligibility | Completion lifecycle decision engine and action guard |
 | Parent terminal result | SQLite `task_completions` row committed by the completion CAS transaction |
+| Task lifecycle state | `TaskLifecycleFunnel` record/event CAS in `task_lifecycle_records` and `task_lifecycle_events` |
 | Workspace roadmap truth | Coordinator `commitWorkspaceRoadmapPatches` after reconciliation |
 
 ### Coordination authority modes
@@ -105,6 +107,8 @@ Subagents may:
 - propose corrections
 
 Subagents may **not** independently freeze execution using receipts alone.
+
+Each subagent execution also has a unique task lifecycle identity. Attached children register against the exact active parent generation and use the same `TaskLifecycleFunnel` instance. Lane runtime states and governed receipts remain execution projections; they cannot activate, cancel, resume, or terminalize task lifecycle state.
 
 ---
 

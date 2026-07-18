@@ -22,6 +22,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 - [**MEOW Technical Whitepaper**](meow-whitepaper.md) — Canonical technical architecture reference.
 - [**MEOW Architecture Decision Records (ADRs)**](adr/README.md) — Decision records for the execution model.
 - [**MEOW-011: Approval Is Execution Admission**](adr/MEOW-011-execution-approval-admission.md) — Central approval, causal permit, and handler-intent contract.
+- [**MEOW-012: Transactional Task Lifecycle Authority**](adr/MEOW-012-transactional-task-lifecycle.md) — Generation-bound state transitions, cancellation, resume, parent/child propagation, and immutable events.
 - [**MEOW Migration Report**](meow-migration.md) — Before/after evolution and measured evidence.
 - [**00 Forensic Substrate Report**](00-forensics.md) — Historical forensic report; refresh before treating as current.
 
@@ -40,6 +41,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 | One central completion funnel and modern terminal event documented | [x] [Agent key findings](agent/key-findings.md) |
 | One central execution funnel and modern terminal tool event documented | [x] [Agent key findings](agent/key-findings.md) |
 | Approval and permit authority centralized in the execution transaction | [x] [MEOW-011](adr/MEOW-011-execution-approval-admission.md) |
+| One transactional task lifecycle authority and generation fence | [x] [MEOW-012](adr/MEOW-012-transactional-task-lifecycle.md) |
 | Canonical MEOW architecture suite linked | [x] [Whitepaper](meow-whitepaper.md) |
 | Historical forensic report refreshed after 2026-07-09 | [ ] Pending fresh diagnostics |
 | `ROADMAP.md` repaired after bootstrap drift | [ ] Pending roadmap pass |

@@ -30,7 +30,7 @@ src/extension.ts
 
 1. **Activation** — `src/extension.ts` registers commands, webview, roadmap watcher, and initializes `HostProvider` with VS Code–specific implementations under `src/hosts/vscode/`.
 2. **Controller** — Holds extension state, MCP hub, auth, workspace manager, and the active `Task`. Routes webview messages via gRPC handlers in `src/core/controller/`.
-3. **Task** — Runs the agent loop: build prompt → call API → parse assistant message → execute tools → repeat until completion or user cancel.
+3. **Task** — Runs the agent loop: build prompt → call API → parse assistant message → execute tools → repeat. Task creation, cancellation, suspension, resume, and terminalization are committed by the [task lifecycle authority](../task-lifecycle-authority.md).
 4. **Tools** — Registered in `ToolExecutorCoordinator` against `DietCodeDefaultTool` enum values in `src/shared/tools.ts`. Parent, sibling, and subagent calls enter one permit-protected authority — see [Central execution funnel](../parent-thread-execution-authority.md).
 5. **UI** — `webview-ui/` renders messages; updates arrive through protobuf-backed subscriptions in `src/core/controller/ui/`.
 
@@ -38,8 +38,10 @@ src/extension.ts
 
 | Directory | Role |
 |-----------|------|
-| `src/core/controller/` | Webview message handling, task lifecycle, MCP, models, account |
+| `src/core/controller/` | Webview message handling, lifecycle transition requests, MCP, models, account |
 | `src/core/task/` | Agent loop, tool execution, message state |
+| `src/core/task/lifecycle/TaskLifecycleFunnel.ts` | Sole transactional task lifecycle transition and immutable event authority |
+| `src/core/task/lifecycle/TaskLifecyclePersistence.ts` | Lifecycle compare-and-swap persistence adapter |
 | `src/core/task/ToolExecutor.ts` | Parent execution adapter and deterministic result projection |
 | `src/core/task/tools/execution/ExecutionFunnel.ts` | Single tool admission, policy, permit, dispatch, reliability, and terminal event authority |
 | `src/core/task/tools/subagent/` | Subagent runner, governed coordinator, projection, merge gate |
@@ -144,14 +146,16 @@ Tool proposed → register + normalize → freeze pure ApprovalIntent
             → dispatch via HostProvider or MCP → reliability/post-policy
             → immutable ExecutionFunnelEvent
 
-attempt_completion → snapshot builder → decision engine → action contract → action guard
-                     (immutable         (pure function,     (nextAllowedAction +    (enforces at tool
-                      snapshot)          full trace)         canonicalInstruction)   boundary, no counter
-                                                                               mutation on reject)
+task transition → typed generation-bound intent → TaskLifecycleFunnel
+                → validate state/cause/parent constraints → lifecycle CAS
+                → persist record + event → immutable TaskLifecycleEvent
+
+attempt_completion → CompletionFunnel semantic decision + durable completion CAS
+                   → SettleCompletion fact → TaskLifecycleFunnel terminal commit
 use_subagents seal   → MergeGate → patch reconciliation → coordinator workspace commit
 ```
 
-The completion spine (`snapshot → decision → permitted action → guard enforcement`) ensures the agent receives a command, not a prose explanation to interpret. See [Completion lifecycle decision engine](../completion-lifecycle-decision-engine.md).
+The three authorities remain separate: `ExecutionFunnel` owns one tool transaction, `CompletionFunnel` owns the semantic decision that the task is durably complete, and `TaskLifecycleFunnel` owns committing the generation-bound task-state transition. See [Task lifecycle authority](../task-lifecycle-authority.md) and [Completion funnel](../completion-lifecycle-decision-engine.md).
 
 Details: [Security best practices](../SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](../papers/whitepaper.md#7-approval-hooks-and-completion) · [Roadmap projection quick reference](../governed-roadmap-projection-quickref.md).
 
@@ -161,6 +165,7 @@ Details: [Security best practices](../SECURITY_BEST_PRACTICES.md) · [Whitepaper
 
 | Topic | Doc |
 |-------|-----|
+| Task lifecycle, cancellation, and resume | [Task lifecycle authority](../task-lifecycle-authority.md) |
 | Executive metrics | [Companion brief](../papers/companion-brief.md) |
 | Design values | [Philosophy](../papers/philosophy.md) |
 | Full technical spec | [Whitepaper](../papers/whitepaper.md) |

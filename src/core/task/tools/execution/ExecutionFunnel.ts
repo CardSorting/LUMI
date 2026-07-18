@@ -36,6 +36,7 @@ import { DietCodeDefaultTool } from "@shared/tools"
 import { SafeNumber } from "@shared/utils/SafeNumber"
 import { createLockAuthority } from "@/core/governance/LockAuthority"
 import type { SpiderEngine } from "@/core/policy/spider/SpiderEngine"
+import { getTaskLifecycleAuthority } from "@/core/task/lifecycle/TaskLifecycleFunnel"
 import { processFilesIntoText } from "@/integrations/misc/extract-text"
 import { Logger } from "@/shared/services/Logger"
 import type { TaskState } from "../../TaskState"
@@ -451,6 +452,14 @@ export class ExecutionFunnel {
 		const invocationId = block.call_id?.trim()
 		if (!invocationId) throw new Error("Tool dispatch rejected: invocation identity is missing.")
 		this.reliability.assertActivePermit(config.taskId, config.taskState.executionGeneration, invocationId)
+		const lifecycle = getTaskLifecycleAuthority(config.taskState).executionEligibility(
+			config.taskState,
+			config.taskId,
+			config.taskState.executionGeneration,
+		)
+		if (!lifecycle.eligible) {
+			throw new Error(`Tool dispatch rejected by task lifecycle authority: ${lifecycle.reason}`)
+		}
 		return handler.execute(config, block)
 	}
 
@@ -464,6 +473,14 @@ export class ExecutionFunnel {
 		const invocationId = parentBlock.call_id?.trim()
 		if (!invocationId) throw new Error("Delegated tool dispatch rejected: parent invocation identity is missing.")
 		this.reliability.assertActivePermit(config.taskId, config.taskState.executionGeneration, invocationId)
+		const lifecycle = getTaskLifecycleAuthority(config.taskState).executionEligibility(
+			config.taskState,
+			config.taskId,
+			config.taskState.executionGeneration,
+		)
+		if (!lifecycle.eligible) {
+			throw new Error(`Delegated tool dispatch rejected by task lifecycle authority: ${lifecycle.reason}`)
+		}
 		const context = this.reliability.getActiveContext()
 		const delegatedIntent = handler.getApprovalIntent(delegatedBlock)
 		this.validateApprovalIntent(delegatedIntent)
@@ -554,6 +571,12 @@ export class ExecutionFunnel {
 	async execute(input: ExecutionFunnelInput): Promise<ExecutionFunnelOutcome> {
 		const { config, block } = input
 		const lane = input.lane ?? (config.isSubagentExecution ? "subagent" : "parent")
+		const lifecycleAuthority = getTaskLifecycleAuthority(config.taskState)
+		const lifecycleAdmission = await lifecycleAuthority.ensureActive(config.taskState, config.taskId, {
+			source: "execution_funnel",
+			reason: `Execution admission requested for the ${lane} lane.`,
+			originatingOperationId: block.call_id,
+		})
 		const requestedInvocationId = block.call_id?.trim() || `${lane}:${block.name}:${++this.sequence}`
 		if (!block.call_id?.trim()) block.call_id = requestedInvocationId
 		const taskGeneration = config.taskState.executionGeneration
@@ -586,6 +609,22 @@ export class ExecutionFunnel {
 			}),
 		)
 		this.publish(decision, "evaluating", "allow", "authorized", false, "Execution admission is being evaluated.")
+		if (lifecycleAdmission.kind === "rejected") {
+			return this.block(
+				decision,
+				"task_cancelled",
+				"task.lifecycle",
+				`Lifecycle admission rejected (${lifecycleAdmission.code}): ${lifecycleAdmission.reason}`,
+				lifecycleAdmission.code === "terminal_generation" ? "deny" : "cancel",
+				lifecycleAdmission.code === "terminal_generation" ? "denied" : "cancelled",
+			)
+		}
+		decision.stages.push(
+			pass("task.lifecycle", "The active generation is eligible for execution admission.", {
+				generationId: lifecycleAdmission.record.generationId,
+				lifecycleRevision: lifecycleAdmission.record.lifecycleRevision,
+			}),
+		)
 		if (duplicateInvocation) {
 			return this.block(
 				decision,
@@ -1530,7 +1569,12 @@ export class ExecutionFunnel {
 	}
 
 	private cancellationReason(input: ExecutionFunnelInput): string | undefined {
-		if (input.config.taskState.abort) return "Task cancellation is active; the operation was not executed."
+		const lifecycle = getTaskLifecycleAuthority(input.config.taskState).executionEligibility(
+			input.config.taskState,
+			input.config.taskId,
+			input.config.taskState.executionGeneration,
+		)
+		if (!lifecycle.eligible) return lifecycle.reason || "Task lifecycle admission is inactive."
 		if (input.signal?.aborted || input.config.taskSignal?.aborted) {
 			return "Invocation cancellation is active; the operation was not executed."
 		}

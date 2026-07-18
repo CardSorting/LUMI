@@ -29,7 +29,7 @@ const RISK_TONE = {
 /** High-confidence approval, recovery, completion, and stop controls. */
 export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, chatState, mode, messageHandlers }) => {
 	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
-	const { enableCheckpointsSetting, checkpointManagerErrorMessage } = useExtensionState()
+	const { enableCheckpointsSetting, checkpointManagerErrorMessage, taskLifecycleEvent } = useExtensionState()
 	const [isProcessing, setIsProcessing] = useState(false)
 	const panelRef = useRef<HTMLElement>(null)
 
@@ -44,13 +44,17 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 	)
 	const { primaryText, secondaryText, primaryAction, secondaryAction, enableButtons } = buttonConfig
 	const hasButtons = Boolean(primaryText || secondaryText)
-	const canInteract = enableButtons && !isProcessing
+	const completionAction =
+		lastMessage?.type === "ask" && (lastMessage.ask === "completion_result" || lastMessage.ask === "resume_completed_task")
+	const lifecycleCompleted =
+		taskLifecycleEvent?.committed.state === "terminal" && taskLifecycleEvent.committed.terminalOutcome === "completed"
+	const canInteract = enableButtons && !isProcessing && (!completionAction || lifecycleCompleted)
 	const executionControlConfigured = secondaryAction === "cancel" && !primaryAction
 	const isExecutionControl = Boolean(executionControlConfigured && lastMessage && isApiRequestInProgress(lastMessage))
 	const checkpointAvailable = enableCheckpointsSetting !== false && !checkpointManagerErrorMessage
 	const presentation = useMemo(
-		() => getActionPresentation(lastMessage, buttonConfig, { checkpointAvailable }),
-		[lastMessage, buttonConfig, checkpointAvailable],
+		() => getActionPresentation(lastMessage, buttonConfig, { checkpointAvailable, lifecycleCompleted }),
+		[lastMessage, buttonConfig, checkpointAvailable, lifecycleCompleted],
 	)
 
 	useEffect(() => {
@@ -166,7 +170,9 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 			? "Something went wrong"
 			: presentation.kind === "completion"
 				? "Task completed"
-				: "Needs your approval"
+				: presentation.kind === "other"
+					? "Task state pending"
+					: "Needs your approval"
 	const isCompletion = presentation.kind === "completion"
 	const isRecovery = presentation.kind === "recovery"
 	const panelTone = isRecovery

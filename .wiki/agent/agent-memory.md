@@ -15,6 +15,10 @@
 - `ExecutionFunnel.ts` is the sole approval and tool-execution authority. Parent, sibling, and subagent callers enter it; `ToolExecutorCoordinator` is a registry and owns no dispatch or approval path.
 - Approval is part of execution admission. The funnel freezes a handler's pure `ApprovalIntent`, evaluates current settings/policy, records one immutable decision, and only then issues an invocation- and generation-scoped permit. Missing/malformed intents and stale decisions fail closed.
 - `ExecutionFunnelEvent` is the one execution projection. It causally links intent, policy inputs, prompt, decision, and permit in one ordered trace. Consumers select a whole event; never infer status from handler prose or merge different invocation events.
+- `TaskLifecycleFunnel.ts` is the sole task-state transition authority. Callers submit typed generation-bound intents; they never assign lifecycle state, cancellation, terminal outcome, or generation.
+- `TaskLifecycleEvent` is the one lifecycle projection. Record + event commit atomically by generation/revision CAS before publication. `TaskState`, controller transport, history recovery, and webview status consume it without repair or fallback inference.
+- Cancellation request and settlement are distinct. A committed request fences new execution immediately; terminal cancellation requires later settlement. A terminal generation never resumes, and a replacement generation rejects all old callbacks and permits.
+- Attached subagents share the parent funnel, name the exact parent generation, and terminalize before parent completion/replacement. Parent cancellation/failure/timeout propagates through typed child intents; detached children are independent.
 - Turn control has no legacy boolean fallback. Conditional mutation collision paths come from the frozen intent, and `npm run check:handler-imports` enforces that handlers do not reacquire approval authority.
 - `CommandExecutor` owns shell process timeout/cancellation. The funnel sets no competing shell timeout or retry, so it cannot start a replacement while an original process is alive; all advisory notification timers clear in `finally`. Scoped cancellation uses `cancelBackgroundCommand(ownerId)` and `hasActiveBackgroundCommand(ownerId)`.
 - Swarm execution lane concurrency must be controlled by tracking active execution slots in the pool (`running.size`) rather than yielded/suspended lifecycle states (`activeLaneExecutions`) to prevent premature queue saturation during setup.
@@ -40,3 +44,4 @@
 - When touching coordination authority or projections, run `LockAuthorityReconciliation.test.ts` and the governed execution hardening/reliability suites.
 - When touching scheduler wait state or lane transitions, run `TarjanDeadlockDetector.test.ts` and `SubagentToolHandler.test.ts`.
 - When touching completion identity, lease binding, or terminal persistence, run `TaskCompletionTerminalization.test.ts` plus completion lifecycle/gate tests.
+- When touching task lifecycle, run `TaskLifecycleFunnel.test.ts`, `ExecutionFunnel.test.ts`, `CompletionFunnel.test.ts`, subagent parity, and `npm run check:task-lifecycle-boundary`.

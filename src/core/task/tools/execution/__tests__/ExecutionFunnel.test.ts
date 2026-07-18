@@ -5,6 +5,12 @@ import type { ApprovalIntent } from "@shared/execution/executionFunnelEvent"
 import { DietCodeDefaultTool } from "@shared/tools"
 import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
+import {
+	bindTaskLifecycleAuthority,
+	createInMemoryTaskLifecycleFunnel,
+	createTaskLifecycleIntentId,
+	getTaskLifecycleAuthority,
+} from "../../../lifecycle/TaskLifecycleFunnel"
 import { TaskState } from "../../../TaskState"
 import type { TaskConfig } from "../../types/TaskConfig"
 import { declareApprovalIntent, type IToolHandler, type ToolResponse } from "../../types/ToolContracts"
@@ -27,6 +33,7 @@ import {
 } from "../ExecutionFunnel"
 
 function config(state = new TaskState(), overrides: Partial<TaskConfig> = {}): TaskConfig {
+	bindTaskLifecycleAuthority(state, createInMemoryTaskLifecycleFunnel())
 	return {
 		taskId: "task-1",
 		ulid: "task-1",
@@ -372,6 +379,89 @@ describe("ExecutionFunnel approval authority", () => {
 		assert.equal(outcome.event.permitId, undefined)
 	})
 
+	it("rejects lifecycle cancellation before dispatch", async () => {
+		const state = new TaskState()
+		const taskConfig = config(state)
+		const lifecycle = getTaskLifecycleAuthority(state)
+		const active = await lifecycle.ensureActive(state, taskConfig.taskId, {
+			source: "test",
+			reason: "Prepare cancellation-before-dispatch fixture.",
+		})
+		assert.equal(active.kind, "committed")
+		const cancelled = await lifecycle.submit(state, {
+			type: "RequestCancellation",
+			intentId: createTaskLifecycleIntentId(),
+			taskId: taskConfig.taskId,
+			generationId: active.record.generationId,
+			cause: { source: "test", reason: "Fence execution before dispatch." },
+		})
+		assert.equal(cancelled.kind, "committed")
+		let dispatches = 0
+		const outcome = await run(
+			new ExecutionFunnel(),
+			taskConfig,
+			block(DietCodeDefaultTool.ATTEMPT, "cancelled-before-dispatch"),
+			handler(DietCodeDefaultTool.ATTEMPT, async () => {
+				dispatches++
+				return "unreachable"
+			}),
+		)
+		assert.equal(dispatches, 0)
+		assert.equal(outcome.event.reasonCode, "task_cancelled")
+	})
+
+	it("fences new dispatch while an in-flight operation settles cancellation", async () => {
+		const state = new TaskState()
+		const taskConfig = config(state)
+		const funnel = new ExecutionFunnel()
+		let release!: () => void
+		let dispatched!: () => void
+		const waitForRelease = new Promise<void>((resolve) => {
+			release = resolve
+		})
+		const dispatchStarted = new Promise<void>((resolve) => {
+			dispatched = resolve
+		})
+		let dispatches = 0
+		const first = run(
+			funnel,
+			taskConfig,
+			block(DietCodeDefaultTool.ATTEMPT, "in-flight"),
+			handler(DietCodeDefaultTool.ATTEMPT, async () => {
+				dispatches++
+				dispatched()
+				await waitForRelease
+				return "settled"
+			}),
+		)
+		await dispatchStarted
+		const lifecycle = getTaskLifecycleAuthority(state)
+		const current = lifecycle.readProjection(state)
+		assert.ok(current)
+		const cancellation = await lifecycle.submit(state, {
+			type: "RequestCancellation",
+			intentId: createTaskLifecycleIntentId(),
+			taskId: taskConfig.taskId,
+			generationId: current.generationId,
+			cause: { source: "test", reason: "Cancel while the admitted operation is in flight." },
+		})
+		assert.equal(cancellation.kind, "committed")
+
+		const second = await run(
+			funnel,
+			taskConfig,
+			block(DietCodeDefaultTool.ATTEMPT, "after-fence"),
+			handler(DietCodeDefaultTool.ATTEMPT, async () => {
+				dispatches++
+				return "unreachable"
+			}),
+		)
+		assert.equal(second.event.reasonCode, "task_cancelled")
+		assert.equal(dispatches, 1)
+		release()
+		await first
+	})
+
 	it("terminalizes approval preparation failure without dispatch", async () => {
 		let dispatches = 0
 		const outcome = await run(
@@ -440,7 +530,26 @@ describe("ExecutionFunnel approval authority", () => {
 			return "done"
 		})
 		const first = await run(funnel, config(state), block(DietCodeDefaultTool.ATTEMPT, "same-call"), toolHandler)
-		state.executionGeneration = "next-generation"
+		const lifecycle = getTaskLifecycleAuthority(state)
+		const current = lifecycle.readProjection(state)
+		assert.ok(current)
+		const suspended = await lifecycle.submit(state, {
+			type: "SuspendGeneration",
+			intentId: createTaskLifecycleIntentId(),
+			taskId: "task-1",
+			generationId: current.generationId,
+			cause: { source: "test", reason: "Suspend before generation replacement." },
+		})
+		assert.equal(suspended.kind, "committed")
+		const replaced = await lifecycle.submit(state, {
+			type: "ResumeWithGeneration",
+			intentId: createTaskLifecycleIntentId(),
+			taskId: "task-1",
+			generationId: suspended.record.generationId,
+			newGenerationId: "next-generation",
+			cause: { source: "test", reason: "Exercise generation isolation." },
+		})
+		assert.equal(replaced.kind, "committed")
 		const second = await run(funnel, config(state), block(DietCodeDefaultTool.ATTEMPT, "same-call"), toolHandler)
 		assert.equal(dispatches, 2)
 		assert.notEqual(first.event.approvalDecision?.decisionId, second.event.approvalDecision?.decisionId)
@@ -465,7 +574,26 @@ describe("ExecutionFunnel approval authority", () => {
 			return "done"
 		})
 		await run(funnel, taskConfig, toolBlock, toolHandler)
-		state.executionGeneration = "replacement-generation"
+		const lifecycle = getTaskLifecycleAuthority(state)
+		const current = lifecycle.readProjection(state)
+		assert.ok(current)
+		const suspended = await lifecycle.submit(state, {
+			type: "SuspendGeneration",
+			intentId: createTaskLifecycleIntentId(),
+			taskId: taskConfig.taskId,
+			generationId: current.generationId,
+			cause: { source: "test", reason: "Suspend before generation replacement." },
+		})
+		assert.equal(suspended.kind, "committed")
+		const replaced = await lifecycle.submit(state, {
+			type: "ResumeWithGeneration",
+			intentId: createTaskLifecycleIntentId(),
+			taskId: taskConfig.taskId,
+			generationId: suspended.record.generationId,
+			newGenerationId: "replacement-generation",
+			cause: { source: "test", reason: "Exercise stale permit fencing." },
+		})
+		assert.equal(replaced.kind, "committed")
 		release()
 		await assert.rejects(staleAttempt, /approval-linked ExecutionFunnel permit/)
 	})
@@ -563,6 +691,7 @@ describe("ExecutionFunnel approval authority", () => {
 		const outcome = await run(new ExecutionFunnel(), config(state), block(), handler(DietCodeDefaultTool.ATTEMPT))
 		assert.equal(outcome.event.phase, "succeeded")
 		assert.equal(state.completionFunnelEventJson, before)
+		assert.equal(getTaskLifecycleAuthority(state).readProjection(state)?.state, "active")
 	})
 
 	it("publishes deeply immutable audit stages in their original order", async () => {

@@ -844,7 +844,6 @@ export const ChatRowContent = memo(
 								handleToggle={handleToggle}
 								isExpanded={isExpanded}
 								message={message}
-								mode={mode}
 								reasoningContent={reasoningContent}
 								responseStarted={responseStarted}
 							/>

@@ -1,6 +1,11 @@
 import { MAX_COMPLETION_GATE_BLOCK_COUNT } from "@shared/audit/gatePolicy"
 import { expect } from "chai"
 import { describe, it } from "mocha"
+import {
+	bindTaskLifecycleAuthority,
+	createInMemoryTaskLifecycleFunnel,
+	getTaskLifecycleAuthority,
+} from "../../../lifecycle/TaskLifecycleFunnel"
 import { TaskState } from "../../../TaskState"
 import type { TaskConfig } from "../../types/TaskConfig"
 import {
@@ -8,10 +13,12 @@ import {
 	CompletionFunnelEvaluator,
 	type CompletionFunnelSnapshot,
 	cacheCompletionFunnelEvent,
+	commitCompletionLifecycleFact,
 	decisionToCompletionFunnelEvent,
 	evaluateCircuitBreaker,
 	evaluateCompletionFunnel,
 	guardCompletionAction,
+	isTaskHarnessTerminal,
 } from "../CompletionFunnel"
 
 function snapshot(overrides: Partial<CompletionFunnelSnapshot> = {}): CompletionFunnelSnapshot {
@@ -46,9 +53,11 @@ function snapshot(overrides: Partial<CompletionFunnelSnapshot> = {}): Completion
 }
 
 function config(): TaskConfig {
+	const taskState = new TaskState()
+	bindTaskLifecycleAuthority(taskState, createInMemoryTaskLifecycleFunnel())
 	return {
 		taskId: "task-1",
-		taskState: new TaskState(),
+		taskState,
 		messageState: { getDietCodeMessages: () => [] },
 		auditCompletionGateEnabled: false,
 	} as unknown as TaskConfig
@@ -147,5 +156,33 @@ describe("CompletionFunnel monolith", () => {
 		cacheCompletionFunnelEvent(taskConfig, terminal)
 		const guarded = guardCompletionAction("attempt_completion", evaluateCompletionFunnel(taskConfig))
 		expect(guarded.allowed).to.equal(false)
+	})
+
+	it("commits one authoritative lifecycle event from a CompletionFunnel fact", async () => {
+		const taskConfig = config()
+		const authority = getTaskLifecycleAuthority(taskConfig.taskState)
+		const active = await authority.ensureActive(taskConfig.taskState, taskConfig.taskId, {
+			source: "test",
+			reason: "Prepare completion integration fixture.",
+		})
+		expect(active.kind).to.equal("committed")
+		const historyBefore = taskConfig.taskState.lifecycleFunnelHistory?.length ?? 0
+		await commitCompletionLifecycleFact(taskConfig, "decision-1", Date.now())
+		const record = authority.readProjection(taskConfig.taskState)
+		expect(record?.state).to.equal("terminal")
+		expect(record?.terminalOutcome).to.equal("completed")
+		expect(taskConfig.taskState.lifecycleFunnelHistory?.length).to.equal(historyBefore + 1)
+		expect(taskConfig.taskState.lifecycleFunnelHistory?.at(-1)?.transition).to.equal("settle_completion")
+		expect(isTaskHarnessTerminal(taskConfig.taskState)).to.equal(true)
+	})
+
+	it("does not let a UI completion projection create lifecycle truth", () => {
+		const taskConfig = config()
+		const terminal = decisionToCompletionFunnelEvent(taskConfig, CompletionFunnelEvaluator.evaluate(snapshot()), {
+			decisionId: "projection-only",
+			committedAt: 123,
+		})
+		cacheCompletionFunnelEvent(taskConfig, terminal)
+		expect(isTaskHarnessTerminal(taskConfig.taskState)).to.equal(false)
 	})
 })

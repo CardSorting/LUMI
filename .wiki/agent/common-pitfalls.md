@@ -8,6 +8,11 @@
 - Do not classify every dependency cycle or exhausted pool as deadlock. Check timers, lease expiry, outside owners, and capacity escapes from a consistent snapshot.
 - Do not apply deadlock recovery after scheduler or lane state changes; discard the stale diagnosis and recompute.
 - Do not mark task state terminal before the `task_completions` CAS commits.
+- Do not assign task lifecycle state, generation, cancellation, or terminal flags outside `TaskLifecycleFunnel`. Submit a typed intent for the exact generation.
+- Do not treat cancellation request as cancellation settlement. The request fences execution; settlement occurs only after task-owned resources are joined.
+- Do not resume a terminal generation or reinterpret an old callback against a replacement generation.
+- Do not let storage restoration, controller retry, UI status repair, or subagent envelopes create lifecycle state. They are adapters/projections of the committed event.
+- Do not complete or replace a parent generation while an attached child remains active.
 - Do not use an ad hoc JSON hash as a completion decision ID; use the schema-versioned canonical digest.
 - Do not create a completion decision in a handler, finalizer, resume adapter, prompt projection, or webview component. All authority belongs to `CompletionFunnel.ts`; downstream code consumes its event.
 - Do not call a tool handler, `UniversalGuard`, execution hook, mutation fence, or roadmap preflight as a second execution gate. All authorization and dispatch belong to `ExecutionFunnel.ts`.

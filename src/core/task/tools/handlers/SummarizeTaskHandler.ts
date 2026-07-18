@@ -90,7 +90,6 @@ export class SummarizeTaskHandler implements IToolHandler, IPartialBlockHandler 
 						},
 						clearActiveHookExecution: config.callbacks.clearActiveHookExecution,
 						postStateToWebview: config.callbacks.postStateToWebview,
-						taskState: config.taskState,
 						cancelTask: config.callbacks.cancelTask,
 						hooksEnabled,
 					})

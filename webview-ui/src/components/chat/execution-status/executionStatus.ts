@@ -1,7 +1,6 @@
 import { isApiRequestInProgress } from "@shared/agentActivity"
 import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { ResolvedCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
-import { hasTerminalCompletionEvidence } from "@shared/completion/taskCompletionEvidence"
 import { sanitizeWebviewMessageContent } from "@shared/diagnostics/webviewDiagnostics"
 import type {
 	DietCodeMessage,
@@ -9,6 +8,7 @@ import type {
 	GovernedReceiptIncident,
 	TaskAuditMetadata,
 } from "@shared/ExtensionMessage"
+import type { TaskLifecycleEvent } from "@shared/lifecycle/taskLifecycleEvent"
 
 export type ExecutionState =
 	| "running"
@@ -35,6 +35,7 @@ interface ExecutionStatusOptions {
 	auditMetadata?: TaskAuditMetadata
 	auditHealth?: AuditHealthSummary
 	completionFunnel?: ResolvedCompletionFunnelSnapshot
+	lifecycleEvent?: TaskLifecycleEvent
 	checkpointError?: string
 }
 
@@ -119,15 +120,6 @@ function getCompletionConfidence(
 	return "Reported complete"
 }
 
-function wasCancelled(message: DietCodeMessage | undefined): boolean {
-	if (message?.type !== "say" || message.say !== "api_req_started") return false
-	try {
-		return (JSON.parse(message.text || "{}") as { cancelReason?: string }).cancelReason === "user_cancelled"
-	} catch {
-		return false
-	}
-}
-
 function getReceiptIncident(message: DietCodeMessage | undefined): {
 	incident?: GovernedReceiptIncident
 	retrySafe?: boolean
@@ -149,23 +141,41 @@ export function deriveExecutionStatus({
 	auditMetadata,
 	auditHealth,
 	completionFunnel,
+	lifecycleEvent,
 	checkpointError,
 }: ExecutionStatusOptions): ExecutionStatusModel {
 	const lastMessage = messages.at(-1)
 	const safety = getSafetyLabel(auditMetadata, auditHealth, completionFunnel)
 	const receipt = getReceiptIncident(lastMessage)
-	const terminalCompletion = completionFunnel?.terminalCompletion ?? hasTerminalCompletionEvidence(messages)
+	const terminalCompletion =
+		lifecycleEvent?.committed.state === "terminal" && lifecycleEvent.committed.terminalOutcome === "completed"
 	const funnelEvent = completionFunnel?.event
 
 	let status: Omit<ExecutionStatusModel, "safety" | "confidence">
 
-	if (terminalCompletion || funnelEvent?.terminal) {
+	if (terminalCompletion) {
 		status = {
 			state: "complete",
 			title: "Execution complete",
 			detail: "The final outcome is recorded and older pending gate projections are no longer actionable.",
 			nextAction: "Review the result or start a new task.",
 		}
+	} else if (lifecycleEvent?.committed.state === "terminal") {
+		const outcome = lifecycleEvent.committed.terminalOutcome
+		status =
+			outcome === "cancelled"
+				? {
+						state: "cancelled",
+						title: "Execution cancelled",
+						detail: "The authoritative task generation settled cancellation.",
+						nextAction: "Resume as a new generation when you are ready.",
+					}
+				: {
+						state: "failed",
+						title: outcome === "timed_out" ? "Execution timed out" : "Execution failed",
+						detail: `The authoritative task generation settled as '${outcome ?? "failed"}'.`,
+						nextAction: "Review the terminal event before starting a new generation.",
+					}
 	} else if (checkpointError) {
 		status = {
 			state: "failed",
@@ -202,19 +212,12 @@ export function deriveExecutionStatus({
 				? "Follow the recovery path in the receipt."
 				: "Inspect the receipt before retrying or merging changes.",
 		}
-	} else if (wasCancelled(lastMessage)) {
-		status = {
-			state: "cancelled",
-			title: "Execution stopped",
-			detail: "The active model turn was cancelled. Completed workspace changes remain in place.",
-			nextAction: "Review the timeline, then resume with updated guidance when ready.",
-		}
 	} else if (receipt.incident === "sealed_success") {
 		status = {
-			state: "complete",
-			title: "Execution complete",
-			detail: "The final outcome is recorded and older pending gate projections are no longer actionable.",
-			nextAction: "Review the result or start a new task.",
+			state: "ready",
+			title: "Governed work sealed",
+			detail: "The governed execution receipt is sealed; task lifecycle settlement remains authoritative.",
+			nextAction: "Review the receipt or continue toward task completion.",
 		}
 	} else if (funnelEvent?.phase === "failed" || funnelEvent?.phase === "blocked") {
 		status = {
@@ -262,17 +265,17 @@ export function deriveExecutionStatus({
 		(lastMessage.ask === "completion_result" || lastMessage.ask === "resume_completed_task")
 	) {
 		status = {
-			state: "complete",
-			title: "Execution complete",
-			detail: "The final outcome and available evidence are recorded in the timeline.",
-			nextAction: "Review the receipt or start a new task.",
+			state: "input",
+			title: "Outcome awaiting lifecycle record",
+			detail: "The timeline contains completion evidence, but the lifecycle projection is not yet terminal.",
+			nextAction: "Wait for lifecycle restoration or choose the available recovery action.",
 		}
 	} else if (lastMessage?.type === "say" && lastMessage.say === "completion_result") {
 		status = {
-			state: "complete",
+			state: "ready",
 			title: "Finalizing outcome",
-			detail: "Work is complete and the final receipt is being presented.",
-			nextAction: "Review the outcome and verification evidence.",
+			detail: "Completion evidence is present while lifecycle settlement is being projected.",
+			nextAction: "Review the evidence while lifecycle settlement completes.",
 		}
 	} else if (lastMessage?.type === "ask" && APPROVAL_ASKS.has(lastMessage.ask)) {
 		status = {

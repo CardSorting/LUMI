@@ -4,13 +4,47 @@ import { AssistantMessageContent } from "@core/assistant-message"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 import type { LockClaim } from "@shared/governance/lockTypes"
+import type { TaskLifecycleEvent, TaskLifecycleRecord } from "@shared/lifecycle/taskLifecycleEvent"
 import type { WorkLaneClaim } from "@shared/subagent/governedExecution"
 import { DietCodeAskResponse } from "@shared/WebviewMessage"
 import type { HookExecution } from "./types/HookExecution"
 
 export class TaskState {
-	/** Unique lifecycle generation. Approval decisions and permits never cross it. */
-	public executionGeneration: string = randomUUID()
+	/**
+	 * Identity proposed for first registration. Once registered, the lifecycle
+	 * projection is the only source of the active generation identifier.
+	 */
+	private readonly proposedLifecycleGeneration = randomUUID()
+	/** Authoritative committed lifecycle record projection. Written only by TaskLifecycleFunnel. */
+	lifecycleFunnelRecordJson?: string
+	/** Latest immutable lifecycle event projection. Written only after durable commit. */
+	lifecycleFunnelEventJson?: string
+	/** Bounded ordered lifecycle history projection. */
+	lifecycleFunnelHistory?: readonly TaskLifecycleEvent[]
+
+	get executionGeneration(): string {
+		if (this.lifecycleFunnelRecordJson) {
+			try {
+				return (JSON.parse(this.lifecycleFunnelRecordJson) as TaskLifecycleRecord).generationId
+			} catch {
+				// A malformed projection cannot invent a generation; the funnel's
+				// eligibility read will fail closed before execution admission.
+			}
+		}
+		return this.proposedLifecycleGeneration
+	}
+
+	/** Read-only compatibility projection; cancellation authority lives in the lifecycle record. */
+	get abort(): boolean {
+		if (!this.lifecycleFunnelRecordJson) return false
+		try {
+			const record = JSON.parse(this.lifecycleFunnelRecordJson) as TaskLifecycleRecord
+			return record.cancellation.status === "requested" || record.terminalOutcome === "cancelled"
+		} catch {
+			return true
+		}
+	}
+
 	public recursionDepth = 0
 	public maxTokens?: number
 	public maxCost?: number
@@ -85,9 +119,6 @@ export class TaskState {
 	// Retry tracking for auto-retry feature
 	autoRetryAttempts = 0
 
-	// Task Initialization
-	isInitialized = false
-
 	// Focus Chain / Todo List Management
 	apiRequestCount = 0
 	apiRequestsSinceLastTodoUpdate = 0
@@ -124,11 +155,6 @@ export class TaskState {
 	}
 	currentFocusChainChecklist: string | null = null
 	todoListWasUpdatedByUser = false
-
-	// Task Abort / Cancellation
-	abort = false
-	didFinishAbortingStream = false
-	abandoned = false
 
 	// Hook execution tracking for cancellation
 	activeHookExecution?: HookExecution
@@ -274,7 +300,6 @@ export class TaskState {
 	public laneIndex?: number
 	public activeLockClaim?: LockClaim | WorkLaneClaim
 
-	public isTerminalState = false
 	public lastCompletionDecisionId?: string
 	public lastCompletionDecisionResult?: string
 

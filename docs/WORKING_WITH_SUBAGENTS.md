@@ -25,6 +25,7 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 | Parent flow control | `src/core/task/tools/subagent/ParentAgentFlowControl.ts` · [Execution authority](parent-thread-execution-authority.md) |
 | Deadlock analysis | `src/core/task/tools/subagent/TarjanDeadlockDetector.ts` |
 | Durable lock authority | `src/core/governance/LockAuthority.ts` · `src/core/swarm/SwarmMutexService.ts` |
+| Task lifecycle authority | `src/core/task/lifecycle/TaskLifecycleFunnel.ts` · [Task lifecycle](task-lifecycle-authority.md) |
 | Lane completion gates | `src/core/task/tools/subagentCompletionGates.ts` |
 | Merge gate | `src/core/task/tools/subagent/MergeGate.ts` |
 
@@ -35,9 +36,11 @@ LUMI can spawn **subagents** — isolated agent runs with their own prompts, too
 1. The main `Task` calls `use_subagents` with agent type(s) and prompts.
 2. The parent classifies lane authority and requests one batch approval at the required read/mutation level.
 3. `SubagentBuilder` constructs an isolated model client for each attempt.
-4. A FIFO pool allows three active model requests; queued and retry-backoff lanes consume no active slot.
-5. `SubagentRunner` executes the child loop with lane-scoped tools; non-mutating lanes cannot invoke write, command, MCP, memory-mutation, or repair tools.
-6. The parent stops progress I/O, atomically stages the artifact, reconciles receipts, publishes the sealed terminal artifact, and returns synthesized output.
+4. `SubagentRunner` registers and activates a unique child lifecycle task through the same `TaskLifecycleFunnel` as the parent.
+5. A FIFO pool allows three active model requests; queued and retry-backoff lanes consume no active slot.
+6. `SubagentRunner` executes the child loop with lane-scoped tools; non-mutating lanes cannot invoke write, command, MCP, memory-mutation, or repair tools.
+7. The child settles completion, cancellation, failure, or timeout through the shared lifecycle authority before publishing its terminal envelope.
+8. The parent stops progress I/O, atomically stages the artifact, reconciles receipts, publishes the sealed terminal artifact, and returns synthesized output.
 
 Scheduler recovery uses an immutable, versioned wait-for snapshot. Dependency and ownership cycles are reported as deadlocks only when timers, lease expiry, outside resource owners, and unrelated capacity cannot resolve them. The state version is checked again before recovery is applied.
 
@@ -59,6 +62,7 @@ The parent launch is the approval boundary:
 - Read-only lanes use read auto-approval and receive a read/diagnostic tool subset; declared mutation lanes use edit auto-approval and otherwise request approval once.
 - Inner tools do not prompt repeatedly after launch, but allowlists, mutation locks, budgets, and merge checks still apply.
 - **Tool execution** in every lane enters the same [central execution funnel](parent-thread-execution-authority.md); the lane supplies its authority mode and resource-collision evidence. Full task-completion enforcement remains on parent `attempt_completion`.
+- **Task lifecycle** in every lane enters the same [task lifecycle authority](task-lifecycle-authority.md). Attached child registration names the exact parent generation; parent cancellation/failure/timeout propagation is typed and auditable. Detached children do not inherit parent termination.
 - **I/O authority** on non-mutating lanes: read/list/search tools bypass UniversalGuard and may parallelize when the parent pool allows — see [Governed execution runbook § Fast I/O](governed-execution-runbook.md#retry-decision-flow).
 - **Production mutation authority** is SQLite-only. Memory, file locks, and Broccoli fences are projections; database outages retry or fail closed and never switch the process to local authority.
 - **Lease identity** is owner + epoch + fencing token + authority mode. Tokens remain decimal strings for precision safety.
@@ -133,3 +137,4 @@ See [quick reference](governed-roadmap-projection-quickref.md) for full tag synt
 - [Subagents feature guide](features/subagents.mdx)
 - [All tools — use_subagents](tools-reference/all-dietcode-tools.mdx)
 - [Memory & reasoning](MEMORY_AND_REASONING.md)
+- [Task lifecycle authority](task-lifecycle-authority.md)

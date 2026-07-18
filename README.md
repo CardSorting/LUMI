@@ -251,7 +251,8 @@ Tutorial: [your-first-project](docs/getting-started/your-first-project.mdx) · P
 | [Governed subagent execution](docs/governed-subagent-execution.md) | Swarm architecture and lifecycle |
 | [Governed execution authority](docs/governed-execution-authority.md) | SQLite lease authority, projection reconciliation, and deadlock safety |
 | [Governed execution runbook](docs/governed-execution-runbook.md) | Operator playbook |
-| [Completion lifecycle](docs/completion-lifecycle-decision-engine.md) | Deterministic decisions and durable terminal CAS |
+| [Task lifecycle authority](docs/task-lifecycle-authority.md) | Transactional generation, cancellation, resume, and terminal state |
+| [Completion funnel](docs/completion-lifecycle-decision-engine.md) | Semantic completion and durable lifecycle handoff |
 | [Memory & reasoning](docs/MEMORY_AND_REASONING.md) | BroccoliDB cognitive layer |
 | [Spider forensic engine](docs/architecture/spider-v20-forensic-engine.md) | BroccoliDB analysis substrate |
 | [Security best practices](docs/SECURITY_BEST_PRACTICES.md) | Trust boundaries and hardening |

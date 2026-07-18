@@ -1,8 +1,13 @@
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
+import type { TaskLifecycleEvent, TaskTerminalOutcome } from "@shared/lifecycle/taskLifecycleEvent"
 import { describe, expect, it } from "vitest"
 import { deriveComposerMode, shouldCollapseComposer } from "./composerState"
 
 const task: DietCodeMessage = { ts: 1, type: "say", say: "task", text: "Do work" }
+const terminalEvent = (outcome: TaskTerminalOutcome): TaskLifecycleEvent =>
+	({
+		committed: { state: "terminal", terminalOutcome: outcome },
+	}) as TaskLifecycleEvent
 
 describe("deriveComposerMode", () => {
 	it("distinguishes active steering from an idle composer", () => {
@@ -23,7 +28,8 @@ describe("deriveComposerMode", () => {
 
 	it("demotes the composer after completion", () => {
 		const completion: DietCodeMessage = { ts: 2, type: "ask", ask: "completion_result", text: "Done" }
-		expect(deriveComposerMode([task, completion], "completion_result", true)).toBe("completion")
+		expect(deriveComposerMode([task, completion], "completion_result", true)).toBe("ready")
+		expect(deriveComposerMode([task, completion], "completion_result", true, terminalEvent("completed"))).toBe("completion")
 	})
 
 	it("demotes optional guidance while recovery is active", () => {
@@ -39,7 +45,10 @@ describe("deriveComposerMode", () => {
 			say: "api_req_started",
 			text: JSON.stringify({ cancelReason: "user_cancelled" }),
 		}
-		expect(deriveComposerMode([task, cancelled], undefined, true)).toBe("resume")
+		expect(deriveComposerMode([task, cancelled], undefined, true)).toBe("ready")
+		expect(deriveComposerMode([task, cancelled], undefined, true, terminalEvent("cancelled"))).toBe("resume")
+		expect(deriveComposerMode([task], undefined, true, terminalEvent("failed"))).toBe("resume")
+		expect(deriveComposerMode([task], undefined, true, terminalEvent("timed_out"))).toBe("resume")
 	})
 
 	it("collapses secondary composers but preserves drafts and quotes", () => {

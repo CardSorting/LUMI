@@ -103,13 +103,6 @@ export async function writePreCompactContextFiles(
 }
 
 /**
- * Task state interface for cancellation handling
- */
-export interface TaskStateForCancellation {
-	didFinishAbortingStream: boolean
-}
-
-/**
  * Parameters for executing the PreCompact hook
  * Organized into logical groups for better clarity
  */
@@ -152,9 +145,7 @@ export interface PreCompactHookParams {
 	/** Callback to clear active hook execution */
 	clearActiveHookExecution: () => Promise<void>
 
-	// Cancellation dependencies
-	/** Task state object for setting abort flag */
-	taskState: TaskStateForCancellation
+	// Cancellation dependency
 	/** Callback to cancel the task */
 	cancelTask: () => Promise<void>
 
@@ -249,9 +240,7 @@ export async function executePreCompactHookWithCleanup(params: PreCompactHookPar
 			const cancellationSource = preCompactResult.wasCancelled ? "user" : "PreCompact hook"
 			Logger.log(`[PreCompact] Context compaction cancelled by ${cancellationSource} for task ${params.taskId}`)
 
-			// Internalized cancellation state management (replaces handleCancellation callback)
-			// Always save state before cancelling, regardless of cancellation source
-			params.taskState.didFinishAbortingStream = true
+			// Persist hook evidence before the controller submits cancellation.
 			await params.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 			await params.messageStateHandler.overwriteApiConversationHistory(
 				params.messageStateHandler.getApiConversationHistory(),

@@ -275,6 +275,27 @@ export interface Schema {
 		fencingToken: string
 		committedAt: number
 	}
+	task_lifecycle_records: {
+		taskId: string
+		generationId: string
+		lifecycleRevision: number
+		recordJson: string
+		updatedAt: number
+	}
+	task_lifecycle_events: {
+		monotonicSequence: number
+		eventId: string
+		intentId: string
+		taskId: string
+		generationId: string
+		lifecycleRevision: number
+		eventJson: string
+		committedAt: number
+	}
+	task_lifecycle_sequence: {
+		id: number
+		value: number
+	}
 }
 
 let _db: Kysely<Schema> | null = null
@@ -777,6 +798,38 @@ export async function getDb(): Promise<Kysely<Schema>> {
 				)`,
 			)
 			await execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_completions_decision ON task_completions(decisionId)`)
+			await execute(
+				`CREATE TABLE IF NOT EXISTS task_lifecycle_records (
+					taskId TEXT PRIMARY KEY,
+					generationId TEXT NOT NULL,
+					lifecycleRevision INTEGER NOT NULL,
+					recordJson TEXT NOT NULL,
+					updatedAt BIGINT NOT NULL
+				)`,
+			)
+			await execute(
+				`CREATE TABLE IF NOT EXISTS task_lifecycle_events (
+					monotonicSequence INTEGER PRIMARY KEY,
+					eventId TEXT NOT NULL UNIQUE,
+					intentId TEXT NOT NULL UNIQUE,
+					taskId TEXT NOT NULL,
+					generationId TEXT NOT NULL,
+					lifecycleRevision INTEGER NOT NULL,
+					eventJson TEXT NOT NULL,
+					committedAt BIGINT NOT NULL
+				)`,
+			)
+			await execute(
+				`CREATE INDEX IF NOT EXISTS idx_task_lifecycle_events_task_generation
+				 ON task_lifecycle_events(taskId, generationId, lifecycleRevision)`,
+			)
+			await execute(
+				`CREATE TABLE IF NOT EXISTS task_lifecycle_sequence (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					value INTEGER NOT NULL
+				)`,
+			)
+			await execute("INSERT OR IGNORE INTO task_lifecycle_sequence(id, value) VALUES (1, 0)")
 
 			// Inspect table schema using PRAGMA table_info to handle existing databases safely
 			let hasEpoch = false

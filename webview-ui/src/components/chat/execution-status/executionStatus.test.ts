@@ -2,6 +2,7 @@ import type { AuditHealthSummary } from "@shared/audit/auditRollup"
 import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
 import type { ResolvedCompletionFunnelSnapshot } from "@shared/completion/completionFunnelMessages"
 import type { DietCodeMessage, TaskAuditMetadata } from "@shared/ExtensionMessage"
+import type { TaskLifecycleEvent } from "@shared/lifecycle/taskLifecycleEvent"
 import { describe, expect, it } from "vitest"
 import { deriveExecutionStatus } from "./executionStatus"
 
@@ -21,6 +22,57 @@ const funnelEvent = (overrides: Partial<CompletionFunnelEvent> = {}): Completion
 	evaluatedAt: 1,
 	...overrides,
 })
+const completedLifecycleEvent: TaskLifecycleEvent = {
+	schemaVersion: 1,
+	eventId: "lifecycle-event-1",
+	intentId: "lifecycle-intent-1",
+	taskId: "task-1",
+	generationId: "generation-1",
+	lifecycleRevision: 3,
+	transition: "settle_completion",
+	previous: {
+		generationId: "generation-1",
+		lifecycleRevision: 2,
+		state: "active",
+		cancellation: { status: "none" },
+		lastEventId: "lifecycle-event-0",
+		committedAt: 1,
+		monotonicSequence: 2,
+	},
+	committed: {
+		generationId: "generation-1",
+		lifecycleRevision: 3,
+		state: "terminal",
+		terminalOutcome: "completed",
+		cancellation: { status: "none" },
+		lastEventId: "lifecycle-event-1",
+		committedAt: 2,
+		monotonicSequence: 3,
+	},
+	terminalOutcome: "completed",
+	cause: { source: "completion_funnel", reason: "Durable completion committed." },
+	committedAt: 2,
+	monotonicSequence: 3,
+}
+const cancelledLifecycleEvent: TaskLifecycleEvent = {
+	...completedLifecycleEvent,
+	eventId: "lifecycle-cancelled-1",
+	intentId: "lifecycle-cancel-intent-1",
+	transition: "settle_cancellation",
+	committed: {
+		...completedLifecycleEvent.committed,
+		terminalOutcome: "cancelled",
+		cancellation: {
+			status: "requested",
+			requestedAt: 1,
+			requestEventId: "lifecycle-cancel-request-1",
+			requestIntentId: "lifecycle-cancel-request-intent-1",
+		},
+		lastEventId: "lifecycle-cancelled-1",
+	},
+	terminalOutcome: "cancelled",
+	cause: { source: "controller", reason: "Cancellation resources settled." },
+}
 
 describe("deriveExecutionStatus", () => {
 	it("makes a pending approval the primary state", () => {
@@ -47,7 +99,7 @@ describe("deriveExecutionStatus", () => {
 		expect(result.confidence).toBe("Pending")
 	})
 
-	it("distinguishes cancelled and recovering execution", () => {
+	it("uses lifecycle cancellation rather than inferring it from an API message", () => {
 		const cancelled: DietCodeMessage = {
 			ts: 2,
 			type: "say",
@@ -56,7 +108,13 @@ describe("deriveExecutionStatus", () => {
 		}
 		const recovering: DietCodeMessage = { ts: 3, type: "say", say: "api_req_retried", text: "Retrying" }
 
-		expect(deriveExecutionStatus({ messages: [task, cancelled] }).state).toBe("cancelled")
+		expect(deriveExecutionStatus({ messages: [task, cancelled] }).state).not.toBe("cancelled")
+		expect(
+			deriveExecutionStatus({
+				messages: [task, cancelled],
+				lifecycleEvent: cancelledLifecycleEvent,
+			}).state,
+		).toBe("cancelled")
 		expect(deriveExecutionStatus({ messages: [task, recovering] }).state).toBe("recovering")
 	})
 
@@ -76,14 +134,18 @@ describe("deriveExecutionStatus", () => {
 		expect(result.title).toContain("Workspace changes")
 	})
 
-	it("does not let an older non-terminal event override completion", () => {
+	it("uses the lifecycle commit rather than an older non-terminal completion projection", () => {
 		const completion: DietCodeMessage = { ts: 2, type: "ask", ask: "completion_result", text: "Done" }
 		const completionFunnel: ResolvedCompletionFunnelSnapshot = {
 			terminalCompletion: true,
 			event: funnelEvent({ phase: "blocked", kind: "soft_block", nextAllowedAction: "modify_workspace" }),
 		}
 
-		const result = deriveExecutionStatus({ messages: [task, completion], completionFunnel })
+		const result = deriveExecutionStatus({
+			messages: [task, completion],
+			completionFunnel,
+			lifecycleEvent: completedLifecycleEvent,
+		})
 		expect(result.state).toBe("complete")
 		expect(result.confidence).toBe("Recorded")
 	})
@@ -119,7 +181,11 @@ describe("deriveExecutionStatus", () => {
 			event: funnelEvent({ phase: "completed", kind: "completed", terminal: true, nextAllowedAction: "none" }),
 		}
 
-		const result = deriveExecutionStatus({ messages: [task, receipt], completionFunnel })
+		const result = deriveExecutionStatus({
+			messages: [task, receipt],
+			completionFunnel,
+			lifecycleEvent: completedLifecycleEvent,
+		})
 		expect(result.state).toBe("complete")
 		expect(result.confidence).toBe("Recorded")
 	})
@@ -128,7 +194,11 @@ describe("deriveExecutionStatus", () => {
 		const completion: DietCodeMessage = { ts: 2, type: "ask", ask: "completion_result", text: "Done" }
 		const auditMetadata = { gate_blocked: true, violations: ["critical:test"] } as TaskAuditMetadata
 
-		const result = deriveExecutionStatus({ messages: [task, completion], auditMetadata })
+		const result = deriveExecutionStatus({
+			messages: [task, completion],
+			auditMetadata,
+			lifecycleEvent: completedLifecycleEvent,
+		})
 
 		expect(result.state).toBe("complete")
 		expect(result.safety).toBe("Advisory findings")
@@ -161,7 +231,12 @@ describe("deriveExecutionStatus", () => {
 			}),
 		}
 
-		const result = deriveExecutionStatus({ messages: [task, completion], auditHealth, completionFunnel })
+		const result = deriveExecutionStatus({
+			messages: [task, completion],
+			auditHealth,
+			completionFunnel,
+			lifecycleEvent: completedLifecycleEvent,
+		})
 
 		expect(result.state).toBe("complete")
 		expect(result.safety).toBe("Passed")
@@ -173,7 +248,10 @@ describe("deriveExecutionStatus", () => {
 		const progress: DietCodeMessage = { ts: 3, type: "say", say: "task_progress", text: "- [x] Done" }
 		const resume: DietCodeMessage = { ts: 4, type: "ask", ask: "resume_task" }
 
-		const result = deriveExecutionStatus({ messages: [task, completion, progress, resume] })
+		const result = deriveExecutionStatus({
+			messages: [task, completion, progress, resume],
+			lifecycleEvent: completedLifecycleEvent,
+		})
 
 		expect(result.state).toBe("complete")
 		expect(result.title).toBe("Execution complete")
@@ -189,10 +267,25 @@ describe("deriveExecutionStatus", () => {
 			event: funnelEvent({ phase: "ready" }),
 		}
 
-		const result = deriveExecutionStatus({ messages: [task, completion, resume], completionFunnel })
+		const result = deriveExecutionStatus({
+			messages: [task, completion, resume],
+			completionFunnel,
+			lifecycleEvent: completedLifecycleEvent,
+		})
 
 		expect(result.state).toBe("complete")
 		expect(result.confidence).not.toBe("Pending")
+	})
+
+	it("does not synthesize terminal lifecycle state from transcript completion evidence", () => {
+		const completion: DietCodeMessage = { ts: 2, type: "say", say: "completion_result", text: "Done" }
+		const completionFunnel: ResolvedCompletionFunnelSnapshot = {
+			terminalCompletion: true,
+			event: funnelEvent({ phase: "completed", kind: "completed", terminal: true, nextAllowedAction: "none" }),
+		}
+		const result = deriveExecutionStatus({ messages: [task, completion], completionFunnel })
+		expect(result.state).not.toBe("complete")
+		expect(result.confidence).not.toBe("Recorded")
 	})
 
 	it("sanitizes funnel reasons before rendering guidance", () => {

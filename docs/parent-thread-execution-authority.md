@@ -12,7 +12,7 @@ All agent tool invocations enter one modern execution authority:
 
 The funnel is intentionally a large, cohesive monolith. It keeps every decision that can authorize, block, deny, cancel, dispatch, or classify a tool invocation in one ordered audit surface. Tool handlers are operation adapters; `ToolExecutor`, sibling schedulers, and subagent runners are transport adapters. None of them may create a second execution decision.
 
-This execution authority is separate from task completion. A successful tool event means one operation succeeded. Only `CompletionFunnel.ts` can decide that the whole task is complete.
+This execution authority is separate from task lifecycle and completion. A successful tool event means one operation succeeded. `CompletionFunnel.ts` decides whether the task is durably complete; `TaskLifecycleFunnel.ts` alone commits the corresponding terminal lifecycle transition.
 
 ## Canonical surfaces
 
@@ -26,6 +26,7 @@ This execution authority is separate from task completion. A successful tool eve
 | Governed subagent integration | `src/core/task/tools/subagent/SubagentRunner.ts` |
 | Task state projection | `src/core/task/TaskState.ts` |
 | Task completion authority | `src/core/task/tools/completion/CompletionFunnel.ts` |
+| Task lifecycle eligibility and transition authority | `src/core/task/lifecycle/TaskLifecycleFunnel.ts` |
 
 The former `ActionExecutor`, `executionAuthority`, `ToolHookUtils`, unconditional `autoApprove.ts`, executor/coordinator approval callbacks, handler-local approval paths, and compatibility decision helpers were removed. Their remaining contracts are either pure handler adapters or owned inside `ExecutionFunnel`; callers cannot fall back to those paths.
 
@@ -36,7 +37,7 @@ Every invocation moves through one ordered decision trace:
 1. Register the invocation under its task generation and reject sequential or concurrent replay.
 2. Prepare and normalize the operation.
 3. Obtain and freeze the handler's synchronous, pure `ApprovalIntent`.
-4. Evaluate mode, lane, fencing, intent-derived collision paths, roadmap, cancellation, hooks, and execution policy.
+4. Query current-generation lifecycle eligibility, then evaluate mode, lane, fencing, intent-derived collision paths, roadmap, hooks, and execution policy.
 5. Snapshot and evaluate approval settings, trusted-command policy, command safety tiers, and MCP per-tool policy.
 6. Prompt only when the complete intent is not eligible for automatic admission.
 7. Record exactly one immutable approval decision for the same task generation, invocation, and intent.
@@ -87,7 +88,7 @@ Terminal phases are `blocked`, `denied`, `cancelled`, `succeeded`, and `failed`.
 
 ### Parent execution
 
-`ToolExecutor` creates the invocation input and delegates the complete decision to `ExecutionFunnel.execute()`. It may perform result presentation and advisory post-operation bookkeeping after the funnel returns. It does not run policy, hooks, mutation fencing, roadmap preflight, or dispatch independently.
+`ToolExecutor` creates the invocation input and delegates the complete decision to `ExecutionFunnel.execute()`. The funnel queries the task lifecycle eligibility contract before approval and again before permit-protected dispatch. It may submit an execution-derived lifecycle fact, but never writes task state or cancellation fields. `ToolExecutor` may perform result presentation and advisory post-operation bookkeeping after the funnel returns. It does not run policy, hooks, mutation fencing, roadmap preflight, or dispatch independently.
 
 ### Sibling execution
 
@@ -130,7 +131,7 @@ Retries, timeouts, concurrency, and circuit state are integrated into `Execution
 
 After dispatch, task streaming asks `executionFunnel.getTurnControl()` for the one projection of rejection and non-parallel tool-budget exhaustion. The former `didRejectTool` and `didAlreadyUseTool` compatibility booleans were deleted; only the current-generation event is authoritative.
 
-Execution success never sets task completion. Completion UI and resume behavior consume `CompletionFunnelEvent`, not `ExecutionFunnelEvent`.
+Execution success never sets task completion or task lifecycle terminality. Completion UI and resume behavior consume committed `TaskLifecycleEvent` state; `CompletionFunnelEvent` remains semantic completion evidence and `ExecutionFunnelEvent` remains operation evidence.
 
 ## Adding or changing a tool
 
@@ -202,3 +203,6 @@ Then run `npm run check-types`, `npm run lint`, `npm run check:handler-imports`,
 - Query fast paths remain inside the funnel and still honor workspace security.
 - Reliability cannot become a second execution authority.
 - Tool success cannot become a second completion authority.
+- Lifecycle cancellation and stale-generation fencing come from `TaskLifecycleFunnel`, never mutable task booleans.
+
+Related: [Task lifecycle authority](task-lifecycle-authority.md).

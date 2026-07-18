@@ -1,5 +1,6 @@
 import { canSendSteeringMessage } from "@shared/agentActivity"
 import type { DietCodeMessage } from "@shared/ExtensionMessage"
+import type { TaskLifecycleEvent } from "@shared/lifecycle/taskLifecycleEvent"
 
 export type ComposerMode = "ready" | "steering" | "recovering" | "resume" | "approval" | "completion" | "disabled"
 
@@ -16,25 +17,14 @@ export function deriveComposerMode(
 	messages: DietCodeMessage[],
 	dietcodeAsk: DietCodeMessage["ask"] | null | undefined,
 	inputEnabled: boolean,
+	lifecycleEvent?: TaskLifecycleEvent,
 ): ComposerMode {
 	if (!inputEnabled) return "disabled"
+	if (lifecycleEvent?.committed.state === "terminal") {
+		return lifecycleEvent.committed.terminalOutcome === "completed" ? "completion" : "resume"
+	}
 	const lastMessage = messages.at(-1)
-	if (lastMessage?.type === "say" && lastMessage.say === "api_req_started") {
-		try {
-			const info = JSON.parse(lastMessage.text || "{}") as { cancelReason?: string }
-			if (info.cancelReason === "user_cancelled") return "resume"
-		} catch {
-			// Malformed legacy payloads remain in the normal composer state.
-		}
-	}
 	if (lastMessage?.type === "ask" && APPROVAL_ASKS.has(lastMessage.ask)) return "approval"
-	if (
-		lastMessage?.ask === "completion_result" ||
-		lastMessage?.ask === "resume_completed_task" ||
-		lastMessage?.say === "completion_result"
-	) {
-		return "completion"
-	}
 	if (lastMessage?.say === "api_req_retried" || lastMessage?.say === "error_retry") return "recovering"
 	if (canSendSteeringMessage(messages, dietcodeAsk)) return "steering"
 	return "ready"

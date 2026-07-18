@@ -14,6 +14,7 @@ import type { ChatContent } from "@shared/ChatContent"
 import { isInternalDiagnosticsEnabled, projectMessagesForWebview } from "@shared/diagnostics/webviewDiagnostics"
 import type { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
+import { isTaskLifecycleEvent } from "@shared/lifecycle/taskLifecycleEvent"
 import type { McpMarketplaceCatalog, McpMarketplaceItem } from "@shared/mcp"
 import { type Settings } from "@shared/storage/state-keys"
 import type { Mode } from "@shared/storage/types"
@@ -23,7 +24,6 @@ import { fileExistsAtPath } from "@utils/fs"
 import axios from "axios"
 import fs from "fs/promises"
 import open from "open"
-import pWaitFor from "p-wait-for"
 import * as path from "path"
 import { DietCodeEnv } from "@/config"
 import type { FolderLockWithRetryResult } from "@/core/locks/types"
@@ -90,8 +90,8 @@ export class Controller implements IController {
 	private backgroundCommandRunning = false
 	private backgroundCommandTaskId?: string
 
-	// Flag to prevent duplicate cancellations from spam clicking
-	private cancelInProgress = false
+	/** Coalesces duplicate UI requests; lifecycle truth remains in TaskLifecycleFunnel. */
+	private activeCancellation?: Promise<void>
 
 	// Timer for periodic remote config fetching
 	private remoteConfigTimer?: NodeJS.Timeout
@@ -447,73 +447,43 @@ export class Controller implements IController {
 	}
 
 	async cancelTask() {
-		// Prevent duplicate cancellations from spam clicking
-		if (this.cancelInProgress) {
-			Logger.log(`[Controller.cancelTask] Cancellation already in progress, ignoring duplicate request`)
-			return
+		if (this.activeCancellation) return this.activeCancellation
+		const cancellation = this.performCancellation()
+		this.activeCancellation = cancellation
+		try {
+			await cancellation
+		} finally {
+			if (this.activeCancellation === cancellation) this.activeCancellation = undefined
 		}
+	}
 
-		if (!this.task) {
-			return
-		}
-
-		// Set flag to prevent concurrent cancellations
-		this.cancelInProgress = true
+	private async performCancellation(): Promise<void> {
+		const task = this.task
+		if (!task) return
+		this.updateBackgroundCommandState(false)
 
 		try {
-			this.updateBackgroundCommandState(false)
-
-			try {
-				await this.task.abortTask()
-			} catch (error) {
-				Logger.error("Failed to abort task", error)
-			}
-
-			await pWaitFor(
-				() =>
-					this.task === undefined ||
-					this.task.taskState.isStreaming === false ||
-					this.task.taskState.didFinishAbortingStream ||
-					this.task.taskState.isWaitingForFirstChunk, // if only first chunk is processed, then there's no need to wait for graceful abort (closes edits, browser, etc)
-				{
-					timeout: 3_000,
-				},
-			).catch(() => {
-				Logger.error("Failed to abort task")
-			})
-
-			if (this.task) {
-				// 'abandoned' will prevent this dietcode instance from affecting future dietcode instance gui. this may happen if its hanging on a streaming request
-				this.task.taskState.abandoned = true
-			}
-
-			// Small delay to ensure state manager has persisted the history update
-			//await new Promise((resolve) => setTimeout(resolve, 100))
-
-			// NOW try to get history after abort has finished (hook may have saved messages)
-			let historyItem: HistoryItem | undefined
-			try {
-				const result = await this.getTaskWithId(this.task.taskId)
-				historyItem = result.historyItem
-			} catch (error) {
-				// Task not in history yet (new task with no messages); catch the
-				// error to enable the agent to continue making progress.
-				Logger.log(`[Controller.cancelTask] Task not found in history: ${error}`)
-			}
-
-			// Only re-initialize if we found a history item, otherwise just clear
-			if (historyItem) {
-				// Re-initialize task to keep it visible in UI with resume button
-				await this.initTask(undefined, undefined, undefined, historyItem, undefined)
-			} else {
-				await this.clearTask()
-			}
-
-			await this.postStateToWebview()
-		} finally {
-			// Always clear the flag, even if cancellation fails
-			this.cancelInProgress = false
+			await task.abortTask({ reason: "The controller accepted a user or hook cancellation request." })
+		} catch (error) {
+			Logger.error("Failed to settle task cancellation", error)
+			throw error
 		}
+
+		let historyItem: HistoryItem | undefined
+		try {
+			const result = await this.getTaskWithId(task.taskId)
+			historyItem = result.historyItem
+		} catch (error) {
+			Logger.log(`[Controller.cancelTask] Task not found in history: ${error}`)
+		}
+
+		if (this.task !== task) return
+		if (historyItem) {
+			await this.initTask(undefined, undefined, undefined, historyItem, undefined)
+		} else {
+			await this.clearTask()
+		}
+		await this.postStateToWebview()
 	}
 
 	updateBackgroundCommandState(running: boolean, taskId?: string) {
@@ -993,6 +963,16 @@ export class Controller implements IController {
 			showInternalDiagnostics,
 		})
 		const checkpointManagerErrorMessage = this.task?.taskState.checkpointManagerErrorMessage
+		const taskLifecycleEvent = (() => {
+			const json = this.task?.taskState.lifecycleFunnelEventJson
+			if (!json) return undefined
+			try {
+				const event = JSON.parse(json) as unknown
+				return isTaskLifecycleEvent(event) ? event : undefined
+			} catch {
+				return undefined
+			}
+		})()
 
 		const processedTaskHistory = (taskHistory || [])
 			.filter((item) => item.ts && item.task)
@@ -1019,6 +999,7 @@ export class Controller implements IController {
 			version,
 			apiConfiguration,
 			currentTaskItem,
+			taskLifecycleEvent,
 			dietcodeMessages,
 			currentFocusChainChecklist: this.task?.taskState.currentFocusChainChecklist || null,
 			checkpointManagerErrorMessage,

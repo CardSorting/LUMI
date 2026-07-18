@@ -30,8 +30,7 @@ export async function resetState(controller: Controller, request: ResetStateRequ
 		}
 
 		if (controller.task) {
-			controller.task.abortTask()
-			controller.task = undefined
+			await controller.clearTask()
 		}
 
 		HostProvider.window.showMessage({

@@ -219,8 +219,11 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [Releasing](../.github/RELEASING.md) | Maintainer marketplace publish runbook |
 | [Security best practices](SECURITY_BEST_PRACTICES.md) | Approval gates, ignore files |
 | [Central execution funnel](parent-thread-execution-authority.md) | One auditable authority for admission, permits, handler dispatch, reliability, and terminal tool events |
-| [Completion gate lifecycle](completion-gate-lifecycle-migration.md) | Engineering vs finalization lanes, receipt requirements, lifecycle states |
-| [Completion lifecycle decision engine](completion-lifecycle-decision-engine.md) | Deterministic decisions, action guards, and restart-safe terminal completion CAS |
+| [Task lifecycle authority](task-lifecycle-authority.md) | Transactional generation, cancellation, resume, parent/child propagation, and terminal state |
+| [Task cancellation](task-cancellation.md) | Cancellation request fence and settlement |
+| [Task resume and recovery](task-resume-recovery.md) | Generation-safe restore and explicit resume |
+| [Completion authority migration](completion-gate-lifecycle-migration.md) | Historical split-authority migration |
+| [Completion funnel](completion-lifecycle-decision-engine.md) | Semantic completion and durable handoff to lifecycle |
 | [Spider forensic engine](architecture/spider-v20-forensic-engine.md) | Policy/audit layer (BroccoliDB) |
 | [User interface design](USER_INTERFACE_DESIGN.md) | Webview UX patterns |
 
@@ -299,4 +302,3 @@ Architecture milestone notes (archaeology only): [history/architecture/](history
 4. **Measured claims** — Metrics cite verifiable paths (`package.json`, `src/shared/tools.ts`, etc.).
 
 **Calm agency:** approve before mutate, checkpoint after tool use, complete only through gates.
-

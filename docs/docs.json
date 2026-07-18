@@ -192,6 +192,9 @@
 					{
 						"group": "Execution & Completion Authority",
 						"pages": [
+							"task-lifecycle-authority",
+							"task-cancellation",
+							"task-resume-recovery",
 							"completion-lifecycle-decision-engine",
 							"completion-gate-lifecycle-migration",
 							"parent-thread-execution-authority",

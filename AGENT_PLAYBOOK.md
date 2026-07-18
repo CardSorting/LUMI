@@ -16,13 +16,15 @@ Last audited: 2026-07-18
 | Substrate | BroccoliDB package | `broccolidb/package.json` name `@noorm/broccolidb` |
 | Tools | 64 typed tool enum values | `src/shared/tools.ts` |
 | Providers | 6 provider keys in code/UI | `src/core/api/index.ts`, `src/shared/providers/providers.json` |
-| Active pass | Central execution approval admission and causal permit hardening | Current working tree |
+| Active pass | Transactional task lifecycle authority and generation fencing | Current working tree |
 
 ## What Is Happening Right Now
 
 The active work now includes production authority and terminalization hardening:
 
 - `src/core/task/tools/execution/ExecutionFunnel.ts` is the sole approval and execution authority: it freezes pure handler intents, evaluates current settings/policy, records one decision, and only then issues an invocation- and generation-scoped permit.
+- `src/core/task/lifecycle/TaskLifecycleFunnel.ts` is the sole task-state transition authority: it commits typed, generation-bound lifecycle intents and publishes one immutable event after record/event compare-and-swap.
+- Cancellation is a two-step lifecycle transaction. `RequestCancellation` fences new execution; resource cleanup then submits `SettleCancellation`. Terminal generations require explicit replacement rather than revival.
 - `src/core/task/tools/ToolExecutorCoordinator.ts` is a registry only. Parent, sibling, subagent, and covered composite-child dispatch all use the same funnel authority; handlers never decide or prompt for operation approval.
 - `src/core/governance/LockAuthority.ts` fixes coordination mode at startup and uses SQLite as the sole production lease authority.
 - `src/core/swarm/SwarmMutexService.ts` allocates precision-safe lease epochs/fencing tokens and commits exact-tuple lease changes under `BEGIN IMMEDIATE`.
@@ -41,7 +43,7 @@ The active work now includes production authority and terminalization hardening:
 2. Read this file, [HANDOFF.md](HANDOFF.md), [TROUBLESHOOTING.md](TROUBLESHOOTING.md), and [WIKI.md](WIKI.md).
 3. For architecture, verify against `docs/architecture/current.md`, `docs/PROJECT_MAP.md`, and `docs/AGENT_STACK.md`.
 4. For active agent/finalization work, inspect `src/core/task/tools/finalization/` and `src/core/prompts/system-prompt/components/integrity_wiki.ts`.
-5. For execution/approval work, inspect `ExecutionFunnel.ts`, `executionFunnelEvent.ts`, and `ToolContracts.ts`; for coordination/completion work, inspect `LockAuthority.ts`, `SwarmMutexService.ts`, `TarjanDeadlockDetector.ts`, and `CompletionFunnel.ts` before changing an authority projection.
+5. For lifecycle work, inspect `TaskLifecycleFunnel.ts`, `TaskLifecyclePersistence.ts`, and `taskLifecycleEvent.ts`; for execution/approval work, inspect `ExecutionFunnel.ts`, `executionFunnelEvent.ts`, and `ToolContracts.ts`; for coordination/completion work, inspect `LockAuthority.ts`, `SwarmMutexService.ts`, `TarjanDeadlockDetector.ts`, and `CompletionFunnel.ts` before changing an authority projection.
 6. Pick the smallest validation command that matches the touched surface.
 
 ## Active Priorities
@@ -50,6 +52,7 @@ The active work now includes production authority and terminalization hardening:
 |---|---|---|
 | Keep playbook generation accurate | It is now part of finalization evidence | Preserve workspace-evidence based generation and tests |
 | Preserve one approval authority | Competing handler/coordinator decisions caused non-terminal pending states | Keep decision recording and permit issuance inside `ExecutionFunnel` |
+| Preserve one lifecycle authority | Mutable cancellation, terminal, resume, and generation writers could disagree | Submit typed intents to `TaskLifecycleFunnel`; keep UI/storage as projections |
 | Keep Workspace Intelligence first-class | It now persists typed cognitive models during finalization | Extend `src/core/workspace-intelligence/` instead of scattering continuity logic |
 | Separate stable docs from handoff state | Prevents stale wiki sprawl | Put durable architecture in `WIKI.md`, temporary state in `HANDOFF.md` |
 | Prevent doc drift regressions | Provider/version metrics drifted and were corrected in this pass | Keep metrics tied to manifests and code |
@@ -71,6 +74,9 @@ The active work now includes production authority and terminalization hardening:
 |---|---|
 | `src/integrations/terminal/CommandExecutor.ts` | Scoped terminal command cancellation via `ownerId`. |
 | `src/core/task/tools/execution/ExecutionFunnel.ts` | Pure approval intent, settings/policy evaluation, immutable decision, causal permit, and terminal audit. |
+| `src/core/task/lifecycle/TaskLifecycleFunnel.ts` | Sole generation-bound task lifecycle state machine, transition policy, and event publisher. |
+| `src/core/task/lifecycle/TaskLifecyclePersistence.ts` | Atomic lifecycle record/event CAS and parent constraints. |
+| `src/shared/lifecycle/taskLifecycleEvent.ts` | Shared lifecycle record, intent, event, and rejection schema. |
 | `src/shared/execution/executionFunnelEvent.ts` | Schema-v2 approval and permit audit contract. |
 | `src/core/task/tools/types/ToolContracts.ts` | Mandatory synchronous pure `ApprovalIntent` handler contract. |
 | `src/core/task/tools/handlers/SubagentToolHandler.ts` | Subagent queue admission concurrency fixes and async prefetching. |
@@ -108,6 +114,7 @@ The active work now includes production authority and terminalization hardening:
 | Record reproduced failures in [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Record guesses as troubleshooting facts |
 | Keep LUMI session docs separate from BroccoliDB substrate docs | Merge the narratives into one vague agent story |
 | Route approval and dispatch through `ExecutionFunnel` | Add handler prompts, auto-approval helpers, coordinator dispatch wrappers, or compatibility permits |
+| Route task state through `TaskLifecycleFunnel` | Assign generation, cancellation, terminal, suspend, or resume state directly |
 
 ## Validation Command Menu
 
@@ -115,6 +122,8 @@ The active work now includes production authority and terminalization hardening:
 |---|---|
 | Production TypeScript | `npx tsc --noEmit --pretty false --project tsconfig.json` |
 | Focused execution approval | `TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts` |
+| Focused task lifecycle | `npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --timeout 10000 --exit --extension ts --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs src/core/task/lifecycle/__tests__/TaskLifecycleFunnel.test.ts src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts src/core/task/tools/completion/__tests__/CompletionFunnel.test.ts` |
+| Lifecycle mutation boundary | `npm run check:task-lifecycle-boundary` |
 | Focused Subagent/Executor tests | `TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts src/integrations/terminal/CommandOrchestrator.test.ts` |
 | Coordination/liveness/completion tests | `npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/__tests__/LockAuthorityReconciliation.test.ts src/core/task/tools/subagent/__tests__/TarjanDeadlockDetector.test.ts src/core/task/tools/__tests__/TaskCompletionTerminalization.test.ts` |
 | Touched file style | `npx biome check <files> --files-ignore-unknown=true --diagnostic-level=error` |
@@ -135,6 +144,7 @@ The active work now includes production authority and terminalization hardening:
 - Production coordination records use `authorityMode: sqlite`; `local_test` records never migrate into production authority.
 - Completion is terminal only after the durable `task_completions` CAS commits.
 - Approval is execution admission: no operation dispatches without a current-generation permit linked to the recorded decision for that invocation. Tool success never completes the task.
+- Task lifecycle transitions are generation-bound CAS commits. UI, storage restoration, execution, completion, and subagent transports submit requests/facts or consume events; they never assign lifecycle truth.
 
 ## Known Unknowns
 

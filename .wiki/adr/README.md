@@ -15,6 +15,9 @@ Decisions governing the admission, concurrency limits, and execution order of si
 
 ## 2. Authority Reuse
 Decisions governing risk-proportional governance and caching of workspace authorities.
+* **[MEOW-012: Transactional Task Lifecycle Authority](MEOW-012-transactional-task-lifecycle.md)**
+  Makes `TaskLifecycleFunnel` the sole generation-bound task-state transition and lifecycle event authority.
+  * *Implementing Surface:* `src/core/task/lifecycle/TaskLifecycleFunnel.ts`
 * **[MEOW-011: Approval Is Execution Admission](MEOW-011-execution-approval-admission.md)**
   Makes `ExecutionFunnel` the sole approval decision and permit authority; handlers declare pure intents only.
   * *Implementing Surface:* `src/core/task/tools/execution/ExecutionFunnel.ts`

@@ -1,5 +1,4 @@
 import type { DietCodeMessage, DietCodeSayTool } from "@shared/ExtensionMessage"
-import type { Mode } from "@shared/storage/types"
 import type { LucideIcon } from "lucide-react"
 import type React from "react"
 import { useMemo } from "react"
@@ -18,7 +17,6 @@ interface RequestStartRowProps {
 	reasoningContent?: string
 	responseStarted?: boolean
 	dietcodeMessages: DietCodeMessage[]
-	mode?: Mode
 	classNames?: string
 	isExpanded: boolean
 	handleToggle: () => void
@@ -135,7 +133,6 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 	reasoningContent,
 	responseStarted,
 	dietcodeMessages,
-	mode,
 	handleToggle,
 	isExpanded,
 	message,
@@ -144,13 +141,6 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 	const hasError = !!(apiRequestFailedMessage || apiReqStreamingFailedMessage)
 	const hasCost = cost != null
 	const hasReasoning = !!reasoningContent
-	const _hasCompletionResult = dietcodeMessages.some(
-		(msg) =>
-			msg.ask === "completion_result" ||
-			msg.say === "completion_result" ||
-			msg.say === "plan_summary" ||
-			msg.ask === "plan_mode_respond",
-	)
 
 	const apiReqState: ApiReqState = hasError ? "error" : hasCost ? "final" : hasReasoning ? "thinking" : "pre"
 

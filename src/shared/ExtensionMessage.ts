@@ -14,6 +14,7 @@ import { BannerCardData } from "./dietcode/banner"
 import { DietCodeRulesToggles } from "./dietcode-rules"
 import { FocusChainSettings } from "./FocusChainSettings"
 import { HistoryItem } from "./HistoryItem"
+import type { TaskLifecycleEvent } from "./lifecycle/taskLifecycleEvent"
 import { McpDisplayMode } from "./McpDisplayMode"
 import { DietCodeMessageModelInfo } from "./messages"
 import { Mode } from "./storage/types"
@@ -55,6 +56,8 @@ export interface ExtensionState {
 	checkpointManagerErrorMessage?: string
 	dietcodeMessages: DietCodeMessage[]
 	currentTaskItem?: HistoryItem
+	/** Immutable projection of the latest committed task lifecycle event. */
+	taskLifecycleEvent?: TaskLifecycleEvent
 	currentFocusChainChecklist?: string | null
 	mcpMarketplaceEnabled?: boolean
 	mcpDisplayMode: McpDisplayMode

@@ -84,6 +84,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		setExpandTaskHeader,
 		environment,
 		dietcodeMessages,
+		taskLifecycleEvent,
 	} = useExtensionState()
 
 	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
@@ -163,6 +164,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 					checkpointError={checkpointManagerErrorMessage}
 					completionFunnel={completionFunnelSnapshot}
 					isDetailsOpen={isTaskExpanded}
+					lifecycleEvent={taskLifecycleEvent}
 					messages={dietcodeMessages}
 					onReviewBlock={onScrollToLatestGateBlock}
 					onToggleDetails={() => setExpandTaskHeader(!isTaskExpanded)}

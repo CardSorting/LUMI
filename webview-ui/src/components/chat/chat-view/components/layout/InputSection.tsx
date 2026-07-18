@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react"
 import ChatTextArea from "@/components/chat/ChatTextArea"
 import QuotedMessagePreview from "@/components/chat/QuotedMessagePreview"
 import { QuoteSelectionBar } from "@/components/chat/QuoteSelectionBar"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { isChatInputEnabled } from "../../shared/chatInputPolicy"
 import { deriveComposerMode, shouldCollapseComposer } from "../../shared/composerState"
 import { ChatState, MessageHandlers, ScrollBehavior } from "../../types/chatTypes"
@@ -32,6 +33,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	shouldDisableFilesAndImages,
 	selectFilesAndImages,
 }) => {
+	const { taskLifecycleEvent } = useExtensionState()
 	const {
 		activeQuote,
 		setActiveQuote,
@@ -57,8 +59,8 @@ export const InputSection: React.FC<InputSectionProps> = ({
 		[messages, dietcodeAsk, sendingDisabled, sendRouteOptions],
 	)
 	const composerMode = useMemo(
-		() => deriveComposerMode(messages, dietcodeAsk, inputEnabled),
-		[messages, dietcodeAsk, inputEnabled],
+		() => deriveComposerMode(messages, dietcodeAsk, inputEnabled, taskLifecycleEvent),
+		[messages, dietcodeAsk, inputEnabled, taskLifecycleEvent],
 	)
 	const lastMessageTs = messages.at(-1)?.ts
 	const composerKey = `${lastMessageTs ?? "empty"}:${composerMode}`

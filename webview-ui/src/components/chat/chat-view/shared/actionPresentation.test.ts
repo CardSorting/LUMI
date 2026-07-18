@@ -49,6 +49,18 @@ describe("getActionPresentation", () => {
 		expect(result.riskLabel).toBe("Safe to retry")
 		expect(result.reversibility).toContain("preserved")
 	})
+
+	it("does not infer terminal completion from a completion-shaped message", () => {
+		const message: DietCodeMessage = { ts: 1, type: "ask", ask: "completion_result", text: "Done" }
+		const pending = getActionPresentation(message, BUTTON_CONFIGS.completion_result)
+		const committed = getActionPresentation(message, BUTTON_CONFIGS.completion_result, {
+			lifecycleCompleted: true,
+		})
+
+		expect(pending.kind).toBe("other")
+		expect(pending.riskLabel).toBe("Pending")
+		expect(committed.kind).toBe("completion")
+	})
 })
 
 describe("resolveActionShortcut", () => {

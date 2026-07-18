@@ -12,7 +12,7 @@ export async function checkpointRestore(controller: Controller, request: Checkpo
 
 	if (request.number) {
 		// wait for messages to be loaded
-		await pWaitFor(() => controller.task?.taskState.isInitialized === true, {
+		await pWaitFor(() => controller.task?.isRuntimeReady() === true, {
 			timeout: 3_000,
 		}).catch((error) => {
 			Logger.log("Failed to init new DietCode instance to restore checkpoint", error)

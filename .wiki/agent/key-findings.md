@@ -1,5 +1,27 @@
 # Key Findings
 
+## 2026-07-18 Transactional Task Lifecycle Migration
+
+- `src/core/task/lifecycle/TaskLifecycleFunnel.ts` is the sole production task lifecycle mutation authority. Registration, activation, suspension, resume/replacement, cancellation request/settlement, completion, failure, timeout, and parent-to-child propagation are typed, generation-bound transitions.
+- The authoritative model separates `registered | active | suspended | terminal` from terminal outcome `completed | cancelled | failed | timed_out`. Cancellation is a `none | requested` substate, so request and settlement cannot be collapsed into contradictory booleans.
+- SQLite commits the current record and immutable event together under `BEGIN IMMEDIATE`, generation/revision compare-and-swap, parent constraints, and one global monotonic sequence. Restoration validates both full schemas and their exact record/event relationship; missing, malformed, contradictory, or mismatched data fails closed. Publication and task/webview projection happen only after commit.
+- `TaskState.executionGeneration` and `abort` are read-only lifecycle projections. Direct `isTerminalState`, `didFinishAbortingStream`, `abandoned`, generation assignments, cancellation assignments, UI repair, and storage restoration bypasses were removed.
+- `CompletionFunnel` remains the semantic durable completion authority and submits one `SettleCompletion` fact. `ExecutionFunnel` queries lifecycle eligibility before dispatch. Neither writes task lifecycle fields.
+- Parent, sibling, and subagent work shares one lifecycle authority. Attached child registration binds the exact parent generation; parent cancellation/failure/timeout propagates as typed events; parent completion/replacement waits for active attached children.
+- Attached-child admission revalidates the durable parent generation. If a process stops between the parent commit and a child propagation commit, the child remains fenced and parent restoration reconciles it through the same typed transition.
+- Terminal generations are monotonic. A suspended generation may resume explicitly; a terminal generation requires a new identifier. Old callbacks, permits, and intents cannot cross the generation replacement.
+- `scripts/check-task-lifecycle-boundary.mjs` prevents production lifecycle projection writes, generation/cancellation setters, lifecycle-table mutation outside approved authority files, alternate funnel construction/binding, and production use of the internal persistence or in-memory test authority.
+- JoyRide lifecycle registration and the subagent lane state machine are intentionally retained as cache/scheduling mechanisms. They do not own task state and must not be migrated into the lifecycle funnel.
+
+### Verification evidence
+
+- Broad host unit suite: 2,214 passing, 4 expected environment-dependent pending, 0 failures.
+- Lifecycle/execution/completion authority matrix: 64 passing; parent/sibling/subagent parity matrix: 77 passing.
+- Webview suite: 173 passing, including lifecycle-only terminal status and action presentation.
+- VS Code integration suite: 593 passing. Its existing mock-auth `getSecretKey is not a function` warnings remain non-fatal and unrelated to lifecycle.
+- TypeScript, lint, handler and lifecycle boundary checks, roadmap audit, CI build, production prepublish, agent-doc branding/links, README/doc metrics, and `git diff --check`: passed.
+- The repository-wide Mintlify checker retains the pre-existing baseline of 145 broken links in 37 legacy files; it reports none in the new task lifecycle, cancellation, resume, or ADR pages.
+
 ## 2026-07-18 Central Execution Funnel Migration
 
 - `src/core/task/tools/execution/ExecutionFunnel.ts` is the sole approval and tool-execution authority. One auditable monolith owns invocation registration, pure intent preparation, task/lane/policy admission, approval settings, command safety, automatic approval, explicit prompting, the one immutable decision, decision-linked permit issuance, dispatch, reliability, and terminal classification.

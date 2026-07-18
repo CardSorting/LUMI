@@ -61,41 +61,6 @@ console.log(JSON.stringify({
 			// Note: contextModification is ignored for TaskCancel hooks
 		})
 
-		it("should handle 'abandoned' completion status", async () => {
-			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "TaskCancel")
-			const hookScript = `#!/usr/bin/env node
-const input = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
-const status = input.taskCancel.taskMetadata.completionStatus;
-// Verify we can read the status (for logging purposes)
-if (status !== "abandoned") {
-  process.exit(1);
-}
-console.log(JSON.stringify({
-  cancel: false,
-  contextModification: "",
-  errorMessage: ""
-}))`
-
-			await writeHookScript(hookPath, hookScript)
-
-			const factory = new HookFactory()
-			const runner = await factory.create("TaskCancel")
-
-			const result = await runner.run({
-				taskId: "test-task-id",
-				taskCancel: {
-					taskMetadata: {
-						taskId: "test-task-id",
-						ulid: "test-ulid",
-						completionStatus: "abandoned",
-					},
-				},
-			})
-
-			result.cancel.should.be.false()
-			// Note: contextModification is ignored for TaskCancel hooks
-		})
-
 		it("should receive all common hook input fields", async () => {
 			const hookPath = path.join(tempDir, ".dietcoderules", "hooks", "TaskCancel")
 			const hookScript = `#!/usr/bin/env node
@@ -398,7 +363,7 @@ console.log(JSON.stringify({
 			// Both hooks executed successfully
 		})
 
-		it("should execute both hooks with different completion statuses", async () => {
+		it("should execute both hooks with the committed cancellation status", async () => {
 			const globalHookPath = path.join(globalHooksDir, "TaskCancel")
 			const globalHookScript = `#!/usr/bin/env node
 const input = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
@@ -429,7 +394,7 @@ console.log(JSON.stringify({
 					taskMetadata: {
 						taskId: "test-task-id",
 						ulid: "test-ulid",
-						completionStatus: "abandoned",
+						completionStatus: "cancelled",
 					},
 				},
 			})

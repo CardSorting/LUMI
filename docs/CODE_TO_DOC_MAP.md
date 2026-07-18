@@ -25,12 +25,12 @@ Use this when you change code and need to update the matching doc.
 | Source | Documentation |
 |--------|---------------|
 | `src/core/task/tools/execution/ExecutionFunnel.ts` | [Auto-approve](features/auto-approve.mdx) · [Central execution funnel](parent-thread-execution-authority.md) |
+| `src/core/task/lifecycle/TaskLifecycleFunnel.ts` | [Task lifecycle authority](task-lifecycle-authority.md) · [Cancellation](task-cancellation.md) · [Resume and recovery](task-resume-recovery.md) |
+| `src/core/task/lifecycle/TaskLifecyclePersistence.ts` | [Task lifecycle authority](task-lifecycle-authority.md) |
+| `src/shared/lifecycle/taskLifecycleEvent.ts` | [Task lifecycle authority](task-lifecycle-authority.md) |
 | `src/core/task/tools/completionGatePipeline.ts` | [Security](SECURITY_BEST_PRACTICES.md) · [Whitepaper §7](papers/whitepaper.md#7-approval-hooks-and-completion) · [Central execution funnel](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) · [Decision engine](completion-lifecycle-decision-engine.md) |
 | `src/core/task/tools/attemptCompletionUtils.ts` | [Central execution funnel](parent-thread-execution-authority.md) · [Completion gate lifecycle](completion-gate-lifecycle-migration.md) · [Decision engine](completion-lifecycle-decision-engine.md) |
-| `src/core/task/tools/completion/CompletionLifecycleDecisionEngine.ts` | [Decision engine](completion-lifecycle-decision-engine.md) |
-| `src/core/task/tools/completion/CompletionActionGuard.ts` | [Decision engine](completion-lifecycle-decision-engine.md) |
-| `src/core/task/tools/completion/completionSnapshotBuilder.ts` | [Decision engine](completion-lifecycle-decision-engine.md) |
-| `src/core/task/tools/completion/gateRegistry.ts` | [Decision engine](completion-lifecycle-decision-engine.md) |
+| `src/core/task/tools/completion/CompletionFunnel.ts` | [Completion funnel](completion-lifecycle-decision-engine.md) · [Completion migration](completion-gate-lifecycle-migration.md) |
 | `src/core/task/tools/execution/ExecutionFunnel.ts` | [Central execution funnel](parent-thread-execution-authority.md) |
 | `src/shared/execution/executionFunnelEvent.ts` | [Central execution funnel](parent-thread-execution-authority.md) |
 | `src/core/task/ToolExecutor.ts` | [Central execution funnel](parent-thread-execution-authority.md) · [Project map](PROJECT_MAP.md) |

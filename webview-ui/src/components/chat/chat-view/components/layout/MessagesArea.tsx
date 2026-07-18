@@ -31,7 +31,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	chatState,
 	messageHandlers,
 }) => {
-	const { dietcodeMessages } = useExtensionState()
+	const { dietcodeMessages, taskLifecycleEvent } = useExtensionState()
 	const lastRawMessage = useMemo(() => dietcodeMessages.at(-1), [dietcodeMessages])
 	const isCompact = useIsCompact()
 
@@ -68,21 +68,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		if (lastRawMessage?.type === "ask") {
 			return false
 		}
-		// attempt_completion emits a final say("completion_result") before ask("completion_result").
-		// Treat that final completion message as non-waiting to avoid a brief footer flicker.
-		if (lastRawMessage?.type === "say" && lastRawMessage.say === "completion_result") {
-			return false
-		}
-		if (lastRawMessage?.type === "say" && lastRawMessage.say === "api_req_started") {
-			try {
-				const info = JSON.parse(lastRawMessage.text || "{}")
-				if (info.cancelReason === "user_cancelled") {
-					return false
-				}
-			} catch {
-				// ignore parse errors
-			}
-		}
+		if (taskLifecycleEvent?.committed.state === "terminal") return false
 
 		// Always show while task has started but no visible rows are rendered yet.
 		if (groupedMessages.length === 0) {
@@ -122,7 +108,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 			}
 		}
 		return false
-	}, [lastRawMessage, groupedMessages.length, lastVisibleMessage, lastVisibleRow, modifiedMessages])
+	}, [lastRawMessage, groupedMessages.length, lastVisibleMessage, lastVisibleRow, modifiedMessages, taskLifecycleEvent])
 
 	// Keep loader in the message flow (not footer). During handoff from waiting -> reasoning stream,
 	// keep the loader mounted until a real reasoning row is visible.

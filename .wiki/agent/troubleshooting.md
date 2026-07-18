@@ -1,5 +1,25 @@
 # Troubleshooting
 
+## Task Lifecycle Status Disagrees or Never Settles
+
+Symptom: one surface says active or complete while another remains pending, cancellation never settles, or an old resumed callback changes the current task.
+
+Response:
+
+1. Inspect `TaskState.lifecycleFunnelRecordJson` and `lifecycleFunnelEventJson`.
+2. Match `taskId`, `generationId`, `lifecycleRevision`, `lastEventId`, and `monotonicSequence`.
+3. Treat only the committed record/event as lifecycle truth. Completion events, execution events, transcripts, receipts, and UI flags cannot synthesize task state.
+4. If cancellation is `requested`, verify new execution is fenced and that resource cleanup is followed by `SettleCancellation`.
+5. If an old generation appears, fix the caller to submit its original generation and accept `stale_generation`; never reinterpret it against the current record.
+6. If persistence fails or CAS rejects, preserve the newer record. Do not repair it with a direct assignment.
+7. Run the focused lifecycle suite and `npm run check:task-lifecycle-boundary`.
+
+Focused proof:
+
+```sh
+npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --timeout 10000 --exit --extension ts --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs src/core/task/lifecycle/__tests__/TaskLifecycleFunnel.test.ts src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts src/core/task/tools/completion/__tests__/CompletionFunnel.test.ts
+```
+
 ## Tool Status Disagrees Across Parent, Sibling, or Subagent Views
 
 Symptom: one surface says a tool succeeded or failed while another remains pending, or the agent stops after a handler returned a result.

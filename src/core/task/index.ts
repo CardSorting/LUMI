@@ -84,6 +84,7 @@ import {
 import { HistoryItem } from "@shared/HistoryItem"
 import { inferAgentModeFromMessages, stripPartialPlanSummaryMessages } from "@shared/inferAgentModeFromMessages"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay } from "@shared/Languages"
+import type { TaskLifecycleRecord, TaskLifecycleTransitionResult } from "@shared/lifecycle/taskLifecycleEvent"
 import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertDietCodeMessageToProto } from "@shared/proto-conversions/dietcode-message"
 import { DietCodeDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
@@ -142,6 +143,13 @@ import { executeHook } from "../hooks/hook-executor"
 import { StateManager } from "../storage/StateManager"
 import { FocusChainManager } from "./focus-chain"
 import { type TaskLatencySnapshot, TaskLatencyTracker } from "./latency/TaskLatencyTracker"
+import {
+	bindTaskLifecycleAuthority,
+	createTaskGenerationId,
+	createTaskLifecycleIntentId,
+	getTaskLifecycleAuthority,
+	taskLifecycleFunnel,
+} from "./lifecycle/TaskLifecycleFunnel"
 import { MessageStateHandler } from "./message-state"
 import { StreamResponseHandler } from "./StreamResponseHandler"
 import { TaskState } from "./TaskState"
@@ -203,6 +211,7 @@ export class Task {
 	private taskInitializationStartTime: number
 
 	taskState: TaskState
+	private taskRuntimeReady = false
 
 	/** True while initiateTaskLoop is running (prevents parallel agent loops). */
 	private taskLoopActive = false
@@ -346,15 +355,16 @@ export class Task {
 
 		this.taskInitializationStartTime = performance.now()
 		this.taskState = new TaskState()
-		const executionGeneration = this.taskState.executionGeneration
 		this.latencyTracker = new TaskLatencyTracker()
 		if (params.initialTaskState) {
-			Object.assign(this.taskState, params.initialTaskState)
+			const initialTaskState = { ...params.initialTaskState }
+			delete initialTaskState.executionGeneration
+			delete initialTaskState.abort
+			delete initialTaskState.lifecycleFunnelRecordJson
+			delete initialTaskState.lifecycleFunnelEventJson
+			delete initialTaskState.lifecycleFunnelHistory
+			Object.assign(this.taskState, initialTaskState)
 		}
-		// Resuming creates a new execution lifecycle. Never inherit permits or decisions.
-		this.taskState.executionGeneration = executionGeneration
-		this.taskState.executionFunnelEventJson = undefined
-		this.taskState.executionInvocationLedger = {}
 		this.controller = controller
 		this.mcpHub = mcpHub
 		this.updateTaskHistory = updateTaskHistory
@@ -393,6 +403,7 @@ export class Task {
 		})
 
 		this.taskId = taskId
+		bindTaskLifecycleAuthority(this.taskState, taskLifecycleFunnel)
 		getJoyRideCache().registerTask(taskId, 0)
 
 		// Initialize taskId first
@@ -1145,8 +1156,6 @@ export class Task {
 	 */
 	private async handleHookCancellation(hookName: string, wasCancelled: boolean): Promise<void> {
 		// ALWAYS save state, regardless of cancellation source
-		this.taskState.didFinishAbortingStream = true
-
 		// Save conversation state to disk
 		await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 		await this.messageStateHandler.overwriteApiConversationHistory(this.messageStateHandler.getApiConversationHistory())
@@ -1207,8 +1216,6 @@ export class Task {
 
 		// Handle cancellation from hook
 		if (userPromptResult.cancel === true && userPromptResult.wasCancelled) {
-			// Set flag to allow Controller.cancelTask() to proceed
-			this.taskState.didFinishAbortingStream = true
 			// Save BOTH files so Controller.cancelTask() can find the task
 			await this.messageStateHandler.saveDietCodeMessagesAndUpdateHistory()
 			await this.messageStateHandler.overwriteApiConversationHistory(this.messageStateHandler.getApiConversationHistory())
@@ -1224,7 +1231,132 @@ export class Task {
 
 	// Task lifecycle
 
+	public isRuntimeReady(): boolean {
+		return this.taskRuntimeReady
+	}
+
+	private lifecycleAuthority() {
+		return getTaskLifecycleAuthority(this.taskState)
+	}
+
+	private requireLifecycleCommit(
+		result: TaskLifecycleTransitionResult,
+		operation: string,
+	): Extract<TaskLifecycleTransitionResult, { kind: "committed" }> {
+		if (result.kind === "rejected") {
+			throw new Error(`${operation} was rejected by TaskLifecycleFunnel (${result.code}): ${result.reason}`)
+		}
+		return result
+	}
+
+	private async activateNewTaskLifecycle(): Promise<TaskLifecycleRecord> {
+		const authority = this.lifecycleAuthority()
+		const result = await authority.ensureActive(this.taskState, this.taskId, {
+			source: "task",
+			reason: "A newly created task is ready to enter its execution loop.",
+		})
+		return this.requireLifecycleCommit(result, "New task activation").record
+	}
+
+	private async prepareResumeLifecycle(): Promise<TaskLifecycleRecord> {
+		const authority = this.lifecycleAuthority()
+		let record = await authority.restore(this.taskState, this.taskId)
+		if (!record) {
+			const registered = this.requireLifecycleCommit(
+				await authority.submit(this.taskState, {
+					type: "RegisterGeneration",
+					intentId: createTaskLifecycleIntentId(),
+					taskId: this.taskId,
+					generationId: this.taskState.executionGeneration,
+					cause: {
+						source: "storage_restore",
+						reason: "Legacy task history was restored through lifecycle transition validation.",
+					},
+				}),
+				"Restored task registration",
+			)
+			record = registered.record
+
+			// A pre-funnel durable completion is migrated as an authoritative fact,
+			// never inferred into mutable task state.
+			const durableCompletion = await durableGetTaskCompletion(this.taskId)
+			if (durableCompletion?.status === "succeeded") {
+				record = this.requireLifecycleCommit(
+					await authority.submit(this.taskState, {
+						type: "SettleCompletion",
+						intentId: createTaskLifecycleIntentId(),
+						taskId: this.taskId,
+						generationId: record.generationId,
+						cause: {
+							source: "completion_funnel",
+							reason: "Existing durable CompletionFunnel fact migrated during validated restoration.",
+							originatingOperationId: durableCompletion.decisionId,
+							authoritativeAt: durableCompletion.committedAt,
+						},
+					}),
+					"Durable completion restoration",
+				).record
+			}
+		}
+
+		if (record.state === "active") {
+			record = this.requireLifecycleCommit(
+				await authority.submit(this.taskState, {
+					type: "SuspendGeneration",
+					intentId: createTaskLifecycleIntentId(),
+					taskId: this.taskId,
+					generationId: record.generationId,
+					cause: {
+						source: "storage_restore",
+						reason: "An interrupted active generation must be explicitly resumed before executing again.",
+					},
+				}),
+				"Interrupted task suspension",
+			).record
+		}
+		return record
+	}
+
+	private async commitResumeLifecycle(): Promise<TaskLifecycleRecord> {
+		const authority = this.lifecycleAuthority()
+		const current = authority.readProjection(this.taskState) ?? (await authority.restore(this.taskState, this.taskId))
+		if (!current) throw new Error("Cannot resume a task without a committed lifecycle record.")
+
+		if (current.state === "active" && current.cancellation.status === "none") return current
+		if (current.state === "registered") {
+			return this.requireLifecycleCommit(
+				await authority.submit(this.taskState, {
+					type: "ActivateGeneration",
+					intentId: createTaskLifecycleIntentId(),
+					taskId: this.taskId,
+					generationId: current.generationId,
+					cause: { source: "task", reason: "The user explicitly resumed the registered task." },
+				}),
+				"Registered task resume",
+			).record
+		}
+
+		return this.requireLifecycleCommit(
+			await authority.submit(this.taskState, {
+				type: "ResumeWithGeneration",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: this.taskId,
+				generationId: current.generationId,
+				newGenerationId: current.state === "terminal" ? createTaskGenerationId() : undefined,
+				cause: {
+					source: "task",
+					reason:
+						current.state === "terminal"
+							? "The user explicitly resumed terminal history as a new isolated generation."
+							: "The user explicitly resumed the suspended generation.",
+				},
+			}),
+			"Task resume",
+		).record
+	}
+
 	public async startTask(task?: string, images?: string[], files?: string[]): Promise<void> {
+		await this.activateNewTaskLifecycle()
 		if (process.env.E2E_TEST === "true" || this.stateManager.getGlobalSettingsKey("yoloModeToggled")) {
 			await this.controller.toggleActModeForYoloMode()
 		} else {
@@ -1261,7 +1393,7 @@ export class Task {
 		// in initiateTaskLoop() to ensure grounded context is available.
 
 		await this.loadWorkspaceIntelligence()
-		this.taskState.isInitialized = true
+		this.taskRuntimeReady = true
 
 		// Roadmap orientation and progress journaling are advisory. Reuse cached
 		// workspace evidence in the background and leave bootstrap writes to an
@@ -1380,10 +1512,6 @@ export class Task {
 	private async resolveResumeAskType(messages: readonly DietCodeMessage[]): Promise<DietCodeAsk> {
 		try {
 			const durableCompletion = await durableGetTaskCompletion(this.taskId)
-			if (durableCompletion?.status === "succeeded") {
-				this.taskState.isTerminalState = true
-				this.taskState.lastCompletionDecisionId = durableCompletion.decisionId
-			}
 			return resolveTaskResumeAsk(messages, durableCompletion?.status)
 		} catch (error) {
 			// Transcript evidence remains useful for presentation when the durable
@@ -1438,6 +1566,7 @@ export class Task {
 		// load the context history state
 		await ensureTaskDirectoryExists(this.taskId)
 		await this.contextManager.initializeContextHistory(await ensureTaskDirectoryExists(this.taskId))
+		await this.prepareResumeLifecycle()
 
 		const currentDietCodeMessages = this.messageStateHandler.getDietCodeMessages()
 		const lastDietCodeMessage = currentDietCodeMessages
@@ -1447,9 +1576,7 @@ export class Task {
 		const askType = await this.resolveResumeAskType(currentDietCodeMessages)
 
 		await this.loadWorkspaceIntelligence()
-		this.taskState.isInitialized = true
-		this.taskState.abort = false // Reset abort flag when resuming task
-		this.ioAbortController = new AbortController()
+		this.taskRuntimeReady = true
 
 		const yoloModeToggled = this.stateManager.getGlobalSettingsKey("yoloModeToggled")
 		const inferredMode = inferAgentModeFromMessages(this.messageStateHandler.getDietCodeMessages(), yoloModeToggled)
@@ -1471,6 +1598,8 @@ export class Task {
 		// Task is initialized
 
 		const { response, text, images, files } = await this.ask(askType) // calls poststatetowebview
+		await this.commitResumeLifecycle()
+		this.ioAbortController = new AbortController()
 
 		// Initialize newUserContent array for hook context
 		const newUserContent: DietCodeContent[] = []
@@ -1805,17 +1934,47 @@ export class Task {
 		return true
 	}
 
-	async abortTask() {
+	async abortTask(options?: { reason?: string }) {
+		const lifecycle = this.lifecycleAuthority()
+		let lifecycleRecord = lifecycle.readProjection(this.taskState) ?? (await lifecycle.restore(this.taskState, this.taskId))
+		if (!lifecycleRecord) {
+			const activated = await lifecycle.ensureActive(this.taskState, this.taskId, {
+				source: "controller",
+				reason: "Cancellation arrived while task registration was still preparing.",
+			})
+			if (activated.kind === "committed") {
+				lifecycleRecord = activated.record
+			} else if (activated.current) {
+				lifecycleRecord = activated.current
+			} else {
+				throw new Error(
+					`Task cancellation could not establish lifecycle authority (${activated.code}): ${activated.reason}`,
+				)
+			}
+		}
+		if (lifecycleRecord && lifecycleRecord.state !== "terminal" && lifecycleRecord.cancellation.status === "none") {
+			lifecycleRecord = this.requireLifecycleCommit(
+				await lifecycle.submit(this.taskState, {
+					type: "RequestCancellation",
+					intentId: createTaskLifecycleIntentId(),
+					taskId: this.taskId,
+					generationId: lifecycleRecord.generationId,
+					cause: {
+						source: "controller",
+						reason: options?.reason ?? "Task cancellation was requested.",
+					},
+				}),
+				"Task cancellation request",
+			).record
+		}
+		let lifecycleSettlementError: Error | undefined
 		try {
 			// PHASE 1: Check if TaskCancel hook should run BEFORE any cleanup
 			// We must capture this state now because subsequent cleanup will
 			// clear the active work indicators that shouldRunTaskCancelHook checks
 			const shouldRunTaskCancelHook = await this.shouldRunTaskCancelHook()
 
-			// PHASE 2: Set abort flag to prevent race conditions
-			// This must happen before canceling hooks so that hook catch blocks
-			// can properly detect the abort state
-			this.taskState.abort = true
+			// PHASE 2: the committed lifecycle cancellation request is the fence.
 			this.ioAbortController.abort(new Error("Task I/O cancelled"))
 			this.activeSiblingScheduler?.cancel()
 
@@ -1863,7 +2022,7 @@ export class Task {
 								taskMetadata: {
 									taskId: this.taskId,
 									ulid: this.ulid,
-									completionStatus: this.taskState.abandoned ? "abandoned" : "cancelled",
+									completionStatus: "cancelled",
 								},
 							},
 						},
@@ -1936,6 +2095,30 @@ export class Task {
 				this.FocusChainManager.dispose()
 			}
 		} finally {
+			const currentLifecycle = lifecycle.readProjection(this.taskState)
+			if (
+				currentLifecycle &&
+				currentLifecycle.state !== "terminal" &&
+				currentLifecycle.cancellation.status === "requested"
+			) {
+				const settlement = await lifecycle.submit(this.taskState, {
+					type: "SettleCancellation",
+					intentId: createTaskLifecycleIntentId(),
+					taskId: this.taskId,
+					generationId: currentLifecycle.generationId,
+					cause: {
+						source: "controller",
+						reason: options?.reason ?? "Task-owned work and resources settled after cancellation.",
+					},
+				})
+				if (settlement.kind === "rejected" && settlement.code !== "terminal_generation") {
+					lifecycleSettlementError = new Error(
+						`Lifecycle cancellation settlement failed (${settlement.code}): ${settlement.reason}`,
+					)
+				}
+			} else if (!currentLifecycle) {
+				lifecycleSettlementError = new Error("Lifecycle cancellation settlement lost its authoritative record.")
+			}
 			try {
 				const { finalizeRoadmapSession } = await import("@/services/roadmap/RoadmapLifecycle")
 				await finalizeRoadmapSession(this.cwd, this.taskId)
@@ -1961,6 +2144,7 @@ export class Task {
 				Logger.error("Failed to post final state after abort", error)
 			}
 		}
+		if (lifecycleSettlementError) throw lifecycleSettlementError
 	}
 
 	// Tools
@@ -2151,7 +2335,6 @@ export class Task {
 					},
 					clearActiveHookExecution: this.clearActiveHookExecution.bind(this),
 					postStateToWebview: this.postStateToWebview.bind(this),
-					taskState: this.taskState,
 					cancelTask: this.cancelTask.bind(this),
 					hooksEnabled: true,
 				})
@@ -3321,9 +3504,6 @@ export class Task {
 					},
 					this.useNativeToolCalls, // For assistant turn only.
 				)
-
-				// signals to provider that it can retrieve the saved messages from disk, as abortTask can not be awaited on in nature
-				this.taskState.didFinishAbortingStream = true
 			}
 
 			// reset streaming state
@@ -3497,10 +3677,7 @@ export class Task {
 
 					if (this.taskState.abort) {
 						this.api.abort?.()
-						if (!this.taskState.abandoned) {
-							// only need to gracefully abort if this instance isn't abandoned (sometimes openrouter stream hangs, in which case this would affect future instances of dietcode)
-							await abortStream("user_cancelled")
-						}
+						await abortStream("user_cancelled")
 						break // aborts the stream
 					}
 
@@ -3538,8 +3715,7 @@ export class Task {
 					}
 				}
 			} catch (error) {
-				// abandoned happens when extension is no longer waiting for the dietcode instance to finish aborting (error is thrown here when any function in the for loop throws due to this.abort)
-				if (!this.taskState.abandoned) {
+				if (!this.taskState.abort) {
 					const dietcodeError = ErrorService.get().toDietCodeError(error, this.api.getModel().id)
 					const errorMessage = dietcodeError.serialize()
 					// Auto-retry for streaming failures (always enabled)
@@ -3563,6 +3739,9 @@ export class Task {
 						// Pass grounding state to the new task instance immediately
 						const initialTaskState: Partial<TaskState> = {
 							autoRetryAttempts: this.taskState.autoRetryAttempts,
+							executionFunnelEventJson: this.taskState.executionFunnelEventJson,
+							executionFunnelHistory: this.taskState.executionFunnelHistory,
+							executionInvocationLedger: { ...this.taskState.executionInvocationLedger },
 						}
 
 						// Wait with exponential backoff before auto-resuming

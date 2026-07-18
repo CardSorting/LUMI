@@ -37,6 +37,11 @@ import { HostRegistryInfo } from "@/registry"
 import { DietCodeError, DietCodeErrorType } from "@/services/error"
 import { ApiFormat } from "@/shared/proto/dietcode/models"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@/utils/cost"
+import {
+	bindTaskLifecycleAuthority,
+	createTaskLifecycleIntentId,
+	getTaskLifecycleAuthority,
+} from "../../lifecycle/TaskLifecycleFunnel"
 import { TaskState } from "../../TaskState"
 import {
 	buildCompletionGateObservabilityEnvelope,
@@ -328,6 +333,8 @@ export class SubagentRunner {
 	private swarmId?: string
 	private lockClaim?: any
 	private streamId?: string
+	private lifecycleTaskState?: TaskState
+	private lifecycleTaskId?: string
 
 	private readonly baseConfig: TaskConfig
 	private totalConsecutiveIdenticalCalls = 0
@@ -442,6 +449,7 @@ export class SubagentRunner {
 		streamId?: string,
 	): Promise<SubagentRunResult> {
 		const executionId = envelopeContext.executionId || uuidv4()
+		this.lifecycleTaskId = `${envelopeContext.taskId}:subagent:${envelopeContext.swarmId}:${envelopeContext.agentId}:${executionId}`
 		this.commandOwnerId = executionId
 		this.prefetchedParentContext = envelopeContext.prefetchedParentContext
 		this.swarmGateOptions = envelopeContext.swarmGateOptions
@@ -502,6 +510,31 @@ export class SubagentRunner {
 		}
 
 		const state = new TaskState()
+		const lifecycleAuthority = getTaskLifecycleAuthority(this.baseConfig.taskState)
+		bindTaskLifecycleAuthority(state, lifecycleAuthority)
+		const parentRecord = lifecycleAuthority.readProjection(this.baseConfig.taskState)
+		const childLifecycle = await lifecycleAuthority.registerAndActivate(
+			state,
+			this.lifecycleTaskId ?? `${this.baseConfig.taskId}:subagent:${this.commandOwnerId}`,
+			{
+				source: "subagent",
+				reason: "A governed subagent lane started through the shared lifecycle authority.",
+				originatingOperationId: this.commandOwnerId,
+			},
+			parentRecord
+				? {
+						taskId: parentRecord.taskId,
+						generationId: parentRecord.generationId,
+						governance: "attached",
+					}
+				: undefined,
+		)
+		if (childLifecycle.kind === "rejected") {
+			const error = `Subagent lifecycle activation rejected (${childLifecycle.code}): ${childLifecycle.reason}`
+			this.envelopeBuilder?.fail(error)
+			return this.finalizeAndPublish({ status: "failed", error, stats: this.stats })
+		}
+		this.lifecycleTaskState = state
 		state.recursionDepth = this.recursionDepth
 		const subagentConfig = this.createSubagentTaskConfig(state)
 		let emptyAssistantResponseRetries = 0
@@ -1036,9 +1069,11 @@ export class SubagentRunner {
 						stats.toolCalls += 1
 						onProgress({ stats: { ...stats } })
 						this.envelopeBuilder?.setPhase("completion_gate")
-						this.envelopeBuilder?.complete(completionResult)
 						await this.recordTranscript("completion", { result: completionResult }, "raw")
-						const finalized = await this.finalizeResult({ status: "completed", result: completionResult, stats })
+						const completedResult = { status: "completed" as const, result: completionResult, stats }
+						await this.settleSubagentLifecycle(completedResult)
+						this.envelopeBuilder?.complete(completionResult)
+						const finalized = await this.finalizeResult(completedResult)
 						void this.signalCriticalFindingsToSwarm(completionResult)
 						await SwarmConsensusHandler.handleSignal(this.baseConfig, completionResult)
 						onProgress({ status: "completed", result: completionResult, stats: { ...stats } })
@@ -1188,6 +1223,7 @@ export class SubagentRunner {
 
 		return {
 			...this.baseConfig,
+			taskId: this.lifecycleTaskId ?? `${this.baseConfig.taskId}:subagent:${this.commandOwnerId}`,
 			api: this.apiHandler,
 			coordinator,
 			taskState: subagentTaskState,
@@ -1572,9 +1608,99 @@ export class SubagentRunner {
 	}
 
 	private async finalizeAndPublish(result: Omit<SubagentRunResult, "envelope">): Promise<SubagentRunResult> {
+		await this.settleSubagentLifecycle(result)
 		const finalized = await this.finalizeResult(result)
 		this.onProgress?.({ ...result, stats: { ...result.stats } })
 		return finalized
+	}
+
+	private async settleSubagentLifecycle(result: Omit<SubagentRunResult, "envelope">): Promise<void> {
+		const state = this.lifecycleTaskState
+		const taskId = this.lifecycleTaskId
+		if (!state || !taskId) return
+		const authority = getTaskLifecycleAuthority(state)
+		const current = authority.readProjection(state)
+		if (!current || current.state === "terminal") return
+
+		if (this.shouldAbort()) {
+			if (current.cancellation.status === "none") {
+				const request = await authority.submit(state, {
+					type: "RequestCancellation",
+					intentId: createTaskLifecycleIntentId(),
+					taskId,
+					generationId: current.generationId,
+					cause: {
+						source: "subagent",
+						reason: "The parent or lane runner cancelled the governed child.",
+						originatingOperationId: this.commandOwnerId,
+					},
+				})
+				if (request.kind === "rejected") {
+					const latest = await authority.restore(state, taskId)
+					if (latest?.state === "terminal") return
+					if (latest?.cancellation.status !== "requested") {
+						throw new Error(`Subagent lifecycle cancellation rejected (${request.code}): ${request.reason}`)
+					}
+				}
+			}
+			const requested = authority.readProjection(state)
+			if (requested?.cancellation.status === "requested") {
+				const settlement = await authority.submit(state, {
+					type: "SettleCancellation",
+					intentId: createTaskLifecycleIntentId(),
+					taskId,
+					generationId: requested.generationId,
+					cause: {
+						source: "subagent",
+						reason: "The governed child stopped and released its task-owned work.",
+						originatingOperationId: this.commandOwnerId,
+					},
+				})
+				if (settlement.kind === "rejected") {
+					const latest = await authority.restore(state, taskId)
+					if (latest?.state !== "terminal") {
+						throw new Error(
+							`Subagent lifecycle cancellation settlement rejected (${settlement.code}): ${settlement.reason}`,
+						)
+					}
+				}
+			}
+			return
+		}
+
+		const settlement = await authority.submit(
+			state,
+			result.status === "completed"
+				? {
+						type: "SettleCompletion",
+						intentId: createTaskLifecycleIntentId(),
+						taskId,
+						generationId: current.generationId,
+						cause: {
+							source: "completion_funnel",
+							reason: "The governed subagent completion gate accepted the terminal result.",
+							originatingOperationId: this.commandOwnerId,
+							authoritativeAt: Date.now(),
+						},
+					}
+				: {
+						type: "SettleFailure",
+						intentId: createTaskLifecycleIntentId(),
+						taskId,
+						generationId: current.generationId,
+						cause: {
+							source: "subagent",
+							reason: result.error || "The governed subagent failed.",
+							originatingOperationId: this.commandOwnerId,
+						},
+					},
+		)
+		if (settlement.kind === "rejected") {
+			const latest = await authority.restore(state, taskId)
+			if (latest?.state !== "terminal") {
+				throw new Error(`Subagent lifecycle settlement rejected (${settlement.code}): ${settlement.reason}`)
+			}
+		}
 	}
 
 	private async invokeTranscriptFlushCallback(): Promise<void> {

@@ -19,6 +19,7 @@ export interface ActionPresentation {
 
 interface PresentationOptions {
 	checkpointAvailable?: boolean
+	lifecycleCompleted?: boolean
 }
 
 const APPROVAL_ASKS = new Set<DietCodeMessage["ask"]>([
@@ -98,6 +99,18 @@ export function getActionPresentation(
 	}
 
 	if (message.type === "ask" && (message.ask === "completion_result" || message.ask === "resume_completed_task")) {
+		if (options.lifecycleCompleted !== true) {
+			return {
+				kind: "other",
+				summary: "Completion outcome awaiting lifecycle record",
+				risk: "low",
+				riskLabel: "Pending",
+				riskDetail: "The task generation is not yet projected as terminal completed.",
+				reversibility: "Wait for the committed lifecycle event before continuing.",
+				isDestructive: false,
+				recommendedAction,
+			}
+		}
 		return {
 			kind: "completion",
 			summary: "Task complete",
