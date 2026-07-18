@@ -100,6 +100,8 @@ function transitionName(intent: TaskLifecycleIntent, replacingGeneration: boolea
 			return "activate_generation" as const
 		case "SuspendGeneration":
 			return "suspend_generation" as const
+		case "ReactivateAfterCompletionRejection":
+			return "reactivate_after_completion_rejection" as const
 		case "ResumeWithGeneration":
 			return replacingGeneration ? ("replace_generation" as const) : ("resume_generation" as const)
 		case "RequestCancellation":
@@ -480,6 +482,44 @@ export class TaskLifecycleFunnel {
 					return rejected(
 						"invalid_transition",
 						`Only a registered generation may activate; current state is '${current?.state}'.`,
+						current,
+					) as Extract<TaskLifecycleTransitionResult, { kind: "rejected" }>
+				}
+				state = "active"
+				break
+			case "ReactivateAfterCompletionRejection":
+				if (current?.state !== "suspended") {
+					return rejected(
+						"invalid_transition",
+						`Only a suspended generation may reactivate after rejection; current state is '${current?.state}'.`,
+						current,
+					) as Extract<TaskLifecycleTransitionResult, { kind: "rejected" }>
+				}
+				if (current.lifecycleRevision !== intent.expectedRevision) {
+					return rejected(
+						"stale_revision",
+						`Expected revision ${intent.expectedRevision} but found current revision ${current.lifecycleRevision}.`,
+						current,
+					) as Extract<TaskLifecycleTransitionResult, { kind: "rejected" }>
+				}
+				if (current.cancellation.status === "requested") {
+					return rejected(
+						"cancellation_fenced",
+						"A cancellation-fenced generation cannot reactivate.",
+						current,
+					) as Extract<TaskLifecycleTransitionResult, { kind: "rejected" }>
+				}
+				if (current.cause.reason !== `awaiting_completion_decision:${intent.completionAttemptId}`) {
+					return rejected(
+						"invalid_transition",
+						`Suspension reason mismatch. Expected completionAttemptId ${intent.completionAttemptId} but found cause reason '${current.cause.reason}'.`,
+						current,
+					) as Extract<TaskLifecycleTransitionResult, { kind: "rejected" }>
+				}
+				if (current.cause.originatingOperationId !== intent.decisionId) {
+					return rejected(
+						"invalid_transition",
+						`Suspension decisionId mismatch. Expected ${intent.decisionId} but found originatingOperationId '${current.cause.originatingOperationId}'.`,
 						current,
 					) as Extract<TaskLifecycleTransitionResult, { kind: "rejected" }>
 				}

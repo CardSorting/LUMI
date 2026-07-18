@@ -84,7 +84,11 @@ import {
 import { HistoryItem } from "@shared/HistoryItem"
 import { inferAgentModeFromMessages, stripPartialPlanSummaryMessages } from "@shared/inferAgentModeFromMessages"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay } from "@shared/Languages"
-import type { TaskLifecycleRecord, TaskLifecycleTransitionResult } from "@shared/lifecycle/taskLifecycleEvent"
+import type {
+	TaskLifecycleEligibility,
+	TaskLifecycleRecord,
+	TaskLifecycleTransitionResult,
+} from "@shared/lifecycle/taskLifecycleEvent"
 import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertDietCodeMessageToProto } from "@shared/proto-conversions/dietcode-message"
 import { DietCodeDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
@@ -102,6 +106,7 @@ import type { SystemPromptContext } from "@/core/prompts/system-prompt"
 import { getSystemPrompt } from "@/core/prompts/system-prompt"
 import { HostProvider } from "@/hosts/host-provider"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
+import { getCoordinationRawDb } from "@/infrastructure/db/Config"
 import { FileEditProvider } from "@/integrations/editor/FileEditProvider"
 import {
 	type CommandExecutionOptions,
@@ -155,6 +160,7 @@ import { StreamResponseHandler } from "./StreamResponseHandler"
 import { TaskState } from "./TaskState"
 import { ToolExecutor } from "./ToolExecutor"
 import {
+	type CompletionRawDatabase,
 	durableGetTaskCompletion,
 	getCachedCompletionFunnelEventFromState,
 	isTaskHarnessTerminal,
@@ -200,6 +206,43 @@ type TaskParams = {
 	taskId: string
 	taskLockAcquired: boolean
 	initialTaskState?: Partial<TaskState>
+}
+
+export type RequestLoopResult =
+	| { kind: "continue" }
+	| {
+			kind: "stop"
+			reason:
+				| "suspended"
+				| "terminal"
+				| "cancellation_fenced"
+				| "stale_generation"
+				| "generation_replaced"
+				| "lifecycle_unavailable"
+				| "retry_dismissed"
+				| "exception_thrown"
+	  }
+
+function mapEligibilityToStopReason(
+	eligibility: TaskLifecycleEligibility,
+	record: TaskLifecycleRecord | undefined,
+): "suspended" | "terminal" | "cancellation_fenced" | "stale_generation" | "generation_replaced" | "lifecycle_unavailable" {
+	if (!record) {
+		return "lifecycle_unavailable"
+	}
+	if (record.generationId !== eligibility.generationId) {
+		return "stale_generation"
+	}
+	if (record.cancellation.status === "requested") {
+		return "cancellation_fenced"
+	}
+	if (record.state === "suspended") {
+		return "suspended"
+	}
+	if (record.state === "terminal") {
+		return "terminal"
+	}
+	return "lifecycle_unavailable"
 }
 
 export class Task {
@@ -931,17 +974,20 @@ export class Task {
 		}
 	}
 
-	private async continueFromSteeringInterrupt(params: {
-		assistantTextOnly: string
-		taskMetrics: {
-			inputTokens: number
-			outputTokens: number
-			cacheWriteTokens: number
-			cacheReadTokens: number
-			totalCost: number | undefined
-		}
-		modelInfo: DietCodeMessageModelInfo
-	}): Promise<boolean> {
+	private async continueFromSteeringInterrupt(
+		params: {
+			assistantTextOnly: string
+			taskMetrics: {
+				inputTokens: number
+				outputTokens: number
+				cacheWriteTokens: number
+				cacheReadTokens: number
+				totalCost: number | undefined
+			}
+			modelInfo: DietCodeMessageModelInfo
+		},
+		loopGenerationId: string,
+	): Promise<RequestLoopResult> {
 		const steeringUserContent = await consumeSteeringInterrupt({
 			taskState: this.taskState,
 			mode: this.stateManager.getGlobalSettingsKey("mode"),
@@ -950,7 +996,7 @@ export class Task {
 			say: this.say.bind(this),
 		})
 		if (!steeringUserContent) {
-			return false
+			return { kind: "continue" }
 		}
 
 		if (params.assistantTextOnly.trim()) {
@@ -962,7 +1008,7 @@ export class Task {
 			})
 		}
 
-		return await this.recursivelyMakeDietCodeRequests(steeringUserContent)
+		return await this.recursivelyMakeDietCodeRequests(steeringUserContent, false, loopGenerationId)
 	}
 
 	async say(
@@ -1296,6 +1342,45 @@ export class Task {
 					}),
 					"Durable completion restoration",
 				).record
+			}
+		}
+
+		// Reconciliation for interrupted rejection reactivation:
+		// Recover missing reactivation ONLY when the suspended state matches a committed rejection.
+		if (record.state === "suspended") {
+			try {
+				const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
+				const latestRejection = rawDb
+					.prepare(
+						"SELECT * FROM task_rejections WHERE taskId = ? AND generationId = ? ORDER BY committedAt DESC LIMIT 1",
+					)
+					.get(this.taskId, record.generationId) as Record<string, unknown> | undefined
+				if (
+					latestRejection &&
+					record.lifecycleRevision === (latestRejection.lifecycleRevision as number) &&
+					record.cause.reason === `awaiting_completion_decision:${latestRejection.completionAttemptId as string}` &&
+					record.cause.originatingOperationId === (latestRejection.decisionId as string)
+				) {
+					const activeResult = await authority.submit(this.taskState, {
+						type: "ReactivateAfterCompletionRejection",
+						intentId: createTaskLifecycleIntentId(),
+						taskId: this.taskId,
+						generationId: record.generationId,
+						expectedRevision: latestRejection.lifecycleRevision as number,
+						completionAttemptId: latestRejection.completionAttemptId as string,
+						decisionId: latestRejection.decisionId as string,
+						cause: {
+							source: "recovery",
+							reason: "Reconcile missing reactivation for rejected completion proposal.",
+							originatingOperationId: latestRejection.decisionId as string,
+						},
+					})
+					if (activeResult.kind === "committed") {
+						record = activeResult.record
+					}
+				}
+			} catch (error) {
+				Logger.warn("[prepareResumeLifecycle] Failed to reconcile interrupted rejection reactivation:", error)
 			}
 		}
 
@@ -1829,11 +1914,17 @@ export class Task {
 		this.taskLoopActive = true
 		let nextUserContent = userContent
 		let includeFileDetails = true
+		const loopGenerationId = this.taskState.executionGeneration
 
 		try {
-			while (!this.taskState.abort) {
-				if (isTaskHarnessTerminal(this.taskState)) {
-					Logger.info(`[Task ${this.taskId}] Task execution loop ending: task state is terminal.`)
+			while (true) {
+				const lifecycleAuthority = getTaskLifecycleAuthority(this.taskState)
+				const eligibility = lifecycleAuthority.executionEligibility(this.taskState, this.taskId, loopGenerationId)
+
+				if (!eligibility.eligible) {
+					Logger.info(
+						`[Task ${this.taskId}] Task execution loop ending for generation ${loopGenerationId}: ${eligibility.reason}`,
+					)
 					break
 				}
 
@@ -1850,13 +1941,17 @@ export class Task {
 				this.taskState.currentTurnTotalReadCount = 0 // Reset total read counter for the new turn
 				this.taskState.currentTurnUniqueReadCount = 0 // Reset unique read counter for the new turn
 				this.taskState.currentTurnExplorationCount = 0 // Reset exploration counter for the new turn
-				const didEndLoop = await this.recursivelyMakeDietCodeRequests(nextUserContent, includeFileDetails)
+				const loopResult = await this.recursivelyMakeDietCodeRequests(
+					nextUserContent,
+					includeFileDetails,
+					loopGenerationId,
+				)
 				includeFileDetails = false // we only need file details the first time
 
 				//  The way this agentic loop works is that dietcode will be given a task that he then calls tools to complete. unless there's an attempt_completion call, we keep responding back to him with his tool's responses until he either attempt_completion or does not use anymore tools. If he does not use anymore tools, we ask him to consider if he's completed the task and then call attempt_completion, otherwise proceed with completing the task.
 
 				//const totalCost = this.calculateApiCost(totalInputTokens, totalOutputTokens)
-				if (didEndLoop) {
+				if (loopResult.kind !== "continue") {
 					const idleGapOnEnd = await this.consumeIdleGapFeedbackIfPending()
 					if (idleGapOnEnd) {
 						nextUserContent = idleGapOnEnd
@@ -3138,20 +3233,30 @@ export class Task {
 		}
 	}
 
-	async recursivelyMakeDietCodeRequests(userContent: DietCodeContent[], includeFileDetails = false): Promise<boolean> {
+	async recursivelyMakeDietCodeRequests(
+		userContent: DietCodeContent[],
+		includeFileDetails = false,
+		loopGenerationId = this.taskState.executionGeneration,
+	): Promise<RequestLoopResult> {
 		// Check abort flag at the very start to prevent any execution after cancellation
 		if (this.taskState.abort) {
 			throw new Error("Task instance aborted")
 		}
 
-		if (isTaskHarnessTerminal(this.taskState)) {
-			Logger.info(`[Task ${this.taskId}] Task execution loop ending: task state is terminal.`)
-			return true
+		const lifecycleAuthority = getTaskLifecycleAuthority(this.taskState)
+		const eligibility = lifecycleAuthority.executionEligibility(this.taskState, this.taskId, loopGenerationId)
+
+		if (!eligibility.eligible) {
+			Logger.info(`[Task ${this.taskId}] Execution loop ending for generation ${loopGenerationId}: ${eligibility.reason}`)
+			const record =
+				lifecycleAuthority.readProjection(this.taskState) ??
+				(await lifecycleAuthority.restore(this.taskState, this.taskId))
+			return { kind: "stop", reason: mapEligibilityToStopReason(eligibility, record) }
 		}
 
 		const idleGapAtRequestStart = await this.consumeIdleGapFeedbackIfPending()
 		if (idleGapAtRequestStart) {
-			return await this.recursivelyMakeDietCodeRequests(idleGapAtRequestStart, includeFileDetails)
+			return await this.recursivelyMakeDietCodeRequests(idleGapAtRequestStart, includeFileDetails, loopGenerationId)
 		}
 
 		// Increment API request counter for focus chain list management
@@ -3350,7 +3455,7 @@ export class Task {
 			// When NOT compacting, load full context with mentions parsing and slash commands
 			const idleGapBeforeLoadContext = await this.consumeIdleGapFeedbackIfPending()
 			if (idleGapBeforeLoadContext) {
-				return await this.recursivelyMakeDietCodeRequests(idleGapBeforeLoadContext, includeFileDetails)
+				return await this.recursivelyMakeDietCodeRequests(idleGapBeforeLoadContext, includeFileDetails, loopGenerationId)
 			}
 
 			;[parsedUserContent, environmentDetails, dietcoderulesError] = await this.loadContext(
@@ -3373,7 +3478,7 @@ export class Task {
 
 		const idleGapAfterContext = await this.consumeIdleGapFeedbackIfPending()
 		if (idleGapAfterContext) {
-			return await this.recursivelyMakeDietCodeRequests(idleGapAfterContext, false)
+			return await this.recursivelyMakeDietCodeRequests(idleGapAfterContext, false, loopGenerationId)
 		}
 
 		// add environment details as its own text block, separate from tool results
@@ -3395,7 +3500,7 @@ export class Task {
 
 		const idleGapBeforeApiReq = await this.consumeIdleGapFeedbackIfPending()
 		if (idleGapBeforeApiReq) {
-			return await this.recursivelyMakeDietCodeRequests(idleGapBeforeApiReq, false)
+			return await this.recursivelyMakeDietCodeRequests(idleGapBeforeApiReq, false, loopGenerationId)
 		}
 
 		// getting verbose details is an expensive operation, it uses globby to top-down build file structure of project which for large projects can take a few seconds
@@ -3536,7 +3641,7 @@ export class Task {
 			const idleGapBeforeStream = await this.consumeIdleGapFeedbackIfPending()
 			if (idleGapBeforeStream) {
 				await this.rollbackStagedApiUserTurn(lastApiReqIndex)
-				return await this.recursivelyMakeDietCodeRequests(idleGapBeforeStream, false)
+				return await this.recursivelyMakeDietCodeRequests(idleGapBeforeStream, false, loopGenerationId)
 			}
 
 			const { toolUseHandler, reasonsHandler } = this.streamHandler.getHandlers()
@@ -3849,11 +3954,14 @@ export class Task {
 				await this.postStateToWebview()
 
 				if (this.taskState.steeringInterruptRequested) {
-					return await this.continueFromSteeringInterrupt({
-						assistantTextOnly,
-						taskMetrics,
-						modelInfo,
-					})
+					return await this.continueFromSteeringInterrupt(
+						{
+							assistantTextOnly,
+							taskMetrics,
+							modelInfo,
+						},
+						loopGenerationId,
+					)
 				}
 
 				// need to call here in case the stream was aborted
@@ -3968,7 +4076,7 @@ export class Task {
 
 			// now add to apiconversationhistory
 			// need to save assistant responses to file before proceeding to tool use since user can exit at any moment and we wouldn't be able to save the assistant's response
-			let didEndLoop = false
+			let didEndLoop: RequestLoopResult = { kind: "continue" }
 			if (assistantHasContent) {
 				// Partial blocks must recurse so a terminal execution event cannot leave the stream waiting forever.
 				// in case the content blocks finished
@@ -3984,7 +4092,7 @@ export class Task {
 					this.taskState.userMessageContent = []
 					const idleGapContent = await this.consumeIdleGapFeedbackIfPending()
 					if (idleGapContent) {
-						return await this.recursivelyMakeDietCodeRequests(idleGapContent, false)
+						return await this.recursivelyMakeDietCodeRequests(idleGapContent, false, loopGenerationId)
 					}
 				}
 
@@ -4011,11 +4119,15 @@ export class Task {
 					this.taskState.userMessageContent = []
 					const idleGapBeforeContinuation = await this.consumeIdleGapFeedbackIfPending()
 					if (idleGapBeforeContinuation) {
-						return await this.recursivelyMakeDietCodeRequests(idleGapBeforeContinuation, false)
+						return await this.recursivelyMakeDietCodeRequests(idleGapBeforeContinuation, false, loopGenerationId)
 					}
 				}
 
-				const recDidEndLoop = await this.recursivelyMakeDietCodeRequests(this.taskState.userMessageContent)
+				const recDidEndLoop = await this.recursivelyMakeDietCodeRequests(
+					this.taskState.userMessageContent,
+					false,
+					loopGenerationId,
+				)
 				didEndLoop = recDidEndLoop
 			} else {
 				// if there's no assistant_responses, that means we got no text or tool_use content blocks from API which we should assume is an error
@@ -4101,35 +4213,38 @@ export class Task {
 
 				if (response === "yesButtonClicked") {
 					// Signal the loop to continue (i.e., do not end), so it will attempt again
-					return false
+					return { kind: "continue" }
 				}
 
 				// Returns early to avoid retry since user dismissed
-				return true
+				return { kind: "stop", reason: "retry_dismissed" }
 			}
 
-			return didEndLoop // will always be false for now
+			return didEndLoop
 		} catch {
 			if (this.taskState.steeringInterruptRequested) {
 				const providerInfo = this.getCurrentProviderInfo()
-				return await this.continueFromSteeringInterrupt({
-					assistantTextOnly: "",
-					taskMetrics: {
-						inputTokens: 0,
-						outputTokens: 0,
-						cacheWriteTokens: 0,
-						cacheReadTokens: 0,
-						totalCost: undefined,
+				return await this.continueFromSteeringInterrupt(
+					{
+						assistantTextOnly: "",
+						taskMetrics: {
+							inputTokens: 0,
+							outputTokens: 0,
+							cacheWriteTokens: 0,
+							cacheReadTokens: 0,
+							totalCost: undefined,
+						},
+						modelInfo: {
+							providerId: providerInfo.providerId,
+							modelId: providerInfo.model.id,
+							mode: providerInfo.mode,
+						},
 					},
-					modelInfo: {
-						providerId: providerInfo.providerId,
-						modelId: providerInfo.model.id,
-						mode: providerInfo.mode,
-					},
-				})
+					loopGenerationId,
+				)
 			}
 			// this should never happen since the only thing that can throw an error is the attemptApiRequest, which is wrapped in a try catch that sends an ask where if noButtonClicked, will clear current task and destroy this instance. However to avoid unhandled promise rejection, we will end this loop which will end execution of this instance (see startTask)
-			return true // needs to be true so parent loop knows to end task
+			return { kind: "stop", reason: "exception_thrown" }
 		}
 	}
 

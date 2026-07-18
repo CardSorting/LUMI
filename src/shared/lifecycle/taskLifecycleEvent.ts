@@ -25,6 +25,7 @@ export type TaskLifecycleTransitionType =
 	| "settle_failure"
 	| "settle_timeout"
 	| "propagate_parent_termination"
+	| "reactivate_after_completion_rejection"
 
 export type TaskLifecycleCausalSource =
 	| "task"
@@ -122,6 +123,13 @@ export interface SuspendGenerationIntent extends BaseTaskLifecycleIntent {
 	type: "SuspendGeneration"
 }
 
+export interface ReactivateAfterCompletionRejectionIntent extends BaseTaskLifecycleIntent {
+	type: "ReactivateAfterCompletionRejection"
+	expectedRevision: number
+	completionAttemptId: string
+	decisionId: string
+}
+
 export interface ResumeWithGenerationIntent extends BaseTaskLifecycleIntent {
 	type: "ResumeWithGeneration"
 	/**
@@ -164,6 +172,7 @@ export type TaskLifecycleIntent =
 	| RegisterGenerationIntent
 	| ActivateGenerationIntent
 	| SuspendGenerationIntent
+	| ReactivateAfterCompletionRejectionIntent
 	| ResumeWithGenerationIntent
 	| RequestCancellationIntent
 	| SettleCancellationIntent
@@ -175,6 +184,7 @@ export type TaskLifecycleIntent =
 export type TaskLifecycleRejectionCode =
 	| "unknown_generation"
 	| "stale_generation"
+	| "stale_revision"
 	| "invalid_transition"
 	| "terminal_generation"
 	| "duplicate_intent"
@@ -345,6 +355,7 @@ export function isTaskLifecycleEvent(value: unknown): value is TaskLifecycleEven
 			"settle_failure",
 			"settle_timeout",
 			"propagate_parent_termination",
+			"reactivate_after_completion_rejection",
 		].includes(String(value.transition)) &&
 		(value.previous === undefined || isSnapshot(value.previous)) &&
 		isSnapshot(value.committed) &&

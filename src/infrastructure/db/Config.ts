@@ -275,6 +275,18 @@ export interface Schema {
 		fencingToken: string
 		committedAt: number
 	}
+	task_rejections: {
+		decisionId: string
+		taskId: string
+		generationId: string
+		completionAttemptId: string
+		proposalEventId: string
+		lifecycleRevision: number
+		feedback: string
+		filesJson: string | null
+		imagesJson: string | null
+		committedAt: number
+	}
 	task_lifecycle_records: {
 		taskId: string
 		generationId: string
@@ -799,6 +811,21 @@ export async function getDb(): Promise<Kysely<Schema>> {
 			)
 			await execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_completions_decision ON task_completions(decisionId)`)
 			await execute(
+				`CREATE TABLE IF NOT EXISTS task_rejections (
+					decisionId TEXT PRIMARY KEY,
+					taskId TEXT NOT NULL,
+					generationId TEXT NOT NULL,
+					completionAttemptId TEXT NOT NULL,
+					proposalEventId TEXT NOT NULL,
+					lifecycleRevision INTEGER NOT NULL,
+					feedback TEXT NOT NULL,
+					filesJson TEXT,
+					imagesJson TEXT,
+					committedAt BIGINT NOT NULL,
+					UNIQUE(taskId, generationId, completionAttemptId)
+				)`,
+			)
+			await execute(
 				`CREATE TABLE IF NOT EXISTS task_lifecycle_records (
 					taskId TEXT PRIMARY KEY,
 					generationId TEXT NOT NULL,
@@ -839,13 +866,14 @@ export async function getDb(): Promise<Kysely<Schema>> {
 			let hasPid = false
 			try {
 				const result = await execute("PRAGMA table_info(swarm_locks)")
-				if (result && result.rows) {
+				if (result?.rows) {
 					for (const row of result.rows) {
-						if ((row as any).name === "leaseEpoch") hasEpoch = true
-						if ((row as any).name === "fencingToken") hasToken = true
-						if ((row as any).name === "protocolVersion") hasProto = true
-						if ((row as any).name === "authorityMode") hasAuthorityMode = true
-						if ((row as any).name === "pid") hasPid = true
+						const name = (row as { name?: string })?.name
+						if (name === "leaseEpoch") hasEpoch = true
+						if (name === "fencingToken") hasToken = true
+						if (name === "protocolVersion") hasProto = true
+						if (name === "authorityMode") hasAuthorityMode = true
+						if (name === "pid") hasPid = true
 					}
 				}
 			} catch {}

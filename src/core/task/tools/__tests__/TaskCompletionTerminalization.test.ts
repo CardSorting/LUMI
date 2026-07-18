@@ -59,6 +59,19 @@ async function createTestDb(dbPath: string): Promise<{ db: Kysely<Schema>; rawDb
 		committedAt BIGINT NOT NULL
 	)`)
 	await execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_completions_decision ON task_completions(decisionId)`)
+	await execute(`CREATE TABLE IF NOT EXISTS task_rejections (
+		decisionId TEXT PRIMARY KEY,
+		taskId TEXT NOT NULL,
+		generationId TEXT NOT NULL,
+		completionAttemptId TEXT NOT NULL,
+		proposalEventId TEXT NOT NULL,
+		lifecycleRevision INTEGER NOT NULL,
+		feedback TEXT NOT NULL,
+		filesJson TEXT,
+		imagesJson TEXT,
+		committedAt BIGINT NOT NULL,
+		UNIQUE(taskId, generationId, completionAttemptId)
+	)`)
 
 	return { db, rawDb }
 }
@@ -440,6 +453,192 @@ describe("TaskCompletionTerminalization", () => {
 			const newDb = await createTestDb(dbPath)
 			db = newDb.db
 			rawDb = newDb.rawDb
+		})
+	})
+
+	describe("Completion Negotiation & Causal Lifecycle Transitions", () => {
+		it("rejection reactivation recovers missing reactivation only on matching causal chain", async () => {
+			const { createInMemoryTaskLifecycleFunnel, createTaskLifecycleIntentId } = await import(
+				"../../lifecycle/TaskLifecycleFunnel"
+			)
+			const { TaskState } = await import("../../TaskState")
+
+			const funnel = createInMemoryTaskLifecycleFunnel()
+			const state = new TaskState()
+			const genId = state.executionGeneration
+
+			// Register and Activate
+			const regResult = await funnel.submit(state, {
+				type: "RegisterGeneration",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-1",
+				generationId: genId,
+				cause: { source: "test", reason: "initial" },
+			})
+			regResult.kind.should.equal("committed")
+
+			const actResult = await funnel.submit(state, {
+				type: "ActivateGeneration",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-1",
+				generationId: genId,
+				cause: { source: "test", reason: "active" },
+			})
+			actResult.kind.should.equal("committed")
+
+			// Suspend with attempt-specific reason
+			const attemptId = "attempt-abc"
+			const decisionId = "dec-xyz"
+			const suspendResult = await funnel.submit(state, {
+				type: "SuspendGeneration",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-1",
+				generationId: genId,
+				cause: {
+					source: "completion_funnel",
+					reason: `awaiting_completion_decision:${attemptId}`,
+					originatingOperationId: decisionId,
+				},
+			})
+			if (suspendResult.kind !== "committed") {
+				throw new Error("suspendResult failed")
+			}
+			const R_suspend = suspendResult.record.lifecycleRevision
+
+			// 1. Try Reactivate with incorrect attempt ID -> should reject
+			const badAttemptResult = await funnel.submit(state, {
+				type: "ReactivateAfterCompletionRejection",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-1",
+				generationId: genId,
+				expectedRevision: R_suspend,
+				completionAttemptId: "attempt-wrong",
+				decisionId,
+				cause: { source: "completion_funnel", reason: "rejection", originatingOperationId: decisionId },
+			})
+			if (badAttemptResult.kind !== "rejected") {
+				throw new Error("badAttemptResult was not rejected")
+			}
+			badAttemptResult.code.should.equal("invalid_transition")
+
+			// 2. Try Reactivate with incorrect decision ID -> should reject
+			const badDecisionResult = await funnel.submit(state, {
+				type: "ReactivateAfterCompletionRejection",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-1",
+				generationId: genId,
+				expectedRevision: R_suspend,
+				completionAttemptId: attemptId,
+				decisionId: "dec-wrong",
+				cause: { source: "completion_funnel", reason: "rejection", originatingOperationId: "dec-wrong" },
+			})
+			if (badDecisionResult.kind !== "rejected") {
+				throw new Error("badDecisionResult was not rejected")
+			}
+			badDecisionResult.code.should.equal("invalid_transition")
+
+			// 3. Try Reactivate with incorrect revision -> should reject
+			const badRevisionResult = await funnel.submit(state, {
+				type: "ReactivateAfterCompletionRejection",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-1",
+				generationId: genId,
+				expectedRevision: R_suspend - 1,
+				completionAttemptId: attemptId,
+				decisionId,
+				cause: { source: "completion_funnel", reason: "rejection", originatingOperationId: decisionId },
+			})
+			if (badRevisionResult.kind !== "rejected") {
+				throw new Error("badRevisionResult was not rejected")
+			}
+			badRevisionResult.code.should.equal("stale_revision")
+
+			// 4. Try Reactivate with correct parameters -> should succeed
+			const goodResult = await funnel.submit(state, {
+				type: "ReactivateAfterCompletionRejection",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-1",
+				generationId: genId,
+				expectedRevision: R_suspend,
+				completionAttemptId: attemptId,
+				decisionId,
+				cause: { source: "completion_funnel", reason: "rejection", originatingOperationId: decisionId },
+			})
+			if (goodResult.kind !== "committed") {
+				throw new Error("goodResult failed to commit")
+			}
+			goodResult.record.state.should.equal("active")
+		})
+
+		it("cancellation fences reactivation", async () => {
+			const { createInMemoryTaskLifecycleFunnel, createTaskLifecycleIntentId } = await import(
+				"../../lifecycle/TaskLifecycleFunnel"
+			)
+			const { TaskState } = await import("../../TaskState")
+
+			const funnel = createInMemoryTaskLifecycleFunnel()
+			const state = new TaskState()
+			const genId = state.executionGeneration
+
+			await funnel.submit(state, {
+				type: "RegisterGeneration",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-2",
+				generationId: genId,
+				cause: { source: "test", reason: "initial" },
+			})
+			await funnel.submit(state, {
+				type: "ActivateGeneration",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-2",
+				generationId: genId,
+				cause: { source: "test", reason: "active" },
+			})
+
+			const attemptId = "attempt-123"
+			const decisionId = "dec-456"
+			const suspendResult = await funnel.submit(state, {
+				type: "SuspendGeneration",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-2",
+				generationId: genId,
+				cause: {
+					source: "completion_funnel",
+					reason: `awaiting_completion_decision:${attemptId}`,
+					originatingOperationId: decisionId,
+				},
+			})
+			if (suspendResult.kind !== "committed") {
+				throw new Error("suspendResult failed")
+			}
+
+			// Request Cancellation
+			const cancelResult = await funnel.submit(state, {
+				type: "RequestCancellation",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-2",
+				generationId: genId,
+				cause: { source: "test", reason: "cancellation" },
+			})
+			if (cancelResult.kind !== "committed") {
+				throw new Error("cancelResult failed")
+			}
+
+			// Try reactivating -> should be fenced by cancellation
+			const reactivateResult = await funnel.submit(state, {
+				type: "ReactivateAfterCompletionRejection",
+				intentId: createTaskLifecycleIntentId(),
+				taskId: "task-2",
+				generationId: genId,
+				expectedRevision: cancelResult.record.lifecycleRevision,
+				completionAttemptId: attemptId,
+				decisionId,
+				cause: { source: "completion_funnel", reason: "rejection", originatingOperationId: decisionId },
+			})
+			if (reactivateResult.kind !== "rejected") {
+				throw new Error("reactivateResult was not rejected")
+			}
+			reactivateResult.code.should.equal("cancellation_fenced")
 		})
 	})
 })

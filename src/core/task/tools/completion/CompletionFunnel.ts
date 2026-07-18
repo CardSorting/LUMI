@@ -28,7 +28,7 @@
  * - Fail-closed only for known active gates; fail-open for unknown/retired gates
  */
 
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { formatResponse } from "@core/prompts/responses"
 import type { AuditGateDecision } from "@shared/audit/auditGateReport"
 import { COMPLETION_AUDIT_CACHE_TTL_MS, MAX_COMPLETION_GATE_BLOCK_COUNT } from "@shared/audit/gatePolicy"
@@ -42,10 +42,12 @@ import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
 import { CoordinationError, CoordinationErrorCode } from "@shared/governance/CoordinationErrors"
 import type { LockClaim } from "@shared/governance/lockTypes"
 import { isTaskLifecycleRecord } from "@shared/lifecycle/taskLifecycleEvent"
+import { Logger } from "@shared/services/Logger"
 import { configuredCoordinationAuthorityMode } from "@/core/governance/LockAuthority"
 import { SWARM_LOCK_PROTOCOL_VERSION, SwarmMutexService } from "@/core/swarm/SwarmMutexService"
 import { createTaskLifecycleIntentId, getTaskLifecycleAuthority } from "@/core/task/lifecycle/TaskLifecycleFunnel"
 import { getCoordinationRawDb } from "@/infrastructure/db/Config"
+
 import {
 	getCompletionGraphRevision,
 	getLatestCheckpointHashFromMessages,
@@ -1137,12 +1139,25 @@ export type CompletionFunnelAttemptResult =
 			decision: CompletionDecision
 			record?: TaskCompletionRecord
 			event: CompletionFunnelEvent
+			commandResult?: ToolResponse
 	  }
 	| { kind: "blocked"; decision: CompletionDecision; event: CompletionFunnelEvent }
+	| {
+			kind: "rejected"
+			decision: CompletionDecision
+			feedback: string
+			files?: string[]
+			images?: string[]
+			event: CompletionFunnelEvent
+	  }
+	| { kind: "settlement_failed"; decision: CompletionDecision; event: CompletionFunnelEvent }
 
 export async function runCompletionFunnelAttempt(
 	config: TaskConfig,
-	input: { result: string; taskDescription: string },
+	input: { result: string; taskDescription: string; command?: string; commandResult?: ToolResponse },
+	options?: {
+		auditMetadata?: TaskAuditMetadata
+	},
 ): Promise<CompletionFunnelAttemptResult> {
 	const activeLockContainer = config.taskState.activeLockClaim as LockClaim | { lockClaim?: LockClaim } | undefined
 	const activeLockClaim =
@@ -1202,6 +1217,47 @@ export async function runCompletionFunnelAttempt(
 		decisionSchemaVersion: COMPLETION_DECISION_SCHEMA_VERSION,
 	})
 
+	// Check if a rejection record already exists for this decisionId (idempotent rejection check)
+	if (authorityMode === "sqlite") {
+		try {
+			const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
+			const existingRejection = rawDb
+				.prepare("SELECT * FROM task_rejections WHERE decisionId = ?")
+				.get(proposedDecisionId) as Record<string, unknown> | undefined
+			if (existingRejection) {
+				const feedback = (existingRejection.feedback as string) || ""
+				const decision: CompletionDecision = {
+					status: "blocked_recoverable",
+					code: "AUDIT_REQUIRED",
+					nextTransition: "RETURN_TO_EXECUTION",
+					stateVersion: evaluatedStateVersion,
+					decisionId: proposedDecisionId,
+				}
+				const event: CompletionFunnelEvent = {
+					schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
+					taskId: config.taskId,
+					phase: "decision_rejected",
+					kind: "soft_block",
+					terminal: false,
+					nextAllowedAction: "continue_execution",
+					forbiddenActions: ["attempt_completion"],
+					canonicalInstruction: "Completion rejected by user. Continue execution.",
+					reason: `Idempotent recovery: user feedback: ${feedback}`,
+					stages: [],
+					graphRevision: getCompletionGraphRevision(config),
+					evaluatedAt: existingRejection.committedAt as number,
+					decisionId: proposedDecisionId,
+				}
+				return {
+					kind: "rejected",
+					decision,
+					feedback: existingRejection.feedback as string,
+					event,
+				}
+			}
+		} catch {}
+	}
+
 	const evaluation = await evaluateCompletionDecision(
 		config,
 		input.result,
@@ -1216,72 +1272,264 @@ export async function runCompletionFunnelAttempt(
 		return { kind: "blocked", decision, event }
 	}
 
-	let committedRecord: TaskCompletionRecord | undefined
-	if (authorityMode === "sqlite") {
-		let commitClaim = activeLockClaim
-		let releaseOwnedCompletionLease = false
+	// Generate proposal and attempt IDs
+	const completionAttemptId = randomUUID()
+	const proposalEventId = randomUUID()
+
+	// 1. Submit SuspendGeneration
+	const authority = getTaskLifecycleAuthority(config.taskState)
+	const currentLifecycle =
+		authority.readProjection(config.taskState) ?? (await authority.restore(config.taskState, config.taskId))
+	if (!currentLifecycle) {
+		throw new Error("Cannot propose completion without an active lifecycle record.")
+	}
+
+	const suspendResult = await authority.submit(config.taskState, {
+		type: "SuspendGeneration",
+		intentId: createTaskLifecycleIntentId(),
+		taskId: config.taskId,
+		generationId: currentLifecycle.generationId,
+		cause: {
+			source: "completion_funnel",
+			reason: `awaiting_completion_decision:${completionAttemptId}`,
+			originatingOperationId: proposedDecisionId,
+		},
+	})
+	if (suspendResult.kind === "rejected") {
+		throw new Error(`Lifecycle suspension rejected (${suspendResult.code}): ${suspendResult.reason}`)
+	}
+
+	// 2. Publish Proposed event
+	const proposedEvent: CompletionFunnelEvent = {
+		schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
+		taskId: config.taskId,
+		phase: "proposed",
+		kind: evaluation.funnelDecision.kind,
+		terminal: false,
+		nextAllowedAction: "none",
+		forbiddenActions: ["attempt_completion"],
+		canonicalInstruction: "Completion proposal awaiting user resolution.",
+		reason: "Task completion has been proposed and is awaiting user approval.",
+		stages: evaluation.funnelDecision.stages,
+		graphRevision: getCompletionGraphRevision(config),
+		evaluatedAt: Date.now(),
+		decisionId: proposedDecisionId,
+	}
+	await publishCompletionFunnelEvent(config, proposedEvent)
+
+	// 3. Ask User (blocks on the yes/no/feedback modal)
+	const { response, text, images, files } = await config.callbacks.ask("completion_result", "", false)
+
+	// Case 1: Accepted
+	if (response === "yesButtonClicked") {
+		const completionMessageTs = await config.callbacks.say(
+			"completion_result",
+			input.result,
+			undefined,
+			undefined,
+			false,
+			options?.auditMetadata,
+		)
+		await config.callbacks.saveCheckpoint(true, completionMessageTs)
+
+		let committedRecord: TaskCompletionRecord | undefined
 		try {
-			if (commitClaim && (commitClaim.authorityMode !== "sqlite" || !commitClaim.backends.swarmMutex)) {
-				throw new CoordinationError(
-					CoordinationErrorCode.AUTHORITY_MODE_MISMATCH,
-					"A local-test or non-durable claim cannot terminalize through SQLite authority.",
-					"fail_closed",
-				)
-			}
-			if (!commitClaim) {
-				const lease = await SwarmMutexService.acquireLease(`task-completion:${config.taskId}`, config.taskId, 60_000)
-				commitClaim = {
-					claimId: `completion:${proposedDecisionId}`,
-					resourceKey: lease.resource,
-					ownerId: lease.ownerId,
-					fencingToken: lease.fencingToken,
-					leaseEpoch: lease.leaseEpoch,
-					authorityMode: "sqlite",
-					acquiredAt: lease.createdAt,
-					backends: {
-						inProcess: false,
-						swarmMutex: true,
-						roadmapLease: false,
-						fileLock: false,
-						broccoliFence: false,
-					},
+			if (authorityMode === "sqlite") {
+				let commitClaim = activeLockClaim
+				let releaseOwnedCompletionLease = false
+				try {
+					if (commitClaim && (commitClaim.authorityMode !== "sqlite" || !commitClaim.backends.swarmMutex)) {
+						throw new CoordinationError(
+							CoordinationErrorCode.AUTHORITY_MODE_MISMATCH,
+							"A local-test or non-durable claim cannot terminalize through SQLite authority.",
+							"fail_closed",
+						)
+					}
+					if (!commitClaim) {
+						const lease = await SwarmMutexService.acquireLease(
+							`task-completion:${config.taskId}`,
+							config.taskId,
+							60_000,
+						)
+						commitClaim = {
+							claimId: `completion:${proposedDecisionId}`,
+							resourceKey: lease.resource,
+							ownerId: lease.ownerId,
+							fencingToken: lease.fencingToken,
+							leaseEpoch: lease.leaseEpoch,
+							authorityMode: "sqlite",
+							acquiredAt: lease.createdAt,
+							backends: {
+								inProcess: false,
+								swarmMutex: true,
+								roadmapLease: false,
+								fileLock: false,
+								broccoliFence: false,
+							},
+						}
+						releaseOwnedCompletionLease = true
+					}
+					const record: TaskCompletionRecord = {
+						taskId: config.taskId,
+						decisionId: proposedDecisionId,
+						status: "succeeded",
+						evaluatedStateVersion,
+						evaluatedCheckpointJson: canonicalCompletionJson({ checkpoint: stateIdentifier }),
+						decisionJson: canonicalCompletionJson({ decision, result: input.result }),
+						ownerId: commitClaim.ownerId,
+						leaseEpoch: commitClaim.leaseEpoch,
+						fencingToken: commitClaim.fencingToken,
+						committedAt: Date.now(),
+					}
+					const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
+					committedRecord = commitTaskCompletionTransaction(rawDb, {
+						record,
+						resourceKey: commitClaim.resourceKey,
+						currentStateVersion: () => config.taskState.workspaceStateVersion || 0,
+					}).record
+				} finally {
+					if (releaseOwnedCompletionLease && commitClaim) {
+						await SwarmMutexService.release(
+							commitClaim.resourceKey,
+							commitClaim.ownerId,
+							commitClaim.leaseEpoch,
+							commitClaim.fencingToken,
+						).catch(() => undefined)
+					}
 				}
-				releaseOwnedCompletionLease = true
 			}
-			const record: TaskCompletionRecord = {
+
+			const decisionId = committedRecord?.decisionId ?? proposedDecisionId
+			const committedAt = committedRecord?.committedAt ?? Date.now()
+
+			// Submit SettleCompletion
+			const settleResult = await authority.submit(config.taskState, {
+				type: "SettleCompletion",
+				intentId: createTaskLifecycleIntentId(),
 				taskId: config.taskId,
+				generationId: currentLifecycle.generationId,
+				cause: {
+					source: "completion_funnel",
+					reason: "CompletionFunnel durably committed the semantic completion fact.",
+					originatingOperationId: decisionId,
+					authoritativeAt: committedAt,
+				},
+			})
+			if (settleResult.kind === "rejected") {
+				throw new Error(`Lifecycle settlement rejected (${settleResult.code}): ${settleResult.reason}`)
+			}
+
+			// Publish completed event
+			const acceptedEvent: CompletionFunnelEvent = {
+				schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
+				taskId: config.taskId,
+				phase: "completed",
+				kind: "completed",
+				terminal: true,
+				nextAllowedAction: "none",
+				forbiddenActions: ["attempt_completion"],
+				canonicalInstruction: "Task completion is committed. No completion action remains.",
+				reason: "The authoritative completion transaction committed successfully.",
+				stages: [...evaluation.funnelDecision.stages, pass("terminal_commit", "Durable completion committed", true)],
+				graphRevision: getCompletionGraphRevision(config),
+				evaluatedAt: Date.now(),
+				decisionId,
+				committedAt,
+			}
+			await publishCompletionFunnelEvent(config, acceptedEvent)
+			return {
+				kind: "terminal",
+				decision: { ...decision, decisionId },
+				record: committedRecord,
+				event: acceptedEvent,
+				commandResult: input.commandResult,
+			}
+		} catch (error) {
+			Logger.error("[CompletionFunnel] Acceptance settlement failed:", error)
+			const failedEvent: CompletionFunnelEvent = {
+				schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
+				taskId: config.taskId,
+				phase: "settlement_failed",
+				kind: "soft_block",
+				terminal: false,
+				nextAllowedAction: "continue_execution",
+				forbiddenActions: ["attempt_completion"],
+				canonicalInstruction: `Settlement failed: ${String(error)}`,
+				reason: `Completion settlement error: ${String(error)}`,
+				stages: evaluation.funnelDecision.stages,
+				graphRevision: getCompletionGraphRevision(config),
+				evaluatedAt: Date.now(),
 				decisionId: proposedDecisionId,
-				status: "succeeded",
-				evaluatedStateVersion,
-				evaluatedCheckpointJson: canonicalCompletionJson({ checkpoint: stateIdentifier }),
-				decisionJson: canonicalCompletionJson({ decision, result: input.result }),
-				ownerId: commitClaim.ownerId,
-				leaseEpoch: commitClaim.leaseEpoch,
-				fencingToken: commitClaim.fencingToken,
-				committedAt: Date.now(),
 			}
-			const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
-			committedRecord = commitTaskCompletionTransaction(rawDb, {
-				record,
-				resourceKey: commitClaim.resourceKey,
-				currentStateVersion: () => config.taskState.workspaceStateVersion || 0,
-			}).record
-		} finally {
-			if (releaseOwnedCompletionLease && commitClaim) {
-				await SwarmMutexService.release(
-					commitClaim.resourceKey,
-					commitClaim.ownerId,
-					commitClaim.leaseEpoch,
-					commitClaim.fencingToken,
-				).catch(() => undefined)
-			}
+			await publishCompletionFunnelEvent(config, failedEvent)
+			return { kind: "settlement_failed", decision, event: failedEvent }
 		}
 	}
 
-	const decisionId = committedRecord?.decisionId ?? proposedDecisionId
-	const committedAt = committedRecord?.committedAt ?? Date.now()
-	const event = decisionToCompletionFunnelEvent(config, evaluation.funnelDecision, { decisionId, committedAt })
-	await commitCompletionLifecycleFact(config, decisionId, committedAt)
-	await publishCompletionFunnelEvent(config, event)
-	return { kind: "terminal", decision: { ...decision, decisionId }, record: committedRecord, event }
+	// Case 2: Rejected
+	const feedbackText = text ?? ""
+	try {
+		if (authorityMode === "sqlite") {
+			const rawDb = (await getCoordinationRawDb()) as CompletionRawDatabase
+			rawDb
+				.prepare(
+					`INSERT OR IGNORE INTO task_rejections (
+						decisionId, taskId, generationId, completionAttemptId, proposalEventId,
+						lifecycleRevision, feedback, filesJson, imagesJson, committedAt
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				)
+				.run(
+					proposedDecisionId,
+					config.taskId,
+					currentLifecycle.generationId,
+					completionAttemptId,
+					proposalEventId,
+					suspendResult.record.lifecycleRevision,
+					feedbackText,
+					files ? JSON.stringify(files) : null,
+					images ? JSON.stringify(images) : null,
+					Date.now(),
+				)
+		}
+
+		// Submit ReactivateAfterCompletionRejection to reactivate
+		const activateResult = await authority.submit(config.taskState, {
+			type: "ReactivateAfterCompletionRejection",
+			intentId: createTaskLifecycleIntentId(),
+			taskId: config.taskId,
+			generationId: currentLifecycle.generationId,
+			expectedRevision: suspendResult.record.lifecycleRevision,
+			completionAttemptId,
+			decisionId: proposedDecisionId,
+			cause: {
+				source: "completion_funnel",
+				reason: "The user rejected the completion attempt and provided feedback.",
+				originatingOperationId: proposedDecisionId,
+			},
+		})
+		if (activateResult.kind === "rejected") {
+			throw new Error(`Lifecycle reactivation rejected (${activateResult.code}): ${activateResult.reason}`)
+		}
+
+		const rejectedEvent: CompletionFunnelEvent = {
+			schemaVersion: COMPLETION_FUNNEL_SCHEMA_VERSION,
+			taskId: config.taskId,
+			phase: "decision_rejected",
+			kind: "soft_block",
+			terminal: false,
+			nextAllowedAction: "continue_execution",
+			forbiddenActions: ["attempt_completion"],
+			canonicalInstruction: "Completion rejected by user. Continue execution.",
+			reason: `User feedback: ${feedbackText}`,
+			stages: evaluation.funnelDecision.stages,
+			graphRevision: getCompletionGraphRevision(config),
+			evaluatedAt: Date.now(),
+			decisionId: proposedDecisionId,
+		}
+		await publishCompletionFunnelEvent(config, rejectedEvent)
+		return { kind: "rejected", decision, feedback: feedbackText, files, images, event: rejectedEvent }
+	} catch (error) {
+		Logger.error("[CompletionFunnel] Rejection processing failed:", error)
+		throw error
+	}
 }

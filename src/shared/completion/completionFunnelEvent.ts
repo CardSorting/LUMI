@@ -6,7 +6,17 @@
  */
 export const COMPLETION_FUNNEL_SCHEMA_VERSION = 1 as const
 
-export type CompletionFunnelPhase = "evaluating" | "ready" | "blocked" | "completed" | "failed"
+export type CompletionFunnelPhase =
+	| "evaluating"
+	| "ready"
+	| "blocked"
+	| "completed"
+	| "failed"
+	| "proposed"
+	| "decision_accepted"
+	| "decision_rejected"
+	| "settling"
+	| "settlement_failed"
 
 export type CompletionFunnelDecisionKind = "allow_attempt" | "allow_probe" | "soft_block" | "hard_block" | "completed"
 
