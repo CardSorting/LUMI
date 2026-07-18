@@ -163,20 +163,20 @@ Retry-lock with verified engineering shows amber **Retry Locked — Recoverable*
 
 `validateSubagentCompletionGates()` runs the same preflight pipeline and publishes `GateLifecycleDecision`. The decision is persisted on `SubagentExecutionEnvelope.gateLifecycleStatus`. Envelope validation requires `gateLifecycleStatus` when `phase === "completion_gate"`.
 
-## Parent-thread throughput (shift-right gates)
+## Execution funnel and completion boundary
 
 Completion and finalization gates remain **cold-path authoritative** — they block at `attempt_completion` when engineering verification fails.
 
-Inner-loop tool execution uses a separate **I/O execution authority** model so reads and searches do not pay full guard/audit cost on every call:
+Inner-loop tools enter one **central execution funnel**. Its query classification keeps reads and searches fast, while mutations and side effects traverse the full governed stage sequence:
 
 | Concern | Cold path (blocks) | Hot path (non-blocking) |
 |---------|-------------------|-------------------------|
 | Engineering audit score | `evaluateCompletionAuditGate` at `attempt_completion` | Deferred act-mode / command advisories |
-| UniversalGuard | Plan-mode writes, disk blockade | I/O tools bypass guard in `ToolExecutor` |
+| UniversalGuard | Governed mutations and side effects | Workspace queries use the funnel's I/O fast path |
 | Preflight | Quality, roadmap (when enabled), circuit breaker | `cooldown`, `duplicate` soft stages |
 | Audit cache | Fresh `runCompletionAudit` when needed | 5-min TTL on unchanged result + advisory reuse |
 
-See **[parent-thread-execution-authority.md](parent-thread-execution-authority.md)** for helpers, file map, and operator summary.
+See **[Central execution funnel](parent-thread-execution-authority.md)** for the permit boundary, event schema, complete stage order, and operator diagnosis.
 
 ### Failure messages and why completion blocks
 
@@ -191,7 +191,7 @@ When `attempt_completion` fails, the agent receives a structured error — not a
 | **Circuit breaker** | `maximum completion gate retries (10) exceeded` | Retry budget exhausted — see lifecycle states below |
 | **Double-check** | `re-verify your work` | Two-step completion gate pending |
 
-Full stage order, soft vs hard preflight, audit reason codes (`score_below_threshold`, `critical_violations`, …), and tool-level blocks (plan mode, disk blockade): **[parent-thread execution authority § Failure catalog](parent-thread-execution-authority.md#what-blocked-throughput-before-vs-after)**.
+Tool-level execution blocks such as plan mode, fencing, collisions, roadmap policy, hooks, and cancellation are recorded by the **[central execution funnel](parent-thread-execution-authority.md#failure-diagnosis)**. Completion-specific failures remain in the completion event and durable terminal record.
 
 Gate block events append to `completionGateBlockHistory` (ring buffer) and publish `gateLifecycleStatus` to the webview via `GateLifecycleStatusPanel`.
 

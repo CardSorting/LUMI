@@ -62,6 +62,8 @@ export interface TaskConfig {
 	vscodeTerminalExecutionMode: "vscodeTerminal"
 	enableParallelToolCalling: boolean
 	isSubagentExecution: boolean
+	/** Immutable execution snapshot; avoids hook discovery through global singleton state. */
+	hooksEnabled?: boolean
 	/** True while same-session finalization lane is active — authorizes .wiki writes. */
 	finalizationMode?: boolean
 	recursionDepth?: number

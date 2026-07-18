@@ -222,7 +222,7 @@ Check receipt `roadmapLinkage.workspaceCommit.blockReason`:
 | Lane pipeline | Slot → claim → run; active executions capped (capacity + 1); scheduler wakes on slot release | Retry backoff frees slots and active execution capacity for other lanes |
 | Attempt isolation | Fresh runner/model client; 2-second abort grace before replacement | No overlapping replacement if the prior attempt cannot quiesce |
 | Parent budget | Tokens/cost accumulated across attempts | Retry spend is visible and an aggregate cost crossing fails the crossing lane |
-| Fast I/O throughput | Non-mutating lanes may parallelize independent tool calls when parent setting allows | Read/diagnostic lanes batch reads without serial tool latency; see [parent-thread execution authority](parent-thread-execution-authority.md) |
+| Fast I/O throughput | Non-mutating lanes may parallelize independent tool calls when parent setting allows | Read/diagnostic lanes batch reads while every call retains one [central execution funnel](parent-thread-execution-authority.md) event |
 | Dependency failure | Propagated immediately to downstream pending lanes | Independent lanes continue; blocked descendants fail with upstream IDs |
 
 Worker lanes cannot spawn verifier lanes. A worker emits `SIGNAL: REVIEW_REQUESTED`; the parent schedules review if needed. Shared `.wiki/` writes belong to an explicitly assigned documentation lane or parent finalization.

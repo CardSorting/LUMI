@@ -31,7 +31,7 @@ src/extension.ts
 1. **Activation** — `src/extension.ts` registers commands, webview, roadmap watcher, and initializes `HostProvider` with VS Code–specific implementations under `src/hosts/vscode/`.
 2. **Controller** — Holds extension state, MCP hub, auth, workspace manager, and the active `Task`. Routes webview messages via gRPC handlers in `src/core/controller/`.
 3. **Task** — Runs the agent loop: build prompt → call API → parse assistant message → execute tools → repeat until completion or user cancel.
-4. **Tools** — Registered in `ToolExecutorCoordinator` against `DietCodeDefaultTool` enum values in `src/shared/tools.ts`. Parent execution uses a **three-tier hot/warm/cold model** for I/O authority and completion gates — see [Parent-thread execution authority](../parent-thread-execution-authority.md).
+4. **Tools** — Registered in `ToolExecutorCoordinator` against `DietCodeDefaultTool` enum values in `src/shared/tools.ts`. Parent, sibling, and subagent calls enter one permit-protected authority — see [Central execution funnel](../parent-thread-execution-authority.md).
 5. **UI** — `webview-ui/` renders messages; updates arrive through protobuf-backed subscriptions in `src/core/controller/ui/`.
 
 ## `src/` directory map
@@ -40,8 +40,8 @@ src/extension.ts
 |-----------|------|
 | `src/core/controller/` | Webview message handling, task lifecycle, MCP, models, account |
 | `src/core/task/` | Agent loop, tool execution, message state |
-| `src/core/task/ToolExecutor.ts` | Parent tool hot path — I/O guard bypass, deferred post-guard |
-| `src/core/task/tools/executionAuthority.ts` | I/O authority helpers and bulkhead constants |
+| `src/core/task/ToolExecutor.ts` | Parent execution adapter and deterministic result projection |
+| `src/core/task/tools/execution/ExecutionFunnel.ts` | Single tool admission, policy, permit, dispatch, reliability, and terminal event authority |
 | `src/core/task/tools/subagent/` | Subagent runner, governed coordinator, projection, merge gate |
 | `src/core/governance/` | `LockAuthority`, governed locks, broccoli fencing |
 | `src/core/task/tools/` | Tool handlers and coordinator |

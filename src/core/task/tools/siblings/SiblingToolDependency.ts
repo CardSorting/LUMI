@@ -3,7 +3,7 @@ import path from "node:path"
 import type { ToolUse } from "@core/assistant-message"
 import { classifyCommand } from "@core/joyride"
 import { DietCodeDefaultTool } from "@shared/tools"
-import { isIoAuthorityTool, isLocalMutationTool } from "../executionAuthority"
+import { isIoAuthorityTool, isLocalMutationTool } from "../execution/ExecutionFunnel"
 
 export type SiblingResourceAccess = "read" | "write"
 

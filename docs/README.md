@@ -218,7 +218,7 @@ When in doubt: session behavior → `docs/`; durable substrate → `broccolidb/d
 | [GitHub automation](github-automation.md) | Workflows, templates, and maintainer CI map |
 | [Releasing](../.github/RELEASING.md) | Maintainer marketplace publish runbook |
 | [Security best practices](SECURITY_BEST_PRACTICES.md) | Approval gates, ignore files |
-| [Parent-thread execution authority](parent-thread-execution-authority.md) | I/O fast path, shift-right gates, completion audit caching |
+| [Central execution funnel](parent-thread-execution-authority.md) | One auditable authority for admission, permits, handler dispatch, reliability, and terminal tool events |
 | [Completion gate lifecycle](completion-gate-lifecycle-migration.md) | Engineering vs finalization lanes, receipt requirements, lifecycle states |
 | [Completion lifecycle decision engine](completion-lifecycle-decision-engine.md) | Deterministic decisions, action guards, and restart-safe terminal completion CAS |
 | [Spider forensic engine](architecture/spider-v20-forensic-engine.md) | Policy/audit layer (BroccoliDB) |
@@ -299,5 +299,4 @@ Architecture milestone notes (archaeology only): [history/architecture/](history
 4. **Measured claims** — Metrics cite verifiable paths (`package.json`, `src/shared/tools.ts`, etc.).
 
 **Calm agency:** approve before mutate, checkpoint after tool use, complete only through gates.
-
 

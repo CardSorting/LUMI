@@ -14,6 +14,7 @@ import { LaneDAG } from "../LaneDAG"
 import { runMergeGate } from "../MergeGate"
 import { validateDeterministicReplay } from "../ReplayValidator"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
+import { terminalExecutionEvent } from "./executionFunnelFixture"
 
 function buildAgent(agentId: string, index: number, overrides?: Partial<SubagentExecutionEnvelope>): SubagentExecutionEnvelope {
 	const builder = new SubagentEnvelopeBuilder(agentId, "exec-1", "researcher", "swarm-1", "task-1", "inspect module", {
@@ -22,7 +23,7 @@ function buildAgent(agentId: string, index: number, overrides?: Partial<Subagent
 		depth: 1,
 	})
 	builder.setStatus("completed")
-	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "contents", { path: "src/a.ts" })
+	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "contents", { path: "src/a.ts" }, terminalExecutionEvent())
 	builder.setTranscriptMeta("subagent_executions/swarm-1/agents/agent-1.transcript.jsonl", 3, 120)
 	builder.complete("done")
 	return { ...builder.build(), compactionEvents: [], ...overrides }

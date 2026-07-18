@@ -237,7 +237,7 @@ describe("SubagentRunner", () => {
 		const runner = new SubagentRunner(config, builder)
 		const result = await runner.run("List files", () => {})
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 	})
@@ -285,7 +285,7 @@ describe("SubagentRunner", () => {
 			},
 		)
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.ok(result.envelope?.warnings.some((warning) => warning.includes("flush callback failed")))
 	})
 
@@ -378,7 +378,7 @@ describe("SubagentRunner", () => {
 		releases.get("f.ts")?.()
 		const result = await execution
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(result.stats.toolCalls, 7)
 	})
 
@@ -415,7 +415,7 @@ describe("SubagentRunner", () => {
 			() => {},
 		)
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(createMessage.callCount, 1)
 		assert.equal(config.taskState.completionAttemptCount, undefined)
 	})
@@ -476,7 +476,7 @@ describe("SubagentRunner", () => {
 
 		const result = await runner.run("List files", () => {})
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 		assert.equal(shouldCompactStub.callCount, 1)
@@ -536,7 +536,7 @@ describe("SubagentRunner", () => {
 		const runner = new SubagentRunner(config, builder)
 		const result = await runner.run("List files", () => {})
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 	})
@@ -588,7 +588,7 @@ describe("SubagentRunner", () => {
 		const runner = new SubagentRunner(config, builder)
 		const result = await runner.run("List files", () => {})
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 	})
@@ -691,7 +691,7 @@ describe("SubagentRunner", () => {
 		const runner = new SubagentRunner(config, builder)
 		const result = await runner.run("List files", () => {})
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(createMessage.callCount, 1)
 	})
 
@@ -733,7 +733,7 @@ describe("SubagentRunner", () => {
 		const result = await runner.run("Run task", () => {})
 		console.log("SKILL TEST RESULT:", JSON.stringify(result, null, 2))
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(createMessage.callCount, 1)
 	})
 
@@ -774,7 +774,7 @@ describe("SubagentRunner", () => {
 		const runner = new SubagentRunner(config, builder)
 		const result = await runner.run("Run task", () => {})
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(createMessage.callCount, 1)
 	})
 
@@ -813,7 +813,7 @@ describe("SubagentRunner", () => {
 		const runner = new SubagentRunner(config, builder)
 		const result = await runner.run("Run task", () => {})
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(createMessage.callCount, 1)
 		sinon.assert.calledWith(
 			warnStub,
@@ -886,7 +886,7 @@ describe("SubagentRunner", () => {
 		const runner = new SubagentRunner(config, builder)
 		const result = await runner.run("List files", () => {})
 
-		assert.equal(result.status, "completed")
+		assert.equal(result.status, "completed", result.error)
 		assert.equal(result.result, VALID_SUBAGENT_COMPLETION_RESULT)
 		assert.equal(createMessage.callCount, 2)
 	})

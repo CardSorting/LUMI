@@ -20,8 +20,8 @@ import { Logger } from "@shared/services/Logger"
 import { arePathsEqual } from "@utils/path"
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { executor } from "../../ActionExecutor"
 import { showNotificationForApproval } from "../../utils"
+import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
@@ -302,18 +302,6 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 			)
 		}
 
-		// Run PreToolUse hook after approval but before execution
-		try {
-			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-		} catch (error) {
-			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-			if (error instanceof PreToolUseHookCancellationError) {
-				return evidenceResponse(formatResponse.toolDenied(), { approvalStatus: "denied" })
-			}
-			throw error
-		}
-
 		// Setup timeout notification for long-running auto-approved commands
 		let timeoutId: NodeJS.Timeout | undefined
 		if (didAutoApprove && config.autoApprovalSettings.enableNotifications && !config.isSubagentExecution) {
@@ -341,7 +329,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		let commandStarted = false
 		config.latencyTracker?.recordIoClassQueued(ioClass)
 		try {
-			;[userRejected, result] = await executor.execute(
+			;[userRejected, result] = await executionFunnel.executeReliableAction(
 				config.ulid,
 				async () => {
 					commandStarted = true
@@ -381,7 +369,7 @@ export class ExecuteCommandToolHandler implements IFullyManagedTool {
 		})
 
 		if (userRejected) {
-			config.taskState.didRejectTool = true
+			executionFunnel.recordUserDecision(config.taskState, false)
 		}
 
 		if (!userRejected && config.auditToolOutputAdvisoryEnabled && !config.isSubagentExecution) {

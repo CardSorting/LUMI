@@ -6,7 +6,7 @@ import { formatResponse } from "@/core/prompts/responses"
 import { telemetryService } from "@/services/telemetry"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
-import { hasWorkspaceLocalIoAuthority } from "../executionAuthority"
+import { hasWorkspaceLocalIoAuthority } from "../execution/ExecutionFunnel"
 import { executeTaskIoBackend } from "../io/TaskIoBackend"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -151,19 +151,6 @@ export class ListCodeDefinitionNamesToolHandler implements IFullyManagedTool {
 				undefined,
 				block.isNativeToolCall,
 			)
-		}
-
-		try {
-			if (config.isSubagentExecution) {
-				const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-				await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-			}
-		} catch (error) {
-			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-			if (error instanceof PreToolUseHookCancellationError) {
-				return formatResponse.toolDenied()
-			}
-			throw error
 		}
 
 		const result = await executeTaskIoBackend(config, block, authority, "traversal", async (io, signal) =>

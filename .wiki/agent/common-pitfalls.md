@@ -10,10 +10,13 @@
 - Do not mark task state terminal before the `task_completions` CAS commits.
 - Do not use an ad hoc JSON hash as a completion decision ID; use the schema-versioned canonical digest.
 - Do not create a completion decision in a handler, finalizer, resume adapter, prompt projection, or webview component. All authority belongs to `CompletionFunnel.ts`; downstream code consumes its event.
+- Do not call a tool handler, `UniversalGuard`, execution hook, mutation fence, or roadmap preflight as a second execution gate. All authorization and dispatch belong to `ExecutionFunnel.ts`.
+- Do not infer tool success, failure, denial, or cancellation from presentation text. Consume the whole terminal `ExecutionFunnelEvent` for that invocation.
+- Do not add a compatibility executor beside the funnel. Reliability is subordinate to the active permit and lives in the same monolith.
 - Do not merge a pending event with fields from an older completed event. Select one whole event, while allowing separately verified durable terminal evidence to supersede stale presentation history.
 - Do not let generic resume markers demote a terminal completion. Reopening requires explicit user feedback or a new user request.
 - Do not route circuit-breaker recovery through `run_finalization`. Change the workspace for a central-funnel probe or report the unresolved blocker; finalization is documentation maintenance only.
-- Do not add another pre-tool gate for workspace-local queries; required parameters and `.dietcodeignore` already provide the relevant boundary.
+- Do not add another pre-tool gate for workspace-local queries; the funnel's query classification already combines required parameters, `.dietcodeignore`, task/lane authority, and cancellation.
 - Do not cache completed reads across a file mutation. Reset `IoRequestCoalescer` for the task.
 - Do not acquire a backend bulkhead slot before coalescing. Identical waiters would consume the whole class budget while one backend runs.
 - Do not wrap the complete handler in a reusable cache: validation and external approval must execute per invocation. Cache only contained, generation-bound backend payloads after approval.

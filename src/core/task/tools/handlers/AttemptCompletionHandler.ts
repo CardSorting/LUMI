@@ -40,6 +40,7 @@ import {
 	evaluateGatePreflightReadinessAsync,
 	runCompletionPreflightChecks,
 } from "../completionGatePipeline"
+import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IPartialBlockHandler, IToolHandler, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -440,7 +441,7 @@ export class AttemptCompletionHandler implements IToolHandler, IPartialBlockHand
 			const [userRejected, execCommandResult] = await config.callbacks.executeCommandTool(command, undefined) // no timeout for attempt_completion command
 
 			if (userRejected) {
-				config.taskState.didRejectTool = true
+				executionFunnel.recordUserDecision(config.taskState, false)
 				return execCommandResult
 			}
 			// user didn't reject, but the command may have output

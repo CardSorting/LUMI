@@ -14,15 +14,14 @@ import { arePathsEqual, getReadablePath, isLocatedInWorkspace } from "@utils/pat
 import { telemetryService } from "@/services/telemetry"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { executor } from "../../ActionExecutor"
 import { showNotificationForApproval } from "../../utils"
+import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
 import { applyModelContentFixes } from "../utils/ModelContentProcessor"
 import { StabilityScribe } from "../utils/StabilityScribe"
-import { ToolDisplayUtils } from "../utils/ToolDisplayUtils"
 import { ToolResultUtils } from "../utils/ToolResultUtils"
 
 export class WriteToFileToolHandler implements IFullyManagedTool {
@@ -225,6 +224,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				// Need a more customized tool response for file edits to highlight the fact that the file was not updated (particularly important for deepseek)
 
 				const { response, text, images, files } = await config.callbacks.ask("tool", completeMessage, false)
+				executionFunnel.recordUserDecision(config.taskState, response === "yesButtonClicked")
 
 				if (response !== "yesButtonClicked") {
 					// Handle rejection with detailed messages
@@ -253,7 +253,6 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 					// await config.services.diffViewProvider.revertChanges()
 					// await config.services.diffViewProvider.reset()
 
-					config.taskState.didRejectTool = true
 					telemetryService.captureToolUsage(
 						config.ulid,
 						block.name,
@@ -297,29 +296,14 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				)
 			}
 
-			// Run PreToolUse hook after approval but before execution
-			try {
-				const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-				await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-			} catch (error) {
-				const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-				if (error instanceof PreToolUseHookCancellationError) {
-					await config.services.diffViewProvider.revertChanges()
-					await config.services.diffViewProvider.reset()
-					return formatResponse.toolDenied()
-				}
-				throw error
-			}
-
 			// Mark the file as edited by DietCode
 			config.services.fileContextTracker.markFileAsEditedByDietCode(relPath)
 
 			// Save the changes and get the result with reliability wrapper
-			const { newProblemsMessage, userEdits, autoFormattingEdits, finalContent } = await executor.execute(
-				config.ulid,
-				() => config.services.diffViewProvider.saveChanges(),
-				{ concurrencyGroup: "fs" },
-			)
+			const { newProblemsMessage, userEdits, autoFormattingEdits, finalContent } =
+				await executionFunnel.executeReliableAction(config.ulid, () => config.services.diffViewProvider.saveChanges(), {
+					concurrencyGroup: "fs",
+				})
 
 			// Reset consecutive mistake counter on successful file operation
 			config.taskState.consecutiveMistakeCount = 0
@@ -430,21 +414,8 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 			// Show error and return early (full original behavior)
 			await config.callbacks.say("dietcodeignore_error", resolvedPath)
 
-			// Push tool result and save checkpoint using existing utilities
 			const errorResponse = formatResponse.toolError(formatResponse.dietcodeIgnoreError(resolvedPath))
-			ToolResultUtils.pushToolResult(
-				errorResponse,
-				block,
-				config.taskState.userMessageContent,
-				ToolDisplayUtils.getToolDescription,
-				config.coordinator,
-				config.taskState.toolUseIdMap,
-			)
-			if (!config.enableParallelToolCalling) {
-				config.taskState.didAlreadyUseTool = true
-			}
-
-			return
+			throw new Error(typeof errorResponse === "string" ? errorResponse : JSON.stringify(errorResponse))
 		}
 
 		// V226: Knowledge Ledger (Wiki) Protection Gate
@@ -452,20 +423,7 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 		if (isWikiPath(resolvedPath) && !isWikiWriteAuthorized(config)) {
 			const wikiError =
 				"🛑 **ACCESS DENIED**: Direct modifications to the Knowledge Ledger (.wiki/) are reserved for the authorized finalization lane. Call `run_finalization` to update documentation in this session."
-			const errorResponse = formatResponse.toolError(wikiError)
-
-			ToolResultUtils.pushToolResult(
-				errorResponse,
-				block,
-				config.taskState.userMessageContent,
-				ToolDisplayUtils.getToolDescription,
-				config.coordinator,
-				config.taskState.toolUseIdMap,
-			)
-			if (!config.enableParallelToolCalling) {
-				config.taskState.didAlreadyUseTool = true
-			}
-			return
+			throw new Error(wikiError)
 		}
 
 		// Check if file exists to determine the correct UI message
@@ -527,29 +485,15 @@ export class WriteToFileToolHandler implements IFullyManagedTool {
 				const isNativeToolCall = block.isNativeToolCall === true
 				telemetryService.captureDiffEditFailure(config.ulid, modelId, providerId, errorType, isNativeToolCall)
 
-				// Push tool result with detailed error using existing utilities
 				const errorResponse = formatResponse.toolError(
 					`${(error as Error)?.message}\n\n` +
 						formatResponse.diffError(relPath, config.services.diffViewProvider.getOriginalContentForLLM()),
 				)
-				ToolResultUtils.pushToolResult(
-					errorResponse,
-					block,
-					config.taskState.userMessageContent,
-					ToolDisplayUtils.getToolDescription,
-					config.coordinator,
-					config.taskState.toolUseIdMap,
-				)
-
-				if (!config.enableParallelToolCalling) {
-					config.taskState.didAlreadyUseTool = true
-				}
-
 				// Revert changes and reset diff view
 				await config.services.diffViewProvider.revertChanges()
 				await config.services.diffViewProvider.reset()
 
-				return
+				throw new Error(typeof errorResponse === "string" ? errorResponse : JSON.stringify(errorResponse))
 			}
 		} else if (content) {
 			// Handle write_to_file with direct content

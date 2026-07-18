@@ -14,6 +14,7 @@ import { swarmEnvelopeToReplayArtifact } from "../executionReplayMappers"
 import { validateGovernedReceipt } from "../GovernedExecutionStore"
 import { runMergeGate } from "../MergeGate"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
+import { terminalExecutionEvent } from "./executionFunnelFixture"
 
 function agent(
 	id: string,
@@ -35,7 +36,7 @@ function agent(
 		},
 	)
 	builder.setStatus("running")
-	builder.recordToolStep("read_file", `read ${id}`, `evidence for ${id}`, { path: `src/${id}.ts` })
+	builder.recordToolStep("read_file", `read ${id}`, `evidence for ${id}`, { path: `src/${id}.ts` }, terminalExecutionEvent())
 	builder.complete(result)
 	return { ...builder.build(), ...overrides }
 }

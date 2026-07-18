@@ -21,6 +21,7 @@ import { GovernedSwarmCoordinator } from "../GovernedSwarmCoordinator"
 import { parseDependsOnFromPrompt, parseRoadmapItemFromPrompt, resolveLaneLockIntent } from "../LockNecessity"
 import { runMergeGate } from "../MergeGate"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
+import { terminalExecutionEvent } from "./executionFunnelFixture"
 
 function buildAgent(agentId: string, index: number): SubagentExecutionEnvelope {
 	const builder = new SubagentEnvelopeBuilder(agentId, "exec-1", "researcher", "swarm-int", "task-1", "work", {
@@ -30,7 +31,7 @@ function buildAgent(agentId: string, index: number): SubagentExecutionEnvelope {
 	})
 	builder.setStatus("completed")
 	builder.setPhase("completion_gate")
-	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "ok", { path: "src/a.ts" })
+	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "ok", { path: "src/a.ts" }, terminalExecutionEvent())
 	builder.setTranscriptMeta("subagent_executions/swarm-int/a.transcript.jsonl", 1, 40)
 	builder.complete("done")
 	return { ...builder.build(), compactionEvents: [], phase: "completion_gate" }

@@ -58,7 +58,7 @@ The parent launch is the approval boundary:
 - **PreToolUse / PostToolUse hooks** apply per tool invocation.
 - Read-only lanes use read auto-approval and receive a read/diagnostic tool subset; declared mutation lanes use edit auto-approval and otherwise request approval once.
 - Inner tools do not prompt repeatedly after launch, but allowlists, mutation locks, budgets, and merge checks still apply.
-- **Completion gates** on lanes run **sync quality checks only**; hardening audit is deferred to the parent seal barrier. Full blocking enforcement remains on parent `attempt_completion` — see [Parent-thread execution authority](parent-thread-execution-authority.md#subagent-lane-vs-parent-vs-seal).
+- **Tool execution** in every lane enters the same [central execution funnel](parent-thread-execution-authority.md); the lane supplies its authority mode and resource-collision evidence. Full task-completion enforcement remains on parent `attempt_completion`.
 - **I/O authority** on non-mutating lanes: read/list/search tools bypass UniversalGuard and may parallelize when the parent pool allows — see [Governed execution runbook § Fast I/O](governed-execution-runbook.md#retry-decision-flow).
 - **Production mutation authority** is SQLite-only. Memory, file locks, and Broccoli fences are projections; database outages retry or fail closed and never switch the process to local authority.
 - **Lease identity** is owner + epoch + fencing token + authority mode. Tokens remain decimal strings for precision safety.

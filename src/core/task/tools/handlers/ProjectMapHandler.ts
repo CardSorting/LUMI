@@ -4,7 +4,7 @@ import * as fs from "fs"
 import * as nodePath from "path"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { SpiderEngine } from "../../../policy/spider/SpiderEngine"
-import { resolveSessionSpiderEngine } from "../executionAuthority"
+import { resolveSessionSpiderEngine } from "../execution/ExecutionFunnel"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IToolHandler, ToolResponse } from "../types/ToolContracts"
 

@@ -125,18 +125,6 @@ export class WebFetchToolHandler implements IFullyManagedTool {
 				)
 			}
 
-			// Run PreToolUse hook after approval but before execution
-			try {
-				const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-				await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-			} catch (error) {
-				const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-				if (error instanceof PreToolUseHookCancellationError) {
-					return formatResponse.toolDenied()
-				}
-				throw error
-			}
-
 			// Execute the actual fetch
 			const baseUrl = DietCodeEnv.config().apiBaseUrl
 			const authToken = await AuthService.getInstance().getAuthToken()

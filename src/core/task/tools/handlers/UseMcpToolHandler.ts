@@ -4,8 +4,8 @@ import { DietCodeAsk, DietCodeAskUseMcpServer } from "@shared/ExtensionMessage"
 import { telemetryService } from "@/services/telemetry"
 import { truncateContent } from "@/shared/content-limits"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { executor } from "../../ActionExecutor"
 import { showNotificationForApproval } from "../../utils"
+import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
 import type { StronglyTypedUIHelpers } from "../types/UIHelpers"
@@ -144,18 +144,6 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			)
 		}
 
-		// Run PreToolUse hook after approval but before execution
-		try {
-			const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-			await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-		} catch (error) {
-			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-			if (error instanceof PreToolUseHookCancellationError) {
-				return formatResponse.toolDenied()
-			}
-			throw error
-		}
-
 		// Show MCP request started message
 		await config.callbacks.say("mcp_server_request_started")
 
@@ -167,7 +155,7 @@ export class UseMcpToolHandler implements IFullyManagedTool {
 			}
 
 			// Execute the MCP tool with reliability wrapper
-			const toolResult = await executor.execute(
+			const toolResult = await executionFunnel.executeReliableAction(
 				config.ulid,
 				() => config.services.mcpHub.callTool(server_name, tool_name, parsedArguments, config.ulid),
 				{ concurrencyGroup: "mcp" },

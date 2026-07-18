@@ -11,6 +11,7 @@ import { runMergeGate } from "../MergeGate"
 import { auditRoadmapCompletionIntegrity, auditStaleRoadmapOrchestrationLease, runRoadmapMergeAudit } from "../RoadmapMergeAudit"
 import { buildRoadmapItemKey, buildRoadmapWorkspaceKey } from "../RoadmapMutation"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
+import { terminalExecutionEvent } from "./executionFunnelFixture"
 
 function buildAgent(agentId: string, index: number, overrides?: Partial<SubagentExecutionEnvelope>): SubagentExecutionEnvelope {
 	const builder = new SubagentEnvelopeBuilder(agentId, "exec-rm", "researcher", "swarm-rm", "task-rm", "roadmap work", {
@@ -19,7 +20,7 @@ function buildAgent(agentId: string, index: number, overrides?: Partial<Subagent
 		depth: 1,
 	})
 	builder.setStatus("completed")
-	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "ok", { path: "src/a.ts" })
+	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "ok", { path: "src/a.ts" }, terminalExecutionEvent())
 	builder.setTranscriptMeta("subagent_executions/swarm-rm/a.transcript.jsonl", 1, 40)
 	builder.complete("done")
 	return { ...builder.build(), compactionEvents: [], ...overrides }
@@ -251,6 +252,7 @@ describe("governed execution roadmap serialization", () => {
 								timestamp: Date.now(),
 								touchedPaths: [],
 								params: { action: "update" },
+								executionFunnelEvent: terminalExecutionEvent("roadmap"),
 							},
 						],
 					}),

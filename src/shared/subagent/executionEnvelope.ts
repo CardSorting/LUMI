@@ -1,5 +1,6 @@
 import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
 import type { SubagentExecutionStatus } from "@shared/ExtensionMessage"
+import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 import type { CompactionEventRecord } from "@shared/subagent/transcript"
 
 export type SubagentExecutionPhase =
@@ -75,6 +76,8 @@ export interface SubagentToolStepRecord {
 	timestamp: number
 	touchedPaths: string[]
 	params?: Record<string, string>
+	/** Canonical per-invocation authority; handler text is evidence, never status. */
+	executionFunnelEvent: ExecutionFunnelEvent
 }
 
 export interface SubagentExecutionEnvelope {

@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
+import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 import type { SubagentExecutionEnvelope, SwarmExecutionEnvelope } from "@shared/subagent/executionEnvelope"
 import { createContinuityMarker } from "@shared/subagent/executionEnvelope"
 import { afterEach, describe, it } from "mocha"
@@ -19,6 +20,23 @@ import {
 import { buildParentToolResult, buildSwarmSummaryOverlay } from "../SwarmReportBuilder"
 
 function createAgentEnvelope(overrides?: Partial<SubagentExecutionEnvelope>): SubagentExecutionEnvelope {
+	const executionFunnelEvent: ExecutionFunnelEvent = {
+		schemaVersion: 1,
+		taskId: "task-1",
+		invocationId: "tool-1",
+		permitId: "permit-1",
+		toolName: "read_file",
+		lane: "subagent",
+		phase: "succeeded",
+		kind: "success",
+		reasonCode: "operation_succeeded",
+		terminal: true,
+		reason: "Read completed.",
+		stages: [],
+		workspaceRevision: 0,
+		evaluatedAt: 1,
+		completedAt: 1,
+	}
 	const builder = new SubagentEnvelopeBuilder(
 		"agent-1",
 		"exec-1",
@@ -31,7 +49,13 @@ function createAgentEnvelope(overrides?: Partial<SubagentExecutionEnvelope>): Su
 		"stream-child",
 	)
 	builder.setStatus("running")
-	builder.recordToolStep("read_file", "read_file(path=src/auth.ts)", "file contents here", { path: "src/auth.ts" })
+	builder.recordToolStep(
+		"read_file",
+		"read_file(path=src/auth.ts)",
+		"file contents here",
+		{ path: "src/auth.ts" },
+		executionFunnelEvent,
+	)
 	builder.complete(`${"Auth module uses JWT with refresh rotation. ".repeat(20)}End.`)
 	return { ...builder.build(), compactionEvents: [], ...overrides }
 }

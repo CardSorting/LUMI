@@ -1,5 +1,26 @@
 # Troubleshooting
 
+## Tool Status Disagrees Across Parent, Sibling, or Subagent Views
+
+Symptom: one surface says a tool succeeded or failed while another remains pending, or the agent stops after a handler returned a result.
+
+Meaning: a consumer is inferring execution state from handler text, transient presentation flags, or an older invocation instead of consuming the central event.
+
+Response:
+
+1. Inspect `TaskState.executionFunnelEventJson`; for sibling/subagent work, inspect the invocation context or envelope `executionFunnelEvent`.
+2. Match the exact `taskId` and `invocationId`, then require `terminal: true`.
+3. Read `phase`, `reasonCode`, and the ordered `stages`; the decisive failed stage is the complete gate audit.
+4. Route the caller through `ExecutionFunnel.execute()` and consume its returned event. Do not call a handler or policy directly.
+5. If dispatch reports a missing permit, fix the bypassing caller rather than weakening `ToolExecutorCoordinator`.
+6. Keep tool execution and task completion distinct: `operation_succeeded` does not mean the task is complete.
+
+Focused proof:
+
+```sh
+npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts src/test/tool-executor-hooks.test.ts src/core/task/tools/siblings/__tests__/SiblingToolBatch.test.ts src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionEnvelope.test.ts --timeout 10000 --exit
+```
+
 ## Completion UI Says Pending After Durable Success
 
 Symptom: task history or the database says the task completed, while a header, resume card, or finalization view still says pending.

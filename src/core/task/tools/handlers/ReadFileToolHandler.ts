@@ -9,7 +9,7 @@ import { DietCodeSayTool } from "@/shared/ExtensionMessage"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { SafeNumber } from "../../../../shared/utils/SafeNumber"
 import { showNotificationForApproval } from "../../utils"
-import { appendSessionStabilityContext, hasWorkspaceLocalIoAuthority } from "../executionAuthority"
+import { appendSessionStabilityContext, hasWorkspaceLocalIoAuthority } from "../execution/ExecutionFunnel"
 import { executeTaskIoBackend } from "../io/TaskIoBackend"
 import { resolveInvocationResultTarget } from "../siblings/ToolInvocationContext"
 import type { ToolValidator } from "../ToolValidator"
@@ -173,19 +173,6 @@ export class ReadFileToolHandler implements IFullyManagedTool {
 				workspaceContext,
 				block.isNativeToolCall,
 			)
-		}
-
-		try {
-			if (config.isSubagentExecution) {
-				const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-				await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-			}
-		} catch (error) {
-			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-			if (error instanceof PreToolUseHookCancellationError) {
-				return formatResponse.toolDenied()
-			}
-			throw error
 		}
 
 		// Execute the actual file read operation

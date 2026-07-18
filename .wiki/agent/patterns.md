@@ -1,5 +1,16 @@
 # Execution Patterns
 
+## Central Execution Funnel
+
+1. Give every invocation a stable task-scoped invocation ID.
+2. Enter `ExecutionFunnel.execute()` from parent, sibling, or subagent transport code.
+3. Evaluate the monolith's ordered admission stages and publish each complete event projection.
+4. Issue one in-process permit only after all synchronous authority passes.
+5. Dispatch exactly one registered handler under that permit; keep operation-specific validation and consent in the handler.
+6. Run reliability, post-hook, and post-policy observation inside the permit context.
+7. Publish one immutable terminal event with a stable reason code and decisive stage.
+8. Project results in deterministic order and keep task completion under the separate `CompletionFunnel`.
+
 ## Database-First Lease Lifecycle
 
 1. Run admission checks without creating a competing authority.
@@ -29,12 +40,12 @@
 
 ## Workspace-Local Query Fast Path
 
-1. Validate required parameters.
-2. Enforce `.dietcodeignore`.
+1. Enter the central funnel and classify the invocation as workspace query.
+2. Validate required parameters and enforce `.dietcodeignore`.
 3. Resolve whether the target is inside an open workspace.
 4. Reuse task authority for local query I/O; retain approval for external paths.
-5. Skip architectural mutation guards and pre-tool observability hooks.
-6. Return the result, then record lightweight evidence.
+5. Skip architectural mutation guards and pre-tool observability hooks as recorded funnel stages.
+6. Return the result and publish the same terminal event contract used by governed tools.
 
 ## Advisory Shift-Right
 

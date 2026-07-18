@@ -204,8 +204,10 @@ Tool calls may be native (model API tools) or parsed from text (`parseAssistantM
 - Maps `DietCodeDefaultTool` → handler factory
 - Supports **dynamic subagent handlers** (`dynamicSubagentHandlers` map)
 - Validates via `ToolValidator`
-- Runs hook pipeline (`ToolHookUtils`, `hook-executor.ts`) when hooks enabled
+- Dispatches handlers only under the active permit issued by `ExecutionFunnel`
 - Returns structured `ToolResponse` to conversation
+
+`ExecutionFunnel` is the sole execution authority for parent, sibling, and subagent calls. It centralizes admission, policy, hooks, dispatch reliability, and the terminal execution event; the coordinator cannot invoke a handler without its permit.
 
 Unwired enum entries (`rename_files`, `move_files`, `delete_file`, `focus_chain` as TODO handler) return `undefined` from factory — coordinator must handle absence.
 

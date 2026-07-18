@@ -37,6 +37,7 @@ This ledger now routes to the current LUMI workspace operating docs and preserve
 | I/O authority, backend, and fixture evidence recorded | [x] [Agent key findings](agent/key-findings.md) |
 | Lease reconciliation, deadlock, and completion CAS evidence recorded | [x] [Agent key findings](agent/key-findings.md) |
 | One central completion funnel and modern terminal event documented | [x] [Agent key findings](agent/key-findings.md) |
+| One central execution funnel and modern terminal tool event documented | [x] [Agent key findings](agent/key-findings.md) |
 | Canonical MEOW architecture suite linked | [x] [Whitepaper](meow-whitepaper.md) |
 | Historical forensic report refreshed after 2026-07-09 | [ ] Pending fresh diagnostics |
 | `ROADMAP.md` repaired after bootstrap drift | [ ] Pending roadmap pass |

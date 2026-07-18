@@ -12,7 +12,9 @@
 - Scheduled tool results are invocation-local. Canonical results are projected in model-emission order before advisory query-card replay; auto-approved local query presentation overlaps backend work. Non-query and interactive presentation remains shared. Do not append concurrent results directly to `TaskState.userMessageContent`.
 - All sibling mutations remain one lane because the classifier adds a shared `workspace-mutation` claim. Task verification commands share a `command-lane`; mutating/unknown commands fence the workspace.
 - Commands classified by the canonical JoyRide policy as `verification` or `safe-readonly` may overlap read-only diagnostics; shell operators, installs, builds, unknown commands, and environment mutations retain the workspace-wide fence.
-- CommandExecutor owns shell timeout/cancellation. The outer ActionExecutor shell lane uses no competing timeout or retry, so it cannot start a replacement while an original process is alive; all advisory notification timers clear in `finally`. Scoped command cancellation is supported by passing an optional `ownerId` to `cancelBackgroundCommand(ownerId)` and checking `hasActiveBackgroundCommand(ownerId)`.
+- `ExecutionFunnel.ts` is the sole tool execution authority. Parent, sibling, and subagent callers enter it; `ToolExecutorCoordinator` dispatches a handler only with the current in-process permit. Handlers may validate and prompt, but cannot publish an independent execution decision.
+- `ExecutionFunnelEvent` is the one execution projection. Consumers select a whole event and inspect its ordered stage trace; never infer status from handler prose or merge different invocation events.
+- `CommandExecutor` owns shell process timeout/cancellation. The funnel sets no competing shell timeout or retry, so it cannot start a replacement while an original process is alive; all advisory notification timers clear in `finally`. Scoped cancellation uses `cancelBackgroundCommand(ownerId)` and `hasActiveBackgroundCommand(ownerId)`.
 - Swarm execution lane concurrency must be controlled by tracking active execution slots in the pool (`running.size`) rather than yielded/suspended lifecycle states (`activeLaneExecutions`) to prevent premature queue saturation during setup.
 - Swarm resumes must check and validate that a candidate governed authority receipt is sealed and has valid integrity with a matching checksum before reusing historical agent work; unsealed or missing receipt evidence requires the lane to restart.
 - Subagents apply repetition detection (`MAX_CONSECUTIVE_IDENTICAL_CALLS = 3`) to self-correct with a nudge to re-evaluate or ask a follow-up, and signal a toxic hotspot to the parent swarm.
@@ -26,7 +28,7 @@
 
 ## Validation Coupling
 
-- When touching query authority, run `executionAuthority.test.ts` and `parentIoThroughput.test.ts`.
+- When touching execution or query authority, run `ExecutionFunnel.test.ts`, `tool-executor-hooks.test.ts`, sibling/subagent parity tests, and `parentIoThroughput.test.ts`.
 - When touching path/cache generations, run `TaskPathAuthorityCache.test.ts`, `TaskIoBackend.test.ts`, both ignore-controller suites, and `IoRequestCoalescer` coverage in `parentIoThroughput.test.ts`.
 - When touching read/list/search backends, run `extract-text.test.ts`, `glob/list-files.test.ts`, `ripgrep/index.test.ts`, and `languageParserCache.test.ts`.
 - When touching completion audit persistence, run `completionAuditResilience.test.ts` and `Orchestrator.test.ts`.

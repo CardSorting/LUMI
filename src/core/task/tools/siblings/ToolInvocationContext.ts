@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 import type Anthropic from "@anthropic-ai/sdk"
 import type { DietCodeAsk, DietCodeSay } from "@shared/ExtensionMessage"
+import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 
 export type CapturedToolResultContent = Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.ToolResultBlockParam
 
@@ -18,6 +19,7 @@ export interface ToolInvocationContextValue {
 	resultContent: CapturedToolResultContent[]
 	presentationEvents: CapturedPresentationEvent[]
 	signal?: AbortSignal
+	executionFunnelEvent?: ExecutionFunnelEvent
 }
 
 const invocationStorage = new AsyncLocalStorage<ToolInvocationContextValue>()

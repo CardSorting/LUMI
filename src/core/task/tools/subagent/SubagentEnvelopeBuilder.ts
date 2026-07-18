@@ -1,5 +1,6 @@
 import type { CompletionFunnelEvent } from "@shared/completion/completionFunnelEvent"
 import type { SubagentExecutionStatus } from "@shared/ExtensionMessage"
+import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 import type {
 	EvidenceReference,
 	ExecutionConfidence,
@@ -160,7 +161,13 @@ export class SubagentEnvelopeBuilder {
 		}
 	}
 
-	recordToolStep(toolName: string, preview: string, result: string, params: Record<string, string>): void {
+	recordToolStep(
+		toolName: string,
+		preview: string,
+		result: string,
+		params: Record<string, string>,
+		executionFunnelEvent: ExecutionFunnelEvent,
+	): void {
 		const touchedPaths = extractTouchedPaths(params)
 		for (const touchedPath of touchedPaths) {
 			this.touchedFiles.add(touchedPath)
@@ -174,6 +181,7 @@ export class SubagentEnvelopeBuilder {
 			timestamp: Date.now(),
 			touchedPaths,
 			params,
+			executionFunnelEvent,
 		}
 		this.toolSteps.push(step)
 		this.phase = "tool_execution"

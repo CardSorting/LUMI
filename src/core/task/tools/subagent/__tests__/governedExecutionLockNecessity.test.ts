@@ -15,6 +15,7 @@ import {
 } from "../LockNecessity"
 import { runMergeGate } from "../MergeGate"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
+import { terminalExecutionEvent } from "./executionFunnelFixture"
 
 function buildAgent(agentId: string, index: number, overrides?: Partial<SubagentExecutionEnvelope>): SubagentExecutionEnvelope {
 	const builder = new SubagentEnvelopeBuilder(agentId, "exec-1", "researcher", "swarm-1", "task-1", "inspect module", {
@@ -23,7 +24,13 @@ function buildAgent(agentId: string, index: number, overrides?: Partial<Subagent
 		depth: 1,
 	})
 	builder.setStatus("completed")
-	builder.recordToolStep("read_file", "read_file(path=src/shared.ts)", "contents", { path: "src/shared.ts" })
+	builder.recordToolStep(
+		"read_file",
+		"read_file(path=src/shared.ts)",
+		"contents",
+		{ path: "src/shared.ts" },
+		terminalExecutionEvent(),
+	)
 	builder.setTranscriptMeta("subagent_executions/swarm-1/agents/a.transcript.jsonl", 2, 80)
 	builder.complete("done")
 	return { ...builder.build(), compactionEvents: [], ...overrides }
@@ -283,6 +290,7 @@ describe("governed execution lock necessity", () => {
 						timestamp: Date.now(),
 						touchedPaths: ["docs/x.md"],
 						params: { path: "docs/x.md" },
+						executionFunnelEvent: terminalExecutionEvent("write_to_file"),
 					},
 				],
 				touchedFiles: ["docs/x.md"],

@@ -489,5 +489,5 @@ TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha \
 ## Related documentation
 
 - [Completion gate lifecycle](completion-gate-lifecycle-migration.md) — Engineering vs finalization lanes, receipt requirements, lifecycle states
-- [Parent-thread execution authority](parent-thread-execution-authority.md) — Hot/warm/cold execution model, I/O authority, shift-right gates
+- [Central execution funnel](parent-thread-execution-authority.md) — Permit-protected parent, sibling, and subagent tool execution
 - [Governed execution authority](governed-execution-authority.md) — Subagent execution, coordinator authority, seal barrier

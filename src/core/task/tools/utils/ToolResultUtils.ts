@@ -5,6 +5,7 @@ import { maybeTransitionToReplanMode } from "@core/task/utils/replanModeTransiti
 import { processFilesIntoText } from "@/integrations/misc/extract-text"
 import { DietCodeAsk } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
+import { executionFunnel } from "../execution/ExecutionFunnel"
 import { resolveInvocationResultTarget } from "../siblings/ToolInvocationContext"
 import type { ToolExecutorCoordinator } from "../ToolExecutorCoordinator"
 import { TaskConfig } from "../types/TaskConfig"
@@ -128,6 +129,7 @@ export class ToolResultUtils {
 	 */
 	static async askApprovalAndPushFeedback(type: DietCodeAsk, completeMessage: string, config: TaskConfig) {
 		if (config.isSubagentExecution) {
+			executionFunnel.recordApprovalDecision(true, "subagent_authority")
 			return true
 		}
 
@@ -155,10 +157,11 @@ export class ToolResultUtils {
 
 		if (response !== "yesButtonClicked") {
 			// User pressed reject button or responded with a message, which we treat as a rejection
-			config.taskState.didRejectTool = true // Prevent further tool uses in this message
+			executionFunnel.recordUserDecision(config.taskState, false)
 			return false
 		}
 		// User hit the approve button, and may have provided feedback
+		executionFunnel.recordUserDecision(config.taskState, true)
 		return true
 	}
 }

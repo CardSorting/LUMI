@@ -11,6 +11,7 @@ import { telemetryService } from "@/services/telemetry"
 import { BASH_WRAPPERS, DiffError, PATCH_MARKERS, type Patch, PatchActionType, type PatchChunk } from "@/shared/Patch"
 import { preserveEscaping } from "@/shared/string"
 import { showNotificationForApproval } from "../../utils"
+import { executionFunnel } from "../execution/ExecutionFunnel"
 import type { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
 import type { IFullyManagedTool, ToolResponse } from "../types/ToolContracts"
@@ -240,19 +241,6 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 
 			this.config = config
 
-			// Run PreToolUse hook before applying changes
-			try {
-				const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-				await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-			} catch (error) {
-				const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-				if (error instanceof PreToolUseHookCancellationError) {
-					await provider.reset()
-					return "The user denied this patch operation."
-				}
-				throw error
-			}
-
 			// Generate summary
 			const changedFiles = Object.keys(commit.changes)
 			const blockedWikiPaths = changedFiles.filter((filePath) => isWikiPath(filePath) && !isWikiWriteAuthorized(config))
@@ -306,7 +294,6 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 				const approved = await this.handleApproval(config, block, message, rawInput)
 				if (!approved) {
 					this.config = undefined
-					config.taskState.didRejectTool = true
 					await provider.revertChanges()
 					await provider.reset()
 					return "The user denied this patch operation."
@@ -748,7 +735,7 @@ export class ApplyPatchHandler implements IFullyManagedTool {
 		}
 
 		const approved = response === "yesButtonClicked"
-		config.taskState.didRejectTool = !approved
+		executionFunnel.recordUserDecision(config.taskState, approved)
 		telemetryService.captureToolUsage(
 			config.ulid,
 			this.name,

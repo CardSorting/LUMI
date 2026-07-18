@@ -18,7 +18,6 @@ import { isParallelToolCallingEnabled, modelDoesntSupportWebp } from "@/utils/mo
 import { ToolUse } from "../assistant-message"
 import { ContextManager } from "../context/context-management/ContextManager"
 import { KnowledgeGraphService } from "../context/KnowledgeGraphService"
-import { createLockAuthority } from "../governance/LockAuthority"
 import { formatResponse } from "../prompts/responses"
 import { StateManager } from "../storage/StateManager"
 import { WorkspaceRootManager } from "../workspace"
@@ -29,13 +28,12 @@ import { TaskState } from "./TaskState"
 import { canonicalizeAttemptCompletionParams } from "./tools/attemptCompletionUtils"
 import { AutoApprove } from "./tools/autoApprove"
 import {
+	executionFunnel,
+	isAuthoritativeToolFailure,
 	isLocalMutationTool,
-	shouldBypassGuardForParentIoTool,
-	shouldCloseBrowserBetweenTools,
-	shouldDeferParentGuardPostExecution,
-	shouldSkipLayerInjectionForParentIoTool,
+	refreshIgnorePolicyAfterToolMutation,
 	shouldUseIoAuthorityReadFastPath,
-} from "./tools/executionAuthority"
+} from "./tools/execution/ExecutionFunnel"
 import { disposeIoRequestCoalescer, getIoRequestCoalescer, resetIoRequestCoalescer } from "./tools/io/IoRequestCoalescer"
 import { type PathAuthorityRecord, TaskPathAuthorityCache } from "./tools/io/TaskPathAuthorityCache"
 import { RefactorHealer } from "./tools/RefactorHealer"
@@ -45,8 +43,8 @@ import {
 	type CapturedToolResultContent,
 	getToolInvocationContext,
 	getToolInvocationSignal,
-	resolveInvocationResultTarget,
 	runWithToolInvocationContext,
+	type ToolInvocationContextValue,
 } from "./tools/siblings/ToolInvocationContext"
 import { IPartialBlockHandler, ToolExecutorCoordinator } from "./tools/ToolExecutorCoordinator"
 import { ToolValidator } from "./tools/ToolValidator"
@@ -60,41 +58,7 @@ export { canonicalizeAttemptCompletionParams } from "./tools/attemptCompletionUt
 import { ReactivePolicyObserver } from "../policy/ReactivePolicyObserver"
 import { UniversalGuard } from "../policy/UniversalGuard"
 
-const TOOL_FAILURE_RESULT_PATTERN =
-	/The tool execution failed with the following error:|The user denied this operation\.|Tool was interrupted and not executed|Skipping tool due to user rejecting/
-
-function mutationTargetPaths(block: ToolUse, cwd: string): string[] {
-	if (block.name !== DietCodeDefaultTool.APPLY_PATCH) {
-		return block.params.path?.trim() ? [path.resolve(cwd, block.params.path)] : []
-	}
-	const targets = new Set<string>()
-	for (const line of block.params.input?.split("\n") ?? []) {
-		const match = /^\*\*\* (?:Add File|Update File|Delete File|Move to):\s+(.+)$/.exec(line.trim())
-		if (match?.[1]) targets.add(path.resolve(cwd, match[1]))
-	}
-	return [...targets]
-}
-
-export async function refreshIgnorePolicyAfterToolMutation(
-	block: ToolUse,
-	cwd: string,
-	controller: Pick<DietCodeIgnoreController, "refreshPolicy" | "refreshPolicyIfAffected">,
-	localMutation: boolean,
-): Promise<void> {
-	if (block.name === DietCodeDefaultTool.BASH && isReadOnlyVerificationCommand(block.params.command)) return
-	if (block.name === DietCodeDefaultTool.BASH || block.name === DietCodeDefaultTool.MCP_USE) {
-		await controller.refreshPolicy()
-		return
-	}
-	if (!localMutation) return
-
-	const targets = mutationTargetPaths(block, cwd)
-	if (targets.length === 0) {
-		await controller.refreshPolicy()
-		return
-	}
-	for (const target of targets) await controller.refreshPolicyIfAffected(target)
-}
+export { refreshIgnorePolicyAfterToolMutation } from "./tools/execution/ExecutionFunnel"
 
 export class ToolExecutor {
 	private autoApprover: AutoApprove
@@ -162,8 +126,9 @@ export class ToolExecutor {
 		presentationEvents: CapturedPresentationEvent[]
 		outcome: "succeeded" | "failed"
 		error?: string
+		executionFunnelEvent?: import("@shared/execution/executionFunnelEvent").ExecutionFunnelEvent
 	}> {
-		const context = {
+		const context: ToolInvocationContextValue = {
 			invocationId,
 			sequence,
 			capturePresentation,
@@ -174,21 +139,8 @@ export class ToolExecutor {
 		signal?.throwIfAborted()
 		await runWithToolInvocationContext(context, () => this.executeTool(block))
 		signal?.throwIfAborted()
-		const stack: unknown[] = [...context.resultContent]
-		const seen = new Set<object>()
-		let failed = false
-		for (let visited = 0; stack.length > 0 && visited < 4_096 && !failed; visited++) {
-			const value = stack.pop()
-			if (typeof value === "string") {
-				failed = TOOL_FAILURE_RESULT_PATTERN.test(value)
-			} else if (value && typeof value === "object" && !seen.has(value)) {
-				seen.add(value)
-				for (const [key, nested] of Object.entries(value)) {
-					// Image base64 is immutable payload, never an execution-status carrier.
-					if (key !== "data") stack.push(nested)
-				}
-			}
-		}
+		const executionEvent = context.executionFunnelEvent
+		const failed = executionEvent ? executionEvent.phase !== "succeeded" : isAuthoritativeToolFailure(context.resultContent)
 		this.latencyTracker?.markIoStage("envelope_completed", this.invocationDetail(block, invocationId))
 		Object.freeze(context.resultContent)
 		Object.freeze(context.presentationEvents)
@@ -196,7 +148,8 @@ export class ToolExecutor {
 			resultContent: context.resultContent,
 			presentationEvents: context.presentationEvents,
 			outcome: failed ? "failed" : "succeeded",
-			error: failed ? "Tool returned an authoritative failure result" : undefined,
+			error: failed ? executionEvent?.reason || "Tool returned an authoritative failure result" : undefined,
+			executionFunnelEvent: executionEvent,
 		}
 	}
 
@@ -206,7 +159,7 @@ export class ToolExecutor {
 		invocationId: string,
 		content: ToolResponse,
 	): Promise<CapturedToolResultContent[]> {
-		const context = {
+		const context: ToolInvocationContextValue = {
 			invocationId,
 			sequence,
 			capturePresentation: true,
@@ -354,6 +307,7 @@ export class ToolExecutor {
 		config.auditSarifHookExportEnabled = this.stateManager.getGlobalSettingsKey("auditSarifHookExportEnabled")
 		config.auditWorkspaceArtifactsEnabled = this.stateManager.getGlobalSettingsKey("auditWorkspaceArtifactsEnabled")
 		config.enableParallelToolCalling = this.isParallelToolCallingEnabled()
+		config.hooksEnabled = getHooksEnabledSafe()
 		config.taskSignal = this.getTaskSignal()
 		config.autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 		config.browserSettings = this.stateManager.getGlobalSettingsKey("browserSettings")
@@ -403,6 +357,7 @@ export class ToolExecutor {
 			vscodeTerminalExecutionMode: this.vscodeTerminalExecutionMode,
 			enableParallelToolCalling: this.isParallelToolCallingEnabled(),
 			isSubagentExecution: false,
+			hooksEnabled: getHooksEnabledSafe(),
 			finalizationMode: false,
 			latencyTracker: this.latencyTracker,
 			taskSignal: this.getTaskSignal(),
@@ -528,7 +483,6 @@ export class ToolExecutor {
 	 * This is a critical method that:
 	 * - Formats the tool result appropriately for the API
 	 * - Adds it to the conversation context
-	 * - Marks that a tool has been used in this turn
 	 *
 	 * @param content The tool response content to add
 	 * @param block The tool use block that generated this result
@@ -543,13 +497,6 @@ export class ToolExecutor {
 			this.coordinator,
 			this.taskState.toolUseIdMap,
 		)
-		// Mark that a tool has been used (only matters when parallel tool calling is disabled)
-		if (!this.isParallelToolCallingEnabled()) {
-			this.taskState.didAlreadyUseTool = true
-		}
-	}
-
-	/**
 	}
 
 	/**
@@ -568,114 +515,28 @@ export class ToolExecutor {
 	}
 
 	/**
-	 * Tools that are restricted in plan mode and can only be used in act mode
-	 */
-	private static readonly PLAN_MODE_RESTRICTED_TOOLS: DietCodeDefaultTool[] = [
-		DietCodeDefaultTool.FILE_NEW,
-		DietCodeDefaultTool.FILE_EDIT,
-		DietCodeDefaultTool.NEW_RULE,
-		DietCodeDefaultTool.APPLY_PATCH,
-	]
-
-	/**
-	 * Execute a tool through the coordinator if it's registered.
+	 * Prepare a tool invocation and delegate complete execution to the funnel.
 	 *
 	 * This is the main entry point for tool execution, called by the Task class.
 	 * It handles:
-	 * - Checking if the tool is registered with the coordinator
-	 * - Validating tool execution is allowed (not rejected, not already used, etc.)
-	 * - Enforcing plan mode restrictions on file modification tools
-	 * - Delegating to partial or complete block handlers
-	 * - Error handling and checkpointing
+	 * - Canonicalizing compatibility parameters
+	 * - Building the handler configuration
+	 * - Delegating partial blocks to presentation only
+	 * - Sending complete blocks through `ExecutionFunnel`
+	 * - Publishing preparation failures through the same event contract
 	 *
 	 * @param block The tool use block to execute
 	 * @returns true if the tool was handled (even if execution failed), false if not registered
 	 */
 	private async execute(block: ToolUse): Promise<boolean> {
-		// Note: MCP tool name transformation happens earlier in ToolUseHandler.getPartialToolUsesAsContent()
-		// The toolUseIdMap is updated at the point of transformation in index.ts
-
-		if (!this.coordinator.has(block.name)) {
-			return false // Tool not handled by coordinator
-		}
-		canonicalizeAttemptCompletionParams(block)
-
-		const config = await this.asToolConfig()
-
 		try {
-			// Check if user rejected a previous tool
-			if (this.taskState.didRejectTool) {
-				const reason = block.partial
-					? "Tool was interrupted and not executed due to user rejecting a previous tool."
-					: "Skipping tool due to user rejecting a previous tool."
-				this.createToolRejectionMessage(block, reason)
-				return true
-			}
-
-			// Check if a tool has already been used in this message (only enforced when parallel tool calling is disabled)
-			if (!this.isParallelToolCallingEnabled() && this.taskState.didAlreadyUseTool) {
-				resolveInvocationResultTarget(this.taskState.userMessageContent).push({
-					type: "text",
-					text: formatResponse.toolAlreadyUsed(block.name),
-				})
-				return true
-			}
-
-			// Logic for plan-mode tool call restrictions
-			if (
-				this.stateManager.getGlobalSettingsKey("strictPlanModeEnabled") &&
-				this.stateManager.getGlobalSettingsKey("mode") === "plan" &&
-				block.name
-			) {
-				const isNaturallyRestricted = this.isPlanModeToolRestricted(block.name)
-
-				// Layer-Contextual Blocking: Prevent bypasses in DOMAIN and CORE layers during planning
-				const params = block.params as any
-				const { getTargetPath } = require("@/utils/joy-zoning")
-				const targetPath = getTargetPath(params)
-				let isLayerRestricted = false
-				let layerHint = ""
-
-				if (targetPath) {
-					const layer = this.guard.getLayerForPath(targetPath)
-
-					if (
-						(layer === "domain" || layer === "core") &&
-						(block.name === DietCodeDefaultTool.BASH || block.name === DietCodeDefaultTool.MCP_USE)
-					) {
-						isLayerRestricted = true
-						const role = layer.toUpperCase()
-						layerHint = `\n\nThis operation targets the **${role}** layer. To maintain architectural purity, direct execution or MCP interventions on ${role} logic are strictly forbidden during the PLANNING phase. Focus on:
-- Mapping dependencies and interfaces.
-- Defining contracts in Domain.
-- Orchestration logic in Core (without side effects).`
-					} else if (layer) {
-						layerHint = `\n\nThis file belongs to the **${layer.toUpperCase()}** layer. While planning, consider:\n- What interfaces does this change need?\n- Which other layers will be affected?\n- Should domain logic be separated from infrastructure?`
-					}
-				}
-
-				if (isNaturallyRestricted || isLayerRestricted) {
-					const errorMessage = isLayerRestricted
-						? `Tool '${block.name}' is temporarily restricted for this target in PLAN MODE.${layerHint}`
-						: `Tool '${block.name}' is not available in PLAN MODE. The system will automatically transition to ACT MODE after you finalize your plan with plan_mode_respond.${layerHint}`
-
-					await this.removeLastPartialMessageIfExistsWithType("say", "error")
-					await this.say("error", errorMessage)
-
-					if (!block.partial) {
-						this.pushToolResult(formatResponse.toolError(errorMessage), block)
-					}
-					return true
-				}
-			}
-
-			// Close browser for non-browser tools when a session is active
-			if (shouldCloseBrowserBetweenTools(block.name, this.browserSession.hasActiveSession())) {
-				void this.browserSession.closeBrowser().catch(() => undefined)
-			}
+			// MCP name transformation and toolUseIdMap projection happen earlier in the stream handler.
+			canonicalizeAttemptCompletionParams(block)
+			const config = await this.asToolConfig()
 
 			// Handle partial blocks
 			if (block.partial) {
+				if (!this.coordinator.has(block.name)) return false
 				await this.handlePartialBlock(block, config)
 				return true
 			}
@@ -684,136 +545,18 @@ export class ToolExecutor {
 			await this.handleCompleteBlock(block, config)
 			return true
 		} catch (error) {
+			if (!block.partial) {
+				executionFunnel.recordPreparationFailure(
+					this.taskState,
+					this.taskId,
+					block,
+					getToolInvocationContext() ? "sibling" : "parent",
+					error,
+				)
+			}
 			await this.handleError(`executing ${block.name}`, error as Error, block)
 			return true
 		}
-	}
-
-	/**
-	 * Check if a tool is restricted in plan mode.
-	 *
-	 * In strict plan mode, file modification tools (write_to_file, editedExistingFile, etc.)
-	 * are blocked. The AI must switch to Act mode to use these tools.
-	 *
-	 * @param toolName The name of the tool to check
-	 * @returns true if the tool is restricted in plan mode, false otherwise
-	 */
-	private isPlanModeToolRestricted(toolName: DietCodeDefaultTool): boolean {
-		return ToolExecutor.PLAN_MODE_RESTRICTED_TOOLS.includes(toolName)
-	}
-
-	/**
-	 * Create a tool rejection message and add it to user message content.
-	 *
-	 * Used when a tool cannot be executed (e.g., user rejected a previous tool,
-	 * tool was interrupted, etc.). Adds a text message to the conversation explaining
-	 * why the tool was not executed.
-	 *
-	 * @param block The tool use block that was rejected
-	 * @param reason Human-readable explanation of why the tool was rejected
-	 */
-	private createToolRejectionMessage(block: ToolUse, reason: string): void {
-		resolveInvocationResultTarget(this.taskState.userMessageContent).push({
-			type: "text",
-			text: `${reason} ${ToolDisplayUtils.getToolDescription(block, this.coordinator)}`,
-		})
-	}
-
-	/**
-	 * Adds hook context modification to the conversation if provided.
-	 * Parses the context to extract type prefix and formats as XML.
-	 *
-	 * @param contextModification The context string from the hook output
-	 * @param source The hook source name ("PreToolUse" or "PostToolUse")
-	 */
-	private addHookContextToConversation(contextModification: string | undefined, source: string): void {
-		if (!contextModification) {
-			return
-		}
-
-		const contextText = contextModification.trim()
-		if (!contextText) {
-			return
-		}
-
-		// Extract context type from first line if specified (e.g., "WORKSPACE_RULES: ...")
-		const lines = contextText.split("\n")
-		const firstLine = lines[0]
-		let contextType = "general"
-		let content = contextText
-
-		// Check if first line specifies a type: "TYPE: content"
-		const typeMatchRegex = /^([A-Z_]+):\s*(.*)/
-		const typeMatch = typeMatchRegex.exec(firstLine)
-		if (typeMatch) {
-			contextType = typeMatch[1].toLowerCase()
-			const remainingLines = lines.slice(1).filter((l: string) => l.trim())
-			content = typeMatch[2] ? [typeMatch[2], ...remainingLines].join("\n") : remainingLines.join("\n")
-		}
-
-		const hookContextBlock = {
-			type: "text" as const,
-			text: `<hook_context source="${source}" type="${contextType}">\n${content}\n</hook_context>`,
-		}
-
-		resolveInvocationResultTarget(this.taskState.userMessageContent).push(hookContextBlock)
-	}
-
-	/**
-	 * Runs the PostToolUse hook after tool execution.
-	 * This is extracted from handleCompleteBlock to eliminate code duplication
-	 * between success and error paths.
-	 *
-	 * @param block The tool use block that was executed
-	 * @param toolResult The result from the tool execution
-	 * @param executionSuccess Whether the tool executed successfully
-	 * @param executionStartTime The timestamp when tool execution started
-	 * @returns true if hook requested cancellation, false otherwise
-	 */
-	private async runPostToolUseHook(
-		block: ToolUse,
-		toolResult: any,
-		executionSuccess: boolean,
-		executionStartTime: number,
-	): Promise<boolean> {
-		const { executeHook } = await import("../hooks/hook-executor")
-
-		const executionTimeMs = Date.now() - executionStartTime
-
-		const postToolResult = await executeHook({
-			hookName: "PostToolUse",
-			hookInput: {
-				postToolUse: {
-					toolName: block.name,
-					parameters: block.params,
-					result: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult),
-					success: executionSuccess,
-					executionTimeMs,
-				},
-			},
-			isCancellable: true,
-			say: this.say,
-			setActiveHookExecution: this.setActiveHookExecution,
-			clearActiveHookExecution: this.clearActiveHookExecution,
-			messageStateHandler: this.messageStateHandler,
-			taskId: this.taskId,
-			hooksEnabled: true, // Already checked by caller
-			toolName: block.name,
-		})
-
-		// Handle cancellation request
-		if (postToolResult.cancel === true) {
-			const errorMessage = postToolResult.errorMessage || "Hook requested task cancellation"
-			await this.say("error", errorMessage)
-			return true
-		}
-
-		// Add context modification to the conversation if provided
-		if (postToolResult.contextModification) {
-			this.addHookContextToConversation(postToolResult.contextModification, "PostToolUse")
-		}
-
-		return false
 	}
 
 	/**
@@ -848,276 +591,39 @@ export class ToolExecutor {
 	/**
 	 * Handle complete block execution.
 	 *
-	 * This is the main execution flow for a tool:
-	 * 1. Execute the actual tool (tool handlers now run PreToolUse hooks post-approval)
-	 * 2. Run PostToolUse hooks (if enabled) - cannot block, only observe
-	 * 3. Add hook context modifications to the conversation
-	 * 4. Update focus chain tracking
-	 *
-	 * Note: PreToolUse hooks are now executed by individual tool handlers after approval
-	 * and before the actual tool operation. This provides better UX as approval dialogs
-	 * appear immediately without hook execution delay.
-	 *
-	 * PostToolUse hooks are for observation/logging only and cannot block.
+	 * The central funnel owns every status-affecting stage and returns one terminal
+	 * event. This adapter enriches successful results inside the permit boundary,
+	 * then projects the finalized result and schedules advisory focus tracking.
 	 *
 	 * @param block The complete tool use block with all parameters
 	 * @param config The task configuration containing all necessary context
 	 */
-	private async handleCompleteBlock(block: ToolUse, config: any): Promise<void> {
-		// Check abort flag at the very start to prevent execution after cancellation
-		if (this.taskState.abort) {
-			return
-		}
-
-		const isMutating = !["view_file", "grep_search", "list_dir", "attempt_completion"].includes(block.name)
-
-		if (isMutating) {
-			if (this.taskState.activeLockClaim) {
-				const activeClaim = this.taskState.activeLockClaim
-				const claim = ("lockClaim" in activeClaim ? activeClaim.lockClaim : activeClaim) as
-					| import("@shared/governance/lockTypes").LockClaim
-					| undefined
-				if (!claim) {
-					throw new Error("Mutating governed lane is missing its durable lock claim.")
-				}
-				const lockAuthority = createLockAuthority()
-				await lockAuthority.assertCurrentFencingToken(claim.resourceKey, String(claim.fencingToken), this.cwd)
-			}
-			this.taskState.workspaceStateVersion = (this.taskState.workspaceStateVersion || 0) + 1
-			this.taskState.workspaceContentVersion = (this.taskState.workspaceContentVersion || 0) + 1
-		}
-
-		const hooksEnabled = getHooksEnabledSafe()
-
-		// Track if we need to cancel after hooks complete
-		let shouldCancelAfterHook = false
-
-		let executionSuccess = true
-		let toolResult: any = null
-		let toolWasExecuted = false
-		const executionStartTime = Date.now()
-
-		// Mode Awareness: Synchronize the guard with the current task mode
-		this.guard.setMode(this.stateManager.getGlobalSettingsKey("mode") || "act")
-
-		const parentIoFastPath = shouldBypassGuardForParentIoTool(block.name)
+	private async handleCompleteBlock(block: ToolUse, config: TaskConfig): Promise<void> {
 		const invocationDetail = this.invocationDetail(block)
 		this.latencyTracker?.markOnce("tool_dispatch_started", invocationDetail)
 		this.latencyTracker?.markIoStage("dispatch_entered", invocationDetail)
 
-		// Direct Layer Injection — skip for I/O authority (joy-zoning not needed on read/list/search)
-		if (!shouldSkipLayerInjectionForParentIoTool(block.name) && block.params.path) {
-			const { getLayer } = require("@/utils/joy-zoning")
-			block.layer = getLayer(path.resolve(this.cwd, block.params.path))
-		}
-
-		// Roadmap write guard + mutation tracking
-		if (
-			(block.name === DietCodeDefaultTool.FILE_NEW ||
-				block.name === DietCodeDefaultTool.FILE_EDIT ||
-				block.name === DietCodeDefaultTool.APPLY_PATCH ||
-				block.name === DietCodeDefaultTool.DIETCODE_KERNEL) &&
-			block.params.path
-		) {
-			try {
-				const { preflightRoadmapWrite, targetsRoadmapFile } = require("@/services/roadmap/RoadmapNativeBridge")
-				if (targetsRoadmapFile(block.name, block.params)) {
-					const preflight = await preflightRoadmapWrite(block.name, block.params, this.cwd)
-					if (preflight.block) {
-						const blockMessage = preflight.message ?? "Roadmap write blocked."
-						await this.say("error_retry" as any, blockMessage)
-						this.taskState.consecutiveMistakeCount++
-						this.pushToolResult(formatResponse.toolError(blockMessage), block)
-						return
-					}
-				}
-			} catch {
-				const { getRoadmapConfig } = require("@/services/roadmap/RoadmapConfig")
-				const cfg = getRoadmapConfig()
-				if (cfg.enabled && cfg.fail_closed_completion_gates) {
-					const message =
-						"ROADMAP write guard failed — cannot verify write target safely. Verify workspace root and ROADMAP.md path, then retry the edit."
-					await this.say("error_retry" as any, message)
-					this.taskState.consecutiveMistakeCount++
-					this.pushToolResult(formatResponse.toolError(message), block)
-					return
-				}
+		const outcome = await executionFunnel.execute({
+			config,
+			block,
+			registered: this.coordinator.has(block.name),
+			lane: getToolInvocationContext() ? "sibling" : "parent",
+			signal: getToolInvocationSignal() ?? this.getTaskSignal(),
+			operation: () => this.coordinator.execute(config, block),
+			postProcess: (result) => this.postProcessSuccessfulResult(block, config, result),
+		})
+		if (outcome.warning) void this.say("text", outcome.warning).catch(() => undefined)
+		if (outcome.result === undefined) {
+			const message = outcome.event.reason
+			if (outcome.event.phase !== "cancelled") {
+				await this.say("error_retry" as DietCodeSay, message)
+				this.taskState.consecutiveMistakeCount++
+				this.pushToolResult(formatResponse.toolError(message), block)
 			}
-		}
-
-		try {
-			if (!parentIoFastPath) {
-				// Policy Enforcement: Pre-Execution
-				const preExecResult = await this.guard.guardPreExecution(block)
-				if (!preExecResult.success) {
-					await this.say("error_retry" as any, preExecResult.error!)
-					this.taskState.consecutiveMistakeCount++
-					this.pushToolResult((formatResponse as any).architecturalCorrection(preExecResult.error!), block)
-					return
-				}
-				if (preExecResult.warning) {
-					this.say("text", preExecResult.warning).catch(() => {})
-				}
-			}
-
-			// Final abort check immediately before tool execution
-			if (this.taskState.abort) {
-				return
-			}
-
-			// Parent I/O handlers acquire their work-class budget inside the
-			// generation-safe singleflight leader, after per-invocation validation.
-			toolResult = await this.coordinator.execute(config, block)
-			toolWasExecuted = true
-			if (parentIoFastPath) {
-				;(getToolInvocationSignal() ?? this.getTaskSignal()).throwIfAborted()
-			}
-
-			// A local mutation ends the validity window for completed I/O cache entries.
-			// In-flight query coalescing remains available on the next stable generation.
-			const scratchpadReadMayCreate =
-				block.name === DietCodeDefaultTool.FILE_READ &&
-				path.basename(block.params.path?.trim() ?? "").toLowerCase() === "scratchpad.md"
-			const localMutation = isLocalMutationTool(block.name) || scratchpadReadMayCreate
-			const opaqueMutation =
-				block.name === DietCodeDefaultTool.MCP_USE ||
-				(block.name === DietCodeDefaultTool.BASH && !isReadOnlyVerificationCommand(block.params.command))
-			await this.refreshIgnorePolicyAfterMutation(block, localMutation)
-			if (localMutation || opaqueMutation) {
-				resetIoRequestCoalescer(this.taskId)
-			}
-
-			// Roadmap post-write: record mutation and attach validate nudge
-			if (
-				(block.name === DietCodeDefaultTool.FILE_NEW ||
-					block.name === DietCodeDefaultTool.FILE_EDIT ||
-					block.name === DietCodeDefaultTool.APPLY_PATCH ||
-					block.name === DietCodeDefaultTool.DIETCODE_KERNEL) &&
-				block.params.path
-			) {
-				try {
-					const { afterRoadmapWrite, appendRoadmapWriteHint, targetsRoadmapFile } =
-						require("@/services/roadmap/RoadmapNativeBridge")
-					if (targetsRoadmapFile(block.name, block.params)) {
-						void afterRoadmapWrite(block.name, block.params, this.cwd).catch((error: unknown) => {
-							Logger.warn("[ToolExecutor] Deferred roadmap mutation journal failed:", error)
-						})
-						toolResult = await appendRoadmapWriteHint(block.name, block.params, this.cwd, toolResult)
-					}
-				} catch {
-					// Non-fatal
-				}
-			}
-
-			// Autonomous Self-Healing: Align tags and resolve imports
-			if (
-				(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
-				block.params.path
-			) {
-				const fullPath = path.resolve(this.cwd, block.params.path)
-				void this.healer.alignTag(fullPath).catch(() => undefined)
-			}
-
-			// Policy Enforcement: Read-Time
-			if (
-				(block.name === DietCodeDefaultTool.FILE_READ || block.name === DietCodeDefaultTool.SEARCH) &&
-				block.params.path &&
-				typeof toolResult === "string"
-			) {
-				const pathKey = block.params.path
-				const currentCount = this.taskState.currentTurnReadHistory.get(pathKey) || 0
-				if (currentCount === 0) {
-					this.taskState.currentTurnUniqueReadCount++
-				}
-				const newCount = currentCount + 1
-				this.taskState.currentTurnReadHistory.set(pathKey, newCount)
-				this.taskState.currentTurnTotalReadCount++
-
-				const globalCount = (this.taskState.taskReadHistory.get(pathKey) || 0) + 1
-				this.taskState.taskReadHistory.set(pathKey, globalCount)
-
-				if (shouldUseIoAuthorityReadFastPath(block.name)) {
-					toolResult = this.guard.onReadIoAuthority(block.params.path, toolResult)
-				} else {
-					toolResult = await this.guard.onRead(
-						block.params.path,
-						toolResult,
-						this.taskState.currentTurnUniqueReadCount,
-						newCount,
-						globalCount,
-					)
-				}
-
-				if (block.name === DietCodeDefaultTool.FILE_READ && typeof toolResult === "string") {
-					const readPath = block.params.path
-					void (async () => {
-						try {
-							const { NativeMutationManager } = require("@/services/mutation/NativeMutationManager")
-							const mutationManager = NativeMutationManager.getInstance()
-							if (readPath) {
-								await mutationManager.autoTrackFileRead(this.cwd, readPath, config.taskId || config.ulid)
-							}
-						} catch {
-							// Silent fallback
-						}
-					})()
-				}
-			}
-
-			this.pushToolResult(toolResult, block)
-			this.latencyTracker?.markIoStage("envelope_completed", invocationDetail)
-
-			if (!parentIoFastPath) {
-				const runPostExecution = async () => {
-					const postExecResult = await this.guard.guardPostExecution(block, toolResult, undefined)
-					if (
-						(block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) &&
-						block.params.path
-					) {
-						const telemetry = this.guard.getStabilityTelemetry(block.params.path)
-						const summary = (formatResponse as any).postExecutionSummary(telemetry, postExecResult.violations)
-						Logger.debug(`[ToolExecutor] Post-execution substrate telemetry:\n${summary}`)
-					} else if (postExecResult.warning) {
-						Logger.debug(`[ToolExecutor] Post-execution policy diagnostic:\n${postExecResult.warning}`)
-					}
-				}
-
-				if (shouldDeferParentGuardPostExecution(block.name, config.isSubagentExecution)) {
-					void runPostExecution().catch((error) => {
-						Logger.warn("[ToolExecutor] Deferred guard post-execution failed:", error)
-					})
-				} else {
-					await runPostExecution()
-				}
-			}
-		} catch (error) {
-			executionSuccess = false
-			const errorMsg = `Tool execution failed: ${error}`
-			toolResult = formatResponse.toolError(errorMsg)
-
-			// Check abort before running PostToolUse hook (error path)
-			if (this.taskState.abort) {
-				throw error
-			}
-
-			// Run PostToolUse hook for failed tool execution
-			// Skip for attempt_completion since it marks task completion, not actual work
-			if (toolWasExecuted && hooksEnabled && block.name !== "attempt_completion") {
-				const hookRequestedCancel = await this.runPostToolUseHook(block, toolResult, executionSuccess, executionStartTime)
-				if (hookRequestedCancel) {
-					await config.callbacks.cancelTask()
-					shouldCancelAfterHook = true
-				}
-			}
-
-			// Re-throw the error after PostToolUse completes
-			throw error
-		}
-
-		// Early return if hook requested cancellation
-		if (shouldCancelAfterHook) {
 			return
 		}
+		this.pushToolResult(outcome.result, block)
+		this.latencyTracker?.markIoStage("envelope_completed", invocationDetail)
 
 		// Handle focus chain updates (shift-right — non-blocking for tool throughput)
 		if (
@@ -1127,5 +633,90 @@ export class ToolExecutor {
 		) {
 			void this.updateFCListFromToolResponse(block.params.task_progress).catch(() => undefined)
 		}
+	}
+
+	private async postProcessSuccessfulResult(
+		block: ToolUse,
+		config: TaskConfig,
+		initialResult: ToolResponse,
+	): Promise<ToolResponse> {
+		let toolResult = initialResult
+		const scratchpadReadMayCreate =
+			block.name === DietCodeDefaultTool.FILE_READ &&
+			path.basename(block.params.path?.trim() ?? "").toLowerCase() === "scratchpad.md"
+		const localMutation = isLocalMutationTool(block.name) || scratchpadReadMayCreate
+		const opaqueMutation =
+			block.name === DietCodeDefaultTool.MCP_USE ||
+			(block.name === DietCodeDefaultTool.BASH && !isReadOnlyVerificationCommand(block.params.command))
+		await this.refreshIgnorePolicyAfterMutation(block, localMutation)
+		if (localMutation || opaqueMutation) resetIoRequestCoalescer(this.taskId)
+
+		if (
+			(block.name === DietCodeDefaultTool.FILE_NEW ||
+				block.name === DietCodeDefaultTool.FILE_EDIT ||
+				block.name === DietCodeDefaultTool.APPLY_PATCH ||
+				block.name === DietCodeDefaultTool.DIETCODE_KERNEL) &&
+			block.params.path
+		) {
+			try {
+				const { afterRoadmapWrite, appendRoadmapWriteHint, targetsRoadmapFile } =
+					require("@/services/roadmap/RoadmapNativeBridge")
+				if (targetsRoadmapFile(block.name, block.params)) {
+					void afterRoadmapWrite(block.name, block.params, this.cwd).catch((error: unknown) => {
+						Logger.warn("[ToolExecutor] Deferred roadmap mutation journal failed:", error)
+					})
+					toolResult = await appendRoadmapWriteHint(block.name, block.params, this.cwd, toolResult)
+				}
+			} catch {
+				// Advisory roadmap projection is non-authoritative.
+			}
+		}
+
+		if ((block.name === DietCodeDefaultTool.FILE_NEW || block.name === DietCodeDefaultTool.FILE_EDIT) && block.params.path) {
+			void this.healer.alignTag(path.resolve(this.cwd, block.params.path)).catch(() => undefined)
+		}
+
+		if (
+			(block.name === DietCodeDefaultTool.FILE_READ || block.name === DietCodeDefaultTool.SEARCH) &&
+			block.params.path &&
+			typeof toolResult === "string"
+		) {
+			const pathKey = block.params.path
+			const currentCount = this.taskState.currentTurnReadHistory.get(pathKey) || 0
+			if (currentCount === 0) this.taskState.currentTurnUniqueReadCount++
+			const newCount = currentCount + 1
+			this.taskState.currentTurnReadHistory.set(pathKey, newCount)
+			this.taskState.currentTurnTotalReadCount++
+			const globalCount = (this.taskState.taskReadHistory.get(pathKey) || 0) + 1
+			this.taskState.taskReadHistory.set(pathKey, globalCount)
+
+			toolResult = shouldUseIoAuthorityReadFastPath(block.name)
+				? this.guard.onReadIoAuthority(block.params.path, toolResult)
+				: await this.guard.onRead(
+						block.params.path,
+						toolResult,
+						this.taskState.currentTurnUniqueReadCount,
+						newCount,
+						globalCount,
+					)
+
+			if (block.name === DietCodeDefaultTool.FILE_READ) {
+				const readPath = block.params.path
+				void (async () => {
+					try {
+						const { NativeMutationManager } = require("@/services/mutation/NativeMutationManager")
+						await NativeMutationManager.getInstance().autoTrackFileRead(
+							this.cwd,
+							readPath,
+							config.taskId || config.ulid,
+						)
+					} catch {
+						// Advisory read tracking is non-authoritative.
+					}
+				})()
+			}
+		}
+
+		return toolResult
 	}
 }

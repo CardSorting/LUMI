@@ -1,7 +1,7 @@
 import pathModule from "node:path"
 import type { ToolUse } from "@core/assistant-message"
 import { DietCodeDefaultTool } from "@/shared/tools"
-import { isIoAuthorityTool } from "../executionAuthority"
+import { isIoAuthorityTool } from "../execution/ExecutionFunnel"
 
 export type IoCoalesceKey = string
 

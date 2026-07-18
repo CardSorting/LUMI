@@ -15,6 +15,7 @@ import { ModelInfo } from "@shared/api"
 import { resolveCompletionGateOptions } from "@shared/audit/auditGatePolicyLoader"
 import type { CompletionGateOptions } from "@shared/audit/auditGateReport"
 import { buildSubagentAuditContext, buildSubagentGateSignals } from "@shared/audit/auditSubagentContext"
+import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 import {
 	DietCodeAssistantToolUseBlock,
 	DietCodeStorageMessage,
@@ -47,10 +48,11 @@ import {
 	wrapFormattedCompletionError,
 } from "../attemptCompletionUtils"
 import {
+	executionFunnel,
+	getDeclaredMutationPaths,
 	shouldBypassGuardForLaneIoTool,
-	shouldDeferLaneGuardPostExecution,
 	shouldUseIoAuthorityReadFastPath,
-} from "../executionAuthority"
+} from "../execution/ExecutionFunnel"
 import { validateSubagentCompletionGates } from "../subagentCompletionGates"
 import { ToolValidator } from "../ToolValidator"
 import type { TaskConfig } from "../types/TaskConfig"
@@ -1048,12 +1050,6 @@ export class SubagentRunner {
 						return finalized
 					}
 
-					if (!this.allowedTools.includes(toolName)) {
-						const deniedResult = formatResponse.toolError(`Tool '${toolName}' is not available inside subagent runs.`)
-						pushSubagentToolResultBlock(toolResultBlocks, call, toolName, deniedResult)
-						continue
-					}
-
 					const toolCallBlock: ToolUse = {
 						type: "tool_use",
 						name: toolName,
@@ -1074,89 +1070,46 @@ export class SubagentRunner {
 					const handler = this.baseConfig.coordinator.getHandler(toolName)
 					let toolResult: unknown
 
-					if (!handler) {
-						toolResult = formatResponse.toolError(`No handler registered for tool '${toolName}'.`)
-					} else {
-						try {
-							// V230: Swarm Collision Prevention
-							if (
-								this.streamId &&
-								toolCallParams.path &&
-								(toolName === DietCodeDefaultTool.FILE_NEW ||
-									toolName === DietCodeDefaultTool.FILE_EDIT ||
-									toolName === DietCodeDefaultTool.APPLY_PATCH)
-							) {
-								const collision = await orchestrator.checkCollision(this.streamId, [toolCallParams.path])
-								if (collision) {
-									toolResult = formatResponse.toolError(
-										`[COLLISION] ${collision} Wait for the other agent to finish or coordinate elsewhere.`,
-									)
-								}
-							}
-
-							if (!toolResult) {
-								const guard = this.baseConfig.universalGuard
-								const ioAuthorityFastPath = shouldBypassGuardForLaneIoTool(this.laneExecutionMode, toolName)
-								if (ioAuthorityFastPath) {
-									toolResult = await handler.execute(subagentConfig, toolCallBlock)
-								} else if (guard) {
-									// V227: Sovereign Audit Integration for Swarms (mutation / side-effect tools)
-									const preExecResult = await guard.guardPreExecution(toolCallBlock)
-									if (!preExecResult.success) {
-										toolResult = formatResponse.toolError(
-											preExecResult.error || "Subagent action denied by policy.",
-										)
-									} else {
-										toolResult = await handler.execute(subagentConfig, toolCallBlock)
-										const runLanePostGuard = async () => {
-											await guard.guardPostExecution(toolCallBlock, toolResult)
-										}
-										if (shouldDeferLaneGuardPostExecution(this.laneExecutionMode, toolName)) {
-											void runLanePostGuard().catch((error) => {
-												Logger.warn("[SubagentRunner] Deferred lane guard post-execution failed:", error)
-											})
-										} else {
-											await runLanePostGuard()
-										}
-
-										// V227: Substrate Read Auditing for Swarms
-										if (
-											(toolName === DietCodeDefaultTool.FILE_READ ||
-												toolName === DietCodeDefaultTool.SEARCH) &&
-											toolCallParams.path &&
-											typeof toolResult === "string"
-										) {
-											const pathKey = toolCallParams.path
-											const currentCount = state.currentTurnReadHistory.get(pathKey) || 0
-											if (currentCount === 0) {
-												state.currentTurnUniqueReadCount++
-											}
-											const newCount = currentCount + 1
-											state.currentTurnReadHistory.set(pathKey, newCount)
-											state.currentTurnTotalReadCount++
-
-											// Track global read history across turns
-											const globalCount = (state.taskReadHistory.get(pathKey) || 0) + 1
-											state.taskReadHistory.set(pathKey, globalCount)
-
-											toolResult = shouldUseIoAuthorityReadFastPath(toolName, this.laneExecutionMode)
-												? guard.onReadIoAuthority(toolCallParams.path, toolResult)
-												: await guard.onRead(
-														toolCallParams.path,
-														toolResult,
-														state.currentTurnUniqueReadCount,
-														newCount,
-														globalCount,
-													)
-										}
+					const outcome = await executionFunnel.execute({
+						config: subagentConfig,
+						block: toolCallBlock,
+						registered: !!handler,
+						lane: "subagent",
+						laneMode: this.laneExecutionMode,
+						allowedInLane: this.allowedTools.includes(toolName),
+						collisionCheck: (() => {
+							const mutationPaths = getDeclaredMutationPaths(toolCallBlock)
+							return this.streamId && mutationPaths.length > 0
+								? async () => {
+										const collision = await orchestrator.checkCollision(this.streamId!, mutationPaths)
+										return collision
+											? `[COLLISION] ${collision} Wait for the other agent to finish or coordinate elsewhere.`
+											: undefined
 									}
-								} else {
-									toolResult = await handler.execute(subagentConfig, toolCallBlock)
-								}
-							}
-						} catch (error) {
-							toolResult = formatResponse.toolError((error as Error).message)
-						}
+								: undefined
+						})(),
+						operation: () => executionFunnel.dispatchAuthorizedOperation(subagentConfig, toolCallBlock, handler!),
+					})
+					toolResult = outcome.result ?? formatResponse.toolError(outcome.event.reason)
+
+					const guard = this.baseConfig.universalGuard
+					if (
+						guard &&
+						(toolName === DietCodeDefaultTool.FILE_READ || toolName === DietCodeDefaultTool.SEARCH) &&
+						toolCallParams.path &&
+						typeof toolResult === "string"
+					) {
+						const pathKey = toolCallParams.path
+						const currentCount = state.currentTurnReadHistory.get(pathKey) || 0
+						if (currentCount === 0) state.currentTurnUniqueReadCount++
+						const newCount = currentCount + 1
+						state.currentTurnReadHistory.set(pathKey, newCount)
+						state.currentTurnTotalReadCount++
+						const globalCount = (state.taskReadHistory.get(pathKey) || 0) + 1
+						state.taskReadHistory.set(pathKey, globalCount)
+						toolResult = shouldUseIoAuthorityReadFastPath(toolName, this.laneExecutionMode)
+							? guard.onReadIoAuthority(pathKey, toolResult)
+							: await guard.onRead(pathKey, toolResult, state.currentTurnUniqueReadCount, newCount, globalCount)
 					}
 
 					stats.toolCalls += 1
@@ -1169,10 +1122,16 @@ export class SubagentRunner {
 						latestToolCall,
 						serializedToolResult,
 						toolCallParams as Record<string, string>,
+						outcome.event,
 					)
 					await this.recordTranscript(
 						"tool_response",
-						{ toolName, preview: latestToolCall, resultExcerpt: serializedToolResult.slice(0, 500) },
+						{
+							toolName,
+							preview: latestToolCall,
+							resultExcerpt: serializedToolResult.slice(0, 500),
+							executionFunnelEvent: outcome.event,
+						},
 						"raw",
 					)
 					pushSubagentToolResultBlock(toolResultBlocks, call, toolDescription, serializedToolResult)
@@ -1332,16 +1291,26 @@ export class SubagentRunner {
 			this.onProgress?.({ latestToolCall })
 			await this.recordTranscript("tool_call", { toolName, preview: latestToolCall, params: toolCallParams }, "raw")
 			const handler = this.baseConfig.coordinator.getHandler(toolName)
-			let toolResult: unknown
-			try {
-				toolResult = handler
-					? await handler.execute(subagentConfig, toolCallBlock)
-					: formatResponse.toolError(`No handler registered for tool '${toolName}'.`)
-			} catch (error) {
-				toolResult = formatResponse.toolError((error as Error).message)
-			}
+			const execution = await executionFunnel.execute({
+				config: subagentConfig,
+				block: toolCallBlock,
+				registered: !!handler,
+				lane: "subagent",
+				laneMode: this.laneExecutionMode,
+				allowedInLane: this.allowedTools.includes(toolName),
+				operation: () => executionFunnel.dispatchAuthorizedOperation(subagentConfig, toolCallBlock, handler!),
+			})
+			const toolResult: unknown = execution.result ?? formatResponse.toolError(execution.event.reason)
 
-			return { call, handler, latestToolCall, toolCallParams, toolResult, executed: true }
+			return {
+				call,
+				handler,
+				latestToolCall,
+				toolCallParams,
+				toolResult,
+				executed: true,
+				executionFunnelEvent: execution.event,
+			}
 		}
 		const executableCount = Math.min(calls.length, Math.max(0, MAX_TOTAL_TOOL_CALLS - this.stats.toolCalls))
 		const outcomes: Awaited<ReturnType<typeof executeCall>>[] = []
@@ -1351,15 +1320,36 @@ export class SubagentRunner {
 		for (const call of calls.slice(executableCount)) {
 			const toolName = call.name as DietCodeDefaultTool
 			const toolCallParams = toToolUseParams(call.input)
+			const toolCallBlock: ToolUse = {
+				type: "tool_use",
+				name: toolName,
+				params: toolCallParams,
+				partial: false,
+				call_id: call.call_id || call.toolUseId,
+			}
+			const denied = await executionFunnel.execute({
+				config: subagentConfig,
+				block: toolCallBlock,
+				registered: !!this.baseConfig.coordinator.getHandler(toolName),
+				lane: "subagent",
+				laneMode: this.laneExecutionMode,
+				allowedInLane: false,
+				laneDenialReason: `Swarm Tool Call Limit Exceeded (${MAX_TOTAL_TOOL_CALLS}). Tool was not executed.`,
+				operation: () =>
+					executionFunnel.dispatchAuthorizedOperation(
+						subagentConfig,
+						toolCallBlock,
+						this.baseConfig.coordinator.getHandler(toolName)!,
+					),
+			})
 			outcomes.push({
 				call,
 				handler: this.baseConfig.coordinator.getHandler(toolName),
 				latestToolCall: formatToolCallPreview(toolName, toolCallParams),
 				toolCallParams,
-				toolResult: formatResponse.toolError(
-					`Swarm Tool Call Limit Exceeded (${MAX_TOTAL_TOOL_CALLS}). Tool was not executed.`,
-				),
+				toolResult: formatResponse.toolError(denied.event.reason),
 				executed: false,
+				executionFunnelEvent: denied.event,
 			})
 		}
 
@@ -1386,10 +1376,16 @@ export class SubagentRunner {
 				latestToolCall,
 				serializedToolResult,
 				toolCallParams as Record<string, string>,
+				outcome.executionFunnelEvent,
 			)
 			await this.recordTranscript(
 				"tool_response",
-				{ toolName, preview: latestToolCall, resultExcerpt: serializedToolResult.slice(0, 500) },
+				{
+					toolName,
+					preview: latestToolCall,
+					resultExcerpt: serializedToolResult.slice(0, 500),
+					executionFunnelEvent: outcome.executionFunnelEvent,
+				},
 				"raw",
 			)
 			pushSubagentToolResultBlock(toolResultBlocks, call, toolDescription, serializedToolResult)
@@ -1602,8 +1598,14 @@ export class SubagentRunner {
 		}
 	}
 
-	private recordToolStepInEnvelope(toolName: string, preview: string, result: string, params: Record<string, string>): void {
-		this.envelopeBuilder?.recordToolStep(toolName, preview, result, params)
+	private recordToolStepInEnvelope(
+		toolName: string,
+		preview: string,
+		result: string,
+		params: Record<string, string>,
+		executionFunnelEvent: ExecutionFunnelEvent,
+	): void {
+		this.envelopeBuilder?.recordToolStep(toolName, preview, result, params, executionFunnelEvent)
 	}
 
 	private hashString(value: string): string {

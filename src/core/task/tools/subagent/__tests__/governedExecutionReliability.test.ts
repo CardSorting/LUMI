@@ -28,6 +28,7 @@ import { GovernedSwarmCoordinator } from "../GovernedSwarmCoordinator"
 import { runMergeGate } from "../MergeGate"
 import { explainReplayMismatch, validateDeterministicReplay } from "../ReplayValidator"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
+import { terminalExecutionEvent } from "./executionFunnelFixture"
 
 function buildAgent(agentId: string, index: number, overrides?: Partial<SubagentExecutionEnvelope>): SubagentExecutionEnvelope {
 	const builder = new SubagentEnvelopeBuilder(agentId, "exec-1", "researcher", "swarm-1", "task-1", "inspect module", {
@@ -36,7 +37,7 @@ function buildAgent(agentId: string, index: number, overrides?: Partial<Subagent
 		depth: 1,
 	})
 	builder.setStatus("completed")
-	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "contents", { path: "src/a.ts" })
+	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "contents", { path: "src/a.ts" }, terminalExecutionEvent())
 	builder.setTranscriptMeta("subagent_executions/swarm-1/agents/agent-1.transcript.jsonl", 3, 120)
 	builder.complete("done")
 	return { ...builder.build(), compactionEvents: [], ...overrides }
@@ -79,11 +80,12 @@ describe("governed execution reliability", () => {
 
 	describe("crash safety", () => {
 		async function setupCoordinator(attemptId: string, parentAttemptId?: string) {
+			InMemoryLockAuthority.reset()
 			tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "crash-"))
 			const disk = await import("@core/storage/disk")
 			sinon.stub(disk, "ensureTaskDirectoryExists").resolves(tempDir)
 			return new GovernedSwarmCoordinator(
-				"/tmp",
+				tempDir,
 				false,
 				1,
 				undefined,

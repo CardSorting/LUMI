@@ -13,6 +13,7 @@ import { createGovernedExecutionPathMetrics } from "../ParentAgentFlowControl"
 import { computeSwarmArtifactChecksum, SWARM_TERMINAL_STAGING_VIOLATION } from "../ResumeSwarmFromArtifact"
 import { SubagentEnvelopeBuilder } from "../SubagentEnvelopeBuilder"
 import { persistSwarmEnvelope } from "../SubagentExecutionStore"
+import { terminalExecutionEvent } from "./executionFunnelFixture"
 
 function buildAgent(agentId: string, overrides?: Partial<SubagentExecutionEnvelope>): SubagentExecutionEnvelope {
 	const builder = new SubagentEnvelopeBuilder(agentId, "exec-1", "researcher", "swarm-1", "task-1", "inspect module", {
@@ -21,7 +22,7 @@ function buildAgent(agentId: string, overrides?: Partial<SubagentExecutionEnvelo
 		depth: 1,
 	})
 	builder.setStatus("completed")
-	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "contents", { path: "src/a.ts" })
+	builder.recordToolStep("read_file", "read_file(path=src/a.ts)", "contents", { path: "src/a.ts" }, terminalExecutionEvent())
 	builder.setTranscriptMeta("subagent_executions/swarm-1/agents/agent-1.transcript.jsonl", 3, 120)
 	builder.complete("done")
 	return { ...builder.build(), compactionEvents: [], ...overrides }

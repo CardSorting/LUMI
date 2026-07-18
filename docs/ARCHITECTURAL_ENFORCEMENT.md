@@ -38,19 +38,19 @@ Every change is measured for its impact on project health:
 - **Stability Scores**: After a successful edit, LUMI calculates a stability score for the affected file based on complexity, churn, and dependency health.
 - **Violation Tracking**: The system tracks how many architectural violations were introduced or resolved during a task, providing a clear "Net Health" impact report.
 
-## ⚡ I/O execution authority (parent throughput)
+## ⚡ Central execution funnel
 
-Parent main-thread reads and searches use a **hot / warm / cold** execution model so tool loops stay fast while `attempt_completion` remains authoritative.
+Every parent, sibling, and subagent tool invocation enters `ExecutionFunnel`. The funnel owns registration, task/lane admission, plan mode, fencing, collision and roadmap checks, policy, hooks, the dispatch permit, reliability, and one terminal event. Query fast paths remain classifications inside this authority.
 
 | Tier | Parent behavior |
 |------|-----------------|
-| **Hot** | `read_file`, `list_files`, `search_files`, `list_code_definition_names` skip full UniversalGuard; sync substrate tracking only |
-| **Warm** | Advisory audits, post-guard GC, roadmap journals, and forensic hints run **after** the tool result is pushed |
-| **Cold** | `attempt_completion` audit gate, progressive threshold, circuit breaker |
+| **Hot** | Workspace queries reuse task authority while still enforcing required parameters, `.dietcodeignore`, cancellation, and lane admission |
+| **Governed** | Mutations and side effects add plan mode, fencing, collisions, roadmap policy, guards, hooks, and consent |
+| **Terminal** | One immutable event records success, failure, denial, cancellation, or the decisive block; task completion remains a separate `CompletionFunnel` decision |
 
-When a tool or completion is blocked, see **[Failure and block catalog](parent-thread-execution-authority.md#what-blocked-throughput-before-vs-after)** for message → reason → remediation mapping.
+When a tool is blocked, inspect the event's stable reason code and ordered stage trace; do not infer state from handler prose.
 
-Full reference: **[Parent-thread execution authority](parent-thread-execution-authority.md)** — helpers in `src/core/task/tools/executionAuthority.ts`, orchestration in `ToolExecutor.ts`.
+Full reference: **[Central execution funnel](parent-thread-execution-authority.md)** — authority in `src/core/task/tools/execution/ExecutionFunnel.ts`, event contract in `src/shared/execution/executionFunnelEvent.ts`.
 
 ---
 *LUMI isn't just an agent that codes; it's an architect that enforces. Build systems that stand the test of time.*

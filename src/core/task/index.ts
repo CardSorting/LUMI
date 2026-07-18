@@ -151,7 +151,7 @@ import {
 	getCachedCompletionFunnelEventFromState,
 	isTaskHarnessTerminal,
 } from "./tools/completion/CompletionFunnel"
-import { isIoAuthorityTool } from "./tools/executionAuthority"
+import { executionFunnel, isIoAuthorityTool } from "./tools/execution/ExecutionFunnel"
 import { buildSiblingToolDependencyModel, isReadOnlyVerificationCommand } from "./tools/siblings/SiblingToolDependency"
 import { DEFAULT_SIBLING_TOOL_CONCURRENCY, SiblingToolScheduler } from "./tools/siblings/SiblingToolScheduler"
 import {
@@ -2656,14 +2656,19 @@ export class Task {
 			presentationEvents: CapturedPresentationEvent[]
 			outcome?: "succeeded" | "failed"
 			error?: string
+			executionFunnelEvent?: import("@shared/execution/executionFunnelEvent").ExecutionFunnelEvent
 		}>({
 			concurrency: DEFAULT_SIBLING_TOOL_CONCURRENCY,
 			isCancelled: () => this.taskState.abort,
 			canStart: (node) => !node.requiresCheckpoint || checkpointReady,
-			classifyResult: (value) => ({
-				status: value.outcome ?? "succeeded",
-				error: value.error,
-			}),
+			classifyResult: (value) => {
+				const event = value.executionFunnelEvent
+				if (!event) return { status: value.outcome ?? "succeeded", error: value.error }
+				return {
+					status: event.phase === "succeeded" ? "succeeded" : "failed",
+					error: event.phase === "succeeded" ? undefined : event.reason,
+				}
+			},
 			onEvent: (event) => {
 				const detail = {
 					invocationId: event.node.id,
@@ -2773,11 +2778,12 @@ export class Task {
 		}
 
 		const block = cloneDeep(this.taskState.assistantMessageContent[this.taskState.currentStreamingContentIndex]) // need to create copy bc while stream is updating the array, it could be updating the reference block properties too
+		const initialTurnControl = executionFunnel.getTurnControl(this.taskState, this.isParallelToolCallingEnabled())
 		let processedBlockCount = 1
 		switch (block.type) {
 			case "text": {
 				// Skip text rendering if tool was rejected, or if a tool was already used and parallel calling is disabled
-				if (this.taskState.didRejectTool || (!this.isParallelToolCallingEnabled() && this.taskState.didAlreadyUseTool)) {
+				if (initialTurnControl.suppressFurtherContent) {
 					break
 				}
 				let content = block.content
@@ -2909,11 +2915,8 @@ export class Task {
 		this.taskState.presentAssistantMessageLocked = false // this needs to be placed here, if not then calling this.presentAssistantMessage below would fail (sometimes) since it's locked
 		// NOTE: when tool is rejected, iterator stream is interrupted and it waits for userMessageContentReady to be true. Future calls to present will skip execution since didRejectTool and iterate until contentIndex is set to message length and it sets userMessageContentReady to true itself (instead of preemptively doing it in iterator)
 		// Also advance when a tool was used and parallel calling is disabled
-		if (
-			!block.partial ||
-			this.taskState.didRejectTool ||
-			(!this.isParallelToolCallingEnabled() && this.taskState.didAlreadyUseTool)
-		) {
+		const settledTurnControl = executionFunnel.getTurnControl(this.taskState, this.isParallelToolCallingEnabled())
+		if (!block.partial || settledTurnControl.suppressFurtherContent) {
 			// block is finished streaming and executing
 			const finalProcessedIndex = this.taskState.currentStreamingContentIndex + processedBlockCount - 1
 			if (finalProcessedIndex === this.taskState.assistantMessageContent.length - 1) {
@@ -3324,6 +3327,7 @@ export class Task {
 			this.taskState.userMessageContentReady = false
 			this.taskState.didRejectTool = false
 			this.taskState.didAlreadyUseTool = false
+			this.taskState.executionFunnelEventJson = undefined
 			this.taskState.presentAssistantMessageLocked = false
 			this.taskState.presentAssistantMessageHasPendingUpdates = false
 			this.taskState.didAutomaticallyRetryFailedApiRequest = false
@@ -3495,7 +3499,8 @@ export class Task {
 						break // aborts the stream
 					}
 
-					if (this.taskState.didRejectTool) {
+					const turnControl = executionFunnel.getTurnControl(this.taskState, this.isParallelToolCallingEnabled())
+					if (turnControl.rejected) {
 						// userContent has a tool rejection, so interrupt the assistant's response to present the user's feedback
 						assistantMessage += "\n\n[Response interrupted by user feedback]"
 						// this.userMessageContentReady = true // instead of setting this preemptively, we allow the present iterator to finish and set userMessageContentReady when its ready
@@ -3510,7 +3515,7 @@ export class Task {
 					// Interrupt stream if a tool was used and parallel calling is disabled
 					// PREV: we need to let the request finish for openrouter to get generation details
 					// UPDATE: it's better UX to interrupt the request at the cost of the api cost not being retrieved
-					if (!this.isParallelToolCallingEnabled() && this.taskState.didAlreadyUseTool) {
+					if (turnControl.toolBudgetExhausted) {
 						assistantMessage +=
 							"\n\n[Response interrupted by a tool use result. Only one tool may be used at a time and should be placed at the end of the message.]"
 						break
@@ -3582,7 +3587,7 @@ export class Task {
 				finalizedNativeToolBlocks.length > 1 &&
 				!this.taskState.abort &&
 				!this.taskState.steeringInterruptRequested &&
-				!this.taskState.didRejectTool
+				!executionFunnel.getTurnControl(this.taskState, this.isParallelToolCallingEnabled()).rejected
 			) {
 				const allEarlyQueries = finalizedNativeToolBlocks.every(
 					(block) =>

@@ -1,5 +1,6 @@
 import { DietCodeDefaultTool } from "@shared/tools"
 import { StateManager } from "@/core/storage/StateManager"
+import { executionFunnel } from "./execution/ExecutionFunnel"
 
 export class AutoApprove {
 	private stateManager: StateManager
@@ -26,6 +27,7 @@ export class AutoApprove {
 	// Check if the tool should be auto-approved based on the settings
 	// Returns bool for most tools, and tuple for tools with nested settings
 	shouldAutoApproveTool(toolName: DietCodeDefaultTool): boolean | [boolean, boolean] {
+		executionFunnel.recordApprovalDecision(true, "automatic")
 		switch (toolName) {
 			case DietCodeDefaultTool.FILE_READ:
 			case DietCodeDefaultTool.LIST_FILES:
@@ -52,6 +54,7 @@ export class AutoApprove {
 		_command?: string,
 		_mcpServerName?: string,
 	): Promise<boolean> {
+		executionFunnel.recordApprovalDecision(true, "automatic")
 		return true
 	}
 }

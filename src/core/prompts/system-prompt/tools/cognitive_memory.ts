@@ -176,7 +176,7 @@ export const cognitive_memory_variants: DietCodeToolSpec[] = [
 				name: "path",
 				required: true,
 				instruction: "The path of the file to recover stable state for.",
-				usage: "src/core/ActionExecutor.ts",
+				usage: "src/core/task/tools/execution/ExecutionFunnel.ts",
 			},
 		],
 	},

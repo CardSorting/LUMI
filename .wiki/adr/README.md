@@ -20,7 +20,7 @@ Decisions governing risk-proportional governance and caching of workspace author
   * *Implementing Surfaces:* [ToolExecutor.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/ToolExecutor.ts) and [ToolValidator.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/tools/ToolValidator.ts)
 * **[MEOW-003: Risk-Proportional Governance](MEOW-003-risk-proportional-governance.md)**
   Balances validation overhead against material risk, allowing advisory operations to run asynchronously.
-  * *Implementing Surfaces:* [ToolExecutor.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/ToolExecutor.ts) and [ActionExecutor.ts](file:///Users/bozoegg/Downloads/codemarie-new/src/core/task/ActionExecutor.ts)
+  * *Implementing Surface:* `src/core/task/tools/execution/ExecutionFunnel.ts`
 
 ## 3. I/O Generations
 Decisions governing the caching, coalescing, and validation of file/search results.

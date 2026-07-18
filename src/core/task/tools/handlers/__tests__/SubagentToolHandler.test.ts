@@ -9,6 +9,7 @@ import { afterEach, describe, it } from "mocha"
 import sinon from "sinon"
 import { orchestrator } from "@/infrastructure/ai/Orchestrator"
 import { TaskState } from "../../../TaskState"
+import { terminalExecutionEvent } from "../../subagent/__tests__/executionFunnelFixture"
 import { AgentConfigLoader } from "../../subagent/AgentConfigLoader"
 import { GovernedSwarmCoordinator } from "../../subagent/GovernedSwarmCoordinator"
 import { computeSwarmArtifactChecksum } from "../../subagent/ResumeSwarmFromArtifact"
@@ -372,9 +373,13 @@ describe("SubagentToolHandler", () => {
 					{ swarmId: context.swarmId, index: context.index, depth: context.depth },
 				)
 				builder.setStatus("running")
-				builder.recordToolStep("read_file", "read authoritative implementation", "direct evidence", {
-					path: "src/authoritative.ts",
-				})
+				builder.recordToolStep(
+					"read_file",
+					"read authoritative implementation",
+					"direct evidence",
+					{ path: "src/authoritative.ts" },
+					terminalExecutionEvent(),
+				)
 				builder.setTranscriptMeta(
 					`subagent_executions/${context.swarmId}/agents/${context.agentId}.transcript.jsonl`,
 					1,

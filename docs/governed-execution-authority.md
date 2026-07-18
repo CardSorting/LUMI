@@ -33,7 +33,7 @@ Related:
 |-----|--------|
 | [Governed subagent execution](governed-subagent-execution.md) | Swarm architecture |
 | [Governed execution runbook](governed-execution-runbook.md) | Authoritative state procedure |
-| [Parent-thread execution authority](parent-thread-execution-authority.md) | Hot/warm/cold parent gates |
+| [Central execution funnel](parent-thread-execution-authority.md) | Parent, sibling, and subagent tool permits and terminal events |
 | [Governed execution decisions § ADR-001/015](governed-execution-decisions.md) | Locks, receipts, coordinator authority |
 
 ---
@@ -166,7 +166,7 @@ Valid escapes include a pending timer, an expiring resource lease, an outside ru
 | Receipt-driven inner-loop block | I/O authority hot path; audits advisory until `attempt_completion` |
 | Recursive validation without progress | Soft cooldown/duplicate preflight; 5-min audit cache-aside |
 
-See [parent-thread execution authority](parent-thread-execution-authority.md).
+See the [central execution funnel](parent-thread-execution-authority.md).
 
 ### Mapping to implementation (receipt authority refactor)
 

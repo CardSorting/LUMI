@@ -11,7 +11,7 @@ import { DietCodeSayTool } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { DietCodeDefaultTool } from "@/shared/tools"
 import { showNotificationForApproval } from "../../utils"
-import { hasWorkspaceLocalIoAuthority } from "../executionAuthority"
+import { hasWorkspaceLocalIoAuthority } from "../execution/ExecutionFunnel"
 import { executeTaskIoBackend, type TaskIoBackendCallbacks } from "../io/TaskIoBackend"
 import type { PathAuthorityRecord } from "../io/TaskPathAuthorityCache"
 import type { ToolValidator } from "../ToolValidator"
@@ -419,19 +419,6 @@ export class SearchFilesToolHandler implements IFullyManagedTool {
 				workspaceContext,
 				block.isNativeToolCall,
 			)
-		}
-
-		try {
-			if (config.isSubagentExecution) {
-				const { ToolHookUtils } = await import("../utils/ToolHookUtils")
-				await ToolHookUtils.runPreToolUseIfEnabled(config, block)
-			}
-		} catch (error) {
-			const { PreToolUseHookCancellationError } = await import("@core/hooks/PreToolUseHookCancellationError")
-			if (error instanceof PreToolUseHookCancellationError) {
-				return formatResponse.toolDenied()
-			}
-			throw error
 		}
 
 		const searchStartTime = performance.now()

@@ -48,6 +48,11 @@ export function validateSubagentEnvelope(envelope: SubagentExecutionEnvelope): s
 			violations.push(`agent ${envelope.agentId}: compaction missing transcript sequence anchor`)
 		}
 	}
+	for (const step of envelope.toolSteps || []) {
+		if (!step.executionFunnelEvent?.terminal) {
+			violations.push(`agent ${envelope.agentId}: tool step ${step.index} lacks a terminal ExecutionFunnel event`)
+		}
+	}
 
 	if (envelope.phase === "completion_gate" && !envelope.completionFunnelEvent) {
 		violations.push(`agent ${envelope.agentId}: completion_gate phase without completionFunnelEvent snapshot`)

@@ -1,6 +1,7 @@
 import type { ToolUse } from "@core/assistant-message"
 import { CLINE_MCP_TOOL_IDENTIFIER } from "@/shared/mcp"
 import { DietCodeDefaultTool } from "@/shared/tools"
+import { executionFunnel } from "./execution/ExecutionFunnel"
 import { AccessMcpResourceHandler } from "./handlers/AccessMcpResourceHandler"
 import { ActModeRespondHandler } from "./handlers/ActModeRespondHandler"
 import { ApplyPatchHandler } from "./handlers/ApplyPatchHandler"
@@ -75,10 +76,7 @@ import {
 export { SharedToolHandler }
 export type { IFullyManagedTool, IPartialBlockHandler, IToolHandler, ToolResponse }
 
-/**
- * Coordinates tool execution by routing to registered handlers.
- * Falls back to legacy switch for unregistered tools.
- */
+/** Routes registered handlers only after ExecutionFunnel issues a permit. */
 export class ToolExecutorCoordinator {
 	private handlers = new Map<string, IToolHandler>()
 	private dynamicSubagentHandlers = new Map<string, IToolHandler>()
@@ -210,25 +208,6 @@ export class ToolExecutorCoordinator {
 			throw new Error(`No handler registered for tool: ${block.name}`)
 		}
 
-		// Production Hardening: Global parameter normalization
-		// Ensures tools that expect 'path' can also handle 'absolutePath' from older models/variants
-		this.normalizeToolParameters(block)
-
-		return handler.execute(config, block)
-	}
-
-	/**
-	 * Normalizes tool parameters to ensure consistency across different model variants.
-	 * Currently handles 'path' vs 'absolutePath' unification.
-	 */
-	private normalizeToolParameters(block: ToolUse): void {
-		if (!block.params) {
-			return
-		}
-
-		// Fallback for path naming inconsistencies
-		if (!block.params.path && block.params.absolutePath) {
-			block.params.path = block.params.absolutePath
-		}
+		return executionFunnel.dispatchAuthorizedOperation(config, block, handler)
 	}
 }

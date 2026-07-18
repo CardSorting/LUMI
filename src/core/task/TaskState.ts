@@ -1,6 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { AssistantMessageContent } from "@core/assistant-message"
 import type { TaskAuditMetadata } from "@shared/ExtensionMessage"
+import type { ExecutionFunnelEvent } from "@shared/execution/executionFunnelEvent"
 import type { LockClaim } from "@shared/governance/lockTypes"
 import type { WorkLaneClaim } from "@shared/subagent/governedExecution"
 import { DietCodeAskResponse } from "@shared/WebviewMessage"
@@ -67,6 +68,10 @@ export class TaskState {
 	didAlreadyUseTool = false
 	didEditFile = false
 	lastToolName = "" // Track last tool used for consecutive call detection
+	/** Sole modern execution authority cached as one immutable funnel event. */
+	executionFunnelEventJson?: string
+	/** Bounded terminal audit trail. Non-terminal handler/UI messages are never authority. */
+	executionFunnelHistory?: ExecutionFunnelEvent[]
 
 	// Error tracking
 	consecutiveMistakeCount = 0

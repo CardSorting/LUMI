@@ -5,8 +5,9 @@ Last validated: 2026-07-18
 ## Current Snapshot
 
 - Task admission and agent loop: `src/core/task/index.ts`.
-- Tool dispatch and execution policy: `src/core/task/ToolExecutor.ts` and `src/core/task/tools/`.
-- Workspace-local query authority: `src/core/task/tools/executionAuthority.ts`.
+- Tool execution authority: `src/core/task/tools/execution/ExecutionFunnel.ts`. This auditable monolith owns parent, sibling, and subagent admission, policy, permits, dispatch, reliability, and terminal classification.
+- Execution adapters: `src/core/task/ToolExecutor.ts`, `ToolExecutorCoordinator.ts`, sibling invocation contexts, and subagent runners consume the single `ExecutionFunnelEvent`; they do not derive execution state from handler text.
+- Workspace-local query authority is a classification inside `ExecutionFunnel.ts`, not a separate gate.
 - Completion authority: `src/core/task/tools/completion/CompletionFunnel.ts`. This monolith owns collection, ordered gate evaluation, action authorization, canonical identity, durable SQLite CAS, publication, terminal classification, and the auditable stage trace.
 - Completion adapters: `AttemptCompletionHandler.ts`, task resume, subagent envelopes, and the webview consume the single `CompletionFunnelEvent`; they must not derive independent lifecycle or completion decisions.
 - Completion diagnostics remain advisory in `src/core/task/tools/completionGatePipeline.ts`; `run_finalization` is optional post-completion documentation maintenance and has no gate authority.
@@ -20,7 +21,7 @@ Last validated: 2026-07-18
 - Query singleflight/generation evidence: `src/core/task/tools/io/IoRequestCoalescer.ts`.
 - Generation-scoped canonical path evidence: `src/core/task/tools/io/TaskPathAuthorityCache.ts`.
 - Backend admission and class budgets: `src/core/task/tools/io/TaskIoBackend.ts` and `ParentIoBulkhead.ts`.
-- Task/process ownership: `src/core/task/index.ts`, `src/core/task/ActionExecutor.ts`, and `ExecuteCommandToolHandler.ts`.
+- Task/process ownership: `src/core/task/index.ts`, `ExecutionFunnel.ts`, `ExecuteCommandToolHandler.ts`, and `CommandExecutor.ts`. Shell timeout/cancellation remains owned by `CommandExecutor` beneath the funnel permit.
 - Read/list/search/definition backends: `src/integrations/misc/`, `src/services/glob/`, `src/services/ripgrep/`, and `src/services/tree-sitter/`.
 - Reproducible I/O fixture: `scripts/meow-io-benchmark.ts` (`npm run benchmark:meow-io`).
 - Native sibling delta identity: `src/core/api/transform/tool-call-processor.ts`.
@@ -37,6 +38,7 @@ Last validated: 2026-07-18
 
 ```sh
 npx tsc --noEmit --pretty false
+npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 --exit src/core/task/tools/execution/__tests__/ExecutionFunnel.test.ts src/test/tool-executor-hooks.test.ts src/core/task/tools/siblings/__tests__/SiblingToolBatch.test.ts src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionEnvelope.test.ts
 TS_NODE_PROJECT=./tsconfig.unit-test.json npx mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/subagent/__tests__/SubagentRunner.test.ts src/core/task/tools/subagent/__tests__/executionHarnessGaps.test.ts src/integrations/terminal/CommandOrchestrator.test.ts
 npx cross-env TS_NODE_PROJECT=./tsconfig.unit-test.json mocha --no-config --require ts-node/register --require tsconfig-paths/register --require source-map-support/register --require ./src/test/requires.cjs --timeout 10000 src/core/task/tools/__tests__/LockAuthorityReconciliation.test.ts src/core/task/tools/subagent/__tests__/TarjanDeadlockDetector.test.ts src/core/task/tools/__tests__/TaskCompletionTerminalization.test.ts
 npm run test:unit
@@ -50,6 +52,8 @@ npm run benchmark:meow-io
 `mocha` must use `--no-config` for a truly focused run; `.mocharc.json` otherwise adds every `src/**/__tests__/*.ts` test.
 
 For completion work, start with `CompletionFunnel.test.ts`, `completionFunnelHardening.test.ts`, `TaskCompletionTerminalization.test.ts`, `completionFunnelMessages.test.ts`, and `taskCompletionEvidence.test.ts`. A terminal event must always be `phase: "completed"`, expose no next action, forbid `attempt_completion`, and never regress to pending when generic resume bookkeeping is appended.
+
+For execution work, start with `ExecutionFunnel.test.ts` and the parent/sibling/subagent parity suites. Every invocation must enter `ExecutionFunnel.execute()`, dispatch only under its active permit, and publish one terminal event whose decisive stage explains the outcome.
 
 For Task-level focused tests, also require `./src/test/requires.cjs` so the VS Code shim is installed.
 

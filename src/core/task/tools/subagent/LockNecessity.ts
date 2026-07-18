@@ -4,11 +4,11 @@ import {
 	IO_AUTHORITY_TOOLS,
 	isNonMutatingLaneMode,
 	shouldBypassGuardForLaneIoTool,
-} from "../executionAuthority"
+} from "../execution/ExecutionFunnel"
 import { classifyRoadmapWriteIntent, declaresDirectWorkspaceRoadmapMutation, type RoadmapMutationSignal } from "./RoadmapMutation"
 
 export { computeFastIoReservedSlots, IO_AUTHORITY_TOOLS as LANE_IO_AUTHORITY_TOOLS, shouldBypassGuardForLaneIoTool }
-export { isIoAuthorityTool as isLaneIoAuthorityTool } from "../executionAuthority"
+export { isIoAuthorityTool as isLaneIoAuthorityTool } from "../execution/ExecutionFunnel"
 
 export interface LaneLockIntent {
 	executionMode: LaneExecutionMode
