@@ -140,3 +140,12 @@ For direct operations, use the task signal when no sibling invocation signal exi
 1. Support deferred write-behind transcript flushes to keep the hot path responsive.
 2. Force a full flush as a durability barrier before publishing completions or failure results.
 3. Perform atomic writes by writing the transcript history to a temporary file (`.tmp`) and renaming it to the final destination to prevent JSONL corruption/duplication.
+
+## Transaction-Split Completion Saga
+
+1. In the initial tool handler, perform preflight gate checks, build the completion attempt metadata, persist the `prepared` saga row in `completion_attempts`, and return a typed continuation outcome.
+2. The `ExecutionFunnel` terminalizes the original invocation, commits the terminal event, and releases the execution permit before returning control.
+3. The coordinator receives the committed terminal execution event, validates its integrity using `loadTerminalExecutionEvent`, and retrieves the registered saga attempt.
+4. If a validation command is required, the coordinator performs an atomic CAS claim by transitioning the phase from `evidence_pending` to `evidence_dispatching`, preventing duplicate execution races.
+5. If the claim succeeds, the coordinator runs the validation command under a fresh sibling permit, verifies integrity against the resulting terminal event, and continues the proposal lifecycle (user prompting and final settlement).
+6. In case of crash recovery, `reconcileForTask(config)` automatically loads unfinished attempts, checks for stale generations, and resumes the saga from its persisted phase.

@@ -2,6 +2,14 @@
 
 This log preserves historical wiki entries and records current LUMI workspace knowledge-layer changes.
 
+## [Transaction-Split Completion Saga and Committed Boundary Migration] — 2026-07-18
+
+- Refactored the task completion flow to execute under a transaction-split completion saga, resolving nested execution permit leaks.
+- Replaced monolithic `runCompletionFunnelAttempt` with a clean sibling dispatch model governed by `CompletionSagaCoordinator.ts`.
+- Implemented `evidence_dispatching` saga state with atomic compare-and-swap (CAS) transitions to eliminate races between `consume()` and `reconcileForTask()`.
+- Replaced raw SQL queries and synchronous getters with narrow asynchronous repository helpers (`loadTerminalExecutionEvent`).
+- Added robust unit test suites asserting transactional boundaries, permit release ordering, and crash recovery.
+
 ## [Central Completion Funnel Migration] — 2026-07-18
 
 - Replaced competing lifecycle/finalization authorities with one large `CompletionFunnel.ts` authority covering collection through durable CAS and terminal publication.

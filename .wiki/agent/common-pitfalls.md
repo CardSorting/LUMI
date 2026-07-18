@@ -52,3 +52,6 @@
 - Do not reuse completed subagents on swarm resume without checking that the source governed receipt is sealed and has valid checksum integrity; doing so leads to unsafe work reuse.
 - Do not block swarm initialization or lane admission on parent context prefetching; fetch it asynchronously and pass the promise to the runner.
 - Do not let a subagent run in a loop calling the same tool with identical parameters; ensure repetition detection and self-correction nudges are active.
+- Do not execute a completion validation command under the original handler permit or inside the handler transaction. Doing so re-introduces nested permit leaks; always split the transaction, letting `ExecutionFunnel` release the permit and commit the terminal event before consumption.
+- Do not let `consume()` and `reconcileForTask()` race to run the same validation command. Use atomic CAS to transition the saga to `evidence_dispatching`, and check both terminal db events and in-memory active states before resubmitting.
+- Do not use raw database connections or synchronous getters in domain code. Use narrow repository functions (like `loadTerminalExecutionEvent`).

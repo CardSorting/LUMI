@@ -1,5 +1,13 @@
 # Key Findings
 
+## 2026-07-18 Transaction-Split Completion Saga and Committed Boundary Migration
+
+- **Decisive Boundary Enforcement**: Refactored completion tool execution to prevent nested execution permit leaks. The `AttemptCompletionHandler` immediately returns a typed continuation outcome (releasing its execution permit and committing the terminal execution event) before any validation commands or user prompts are run.
+- **Completion Saga Coordinator (`CompletionSagaCoordinator.ts`)**: Introduced a dedicated coordinator to consume the committed terminal execution event, verify that the originating permit is released, and manage the sibling validation command and user prompts under fresh sibling permits.
+- **Idempotent Concurrency Control (`evidence_dispatching`)**: Added the `evidence_dispatching` attempt state with atomic CAS claims to eliminate races between `consume()` and `reconcileForTask()`.
+- **Startup Recovery & Reconciliation**: Integrates automatic completion saga reconciliation in `prepareResumeLifecycle` to recover from crashes mid-completion.
+- **Clean Repository Decoupling**: Replaced raw SQL queries and synchronous database getters with narrow async repository methods (`loadTerminalExecutionEvent` and `getCompletionAttempt`), removing all synchronous database hooks.
+
 ## 2026-07-18 Transactional Task Lifecycle Migration
 
 - `src/core/task/lifecycle/TaskLifecycleFunnel.ts` is the sole production task lifecycle mutation authority. Registration, activation, suspension, resume/replacement, cancellation request/settlement, completion, failure, timeout, and parent-to-child propagation are typed, generation-bound transitions.
